@@ -19,21 +19,14 @@ internal static class Lzma2Encoder
 
     public const uint DefaultDictionarySize = 1u << 23;
 
-    /// <summary>
-    /// Encodes the input into a raw LZMA2 stream (without the XZ container).
-    /// <para>将输入编码为 LZMA2 原始流（不含 XZ 容器）。</para>
-    /// </summary>
-    /// <param name="data">Bytes to compress, split into independent 64 KiB windows; an empty array
-    /// yields a stream holding only the end marker.
+    /// <summary>Encodes the input into a raw LZMA2 stream (without the XZ container).
+    /// <para>将输入编码为 LZMA2 原始流（不含 XZ 容器）。</para></summary>
+    /// <param name="data">Bytes to compress, split into independent 64 KiB windows; an empty array yields a stream holding only the end marker.
     /// <para>待压缩的字节，按相互独立的 64 KiB 窗口切分；空数组仅产出含结束标记的流。</para></param>
-    /// <param name="dictionarySize">LZMA dictionary size in bytes given to each window encoder,
-    /// defaulting to <see cref="DefaultDictionarySize"/> (8 MiB).
+    /// <param name="dictionarySize">LZMA dictionary size in bytes given to each window encoder, defaulting to <see cref="DefaultDictionarySize"/> (8 MiB).
     /// <para>交给每个窗口编码器的字典大小（字节），默认为 <see cref="DefaultDictionarySize"/>（8 MiB）。</para></param>
-    /// <param name="maxDegreeOfParallelism">
-    /// <see langword="null"/> or 1 and below encodes sequentially; above 1 encodes independent windows
-    /// concurrently, capped by the window count, with bytes identical to the sequential result.
-    /// <para>为 <see langword="null"/> 或小于等于 1 时串行编码；大于 1 时并发编码相互独立的窗口（不超过窗口
-    /// 数量），输出字节与串行结果一致。</para></param>
+    /// <param name="maxDegreeOfParallelism"><see langword="null"/> or 1 and below encodes sequentially; above 1 encodes independent windows concurrently, capped by the window count, with bytes identical to the sequential result.
+    /// <para>为 <see langword="null"/> 或小于等于 1 时串行编码；大于 1 时并发编码相互独立的窗口（不超过窗口 数量），输出字节与串行结果一致。</para></param>
     /// <returns>The raw LZMA2 bytes ending with the <c>0x00</c> end marker.
     /// <para>以 <c>0x00</c> 结束标记收尾的 LZMA2 原始字节。</para></returns>
     public static byte[] Encode(byte[] data, uint dictionarySize = DefaultDictionarySize, int? maxDegreeOfParallelism = null)
@@ -111,26 +104,17 @@ internal static class Lzma2Encoder
         return output.ToArray();
     }
 
-    /// <summary>
-    /// Streaming encode: reads independent 64 KiB windows and writes a raw LZMA2 stream.
-    /// <para>流式编码：读取独立的 64 KiB 窗口并写出 LZMA2 原始流。</para>
-    /// </summary>
-    /// <param name="input">Source of the uncompressed bytes, drained in whole 64 KiB windows until it
-    /// returns <c>0</c>. <para>未压缩字节的来源，按完整的 64 KiB 窗口读取直到返回 <c>0</c>。</para></param>
-    /// <param name="output">Destination stream that receives the chunk headers, payload bytes and the
-    /// terminating <c>0x00</c> end marker; the caller keeps ownership and flushes it.
+    /// <summary>Streaming encode: reads independent 64 KiB windows and writes a raw LZMA2 stream.
+    /// <para>流式编码：读取独立的 64 KiB 窗口并写出 LZMA2 原始流。</para></summary>
+    /// <param name="input">Source of the uncompressed bytes, drained in whole 64 KiB windows until it returns <c>0</c>.
+    /// <para>未压缩字节的来源，按完整的 64 KiB 窗口读取直到返回 <c>0</c>。</para></param>
+    /// <param name="output">Destination stream that receives the chunk headers, payload bytes and the terminating <c>0x00</c> end marker; the caller keeps ownership and flushes it.
     /// <para>接收块头、载荷字节与结尾 <c>0x00</c> 结束标记的目标流；所有权仍属于调用方，由其负责刷新。</para></param>
-    /// <param name="dictionarySize">LZMA dictionary size in bytes given to each window encoder,
-    /// defaulting to <see cref="DefaultDictionarySize"/> (8 MiB).
+    /// <param name="dictionarySize">LZMA dictionary size in bytes given to each window encoder, defaulting to <see cref="DefaultDictionarySize"/> (8 MiB).
     /// <para>交给每个窗口编码器的字典大小（字节），默认为 <see cref="DefaultDictionarySize"/>（8 MiB）。</para></param>
-    /// <param name="maxDegreeOfParallelism">
-    /// <see langword="null"/> or 1 and below reads and encodes sequentially; above 1 that many windows are
-    /// encoded concurrently, bounded by the window count, the detected physical core count and a 512 MiB budget
-    /// for the dictionary-sized window encoders, while staying in input order.
-    /// <para>为 <see langword="null"/> 或小于等于 1 时串行读取与编码；大于 1 时并发编码相应数量的窗口，上限由窗口数量、
-    /// 探测到的物理核心数以及字典大小的窗口编码器所占 512 MiB 预算共同决定，窗口仍按输入顺序写出。</para></param>
-    /// <param name="onOriginalWindow">Optional callback invoked once per window with the freshly read
-    /// uncompressed bytes; <see langword="null"/> reports nothing.
+    /// <param name="maxDegreeOfParallelism"><see langword="null"/> or 1 and below reads and encodes sequentially; above 1 that many windows are encoded concurrently, bounded by the window count, the detected physical core count and a 512 MiB budget for the dictionary-sized window encoders, while staying in input order.
+    /// <para>为 <see langword="null"/> 或小于等于 1 时串行读取与编码；大于 1 时并发编码相应数量的窗口，上限由窗口数量、 探测到的物理核心数以及字典大小的窗口编码器所占 512 MiB 预算共同决定，窗口仍按输入顺序写出。</para></param>
+    /// <param name="onOriginalWindow">Optional callback invoked once per window with the freshly read uncompressed bytes; <see langword="null"/> reports nothing.
     /// <para>可选回调，每个窗口以刚读取的未压缩字节调用一次；为 <see langword="null"/> 时不上报。</para></param>
     /// <returns>The total number of uncompressed bytes read from <paramref name="input"/>.
     /// <para>从 <paramref name="input"/> 读取的未压缩字节总数。</para></returns>

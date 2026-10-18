@@ -115,36 +115,17 @@ public static class FileOpenMode
     /// </summary>
     public const int ContentProbeLength = 65536;
 
-    /// <summary>
-    /// Resolves the open mode for the given path: <c>.dts→Text</c>, <c>.dtb/.dtbo→Dtb</c>,
-    /// known firmware extensions (aggregated from the format-handler registry, e.g.
-    /// <c>.img/.pac/.ops/.nb0</c>)→<c>Firmware</c>, known binary/firmware extensions→<c>Hex</c>,
-    /// known text/code extensions→<c>Text</c>, else <c>Auto</c>.
-    /// <para>解析指定文件应使用的打开方式。规则：<c>.dts→Text</c>、<c>.dtb/.dtbo→Dtb</c>、
-    /// 已知固件扩展名（格式处理器注册表聚合，如 <c>.img/.pac/.ops/.nb0</c>）→<c>Firmware</c>、
-    /// 已知二进制/固件扩展名→<c>Hex</c>、已知文本/代码扩展名→<c>Text</c>、其余→<c>Auto</c>。</para>
-    /// </summary>
-    /// <param name="path">
-    /// A file name or full path.
-    /// <para>文件名或完整路径。</para>
-    /// </param>
+    /// <summary>Resolves the open mode for the given path: <c>.dts→Text</c>, <c>.dtb/.dtbo→Dtb</c>, known firmware extensions (aggregated from the format-handler registry, e.g. <c>.img/.pac/.ops/.nb0</c>)→<c>Firmware</c>, known binary/firmware extensions→<c>Hex</c>, known text/code extensions→<c>Text</c>, else <c>Auto</c>.
+    /// <para>解析指定文件应使用的打开方式。规则：<c>.dts→Text</c>、<c>.dtb/.dtbo→Dtb</c>、 已知固件扩展名（格式处理器注册表聚合，如 <c>.img/.pac/.ops/.nb0</c>）→<c>Firmware</c>、 已知二进制/固件扩展名→<c>Hex</c>、已知文本/代码扩展名→<c>Text</c>、其余→<c>Auto</c>。</para></summary>
+    /// <param name="path">A file name or full path.<para>文件名或完整路径。</para></param>
     public static EditorOpenMode ResolveMode(string path) =>
         Services.Workspace.Documents.DocumentOpenRegistry.ResolveMode(path);
 
-    /// <summary>
-    /// Resolves the open mode; for unknown/no-extension files, uses the loaded header bytes as a magic
-    /// fallback. Valid ELF headers open the information panel; other strong binary types use <c>Hex</c>.
-    /// <para>解析应使用的打开方式；对未知/无扩展名文件，以已加载的头部字节做 magic 兜底，
-    /// 有效 ELF 头进入信息面板，其余强二进制类型返回 <c>Hex</c>。</para>
-    /// </summary>
-    /// <param name="path">
-    /// A file name or full path.
-    /// <para>文件名或完整路径。</para>
-    /// </param>
-    /// <param name="header">
-    /// Optional loaded file header bytes; magic fallback is skipped when <c>null</c>.
-    /// <para>可选的已加载文件头部字节；为 <c>null</c> 时不计 magic 兜底。</para>
-    /// </param>
+    /// <summary>Resolves the open mode; for unknown/no-extension files, uses the loaded header bytes as a magic fallback. Valid ELF headers open the information panel; other strong binary types use <c>Hex</c>.
+    /// <para>解析应使用的打开方式；对未知/无扩展名文件，以已加载的头部字节做 magic 兜底， 有效 ELF 头进入信息面板，其余强二进制类型返回 <c>Hex</c>。</para></summary>
+    /// <param name="path">A file name or full path.<para>文件名或完整路径。</para></param>
+    /// <param name="header">Optional loaded file header bytes; magic fallback is skipped when <c>null</c>.
+    /// <para>可选的已加载文件头部字节；为 <c>null</c> 时不计 magic 兜底。</para></param>
     public static EditorOpenMode ResolveMode(string path, byte[]? header, FormatDetectionResult? detection = null) =>
         Services.Workspace.Documents.DocumentOpenRegistry.ResolveMode(path, header, detection);
 

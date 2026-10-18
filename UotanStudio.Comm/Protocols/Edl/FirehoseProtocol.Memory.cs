@@ -87,33 +87,23 @@ public sealed partial class FirehoseProtocol
         }
     }
 
-    /// <summary>
-    /// Streams a partition range into the destination while hashing every written byte, detecting
-    /// short reads, and reporting cumulative progress. Large reads never allocate a single
-    /// destination-sized buffer; the transport works chunk by chunk.
-    /// <para>将分区范围流式写入目标，同时对每个写入字节计算哈希、检测短读并上报累计进度。
-    /// 大读取绝不会分配等同于目标大小的单块缓冲；传输按分块推进。</para>
-    /// </summary>
-    /// <remarks>
-    /// The caller owns <paramref name="destination"/>. Atomic publication (temp file then rename)
-    /// is a host responsibility: a cancelled or failed read leaves the destination partially
-    /// written and it must never be published as a completed backup.
-    /// <para>调用方持有 <paramref name="destination"/>。原子发布（临时文件后重命名）是宿主职责：
-    /// 被取消或失败的读取会留下部分写入的目标，绝不能作为完成备份发布。</para>
-    /// </remarks>
-    /// <param name="destination">Writable destination stream. <para>可写目标流。</para></param>
-    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
-    /// <param name="numSectors">The number of sectors. <para>扇区数量。</para></param>
-    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
-    /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
+    /// <summary>Streams a partition range into the destination while hashing every written byte, detecting short reads, and reporting cumulative progress. Large reads never allocate a single destination-sized buffer; the transport works chunk by chunk.
+    /// <para>将分区范围流式写入目标，同时对每个写入字节计算哈希、检测短读并上报累计进度。 大读取绝不会分配等同于目标大小的单块缓冲；传输按分块推进。</para></summary>
+    /// <remarks>The caller owns <paramref name="destination"/>. Atomic publication (temp file then rename) is a host responsibility: a cancelled or failed read leaves the destination partially written and it must never be published as a completed backup.
+    /// <para>调用方持有 <paramref name="destination"/>。原子发布（临时文件后重命名）是宿主职责： 被取消或失败的读取会留下部分写入的目标，绝不能作为完成备份发布。</para></remarks>
+    /// <param name="destination">Writable destination stream.<para>可写目标流。</para></param>
+    /// <param name="startSector">The starting sector.<para>起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors.<para>扇区数量。</para></param>
+    /// <param name="filename">The target filename.<para>目标文件名。</para></param>
+    /// <param name="physicalPartition">The physical partition number.<para>物理分区编号。</para></param>
     /// <param name="progress">Optional cumulative transferred bytes; not evidence of final completion.
     /// <para>可选的累计传输字节；不是最终完成的证据。</para></param>
     /// <param name="expectedSha256Hex">Optional lowercase hex SHA-256 the transferred bytes must match.
     /// <para>可选的十六进制小写 SHA-256；传输字节必须匹配。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The measured read result with device acknowledgement state. <para>带设备确认状态的计量读取结果。</para></returns>
-    /// <exception cref="EdlException">Thrown when the device short-reads, fails the completion
-    /// acknowledgement, or the measured hash contradicts <paramref name="expectedSha256Hex"/>.
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The measured read result with device acknowledgement state.
+    /// <para>带设备确认状态的计量读取结果。</para></returns>
+    /// <exception cref="EdlException">Thrown when the device short-reads, fails the completion acknowledgement, or the measured hash contradicts <paramref name="expectedSha256Hex"/>.
     /// <para>设备短读、完成确认失败，或实测哈希与 <paramref name="expectedSha256Hex"/> 矛盾时抛出。</para></exception>
     public async Task<EdlStreamReadResult> ReadPartitionToStreamAsync(Stream destination, long startSector, long numSectors,
         string filename = "partition.bin", int physicalPartition = 0, IProgress<long>? progress = null,
@@ -209,19 +199,17 @@ public sealed partial class FirehoseProtocol
         }
     }
 
-    /// <summary>
-    /// Reads memory from the target device via &lt;peek&gt;.
-    /// <para>通过 &lt;peek&gt; 从目标设备读取内存。</para>
-    /// </summary>
-    /// <param name="sizeInBytes">The number of bytes to read; must be greater than 0 and no larger than 16 MiB.<para>待读取字节数；必须大于 0 且不超过 16 MiB。</para></param>
-    /// <param name="address">The memory address; must be non-negative and the sum with <paramref name="sizeInBytes"/> must not overflow.<para>内存地址；必须非负，且与 <paramref name="sizeInBytes"/> 之和不得溢出。</para></param>
+    /// <summary>Reads memory from the target device via &lt;peek&gt;.
+    /// <para>通过 &lt;peek&gt; 从目标设备读取内存。</para></summary>
+    /// <param name="sizeInBytes">The number of bytes to read; must be greater than 0 and no larger than 16 MiB.
+    /// <para>待读取字节数；必须大于 0 且不超过 16 MiB。</para></param>
+    /// <param name="address">The memory address; must be non-negative and the sum with <paramref name="sizeInBytes"/> must not overflow.
+    /// <para>内存地址；必须非负，且与 <paramref name="sizeInBytes"/> 之和不得溢出。</para></param>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>A tuple containing the response and the read data.<para>包含响应与读取数据的元组。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="address"/> is negative, <paramref name="sizeInBytes"/> is 0 or negative, or <paramref name="sizeInBytes"/> exceeds 16 MiB.
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="address"/> is negative, <paramref name="sizeInBytes"/> is 0 or negative, or <paramref name="sizeInBytes"/> exceeds 16 MiB.
     /// <para><paramref name="address"/> 为负、<paramref name="sizeInBytes"/> 为 0 或负数，或 <paramref name="sizeInBytes"/> 超过 16 MiB。</para></exception>
-    /// <exception cref="OverflowException">
-    /// <paramref name="address"/> plus <paramref name="sizeInBytes"/> exceeds <see cref="long.MaxValue"/>.
+    /// <exception cref="OverflowException"><paramref name="address"/> plus <paramref name="sizeInBytes"/> exceeds <see cref="long.MaxValue"/>.
     /// <para><paramref name="address"/> 与 <paramref name="sizeInBytes"/> 之和超出 <see cref="long.MaxValue"/>。</para></exception>
     public async Task<(FirehoseResponse Response, byte[] Data)> PeekAsync(long sizeInBytes, long address, CancellationToken cancellationToken = default)
     {

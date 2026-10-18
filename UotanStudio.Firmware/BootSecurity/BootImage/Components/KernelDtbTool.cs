@@ -66,21 +66,14 @@ public static class KernelDtbTool
             : [];
     }
 
-    /// <summary>
-    /// Extracts the first DTB (the first valid FDT in the merged format).
-    /// <para>提取第一个 DTB（合并格式中的首个有效 FDT）。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Merged kernel-plus-DTB buffer scanned byte by byte for a valid FDT header.
-    /// <para>逐字节扫描有效 FDT 头的内核加 DTB 合并缓冲区。</para>
-    /// </param>
+    /// <summary>Extracts the first DTB (the first valid FDT in the merged format).
+    /// <para>提取第一个 DTB（合并格式中的首个有效 FDT）。</para></summary>
+    /// <param name="data">Merged kernel-plus-DTB buffer scanned byte by byte for a valid FDT header.
+    /// <para>逐字节扫描有效 FDT 头的内核加 DTB 合并缓冲区。</para></param>
     /// <returns>The full first FDT blob spanning its total size, or an empty array when no valid FDT is present.
-    /// <para>覆盖其总长度的首个完整 FDT 块；不存在有效 FDT 时返回空数组。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="data"/> is <see langword="null"/>.
-    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para>
-    /// </exception>
+    /// <para>覆盖其总长度的首个完整 FDT 块；不存在有效 FDT 时返回空数组。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
     public static byte[] ExtractFirstDtb(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);

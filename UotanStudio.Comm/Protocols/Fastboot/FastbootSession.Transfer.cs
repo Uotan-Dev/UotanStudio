@@ -83,36 +83,28 @@ public sealed partial class FastbootSession
         _varCache.Remove(FastbootConstants.VarMaxDownloadSize);
     }
 
-    /// <summary>
-    /// Downloads data to the device: sends download:&lt;hex-size&gt;, streams data, and awaits OKAY/FAIL.
-    /// Payloads exceeding the negotiated max download size are rejected.
-    /// <para>下载数据到设备：发送 download:&lt;hex-size&gt;，流式传输数据，等待 OKAY/FAIL。
-    /// 超过协商的最大下载大小的负载会被拒绝。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Payload source, read in transfer-chunk sized increments up to <paramref name="length"/> bytes; the caller keeps ownership.
-    /// <para>负载来源，按传输分块大小递增读取至多 <paramref name="length"/> 字节；所有权由调用方保留。</para>
-    /// </param>
-    /// <param name="length">
-    /// Exact payload size in bytes; must be between 1 and <see cref="uint.MaxValue"/> and no more than the negotiated max-download-size.
-    /// <para>精确负载字节数；必须在 1 到 <see cref="uint.MaxValue"/> 之间，且不超过协商的 max-download-size。</para>
-    /// </param>
-    /// <param name="progress">Receives the cumulative sent byte count after each chunk; may be <see langword="null"/>. <para>每个分块发送后接收累计字节数；可为 <see langword="null"/>。</para></param>
-    /// <param name="cancellationToken">Checked before every chunk read; cancelling aborts the download mid-payload. <para>每次读取分块前检查；取消会在传输中途终止下载。</para></param>
-    /// <returns>The terminal device response after the payload. A DATA reply announcing fewer bytes than
-    /// requested is zero-filled up to the announced size, drained, and returned with its text rewritten; a
-    /// DATA reply announcing more, or a terminal reply that never arrives, resets the transport before
-    /// returning, because the bootloader's download state machine can no longer be satisfied from this
-    /// side.
-    /// <para>负载传输后的设备终态响应。DATA 应答声明的字节数少于请求时，先按声明尺寸补零并排空，再返回
-    /// 改写文本后的响应；DATA 应答声明得更多，或终态应答始终未到达时，先重置传输再返回，因为 bootloader
-    /// 的下载状态机已无法从本端满足。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="length"/> is not in 1..<see cref="uint.MaxValue"/>. <para><paramref name="length"/> 不在 1 到 <see cref="uint.MaxValue"/> 范围内。</para></exception>
-    /// <exception cref="FastbootException">The payload exceeds the negotiated max-download-size, or the transport short-wrote a chunk. <para>负载超过协商上限，或传输层短写。</para></exception>
-    /// <exception cref="EndOfStreamException">The source stream ended before <paramref name="length"/> bytes were read. <para>源流在读取满 <paramref name="length"/> 字节前提前结束。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled. <para><paramref name="cancellationToken"/> 被取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
+    /// <summary>Downloads data to the device: sends download:&lt;hex-size&gt;, streams data, and awaits OKAY/FAIL. Payloads exceeding the negotiated max download size are rejected.
+    /// <para>下载数据到设备：发送 download:&lt;hex-size&gt;，流式传输数据，等待 OKAY/FAIL。 超过协商的最大下载大小的负载会被拒绝。</para></summary>
+    /// <param name="stream">Payload source, read in transfer-chunk sized increments up to <paramref name="length"/> bytes; the caller keeps ownership.
+    /// <para>负载来源，按传输分块大小递增读取至多 <paramref name="length"/> 字节；所有权由调用方保留。</para></param>
+    /// <param name="length">Exact payload size in bytes; must be between 1 and <see cref="uint.MaxValue"/> and no more than the negotiated max-download-size.
+    /// <para>精确负载字节数；必须在 1 到 <see cref="uint.MaxValue"/> 之间，且不超过协商的 max-download-size。</para></param>
+    /// <param name="progress">Receives the cumulative sent byte count after each chunk; may be <see langword="null"/>.
+    /// <para>每个分块发送后接收累计字节数；可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Checked before every chunk read; cancelling aborts the download mid-payload.
+    /// <para>每次读取分块前检查；取消会在传输中途终止下载。</para></param>
+    /// <returns>The terminal device response after the payload. A DATA reply announcing fewer bytes than requested is zero-filled up to the announced size, drained, and returned with its text rewritten; a DATA reply announcing more, or a terminal reply that never arrives, resets the transport before returning, because the bootloader's download state machine can no longer be satisfied from this side.
+    /// <para>负载传输后的设备终态响应。DATA 应答声明的字节数少于请求时，先按声明尺寸补零并排空，再返回 改写文本后的响应；DATA 应答声明得更多，或终态应答始终未到达时，先重置传输再返回，因为 bootloader 的下载状态机已无法从本端满足。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="length"/> is not in 1..<see cref="uint.MaxValue"/>.
+    /// <para><paramref name="length"/> 不在 1 到 <see cref="uint.MaxValue"/> 范围内。</para></exception>
+    /// <exception cref="FastbootException">The payload exceeds the negotiated max-download-size, or the transport short-wrote a chunk.
+    /// <para>负载超过协商上限，或传输层短写。</para></exception>
+    /// <exception cref="EndOfStreamException">The source stream ended before <paramref name="length"/> bytes were read.
+    /// <para>源流在读取满 <paramref name="length"/> 字节前提前结束。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session has been disposed.
+    /// <para>会话已释放。</para></exception>
     public FastbootResponse DownloadData(Stream stream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -332,22 +324,26 @@ public sealed partial class FastbootSession
         return DownloadData(fs, fs.Length, progress, cancellationToken);
     }
 
-    /// <summary>
-    /// Executes a command that yields a DATA response, then receives the announced payload
-    /// into the specified stream and awaits the trailing OKAY/FAIL.
-    /// Used by fetch/upload/get_staged Style commands.
-    /// <para>执行会产生 DATA 响应的命令，将声明的负载接收到指定流，并等待随后的 OKAY/FAIL。
-    /// 供 fetch/upload/get_staged 类命令使用。</para>
-    /// </summary>
-    /// <param name="command">Raw command sent first (e.g. <c>upload:&lt;name&gt;</c>); it must answer with a DATA frame. <para>首先发送的原始命令（如 <c>upload:&lt;name&gt;</c>）；必须返回 DATA 帧。</para></param>
-    /// <param name="output">Stream the payload is appended to at its current position; the caller keeps ownership. <para>在当前位置追加载负载的流；所有权由调用方保留。</para></param>
-    /// <param name="progress">Receives the cumulative received byte count after each chunk; may be <see langword="null"/>. <para>每个分块接收后接收累计字节数；可为 <see langword="null"/>。</para></param>
-    /// <param name="cancellationToken">Checked before every transport read; cancelling aborts the upload mid-payload. <para>每次传输读取前检查；取消会在传输中途终止上传。</para></param>
-    /// <returns>The trailing OKAY/FAIL response after the payload. <para>负载之后的 OKAY/FAIL 终态响应。</para></returns>
-    /// <exception cref="FastbootException">The command did not answer with a DATA response. <para>命令未返回 DATA 响应。</para></exception>
-    /// <exception cref="EndOfStreamException">The device stopped sending before the announced payload size. <para>设备在声明的负载大小传完前停止发送。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled. <para><paramref name="cancellationToken"/> 被取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
+    /// <summary>Executes a command that yields a DATA response, then receives the announced payload into the specified stream and awaits the trailing OKAY/FAIL. Used by fetch/upload/get_staged Style commands.
+    /// <para>执行会产生 DATA 响应的命令，将声明的负载接收到指定流，并等待随后的 OKAY/FAIL。 供 fetch/upload/get_staged 类命令使用。</para></summary>
+    /// <param name="command">Raw command sent first (e.g. <c>upload:&lt;name&gt;</c>); it must answer with a DATA frame.
+    /// <para>首先发送的原始命令（如 <c>upload:&lt;name&gt;</c>）；必须返回 DATA 帧。</para></param>
+    /// <param name="output">Stream the payload is appended to at its current position; the caller keeps ownership.
+    /// <para>在当前位置追加载负载的流；所有权由调用方保留。</para></param>
+    /// <param name="progress">Receives the cumulative received byte count after each chunk; may be <see langword="null"/>.
+    /// <para>每个分块接收后接收累计字节数；可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Checked before every transport read; cancelling aborts the upload mid-payload.
+    /// <para>每次传输读取前检查；取消会在传输中途终止上传。</para></param>
+    /// <returns>The trailing OKAY/FAIL response after the payload.
+    /// <para>负载之后的 OKAY/FAIL 终态响应。</para></returns>
+    /// <exception cref="FastbootException">The command did not answer with a DATA response.
+    /// <para>命令未返回 DATA 响应。</para></exception>
+    /// <exception cref="EndOfStreamException">The device stopped sending before the announced payload size.
+    /// <para>设备在声明的负载大小传完前停止发送。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session has been disposed.
+    /// <para>会话已释放。</para></exception>
     public FastbootResponse UploadData(string command, Stream output, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -439,19 +435,24 @@ public sealed partial class FastbootSession
         return take;
     }
 
-    /// <summary>
-    /// Uploads a file from the device following an upload: command and writes it to the
-    /// specified stream.
-    /// <para>执行 upload: 命令从设备上传文件并写入指定流。</para>
-    /// </summary>
-    /// <param name="filename">Device-side file path appended after <c>upload:</c>. <para>追加在 <c>upload:</c> 之后的设备侧文件路径。</para></param>
-    /// <param name="output">Stream the file content is appended to at its current position; the caller keeps ownership. <para>在当前位置追加文件内容的流；所有权由调用方保留。</para></param>
-    /// <param name="progress">Receives the cumulative received byte count after each chunk; may be <see langword="null"/>. <para>每个分块接收后接收累计字节数；可为 <see langword="null"/>。</para></param>
-    /// <param name="cancellationToken">Checked before every transport read; cancelling aborts the upload mid-payload. <para>每次传输读取前检查；取消会在传输中途终止上传。</para></param>
-    /// <returns>The trailing OKAY/FAIL response after the payload. <para>负载之后的 OKAY/FAIL 终态响应。</para></returns>
-    /// <exception cref="FastbootException">The <c>upload:</c> command did not answer with a DATA response. <para><c>upload:</c> 命令未返回 DATA 响应。</para></exception>
-    /// <exception cref="EndOfStreamException">The device stopped sending before the announced payload size. <para>设备在声明的负载大小传完前停止发送。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled. <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    /// <summary>Uploads a file from the device following an upload: command and writes it to the specified stream.
+    /// <para>执行 upload: 命令从设备上传文件并写入指定流。</para></summary>
+    /// <param name="filename">Device-side file path appended after <c>upload:</c>.
+    /// <para>追加在 <c>upload:</c> 之后的设备侧文件路径。</para></param>
+    /// <param name="output">Stream the file content is appended to at its current position; the caller keeps ownership.
+    /// <para>在当前位置追加文件内容的流；所有权由调用方保留。</para></param>
+    /// <param name="progress">Receives the cumulative received byte count after each chunk; may be <see langword="null"/>.
+    /// <para>每个分块接收后接收累计字节数；可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Checked before every transport read; cancelling aborts the upload mid-payload.
+    /// <para>每次传输读取前检查；取消会在传输中途终止上传。</para></param>
+    /// <returns>The trailing OKAY/FAIL response after the payload.
+    /// <para>负载之后的 OKAY/FAIL 终态响应。</para></returns>
+    /// <exception cref="FastbootException">The <c>upload:</c> command did not answer with a DATA response.
+    /// <para><c>upload:</c> 命令未返回 DATA 响应。</para></exception>
+    /// <exception cref="EndOfStreamException">The device stopped sending before the announced payload size.
+    /// <para>设备在声明的负载大小传完前停止发送。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     public FastbootResponse UploadToStream(string filename, Stream output, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
         => UploadData(FastbootConstants.CommandUpload + filename, output, progress, cancellationToken);
 
@@ -487,25 +488,30 @@ public sealed partial class FastbootSession
             : ms.ToArray();
     }
 
-    /// <summary>
-    /// Fetches a partition image from the device and writes it to a stream, automatically
-    /// fetching in chunks bounded by max-fetch-size when the partition is larger.
-    /// <para>从设备获取分区镜像并写入流；分区超过 max-fetch-size 时自动分块获取。</para>
-    /// </summary>
-    /// <param name="partition">The partition to fetch (e.g. "boot", "system"). <para>要获取的分区（如 "boot"、"system"）。</para></param>
-    /// <param name="output">The stream to write the fetched data to. <para>写入获取数据的流。</para></param>
-    /// <param name="offset">Byte offset within the partition to start fetching. <para>分区内开始获取的字节偏移。</para></param>
-    /// <param name="size">Number of bytes to fetch, or -1 for the entire partition. <para>要获取的字节数，-1 表示整个分区。</para></param>
-    /// <param name="progress">Receives the cumulative fetched byte count. <para>接收累计已获取字节数。</para></param>
-    /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
+    /// <summary>Fetches a partition image from the device and writes it to a stream, automatically fetching in chunks bounded by max-fetch-size when the partition is larger.
+    /// <para>从设备获取分区镜像并写入流；分区超过 max-fetch-size 时自动分块获取。</para></summary>
+    /// <param name="partition">The partition to fetch (e.g. "boot", "system").
+    /// <para>要获取的分区（如 "boot"、"system"）。</para></param>
+    /// <param name="output">The stream to write the fetched data to.<para>写入获取数据的流。</para></param>
+    /// <param name="offset">Byte offset within the partition to start fetching.
+    /// <para>分区内开始获取的字节偏移。</para></param>
+    /// <param name="size">Number of bytes to fetch, or -1 for the entire partition.
+    /// <para>要获取的字节数，-1 表示整个分区。</para></param>
+    /// <param name="progress">Receives the cumulative fetched byte count.
+    /// <para>接收累计已获取字节数。</para></param>
+    /// <param name="cancellationToken">A cancellation token.<para>取消令牌。</para></param>
     /// <returns>A success response when the full range was written; in chunked mode the first non-success chunk response is returned early.
-    /// <para>完整区间写入成功时返回成功响应；分块模式下提前返回第一个非成功分块的响应。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException"><paramref name="partition"/> is null or empty. <para><paramref name="partition"/> 为空。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> is negative. <para><paramref name="offset"/> 为负数。</para></exception>
-    /// <exception cref="FastbootException">A chunked <c>fetch:</c> command did not answer with a DATA response. <para>分块 <c>fetch:</c> 命令未返回 DATA 响应。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled. <para><paramref name="cancellationToken"/> 被取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
+    /// <para>完整区间写入成功时返回成功响应；分块模式下提前返回第一个非成功分块的响应。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="partition"/> is null or empty.
+    /// <para><paramref name="partition"/> 为空。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> is negative.
+    /// <para><paramref name="offset"/> 为负数。</para></exception>
+    /// <exception cref="FastbootException">A chunked <c>fetch:</c> command did not answer with a DATA response.
+    /// <para>分块 <c>fetch:</c> 命令未返回 DATA 响应。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session has been disposed.
+    /// <para>会话已释放。</para></exception>
     public FastbootResponse FetchToStream(string partition, Stream output, long offset = 0, long size = -1, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();

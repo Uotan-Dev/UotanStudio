@@ -7,17 +7,12 @@ namespace UotanStudio.Firmware.VendorFirmware.NTPi.Models;
 public record NtpiVersionKey
 {
 
-    /// <summary>
-    /// Initializes a new instance of NtpiVersionKey with the specified key and initialization vector.
-    /// <para>使用指定的密钥和初始化向量初始化 NtpiVersionKey 的新实例。</para>
-    /// </summary>
-    /// <param name="key">
-    /// AES key bytes; cloned on entry, so later changes to the caller's array are not observed.
-    /// <para>AES 密钥字节；入参即被克隆，调用方后续修改该数组不会生效。</para>
-    /// </param>
-    /// <param name="iv">
-    /// Initialization vector bytes; cloned on entry. <para>初始化向量字节；入参即被克隆。</para>
-    /// </param>
+    /// <summary>Initializes a new instance of NtpiVersionKey with the specified key and initialization vector.
+    /// <para>使用指定的密钥和初始化向量初始化 NtpiVersionKey 的新实例。</para></summary>
+    /// <param name="key">AES key bytes; cloned on entry, so later changes to the caller's array are not observed.
+    /// <para>AES 密钥字节；入参即被克隆，调用方后续修改该数组不会生效。</para></param>
+    /// <param name="iv">Initialization vector bytes; cloned on entry.
+    /// <para>初始化向量字节；入参即被克隆。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="key"/> or <paramref name="iv"/> is <see langword="null"/>.
     /// <para><paramref name="key"/> 或 <paramref name="iv"/> 为 <see langword="null"/>。</para></exception>
     public NtpiVersionKey(byte[] key, byte[] iv)

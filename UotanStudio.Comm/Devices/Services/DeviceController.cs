@@ -114,19 +114,14 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         get { lock (_gate) { return _snapshot; } }
     }
 
-    /// <summary>
-    /// Runs every discovery source in registration order and commits the combined inventory as a new generation. Refreshes are single-flight, so a caller queued behind an in-flight refresh returns the snapshot committed while it waited.
-    /// <para>按注册顺序执行所有发现源，并把合并后的设备清单提交为新的一代。刷新是单飞式的：排在在途刷新之后的调用方，返回其等待期间已提交的那份快照。</para>
-    /// </summary>
-    /// <param name="cancellationToken">
-    /// Passed to each source and re-checked after every source. <para>传递给每个发现源，并在每个源结束后再次检查。</para>
-    /// </param>
-    /// <returns>The currently committed snapshot. <para>当前已提交的快照。</para></returns>
-    /// <exception cref="InvalidOperationException">
-    /// A source returned a null, foreign-sourced, malformed or duplicate endpoint.
+    /// <summary>Runs every discovery source in registration order and commits the combined inventory as a new generation. Refreshes are single-flight, so a caller queued behind an in-flight refresh returns the snapshot committed while it waited.
+    /// <para>按注册顺序执行所有发现源，并把合并后的设备清单提交为新的一代。刷新是单飞式的：排在在途刷新之后的调用方，返回其等待期间已提交的那份快照。</para></summary>
+    /// <param name="cancellationToken">Passed to each source and re-checked after every source.
+    /// <para>传递给每个发现源，并在每个源结束后再次检查。</para></param>
+    /// <returns>The currently committed snapshot.<para>当前已提交的快照。</para></returns>
+    /// <exception cref="InvalidOperationException">A source returned a null, foreign-sourced, malformed or duplicate endpoint.
     /// <para>某发现源返回了 null、来源不符、格式非法或重复的端点。</para></exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The controller has been disposed, including while the call queued behind an in-flight refresh.
+    /// <exception cref="ObjectDisposedException">The controller has been disposed, including while the call queued behind an in-flight refresh.
     /// <para>控制器已被释放，包括在已启动刷新之后排队期间被释放。</para></exception>
     public async Task<DeviceSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
     {
@@ -195,29 +190,21 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         return result;
     }
 
-    /// <summary>
-    /// Leases the exact endpoint and opens only its transport, without building a protocol session.
-    /// <para>租用精确端点并仅打开其传输，不构建协议会话。</para>
-    /// </summary>
-    /// <param name="snapshot">
-    /// The live snapshot the endpoint was taken from; a stale snapshot is rejected. <para>端点所来自的当前快照；过期快照会被拒绝。</para>
-    /// </param>
-    /// <param name="id">
-    /// Exact endpoint identity to lease. <para>待租用的精确端点身份。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the open before the transport is acquired; a leased endpoint is released on cancellation.
-    /// <para>在传输取得之前取消开启；取消时已租用的端点会被归还。</para>
-    /// </param>
+    /// <summary>Leases the exact endpoint and opens only its transport, without building a protocol session.
+    /// <para>租用精确端点并仅打开其传输，不构建协议会话。</para></summary>
+    /// <param name="snapshot">The live snapshot the endpoint was taken from; a stale snapshot is rejected.
+    /// <para>端点所来自的当前快照；过期快照会被拒绝。</para></param>
+    /// <param name="id">Exact endpoint identity to lease.<para>待租用的精确端点身份。</para></param>
+    /// <param name="cancellationToken">Cancels the open before the transport is acquired; a leased endpoint is released on cancellation.
+    /// <para>在传输取得之前取消开启；取消时已租用的端点会被归还。</para></param>
     /// <returns>A transport-only lease whose <see cref="DeviceLease.Session"/> is null.
     /// <para>纯传输租约，其 <see cref="DeviceLease.Session"/> 为 null。</para></returns>
-    /// <exception cref="InvalidOperationException">
-    /// The snapshot is stale, the endpoint is already leased, or the opener returned no transport.
+    /// <exception cref="InvalidOperationException">The snapshot is stale, the endpoint is already leased, or the opener returned no transport.
     /// <para>快照过期、端点已被租用，或开启器未返回传输。</para></exception>
-    /// <exception cref="KeyNotFoundException">
-    /// The endpoint is not present in the snapshot. <para>快照中不存在该端点。</para></exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The controller has been disposed. <para>控制器已被释放。</para></exception>
+    /// <exception cref="KeyNotFoundException">The endpoint is not present in the snapshot.
+    /// <para>快照中不存在该端点。</para></exception>
+    /// <exception cref="ObjectDisposedException">The controller has been disposed.
+    /// <para>控制器已被释放。</para></exception>
     public async Task<DeviceLease> OpenAsync(DeviceSnapshot snapshot, DeviceEndpointId id,
         CancellationToken cancellationToken = default)
     {
@@ -249,26 +236,18 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Adopts an already-built protocol session into a controller lease: the reservation is
-    /// registered under the endpoint identity and returned on release, while the transport slot is
-    /// a no-op placeholder (the session owns its transport). Intended for server routes that have
-    /// no exclusively ownable USB endpoint.
-    /// <para>把一条已构建的协议会话纳入控制器租约管理：占用按端点身份登记，释放时归还，
-    /// 传输槽为无操作占位（会话自身持有其传输）。用于 server 会话等没有可独占 USB 端点的路由。</para>
-    /// </summary>
-    /// <param name="endpoint">
-    /// The endpoint whose identity carries the reservation. <para>承载占用登记、提供身份的端点。</para>
-    /// </param>
-    /// <param name="session">
-    /// The already-built protocol session to expose through the lease. <para>已经构建好、经租约对外暴露的协议会话。</para>
-    /// </param>
+    /// <summary>Adopts an already-built protocol session into a controller lease: the reservation is registered under the endpoint identity and returned on release, while the transport slot is a no-op placeholder (the session owns its transport). Intended for server routes that have no exclusively ownable USB endpoint.
+    /// <para>把一条已构建的协议会话纳入控制器租约管理：占用按端点身份登记，释放时归还， 传输槽为无操作占位（会话自身持有其传输）。用于 server 会话等没有可独占 USB 端点的路由。</para></summary>
+    /// <param name="endpoint">The endpoint whose identity carries the reservation.
+    /// <para>承载占用登记、提供身份的端点。</para></param>
+    /// <param name="session">The already-built protocol session to expose through the lease.
+    /// <para>已经构建好、经租约对外暴露的协议会话。</para></param>
     /// <returns>A lease whose transport slot is inert and whose release returns the reservation.
     /// <para>传输槽为无操作占位、释放时归还占用登记的租约。</para></returns>
-    /// <exception cref="InvalidOperationException">
-    /// The endpoint is already leased. <para>该端点已被租用。</para></exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The controller has been disposed. <para>控制器已被释放。</para></exception>
+    /// <exception cref="InvalidOperationException">The endpoint is already leased.
+    /// <para>该端点已被租用。</para></exception>
+    /// <exception cref="ObjectDisposedException">The controller has been disposed.
+    /// <para>控制器已被释放。</para></exception>
     public DeviceLease AdoptSession(DeviceEndpoint endpoint, object session)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -355,17 +334,11 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Reads the current transport generation observed for a physical identity without opening anything or advancing it. A consumer holding an older generation must treat its cached observations and leases as retired; entries are pruned when the OS reports the device removed.
-    /// <para>读取某物理身份当前观测到的传输代次，不打开设备也不推进代次。持有较旧代次的消费方须把其缓存观测与租约视为已退役；当操作系统报告设备移除时，相应条目会被清除。</para>
-    /// </summary>
-    /// <param name="identity">
-    /// The physical identity to look up. <para>待查询的物理身份。</para>
-    /// </param>
-    /// <param name="generation">
-    /// The latest generation stamped by an open or an observed mode transition.
-    /// <para>由打开或已观测模式迁移盖印的最近代际。</para>
-    /// </param>
+    /// <summary>Reads the current transport generation observed for a physical identity without opening anything or advancing it. A consumer holding an older generation must treat its cached observations and leases as retired; entries are pruned when the OS reports the device removed.
+    /// <para>读取某物理身份当前观测到的传输代次，不打开设备也不推进代次。持有较旧代次的消费方须把其缓存观测与租约视为已退役；当操作系统报告设备移除时，相应条目会被清除。</para></summary>
+    /// <param name="identity">The physical identity to look up.<para>待查询的物理身份。</para></param>
+    /// <param name="generation">The latest generation stamped by an open or an observed mode transition.
+    /// <para>由打开或已观测模式迁移盖印的最近代际。</para></param>
     /// <returns><see langword="false"/> when no transport instantiation was ever observed for the identity.
     /// <para>从未观测到该身份的任何传输实例化时返回 <see langword="false"/>。</para></returns>
     public bool TryPeekTransportGeneration(PhysicalDeviceIdentity identity, out TransportGeneration generation)

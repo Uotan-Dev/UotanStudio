@@ -14,22 +14,15 @@ internal sealed class OzipFormatParser : IOppFormatParser
 
     public OppFormat SupportedFormat => OppFormat.Ozip;
 
-    /// <summary>
-    /// Parses metadata from an OZip file stream.
-    /// <para>从流中解析 OZip 文件的元数据。</para>
-    /// </summary>
-    /// <param name="stream">Readable, seekable OZip stream owned by the caller; the header, the decrypted view and the
-    /// ZIP central directory are read from it, the original position is restored before returning, and it is never
-    /// closed. <para>调用方持有的可读、可寻址 OZip 流；从中读取头部、解密视图与 ZIP 中央目录，返回前恢复原位置，且不会关闭该流。</para></param>
-    /// <param name="fileSize">Total container byte length recorded as <see cref="OppMetadata.FileSize"/> without being
-    /// re-derived from the stream. <para>容器总字节长度，直接记入 <see cref="OppMetadata.FileSize"/>，不会由流重新推导。</para></param>
+    /// <summary>Parses metadata from an OZip file stream.<para>从流中解析 OZip 文件的元数据。</para></summary>
+    /// <param name="stream">Readable, seekable OZip stream owned by the caller; the header, the decrypted view and the ZIP central directory are read from it, the original position is restored before returning, and it is never closed.
+    /// <para>调用方持有的可读、可寻址 OZip 流；从中读取头部、解密视图与 ZIP 中央目录，返回前恢复原位置，且不会关闭该流。</para></param>
+    /// <param name="fileSize">Total container byte length recorded as <see cref="OppMetadata.FileSize"/> without being re-derived from the stream.
+    /// <para>容器总字节长度，直接记入 <see cref="OppMetadata.FileSize"/>，不会由流重新推导。</para></param>
     /// <param name="cryptoProvider">Not consulted; the OZip key is detected from the encrypted block itself.
     /// <para>本参数不被使用；OZip 密钥由密文块自身探测得到。</para></param>
-    /// <returns>Metadata naming the format <c>OZip</c> whose <see cref="OppMetadata.EntryCount"/> is the number of ZIP
-    /// entries or 1 when none are readable, and whose <see cref="OppMetadata.KeyId"/> is the detected key's description
-    /// or hex text, or <see langword="null"/> when no known key decrypts the archive or its ZIP data is invalid.
-    /// <para>返回格式名为 <c>OZip</c> 的元数据：其 <see cref="OppMetadata.EntryCount"/> 为 ZIP 条目数，无可读条目时为 1；
-    /// <see cref="OppMetadata.KeyId"/> 为探测到的密钥描述或十六进制文本，当已知密钥都无法解密或 ZIP 数据无效时为 <see langword="null"/>。</para></returns>
+    /// <returns>Metadata naming the format <c>OZip</c> whose <see cref="OppMetadata.EntryCount"/> is the number of ZIP entries or 1 when none are readable, and whose <see cref="OppMetadata.KeyId"/> is the detected key's description or hex text, or <see langword="null"/> when no known key decrypts the archive or its ZIP data is invalid.
+    /// <para>返回格式名为 <c>OZip</c> 的元数据：其 <see cref="OppMetadata.EntryCount"/> 为 ZIP 条目数，无可读条目时为 1； <see cref="OppMetadata.KeyId"/> 为探测到的密钥描述或十六进制文本，当已知密钥都无法解密或 ZIP 数据无效时为 <see langword="null"/>。</para></returns>
     public OppMetadata ParseMetadata(Stream stream, long fileSize, IOppCryptoProvider? cryptoProvider)
     {
         Guard.ThrowIfNull(stream);
@@ -86,20 +79,16 @@ internal sealed class OzipFormatParser : IOppFormatParser
         }
     }
 
-    /// <summary>
-    /// Parses the entry list from a stream.
-    /// <para>从流中解析条目列表。</para>
-    /// </summary>
-    /// <param name="stream">Readable, seekable OZip stream owned by the caller; the header and the decrypted ZIP view are
-    /// read from it, the original position is restored before returning, and it is never closed.
+    /// <summary>Parses the entry list from a stream.<para>从流中解析条目列表。</para></summary>
+    /// <param name="stream">Readable, seekable OZip stream owned by the caller; the header and the decrypted ZIP view are read from it, the original position is restored before returning, and it is never closed.
     /// <para>调用方持有的可读、可寻址 OZip 流；从中读取头部与解密后的 ZIP 视图，返回前恢复原位置，且不会关闭该流。</para></param>
     /// <param name="fileSize">Not consulted; the encrypted data range is taken from the OZip header.
     /// <para>本参数不被使用；密文数据范围取自 OZip 头部。</para></param>
-    /// <param name="metadata">Not consulted; the archive is re-read here. <para>本参数不被使用；本方法会重新读取该归档。</para></param>
+    /// <param name="metadata">Not consulted; the archive is re-read here.
+    /// <para>本参数不被使用；本方法会重新读取该归档。</para></param>
     /// <param name="cryptoProvider">Not consulted; the OZip key is detected from the encrypted block itself.
     /// <para>本参数不被使用；OZip 密钥由密文块自身探测得到。</para></param>
-    /// <returns>The non-directory ZIP entries of the decrypted view, or a single synthetic <c>decrypted.zip</c> entry
-    /// covering the encrypted payload when no entry is readable or no known key decrypts the archive.
+    /// <returns>The non-directory ZIP entries of the decrypted view, or a single synthetic <c>decrypted.zip</c> entry covering the encrypted payload when no entry is readable or no known key decrypts the archive.
     /// <para>返回解密视图中各非目录 ZIP 条目；无可读条目或已知密钥都无法解密时，返回一个覆盖密文负载的合成 <c>decrypted.zip</c> 条目。</para></returns>
     public IReadOnlyList<OppEntry> ParseEntries(Stream stream, long fileSize, OppMetadata metadata, IOppCryptoProvider? cryptoProvider)
     {
@@ -306,18 +295,15 @@ internal sealed class OzipFormatParser : IOppFormatParser
         return magic[0] == 0x50 && magic[1] == 0x4B && magic[2] == 0x03 && magic[3] == 0x04;
     }
 
-    /// <summary>
-    /// Extracts a single entry to an output stream (decrypts the OZip file).
-    /// <para>提取单个条目到输出流（解密 OZip 文件）。</para>
-    /// </summary>
-    /// <param name="stream">Readable, seekable OZip stream owned by the caller; its header and encrypted block are read
-    /// from the start regardless of the incoming position, and it stays open.
+    /// <summary>Extracts a single entry to an output stream (decrypts the OZip file).
+    /// <para>提取单个条目到输出流（解密 OZip 文件）。</para></summary>
+    /// <param name="stream">Readable, seekable OZip stream owned by the caller; its header and encrypted block are read from the start regardless of the incoming position, and it stays open.
     /// <para>调用方持有的可读、可寻址 OZip 流；不论入口位置如何，都从头读取其头部与密文块，且流保持打开。</para></param>
-    /// <param name="output">Writable stream receiving the whole decrypted payload; it is not seeked, flushed or closed
-    /// and its position advances by the bytes written. <para>接收完整解密负载的可写流；不对其寻址、刷新或关闭，其位置随写入字节前进。</para></param>
+    /// <param name="output">Writable stream receiving the whole decrypted payload; it is not seeked, flushed or closed and its position advances by the bytes written.
+    /// <para>接收完整解密负载的可写流；不对其寻址、刷新或关闭，其位置随写入字节前进。</para></param>
     /// <param name="entry">Not consulted; this format decrypts the archive as a whole rather than per entry.
     /// <para>本参数不被使用；该格式整体解密归档而非按条目解密。</para></param>
-    /// <param name="metadata">Not consulted. <para>本参数不被使用。</para></param>
+    /// <param name="metadata">Not consulted.<para>本参数不被使用。</para></param>
     /// <param name="keyId">Not consulted; the key is detected from the first encrypted block.
     /// <para>本参数不被使用；密钥由首个密文块探测得到。</para></param>
     /// <param name="cryptoProvider">Not consulted; OZip decryption uses its own built-in key set.

@@ -36,26 +36,15 @@ internal sealed class ApkFormatHandler : IFormatHandler
         return HeaderProbe.ProbeMagic(filePath, 4, 0, "PK\x03\x04"u8);
     }
 
-    /// <summary>
-    /// Reads the firmware metadata asynchronously.
-    /// <para>异步读取固件元数据。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// APK file to analyze through its manifest and archive structure.
-    /// <para>要经清单与归档结构进行分析的 APK 文件。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels before analysis starts; the analysis itself is synchronous.
-    /// <para>在分析开始前取消；分析本身为同步执行。</para>
-    /// </param>
-    /// <returns>
-    /// A task whose result is <c>Ok</c> with the analyzer description, or <c>Fail</c> when the archive cannot be read.
-    /// <para>任务结果为 <c>Ok</c> 并携带分析器描述，归档无法读取时为 <c>Fail</c>。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signalled.
-    /// <para><paramref name="cancellationToken"/> 已被触发。</para>
-    /// </exception>
+    /// <summary>Reads the firmware metadata asynchronously.<para>异步读取固件元数据。</para></summary>
+    /// <param name="filePath">APK file to analyze through its manifest and archive structure.
+    /// <para>要经清单与归档结构进行分析的 APK 文件。</para></param>
+    /// <param name="cancellationToken">Cancels before analysis starts; the analysis itself is synchronous.
+    /// <para>在分析开始前取消；分析本身为同步执行。</para></param>
+    /// <returns>A task whose result is <c>Ok</c> with the analyzer description, or <c>Fail</c> when the archive cannot be read.
+    /// <para>任务结果为 <c>Ok</c> 并携带分析器描述，归档无法读取时为 <c>Fail</c>。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -74,34 +63,19 @@ internal sealed class ApkFormatHandler : IFormatHandler
         }
     }
 
-    /// <summary>
-    /// Extracts the firmware contents asynchronously.
-    /// <para>异步提取固件内容。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// APK archive to extract; each declared entry size is checked against the output budget.
-    /// <para>要解包的 APK 归档；每个条目的声明长度都对照输出预算校验。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Destination directory, created on demand; no entry may resolve outside it.
-    /// <para>目标目录，按需创建；任何条目不得解析到目录之外。</para>
-    /// </param>
-    /// <param name="options">
-    /// Extraction options; <c>Overwrite</c> governs replacing outputs and <c>MaximumOutputBytes</c> bounds entry sizes.
-    /// <para>解包选项；<c>Overwrite</c> 决定是否替换已有输出，<c>MaximumOutputBytes</c> 限制条目大小总和。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before opening the archive and between entries; cancellation is rethrown.
-    /// <para>在打开归档前与条目之间检查；取消异常会重新抛出。</para>
-    /// </param>
-    /// <returns>
-    /// A task naming the generated metadata file and every extracted entry, or reporting an unpack failure.
-    /// <para>任务指明生成的元数据文件与每个解出的条目，或报告解包失败。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signalled; extraction errors are reported as failed results instead.
-    /// <para><paramref name="cancellationToken"/> 已被触发；提取错误则以失败结果报告。</para>
-    /// </exception>
+    /// <summary>Extracts the firmware contents asynchronously.<para>异步提取固件内容。</para></summary>
+    /// <param name="filePath">APK archive to extract; each declared entry size is checked against the output budget.
+    /// <para>要解包的 APK 归档；每个条目的声明长度都对照输出预算校验。</para></param>
+    /// <param name="outputDirectory">Destination directory, created on demand; no entry may resolve outside it.
+    /// <para>目标目录，按需创建；任何条目不得解析到目录之外。</para></param>
+    /// <param name="options">Extraction options; <c>Overwrite</c> governs replacing outputs and <c>MaximumOutputBytes</c> bounds entry sizes.
+    /// <para>解包选项；<c>Overwrite</c> 决定是否替换已有输出，<c>MaximumOutputBytes</c> 限制条目大小总和。</para></param>
+    /// <param name="cancellationToken">Checked before opening the archive and between entries; cancellation is rethrown.
+    /// <para>在打开归档前与条目之间检查；取消异常会重新抛出。</para></param>
+    /// <returns>A task naming the generated metadata file and every extracted entry, or reporting an unpack failure.
+    /// <para>任务指明生成的元数据文件与每个解出的条目，或报告解包失败。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled; extraction errors are reported as failed results instead.
+    /// <para><paramref name="cancellationToken"/> 已被触发；提取错误则以失败结果报告。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -186,31 +160,18 @@ internal sealed class ApkFormatHandler : IFormatHandler
         }
     }
 
-    /// <summary>
-    /// Packs the input into firmware asynchronously. Directories are rebuilt into an APK via
-    /// <see cref="ApkRepacker"/>; APK files are copied through.
-    /// <para>异步将输入打包为固件。目录经 <see cref="ApkRepacker"/> 重建为 APK；APK 文件直接复制。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Existing unpacked directory or an already-built APK file; a missing path yields a failed result.
-    /// <para>已解包的目录或已构建好的 APK 文件；路径不存在时得到失败结果。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination file; its parent directory is created on demand and an existing output is replaced.
-    /// <para>目标文件；按需创建其父目录，已有输出会被替换。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels before packing and is forwarded to the directory rebuild; file copying is synchronous and cannot observe it.
-    /// <para>在打包开始前取消，并在目录重建时继续传递；文件复制为同步执行，无法感知取消。</para>
-    /// </param>
-    /// <returns>
-    /// A task naming the produced file, or reporting a failure prefixed <c>APK pack failed:</c>.
-    /// <para>任务指明生成的文件，或以 <c>APK pack failed:</c> 前缀报告失败。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signalled.
-    /// <para><paramref name="cancellationToken"/> 已被触发。</para>
-    /// </exception>
+    /// <summary>Packs the input into firmware asynchronously. Directories are rebuilt into an APK via <see cref="ApkRepacker"/>; APK files are copied through.
+    /// <para>异步将输入打包为固件。目录经 <see cref="ApkRepacker"/> 重建为 APK；APK 文件直接复制。</para></summary>
+    /// <param name="inputPath">Existing unpacked directory or an already-built APK file; a missing path yields a failed result.
+    /// <para>已解包的目录或已构建好的 APK 文件；路径不存在时得到失败结果。</para></param>
+    /// <param name="outputPath">Destination file; its parent directory is created on demand and an existing output is replaced.
+    /// <para>目标文件；按需创建其父目录，已有输出会被替换。</para></param>
+    /// <param name="cancellationToken">Cancels before packing and is forwarded to the directory rebuild; file copying is synchronous and cannot observe it.
+    /// <para>在打包开始前取消，并在目录重建时继续传递；文件复制为同步执行，无法感知取消。</para></param>
+    /// <returns>A task naming the produced file, or reporting a failure prefixed <c>APK pack failed:</c>.
+    /// <para>任务指明生成的文件，或以 <c>APK pack failed:</c> 前缀报告失败。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try

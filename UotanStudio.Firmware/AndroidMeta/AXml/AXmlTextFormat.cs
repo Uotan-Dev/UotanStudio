@@ -12,32 +12,18 @@ namespace UotanStudio.Firmware.AndroidMeta.AXml;
 /// </summary>
 public static class AXmlTextFormat
 {
-    /// <summary>
-    /// Parses XML text back into an AXML model; <paramref name="reference"/> supplies type and
-    /// namespace hints.
-    /// <para>把 XML 文本解析回 AXML 模型；<paramref name="reference"/> 提供类型与命名空间参照。</para>
-    /// </summary>
-    /// <param name="xml">
-    /// The XML text, normally the output of <see cref="AXmlDocument.ToXml"/>.
-    /// <para>XML 文本，通常来自 <see cref="AXmlDocument.ToXml"/>。</para>
-    /// </param>
-    /// <param name="reference">
-    /// The original model whose attribute types and namespaces are reused; when absent, types are inferred from text.
-    /// <para>原模型，其属性类型与命名空间会被复用；缺失时按文本推断类型。</para>
-    /// </param>
-    /// <returns>
-    /// The rebuilt AXML model, carrying the reference header size and resource map when a reference
-    /// is supplied.
-    /// <para>重建的 AXML 模型；提供参照模型时沿用其头部大小与资源映射。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="xml"/> is <see langword="null"/>.
-    /// <para><paramref name="xml"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="AXmlException">
-    /// XML parsing fails or the document has no root element.
-    /// <para>XML 解析失败或文档没有根元素。</para>
-    /// </exception>
+    /// <summary>Parses XML text back into an AXML model; <paramref name="reference"/> supplies type and namespace hints.
+    /// <para>把 XML 文本解析回 AXML 模型；<paramref name="reference"/> 提供类型与命名空间参照。</para></summary>
+    /// <param name="xml">The XML text, normally the output of <see cref="AXmlDocument.ToXml"/>.
+    /// <para>XML 文本，通常来自 <see cref="AXmlDocument.ToXml"/>。</para></param>
+    /// <param name="reference">The original model whose attribute types and namespaces are reused; when absent, types are inferred from text.
+    /// <para>原模型，其属性类型与命名空间会被复用；缺失时按文本推断类型。</para></param>
+    /// <returns>The rebuilt AXML model, carrying the reference header size and resource map when a reference is supplied.
+    /// <para>重建的 AXML 模型；提供参照模型时沿用其头部大小与资源映射。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="xml"/> is <see langword="null"/>.
+    /// <para><paramref name="xml"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="AXmlException">XML parsing fails or the document has no root element.
+    /// <para>XML 解析失败或文档没有根元素。</para></exception>
     public static AXmlDocument Parse(string xml, AXmlDocument? reference = null)
     {
         ArgumentNullException.ThrowIfNull(xml);

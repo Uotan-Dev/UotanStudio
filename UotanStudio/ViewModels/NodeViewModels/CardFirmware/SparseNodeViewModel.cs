@@ -41,19 +41,10 @@ public class SparseNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>
-    /// Dispatches sparse conversion logic by the node type key (TypeKey): Image.Sparse.Convert converts between
-    /// raw and sparse according to the “To Sparse” input.
-    /// <para>按节点类型键（TypeKey）分发稀疏转换逻辑：Image.Sparse.Convert 按 “To Sparse” 输入在 raw/sparse 之间转换。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context.
-    /// <para>执行上下文。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Dispatches sparse conversion logic by the node type key (TypeKey): Image.Sparse.Convert converts between raw and sparse according to the “To Sparse” input.
+    /// <para>按节点类型键（TypeKey）分发稀疏转换逻辑：Image.Sparse.Convert 按 “To Sparse” 输入在 raw/sparse 之间转换。</para></summary>
+    /// <param name="context">The execution context.<para>执行上下文。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         try

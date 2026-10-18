@@ -127,21 +127,12 @@ public sealed class LanguageService
     /// </summary>
     public void Initialize() => RefreshBridge();
 
-    /// <summary>
-    /// Applies the language for the specified culture: updates every module manager, refreshes the
-    /// locale mirror dictionary, raises <see cref="LanguageChanged"/> and sends a
-    /// <see cref="LanguageStateChangedMessage"/>.
-    /// <para>应用指定语言的区域性：更新所有模块管理器、刷新语言镜像字典、触发 <see cref="LanguageChanged"/> 并发送 <see cref="LanguageStateChangedMessage"/>。</para>
-    /// </summary>
-    /// <param name="language">
-    /// The culture name to apply, such as "en-US" or "zh-CN". Unknown cultures fall back through
-    /// the parent-culture chain to the bundled English resources.
-    /// <para>要应用的区域性名称，如 "en-US" 或 "zh-CN"。未知区域性按父链回退到内置英文资源。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// Thrown when <paramref name="language"/> is null.
-    /// <para>当 <paramref name="language"/> 为 null 时抛出。</para>
-    /// </exception>
+    /// <summary>Applies the language for the specified culture: updates every module manager, refreshes the locale mirror dictionary, raises <see cref="LanguageChanged"/> and sends a <see cref="LanguageStateChangedMessage"/>.
+    /// <para>应用指定语言的区域性：更新所有模块管理器、刷新语言镜像字典、触发 <see cref="LanguageChanged"/> 并发送 <see cref="LanguageStateChangedMessage"/>。</para></summary>
+    /// <param name="language">The culture name to apply, such as "en-US" or "zh-CN". Unknown cultures fall back through the parent-culture chain to the bundled English resources.
+    /// <para>要应用的区域性名称，如 "en-US" 或 "zh-CN"。未知区域性按父链回退到内置英文资源。</para></param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="language"/> is null.
+    /// <para>当 <paramref name="language"/> 为 null 时抛出。</para></exception>
     public void ApplyLanguage(string language)
     {
         ArgumentNullException.ThrowIfNull(language);
@@ -159,20 +150,13 @@ public sealed class LanguageService
         WeakReferenceMessenger.Default.Send(new LanguageStateChangedMessage(language, previousLanguage));
     }
 
-    /// <summary>
-    /// Gets the localized string for the specified resource key.
-    /// Returns the key itself if the corresponding resource is not found.
-    /// <para>根据资源键获取本地化字符串。如果未找到对应资源，则返回键名本身。</para>
-    /// </summary>
-    /// <param name="key">The resource key to look up. <para>要查找的资源键名。</para></param>
-    /// <returns>
-    /// The localized string associated with the specified key, or the key itself if not found.
-    /// <para>与指定键关联的本地化字符串；如果未找到则返回键名本身。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// Thrown when <paramref name="key"/> is null.
-    /// <para>当 <paramref name="key"/> 为 null 时抛出。</para>
-    /// </exception>
+    /// <summary>Gets the localized string for the specified resource key. Returns the key itself if the corresponding resource is not found.
+    /// <para>根据资源键获取本地化字符串。如果未找到对应资源，则返回键名本身。</para></summary>
+    /// <param name="key">The resource key to look up.<para>要查找的资源键名。</para></param>
+    /// <returns>The localized string associated with the specified key, or the key itself if not found.
+    /// <para>与指定键关联的本地化字符串；如果未找到则返回键名本身。</para></returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="key"/> is null.
+    /// <para>当 <paramref name="key"/> 为 null 时抛出。</para></exception>
     public string GetString(string key)
     {
         ArgumentNullException.ThrowIfNull(key);
@@ -243,20 +227,14 @@ public sealed class LanguageService
         return [];
     }
 
-    /// <summary>
-    /// Gets the value of a key in one explicit culture, following the same parent-culture chain
-    /// the generator uses (exact culture, then parents, then the invariant base) without changing
-    /// the active application language.
-    /// <para>按显式区域性获取键值，遵循生成器相同的父区域性链（精确匹配、逐级父级、最后回退到不变基线），不改变当前应用语言。</para>
-    /// </summary>
-    /// <param name="key">The resource key to look up. <para>要查找的资源键名。</para></param>
-    /// <param name="culture">The culture to read from. <para>要读取的区域性。</para></param>
+    /// <summary>Gets the value of a key in one explicit culture, following the same parent-culture chain the generator uses (exact culture, then parents, then the invariant base) without changing the active application language.
+    /// <para>按显式区域性获取键值，遵循生成器相同的父区域性链（精确匹配、逐级父级、最后回退到不变基线），不改变当前应用语言。</para></summary>
+    /// <param name="key">The resource key to look up.<para>要查找的资源键名。</para></param>
+    /// <param name="culture">The culture to read from.<para>要读取的区域性。</para></param>
     /// <returns>The culture value, or <paramref name="key"/> itself when the key is unknown.
     /// <para>该区域性下的值；键未知时返回键名本身。</para></returns>
-    /// <exception cref="ArgumentNullException">
-    /// Thrown when <paramref name="key"/> or <paramref name="culture"/> is null.
-    /// <para>当 <paramref name="key"/> 或 <paramref name="culture"/> 为 null 时抛出。</para>
-    /// </exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="key"/> or <paramref name="culture"/> is null.
+    /// <para>当 <paramref name="key"/> 或 <paramref name="culture"/> 为 null 时抛出。</para></exception>
     public string GetTranslation(string key, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(key);

@@ -117,23 +117,15 @@ public sealed class NativeBinProvisioner
         => NativeBinCatalog.ByRid(rid)?.FileName
             ?? throw new ArgumentException($"No libusb entry for RID '{rid}'.", nameof(rid));
 
-    /// <summary>
-    /// Ensures a verified libusb runtime is cached and registered for the
-    /// supplied RID. On the happy path this returns the existing cache path
-    /// without touching the network.
-    /// <para>确保指定 RID 的 libusb 运行库已缓存并注册。缓存命中时不发起网络请求。</para>
-    /// </summary>
-    /// <param name="rid">Target runtime identifier. <para>目标运行时标识。</para></param>
-    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>
-    /// Absolute path of the cached libusb file ready for loading.
-    /// <para>可供加载的缓存 libusb 文件绝对路径。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The RID is not recognised by <see cref="NativeBinCatalog"/>.
+    /// <summary>Ensures a verified libusb runtime is cached and registered for the supplied RID. On the happy path this returns the existing cache path without touching the network.
+    /// <para>确保指定 RID 的 libusb 运行库已缓存并注册。缓存命中时不发起网络请求。</para></summary>
+    /// <param name="rid">Target runtime identifier.<para>目标运行时标识。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>Absolute path of the cached libusb file ready for loading.
+    /// <para>可供加载的缓存 libusb 文件绝对路径。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">The RID is not recognised by <see cref="NativeBinCatalog"/>.
     /// <para>RID 不被 <see cref="NativeBinCatalog"/> 识别。</para></exception>
-    /// <exception cref="NativeRuntimeNotAvailableException">
-    /// Every configured URL failed to produce a valid libusb binary.
+    /// <exception cref="NativeRuntimeNotAvailableException">Every configured URL failed to produce a valid libusb binary.
     /// <para>所有已配置的 URL 都无法获得有效的 libusb 二进制。</para></exception>
     public async Task<string> EnsureAsync(string rid, CancellationToken ct = default)
     {

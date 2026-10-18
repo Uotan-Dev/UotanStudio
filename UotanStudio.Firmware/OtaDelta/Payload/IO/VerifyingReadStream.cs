@@ -52,16 +52,10 @@ internal sealed class VerifyingReadStream : Stream
     /// <para>复制的字节数；在缓冲边界或输入结尾处少于 <paramref name="count"/>；输入耗尽后为 <c>0</c>。</para></returns>
     public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
 
-    /// <summary>
-    /// Reads bytes from the stream into the buffer.
-    /// <para>从流中读取字节到缓冲区。</para>
-    /// </summary>
-    /// <param name="buffer">Destination span to fill; a span of at least 64 KiB is served straight from the
-    /// hashing wrapper, otherwise the pooled buffer is refilled on demand. An empty span reads nothing.
-    /// <para>要填充的目标区间；不小于 64 KiB 的区间由带摘要的包装器直接服务，否则按需重填池化缓冲区；
-    /// 空区间不读取任何字节。</para></param>
-    /// <returns>The number of bytes copied, fewer than the span length at a buffering boundary or end of
-    /// input, <c>0</c> once the input is exhausted.
+    /// <summary>Reads bytes from the stream into the buffer.<para>从流中读取字节到缓冲区。</para></summary>
+    /// <param name="buffer">Destination span to fill; a span of at least 64 KiB is served straight from the hashing wrapper, otherwise the pooled buffer is refilled on demand. An empty span reads nothing.
+    /// <para>要填充的目标区间；不小于 64 KiB 的区间由带摘要的包装器直接服务，否则按需重填池化缓冲区； 空区间不读取任何字节。</para></param>
+    /// <returns>The number of bytes copied, fewer than the span length at a buffering boundary or end of input, <c>0</c> once the input is exhausted.
     /// <para>复制的字节数；在缓冲边界或输入结尾处少于区间长度；输入耗尽后为 <c>0</c>。</para></returns>
     /// <exception cref="ObjectDisposedException">The pooled buffer has been returned by disposal.
     /// <para>池化缓冲区已随释放归还。</para></exception>

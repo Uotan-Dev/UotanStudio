@@ -43,22 +43,13 @@ internal sealed class ErofsDirectoryEntry
         };
     }
 
-    /// <summary>
-    /// Parses one compact directory block and reports on-disk ordering and corruption.
-    /// <para>解析一个 compact 目录块，并按磁盘顺序返回条目、对损坏输入上报。</para>
-    /// </summary>
-    /// <param name="block">Directory block bytes whose first dirent nameoff selects both the start of the name
-    /// area and the byte size of the dirent array; a block shorter than <see cref="DirentSize"/> bytes parses
-    /// as an empty list.
-    /// <para>目录块字节；首条 dirent 的 nameoff 同时决定名称区起点与 dirent 数组的字节长度。块长不足
-    /// <see cref="DirentSize"/> 字节时结果为空列表。</para></param>
-    /// <returns>The decoded entries in on-disk order.
-    /// <para>按磁盘顺序解码出的条目。</para></returns>
-    /// <exception cref="FileSystemCorruptedException">The first nameoff has bit 15 set, is below
-    /// <see cref="DirentSize"/>, is past the block end or is not a multiple of <see cref="DirentSize"/>; some
-    /// later nameoff is not the running name end; or a name length is zero, above 255, or runs past the block.
-    /// <para>首条 nameoff 置有第 15 位、小于 <see cref="DirentSize"/>、超出块尾或不是 <see cref="DirentSize"/>
-    /// 的整数倍；后续某条 nameoff 不等于运行中的名称结束位置；或名称长度为零、超过 255、或越出块外。</para></exception>
+    /// <summary>Parses one compact directory block and reports on-disk ordering and corruption.
+    /// <para>解析一个 compact 目录块，并按磁盘顺序返回条目、对损坏输入上报。</para></summary>
+    /// <param name="block">Directory block bytes whose first dirent nameoff selects both the start of the name area and the byte size of the dirent array; a block shorter than <see cref="DirentSize"/> bytes parses as an empty list.
+    /// <para>目录块字节；首条 dirent 的 nameoff 同时决定名称区起点与 dirent 数组的字节长度。块长不足 <see cref="DirentSize"/> 字节时结果为空列表。</para></param>
+    /// <returns>The decoded entries in on-disk order.<para>按磁盘顺序解码出的条目。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The first nameoff has bit 15 set, is below <see cref="DirentSize"/>, is past the block end or is not a multiple of <see cref="DirentSize"/>; some later nameoff is not the running name end; or a name length is zero, above 255, or runs past the block.
+    /// <para>首条 nameoff 置有第 15 位、小于 <see cref="DirentSize"/>、超出块尾或不是 <see cref="DirentSize"/> 的整数倍；后续某条 nameoff 不等于运行中的名称结束位置；或名称长度为零、超过 255、或越出块外。</para></exception>
     public static List<ErofsDirectoryEntry> ParseBlock(ReadOnlySpan<byte> block)
     {
         var result = new List<ErofsDirectoryEntry>();

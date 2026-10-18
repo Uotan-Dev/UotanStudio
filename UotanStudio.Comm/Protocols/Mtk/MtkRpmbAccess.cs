@@ -98,29 +98,16 @@ public readonly record struct MtkRpmbFrameRange(long StartFrame, int FrameCount)
     /// </value>
     public int ByteLength => checked(FrameCount * MtkRpmbWire.FrameLength);
 
-    /// <summary>
-    /// Rejects an unbounded, misaligned or out-of-report range before any byte reaches the transport.
-    /// <para>在任何字节进入传输层之前，拒绝无界、错位或超出上报范围的要求。</para>
-    /// </summary>
-    /// <param name="reportedCapacityBytes">
-    /// The RPMB capacity the device reported, or <see langword="null"/> when the selected interface's
-    /// geometry carries no RPMB size field.
-    /// <para>设备上报的 RPMB 容量；所选接口的几何信息不含 RPMB 大小字段时为 <see langword="null"/>。</para>
-    /// </param>
-    /// <param name="maximumFrames">
-    /// The caller-configured ceiling on frames in one exchange.
-    /// <para>调用方配置的单次交换帧数上限。</para>
-    /// </param>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The start frame is negative, the count is not positive, the count exceeds
-    /// <paramref name="maximumFrames"/>, or the range extends past <paramref name="reportedCapacityBytes"/>.
-    /// <para>起始帧为负数、数量非正、数量超过 <paramref name="maximumFrames"/>，或范围超出
-    /// <paramref name="reportedCapacityBytes"/>。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// <paramref name="reportedCapacityBytes"/> is zero, meaning the device reported no RPMB area at all.
-    /// <para><paramref name="reportedCapacityBytes"/> 为零，表示设备完全未上报 RPMB 区域。</para>
-    /// </exception>
+    /// <summary>Rejects an unbounded, misaligned or out-of-report range before any byte reaches the transport.
+    /// <para>在任何字节进入传输层之前，拒绝无界、错位或超出上报范围的要求。</para></summary>
+    /// <param name="reportedCapacityBytes">The RPMB capacity the device reported, or <see langword="null"/> when the selected interface's geometry carries no RPMB size field.
+    /// <para>设备上报的 RPMB 容量；所选接口的几何信息不含 RPMB 大小字段时为 <see langword="null"/>。</para></param>
+    /// <param name="maximumFrames">The caller-configured ceiling on frames in one exchange.
+    /// <para>调用方配置的单次交换帧数上限。</para></param>
+    /// <exception cref="ArgumentOutOfRangeException">The start frame is negative, the count is not positive, the count exceeds <paramref name="maximumFrames"/>, or the range extends past <paramref name="reportedCapacityBytes"/>.
+    /// <para>起始帧为负数、数量非正、数量超过 <paramref name="maximumFrames"/>，或范围超出 <paramref name="reportedCapacityBytes"/>。</para></exception>
+    /// <exception cref="InvalidOperationException"><paramref name="reportedCapacityBytes"/> is zero, meaning the device reported no RPMB area at all.
+    /// <para><paramref name="reportedCapacityBytes"/> 为零，表示设备完全未上报 RPMB 区域。</para></exception>
     public void Validate(long? reportedCapacityBytes, int maximumFrames)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(StartFrame);

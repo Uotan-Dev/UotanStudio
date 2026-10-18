@@ -1,28 +1,20 @@
 namespace UotanStudio.Comm.Protocols.Mtk;
 
-/// <summary>
-/// An explicit operation within an exactly named GPT partition; no slot inference or implicit erase.
-/// <para>在名称完全匹配的 GPT 分区内执行的显式操作；不进行槽位推断，也不隐式擦除。</para>
-/// </summary>
-/// <param name="Kind">Raw, sparse or erase operation. <para>原始、稀疏或擦除操作。</para></param>
-/// <param name="PartitionName">
-/// Exact case-sensitive GPT name; ambiguous names are rejected.
-/// <para>精确且区分大小写的 GPT 名称；存在歧义的名称会被拒绝。</para>
-/// </param>
-/// <param name="Offset">
-/// Block-aligned byte offset relative to the named partition.
-/// <para>相对于命名分区的按块对齐字节偏移。</para>
-/// </param>
-/// <param name="Length">
-/// Exact raw/erase length or sparse target capacity, bounded by the named partition.
-/// <para>精确的原始/擦除长度或稀疏目标容量，受命名分区边界约束。</para>
-/// </param>
-/// <param name="SourcePath">Raw/sparse source path; null for erase. <para>原始/稀疏源路径；擦除时为 null。</para></param>
-/// <param name="SourceOffset">Raw source byte offset; zero for sparse/erase. <para>原始源字节偏移；稀疏/擦除时为零。</para></param>
-/// <param name="Verify">
-/// Whether written extents require readback; invalid for erase.
-/// <para>写出的范围是否需要回读；对擦除无效。</para>
-/// </param>
+/// <summary>An explicit operation within an exactly named GPT partition; no slot inference or implicit erase.
+/// <para>在名称完全匹配的 GPT 分区内执行的显式操作；不进行槽位推断，也不隐式擦除。</para></summary>
+/// <param name="Kind">Raw, sparse or erase operation.<para>原始、稀疏或擦除操作。</para></param>
+/// <param name="PartitionName">Exact case-sensitive GPT name; ambiguous names are rejected.
+/// <para>精确且区分大小写的 GPT 名称；存在歧义的名称会被拒绝。</para></param>
+/// <param name="Offset">Block-aligned byte offset relative to the named partition.
+/// <para>相对于命名分区的按块对齐字节偏移。</para></param>
+/// <param name="Length">Exact raw/erase length or sparse target capacity, bounded by the named partition.
+/// <para>精确的原始/擦除长度或稀疏目标容量，受命名分区边界约束。</para></param>
+/// <param name="SourcePath">Raw/sparse source path; null for erase.
+/// <para>原始/稀疏源路径；擦除时为 null。</para></param>
+/// <param name="SourceOffset">Raw source byte offset; zero for sparse/erase.
+/// <para>原始源字节偏移；稀疏/擦除时为零。</para></param>
+/// <param name="Verify">Whether written extents require readback; invalid for erase.
+/// <para>写出的范围是否需要回读；对擦除无效。</para></param>
 public sealed record MtkPartitionFlashStep(MtkFlashStepKind Kind, string PartitionName, long Offset, long Length,
     string? SourcePath = null, long SourceOffset = 0, bool Verify = false);
 

@@ -72,138 +72,84 @@ public sealed class CheckResult
 /// </summary>
 public sealed class Nb0Processor
 {
-    /// <summary>
-    /// Parses an NB0 firmware file and returns metadata.
-    /// <para>解析 NB0 固件文件并返回元数据。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path to the NB0 file. <para>NB0 文件路径。</para>
-    /// </param>
+    /// <summary>Parses an NB0 firmware file and returns metadata.
+    /// <para>解析 NB0 固件文件并返回元数据。</para></summary>
+    /// <param name="filePath">Path to the NB0 file.<para>NB0 文件路径。</para></param>
     /// <returns>Parsed metadata including entries, MD5 records and warnings.
     /// <para>解析后的元数据，包含条目、MD5 记录与警告。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="filePath"/> is <see langword="null"/> or empty. <para><paramref name="filePath"/> 为 <see langword="null"/> 或空。</para>
-    /// </exception>
-    /// <exception cref="Nb0CorruptedException">
-    /// The entry count exceeds the supported bound or the header table is larger than the file.
-    /// <para>条目数超出支持上限，或头部表大于文件。</para>
-    /// </exception>
-    /// <exception cref="EndOfStreamException">
-    /// The data ends in the middle of a header. <para>数据在头部中间位置结束。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The file cannot be opened for reading. <para>无法以读取方式打开文件。</para>
-    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="Nb0CorruptedException">The entry count exceeds the supported bound or the header table is larger than the file.
+    /// <para>条目数超出支持上限，或头部表大于文件。</para></exception>
+    /// <exception cref="EndOfStreamException">The data ends in the middle of a header.
+    /// <para>数据在头部中间位置结束。</para></exception>
+    /// <exception cref="IOException">The file cannot be opened for reading.
+    /// <para>无法以读取方式打开文件。</para></exception>
     public Nb0Metadata Parse(string filePath) => Nb0Parser.Parse(filePath);
 
-    /// <summary>
-    /// Asynchronously parses an NB0 firmware file and returns metadata.
-    /// <para>异步解析 NB0 固件文件并返回元数据。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path to the NB0 file. <para>NB0 文件路径。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before each entry header read. <para>在读取每个条目头之前检查。</para>
-    /// </param>
+    /// <summary>Asynchronously parses an NB0 firmware file and returns metadata.
+    /// <para>异步解析 NB0 固件文件并返回元数据。</para></summary>
+    /// <param name="filePath">Path to the NB0 file.<para>NB0 文件路径。</para></param>
+    /// <param name="cancellationToken">Checked before each entry header read.
+    /// <para>在读取每个条目头之前检查。</para></param>
     /// <returns>Parsed metadata including entries, MD5 records and warnings.
     /// <para>解析后的元数据，包含条目、MD5 记录与警告。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="filePath"/> is <see langword="null"/> or empty. <para><paramref name="filePath"/> 为 <see langword="null"/> 或空。</para>
-    /// </exception>
-    /// <exception cref="Nb0CorruptedException">
-    /// The entry count exceeds the supported bound or the header table is larger than the file.
-    /// <para>条目数超出支持上限，或头部表大于文件。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para>
-    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="Nb0CorruptedException">The entry count exceeds the supported bound or the header table is larger than the file.
+    /// <para>条目数超出支持上限，或头部表大于文件。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<Nb0Metadata> ParseAsync(string filePath, CancellationToken cancellationToken = default)
         => Nb0Parser.ParseAsync(filePath, cancellationToken);
 
-    /// <summary>
-    /// Extracts all entries from an NB0 firmware file to the output directory.
-    /// <para>从 NB0 固件文件中提取所有条目到输出目录。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path to the NB0 file. <para>NB0 文件路径。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Destination directory; created when absent. Each entry is written through a temporary file and
-    /// moved atomically, with invalid file-name characters replaced by underscores.
-    /// <para>目标目录；不存在时创建。每个条目先写入临时文件后原子移动，非法文件名字符替换为下划线。</para>
-    /// </param>
-    /// <param name="options">
-    /// Overwrite and per-entry filter behaviour; <see langword="null"/> overwrites and extracts everything.
-    /// <para>覆盖与逐条目过滤行为；为 <see langword="null"/> 时覆盖全部并提取所有条目。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives a report after each entry; <see langword="null"/> disables reporting.
-    /// <para>每个条目处理后收到报告；为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <returns>Result counting extracted files and collecting per-entry errors; <c>Success</c> is
-    /// <see langword="false"/> when any entry failed.
+    /// <summary>Extracts all entries from an NB0 firmware file to the output directory.
+    /// <para>从 NB0 固件文件中提取所有条目到输出目录。</para></summary>
+    /// <param name="filePath">Path to the NB0 file.<para>NB0 文件路径。</para></param>
+    /// <param name="outputDirectory">Destination directory; created when absent. Each entry is written through a temporary file and moved atomically, with invalid file-name characters replaced by underscores.
+    /// <para>目标目录；不存在时创建。每个条目先写入临时文件后原子移动，非法文件名字符替换为下划线。</para></param>
+    /// <param name="options">Overwrite and per-entry filter behaviour; <see langword="null"/> overwrites and extracts everything.
+    /// <para>覆盖与逐条目过滤行为；为 <see langword="null"/> 时覆盖全部并提取所有条目。</para></param>
+    /// <param name="progress">Receives a report after each entry; <see langword="null"/> disables reporting.
+    /// <para>每个条目处理后收到报告；为 <see langword="null"/> 时不上报。</para></param>
+    /// <returns>Result counting extracted files and collecting per-entry errors; <c>Success</c> is <see langword="false"/> when any entry failed.
     /// <para>统计提取数量并收集逐条目错误的结果；任一条目失败时 <c>Success</c> 为 <see langword="false"/>。</para></returns>
-    /// <exception cref="Nb0CorruptedException">
-    /// The container structure fails validation; per-entry failures do not throw and stay in the result.
-    /// <para>容器结构校验失败时抛出；逐条目失败不抛出，保留在结果中。</para>
-    /// </exception>
+    /// <exception cref="Nb0CorruptedException">The container structure fails validation; per-entry failures do not throw and stay in the result.
+    /// <para>容器结构校验失败时抛出；逐条目失败不抛出，保留在结果中。</para></exception>
     public ExtractionResult Extract(string filePath, string outputDirectory, ExtractionOptions? options = null, IProgress<Nb0ExtractionProgress>? progress = null)
         => new Nb0Extractor().Extract(filePath, outputDirectory, options, progress);
 
-    /// <summary>
-    /// Asynchronously extracts all entries from an NB0 firmware file to the output directory.
-    /// <para>异步从 NB0 固件文件中提取所有条目到输出目录。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path to the NB0 file. <para>NB0 文件路径。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Destination directory; created when absent. <para>目标目录；不存在时创建。</para>
-    /// </param>
-    /// <param name="options">
-    /// Overwrite and per-entry filter behaviour; <see langword="null"/> overwrites and extracts everything.
-    /// <para>覆盖与逐条目过滤行为；为 <see langword="null"/> 时覆盖全部并提取所有条目。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives a report after each entry; <see langword="null"/> disables reporting.
-    /// <para>每个条目处理后收到报告；为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before each entry and during data copy; cancellation is rethrown, not recorded as a per-entry error.
-    /// <para>在每个条目前及数据复制期间检查；取消会重新抛出，不作为逐条目错误记录。</para>
-    /// </param>
+    /// <summary>Asynchronously extracts all entries from an NB0 firmware file to the output directory.
+    /// <para>异步从 NB0 固件文件中提取所有条目到输出目录。</para></summary>
+    /// <param name="filePath">Path to the NB0 file.<para>NB0 文件路径。</para></param>
+    /// <param name="outputDirectory">Destination directory; created when absent.
+    /// <para>目标目录；不存在时创建。</para></param>
+    /// <param name="options">Overwrite and per-entry filter behaviour; <see langword="null"/> overwrites and extracts everything.
+    /// <para>覆盖与逐条目过滤行为；为 <see langword="null"/> 时覆盖全部并提取所有条目。</para></param>
+    /// <param name="progress">Receives a report after each entry; <see langword="null"/> disables reporting.
+    /// <para>每个条目处理后收到报告；为 <see langword="null"/> 时不上报。</para></param>
+    /// <param name="cancellationToken">Checked before each entry and during data copy; cancellation is rethrown, not recorded as a per-entry error.
+    /// <para>在每个条目前及数据复制期间检查；取消会重新抛出，不作为逐条目错误记录。</para></param>
     /// <returns>Result counting extracted files and collecting per-entry errors.
     /// <para>统计提取数量并收集逐条目错误的结果。</para></returns>
-    /// <exception cref="Nb0CorruptedException">
-    /// The container structure fails validation. <para>容器结构校验失败。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para>
-    /// </exception>
+    /// <exception cref="Nb0CorruptedException">The container structure fails validation.
+    /// <para>容器结构校验失败。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<ExtractionResult> ExtractAsync(string filePath, string outputDirectory, ExtractionOptions? options = null, IProgress<Nb0ExtractionProgress>? progress = null, CancellationToken cancellationToken = default)
         => new Nb0Extractor().ExtractAsync(filePath, outputDirectory, options, progress, cancellationToken);
 
-    /// <summary>
-    /// Verifies the MD5 checksums of entries in an NB0 firmware file.
-    /// <para>校验 NB0 固件文件中各条目的 MD5 校验和。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path to the NB0 file. <para>NB0 文件路径。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives a report after each entry; <see langword="null"/> disables reporting.
-    /// <para>每个条目处理后收到报告；为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <returns>Verification outcome with per-entry errors and a verified count; <c>IsValid</c> is
-    /// <see langword="false"/> when MD5 records are absent or a digest mismatches.
+    /// <summary>Verifies the MD5 checksums of entries in an NB0 firmware file.
+    /// <para>校验 NB0 固件文件中各条目的 MD5 校验和。</para></summary>
+    /// <param name="filePath">Path to the NB0 file.<para>NB0 文件路径。</para></param>
+    /// <param name="progress">Receives a report after each entry; <see langword="null"/> disables reporting.
+    /// <para>每个条目处理后收到报告；为 <see langword="null"/> 时不上报。</para></param>
+    /// <returns>Verification outcome with per-entry errors and a verified count; <c>IsValid</c> is <see langword="false"/> when MD5 records are absent or a digest mismatches.
     /// <para>包含逐条目错误与已校验计数的结果；无 MD5 记录或摘要不匹配时 <c>IsValid</c> 为 <see langword="false"/>。</para></returns>
-    /// <exception cref="Nb0CorruptedException">
-    /// The container structure fails validation. <para>容器结构校验失败。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The file cannot be opened for reading. <para>无法以读取方式打开文件。</para>
-    /// </exception>
+    /// <exception cref="Nb0CorruptedException">The container structure fails validation.
+    /// <para>容器结构校验失败。</para></exception>
+    /// <exception cref="IOException">The file cannot be opened for reading.
+    /// <para>无法以读取方式打开文件。</para></exception>
     public CheckResult Check(string filePath, IProgress<Nb0CheckProgress>? progress = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(filePath);
@@ -212,33 +158,21 @@ public sealed class Nb0Processor
         return CheckWithDigests(metadata, ComputeDigestsFromFile(filePath, metadata), progress);
     }
 
-    /// <summary>
-    /// Asynchronously verifies the MD5 checksums of entries in an NB0 firmware file.
-    /// <para>异步校验 NB0 固件文件中各条目的 MD5 校验和。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path to the NB0 file. <para>NB0 文件路径。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives a report after each entry; <see langword="null"/> disables reporting.
-    /// <para>每个条目处理后收到报告；为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked once before the file is opened; the verification loop itself runs synchronously.
-    /// <para>在打开文件前检查一次；校验循环本身同步执行。</para>
-    /// </param>
+    /// <summary>Asynchronously verifies the MD5 checksums of entries in an NB0 firmware file.
+    /// <para>异步校验 NB0 固件文件中各条目的 MD5 校验和。</para></summary>
+    /// <param name="filePath">Path to the NB0 file.<para>NB0 文件路径。</para></param>
+    /// <param name="progress">Receives a report after each entry; <see langword="null"/> disables reporting.
+    /// <para>每个条目处理后收到报告；为 <see langword="null"/> 时不上报。</para></param>
+    /// <param name="cancellationToken">Checked once before the file is opened; the verification loop itself runs synchronously.
+    /// <para>在打开文件前检查一次；校验循环本身同步执行。</para></param>
     /// <returns>Verification outcome with per-entry errors and a verified count.
     /// <para>包含逐条目错误与已校验计数的结果。</para></returns>
-    /// <exception cref="Nb0CorruptedException">
-    /// The container structure fails validation. <para>容器结构校验失败。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled before the file was opened.
-    /// <para><paramref name="cancellationToken"/> 在打开文件前被触发。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The file cannot be opened for reading. <para>无法以读取方式打开文件。</para>
-    /// </exception>
+    /// <exception cref="Nb0CorruptedException">The container structure fails validation.
+    /// <para>容器结构校验失败。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled before the file was opened.
+    /// <para><paramref name="cancellationToken"/> 在打开文件前被触发。</para></exception>
+    /// <exception cref="IOException">The file cannot be opened for reading.
+    /// <para>无法以读取方式打开文件。</para></exception>
     public async Task<CheckResult> CheckAsync(string filePath, IProgress<Nb0CheckProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -248,29 +182,18 @@ public sealed class Nb0Processor
         return await Task.FromResult(result).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Verifies the MD5 checksums of entries in NB0 firmware data from a stream.
-    /// <para>从流校验 NB0 固件数据中各条目的 MD5 校验和。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Readable, seekable NB0 data; the stream stays open and its position may move arbitrarily. Entries are hashed one
-    /// at a time through a bounded range stream, so no entry is ever materialized in memory.
-    /// <para>可读、可寻址的 NB0 数据流；流保持打开且位置会任意移动。各条目经由有界区间流逐个计算摘要，任何条目都不会被整体物化到内存。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives a report after each entry; <see langword="null"/> disables reporting.
-    /// <para>每个条目处理后收到报告；为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <returns>Verification outcome; <c>IsValid</c> is <see langword="false"/> when MD5 records are
-    /// absent, a record is missing for an entry, or a digest mismatches.
+    /// <summary>Verifies the MD5 checksums of entries in NB0 firmware data from a stream.
+    /// <para>从流校验 NB0 固件数据中各条目的 MD5 校验和。</para></summary>
+    /// <param name="stream">Readable, seekable NB0 data; the stream stays open and its position may move arbitrarily. Entries are hashed one at a time through a bounded range stream, so no entry is ever materialized in memory.
+    /// <para>可读、可寻址的 NB0 数据流；流保持打开且位置会任意移动。各条目经由有界区间流逐个计算摘要，任何条目都不会被整体物化到内存。</para></param>
+    /// <param name="progress">Receives a report after each entry; <see langword="null"/> disables reporting.
+    /// <para>每个条目处理后收到报告；为 <see langword="null"/> 时不上报。</para></param>
+    /// <returns>Verification outcome; <c>IsValid</c> is <see langword="false"/> when MD5 records are absent, a record is missing for an entry, or a digest mismatches.
     /// <para>校验结果；当无 MD5 记录、条目缺少记录或摘要不匹配时 <c>IsValid</c> 为 <see langword="false"/>。</para></returns>
-    /// <exception cref="Nb0CorruptedException">
-    /// The container structure fails validation or an entry range exceeds the stream length.
-    /// <para>容器结构校验失败，或条目范围超出流长度。</para>
-    /// </exception>
-    /// <exception cref="NotSupportedException">
-    /// <paramref name="stream"/> cannot be read or seeked. <para><paramref name="stream"/> 不可读取或寻址。</para>
-    /// </exception>
+    /// <exception cref="Nb0CorruptedException">The container structure fails validation or an entry range exceeds the stream length.
+    /// <para>容器结构校验失败，或条目范围超出流长度。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="stream"/> cannot be read or seeked.
+    /// <para><paramref name="stream"/> 不可读取或寻址。</para></exception>
     public CheckResult CheckFromStream(Stream stream, IProgress<Nb0CheckProgress>? progress = null)
     {
         var metadata = Nb0Parser.ParseFromStream(stream);
@@ -389,27 +312,17 @@ public sealed class Nb0Processor
         return missing;
     }
 
-    /// <summary>
-    /// Returns the metadata of an NB0 firmware file in JSON format.
-    /// <para>以 JSON 格式返回 NB0 固件文件的元数据。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path to the NB0 file. <para>NB0 文件路径。</para>
-    /// </param>
-    /// <param name="compact">
-    /// <see langword="true"/> removes indentation and line breaks; <see langword="false"/> produces
-    /// two-space indented output. <para>为 <see langword="true"/> 时去除缩进与换行；为 <see langword="false"/> 时使用两空格缩进。</para>
-    /// </param>
-    /// <returns>A JSON object with <c>entryCount</c>, <c>totalSize</c>, <c>dataSectionOffset</c>, the
-    /// inferred firmware fields, and an <c>entries</c> array of name/offset/size records.
-    /// <para>包含 <c>entryCount</c>、<c>totalSize</c>、<c>dataSectionOffset</c>、推断固件字段，
-    /// 以及由 name/offset/size 记录组成的 <c>entries</c> 数组的 JSON 对象。</para></returns>
-    /// <exception cref="Nb0CorruptedException">
-    /// The container structure fails validation. <para>容器结构校验失败。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The file cannot be opened for reading. <para>无法以读取方式打开文件。</para>
-    /// </exception>
+    /// <summary>Returns the metadata of an NB0 firmware file in JSON format.
+    /// <para>以 JSON 格式返回 NB0 固件文件的元数据。</para></summary>
+    /// <param name="filePath">Path to the NB0 file.<para>NB0 文件路径。</para></param>
+    /// <param name="compact"><see langword="true"/> removes indentation and line breaks; <see langword="false"/> produces two-space indented output.
+    /// <para>为 <see langword="true"/> 时去除缩进与换行；为 <see langword="false"/> 时使用两空格缩进。</para></param>
+    /// <returns>A JSON object with <c>entryCount</c>, <c>totalSize</c>, <c>dataSectionOffset</c>, the inferred firmware fields, and an <c>entries</c> array of name/offset/size records.
+    /// <para>包含 <c>entryCount</c>、<c>totalSize</c>、<c>dataSectionOffset</c>、推断固件字段， 以及由 name/offset/size 记录组成的 <c>entries</c> 数组的 JSON 对象。</para></returns>
+    /// <exception cref="Nb0CorruptedException">The container structure fails validation.
+    /// <para>容器结构校验失败。</para></exception>
+    /// <exception cref="IOException">The file cannot be opened for reading.
+    /// <para>无法以读取方式打开文件。</para></exception>
     public string ParseAsJson(string filePath, bool compact = false)
     {
         var metadata = Parse(filePath);

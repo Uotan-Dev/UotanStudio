@@ -49,25 +49,20 @@ public sealed unsafe class VaApiSession : IDisposable
     private bool _disposed;
     private readonly int _thread = Environment.CurrentManagedThreadId;
 
-    /// <summary>
-    /// Opens an explicit DRM render node with close-on-exec and initializes the VA driver.
-    /// <para>以 close-on-exec 方式打开指定的 DRM 渲染节点，并初始化 VA 驱动。</para>
-    /// </summary>
-    /// <param name="renderNode">
-    /// Absolute path of the DRM render node to open, such as <c>/dev/dri/renderD128</c>.
-    /// <para>要打开的 DRM 渲染节点绝对路径，例如 <c>/dev/dri/renderD128</c>。</para>
-    /// </param>
+    /// <summary>Opens an explicit DRM render node with close-on-exec and initializes the VA driver.
+    /// <para>以 close-on-exec 方式打开指定的 DRM 渲染节点，并初始化 VA 驱动。</para></summary>
+    /// <param name="renderNode">Absolute path of the DRM render node to open, such as <c>/dev/dri/renderD128</c>.
+    /// <para>要打开的 DRM 渲染节点绝对路径，例如 <c>/dev/dri/renderD128</c>。</para></param>
     /// <exception cref="PlatformNotSupportedException">The current OS is not Linux.
     /// <para>当前操作系统不是 Linux。</para></exception>
     /// <exception cref="ArgumentException"><c>renderNode</c> is null or empty.
     /// <para><c>renderNode</c> 为 null 或空。</para></exception>
-    /// <exception cref="IOException">The render node cannot be opened. <para>无法打开该渲染节点。</para></exception>
+    /// <exception cref="IOException">The render node cannot be opened.
+    /// <para>无法打开该渲染节点。</para></exception>
     /// <exception cref="NotSupportedException">The driver exposes no VA DRM display for the node.
     /// <para>驱动未为该节点提供 VA DRM display。</para></exception>
-    /// <exception cref="InvalidOperationException">
-    /// <c>vaInitialize</c> returned a failure status.
-    /// <para><c>vaInitialize</c> 返回失败状态。</para>
-    /// </exception>
+    /// <exception cref="InvalidOperationException"><c>vaInitialize</c> returned a failure status.
+    /// <para><c>vaInitialize</c> 返回失败状态。</para></exception>
     /// <example>
     /// <code>
     /// using var session = new VaApiSession("/dev/dri/renderD128");
@@ -140,15 +135,12 @@ public sealed unsafe class VaApiSession : IDisposable
         }
     }
 
-    /// <summary>
-    /// Queries actual driver profile/entrypoint pairs for decoding, encoding and processing.
-    /// <para>查询驱动实际提供的解码、编码与处理 profile/entrypoint 组合。</para>
-    /// </summary>
-    /// <returns>
-    /// Every pair the driver advertises; presence of a pair does not prove a specific stream decodes.
-    /// <para>驱动报告的全部组合；某组合存在并不能证明具体码流可解码。</para>
-    /// </returns>
-    /// <exception cref="ObjectDisposedException">The session was disposed. <para>会话已被释放。</para></exception>
+    /// <summary>Queries actual driver profile/entrypoint pairs for decoding, encoding and processing.
+    /// <para>查询驱动实际提供的解码、编码与处理 profile/entrypoint 组合。</para></summary>
+    /// <returns>Every pair the driver advertises; presence of a pair does not prove a specific stream decodes.
+    /// <para>驱动报告的全部组合；某组合存在并不能证明具体码流可解码。</para></returns>
+    /// <exception cref="ObjectDisposedException">The session was disposed.
+    /// <para>会话已被释放。</para></exception>
     /// <exception cref="InvalidOperationException">The session belongs to another thread or a query failed.
     /// <para>会话属于其他线程，或查询失败。</para></exception>
     /// <exception cref="InvalidDataException">The driver reported an out-of-range capability count.
@@ -176,10 +168,8 @@ public sealed unsafe class VaApiSession : IDisposable
         return result;
     }
 
-    /// <summary>
-    /// Creates an 8-bit YUV420 context and reference surface pool, replacing any prior context.
-    /// <para>创建 8 位 YUV420 上下文与参考表面池，并替换之前的任何上下文。</para>
-    /// </summary>
+    /// <summary>Creates an 8-bit YUV420 context and reference surface pool, replacing any prior context.
+    /// <para>创建 8 位 YUV420 上下文与参考表面池，并替换之前的任何上下文。</para></summary>
     /// <param name="profile">VA profile value the driver must advertise; see <see cref="QueryCapabilities"/>.
     /// <para>驱动必须报告的 VA profile 值；参见 <see cref="QueryCapabilities"/>。</para></param>
     /// <param name="entrypoint">VA entrypoint value paired with <c>profile</c>.
@@ -190,7 +180,8 @@ public sealed unsafe class VaApiSession : IDisposable
     /// <para>解码帧高度（像素），须处于共享尺寸上限之内。</para></param>
     /// <param name="surfaceCount">Pool size from 1 to 32 surfaces; defaults to 16.
     /// <para>池大小，1 到 32 个表面；默认为 16。</para></param>
-    /// <exception cref="ObjectDisposedException">The session was disposed. <para>会话已被释放。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session was disposed.
+    /// <para>会话已被释放。</para></exception>
     /// <exception cref="InvalidOperationException">The session belongs to another thread or a VA call failed.
     /// <para>会话属于其他线程，或某次 VA 调用失败。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">Dimensions or <c>surfaceCount</c> are outside the supported bounds.
@@ -221,17 +212,14 @@ public sealed unsafe class VaApiSession : IDisposable
         catch { ReleaseContext(); throw; }
     }
 
-    /// <summary>
-    /// Gets a native surface ID for use in serialized reference-picture parameters.
-    /// <para>获取原生表面 ID，用于序列化的参考帧参数中。</para>
-    /// </summary>
+    /// <summary>Gets a native surface ID for use in serialized reference-picture parameters.
+    /// <para>获取原生表面 ID，用于序列化的参考帧参数中。</para></summary>
     /// <param name="index">Zero-based position in the pool created by <see cref="Configure"/>.
     /// <para>由 <see cref="Configure"/> 创建的池中的从零开始的索引。</para></param>
-    /// <returns>
-    /// The VA surface ID; valid only while the current context lives.
-    /// <para>VA 表面 ID；仅在当前上下文存活期间有效。</para>
-    /// </returns>
-    /// <exception cref="ObjectDisposedException">The session was disposed. <para>会话已被释放。</para></exception>
+    /// <returns>The VA surface ID; valid only while the current context lives.
+    /// <para>VA 表面 ID；仅在当前上下文存活期间有效。</para></returns>
+    /// <exception cref="ObjectDisposedException">The session was disposed.
+    /// <para>会话已被释放。</para></exception>
     /// <exception cref="InvalidOperationException">The session belongs to another thread.
     /// <para>会话属于其他线程。</para></exception>
     /// <exception cref="IndexOutOfRangeException"><c>index</c> is outside the surface pool.

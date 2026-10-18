@@ -183,20 +183,13 @@ public partial class NewProjectWindow : Window
     {
     }
 
-    /// <summary>
-    /// Initializes the form: the location defaults to <c>&lt;baseDirectory&gt;/&lt;default name&gt;</c>,
-    /// where the default name is the first free NewProjectN under the base directory (names in
-    /// <paramref name="reservedNames"/> count as taken too).
-    /// <para>初始化新建表单：位置默认 <c>&lt;baseDirectory&gt;/&lt;默认名&gt;</c>，
-    /// 默认名为基础目录下第一个空闲的 NewProjectN（<paramref name="reservedNames"/> 亦视为占用）。</para>
-    /// </summary>
-    /// <param name="mode">Semantic mode of the form. <para>表单语义模式。</para></param>
-    /// <param name="baseDirectory">
-    /// Default base directory; null uses the app directory (next to the toolbox).
-    /// <para>默认基础目录；null 时使用应用所在目录（工具箱同级）。</para>
-    /// </param>
-    /// <param name="reservedNames">
-    /// <para>额外视为占用的名称（如现有子项目名）。</para>Additional taken names (e.g. existing sub-projects).</param>
+    /// <summary>Initializes the form: the location defaults to <c>&lt;baseDirectory&gt;/&lt;default name&gt;</c>, where the default name is the first free NewProjectN under the base directory (names in <paramref name="reservedNames"/> count as taken too).
+    /// <para>初始化新建表单：位置默认 <c>&lt;baseDirectory&gt;/&lt;默认名&gt;</c>， 默认名为基础目录下第一个空闲的 NewProjectN（<paramref name="reservedNames"/> 亦视为占用）。</para></summary>
+    /// <param name="mode">Semantic mode of the form.<para>表单语义模式。</para></param>
+    /// <param name="baseDirectory">Default base directory; null uses the app directory (next to the toolbox).
+    /// <para>默认基础目录；null 时使用应用所在目录（工具箱同级）。</para></param>
+    /// <param name="reservedNames"> <para>额外视为占用的名称（如现有子项目名）。</para>Additional taken names (e.g.
+    /// existing sub-projects). </param>
     public NewProjectWindow(
         NewProjectWindowMode mode,
         string? baseDirectory,

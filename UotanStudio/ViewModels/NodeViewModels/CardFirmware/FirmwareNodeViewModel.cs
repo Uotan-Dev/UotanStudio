@@ -21,21 +21,10 @@ public partial class FirmwareNodeViewModel : FlowNodeViewModel
     {
     }
 
-    /// <summary>
-    /// Dispatches firmware logic by the node type key (TypeKey): Firmware.Container.Unpack unpacks (boot/oppo/dt), Firmware.Container.Pack packs
-    /// (boot/cpio/dtbo), Validation.Signature.Verify verifies an AVB signature, and Firmware.Container.Extract extracts a
-    /// partition from a payload.
-    /// <para>按节点类型键（TypeKey）分发对应的固件逻辑：Firmware.Container.Unpack 解包（boot/oppo/dt）、Firmware.Container.Pack 打包（boot/cpio/dtbo）、
-    /// Validation.Signature.Verify 校验 AVB 签名、Firmware.Container.Extract 从 payload 提取分区。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context.
-    /// <para>执行上下文。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Dispatches firmware logic by the node type key (TypeKey): Firmware.Container.Unpack unpacks (boot/oppo/dt), Firmware.Container.Pack packs (boot/cpio/dtbo), Validation.Signature.Verify verifies an AVB signature, and Firmware.Container.Extract extracts a partition from a payload.
+    /// <para>按节点类型键（TypeKey）分发对应的固件逻辑：Firmware.Container.Unpack 解包（boot/oppo/dt）、Firmware.Container.Pack 打包（boot/cpio/dtbo）、 Validation.Signature.Verify 校验 AVB 签名、Firmware.Container.Extract 从 payload 提取分区。</para></summary>
+    /// <param name="context">The execution context.<para>执行上下文。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         try

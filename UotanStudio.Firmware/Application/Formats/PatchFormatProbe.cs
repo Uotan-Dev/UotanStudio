@@ -20,39 +20,21 @@ public static class PatchFormatProbe
     private const int ProbeSize = 4096;
     private const int MaxEntries = 100_000;
 
-    /// <summary>
-    /// Inspects a seekable stream and restores its position. An INI hint explicitly selects that ambiguous text dialect.
-    /// Structural success checks metadata/layout, not cryptographic trust, decompressed content or runtime compatibility.
-    /// <para>探测可寻址的流并在返回后恢复其位置。INI 提示会显式选定这一有歧义的文本方言。结构探测成功只校验元数据与
-    /// 布局，而非密码学信任、解压后的内容或运行时兼容性。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Readable, seekable content stream. Signature probing reads at most the first 4096 bytes; text dialects
-    /// may read the whole stream up to the configured byte and character limits. The position is restored even
-    /// on failure paths.
-    /// <para>可读取且可寻址的内容流。签名探测最多读取前 4096 字节；文本方言可能读取整个流，但受配置的字节与字符上限
-    /// 约束。即使失败路径也会恢复位置。</para>
-    /// </param>
-    /// <param name="hint">
-    /// Optional disambiguation hint; only <see cref="PatchFormatKind.Ini"/> alters detection, forcing that
-    /// ambiguous text dialect. Defaults to <see cref="PatchFormatKind.Unknown"/>.
-    /// <para>可选的消歧提示；只有 <see cref="PatchFormatKind.Ini"/> 会改变探测，强制选定有歧义的文本方言。默认为
-    /// <see cref="PatchFormatKind.Unknown"/>。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels probing; checked before reads and between bounded read, parse and chunk-validation steps.
-    /// <para>取消探测；在读取之前以及在有界读取、解析和块校验各步骤之间都会检查。</para>
-    /// </param>
-    /// <returns>The inspection outcome. A recognised but structurally invalid image yields a rejected result with
-    /// <see cref="PatchFormatEvidence.Signature"/> evidence instead of throwing. Never <see langword="null"/>.
-    /// <para>探测结果。识别成功但结构无效的镜像不会抛出异常，而是返回证据为 <see cref="PatchFormatEvidence.Signature"/>
-    /// 的被拒绝结果。绝不为 <see langword="null"/>。</para></returns>
+    /// <summary>Inspects a seekable stream and restores its position. An INI hint explicitly selects that ambiguous text dialect. Structural success checks metadata/layout, not cryptographic trust, decompressed content or runtime compatibility.
+    /// <para>探测可寻址的流并在返回后恢复其位置。INI 提示会显式选定这一有歧义的文本方言。结构探测成功只校验元数据与 布局，而非密码学信任、解压后的内容或运行时兼容性。</para></summary>
+    /// <param name="stream">Readable, seekable content stream. Signature probing reads at most the first 4096 bytes; text dialects may read the whole stream up to the configured byte and character limits. The position is restored even on failure paths.
+    /// <para>可读取且可寻址的内容流。签名探测最多读取前 4096 字节；文本方言可能读取整个流，但受配置的字节与字符上限 约束。即使失败路径也会恢复位置。</para></param>
+    /// <param name="hint">Optional disambiguation hint; only <see cref="PatchFormatKind.Ini"/> alters detection, forcing that ambiguous text dialect. Defaults to <see cref="PatchFormatKind.Unknown"/>.
+    /// <para>可选的消歧提示；只有 <see cref="PatchFormatKind.Ini"/> 会改变探测，强制选定有歧义的文本方言。默认为 <see cref="PatchFormatKind.Unknown"/>。</para></param>
+    /// <param name="cancellationToken">Cancels probing; checked before reads and between bounded read, parse and chunk-validation steps.
+    /// <para>取消探测；在读取之前以及在有界读取、解析和块校验各步骤之间都会检查。</para></param>
+    /// <returns>The inspection outcome. A recognised but structurally invalid image yields a rejected result with <see cref="PatchFormatEvidence.Signature"/> evidence instead of throwing. Never <see langword="null"/>.
+    /// <para>探测结果。识别成功但结构无效的镜像不会抛出异常，而是返回证据为 <see cref="PatchFormatEvidence.Signature"/> 的被拒绝结果。绝不为 <see langword="null"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="stream"/> is not readable or not seekable.
     /// <para><paramref name="stream"/> 不可读取或不可寻址。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="hint"/> is not a defined
-    /// <see cref="PatchFormatKind"/> value.
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="hint"/> is not a defined <see cref="PatchFormatKind"/> value.
     /// <para><paramref name="hint"/> 不是已定义的 <see cref="PatchFormatKind"/> 值。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
     /// <para><paramref name="cancellationToken"/> 已被取消。</para></exception>

@@ -9,23 +9,10 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
 internal partial class WinUSBDevice
 {
-    /// <summary>
-    /// Asynchronously reads one bulk IN chunk through overlapped I/O.
-    /// <para>通过重叠 I/O 异步读取一个批量 IN 分块。</para>
-    /// </summary>
-    /// <remarks>
-    /// A non-disconnection native error collapses to <c>UsbChunkResult.Error</c>,
-    /// which the base read loop treats as a short transfer with the error code only reaching
-    /// the transfer trace; the synchronous <c>ReadChunk</c> instead raises a fatal error
-    /// (<c>UsbChunkStatus.FatalError</c>) for the same error. The collapse is kept because
-    /// turning it into a fatal failure changes per-protocol retry behavior and needs real-device
-    /// regression before it can be flipped; the native error is logged here so the collapse is
-    /// never silent at the backend layer.
-    /// <para>非断连类原生错误折叠为 <c>UsbChunkResult.Error</c>，基类读取循环将其
-    /// 视为短传输且错误码只进入传输 trace；同样的错误在同步 <c>ReadChunk</c> 会报致命错误
-    /// （<c>UsbChunkStatus.FatalError</c>）并抛出。保留折叠是因为改为致命失败会改变各协议的
-    /// 重试行为，需真机回归后才能翻转；此处记录原生错误码，使后端层的折叠不再静默。</para>
-    /// </remarks>
+    /// <summary>Asynchronously reads one bulk IN chunk through overlapped I/O.
+    /// <para>通过重叠 I/O 异步读取一个批量 IN 分块。</para></summary>
+    /// <remarks>A non-disconnection native error collapses to <c>UsbChunkResult.Error</c>, which the base read loop treats as a short transfer with the error code only reaching the transfer trace; the synchronous <c>ReadChunk</c> instead raises a fatal error (<c>UsbChunkStatus.FatalError</c>) for the same error. The collapse is kept because turning it into a fatal failure changes per-protocol retry behavior and needs real-device regression before it can be flipped; the native error is logged here so the collapse is never silent at the backend layer.
+    /// <para>非断连类原生错误折叠为 <c>UsbChunkResult.Error</c>，基类读取循环将其 视为短传输且错误码只进入传输 trace；同样的错误在同步 <c>ReadChunk</c> 会报致命错误 （<c>UsbChunkStatus.FatalError</c>）并抛出。保留折叠是因为改为致命失败会改变各协议的 重试行为，需真机回归后才能翻转；此处记录原生错误码，使后端层的折叠不再静默。</para></remarks>
     protected override async Task<UsbChunkResult> ReadChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
     {
         if (_winUsbHandle.IsInvalid)
@@ -58,21 +45,10 @@ internal partial class WinUSBDevice
         }
     }
 
-    /// <summary>
-    /// Asynchronously writes one bulk OUT chunk through overlapped I/O.
-    /// <para>通过重叠 I/O 异步写入一个批量 OUT 分块。</para>
-    /// </summary>
-    /// <remarks>
-    /// A non-disconnection native error collapses to <c>UsbChunkResult.Error</c>,
-    /// which the base write loop treats as a short write indistinguishable from a device-side
-    /// short completion, while the synchronous <c>WriteChunk</c> raises a fatal failure for the
-    /// same error. The collapse is kept pending per-protocol retry review and real-device
-    /// regression; the native error is logged here so the collapse is never silent at the
-    /// backend layer.
-    /// <para>非断连类原生错误折叠为 <c>UsbChunkResult.Error</c>，基类写入循环将其
-    /// 视为与设备侧短完成不可区分的短写，而同样的错误在同步 <c>WriteChunk</c> 会报致命失败。
-    /// 保留折叠待逐协议重试策略复核与真机回归后再定；此处记录原生错误码，使后端层的折叠不再静默。</para>
-    /// </remarks>
+    /// <summary>Asynchronously writes one bulk OUT chunk through overlapped I/O.
+    /// <para>通过重叠 I/O 异步写入一个批量 OUT 分块。</para></summary>
+    /// <remarks>A non-disconnection native error collapses to <c>UsbChunkResult.Error</c>, which the base write loop treats as a short write indistinguishable from a device-side short completion, while the synchronous <c>WriteChunk</c> raises a fatal failure for the same error. The collapse is kept pending per-protocol retry review and real-device regression; the native error is logged here so the collapse is never silent at the backend layer.
+    /// <para>非断连类原生错误折叠为 <c>UsbChunkResult.Error</c>，基类写入循环将其 视为与设备侧短完成不可区分的短写，而同样的错误在同步 <c>WriteChunk</c> 会报致命失败。 保留折叠待逐协议重试策略复核与真机回归后再定；此处记录原生错误码，使后端层的折叠不再静默。</para></remarks>
     protected override async Task<UsbChunkResult> WriteChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
     {
         if (_winUsbHandle.IsInvalid)

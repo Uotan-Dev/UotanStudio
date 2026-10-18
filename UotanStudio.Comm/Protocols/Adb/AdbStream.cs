@@ -297,19 +297,17 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
         }
     }
 
-    /// <summary>
-    /// Writes a payload to the peer without holding a thread while the peer acknowledges each chunk.
-    /// <para>向对端写入负载，等待每块确认时不占用线程。</para>
-    /// </summary>
-    /// <param name="data">Bytes to send, split by the negotiated payload limit.<para>待发送字节，按协商的负载上限分块。</para></param>
+    /// <summary>Writes a payload to the peer without holding a thread while the peer acknowledges each chunk.
+    /// <para>向对端写入负载，等待每块确认时不占用线程。</para></summary>
+    /// <param name="data">Bytes to send, split by the negotiated payload limit.
+    /// <para>待发送字节，按协商的负载上限分块。</para></param>
     /// <param name="cancellationToken">Cancels a permit wait without consuming the peer acknowledgement.
     /// <para>取消某次许可等待，且不会吞掉对端确认。</para></param>
-    /// <exception cref="InvalidOperationException">The stream is closed. <para>流已关闭。</para></exception>
-    /// <exception cref="TimeoutException">The peer did not acknowledge the previous chunk within the write permit
-    /// wait while <paramref name="cancellationToken"/> stayed unset.
+    /// <exception cref="InvalidOperationException">The stream is closed.<para>流已关闭。</para></exception>
+    /// <exception cref="TimeoutException">The peer did not acknowledge the previous chunk within the write permit wait while <paramref name="cancellationToken"/> stayed unset.
     /// <para>对端未在写入许可等待期限内确认上一块，且 <paramref name="cancellationToken"/> 未触发。</para></exception>
-    /// <exception cref="IOException">The peer advertised no payload limit, or the stream closed or faulted while
-    /// chunks were still pending. <para>对端未通告负载上限，或仍有待发块时流被关闭或判定故障。</para></exception>
+    /// <exception cref="IOException">The peer advertised no payload limit, or the stream closed or faulted while chunks were still pending.
+    /// <para>对端未通告负载上限，或仍有待发块时流被关闭或判定故障。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
     public async ValueTask WriteAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)

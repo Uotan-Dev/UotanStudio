@@ -79,20 +79,14 @@ public class MagiskBootException : Exception
         ErrorCode = 0;
     }
 
-    /// <summary>
-    /// Initializes the base exception with an error code, message and inner exception.
-    /// <para>使用指定错误码、消息与内部异常初始化基础异常。</para>
-    /// </summary>
-    /// <param name="errorCode">
-    /// Error code stored in <see cref="ErrorCode"/>. <para>存入 <see cref="ErrorCode"/> 的错误码。</para>
-    /// </param>
-    /// <param name="message">
-    /// Text returned by <see cref="Exception.Message"/>. <para>由 <see cref="Exception.Message"/> 返回的文本。</para>
-    /// </param>
-    /// <param name="innerException">
-    /// Underlying cause exposed through <see cref="Exception.InnerException"/>.
-    /// <para>通过 <see cref="Exception.InnerException"/> 暴露的根本原因。</para>
-    /// </param>
+    /// <summary>Initializes the base exception with an error code, message and inner exception.
+    /// <para>使用指定错误码、消息与内部异常初始化基础异常。</para></summary>
+    /// <param name="errorCode">Error code stored in <see cref="ErrorCode"/>.
+    /// <para>存入 <see cref="ErrorCode"/> 的错误码。</para></param>
+    /// <param name="message">Text returned by <see cref="Exception.Message"/>.
+    /// <para>由 <see cref="Exception.Message"/> 返回的文本。</para></param>
+    /// <param name="innerException">Underlying cause exposed through <see cref="Exception.InnerException"/>.
+    /// <para>通过 <see cref="Exception.InnerException"/> 暴露的根本原因。</para></param>
     public MagiskBootException(int errorCode, string message, Exception innerException) : base(message, innerException)
     {
         ErrorCode = errorCode;

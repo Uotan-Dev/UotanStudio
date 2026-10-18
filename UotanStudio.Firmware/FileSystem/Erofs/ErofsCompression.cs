@@ -70,29 +70,24 @@ internal static class ErofsCompression
         return (int)count;
     }
 
-    /// <summary>
-    /// Compresses one pcluster with the managed LZ4 block encoder, returning the compressed byte count
-    /// or zero when the stream does not fit the destination.
-    /// <para>用托管 LZ4 块编码器压缩单个 pcluster，返回压缩字节数；输出放不进目标缓冲区时返回 0。</para>
-    /// </summary>
+    /// <summary>Compresses one pcluster with the managed LZ4 block encoder, returning the compressed byte count or zero when the stream does not fit the destination.
+    /// <para>用托管 LZ4 块编码器压缩单个 pcluster，返回压缩字节数；输出放不进目标缓冲区时返回 0。</para></summary>
     /// <param name="source">Buffer holding the uncompressed pcluster bytes.
     /// <para>存放未压缩 pcluster 字节的缓冲区。</para></param>
     /// <param name="sourceIndex">Start index of the input range inside <paramref name="source"/>.
     /// <para><paramref name="source"/> 内输入区间的起始索引。</para></param>
     /// <param name="sourceLength">Input bytes to encode; <c>0</c> writes nothing and returns <c>0</c>.
     /// <para>参与编码的字节数；为 <c>0</c> 时不写入任何内容并返回 <c>0</c>。</para></param>
-    /// <param name="target">Buffer receiving the encoded LZ4 block. <para>接收 LZ4 编码结果的缓冲区。</para></param>
+    /// <param name="target">Buffer receiving the encoded LZ4 block.
+    /// <para>接收 LZ4 编码结果的缓冲区。</para></param>
     /// <param name="targetIndex">Start index of the destination range inside <paramref name="target"/>.
     /// <para><paramref name="target"/> 内目标区间的起始索引。</para></param>
     /// <param name="targetLength">Capacity reserved for the block; <c>0</c> skips encoding and returns <c>0</c>.
     /// <para>为压缩块预留的容量；为 <c>0</c> 时跳过编码并返回 <c>0</c>。</para></param>
-    /// <param name="compressionLevel">EROFS LZ4 level applied through the fast path as
-    /// <c>10 - compressionLevel</c> clamped to 1-10, so a larger value selects a faster, weaker encode.
+    /// <param name="compressionLevel">EROFS LZ4 level applied through the fast path as <c>10 - compressionLevel</c> clamped to 1-10, so a larger value selects a faster, weaker encode.
     /// <para>EROFS 的 LZ4 等级，经快速路径按 <c>10 - compressionLevel</c>（截断到 1-10）生效，取值越大编码越快、压缩率越低。</para></param>
-    /// <returns>Bytes written at <paramref name="targetIndex"/>, or <c>0</c> when the block does not fit the
-    /// destination or the encoder consumed less than <paramref name="sourceLength"/> input bytes.
-    /// <para>写入 <paramref name="targetIndex"/> 处的字节数；块放不进目标区间或编码器消耗字节数少于
-    /// <paramref name="sourceLength"/> 时返回 <c>0</c>。</para></returns>
+    /// <returns>Bytes written at <paramref name="targetIndex"/>, or <c>0</c> when the block does not fit the destination or the encoder consumed less than <paramref name="sourceLength"/> input bytes.
+    /// <para>写入 <paramref name="targetIndex"/> 处的字节数；块放不进目标区间或编码器消耗字节数少于 <paramref name="sourceLength"/> 时返回 <c>0</c>。</para></returns>
     public static int Compress(
         byte[] source,
         int sourceIndex,
@@ -104,20 +99,20 @@ internal static class ErofsCompression
         => CompressLz4(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel,
             highCompression: false);
 
-    /// <summary>
-    /// Decompresses a single pcluster with LZ4 (unchanged legacy behavior), returning the decompressed byte count.
-    /// <para>解压单个 pcluster（LZ4，与既有实现一致），返回解压字节数。</para>
-    /// </summary>
-    /// <param name="source">Buffer holding the encoded LZ4 block. <para>存放 LZ4 编码块的缓冲区。</para></param>
+    /// <summary>Decompresses a single pcluster with LZ4 (unchanged legacy behavior), returning the decompressed byte count.
+    /// <para>解压单个 pcluster（LZ4，与既有实现一致），返回解压字节数。</para></summary>
+    /// <param name="source">Buffer holding the encoded LZ4 block.<para>存放 LZ4 编码块的缓冲区。</para></param>
     /// <param name="sourceIndex">Start index of the compressed range inside <paramref name="source"/>.
     /// <para><paramref name="source"/> 内压缩区间的起始索引。</para></param>
-    /// <param name="sourceLength">Compressed bytes offered to the decoder. <para>交给解码器的压缩字节数。</para></param>
-    /// <param name="target">Buffer receiving the recovered pcluster bytes. <para>接收还原 pcluster 字节的缓冲区。</para></param>
+    /// <param name="sourceLength">Compressed bytes offered to the decoder.
+    /// <para>交给解码器的压缩字节数。</para></param>
+    /// <param name="target">Buffer receiving the recovered pcluster bytes.
+    /// <para>接收还原 pcluster 字节的缓冲区。</para></param>
     /// <param name="targetIndex">Start index of the destination range inside <paramref name="target"/>.
     /// <para><paramref name="target"/> 内目标区间的起始索引。</para></param>
-    /// <param name="targetLength">Capacity reserved for the decoded block. <para>为解码结果预留的目标容量（字节）。</para></param>
-    /// <returns>Bytes written at <paramref name="targetIndex"/>, or <c>0</c> when the block is malformed or the
-    /// destination range is smaller than the decoded output.
+    /// <param name="targetLength">Capacity reserved for the decoded block.
+    /// <para>为解码结果预留的目标容量（字节）。</para></param>
+    /// <returns>Bytes written at <paramref name="targetIndex"/>, or <c>0</c> when the block is malformed or the destination range is smaller than the decoded output.
     /// <para>写入 <paramref name="targetIndex"/> 处的字节数；块格式非法或目标区间小于解码输出时返回 <c>0</c>。</para></returns>
     public static int Decompress(byte[] source, int sourceIndex, int sourceLength, byte[] target, int targetIndex, int targetLength)
         => DecompressLz4(source, sourceIndex, sourceLength, target, targetIndex, targetLength);
@@ -160,26 +155,24 @@ internal static class ErofsCompression
         };
     }
 
-    /// <summary>
-    /// Algorithm-dispatched compression (dictSize/windowBits use the codec defaults).
-    /// <para>按算法分派压缩（dictSize/windowBits 使用算法默认值）。</para>
-    /// </summary>
-    /// <param name="algorithm">EROFS codec branch selected for this call. <para>本次调用选择的 EROFS 编解码分支。</para></param>
-    /// <param name="source">Buffer holding the uncompressed input. <para>存放未压缩输入的缓冲区。</para></param>
+    /// <summary>Algorithm-dispatched compression (dictSize/windowBits use the codec defaults).
+    /// <para>按算法分派压缩（dictSize/windowBits 使用算法默认值）。</para></summary>
+    /// <param name="algorithm">EROFS codec branch selected for this call.
+    /// <para>本次调用选择的 EROFS 编解码分支。</para></param>
+    /// <param name="source">Buffer holding the uncompressed input.<para>存放未压缩输入的缓冲区。</para></param>
     /// <param name="sourceIndex">Offset in <paramref name="source"/> where the input region starts.
     /// <para><paramref name="source"/> 中输入区域的起始偏移。</para></param>
     /// <param name="sourceLength">Number of input bytes read from <paramref name="sourceIndex"/>.
     /// <para>自 <paramref name="sourceIndex"/> 起读取的输入字节数。</para></param>
-    /// <param name="target">Buffer the compressed bytes are written into. <para>写入压缩字节的缓冲区。</para></param>
+    /// <param name="target">Buffer the compressed bytes are written into.
+    /// <para>写入压缩字节的缓冲区。</para></param>
     /// <param name="targetIndex">Offset in <paramref name="target"/> where the output region starts.
     /// <para><paramref name="target"/> 中输出区域的起始偏移。</para></param>
     /// <param name="targetLength">Number of bytes reserved for the output inside <paramref name="target"/>.
     /// <para><paramref name="target"/> 中为输出预留的字节数。</para></param>
-    /// <param name="compressionLevel">Codec level: steers the LZ4 search, selects the LZMA algorithm and
-    /// num-fast-bytes, is clamped to 0..9 for DEFLATE and -5..22 for ZSTD.
+    /// <param name="compressionLevel">Codec level: steers the LZ4 search, selects the LZMA algorithm and num-fast-bytes, is clamped to 0..9 for DEFLATE and -5..22 for ZSTD.
     /// <para>编解码级别：影响 LZ4 搜索、决定 LZMA 算法与 num-fast-bytes，DEFLATE 限制到 0..9，ZSTD 限制到 -5..22。</para></param>
-    /// <returns>The number of compressed bytes written to <paramref name="target"/>; the LZ4 branch
-    /// returns zero when the block does not fit the destination.
+    /// <returns>The number of compressed bytes written to <paramref name="target"/>; the LZ4 branch returns zero when the block does not fit the destination.
     /// <para>写入 <paramref name="target"/> 的压缩字节数；LZ4 分支在块放不下目标时返回 0。</para></returns>
     public static int AlgorithmCompress(
         ErofsAlgorithm algorithm,
@@ -193,30 +186,28 @@ internal static class ErofsCompression
         => AlgorithmCompress(algorithm, source, sourceIndex, sourceLength, target, targetIndex, targetLength,
             compressionLevel, 0, 0);
 
-    /// <summary>
-    /// Algorithm-dispatched compression, returning the compressed byte count.
-    /// <para>按算法分派压缩，返回压缩字节数。</para>
-    /// </summary>
-    /// <param name="algorithm">EROFS codec branch selected for this call. <para>本次调用选择的 EROFS 编解码分支。</para></param>
-    /// <param name="source">Buffer holding the uncompressed input. <para>存放未压缩输入的缓冲区。</para></param>
+    /// <summary>Algorithm-dispatched compression, returning the compressed byte count.
+    /// <para>按算法分派压缩，返回压缩字节数。</para></summary>
+    /// <param name="algorithm">EROFS codec branch selected for this call.
+    /// <para>本次调用选择的 EROFS 编解码分支。</para></param>
+    /// <param name="source">Buffer holding the uncompressed input.<para>存放未压缩输入的缓冲区。</para></param>
     /// <param name="sourceIndex">Offset in <paramref name="source"/> where the input region starts.
     /// <para><paramref name="source"/> 中输入区域的起始偏移。</para></param>
     /// <param name="sourceLength">Number of input bytes read from <paramref name="sourceIndex"/>.
     /// <para>自 <paramref name="sourceIndex"/> 起读取的输入字节数。</para></param>
-    /// <param name="target">Buffer the compressed bytes are written into. <para>写入压缩字节的缓冲区。</para></param>
+    /// <param name="target">Buffer the compressed bytes are written into.
+    /// <para>写入压缩字节的缓冲区。</para></param>
     /// <param name="targetIndex">Offset in <paramref name="target"/> where the output region starts.
     /// <para><paramref name="target"/> 中输出区域的起始偏移。</para></param>
     /// <param name="targetLength">Number of bytes reserved for the output inside <paramref name="target"/>.
     /// <para><paramref name="target"/> 中为输出预留的字节数。</para></param>
-    /// <param name="compressionLevel">Codec level: steers the LZ4 search, selects the LZMA algorithm and
-    /// num-fast-bytes, is clamped to 0..9 for DEFLATE and -5..22 for ZSTD.
+    /// <param name="compressionLevel">Codec level: steers the LZ4 search, selects the LZMA algorithm and num-fast-bytes, is clamped to 0..9 for DEFLATE and -5..22 for ZSTD.
     /// <para>编解码级别：影响 LZ4 搜索、决定 LZMA 算法与 num-fast-bytes，DEFLATE 限制到 0..9，ZSTD 限制到 -5..22。</para></param>
-    /// <param name="dictSize">MicroLZMA dictionary size in bytes; <c>0</c> derives one from the input
-    /// length, other codecs ignore it. <para>MicroLZMA 字典字节数；<c>0</c> 按输入长度推导，其余算法忽略。</para></param>
-    /// <param name="windowBits">DEFLATE window bits (8..15, <c>0</c> for the default) and ZSTD window
-    /// log; ignored by LZ4 and LZMA. <para>DEFLATE 窗口位数（8..15，<c>0</c> 为默认）与 ZSTD 窗口对数；LZ4 与 LZMA 忽略。</para></param>
-    /// <returns>The number of compressed bytes written to <paramref name="target"/>; the LZ4 branch
-    /// returns zero when the block does not fit the destination.
+    /// <param name="dictSize">MicroLZMA dictionary size in bytes; <c>0</c> derives one from the input length, other codecs ignore it.
+    /// <para>MicroLZMA 字典字节数；<c>0</c> 按输入长度推导，其余算法忽略。</para></param>
+    /// <param name="windowBits">DEFLATE window bits (8..15, <c>0</c> for the default) and ZSTD window log; ignored by LZ4 and LZMA.
+    /// <para>DEFLATE 窗口位数（8..15，<c>0</c> 为默认）与 ZSTD 窗口对数；LZ4 与 LZMA 忽略。</para></param>
+    /// <returns>The number of compressed bytes written to <paramref name="target"/>; the LZ4 branch returns zero when the block does not fit the destination.
     /// <para>写入 <paramref name="target"/> 的压缩字节数；LZ4 分支在块放不下目标时返回 0。</para></returns>
     public static int AlgorithmCompress(
         ErofsAlgorithm algorithm,
@@ -232,40 +223,37 @@ internal static class ErofsCompression
         => AlgorithmCompress(algorithm, source, sourceIndex, sourceLength, target, targetIndex, targetLength,
             compressionLevel, highCompression: false, dictSize, windowBits);
 
-    /// <summary>
-    /// Algorithm-dispatched compression with an explicit LZ4 encoder identity.
-    /// <para>按算法分派压缩，并显式指定 LZ4 编码器身份。</para>
-    /// </summary>
-    /// <param name="algorithm">EROFS codec branch selected for this call. <para>本次调用选择的 EROFS 编解码分支。</para></param>
-    /// <param name="source">Buffer holding the uncompressed input. <para>存放未压缩输入的缓冲区。</para></param>
+    /// <summary>Algorithm-dispatched compression with an explicit LZ4 encoder identity.
+    /// <para>按算法分派压缩，并显式指定 LZ4 编码器身份。</para></summary>
+    /// <param name="algorithm">EROFS codec branch selected for this call.
+    /// <para>本次调用选择的 EROFS 编解码分支。</para></param>
+    /// <param name="source">Buffer holding the uncompressed input.<para>存放未压缩输入的缓冲区。</para></param>
     /// <param name="sourceIndex">Offset in <paramref name="source"/> where the input region starts.
     /// <para><paramref name="source"/> 中输入区域的起始偏移。</para></param>
     /// <param name="sourceLength">Number of input bytes read from <paramref name="sourceIndex"/>.
     /// <para>自 <paramref name="sourceIndex"/> 起读取的输入字节数。</para></param>
-    /// <param name="target">Buffer the compressed bytes are written into. <para>写入压缩字节的缓冲区。</para></param>
+    /// <param name="target">Buffer the compressed bytes are written into.
+    /// <para>写入压缩字节的缓冲区。</para></param>
     /// <param name="targetIndex">Offset in <paramref name="target"/> where the output region starts.
     /// <para><paramref name="target"/> 中输出区域的起始偏移。</para></param>
     /// <param name="targetLength">Number of bytes reserved for the output inside <paramref name="target"/>.
     /// <para><paramref name="target"/> 中为输出预留的字节数。</para></param>
-    /// <param name="compressionLevel">Codec level: steers the LZ4 search, selects LZMA algorithm and
-    /// num-fast-bytes, is clamped to 0..9 for DEFLATE and -5..22 for ZSTD.
+    /// <param name="compressionLevel">Codec level: steers the LZ4 search, selects LZMA algorithm and num-fast-bytes, is clamped to 0..9 for DEFLATE and -5..22 for ZSTD.
     /// <para>编解码级别：影响 LZ4 搜索、决定 LZMA 算法与 num-fast-bytes，DEFLATE 限制到 0..9，ZSTD 限制到 -5..22。</para></param>
-    /// <param name="highCompression">Uses the LZ4HC search for LZ4 payloads instead of the fast
-    /// single-hash matcher; ignored by the other codecs.
+    /// <param name="highCompression">Uses the LZ4HC search for LZ4 payloads instead of the fast single-hash matcher; ignored by the other codecs.
     /// <para>对 LZ4 数据使用 LZ4HC 搜索而非快速单哈希匹配器；其余算法忽略。</para></param>
-    /// <param name="dictSize">MicroLZMA dictionary size in bytes; <c>0</c> derives one from the input
-    /// length, other codecs ignore it. <para>MicroLZMA 字典字节数；<c>0</c> 按输入长度推导，其余算法忽略。</para></param>
-    /// <param name="windowBits">DEFLATE window bits (8..15, <c>0</c> for the default) and ZSTD window
-    /// log; ignored by LZ4 and LZMA. <para>DEFLATE 窗口位数（8..15，<c>0</c> 为默认）与 ZSTD 窗口对数；LZ4 与 LZMA 忽略。</para></param>
+    /// <param name="dictSize">MicroLZMA dictionary size in bytes; <c>0</c> derives one from the input length, other codecs ignore it.
+    /// <para>MicroLZMA 字典字节数；<c>0</c> 按输入长度推导，其余算法忽略。</para></param>
+    /// <param name="windowBits">DEFLATE window bits (8..15, <c>0</c> for the default) and ZSTD window log; ignored by LZ4 and LZMA.
+    /// <para>DEFLATE 窗口位数（8..15，<c>0</c> 为默认）与 ZSTD 窗口对数；LZ4 与 LZMA 忽略。</para></param>
     /// <returns>The number of compressed bytes written to <paramref name="target"/>.
     /// <para>写入 <paramref name="target"/> 的压缩字节数。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="target"/> is <see langword="null"/>.
     /// <para><paramref name="source"/> 或 <paramref name="target"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">A region exceeds its buffer, <paramref name="algorithm"/> is
-    /// unknown, or <paramref name="dictSize"/>/<paramref name="windowBits"/> fall outside the codec limits.
+    /// <exception cref="ArgumentOutOfRangeException">A region exceeds its buffer, <paramref name="algorithm"/> is unknown, or <paramref name="dictSize"/>/<paramref name="windowBits"/> fall outside the codec limits.
     /// <para>区域超出缓冲区、<paramref name="algorithm"/> 未知，或 <paramref name="dictSize"/>/<paramref name="windowBits"/> 超出编解码上限。</para></exception>
-    /// <exception cref="InvalidOperationException">DEFLATE or ZSTD output exceeds the destination buffer, or the
-    /// LZMA encoder misbehaves. <para>DEFLATE 或 ZSTD 输出超出目标缓冲区，或 LZMA 编码器行为异常。</para></exception>
+    /// <exception cref="InvalidOperationException">DEFLATE or ZSTD output exceeds the destination buffer, or the LZMA encoder misbehaves.
+    /// <para>DEFLATE 或 ZSTD 输出超出目标缓冲区，或 LZMA 编码器行为异常。</para></exception>
     /// <exception cref="FileSystemCorruptedException">The LZMA payload does not fit the destination buffer.
     /// <para>LZMA 压缩数据放不进目标缓冲区。</para></exception>
     public static int AlgorithmCompress(
@@ -295,22 +283,17 @@ internal static class ErofsCompression
         };
     }
 
-    /// <summary>
-    /// Compresses one pcluster with the codec parameters carried by the options, including the LZ4
-    /// encoder identity selected by <see cref="ErofsOptions.Lz4HighCompression"/>.
-    /// <para>按选项中的编解码参数压缩单个 pcluster，包含 <see cref="ErofsOptions.Lz4HighCompression"/>
-    /// 选择的 LZ4 编码器身份。</para>
-    /// </summary>
-    /// <param name="options">Image-wide codec settings supplying the algorithm, level, LZ4 encoder
-    /// identity, dictionary size and window; the level is raised to at least 1 and a zero window
-    /// becomes 20 for ZSTD. <para>提供算法、等级、LZ4 编码器身份、字典大小与窗口的镜像级编解码设置；
-    /// 等级至少取 1，ZSTD 在窗口为 0 时使用 20。</para></param>
-    /// <param name="source">Buffer holding the uncompressed input. <para>存放未压缩输入的缓冲区。</para></param>
+    /// <summary>Compresses one pcluster with the codec parameters carried by the options, including the LZ4 encoder identity selected by <see cref="ErofsOptions.Lz4HighCompression"/>.
+    /// <para>按选项中的编解码参数压缩单个 pcluster，包含 <see cref="ErofsOptions.Lz4HighCompression"/> 选择的 LZ4 编码器身份。</para></summary>
+    /// <param name="options">Image-wide codec settings supplying the algorithm, level, LZ4 encoder identity, dictionary size and window; the level is raised to at least 1 and a zero window becomes 20 for ZSTD.
+    /// <para>提供算法、等级、LZ4 编码器身份、字典大小与窗口的镜像级编解码设置； 等级至少取 1，ZSTD 在窗口为 0 时使用 20。</para></param>
+    /// <param name="source">Buffer holding the uncompressed input.<para>存放未压缩输入的缓冲区。</para></param>
     /// <param name="sourceIndex">Offset in <paramref name="source"/> where the input region starts.
     /// <para><paramref name="source"/> 中输入区域的起始偏移。</para></param>
     /// <param name="sourceLength">Number of input bytes read from <paramref name="sourceIndex"/>.
     /// <para>自 <paramref name="sourceIndex"/> 起读取的输入字节数。</para></param>
-    /// <param name="target">Buffer the compressed bytes are written into. <para>写入压缩字节的缓冲区。</para></param>
+    /// <param name="target">Buffer the compressed bytes are written into.
+    /// <para>写入压缩字节的缓冲区。</para></param>
     /// <param name="targetIndex">Offset in <paramref name="target"/> where the output region starts.
     /// <para><paramref name="target"/> 中输出区域的起始偏移。</para></param>
     /// <param name="targetLength">Number of bytes reserved for the output inside <paramref name="target"/>.
@@ -333,21 +316,20 @@ internal static class ErofsCompression
             options.DictionarySize,
             options.WindowBits == 0 && options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : options.WindowBits);
 
-    /// <summary>
-    /// Algorithm-dispatched decompression (dictSize/windowBits use the codec defaults).
-    /// <para>按算法分派解压（dictSize/windowBits 使用默认值）。</para>
-    /// </summary>
-    /// <param name="algorithm">EROFS codec branch used to decode. <para>用于解码的 EROFS 编解码分支。</para></param>
-    /// <param name="source">Buffer holding the compressed input. <para>存放压缩输入的缓冲区。</para></param>
+    /// <summary>Algorithm-dispatched decompression (dictSize/windowBits use the codec defaults).
+    /// <para>按算法分派解压（dictSize/windowBits 使用默认值）。</para></summary>
+    /// <param name="algorithm">EROFS codec branch used to decode.
+    /// <para>用于解码的 EROFS 编解码分支。</para></param>
+    /// <param name="source">Buffer holding the compressed input.<para>存放压缩输入的缓冲区。</para></param>
     /// <param name="sourceIndex">Offset in <paramref name="source"/> where the compressed region starts.
     /// <para><paramref name="source"/> 中压缩区域的起始偏移。</para></param>
     /// <param name="sourceLength">Number of compressed bytes read from <paramref name="sourceIndex"/>.
     /// <para>自 <paramref name="sourceIndex"/> 起读取的压缩字节数。</para></param>
-    /// <param name="target">Buffer the decompressed bytes are written into. <para>写入解压字节的缓冲区。</para></param>
+    /// <param name="target">Buffer the decompressed bytes are written into.
+    /// <para>写入解压字节的缓冲区。</para></param>
     /// <param name="targetIndex">Offset in <paramref name="target"/> where the output region starts.
     /// <para><paramref name="target"/> 中输出区域的起始偏移。</para></param>
-    /// <param name="targetLength">Number of bytes reserved for the output inside <paramref name="target"/>,
-    /// which for LZMA and DEFLATE is also the exact expected decompressed size.
+    /// <param name="targetLength">Number of bytes reserved for the output inside <paramref name="target"/>, which for LZMA and DEFLATE is also the exact expected decompressed size.
     /// <para><paramref name="target"/> 中为输出预留的字节数；对 LZMA 与 DEFLATE 同时是期望的解压长度。</para></param>
     /// <returns>The number of decompressed bytes written to <paramref name="target"/>.
     /// <para>写入 <paramref name="target"/> 的解压字节数。</para></returns>
@@ -362,27 +344,24 @@ internal static class ErofsCompression
         => AlgorithmDecompress(algorithm, source, sourceIndex, sourceLength, target, targetIndex, targetLength,
             0, 0);
 
-    /// <summary>
-    /// Algorithm-dispatched decompression, returning the decompressed byte count.
-    /// <para>按算法分派解压，返回解压字节数。</para>
-    /// </summary>
-    /// <param name="algorithm">EROFS codec branch used to decode. <para>用于解码的 EROFS 编解码分支。</para></param>
-    /// <param name="source">Buffer holding the compressed input. <para>存放压缩输入的缓冲区。</para></param>
+    /// <summary>Algorithm-dispatched decompression, returning the decompressed byte count.
+    /// <para>按算法分派解压，返回解压字节数。</para></summary>
+    /// <param name="algorithm">EROFS codec branch used to decode.
+    /// <para>用于解码的 EROFS 编解码分支。</para></param>
+    /// <param name="source">Buffer holding the compressed input.<para>存放压缩输入的缓冲区。</para></param>
     /// <param name="sourceIndex">Offset in <paramref name="source"/> where the compressed region starts.
     /// <para><paramref name="source"/> 中压缩区域的起始偏移。</para></param>
     /// <param name="sourceLength">Number of compressed bytes read from <paramref name="sourceIndex"/>.
     /// <para>自 <paramref name="sourceIndex"/> 起读取的压缩字节数。</para></param>
-    /// <param name="target">Buffer the decompressed bytes are written into. <para>写入解压字节的缓冲区。</para></param>
+    /// <param name="target">Buffer the decompressed bytes are written into.
+    /// <para>写入解压字节的缓冲区。</para></param>
     /// <param name="targetIndex">Offset in <paramref name="target"/> where the output region starts.
     /// <para><paramref name="target"/> 中输出区域的起始偏移。</para></param>
-    /// <param name="targetLength">Number of bytes reserved for the output inside <paramref name="target"/>,
-    /// which for LZMA and DEFLATE is also the exact expected decompressed size.
+    /// <param name="targetLength">Number of bytes reserved for the output inside <paramref name="target"/>, which for LZMA and DEFLATE is also the exact expected decompressed size.
     /// <para><paramref name="target"/> 中为输出预留的字节数；对 LZMA 与 DEFLATE 同时是期望的解压长度。</para></param>
-    /// <param name="dictSize">MicroLZMA dictionary size in bytes; <c>0</c> uses 8 MiB and values below
-    /// 4096 are raised to 4096, other codecs ignore it.
+    /// <param name="dictSize">MicroLZMA dictionary size in bytes; <c>0</c> uses 8 MiB and values below 4096 are raised to 4096, other codecs ignore it.
     /// <para>MicroLZMA 字典字节数；<c>0</c> 使用 8 MiB，小于 4096 的值提升到 4096，其余算法忽略。</para></param>
-    /// <param name="windowBits">Validated DEFLATE window bits (8..15 or <c>0</c>) and the ZSTD maximum
-    /// window log; ignored by LZ4 and LZMA.
+    /// <param name="windowBits">Validated DEFLATE window bits (8..15 or <c>0</c>) and the ZSTD maximum window log; ignored by LZ4 and LZMA.
     /// <para>经校验的 DEFLATE 窗口位数（8..15 或 <c>0</c>）与 ZSTD 最大窗口对数；LZ4 与 LZMA 忽略。</para></param>
     /// <returns>The number of decompressed bytes written to <paramref name="target"/>.
     /// <para>写入 <paramref name="target"/> 的解压字节数。</para></returns>

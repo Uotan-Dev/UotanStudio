@@ -11,55 +11,34 @@ namespace UotanStudio.Firmware.OtaDelta.Dat;
 /// </summary>
 internal static class TransferListSerializer
 {
-    /// <summary>Writes a transfer list to a file. <para>将传输列表写入文件。</para></summary>
-    /// <param name="path">
-    /// Destination file path; an existing file is replaced with the rendered text.
-    /// <para>目标文件路径；已有文件会被渲染后的文本覆盖。</para>
-    /// </param>
-    /// <param name="list">
-    /// The list to render. <paramref name="list"/> must carry a version between 1 and 4.
-    /// <para>待渲染的列表。<paramref name="list"/> 的版本必须在 1 到 4 之间。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="path"/> is <see langword="null"/>. <para><paramref name="path"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="list"/> declares a version outside 1–4.
-    /// <para><paramref name="list"/> 的版本不在 1–4 范围内。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A command cannot be rendered: its kind is unknown, a stash command has no identifier, a range set is empty
-    /// or unordered, or a required SHA-1 is missing.
-    /// <para>命令无法渲染：类型未知、stash 命令缺少标识、范围集为空或顺序非法，或必需的 SHA-1 缺失。</para>
-    /// </exception>
+    /// <summary>Writes a transfer list to a file.<para>将传输列表写入文件。</para></summary>
+    /// <param name="path">Destination file path; an existing file is replaced with the rendered text.
+    /// <para>目标文件路径；已有文件会被渲染后的文本覆盖。</para></param>
+    /// <param name="list">The list to render. <paramref name="list"/> must carry a version between 1 and 4.
+    /// <para>待渲染的列表。<paramref name="list"/> 的版本必须在 1 到 4 之间。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="path"/> is <see langword="null"/>.
+    /// <para><paramref name="path"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="list"/> declares a version outside 1–4.
+    /// <para><paramref name="list"/> 的版本不在 1–4 范围内。</para></exception>
+    /// <exception cref="InvalidDataException">A command cannot be rendered: its kind is unknown, a stash command has no identifier, a range set is empty or unordered, or a required SHA-1 is missing.
+    /// <para>命令无法渲染：类型未知、stash 命令缺少标识、范围集为空或顺序非法，或必需的 SHA-1 缺失。</para></exception>
     public static void Write(string path, TransferList list)
     {
         ArgumentNullException.ThrowIfNull(path);
         File.WriteAllText(path, Serialize(list));
     }
 
-    /// <summary>Renders a transfer list as transfer-list text. <para>将传输列表渲染为传输列表文本。</para></summary>
-    /// <param name="list">
-    /// The list to render, including its version and the commands in output order.
-    /// <para>待渲染的列表，包含版本号与按输出顺序排列的命令。</para>
-    /// </param>
-    /// <returns>
-    /// The header lines followed by one line per command, each terminated by <c>\n</c> and without a trailing
-    /// blank line beyond the last command.
-    /// <para>头部各行后接每条命令一行，均以 <c>\n</c> 结束，最后一条命令之后没有多余空行。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="list"/> is <see langword="null"/>. <para><paramref name="list"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="list"/> declares a version outside 1–4.
-    /// <para><paramref name="list"/> 的版本不在 1–4 范围内。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A command cannot be rendered: its kind is unknown, a stash command has no identifier, a range set is empty
-    /// or unordered, or a required SHA-1 is missing.
-    /// <para>命令无法渲染：类型未知、stash 命令缺少标识、范围集为空或顺序非法，或必需的 SHA-1 缺失。</para>
-    /// </exception>
+    /// <summary>Renders a transfer list as transfer-list text.<para>将传输列表渲染为传输列表文本。</para></summary>
+    /// <param name="list">The list to render, including its version and the commands in output order.
+    /// <para>待渲染的列表，包含版本号与按输出顺序排列的命令。</para></param>
+    /// <returns>The header lines followed by one line per command, each terminated by <c>\n</c> and without a trailing blank line beyond the last command.
+    /// <para>头部各行后接每条命令一行，均以 <c>\n</c> 结束，最后一条命令之后没有多余空行。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="list"/> is <see langword="null"/>.
+    /// <para><paramref name="list"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="list"/> declares a version outside 1–4.
+    /// <para><paramref name="list"/> 的版本不在 1–4 范围内。</para></exception>
+    /// <exception cref="InvalidDataException">A command cannot be rendered: its kind is unknown, a stash command has no identifier, a range set is empty or unordered, or a required SHA-1 is missing.
+    /// <para>命令无法渲染：类型未知、stash 命令缺少标识、范围集为空或顺序非法，或必需的 SHA-1 缺失。</para></exception>
     public static string Serialize(TransferList list)
     {
         ArgumentNullException.ThrowIfNull(list);

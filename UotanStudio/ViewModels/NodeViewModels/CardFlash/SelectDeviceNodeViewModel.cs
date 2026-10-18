@@ -43,19 +43,10 @@ public class SelectDeviceNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>
-    /// Dispatches the device selection logic by the node type key (TypeKey): Device.Target.Select resolves
-    /// a device from the serial or the first scanned device and outputs it.
-    /// <para>按节点类型键（TypeKey）分发设备选择逻辑：Device.Target.Select 从序列号或首台设备解析设备并输出。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context.
-    /// <para>执行上下文。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Dispatches the device selection logic by the node type key (TypeKey): Device.Target.Select resolves a device from the serial or the first scanned device and outputs it.
+    /// <para>按节点类型键（TypeKey）分发设备选择逻辑：Device.Target.Select 从序列号或首台设备解析设备并输出。</para></summary>
+    /// <param name="context">The execution context.<para>执行上下文。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {
         switch (TypeKey)

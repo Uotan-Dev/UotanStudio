@@ -40,18 +40,12 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
         _cancellationToken = cancellationToken;
     }
 
-    /// <summary>
-    /// Creates a browsing node: children are scanned from disk on the first expansion and the node carries
-    /// no comparison status (no status colouring).
-    /// <para>创建浏览节点：子项在首次展开时扫描磁盘，没有对比状态（不显示状态色）。</para>
-    /// </summary>
-    /// <param name="fullPath">The node's absolute path. <para>节点的绝对路径。</para></param>
-    /// <param name="isDirectory">Whether the node is a directory. <para>是否为目录。</para></param>
-    /// <param name="cancellationToken">
-    /// The owning file column's load token; a replaced column content or a closing view cancels pending
-    /// child scans.
-    /// <para>所属文件列的加载令牌；列内容被替换或视图关闭后，未完成的子目录扫描会被取消。</para>
-    /// </param>
+    /// <summary>Creates a browsing node: children are scanned from disk on the first expansion and the node carries no comparison status (no status colouring).
+    /// <para>创建浏览节点：子项在首次展开时扫描磁盘，没有对比状态（不显示状态色）。</para></summary>
+    /// <param name="fullPath">The node's absolute path.<para>节点的绝对路径。</para></param>
+    /// <param name="isDirectory">Whether the node is a directory.<para>是否为目录。</para></param>
+    /// <param name="cancellationToken">The owning file column's load token; a replaced column content or a closing view cancels pending child scans.
+    /// <para>所属文件列的加载令牌；列内容被替换或视图关闭后，未完成的子目录扫描会被取消。</para></param>
     /// <returns>The created browsing node.<para>创建的浏览节点。</para></returns>
     public static CompareTreeNodeViewModel ForBrowsing(
         string fullPath,

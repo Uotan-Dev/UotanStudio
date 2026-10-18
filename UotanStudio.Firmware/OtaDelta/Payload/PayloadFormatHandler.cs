@@ -53,18 +53,13 @@ public sealed class PayloadFormatHandler : IFormatHandler, IRepackMetadataProvid
         return HeaderProbe.ProbeMagic(filePath, 4, 0, "CrAU"u8);
     }
 
-    /// <summary>
-    /// Reads format metadata without unpacking.
-    /// <para>读取格式元数据（不解包）。</para>
-    /// </summary>
+    /// <summary>Reads format metadata without unpacking.<para>读取格式元数据（不解包）。</para></summary>
     /// <param name="filePath">Local payload file, either a raw <c>payload.bin</c> or a ZIP archive wrapping one.
     /// <para>本地载荷文件，为原始 <c>payload.bin</c> 或包裹它的 ZIP 归档。</para></param>
-    /// <param name="cancellationToken">Cancels the metadata read before or during I/O. <para>在 I/O 前后或期间取消元数据读取。</para></param>
-    /// <returns>A task whose result succeeds with the partition name list, a display metadata dictionary (format,
-    /// partition count, block size, minor version, manifest and signature geometry, max timestamp, partial-update
-    /// flag) and one component per partition; parse failures are captured as a failure result.
-    /// <para>任务结果：成功时携带分区名列表、展示元数据字典（格式、分区数、块大小、minor 版本、清单与签名几何、
-    /// 最大时间戳、增量标记）以及每分区一个组件；解析失败以失败结果承载。</para></returns>
+    /// <param name="cancellationToken">Cancels the metadata read before or during I/O.
+    /// <para>在 I/O 前后或期间取消元数据读取。</para></param>
+    /// <returns>A task whose result succeeds with the partition name list, a display metadata dictionary (format, partition count, block size, minor version, manifest and signature geometry, max timestamp, partial-update flag) and one component per partition; parse failures are captured as a failure result.
+    /// <para>任务结果：成功时携带分区名列表、展示元数据字典（格式、分区数、块大小、minor 版本、清单与签名几何、 最大时间戳、增量标记）以及每分区一个组件；解析失败以失败结果承载。</para></returns>
     /// <exception cref="OperationCanceledException">The token was cancelled; cancellation is never converted into a failure result.
     /// <para>令牌被取消；取消不会被转换为失败结果。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
@@ -113,24 +108,20 @@ public sealed class PayloadFormatHandler : IFormatHandler, IRepackMetadataProvid
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Unpacks all partitions of the payload to the output directory.
-    /// <para>将载荷的所有分区解包到输出目录。</para>
-    /// </summary>
-    /// <param name="filePath">Existing raw or ZIP-wrapped payload file. <para>已存在的原始或 ZIP 包裹的载荷文件。</para></param>
-    /// <param name="outputDirectory">Directory receiving the extracted <c>*.img</c> files and the unified repack
-    /// metadata record written after a successful extraction.
+    /// <summary>Unpacks all partitions of the payload to the output directory.
+    /// <para>将载荷的所有分区解包到输出目录。</para></summary>
+    /// <param name="filePath">Existing raw or ZIP-wrapped payload file.
+    /// <para>已存在的原始或 ZIP 包裹的载荷文件。</para></param>
+    /// <param name="outputDirectory">Directory receiving the extracted <c>*.img</c> files and the unified repack metadata record written after a successful extraction.
     /// <para>接收解包出的 <c>*.img</c> 文件，并在解包成功后写入统一重打包元数据记录的目录。</para></param>
-    /// <param name="options">Optional progress reporting, per-partition output byte cap and overwrite policy;
-    /// when overwrite is disabled a pre-existing metadata file fails the operation before extraction, otherwise a
-    /// pre-existing file must already be recognized metadata.
-    /// <para>可选的进度上报、每分区输出字节上限与覆盖策略；关闭覆盖时，已存在的元数据文件会在解包前使操作失败，
-    /// 否则已存在文件必须本身是可识别的元数据。</para></param>
-    /// <param name="cancellationToken">Cancels the extraction before or during I/O. <para>在 I/O 前或期间取消解包。</para></param>
-    /// <returns>A task whose result succeeds with the extracted partition names, or carries the error message when
-    /// the payload cannot be parsed or written.
+    /// <param name="options">Optional progress reporting, per-partition output byte cap and overwrite policy; when overwrite is disabled a pre-existing metadata file fails the operation before extraction, otherwise a pre-existing file must already be recognized metadata.
+    /// <para>可选的进度上报、每分区输出字节上限与覆盖策略；关闭覆盖时，已存在的元数据文件会在解包前使操作失败， 否则已存在文件必须本身是可识别的元数据。</para></param>
+    /// <param name="cancellationToken">Cancels the extraction before or during I/O.
+    /// <para>在 I/O 前或期间取消解包。</para></param>
+    /// <returns>A task whose result succeeds with the extracted partition names, or carries the error message when the payload cannot be parsed or written.
     /// <para>任务结果：成功时携带解包出的分区名；载荷无法解析或写入时携带错误消息。</para></returns>
-    /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌被取消。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -179,20 +170,18 @@ public sealed class PayloadFormatHandler : IFormatHandler, IRepackMetadataProvid
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Packs a directory of partition images into a payload.bin file.
-    /// <para>将分区镜像目录打包为 payload.bin 文件。</para>
-    /// </summary>
-    /// <param name="inputPath">Directory whose top-level <c>*.img</c> files become partitions, ordered by file name
-    /// (ordinal); each file name without its extension is the partition name.
+    /// <summary>Packs a directory of partition images into a payload.bin file.
+    /// <para>将分区镜像目录打包为 payload.bin 文件。</para></summary>
+    /// <param name="inputPath">Directory whose top-level <c>*.img</c> files become partitions, ordered by file name (ordinal); each file name without its extension is the partition name.
     /// <para>其顶层 <c>*.img</c> 文件将按文件名（序数序）成为分区；去掉扩展名的文件名即分区名。</para></param>
     /// <param name="outputPath">Destination payload file; the result is an unsigned full payload.
     /// <para>目标载荷文件；产物为未签名的完整载荷。</para></param>
-    /// <param name="cancellationToken">Cancels before or between partition additions. <para>在开始前或各分区添加之间取消。</para></param>
-    /// <returns>A task whose result succeeds with the packed partition names, or fails when the input is not a
-    /// directory, contains no <c>*.img</c> files, or the build raises an error.
+    /// <param name="cancellationToken">Cancels before or between partition additions.
+    /// <para>在开始前或各分区添加之间取消。</para></param>
+    /// <returns>A task whose result succeeds with the packed partition names, or fails when the input is not a directory, contains no <c>*.img</c> files, or the build raises an error.
     /// <para>任务结果：成功时携带已打包的分区名；输入不是目录、不含 <c>*.img</c> 文件或构建出错时返回失败结果。</para></returns>
-    /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌被取消。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>

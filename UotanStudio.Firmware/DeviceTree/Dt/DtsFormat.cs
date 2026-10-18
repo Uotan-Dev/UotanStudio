@@ -170,11 +170,9 @@ public sealed class DtsWriteOptions
 /// </summary>
 public static class DtsFormat
 {
-    /// <summary>
-    /// Parses DTS source text as given, without include or macro preprocessing, collecting but not recovering from errors.
-    /// <para>按原样解析 DTS 源文本，不做 include 或宏预处理，收集错误但不从中恢复。</para>
-    /// </summary>
-    /// <param name="text">Complete DTS document. <para>完整的 DTS 文档。</para></param>
+    /// <summary>Parses DTS source text as given, without include or macro preprocessing, collecting but not recovering from errors.
+    /// <para>按原样解析 DTS 源文本，不做 include 或宏预处理，收集错误但不从中恢复。</para></summary>
+    /// <param name="text">Complete DTS document.<para>完整的 DTS 文档。</para></param>
     /// <returns>A result carrying the parsed tree and every diagnostic; <see cref="DtsParseResult.IsSuccess"/> only when nothing was reported.
     /// <para>包含解析出的树与全部诊断信息的结果；仅在未报告任何问题时 <see cref="DtsParseResult.IsSuccess"/> 为真。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="text"/> is <see langword="null"/>.
@@ -191,11 +189,9 @@ public static class DtsFormat
         return parser.ParseWithErrorCapture(useRecovery: false);
     }
 
-    /// <summary>
-    /// Preprocesses C-style directives (<c>#define</c>, <c>#undef</c>, <c>#include</c>, <c>#if</c>/<c>#ifdef</c>/<c>#ifndef</c>/<c>#else</c>/<c>#endif</c>) and then parses the expanded text.
-    /// <para>先预处理 C 风格指令（<c>#define</c>、<c>#undef</c>、<c>#include</c>、<c>#if</c>/<c>#ifdef</c>/<c>#ifndef</c>/<c>#else</c>/<c>#endif</c>），再解析展开后的文本。</para>
-    /// </summary>
-    /// <param name="text">DTS source that may contain directives. <para>可能包含指令的 DTS 源文本。</para></param>
+    /// <summary>Preprocesses C-style directives (<c>#define</c>, <c>#undef</c>, <c>#include</c>, <c>#if</c>/<c>#ifdef</c>/<c>#ifndef</c>/<c>#else</c>/<c>#endif</c>) and then parses the expanded text.
+    /// <para>先预处理 C 风格指令（<c>#define</c>、<c>#undef</c>、<c>#include</c>、<c>#if</c>/<c>#ifdef</c>/<c>#ifndef</c>/<c>#else</c>/<c>#endif</c>），再解析展开后的文本。</para></summary>
+    /// <param name="text">DTS source that may contain directives.<para>可能包含指令的 DTS 源文本。</para></param>
     /// <param name="includePaths">Directories searched for quoted or angle-bracketed includes after the literal path fails; <see langword="null"/> means none.
     /// <para>在按字面路径解析失败后用于搜索引号或尖括号 include 的目录；为 <see langword="null"/> 表示无。</para></param>
     /// <param name="defines">Initial macro names to values; <see langword="null"/> starts with no macros. Keys compare case-sensitively.
@@ -233,12 +229,10 @@ public static class DtsFormat
         return parser.ParseWithErrorCapture(useRecovery: true);
     }
 
-    /// <summary>
-    /// Serializes a device tree to DTS text using <see cref="DtsWriteOptions.Default"/>.
-    /// <para>使用 <see cref="DtsWriteOptions.Default"/> 将设备树序列化为 DTS 文本。</para>
-    /// </summary>
-    /// <param name="tree">Tree to write. <para>要写出的树。</para></param>
-    /// <returns>The complete DTS document as one string. <para>以单个字符串返回的完整 DTS 文档。</para></returns>
+    /// <summary>Serializes a device tree to DTS text using <see cref="DtsWriteOptions.Default"/>.
+    /// <para>使用 <see cref="DtsWriteOptions.Default"/> 将设备树序列化为 DTS 文本。</para></summary>
+    /// <param name="tree">Tree to write.<para>要写出的树。</para></param>
+    /// <returns>The complete DTS document as one string.<para>以单个字符串返回的完整 DTS 文档。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="tree"/> is <see langword="null"/>.
     /// <para><paramref name="tree"/> 为 <see langword="null"/>。</para></exception>
     /// <example>
@@ -291,18 +285,14 @@ public static class DtsFormat
         return new Dictionary<string, int>(writer.NodeStartLines);
     }
 
-    /// <summary>
-    /// Merges the overlay tree into the base tree and returns the merged base tree.
-    /// <para>将 overlay 树合并到基树并返回合并后的基树。</para>
-    /// </summary>
-    /// <param name="baseTree">Tree that receives properties and children from the overlay. <para>接收 overlay 的属性与子节点的目标基树。</para></param>
-    /// <param name="overlayTree">Tree whose content is merged into the base. <para>其内容将被合并进基树的树。</para></param>
-    /// <returns>
-    /// The same <paramref name="baseTree"/> instance with its root content rebuilt from merged copies, so node
-    /// references taken from the base tree before the call do not appear in the merged tree;
-    /// <paramref name="overlayTree"/> is left untouched.
-    /// <para>与 <paramref name="baseTree"/> 相同的实例，其根内容按合并后的副本重建，因此调用前从基树取得的节点引用不会出现在合并后的树中；<paramref name="overlayTree"/> 保持不变。</para>
-    /// </returns>
+    /// <summary>Merges the overlay tree into the base tree and returns the merged base tree.
+    /// <para>将 overlay 树合并到基树并返回合并后的基树。</para></summary>
+    /// <param name="baseTree">Tree that receives properties and children from the overlay.
+    /// <para>接收 overlay 的属性与子节点的目标基树。</para></param>
+    /// <param name="overlayTree">Tree whose content is merged into the base.
+    /// <para>其内容将被合并进基树的树。</para></param>
+    /// <returns>The same <paramref name="baseTree"/> instance with its root content rebuilt from merged copies, so node references taken from the base tree before the call do not appear in the merged tree; <paramref name="overlayTree"/> is left untouched.
+    /// <para>与 <paramref name="baseTree"/> 相同的实例，其根内容按合并后的副本重建，因此调用前从基树取得的节点引用不会出现在合并后的树中；<paramref name="overlayTree"/> 保持不变。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="baseTree"/> or <paramref name="overlayTree"/> is <see langword="null"/>.
     /// <para><paramref name="baseTree"/> 或 <paramref name="overlayTree"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The overlay cannot be applied: a fragment target is absent or out of range, a phandle would overflow, or a fixup symbol or cell offset does not resolve.

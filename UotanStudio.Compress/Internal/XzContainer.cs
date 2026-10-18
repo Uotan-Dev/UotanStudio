@@ -16,25 +16,17 @@ internal static class XzContainer
 
     private const ulong FilterIdLzma2 = 0x21;
 
-    /// <summary>
-    /// Wraps a raw LZMA2 stream into a complete .xz file.
-    /// <para>将 LZMA2 原始流封装为完整 .xz 文件。</para>
-    /// </summary>
-    /// <param name="lzma2Data">Raw LZMA2 payload without any .xz framing; it is copied into the block body
-    /// and padded to a four-byte boundary. <para>不含 .xz 封装的原始 LZMA2 载荷；写入块体并补齐到四字节边界。</para></param>
-    /// <param name="originalData">Uncompressed bytes the block decodes back to; its length is recorded as
-    /// the uncompressed size and its content is the input of the check field.
+    /// <summary>Wraps a raw LZMA2 stream into a complete .xz file.
+    /// <para>将 LZMA2 原始流封装为完整 .xz 文件。</para></summary>
+    /// <param name="lzma2Data">Raw LZMA2 payload without any .xz framing; it is copied into the block body and padded to a four-byte boundary.
+    /// <para>不含 .xz 封装的原始 LZMA2 载荷；写入块体并补齐到四字节边界。</para></param>
+    /// <param name="originalData">Uncompressed bytes the block decodes back to; its length is recorded as the uncompressed size and its content is the input of the check field.
     /// <para>该块解压后得到的未压缩字节；其长度记录为未压缩大小，其内容作为校验字段的计算输入。</para></param>
-    /// <param name="dictionarySize">Dictionary size in bytes advertised in the LZMA2 property byte, mapped
-    /// through <see cref="DictionarySizeToIndex"/> to the smallest representable size that is not below it.
+    /// <param name="dictionarySize">Dictionary size in bytes advertised in the LZMA2 property byte, mapped through <see cref="DictionarySizeToIndex"/> to the smallest representable size that is not below it.
     /// <para>写入 LZMA2 属性字节的字典大小（字节），经 <see cref="DictionarySizeToIndex"/> 映射为不小于它的最小可表示值。</para></param>
-    /// <param name="checkType">Check identifier written verbatim into the stream flags;
-    /// <see cref="CheckTypeCrc64"/> selects a CRC-64 check and every other value, including the default
-    /// <see cref="CheckTypeCrc32"/>, selects CRC-32, so a value outside those two constants describes a check
-    /// the container does not carry. <para>原样写入流标志的校验标识；<see cref="CheckTypeCrc64"/> 选用 CRC-64，
-    /// 其余取值（含默认的 <see cref="CheckTypeCrc32"/>）均选用 CRC-32，因此这两个常量之外的值会声明容器并未携带的校验类型。</para></param>
-    /// <returns>The complete single-block .xz file bytes: header magic, stream flags, block header, LZMA2
-    /// payload with padding, check field, index, footer and footer magic.
+    /// <param name="checkType">Check identifier written verbatim into the stream flags; <see cref="CheckTypeCrc64"/> selects a CRC-64 check and every other value, including the default <see cref="CheckTypeCrc32"/>, selects CRC-32, so a value outside those two constants describes a check the container does not carry.
+    /// <para>原样写入流标志的校验标识；<see cref="CheckTypeCrc64"/> 选用 CRC-64， 其余取值（含默认的 <see cref="CheckTypeCrc32"/>）均选用 CRC-32，因此这两个常量之外的值会声明容器并未携带的校验类型。</para></param>
+    /// <returns>The complete single-block .xz file bytes: header magic, stream flags, block header, LZMA2 payload with padding, check field, index, footer and footer magic.
     /// <para>完整的单块 .xz 文件字节：头部魔数、流标志、块头、LZMA2 载荷及其填充、校验字段、索引、尾部与尾部魔数。</para></returns>
     public static byte[] Wrap(byte[] lzma2Data, byte[] originalData, uint dictionarySize, byte checkType = CheckTypeCrc32)
     {

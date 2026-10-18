@@ -65,19 +65,11 @@ public static class JarDexContainer
     /// </summary>
     public const int MaxEntryCount = 65536;
 
-    /// <summary>
-    /// Whether the given path extension is a supported DEX container (.jar/.apk).
-    /// <para>判断给定路径扩展名是否为受支持的 DEX 容器（.jar/.apk）。</para>
-    /// </summary>
-    /// <param name="path">
-    /// A file name or full path.
-    /// <para>文件名或完整路径。</para>
-    /// </param>
-    /// <returns><see langword="true"/> for a <c>.jar</c> or <c>.apk</c> extension, compared without
-    /// case sensitivity; a <see langword="null"/> value or an extension-less name gives
-    /// <see langword="false"/>. <para>扩展名为 <c>.jar</c> 或 <c>.apk</c> 时返回
-    /// <see langword="true"/>（比较忽略大小写）；值为 <see langword="null"/> 或没有扩展名时返回
-    /// <see langword="false"/>。</para></returns>
+    /// <summary>Whether the given path extension is a supported DEX container (.jar/.apk).
+    /// <para>判断给定路径扩展名是否为受支持的 DEX 容器（.jar/.apk）。</para></summary>
+    /// <param name="path">A file name or full path.<para>文件名或完整路径。</para></param>
+    /// <returns><see langword="true"/> for a <c>.jar</c> or <c>.apk</c> extension, compared without case sensitivity; a <see langword="null"/> value or an extension-less name gives <see langword="false"/>.
+    /// <para>扩展名为 <c>.jar</c> 或 <c>.apk</c> 时返回 <see langword="true"/>（比较忽略大小写）；值为 <see langword="null"/> 或没有扩展名时返回 <see langword="false"/>。</para></returns>
     public static bool IsContainerPath(string? path)
     {
         var ext = Path.GetExtension(path ?? string.Empty);
@@ -85,20 +77,13 @@ public static class JarDexContainer
             || ext.Equals(".apk", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Enumerates all entries in the container (name-ordered); throws a format exception
-    /// when the entry count exceeds the cap.
-    /// <para>枚举容器内全部条目（按名称排序）；超出数量上限时抛出格式异常。</para>
-    /// </summary>
-    /// <param name="path">
-    /// The container file path.
-    /// <para>容器文件路径。</para>
-    /// </param>
-    /// <returns>The list of entry summaries. <para>条目摘要列表。</para></returns>
+    /// <summary>Enumerates all entries in the container (name-ordered); throws a format exception when the entry count exceeds the cap.
+    /// <para>枚举容器内全部条目（按名称排序）；超出数量上限时抛出格式异常。</para></summary>
+    /// <param name="path">The container file path.<para>容器文件路径。</para></param>
+    /// <returns>The list of entry summaries.<para>条目摘要列表。</para></returns>
     /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
     /// <para><paramref name="path"/> 不存在。</para></exception>
-    /// <exception cref="InvalidDataException">The container holds more than
-    /// <see cref="MaxEntryCount"/> entries or its central directory cannot be read.
+    /// <exception cref="InvalidDataException">The container holds more than <see cref="MaxEntryCount"/> entries or its central directory cannot be read.
     /// <para>容器条目数超过 <see cref="MaxEntryCount"/>，或中央目录无法读取。</para></exception>
     public static IReadOnlyList<JarEntryInfo> ListEntries(string path)
     {
@@ -115,19 +100,13 @@ public static class JarDexContainer
             .OrderBy(e => e.Name, StringComparer.Ordinal)];
     }
 
-    /// <summary>
-    /// Lists all DEX entry names in the container (root-level classes*.dex, name-ordered).
-    /// <para>列出容器内全部 DEX 条目名（根级 classes*.dex，按名称自然排序）。</para>
-    /// </summary>
-    /// <param name="path">
-    /// The container file path.
-    /// <para>容器文件路径。</para>
-    /// </param>
-    /// <returns>The list of DEX entry names. <para>DEX 条目名列表。</para></returns>
+    /// <summary>Lists all DEX entry names in the container (root-level classes*.dex, name-ordered).
+    /// <para>列出容器内全部 DEX 条目名（根级 classes*.dex，按名称自然排序）。</para></summary>
+    /// <param name="path">The container file path.<para>容器文件路径。</para></param>
+    /// <returns>The list of DEX entry names.<para>DEX 条目名列表。</para></returns>
     /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
     /// <para><paramref name="path"/> 不存在。</para></exception>
-    /// <exception cref="InvalidDataException">The container holds more than
-    /// <see cref="MaxEntryCount"/> entries or its central directory cannot be read.
+    /// <exception cref="InvalidDataException">The container holds more than <see cref="MaxEntryCount"/> entries or its central directory cannot be read.
     /// <para>容器条目数超过 <see cref="MaxEntryCount"/>，或中央目录无法读取。</para></exception>
     public static IReadOnlyList<string> ListDexEntries(string path)
     {
@@ -145,19 +124,11 @@ public static class JarDexContainer
             .OrderBy(n => n, StringComparer.Ordinal)];
     }
 
-    /// <summary>
-    /// Whether the entry name is a root-level classes*.dex (classes.dex, classes2.dex, ...).
-    /// <para>判断条目名是否为根级 classes*.dex（允许 classes.dex、classes2.dex…）。</para>
-    /// </summary>
-    /// <param name="entryName">
-    /// The entry name.
-    /// <para>条目名。</para>
-    /// </param>
-    /// <returns><see langword="true"/> only for such a name; a <see langword="null"/> value, a name
-    /// containing <c>/</c>, or extra characters between <c>classes</c> and <c>.dex</c> that are not
-    /// ASCII digits give <see langword="false"/>. <para>只有满足上述名称时返回
-    /// <see langword="true"/>；值为 <see langword="null"/>、名称包含 <c>/</c>，或 <c>classes</c> 与
-    /// <c>.dex</c> 之间存在非 ASCII 数字字符时返回 <see langword="false"/>。</para></returns>
+    /// <summary>Whether the entry name is a root-level classes*.dex (classes.dex, classes2.dex, ...).
+    /// <para>判断条目名是否为根级 classes*.dex（允许 classes.dex、classes2.dex…）。</para></summary>
+    /// <param name="entryName">The entry name.<para>条目名。</para></param>
+    /// <returns><see langword="true"/> only for such a name; a <see langword="null"/> value, a name containing <c>/</c>, or extra characters between <c>classes</c> and <c>.dex</c> that are not ASCII digits give <see langword="false"/>.
+    /// <para>只有满足上述名称时返回 <see langword="true"/>；值为 <see langword="null"/>、名称包含 <c>/</c>，或 <c>classes</c> 与 <c>.dex</c> 之间存在非 ASCII 数字字符时返回 <see langword="false"/>。</para></returns>
     public static bool IsDexEntryName(string? entryName)
     {
         if (entryName is null || entryName.Contains('/'))
@@ -176,22 +147,11 @@ public static class JarDexContainer
             && entryName[prefix.Length..^4].All(char.IsAsciiDigit);
     }
 
-    /// <summary>
-    /// Whether the entry is a v1/JAR signature artifact (manifest, SF, RSA/DSA/EC and related
-    /// standard signature extensions under META-INF).
-    /// <para>判断条目是否为 v1/JAR 签名工件（META-INF 下的清单、SF、RSA/DSA/EC 与 SF 以外的
-    /// 标准签名扩展）。</para>
-    /// </summary>
-    /// <param name="entryName">
-    /// The entry name.
-    /// <para>条目名。</para>
-    /// </param>
-    /// <returns><see langword="true"/> for <c>META-INF/MANIFEST.MF</c> or a <c>META-INF/</c> entry
-    /// whose extension is <c>SF</c>, <c>RSA</c>, <c>DSA</c> or <c>EC</c>; comparison ignores case and
-    /// a <see langword="null"/> value gives <see langword="false"/>.
-    /// <para><c>META-INF/MANIFEST.MF</c>，或扩展名为 <c>SF</c>、<c>RSA</c>、<c>DSA</c>、<c>EC</c>
-    /// 的 <c>META-INF/</c> 条目返回 <see langword="true"/>；比较忽略大小写，值为
-    /// <see langword="null"/> 时返回 <see langword="false"/>。</para></returns>
+    /// <summary>Whether the entry is a v1/JAR signature artifact (manifest, SF, RSA/DSA/EC and related standard signature extensions under META-INF).
+    /// <para>判断条目是否为 v1/JAR 签名工件（META-INF 下的清单、SF、RSA/DSA/EC 与 SF 以外的 标准签名扩展）。</para></summary>
+    /// <param name="entryName">The entry name.<para>条目名。</para></param>
+    /// <returns><see langword="true"/> for <c>META-INF/MANIFEST.MF</c> or a <c>META-INF/</c> entry whose extension is <c>SF</c>, <c>RSA</c>, <c>DSA</c> or <c>EC</c>; comparison ignores case and a <see langword="null"/> value gives <see langword="false"/>.
+    /// <para><c>META-INF/MANIFEST.MF</c>，或扩展名为 <c>SF</c>、<c>RSA</c>、<c>DSA</c>、<c>EC</c> 的 <c>META-INF/</c> 条目返回 <see langword="true"/>；比较忽略大小写，值为 <see langword="null"/> 时返回 <see langword="false"/>。</para></returns>
     public static bool IsSignatureEntry(string? entryName)
     {
         if (entryName is null || !entryName.StartsWith("META-INF/", StringComparison.OrdinalIgnoreCase))
@@ -217,33 +177,20 @@ public static class JarDexContainer
             || name[(dot + 1)..].Equals("EC", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Reads the full bytes of one entry, with a bounded length.
-    /// <para>有界读取容器内指定条目的全部字节。</para>
-    /// </summary>
-    /// <param name="path">
-    /// The container file path.
-    /// <para>容器文件路径。</para>
-    /// </param>
-    /// <param name="entryName">
-    /// The entry name.
-    /// <para>条目名。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The cancellation token.
-    /// <para>取消令牌。</para>
-    /// </param>
-    /// <returns>The entry bytes. <para>条目字节。</para></returns>
+    /// <summary>Reads the full bytes of one entry, with a bounded length.
+    /// <para>有界读取容器内指定条目的全部字节。</para></summary>
+    /// <param name="path">The container file path.<para>容器文件路径。</para></param>
+    /// <param name="entryName">The entry name.<para>条目名。</para></param>
+    /// <param name="cancellationToken">The cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The entry bytes.<para>条目字节。</para></returns>
     /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
     /// <para><paramref name="path"/> 不存在。</para></exception>
-    /// <exception cref="InvalidDataException"><paramref name="entryName"/> is absent, or its
-    /// recorded uncompressed size exceeds <see cref="MaxEntryBytes"/>.
-    /// <para>容器中不存在 <paramref name="entryName"/>，或其记录的非压缩大小超过
-    /// <see cref="MaxEntryBytes"/>。</para></exception>
-    /// <exception cref="EndOfStreamException">The entry produced fewer bytes than its recorded
-    /// size. <para>条目实际读出的字节少于记录的大小。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was
-    /// cancelled mid-read. <para>读取过程中 <paramref name="cancellationToken"/> 被取消。</para></exception>
+    /// <exception cref="InvalidDataException"><paramref name="entryName"/> is absent, or its recorded uncompressed size exceeds <see cref="MaxEntryBytes"/>.
+    /// <para>容器中不存在 <paramref name="entryName"/>，或其记录的非压缩大小超过 <see cref="MaxEntryBytes"/>。</para></exception>
+    /// <exception cref="EndOfStreamException">The entry produced fewer bytes than its recorded size.
+    /// <para>条目实际读出的字节少于记录的大小。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled mid-read.
+    /// <para>读取过程中 <paramref name="cancellationToken"/> 被取消。</para></exception>
     public static byte[] LoadEntry(string path, string entryName, CancellationToken cancellationToken = default)
     {
         using var stream = OpenRead(path);
@@ -252,52 +199,24 @@ public static class JarDexContainer
         return ReadBounded(entry, entryName, cancellationToken);
     }
 
-    /// <summary>
-    /// Writes modified DEX bytes back into one container entry.
-    /// <para>把修改后的 DEX 字节写回容器内指定条目。</para>
-    /// </summary>
-    /// <param name="path">
-    /// The container file path.
-    /// <para>容器文件路径。</para>
-    /// </param>
-    /// <param name="entryName">
-    /// The entry name to replace.
-    /// <para>要替换的条目名。</para>
-    /// </param>
-    /// <param name="entryBytes">
-    /// The new entry bytes (the rebuilt DEX output).
-    /// <para>新的条目字节（DEX 重建输出）。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The cancellation token.
-    /// <para>取消令牌。</para>
-    /// </param>
+    /// <summary>Writes modified DEX bytes back into one container entry.
+    /// <para>把修改后的 DEX 字节写回容器内指定条目。</para></summary>
+    /// <param name="path">The container file path.<para>容器文件路径。</para></param>
+    /// <param name="entryName">The entry name to replace.<para>要替换的条目名。</para></param>
+    /// <param name="entryBytes">The new entry bytes (the rebuilt DEX output).
+    /// <para>新的条目字节（DEX 重建输出）。</para></param>
+    /// <param name="cancellationToken">The cancellation token.<para>取消令牌。</para></param>
     public static void WriteBack(string path, string entryName, byte[] entryBytes, CancellationToken cancellationToken = default)
     {
         ReplaceEntry(path, entryName, entryBytes, cancellationToken);
     }
 
-    /// <summary>
-    /// Extracts a resource entry to the target file (the directory is created; the write is
-    /// bounded and committed atomically).
-    /// <para>导出容器内的资源条目到目标文件（目标目录自动创建，写入有界并原子提交）。</para>
-    /// </summary>
-    /// <param name="path">
-    /// The container file path.
-    /// <para>容器文件路径。</para>
-    /// </param>
-    /// <param name="entryName">
-    /// The resource entry name.
-    /// <para>资源条目名。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// The output file path.
-    /// <para>输出文件路径。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The cancellation token.
-    /// <para>取消令牌。</para>
-    /// </param>
+    /// <summary>Extracts a resource entry to the target file (the directory is created; the write is bounded and committed atomically).
+    /// <para>导出容器内的资源条目到目标文件（目标目录自动创建，写入有界并原子提交）。</para></summary>
+    /// <param name="path">The container file path.<para>容器文件路径。</para></param>
+    /// <param name="entryName">The resource entry name.<para>资源条目名。</para></param>
+    /// <param name="outputPath">The output file path.<para>输出文件路径。</para></param>
+    /// <param name="cancellationToken">The cancellation token.<para>取消令牌。</para></param>
     public static void ExtractResource(string path, string entryName, string outputPath, CancellationToken cancellationToken = default)
     {
         if (IsSignatureEntry(entryName))
@@ -324,27 +243,13 @@ public static class JarDexContainer
         }
     }
 
-    /// <summary>
-    /// Replaces a resource entry with the content of a local file (bounded read, atomic
-    /// write-back through a temporary file).
-    /// <para>用本地文件内容替换容器内资源条目（读取有界，经临时文件原子写回）。</para>
-    /// </summary>
-    /// <param name="path">
-    /// The container file path.
-    /// <para>容器文件路径。</para>
-    /// </param>
-    /// <param name="entryName">
-    /// The resource entry name.
-    /// <para>资源条目名。</para>
-    /// </param>
-    /// <param name="sourceFilePath">
-    /// The local file providing the replacement content.
-    /// <para>替换内容的本地文件路径。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The cancellation token.
-    /// <para>取消令牌。</para>
-    /// </param>
+    /// <summary>Replaces a resource entry with the content of a local file (bounded read, atomic write-back through a temporary file).
+    /// <para>用本地文件内容替换容器内资源条目（读取有界，经临时文件原子写回）。</para></summary>
+    /// <param name="path">The container file path.<para>容器文件路径。</para></param>
+    /// <param name="entryName">The resource entry name.<para>资源条目名。</para></param>
+    /// <param name="sourceFilePath">The local file providing the replacement content.
+    /// <para>替换内容的本地文件路径。</para></param>
+    /// <param name="cancellationToken">The cancellation token.<para>取消令牌。</para></param>
     public static void ReplaceResource(string path, string entryName, string sourceFilePath, CancellationToken cancellationToken = default)
     {
         if (IsSignatureEntry(entryName))
@@ -364,23 +269,12 @@ public static class JarDexContainer
         WriteBack(path, entryName, bytes, cancellationToken);
     }
 
-    /// <summary>
-    /// Writes a set of entries (DEX and resources) into a new container (atomic commit via a
-    /// temporary file).
-    /// <para>把新建条目（含 DEX 与资源）连同全部既有条目写入新容器（临时文件原子提交）。</para>
-    /// </summary>
-    /// <param name="outputPath">
-    /// The output container path.
-    /// <para>输出容器路径。</para>
-    /// </param>
-    /// <param name="entries">
-    /// The ordered set of entry names and contents.
-    /// <para>条目名与内容的有序集合。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The cancellation token.
-    /// <para>取消令牌。</para>
-    /// </param>
+    /// <summary>Writes a set of entries (DEX and resources) into a new container (atomic commit via a temporary file).
+    /// <para>把新建条目（含 DEX 与资源）连同全部既有条目写入新容器（临时文件原子提交）。</para></summary>
+    /// <param name="outputPath">The output container path.<para>输出容器路径。</para></param>
+    /// <param name="entries">The ordered set of entry names and contents.
+    /// <para>条目名与内容的有序集合。</para></param>
+    /// <param name="cancellationToken">The cancellation token.<para>取消令牌。</para></param>
     public static void WriteNew(string outputPath, IReadOnlyList<(string Name, byte[] Content)> entries, CancellationToken cancellationToken = default)
     {
         if (entries.Count > MaxEntryCount)

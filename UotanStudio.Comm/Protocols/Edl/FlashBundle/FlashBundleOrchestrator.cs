@@ -110,42 +110,29 @@ public sealed class FlashBundleProgress(FlashBundlePhase phase, string message, 
     public override string ToString() => $"FlashBundleProgress[{Phase}] {Message} ({Current}/{Total})";
 }
 
-/// <summary>
-/// Orchestrates a Qualcomm EDL flash bundle: parses rawprogram0.xml / patch0.xml /
-/// UFS-provision XML files and dispatches the individual Program, Erase, Patch, Wipe and UFS
-/// provisioning operations through the Firehose protocol.
-/// <para>编排 Qualcomm EDL 刷写包：解析 rawprogram0.xml / patch0.xml / UFS 配置 XML 文件，
-/// 并通过 Firehose 协议逐项派发 Program、Erase、Patch、Wipe 与 UFS 配置操作。</para>
-/// </summary>
-/// <remarks>
-/// This orchestrator operates directly on an <see cref="EdlSession"/> (which owns the
-/// Firehose transport) instead of a driver abstraction. Skip-block SHA256 verification, NAND
-/// geometry back-fill and the bootable-drive step are intentionally not implemented here.
-/// <para>本编排器直接基于 <see cref="EdlSession"/>（其持有 Firehose 传输）操作，不使用驱动抽象。
-/// skip-block SHA256 校验、NAND 几何回填与可启动驱动器步骤在此有意未实现。</para>
-/// </remarks>
-/// <remarks>
-/// Initializes a new instance of the <see cref="FlashBundleOrchestrator"/> class.
-/// <para>初始化 <see cref="FlashBundleOrchestrator"/> 类的新实例。</para>
-/// </remarks>
-/// <param name="session">The EDL session used for all device operations. <para>用于所有设备操作的 EDL 会话。</para></param>
+/// <summary>Orchestrates a Qualcomm EDL flash bundle: parses rawprogram0.xml / patch0.xml / UFS-provision XML files and dispatches the individual Program, Erase, Patch, Wipe and UFS provisioning operations through the Firehose protocol.
+/// <para>编排 Qualcomm EDL 刷写包：解析 rawprogram0.xml / patch0.xml / UFS 配置 XML 文件， 并通过 Firehose 协议逐项派发 Program、Erase、Patch、Wipe 与 UFS 配置操作。</para></summary>
+/// <remarks>This orchestrator operates directly on an <see cref="EdlSession"/> (which owns the Firehose transport) instead of a driver abstraction. Skip-block SHA256 verification, NAND geometry back-fill and the bootable-drive step are intentionally not implemented here.
+/// <para>本编排器直接基于 <see cref="EdlSession"/>（其持有 Firehose 传输）操作，不使用驱动抽象。 skip-block SHA256 校验、NAND 几何回填与可启动驱动器步骤在此有意未实现。</para></remarks>
+/// <remarks>Initializes a new instance of the <see cref="FlashBundleOrchestrator"/> class.
+/// <para>初始化 <see cref="FlashBundleOrchestrator"/> 类的新实例。</para></remarks>
+/// <param name="session">The EDL session used for all device operations.
+/// <para>用于所有设备操作的 EDL 会话。</para></param>
 public sealed partial class FlashBundleOrchestrator(EdlSession session)
 {
     private readonly EdlSession _session = session ?? throw new ArgumentNullException(nameof(session));
 
-    /// <summary>
-    /// Runs a flash bundle from a rawprogram file (and optional patch file), resolving image
-    /// paths against <paramref name="imageDir"/>. UFS provisioning XML is auto-discovered in
-    /// the image directory.
-    /// <para>从 rawprogram 文件（及可选的 patch 文件）运行刷写包，镜像路径按
-    /// <paramref name="imageDir"/> 解析。UFS 配置 XML 在镜像目录中自动发现。</para>
-    /// </summary>
-    /// <param name="rawprogramPath">The rawprogram XML file path. <para>rawprogram XML 文件路径。</para></param>
-    /// <param name="patchPath">The optional patch XML file path. <para>可选的 patch XML 文件路径。</para></param>
-    /// <param name="imageDir">The base directory for image files; defaults to the rawprogram's directory. <para>镜像文件基础目录；默认为 rawprogram 所在目录。</para></param>
-    /// <param name="progress">Optional progress reporter. <para>可选的进度报告器。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The flash bundle result. <para>刷写包结果。</para></returns>
+    /// <summary>Runs a flash bundle from a rawprogram file (and optional patch file), resolving image paths against <paramref name="imageDir"/>. UFS provisioning XML is auto-discovered in the image directory.
+    /// <para>从 rawprogram 文件（及可选的 patch 文件）运行刷写包，镜像路径按 <paramref name="imageDir"/> 解析。UFS 配置 XML 在镜像目录中自动发现。</para></summary>
+    /// <param name="rawprogramPath">The rawprogram XML file path.
+    /// <para>rawprogram XML 文件路径。</para></param>
+    /// <param name="patchPath">The optional patch XML file path.
+    /// <para>可选的 patch XML 文件路径。</para></param>
+    /// <param name="imageDir">The base directory for image files; defaults to the rawprogram's directory.
+    /// <para>镜像文件基础目录；默认为 rawprogram 所在目录。</para></param>
+    /// <param name="progress">Optional progress reporter.<para>可选的进度报告器。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The flash bundle result.<para>刷写包结果。</para></returns>
     public async Task<FlashBundleResult> FlashBundleAsync(
         string rawprogramPath,
         string? patchPath,
@@ -186,14 +173,8 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
         CancellationToken cancellationToken = default)
         => RunBundleAsync(options, progress, false, cancellationToken);
 
-    /// <summary>
-    /// Validates sources and device ranges without program, erase, patch, wipe or provisioning.
-    /// <para>在不执行 program、erase、patch、wipe 或 provisioning 的情况下校验源文件与设备范围。</para>
-    /// Session initialization and storage queries are allowed and require caller authorization. This
-    /// observation does not retain a prepared plan; execution must validate again.
-    /// <para>允许会话初始化与存储查询，且需要调用方授权。该观察不会保留已准备好的计划；执行时必须
-    /// 重新校验。</para>
-    /// </summary>
+    /// <summary>Validates sources and device ranges without program, erase, patch, wipe or provisioning.
+    /// <para>在不执行 program、erase、patch、wipe 或 provisioning 的情况下校验源文件与设备范围。</para>Session initialization and storage queries are allowed and require caller authorization. This observation does not retain a prepared plan; execution must validate again.<para>允许会话初始化与存储查询，且需要调用方授权。该观察不会保留已准备好的计划；执行时必须 重新校验。</para></summary>
     /// <param name="options">Selected bundle inputs and policy, captured at entry.
     /// <para>入口处捕获的所选包输入与策略。</para></param>
     /// <param name="cancellationToken">Cancellation for preflight and device queries.

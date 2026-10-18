@@ -15,54 +15,36 @@ namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 /// </summary>
 public static partial class FileSystemPreservation
 {
-    /// <summary>
-    /// Rebuilds the extraction tree using validated source metadata, without retaining the original image.
-    /// An optional output limit bounds the emitted file extent before publication. For sparse output this
-    /// is the container size, not the logical partition size.
-    /// <para>使用经过校验的源元数据重建解包文件树，不保留原始镜像。可选的输出上限会在发布前限制写出文件大小；
-    /// 对稀疏输出而言该上限是容器大小，而非逻辑分区大小。</para>
-    /// </summary>
+    /// <summary>Rebuilds the extraction tree using validated source metadata, without retaining the original image. An optional output limit bounds the emitted file extent before publication. For sparse output this is the container size, not the logical partition size.
+    /// <para>使用经过校验的源元数据重建解包文件树，不保留原始镜像。可选的输出上限会在发布前限制写出文件大小； 对稀疏输出而言该上限是容器大小，而非逻辑分区大小。</para></summary>
     /// <param name="inputDirectory">Extracted tree whose <c>.uotan</c> metadata carries the preservation payload.
     /// <para>其 <c>.uotan</c> 元数据携带保留负载的解包目录。</para></param>
-    /// <param name="outputPath">Image file to write atomically (overwriting); it must lie outside the extracted tree
-    /// and its preservation data. <para>以原子方式写出（允许覆盖）的镜像文件；必须位于解包树及其保留数据之外。</para></param>
+    /// <param name="outputPath">Image file to write atomically (overwriting); it must lie outside the extracted tree and its preservation data.
+    /// <para>以原子方式写出（允许覆盖）的镜像文件；必须位于解包树及其保留数据之外。</para></param>
     /// <param name="format">Image format name; must equal the metadata format, including the sparse container name.
     /// <para>镜像格式名；必须与元数据格式一致，稀疏容器同理。</para></param>
     /// <param name="cancellationToken">Cancels manifest reads, hashing, rebuilding and verification.
     /// <para>取消清单读取、哈希、重建与校验。</para></param>
-    /// <param name="rebuildReport">Optional callback receiving the post-publish equivalence report (byte identity,
-    /// structure, content and capacity flags, plus the EROFS compression profile keys) after a successful preserved
-    /// rebuild; it is invoked for every preserved rebuild format. May be <see langword="null"/>.
-    /// <para>可选回调；受保留重建成功发布后接收等价报告（字节一致性、结构、内容与容量标记，以及 EROFS 压缩档案
-    /// 键），对每种受保留重建格式都会触发。可为 <see langword="null"/>。</para></param>
-    /// <param name="maximumOutputBytes">Optional positive hard cap on written bytes enforced during publication, or
-    /// <see langword="null"/> for no limit. <para>可选的正数写出字节硬上限，在发布期间强制；<see langword="null"/> 表示不限制。</para></param>
-    /// <param name="attributeEdits">Optional ownership/permission edits applied to the edit plan before building;
-    /// guards and bounds are enforced per <see cref="FileSystemAttributeEdit"/>. May be <see langword="null"/>.
-    /// <para>可选的属主/权限编辑，构建前应用到编辑计划；守卫与边界按 <see cref="FileSystemAttributeEdit"/> 所述强制。
-    /// 可为 <see langword="null"/>。</para></param>
+    /// <param name="rebuildReport">Optional callback receiving the post-publish equivalence report (byte identity, structure, content and capacity flags, plus the EROFS compression profile keys) after a successful preserved rebuild; it is invoked for every preserved rebuild format. May be <see langword="null"/>.
+    /// <para>可选回调；受保留重建成功发布后接收等价报告（字节一致性、结构、内容与容量标记，以及 EROFS 压缩档案 键），对每种受保留重建格式都会触发。可为 <see langword="null"/>。</para></param>
+    /// <param name="maximumOutputBytes">Optional positive hard cap on written bytes enforced during publication, or <see langword="null"/> for no limit.
+    /// <para>可选的正数写出字节硬上限，在发布期间强制；<see langword="null"/> 表示不限制。</para></param>
+    /// <param name="attributeEdits">Optional ownership/permission edits applied to the edit plan before building; guards and bounds are enforced per <see cref="FileSystemAttributeEdit"/>. May be <see langword="null"/>.
+    /// <para>可选的属主/权限编辑，构建前应用到编辑计划；守卫与边界按 <see cref="FileSystemAttributeEdit"/> 所述强制。 可为 <see langword="null"/>。</para></param>
     /// <param name="xattrEdits">Optional user-namespace xattr edits applied before building. May be <see langword="null"/>.
     /// <para>可选的 user 命名空间扩展属性编辑，构建前应用。可为 <see langword="null"/>。</para></param>
-    /// <param name="progress">Optional staged reporter for the rebuild phases: the extracted-tree projection is
-    /// reported as <see cref="FileSystemWorkStage.VerifyingFiles"/>, the image build as
-    /// <see cref="FileSystemWorkStage.BuildingImage"/>, and the rebuilt-image re-read plus the published-image
-    /// digest as <see cref="FileSystemWorkStage.VerifyingImage"/>. May be <see langword="null"/>.
-    /// <para>可选的重建阶段回调：解包树投影上报为 <see cref="FileSystemWorkStage.VerifyingFiles"/>，镜像构建上报为
-    /// <see cref="FileSystemWorkStage.BuildingImage"/>，重建镜像的复读与已发布镜像的摘要上报为
-    /// <see cref="FileSystemWorkStage.VerifyingImage"/>。可为 <see langword="null"/>。</para></param>
-    /// <returns><see langword="true"/> when the image was rebuilt and verified; <see langword="false"/> when no
-    /// preservation metadata exists (or the sparse-container early return applies), leaving the caller to a fresh
-    /// directory build.
-    /// <para>成功重建并校验时返回 <see langword="true"/>；无保留元数据（或命中稀疏容器提前返回情形）时返回
-    /// <see langword="false"/>，此时由调用方执行全新目录构建。</para></returns>
+    /// <param name="progress">Optional staged reporter for the rebuild phases: the extracted-tree projection is reported as <see cref="FileSystemWorkStage.VerifyingFiles"/>, the image build as <see cref="FileSystemWorkStage.BuildingImage"/>, and the rebuilt-image re-read plus the published-image digest as <see cref="FileSystemWorkStage.VerifyingImage"/>. May be <see langword="null"/>.
+    /// <para>可选的重建阶段回调：解包树投影上报为 <see cref="FileSystemWorkStage.VerifyingFiles"/>，镜像构建上报为 <see cref="FileSystemWorkStage.BuildingImage"/>，重建镜像的复读与已发布镜像的摘要上报为 <see cref="FileSystemWorkStage.VerifyingImage"/>。可为 <see langword="null"/>。</para></param>
+    /// <returns><see langword="true"/> when the image was rebuilt and verified; <see langword="false"/> when no preservation metadata exists (or the sparse-container early return applies), leaving the caller to a fresh directory build.
+    /// <para>成功重建并校验时返回 <see langword="true"/>；无保留元数据（或命中稀疏容器提前返回情形）时返回 <see langword="false"/>，此时由调用方执行全新目录构建。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumOutputBytes"/> is zero or negative.
     /// <para><paramref name="maximumOutputBytes"/> 为零或负数。</para></exception>
-    /// <exception cref="FileSystemException">The metadata format mismatches, the preservation payload is missing,
-    /// oversized or configuration-inconsistent, an edit guard fails, or the container is not editable.
+    /// <exception cref="FileSystemException">The metadata format mismatches, the preservation payload is missing, oversized or configuration-inconsistent, an edit guard fails, or the container is not editable.
     /// <para>元数据格式不匹配、保留负载缺失/超限/配置不一致、编辑守卫失败，或容器不支持编辑。</para></exception>
-    /// <exception cref="IOException">The output path lies inside the protected trees, or content or attributes changed
-    /// during rebuilding. <para>输出路径位于受保护目录树内，或重建期间内容/属性发生变化。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
+    /// <exception cref="IOException">The output path lies inside the protected trees, or content or attributes changed during rebuilding.
+    /// <para>输出路径位于受保护目录树内，或重建期间内容/属性发生变化。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌被取消。</para></exception>
     public static bool TryRestore(string inputDirectory, string outputPath, string format,
         CancellationToken cancellationToken = default,
         Action<IReadOnlyDictionary<string, string>>? rebuildReport = null,

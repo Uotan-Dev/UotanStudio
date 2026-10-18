@@ -241,22 +241,14 @@ public static partial class AvbSignatureVerifier
     private const int ChainPartitionDescriptorTag = 4;
     private const int Exponent = 65537;
 
-    /// <summary>
-    /// Maps an algorithm type to its hash name and RSA key size.
-    /// <para>将算法类型映射为哈希名称与 RSA 密钥大小。</para>
-    /// </summary>
-    /// <param name="algorithmType">
-    /// Header algorithm type: <c>1</c>–<c>3</c> are SHA-256 RSA, <c>4</c>–<c>6</c> SHA-512 RSA, <see cref="AlgorithmNone"/> is unsigned.
-    /// <para>头部算法类型：<c>1</c>–<c>3</c> 为 SHA-256 RSA，<c>4</c>–<c>6</c> 为 SHA-512 RSA，<see cref="AlgorithmNone"/> 表示未签名。</para>
-    /// </param>
-    /// <param name="keySizeBits">
-    /// RSA modulus size in bits (2048, 4096 or 8192); <c>0</c> for <see cref="AlgorithmNone"/> and unknown types.
-    /// <para>RSA 模数位数（2048、4096 或 8192）；<see cref="AlgorithmNone"/> 与未知类型为 <c>0</c>。</para>
-    /// </param>
-    /// <param name="hashName">
-    /// <c>SHA256</c> or <c>SHA512</c>; <see cref="string.Empty"/> for <see cref="AlgorithmNone"/> and unknown types.
-    /// <para><c>SHA256</c> 或 <c>SHA512</c>；<see cref="AlgorithmNone"/> 与未知类型为空字符串。</para>
-    /// </param>
+    /// <summary>Maps an algorithm type to its hash name and RSA key size.
+    /// <para>将算法类型映射为哈希名称与 RSA 密钥大小。</para></summary>
+    /// <param name="algorithmType">Header algorithm type: <c>1</c>–<c>3</c> are SHA-256 RSA, <c>4</c>–<c>6</c> SHA-512 RSA, <see cref="AlgorithmNone"/> is unsigned.
+    /// <para>头部算法类型：<c>1</c>–<c>3</c> 为 SHA-256 RSA，<c>4</c>–<c>6</c> 为 SHA-512 RSA，<see cref="AlgorithmNone"/> 表示未签名。</para></param>
+    /// <param name="keySizeBits">RSA modulus size in bits (2048, 4096 or 8192); <c>0</c> for <see cref="AlgorithmNone"/> and unknown types.
+    /// <para>RSA 模数位数（2048、4096 或 8192）；<see cref="AlgorithmNone"/> 与未知类型为 <c>0</c>。</para></param>
+    /// <param name="hashName"><c>SHA256</c> or <c>SHA512</c>; <see cref="string.Empty"/> for <see cref="AlgorithmNone"/> and unknown types.
+    /// <para><c>SHA256</c> 或 <c>SHA512</c>；<see cref="AlgorithmNone"/> 与未知类型为空字符串。</para></param>
     /// <returns><see langword="true"/> when the type is recognized (including <see cref="AlgorithmNone"/>); <see langword="false"/> for unknown types.
     /// <para>类型可识别（含 <see cref="AlgorithmNone"/>）时返回 <see langword="true"/>；未知类型返回 <see langword="false"/>。</para></returns>
     public static bool TryGetKeySizeAndHash(uint algorithmType, out int keySizeBits, out string hashName)
@@ -389,23 +381,14 @@ public static partial class AvbSignatureVerifier
         }
     }
 
-    /// <summary>
-    /// Verifies the embedded signature of a vbmeta image, using the public key embedded in its auxiliary data block (self-signed verification).
-    /// <para>验证 vbmeta 镜像的内嵌签名，使用其辅助数据块中内嵌的公钥（自签名验证）。</para>
-    /// </summary>
-    /// <param name="vbmetaData">
-    /// Untrusted full vbmeta buffer; every header-declared offset and size is bounds-checked and reported as an error result instead of throwing.
-    /// <para>不可信的完整 vbmeta 缓冲区；头部声明的每个偏移与大小都做边界检查，以错误结果而非异常报告。</para>
-    /// </param>
-    /// <param name="trustedPublicKey">
-    /// External RSA public key to verify against; when <see langword="null"/>, the key embedded in the auxiliary block is used.
-    /// <para>用于验证的外部 RSA 公钥；为 <see langword="null"/> 时使用辅助块中内嵌的密钥。</para>
-    /// </param>
-    /// <returns>
-    /// Verification outcome with hash and signature flags, raw material and parsed descriptors; <see cref="AvbSignatureVerifyResult.ErrorMessage"/>
-    /// explains any rejected input. This method does not throw on malformed data.
-    /// <para>包含哈希与签名标志、原始材料及已解析描述符的校验结果；被拒绝的输入由 <see cref="AvbSignatureVerifyResult.ErrorMessage"/> 说明。本方法对畸形数据不抛异常。</para>
-    /// </returns>
+    /// <summary>Verifies the embedded signature of a vbmeta image, using the public key embedded in its auxiliary data block (self-signed verification).
+    /// <para>验证 vbmeta 镜像的内嵌签名，使用其辅助数据块中内嵌的公钥（自签名验证）。</para></summary>
+    /// <param name="vbmetaData">Untrusted full vbmeta buffer; every header-declared offset and size is bounds-checked and reported as an error result instead of throwing.
+    /// <para>不可信的完整 vbmeta 缓冲区；头部声明的每个偏移与大小都做边界检查，以错误结果而非异常报告。</para></param>
+    /// <param name="trustedPublicKey">External RSA public key to verify against; when <see langword="null"/>, the key embedded in the auxiliary block is used.
+    /// <para>用于验证的外部 RSA 公钥；为 <see langword="null"/> 时使用辅助块中内嵌的密钥。</para></param>
+    /// <returns>Verification outcome with hash and signature flags, raw material and parsed descriptors; <see cref="AvbSignatureVerifyResult.ErrorMessage"/> explains any rejected input. This method does not throw on malformed data.
+    /// <para>包含哈希与签名标志、原始材料及已解析描述符的校验结果；被拒绝的输入由 <see cref="AvbSignatureVerifyResult.ErrorMessage"/> 说明。本方法对畸形数据不抛异常。</para></returns>
     /// <example>
     /// <code>
     /// var result = AvbSignatureVerifier.Verify(File.ReadAllBytes("vbmeta.img"));
@@ -503,10 +486,8 @@ public static partial class AvbSignatureVerifier
         }
     }
 
-    /// <summary>
-    /// Verifies an explicit signature over a vbmeta image with a raw AVB public key blob.
-    /// <para>使用原始 AVB 公钥数据块验证 vbmeta 镜像上的显式签名。</para>
-    /// </summary>
+    /// <summary>Verifies an explicit signature over a vbmeta image with a raw AVB public key blob.
+    /// <para>使用原始 AVB 公钥数据块验证 vbmeta 镜像上的显式签名。</para></summary>
     /// <param name="vbmetaData">Full vbmeta buffer; must be at least 256 bytes with the AVB0 magic, otherwise an error result is returned.
     /// <para>完整 vbmeta 缓冲区；至少 256 字节且带 AVB0 魔数，否则返回错误结果。</para></param>
     /// <param name="signature">Raw RSA signature bytes; a length other than key-size/8 fails verification.
@@ -515,8 +496,7 @@ public static partial class AvbSignatureVerifier
     /// <para>用于导入并验证的 libavb RSA 公钥数据块。</para></param>
     /// <param name="algorithmType">Algorithm type selecting the digest and expected key size.
     /// <para>算法类型，决定摘要算法与预期密钥大小。</para></param>
-    /// <returns>Result with <see cref="AvbSignatureVerifyResult.IsSigned"/> set and <see cref="AvbSignatureVerifyResult.SignatureIsValid"/> reflecting the check;
-    /// error results for bad magic, a failed key import, or a too-short buffer.
+    /// <returns>Result with <see cref="AvbSignatureVerifyResult.IsSigned"/> set and <see cref="AvbSignatureVerifyResult.SignatureIsValid"/> reflecting the check; error results for bad magic, a failed key import, or a too-short buffer.
     /// <para>结果中 <see cref="AvbSignatureVerifyResult.IsSigned"/> 已置位，<see cref="AvbSignatureVerifyResult.SignatureIsValid"/> 反映验证结论；魔数错误、密钥导入失败或缓冲区过短返回错误结果。</para></returns>
     public static AvbSignatureVerifyResult VerifySignature(byte[] vbmetaData, byte[] signature, byte[] avbRsaPublicKeyBlob, uint algorithmType)
     {

@@ -24,24 +24,20 @@ public sealed class OzipFormatCryptoProvider : IOppFormatCryptoProvider
     /// <value><see cref="OppFormat.Ozip"/> for every instance. <para>每个实例都返回 <see cref="OppFormat.Ozip"/>。</para></value>
     public OppFormat SupportedFormat => OppFormat.Ozip;
 
-    /// <summary>
-    /// Decrypts data using the specified key.
-    /// <para>使用指定密钥解密数据。</para>
-    /// </summary>
+    /// <summary>Decrypts data using the specified key.<para>使用指定密钥解密数据。</para></summary>
     /// <param name="data">The complete OZip file bytes; the whole input is buffered in memory.
     /// <para>完整的 OZip 文件字节；整个输入会被缓冲到内存中。</para></param>
-    /// <param name="keyId">Key identifier: <c>OZ-&lt;index&gt;</c>, <c>OZ-custom-&lt;index&gt;</c>, or a
-    /// 32-hex-character key. <para>密钥标识符：<c>OZ-&lt;索引&gt;</c>、<c>OZ-custom-&lt;索引&gt;</c>，或 32 位十六进制字符的密钥。</para></param>
-    /// <returns>The decrypted payload bytes. <para>解密后的负载字节。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="keyId"/> is null, empty, or white space, or the
-    /// stream checks in <see cref="OzipDecryptor.DecryptFile"/> reject the input.
+    /// <param name="keyId">Key identifier: <c>OZ-&lt;index&gt;</c>, <c>OZ-custom-&lt;index&gt;</c>, or a 32-hex-character key.
+    /// <para>密钥标识符：<c>OZ-&lt;索引&gt;</c>、<c>OZ-custom-&lt;索引&gt;</c>，或 32 位十六进制字符的密钥。</para></param>
+    /// <returns>The decrypted payload bytes.<para>解密后的负载字节。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="keyId"/> is null, empty, or white space, or the stream checks in <see cref="OzipDecryptor.DecryptFile"/> reject the input.
     /// <para><paramref name="keyId"/> 为 null、空或仅空白，或 <see cref="OzipDecryptor.DecryptFile"/> 的流检查拒绝了输入。</para></exception>
     /// <exception cref="OppDecryptionException"><paramref name="keyId"/> resolves to no known key.
     /// <para><paramref name="keyId"/> 无法解析为已知密钥。</para></exception>
-    /// <exception cref="InvalidOppFormatException">The header is invalid or the declared size exceeds the
-    /// bytes actually present. <para>头部无效，或声明的大小超出实际存在的字节数。</para></exception>
-    /// <exception cref="System.Security.Cryptography.CryptographicException">The ECB decryption of a prefix block did not produce a full
-    /// 16-byte block. <para>某个前缀块的 ECB 解密未产生完整的 16 字节块。</para></exception>
+    /// <exception cref="InvalidOppFormatException">The header is invalid or the declared size exceeds the bytes actually present.
+    /// <para>头部无效，或声明的大小超出实际存在的字节数。</para></exception>
+    /// <exception cref="System.Security.Cryptography.CryptographicException">The ECB decryption of a prefix block did not produce a full 16-byte block.
+    /// <para>某个前缀块的 ECB 解密未产生完整的 16 字节块。</para></exception>
     public byte[] Decrypt(byte[] data, string keyId)
     {
         Guard.ThrowIfNull(data);
@@ -74,30 +70,24 @@ public sealed class OzipFormatCryptoProvider : IOppFormatCryptoProvider
             "OZip encryption is not supported. OZip is a decryption-only format.");
     }
 
-    /// <summary>
-    /// Decrypts stream data using the specified key.
-    /// <para>使用指定密钥解密流数据。</para>
-    /// </summary>
-    /// <param name="input">Readable, seekable OZip file stream; the header is validated and reading
-    /// continues from offset <c>0x1050</c>. It is not closed.
+    /// <summary>Decrypts stream data using the specified key.<para>使用指定密钥解密流数据。</para></summary>
+    /// <param name="input">Readable, seekable OZip file stream; the header is validated and reading continues from offset <c>0x1050</c>. It is not closed.
     /// <para>可读取、可寻址的 OZip 文件流；校验头部后从偏移 <c>0x1050</c> 继续读取，不会被关闭。</para></param>
     /// <param name="output">Stream that receives the decrypted payload; it is not closed.
     /// <para>接收解密负载的流；不会被关闭。</para></param>
-    /// <param name="keyId">Key identifier: <c>OZ-&lt;index&gt;</c>, <c>OZ-custom-&lt;index&gt;</c>, or a
-    /// 32-hex-character key. <para>密钥标识符：<c>OZ-&lt;索引&gt;</c>、<c>OZ-custom-&lt;索引&gt;</c>，或 32 位十六进制字符的密钥。</para></param>
-    /// <param name="cancellationToken">Checked once at entry; the subsequent bulk decryption is not
-    /// cancellable. <para>仅在入口处检查一次；随后的整体解密过程不可被取消。</para></param>
+    /// <param name="keyId">Key identifier: <c>OZ-&lt;index&gt;</c>, <c>OZ-custom-&lt;index&gt;</c>, or a 32-hex-character key.
+    /// <para>密钥标识符：<c>OZ-&lt;索引&gt;</c>、<c>OZ-custom-&lt;索引&gt;</c>，或 32 位十六进制字符的密钥。</para></param>
+    /// <param name="cancellationToken">Checked once at entry; the subsequent bulk decryption is not cancellable.
+    /// <para>仅在入口处检查一次；随后的整体解密过程不可被取消。</para></param>
     /// <exception cref="OperationCanceledException">Cancellation was already requested at entry.
     /// <para>入口处已请求取消。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="keyId"/> is null, empty, or white space, or
-    /// <paramref name="input"/> is not readable or not seekable.
+    /// <exception cref="ArgumentException"><paramref name="keyId"/> is null, empty, or white space, or <paramref name="input"/> is not readable or not seekable.
     /// <para><paramref name="keyId"/> 为 null、空或仅空白，或 <paramref name="input"/> 不可读取或不可寻址。</para></exception>
     /// <exception cref="OppDecryptionException"><paramref name="keyId"/> resolves to no known key.
     /// <para><paramref name="keyId"/> 无法解析为已知密钥。</para></exception>
-    /// <exception cref="InvalidOppFormatException">The header is invalid or the payload ends before the
-    /// declared size is consumed. <para>头部无效，或负载在消费完声明大小前提前结束。</para></exception>
-    /// <exception cref="System.Security.Cryptography.CryptographicException">The ECB decryption of a prefix
-    /// block did not produce a full 16-byte block.
+    /// <exception cref="InvalidOppFormatException">The header is invalid or the payload ends before the declared size is consumed.
+    /// <para>头部无效，或负载在消费完声明大小前提前结束。</para></exception>
+    /// <exception cref="System.Security.Cryptography.CryptographicException">The ECB decryption of a prefix block did not produce a full 16-byte block.
     /// <para>某个前缀块的 ECB 解密未产生完整的 16 字节块。</para></exception>
     public void Decrypt(Stream input, Stream output, string keyId, CancellationToken cancellationToken)
     {
@@ -111,10 +101,7 @@ public sealed class OzipFormatCryptoProvider : IOppFormatCryptoProvider
         OzipDecryptor.DecryptFile(input, output, keyEntry.KeyBytes);
     }
 
-    /// <summary>
-    /// Encrypts stream data using the specified key.
-    /// <para>使用指定密钥加密流数据。</para>
-    /// </summary>
+    /// <summary>Encrypts stream data using the specified key.<para>使用指定密钥加密流数据。</para></summary>
     /// <param name="input">Not consulted; the call fails after the null checks.
     /// <para>不会被使用；调用在空值检查后即失败。</para></param>
     /// <param name="output">Not consulted; the call fails after the null checks.
@@ -123,8 +110,7 @@ public sealed class OzipFormatCryptoProvider : IOppFormatCryptoProvider
     /// <para>不会被使用；调用在解析密钥前即失败。</para></param>
     /// <param name="cancellationToken">Not consulted; the call fails before any streaming work.
     /// <para>不会被使用；调用在任何流式处理前即失败。</para></param>
-    /// <exception cref="OppDecryptionException">Always, once both streams are verified non-null, because
-    /// OZip is a decryption-only format.
+    /// <exception cref="OppDecryptionException">Always, once both streams are verified non-null, because OZip is a decryption-only format.
     /// <para>在确认两个流均非 null 后始终抛出，因为 OZip 是仅支持解密的格式。</para></exception>
     public void Encrypt(Stream input, Stream output, string keyId, CancellationToken cancellationToken)
     {
@@ -135,20 +121,14 @@ public sealed class OzipFormatCryptoProvider : IOppFormatCryptoProvider
             "OZip encryption is not supported. OZip is a decryption-only format.");
     }
 
-    /// <summary>
-    /// Automatically infers the key and decrypts data.
-    /// <para>自动推断密钥并解密数据。</para>
-    /// </summary>
+    /// <summary>Automatically infers the key and decrypts data.<para>自动推断密钥并解密数据。</para></summary>
     /// <param name="data">Candidate file bytes; the whole input is buffered in memory.
     /// <para>候选文件字节；整个输入会被缓冲到内存中。</para></param>
-    /// <returns>The decrypted payload, or <see langword="null"/> when the bytes lack the OZip magic or no
-    /// built-in key produces valid plaintext.
+    /// <returns>The decrypted payload, or <see langword="null"/> when the bytes lack the OZip magic or no built-in key produces valid plaintext.
     /// <para>解密后的负载；当字节缺少 OZip 魔数或没有内置密钥能产生有效明文时返回 <see langword="null"/>。</para></returns>
-    /// <exception cref="InvalidOppFormatException">The magic matches but the header is malformed or the
-    /// declared size exceeds the buffered data; this failure is not reported as <see langword="null"/>.
+    /// <exception cref="InvalidOppFormatException">The magic matches but the header is malformed or the declared size exceeds the buffered data; this failure is not reported as <see langword="null"/>.
     /// <para>魔数匹配但头部格式错误，或声明的大小超出缓冲数据；这类失败不会以 <see langword="null"/> 形式返回。</para></exception>
-    /// <exception cref="System.Security.Cryptography.CryptographicException">The ECB decryption of a prefix
-    /// block did not produce a full 16-byte block.
+    /// <exception cref="System.Security.Cryptography.CryptographicException">The ECB decryption of a prefix block did not produce a full 16-byte block.
     /// <para>某个前缀块的 ECB 解密未产生完整的 16 字节块。</para></exception>
     public byte[]? AutoDecrypt(byte[] data)
     {

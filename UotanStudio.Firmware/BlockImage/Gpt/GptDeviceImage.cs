@@ -49,17 +49,16 @@ public static class GptDeviceImage
 
     /// <summary>Builds the selected device extents for one validated table.
     /// <para>为一个已校验的表构建所选的设备范围。</para></summary>
-    /// <param name="table">The table to serialize; its geometry, layout LBAs and entry dimensions are
-    /// validated first. <para>待序列化的表；先校验其几何信息、布局 LBA 与条目维度。</para></param>
-    /// <param name="copies">Which copy or copies to emit; both headers always carry the same entry array and
-    /// disk identifier, so a single-copy selection still writes a self-consistent range.
+    /// <param name="table">The table to serialize; its geometry, layout LBAs and entry dimensions are validated first.
+    /// <para>待序列化的表；先校验其几何信息、布局 LBA 与条目维度。</para></param>
+    /// <param name="copies">Which copy or copies to emit; both headers always carry the same entry array and disk identifier, so a single-copy selection still writes a self-consistent range.
     /// <para>要输出的副本；两个头部始终携带相同的条目数组与磁盘标识符，因此仅选一个副本时其范围仍自洽。</para></param>
     /// <returns>The requested extents, primary first when it is included.
     /// <para>返回请求的范围；包含主范围时它排在前面。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="table"/> is <see langword="null"/>.
     /// <para><paramref name="table"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">The table violates the GPT invariants, or its primary and
-    /// backup ranges would overlap. <para>该表违反 GPT 不变量，或主备份范围会互相重叠。</para></exception>
+    /// <exception cref="InvalidDataException">The table violates the GPT invariants, or its primary and backup ranges would overlap.
+    /// <para>该表违反 GPT 不变量，或主备份范围会互相重叠。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="copies"/> is not a defined value.
     /// <para><paramref name="copies"/> 不是已定义的值。</para></exception>
     /// <exception cref="OverflowException">A byte count or block offset exceeds the supported range.

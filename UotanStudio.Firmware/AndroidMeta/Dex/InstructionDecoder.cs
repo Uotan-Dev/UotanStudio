@@ -10,31 +10,17 @@ namespace UotanStudio.Firmware.AndroidMeta.Dex;
 /// </summary>
 internal static class InstructionDecoder
 {
-    /// <summary>
-    /// Decodes a raw instruction stream into an instruction list.
-    /// <para>解码原始指令流为指令列表。</para>
-    /// </summary>
-    /// <param name="raw">
-    /// The 16-bit code units of one method body, in stream order.
-    /// <para>单个方法体的 16 位代码单元，按流顺序排列。</para>
-    /// </param>
-    /// <param name="dex">
-    /// Source <see cref="DexFile"/> used to resolve string, type, field and method reference operands.
-    /// <para>用于解析字符串、类型、字段与方法引用操作数的 <see cref="DexFile"/>。</para>
-    /// </param>
-    /// <returns>
-    /// Instructions in stream order with byte offsets and code-unit sizes. A payload ident at an
-    /// instruction boundary is decoded as a payload entry; an opcode with no table entry becomes a one-unit <c>unknown-0xNN</c>
-    /// entry; an instruction cut off by the end of the stream becomes a <c>truncated-</c> entry and ends decoding.
-    /// <para>按流顺序返回的指令，含字节偏移与代码单元长度。指令边界上的有效负载标识解码为负载条目；无表项的操作码输出为
-    /// 1 单元的 <c>unknown-0xNN</c> 条目；被流尾截断的指令输出为 <c>truncated-</c> 前缀条目并结束解码。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="raw"/> or <paramref name="dex"/> is <see langword="null"/>.
-    /// <para><paramref name="raw"/> 或 <paramref name="dex"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">A payload is truncated, misaligned, or has an invalid width,
-    /// or a fixed register list exceeds five words.
+    /// <summary>Decodes a raw instruction stream into an instruction list.
+    /// <para>解码原始指令流为指令列表。</para></summary>
+    /// <param name="raw">The 16-bit code units of one method body, in stream order.
+    /// <para>单个方法体的 16 位代码单元，按流顺序排列。</para></param>
+    /// <param name="dex">Source <see cref="DexFile"/> used to resolve string, type, field and method reference operands.
+    /// <para>用于解析字符串、类型、字段与方法引用操作数的 <see cref="DexFile"/>。</para></param>
+    /// <returns>Instructions in stream order with byte offsets and code-unit sizes. A payload ident at an instruction boundary is decoded as a payload entry; an opcode with no table entry becomes a one-unit <c>unknown-0xNN</c> entry; an instruction cut off by the end of the stream becomes a <c>truncated-</c> entry and ends decoding.
+    /// <para>按流顺序返回的指令，含字节偏移与代码单元长度。指令边界上的有效负载标识解码为负载条目；无表项的操作码输出为 1 单元的 <c>unknown-0xNN</c> 条目；被流尾截断的指令输出为 <c>truncated-</c> 前缀条目并结束解码。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="raw"/> or <paramref name="dex"/> is <see langword="null"/>.
+    /// <para><paramref name="raw"/> 或 <paramref name="dex"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException">A payload is truncated, misaligned, or has an invalid width, or a fixed register list exceeds five words.
     /// <para>负载被截断、未对齐或元素宽度无效，或者固定寄存器列表超过五个字。</para></exception>
     public static List<Instruction> Decode(ushort[] raw, DexFile dex)
         => Decode(raw, dex, descriptors: false);

@@ -70,15 +70,14 @@ public static class WipeManifestParser
         }
     }
 
-    /// <summary>
-    /// Asynchronously parses the wipe elements of a rawprogram XML file.
-    /// <para>异步解析 rawprogram XML 文件中的 wipe 元素。</para>
-    /// </summary>
-    /// <param name="filePath">The path to the rawprogram XML file. <para>rawprogram XML 文件路径。</para></param>
-    /// <param name="cancellationToken">A token observed while the work item is queued. <para>在工作项排队阶段
-    /// 被观察的令牌。</para></param>
-    /// <returns>A task whose result contains the parsed <see cref="WipeManifestEntry"/> objects. <para>任务结果
-    /// 包含解析出的 <see cref="WipeManifestEntry"/> 对象。</para></returns>
+    /// <summary>Asynchronously parses the wipe elements of a rawprogram XML file.
+    /// <para>异步解析 rawprogram XML 文件中的 wipe 元素。</para></summary>
+    /// <param name="filePath">The path to the rawprogram XML file.
+    /// <para>rawprogram XML 文件路径。</para></param>
+    /// <param name="cancellationToken">A token observed while the work item is queued.
+    /// <para>在工作项排队阶段 被观察的令牌。</para></param>
+    /// <returns>A task whose result contains the parsed <see cref="WipeManifestEntry"/> objects.
+    /// <para>任务结果 包含解析出的 <see cref="WipeManifestEntry"/> 对象。</para></returns>
     /// <exception cref="EdlException">The path is empty or whitespace, or the file cannot be loaded or parsed.
     /// <para>路径为空白字符串，或文件无法加载或解析。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled while the work item was queued.

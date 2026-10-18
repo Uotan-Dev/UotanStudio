@@ -12,11 +12,10 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <para>按 512 对齐的正数字节数；绝不隐式填充。</para></param>
 /// <param name="SourcePath">Image path for a raw step; absent for erase.
 /// <para>原始步骤的镜像路径；擦除步骤不需要。</para></param>
-/// <param name="SourceOffset">Raw source offset; zero for erase. <para>原始源偏移；擦除时为零。</para></param>
+/// <param name="SourceOffset">Raw source offset; zero for erase.<para>原始源偏移；擦除时为零。</para></param>
 /// <param name="Verify">Whether the written extent requires readback comparison.
 /// <para>写出的范围是否需要回读比对。</para></param>
-/// <param name="PadSourceTail">Whether a source shorter than the extent is explicitly zero-filled to that
-/// extent, mirroring the reference tools' round-up-to-block rule; without it a short source is refused.
+/// <param name="PadSourceTail">Whether a source shorter than the extent is explicitly zero-filled to that extent, mirroring the reference tools' round-up-to-block rule; without it a short source is refused.
 /// <para>是否在源短于该范围时显式补零至该范围，对应参考工具“向上取整到块”的规则；不开启时短源会被拒绝。</para></param>
 public sealed record MtkLegacyFlashStep(byte PartitionId, MtkFlashStepKind Kind, long Offset, long Length,
     string? SourcePath = null, long SourceOffset = 0, bool Verify = false, bool PadSourceTail = false);
@@ -25,14 +24,14 @@ public sealed record MtkLegacyFlashStep(byte PartitionId, MtkFlashStepKind Kind,
 /// <para>按区域 GPT 中的分区名寻址的一次显式 Legacy 操作。</para></summary>
 /// <param name="PartitionName">Exact case-sensitive GPT partition name.
 /// <para>精确、区分大小写的 GPT 分区名。</para></param>
-/// <param name="Kind">Raw write or erase. <para>原始写入或擦除。</para></param>
+/// <param name="Kind">Raw write or erase.<para>原始写入或擦除。</para></param>
 /// <param name="Offset">Byte offset relative to the GPT partition.
 /// <para>相对于 GPT 分区的字节偏移。</para></param>
 /// <param name="Length">Positive byte count; the agent never pads implicitly.
 /// <para>正数字节数；代理不会隐式填充。</para></param>
 /// <param name="SourcePath">Image path for a raw step; absent for erase.
 /// <para>原始步骤的镜像路径；擦除步骤不需要。</para></param>
-/// <param name="SourceOffset">Raw source offset; zero for erase. <para>原始源偏移；擦除时为零。</para></param>
+/// <param name="SourceOffset">Raw source offset; zero for erase.<para>原始源偏移；擦除时为零。</para></param>
 /// <param name="Verify">Whether the written extent requires readback comparison.
 /// <para>写出的范围是否需要回读比对。</para></param>
 /// <param name="PadSourceTail">Whether a source shorter than the extent is explicitly zero-filled.
@@ -129,11 +128,9 @@ public sealed class MtkLegacyFlashPlan : IDisposable
     /// <para>目标会话对应的已发现 Legacy 清单。</para></param>
     /// <param name="steps">At most 256 explicitly ordered steps; no hidden erase or padding is added.
     /// <para>最多 256 个显式排序的步骤；不会添加隐藏的擦除或填充。</para></param>
-    /// <param name="cancellationToken">The preflight cancellation token.
-    /// <para>预检取消令牌。</para></param>
-    /// <returns>A plan owning every opened source. <para>持有每个已打开源的计划。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="storage"/> or <paramref name="steps"/> is null,
-    /// or a raw step has a null <c>SourcePath</c>.
+    /// <param name="cancellationToken">The preflight cancellation token.<para>预检取消令牌。</para></param>
+    /// <returns>A plan owning every opened source.<para>持有每个已打开源的计划。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="storage"/> or <paramref name="steps"/> is null, or a raw step has a null <c>SourcePath</c>.
     /// <para><paramref name="storage"/> 或 <paramref name="steps"/> 为 null，或原始步骤的 <c>SourcePath</c> 为 null。</para></exception>
     /// <exception cref="ArgumentException">A step is null or an erase step carries a source or verification.
     /// <para>某个步骤为 null，或擦除步骤携带源或校验要求。</para></exception>
@@ -177,9 +174,8 @@ public sealed class MtkLegacyFlashPlan : IDisposable
     /// <para>在打开任何源之前，将按分区名寻址的步骤与 GPT 观测结果核对。</para></summary>
     /// <param name="snapshot">A validated Legacy GPT observation from the intended session.
     /// <para>来自目标会话、已校验的 Legacy GPT 观测结果。</para></param>
-    /// <param name="steps">At most 256 explicitly ordered steps. <para>最多 256 个显式排序的步骤。</para></param>
-    /// <param name="cancellationToken">The preflight cancellation token.
-    /// <para>预检取消令牌。</para></param>
+    /// <param name="steps">At most 256 explicitly ordered steps.<para>最多 256 个显式排序的步骤。</para></param>
+    /// <param name="cancellationToken">The preflight cancellation token.<para>预检取消令牌。</para></param>
     /// <returns>A plan that revalidates the same GPT table when it executes.
     /// <para>执行时会重新校验同一张 GPT 表的计划。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> or <paramref name="steps"/> is null.

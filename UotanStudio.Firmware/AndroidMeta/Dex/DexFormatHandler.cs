@@ -88,22 +88,18 @@ public sealed class DexFormatHandler : IFormatHandler
         }
     }
 
-    /// <summary>
-    /// Extracts the firmware contents asynchronously.
-    /// <para>异步提取固件内容。</para>
-    /// </summary>
-    /// <param name="filePath">DEX file to disassemble in full. <para>需要整体反汇编的 DEX 文件。</para></param>
-    /// <param name="outputDirectory">Directory created on demand and written with one UTF-8 <c>&lt;name&gt;.smali</c> file plus the repack metadata document. <para>按需创建的目录；写入单个 UTF-8 <c>&lt;name&gt;.smali</c> 文件与重打包元数据文档。</para></param>
-    /// <param name="options">Extraction options; <c>null</c> behaves as overwrite-enabled. <para>解包选项；<c>null</c> 等同于允许覆盖。</para></param>
-    /// <param name="cancellationToken">Observed before and during file writes; a cancelled run throws without a failure result. <para>在写入前后生效；取消时直接抛出而不返回失败结果。</para></param>
-    /// <returns>A successful result listing the emitted smali file, or a failure result (messages
-    /// prefixed "Output directory is empty", "Output exists and overwrite is disabled" or "DEX
-    /// disassembly failed"). The repack metadata step never overwrites a non-metadata file of the
-    /// same name.
-    /// <para>成功结果列出生成的 smali 文件；失败结果前缀为 "Output directory is empty"、
-    /// "Output exists and overwrite is disabled" 或 "DEX disassembly failed"。重打包元数据步骤绝不覆盖
-    /// 同名的非元数据文件。</para></returns>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled. <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    /// <summary>Extracts the firmware contents asynchronously.<para>异步提取固件内容。</para></summary>
+    /// <param name="filePath">DEX file to disassemble in full.<para>需要整体反汇编的 DEX 文件。</para></param>
+    /// <param name="outputDirectory">Directory created on demand and written with one UTF-8 <c>&lt;name&gt;.smali</c> file plus the repack metadata document.
+    /// <para>按需创建的目录；写入单个 UTF-8 <c>&lt;name&gt;.smali</c> 文件与重打包元数据文档。</para></param>
+    /// <param name="options">Extraction options; <c>null</c> behaves as overwrite-enabled.
+    /// <para>解包选项；<c>null</c> 等同于允许覆盖。</para></param>
+    /// <param name="cancellationToken">Observed before and during file writes; a cancelled run throws without a failure result.
+    /// <para>在写入前后生效；取消时直接抛出而不返回失败结果。</para></param>
+    /// <returns>A successful result listing the emitted smali file, or a failure result (messages prefixed "Output directory is empty", "Output exists and overwrite is disabled" or "DEX disassembly failed"). The repack metadata step never overwrites a non-metadata file of the same name.
+    /// <para>成功结果列出生成的 smali 文件；失败结果前缀为 "Output directory is empty"、 "Output exists and overwrite is disabled" 或 "DEX disassembly failed"。重打包元数据步骤绝不覆盖 同名的非元数据文件。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -145,20 +141,17 @@ public sealed class DexFormatHandler : IFormatHandler
         }
     }
 
-    /// <summary>
-    /// Packs the input into firmware asynchronously.
-    /// <para>异步将输入打包为固件。</para>
-    /// </summary>
-    /// <param name="inputPath">Existing DEX file parsed into the model before rebuilding. <para>重建前先解析为模型的既有 DEX 文件。</para></param>
-    /// <param name="outputPath">Destination file; its parent directory is created on demand and an
-    /// existing file is replaced only through the atomic temporary-file swap of <see cref="DexFile.Write"/>.
+    /// <summary>Packs the input into firmware asynchronously.<para>异步将输入打包为固件。</para></summary>
+    /// <param name="inputPath">Existing DEX file parsed into the model before rebuilding.
+    /// <para>重建前先解析为模型的既有 DEX 文件。</para></param>
+    /// <param name="outputPath">Destination file; its parent directory is created on demand and an existing file is replaced only through the atomic temporary-file swap of <see cref="DexFile.Write"/>.
     /// <para>目标文件；父目录按需创建，既有文件仅通过 <see cref="DexFile.Write"/> 的临时文件原子替换被覆盖。</para></param>
-    /// <param name="cancellationToken">Observed before the rebuild; a cancelled run throws without a failure result. <para>在重建开始前生效；取消时直接抛出而不返回失败结果。</para></param>
-    /// <returns>A successful result listing the rebuilt DEX file, or a failure result (messages
-    /// prefixed "Output path is empty" or "DEX rebuild failed") for any parse or I/O error.
-    /// <para>成功结果列出重建后的 DEX 文件；任何解析或 I/O 错误返回以 "Output path is empty" 或
-    /// "DEX rebuild failed" 开头的失败结果。</para></returns>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled. <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    /// <param name="cancellationToken">Observed before the rebuild; a cancelled run throws without a failure result.
+    /// <para>在重建开始前生效；取消时直接抛出而不返回失败结果。</para></param>
+    /// <returns>A successful result listing the rebuilt DEX file, or a failure result (messages prefixed "Output path is empty" or "DEX rebuild failed") for any parse or I/O error.
+    /// <para>成功结果列出重建后的 DEX 文件；任何解析或 I/O 错误返回以 "Output path is empty" 或 "DEX rebuild failed" 开头的失败结果。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try

@@ -104,30 +104,25 @@ internal static class Ext4Htree
         return BuildHtree(0, 0, entries, blockSize, hashSeed);
     }
 
-    /// <summary>
-    /// Builds an htree index for a directory.
-    /// <para>为目录构建 htree 索引。</para>
-    /// </summary>
-    /// <param name="directoryInode">Inode number written into the "." record and mixed into every
-    /// metadata checksum. <para>写入 "." 记录并参与所有元数据校验和的 inode 号。</para></param>
+    /// <summary>Builds an htree index for a directory.<para>为目录构建 htree 索引。</para></summary>
+    /// <param name="directoryInode">Inode number written into the "." record and mixed into every metadata checksum.
+    /// <para>写入 "." 记录并参与所有元数据校验和的 inode 号。</para></param>
     /// <param name="parentInode">Inode number written into the ".." record.
     /// <para>写入 ".." 记录的 inode 号。</para></param>
-    /// <param name="entries">Directory records to index as (name, inode, file type) triples, sorted by
-    /// Half-MD4 hash and then by ordinal name; names longer than 255 UTF-8 bytes are truncated.
-    /// <para>待索引的目录项三元组（名称、inode、文件类型），先按 Half-MD4 哈希再按名称序号排序；超过 255 个
-    /// UTF-8 字节的名称会被截断。</para></param>
+    /// <param name="entries">Directory records to index as (name, inode, file type) triples, sorted by Half-MD4 hash and then by ordinal name; names longer than 255 UTF-8 bytes are truncated.
+    /// <para>待索引的目录项三元组（名称、inode、文件类型），先按 Half-MD4 哈希再按名称序号排序；超过 255 个 UTF-8 字节的名称会被截断。</para></param>
     /// <param name="blockSize">Directory block size in bytes for the root, leaf and index blocks.
     /// <para>根块、叶块与索引块使用的目录块大小（字节）。</para></param>
     /// <param name="hashSeed">At least four seed words from the superblock hash seed used by Half-MD4.
     /// <para>Half-MD4 使用的超级块哈希种子，至少包含四个种子词。</para></param>
     /// <param name="enableMetadataCsum">Reserve the dirent/dx tail space and write CRC32C checksums.
     /// <para>预留 dirent/dx 尾部空间并写入 CRC32C 校验和。</para></param>
-    /// <param name="uuid">Superblock UUID bytes seeding the checksums; <see langword="null"/> seeds them
-    /// with sixteen zero bytes. <para>作为校验和种子的超级块 UUID 字节；为 <see langword="null"/> 时使用十六个零字节。</para></param>
+    /// <param name="uuid">Superblock UUID bytes seeding the checksums; <see langword="null"/> seeds them with sixteen zero bytes.
+    /// <para>作为校验和种子的超级块 UUID 字节；为 <see langword="null"/> 时使用十六个零字节。</para></param>
     /// <param name="generation">Inode generation mixed into the checksums alongside <paramref name="directoryInode"/>.
     /// <para>与 <paramref name="directoryInode"/> 一同参与校验和的 inode 世代号。</para></param>
-    /// <returns>The plan holding the dx_root block, the leaf blocks, any dx_node index blocks and the
-    /// indirect level count. <para>包含 dx_root 块、叶块、可选的 dx_node 索引块与间接层级数的方案。</para></returns>
+    /// <returns>The plan holding the dx_root block, the leaf blocks, any dx_node index blocks and the indirect level count.
+    /// <para>包含 dx_root 块、叶块、可选的 dx_node 索引块与间接层级数的方案。</para></returns>
     public static HtreePlan BuildHtree(
         uint directoryInode,
         uint parentInode,

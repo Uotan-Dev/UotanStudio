@@ -5,25 +5,13 @@ using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Edl.Streaming;
 
-/// <summary>
-/// Implements the Qualcomm Streaming DLOAD protocol, the pre-Firehose command-mode flash transport over DIAG packets. The session enters it after Sahara exec 0x05, negotiates with a hello exchange, optionally programs flash in 1024-byte chunks and finalizes sections with qclose.
-/// <para>实现 Qualcomm Streaming DLOAD 协议，即 Firehose 之前经 DIAG 数据包承载的命令模式刷写传输。Sahara exec 0x05 后进入该协议，经 hello 交换协商，可选按 1024 字节分块编程闪存，并以 qclose 收尾。</para>
-/// </summary>
-/// <remarks>
-/// Transcribed from the reference <c>edlclient/Library/streaming.py</c> (class <c>Streaming</c>)
-/// and <c>edlclient/Library/hdlc.py</c>; operations on one instance are serialized through the
-/// operation gate. Do not share the transport with another protocol instance while an operation
-/// is in progress.
-/// <para>转写自参考实现 <c>edlclient/Library/streaming.py</c>（<c>Streaming</c> 类）与
-/// <c>edlclient/Library/hdlc.py</c>；同一实例上的操作经操作门串行化。操作进行中不得与其他协议
-/// 实例共享传输层。</para>
-/// Initializes a new instance of the <see cref="StreamingProtocol"/> class over the supplied
-/// transport. <para>基于给定传输层初始化 <see cref="StreamingProtocol"/> 类的新实例。</para>
-/// </remarks>
+/// <summary>Implements the Qualcomm Streaming DLOAD protocol, the pre-Firehose command-mode flash transport over DIAG packets. The session enters it after Sahara exec 0x05, negotiates with a hello exchange, optionally programs flash in 1024-byte chunks and finalizes sections with qclose.
+/// <para>实现 Qualcomm Streaming DLOAD 协议，即 Firehose 之前经 DIAG 数据包承载的命令模式刷写传输。Sahara exec 0x05 后进入该协议，经 hello 交换协商，可选按 1024 字节分块编程闪存，并以 qclose 收尾。</para></summary>
+/// <remarks>Transcribed from the reference <c>edlclient/Library/streaming.py</c> (class <c>Streaming</c>) and <c>edlclient/Library/hdlc.py</c>; operations on one instance are serialized through the operation gate. Do not share the transport with another protocol instance while an operation is in progress.
+/// <para>转写自参考实现 <c>edlclient/Library/streaming.py</c>（<c>Streaming</c> 类）与 <c>edlclient/Library/hdlc.py</c>；同一实例上的操作经操作门串行化。操作进行中不得与其他协议 实例共享传输层。</para>Initializes a new instance of the <see cref="StreamingProtocol"/> class over the supplied transport.<para>基于给定传输层初始化 <see cref="StreamingProtocol"/> 类的新实例。</para></remarks>
 /// <param name="transport">The device transport handed over by the Sahara command-mode switch.
 /// <para>由 Sahara 命令模式切换交接的设备传输层。</para></param>
-/// <param name="timeoutMs">Optional timeout in milliseconds; <see langword="null"/> selects
-/// <see cref="EdlConstants.DefaultCommandTimeoutMs"/>.
+/// <param name="timeoutMs">Optional timeout in milliseconds; <see langword="null"/> selects <see cref="EdlConstants.DefaultCommandTimeoutMs"/>.
 /// <para>可选的超时（毫秒）；<see langword="null"/> 选择 <see cref="EdlConstants.DefaultCommandTimeoutMs"/>。</para></param>
 public sealed partial class StreamingProtocol(ICommTransport transport, int? timeoutMs = null) : IDisposable
 {
@@ -70,19 +58,12 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
     /// </summary>
     public event EventHandler<string>? LogMessage;
 
-    /// <summary>
-    /// Sends the host hello with <see cref="StreamingConstants.HostMagic"/> and parses the
-    /// target's device description. Like the reference <c>hello</c>, one mismatched response
-    /// triggers a single resend before the exchange is declared failed.
-    /// <para>随 <see cref="StreamingConstants.HostMagic"/> 发送主机 hello 并解析目标的设备描述。
-    /// 与参考 <c>hello</c> 相同，首个不匹配的响应会触发一次重发，之后才判定交换失败
-    /// 。</para>
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <summary>Sends the host hello with <see cref="StreamingConstants.HostMagic"/> and parses the target's device description. Like the reference <c>hello</c>, one mismatched response triggers a single resend before the exchange is declared failed.
+    /// <para>随 <see cref="StreamingConstants.HostMagic"/> 发送主机 hello 并解析目标的设备描述。 与参考 <c>hello</c> 相同，首个不匹配的响应会触发一次重发，之后才判定交换失败。</para></summary>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The parsed device description, also cached in <see cref="Device"/>.
     /// <para>解析出的设备描述，同时缓存到 <see cref="Device"/>。</para></returns>
-    /// <exception cref="StreamingException">Thrown when the target reports an unrecognized flash
-    /// device, answers with an undecodable frame, or never sends the hello response identifier.
+    /// <exception cref="StreamingException">Thrown when the target reports an unrecognized flash device, answers with an undecodable frame, or never sends the hello response identifier.
     /// <para>目标报告无法识别的闪存设备、应答帧无法解码，或从未发送 hello 响应号时抛出。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled.
     /// <para>令牌被取消。</para></exception>
@@ -92,16 +73,11 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
         return await HelloOwnedAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Negotiates the trusted or untrusted security state with DIAG command 0x17 and reports
-    /// whether the target acknowledged with 0x18.
-    /// <para>用 DIAG 命令 0x17 协商受信或不受信的安全状态，并报告目标是否以 0x18 确认
-    /// 。</para>
-    /// </summary>
-    /// <param name="trusted">Pass <see langword="true"/> for the trusted mode byte 0x01,
-    /// <see langword="false"/> for 0x00. <para>受信模式传 <see langword="true"/>（模式字节 0x01），
-    /// 否则传 <see langword="false"/>（0x00）。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <summary>Negotiates the trusted or untrusted security state with DIAG command 0x17 and reports whether the target acknowledged with 0x18.
+    /// <para>用 DIAG 命令 0x17 协商受信或不受信的安全状态，并报告目标是否以 0x18 确认。</para></summary>
+    /// <param name="trusted">Pass <see langword="true"/> for the trusted mode byte 0x01, <see langword="false"/> for 0x00.
+    /// <para>受信模式传 <see langword="true"/>（模式字节 0x01）， 否则传 <see langword="false"/>（0x00）。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns><see langword="true"/> when the target acknowledged the negotiated state.
     /// <para>目标确认所协商状态时为 <see langword="true"/>。</para></returns>
     /// <exception cref="OperationCanceledException">The token was cancelled.
@@ -129,20 +105,13 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
         return await CloseOwnedAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Sends the DIAG reset command 0x0B.
-    /// <para>发送 DIAG 复位命令 0x0B。</para>
-    /// A target that goes silent immediately after the command is tolerated; the session simply stops
-    /// being usable once the loader leaves the streaming protocol.
-    /// <para>命令后目标立即静默是可以容忍的；loader 一旦离开流式协议，会话即不再可用。</para>
-    /// </summary>
-    /// <param name="confirm">Pass <see langword="true"/> to confirm that resetting the streaming
-    /// session is intended. <para>传 <see langword="true"/> 以确认确实要复位流式会话。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is
-    /// <see langword="false"/>; the refusal happens before the operation lease and before any
-    /// byte reaches the wire. <para><paramref name="confirm"/> 为 <see langword="false"/> 时抛出；
-    /// 拒绝发生在取得操作租约之前，任何字节都不落到线上。</para></exception>
+    /// <summary>Sends the DIAG reset command 0x0B.
+    /// <para>发送 DIAG 复位命令 0x0B。</para>A target that goes silent immediately after the command is tolerated; the session simply stops being usable once the loader leaves the streaming protocol.<para>命令后目标立即静默是可以容忍的；loader 一旦离开流式协议，会话即不再可用。</para></summary>
+    /// <param name="confirm">Pass <see langword="true"/> to confirm that resetting the streaming session is intended.
+    /// <para>传 <see langword="true"/> 以确认确实要复位流式会话。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is <see langword="false"/>; the refusal happens before the operation lease and before any byte reaches the wire.
+    /// <para><paramref name="confirm"/> 为 <see langword="false"/> 时抛出； 拒绝发生在取得操作租约之前，任何字节都不落到线上。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled.
     /// <para>令牌被取消。</para></exception>
     public async Task ResetAsync(bool confirm, CancellationToken cancellationToken = default)
@@ -416,15 +385,9 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
     }
 }
 
-/// <summary>
-/// The device description the streaming target returns in its hello response: version fields,
-/// the preferred block size, the base flash address, the flash identification string, the window
-/// size, the sector table, and the feature bits.
-/// <para>流式目标在 hello 响应中返回的设备描述：版本字段、首选块大小、闪存基地址、闪存识别串、
-/// 窗口大小、扇区表与特性位。</para>
-/// </summary>
-/// <param name="Command">The DIAG response identifier, always
-/// <see cref="StreamingConstants.DiagHelloResponse"/> for a parsed hello.
+/// <summary>The device description the streaming target returns in its hello response: version fields, the preferred block size, the base flash address, the flash identification string, the window size, the sector table, and the feature bits.
+/// <para>流式目标在 hello 响应中返回的设备描述：版本字段、首选块大小、闪存基地址、闪存识别串、 窗口大小、扇区表与特性位。</para></summary>
+/// <param name="Command">The DIAG response identifier, always <see cref="StreamingConstants.DiagHelloResponse"/> for a parsed hello.
 /// <para>DIAG 响应号；解析成功的 hello 恒为 <see cref="StreamingConstants.DiagHelloResponse"/>。</para></param>
 /// <param name="Version">The protocol version byte the target reports.
 /// <para>目标上报的协议版本字节。</para></param>
@@ -434,10 +397,8 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
 /// <para>最大首选块大小（字节）。</para></param>
 /// <param name="BaseFlashAddress">The base flash address reported by the target.
 /// <para>目标上报的闪存基地址。</para></param>
-/// <param name="FlashId">The raw flash identification string bytes.
-/// <para>原始闪存识别串字节。</para></param>
-/// <param name="WindowSize">The reported window size in sectors.
-/// <para>上报的窗口大小（扇区数）。</para></param>
+/// <param name="FlashId">The raw flash identification string bytes.<para>原始闪存识别串字节。</para></param>
+/// <param name="WindowSize">The reported window size in sectors.<para>上报的窗口大小（扇区数）。</para></param>
 /// <param name="NumberOfSectors">The number of sector-size entries in the table.
 /// <para>扇区大小表中的条目数。</para></param>
 /// <param name="SectorSizes">The sector size table entries the target advertised.

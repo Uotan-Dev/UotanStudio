@@ -9,20 +9,16 @@ namespace UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 /// </summary>
 internal static class ApkSigningBlock
 {
-    /// <summary>
-    /// Locates the APK Signing Block in the stream (if present) and returns its offset and contents.
-    /// <para>在流中定位 APK 签名分块（若存在），返回其偏移与内容。</para>
-    /// </summary>
+    /// <summary>Locates the APK Signing Block in the stream (if present) and returns its offset and contents.
+    /// <para>在流中定位 APK 签名分块（若存在），返回其偏移与内容。</para></summary>
     /// <param name="stream">Readable, seekable APK stream; it is repositioned but not closed.
     /// <para>可读、可定位的 APK 流；只重定位、不关闭。</para></param>
     /// <param name="sections">Located ZIP sections whose central-directory offset bounds the search window.
     /// <para>已定位的 ZIP 区段，其中央目录偏移限定搜索窗口。</para></param>
-    /// <returns>The block offset and full contents (both size prefixes, ID-value pairs and magic), or
-    /// <see langword="null"/> when no valid signing block precedes the central directory.
-    /// <para>分块偏移与完整分块字节（含两个长度前缀、ID-值对与 magic）；中央目录之前不存在有效签名块时返回
-    /// <see langword="null"/>。</para></returns>
-    /// <exception cref="InvalidDataException">The magic matches but the 8-byte size prefix contradicts
-    /// the block layout. <para>magic 匹配，但 8 字节长度前缀与分块布局矛盾。</para></exception>
+    /// <returns>The block offset and full contents (both size prefixes, ID-value pairs and magic), or <see langword="null"/> when no valid signing block precedes the central directory.
+    /// <para>分块偏移与完整分块字节（含两个长度前缀、ID-值对与 magic）；中央目录之前不存在有效签名块时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="InvalidDataException">The magic matches but the 8-byte size prefix contradicts the block layout.
+    /// <para>magic 匹配，但 8 字节长度前缀与分块布局矛盾。</para></exception>
     public static (long Offset, byte[] Contents)? Find(Stream stream, in ApkZipSections sections)
     {
         const long minimumBlockSize = 32;

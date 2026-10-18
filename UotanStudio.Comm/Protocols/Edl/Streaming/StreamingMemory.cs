@@ -69,38 +69,19 @@ public sealed partial class StreamingProtocol
         "04102DE50E00A0E10300C0E3FF3080E234109FE5042090E4010052E10300000A030050E1FAFFFF3A0000A0E3" +
         "000000EA000090E504109DE40100C1E5AA00A0E30000C1E50240A0E31EFF2FE1EFBEADDE");
 
-    /// <summary>
-    /// Reads target memory.
-    /// <para>读取目标内存。</para>
-    /// The Qualcomm path loops DIAG 0x03 requests of at most
-    /// <see cref="StreamingConstants.MemoryReadPageBytes"/> bytes whose reply echoes the response
-    /// identifier and the requested address before the page data; the patched path loops the ARM read
-    /// blob with 1000-byte blocks, retrying short replies a bounded number of times. Address and length
-    /// are bound before the operation lease and any transport write, and the whole request must stay
-    /// inside the 32-bit DIAG address space.
-    /// <para>Qualcomm 路径循环发送至多 <see cref="StreamingConstants.MemoryReadPageBytes"/> 字节的
-    /// DIAG 0x03 请求，回包先回显响应号与请求地址再跟页数据；打补丁路径用 ARM 读取机器码按 1000 字节
-    /// 块循环，并对短回包做有界次数的重试。地址与长度在取得操作租约与任何传输写出之前完成边界检查，
-    /// 整个请求必须落在 32 位 DIAG 地址空间内。</para>
-    /// </summary>
-    /// <param name="address">The start address to read. <para>读取起始地址。</para></param>
-    /// <param name="length">The number of bytes to read, at most
-    /// <see cref="StreamingConstants.MaxMemoryReadBytes"/>. <para>读取字节数，至多
-    /// <see cref="StreamingConstants.MaxMemoryReadBytes"/>。</para></param>
-    /// <param name="mode">The loader link mode; <see cref="StreamingMemoryLinkMode.Auto"/>
-    /// resolves the negotiated session first. <para>loader 链接模式；
-    /// <see cref="StreamingMemoryLinkMode.Auto"/> 会先解析已协商的会话。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The exact number of bytes requested. <para>与请求数量完全一致的字节。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the length is outside
-    /// (0, <see cref="StreamingConstants.MaxMemoryReadBytes"/>] or the read window leaves the
-    /// 32-bit DIAG address space; the refusal happens before the operation lease.
-    /// <para>长度超出 (0, <see cref="StreamingConstants.MaxMemoryReadBytes"/>] 或读取窗口超出
-    /// 32 位 DIAG 地址空间时抛出；拒绝发生在取得操作租约之前。</para></exception>
-    /// <exception cref="StreamingException">Thrown when the target rejects a page, replies with a
-    /// mismatched identifier, or a patched-block reply stays short after the retry
-    /// budget. <para>目标拒绝某页、以不符的响应号应答，或打补丁块回包在重试预算后仍然过短
-    /// 时抛出。</para></exception>
+    /// <summary>Reads target memory.
+    /// <para>读取目标内存。</para>The Qualcomm path loops DIAG 0x03 requests of at most <see cref="StreamingConstants.MemoryReadPageBytes"/> bytes whose reply echoes the response identifier and the requested address before the page data; the patched path loops the ARM read blob with 1000-byte blocks, retrying short replies a bounded number of times. Address and length are bound before the operation lease and any transport write, and the whole request must stay inside the 32-bit DIAG address space.<para>Qualcomm 路径循环发送至多 <see cref="StreamingConstants.MemoryReadPageBytes"/> 字节的 DIAG 0x03 请求，回包先回显响应号与请求地址再跟页数据；打补丁路径用 ARM 读取机器码按 1000 字节 块循环，并对短回包做有界次数的重试。地址与长度在取得操作租约与任何传输写出之前完成边界检查， 整个请求必须落在 32 位 DIAG 地址空间内。</para></summary>
+    /// <param name="address">The start address to read.<para>读取起始地址。</para></param>
+    /// <param name="length">The number of bytes to read, at most <see cref="StreamingConstants.MaxMemoryReadBytes"/>.
+    /// <para>读取字节数，至多 <see cref="StreamingConstants.MaxMemoryReadBytes"/>。</para></param>
+    /// <param name="mode">The loader link mode; <see cref="StreamingMemoryLinkMode.Auto"/> resolves the negotiated session first.
+    /// <para>loader 链接模式； <see cref="StreamingMemoryLinkMode.Auto"/> 会先解析已协商的会话。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The exact number of bytes requested.<para>与请求数量完全一致的字节。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the length is outside (0, <see cref="StreamingConstants.MaxMemoryReadBytes"/>] or the read window leaves the 32-bit DIAG address space; the refusal happens before the operation lease.
+    /// <para>长度超出 (0, <see cref="StreamingConstants.MaxMemoryReadBytes"/>] 或读取窗口超出 32 位 DIAG 地址空间时抛出；拒绝发生在取得操作租约之前。</para></exception>
+    /// <exception cref="StreamingException">Thrown when the target rejects a page, replies with a mismatched identifier, or a patched-block reply stays short after the retry budget.
+    /// <para>目标拒绝某页、以不符的响应号应答，或打补丁块回包在重试预算后仍然过短 时抛出。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled.
     /// <para>令牌被取消。</para></exception>
     public async Task<byte[]> ReadMemoryAsync(uint address, int length,
@@ -138,28 +119,21 @@ public sealed partial class StreamingProtocol
         return BinaryPrimitives.ReadUInt32LittleEndian(data);
     }
 
-    /// <summary>
-    /// Writes one little-endian 32-bit word into target memory through the patched loader's ARM
-    /// write blob.
-    /// <para>经打补丁 loader 的 ARM 写入机器码把一个小端 32 位字写入目标内存。</para>
-    /// The word window and the confirmation gate are both checked before the operation lease and
-    /// before any byte reaches the wire.
-    /// <para>字窗口与确认门都在取得操作租约之前、任何字节上线之前检查。</para>
-    /// </summary>
-    /// <param name="address">The word address to poke. <para>要 poke 的字地址。</para></param>
-    /// <param name="value">The 32-bit value to store. <para>要存储的 32 位值。</para></param>
+    /// <summary>Writes one little-endian 32-bit word into target memory through the patched loader's ARM write blob.
+    /// <para>经打补丁 loader 的 ARM 写入机器码把一个小端 32 位字写入目标内存。</para>The word window and the confirmation gate are both checked before the operation lease and before any byte reaches the wire.<para>字窗口与确认门都在取得操作租约之前、任何字节上线之前检查。</para></summary>
+    /// <param name="address">The word address to poke.<para>要 poke 的字地址。</para></param>
+    /// <param name="value">The 32-bit value to store.<para>要存储的 32 位值。</para></param>
     /// <param name="confirm">Pass <see langword="true"/> to confirm the memory write.
     /// <para>传 <see langword="true"/> 以确认这次内存写入。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns><see langword="true"/> when the write was submitted.
     /// <para>写入已提交时为 <see langword="true"/>。</para></returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is
-    /// <see langword="false"/>. <para><paramref name="confirm"/> 为 <see langword="false"/> 时抛出。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the poke window leaves the
-    /// 32-bit DIAG address space. <para>poke 窗口超出 32 位 DIAG 地址空间时抛出。</para></exception>
-    /// <exception cref="StreamingException">Thrown when the session has not resolved the patched
-    /// link mode, or the transport rejects the frame. <para>会话尚未解析为打补丁链接模式，或
-    /// 传输拒绝该帧时抛出。</para></exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is <see langword="false"/>.
+    /// <para><paramref name="confirm"/> 为 <see langword="false"/> 时抛出。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the poke window leaves the 32-bit DIAG address space.
+    /// <para>poke 窗口超出 32 位 DIAG 地址空间时抛出。</para></exception>
+    /// <exception cref="StreamingException">Thrown when the session has not resolved the patched link mode, or the transport rejects the frame.
+    /// <para>会话尚未解析为打补丁链接模式，或 传输拒绝该帧时抛出。</para></exception>
     public async Task<bool> MemPokeAsync(uint address, uint value, bool confirm,
         CancellationToken cancellationToken = default)
     {
@@ -179,22 +153,16 @@ public sealed partial class StreamingProtocol
         return await MemWriteAsync(address, data, confirm, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Writes up to <see cref="StreamingConstants.PatchedMemoryBlockBytes"/> bytes into target
-    /// memory with the patched loader's ARM write blob. Longer payloads are rejected instead of
-    /// being silently truncated.
-    /// <para>用打补丁 loader 的 ARM 写入机器码向目标内存写入至多
-    /// <see cref="StreamingConstants.PatchedMemoryBlockBytes"/> 字节。更长数据会被直接拒绝而不静默截断。</para>
-    /// </summary>
-    /// <param name="address">The start address of the write. <para>写入起始地址。</para></param>
-    /// <param name="data">The bytes to store. <para>要存储的字节。</para></param>
+    /// <summary>Writes up to <see cref="StreamingConstants.PatchedMemoryBlockBytes"/> bytes into target memory with the patched loader's ARM write blob. Longer payloads are rejected instead of being silently truncated.
+    /// <para>用打补丁 loader 的 ARM 写入机器码向目标内存写入至多 <see cref="StreamingConstants.PatchedMemoryBlockBytes"/> 字节。更长数据会被直接拒绝而不静默截断。</para></summary>
+    /// <param name="address">The start address of the write.<para>写入起始地址。</para></param>
+    /// <param name="data">The bytes to store.<para>要存储的字节。</para></param>
     /// <param name="confirm">Pass <see langword="true"/> to confirm the memory write.
     /// <para>传 <see langword="true"/> 以确认这次内存写入。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns><see langword="true"/> when the write was submitted.
     /// <para>写入已提交时为 <see langword="true"/>。</para></returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is
-    /// <see langword="false"/> or the data is empty or oversized.
+    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is <see langword="false"/> or the data is empty or oversized.
     /// <para><paramref name="confirm"/> 为 <see langword="false"/>，或数据为空或超长时抛出。</para></exception>
     public async Task<bool> MemWriteAsync(uint address, byte[] data, bool confirm,
         CancellationToken cancellationToken = default)
@@ -220,21 +188,11 @@ public sealed partial class StreamingProtocol
         return await MemWriteOwnedAsync(address, data, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Identifies the patched loader's chipset by executing the search blob.
-    /// <para>通过执行搜索机器码识别打补丁 loader 的芯片。</para>
-    /// A reply containing "Power off not supported" means the stock Qualcomm loader (returned as
-    /// 0xFF), the marker byte 0xAA followed by the chipset identifier means a patched loader, and one
-    /// mismatched reply is retried once. The resolved mode is cached in
-    /// <see cref="NegotiatedLinkMode"/>.
-    /// <para>回包含 “Power off not supported” 表示原版 Qualcomm loader（返回 0xFF），标记字节 0xAA
-    /// 后跟芯片标识表示打补丁 loader；对一个不符回包只重试一次。解析出的模式缓存到
-    /// <see cref="NegotiatedLinkMode"/>。</para>
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The chipset identifier byte, 0xFF for the stock Qualcomm loader, or -1 when the
-    /// target never produced the search marker. <para>芯片标识字节；原版 Qualcomm loader 为 0xFF；
-    /// 目标始终未给出搜索标记时为 -1。</para></returns>
+    /// <summary>Identifies the patched loader's chipset by executing the search blob.
+    /// <para>通过执行搜索机器码识别打补丁 loader 的芯片。</para>A reply containing "Power off not supported" means the stock Qualcomm loader (returned as 0xFF), the marker byte 0xAA followed by the chipset identifier means a patched loader, and one mismatched reply is retried once. The resolved mode is cached in <see cref="NegotiatedLinkMode"/>.<para>回包含 “Power off not supported” 表示原版 Qualcomm loader（返回 0xFF），标记字节 0xAA 后跟芯片标识表示打补丁 loader；对一个不符回包只重试一次。解析出的模式缓存到 <see cref="NegotiatedLinkMode"/>。</para></summary>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The chipset identifier byte, 0xFF for the stock Qualcomm loader, or -1 when the target never produced the search marker.
+    /// <para>芯片标识字节；原版 Qualcomm loader 为 0xFF； 目标始终未给出搜索标记时为 -1。</para></returns>
     /// <exception cref="OperationCanceledException">The token was cancelled.
     /// <para>令牌被取消。</para></exception>
     public async Task<int> IdentifyChipsetAsync(CancellationToken cancellationToken = default)

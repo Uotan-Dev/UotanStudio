@@ -81,34 +81,29 @@ public static partial class DtboFormat
         return (header, entries);
     }
 
-    /// <summary>
-    /// Extracts overlays, their configuration and an original image for lossless unchanged repacking.
-    /// <para>提取 overlay、配置和原始镜像，支持未修改时无损重打包。</para>
-    /// </summary>
-    /// <param name="inputPath">DTBO image file to extract. <para>要提取的 DTBO 镜像文件。</para></param>
-    /// <param name="outputDirectory">Destination directory; files are staged in a temporary folder and moved
-    /// only after the whole extraction succeeds. <para>目标目录；文件先写入临时暂存目录，仅在整体提取成功后移动。</para></param>
-    /// <param name="options">Output-size limit per blob, overwrite policy and progress sink; <see langword="null"/>
-    /// uses defaults. <para>逐数据块输出上限、覆盖策略与进度回调；为 <see langword="null"/> 时使用默认值。</para></param>
-    /// <param name="cancellationToken">Cancels decoding and copying; a canceled run publishes nothing into the
-    /// destination. <para>取消解码与复制；被取消的运行不会向目标发布任何文件。</para></param>
-    /// <returns>Absolute paths of every written file: each overlay DTB, the original image and the repack
-    /// manifest. <para>所有已写文件的绝对路径：各 overlay DTB、原始镜像与重打包清单。</para></returns>
-    /// <exception cref="FileNotFoundException">The input image cannot be opened. <para>无法打开输入镜像。</para></exception>
+    /// <summary>Extracts overlays, their configuration and an original image for lossless unchanged repacking.
+    /// <para>提取 overlay、配置和原始镜像，支持未修改时无损重打包。</para></summary>
+    /// <param name="inputPath">DTBO image file to extract.<para>要提取的 DTBO 镜像文件。</para></param>
+    /// <param name="outputDirectory">Destination directory; files are staged in a temporary folder and moved only after the whole extraction succeeds.
+    /// <para>目标目录；文件先写入临时暂存目录，仅在整体提取成功后移动。</para></param>
+    /// <param name="options">Output-size limit per blob, overwrite policy and progress sink; <see langword="null"/> uses defaults.
+    /// <para>逐数据块输出上限、覆盖策略与进度回调；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="cancellationToken">Cancels decoding and copying; a canceled run publishes nothing into the destination.
+    /// <para>取消解码与复制；被取消的运行不会向目标发布任何文件。</para></param>
+    /// <returns>Absolute paths of every written file: each overlay DTB, the original image and the repack manifest.
+    /// <para>所有已写文件的绝对路径：各 overlay DTB、原始镜像与重打包清单。</para></returns>
+    /// <exception cref="FileNotFoundException">The input image cannot be opened.
+    /// <para>无法打开输入镜像。</para></exception>
     /// <exception cref="InvalidDataException">The table is malformed or a blob exceeds the output limit.
     /// <para>表结构无效，或某数据块超出输出上限。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><see cref="UnpackOptions.MaximumOutputBytes"/> is negative.
     /// <para><see cref="UnpackOptions.MaximumOutputBytes"/> 为负数。</para></exception>
-    /// <exception cref="IOException">Extraction would overwrite the input, an existing output refuses to be
-    /// replaced, or a reserved metadata name collides. <para>提取会覆盖输入、已存在的输出拒绝被替换，或保留的
-    /// 元数据文件名发生冲突。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
-    /// <remarks>
-    /// This is an explicit synchronous boundary: the repack metadata layer only offers an asynchronous writer, so
-    /// this method waits on it at the boundary. Asynchronous callers should use <see cref="UnpackAsync"/> instead.
-    /// <para>本方法是显式同步边界：重打包元数据层只提供异步写入器，因此本方法在该边界上等待它。
-    /// 异步调用方应改用 <see cref="UnpackAsync"/>。</para>
-    /// </remarks>
+    /// <exception cref="IOException">Extraction would overwrite the input, an existing output refuses to be replaced, or a reserved metadata name collides.
+    /// <para>提取会覆盖输入、已存在的输出拒绝被替换，或保留的 元数据文件名发生冲突。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
+    /// <remarks>This is an explicit synchronous boundary: the repack metadata layer only offers an asynchronous writer, so this method waits on it at the boundary. Asynchronous callers should use <see cref="UnpackAsync"/> instead.
+    /// <para>本方法是显式同步边界：重打包元数据层只提供异步写入器，因此本方法在该边界上等待它。 异步调用方应改用 <see cref="UnpackAsync"/>。</para></remarks>
     public static IReadOnlyList<string> Unpack(string inputPath, string outputDirectory,
         UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -128,28 +123,27 @@ public static partial class DtboFormat
         }
     }
 
-    /// <summary>
-    /// Extracts overlays, their configuration and an original image for lossless unchanged repacking.
-    /// <para>提取 overlay、配置和原始镜像，支持未修改时无损重打包。</para>
-    /// </summary>
-    /// <param name="inputPath">DTBO image file to extract. <para>要提取的 DTBO 镜像文件。</para></param>
-    /// <param name="outputDirectory">Destination directory; files are staged in a temporary folder and moved
-    /// only after the whole extraction succeeds. <para>目标目录；文件先写入临时暂存目录，仅在整体提取成功后移动。</para></param>
-    /// <param name="options">Output-size limit per blob, overwrite policy and progress sink; <see langword="null"/>
-    /// uses defaults. <para>逐数据块输出上限、覆盖策略与进度回调；为 <see langword="null"/> 时使用默认值。</para></param>
-    /// <param name="cancellationToken">Cancels decoding, copying and metadata publication; a canceled run publishes
-    /// nothing into the destination. <para>取消解码、复制与元数据发布；被取消的运行不会向目标发布任何文件。</para></param>
-    /// <returns>A task whose result holds absolute paths of every written file: each overlay DTB, the original
-    /// image and the repack manifest. <para>任务结果为所有已写文件的绝对路径：各 overlay DTB、原始镜像与重打包清单。</para></returns>
-    /// <exception cref="FileNotFoundException">The input image cannot be opened. <para>无法打开输入镜像。</para></exception>
+    /// <summary>Extracts overlays, their configuration and an original image for lossless unchanged repacking.
+    /// <para>提取 overlay、配置和原始镜像，支持未修改时无损重打包。</para></summary>
+    /// <param name="inputPath">DTBO image file to extract.<para>要提取的 DTBO 镜像文件。</para></param>
+    /// <param name="outputDirectory">Destination directory; files are staged in a temporary folder and moved only after the whole extraction succeeds.
+    /// <para>目标目录；文件先写入临时暂存目录，仅在整体提取成功后移动。</para></param>
+    /// <param name="options">Output-size limit per blob, overwrite policy and progress sink; <see langword="null"/> uses defaults.
+    /// <para>逐数据块输出上限、覆盖策略与进度回调；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="cancellationToken">Cancels decoding, copying and metadata publication; a canceled run publishes nothing into the destination.
+    /// <para>取消解码、复制与元数据发布；被取消的运行不会向目标发布任何文件。</para></param>
+    /// <returns>A task whose result holds absolute paths of every written file: each overlay DTB, the original image and the repack manifest.
+    /// <para>任务结果为所有已写文件的绝对路径：各 overlay DTB、原始镜像与重打包清单。</para></returns>
+    /// <exception cref="FileNotFoundException">The input image cannot be opened.
+    /// <para>无法打开输入镜像。</para></exception>
     /// <exception cref="InvalidDataException">The table is malformed or a blob exceeds the output limit.
     /// <para>表结构无效，或某数据块超出输出上限。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><see cref="UnpackOptions.MaximumOutputBytes"/> is negative.
     /// <para><see cref="UnpackOptions.MaximumOutputBytes"/> 为负数。</para></exception>
-    /// <exception cref="IOException">Extraction would overwrite the input, an existing output refuses to be
-    /// replaced, or a reserved metadata name collides. <para>提取会覆盖输入、已存在的输出拒绝被替换，或保留的
-    /// 元数据文件名发生冲突。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="IOException">Extraction would overwrite the input, an existing output refuses to be replaced, or a reserved metadata name collides.
+    /// <para>提取会覆盖输入、已存在的输出拒绝被替换，或保留的 元数据文件名发生冲突。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static Task<IReadOnlyList<string>> UnpackAsync(string inputPath, string outputDirectory,
         UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -237,24 +231,20 @@ public static partial class DtboFormat
         return [.. names.Select(name => Path.Combine(destination, name))];
     }
 
-    /// <summary>
-    /// Rebuilds a manifest directory, preserving metadata and compression; changed authenticated tails are rejected.
-    /// <para>从配置目录重建并保留元数据和压缩；修改后拒绝复用认证尾部。</para>
-    /// </summary>
-    /// <param name="inputDirectory">Directory produced by an earlier <see cref="Unpack"/> call, including the repack
-    /// manifest. <para>由更早一次 <see cref="Unpack"/> 调用生成的目录，须包含重打包清单。</para></param>
+    /// <summary>Rebuilds a manifest directory, preserving metadata and compression; changed authenticated tails are rejected.
+    /// <para>从配置目录重建并保留元数据和压缩；修改后拒绝复用认证尾部。</para></summary>
+    /// <param name="inputDirectory">Directory produced by an earlier <see cref="Unpack"/> call, including the repack manifest.
+    /// <para>由更早一次 <see cref="Unpack"/> 调用生成的目录，须包含重打包清单。</para></param>
     /// <param name="outputPath">Destination image, written to a temporary file and published atomically.
     /// <para>目标镜像，先写临时文件再原子发布。</para></param>
-    /// <param name="cancellationToken">Cancels before or during the rebuild; the existing destination keeps
-    /// its content. <para>在重建开始前或进行中取消；已有目标保持原内容。</para></param>
-    /// <exception cref="InvalidDataException">Metadata or manifest is missing or invalid, an overlay fails DTB
-    /// bounds validation, the header layout change is unsupported, a modified image carries nonzero trailing
-    /// authentication data, or the rebuild exceeds the recorded image size.
-    /// <para>元数据或清单缺失/无效、某个 overlay 未通过 DTB 边界校验、不支持的表头布局变更、被修改的镜像带有
-    /// 非零尾部认证数据，或重建结果超出记录的镜像大小。</para></exception>
+    /// <param name="cancellationToken">Cancels before or during the rebuild; the existing destination keeps its content.
+    /// <para>在重建开始前或进行中取消；已有目标保持原内容。</para></param>
+    /// <exception cref="InvalidDataException">Metadata or manifest is missing or invalid, an overlay fails DTB bounds validation, the header layout change is unsupported, a modified image carries nonzero trailing authentication data, or the rebuild exceeds the recorded image size.
+    /// <para>元数据或清单缺失/无效、某个 overlay 未通过 DTB 边界校验、不支持的表头布局变更、被修改的镜像带有 非零尾部认证数据，或重建结果超出记录的镜像大小。</para></exception>
     /// <exception cref="IOException"><paramref name="outputPath"/> would replace one of the manifest inputs.
     /// <para><paramref name="outputPath"/> 将替换清单的某个输入。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static void PackDirectory(string inputDirectory, string outputPath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -363,20 +353,20 @@ public static partial class DtboFormat
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Validates all overlays and atomically copies an unchanged image, including its padding and authentication data.
-    /// <para>校验全部 overlay 后原子重打包未修改镜像，保留填充及认证数据。</para>
-    /// </summary>
+    /// <summary>Validates all overlays and atomically copies an unchanged image, including its padding and authentication data.
+    /// <para>校验全部 overlay 后原子重打包未修改镜像，保留填充及认证数据。</para></summary>
     /// <param name="inputPath">Existing DTBO image to validate and copy byte for byte.
     /// <para>要逐字节校验并复制的现有 DTBO 镜像。</para></param>
     /// <param name="outputPath">Destination file, published from a temporary file after validation succeeds.
     /// <para>目标文件，在校验成功后由临时文件发布。</para></param>
-    /// <param name="cancellationToken">Cancels validation or copying; the temporary output is discarded and
-    /// the existing destination is untouched. <para>取消校验或复制；临时输出被丢弃且既有目标不受影响。</para></param>
-    /// <exception cref="FileNotFoundException">The input image cannot be opened. <para>无法打开输入镜像。</para></exception>
-    /// <exception cref="InvalidDataException">The table is malformed or a decoded blob exceeds the 256 MiB
-    /// default budget. <para>表结构无效，或某解码数据块超出 256 MiB 默认预算。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <param name="cancellationToken">Cancels validation or copying; the temporary output is discarded and the existing destination is untouched.
+    /// <para>取消校验或复制；临时输出被丢弃且既有目标不受影响。</para></param>
+    /// <exception cref="FileNotFoundException">The input image cannot be opened.
+    /// <para>无法打开输入镜像。</para></exception>
+    /// <exception cref="InvalidDataException">The table is malformed or a decoded blob exceeds the 256 MiB default budget.
+    /// <para>表结构无效，或某解码数据块超出 256 MiB 默认预算。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static void Repack(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         AtomicWrite(outputPath, output =>

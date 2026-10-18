@@ -85,19 +85,18 @@ public static class ZstdCompressor
         }
     }
 
-    /// <summary>
-    /// Compresses a stream with zstd, using parallel frames when the options allow it and at least two chunks are present.
-    /// <para>流式执行 zstd 压缩；选项允许且至少存在两个块时改用并行独立帧。</para>
-    /// </summary>
+    /// <summary>Compresses a stream with zstd, using parallel frames when the options allow it and at least two chunks are present.
+    /// <para>流式执行 zstd 压缩；选项允许且至少存在两个块时改用并行独立帧。</para></summary>
     /// <param name="input">Readable source stream, consumed to its end and left open; it does not have to be seekable, because chunks are read through a bounded look-ahead.
     /// <para>可读源流，读取到末尾并保持打开；通过有界预读分块，因此不需要可寻址。</para></param>
-    /// <param name="output">Writable target stream; frames are flushed on completion but the stream is not
-    /// closed. <para>可写目标流；完成时刷新帧但不关闭流。</para></param>
+    /// <param name="output">Writable target stream; frames are flushed on completion but the stream is not closed.
+    /// <para>可写目标流；完成时刷新帧但不关闭流。</para></param>
     /// <param name="options">Optional compression level; <see langword="null"/> uses level <c>3</c>.
     /// <para>可选压缩级别；为 <see langword="null"/> 时使用级别 <c>3</c>。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is null.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 null。</para></exception>
-    /// <exception cref="CompressionException">Compression or stream copying failed. <para>压缩或流复制失败。</para></exception>
+    /// <exception cref="CompressionException">Compression or stream copying failed.
+    /// <para>压缩或流复制失败。</para></exception>
     public static void Compress(Stream input, Stream output, CompressionOptions? options = null)
     {
         if (input == null)

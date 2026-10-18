@@ -124,10 +124,8 @@ public sealed class SparseFile : IDisposable
         AddChunkSorted(new SparseChunk(header) { StartBlock = startBlock, DataProvider = provider });
     }
 
-    /// <summary>
-    /// Adds a fill chunk (4-byte pattern repeated across blocks).
-    /// <para>添加一个填充数据块(4 字节模式跨块重复)。</para>
-    /// </summary>
+    /// <summary>Adds a fill chunk (4-byte pattern repeated across blocks).
+    /// <para>添加一个填充数据块(4 字节模式跨块重复)。</para></summary>
     /// <param name="fillValue">Pattern written little-endian and repeated across the chunk's expanded bytes.
     /// <para>以小端写出并在块展开字节中重复的模式。</para></param>
     /// <param name="sizeInBytes">Logical byte size; rounded up to whole blocks.
@@ -201,10 +199,8 @@ public sealed class SparseFile : IDisposable
         Header = Header with { TotalBlocks = newTotalBlocks };
     }
 
-    /// <summary>
-    /// Writes the sparse image (or raw data) to the stream.
-    /// <para>将稀疏镜像(或原始数据)写入流。</para>
-    /// </summary>
+    /// <summary>Writes the sparse image (or raw data) to the stream.
+    /// <para>将稀疏镜像(或原始数据)写入流。</para></summary>
     /// <param name="stream">Caller-owned writable destination; it is not flushed or closed here.
     /// <para>调用方持有的可写目标；此处不刷新也不关闭。</para></param>
     /// <param name="sparse">When <see langword="true"/>, emits the sparse container via <see cref="SparseWriter.WriteToStream"/>; otherwise expands every chunk as if flashed.
@@ -237,17 +233,12 @@ public sealed class SparseFile : IDisposable
     /// <para>调用方持有的可写目标；此处不刷新也不关闭。按列表顺序逐块展开并连续写入——复制 RAW 载荷、重复 FILL 模式、将 don't-care 与未知类型置零——随后用零补齐到总块数乘以块大小。块起始索引之间的空隙在对应位置不写入任何字节，因此空隙之后的内容在输出中前移。</para></param>
     public void WriteRawToStream(Stream stream) => WriteRawToStream(stream, SparseRawZeroMode.Write);
 
-    /// <summary>
-    /// Writes the raw (unsparsified) image to the stream, optionally skipping zero runs with seeks.
-    /// <para>将原始(非稀疏)镜像写入流，可选地以寻址跳过零段。</para>
-    /// </summary>
+    /// <summary>Writes the raw (unsparsified) image to the stream, optionally skipping zero runs with seeks.
+    /// <para>将原始(非稀疏)镜像写入流，可选地以寻址跳过零段。</para></summary>
     /// <param name="stream">Caller-owned writable destination; it is not flushed or closed here. The byte sequence is identical for both modes: RAW payloads are copied, FILL patterns repeated, don't-care, zero-pattern and unknown chunks expanded to zeros, and the tail padded to total blocks times block size. Chunk start blocks that leave a gap shift later content earlier exactly as the write mode does.
     /// <para>调用方持有的可写目标；此处不刷新也不关闭。两种模式产生的字节序列完全一致：复制 RAW 载荷、重复 FILL 模式、把 don't-care、零填充模式与未知块展开为零，并将尾部补齐到总块数乘以块大小。块起始索引留下空隙时，后续内容与逐块写模式一样前移。</para></param>
-    /// <param name="zeroMode">
-    /// <see cref="SparseRawZeroMode.Write"/> writes every zero byte; <see cref="SparseRawZeroMode.Seek"/> skips zero runs only when the destination is an empty seekable <see cref="FileStream"/> at position zero and the chunks cover the image contiguously from block zero, and otherwise falls back to writing. Skipped bytes still advance the logical byte count, and the final length is fixed with <see cref="Stream.SetLength"/>, so the caller observes the same length as the write mode even though no zero bytes reach the stream.
-    /// <para><see cref="SparseRawZeroMode.Write"/> 写出每个零字节；<see cref="SparseRawZeroMode.Seek"/> 仅在目标是位于位置零的空可寻址
-    /// <see cref="FileStream"/> 且各块从块零开始连续覆盖镜像时跳过零段，否则回退为写出。被跳过的字节仍然计入逻辑字节数，最终长度由
-    /// <see cref="Stream.SetLength"/> 固定，因此调用方观察到的长度与逐块写模式相同，尽管没有零字节到达流。</para></param>
+    /// <param name="zeroMode"><see cref="SparseRawZeroMode.Write"/> writes every zero byte; <see cref="SparseRawZeroMode.Seek"/> skips zero runs only when the destination is an empty seekable <see cref="FileStream"/> at position zero and the chunks cover the image contiguously from block zero, and otherwise falls back to writing. Skipped bytes still advance the logical byte count, and the final length is fixed with <see cref="Stream.SetLength"/>, so the caller observes the same length as the write mode even though no zero bytes reach the stream.
+    /// <para><see cref="SparseRawZeroMode.Write"/> 写出每个零字节；<see cref="SparseRawZeroMode.Seek"/> 仅在目标是位于位置零的空可寻址 <see cref="FileStream"/> 且各块从块零开始连续覆盖镜像时跳过零段，否则回退为写出。被跳过的字节仍然计入逻辑字节数，最终长度由 <see cref="Stream.SetLength"/> 固定，因此调用方观察到的长度与逐块写模式相同，尽管没有零字节到达流。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="zeroMode"/> is not a defined value.

@@ -27,23 +27,18 @@ public sealed class BootCmdlineService
     /// <value>1024 characters. <para>1024 个字符。</para></value>
     public const int MaximumValueLength = 1024;
 
-    /// <summary>
-    /// Reads the boot image command line and plans one token replacement or removal without touching the input file.
-    /// <para>读取 boot 镜像的命令行，规划一次标记替换或移除，不改动输入文件。</para>
-    /// </summary>
-    /// <param name="bootPath">Path to the Android boot image to inspect. <para>要检查的 Android boot 镜像路径。</para></param>
+    /// <summary>Reads the boot image command line and plans one token replacement or removal without touching the input file.
+    /// <para>读取 boot 镜像的命令行，规划一次标记替换或移除，不改动输入文件。</para></summary>
+    /// <param name="bootPath">Path to the Android boot image to inspect.
+    /// <para>要检查的 Android boot 镜像路径。</para></param>
     /// <param name="key">Parameter name without its <c>=value</c> part, such as <c>androidboot.selinux</c>.
     /// <para>不含 <c>=value</c> 部分的参数名，例如 <c>androidboot.selinux</c>。</para></param>
     /// <param name="value">Replacement value, or <see langword="null"/> or empty to delete the parameter.
     /// <para>替换值；为 <see langword="null"/> 或空字符串时删除该参数。</para></param>
-    /// <returns>A plan carrying the original and updated command lines. Existing tokens with the same name are
-    /// removed regardless of case, and a replacement token is appended at the end.
+    /// <returns>A plan carrying the original and updated command lines. Existing tokens with the same name are removed regardless of case, and a replacement token is appended at the end.
     /// <para>包含原始与更新后命令行的方案；同名旧标记不论大小写都会被移除，替换标记追加在末尾。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="key"/> is blank or contains whitespace, <c>=</c>,
-    /// or a control character, or <paramref name="value"/> contains whitespace or a control character, or
-    /// either exceeds the documented bound.
-    /// <para><paramref name="key"/> 为空或含空白、<c>=</c> 或控制字符；<paramref name="value"/> 含空白或控制字符；
-    /// 或二者超过文档标注的长度上限。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="key"/> is blank or contains whitespace, <c>=</c>, or a control character, or <paramref name="value"/> contains whitespace or a control character, or either exceeds the documented bound.
+    /// <para><paramref name="key"/> 为空或含空白、<c>=</c> 或控制字符；<paramref name="value"/> 含空白或控制字符； 或二者超过文档标注的长度上限。</para></exception>
     /// <exception cref="ImageParseException">The boot image at <paramref name="bootPath"/> has an invalid header or magic.
     /// <para><paramref name="bootPath"/> 处的 boot 镜像头部或魔数无效。</para></exception>
     /// <exception cref="FileNotFoundException">No boot image exists at <paramref name="bootPath"/>.
@@ -75,15 +70,15 @@ public sealed class BootCmdlineService
         ]);
     }
 
-    /// <summary>
-    /// Applies a plan and publishes the repacked boot image, replacing an existing destination file.
-    /// <para>应用方案并发布重新打包的 boot 镜像，已存在的目标文件会被替换。</para>
-    /// </summary>
-    /// <param name="plan">Plan produced by <see cref="CreatePlan"/>. <para>由 <see cref="CreatePlan"/> 生成的方案。</para></param>
-    /// <param name="outputPath">Destination file. <para>目标文件。</para></param>
+    /// <summary>Applies a plan and publishes the repacked boot image, replacing an existing destination file.
+    /// <para>应用方案并发布重新打包的 boot 镜像，已存在的目标文件会被替换。</para></summary>
+    /// <param name="plan">Plan produced by <see cref="CreatePlan"/>.
+    /// <para>由 <see cref="CreatePlan"/> 生成的方案。</para></param>
+    /// <param name="outputPath">Destination file.<para>目标文件。</para></param>
     /// <param name="cancellationToken">Cancels the write; the temporary file is deleted and cancellation is rethrown.
     /// <para>取消写出；临时文件会被删除，取消异常会重新抛出。</para></param>
-    /// <returns>A task completed once the repacked image is published. <para>重新打包的镜像发布完成后结束的任务。</para></returns>
+    /// <returns>A task completed once the repacked image is published.
+    /// <para>重新打包的镜像发布完成后结束的任务。</para></returns>
     /// <exception cref="ArgumentException">The command line no longer fits the boot header capacity.
     /// <para>命令行已超出 boot 头部的容量。</para></exception>
     /// <exception cref="ImageParseException">The source image of <paramref name="plan"/> cannot be parsed.

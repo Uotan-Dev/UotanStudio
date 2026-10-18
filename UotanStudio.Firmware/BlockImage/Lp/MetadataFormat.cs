@@ -597,26 +597,15 @@ public readonly struct LpMetadataPartition
     /// </value>
     public string NameString => ReadName(Name);
 
-    /// <summary>
-    /// Parses a partition entry from binary data.
-    /// <para>从二进制数据解析分区条目。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Span covering one <see cref="MetadataFormat.Sizes.Partition"/>-byte entry; fields are read little-endian.
-    /// <para>覆盖一个 <see cref="MetadataFormat.Sizes.Partition"/> 字节条目的区域；字段按小端读取。</para>
-    /// </param>
-    /// <returns>
-    /// The parsed entry with <see cref="Name"/> as a fresh 36-byte copy.
-    /// <para>解析后的条目，<see cref="Name"/> 为新的 36 字节副本。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="data"/> is shorter than 36 bytes, so the name slice is out of range.
-    /// <para><paramref name="data"/> 短于 36 字节，名称切片越界。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="data"/> has 36 to 51 bytes, so a trailing uint32 read is too short.
-    /// <para><paramref name="data"/> 为 36 至 51 字节，末尾的 uint32 读取长度不足。</para>
-    /// </exception>
+    /// <summary>Parses a partition entry from binary data.<para>从二进制数据解析分区条目。</para></summary>
+    /// <param name="data">Span covering one <see cref="MetadataFormat.Sizes.Partition"/>-byte entry; fields are read little-endian.
+    /// <para>覆盖一个 <see cref="MetadataFormat.Sizes.Partition"/> 字节条目的区域；字段按小端读取。</para></param>
+    /// <returns>The parsed entry with <see cref="Name"/> as a fresh 36-byte copy.
+    /// <para>解析后的条目，<see cref="Name"/> 为新的 36 字节副本。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="data"/> is shorter than 36 bytes, so the name slice is out of range.
+    /// <para><paramref name="data"/> 短于 36 字节，名称切片越界。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="data"/> has 36 to 51 bytes, so a trailing uint32 read is too short.
+    /// <para><paramref name="data"/> 为 36 至 51 字节，末尾的 uint32 读取长度不足。</para></exception>
     public static LpMetadataPartition FromBytes(ReadOnlySpan<byte> data)
     {
         return new LpMetadataPartition
@@ -629,19 +618,11 @@ public readonly struct LpMetadataPartition
         };
     }
 
-    /// <summary>
-    /// Serializes the partition entry to binary.
-    /// <para>将分区条目序列化为二进制。</para>
-    /// </summary>
-    /// <returns>
-    /// A new <see cref="MetadataFormat.Sizes.Partition"/>-byte little-endian array with the name field zero-padded.
-    /// <para>新的 <see cref="MetadataFormat.Sizes.Partition"/> 字节小端数组，名称字段以零填充。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// <see cref="Name"/> is longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, which the
-    /// fixed name field cannot hold.
-    /// <para><see cref="Name"/> 的字节数大于 <see cref="MetadataFormat.NameFieldBytes"/>，定宽名称字段无法容纳。</para>
-    /// </exception>
+    /// <summary>Serializes the partition entry to binary.<para>将分区条目序列化为二进制。</para></summary>
+    /// <returns>A new <see cref="MetadataFormat.Sizes.Partition"/>-byte little-endian array with the name field zero-padded.
+    /// <para>新的 <see cref="MetadataFormat.Sizes.Partition"/> 字节小端数组，名称字段以零填充。</para></returns>
+    /// <exception cref="InvalidDataException"><see cref="Name"/> is longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, which the fixed name field cannot hold.
+    /// <para><see cref="Name"/> 的字节数大于 <see cref="MetadataFormat.NameFieldBytes"/>，定宽名称字段无法容纳。</para></exception>
     public byte[] ToBytes()
     {
         var data = new byte[MetadataFormat.Sizes.Partition];
@@ -839,26 +820,15 @@ public readonly struct LpMetadataPartitionGroup
     /// </value>
     public string NameString => LpMetadataPartition.ReadName(Name);
 
-    /// <summary>
-    /// Parses a partition group entry from binary data.
-    /// <para>从二进制数据解析分区组条目。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Span covering one <see cref="MetadataFormat.Sizes.PartitionGroup"/>-byte entry; fields are read little-endian.
-    /// <para>覆盖一个 <see cref="MetadataFormat.Sizes.PartitionGroup"/> 字节条目的区域；字段按小端读取。</para>
-    /// </param>
-    /// <returns>
-    /// The parsed group entry with <see cref="Name"/> as a fresh 36-byte copy.
-    /// <para>解析后的分区组条目，<see cref="Name"/> 为新的 36 字节副本。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="data"/> is shorter than 36 bytes, so the name slice is out of range.
-    /// <para><paramref name="data"/> 短于 36 字节，名称切片越界。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="data"/> has 36 to 47 bytes, so a trailing field read is too short.
-    /// <para><paramref name="data"/> 为 36 至 47 字节，末尾字段读取长度不足。</para>
-    /// </exception>
+    /// <summary>Parses a partition group entry from binary data.<para>从二进制数据解析分区组条目。</para></summary>
+    /// <param name="data">Span covering one <see cref="MetadataFormat.Sizes.PartitionGroup"/>-byte entry; fields are read little-endian.
+    /// <para>覆盖一个 <see cref="MetadataFormat.Sizes.PartitionGroup"/> 字节条目的区域；字段按小端读取。</para></param>
+    /// <returns>The parsed group entry with <see cref="Name"/> as a fresh 36-byte copy.
+    /// <para>解析后的分区组条目，<see cref="Name"/> 为新的 36 字节副本。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="data"/> is shorter than 36 bytes, so the name slice is out of range.
+    /// <para><paramref name="data"/> 短于 36 字节，名称切片越界。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="data"/> has 36 to 47 bytes, so a trailing field read is too short.
+    /// <para><paramref name="data"/> 为 36 至 47 字节，末尾字段读取长度不足。</para></exception>
     public static LpMetadataPartitionGroup FromBytes(ReadOnlySpan<byte> data)
     {
         return new LpMetadataPartitionGroup
@@ -869,19 +839,11 @@ public readonly struct LpMetadataPartitionGroup
         };
     }
 
-    /// <summary>
-    /// Serializes the partition group entry to binary.
-    /// <para>将分区组条目序列化为二进制。</para>
-    /// </summary>
-    /// <returns>
-    /// A new <see cref="MetadataFormat.Sizes.PartitionGroup"/>-byte little-endian array with the name field zero-padded.
-    /// <para>新的 <see cref="MetadataFormat.Sizes.PartitionGroup"/> 字节小端数组，名称字段以零填充。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// <see cref="Name"/> is longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, which the
-    /// fixed name field cannot hold.
-    /// <para><see cref="Name"/> 的字节数大于 <see cref="MetadataFormat.NameFieldBytes"/>，定宽名称字段无法容纳。</para>
-    /// </exception>
+    /// <summary>Serializes the partition group entry to binary.<para>将分区组条目序列化为二进制。</para></summary>
+    /// <returns>A new <see cref="MetadataFormat.Sizes.PartitionGroup"/>-byte little-endian array with the name field zero-padded.
+    /// <para>新的 <see cref="MetadataFormat.Sizes.PartitionGroup"/> 字节小端数组，名称字段以零填充。</para></returns>
+    /// <exception cref="InvalidDataException"><see cref="Name"/> is longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, which the fixed name field cannot hold.
+    /// <para><see cref="Name"/> 的字节数大于 <see cref="MetadataFormat.NameFieldBytes"/>，定宽名称字段无法容纳。</para></exception>
     public byte[] ToBytes()
     {
         var data = new byte[MetadataFormat.Sizes.PartitionGroup];
@@ -990,19 +952,11 @@ public readonly struct LpMetadataBlockDevice
         };
     }
 
-    /// <summary>
-    /// Serializes the block device entry to binary.
-    /// <para>将块设备条目序列化为二进制。</para>
-    /// </summary>
-    /// <returns>
-    /// A new <see cref="MetadataFormat.Sizes.BlockDevice"/>-byte little-endian array with the partition-name field zero-padded.
-    /// <para>新的 <see cref="MetadataFormat.Sizes.BlockDevice"/> 字节小端数组，分区名字段以零填充。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// <see cref="PartitionName"/> is longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes,
-    /// which the fixed name field cannot hold.
-    /// <para><see cref="PartitionName"/> 的字节数大于 <see cref="MetadataFormat.NameFieldBytes"/>，定宽名称字段无法容纳。</para>
-    /// </exception>
+    /// <summary>Serializes the block device entry to binary.<para>将块设备条目序列化为二进制。</para></summary>
+    /// <returns>A new <see cref="MetadataFormat.Sizes.BlockDevice"/>-byte little-endian array with the partition-name field zero-padded.
+    /// <para>新的 <see cref="MetadataFormat.Sizes.BlockDevice"/> 字节小端数组，分区名字段以零填充。</para></returns>
+    /// <exception cref="InvalidDataException"><see cref="PartitionName"/> is longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, which the fixed name field cannot hold.
+    /// <para><see cref="PartitionName"/> 的字节数大于 <see cref="MetadataFormat.NameFieldBytes"/>，定宽名称字段无法容纳。</para></exception>
     public byte[] ToBytes()
     {
         var data = new byte[MetadataFormat.Sizes.BlockDevice];

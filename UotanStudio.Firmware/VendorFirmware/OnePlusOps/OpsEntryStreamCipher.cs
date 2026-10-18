@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.Core;
 
 namespace UotanStudio.Firmware.VendorFirmware.OnePlusOps;
 

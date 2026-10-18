@@ -255,16 +255,15 @@ public static partial class DtboFormat
     /// <para>单镜像全部解码数据块合计输出预算的默认值（字节）。</para></summary>
     public const long DefaultMaximumDecompressedBytes = 256 * 1024 * 1024;
 
-    /// <summary>
-    /// Parses a bounded in-memory image; the output budget applies to all decoded blobs combined.
-    /// <para>解析有界内存镜像，输出预算限制全部解码数据块的总大小。</para>
-    /// </summary>
-    /// <param name="data">Complete DTBO image bytes. <para>完整的 DTBO 镜像字节。</para></param>
+    /// <summary>Parses a bounded in-memory image; the output budget applies to all decoded blobs combined.
+    /// <para>解析有界内存镜像，输出预算限制全部解码数据块的总大小。</para></summary>
+    /// <param name="data">Complete DTBO image bytes.<para>完整的 DTBO 镜像字节。</para></param>
     /// <param name="maximumDecompressedBytes">Combined decoded-size limit across all blobs.
     /// <para>全部数据块合计的解码大小上限。</para></param>
     /// <returns>Header, validated entries and decoded DTB blobs in entry order.
     /// <para>表头、已校验条目以及按条目顺序解码的 DTB 数据块。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="data"/> is null. <para><paramref name="data"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is null.
+    /// <para><paramref name="data"/> 为 null。</para></exception>
     /// <exception cref="InvalidDataException">The table is malformed or a decoded blob exceeds the budget.
     /// <para>表结构无效，或某个解码数据块超出预算。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumDecompressedBytes"/> is negative.
@@ -295,18 +294,18 @@ public static partial class DtboFormat
         return (header, entries, dtbs);
     }
 
-    /// <summary>
-    /// Packs multiple DTBs into a DTBO image (contiguous layout: header + entry table + blobs, per mkdtboimg).
-    /// <para>将多个 DTB 打包为 DTBO 镜像（连续布局：表头 + 条目表 + 数据块，对齐 mkdtboimg）。</para>
-    /// </summary>
-    /// <param name="dtbs">DTB blobs to store, in entry order. <para>按条目顺序存储的 DTB 数据块。</para></param>
+    /// <summary>Packs multiple DTBs into a DTBO image (contiguous layout: header + entry table + blobs, per mkdtboimg).
+    /// <para>将多个 DTB 打包为 DTBO 镜像（连续布局：表头 + 条目表 + 数据块，对齐 mkdtboimg）。</para></summary>
+    /// <param name="dtbs">DTB blobs to store, in entry order.<para>按条目顺序存储的 DTB 数据块。</para></param>
     /// <param name="pageSize">Page size recorded in the header; blobs are not padded to it.
     /// <para>记录在表头中的页大小；数据块不会按此值填充。</para></param>
     /// <param name="version">Table version, <c>0</c> or <c>1</c>; fresh entries carry no compression.
     /// <para>表版本，取 <c>0</c> 或 <c>1</c>；新生成的条目不携带压缩。</para></param>
-    /// <returns>The complete DTBO image bytes. <para>完整的 DTBO 镜像字节。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="dtbs"/> is null. <para><paramref name="dtbs"/> 为 null。</para></exception>
-    /// <exception cref="ArgumentException">More than 65536 DTBs were supplied. <para>提供的 DTB 超过 65536 个。</para></exception>
+    /// <returns>The complete DTBO image bytes.<para>完整的 DTBO 镜像字节。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="dtbs"/> is null.
+    /// <para><paramref name="dtbs"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentException">More than 65536 DTBs were supplied.
+    /// <para>提供的 DTB 超过 65536 个。</para></exception>
     /// <exception cref="InvalidDataException">The supplied blobs total more than 256 MiB.
     /// <para>提供的数据块合计超过 256 MiB。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="version"/> is greater than <c>1</c>.
@@ -319,17 +318,15 @@ public static partial class DtboFormat
         return Pack(dtbs, [.. dtbs.Select(_ => new DtboEntry())], pageSize, version);
     }
 
-    /// <summary>
-    /// Packs bounded in-memory DTBs with entry metadata and v1 compression flags; offsets and sizes are recalculated.
-    /// <para>将有界内存 DTB 按条目元数据及 v1 压缩标志打包，重新计算偏移和大小。</para>
-    /// </summary>
-    /// <param name="dtbs">DTB blobs to store, in entry order. <para>按条目顺序存储的 DTB 数据块。</para></param>
-    /// <param name="entries">Per-blob metadata; <see cref="DtboEntry.Custom0"/> selects compression when
-    /// <paramref name="version"/> is <c>1</c>. <para>逐数据块元数据；当 <paramref name="version"/> 为 <c>1</c> 时，
-    /// 由 <see cref="DtboEntry.Custom0"/> 选择压缩方式。</para></param>
+    /// <summary>Packs bounded in-memory DTBs with entry metadata and v1 compression flags; offsets and sizes are recalculated.
+    /// <para>将有界内存 DTB 按条目元数据及 v1 压缩标志打包，重新计算偏移和大小。</para></summary>
+    /// <param name="dtbs">DTB blobs to store, in entry order.<para>按条目顺序存储的 DTB 数据块。</para></param>
+    /// <param name="entries">Per-blob metadata; <see cref="DtboEntry.Custom0"/> selects compression when <paramref name="version"/> is <c>1</c>.
+    /// <para>逐数据块元数据；当 <paramref name="version"/> 为 <c>1</c> 时， 由 <see cref="DtboEntry.Custom0"/> 选择压缩方式。</para></param>
     /// <param name="pageSize">Page size recorded in the header; blobs are not padded to it.
     /// <para>记录在表头中的页大小；数据块不会按此值填充。</para></param>
-    /// <param name="version">Table version, <c>0</c> or <c>1</c>. <para>表版本，取 <c>0</c> 或 <c>1</c>。</para></param>
+    /// <param name="version">Table version, <c>0</c> or <c>1</c>.
+    /// <para>表版本，取 <c>0</c> 或 <c>1</c>。</para></param>
     /// <returns>The complete DTBO image bytes with recalculated entry offsets and sizes.
     /// <para>重新计算条目偏移和大小后的完整 DTBO 镜像字节。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="dtbs"/> or <paramref name="entries"/> is null.

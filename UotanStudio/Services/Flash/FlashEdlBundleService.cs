@@ -7,20 +7,31 @@ namespace UotanStudio.Services.Flash;
 /// <summary>Runs every numbered rawprogram and matching patch through one EDL session.<para>把每个带编号的 rawprogram 及其配套 patch 在同一个 EDL 会话中执行。</para></summary>
 internal static class FlashEdlBundleService
 {
-    /// <summary>Inspects all bundle members before opening a device, then flashes them in manifest order.<para>先在打开设备前检查包内全部成员，再按清单顺序刷写。</para></summary>
+    /// <summary>Inspects all bundle members before opening a device, then flashes them in manifest order.
+    /// <para>先在打开设备前检查包内全部成员，再按清单顺序刷写。</para></summary>
     /// <param name="device">The EDL device to flash.<para>要刷写的 EDL 设备。</para></param>
-    /// <param name="folder">Directory holding the rawprogram manifests and images.<para>存放 rawprogram 清单与镜像的目录。</para></param>
-    /// <param name="programmerPath">Path of the Firehose programmer image to load.<para>要加载的 Firehose programmer 镜像路径。</para></param>
+    /// <param name="folder">Directory holding the rawprogram manifests and images.
+    /// <para>存放 rawprogram 清单与镜像的目录。</para></param>
+    /// <param name="programmerPath">Path of the Firehose programmer image to load.
+    /// <para>要加载的 Firehose programmer 镜像路径。</para></param>
     /// <param name="ct">Token cancelling the run.<para>用于取消执行的令牌。</para></param>
-    /// <param name="continueOnFailure">Keeps going after a failed write when true.<para>为真时写入失败后继续执行。</para></param>
-    /// <param name="skipAbsentSources">Tolerates missing source images when true.<para>为真时容忍缺失的源镜像。</para></param>
-    /// <param name="labels">Labels selecting manifest entries; null selects every entry.<para>筛选清单条目的标签，为空时选择全部条目。</para></param>
+    /// <param name="continueOnFailure">Keeps going after a failed write when true.
+    /// <para>为真时写入失败后继续执行。</para></param>
+    /// <param name="skipAbsentSources">Tolerates missing source images when true.
+    /// <para>为真时容忍缺失的源镜像。</para></param>
+    /// <param name="labels">Labels selecting manifest entries; null selects every entry.
+    /// <para>筛选清单条目的标签，为空时选择全部条目。</para></param>
     /// <param name="progress">Reporter for per-step bundle progress.<para>逐步骤的进度上报对象。</para></param>
-    /// <param name="verify">Requests read-back checks of written data when true.<para>为真时要求回读校验已写入的数据。</para></param>
-    /// <param name="skipUfsProvision">Omits the UFS provision step when true.<para>为真时跳过 UFS 配置步骤。</para></param>
-    /// <param name="tuning">Optional sector size, slot, chunking and wipe overrides.<para>扇区大小、槽位、分块与擦除的可选覆盖项。</para></param>
-    /// <param name="initialization">Options controlling session initialization.<para>控制会话初始化的选项。</para></param>
-    /// <returns>The non-fatal deviations recorded while the bundle ran.<para>包执行期间记录的非致命偏差。</para></returns>
+    /// <param name="verify">Requests read-back checks of written data when true.
+    /// <para>为真时要求回读校验已写入的数据。</para></param>
+    /// <param name="skipUfsProvision">Omits the UFS provision step when true.
+    /// <para>为真时跳过 UFS 配置步骤。</para></param>
+    /// <param name="tuning">Optional sector size, slot, chunking and wipe overrides.
+    /// <para>扇区大小、槽位、分块与擦除的可选覆盖项。</para></param>
+    /// <param name="initialization">Options controlling session initialization.
+    /// <para>控制会话初始化的选项。</para></param>
+    /// <returns>The non-fatal deviations recorded while the bundle ran.
+    /// <para>包执行期间记录的非致命偏差。</para></returns>
     public static async Task<IReadOnlyList<string>> FlashAsync(DetectedDevice device, string folder, string programmerPath,
         CancellationToken ct, bool continueOnFailure = false, bool skipAbsentSources = false,
         IReadOnlyList<string>? labels = null, IProgress<FlashBundleProgress>? progress = null, bool verify = false,

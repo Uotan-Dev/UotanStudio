@@ -67,34 +67,20 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
     /// <value>Always <c>16</c>. <para>始终为 <c>16</c>。</para></value>
     public int BitsPerSample => 16;
 
-    /// <summary>
-    /// Creates the AudioConverter from an AAC AudioSpecificConfig and installs the per-frame callback.
-    /// <para>依据 AAC AudioSpecificConfig 创建 AudioConverter，并安装逐帧回调。</para>
-    /// </summary>
-    /// <param name="codecConfig">
-    /// The AudioSpecificConfig bytes; must be 2 to 64 bytes long and is used as the converter magic cookie.
-    /// <para>AudioSpecificConfig 字节；长度须为 2 至 64 字节，用作转换器的 magic cookie。</para>
-    /// </param>
-    /// <param name="frameCallback">
-    /// Invoked on the calling thread for each decoded frame; the callback owns and must dispose the frame.
-    /// <para>对每一解码帧在调用线程上触发；回调接管该帧并必须将其释放。</para>
-    /// </param>
-    /// <exception cref="InvalidDataException">
-    /// <paramref name="codecConfig"/> is empty or longer than 64 bytes, or the converter call fails.
-    /// <para><paramref name="codecConfig"/> 为空或超过 64 字节，或转换器调用失败。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="frameCallback"/> is <see langword="null"/>.
-    /// <para><paramref name="frameCallback"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The decoder has been disposed.
-    /// <para>解码器已被释放。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The call reenters from a callback or runs on a thread other than the owning thread.
-    /// <para>该调用从回调中重入，或在非属主线程上运行。</para>
-    /// </exception>
+    /// <summary>Creates the AudioConverter from an AAC AudioSpecificConfig and installs the per-frame callback.
+    /// <para>依据 AAC AudioSpecificConfig 创建 AudioConverter，并安装逐帧回调。</para></summary>
+    /// <param name="codecConfig">The AudioSpecificConfig bytes; must be 2 to 64 bytes long and is used as the converter magic cookie.
+    /// <para>AudioSpecificConfig 字节；长度须为 2 至 64 字节，用作转换器的 magic cookie。</para></param>
+    /// <param name="frameCallback">Invoked on the calling thread for each decoded frame; the callback owns and must dispose the frame.
+    /// <para>对每一解码帧在调用线程上触发；回调接管该帧并必须将其释放。</para></param>
+    /// <exception cref="InvalidDataException"><paramref name="codecConfig"/> is empty or longer than 64 bytes, or the converter call fails.
+    /// <para><paramref name="codecConfig"/> 为空或超过 64 字节，或转换器调用失败。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="frameCallback"/> is <see langword="null"/>.
+    /// <para><paramref name="frameCallback"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder has been disposed.
+    /// <para>解码器已被释放。</para></exception>
+    /// <exception cref="InvalidOperationException">The call reenters from a callback or runs on a thread other than the owning thread.
+    /// <para>该调用从回调中重入，或在非属主线程上运行。</para></exception>
     public void Initialize(ReadOnlySpan<byte> codecConfig, Action<DecodedAudioFrame> frameCallback)
     {
         if (_inCallback) throw new InvalidOperationException("Decoder callbacks cannot reenter the decoder.");
@@ -144,30 +130,18 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
         _callback = frameCallback;
     }
 
-    /// <summary>
-    /// Decodes one AAC packet through the converter and emits interleaved 16-bit PCM via the callback on the owning thread.
-    /// <para>经转换器解码一个 AAC 包，并在属主线程上通过回调输出交错 16 位 PCM。</para>
-    /// </summary>
-    /// <param name="packet">
-    /// A single AAC access unit; must be non-empty and no larger than 1 MiB. The bytes are read only for the duration of the call.
-    /// <para>单个 AAC 访问单元；必须非空且不超过 1 MiB。这些字节仅在调用期间被读取。</para>
-    /// </param>
-    /// <param name="timestampTicks">
-    /// Presentation timestamp stamped onto every frame produced from this packet.
-    /// <para>盖在该包产生的每一帧上的显示时间戳。</para>
-    /// </param>
-    /// <exception cref="InvalidDataException">
-    /// The packet is empty or exceeds 1 MiB, or the converter returns a PCM size inconsistent with the sample layout.
-    /// <para>包为空或超过 1 MiB，或转换器返回的 PCM 大小与采样布局不一致。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The decoder is not initialized, the call reenters from a callback, or it runs on a thread other than the owning thread.
-    /// <para>解码器未初始化、该调用从回调中重入，或在非属主线程上运行。</para>
-    /// </exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The decoder has been disposed.
-    /// <para>解码器已被释放。</para>
-    /// </exception>
+    /// <summary>Decodes one AAC packet through the converter and emits interleaved 16-bit PCM via the callback on the owning thread.
+    /// <para>经转换器解码一个 AAC 包，并在属主线程上通过回调输出交错 16 位 PCM。</para></summary>
+    /// <param name="packet">A single AAC access unit; must be non-empty and no larger than 1 MiB. The bytes are read only for the duration of the call.
+    /// <para>单个 AAC 访问单元；必须非空且不超过 1 MiB。这些字节仅在调用期间被读取。</para></param>
+    /// <param name="timestampTicks">Presentation timestamp stamped onto every frame produced from this packet.
+    /// <para>盖在该包产生的每一帧上的显示时间戳。</para></param>
+    /// <exception cref="InvalidDataException">The packet is empty or exceeds 1 MiB, or the converter returns a PCM size inconsistent with the sample layout.
+    /// <para>包为空或超过 1 MiB，或转换器返回的 PCM 大小与采样布局不一致。</para></exception>
+    /// <exception cref="InvalidOperationException">The decoder is not initialized, the call reenters from a callback, or it runs on a thread other than the owning thread.
+    /// <para>解码器未初始化、该调用从回调中重入，或在非属主线程上运行。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder has been disposed.
+    /// <para>解码器已被释放。</para></exception>
     public void Decode(ReadOnlySpan<byte> packet, long timestampTicks)
     {
         CheckReady();

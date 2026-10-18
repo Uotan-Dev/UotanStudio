@@ -27,20 +27,10 @@ internal static class FileSystemMetadataOverrides
 {
     private const string SelinuxXattrName = "security.selinux";
 
-    /// <summary>
-    /// Loads an <c>fs_config</c> file into a lookup keyed by the absolute image path
-    /// (leading "/" stripped, invariant-case on Windows platforms is preserved as-is).
-    /// Returns an empty dictionary when <paramref name="path"/> is null, empty or unreadable.
-    /// <para>加载 <c>fs_config</c> 文件为以镜像路径为键的查找表（去除前导 "/"）。
-    /// <paramref name="path"/> 为 null、空或不可读时返回空字典。</para>
-    /// </summary>
-    /// <param name="path">File path; <see langword="null"/>, whitespace, a missing file or a
-    /// reparse point yields an empty table. Lines need at least four space-separated tokens, and lines whose
-    /// uid or gid is not decimal or whose mode is not an octal token are skipped; a repeated path overwrites
-    /// the earlier entry.
-    /// <para>文件路径；为 <see langword="null"/>、仅空白、文件不存在或为重解析点时返回空表。
-    /// 每行至少需要四个以空格分隔的记号；uid 或 gid 非十进制、模式非八进制记号的行会被跳过；
-    /// 重复路径覆盖先前条目。</para></param>
+    /// <summary>Loads an <c>fs_config</c> file into a lookup keyed by the absolute image path (leading "/" stripped, invariant-case on Windows platforms is preserved as-is). Returns an empty dictionary when <paramref name="path"/> is null, empty or unreadable.
+    /// <para>加载 <c>fs_config</c> 文件为以镜像路径为键的查找表（去除前导 "/"）。 <paramref name="path"/> 为 null、空或不可读时返回空字典。</para></summary>
+    /// <param name="path">File path; <see langword="null"/>, whitespace, a missing file or a reparse point yields an empty table. Lines need at least four space-separated tokens, and lines whose uid or gid is not decimal or whose mode is not an octal token are skipped; a repeated path overwrites the earlier entry.
+    /// <para>文件路径；为 <see langword="null"/>、仅空白、文件不存在或为重解析点时返回空表。 每行至少需要四个以空格分隔的记号；uid 或 gid 非十进制、模式非八进制记号的行会被跳过； 重复路径覆盖先前条目。</para></param>
     /// <returns>Ordinal path-keyed entries with leading and trailing <c>/</c> stripped from keys.
     /// <para>以序号方式比较路径的查找表，键已去除首尾 <c>/</c>。</para></returns>
     /// <exception cref="InvalidDataException">The file is larger than 64 MiB.
@@ -62,17 +52,10 @@ internal static class FileSystemMetadataOverrides
         return result;
     }
 
-    /// <summary>
-    /// Loads a <c>file_contexts</c> file into a lookup keyed by the absolute image path.
-    /// Returns an empty dictionary when <paramref name="path"/> is null, empty or unreadable.
-    /// <para>加载 <c>file_contexts</c> 文件为以镜像路径为键的查找表。
-    /// <paramref name="path"/> 为 null、空或不可读时返回空字典。</para>
-    /// </summary>
-    /// <param name="path">File path; <see langword="null"/>, whitespace, a missing file or a
-    /// reparse point yields an empty table. Lines need at least two whitespace-separated tokens
-    /// and the last token is taken as the label; a repeated path overwrites the earlier entry.
-    /// <para>文件路径；为 <see langword="null"/>、仅空白、文件不存在或为重解析点时返回空表。
-    /// 每行至少需要两个以空白分隔的记号，最后一个记号作为标签；重复路径覆盖先前条目。</para></param>
+    /// <summary>Loads a <c>file_contexts</c> file into a lookup keyed by the absolute image path. Returns an empty dictionary when <paramref name="path"/> is null, empty or unreadable.
+    /// <para>加载 <c>file_contexts</c> 文件为以镜像路径为键的查找表。 <paramref name="path"/> 为 null、空或不可读时返回空字典。</para></summary>
+    /// <param name="path">File path; <see langword="null"/>, whitespace, a missing file or a reparse point yields an empty table. Lines need at least two whitespace-separated tokens and the last token is taken as the label; a repeated path overwrites the earlier entry.
+    /// <para>文件路径；为 <see langword="null"/>、仅空白、文件不存在或为重解析点时返回空表。 每行至少需要两个以空白分隔的记号，最后一个记号作为标签；重复路径覆盖先前条目。</para></param>
     /// <returns>Ordinal path-keyed SELinux labels with leading and trailing <c>/</c> stripped from keys.
     /// <para>以序号方式比较路径的 SELinux 标签查找表，键已去除首尾 <c>/</c>。</para></returns>
     /// <exception cref="InvalidDataException">The file is larger than 64 MiB.
@@ -91,34 +74,24 @@ internal static class FileSystemMetadataOverrides
         return result;
     }
 
-    /// <summary>
-    /// Looks up a normalized relative path; also accepts the root ("/").
-    /// <para>按规整后的相对路径查找；根路径（"/"）同样可查。</para>
-    /// </summary>
+    /// <summary>Looks up a normalized relative path; also accepts the root ("/").
+    /// <para>按规整后的相对路径查找；根路径（"/"）同样可查。</para></summary>
     /// <param name="table">Table produced by <see cref="LoadFsConfig"/>.
     /// <para>由 <see cref="LoadFsConfig"/> 生成的查找表。</para></param>
-    /// <param name="relativePath">Path in either separator style; backslashes become slashes,
-    /// surrounding slashes are trimmed, and <c>"."</c> maps to the root key.
+    /// <param name="relativePath">Path in either separator style; backslashes become slashes, surrounding slashes are trimmed, and <c>"."</c> maps to the root key.
     /// <para>任意分隔符风格的路径；反斜杠转为正斜杠，去除首尾斜杠，<c>"."</c> 映射到根键。</para></param>
-    /// <param name="entry">The matched entry when <see langword="true"/>; default-initialized when
-    /// <see langword="false"/>.
+    /// <param name="entry">The matched entry when <see langword="true"/>; default-initialized when <see langword="false"/>.
     /// <para>返回 <see langword="true"/> 时为命中的条目；返回 <see langword="false"/> 时为默认值。</para></param>
     /// <returns><see langword="true"/> when the normalized path exists in <paramref name="table"/>.
     /// <para>规整后的路径存在于 <paramref name="table"/> 中时返回 <see langword="true"/>。</para></returns>
     public static bool TryGetFsConfig(IReadOnlyDictionary<string, FsConfigEntry> table, string relativePath, out FsConfigEntry entry)
         => table.TryGetValue(NormalizeRelativePath(relativePath), out entry);
 
-    /// <summary>
-    /// Loads a partition_info file into a lookup keyed by the prefix-stripped key.
-    /// <para>把 partition_info 文件加载为以去除分区前缀后的键为键的查找表。</para>
-    /// </summary>
-    /// <param name="path">File path; <see langword="null"/>, whitespace, a missing file or a
-    /// reparse point yields an empty table. Lines must contain an <c>=</c> after a non-empty key;
-    /// a repeated key overwrites the earlier value.
-    /// <para>文件路径；为 <see langword="null"/>、仅空白、文件不存在或为重解析点时返回空表。
-    /// 每行须在非空键之后包含 <c>=</c>；重复键覆盖先前值。</para></param>
-    /// <returns>Ordinal lookup keyed by each line's key with the text up to the first <c>.</c>
-    /// (the partition prefix) removed, values trimmed.
+    /// <summary>Loads a partition_info file into a lookup keyed by the prefix-stripped key.
+    /// <para>把 partition_info 文件加载为以去除分区前缀后的键为键的查找表。</para></summary>
+    /// <param name="path">File path; <see langword="null"/>, whitespace, a missing file or a reparse point yields an empty table. Lines must contain an <c>=</c> after a non-empty key; a repeated key overwrites the earlier value.
+    /// <para>文件路径；为 <see langword="null"/>、仅空白、文件不存在或为重解析点时返回空表。 每行须在非空键之后包含 <c>=</c>；重复键覆盖先前值。</para></param>
+    /// <returns>Ordinal lookup keyed by each line's key with the text up to the first <c>.</c> (the partition prefix) removed, values trimmed.
     /// <para>序号比较的查找表：键去除首个 <c>.</c>（含）及其左侧的分区前缀，值已去除首尾空白。</para></returns>
     /// <exception cref="InvalidDataException">The file is larger than 64 MiB.
     /// <para>文件超过 64 MiB。</para></exception>
@@ -140,17 +113,13 @@ internal static class FileSystemMetadataOverrides
         return result;
     }
 
-    /// <summary>
-    /// Looks up the SELinux label for a normalized relative path.
-    /// <para>按规整后的相对路径查找 SELinux 标签。</para>
-    /// </summary>
+    /// <summary>Looks up the SELinux label for a normalized relative path.
+    /// <para>按规整后的相对路径查找 SELinux 标签。</para></summary>
     /// <param name="table">Table produced by <see cref="LoadFileContexts"/>.
     /// <para>由 <see cref="LoadFileContexts"/> 生成的查找表。</para></param>
-    /// <param name="relativePath">Path in either separator style; backslashes become slashes,
-    /// surrounding slashes are trimmed, and <c>"."</c> maps to the root key.
+    /// <param name="relativePath">Path in either separator style; backslashes become slashes, surrounding slashes are trimmed, and <c>"."</c> maps to the root key.
     /// <para>任意分隔符风格的路径；反斜杠转为正斜杠，去除首尾斜杠，<c>"."</c> 映射到根键。</para></param>
-    /// <param name="label">The matched label when <see langword="true"/>; <see langword="null"/>
-    /// when <see langword="false"/>.
+    /// <param name="label">The matched label when <see langword="true"/>; <see langword="null"/> when <see langword="false"/>.
     /// <para>返回 <see langword="true"/> 时为命中标签；返回 <see langword="false"/> 时为 <see langword="null"/>。</para></param>
     /// <returns><see langword="true"/> when the normalized path exists in <paramref name="table"/>.
     /// <para>规整后的路径存在于 <paramref name="table"/> 中时返回 <see langword="true"/>。</para></returns>

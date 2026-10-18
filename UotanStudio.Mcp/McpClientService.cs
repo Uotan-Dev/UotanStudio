@@ -96,18 +96,19 @@ public sealed class McpClientService
         return names;
     }
 
-    /// <summary>
-    /// Calls a tool on the named server and returns the text form of its result content.
-    /// <para>调用指定服务器的工具并返回文本形式的结果内容。</para>
-    /// </summary>
-    /// <example><code>
+    /// <summary>Calls a tool on the named server and returns the text form of its result content.
+    /// <para>调用指定服务器的工具并返回文本形式的结果内容。</para></summary>
+    /// <example>
+    /// <code>
     /// string text = await McpClientService.Instance.CallToolAsync(
-    ///     "docs", "search", """{"query":"payload"}""", CancellationToken.None);
-    /// </code></example>
-    /// <param name="serverName">Server name. <para>服务器名称。</para></param>
-    /// <param name="toolName">Tool name. <para>工具名称。</para></param>
-    /// <param name="argumentsJson">Tool arguments JSON (may be <c>null</c> for none). <para>工具实参 JSON（可为 <c>null</c> 表示无参数）。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// "docs", "search", """{"query":"payload"}""", CancellationToken.None);
+    /// </code>
+    /// </example>
+    /// <param name="serverName">Server name.<para>服务器名称。</para></param>
+    /// <param name="toolName">Tool name.<para>工具名称。</para></param>
+    /// <param name="argumentsJson">Tool arguments JSON (may be <c>null</c> for none).
+    /// <para>工具实参 JSON（可为 <c>null</c> 表示无参数）。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The concatenated text of text blocks and embedded text resources, trimmed, or <c>"(no text content)"</c> when the result carried none.
     /// <para>文本块与内嵌文本资源拼接并去除尾端空白后的结果；结果不含文本时返回 <c>"(no text content)"</c>。</para></returns>
     /// <exception cref="InvalidOperationException">No config carries that name, the server is disabled, or <paramref name="argumentsJson"/> is a JSON value that is not an object.

@@ -169,18 +169,15 @@ internal readonly struct ZErofsMapHeader
 
     private static long AlignUp(long value, long alignment) => (value + alignment - 1) / alignment * alignment;
 
-    /// <summary>
-    /// Creates a header using the fragment-offset form (h_fragmentoff occupies bytes 0-3).
-    /// <para>以 fragment 偏移形式构造（h_fragmentoff 占满字节 0-3）。</para>
-    /// </summary>
-    /// <param name="fragmentOff">h_fragmentoff written to bytes 0-3 and exposed as
-    /// <see cref="FragmentOff"/>. <para>写入字节 0-3 并由 <see cref="FragmentOff"/> 暴露的 h_fragmentoff。</para></param>
-    /// <param name="advise">h_advise feature-advice flags at bytes 4-5. <para>字节 4-5 的 h_advise 特性建议标志。</para></param>
-    /// <param name="algorithmType">h_type at byte 6; the low nibble selects <see cref="Algorithm"/> and the
-    /// upper nibble belongs to <see cref="ExtentsHi"/>.
+    /// <summary>Creates a header using the fragment-offset form (h_fragmentoff occupies bytes 0-3).
+    /// <para>以 fragment 偏移形式构造（h_fragmentoff 占满字节 0-3）。</para></summary>
+    /// <param name="fragmentOff">h_fragmentoff written to bytes 0-3 and exposed as <see cref="FragmentOff"/>.
+    /// <para>写入字节 0-3 并由 <see cref="FragmentOff"/> 暴露的 h_fragmentoff。</para></param>
+    /// <param name="advise">h_advise feature-advice flags at bytes 4-5.
+    /// <para>字节 4-5 的 h_advise 特性建议标志。</para></param>
+    /// <param name="algorithmType">h_type at byte 6; the low nibble selects <see cref="Algorithm"/> and the upper nibble belongs to <see cref="ExtentsHi"/>.
     /// <para>字节 6 的 h_type；低四位决定 <see cref="Algorithm"/>，高四位属于 <see cref="ExtentsHi"/>。</para></param>
-    /// <param name="clusterBits">h_clusterbits at byte 7; the low nibble is <see cref="LclusterBitsOffset"/>
-    /// and the high bit marks <see cref="IsFragmentInode"/>.
+    /// <param name="clusterBits">h_clusterbits at byte 7; the low nibble is <see cref="LclusterBitsOffset"/> and the high bit marks <see cref="IsFragmentInode"/>.
     /// <para>字节 7 的 h_clusterbits；低四位是 <see cref="LclusterBitsOffset"/>，最高位标记 <see cref="IsFragmentInode"/>。</para></param>
     public ZErofsMapHeader(uint fragmentOff, ushort advise, byte algorithmType, byte clusterBits)
     {
@@ -190,20 +187,17 @@ internal readonly struct ZErofsMapHeader
         ClusterBits = clusterBits;
     }
 
-    /// <summary>
-    /// Creates a header using the inline-data form (h_reserved1 at bytes 0-1, h_idata_size at bytes 2-3).
-    /// <para>以内联数据形式构造（h_reserved1 字节 0-1，h_idata_size 字节 2-3）。</para>
-    /// </summary>
+    /// <summary>Creates a header using the inline-data form (h_reserved1 at bytes 0-1, h_idata_size at bytes 2-3).
+    /// <para>以内联数据形式构造（h_reserved1 字节 0-1，h_idata_size 字节 2-3）。</para></summary>
     /// <param name="reserved1">h_reserved1 written to bytes 0-1 and exposed as <see cref="Reserved1"/>.
     /// <para>写入字节 0-1 并由 <see cref="Reserved1"/> 暴露的 h_reserved1。</para></param>
     /// <param name="idataSize">h_idata_size written to bytes 2-3 and exposed as <see cref="IdataSize"/>.
     /// <para>写入字节 2-3 并由 <see cref="IdataSize"/> 暴露的 h_idata_size。</para></param>
-    /// <param name="advise">h_advise feature-advice flags at bytes 4-5. <para>字节 4-5 的 h_advise 特性建议标志。</para></param>
-    /// <param name="algorithmType">h_type at byte 6; the low nibble selects <see cref="Algorithm"/> and the
-    /// upper nibble belongs to <see cref="ExtentsHi"/>.
+    /// <param name="advise">h_advise feature-advice flags at bytes 4-5.
+    /// <para>字节 4-5 的 h_advise 特性建议标志。</para></param>
+    /// <param name="algorithmType">h_type at byte 6; the low nibble selects <see cref="Algorithm"/> and the upper nibble belongs to <see cref="ExtentsHi"/>.
     /// <para>字节 6 的 h_type；低四位决定 <see cref="Algorithm"/>，高四位属于 <see cref="ExtentsHi"/>。</para></param>
-    /// <param name="clusterBits">h_clusterbits at byte 7; the low nibble is <see cref="LclusterBitsOffset"/>
-    /// and the high bit marks <see cref="IsFragmentInode"/>.
+    /// <param name="clusterBits">h_clusterbits at byte 7; the low nibble is <see cref="LclusterBitsOffset"/> and the high bit marks <see cref="IsFragmentInode"/>.
     /// <para>字节 7 的 h_clusterbits；低四位是 <see cref="LclusterBitsOffset"/>，最高位标记 <see cref="IsFragmentInode"/>。</para></param>
     public ZErofsMapHeader(ushort reserved1, ushort idataSize, ushort advise, byte algorithmType, byte clusterBits)
         : this(reserved1 | ((uint)idataSize << 16), advise, algorithmType, clusterBits)

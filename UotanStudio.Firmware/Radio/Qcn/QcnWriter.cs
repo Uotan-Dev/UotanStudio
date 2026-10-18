@@ -9,38 +9,21 @@ namespace UotanStudio.Firmware.Radio.Qcn;
 /// </summary>
 public static class QcnWriter
 {
-    /// <summary>
-    /// Patches the NV records of a QCN file with the data held by the supplied items.
-    /// <para>用给定条目持有的数据修补 QCN 文件的 NV 记录。</para>
-    /// </summary>
-    /// <param name="path">
-    /// The QCN file path to patch.
-    /// <para>要补丁的 QCN 文件路径。</para>
-    /// </param>
-    /// <param name="items">
-    /// The complete item set originating from this file (e.g. an edited QcnReader.ParseAsync result).
-    /// <para>来自该文件的完整条目集合（可为编辑后的 QcnReader.ParseAsync 结果）。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation token carried through verification, the temporary file write and publication.
-    /// <para>取消令牌，贯穿校验、临时文件写入与发布。</para>
-    /// </param>
-    /// <returns>
-    /// The number of data regions actually rewritten (0 when the content already matches and the file is untouched).
-    /// <para>实际重写的数据区数量（0 表示内容已一致，文件未改动）。</para>
-    /// </returns>
-    /// <exception cref="QcnPatchMismatchException">
-    /// The item set does not match the file (record count, stream paths, indices, ids or flags differ).
-    /// <para>条目集合与文件不匹配（记录数、流路径、索引、id 或 flags 不一致）。</para>
-    /// </exception>
-    /// <exception cref="QcnException">
-    /// Post-patch verification failed; the source file is left untouched.
-    /// <para>补丁后的校验失败；源文件保持原样。</para>
-    /// </exception>
-    /// <exception cref="CompoundFileException">
-    /// The container structure is corrupted or unsupported.
-    /// <para>容器结构损坏或不受支持。</para>
-    /// </exception>
+    /// <summary>Patches the NV records of a QCN file with the data held by the supplied items.
+    /// <para>用给定条目持有的数据修补 QCN 文件的 NV 记录。</para></summary>
+    /// <param name="path">The QCN file path to patch.<para>要补丁的 QCN 文件路径。</para></param>
+    /// <param name="items">The complete item set originating from this file (e.g. an edited QcnReader.ParseAsync result).
+    /// <para>来自该文件的完整条目集合（可为编辑后的 QcnReader.ParseAsync 结果）。</para></param>
+    /// <param name="cancellationToken">Cancellation token carried through verification, the temporary file write and publication.
+    /// <para>取消令牌，贯穿校验、临时文件写入与发布。</para></param>
+    /// <returns>The number of data regions actually rewritten (0 when the content already matches and the file is untouched).
+    /// <para>实际重写的数据区数量（0 表示内容已一致，文件未改动）。</para></returns>
+    /// <exception cref="QcnPatchMismatchException">The item set does not match the file (record count, stream paths, indices, ids or flags differ).
+    /// <para>条目集合与文件不匹配（记录数、流路径、索引、id 或 flags 不一致）。</para></exception>
+    /// <exception cref="QcnException">Post-patch verification failed; the source file is left untouched.
+    /// <para>补丁后的校验失败；源文件保持原样。</para></exception>
+    /// <exception cref="CompoundFileException">The container structure is corrupted or unsupported.
+    /// <para>容器结构损坏或不受支持。</para></exception>
     public static async Task<int> PatchAsync(string path, IReadOnlyList<QcnNvItem> items, CancellationToken cancellationToken = default)
     {
         List<PatchedRecordLayout> layout;

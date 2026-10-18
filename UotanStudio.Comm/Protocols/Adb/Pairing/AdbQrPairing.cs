@@ -98,19 +98,10 @@ public static class AdbQrPairing
     }
 }
 
-/// <summary>
-/// One-time wireless-debugging QR pairing credentials: the mDNS instance name the
-/// phone advertises after scanning (<c>_adb-tls-pairing._tcp</c>) and the pairing
-/// password shared through the QR code.
-/// <para>无线调试二维码配对的一次性凭据：手机扫码后广播的 mDNS 实例名
-/// （<c>_adb-tls-pairing._tcp</c>）与通过二维码共享的配对密码。</para>
-/// </summary>
-/// <param name="ServiceName">
-/// The mDNS service instance name, in the shape <c>ADB_WIFI_a1B2c3D4e5F6g7H-xy9Zwq</c>.
-/// <para>mDNS 服务实例名，形如 <c>ADB_WIFI_a1B2c3D4e5F6g7H-xy9Zwq</c>。</para>
-/// </param>
-/// <param name="Password">
-/// The pairing password (SPAKE2 shared secret input).
-/// <para>配对密码（SPAKE2 共享密钥输入）。</para>
-/// </param>
+/// <summary>One-time wireless-debugging QR pairing credentials: the mDNS instance name the phone advertises after scanning (<c>_adb-tls-pairing._tcp</c>) and the pairing password shared through the QR code.
+/// <para>无线调试二维码配对的一次性凭据：手机扫码后广播的 mDNS 实例名 （<c>_adb-tls-pairing._tcp</c>）与通过二维码共享的配对密码。</para></summary>
+/// <param name="ServiceName">The mDNS service instance name, in the shape <c>ADB_WIFI_a1B2c3D4e5F6g7H-xy9Zwq</c>.
+/// <para>mDNS 服务实例名，形如 <c>ADB_WIFI_a1B2c3D4e5F6g7H-xy9Zwq</c>。</para></param>
+/// <param name="Password">The pairing password (SPAKE2 shared secret input).
+/// <para>配对密码（SPAKE2 共享密钥输入）。</para></param>
 public sealed record AdbQrPairingCredentials(string ServiceName, string Password);

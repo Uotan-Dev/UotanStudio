@@ -23,24 +23,15 @@ namespace UotanStudio.RegexInfer;
 /// </remarks>
 public static class RegexInfer
 {
-    /// <summary>
-    /// Infers a regular expression that extracts the expected outputs from the source text.
-    /// <para>推导一个能从源文本中提取出全部期望输出的正则表达式。</para>
-    /// </summary>
-    /// <param name="sourceText">The text the pattern will run against. <para>正则将要作用的文本。</para></param>
-    /// <param name="expectedOutputs">
-    /// The strings that must be matched exactly, each of which occurs somewhere in <paramref name="sourceText"/>.
-    /// <para>必须被精确匹配的字符串，每个都应出现在 <paramref name="sourceText"/> 中某处。</para>
-    /// </param>
-    /// <param name="options">
-    /// Tuning knobs; pass a populated <see cref="RegexInferenceOptions"/> to override the defaults.
-    /// <para>可调参数；传入填写好的 <see cref="RegexInferenceOptions"/> 即可覆盖默认值。</para>
-    /// </param>
-    /// <returns>
-    /// Candidates ordered by descending confidence, at most <see cref="RegexInferenceOptions.TopResults"/>
-    /// of them. The list is empty when no candidate matched every positive example exactly.
-    /// <para>按置信度降序排列的候选，最多 <see cref="RegexInferenceOptions.TopResults"/> 个。没有任何候选精确命中全部正例时为空列表。</para>
-    /// </returns>
+    /// <summary>Infers a regular expression that extracts the expected outputs from the source text.
+    /// <para>推导一个能从源文本中提取出全部期望输出的正则表达式。</para></summary>
+    /// <param name="sourceText">The text the pattern will run against.<para>正则将要作用的文本。</para></param>
+    /// <param name="expectedOutputs">The strings that must be matched exactly, each of which occurs somewhere in <paramref name="sourceText"/>.
+    /// <para>必须被精确匹配的字符串，每个都应出现在 <paramref name="sourceText"/> 中某处。</para></param>
+    /// <param name="options">Tuning knobs; pass a populated <see cref="RegexInferenceOptions"/> to override the defaults.
+    /// <para>可调参数；传入填写好的 <see cref="RegexInferenceOptions"/> 即可覆盖默认值。</para></param>
+    /// <returns>Candidates ordered by descending confidence, at most <see cref="RegexInferenceOptions.TopResults"/> of them. The list is empty when no candidate matched every positive example exactly.
+    /// <para>按置信度降序排列的候选，最多 <see cref="RegexInferenceOptions.TopResults"/> 个。没有任何候选精确命中全部正例时为空列表。</para></returns>
     public static IReadOnlyList<InferredRegex> Infer(
         string sourceText,
         IReadOnlyList<string> expectedOutputs,
@@ -49,27 +40,17 @@ public static class RegexInfer
         return InferCore(sourceText, expectedOutputs, Array.Empty<string>(), options);
     }
 
-    /// <summary>
-    /// Infers a regular expression that extracts the expected outputs while rejecting the negatives.
-    /// <para>推导一个既能提取全部期望输出、又能拒绝全部负例的正则表达式。</para>
-    /// </summary>
-    /// <param name="sourceText">The text the pattern will run against. <para>正则将要作用的文本。</para></param>
-    /// <param name="expectedOutputs">The strings that must be matched exactly. <para>必须被精确匹配的字符串。</para></param>
-    /// <param name="negatives">
-    /// The strings the pattern must not match. They steer the ranking, and a candidate that matches one of
-    /// them is still returned with a non-zero <see cref="InferredRegex.NegativeLeaks"/>.
-    /// <para>正则不得匹配的字符串。它们参与排序；仍然匹配其中之一的候选仍会被返回，并带上非零的
-    /// <see cref="InferredRegex.NegativeLeaks"/>。</para>
-    /// </param>
-    /// <param name="options">
-    /// Tuning knobs; pass a populated <see cref="RegexInferenceOptions"/> to override the defaults.
-    /// <para>可调参数；传入填写好的 <see cref="RegexInferenceOptions"/> 即可覆盖默认值。</para>
-    /// </param>
-    /// <returns>
-    /// Candidates ordered by descending confidence, at most <see cref="RegexInferenceOptions.TopResults"/>
-    /// of them. The list is empty when no candidate matched every positive example exactly.
-    /// <para>按置信度降序排列的候选，最多 <see cref="RegexInferenceOptions.TopResults"/> 个。没有任何候选精确命中全部正例时为空列表。</para>
-    /// </returns>
+    /// <summary>Infers a regular expression that extracts the expected outputs while rejecting the negatives.
+    /// <para>推导一个既能提取全部期望输出、又能拒绝全部负例的正则表达式。</para></summary>
+    /// <param name="sourceText">The text the pattern will run against.<para>正则将要作用的文本。</para></param>
+    /// <param name="expectedOutputs">The strings that must be matched exactly.
+    /// <para>必须被精确匹配的字符串。</para></param>
+    /// <param name="negatives">The strings the pattern must not match. They steer the ranking, and a candidate that matches one of them is still returned with a non-zero <see cref="InferredRegex.NegativeLeaks"/>.
+    /// <para>正则不得匹配的字符串。它们参与排序；仍然匹配其中之一的候选仍会被返回，并带上非零的 <see cref="InferredRegex.NegativeLeaks"/>。</para></param>
+    /// <param name="options">Tuning knobs; pass a populated <see cref="RegexInferenceOptions"/> to override the defaults.
+    /// <para>可调参数；传入填写好的 <see cref="RegexInferenceOptions"/> 即可覆盖默认值。</para></param>
+    /// <returns>Candidates ordered by descending confidence, at most <see cref="RegexInferenceOptions.TopResults"/> of them. The list is empty when no candidate matched every positive example exactly.
+    /// <para>按置信度降序排列的候选，最多 <see cref="RegexInferenceOptions.TopResults"/> 个。没有任何候选精确命中全部正例时为空列表。</para></returns>
     public static IReadOnlyList<InferredRegex> Infer(
         string sourceText,
         IReadOnlyList<string> expectedOutputs,

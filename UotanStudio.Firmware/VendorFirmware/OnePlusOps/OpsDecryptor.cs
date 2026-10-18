@@ -79,17 +79,12 @@ internal class OpsDecryptor(Stream stream, IOnePlusLogger? logger = null)
         return entries;
     }
 
-    /// <summary>
-    /// Decrypts data using the SBox-based stream cipher with a default key
-    /// <para>使用基于SBox的流密码和默认密钥解密数据</para>
-    /// </summary>
+    /// <summary>Decrypts data using the SBox-based stream cipher with a default key
+    /// <para>使用基于SBox的流密码和默认密钥解密数据</para></summary>
     /// <param name="encryptedData">Raw entry bytes read from the package stream.
     /// <para>从包流读取的原始条目字节。</para></param>
-    /// <param name="variant">Key-derivation variant; 0 uses the built-in 16-byte default key as-is,
-    /// and each step above 0 prepends one derived byte before the key material is truncated to
-    /// 32 bytes. A negative value behaves like 0.
-    /// <para>密钥派生变体；0 表示直接使用内置 16 字节默认密钥，每增加 1 在密钥前追加一个派生字节，
-    /// 最终截断至 32 字节。负值与 0 等效。</para></param>
+    /// <param name="variant">Key-derivation variant; 0 uses the built-in 16-byte default key as-is, and each step above 0 prepends one derived byte before the key material is truncated to 32 bytes. A negative value behaves like 0.
+    /// <para>密钥派生变体；0 表示直接使用内置 16 字节默认密钥，每增加 1 在密钥前追加一个派生字节， 最终截断至 32 字节。负值与 0 等效。</para></param>
     /// <returns>A new array holding the decrypted bytes, with the same length as the input.
     /// <para>包含解密结果的新数组，长度与输入相同。</para></returns>
     public byte[] DecryptData(byte[] encryptedData, int variant = 0)
@@ -141,22 +136,17 @@ internal class OpsDecryptor(Stream stream, IOnePlusLogger? logger = null)
         }
     }
 
-    /// <summary>
-    /// Decrypts data using AES-ECB mode with the specified key
-    /// <para>使用指定密钥以AES-ECB模式解密数据</para>
-    /// </summary>
+    /// <summary>Decrypts data using AES-ECB mode with the specified key
+    /// <para>使用指定密钥以AES-ECB模式解密数据</para></summary>
     /// <param name="encryptedData">Ciphertext whose length is a positive multiple of 16 bytes.
     /// <para>长度为非零且为 16 字节整数倍的密文。</para></param>
-    /// <param name="key">AES key of 16, 24, or 32 bytes. <para>16、24 或 32 字节的 AES 密钥。</para></param>
+    /// <param name="key">AES key of 16, 24, or 32 bytes.<para>16、24 或 32 字节的 AES 密钥。</para></param>
     /// <returns>The decrypted blocks; no padding is added or removed.
     /// <para>解密后的数据块；不添加也不移除填充。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="encryptedData"/> or
-    /// <paramref name="key"/> is <see langword="null"/>.
+    /// <exception cref="ArgumentNullException"><paramref name="encryptedData"/> or <paramref name="key"/> is <see langword="null"/>.
     /// <para><paramref name="encryptedData"/> 或 <paramref name="key"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="encryptedData"/> is empty or not a
-    /// multiple of 16 bytes, or <paramref name="key"/> is not 16, 24 or 32 bytes.
-    /// <para><paramref name="encryptedData"/> 为空或长度不是 16 的整数倍，或 <paramref name="key"/>
-    /// 不是 16、24、32 字节。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="encryptedData"/> is empty or not a multiple of 16 bytes, or <paramref name="key"/> is not 16, 24 or 32 bytes.
+    /// <para><paramref name="encryptedData"/> 为空或长度不是 16 的整数倍，或 <paramref name="key"/> 不是 16、24、32 字节。</para></exception>
     public byte[] DecryptAesEcb(byte[] encryptedData, byte[] key)
     {
         if (encryptedData == null)
@@ -190,26 +180,19 @@ internal class OpsDecryptor(Stream stream, IOnePlusLogger? logger = null)
         return decryptor.TransformFinalBlock(encryptedData, 0, encryptedData.Length);
     }
 
-    /// <summary>
-    /// Decrypts data using AES-ECB with a key from the OnePlus key table.
-    /// <para>使用一加密钥表中的密钥以 AES-ECB 模式解密数据。</para>
-    /// </summary>
-    /// <param name="encryptedData">The ciphertext to decrypt.
-    /// <para>待解密的密文。</para></param>
-    /// <param name="keyIndex">Index into <see cref="OnePlusKeyTable"/>; must be
-    /// <see cref="OnePlusKeyTable.AesKeyIndex"/> (0) for the AES path.
-    /// <para><see cref="OnePlusKeyTable"/> 中的索引；AES 路径必须使用
-    /// <see cref="OnePlusKeyTable.AesKeyIndex"/>（0）。</para></param>
-    /// <returns>The decrypted plaintext. <para>解密后的明文。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="keyIndex"/> is
-    /// outside the table bounds. <para><paramref name="keyIndex"/> 超出表的索引范围。</para></exception>
-    /// <exception cref="NotSupportedException"><paramref name="keyIndex"/> refers to
-    /// an MBox data entry that cannot be used with the AES-ECB interface.
+    /// <summary>Decrypts data using AES-ECB with a key from the OnePlus key table.
+    /// <para>使用一加密钥表中的密钥以 AES-ECB 模式解密数据。</para></summary>
+    /// <param name="encryptedData">The ciphertext to decrypt.<para>待解密的密文。</para></param>
+    /// <param name="keyIndex">Index into <see cref="OnePlusKeyTable"/>; must be <see cref="OnePlusKeyTable.AesKeyIndex"/> (0) for the AES path.
+    /// <para><see cref="OnePlusKeyTable"/> 中的索引；AES 路径必须使用 <see cref="OnePlusKeyTable.AesKeyIndex"/>（0）。</para></param>
+    /// <returns>The decrypted plaintext.<para>解密后的明文。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="keyIndex"/> is outside the table bounds.
+    /// <para><paramref name="keyIndex"/> 超出表的索引范围。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="keyIndex"/> refers to an MBox data entry that cannot be used with the AES-ECB interface.
     /// <para><paramref name="keyIndex"/> 指向无法用于 AES-ECB 接口的 MBox 数据条目。</para></exception>
-    /// <exception cref="ArgumentNullException"><paramref name="encryptedData"/> is
-    /// <see langword="null"/>. <para><paramref name="encryptedData"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="encryptedData"/> length is not a
-    /// positive multiple of 16 bytes.
+    /// <exception cref="ArgumentNullException"><paramref name="encryptedData"/> is <see langword="null"/>.
+    /// <para><paramref name="encryptedData"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="encryptedData"/> length is not a positive multiple of 16 bytes.
     /// <para><paramref name="encryptedData"/> 长度不是非零的 16 字节整数倍。</para></exception>
     public byte[] DecryptAesEcb(byte[] encryptedData, int keyIndex)
     {

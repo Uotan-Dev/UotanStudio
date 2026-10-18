@@ -149,19 +149,26 @@ public sealed class HdcAppClient(HdcConnection connection) : Contracts.IHdcAppCl
         return ReadResult(channel, 1, cancellationToken);
     }
 
-    /// <summary>
-    /// Installs the signed modules in an APP container that match a device type, without re-signing them.
-    /// <para>安装 APP 容器中与目标设备类型匹配的已签名模块，不进行重新签名。</para>
-    /// </summary>
-    /// <param name="path">APP (ZIP) container path opened read-only. <para>以只读方式打开的 APP（ZIP）容器路径。</para></param>
-    /// <param name="deviceType">Device type matched against the <c>deviceType</c> arrays in <c>pack.info</c>. <para>与 <c>pack.info</c> 中各 <c>deviceType</c> 数组匹配的机型代号。</para></param>
-    /// <param name="options">Bundle-manager option string validated exactly as in <see cref="Install(string, string, CancellationToken)"/>. <para>bundle-manager 选项串，校验规则与 <see cref="Install(string, string, CancellationToken)"/> 完全一致。</para></param>
-    /// <param name="cancellationToken">Checked while extracting modules; the staging directory is deleted either way. <para>解压模块期间检查；暂存目录无论如何都会删除。</para></param>
-    /// <returns>The bundle-manager completion text for the single-module install or the combined TAR transfer. <para>单模块安装或合并 TAR 传输的 bundle-manager 完成文本。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="deviceType"/> is blank or <paramref name="options"/> contains rejected characters. <para><paramref name="deviceType"/> 为空，或 <paramref name="options"/> 含被拒绝的字符。</para></exception>
-    /// <exception cref="InvalidDataException">The container, its <c>pack.info</c> metadata or a module entry violates the size, naming or uniqueness constraints. <para>容器、其 <c>pack.info</c> 元数据或模块条目违反大小、命名或唯一性约束。</para></exception>
-    /// <exception cref="NotSupportedException">The container has no installable module for <paramref name="deviceType"/>. <para>容器中没有匹配 <paramref name="deviceType"/> 的可安装模块。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled. <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    /// <summary>Installs the signed modules in an APP container that match a device type, without re-signing them.
+    /// <para>安装 APP 容器中与目标设备类型匹配的已签名模块，不进行重新签名。</para></summary>
+    /// <param name="path">APP (ZIP) container path opened read-only.
+    /// <para>以只读方式打开的 APP（ZIP）容器路径。</para></param>
+    /// <param name="deviceType">Device type matched against the <c>deviceType</c> arrays in <c>pack.info</c>.
+    /// <para>与 <c>pack.info</c> 中各 <c>deviceType</c> 数组匹配的机型代号。</para></param>
+    /// <param name="options">Bundle-manager option string validated exactly as in <see cref="Install(string, string, CancellationToken)"/>.
+    /// <para>bundle-manager 选项串，校验规则与 <see cref="Install(string, string, CancellationToken)"/> 完全一致。</para></param>
+    /// <param name="cancellationToken">Checked while extracting modules; the staging directory is deleted either way.
+    /// <para>解压模块期间检查；暂存目录无论如何都会删除。</para></param>
+    /// <returns>The bundle-manager completion text for the single-module install or the combined TAR transfer.
+    /// <para>单模块安装或合并 TAR 传输的 bundle-manager 完成文本。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="deviceType"/> is blank or <paramref name="options"/> contains rejected characters.
+    /// <para><paramref name="deviceType"/> 为空，或 <paramref name="options"/> 含被拒绝的字符。</para></exception>
+    /// <exception cref="InvalidDataException">The container, its <c>pack.info</c> metadata or a module entry violates the size, naming or uniqueness constraints.
+    /// <para>容器、其 <c>pack.info</c> 元数据或模块条目违反大小、命名或唯一性约束。</para></exception>
+    /// <exception cref="NotSupportedException">The container has no installable module for <paramref name="deviceType"/>.
+    /// <para>容器中没有匹配 <paramref name="deviceType"/> 的可安装模块。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     public string InstallAppBundle(string path, string deviceType, string options = "", CancellationToken cancellationToken = default)
     {
         ValidateOptions(options);

@@ -24,26 +24,14 @@ internal sealed class BoundedWriteStream : Stream
     private readonly CancellationToken _cancellationToken;
     private bool _disposed;
 
-    /// <summary>
-    /// Creates a limited counting write stream.
-    /// <para>创建受限计数写入流。</para>
-    /// </summary>
-    /// <param name="inner">
-    /// Writable stream the bytes are forwarded to.
-    /// <para>字节转发到的可写流。</para>
-    /// </param>
-    /// <param name="maximumBytes">
-    /// Cumulative byte budget; zero allows no writes at all and must be non-negative.
-    /// <para>累计字节预算；为 0 表示不允许任何写入，取值必须非负。</para>
-    /// </param>
-    /// <param name="leaveOpen">
-    /// When <see langword="true"/>, disposing this wrapper leaves <paramref name="inner"/> open.
-    /// <para>为 <see langword="true"/> 时，释放本包装器后 <paramref name="inner"/> 仍保持打开。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token checked by every synchronous write and before the budget test.
-    /// <para>每次同步写入以及预算校验前都会检查的取消令牌。</para>
-    /// </param>
+    /// <summary>Creates a limited counting write stream.<para>创建受限计数写入流。</para></summary>
+    /// <param name="inner">Writable stream the bytes are forwarded to.<para>字节转发到的可写流。</para></param>
+    /// <param name="maximumBytes">Cumulative byte budget; zero allows no writes at all and must be non-negative.
+    /// <para>累计字节预算；为 0 表示不允许任何写入，取值必须非负。</para></param>
+    /// <param name="leaveOpen">When <see langword="true"/>, disposing this wrapper leaves <paramref name="inner"/> open.
+    /// <para>为 <see langword="true"/> 时，释放本包装器后 <paramref name="inner"/> 仍保持打开。</para></param>
+    /// <param name="cancellationToken">Token checked by every synchronous write and before the budget test.
+    /// <para>每次同步写入以及预算校验前都会检查的取消令牌。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="inner"/> is <see langword="null"/>.
     /// <para><paramref name="inner"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="inner"/> cannot be written.
@@ -120,20 +108,11 @@ internal sealed class BoundedWriteStream : Stream
     /// <para>读写均直接转发到底层流，并遵循其相同的可定位性限制。</para></value>
     public override long Position { get => _inner.Position; set => _inner.Position = value; }
 
-    /// <summary>
-    /// Writes bytes to the stream.
-    /// <para>向流写入字节。</para>
-    /// </summary>
-    /// <param name="buffer">
-    /// Source span forwarded to the inner stream; an empty span still tests the budget but transfers nothing.
-    /// <para>转发给底层流的源区间；空区间仍会校验预算但不传输任何字节。</para>
-    /// </param>
-    /// <exception cref="IOException">
-    /// Adding <paramref name="buffer"/> to <see cref="BytesWritten"/> would overflow or exceed
-    /// <see cref="MaximumBytes"/>; nothing is forwarded in that case.
-    /// <para>将 <paramref name="buffer"/> 累加到 <see cref="BytesWritten"/> 后溢出或超出 <see cref="MaximumBytes"/>；
-    /// 此时不会转发任何字节。</para>
-    /// </exception>
+    /// <summary>Writes bytes to the stream.<para>向流写入字节。</para></summary>
+    /// <param name="buffer">Source span forwarded to the inner stream; an empty span still tests the budget but transfers nothing.
+    /// <para>转发给底层流的源区间；空区间仍会校验预算但不传输任何字节。</para></param>
+    /// <exception cref="IOException">Adding <paramref name="buffer"/> to <see cref="BytesWritten"/> would overflow or exceed <see cref="MaximumBytes"/>; nothing is forwarded in that case.
+    /// <para>将 <paramref name="buffer"/> 累加到 <see cref="BytesWritten"/> 后溢出或超出 <see cref="MaximumBytes"/>； 此时不会转发任何字节。</para></exception>
     /// <exception cref="OperationCanceledException"><see cref="CancellationToken"/> was signaled.
     /// <para><see cref="CancellationToken"/> 已被触发。</para></exception>
     public override void Write(ReadOnlySpan<byte> buffer)

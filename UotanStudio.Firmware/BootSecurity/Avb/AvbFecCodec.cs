@@ -100,27 +100,29 @@ internal static class AvbFecCodec
 
     /// <summary>Rebuilds whole 4096-byte blocks that are known to be damaged from intact FEC parity.
     /// <para>借助完好的 FEC 校验码重建已知损坏的整块 4096 字节数据。</para></summary>
-    /// <remarks>Applies Reed-Solomon erasure decoding: the block list is the set of erasure positions and the parity is trusted.
-    /// A round can repair at most <c>roots</c> erased blocks; damaged parity or too many erasures in one round aborts the rebuild
-    /// and leaves every image byte untouched. No trailing footer block is produced or consumed.
-    /// <para>采用 Reed-Solomon 删除译码：坏块列表即删除位置集合，校验码视为可信。单轮最多重建 <c>roots</c> 个删除块；
-    /// 校验码本身损坏或某轮删除数超出上限时中止重建且不改动任何镜像字节。不生成也不消费末尾 footer 块。</para></remarks>
+    /// <remarks>Applies Reed-Solomon erasure decoding: the block list is the set of erasure positions and the parity is trusted. A round can repair at most <c>roots</c> erased blocks; damaged parity or too many erasures in one round aborts the rebuild and leaves every image byte untouched. No trailing footer block is produced or consumed.
+    /// <para>采用 Reed-Solomon 删除译码：坏块列表即删除位置集合，校验码视为可信。单轮最多重建 <c>roots</c> 个删除块； 校验码本身损坏或某轮删除数超出上限时中止重建且不改动任何镜像字节。不生成也不消费末尾 footer 块。</para></remarks>
     /// <param name="image">Readable, writable, seekable image holding the data prefix and its trailing FEC parity; its position is restored.
     /// <para>可读、可写、可定位的镜像，包含数据前缀及其尾部 FEC 校验码；结束后恢复位置。</para></param>
-    /// <param name="fecOffset">Start of FEC, also the protected source length. <para>FEC 起点，亦为受保护源长度。</para></param>
-    /// <param name="fecSize">Declared parity length without a standalone fec footer. <para>不含独立 fec footer 的校验码声明长度。</para></param>
-    /// <param name="roots">Number of RS parity roots. <para>RS 校验根数。</para></param>
+    /// <param name="fecOffset">Start of FEC, also the protected source length.
+    /// <para>FEC 起点，亦为受保护源长度。</para></param>
+    /// <param name="fecSize">Declared parity length without a standalone fec footer.
+    /// <para>不含独立 fec footer 的校验码声明长度。</para></param>
+    /// <param name="roots">Number of RS parity roots.<para>RS 校验根数。</para></param>
     /// <param name="badBlocks">Zero-based 4096-byte block numbers inside the protected prefix to rebuild; duplicates are ignored.
     /// <para>受保护前缀内待重建的从零起算 4096 字节块编号；重复项忽略。</para></param>
-    /// <param name="cancellationToken">Cancels reads, solves and writes. <para>取消读取、求解与写入。</para></param>
+    /// <param name="cancellationToken">Cancels reads, solves and writes.
+    /// <para>取消读取、求解与写入。</para></param>
     /// <returns>True when every requested block was reconstructed and written; false when the erasures exceed the code's capacity.
     /// <para>全部请求块均重建并写入时为真；删除数超出码可纠正能力时为假。</para></returns>
     /// <exception cref="ArgumentException">The stream cannot read, write or seek, or a block number is out of range.
     /// <para>流不可读、不可写或不可定位，或块编号越界。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The geometry is invalid or the parity size mismatches the declaration.
     /// <para>布局无效或校验码长度与声明不符。</para></exception>
-    /// <exception cref="EndOfStreamException">Declared bytes cannot be read completely. <para>无法完整读取声明的字节。</para></exception>
-    /// <exception cref="OperationCanceledException">Cancellation was requested. <para>请求了取消。</para></exception>
+    /// <exception cref="EndOfStreamException">Declared bytes cannot be read completely.
+    /// <para>无法完整读取声明的字节。</para></exception>
+    /// <exception cref="OperationCanceledException">Cancellation was requested.
+    /// <para>请求了取消。</para></exception>
     public static async Task<bool> RepairAsync(Stream image, long fecOffset, long fecSize, uint roots,
         IReadOnlyCollection<long> badBlocks, CancellationToken cancellationToken = default)
     {

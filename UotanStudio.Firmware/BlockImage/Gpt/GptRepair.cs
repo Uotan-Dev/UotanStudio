@@ -111,38 +111,21 @@ internal static class GptRepair
     private const int BackupScanBlocks = 2048;
     private static readonly UnicodeEncoding NameEncoding = new(false, false, true);
 
-    /// <summary>
-    /// Reports the GPT structural state of an image without writing anything.
-    /// <para>报告镜像的 GPT 结构状态，不写入任何内容。</para>
-    /// </summary>
-    /// <param name="imagePath">
-    /// Disk image file; opened read-only.
-    /// <para>磁盘镜像文件；以只读方式打开。</para>
-    /// </param>
-    /// <param name="blockSize">
-    /// Logical block size, a power of two from 512 through 65536.
-    /// <para>逻辑块大小，须为 512 至 65536 之间 2 的幂。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation checked between bounded reads.
-    /// <para>在各次有界读取之间检查的取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// A report with discovery-order issues and the repairability decision.
-    /// <para>按发现顺序记录问题并给出可修复性判定的报告。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="imagePath"/> is blank or <paramref name="blockSize"/> is unsupported.
-    /// <para><paramref name="imagePath"/> 为空白，或 <paramref name="blockSize"/> 不受支持。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// The image file does not exist.
-    /// <para>镜像文件不存在。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Reports the GPT structural state of an image without writing anything.
+    /// <para>报告镜像的 GPT 结构状态，不写入任何内容。</para></summary>
+    /// <param name="imagePath">Disk image file; opened read-only.<para>磁盘镜像文件；以只读方式打开。</para></param>
+    /// <param name="blockSize">Logical block size, a power of two from 512 through 65536.
+    /// <para>逻辑块大小，须为 512 至 65536 之间 2 的幂。</para></param>
+    /// <param name="cancellationToken">Cancellation checked between bounded reads.
+    /// <para>在各次有界读取之间检查的取消令牌。</para></param>
+    /// <returns>A report with discovery-order issues and the repairability decision.
+    /// <para>按发现顺序记录问题并给出可修复性判定的报告。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="imagePath"/> is blank or <paramref name="blockSize"/> is unsupported.
+    /// <para><paramref name="imagePath"/> 为空白，或 <paramref name="blockSize"/> 不受支持。</para></exception>
+    /// <exception cref="FileNotFoundException">The image file does not exist.
+    /// <para>镜像文件不存在。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public static GptRepairReport Inspect(string imagePath, int blockSize = DefaultBlockSize,
         CancellationToken cancellationToken = default)
     {
@@ -151,50 +134,28 @@ internal static class GptRepair
         return Analyze(file, blockSize, cancellationToken).Report;
     }
 
-    /// <summary>
-    /// Rebuilds the primary GPT copy from the backup and publishes the repaired image.
-    /// <para>由备份重建 GPT 主副本并发布修复后的镜像。</para>
-    /// </summary>
-    /// <param name="imagePath">
-    /// Damaged disk image; it is only read and never modified.
-    /// <para>受损磁盘镜像；仅读取，绝不修改。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Repaired image destination; an existing file is replaced only after full validation.
-    /// <para>修复后的目标镜像；已存在的文件仅在完整校验通过后被替换。</para>
-    /// </param>
-    /// <param name="blockSize">
-    /// Logical block size, a power of two from 512 through 65536.
-    /// <para>逻辑块大小，须为 512 至 65536 之间 2 的幂。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation checked through the copy, the metadata writes and the read-back validation.
-    /// <para>在复制、元数据写入与读回校验期间持续检查的取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// The report for the analyzed image, with <see cref="GptRepairReport.Action"/> set when a repair was published.
-    /// <para>对所分析镜像的报告；已发布修复时设置 <see cref="GptRepairReport.Action"/>。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// A path is blank, the paths are equal, or the block size is unsupported.
-    /// <para>路径为空白、两个路径相同，或块大小不受支持。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// The image file does not exist.
-    /// <para>镜像文件不存在。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The output or its temporary publication file cannot be written.
-    /// <para>无法写入输出或其临时发布文件。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The rebuilt image failed read-back validation; nothing is published in that case.
-    /// <para>重建后的镜像未通过读回校验；此时不会发布任何内容。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Rebuilds the primary GPT copy from the backup and publishes the repaired image.
+    /// <para>由备份重建 GPT 主副本并发布修复后的镜像。</para></summary>
+    /// <param name="imagePath">Damaged disk image; it is only read and never modified.
+    /// <para>受损磁盘镜像；仅读取，绝不修改。</para></param>
+    /// <param name="outputPath">Repaired image destination; an existing file is replaced only after full validation.
+    /// <para>修复后的目标镜像；已存在的文件仅在完整校验通过后被替换。</para></param>
+    /// <param name="blockSize">Logical block size, a power of two from 512 through 65536.
+    /// <para>逻辑块大小，须为 512 至 65536 之间 2 的幂。</para></param>
+    /// <param name="cancellationToken">Cancellation checked through the copy, the metadata writes and the read-back validation.
+    /// <para>在复制、元数据写入与读回校验期间持续检查的取消令牌。</para></param>
+    /// <returns>The report for the analyzed image, with <see cref="GptRepairReport.Action"/> set when a repair was published.
+    /// <para>对所分析镜像的报告；已发布修复时设置 <see cref="GptRepairReport.Action"/>。</para></returns>
+    /// <exception cref="ArgumentException">A path is blank, the paths are equal, or the block size is unsupported.
+    /// <para>路径为空白、两个路径相同，或块大小不受支持。</para></exception>
+    /// <exception cref="FileNotFoundException">The image file does not exist.
+    /// <para>镜像文件不存在。</para></exception>
+    /// <exception cref="IOException">The output or its temporary publication file cannot be written.
+    /// <para>无法写入输出或其临时发布文件。</para></exception>
+    /// <exception cref="InvalidDataException">The rebuilt image failed read-back validation; nothing is published in that case.
+    /// <para>重建后的镜像未通过读回校验；此时不会发布任何内容。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public static GptRepairReport Repair(string imagePath, string outputPath, int blockSize = DefaultBlockSize,
         CancellationToken cancellationToken = default)
     {

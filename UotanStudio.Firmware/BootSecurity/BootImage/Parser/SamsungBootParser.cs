@@ -83,19 +83,12 @@ public class SamsungBootParser : IDisposable
     /// </value>
     public byte[] Extra { get; private set; } = [];
 
-    /// <summary>
-    /// Checks if the data is in Samsung PXA format.
-    /// <para>检查数据是否为 Samsung PXA 格式。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Candidate image bytes. <see langword="null"/> or fewer than 44 bytes is reported as a non-match.
-    /// <para>候选镜像字节。<see langword="null"/> 或少于 44 字节时按不匹配处理。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> when the bytes carry the <c>ANDROID!</c> magic and the little-endian word at
-    /// offset 40 exceeds <c>4</c>, which marks an extra block size instead of a header version.
-    /// <para>当字节带有 <c>ANDROID!</c> 魔数且偏移 40 处的小端字大于 <c>4</c>（表示 extra 块大小而非头部版本号）时返回 <see langword="true"/>。</para>
-    /// </returns>
+    /// <summary>Checks if the data is in Samsung PXA format.
+    /// <para>检查数据是否为 Samsung PXA 格式。</para></summary>
+    /// <param name="data">Candidate image bytes. <see langword="null"/> or fewer than 44 bytes is reported as a non-match.
+    /// <para>候选镜像字节。<see langword="null"/> 或少于 44 字节时按不匹配处理。</para></param>
+    /// <returns><see langword="true"/> when the bytes carry the <c>ANDROID!</c> magic and the little-endian word at offset 40 exceeds <c>4</c>, which marks an extra block size instead of a header version.
+    /// <para>当字节带有 <c>ANDROID!</c> 魔数且偏移 40 处的小端字大于 <c>4</c>（表示 extra 块大小而非头部版本号）时返回 <see langword="true"/>。</para></returns>
     public static bool IsSamsungFormat(byte[] data)
     {
         if (data == null || data.Length < 44)
@@ -114,19 +107,12 @@ public class SamsungBootParser : IDisposable
         return headerOrExtra > 4;
     }
 
-    /// <summary>
-    /// Parses a Samsung PXA boot image from a file.
-    /// <para>从文件解析 Samsung PXA Boot 镜像。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Existing file opened for shared reading; at most the first 1680 bytes are buffered for the header and
-    /// components are streamed from the same handle, which is closed before returning.
-    /// <para>以共享读方式打开的已存在文件；头部最多缓存前 1680 字节，其余组件从同一句柄流式读取，句柄在返回前关闭。</para>
-    /// </param>
-    /// <exception cref="ImageParseException">
-    /// The file is shorter than 8 bytes or its first 8 bytes are not the <c>ANDROID!</c> magic.
-    /// <para>文件不足 8 字节，或前 8 字节不是 <c>ANDROID!</c> 魔数。</para>
-    /// </exception>
+    /// <summary>Parses a Samsung PXA boot image from a file.
+    /// <para>从文件解析 Samsung PXA Boot 镜像。</para></summary>
+    /// <param name="filePath">Existing file opened for shared reading; at most the first 1680 bytes are buffered for the header and components are streamed from the same handle, which is closed before returning.
+    /// <para>以共享读方式打开的已存在文件；头部最多缓存前 1680 字节，其余组件从同一句柄流式读取，句柄在返回前关闭。</para></param>
+    /// <exception cref="ImageParseException">The file is shorter than 8 bytes or its first 8 bytes are not the <c>ANDROID!</c> magic.
+    /// <para>文件不足 8 字节，或前 8 字节不是 <c>ANDROID!</c> 魔数。</para></exception>
     public void ParseFile(string filePath)
     {
         using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -137,19 +123,12 @@ public class SamsungBootParser : IDisposable
         ExtractComponentsFromStream(stream);
     }
 
-    /// <summary>
-    /// Parses a Samsung PXA boot image from a byte array.
-    /// <para>从字节数组解析 Samsung PXA Boot 镜像。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete image bytes to read in place; the array is not copied and header fields beyond its length
-    /// fall back to <c>0</c> instead of throwing.
-    /// <para>就地读取的完整镜像字节；数组不会被复制，超出其长度的头部字段回退为 <c>0</c> 而非抛出异常。</para>
-    /// </param>
-    /// <exception cref="ImageParseException">
-    /// <paramref name="data"/> is shorter than 8 bytes or does not start with the <c>ANDROID!</c> magic.
-    /// <para><paramref name="data"/> 不足 8 字节，或开头不是 <c>ANDROID!</c> 魔数。</para>
-    /// </exception>
+    /// <summary>Parses a Samsung PXA boot image from a byte array.
+    /// <para>从字节数组解析 Samsung PXA Boot 镜像。</para></summary>
+    /// <param name="data">Complete image bytes to read in place; the array is not copied and header fields beyond its length fall back to <c>0</c> instead of throwing.
+    /// <para>就地读取的完整镜像字节；数组不会被复制，超出其长度的头部字段回退为 <c>0</c> 而非抛出异常。</para></param>
+    /// <exception cref="ImageParseException"><paramref name="data"/> is shorter than 8 bytes or does not start with the <c>ANDROID!</c> magic.
+    /// <para><paramref name="data"/> 不足 8 字节，或开头不是 <c>ANDROID!</c> 魔数。</para></exception>
     public void Parse(byte[] data)
     {
         ParseHeader(data);
@@ -222,20 +201,12 @@ public class SamsungBootParser : IDisposable
         }
     }
 
-    /// <summary>
-    /// Parses the extra data block in Samsung boot images.
-    /// <para>解析 Samsung boot 镜像的 extra 数据块。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Full image bytes; the block starts right after the fixed 1664-byte header region.
-    /// <para>完整镜像字节；该块紧随固定的 1664 字节头部区域之后。</para>
-    /// </param>
-    /// <returns>
-    /// An empty array when the parsed header has no extra block, <see cref="SamsungHeader.ExtraSize"/> is
-    /// <c>0</c>, or <paramref name="data"/> is shorter than 1664 bytes; otherwise up to
-    /// <see cref="SamsungHeader.ExtraSize"/> bytes, truncated at the end of <paramref name="data"/>.
-    /// <para>当已解析头部没有 extra 块、<see cref="SamsungHeader.ExtraSize"/> 为 <c>0</c> 或 <paramref name="data"/> 短于 1664 字节时返回空数组；否则最多返回 <see cref="SamsungHeader.ExtraSize"/> 字节，并在 <paramref name="data"/> 末尾处截断。</para>
-    /// </returns>
+    /// <summary>Parses the extra data block in Samsung boot images.
+    /// <para>解析 Samsung boot 镜像的 extra 数据块。</para></summary>
+    /// <param name="data">Full image bytes; the block starts right after the fixed 1664-byte header region.
+    /// <para>完整镜像字节；该块紧随固定的 1664 字节头部区域之后。</para></param>
+    /// <returns>An empty array when the parsed header has no extra block, <see cref="SamsungHeader.ExtraSize"/> is <c>0</c>, or <paramref name="data"/> is shorter than 1664 bytes; otherwise up to <see cref="SamsungHeader.ExtraSize"/> bytes, truncated at the end of <paramref name="data"/>.
+    /// <para>当已解析头部没有 extra 块、<see cref="SamsungHeader.ExtraSize"/> 为 <c>0</c> 或 <paramref name="data"/> 短于 1664 字节时返回空数组；否则最多返回 <see cref="SamsungHeader.ExtraSize"/> 字节，并在 <paramref name="data"/> 末尾处截断。</para></returns>
     public byte[] ParseExtra(byte[] data)
     {
         if (!Header.HasExtra || Header.ExtraSize == 0)

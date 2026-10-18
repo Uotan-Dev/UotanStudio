@@ -23,29 +23,18 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
     private readonly TarArchiveWriter _tarWriter = new();
     private readonly CpioExtractor _extractor = extractor ?? new CpioExtractor();
 
-    /// <summary>
-    /// Reads all entries from an archive stream into memory.
-    /// <para>从归档流中读取全部条目到内存。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Readable archive source kept open by the reader; each payload is copied under the 256 MiB materialization cap.
-    /// <para>可读的归档源流，读取器不会将其关闭；每个负载在 256 MiB 物化上限内复制。</para>
-    /// </param>
-    /// <param name="formatHint">
-    /// Optional format override; <see langword="null"/> detects the format from header bytes, which requires a seekable stream.
-    /// <para>可选的格式覆盖；<see langword="null"/> 表示从头部字节检测格式，这要求流可定位。</para>
-    /// </param>
-    /// <returns>
-    /// A fully materialized list of entries with payloads in <c>Data</c>.
-    /// <para>完全物化的条目列表，负载位于 <c>Data</c> 中。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="stream"/> is <see langword="null"/>. <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArchiveCorruptedException">
-    /// The format is unknown or an entry exceeds the materialization limit.
-    /// <para>格式未知，或条目超出物化上限。</para>
-    /// </exception>
+    /// <summary>Reads all entries from an archive stream into memory.
+    /// <para>从归档流中读取全部条目到内存。</para></summary>
+    /// <param name="stream">Readable archive source kept open by the reader; each payload is copied under the 256 MiB materialization cap.
+    /// <para>可读的归档源流，读取器不会将其关闭；每个负载在 256 MiB 物化上限内复制。</para></param>
+    /// <param name="formatHint">Optional format override; <see langword="null"/> detects the format from header bytes, which requires a seekable stream.
+    /// <para>可选的格式覆盖；<see langword="null"/> 表示从头部字节检测格式，这要求流可定位。</para></param>
+    /// <returns>A fully materialized list of entries with payloads in <c>Data</c>.
+    /// <para>完全物化的条目列表，负载位于 <c>Data</c> 中。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArchiveCorruptedException">The format is unknown or an entry exceeds the materialization limit.
+    /// <para>格式未知，或条目超出物化上限。</para></exception>
     public IReadOnlyList<ArchiveEntry> ReadAll(Stream stream, ArchiveFormat? formatHint = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -57,26 +46,16 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         return entries;
     }
 
-    /// <summary>
-    /// Reads entries lazily while giving every returned entry independent, materialized data.
-    /// <para>惰性读取条目，同时为每个返回条目提供独立物化的数据。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Readable archive source kept open by the reader.
-    /// <para>可读的归档源流，读取器不会将其关闭。</para>
-    /// </param>
-    /// <param name="formatHint">
-    /// Optional format override; <see langword="null"/> detects the format from header bytes, which requires a seekable stream.
-    /// <para>可选的格式覆盖；<see langword="null"/> 表示从头部字节检测格式，这要求流可定位。</para>
-    /// </param>
-    /// <returns>
-    /// A lazy sequence whose payloads are copied out of the source as enumeration advances, capped at 256 MiB per entry.
-    /// <para>惰性序列，其负载在枚举推进时从源中复制，单条目上限 256 MiB。</para>
-    /// </returns>
-    /// <exception cref="ArchiveCorruptedException">
-    /// An entry exceeds the materialization limit or the archive is malformed.
-    /// <para>条目超出物化上限，或归档格式非法。</para>
-    /// </exception>
+    /// <summary>Reads entries lazily while giving every returned entry independent, materialized data.
+    /// <para>惰性读取条目，同时为每个返回条目提供独立物化的数据。</para></summary>
+    /// <param name="stream">Readable archive source kept open by the reader.
+    /// <para>可读的归档源流，读取器不会将其关闭。</para></param>
+    /// <param name="formatHint">Optional format override; <see langword="null"/> detects the format from header bytes, which requires a seekable stream.
+    /// <para>可选的格式覆盖；<see langword="null"/> 表示从头部字节检测格式，这要求流可定位。</para></param>
+    /// <returns>A lazy sequence whose payloads are copied out of the source as enumeration advances, capped at 256 MiB per entry.
+    /// <para>惰性序列，其负载在枚举推进时从源中复制，单条目上限 256 MiB。</para></returns>
+    /// <exception cref="ArchiveCorruptedException">An entry exceeds the materialization limit or the archive is malformed.
+    /// <para>条目超出物化上限，或归档格式非法。</para></exception>
     public IEnumerable<ArchiveEntry> ReadEntries(Stream stream, ArchiveFormat? formatHint = null)
     {
         foreach (var entry in ReadEntriesStreaming(stream, formatHint))
@@ -85,29 +64,18 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         }
     }
 
-    /// <summary>
-    /// Reads entries as a single-pass streaming sequence.
-    /// <para>以单遍流式序列读取条目；请求下一项前必须消费当前负载。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Readable archive source kept open by the reader.
-    /// <para>可读的归档源流，读取器不会将其关闭。</para>
-    /// </param>
-    /// <param name="formatHint">
-    /// Required when <paramref name="stream"/> cannot seek; <see langword="null"/> on a seekable stream triggers header detection.
-    /// <para>当 <paramref name="stream"/> 不可定位时必须提供；可定位流上传入 <see langword="null"/> 将触发头部检测。</para>
-    /// </param>
-    /// <returns>
-    /// Entries routed to the CPIO or TAR reader according to the format; payloads are live views valid only during enumeration.
-    /// <para>按格式路由到 CPIO 或 TAR 读取器得到的条目；负载为仅在枚举期间有效的实时视图。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="stream"/> is <see langword="null"/>. <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="NotSupportedException">
-    /// No format hint was given for a non-seekable stream.
-    /// <para>对不可定位的流未提供格式提示。</para>
-    /// </exception>
+    /// <summary>Reads entries as a single-pass streaming sequence.
+    /// <para>以单遍流式序列读取条目；请求下一项前必须消费当前负载。</para></summary>
+    /// <param name="stream">Readable archive source kept open by the reader.
+    /// <para>可读的归档源流，读取器不会将其关闭。</para></param>
+    /// <param name="formatHint">Required when <paramref name="stream"/> cannot seek; <see langword="null"/> on a seekable stream triggers header detection.
+    /// <para>当 <paramref name="stream"/> 不可定位时必须提供；可定位流上传入 <see langword="null"/> 将触发头部检测。</para></param>
+    /// <returns>Entries routed to the CPIO or TAR reader according to the format; payloads are live views valid only during enumeration.
+    /// <para>按格式路由到 CPIO 或 TAR 读取器得到的条目；负载为仅在枚举期间有效的实时视图。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="NotSupportedException">No format hint was given for a non-seekable stream.
+    /// <para>对不可定位的流未提供格式提示。</para></exception>
     public IEnumerable<ArchiveEntry> ReadEntriesStreaming(Stream stream, ArchiveFormat? formatHint = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -125,81 +93,46 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         };
     }
 
-    /// <summary>
-    /// Returns lightweight archive entries suitable for listing and inspection.
-    /// <para>返回适合列表与检查的轻量级归档条目；这是 GNU cpio 的 -t / --list 模式在库层面的最近等价物。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Readable archive source kept open by the reader; payloads are never copied.
-    /// <para>可读的归档源流，读取器不会将其关闭；负载不会被复制。</para>
-    /// </param>
-    /// <param name="formatHint">
-    /// Optional format override; <see langword="null"/> detects the format from header bytes, which requires a seekable stream.
-    /// <para>可选的格式覆盖；<see langword="null"/> 表示从头部字节检测格式，这要求流可定位。</para>
-    /// </param>
-    /// <returns>
-    /// A snapshot of names, link targets, declared lengths and metadata for every entry.
-    /// <para>包含每个条目的名称、链接目标、声明长度与元数据的快照。</para>
-    /// </returns>
+    /// <summary>Returns lightweight archive entries suitable for listing and inspection.
+    /// <para>返回适合列表与检查的轻量级归档条目；这是 GNU cpio 的 -t / --list 模式在库层面的最近等价物。</para></summary>
+    /// <param name="stream">Readable archive source kept open by the reader; payloads are never copied.
+    /// <para>可读的归档源流，读取器不会将其关闭；负载不会被复制。</para></param>
+    /// <param name="formatHint">Optional format override; <see langword="null"/> detects the format from header bytes, which requires a seekable stream.
+    /// <para>可选的格式覆盖；<see langword="null"/> 表示从头部字节检测格式，这要求流可定位。</para></param>
+    /// <returns>A snapshot of names, link targets, declared lengths and metadata for every entry.
+    /// <para>包含每个条目的名称、链接目标、声明长度与元数据的快照。</para></returns>
     public IReadOnlyList<ArchiveEntrySummary> ListEntries(Stream stream, ArchiveFormat? formatHint = null) => [.. ReadEntriesStreaming(stream, formatHint).Select(ToSummary)];
 
-    /// <summary>
-    /// Extracts archive entries to a destination directory.
-    /// <para>将归档条目解包到目标目录。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Readable archive source kept open by the reader.
-    /// <para>可读的归档源流，读取器不会将其关闭。</para>
-    /// </param>
-    /// <param name="destinationDirectory">
-    /// Directory that receives the extracted entries.
-    /// <para>接收解出条目的目录。</para>
-    /// </param>
-    /// <param name="options">
-    /// Optional extraction settings such as overwrite policy; <see langword="null"/> uses extractor defaults.
-    /// <para>可选解包设置（如覆盖策略）；<see langword="null"/> 使用解压器默认值。</para>
-    /// </param>
-    /// <param name="formatHint">
-    /// Optional format override; <see langword="null"/> detects the format from header bytes, which requires a seekable stream.
-    /// <para>可选的格式覆盖；<see langword="null"/> 表示从头部字节检测格式，这要求流可定位。</para>
-    /// </param>
+    /// <summary>Extracts archive entries to a destination directory.
+    /// <para>将归档条目解包到目标目录。</para></summary>
+    /// <param name="stream">Readable archive source kept open by the reader.
+    /// <para>可读的归档源流，读取器不会将其关闭。</para></param>
+    /// <param name="destinationDirectory">Directory that receives the extracted entries.
+    /// <para>接收解出条目的目录。</para></param>
+    /// <param name="options">Optional extraction settings such as overwrite policy; <see langword="null"/> uses extractor defaults.
+    /// <para>可选解包设置（如覆盖策略）；<see langword="null"/> 使用解压器默认值。</para></param>
+    /// <param name="formatHint">Optional format override; <see langword="null"/> detects the format from header bytes, which requires a seekable stream.
+    /// <para>可选的格式覆盖；<see langword="null"/> 表示从头部字节检测格式，这要求流可定位。</para></param>
     public void ExtractToDirectory(Stream stream, string destinationDirectory, ExtractOptions? options = null, ArchiveFormat? formatHint = null)
     {
         var entries = ReadEntriesStreaming(stream, formatHint);
         _extractor.ExtractToDirectory(entries, destinationDirectory, options);
     }
 
-    /// <summary>
-    /// Extracts archive entries to a destination directory and collects the entry
-    /// names during the same single pass, so callers do not need to re-read the
-    /// archive just to list its contents.
-    /// <para>将归档条目解包到目标目录，并在同一次遍历中收集条目名，调用方无需
-    /// 为获取清单而重新读取归档。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Readable archive source kept open by the reader.
-    /// <para>可读的归档源流，读取器不会将其关闭。</para>
-    /// </param>
-    /// <param name="destinationDirectory">
-    /// Directory that receives the extracted entries.
-    /// <para>接收解出条目的目录。</para>
-    /// </param>
-    /// <param name="options">
-    /// Optional extraction settings such as overwrite policy; <see langword="null"/> uses extractor defaults.
-    /// <para>可选解包设置（如覆盖策略）；<see langword="null"/> 使用解压器默认值。</para>
-    /// </param>
-    /// <param name="formatHint">
-    /// Optional format override; <see langword="null"/> detects the format from header bytes, which requires a seekable stream.
-    /// <para>可选的格式覆盖；<see langword="null"/> 表示从头部字节检测格式，这要求流可定位。</para>
-    /// </param>
-    /// <param name="entryNames">
-    /// When this method returns, the names of all entries encountered during extraction, in archive order.
-    /// <para>方法返回时，为解包过程中按归档顺序遇到的全部条目名。</para>
-    /// </param>
-    /// <returns>
-    /// The same collected name list that is written to <paramref name="entryNames"/>.
-    /// <para>与写入 <paramref name="entryNames"/> 相同的条目名列表。</para>
-    /// </returns>
+    /// <summary>Extracts archive entries to a destination directory and collects the entry names during the same single pass, so callers do not need to re-read the archive just to list its contents.
+    /// <para>将归档条目解包到目标目录，并在同一次遍历中收集条目名，调用方无需 为获取清单而重新读取归档。</para></summary>
+    /// <param name="stream">Readable archive source kept open by the reader.
+    /// <para>可读的归档源流，读取器不会将其关闭。</para></param>
+    /// <param name="destinationDirectory">Directory that receives the extracted entries.
+    /// <para>接收解出条目的目录。</para></param>
+    /// <param name="options">Optional extraction settings such as overwrite policy; <see langword="null"/> uses extractor defaults.
+    /// <para>可选解包设置（如覆盖策略）；<see langword="null"/> 使用解压器默认值。</para></param>
+    /// <param name="formatHint">Optional format override; <see langword="null"/> detects the format from header bytes, which requires a seekable stream.
+    /// <para>可选的格式覆盖；<see langword="null"/> 表示从头部字节检测格式，这要求流可定位。</para></param>
+    /// <param name="entryNames">When this method returns, the names of all entries encountered during extraction, in archive order.
+    /// <para>方法返回时，为解包过程中按归档顺序遇到的全部条目名。</para></param>
+    /// <returns>The same collected name list that is written to <paramref name="entryNames"/>.
+    /// <para>与写入 <paramref name="entryNames"/> 相同的条目名列表。</para></returns>
     public IReadOnlyList<string> ExtractToDirectory(Stream stream, string destinationDirectory, ExtractOptions? options, ArchiveFormat? formatHint, out IReadOnlyList<string> entryNames)
     {
         var names = new List<string>();
@@ -217,33 +150,19 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         return names;
     }
 
-    /// <summary>
-    /// Saves all entries to an archive stream.
-    /// <para>将全部条目保存到归档流。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Writable destination kept open by the writer.
-    /// <para>可写目标流，写入器不会将其关闭。</para>
-    /// </param>
-    /// <param name="entries">
-    /// Entries to serialize; metadata is normalized first according to <paramref name="options"/>.
-    /// <para>待序列化的条目；元数据会先按 <paramref name="options"/> 规范化。</para>
-    /// </param>
-    /// <param name="format">
-    /// Target format selecting the TAR or CPIO writer; <see cref="ArchiveFormat.Unknown"/> writes nothing.
-    /// <para>决定使用 TAR 还是 CPIO 写入器的目标格式；<see cref="ArchiveFormat.Unknown"/> 不写入任何内容。</para>
-    /// </param>
-    /// <param name="options">
-    /// Optional write settings (owner override, inode renumbering, trailer); <see langword="null"/> uses <c>WriteOptions</c> defaults.
-    /// <para>可选写入设置（属主覆盖、inode 重编号、尾部记录）；<see langword="null"/> 使用 <c>WriteOptions</c> 默认值。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>. <para><paramref name="stream"/> 或 <paramref name="entries"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="NotSupportedException">
-    /// <paramref name="format"/> is a value outside the known archive formats.
-    /// <para><paramref name="format"/> 为已知归档格式之外的取值。</para>
-    /// </exception>
+    /// <summary>Saves all entries to an archive stream.<para>将全部条目保存到归档流。</para></summary>
+    /// <param name="stream">Writable destination kept open by the writer.
+    /// <para>可写目标流，写入器不会将其关闭。</para></param>
+    /// <param name="entries">Entries to serialize; metadata is normalized first according to <paramref name="options"/>.
+    /// <para>待序列化的条目；元数据会先按 <paramref name="options"/> 规范化。</para></param>
+    /// <param name="format">Target format selecting the TAR or CPIO writer; <see cref="ArchiveFormat.Unknown"/> writes nothing.
+    /// <para>决定使用 TAR 还是 CPIO 写入器的目标格式；<see cref="ArchiveFormat.Unknown"/> 不写入任何内容。</para></param>
+    /// <param name="options">Optional write settings (owner override, inode renumbering, trailer); <see langword="null"/> uses <c>WriteOptions</c> defaults.
+    /// <para>可选写入设置（属主覆盖、inode 重编号、尾部记录）；<see langword="null"/> 使用 <c>WriteOptions</c> 默认值。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 或 <paramref name="entries"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="format"/> is a value outside the known archive formats.
+    /// <para><paramref name="format"/> 为已知归档格式之外的取值。</para></exception>
     public void SaveAll(Stream stream, IEnumerable<ArchiveEntry> entries, ArchiveFormat format, WriteOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -273,33 +192,20 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         }
     }
 
-    /// <summary>
-    /// Detects the archive format by probing header bytes from a seekable stream.
-    /// <para>通过探测可寻址流的头部字节检测归档格式。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Seekable archive source positioned at the start of the archive; the position is restored before returning.
-    /// <para>定位在归档起始处的可寻址源流；返回前会恢复其位置。</para>
-    /// </param>
-    /// <returns>
-    /// The detected <see cref="ArchiveFormat"/>: a CPIO ASCII or binary variant, <see cref="ArchiveFormat.Ustar"/> for a ustar marker, or <see cref="ArchiveFormat.Tar"/> for a header whose checksum field validates.
-    /// <para>检测得到的 <see cref="ArchiveFormat"/>：CPIO ASCII 或 binary 变体、带 ustar 标记时的 <see cref="ArchiveFormat.Ustar"/>，或校验和字段可通过验证的 <see cref="ArchiveFormat.Tar"/>。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="stream"/> is <see langword="null"/>. <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="NotSupportedException">
-    /// <paramref name="stream"/> cannot seek.
-    /// <para><paramref name="stream"/> 不可定位。</para>
-    /// </exception>
-    /// <exception cref="EndOfStreamException">
-    /// Fewer than six bytes remain at the current position.
-    /// <para>当前位置剩余字节不足六个。</para>
-    /// </exception>
-    /// <exception cref="ArchiveCorruptedException">
-    /// The probed bytes match no known CPIO or TAR layout.
-    /// <para>探测字节不匹配任何已知 CPIO 或 TAR 布局。</para>
-    /// </exception>
+    /// <summary>Detects the archive format by probing header bytes from a seekable stream.
+    /// <para>通过探测可寻址流的头部字节检测归档格式。</para></summary>
+    /// <param name="stream">Seekable archive source positioned at the start of the archive; the position is restored before returning.
+    /// <para>定位在归档起始处的可寻址源流；返回前会恢复其位置。</para></param>
+    /// <returns>The detected <see cref="ArchiveFormat"/>: a CPIO ASCII or binary variant, <see cref="ArchiveFormat.Ustar"/> for a ustar marker, or <see cref="ArchiveFormat.Tar"/> for a header whose checksum field validates.
+    /// <para>检测得到的 <see cref="ArchiveFormat"/>：CPIO ASCII 或 binary 变体、带 ustar 标记时的 <see cref="ArchiveFormat.Ustar"/>，或校验和字段可通过验证的 <see cref="ArchiveFormat.Tar"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="stream"/> cannot seek.
+    /// <para><paramref name="stream"/> 不可定位。</para></exception>
+    /// <exception cref="EndOfStreamException">Fewer than six bytes remain at the current position.
+    /// <para>当前位置剩余字节不足六个。</para></exception>
+    /// <exception cref="ArchiveCorruptedException">The probed bytes match no known CPIO or TAR layout.
+    /// <para>探测字节不匹配任何已知 CPIO 或 TAR 布局。</para></exception>
     public ArchiveFormat DetectFormat(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);

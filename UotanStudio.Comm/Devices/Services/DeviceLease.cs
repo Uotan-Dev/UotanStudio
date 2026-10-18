@@ -87,16 +87,11 @@ public sealed class DeviceLease : IAsyncDisposable, IDisposable
         return session is not null;
     }
 
-    /// <summary>
-    /// Registers a directly opened streaming resource with this lease. Registered streams close
-    /// before the session and transport, and registration after teardown has started fails.
-    /// <para>把直开的流式资源登记到本租约。登记的流先于会话与传输关闭，清理开始后的登记会失败。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// The stream to close together with the lease. <para>随租约一同关闭的流。</para>
-    /// </param>
-    /// <returns>A handle that removes the stream from the registry when it is disposed; disposing it
-    /// does not close the stream. <para>释放时把该流从登记表移除的句柄；释放该句柄不会关闭流本身。</para></returns>
+    /// <summary>Registers a directly opened streaming resource with this lease. Registered streams close before the session and transport, and registration after teardown has started fails.
+    /// <para>把直开的流式资源登记到本租约。登记的流先于会话与传输关闭，清理开始后的登记会失败。</para></summary>
+    /// <param name="stream">The stream to close together with the lease.<para>随租约一同关闭的流。</para></param>
+    /// <returns>A handle that removes the stream from the registry when it is disposed; disposing it does not close the stream.
+    /// <para>释放时把该流从登记表移除的句柄；释放该句柄不会关闭流本身。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ObjectDisposedException">Teardown of this lease has already started.

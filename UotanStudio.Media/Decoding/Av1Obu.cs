@@ -6,25 +6,14 @@ namespace UotanStudio.Media.Decoding;
 /// </summary>
 public static class Av1Obu
 {
-    /// <summary>
-    /// Splits a delimited OBU stream without copying encoded payloads.
-    /// <para>按时间分隔符分割，保留原始编码负载。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// A low-overhead AV1 OBU stream in which every OBU declares its size; headers with forbidden
-    /// or reserved bits are rejected, and an extension flag consumes one extra header byte.
-    /// <para>每个 OBU 均声明长度的低开销 AV1 OBU 码流；含 forbidden 或保留位的头部会被拒绝，带扩展标志时额外消耗一个头部字节。</para>
-    /// </param>
-    /// <returns>
-    /// Contiguous half-open ranges covering the whole input, one per temporal unit; each unit after
-    /// the first starts at its temporal-delimiter OBU.
-    /// <para>覆盖整个输入的连续半开区间，每个时间单元一段；首个单元之后的每段从其 temporal-delimiter OBU 起始。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// An OBU header is not sized low-overhead framing, or an extension byte or size field is
-    /// truncated, oversized, or out of range for the remaining stream.
-    /// <para>OBU 头部不是带长度的低开销分帧，或扩展字节、长度字段被截断、超长或超出流剩余范围。</para>
-    /// </exception>
+    /// <summary>Splits a delimited OBU stream without copying encoded payloads.
+    /// <para>按时间分隔符分割，保留原始编码负载。</para></summary>
+    /// <param name="stream">A low-overhead AV1 OBU stream in which every OBU declares its size; headers with forbidden or reserved bits are rejected, and an extension flag consumes one extra header byte.
+    /// <para>每个 OBU 均声明长度的低开销 AV1 OBU 码流；含 forbidden 或保留位的头部会被拒绝，带扩展标志时额外消耗一个头部字节。</para></param>
+    /// <returns>Contiguous half-open ranges covering the whole input, one per temporal unit; each unit after the first starts at its temporal-delimiter OBU.
+    /// <para>覆盖整个输入的连续半开区间，每个时间单元一段；首个单元之后的每段从其 temporal-delimiter OBU 起始。</para></returns>
+    /// <exception cref="InvalidDataException">An OBU header is not sized low-overhead framing, or an extension byte or size field is truncated, oversized, or out of range for the remaining stream.
+    /// <para>OBU 头部不是带长度的低开销分帧，或扩展字节、长度字段被截断、超长或超出流剩余范围。</para></exception>
     public static IReadOnlyList<Range> SplitTemporalUnits(ReadOnlySpan<byte> stream)
     {
         var ranges = new List<Range>();

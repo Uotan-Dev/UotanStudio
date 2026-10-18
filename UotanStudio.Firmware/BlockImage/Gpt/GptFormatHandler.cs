@@ -45,18 +45,11 @@ public sealed class GptFormatHandler : IFormatHandler, IFormatProbeHints
         return false;
     }
 
-    /// <summary>
-    /// Determines whether the file carries a GPT header at a candidate block alignment.
-    /// <para>判断文件是否在候选块对齐处携带 GPT 头部。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Candidate disk image; only the first byte of each candidate header block is probed for the
-    /// <c>EFI PART</c> signature. GPT headers do not store the logical block size, so the probe tries
-    /// the conventional 512-byte alignment first and then 4Kn-style alignments.
-    /// <para>候选磁盘镜像；仅在各候选头部块的首字节探测 <c>EFI PART</c> 签名。GPT 头部不存储逻辑块大小，
-    /// 因此先按常见的 512 字节对齐探测，再尝试 4Kn 类对齐。</para></param>
-    /// <returns><see langword="true"/> when a signature matches at any probed offset;
-    /// <see langword="false"/> for blank, missing or unreadable files (all I/O errors are swallowed).
+    /// <summary>Determines whether the file carries a GPT header at a candidate block alignment.
+    /// <para>判断文件是否在候选块对齐处携带 GPT 头部。</para></summary>
+    /// <param name="filePath">Candidate disk image; only the first byte of each candidate header block is probed for the <c>EFI PART</c> signature. GPT headers do not store the logical block size, so the probe tries the conventional 512-byte alignment first and then 4Kn-style alignments.
+    /// <para>候选磁盘镜像；仅在各候选头部块的首字节探测 <c>EFI PART</c> 签名。GPT 头部不存储逻辑块大小， 因此先按常见的 512 字节对齐探测，再尝试 4Kn 类对齐。</para></param>
+    /// <returns><see langword="true"/> when a signature matches at any probed offset; <see langword="false"/> for blank, missing or unreadable files (all I/O errors are swallowed).
     /// <para>任一探测偏移命中签名时为 <see langword="true"/>；空白、缺失或不可读文件为 <see langword="false"/>（吞掉所有 I/O 错误）。</para></returns>
     public bool CanHandle(string filePath)
     {
@@ -70,23 +63,15 @@ public sealed class GptFormatHandler : IFormatHandler, IFormatProbeHints
         return false;
     }
 
-    /// <summary>
-    /// Reads and validates the GPT pair and reports the partition map.
-    /// <para>读取并校验 GPT 主备对，并报告分区映射。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Disk image file; the block size is detected from the header position and the block count is
-    /// derived from the file length, so a trailing partial block is ignored.
+    /// <summary>Reads and validates the GPT pair and reports the partition map.
+    /// <para>读取并校验 GPT 主备对，并报告分区映射。</para></summary>
+    /// <param name="filePath">Disk image file; the block size is detected from the header position and the block count is derived from the file length, so a trailing partial block is ignored.
     /// <para>磁盘镜像文件；块大小由头部位置探测得出，块数量由文件长度推导，因此尾部不完整块会被忽略。</para></param>
-    /// <param name="cancellationToken">
-    /// Checked between the bounded metadata reads.
+    /// <param name="cancellationToken">Checked between the bounded metadata reads.
     /// <para>在各次有界元数据读取之间检查。</para></param>
-    /// <returns>
-    /// Success result with one entry per partition and the layout metadata, or a failure result
-    /// carrying the validation message when no GPT pair validates.
+    /// <returns>Success result with one entry per partition and the layout metadata, or a failure result carrying the validation message when no GPT pair validates.
     /// <para>成功结果按分区各列一条条目并携带布局元数据；主备对无法校验时返回携带校验信息的失败结果。</para></returns>
-    /// <exception cref="OperationCanceledException">
-    /// Cancellation was requested during the read.
+    /// <exception cref="OperationCanceledException">Cancellation was requested during the read.
     /// <para>读取过程中请求了取消。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -110,31 +95,19 @@ public sealed class GptFormatHandler : IFormatHandler, IFormatProbeHints
         }
     }
 
-    /// <summary>
-    /// Publishes the partition-entry manifest as a tab-separated <c>gpt-partitions.tsv</c> file in the
-    /// output directory. Partition payloads are not carved; use the filesystem handlers on the raw
-    /// partition ranges for content extraction, and <c>GptTableWriter</c> to write tables.
-    /// <para>在输出目录发布以制表符分隔的分区条目清单 <c>gpt-partitions.tsv</c>。不切除分区数据；内容提取请对原始分区
-    /// 范围使用文件系统处理器，写入表请使用 <c>GptTableWriter</c>。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Disk image file whose GPT pair must validate.
+    /// <summary>Publishes the partition-entry manifest as a tab-separated <c>gpt-partitions.tsv</c> file in the output directory. Partition payloads are not carved; use the filesystem handlers on the raw partition ranges for content extraction, and <c>GptTableWriter</c> to write tables.
+    /// <para>在输出目录发布以制表符分隔的分区条目清单 <c>gpt-partitions.tsv</c>。不切除分区数据；内容提取请对原始分区 范围使用文件系统处理器，写入表请使用 <c>GptTableWriter</c>。</para></summary>
+    /// <param name="filePath">Disk image file whose GPT pair must validate.
     /// <para>GPT 主备对必须校验通过的磁盘镜像文件。</para></param>
-    /// <param name="outputDirectory">
-    /// Created on demand; receives the manifest via a temporary publication file.
+    /// <param name="outputDirectory">Created on demand; receives the manifest via a temporary publication file.
     /// <para>按需创建；经临时发布文件接收清单。</para></param>
-    /// <param name="options">
-    /// Unpack options; <c>Overwrite</c> defaults to enabled and is the only option honoured here. May be <see langword="null"/>.
+    /// <param name="options">Unpack options; <c>Overwrite</c> defaults to enabled and is the only option honoured here. May be <see langword="null"/>.
     /// <para>解包选项；<c>Overwrite</c> 默认开启且是此处唯一生效的选项。可为 <see langword="null"/>。</para></param>
-    /// <param name="cancellationToken">
-    /// Checked before reading and while emitting manifest lines; cancellation is rethrown and leaves the
-    /// destination untouched.
+    /// <param name="cancellationToken">Checked before reading and while emitting manifest lines; cancellation is rethrown and leaves the destination untouched.
     /// <para>读取前与生成清单行时检查；取消会重新抛出且不改动目标。</para></param>
-    /// <returns>
-    /// Success result naming the manifest, or a failure result for images without a valid GPT pair.
+    /// <returns>Success result naming the manifest, or a failure result for images without a valid GPT pair.
     /// <para>成功结果指明清单文件；不含有效 GPT 主备对的镜像返回失败结果。</para></returns>
-    /// <exception cref="OperationCanceledException">
-    /// Cancellation was requested before or during the read.
+    /// <exception cref="OperationCanceledException">Cancellation was requested before or during the read.
     /// <para>读取之前或过程中请求了取消。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory,
         UnpackOptions? options = null, CancellationToken cancellationToken = default)
@@ -172,32 +145,18 @@ public sealed class GptFormatHandler : IFormatHandler, IFormatProbeHints
         }
     }
 
-    /// <summary>
-    /// Republishes the image with both GPT header copies and both entry arrays rewritten from the validated
-    /// table; partition payload bytes are copied untouched.
-    /// <para>按已校验的表重写 GPT 的主备头部与两份条目数组后重新发布镜像；分区数据字节原样复制。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Source disk image whose GPT pair must validate.
-    /// <para>源磁盘镜像，其 GPT 主备对必须能通过校验。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination image path, published atomically through a temporary file.
-    /// <para>发布后的目标镜像路径，经临时文件原子写入。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked while reading the table and during the image copy.
-    /// <para>在读取表与复制镜像期间持续检查。</para>
-    /// </param>
-    /// <returns>
-    /// Success result naming the published image and the restored entry count; a failure result when the
-    /// table does not validate or its capacity differs from the image length.
-    /// <para>成功结果说明发布的镜像与恢复的条目数；表无法校验或容量与镜像不符时返回失败结果。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// Cancellation requested during publication; rethrown so the destination stays untouched.
-    /// <para>取消在发布过程中被请求；该异常重新抛出且不改动目标。</para>
-    /// </exception>
+    /// <summary>Republishes the image with both GPT header copies and both entry arrays rewritten from the validated table; partition payload bytes are copied untouched.
+    /// <para>按已校验的表重写 GPT 的主备头部与两份条目数组后重新发布镜像；分区数据字节原样复制。</para></summary>
+    /// <param name="inputPath">Source disk image whose GPT pair must validate.
+    /// <para>源磁盘镜像，其 GPT 主备对必须能通过校验。</para></param>
+    /// <param name="outputPath">Destination image path, published atomically through a temporary file.
+    /// <para>发布后的目标镜像路径，经临时文件原子写入。</para></param>
+    /// <param name="cancellationToken">Checked while reading the table and during the image copy.
+    /// <para>在读取表与复制镜像期间持续检查。</para></param>
+    /// <returns>Success result naming the published image and the restored entry count; a failure result when the table does not validate or its capacity differs from the image length.
+    /// <para>成功结果说明发布的镜像与恢复的条目数；表无法校验或容量与镜像不符时返回失败结果。</para></returns>
+    /// <exception cref="OperationCanceledException">Cancellation requested during publication; rethrown so the destination stays untouched.
+    /// <para>取消在发布过程中被请求；该异常重新抛出且不改动目标。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath,
         CancellationToken cancellationToken = default)
     {

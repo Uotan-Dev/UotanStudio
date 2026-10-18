@@ -36,24 +36,17 @@ public enum BootImageRole
 /// </remarks>
 internal static class BootImageRoleResolver
 {
-    /// <summary>
-    /// Detects the role of a boot image.
-    /// <para>检测 Boot 镜像的角色。</para>
-    /// </summary>
+    /// <summary>Detects the role of a boot image.<para>检测 Boot 镜像的角色。</para></summary>
     /// <param name="version">Header version of the image as parsed or to be packed.
     /// <para>已解析或即将打包镜像的头部版本。</para></param>
     /// <param name="kernelSize">Declared or actual kernel segment size in bytes.
     /// <para>声明或实际的 kernel 区段字节大小。</para></param>
     /// <param name="ramdiskSize">Declared or actual ramdisk segment size in bytes.
     /// <para>声明或实际的 ramdisk 区段字节大小。</para></param>
-    /// <param name="partitionName">Partition-name hint (for example the unpacked source file name without its
-    /// extension); <see langword="null"/> or an unrecognized name disables the hint path.
+    /// <param name="partitionName">Partition-name hint (for example the unpacked source file name without its extension); <see langword="null"/> or an unrecognized name disables the hint path.
     /// <para>分区名提示（例如去扩展名的解包源文件名）；为 <see langword="null"/> 或无法识别时禁用提示路径。</para></param>
-    /// <returns><see cref="BootImageRole.InitBoot"/> for an <c>init_boot</c> hint or for a version 4 image with an
-    /// empty kernel and a non-empty ramdisk; <see cref="BootImageRole.Recovery"/> for a <c>recovery</c> hint;
-    /// otherwise <see cref="BootImageRole.Boot"/>.
-    /// <para><c>init_boot</c> 提示，或版本 4 且 kernel 为空、ramdisk 非空时返回 <see cref="BootImageRole.InitBoot"/>；
-    /// <c>recovery</c> 提示时返回 <see cref="BootImageRole.Recovery"/>；其余返回 <see cref="BootImageRole.Boot"/>。</para></returns>
+    /// <returns><see cref="BootImageRole.InitBoot"/> for an <c>init_boot</c> hint or for a version 4 image with an empty kernel and a non-empty ramdisk; <see cref="BootImageRole.Recovery"/> for a <c>recovery</c> hint; otherwise <see cref="BootImageRole.Boot"/>.
+    /// <para><c>init_boot</c> 提示，或版本 4 且 kernel 为空、ramdisk 非空时返回 <see cref="BootImageRole.InitBoot"/>； <c>recovery</c> 提示时返回 <see cref="BootImageRole.Recovery"/>；其余返回 <see cref="BootImageRole.Boot"/>。</para></returns>
     public static BootImageRole Detect(BootImageVersion version, uint kernelSize, uint ramdiskSize, string? partitionName = null)
     {
         foreach (var candidate in Candidates(partitionName))

@@ -118,26 +118,12 @@ public partial class FileManagerEntryViewModel : ObservableObject
     /// </summary>
     [ObservableProperty] private bool _isSelected;
 
-    /// <summary>
-    /// Creates a filesystem tree entry.
-    /// <para>创建文件系统树条目。</para>
-    /// </summary>
-    /// <param name="name">
-    /// The display name.
-    /// <para>显示名称。</para>
-    /// </param>
-    /// <param name="path">
-    /// The relative path inside the image ('/' separated).
-    /// <para>镜像内相对路径（'/' 分隔）。</para>
-    /// </param>
-    /// <param name="size">
-    /// The entry size in bytes.
-    /// <para>条目大小（字节）。</para>
-    /// </param>
-    /// <param name="kind">
-    /// The entry kind.
-    /// <para>条目类型。</para>
-    /// </param>
+    /// <summary>Creates a filesystem tree entry.<para>创建文件系统树条目。</para></summary>
+    /// <param name="name">The display name.<para>显示名称。</para></param>
+    /// <param name="path">The relative path inside the image ('/' separated).
+    /// <para>镜像内相对路径（'/' 分隔）。</para></param>
+    /// <param name="size">The entry size in bytes.<para>条目大小（字节）。</para></param>
+    /// <param name="kind">The entry kind.<para>条目类型。</para></param>
     public FileManagerEntryViewModel(string name, string path, long size, FileEntryKind kind)
     {
         Name = name;

@@ -15,18 +15,11 @@ internal static class Lz4Compressor
     private const int BlockChunkSize = 0x10000;
 
 
-    /// <summary>
-    /// Standard LZ4 frame compression.
-    /// <para>标准 LZ4 帧压缩。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext compressed in one pass.
-    /// <para>一次性压缩的明文字节。</para></param>
-    /// <param name="options">
-    /// Only <see cref="CompressionOptions.Level"/> is read and clamped into the LZ4 0-12 range, 0 (fast) when unset; the other members are ignored and the data is not chunked.
+    /// <summary>Standard LZ4 frame compression.<para>标准 LZ4 帧压缩。</para></summary>
+    /// <param name="data">Plaintext compressed in one pass.<para>一次性压缩的明文字节。</para></param>
+    /// <param name="options">Only <see cref="CompressionOptions.Level"/> is read and clamped into the LZ4 0-12 range, 0 (fast) when unset; the other members are ignored and the data is not chunked.
     /// <para>仅读取 <see cref="CompressionOptions.Level"/> 并夹取到 LZ4 的 0-12 范围，未设置时为 0（快速）；其他成员被忽略，数据也不分块。</para></param>
-    /// <returns>
-    /// A complete LZ4 frame, from the <c>04 22 4D 18</c> magic through the end marker.
+    /// <returns>A complete LZ4 frame, from the <c>04 22 4D 18</c> magic through the end marker.
     /// <para>完整的 LZ4 帧，从 <c>04 22 4D 18</c> 魔数直到结束标记。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
@@ -56,16 +49,10 @@ internal static class Lz4Compressor
         }
     }
 
-    /// <summary>
-    /// Standard LZ4 frame decompression.
-    /// <para>标准 LZ4 帧解压。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete LZ4 frame, treated as untrusted input; the whole expansion is buffered in memory with no output cap.
+    /// <summary>Standard LZ4 frame decompression.<para>标准 LZ4 帧解压。</para></summary>
+    /// <param name="data">Complete LZ4 frame, treated as untrusted input; the whole expansion is buffered in memory with no output cap.
     /// <para>完整的 LZ4 帧，按不可信输入处理；解压结果整体驻留内存且没有上限。</para></param>
-    /// <returns>
-    /// The decoded bytes of the frame.
-    /// <para>该帧解码后的字节。</para></returns>
+    /// <returns>The decoded bytes of the frame.<para>该帧解码后的字节。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="CompressionException">The frame magic, descriptor, block data or content checksum is invalid, or the frame is truncated.
@@ -91,18 +78,12 @@ internal static class Lz4Compressor
         }
     }
 
-    /// <summary>
-    /// Streaming standard LZ4 frame compression.
-    /// <para>流式标准 LZ4 帧压缩。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable source copied into the frame encoder in fixed buffers until end of stream; ownership stays with the caller.
+    /// <summary>Streaming standard LZ4 frame compression.<para>流式标准 LZ4 帧压缩。</para></summary>
+    /// <param name="input">Readable source copied into the frame encoder in fixed buffers until end of stream; ownership stays with the caller.
     /// <para>按固定缓冲逐块拷入帧编码器的可读源流，直至流末尾；所有权归调用方。</para></param>
-    /// <param name="output">
-    /// Writable destination left open after the frame end marker is written; the frame starts at its current position.
+    /// <param name="output">Writable destination left open after the frame end marker is written; the frame starts at its current position.
     /// <para>写出帧结束标记后保持打开的写入目标；帧数据从其当前位置开始。</para></param>
-    /// <param name="options">
-    /// Only <see cref="CompressionOptions.Level"/> is read and clamped into the LZ4 0-12 range, 0 (fast) when unset.
+    /// <param name="options">Only <see cref="CompressionOptions.Level"/> is read and clamped into the LZ4 0-12 range, 0 (fast) when unset.
     /// <para>仅读取 <see cref="CompressionOptions.Level"/> 并夹取到 LZ4 的 0-12 范围，未设置时为 0（快速）。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -144,15 +125,10 @@ internal static class Lz4Compressor
     internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
         => LZ4Stream.Encode(new NonDisposingStream(output), ToLz4Level(options?.Level), leaveOpen: true);
 
-    /// <summary>
-    /// Streaming standard LZ4 frame decompression.
-    /// <para>流式标准 LZ4 帧解压。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable LZ4 frame consumed block by block; the stream is left open at the offset the frame ended at, so a concatenated payload continues from there.
+    /// <summary>Streaming standard LZ4 frame decompression.<para>流式标准 LZ4 帧解压。</para></summary>
+    /// <param name="input">Readable LZ4 frame consumed block by block; the stream is left open at the offset the frame ended at, so a concatenated payload continues from there.
     /// <para>逐块读取的可读 LZ4 帧；流保持打开，并停在当前帧结束的位置，串接的数据可从该处继续。</para></param>
-    /// <param name="output">
-    /// Writable destination with no size cap, so an oversized payload is written out in full; it is not closed.
+    /// <param name="output">Writable destination with no size cap, so an oversized payload is written out in full; it is not closed.
     /// <para>不设上限的写入目标，因此过大的数据会被完整写出；不会被本调用关闭。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -192,18 +168,13 @@ internal static class Lz4Compressor
     internal static Stream CreateDecompressionStream(Stream input)
         => LZ4Stream.Decode(new NonDisposingStream(input), leaveOpen: true);
 
-    /// <summary>
-    /// Streaming standard LZ4 frame decompression with output limit (decompression bomb protection).
-    /// <para>流式标准 LZ4 帧解压，带输出上限（防解压炸弹）。</para>
-    /// </summary>
-    /// <param name="source">
-    /// Readable LZ4 frame decoded through an 80 KiB pooled buffer; the stream is left open.
+    /// <summary>Streaming standard LZ4 frame decompression with output limit (decompression bomb protection).
+    /// <para>流式标准 LZ4 帧解压，带输出上限（防解压炸弹）。</para></summary>
+    /// <param name="source">Readable LZ4 frame decoded through an 80 KiB pooled buffer; the stream is left open.
     /// <para>可读的 LZ4 帧，使用 80 KiB 池化缓冲逐块解码；流保持打开。</para></param>
-    /// <param name="destination">
-    /// Writable destination; the cumulative check runs before each write, so bytes beyond the budget never reach it.
+    /// <param name="destination">Writable destination; the cumulative check runs before each write, so bytes beyond the budget never reach it.
     /// <para>写入目标；每次写入前先检查累计字节数，超出预算的字节不会落入该流。</para></param>
-    /// <param name="maxOutputBytes">
-    /// Inclusive cap on the decoded total; <c>0</c> allows an empty result only.
+    /// <param name="maxOutputBytes">Inclusive cap on the decoded total; <c>0</c> allows an empty result only.
     /// <para>解压总量的含上限；<c>0</c> 表示只允许空结果。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="destination"/> is <see langword="null"/>.
     /// <para><paramref name="source"/> 或 <paramref name="destination"/> 为 <see langword="null"/>。</para></exception>
@@ -264,18 +235,13 @@ internal static class Lz4Compressor
     }
 
 
-    /// <summary>
-    /// LZ4 legacy compression (0x02 0x21 0x4C 0x18 magic + 4-byte block length prefixes).
-    /// <para>LZ4 传统格式压缩（0x02 0x21 0x4C 0x18 魔数 + 4 字节块长前缀）。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext compressed in one pass; an empty array yields the magic alone.
+    /// <summary>LZ4 legacy compression (0x02 0x21 0x4C 0x18 magic + 4-byte block length prefixes).
+    /// <para>LZ4 传统格式压缩（0x02 0x21 0x4C 0x18 魔数 + 4 字节块长前缀）。</para></summary>
+    /// <param name="data">Plaintext compressed in one pass; an empty array yields the magic alone.
     /// <para>一次性压缩的明文字节；空数组只产生魔数。</para></param>
-    /// <param name="options">
-    /// <see cref="CompressionOptions.Level"/> is clamped into the LZ4 0-12 range, 0 (fast) when unset; <see cref="CompressionOptions.MaxDegreeOfParallelism"/> bounds how many 64 KiB blocks the pipeline encodes concurrently and leaves the bytes unchanged.
+    /// <param name="options"><see cref="CompressionOptions.Level"/> is clamped into the LZ4 0-12 range, 0 (fast) when unset; <see cref="CompressionOptions.MaxDegreeOfParallelism"/> bounds how many 64 KiB blocks the pipeline encodes concurrently and leaves the bytes unchanged.
     /// <para><see cref="CompressionOptions.Level"/> 夹取到 LZ4 的 0-12 范围，未设置时为 0（快速）；<see cref="CompressionOptions.MaxDegreeOfParallelism"/> 限制流水线并发压缩的 64 KiB 块数量，输出字节保持不变。</para></param>
-    /// <returns>
-    /// The legacy block frame, whose blocks carry no checksum and no end marker.
+    /// <returns>The legacy block frame, whose blocks carry no checksum and no end marker.
     /// <para>传统块帧；其块不带校验和，也没有结束标记。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
@@ -304,18 +270,13 @@ internal static class Lz4Compressor
         }
     }
 
-    /// <summary>
-    /// Streaming LZ4 legacy compression: reads 64 KiB chunks, compresses and writes them in a bounded-memory pipeline directly to the output stream.
-    /// <para>流式 LZ4 传统格式压缩：按 64 KiB 块边读边压（有界内存），直接写入输出流。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable source drained in 64 KiB blocks until end of stream; ownership stays with the caller.
+    /// <summary>Streaming LZ4 legacy compression: reads 64 KiB chunks, compresses and writes them in a bounded-memory pipeline directly to the output stream.
+    /// <para>流式 LZ4 传统格式压缩：按 64 KiB 块边读边压（有界内存），直接写入输出流。</para></summary>
+    /// <param name="input">Readable source drained in 64 KiB blocks until end of stream; ownership stays with the caller.
     /// <para>按 64 KiB 块读取直至流末尾的可读源流；所有权归调用方。</para></param>
-    /// <param name="output">
-    /// Writable destination receiving the magic and then, per block, a little-endian 4-byte compressed length and the encoded bytes; it is never closed here.
+    /// <param name="output">Writable destination receiving the magic and then, per block, a little-endian 4-byte compressed length and the encoded bytes; it is never closed here.
     /// <para>写入目标：先写魔数，随后每块写入小端 4 字节压缩长度和编码字节；本调用不会关闭该流。</para></param>
-    /// <param name="options">
-    /// <see cref="CompressionOptions.Level"/> is clamped into the LZ4 0-12 range, 0 (fast) when unset; <see cref="CompressionOptions.MaxDegreeOfParallelism"/> above 1 lets that many blocks be read and encoded concurrently, and blocks are still written in input order, byte-identical to the sequential run.
+    /// <param name="options"><see cref="CompressionOptions.Level"/> is clamped into the LZ4 0-12 range, 0 (fast) when unset; <see cref="CompressionOptions.MaxDegreeOfParallelism"/> above 1 lets that many blocks be read and encoded concurrently, and blocks are still written in input order, byte-identical to the sequential run.
     /// <para><see cref="CompressionOptions.Level"/> 夹取到 LZ4 的 0-12 范围，未设置时为 0（快速）；<see cref="CompressionOptions.MaxDegreeOfParallelism"/> 大于 1 时允许并发读取并编码相应数量的块，块仍按输入顺序写出，与串行结果逐字节一致。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -347,15 +308,10 @@ internal static class Lz4Compressor
         }
     }
 
-    /// <summary>
-    /// LZ4 legacy decompression.
-    /// <para>LZ4 传统格式解压。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete legacy payload, treated as untrusted input; the whole expansion is buffered in memory.
+    /// <summary>LZ4 legacy decompression.<para>LZ4 传统格式解压。</para></summary>
+    /// <param name="data">Complete legacy payload, treated as untrusted input; the whole expansion is buffered in memory.
     /// <para>完整的传统格式数据，按不可信输入处理；解压结果整体驻留内存。</para></param>
-    /// <returns>
-    /// The decoded bytes of every block up to the end of the payload.
+    /// <returns>The decoded bytes of every block up to the end of the payload.
     /// <para>直到数据末尾各块解码后的字节。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
@@ -384,15 +340,11 @@ internal static class Lz4Compressor
         }
     }
 
-    /// <summary>
-    /// Streaming LZ4 legacy decompression: reads and decodes block by block (bounded memory), writing directly to the output stream.
-    /// <para>流式 LZ4 传统格式解压：按块读取并解码（有界内存），直接写入输出流。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable legacy payload positioned at its magic; blocks are read one at a time, so the caller owns the stream and it is not closed. A length header read as zero bytes ends the payload cleanly, a partially readable header ends it as an error.
+    /// <summary>Streaming LZ4 legacy decompression: reads and decodes block by block (bounded memory), writing directly to the output stream.
+    /// <para>流式 LZ4 传统格式解压：按块读取并解码（有界内存），直接写入输出流。</para></summary>
+    /// <param name="input">Readable legacy payload positioned at its magic; blocks are read one at a time, so the caller owns the stream and it is not closed. A length header read as zero bytes ends the payload cleanly, a partially readable header ends it as an error.
     /// <para>定位在魔数处的可读传统格式数据；逐块读取，流由调用方持有且不会关闭。长度头读到 0 字节表示数据正常结束，只能读到不完整的头则按错误处理。</para></param>
-    /// <param name="output">
-    /// Writable destination fed block by block; decoded bytes are written as soon as each block is valid, so a late failure leaves the earlier blocks in place. There is no cap on the total output, only the 8 MiB per-block bound.
+    /// <param name="output">Writable destination fed block by block; decoded bytes are written as soon as each block is valid, so a late failure leaves the earlier blocks in place. There is no cap on the total output, only the 8 MiB per-block bound.
     /// <para>逐块写入的目标；每块通过校验后立即写出，因此后续块失败时前面的块已保留。总输出没有上限，仅有 8 MiB 的单块上限。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>

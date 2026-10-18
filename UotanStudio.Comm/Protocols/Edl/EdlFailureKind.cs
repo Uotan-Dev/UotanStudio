@@ -129,23 +129,15 @@ public static class EdlFailureClassification
         };
     }
 
-    /// <summary>
-    /// Classifies a failure observed around a raw transfer command.
-    /// <para>对围绕原始传输命令观测到的失败进行分类。</para>
-    /// </summary>
-    /// <param name="error">The observed exception. <para>观测到的异常。</para></param>
-    /// <param name="transferStarted">Whether the device had entered raw mode and any payload bytes
-    /// may have reached it. <para>设备是否已进入原始模式、是否可能有载荷字节已到达。</para></param>
-    /// <param name="payloadSent">Whether the complete payload was written to the device. <para>完整载荷是否已写入设备。</para></param>
-    /// <returns>
-    /// <see cref="EdlFailureKind.CompletionLost"/> when a complete payload waited in vain for the
-    /// final acknowledgement, <see cref="EdlFailureKind.CancelledAfterTransfer"/> for cancellation
-    /// once raw transfer had begun, <see cref="EdlFailureKind.ExecutionUnknown"/> for other failures
-    /// after raw transfer began, and the plain classification otherwise.
-    /// <para>完整载荷等待最终确认失败时返回 <see cref="EdlFailureKind.CompletionLost"/>；原始传输
-    /// 开始后取消返回 <see cref="EdlFailureKind.CancelledAfterTransfer"/>；原始传输开始后的其他失败
-    /// 返回 <see cref="EdlFailureKind.ExecutionUnknown"/>；其余按普通分类。</para>
-    /// </returns>
+    /// <summary>Classifies a failure observed around a raw transfer command.
+    /// <para>对围绕原始传输命令观测到的失败进行分类。</para></summary>
+    /// <param name="error">The observed exception.<para>观测到的异常。</para></param>
+    /// <param name="transferStarted">Whether the device had entered raw mode and any payload bytes may have reached it.
+    /// <para>设备是否已进入原始模式、是否可能有载荷字节已到达。</para></param>
+    /// <param name="payloadSent">Whether the complete payload was written to the device.
+    /// <para>完整载荷是否已写入设备。</para></param>
+    /// <returns><see cref="EdlFailureKind.CompletionLost"/> when a complete payload waited in vain for the final acknowledgement, <see cref="EdlFailureKind.CancelledAfterTransfer"/> for cancellation once raw transfer had begun, <see cref="EdlFailureKind.ExecutionUnknown"/> for other failures after raw transfer began, and the plain classification otherwise.
+    /// <para>完整载荷等待最终确认失败时返回 <see cref="EdlFailureKind.CompletionLost"/>；原始传输 开始后取消返回 <see cref="EdlFailureKind.CancelledAfterTransfer"/>；原始传输开始后的其他失败 返回 <see cref="EdlFailureKind.ExecutionUnknown"/>；其余按普通分类。</para></returns>
     public static EdlFailureKind ClassifyTransfer(Exception error, bool transferStarted, bool payloadSent)
     {
         if (payloadSent)

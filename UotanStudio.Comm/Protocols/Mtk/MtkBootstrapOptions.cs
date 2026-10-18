@@ -205,35 +205,21 @@ public record MtkBootstrapOptions
     /// </value>
     public int SlaTimeoutMs { get; init; } = 60000;
 
-    /// <summary>
-    /// Builds startup options from an evaluated loader profile selection, carrying the entry and region indices decided by hardware identity. The selection must be a single match; companion resources are added by the caller with collection expressions.
-    /// <para>由已评估的 loader 配置文件选择构建启动选项，携带按硬件身份确定的入口与区域索引。选择必须唯一匹配；伴随资源由调用方以集合表达式添加。</para>
-    /// </summary>
-    /// <param name="profile">
-    /// The parsed, hashed loader profile the selection was evaluated against.
-    /// <para>评估该选择时所依据的、已解析并哈希的加载器配置。</para>
-    /// </param>
-    /// <param name="selection">
-    /// The evaluated selection; must report <see cref="MtkProfileDecision.SingleMatch"/>.
-    /// <para>已评估的选择结果；必须报告 <see cref="MtkProfileDecision.SingleMatch"/>。</para>
-    /// </param>
-    /// <param name="storageKind">
-    /// The explicitly selected storage family. <para>显式选定的存储家族。</para>
-    /// </param>
-    /// <param name="identityMatch">
-    /// The revision policy that produced the selection. <para>产生该选择的版本策略。</para>
-    /// </param>
-    /// <returns>
-    /// Options wired to the selected entry and validated region pair.
-    /// <para>已接到所选条目与经校验区域配对的选项。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="profile"/> or <paramref name="selection"/> is null.
-    /// <para><paramref name="profile"/> 或 <paramref name="selection"/> 为 null。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The selection is not a single match. <para>选择结果不是唯一匹配。</para>
-    /// </exception>
+    /// <summary>Builds startup options from an evaluated loader profile selection, carrying the entry and region indices decided by hardware identity. The selection must be a single match; companion resources are added by the caller with collection expressions.
+    /// <para>由已评估的 loader 配置文件选择构建启动选项，携带按硬件身份确定的入口与区域索引。选择必须唯一匹配；伴随资源由调用方以集合表达式添加。</para></summary>
+    /// <param name="profile">The parsed, hashed loader profile the selection was evaluated against.
+    /// <para>评估该选择时所依据的、已解析并哈希的加载器配置。</para></param>
+    /// <param name="selection">The evaluated selection; must report <see cref="MtkProfileDecision.SingleMatch"/>.
+    /// <para>已评估的选择结果；必须报告 <see cref="MtkProfileDecision.SingleMatch"/>。</para></param>
+    /// <param name="storageKind">The explicitly selected storage family.<para>显式选定的存储家族。</para></param>
+    /// <param name="identityMatch">The revision policy that produced the selection.
+    /// <para>产生该选择的版本策略。</para></param>
+    /// <returns>Options wired to the selected entry and validated region pair.
+    /// <para>已接到所选条目与经校验区域配对的选项。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="profile"/> or <paramref name="selection"/> is null.
+    /// <para><paramref name="profile"/> 或 <paramref name="selection"/> 为 null。</para></exception>
+    /// <exception cref="InvalidOperationException">The selection is not a single match.
+    /// <para>选择结果不是唯一匹配。</para></exception>
     public static MtkBootstrapOptions From(MtkLoaderProfile profile, MtkProfileSelection selection,
         MtkXFlashStorageKind storageKind, MtkDaIdentityMatch identityMatch = MtkDaIdentityMatch.Exact)
     {

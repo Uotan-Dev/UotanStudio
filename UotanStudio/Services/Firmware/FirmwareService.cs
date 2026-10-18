@@ -453,21 +453,20 @@ public sealed class FirmwareService
         }
     }
 
-    /// <summary>
-    /// Signs an APK with user-provided key material (v1/v2/v3). The input file is not modified.
-    /// <para>使用用户提供的密钥材料签署 APK（v1/v2/v3）。不修改输入文件。</para>
-    /// </summary>
-    /// <param name="inputApk">Input APK path. <para>输入 APK 路径。</para></param>
-    /// <param name="outputApk">Output signed APK path. <para>输出已签名 APK 路径。</para></param>
-    /// <param name="keyPath">Private key file (PKCS#8/PKCS#1, PEM or DER). <para>私钥文件（PKCS#8/PKCS#1，PEM 或 DER）。</para></param>
-    /// <param name="certPath">Certificate file (PEM/DER/PFX). <para>证书文件（PEM/DER/PFX）。</para></param>
-    /// <param name="keyPassword">Optional private key password. <para>可选私钥密码。</para></param>
-    /// <param name="certPassword">Optional certificate (PFX) password. <para>可选证书（PFX）密码。</para></param>
-    /// <param name="enableV1">Enable JAR signature. <para>启用 JAR 签名。</para></param>
-    /// <param name="enableV2">Enable scheme v2. <para>启用 v2 方案。</para></param>
-    /// <param name="enableV3">Enable scheme v3. <para>启用 v3 方案。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>Operation result. <para>操作结果。</para></returns>
+    /// <summary>Signs an APK with user-provided key material (v1/v2/v3). The input file is not modified.
+    /// <para>使用用户提供的密钥材料签署 APK（v1/v2/v3）。不修改输入文件。</para></summary>
+    /// <param name="inputApk">Input APK path.<para>输入 APK 路径。</para></param>
+    /// <param name="outputApk">Output signed APK path.<para>输出已签名 APK 路径。</para></param>
+    /// <param name="keyPath">Private key file (PKCS#8/PKCS#1, PEM or DER).
+    /// <para>私钥文件（PKCS#8/PKCS#1，PEM 或 DER）。</para></param>
+    /// <param name="certPath">Certificate file (PEM/DER/PFX).<para>证书文件（PEM/DER/PFX）。</para></param>
+    /// <param name="keyPassword">Optional private key password.<para>可选私钥密码。</para></param>
+    /// <param name="certPassword">Optional certificate (PFX) password.<para>可选证书（PFX）密码。</para></param>
+    /// <param name="enableV1">Enable JAR signature.<para>启用 JAR 签名。</para></param>
+    /// <param name="enableV2">Enable scheme v2.<para>启用 v2 方案。</para></param>
+    /// <param name="enableV3">Enable scheme v3.<para>启用 v3 方案。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>Operation result.<para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> SignApkAsync(
         string inputApk,
         string outputApk,
@@ -517,10 +516,8 @@ public sealed class FirmwareService
         }
     }
 
-    /// <summary>
-    /// Generates a fresh APK signing key pair and self-signed certificate, round-trip verified before commit.
-    /// <para>生成全新的 APK 签名密钥对与自签证书，提交前先经回环自检。</para>
-    /// </summary>
+    /// <summary>Generates a fresh APK signing key pair and self-signed certificate, round-trip verified before commit.
+    /// <para>生成全新的 APK 签名密钥对与自签证书，提交前先经回环自检。</para></summary>
     /// <param name="options">Generation options (key type, subject, validity, password).
     /// <para>生成选项（密钥类型、主题、有效期、密码）。</para></param>
     /// <param name="outputDirectory">Target directory for the generated files.
@@ -529,8 +526,8 @@ public sealed class FirmwareService
     /// <para>可选的不含扩展名的基础文件名。</para></param>
     /// <param name="exportPfx">Also export a PFX containing the private key.
     /// <para>是否额外导出含私钥的 PFX。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>Paths of the generated files. <para>生成文件的路径。</para></returns>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>Paths of the generated files.<para>生成文件的路径。</para></returns>
     public async Task<ApkSigningKeyFiles> GenerateApkSigningKeyAsync(
         ApkSigningKeyOptions options,
         string outputDirectory,
@@ -960,19 +957,14 @@ public sealed class FirmwareService
         return FirmwareOpResult.From(result);
     }
 
-    /// <summary>
-    /// Converts an image between raw and Android sparse formats (a thin wrapper over
-    /// <see cref="SparseImageConverter"/>): <c>toSparse = true</c> calls <see cref="SparseImageConverter.ConvertRawToSparse(string, string, uint)"/>,
-    /// <c>false</c> calls <see cref="SparseImageConverter.ConvertSparseToRaw(IEnumerable{string}, string)"/>.
-    /// <para>在 raw 与 Android sparse 格式之间转换镜像（<see cref="SparseImageConverter"/> 的薄封装）：
-    /// <c>toSparse = true</c> 调用 <see cref="SparseImageConverter.ConvertRawToSparse(string, string, uint)"/>，
-    /// <c>false</c> 调用 <see cref="SparseImageConverter.ConvertSparseToRaw(IEnumerable{string}, string)"/>。</para>
-    /// </summary>
-    /// <param name="inputPath">The input image file path. <para>输入镜像文件路径。</para></param>
-    /// <param name="outputPath">The output image file path. <para>输出镜像文件路径。</para></param>
-    /// <param name="toSparse">Whether to convert raw to sparse (<c>true</c>) or sparse to raw (<c>false</c>). <para>是否转换为稀疏格式（<c>true</c> 为 raw→sparse，<c>false</c> 为 sparse→raw）。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>Operation result. <para>操作结果。</para></returns>
+    /// <summary>Converts an image between raw and Android sparse formats (a thin wrapper over <see cref="SparseImageConverter"/>): <c>toSparse = true</c> calls <see cref="SparseImageConverter.ConvertRawToSparse(string, string, uint)"/>, <c>false</c> calls <see cref="SparseImageConverter.ConvertSparseToRaw(IEnumerable{string}, string)"/>.
+    /// <para>在 raw 与 Android sparse 格式之间转换镜像（<see cref="SparseImageConverter"/> 的薄封装）： <c>toSparse = true</c> 调用 <see cref="SparseImageConverter.ConvertRawToSparse(string, string, uint)"/>， <c>false</c> 调用 <see cref="SparseImageConverter.ConvertSparseToRaw(IEnumerable{string}, string)"/>。</para></summary>
+    /// <param name="inputPath">The input image file path.<para>输入镜像文件路径。</para></param>
+    /// <param name="outputPath">The output image file path.<para>输出镜像文件路径。</para></param>
+    /// <param name="toSparse">Whether to convert raw to sparse (<c>true</c>) or sparse to raw (<c>false</c>).
+    /// <para>是否转换为稀疏格式（<c>true</c> 为 raw→sparse，<c>false</c> 为 sparse→raw）。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>Operation result.<para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> ConvertSparseAsync(string inputPath, string outputPath, bool toSparse, CancellationToken cancellationToken = default)
     {
         return await Task.Run(() =>
@@ -1373,21 +1365,23 @@ public sealed class FirmwareService
         }
     }
 
-    /// <summary>
-    /// Builds an Android super image from raw or sparse partition images by writing LP metadata and laying out partition data.
-    /// <para>由 raw 或 sparse 分区镜像构建 Android super 镜像，写入 LP 元数据并排布分区数据。</para>
-    /// </summary>
-    /// <param name="partitions">The partitions (name + source image path). <para>分区（名称 + 源镜像路径）。</para></param>
-    /// <param name="outputPath">The output super image path. <para>输出 super 镜像路径。</para></param>
-    /// <param name="deviceSize">The total device (super) size in bytes. <para>设备（super）总大小（字节）。</para></param>
-    /// <param name="groupName">The partition group name. <para>分区组名称。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <param name="metadataSize">The LP metadata area size in bytes. <para>LP 元数据区的字节大小。</para></param>
-    /// <param name="slots">The number of metadata slots. <para>元数据槽位数量。</para></param>
-    /// <param name="blockSize">The block size in bytes. <para>块大小（字节）。</para></param>
-    /// <param name="sparse">Whether to sparsify the produced image. <para>是否将产出镜像转为 sparse 格式。</para></param>
-    /// <param name="virtualAb">Whether to mark the image as virtual A/B. <para>是否将镜像标记为虚拟 A/B。</para></param>
-    /// <returns>Operation result. <para>操作结果。</para></returns>
+    /// <summary>Builds an Android super image from raw or sparse partition images by writing LP metadata and laying out partition data.
+    /// <para>由 raw 或 sparse 分区镜像构建 Android super 镜像，写入 LP 元数据并排布分区数据。</para></summary>
+    /// <param name="partitions">The partitions (name + source image path).
+    /// <para>分区（名称 + 源镜像路径）。</para></param>
+    /// <param name="outputPath">The output super image path.<para>输出 super 镜像路径。</para></param>
+    /// <param name="deviceSize">The total device (super) size in bytes.
+    /// <para>设备（super）总大小（字节）。</para></param>
+    /// <param name="groupName">The partition group name.<para>分区组名称。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <param name="metadataSize">The LP metadata area size in bytes.<para>LP 元数据区的字节大小。</para></param>
+    /// <param name="slots">The number of metadata slots.<para>元数据槽位数量。</para></param>
+    /// <param name="blockSize">The block size in bytes.<para>块大小（字节）。</para></param>
+    /// <param name="sparse">Whether to sparsify the produced image.
+    /// <para>是否将产出镜像转为 sparse 格式。</para></param>
+    /// <param name="virtualAb">Whether to mark the image as virtual A/B.
+    /// <para>是否将镜像标记为虚拟 A/B。</para></param>
+    /// <returns>Operation result.<para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> SynthesizeSuperAsync(
         IReadOnlyList<SuperPartitionInput> partitions,
         string outputPath,

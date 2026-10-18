@@ -161,23 +161,14 @@ public sealed class ScrcpyServerOptions
     /// </value>
     public bool SendStreamMeta { get; init; } = true;
 
-    /// <summary>
-    /// Validates the options and builds the ordered server argument list (args[0] is the version).
-    /// <para>校验选项并构建有序的服务端参数列表（args[0] 为版本号）。</para>
-    /// </summary>
+    /// <summary>Validates the options and builds the ordered server argument list (args[0] is the version).
+    /// <para>校验选项并构建有序的服务端参数列表（args[0] 为版本号）。</para></summary>
     /// <returns>The argument strings, in the order the scrcpy server parses them.
     /// <para>按 scrcpy 服务端解析顺序排列的参数字符串数组。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <see cref="Scid"/> exceeds <see cref="int.MaxValue"/>, or a capture limit
-    /// (<see cref="VideoBitRate"/>, <see cref="AudioBitRate"/>,
-    /// <see cref="MaxFps"/> or <see cref="MaxSize"/>) is out of range.
-    /// <para><see cref="Scid"/> 超过 <see cref="int.MaxValue"/>，或采集上限（<see cref="VideoBitRate"/>、
-    /// <see cref="AudioBitRate"/>、<see cref="MaxFps"/>、<see cref="MaxSize"/>）超出允许范围。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// The codec, encoder name or log level is not one of the supported values.
-    /// <para>编解码器、编码器名称或日志级别不属于支持的取值。</para>
-    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="Scid"/> exceeds <see cref="int.MaxValue"/>, or a capture limit (<see cref="VideoBitRate"/>, <see cref="AudioBitRate"/>, <see cref="MaxFps"/> or <see cref="MaxSize"/>) is out of range.
+    /// <para><see cref="Scid"/> 超过 <see cref="int.MaxValue"/>，或采集上限（<see cref="VideoBitRate"/>、 <see cref="AudioBitRate"/>、<see cref="MaxFps"/>、<see cref="MaxSize"/>）超出允许范围。</para></exception>
+    /// <exception cref="ArgumentException">The codec, encoder name or log level is not one of the supported values.
+    /// <para>编解码器、编码器名称或日志级别不属于支持的取值。</para></exception>
     public string[] BuildArguments()
     {
         if (Scid > int.MaxValue) throw new ArgumentOutOfRangeException(nameof(Scid));
@@ -224,19 +215,13 @@ public sealed class ScrcpyServerOptions
         return BinaryPrimitives.ReadUInt32LittleEndian(bytes) & 0x7fffffff;
     }
 
-    /// <summary>
-    /// Builds the full <c>app_process</c> command line for the shell, appending every validated argument.
-    /// <para>构建 shell 执行的完整 <c>app_process</c> 命令行，逐个追加通过校验的参数。</para>
-    /// </summary>
-    /// <returns>The shell command string. <para>shell 命令字符串。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// An option fails the validation performed by <see cref="BuildArguments"/>.
-    /// <para>某个选项未通过 <see cref="BuildArguments"/> 执行的校验。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// A numeric limit fails the validation performed by <see cref="BuildArguments"/>.
-    /// <para>某个数值上限未通过 <see cref="BuildArguments"/> 执行的校验。</para>
-    /// </exception>
+    /// <summary>Builds the full <c>app_process</c> command line for the shell, appending every validated argument.
+    /// <para>构建 shell 执行的完整 <c>app_process</c> 命令行，逐个追加通过校验的参数。</para></summary>
+    /// <returns>The shell command string.<para>shell 命令字符串。</para></returns>
+    /// <exception cref="ArgumentException">An option fails the validation performed by <see cref="BuildArguments"/>.
+    /// <para>某个选项未通过 <see cref="BuildArguments"/> 执行的校验。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">A numeric limit fails the validation performed by <see cref="BuildArguments"/>.
+    /// <para>某个数值上限未通过 <see cref="BuildArguments"/> 执行的校验。</para></exception>
     public string BuildShellCommand()
     {
         var sb = new StringBuilder();

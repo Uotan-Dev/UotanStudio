@@ -6,29 +6,19 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    /// <summary>
-    /// Reads an aligned physical storage range to a caller-owned stream. The destination may
-    /// contain partial data on failure; callers publishing files must use temporary files.
-    /// NOR ranges smaller than the status-frame width are read through a bounded aligned window.
-    /// <para>将对齐的物理存储范围读取到调用方拥有的流中。失败时目标流可能包含部分
-    /// 数据；发布文件的调用方必须使用临时文件。小于状态帧宽度的 NOR 范围通过有界对齐窗口读取。</para>
-    /// </summary>
-    /// <remarks><see cref="XFlashStorageTransferTimeoutMs"/> bounds the entire cooperative exchange.
-    /// At most 64 consecutive success-status frames may arrive without data.
-    /// <para><see cref="XFlashStorageTransferTimeoutMs"/> 限制整次协作式交换的时间。
-    /// 未收到数据时最多接受连续 64 个成功状态帧。</para></remarks>
+    /// <summary>Reads an aligned physical storage range to a caller-owned stream. The destination may contain partial data on failure; callers publishing files must use temporary files. NOR ranges smaller than the status-frame width are read through a bounded aligned window.
+    /// <para>将对齐的物理存储范围读取到调用方拥有的流中。失败时目标流可能包含部分 数据；发布文件的调用方必须使用临时文件。小于状态帧宽度的 NOR 范围通过有界对齐窗口读取。</para></summary>
+    /// <remarks><see cref="XFlashStorageTransferTimeoutMs"/> bounds the entire cooperative exchange. At most 64 consecutive success-status frames may arrive without data.
+    /// <para><see cref="XFlashStorageTransferTimeoutMs"/> 限制整次协作式交换的时间。 未收到数据时最多接受连续 64 个成功状态帧。</para></remarks>
     /// <param name="partitionId">The discovered XFlash physical partition identifier, not a GPT index.
     /// <para>已发现的 XFlash 物理分区标识符，不是 GPT 索引。</para></param>
     /// <param name="offset">The block-aligned byte offset within the physical partition.
     /// <para>物理分区内按块对齐的字节偏移。</para></param>
-    /// <param name="length">The positive block-aligned byte count.
-    /// <para>正数、按块对齐的字节数。</para></param>
-    /// <param name="destination">A writable stream which remains open.
-    /// <para>保持打开的可写流。</para></param>
+    /// <param name="length">The positive block-aligned byte count.<para>正数、按块对齐的字节数。</para></param>
+    /// <param name="destination">A writable stream which remains open.<para>保持打开的可写流。</para></param>
     /// <param name="progress">Optional cumulative bytes stored and acknowledged.
     /// <para>可选的累计已写入并已确认字节数。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>A task that completes after the final read-completion status is acknowledged.
     /// <para>在最终的读取完成状态被确认后返回的异步任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="destination"/> is null.
@@ -147,26 +137,20 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>
-    /// Writes exactly an aligned byte range from a caller-owned stream. No padding, retry,
-    /// rollback, vendor optional-download action or readback verification is implied.
-    /// <para>从调用方拥有的流精确写入一段对齐的字节范围。不包含填充、重试、回滚、
-    /// 厂商可选下载动作或回读校验等任何隐含行为。</para>
-    /// </summary>
+    /// <summary>Writes exactly an aligned byte range from a caller-owned stream. No padding, retry, rollback, vendor optional-download action or readback verification is implied.
+    /// <para>从调用方拥有的流精确写入一段对齐的字节范围。不包含填充、重试、回滚、 厂商可选下载动作或回读校验等任何隐含行为。</para></summary>
     /// <remarks><see cref="XFlashStorageTransferTimeoutMs"/> includes reading the source and waiting for final confirmation.
     /// <para><see cref="XFlashStorageTransferTimeoutMs"/> 包含读取源流与等待最终确认的时间。</para></remarks>
     /// <param name="partitionId">The discovered XFlash physical partition identifier, excluding RPMB.
     /// <para>已发现的 XFlash 物理分区标识符，不含 RPMB。</para></param>
     /// <param name="offset">The block-aligned byte offset within the physical partition.
     /// <para>物理分区内按块对齐的字节偏移。</para></param>
-    /// <param name="length">The positive block-aligned byte count.
-    /// <para>正数、按块对齐的字节数。</para></param>
+    /// <param name="length">The positive block-aligned byte count.<para>正数、按块对齐的字节数。</para></param>
     /// <param name="source">A readable stream positioned at the first source byte; remains open.
     /// <para>定位在首个源字节处的可读流；保持打开。</para></param>
     /// <param name="progress">Optional cumulative bytes acknowledged by the agent.
     /// <para>可选的累计已被 agent 确认的字节数。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>A task that completes after the write-completion status is acknowledged.
     /// <para>在写入完成状态被确认后返回的异步任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> is null.

@@ -129,22 +129,11 @@ internal sealed class UsbDeviceOpenException : InvalidOperationException
     {
     }
 
-    /// <summary>
-    /// Initializes the exception with the specified error message, device path, and native error code.
-    /// <para>使用指定错误消息、设备路径和原生错误码初始化异常。</para>
-    /// </summary>
-    /// <param name="message">
-    /// The message that describes the error.
-    /// <para>描述错误的消息。</para>
-    /// </param>
-    /// <param name="devicePath">
-    /// The device path.
-    /// <para>设备路径。</para>
-    /// </param>
-    /// <param name="nativeErrorCode">
-    /// The native error code.
-    /// <para>原生错误码。</para>
-    /// </param>
+    /// <summary>Initializes the exception with the specified error message, device path, and native error code.
+    /// <para>使用指定错误消息、设备路径和原生错误码初始化异常。</para></summary>
+    /// <param name="message">The message that describes the error.<para>描述错误的消息。</para></param>
+    /// <param name="devicePath">The device path.<para>设备路径。</para></param>
+    /// <param name="nativeErrorCode">The native error code.<para>原生错误码。</para></param>
     public UsbDeviceOpenException(string message, string devicePath, int nativeErrorCode) : base(message)
     {
         DevicePath = devicePath;

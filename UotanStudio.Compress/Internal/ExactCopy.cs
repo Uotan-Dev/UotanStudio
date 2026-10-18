@@ -16,22 +16,14 @@ namespace UotanStudio.Compress.Internal;
 /// </remarks>
 internal static class ExactCopy
 {
-    /// <summary>
-    /// Copies exactly the specified byte count from <paramref name="source"/> to <paramref name="destination"/>.
-    /// <para>从 <paramref name="source"/> 精确复制指定字节数到 <paramref name="destination"/>。</para>
-    /// </summary>
-    /// <param name="source">
-    /// Readable stream positioned at the first byte of the region; it is not closed.
-    /// <para>定位到待复制区域首字节、可读的源流；不会被关闭。</para>
-    /// </param>
-    /// <param name="destination">
-    /// Writable stream receiving the copied bytes; it is not flushed and not closed.
-    /// <para>接收复制字节的可写目标流；不会被刷新，也不会被关闭。</para>
-    /// </param>
-    /// <param name="count">
-    /// Exact number of bytes to copy; zero writes nothing and completes immediately.
-    /// <para>需要复制的精确字节数；为 0 时不写入任何内容并立即完成。</para>
-    /// </param>
+    /// <summary>Copies exactly the specified byte count from <paramref name="source"/> to <paramref name="destination"/>.
+    /// <para>从 <paramref name="source"/> 精确复制指定字节数到 <paramref name="destination"/>。</para></summary>
+    /// <param name="source">Readable stream positioned at the first byte of the region; it is not closed.
+    /// <para>定位到待复制区域首字节、可读的源流；不会被关闭。</para></param>
+    /// <param name="destination">Writable stream receiving the copied bytes; it is not flushed and not closed.
+    /// <para>接收复制字节的可写目标流；不会被刷新，也不会被关闭。</para></param>
+    /// <param name="count">Exact number of bytes to copy; zero writes nothing and completes immediately.
+    /// <para>需要复制的精确字节数；为 0 时不写入任何内容并立即完成。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="destination"/> is <see langword="null"/>.
     /// <para><paramref name="source"/> 或 <paramref name="destination"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="count"/> is negative.

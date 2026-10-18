@@ -7,16 +7,14 @@ public sealed partial class MtkSession
 {
     /// <summary>Reads an explicitly selected, aligned XML physical-storage range to a caller-owned stream.
     /// <para>将显式选定的、对齐的 XML 物理存储范围读取到调用方拥有的流中。</para></summary>
-    /// <remarks>
-    /// The destination may contain partial bytes after failure. No padding, clamping, automatic
-    /// authentication or retry is performed. Device authorization remains enforced by the agent.
-    /// Full byte progress does not imply the final START handshake or durable file publication.
-    /// CHK_NO callbacks do not provide cryptographic integrity or independently verified storage identity.
-    /// </remarks>
+    /// <remarks>The destination may contain partial bytes after failure. No padding, clamping,
+    /// automatic authentication or retry is performed. Device authorization remains enforced by the
+    /// agent. Full byte progress does not imply the final START handshake or durable file publication.
+    /// CHK_NO callbacks do not provide cryptographic integrity or independently verified storage
+    /// identity.</remarks>
     /// <param name="regionName">An exact XML physical-region token from the discovered geometry, excluding RPMB.
     /// <para>来自已发现几何信息的精确 XML 物理区域令牌，不含 RPMB。</para></param>
-    /// <param name="offset">Nonnegative block-aligned byte offset.
-    /// <para>非负、块对齐的字节偏移。</para></param>
+    /// <param name="offset">Nonnegative block-aligned byte offset.<para>非负、块对齐的字节偏移。</para></param>
     /// <param name="length">Positive block-aligned byte count, bounded by reported capacity.
     /// <para>正数、块对齐的字节数，受上报容量限制。</para></param>
     /// <param name="destination">Writable output positioned at the intended location; remains caller-owned.

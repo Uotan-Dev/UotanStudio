@@ -30,39 +30,24 @@ namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 /// </remarks>
 internal static class PayloadSigner
 {
-    /// <summary>Re-signs a payload file with the given private key. <para>使用给定私钥为载荷文件重新签名。</para></summary>
-    /// <param name="payloadPath">
-    /// Existing signed or unsigned payload; opened for reading only and never modified.
-    /// <para>既有已签或未签载荷；只读打开，绝不原地修改。</para>
-    /// </param>
-    /// <param name="signingKey">
-    /// RSA key with a 2048- or 4096-bit modulus; ownership stays with the caller and it is never disposed here.
-    /// <para>模数为 2048 或 4096 位的 RSA 密钥；所有权归调用方，本方法绝不释放。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination file, replaced atomically only after a complete re-sign; may be the same path as
-    /// <paramref name="payloadPath"/>. <para>目标文件，仅在完整重签后原子替换；可与 <paramref name="payloadPath"/> 相同。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels before and during the copy; a cancelled re-sign never touches the existing output.
-    /// <para>在复制前后响应取消；被取消的重签不会触及既有输出。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// A path is empty or whitespace, or the key modulus is neither 2048 nor 4096 bits.
-    /// <para>路径为空或仅含空白，或密钥模数既非 2048 也非 4096 位。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="payloadPath"/>, <paramref name="signingKey"/> or <paramref name="outputPath"/> is
-    /// <see langword="null"/>. <para><paramref name="payloadPath"/>、<paramref name="signingKey"/> 或
-    /// <paramref name="outputPath"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="payloadPath"/> does not exist. <para><paramref name="payloadPath"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The input is not a structurally consistent major-version-2 payload, or its declared signature region
-    /// does not match the file size. <para>输入不是结构一致的主版本 2 载荷，或其声明的签名区域与文件大小不符。</para>
-    /// </exception>
+    /// <summary>Re-signs a payload file with the given private key.
+    /// <para>使用给定私钥为载荷文件重新签名。</para></summary>
+    /// <param name="payloadPath">Existing signed or unsigned payload; opened for reading only and never modified.
+    /// <para>既有已签或未签载荷；只读打开，绝不原地修改。</para></param>
+    /// <param name="signingKey">RSA key with a 2048- or 4096-bit modulus; ownership stays with the caller and it is never disposed here.
+    /// <para>模数为 2048 或 4096 位的 RSA 密钥；所有权归调用方，本方法绝不释放。</para></param>
+    /// <param name="outputPath">Destination file, replaced atomically only after a complete re-sign; may be the same path as <paramref name="payloadPath"/>.
+    /// <para>目标文件，仅在完整重签后原子替换；可与 <paramref name="payloadPath"/> 相同。</para></param>
+    /// <param name="cancellationToken">Cancels before and during the copy; a cancelled re-sign never touches the existing output.
+    /// <para>在复制前后响应取消；被取消的重签不会触及既有输出。</para></param>
+    /// <exception cref="ArgumentException">A path is empty or whitespace, or the key modulus is neither 2048 nor 4096 bits.
+    /// <para>路径为空或仅含空白，或密钥模数既非 2048 也非 4096 位。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="payloadPath"/>, <paramref name="signingKey"/> or <paramref name="outputPath"/> is <see langword="null"/>.
+    /// <para><paramref name="payloadPath"/>、<paramref name="signingKey"/> 或 <paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="payloadPath"/> does not exist.
+    /// <para><paramref name="payloadPath"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The input is not a structurally consistent major-version-2 payload, or its declared signature region does not match the file size.
+    /// <para>输入不是结构一致的主版本 2 载荷，或其声明的签名区域与文件大小不符。</para></exception>
     public static void Resign(string payloadPath, RSA signingKey, string outputPath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(payloadPath);
@@ -98,26 +83,19 @@ internal static class PayloadSigner
         }
     }
 
-    /// <summary>Re-signs a payload read from a seekable stream into a writable stream. <para>从可定位流读取载荷并重签名到可写流。</para></summary>
-    /// <param name="payload">
-    /// Seekable payload source read from position <c>0</c>; left open. <para>从位置 <c>0</c> 读取的可定位载荷源；保持打开。</para>
-    /// </param>
-    /// <param name="signingKey">
-    /// RSA key with a 2048- or 4096-bit modulus; not disposed here. <para>模数为 2048 或 4096 位的 RSA 密钥；不在此释放。</para>
-    /// </param>
-    /// <param name="output">
-    /// Writable sink receiving the resigned payload from its current position; left open.
-    /// <para>从其当前位置接收重签载荷的可写接收流；保持打开。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels during the data copy. <para>在数据复制期间响应取消。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// A stream is unusable or the key modulus is neither 2048 nor 4096 bits. <para>流不可用，或密钥模数既非 2048 也非 4096 位。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The input is not a structurally consistent major-version-2 payload. <para>输入不是结构一致的主版本 2 载荷。</para>
-    /// </exception>
+    /// <summary>Re-signs a payload read from a seekable stream into a writable stream.
+    /// <para>从可定位流读取载荷并重签名到可写流。</para></summary>
+    /// <param name="payload">Seekable payload source read from position <c>0</c>; left open.
+    /// <para>从位置 <c>0</c> 读取的可定位载荷源；保持打开。</para></param>
+    /// <param name="signingKey">RSA key with a 2048- or 4096-bit modulus; not disposed here.
+    /// <para>模数为 2048 或 4096 位的 RSA 密钥；不在此释放。</para></param>
+    /// <param name="output">Writable sink receiving the resigned payload from its current position; left open.
+    /// <para>从其当前位置接收重签载荷的可写接收流；保持打开。</para></param>
+    /// <param name="cancellationToken">Cancels during the data copy.<para>在数据复制期间响应取消。</para></param>
+    /// <exception cref="ArgumentException">A stream is unusable or the key modulus is neither 2048 nor 4096 bits.
+    /// <para>流不可用，或密钥模数既非 2048 也非 4096 位。</para></exception>
+    /// <exception cref="InvalidDataException">The input is not a structurally consistent major-version-2 payload.
+    /// <para>输入不是结构一致的主版本 2 载荷。</para></exception>
     public static void Resign(Stream payload, RSA signingKey, Stream output, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);

@@ -37,20 +37,28 @@ public static class ApkEntryStripper
         public IReadOnlyList<(string Name, byte[] Content)> EntriesToAppend { get; init; } = [];
     }
 
-    /// <summary>
-    /// Rewrites the input APK into the output path (atomic replace) per the request.
-    /// <para>按请求把输入 APK 重写到输出路径（原子替换）。</para>
-    /// </summary>
-    /// <param name="inputApk">Existing APK to read; opened for reading and closed before returning. <para>待读取的已存在 APK；以读方式打开并在返回前关闭。</para></param>
-    /// <param name="outputApk">Destination path; an existing file is replaced only after the rewrite succeeds. <para>目标路径；仅在重写成功后替换既有文件。</para></param>
-    /// <param name="request">Rewrite request describing stripping and appended entries; must not be <see langword="null"/>. <para>描述剔除与追加条目的重写请求；不得为 null。</para></param>
-    /// <param name="cancellationToken">Observed between entry copies and appended writes; cancellation leaves the existing output untouched. <para>在条目复制与追加写入之间生效；取消时保持既有输出不动。</para></param>
-    /// <exception cref="FileNotFoundException"><paramref name="inputApk"/> does not exist. <para><paramref name="inputApk"/> 不存在。</para></exception>
-    /// <exception cref="InvalidDataException">The central directory is corrupt or exceeds 256 MiB, or a local header signature is missing. <para>中央目录损坏或超过 256 MiB，或本地文件头签名缺失。</para></exception>
-    /// <exception cref="EndOfStreamException">An entry's declared range runs past the end of the input. <para>条目声明的范围超出输入末尾。</para></exception>
-    /// <exception cref="OverflowException">The rewritten archive exceeds the 4 GiB offset addressable by 32-bit ZIP records. <para>重写后的包超出 32 位 ZIP 可寻址的 4 GiB 偏移。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
-    /// <exception cref="IOException">The output or its temporary file cannot be written. <para>输出或其临时文件无法写入。</para></exception>
+    /// <summary>Rewrites the input APK into the output path (atomic replace) per the request.
+    /// <para>按请求把输入 APK 重写到输出路径（原子替换）。</para></summary>
+    /// <param name="inputApk">Existing APK to read; opened for reading and closed before returning.
+    /// <para>待读取的已存在 APK；以读方式打开并在返回前关闭。</para></param>
+    /// <param name="outputApk">Destination path; an existing file is replaced only after the rewrite succeeds.
+    /// <para>目标路径；仅在重写成功后替换既有文件。</para></param>
+    /// <param name="request">Rewrite request describing stripping and appended entries; must not be <see langword="null"/>.
+    /// <para>描述剔除与追加条目的重写请求；不得为 null。</para></param>
+    /// <param name="cancellationToken">Observed between entry copies and appended writes; cancellation leaves the existing output untouched.
+    /// <para>在条目复制与追加写入之间生效；取消时保持既有输出不动。</para></param>
+    /// <exception cref="FileNotFoundException"><paramref name="inputApk"/> does not exist.
+    /// <para><paramref name="inputApk"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The central directory is corrupt or exceeds 256 MiB, or a local header signature is missing.
+    /// <para>中央目录损坏或超过 256 MiB，或本地文件头签名缺失。</para></exception>
+    /// <exception cref="EndOfStreamException">An entry's declared range runs past the end of the input.
+    /// <para>条目声明的范围超出输入末尾。</para></exception>
+    /// <exception cref="OverflowException">The rewritten archive exceeds the 4 GiB offset addressable by 32-bit ZIP records.
+    /// <para>重写后的包超出 32 位 ZIP 可寻址的 4 GiB 偏移。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    /// <exception cref="IOException">The output or its temporary file cannot be written.
+    /// <para>输出或其临时文件无法写入。</para></exception>
     public static void Rewrite(string inputApk, string outputApk, RewriteRequest request, CancellationToken cancellationToken = default)
     {
         if (!File.Exists(inputApk))

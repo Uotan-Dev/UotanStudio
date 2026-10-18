@@ -49,19 +49,17 @@ public static partial class FirehoseXmlBuilder
         return sb.ToString();
     }
 
-    /// <summary>
-    /// Builds the &lt;patch&gt; XML command, including patches targeting physical storage via DISK.
-    /// <para>构建 &lt;patch&gt; XML 命令，包括通过 DISK 针对物理存储的补丁。</para>
-    /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
-    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
-    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
-    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
-    /// <param name="byteOffset">The byte offset within the sector. <para>扇区内字节偏移。</para></param>
-    /// <param name="value">The value to patch (hex string). <para>待写入的值（十六进制字符串）。</para></param>
-    /// <param name="sizeInBytes">The size in bytes. <para>大小（字节）。</para></param>
-    /// <param name="slot">Optional slot number. <para>可选槽位编号。</para></param>
-    /// <returns>The patch XML string. <para>patch XML 字符串。</para></returns>
+    /// <summary>Builds the &lt;patch&gt; XML command, including patches targeting physical storage via DISK.
+    /// <para>构建 &lt;patch&gt; XML 命令，包括通过 DISK 针对物理存储的补丁。</para></summary>
+    /// <param name="sectorSizeInBytes">The sector size in bytes.<para>扇区大小（字节）。</para></param>
+    /// <param name="filename">The target filename.<para>目标文件名。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number.<para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector.<para>起始扇区。</para></param>
+    /// <param name="byteOffset">The byte offset within the sector.<para>扇区内字节偏移。</para></param>
+    /// <param name="value">The value to patch (hex string).<para>待写入的值（十六进制字符串）。</para></param>
+    /// <param name="sizeInBytes">The size in bytes.<para>大小（字节）。</para></param>
+    /// <param name="slot">Optional slot number.<para>可选槽位编号。</para></param>
+    /// <returns>The patch XML string.<para>patch XML 字符串。</para></returns>
     public static string BuildPatch(long sectorSizeInBytes, string filename,
         int physicalPartitionNumber, long startSector,
         long byteOffset, string value, long sizeInBytes, int? slot = null)

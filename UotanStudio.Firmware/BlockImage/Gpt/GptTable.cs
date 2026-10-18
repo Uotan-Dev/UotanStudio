@@ -1,36 +1,23 @@
 namespace UotanStudio.Firmware.BlockImage.Gpt;
 
-/// <summary>
-/// A partition from a validated pair of GPT arrays. End LBA is inclusive.
-/// <para>来自已校验主备 GPT 数组对的分区。结束 LBA 为闭区间。</para>
-/// </summary>
-/// <param name="Index">
-/// Zero-based slot position in the entry array. <para>条目数组中从零开始的槽位位置。</para>
-/// </param>
-/// <param name="TypeId">
-/// Partition type GUID. <para>分区类型 GUID。</para>
-/// </param>
-/// <param name="Id">
-/// Unique partition GUID; empty identifiers are rejected during validation. <para>唯一分区 GUID；空标识在校验阶段即被拒绝。</para>
-/// </param>
-/// <param name="FirstLba">
-/// First logical block of the partition. <para>分区的起始逻辑块。</para>
-/// </param>
-/// <param name="LastLba">
-/// Last logical block, inside the usable range declared by both headers. <para>结束逻辑块，位于两个头部共同声明的可用范围之内。</para>
-/// </param>
-/// <param name="Attributes">
-/// Raw 64-bit attribute flags; only the low three bits may be set. <para>原始 64 位属性标志；仅允许置位最低三位。</para>
-/// </param>
-/// <param name="Name">
-/// UTF-16 decoded partition name, without the NUL terminator. <para>由 UTF-16 解码得到的分区名称，不含 NUL 终止符。</para>
-/// </param>
-/// <param name="ByteOffset">
-/// Absolute byte offset of <paramref name="FirstLba"/> in the device address space. <para><paramref name="FirstLba"/> 在设备地址空间中的绝对字节偏移。</para>
-/// </param>
-/// <param name="ByteLength">
-/// Byte length covering <paramref name="FirstLba"/> through <paramref name="LastLba"/> inclusive. <para>覆盖 <paramref name="FirstLba"/> 至 <paramref name="LastLba"/>（含两端）的字节长度。</para>
-/// </param>
+/// <summary>A partition from a validated pair of GPT arrays. End LBA is inclusive.
+/// <para>来自已校验主备 GPT 数组对的分区。结束 LBA 为闭区间。</para></summary>
+/// <param name="Index">Zero-based slot position in the entry array.
+/// <para>条目数组中从零开始的槽位位置。</para></param>
+/// <param name="TypeId">Partition type GUID.<para>分区类型 GUID。</para></param>
+/// <param name="Id">Unique partition GUID; empty identifiers are rejected during validation.
+/// <para>唯一分区 GUID；空标识在校验阶段即被拒绝。</para></param>
+/// <param name="FirstLba">First logical block of the partition.<para>分区的起始逻辑块。</para></param>
+/// <param name="LastLba">Last logical block, inside the usable range declared by both headers.
+/// <para>结束逻辑块，位于两个头部共同声明的可用范围之内。</para></param>
+/// <param name="Attributes">Raw 64-bit attribute flags; only the low three bits may be set.
+/// <para>原始 64 位属性标志；仅允许置位最低三位。</para></param>
+/// <param name="Name">UTF-16 decoded partition name, without the NUL terminator.
+/// <para>由 UTF-16 解码得到的分区名称，不含 NUL 终止符。</para></param>
+/// <param name="ByteOffset">Absolute byte offset of <paramref name="FirstLba"/> in the device address space.
+/// <para><paramref name="FirstLba"/> 在设备地址空间中的绝对字节偏移。</para></param>
+/// <param name="ByteLength">Byte length covering <paramref name="FirstLba"/> through <paramref name="LastLba"/> inclusive.
+/// <para>覆盖 <paramref name="FirstLba"/> 至 <paramref name="LastLba"/>（含两端）的字节长度。</para></param>
 public sealed record GptPartition(int Index, Guid TypeId, Guid Id, ulong FirstLba, ulong LastLba,
     ulong Attributes, string Name, long ByteOffset, long ByteLength);
 

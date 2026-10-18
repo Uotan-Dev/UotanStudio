@@ -281,32 +281,23 @@ public static class ElfCleaner
         return result;
     }
 
-    /// <summary>
-    /// Cleans useless sections from ELF data.
-    /// <para>清理 ELF 数据中的无用节。</para>
-    /// </summary>
+    /// <summary>Cleans useless sections from ELF data.<para>清理 ELF 数据中的无用节。</para></summary>
     /// <example>
     /// <code>
     /// var data = File.ReadAllBytes("libfoo.so");
     /// var result = ElfCleaner.Clean(data);
     /// if (result.Success)
     /// {
-    ///     File.WriteAllBytes("libfoo.stripped.so", ElfCleaner.CleanData(data));
+    /// File.WriteAllBytes("libfoo.stripped.so", ElfCleaner.CleanData(data));
     /// }
     /// </code>
     /// </example>
-    /// <param name="data">
-    /// ELF file bytes; null is reported as a failure instead of throwing.
-    /// <para>ELF 文件字节；null 会被报告为失败而不会抛出异常。</para>
-    /// </param>
-    /// <param name="options">
-    /// Section categories to remove; null uses <see cref="CleanOptions"/> defaults with every category enabled.
-    /// <para>要移除的节类别；null 时使用全部启用的 <see cref="CleanOptions"/> 默认值。</para>
-    /// </param>
-    /// <returns>Result with <see cref="CleanResult.Success"/> set; any exception raised while stripping is caught
-    /// and surfaced through <see cref="CleanResult.ErrorMessage"/>, so this method never throws.
-    /// <para>设置了 <see cref="CleanResult.Success"/> 的结果；清理过程中抛出的任何异常都会被捕获并通过
-    /// <see cref="CleanResult.ErrorMessage"/> 呈现，因此本方法不会抛出异常。</para></returns>
+    /// <param name="data">ELF file bytes; null is reported as a failure instead of throwing.
+    /// <para>ELF 文件字节；null 会被报告为失败而不会抛出异常。</para></param>
+    /// <param name="options">Section categories to remove; null uses <see cref="CleanOptions"/> defaults with every category enabled.
+    /// <para>要移除的节类别；null 时使用全部启用的 <see cref="CleanOptions"/> 默认值。</para></param>
+    /// <returns>Result with <see cref="CleanResult.Success"/> set; any exception raised while stripping is caught and surfaced through <see cref="CleanResult.ErrorMessage"/>, so this method never throws.
+    /// <para>设置了 <see cref="CleanResult.Success"/> 的结果；清理过程中抛出的任何异常都会被捕获并通过 <see cref="CleanResult.ErrorMessage"/> 呈现，因此本方法不会抛出异常。</para></returns>
     public static CleanResult Clean(byte[] data, CleanOptions? options = null)
     {
         options ??= new CleanOptions();
@@ -338,20 +329,13 @@ public static class ElfCleaner
         }
     }
 
-    /// <summary>
-    /// Cleans ELF data and returns the cleaned bytes.
-    /// <para>清理 ELF 数据并返回清理后的字节。</para>
-    /// </summary>
-    /// <param name="data">
-    /// ELF file bytes; null or non-ELF input is returned unchanged, with null becoming an empty array.
-    /// <para>ELF 文件字节；null 或非 ELF 输入原样返回，其中 null 变为空数组。</para>
-    /// </param>
-    /// <param name="options">
-    /// Section categories to remove; null uses <see cref="CleanOptions"/> defaults with every category enabled.
-    /// <para>要移除的节类别；null 时使用全部启用的 <see cref="CleanOptions"/> 默认值。</para>
-    /// </param>
-    /// <returns>A cleaned copy of the image when at least one section matched, otherwise the original array
-    /// reference; unlike <see cref="Clean"/> this method does not catch stripping failures.
+    /// <summary>Cleans ELF data and returns the cleaned bytes.
+    /// <para>清理 ELF 数据并返回清理后的字节。</para></summary>
+    /// <param name="data">ELF file bytes; null or non-ELF input is returned unchanged, with null becoming an empty array.
+    /// <para>ELF 文件字节；null 或非 ELF 输入原样返回，其中 null 变为空数组。</para></param>
+    /// <param name="options">Section categories to remove; null uses <see cref="CleanOptions"/> defaults with every category enabled.
+    /// <para>要移除的节类别；null 时使用全部启用的 <see cref="CleanOptions"/> 默认值。</para></param>
+    /// <returns>A cleaned copy of the image when at least one section matched, otherwise the original array reference; unlike <see cref="Clean"/> this method does not catch stripping failures.
     /// <para>至少有一个节匹配时返回镜像的清理副本，否则返回原数组引用；与 <see cref="Clean"/> 不同，本方法不捕获清理失败。</para></returns>
     public static byte[] CleanData(byte[] data, CleanOptions? options = null)
     {
@@ -368,24 +352,15 @@ public static class ElfCleaner
         return toRemove.Count == 0 ? data : ElfTool.StripSections(data, toRemove);
     }
 
-    /// <summary>
-    /// Cleans an ELF file and writes it to the output file.
-    /// <para>清理 ELF 文件并写入输出文件。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Path of the ELF file to read; read failures are reported through the result instead of throwing.
-    /// <para>要读取的 ELF 文件路径；读取失败通过结果报告而不会抛出异常。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Path written with the cleaned bytes; an existing file is overwritten.
-    /// <para>写入清理后字节的目标路径；已存在的文件会被覆盖。</para>
-    /// </param>
-    /// <param name="options">
-    /// Section categories to remove; null uses <see cref="CleanOptions"/> defaults with every category enabled.
-    /// <para>要移除的节类别；null 时使用全部启用的 <see cref="CleanOptions"/> 默认值。</para>
-    /// </param>
-    /// <returns>Result with sizes and removed section names; on any read or cleaning failure <see cref="CleanResult.Success"/>
-    /// is false and nothing is written.
+    /// <summary>Cleans an ELF file and writes it to the output file.
+    /// <para>清理 ELF 文件并写入输出文件。</para></summary>
+    /// <param name="inputPath">Path of the ELF file to read; read failures are reported through the result instead of throwing.
+    /// <para>要读取的 ELF 文件路径；读取失败通过结果报告而不会抛出异常。</para></param>
+    /// <param name="outputPath">Path written with the cleaned bytes; an existing file is overwritten.
+    /// <para>写入清理后字节的目标路径；已存在的文件会被覆盖。</para></param>
+    /// <param name="options">Section categories to remove; null uses <see cref="CleanOptions"/> defaults with every category enabled.
+    /// <para>要移除的节类别；null 时使用全部启用的 <see cref="CleanOptions"/> 默认值。</para></param>
+    /// <returns>Result with sizes and removed section names; on any read or cleaning failure <see cref="CleanResult.Success"/> is false and nothing is written.
     /// <para>包含大小与被移除节名的结果；任何读取或清理失败时 <see cref="CleanResult.Success"/> 为 false 且不写入任何内容。</para></returns>
     /// <exception cref="IOException">The output file exists but cannot be replaced, or the cleaned bytes cannot be written.
     /// <para>输出文件已存在但无法替换，或清理后的字节无法写入。</para></exception>
@@ -422,19 +397,11 @@ public static class ElfCleaner
         return result;
     }
 
-    /// <summary>
-    /// Cleans an ELF file in place.
-    /// <para>原地清理 ELF 文件。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path of the file to clean; it is replaced only after the cleaned bytes have been written to the temporary
-    /// file <c>filePath + ".clean.tmp"</c>, and the original content is kept when cleaning fails.
-    /// <para>要清理的文件路径；只有清理后的字节写入临时文件 <c>filePath + ".clean.tmp"</c> 之后才会替换原文件，清理失败时保留原内容。</para>
-    /// </param>
-    /// <param name="options">
-    /// Section categories to remove; null uses <see cref="CleanOptions"/> defaults with every category enabled.
-    /// <para>要移除的节类别；null 时使用全部启用的 <see cref="CleanOptions"/> 默认值。</para>
-    /// </param>
+    /// <summary>Cleans an ELF file in place.<para>原地清理 ELF 文件。</para></summary>
+    /// <param name="filePath">Path of the file to clean; it is replaced only after the cleaned bytes have been written to the temporary file <c>filePath + ".clean.tmp"</c>, and the original content is kept when cleaning fails.
+    /// <para>要清理的文件路径；只有清理后的字节写入临时文件 <c>filePath + ".clean.tmp"</c> 之后才会替换原文件，清理失败时保留原内容。</para></param>
+    /// <param name="options">Section categories to remove; null uses <see cref="CleanOptions"/> defaults with every category enabled.
+    /// <para>要移除的节类别；null 时使用全部启用的 <see cref="CleanOptions"/> 默认值。</para></param>
     /// <returns>Result of the in-place clean; a failed clean deletes the temporary file and leaves the original untouched.
     /// <para>原地清理的结果；清理失败时会删除临时文件并保持原文件不变。</para></returns>
     /// <exception cref="IOException">The temporary file cannot be written or cannot be moved onto the original path.

@@ -131,21 +131,13 @@ public static class BootconfigTool
         return result;
     }
 
-    /// <summary>
-    /// Reads the value of the given key.
-    /// <para>读取指定键的值。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Raw bootconfig bytes; parsed on each call.
-    /// <para>原始 bootconfig 字节；每次调用都会解析。</para>
-    /// </param>
-    /// <param name="key">
-    /// Key to match case-sensitively against non-comment, non-empty entries.
-    /// <para>区分大小写地匹配非注释、非空条目的键。</para>
-    /// </param>
+    /// <summary>Reads the value of the given key.<para>读取指定键的值。</para></summary>
+    /// <param name="data">Raw bootconfig bytes; parsed on each call.
+    /// <para>原始 bootconfig 字节；每次调用都会解析。</para></param>
+    /// <param name="key">Key to match case-sensitively against non-comment, non-empty entries.
+    /// <para>区分大小写地匹配非注释、非空条目的键。</para></param>
     /// <returns>The trimmed value of the first matching key, or <see langword="null"/> when parsing fails or the key is absent.
-    /// <para>首个匹配键的去空白值；解析失败或键不存在时为 <see langword="null"/>。</para>
-    /// </returns>
+    /// <para>首个匹配键的去空白值；解析失败或键不存在时为 <see langword="null"/>。</para></returns>
     public static string? GetValue(byte[] data, string key)
     {
         var result = Parse(data);
@@ -156,46 +148,26 @@ public static class BootconfigTool
             ?.Value);
     }
 
-    /// <summary>
-    /// Checks whether the bootconfig contains the given key.
-    /// <para>检查 bootconfig 是否包含指定键。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Raw bootconfig bytes; parsed on each call.
-    /// <para>原始 bootconfig 字节；每次调用都会解析。</para>
-    /// </param>
-    /// <param name="key">
-    /// Key to look up case-sensitively.
-    /// <para>区分大小写查找的键。</para>
-    /// </param>
+    /// <summary>Checks whether the bootconfig contains the given key.
+    /// <para>检查 bootconfig 是否包含指定键。</para></summary>
+    /// <param name="data">Raw bootconfig bytes; parsed on each call.
+    /// <para>原始 bootconfig 字节；每次调用都会解析。</para></param>
+    /// <param name="key">Key to look up case-sensitively.<para>区分大小写查找的键。</para></param>
     /// <returns><see langword="true"/> when a matching non-comment, non-empty key exists and parsing succeeded.
-    /// <para>存在匹配的非注释、非空键且解析成功时为 <see langword="true"/>。</para>
-    /// </returns>
+    /// <para>存在匹配的非注释、非空键且解析成功时为 <see langword="true"/>。</para></returns>
     public static bool HasKey(byte[] data, string key) => GetValue(data, key) != null;
 
-    /// <summary>
-    /// Sets the value of a key (adding it when missing) and re-serializes the bootconfig.
-    /// <para>修改或新增指定键的值并重新序列化为 bootconfig。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Raw bootconfig bytes to parse before editing.
-    /// <para>编辑前先解析的原始 bootconfig 字节。</para>
-    /// </param>
-    /// <param name="key">
-    /// Key to update case-sensitively, or to append when no matching entry exists.
-    /// <para>区分大小写更新的键；无匹配条目时追加。</para>
-    /// </param>
-    /// <param name="value">
-    /// New value stored verbatim for the key.
-    /// <para>为该键逐字存储的新值。</para>
-    /// </param>
+    /// <summary>Sets the value of a key (adding it when missing) and re-serializes the bootconfig.
+    /// <para>修改或新增指定键的值并重新序列化为 bootconfig。</para></summary>
+    /// <param name="data">Raw bootconfig bytes to parse before editing.
+    /// <para>编辑前先解析的原始 bootconfig 字节。</para></param>
+    /// <param name="key">Key to update case-sensitively, or to append when no matching entry exists.
+    /// <para>区分大小写更新的键；无匹配条目时追加。</para></param>
+    /// <param name="value">New value stored verbatim for the key.<para>为该键逐字存储的新值。</para></param>
     /// <returns>The re-serialized bootconfig bytes produced by <see cref="Build"/>.
-    /// <para>由 <see cref="Build"/> 生成的重新序列化 bootconfig 字节。</para>
-    /// </returns>
-    /// <exception cref="FormatException">
-    /// The input could not be parsed as bootconfig.
-    /// <para>输入无法作为 bootconfig 解析。</para>
-    /// </exception>
+    /// <para>由 <see cref="Build"/> 生成的重新序列化 bootconfig 字节。</para></returns>
+    /// <exception cref="FormatException">The input could not be parsed as bootconfig.
+    /// <para>输入无法作为 bootconfig 解析。</para></exception>
     public static byte[] SetValue(byte[] data, string key, string value)
     {
         var result = Parse(data);

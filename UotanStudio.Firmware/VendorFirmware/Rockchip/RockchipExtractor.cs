@@ -42,16 +42,11 @@ internal static class RockchipExtractor
 
     /// <summary>Reads bounded RKFW headers and the embedded RKAF table without scanning payload checksums.
     /// <para>读取经过边界校验的 RKFW 头部与内嵌 RKAF 表，但不扫描负载校验和。</para></summary>
-    /// <param name="imagePath">
-    /// RKFW file to preview; the payload MD5 trailer and the RKAF CRC are not verified. The file is closed
-    /// when the call returns.
-    /// <para>要预览的 RKFW 文件；不校验负载的 MD5 尾部与 RKAF 的 CRC。调用返回时文件已关闭。</para>
-    /// </param>
-    /// <returns>The parsed header plus loader, embedded-image and RKAF partition entries whose offsets are
-    /// absolute within the file.
+    /// <param name="imagePath">RKFW file to preview; the payload MD5 trailer and the RKAF CRC are not verified. The file is closed when the call returns.
+    /// <para>要预览的 RKFW 文件；不校验负载的 MD5 尾部与 RKAF 的 CRC。调用返回时文件已关闭。</para></param>
+    /// <returns>The parsed header plus loader, embedded-image and RKAF partition entries whose offsets are absolute within the file.
     /// <para>解析后的头部，以及加载器、内嵌镜像与 RKAF 分区条目；条目偏移为文件内绝对偏移。</para></returns>
-    /// <exception cref="InvalidDataException">The RKFW magic, header size, payload regions, loader magic or
-    /// embedded RKAF layout is invalid.
+    /// <exception cref="InvalidDataException">The RKFW magic, header size, payload regions, loader magic or embedded RKAF layout is invalid.
     /// <para>RKFW 魔数、头部长度、负载区域、加载器魔数或内嵌 RKAF 布局无效。</para></exception>
     /// <exception cref="EndOfStreamException">The file is shorter than the bytes the preview must read.
     /// <para>文件长度不足以满足预览所需读取的字节数。</para></exception>
@@ -91,23 +86,18 @@ internal static class RockchipExtractor
         return (header, entries);
     }
 
-    /// <summary>Extracts validated entries with atomic file replacement.<para>校验条目后以原子文件替换方式提取。</para></summary>
-    /// <param name="imagePath">The source image path.
-    /// <para>源镜像路径。</para></param>
-    /// <param name="outputDirectory">Directory that receives the fixed header template file and one file
-    /// per validated entry.
+    /// <summary>Extracts validated entries with atomic file replacement.
+    /// <para>校验条目后以原子文件替换方式提取。</para></summary>
+    /// <param name="imagePath">The source image path.<para>源镜像路径。</para></param>
+    /// <param name="outputDirectory">Directory that receives the fixed header template file and one file per validated entry.
     /// <para>接收固定头部模板文件以及每个已校验条目对应文件的目录。</para></param>
-    /// <param name="progress">The optional progress sink, reported with a fraction between 0 and 1 after
-    /// each extracted entry.
+    /// <param name="progress">The optional progress sink, reported with a fraction between 0 and 1 after each extracted entry.
     /// <para>可选进度接收器，每提取完一个条目收到一次 0 到 1 之间的比例值。</para></param>
-    /// <param name="overwrite">Whether existing files may be replaced.
-    /// <para>是否允许替换现有文件。</para></param>
-    /// <param name="cancellationToken">The cancellation token.
-    /// <para>取消令牌。</para></param>
+    /// <param name="overwrite">Whether existing files may be replaced.<para>是否允许替换现有文件。</para></param>
+    /// <param name="cancellationToken">The cancellation token.<para>取消令牌。</para></param>
     /// <returns>The number of container entries written, not counting the header template file.
     /// <para>已写入的容器条目数量，不计头部模板文件。</para></returns>
-    /// <exception cref="InvalidDataException">The container fails validation, or two entries resolve to the
-    /// same output path.
+    /// <exception cref="InvalidDataException">The container fails validation, or two entries resolve to the same output path.
     /// <para>容器未通过校验，或两个条目解析到同一输出路径。</para></exception>
     /// <exception cref="IOException">An output file already exists while replacement is disabled.
     /// <para>禁用替换时目标文件已存在。</para></exception>

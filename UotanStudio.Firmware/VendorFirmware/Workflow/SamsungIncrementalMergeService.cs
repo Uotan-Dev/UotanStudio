@@ -118,18 +118,18 @@ internal sealed class SamsungIncrementalMergeService
 
     private static readonly string[] SlotSuffixes = ["_a", "_b"];
 
-    /// <summary>
-    /// Lists the payload's named partitions and their source-dependency flags without touching any image.
-    /// <para>仅列出载荷中的有名字分区及其源依赖标记，不读取任何镜像。</para>
-    /// </summary>
+    /// <summary>Lists the payload's named partitions and their source-dependency flags without touching any image.
+    /// <para>仅列出载荷中的有名字分区及其源依赖标记，不读取任何镜像。</para></summary>
     /// <param name="payloadPath">Payload file or ZIP update package containing <c>payload.bin</c>.
     /// <para>载荷文件，或包含 <c>payload.bin</c> 的 ZIP 升级包。</para></param>
-    /// <param name="cancellationToken">Cancels metadata reads. <para>取消元数据读取。</para></param>
-    /// <returns>The block size and one entry per named partition.
-    /// <para>块大小与每个有名字分区的条目。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="payloadPath"/> is blank. <para><paramref name="payloadPath"/> 为空白。</para></exception>
-    /// <exception cref="FileNotFoundException"><paramref name="payloadPath"/> does not exist. <para><paramref name="payloadPath"/> 不存在。</para></exception>
-    /// <exception cref="InvalidDataException">The payload or its manifest is unreadable. <para>载荷或其清单不可读。</para></exception>
+    /// <param name="cancellationToken">Cancels metadata reads.<para>取消元数据读取。</para></param>
+    /// <returns>The block size and one entry per named partition.<para>块大小与每个有名字分区的条目。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="payloadPath"/> is blank.
+    /// <para><paramref name="payloadPath"/> 为空白。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="payloadPath"/> does not exist.
+    /// <para><paramref name="payloadPath"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The payload or its manifest is unreadable.
+    /// <para>载荷或其清单不可读。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<SamsungPayloadMergePlan> ListPayloadAsync(string payloadPath,
@@ -165,29 +165,26 @@ internal sealed class SamsungIncrementalMergeService
         return (new SamsungPayloadMergePlan(metadata.BlockSize, entries), metadata);
     }
 
-    /// <summary>
-    /// Runs the DAT-mode merge described by <see cref="SamsungIncrementalMergeService"/>.
-    /// <para>执行 <see cref="SamsungIncrementalMergeService"/> 所描述的 DAT 模式合并。</para>
-    /// </summary>
-    /// <param name="baseImagePath">Base image: a single partition image, a <c>super.img</c>, or an
-    /// LZ4-wrapped variant of either. <para>基座镜像：单分区镜像、<c>super.img</c>，或二者的 LZ4 封装变体。</para></param>
-    /// <param name="otaSourcePath">ZIP package holding the DAT triples, or any loose triple member whose
-    /// siblings live beside it. <para>存放 DAT 三元组的 ZIP 包，或以其同目录散装成员形式给出的任一三元组文件。</para></param>
-    /// <param name="outputDirectory">Directory that receives the merged <c>&lt;partition&gt;.img</c> files;
-    /// created when missing. <para>接收合并后 <c>&lt;分区&gt;.img</c> 文件的目录，缺失时创建。</para></param>
+    /// <summary>Runs the DAT-mode merge described by <see cref="SamsungIncrementalMergeService"/>.
+    /// <para>执行 <see cref="SamsungIncrementalMergeService"/> 所描述的 DAT 模式合并。</para></summary>
+    /// <param name="baseImagePath">Base image: a single partition image, a <c>super.img</c>, or an LZ4-wrapped variant of either.
+    /// <para>基座镜像：单分区镜像、<c>super.img</c>，或二者的 LZ4 封装变体。</para></param>
+    /// <param name="otaSourcePath">ZIP package holding the DAT triples, or any loose triple member whose siblings live beside it.
+    /// <para>存放 DAT 三元组的 ZIP 包，或以其同目录散装成员形式给出的任一三元组文件。</para></param>
+    /// <param name="outputDirectory">Directory that receives the merged <c>&lt;partition&gt;.img</c> files; created when missing.
+    /// <para>接收合并后 <c>&lt;分区&gt;.img</c> 文件的目录，缺失时创建。</para></param>
     /// <param name="options">Merge policy; <see langword="null"/> uses defaults.
     /// <para>合并策略；为 <see langword="null"/> 时使用默认值。</para></param>
-    /// <param name="progress">Optional stage progress sink. <para>可选的阶段进度回调。</para></param>
-    /// <param name="cancellationToken">Checked before every phase and inside the replay pipelines; cancellation
-    /// before publication leaves the output directory untouched. <para>在每个阶段前及回放管线内检查；发布前取消不会改动输出目录。</para></param>
-    /// <returns>The published images and skipped stems. <para>已发布镜像与被跳过的词干。</para></returns>
+    /// <param name="progress">Optional stage progress sink.<para>可选的阶段进度回调。</para></param>
+    /// <param name="cancellationToken">Checked before every phase and inside the replay pipelines; cancellation before publication leaves the output directory untouched.
+    /// <para>在每个阶段前及回放管线内检查；发布前取消不会改动输出目录。</para></param>
+    /// <returns>The published images and skipped stems.<para>已发布镜像与被跳过的词干。</para></returns>
     /// <exception cref="ArgumentException">A path is blank or a DAT member name is not a safe file name.
     /// <para>路径为空，或 DAT 成员名不是安全文件名。</para></exception>
-    /// <exception cref="InvalidDataException">A triple is incomplete, two stems collide after slot stripping,
-    /// a source-dependent transfer list has no base image, or a size budget is exceeded.
+    /// <exception cref="InvalidDataException">A triple is incomplete, two stems collide after slot stripping, a source-dependent transfer list has no base image, or a size budget is exceeded.
     /// <para>三元组不完整、两个词干剥离槽位后缀后冲突、依赖源的传输清单缺少基座镜像，或超出大小预算。</para></exception>
-    /// <exception cref="IOException">A destination exists while <see cref="SamsungIncrementalMergeOptions.Overwrite"/>
-    /// is disabled. <para>禁用 <see cref="SamsungIncrementalMergeOptions.Overwrite"/> 时目标已存在。</para></exception>
+    /// <exception cref="IOException">A destination exists while <see cref="SamsungIncrementalMergeOptions.Overwrite"/> is disabled.
+    /// <para>禁用 <see cref="SamsungIncrementalMergeOptions.Overwrite"/> 时目标已存在。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<SamsungIncrementalMergeResult> MergeDatAsync(string baseImagePath, string otaSourcePath,
@@ -200,38 +197,30 @@ internal sealed class SamsungIncrementalMergeService
             progress, cancellationToken), cancellationToken);
     }
 
-    /// <summary>
-    /// Runs the payload-mode merge: selected manifest partitions are rebuilt against extracted old images from
-    /// <paramref name="oldImageDirectory"/> and published into <paramref name="outputDirectory"/> only after the
-    /// whole selection succeeds.
-    /// <para>执行 payload 模式合并：把选定清单分区针对 <paramref name="oldImageDirectory"/> 中的旧镜像重建，
-    /// 并在全部选定分区成功后才发布到 <paramref name="outputDirectory"/>。</para>
-    /// </summary>
-    /// <param name="payloadPath">Payload file or ZIP update package. <para>载荷文件或 ZIP 升级包。</para></param>
-    /// <param name="oldImageDirectory">Directory of extracted old partition images used as base images;
-    /// A/B slot suffixes are paired away when matching. <para>用作基座的解包旧镜像目录；匹配时会剥离 A/B 槽位后缀。</para></param>
-    /// <param name="selectedPartitions">Partition names to merge, matched exactly or after slot stripping;
-    /// <see langword="null"/> or empty merges every named partition.
+    /// <summary>Runs the payload-mode merge: selected manifest partitions are rebuilt against extracted old images from <paramref name="oldImageDirectory"/> and published into <paramref name="outputDirectory"/> only after the whole selection succeeds.
+    /// <para>执行 payload 模式合并：把选定清单分区针对 <paramref name="oldImageDirectory"/> 中的旧镜像重建， 并在全部选定分区成功后才发布到 <paramref name="outputDirectory"/>。</para></summary>
+    /// <param name="payloadPath">Payload file or ZIP update package.<para>载荷文件或 ZIP 升级包。</para></param>
+    /// <param name="oldImageDirectory">Directory of extracted old partition images used as base images; A/B slot suffixes are paired away when matching.
+    /// <para>用作基座的解包旧镜像目录；匹配时会剥离 A/B 槽位后缀。</para></param>
+    /// <param name="selectedPartitions">Partition names to merge, matched exactly or after slot stripping; <see langword="null"/> or empty merges every named partition.
     /// <para>要合并的分区名，按精确或剥离槽位后缀匹配；为 <see langword="null"/> 或空时合并全部有名字分区。</para></param>
     /// <param name="outputDirectory">Destination directory for the merged images.
     /// <para>合并镜像的目标目录。</para></param>
     /// <param name="options">Merge policy; <see langword="null"/> uses defaults.
     /// <para>合并策略；为 <see langword="null"/> 时使用默认值。</para></param>
-    /// <param name="progress">Optional stage progress sink. <para>可选的阶段进度回调。</para></param>
+    /// <param name="progress">Optional stage progress sink.<para>可选的阶段进度回调。</para></param>
     /// <param name="cancellationToken">Checked around listing, extraction and publication.
     /// <para>在列表、提取与发布前后检查。</para></param>
-    /// <returns>The published images; <see cref="SamsungIncrementalMergeResult.SkippedPartitions"/> is empty
-    /// because the <c>prism</c> policy applies to DAT mode only.
-    /// <para>已发布镜像；<see cref="SamsungIncrementalMergeResult.SkippedPartitions"/> 恒为空，
-    /// 因为 <c>prism</c> 策略仅适用于 DAT 模式。</para></returns>
+    /// <returns>The published images; <see cref="SamsungIncrementalMergeResult.SkippedPartitions"/> is empty because the <c>prism</c> policy applies to DAT mode only.
+    /// <para>已发布镜像；<see cref="SamsungIncrementalMergeResult.SkippedPartitions"/> 恒为空， 因为 <c>prism</c> 策略仅适用于 DAT 模式。</para></returns>
     /// <exception cref="ArgumentException">A path is blank or a partition name is unusable.
     /// <para>路径为空或分区名不可用。</para></exception>
-    /// <exception cref="DirectoryNotFoundException">The old-image directory is missing. <para>旧镜像目录缺失。</para></exception>
-    /// <exception cref="InvalidDataException">A selected partition is absent from the manifest, or a
-    /// source-dependent partition has no unambiguous old image.
+    /// <exception cref="DirectoryNotFoundException">The old-image directory is missing.
+    /// <para>旧镜像目录缺失。</para></exception>
+    /// <exception cref="InvalidDataException">A selected partition is absent from the manifest, or a source-dependent partition has no unambiguous old image.
     /// <para>选定分区不在清单中，或依赖源的分区没有唯一可匹配的旧镜像。</para></exception>
-    /// <exception cref="IOException">A destination exists while <see cref="SamsungIncrementalMergeOptions.Overwrite"/>
-    /// is disabled. <para>禁用 <see cref="SamsungIncrementalMergeOptions.Overwrite"/> 时目标已存在。</para></exception>
+    /// <exception cref="IOException">A destination exists while <see cref="SamsungIncrementalMergeOptions.Overwrite"/> is disabled.
+    /// <para>禁用 <see cref="SamsungIncrementalMergeOptions.Overwrite"/> 时目标已存在。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<SamsungIncrementalMergeResult> MergePayloadAsync(string payloadPath, string oldImageDirectory,

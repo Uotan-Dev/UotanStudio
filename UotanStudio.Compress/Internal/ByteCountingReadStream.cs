@@ -21,26 +21,14 @@ internal sealed class ByteCountingReadStream : Stream
     private readonly Action<int>? _bytesRead;
     private bool _disposed;
 
-    /// <summary>
-    /// Creates a counting read stream.
-    /// <para>创建计数读取流。</para>
-    /// </summary>
-    /// <param name="inner">
-    /// Readable stream the bytes are taken from.
-    /// <para>读取字节的来源流。</para>
-    /// </param>
-    /// <param name="leaveOpen">
-    /// When <see langword="true"/>, disposing this wrapper leaves <paramref name="inner"/> open.
-    /// <para>为 <see langword="true"/> 时，释放本包装器后 <paramref name="inner"/> 仍保持打开。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token checked before each read and after each accepted byte count.
-    /// <para>在每次读取前以及每次确认到的字节数后检查的令牌。</para>
-    /// </param>
-    /// <param name="bytesRead">
-    /// Optional callback invoked with the size of each read that returned at least one byte.
-    /// <para>可选回调，对每次返回至少一个字节的读取收到本次的字节数。</para>
-    /// </param>
+    /// <summary>Creates a counting read stream.<para>创建计数读取流。</para></summary>
+    /// <param name="inner">Readable stream the bytes are taken from.<para>读取字节的来源流。</para></param>
+    /// <param name="leaveOpen">When <see langword="true"/>, disposing this wrapper leaves <paramref name="inner"/> open.
+    /// <para>为 <see langword="true"/> 时，释放本包装器后 <paramref name="inner"/> 仍保持打开。</para></param>
+    /// <param name="cancellationToken">Token checked before each read and after each accepted byte count.
+    /// <para>在每次读取前以及每次确认到的字节数后检查的令牌。</para></param>
+    /// <param name="bytesRead">Optional callback invoked with the size of each read that returned at least one byte.
+    /// <para>可选回调，对每次返回至少一个字节的读取收到本次的字节数。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="inner"/> is <see langword="null"/>.
     /// <para><paramref name="inner"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="inner"/> cannot be read.

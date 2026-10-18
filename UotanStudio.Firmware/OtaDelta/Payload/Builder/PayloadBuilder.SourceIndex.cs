@@ -113,31 +113,20 @@ public sealed partial class PayloadBuilder
             }
         }
 
-        /// <summary>
-        /// Resolves every block of one target chunk against the index, writing one source block index per target
-        /// block, or <c>-1</c> when the content is absent.
-        /// <para>把一个目标分块的每个块与索引比对，按目标块写入一个源块下标；内容不存在时为 <c>-1</c>。</para>
-        /// </summary>
-        /// <remarks>
-        /// This loop is deliberately serial. Each block's preferred hint is derived from the previous block's
-        /// resolved match, and a hint failure is resolved by the digest chains, so block <c>i</c> cannot be settled
-        /// before block <c>i - 1</c>. Evaluating blocks out of order or concurrently therefore changes which source
-        /// block duplicate content resolves to, and that index is copied into the emitted extents, so the parallelism
-        /// budget for incremental matching is spent inside the index instead of in this loop.
-        /// <para>本循环刻意保持串行。每个块的 preferred 提示源自前一个块已解析的匹配，而提示失败时由摘要链解析，
-        /// 因此块 <c>i</c> 无法在块 <c>i - 1</c> 之前定论。乱序或并发求值会改变重复内容解析到的源块，而该索引会被
-        /// 写入输出的 extent，因此增量匹配的并发预算花在索引内部而不是本循环上。</para>
-        /// </remarks>
-        /// <param name="chunk">Target chunk buffer, a whole number of blocks long. <para>目标分块缓冲区，长度是块的整数倍。</para></param>
-        /// <param name="chunkLength">Valid bytes in <paramref name="chunk"/>. <para><paramref name="chunk"/> 中的有效字节数。</para></param>
-        /// <param name="blockSize">Block size in bytes. <para>块大小（字节）。</para></param>
-        /// <param name="chunkStartBlock">Index of the chunk's first block in the target partition. <para>本分块首块在目标分区中的下标。</para></param>
-        /// <param name="matches">
-        /// Receives one source block index per target block, or <c>-1</c>; must hold at least
-        /// <c>chunkLength / blockSize</c> entries.
-        /// <para>按目标块接收一个源块下标或 <c>-1</c>；容量至少为 <c>chunkLength / blockSize</c>。</para>
-        /// </param>
-        /// <param name="token">Cancellation token. <para>取消令牌。</para></param>
+        /// <summary>Resolves every block of one target chunk against the index, writing one source block index per target block, or <c>-1</c> when the content is absent.
+        /// <para>把一个目标分块的每个块与索引比对，按目标块写入一个源块下标；内容不存在时为 <c>-1</c>。</para></summary>
+        /// <remarks>This loop is deliberately serial. Each block's preferred hint is derived from the previous block's resolved match, and a hint failure is resolved by the digest chains, so block <c>i</c> cannot be settled before block <c>i - 1</c>. Evaluating blocks out of order or concurrently therefore changes which source block duplicate content resolves to, and that index is copied into the emitted extents, so the parallelism budget for incremental matching is spent inside the index instead of in this loop.
+        /// <para>本循环刻意保持串行。每个块的 preferred 提示源自前一个块已解析的匹配，而提示失败时由摘要链解析， 因此块 <c>i</c> 无法在块 <c>i - 1</c> 之前定论。乱序或并发求值会改变重复内容解析到的源块，而该索引会被 写入输出的 extent，因此增量匹配的并发预算花在索引内部而不是本循环上。</para></remarks>
+        /// <param name="chunk">Target chunk buffer, a whole number of blocks long.
+        /// <para>目标分块缓冲区，长度是块的整数倍。</para></param>
+        /// <param name="chunkLength">Valid bytes in <paramref name="chunk"/>.
+        /// <para><paramref name="chunk"/> 中的有效字节数。</para></param>
+        /// <param name="blockSize">Block size in bytes.<para>块大小（字节）。</para></param>
+        /// <param name="chunkStartBlock">Index of the chunk's first block in the target partition.
+        /// <para>本分块首块在目标分区中的下标。</para></param>
+        /// <param name="matches">Receives one source block index per target block, or <c>-1</c>; must hold at least <c>chunkLength / blockSize</c> entries.
+        /// <para>按目标块接收一个源块下标或 <c>-1</c>；容量至少为 <c>chunkLength / blockSize</c>。</para></param>
+        /// <param name="token">Cancellation token.<para>取消令牌。</para></param>
         public void MatchChunk(byte[] chunk, int chunkLength, int blockSize, ulong chunkStartBlock, long[] matches,
             CancellationToken token)
         {

@@ -105,19 +105,13 @@ public readonly struct AvbFooter
         };
     }
 
-    /// <summary>
-    /// Reads only the trailing footer-sized window to detect an AVB-signed image.
-    /// <para>仅读取尾部与 footer 等长的窗口来检测 AVB 签名镜像。</para>
-    /// </summary>
-    /// <param name="path">File system path of the candidate image; the file is opened for reading,
-    /// shared for concurrent readers, and closed before this method returns.
+    /// <summary>Reads only the trailing footer-sized window to detect an AVB-signed image.
+    /// <para>仅读取尾部与 footer 等长的窗口来检测 AVB 签名镜像。</para></summary>
+    /// <param name="path">File system path of the candidate image; the file is opened for reading, shared for concurrent readers, and closed before this method returns.
     /// <para>候选镜像的文件系统路径；文件以只读、允许并发读取的方式打开，并在本方法返回前关闭。</para></param>
-    /// <returns>The parsed footer, or <see langword="null"/> when the file is shorter than
-    /// <see cref="Size"/> bytes or its tail does not parse via <see cref="TryLoad"/>.
-    /// <para>解析后的尾部；当文件短于 <see cref="Size"/> 字节，或其尾部无法通过 <see cref="TryLoad"/>
-    /// 解析时返回 <see langword="null"/>。</para></returns>
-    /// <exception cref="FileNotFoundException">The file does not exist.
-    /// <para>文件不存在。</para></exception>
+    /// <returns>The parsed footer, or <see langword="null"/> when the file is shorter than <see cref="Size"/> bytes or its tail does not parse via <see cref="TryLoad"/>.
+    /// <para>解析后的尾部；当文件短于 <see cref="Size"/> 字节，或其尾部无法通过 <see cref="TryLoad"/> 解析时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="FileNotFoundException">The file does not exist.<para>文件不存在。</para></exception>
     public static AvbFooter? TryReadFile(string path)
     {
         var length = new FileInfo(path).Length;

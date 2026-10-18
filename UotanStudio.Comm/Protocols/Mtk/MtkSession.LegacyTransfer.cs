@@ -24,23 +24,18 @@ public sealed partial class MtkSession
 {
     /// <summary>Reads a Legacy eMMC range to a caller-owned stream after validating each packet checksum.
     /// <para>校验每个数据包的校验和后，将 Legacy eMMC 范围读取到调用方持有的流。</para></summary>
-    /// <remarks>The stream may contain partial output on failure; file publishers must use temporary files.
-    /// RPMB is not ordinary block storage. No retry or protocol fallback occurs.
+    /// <remarks>The stream may contain partial output on failure; file publishers must use temporary files. RPMB is not ordinary block storage. No retry or protocol fallback occurs.
     /// <para>失败时流可能包含部分输出；发布文件必须使用临时文件。RPMB 不是普通块存储。不重试，也不回退协议。</para></remarks>
     /// <param name="partitionId">The discovered physical region from 1 through 8, excluding RPMB.
     /// <para>已发现的 1 至 8 物理区域，不含 RPMB。</para></param>
-    /// <param name="offset">The byte offset aligned to 512.
-    /// <para>按 512 对齐的字节偏移。</para></param>
-    /// <param name="length">The positive byte count aligned to 512.
-    /// <para>按 512 对齐的正数字节数。</para></param>
-    /// <param name="destination">The writable stream, which remains open.
-    /// <para>保持打开的可写流。</para></param>
+    /// <param name="offset">The byte offset aligned to 512.<para>按 512 对齐的字节偏移。</para></param>
+    /// <param name="length">The positive byte count aligned to 512.<para>按 512 对齐的正数字节数。</para></param>
+    /// <param name="destination">The writable stream, which remains open.<para>保持打开的可写流。</para></param>
     /// <param name="timeoutMs">The cooperative whole-transfer deadline, from 1 ms through 24 hours.
     /// <para>完整传输的协作式截止时间，范围为 1 毫秒至 24 小时。</para></param>
     /// <param name="progress">Cumulative bytes stored and acknowledged.
     /// <para>累计已保存并确认的字节数。</para></param>
-    /// <param name="cancellationToken">Cancellation for the operation.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">Cancellation for the operation.<para>操作取消令牌。</para></param>
     /// <returns>A task completing after the last packet has been verified and acknowledged.
     /// <para>最后一个数据包经校验并确认后完成的任务。</para></returns>
     public Task ReadLegacyStorageAsync(byte partitionId, long offset, long length, Stream destination,
@@ -51,18 +46,15 @@ public sealed partial class MtkSession
     /// <para>精确写入 Legacy eMMC 范围，不填充、不重试，也不隐含回读校验。</para></summary>
     /// <param name="partitionId">The discovered physical region from 1 through 8, excluding RPMB.
     /// <para>已发现的 1 至 8 物理区域，不含 RPMB。</para></param>
-    /// <param name="offset">The byte offset aligned to 512.
-    /// <para>按 512 对齐的字节偏移。</para></param>
-    /// <param name="length">The positive byte count aligned to 512.
-    /// <para>按 512 对齐的正数字节数。</para></param>
+    /// <param name="offset">The byte offset aligned to 512.<para>按 512 对齐的字节偏移。</para></param>
+    /// <param name="length">The positive byte count aligned to 512.<para>按 512 对齐的正数字节数。</para></param>
     /// <param name="source">The readable stream positioned at the first selected byte; it remains open.
     /// <para>定位到首个选定字节的可读流；保持打开。</para></param>
     /// <param name="timeoutMs">The cooperative whole-transfer deadline, from 1 ms through 24 hours.
     /// <para>完整传输的协作式截止时间，范围为 1 毫秒至 24 小时。</para></param>
     /// <param name="progress">Cumulative bytes acknowledged by the agent.
     /// <para>累计已被代理确认的字节数。</para></param>
-    /// <param name="cancellationToken">Cancellation for the operation.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">Cancellation for the operation.<para>操作取消令牌。</para></param>
     /// <returns>A task completing after the final packet receives its CONT acknowledgement.
     /// <para>最后一个数据包收到 CONT 确认后完成的任务。</para></returns>
     public Task WriteLegacyStorageAsync(byte partitionId, long offset, long length, Stream source,

@@ -14,10 +14,8 @@ public sealed class BoundedReadStream : Stream
     private long _position;
     private bool _disposed;
 
-    /// <summary>
-    /// Creates a bounded read stream beginning at the current stream position.
-    /// <para>创建从当前流位置开始的有界只读流。</para>
-    /// </summary>
+    /// <summary>Creates a bounded read stream beginning at the current stream position.
+    /// <para>创建从当前流位置开始的有界只读流。</para></summary>
     /// <param name="inner">Readable, seekable stream whose current position becomes the window start.
     /// <para>可读且可定位的流，其当前位置即窗口起点。</para></param>
     /// <param name="length">Window size in bytes; zero yields a stream that always reads as exhausted.
@@ -37,10 +35,8 @@ public sealed class BoundedReadStream : Stream
     {
     }
 
-    /// <summary>
-    /// Creates a bounded read stream at the specified absolute offset and length.
-    /// <para>创建指定绝对偏移和长度的有界只读流。</para>
-    /// </summary>
+    /// <summary>Creates a bounded read stream at the specified absolute offset and length.
+    /// <para>创建指定绝对偏移和长度的有界只读流。</para></summary>
     /// <param name="inner">Readable, seekable stream supplying the window bytes.
     /// <para>提供窗口字节的可读且可定位的流。</para></param>
     /// <param name="offset">Absolute offset of the window start within <paramref name="inner"/>; must be non-negative.
@@ -114,15 +110,12 @@ public sealed class BoundedReadStream : Stream
         set { Seek(value, SeekOrigin.Begin); }
     }
 
-    /// <summary>
-    /// Reads bytes from the stream into the buffer.
-    /// <para>从流中读取字节到缓冲区。</para>
-    /// </summary>
-    /// <param name="buffer">Destination array receiving the window bytes. <para>接收窗口字节的目标数组。</para></param>
+    /// <summary>Reads bytes from the stream into the buffer.<para>从流中读取字节到缓冲区。</para></summary>
+    /// <param name="buffer">Destination array receiving the window bytes.
+    /// <para>接收窗口字节的目标数组。</para></param>
     /// <param name="offset">Index in <paramref name="buffer"/> where the copied bytes start.
     /// <para><paramref name="buffer"/> 中复制字节的起始索引。</para></param>
-    /// <param name="count">Maximum number of bytes to read; the request is trimmed to the bytes left in
-    /// the window before the inner stream is touched.
+    /// <param name="count">Maximum number of bytes to read; the request is trimmed to the bytes left in the window before the inner stream is touched.
     /// <para>最多读取的字节数；在访问底层流前先裁剪到窗口内的剩余字节数。</para></param>
     /// <returns>The number of bytes copied into <paramref name="buffer"/>, <c>0</c> at the window end.
     /// <para>复制到 <paramref name="buffer"/> 的字节数；到达窗口末尾时为 <c>0</c>。</para></returns>

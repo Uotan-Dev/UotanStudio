@@ -49,20 +49,24 @@ public sealed class PathSandbox
     /// <para>不受限沙箱为 <see langword="true"/>，此时只应用规范化与存在性检查。</para></value>
     public bool IsUnrestricted => _root is null;
 
-    /// <summary>
-    /// Resolves a client-supplied path against the sandbox and verifies containment.
-    /// <para>按沙箱解析客户端路径并验证包含关系。</para>
-    /// </summary>
-    /// <example><code>
+    /// <summary>Resolves a client-supplied path against the sandbox and verifies containment.
+    /// <para>按沙箱解析客户端路径并验证包含关系。</para></summary>
+    /// <example>
+    /// <code>
     /// var sandbox = new PathSandbox(@"D:\firmware");
     /// string image = sandbox.Resolve("images/boot.img", mustExist: true);
-    /// </code></example>
-    /// <param name="path">Absolute path (must stay inside the root) or root-relative path. <para>绝对路径（必须位于根内）或相对根目录的路径。</para></param>
-    /// <param name="mustExist">When true, requires the resolved path to exist. <para>为 true 时要求解析后的路径必须存在。</para></param>
+    /// </code>
+    /// </example>
+    /// <param name="path">Absolute path (must stay inside the root) or root-relative path.
+    /// <para>绝对路径（必须位于根内）或相对根目录的路径。</para></param>
+    /// <param name="mustExist">When true, requires the resolved path to exist.
+    /// <para>为 true 时要求解析后的路径必须存在。</para></param>
     /// <returns>The normalized absolute path. Containment compares case-insensitively on Windows and case-sensitively elsewhere, and the root itself counts as contained.
     /// <para>规范化后的绝对路径。包含比较在 Windows 上不区分大小写、在其他平台区分大小写，根目录本身也算被包含。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="path"/> is empty or only whitespace. <para><paramref name="path"/> 为空或仅包含空白。</para></exception>
-    /// <exception cref="UnauthorizedAccessException">The path escapes the sandbox. <para>路径逃逸沙箱时抛出。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is empty or only whitespace.
+    /// <para><paramref name="path"/> 为空或仅包含空白。</para></exception>
+    /// <exception cref="UnauthorizedAccessException">The path escapes the sandbox.
+    /// <para>路径逃逸沙箱时抛出。</para></exception>
     /// <exception cref="FileNotFoundException"><paramref name="mustExist"/> is <see langword="true"/> and neither a file nor a directory exists at the resolved path.
     /// <para><paramref name="mustExist"/> 为 <see langword="true"/> 且解析路径上既无文件也无目录。</para></exception>
     public string Resolve(string path, bool mustExist = false)

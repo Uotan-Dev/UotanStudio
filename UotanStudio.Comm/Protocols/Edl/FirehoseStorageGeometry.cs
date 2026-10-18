@@ -6,23 +6,14 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// </summary>
 public sealed record FirehoseStorageGeometry
 {
-    /// <summary>
-    /// Creates a geometry with checked sector and byte capacities.
-    /// <para>创建带有经校验扇区与字节容量的几何信息。</para>
-    /// </summary>
-    /// <param name="physicalPartitionNumber">
-    /// The queried physical region or LUN. <para>被查询的物理区域或 LUN。</para>
-    /// </param>
-    /// <param name="sectorSize">
-    /// The reported block size in bytes. <para>所报告的块大小（字节）。</para>
-    /// </param>
-    /// <param name="sectorCount">
-    /// The reported total block count. <para>所报告的总块数。</para>
-    /// </param>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="physicalPartitionNumber"/> is negative, <paramref name="sectorSize"/> is zero, negative or greater than 65536, or <paramref name="sectorCount"/> is zero or negative.
-    /// <para><paramref name="physicalPartitionNumber"/> 为负、<paramref name="sectorSize"/> 为零、负值或大于 65536，或 <paramref name="sectorCount"/> 为零或负值。</para>
-    /// </exception>
+    /// <summary>Creates a geometry with checked sector and byte capacities.
+    /// <para>创建带有经校验扇区与字节容量的几何信息。</para></summary>
+    /// <param name="physicalPartitionNumber">The queried physical region or LUN.
+    /// <para>被查询的物理区域或 LUN。</para></param>
+    /// <param name="sectorSize">The reported block size in bytes.<para>所报告的块大小（字节）。</para></param>
+    /// <param name="sectorCount">The reported total block count.<para>所报告的总块数。</para></param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="physicalPartitionNumber"/> is negative, <paramref name="sectorSize"/> is zero, negative or greater than 65536, or <paramref name="sectorCount"/> is zero or negative.
+    /// <para><paramref name="physicalPartitionNumber"/> 为负、<paramref name="sectorSize"/> 为零、负值或大于 65536，或 <paramref name="sectorCount"/> 为零或负值。</para></exception>
     public FirehoseStorageGeometry(int physicalPartitionNumber, long sectorSize, long sectorCount)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(physicalPartitionNumber);

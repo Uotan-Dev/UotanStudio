@@ -8,10 +8,8 @@ using System.Buffers;
 /// </summary>
 public static class StreamCopy
 {
-    /// <summary>
-    /// Copies exactly the specified byte count and throws if the input ends early.
-    /// <para>精确复制指定字节数，输入提前结束时抛出异常。</para>
-    /// </summary>
+    /// <summary>Copies exactly the specified byte count and throws if the input ends early.
+    /// <para>精确复制指定字节数，输入提前结束时抛出异常。</para></summary>
     /// <param name="source">Readable stream positioned at the first byte of the region.
     /// <para>定位到待复制区域首字节、可读的源流。</para></param>
     /// <param name="destination">Writable stream receiving the copied bytes; it is not flushed.
@@ -31,13 +29,8 @@ public static class StreamCopy
     public static void CopyExactly(Stream source, Stream destination, long count, int bufferSize = 81920)
         => CopyExactly(source, destination, count, CancellationToken.None, bufferSize);
 
-    /// <summary>
-    /// Copies exactly the specified byte count with cancellation between buffer transfers.
-    /// The transfer buffer is rented from <see cref="ArrayPool{Byte}.Shared"/> instead of being
-    /// allocated per call; this method is called at high frequency by extractors.
-    /// <para>精确复制指定字节数，并在缓冲传输之间检查取消。传输缓冲改由
-    /// <see cref="ArrayPool{Byte}.Shared"/> 租借而非每次分配；提取器会高频调用本方法。</para>
-    /// </summary>
+    /// <summary>Copies exactly the specified byte count with cancellation between buffer transfers. The transfer buffer is rented from <see cref="ArrayPool{Byte}.Shared"/> instead of being allocated per call; this method is called at high frequency by extractors.
+    /// <para>精确复制指定字节数，并在缓冲传输之间检查取消。传输缓冲改由 <see cref="ArrayPool{Byte}.Shared"/> 租借而非每次分配；提取器会高频调用本方法。</para></summary>
     /// <param name="source">Readable stream positioned at the first byte of the region.
     /// <para>定位到待复制区域首字节、可读的源流。</para></param>
     /// <param name="destination">Writable stream receiving the copied bytes; it is not flushed.
@@ -82,12 +75,8 @@ public static class StreamCopy
         }
     }
 
-    /// <summary>
-    /// Asynchronously copies exactly the specified byte count with cancellation support and throws if the input ends early.
-    /// The transfer buffer is rented from <see cref="ArrayPool{Byte}.Shared"/> instead of being allocated per call.
-    /// <para>异步精确复制指定字节数，支持取消，输入提前结束时抛出异常。传输缓冲改由
-    /// <see cref="ArrayPool{Byte}.Shared"/> 租借而非每次分配。</para>
-    /// </summary>
+    /// <summary>Asynchronously copies exactly the specified byte count with cancellation support and throws if the input ends early. The transfer buffer is rented from <see cref="ArrayPool{Byte}.Shared"/> instead of being allocated per call.
+    /// <para>异步精确复制指定字节数，支持取消，输入提前结束时抛出异常。传输缓冲改由 <see cref="ArrayPool{Byte}.Shared"/> 租借而非每次分配。</para></summary>
     /// <param name="source">Readable stream positioned at the first byte of the region.
     /// <para>定位到待复制区域首字节、可读的源流。</para></param>
     /// <param name="destination">Writable stream receiving the copied bytes; bytes already written stay written when the operation fails.

@@ -222,22 +222,14 @@ public sealed class ScrcpyClient : IDisposable
     /// <para>服务端进程启动期间，视频 socket 重试之间的等待。</para></summary>
     private const int SocketRetryDelayMs = 50;
 
-    /// <summary>
-    /// Initializes the client over an established device session; call <see cref="Connect"/> once the server is running. The session owns the streams returned by <c>OpenServiceStream</c>.
-    /// <para>通过已建立的设备会话初始化客户端；服务端启动后调用 <see cref="Connect"/>。由 <c>OpenServiceStream</c> 返回的流归该会话所有。</para>
-    /// </summary>
-    /// <param name="session">
-    /// An established ADB session used to open service streams.
-    /// <para>用于打开服务流的已建立 ADB 会话。</para>
-    /// </param>
-    /// <param name="options">
-    /// The options the server was started with; controls which sockets and metadata are read.
-    /// <para>服务端启动时使用的选项；决定读取哪些 socket 与元数据。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="session"/> or <paramref name="options"/> is <see langword="null"/>.
-    /// <para><paramref name="session"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para>
-    /// </exception>
+    /// <summary>Initializes the client over an established device session; call <see cref="Connect"/> once the server is running. The session owns the streams returned by <c>OpenServiceStream</c>.
+    /// <para>通过已建立的设备会话初始化客户端；服务端启动后调用 <see cref="Connect"/>。由 <c>OpenServiceStream</c> 返回的流归该会话所有。</para></summary>
+    /// <param name="session">An established ADB session used to open service streams.
+    /// <para>用于打开服务流的已建立 ADB 会话。</para></param>
+    /// <param name="options">The options the server was started with; controls which sockets and metadata are read.
+    /// <para>服务端启动时使用的选项；决定读取哪些 socket 与元数据。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="session"/> or <paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="session"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para></exception>
     public ScrcpyClient(Comm.Contracts.IAdbDeviceSession session, ScrcpyServerOptions options)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -245,22 +237,14 @@ public sealed class ScrcpyClient : IDisposable
         _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
-    /// <summary>
-    /// Initializes the client from an existing ADB server, opening each service stream as an owned stream.
-    /// <para>从现有 ADB 服务端初始化客户端，将每个服务流作为自有流打开。</para>
-    /// </summary>
-    /// <param name="server">
-    /// The ADB server services used to open localabstract streams; the client disposes the streams it opens.
-    /// <para>用于打开 localabstract 流的 ADB 服务；客户端负责释放其打开的流。</para>
-    /// </param>
-    /// <param name="options">
-    /// The options the server was started with; controls which sockets and metadata are read.
-    /// <para>服务端启动时使用的选项；决定读取哪些 socket 与元数据。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="server"/> or <paramref name="options"/> is <see langword="null"/>.
-    /// <para><paramref name="server"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para>
-    /// </exception>
+    /// <summary>Initializes the client from an existing ADB server, opening each service stream as an owned stream.
+    /// <para>从现有 ADB 服务端初始化客户端，将每个服务流作为自有流打开。</para></summary>
+    /// <param name="server">The ADB server services used to open localabstract streams; the client disposes the streams it opens.
+    /// <para>用于打开 localabstract 流的 ADB 服务；客户端负责释放其打开的流。</para></param>
+    /// <param name="options">The options the server was started with; controls which sockets and metadata are read.
+    /// <para>服务端启动时使用的选项；决定读取哪些 socket 与元数据。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="server"/> or <paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="server"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para></exception>
     public ScrcpyClient(AdbServerServices server, ScrcpyServerOptions options)
     {
         ArgumentNullException.ThrowIfNull(server);
@@ -592,18 +576,14 @@ public sealed class ScrcpyClient : IDisposable
         }
     }
 
-    /// <summary>
-    /// Reads one framed audio packet from the audio socket.
-    /// <para>从音频 socket 读取一个分帧音频包。</para>
-    /// </summary>
-    /// <remarks>
-    /// Audio packets use the same 12-byte header as video (PTS + length).
-    /// The payload bound is <see cref="MaxAudioFrameLength"/>; violations throw.
-    /// <para>音频包与视频共用 12 字节头（PTS + 长度）。负载上限 <see cref="MaxAudioFrameLength"/>，越界即抛出。</para>
-    /// </remarks>
-    /// <param name="timeoutMs">Per-read timeout in milliseconds. <para>单次读取超时（毫秒）。</para></param>
+    /// <summary>Reads one framed audio packet from the audio socket.
+    /// <para>从音频 socket 读取一个分帧音频包。</para></summary>
+    /// <remarks>Audio packets use the same 12-byte header as video (PTS + length). The payload bound is <see cref="MaxAudioFrameLength"/>; violations throw.
+    /// <para>音频包与视频共用 12 字节头（PTS + 长度）。负载上限 <see cref="MaxAudioFrameLength"/>，越界即抛出。</para></remarks>
+    /// <param name="timeoutMs">Per-read timeout in milliseconds.<para>单次读取超时（毫秒）。</para></param>
     /// <returns>The frame, or <see langword="null"/> when no header arrived before timeout.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when audio is disabled or not connected. <para>音频未启用或未连接时抛出。</para></exception>
+    /// <exception cref="InvalidOperationException">Thrown when audio is disabled or not connected.
+    /// <para>音频未启用或未连接时抛出。</para></exception>
     /// <exception cref="EndOfStreamException">The server closed the audio stream.</exception>
     public ScrcpyAudioFrame? ReadAudioFrame(int timeoutMs)
     {

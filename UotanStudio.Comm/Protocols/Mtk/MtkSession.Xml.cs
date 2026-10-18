@@ -64,14 +64,8 @@ public sealed partial class MtkSession
     }
 
 
-    /// <summary>
-    /// Accepts and acknowledges an XML DA's initial START after an explicitly uploaded and
-    /// started agent. This only establishes the control channel, not hardware, DRAM, DA2
-    /// or storage readiness. No XFlash/XML fallback or loader autodetection is performed.
-    /// <para>在显式上传并启动的 agent 之后，接受并确认 XML DA 的初始 START。
-    /// 这仅建立控制通道，不代表硬件、DRAM、DA2 或存储已就绪。不进行 XFlash/XML
-    /// 回退，也不自动探测 loader。</para>
-    /// </summary>
+    /// <summary>Accepts and acknowledges an XML DA's initial START after an explicitly uploaded and started agent. This only establishes the control channel, not hardware, DRAM, DA2 or storage readiness. No XFlash/XML fallback or loader autodetection is performed.
+    /// <para>在显式上传并启动的 agent 之后，接受并确认 XML DA 的初始 START。 这仅建立控制通道，不代表硬件、DRAM、DA2 或存储已就绪。不进行 XFlash/XML 回退，也不自动探测 loader。</para></summary>
     /// <param name="cancellationToken">Cancellation for waiting and the bounded initial exchange.
     /// <para>用于等待与有界初始交换的取消令牌。</para></param>
     /// <returns>A task that completes once the control channel is attached.

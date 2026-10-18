@@ -25,23 +25,14 @@ public static class FileMagic
     /// </returns>
     public static MagicInfo? Identify(ReadOnlySpan<byte> data) => CompiledMagicEngine.Match(data);
 
-    /// <summary>
-    /// Identifies a file path, reading only the first <paramref name="probeLength"/> bytes.
-    /// <para>识别文件路径，仅读取头部 <paramref name="probeLength"/> 字节。</para>
-    /// </summary>
-    /// <param name="path">
-    /// Path of the file to probe; blank or missing paths yield no result.
-    /// <para>要探测的文件路径；空白或不存在的返回空。</para>
-    /// </param>
-    /// <param name="probeLength">
-    /// Maximum header bytes to read, clamped to the actual file length.
-    /// <para>读取的最大头部字节数，会被限制到实际文件长度。</para>
-    /// </param>
-    /// <returns>
-    /// The matched descriptor, or <see langword="null"/> when the file is unknown, empty,
-    /// unreadable, or inaccessible.
-    /// <para>匹配到的描述符；文件未知、为空、不可读或无法访问时返回 <see langword="null"/>。</para>
-    /// </returns>
+    /// <summary>Identifies a file path, reading only the first <paramref name="probeLength"/> bytes.
+    /// <para>识别文件路径，仅读取头部 <paramref name="probeLength"/> 字节。</para></summary>
+    /// <param name="path">Path of the file to probe; blank or missing paths yield no result.
+    /// <para>要探测的文件路径；空白或不存在的返回空。</para></param>
+    /// <param name="probeLength">Maximum header bytes to read, clamped to the actual file length.
+    /// <para>读取的最大头部字节数，会被限制到实际文件长度。</para></param>
+    /// <returns>The matched descriptor, or <see langword="null"/> when the file is unknown, empty, unreadable, or inaccessible.
+    /// <para>匹配到的描述符；文件未知、为空、不可读或无法访问时返回 <see langword="null"/>。</para></returns>
     public static MagicInfo? IdentifyFile(string path, int probeLength = DefaultProbeLength)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))

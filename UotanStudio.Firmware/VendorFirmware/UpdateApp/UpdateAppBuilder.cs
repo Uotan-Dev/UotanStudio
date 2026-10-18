@@ -31,28 +31,20 @@ public static class UpdateAppBuilder
     private const int MaximumEntries = 1024;
     private const int MaximumChecksumEntries = 1_048_576;
 
-    /// <summary>
-    /// Builds a flat-directory, canonical unsigned container and publishes it atomically.
-    /// <para>从扁平目录构建标准无签名容器，并以原子方式发布输出。</para>
-    /// </summary>
+    /// <summary>Builds a flat-directory, canonical unsigned container and publishes it atomically.
+    /// <para>从扁平目录构建标准无签名容器，并以原子方式发布输出。</para></summary>
     /// <param name="inputDirectory">Directory containing partition files, normally with an <c>.img</c> suffix.
     /// <para>包含分区文件的目录，通常使用 <c>.img</c> 后缀。</para></param>
-    /// <param name="outputPath">Destination container path. <para>目标容器路径。</para></param>
+    /// <param name="outputPath">Destination container path.<para>目标容器路径。</para></param>
     /// <param name="options">Writer options; <see langword="null"/> uses defaults.
     /// <para>写入选项；为 <see langword="null"/> 时使用默认值。</para></param>
     /// <param name="cancellationToken">Cancellation token checked during both passes.
     /// <para>在两次文件扫描和写入期间检查的取消令牌。</para></param>
-    /// <returns>The number of entries written. <para>写入的条目数。</para></returns>
-    /// <exception cref="DirectoryNotFoundException">
-    /// <paramref name="inputDirectory"/> does not exist. <para><paramref name="inputDirectory"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The configured block size is zero, an entry name is not printable ASCII of at most the 16 bytes the
-    /// file_type field stores, two entries share a name, an entry exceeds 4 GiB, or a checksum table would
-    /// exceed its stored limit.
-    /// <para>配置的分块大小为零、条目名不是 file_type 字段可存放的最多 16 字节可打印 ASCII、两个条目重名、
-    /// 单个条目超过 4 GiB，或校验和表超出其存储上限。</para>
-    /// </exception>
+    /// <returns>The number of entries written.<para>写入的条目数。</para></returns>
+    /// <exception cref="DirectoryNotFoundException"><paramref name="inputDirectory"/> does not exist.
+    /// <para><paramref name="inputDirectory"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The configured block size is zero, an entry name is not printable ASCII of at most the 16 bytes the file_type field stores, two entries share a name, an entry exceeds 4 GiB, or a checksum table would exceed its stored limit.
+    /// <para>配置的分块大小为零、条目名不是 file_type 字段可存放的最多 16 字节可打印 ASCII、两个条目重名、 单个条目超过 4 GiB，或校验和表超出其存储上限。</para></exception>
     public static int Build(
         string inputDirectory,
         string outputPath,

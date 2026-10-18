@@ -41,19 +41,17 @@ internal static class QsbRawprogram
     private const long MaximumXmlBytes = 16L * 1024 * 1024;
     private const int Ext4SuperblockMagicOffset = 1080;
 
-    /// <summary>
-    /// Parses the rawprogram XML from a stream, rejecting oversized or malformed documents.
-    /// <para>从流解析 rawprogram XML，拒绝超大或格式错误的文档。</para>
-    /// </summary>
+    /// <summary>Parses the rawprogram XML from a stream, rejecting oversized or malformed documents.
+    /// <para>从流解析 rawprogram XML，拒绝超大或格式错误的文档。</para></summary>
     /// <param name="input">Readable XML stream; consumed from the start and left open.
     /// <para>可读的 XML 流；从起始处消费并保持打开。</para></param>
-    /// <param name="cancellationToken">Cancels parsing. <para>取消本次解析。</para></param>
-    /// <returns>Program elements in document order. <para>按文档顺序排列的 program 元素。</para></returns>
-    /// <exception cref="ArgumentException">The stream cannot be read. <para>流不可读。</para></exception>
-    /// <exception cref="InvalidDataException">The XML is malformed, a required sector attribute is
-    /// missing or non-numeric, or the program count exceeds the ceiling.
+    /// <param name="cancellationToken">Cancels parsing.<para>取消本次解析。</para></param>
+    /// <returns>Program elements in document order.<para>按文档顺序排列的 program 元素。</para></returns>
+    /// <exception cref="ArgumentException">The stream cannot be read.<para>流不可读。</para></exception>
+    /// <exception cref="InvalidDataException">The XML is malformed, a required sector attribute is missing or non-numeric, or the program count exceeds the ceiling.
     /// <para>XML 格式错误、必需扇区属性缺失或非数值、program 数量超过上限。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static IReadOnlyList<QsbProgram> Parse(Stream input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -145,22 +143,22 @@ internal static class QsbRawprogram
             .ToList();
     }
 
-    /// <summary>
-    /// Merges one chunk group into <c>{prefix}.img</c> inside the output directory, following the
-    /// reference sector-window layout with bounded writes.
-    /// <para>将一组分块按参考扇区窗口布局合并为输出目录中的 <c>{prefix}.img</c>，写入量有界。</para>
-    /// </summary>
-    /// <param name="baseDirectory">Directory containing the chunk files. <para>包含分块文件的目录。</para></param>
-    /// <param name="prefix">Group prefix taken from <see cref="GroupChunks"/>. <para>来自 <see cref="GroupChunks"/> 的组前缀。</para></param>
-    /// <param name="members">Ordered chunk programs of the group. <para>组内有序的分块程序。</para></param>
-    /// <param name="outputDirectory">Destination directory for the merged image. <para>合并镜像的目标目录。</para></param>
-    /// <param name="maximumOutputBytes">Ceiling for the merged image size. <para>合并镜像的大小上限。</para></param>
-    /// <param name="cancellationToken">Cancels the merge. <para>取消本次合并。</para></param>
-    /// <returns>Absolute path of the merged image. <para>合并镜像的绝对路径。</para></returns>
-    /// <exception cref="InvalidDataException">A chunk file is missing, a sector computation overflows or
-    /// exceeds the output ceiling, or a file name escapes the base directory.
+    /// <summary>Merges one chunk group into <c>{prefix}.img</c> inside the output directory, following the reference sector-window layout with bounded writes.
+    /// <para>将一组分块按参考扇区窗口布局合并为输出目录中的 <c>{prefix}.img</c>，写入量有界。</para></summary>
+    /// <param name="baseDirectory">Directory containing the chunk files.<para>包含分块文件的目录。</para></param>
+    /// <param name="prefix">Group prefix taken from <see cref="GroupChunks"/>.
+    /// <para>来自 <see cref="GroupChunks"/> 的组前缀。</para></param>
+    /// <param name="members">Ordered chunk programs of the group.<para>组内有序的分块程序。</para></param>
+    /// <param name="outputDirectory">Destination directory for the merged image.
+    /// <para>合并镜像的目标目录。</para></param>
+    /// <param name="maximumOutputBytes">Ceiling for the merged image size.
+    /// <para>合并镜像的大小上限。</para></param>
+    /// <param name="cancellationToken">Cancels the merge.<para>取消本次合并。</para></param>
+    /// <returns>Absolute path of the merged image.<para>合并镜像的绝对路径。</para></returns>
+    /// <exception cref="InvalidDataException">A chunk file is missing, a sector computation overflows or exceeds the output ceiling, or a file name escapes the base directory.
     /// <para>分块缺失、扇区计算溢出或超出输出上限、文件名逃出基准目录。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static async Task<string> MergeGroupAsync(string baseDirectory, string prefix,
         IReadOnlyList<QsbProgram> members, string outputDirectory, long maximumOutputBytes,
         CancellationToken cancellationToken = default)

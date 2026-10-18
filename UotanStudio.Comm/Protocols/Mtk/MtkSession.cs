@@ -206,23 +206,17 @@ public sealed partial class MtkSession : IProtocolSession
             session.EndpointIn, session.EndpointOut, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Opens a session over a transport already bound to the command endpoints of the described USB device, verifying the descriptor-level mode and command-interface selection before any protocol byte is exchanged. Ambiguous or unexpected interfaces are rejected without device I/O.
-    /// <para>在已绑定到所描述 USB 设备命令端点的传输上开会话，在任何协议字节交互之前先校验描述符层面的模式与命令接口选择。接口歧义或不符合预期时直接拒绝，不进行设备 I/O。</para>
-    /// </summary>
+    /// <summary>Opens a session over a transport already bound to the command endpoints of the described USB device, verifying the descriptor-level mode and command-interface selection before any protocol byte is exchanged. Ambiguous or unexpected interfaces are rejected without device I/O.
+    /// <para>在已绑定到所描述 USB 设备命令端点的传输上开会话，在任何协议字节交互之前先校验描述符层面的模式与命令接口选择。接口歧义或不符合预期时直接拒绝，不进行设备 I/O。</para></summary>
     /// <param name="transport">An open transport bound to the caller-selected endpoints.
     /// 已绑定到调用方所选端点的打开传输。</param>
-    /// <param name="device">The observed descriptors of the device behind the transport.
-    /// 传输之后设备的已观测描述符。</param>
-    /// <param name="options">Optional expectations; <see langword="null"/> keeps compatible behaviour.
-    /// 可选的期望条件；为 <see langword="null"/> 时保持兼容行为。</param>
+    /// <param name="device">The observed descriptors of the device behind the transport. 传输之后设备的已观测描述符。</param>
+    /// <param name="options">Optional expectations; <see langword="null"/>keeps compatible behaviour.
+    /// 可选的期望条件；为 <see langword="null"/>时保持兼容行为。</param>
     /// <param name="cancellationToken">The operation cancellation token. 取消令牌。</param>
-    /// <returns>An initialized bootloader session which owns the transport.
-    /// 拥有该传输的已初始化 bootloader 会话。</returns>
-    /// <exception cref="InvalidOperationException">The endpoint presents a logging-only or otherwise
-    /// unusable command interface, or the classified mode contradicts <see cref="MtkOpenOptions.ExpectedMode"/>;
-    /// no protocol byte was exchanged. <para>端点仅呈现日志接口或其他不可用命令接口，或分类模式与
-    /// <see cref="MtkOpenOptions.ExpectedMode"/> 矛盾；未交换任何协议字节。</para></exception>
+    /// <returns>An initialized bootloader session which owns the transport. 拥有该传输的已初始化 bootloader 会话。</returns>
+    /// <exception cref="InvalidOperationException">The endpoint presents a logging-only or otherwise unusable command interface, or the classified mode contradicts <see cref="MtkOpenOptions.ExpectedMode"/>; no protocol byte was exchanged.
+    /// <para>端点仅呈现日志接口或其他不可用命令接口，或分类模式与 <see cref="MtkOpenOptions.ExpectedMode"/> 矛盾；未交换任何协议字节。</para></exception>
     public static Task<MtkSession> OpenUsbAsync(ICommTransport transport, UsbDeviceInfo device,
         MtkOpenOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -355,40 +349,21 @@ public sealed partial class MtkSession : IProtocolSession
         }
     }
 
-    /// <summary>
-    /// Uploads one explicitly selected, word-aligned DA image including its signature bytes.
-    /// Authentication failures are reported; no image patching or fallback agent is attempted.
-    /// <para>上传一个显式选定、按字对齐的 DA 镜像（含其签名字节）。认证失败会被上报；
-    /// 不进行镜像修补，也不尝试任何回退代理。</para>
-    /// </summary>
-    /// <param name="image">
-    /// A readable stream positioned at the agent image.
-    /// <para>定位到代理镜像起始处、可读的流。</para>
-    /// </param>
-    /// <param name="loadAddress">
-    /// The validated 32-bit target load address supplied by the device profile.
-    /// <para>由设备配置提供、已校验的 32 位目标加载地址。</para>
-    /// </param>
-    /// <param name="length">
-    /// The total image length, including the signature, limited to 64 MiB.
-    /// <para>镜像总长度（含签名），上限为 64 MiB。</para>
-    /// </param>
-    /// <param name="signatureLength">
-    /// The signature suffix length included in the image.
-    /// <para>镜像中包含的签名后缀长度。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Optional cumulative uploaded-byte progress.
-    /// <para>可选的累计已上传字节进度。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The operation cancellation token.
-    /// <para>操作取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// A task that completes once the device confirms the uploaded agent checksum and the session advances to the agent-uploaded stage.
-    /// <para>在设备确认已上传代理的校验和、会话推进到代理已上传阶段后完成的任务。</para>
-    /// </returns>
+    /// <summary>Uploads one explicitly selected, word-aligned DA image including its signature bytes. Authentication failures are reported; no image patching or fallback agent is attempted.
+    /// <para>上传一个显式选定、按字对齐的 DA 镜像（含其签名字节）。认证失败会被上报； 不进行镜像修补，也不尝试任何回退代理。</para></summary>
+    /// <param name="image">A readable stream positioned at the agent image.
+    /// <para>定位到代理镜像起始处、可读的流。</para></param>
+    /// <param name="loadAddress">The validated 32-bit target load address supplied by the device profile.
+    /// <para>由设备配置提供、已校验的 32 位目标加载地址。</para></param>
+    /// <param name="length">The total image length, including the signature, limited to 64 MiB.
+    /// <para>镜像总长度（含签名），上限为 64 MiB。</para></param>
+    /// <param name="signatureLength">The signature suffix length included in the image.
+    /// <para>镜像中包含的签名后缀长度。</para></param>
+    /// <param name="progress">Optional cumulative uploaded-byte progress.
+    /// <para>可选的累计已上传字节进度。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
+    /// <returns>A task that completes once the device confirms the uploaded agent checksum and the session advances to the agent-uploaded stage.
+    /// <para>在设备确认已上传代理的校验和、会话推进到代理已上传阶段后完成的任务。</para></returns>
     public Task UploadDownloadAgentAsync(Stream image, uint loadAddress, int length, int signatureLength = 0,
         IProgress<long>? progress = null, CancellationToken cancellationToken = default)
         => UploadDownloadAgentCoreAsync(image, loadAddress, length, signatureLength, progress, cancellationToken);

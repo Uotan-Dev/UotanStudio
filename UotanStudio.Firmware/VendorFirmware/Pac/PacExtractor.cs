@@ -32,24 +32,15 @@ internal static class PacExtractor
     private const int ChunkSize = 1024 * 1024;
     private const uint ExpectedMagic = 0xFFFAFFFA;
 
-    /// <summary>
-    /// Lists all entry information within a PAC file.
-    /// <para>列出 PAC 文件中的所有条目信息。</para>
-    /// </summary>
-    /// <param name="imagePath">
-    /// Path to the PAC image; must be a non-empty, existing file readable from the start.
-    /// <para>PAC 镜像路径；必须是非空、存在且可从开头读取的文件。</para>
-    /// </param>
+    /// <summary>Lists all entry information within a PAC file.<para>列出 PAC 文件中的所有条目信息。</para></summary>
+    /// <param name="imagePath">Path to the PAC image; must be a non-empty, existing file readable from the start.
+    /// <para>PAC 镜像路径；必须是非空、存在且可从开头读取的文件。</para></param>
     /// <returns>One tuple per declared file entry giving its name, size, offset in the image, type flag, address count and address array, in table order; entries are returned even when their data range is invalid.
     /// <para>每个声明的文件条目对应一个元组，按表顺序给出名称、大小、在镜像中的偏移、类型标志、地址数量与地址数组；即使数据范围无效条目仍会被返回。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="imagePath"/> is <see langword="null"/> or empty.
-    /// <para><paramref name="imagePath"/> 为 <see langword="null"/> 或空。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The header magic, directory offset or file count fails validation, or a directory entry has an unexpected struct size.
-    /// <para>头部魔数、目录偏移或文件数量未通过校验，或目录条目结构大小不符合预期。</para>
-    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="imagePath"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="imagePath"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="InvalidDataException">The header magic, directory offset or file count fails validation, or a directory entry has an unexpected struct size.
+    /// <para>头部魔数、目录偏移或文件数量未通过校验，或目录条目结构大小不符合预期。</para></exception>
     public static List<(string Name, uint Size, uint Offset, uint Type, uint AddrNum, uint[] Addr)> List(string imagePath)
     {
         ArgumentException.ThrowIfNullOrEmpty(imagePath);
@@ -72,44 +63,25 @@ internal static class PacExtractor
         return result;
     }
 
-    /// <summary>
-    /// Extracts all entries from a PAC file to the output directory.
-    /// <para>将 PAC 文件中的所有条目提取到输出目录。</para>
-    /// </summary>
-    /// <param name="imagePath">
-    /// Path to the PAC image to read.
-    /// <para>要读取的 PAC 镜像路径。</para>
-    /// </param>
-    /// <param name="outDir">
-    /// Destination directory; created when absent. Each entry is written beneath it and never outside it.
-    /// <para>目标目录；不存在时创建。每个条目都写入其下，绝不写到其外。</para>
-    /// </param>
-    /// <param name="nameFilter">
-    /// Predicate deciding which entry names to extract, or <see langword="null"/> to extract every entry with a non-empty name, offset and size.
-    /// <para>决定提取哪些条目名称的谓词；为 <see langword="null"/> 时提取所有名称、偏移与大小均非空的条目。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token checked before the run and between copy chunks; cancelling it aborts extraction.
-    /// <para>在开始前及各复制块之间检查的令牌；取消它会中止提取。</para>
-    /// </param>
+    /// <summary>Extracts all entries from a PAC file to the output directory.
+    /// <para>将 PAC 文件中的所有条目提取到输出目录。</para></summary>
+    /// <param name="imagePath">Path to the PAC image to read.<para>要读取的 PAC 镜像路径。</para></param>
+    /// <param name="outDir">Destination directory; created when absent. Each entry is written beneath it and never outside it.
+    /// <para>目标目录；不存在时创建。每个条目都写入其下，绝不写到其外。</para></param>
+    /// <param name="nameFilter">Predicate deciding which entry names to extract, or <see langword="null"/> to extract every entry with a non-empty name, offset and size.
+    /// <para>决定提取哪些条目名称的谓词；为 <see langword="null"/> 时提取所有名称、偏移与大小均非空的条目。</para></param>
+    /// <param name="cancellationToken">Token checked before the run and between copy chunks; cancelling it aborts extraction.
+    /// <para>在开始前及各复制块之间检查的令牌；取消它会中止提取。</para></param>
     /// <returns>The number of entries written to disk. Entries with a zero name, offset or size are skipped and not counted.
     /// <para>实际写入磁盘的条目数。名称、偏移或大小为零的条目会被跳过且不计入。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="imagePath"/> or <paramref name="outDir"/> is <see langword="null"/> or empty.
-    /// <para><paramref name="imagePath"/> 或 <paramref name="outDir"/> 为 <see langword="null"/> 或空。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A directory entry has an unexpected struct size, an invalid output name, no output directory, a range outside the image, or a path that escapes <paramref name="outDir"/>.
-    /// <para>目录条目的结构大小不符合预期、输出名称无效、缺少输出目录、范围超出镜像，或路径逃逸出 <paramref name="outDir"/>。</para>
-    /// </exception>
-    /// <exception cref="EndOfStreamException">
-    /// The image ends before an entry's declared size is fully read.
-    /// <para>镜像在条目声明大小读取完成之前就已结束。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled.
-    /// <para><paramref name="cancellationToken"/> 已被发出取消信号。</para>
-    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="imagePath"/> or <paramref name="outDir"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="imagePath"/> 或 <paramref name="outDir"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="InvalidDataException">A directory entry has an unexpected struct size, an invalid output name, no output directory, a range outside the image, or a path that escapes <paramref name="outDir"/>.
+    /// <para>目录条目的结构大小不符合预期、输出名称无效、缺少输出目录、范围超出镜像，或路径逃逸出 <paramref name="outDir"/>。</para></exception>
+    /// <exception cref="EndOfStreamException">The image ends before an entry's declared size is fully read.
+    /// <para>镜像在条目声明大小读取完成之前就已结束。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 已被发出取消信号。</para></exception>
     public static int Extract(string imagePath, string outDir, Func<string, bool>? nameFilter = null,
         CancellationToken cancellationToken = default)
     {
@@ -204,32 +176,19 @@ internal static class PacExtractor
         return count;
     }
 
-    /// <summary>
-    /// Verifies the head CRC and data CRC of a PAC file.
-    /// <para>校验 PAC 文件的头部 CRC 与数据区 CRC。</para>
-    /// </summary>
-    /// <param name="imagePath">
-    /// Path to the PAC image to verify.
-    /// <para>要校验的 PAC 镜像路径。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token checked before the run and between data chunks; cancelling it aborts verification.
-    /// <para>在开始前及各数据块之间检查的令牌；取消它会中止校验。</para>
-    /// </param>
+    /// <summary>Verifies the head CRC and data CRC of a PAC file.
+    /// <para>校验 PAC 文件的头部 CRC 与数据区 CRC。</para></summary>
+    /// <param name="imagePath">Path to the PAC image to verify.<para>要校验的 PAC 镜像路径。</para></param>
+    /// <param name="cancellationToken">Token checked before the run and between data chunks; cancelling it aborts verification.
+    /// <para>在开始前及各数据块之间检查的令牌；取消它会中止校验。</para></param>
     /// <returns>A tuple reporting whether the header CRC matches the stored value and whether the CRC computed over the declared data region matches the stored value; the data scan stops early at the physical end of the stream.
     /// <para>元组分别报告头部 CRC 是否与存储值相符、按声明数据区计算的 CRC 是否与存储值相符；数据扫描会在流的物理末尾提前停止。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="imagePath"/> is <see langword="null"/> or empty.
-    /// <para><paramref name="imagePath"/> 为 <see langword="null"/> 或空。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The header magic, directory offset or file count fails validation, or the declared PAC size is smaller than the header.
-    /// <para>头部魔数、目录偏移或文件数量未通过校验，或声明的 PAC 大小小于头部。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled.
-    /// <para><paramref name="cancellationToken"/> 已被发出取消信号。</para>
-    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="imagePath"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="imagePath"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="InvalidDataException">The header magic, directory offset or file count fails validation, or the declared PAC size is smaller than the header.
+    /// <para>头部魔数、目录偏移或文件数量未通过校验，或声明的 PAC 大小小于头部。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 已被发出取消信号。</para></exception>
     public static (bool HeadOk, bool DataOk) Check(string imagePath,
         CancellationToken cancellationToken = default)
     {

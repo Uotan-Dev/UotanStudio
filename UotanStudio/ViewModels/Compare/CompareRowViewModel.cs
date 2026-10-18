@@ -31,30 +31,40 @@ public sealed class CompareRowViewModel : ObservableObject
     private string _leftText;
     private string _rightText;
 
-    /// <summary>
-    /// Creates a row model pairing one entry across both sides, with optional tree, icon, editable, menu, and callback inputs.
-    /// <para>创建一条把同一条目在左右两侧对齐的行模型，可选参数涵盖目录树、图标、可编辑标记、菜单与编辑回调。</para>
-    /// </summary>
+    /// <summary>Creates a row model pairing one entry across both sides, with optional tree, icon, editable, menu, and callback inputs.
+    /// <para>创建一条把同一条目在左右两侧对齐的行模型，可选参数涵盖目录树、图标、可编辑标记、菜单与编辑回调。</para></summary>
     /// <param name="status">Row status.<para>行状态。</para></param>
     /// <param name="depth">Indentation depth (0-based).<para>缩进深度，从 0 起。</para></param>
     /// <param name="leftLine">Left line number or hex offset text.<para>左侧行号或十六进制偏移文本。</para></param>
-    /// <param name="leftText">Left primary text: line, name, or hex bytes.<para>左侧主文本：行内容、名称或十六进制字节串。</para></param>
+    /// <param name="leftText">Left primary text: line, name, or hex bytes.
+    /// <para>左侧主文本：行内容、名称或十六进制字节串。</para></param>
     /// <param name="leftSub">Left secondary text: size or ASCII.<para>左侧副文本：大小或 ASCII 串。</para></param>
-    /// <param name="isLeftDiff">Whether the left side is diff-highlighted.<para>左侧是否差异高亮。</para></param>
+    /// <param name="isLeftDiff">Whether the left side is diff-highlighted.
+    /// <para>左侧是否差异高亮。</para></param>
     /// <param name="rightLine">Right line number or hex offset text.<para>右侧行号或十六进制偏移文本。</para></param>
     /// <param name="rightText">Right primary text.<para>右侧主文本。</para></param>
     /// <param name="rightSub">Right secondary text.<para>右侧副文本。</para></param>
-    /// <param name="isRightDiff">Whether the right side is diff-highlighted.<para>右侧是否差异高亮。</para></param>
-    /// <param name="tintSingleSide">Whether a single-side entry tints its own side.<para>单侧条目是否按侧着色。</para></param>
-    /// <param name="treeNode">The node behind a tree row; <c>null</c> for text and hex rows.<para>树行对应的节点；文本行与十六进制行为 <c>null</c>。</para></param>
-    /// <param name="leftIcon">The left glyph and colour, or <c>null</c>.<para>左侧图标与配色，或为 <c>null</c>。</para></param>
-    /// <param name="rightIcon">The right glyph and colour, or <c>null</c>.<para>右侧图标与配色，或为 <c>null</c>。</para></param>
-    /// <param name="editable">Whether the row can be edited in a text comparison.<para>该行在文本对比中是否可编辑。</para></param>
+    /// <param name="isRightDiff">Whether the right side is diff-highlighted.
+    /// <para>右侧是否差异高亮。</para></param>
+    /// <param name="tintSingleSide">Whether a single-side entry tints its own side.
+    /// <para>单侧条目是否按侧着色。</para></param>
+    /// <param name="treeNode">The node behind a tree row; <c>null</c> for text and hex rows.
+    /// <para>树行对应的节点；文本行与十六进制行为 <c>null</c>。</para></param>
+    /// <param name="leftIcon">The left glyph and colour, or <c>null</c>.
+    /// <para>左侧图标与配色，或为 <c>null</c>。</para></param>
+    /// <param name="rightIcon">The right glyph and colour, or <c>null</c>.
+    /// <para>右侧图标与配色，或为 <c>null</c>。</para></param>
+    /// <param name="editable">Whether the row can be edited in a text comparison.
+    /// <para>该行在文本对比中是否可编辑。</para></param>
     /// <param name="menu">The context-menu kind this row offers.<para>该行提供的右键菜单类型。</para></param>
-    /// <param name="compared">Whether the row belongs to a comparison result.<para>该行是否属于对比结果。</para></param>
-    /// <param name="hasLeftLine">Whether the left side has this row; inferred from text when <c>null</c>.<para>左侧是否存在该行；<c>null</c> 时按文本推断。</para></param>
-    /// <param name="hasRightLine">Whether the right side has this row; inferred from text when <c>null</c>.<para>右侧是否存在该行；<c>null</c> 时按文本推断。</para></param>
-    /// <param name="edited">Callback invoked when the row's text is edited.<para>行文本被编辑时触发的回调。</para></param>
+    /// <param name="compared">Whether the row belongs to a comparison result.
+    /// <para>该行是否属于对比结果。</para></param>
+    /// <param name="hasLeftLine">Whether the left side has this row; inferred from text when <c>null</c>.
+    /// <para>左侧是否存在该行；<c>null</c> 时按文本推断。</para></param>
+    /// <param name="hasRightLine">Whether the right side has this row; inferred from text when <c>null</c>.
+    /// <para>右侧是否存在该行；<c>null</c> 时按文本推断。</para></param>
+    /// <param name="edited">Callback invoked when the row's text is edited.
+    /// <para>行文本被编辑时触发的回调。</para></param>
     public CompareRowViewModel(
         FolderItemStatus status,
         int depth,

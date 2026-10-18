@@ -47,30 +47,17 @@ public sealed class GStreamerAudioSink(bool alsa = false) : IAudioSink
         get => field;
         set { if (!float.IsFinite(value)) throw new ArgumentOutOfRangeException(nameof(value)); field = Math.Clamp(value, 0, 1); }
     } = 1;
-    /// <summary>
-    /// Builds a live appsrc playback pipeline for the given format, disposing any previous pipeline; 16-bit input maps to S16LE and 32-bit input to F32LE.
-    /// <para>为指定格式构建实时 appsrc 播放流水线，并释放此前的流水线；16 位输入映射为 S16LE，32 位输入映射为 F32LE。</para>
-    /// </summary>
-    /// <param name="channels">
-    /// Input channel count; must be 1 to 8.
-    /// <para>输入通道数；必须为 1 至 8。</para>
-    /// </param>
-    /// <param name="sampleRate">
-    /// Input sample rate in hertz; must be within 7350 to 192000.
-    /// <para>以赫兹计的输入采样率；必须处于 7350 至 192000 之间。</para>
-    /// </param>
-    /// <param name="bitsPerSample">
-    /// Input sample width; must be 16 or 32.
-    /// <para>输入位宽；必须为 16 或 32。</para>
-    /// </param>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The channel count, sample rate, or bit depth is outside the supported range.
-    /// <para>通道数、采样率或位深超出支持范围。</para>
-    /// </exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The sink has been disposed.
-    /// <para>输出端已被释放。</para>
-    /// </exception>
+    /// <summary>Builds a live appsrc playback pipeline for the given format, disposing any previous pipeline; 16-bit input maps to S16LE and 32-bit input to F32LE.
+    /// <para>为指定格式构建实时 appsrc 播放流水线，并释放此前的流水线；16 位输入映射为 S16LE，32 位输入映射为 F32LE。</para></summary>
+    /// <param name="channels">Input channel count; must be 1 to 8.<para>输入通道数；必须为 1 至 8。</para></param>
+    /// <param name="sampleRate">Input sample rate in hertz; must be within 7350 to 192000.
+    /// <para>以赫兹计的输入采样率；必须处于 7350 至 192000 之间。</para></param>
+    /// <param name="bitsPerSample">Input sample width; must be 16 or 32.
+    /// <para>输入位宽；必须为 16 或 32。</para></param>
+    /// <exception cref="ArgumentOutOfRangeException">The channel count, sample rate, or bit depth is outside the supported range.
+    /// <para>通道数、采样率或位深超出支持范围。</para></exception>
+    /// <exception cref="ObjectDisposedException">The sink has been disposed.
+    /// <para>输出端已被释放。</para></exception>
     public void Open(int channels, int sampleRate, int bitsPerSample)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -79,30 +66,18 @@ public sealed class GStreamerAudioSink(bool alsa = false) : IAudioSink
         _pipeline = new GstPipeline($"appsrc name=input is-live=true format=time block=false max-bytes={sampleRate * channels * bitsPerSample / 8} caps=audio/x-raw,format={(bitsPerSample == 16 ? "S16LE" : "F32LE")},layout=interleaved,channels={channels},rate={sampleRate} ! audioconvert ! audioresample ! {(alsa ? "alsasink" : "pulsesink")} sync=true", hasSink: false);
         Channels = channels; SampleRate = sampleRate; _bits = bitsPerSample; _samples = 0;
     }
-    /// <summary>
-    /// Pushes interleaved PCM into the pipeline, scaling samples to the current <see cref="Volume"/> when it differs from unity and applying little-endian 16-bit or 32-bit sample encoding; an empty span is ignored.
-    /// <para>将交错 PCM 推入流水线：当 <see cref="Volume"/> 不为 1 时按其缩放采样，并采用小端 16 位或 32 位编码；空区间会被忽略。</para>
-    /// </summary>
-    /// <param name="pcm">
-    /// Interleaved PCM whose length is a multiple of the frame size and no larger than the maximum packet size; read only for the duration of the call.
-    /// <para>长度须为帧大小整数倍且不超过最大数据包大小的交错 PCM；仅在调用期间被读取。</para>
-    /// </param>
-    /// <exception cref="InvalidOperationException">
-    /// The sink has not been opened.
-    /// <para>输出端尚未打开。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="pcm"/> is not frame aligned or exceeds the maximum packet size.
-    /// <para><paramref name="pcm"/> 未按帧对齐，或超过最大数据包大小。</para>
-    /// </exception>
-    /// <exception cref="TimeoutException">
-    /// The output stopped consuming PCM and the queue stayed above the half-second backlog for two seconds.
-    /// <para>输出停止消费 PCM，且队列在半秒积压量以上持续两秒。</para>
-    /// </exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The sink has been disposed.
-    /// <para>输出端已被释放。</para>
-    /// </exception>
+    /// <summary>Pushes interleaved PCM into the pipeline, scaling samples to the current <see cref="Volume"/> when it differs from unity and applying little-endian 16-bit or 32-bit sample encoding; an empty span is ignored.
+    /// <para>将交错 PCM 推入流水线：当 <see cref="Volume"/> 不为 1 时按其缩放采样，并采用小端 16 位或 32 位编码；空区间会被忽略。</para></summary>
+    /// <param name="pcm">Interleaved PCM whose length is a multiple of the frame size and no larger than the maximum packet size; read only for the duration of the call.
+    /// <para>长度须为帧大小整数倍且不超过最大数据包大小的交错 PCM；仅在调用期间被读取。</para></param>
+    /// <exception cref="InvalidOperationException">The sink has not been opened.
+    /// <para>输出端尚未打开。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="pcm"/> is not frame aligned or exceeds the maximum packet size.
+    /// <para><paramref name="pcm"/> 未按帧对齐，或超过最大数据包大小。</para></exception>
+    /// <exception cref="TimeoutException">The output stopped consuming PCM and the queue stayed above the half-second backlog for two seconds.
+    /// <para>输出停止消费 PCM，且队列在半秒积压量以上持续两秒。</para></exception>
+    /// <exception cref="ObjectDisposedException">The sink has been disposed.
+    /// <para>输出端已被释放。</para></exception>
     public void Write(ReadOnlySpan<byte> pcm)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

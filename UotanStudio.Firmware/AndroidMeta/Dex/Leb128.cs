@@ -12,29 +12,17 @@ internal static class Leb128
     /// </summary>
     public const int MaxEncodedBytes = 5;
 
-    /// <summary>
-    /// Reads an unsigned LEB128 integer of at most five bytes.
-    /// <para>读取一个最多五字节的无符号 LEB128 整数。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Source bytes; <paramref name="offset"/> must point at the first byte of the encoding.
-    /// <para>源字节；<paramref name="offset"/> 必须指向编码的首字节。</para>
-    /// </param>
-    /// <param name="offset">
-    /// Byte index to read from, advanced past the last consumed byte on success and left unchanged on failure.
-    /// <para>读取的字节索引；成功时前进到最后消费的字节之后，失败时保持不变。</para>
-    /// </param>
-    /// <returns>The decoded 32-bit unsigned value.
-    /// <para>解码得到的 32 位无符号值。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="offset"/> is negative.
-    /// <para><paramref name="offset"/> 为负数。</para>
-    /// </exception>
-    /// <exception cref="FormatException">
-    /// No byte is available at <paramref name="offset"/>, the input ends on a continuation byte,
-    /// or the encoding spans more than 5 bytes.
-    /// <para><paramref name="offset"/> 处无可用字节、输入以续位字节结束，或编码超过 5 字节。</para>
-    /// </exception>
+    /// <summary>Reads an unsigned LEB128 integer of at most five bytes.
+    /// <para>读取一个最多五字节的无符号 LEB128 整数。</para></summary>
+    /// <param name="data">Source bytes; <paramref name="offset"/> must point at the first byte of the encoding.
+    /// <para>源字节；<paramref name="offset"/> 必须指向编码的首字节。</para></param>
+    /// <param name="offset">Byte index to read from, advanced past the last consumed byte on success and left unchanged on failure.
+    /// <para>读取的字节索引；成功时前进到最后消费的字节之后，失败时保持不变。</para></param>
+    /// <returns>The decoded 32-bit unsigned value.<para>解码得到的 32 位无符号值。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> is negative.
+    /// <para><paramref name="offset"/> 为负数。</para></exception>
+    /// <exception cref="FormatException">No byte is available at <paramref name="offset"/>, the input ends on a continuation byte, or the encoding spans more than 5 bytes.
+    /// <para><paramref name="offset"/> 处无可用字节、输入以续位字节结束，或编码超过 5 字节。</para></exception>
     public static uint ReadUleb128(ReadOnlySpan<byte> data, ref int offset)
     {
         if (offset < 0)
@@ -69,32 +57,18 @@ internal static class Leb128
         throw new FormatException("ULEB128 value exceeds 32 bits (more than 5 bytes of continuation).");
     }
 
-    /// <summary>
-    /// Reads a signed LEB128 integer, bounded to at most 5 bytes.
-    /// On malformed input a <see cref="FormatException"/> is thrown and
-    /// <paramref name="offset"/> is left unchanged.
-    /// <para>读取一个有符号 LEB128 整数，最多消费 5 字节。遇到畸形输入时抛出
-    /// <see cref="FormatException"/>，<paramref name="offset"/> 保持不变。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Source bytes; <paramref name="offset"/> must point at the first byte of the encoding.
-    /// <para>源字节；<paramref name="offset"/> 必须指向编码的首字节。</para>
-    /// </param>
-    /// <param name="offset">
-    /// Byte index to read from, advanced past the last consumed byte on success and left unchanged on failure.
-    /// <para>读取的字节索引；成功时前进到最后消费的字节之后，失败时保持不变。</para>
-    /// </param>
+    /// <summary>Reads a signed LEB128 integer, bounded to at most 5 bytes. On malformed input a <see cref="FormatException"/> is thrown and <paramref name="offset"/> is left unchanged.
+    /// <para>读取一个有符号 LEB128 整数，最多消费 5 字节。遇到畸形输入时抛出 <see cref="FormatException"/>，<paramref name="offset"/> 保持不变。</para></summary>
+    /// <param name="data">Source bytes; <paramref name="offset"/> must point at the first byte of the encoding.
+    /// <para>源字节；<paramref name="offset"/> 必须指向编码的首字节。</para></param>
+    /// <param name="offset">Byte index to read from, advanced past the last consumed byte on success and left unchanged on failure.
+    /// <para>读取的字节索引；成功时前进到最后消费的字节之后，失败时保持不变。</para></param>
     /// <returns>The decoded 32-bit signed value, sign-extended from the final group.
     /// <para>解码得到的 32 位有符号值，由最后一组进行符号扩展。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="offset"/> is negative.
-    /// <para><paramref name="offset"/> 为负数。</para>
-    /// </exception>
-    /// <exception cref="FormatException">
-    /// No byte is available at <paramref name="offset"/>, the input ends on a continuation byte,
-    /// or the encoding spans more than 5 bytes.
-    /// <para><paramref name="offset"/> 处无可用字节、输入以续位字节结束，或编码超过 5 字节。</para>
-    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> is negative.
+    /// <para><paramref name="offset"/> 为负数。</para></exception>
+    /// <exception cref="FormatException">No byte is available at <paramref name="offset"/>, the input ends on a continuation byte, or the encoding spans more than 5 bytes.
+    /// <para><paramref name="offset"/> 处无可用字节、输入以续位字节结束，或编码超过 5 字节。</para></exception>
     public static int ReadSleb128(ReadOnlySpan<byte> data, ref int offset)
     {
         if (offset < 0)

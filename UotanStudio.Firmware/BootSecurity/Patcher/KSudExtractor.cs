@@ -283,23 +283,18 @@ public static partial class Extractor
         };
     }
 
-    /// <summary>
-    /// Finds KernelSU asset table entries in the ELF view data, returning their name, factory function address and table offset.
-    /// <para>在 ELF 视图数据中查找 KernelSU 资源表条目，返回名称、工厂函数地址与表偏移。</para>
-    /// </summary>
-    /// <param name="view">
-    /// Bytes to scan, normally the relocation-patched view of the image.
-    /// <para>待扫描的字节，通常为镜像经重定位修补后的视图。</para>
-    /// </param>
-    /// <param name="elf">Image supplying the address mapping used to read name strings and verify the
-    /// function pointer. <para>提供地址换算以读取名称并校验函数指针的镜像。</para></param>
+    /// <summary>Finds KernelSU asset table entries in the ELF view data, returning their name, factory function address and table offset.
+    /// <para>在 ELF 视图数据中查找 KernelSU 资源表条目，返回名称、工厂函数地址与表偏移。</para></summary>
+    /// <param name="view">Bytes to scan, normally the relocation-patched view of the image.
+    /// <para>待扫描的字节，通常为镜像经重定位修补后的视图。</para></param>
+    /// <param name="elf">Image supplying the address mapping used to read name strings and verify the function pointer.
+    /// <para>提供地址换算以读取名称并校验函数指针的镜像。</para></param>
     /// <param name="maxNameLen">Largest accepted name-length field in an entry.
     /// <para>条目中可接受的名称长度字段上限。</para></param>
-    /// <param name="minCluster">Minimum number of consecutive entries a cluster needs to keep; clusters
-    /// are only filtered when doing so leaves at least one cluster.
+    /// <param name="minCluster">Minimum number of consecutive entries a cluster needs to keep; clusters are only filtered when doing so leaves at least one cluster.
     /// <para>簇需要保留的最小连续条目数；仅当过滤后仍有簇时才应用该过滤。</para></param>
-    /// <returns>Unique entries sorted by table offset; empty when no entry passes the shape and name
-    /// checks. <para>按表偏移排序的去重条目；没有条目通过形态与名称检查时为空。</para></returns>
+    /// <returns>Unique entries sorted by table offset; empty when no entry passes the shape and name checks.
+    /// <para>按表偏移排序的去重条目；没有条目通过形态与名称检查时为空。</para></returns>
     public static List<(string Name, ulong FnVa, long TableOff)> FindEntries(
         byte[] view, ElfFile elf, int maxNameLen = 256, int minCluster = 3)
     {
@@ -366,19 +361,18 @@ public static partial class Extractor
         return entries;
     }
 
-    /// <summary>
-    /// Scans for 64-bit words pointing into executable code near a given static address and returns candidate internal function addresses.
-    /// <para>在给定静态地址附近扫描指向可执行代码的 64 位字，返回候选内部函数地址。</para>
-    /// </summary>
+    /// <summary>Scans for 64-bit words pointing into executable code near a given static address and returns candidate internal function addresses.
+    /// <para>在给定静态地址附近扫描指向可执行代码的 64 位字，返回候选内部函数地址。</para></summary>
     /// <param name="view">Bytes to scan, normally the relocation-patched view of the image.
     /// <para>待扫描的字节，通常为镜像经重定位修补后的视图。</para></param>
-    /// <param name="elf">Image supplying the PT_LOAD segment map. <para>提供 PT_LOAD 段映射的镜像。</para></param>
+    /// <param name="elf">Image supplying the PT_LOAD segment map.
+    /// <para>提供 PT_LOAD 段映射的镜像。</para></param>
     /// <param name="staticVa">Virtual address to start from; an empty list is returned when it is unmapped.
     /// <para>起算的虚拟地址；未映射时返回空列表。</para></param>
     /// <param name="scanBytes">Number of bytes to read from the start address.
     /// <para>从起始地址读取的字节数。</para></param>
-    /// <returns>Candidate addresses in scan order; each matching word is reported once and duplicates are
-    /// not removed. <para>按扫描顺序返回的候选地址；每个命中的字只记录一次，不去重。</para></returns>
+    /// <returns>Candidate addresses in scan order; each matching word is reported once and duplicates are not removed.
+    /// <para>按扫描顺序返回的候选地址；每个命中的字只记录一次，不去重。</para></returns>
     public static List<ulong> FindStaticFns(byte[] view, ElfFile elf, ulong staticVa, int scanBytes = 0x40)
     {
         var off = elf.VaToOff(staticVa);
@@ -428,26 +422,16 @@ public static partial class Extractor
         return (output, consumed);
     }
 
-    /// <summary>
-    /// Attempts to decompress data at <paramref name="off" /> as a raw RFC 1951 DEFLATE stream through the compression facade
-    /// and returns the consumed bytes and output.
-    /// <para>经由压缩门面把 <paramref name="off" /> 处的数据当作原始 RFC 1951 DEFLATE 流解压，并返回消耗字节数与输出。</para>
-    /// </summary>
+    /// <summary>Attempts to decompress data at <paramref name="off" /> as a raw RFC 1951 DEFLATE stream through the compression facade and returns the consumed bytes and output.
+    /// <para>经由压缩门面把 <paramref name="off" /> 处的数据当作原始 RFC 1951 DEFLATE 流解压，并返回消耗字节数与输出。</para></summary>
     /// <param name="data">Buffer containing a candidate deflate stream.
     /// <para>包含候选 deflate 流的缓冲区。</para></param>
     /// <param name="off">Offset in <paramref name="data"/> where the stream may start.
     /// <para><paramref name="data"/> 中该流可能的起始位置。</para></param>
     /// <param name="cap">Maximum decompressed output size in bytes; streams producing more are rejected.
     /// <para>解压输出的最大字节数；超过上限的流会被拒绝。</para></param>
-    /// <returns>The input bytes consumed and the decompressed output, or <see langword="null"/> when the
-    /// region is empty, the stream is malformed, the output is empty or exceeds <paramref name="cap"/>,
-    /// or no input bytes are consumed. A malformed region is reported as <see langword="null"/> rather than
-    /// propagating: the codec raised by the facade surfaces either as <see cref="InvalidDataException"/> or as
-    /// <see cref="ZlibException"/>, and both mean the region carries no usable deflate stream.
-    /// <para>消耗的输入字节数与解压输出；当区域为空、流格式错误、输出为空或超过
-    /// <paramref name="cap"/>、或未消耗任何输入字节时返回 <see langword="null"/>。格式错误的区域以
-    /// <see langword="null"/> 上报而不向上抛出：门面编解码器抛出的异常会呈现为 <see cref="InvalidDataException"/>
-    /// 或 <see cref="ZlibException"/>，两者都说明该区域没有可用的 deflate 流。</para></returns>
+    /// <returns>The input bytes consumed and the decompressed output, or <see langword="null"/> when the region is empty, the stream is malformed, the output is empty or exceeds <paramref name="cap"/>, or no input bytes are consumed. A malformed region is reported as <see langword="null"/> rather than propagating: the codec raised by the facade surfaces either as <see cref="InvalidDataException"/> or as <see cref="ZlibException"/>, and both mean the region carries no usable deflate stream.
+    /// <para>消耗的输入字节数与解压输出；当区域为空、流格式错误、输出为空或超过 <paramref name="cap"/>、或未消耗任何输入字节时返回 <see langword="null"/>。格式错误的区域以 <see langword="null"/> 上报而不向上抛出：门面编解码器抛出的异常会呈现为 <see cref="InvalidDataException"/> 或 <see cref="ZlibException"/>，两者都说明该区域没有可用的 deflate 流。</para></returns>
     public static (int Consumed, byte[] Output)? TryDeflate(byte[] data, int off, int cap = 32 * 1024 * 1024)
     {
         var chunkLen = Math.Min(cap, data.Length - off);
@@ -615,18 +599,14 @@ public static partial class Extractor
         }
     }
 
-    /// <summary>
-    /// Extracts every asset entry from a KernelSU module ELF and returns the asset list and log.
-    /// <para>从 KernelSU 模块 ELF 中提取全部资源条目，返回资源列表与日志。</para>
-    /// </summary>
+    /// <summary>Extracts every asset entry from a KernelSU module ELF and returns the asset list and log.
+    /// <para>从 KernelSU 模块 ELF 中提取全部资源条目，返回资源列表与日志。</para></summary>
     /// <param name="elf">KernelSU module ELF to analyze; its data is kept read-only.
     /// <para>待分析的 KernelSU 模块 ELF；其数据保持只读。</para></param>
-    /// <param name="verbose">When <see langword="true"/>, adds one log line listing every discovered table
-    /// entry. <para>为 <see langword="true"/> 时在日志中追加一行，列出全部发现到的表条目。</para></param>
-    /// <returns>One <see cref="Asset"/> per table entry — entries whose payload (at least 4096
-    /// decompressed bytes) cannot be located keep <c>DataOff</c> <see langword="null"/> — plus the log
-    /// lines in emission order. <para>每个表条目对应一个 <see cref="Asset"/>——无法定位数据（解压后不少于 4096 字节）
-    /// 的条目其 <c>DataOff</c> 保持 <see langword="null"/>——外加按产生顺序排列的日志行。</para></returns>
+    /// <param name="verbose">When <see langword="true"/>, adds one log line listing every discovered table entry.
+    /// <para>为 <see langword="true"/> 时在日志中追加一行，列出全部发现到的表条目。</para></param>
+    /// <returns>One <see cref="Asset"/> per table entry — entries whose payload (at least 4096 decompressed bytes) cannot be located keep <c>DataOff</c> <see langword="null"/> — plus the log lines in emission order.
+    /// <para>每个表条目对应一个 <see cref="Asset"/>——无法定位数据（解压后不少于 4096 字节） 的条目其 <c>DataOff</c> 保持 <see langword="null"/>——外加按产生顺序排列的日志行。</para></returns>
     /// <example>
     /// <code>
     /// var elf = new ElfFile(File.ReadAllBytes("libKSU_apc64.so"));

@@ -150,20 +150,15 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         { return false; }
     }
 
-    /// <summary>
-    /// Opens the native VA session and decoder pipeline for the given codec and frame size, replacing any prior session.
-    /// <para>为指定编解码器与帧尺寸打开原生 VA 会话与解码管线，并替换之前的任何会话。</para>
-    /// </summary>
-    /// <param name="codec">H.264, H.265 or AV1. <para>H.264、H.265 或 AV1。</para></param>
-    /// <param name="width">Expected frame width in pixels. <para>预期帧宽度（像素）。</para></param>
-    /// <param name="height">Expected frame height in pixels. <para>预期帧高度（像素）。</para></param>
-    /// <param name="frameCallback">
-    /// Invoked for every decoded NV12 frame on the calling thread; the frame is disposed after the callback
-    /// returns, so consumers must copy or convert within it. Reentering the decoder from the callback is forbidden.
-    /// <para>每解出一帧 NV12 即在调用线程上触发；回调返回后该帧即被释放，消费方须在回调内完成复制或转换。
-    /// 禁止在回调中重入解码器。</para>
-    /// </param>
-    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <summary>Opens the native VA session and decoder pipeline for the given codec and frame size, replacing any prior session.
+    /// <para>为指定编解码器与帧尺寸打开原生 VA 会话与解码管线，并替换之前的任何会话。</para></summary>
+    /// <param name="codec">H.264, H.265 or AV1.<para>H.264、H.265 或 AV1。</para></param>
+    /// <param name="width">Expected frame width in pixels.<para>预期帧宽度（像素）。</para></param>
+    /// <param name="height">Expected frame height in pixels.<para>预期帧高度（像素）。</para></param>
+    /// <param name="frameCallback">Invoked for every decoded NV12 frame on the calling thread; the frame is disposed after the callback returns, so consumers must copy or convert within it. Reentering the decoder from the callback is forbidden.
+    /// <para>每解出一帧 NV12 即在调用线程上触发；回调返回后该帧即被释放，消费方须在回调内完成复制或转换。 禁止在回调中重入解码器。</para></param>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed.
+    /// <para>解码器已被释放。</para></exception>
     /// <exception cref="ArgumentNullException"><c>frameCallback</c> is null.
     /// <para><c>frameCallback</c> 为 null。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><c>codec</c> is unsupported or dimensions exceed the limits.
@@ -197,15 +192,12 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         _callback = frameCallback;
     }
 
-    /// <summary>
-    /// Feeds one compressed access unit into the decoder with a synthesized 60 fps presentation timestamp.
-    /// <para>将一个压缩访问单元送入解码器，时间戳为合成的 60 fps 递进值。</para>
-    /// </summary>
-    /// <param name="accessUnit">
-    /// One complete access unit (H.264/H.265 in Annex-B, AV1 in OBU stream form).
-    /// <para>一个完整的访问单元（H.264/H.265 为 Annex-B 形式，AV1 为 OBU 流形式）。</para>
-    /// </param>
-    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <summary>Feeds one compressed access unit into the decoder with a synthesized 60 fps presentation timestamp.
+    /// <para>将一个压缩访问单元送入解码器，时间戳为合成的 60 fps 递进值。</para></summary>
+    /// <param name="accessUnit">One complete access unit (H.264/H.265 in Annex-B, AV1 in OBU stream form).
+    /// <para>一个完整的访问单元（H.264/H.265 为 Annex-B 形式，AV1 为 OBU 流形式）。</para></param>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed.
+    /// <para>解码器已被释放。</para></exception>
     /// <exception cref="InvalidOperationException">The decoder is not initialized, has faulted, was drained, or the call is on the wrong thread.
     /// <para>解码器未初始化、已出错、已排空，或调用线程不正确。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The access unit is empty or exceeds 32 MiB.
@@ -214,18 +206,14 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
     /// <para>码流被原生解码器拒绝。</para></exception>
     public void Decode(ReadOnlySpan<byte> accessUnit) => Decode(accessUnit, checked(_sequence++ * 166667));
 
-    /// <summary>
-    /// Feeds one compressed access unit with an explicit presentation timestamp in TimeSpan ticks.
-    /// Non-picture units are buffered and prepended to the next picture-bearing unit.
-    /// <para>送入一个带显式呈现时间戳（TimeSpan 刻度）的压缩访问单元。不含图像的单元会被缓存，并拼接到下一个含图像的单元之前。</para>
-    /// </summary>
-    /// <param name="accessUnit">
-    /// One complete access unit (H.264/H.265 in Annex-B, AV1 in OBU stream form).
-    /// <para>一个完整的访问单元（H.264/H.265 为 Annex-B 形式，AV1 为 OBU 流形式）。</para>
-    /// </param>
+    /// <summary>Feeds one compressed access unit with an explicit presentation timestamp in TimeSpan ticks. Non-picture units are buffered and prepended to the next picture-bearing unit.
+    /// <para>送入一个带显式呈现时间戳（TimeSpan 刻度）的压缩访问单元。不含图像的单元会被缓存，并拼接到下一个含图像的单元之前。</para></summary>
+    /// <param name="accessUnit">One complete access unit (H.264/H.265 in Annex-B, AV1 in OBU stream form).
+    /// <para>一个完整的访问单元（H.264/H.265 为 Annex-B 形式，AV1 为 OBU 流形式）。</para></param>
     /// <param name="timestampTicks">Presentation timestamp in TimeSpan ticks, carried through to the output frames.
     /// <para>以 TimeSpan 刻度表示的呈现时间戳，会传递到输出帧。</para></param>
-    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed.
+    /// <para>解码器已被释放。</para></exception>
     /// <exception cref="InvalidOperationException">The decoder is not initialized, has faulted, was drained, or the call is on the wrong thread.
     /// <para>解码器未初始化、已出错、已排空，或调用线程不正确。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The access unit is empty or exceeds 32 MiB.

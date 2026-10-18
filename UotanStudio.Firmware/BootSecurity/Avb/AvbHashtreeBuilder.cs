@@ -60,23 +60,17 @@ public sealed class AvbHashtreeResult : IDisposable
 
     /// <summary>
     /// <para>Streams the tree bytes to the target without materializing a large tree in memory.</para>
-    /// <para>把树字节流式写入目标流；大树不整体进入内存。</para>
-    /// </summary>
-    /// <param name="output">
-    /// Destination the tree bytes are appended to; the stream is neither flushed nor closed here.
-    /// <para>接收树字节并追加写入的目标流；此处不会刷新或关闭该流。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the copy, which can leave <paramref name="output"/> partially written.
-    /// <para>取消拷贝操作，取消后 <paramref name="output"/> 可能已被部分写入。</para>
-    /// </param>
-    /// <returns>
-    /// A task that completes once every tree byte has been written; it completes immediately when the image needs
-    /// no tree.
-    /// <para>在每个树字节写入后完成的 Task；镜像无需哈希树时立即完成。</para>
-    /// </returns>
-    /// <exception cref="IOException">The temporary tree file cannot be read. <para>无法读取临时树文件。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled. <para><paramref name="cancellationToken"/> 已取消。</para></exception>
+    /// <para>把树字节流式写入目标流；大树不整体进入内存。</para></summary>
+    /// <param name="output">Destination the tree bytes are appended to; the stream is neither flushed nor closed here.
+    /// <para>接收树字节并追加写入的目标流；此处不会刷新或关闭该流。</para></param>
+    /// <param name="cancellationToken">Cancels the copy, which can leave <paramref name="output"/> partially written.
+    /// <para>取消拷贝操作，取消后 <paramref name="output"/> 可能已被部分写入。</para></param>
+    /// <returns>A task that completes once every tree byte has been written; it completes immediately when the image needs no tree.
+    /// <para>在每个树字节写入后完成的 Task；镜像无需哈希树时立即完成。</para></returns>
+    /// <exception cref="IOException">The temporary tree file cannot be read.
+    /// <para>无法读取临时树文件。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 已取消。</para></exception>
     public Task WriteTreeToAsync(Stream output, CancellationToken cancellationToken = default)
         => _store is null ? Task.CompletedTask : _store.CopyToAsync(output, cancellationToken);
 
@@ -195,14 +189,10 @@ internal static class AvbHashtreeBuilder
     /// </summary>
     private const long SpillThresholdBytes = 16L * 1024 * 1024;
 
-    /// <summary>
-    /// Builds the dm-verity hash tree for the image at imagePath.
-    /// <para>为 imagePath 指定的镜像构建 dm-verity 哈希树。</para>
-    /// </summary>
-    /// <param name="imagePath">
-    /// Path opened read-share for sequential reading; the file handle is closed before this call returns.
-    /// <para>以可读共享方式打开并顺序读取的路径；本调用返回前会关闭该文件句柄。</para>
-    /// </param>
+    /// <summary>Builds the dm-verity hash tree for the image at imagePath.
+    /// <para>为 imagePath 指定的镜像构建 dm-verity 哈希树。</para></summary>
+    /// <param name="imagePath">Path opened read-share for sequential reading; the file handle is closed before this call returns.
+    /// <para>以可读共享方式打开并顺序读取的路径；本调用返回前会关闭该文件句柄。</para></param>
     /// <param name="salt">Salt prepended to every hashed block; null is treated as an empty salt.
     /// <para>每个被哈希块前拼接的盐值；null 视为空盐。</para></param>
     /// <param name="dataBlockSize">Bytes per data block; a power of two from 512 to 1048576.
@@ -217,11 +207,14 @@ internal static class AvbHashtreeBuilder
     /// Console.WriteLine(Convert.ToHexString(tree.RootDigest));
     /// </code>
     /// </example>
-    /// <exception cref="ArgumentNullException"><paramref name="imagePath"/> is null. <para><paramref name="imagePath"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="imagePath"/> is null.
+    /// <para><paramref name="imagePath"/> 为 null。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">A block size is outside the supported power-of-two range.
     /// <para>某个块大小不在支持的二次幂范围内。</para></exception>
-    /// <exception cref="FileNotFoundException">The image file does not exist. <para>镜像文件不存在。</para></exception>
-    /// <exception cref="IOException">The image file cannot be opened or read. <para>无法打开或读取镜像文件。</para></exception>
+    /// <exception cref="FileNotFoundException">The image file does not exist.
+    /// <para>镜像文件不存在。</para></exception>
+    /// <exception cref="IOException">The image file cannot be opened or read.
+    /// <para>无法打开或读取镜像文件。</para></exception>
     public static AvbHashtreeResult Build(string imagePath, byte[]? salt, int dataBlockSize = 4096, int hashBlockSize = 4096)
     {
         ArgumentNullException.ThrowIfNull(imagePath);
@@ -257,25 +250,20 @@ internal static class AvbHashtreeBuilder
         return Build(stream, salt, dataBlockSize, hashBlockSize);
     }
 
-    /// <summary>
-    /// Builds the dm-verity hash tree by streaming a seekable stream.
-    /// <para>通过流式读取可定位流构建 dm-verity 哈希树。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Readable, seekable stream whose content starting at position 0 is hashed; the stream is rewound for the
-    /// build and its original position is restored afterwards, and it stays open.
-    /// <para>可读且可定位的流；从位置 0 开始的内容将被哈希，构建过程会将其倒回，结束后恢复其原始位置，并保持流打开。</para>
-    /// </param>
+    /// <summary>Builds the dm-verity hash tree by streaming a seekable stream.
+    /// <para>通过流式读取可定位流构建 dm-verity 哈希树。</para></summary>
+    /// <param name="stream">Readable, seekable stream whose content starting at position 0 is hashed; the stream is rewound for the build and its original position is restored afterwards, and it stays open.
+    /// <para>可读且可定位的流；从位置 0 开始的内容将被哈希，构建过程会将其倒回，结束后恢复其原始位置，并保持流打开。</para></param>
     /// <param name="salt">Salt prepended to every hashed block; null is treated as an empty salt.
     /// <para>每个被哈希块前拼接的盐值；null 视为空盐。</para></param>
     /// <param name="dataBlockSize">Bytes per data block; a power of two from 512 to 1048576.
     /// <para>数据块字节数；必须是 512 至 1048576 的二次幂。</para></param>
     /// <param name="hashBlockSize">Bytes per tree block; a power of two from 512 to 1048576.
     /// <para>树块字节数；必须是 512 至 1048576 的二次幂。</para></param>
-    /// <returns>The root digest plus tree and block-aligned image sizes. An empty stream yields a zero tree size and
-    /// a zero image size; a stream that fits one data block yields a zero tree size with the block's digest.
+    /// <returns>The root digest plus tree and block-aligned image sizes. An empty stream yields a zero tree size and a zero image size; a stream that fits one data block yields a zero tree size with the block's digest.
     /// <para>根摘要以及树大小与对齐后的镜像大小。空流的树大小与镜像大小均为 0；仅占一个数据块的流树大小为 0，但会给出该块的摘要。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is null. <para><paramref name="stream"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is null.
+    /// <para><paramref name="stream"/> 为 null。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="stream"/> cannot be read or cannot seek.
     /// <para><paramref name="stream"/> 不可读或不可定位。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">A block size is outside the supported power-of-two range.

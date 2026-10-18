@@ -38,21 +38,15 @@ public sealed class AXmlStringPool
     /// <para>内部列表的只读视图；来自其他数据块的越界池索引应改用 <see cref="GetString"/> 解析。</para></value>
     public IReadOnlyList<string> Strings => _strings;
 
-    /// <summary>
-    /// Parses a ResStringPool chunk.
-    /// <para>解析 ResStringPool 数据块。</para>
-    /// </summary>
-    /// <param name="data">Buffer containing the chunk; treated as untrusted input. <para>包含该数据块的缓冲区；按不可信输入处理。</para></param>
-    /// <param name="offset">Absolute start of the chunk inside <paramref name="data"/>. <para>数据块在 <paramref name="data"/> 中的绝对起始位置。</para></param>
-    /// <param name="chunkSize">Total chunk length in bytes, including its header; at least 28. <para>含头部在内的数据块总字节数，至少为 28。</para></param>
-    /// <exception cref="AXmlException">The window is outside <paramref name="data"/>, the header or
-    /// offset-table geometry is inconsistent (header size below 28, counts exceeding the available
-    /// space, malformed <c>stringsStart</c>/<c>stylesStart</c>), a string or style lies outside its
-    /// region, or a length prefix, NUL terminator or declared UTF-8 character count does not match.
-    /// State from a previous parse is cleared only after all header checks pass.
-    /// <para>窗口超出 <paramref name="data"/> 范围、头部或偏移表几何不一致（头部小于 28、数量超出可用空间、
-    /// <c>stringsStart</c>/<c>stylesStart</c> 非法）、字符串或样式越出其区域，或长度前缀、NUL 结束符、
-    /// 声明的 UTF-8 字符数不匹配时抛出。仅在全部头部检查通过后才清除上次解析的状态。</para></exception>
+    /// <summary>Parses a ResStringPool chunk.<para>解析 ResStringPool 数据块。</para></summary>
+    /// <param name="data">Buffer containing the chunk; treated as untrusted input.
+    /// <para>包含该数据块的缓冲区；按不可信输入处理。</para></param>
+    /// <param name="offset">Absolute start of the chunk inside <paramref name="data"/>.
+    /// <para>数据块在 <paramref name="data"/> 中的绝对起始位置。</para></param>
+    /// <param name="chunkSize">Total chunk length in bytes, including its header; at least 28.
+    /// <para>含头部在内的数据块总字节数，至少为 28。</para></param>
+    /// <exception cref="AXmlException">The window is outside <paramref name="data"/>, the header or offset-table geometry is inconsistent (header size below 28, counts exceeding the available space, malformed <c>stringsStart</c>/<c>stylesStart</c>), a string or style lies outside its region, or a length prefix, NUL terminator or declared UTF-8 character count does not match. State from a previous parse is cleared only after all header checks pass.
+    /// <para>窗口超出 <paramref name="data"/> 范围、头部或偏移表几何不一致（头部小于 28、数量超出可用空间、 <c>stringsStart</c>/<c>stylesStart</c> 非法）、字符串或样式越出其区域，或长度前缀、NUL 结束符、 声明的 UTF-8 字符数不匹配时抛出。仅在全部头部检查通过后才清除上次解析的状态。</para></exception>
     public void Parse(byte[] data, int offset, int chunkSize)
     {
         if (offset < 0 || chunkSize < 28 || offset > data.Length || chunkSize > data.Length - offset)

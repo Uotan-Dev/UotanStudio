@@ -134,61 +134,32 @@ public sealed record OtaZipRebuildOptions
     public bool VerifyOutput { get; init; } = true;
 }
 
-/// <summary>
-/// Reports a verified, atomically published A/B OTA rebuild and its final verification state.
-/// <para>报告已通过校验并原子发布的 A/B OTA 重建及其最终校验状态。</para>
-/// </summary>
-/// <param name="OutputPath">
-/// Absolute path of the published OTA; staging files next to it have been deleted.
-/// <para>已发布 OTA 的绝对路径；其旁边的暂存文件已被删除。</para>
-/// </param>
-/// <param name="ReplacedEntries">
-/// Every member written by the rebuild — the caller's replacements plus the generated Payload, properties,
-/// metadata and certificate entries — ordered by ordinal name.
-/// <para>重建写入的每个成员——调用方的替换项，加上生成的 Payload、属性文件、元数据与证书条目——
-/// 按序数名称排序。</para>
-/// </param>
-/// <param name="OuterSignatureApplied">
-/// <see langword="true"/> when a signing key was supplied and the whole-file signature was written after the
-/// final verification pass.
-/// <para>提供了签名密钥并在最终校验之后写入整包签名时为 <see langword="true"/>。</para>
-/// </param>
-/// <param name="Verification">
-/// Verification of the published archive: the staged result when unsigned, otherwise the result recomputed
-/// after signing.
-/// <para>对已发布归档的校验结果：未签名时为暂存件的校验结果，否则为签名后重新计算的校验结果。</para>
-/// </param>
+/// <summary>Reports a verified, atomically published A/B OTA rebuild and its final verification state.
+/// <para>报告已通过校验并原子发布的 A/B OTA 重建及其最终校验状态。</para></summary>
+/// <param name="OutputPath">Absolute path of the published OTA; staging files next to it have been deleted.
+/// <para>已发布 OTA 的绝对路径；其旁边的暂存文件已被删除。</para></param>
+/// <param name="ReplacedEntries">Every member written by the rebuild — the caller's replacements plus the generated Payload, properties, metadata and certificate entries — ordered by ordinal name.
+/// <para>重建写入的每个成员——调用方的替换项，加上生成的 Payload、属性文件、元数据与证书条目—— 按序数名称排序。</para></param>
+/// <param name="OuterSignatureApplied"><see langword="true"/> when a signing key was supplied and the whole-file signature was written after the final verification pass.
+/// <para>提供了签名密钥并在最终校验之后写入整包签名时为 <see langword="true"/>。</para></param>
+/// <param name="Verification">Verification of the published archive: the staged result when unsigned, otherwise the result recomputed after signing.
+/// <para>对已发布归档的校验结果：未签名时为暂存件的校验结果，否则为签名后重新计算的校验结果。</para></param>
 public sealed record OtaZipRebuildResult(
     string OutputPath,
     IReadOnlyList<string> ReplacedEntries,
     bool OuterSignatureApplied,
     OtaZipVerificationResult Verification);
 
-/// <summary>
-/// Structural and property-level verification result for an OTA ZIP, collected without throwing.
-/// <para>对 OTA ZIP 的结构与属性级校验结果，收集错误而不抛出异常。</para>
-/// </summary>
-/// <param name="IsValid">
-/// <see langword="true"/> when no error was recorded; warnings alone still leave the package valid.
-/// <para>未记录任何错误时为 <see langword="true"/>；仅有警告时包仍然有效。</para>
-/// </param>
-/// <param name="Errors">
-/// Fatal findings such as duplicate or oversized members, a missing <c>payload_properties.txt</c>, and
-/// <c>FILE_HASH</c>, <c>FILE_SIZE</c>, <c>METADATA_HASH</c> or <c>METADATA_SIZE</c> mismatches.
-/// <para>致命问题，例如成员重复或过大、缺少 <c>payload_properties.txt</c>，
-/// 以及 <c>FILE_HASH</c>、<c>FILE_SIZE</c>、<c>METADATA_HASH</c> 或 <c>METADATA_SIZE</c> 不匹配。</para>
-/// </param>
-/// <param name="Warnings">
-/// Non-fatal findings such as an absent <c>payload.bin</c>, an unsupported CrAU version, or an empty
-/// partition manifest.
-/// <para>非致命问题，例如缺少 <c>payload.bin</c>、CrAU 版本不受支持，或分区清单为空。</para>
-/// </param>
-/// <param name="Properties">
-/// Parsed <c>payload_properties.txt</c> keys with case-insensitive lookup, enriched with
-/// <c>PAYLOAD_MANIFEST_PARTITIONS</c> and <c>PAYLOAD_MANIFEST_LENGTH</c> when the manifest was parsed.
-/// <para>已解析的 <c>payload_properties.txt</c> 键值（查找时忽略大小写），在清单解析成功时还会补充
-/// <c>PAYLOAD_MANIFEST_PARTITIONS</c> 与 <c>PAYLOAD_MANIFEST_LENGTH</c>。</para>
-/// </param>
+/// <summary>Structural and property-level verification result for an OTA ZIP, collected without throwing.
+/// <para>对 OTA ZIP 的结构与属性级校验结果，收集错误而不抛出异常。</para></summary>
+/// <param name="IsValid"><see langword="true"/> when no error was recorded; warnings alone still leave the package valid.
+/// <para>未记录任何错误时为 <see langword="true"/>；仅有警告时包仍然有效。</para></param>
+/// <param name="Errors">Fatal findings such as duplicate or oversized members, a missing <c>payload_properties.txt</c>, and <c>FILE_HASH</c>, <c>FILE_SIZE</c>, <c>METADATA_HASH</c> or <c>METADATA_SIZE</c> mismatches.
+/// <para>致命问题，例如成员重复或过大、缺少 <c>payload_properties.txt</c>， 以及 <c>FILE_HASH</c>、<c>FILE_SIZE</c>、<c>METADATA_HASH</c> 或 <c>METADATA_SIZE</c> 不匹配。</para></param>
+/// <param name="Warnings">Non-fatal findings such as an absent <c>payload.bin</c>, an unsupported CrAU version, or an empty partition manifest.
+/// <para>非致命问题，例如缺少 <c>payload.bin</c>、CrAU 版本不受支持，或分区清单为空。</para></param>
+/// <param name="Properties">Parsed <c>payload_properties.txt</c> keys with case-insensitive lookup, enriched with <c>PAYLOAD_MANIFEST_PARTITIONS</c> and <c>PAYLOAD_MANIFEST_LENGTH</c> when the manifest was parsed.
+/// <para>已解析的 <c>payload_properties.txt</c> 键值（查找时忽略大小写），在清单解析成功时还会补充 <c>PAYLOAD_MANIFEST_PARTITIONS</c> 与 <c>PAYLOAD_MANIFEST_LENGTH</c>。</para></param>
 public sealed record OtaZipVerificationResult(
     bool IsValid,
     IReadOnlyList<string> Errors,
@@ -208,66 +179,34 @@ public static class OtaZipPatchService
     private const ulong MaximumPayloadMetadataLength = 64UL * 1024 * 1024;
     private const int PropertyRangeReservation = 512;
 
-    /// <summary>
-    /// Rebuilds an existing A/B OTA around a replacement Payload, regenerates properties and offset metadata,
-    /// optionally signs the complete ZIP, verifies it, and atomically publishes it.
-    /// <para>围绕替换 Payload 重建既有 A/B OTA，重新生成属性与偏移元数据，可选地对完整 ZIP 签名，对其进行校验，
-    /// 最后原子地发布。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Existing OTA ZIP supplying the member set that is copied through and the
-    /// <c>META-INF/com/android/metadata</c> base whose streaming property lines are replaced. Entries larger
-    /// than 16 GiB and unsafe member names abort the rebuild.
-    /// <para>提供需要原样复制的成员集合、以及作为 <c>META-INF/com/android/metadata</c> 基底（其流式属性行会被替换）
-    /// 的既有 OTA ZIP。超过 16 GiB 的条目和不安全的成员名会中止重建。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination archive, overwritten only after verification succeeds. Its directory is created when
-    /// missing; staging files are written beside it under a GUID suffix and always removed afterwards.
-    /// <para>目标归档文件，只有在校验成功后才会被覆盖。其目录不存在时会被创建；暂存文件以 GUID 后缀写在其旁边，
-    /// 并在结束后必定删除。</para>
-    /// </param>
-    /// <param name="options">
-    /// Replacement Payload, extra member substitutions, optional signing pair and verification policy.
-    /// <para>替换 Payload、附加成员替换、可选的签名密钥对以及校验策略。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels file reads, hash computations and the publication move; a cancelled run leaves the previous
-    /// <paramref name="outputPath"/> content untouched.
-    /// <para>取消文件读取、哈希计算与发布移动操作；被取消的运行不会改动 <paramref name="outputPath"/> 原有内容。</para>
-    /// </param>
-    /// <returns>
-    /// The published path, the ordered set of written members, whether the outer signature was applied, and
-    /// the final verification result.
-    /// <para>已发布路径、按序写出的成员集合、是否应用外层签名，以及最终校验结果。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException"><paramref name="inputPath"/> or <paramref name="outputPath"/> is
-    /// <see langword="null"/> or blank.
-    /// <para><paramref name="inputPath"/> 或 <paramref name="outputPath"/> 为 <see langword="null"/> 或空白。</para>
-    /// </exception>
+    /// <summary>Rebuilds an existing A/B OTA around a replacement Payload, regenerates properties and offset metadata, optionally signs the complete ZIP, verifies it, and atomically publishes it.
+    /// <para>围绕替换 Payload 重建既有 A/B OTA，重新生成属性与偏移元数据，可选地对完整 ZIP 签名，对其进行校验， 最后原子地发布。</para></summary>
+    /// <param name="inputPath">Existing OTA ZIP supplying the member set that is copied through and the <c>META-INF/com/android/metadata</c> base whose streaming property lines are replaced. Entries larger than 16 GiB and unsafe member names abort the rebuild.
+    /// <para>提供需要原样复制的成员集合、以及作为 <c>META-INF/com/android/metadata</c> 基底（其流式属性行会被替换） 的既有 OTA ZIP。超过 16 GiB 的条目和不安全的成员名会中止重建。</para></param>
+    /// <param name="outputPath">Destination archive, overwritten only after verification succeeds. Its directory is created when missing; staging files are written beside it under a GUID suffix and always removed afterwards.
+    /// <para>目标归档文件，只有在校验成功后才会被覆盖。其目录不存在时会被创建；暂存文件以 GUID 后缀写在其旁边， 并在结束后必定删除。</para></param>
+    /// <param name="options">Replacement Payload, extra member substitutions, optional signing pair and verification policy.
+    /// <para>替换 Payload、附加成员替换、可选的签名密钥对以及校验策略。</para></param>
+    /// <param name="cancellationToken">Cancels file reads, hash computations and the publication move; a cancelled run leaves the previous <paramref name="outputPath"/> content untouched.
+    /// <para>取消文件读取、哈希计算与发布移动操作；被取消的运行不会改动 <paramref name="outputPath"/> 原有内容。</para></param>
+    /// <returns>The published path, the ordered set of written members, whether the outer signature was applied, and the final verification result.
+    /// <para>已发布路径、按序写出的成员集合、是否应用外层签名，以及最终校验结果。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="inputPath"/> or <paramref name="outputPath"/> is <see langword="null"/> or blank.
+    /// <para><paramref name="inputPath"/> 或 <paramref name="outputPath"/> 为 <see langword="null"/> 或空白。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null"/>.
     /// <para><paramref name="options"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="FileNotFoundException"><paramref name="inputPath"/>, the replacement Payload, or a
-    /// replacement file is missing.
+    /// <exception cref="FileNotFoundException"><paramref name="inputPath"/>, the replacement Payload, or a replacement file is missing.
     /// <para><paramref name="inputPath"/>、替换 Payload 或某个替换文件不存在。</para></exception>
-    /// <exception cref="InvalidDataException">
-    /// Only one of certificate and signing key is set, a replacement claims an entry owned by the rebuild,
-    /// the Payload has an unsupported CrAU header or out-of-range metadata, a generated metadata line exceeds
-    /// the 512-byte reservation, an entry offset shifts between the provisional and final pass, verification
-    /// fails while <see cref="OtaZipRebuildOptions.VerifyOutput"/> is set, or an archive member is unsafe or
-    /// oversized.
-    /// <para>仅设置了证书或签名密钥之一；替换项声称了由重建负责的条目；Payload 的 CrAU 头部不受支持或元数据越界；
-    /// 生成的元数据行超出 512 字节预留；条目偏移在临时与最终两趟之间发生变化；<see cref="OtaZipRebuildOptions.VerifyOutput"/>
-    /// 开启时校验失败；或归档成员不安全或过大。</para>
-    /// </exception>
+    /// <exception cref="InvalidDataException">Only one of certificate and signing key is set, a replacement claims an entry owned by the rebuild, the Payload has an unsupported CrAU header or out-of-range metadata, a generated metadata line exceeds the 512-byte reservation, an entry offset shifts between the provisional and final pass, verification fails while <see cref="OtaZipRebuildOptions.VerifyOutput"/> is set, or an archive member is unsafe or oversized.
+    /// <para>仅设置了证书或签名密钥之一；替换项声称了由重建负责的条目；Payload 的 CrAU 头部不受支持或元数据越界； 生成的元数据行超出 512 字节预留；条目偏移在临时与最终两趟之间发生变化；<see cref="OtaZipRebuildOptions.VerifyOutput"/> 开启时校验失败；或归档成员不安全或过大。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已收到取消信号。</para></exception>
     /// <example>
     /// <code>
     /// var rebuilt = await OtaZipPatchService.RebuildAsync(
-    ///     "ota.zip",
-    ///     "out/ota-fixed.zip",
-    ///     new OtaZipRebuildOptions { PayloadPath = "out/payload.bin" });
+    /// "ota.zip",
+    /// "out/ota-fixed.zip",
+    /// new OtaZipRebuildOptions { PayloadPath = "out/payload.bin" });
     /// </code>
     /// </example>
     public static Task<OtaZipRebuildResult> RebuildAsync(
@@ -426,63 +365,37 @@ public static class OtaZipPatchService
         }
     }
 
-    /// <summary>
-    /// Patches selected ZIP members and atomically publishes the new archive.
-    /// <para>修补选定的 ZIP 成员并原子发布新归档。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Source OTA ZIP read through <see cref="ZipFile.OpenRead(string)"/>; it stays open for reading only and
-    /// is never modified.
-    /// <para>通过 <see cref="ZipFile.OpenRead(string)"/> 打开读取的源 OTA ZIP；仅只读，绝不被修改。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination archive path, resolved to an absolute path and overwritten after the temporary archive is
-    /// complete. The containing directory is created when missing.
-    /// <para>目标归档路径，会被解析为绝对路径，并在临时归档完成后被覆盖写入。其所在目录不存在时会被创建。</para>
-    /// </param>
-    /// <param name="options">
-    /// Replacement map and whether a <c>payload.bin</c> swap is authorized.
-    /// <para>替换映射，以及是否授权替换 <c>payload.bin</c>。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before each member and honoured by every copy; a cancelled run deletes the temporary archive
-    /// and leaves <paramref name="outputPath"/> untouched.
-    /// <para>在写入每个成员前检查，并被所有复制操作遵守；被取消的运行会删除临时归档并保持
-    /// <paramref name="outputPath"/> 不变。</para>
-    /// </param>
-    /// <returns>
-    /// The published path, the replacement member names as given, and <c>OuterSignatureInvalidated</c> set to
-    /// <see langword="true"/>.
-    /// <para>已发布路径、按输入给出的替换成员名，并且 <c>OuterSignatureInvalidated</c> 恒为
-    /// <see langword="true"/>。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException"><paramref name="inputPath"/> or <paramref name="outputPath"/> is
-    /// <see langword="null"/> or blank.
-    /// <para><paramref name="inputPath"/> 或 <paramref name="outputPath"/> 为 <see langword="null"/> 或空白。</para>
-    /// </exception>
+    /// <summary>Patches selected ZIP members and atomically publishes the new archive.
+    /// <para>修补选定的 ZIP 成员并原子发布新归档。</para></summary>
+    /// <param name="inputPath">Source OTA ZIP read through <see cref="ZipFile.OpenRead(string)"/>; it stays open for reading only and is never modified.
+    /// <para>通过 <see cref="ZipFile.OpenRead(string)"/> 打开读取的源 OTA ZIP；仅只读，绝不被修改。</para></param>
+    /// <param name="outputPath">Destination archive path, resolved to an absolute path and overwritten after the temporary archive is complete. The containing directory is created when missing.
+    /// <para>目标归档路径，会被解析为绝对路径，并在临时归档完成后被覆盖写入。其所在目录不存在时会被创建。</para></param>
+    /// <param name="options">Replacement map and whether a <c>payload.bin</c> swap is authorized.
+    /// <para>替换映射，以及是否授权替换 <c>payload.bin</c>。</para></param>
+    /// <param name="cancellationToken">Checked before each member and honoured by every copy; a cancelled run deletes the temporary archive and leaves <paramref name="outputPath"/> untouched.
+    /// <para>在写入每个成员前检查，并被所有复制操作遵守；被取消的运行会删除临时归档并保持 <paramref name="outputPath"/> 不变。</para></param>
+    /// <returns>The published path, the replacement member names as given, and <c>OuterSignatureInvalidated</c> set to <see langword="true"/>.
+    /// <para>已发布路径、按输入给出的替换成员名，并且 <c>OuterSignatureInvalidated</c> 恒为 <see langword="true"/>。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="inputPath"/> or <paramref name="outputPath"/> is <see langword="null"/> or blank.
+    /// <para><paramref name="inputPath"/> 或 <paramref name="outputPath"/> 为 <see langword="null"/> 或空白。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null"/>.
     /// <para><paramref name="options"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="FileNotFoundException"><paramref name="inputPath"/> or a mapped replacement file does
-    /// not exist. <para><paramref name="inputPath"/> 或映射的替换文件不存在。</para></exception>
-    /// <exception cref="InvalidDataException">
-    /// An entry name is absolute or contains empty, <c>.</c> or <c>..</c> segments, a member repeats or exceeds
-    /// 16 GiB, or a <c>payload.bin</c> replacement lacks <see cref="OtaZipPatchOptions.AllowPayloadReplacement"/>
-    /// or its companion <c>payload_properties.txt</c>.
-    /// <para>条目名为绝对路径或包含空段、<c>.</c> 或 <c>..</c>；成员重复或超过 16 GiB；或替换
-    /// <c>payload.bin</c> 时未设置 <see cref="OtaZipPatchOptions.AllowPayloadReplacement"/>，
-    /// 或缺少配套的 <c>payload_properties.txt</c>。</para>
-    /// </exception>
+    /// <exception cref="FileNotFoundException"><paramref name="inputPath"/> or a mapped replacement file does not exist.
+    /// <para><paramref name="inputPath"/> 或映射的替换文件不存在。</para></exception>
+    /// <exception cref="InvalidDataException">An entry name is absolute or contains empty, <c>.</c> or <c>..</c> segments, a member repeats or exceeds 16 GiB, or a <c>payload.bin</c> replacement lacks <see cref="OtaZipPatchOptions.AllowPayloadReplacement"/> or its companion <c>payload_properties.txt</c>.
+    /// <para>条目名为绝对路径或包含空段、<c>.</c> 或 <c>..</c>；成员重复或超过 16 GiB；或替换 <c>payload.bin</c> 时未设置 <see cref="OtaZipPatchOptions.AllowPayloadReplacement"/>， 或缺少配套的 <c>payload_properties.txt</c>。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已收到取消信号。</para></exception>
     /// <example>
     /// <code>
     /// var patched = await OtaZipPatchService.PatchAsync(
-    ///     "ota.zip",
-    ///     "ota-patched.zip",
-    ///     new OtaZipPatchOptions
-    ///     {
-    ///         ReplacementFiles = new Dictionary&lt;string, string&gt; { ["updater-script"] = "updater-script" },
-    ///     });
+    /// "ota.zip",
+    /// "ota-patched.zip",
+    /// new OtaZipPatchOptions
+    /// {
+    /// ReplacementFiles = new Dictionary&lt;string, string&gt; { ["updater-script"] = "updater-script" },
+    /// });
     /// </code>
     /// </example>
     public static async Task<OtaZipPatchResult> PatchAsync(string inputPath, string outputPath,
@@ -550,29 +463,17 @@ public static class OtaZipPatchService
         }
     }
 
-    /// <summary>
-    /// Verifies ZIP structure, A/B payload members and payload properties.
-    /// <para>校验 ZIP 结构、A/B payload 成员以及 payload 属性。</para>
-    /// </summary>
-    /// <param name="zipPath">
-    /// Archive opened for reading only. A missing or unreadable file is reported through
-    /// <see cref="OtaZipVerificationResult.Errors"/> instead of throwing.
-    /// <para>仅以只读方式打开的归档。文件缺失或不可读时通过
-    /// <see cref="OtaZipVerificationResult.Errors"/> 上报，而不抛出异常。</para>
-    /// </param>
-    /// <returns>
-    /// Collected errors, warnings and properties with <see cref="OtaZipVerificationResult.IsValid"/> set when
-    /// no error occurred. A package without <c>payload.bin</c> is treated as a possible Recovery ZIP and only
-    /// warned about; a Payload whose CrAU version is neither 2 nor 3 skips manifest parsing with a warning.
-    /// <para>收集的错误、警告与属性，未出现错误时 <see cref="OtaZipVerificationResult.IsValid"/> 为真。
-    /// 不含 <c>payload.bin</c> 的包被视为可能的 Recovery ZIP，仅给出警告；CrAU 版本非 2 或 3 的 Payload
-    /// 会跳过清单解析并给出警告。</para>
-    /// </returns>
+    /// <summary>Verifies ZIP structure, A/B payload members and payload properties.
+    /// <para>校验 ZIP 结构、A/B payload 成员以及 payload 属性。</para></summary>
+    /// <param name="zipPath">Archive opened for reading only. A missing or unreadable file is reported through <see cref="OtaZipVerificationResult.Errors"/> instead of throwing.
+    /// <para>仅以只读方式打开的归档。文件缺失或不可读时通过 <see cref="OtaZipVerificationResult.Errors"/> 上报，而不抛出异常。</para></param>
+    /// <returns>Collected errors, warnings and properties with <see cref="OtaZipVerificationResult.IsValid"/> set when no error occurred. A package without <c>payload.bin</c> is treated as a possible Recovery ZIP and only warned about; a Payload whose CrAU version is neither 2 nor 3 skips manifest parsing with a warning.
+    /// <para>收集的错误、警告与属性，未出现错误时 <see cref="OtaZipVerificationResult.IsValid"/> 为真。 不含 <c>payload.bin</c> 的包被视为可能的 Recovery ZIP，仅给出警告；CrAU 版本非 2 或 3 的 Payload 会跳过清单解析并给出警告。</para></returns>
     /// <example>
     /// <code>
     /// var check = OtaZipPatchService.Verify("ota.zip");
     /// if (!check.IsValid)
-    ///     Console.Error.WriteLine(string.Join("; ", check.Errors));
+    /// Console.Error.WriteLine(string.Join("; ", check.Errors));
     /// </code>
     /// </example>
     public static OtaZipVerificationResult Verify(string zipPath)

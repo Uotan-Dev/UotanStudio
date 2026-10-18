@@ -182,13 +182,11 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
         return sb.ToString();
     }
 
-    /// <summary>
-    /// Executes the command asynchronously and returns captured stdout/stderr/exit code.
-    /// <para>异步执行命令并返回捕获的 stdout / stderr / 退出码。</para>
-    /// </summary>
+    /// <summary>Executes the command asynchronously and returns captured stdout/stderr/exit code.
+    /// <para>异步执行命令并返回捕获的 stdout / stderr / 退出码。</para></summary>
     /// <param name="timeoutMs">Timeout in milliseconds.<para>超时（毫秒）。</para></param>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
-    /// <returns>A task resolving to the shell result. <para>结果为 shell 执行结果的任务。</para></returns>
+    /// <returns>A task resolving to the shell result.<para>结果为 shell 执行结果的任务。</para></returns>
     /// <exception cref="TimeoutException">A read timed out while the stream was still open.
     /// <para>流仍打开时读取超时。</para></exception>
     /// <exception cref="InvalidDataException">The stream ended with a truncated shell v2 frame.

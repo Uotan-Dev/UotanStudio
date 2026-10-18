@@ -72,53 +72,36 @@ public static class MetadataReader
     }
 
     internal const int MaximumMetadataBytes = 64 * 1024 * 1024;
-    /// <summary>
-    /// Reads LP metadata from an image file (uses slot 0 primary metadata).
-    /// <para>从镜像文件读取 LP 元数据(使用槽 0 主元数据)。</para>
-    /// </summary>
-    /// <param name="path">
-    /// Raw or sparse image file, opened through <see cref="OpenImage"/> and closed again before this call returns.
-    /// <para>原始或稀疏镜像文件，由 <see cref="OpenImage"/> 打开，并在本调用返回前关闭。</para>
-    /// </param>
-    /// <returns>
-    /// The validated geometry, header and metadata tables of the slot that parsed successfully.
-    /// <para>成功解析槽位中已通过校验的几何信息、头部与元数据表。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// No geometry or metadata slot passes validation, as reported by <see cref="ReadFromImageStream"/>.
+    /// <summary>Reads LP metadata from an image file (uses slot 0 primary metadata).
+    /// <para>从镜像文件读取 LP 元数据(使用槽 0 主元数据)。</para></summary>
+    /// <param name="path">Raw or sparse image file, opened through <see cref="OpenImage"/> and closed again before this call returns.
+    /// <para>原始或稀疏镜像文件，由 <see cref="OpenImage"/> 打开，并在本调用返回前关闭。</para></param>
+    /// <returns>The validated geometry, header and metadata tables of the slot that parsed successfully.
+    /// <para>成功解析槽位中已通过校验的几何信息、头部与元数据表。</para></returns>
+    /// <exception cref="InvalidDataException">No geometry or metadata slot passes validation, as reported by <see cref="ReadFromImageStream"/>.
     /// <para>如同 <see cref="ReadFromImageStream"/> 所报告的那样，没有任何几何信息或元数据槽通过校验。</para></exception>
-    /// <exception cref="EndOfStreamException">
-    /// The image is shorter than the structures being read. <para>镜像长度不足以读取所需结构。</para></exception>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="path"/> does not exist. <para><paramref name="path"/> 不存在。</para></exception>
+    /// <exception cref="EndOfStreamException">The image is shorter than the structures being read.
+    /// <para>镜像长度不足以读取所需结构。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
+    /// <para><paramref name="path"/> 不存在。</para></exception>
     public static LpMetadata ReadFromImageFile(string path)
     {
         using var stream = OpenImage(path);
         return ReadFromImageStream(stream);
     }
 
-    /// <summary>
-    /// Reads LP metadata from an image stream (uses slot 0 primary metadata).
-    /// <para>从镜像流读取 LP 元数据(使用槽 0 主元数据)。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Seekable stream over a super image or a standalone metadata region. The stream position is moved while geometry and metadata
-    /// slots are probed and ends after the tables of the block that parsed successfully; the stream itself stays open and owned by the caller.
-    /// <para>覆盖 super 镜像或独立元数据区域、可寻址的流。探测几何信息与元数据槽时会移动位置，解析成功后停留在所读数据块之后；流保持打开，所有权属于调用方。</para>
-    /// </param>
-    /// <returns>
-    /// The validated geometry, header and metadata tables. Geometry is taken from the primary block at offset
-    /// <c>4096</c>, then the backup block at offset <c>8192</c>; if both fail, the leading 4096 bytes are parsed as a geometry block and
-    /// the metadata is read from offset <c>4096</c>. Metadata is taken from slot <c>0</c> primary first, then slot <c>0</c> backup.
-    /// <para>已通过校验的几何信息、头部与元数据表。几何信息依次取自偏移 <c>4096</c> 的主块和偏移 <c>8192</c> 的备份块；两者均失败时，将起始 <c>4096</c> 字节按几何信息块解析，并从偏移 <c>4096</c> 读取元数据。元数据优先取自槽 <c>0</c> 主副本，其次取自槽 <c>0</c> 备份副本。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// Every probed geometry and metadata block failed validation, or the fallback region itself is not a valid metadata block.
+    /// <summary>Reads LP metadata from an image stream (uses slot 0 primary metadata).
+    /// <para>从镜像流读取 LP 元数据(使用槽 0 主元数据)。</para></summary>
+    /// <param name="stream">Seekable stream over a super image or a standalone metadata region. The stream position is moved while geometry and metadata slots are probed and ends after the tables of the block that parsed successfully; the stream itself stays open and owned by the caller.
+    /// <para>覆盖 super 镜像或独立元数据区域、可寻址的流。探测几何信息与元数据槽时会移动位置，解析成功后停留在所读数据块之后；流保持打开，所有权属于调用方。</para></param>
+    /// <returns>The validated geometry, header and metadata tables. Geometry is taken from the primary block at offset <c>4096</c>, then the backup block at offset <c>8192</c>; if both fail, the leading 4096 bytes are parsed as a geometry block and the metadata is read from offset <c>4096</c>. Metadata is taken from slot <c>0</c> primary first, then slot <c>0</c> backup.
+    /// <para>已通过校验的几何信息、头部与元数据表。几何信息依次取自偏移 <c>4096</c> 的主块和偏移 <c>8192</c> 的备份块；两者均失败时，将起始 <c>4096</c> 字节按几何信息块解析，并从偏移 <c>4096</c> 读取元数据。元数据优先取自槽 <c>0</c> 主副本，其次取自槽 <c>0</c> 备份副本。</para></returns>
+    /// <exception cref="InvalidDataException">Every probed geometry and metadata block failed validation, or the fallback region itself is not a valid metadata block.
     /// <para>所有被探测的几何信息与元数据块均未通过校验，或回退区域本身不是有效的元数据块。</para></exception>
-    /// <exception cref="EndOfStreamException">
-    /// The stream ends before the structures of the last probed block. <para>流在最后一个被探测块所需结构结束之前就已结束。</para></exception>
-    /// <exception cref="NotSupportedException">
-    /// <paramref name="stream"/> does not support seeking. <para><paramref name="stream"/> 不支持寻址。</para></exception>
+    /// <exception cref="EndOfStreamException">The stream ends before the structures of the last probed block.
+    /// <para>流在最后一个被探测块所需结构结束之前就已结束。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="stream"/> does not support seeking.
+    /// <para><paramref name="stream"/> 不支持寻址。</para></exception>
     public static LpMetadata ReadFromImageStream(Stream stream)
     {
         LpMetadataGeometry geometry;
@@ -141,48 +124,32 @@ public static class MetadataReader
         }
     }
 
-    /// <summary>
-    /// Parses the geometry structure from the beginning of an image stream.
-    /// <para>从镜像流起始处解析几何结构。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Seekable image stream; the reserved 4096-byte header block is skipped and reading starts at offset <c>4096</c>.
-    /// <para>可寻址的镜像流；跳过保留的 4096 字节头部块，从偏移 <c>4096</c> 开始读取。</para>
-    /// </param>
-    /// <param name="geometry">
-    /// The validated geometry on return: magic, structure size, SHA-256 checksum, per-slot metadata size, slot count and logical block size.
-    /// Unset when the call throws.
-    /// <para>返回时为已校验的几何信息：魔数、结构长度、SHA-256 校验和、每槽元数据大小、槽数量与逻辑块大小。抛出异常时不赋值。</para>
-    /// </param>
-    /// <exception cref="InvalidDataException">
-    /// The geometry magic or structure size is wrong, its dimensions are outside the supported limits, or the SHA-256 checksum computed
-    /// over the structure with its checksum field zeroed does not match the stored value.
+    /// <summary>Parses the geometry structure from the beginning of an image stream.
+    /// <para>从镜像流起始处解析几何结构。</para></summary>
+    /// <param name="stream">Seekable image stream; the reserved 4096-byte header block is skipped and reading starts at offset <c>4096</c>.
+    /// <para>可寻址的镜像流；跳过保留的 4096 字节头部块，从偏移 <c>4096</c> 开始读取。</para></param>
+    /// <param name="geometry">The validated geometry on return: magic, structure size, SHA-256 checksum, per-slot metadata size, slot count and logical block size. Unset when the call throws.
+    /// <para>返回时为已校验的几何信息：魔数、结构长度、SHA-256 校验和、每槽元数据大小、槽数量与逻辑块大小。抛出异常时不赋值。</para></param>
+    /// <exception cref="InvalidDataException">The geometry magic or structure size is wrong, its dimensions are outside the supported limits, or the SHA-256 checksum computed over the structure with its checksum field zeroed does not match the stored value.
     /// <para>几何信息的魔数或结构长度错误，其尺寸超出支持范围，或在校验和字段置零后对该结构计算出的 SHA-256 与存储值不一致。</para></exception>
-    /// <exception cref="EndOfStreamException">
-    /// The stream ends before the geometry structure. <para>流在几何信息结构结束之前就已结束。</para></exception>
-    /// <exception cref="NotSupportedException">
-    /// <paramref name="stream"/> does not support seeking. <para><paramref name="stream"/> 不支持寻址。</para></exception>
+    /// <exception cref="EndOfStreamException">The stream ends before the geometry structure.
+    /// <para>流在几何信息结构结束之前就已结束。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="stream"/> does not support seeking.
+    /// <para><paramref name="stream"/> 不支持寻址。</para></exception>
     public static void ReadPrimaryGeometry(Stream stream, out LpMetadataGeometry geometry) => ReadGeometry(stream, MetadataFormat.LP_PARTITION_RESERVED_BYTES, out geometry);
 
-    /// <summary>
-    /// Parses the backup geometry structure from an image stream.
-    /// <para>从镜像流解析备份几何结构。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Seekable image stream; reading starts at offset <c>8192</c>, the second geometry copy.
-    /// <para>可寻址的镜像流；从偏移 <c>8192</c> 开始读取，即第二份几何信息副本。</para>
-    /// </param>
-    /// <param name="geometry">
-    /// The validated backup geometry on return; unset when the call throws.
-    /// <para>返回时为已校验的备份几何信息；抛出异常时不赋值。</para>
-    /// </param>
-    /// <exception cref="InvalidDataException">
-    /// The backup geometry magic, structure size, dimensions or SHA-256 checksum fail validation.
+    /// <summary>Parses the backup geometry structure from an image stream.
+    /// <para>从镜像流解析备份几何结构。</para></summary>
+    /// <param name="stream">Seekable image stream; reading starts at offset <c>8192</c>, the second geometry copy.
+    /// <para>可寻址的镜像流；从偏移 <c>8192</c> 开始读取，即第二份几何信息副本。</para></param>
+    /// <param name="geometry">The validated backup geometry on return; unset when the call throws.
+    /// <para>返回时为已校验的备份几何信息；抛出异常时不赋值。</para></param>
+    /// <exception cref="InvalidDataException">The backup geometry magic, structure size, dimensions or SHA-256 checksum fail validation.
     /// <para>备份几何信息的魔数、结构长度、尺寸或 SHA-256 校验和未通过校验。</para></exception>
-    /// <exception cref="EndOfStreamException">
-    /// The stream ends before the backup geometry structure. <para>流在备份几何信息结构结束之前就已结束。</para></exception>
-    /// <exception cref="NotSupportedException">
-    /// <paramref name="stream"/> does not support seeking. <para><paramref name="stream"/> 不支持寻址。</para></exception>
+    /// <exception cref="EndOfStreamException">The stream ends before the backup geometry structure.
+    /// <para>流在备份几何信息结构结束之前就已结束。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="stream"/> does not support seeking.
+    /// <para><paramref name="stream"/> 不支持寻址。</para></exception>
     public static void ReadBackupGeometry(Stream stream, out LpMetadataGeometry geometry) => ReadGeometry(stream, MetadataFormat.LP_PARTITION_RESERVED_BYTES + MetadataFormat.LP_METADATA_GEOMETRY_SIZE, out geometry);
 
     private static void ReadGeometry(Stream stream, long offset, out LpMetadataGeometry geometry)
@@ -212,35 +179,23 @@ public static class MetadataReader
         }
     }
 
-    /// <summary>
-    /// Reads primary metadata for the given slot number.
-    /// <para>读取指定槽号的主元数据。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Seekable image stream; the position is moved to the slot's primary metadata offset before parsing.
-    /// <para>可寻址的镜像流；解析前会将位置移动到该槽的主元数据偏移。</para>
-    /// </param>
-    /// <param name="geometry">
-    /// Geometry describing the per-slot metadata size and slot count; validated again by <see cref="ParseMetadata"/>.
-    /// <para>描述每槽元数据大小与槽数量的几何信息；由 <see cref="ParseMetadata"/> 再次校验。</para>
-    /// </param>
-    /// <param name="slotNumber">
-    /// Zero-based metadata slot to read, which must be below <see cref="LpMetadataGeometry.MetadataSlotCount"/>.
-    /// <para>要读取的从零开始的元数据槽，必须小于 <see cref="LpMetadataGeometry.MetadataSlotCount"/>。</para>
-    /// </param>
-    /// <returns>
-    /// The validated header and metadata tables of that slot, with <paramref name="geometry"/> attached.
-    /// <para>该槽已通过校验的头部与元数据表，并附带 <paramref name="geometry"/>。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="slotNumber"/> is not below the geometry's slot count. <para><paramref name="slotNumber"/> 不小于几何信息中的槽数量。</para></exception>
-    /// <exception cref="InvalidDataException">
-    /// The geometry dimensions are invalid, or the metadata block at the computed offset fails validation.
+    /// <summary>Reads primary metadata for the given slot number.<para>读取指定槽号的主元数据。</para></summary>
+    /// <param name="stream">Seekable image stream; the position is moved to the slot's primary metadata offset before parsing.
+    /// <para>可寻址的镜像流；解析前会将位置移动到该槽的主元数据偏移。</para></param>
+    /// <param name="geometry">Geometry describing the per-slot metadata size and slot count; validated again by <see cref="ParseMetadata"/>.
+    /// <para>描述每槽元数据大小与槽数量的几何信息；由 <see cref="ParseMetadata"/> 再次校验。</para></param>
+    /// <param name="slotNumber">Zero-based metadata slot to read, which must be below <see cref="LpMetadataGeometry.MetadataSlotCount"/>.
+    /// <para>要读取的从零开始的元数据槽，必须小于 <see cref="LpMetadataGeometry.MetadataSlotCount"/>。</para></param>
+    /// <returns>The validated header and metadata tables of that slot, with <paramref name="geometry"/> attached.
+    /// <para>该槽已通过校验的头部与元数据表，并附带 <paramref name="geometry"/>。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="slotNumber"/> is not below the geometry's slot count.
+    /// <para><paramref name="slotNumber"/> 不小于几何信息中的槽数量。</para></exception>
+    /// <exception cref="InvalidDataException">The geometry dimensions are invalid, or the metadata block at the computed offset fails validation.
     /// <para>几何信息尺寸无效，或计算偏移处的元数据块未通过校验。</para></exception>
-    /// <exception cref="EndOfStreamException">
-    /// The stream ends before the metadata block. <para>流在元数据块结束之前就已结束。</para></exception>
-    /// <exception cref="NotSupportedException">
-    /// <paramref name="stream"/> does not support seeking. <para><paramref name="stream"/> 不支持寻址。</para></exception>
+    /// <exception cref="EndOfStreamException">The stream ends before the metadata block.
+    /// <para>流在元数据块结束之前就已结束。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="stream"/> does not support seeking.
+    /// <para><paramref name="stream"/> 不支持寻址。</para></exception>
     public static LpMetadata ReadPrimaryMetadata(Stream stream, LpMetadataGeometry geometry, uint slotNumber)
     {
         var offset = GetPrimaryMetadataOffset(geometry, slotNumber);
@@ -248,36 +203,17 @@ public static class MetadataReader
         return ParseMetadata(geometry, stream);
     }
 
-    /// <summary>
-    /// Parses a metadata block (header + tables) from the current stream position.
-    /// <para>从当前流位置解析元数据块(头部 + 表)。</para>
-    /// </summary>
-    /// <param name="geometry">
-    /// Geometry that owns the block; its metadata size and slot count are re-validated and the per-slot ceiling is capped at
-    /// <c>64</c> MiB, with a logical block size that is a power of two at least <c>512</c> bytes.
-    /// <para>拥有该数据块的几何信息；其元数据大小与槽数量会被重新校验，每槽上限为 <c>64</c> MiB，逻辑块大小必须是不小于 <c>512</c> 字节的 2 的幂。</para>
-    /// </param>
-    /// <param name="stream">
-    /// Readable stream positioned at the first byte of a metadata header. The header is read little-endian. Reading advances the
-    /// position past the header and its tables; seeking is optional here, and a non-seekable stream is bounded only by the geometry.
-    /// <para>定位在元数据头部第一字节、可读的流。头部按小端序读取。读取会把位置推进到头部及其数据表之后；此处不强制要求可寻址，不可寻址的流只受几何信息约束。</para>
-    /// </param>
-    /// <returns>
-    /// The parsed block: the supplied geometry, the validated header, and the partition, extent, group and block-device tables. A
-    /// table descriptor with zero entries yields an empty list, while the block-device table must hold at least one super device at index <c>0</c>.
-    /// <para>解析后的数据块：传入的几何信息、已校验的头部，以及分区、范围、分区组和块设备四张表。条目数为零的描述符得到空列表，而块设备表必须在索引 <c>0</c> 处至少包含一个 super 设备。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// The geometry dimensions are invalid; the header magic, major version (must be <c>10</c>), minor version (must be at most <c>2</c>)
-    /// or header size (must be <c>128</c> for minor version below <c>2</c> and <c>256</c> for minor version <c>2</c>) are rejected; the header
-    /// or table byte counts exceed the slot or the remaining seekable stream length; a SHA-256 header or table checksum does not match;
-    /// a table descriptor entry size or range is wrong; the super device data area overlaps the metadata; or partition attributes, group
-    /// and extent references, extent targets or their device bounds fall outside what the block declares. Partition attributes are masked
-    /// with <c>0x3</c> for minor version <c>0</c> and <c>0xf</c> for later versions.
-    /// <para>以下情形均抛出：几何信息尺寸无效；头部魔数、主版本（必须为 <c>10</c>）、次版本（不得大于 <c>2</c>）或头部长度（次版本小于 <c>2</c> 时必须为 <c>128</c>，次版本为 <c>2</c> 时必须为 <c>256</c>）被拒绝；头部或数据表字节数超出该槽或可寻址流剩余长度；SHA-256 头部或数据表校验和不匹配；表描述符的条目长度或范围错误；super 设备数据区域与元数据重叠；分区的属性、组与范围引用、范围目标或其设备边界超出数据块声明的范围。次版本为 <c>0</c> 时属性掩码为 <c>0x3</c>，更高版本为 <c>0xf</c>。</para>
-    /// </exception>
-    /// <exception cref="EndOfStreamException">
-    /// The stream ends before the header, the extended header or the declared tables have been read.
+    /// <summary>Parses a metadata block (header + tables) from the current stream position.
+    /// <para>从当前流位置解析元数据块(头部 + 表)。</para></summary>
+    /// <param name="geometry">Geometry that owns the block; its metadata size and slot count are re-validated and the per-slot ceiling is capped at <c>64</c> MiB, with a logical block size that is a power of two at least <c>512</c> bytes.
+    /// <para>拥有该数据块的几何信息；其元数据大小与槽数量会被重新校验，每槽上限为 <c>64</c> MiB，逻辑块大小必须是不小于 <c>512</c> 字节的 2 的幂。</para></param>
+    /// <param name="stream">Readable stream positioned at the first byte of a metadata header. The header is read little-endian. Reading advances the position past the header and its tables; seeking is optional here, and a non-seekable stream is bounded only by the geometry.
+    /// <para>定位在元数据头部第一字节、可读的流。头部按小端序读取。读取会把位置推进到头部及其数据表之后；此处不强制要求可寻址，不可寻址的流只受几何信息约束。</para></param>
+    /// <returns>The parsed block: the supplied geometry, the validated header, and the partition, extent, group and block-device tables. A table descriptor with zero entries yields an empty list, while the block-device table must hold at least one super device at index <c>0</c>.
+    /// <para>解析后的数据块：传入的几何信息、已校验的头部，以及分区、范围、分区组和块设备四张表。条目数为零的描述符得到空列表，而块设备表必须在索引 <c>0</c> 处至少包含一个 super 设备。</para></returns>
+    /// <exception cref="InvalidDataException">The geometry dimensions are invalid; the header magic, major version (must be <c>10</c>), minor version (must be at most <c>2</c>) or header size (must be <c>128</c> for minor version below <c>2</c> and <c>256</c> for minor version <c>2</c>) are rejected; the header or table byte counts exceed the slot or the remaining seekable stream length; a SHA-256 header or table checksum does not match; a table descriptor entry size or range is wrong; the super device data area overlaps the metadata; or partition attributes, group and extent references, extent targets or their device bounds fall outside what the block declares. Partition attributes are masked with <c>0x3</c> for minor version <c>0</c> and <c>0xf</c> for later versions.
+    /// <para>以下情形均抛出：几何信息尺寸无效；头部魔数、主版本（必须为 <c>10</c>）、次版本（不得大于 <c>2</c>）或头部长度（次版本小于 <c>2</c> 时必须为 <c>128</c>，次版本为 <c>2</c> 时必须为 <c>256</c>）被拒绝；头部或数据表字节数超出该槽或可寻址流剩余长度；SHA-256 头部或数据表校验和不匹配；表描述符的条目长度或范围错误；super 设备数据区域与元数据重叠；分区的属性、组与范围引用、范围目标或其设备边界超出数据块声明的范围。次版本为 <c>0</c> 时属性掩码为 <c>0x3</c>，更高版本为 <c>0xf</c>。</para></exception>
+    /// <exception cref="EndOfStreamException">The stream ends before the header, the extended header or the declared tables have been read.
     /// <para>流在头部、扩展头部或声明的数据表读取完成之前就已结束。</para></exception>
     public static LpMetadata ParseMetadata(LpMetadataGeometry geometry, Stream stream)
     {
@@ -388,27 +324,18 @@ public static class MetadataReader
         }
     }
 
-    /// <summary>
-    /// Calculates the byte offset of the primary metadata for a given slot.
-    /// <para>计算给定槽号的主元数据字节偏移。</para>
-    /// </summary>
-    /// <param name="geometry">
-    /// Validated geometry supplying the per-slot metadata size and the slot count.
-    /// <para>已校验的几何信息，提供每槽元数据大小与槽数量。</para>
-    /// </param>
-    /// <param name="slotNumber">
-    /// Zero-based metadata slot, which must be below <see cref="LpMetadataGeometry.MetadataSlotCount"/>.
-    /// <para>从零开始的元数据槽，必须小于 <see cref="LpMetadataGeometry.MetadataSlotCount"/>。</para>
-    /// </param>
-    /// <returns>
-    /// Absolute byte offset <c>4096 + 2 * 4096 + slotNumber * MetadataMaxSize</c>, i.e. past the reserved block and both geometry copies.
-    /// <para>绝对字节偏移 <c>4096 + 2 * 4096 + slotNumber * MetadataMaxSize</c>，即位于保留块与两份几何信息副本之后。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// <paramref name="geometry"/> has metadata sizes, slot counts or a logical block size outside the supported limits.
+    /// <summary>Calculates the byte offset of the primary metadata for a given slot.
+    /// <para>计算给定槽号的主元数据字节偏移。</para></summary>
+    /// <param name="geometry">Validated geometry supplying the per-slot metadata size and the slot count.
+    /// <para>已校验的几何信息，提供每槽元数据大小与槽数量。</para></param>
+    /// <param name="slotNumber">Zero-based metadata slot, which must be below <see cref="LpMetadataGeometry.MetadataSlotCount"/>.
+    /// <para>从零开始的元数据槽，必须小于 <see cref="LpMetadataGeometry.MetadataSlotCount"/>。</para></param>
+    /// <returns>Absolute byte offset <c>4096 + 2 * 4096 + slotNumber * MetadataMaxSize</c>, i.e. past the reserved block and both geometry copies.
+    /// <para>绝对字节偏移 <c>4096 + 2 * 4096 + slotNumber * MetadataMaxSize</c>，即位于保留块与两份几何信息副本之后。</para></returns>
+    /// <exception cref="InvalidDataException"><paramref name="geometry"/> has metadata sizes, slot counts or a logical block size outside the supported limits.
     /// <para><paramref name="geometry"/> 的元数据大小、槽数量或逻辑块大小超出支持范围。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="slotNumber"/> is not below the geometry's slot count. <para><paramref name="slotNumber"/> 不小于几何信息中的槽数量。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="slotNumber"/> is not below the geometry's slot count.
+    /// <para><paramref name="slotNumber"/> 不小于几何信息中的槽数量。</para></exception>
     public static long GetPrimaryMetadataOffset(LpMetadataGeometry geometry, uint slotNumber)
     {
         ValidateGeometry(geometry);
@@ -416,32 +343,20 @@ public static class MetadataReader
         return checked(MetadataFormat.LP_PARTITION_RESERVED_BYTES + (MetadataFormat.LP_METADATA_GEOMETRY_SIZE * 2) + ((long)slotNumber * geometry.MetadataMaxSize));
     }
 
-    /// <summary>
-    /// Calculates the backup slot offset following the primary metadata slots.
-    /// <para>计算位于全部主元数据槽之后的备份槽偏移。</para>
-    /// </summary>
-    /// <param name="geometry">
-    /// Validated geometry supplying the per-slot metadata size and the slot count.
-    /// <para>已校验的几何信息，提供每槽元数据大小与槽数量。</para>
-    /// </param>
-    /// <param name="deviceSize">
-    /// Total size of the image or super device in bytes, used to reject a backup slot that would not fit.
-    /// <para>镜像或 super 设备的总字节大小，用于判定放不下备份槽的情形。</para>
-    /// </param>
-    /// <param name="slotNumber">
-    /// Zero-based metadata slot, which must be below <see cref="LpMetadataGeometry.MetadataSlotCount"/>.
-    /// <para>从零开始的元数据槽，必须小于 <see cref="LpMetadataGeometry.MetadataSlotCount"/>。</para>
-    /// </param>
-    /// <returns>
-    /// Absolute byte offset of the slot's backup copy, <c>GetPrimaryMetadataOffset(...) + MetadataMaxSize * MetadataSlotCount</c>, which
-    /// always leaves a full <c>MetadataMaxSize</c> of bytes inside <paramref name="deviceSize"/>.
-    /// <para>该槽备份副本的绝对字节偏移，即 <c>GetPrimaryMetadataOffset(...) + MetadataMaxSize * MetadataSlotCount</c>；在 <paramref name="deviceSize"/> 内必定留有完整的 <c>MetadataMaxSize</c> 字节。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// <paramref name="geometry"/> is outside the supported limits, or the backup slot starts beyond <paramref name="deviceSize"/> or is
-    /// truncated by it. <para><paramref name="geometry"/> 超出支持范围，或备份槽起点超出 <paramref name="deviceSize"/>、被其截断。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="slotNumber"/> is not below the geometry's slot count. <para><paramref name="slotNumber"/> 不小于几何信息中的槽数量。</para></exception>
+    /// <summary>Calculates the backup slot offset following the primary metadata slots.
+    /// <para>计算位于全部主元数据槽之后的备份槽偏移。</para></summary>
+    /// <param name="geometry">Validated geometry supplying the per-slot metadata size and the slot count.
+    /// <para>已校验的几何信息，提供每槽元数据大小与槽数量。</para></param>
+    /// <param name="deviceSize">Total size of the image or super device in bytes, used to reject a backup slot that would not fit.
+    /// <para>镜像或 super 设备的总字节大小，用于判定放不下备份槽的情形。</para></param>
+    /// <param name="slotNumber">Zero-based metadata slot, which must be below <see cref="LpMetadataGeometry.MetadataSlotCount"/>.
+    /// <para>从零开始的元数据槽，必须小于 <see cref="LpMetadataGeometry.MetadataSlotCount"/>。</para></param>
+    /// <returns>Absolute byte offset of the slot's backup copy, <c>GetPrimaryMetadataOffset(...) + MetadataMaxSize * MetadataSlotCount</c>, which always leaves a full <c>MetadataMaxSize</c> of bytes inside <paramref name="deviceSize"/>.
+    /// <para>该槽备份副本的绝对字节偏移，即 <c>GetPrimaryMetadataOffset(...) + MetadataMaxSize * MetadataSlotCount</c>；在 <paramref name="deviceSize"/> 内必定留有完整的 <c>MetadataMaxSize</c> 字节。</para></returns>
+    /// <exception cref="InvalidDataException"><paramref name="geometry"/> is outside the supported limits, or the backup slot starts beyond <paramref name="deviceSize"/> or is truncated by it.
+    /// <para><paramref name="geometry"/> 超出支持范围，或备份槽起点超出 <paramref name="deviceSize"/>、被其截断。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="slotNumber"/> is not below the geometry's slot count.
+    /// <para><paramref name="slotNumber"/> 不小于几何信息中的槽数量。</para></exception>
     public static long GetBackupMetadataOffset(LpMetadataGeometry geometry, ulong deviceSize, uint slotNumber)
     {
         var offset = checked(GetPrimaryMetadataOffset(geometry, slotNumber) + (long)geometry.MetadataMaxSize * geometry.MetadataSlotCount);

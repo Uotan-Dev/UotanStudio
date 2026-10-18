@@ -132,29 +132,19 @@ public sealed class SparseReadStream : Stream
         return Read(buffer.AsSpan(offset, count));
     }
 
-    /// <summary>
-    /// Sets the position within the logical image relative to the specified origin.
-    /// <para>设置逻辑镜像中相对于指定参考点的位置。</para>
-    /// </summary>
-    /// <param name="offset">Byte displacement added to the origin; negative values are accepted for
-    /// <see cref="SeekOrigin.Current"/> and <see cref="SeekOrigin.End"/>, the addition rejects overflow,
-    /// and a target before the start of the stream is rejected.
-    /// <para>叠加在参考点上的字节位移；<see cref="SeekOrigin.Current"/> 与 <see cref="SeekOrigin.End"/>
-    /// 允许负值，相加时拒绝溢出，落在流起点之前的目标会被拒绝。</para></param>
-    /// <param name="origin">Reference point: <see cref="SeekOrigin.Begin"/> measures from the start of the
-    /// logical stream, <see cref="SeekOrigin.Current"/> from the current position and
-    /// <see cref="SeekOrigin.End"/> from <see cref="Length"/>; only these three values are accepted.
-    /// <para>参考点：<see cref="SeekOrigin.Begin"/> 从逻辑流起点计算，<see cref="SeekOrigin.Current"/>
-    /// 从当前位置计算，<see cref="SeekOrigin.End"/> 从 <see cref="Length"/> 计算；仅接受这三个值。</para></param>
-    /// <returns>The new absolute position, which may exceed <see cref="Length"/>; reads at such a
-    /// position return <c>0</c> bytes.
+    /// <summary>Sets the position within the logical image relative to the specified origin.
+    /// <para>设置逻辑镜像中相对于指定参考点的位置。</para></summary>
+    /// <param name="offset">Byte displacement added to the origin; negative values are accepted for <see cref="SeekOrigin.Current"/> and <see cref="SeekOrigin.End"/>, the addition rejects overflow, and a target before the start of the stream is rejected.
+    /// <para>叠加在参考点上的字节位移；<see cref="SeekOrigin.Current"/> 与 <see cref="SeekOrigin.End"/> 允许负值，相加时拒绝溢出，落在流起点之前的目标会被拒绝。</para></param>
+    /// <param name="origin">Reference point: <see cref="SeekOrigin.Begin"/> measures from the start of the logical stream, <see cref="SeekOrigin.Current"/> from the current position and <see cref="SeekOrigin.End"/> from <see cref="Length"/>; only these three values are accepted.
+    /// <para>参考点：<see cref="SeekOrigin.Begin"/> 从逻辑流起点计算，<see cref="SeekOrigin.Current"/> 从当前位置计算，<see cref="SeekOrigin.End"/> 从 <see cref="Length"/> 计算；仅接受这三个值。</para></param>
+    /// <returns>The new absolute position, which may exceed <see cref="Length"/>; reads at such a position return <c>0</c> bytes.
     /// <para>新的绝对位置，可以超出 <see cref="Length"/>；在该位置读取返回 <c>0</c> 字节。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="origin"/> is not one of the three supported
-    /// seek origins. <para><paramref name="origin"/> 不是三个受支持的寻址参考点之一。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="origin"/> is not one of the three supported seek origins.
+    /// <para><paramref name="origin"/> 不是三个受支持的寻址参考点之一。</para></exception>
     /// <exception cref="IOException">The computed target position lies before the beginning of the stream.
     /// <para>计算出的目标位置位于流起点之前。</para></exception>
-    /// <exception cref="OverflowException">Adding <paramref name="offset"/> to the current position or to
-    /// <see cref="Length"/> overflows <see cref="long"/>.
+    /// <exception cref="OverflowException">Adding <paramref name="offset"/> to the current position or to <see cref="Length"/> overflows <see cref="long"/>.
     /// <para><paramref name="offset"/> 与当前位置或 <see cref="Length"/> 相加时溢出 <see cref="long"/>。</para></exception>
     public override long Seek(long offset, SeekOrigin origin)
     {

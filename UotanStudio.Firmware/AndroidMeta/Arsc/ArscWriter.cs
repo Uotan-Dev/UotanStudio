@@ -32,30 +32,20 @@ public static class ArscWriter
     private const int TypeSpecHeaderSize = 16;
     private const int ConfigSize = 64;
 
-    /// <summary>
-    /// Serializes the model into ARSC bytes.
-    /// <para>把模型序列化为 ARSC 字节。</para>
-    /// </summary>
-    /// <param name="table">
-    /// Table to write. Types are grouped by their <see cref="ResType.Id"/> and emitted in ascending id order, one
-    /// type specification chunk per group followed by that group's type chunks; null entries inside
-    /// <see cref="ResType.Entries"/> are written as the 0xFFFFFFFF offset sentinel.
-    /// <para>待写出的资源表。类型按 <see cref="ResType.Id"/> 分组并按 id 升序写出，每组先写一个类型规格块，
-    /// 再写该组的类型块；<see cref="ResType.Entries"/> 中的 null 条目会写成 0xFFFFFFFF 偏移哨兵值。</para>
-    /// </param>
-    /// <returns>
-    /// A self-contained buffer whose declared total size, package count and chunk sizes match the produced bytes.
-    /// <para>自包含的缓冲区，其声明的总大小、包数量与各块大小均与实际写出的字节一致。</para>
-    /// </returns>
+    /// <summary>Serializes the model into ARSC bytes.<para>把模型序列化为 ARSC 字节。</para></summary>
+    /// <param name="table">Table to write. Types are grouped by their <see cref="ResType.Id"/> and emitted in ascending id order, one type specification chunk per group followed by that group's type chunks; null entries inside <see cref="ResType.Entries"/> are written as the 0xFFFFFFFF offset sentinel.
+    /// <para>待写出的资源表。类型按 <see cref="ResType.Id"/> 分组并按 id 升序写出，每组先写一个类型规格块， 再写该组的类型块；<see cref="ResType.Entries"/> 中的 null 条目会写成 0xFFFFFFFF 偏移哨兵值。</para></param>
+    /// <returns>A self-contained buffer whose declared total size, package count and chunk sizes match the produced bytes.
+    /// <para>自包含的缓冲区，其声明的总大小、包数量与各块大小均与实际写出的字节一致。</para></returns>
     /// <example>
     /// <code>
     /// ResourceTable table = ArscParser.Parse(File.ReadAllBytes("resources.arsc"));
     /// File.WriteAllBytes("copy.arsc", ArscWriter.Write(table));
     /// </code>
     /// </example>
-    /// <exception cref="ArgumentNullException"><paramref name="table"/> is null. <para><paramref name="table"/> 为 null。</para></exception>
-    /// <exception cref="ArscException">A package name is longer than 127 UTF-16 code units or contains a NUL, or a
-    /// type configuration decodes to fewer than 4 bytes, more than 65515 bytes, or a length that is not a multiple of 4.
+    /// <exception cref="ArgumentNullException"><paramref name="table"/> is null.
+    /// <para><paramref name="table"/> 为 null。</para></exception>
+    /// <exception cref="ArscException">A package name is longer than 127 UTF-16 code units or contains a NUL, or a type configuration decodes to fewer than 4 bytes, more than 65515 bytes, or a length that is not a multiple of 4.
     /// <para>包名超过 127 个 UTF-16 编码单元或包含 NUL；或某个类型的配置字节少于 4 字节、多于 65515 字节、或长度不是 4 的倍数。</para></exception>
     public static byte[] Write(ResourceTable table)
     {

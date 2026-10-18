@@ -71,22 +71,12 @@ public sealed class InteractionNodeViewModel : FlowNodeViewModel
         TypeKey = typeKey;
     }
 
-    /// <summary>
-    /// Creates an interaction node by type key; the port layout comes from the element descriptor.
-    /// <para>按类型键创建交互节点，端口布局来自元素描述符。</para>
-    /// </summary>
-    /// <param name="typeKey">
-    /// The interaction element type key.
-    /// <para>交互元素类型键。</para>
-    /// </param>
-    /// <returns>
-    /// The interaction node with its ports configured.
-    /// <para>配置好端口的交互节点。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// Thrown when the type key is not a registered interaction element.
-    /// <para>类型键不是已注册的交互元素时抛出。</para>
-    /// </exception>
+    /// <summary>Creates an interaction node by type key; the port layout comes from the element descriptor.
+    /// <para>按类型键创建交互节点，端口布局来自元素描述符。</para></summary>
+    /// <param name="typeKey">The interaction element type key.<para>交互元素类型键。</para></param>
+    /// <returns>The interaction node with its ports configured.<para>配置好端口的交互节点。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the type key is not a registered interaction element.
+    /// <para>类型键不是已注册的交互元素时抛出。</para></exception>
     public static InteractionNodeViewModel Create(string typeKey)
     {
         if (!InteractionElements.TryGetDescriptor(typeKey, out var descriptor))

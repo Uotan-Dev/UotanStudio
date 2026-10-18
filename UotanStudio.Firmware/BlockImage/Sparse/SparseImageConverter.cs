@@ -17,74 +17,42 @@ namespace UotanStudio.Firmware.BlockImage.Sparse;
 /// </summary>
 public static class SparseImageConverter
 {
-    /// <summary>
-    /// Converts one or more sparse images to a raw image file.
-    /// <para>将一个或多个稀疏镜像转换为原始镜像文件。</para>
-    /// </summary>
-    /// <param name="inputFiles">
-    /// Paths of the sparse images to expand, consumed in enumeration order.
-    /// <para>待展开的稀疏镜像路径，按枚举顺序依次处理。</para>
-    /// </param>
-    /// <param name="outputFile">
-    /// Destination raw image path, replaced only after the whole conversion has succeeded.
-    /// <para>目标原始镜像路径；仅在整体转换成功后才会被替换。</para>
-    /// </param>
+    /// <summary>Converts one or more sparse images to a raw image file.
+    /// <para>将一个或多个稀疏镜像转换为原始镜像文件。</para></summary>
+    /// <param name="inputFiles">Paths of the sparse images to expand, consumed in enumeration order.
+    /// <para>待展开的稀疏镜像路径，按枚举顺序依次处理。</para></param>
+    /// <param name="outputFile">Destination raw image path, replaced only after the whole conversion has succeeded.
+    /// <para>目标原始镜像路径；仅在整体转换成功后才会被替换。</para></param>
     /// <example>
     /// <code>SparseImageConverter.ConvertSparseToRaw(new[] { "system.sparse" }, "system.img");</code>
     /// </example>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="inputFiles"/> is empty or <paramref name="outputFile"/> is blank.
-    /// <para><paramref name="inputFiles"/> 为空，或 <paramref name="outputFile"/> 为空白。</para>
-    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="inputFiles"/> is empty or <paramref name="outputFile"/> is blank.
+    /// <para><paramref name="inputFiles"/> 为空，或 <paramref name="outputFile"/> 为空白。</para></exception>
     public static void ConvertSparseToRaw(IEnumerable<string> inputFiles, string outputFile)
         => ConvertSparseToRawCancellable(inputFiles, outputFile, CancellationToken.None);
 
-    /// <summary>
-    /// Converts one or more sparse image chunks to a raw image with cancellation and atomic publication.
-    /// <para>在支持取消的前提下把一个或多个稀疏镜像数据块转换为原始镜像并原子发布。</para>
-    /// </summary>
-    /// <param name="inputFiles">
-    /// Paths of the sparse images to expand; each must exist and must not be the destination path.
-    /// <para>待展开的稀疏镜像路径；每个都必须存在且不等于目标路径。</para>
-    /// </param>
-    /// <param name="outputFile">
-    /// Destination raw image path; its directory is created when missing and an existing file is replaced.
-    /// <para>目标原始镜像路径；缺失时创建其目录，已存在的文件会被替换。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked per input file and observed by the output stream; cancellation leaves the destination
-    /// content untouched because the temporary file is discarded.
-    /// <para>在每个输入文件处检查并由输出流观察；取消不会改动目标内容，因为临时文件会被丢弃。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="inputFiles"/> is <see langword="null"/>.
-    /// <para><paramref name="inputFiles"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// No input path was supplied, <paramref name="outputFile"/> is blank, or an input resolves to the
-    /// destination path.
-    /// <para>未提供任何输入路径、<paramref name="outputFile"/> 为空白，或某个输入解析后就是目标路径。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// A sparse input image does not exist.
-    /// <para>某个稀疏输入镜像不存在。</para>
-    /// </exception>
-    /// <exception cref="EndOfStreamException">
-    /// An input is shorter than the 28-byte sparse header.
-    /// <para>某个输入短于 28 字节的稀疏头部。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// An input's header or chunks fail sparse parsing while the image is expanded.
-    /// <para>某个输入在展开时其头部或数据块未通过稀疏解析。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// An input is the output file itself, or the temporary file cannot be written.
-    /// <para>输入即输出文件本身，或临时文件无法写入。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was cancelled.
-    /// <para><paramref name="cancellationToken"/> 被取消。</para>
-    /// </exception>
+    /// <summary>Converts one or more sparse image chunks to a raw image with cancellation and atomic publication.
+    /// <para>在支持取消的前提下把一个或多个稀疏镜像数据块转换为原始镜像并原子发布。</para></summary>
+    /// <param name="inputFiles">Paths of the sparse images to expand; each must exist and must not be the destination path.
+    /// <para>待展开的稀疏镜像路径；每个都必须存在且不等于目标路径。</para></param>
+    /// <param name="outputFile">Destination raw image path; its directory is created when missing and an existing file is replaced.
+    /// <para>目标原始镜像路径；缺失时创建其目录，已存在的文件会被替换。</para></param>
+    /// <param name="cancellationToken">Checked per input file and observed by the output stream; cancellation leaves the destination content untouched because the temporary file is discarded.
+    /// <para>在每个输入文件处检查并由输出流观察；取消不会改动目标内容，因为临时文件会被丢弃。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="inputFiles"/> is <see langword="null"/>.
+    /// <para><paramref name="inputFiles"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException">No input path was supplied, <paramref name="outputFile"/> is blank, or an input resolves to the destination path.
+    /// <para>未提供任何输入路径、<paramref name="outputFile"/> 为空白，或某个输入解析后就是目标路径。</para></exception>
+    /// <exception cref="FileNotFoundException">A sparse input image does not exist.
+    /// <para>某个稀疏输入镜像不存在。</para></exception>
+    /// <exception cref="EndOfStreamException">An input is shorter than the 28-byte sparse header.
+    /// <para>某个输入短于 28 字节的稀疏头部。</para></exception>
+    /// <exception cref="InvalidDataException">An input's header or chunks fail sparse parsing while the image is expanded.
+    /// <para>某个输入在展开时其头部或数据块未通过稀疏解析。</para></exception>
+    /// <exception cref="IOException">An input is the output file itself, or the temporary file cannot be written.
+    /// <para>输入即输出文件本身，或临时文件无法写入。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     public static void ConvertSparseToRawCancellable(IEnumerable<string> inputFiles, string outputFile, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(inputFiles);
@@ -156,45 +124,25 @@ public static class SparseImageConverter
         }
     }
 
-    /// <summary>
-    /// Converts a raw image file to a sparse image file.
-    /// <para>将原始镜像文件转换为稀疏镜像文件。</para>
-    /// </summary>
-    /// <param name="inputFile">
-    /// Path of the raw image read from its beginning.
-    /// <para>从起始位置读取的原始镜像文件路径。</para>
-    /// </param>
-    /// <param name="outputFile">
-    /// Destination sparse path, truncated in place and left partially written when the conversion fails.
-    /// <para>目标稀疏路径；会被就地截断，转换失败时留下部分写入的内容。</para>
-    /// </param>
-    /// <param name="blockSize">
-    /// Logical block size used to classify zero, fill and raw runs; defaults to <c>4096</c> and must be
-    /// a positive multiple of <c>4</c>. When <paramref name="options"/> is supplied, its validated
-    /// <see cref="SparseWriteOptions"/> geometry additionally caps RAW chunks, appends the CRC32 chunk
-    /// and pads the total block count; the classification block size stays <paramref name="blockSize"/>.
-    /// <para>用于判定零块、Fill 块与 Raw 块的逻辑块大小；默认为 <c>4096</c>，必须是 <c>4</c> 的正整数倍。
-    /// 提供 <paramref name="options"/> 时，其已校验的几何会额外限制 RAW 块、追加 CRC32 块并填充总块数；分类块大小仍为 <paramref name="blockSize"/>。</para>
-    /// </param>
-    /// <param name="options">
-    /// Optional write geometry; <see langword="null"/> reproduces the historical byte output.
-    /// <para>可选写出几何；<see langword="null"/> 复现历史字节输出。</para>
-    /// </param>
+    /// <summary>Converts a raw image file to a sparse image file.
+    /// <para>将原始镜像文件转换为稀疏镜像文件。</para></summary>
+    /// <param name="inputFile">Path of the raw image read from its beginning.
+    /// <para>从起始位置读取的原始镜像文件路径。</para></param>
+    /// <param name="outputFile">Destination sparse path, truncated in place and left partially written when the conversion fails.
+    /// <para>目标稀疏路径；会被就地截断，转换失败时留下部分写入的内容。</para></param>
+    /// <param name="blockSize">Logical block size used to classify zero, fill and raw runs; defaults to <c>4096</c> and must be a positive multiple of <c>4</c>. When <paramref name="options"/> is supplied, its validated <see cref="SparseWriteOptions"/> geometry additionally caps RAW chunks, appends the CRC32 chunk and pads the total block count; the classification block size stays <paramref name="blockSize"/>.
+    /// <para>用于判定零块、Fill 块与 Raw 块的逻辑块大小；默认为 <c>4096</c>，必须是 <c>4</c> 的正整数倍。 提供 <paramref name="options"/> 时，其已校验的几何会额外限制 RAW 块、追加 CRC32 块并填充总块数；分类块大小仍为 <paramref name="blockSize"/>。</para></param>
+    /// <param name="options">Optional write geometry; <see langword="null"/> reproduces the historical byte output.
+    /// <para>可选写出几何；<see langword="null"/> 复现历史字节输出。</para></param>
     /// <example>
     /// <code>SparseImageConverter.ConvertRawToSparse("system.img", "system.sparse.img", blockSize: 4096);</code>
     /// </example>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="inputFile"/> does not exist.
-    /// <para><paramref name="inputFile"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="blockSize"/> is not a positive multiple of <c>4</c>.
-    /// <para><paramref name="blockSize"/> 不是 <c>4</c> 的正整数倍。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// Either path cannot be opened for the required access.
-    /// <para>某个路径无法以所需访问方式打开。</para>
-    /// </exception>
+    /// <exception cref="FileNotFoundException"><paramref name="inputFile"/> does not exist.
+    /// <para><paramref name="inputFile"/> 不存在。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="blockSize"/> is not a positive multiple of <c>4</c>.
+    /// <para><paramref name="blockSize"/> 不是 <c>4</c> 的正整数倍。</para></exception>
+    /// <exception cref="IOException">Either path cannot be opened for the required access.
+    /// <para>某个路径无法以所需访问方式打开。</para></exception>
     public static void ConvertRawToSparse(string inputFile, string outputFile, uint blockSize = 4096,
         SparseWriteOptions? options = null)
     {
@@ -204,50 +152,29 @@ public static class SparseImageConverter
         ConvertRawToSparseCancellable(inputStream, outputStream, blockSize, inputStream.Length, CancellationToken.None, options);
     }
 
-    /// <summary>
-    /// Converts a raw image and atomically publishes a structurally validated Android Sparse image.
-    /// <para>转换原始镜像并原子发布一个经过结构校验的 Android Sparse 镜像。</para>
-    /// </summary>
-    /// <param name="inputFile">
-    /// Path of the raw image; its file size at the start of the call fixes the converted logical length.
-    /// <para>原始镜像路径；调用开始时的文件大小决定转换后的逻辑长度。</para>
-    /// </param>
-    /// <param name="outputFile">
-    /// Destination sparse path, replaced only after validation succeeds.
-    /// <para>目标稀疏路径；仅在校验成功后才被替换。</para>
-    /// </param>
-    /// <param name="blockSize">
-    /// Logical block size in bytes; must be a positive multiple of <c>4</c>.
-    /// <para>逻辑块大小（字节数）；必须是 <c>4</c> 的正整数倍。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before the publication and between blocks; cancellation aborts publication so the
-    /// destination keeps its previous content.
-    /// <para>在发布之前以及各块之间检查；取消会中止发布，目标保持原有内容。</para>
-    /// </param>
+    /// <summary>Converts a raw image and atomically publishes a structurally validated Android Sparse image.
+    /// <para>转换原始镜像并原子发布一个经过结构校验的 Android Sparse 镜像。</para></summary>
+    /// <param name="inputFile">Path of the raw image; its file size at the start of the call fixes the converted logical length.
+    /// <para>原始镜像路径；调用开始时的文件大小决定转换后的逻辑长度。</para></param>
+    /// <param name="outputFile">Destination sparse path, replaced only after validation succeeds.
+    /// <para>目标稀疏路径；仅在校验成功后才被替换。</para></param>
+    /// <param name="blockSize">Logical block size in bytes; must be a positive multiple of <c>4</c>.
+    /// <para>逻辑块大小（字节数）；必须是 <c>4</c> 的正整数倍。</para></param>
+    /// <param name="cancellationToken">Checked before the publication and between blocks; cancellation aborts publication so the destination keeps its previous content.
+    /// <para>在发布之前以及各块之间检查；取消会中止发布，目标保持原有内容。</para></param>
     /// <example>
     /// <code>SparseImageConverter.ConvertRawToSparseAtomic("vendor.img", "vendor.sparse.img", 4096, token);</code>
     /// </example>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="inputFile"/> or <paramref name="outputFile"/> is blank.
-    /// <para><paramref name="inputFile"/> 或 <paramref name="outputFile"/> 为空白。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="blockSize"/> is not a positive multiple of <c>4</c>.
-    /// <para><paramref name="blockSize"/> 不是 <c>4</c> 的正整数倍。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The published sparse image does not match the raw length or carries trailing data.
-    /// <para>发布的稀疏镜像与原始长度不符，或尾部存在多余数据。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was cancelled.
-    /// <para><paramref name="cancellationToken"/> 被取消。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The input cannot be read or the publication cannot be written.
-    /// <para>无法读取输入或无法写入发布结果。</para>
-    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="inputFile"/> or <paramref name="outputFile"/> is blank.
+    /// <para><paramref name="inputFile"/> 或 <paramref name="outputFile"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="blockSize"/> is not a positive multiple of <c>4</c>.
+    /// <para><paramref name="blockSize"/> 不是 <c>4</c> 的正整数倍。</para></exception>
+    /// <exception cref="InvalidDataException">The published sparse image does not match the raw length or carries trailing data.
+    /// <para>发布的稀疏镜像与原始长度不符，或尾部存在多余数据。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    /// <exception cref="IOException">The input cannot be read or the publication cannot be written.
+    /// <para>无法读取输入或无法写入发布结果。</para></exception>
     public static void ConvertRawToSparseAtomic(
         string inputFile,
         string outputFile,
@@ -260,55 +187,28 @@ public static class SparseImageConverter
             static (input, output, size, length, token) => ConvertRawToSparseCancellable(input, output, size, length, token),
             cancellationToken);
 
-    /// <summary>
-    /// Converts a raw image with explicit <see cref="SparseWriteOptions"/> geometry and atomically
-    /// publishes the structurally validated result. The alignment check honours
-    /// <see cref="SparseWriteOptions.FileAlignment"/>, so a padded image is validated against the
-    /// aligned block count rather than the raw length alone.
-    /// <para>使用显式 <see cref="SparseWriteOptions"/> 几何转换原始镜像，并原子发布经过结构校验的结果。
-    /// 对齐检查遵循 <see cref="SparseWriteOptions.FileAlignment"/>，因此填充后的镜像按对齐后的块数校验，而非仅按原始长度。</para>
-    /// </summary>
-    /// <param name="inputFile">
-    /// Path of the raw image; its file size at the start of the call fixes the converted logical length.
-    /// <para>原始镜像路径；调用开始时的文件大小决定转换后的逻辑长度。</para>
-    /// </param>
-    /// <param name="outputFile">
-    /// Destination sparse path, replaced only after validation succeeds.
-    /// <para>目标稀疏路径；仅在校验成功后才被替换。</para>
-    /// </param>
-    /// <param name="blockSize">
-    /// Classification block size; must be a positive multiple of <c>4</c> and is not overridden by
-    /// <see cref="SparseWriteOptions.BlockSize"/>.
-    /// <para>分类块大小；必须是 <c>4</c> 的正整数倍，且不会被 <see cref="SparseWriteOptions.BlockSize"/> 覆盖。</para>
-    /// </param>
-    /// <param name="options">
-    /// Validated write geometry supplying the CRC chunk, RAW cap and alignment padding.
-    /// <para>已校验的写出几何，提供 CRC 块、RAW 上限与对齐填充。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before the publication and between blocks; cancellation aborts publication.
-    /// <para>在发布之前以及各块之间检查；取消会中止发布。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="inputFile"/> or <paramref name="outputFile"/> is blank.
-    /// <para><paramref name="inputFile"/> 或 <paramref name="outputFile"/> 为空白。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="blockSize"/> is not a positive multiple of <c>4</c>, or the options are invalid.
-    /// <para><paramref name="blockSize"/> 不是 <c>4</c> 的正整数倍，或选项无效。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The published sparse image does not match the expected padded length or carries trailing data.
-    /// <para>发布的稀疏镜像与预期的填充长度不符，或尾部存在多余数据。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was cancelled.
-    /// <para><paramref name="cancellationToken"/> 被取消。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The input cannot be read or the publication cannot be written.
-    /// <para>无法读取输入或无法写入发布结果。</para>
-    /// </exception>
+    /// <summary>Converts a raw image with explicit <see cref="SparseWriteOptions"/> geometry and atomically publishes the structurally validated result. The alignment check honours <see cref="SparseWriteOptions.FileAlignment"/>, so a padded image is validated against the aligned block count rather than the raw length alone.
+    /// <para>使用显式 <see cref="SparseWriteOptions"/> 几何转换原始镜像，并原子发布经过结构校验的结果。 对齐检查遵循 <see cref="SparseWriteOptions.FileAlignment"/>，因此填充后的镜像按对齐后的块数校验，而非仅按原始长度。</para></summary>
+    /// <param name="inputFile">Path of the raw image; its file size at the start of the call fixes the converted logical length.
+    /// <para>原始镜像路径；调用开始时的文件大小决定转换后的逻辑长度。</para></param>
+    /// <param name="outputFile">Destination sparse path, replaced only after validation succeeds.
+    /// <para>目标稀疏路径；仅在校验成功后才被替换。</para></param>
+    /// <param name="blockSize">Classification block size; must be a positive multiple of <c>4</c> and is not overridden by <see cref="SparseWriteOptions.BlockSize"/>.
+    /// <para>分类块大小；必须是 <c>4</c> 的正整数倍，且不会被 <see cref="SparseWriteOptions.BlockSize"/> 覆盖。</para></param>
+    /// <param name="options">Validated write geometry supplying the CRC chunk, RAW cap and alignment padding.
+    /// <para>已校验的写出几何，提供 CRC 块、RAW 上限与对齐填充。</para></param>
+    /// <param name="cancellationToken">Checked before the publication and between blocks; cancellation aborts publication.
+    /// <para>在发布之前以及各块之间检查；取消会中止发布。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="inputFile"/> or <paramref name="outputFile"/> is blank.
+    /// <para><paramref name="inputFile"/> 或 <paramref name="outputFile"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="blockSize"/> is not a positive multiple of <c>4</c>, or the options are invalid.
+    /// <para><paramref name="blockSize"/> 不是 <c>4</c> 的正整数倍，或选项无效。</para></exception>
+    /// <exception cref="InvalidDataException">The published sparse image does not match the expected padded length or carries trailing data.
+    /// <para>发布的稀疏镜像与预期的填充长度不符，或尾部存在多余数据。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    /// <exception cref="IOException">The input cannot be read or the publication cannot be written.
+    /// <para>无法读取输入或无法写入发布结果。</para></exception>
     public static void ConvertRawToSparseAtomic(
         string inputFile,
         string outputFile,
@@ -352,42 +252,20 @@ public static class SparseImageConverter
         });
     }
 
-    /// <summary>
-    /// Converts a raw image stream to a sparse image stream.
-    /// <para>将原始镜像流转换为稀疏镜像流。</para>
-    /// </summary>
-    /// <param name="input">
-    /// The source raw stream.
-    /// <para>源原始流。</para>
-    /// </param>
-    /// <param name="output">
-    /// The destination sparse stream.
-    /// <para>目标稀疏流。</para>
-    /// </param>
-    /// <param name="blockSize">
-    /// Sparse block size; must be a positive multiple of 4 per the Android sparse format.
-    /// <para>稀疏块大小；须为 Android 稀疏格式要求的 4 的正整数倍。</para>
-    /// </param>
-    /// <param name="length">
-    /// Explicit source length; when omitted uses <paramref name="input"/>.Length.
-    /// <para>显式源长度；省略时使用 <paramref name="input"/> 的 Length。</para>
-    /// </param>
-    /// <param name="options">
-    /// Optional write geometry; <see langword="null"/> reproduces the historical byte output. The
-    /// classification block size remains <paramref name="blockSize"/>; options add RAW chunk caps, the
-    /// trailing CRC32 chunk and total-block alignment padding.
-    /// <para>可选写出几何；<see langword="null"/> 复现历史字节输出。分类块大小仍为 <paramref name="blockSize"/>；
-    /// 选项额外提供 RAW 块上限、CRC32 尾块与总块数对齐填充。</para>
-    /// </param>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// Thrown when <paramref name="blockSize"/> is not a positive multiple of 4, which would make the
-    /// sparse stream unparseable.
-    /// <para>当 <paramref name="blockSize"/> 不是 4 的正整数倍时抛出，此时稀疏流会无法被正确解析。</para>
-    /// </exception>
-    /// <exception cref="EndOfStreamException">
-    /// <paramref name="input"/> holds fewer bytes than the length it is asked to convert.
-    /// <para><paramref name="input"/> 实际字节数少于待转换的长度。</para>
-    /// </exception>
+    /// <summary>Converts a raw image stream to a sparse image stream.
+    /// <para>将原始镜像流转换为稀疏镜像流。</para></summary>
+    /// <param name="input">The source raw stream.<para>源原始流。</para></param>
+    /// <param name="output">The destination sparse stream.<para>目标稀疏流。</para></param>
+    /// <param name="blockSize">Sparse block size; must be a positive multiple of 4 per the Android sparse format.
+    /// <para>稀疏块大小；须为 Android 稀疏格式要求的 4 的正整数倍。</para></param>
+    /// <param name="length">Explicit source length; when omitted uses <paramref name="input"/>.Length.
+    /// <para>显式源长度；省略时使用 <paramref name="input"/> 的 Length。</para></param>
+    /// <param name="options">Optional write geometry; <see langword="null"/> reproduces the historical byte output. The classification block size remains <paramref name="blockSize"/>; options add RAW chunk caps, the trailing CRC32 chunk and total-block alignment padding.
+    /// <para>可选写出几何；<see langword="null"/> 复现历史字节输出。分类块大小仍为 <paramref name="blockSize"/>； 选项额外提供 RAW 块上限、CRC32 尾块与总块数对齐填充。</para></param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="blockSize"/> is not a positive multiple of 4, which would make the sparse stream unparseable.
+    /// <para>当 <paramref name="blockSize"/> 不是 4 的正整数倍时抛出，此时稀疏流会无法被正确解析。</para></exception>
+    /// <exception cref="EndOfStreamException"><paramref name="input"/> holds fewer bytes than the length it is asked to convert.
+    /// <para><paramref name="input"/> 实际字节数少于待转换的长度。</para></exception>
     public static void ConvertRawToSparse(Stream input, Stream output, uint blockSize = 4096, long? length = null,
         SparseWriteOptions? options = null)
         => ConvertRawToSparseCancellable(input, output, blockSize, length, CancellationToken.None, options);

@@ -594,19 +594,20 @@ internal static unsafe class MfCom
     /// <param name="result">Queried interface pointer with one reference held on success. <para>成功时持有 1 个引用的查询结果接口指针。</para></param>
     public static int D3DQueryInterface(nint value, in Guid iid, out nint result) => QueryInterface(value, iid, out result);
 
-    /// <summary>
-    /// ID3D11DeviceContext.Map (slot 14).
-    /// <para>ID3D11DeviceContext.Map（槽位 14）。</para>
-    /// </summary>
-    /// <param name="context">ID3D11DeviceContext interface pointer. <para>ID3D11DeviceContext 接口指针。</para></param>
-    /// <param name="resource">Staging resource to map; only <c>D3D11_USAGE_STAGING</c> textures are readable from the CPU. <para>待映射的 staging 资源；只有 <c>D3D11_USAGE_STAGING</c> 纹理可被 CPU 读取。</para></param>
-    /// <param name="subresource">Subresource index within the resource, 0 for single-slice textures. <para>资源内的子资源索引，单切片纹理为 0。</para></param>
-    /// <param name="mapType"><c>D3D11_MAP</c> value; the read-back paths pass 1 (<c>D3D11_MAP_READ</c>). <para><c>D3D11_MAP</c> 值，读回路径传 1（<c>D3D11_MAP_READ</c>）。</para></param>
-    /// <param name="mapFlags"><c>D3D11_MAP_FLAG_*</c> bitmask; 0 for the current read-back paths. <para><c>D3D11_MAP_FLAG_*</c> 位掩码，当前读回路径传 0。</para></param>
-    /// <param name="mapped">
-    /// Data pointer plus row and depth pitch; valid until the matching Unmap call.
-    /// <para>数据指针与行距、深度间距；在配对的 Unmap 调用之前有效。</para>
-    /// </param>
+    /// <summary>ID3D11DeviceContext.Map (slot 14).
+    /// <para>ID3D11DeviceContext.Map（槽位 14）。</para></summary>
+    /// <param name="context">ID3D11DeviceContext interface pointer.
+    /// <para>ID3D11DeviceContext 接口指针。</para></param>
+    /// <param name="resource">Staging resource to map; only <c>D3D11_USAGE_STAGING</c> textures are readable from the CPU.
+    /// <para>待映射的 staging 资源；只有 <c>D3D11_USAGE_STAGING</c> 纹理可被 CPU 读取。</para></param>
+    /// <param name="subresource">Subresource index within the resource, 0 for single-slice textures.
+    /// <para>资源内的子资源索引，单切片纹理为 0。</para></param>
+    /// <param name="mapType"><c>D3D11_MAP</c> value; the read-back paths pass 1 (<c>D3D11_MAP_READ</c>).
+    /// <para><c>D3D11_MAP</c> 值，读回路径传 1（<c>D3D11_MAP_READ</c>）。</para></param>
+    /// <param name="mapFlags"><c>D3D11_MAP_FLAG_*</c> bitmask; 0 for the current read-back paths.
+    /// <para><c>D3D11_MAP_FLAG_*</c> 位掩码，当前读回路径传 0。</para></param>
+    /// <param name="mapped">Data pointer plus row and depth pitch; valid until the matching Unmap call.
+    /// <para>数据指针与行距、深度间距；在配对的 Unmap 调用之前有效。</para></param>
     public static int D3DMap(nint context, nint resource, uint subresource, uint mapType, uint mapFlags, out D3D11Interop.MappedSubresource mapped)
     {
         fixed (D3D11Interop.MappedSubresource* m = &mapped)
@@ -623,22 +624,23 @@ internal static unsafe class MfCom
     public static void D3DUnmap(nint context, nint resource, uint subresource) =>
         ((delegate* unmanaged[Stdcall]<nint, nint, uint, void>)Slot(context, 15))(context, resource, subresource);
 
-    /// <summary>
-    /// ID3D11DeviceContext.CopySubresourceRegion (slot 46).
-    /// <para>ID3D11DeviceContext.CopySubresourceRegion（槽位 46）。</para>
-    /// </summary>
-    /// <param name="context">ID3D11DeviceContext interface pointer. <para>ID3D11DeviceContext 接口指针。</para></param>
-    /// <param name="destination">Destination resource. <para>目标资源。</para></param>
-    /// <param name="destinationSubresource">Destination subresource index. <para>目标子资源索引。</para></param>
-    /// <param name="destinationX">Texel offset on the destination X axis. <para>目标 X 轴的纹素偏移。</para></param>
-    /// <param name="destinationY">Texel offset on the destination Y axis. <para>目标 Y 轴的纹素偏移。</para></param>
-    /// <param name="destinationZ">Texel offset on the destination Z axis or array slice. <para>目标 Z 轴或数组切片的纹素偏移。</para></param>
-    /// <param name="source">Source resource. <para>源资源。</para></param>
-    /// <param name="sourceSubresource">Source subresource index, typically the decoder buffer slice. <para>源子资源索引，通常为解码器缓冲区切片。</para></param>
-    /// <param name="sourceBox">
-    /// Pointer to a <c>D3D11_BOX</c> limiting the copied region; 0 copies the whole subresource.
-    /// <para>限定拷贝区域的 <c>D3D11_BOX</c> 指针；0 表示复制整个子资源。</para>
-    /// </param>
+    /// <summary>ID3D11DeviceContext.CopySubresourceRegion (slot 46).
+    /// <para>ID3D11DeviceContext.CopySubresourceRegion（槽位 46）。</para></summary>
+    /// <param name="context">ID3D11DeviceContext interface pointer.
+    /// <para>ID3D11DeviceContext 接口指针。</para></param>
+    /// <param name="destination">Destination resource.<para>目标资源。</para></param>
+    /// <param name="destinationSubresource">Destination subresource index.<para>目标子资源索引。</para></param>
+    /// <param name="destinationX">Texel offset on the destination X axis.
+    /// <para>目标 X 轴的纹素偏移。</para></param>
+    /// <param name="destinationY">Texel offset on the destination Y axis.
+    /// <para>目标 Y 轴的纹素偏移。</para></param>
+    /// <param name="destinationZ">Texel offset on the destination Z axis or array slice.
+    /// <para>目标 Z 轴或数组切片的纹素偏移。</para></param>
+    /// <param name="source">Source resource.<para>源资源。</para></param>
+    /// <param name="sourceSubresource">Source subresource index, typically the decoder buffer slice.
+    /// <para>源子资源索引，通常为解码器缓冲区切片。</para></param>
+    /// <param name="sourceBox">Pointer to a <c>D3D11_BOX</c> limiting the copied region; 0 copies the whole subresource.
+    /// <para>限定拷贝区域的 <c>D3D11_BOX</c> 指针；0 表示复制整个子资源。</para></param>
     public static void D3DCopySubresourceRegion(nint context, nint destination, uint destinationSubresource, uint destinationX, uint destinationY, uint destinationZ, nint source, uint sourceSubresource, nint sourceBox) =>
         ((delegate* unmanaged[Stdcall]<nint, nint, uint, uint, uint, uint, nint, uint, nint, void>)Slot(context, 46))(context, destination, destinationSubresource, destinationX, destinationY, destinationZ, source, sourceSubresource, sourceBox);
 
@@ -709,19 +711,20 @@ internal static unsafe class MfCom
             return ((delegate* unmanaged[Stdcall]<nint, nint, nint, D3D11Interop.VideoProcessorOutputViewDesc*, nint*, int>)Slot(videoDevice, 9))(videoDevice, resource, enumerator, d, v);
     }
 
-    /// <summary>
-    /// ID3D11VideoContext.VideoProcessorBlt (slot 53).
-    /// <para>ID3D11VideoContext.VideoProcessorBlt（槽位 53）。</para>
-    /// </summary>
-    /// <param name="videoContext">ID3D11VideoContext interface pointer. <para>ID3D11VideoContext 接口指针。</para></param>
-    /// <param name="processor">Video processor configured with the stream color spaces. <para>已按流色彩空间配置的处理器。</para></param>
-    /// <param name="outputView">Output view receiving the converted frame. <para>接收转换后帧的输出视图。</para></param>
-    /// <param name="outputFrame">Presentation index assigned to the produced frame. <para>为产出帧指定的呈现索引。</para></param>
-    /// <param name="streamCount">Number of <c>D3D11_VIDEO_PROCESSOR_STREAM</c> entries read from <paramref name="stream"/>; the decode path passes 1. <para>从 <paramref name="stream"/> 读取的 <c>D3D11_VIDEO_PROCESSOR_STREAM</c> 条目数；解码路径传 1。</para></param>
-    /// <param name="stream">
-    /// First stream descriptor: enabled flag and the input view pointer.
-    /// <para>首个流描述符：启用标志与输入视图指针。</para>
-    /// </param>
+    /// <summary>ID3D11VideoContext.VideoProcessorBlt (slot 53).
+    /// <para>ID3D11VideoContext.VideoProcessorBlt（槽位 53）。</para></summary>
+    /// <param name="videoContext">ID3D11VideoContext interface pointer.
+    /// <para>ID3D11VideoContext 接口指针。</para></param>
+    /// <param name="processor">Video processor configured with the stream color spaces.
+    /// <para>已按流色彩空间配置的处理器。</para></param>
+    /// <param name="outputView">Output view receiving the converted frame.
+    /// <para>接收转换后帧的输出视图。</para></param>
+    /// <param name="outputFrame">Presentation index assigned to the produced frame.
+    /// <para>为产出帧指定的呈现索引。</para></param>
+    /// <param name="streamCount">Number of <c>D3D11_VIDEO_PROCESSOR_STREAM</c> entries read from <paramref name="stream"/>; the decode path passes 1.
+    /// <para>从 <paramref name="stream"/> 读取的 <c>D3D11_VIDEO_PROCESSOR_STREAM</c> 条目数；解码路径传 1。</para></param>
+    /// <param name="stream">First stream descriptor: enabled flag and the input view pointer.
+    /// <para>首个流描述符：启用标志与输入视图指针。</para></param>
     public static int D3DVideoProcessorBlt(nint videoContext, nint processor, nint outputView, uint outputFrame, uint streamCount, in D3D11Interop.VideoProcessorStream stream)
     {
         fixed (D3D11Interop.VideoProcessorStream* s = &stream)

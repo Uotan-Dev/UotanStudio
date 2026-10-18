@@ -80,28 +80,16 @@ public sealed record SuperPayloadConversionOptions
     public string SigningKeyFingerprint { get; init; } = string.Empty;
 }
 
-/// <summary>
-/// Describes the atomically published output of a Super-to-Payload conversion.
-/// <para>描述 Super 转 Payload 转换原子发布后的产物。</para>
-/// </summary>
-/// <param name="PayloadPath">
-/// Absolute path the staged Payload was moved to, typically identical to the requested output path.
-/// <para>暂存 Payload 被移动到的绝对路径，通常与请求的输出路径相同。</para>
-/// </param>
-/// <param name="PropertiesPath">
-/// Absolute path of the companion <c>payload_properties.txt</c>, which is always written into the Payload's
-/// own directory under that fixed name.
-/// <para>配套 <c>payload_properties.txt</c> 的绝对路径，它总是以该固定名称写入 Payload 自身所在目录。</para>
-/// </param>
-/// <param name="Partitions">
-/// Names of the non-empty Super partitions placed into the Payload, in LP metadata order.
-/// <para>放入 Payload 的非空 Super 分区名，按 LP 元数据顺序排列。</para>
-/// </param>
-/// <param name="VirtualAb">
-/// <see langword="true"/> when the source Super declares the virtual-A/B header flag, mirrored into the
-/// generated dynamic-partition configuration.
-/// <para>源 Super 声明了 virtual-A/B 头部标志位时为 <see langword="true"/>，并镜像到生成的动态分区配置中。</para>
-/// </param>
+/// <summary>Describes the atomically published output of a Super-to-Payload conversion.
+/// <para>描述 Super 转 Payload 转换原子发布后的产物。</para></summary>
+/// <param name="PayloadPath">Absolute path the staged Payload was moved to, typically identical to the requested output path.
+/// <para>暂存 Payload 被移动到的绝对路径，通常与请求的输出路径相同。</para></param>
+/// <param name="PropertiesPath">Absolute path of the companion <c>payload_properties.txt</c>, which is always written into the Payload's own directory under that fixed name.
+/// <para>配套 <c>payload_properties.txt</c> 的绝对路径，它总是以该固定名称写入 Payload 自身所在目录。</para></param>
+/// <param name="Partitions">Names of the non-empty Super partitions placed into the Payload, in LP metadata order.
+/// <para>放入 Payload 的非空 Super 分区名，按 LP 元数据顺序排列。</para></param>
+/// <param name="VirtualAb"><see langword="true"/> when the source Super declares the virtual-A/B header flag, mirrored into the generated dynamic-partition configuration.
+/// <para>源 Super 声明了 virtual-A/B 头部标志位时为 <see langword="true"/>，并镜像到生成的动态分区配置中。</para></param>
 public sealed record SuperPayloadConversionResult(
     string PayloadPath,
     string PropertiesPath,
@@ -114,76 +102,38 @@ public sealed record SuperPayloadConversionResult(
 /// </summary>
 public static class SuperPayloadConversionService
 {
-    /// <summary>
-    /// Extracts every non-empty logical partition from a Super image and builds a full update_engine Payload
-    /// plus its <c>payload_properties.txt</c> next to the requested output path.
-    /// <para>从 Super 镜像中提取所有非空逻辑分区，并在请求的输出路径旁构建完整的 update_engine Payload
-    /// 及其 <c>payload_properties.txt</c>。</para>
-    /// </summary>
-    /// <param name="superPath">
-    /// Source LP Super image; opened read-only and never modified.
-    /// <para>源 LP Super 镜像；以只读方式打开，绝不被修改。</para>
-    /// </param>
-    /// <param name="payloadPath">
-    /// Destination Payload. Its directory is created when missing, and the fixed-name properties file is
-    /// published into the same directory. The path may not be the source Super image nor the properties file.
-    /// <para>目标 Payload。其目录不存在时会被创建，固定名称的属性文件会发布到同一目录。该路径既不能是源 Super
-    /// 镜像，也不能是属性文件。</para>
-    /// </param>
-    /// <param name="options">
-    /// Block size, compression, timestamp, patch level and signing references; <see langword="null"/> uses the
-    /// default 4096-byte uncompressed full Payload.
-    /// <para>块大小、压缩、时间戳、补丁级别与签名引用；为 <see langword="null"/> 时使用默认的 4096 字节不压缩完整 Payload。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives human-readable progress lines formatted as <c>percent% message</c>; may be
-    /// <see langword="null"/>. Reports are raised on the thread the builder uses, so UI hosts must marshal.
-    /// <para>接收格式为 <c>percent% message</c> 的人类可读进度行；可以为 <see langword="null"/>。
-    /// 回调在构建器所用线程上触发，因此 UI 宿主需要自行切换调度。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels extraction, hashing and publishing; a cancelled run leaves the previous Payload and properties
-    /// files in place and removes the staging directory.
-    /// <para>取消解包、哈希与发布操作；被取消的运行会保留原有的 Payload 与属性文件，并删除暂存目录。</para>
-    /// </param>
-    /// <returns>
-    /// The published Payload path, the properties path, the partition names carried by the Payload, and the
-    /// virtual-A/B state read from the Super header.
-    /// <para>已发布的 Payload 路径、属性文件路径、Payload 承载的分区名，以及从 Super 头部读到的 virtual-A/B 状态。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException"><paramref name="superPath"/> or <paramref name="payloadPath"/> is
-    /// <see langword="null"/> or blank.
-    /// <para><paramref name="superPath"/> 或 <paramref name="payloadPath"/> 为 <see langword="null"/> 或空白。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException"><paramref name="superPath"/> does not exist, or
-    /// <see cref="SuperPayloadConversionOptions.SigningKeyPath"/> names a key that cannot be read.
-    /// <para><paramref name="superPath"/> 不存在，或 <see cref="SuperPayloadConversionOptions.SigningKeyPath"/>
-    /// 指向无法读取的密钥。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="options"/> block size is not a power of
-    /// two between 512 and 1048576. <para><paramref name="options"/> 的块大小不是 512 到 1048576 之间的 2 的幂。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">The output collides with the source Super image or with
-    /// <c>payload_properties.txt</c>, or <see cref="SuperPayloadConversionOptions.SigningKeyPath"/> is set
-    /// because this overload provides no signing-key provider.
-    /// <para>输出与源 Super 镜像或 <c>payload_properties.txt</c> 冲突，或设置了
-    /// <see cref="SuperPayloadConversionOptions.SigningKeyPath"/>（此重载不提供签名密钥供应器）。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// Super extraction fails, the Super holds no non-empty partition, an extracted partition is not aligned to
-    /// the block size, the dynamic-partition groups are empty or unnamed, the builder omits its properties
-    /// file, the re-parsed manifest lacks an extracted partition, or the compression, timestamp or patch level
-    /// is rejected by plan validation.
-    /// <para>Super 解包失败、Super 中没有非空分区、解出的分区未按块大小对齐、动态分区组为空或未命名、
-    /// 构建器未生成属性文件、重新解析的清单缺少某个解出的分区，或压缩方式、时间戳、补丁级别被计划校验拒绝。</para>
-    /// </exception>
+    /// <summary>Extracts every non-empty logical partition from a Super image and builds a full update_engine Payload plus its <c>payload_properties.txt</c> next to the requested output path.
+    /// <para>从 Super 镜像中提取所有非空逻辑分区，并在请求的输出路径旁构建完整的 update_engine Payload 及其 <c>payload_properties.txt</c>。</para></summary>
+    /// <param name="superPath">Source LP Super image; opened read-only and never modified.
+    /// <para>源 LP Super 镜像；以只读方式打开，绝不被修改。</para></param>
+    /// <param name="payloadPath">Destination Payload. Its directory is created when missing, and the fixed-name properties file is published into the same directory. The path may not be the source Super image nor the properties file.
+    /// <para>目标 Payload。其目录不存在时会被创建，固定名称的属性文件会发布到同一目录。该路径既不能是源 Super 镜像，也不能是属性文件。</para></param>
+    /// <param name="options">Block size, compression, timestamp, patch level and signing references; <see langword="null"/> uses the default 4096-byte uncompressed full Payload.
+    /// <para>块大小、压缩、时间戳、补丁级别与签名引用；为 <see langword="null"/> 时使用默认的 4096 字节不压缩完整 Payload。</para></param>
+    /// <param name="progress">Receives human-readable progress lines formatted as <c>percent% message</c>; may be <see langword="null"/>. Reports are raised on the thread the builder uses, so UI hosts must marshal.
+    /// <para>接收格式为 <c>percent% message</c> 的人类可读进度行；可以为 <see langword="null"/>。 回调在构建器所用线程上触发，因此 UI 宿主需要自行切换调度。</para></param>
+    /// <param name="cancellationToken">Cancels extraction, hashing and publishing; a cancelled run leaves the previous Payload and properties files in place and removes the staging directory.
+    /// <para>取消解包、哈希与发布操作；被取消的运行会保留原有的 Payload 与属性文件，并删除暂存目录。</para></param>
+    /// <returns>The published Payload path, the properties path, the partition names carried by the Payload, and the virtual-A/B state read from the Super header.
+    /// <para>已发布的 Payload 路径、属性文件路径、Payload 承载的分区名，以及从 Super 头部读到的 virtual-A/B 状态。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="superPath"/> or <paramref name="payloadPath"/> is <see langword="null"/> or blank.
+    /// <para><paramref name="superPath"/> 或 <paramref name="payloadPath"/> 为 <see langword="null"/> 或空白。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="superPath"/> does not exist, or <see cref="SuperPayloadConversionOptions.SigningKeyPath"/> names a key that cannot be read.
+    /// <para><paramref name="superPath"/> 不存在，或 <see cref="SuperPayloadConversionOptions.SigningKeyPath"/> 指向无法读取的密钥。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="options"/> block size is not a power of two between 512 and 1048576.
+    /// <para><paramref name="options"/> 的块大小不是 512 到 1048576 之间的 2 的幂。</para></exception>
+    /// <exception cref="InvalidOperationException">The output collides with the source Super image or with <c>payload_properties.txt</c>, or <see cref="SuperPayloadConversionOptions.SigningKeyPath"/> is set because this overload provides no signing-key provider.
+    /// <para>输出与源 Super 镜像或 <c>payload_properties.txt</c> 冲突，或设置了 <see cref="SuperPayloadConversionOptions.SigningKeyPath"/>（此重载不提供签名密钥供应器）。</para></exception>
+    /// <exception cref="InvalidDataException">Super extraction fails, the Super holds no non-empty partition, an extracted partition is not aligned to the block size, the dynamic-partition groups are empty or unnamed, the builder omits its properties file, the re-parsed manifest lacks an extracted partition, or the compression, timestamp or patch level is rejected by plan validation.
+    /// <para>Super 解包失败、Super 中没有非空分区、解出的分区未按块大小对齐、动态分区组为空或未命名、 构建器未生成属性文件、重新解析的清单缺少某个解出的分区，或压缩方式、时间戳、补丁级别被计划校验拒绝。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已收到取消信号。</para></exception>
     /// <example>
     /// <code>
     /// var built = await SuperPayloadConversionService.ConvertAsync(
-    ///     "super.img",
-    ///     "out/payload.bin",
-    ///     new SuperPayloadConversionOptions { Compression = CompressionType.Xz });
+    /// "super.img",
+    /// "out/payload.bin",
+    /// new SuperPayloadConversionOptions { Compression = CompressionType.Xz });
     /// </code>
     /// </example>
     public static Task<SuperPayloadConversionResult> ConvertAsync(

@@ -4,24 +4,18 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    /// <summary>
-    /// Reads to a unique sibling staging file and replaces the destination only after
-    /// complete protocol success. The destination directory must already exist.
-    /// <para>读取到同目录下一个唯一的暂存文件，仅在协议完全成功后替换目标文件。
-    /// 目标目录必须已经存在。</para>
-    /// </summary>
+    /// <summary>Reads to a unique sibling staging file and replaces the destination only after complete protocol success. The destination directory must already exist.
+    /// <para>读取到同目录下一个唯一的暂存文件，仅在协议完全成功后替换目标文件。 目标目录必须已经存在。</para></summary>
     /// <param name="partitionId">The discovered XFlash physical partition identifier.
     /// <para>已发现的 XFlash 物理分区标识符。</para></param>
     /// <param name="offset">The block-aligned byte offset within the physical partition.
     /// <para>物理分区内按块对齐的字节偏移。</para></param>
-    /// <param name="length">The positive block-aligned byte count.
-    /// <para>正数、按块对齐的字节数。</para></param>
+    /// <param name="length">The positive block-aligned byte count.<para>正数、按块对齐的字节数。</para></param>
     /// <param name="destinationPath">The file to publish after successful completion.
     /// <para>成功完成后发布的文件路径。</para></param>
     /// <param name="progress">Optional cumulative transferred bytes; full progress is not publication success.
     /// <para>可选的累计传输字节数；进度跑满不代表发布成功。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>A task that completes once the staging file replaced the destination.
     /// <para>在暂存文件替换目标文件后完成的异步任务。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="destinationPath"/> is blank.
@@ -39,25 +33,18 @@ public sealed partial class MtkSession
         => StorageFilePublisher.PublishAsync(destinationPath, length,
             output => ReadXFlashStorageAsync(partitionId, offset, length, output, progress, cancellationToken), cancellationToken);
 
-    /// <summary>
-    /// Compares a device range with exactly the requested bytes at the source's current position.
-    /// Mismatches do not interrupt reception; only a fully completed exchange produces a result.
-    /// This is a separate read operation, not an atomic write-and-verify transaction.
-    /// <para>将设备范围与源流当前位置起恰好请求的字节数进行比较。不匹配不会中断接收；
-    /// 只有完整结束的交换才产生结果。这是独立的读取操作，不是原子的写入并校验事务。</para>
-    /// </summary>
+    /// <summary>Compares a device range with exactly the requested bytes at the source's current position. Mismatches do not interrupt reception; only a fully completed exchange produces a result. This is a separate read operation, not an atomic write-and-verify transaction.
+    /// <para>将设备范围与源流当前位置起恰好请求的字节数进行比较。不匹配不会中断接收； 只有完整结束的交换才产生结果。这是独立的读取操作，不是原子的写入并校验事务。</para></summary>
     /// <param name="partitionId">The discovered XFlash physical partition identifier.
     /// <para>已发现的 XFlash 物理分区标识符。</para></param>
     /// <param name="offset">The block-aligned byte offset within the physical partition.
     /// <para>物理分区内按块对齐的字节偏移。</para></param>
-    /// <param name="length">The positive block-aligned byte count.
-    /// <para>正数、按块对齐的字节数。</para></param>
+    /// <param name="length">The positive block-aligned byte count.<para>正数、按块对齐的字节数。</para></param>
     /// <param name="expected">A readable caller-owned reference stream which remains open.
     /// <para>调用方拥有、保持打开的可读参考流。</para></param>
     /// <param name="progress">Optional cumulative compared and acknowledged bytes.
     /// <para>可选的累计已比较并已确认字节数。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>Full comparison evidence, including the first relative mismatch offset.
     /// <para>完整的比较证据，包含首个相对不匹配偏移。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="expected"/> is null.

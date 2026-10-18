@@ -57,25 +57,18 @@ internal static class FileSystemMetadataGenerator
     /// </summary>
     private static readonly UTF8Encoding MetadataEncoding = new(false, true);
 
-    /// <summary>
-    /// Generates all three metadata files for an EXT4 extraction.
-    /// <para>为 EXT4 解包生成全部三个元数据文件。</para>
-    /// </summary>
+    /// <summary>Generates all three metadata files for an EXT4 extraction.
+    /// <para>为 EXT4 解包生成全部三个元数据文件。</para></summary>
     /// <param name="metadataDirectory">Directory the files are written to; created when missing.
     /// <para>写入目标的目录；不存在时自动创建。</para></param>
     /// <param name="partitionName">Prefix applied to all three generated file names.
     /// <para>作为三个生成文件名前缀的分区名。</para></param>
     /// <param name="parser">Opened EXT4 parser supplying entries (root included), ownership, modes and xattrs.
     /// <para>已打开的 EXT4 解析器，提供条目（含根目录）、属主、模式与扩展属性。</para></param>
-    /// <param name="superblockConfig">Optional JSON object whose members are written as
-    /// <c>partition.key=value</c> lines; <see langword="null"/> emits only the default
-    /// <c>partition_name</c> line.
-    /// <para>可选 JSON 对象，其成员以 <c>分区.key=value</c> 行写入；为 <see langword="null"/> 时仅输出默认的
-    /// <c>partition_name</c> 行。</para></param>
-    /// <returns>One message per entry the flat grammar cannot carry (link or special node, whitespace in a
-    /// path, unreadable capability xattr); empty when every entry was exported.
-    /// <para>每条扁平语法无法承载的条目（链接或特殊节点、路径含空白、能力 xattr 不可解析）对应一条说明；
-    /// 全部条目均已导出时为空。</para></returns>
+    /// <param name="superblockConfig">Optional JSON object whose members are written as <c>partition.key=value</c> lines; <see langword="null"/> emits only the default <c>partition_name</c> line.
+    /// <para>可选 JSON 对象，其成员以 <c>分区.key=value</c> 行写入；为 <see langword="null"/> 时仅输出默认的 <c>partition_name</c> 行。</para></param>
+    /// <returns>One message per entry the flat grammar cannot carry (link or special node, whitespace in a path, unreadable capability xattr); empty when every entry was exported.
+    /// <para>每条扁平语法无法承载的条目（链接或特殊节点、路径含空白、能力 xattr 不可解析）对应一条说明； 全部条目均已导出时为空。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="parser"/> is <see langword="null"/>.
     /// <para><paramref name="parser"/> 为 <see langword="null"/>。</para></exception>
     public static IReadOnlyList<string> GenerateForExt4(string metadataDirectory, string partitionName, Ext4Parser parser, JsonObject? superblockConfig = null)
@@ -97,24 +90,18 @@ internal static class FileSystemMetadataGenerator
         return warnings;
     }
 
-    /// <summary>
-    /// Generates all three metadata files for an EROFS extraction.
-    /// <para>为 EROFS 解包生成全部三个元数据文件。</para>
-    /// </summary>
+    /// <summary>Generates all three metadata files for an EROFS extraction.
+    /// <para>为 EROFS 解包生成全部三个元数据文件。</para></summary>
     /// <param name="metadataDirectory">Directory the files are written to; created when missing.
     /// <para>写入目标的目录；不存在时自动创建。</para></param>
     /// <param name="partitionName">Prefix applied to all three generated file names.
     /// <para>作为三个生成文件名前缀的分区名。</para></param>
     /// <param name="parser">Opened EROFS parser supplying the enumerated entries, ownership, modes and xattrs.
     /// <para>已打开的 EROFS 解析器，提供枚举出的条目、属主、模式与扩展属性。</para></param>
-    /// <param name="superblockConfig">Optional JSON object whose members are written as
-    /// <c>partition.key=value</c> lines; <see langword="null"/> emits only the default
-    /// <c>partition_name</c> line.
-    /// <para>可选 JSON 对象，其成员以 <c>分区.key=value</c> 行写入；为 <see langword="null"/> 时仅输出默认的
-    /// <c>partition_name</c> 行。</para></param>
-    /// <returns>One message per entry the flat grammar cannot carry; see
-    /// <see cref="GenerateForExt4"/>. <para>扁平语法无法承载的条目各产生一条说明；见
-    /// <see cref="GenerateForExt4"/>。</para></returns>
+    /// <param name="superblockConfig">Optional JSON object whose members are written as <c>partition.key=value</c> lines; <see langword="null"/> emits only the default <c>partition_name</c> line.
+    /// <para>可选 JSON 对象，其成员以 <c>分区.key=value</c> 行写入；为 <see langword="null"/> 时仅输出默认的 <c>partition_name</c> 行。</para></param>
+    /// <returns>One message per entry the flat grammar cannot carry; see <see cref="GenerateForExt4"/>.
+    /// <para>扁平语法无法承载的条目各产生一条说明；见 <see cref="GenerateForExt4"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="parser"/> is <see langword="null"/>.
     /// <para><paramref name="parser"/> 为 <see langword="null"/>。</para></exception>
     public static IReadOnlyList<string> GenerateForErofs(string metadataDirectory, string partitionName, ErofsParser parser, JsonObject? superblockConfig = null)
@@ -134,24 +121,18 @@ internal static class FileSystemMetadataGenerator
         return warnings;
     }
 
-    /// <summary>
-    /// Generates all three metadata files for an F2FS extraction.
-    /// <para>为 F2FS 解包生成全部三个元数据文件。</para>
-    /// </summary>
+    /// <summary>Generates all three metadata files for an F2FS extraction.
+    /// <para>为 F2FS 解包生成全部三个元数据文件。</para></summary>
     /// <param name="metadataDirectory">Directory the files are written to; created when missing.
     /// <para>写入目标的目录；不存在时自动创建。</para></param>
     /// <param name="partitionName">Prefix applied to all three generated file names.
     /// <para>作为三个生成文件名前缀的分区名。</para></param>
     /// <param name="parser">Opened F2FS parser supplying entries (root included), ownership, modes and xattrs.
     /// <para>已打开的 F2FS 解析器，提供条目（含根目录）、属主、模式与扩展属性。</para></param>
-    /// <param name="superblockConfig">Optional JSON object whose members are written as
-    /// <c>partition.key=value</c> lines; <see langword="null"/> emits only the default
-    /// <c>partition_name</c> line.
-    /// <para>可选 JSON 对象，其成员以 <c>分区.key=value</c> 行写入；为 <see langword="null"/> 时仅输出默认的
-    /// <c>partition_name</c> 行。</para></param>
-    /// <returns>One message per entry the flat grammar cannot carry; see
-    /// <see cref="GenerateForExt4"/>. <para>扁平语法无法承载的条目各产生一条说明；见
-    /// <see cref="GenerateForExt4"/>。</para></returns>
+    /// <param name="superblockConfig">Optional JSON object whose members are written as <c>partition.key=value</c> lines; <see langword="null"/> emits only the default <c>partition_name</c> line.
+    /// <para>可选 JSON 对象，其成员以 <c>分区.key=value</c> 行写入；为 <see langword="null"/> 时仅输出默认的 <c>partition_name</c> 行。</para></param>
+    /// <returns>One message per entry the flat grammar cannot carry; see <see cref="GenerateForExt4"/>.
+    /// <para>扁平语法无法承载的条目各产生一条说明；见 <see cref="GenerateForExt4"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="parser"/> is <see langword="null"/>.
     /// <para><paramref name="parser"/> 为 <see langword="null"/>。</para></exception>
     public static IReadOnlyList<string> GenerateForF2fs(string metadataDirectory, string partitionName, F2fsParser parser, JsonObject? superblockConfig = null)
@@ -171,24 +152,16 @@ internal static class FileSystemMetadataGenerator
         return warnings;
     }
 
-    /// <summary>
-    /// Generates metadata files from the extraction directory on disk.
-    /// <para>从磁盘上的解包目录生成元数据文件。</para>
-    /// </summary>
+    /// <summary>Generates metadata files from the extraction directory on disk.
+    /// <para>从磁盘上的解包目录生成元数据文件。</para></summary>
     /// <param name="metadataDirectory">Directory the files are written to; created when missing.
     /// <para>写入目标的目录；不存在时自动创建。</para></param>
     /// <param name="partitionName">Prefix applied to all three generated file names.
     /// <para>作为三个生成文件名前缀的分区名。</para></param>
-    /// <param name="extractionDirectory">Tree enumerated recursively; every path is exported with uid, gid and
-    /// mode <c>0</c>, so the <c>fs_config</c> rows read <c>0 0 0000</c> — the mode is written verbatim instead
-    /// of being replaced by invented defaults — and the default SELinux label is used. A missing directory
-    /// yields only the root entry.
-    /// <para>递归枚举的目录树；每个条目都以 uid、gid 与 mode <c>0</c> 导出，因此 <c>fs_config</c> 行写作
-    /// <c>0 0 0000</c>——模式按原值写出，不会被替换成臆造的默认权限——并使用默认 SELinux 标签。
-    /// 目录不存在时仅生成根条目。</para></param>
-    /// <returns>One message per entry the flat grammar cannot carry; see
-    /// <see cref="GenerateForExt4"/>. <para>扁平语法无法承载的条目各产生一条说明；见
-    /// <see cref="GenerateForExt4"/>。</para></returns>
+    /// <param name="extractionDirectory">Tree enumerated recursively; every path is exported with uid, gid and mode <c>0</c>, so the <c>fs_config</c> rows read <c>0 0 0000</c> — the mode is written verbatim instead of being replaced by invented defaults — and the default SELinux label is used. A missing directory yields only the root entry.
+    /// <para>递归枚举的目录树；每个条目都以 uid、gid 与 mode <c>0</c> 导出，因此 <c>fs_config</c> 行写作 <c>0 0 0000</c>——模式按原值写出，不会被替换成臆造的默认权限——并使用默认 SELinux 标签。 目录不存在时仅生成根条目。</para></param>
+    /// <returns>One message per entry the flat grammar cannot carry; see <see cref="GenerateForExt4"/>.
+    /// <para>扁平语法无法承载的条目各产生一条说明；见 <see cref="GenerateForExt4"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="extractionDirectory"/> is <see langword="null"/>.
     /// <para><paramref name="extractionDirectory"/> 为 <see langword="null"/>。</para></exception>
     public static IReadOnlyList<string> GenerateFromDirectory(string metadataDirectory, string partitionName, string extractionDirectory)

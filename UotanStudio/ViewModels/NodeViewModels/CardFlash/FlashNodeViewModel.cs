@@ -81,24 +81,10 @@ public class FlashNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>
-    /// Dispatches flash logic by the node type key (TypeKey): Device.Partition.Flash calls
-    /// <see cref="FlashService.FlashImageAsync"/>, Device.Partition.Erase calls
-    /// <see cref="FlashService.ErasePartitionAsync"/>, and Device.Power.Reboot calls
-    /// <see cref="DeviceMonitorService.RebootAsync"/>. A missing device logs a warning and short-circuits.
-    /// <para>按节点类型键（TypeKey）分发对应的烧录逻辑：Device.Partition.Flash 调
-    /// <see cref="FlashService.FlashImageAsync"/>、Device.Partition.Erase 调
-    /// <see cref="FlashService.ErasePartitionAsync"/>、Device.Power.Reboot 调
-    /// <see cref="DeviceMonitorService.RebootAsync"/>。设备缺失时告警并短路。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context.
-    /// <para>执行上下文。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Dispatches flash logic by the node type key (TypeKey): Device.Partition.Flash calls <see cref="FlashService.FlashImageAsync"/>, Device.Partition.Erase calls <see cref="FlashService.ErasePartitionAsync"/>, and Device.Power.Reboot calls <see cref="DeviceMonitorService.RebootAsync"/>. A missing device logs a warning and short-circuits.
+    /// <para>按节点类型键（TypeKey）分发对应的烧录逻辑：Device.Partition.Flash 调 <see cref="FlashService.FlashImageAsync"/>、Device.Partition.Erase 调 <see cref="FlashService.ErasePartitionAsync"/>、Device.Power.Reboot 调 <see cref="DeviceMonitorService.RebootAsync"/>。设备缺失时告警并短路。</para></summary>
+    /// <param name="context">The execution context.<para>执行上下文。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         try

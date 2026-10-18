@@ -96,19 +96,15 @@ public sealed class DexService
         }
     }
 
-    /// <summary>
-    /// Loads a DEX (or a container DEX entry) and rebuilds it to the specified output path;
-    /// container sources are written back through the entry.
-    /// <para>加载 DEX（或容器内 DEX 条目）并重建写入到指定输出路径；来源为容器时经条目写回。</para>
-    /// </summary>
-    /// <param name="path">The DEX or container file path. <para>DEX 或容器文件路径。</para></param>
-    /// <param name="outputPath">The output file path. <para>输出文件路径。</para></param>
-    /// <param name="entryName">
-    /// The container DEX entry name; empty picks the first DEX entry, ignored for plain files.
-    /// <para>容器内 DEX 条目名；为空时取第一个 DEX 条目，非容器路径忽略。</para>
-    /// </param>
-    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>Operation result whose summary names the written path. <para>操作结果，摘要指明写出路径。</para></returns>
+    /// <summary>Loads a DEX (or a container DEX entry) and rebuilds it to the specified output path; container sources are written back through the entry.
+    /// <para>加载 DEX（或容器内 DEX 条目）并重建写入到指定输出路径；来源为容器时经条目写回。</para></summary>
+    /// <param name="path">The DEX or container file path.<para>DEX 或容器文件路径。</para></param>
+    /// <param name="outputPath">The output file path.<para>输出文件路径。</para></param>
+    /// <param name="entryName">The container DEX entry name; empty picks the first DEX entry, ignored for plain files.
+    /// <para>容器内 DEX 条目名；为空时取第一个 DEX 条目，非容器路径忽略。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>Operation result whose summary names the written path.
+    /// <para>操作结果，摘要指明写出路径。</para></returns>
     public Task<UotanStudio.Firmware.Core.FirmwareOpResult> RebuildDexAsync(string path, string outputPath, string? entryName = null, CancellationToken ct = default)
     {
         try

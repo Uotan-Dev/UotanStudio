@@ -9,22 +9,14 @@ using UnifiedInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsIn
 
 namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;
 
-/// <summary>
-/// One inode listing produced by <see cref="ErofsParser"/>: path, size, inode number and decoded metadata.
-/// <para><see cref="ErofsParser"/> 输出的一条 inode 清单：路径、大小、inode 编号与已解析的元数据。</para>
-/// </summary>
-/// <param name="Path">
-/// Slash-separated path of the entry relative to the image root.
-/// <para>相对于镜像根目录、以 '/' 分隔的条目路径。</para>
-/// </param>
-/// <param name="Size">
-/// Content size in bytes recorded by the inode, before decompression.
-/// <para>inode 记录的字节大小（解压前的内容尺寸）。</para>
-/// </param>
-/// <param name="Nid">
-/// On-disk inode number; the METABOX flag bit is kept when the inode lives in the metabox.
-/// <para>磁盘 inode 编号；inode 位于 metabox 时保留 METABOX 标志位。</para>
-/// </param>
+/// <summary>One inode listing produced by <see cref="ErofsParser"/>: path, size, inode number and decoded metadata.
+/// <para><see cref="ErofsParser"/> 输出的一条 inode 清单：路径、大小、inode 编号与已解析的元数据。</para></summary>
+/// <param name="Path">Slash-separated path of the entry relative to the image root.
+/// <para>相对于镜像根目录、以 '/' 分隔的条目路径。</para></param>
+/// <param name="Size">Content size in bytes recorded by the inode, before decompression.
+/// <para>inode 记录的字节大小（解压前的内容尺寸）。</para></param>
+/// <param name="Nid">On-disk inode number; the METABOX flag bit is kept when the inode lives in the metabox.
+/// <para>磁盘 inode 编号；inode 位于 metabox 时保留 METABOX 标志位。</para></param>
 public sealed record ErofsFileEntry(
     string Path,
     long Size,
@@ -175,14 +167,10 @@ public sealed partial class ErofsParser : IDisposable
     private UnifiedInode? _packedInode;
     private UnifiedInode? _rootInode;
 
-    /// <summary>
-    /// Creates a parser from image bytes (the array is wrapped in a memory stream without copying; validates the magic at offset 1024).
-    /// <para>从镜像字节创建解析器（字节数组直接包装为内存流，不复制；校验偏移 1024 处的魔数）。</para>
-    /// </summary>
-    /// <param name="image">
-    /// Complete EROFS image bytes; the parser reads through them for its whole lifetime.
-    /// <para>完整的 EROFS 镜像字节；解析器整个生命周期都经由它们读取。</para>
-    /// </param>
+    /// <summary>Creates a parser from image bytes (the array is wrapped in a memory stream without copying; validates the magic at offset 1024).
+    /// <para>从镜像字节创建解析器（字节数组直接包装为内存流，不复制；校验偏移 1024 处的魔数）。</para></summary>
+    /// <param name="image">Complete EROFS image bytes; the parser reads through them for its whole lifetime.
+    /// <para>完整的 EROFS 镜像字节；解析器整个生命周期都经由它们读取。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="image"/> is null.
     /// <para><paramref name="image"/> 为 null。</para></exception>
     /// <exception cref="FormatException">The superblock magic, geometry, features or checksum is invalid.
@@ -194,16 +182,10 @@ public sealed partial class ErofsParser : IDisposable
     {
     }
 
-    /// <summary>
-    /// Creates a parser from a stream. The current position is treated as the image base; the stream
-    /// is never closed, and a non-seekable stream is staged into a temporary file owned by the parser.
-    /// <para>从流创建解析器。流的当前 position 被视为镜像基址；解析器不关闭该流，不可寻址的流会
-    /// 转存到解析器持有的临时文件。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Readable image stream covering the full EROFS image from its current position.
-    /// <para>从当前 position 起覆盖完整 EROFS 镜像的可读流。</para>
-    /// </param>
+    /// <summary>Creates a parser from a stream. The current position is treated as the image base; the stream is never closed, and a non-seekable stream is staged into a temporary file owned by the parser.
+    /// <para>从流创建解析器。流的当前 position 被视为镜像基址；解析器不关闭该流，不可寻址的流会 转存到解析器持有的临时文件。</para></summary>
+    /// <param name="stream">Readable image stream covering the full EROFS image from its current position.
+    /// <para>从当前 position 起覆盖完整 EROFS 镜像的可读流。</para></param>
     /// <exception cref="ArgumentException"><paramref name="stream"/> is not readable.
     /// <para><paramref name="stream"/> 不可读。</para></exception>
     /// <exception cref="FileSystemCorruptedException">The stream position exceeds its length.
@@ -229,8 +211,7 @@ public sealed partial class ErofsParser : IDisposable
     /// <para><paramref name="stream"/> 为 null。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="stream"/> cannot be read or seeked.
     /// <para><paramref name="stream"/> 不可读或不可寻址。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumEntries"/> or
-    /// <paramref name="maximumPathCharacters"/> is not positive.
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumEntries"/> or <paramref name="maximumPathCharacters"/> is not positive.
     /// <para>预算参数不是正数。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was already signalled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
@@ -250,10 +231,8 @@ public sealed partial class ErofsParser : IDisposable
         return stream;
     }
 
-    /// <summary>
-    /// Creates a parser from a file path (opens and owns a FileStream; disposing the parser closes the file).
-    /// <para>从文件路径创建解析器（内部打开并持有 FileStream；释放解析器即关闭文件）。</para>
-    /// </summary>
+    /// <summary>Creates a parser from a file path (opens and owns a FileStream; disposing the parser closes the file).
+    /// <para>从文件路径创建解析器（内部打开并持有 FileStream；释放解析器即关闭文件）。</para></summary>
     /// <param name="filePath">Existing path to an EROFS image file, opened for shared reading.
     /// <para>已存在的 EROFS 镜像文件路径，以共享读方式打开。</para></param>
     /// <exception cref="ArgumentException">The path is null, empty or whitespace.
@@ -274,15 +253,10 @@ public sealed partial class ErofsParser : IDisposable
     /// <returns>A parser that leaves the supplied stream open. <para>不会关闭传入流的解析器。</para></returns>
     public static ErofsParser OpenFlatDevice(Stream stream) => new(stream) { _flatDevice = true };
 
-    /// <summary>
-    /// Creates a parser for a multi-device image from one stream per device id, with unlimited budgets.
-    /// <para>为多设备镜像创建解析器，每个设备 id 对应一条流，预算不受限。</para>
-    /// </summary>
-    /// <param name="deviceStreams">
-    /// Device streams indexed by device id; the count must equal the extra-device count in the
-    /// superblock plus one. A stream is addressed by its own position as device base.
-    /// <para>按设备 id 索引的流；数量必须等于超级块声明的额外设备数加一。每条流以其自身位置作为设备基址。</para>
-    /// </param>
+    /// <summary>Creates a parser for a multi-device image from one stream per device id, with unlimited budgets.
+    /// <para>为多设备镜像创建解析器，每个设备 id 对应一条流，预算不受限。</para></summary>
+    /// <param name="deviceStreams">Device streams indexed by device id; the count must equal the extra-device count in the superblock plus one. A stream is addressed by its own position as device base.
+    /// <para>按设备 id 索引的流；数量必须等于超级块声明的额外设备数加一。每条流以其自身位置作为设备基址。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="deviceStreams"/> or one of its elements is null.
     /// <para><paramref name="deviceStreams"/> 或其某个元素为 null。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="deviceStreams"/> is empty.
@@ -294,15 +268,10 @@ public sealed partial class ErofsParser : IDisposable
     {
     }
 
-    /// <summary>
-    /// Creates a budgeted, cancellable parser for a multi-device image from one stream per device id.
-    /// <para>为多设备镜像创建带预算、可取消的解析器，每个设备 id 对应一条流。</para>
-    /// </summary>
-    /// <param name="deviceStreams">
-    /// Device streams indexed by device id; the count must equal the extra-device count in the
-    /// superblock plus one.
-    /// <para>按设备 id 索引的流；数量必须等于超级块声明的额外设备数加一。</para>
-    /// </param>
+    /// <summary>Creates a budgeted, cancellable parser for a multi-device image from one stream per device id.
+    /// <para>为多设备镜像创建带预算、可取消的解析器，每个设备 id 对应一条流。</para></summary>
+    /// <param name="deviceStreams">Device streams indexed by device id; the count must equal the extra-device count in the superblock plus one.
+    /// <para>按设备 id 索引的流；数量必须等于超级块声明的额外设备数加一。</para></param>
     /// <param name="maximumEntries">Positive budget for entries visited during directory enumeration.
     /// <para>目录枚举中访问条目数的正整数预算。</para></param>
     /// <param name="maximumPathCharacters">Positive budget for the summed length of enumerated paths.
@@ -311,11 +280,9 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>元数据读取与目录遍历所观察的取消令牌。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="deviceStreams"/> or one of its elements is null.
     /// <para><paramref name="deviceStreams"/> 或其某个元素为 null。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="deviceStreams"/> is empty or the primary
-    /// stream is not readable.
+    /// <exception cref="ArgumentException"><paramref name="deviceStreams"/> is empty or the primary stream is not readable.
     /// <para><paramref name="deviceStreams"/> 为空，或主流不可读。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumEntries"/> or
-    /// <paramref name="maximumPathCharacters"/> is not positive.
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumEntries"/> or <paramref name="maximumPathCharacters"/> is not positive.
     /// <para>预算参数不是正数。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was already signalled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
@@ -574,29 +541,18 @@ public sealed partial class ErofsParser : IDisposable
         }
     }
 
-    /// <summary>
-    /// Reads a single file and returns its bytes.
-    /// <para>读取单个文件内容并返回字节数组。</para>
-    /// </summary>
+    /// <summary>Reads a single file and returns its bytes.<para>读取单个文件内容并返回字节数组。</para></summary>
     /// <param name="path">Exact '/'-separated image path as reported by <see cref="EnumerateFiles"/>.
     /// <para>与 <see cref="EnumerateFiles"/> 输出逐字一致的 '/' 分隔镜像路径。</para></param>
-    /// <returns>The complete decoded contents of the file.
-    /// <para>文件完整解码后的内容字节。</para></returns>
+    /// <returns>The complete decoded contents of the file.<para>文件完整解码后的内容字节。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="path"/> is null.
     /// <para><paramref name="path"/> 为 null。</para></exception>
     /// <exception cref="FileNotFoundException">No file has that exact path.
     /// <para>不存在与该路径逐字匹配的文件。</para></exception>
     /// <exception cref="FileSystemCorruptedException">The file's metadata or data blocks are malformed.
     /// <para>文件的元数据或数据块非法。</para></exception>
-    /// <remarks>
-    /// The buffer is sized from the inode instead of growing, so decoding writes the payload once rather than
-    /// leaving a second full copy behind from <c>MemoryStream.ToArray</c>. A malformed inode whose declared size
-    /// disagrees with what the decoder produces still throws <see cref="FileSystemCorruptedException"/>, because
-    /// the length check runs after the write completes and this method still allocates from that same length.
-    /// <para>缓冲区按 inode 大小一次分配，解码只写一份负载，不再由 <c>MemoryStream.ToArray</c> 留下第二份完整拷贝。
-    /// 声明大小与解码结果不一致的非法 inode 仍会抛出 <see cref="FileSystemCorruptedException"/>：长度校验在写完之后
-    /// 执行，而本方法仍然按同一长度分配。</para>
-    /// </remarks>
+    /// <remarks>The buffer is sized from the inode instead of growing, so decoding writes the payload once rather than leaving a second full copy behind from <c>MemoryStream.ToArray</c>. A malformed inode whose declared size disagrees with what the decoder produces still throws <see cref="FileSystemCorruptedException"/>, because the length check runs after the write completes and this method still allocates from that same length.
+    /// <para>缓冲区按 inode 大小一次分配，解码只写一份负载，不再由 <c>MemoryStream.ToArray</c> 留下第二份完整拷贝。 声明大小与解码结果不一致的非法 inode 仍会抛出 <see cref="FileSystemCorruptedException"/>：长度校验在写完之后 执行，而本方法仍然按同一长度分配。</para></remarks>
     public byte[] ReadFileBytes(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
@@ -621,14 +577,11 @@ public sealed partial class ErofsParser : IDisposable
         return result;
     }
 
-    /// <summary>
-    /// Reads a single file into the output stream (plain data read directly, inline data read directly, compressed data decompressed pcluster by pcluster, chunk-based data assembled chunk by chunk).
-    /// <para>读取单个文件内容到输出流（plain 直读，inline 直读，compressed 逐 pcluster 解压，chunk 逐块拼接）。</para>
-    /// </summary>
+    /// <summary>Reads a single file into the output stream (plain data read directly, inline data read directly, compressed data decompressed pcluster by pcluster, chunk-based data assembled chunk by chunk).
+    /// <para>读取单个文件内容到输出流（plain 直读，inline 直读，compressed 逐 pcluster 解压，chunk 逐块拼接）。</para></summary>
     /// <param name="path">Exact '/'-separated image path of the file.
     /// <para>文件的 '/' 分隔镜像路径（逐字匹配）。</para></param>
-    /// <param name="outputStream">Stream receiving the decoded bytes; writing starts at its current
-    /// position and the stream is not closed.
+    /// <param name="outputStream">Stream receiving the decoded bytes; writing starts at its current position and the stream is not closed.
     /// <para>接收解码字节的流；从其当前位置开始写入且不被关闭。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="path"/> or <paramref name="outputStream"/> is null.
     /// <para><paramref name="path"/> 或 <paramref name="outputStream"/> 为 null。</para></exception>
@@ -653,16 +606,12 @@ public sealed partial class ErofsParser : IDisposable
     private static bool IsSpecialFile(UnifiedInode inode)
         => inode.IsCharacterDevice || inode.IsBlockDevice || inode.IsFifo || inode.IsSocket;
 
-    /// <summary>
-    /// Extracts all files to the output directory.
-    /// <para>将镜像中全部文件解包到输出目录。</para>
-    /// </summary>
+    /// <summary>Extracts all files to the output directory.<para>将镜像中全部文件解包到输出目录。</para></summary>
     /// <param name="outputDirectory">Host directory receiving the tree; created when missing.
     /// <para>接收目录树的宿主目录；缺失时自动创建。</para></param>
     /// <param name="overwrite">When <see langword="false"/>, files already present on the host are skipped.
     /// <para>为 <see langword="false"/> 时跳过宿主上已存在的文件。</para></param>
-    /// <param name="progress">Receives processed/total entry counts, coalesced to one notification per 100 millisecond
-    /// window and ended by a notification carrying the total; may be null.
+    /// <param name="progress">Receives processed/total entry counts, coalesced to one notification per 100 millisecond window and ended by a notification carrying the total; may be null.
     /// <para>接收已处理/总条目数，按 100 毫秒窗口合并，并以一条携带总量的通知结束；可为 null。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="outputDirectory"/> is null.
     /// <para><paramref name="outputDirectory"/> 为 null。</para></exception>
@@ -673,15 +622,13 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>按字节计量并支持取消地解包，取消点覆盖大文件内部的写入。</para></summary>
     /// <param name="outputDirectory">Host directory receiving the tree; created when missing.
     /// <para>接收目录树的宿主目录；缺失时自动创建。</para></param>
-    /// <param name="byteProgress">Receives processed/total output bytes; symlink targets count their
-    /// UTF-8 length and special files contribute nothing. May be null.
+    /// <param name="byteProgress">Receives processed/total output bytes; symlink targets count their UTF-8 length and special files contribute nothing. May be null.
     /// <para>接收已处理/总输出字节；符号链接目标按 UTF-8 长度计，特殊文件不计入。可为 null。</para></param>
     /// <param name="cancellationToken">Stops remaining entries and interrupts in-flight counted writes.
     /// <para>中止剩余条目，并打断进行中的计量写入。</para></param>
     /// <param name="overwrite">When <see langword="false"/>, files already present on the host are skipped.
     /// <para>为 <see langword="false"/> 时跳过宿主上已存在的文件。</para></param>
-    /// <param name="progress">Receives processed/total entry counts, coalesced to one notification per 100 millisecond
-    /// window and ended by a notification carrying the total; may be null.
+    /// <param name="progress">Receives processed/total entry counts, coalesced to one notification per 100 millisecond window and ended by a notification carrying the total; may be null.
     /// <para>接收已处理/总条目数，按 100 毫秒窗口合并，并以一条携带总量的通知结束；可为 null。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="outputDirectory"/> is null.
     /// <para><paramref name="outputDirectory"/> 为 null。</para></exception>

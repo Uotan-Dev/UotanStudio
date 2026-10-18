@@ -24,20 +24,13 @@ internal abstract partial class UsbDevice
     /// <returns>The received data. <para>接收到的数据。</para></returns>
     public virtual byte[] Read(int length, int timeoutMs) => Read(length);
 
-    /// <summary>
-    /// Reads data from the device directly into the specified buffer with a specified timeout.
-    /// <para>使用指定超时时间将数据直接读入指定的缓冲区。</para>
-    /// <b>Timeout semantics:</b> the timeout applies per chunk (see <see cref="MaxChunkSize"/>),
-    /// not to the whole operation - a large read spanning several chunks can take up to
-    /// chunkCount × timeoutMs. Use <c>ReadExact</c> when a total-budget read is needed.
-    /// <para><b>超时语义：</b>超时作用于每块（见 <see cref="MaxChunkSize"/>）而非整个操作——
-    /// 跨多块的大读取最多耗时 块数 × timeoutMs。需要整体预算读取时使用 <c>ReadExact</c>。</para>
-    /// </summary>
-    /// <param name="buffer">The target buffer. <para>目标缓冲区。</para></param>
-    /// <param name="offset">The byte offset within the buffer. <para>缓冲区内的字节偏移量。</para></param>
-    /// <param name="length">The number of bytes to read. <para>要读取的字节数。</para></param>
-    /// <param name="timeoutMs">The timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
-    /// <returns>The number of bytes actually read. <para>实际读取的字节数。</para></returns>
+    /// <summary>Reads data from the device directly into the specified buffer with a specified timeout.
+    /// <para>使用指定超时时间将数据直接读入指定的缓冲区。</para><b>Timeout semantics:</b> the timeout applies per chunk (see <see cref="MaxChunkSize"/>), not to the whole operation - a large read spanning several chunks can take up to chunkCount × timeoutMs. Use <c>ReadExact</c> when a total-budget read is needed.<para><b>超时语义：</b>超时作用于每块（见 <see cref="MaxChunkSize"/>）而非整个操作—— 跨多块的大读取最多耗时 块数 × timeoutMs。需要整体预算读取时使用 <c>ReadExact</c>。</para></summary>
+    /// <param name="buffer">The target buffer.<para>目标缓冲区。</para></param>
+    /// <param name="offset">The byte offset within the buffer.<para>缓冲区内的字节偏移量。</para></param>
+    /// <param name="length">The number of bytes to read.<para>要读取的字节数。</para></param>
+    /// <param name="timeoutMs">The timeout in milliseconds.<para>超时时间（毫秒）。</para></param>
+    /// <returns>The number of bytes actually read.<para>实际读取的字节数。</para></returns>
     public virtual int ReadInto(byte[] buffer, int offset, int length, int timeoutMs) => ReadPacket(buffer, offset, length, timeoutMs).Count;
 
 #if NET8_0_OR_GREATER
@@ -69,22 +62,14 @@ internal abstract partial class UsbDevice
     }
 #endif
 
-    /// <summary>
-    /// Reads bytes into the specified buffer and reports the transfer outcome.
-    /// <para>将数据读取到指定缓冲区并报告传输结果。</para>
-    /// <see cref="UsbReadResult.IsTimeout"/> is set when no data arrived before the deadline;
-    /// <see cref="UsbReadResult.IsShortPacket"/> is set when the device ended the transfer with
-    /// fewer bytes than requested (the USB Message boundary). Protocol layers use these flags to
-    /// distinguish "waiting for more data" from "Message complete".
-    /// <para><see cref="UsbReadResult.IsTimeout"/> 表示在期限内没有数据到达；
-    /// <see cref="UsbReadResult.IsShortPacket"/> 表示设备以少于请求的字节数结束传输
-    /// （USB 消息边界）。协议层用这些标志区分"等待更多数据"与"消息已完成"。</para>
-    /// </summary>
-    /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
-    /// <param name="offset">The destination offset. <para>目标偏移量。</para></param>
-    /// <param name="length">The number of bytes to read. <para>读取字节数。</para></param>
-    /// <param name="timeoutMs">The timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
-    /// <returns>The read result with byte count and outcome flags. <para>包含字节数与结果标志的读取结果。</para></returns>
+    /// <summary>Reads bytes into the specified buffer and reports the transfer outcome.
+    /// <para>将数据读取到指定缓冲区并报告传输结果。</para><see cref="UsbReadResult.IsTimeout"/> is set when no data arrived before the deadline; <see cref="UsbReadResult.IsShortPacket"/> is set when the device ended the transfer with fewer bytes than requested (the USB Message boundary). Protocol layers use these flags to distinguish "waiting for more data" from "Message complete".<para><see cref="UsbReadResult.IsTimeout"/> 表示在期限内没有数据到达； <see cref="UsbReadResult.IsShortPacket"/> 表示设备以少于请求的字节数结束传输 （USB 消息边界）。协议层用这些标志区分"等待更多数据"与"消息已完成"。</para></summary>
+    /// <param name="buffer">The destination buffer.<para>目标缓冲区。</para></param>
+    /// <param name="offset">The destination offset.<para>目标偏移量。</para></param>
+    /// <param name="length">The number of bytes to read.<para>读取字节数。</para></param>
+    /// <param name="timeoutMs">The timeout in milliseconds.<para>超时时间（毫秒）。</para></param>
+    /// <returns>The read result with byte count and outcome flags.
+    /// <para>包含字节数与结果标志的读取结果。</para></returns>
     public virtual UsbReadResult ReadPacket(byte[] buffer, int offset, int length, int timeoutMs)
         => ReadPacket(buffer, offset, length, timeoutMs, progress: null);
 

@@ -52,16 +52,12 @@ public sealed partial class ErofsBuilder
     [LibraryImport("libc", EntryPoint = "lstat", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
     private static partial int LStat(string path, out LinuxStat buf);
 
-    /// <summary>
-    /// Packs a directory into erofs image bytes.
-    /// <para>将目录打包为 erofs 镜像字节。</para>
-    /// </summary>
+    /// <summary>Packs a directory into erofs image bytes.<para>将目录打包为 erofs 镜像字节。</para></summary>
     /// <param name="directoryPath">Existing directory whose tree becomes the image root.
     /// <para>作为镜像根目录的现存目录。</para></param>
     /// <param name="options">Build options; <see langword="null"/> uses validated defaults.
     /// <para>构建选项；为 <see langword="null"/> 时使用经校验的默认值。</para></param>
-    /// <returns>The complete image as one in-memory byte array.
-    /// <para>完整镜像的内存字节数组。</para></returns>
+    /// <returns>The complete image as one in-memory byte array.<para>完整镜像的内存字节数组。</para></returns>
     /// <exception cref="DirectoryNotFoundException"><paramref name="directoryPath"/> does not exist.
     /// <para><paramref name="directoryPath"/> 不存在。</para></exception>
     /// <exception cref="InvalidOperationException">The built image exceeds the maximum byte-array length.
@@ -89,25 +85,16 @@ public sealed partial class ErofsBuilder
         }
     }
 
-    /// <summary>
-    /// Atomically packs a directory to a path by building and flushing a temporary file in the destination directory before replacing the destination.
-    /// <para>将目录原子打包到指定路径。</para>
-    /// </summary>
-    /// <param name="directoryPath">Existing directory whose tree becomes the image root; the temporary and
-    /// final output files are excluded from the collected tree.
+    /// <summary>Atomically packs a directory to a path by building and flushing a temporary file in the destination directory before replacing the destination.
+    /// <para>将目录原子打包到指定路径。</para></summary>
+    /// <param name="directoryPath">Existing directory whose tree becomes the image root; the temporary and final output files are excluded from the collected tree.
     /// <para>作为镜像根目录的现存目录；收集目录树时会排除临时文件与最终输出文件。</para></param>
-    /// <param name="outputPath">Destination image path, replaced only after the temporary file is fully
-    /// written and flushed to disk; an existing file is overwritten.
+    /// <param name="outputPath">Destination image path, replaced only after the temporary file is fully written and flushed to disk; an existing file is overwritten.
     /// <para>目标镜像路径；仅在临时文件完整写入并落盘后才替换目标，已存在的文件会被覆盖。</para></param>
     /// <param name="options">Build options; <see langword="null"/> uses validated defaults.
     /// <para>构建选项；为 <see langword="null"/> 时使用经校验的默认值。</para></param>
-    /// <param name="progress">Optional reporter receiving <c>(processed, total)</c> payload bytes, where the total is
-    /// the summed size of the collected payload files and every payload is measured exactly once: a payload whose
-    /// compression plan was accepted is measured while it is hashed and compressed, and every other payload is
-    /// measured when its bytes are emitted. The measurement therefore reaches the total regardless of the
-    /// compression ratio. <para>可选的进度回调，报告 <c>(已处理, 总量)</c> 负载字节；总量为已收集负载文件大小之和，
-    /// 且每个负载只被计量一次：压缩规划被接受的负载在哈希与压缩时计量，其余负载在写出其字节时计量。因此无论压缩率
-    /// 如何，计量都会到达总量。</para></param>
+    /// <param name="progress">Optional reporter receiving <c>(processed, total)</c> payload bytes, where the total is the summed size of the collected payload files and every payload is measured exactly once: a payload whose compression plan was accepted is measured while it is hashed and compressed, and every other payload is measured when its bytes are emitted. The measurement therefore reaches the total regardless of the compression ratio.
+    /// <para>可选的进度回调，报告 <c>(已处理, 总量)</c> 负载字节；总量为已收集负载文件大小之和， 且每个负载只被计量一次：压缩规划被接受的负载在哈希与压缩时计量，其余负载在写出其字节时计量。因此无论压缩率 如何，计量都会到达总量。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="outputPath"/> is <see langword="null"/>.
     /// <para><paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="DirectoryNotFoundException"><paramref name="directoryPath"/> does not exist.
@@ -140,18 +127,12 @@ public sealed partial class ErofsBuilder
         }
     }
 
-    /// <summary>
-    /// Packs a directory starting at the output stream's current position.
-    /// <para>将目录打包为 erofs 镜像并从输出流当前 Position 写入。</para>
-    /// </summary>
-    /// <param name="directoryPath">Existing directory whose tree becomes the image root; when the output is
-    /// a <see cref="FileStream"/>, that file is excluded from the collected tree.
+    /// <summary>Packs a directory starting at the output stream's current position.
+    /// <para>将目录打包为 erofs 镜像并从输出流当前 Position 写入。</para></summary>
+    /// <param name="directoryPath">Existing directory whose tree becomes the image root; when the output is a <see cref="FileStream"/>, that file is excluded from the collected tree.
     /// <para>作为镜像根目录的现存目录；当输出为 <see cref="FileStream"/> 时，收集目录树会排除该文件。</para></param>
-    /// <param name="output">Writable stream; a seekable stream supporting length resets is written in place
-    /// from its current position, otherwise the image is staged in a temporary file and copied. The caller
-    /// keeps ownership and must flush or close it.
-    /// <para>可写流；支持改长度的可寻址流从当前位置就地写入，否则先经临时文件中转复制。流的所有权仍归调用方，
-    /// 需自行刷新或关闭。</para></param>
+    /// <param name="output">Writable stream; a seekable stream supporting length resets is written in place from its current position, otherwise the image is staged in a temporary file and copied. The caller keeps ownership and must flush or close it.
+    /// <para>可写流；支持改长度的可寻址流从当前位置就地写入，否则先经临时文件中转复制。流的所有权仍归调用方， 需自行刷新或关闭。</para></param>
     /// <param name="options">Build options; <see langword="null"/> uses validated defaults.
     /// <para>构建选项；为 <see langword="null"/> 时使用经校验的默认值。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="directoryPath"/> is <see langword="null"/>.

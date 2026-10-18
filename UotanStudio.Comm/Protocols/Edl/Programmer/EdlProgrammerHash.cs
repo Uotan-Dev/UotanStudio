@@ -14,26 +14,17 @@ public static class EdlProgrammerHash
 {
     private const int ChunkBytes = 64 * 1024;
 
-    /// <summary>
-    /// Computes the lowercase hexadecimal SHA-256 digest of the whole stream.
-    /// <para>计算整个流的小写十六进制 SHA-256 摘要。</para>
-    /// </summary>
-    /// <param name="image">
-    /// The readable, seekable image stream owned by the caller; its position is restored before return.
-    /// <para>调用方持有的可读、可定位镜像流；返回前恢复其位置。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation checked between chunks. <para>在数据块之间检查的取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// The 64-character lowercase hex digest. <para>64 位小写十六进制摘要。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="image"/> is <see langword="null"/>. <para><paramref name="image"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// The stream cannot be read or cannot seek. <para>流不可读或不可定位。</para>
-    /// </exception>
+    /// <summary>Computes the lowercase hexadecimal SHA-256 digest of the whole stream.
+    /// <para>计算整个流的小写十六进制 SHA-256 摘要。</para></summary>
+    /// <param name="image">The readable, seekable image stream owned by the caller; its position is restored before return.
+    /// <para>调用方持有的可读、可定位镜像流；返回前恢复其位置。</para></param>
+    /// <param name="cancellationToken">Cancellation checked between chunks.
+    /// <para>在数据块之间检查的取消令牌。</para></param>
+    /// <returns>The 64-character lowercase hex digest.<para>64 位小写十六进制摘要。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="image"/> is <see langword="null"/>.
+    /// <para><paramref name="image"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException">The stream cannot be read or cannot seek.
+    /// <para>流不可读或不可定位。</para></exception>
     public static string ComputeSha256Hex(Stream image, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(image);

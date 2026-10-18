@@ -249,22 +249,9 @@ public sealed class DeltaArchiveManifest : IMessage<DeltaArchiveManifest>
     public bool Equals(DeltaArchiveManifest? other)
         => other is not null && (ReferenceEquals(other, this) || (BlockSize == other.BlockSize && SignaturesOffset == other.SignaturesOffset && SignaturesSize == other.SignaturesSize && MinorVersion == other.MinorVersion && Partitions.Equals(other.Partitions) && MaxTimestamp == other.MaxTimestamp && Equals(DynamicPartitionMetadata, other.DynamicPartitionMetadata) && PartialUpdate == other.PartialUpdate && SecurityPatchLevel == other.SecurityPatchLevel && Equals(_unknownFields, other._unknownFields)));
 
-    /// <summary>
-    /// Computes the hash code of this manifest.
-    /// <para>计算本清单的哈希代码。</para>
-    /// </summary>
-    /// <returns>
-    /// Base value <c>1</c> XOR-folded with each component that carries content: <see cref="BlockSize"/>
-    /// only when <see cref="HasBlockSize"/> is set, the remaining scalars only when they differ from
-    /// their proto3 defaults, <see cref="Partitions"/> always, and the stored sub-message,
-    /// <see cref="PartialUpdate"/>, <see cref="SecurityPatchLevel"/> and unknown-field hashes when
-    /// present. Manifests that compare equal therefore hash alike, because a default-valued field
-    /// contributes nothing whether or not it was explicitly set.
-    /// <para>以 <c>1</c> 为基数，依次异或各有效分量：仅在 <see cref="HasBlockSize"/> 置位时计入
-    /// <see cref="BlockSize"/>，其余标量仅在不同于 proto3 默认值时计入，<see cref="Partitions"/> 始终计入，
-    /// 子消息、<see cref="PartialUpdate"/>、<see cref="SecurityPatchLevel"/> 与未知字段也仅在有内容时计入。
-    /// 因此相等的清单哈希相同，因为默认值字段无论是否显式设置都不贡献哈希。</para>
-    /// </returns>
+    /// <summary>Computes the hash code of this manifest.<para>计算本清单的哈希代码。</para></summary>
+    /// <returns>Base value <c>1</c> XOR-folded with each component that carries content: <see cref="BlockSize"/> only when <see cref="HasBlockSize"/> is set, the remaining scalars only when they differ from their proto3 defaults, <see cref="Partitions"/> always, and the stored sub-message, <see cref="PartialUpdate"/>, <see cref="SecurityPatchLevel"/> and unknown-field hashes when present. Manifests that compare equal therefore hash alike, because a default-valued field contributes nothing whether or not it was explicitly set.
+    /// <para>以 <c>1</c> 为基数，依次异或各有效分量：仅在 <see cref="HasBlockSize"/> 置位时计入 <see cref="BlockSize"/>，其余标量仅在不同于 proto3 默认值时计入，<see cref="Partitions"/> 始终计入， 子消息、<see cref="PartialUpdate"/>、<see cref="SecurityPatchLevel"/> 与未知字段也仅在有内容时计入。 因此相等的清单哈希相同，因为默认值字段无论是否显式设置都不贡献哈希。</para></returns>
     public override int GetHashCode()
     {
         var hash = 1;

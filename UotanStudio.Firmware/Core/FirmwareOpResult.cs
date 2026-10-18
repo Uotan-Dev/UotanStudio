@@ -36,27 +36,16 @@ public sealed class FirmwareOpResult
     /// <para>组件只读列表，绝不为 <see langword="null"/>。</para></value>
     public IReadOnlyList<FirmwareComponent> Components { get; init; } = [];
 
-    /// <summary>
-    /// Creates a success result.
-    /// <para>创建成功结果。</para>
-    /// </summary>
-    /// <param name="summary">
-    /// One-line summary of what succeeded.
-    /// <para>对成功内容的一行摘要。</para>
-    /// </param>
-    /// <param name="entries">
-    /// Detail lines; <see langword="null"/> yields an empty list.
-    /// <para>明细行；传 <see langword="null"/> 时得到空列表。</para>
-    /// </param>
-    /// <param name="metadata">
-    /// Key/value facts; <see langword="null"/> yields an empty dictionary.
-    /// <para>键值信息；传 <see langword="null"/> 时得到空字典。</para>
-    /// </param>
-    /// <param name="components">
-    /// Involved components; <see langword="null"/> yields an empty list.
-    /// <para>所涉及的组件；传 <see langword="null"/> 时得到空列表。</para>
-    /// </param>
-    /// <returns>A result with <see cref="Success"/> set. <para><see cref="Success"/> 为真的结果。</para></returns>
+    /// <summary>Creates a success result.<para>创建成功结果。</para></summary>
+    /// <param name="summary">One-line summary of what succeeded.<para>对成功内容的一行摘要。</para></param>
+    /// <param name="entries">Detail lines; <see langword="null"/> yields an empty list.
+    /// <para>明细行；传 <see langword="null"/> 时得到空列表。</para></param>
+    /// <param name="metadata">Key/value facts; <see langword="null"/> yields an empty dictionary.
+    /// <para>键值信息；传 <see langword="null"/> 时得到空字典。</para></param>
+    /// <param name="components">Involved components; <see langword="null"/> yields an empty list.
+    /// <para>所涉及的组件；传 <see langword="null"/> 时得到空列表。</para></param>
+    /// <returns>A result with <see cref="Success"/> set.
+    /// <para><see cref="Success"/> 为真的结果。</para></returns>
     public static FirmwareOpResult Ok(string summary, IReadOnlyList<string>? entries = null, IReadOnlyDictionary<string, string>? metadata = null, IReadOnlyList<FirmwareComponent>? components = null)
         => new()
         {

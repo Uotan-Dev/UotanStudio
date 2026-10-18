@@ -54,12 +54,10 @@ public static class SparseReader
 
     /// <summary>Loads sparse metadata with a bounded chunk count and cancellable checksum processing.
     /// <para>以受限的块数量加载稀疏元数据，校验和处理可取消。</para></summary>
-    /// <param name="stream">The caller-owned image stream.
-    /// <para>调用方持有的镜像流。</para></param>
+    /// <param name="stream">The caller-owned image stream.<para>调用方持有的镜像流。</para></param>
     /// <param name="validateCrc">Whether to verify stored image and chunk checksums.
     /// <para>是否校验存储的镜像与块校验和。</para></param>
-    /// <param name="verbose">Reserved diagnostic option.
-    /// <para>保留的诊断选项。</para></param>
+    /// <param name="verbose">Reserved diagnostic option.<para>保留的诊断选项。</para></param>
     /// <param name="maximumChunks">Maximum accepted chunk count, including checksum chunks.
     /// <para>接受的最大块数量，包含校验和块。</para></param>
     /// <param name="cancellationToken">Cancellation token checked during parsing and checksum processing.
@@ -79,14 +77,10 @@ public static class SparseReader
 
     /// <summary>Rejects an oversized logical image before reading chunks or computing expanded checksums.
     /// <para>在读取数据块或计算展开校验和之前，拒绝逻辑大小超限的镜像。</para></summary>
-    /// <param name="stream">The caller-owned image stream.
-    /// <para>调用方持有的镜像流。</para></param>
-    /// <param name="validateCrc">Whether to verify stored checksums.
-    /// <para>是否校验存储的校验和。</para></param>
-    /// <param name="verbose">Reserved diagnostic option.
-    /// <para>保留的诊断选项。</para></param>
-    /// <param name="maximumChunks">Maximum accepted chunk count.
-    /// <para>接受的最大块数量。</para></param>
+    /// <param name="stream">The caller-owned image stream.<para>调用方持有的镜像流。</para></param>
+    /// <param name="validateCrc">Whether to verify stored checksums.<para>是否校验存储的校验和。</para></param>
+    /// <param name="verbose">Reserved diagnostic option.<para>保留的诊断选项。</para></param>
+    /// <param name="maximumChunks">Maximum accepted chunk count.<para>接受的最大块数量。</para></param>
     /// <param name="cancellationToken">Cancellation for parsing and checksum processing.
     /// <para>用于解析与校验和处理的取消令牌。</para></param>
     /// <param name="maximumExpandedLength">Nonnegative upper bound on declared logical bytes.
@@ -281,10 +275,7 @@ public static class SparseReader
         return sparseFile;
     }
 
-    /// <summary>
-    /// Loads a SparseFile from a byte array.
-    /// <para>从字节数组加载 SparseFile。</para>
-    /// </summary>
+    /// <summary>Loads a SparseFile from a byte array.<para>从字节数组加载 SparseFile。</para></summary>
     /// <param name="buffer">Sparse image bytes; the array is wrapped without copying, so it must not be modified before the returned model is disposed.
     /// <para>稀疏镜像字节；数组被直接包装而不复制，因此在返回模型释放前不得修改。</para></param>
     /// <param name="validateCrc">When <see langword="true"/>, verifies stored chunk and header checksums.
@@ -313,10 +304,7 @@ public static class SparseReader
         }
     }
 
-    /// <summary>
-    /// Loads a SparseFile from a file on disk.
-    /// <para>从磁盘文件加载 SparseFile。</para>
-    /// </summary>
+    /// <summary>Loads a SparseFile from a file on disk.<para>从磁盘文件加载 SparseFile。</para></summary>
     /// <param name="filePath">Path to a sparse image file, opened for sequential reading.
     /// <para>稀疏镜像文件路径；以顺序读取方式打开。</para></param>
     /// <param name="validateCrc">When <see langword="true"/>, verifies stored chunk and header checksums.
@@ -325,8 +313,7 @@ public static class SparseReader
     /// <para>保留的诊断选项；不改变解析行为。</para></param>
     /// <returns>A model that owns the underlying file stream; the file stays open until the model is disposed.
     /// <para>持有底层文件流的模型；直到模型释放前文件保持打开。</para></returns>
-    /// <exception cref="FileNotFoundException">The file does not exist.
-    /// <para>文件不存在。</para></exception>
+    /// <exception cref="FileNotFoundException">The file does not exist.<para>文件不存在。</para></exception>
     /// <exception cref="InvalidDataException">The file is not a valid sparse image.
     /// <para>文件不是有效的稀疏镜像。</para></exception>
     public static SparseFile FromImageFile(string filePath, bool validateCrc = false, bool verbose = false)
@@ -347,10 +334,8 @@ public static class SparseReader
         }
     }
 
-    /// <summary>
-    /// Automatically imports an image file, detecting whether it is sparse or raw.
-    /// <para>自动导入镜像文件,检测其为稀疏格式还是原始格式。</para>
-    /// </summary>
+    /// <summary>Automatically imports an image file, detecting whether it is sparse or raw.
+    /// <para>自动导入镜像文件,检测其为稀疏格式还是原始格式。</para></summary>
     /// <param name="filePath">Path to the image file; the first four little-endian bytes decide the format.
     /// <para>镜像文件路径；前四个小端字节决定格式。</para></param>
     /// <param name="validateCrc">Passed to the sparse parser; ignored for raw files.
@@ -359,8 +344,7 @@ public static class SparseReader
     /// <para>保留的诊断选项；不改变导入行为。</para></param>
     /// <returns>A model owning the opened file stream. A raw file becomes one 4096-byte-block RAW chunk covering the whole file; a sparse file is parsed as by <see cref="FromImageFile(string, bool, bool)"/>.
     /// <para>返回持有已打开文件流的模型。原始文件会成为一个覆盖整个文件、块大小 4096 的 RAW 块；稀疏文件按 <see cref="FromImageFile(string, bool, bool)"/> 解析。</para></returns>
-    /// <exception cref="FileNotFoundException">The file does not exist.
-    /// <para>文件不存在。</para></exception>
+    /// <exception cref="FileNotFoundException">The file does not exist.<para>文件不存在。</para></exception>
     /// <exception cref="InvalidDataException">The magic matches but the sparse structure fails validation.
     /// <para>魔数匹配但稀疏结构校验失败。</para></exception>
     public static SparseFile ImportAuto(string filePath, bool validateCrc = false, bool verbose = false)
@@ -379,10 +363,8 @@ public static class SparseReader
         }
     }
 
-    /// <summary>
-    /// Automatically imports image data from a stream, detecting whether it is sparse or raw.
-    /// <para>自动从流导入镜像数据，检测其为稀疏格式还是原始格式。</para>
-    /// </summary>
+    /// <summary>Automatically imports image data from a stream, detecting whether it is sparse or raw.
+    /// <para>自动从流导入镜像数据，检测其为稀疏格式还是原始格式。</para></summary>
     /// <param name="stream">Caller-owned, seekable stream; detection peeks the header four bytes and rewinds, and raw import wraps the remaining bytes from the current position. The stream must stay open while the returned model is read.
     /// <para>调用方持有的可寻址流；检测时会窥视头部四字节后回退，原始导入则从当前位置包装剩余字节。读取返回模型期间流必须保持打开。</para></param>
     /// <param name="validateCrc">Passed to the sparse parser; ignored for raw data.
@@ -419,18 +401,15 @@ public static class SparseReader
         return sparseFile;
     }
 
-    /// <summary>
-    /// Converts a raw binary file to a sparse representation.
-    /// <para>将原始二进制文件转换为稀疏表示。</para>
-    /// </summary>
+    /// <summary>Converts a raw binary file to a sparse representation.
+    /// <para>将原始二进制文件转换为稀疏表示。</para></summary>
     /// <param name="filePath">Path to the raw file; its bytes are never read here, only its length is taken.
     /// <para>原始文件路径；此处不读取其字节，仅获取长度。</para></param>
     /// <param name="blockSize">Logical block size for the produced image; must be non-zero and is not validated further.
     /// <para>生成镜像的逻辑块大小；必须非 0，不做更多校验。</para></param>
     /// <returns>A model with one RAW chunk whose provider lazily reads the file from disk; the source file is not opened until the chunk is read.
     /// <para>返回仅含一个 RAW 块的模型，其提供器按需从磁盘读取；在读取该块前不会打开源文件。</para></returns>
-    /// <exception cref="FileNotFoundException">The file does not exist.
-    /// <para>文件不存在。</para></exception>
+    /// <exception cref="FileNotFoundException">The file does not exist.<para>文件不存在。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="blockSize"/> is zero.
     /// <para><paramref name="blockSize"/> 为 0。</para></exception>
     /// <exception cref="OverflowException">The file's block count exceeds <see cref="uint.MaxValue"/>.
@@ -598,10 +577,8 @@ public static class SparseReader
         }
     }
 
-    /// <summary>
-    /// Reads up to count logical (unsparsified) bytes of a sparse image starting at offset, without expanding the whole image.
-    /// <para>不展开整个镜像，从稀疏镜像的 offset 处读取最多 count 个逻辑（非稀疏）字节。</para>
-    /// </summary>
+    /// <summary>Reads up to count logical (unsparsified) bytes of a sparse image starting at offset, without expanding the whole image.
+    /// <para>不展开整个镜像，从稀疏镜像的 offset 处读取最多 count 个逻辑（非稀疏）字节。</para></summary>
     /// <param name="filePath">Path to a sparse image file; the file is closed again before the result is returned.
     /// <para>稀疏镜像文件路径；返回结果前文件已再次关闭。</para></param>
     /// <param name="offset">Absolute offset in the expanded logical image; positions past the end yield an empty result.
@@ -610,8 +587,7 @@ public static class SparseReader
     /// <para>返回字节数的上限；由 don't-care 或空隙覆盖的区域以零返回。</para></param>
     /// <returns>The requested bytes, shortened only when the logical end is reached.
     /// <para>请求的字节；仅在到达逻辑末尾时结果才会变短。</para></returns>
-    /// <exception cref="FileNotFoundException">The file does not exist.
-    /// <para>文件不存在。</para></exception>
+    /// <exception cref="FileNotFoundException">The file does not exist.<para>文件不存在。</para></exception>
     /// <exception cref="InvalidDataException">The file is not a valid sparse image.
     /// <para>文件不是有效的稀疏镜像。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="count"/> is negative.

@@ -193,10 +193,7 @@ internal sealed class LinearAnalysis
 /// <para>对寄存器做符号执行的遍历，把 Dalvik 寄存器映射为 Java 表达式、语句、if 条件与 switch 选择子。</para></summary>
 internal static class RegisterAnalyzer
 {
-    /// <summary>
-    /// Analyzes a method's instruction stream.
-    /// <para>分析方法的指令流。</para>
-    /// </summary>
+    /// <summary>Analyzes a method's instruction stream.<para>分析方法的指令流。</para></summary>
     /// <param name="ctx">Method context supplying names and register geometry.
     /// <para>提供名称与寄存器几何信息的方法上下文。</para></param>
     /// <param name="instructions">Decoded instructions in execution order.

@@ -93,23 +93,14 @@ internal sealed class SprdHead
     /// </summary>
     public const int Size = 2124;
 
-    /// <summary>
-    /// Reads exactly <see cref="Size"/> bytes from the current position as little-endian words in the documented field order.
-    /// <para>从当前位置按文档字段顺序以小端字读取恰好 <see cref="Size"/> 字节。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Stream positioned at the first header byte; it is advanced past the header and left open. The whole header is read
-    /// with one exact read and decoded in memory.
-    /// <para>定位在头部第一个字节的流；调用后其位置越过头部，流本身保持打开。整个头部以一次精确读取完成，随后在内存中解码。</para>
-    /// </param>
-    /// <returns>
-    /// A header whose array fields have the fixed lengths declared by this type.
-    /// <para>头部对象，其数组字段长度与本类型声明的固定长度一致。</para>
-    /// </returns>
-    /// <exception cref="EndOfStreamException">
-    /// Fewer than <see cref="Size"/> bytes remain at the current position.
-    /// <para>当前位置剩余字节少于 <see cref="Size"/>。</para>
-    /// </exception>
+    /// <summary>Reads exactly <see cref="Size"/> bytes from the current position as little-endian words in the documented field order.
+    /// <para>从当前位置按文档字段顺序以小端字读取恰好 <see cref="Size"/> 字节。</para></summary>
+    /// <param name="stream">Stream positioned at the first header byte; it is advanced past the header and left open. The whole header is read with one exact read and decoded in memory.
+    /// <para>定位在头部第一个字节的流；调用后其位置越过头部，流本身保持打开。整个头部以一次精确读取完成，随后在内存中解码。</para></param>
+    /// <returns>A header whose array fields have the fixed lengths declared by this type.
+    /// <para>头部对象，其数组字段长度与本类型声明的固定长度一致。</para></returns>
+    /// <exception cref="EndOfStreamException">Fewer than <see cref="Size"/> bytes remain at the current position.
+    /// <para>当前位置剩余字节少于 <see cref="Size"/>。</para></exception>
     public static SprdHead Read(Stream stream)
     {
         Span<byte> raw = stackalloc byte[Size];
@@ -288,24 +279,14 @@ internal sealed class SprdFile
     /// </summary>
     public const int StructFixedSize = 2580;
 
-    /// <summary>
-    /// Reads exactly <see cref="StructFixedSize"/> bytes from the current position as little-endian words in the documented field order.
-    /// <para>从当前位置按文档字段顺序以小端字读取恰好 <see cref="StructFixedSize"/> 字节。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Stream positioned at the first byte of the entry; it is advanced past the entry and left open. The whole entry is
-    /// read with one exact read and decoded in memory.
-    /// <para>定位在条目第一个字节的流；调用后其位置越过条目，流本身保持打开。整个条目以一次精确读取完成，随后在内存中解码。</para>
-    /// </param>
-    /// <returns>
-    /// An entry whose array fields have the fixed lengths declared by this type.
-    /// Field values are not validated here, so a caller must bound <see cref="Size"/> and <see cref="PacOffset"/> before reading payload bytes.
-    /// <para>条目对象，其数组字段长度与本类型声明的固定长度一致。此处不校验字段取值，调用方必须先对 <see cref="Size"/> 与 <see cref="PacOffset"/> 做上限校验，然后才能读取数据字节。</para>
-    /// </returns>
-    /// <exception cref="EndOfStreamException">
-    /// Fewer than <see cref="StructFixedSize"/> bytes remain at the current position.
-    /// <para>当前位置剩余字节少于 <see cref="StructFixedSize"/>。</para>
-    /// </exception>
+    /// <summary>Reads exactly <see cref="StructFixedSize"/> bytes from the current position as little-endian words in the documented field order.
+    /// <para>从当前位置按文档字段顺序以小端字读取恰好 <see cref="StructFixedSize"/> 字节。</para></summary>
+    /// <param name="stream">Stream positioned at the first byte of the entry; it is advanced past the entry and left open. The whole entry is read with one exact read and decoded in memory.
+    /// <para>定位在条目第一个字节的流；调用后其位置越过条目，流本身保持打开。整个条目以一次精确读取完成，随后在内存中解码。</para></param>
+    /// <returns>An entry whose array fields have the fixed lengths declared by this type. Field values are not validated here, so a caller must bound <see cref="Size"/> and <see cref="PacOffset"/> before reading payload bytes.
+    /// <para>条目对象，其数组字段长度与本类型声明的固定长度一致。此处不校验字段取值，调用方必须先对 <see cref="Size"/> 与 <see cref="PacOffset"/> 做上限校验，然后才能读取数据字节。</para></returns>
+    /// <exception cref="EndOfStreamException">Fewer than <see cref="StructFixedSize"/> bytes remain at the current position.
+    /// <para>当前位置剩余字节少于 <see cref="StructFixedSize"/>。</para></exception>
     public static SprdFile Read(Stream stream)
     {
         Span<byte> raw = stackalloc byte[StructFixedSize];

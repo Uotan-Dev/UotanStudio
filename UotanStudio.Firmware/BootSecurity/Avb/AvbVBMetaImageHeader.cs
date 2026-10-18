@@ -159,22 +159,12 @@ public readonly struct AvbVBMetaImageHeader
     /// <para>当 <see cref="Magic"/> 与 <see cref="ExpectedMagic"/> 按序数比较相等时返回 <see langword="true"/>。</para></returns>
     public bool IsValid() => string.Equals(Magic, ExpectedMagic, StringComparison.Ordinal);
 
-    /// <summary>
-    /// Writes the header's fields into a big-endian buffer, mirroring the offsets read by <see cref="FromBytes"/> so the layout has a single source of truth.
-    /// <para>按 <see cref="FromBytes"/> 所读取的偏移逆序，将各字段以大端形式写入缓冲区，使布局只有一处真相。</para>
-    /// </summary>
-    /// <param name="destination">
-    /// Destination of at least <see cref="Size"/> bytes; the first <see cref="Size"/> bytes are fully overwritten, including the zero-filled reserved region that follows the release field.
-    /// <para>至少 <see cref="Size"/> 字节的目标区域；前 <see cref="Size"/> 字节会被完整覆写，包含释放字段之后置零的保留区。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="destination"/> is shorter than <see cref="Size"/> bytes, or <see cref="Magic"/> or
-    /// <see cref="ReleaseString"/> does not fit its fixed header capacity (47 bytes plus one NUL for the
-    /// release string); the write is rejected instead of silently truncating.
-    /// <para><paramref name="destination"/> 短于 <see cref="Size"/> 字节，或 <see cref="Magic"/> /
-    /// <see cref="ReleaseString"/> 超出其定长头部容量（release string 为 47 字节加一个 NUL），
-    /// 此时写入被拒绝而非静默截断。</para>
-    /// </exception>
+    /// <summary>Writes the header's fields into a big-endian buffer, mirroring the offsets read by <see cref="FromBytes"/> so the layout has a single source of truth.
+    /// <para>按 <see cref="FromBytes"/> 所读取的偏移逆序，将各字段以大端形式写入缓冲区，使布局只有一处真相。</para></summary>
+    /// <param name="destination">Destination of at least <see cref="Size"/> bytes; the first <see cref="Size"/> bytes are fully overwritten, including the zero-filled reserved region that follows the release field.
+    /// <para>至少 <see cref="Size"/> 字节的目标区域；前 <see cref="Size"/> 字节会被完整覆写，包含释放字段之后置零的保留区。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="destination"/> is shorter than <see cref="Size"/> bytes, or <see cref="Magic"/> or <see cref="ReleaseString"/> does not fit its fixed header capacity (47 bytes plus one NUL for the release string); the write is rejected instead of silently truncating.
+    /// <para><paramref name="destination"/> 短于 <see cref="Size"/> 字节，或 <see cref="Magic"/> / <see cref="ReleaseString"/> 超出其定长头部容量（release string 为 47 字节加一个 NUL）， 此时写入被拒绝而非静默截断。</para></exception>
     public void WriteTo(Span<byte> destination)
     {
         if (destination.Length < Size)

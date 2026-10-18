@@ -10,23 +10,16 @@ namespace UotanStudio.Compress.Compressors;
 /// </summary>
 public static class BrotliCompressor
 {
-    /// <summary>
-    /// Brotli compression.
-    /// <para>Brotli 压缩。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext compressed in one pass; an empty array yields an empty Brotli stream.
+    /// <summary>Brotli compression.<para>Brotli 压缩。</para></summary>
+    /// <param name="data">Plaintext compressed in one pass; an empty array yields an empty Brotli stream.
     /// <para>一次性压缩的明文字节；空数组产生空的 Brotli 流。</para></param>
-    /// <param name="options">
-    /// Only <see cref="CompressionOptions.Level"/> is read: it maps to Brotli quality, 0 for level 0 and below, 1 up to level 3, 5 for levels 4-8 and 11 from level 9, with quality 4 when unset.
+    /// <param name="options">Only <see cref="CompressionOptions.Level"/> is read: it maps to Brotli quality, 0 for level 0 and below, 1 up to level 3, 5 for levels 4-8 and 11 from level 9, with quality 4 when unset.
     /// <para>仅读取 <see cref="CompressionOptions.Level"/>：映射为 Brotli 质量，等级 0 及以下为 0，3 及以下为 1，4-8 为 5，9 及以上为 11，未设置时为质量 4。</para></param>
-    /// <returns>
-    /// The Brotli byte stream without any wrapping container.
+    /// <returns>The Brotli byte stream without any wrapping container.
     /// <para>不带任何容器包装的 Brotli 字节流。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="CompressionException">The encoder failed.
-    /// <para>编码器执行失败。</para></exception>
+    /// <exception cref="CompressionException">The encoder failed.<para>编码器执行失败。</para></exception>
     public static byte[] Compress(byte[] data, CompressionOptions? options = null)
     {
         if (data == null)
@@ -49,16 +42,10 @@ public static class BrotliCompressor
         }
     }
 
-    /// <summary>
-    /// Brotli decompression.
-    /// <para>Brotli 解压。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete Brotli stream, treated as untrusted input; the whole expansion is buffered in memory with no output cap.
+    /// <summary>Brotli decompression.<para>Brotli 解压。</para></summary>
+    /// <param name="data">Complete Brotli stream, treated as untrusted input; the whole expansion is buffered in memory with no output cap.
     /// <para>完整的 Brotli 流，按不可信输入处理；解压结果全部驻留内存且没有输出上限。</para></param>
-    /// <returns>
-    /// The decoded bytes.
-    /// <para>解码后的字节。</para></returns>
+    /// <returns>The decoded bytes.<para>解码后的字节。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="CompressionException">The stream is truncated, corrupt, or not Brotli encoded.
@@ -84,18 +71,12 @@ public static class BrotliCompressor
         }
     }
 
-    /// <summary>
-    /// Streaming Brotli compression.
-    /// <para>流式 Brotli 压缩。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable source copied into the encoder in fixed buffers until end of stream; ownership stays with the caller.
+    /// <summary>Streaming Brotli compression.<para>流式 Brotli 压缩。</para></summary>
+    /// <param name="input">Readable source copied into the encoder in fixed buffers until end of stream; ownership stays with the caller.
     /// <para>按固定缓冲拷贝进编码器直至流末尾的可读源流；所有权归调用方。</para></param>
-    /// <param name="output">
-    /// Writable destination; the encoded bytes are appended from its current position and it is left open once the final Brotli block is flushed.
+    /// <param name="output">Writable destination; the encoded bytes are appended from its current position and it is left open once the final Brotli block is flushed.
     /// <para>写入目标；编码字节从其当前位置追加写出，刷新最后一个 Brotli 块后保持打开。</para></param>
-    /// <param name="options">
-    /// Only <see cref="CompressionOptions.Level"/> is read; <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is ignored because a Brotli stream is not chunked.
+    /// <param name="options">Only <see cref="CompressionOptions.Level"/> is read; <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is ignored because a Brotli stream is not chunked.
     /// <para>仅读取 <see cref="CompressionOptions.Level"/>；Brotli 流不分块，<see cref="CompressionOptions.MaxDegreeOfParallelism"/> 被忽略。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -140,15 +121,10 @@ public static class BrotliCompressor
     internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
         => new BrotliStream(new NonDisposingStream(output), EncoderOptions(options), leaveOpen: true);
 
-    /// <summary>
-    /// Streaming Brotli decompression.
-    /// <para>流式 Brotli 解压。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable Brotli stream; only the bytes the decoder consumes are read and the stream is left open.
+    /// <summary>Streaming Brotli decompression.<para>流式 Brotli 解压。</para></summary>
+    /// <param name="input">Readable Brotli stream; only the bytes the decoder consumes are read and the stream is left open.
     /// <para>可读的 Brotli 流；仅读取解码器消费的字节，流保持打开。</para></param>
-    /// <param name="output">
-    /// Writable destination for the decoded bytes, written in fixed buffers so the expansion is never fully buffered; no size cap is enforced.
+    /// <param name="output">Writable destination for the decoded bytes, written in fixed buffers so the expansion is never fully buffered; no size cap is enforced.
     /// <para>解码字节的写入目标，按固定缓冲写出因此不会整体驻留内存；不施加大小上限。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -190,18 +166,13 @@ public static class BrotliCompressor
     internal static Stream CreateDecompressionStream(Stream input)
         => new BrotliStream(new NonDisposingStream(input), CompressionMode.Decompress, leaveOpen: true);
 
-    /// <summary>
-    /// Streaming Brotli decompression with output limit (decompression bomb protection).
-    /// <para>流式 Brotli 解压，带输出上限（防解压炸弹）。</para>
-    /// </summary>
-    /// <param name="source">
-    /// Readable Brotli stream, decoded through an 80 KiB pooled buffer; the stream is left open.
+    /// <summary>Streaming Brotli decompression with output limit (decompression bomb protection).
+    /// <para>流式 Brotli 解压，带输出上限（防解压炸弹）。</para></summary>
+    /// <param name="source">Readable Brotli stream, decoded through an 80 KiB pooled buffer; the stream is left open.
     /// <para>可读的 Brotli 流，使用 80 KiB 池化缓冲逐块解码；流保持打开。</para></param>
-    /// <param name="destination">
-    /// Writable destination; each accepted block is written before the next limit check, so no byte beyond the budget reaches it.
+    /// <param name="destination">Writable destination; each accepted block is written before the next limit check, so no byte beyond the budget reaches it.
     /// <para>写入目标；每块先通过上限检查再写出，超出预算的字节不会落入该流。</para></param>
-    /// <param name="maxOutputBytes">
-    /// Inclusive cap on total decoded bytes; <c>0</c> allows an empty result only.
+    /// <param name="maxOutputBytes">Inclusive cap on total decoded bytes; <c>0</c> allows an empty result only.
     /// <para>解压输出总字节数的含上限，<c>0</c> 表示只允许空结果。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="destination"/> is <see langword="null"/>.
     /// <para><paramref name="source"/> 或 <paramref name="destination"/> 为 <see langword="null"/>。</para></exception>

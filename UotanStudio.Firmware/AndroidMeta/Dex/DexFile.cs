@@ -103,19 +103,17 @@ public sealed class DexFile
     /// </summary>
     internal InstructionOperandCache InstructionOperands { get; } = new();
 
-    /// <summary>
-    /// Loads a DEX from a file.
-    /// <para>从文件加载 DEX。</para>
-    /// </summary>
-    /// <param name="path">
-    /// Existing file path; the whole file is buffered into memory under a 256 MiB cap before parsing.
-    /// <para>已存在的文件路径；解析前整个文件会在 256 MiB 上限内完整读入内存。</para>
-    /// </param>
+    /// <summary>Loads a DEX from a file.<para>从文件加载 DEX。</para></summary>
+    /// <param name="path">Existing file path; the whole file is buffered into memory under a 256 MiB cap before parsing.
+    /// <para>已存在的文件路径；解析前整个文件会在 256 MiB 上限内完整读入内存。</para></param>
     /// <returns>The parsed model, with every table range-checked against the actual file length.
     /// <para>解析后的模型；各表范围均已对照实际文件长度校验。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="path"/> is null or white space. <para><paramref name="path"/> 为 null 或空白。</para></exception>
-    /// <exception cref="DexException">The file does not exist, or its magic, version, endian tag, header size, file size, Adler-32 checksum or table ranges are invalid. <para>文件不存在，或魔数、版本、字节序标记、头部长度、文件大小、Adler-32 校验和与表范围校验失败。</para></exception>
-    /// <exception cref="InvalidDataException">The file exceeds the 256 MiB metadata limit. <para>文件超过 256 MiB 元数据上限。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is null or white space.
+    /// <para><paramref name="path"/> 为 null 或空白。</para></exception>
+    /// <exception cref="DexException">The file does not exist, or its magic, version, endian tag, header size, file size, Adler-32 checksum or table ranges are invalid.
+    /// <para>文件不存在，或魔数、版本、字节序标记、头部长度、文件大小、Adler-32 校验和与表范围校验失败。</para></exception>
+    /// <exception cref="InvalidDataException">The file exceeds the 256 MiB metadata limit.
+    /// <para>文件超过 256 MiB 元数据上限。</para></exception>
     /// <example>
     /// <code>
     /// var dex = DexFile.Load("classes.dex");
@@ -130,22 +128,15 @@ public sealed class DexFile
         return Load(IO.AndroidMetadataReader.Read(stream));
     }
 
-    /// <summary>
-    /// Loads a DEX from a byte array.
-    /// <para>从字节数组加载 DEX。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete DEX image. The declared header file size must equal <c>data.Length</c>, and the declared
-    /// Adler-32 checksum must match the bytes from offset 12 to the end; the input is
-    /// treated as untrusted and every offset, count and length is bounds-checked before use.
-    /// <para>完整 DEX 镜像。头部声明的文件大小必须等于 <c>data.Length</c>，且头部声明的 Adler-32 校验和必须与
-    /// 偏移 12 至结尾的字节一致；输入按不可信处理，
-    /// 所有偏移、数量与长度在使用前均经过边界检查。</para>
-    /// </param>
-    /// <returns>The parsed model. Only little-endian DEX (endian tag 0x12345678) versions 035, 037,
-    /// 038, 039 and 040 are accepted. <para>解析后的模型。仅接受小端 DEX（字节序标记 0x12345678）的 035、037、038、039、040 版本。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="data"/> is null. <para><paramref name="data"/> 为 null。</para></exception>
-    /// <exception cref="DexException">The magic, version, endian tag, header size, file size, Adler-32 checksum or any table range is invalid. <para>魔数、版本、字节序标记、头部长度、文件大小、Adler-32 校验和或任一表范围非法。</para></exception>
+    /// <summary>Loads a DEX from a byte array.<para>从字节数组加载 DEX。</para></summary>
+    /// <param name="data">Complete DEX image. The declared header file size must equal <c>data.Length</c>, and the declared Adler-32 checksum must match the bytes from offset 12 to the end; the input is treated as untrusted and every offset, count and length is bounds-checked before use.
+    /// <para>完整 DEX 镜像。头部声明的文件大小必须等于 <c>data.Length</c>，且头部声明的 Adler-32 校验和必须与 偏移 12 至结尾的字节一致；输入按不可信处理， 所有偏移、数量与长度在使用前均经过边界检查。</para></param>
+    /// <returns>The parsed model. Only little-endian DEX (endian tag 0x12345678) versions 035, 037, 038, 039 and 040 are accepted.
+    /// <para>解析后的模型。仅接受小端 DEX（字节序标记 0x12345678）的 035、037、038、039、040 版本。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is null.
+    /// <para><paramref name="data"/> 为 null。</para></exception>
+    /// <exception cref="DexException">The magic, version, endian tag, header size, file size, Adler-32 checksum or any table range is invalid.
+    /// <para>魔数、版本、字节序标记、头部长度、文件大小、Adler-32 校验和或任一表范围非法。</para></exception>
     public static DexFile Load(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -284,23 +275,12 @@ public sealed class DexFile
         return FormatDescriptor(descriptor);
     }
 
-    /// <summary>
-    /// Formats a type descriptor string into a readable form.
-    /// <para>把类型描述符字符串格式化为可读形式。</para>
-    /// </summary>
-    /// <param name="descriptor">
-    /// JVM-style descriptor: leading <c>[</c> per array dimension, a class form
-    /// <c>Lpkg/Class;</c>, or a single-char primitive shorty. Never dereferenced past its own length.
-    /// <para>JVM 风格描述符：每维数组以一个前导 <c>[</c> 表示，类形式为 <c>Lpkg/Class;</c>，
-    /// 基本类型为单字符 shorty。解析不会越出其自身长度。</para>
-    /// </param>
-    /// <returns>
-    /// <c>"?"</c> for null/empty input; class descriptors with <c>/</c> replaced by <c>.</c> and the
-    /// <c>L…;</c> wrapper stripped; shorties mapped to names such as <c>int</c> or <c>void</c>; each
-    /// array dimension appends one trailing <c>[</c>; anything unrecognized is returned unchanged.
-    /// <para>null/空输入返回 <c>"?"</c>；类描述符去掉 <c>L…;</c> 包裹并把 <c>/</c> 替换为 <c>.</c>；
-    /// shorty 映射为 <c>int</c>、<c>void</c> 等名称；每一维数组追加一个尾部 <c>[</c>；无法识别的内容原样返回。</para>
-    /// </returns>
+    /// <summary>Formats a type descriptor string into a readable form.
+    /// <para>把类型描述符字符串格式化为可读形式。</para></summary>
+    /// <param name="descriptor">JVM-style descriptor: leading <c>[</c> per array dimension, a class form <c>Lpkg/Class;</c>, or a single-char primitive shorty. Never dereferenced past its own length.
+    /// <para>JVM 风格描述符：每维数组以一个前导 <c>[</c> 表示，类形式为 <c>Lpkg/Class;</c>， 基本类型为单字符 shorty。解析不会越出其自身长度。</para></param>
+    /// <returns><c>"?"</c> for null/empty input; class descriptors with <c>/</c> replaced by <c>.</c> and the <c>L…;</c> wrapper stripped; shorties mapped to names such as <c>int</c> or <c>void</c>; each array dimension appends one trailing <c>[</c>; anything unrecognized is returned unchanged.
+    /// <para>null/空输入返回 <c>"?"</c>；类描述符去掉 <c>L…;</c> 包裹并把 <c>/</c> 替换为 <c>.</c>； shorty 映射为 <c>int</c>、<c>void</c> 等名称；每一维数组追加一个尾部 <c>[</c>；无法识别的内容原样返回。</para></returns>
     public static string FormatDescriptor(string descriptor)
     {
         if (string.IsNullOrEmpty(descriptor)) return "?";

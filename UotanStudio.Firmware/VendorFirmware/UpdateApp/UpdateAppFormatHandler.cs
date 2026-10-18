@@ -68,20 +68,14 @@ internal sealed partial class UpdateAppFormatHandler : IFormatHandler, IRepackMe
         }
     }
 
-    /// <summary>
-    /// Reads the firmware metadata asynchronously.
-    /// <para>异步读取固件元数据。</para>
-    /// </summary>
+    /// <summary>Reads the firmware metadata asynchronously.<para>异步读取固件元数据。</para></summary>
     /// <param name="filePath">update.app package whose partition entries are enumerated.
     /// <para>待枚举分区块项的 update.app 包。</para></param>
-    /// <param name="cancellationToken">Accepted for interface uniformity; entry enumeration itself is
-    /// synchronous.
+    /// <param name="cancellationToken">Accepted for interface uniformity; entry enumeration itself is synchronous.
     /// <para>为接口一致性而保留；条目枚举本身是同步的。</para></param>
-    /// <returns>An <see cref="FirmwareOpResult"/> listing the entry names and reporting the entry count and header
-    /// generation flavour, or a failed result carrying the parse error message.
+    /// <returns>An <see cref="FirmwareOpResult"/> listing the entry names and reporting the entry count and header generation flavour, or a failed result carrying the parse error message.
     /// <para>返回列出条目名称、报告条目数与头部代际风格的 <see cref="FirmwareOpResult"/>，或携带解析错误信息的失败结果。</para></returns>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled inside
-    /// the enumeration.
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled inside the enumeration.
     /// <para>枚举过程中 <paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -105,33 +99,16 @@ internal sealed partial class UpdateAppFormatHandler : IFormatHandler, IRepackMe
         }
     }
 
-    /// <summary>
-    /// Extracts the firmware contents asynchronously.
-    /// <para>异步提取固件内容。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// update.app package to extract.
-    /// <para>待解包的 update.app 包。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Directory receiving the extracted partitions and, on success, the repack metadata file.
-    /// <para>接收解出分区以及成功后打包元数据文件的目录。</para>
-    /// </param>
-    /// <param name="options">
-    /// Extraction policy; <c>null</c> uses defaults. <c>SelectedEntries</c>, when set, restricts extraction to
-    /// those exact entry names, and <c>Overwrite</c> controls replacement of existing files.
-    /// <para>解包策略；为 <c>null</c> 时使用默认值。设置 <c>SelectedEntries</c> 时仅解出这些精确名称的条目，
-    /// <c>Overwrite</c> 决定是否替换已存在文件。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the extraction; cancellation is rethrown rather than converted to a failed result.
-    /// <para>取消解包；取消会向上抛出，而不是转换为失败结果。</para>
-    /// </param>
-    /// <returns>
-    /// An <see cref="FirmwareOpResult"/> reporting the extracted partition count, or a failed result carrying the
-    /// error message.
-    /// <para>返回报告解出分区数的 <see cref="FirmwareOpResult"/>，或携带错误信息的失败结果。</para>
-    /// </returns>
+    /// <summary>Extracts the firmware contents asynchronously.<para>异步提取固件内容。</para></summary>
+    /// <param name="filePath">update.app package to extract.<para>待解包的 update.app 包。</para></param>
+    /// <param name="outputDirectory">Directory receiving the extracted partitions and, on success, the repack metadata file.
+    /// <para>接收解出分区以及成功后打包元数据文件的目录。</para></param>
+    /// <param name="options">Extraction policy; <c>null</c> uses defaults. <c>SelectedEntries</c>, when set, restricts extraction to those exact entry names, and <c>Overwrite</c> controls replacement of existing files.
+    /// <para>解包策略；为 <c>null</c> 时使用默认值。设置 <c>SelectedEntries</c> 时仅解出这些精确名称的条目， <c>Overwrite</c> 决定是否替换已存在文件。</para></param>
+    /// <param name="cancellationToken">Cancels the extraction; cancellation is rethrown rather than converted to a failed result.
+    /// <para>取消解包；取消会向上抛出，而不是转换为失败结果。</para></param>
+    /// <returns>An <see cref="FirmwareOpResult"/> reporting the extracted partition count, or a failed result carrying the error message.
+    /// <para>返回报告解出分区数的 <see cref="FirmwareOpResult"/>，或携带错误信息的失败结果。</para></returns>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -153,19 +130,15 @@ internal sealed partial class UpdateAppFormatHandler : IFormatHandler, IRepackMe
         }
     }
 
-    /// <summary>
-    /// Packs a directory into an update.app container: a faithful restoration when the directory carries
-    /// captured <c>updateApp</c> repack metadata, otherwise a canonical unsigned container.
-    /// <para>将目录打包为 update.app 容器：目录带有已捕获的 <c>updateApp</c> 重打包元数据时按字节保真还原，否则生成标准无签名容器。</para>
-    /// </summary>
+    /// <summary>Packs a directory into an update.app container: a faithful restoration when the directory carries captured <c>updateApp</c> repack metadata, otherwise a canonical unsigned container.
+    /// <para>将目录打包为 update.app 容器：目录带有已捕获的 <c>updateApp</c> 重打包元数据时按字节保真还原，否则生成标准无签名容器。</para></summary>
     /// <param name="inputPath">Flat directory containing partition files; a trailing <c>.img</c> is removed from entry names.
     /// <para>包含分区文件的扁平目录；条目名称会去掉 <c>.img</c> 后缀。</para></param>
     /// <param name="outputPath">Destination package path, published atomically.
     /// <para>目标容器路径，以原子方式发布。</para></param>
     /// <param name="cancellationToken">Cancellation token observed during checksum and write passes.
     /// <para>在校验与写入过程中观察的取消令牌。</para></param>
-    /// <returns>A success result for the produced package, or a failed result for invalid input or a
-    /// faithful-repack CRC rejection.
+    /// <returns>A success result for the produced package, or a failed result for invalid input or a faithful-repack CRC rejection.
     /// <para>成功时返回生成容器的结果；输入无效或保真重打包被 CRC 拒绝时返回失败结果。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {

@@ -143,24 +143,12 @@ public sealed class ArchiveBrowser : IDisposable
         LinkName = entry.LinkName,
     };
 
-    /// <summary>
-    /// Recognizes archive extensions and compression extensions supported by the backend.
-    /// Extensions not claimed fall back to a bounded container-magic sniff (ZIP/RAR/7z), so renamed
-    /// or extension-less archives still open.
-    /// <para>识别后端支持的归档扩展名与压缩扩展名。未被声明的扩展名回退到有界的容器魔数嗅探
-    /// （ZIP/RAR/7z），因此被改名或无扩展名的归档仍可打开。</para>
-    /// </summary>
-    /// <param name="path">
-    /// File path to test; only its extension and first bytes are consulted, and an unreadable
-    /// file simply fails the magic check.
-    /// <para>待检测的文件路径；只读取其扩展名与起始字节，不可读的文件直接判定为魔数不匹配。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> when the extension claims a supported archive or compression format,
-    /// or the container magic matches; otherwise <see langword="false"/>.
-    /// <para>扩展名声明了受支持的归档或压缩格式、或容器魔数匹配时返回 <see langword="true"/>，
-    /// 否则返回 <see langword="false"/>。</para>
-    /// </returns>
+    /// <summary>Recognizes archive extensions and compression extensions supported by the backend. Extensions not claimed fall back to a bounded container-magic sniff (ZIP/RAR/7z), so renamed or extension-less archives still open.
+    /// <para>识别后端支持的归档扩展名与压缩扩展名。未被声明的扩展名回退到有界的容器魔数嗅探 （ZIP/RAR/7z），因此被改名或无扩展名的归档仍可打开。</para></summary>
+    /// <param name="path">File path to test; only its extension and first bytes are consulted, and an unreadable file simply fails the magic check.
+    /// <para>待检测的文件路径；只读取其扩展名与起始字节，不可读的文件直接判定为魔数不匹配。</para></param>
+    /// <returns><see langword="true"/> when the extension claims a supported archive or compression format, or the container magic matches; otherwise <see langword="false"/>.
+    /// <para>扩展名声明了受支持的归档或压缩格式、或容器魔数匹配时返回 <see langword="true"/>， 否则返回 <see langword="false"/>。</para></returns>
     public static bool SupportsPath(string path) => Path.GetExtension(path).ToLowerInvariant() is ".cpio" or ".tar"
         or ".zip" or ".apk" or ".rar" or ".7z" or ".arj" or ".ace" or ".arc"
         or ".lzw" or ".z"
@@ -215,41 +203,22 @@ public sealed class ArchiveBrowser : IDisposable
         _ => CompressionFormats.FromExtension(path)
     };
 
-    /// <summary>
-    /// Opens an archive, spooling at most one compression layer to a bounded temporary file.
-    /// <para>打开归档，至多将一层压缩数据中转写入有大小上限的临时文件。</para>
-    /// </summary>
-    /// <param name="path">
-    /// Existing file to open; it is read with share-read and the browser owns the resulting
-    /// source stream.
-    /// <para>要打开的既有文件；以共享读方式读取，打开后的源流由浏览器持有。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the initial open and member enumeration.
-    /// <para>取消初始打开与条目枚举。</para>
-    /// </param>
-    /// <param name="maximumExpandedBytes">
-    /// Ceiling for the spooled scratch file and, implicitly, the total size of the enumerated
-    /// members.
-    /// <para>中转临时文件的容量上限，同时约束枚举出的条目总大小。</para>
-    /// </param>
-    /// <returns>
-    /// An opened browser with the member list already enumerated.
-    /// <para>已打开且完成条目枚举的浏览器实例。</para>
-    /// </returns>
-    /// <exception cref="ArchiveCorruptedException">
-    /// The archive is malformed or unsupported, or a member or the whole directory exceeds the
-    /// browsing limits.
-    /// <para>归档损坏或不受支持，或单个条目与整体目录超出浏览上限。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// Decompressing the compression layer exceeds <paramref name="maximumExpandedBytes"/>.
-    /// <para>解压压缩层时超出 <paramref name="maximumExpandedBytes"/>。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已取消。</para>
-    /// </exception>
+    /// <summary>Opens an archive, spooling at most one compression layer to a bounded temporary file.
+    /// <para>打开归档，至多将一层压缩数据中转写入有大小上限的临时文件。</para></summary>
+    /// <param name="path">Existing file to open; it is read with share-read and the browser owns the resulting source stream.
+    /// <para>要打开的既有文件；以共享读方式读取，打开后的源流由浏览器持有。</para></param>
+    /// <param name="cancellationToken">Cancels the initial open and member enumeration.
+    /// <para>取消初始打开与条目枚举。</para></param>
+    /// <param name="maximumExpandedBytes">Ceiling for the spooled scratch file and, implicitly, the total size of the enumerated members.
+    /// <para>中转临时文件的容量上限，同时约束枚举出的条目总大小。</para></param>
+    /// <returns>An opened browser with the member list already enumerated.
+    /// <para>已打开且完成条目枚举的浏览器实例。</para></returns>
+    /// <exception cref="ArchiveCorruptedException">The archive is malformed or unsupported, or a member or the whole directory exceeds the browsing limits.
+    /// <para>归档损坏或不受支持，或单个条目与整体目录超出浏览上限。</para></exception>
+    /// <exception cref="IOException">Decompressing the compression layer exceeds <paramref name="maximumExpandedBytes"/>.
+    /// <para>解压压缩层时超出 <paramref name="maximumExpandedBytes"/>。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已取消。</para></exception>
     public static ArchiveBrowser Open(string path, CancellationToken cancellationToken = default,
         long maximumExpandedBytes = MaximumExpandedBytes)
     {
@@ -310,27 +279,16 @@ public sealed class ArchiveBrowser : IDisposable
         catch { source.Dispose(); throw; }
     }
 
-    /// <summary>
-    /// Extracts the selected member or directory subtree using the archive backend's safe writer.
-    /// <para>使用归档后端的安全写入器解出所选条目或目录子树。</para>
-    /// </summary>
-    /// <param name="relativePath">
-    /// Member path or directory prefix to extract; a value that normalizes to empty (for example
-    /// <c>.</c>) extracts every member.
-    /// <para>要解出的条目路径或目录前缀；规范化后为空（例如 <c>.</c>）时解出全部条目。</para>
-    /// </param>
-    /// <param name="destination">
-    /// Destination directory handed to the extractor, which confines every write beneath it.
-    /// <para>传给解包器的目标目录，所有写入都被约束在其内部。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels entry enumeration during extraction.
-    /// <para>取消解包期间的条目枚举。</para>
-    /// </param>
-    /// <exception cref="ArchiveCorruptedException">
-    /// <paramref name="relativePath"/> is absolute or contains traversal, drive, or NUL segments.
-    /// <para><paramref name="relativePath"/> 为绝对路径，或含上级回溯、盘符、NUL 等不安全片段。</para>
-    /// </exception>
+    /// <summary>Extracts the selected member or directory subtree using the archive backend's safe writer.
+    /// <para>使用归档后端的安全写入器解出所选条目或目录子树。</para></summary>
+    /// <param name="relativePath">Member path or directory prefix to extract; a value that normalizes to empty (for example <c>.</c>) extracts every member.
+    /// <para>要解出的条目路径或目录前缀；规范化后为空（例如 <c>.</c>）时解出全部条目。</para></param>
+    /// <param name="destination">Destination directory handed to the extractor, which confines every write beneath it.
+    /// <para>传给解包器的目标目录，所有写入都被约束在其内部。</para></param>
+    /// <param name="cancellationToken">Cancels entry enumeration during extraction.
+    /// <para>取消解包期间的条目枚举。</para></param>
+    /// <exception cref="ArchiveCorruptedException"><paramref name="relativePath"/> is absolute or contains traversal, drive, or NUL segments.
+    /// <para><paramref name="relativePath"/> 为绝对路径，或含上级回溯、盘符、NUL 等不安全片段。</para></exception>
     public void Extract(string relativePath, string destination, CancellationToken cancellationToken = default)
     {
         var selected = Normalize(relativePath);

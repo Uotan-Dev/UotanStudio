@@ -169,20 +169,11 @@ public sealed class ScrcpyServerService
     /// <summary>Returns the provisioned artifact, or the bundled jar when nothing valid is cached.
     /// <para>返回已供给的产物；缓存中没有有效文件时返回随包 jar。</para></summary>
     /// <remarks>
-    /// <para>
-    /// A provisioned jar is accepted only when its bytes still hash to the digest recorded at install
-    /// time, so a half-written or hand-edited cache file falls back to the bundled jar instead of
-    /// breaking every launch. The bundled jar is used without a digest match: a locally replaced jar
-    /// still starts, and the server itself reports the version mismatch on the device.
-    /// </para>
-    /// <para>
-    /// 已供给的 jar 只有在其字节仍能哈希到安装时记录的摘要时才被接受，因此写坏一半或被手工改过的缓存文件
-    /// 会回落到随包 jar，而不是让每次启动都失败。随包 jar 不做摘要匹配即使用：本地替换的 jar 仍然能启动，
-    /// 版本不一致由服务端在设备上自行上报。
-    /// </para>
-    /// </remarks>
-    /// <param name="cancellationToken">Cancels the digest read. <para>取消摘要读取。</para></param>
-    /// <returns>The jar to push and the version to launch it with. <para>要推送的 jar 及其启动版本。</para></returns>
+    /// <para> A provisioned jar is accepted only when its bytes still hash to the digest recorded at install time, so a half-written or hand-edited cache file falls back to the bundled jar instead of breaking every launch. The bundled jar is used without a digest match: a locally replaced jar still starts, and the server itself reports the version mismatch on the device. </para>
+    /// <para> 已供给的 jar 只有在其字节仍能哈希到安装时记录的摘要时才被接受，因此写坏一半或被手工改过的缓存文件 会回落到随包 jar，而不是让每次启动都失败。随包 jar 不做摘要匹配即使用：本地替换的 jar 仍然能启动， 版本不一致由服务端在设备上自行上报。 </para></remarks>
+    /// <param name="cancellationToken">Cancels the digest read.<para>取消摘要读取。</para></param>
+    /// <returns>The jar to push and the version to launch it with.
+    /// <para>要推送的 jar 及其启动版本。</para></returns>
     /// <exception cref="FileNotFoundException">Neither a valid provisioned jar nor a bundled jar exists.
     /// <para>既没有有效的已供给 jar，也没有随包 jar。</para></exception>
     public ScrcpyServerArtifact Resolve()
@@ -296,17 +287,16 @@ public sealed class ScrcpyServerService
 
     /// <summary>Downloads one released artifact and commits it after length and digest verification.
     /// <para>下载一个已发布产物，并在长度与摘要校验后提交。</para></summary>
-    /// <param name="release">Release description to fetch. <para>要获取的版本描述。</para></param>
+    /// <param name="release">Release description to fetch.<para>要获取的版本描述。</para></param>
     /// <param name="cancellationToken">Cancels the transfer; the staged file is removed before the exception escapes.
     /// <para>取消传输；异常抛出前会先删除暂存文件。</para></param>
-    /// <returns>The provisioned artifact. <para>已供给的产物。</para></returns>
+    /// <returns>The provisioned artifact.<para>已供给的产物。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="release"/> is <see langword="null"/>.
     /// <para><paramref name="release"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">
-    /// The delivered file does not have the published length or SHA-256.
-    /// <para>交付的文件与公布的长度或 SHA-256 不符。</para>
-    /// </exception>
-    /// <exception cref="IOException">The file could not be staged or committed. <para>无法暂存或提交该文件。</para></exception>
+    /// <exception cref="InvalidDataException">The delivered file does not have the published length or SHA-256.
+    /// <para>交付的文件与公布的长度或 SHA-256 不符。</para></exception>
+    /// <exception cref="IOException">The file could not be staged or committed.
+    /// <para>无法暂存或提交该文件。</para></exception>
     public async Task<ScrcpyServerArtifact> InstallAsync(ScrcpyServerRelease release, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(release);
@@ -366,17 +356,11 @@ public sealed class ScrcpyServerService
 
     /// <summary>Refreshes the cache in the background when the setting allows it.
     /// <para>在设置允许时于后台更新缓存。</para></summary>
-    /// <remarks>
-    /// <para>
-    /// Failures are reported through <see cref="LogService"/> only: a launch must never depend on a
-    /// reachable release feed, and the bundled jar keeps mirroring working meanwhile.
-    /// </para>
-    /// <para>
-    /// 失败只经由 <see cref="LogService"/> 上报：启动绝不能依赖可达的 Release 源，期间随包 jar 仍可投屏。
-    /// </para>
-    /// </remarks>
-    /// <param name="startupDelay">Delay before the first request. <para>首次请求前的延迟。</para></param>
-    /// <param name="cancellationToken">Cancels the wait and the update. <para>取消等待与更新。</para></param>
+    /// <remarks> <para> Failures are reported through <see cref="LogService"/> only: a launch must
+    /// never depend on a reachable release feed, and the bundled jar keeps mirroring working meanwhile.
+    /// </para><para> 失败只经由 <see cref="LogService"/> 上报：启动绝不能依赖可达的 Release 源，期间随包 jar 仍可投屏。 </para> </remarks>
+    /// <param name="startupDelay">Delay before the first request.<para>首次请求前的延迟。</para></param>
+    /// <param name="cancellationToken">Cancels the wait and the update.<para>取消等待与更新。</para></param>
     /// <returns>A task that completes once the check round has finished or been skipped.
     /// <para>检查轮次完成或被跳过后完成的任务。</para></returns>
     public async Task RunBackgroundCheckAsync(TimeSpan startupDelay, CancellationToken cancellationToken = default)

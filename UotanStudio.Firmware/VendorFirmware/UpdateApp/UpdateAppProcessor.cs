@@ -93,24 +93,19 @@ internal static class UpdateAppProcessor
     /// <value>A span over the same bytes as <see cref="Magic"/>. <para>与 <see cref="Magic"/> 指向相同字节的跨度。</para></value>
     public static ReadOnlySpan<byte> MagicBytes => Magic;
 
-    /// <summary>
-    /// Enumerates all entries within an update.app file.
-    /// <para>枚举 update.app 中的所有条目。</para>
-    /// </summary>
+    /// <summary>Enumerates all entries within an update.app file.
+    /// <para>枚举 update.app 中的所有条目。</para></summary>
     /// <param name="source">Path to the container; scanning stops at the last position where a 4-byte signature can start.
     /// <para>容器路径；扫描在最后一个可容纳 4 字节签名的位置之后停止。</para></param>
-    /// <returns>
-    /// Named entries in file order, lazily read from a stream the iterator opens and owns. A missing file yields an empty sequence;
-    /// a signature whose header or payload exceeds the file bounds aborts enumeration, and 4-byte blocks without the signature are skipped.
-    /// <para>按文件顺序惰性返回命名条目，迭代器自行打开并持有底层流。文件不存在时返回空序列；头部或载荷超出文件边界的签名会中断枚举，不含签名的 4 字节块被跳过。</para>
-    /// </returns>
+    /// <returns>Named entries in file order, lazily read from a stream the iterator opens and owns. A missing file yields an empty sequence; a signature whose header or payload exceeds the file bounds aborts enumeration, and 4-byte blocks without the signature are skipped.
+    /// <para>按文件顺序惰性返回命名条目，迭代器自行打开并持有底层流。文件不存在时返回空序列；头部或载荷超出文件边界的签名会中断枚举，不含签名的 4 字节块被跳过。</para></returns>
     /// <exception cref="InvalidDataException">An entry header is shorter than 76 bytes, or a header or payload range lies outside the file.
     /// <para>条目头部短于 76 字节，或头部/载荷范围超出文件。</para></exception>
-    /// <exception cref="IOException">The container cannot be read. <para>无法读取容器。</para></exception>
+    /// <exception cref="IOException">The container cannot be read.<para>无法读取容器。</para></exception>
     /// <example>
     /// <code>
     /// foreach (var entry in UpdateAppProcessor.GetEntries(@"F:\OTA\update.app"))
-    ///     Console.WriteLine(entry.Name + " " + entry.DataOffset + " " + entry.FileSize);
+    /// Console.WriteLine(entry.Name + " " + entry.DataOffset + " " + entry.FileSize);
     /// </code>
     /// </example>
     public static IEnumerable<UpdateAppEntry> GetEntries(string source)
@@ -122,22 +117,15 @@ internal static class UpdateAppProcessor
         }
     }
 
-    /// <summary>
-    /// Enumerates every framed entry, including anonymous ones whose cleaned name is empty, with the verbatim raw header bytes.
-    /// Used by the faithful repack capture to preserve entry order and unknown header fields byte for byte.
-    /// <para>枚举全部帧区域条目（含清理后名称为空的匿名条目）并附带逐字节原始头部。供保真重打包捕获流程按条目顺序与未知头部字段逐字节保留。</para>
-    /// </summary>
-    /// <param name="source">
-    /// Path to the container; a missing file yields an empty sequence.
-    /// <para>容器路径；文件不存在时返回空序列。</para>
-    /// </param>
-    /// <returns>
-    /// All framed entries in file order, each with its raw header; the same bounds and checksum rules as <see cref="GetEntries"/> apply.
-    /// <para>按文件顺序返回全部帧区域条目及其原始头部；与 <see cref="GetEntries"/> 应用相同的边界与校验规则。</para>
-    /// </returns>
+    /// <summary>Enumerates every framed entry, including anonymous ones whose cleaned name is empty, with the verbatim raw header bytes. Used by the faithful repack capture to preserve entry order and unknown header fields byte for byte.
+    /// <para>枚举全部帧区域条目（含清理后名称为空的匿名条目）并附带逐字节原始头部。供保真重打包捕获流程按条目顺序与未知头部字段逐字节保留。</para></summary>
+    /// <param name="source">Path to the container; a missing file yields an empty sequence.
+    /// <para>容器路径；文件不存在时返回空序列。</para></param>
+    /// <returns>All framed entries in file order, each with its raw header; the same bounds and checksum rules as <see cref="GetEntries"/> apply.
+    /// <para>按文件顺序返回全部帧区域条目及其原始头部；与 <see cref="GetEntries"/> 应用相同的边界与校验规则。</para></returns>
     /// <exception cref="InvalidDataException">An entry header is shorter than 76 bytes, a checksum table is inconsistent, a header CRC fails, or a header or payload range lies outside the file.
     /// <para>条目头部短于 76 字节、校验表不一致、头部 CRC 失败，或头部/载荷范围超出文件。</para></exception>
-    /// <exception cref="IOException">The container cannot be read. <para>无法读取容器。</para></exception>
+    /// <exception cref="IOException">The container cannot be read.<para>无法读取容器。</para></exception>
     public static IEnumerable<UpdateAppRawEntry> GetRawEntries(string source)
     {
         if (!File.Exists(source))
@@ -228,37 +216,22 @@ internal static class UpdateAppProcessor
         }
     }
 
-    /// <summary>
-    /// Classifies a container by the header generation used by its named entries.
-    /// <para>按命名条目使用的头部代际对容器分类。</para>
-    /// </summary>
-    /// <param name="source">
-    /// Path to the container; a missing or entry-free container reports <see cref="UpdateAppFlavor.NotApplicable"/>.
-    /// <para>容器路径；文件不存在或无命名条目时报告 <see cref="UpdateAppFlavor.NotApplicable"/>。</para>
-    /// </param>
-    /// <returns>
-    /// The detected <see cref="UpdateAppFlavor"/> for the named entries of the container.
-    /// <para>容器命名条目对应的 <see cref="UpdateAppFlavor"/> 检测结果。</para>
-    /// </returns>
+    /// <summary>Classifies a container by the header generation used by its named entries.
+    /// <para>按命名条目使用的头部代际对容器分类。</para></summary>
+    /// <param name="source">Path to the container; a missing or entry-free container reports <see cref="UpdateAppFlavor.NotApplicable"/>.
+    /// <para>容器路径；文件不存在或无命名条目时报告 <see cref="UpdateAppFlavor.NotApplicable"/>。</para></param>
+    /// <returns>The detected <see cref="UpdateAppFlavor"/> for the named entries of the container.
+    /// <para>容器命名条目对应的 <see cref="UpdateAppFlavor"/> 检测结果。</para></returns>
     /// <exception cref="InvalidDataException">The container fails the same framing checks as <see cref="GetEntries"/>.
     /// <para>容器未通过与 <see cref="GetEntries"/> 相同的帧结构检查。</para></exception>
     public static UpdateAppFlavor DetectFlavor(string source) => DetectFlavor(GetEntries(source));
 
-    /// <summary>
-    /// Classifies already-parsed entries by header generation: canonical Huawei headers carry a non-zero CRC16 block size,
-    /// legacy short headers do not.
-    /// <para>按头部代际分类已解析条目：华为标准头部带有非零 CRC16 分块大小，旧式短头部没有。</para>
-    /// </summary>
-    /// <param name="entries">
-    /// Named entries to classify; an empty sequence yields <see cref="UpdateAppFlavor.NotApplicable"/>.
-    /// <para>待分类的命名条目；空序列返回 <see cref="UpdateAppFlavor.NotApplicable"/>。</para>
-    /// </param>
-    /// <returns>
-    /// <see cref="UpdateAppFlavor.HuaweiVerified"/> when every entry is CRC-table backed, <see cref="UpdateAppFlavor.UnisocLegacy"/>
-    /// when none is, <see cref="UpdateAppFlavor.Mixed"/> otherwise.
-    /// <para>全部条目带 CRC 表时为 <see cref="UpdateAppFlavor.HuaweiVerified"/>，全部不带时为 <see cref="UpdateAppFlavor.UnisocLegacy"/>，
-    /// 其余为 <see cref="UpdateAppFlavor.Mixed"/>。</para>
-    /// </returns>
+    /// <summary>Classifies already-parsed entries by header generation: canonical Huawei headers carry a non-zero CRC16 block size, legacy short headers do not.
+    /// <para>按头部代际分类已解析条目：华为标准头部带有非零 CRC16 分块大小，旧式短头部没有。</para></summary>
+    /// <param name="entries">Named entries to classify; an empty sequence yields <see cref="UpdateAppFlavor.NotApplicable"/>.
+    /// <para>待分类的命名条目；空序列返回 <see cref="UpdateAppFlavor.NotApplicable"/>。</para></param>
+    /// <returns><see cref="UpdateAppFlavor.HuaweiVerified"/> when every entry is CRC-table backed, <see cref="UpdateAppFlavor.UnisocLegacy"/> when none is, <see cref="UpdateAppFlavor.Mixed"/> otherwise.
+    /// <para>全部条目带 CRC 表时为 <see cref="UpdateAppFlavor.HuaweiVerified"/>，全部不带时为 <see cref="UpdateAppFlavor.UnisocLegacy"/>， 其余为 <see cref="UpdateAppFlavor.Mixed"/>。</para></returns>
     public static UpdateAppFlavor DetectFlavor(IEnumerable<UpdateAppEntry> entries)
     {
         ArgumentNullException.ThrowIfNull(entries);

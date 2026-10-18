@@ -57,33 +57,16 @@ internal sealed class SonySinFormatHandler : IReadonlyFormatHandler
         }
     }
 
-    /// <summary>
-    /// Parses the SIN container end to end and reports its segment table without writing any output.
-    /// <para>完整解析 SIN 容器并报告段表，不写出任何文件。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// SIN image to parse. All size fields are big-endian; versions 1 and 2 derive the data region from the
-    /// stream length, version 3 reads it from the header.
-    /// <para>待解析的 SIN 镜像。所有长度字段为大端序；v1/v2 的数据区长度由流长度推得，v3 从头部读取。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked while walking the GPTP segment table; cancellation is rethrown.
-    /// <para>在遍历 GPTP 段表时检查；取消时向上抛出。</para>
-    /// </param>
-    /// <returns>
-    /// An <see cref="FirmwareOpResult"/> whose entries are named <c>segment-NNNN.type</c> and whose metadata
-    /// reports version, header and data sizes, the MMCF container, GPTP length and UUID, segment count and the
-    /// total reassembled output size; parse failures return a failed result carrying the message. Parsing itself
-    /// rejects more than 65,536 segments, per-segment packed sizes above 16 GiB, segment records or data ranges
-    /// outside the file, overlapping output ranges, and unknown segment types.
-    /// <para>返回的 <see cref="FirmwareOpResult"/> 条目命名为 <c>segment-NNNN.type</c>；元数据包含版本、头部与数据
-    /// 长度、MMCF 容器、GPTP 长度与 UUID、段数量以及重组后的总输出大小；解析失败返回携带错误信息的失败结果。解析过程会
-    /// 拒绝超过 65,536 个段、单段压缩长度超过 16 GiB、段记录或数据范围越界、输出区间重叠以及未知段类型。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signalled.
-    /// <para><paramref name="cancellationToken"/> 被触发。</para>
-    /// </exception>
+    /// <summary>Parses the SIN container end to end and reports its segment table without writing any output.
+    /// <para>完整解析 SIN 容器并报告段表，不写出任何文件。</para></summary>
+    /// <param name="filePath">SIN image to parse. All size fields are big-endian; versions 1 and 2 derive the data region from the stream length, version 3 reads it from the header.
+    /// <para>待解析的 SIN 镜像。所有长度字段为大端序；v1/v2 的数据区长度由流长度推得，v3 从头部读取。</para></param>
+    /// <param name="cancellationToken">Checked while walking the GPTP segment table; cancellation is rethrown.
+    /// <para>在遍历 GPTP 段表时检查；取消时向上抛出。</para></param>
+    /// <returns>An <see cref="FirmwareOpResult"/> whose entries are named <c>segment-NNNN.type</c> and whose metadata reports version, header and data sizes, the MMCF container, GPTP length and UUID, segment count and the total reassembled output size; parse failures return a failed result carrying the message. Parsing itself rejects more than 65,536 segments, per-segment packed sizes above 16 GiB, segment records or data ranges outside the file, overlapping output ranges, and unknown segment types.
+    /// <para>返回的 <see cref="FirmwareOpResult"/> 条目命名为 <c>segment-NNNN.type</c>；元数据包含版本、头部与数据 长度、MMCF 容器、GPTP 长度与 UUID、段数量以及重组后的总输出大小；解析失败返回携带错误信息的失败结果。解析过程会 拒绝超过 65,536 个段、单段压缩长度超过 16 GiB、段记录或数据范围越界、输出区间重叠以及未知段类型。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public async Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -114,34 +97,17 @@ internal sealed class SonySinFormatHandler : IReadonlyFormatHandler
         }
     }
 
-    /// <summary>
-    /// Reassembles the Sony SIN image into a single raw image file.
-    /// <para>把 Sony SIN 镜像重组为单个原始镜像文件。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// SIN image to unpack.
-    /// <para>待解包的 SIN 镜像。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Directory receiving the output image, whose name is the input file name with an <c>.img</c> extension.
-    /// <para>接收输出镜像的目录；输出名为输入文件名改带 <c>.img</c> 扩展名。</para>
-    /// </param>
-    /// <param name="options">
-    /// Extraction policy; <c>null</c> uses defaults. <c>MaximumOutputBytes</c> caps the total reassembled size
-    /// and <c>Overwrite</c> controls whether an existing output image is replaced. The output is staged in a
-    /// temporary file and moved into place only after the full write.
-    /// <para>解包策略；为 <c>null</c> 时使用默认值。<c>MaximumOutputBytes</c> 限制重组后的总长度，
-    /// <c>Overwrite</c> 决定是否替换已存在的输出镜像。输出先写入临时文件，完整写出后才移动到目标位置。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked between segments and honored by all reads, writes and LZ4 decoding; cancellation is rethrown.
-    /// <para>在段之间检查，并由所有读取、写入与 LZ4 解码遵守；取消时向上抛出。</para>
-    /// </param>
-    /// <returns>
-    /// An <see cref="FirmwareOpResult"/> reporting the segment count and output name, or a failed result carrying
-    /// the parse, budget or decode error message.
-    /// <para>返回报告段数与输出名的 <see cref="FirmwareOpResult"/>，或携带解析、预算或解码错误信息的失败结果。</para>
-    /// </returns>
+    /// <summary>Reassembles the Sony SIN image into a single raw image file.
+    /// <para>把 Sony SIN 镜像重组为单个原始镜像文件。</para></summary>
+    /// <param name="filePath">SIN image to unpack.<para>待解包的 SIN 镜像。</para></param>
+    /// <param name="outputDirectory">Directory receiving the output image, whose name is the input file name with an <c>.img</c> extension.
+    /// <para>接收输出镜像的目录；输出名为输入文件名改带 <c>.img</c> 扩展名。</para></param>
+    /// <param name="options">Extraction policy; <c>null</c> uses defaults. <c>MaximumOutputBytes</c> caps the total reassembled size and <c>Overwrite</c> controls whether an existing output image is replaced. The output is staged in a temporary file and moved into place only after the full write.
+    /// <para>解包策略；为 <c>null</c> 时使用默认值。<c>MaximumOutputBytes</c> 限制重组后的总长度， <c>Overwrite</c> 决定是否替换已存在的输出镜像。输出先写入临时文件，完整写出后才移动到目标位置。</para></param>
+    /// <param name="cancellationToken">Checked between segments and honored by all reads, writes and LZ4 decoding; cancellation is rethrown.
+    /// <para>在段之间检查，并由所有读取、写入与 LZ4 解码遵守；取消时向上抛出。</para></param>
+    /// <returns>An <see cref="FirmwareOpResult"/> reporting the segment count and output name, or a failed result carrying the parse, budget or decode error message.
+    /// <para>返回报告段数与输出名的 <see cref="FirmwareOpResult"/>，或携带解析、预算或解码错误信息的失败结果。</para></returns>
     public async Task<FirmwareOpResult> UnpackAsync(
         string filePath,
         string outputDirectory,

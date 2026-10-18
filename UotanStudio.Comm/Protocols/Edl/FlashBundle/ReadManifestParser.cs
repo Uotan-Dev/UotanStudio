@@ -69,15 +69,14 @@ public static class ReadManifestParser
         }
     }
 
-    /// <summary>
-    /// Asynchronously parses a read manifest XML file from the specified path.
-    /// <para>从指定路径异步解析 read 清单 XML 文件。</para>
-    /// </summary>
-    /// <param name="filePath">The path to the read manifest XML file. <para>read 清单 XML 文件路径。</para></param>
-    /// <param name="cancellationToken">A token observed while the work item is queued. <para>在工作项排队阶段
-    /// 被观察的令牌。</para></param>
-    /// <returns>A task whose result contains the parsed <see cref="ReadManifestEntry"/> objects. <para>任务结果
-    /// 包含解析出的 <see cref="ReadManifestEntry"/> 对象。</para></returns>
+    /// <summary>Asynchronously parses a read manifest XML file from the specified path.
+    /// <para>从指定路径异步解析 read 清单 XML 文件。</para></summary>
+    /// <param name="filePath">The path to the read manifest XML file.
+    /// <para>read 清单 XML 文件路径。</para></param>
+    /// <param name="cancellationToken">A token observed while the work item is queued.
+    /// <para>在工作项排队阶段 被观察的令牌。</para></param>
+    /// <returns>A task whose result contains the parsed <see cref="ReadManifestEntry"/> objects.
+    /// <para>任务结果 包含解析出的 <see cref="ReadManifestEntry"/> 对象。</para></returns>
     /// <exception cref="EdlException">The path is empty or whitespace, or the file cannot be loaded or parsed.
     /// <para>路径为空白字符串，或文件无法加载或解析。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled while the work item was queued.

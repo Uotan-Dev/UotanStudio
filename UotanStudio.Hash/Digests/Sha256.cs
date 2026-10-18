@@ -30,23 +30,14 @@ public static class Sha256
     /// </returns>
     public static byte[] ComputeHash(ReadOnlySpan<byte> data) => SHA256.HashData(data);
 
-    /// <summary>
-    /// Computes the SHA-256 of the data into a caller-owned buffer.
-    /// <para>把数据的 SHA-256 计算到调用方拥有的缓冲区。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Bytes to digest. <para>待摘要的字节。</para>
-    /// </param>
-    /// <param name="destination">
-    /// Buffer receiving the digest; it must be at least <see cref="HashSizeInBytes"/> long.
-    /// <para>接收摘要的缓冲区；长度不得小于 <see cref="HashSizeInBytes"/>。</para>
-    /// </param>
-    /// <returns>
-    /// The number of bytes written. <para>写入的字节数。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="destination"/> is too short to hold the digest. <para><paramref name="destination"/> 短于摘要长度。</para>
-    /// </exception>
+    /// <summary>Computes the SHA-256 of the data into a caller-owned buffer.
+    /// <para>把数据的 SHA-256 计算到调用方拥有的缓冲区。</para></summary>
+    /// <param name="data">Bytes to digest.<para>待摘要的字节。</para></param>
+    /// <param name="destination">Buffer receiving the digest; it must be at least <see cref="HashSizeInBytes"/> long.
+    /// <para>接收摘要的缓冲区；长度不得小于 <see cref="HashSizeInBytes"/>。</para></param>
+    /// <returns>The number of bytes written.<para>写入的字节数。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="destination"/> is too short to hold the digest.
+    /// <para><paramref name="destination"/> 短于摘要长度。</para></exception>
     public static int ComputeHash(ReadOnlySpan<byte> data, Span<byte> destination) => SHA256.HashData(data, destination);
 
     /// <summary>
@@ -61,22 +52,13 @@ public static class Sha256
     /// </returns>
     public static string ComputeHexLower(ReadOnlySpan<byte> data) => Convert.ToHexStringLower(SHA256.HashData(data));
 
-    /// <summary>
-    /// Computes the SHA-256 of a stream without buffering the whole content.
-    /// <para>对流计算 SHA-256，不缓冲整个内容。</para>
-    /// </summary>
-    /// <param name="source">
-    /// Stream read to the end; it is left open. <para>读取到末尾的流；保持打开。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the read. <para>取消读取。</para>
-    /// </param>
-    /// <returns>
-    /// A task yielding the 32-byte digest. <para>产出 32 字节摘要的任务。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// Cancellation was requested. <para>请求了取消。</para>
-    /// </exception>
+    /// <summary>Computes the SHA-256 of a stream without buffering the whole content.
+    /// <para>对流计算 SHA-256，不缓冲整个内容。</para></summary>
+    /// <param name="source">Stream read to the end; it is left open.<para>读取到末尾的流；保持打开。</para></param>
+    /// <param name="cancellationToken">Cancels the read.<para>取消读取。</para></param>
+    /// <returns>A task yielding the 32-byte digest.<para>产出 32 字节摘要的任务。</para></returns>
+    /// <exception cref="OperationCanceledException">Cancellation was requested.
+    /// <para>请求了取消。</para></exception>
     public static ValueTask<byte[]> ComputeHashAsync(Stream source, CancellationToken cancellationToken = default) =>
         SHA256.HashDataAsync(source, cancellationToken);
 

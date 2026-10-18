@@ -22,27 +22,16 @@ public static class RockchipPacker
 
     private static readonly byte[] ZeroChunk = new byte[64 * 1024];
 
-    /// <summary>
-    /// Packs the source directory into an RKAF or RKFW container using default options.
-    /// <para>使用默认选项将源目录打包为 RKAF 或 RKFW 容器。</para>
-    /// </summary>
-    /// <param name="sourceDirectory">
-    /// Directory holding the files to pack.
-    /// <para>存放待打包文件的目录。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination container path; the result is staged in a temporary file and moved into place only after a
-    /// complete write, so a failed run keeps any pre-existing output.
-    /// <para>目标容器路径；结果先写入临时文件，完整写出后才移动到目标位置，失败的打包会保留已有输出。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the packing; cancellation propagates as <see cref="OperationCanceledException"/>.
-    /// <para>取消打包；取消时抛出 <see cref="OperationCanceledException"/>。</para>
-    /// </param>
-    /// <returns>
-    /// A task that completes once the container is fully written.
-    /// <para>容器完整写出后完成的任务。</para>
-    /// </returns>
+    /// <summary>Packs the source directory into an RKAF or RKFW container using default options.
+    /// <para>使用默认选项将源目录打包为 RKAF 或 RKFW 容器。</para></summary>
+    /// <param name="sourceDirectory">Directory holding the files to pack.
+    /// <para>存放待打包文件的目录。</para></param>
+    /// <param name="outputPath">Destination container path; the result is staged in a temporary file and moved into place only after a complete write, so a failed run keeps any pre-existing output.
+    /// <para>目标容器路径；结果先写入临时文件，完整写出后才移动到目标位置，失败的打包会保留已有输出。</para></param>
+    /// <param name="cancellationToken">Cancels the packing; cancellation propagates as <see cref="OperationCanceledException"/>.
+    /// <para>取消打包；取消时抛出 <see cref="OperationCanceledException"/>。</para></param>
+    /// <returns>A task that completes once the container is fully written.
+    /// <para>容器完整写出后完成的任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="sourceDirectory"/> or <paramref name="outputPath"/> is <see langword="null"/>.
     /// <para><paramref name="sourceDirectory"/> 或 <paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="sourceDirectory"/> or <paramref name="outputPath"/> is blank.
@@ -55,46 +44,26 @@ public static class RockchipPacker
         CancellationToken cancellationToken = default)
         => PackAsync(sourceDirectory, outputPath, new RockchipPackOptions(), cancellationToken);
 
-    /// <summary>
-    /// Packs the source directory into a container, selecting RKFW when it contains
-    /// <c>embedded-update.img</c> and RKAF otherwise.
-    /// <para>将源目录打包为容器：包含 <c>embedded-update.img</c> 时选择 RKFW，否则选择 RKAF。</para>
-    /// </summary>
-    /// <param name="sourceDirectory">
-    /// Directory holding the files to pack; for RKFW it must contain <c>BOOT</c> or <c>LDR</c> plus
-    /// <c>embedded-update.img</c>, for RKAF between 1 and 16 entries listed directly or via
-    /// <c>package-file</c>.
-    /// <para>待打包文件所在目录：RKFW 需包含 <c>BOOT</c> 或 <c>LDR</c> 以及 <c>embedded-update.img</c>；
-    /// RKAF 需要 1 到 16 个条目，直接枚举或由 <c>package-file</c> 列出。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination container path; the result is staged in a temporary file and moved into place only after a
-    /// complete write, so a failed run keeps any pre-existing output.
-    /// <para>目标容器路径；结果先写入临时文件，完整写出后才移动到目标位置，失败的打包会保留已有输出。</para>
-    /// </param>
-    /// <param name="options">
-    /// Header identity, version, timestamp and template-reuse settings; must not be <see langword="null"/>.
-    /// <para>头部标识、版本、时间戳与模板复用设置；不得为 <see langword="null"/>。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the packing; cancellation propagates as <see cref="OperationCanceledException"/>.
-    /// <para>取消打包；取消时抛出 <see cref="OperationCanceledException"/>。</para>
-    /// </param>
-    /// <returns>
-    /// A task that completes once the container is fully written and its trailing checksum or MD5 digest is stored.
-    /// <para>容器完整写出并保存末尾校验和或 MD5 摘要后完成的任务。</para>
-    /// </returns>
+    /// <summary>Packs the source directory into a container, selecting RKFW when it contains <c>embedded-update.img</c> and RKAF otherwise.
+    /// <para>将源目录打包为容器：包含 <c>embedded-update.img</c> 时选择 RKFW，否则选择 RKAF。</para></summary>
+    /// <param name="sourceDirectory">Directory holding the files to pack; for RKFW it must contain <c>BOOT</c> or <c>LDR</c> plus <c>embedded-update.img</c>, for RKAF between 1 and 16 entries listed directly or via <c>package-file</c>.
+    /// <para>待打包文件所在目录：RKFW 需包含 <c>BOOT</c> 或 <c>LDR</c> 以及 <c>embedded-update.img</c>； RKAF 需要 1 到 16 个条目，直接枚举或由 <c>package-file</c> 列出。</para></param>
+    /// <param name="outputPath">Destination container path; the result is staged in a temporary file and moved into place only after a complete write, so a failed run keeps any pre-existing output.
+    /// <para>目标容器路径；结果先写入临时文件，完整写出后才移动到目标位置，失败的打包会保留已有输出。</para></param>
+    /// <param name="options">Header identity, version, timestamp and template-reuse settings; must not be <see langword="null"/>.
+    /// <para>头部标识、版本、时间戳与模板复用设置；不得为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Cancels the packing; cancellation propagates as <see cref="OperationCanceledException"/>.
+    /// <para>取消打包；取消时抛出 <see cref="OperationCanceledException"/>。</para></param>
+    /// <returns>A task that completes once the container is fully written and its trailing checksum or MD5 digest is stored.
+    /// <para>容器完整写出并保存末尾校验和或 MD5 摘要后完成的任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="sourceDirectory"/>, <paramref name="outputPath"/> or <paramref name="options"/> is <see langword="null"/>.
     /// <para><paramref name="sourceDirectory"/>、<paramref name="outputPath"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="sourceDirectory"/> or <paramref name="outputPath"/> is blank.
     /// <para><paramref name="sourceDirectory"/> 或 <paramref name="outputPath"/> 为空白。</para></exception>
     /// <exception cref="DirectoryNotFoundException"><paramref name="sourceDirectory"/> does not exist.
     /// <para><paramref name="sourceDirectory"/> 不存在。</para></exception>
-    /// <exception cref="InvalidDataException">The inputs violate the container limits: missing or wrong loader/image
-    /// magic, an unreadable or mismatched header template, more than 16 or zero RKAF entries, a 32-bit field
-    /// overflow, an unsupported chip family, or a malformed version, model, manufacturer or entry name.
-    /// <para>输入违反容器限制：引导加载器/镜像魔数缺失或错误、头部模板不可读或魔数不符、RKAF 条目数为 0 或超过
-    /// 16、32 位字段溢出、不支持的芯片系列，或版本、机型、厂商、条目名称格式错误。</para></exception>
+    /// <exception cref="InvalidDataException">The inputs violate the container limits: missing or wrong loader/image magic, an unreadable or mismatched header template, more than 16 or zero RKAF entries, a 32-bit field overflow, an unsupported chip family, or a malformed version, model, manufacturer or entry name.
+    /// <para>输入违反容器限制：引导加载器/镜像魔数缺失或错误、头部模板不可读或魔数不符、RKAF 条目数为 0 或超过 16、32 位字段溢出、不支持的芯片系列，或版本、机型、厂商、条目名称格式错误。</para></exception>
     /// <exception cref="FileNotFoundException">A path referenced by <c>package-file</c> does not exist on disk.
     /// <para><c>package-file</c> 引用的路径在磁盘上不存在。</para></exception>
     /// <exception cref="EndOfStreamException">A source file shrank below its planned length while being copied.

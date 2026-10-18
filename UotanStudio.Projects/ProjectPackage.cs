@@ -16,57 +16,29 @@ public static class ProjectPackage
     /// </summary>
     private static readonly SearchValues<char> InvalidSegmentChars = SearchValues.Create(['<', '>', '"', '|', '?', '*']);
 
-    /// <summary>
-    /// Extracts into a new destination directory and returns its solution path. Existing destinations are never replaced.
-    /// <para>解压到一个新的目标目录并返回其解决方案路径。已存在的目标目录不会被替换。</para>
-    /// </summary>
-    /// <param name="archivePath">
-    /// Path of the ZIP package to open for reading; the file itself is never modified.
-    /// <para>要打开读取的 ZIP 包路径；该文件本身不会被修改。</para>
-    /// </param>
-    /// <param name="destinationDirectory">
-    /// Not-yet-existing directory that receives the extracted tree; it is created atomically by renaming
-    /// a private <c>.import-</c> sibling once every check passes.
-    /// <para>接收解压目录树的尚不存在的目录；在所有校验通过后，由私有的 <c>.import-</c> 同级目录重命名而来，原子地创建。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels between entry copies and before publication; a cancelled or failed import deletes the
-    /// temporary tree and leaves the destination untouched.
-    /// <para>在条目拷贝之间与发布之前取消；已取消或失败的导入会删除临时目录树，并保持目标目录不变。</para>
-    /// </param>
-    /// <returns>
-    /// Full path of the single <c>.uotan</c> solution file inside <paramref name="destinationDirectory"/>.
-    /// <para><paramref name="destinationDirectory"/> 内唯一 <c>.uotan</c> 解决方案文件的完整路径。</para>
-    /// </returns>
+    /// <summary>Extracts into a new destination directory and returns its solution path. Existing destinations are never replaced.
+    /// <para>解压到一个新的目标目录并返回其解决方案路径。已存在的目标目录不会被替换。</para></summary>
+    /// <param name="archivePath">Path of the ZIP package to open for reading; the file itself is never modified.
+    /// <para>要打开读取的 ZIP 包路径；该文件本身不会被修改。</para></param>
+    /// <param name="destinationDirectory">Not-yet-existing directory that receives the extracted tree; it is created atomically by renaming a private <c>.import-</c> sibling once every check passes.
+    /// <para>接收解压目录树的尚不存在的目录；在所有校验通过后，由私有的 <c>.import-</c> 同级目录重命名而来，原子地创建。</para></param>
+    /// <param name="cancellationToken">Cancels between entry copies and before publication; a cancelled or failed import deletes the temporary tree and leaves the destination untouched.
+    /// <para>在条目拷贝之间与发布之前取消；已取消或失败的导入会删除临时目录树，并保持目标目录不变。</para></param>
+    /// <returns>Full path of the single <c>.uotan</c> solution file inside <paramref name="destinationDirectory"/>.
+    /// <para><paramref name="destinationDirectory"/> 内唯一 <c>.uotan</c> 解决方案文件的完整路径。</para></returns>
     /// <example>
     /// <code>
     /// var solutionPath = await ProjectPackage.ImportAsync(packageZip, targetDirectory, cancellationToken);
     /// </code>
     /// </example>
-    /// <exception cref="IOException">
-    /// <paramref name="destinationDirectory"/> already exists as a file or directory.
-    /// <para><paramref name="destinationDirectory"/> 已作为文件或目录存在。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="archivePath"/> does not exist.
-    /// <para><paramref name="archivePath"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The package exceeds its budgets (more than 100000 entries, more than 64 GiB total uncompressed
-    /// bytes, or more than 8 MiB of total entry-name characters), carries an unsafe, duplicate or
-    /// escaping entry path, a symlink entry, an entry larger than its declared size, or fails the
-    /// root-solution, sub-project and workflow validation (the root must contain exactly one
-    /// <c>.uotan</c> solution, each sub-project must live in its own direct subdirectory inside the
-    /// data root, and the packaged workflow must load).
-    /// <para>包超出预算（条目数超过 100000、解压总字节超过 64 GiB、或条目名总字符数超过 8 MiB）、
-    /// 包含不安全、重复或逃逸的条目路径、符号链接条目、条目实际大小超过声明大小，
-    /// 或未通过根解决方案、子项目与工作流校验（根目录必须恰好包含一个 <c>.uotan</c> 解决方案，
-    /// 每个子项目必须位于数据根下的直接子目录中，且打包的工作流必须可加载）。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled.
-    /// <para><paramref name="cancellationToken"/> 被触发。</para>
-    /// </exception>
+    /// <exception cref="IOException"><paramref name="destinationDirectory"/> already exists as a file or directory.
+    /// <para><paramref name="destinationDirectory"/> 已作为文件或目录存在。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="archivePath"/> does not exist.
+    /// <para><paramref name="archivePath"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The package exceeds its budgets (more than 100000 entries, more than 64 GiB total uncompressed bytes, or more than 8 MiB of total entry-name characters), carries an unsafe, duplicate or escaping entry path, a symlink entry, an entry larger than its declared size, or fails the root-solution, sub-project and workflow validation (the root must contain exactly one <c>.uotan</c> solution, each sub-project must live in its own direct subdirectory inside the data root, and the packaged workflow must load).
+    /// <para>包超出预算（条目数超过 100000、解压总字节超过 64 GiB、或条目名总字符数超过 8 MiB）、 包含不安全、重复或逃逸的条目路径、符号链接条目、条目实际大小超过声明大小， 或未通过根解决方案、子项目与工作流校验（根目录必须恰好包含一个 <c>.uotan</c> 解决方案， 每个子项目必须位于数据根下的直接子目录中，且打包的工作流必须可加载）。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public static async Task<string> ImportAsync(string archivePath, string destinationDirectory,
         CancellationToken cancellationToken = default)
     {

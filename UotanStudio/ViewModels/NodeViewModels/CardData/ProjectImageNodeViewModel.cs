@@ -75,19 +75,10 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
     public override IReadOnlyList<string> AvailableImages
         => _cachedAvailableImages ??= ComputeAvailableImages();
 
-    /// <summary>
-    /// Dispatches execution logic by the node type key (TypeKey): Resource.Project.Image outputs the absolute
-    /// path of the selected image.
-    /// <para>按节点类型键（TypeKey）分发执行逻辑：Resource.Project.Image 输出选中镜像的绝对路径。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context.
-    /// <para>执行上下文。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Dispatches execution logic by the node type key (TypeKey): Resource.Project.Image outputs the absolute path of the selected image.
+    /// <para>按节点类型键（TypeKey）分发执行逻辑：Resource.Project.Image 输出选中镜像的绝对路径。</para></summary>
+    /// <param name="context">The execution context.<para>执行上下文。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {
         switch (TypeKey)

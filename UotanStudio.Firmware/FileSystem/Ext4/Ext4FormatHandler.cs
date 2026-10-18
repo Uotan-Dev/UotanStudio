@@ -101,20 +101,19 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
         }
     }
 
-    /// <summary>
-    /// Unpacks a raw EXT4 image carried by an already-resolved logical stream into the output directory.
-    /// <para>把已解析逻辑流承载的 ext4 原始镜像解包到输出目录。</para>
-    /// </summary>
-    /// <param name="logical">Seekable logical stream positioned at the start of the image; ownership stays with
-    /// the caller, which disposes it after the returned task completes.
+    /// <summary>Unpacks a raw EXT4 image carried by an already-resolved logical stream into the output directory.
+    /// <para>把已解析逻辑流承载的 ext4 原始镜像解包到输出目录。</para></summary>
+    /// <param name="logical">Seekable logical stream positioned at the start of the image; ownership stays with the caller, which disposes it after the returned task completes.
     /// <para>定位到镜像起始处的可寻址逻辑流；所有权保留在调用方，由调用方在返回任务完成后释放。</para></param>
-    /// <param name="outputDirectory">Host directory receiving the extracted tree. <para>接收解出目录树的主机目录。</para></param>
+    /// <param name="outputDirectory">Host directory receiving the extracted tree.
+    /// <para>接收解出目录树的主机目录。</para></param>
     /// <param name="byteProgress">Optional byte-level progress routed to the extraction stage. <see langword="null"/> reports nothing.
     /// <para>可选的字节级进度，归入提取阶段；<see langword="null"/> 表示不报告。</para></param>
-    /// <param name="overwrite">Whether existing output files may be replaced. <para>是否允许替换已存在的输出文件。</para></param>
-    /// <param name="cancellationToken">Cancels parsing and writes; cancellation propagates. <para>取消解析与写入；取消会向上抛出。</para></param>
-    /// <returns>An <c>Ok</c> result listing every extracted entry path with the inner-format metadata; its
-    /// summary is composed by the container caller, which alone knows the container file path.
+    /// <param name="overwrite">Whether existing output files may be replaced.
+    /// <para>是否允许替换已存在的输出文件。</para></param>
+    /// <param name="cancellationToken">Cancels parsing and writes; cancellation propagates.
+    /// <para>取消解析与写入；取消会向上抛出。</para></param>
+    /// <returns>An <c>Ok</c> result listing every extracted entry path with the inner-format metadata; its summary is composed by the container caller, which alone knows the container file path.
     /// <para><c>Ok</c> 结果列出全部解出的条目路径并附内部格式元数据；其摘要由容器调用方组织，因为只有它知道容器文件路径。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
@@ -231,36 +230,30 @@ public sealed class Ext4FormatHandler : IFormatHandler, IRepackMetadataProvider,
         }
     }
 
-    /// <summary>
-    /// Packs the input into firmware asynchronously.
-    /// <para>异步将输入打包为固件。</para>
-    /// </summary>
-    /// <param name="inputPath">Source directory to pack; a preserved extraction is restored instead of rebuilt. <para>待打包的源目录；若为已保留的解包结果则直接恢复而非重建。</para></param>
-    /// <param name="outputPath">Target image path; a blank value fails the result. <para>目标镜像路径；为空白时结果失败。</para></param>
-    /// <param name="cancellationToken">Cancellation propagates as an exception; other failures return <c>Fail</c>. <para>取消以异常传播；其他失败返回 <c>Fail</c>。</para></param>
-    /// <returns>A completed task: <c>Ok</c> listing the written image path and carrying rebuild equivalence metadata
-    /// for a preserved restore plus the <c>LowWriteHeadroomBlocks</c> key when the produced image leaves too few
-    /// free blocks for read-write use, or <c>Fail</c> with the reason; explicit overrides on a preserved extraction
-    /// are refused as <c>Fail</c>.
-    /// <para>已完成任务：<c>Ok</c> 列出写出的镜像路径、附带受保留重建的等价元数据，并在产出镜像的空闲块不足以
-    /// 读写使用时附加 <c>LowWriteHeadroomBlocks</c> 键，或 <c>Fail</c> 给出原因；对已保留解包结果使用显式覆盖会按
-    /// <c>Fail</c> 拒绝。</para></returns>
+    /// <summary>Packs the input into firmware asynchronously.<para>异步将输入打包为固件。</para></summary>
+    /// <param name="inputPath">Source directory to pack; a preserved extraction is restored instead of rebuilt.
+    /// <para>待打包的源目录；若为已保留的解包结果则直接恢复而非重建。</para></param>
+    /// <param name="outputPath">Target image path; a blank value fails the result.
+    /// <para>目标镜像路径；为空白时结果失败。</para></param>
+    /// <param name="cancellationToken">Cancellation propagates as an exception; other failures return <c>Fail</c>.
+    /// <para>取消以异常传播；其他失败返回 <c>Fail</c>。</para></param>
+    /// <returns>A completed task: <c>Ok</c> listing the written image path and carrying rebuild equivalence metadata for a preserved restore plus the <c>LowWriteHeadroomBlocks</c> key when the produced image leaves too few free blocks for read-write use, or <c>Fail</c> with the reason; explicit overrides on a preserved extraction are refused as <c>Fail</c>.
+    /// <para>已完成任务：<c>Ok</c> 列出写出的镜像路径、附带受保留重建的等价元数据，并在产出镜像的空闲块不足以 读写使用时附加 <c>LowWriteHeadroomBlocks</c> 键，或 <c>Fail</c> 给出原因；对已保留解包结果使用显式覆盖会按 <c>Fail</c> 拒绝。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
         => PackCore(inputPath, outputPath, progress: null, cancellationToken);
 
-    /// <summary>
-    /// Packs the input into firmware with byte-level progress.
-    /// <para>带字节级进度异步将输入打包为固件。</para>
-    /// </summary>
-    /// <param name="inputPath">Source directory to pack; a preserved extraction is restored instead of rebuilt. <para>待打包的源目录；若为已保留的解包结果则直接恢复而非重建。</para></param>
-    /// <param name="outputPath">Target image path; a blank value fails the result. <para>目标镜像路径；为空白时结果失败。</para></param>
-    /// <param name="progress">Byte-level build progress sink; <see langword="null"/> disables reporting. <para>字节级构建进度回调；<see langword="null"/> 表示不报告。</para></param>
-    /// <param name="cancellationToken">Cancellation propagates as an exception; other failures return <c>Fail</c>. <para>取消以异常传播；其他失败返回 <c>Fail</c>。</para></param>
-    /// <returns>A completed task: <c>Ok</c> listing the written image path and carrying rebuild equivalence metadata
-    /// for a preserved restore plus the <c>LowWriteHeadroomBlocks</c> key when the produced image leaves too few
-    /// free blocks for read-write use, or <c>Fail</c> with the reason.
-    /// <para>已完成任务：<c>Ok</c> 列出写出的镜像路径、附带受保留重建的等价元数据，并在产出镜像的空闲块不足以
-    /// 读写使用时附加 <c>LowWriteHeadroomBlocks</c> 键，或 <c>Fail</c> 给出原因。</para></returns>
+    /// <summary>Packs the input into firmware with byte-level progress.
+    /// <para>带字节级进度异步将输入打包为固件。</para></summary>
+    /// <param name="inputPath">Source directory to pack; a preserved extraction is restored instead of rebuilt.
+    /// <para>待打包的源目录；若为已保留的解包结果则直接恢复而非重建。</para></param>
+    /// <param name="outputPath">Target image path; a blank value fails the result.
+    /// <para>目标镜像路径；为空白时结果失败。</para></param>
+    /// <param name="progress">Byte-level build progress sink; <see langword="null"/> disables reporting.
+    /// <para>字节级构建进度回调；<see langword="null"/> 表示不报告。</para></param>
+    /// <param name="cancellationToken">Cancellation propagates as an exception; other failures return <c>Fail</c>.
+    /// <para>取消以异常传播；其他失败返回 <c>Fail</c>。</para></param>
+    /// <returns>A completed task: <c>Ok</c> listing the written image path and carrying rebuild equivalence metadata for a preserved restore plus the <c>LowWriteHeadroomBlocks</c> key when the produced image leaves too few free blocks for read-write use, or <c>Fail</c> with the reason.
+    /// <para>已完成任务：<c>Ok</c> 列出写出的镜像路径、附带受保留重建的等价元数据，并在产出镜像的空闲块不足以 读写使用时附加 <c>LowWriteHeadroomBlocks</c> 键，或 <c>Fail</c> 给出原因。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken = default)
         => PackCore(inputPath, outputPath, progress, cancellationToken);
 

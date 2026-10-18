@@ -69,33 +69,16 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         "https://github.com/aspect-build/zstd-prebuilt/releases/download/v1.5.6-bcr2/zstd_darwin_amd64",
         "D81BE8618553D7D658E09DA669FFD68EC76D8095161A590C9B8A1A99FCE67CA8", "", Raw: true);
 
-    /// <summary>
-    /// Prepares the platform tools and zstd binaries for the enabled platforms.
-    /// <para>为启用的平台准备平台工具与 zstd 二进制。</para>
-    /// </summary>
-    /// <param name="plan">
-    /// Plan selecting the enabled platforms and deciding whether zstd is needed: files ending in
-    /// <c>.zst</c>, an organized Zstd Super, or a Recovery-only delivery with ZST files also stage the
-    /// Linux toolset.
-    /// <para>决定启用平台的交付计划；以 <c>.zst</c> 结尾的文件、组织式 Zstd Super，或带 ZST 文件的纯 Recovery
-    /// 都会额外暂存 Linux 工具集并准备 zstd。</para>
-    /// </param>
-    /// <param name="directory">
-    /// Staging root; each platform lands in <c>bin/Windows</c>, <c>bin/Linux</c> or <c>bin/macOS</c> and the
-    /// Linux zstd aliases in <c>bin/android</c>.
-    /// <para>暂存根目录；各平台分别落到 <c>bin/Windows</c>、<c>bin/Linux</c> 或 <c>bin/macOS</c>，
-    /// Linux 的 zstd 别名落到 <c>bin/android</c>。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Sink for the <c>Delivery_ProgressTools</c> stage reports at 75 percent, one per platform and per
-    /// zstd download; <see langword="null"/> skips reporting.
-    /// <para>接收 75% 的 <c>Delivery_ProgressTools</c> 阶段上报，每个平台与每次 zstd 下载各一条；
-    /// 为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <param name="token">
-    /// Cancellation token threaded through the downloads, archive extraction and file copies.
-    /// <para>贯穿下载、归档解压与文件复制的取消令牌。</para>
-    /// </param>
+    /// <summary>Prepares the platform tools and zstd binaries for the enabled platforms.
+    /// <para>为启用的平台准备平台工具与 zstd 二进制。</para></summary>
+    /// <param name="plan">Plan selecting the enabled platforms and deciding whether zstd is needed: files ending in <c>.zst</c>, an organized Zstd Super, or a Recovery-only delivery with ZST files also stage the Linux toolset.
+    /// <para>决定启用平台的交付计划；以 <c>.zst</c> 结尾的文件、组织式 Zstd Super，或带 ZST 文件的纯 Recovery 都会额外暂存 Linux 工具集并准备 zstd。</para></param>
+    /// <param name="directory">Staging root; each platform lands in <c>bin/Windows</c>, <c>bin/Linux</c> or <c>bin/macOS</c> and the Linux zstd aliases in <c>bin/android</c>.
+    /// <para>暂存根目录；各平台分别落到 <c>bin/Windows</c>、<c>bin/Linux</c> 或 <c>bin/macOS</c>， Linux 的 zstd 别名落到 <c>bin/android</c>。</para></param>
+    /// <param name="progress">Sink for the <c>Delivery_ProgressTools</c> stage reports at 75 percent, one per platform and per zstd download; <see langword="null"/> skips reporting.
+    /// <para>接收 75% 的 <c>Delivery_ProgressTools</c> 阶段上报，每个平台与每次 zstd 下载各一条； 为 <see langword="null"/> 时不上报。</para></param>
+    /// <param name="token">Cancellation token threaded through the downloads, archive extraction and file copies.
+    /// <para>贯穿下载、归档解压与文件复制的取消令牌。</para></param>
     public async Task PrepareAsync(DeliveryPlan plan, string directory, IProgress<DeliveryProgress>? progress, CancellationToken token)
     {
         var platforms = new List<(string Name, DeliveryToolPackage Package)>();

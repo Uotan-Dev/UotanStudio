@@ -57,24 +57,20 @@ public sealed partial class ProjectSession
     /// </summary>
     public event Action? SolutionReloaded;
 
-    /// <summary>
-    /// Switches active sub-project under the operation gate. Optional persistence saves the old project's data first.
-    /// <para>在操作门下切换活动子项目；可选的持久化会先保存旧工程的数据。</para>
-    /// </summary>
-    /// <param name="name">Target sub-project name, matched case-insensitively. <para>目标子项目名，按大小写不敏感匹配。</para></param>
-    /// <param name="persistCurrent">When <see langword="false"/>, the previous project's files are left
-    /// untouched; when <see langword="true"/>, its data is persisted without capturing editor page state.
+    /// <summary>Switches active sub-project under the operation gate. Optional persistence saves the old project's data first.
+    /// <para>在操作门下切换活动子项目；可选的持久化会先保存旧工程的数据。</para></summary>
+    /// <param name="name">Target sub-project name, matched case-insensitively.
+    /// <para>目标子项目名，按大小写不敏感匹配。</para></param>
+    /// <param name="persistCurrent">When <see langword="false"/>, the previous project's files are left untouched; when <see langword="true"/>, its data is persisted without capturing editor page state.
     /// <para>为 <see langword="false"/> 时不改写旧工程文件；为 <see langword="true"/> 时持久化其数据，但不采集编辑器页面状态。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the reads performed before the switch.
     /// <para>取消门等待与切换前的读取。</para></param>
-    /// <returns><see langword="true"/> when the target became active (including when it already was);
-    /// <see langword="false"/> when no sub-project matches <paramref name="name"/> or the operation was
-    /// gated. <para>目标已处于活动状态（含原本就是活动项）时返回 <see langword="true"/>；没有匹配
-    /// <paramref name="name"/> 的子项目或操作被门拦截时返回 <see langword="false"/>。</para></returns>
+    /// <returns><see langword="true"/> when the target became active (including when it already was); <see langword="false"/> when no sub-project matches <paramref name="name"/> or the operation was gated.
+    /// <para>目标已处于活动状态（含原本就是活动项）时返回 <see langword="true"/>；没有匹配 <paramref name="name"/> 的子项目或操作被门拦截时返回 <see langword="false"/>。</para></returns>
     /// <exception cref="InvalidDataException">The target sub-project's firmware file cannot be read.
     /// <para>目标子项目的固件文件无法读取。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was cancelled before the state was swapped
-    /// in. <para>令牌在状态替换前被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled before the state was swapped in.
+    /// <para>令牌在状态替换前被取消。</para></exception>
     public async Task<bool> SwitchSubProjectAsync(string name, bool persistCurrent = true, CancellationToken cancellationToken = default)
     {
         var switched = false;
@@ -100,24 +96,18 @@ public sealed partial class ProjectSession
         return switched;
     }
 
-    /// <summary>
-    /// Closes the project after the host's change confirmation. Optional persistence does not save editor contents.
-    /// <para>在宿主确认变更后关闭工程；可选的持久化不会保存编辑器内容。</para>
-    /// </summary>
-    /// <param name="persistProject">When <see langword="true"/> and a path exists, project and page data
-    /// are persisted first; the active editor itself is never flushed.
+    /// <summary>Closes the project after the host's change confirmation. Optional persistence does not save editor contents.
+    /// <para>在宿主确认变更后关闭工程；可选的持久化不会保存编辑器内容。</para></summary>
+    /// <param name="persistProject">When <see langword="true"/> and a path exists, project and page data are persisted first; the active editor itself is never flushed.
     /// <para>为 <see langword="true"/> 且路径存在时，先持久化工程与页面数据；但不会保存当前编辑器内容。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the persistence writes.
     /// <para>取消门等待与持久化写入。</para></param>
-    /// <param name="confirmChange">When <see langword="false"/>, closing proceeds without the
-    /// project-change gate or the host confirmation. <para>为 <see langword="false"/> 时，关闭不经过项目变更门，
-    /// 也不询问宿主确认。</para></param>
-    /// <returns><see langword="true"/> when the session was reset to a closed state; <see langword="false"/>
-    /// when an image operation is running or the host declined the change.
-    /// <para>会话成功重置为已关闭状态时返回 <see langword="true"/>；镜像操作运行中或宿主拒绝变更时返回
-    /// <see langword="false"/>。</para></returns>
-    /// <exception cref="OperationCanceledException">The token was cancelled before or during the gate
-    /// wait, or during persistence. <para>令牌在门等待前后或持久化期间被取消。</para></exception>
+    /// <param name="confirmChange">When <see langword="false"/>, closing proceeds without the project-change gate or the host confirmation.
+    /// <para>为 <see langword="false"/> 时，关闭不经过项目变更门， 也不询问宿主确认。</para></param>
+    /// <returns><see langword="true"/> when the session was reset to a closed state; <see langword="false"/> when an image operation is running or the host declined the change.
+    /// <para>会话成功重置为已关闭状态时返回 <see langword="true"/>；镜像操作运行中或宿主拒绝变更时返回 <see langword="false"/>。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled before or during the gate wait, or during persistence.
+    /// <para>令牌在门等待前后或持久化期间被取消。</para></exception>
     public async Task<bool> CloseAsync(bool persistProject = false, CancellationToken cancellationToken = default, bool confirmChange = true)
     {
         var closed = false;
@@ -175,22 +165,18 @@ public sealed partial class ProjectSession
             await ProjectArchiveService.ExportPackageAsync(path, outputPath, cancellationToken);
         }, cancellationToken: cancellationToken);
 
-    /// <summary>
-    /// Imports a package into a new directory and opens it after host confirmation.
-    /// <para>将包导入到新目录，并在宿主确认后打开它。</para>
-    /// </summary>
+    /// <summary>Imports a package into a new directory and opens it after host confirmation.
+    /// <para>将包导入到新目录，并在宿主确认后打开它。</para></summary>
     /// <param name="archivePath">Package file produced by <see cref="ExportPackageAsync"/>.
     /// <para>由 <see cref="ExportPackageAsync"/> 生成的包文件。</para></param>
     /// <param name="destinationDirectory">Directory the package is extracted into.
     /// <para>解包目标目录。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the extraction.
     /// <para>取消门等待与解包。</para></param>
-    /// <returns><see langword="true"/> when the extracted solution was opened; <see langword="false"/>
-    /// when the extracted solution file cannot be read or the operation was gated.
-    /// <para>解出的解决方案成功打开时返回 <see langword="true"/>；解出的解决方案文件无法读取或操作被门
-    /// 拦截时返回 <see langword="false"/>。</para></returns>
-    /// <exception cref="IOException"><paramref name="destinationDirectory"/> already exists as a file or
-    /// directory. <para><paramref name="destinationDirectory"/> 已作为文件或目录存在。</para></exception>
+    /// <returns><see langword="true"/> when the extracted solution was opened; <see langword="false"/> when the extracted solution file cannot be read or the operation was gated.
+    /// <para>解出的解决方案成功打开时返回 <see langword="true"/>；解出的解决方案文件无法读取或操作被门 拦截时返回 <see langword="false"/>。</para></returns>
+    /// <exception cref="IOException"><paramref name="destinationDirectory"/> already exists as a file or directory.
+    /// <para><paramref name="destinationDirectory"/> 已作为文件或目录存在。</para></exception>
     public async Task<bool> ImportPackageAsync(string archivePath, string destinationDirectory, CancellationToken cancellationToken = default)
     {
         var opened = false;

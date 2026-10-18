@@ -86,19 +86,29 @@ public sealed partial class DeviceMonitorService
             throw new IOException("The selected serial target is no longer present. Refresh the device list.");
     }
 
-    /// <summary>Runs a preflighted Firehose bundle on the selected EDL serial target.<para>在所选 EDL 串口目标上执行已预检的 Firehose 包。</para></summary>
+    /// <summary>Runs a preflighted Firehose bundle on the selected EDL serial target.
+    /// <para>在所选 EDL 串口目标上执行已预检的 Firehose 包。</para></summary>
     /// <param name="serial">The serial target the bundle runs on.<para>执行该包的串口目标。</para></param>
-    /// <param name="folder">The directory holding the bundle images and manifests.<para>存放包镜像与清单的目录。</para></param>
-    /// <param name="programmerPath">Optional explicit Firehose programmer image path.<para>可选的显式 Firehose programmer 镜像路径。</para></param>
-    /// <param name="configuration">Optional Firehose session configuration.<para>可选的 Firehose 会话配置。</para></param>
-    /// <param name="includeUfsProvision">When true, UFS provisioning is part of the run.<para>为 true 时，执行中包含 UFS 预置。</para></param>
+    /// <param name="folder">The directory holding the bundle images and manifests.
+    /// <para>存放包镜像与清单的目录。</para></param>
+    /// <param name="programmerPath">Optional explicit Firehose programmer image path.
+    /// <para>可选的显式 Firehose programmer 镜像路径。</para></param>
+    /// <param name="configuration">Optional Firehose session configuration.
+    /// <para>可选的 Firehose 会话配置。</para></param>
+    /// <param name="includeUfsProvision">When true, UFS provisioning is part of the run.
+    /// <para>为 true 时，执行中包含 UFS 预置。</para></param>
     /// <param name="cancellationToken">Cancels the flash run.<para>取消刷写执行。</para></param>
-    /// <param name="continueOnFailure">When true, a failed entry does not stop the run.<para>为 true 时，条目失败不会中止执行。</para></param>
-    /// <param name="skipAbsentSources">When true, missing source images are tolerated.<para>为 true 时，容忍缺失的源镜像。</para></param>
-    /// <param name="labels">Optional bundle entry labels limiting what is flashed.<para>可选的包条目标签，限定刷写范围。</para></param>
+    /// <param name="continueOnFailure">When true, a failed entry does not stop the run.
+    /// <para>为 true 时，条目失败不会中止执行。</para></param>
+    /// <param name="skipAbsentSources">When true, missing source images are tolerated.
+    /// <para>为 true 时，容忍缺失的源镜像。</para></param>
+    /// <param name="labels">Optional bundle entry labels limiting what is flashed.
+    /// <para>可选的包条目标签，限定刷写范围。</para></param>
     /// <param name="progress">Optional reporter for bundle progress.<para>可选的包进度回调。</para></param>
-    /// <param name="verify">When true, programmed writes are read back for checking.<para>为 true 时回读已写入数据以校验。</para></param>
-    /// <param name="tuning">Optional sector-size, chunk and NAND overrides.<para>可选的扇区大小、写入块与 NAND 覆盖项。</para></param>
+    /// <param name="verify">When true, programmed writes are read back for checking.
+    /// <para>为 true 时回读已写入数据以校验。</para></param>
+    /// <param name="tuning">Optional sector-size, chunk and NAND overrides.
+    /// <para>可选的扇区大小、写入块与 NAND 覆盖项。</para></param>
     /// <returns>The non-fatal deviations recorded during the run.<para>执行期间记录的非致命偏差。</para></returns>
     public Task<IReadOnlyList<string>> FlashEdlSerialAsync(SerialConnectionOptions serial, string folder, string? programmerPath,
         FirehoseConfiguration? configuration = null, bool includeUfsProvision = false,
@@ -113,19 +123,30 @@ public sealed partial class DeviceMonitorService
             progress, verify, tuning);
     }
 
-    /// <summary>Runs a preflighted bundle against the selected USB EDL device.<para>对所选 USB EDL 设备执行已预检的包。</para></summary>
-    /// <param name="device">The USB EDL device the bundle runs against.<para>执行该包的 USB EDL 设备。</para></param>
-    /// <param name="folder">The directory holding the bundle images and manifests.<para>存放包镜像与清单的目录。</para></param>
-    /// <param name="programmerPath">The Firehose programmer image to load.<para>要加载的 Firehose programmer 镜像。</para></param>
+    /// <summary>Runs a preflighted bundle against the selected USB EDL device.
+    /// <para>对所选 USB EDL 设备执行已预检的包。</para></summary>
+    /// <param name="device">The USB EDL device the bundle runs against.
+    /// <para>执行该包的 USB EDL 设备。</para></param>
+    /// <param name="folder">The directory holding the bundle images and manifests.
+    /// <para>存放包镜像与清单的目录。</para></param>
+    /// <param name="programmerPath">The Firehose programmer image to load.
+    /// <para>要加载的 Firehose programmer 镜像。</para></param>
     /// <param name="cancellationToken">Cancels the flash run.<para>取消刷写执行。</para></param>
-    /// <param name="continueOnFailure">When true, a failed entry does not stop the run.<para>为 true 时，条目失败不会中止执行。</para></param>
-    /// <param name="skipAbsentSources">When true, missing source images are tolerated.<para>为 true 时，容忍缺失的源镜像。</para></param>
-    /// <param name="labels">Optional bundle entry labels limiting what is flashed.<para>可选的包条目标签，限定刷写范围。</para></param>
+    /// <param name="continueOnFailure">When true, a failed entry does not stop the run.
+    /// <para>为 true 时，条目失败不会中止执行。</para></param>
+    /// <param name="skipAbsentSources">When true, missing source images are tolerated.
+    /// <para>为 true 时，容忍缺失的源镜像。</para></param>
+    /// <param name="labels">Optional bundle entry labels limiting what is flashed.
+    /// <para>可选的包条目标签，限定刷写范围。</para></param>
     /// <param name="progress">Optional reporter for bundle progress.<para>可选的包进度回调。</para></param>
-    /// <param name="verify">When true, programmed writes are read back for checking.<para>为 true 时回读已写入数据以校验。</para></param>
-    /// <param name="skipUfsProvision">When true, UFS provisioning is left out of the run.<para>为 true 时，执行中不含 UFS 预置。</para></param>
-    /// <param name="tuning">Optional sector-size, chunk and NAND overrides.<para>可选的扇区大小、写入块与 NAND 覆盖项。</para></param>
-    /// <param name="initialization">Optional EDL initialization options for the session.<para>可选的会话 EDL 初始化选项。</para></param>
+    /// <param name="verify">When true, programmed writes are read back for checking.
+    /// <para>为 true 时回读已写入数据以校验。</para></param>
+    /// <param name="skipUfsProvision">When true, UFS provisioning is left out of the run.
+    /// <para>为 true 时，执行中不含 UFS 预置。</para></param>
+    /// <param name="tuning">Optional sector-size, chunk and NAND overrides.
+    /// <para>可选的扇区大小、写入块与 NAND 覆盖项。</para></param>
+    /// <param name="initialization">Optional EDL initialization options for the session.
+    /// <para>可选的会话 EDL 初始化选项。</para></param>
     /// <returns>The non-fatal deviations recorded during the run.<para>执行期间记录的非致命偏差。</para></returns>
     public Task<IReadOnlyList<string>> FlashEdlBundleAsync(DetectedDevice device, string folder, string programmerPath,
         CancellationToken cancellationToken = default, bool continueOnFailure = false,

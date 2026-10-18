@@ -17,22 +17,21 @@ namespace UotanStudio.Firmware.VendorFirmware.Oppo;
 /// <param name="CompressedSize">Declared stored (gzip) size in bytes. <para>声明的存储（gzip）字节大小。</para></param>
 public sealed record OppoSplashEntry(string Name, long Offset, long RealSize, long CompressedSize);
 
-/// <summary>
-/// Validated metadata of an OPPO/OnePlus splash image.
-/// <para>已校验的 OPPO/OnePlus splash 镜像元数据。</para>
-/// </summary>
+/// <summary>Validated metadata of an OPPO/OnePlus splash image.
+/// <para>已校验的 OPPO/OnePlus splash 镜像元数据。</para></summary>
 /// <param name="HasDdphHeader">Whether the file starts with the optional <c>DDPH</c> descriptor header.
 /// <para>文件是否以可选的 <c>DDPH</c> 描述头开始。</para></param>
 /// <param name="DdphFlag">Raw flag word following the DDPH magic; zero when absent.
 /// <para><c>DDPH</c> 魔数之后的原始标志字；不存在时为 0。</para></param>
 /// <param name="Metadata">The four 0x40-byte ASCII metadata strings following the splash magic.
 /// <para>splash 魔数之后的四个 0x40 字节 ASCII 元数据字符串。</para></param>
-/// <param name="Version">Declared format version word. <para>声明的格式版本字。</para></param>
-/// <param name="Width">Declared panel width. <para>声明的面板宽度。</para></param>
-/// <param name="Height">Declared panel height. <para>声明的面板高度。</para></param>
+/// <param name="Version">Declared format version word.<para>声明的格式版本字。</para></param>
+/// <param name="Width">Declared panel width.<para>声明的面板宽度。</para></param>
+/// <param name="Height">Declared panel height.<para>声明的面板高度。</para></param>
 /// <param name="Special">Declared special flag word, uninterpreted.
 /// <para>声明的特殊标志字，未作解释。</para></param>
-/// <param name="Entries">Validated image records in table order. <para>按表顺序排列的已校验镜像记录。</para></param>
+/// <param name="Entries">Validated image records in table order.
+/// <para>按表顺序排列的已校验镜像记录。</para></param>
 public sealed record OppoSplashImage(bool HasDdphHeader, uint DdphFlag, IReadOnlyList<string> Metadata,
     uint Version, uint Width, uint Height, uint Special, IReadOnlyList<OppoSplashEntry> Entries);
 
@@ -73,20 +72,18 @@ internal static class OppoSplashFormat
     public static bool HasSplashMagic(ReadOnlySpan<byte> header) =>
         header.Length >= 12 && header[..12].SequenceEqual("SPLASH LOGO!"u8);
 
-    /// <summary>
-    /// Reads and validates the splash header, metadata strings and image record table.
-    /// <para>读取并校验 splash 头、元数据字符串与镜像记录表。</para>
-    /// </summary>
+    /// <summary>Reads and validates the splash header, metadata strings and image record table.
+    /// <para>读取并校验 splash 头、元数据字符串与镜像记录表。</para></summary>
     /// <param name="input">Readable, seekable splash stream; position is restored on return.
     /// <para>可读、可寻址的 splash 流；返回时恢复位置。</para></param>
-    /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
-    /// <returns>The validated image metadata. <para>已校验的镜像元数据。</para></returns>
+    /// <param name="cancellationToken">Cancels the read.<para>取消本次读取。</para></param>
+    /// <returns>The validated image metadata.<para>已校验的镜像元数据。</para></returns>
     /// <exception cref="ArgumentException">The stream cannot be read or cannot seek.
     /// <para>流不可读或不可寻址。</para></exception>
-    /// <exception cref="InvalidDataException">The splash magic is missing, the declared entry count
-    /// exceeds the metadata area, or a payload range escapes the file.
+    /// <exception cref="InvalidDataException">The splash magic is missing, the declared entry count exceeds the metadata area, or a payload range escapes the file.
     /// <para>splash 魔数缺失、声明条目数超出元数据区，或负载区间超出文件。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static OppoSplashImage Read(Stream input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -188,22 +185,20 @@ internal static class OppoSplashFormat
         StreamCopy.CopyExactly(range, output, entry.CompressedSize, cancellationToken);
     }
 
-    /// <summary>
-    /// Decompresses one entry's gzip payload into the destination stream and verifies the produced
-    /// byte count against the declared raw size when that size is nonzero.
-    /// <para>解压单个条目的 gzip 负载到目标流，并在声明的原始大小非零时与其核对产出的字节数。</para>
-    /// </summary>
-    /// <param name="input">Source splash stream. <para>源 splash 流。</para></param>
-    /// <param name="entry">Entry produced by <see cref="Read"/>. <para>由 <see cref="Read"/> 产生的条目。</para></param>
+    /// <summary>Decompresses one entry's gzip payload into the destination stream and verifies the produced byte count against the declared raw size when that size is nonzero.
+    /// <para>解压单个条目的 gzip 负载到目标流，并在声明的原始大小非零时与其核对产出的字节数。</para></summary>
+    /// <param name="input">Source splash stream.<para>源 splash 流。</para></param>
+    /// <param name="entry">Entry produced by <see cref="Read"/>.
+    /// <para>由 <see cref="Read"/> 产生的条目。</para></param>
     /// <param name="output">Destination stream receiving the raw image bytes.
     /// <para>接收原始镜像字节的目标流。</para></param>
-    /// <param name="maximumOutputBytes">Decompression ceiling for this entry. <para>本条目的解压上限。</para></param>
-    /// <param name="cancellationToken">Cancels the decompression. <para>取消本次解压。</para></param>
-    /// <exception cref="ArgumentNullException">Any argument is null. <para>任一参数为 null。</para></exception>
-    /// <exception cref="InvalidDataException">The gzip stream is malformed, exceeds the ceiling, or
-    /// disagrees with the declared raw size.
-    /// <para>gzip 流格式错误、超出上限，或与声明的原始大小不一致。压缩门面报告的失败也会以此类型呈现，
-    /// 原始原因保留在 <see cref="Exception.InnerException"/> 中。</para></exception>
+    /// <param name="maximumOutputBytes">Decompression ceiling for this entry.
+    /// <para>本条目的解压上限。</para></param>
+    /// <param name="cancellationToken">Cancels the decompression.<para>取消本次解压。</para></param>
+    /// <exception cref="ArgumentNullException">Any argument is null.
+    /// <para>任一参数为 null。</para></exception>
+    /// <exception cref="InvalidDataException">The gzip stream is malformed, exceeds the ceiling, or disagrees with the declared raw size.
+    /// <para>gzip 流格式错误、超出上限，或与声明的原始大小不一致。压缩门面报告的失败也会以此类型呈现， 原始原因保留在 <see cref="Exception.InnerException"/> 中。</para></exception>
     public static void DecompressEntry(Stream input, OppoSplashEntry entry, Stream output,
         long maximumOutputBytes, CancellationToken cancellationToken = default)
     {

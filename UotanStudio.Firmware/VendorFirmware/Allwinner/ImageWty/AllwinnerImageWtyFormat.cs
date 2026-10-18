@@ -4,38 +4,39 @@ using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.VendorFirmware.Allwinner.ImageWty;
 
-/// <summary>
-/// One file record of an IMAGEWTY container: name, absolute data range, declared types and
-/// the raw attribute/checksum words.
-/// <para>IMAGEWTY 容器中的一个文件记录：名称、绝对数据区间、声明的类型，以及原始的属性/校验字。</para>
-/// </summary>
-/// <param name="Name">Entry name from the 32-byte field. <para>来自 32 字段的条目名。</para></param>
-/// <param name="MainType">Declared main type string, up to 32 bytes. <para>声明的主类型字符串，至多 32 字节。</para></param>
-/// <param name="SubType">Declared sub type string, up to 32 bytes. <para>声明的子类型字符串，至多 32 字节。</para></param>
-/// <param name="Offset">Absolute payload offset inside the container. <para>容器内绝对负载偏移。</para></param>
-/// <param name="Length">Payload size in bytes. <para>负载字节大小。</para></param>
-/// <param name="Attributes">Raw attribute word. <para>原始属性字。</para></param>
+/// <summary>One file record of an IMAGEWTY container: name, absolute data range, declared types and the raw attribute/checksum words.
+/// <para>IMAGEWTY 容器中的一个文件记录：名称、绝对数据区间、声明的类型，以及原始的属性/校验字。</para></summary>
+/// <param name="Name">Entry name from the 32-byte field.<para>来自 32 字段的条目名。</para></param>
+/// <param name="MainType">Declared main type string, up to 32 bytes.
+/// <para>声明的主类型字符串，至多 32 字节。</para></param>
+/// <param name="SubType">Declared sub type string, up to 32 bytes.
+/// <para>声明的子类型字符串，至多 32 字节。</para></param>
+/// <param name="Offset">Absolute payload offset inside the container.
+/// <para>容器内绝对负载偏移。</para></param>
+/// <param name="Length">Payload size in bytes.<para>负载字节大小。</para></param>
+/// <param name="Attributes">Raw attribute word.<para>原始属性字。</para></param>
 /// <param name="Checksum">Raw checksum word; its coverage is not enforced on read.
 /// <para>原始校验字；读取时不强制校验其覆盖范围。</para></param>
 public sealed record ImageWtyEntry(string Name, string MainType, string SubType, long Offset, long Length,
     uint Attributes, uint Checksum);
 
-/// <summary>
-/// Validated header metadata of an IMAGEWTY container.
-/// <para>已校验的 IMAGEWTY 容器头元数据。</para>
-/// </summary>
+/// <summary>Validated header metadata of an IMAGEWTY container.
+/// <para>已校验的 IMAGEWTY 容器头元数据。</para></summary>
 /// <param name="HeaderVersion">Container header version, <c>0x100</c> or <c>0x300</c>.
 /// <para>容器头版本，取 <c>0x100</c> 或 <c>0x300</c>。</para></param>
-/// <param name="HeaderSize">Declared header size word. <para>声明的头部大小字。</para></param>
-/// <param name="RamBase">Declared RAM base address word. <para>声明的 RAM 基地址字。</para></param>
-/// <param name="Version">Container version word. <para>容器版本字。</para></param>
-/// <param name="ImageSize">Declared image size word. <para>声明的镜像大小字。</para></param>
-/// <param name="ImageHeaderSize">Declared combined header size word. <para>声明的合并头部大小字。</para></param>
-/// <param name="Vid">Declared USB vendor id from the version body. <para>来自版本主体的 USB 厂商 id。</para></param>
-/// <param name="Pid">Declared USB peripheral id from the version body. <para>来自版本主体的 USB 外设 id。</para></param>
-/// <param name="HardwareId">Declared hardware id. <para>声明的硬件 id。</para></param>
-/// <param name="FirmwareId">Declared firmware id. <para>声明的固件 id。</para></param>
-/// <param name="Entries">Validated entry records in table order. <para>按表顺序排列的已校验条目。</para></param>
+/// <param name="HeaderSize">Declared header size word.<para>声明的头部大小字。</para></param>
+/// <param name="RamBase">Declared RAM base address word.<para>声明的 RAM 基地址字。</para></param>
+/// <param name="Version">Container version word.<para>容器版本字。</para></param>
+/// <param name="ImageSize">Declared image size word.<para>声明的镜像大小字。</para></param>
+/// <param name="ImageHeaderSize">Declared combined header size word.
+/// <para>声明的合并头部大小字。</para></param>
+/// <param name="Vid">Declared USB vendor id from the version body.
+/// <para>来自版本主体的 USB 厂商 id。</para></param>
+/// <param name="Pid">Declared USB peripheral id from the version body.
+/// <para>来自版本主体的 USB 外设 id。</para></param>
+/// <param name="HardwareId">Declared hardware id.<para>声明的硬件 id。</para></param>
+/// <param name="FirmwareId">Declared firmware id.<para>声明的固件 id。</para></param>
+/// <param name="Entries">Validated entry records in table order.<para>按表顺序排列的已校验条目。</para></param>
 public sealed record ImageWtyHeader(uint HeaderVersion, uint HeaderSize, uint RamBase, uint Version,
     uint ImageSize, uint ImageHeaderSize, uint Vid, uint Pid, uint HardwareId, uint FirmwareId,
     IReadOnlyList<ImageWtyEntry> Entries);
@@ -81,20 +82,18 @@ internal static class AllwinnerImageWtyFormat
     public static bool HasPlainMagic(ReadOnlySpan<byte> header) => header.Length >= 8
         && header[..8].SequenceEqual("IMAGEWTY"u8);
 
-    /// <summary>
-    /// Reads and validates the header, version body and entry table from a seekable stream.
-    /// <para>从可寻址流读取并校验头部、版本主体与条目表。</para>
-    /// </summary>
+    /// <summary>Reads and validates the header, version body and entry table from a seekable stream.
+    /// <para>从可寻址流读取并校验头部、版本主体与条目表。</para></summary>
     /// <param name="input">Readable, seekable container stream; position is restored on return.
     /// <para>可读、可寻址的容器流；返回时恢复位置。</para></param>
-    /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
-    /// <returns>The validated header with its entry table. <para>已校验的头部及其条目表。</para></returns>
+    /// <param name="cancellationToken">Cancels the read.<para>取消本次读取。</para></param>
+    /// <returns>The validated header with its entry table.<para>已校验的头部及其条目表。</para></returns>
     /// <exception cref="ArgumentException">The stream cannot be read or cannot seek.
     /// <para>流不可读或不可寻址。</para></exception>
-    /// <exception cref="InvalidDataException">The magic is missing (encrypted container), the header
-    /// version is unknown, the entry table escapes the file, or an entry payload range is invalid.
+    /// <exception cref="InvalidDataException">The magic is missing (encrypted container), the header version is unknown, the entry table escapes the file, or an entry payload range is invalid.
     /// <para>魔数缺失（加密容器）、头版本未知、条目表超出文件或条目负载区间无效。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static ImageWtyHeader Read(Stream input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);

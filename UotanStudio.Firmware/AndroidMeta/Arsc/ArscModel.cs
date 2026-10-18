@@ -148,27 +148,16 @@ public sealed class ResValue
 
     private List<ResMap>? _maps;
 
-    /// <summary>
-    /// Formats the value as readable text (strings decoded via globalPool; references as resource IDs).
-    /// <para>格式化值为可读文本（字符串值经 globalPool 解码，引用转为资源 ID 文本）。</para>
-    /// </summary>
-    /// <param name="globalPool">
-    /// Table-level string pool resolving <see cref="ResValueType.String"/> indices; when
-    /// <see langword="null"/>, strings render as <c>@str:N</c> text.
-    /// <para>解析 <see cref="ResValueType.String"/> 索引的表级字符串池；为 <see langword="null"/> 时字符串输出为 <c>@str:N</c> 文本。</para>
-    /// </param>
-    /// <param name="packageId">
-    /// Package byte substituted when a reference or attribute encodes 0 in its high byte.
-    /// <para>引用或属性高位编码为 0 时替代使用的包字节。</para>
-    /// </param>
-    /// <returns>
-    /// Invariant-culture display text, never <see langword="null"/>; complex values render as a map-count stub.
-    /// <para>固定区域设置的显示文本，永不为 <see langword="null"/>；复杂值输出映射数量摘要。</para>
-    /// </returns>
-    /// <exception cref="OverflowException">
-    /// The value is a string whose pool index exceeds <see cref="int.MaxValue"/>.
-    /// <para>该值为字符串且其字符串池索引超出 <see cref="int.MaxValue"/>。</para>
-    /// </exception>
+    /// <summary>Formats the value as readable text (strings decoded via globalPool; references as resource IDs).
+    /// <para>格式化值为可读文本（字符串值经 globalPool 解码，引用转为资源 ID 文本）。</para></summary>
+    /// <param name="globalPool">Table-level string pool resolving <see cref="ResValueType.String"/> indices; when <see langword="null"/>, strings render as <c>@str:N</c> text.
+    /// <para>解析 <see cref="ResValueType.String"/> 索引的表级字符串池；为 <see langword="null"/> 时字符串输出为 <c>@str:N</c> 文本。</para></param>
+    /// <param name="packageId">Package byte substituted when a reference or attribute encodes 0 in its high byte.
+    /// <para>引用或属性高位编码为 0 时替代使用的包字节。</para></param>
+    /// <returns>Invariant-culture display text, never <see langword="null"/>; complex values render as a map-count stub.
+    /// <para>固定区域设置的显示文本，永不为 <see langword="null"/>；复杂值输出映射数量摘要。</para></returns>
+    /// <exception cref="OverflowException">The value is a string whose pool index exceeds <see cref="int.MaxValue"/>.
+    /// <para>该值为字符串且其字符串池索引超出 <see cref="int.MaxValue"/>。</para></exception>
     public string FormatValue(AXmlStringPool? globalPool, byte packageId)
     {
         if (IsComplex)

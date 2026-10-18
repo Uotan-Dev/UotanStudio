@@ -19,12 +19,8 @@ public sealed class CountingReadStream : Stream
     private readonly Action<int>? _bytesRead;
     private bool _disposed;
 
-    /// <summary>
-    /// Creates a counting read stream.
-    /// <para>创建计数读取流。</para>
-    /// </summary>
-    /// <param name="inner">Readable stream the bytes are taken from.
-    /// <para>读取字节的来源流。</para></param>
+    /// <summary>Creates a counting read stream.<para>创建计数读取流。</para></summary>
+    /// <param name="inner">Readable stream the bytes are taken from.<para>读取字节的来源流。</para></param>
     /// <param name="leaveOpen">When <see langword="true"/>, disposing this wrapper leaves <paramref name="inner"/> open.
     /// <para>为 <see langword="true"/> 时，释放本包装器后 <paramref name="inner"/> 仍保持打开。</para></param>
     /// <param name="cancellationToken">Token checked before each read and after each accepted byte count, including reads issued through <see cref="Stream.ReadAsync(Memory{byte},CancellationToken)"/>.

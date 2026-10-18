@@ -15,15 +15,11 @@ namespace UotanStudio.Services.NativeBin;
 /// <para>为 <c>true</c> 时表示非官方镜像。</para></param>
 public sealed record NativeBinUrl(string Url, bool IsMirror);
 
-/// <summary>
-/// Catalog entry describing one supported libusb runtime for a .NET RID:
-/// expected SHA-256 and the ordered list of URLs to attempt.
-/// <para>描述某个 .NET RID 支持的 libusb 运行时的清单条目：预期 SHA-256 及按顺序尝试的 URL 列表。</para>
-/// </summary>
+/// <summary>Catalog entry describing one supported libusb runtime for a .NET RID: expected SHA-256 and the ordered list of URLs to attempt.
+/// <para>描述某个 .NET RID 支持的 libusb 运行时的清单条目：预期 SHA-256 及按顺序尝试的 URL 列表。</para></summary>
 /// <param name="Rid">The target runtime identifier, for instance win-x64.
 /// <para>目标运行时标识，例如 win-x64。</para></param>
-/// <param name="FileName">File name of the shared library to fetch.
-/// <para>要获取的共享库文件名。</para></param>
+/// <param name="FileName">File name of the shared library to fetch.<para>要获取的共享库文件名。</para></param>
 /// <param name="ExpectedSha256">Lowercase 64-char SHA-256 hex digest of the artifact.
 /// <para>产物小写 64 字符 SHA-256 十六进制摘要。</para></param>
 /// <param name="Urls">Ordered URLs to try; first entry is the canonical upstream release.

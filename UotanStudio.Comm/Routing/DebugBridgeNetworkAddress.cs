@@ -92,13 +92,10 @@ public static class DebugBridgeNetworkAddress
         return value.Contains(':') ? $"[{value}]" : value;
     }
 
-    /// <summary>
-    /// Builds the <c>host:port</c> identity used by server commands and by the device list, bracketing an
-    /// IPv6 host.
-    /// <para>构建 server 命令与设备列表使用的 <c>host:port</c> 标识；IPv6 主机加方括号。</para>
-    /// </summary>
-    /// <param name="host">Host name or IP literal. <para>主机名或 IP 字面量。</para></param>
-    /// <param name="port">TCP port. <para>TCP 端口。</para></param>
+    /// <summary>Builds the <c>host:port</c> identity used by server commands and by the device list, bracketing an IPv6 host.
+    /// <para>构建 server 命令与设备列表使用的 <c>host:port</c> 标识；IPv6 主机加方括号。</para></summary>
+    /// <param name="host">Host name or IP literal.<para>主机名或 IP 字面量。</para></param>
+    /// <param name="port">TCP port.<para>TCP 端口。</para></param>
     /// <returns>The bracketed-if-needed <c>host:port</c> text.
     /// <para>必要时加括号的 <c>host:port</c> 文本。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="host"/> is blank.
@@ -115,22 +112,12 @@ public static class DebugBridgeNetworkAddress
         return $"{FormatHost(host)}:{port.ToString(CultureInfo.InvariantCulture)}";
     }
 
-    /// <summary>
-    /// Splits a <c>host:port</c> identity into the bare host the sockets dial and its port, accepting both
-    /// the bracketed IPv6 form produced by <see cref="FormatEndpoint"/> and a plain <c>host:port</c>. A
-    /// bracket-less host with interior colons is rejected, because it cannot be told apart from an IPv6
-    /// address that carries no port, matching the grammar <see cref="TryNormalize(string,int,out string)"/>
-    /// accepts.
-    /// <para>把 <c>host:port</c> 标识拆成套接字实际拨号的裸主机与端口；同时接受
-    /// <see cref="FormatEndpoint"/> 产生的 IPv6 括号形式与普通 <c>host:port</c>。不带方括号却含内部冒号的
-    /// 主机被拒绝，因为它无法与「不带端口的 IPv6 地址」区分，这与 <see cref="TryNormalize(string,int,out string)"/>
-    /// 接受的语法一致。</para>
-    /// </summary>
-    /// <param name="endpoint">The endpoint identity. <para>端点标识。</para></param>
-    /// <param name="host">The bare host, without brackets. <para>不带方括号的裸主机。</para></param>
-    /// <param name="port">The TCP port. <para>TCP 端口。</para></param>
-    /// <returns>Whether the text carries a usable host and port.
-    /// <para>文本是否带有可用主机与端口。</para></returns>
+    /// <summary>Splits a <c>host:port</c> identity into the bare host the sockets dial and its port, accepting both the bracketed IPv6 form produced by <see cref="FormatEndpoint"/> and a plain <c>host:port</c>. A bracket-less host with interior colons is rejected, because it cannot be told apart from an IPv6 address that carries no port, matching the grammar <see cref="TryNormalize(string,int,out string)"/> accepts.
+    /// <para>把 <c>host:port</c> 标识拆成套接字实际拨号的裸主机与端口；同时接受 <see cref="FormatEndpoint"/> 产生的 IPv6 括号形式与普通 <c>host:port</c>。不带方括号却含内部冒号的 主机被拒绝，因为它无法与「不带端口的 IPv6 地址」区分，这与 <see cref="TryNormalize(string,int,out string)"/> 接受的语法一致。</para></summary>
+    /// <param name="endpoint">The endpoint identity.<para>端点标识。</para></param>
+    /// <param name="host">The bare host, without brackets.<para>不带方括号的裸主机。</para></param>
+    /// <param name="port">The TCP port.<para>TCP 端口。</para></param>
+    /// <returns>Whether the text carries a usable host and port.<para>文本是否带有可用主机与端口。</para></returns>
     public static bool TrySplitEndpoint(string? endpoint, out string host, out int port)
     {
         host = string.Empty;

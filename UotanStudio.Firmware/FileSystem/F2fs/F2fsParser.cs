@@ -6,20 +6,16 @@ using UotanStudio.Hash.Crc32Register;
 
 namespace UotanStudio.Firmware.FileSystem.F2fs;
 
-/// <summary>
-/// One directory-tree entry of a parsed F2FS image, addressed by its image-relative path.
-/// <para>已解析 F2FS 镜像目录树中的一个条目，以镜像内相对路径定位。</para>
-/// </summary>
+/// <summary>One directory-tree entry of a parsed F2FS image, addressed by its image-relative path.
+/// <para>已解析 F2FS 镜像目录树中的一个条目，以镜像内相对路径定位。</para></summary>
 /// <param name="Path">Image-relative path with <c>/</c> separators and no leading slash.
 /// <para>镜像内相对路径，以 <c>/</c> 分隔且无前导斜杠。</para></param>
 /// <param name="Size">Logical size in bytes; for directories this is the dentry data size.
 /// <para>逻辑大小（字节）；目录为 dentry 数据大小。</para></param>
 /// <param name="Inode">Inode number (nid) backing this entry.
 /// <para>该条目对应的 inode 号（nid）。</para></param>
-/// <param name="Kind">Entry type: file, directory or symlink.
-/// <para>条目类型：文件、目录或符号链接。</para></param>
-/// <param name="SymlinkTarget">UTF-8-decoded link target for symlinks; <see langword="null"/> for
-/// every other kind.
+/// <param name="Kind">Entry type: file, directory or symlink.<para>条目类型：文件、目录或符号链接。</para></param>
+/// <param name="SymlinkTarget">UTF-8-decoded link target for symlinks; <see langword="null"/> for every other kind.
 /// <para>符号链接的 UTF-8 解码目标；其他类型均为 <see langword="null"/>。</para></param>
 /// <param name="Uid">Owner user identifier recorded by the inode.
 /// <para>inode 记录的所有者用户 ID。</para></param>
@@ -29,8 +25,7 @@ namespace UotanStudio.Firmware.FileSystem.F2fs;
 /// <para>源 inode 的 POSIX 模式位（文件类型与权限）。</para></param>
 /// <param name="Xattrs">Decoded extended attributes; <see langword="null"/> when the entry carries none.
 /// <para>解码后的扩展属性；条目无属性时为 <see langword="null"/>。</para></param>
-/// <param name="DeviceId">Device number for special nodes, resolved from the inode address fields;
-/// <c>0</c> for regular files.
+/// <param name="DeviceId">Device number for special nodes, resolved from the inode address fields; <c>0</c> for regular files.
 /// <para>特殊节点的 dev 号（取自 inode 地址字段）；常规文件为 <c>0</c>。</para></param>
 /// <param name="Flags">Raw F2FS inode flag bits of the source inode.
 /// <para>源 inode 的原始 F2FS 标志位。</para></param>
@@ -137,15 +132,10 @@ public sealed class F2fsParser : IDisposable
         }
     }
 
-    /// <summary>
-    /// Parses an f2fs image from an existing stream (the parser takes ownership and disposes it).
-    /// <para>从既有流解析 f2fs 镜像（所有权转移，释放解析器时一并释放流）。</para>
-    /// </summary>
-    /// <param name="stream">Readable, seekable image stream; it is read from position 0 and its
-    /// position afterwards is undefined. The parser assumes ownership and disposes it on failure or
-    /// <see cref="Dispose"/>.
-    /// <para>可读、可寻址的镜像流；从位置 0 开始读取，结束后位置不确定。所有权归解析器，初始化失败或
-    /// <see cref="Dispose"/> 时由其释放。</para></param>
+    /// <summary>Parses an f2fs image from an existing stream (the parser takes ownership and disposes it).
+    /// <para>从既有流解析 f2fs 镜像（所有权转移，释放解析器时一并释放流）。</para></summary>
+    /// <param name="stream">Readable, seekable image stream; it is read from position 0 and its position afterwards is undefined. The parser assumes ownership and disposes it on failure or <see cref="Dispose"/>.
+    /// <para>可读、可寻址的镜像流；从位置 0 开始读取，结束后位置不确定。所有权归解析器，初始化失败或 <see cref="Dispose"/> 时由其释放。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException">The stream cannot be read or cannot seek.
@@ -377,15 +367,11 @@ public sealed class F2fsParser : IDisposable
         return algorithms;
     }
 
-    /// <summary>
-    /// Writes the full content of the file at path to output, zero-filling sparse holes.
-    /// <para>将 path 处文件的完整内容写入 output， 稀疏洞补零；符号链接输出其目标字节。</para>
-    /// </summary>
-    /// <param name="path">Image-relative path exactly as reported by <see cref="ListFiles"/>;
-    /// matching is case-sensitive.
+    /// <summary>Writes the full content of the file at path to output, zero-filling sparse holes.
+    /// <para>将 path 处文件的完整内容写入 output， 稀疏洞补零；符号链接输出其目标字节。</para></summary>
+    /// <param name="path">Image-relative path exactly as reported by <see cref="ListFiles"/>; matching is case-sensitive.
     /// <para>与 <see cref="ListFiles"/> 报告一致的镜像内相对路径；区分大小写。</para></param>
-    /// <param name="output">Writable destination stream; its current position is used and advanced,
-    /// and it is not closed by this call.
+    /// <param name="output">Writable destination stream; its current position is used and advanced, and it is not closed by this call.
     /// <para>可写目标流；从当前 Position 写入并前移，本调用不关闭该流。</para></param>
     /// <exception cref="ArgumentException"><paramref name="path"/> is <see langword="null"/> or empty.
     /// <para><paramref name="path"/> 为 <see langword="null"/> 或空字符串。</para></exception>
@@ -395,8 +381,7 @@ public sealed class F2fsParser : IDisposable
     /// <para>镜像内不存在该路径的条目。</para></exception>
     /// <exception cref="InvalidOperationException"><paramref name="path"/> names a directory.
     /// <para><paramref name="path"/> 指向目录。</para></exception>
-    /// <exception cref="FileSystemCorruptedException">The file's node chain, compression clusters or block
-    /// addresses are corrupt.
+    /// <exception cref="FileSystemCorruptedException">The file's node chain, compression clusters or block addresses are corrupt.
     /// <para>文件的节点链、压缩簇或块地址已损坏。</para></exception>
     public void ReadFile(string path, Stream output)
     {
@@ -411,17 +396,13 @@ public sealed class F2fsParser : IDisposable
         WriteFileData(entry.Inode, inode, output);
     }
 
-    /// <summary>
-    /// Extracts the whole filesystem tree into outputDirectory.
-    /// <para>将整个文件系统树提取到 outputDirectory。</para>
-    /// </summary>
+    /// <summary>Extracts the whole filesystem tree into outputDirectory.
+    /// <para>将整个文件系统树提取到 outputDirectory。</para></summary>
     /// <param name="outputDirectory">Host directory to receive the tree; created when missing.
     /// <para>接收目录树的宿主目录；不存在时自动创建。</para></param>
-    /// <param name="overwrite"><see langword="true"/> (default) replaces existing host files;
-    /// <see langword="false"/> skips entries whose host file already exists.
+    /// <param name="overwrite"><see langword="true"/> (default) replaces existing host files; <see langword="false"/> skips entries whose host file already exists.
     /// <para><see langword="true"/>（默认）覆盖已存在的宿主文件；<see langword="false"/> 跳过宿主已存在对应文件的条目。</para></param>
-    /// <param name="progress">Receives (processed, total) entry counts after each entry;
-    /// <see langword="null"/> reports nothing.
+    /// <param name="progress">Receives (processed, total) entry counts after each entry; <see langword="null"/> reports nothing.
     /// <para>每处理完一个条目上报（已处理数, 总数）；为 <see langword="null"/> 时不上报。</para></param>
     /// <exception cref="ArgumentException"><paramref name="outputDirectory"/> is <see langword="null"/> or whitespace.
     /// <para><paramref name="outputDirectory"/> 为 <see langword="null"/> 或仅含空白。</para></exception>
@@ -434,17 +415,13 @@ public sealed class F2fsParser : IDisposable
     /// <para>带字节计量与取消的提取，取消可作用于大文件内部的写入。</para></summary>
     /// <param name="outputDirectory">Host directory to receive the tree; created when missing.
     /// <para>接收目录树的宿主目录；不存在时自动创建。</para></param>
-    /// <param name="byteProgress">Receives (processed, total) output bytes; symlink targets count as
-    /// their UTF-8 length and non-regular payloads count as zero. <see langword="null"/> reports nothing.
+    /// <param name="byteProgress">Receives (processed, total) output bytes; symlink targets count as their UTF-8 length and non-regular payloads count as zero. <see langword="null"/> reports nothing.
     /// <para>上报（已处理字节, 总字节）；符号链接目标按 UTF-8 长度计数，非常规数据按零计数。为 <see langword="null"/> 时不上报。</para></param>
-    /// <param name="cancellationToken">Checked before each entry and inside large-file writes;
-    /// partial host files are written atomically so a cancelled entry leaves no truncated output.
+    /// <param name="cancellationToken">Checked before each entry and inside large-file writes; partial host files are written atomically so a cancelled entry leaves no truncated output.
     /// <para>在每个条目之前及大文件写入内部进行检查；宿主文件以原子方式写入，被取消的条目不会留下截断输出。</para></param>
-    /// <param name="overwrite"><see langword="true"/> (default) replaces existing host files;
-    /// <see langword="false"/> skips entries whose host file already exists.
+    /// <param name="overwrite"><see langword="true"/> (default) replaces existing host files; <see langword="false"/> skips entries whose host file already exists.
     /// <para><see langword="true"/>（默认）覆盖已存在的宿主文件；<see langword="false"/> 跳过宿主已存在对应文件的条目。</para></param>
-    /// <param name="progress">Receives (processed, total) entry counts after each entry;
-    /// <see langword="null"/> reports nothing.
+    /// <param name="progress">Receives (processed, total) entry counts after each entry; <see langword="null"/> reports nothing.
     /// <para>每处理完一个条目上报（已处理数, 总数）；为 <see langword="null"/> 时不上报。</para></param>
     /// <exception cref="ArgumentException"><paramref name="outputDirectory"/> is <see langword="null"/> or whitespace.
     /// <para><paramref name="outputDirectory"/> 为 <see langword="null"/> 或仅含空白。</para></exception>

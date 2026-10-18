@@ -19,20 +19,12 @@ internal static class OzipKeyDatabase
     /// </returns>
     public static IReadOnlyList<OzipKeyEntry> GetAllKeys() => Entries;
 
-    /// <summary>
-    /// Gets a key entry by its index.
-    /// <para>根据索引获取密钥条目。</para>
-    /// </summary>
-    /// <param name="index">
-    /// Zero-based position in the built-in list; it corresponds to the key slot index a payload records.
-    /// <para>内置列表中从零开始的序号，对应负载中记录的密钥槽位编号。</para>
-    /// </param>
-    /// <returns>The entry at that position.
-    /// <para>该位置上的条目。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="index"/> is negative or greater than or equal to <see cref="Count"/>.
-    /// <para><paramref name="index"/> 为负数，或大于等于 <see cref="Count"/>。</para>
-    /// </exception>
+    /// <summary>Gets a key entry by its index.<para>根据索引获取密钥条目。</para></summary>
+    /// <param name="index">Zero-based position in the built-in list; it corresponds to the key slot index a payload records.
+    /// <para>内置列表中从零开始的序号，对应负载中记录的密钥槽位编号。</para></param>
+    /// <returns>The entry at that position.<para>该位置上的条目。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="index"/> is negative or greater than or equal to <see cref="Count"/>.
+    /// <para><paramref name="index"/> 为负数，或大于等于 <see cref="Count"/>。</para></exception>
     public static OzipKeyEntry FindByIndex(int index)
     {
         return index < 0 || index >= Entries.Count

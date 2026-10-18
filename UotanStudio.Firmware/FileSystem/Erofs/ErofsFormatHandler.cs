@@ -133,20 +133,19 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
         }
     }
 
-    /// <summary>
-    /// Unpacks an EROFS image carried by an already-resolved logical stream into the output directory.
-    /// <para>把已解析逻辑流承载的 EROFS 镜像解包到输出目录。</para>
-    /// </summary>
-    /// <param name="logical">Seekable logical stream positioned at the start of the primary device image;
-    /// ownership stays with the caller, which disposes it after the returned task completes.
+    /// <summary>Unpacks an EROFS image carried by an already-resolved logical stream into the output directory.
+    /// <para>把已解析逻辑流承载的 EROFS 镜像解包到输出目录。</para></summary>
+    /// <param name="logical">Seekable logical stream positioned at the start of the primary device image; ownership stays with the caller, which disposes it after the returned task completes.
     /// <para>定位到主设备镜像起始处的可寻址逻辑流；所有权保留在调用方，由调用方在返回任务完成后释放。</para></param>
-    /// <param name="outputDirectory">Host directory receiving the extracted tree. <para>接收解出目录树的主机目录。</para></param>
+    /// <param name="outputDirectory">Host directory receiving the extracted tree.
+    /// <para>接收解出目录树的主机目录。</para></param>
     /// <param name="byteProgress">Optional byte-level progress routed to the extraction stage. <see langword="null"/> reports nothing.
     /// <para>可选的字节级进度，归入提取阶段；<see langword="null"/> 表示不报告。</para></param>
-    /// <param name="overwrite">Whether existing output files may be replaced. <para>是否允许替换已存在的输出文件。</para></param>
-    /// <param name="cancellationToken">Cancels parsing and writes; cancellation propagates. <para>取消解析与写入；取消会向上抛出。</para></param>
-    /// <returns>An <c>Ok</c> result listing every extracted file path with the inner-format metadata; its
-    /// summary is composed by the container caller, which alone knows the container file path.
+    /// <param name="overwrite">Whether existing output files may be replaced.
+    /// <para>是否允许替换已存在的输出文件。</para></param>
+    /// <param name="cancellationToken">Cancels parsing and writes; cancellation propagates.
+    /// <para>取消解析与写入；取消会向上抛出。</para></param>
+    /// <returns>An <c>Ok</c> result listing every extracted file path with the inner-format metadata; its summary is composed by the container caller, which alone knows the container file path.
     /// <para><c>Ok</c> 结果列出全部解出的文件路径并附内部格式元数据；其摘要由容器调用方组织，因为只有它知道容器文件路径。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
@@ -167,19 +166,13 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
             }));
     }
 
-    /// <summary>
-    /// Reads format metadata without unpacking.
-    /// <para>读取格式元数据而不解包。</para>
-    /// </summary>
-    /// <param name="filePath">EROFS image file, opened read-only on a worker thread and closed before the
-    /// task completes. <para>EROFS 镜像文件；在工作线程上以只读方式打开，任务完成前关闭。</para></param>
+    /// <summary>Reads format metadata without unpacking.<para>读取格式元数据而不解包。</para></summary>
+    /// <param name="filePath">EROFS image file, opened read-only on a worker thread and closed before the task completes.
+    /// <para>EROFS 镜像文件；在工作线程上以只读方式打开，任务完成前关闭。</para></param>
     /// <param name="cancellationToken">Token checked before and after parsing.
     /// <para>在解析前后各检查一次的令牌。</para></param>
-    /// <returns>An <c>Ok</c> result whose metadata dictionary carries superblock geometry, UUID, feature
-    /// flag names and effective compression algorithms; a <c>Fail</c> result with the error message when
-    /// the image cannot be read or parsed. <see langword="null"/> entries never occur in the dictionary.
-    /// <para><c>Ok</c> 结果的元数据字典包含超级块几何、UUID、特性标志名与实际生效的压缩算法；镜像无法读取或
-    /// 解析时返回带错误消息的 <c>Fail</c> 结果。字典中不会出现 <see langword="null"/> 项。</para></returns>
+    /// <returns>An <c>Ok</c> result whose metadata dictionary carries superblock geometry, UUID, feature flag names and effective compression algorithms; a <c>Fail</c> result with the error message when the image cannot be read or parsed. <see langword="null"/> entries never occur in the dictionary.
+    /// <para><c>Ok</c> 结果的元数据字典包含超级块几何、UUID、特性标志名与实际生效的压缩算法；镜像无法读取或 解析时返回带错误消息的 <c>Fail</c> 结果。字典中不会出现 <see langword="null"/> 项。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
@@ -234,25 +227,18 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Unpacks the erofs image to the output directory.
-    /// <para>将 erofs 镜像解包到输出目录。</para>
-    /// </summary>
-    /// <param name="filePath">Source image; extraction runs against a private snapshot copy of it, so a
-    /// concurrent change to this file fails the operation instead of mixing content versions.
+    /// <summary>Unpacks the erofs image to the output directory.
+    /// <para>将 erofs 镜像解包到输出目录。</para></summary>
+    /// <param name="filePath">Source image; extraction runs against a private snapshot copy of it, so a concurrent change to this file fails the operation instead of mixing content versions.
     /// <para>源镜像；解包针对其私有快照副本进行，因此对该文件的并发修改会使操作失败而不是混用两个版本的内容。</para></param>
     /// <param name="outputDirectory">Destination tree; files are extracted with their image paths.
     /// <para>目标目录树；文件按镜像内路径解出。</para></param>
-    /// <param name="options">Unpack options; <see langword="null"/> overwrites existing files and reports
-    /// no byte progress. External device images are validated against the snapshot stage.
-    /// <para>解包选项；为 <see langword="null"/> 时覆盖已存在文件且不报告字节进度。外部设备镜像会在快照阶段
-    /// 一并校验。</para></param>
+    /// <param name="options">Unpack options; <see langword="null"/> overwrites existing files and reports no byte progress. External device images are validated against the snapshot stage.
+    /// <para>解包选项；为 <see langword="null"/> 时覆盖已存在文件且不报告字节进度。外部设备镜像会在快照阶段 一并校验。</para></param>
     /// <param name="cancellationToken">Token checked through snapshot preparation and extraction.
     /// <para>在快照准备与解包全程检查的令牌。</para></param>
-    /// <returns>An <c>Ok</c> result listing the extracted file paths, or a <c>Fail</c> result when the
-    /// image, snapshot or extraction fails; summary paths refer to the original image file.
-    /// <para>返回列出已解出文件路径的 <c>Ok</c> 结果；镜像、快照或解包失败时返回 <c>Fail</c> 结果，
-    /// 摘要中的路径指向原始镜像文件。</para></returns>
+    /// <returns>An <c>Ok</c> result listing the extracted file paths, or a <c>Fail</c> result when the image, snapshot or extraction fails; summary paths refer to the original image file.
+    /// <para>返回列出已解出文件路径的 <c>Ok</c> 结果；镜像、快照或解包失败时返回 <c>Fail</c> 结果， 摘要中的路径指向原始镜像文件。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
@@ -286,40 +272,31 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Packs a directory into an erofs image.
-    /// <para>将目录打包为 erofs 镜像。</para>
-    /// </summary>
-    /// <param name="inputPath">Unpacked directory tree; when preserved rebuild parameters exist for it,
-    /// the original-image reconstruction path is taken first.
+    /// <summary>Packs a directory into an erofs image.<para>将目录打包为 erofs 镜像。</para></summary>
+    /// <param name="inputPath">Unpacked directory tree; when preserved rebuild parameters exist for it, the original-image reconstruction path is taken first.
     /// <para>已解包的目录树；若存在为其保留的重建参数，会优先走原镜像重建路径。</para></param>
     /// <param name="outputPath">Destination image file, overwritten by a successful build.
     /// <para>目标镜像文件；构建成功后被覆盖。</para></param>
     /// <param name="cancellationToken">Token checked at task start, throughout preserved-image restoration and during the image build.
     /// <para>在任务开始、保留镜像重建与镜像构建全程检查的令牌。</para></param>
-    /// <returns>An <c>Ok</c> result on success, possibly carrying rebuild-report metadata; a <c>Fail</c>
-    /// result when the input is not a directory or the build fails.
+    /// <returns>An <c>Ok</c> result on success, possibly carrying rebuild-report metadata; a <c>Fail</c> result when the input is not a directory or the build fails.
     /// <para>成功时返回 <c>Ok</c> 结果（可能带有重建报告元数据）；输入不是目录或构建失败时返回 <c>Fail</c> 结果。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
         => PackCore(inputPath, outputPath, progress: null, cancellationToken);
 
-    /// <summary>
-    /// Packs a directory into an erofs image with byte-level progress.
-    /// <para>带字节级进度将目录打包为 erofs 镜像。</para>
-    /// </summary>
-    /// <param name="inputPath">Unpacked directory tree; when preserved rebuild parameters exist for it,
-    /// the original-image reconstruction path is taken first.
+    /// <summary>Packs a directory into an erofs image with byte-level progress.
+    /// <para>带字节级进度将目录打包为 erofs 镜像。</para></summary>
+    /// <param name="inputPath">Unpacked directory tree; when preserved rebuild parameters exist for it, the original-image reconstruction path is taken first.
     /// <para>已解包的目录树；若存在为其保留的重建参数，会优先走原镜像重建路径。</para></param>
     /// <param name="outputPath">Destination image file, overwritten by a successful build.
     /// <para>目标镜像文件；构建成功后被覆盖。</para></param>
-    /// <param name="progress">Reporter receiving byte progress for the building stage; <see langword="null"/>
-    /// reports nothing. <para>接收构建阶段字节进度的回调；为 <see langword="null"/> 时不报告。</para></param>
+    /// <param name="progress">Reporter receiving byte progress for the building stage; <see langword="null"/> reports nothing.
+    /// <para>接收构建阶段字节进度的回调；为 <see langword="null"/> 时不报告。</para></param>
     /// <param name="cancellationToken">Token checked at task start, throughout preserved-image restoration and during the image build.
     /// <para>在任务开始、保留镜像重建与镜像构建全程检查的令牌。</para></param>
-    /// <returns>An <c>Ok</c> result on success, possibly carrying rebuild-report metadata; a <c>Fail</c>
-    /// result when the input is not a directory or the build fails.
+    /// <returns>An <c>Ok</c> result on success, possibly carrying rebuild-report metadata; a <c>Fail</c> result when the input is not a directory or the build fails.
     /// <para>成功时返回 <c>Ok</c> 结果（可能带有重建报告元数据）；输入不是目录或构建失败时返回 <c>Fail</c> 结果。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>

@@ -8,21 +8,15 @@ using FirmwareAvbVerifier = UotanStudio.Firmware.BootSecurity.Avb.Verification.A
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Images;
 
-/// <summary>
-/// Comm-side AVB hash descriptor model, parsed from descriptors embedded in a vbmeta auxiliary data block.
-/// It is distinct from Firmware's signing model
-/// <see cref="Firmware.BootSecurity.Avb.AvbHashDescriptor"/>.
-/// <para>Comm 侧 AVB 哈希描述符模型，从 vbmeta 辅助数据块中内嵌的描述符解析得到。
-/// 与 Firmware 的签名模型
-/// <see cref="Firmware.BootSecurity.Avb.AvbHashDescriptor"/>不同。</para>
-/// </summary>
+/// <summary>Comm-side AVB hash descriptor model, parsed from descriptors embedded in a vbmeta auxiliary data block. It is distinct from Firmware's signing model <see cref="Firmware.BootSecurity.Avb.AvbHashDescriptor"/>.
+/// <para>Comm 侧 AVB 哈希描述符模型，从 vbmeta 辅助数据块中内嵌的描述符解析得到。 与 Firmware 的签名模型 <see cref="Firmware.BootSecurity.Avb.AvbHashDescriptor"/>不同。</para></summary>
 /// <param name="tag">Descriptor tag identifying the descriptor kind; hash descriptors use 0.
 /// <para>描述符标签，用于标识描述符类型；哈希描述符为 0。</para></param>
 /// <param name="dmVerityVersion">dm-verity format version declared by the descriptor.
 /// <para>描述符声明的 dm-verity 格式版本。</para></param>
 /// <param name="imageSize">Size in bytes of the hashed image region covered by the hash tree.
 /// <para>哈希树覆盖的被哈希镜像区域大小（字节）。</para></param>
-/// <param name="hashBlockSize">Hash tree block size in bytes. <para>哈希树块大小（字节）。</para></param>
+/// <param name="hashBlockSize">Hash tree block size in bytes.<para>哈希树块大小（字节）。</para></param>
 /// <param name="hashAlgorithm">Digest algorithm name stored in the descriptor, e.g. "sha256".
 /// <para>描述符中存储的摘要算法名称，如 "sha256"。</para></param>
 /// <param name="partitionName">Name of the partition this digest applies to.

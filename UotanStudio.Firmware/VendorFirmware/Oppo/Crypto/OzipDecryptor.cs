@@ -27,21 +27,12 @@ internal static class OzipDecryptor
 
     private static readonly byte[] AndrMagic = [0x41, 0x4E, 0x44, 0x52];
 
-    /// <summary>
-    /// Attempts to automatically detect the correct AES key from encrypted data.
-    /// <para>尝试从加密数据中自动检测正确的 AES 密钥。</para>
-    /// </summary>
-    /// <param name="firstEncrypted16Bytes">
-    /// The first 16-byte encrypted prefix block of the payload, taken from offset <c>0x1050</c> of a
-    /// standard OZip file. <para>负载的第一个 16 字节加密前缀块，取自标准 OZip 文件的偏移 <c>0x1050</c> 处。</para>
-    /// </param>
-    /// <returns>
-    /// The first built-in database key whose ECB decryption of the block starts with a known plaintext
-    /// magic (<c>PK\x03\x04</c>, <c>AVB0</c>, or <c>ANDR</c>), or <see langword="null"/> when no built-in
-    /// key matches. Custom keys supplied to providers are not consulted here.
-    /// <para>内置密钥库中第一个能使 ECB 解密结果以已知明文魔数（<c>PK\x03\x04</c>、<c>AVB0</c> 或 <c>ANDR</c>）开头的密钥；
-    /// 没有内置密钥匹配时返回 <see langword="null"/>。此处不会使用提供给提供程序的自定义密钥。</para>
-    /// </returns>
+    /// <summary>Attempts to automatically detect the correct AES key from encrypted data.
+    /// <para>尝试从加密数据中自动检测正确的 AES 密钥。</para></summary>
+    /// <param name="firstEncrypted16Bytes">The first 16-byte encrypted prefix block of the payload, taken from offset <c>0x1050</c> of a standard OZip file.
+    /// <para>负载的第一个 16 字节加密前缀块，取自标准 OZip 文件的偏移 <c>0x1050</c> 处。</para></param>
+    /// <returns>The first built-in database key whose ECB decryption of the block starts with a known plaintext magic (<c>PK\x03\x04</c>, <c>AVB0</c>, or <c>ANDR</c>), or <see langword="null"/> when no built-in key matches. Custom keys supplied to providers are not consulted here.
+    /// <para>内置密钥库中第一个能使 ECB 解密结果以已知明文魔数（<c>PK\x03\x04</c>、<c>AVB0</c> 或 <c>ANDR</c>）开头的密钥； 没有内置密钥匹配时返回 <see langword="null"/>。此处不会使用提供给提供程序的自定义密钥。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="firstEncrypted16Bytes"/> is not exactly 16 bytes long.
     /// <para><paramref name="firstEncrypted16Bytes"/> 的长度不是 16 字节。</para></exception>
     public static OzipKeyEntry? DetectKey(byte[] firstEncrypted16Bytes)
@@ -72,19 +63,12 @@ internal static class OzipDecryptor
         return null;
     }
 
-    /// <summary>
-    /// Decrypts OZip data stream using the specified key.
-    /// <para>使用指定密钥解密 OZip 数据流。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable stream positioned at the first encrypted unit; the header region is not read here and
-    /// the stream is neither repositioned nor closed.
-    /// <para>定位在第一个加密单元起始处的可读流；此处不读取头部区域，也不会移动或关闭该流。</para>
-    /// </param>
-    /// <param name="output">
-    /// Writable stream that receives each unit's decrypted prefix block followed by its plaintext run; it
-    /// is not closed. <para>接收每个单元解密前缀块及其后明文段的可写流；不会被关闭。</para>
-    /// </param>
+    /// <summary>Decrypts OZip data stream using the specified key.
+    /// <para>使用指定密钥解密 OZip 数据流。</para></summary>
+    /// <param name="input">Readable stream positioned at the first encrypted unit; the header region is not read here and the stream is neither repositioned nor closed.
+    /// <para>定位在第一个加密单元起始处的可读流；此处不读取头部区域，也不会移动或关闭该流。</para></param>
+    /// <param name="output">Writable stream that receives each unit's decrypted prefix block followed by its plaintext run; it is not closed.
+    /// <para>接收每个单元解密前缀块及其后明文段的可写流；不会被关闭。</para></param>
     /// <param name="aesKey">The 16-byte AES-128 key used for the ECB prefix-block decryption.
     /// <para>用于 ECB 前缀块解密的 16 字节 AES-128 密钥。</para></param>
     /// <param name="encryptedDataSize">Byte length of the encrypted region to consume from <paramref name="input"/>.
@@ -93,13 +77,10 @@ internal static class OzipDecryptor
     /// <para><paramref name="aesKey"/> 的长度不是 16 字节。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="encryptedDataSize"/> is negative.
     /// <para><paramref name="encryptedDataSize"/> 为负数。</para></exception>
-    /// <exception cref="InvalidOppFormatException">
-    /// The input ends before <paramref name="encryptedDataSize"/> bytes are consumed, or the region ends
-    /// with an incomplete 16-byte encrypted prefix.
-    /// <para>输入流在消费满 <paramref name="encryptedDataSize"/> 字节前提前结束，或区域末尾存在不完整的 16 字节加密前缀。</para>
-    /// </exception>
-    /// <exception cref="CryptographicException">The ECB decryption of a prefix block did not produce a full
-    /// 16-byte block. <para>某个前缀块的 ECB 解密未产生完整的 16 字节块。</para></exception>
+    /// <exception cref="InvalidOppFormatException">The input ends before <paramref name="encryptedDataSize"/> bytes are consumed, or the region ends with an incomplete 16-byte encrypted prefix.
+    /// <para>输入流在消费满 <paramref name="encryptedDataSize"/> 字节前提前结束，或区域末尾存在不完整的 16 字节加密前缀。</para></exception>
+    /// <exception cref="CryptographicException">The ECB decryption of a prefix block did not produce a full 16-byte block.
+    /// <para>某个前缀块的 ECB 解密未产生完整的 16 字节块。</para></exception>
     public static void Decrypt(Stream input, Stream output, byte[] aesKey, long encryptedDataSize)
     {
         Guard.ThrowIfNull(input);
@@ -155,27 +136,20 @@ internal static class OzipDecryptor
         }
     }
 
-    /// <summary>
-    /// Decrypts a standard OZip file to an output stream.
-    /// <para>解密标准 OZip 文件到输出流。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable, seekable OZip file stream; the header is validated, then reading continues from offset
-    /// <c>0x1050</c>. Neither stream is closed.
-    /// <para>可读取、可寻址的 OZip 文件流；先校验头部，然后从偏移 <c>0x1050</c> 继续读取。两个流都不会被关闭。</para>
-    /// </param>
+    /// <summary>Decrypts a standard OZip file to an output stream.
+    /// <para>解密标准 OZip 文件到输出流。</para></summary>
+    /// <param name="input">Readable, seekable OZip file stream; the header is validated, then reading continues from offset <c>0x1050</c>. Neither stream is closed.
+    /// <para>可读取、可寻址的 OZip 文件流；先校验头部，然后从偏移 <c>0x1050</c> 继续读取。两个流都不会被关闭。</para></param>
     /// <param name="output">Stream that receives the decrypted payload; it is not closed.
     /// <para>接收解密负载的流；不会被关闭。</para></param>
     /// <param name="aesKey">The 16-byte AES-128 key for the payload.
     /// <para>用于该负载的 16 字节 AES-128 密钥。</para></param>
-    /// <exception cref="ArgumentException"><paramref name="input"/> is not readable or not seekable, or
-    /// <paramref name="aesKey"/> is not exactly 16 bytes long.
+    /// <exception cref="ArgumentException"><paramref name="input"/> is not readable or not seekable, or <paramref name="aesKey"/> is not exactly 16 bytes long.
     /// <para><paramref name="input"/> 不可读取或不可寻址，或 <paramref name="aesKey"/> 的长度不是 16 字节。</para></exception>
-    /// <exception cref="InvalidOppFormatException">The header is invalid, or the declared size exceeds the
-    /// bytes actually present in <paramref name="input"/>.
+    /// <exception cref="InvalidOppFormatException">The header is invalid, or the declared size exceeds the bytes actually present in <paramref name="input"/>.
     /// <para>头部无效，或声明的大小超出 <paramref name="input"/> 中实际存在的字节数。</para></exception>
-    /// <exception cref="CryptographicException">The ECB decryption of a prefix block did not produce a full
-    /// 16-byte block. <para>某个前缀块的 ECB 解密未产生完整的 16 字节块。</para></exception>
+    /// <exception cref="CryptographicException">The ECB decryption of a prefix block did not produce a full 16-byte block.
+    /// <para>某个前缀块的 ECB 解密未产生完整的 16 字节块。</para></exception>
     public static void DecryptFile(Stream input, Stream output, byte[] aesKey)
     {
         Guard.ThrowIfNull(input);
@@ -188,10 +162,8 @@ internal static class OzipDecryptor
         Decrypt(input, output, aesKey, header.EncryptedDataSize);
     }
 
-    /// <summary>
-    /// Automatically detects the key and decrypts an OZip file to an output stream.
-    /// <para>自动检测密钥并解密 OZip 文件到输出流。</para>
-    /// </summary>
+    /// <summary>Automatically detects the key and decrypts an OZip file to an output stream.
+    /// <para>自动检测密钥并解密 OZip 文件到输出流。</para></summary>
     /// <param name="input">Readable, seekable OZip file stream; it stays open and is advanced while copying.
     /// <para>可读取、可寻址的 OZip 文件流；复制过程中保持打开并向前推进。</para></param>
     /// <param name="output">Stream that receives the fully decrypted payload; it is not closed.
@@ -200,11 +172,10 @@ internal static class OzipDecryptor
     /// <para>对第一个前缀块解密后得到有效明文的密钥项。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="input"/> is not readable or not seekable.
     /// <para><paramref name="input"/> 不可读取或不可寻址。</para></exception>
-    /// <exception cref="InvalidOppFormatException">The header is invalid or the declared data size does not
-    /// fit between offset <c>0x1050</c> and the end of <paramref name="input"/>.
+    /// <exception cref="InvalidOppFormatException">The header is invalid or the declared data size does not fit between offset <c>0x1050</c> and the end of <paramref name="input"/>.
     /// <para>头部无效，或声明的数据大小超出偏移 <c>0x1050</c> 到 <paramref name="input"/> 末尾的范围。</para></exception>
-    /// <exception cref="OppDecryptionException">No built-in key decrypts the first prefix block to a known
-    /// plaintext magic. <para>没有任何内置密钥能将第一个前缀块解密为已知明文魔数。</para></exception>
+    /// <exception cref="OppDecryptionException">No built-in key decrypts the first prefix block to a known plaintext magic.
+    /// <para>没有任何内置密钥能将第一个前缀块解密为已知明文魔数。</para></exception>
     public static OzipKeyEntry DecryptFileWithAutoDetection(Stream input, Stream output)
     {
         Guard.ThrowIfNull(input);

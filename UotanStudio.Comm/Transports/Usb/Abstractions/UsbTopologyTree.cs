@@ -72,21 +72,11 @@ public static class UsbTopologyTree
         return Branch(roots, children, []);
     }
 
-    /// <summary>
-    /// Keeps branches that contain at least one node accepted by <paramref name="matches"/>, preserving
-    /// the ancestor chain so a filtered tree still shows where a device is plugged in.
-    /// <para>保留至少含一个被 <paramref name="matches"/> 接受节点的分支，并保留祖先链，
-    /// 使过滤后的树仍能看出设备插在哪个口上。</para>
-    /// </summary>
-    /// <param name="roots">
-    /// The unfiltered roots. <para>未过滤的根。</para>
-    /// </param>
-    /// <param name="matches">
-    /// Predicate over a single node. <para>针对单个节点的判定。</para>
-    /// </param>
-    /// <returns>
-    /// The filtered roots in the original order. <para>按原顺序过滤后的根。</para>
-    /// </returns>
+    /// <summary>Keeps branches that contain at least one node accepted by <paramref name="matches"/>, preserving the ancestor chain so a filtered tree still shows where a device is plugged in.
+    /// <para>保留至少含一个被 <paramref name="matches"/> 接受节点的分支，并保留祖先链， 使过滤后的树仍能看出设备插在哪个口上。</para></summary>
+    /// <param name="roots">The unfiltered roots.<para>未过滤的根。</para></param>
+    /// <param name="matches">Predicate over a single node.<para>针对单个节点的判定。</para></param>
+    /// <returns>The filtered roots in the original order.<para>按原顺序过滤后的根。</para></returns>
     public static IReadOnlyList<UsbTopologyBranch> Retain(IReadOnlyList<UsbTopologyBranch> roots,
         Func<UsbTopologyNode, bool> matches)
     {

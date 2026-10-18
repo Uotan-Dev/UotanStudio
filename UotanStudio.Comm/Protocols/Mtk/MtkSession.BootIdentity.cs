@@ -42,17 +42,13 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the bootloader version byte through command FE.
     /// <para>通过命令 FE 读取 bootloader 版本字节。</para></summary>
-    /// <remarks>
-    /// Mirrors <c>get_blver</c> (<c>mtkclient/Library/mtk_preloader.py:664-673</c>): the single reply
-    /// byte is the version, and the value 0xFE is the documented Boot ROM mode marker rather than an
-    /// error. A refused or truncated exchange faults the session, unlike the non-fatal behaviour of
-    /// the same query inside <c>InitializeAsync</c>.
-    /// 对应 <c>get_blver</c>（<c>mtkclient/Library/mtk_preloader.py:664-673</c>）：单个回复字节即版本，
-    /// 取值 0xFE 是已记载的 Boot ROM 模式标记而非错误。与 <c>InitializeAsync</c> 中同一查询的非致命行为
-    /// 不同，被拒绝或截断的交互会使会话进入 fault 状态。
-    /// </remarks>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <remarks>Mirrors <c>get_blver</c>( <c>mtkclient/Library/mtk_preloader.py:664-673</c>): the
+    /// single reply byte is the version, and the value 0xFE is the documented Boot ROM mode marker
+    /// rather than an error. A refused or truncated exchange faults the session, unlike the non-fatal
+    /// behaviour of the same query inside <c>InitializeAsync</c>. 对应 <c>get_blver</c>（
+    /// <c>mtkclient/Library/mtk_preloader.py:664-673</c>）：单个回复字节即版本， 取值 0xFE 是已记载的 Boot ROM 模式标记而非错误。与
+    /// <c>InitializeAsync</c>中同一查询的非致命行为 不同，被拒绝或截断的交互会使会话进入 fault 状态。</remarks>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The bootloader version byte exactly as delivered.
     /// <para>按交付原样返回的 bootloader 版本字节。</para></returns>
     /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
@@ -91,15 +87,12 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the Boot ROM version byte through command FF.
     /// <para>通过命令 FF 读取 Boot ROM 版本字节。</para></summary>
-    /// <remarks>
-    /// Mirrors <c>get_bromver</c> (<c>mtkclient/Library/mtk_preloader.py:657-663</c>). A refused or
-    /// truncated exchange faults the session, unlike the non-fatal behaviour of the same query inside
-    /// <c>InitializeAsync</c>.
-    /// 对应 <c>get_bromver</c>（<c>mtkclient/Library/mtk_preloader.py:657-663</c>）。与
-    /// <c>InitializeAsync</c> 中同一查询的非致命行为不同，被拒绝或截断的交互会使会话进入 fault 状态。
-    /// </remarks>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <remarks>Mirrors <c>get_bromver</c>( <c>mtkclient/Library/mtk_preloader.py:657-663</c>). A
+    /// refused or truncated exchange faults the session, unlike the non-fatal behaviour of the same
+    /// query inside <c>InitializeAsync</c>. 对应 <c>get_bromver</c>（
+    /// <c>mtkclient/Library/mtk_preloader.py:657-663</c>）。与 <c>InitializeAsync</c>
+    /// 中同一查询的非致命行为不同，被拒绝或截断的交互会使会话进入 fault 状态。</remarks>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The Boot ROM version byte exactly as delivered.
     /// <para>按交付原样返回的 Boot ROM 版本字节。</para></returns>
     /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
@@ -138,27 +131,21 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the media device identifier through the E1 command exchange.
     /// <para>通过 E1 命令交互读取媒体设备标识。</para></summary>
-    /// <remarks>
-    /// Mirrors <c>get_meid</c> (<c>mtkclient/Library/mtk_preloader.py:932-958</c>): the 0xFE probe
-    /// reply decides whether the identifier exchange is attempted at all — the reference skips it
-    /// when the probe reports a bootloader version of two or below — and the payload length declared
-    /// by the target is bounded before any buffer is allocated. The completion status is the one
-    /// little-endian word of the reference framing. A null result means the target does not report
-    /// the identifier; a refused echo, an oversized declaration or a rejected status faults the
-    /// session.
-    /// 对应 <c>get_meid</c>（<c>mtkclient/Library/mtk_preloader.py:932-958</c>）：0xFE 探测回复决定是否
-    /// 发起标识交互——探测报告的 bootloader 版本不大于 2 时参考实现会直接跳过——目标声明的载荷长度在分配
-    /// 任何缓冲之前先做上限校验。完成状态采用参考帧结构中的唯一一个小端字。null 表示目标不上报该标识；
-    /// 被拒绝的回显、超限的长度声明或被拒绝的状态会使会话进入 fault 状态。
-    /// </remarks>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <remarks>Mirrors <c>get_meid</c>( <c>mtkclient/Library/mtk_preloader.py:932-958</c>): the 0xFE
+    /// probe reply decides whether the identifier exchange is attempted at all — the reference skips it
+    /// when the probe reports a bootloader version of two or below — and the payload length declared by
+    /// the target is bounded before any buffer is allocated. The completion status is the one
+    /// little-endian word of the reference framing. A null result means the target does not report the
+    /// identifier; a refused echo, an oversized declaration or a rejected status faults the session. 对应
+    /// <c>get_meid</c>（ <c>mtkclient/Library/mtk_preloader.py:932-958</c>）：0xFE 探测回复决定是否 发起标识交互——探测报告的
+    /// bootloader 版本不大于 2 时参考实现会直接跳过——目标声明的载荷长度在分配 任何缓冲之前先做上限校验。完成状态采用参考帧结构中的唯一一个小端字。null 表示目标不上报该标识；
+    /// 被拒绝的回显、超限的长度声明或被拒绝的状态会使会话进入 fault 状态。</remarks>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The identifier bytes, or null when the probe reports no identifier support.
     /// <para>标识字节；探测报告不支持该标识时为 null。</para></returns>
     /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
     /// <para>会话不处于 preloader 命令阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">The echo was refused, the declared length exceeds the
-    /// identity bound or the status was rejected; the session faults.
+    /// <exception cref="MtkProtocolException">The echo was refused, the declared length exceeds the identity bound or the status was rejected; the session faults.
     /// <para>回显被拒绝、声明的长度超过身份上限或状态被拒绝；会话进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
     /// <para>调用方在任一协作点取消。</para></exception>
@@ -196,23 +183,18 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the secure on-chip identifier through the E7 command exchange.
     /// <para>通过 E7 命令交互读取安全片上标识。</para></summary>
-    /// <remarks>
-    /// Mirrors <c>get_socid</c> (<c>mtkclient/Library/mtk_preloader.py:960-987</c>) with the same
-    /// probe, echo, bounded big-endian length and little-endian status framing as the MEID exchange.
-    /// A null result means the target does not report the identifier; a refused echo, an oversized
-    /// declaration or a rejected status faults the session.
-    /// 对应 <c>get_socid</c>（<c>mtkclient/Library/mtk_preloader.py:960-987</c>），探测、回显、有界大端
-    /// 长度与小端状态帧结构与 MEID 交互一致。null 表示目标不上报该标识；被拒绝的回显、超限的长度声明或
-    /// 被拒绝的状态会使会话进入 fault 状态。
-    /// </remarks>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <remarks>Mirrors <c>get_socid</c>( <c>mtkclient/Library/mtk_preloader.py:960-987</c>) with the
+    /// same probe, echo, bounded big-endian length and little-endian status framing as the MEID
+    /// exchange. A null result means the target does not report the identifier; a refused echo, an
+    /// oversized declaration or a rejected status faults the session. 对应 <c>get_socid</c>（
+    /// <c>mtkclient/Library/mtk_preloader.py:960-987</c>），探测、回显、有界大端 长度与小端状态帧结构与 MEID 交互一致。null
+    /// 表示目标不上报该标识；被拒绝的回显、超限的长度声明或 被拒绝的状态会使会话进入 fault 状态。</remarks>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The identifier bytes, or null when the probe reports no identifier support.
     /// <para>标识字节；探测报告不支持该标识时为 null。</para></returns>
     /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
     /// <para>会话不处于 preloader 命令阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">The echo was refused, the declared length exceeds the
-    /// identity bound or the status was rejected; the session faults.
+    /// <exception cref="MtkProtocolException">The echo was refused, the declared length exceeds the identity bound or the status was rejected; the session faults.
     /// <para>回显被拒绝、声明的长度超过身份上限或状态被拒绝；会话进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
     /// <para>调用方在任一协作点取消。</para></exception>

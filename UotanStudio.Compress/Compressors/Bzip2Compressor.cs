@@ -10,23 +10,16 @@ namespace UotanStudio.Compress.Compressors;
 /// </summary>
 internal static class Bzip2Compressor
 {
-    /// <summary>
-    /// BZIP2 compression.
-    /// <para>BZIP2 压缩。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext to compress, taken in full from the array.
+    /// <summary>BZIP2 compression.<para>BZIP2 压缩。</para></summary>
+    /// <param name="data">Plaintext to compress, taken in full from the array.
     /// <para>待压缩的明文字节，整体取自该数组。</para></param>
-    /// <param name="options">
-    /// Only <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is read: above 1 and with at least two 1 MiB chunks the input is split, each chunk encoded as an independent stream and the results concatenated in chunk order. <see cref="CompressionOptions.Level"/> is ignored because the block size is fixed.
+    /// <param name="options">Only <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is read: above 1 and with at least two 1 MiB chunks the input is split, each chunk encoded as an independent stream and the results concatenated in chunk order. <see cref="CompressionOptions.Level"/> is ignored because the block size is fixed.
     /// <para>仅读取 <see cref="CompressionOptions.MaxDegreeOfParallelism"/>：当值大于 1 且至少存在两个 1 MiB 块时，将输入切分、各块独立编码并按块序拼接。<see cref="CompressionOptions.Level"/> 被忽略，因为块大小固定。</para></param>
-    /// <returns>
-    /// One bzip2 stream, or several concatenated ones when the parallel chunk path was taken.
+    /// <returns>One bzip2 stream, or several concatenated ones when the parallel chunk path was taken.
     /// <para>单个 bzip2 流；走并行分块路径时为多个串接的流。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="CompressionException">The encoder failed.
-    /// <para>编码器执行失败。</para></exception>
+    /// <exception cref="CompressionException">The encoder failed.<para>编码器执行失败。</para></exception>
     public static byte[] Compress(byte[] data, CompressionOptions? options = null)
     {
         if (data == null)
@@ -68,16 +61,10 @@ internal static class Bzip2Compressor
         }
     }
 
-    /// <summary>
-    /// BZIP2 decompression.
-    /// <para>BZIP2 解压。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete bzip2 payload; concatenated streams are decoded one after another and their output merged, with no cap on the expansion size.
+    /// <summary>BZIP2 decompression.<para>BZIP2 解压。</para></summary>
+    /// <param name="data">Complete bzip2 payload; concatenated streams are decoded one after another and their output merged, with no cap on the expansion size.
     /// <para>完整的 bzip2 数据；串接的多个流会依次解码并合并输出，不对解压大小设上限。</para></param>
-    /// <returns>
-    /// The decoded bytes of every concatenated stream.
-    /// <para>所有串接流解码后的字节。</para></returns>
+    /// <returns>The decoded bytes of every concatenated stream.<para>所有串接流解码后的字节。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="CompressionException">The payload is truncated, corrupt, or not bzip2 encoded.
@@ -103,15 +90,10 @@ internal static class Bzip2Compressor
         }
     }
 
-    /// <summary>
-    /// Streaming BZIP2 compression.
-    /// <para>流式 BZIP2 压缩。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable source piped through a 64 KiB buffer, so the plaintext is never held in memory as a whole; ownership stays with the caller.
+    /// <summary>Streaming BZIP2 compression.<para>流式 BZIP2 压缩。</para></summary>
+    /// <param name="input">Readable source piped through a 64 KiB buffer, so the plaintext is never held in memory as a whole; ownership stays with the caller.
     /// <para>经 64 KiB 缓冲逐块读取的可读源流，明文不会整体驻留内存；所有权归调用方。</para></param>
-    /// <param name="output">
-    /// Writable destination that is not closed by this call; the stream trailer is written when the encoder is disposed, so the call only returns after the payload is complete.
+    /// <param name="output">Writable destination that is not closed by this call; the stream trailer is written when the encoder is disposed, so the call only returns after the payload is complete.
     /// <para>不会被本调用关闭的写入目标；流尾结构在编码器释放时写出，因此本调用返回时数据已完整。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -152,15 +134,10 @@ internal static class Bzip2Compressor
     internal static Stream CreateCompressionStream(Stream output)
         => BZip2Stream.Create(new BufferedStream(new NonDisposingStream(output), 64 * 1024), CompressionMode.Compress, decompressConcatenated: false, leaveOpen: false);
 
-    /// <summary>
-    /// Streaming BZIP2 decompression.
-    /// <para>流式 BZIP2 解压。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable bzip2 payload consumed through a 64 KiB buffer; concatenated streams are followed and the stream is left open at the offset decoding stopped at.
+    /// <summary>Streaming BZIP2 decompression.<para>流式 BZIP2 解压。</para></summary>
+    /// <param name="input">Readable bzip2 payload consumed through a 64 KiB buffer; concatenated streams are followed and the stream is left open at the offset decoding stopped at.
     /// <para>经 64 KiB 缓冲读取的可读 bzip2 数据；会跟随串接的多个流，解码停在哪个偏移该流就处于哪个偏移且保持打开。</para></param>
-    /// <param name="output">
-    /// Writable destination for the decoded bytes, written in fixed buffers with no size cap; it is not closed.
+    /// <param name="output">Writable destination for the decoded bytes, written in fixed buffers with no size cap; it is not closed.
     /// <para>解码字节的写入目标，按固定缓冲写出且不设大小上限，不会被本调用关闭。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>

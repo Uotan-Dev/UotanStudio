@@ -138,24 +138,15 @@ public sealed class Ext4Parser : IDisposable
     }
 
     /// <summary>Parses a stream with explicit directory-entry/path budgets and cancellable metadata/content reads.
-    /// <para>按显式的目录条目/路径预算解析流，元数据与内容读取可取消。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Readable and seekable stream; ownership transfers and it is closed by <see cref="Dispose"/>. A non-readable or non-seekable stream throws <see cref="ArgumentException"/>.
-    /// <para>可读且可寻址的流；所有权转移并由 <see cref="Dispose"/> 关闭。流不可读或不可寻址时抛出 <see cref="ArgumentException"/>。</para>
-    /// </param>
-    /// <param name="maximumEntries">
-    /// Positive upper bound on visited directory entries; exceeding it during a walk throws <see cref="FileSystemCorruptedException"/>.
-    /// <para>已访问目录条目数的正整数上限；遍历中超出时抛出 <see cref="FileSystemCorruptedException"/>。</para>
-    /// </param>
-    /// <param name="maximumPathCharacters">
-    /// Positive upper bound on the accumulated total of all entry path lengths.
-    /// <para>所有条目路径长度累计总和的正整数上限。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels initialization and every subsequent metadata or content read; an already-cancelled token throws immediately.
-    /// <para>取消初始化及其后所有元数据/内容读取；传入已取消的令牌会立即抛出。</para>
-    /// </param>
+    /// <para>按显式的目录条目/路径预算解析流，元数据与内容读取可取消。</para></summary>
+    /// <param name="stream">Readable and seekable stream; ownership transfers and it is closed by <see cref="Dispose"/>. A non-readable or non-seekable stream throws <see cref="ArgumentException"/>.
+    /// <para>可读且可寻址的流；所有权转移并由 <see cref="Dispose"/> 关闭。流不可读或不可寻址时抛出 <see cref="ArgumentException"/>。</para></param>
+    /// <param name="maximumEntries">Positive upper bound on visited directory entries; exceeding it during a walk throws <see cref="FileSystemCorruptedException"/>.
+    /// <para>已访问目录条目数的正整数上限；遍历中超出时抛出 <see cref="FileSystemCorruptedException"/>。</para></param>
+    /// <param name="maximumPathCharacters">Positive upper bound on the accumulated total of all entry path lengths.
+    /// <para>所有条目路径长度累计总和的正整数上限。</para></param>
+    /// <param name="cancellationToken">Cancels initialization and every subsequent metadata or content read; an already-cancelled token throws immediately.
+    /// <para>取消初始化及其后所有元数据/内容读取；传入已取消的令牌会立即抛出。</para></param>
     public Ext4Parser(Stream stream, int maximumEntries, long maximumPathCharacters, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(stream);

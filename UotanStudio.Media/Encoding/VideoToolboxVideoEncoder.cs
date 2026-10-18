@@ -8,23 +8,13 @@ using UotanStudio.Media.Decoding.VideoToolbox;
 
 namespace UotanStudio.Media.Encoding;
 
-/// <summary>
-/// An owned Annex-B access unit, including parameter sets, emitted by a video encoder.
-/// <para>视频编码器产出的、由接收方独占的 Annex-B 访问单元（含参数集）。</para>
-/// </summary>
-/// <param name="Codec">
-/// Compressed codec of the packet.
-/// <para>该数据包对应的压缩编码格式。</para>
-/// </param>
-/// <param name="Data">
-/// Managed encoded data owned by the recipient: NAL units separated by 00 00 00 01 start codes,
-/// with format-description parameter sets written first.
-/// <para>接收方独占的托管编码数据：以 00 00 00 01 起始码分隔的 NAL 单元，格式描述中的参数集最先写入。</para>
-/// </param>
-/// <param name="TimestampTicks">
-/// Presentation timestamp in TimeSpan ticks.
-/// <para>以 TimeSpan tick 计的表现时间戳。</para>
-/// </param>
+/// <summary>An owned Annex-B access unit, including parameter sets, emitted by a video encoder.
+/// <para>视频编码器产出的、由接收方独占的 Annex-B 访问单元（含参数集）。</para></summary>
+/// <param name="Codec">Compressed codec of the packet.<para>该数据包对应的压缩编码格式。</para></param>
+/// <param name="Data">Managed encoded data owned by the recipient: NAL units separated by 00 00 00 01 start codes, with format-description parameter sets written first.
+/// <para>接收方独占的托管编码数据：以 00 00 00 01 起始码分隔的 NAL 单元，格式描述中的参数集最先写入。</para></param>
+/// <param name="TimestampTicks">Presentation timestamp in TimeSpan ticks.
+/// <para>以 TimeSpan tick 计的表现时间戳。</para></param>
 public sealed record EncodedVideoPacket(VideoCodecId Codec, byte[] Data, long TimestampTicks);
 
 /// <summary>
@@ -47,39 +37,24 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
     private bool _inCallback;
     private long _lastTimestamp = -1;
 
-    /// <summary>
-    /// Creates a low-latency hardware encoder, failing if the codec or stream configuration is unavailable.
-    /// <para>创建低延迟硬件编码器；若编码格式或流配置不可用则立即失败。</para>
-    /// </summary>
-    /// <param name="codec">
-    /// Target compressed codec, H.264 or H.265.
-    /// <para>目标压缩编码格式（H.264 或 H.265）。</para>
-    /// </param>
-    /// <param name="width">
-    /// Frame width in pixels; must be positive, at most 16384, and fit the shared frame byte cap together with <paramref name="height"/>.
-    /// <para>帧宽度（像素）；必须为正且不超过 16384，并与 <paramref name="height"/> 共同满足共享的帧字节上限。</para>
-    /// </param>
-    /// <param name="height">
-    /// Frame height in pixels under the same bounds as <paramref name="width"/>.
-    /// <para>帧高度（像素），边界与 <paramref name="width"/> 相同。</para>
-    /// </param>
-    /// <param name="packetCallback">
-    /// Consumer invoked with each encoded packet during <see cref="Flush"/> on the creating thread.
-    /// <para>在 <see cref="Flush"/> 期间于创建者线程上接收每个编码数据包的消费者。</para>
-    /// </param>
-    /// <exception cref="PlatformNotSupportedException">
-    /// The current OS is not macOS. <para>当前操作系统不是 macOS。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="packetCallback"/> is null. <para><paramref name="packetCallback"/> 为 null。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The dimensions are unsupported or excessive. <para>尺寸不受支持或超出上限。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The VideoToolbox session could not be created or prepared; the partially built encoder is disposed before the exception escapes.
-    /// <para>无法创建或准备 VideoToolbox 会话；异常抛出前会先处置已部分构建的编码器。</para>
-    /// </exception>
+    /// <summary>Creates a low-latency hardware encoder, failing if the codec or stream configuration is unavailable.
+    /// <para>创建低延迟硬件编码器；若编码格式或流配置不可用则立即失败。</para></summary>
+    /// <param name="codec">Target compressed codec, H.264 or H.265.
+    /// <para>目标压缩编码格式（H.264 或 H.265）。</para></param>
+    /// <param name="width">Frame width in pixels; must be positive, at most 16384, and fit the shared frame byte cap together with <paramref name="height"/>.
+    /// <para>帧宽度（像素）；必须为正且不超过 16384，并与 <paramref name="height"/> 共同满足共享的帧字节上限。</para></param>
+    /// <param name="height">Frame height in pixels under the same bounds as <paramref name="width"/>.
+    /// <para>帧高度（像素），边界与 <paramref name="width"/> 相同。</para></param>
+    /// <param name="packetCallback">Consumer invoked with each encoded packet during <see cref="Flush"/> on the creating thread.
+    /// <para>在 <see cref="Flush"/> 期间于创建者线程上接收每个编码数据包的消费者。</para></param>
+    /// <exception cref="PlatformNotSupportedException">The current OS is not macOS.
+    /// <para>当前操作系统不是 macOS。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="packetCallback"/> is null.
+    /// <para><paramref name="packetCallback"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The dimensions are unsupported or excessive.
+    /// <para>尺寸不受支持或超出上限。</para></exception>
+    /// <exception cref="InvalidOperationException">The VideoToolbox session could not be created or prepared; the partially built encoder is disposed before the exception escapes.
+    /// <para>无法创建或准备 VideoToolbox 会话；异常抛出前会先处置已部分构建的编码器。</para></exception>
     public VideoToolboxVideoEncoder(VideoCodecId codec, int width, int height, Action<EncodedVideoPacket> packetCallback)
     {
         if (!OperatingSystem.IsMacOS()) throw new PlatformNotSupportedException();
@@ -101,37 +76,22 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
         finally { VtNative.CFRelease(specification); }
     }
 
-    /// <summary>
-    /// Encodes a complete NV12 frame with a nonnegative, strictly increasing timestamp, then delivers output.
-    /// <para>编码一帧完整的 NV12 图像（时间戳必须非负且严格递增），随后交付输出。</para>
-    /// </summary>
-    /// <param name="frame">
-    /// A CPU-readable NV12 frame whose dimensions match the encoder and whose span covers both planes at the frame stride.
-    /// <para>可被 CPU 读取的 NV12 帧：尺寸必须与编码器一致，且跨度按帧行距完整覆盖两个平面。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// The frame is GPU-backed, its dimensions differ from the encoder, its NV12 span is truncated,
-    /// or its timestamp is negative or does not strictly increase.
-    /// <para>帧为 GPU 承载、尺寸与编码器不符、NV12 跨度被截断，或时间戳为负/未严格递增。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The frame stride is below the luma row bound or the computed NV12 length exceeds the shared frame byte cap.
-    /// <para>帧行距小于亮度行最小值，或按 NV12 计算的长度超出共享的帧字节上限。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="frame"/> is null. <para><paramref name="frame"/> 为 null。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A CoreVideo pixel plane reports an unusable base address, pitch or height.
-    /// <para>CoreVideo 像素平面报告了不可用的基地址、跨距或高度。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The call comes from an encoder callback or from a thread other than the creating thread, or a VideoToolbox or CoreVideo call fails.
-    /// <para>调用来自编码器回调或创建者以外的线程，或 VideoToolbox/CoreVideo 调用失败。</para>
-    /// </exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The encoder has been disposed. <para>编码器已被释放。</para>
-    /// </exception>
+    /// <summary>Encodes a complete NV12 frame with a nonnegative, strictly increasing timestamp, then delivers output.
+    /// <para>编码一帧完整的 NV12 图像（时间戳必须非负且严格递增），随后交付输出。</para></summary>
+    /// <param name="frame">A CPU-readable NV12 frame whose dimensions match the encoder and whose span covers both planes at the frame stride.
+    /// <para>可被 CPU 读取的 NV12 帧：尺寸必须与编码器一致，且跨度按帧行距完整覆盖两个平面。</para></param>
+    /// <exception cref="ArgumentException">The frame is GPU-backed, its dimensions differ from the encoder, its NV12 span is truncated, or its timestamp is negative or does not strictly increase.
+    /// <para>帧为 GPU 承载、尺寸与编码器不符、NV12 跨度被截断，或时间戳为负/未严格递增。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The frame stride is below the luma row bound or the computed NV12 length exceeds the shared frame byte cap.
+    /// <para>帧行距小于亮度行最小值，或按 NV12 计算的长度超出共享的帧字节上限。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="frame"/> is null.
+    /// <para><paramref name="frame"/> 为 null。</para></exception>
+    /// <exception cref="InvalidDataException">A CoreVideo pixel plane reports an unusable base address, pitch or height.
+    /// <para>CoreVideo 像素平面报告了不可用的基地址、跨距或高度。</para></exception>
+    /// <exception cref="InvalidOperationException">The call comes from an encoder callback or from a thread other than the creating thread, or a VideoToolbox or CoreVideo call fails.
+    /// <para>调用来自编码器回调或创建者以外的线程，或 VideoToolbox/CoreVideo 调用失败。</para></exception>
+    /// <exception cref="ObjectDisposedException">The encoder has been disposed.
+    /// <para>编码器已被释放。</para></exception>
     public void Encode(DecodedVideoFrame frame)
     {
         if (frame.PixelFormat != VideoPixelFormat.Nv12) throw new ArgumentException("Encoder requires NV12 input, not a packed pixel layout.", nameof(frame));
@@ -168,21 +128,14 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
         finally { VtNative.CFRelease(image); }
     }
 
-    /// <summary>
-    /// Completes pending native encoding work and delivers packets on the caller's thread.
-    /// <para>完成挂起的原生编码工作，并在调用者线程上交付数据包。</para>
-    /// </summary>
-    /// <exception cref="InvalidDataException">
-    /// A native encoder callback has captured an error; the stored exception is rethrown before any packet is delivered.
-    /// <para>原生编码器回调已捕获错误；在交付任何数据包之前会重新抛出已保存的异常。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The call comes from an encoder callback or from a thread other than the creating thread, or a VideoToolbox call fails.
-    /// <para>调用来自编码器回调或创建者以外的线程，或 VideoToolbox 调用失败。</para>
-    /// </exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The encoder has been disposed. <para>编码器已被释放。</para>
-    /// </exception>
+    /// <summary>Completes pending native encoding work and delivers packets on the caller's thread.
+    /// <para>完成挂起的原生编码工作，并在调用者线程上交付数据包。</para></summary>
+    /// <exception cref="InvalidDataException">A native encoder callback has captured an error; the stored exception is rethrown before any packet is delivered.
+    /// <para>原生编码器回调已捕获错误；在交付任何数据包之前会重新抛出已保存的异常。</para></exception>
+    /// <exception cref="InvalidOperationException">The call comes from an encoder callback or from a thread other than the creating thread, or a VideoToolbox call fails.
+    /// <para>调用来自编码器回调或创建者以外的线程，或 VideoToolbox 调用失败。</para></exception>
+    /// <exception cref="ObjectDisposedException">The encoder has been disposed.
+    /// <para>编码器已被释放。</para></exception>
     public void Flush()
     {
         CheckReady();

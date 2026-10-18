@@ -288,21 +288,14 @@ public class FirehoseConfiguration
     };
 }
 
-/// <summary>
-/// Implements the Firehose protocol: configure, program, erase, read, memory, power and UFS
-/// provisioning operations.
-/// <para>实现 Firehose 协议：配置、编程、擦除、读取、内存、电源与 UFS provisioning 操作。</para>
-/// Operations on one instance are serialized through their final response. Do not modify
-/// the configuration, share the transport with another protocol instance, or synchronously
-/// wait for another operation from a log callback while an operation is in progress.
-/// </summary>
-/// <remarks>
-/// Initializes a new instance of the <see cref="FirehoseProtocol"/> class.
-/// <para>初始化 <see cref="FirehoseProtocol"/> 类的新实例。</para>
-/// </remarks>
-/// <param name="transport">The device transport. <para>设备传输。</para></param>
-/// <param name="config">Optional Firehose configuration. <para>可选的 Firehose 配置。</para></param>
-/// <param name="timeoutMs">Optional per-read command timeout in milliseconds. <para>可选的单次读取命令超时（毫秒）。</para></param>
+/// <summary>Implements the Firehose protocol: configure, program, erase, read, memory, power and UFS provisioning operations.
+/// <para>实现 Firehose 协议：配置、编程、擦除、读取、内存、电源与 UFS provisioning 操作。</para>Operations on one instance are serialized through their final response. Do not modify the configuration, share the transport with another protocol instance, or synchronously wait for another operation from a log callback while an operation is in progress.</summary>
+/// <remarks>Initializes a new instance of the <see cref="FirehoseProtocol"/> class.
+/// <para>初始化 <see cref="FirehoseProtocol"/> 类的新实例。</para></remarks>
+/// <param name="transport">The device transport.<para>设备传输。</para></param>
+/// <param name="config">Optional Firehose configuration.<para>可选的 Firehose 配置。</para></param>
+/// <param name="timeoutMs">Optional per-read command timeout in milliseconds.
+/// <para>可选的单次读取命令超时（毫秒）。</para></param>
 public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseConfiguration? config = null, int? timeoutMs = null) : IDisposable
 {
     private const int DisposalGateTimeoutMs = 250;

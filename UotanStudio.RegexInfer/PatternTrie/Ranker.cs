@@ -9,20 +9,16 @@ namespace UotanStudio.RegexInfer.PatternTrie;
 /// </summary>
 internal static class Ranker
 {
-    /// <summary>
-    /// Renders, validates and scores the candidate derived from the traces.
-    /// <para>渲染、验证并评定从轨迹推导出的候选。</para>
-    /// </summary>
-    /// <param name="sourceText">The text the pattern will run against. <para>正则将要作用的文本。</para></param>
-    /// <param name="traces">The traces the DAG was built from. <para>构建 DAG 所用的轨迹。</para></param>
-    /// <param name="expectedOutputs">The strings that must be matched exactly. <para>必须被精确匹配的字符串。</para></param>
-    /// <param name="negatives">The strings the pattern must not match. <para>正则不得匹配的字符串。</para></param>
-    /// <param name="options">Resolved tuning knobs. <para>已解析的可调参数。</para></param>
-    /// <returns>
-    /// The scored candidates, descending by confidence; empty when no candidate matched every positive
-    /// example exactly.
-    /// <para>按置信度降序排列的已评分候选；没有任何候选精确命中全部正例时为空。</para>
-    /// </returns>
+    /// <summary>Renders, validates and scores the candidate derived from the traces.
+    /// <para>渲染、验证并评定从轨迹推导出的候选。</para></summary>
+    /// <param name="sourceText">The text the pattern will run against.<para>正则将要作用的文本。</para></param>
+    /// <param name="traces">The traces the DAG was built from.<para>构建 DAG 所用的轨迹。</para></param>
+    /// <param name="expectedOutputs">The strings that must be matched exactly.
+    /// <para>必须被精确匹配的字符串。</para></param>
+    /// <param name="negatives">The strings the pattern must not match.<para>正则不得匹配的字符串。</para></param>
+    /// <param name="options">Resolved tuning knobs.<para>已解析的可调参数。</para></param>
+    /// <returns>The scored candidates, descending by confidence; empty when no candidate matched every positive example exactly.
+    /// <para>按置信度降序排列的已评分候选；没有任何候选精确命中全部正例时为空。</para></returns>
     public static IReadOnlyList<InferredRegex> Rank(
         string sourceText,
         IReadOnlyList<PatternTrace.Trace> traces,

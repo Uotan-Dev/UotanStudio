@@ -131,25 +131,16 @@ public sealed class StreamingBadBlockTable(
         return bad;
     }
 
-    /// <summary>
-    /// Writes the bad-block marker into a currently good block.
-    /// <para>向当前完好的块写入坏块标记。</para>
-    /// ECC is disabled, hardware detection is masked off, the 0x220-byte fill buffer is programmed
-    /// once per codeword, then detection and the saved configs are restored.
-    /// <para>禁用 ECC，掩掉硬件检测，每个码字编程一次 0x220 字节的填充缓冲区，随后恢复检测与保存的
-    /// 配置。</para>
-    /// </summary>
-    /// <param name="block">The block to mark. <para>要标记的块。</para></param>
+    /// <summary>Writes the bad-block marker into a currently good block.
+    /// <para>向当前完好的块写入坏块标记。</para>ECC is disabled, hardware detection is masked off, the 0x220-byte fill buffer is programmed once per codeword, then detection and the saved configs are restored.<para>禁用 ECC，掩掉硬件检测，每个码字编程一次 0x220 字节的填充缓冲区，随后恢复检测与保存的 配置。</para></summary>
+    /// <param name="block">The block to mark.<para>要标记的块。</para></param>
     /// <param name="confirm">Pass <see langword="true"/> to confirm the marker write.
     /// <para>传 <see langword="true"/> 以确认标记写入。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns><see langword="true"/> when the block was freshly marked, <see langword="false"/>
-    /// when it already carried a marker. <para>块是本次新标记时为
-    /// <see langword="true"/>；已带标记时为 <see langword="false"/>。</para></returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is
-    /// <see langword="false"/>; the refusal happens before any transport write.
-    /// <para><paramref name="confirm"/> 为 <see langword="false"/> 时抛出；拒绝发生在任何传输写出
-    /// 之前。</para></exception>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns><see langword="true"/> when the block was freshly marked, <see langword="false"/> when it already carried a marker.
+    /// <para>块是本次新标记时为 <see langword="true"/>；已带标记时为 <see langword="false"/>。</para></returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is <see langword="false"/>; the refusal happens before any transport write.
+    /// <para><paramref name="confirm"/> 为 <see langword="false"/> 时抛出；拒绝发生在任何传输写出 之前。</para></exception>
     public async Task<bool> MarkBadAsync(uint block, bool confirm, CancellationToken cancellationToken)
     {
         if (!confirm)
@@ -193,22 +184,16 @@ public sealed class StreamingBadBlockTable(
         return true;
     }
 
-    /// <summary>
-    /// Clears a bad marker by erasing the whole block, mirroring <c>unmark_bad</c> and
-    /// <c>block_erase</c>.
-    /// <para>擦除整个块以清除坏块标记，对应 <c>unmark_bad</c> 与 <c>block_erase</c>
-    /// 。</para>
-    /// </summary>
-    /// <param name="block">The block to erase. <para>要擦除的块。</para></param>
+    /// <summary>Clears a bad marker by erasing the whole block, mirroring <c>unmark_bad</c> and <c>block_erase</c>.
+    /// <para>擦除整个块以清除坏块标记，对应 <c>unmark_bad</c> 与 <c>block_erase</c>。</para></summary>
+    /// <param name="block">The block to erase.<para>要擦除的块。</para></param>
     /// <param name="confirm">Pass <see langword="true"/> to confirm the erase.
     /// <para>传 <see langword="true"/> 以确认擦除。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns><see langword="true"/> when a marked block was erased, <see langword="false"/>
-    /// when the block was already good. <para>被标记的块已擦除时为
-    /// <see langword="true"/>；块本就完好时为 <see langword="false"/>。</para></returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is
-    /// <see langword="false"/>. <para><paramref name="confirm"/> 为
-    /// <see langword="false"/> 时抛出。</para></exception>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns><see langword="true"/> when a marked block was erased, <see langword="false"/> when the block was already good.
+    /// <para>被标记的块已擦除时为 <see langword="true"/>；块本就完好时为 <see langword="false"/>。</para></returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is <see langword="false"/>.
+    /// <para><paramref name="confirm"/> 为 <see langword="false"/> 时抛出。</para></exception>
     public async Task<bool> UnmarkBadAsync(uint block, bool confirm, CancellationToken cancellationToken)
     {
         if (!confirm)
@@ -236,19 +221,12 @@ public sealed class StreamingBadBlockTable(
         return true;
     }
 
-    /// <summary>
-    /// Reads the three NAND_DEV0 configuration words without programming anything.
-    /// <para>只读取 NAND_DEV0 的三个配置字，不做任何编程。</para>
-    /// Only the peek path runs, so no controller command, page address or buffer byte is written. The
-    /// host decodes and derives from these words with <see cref="StreamingNandRegisters"/>, and nothing
-    /// this method returns is written back.
-    /// <para>仅走 peek 路径，因此不会写入控制器命令、页地址或缓冲字节。宿主用
-    /// <see cref="StreamingNandRegisters"/> 解码并推导这些字，本方法返回的任何内容都不会被写回。</para>
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The three raw configuration words. <para>三个原始配置字。</para></returns>
-    /// <exception cref="StreamingException">Thrown when a register read fails or the reply is
-    /// malformed. <para>寄存器读取失败或回包格式错误时抛出。</para></exception>
+    /// <summary>Reads the three NAND_DEV0 configuration words without programming anything.
+    /// <para>只读取 NAND_DEV0 的三个配置字，不做任何编程。</para>Only the peek path runs, so no controller command, page address or buffer byte is written. The host decodes and derives from these words with <see cref="StreamingNandRegisters"/>, and nothing this method returns is written back.<para>仅走 peek 路径，因此不会写入控制器命令、页地址或缓冲字节。宿主用 <see cref="StreamingNandRegisters"/> 解码并推导这些字，本方法返回的任何内容都不会被写回。</para></summary>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The three raw configuration words.<para>三个原始配置字。</para></returns>
+    /// <exception cref="StreamingException">Thrown when a register read fails or the reply is malformed.
+    /// <para>寄存器读取失败或回包格式错误时抛出。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled.
     /// <para>令牌被取消。</para></exception>
     public async Task<StreamingNandRegisterSnapshot> ReadRegisterSnapshotAsync(CancellationToken cancellationToken)
@@ -259,27 +237,16 @@ public sealed class StreamingBadBlockTable(
         return new StreamingNandRegisterSnapshot(cfg0, cfg1, eccCfg);
     }
 
-    /// <summary>
-    /// Runs one controller page-read command sequence over a block and reports the resulting status
-    /// words.
-    /// <para>对一个块执行一次控制器页读命令序列并回报随后的状态字。</para>
-    /// The sequence is soft reset, page address, PAGE_READ_ALL, exec, bounded status wait, then a
-    /// read-back of NAND_BUFFER_STATUS and NAND_FLASH_CMD. No array location is programmed or erased
-    /// here, but the controller command registers are pulsed, so the caller must confirm the sequence.
-    /// <para>序列为软复位、页地址、PAGE_READ_ALL、执行、有界状态等待，然后读回 NAND_BUFFER_STATUS 与
-    /// NAND_FLASH_CMD。这里不编程也不擦除任何阵列位置，但会脉冲控制器命令寄存器，因此调用方必须确认
-    /// 该序列。</para>
-    /// </summary>
-    /// <param name="block">The block whose page zero is read. <para>读取其 0 页的块。</para></param>
-    /// <param name="confirm">Pass <see langword="true"/> to confirm the controller command
-    /// sequence. <para>传 <see langword="true"/> 以确认这次控制器命令序列。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <summary>Runs one controller page-read command sequence over a block and reports the resulting status words.
+    /// <para>对一个块执行一次控制器页读命令序列并回报随后的状态字。</para>The sequence is soft reset, page address, PAGE_READ_ALL, exec, bounded status wait, then a read-back of NAND_BUFFER_STATUS and NAND_FLASH_CMD. No array location is programmed or erased here, but the controller command registers are pulsed, so the caller must confirm the sequence.<para>序列为软复位、页地址、PAGE_READ_ALL、执行、有界状态等待，然后读回 NAND_BUFFER_STATUS 与 NAND_FLASH_CMD。这里不编程也不擦除任何阵列位置，但会脉冲控制器命令寄存器，因此调用方必须确认 该序列。</para></summary>
+    /// <param name="block">The block whose page zero is read.<para>读取其 0 页的块。</para></param>
+    /// <param name="confirm">Pass <see langword="true"/> to confirm the controller command sequence.
+    /// <para>传 <see langword="true"/> 以确认这次控制器命令序列。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The bad-block and ECC verdict decoded from the read-back words.
     /// <para>由读回字解码出的坏块与 ECC 结论。</para></returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is
-    /// <see langword="false"/>; the refusal happens before any byte reaches the wire.
-    /// <para><paramref name="confirm"/> 为 <see langword="false"/> 时抛出；拒绝发生在任何字节上线
-    /// 之前。</para></exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is <see langword="false"/>; the refusal happens before any byte reaches the wire.
+    /// <para><paramref name="confirm"/> 为 <see langword="false"/> 时抛出；拒绝发生在任何字节上线 之前。</para></exception>
     /// <exception cref="StreamingException">Thrown when the controller never reports idle.
     /// <para>控制器始终不报告空闲时抛出。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled.
@@ -383,22 +350,13 @@ public sealed class StreamingBadBlockTable(
 /// <param name="Dev0EccCfg">The raw NAND_DEV0_ECC_CFG word. <para>原始 NAND_DEV0_ECC_CFG 字。</para></param>
 public sealed record StreamingNandRegisterSnapshot(uint Dev0Cfg0, uint Dev0Cfg1, uint Dev0EccCfg);
 
-/// <summary>
-/// The status words and decoded verdicts after one controller page-read sequence: the raw
-/// NAND_BUFFER_STATUS and NAND_FLASH_CMD read-backs, the bad-marker verdict from
-/// <see cref="StreamingNandRegisters.IsBadBlock"/>, and the ECC verdict from
-/// <see cref="StreamingNandRegisters.EvaluateEccStatus"/>. Both
-/// verdicts assume the narrow-flash comparison, because
-/// the table does not read the CFG1 wide-flash bit.
-/// <para>一次控制器页读序列之后的状态字与解码结论：原始的 NAND_BUFFER_STATUS 与 NAND_FLASH_CMD
-/// 读回值、由 <see cref="StreamingNandRegisters.IsBadBlock"/> 得到的坏标记结论，以及由
-/// <see cref="StreamingNandRegisters.EvaluateEccStatus"/> 得到的 ECC 结论。两个结论都按窄闪存比较，因为该表不读取 CFG1 的
-/// 宽闪存位。</para>
-/// </summary>
-/// <param name="Block">The block whose page zero was read. <para>读取其 0 页的块。</para></param>
-/// <param name="BufferStatus">The raw NAND_BUFFER_STATUS word. <para>原始 NAND_BUFFER_STATUS 字。</para></param>
-/// <param name="FlashCommandValue">The word read back from NAND_FLASH_CMD. <para>从 NAND_FLASH_CMD
-/// 读回的字。</para></param>
+/// <summary>The status words and decoded verdicts after one controller page-read sequence: the raw NAND_BUFFER_STATUS and NAND_FLASH_CMD read-backs, the bad-marker verdict from <see cref="StreamingNandRegisters.IsBadBlock"/>, and the ECC verdict from <see cref="StreamingNandRegisters.EvaluateEccStatus"/>. Both verdicts assume the narrow-flash comparison, because the table does not read the CFG1 wide-flash bit.
+/// <para>一次控制器页读序列之后的状态字与解码结论：原始的 NAND_BUFFER_STATUS 与 NAND_FLASH_CMD 读回值、由 <see cref="StreamingNandRegisters.IsBadBlock"/> 得到的坏标记结论，以及由 <see cref="StreamingNandRegisters.EvaluateEccStatus"/> 得到的 ECC 结论。两个结论都按窄闪存比较，因为该表不读取 CFG1 的 宽闪存位。</para></summary>
+/// <param name="Block">The block whose page zero was read.<para>读取其 0 页的块。</para></param>
+/// <param name="BufferStatus">The raw NAND_BUFFER_STATUS word.
+/// <para>原始 NAND_BUFFER_STATUS 字。</para></param>
+/// <param name="FlashCommandValue">The word read back from NAND_FLASH_CMD.
+/// <para>从 NAND_FLASH_CMD 读回的字。</para></param>
 /// <param name="IsBadBlock"><see langword="true"/> when the status carries a bad marker.
 /// <para>状态携带坏块标记时为 <see langword="true"/>。</para></param>
 /// <param name="EccCorrectedBits">The corrected-bit count, or -1 for an uncorrectable codeword.

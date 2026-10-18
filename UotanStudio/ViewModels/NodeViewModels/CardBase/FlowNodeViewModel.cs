@@ -397,19 +397,11 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
         connector?.Data = value;
     }
 
-    /// <summary>
-    /// Executes the node business logic. Subclasses should override this method, reading inputs via <see cref="ReadInput"/>
-    /// and writing results via <see cref="WriteOutput"/>; the default implementation only writes a log entry.
-    /// <para>执行节点业务逻辑。子类应重写此方法，通过 <see cref="ReadInput"/> 读取输入值并调用 <see cref="WriteOutput"/> 写入结果；默认实现仅记录一条日志。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context, providing logging, a cancellation token, and progress reporting.
-    /// <para>执行上下文，提供日志、取消令牌与进度报告。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Executes the node business logic. Subclasses should override this method, reading inputs via <see cref="ReadInput"/> and writing results via <see cref="WriteOutput"/>; the default implementation only writes a log entry.
+    /// <para>执行节点业务逻辑。子类应重写此方法，通过 <see cref="ReadInput"/> 读取输入值并调用 <see cref="WriteOutput"/> 写入结果；默认实现仅记录一条日志。</para></summary>
+    /// <param name="context">The execution context, providing logging, a cancellation token, and progress reporting.
+    /// <para>执行上下文，提供日志、取消令牌与进度报告。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public virtual Task ExecuteAsync(INodeExecutionContext context)
     {
         context.Log.Write(LogLevel.Info, Title, $"Node '{Title}' has no execution logic (no-op).  节点无执行逻辑。");

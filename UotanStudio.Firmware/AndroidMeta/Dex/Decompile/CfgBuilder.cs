@@ -42,25 +42,16 @@ internal sealed class Cfg
 /// </summary>
 internal static class CfgBuilder
 {
-    /// <summary>
-    /// Builds a control-flow graph from a code item (decoding instructions on demand).
-    /// <para>从代码项构建控制流图（未解码的指令按需解码）。</para>
-    /// </summary>
+    /// <summary>Builds a control-flow graph from a code item (decoding instructions on demand).
+    /// <para>从代码项构建控制流图（未解码的指令按需解码）。</para></summary>
     /// <param name="code">Code item holding either decoded instructions or raw instruction bytes.
     /// <para>持有已解码指令或原始指令字节的代码项。</para></param>
-    /// <param name="dex">DEX model used to decode <paramref name="code"/> when its instruction list is
-    /// empty. <para>当 <paramref name="code"/> 的指令列表为空时用于解码的 DEX 模型。</para></param>
-    /// <returns>A graph whose blocks run from offset <c>0</c> to the last instruction, with leaders
-    /// taken from branch targets, switch case targets and the instruction after each terminator. A
-    /// code item with no instructions yields an empty graph whose <see cref="Cfg.Entry"/> is
-    /// <see langword="null"/>. Targets that fall outside a block boundary are left as
-    /// <see langword="null"/> references on the block.
-    /// <para>返回的图中块从偏移 <c>0</c> 一直排列到最后一条指令，leader 取自分支目标、switch 分支目标以及
-    /// 每条终止指令的后继指令。没有指令的代码项产生空图，其 <see cref="Cfg.Entry"/> 为
-    /// <see langword="null"/>。落在块边界之外的目标在块上保留为 <see langword="null"/> 引用。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="code"/> or <paramref name="dex"/> is
-    /// <see langword="null"/>. <para><paramref name="code"/> 或 <paramref name="dex"/> 为
-    /// <see langword="null"/>。</para></exception>
+    /// <param name="dex">DEX model used to decode <paramref name="code"/> when its instruction list is empty.
+    /// <para>当 <paramref name="code"/> 的指令列表为空时用于解码的 DEX 模型。</para></param>
+    /// <returns>A graph whose blocks run from offset <c>0</c> to the last instruction, with leaders taken from branch targets, switch case targets and the instruction after each terminator. A code item with no instructions yields an empty graph whose <see cref="Cfg.Entry"/> is <see langword="null"/>. Targets that fall outside a block boundary are left as <see langword="null"/> references on the block.
+    /// <para>返回的图中块从偏移 <c>0</c> 一直排列到最后一条指令，leader 取自分支目标、switch 分支目标以及 每条终止指令的后继指令。没有指令的代码项产生空图，其 <see cref="Cfg.Entry"/> 为 <see langword="null"/>。落在块边界之外的目标在块上保留为 <see langword="null"/> 引用。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="code"/> or <paramref name="dex"/> is <see langword="null"/>.
+    /// <para><paramref name="code"/> 或 <paramref name="dex"/> 为 <see langword="null"/>。</para></exception>
     public static Cfg Build(CodeItem code, DexFile dex)
     {
         ArgumentNullException.ThrowIfNull(code);

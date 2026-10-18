@@ -62,10 +62,8 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         catch { stream.Dispose(); throw; }
     }
 
-    /// <summary>
-    /// Runs a device shell command to completion and returns its interleaved stdout/stderr text.
-    /// <para>运行设备 shell 命令直至结束，返回其 stdout/stderr 交织的文本。</para>
-    /// </summary>
+    /// <summary>Runs a device shell command to completion and returns its interleaved stdout/stderr text.
+    /// <para>运行设备 shell 命令直至结束，返回其 stdout/stderr 交织的文本。</para></summary>
     /// <param name="command">The shell command string sent as <c>shell:</c> plus this text.
     /// <para>以 <c>shell:</c> 前缀加上该文本发送的 shell 命令字符串。</para></param>
     /// <param name="cancellationToken">Cancels connection, request and response reads.
@@ -87,16 +85,13 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         return text.Replace("\r\n", "\n").TrimEnd('\n');
     }
 
-    /// <summary>
-    /// Streams device shell output line by line; <paramref name="onLine"/> returning <c>false</c> stops early.
-    /// <para>逐行流式读取设备 shell 输出；<paramref name="onLine"/> 返回 <c>false</c> 时提前停止。</para>
-    /// </summary>
+    /// <summary>Streams device shell output line by line; <paramref name="onLine"/> returning <c>false</c> stops early.
+    /// <para>逐行流式读取设备 shell 输出；<paramref name="onLine"/> 返回 <c>false</c> 时提前停止。</para></summary>
     /// <param name="command">The shell command string sent as <c>shell:</c> plus this text.
     /// <para>以 <c>shell:</c> 前缀加上该文本发送的 shell 命令字符串。</para></param>
     /// <param name="onLine">Invoked once per decoded line; returning <c>false</c> stops the stream.
     /// <para>每解码一行调用一次；返回 <c>false</c> 即停止流式读取。</para></param>
-    /// <param name="cancellationToken">Checked before each read; a read interrupted by an
-    /// <see cref="IOException"/> after cancellation ends the loop instead of throwing.
+    /// <param name="cancellationToken">Checked before each read; a read interrupted by an <see cref="IOException"/> after cancellation ends the loop instead of throwing.
     /// <para>每次读取前检查；取消后以 <see cref="IOException"/> 形式结束的读取会退出循环而不抛出。</para></param>
     /// <exception cref="ArgumentException"><paramref name="command"/> is blank.
     /// <para><paramref name="command"/> 为空。</para></exception>
@@ -151,23 +146,20 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         await RequestAsync(stream, "host:kill", cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Pairs one network device with a one-time password through an existing ADB server, so the
-    /// server stores the pairing credentials instead of this process.
-    /// <para>通过已运行的 ADB server 用一次性密码与单个网络设备配对，使配对凭据由 server 保存而不是本进程。</para>
-    /// </summary>
+    /// <summary>Pairs one network device with a one-time password through an existing ADB server, so the server stores the pairing credentials instead of this process.
+    /// <para>通过已运行的 ADB server 用一次性密码与单个网络设备配对，使配对凭据由 server 保存而不是本进程。</para></summary>
     /// <param name="host">The device address the pairing service advertisement resolved to.
     /// <para>配对服务广播解析出的设备地址。</para></param>
     /// <param name="pairingPort">The pairing port carried by that advertisement.
     /// <para>该广播携带的配对端口。</para></param>
     /// <param name="password">The one-time pairing password shown with the QR code.
     /// <para>二维码旁显示的一次性配对密码。</para></param>
-    /// <param name="serverHost">The adb server host. <para>adb server 主机。</para></param>
-    /// <param name="serverPort">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
+    /// <param name="serverHost">The adb server host.<para>adb server 主机。</para></param>
+    /// <param name="serverPort">The adb server TCP port.<para>adb server 的 TCP 端口。</para></param>
     /// <param name="cancellationToken">Cancels connecting and <c>host:pair:</c> processing.
     /// <para>取消连接与 <c>host:pair:</c> 交互。</para></param>
-    /// <returns>The server's pairing result, which begins with <c>Successfully paired</c> once the
-    /// device accepted the password. <para>server 返回的配对结果；设备接受密码后以 <c>Successfully paired</c> 开头。</para></returns>
+    /// <returns>The server's pairing result, which begins with <c>Successfully paired</c> once the device accepted the password.
+    /// <para>server 返回的配对结果；设备接受密码后以 <c>Successfully paired</c> 开头。</para></returns>
     /// <exception cref="ArgumentException">The device host or the password is blank.
     /// <para>设备主机或密码为空。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The pairing port is outside 1-65535.
@@ -229,14 +221,12 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         return response;
     }
 
-    /// <summary>
-    /// Disconnects one network target from the local adb server.
-    /// <para>将单个网络目标从本地 adb server 断开。</para>
-    /// </summary>
+    /// <summary>Disconnects one network target from the local adb server.
+    /// <para>将单个网络目标从本地 adb server 断开。</para></summary>
     /// <param name="serial">Identifies the target by its <c>host:port</c> connect key.
     /// <para>待断开目标的 <c>host:port</c> 连接标识。</para></param>
-    /// <param name="host">The adb server host. <para>adb server 主机。</para></param>
-    /// <param name="port">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
+    /// <param name="host">The adb server host.<para>adb server 主机。</para></param>
+    /// <param name="port">The adb server TCP port.<para>adb server 的 TCP 端口。</para></param>
     /// <param name="cancellationToken">Cancels connecting and <c>host:disconnect:</c> processing.
     /// <para>取消连接与 <c>host:disconnect:</c> 交互。</para></param>
     /// <exception cref="ArgumentException"><paramref name="serial"/> is blank.
@@ -380,12 +370,8 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         catch { client.Dispose(); throw; }
     }
 
-    /// <summary>
-    /// Pushes a local file using the ADB sync protocol and checks the device's final status.
-    /// The remote path is sent with mode bits 0644 and the DONE marker carries the current UTC time.
-    /// <para>使用 ADB sync 协议推送本地文件并检查设备的最终状态。远端路径按模式位 0644 发送，
-    /// DONE 标记携带当前 UTC 时间。</para>
-    /// </summary>
+    /// <summary>Pushes a local file using the ADB sync protocol and checks the device's final status. The remote path is sent with mode bits 0644 and the DONE marker carries the current UTC time.
+    /// <para>使用 ADB sync 协议推送本地文件并检查设备的最终状态。远端路径按模式位 0644 发送， DONE 标记携带当前 UTC 时间。</para></summary>
     /// <param name="localPath">Path of the existing local file to upload.
     /// <para>待上传的现有本地文件路径。</para></param>
     /// <param name="remotePath">Destination path on the device, sent verbatim as UTF-8.

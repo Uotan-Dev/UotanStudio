@@ -69,21 +69,19 @@ internal static class MpkFormat
     private static readonly byte[] ArchiveMagic = "!MPK"u8.ToArray();
     private static readonly byte[] EntryMagic = "!F"u8.ToArray();
 
-    /// <summary>
-    /// Reads and validates the header and entry table from a seekable stream.
-    /// <para>从可寻址流读取并校验头部与条目表。</para>
-    /// </summary>
+    /// <summary>Reads and validates the header and entry table from a seekable stream.
+    /// <para>从可寻址流读取并校验头部与条目表。</para></summary>
     /// <param name="input">Readable, seekable archive stream; its position is restored on return.
     /// <para>可读、可寻址的归档流；返回时恢复其位置。</para></param>
-    /// <param name="cancellationToken">Cancels the read. <para>取消本次读取。</para></param>
+    /// <param name="cancellationToken">Cancels the read.<para>取消本次读取。</para></param>
     /// <returns>The validated archive metadata with its entry table.
     /// <para>已校验的归档元数据及其条目表。</para></returns>
     /// <exception cref="ArgumentException">The stream cannot be read or cannot seek.
     /// <para>流不可读或不可寻址。</para></exception>
-    /// <exception cref="InvalidDataException">The archive is truncated, the magic mismatches, an entry
-    /// record is malformed, a payload range escapes the file, or the table exceeds the entry ceiling.
+    /// <exception cref="InvalidDataException">The archive is truncated, the magic mismatches, an entry record is malformed, a payload range escapes the file, or the table exceeds the entry ceiling.
     /// <para>归档被截断、魔数不符、条目记录格式错误、负载区间超出文件或表超出条目上限。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static MpkArchive Read(Stream input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);

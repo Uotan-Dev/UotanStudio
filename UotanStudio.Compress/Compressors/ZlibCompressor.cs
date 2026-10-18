@@ -114,10 +114,7 @@ public static class ZlibCompressor
         }
     }
 
-    /// <summary>
-    /// Streaming ZLIB compression.
-    /// <para>流式 ZLIB 压缩。</para>
-    /// </summary>
+    /// <summary>Streaming ZLIB compression.<para>流式 ZLIB 压缩。</para></summary>
     /// <param name="input">Readable source stream, consumed to its end and left open.
     /// <para>可读源流，读取到末尾并保持打开。</para></param>
     /// <param name="output">Writable target stream; the zlib stream is flushed on completion but not closed.
@@ -126,7 +123,8 @@ public static class ZlibCompressor
     /// <para>可选压缩级别；为 <see langword="null"/> 时采用默认级别。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is null.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 null。</para></exception>
-    /// <exception cref="CompressionException">Compression or stream copying failed. <para>压缩或流复制失败。</para></exception>
+    /// <exception cref="CompressionException">Compression or stream copying failed.
+    /// <para>压缩或流复制失败。</para></exception>
     public static void Compress(Stream input, Stream output, CompressionOptions? options = null)
     {
         if (input == null)
@@ -166,19 +164,14 @@ public static class ZlibCompressor
     internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
         => new ZlibStream(new NonDisposingStream(output), CompressionMode.Compress, CompressionLevelMapper.ToSharpCompressDeflate(options?.Level));
 
-    /// <summary>
-    /// Streaming ZLIB decompression.
-    /// <para>流式 ZLIB 解压。</para>
-    /// </summary>
-    /// <param name="input">Readable compressed stream, left open; seekable inputs decode every concatenated
-    /// member, non-seekable inputs stop after the first. The decoded size is unbounded, so callers handling
-    /// untrusted input must cap <paramref name="output"/> themselves.
-    /// <para>可读压缩流并保持打开；可定位的输入会解码全部串联成员，不可定位的输入在首个成员后停止。解码大小
-    /// 无上限，处理不可信输入的调用方需自行限制 <paramref name="output"/>。</para></param>
-    /// <param name="output">Writable target stream, not closed. <para>可写目标流，不会被关闭。</para></param>
+    /// <summary>Streaming ZLIB decompression.<para>流式 ZLIB 解压。</para></summary>
+    /// <param name="input">Readable compressed stream, left open; seekable inputs decode every concatenated member, non-seekable inputs stop after the first. The decoded size is unbounded, so callers handling untrusted input must cap <paramref name="output"/> themselves.
+    /// <para>可读压缩流并保持打开；可定位的输入会解码全部串联成员，不可定位的输入在首个成员后停止。解码大小 无上限，处理不可信输入的调用方需自行限制 <paramref name="output"/>。</para></param>
+    /// <param name="output">Writable target stream, not closed.<para>可写目标流，不会被关闭。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is null.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 null。</para></exception>
-    /// <exception cref="CompressionException">Decompression or stream copying failed. <para>解压或流复制失败。</para></exception>
+    /// <exception cref="CompressionException">Decompression or stream copying failed.
+    /// <para>解压或流复制失败。</para></exception>
     public static void Decompress(Stream input, Stream output)
     {
         if (input == null)

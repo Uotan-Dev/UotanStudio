@@ -94,14 +94,12 @@ public sealed partial class MtkSession
     /// <para>为显式选择的 eMMC、NOR 或 NAND 存储初始化非 IoT Legacy 代理。</para></summary>
     /// <param name="stageTwo">The caller-owned readable complete DA2 stream.
     /// <para>调用方持有的完整可读 DA2 流。</para></param>
-    /// <param name="loadAddress">The aligned 32-bit load address.
-    /// <para>对齐的 32 位加载地址。</para></param>
+    /// <param name="loadAddress">The aligned 32-bit load address.<para>对齐的 32 位加载地址。</para></param>
     /// <param name="length">The DA2 byte length, at most 64 MiB.
     /// <para>DA2 字节长度，最多 64 MiB。</para></param>
     /// <param name="storageKind">The required storage family; no automatic fallback occurs.
     /// <para>要求的存储类型，不自动回退。</para></param>
-    /// <param name="options">The explicit non-IoT wire profile.
-    /// <para>显式的非 IoT 线协议配置。</para></param>
+    /// <param name="options">The explicit non-IoT wire profile.<para>显式的非 IoT 线协议配置。</para></param>
     /// <param name="emi">The DRAM resource used only when requested.
     /// <para>仅当设备请求时使用的 DRAM 资源。</para></param>
     /// <param name="cancellationToken">Cancellation for the complete startup.

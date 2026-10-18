@@ -21,19 +21,15 @@ public static partial class FileSystemPreservation
     private static readonly AsyncLocal<IReadOnlyList<string>?> FrozenErofsDevices = new();
     private static readonly AsyncLocal<IProgress<FileSystemByteProgress>?> ActiveProgress = new();
 
-    /// <summary>
-    /// Opens the EROFS external device set for the current preservation operation.
-    /// <para>为当前保留操作打开 EROFS 外部设备集。</para>
-    /// </summary>
+    /// <summary>Opens the EROFS external device set for the current preservation operation.
+    /// <para>为当前保留操作打开 EROFS 外部设备集。</para></summary>
     /// <param name="source">Main EROFS image stream; ownership transfers to the returned parser.
     /// <para>主 EROFS 镜像流；所有权转移给返回的解析器。</para></param>
-    /// <param name="token">Cancels parser reads; <para>取消解析器读取。</para></param>
+    /// <param name="token">Cancels parser reads;<para>取消解析器读取。</para></param>
     /// <param name="requireCompleteMetadata">When <see langword="true"/>, the parser demands complete metadata coverage.
     /// <para>为 <see langword="true"/> 时，解析器要求元数据完整覆盖。</para></param>
-    /// <returns>A parser over <paramref name="source"/> alone, or over the source plus the external device
-    /// files registered by the active <see cref="UnpackAsync"/> operation when one is in scope on this async flow.
-    /// <para>仅基于 <paramref name="source"/> 的解析器；若当前异步流上存在活动的 <see cref="UnpackAsync"/> 操作，
-    /// 则返回基于源镜像及其外部设备文件的解析器。</para></returns>
+    /// <returns>A parser over <paramref name="source"/> alone, or over the source plus the external device files registered by the active <see cref="UnpackAsync"/> operation when one is in scope on this async flow.
+    /// <para>仅基于 <paramref name="source"/> 的解析器；若当前异步流上存在活动的 <see cref="UnpackAsync"/> 操作， 则返回基于源镜像及其外部设备文件的解析器。</para></returns>
     /// <exception cref="IOException">An external device file cannot be opened; already-opened device streams are disposed.
     /// <para>无法打开外部设备文件；已打开的设备流会被释放。</para></exception>
     public static ErofsParser OpenErofsParser(Stream source, CancellationToken token = default,

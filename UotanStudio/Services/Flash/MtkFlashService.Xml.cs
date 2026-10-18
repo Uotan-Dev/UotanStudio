@@ -9,10 +9,9 @@ public static partial class MtkFlashService
 {
     /// <summary>Boots an XML agent on a leased session and previews GPT-named operations.
     /// <para>在已租用的会话上启动 XML 代理并预览按 GPT 名寻址的操作。</para></summary>
-    /// <param name="session">A leased session in the created state.
-    /// <para>处于已创建状态的已租用会话。</para></param>
-    /// <param name="startup">Parsed loader profile, XML settings, storage family, identity policy and companion
-    /// resources. <para>已解析的加载器配置、XML 设置、存储族、身份策略与伴随资源。</para></param>
+    /// <param name="session">A leased session in the created state.<para>处于已创建状态的已租用会话。</para></param>
+    /// <param name="startup">Parsed loader profile, XML settings, storage family, identity policy and companion resources.
+    /// <para>已解析的加载器配置、XML 设置、存储族、身份策略与伴随资源。</para></param>
     /// <param name="regionName">Explicit XML region token holding the GPT, such as <c>EMMC-USER</c>.
     /// <para>显式指定的、持有 GPT 的 XML 区域标记，例如 <c>EMMC-USER</c>。</para></param>
     /// <param name="steps">Explicit named operations; copied before asynchronous startup.
@@ -34,8 +33,7 @@ public static partial class MtkFlashService
 
     /// <summary>Boots an XML agent over an explicit serial port and previews GPT-named operations.
     /// <para>经显式串口启动 XML 代理并预览按 GPT 名寻址的操作。</para></summary>
-    /// <param name="serial">Explicit COM/TTY and line settings.
-    /// <para>显式的 COM/TTY 与线路设置。</para></param>
+    /// <param name="serial">Explicit COM/TTY and line settings.<para>显式的 COM/TTY 与线路设置。</para></param>
     /// <param name="startup">Identity-matched loader selection, XML settings and companion resources.
     /// <para>按身份匹配的加载器选择、XML 设置与伴随资源。</para></param>
     /// <param name="regionName">Explicit XML region token holding the GPT, such as <c>EMMC-USER</c>.

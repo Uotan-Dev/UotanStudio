@@ -27,13 +27,13 @@ public static class ScrcpyServerManager
     /// <para>结束命令在调用方继续之前被允许上报的时长。</para></summary>
     private const int ReplyWaitMilliseconds = 3000;
 
-    /// <summary>
-    /// Pushes the scrcpy server jar to the device.
-    /// <para>将 scrcpy 服务端 jar 推送到设备。</para>
-    /// </summary>
-    /// <param name="session">An established ADB session. <para>已建立的 ADB 会话。</para></param>
-    /// <param name="localJarPath">Path of the bundled <c>scrcpy-server</c> jar. <para>随附 <c>scrcpy-server</c> jar 的本地路径。</para></param>
-    /// <param name="cancellationToken">Cancels the push between sync packets. <para>在 sync 数据包之间取消推送。</para></param>
+    /// <summary>Pushes the scrcpy server jar to the device.
+    /// <para>将 scrcpy 服务端 jar 推送到设备。</para></summary>
+    /// <param name="session">An established ADB session.<para>已建立的 ADB 会话。</para></param>
+    /// <param name="localJarPath">Path of the bundled <c>scrcpy-server</c> jar.
+    /// <para>随附 <c>scrcpy-server</c> jar 的本地路径。</para></param>
+    /// <param name="cancellationToken">Cancels the push between sync packets.
+    /// <para>在 sync 数据包之间取消推送。</para></param>
     /// <returns>A task that completes once the device has accepted the transfer.
     /// <para>设备接受该传输后完成的任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.

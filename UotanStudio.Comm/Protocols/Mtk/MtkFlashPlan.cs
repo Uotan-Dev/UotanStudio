@@ -193,53 +193,27 @@ public sealed partial class MtkFlashPlan : IDisposable
         }
     }
 
-    /// <summary>
-    /// Validates all steps, opens their sources and expands bounded sparse extents without device commands.
-    /// <para>校验所有步骤、打开其源文件，并在不发送设备命令的前提下展开有界的稀疏范围。</para>
-    /// </summary>
-    /// <param name="storage">
-    /// Validated device geometry for the intended session.
-    /// <para>目标会话对应的、已校验的设备几何信息。</para>
-    /// </param>
-    /// <param name="steps">
-    /// At most 256 explicitly ordered steps; no hidden erase or padding is added.
-    /// <para>最多 256 个显式排序的步骤；不会添加隐藏的擦除或填充。</para>
-    /// </param>
-    /// <param name="cancellationToken">The preflight cancellation token. <para>预检取消令牌。</para></param>
-    /// <returns>
-    /// An owner of source handles and at most 65536 executable extents.
-    /// <para>源句柄的持有者，最多包含 65536 个可执行范围。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// A step is null, an erase step carries a source, a nonzero source offset, or verification, or
-    /// a raw/sparse step has a blank <c>SourcePath</c>.
-    /// <para>某步骤为 null、擦除步骤携带源、非零源偏移或校验要求，或原始/稀疏步骤的 <c>SourcePath</c> 为空白。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The step count is outside one to 256, an operation type is unsupported, or a source offset is
-    /// negative.
-    /// <para>步骤数量不在 1 到 256 之间、操作类型不受支持，或源偏移为负。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="storage"/> or <paramref name="steps"/> is null, or a raw/sparse step has a null
-    /// <c>SourcePath</c>.
-    /// <para><paramref name="storage"/> 或 <paramref name="steps"/> 为 null，或原始/稀疏步骤的 <c>SourcePath</c> 为 null。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A source is shorter than its selected range, a sparse image is misaligned, has a nonzero
-    /// source offset or trailing bytes, or an aggregate chunk or extent limit is exceeded. Every
-    /// already-opened handle is released before the exception propagates.
-    /// <para>源短于所选范围、稀疏镜像未对齐、源偏移非零或存在尾部字节，或超出聚合的块/范围数量上限。
-    /// 异常向上传播前会释放所有已打开的句柄。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// Cancellation was requested during the preflight loop.
-    /// <para>在预检循环期间请求了取消。</para>
-    /// </exception>
-    /// <exception cref="OverflowException">
-    /// A computed offset, length, chunk count or byte total exceeds its arithmetic bound.
-    /// <para>计算得到的偏移、长度、块数或字节总数超出算术上限。</para>
-    /// </exception>
+    /// <summary>Validates all steps, opens their sources and expands bounded sparse extents without device commands.
+    /// <para>校验所有步骤、打开其源文件，并在不发送设备命令的前提下展开有界的稀疏范围。</para></summary>
+    /// <param name="storage">Validated device geometry for the intended session.
+    /// <para>目标会话对应的、已校验的设备几何信息。</para></param>
+    /// <param name="steps">At most 256 explicitly ordered steps; no hidden erase or padding is added.
+    /// <para>最多 256 个显式排序的步骤；不会添加隐藏的擦除或填充。</para></param>
+    /// <param name="cancellationToken">The preflight cancellation token.<para>预检取消令牌。</para></param>
+    /// <returns>An owner of source handles and at most 65536 executable extents.
+    /// <para>源句柄的持有者，最多包含 65536 个可执行范围。</para></returns>
+    /// <exception cref="ArgumentException">A step is null, an erase step carries a source, a nonzero source offset, or verification, or a raw/sparse step has a blank <c>SourcePath</c>.
+    /// <para>某步骤为 null、擦除步骤携带源、非零源偏移或校验要求，或原始/稀疏步骤的 <c>SourcePath</c> 为空白。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The step count is outside one to 256, an operation type is unsupported, or a source offset is negative.
+    /// <para>步骤数量不在 1 到 256 之间、操作类型不受支持，或源偏移为负。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="storage"/> or <paramref name="steps"/> is null, or a raw/sparse step has a null <c>SourcePath</c>.
+    /// <para><paramref name="storage"/> 或 <paramref name="steps"/> 为 null，或原始/稀疏步骤的 <c>SourcePath</c> 为 null。</para></exception>
+    /// <exception cref="InvalidDataException">A source is shorter than its selected range, a sparse image is misaligned, has a nonzero source offset or trailing bytes, or an aggregate chunk or extent limit is exceeded. Every already-opened handle is released before the exception propagates.
+    /// <para>源短于所选范围、稀疏镜像未对齐、源偏移非零或存在尾部字节，或超出聚合的块/范围数量上限。 异常向上传播前会释放所有已打开的句柄。</para></exception>
+    /// <exception cref="OperationCanceledException">Cancellation was requested during the preflight loop.
+    /// <para>在预检循环期间请求了取消。</para></exception>
+    /// <exception cref="OverflowException">A computed offset, length, chunk count or byte total exceeds its arithmetic bound.
+    /// <para>计算得到的偏移、长度、块数或字节总数超出算术上限。</para></exception>
     public static MtkFlashPlan Prepare(MtkXFlashStorageInfo storage, IReadOnlyList<MtkFlashStep> steps,
         CancellationToken cancellationToken = default)
     {

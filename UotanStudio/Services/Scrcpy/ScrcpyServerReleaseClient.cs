@@ -3,17 +3,17 @@ using System.Text.Json.Serialization;
 
 namespace UotanStudio.Services.Scrcpy;
 
-/// <summary>
-/// One published scrcpy server artifact, as described by the GitHub release API.
-/// <para>GitHub Release API 描述的一个 scrcpy 服务端产物。</para>
-/// </summary>
+/// <summary>One published scrcpy server artifact, as described by the GitHub release API.
+/// <para>GitHub Release API 描述的一个 scrcpy 服务端产物。</para></summary>
 /// <param name="Version">Dotted decimal version, derived from the release tag.
 /// <para>点分十进制版本，由 Release 标签推导。</para></param>
-/// <param name="Tag">Release tag the artifact was published under. <para>发布该产物的 Release 标签。</para></param>
-/// <param name="AssetName">Release asset file name. <para>Release 资产文件名。</para></param>
+/// <param name="Tag">Release tag the artifact was published under.
+/// <para>发布该产物的 Release 标签。</para></param>
+/// <param name="AssetName">Release asset file name.<para>Release 资产文件名。</para></param>
 /// <param name="DownloadUrl">Origin download URL; mirrors are derived from it by the downloader.
 /// <para>源站下载地址；镜像由下载器据此派生。</para></param>
-/// <param name="Length">Exact byte length reported by the release API. <para>Release API 上报的精确字节长度。</para></param>
+/// <param name="Length">Exact byte length reported by the release API.
+/// <para>Release API 上报的精确字节长度。</para></param>
 /// <param name="Sha256">Lowercase SHA-256 digest published by the release API.
 /// <para>Release API 公布的小写 SHA-256 摘要。</para></param>
 public sealed record ScrcpyServerRelease(
@@ -49,19 +49,17 @@ public static class ScrcpyServerReleaseClient
     /// <para>独立服务端资产文件名的前缀。</para></summary>
     public const string ServerAssetPrefix = "scrcpy-server-v";
 
-    /// <summary>Fetches and validates the newest release.
-    /// <para>获取并校验最新的 Release。</para></summary>
+    /// <summary>Fetches and validates the newest release.<para>获取并校验最新的 Release。</para></summary>
     /// <param name="client">HTTP client used for the single origin request.
     /// <para>用于这次源站请求的 HTTP 客户端。</para></param>
-    /// <param name="url">Release API URL; tests inject a stand-in. <para>Release API 地址；测试注入替身。</para></param>
-    /// <param name="cancellationToken">Cancels the request and the parse. <para>取消请求与解析。</para></param>
-    /// <returns>The described server artifact. <para>所描述的服务端产物。</para></returns>
-    /// <exception cref="InvalidOperationException">
-    /// The response carries no release, no standalone server asset, a tag without a dotted decimal
-    /// version, or an asset without a published SHA-256 digest.
-    /// <para>响应中没有 Release、没有独立服务端资产、标签不含点分十进制版本，或资产未公布 SHA-256 摘要。</para>
-    /// </exception>
-    /// <exception cref="HttpRequestException">The origin request failed. <para>源站请求失败。</para></exception>
+    /// <param name="url">Release API URL; tests inject a stand-in.
+    /// <para>Release API 地址；测试注入替身。</para></param>
+    /// <param name="cancellationToken">Cancels the request and the parse.<para>取消请求与解析。</para></param>
+    /// <returns>The described server artifact.<para>所描述的服务端产物。</para></returns>
+    /// <exception cref="InvalidOperationException">The response carries no release, no standalone server asset, a tag without a dotted decimal version, or an asset without a published SHA-256 digest.
+    /// <para>响应中没有 Release、没有独立服务端资产、标签不含点分十进制版本，或资产未公布 SHA-256 摘要。</para></exception>
+    /// <exception cref="HttpRequestException">The origin request failed.
+    /// <para>源站请求失败。</para></exception>
     public static async Task<ScrcpyServerRelease> GetLatestAsync(
         HttpClient client,
         string url = LatestReleaseUrl,

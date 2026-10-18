@@ -31,17 +31,10 @@ public static class ErofsAlgorithmSelectors
     /// <para>只读列表 <c>lz4, lz4hc, lzma, deflate, zstd</c>，可跨线程共享。</para></value>
     public static IReadOnlyList<string> Ordered { get; } = [Lz4, Lz4HighCompression, Lzma, Deflate, Zstd];
 
-    /// <summary>
-    /// Normalizes a free-form selector to one of <see cref="Ordered"/>, falling back to
-    /// <see cref="Lz4"/> for unknown or empty input so untrusted metadata never selects an
-    /// unintended codec.
-    /// <para>将自由形式的选择器规范化为 <see cref="Ordered"/> 之一；空或未知输入回退到 <see cref="Lz4"/>，
-    /// 使不可信元数据永远不会选到非预期编解码器。</para>
-    /// </summary>
-    /// <param name="selector">Token matched case-insensitively against <see cref="Ordered"/>; <see langword="null"/>
-    /// or any unmatched value maps to <see cref="Lz4"/>.
-    /// <para>与 <see cref="Ordered"/> 逐项做忽略大小写匹配的令牌；<see langword="null"/> 或未匹配的值映射为
-    /// <see cref="Lz4"/>。</para></param>
+    /// <summary>Normalizes a free-form selector to one of <see cref="Ordered"/>, falling back to <see cref="Lz4"/> for unknown or empty input so untrusted metadata never selects an unintended codec.
+    /// <para>将自由形式的选择器规范化为 <see cref="Ordered"/> 之一；空或未知输入回退到 <see cref="Lz4"/>， 使不可信元数据永远不会选到非预期编解码器。</para></summary>
+    /// <param name="selector">Token matched case-insensitively against <see cref="Ordered"/>; <see langword="null"/> or any unmatched value maps to <see cref="Lz4"/>.
+    /// <para>与 <see cref="Ordered"/> 逐项做忽略大小写匹配的令牌；<see langword="null"/> 或未匹配的值映射为 <see cref="Lz4"/>。</para></param>
     /// <returns>The canonical token from <see cref="Ordered"/>.
     /// <para><see cref="Ordered"/> 中的规范令牌。</para></returns>
     public static string Normalize(string? selector)

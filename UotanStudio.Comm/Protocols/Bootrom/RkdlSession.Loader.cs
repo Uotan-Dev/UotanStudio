@@ -78,25 +78,18 @@ public sealed partial class RkdlSession
         return total;
     }
 
-    /// <summary>
-    /// Asynchronously downloads a complete RKBOOT loader image; see
-    /// <see cref="DownloadBootLoader(byte[])"/> for the protocol flow, the delay bound, and the
-    /// settle-window caveats. Every entry delay and the final re-enumeration settle window are
-    /// cooperative waits on <paramref name="cancellationToken"/>.
-    /// <para>异步下载完整的 RKBOOT loader 镜像；协议流程、延时上界与稳定窗口的注意事项见
-    /// <see cref="DownloadBootLoader(byte[])"/>。每个条目延时与最终的重枚举稳定窗口都会协作式地
-    /// 等待 <paramref name="cancellationToken"/>。</para>
-    /// </summary>
-    /// <param name="loaderImage">The loader image bytes (RKBOOT .bin). <para>loader 镜像字节（RKBOOT .bin）。</para></param>
+    /// <summary>Asynchronously downloads a complete RKBOOT loader image; see <see cref="DownloadBootLoader(byte[])"/> for the protocol flow, the delay bound, and the settle-window caveats. Every entry delay and the final re-enumeration settle window are cooperative waits on <paramref name="cancellationToken"/>.
+    /// <para>异步下载完整的 RKBOOT loader 镜像；协议流程、延时上界与稳定窗口的注意事项见 <see cref="DownloadBootLoader(byte[])"/>。每个条目延时与最终的重枚举稳定窗口都会协作式地 等待 <paramref name="cancellationToken"/>。</para></summary>
+    /// <param name="loaderImage">The loader image bytes (RKBOOT .bin).
+    /// <para>loader 镜像字节（RKBOOT .bin）。</para></param>
     /// <param name="cancellationToken">A cancellation token observed by every delay in the download.
     /// <para>下载过程中每段等待都会观测的取消令牌。</para></param>
-    /// <returns>A task that resolves to the total number of bytes transferred; completion is not
-    /// proof that the device entered loader mode. <para>返回实际传输字节总数的任务；完成并不代表
-    /// 设备已进入 loader 模式。</para></returns>
-    /// <exception cref="RkdlException">Propagated from <see cref="DownloadBootLoader(byte[])"/> for
-    /// the same guards. <para>与 <see cref="DownloadBootLoader(byte[])"/> 相同的守卫抛出。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was cancelled before or during any
-    /// delay of the download. <para>令牌在下载开始前或任一段等待期间被取消。</para></exception>
+    /// <returns>A task that resolves to the total number of bytes transferred; completion is not proof that the device entered loader mode.
+    /// <para>返回实际传输字节总数的任务；完成并不代表 设备已进入 loader 模式。</para></returns>
+    /// <exception cref="RkdlException">Propagated from <see cref="DownloadBootLoader(byte[])"/> for the same guards.
+    /// <para>与 <see cref="DownloadBootLoader(byte[])"/> 相同的守卫抛出。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled before or during any delay of the download.
+    /// <para>令牌在下载开始前或任一段等待期间被取消。</para></exception>
     public async Task<int> DownloadBootLoaderAsync(byte[] loaderImage, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

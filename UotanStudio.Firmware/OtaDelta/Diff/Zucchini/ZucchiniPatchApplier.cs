@@ -132,37 +132,23 @@ internal static class ZucchiniPatchApplier
         output.Add((byte)(value >> 24));
     }
 
-    /// <summary>Applies a patch to a bounded output buffer. <para>将补丁应用到有界输出缓冲区。</para></summary>
-    /// <param name="oldData">
-    /// Source image the patch was created against; its length must equal the size recorded in the patch header.
-    /// <para>补丁创建时所依据的源镜像；其长度必须与补丁头部记录的大小一致。</para>
-    /// </param>
-    /// <param name="patch">
-    /// Complete <c>Zucc</c> container, read from its first byte. <para>完整的 <c>Zucc</c> 容器，从首字节开始读取。</para>
-    /// </param>
-    /// <param name="newSize">
-    /// Size in bytes of the image to produce, up to the <c>256</c> MiB buffer ceiling of this API; it must match the
-    /// new size recorded in the patch.
-    /// <para>要生成镜像的字节大小，不得超过本 API 的 <c>256</c> MiB 缓冲区上限；必须与补丁记录的新大小一致。</para>
-    /// </param>
-    /// <returns>
-    /// A new array of exactly <paramref name="newSize"/> bytes holding the reconstructed image after both CRC
-    /// checks passed. <para>长度恰为 <paramref name="newSize"/> 字节的新数组，保存两项 CRC 校验通过后的还原镜像。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="newSize"/> is negative. <para><paramref name="newSize"/> 为负数。</para>
-    /// </exception>
-    /// <exception cref="ZucchiniFormatException">
-    /// <paramref name="newSize"/> exceeds <c>256</c> MiB, or the container is malformed, truncated, or does not
-    /// cover the destination exactly. <para><paramref name="newSize"/> 超过 <c>256</c> MiB，或容器畸形、被截断，未能精确覆盖目标。</para>
-    /// </exception>
-    /// <exception cref="ZucchiniChecksumException">
-    /// The CRC-32 of <paramref name="oldData"/> or of the result disagrees with the patch header.
-    /// <para><paramref name="oldData"/> 或结果的 CRC-32 与补丁头部不一致。</para>
-    /// </exception>
-    /// <exception cref="ZucchiniUnsupportedExecutableTypeException">
-    /// An element declares an executable type other than NoOp. <para>某个元素声明了 NoOp 之外的可执行类型。</para>
-    /// </exception>
+    /// <summary>Applies a patch to a bounded output buffer.<para>将补丁应用到有界输出缓冲区。</para></summary>
+    /// <param name="oldData">Source image the patch was created against; its length must equal the size recorded in the patch header.
+    /// <para>补丁创建时所依据的源镜像；其长度必须与补丁头部记录的大小一致。</para></param>
+    /// <param name="patch">Complete <c>Zucc</c> container, read from its first byte.
+    /// <para>完整的 <c>Zucc</c> 容器，从首字节开始读取。</para></param>
+    /// <param name="newSize">Size in bytes of the image to produce, up to the <c>256</c> MiB buffer ceiling of this API; it must match the new size recorded in the patch.
+    /// <para>要生成镜像的字节大小，不得超过本 API 的 <c>256</c> MiB 缓冲区上限；必须与补丁记录的新大小一致。</para></param>
+    /// <returns>A new array of exactly <paramref name="newSize"/> bytes holding the reconstructed image after both CRC checks passed.
+    /// <para>长度恰为 <paramref name="newSize"/> 字节的新数组，保存两项 CRC 校验通过后的还原镜像。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="newSize"/> is negative.
+    /// <para><paramref name="newSize"/> 为负数。</para></exception>
+    /// <exception cref="ZucchiniFormatException"><paramref name="newSize"/> exceeds <c>256</c> MiB, or the container is malformed, truncated, or does not cover the destination exactly.
+    /// <para><paramref name="newSize"/> 超过 <c>256</c> MiB，或容器畸形、被截断，未能精确覆盖目标。</para></exception>
+    /// <exception cref="ZucchiniChecksumException">The CRC-32 of <paramref name="oldData"/> or of the result disagrees with the patch header.
+    /// <para><paramref name="oldData"/> 或结果的 CRC-32 与补丁头部不一致。</para></exception>
+    /// <exception cref="ZucchiniUnsupportedExecutableTypeException">An element declares an executable type other than NoOp.
+    /// <para>某个元素声明了 NoOp 之外的可执行类型。</para></exception>
     public static byte[] Apply(ReadOnlySpan<byte> oldData, ReadOnlySpan<byte> patch, int newSize)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(newSize);
@@ -170,35 +156,20 @@ internal static class ZucchiniPatchApplier
         var result = new byte[newSize]; Apply(oldData, patch, result); return result;
     }
 
-    /// <summary>Applies a standard Zucc patch and verifies both CRCs. <para>应用标准 Zucc 补丁并验证源和目标 CRC。</para></summary>
-    /// <param name="oldData">
-    /// Source image whose length must equal the old size recorded in the patch; it is read, never modified.
-    /// <para>长度必须与补丁记录的旧大小一致的源镜像；只被读取，不会被修改。</para>
-    /// </param>
-    /// <param name="patch">
-    /// Complete <c>Zucc</c> container: magic, version, image sizes and CRCs, then the element table.
-    /// <para>完整的 <c>Zucc</c> 容器：魔数、版本、镜像大小与 CRC，随后是元素表。</para>
-    /// </param>
-    /// <param name="newData">
-    /// Destination buffer, whose length must equal the new size recorded in the patch and which the elements fill
-    /// in strictly increasing destination order.
-    /// <para>目标缓冲区，其长度必须与补丁记录的新大小一致，元素按目标偏移严格递增地将其填满。</para>
-    /// </param>
-    /// <exception cref="ZucchiniFormatException">
-    /// The magic or major version is unsupported, an image size disagrees with the header, an element range or
-    /// destination coverage is invalid, an element carries a reference pool, its version is not <c>1</c>, patch
-    /// sub-streams are left over, or the container has trailing data.
-    /// <para>魔数或主版本不受支持、镜像大小与头部不符、元素范围或目标覆盖非法、元素含引用池、元素版本不是 <c>1</c>、
-    /// 补丁子流有残留，或容器尾部有多余数据。</para>
-    /// </exception>
-    /// <exception cref="ZucchiniChecksumException">
-    /// The CRC-32 computed over <paramref name="oldData"/> or over the finished <paramref name="newData"/> disagrees
-    /// with the header. <para>对 <paramref name="oldData"/> 或完成的 <paramref name="newData"/> 计算的 CRC-32 与头部不一致。</para>
-    /// </exception>
-    /// <exception cref="ZucchiniUnsupportedExecutableTypeException">
-    /// An element declares an executable type other than NoOp; the offset of that element is reported.
-    /// <para>某个元素声明了 NoOp 之外的可执行类型；会上报该元素的偏移。</para>
-    /// </exception>
+    /// <summary>Applies a standard Zucc patch and verifies both CRCs.
+    /// <para>应用标准 Zucc 补丁并验证源和目标 CRC。</para></summary>
+    /// <param name="oldData">Source image whose length must equal the old size recorded in the patch; it is read, never modified.
+    /// <para>长度必须与补丁记录的旧大小一致的源镜像；只被读取，不会被修改。</para></param>
+    /// <param name="patch">Complete <c>Zucc</c> container: magic, version, image sizes and CRCs, then the element table.
+    /// <para>完整的 <c>Zucc</c> 容器：魔数、版本、镜像大小与 CRC，随后是元素表。</para></param>
+    /// <param name="newData">Destination buffer, whose length must equal the new size recorded in the patch and which the elements fill in strictly increasing destination order.
+    /// <para>目标缓冲区，其长度必须与补丁记录的新大小一致，元素按目标偏移严格递增地将其填满。</para></param>
+    /// <exception cref="ZucchiniFormatException">The magic or major version is unsupported, an image size disagrees with the header, an element range or destination coverage is invalid, an element carries a reference pool, its version is not <c>1</c>, patch sub-streams are left over, or the container has trailing data.
+    /// <para>魔数或主版本不受支持、镜像大小与头部不符、元素范围或目标覆盖非法、元素含引用池、元素版本不是 <c>1</c>、 补丁子流有残留，或容器尾部有多余数据。</para></exception>
+    /// <exception cref="ZucchiniChecksumException">The CRC-32 computed over <paramref name="oldData"/> or over the finished <paramref name="newData"/> disagrees with the header.
+    /// <para>对 <paramref name="oldData"/> 或完成的 <paramref name="newData"/> 计算的 CRC-32 与头部不一致。</para></exception>
+    /// <exception cref="ZucchiniUnsupportedExecutableTypeException">An element declares an executable type other than NoOp; the offset of that element is reported.
+    /// <para>某个元素声明了 NoOp 之外的可执行类型；会上报该元素的偏移。</para></exception>
     public static void Apply(ReadOnlySpan<byte> oldData, ReadOnlySpan<byte> patch, Span<byte> newData)
     {
         var reader = new Reader(patch);

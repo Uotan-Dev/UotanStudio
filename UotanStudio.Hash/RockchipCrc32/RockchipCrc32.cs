@@ -26,25 +26,14 @@ public static class RockchipCrc32
 
     private static readonly uint[] SliceTable = BuildSliceTable();
 
-    /// <summary>
-    /// Computes the Rockchip CRC-32 of the data starting from <paramref name="seed"/>. To checksum a
-    /// stream in chunks, pass the previous return value as the next <paramref name="seed"/>.
-    /// <para>以 <paramref name="seed"/> 为初值计算数据的 Rockchip CRC-32。分块计算流数据时，把上一次的
-    /// 返回值作为下一次的 <paramref name="seed"/> 传入即可续算。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Bytes to hash; an empty span returns <paramref name="seed"/> unchanged.
-    /// <para>参与计算的字节；空区间原样返回 <paramref name="seed"/>。</para>
-    /// </param>
-    /// <param name="seed">
-    /// Register initial value; the convention for full images is 0, and the previous return value for
-    /// chunked continuation.
-    /// <para>寄存器初值；整图计算按约定取 0，分块续算时取上一次的返回值。</para>
-    /// </param>
-    /// <returns>
-    /// The Rockchip CRC-32 register value after consuming the data.
-    /// <para>消费完数据后的 Rockchip CRC-32 寄存器值。</para>
-    /// </returns>
+    /// <summary>Computes the Rockchip CRC-32 of the data starting from <paramref name="seed"/>. To checksum a stream in chunks, pass the previous return value as the next <paramref name="seed"/>.
+    /// <para>以 <paramref name="seed"/> 为初值计算数据的 Rockchip CRC-32。分块计算流数据时，把上一次的 返回值作为下一次的 <paramref name="seed"/> 传入即可续算。</para></summary>
+    /// <param name="data">Bytes to hash; an empty span returns <paramref name="seed"/> unchanged.
+    /// <para>参与计算的字节；空区间原样返回 <paramref name="seed"/>。</para></param>
+    /// <param name="seed">Register initial value; the convention for full images is 0, and the previous return value for chunked continuation.
+    /// <para>寄存器初值；整图计算按约定取 0，分块续算时取上一次的返回值。</para></param>
+    /// <returns>The Rockchip CRC-32 register value after consuming the data.
+    /// <para>消费完数据后的 Rockchip CRC-32 寄存器值。</para></returns>
     public static uint Compute(ReadOnlySpan<byte> data, uint seed = 0)
     {
         var crc = seed;

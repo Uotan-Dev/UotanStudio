@@ -39,47 +39,22 @@ internal sealed class OzipBlockDecryptStream : Stream
     private long _cachedUnitIndex = -1;
     private long _innerPosition = -1;
 
-    /// <summary>
-    /// Initializes a new instance of OzipBlockDecryptStream.
-    /// <para>初始化 OzipBlockDecryptStream 的新实例。</para>
-    /// </summary>
-    /// <param name="inner">
-    /// Underlying container stream holding the payload; readable and seekable, with its own position
-    /// managed entirely by this view. Ownership follows <paramref name="leaveOpen"/>.
-    /// <para>
-    /// 承载负载的底层容器流；必须可读且可寻址，其自身位置完全由本视图管理。所有权由
-    /// <paramref name="leaveOpen"/> 决定。
-    /// </para>
-    /// </param>
-    /// <param name="aesKey">
-    /// AES-128 key for the encrypted prefixes, exactly 16 bytes; used in ECB mode with an all-zero
-    /// implicit IV.
-    /// <para>用于加密前缀的 AES-128 密钥，必须为 16 字节；以 ECB 模式使用，隐含全零 IV。</para>
-    /// </param>
-    /// <param name="dataLength">
-    /// Logical length in bytes of the decrypted data region, measured from <c>OzipHeader.DataOffset</c>.
-    /// <para>解密数据区的逻辑长度（字节），从 <c>OzipHeader.DataOffset</c> 起算。</para>
-    /// </param>
-    /// <param name="leaveOpen">
-    /// <see langword="true"/> to keep <paramref name="inner"/> open when this stream is disposed;
-    /// <see langword="false"/> disposes it together with this stream.
-    /// <para>
-    /// 为 <see langword="true"/> 时，本流释放后保持 <paramref name="inner"/> 打开；为 <see langword="false"/>
-    /// 时与之一起释放。
-    /// </para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="inner"/> or <paramref name="aesKey"/> is <see langword="null"/>.
-    /// <para><paramref name="inner"/> 或 <paramref name="aesKey"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="inner"/> cannot be read or seek, or <paramref name="aesKey"/> is not 16 bytes.
-    /// <para><paramref name="inner"/> 不可读或不可寻址，或 <paramref name="aesKey"/> 长度不是 16 字节。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="dataLength"/> is negative, or it extends past the end of <paramref name="inner"/>.
-    /// <para><paramref name="dataLength"/> 为负数，或超出 <paramref name="inner"/> 的末尾。</para>
-    /// </exception>
+    /// <summary>Initializes a new instance of OzipBlockDecryptStream.
+    /// <para>初始化 OzipBlockDecryptStream 的新实例。</para></summary>
+    /// <param name="inner">Underlying container stream holding the payload; readable and seekable, with its own position managed entirely by this view. Ownership follows <paramref name="leaveOpen"/>.
+    /// <para> 承载负载的底层容器流；必须可读且可寻址，其自身位置完全由本视图管理。所有权由 <paramref name="leaveOpen"/> 决定。 </para></param>
+    /// <param name="aesKey">AES-128 key for the encrypted prefixes, exactly 16 bytes; used in ECB mode with an all-zero implicit IV.
+    /// <para>用于加密前缀的 AES-128 密钥，必须为 16 字节；以 ECB 模式使用，隐含全零 IV。</para></param>
+    /// <param name="dataLength">Logical length in bytes of the decrypted data region, measured from <c>OzipHeader.DataOffset</c>.
+    /// <para>解密数据区的逻辑长度（字节），从 <c>OzipHeader.DataOffset</c> 起算。</para></param>
+    /// <param name="leaveOpen"><see langword="true"/> to keep <paramref name="inner"/> open when this stream is disposed; <see langword="false"/> disposes it together with this stream.
+    /// <para> 为 <see langword="true"/> 时，本流释放后保持 <paramref name="inner"/> 打开；为 <see langword="false"/> 时与之一起释放。 </para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="inner"/> or <paramref name="aesKey"/> is <see langword="null"/>.
+    /// <para><paramref name="inner"/> 或 <paramref name="aesKey"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="inner"/> cannot be read or seek, or <paramref name="aesKey"/> is not 16 bytes.
+    /// <para><paramref name="inner"/> 不可读或不可寻址，或 <paramref name="aesKey"/> 长度不是 16 字节。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="dataLength"/> is negative, or it extends past the end of <paramref name="inner"/>.
+    /// <para><paramref name="dataLength"/> 为负数，或超出 <paramref name="inner"/> 的末尾。</para></exception>
     public OzipBlockDecryptStream(Stream inner, byte[] aesKey, long dataLength, bool leaveOpen = false)
     {
         Guard.ThrowIfNull(inner);
@@ -148,49 +123,24 @@ internal sealed class OzipBlockDecryptStream : Stream
         set => Seek(value, SeekOrigin.Begin);
     }
 
-    /// <summary>
-    /// Reads decrypted bytes from the current position into <paramref name="buffer"/> and advances the
-    /// position. Unit prefixes are decrypted on demand; plaintext runs are copied straight from the
-    /// inner stream. A short return only means the region end was reached.
-    /// <para>
-    /// 从当前位置向 <paramref name="buffer"/> 读取解密字节并前移位置。单元前缀按需解密，明文段直接从内部流复制。
-    /// 返回数量偏少只表示已到达数据区末尾。
-    /// </para>
-    /// </summary>
-    /// <param name="buffer">
-    /// Destination array; must have <paramref name="count"/> writable bytes at <paramref name="offset"/>.
-    /// <para>目标数组；在 <paramref name="offset"/> 处必须可写 <paramref name="count"/> 字节。</para>
-    /// </param>
-    /// <param name="offset">
-    /// Zero-based index in <paramref name="buffer"/> where writing starts.
-    /// <para><paramref name="buffer"/> 中开始写入位置的从零开始序号。</para>
-    /// </param>
-    /// <param name="count">
-    /// Maximum number of bytes requested; <c>0</c> returns <c>0</c> without touching the inner stream.
-    /// <para>请求的最大字节数；为 <c>0</c> 时直接返回 <c>0</c>，不访问内部流。</para>
-    /// </param>
-    /// <returns>
-    /// The number of bytes actually written, which is <c>0</c> once the position reaches
-    /// <see cref="Length"/>.
-    /// <para>实际写入的字节数；位置到达 <see cref="Length"/> 后为 <c>0</c>。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="offset"/> and <paramref name="count"/> do not denote a valid range of
-    /// <paramref name="buffer"/>.
-    /// <para><paramref name="offset"/> 与 <paramref name="count"/> 未构成 <paramref name="buffer"/> 的有效区间。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="buffer"/> is <see langword="null"/>.
-    /// <para><paramref name="buffer"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="offset"/> or <paramref name="count"/> is negative.
-    /// <para><paramref name="offset"/> 或 <paramref name="count"/> 为负数。</para>
-    /// </exception>
-    /// <exception cref="InvalidOppFormatException">
-    /// The inner stream ends before the requested data, or the unit prefix being decrypted is incomplete.
-    /// <para>内部流在所需数据之前结束，或正在解密的单元前缀不完整。</para>
-    /// </exception>
+    /// <summary>Reads decrypted bytes from the current position into <paramref name="buffer"/> and advances the position. Unit prefixes are decrypted on demand; plaintext runs are copied straight from the inner stream. A short return only means the region end was reached.
+    /// <para> 从当前位置向 <paramref name="buffer"/> 读取解密字节并前移位置。单元前缀按需解密，明文段直接从内部流复制。 返回数量偏少只表示已到达数据区末尾。 </para></summary>
+    /// <param name="buffer">Destination array; must have <paramref name="count"/> writable bytes at <paramref name="offset"/>.
+    /// <para>目标数组；在 <paramref name="offset"/> 处必须可写 <paramref name="count"/> 字节。</para></param>
+    /// <param name="offset">Zero-based index in <paramref name="buffer"/> where writing starts.
+    /// <para><paramref name="buffer"/> 中开始写入位置的从零开始序号。</para></param>
+    /// <param name="count">Maximum number of bytes requested; <c>0</c> returns <c>0</c> without touching the inner stream.
+    /// <para>请求的最大字节数；为 <c>0</c> 时直接返回 <c>0</c>，不访问内部流。</para></param>
+    /// <returns>The number of bytes actually written, which is <c>0</c> once the position reaches <see cref="Length"/>.
+    /// <para>实际写入的字节数；位置到达 <see cref="Length"/> 后为 <c>0</c>。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="offset"/> and <paramref name="count"/> do not denote a valid range of <paramref name="buffer"/>.
+    /// <para><paramref name="offset"/> 与 <paramref name="count"/> 未构成 <paramref name="buffer"/> 的有效区间。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="buffer"/> is <see langword="null"/>.
+    /// <para><paramref name="buffer"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> or <paramref name="count"/> is negative.
+    /// <para><paramref name="offset"/> 或 <paramref name="count"/> 为负数。</para></exception>
+    /// <exception cref="InvalidOppFormatException">The inner stream ends before the requested data, or the unit prefix being decrypted is incomplete.
+    /// <para>内部流在所需数据之前结束，或正在解密的单元前缀不完整。</para></exception>
     public override int Read(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);

@@ -59,52 +59,38 @@ public static class ImageConfigurationEditor
         => RebuildManyAsync(sourcePath, format, [new ImageConfigurationReplacement(imagePath, replacement)],
             outputPath, capacity, maximumExtractionBytes, token);
 
-    /// <summary>
-    /// Applies up to 256 content and 256 attribute requests in one tree, verifying requested bytes and attributes before
-    /// publication.
-    /// <para>在同一棵目录树中最多应用 256 项内容替换与 256 项属性修改，并在发布前校验所请求的字节与属性。</para>
-    /// </summary>
+    /// <summary>Applies up to 256 content and 256 attribute requests in one tree, verifying requested bytes and attributes before publication.
+    /// <para>在同一棵目录树中最多应用 256 项内容替换与 256 项属性修改，并在发布前校验所请求的字节与属性。</para></summary>
     /// <param name="sourcePath">Existing raw image file copied to a private temporary file before any editing.
     /// <para>在任何编辑之前会被复制到私有临时文件的现有原始镜像文件。</para></param>
     /// <param name="format">Selects the handler: <c>"EXT4"</c> or <c>"EROFS"</c>, matched case-sensitively.
     /// <para>决定使用哪个处理器：区分大小写的 <c>"EXT4"</c> 或 <c>"EROFS"</c>。</para></param>
-    /// <param name="replacements">Content requests, at most 256 with distinct paths; an empty list is allowed only when an
-    /// attribute or extended-attribute list is non-empty. <para>内容替换请求，最多 256 项且路径互不重复；
-    /// 仅当属性或扩展属性列表非空时才允许为空。</para></param>
+    /// <param name="replacements">Content requests, at most 256 with distinct paths; an empty list is allowed only when an attribute or extended-attribute list is non-empty.
+    /// <para>内容替换请求，最多 256 项且路径互不重复； 仅当属性或扩展属性列表非空时才允许为空。</para></param>
     /// <param name="outputPath">Destination file written through a temporary file and replaced atomically at the end.
     /// <para>目标文件经由临时文件写入，最后原子替换。</para></param>
-    /// <param name="capacity">Maximum output image size in bytes; must be positive. <para>输出镜像的最大字节数；必须为正数。</para></param>
+    /// <param name="capacity">Maximum output image size in bytes; must be positive.
+    /// <para>输出镜像的最大字节数；必须为正数。</para></param>
     /// <param name="maximumExtractionBytes">Total byte budget for the extracted tree; must be positive.
     /// <para>解包目录树的总字节预算；必须为正数。</para></param>
     /// <param name="token">Checked during copying, unpacking, rebuilding, verification and publication.
     /// <para>在复制、解包、重建、校验与发布的全过程中都会检查。</para></param>
-    /// <param name="attributeEdits">Ownership and permission changes, at most 256; the file-type bits of the current mode are
-    /// retained. <see langword="null"/> means no attribute edits. <para>属主与权限修改，最多 256 项；保留当前 mode 的文件类型位。
-    /// <see langword="null"/> 表示不做属性编辑。</para></param>
-    /// <param name="xattrEdits">Extended-attribute changes, at most 256, each with a value of at most 64 KiB;
-    /// <see langword="null"/> means no extended-attribute edits. <para>扩展属性修改，最多 256 项，每项取值最多 64 KiB；
-    /// <see langword="null"/> 表示不做扩展属性编辑。</para></param>
+    /// <param name="attributeEdits">Ownership and permission changes, at most 256; the file-type bits of the current mode are retained. <see langword="null"/> means no attribute edits.
+    /// <para>属主与权限修改，最多 256 项；保留当前 mode 的文件类型位。 <see langword="null"/> 表示不做属性编辑。</para></param>
+    /// <param name="xattrEdits">Extended-attribute changes, at most 256, each with a value of at most 64 KiB; <see langword="null"/> means no extended-attribute edits.
+    /// <para>扩展属性修改，最多 256 项，每项取值最多 64 KiB； <see langword="null"/> 表示不做扩展属性编辑。</para></param>
     /// <returns>A task that completes once every request has been re-read from the rebuilt image and the output is published.
     /// <para>在全部请求都能从重建后的镜像中重新读出、且输出已发布后结束的任务。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="replacements"/> is <see langword="null"/>, one of its items is
-    /// <see langword="null"/> or carries a null path or content stream, or an element of <paramref name="attributeEdits"/> or
-    /// <paramref name="xattrEdits"/> is <see langword="null"/>.
-    /// <para><paramref name="replacements"/> 为 <see langword="null"/>、其中某一项为 <see langword="null"/> 或其路径与
-    /// 内容流为空，或 <paramref name="attributeEdits"/>、<paramref name="xattrEdits"/> 中存在 <see langword="null"/> 元素。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="capacity"/> or
-    /// <paramref name="maximumExtractionBytes"/> is zero or negative.
+    /// <exception cref="ArgumentNullException"><paramref name="replacements"/> is <see langword="null"/>, one of its items is <see langword="null"/> or carries a null path or content stream, or an element of <paramref name="attributeEdits"/> or <paramref name="xattrEdits"/> is <see langword="null"/>.
+    /// <para><paramref name="replacements"/> 为 <see langword="null"/>、其中某一项为 <see langword="null"/> 或其路径与 内容流为空，或 <paramref name="attributeEdits"/>、<paramref name="xattrEdits"/> 中存在 <see langword="null"/> 元素。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="capacity"/> or <paramref name="maximumExtractionBytes"/> is zero or negative.
     /// <para><paramref name="capacity"/> 或 <paramref name="maximumExtractionBytes"/> 为零或负数。</para></exception>
-    /// <exception cref="InvalidDataException">The batch is empty or over 256 requests of a kind, the format is unsupported, a
-    /// replacement path repeats or its stream is unreadable, an extended attribute value exceeds 64 KiB, the extraction byte
-    /// budget is exceeded, unpacking or preservation fails, the rebuilt image lacks the metadata, or content, inode attribute or
-    /// extended attribute verification fails. <para>批次为空或某类请求超过 256 项、格式不受支持、替换路径重复或流不可读、
-    /// 扩展属性值超过 64 KiB、超出解包字节预算、解包或元数据保留失败、重建镜像缺少元数据，或内容、inode 属性、
-    /// 扩展属性校验失败。</para></exception>
+    /// <exception cref="InvalidDataException">The batch is empty or over 256 requests of a kind, the format is unsupported, a replacement path repeats or its stream is unreadable, an extended attribute value exceeds 64 KiB, the extraction byte budget is exceeded, unpacking or preservation fails, the rebuilt image lacks the metadata, or content, inode attribute or extended attribute verification fails.
+    /// <para>批次为空或某类请求超过 256 项、格式不受支持、替换路径重复或流不可读、 扩展属性值超过 64 KiB、超出解包字节预算、解包或元数据保留失败、重建镜像缺少元数据，或内容、inode 属性、 扩展属性校验失败。</para></exception>
     /// <exception cref="FileNotFoundException">A replacement, attribute or extended attribute target is absent from the image.
     /// <para>镜像中不存在内容、属性或扩展属性的目标路径。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="token"/> was signaled; the temporary directory is removed and
-    /// the destination keeps its previous content. <para><paramref name="token"/> 已发出取消信号；临时目录会被删除，
-    /// 目标文件保留原有内容。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="token"/> was signaled; the temporary directory is removed and the destination keeps its previous content.
+    /// <para><paramref name="token"/> 已发出取消信号；临时目录会被删除， 目标文件保留原有内容。</para></exception>
     public static async Task RebuildManyAsync(string sourcePath, string format,
         IReadOnlyList<ImageConfigurationReplacement> replacements, string outputPath, long capacity,
         long maximumExtractionBytes, CancellationToken token, IReadOnlyList<FileSystemAttributeEdit>? attributeEdits = null,

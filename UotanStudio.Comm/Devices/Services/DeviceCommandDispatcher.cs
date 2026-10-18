@@ -31,29 +31,20 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
         _worker = Task.Run(RunAsync);
     }
 
-    /// <summary>
-    /// Enqueues a command and returns a task that completes with its result once the command
-    /// has run. The <paramref name="cancellationToken"/> only cancels this command.
-    /// <para>将指令入队并返回携带其结果的任务。<paramref name="cancellationToken"/> 仅取消该指令。</para>
-    /// </summary>
-    /// <param name="name">
-    /// Nonempty label identifying the command. <para>标识该指令的非空名称。</para>
-    /// </param>
-    /// <param name="work">
-    /// Command body, invoked once on the worker with a token tied to this command and the dispatcher lifetime.
-    /// <para>指令主体，仅在工作任务上调用一次，接收同时绑定该指令与调度器生命周期的标记。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels only this command, never the queue. <para>仅取消该指令，绝不影响队列。</para>
-    /// </param>
+    /// <summary>Enqueues a command and returns a task that completes with its result once the command has run. The <paramref name="cancellationToken"/> only cancels this command.
+    /// <para>将指令入队并返回携带其结果的任务。<paramref name="cancellationToken"/> 仅取消该指令。</para></summary>
+    /// <param name="name">Nonempty label identifying the command.<para>标识该指令的非空名称。</para></param>
+    /// <param name="work">Command body, invoked once on the worker with a token tied to this command and the dispatcher lifetime.
+    /// <para>指令主体，仅在工作任务上调用一次，接收同时绑定该指令与调度器生命周期的标记。</para></param>
+    /// <param name="cancellationToken">Cancels only this command, never the queue.
+    /// <para>仅取消该指令，绝不影响队列。</para></param>
     /// <returns>A task that completes with the command result, or faults or cancels with it.
     /// <para>随指令结果完成、或随之失败/取消的任务。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="name"/> is null, empty, or whitespace. <para><paramref name="name"/> 为 null、空白或仅含空白字符。</para></exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="work"/> is null. <para><paramref name="work"/> 为 null。</para></exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The dispatcher has been disposed, including when disposal wins a concurrent race.
+    /// <exception cref="ArgumentException"><paramref name="name"/> is null, empty, or whitespace.
+    /// <para><paramref name="name"/> 为 null、空白或仅含空白字符。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="work"/> is null.
+    /// <para><paramref name="work"/> 为 null。</para></exception>
+    /// <exception cref="ObjectDisposedException">The dispatcher has been disposed, including when disposal wins a concurrent race.
     /// <para>调度器已被释放，包括并发竞争中释放先到达的情况。</para></exception>
     public Task<T> EnqueueAsync<T>(string name, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default)
     {
@@ -105,19 +96,11 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
         return completion.Task;
     }
 
-    /// <summary>
-    /// Enqueues a command that returns no value.
-    /// <para>入队无返回值的指令。</para>
-    /// </summary>
-    /// <param name="name">
-    /// Nonempty label identifying the command. <para>标识该指令的非空名称。</para>
-    /// </param>
-    /// <param name="work">
-    /// Command body run on the worker. <para>在工作任务上执行的指令主体。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels only this command, never the queue. <para>仅取消该指令，绝不影响队列。</para>
-    /// </param>
+    /// <summary>Enqueues a command that returns no value.<para>入队无返回值的指令。</para></summary>
+    /// <param name="name">Nonempty label identifying the command.<para>标识该指令的非空名称。</para></param>
+    /// <param name="work">Command body run on the worker.<para>在工作任务上执行的指令主体。</para></param>
+    /// <param name="cancellationToken">Cancels only this command, never the queue.
+    /// <para>仅取消该指令，绝不影响队列。</para></param>
     public Task EnqueueAsync(string name, Func<CancellationToken, Task> work, CancellationToken cancellationToken = default)
         => EnqueueAsync<object?>(name, async token => { await work(token).ConfigureAwait(false); return null; }, cancellationToken);
 

@@ -36,26 +36,15 @@ public sealed class AXmlFormatHandler : IFormatHandler
                && HeaderProbe.ProbeMagic(filePath, 8, 2, [0x08, 0x00]);
     }
 
-    /// <summary>
-    /// Reads the firmware metadata asynchronously.
-    /// <para>异步读取固件元数据。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path of the binary XML file to parse in full before summarising.
-    /// <para>要完整解析后再摘要的二进制 XML 文件路径。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels before parsing starts; the parse itself is synchronous.
-    /// <para>在解析开始前取消；解析本身为同步执行。</para>
-    /// </param>
-    /// <returns>
-    /// A task whose result is <c>Ok</c> with a one-line description, or <c>Fail</c> when parsing or reading fails.
-    /// <para>任务结果：成功为 <c>Ok</c> 并携带单行描述，读取或解析失败为 <c>Fail</c>。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signalled.
-    /// <para><paramref name="cancellationToken"/> 已被触发。</para>
-    /// </exception>
+    /// <summary>Reads the firmware metadata asynchronously.<para>异步读取固件元数据。</para></summary>
+    /// <param name="filePath">Path of the binary XML file to parse in full before summarising.
+    /// <para>要完整解析后再摘要的二进制 XML 文件路径。</para></param>
+    /// <param name="cancellationToken">Cancels before parsing starts; the parse itself is synchronous.
+    /// <para>在解析开始前取消；解析本身为同步执行。</para></param>
+    /// <returns>A task whose result is <c>Ok</c> with a one-line description, or <c>Fail</c> when parsing or reading fails.
+    /// <para>任务结果：成功为 <c>Ok</c> 并携带单行描述，读取或解析失败为 <c>Fail</c>。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -74,34 +63,19 @@ public sealed class AXmlFormatHandler : IFormatHandler
         }
     }
 
-    /// <summary>
-    /// Extracts the firmware contents asynchronously.
-    /// <para>异步提取固件内容。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Binary XML source file that is parsed and written out as decoded XML text.
-    /// <para>将被解析并以解码后的 XML 文本写出的二进制 XML 源文件。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Destination directory, created on demand; output reuses the source name with an XML extension.
-    /// <para>目标目录，按需创建；输出沿用源文件名并改用 XML 扩展名。</para>
-    /// </param>
-    /// <param name="options">
-    /// Extraction options; only <c>Overwrite</c> is consulted and <see langword="null"/> uses its defaults.
-    /// <para>解包选项；仅读取 <c>Overwrite</c>，为 <see langword="null"/> 时使用默认值。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels before parsing and during the output write; cancellation is rethrown.
-    /// <para>在解析前与写入输出期间取消；取消异常会重新抛出。</para>
-    /// </param>
-    /// <returns>
-    /// A task naming the written XML file, or reporting a failure prefixed <c>AXML unpack failed:</c>.
-    /// <para>任务指明写出的 XML 文件，或以 <c>AXML unpack failed:</c> 前缀报告失败。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signalled; extraction errors are reported as failed results instead.
-    /// <para><paramref name="cancellationToken"/> 已被触发；提取错误则以失败结果报告。</para>
-    /// </exception>
+    /// <summary>Extracts the firmware contents asynchronously.<para>异步提取固件内容。</para></summary>
+    /// <param name="filePath">Binary XML source file that is parsed and written out as decoded XML text.
+    /// <para>将被解析并以解码后的 XML 文本写出的二进制 XML 源文件。</para></param>
+    /// <param name="outputDirectory">Destination directory, created on demand; output reuses the source name with an XML extension.
+    /// <para>目标目录，按需创建；输出沿用源文件名并改用 XML 扩展名。</para></param>
+    /// <param name="options">Extraction options; only <c>Overwrite</c> is consulted and <see langword="null"/> uses its defaults.
+    /// <para>解包选项；仅读取 <c>Overwrite</c>，为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="cancellationToken">Cancels before parsing and during the output write; cancellation is rethrown.
+    /// <para>在解析前与写入输出期间取消；取消异常会重新抛出。</para></param>
+    /// <returns>A task naming the written XML file, or reporting a failure prefixed <c>AXML unpack failed:</c>.
+    /// <para>任务指明写出的 XML 文件，或以 <c>AXML unpack failed:</c> 前缀报告失败。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled; extraction errors are reported as failed results instead.
+    /// <para><paramref name="cancellationToken"/> 已被触发；提取错误则以失败结果报告。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -143,30 +117,17 @@ public sealed class AXmlFormatHandler : IFormatHandler
         }
     }
 
-    /// <summary>
-    /// Packs the input into firmware asynchronously.
-    /// <para>异步将输入打包为固件。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Path of the binary XML source; plain-text XML is rejected with a failed result.
-    /// <para>二进制 XML 源路径；纯文本 XML 会以失败结果被拒绝。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination file, committed atomically through a temporary file after a full write.
-    /// <para>目标文件；完整写入后经临时文件原子提交。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels before the rebuild starts; writing itself is synchronous.
-    /// <para>在重建开始前取消；写入本身为同步执行。</para>
-    /// </param>
-    /// <returns>
-    /// A task naming the written file, or reporting a failure prefixed <c>AXML rebuild failed:</c>.
-    /// <para>任务指明写出的文件，或以 <c>AXML rebuild failed:</c> 前缀报告失败。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signalled.
-    /// <para><paramref name="cancellationToken"/> 已被触发。</para>
-    /// </exception>
+    /// <summary>Packs the input into firmware asynchronously.<para>异步将输入打包为固件。</para></summary>
+    /// <param name="inputPath">Path of the binary XML source; plain-text XML is rejected with a failed result.
+    /// <para>二进制 XML 源路径；纯文本 XML 会以失败结果被拒绝。</para></param>
+    /// <param name="outputPath">Destination file, committed atomically through a temporary file after a full write.
+    /// <para>目标文件；完整写入后经临时文件原子提交。</para></param>
+    /// <param name="cancellationToken">Cancels before the rebuild starts; writing itself is synchronous.
+    /// <para>在重建开始前取消；写入本身为同步执行。</para></param>
+    /// <returns>A task naming the written file, or reporting a failure prefixed <c>AXML rebuild failed:</c>.
+    /// <para>任务指明写出的文件，或以 <c>AXML rebuild failed:</c> 前缀报告失败。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try

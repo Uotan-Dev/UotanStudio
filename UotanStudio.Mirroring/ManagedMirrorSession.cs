@@ -4,10 +4,8 @@ using UotanStudio.Comm.Devices.Services;
 
 namespace UotanStudio.Services.Mirroring;
 
-/// <summary>Owns the ADB and scrcpy transports while presentation consumes decoded packets.
-/// Server log lines are forwarded to the optional <c>logSink</c> so this layer stays decoupled
-/// from any host logging service. <para>持有 ADB 与 scrcpy 传输直至呈现层消费解码包。
-/// server 日志行转发给可选的 <c>logSink</c>，使本层与宿主日志服务解耦。</para></summary>
+/// <summary>Owns the ADB and scrcpy transports while presentation consumes decoded packets. Server log lines are forwarded to the optional <c>logSink</c> so this layer stays decoupled from any host logging service.
+/// <para>持有 ADB 与 scrcpy 传输直至呈现层消费解码包。 server 日志行转发给可选的 <c>logSink</c>，使本层与宿主日志服务解耦。</para></summary>
 /// <param name="client">The connected scrcpy client this session forwards frames and control to.
 /// <para>本会话转发帧与控制消息的目标、已连接的 scrcpy 客户端。</para></param>
 /// <param name="shell">Shell stream used to pump server log output; disposed with the session.
@@ -61,21 +59,12 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     /// <para>持有控制流、可使用 <see cref="SendControl"/> 时为 <see langword="true"/>。</para></value>
     public bool IsControlConnected => client.IsControlConnected;
 
-    /// <summary>
-    /// Opens the scrcpy sockets, retrying up to twenty times at 250 ms intervals while the session is alive.
-    /// Server error output captured meanwhile is folded into the thrown <see cref="IOException"/> message.
-    /// <para>打开 scrcpy socket；在会话存活期间最多重试二十次、每次间隔 250 毫秒。
-    /// 期间捕获的服务端错误输出会并入抛出的 <see cref="IOException"/> 消息。</para>
-    /// </summary>
-    /// <exception cref="IOException">
-    /// Every attempt failed and the server emitted log detail; the message carries the summarized server errors.
-    /// <para>所有尝试均失败且服务端产生了日志细节；消息携带概括后的服务端错误。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The final attempt failed during the handshake and no server log detail was captured; such underlying
-    /// errors are rethrown unchanged.
-    /// <para>最后一次尝试在握手期间失败且未捕获到服务端日志细节；此类底层错误原样重新抛出。</para>
-    /// </exception>
+    /// <summary>Opens the scrcpy sockets, retrying up to twenty times at 250 ms intervals while the session is alive. Server error output captured meanwhile is folded into the thrown <see cref="IOException"/> message.
+    /// <para>打开 scrcpy socket；在会话存活期间最多重试二十次、每次间隔 250 毫秒。 期间捕获的服务端错误输出会并入抛出的 <see cref="IOException"/> 消息。</para></summary>
+    /// <exception cref="IOException">Every attempt failed and the server emitted log detail; the message carries the summarized server errors.
+    /// <para>所有尝试均失败且服务端产生了日志细节；消息携带概括后的服务端错误。</para></exception>
+    /// <exception cref="InvalidDataException">The final attempt failed during the handshake and no server log detail was captured; such underlying errors are rethrown unchanged.
+    /// <para>最后一次尝试在握手期间失败且未捕获到服务端日志细节；此类底层错误原样重新抛出。</para></exception>
     public void Connect()
     {
         _ = Task.Run(DrainServerOutput);
@@ -124,12 +113,10 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
 
     /// <summary>Reads one framed audio packet from the underlying scrcpy client.
     /// <para>从底层 scrcpy 客户端读取一个分帧音频包。</para></summary>
-    /// <param name="timeoutMs">Per-read timeout in milliseconds.
-    /// <para>单次读取超时（毫秒）。</para></param>
+    /// <param name="timeoutMs">Per-read timeout in milliseconds.<para>单次读取超时（毫秒）。</para></param>
     /// <returns>The audio packet, or <see langword="null"/> when no header arrived before the timeout.
     /// <para>音频包；超时前未收到头部时返回 <see langword="null"/>。</para></returns>
-    /// <exception cref="InvalidOperationException">
-    /// Audio is disabled, was refused by the server, or the session is not connected.
+    /// <exception cref="InvalidOperationException">Audio is disabled, was refused by the server, or the session is not connected.
     /// <para>音频已禁用、被服务端拒绝或会话尚未连接。</para></exception>
     /// <exception cref="InvalidDataException">The announced packet length exceeds the client's bound.
     /// <para>宣告的包长度超出客户端上限。</para></exception>

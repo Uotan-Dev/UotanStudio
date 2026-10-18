@@ -162,16 +162,12 @@ public static class DebugBridgeRoute
 
     /// <summary>Checks an endpoint without caching absence or converting protocol failures into USB permission.
     /// <para>检查端点，但不缓存“不存在”结论，也不会把协议失败转换为 USB 权限问题。</para></summary>
-    /// <remarks>
-    /// <para>存在结果经 2 秒 TTL 缓存；拒绝与其他错误每次都真实探测。</para>
-    /// <para>Present results go through a 2-second TTL cache; refusals and other errors probe for real every time.</para>
-    /// </remarks>
+    /// <remarks><para>存在结果经 2 秒 TTL 缓存；拒绝与其他错误每次都真实探测。</para>
+    /// <para>Present results go through a 2-second TTL cache; refusals and other errors probe for real every time.</para></remarks>
     /// <param name="host">Server hostname or literal address; a non-parseable value is resolved as DNS.
     /// <para>server 主机名或字面地址；无法解析的值将按 DNS 解析。</para></param>
-    /// <param name="port">Server TCP port number. <para>server TCP 端口号。</para></param>
-    /// <returns>
-    /// <see langword="true"/> only when the TCP connect completes successfully; <see langword="false"/>
-    /// only when the connection is refused.
+    /// <param name="port">Server TCP port number.<para>server TCP 端口号。</para></param>
+    /// <returns><see langword="true"/> only when the TCP connect completes successfully; <see langword="false"/> only when the connection is refused.
     /// <para>仅在 TCP 连接成功时返回 <see langword="true"/>；仅在连接被拒绝时返回 <see langword="false"/>。</para></returns>
     public static bool IsListening(string host, int port)
         => IsListeningAsync(host, port).GetAwaiter().GetResult();
@@ -407,22 +403,13 @@ public static class DebugBridgeRoute
             ? AdbServerAvailable
             : ProbeEndpoint(host, port);
 
-    /// <summary>
-    /// Selects the HDC availability source per endpoint: the default endpoint (including the port
-    /// resolved from OHOS_HDC_SERVER_PORT) reads the global <see cref="HdcServerAvailable"/>
-    /// parameter; any other endpoint (test doubles or a custom server) keeps live
-    /// <para>按端点选择 HDC 存在性来源：默认端点（含 OHOS_HDC_SERVER_PORT 解析出的端口）读取全局参数
-    /// <see cref="HdcServerAvailable"/>；其他端点（测试替身或自定义 server）保持实时
-    /// <see cref="ProbeEndpoint"/> 探测。</para>
-    /// <see cref="ProbeEndpoint"/> probing.</summary>
+    /// <summary>Selects the HDC availability source per endpoint: the default endpoint (including the port resolved from OHOS_HDC_SERVER_PORT) reads the global <see cref="HdcServerAvailable"/> parameter; any other endpoint (test doubles or a custom server) keeps live
+    /// <para>按端点选择 HDC 存在性来源：默认端点（含 OHOS_HDC_SERVER_PORT 解析出的端口）读取全局参数 <see cref="HdcServerAvailable"/>；其他端点（测试替身或自定义 server）保持实时 <see cref="ProbeEndpoint"/> 探测。</para><see cref="ProbeEndpoint"/> probing.</summary>
     /// <param name="host">Server host, defaulting to <see cref="DebugBridgeEndpoints.ServerHost"/>.
     /// <para>server 主机，默认为 <see cref="DebugBridgeEndpoints.ServerHost"/>。</para></param>
-    /// <param name="port">Explicit port number; when null the value of
-    /// <see cref="DebugBridgeEndpoints.HdcServerPort"/> is used.
+    /// <param name="port">Explicit port number; when null the value of <see cref="DebugBridgeEndpoints.HdcServerPort"/> is used.
     /// <para>显式端口号；为 null 时使用 <see cref="DebugBridgeEndpoints.HdcServerPort"/> 的值。</para></param>
-    /// <returns>
-    /// <see langword="true"/> when the endpoint is marked available, from the global parameter for
-    /// the default endpoint or from a probe for any other endpoint.
+    /// <returns><see langword="true"/> when the endpoint is marked available, from the global parameter for the default endpoint or from a probe for any other endpoint.
     /// <para>端点被标记为可用时为 <see langword="true"/>；默认端点取全局参数，其他端点取探测结果。</para></returns>
     public static bool UseHdcServer(string host = DebugBridgeEndpoints.ServerHost, int? port = null)
     {

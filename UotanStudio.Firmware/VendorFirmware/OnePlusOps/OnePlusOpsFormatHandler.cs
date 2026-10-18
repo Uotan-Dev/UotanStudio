@@ -6,28 +6,16 @@ using UotanStudio.Firmware.Core.Streams;
 
 namespace UotanStudio.Firmware.VendorFirmware.OnePlusOps;
 
-/// <summary>
-/// Format entry point for OnePlus OPS packages: detects the container, reads its header and entry table,
-/// extracts each partition payload next to an optional decrypted sidecar, and rebuilds an OPS file from an
-/// extracted directory or from an existing package.
-/// <para>OnePlus OPS 包的格式入口：识别容器、读取其头部与条目表、解出每个分区的负载并按需附带解密侧文件，
-/// 并从解包目录或既有包重建 OPS 文件。</para>
-/// </summary>
-/// <remarks>
-/// Every untrusted package is parsed with bounded work: the entry count is read only when it lies between
-/// <c>1</c> and <c>10000</c>, and each payload is sized by the 32-bit entry length recorded in the table.
-/// Parsing or I/O failures arrive as a failure <see cref="FirmwareOpResult"/>, while cancellation stays an
-/// exception so callers can tell the two apart.
-/// <para>对不可信包的解析全程有界：只有条目数落在 <c>1</c> 到 <c>10000</c> 之间才会读取条目表，
-/// 每段负载的大小由条目表中记录的 32 位长度决定。解析或 I/O 失败以失败的 <see cref="FirmwareOpResult"/> 返回，
-/// 取消仍以异常抛出，便于调用方区分两者。</para>
-/// </remarks>
+/// <summary>Format entry point for OnePlus OPS packages: detects the container, reads its header and entry table, extracts each partition payload next to an optional decrypted sidecar, and rebuilds an OPS file from an extracted directory or from an existing package.
+/// <para>OnePlus OPS 包的格式入口：识别容器、读取其头部与条目表、解出每个分区的负载并按需附带解密侧文件， 并从解包目录或既有包重建 OPS 文件。</para></summary>
+/// <remarks>Every untrusted package is parsed with bounded work: the entry count is read only when it lies between <c>1</c> and <c>10000</c>, and each payload is sized by the 32-bit entry length recorded in the table. Parsing or I/O failures arrive as a failure <see cref="FirmwareOpResult"/>, while cancellation stays an exception so callers can tell the two apart.
+/// <para>对不可信包的解析全程有界：只有条目数落在 <c>1</c> 到 <c>10000</c> 之间才会读取条目表， 每段负载的大小由条目表中记录的 32 位长度决定。解析或 I/O 失败以失败的 <see cref="FirmwareOpResult"/> 返回， 取消仍以异常抛出，便于调用方区分两者。</para></remarks>
 /// <example>
 /// <code>
 /// var handler = new OnePlusOpsFormatHandler();
 /// if (handler.CanHandle(opsPath))
 /// {
-///     var info = await handler.ReadMetadataAsync(opsPath, cancellationToken);
+/// var info = await handler.ReadMetadataAsync(opsPath, cancellationToken);
 /// }
 /// </code>
 /// </example>
@@ -90,31 +78,15 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         return HeaderProbe.ProbeMagic(filePath, 4, 0, "OPS\0"u8);
     }
 
-    /// <summary>
-    /// Reads the firmware metadata asynchronously.
-    /// <para>异步读取固件元数据。</para>
-    /// </summary>
-    /// <remarks>
-    /// Only the 52-byte header and the entry table are consumed; partition payloads are never touched, so a
-    /// truncated data section does not fail the read. An entry count of <c>0</c> or above <c>10000</c> is
-    /// reported as an empty entry list.
-    /// <para>只消费 52 字节头部与条目表，从不读取分区负载，因此数据段被截断也不会让本次读取失败。
-    /// 条目数为 <c>0</c> 或超过 <c>10000</c> 时报告为空条目列表。</para>
-    /// </remarks>
-    /// <param name="filePath">OPS package to open; the file must exist and be readable, and a blank path is
-    /// reported as a failure result.
+    /// <summary>Reads the firmware metadata asynchronously.<para>异步读取固件元数据。</para></summary>
+    /// <remarks>Only the 52-byte header and the entry table are consumed; partition payloads are never touched, so a truncated data section does not fail the read. An entry count of <c>0</c> or above <c>10000</c> is reported as an empty entry list.
+    /// <para>只消费 52 字节头部与条目表，从不读取分区负载，因此数据段被截断也不会让本次读取失败。 条目数为 <c>0</c> 或超过 <c>10000</c> 时报告为空条目列表。</para></remarks>
+    /// <param name="filePath">OPS package to open; the file must exist and be readable, and a blank path is reported as a failure result.
     /// <para>待打开的 OPS 包；文件必须存在且可读，空白路径会报告为失败结果。</para></param>
-    /// <param name="cancellationToken">Checked before any work and handed to the thread-pool item; a signalled
-    /// token surfaces as an <see cref="OperationCanceledException"/> on the returned task and is not converted
-    /// into a failure result.
+    /// <param name="cancellationToken">Checked before any work and handed to the thread-pool item; a signalled token surfaces as an <see cref="OperationCanceledException"/> on the returned task and is not converted into a failure result.
     /// <para>在任何工作前检查并交给线程池项；已触发的令牌以返回任务上的 <see cref="OperationCanceledException"/> 呈现，绝不转换为失败结果。</para></param>
-    /// <returns>A success result whose <see cref="FirmwareOpResult.Entries"/> hold the entry names and whose
-    /// <see cref="FirmwareOpResult.Metadata"/> hold <c>Version</c>, <c>HeaderSize</c>, <c>FileSize</c>,
-    /// <c>Flags</c> and <c>EntryCount</c>; a failure result carrying the exception message when the header
-    /// magic is invalid, the stream ends early or the file cannot be opened.
-    /// <para>成功结果的 <see cref="FirmwareOpResult.Entries"/> 保存条目名称，
-    /// <see cref="FirmwareOpResult.Metadata"/> 保存 <c>Version</c>、<c>HeaderSize</c>、<c>FileSize</c>、
-    /// <c>Flags</c> 与 <c>EntryCount</c>；头部魔数无效、流提前结束或文件无法打开时返回携带异常消息的失败结果。</para></returns>
+    /// <returns>A success result whose <see cref="FirmwareOpResult.Entries"/> hold the entry names and whose <see cref="FirmwareOpResult.Metadata"/> hold <c>Version</c>, <c>HeaderSize</c>, <c>FileSize</c>, <c>Flags</c> and <c>EntryCount</c>; a failure result carrying the exception message when the header magic is invalid, the stream ends early or the file cannot be opened.
+    /// <para>成功结果的 <see cref="FirmwareOpResult.Entries"/> 保存条目名称， <see cref="FirmwareOpResult.Metadata"/> 保存 <c>Version</c>、<c>HeaderSize</c>、<c>FileSize</c>、 <c>Flags</c> 与 <c>EntryCount</c>；头部魔数无效、流提前结束或文件无法打开时返回携带异常消息的失败结果。</para></returns>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -147,46 +119,21 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Extracts the firmware contents asynchronously.
-    /// <para>异步提取固件内容。</para>
-    /// </summary>
-    /// <remarks>
-    /// Each entry is written verbatim as stored, under a name whose invalid file-name characters are replaced
-    /// by <c>_</c>; an entry with a blank name becomes <c>entry_&lt;id&gt;</c>. When
-    /// <see cref="TryDecrypt(byte[])"/> recognises a key, the plaintext is written next to it as
-    /// <c>&lt;name&gt;.decrypted</c>. After a successful extraction the repack metadata record is published, so
-    /// the directory can be packed again.
-    /// <para>每个条目按存储原样写出，文件名中的非法字符替换为 <c>_</c>；名称为空的条目写成 <c>entry_&lt;id&gt;</c>。
-    /// 当 <see cref="TryDecrypt(byte[])"/> 识别出密钥时，明文以 <c>&lt;名称&gt;.decrypted</c> 写在同目录。
-    /// 解包成功后会发布重打包元数据记录，使该目录可以再次打包。</para>
-    /// </remarks>
+    /// <summary>Extracts the firmware contents asynchronously.<para>异步提取固件内容。</para></summary>
+    /// <remarks>Each entry is written verbatim as stored, under a name whose invalid file-name characters are replaced by <c>_</c>; an entry with a blank name becomes <c>entry_&lt;id&gt;</c>. When <see cref="TryDecrypt(byte[])"/> recognises a key, the plaintext is written next to it as <c>&lt;name&gt;.decrypted</c>. After a successful extraction the repack metadata record is published, so the directory can be packed again.
+    /// <para>每个条目按存储原样写出，文件名中的非法字符替换为 <c>_</c>；名称为空的条目写成 <c>entry_&lt;id&gt;</c>。 当 <see cref="TryDecrypt(byte[])"/> 识别出密钥时，明文以 <c>&lt;名称&gt;.decrypted</c> 写在同目录。 解包成功后会发布重打包元数据记录，使该目录可以再次打包。</para></remarks>
     /// <param name="filePath">OPS package to read; the input file is never modified.
     /// <para>待读取的 OPS 包；输入文件不会被修改。</para></param>
-    /// <param name="outputDirectory">Destination directory, created when missing; it also receives the repack
-    /// metadata record.
+    /// <param name="outputDirectory">Destination directory, created when missing; it also receives the repack metadata record.
     /// <para>目标目录，缺失时创建；重打包元数据记录也写入该目录。</para></param>
-    /// <param name="options">Only <see cref="UnpackOptions.Overwrite"/> is consulted: with overwrite disabled
-    /// an existing destination file is kept and still listed as written. The OPS entry table carries no
-    /// checksum and no per-entry selection is applied, so the other options have no effect.
-    /// <see langword="null"/> uses the <see cref="UnpackOptions"/> defaults.
-    /// <para>仅读取 <see cref="UnpackOptions.Overwrite"/>：关闭覆盖时已存在的目标文件会保留并仍被列为已写出。
-    /// OPS 条目表不含校验和，也不做逐条目选择，因此其余选项无效。传 <see langword="null"/> 时使用
-    /// <see cref="UnpackOptions"/> 默认值。</para></param>
-    /// <param name="cancellationToken">Checked before the extraction and again before every entry; a signalled
-    /// token propagates as <see cref="OperationCanceledException"/> and leaves whatever was already written in
-    /// place without publishing metadata.
-    /// <para>在解包前以及每个条目处理前检查；已触发的令牌以 <see cref="OperationCanceledException"/> 抛出，
-    /// 已写出的文件保留原位且不发布元数据。</para></param>
-    /// <returns>A success result listing the written file paths in <see cref="FirmwareOpResult.Entries"/> and
-    /// reporting <c>Version</c>, <c>EntryCount</c> and the comma-joined <c>DecryptedEntries</c> in
-    /// <see cref="FirmwareOpResult.Metadata"/>; a failure result carrying the exception message when the package
-    /// cannot be parsed or a write fails.
-    /// <para>成功结果在 <see cref="FirmwareOpResult.Entries"/> 中列出已写出的文件路径，并在
-    /// <see cref="FirmwareOpResult.Metadata"/> 中报告 <c>Version</c>、<c>EntryCount</c> 以及以逗号拼接的
-    /// <c>DecryptedEntries</c>；包无法解析或写入失败时返回携带异常消息的失败结果。</para></returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signalled. <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
+    /// <param name="options">Only <see cref="UnpackOptions.Overwrite"/> is consulted: with overwrite disabled an existing destination file is kept and still listed as written. The OPS entry table carries no checksum and no per-entry selection is applied, so the other options have no effect. <see langword="null"/> uses the <see cref="UnpackOptions"/> defaults.
+    /// <para>仅读取 <see cref="UnpackOptions.Overwrite"/>：关闭覆盖时已存在的目标文件会保留并仍被列为已写出。 OPS 条目表不含校验和，也不做逐条目选择，因此其余选项无效。传 <see langword="null"/> 时使用 <see cref="UnpackOptions"/> 默认值。</para></param>
+    /// <param name="cancellationToken">Checked before the extraction and again before every entry; a signalled token propagates as <see cref="OperationCanceledException"/> and leaves whatever was already written in place without publishing metadata.
+    /// <para>在解包前以及每个条目处理前检查；已触发的令牌以 <see cref="OperationCanceledException"/> 抛出， 已写出的文件保留原位且不发布元数据。</para></param>
+    /// <returns>A success result listing the written file paths in <see cref="FirmwareOpResult.Entries"/> and reporting <c>Version</c>, <c>EntryCount</c> and the comma-joined <c>DecryptedEntries</c> in <see cref="FirmwareOpResult.Metadata"/>; a failure result carrying the exception message when the package cannot be parsed or a write fails.
+    /// <para>成功结果在 <see cref="FirmwareOpResult.Entries"/> 中列出已写出的文件路径，并在 <see cref="FirmwareOpResult.Metadata"/> 中报告 <c>Version</c>、<c>EntryCount</c> 以及以逗号拼接的 <c>DecryptedEntries</c>；包无法解析或写入失败时返回携带异常消息的失败结果。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -263,35 +210,17 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Packs the input into firmware asynchronously.
-    /// <para>异步将输入打包为固件。</para>
-    /// </summary>
-    /// <remarks>
-    /// A directory input becomes one entry per file, ordered by ordinal path, skipping repack-metadata files
-    /// and <c>.decrypted</c> sidecars; every entry name must fit the 20-byte ASCII table field, and a name it
-    /// cannot store fails the pack instead of being clipped. A file input is parsed as an OPS package and its
-    /// entry payloads are copied byte for byte. Neither path encrypts or decrypts payload bytes, and each
-    /// payload is streamed in bounded copies rather than buffered whole.
-    /// <para>目录输入按序数路径顺序为每个文件生成一个条目，跳过重打包元数据文件与 <c>.decrypted</c> 侧文件；
-    /// 每个条目名都必须能放入 20 字节的 ASCII 表字段，放不下的名称会让打包直接失败而不会被截断。
-    /// 文件输入按 OPS 包解析并逐字节复制其条目负载。两条路径都不对负载加解密，
-    /// 每段负载以有界复制写出而非整体缓冲。</para>
-    /// </remarks>
-    /// <param name="inputPath">Extraction directory or existing OPS package; a blank path, or a path that is
-    /// neither an existing file nor an existing directory, is reported as a failure result.
+    /// <summary>Packs the input into firmware asynchronously.<para>异步将输入打包为固件。</para></summary>
+    /// <remarks>A directory input becomes one entry per file, ordered by ordinal path, skipping repack-metadata files and <c>.decrypted</c> sidecars; every entry name must fit the 20-byte ASCII table field, and a name it cannot store fails the pack instead of being clipped. A file input is parsed as an OPS package and its entry payloads are copied byte for byte. Neither path encrypts or decrypts payload bytes, and each payload is streamed in bounded copies rather than buffered whole.
+    /// <para>目录输入按序数路径顺序为每个文件生成一个条目，跳过重打包元数据文件与 <c>.decrypted</c> 侧文件； 每个条目名都必须能放入 20 字节的 ASCII 表字段，放不下的名称会让打包直接失败而不会被截断。 文件输入按 OPS 包解析并逐字节复制其条目负载。两条路径都不对负载加解密， 每段负载以有界复制写出而非整体缓冲。</para></remarks>
+    /// <param name="inputPath">Extraction directory or existing OPS package; a blank path, or a path that is neither an existing file nor an existing directory, is reported as a failure result.
     /// <para>解包目录或既有 OPS 包；空白路径，或既非已存在文件也非已存在目录的路径，会报告为失败结果。</para></param>
-    /// <param name="outputPath">Destination file, created fresh: an existing file at this path is replaced
-    /// during the write, and the header's recorded total size is patched once all payloads are appended.
+    /// <param name="outputPath">Destination file, created fresh: an existing file at this path is replaced during the write, and the header's recorded total size is patched once all payloads are appended.
     /// <para>目标文件，以新建方式写出：该路径上的已有文件会在写入时被替换，头部的总长度字段在所有负载追加完成后回填。</para></param>
-    /// <param name="cancellationToken">Checked before any work; a signalled token surfaces as an
-    /// <see cref="OperationCanceledException"/> on the returned task, never as a failure result.
+    /// <param name="cancellationToken">Checked before any work; a signalled token surfaces as an <see cref="OperationCanceledException"/> on the returned task, never as a failure result.
     /// <para>在任何工作前检查；已触发的令牌以返回任务上的 <see cref="OperationCanceledException"/> 呈现，绝不转换为失败结果。</para></param>
-    /// <returns>A success result whose summary names the produced path; a failure result carrying the exception
-    /// message when the input cannot be read, an entry exceeds the 32-bit size field, an entry name does not
-    /// fit the 20-byte ASCII name field, or the output cannot be written.
-    /// <para>成功结果的摘要写有产出路径；输入不可读、条目超出 32 位长度字段、条目名放不进 20 字节 ASCII
-    /// 名称字段，或输出无法写入时返回携带异常消息的失败结果。</para></returns>
+    /// <returns>A success result whose summary names the produced path; a failure result carrying the exception message when the input cannot be read, an entry exceeds the 32-bit size field, an entry name does not fit the 20-byte ASCII name field, or the output cannot be written.
+    /// <para>成功结果的摘要写有产出路径；输入不可读、条目超出 32 位长度字段、条目名放不进 20 字节 ASCII 名称字段，或输出无法写入时返回携带异常消息的失败结果。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -332,22 +261,12 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Tries to decrypt partition data with every key in the OnePlus key table.
-    /// <para>尝试使用一加密钥表中的全部密钥解密分区数据。</para>
-    /// </summary>
-    /// <param name="data">Candidate partition payload. It must be at least one AES block long and an exact
-    /// multiple of <c>16</c> bytes, because the AES-ECB path decrypts whole blocks without padding; the buffer
-    /// is read only.
+    /// <summary>Tries to decrypt partition data with every key in the OnePlus key table.
+    /// <para>尝试使用一加密钥表中的全部密钥解密分区数据。</para></summary>
+    /// <param name="data">Candidate partition payload. It must be at least one AES block long and an exact multiple of <c>16</c> bytes, because the AES-ECB path decrypts whole blocks without padding; the buffer is read only.
     /// <para>候选分区负载。长度至少一个 AES 块且必须是 <c>16</c> 字节的整数倍，因为 AES-ECB 路径按整块解密且不带填充；缓冲仅读取。</para></param>
-    /// <returns>The plaintext from the first accepted candidate: an AES-ECB pass with the matching key, whose
-    /// whole result is byte-reversed when only the reversed form produced the recognised magic, or the fixed
-    /// SBox stream-cipher result; <see langword="null"/> when the input is <see langword="null"/> or too short,
-    /// when it already starts with a recognised partition magic, or when no key and the SBox path produce
-    /// accepted plaintext.
-    /// <para>第一个被接受候选产出的明文：使用匹配密钥的 AES-ECB 结果（仅反转形式命中可识别魔数时整体反转其输出），
-    /// 或固定 SBox 流密码结果；输入为 <see langword="null"/> 或过短、开头已具备可识别的分区魔数，
-    /// 或所有密钥与 SBox 路径都未产出可接受的明文时返回 <see langword="null"/>。</para></returns>
+    /// <returns>The plaintext from the first accepted candidate: an AES-ECB pass with the matching key, whose whole result is byte-reversed when only the reversed form produced the recognised magic, or the fixed SBox stream-cipher result; <see langword="null"/> when the input is <see langword="null"/> or too short, when it already starts with a recognised partition magic, or when no key and the SBox path produce accepted plaintext.
+    /// <para>第一个被接受候选产出的明文：使用匹配密钥的 AES-ECB 结果（仅反转形式命中可识别魔数时整体反转其输出）， 或固定 SBox 流密码结果；输入为 <see langword="null"/> 或过短、开头已具备可识别的分区魔数， 或所有密钥与 SBox 路径都未产出可接受的明文时返回 <see langword="null"/>。</para></returns>
     public static byte[]? TryDecrypt(byte[] data)
     {
         if (data == null || data.Length < 16 || data.Length % OpsConstants.AES_BLOCK_SIZE != 0)

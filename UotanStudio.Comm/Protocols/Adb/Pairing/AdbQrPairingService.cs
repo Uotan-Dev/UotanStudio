@@ -319,21 +319,18 @@ public static class AdbQrPairingService
             candidateAddress.Equals(hostAddress.MapToIPv6());
     }
 
-    /// <summary>
-    /// Completes the connection half of QR pairing with an explicit port, for the case where the device never advertised its secure connect service via mDNS. The ADB-server route connects through the server; the direct route validates the arguments and returns the endpoint.
-    /// <para>以显式端口完成 QR 配对的连接后半段，用于设备未通过 mDNS 通告安全连接服务的场景。ADB server 路由经 server 连接；直连路由仅校验参数并返回端点。</para>
-    /// </summary>
-    /// <param name="route">The route the pairing completed through.
-    /// <para>配对完成的路径。</para></param>
+    /// <summary>Completes the connection half of QR pairing with an explicit port, for the case where the device never advertised its secure connect service via mDNS. The ADB-server route connects through the server; the direct route validates the arguments and returns the endpoint.
+    /// <para>以显式端口完成 QR 配对的连接后半段，用于设备未通过 mDNS 通告安全连接服务的场景。ADB server 路由经 server 连接；直连路由仅校验参数并返回端点。</para></summary>
+    /// <param name="route">The route the pairing completed through.<para>配对完成的路径。</para></param>
     /// <param name="host">The device IP address discovered during pairing.
     /// <para>配对阶段发现的设备 IP 地址。</para></param>
-    /// <param name="port">The connect port shown on the phone. <para>手机上显示的连接端口。</para></param>
-    /// <param name="cancellationToken">Cancels the server command. <para>取消 server 命令。</para></param>
-    /// <returns>The connected <c>host:port</c> endpoint. <para>已连接的 <c>host:port</c> 端点。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="host"/> is blank or <paramref name="port"/>
-    /// is out of range. <para><paramref name="host"/> 为空或 <paramref name="port"/> 超出范围。</para></exception>
-    /// <exception cref="IOException">The server route could not reach the device port, found no
-    /// listening ADB server, or the server rejected the connection.
+    /// <param name="port">The connect port shown on the phone.<para>手机上显示的连接端口。</para></param>
+    /// <param name="cancellationToken">Cancels the server command.<para>取消 server 命令。</para></param>
+    /// <returns>The connected <c>host:port</c> endpoint.
+    /// <para>已连接的 <c>host:port</c> 端点。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="host"/> is blank or <paramref name="port"/> is out of range.
+    /// <para><paramref name="host"/> 为空或 <paramref name="port"/> 超出范围。</para></exception>
+    /// <exception cref="IOException">The server route could not reach the device port, found no listening ADB server, or the server rejected the connection.
     /// <para>server 路由无法到达设备端口、未找到在监听的 adb server，或 server 拒绝连接。</para></exception>
     /// <exception cref="OperationCanceledException">The token was canceled.
     /// <para>令牌被取消。</para></exception>

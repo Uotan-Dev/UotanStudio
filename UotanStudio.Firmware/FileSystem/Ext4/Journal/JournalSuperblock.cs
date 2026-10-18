@@ -71,14 +71,11 @@ internal sealed class JournalSuperblock
 
     public bool IsEmpty => Start == 0;
 
-    /// <summary>
-    /// Creates a clean initial empty-journal superblock with sequence=1, start=0, first=1 and errno=0.
-    /// <para>构造一个干净的初始空日志超级块：sequence=1、start=0、first=1、errno=0。</para>
-    /// </summary>
+    /// <summary>Creates a clean initial empty-journal superblock with sequence=1, start=0, first=1 and errno=0.
+    /// <para>构造一个干净的初始空日志超级块：sequence=1、start=0、first=1、errno=0。</para></summary>
     /// <param name="blockSize">Journal block size in bytes, at least 1024 and a power of two.
     /// <para>日志块大小（字节），至少 1024 且必须是 2 的整数次幂。</para></param>
-    /// <param name="maxLen">Journal length in blocks, at least 2.
-    /// <para>日志的块数，至少 2。</para></param>
+    /// <param name="maxLen">Journal length in blocks, at least 2.<para>日志的块数，至少 2。</para></param>
     /// <param name="uuid">16-byte journal UUID copied into the record; <see langword="null"/> fills the field with 16 random bytes, and any other length is rejected.
     /// <para>写入记录的 16 字节日志 UUID；为 <see langword="null"/> 时用 16 个随机字节填充，其他长度会被拒绝。</para></param>
     /// <param name="checksumV3">When <see langword="true"/> the incompatibility features and checksum type are set to metadata checksums v3, leaving both at zero when <see langword="false"/>.

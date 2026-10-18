@@ -66,19 +66,12 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
             F2fsSuperblock.Magic);
     }
 
-    /// <summary>
-    /// Reads format metadata without unpacking.
-    /// <para>读取格式元数据而不解包。</para>
-    /// </summary>
-    /// <param name="filePath">F2FS image file to open and parse.
-    /// <para>要打开并解析的 F2FS 镜像文件。</para></param>
+    /// <summary>Reads format metadata without unpacking.<para>读取格式元数据而不解包。</para></summary>
+    /// <param name="filePath">F2FS image file to open and parse.<para>要打开并解析的 F2FS 镜像文件。</para></param>
     /// <param name="cancellationToken">Cancels before parsing starts and at checkpoints inside it.
     /// <para>在解析开始前及解析过程中的检查点处取消。</para></param>
-    /// <returns>A task whose result is <c>Ok</c> with a string dictionary describing geometry,
-    /// segment addresses, feature/checkpoint flags and checkpoint counters, or <c>Fail</c> carrying
-    /// the parse error message when the image is not a valid F2FS filesystem.
-    /// <para>任务结果：有效镜像时为 <c>Ok</c>，附字符串字典描述几何信息、段地址、特性/检查点标志与
-    /// 检查点计数；镜像非法时为 <c>Fail</c> 并携带解析错误消息。</para></returns>
+    /// <returns>A task whose result is <c>Ok</c> with a string dictionary describing geometry, segment addresses, feature/checkpoint flags and checkpoint counters, or <c>Fail</c> carrying the parse error message when the image is not a valid F2FS filesystem.
+    /// <para>任务结果：有效镜像时为 <c>Ok</c>，附字符串字典描述几何信息、段地址、特性/检查点标志与 检查点计数；镜像非法时为 <c>Fail</c> 并携带解析错误消息。</para></returns>
     /// <exception cref="OperationCanceledException">The token was cancelled before or during the read.
     /// <para>读取开始前或进行中令牌被取消。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
@@ -152,22 +145,16 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Unpacks the f2fs image to the output directory.
-    /// <para>将 f2fs 镜像解包到输出目录。</para>
-    /// </summary>
-    /// <param name="filePath">Source F2FS image; a frozen snapshot of it is extracted so concurrent
-    /// writes to the original file cannot corrupt the output.
+    /// <summary>Unpacks the f2fs image to the output directory.<para>将 f2fs 镜像解包到输出目录。</para></summary>
+    /// <param name="filePath">Source F2FS image; a frozen snapshot of it is extracted so concurrent writes to the original file cannot corrupt the output.
     /// <para>源 F2FS 镜像；解包基于其冻结快照，原文件上的并发写入不会破坏输出。</para></param>
     /// <param name="outputDirectory">Destination directory; created when missing.
     /// <para>目标目录；不存在时自动创建。</para></param>
-    /// <param name="options">Unpack options such as overwrite and progress reporting;
-    /// <see langword="null"/> applies the defaults (overwrite enabled, no progress).
+    /// <param name="options">Unpack options such as overwrite and progress reporting; <see langword="null"/> applies the defaults (overwrite enabled, no progress).
     /// <para>解包选项（覆盖策略与进度上报等）；为 <see langword="null"/> 时使用默认值（允许覆盖、无进度）。</para></param>
     /// <param name="cancellationToken">Cancels the extraction, including writes inside a large file.
     /// <para>取消提取过程，包括大文件内部的写入。</para></param>
-    /// <returns>A task whose result is <c>Ok</c> listing the image-relative paths of all extracted
-    /// entries, or <c>Fail</c> carrying the extraction error message.
+    /// <returns>A task whose result is <c>Ok</c> listing the image-relative paths of all extracted entries, or <c>Fail</c> carrying the extraction error message.
     /// <para>任务结果：成功时为 <c>Ok</c> 并列出全部解包条目的镜像内相对路径；失败时为 <c>Fail</c> 并携带错误消息。</para></returns>
     /// <exception cref="OperationCanceledException">The token was cancelled during unpacking.
     /// <para>解包过程中令牌被取消。</para></exception>
@@ -200,29 +187,15 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Packs a directory into an f2fs image.
-    /// <para>将目录打包为 f2fs 镜像。</para>
-    /// </summary>
-    /// <param name="inputPath">Directory to pack; when it carries repack metadata for this format,
-    /// preserved source attributes are restored directly, otherwise a fresh build is produced from
-    /// the packing options. A native Android profile refuses to rebuild an extracted tree that has
-    /// preserved source metadata.
-    /// <para>待打包目录；若目录携带本格式的 repack 元数据，则直接还原保留的源属性，否则按打包选项
-    /// 全新构建。Android 原生配置拒绝重建带有源元数据保留的已解包目录树。</para></param>
-    /// <param name="outputPath">Destination image path; the parent directory is created and the file
-    /// is replaced. With the sparse-container option the raw image is built to a temporary file and
-    /// converted atomically, and the temporary file is deleted either way.
-    /// <para>目标镜像路径；自动创建父目录并覆盖目标文件。启用稀疏容器选项时，先写入临时原始镜像再
-    /// 原子转换，临时文件无论成败都会被删除。</para></param>
+    /// <summary>Packs a directory into an f2fs image.<para>将目录打包为 f2fs 镜像。</para></summary>
+    /// <param name="inputPath">Directory to pack; when it carries repack metadata for this format, preserved source attributes are restored directly, otherwise a fresh build is produced from the packing options. A native Android profile refuses to rebuild an extracted tree that has preserved source metadata.
+    /// <para>待打包目录；若目录携带本格式的 repack 元数据，则直接还原保留的源属性，否则按打包选项 全新构建。Android 原生配置拒绝重建带有源元数据保留的已解包目录树。</para></param>
+    /// <param name="outputPath">Destination image path; the parent directory is created and the file is replaced. With the sparse-container option the raw image is built to a temporary file and converted atomically, and the temporary file is deleted either way.
+    /// <para>目标镜像路径；自动创建父目录并覆盖目标文件。启用稀疏容器选项时，先写入临时原始镜像再 原子转换，临时文件无论成败都会被删除。</para></param>
     /// <param name="cancellationToken">Cancels the build before or during output.
     /// <para>在输出开始前或输出过程中取消构建。</para></param>
-    /// <returns>A task whose result is <c>Ok</c> on success, carrying rebuild equivalence metadata for a
-    /// preserved restore, or <c>Fail</c> carrying the build error
-    /// message (missing input directory, invalid options, native-tool failure and similar);
-    /// a failed pack leaves the previous output untouched where the atomic paths are taken.
-    /// <para>任务结果：成功为 <c>Ok</c> 并附带受保留重建的等价元数据；失败为 <c>Fail</c> 并携带构建错误消息（输入目录缺失、
-    /// 选项非法、原生工具失败等）；走原子路径时，打包失败不会动既有输出。</para></returns>
+    /// <returns>A task whose result is <c>Ok</c> on success, carrying rebuild equivalence metadata for a preserved restore, or <c>Fail</c> carrying the build error message (missing input directory, invalid options, native-tool failure and similar); a failed pack leaves the previous output untouched where the atomic paths are taken.
+    /// <para>任务结果：成功为 <c>Ok</c> 并附带受保留重建的等价元数据；失败为 <c>Fail</c> 并携带构建错误消息（输入目录缺失、 选项非法、原生工具失败等）；走原子路径时，打包失败不会动既有输出。</para></returns>
     /// <exception cref="OperationCanceledException">The token was cancelled during packing.
     /// <para>打包过程中令牌被取消。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
@@ -369,12 +342,10 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
         }
     }
 
-    /// <summary>
-    /// Unpacks an F2FS image carried by an already-resolved logical stream into the output directory.
-    /// <para>把已解析逻辑流承载的 F2FS 镜像解包到输出目录。</para>
-    /// </summary>
-    /// <param name="logical">Seekable logical stream positioned at the start of the image; ownership stays with the
-    /// caller. <para>定位到镜像起始处的可寻址逻辑流；所有权保留在调用方。</para></param>
+    /// <summary>Unpacks an F2FS image carried by an already-resolved logical stream into the output directory.
+    /// <para>把已解析逻辑流承载的 F2FS 镜像解包到输出目录。</para></summary>
+    /// <param name="logical">Seekable logical stream positioned at the start of the image; ownership stays with the caller.
+    /// <para>定位到镜像起始处的可寻址逻辑流；所有权保留在调用方。</para></param>
     /// <param name="outputDirectory">Host directory receiving the extracted tree.
     /// <para>接收解出目录树的主机目录。</para></param>
     /// <param name="byteProgress">Optional byte-level progress routed to the extraction stage.
@@ -383,10 +354,8 @@ public sealed class F2fsFormatHandler : IFormatHandler, IRepackMetadataProvider,
     /// <para>是否允许替换已存在的输出文件。</para></param>
     /// <param name="cancellationToken">Cancels parsing and writes; cancellation propagates.
     /// <para>取消解析与写入；取消会向上抛出。</para></param>
-    /// <returns>An <c>Ok</c> result listing every extracted entry path with the inner-format metadata; its summary
-    /// is composed by the container caller, which alone knows the container file path.
-    /// <para><c>Ok</c> 结果列出全部解出的条目路径并附内部格式元数据；摘要由容器调用方组织，因为只有它知道容器
-    /// 文件路径。</para></returns>
+    /// <returns>An <c>Ok</c> result listing every extracted entry path with the inner-format metadata; its summary is composed by the container caller, which alone knows the container file path.
+    /// <para><c>Ok</c> 结果列出全部解出的条目路径并附内部格式元数据；摘要由容器调用方组织，因为只有它知道容器 文件路径。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> UnpackLogicalStreamAsync(Stream logical, string outputDirectory,

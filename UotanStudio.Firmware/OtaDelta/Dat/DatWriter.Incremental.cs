@@ -4,60 +4,34 @@ namespace UotanStudio.Firmware.OtaDelta.Dat;
 
 public static partial class DatWriter
 {
-    /// <summary>
-    /// Writes an incremental classic block OTA from a source and target image.
-    /// <para>由源镜像与目标镜像写出增量经典块 OTA。</para>
-    /// </summary>
-    /// <remarks>
-    /// A dataset without source-dependent commands (<c>imgdiff</c>, <c>diff</c>, <c>move</c> or <c>stash</c>)
-    /// cannot be seeded from the base image by the reader, so the writer ships the target as a plain
-    /// full image instead.
-    /// <para>不含源依赖命令（<c>imgdiff</c>、<c>diff</c>、<c>move</c> 或 <c>stash</c>）的数据集无法由
-    /// 读取器从基座镜像预置，因此此时把目标作为普通全量镜像发布。</para>
-    /// <para>Both images are read once: a differing non-zero run is encoded while the classification pass is
-    /// still at its last block, so the patches are never derived from a second read of the same bytes. Runs are
-    /// buffered in at most one 16 MiB piece per side, the same cap a single command may cover.</para>
-    /// <para>两侧镜像只读一遍：差异非零区段在分类趟走到其最后一块时即完成编码，补丁不会由同一批字节的第二次读取
-    /// 推导。区段每侧最多缓冲一个 16 MiB 片段，与单条命令可覆盖的上限一致。</para>
-    /// </remarks>
-    /// <param name="sourceImagePath">Base image the updater seeds the target from; the file must exist. <para>updater 用于预置目标的基座镜像；文件必须存在。</para></param>
-    /// <param name="targetImagePath">Desired image compared block by block against the source; the file must exist. <para>与源逐块比较的目标镜像；文件必须存在。</para></param>
-    /// <param name="outputDatPath">
-    /// Data file receiving the non-zero blocks of <c>imgdiff</c> runs; on the full-image fallback it holds every
-    /// non-zero target block. <para>接收 <c>imgdiff</c> 区段非零块的数据文件；走全量回退时包含目标的全部非零块。</para>
-    /// </param>
-    /// <param name="outputPatchDatPath">
-    /// File receiving the concatenated bsdiff bytes referenced by the <c>imgdiff</c> commands; written as an empty
-    /// file on the full-image fallback.
-    /// <para>接收各 <c>imgdiff</c> 命令所引用的 bsdiff 字节拼接结果的文件；走全量回退时写为空文件。</para>
-    /// </param>
-    /// <param name="outputTransferListPath">
-    /// Version 4 transfer list carrying the positional <c>imgdiff</c>, <c>zero</c> and <c>new</c> commands.
-    /// <para>包含位置式 <c>imgdiff</c>、<c>zero</c> 与 <c>new</c> 命令的版本 4 传输列表。</para>
-    /// </param>
-    /// <param name="options">
-    /// Compression and per-command block cap settings applied to the emitted data; ownership stays with the caller.
-    /// <para>应用于所写出数据的压缩与单条命令块数上限设置；所有权归调用方。</para>
-    /// </param>
-    /// <param name="progress">Optional byte progress over the target image, coalesced to one notification per 100
-    /// millisecond window and ended by a notification carrying the total. <para>可选的按目标镜像字节进度，按 100
-    /// 毫秒窗口合并，并以一条携带总量的通知结束。</para></param>
-    /// <param name="cancellationToken">
-    /// Cancels between blocks and before the self-verification pass. <para>在块间与自校验趟之间响应取消。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">One of the paths is empty or contains only whitespace. <para>某个路径为空或仅含空白字符。</para></exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="options"/> is <see langword="null"/>. <para><paramref name="options"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="sourceImagePath"/> or <paramref name="targetImagePath"/> does not exist.
-    /// <para><paramref name="sourceImagePath"/> 或 <paramref name="targetImagePath"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// <see cref="DatWriteOptions.SelfVerifyIncremental"/> is set and the generated triple does not rebuild the
-    /// target image when replayed through <c>DatReader</c>. <para>设置了 <see cref="DatWriteOptions.SelfVerifyIncremental"/>
-    /// 且生成的三元组经 <c>DatReader</c> 回放后未能重建目标镜像。</para>
-    /// </exception>
+    /// <summary>Writes an incremental classic block OTA from a source and target image.
+    /// <para>由源镜像与目标镜像写出增量经典块 OTA。</para></summary>
+    /// <remarks>A dataset without source-dependent commands (<c>imgdiff</c>, <c>diff</c>, <c>move</c> or <c>stash</c>) cannot be seeded from the base image by the reader, so the writer ships the target as a plain full image instead.
+    /// <para>不含源依赖命令（<c>imgdiff</c>、<c>diff</c>、<c>move</c> 或 <c>stash</c>）的数据集无法由 读取器从基座镜像预置，因此此时把目标作为普通全量镜像发布。</para><para>Both images are read once: a differing non-zero run is encoded while the classification pass is still at its last block, so the patches are never derived from a second read of the same bytes. Runs are buffered in at most one 16 MiB piece per side, the same cap a single command may cover.</para><para>两侧镜像只读一遍：差异非零区段在分类趟走到其最后一块时即完成编码，补丁不会由同一批字节的第二次读取 推导。区段每侧最多缓冲一个 16 MiB 片段，与单条命令可覆盖的上限一致。</para></remarks>
+    /// <param name="sourceImagePath">Base image the updater seeds the target from; the file must exist.
+    /// <para>updater 用于预置目标的基座镜像；文件必须存在。</para></param>
+    /// <param name="targetImagePath">Desired image compared block by block against the source; the file must exist.
+    /// <para>与源逐块比较的目标镜像；文件必须存在。</para></param>
+    /// <param name="outputDatPath">Data file receiving the non-zero blocks of <c>imgdiff</c> runs; on the full-image fallback it holds every non-zero target block.
+    /// <para>接收 <c>imgdiff</c> 区段非零块的数据文件；走全量回退时包含目标的全部非零块。</para></param>
+    /// <param name="outputPatchDatPath">File receiving the concatenated bsdiff bytes referenced by the <c>imgdiff</c> commands; written as an empty file on the full-image fallback.
+    /// <para>接收各 <c>imgdiff</c> 命令所引用的 bsdiff 字节拼接结果的文件；走全量回退时写为空文件。</para></param>
+    /// <param name="outputTransferListPath">Version 4 transfer list carrying the positional <c>imgdiff</c>, <c>zero</c> and <c>new</c> commands.
+    /// <para>包含位置式 <c>imgdiff</c>、<c>zero</c> 与 <c>new</c> 命令的版本 4 传输列表。</para></param>
+    /// <param name="options">Compression and per-command block cap settings applied to the emitted data; ownership stays with the caller.
+    /// <para>应用于所写出数据的压缩与单条命令块数上限设置；所有权归调用方。</para></param>
+    /// <param name="progress">Optional byte progress over the target image, coalesced to one notification per 100 millisecond window and ended by a notification carrying the total.
+    /// <para>可选的按目标镜像字节进度，按 100 毫秒窗口合并，并以一条携带总量的通知结束。</para></param>
+    /// <param name="cancellationToken">Cancels between blocks and before the self-verification pass.
+    /// <para>在块间与自校验趟之间响应取消。</para></param>
+    /// <exception cref="ArgumentException">One of the paths is empty or contains only whitespace.
+    /// <para>某个路径为空或仅含空白字符。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="options"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="sourceImagePath"/> or <paramref name="targetImagePath"/> does not exist.
+    /// <para><paramref name="sourceImagePath"/> 或 <paramref name="targetImagePath"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException"><see cref="DatWriteOptions.SelfVerifyIncremental"/> is set and the generated triple does not rebuild the target image when replayed through <c>DatReader</c>.
+    /// <para>设置了 <see cref="DatWriteOptions.SelfVerifyIncremental"/> 且生成的三元组经 <c>DatReader</c> 回放后未能重建目标镜像。</para></exception>
     public static void WriteIncremental(string sourceImagePath, string targetImagePath, string outputDatPath, string outputPatchDatPath,
         string outputTransferListPath, DatWriteOptions options, IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
     {

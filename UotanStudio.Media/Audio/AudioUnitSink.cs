@@ -79,34 +79,19 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
         }
     } = 1f;
 
-    /// <summary>
-    /// Opens the default output AudioUnit, closes any previous instance, and starts rendering; the unit is converted to the device float32 format internally.
-    /// <para>打开默认输出 AudioUnit，关闭此前的实例并开始渲染；单元在内部转换为设备 float32 格式。</para>
-    /// </summary>
-    /// <param name="channels">
-    /// Input channel count; must be 1 or 2.
-    /// <para>输入通道数；必须为 1 或 2。</para>
-    /// </param>
-    /// <param name="sampleRate">
-    /// Input sample rate in hertz; must be within 8000 to 192000.
-    /// <para>以赫兹计的输入采样率；必须处于 8000 至 192000 之间。</para>
-    /// </param>
-    /// <param name="bitsPerSample">
-    /// Input sample width; only 16-bit PCM is accepted.
-    /// <para>输入位宽；仅接受 16 位 PCM。</para>
-    /// </param>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The channel count, sample rate, or bit depth is outside the supported range.
-    /// <para>通道数、采样率或位深超出支持范围。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The call runs on a thread other than the owning thread, the default output component is unavailable, or an AudioUnit call fails.
-    /// <para>该调用在非属主线程上运行、默认输出组件不可用，或某个 AudioUnit 调用失败。</para>
-    /// </exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The sink has been disposed.
-    /// <para>输出端已被释放。</para>
-    /// </exception>
+    /// <summary>Opens the default output AudioUnit, closes any previous instance, and starts rendering; the unit is converted to the device float32 format internally.
+    /// <para>打开默认输出 AudioUnit，关闭此前的实例并开始渲染；单元在内部转换为设备 float32 格式。</para></summary>
+    /// <param name="channels">Input channel count; must be 1 or 2.<para>输入通道数；必须为 1 或 2。</para></param>
+    /// <param name="sampleRate">Input sample rate in hertz; must be within 8000 to 192000.
+    /// <para>以赫兹计的输入采样率；必须处于 8000 至 192000 之间。</para></param>
+    /// <param name="bitsPerSample">Input sample width; only 16-bit PCM is accepted.
+    /// <para>输入位宽；仅接受 16 位 PCM。</para></param>
+    /// <exception cref="ArgumentOutOfRangeException">The channel count, sample rate, or bit depth is outside the supported range.
+    /// <para>通道数、采样率或位深超出支持范围。</para></exception>
+    /// <exception cref="InvalidOperationException">The call runs on a thread other than the owning thread, the default output component is unavailable, or an AudioUnit call fails.
+    /// <para>该调用在非属主线程上运行、默认输出组件不可用，或某个 AudioUnit 调用失败。</para></exception>
+    /// <exception cref="ObjectDisposedException">The sink has been disposed.
+    /// <para>输出端已被释放。</para></exception>
     public void Open(int channels, int sampleRate, int bitsPerSample)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -154,26 +139,16 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
         _sampleRate = sampleRate;
     }
 
-    /// <summary>
-    /// Stages 16-bit interleaved PCM for the render callback, scaled by the current <see cref="Volume"/>; an empty span is ignored.
-    /// <para>将 16 位交错 PCM 暂存以供渲染回调读取，并按当前 <see cref="Volume"/> 缩放；空区间会被忽略。</para>
-    /// </summary>
-    /// <param name="pcm">
-    /// Interleaved 16-bit PCM whose length is a multiple of the frame size; read only for the duration of the call.
-    /// <para>长度须为帧大小整数倍的交错 16 位 PCM；仅在调用期间被读取。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="pcm"/> is not frame aligned or exceeds the maximum packet size.
-    /// <para><paramref name="pcm"/> 未按帧对齐，或超过最大数据包大小。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The sink is not open or the call runs on a thread other than the owning thread.
-    /// <para>输出端未打开，或该调用在非属主线程上运行。</para>
-    /// </exception>
-    /// <exception cref="ObjectDisposedException">
-    /// The sink has been disposed.
-    /// <para>输出端已被释放。</para>
-    /// </exception>
+    /// <summary>Stages 16-bit interleaved PCM for the render callback, scaled by the current <see cref="Volume"/>; an empty span is ignored.
+    /// <para>将 16 位交错 PCM 暂存以供渲染回调读取，并按当前 <see cref="Volume"/> 缩放；空区间会被忽略。</para></summary>
+    /// <param name="pcm">Interleaved 16-bit PCM whose length is a multiple of the frame size; read only for the duration of the call.
+    /// <para>长度须为帧大小整数倍的交错 16 位 PCM；仅在调用期间被读取。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="pcm"/> is not frame aligned or exceeds the maximum packet size.
+    /// <para><paramref name="pcm"/> 未按帧对齐，或超过最大数据包大小。</para></exception>
+    /// <exception cref="InvalidOperationException">The sink is not open or the call runs on a thread other than the owning thread.
+    /// <para>输出端未打开，或该调用在非属主线程上运行。</para></exception>
+    /// <exception cref="ObjectDisposedException">The sink has been disposed.
+    /// <para>输出端已被释放。</para></exception>
     public void Write(ReadOnlySpan<byte> pcm)
     {
         CheckOpen();

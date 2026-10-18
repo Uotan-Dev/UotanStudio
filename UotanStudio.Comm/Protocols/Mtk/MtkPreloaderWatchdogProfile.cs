@@ -170,34 +170,31 @@ public static class MtkPreloaderWatchdogTable
 
     /// <summary>Resolves the ordered watchdog-disable steps the reference defines for one chip.
     /// <para>为单芯片解析参考实现所定义的有序看门狗禁用步骤。</para></summary>
-    /// <remarks>
-    /// Hardware codes 0x2625, 0x2523, 0x7682, 0x7686 and 0x5932 issue the single
-    /// <c>write16(0xA2050000, 0x2200)</c> of <c>mtkclient/Library/mtk_preloader.py:538-540</c>; MT6261
+    /// <remarks>Hardware codes 0x2625, 0x2523, 0x7682, 0x7686 and 0x5932 issue the single
+    /// <c>write16(0xA2050000, 0x2200)</c>of <c>mtkclient/Library/mtk_preloader.py:538-540</c>; MT6261
     /// with hardware version 0xCA02 or 0xCB01 walks the MT2503 sub-branch at
-    /// <c>mtkclient/Library/mtk_preloader.py:544-632</c> (RGU clear, the two uncommented CTIRQ1/2
-    /// avoids, and the <c>EMI_REMAP |= 2</c> read-modify-write), while other MT6261 revisions keep
-    /// only the RGU clear (<c>mtkclient/Library/mtk_preloader.py:634</c>); MT6575/MT6577 use sixteen-bit
+    /// <c>mtkclient/Library/mtk_preloader.py:544-632</c>(RGU clear, the two uncommented CTIRQ1/2
+    /// avoids, and the <c>EMI_REMAP |= 2</c>read-modify-write), while other MT6261 revisions keep only
+    /// the RGU clear ( <c>mtkclient/Library/mtk_preloader.py:634</c>); MT6575/MT6577 use sixteen-bit
     /// I/O per <c>mtkclient/Library/mtk_preloader.py:637-642</c>; MT6592 gains the additional
-    /// <c>0x10000500</c> register per <c>mtkclient/Library/mtk_preloader.py:645-650</c>. Every other
-    /// recorded chip falls through to the thirty-two-bit default
-    /// (<c>mtkclient/Library/mtk_preloader.py:643-644</c>) using the per-chip base and the value table
-    /// of <c>MtkConfig.get_watchdog_addr</c> (<c>mtkclient/config/mtk_config.py:202-232</c>).
-    /// 硬件码 0x2625、0x2523、0x7682、0x7686 与 0x5932 发出
-    /// <c>mtkclient/Library/mtk_preloader.py:538-540</c> 中单一的
+    /// <c>0x10000500</c>register per <c>mtkclient/Library/mtk_preloader.py:645-650</c>. Every other
+    /// recorded chip falls through to the thirty-two-bit default (
+    /// <c>mtkclient/Library/mtk_preloader.py:643-644</c>) using the per-chip base and the value table
+    /// of <c>MtkConfig.get_watchdog_addr</c>( <c>mtkclient/config/mtk_config.py:202-232</c>). 硬件码
+    /// 0x2625、0x2523、0x7682、0x7686 与 0x5932 发出 <c>mtkclient/Library/mtk_preloader.py:538-540</c>中单一的
     /// <c>write16(0xA2050000, 0x2200)</c>；硬件版本为 0xCA02 或 0xCB01 的 MT6261 走
-    /// <c>mtkclient/Library/mtk_preloader.py:544-632</c> 的 MT2503 子分支（RGU 清零、两条未注释的
-    /// CTIRQ1/2 规避，以及 <c>EMI_REMAP |= 2</c> 的读-改-写），其它 MT6261 修订只保留 RGU 清零
-    /// （<c>mtkclient/Library/mtk_preloader.py:634</c>）；MT6575/MT6577 按
-    /// <c>mtkclient/Library/mtk_preloader.py:637-642</c> 使用十六位 I/O；MT6592 按
-    /// <c>mtkclient/Library/mtk_preloader.py:645-650</c> 追加 <c>0x10000500</c> 寄存器。其余已记录
-    /// 芯片走三十二位默认分支（<c>mtkclient/Library/mtk_preloader.py:643-644</c>），使用每芯片基址与
-    /// <c>MtkConfig.get_watchdog_addr</c>（<c>mtkclient/config/mtk_config.py:202-232</c>）的取值表。
-    /// </remarks>
+    /// <c>mtkclient/Library/mtk_preloader.py:544-632</c>的 MT2503 子分支（RGU 清零、两条未注释的 CTIRQ1/2 规避，以及
+    /// <c>EMI_REMAP |= 2</c>的读-改-写），其它 MT6261 修订只保留 RGU 清零 （
+    /// <c>mtkclient/Library/mtk_preloader.py:634</c>）；MT6575/MT6577 按
+    /// <c>mtkclient/Library/mtk_preloader.py:637-642</c>使用十六位 I/O；MT6592 按
+    /// <c>mtkclient/Library/mtk_preloader.py:645-650</c>追加 <c>0x10000500</c>寄存器。其余已记录 芯片走三十二位默认分支（
+    /// <c>mtkclient/Library/mtk_preloader.py:643-644</c>），使用每芯片基址与 <c>MtkConfig.get_watchdog_addr</c>（
+    /// <c>mtkclient/config/mtk_config.py:202-232</c>）的取值表。</remarks>
     /// <param name="hardwareCode">The hardware code reported by command FD. 命令 FD 报告的硬件码。</param>
     /// <param name="hardwareVersion">The hardware revision reported by the boot identity query.
     /// <para>boot 身份查询报告的硬件修订。</para></param>
-    /// <returns>The steps in send order, or an empty list when upstream records no sequence for the
-    /// chip. <para>按发送顺序排列的步骤；上游没有记录该芯片序列时为空列表。</para></returns>
+    /// <returns>The steps in send order, or an empty list when upstream records no sequence for the chip.
+    /// <para>按发送顺序排列的步骤；上游没有记录该芯片序列时为空列表。</para></returns>
     public static IReadOnlyList<MtkPreloaderWatchdogRule> Resolve(ushort hardwareCode, uint hardwareVersion)
     {
         if (FixedAddressCodes.Contains(hardwareCode))
@@ -247,17 +244,13 @@ public static class MtkPreloaderWatchdogTable
 
     /// <summary>Resolves the watchdog-reset <c>misc_lock</c> register upstream records for one chip.
     /// <para>解析上游为单芯片记录的看门狗复位 <c>misc_lock</c> 寄存器。</para></summary>
-    /// <remarks>
-    /// <c>reset_to_brom</c> (<c>mtkclient/Library/mtk_preloader.py:457-482</c>) derives every other
-    /// address of the unlock sequence from <c>chipconfig.misc_lock</c>; the values here are the
-    /// <c>misc_lock=</c> entries of <c>mtkclient/config/brom_config.py</c>. Chips upstream leaves
-    /// without the field return <see langword="false"/> so the caller can refuse rather than guess an
-    /// address.
-    /// <c>reset_to_brom</c>（<c>mtkclient/Library/mtk_preloader.py:457-482</c>）从
-    /// <c>chipconfig.misc_lock</c> 推导出解锁序列的其它地址；这里的取值来自
-    /// <c>mtkclient/config/brom_config.py</c> 中的 <c>misc_lock=</c> 条目。上游未提供该字段的芯片返回
-    /// <see langword="false"/>，让调用方可以拒绝而不是猜测地址。
-    /// </remarks>
+    /// <remarks><c>reset_to_brom</c>( <c>mtkclient/Library/mtk_preloader.py:457-482</c>) derives every
+    /// other address of the unlock sequence from <c>chipconfig.misc_lock</c>; the values here are the
+    /// <c>misc_lock=</c>entries of <c>mtkclient/config/brom_config.py</c>. Chips upstream leaves
+    /// without the field return <see langword="false"/>so the caller can refuse rather than guess an
+    /// address. <c>reset_to_brom</c>（ <c>mtkclient/Library/mtk_preloader.py:457-482</c>）从
+    /// <c>chipconfig.misc_lock</c>推导出解锁序列的其它地址；这里的取值来自 <c>mtkclient/config/brom_config.py</c>中的
+    /// <c>misc_lock=</c>条目。上游未提供该字段的芯片返回 <see langword="false"/>，让调用方可以拒绝而不是猜测地址。</remarks>
     /// <param name="hardwareCode">The hardware code reported by command FD. 命令 FD 报告的硬件码。</param>
     /// <param name="miscLockAddress">The recorded register base, or <c>0</c> when unknown.
     /// <para>记录的寄存器基址，未知时为 <c>0</c>。</para></param>

@@ -60,19 +60,14 @@ internal sealed class SquashfsFormatHandler : IReadonlyFormatHandler
         }
     }
 
-    /// <summary>
-    /// Reads the superblock, table geometry and full entry listing without extracting file data.
-    /// <para>读取超级块、表几何与完整条目列表，但不解出文件数据。</para>
-    /// </summary>
+    /// <summary>Reads the superblock, table geometry and full entry listing without extracting file data.
+    /// <para>读取超级块、表几何与完整条目列表，但不解出文件数据。</para></summary>
     /// <param name="filePath">SquashFS image file, opened read-only on a worker thread.
     /// <para>SquashFS 镜像文件；在工作线程上以只读方式打开。</para></param>
     /// <param name="cancellationToken">Token checked throughout the walk.
     /// <para>在遍历全程检查的令牌。</para></param>
-    /// <returns>An <c>Ok</c> result whose metadata carries superblock geometry, compressor name, feature
-    /// flag names and xattr counts and whose entries list every image path; a <c>Fail</c> result with the
-    /// error message when the image cannot be parsed.
-    /// <para><c>Ok</c> 结果的元数据包含超级块几何、压缩器名、特性标志名与 xattr 计数，明细行列出全部镜像
-    /// 路径；镜像无法解析时返回带错误消息的 <c>Fail</c> 结果。</para></returns>
+    /// <returns>An <c>Ok</c> result whose metadata carries superblock geometry, compressor name, feature flag names and xattr counts and whose entries list every image path; a <c>Fail</c> result with the error message when the image cannot be parsed.
+    /// <para><c>Ok</c> 结果的元数据包含超级块几何、压缩器名、特性标志名与 xattr 计数，明细行列出全部镜像 路径；镜像无法解析时返回带错误消息的 <c>Fail</c> 结果。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)

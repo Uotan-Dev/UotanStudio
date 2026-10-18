@@ -175,15 +175,10 @@ internal static class OnePlusKeyTable
         return Keys[index];
     }
 
-    /// <summary>
-    /// Returns the MBox data blob at the specified MBox-data index
-    /// (0 .. <see cref="MBoxDataCount"/> - 1, relative to <see cref="MBoxDataStartIndex"/>).
-    /// <para>返回指定 MBox 数据索引（0 .. <see cref="MBoxDataCount"/> - 1，
-    /// 相对于 <see cref="MBoxDataStartIndex"/>）处的 MBox 数据 blob。</para>
-    /// </summary>
-    /// <param name="index">MBox-relative index, mapped to absolute table indices starting at
-    /// <see cref="MBoxDataStartIndex"/>. <para>相对 MBox 的索引，映射为自
-    /// <see cref="MBoxDataStartIndex"/> 起的绝对表索引。</para></param>
+    /// <summary>Returns the MBox data blob at the specified MBox-data index (0 .. <see cref="MBoxDataCount"/> - 1, relative to <see cref="MBoxDataStartIndex"/>).
+    /// <para>返回指定 MBox 数据索引（0 .. <see cref="MBoxDataCount"/> - 1， 相对于 <see cref="MBoxDataStartIndex"/>）处的 MBox 数据 blob。</para></summary>
+    /// <param name="index">MBox-relative index, mapped to absolute table indices starting at <see cref="MBoxDataStartIndex"/>.
+    /// <para>相对 MBox 的索引，映射为自 <see cref="MBoxDataStartIndex"/> 起的绝对表索引。</para></param>
     /// <returns>The 62-byte MBox data blob, shared with the table storage.
     /// <para>62 字节 MBox 数据 blob，与表存储共享。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException">The index is outside the MBox data range.

@@ -64,40 +64,23 @@ public sealed class DigestAccumulator : IDisposable
     /// </returns>
     public byte[] GetCurrentHash() => _hash.GetCurrentHash();
 
-    /// <summary>
-    /// Finalizes the digest into a caller-owned buffer and resets the accumulator.
-    /// <para>把摘要定稿到调用方拥有的缓冲区，并重置累加器。</para>
-    /// </summary>
-    /// <param name="destination">
-    /// Buffer receiving the digest; it must be exactly <see cref="HashLengthInBytes"/> long.
-    /// <para>接收摘要的缓冲区；长度必须恰好等于 <see cref="HashLengthInBytes"/>。</para>
-    /// </param>
-    /// <returns>
-    /// The number of bytes written. <para>写入的字节数。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="destination"/> is too short to hold the digest. <para><paramref name="destination"/> 短于摘要长度。</para>
-    /// </exception>
+    /// <summary>Finalizes the digest into a caller-owned buffer and resets the accumulator.
+    /// <para>把摘要定稿到调用方拥有的缓冲区，并重置累加器。</para></summary>
+    /// <param name="destination">Buffer receiving the digest; it must be exactly <see cref="HashLengthInBytes"/> long.
+    /// <para>接收摘要的缓冲区；长度必须恰好等于 <see cref="HashLengthInBytes"/>。</para></param>
+    /// <returns>The number of bytes written.<para>写入的字节数。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="destination"/> is too short to hold the digest.
+    /// <para><paramref name="destination"/> 短于摘要长度。</para></exception>
     public int GetHashAndReset(Span<byte> destination) => _hash.GetHashAndReset(destination);
 
-    /// <summary>
-    /// Finalizes the digest into a caller-owned buffer and resets the accumulator.
-    /// <para>把摘要定稿到调用方拥有的缓冲区，并重置累加器。</para>
-    /// </summary>
-    /// <param name="destination">
-    /// Buffer receiving the digest; it must be at least the algorithm's digest length.
-    /// <para>接收摘要的缓冲区；长度不得小于算法的摘要长度。</para>
-    /// </param>
-    /// <param name="bytesWritten">
-    /// Number of bytes written when this method returns <see langword="true"/>; undefined otherwise.
-    /// <para>方法返回 <see langword="true"/> 时写入的字节数；否则未定义。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> when the buffer was large enough; <see langword="false"/> leaves the accumulator
-    /// carrying the same state so the caller may retry with a larger buffer.
-    /// <para>缓冲区足够大时为 <see langword="true"/>；为 <see langword="false"/> 时累加器保持原状态，
-    /// 调用方可用更大的缓冲区重试。</para>
-    /// </returns>
+    /// <summary>Finalizes the digest into a caller-owned buffer and resets the accumulator.
+    /// <para>把摘要定稿到调用方拥有的缓冲区，并重置累加器。</para></summary>
+    /// <param name="destination">Buffer receiving the digest; it must be at least the algorithm's digest length.
+    /// <para>接收摘要的缓冲区；长度不得小于算法的摘要长度。</para></param>
+    /// <param name="bytesWritten">Number of bytes written when this method returns <see langword="true"/>; undefined otherwise.
+    /// <para>方法返回 <see langword="true"/> 时写入的字节数；否则未定义。</para></param>
+    /// <returns><see langword="true"/> when the buffer was large enough; <see langword="false"/> leaves the accumulator carrying the same state so the caller may retry with a larger buffer.
+    /// <para>缓冲区足够大时为 <see langword="true"/>；为 <see langword="false"/> 时累加器保持原状态， 调用方可用更大的缓冲区重试。</para></returns>
     public bool TryGetHashAndReset(Span<byte> destination, out int bytesWritten) =>
         _hash.TryGetHashAndReset(destination, out bytesWritten);
 

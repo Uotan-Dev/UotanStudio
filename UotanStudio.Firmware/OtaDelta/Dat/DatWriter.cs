@@ -29,71 +29,40 @@ public static partial class DatWriter
     /// </remarks>
     private const long MaximumBlocksPerPatchCommand = 4096;
 
-    /// <summary>
-    /// Writes a raw image as a DAT image pair.
-    /// <para>将原始镜像写出为 DAT 镜像对。</para>
-    /// </summary>
-    /// <param name="inputImagePath">
-    /// Raw (non-sparse) image to read; the file must exist.
-    /// <para>待读取的原始（非 sparse）镜像；文件必须存在。</para>
-    /// </param>
-    /// <param name="outputDatPath">
-    /// Data file created with every non-zero block, zero padding to the block boundary; replaced when it already
-    /// exists. <para>写出全部非零块（末尾按块边界补零）的数据文件；已存在时被替换。</para>
-    /// </param>
-    /// <param name="outputTransferListPath">
-    /// Version 4 transfer list describing the <c>new</c> and <c>zero</c> ranges; replaced when it already exists.
-    /// <para>描述 <c>new</c> 与 <c>zero</c> 范围的版本 4 传输列表；已存在时被替换。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// A path is empty or contains only whitespace. <para>路径为空或仅含空白字符。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="inputImagePath"/> does not exist. <para><paramref name="inputImagePath"/> 不存在。</para>
-    /// </exception>
+    /// <summary>Writes a raw image as a DAT image pair.<para>将原始镜像写出为 DAT 镜像对。</para></summary>
+    /// <param name="inputImagePath">Raw (non-sparse) image to read; the file must exist.
+    /// <para>待读取的原始（非 sparse）镜像；文件必须存在。</para></param>
+    /// <param name="outputDatPath">Data file created with every non-zero block, zero padding to the block boundary; replaced when it already exists.
+    /// <para>写出全部非零块（末尾按块边界补零）的数据文件；已存在时被替换。</para></param>
+    /// <param name="outputTransferListPath">Version 4 transfer list describing the <c>new</c> and <c>zero</c> ranges; replaced when it already exists.
+    /// <para>描述 <c>new</c> 与 <c>zero</c> 范围的版本 4 传输列表；已存在时被替换。</para></param>
+    /// <exception cref="ArgumentException">A path is empty or contains only whitespace.
+    /// <para>路径为空或仅含空白字符。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="inputImagePath"/> does not exist.
+    /// <para><paramref name="inputImagePath"/> 不存在。</para></exception>
     public static void Write(string inputImagePath, string outputDatPath, string outputTransferListPath)
         => Write(inputImagePath, outputDatPath, outputTransferListPath, new DatWriteOptions());
 
-    /// <summary>
-    /// Writes a raw image as a DAT image pair with the given options.
-    /// <para>使用给定选项将原始镜像写出为 DAT 镜像对。</para>
-    /// </summary>
-    /// <param name="inputImagePath">
-    /// Raw (non-sparse) image to read; the file must exist.
-    /// <para>待读取的原始（非 sparse）镜像；文件必须存在。</para>
-    /// </param>
-    /// <param name="outputDatPath">
-    /// Data file created with every non-zero block, zero padding to the block boundary; replaced when it already
-    /// exists. <para>写出全部非零块（末尾按块边界补零）的数据文件；已存在时被替换。</para>
-    /// </param>
-    /// <param name="outputTransferListPath">
-    /// Version 4 transfer list describing the <c>new</c> and <c>zero</c> ranges; replaced when it already exists.
-    /// <para>描述 <c>new</c> 与 <c>zero</c> 范围的版本 4 传输列表；已存在时被替换。</para>
-    /// </param>
-    /// <param name="options">
-    /// Compression and per-command block cap settings; ownership stays with the caller and the object is only read.
-    /// <para>压缩与单条命令块数上限设置；所有权归调用方，本方法只读取。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Optional byte progress, fed with (processed bytes read from the raw image, total raw bytes); <c>null</c> to
-    /// disable reporting. Reports are coalesced to one notification per 100 millisecond window and always end with a
-    /// notification carrying the total. <para>可选的按字节进度回调（读入原始镜像的字节数、原始镜像总字节数）；<c>null</c> 表示不报告。
-    /// 上报按 100 毫秒窗口合并，并必定以一条携带总量的通知结束。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels between blocks and before self-verification; a cancelled write may leave partial output files and
-    /// never runs the verify pass. <para>在块间与自校验前响应取消；被取消的写出可能留下部分输出文件且不会执行校验趟。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// A path is empty or contains only whitespace. <para>路径为空或仅含空白字符。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="options"/> is <see langword="null"/>. <para><paramref name="options"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// <see cref="DatWriteOptions.SelfVerifyIncremental"/> is set and the freshly written dataset does not rebuild
-    /// the input image. <para>设置了 <see cref="DatWriteOptions.SelfVerifyIncremental"/> 且新写出的数据集未能重建输入镜像。</para>
-    /// </exception>
+    /// <summary>Writes a raw image as a DAT image pair with the given options.
+    /// <para>使用给定选项将原始镜像写出为 DAT 镜像对。</para></summary>
+    /// <param name="inputImagePath">Raw (non-sparse) image to read; the file must exist.
+    /// <para>待读取的原始（非 sparse）镜像；文件必须存在。</para></param>
+    /// <param name="outputDatPath">Data file created with every non-zero block, zero padding to the block boundary; replaced when it already exists.
+    /// <para>写出全部非零块（末尾按块边界补零）的数据文件；已存在时被替换。</para></param>
+    /// <param name="outputTransferListPath">Version 4 transfer list describing the <c>new</c> and <c>zero</c> ranges; replaced when it already exists.
+    /// <para>描述 <c>new</c> 与 <c>zero</c> 范围的版本 4 传输列表；已存在时被替换。</para></param>
+    /// <param name="options">Compression and per-command block cap settings; ownership stays with the caller and the object is only read.
+    /// <para>压缩与单条命令块数上限设置；所有权归调用方，本方法只读取。</para></param>
+    /// <param name="progress">Optional byte progress, fed with (processed bytes read from the raw image, total raw bytes); <c>null</c> to disable reporting. Reports are coalesced to one notification per 100 millisecond window and always end with a notification carrying the total.
+    /// <para>可选的按字节进度回调（读入原始镜像的字节数、原始镜像总字节数）；<c>null</c> 表示不报告。 上报按 100 毫秒窗口合并，并必定以一条携带总量的通知结束。</para></param>
+    /// <param name="cancellationToken">Cancels between blocks and before self-verification; a cancelled write may leave partial output files and never runs the verify pass.
+    /// <para>在块间与自校验前响应取消；被取消的写出可能留下部分输出文件且不会执行校验趟。</para></param>
+    /// <exception cref="ArgumentException">A path is empty or contains only whitespace.
+    /// <para>路径为空或仅含空白字符。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="options"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException"><see cref="DatWriteOptions.SelfVerifyIncremental"/> is set and the freshly written dataset does not rebuild the input image.
+    /// <para>设置了 <see cref="DatWriteOptions.SelfVerifyIncremental"/> 且新写出的数据集未能重建输入镜像。</para></exception>
     public static void Write(string inputImagePath, string outputDatPath, string outputTransferListPath, DatWriteOptions options, IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputImagePath);

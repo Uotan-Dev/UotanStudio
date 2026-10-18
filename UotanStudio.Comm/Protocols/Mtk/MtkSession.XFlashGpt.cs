@@ -13,8 +13,7 @@ public sealed partial class MtkSession
     /// <para>取消信号会传播到每一次存储交换。</para></param>
     /// <returns>A validated snapshot bound to the selected storage geometry and physical region.
     /// <para>与所选存储几何信息和物理区域绑定的已校验快照。</para></returns>
-    /// <exception cref="InvalidOperationException">
-    /// Storage is not ready, has not been discovered, or <paramref name="partitionId"/> is not a discovered region.
+    /// <exception cref="InvalidOperationException">Storage is not ready, has not been discovered, or <paramref name="partitionId"/> is not a discovered region.
     /// <para>存储未就绪、尚未发现，或 <paramref name="partitionId"/> 不是已发现的区域。</para></exception>
     /// <exception cref="InvalidDataException">A GPT block read was incomplete or the table failed validation.
     /// <para>某个 GPT 块读取不完整，或表未通过校验。</para></exception>

@@ -4,21 +4,13 @@ namespace UotanStudio.Compress.Internal;
 
 internal static class CompressionLevelMapper
 {
-    /// <summary>
-    /// Maps to the built-in CompressionLevel (gzip / deflate / brotli).
-    /// <para>映射到 .NET 内置 CompressionLevel（gzip / deflate / brotli）。</para>
-    /// </summary>
-    /// <param name="level">Unified level on the 0-9 scale, or <see langword="null"/> to keep
-    /// <paramref name="default"/>; values at or below 0 select no compression, 1 through 3 the fastest
-    /// setting, 9 and above the smallest-size setting, and 4 through 8 the optimal setting.
-    /// <para>统一的 0-9 等级，为 <see langword="null"/> 时沿用 <paramref name="default"/>；不超过 0 选择不压缩，
-    /// 1 至 3 选最快，9 及以上选最小体积，4 至 8 选最优。</para></param>
-    /// <param name="default">Result returned when <paramref name="level"/> is <see langword="null"/>;
-    /// defaults to <see cref="CompressionLevel.Optimal"/>.
-    /// <para>当 <paramref name="level"/> 为 <see langword="null"/> 时的返回值；默认为
-    /// <see cref="CompressionLevel.Optimal"/>。</para></param>
-    /// <returns>The equivalent built-in compression level.
-    /// <para>等价的内置压缩等级。</para></returns>
+    /// <summary>Maps to the built-in CompressionLevel (gzip / deflate / brotli).
+    /// <para>映射到 .NET 内置 CompressionLevel（gzip / deflate / brotli）。</para></summary>
+    /// <param name="level">Unified level on the 0-9 scale, or <see langword="null"/> to keep <paramref name="default"/>; values at or below 0 select no compression, 1 through 3 the fastest setting, 9 and above the smallest-size setting, and 4 through 8 the optimal setting.
+    /// <para>统一的 0-9 等级，为 <see langword="null"/> 时沿用 <paramref name="default"/>；不超过 0 选择不压缩， 1 至 3 选最快，9 及以上选最小体积，4 至 8 选最优。</para></param>
+    /// <param name="default">Result returned when <paramref name="level"/> is <see langword="null"/>; defaults to <see cref="CompressionLevel.Optimal"/>.
+    /// <para>当 <paramref name="level"/> 为 <see langword="null"/> 时的返回值；默认为 <see cref="CompressionLevel.Optimal"/>。</para></param>
+    /// <returns>The equivalent built-in compression level.<para>等价的内置压缩等级。</para></returns>
     public static CompressionLevel ToBclCompressionLevel(int? level, CompressionLevel @default = CompressionLevel.Optimal)
     {
         return !level.HasValue

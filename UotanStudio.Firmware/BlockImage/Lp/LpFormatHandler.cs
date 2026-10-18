@@ -105,26 +105,15 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider, I
                 MetadataFormat.LP_METADATA_GEOMETRY_MAGIC)
             || HeaderProbe.ProbeMagic(filePath, sizeof(uint), 0, MetadataFormat.LP_METADATA_GEOMETRY_MAGIC);
 
-    /// <summary>
-    /// Reads the firmware metadata asynchronously.
-    /// <para>异步读取固件元数据。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Super image path; both raw and Android sparse storage layouts are decoded.
-    /// <para>super 镜像路径；原始与 Android sparse 两种存储布局均可解码。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancel token checked before and after the metadata parse; the read itself is synchronous.
-    /// <para>在元数据解析前后各检查一次的取消令牌；读取本身为同步执行。</para>
-    /// </param>
-    /// <returns>
-    /// An <see cref="FirmwareOpResult"/> carrying geometry, per-partition sizes and the partition name list on success, or a failure result when the image cannot be parsed; every non-cancellation error is captured into the result.
-    /// <para>成功时返回包含几何信息、各分区大小与分区名列表的 <see cref="FirmwareOpResult"/>，镜像无法解析时返回失败结果；除取消外的所有错误都被捕获进结果。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Reads the firmware metadata asynchronously.<para>异步读取固件元数据。</para></summary>
+    /// <param name="filePath">Super image path; both raw and Android sparse storage layouts are decoded.
+    /// <para>super 镜像路径；原始与 Android sparse 两种存储布局均可解码。</para></param>
+    /// <param name="cancellationToken">Cancel token checked before and after the metadata parse; the read itself is synchronous.
+    /// <para>在元数据解析前后各检查一次的取消令牌；读取本身为同步执行。</para></param>
+    /// <returns>An <see cref="FirmwareOpResult"/> carrying geometry, per-partition sizes and the partition name list on success, or a failure result when the image cannot be parsed; every non-cancellation error is captured into the result.
+    /// <para>成功时返回包含几何信息、各分区大小与分区名列表的 <see cref="FirmwareOpResult"/>，镜像无法解析时返回失败结果；除取消外的所有错误都被捕获进结果。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -159,68 +148,39 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider, I
         catch (Exception ex) { return Task.FromResult(FirmwareOpResult.Fail(ex.Message)); }
     }
 
-    /// <summary>
-    /// Extracts complete primary-device partitions and zero extents, committing each file atomically.
-    /// <para>提取完整的主设备分区及零 extent，逐文件原子提交。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Source super image; it is never modified and a partition output may not replace it.
-    /// <para>源 super 镜像；镜像本身不会被修改，且分区输出不得指向源镜像。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Directory that receives one <c>&lt;name&gt;.img</c> file per selected partition.
-    /// <para>接收每个所选分区对应 <c>&lt;name&gt;.img</c> 文件的目录。</para>
-    /// </param>
-    /// <param name="options">
-    /// Optional selection, overwrite and output-budget settings; <see langword="null"/> uses defaults with overwrite enabled.
-    /// <para>可选的选择、覆盖与输出预算设置；<see langword="null"/> 表示使用默认值且允许覆盖。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancel token checked around every partition read and copy; cancellation aborts before partially committed files are replaced.
-    /// <para>在每个分区的读取与拷贝前后检查的取消令牌；取消发生在尚未完成提交的文件被替换之前。</para>
-    /// </param>
-    /// <returns>
-    /// An <see cref="FirmwareOpResult"/> reporting the extracted partition count on success, or a failure result for invalid metadata, budget or path conflicts; only <see cref="OperationCanceledException"/> escapes.
-    /// <para>成功时报告提取分区数量的 <see cref="FirmwareOpResult"/>；元数据无效、超出预算或路径冲突时返回失败结果；仅 <see cref="OperationCanceledException"/> 会向外抛出。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Extracts complete primary-device partitions and zero extents, committing each file atomically.
+    /// <para>提取完整的主设备分区及零 extent，逐文件原子提交。</para></summary>
+    /// <param name="filePath">Source super image; it is never modified and a partition output may not replace it.
+    /// <para>源 super 镜像；镜像本身不会被修改，且分区输出不得指向源镜像。</para></param>
+    /// <param name="outputDirectory">Directory that receives one <c>&lt;name&gt;.img</c> file per selected partition.
+    /// <para>接收每个所选分区对应 <c>&lt;name&gt;.img</c> 文件的目录。</para></param>
+    /// <param name="options">Optional selection, overwrite and output-budget settings; <see langword="null"/> uses defaults with overwrite enabled.
+    /// <para>可选的选择、覆盖与输出预算设置；<see langword="null"/> 表示使用默认值且允许覆盖。</para></param>
+    /// <param name="cancellationToken">Cancel token checked around every partition read and copy; cancellation aborts before partially committed files are replaced.
+    /// <para>在每个分区的读取与拷贝前后检查的取消令牌；取消发生在尚未完成提交的文件被替换之前。</para></param>
+    /// <returns>An <see cref="FirmwareOpResult"/> reporting the extracted partition count on success, or a failure result for invalid metadata, budget or path conflicts; only <see cref="OperationCanceledException"/> escapes.
+    /// <para>成功时报告提取分区数量的 <see cref="FirmwareOpResult"/>；元数据无效、超出预算或路径冲突时返回失败结果；仅 <see cref="OperationCanceledException"/> 会向外抛出。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
 
-    /// <summary>
-    /// Extracts selected image entries without creating directory repack metadata.
-    /// <para>提取所选镜像条目，且不创建目录重打包元数据。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Source super image to read.
-    /// <para>要读取的源 super 镜像。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Directory that receives the extracted <c>&lt;name&gt;.img</c> files.
-    /// <para>接收解出的 <c>&lt;name&gt;.img</c> 文件的目录。</para>
-    /// </param>
-    /// <param name="partitions">
-    /// Exact partition names to extract, matched case-insensitively; existing outputs are never overwritten.
-    /// <para>要提取的分区名称集合，按不区分大小写匹配；绝不覆盖已有输出。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancel token propagated through the extraction loop.
-    /// <para>贯穿整个提取循环传递的取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// An <see cref="FirmwareOpResult"/> for the selected-partition extraction; format errors are captured into the result.
-    /// <para>针对所选分区提取的 <see cref="FirmwareOpResult"/>；格式错误被捕获进结果。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="partitions"/> is empty. <para><paramref name="partitions"/> 为空。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="partitions"/> is <see langword="null"/>. <para><paramref name="partitions"/> 为 <see langword="null"/>。</para>
-    /// </exception>
+    /// <summary>Extracts selected image entries without creating directory repack metadata.
+    /// <para>提取所选镜像条目，且不创建目录重打包元数据。</para></summary>
+    /// <param name="filePath">Source super image to read.<para>要读取的源 super 镜像。</para></param>
+    /// <param name="outputDirectory">Directory that receives the extracted <c>&lt;name&gt;.img</c> files.
+    /// <para>接收解出的 <c>&lt;name&gt;.img</c> 文件的目录。</para></param>
+    /// <param name="partitions">Exact partition names to extract, matched case-insensitively; existing outputs are never overwritten.
+    /// <para>要提取的分区名称集合，按不区分大小写匹配；绝不覆盖已有输出。</para></param>
+    /// <param name="cancellationToken">Cancel token propagated through the extraction loop.
+    /// <para>贯穿整个提取循环传递的取消令牌。</para></param>
+    /// <returns>An <see cref="FirmwareOpResult"/> for the selected-partition extraction; format errors are captured into the result.
+    /// <para>针对所选分区提取的 <see cref="FirmwareOpResult"/>；格式错误被捕获进结果。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="partitions"/> is empty.
+    /// <para><paramref name="partitions"/> 为空。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="partitions"/> is <see langword="null"/>.
+    /// <para><paramref name="partitions"/> 为 <see langword="null"/>。</para></exception>
     public Task<FirmwareOpResult> ExtractSelectedAsync(string filePath, string outputDirectory,
         IReadOnlyCollection<string> partitions, CancellationToken cancellationToken = default)
     {
@@ -314,30 +274,18 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider, I
         catch (Exception ex) { return FirmwareOpResult.Fail(ex.Message); }
     }
 
-    /// <summary>
-    /// Plans an aligned device from the input images, then streams it to an atomic output file.
-    /// <para>根据输入镜像规划对齐的设备布局，再流式构建并原子提交输出文件。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Directory whose top-level <c>*.img</c> files become one linearly laid-out partition each; the output file itself is excluded.
-    /// <para>其顶层 <c>*.img</c> 文件将各自成为一个线性排布分区的目录；输出文件本身会被排除。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination super image, written through a temporary file and committed atomically.
-    /// <para>目标 super 镜像，先写入临时文件再原子提交。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancel token checked during planning and around every partition copy.
-    /// <para>在规划阶段及每次分区拷贝前后检查的取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// An <see cref="FirmwareOpResult"/> reporting the packed partition count on success, or a failure result when the directory has no <c>*.img</c> files, a source changes while packing, or sizes overflow; only <see cref="OperationCanceledException"/> escapes.
-    /// <para>成功时报告打包分区数量的 <see cref="FirmwareOpResult"/>；目录无 <c>*.img</c> 文件、打包期间源文件变化或尺寸溢出时返回失败结果；仅 <see cref="OperationCanceledException"/> 会向外抛出。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Plans an aligned device from the input images, then streams it to an atomic output file.
+    /// <para>根据输入镜像规划对齐的设备布局，再流式构建并原子提交输出文件。</para></summary>
+    /// <param name="inputPath">Directory whose top-level <c>*.img</c> files become one linearly laid-out partition each; the output file itself is excluded.
+    /// <para>其顶层 <c>*.img</c> 文件将各自成为一个线性排布分区的目录；输出文件本身会被排除。</para></param>
+    /// <param name="outputPath">Destination super image, written through a temporary file and committed atomically.
+    /// <para>目标 super 镜像，先写入临时文件再原子提交。</para></param>
+    /// <param name="cancellationToken">Cancel token checked during planning and around every partition copy.
+    /// <para>在规划阶段及每次分区拷贝前后检查的取消令牌。</para></param>
+    /// <returns>An <see cref="FirmwareOpResult"/> reporting the packed partition count on success, or a failure result when the directory has no <c>*.img</c> files, a source changes while packing, or sizes overflow; only <see cref="OperationCanceledException"/> escapes.
+    /// <para>成功时报告打包分区数量的 <see cref="FirmwareOpResult"/>；目录无 <c>*.img</c> 文件、打包期间源文件变化或尺寸溢出时返回失败结果；仅 <see cref="OperationCanceledException"/> 会向外抛出。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public async Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try

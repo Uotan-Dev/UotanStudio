@@ -210,28 +210,13 @@ public sealed class HdcAuthentication : IDisposable
         return new HdcAuthentication(rsa);
     }
 
-    /// <summary>
-    /// Loads the authentication key from <paramref name="keyPath"/> (PEM, PKCS#1 or
-    /// PKCS#8), or generates and persists a new 3072-bit key when the file does not
-    /// exist. The public key is written next to it with a ".pub" extension.
-    /// <para>从 <paramref name="keyPath"/> 加载认证密钥（PEM，PKCS#1 或 PKCS#8）；
-    /// 文件不存在时生成并持久化新的 3072 位密钥。公钥以 ".pub" 扩展名写入同名文件。</para>
-    /// </summary>
-    /// <remarks>
-    /// A generated key is written as unencrypted PKCS#8 PEM (<c>BEGIN PRIVATE KEY</c>) and its sidecar as
-    /// the PEM <c>SUBJECT PUBLIC KEY</c> block, matching upstream <c>WritePrivateFile</c>
-    /// (<c>PEM_write_PrivateKey</c>) and <c>WritePublicFile</c> (<c>PEM_write_PUBKEY</c>) in
-    /// <c>src/common/auth.cpp</c>, so a key directory is interchangeable with the official client.
-    /// <para>生成的密钥以未加密的 PKCS#8 PEM（<c>BEGIN PRIVATE KEY</c>）写出，同名公钥写成 PEM
-    /// <c>SUBJECT PUBLIC KEY</c> 块，与上游 <c>src/common/auth.cpp</c> 的
-    /// <c>WritePrivateFile</c>（<c>PEM_write_PrivateKey</c>）和 <c>WritePublicFile</c>
-    /// （<c>PEM_write_PUBKEY</c>）一致，因此密钥目录可与官方客户端互换。</para>
-    /// </remarks>
-    /// <param name="keyPath">
-    /// The private key path; defaults to <see cref="DefaultKeyFilePath"/>.
-    /// <para>私钥路径；默认为 <see cref="DefaultKeyFilePath"/>。</para>
-    /// </param>
-    /// <returns>The loaded or newly created authentication. <para>加载或新建的认证实例。</para></returns>
+    /// <summary>Loads the authentication key from <paramref name="keyPath"/> (PEM, PKCS#1 or PKCS#8), or generates and persists a new 3072-bit key when the file does not exist. The public key is written next to it with a ".pub" extension.
+    /// <para>从 <paramref name="keyPath"/> 加载认证密钥（PEM，PKCS#1 或 PKCS#8）； 文件不存在时生成并持久化新的 3072 位密钥。公钥以 ".pub" 扩展名写入同名文件。</para></summary>
+    /// <remarks>A generated key is written as unencrypted PKCS#8 PEM (<c>BEGIN PRIVATE KEY</c>) and its sidecar as the PEM <c>SUBJECT PUBLIC KEY</c> block, matching upstream <c>WritePrivateFile</c> (<c>PEM_write_PrivateKey</c>) and <c>WritePublicFile</c> (<c>PEM_write_PUBKEY</c>) in <c>src/common/auth.cpp</c>, so a key directory is interchangeable with the official client.
+    /// <para>生成的密钥以未加密的 PKCS#8 PEM（<c>BEGIN PRIVATE KEY</c>）写出，同名公钥写成 PEM <c>SUBJECT PUBLIC KEY</c> 块，与上游 <c>src/common/auth.cpp</c> 的 <c>WritePrivateFile</c>（<c>PEM_write_PrivateKey</c>）和 <c>WritePublicFile</c> （<c>PEM_write_PUBKEY</c>）一致，因此密钥目录可与官方客户端互换。</para></remarks>
+    /// <param name="keyPath">The private key path; defaults to <see cref="DefaultKeyFilePath"/>.
+    /// <para>私钥路径；默认为 <see cref="DefaultKeyFilePath"/>。</para></param>
+    /// <returns>The loaded or newly created authentication.<para>加载或新建的认证实例。</para></returns>
     public static HdcAuthentication LoadOrCreate(string? keyPath = null)
     {
         var path = keyPath ?? DefaultKeyFilePath;
@@ -348,22 +333,20 @@ public sealed class HdcAuthentication : IDisposable
     public byte[] SignToken(byte[] token)
         => SignToken(token, _verifyType);
 
-    /// <summary>
-    /// Signs a daemon challenge with the negotiated upstream RSA algorithm.
-    /// <para>使用协商的上游 RSA 算法对守护进程挑战签名。</para>
-    /// </summary>
-    /// <param name="token">Challenge bytes from the daemon handshake; must not be empty. <para>来自守护进程握手的挑战字节；不得为空。</para></param>
-    /// <param name="verifyType">Negotiated algorithm; only <see cref="HdcAuthVerifyType.Rsa3072Sha512"/> and <see cref="HdcAuthVerifyType.RsaEncrypt"/> are implemented. <para>协商算法；仅实现了 <see cref="HdcAuthVerifyType.Rsa3072Sha512"/> 与 <see cref="HdcAuthVerifyType.RsaEncrypt"/>。</para></param>
-    /// <returns>
-    /// For the RSA signature type, the signature over the token; for legacy mode, the RSA private-key
-    /// encryption of the whole token. Both are modulus-width: 384 bytes for the 3072-bit identity and
-    /// 512 bytes for the accepted 4096-bit legacy identity.
-    /// <para>RSA 签名类型返回对令牌的签名；旧版模式返回整个令牌的 RSA 私钥加密结果。
-    /// 两者均为模数宽度：3072 位身份为 384 字节，可接受的 4096 位旧版身份为 512 字节。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException"><paramref name="token"/> is <see langword="null"/> or empty. <para><paramref name="token"/> 为 <see langword="null"/> 或空。</para></exception>
-    /// <exception cref="NotSupportedException"><paramref name="verifyType"/> selects an unimplemented algorithm. <para><paramref name="verifyType"/> 选择了未实现的算法。</para></exception>
-    /// <exception cref="CryptographicException">Legacy mode requires a private key and a token that fits the type-1 block. <para>旧版模式要求存在私钥，且令牌能装入 type-1 块。</para></exception>
+    /// <summary>Signs a daemon challenge with the negotiated upstream RSA algorithm.
+    /// <para>使用协商的上游 RSA 算法对守护进程挑战签名。</para></summary>
+    /// <param name="token">Challenge bytes from the daemon handshake; must not be empty.
+    /// <para>来自守护进程握手的挑战字节；不得为空。</para></param>
+    /// <param name="verifyType">Negotiated algorithm; only <see cref="HdcAuthVerifyType.Rsa3072Sha512"/> and <see cref="HdcAuthVerifyType.RsaEncrypt"/> are implemented.
+    /// <para>协商算法；仅实现了 <see cref="HdcAuthVerifyType.Rsa3072Sha512"/> 与 <see cref="HdcAuthVerifyType.RsaEncrypt"/>。</para></param>
+    /// <returns>For the RSA signature type, the signature over the token; for legacy mode, the RSA private-key encryption of the whole token. Both are modulus-width: 384 bytes for the 3072-bit identity and 512 bytes for the accepted 4096-bit legacy identity.
+    /// <para>RSA 签名类型返回对令牌的签名；旧版模式返回整个令牌的 RSA 私钥加密结果。 两者均为模数宽度：3072 位身份为 384 字节，可接受的 4096 位旧版身份为 512 字节。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="token"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="token"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="verifyType"/> selects an unimplemented algorithm.
+    /// <para><paramref name="verifyType"/> 选择了未实现的算法。</para></exception>
+    /// <exception cref="CryptographicException">Legacy mode requires a private key and a token that fits the type-1 block.
+    /// <para>旧版模式要求存在私钥，且令牌能装入 type-1 块。</para></exception>
     public byte[] SignToken(byte[] token, HdcAuthVerifyType verifyType)
     {
         if (token is null || token.Length == 0)
@@ -382,19 +365,9 @@ public sealed class HdcAuthentication : IDisposable
         throw new NotSupportedException($"HDC authentication algorithm {verifyType} is not implemented.");
     }
 
-    /// <summary>
-    /// Builds the <c>buf</c> payload of the HDC handshake public-key message, byte-for-byte the shape
-    /// upstream <c>GetPublicKeyinfo</c> produces: the local host name, the <c>\f</c> separator
-    /// (<c>HDC_HOST_DAEMON_BUF_SEPARATOR</c>), and the PEM <c>SubjectPublicKeyInfo</c> block with its single
-    /// trailing newline. The daemon splits on the first <c>\f</c>, shows the prefix as the requesting host in
-    /// its authorization prompt, and keeps the remainder as the known-hosts record, so neither the label nor
-    /// a stray newline may be invented here.
-    /// <para>构建 HDC 握手公钥消息的 <c>buf</c> 负载，与上游 <c>GetPublicKeyinfo</c> 产生的形状逐字节一致：
-    /// 本机主机名、<c>\f</c> 分隔符（<c>HDC_HOST_DAEMON_BUF_SEPARATOR</c>）、以及带单个结尾换行的 PEM
-    /// <c>SubjectPublicKeyInfo</c> 块。守护进程按第一个 <c>\f</c> 切分，把前缀作为请求主机显示在授权提示中，
-    /// 并把余下部分作为已知主机记录保存，因此这里的标注与换行都不能自行编造。</para>
-    /// </summary>
-    /// <returns>The UTF-8 encoded handshake payload. <para>UTF-8 编码的握手负载。</para></returns>
+    /// <summary>Builds the <c>buf</c> payload of the HDC handshake public-key message, byte-for-byte the shape upstream <c>GetPublicKeyinfo</c> produces: the local host name, the <c>\f</c> separator (<c>HDC_HOST_DAEMON_BUF_SEPARATOR</c>), and the PEM <c>SubjectPublicKeyInfo</c> block with its single trailing newline. The daemon splits on the first <c>\f</c>, shows the prefix as the requesting host in its authorization prompt, and keeps the remainder as the known-hosts record, so neither the label nor a stray newline may be invented here.
+    /// <para>构建 HDC 握手公钥消息的 <c>buf</c> 负载，与上游 <c>GetPublicKeyinfo</c> 产生的形状逐字节一致： 本机主机名、<c>\f</c> 分隔符（<c>HDC_HOST_DAEMON_BUF_SEPARATOR</c>）、以及带单个结尾换行的 PEM <c>SubjectPublicKeyInfo</c> 块。守护进程按第一个 <c>\f</c> 切分，把前缀作为请求主机显示在授权提示中， 并把余下部分作为已知主机记录保存，因此这里的标注与换行都不能自行编造。</para></summary>
+    /// <returns>The UTF-8 encoded handshake payload.<para>UTF-8 编码的握手负载。</para></returns>
     public byte[] BuildDaemonPublicKeyPayload()
         => Encoding.UTF8.GetBytes(HostName + BufferSeparator + BuildPublicKeyFileText(_rsa));
 

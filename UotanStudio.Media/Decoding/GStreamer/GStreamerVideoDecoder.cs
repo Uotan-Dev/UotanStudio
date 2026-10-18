@@ -156,20 +156,15 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
         }
         catch (Exception error) when (error is DllNotFoundException or EntryPointNotFoundException or NotSupportedException or TypeInitializationException) { return false; }
     }
-    /// <summary>
-    /// Builds an appsrc-to-appsink pipeline for the codec, trying registered candidate decoders until one accepts the NV12 layout.
-    /// <para>为该编解码器构建从 appsrc 到 appsink 的管线，依次尝试已注册的候选解码器，直到某个解码器接受 NV12 输出布局。</para>
-    /// </summary>
-    /// <param name="codec">H.264, H.265 or AV1. <para>H.264、H.265 或 AV1。</para></param>
-    /// <param name="width">Expected frame width in pixels. <para>预期帧宽度（像素）。</para></param>
-    /// <param name="height">Expected frame height in pixels. <para>预期帧高度（像素）。</para></param>
-    /// <param name="frameCallback">
-    /// Invoked for every decoded NV12 frame on the calling thread; the frame is disposed after the callback
-    /// returns, so consumers must copy or convert within it. Reentering the decoder from the callback is forbidden.
-    /// <para>每解出一帧 NV12 即在调用线程上触发；回调返回后该帧即被释放，消费方须在回调内完成复制或转换。
-    /// 禁止在回调中重入解码器。</para>
-    /// </param>
-    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <summary>Builds an appsrc-to-appsink pipeline for the codec, trying registered candidate decoders until one accepts the NV12 layout.
+    /// <para>为该编解码器构建从 appsrc 到 appsink 的管线，依次尝试已注册的候选解码器，直到某个解码器接受 NV12 输出布局。</para></summary>
+    /// <param name="codec">H.264, H.265 or AV1.<para>H.264、H.265 或 AV1。</para></param>
+    /// <param name="width">Expected frame width in pixels.<para>预期帧宽度（像素）。</para></param>
+    /// <param name="height">Expected frame height in pixels.<para>预期帧高度（像素）。</para></param>
+    /// <param name="frameCallback">Invoked for every decoded NV12 frame on the calling thread; the frame is disposed after the callback returns, so consumers must copy or convert within it. Reentering the decoder from the callback is forbidden.
+    /// <para>每解出一帧 NV12 即在调用线程上触发；回调返回后该帧即被释放，消费方须在回调内完成复制或转换。 禁止在回调中重入解码器。</para></param>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed.
+    /// <para>解码器已被释放。</para></exception>
     /// <exception cref="ArgumentNullException"><c>frameCallback</c> is null.
     /// <para><c>frameCallback</c> 为 null。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><c>codec</c> is unsupported or dimensions exceed the limits.
@@ -268,17 +263,14 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
         if (format == "NV12") return;
         throw new InvalidDataException($"GStreamer delivered {format ?? "(no format field)"}; only NV12 planes are supported.");
     }
-    /// <summary>
-    /// Feeds one compressed access unit into the pipeline with a synthesized 60 fps presentation timestamp.
-    /// <para>将一个压缩访问单元送入管线，时间戳为合成的 60 fps 递进值。</para>
-    /// </summary>
-    /// <param name="accessUnit">
-    /// One complete access unit (H.264/H.265 in Annex-B, AV1 in OBU stream form).
-    /// <para>一个完整的访问单元（H.264/H.265 为 Annex-B 形式，AV1 为 OBU 流形式）。</para>
-    /// </param>
+    /// <summary>Feeds one compressed access unit into the pipeline with a synthesized 60 fps presentation timestamp.
+    /// <para>将一个压缩访问单元送入管线，时间戳为合成的 60 fps 递进值。</para></summary>
+    /// <param name="accessUnit">One complete access unit (H.264/H.265 in Annex-B, AV1 in OBU stream form).
+    /// <para>一个完整的访问单元（H.264/H.265 为 Annex-B 形式，AV1 为 OBU 流形式）。</para></param>
     /// <exception cref="InvalidOperationException">The decoder is not initialized or the call reenters from a callback.
     /// <para>解码器未初始化，或调用从回调中重入。</para></exception>
-    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed.
+    /// <para>解码器已被释放。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The access unit is empty or exceeds 32 MiB.
     /// <para>访问单元为空或超过 32 MiB。</para></exception>
     /// <exception cref="InvalidDataException">The pipeline output had an unexpected layout or produced excessive frames.

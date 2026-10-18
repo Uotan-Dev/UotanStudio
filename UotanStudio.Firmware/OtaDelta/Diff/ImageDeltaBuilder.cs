@@ -73,52 +73,28 @@ internal static class ImageDeltaBuilder
     /// <summary>The block size the container layout assumes by default. <para>容器布局默认采用的块大小。</para></summary>
     public const int DefaultBlockSize = 4096;
 
-    /// <summary>Builds an IMGDIFF2 patch container from raw source and target images. <para>由原始源镜像与目标镜像构建 IMGDIFF2 补丁容器。</para></summary>
-    /// <param name="sourceImage">
-    /// Base image; read from position <c>0</c> and required to be readable and seekable because self-verification
-    /// replays against it. <para>基座镜像；需从位置 <c>0</c> 读取，且因自校验需回放而必须可读、可定位。</para>
-    /// </param>
-    /// <param name="targetImage">
-    /// Desired image; read from position <c>0</c>. Its length minus the block-aligned common prefix becomes the
-    /// RAW chunk. <para>目标镜像；从位置 <c>0</c> 读取。其长度减去块对齐公共前缀后成为 RAW 块。</para>
-    /// </param>
-    /// <param name="patchOutput">
-    /// Sink receiving the container bytes from its current position; left open. <para>从其当前位置接收容器字节的输出流；保持打开。</para>
-    /// </param>
-    /// <param name="blockSize">
-    /// Block alignment for the NORMAL/RAW split; must be a positive power of two no larger than 1 MiB. The
-    /// updater vocabulary assumes <see cref="DefaultBlockSize"/>. <para>NORMAL/RAW 切分的块对齐；必须是不大于
-    /// 1 MiB 的正 2 的幂。更新器词汇表假定 <see cref="DefaultBlockSize"/>。</para>
-    /// </param>
-    /// <param name="options">
-    /// Self-verification and size-ceiling settings; <see langword="null"/> uses <see cref="ImgDiffBuilderOptions"/>
-    /// defaults. Ownership stays with the caller. <para>自校验与大小上限设置；为 <see langword="null"/> 时使用
-    /// <see cref="ImgDiffBuilderOptions"/> 默认值。所有权归调用方。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels before reads, during the BSDIFF1 computation and between self-verification passes; a cancelled
-    /// build may leave partial bytes in <paramref name="patchOutput"/> and publishes nothing further.
-    /// <para>在读取前、BSDIFF1 计算期间及自校验各趟之间响应取消；被取消的构建可能在 <paramref name="patchOutput"/>
-    /// 中留下部分字节且不再写入。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// A stream is unusable (not readable/seekable/writable), <paramref name="blockSize"/> is not a positive
-    /// power of two within 1 MiB, or an image exceeds <see cref="ImgDiffBuilderOptions.MaximumImageBytes"/>.
-    /// <para>流不可用（不可读/不可定位/不可写）、<paramref name="blockSize"/> 不是不大于 1 MiB 的正 2 的幂，
-    /// 或镜像超过 <see cref="ImgDiffBuilderOptions.MaximumImageBytes"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="sourceImage"/>, <paramref name="targetImage"/> or <paramref name="patchOutput"/> is
-    /// <see langword="null"/>. <para><paramref name="sourceImage"/>、<paramref name="targetImage"/> 或
-    /// <paramref name="patchOutput"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// Cancellation was requested. <para>已请求取消。</para>
-    /// </exception>
-    /// <exception cref="ImgDiffSelfVerificationException">
-    /// <see cref="ImgDiffBuilderOptions.SelfVerify"/> is set and the generated container does not rebuild the
-    /// target byte-for-byte. <para>设置了 <see cref="ImgDiffBuilderOptions.SelfVerify"/> 且生成的容器未能逐字节重建目标。</para>
-    /// </exception>
+    /// <summary>Builds an IMGDIFF2 patch container from raw source and target images.
+    /// <para>由原始源镜像与目标镜像构建 IMGDIFF2 补丁容器。</para></summary>
+    /// <param name="sourceImage">Base image; read from position <c>0</c> and required to be readable and seekable because self-verification replays against it.
+    /// <para>基座镜像；需从位置 <c>0</c> 读取，且因自校验需回放而必须可读、可定位。</para></param>
+    /// <param name="targetImage">Desired image; read from position <c>0</c>. Its length minus the block-aligned common prefix becomes the RAW chunk.
+    /// <para>目标镜像；从位置 <c>0</c> 读取。其长度减去块对齐公共前缀后成为 RAW 块。</para></param>
+    /// <param name="patchOutput">Sink receiving the container bytes from its current position; left open.
+    /// <para>从其当前位置接收容器字节的输出流；保持打开。</para></param>
+    /// <param name="blockSize">Block alignment for the NORMAL/RAW split; must be a positive power of two no larger than 1 MiB. The updater vocabulary assumes <see cref="DefaultBlockSize"/>.
+    /// <para>NORMAL/RAW 切分的块对齐；必须是不大于 1 MiB 的正 2 的幂。更新器词汇表假定 <see cref="DefaultBlockSize"/>。</para></param>
+    /// <param name="options">Self-verification and size-ceiling settings; <see langword="null"/> uses <see cref="ImgDiffBuilderOptions"/> defaults. Ownership stays with the caller.
+    /// <para>自校验与大小上限设置；为 <see langword="null"/> 时使用 <see cref="ImgDiffBuilderOptions"/> 默认值。所有权归调用方。</para></param>
+    /// <param name="cancellationToken">Cancels before reads, during the BSDIFF1 computation and between self-verification passes; a cancelled build may leave partial bytes in <paramref name="patchOutput"/> and publishes nothing further.
+    /// <para>在读取前、BSDIFF1 计算期间及自校验各趟之间响应取消；被取消的构建可能在 <paramref name="patchOutput"/> 中留下部分字节且不再写入。</para></param>
+    /// <exception cref="ArgumentException">A stream is unusable (not readable/seekable/writable), <paramref name="blockSize"/> is not a positive power of two within 1 MiB, or an image exceeds <see cref="ImgDiffBuilderOptions.MaximumImageBytes"/>.
+    /// <para>流不可用（不可读/不可定位/不可写）、<paramref name="blockSize"/> 不是不大于 1 MiB 的正 2 的幂， 或镜像超过 <see cref="ImgDiffBuilderOptions.MaximumImageBytes"/>。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="sourceImage"/>, <paramref name="targetImage"/> or <paramref name="patchOutput"/> is <see langword="null"/>.
+    /// <para><paramref name="sourceImage"/>、<paramref name="targetImage"/> 或 <paramref name="patchOutput"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="OperationCanceledException">Cancellation was requested.
+    /// <para>已请求取消。</para></exception>
+    /// <exception cref="ImgDiffSelfVerificationException"><see cref="ImgDiffBuilderOptions.SelfVerify"/> is set and the generated container does not rebuild the target byte-for-byte.
+    /// <para>设置了 <see cref="ImgDiffBuilderOptions.SelfVerify"/> 且生成的容器未能逐字节重建目标。</para></exception>
     public static void Build(
         Stream sourceImage,
         Stream targetImage,

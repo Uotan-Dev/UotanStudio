@@ -35,19 +35,14 @@ internal sealed class ExFatFormatHandler : IReadonlyFormatHandler
     /// <para>引导记录、几何信息与库识别一致时为 <see langword="true"/>；任何读取失败按不匹配处理。</para></returns>
     public bool CanHandle(string filePath) => ExFatParser.IsExFatImage(filePath);
 
-    /// <summary>
-    /// Reads the volume geometry and lists every entry path without extracting file data.
-    /// <para>读取卷几何信息并列出全部条目路径，不解出文件数据。</para>
-    /// </summary>
+    /// <summary>Reads the volume geometry and lists every entry path without extracting file data.
+    /// <para>读取卷几何信息并列出全部条目路径，不解出文件数据。</para></summary>
     /// <param name="filePath">exFAT volume image, opened read-only on a worker thread.
     /// <para>exFAT 卷镜像；在工作线程上以只读方式打开。</para></param>
     /// <param name="cancellationToken">Token checked around the tree walk.
     /// <para>在目录树遍历前后检查的令牌。</para></param>
-    /// <returns>An <c>Ok</c> result whose metadata carries the boot-record fields, entry counts and the
-    /// capacity-equivalence verdict, and whose entries list the image paths; a <c>Fail</c> result with the
-    /// error message when the volume cannot be parsed.
-    /// <para><c>Ok</c> 结果的元数据包含引导记录字段、条目计数与容量等价判定，明细行列出镜像路径；镜像无法解析
-    /// 时返回带错误消息的 <c>Fail</c> 结果。</para></returns>
+    /// <returns>An <c>Ok</c> result whose metadata carries the boot-record fields, entry counts and the capacity-equivalence verdict, and whose entries list the image paths; a <c>Fail</c> result with the error message when the volume cannot be parsed.
+    /// <para><c>Ok</c> 结果的元数据包含引导记录字段、条目计数与容量等价判定，明细行列出镜像路径；镜像无法解析 时返回带错误消息的 <c>Fail</c> 结果。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
@@ -74,23 +69,18 @@ internal sealed class ExFatFormatHandler : IReadonlyFormatHandler
             }
         }, cancellationToken);
 
-    /// <summary>
-    /// Extracts the exFAT tree into the output directory.
-    /// <para>将 exFAT 目录树解包到输出目录。</para>
-    /// </summary>
+    /// <summary>Extracts the exFAT tree into the output directory.
+    /// <para>将 exFAT 目录树解包到输出目录。</para></summary>
     /// <param name="filePath">Source image; the input is never modified.
     /// <para>源镜像；输入文件不会被修改。</para></param>
     /// <param name="outputDirectory">Destination tree; entries are written with their image paths.
     /// <para>目标目录树；条目按镜像内路径写出。</para></param>
-    /// <param name="options">Unpack options; <see langword="null"/> overwrites existing files, reports no byte
-    /// progress and applies the default output budget.
+    /// <param name="options">Unpack options; <see langword="null"/> overwrites existing files, reports no byte progress and applies the default output budget.
     /// <para>解包选项；为 <see langword="null"/> 时覆盖已存在文件、不报告字节进度并使用默认输出预算。</para></param>
     /// <param name="cancellationToken">Token checked throughout parsing and extraction.
     /// <para>在解析与解包全程检查的令牌。</para></param>
-    /// <returns>An <c>Ok</c> result listing the extracted file paths and reporting how many entries could not be
-    /// read because the volume is truncated, or a <c>Fail</c> result when the image or extraction fails.
-    /// <para>返回列出已解出文件路径的 <c>Ok</c> 结果并说明有多少条目因卷被截断而无法读取；镜像或解包失败时返回
-    /// <c>Fail</c> 结果。</para></returns>
+    /// <returns>An <c>Ok</c> result listing the extracted file paths and reporting how many entries could not be read because the volume is truncated, or a <c>Fail</c> result when the image or extraction fails.
+    /// <para>返回列出已解出文件路径的 <c>Ok</c> 结果并说明有多少条目因卷被截断而无法读取；镜像或解包失败时返回 <c>Fail</c> 结果。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory,

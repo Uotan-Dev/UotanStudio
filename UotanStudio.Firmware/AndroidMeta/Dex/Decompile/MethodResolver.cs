@@ -105,20 +105,14 @@ internal sealed class MethodResolver
         BuildIndex();
     }
 
-    /// <summary>
-    /// Resolves a method call: exact signature match first, then the most specific overload by inferred argument types.
-    /// <para>解析一次方法调用：优先精确签名匹配，其次按推断实参类型选择最特定重载。</para>
-    /// </summary>
+    /// <summary>Resolves a method call: exact signature match first, then the most specific overload by inferred argument types.
+    /// <para>解析一次方法调用：优先精确签名匹配，其次按推断实参类型选择最特定重载。</para></summary>
     /// <param name="target">Method reference operand taken from the call instruction.
     /// <para>来自调用指令的方法引用操作数。</para></param>
-    /// <param name="inferredArgTypes">Readable type hint per argument; entries may be <see langword="null"/>, and a
-    /// <see langword="null"/> array scores every argument as unknown.
+    /// <param name="inferredArgTypes">Readable type hint per argument; entries may be <see langword="null"/>, and a <see langword="null"/> array scores every argument as unknown.
     /// <para>逐实参的可读类型提示；对应项可为 <see langword="null"/>，整个数组为 <see langword="null"/> 时所有实参按未知处理。</para></param>
-    /// <returns>A rewritten-call verdict when the most specific overload differs from the call-site signature;
-    /// <see langword="null"/> for constructors and class initializers, when no candidate is found, when a non-bridge,
-    /// non-synthetic candidate already matches the call-site signature exactly, or when no argument needs a cast.
-    /// <para>当最特定重载与调用点签名存在差异时返回改写结论；构造器与类初始化器、无候选、已有非 bridge 且非
-    /// synthetic 的精确匹配、或无需任何实参转型时返回 <see langword="null"/>。</para></returns>
+    /// <returns>A rewritten-call verdict when the most specific overload differs from the call-site signature; <see langword="null"/> for constructors and class initializers, when no candidate is found, when a non-bridge, non-synthetic candidate already matches the call-site signature exactly, or when no argument needs a cast.
+    /// <para>当最特定重载与调用点签名存在差异时返回改写结论；构造器与类初始化器、无候选、已有非 bridge 且非 synthetic 的精确匹配、或无需任何实参转型时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="target"/> is null.
     /// <para><paramref name="target"/> 为 null。</para></exception>
     public ResolvedCall? Resolve(MethodRefOperand target, string?[]? inferredArgTypes)

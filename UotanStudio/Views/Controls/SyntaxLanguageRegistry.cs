@@ -41,19 +41,11 @@ public static class SyntaxLanguageRegistry
     /// </summary>
     public static IReadOnlyList<(string Id, string DisplayName)> GetAllLanguages() => s_allLanguages;
 
-    /// <summary>
-    /// Returns the TextMate syntax language id by file extension (case-insensitive); returns <c>null</c>
-    /// for unsupported extensions so no syntax highlighting is installed.
-    /// <para>按扩展名（不区分大小写）返回 TextMate 语法语言标识；不支持的扩展名返回 <c>null</c>，不安装语法高亮。</para>
-    /// </summary>
-    /// <param name="fileNameOrPath">
-    /// A file name or a full path.
-    /// <para>文件名或完整路径。</para>
-    /// </param>
-    /// <returns>
-    /// The TextMate syntax language id (e.g. <c>ini</c>, <c>xml</c>); <c>null</c> for unknown extensions.
-    /// <para>TextMate 语法语言标识（如 <c>ini</c>、<c>xml</c>）；未知扩展名为 <c>null</c>。</para>
-    /// </returns>
+    /// <summary>Returns the TextMate syntax language id by file extension (case-insensitive); returns <c>null</c> for unsupported extensions so no syntax highlighting is installed.
+    /// <para>按扩展名（不区分大小写）返回 TextMate 语法语言标识；不支持的扩展名返回 <c>null</c>，不安装语法高亮。</para></summary>
+    /// <param name="fileNameOrPath">A file name or a full path.<para>文件名或完整路径。</para></param>
+    /// <returns>The TextMate syntax language id (e.g. <c>ini</c>, <c>xml</c>); <c>null</c> for unknown extensions.
+    /// <para>TextMate 语法语言标识（如 <c>ini</c>、<c>xml</c>）；未知扩展名为 <c>null</c>。</para></returns>
     public static string? GetLanguageId(string fileNameOrPath)
     {
         if (string.IsNullOrWhiteSpace(fileNameOrPath))

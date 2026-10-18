@@ -125,17 +125,13 @@ internal class VendorBootPacker
         return packer;
     }
 
-    /// <summary>
-    /// Packs the vendor boot image to a file (writes the file stream directly to avoid keeping the full image in memory).
-    /// <para>打包 Vendor Boot 镜像到文件（直接写文件流，避免内存中保留完整镜像）。</para>
-    /// </summary>
-    /// <param name="outputPath">Destination path; the image is first written to a temporary file and the target is
-    /// replaced only after the write completes, so a mid-write failure leaves the previous target untouched.
+    /// <summary>Packs the vendor boot image to a file (writes the file stream directly to avoid keeping the full image in memory).
+    /// <para>打包 Vendor Boot 镜像到文件（直接写文件流，避免内存中保留完整镜像）。</para></summary>
+    /// <param name="outputPath">Destination path; the image is first written to a temporary file and the target is replaced only after the write completes, so a mid-write failure leaves the previous target untouched.
     /// <para>目标路径；先写入临时文件，写入完成后才替换目标文件，中途失败不会影响已有目标文件。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="outputPath"/> is <see langword="null"/>.
     /// <para><paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="outputPath"/> is empty, or a check in
-    /// <see cref="PackToStream(Stream)"/> fails.
+    /// <exception cref="ArgumentException"><paramref name="outputPath"/> is empty, or a check in <see cref="PackToStream(Stream)"/> fails.
     /// <para><paramref name="outputPath"/> 为空字符串，或 <see cref="PackToStream(Stream)"/> 中的校验失败。</para></exception>
     /// <exception cref="InvalidDataException">The target or one of its parent directories is a symbolic link or reparse point.
     /// <para>目标或其任一上级目录为符号链接或重解析点。</para></exception>
@@ -145,12 +141,9 @@ internal class VendorBootPacker
         FileExtraction.WriteAtomic(outputPath, PackToStream);
     }
 
-    /// <summary>
-    /// Asynchronously packs the vendor boot image to a file, honoring cancellation during the write.
-    /// <para>异步打包 Vendor Boot 镜像到文件，写入期间响应取消。</para>
-    /// </summary>
-    /// <param name="outputPath">Destination path; the image is first written to a temporary file and the target is
-    /// replaced only after the write completes.
+    /// <summary>Asynchronously packs the vendor boot image to a file, honoring cancellation during the write.
+    /// <para>异步打包 Vendor Boot 镜像到文件，写入期间响应取消。</para></summary>
+    /// <param name="outputPath">Destination path; the image is first written to a temporary file and the target is replaced only after the write completes.
     /// <para>目标路径；先写入临时文件，写入完成后才替换目标文件。</para></param>
     /// <param name="cancellationToken">Token checked before the publish and during the asynchronous write.
     /// <para>在发布前与异步写入期间检查的取消令牌。</para></param>
@@ -158,13 +151,11 @@ internal class VendorBootPacker
     /// <para>在镜像成功发布到 <paramref name="outputPath"/> 后完成的任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="outputPath"/> is <see langword="null"/>.
     /// <para><paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="outputPath"/> is empty, or a check in
-    /// <see cref="PackToStream(Stream)"/> fails.
+    /// <exception cref="ArgumentException"><paramref name="outputPath"/> is empty, or a check in <see cref="PackToStream(Stream)"/> fails.
     /// <para><paramref name="outputPath"/> 为空字符串，或 <see cref="PackToStream(Stream)"/> 中的校验失败。</para></exception>
     /// <exception cref="InvalidDataException">The target or one of its parent directories is a symbolic link or reparse point.
     /// <para>目标或其任一上级目录为符号链接或重解析点。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled; the existing
-    /// target file, if any, is left untouched.
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled; the existing target file, if any, is left untouched.
     /// <para><paramref name="cancellationToken"/> 已被触发；已有目标文件（如存在）保持不变。</para></exception>
     public Task PackToFileAsync(string outputPath, CancellationToken cancellationToken = default)
     {
@@ -173,23 +164,16 @@ internal class VendorBootPacker
             cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Writes the vendor boot image to the given stream.
-    /// <para>将 Vendor Boot 镜像写入指定流。</para>
-    /// </summary>
-    /// <param name="output">Writable stream positioned where the image starts; it stays open and ends at the tail of
-    /// the written image.
+    /// <summary>Writes the vendor boot image to the given stream.
+    /// <para>将 Vendor Boot 镜像写入指定流。</para></summary>
+    /// <param name="output">Writable stream positioned where the image starts; it stays open and ends at the tail of the written image.
     /// <para>定位在镜像起始处的可写流；写入后保持打开，位置停在已写镜像末尾。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="output"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="NotSupportedException"><see cref="VendorBootHeader.HeaderVersion"/> is neither 3 nor 4.
     /// <para><see cref="VendorBootHeader.HeaderVersion"/> 既不是 3 也不是 4。</para></exception>
-    /// <exception cref="ArgumentException">The page size is not a non-zero power of two, a version 4 page size is
-    /// neither 4096 nor 16384, a version 3 image has an empty DTB, a new bootconfig payload exceeds the 4096-byte
-    /// convention, a ramdisk table entry exceeds the vendor ramdisk region or has a malformed board id, or a V4
-    /// component offset exceeds the supported range.
-    /// <para>页大小不是非零的 2 的幂、版本 4 页大小既非 4096 也非 16384、版本 3 镜像 DTB 为空、新 bootconfig 载荷超过
-    /// 4096 字节约定、ramdisk 表条目超出 vendor ramdisk 区域或 board id 长度不符，或 V4 组件偏移超出支持范围。</para></exception>
+    /// <exception cref="ArgumentException">The page size is not a non-zero power of two, a version 4 page size is neither 4096 nor 16384, a version 3 image has an empty DTB, a new bootconfig payload exceeds the 4096-byte convention, a ramdisk table entry exceeds the vendor ramdisk region or has a malformed board id, or a V4 component offset exceeds the supported range.
+    /// <para>页大小不是非零的 2 的幂、版本 4 页大小既非 4096 也非 16384、版本 3 镜像 DTB 为空、新 bootconfig 载荷超过 4096 字节约定、ramdisk 表条目超出 vendor ramdisk 区域或 board id 长度不符，或 V4 组件偏移超出支持范围。</para></exception>
     public void PackToStream(Stream output)
     {
         ArgumentNullException.ThrowIfNull(output);
@@ -223,16 +207,11 @@ internal class VendorBootPacker
         }
     }
 
-    /// <summary>
-    /// Asynchronously writes the vendor boot image to the given stream, checking cancellation before each section and
-    /// during padding and component transfers.
-    /// <para>异步将 Vendor Boot 镜像写入指定流，在每个区段开始前以及填充与组件传输期间响应取消。</para>
-    /// </summary>
-    /// <param name="output">Writable stream positioned where the image starts; it stays open and ends at the tail of
-    /// the written image.
+    /// <summary>Asynchronously writes the vendor boot image to the given stream, checking cancellation before each section and during padding and component transfers.
+    /// <para>异步将 Vendor Boot 镜像写入指定流，在每个区段开始前以及填充与组件传输期间响应取消。</para></summary>
+    /// <param name="output">Writable stream positioned where the image starts; it stays open and ends at the tail of the written image.
     /// <para>定位在镜像起始处的可写流；写入后保持打开，位置停在已写镜像末尾。</para></param>
-    /// <param name="cancellationToken">Token forwarded to the asynchronous writes; components backed by component
-    /// files are copied through bounded synchronous transfers, so the token is only checked around those sections.
+    /// <param name="cancellationToken">Token forwarded to the asynchronous writes; components backed by component files are copied through bounded synchronous transfers, so the token is only checked around those sections.
     /// <para>传递给异步写入的取消令牌；由组件文件后备来源提供的组件以有界同步方式复制，令牌仅在这些区段前后检查。</para></param>
     /// <returns>A task that completes once the full image has been written.
     /// <para>在完整镜像写入完成后结束的任务。</para></returns>
@@ -240,14 +219,9 @@ internal class VendorBootPacker
     /// <para><paramref name="output"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="NotSupportedException"><see cref="VendorBootHeader.HeaderVersion"/> is neither 3 nor 4.
     /// <para><see cref="VendorBootHeader.HeaderVersion"/> 既不是 3 也不是 4。</para></exception>
-    /// <exception cref="ArgumentException">The page size is not a non-zero power of two, a version 4 page size is
-    /// neither 4096 nor 16384, a version 3 image has an empty DTB, a new bootconfig payload exceeds the 4096-byte
-    /// convention, a ramdisk table entry exceeds the vendor ramdisk region or has a malformed board id, or a V4
-    /// component offset exceeds the supported range.
-    /// <para>页大小不是非零的 2 的幂、版本 4 页大小既非 4096 也非 16384、版本 3 镜像 DTB 为空、新 bootconfig 载荷超过
-    /// 4096 字节约定、ramdisk 表条目超出 vendor ramdisk 区域或 board id 长度不符，或 V4 组件偏移超出支持范围。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled; bytes already
-    /// written stay written.
+    /// <exception cref="ArgumentException">The page size is not a non-zero power of two, a version 4 page size is neither 4096 nor 16384, a version 3 image has an empty DTB, a new bootconfig payload exceeds the 4096-byte convention, a ramdisk table entry exceeds the vendor ramdisk region or has a malformed board id, or a V4 component offset exceeds the supported range.
+    /// <para>页大小不是非零的 2 的幂、版本 4 页大小既非 4096 也非 16384、版本 3 镜像 DTB 为空、新 bootconfig 载荷超过 4096 字节约定、ramdisk 表条目超出 vendor ramdisk 区域或 board id 长度不符，或 V4 组件偏移超出支持范围。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled; bytes already written stay written.
     /// <para><paramref name="cancellationToken"/> 已被触发；已写入的字节仍保留。</para></exception>
     public async Task PackToStreamAsync(Stream output, CancellationToken cancellationToken = default)
     {

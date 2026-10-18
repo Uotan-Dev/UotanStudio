@@ -132,15 +132,10 @@ public sealed class FdtHeader
     /// <para>当 <see cref="Magic"/> 等于 <see cref="FdtConstants.FdtMagic"/> 时为 <see langword="true"/>。</para></value>
     public bool IsValidMagic => Magic == FdtConstants.FdtMagic;
 
-    /// <summary>
-    /// Reads an FDT header from a byte span (big-endian).
-    /// <para>从字节跨度读取 FDT 头部(大端)。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Span holding at least the first 28 header bytes; trailing fields are only consumed when the version
-    /// and remaining length allow it.
-    /// <para>至少包含头部前 28 字节的跨度；尾部字段仅在版本与剩余长度允许时被读取。</para>
-    /// </param>
+    /// <summary>Reads an FDT header from a byte span (big-endian).
+    /// <para>从字节跨度读取 FDT 头部(大端)。</para></summary>
+    /// <param name="data">Span holding at least the first 28 header bytes; trailing fields are only consumed when the version and remaining length allow it.
+    /// <para>至少包含头部前 28 字节的跨度；尾部字段仅在版本与剩余长度允许时被读取。</para></param>
     /// <returns>The parsed header. Magic is not checked; callers verify it via <see cref="IsValidMagic"/>.
     /// <para>解析后的头部；不校验魔数，调用方通过 <see cref="IsValidMagic"/> 验证。</para></returns>
     /// <exception cref="InvalidDataException">The span holds fewer than 28 bytes.

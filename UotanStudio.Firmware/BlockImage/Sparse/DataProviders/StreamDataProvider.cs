@@ -42,20 +42,12 @@ internal class StreamDataProvider(Stream stream, long offset, long length, bool 
     /// </value>
     public long Length { get; } = length;
 
-    /// <summary>
-    /// Synchronously writes the provider's data to the specified output stream.
-    /// <para>同步将提供程序的数据写入指定输出流。</para>
-    /// </summary>
-    /// <param name="outStream">
-    /// Writable destination stream receiving the window in blocks of up to 1 MiB; it is not flushed
-    /// or closed.
-    /// <para>可写目标流，以不超过 1 MiB 的块接收窗口内容；不会刷新也不会关闭。</para>
-    /// </param>
-    /// <remarks>
-    /// The source is seeked to the window start when it can seek, and the copy stops early when the
-    /// source returns <c>0</c>.
-    /// <para>源支持寻址时会定位到窗口起点；源返回 <c>0</c> 时复制提前结束。</para>
-    /// </remarks>
+    /// <summary>Synchronously writes the provider's data to the specified output stream.
+    /// <para>同步将提供程序的数据写入指定输出流。</para></summary>
+    /// <param name="outStream">Writable destination stream receiving the window in blocks of up to 1 MiB; it is not flushed or closed.
+    /// <para>可写目标流，以不超过 1 MiB 的块接收窗口内容；不会刷新也不会关闭。</para></param>
+    /// <remarks>The source is seeked to the window start when it can seek, and the copy stops early when the source returns <c>0</c>.
+    /// <para>源支持寻址时会定位到窗口起点；源返回 <c>0</c> 时复制提前结束。</para></remarks>
     public void WriteTo(Stream outStream)
     {
         if (_stream.CanSeek)
@@ -85,26 +77,16 @@ internal class StreamDataProvider(Stream stream, long offset, long length, bool 
         }
     }
 
-    /// <summary>
-    /// Asynchronously writes the provider's data to the specified output stream.
-    /// <para>异步将提供程序的数据写入指定输出流。</para>
-    /// </summary>
-    /// <param name="outStream">
-    /// Writable destination stream receiving up to <see cref="Length"/> bytes.
-    /// <para>可写目标流，接收最多 <see cref="Length"/> 字节。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Passed to every source read and destination write; partial output stays where it was written.
-    /// <para>传递给每次源读取与目标写入；已写出的部分不会回滚。</para>
-    /// </param>
-    /// <returns>
-    /// Task that completes once the window has been copied or the source reported its end.
-    /// <para>在窗口复制完成或源报告结束时结束的 Task。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was cancelled during the copy.
-    /// <para><paramref name="cancellationToken"/> 在复制过程中被取消。</para>
-    /// </exception>
+    /// <summary>Asynchronously writes the provider's data to the specified output stream.
+    /// <para>异步将提供程序的数据写入指定输出流。</para></summary>
+    /// <param name="outStream">Writable destination stream receiving up to <see cref="Length"/> bytes.
+    /// <para>可写目标流，接收最多 <see cref="Length"/> 字节。</para></param>
+    /// <param name="cancellationToken">Passed to every source read and destination write; partial output stays where it was written.
+    /// <para>传递给每次源读取与目标写入；已写出的部分不会回滚。</para></param>
+    /// <returns>Task that completes once the window has been copied or the source reported its end.
+    /// <para>在窗口复制完成或源报告结束时结束的 Task。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled during the copy.
+    /// <para><paramref name="cancellationToken"/> 在复制过程中被取消。</para></exception>
     public async Task WriteToAsync(Stream outStream, CancellationToken cancellationToken = default)
     {
         if (_stream.CanSeek)
@@ -134,55 +116,27 @@ internal class StreamDataProvider(Stream stream, long offset, long length, bool 
         }
     }
 
-    /// <summary>
-    /// Reads bytes from this provider into a byte array buffer.
-    /// <para>从此提供程序读取字节到字节数组缓冲区。</para>
-    /// </summary>
-    /// <param name="inOffset">
-    /// Offset inside the window; honoured only when the source stream supports seeking.
-    /// <para>窗口内的偏移；仅在源流支持寻址时生效。</para>
-    /// </param>
-    /// <param name="buffer">
-    /// Destination array receiving the bytes.
-    /// <para>接收字节的目标数组。</para>
-    /// </param>
-    /// <param name="bufferOffset">
-    /// Index in <paramref name="buffer"/> where writing starts.
-    /// <para>开始写入的 <paramref name="buffer"/> 索引。</para>
-    /// </param>
-    /// <param name="count">
-    /// Maximum number of bytes requested.
-    /// <para>请求的最大字节数。</para>
-    /// </param>
-    /// <returns>
-    /// Bytes read, truncated at the window end.
-    /// <para>实际读取的字节数，到达窗口末尾时会被截断。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="bufferOffset"/> or <paramref name="count"/> falls outside <paramref name="buffer"/>.
-    /// <para><paramref name="bufferOffset"/> 或 <paramref name="count"/> 超出 <paramref name="buffer"/> 范围。</para>
-    /// </exception>
+    /// <summary>Reads bytes from this provider into a byte array buffer.
+    /// <para>从此提供程序读取字节到字节数组缓冲区。</para></summary>
+    /// <param name="inOffset">Offset inside the window; honoured only when the source stream supports seeking.
+    /// <para>窗口内的偏移；仅在源流支持寻址时生效。</para></param>
+    /// <param name="buffer">Destination array receiving the bytes.<para>接收字节的目标数组。</para></param>
+    /// <param name="bufferOffset">Index in <paramref name="buffer"/> where writing starts.
+    /// <para>开始写入的 <paramref name="buffer"/> 索引。</para></param>
+    /// <param name="count">Maximum number of bytes requested.<para>请求的最大字节数。</para></param>
+    /// <returns>Bytes read, truncated at the window end.<para>实际读取的字节数，到达窗口末尾时会被截断。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="bufferOffset"/> or <paramref name="count"/> falls outside <paramref name="buffer"/>.
+    /// <para><paramref name="bufferOffset"/> 或 <paramref name="count"/> 超出 <paramref name="buffer"/> 范围。</para></exception>
     public int Read(long inOffset, byte[] buffer, int bufferOffset, int count) => Read(inOffset, buffer.AsSpan(bufferOffset, count));
 
-    /// <summary>
-    /// Reads bytes from this provider into a Span{Byte}.
-    /// <para>从此提供程序读取字节到 Span{Byte}。</para>
-    /// </summary>
-    /// <param name="inOffset">
-    /// Offset inside the window; a value at or beyond <see cref="Length"/> reads nothing. On a
-    /// non-seekable source this argument is ignored and reading continues from the current position.
-    /// <para>窗口内的偏移；等于或超过 <see cref="Length"/> 时不读取。若源不可寻址，该参数会被忽略，
-    /// 从流当前位置继续读取。</para>
-    /// </param>
-    /// <param name="buffer">
-    /// Destination span whose length is the maximum wanted.
-    /// <para>长度即所需最大字节数的目标 Span。</para>
-    /// </param>
-    /// <returns>
-    /// Bytes returned by the source stream, or <c>0</c> at or past the window end and at the end of
-    /// the underlying stream.
-    /// <para>源流返回的字节数；位于或越过窗口末尾以及底层流末尾时为 <c>0</c>。</para>
-    /// </returns>
+    /// <summary>Reads bytes from this provider into a Span{Byte}.
+    /// <para>从此提供程序读取字节到 Span{Byte}。</para></summary>
+    /// <param name="inOffset">Offset inside the window; a value at or beyond <see cref="Length"/> reads nothing. On a non-seekable source this argument is ignored and reading continues from the current position.
+    /// <para>窗口内的偏移；等于或超过 <see cref="Length"/> 时不读取。若源不可寻址，该参数会被忽略， 从流当前位置继续读取。</para></param>
+    /// <param name="buffer">Destination span whose length is the maximum wanted.
+    /// <para>长度即所需最大字节数的目标 Span。</para></param>
+    /// <returns>Bytes returned by the source stream, or <c>0</c> at or past the window end and at the end of the underlying stream.
+    /// <para>源流返回的字节数；位于或越过窗口末尾以及底层流末尾时为 <c>0</c>。</para></returns>
     public int Read(long inOffset, Span<byte> buffer)
     {
         if (inOffset >= Length)
@@ -198,23 +152,13 @@ internal class StreamDataProvider(Stream stream, long offset, long length, bool 
         return _stream.Read(buffer[..toRead]);
     }
 
-    /// <summary>
-    /// Creates a sub-provider that represents a sub-range of this provider.
-    /// <para>创建表示此提供程序子范围的子提供程序。</para>
-    /// </summary>
-    /// <param name="subOffset">
-    /// Offset inside this window where the child window starts.
-    /// <para>子窗口在本窗口内的起始偏移。</para>
-    /// </param>
-    /// <param name="subLength">
-    /// Byte length of the child window.
-    /// <para>子窗口的字节长度。</para>
-    /// </param>
-    /// <returns>
-    /// Provider sharing the same underlying stream configured to leave that stream open, so disposing
-    /// the child never closes the source.
-    /// <para>共享同一底层流的提供程序，并配置为保持该流打开，因此释放子提供程序不会关闭源流。</para>
-    /// </returns>
+    /// <summary>Creates a sub-provider that represents a sub-range of this provider.
+    /// <para>创建表示此提供程序子范围的子提供程序。</para></summary>
+    /// <param name="subOffset">Offset inside this window where the child window starts.
+    /// <para>子窗口在本窗口内的起始偏移。</para></param>
+    /// <param name="subLength">Byte length of the child window.<para>子窗口的字节长度。</para></param>
+    /// <returns>Provider sharing the same underlying stream configured to leave that stream open, so disposing the child never closes the source.
+    /// <para>共享同一底层流的提供程序，并配置为保持该流打开，因此释放子提供程序不会关闭源流。</para></returns>
     public ISparseDataProvider GetSubProvider(long subOffset, long subLength) => new StreamDataProvider(_stream, _offset + subOffset, subLength, true);
 
     /// <summary>

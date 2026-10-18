@@ -21,25 +21,17 @@ public static class AXmlParser
 
     private const uint NoIndex = 0xFFFFFFFF;
 
-    /// <summary>
-    /// Parses AXML bytes into a document model.
-    /// <para>解析 AXML 字节为文档模型。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Full contents of an AXML file; every chunk is bounds-checked against it before reading.
-    /// <para>AXML 文件的完整内容；读取前每个数据块都按其做边界校验。</para>
-    /// </param>
-    /// <returns>
-    /// The parsed document with root element, string pool, resource map and namespaces populated.
-    /// <para>解析后的文档，已填充根元素、字符串池、资源映射与命名空间。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>. <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="AXmlException">
-    /// The header is missing, the root chunk type is not <c>0x0003</c>, a chunk is out of bounds, or elements are unbalanced.
-    /// <para>头部缺失、根块类型不是 <c>0x0003</c>、数据块越界或元素未配平。</para>
-    /// </exception>
-    /// <exception cref="OverflowException">
-    /// A declared file or chunk size exceeds <see cref="System.Int32.MaxValue"/>. <para>声明的文件或数据块大小超过 <see cref="System.Int32.MaxValue"/>。</para></exception>
+    /// <summary>Parses AXML bytes into a document model.<para>解析 AXML 字节为文档模型。</para></summary>
+    /// <param name="data">Full contents of an AXML file; every chunk is bounds-checked against it before reading.
+    /// <para>AXML 文件的完整内容；读取前每个数据块都按其做边界校验。</para></param>
+    /// <returns>The parsed document with root element, string pool, resource map and namespaces populated.
+    /// <para>解析后的文档，已填充根元素、字符串池、资源映射与命名空间。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="AXmlException">The header is missing, the root chunk type is not <c>0x0003</c>, a chunk is out of bounds, or elements are unbalanced.
+    /// <para>头部缺失、根块类型不是 <c>0x0003</c>、数据块越界或元素未配平。</para></exception>
+    /// <exception cref="OverflowException">A declared file or chunk size exceeds <see cref="System.Int32.MaxValue"/>.
+    /// <para>声明的文件或数据块大小超过 <see cref="System.Int32.MaxValue"/>。</para></exception>
     /// <example>
     /// <code language="csharp">
     /// var doc = AXmlParser.Parse(data);

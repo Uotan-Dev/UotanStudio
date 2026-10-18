@@ -5,20 +5,12 @@ namespace UotanStudio.Firmware.VendorFirmware.NTPi.Writer;
 
 internal static class NtpiXmlGenerator
 {
-    /// <summary>
-    /// Generates FileIndex XML data from the file entry list.
-    /// <para>从文件条目列表生成 FileIndex XML 数据。</para>
-    /// </summary>
-    /// <param name="entries">
-    /// Entries written in iteration order, one <c>file</c> element each with the name, both lengths, the SHA-256 hex, the
-    /// key index and the offset as attributes; an empty sequence produces a document with no <c>file</c> elements.
-    /// <para>按迭代顺序写入的条目，每个生成一个 <c>file</c> 元素，其名称、两个长度、SHA-256 十六进制、密钥索引与偏移作为属性；空序列得到不含 <c>file</c> 元素的文档。</para>
-    /// </param>
-    /// <returns>
-    /// UTF-8 bytes of a <c>root</c> element without an XML declaration or indentation; numeric attributes use the
-    /// current culture's number formatting.
-    /// <para>不含 XML 声明与缩进的 <c>root</c> 元素的 UTF-8 字节；数值属性按当前区域的数字格式写入。</para>
-    /// </returns>
+    /// <summary>Generates FileIndex XML data from the file entry list.
+    /// <para>从文件条目列表生成 FileIndex XML 数据。</para></summary>
+    /// <param name="entries">Entries written in iteration order, one <c>file</c> element each with the name, both lengths, the SHA-256 hex, the key index and the offset as attributes; an empty sequence produces a document with no <c>file</c> elements.
+    /// <para>按迭代顺序写入的条目，每个生成一个 <c>file</c> 元素，其名称、两个长度、SHA-256 十六进制、密钥索引与偏移作为属性；空序列得到不含 <c>file</c> 元素的文档。</para></param>
+    /// <returns>UTF-8 bytes of a <c>root</c> element without an XML declaration or indentation; numeric attributes use the current culture's number formatting.
+    /// <para>不含 XML 声明与缩进的 <c>root</c> 元素的 UTF-8 字节；数值属性按当前区域的数字格式写入。</para></returns>
     public static byte[] GenerateFileIndexXml(IEnumerable<FileEntry> entries)
     {
         using var stream = new MemoryStream(4096);

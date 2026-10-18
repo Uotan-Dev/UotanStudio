@@ -12,23 +12,15 @@ namespace UotanStudio.Compress.Compressors;
 /// </summary>
 public static class DeflateCompressor
 {
-    /// <summary>
-    /// DEFLATE compression.
-    /// <para>DEFLATE 压缩。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext compressed in one pass.
-    /// <para>一次性压缩的明文字节。</para></param>
-    /// <param name="options">
-    /// <see cref="CompressionOptions.Level"/> selects the BCL level band (0 and below no compression, 1-3 fastest, 4-8 optimal, 9 and above smallest size, unset optimal); <see cref="CompressionOptions.MaxDegreeOfParallelism"/> above 1 encodes independent 1 MiB chunks in parallel and concatenates them as separate members.
+    /// <summary>DEFLATE compression.<para>DEFLATE 压缩。</para></summary>
+    /// <param name="data">Plaintext compressed in one pass.<para>一次性压缩的明文字节。</para></param>
+    /// <param name="options"><see cref="CompressionOptions.Level"/> selects the BCL level band (0 and below no compression, 1-3 fastest, 4-8 optimal, 9 and above smallest size, unset optimal); <see cref="CompressionOptions.MaxDegreeOfParallelism"/> above 1 encodes independent 1 MiB chunks in parallel and concatenates them as separate members.
     /// <para><see cref="CompressionOptions.Level"/> 决定 BCL 等级档位（0 及以下不压缩、1-3 最快、4-8 最优、9 及以上最小，未设置按最优）；<see cref="CompressionOptions.MaxDegreeOfParallelism"/> 大于 1 时并行压缩相互独立的 1 MiB 块，并作为多个成员串接。</para></param>
-    /// <returns>
-    /// A raw deflate stream, or several concatenated streams when the parallel chunk path was taken.
+    /// <returns>A raw deflate stream, or several concatenated streams when the parallel chunk path was taken.
     /// <para>原始 deflate 流；走并行分块路径时为多个串接的流。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="CompressionException">The encoder failed.
-    /// <para>编码器执行失败。</para></exception>
+    /// <exception cref="CompressionException">The encoder failed.<para>编码器执行失败。</para></exception>
     public static byte[] Compress(byte[] data, CompressionOptions? options = null)
     {
         if (data == null)
@@ -71,15 +63,10 @@ public static class DeflateCompressor
         }
     }
 
-    /// <summary>
-    /// DEFLATE decompression.
-    /// <para>DEFLATE 解压。</para>
-    /// </summary>
-    /// <param name="data">
-    /// One or more concatenated raw deflate members; the whole expansion is buffered in memory with no output cap.
+    /// <summary>DEFLATE decompression.<para>DEFLATE 解压。</para></summary>
+    /// <param name="data">One or more concatenated raw deflate members; the whole expansion is buffered in memory with no output cap.
     /// <para>一个或多个串接的原始 deflate 成员；解压结果整体驻留内存且没有上限。</para></param>
-    /// <returns>
-    /// The decoded bytes of every member, in member order.
+    /// <returns>The decoded bytes of every member, in member order.
     /// <para>按成员顺序拼接的全部解码字节。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
@@ -125,18 +112,12 @@ public static class DeflateCompressor
         }
     }
 
-    /// <summary>
-    /// Streaming DEFLATE compression.
-    /// <para>流式 DEFLATE 压缩。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable source copied into the encoder in fixed buffers until end of stream; ownership stays with the caller.
+    /// <summary>Streaming DEFLATE compression.<para>流式 DEFLATE 压缩。</para></summary>
+    /// <param name="input">Readable source copied into the encoder in fixed buffers until end of stream; ownership stays with the caller.
     /// <para>按固定缓冲逐块拷入编码器的可读源流，直至流末尾；所有权归调用方。</para></param>
-    /// <param name="output">
-    /// Writable destination left open after the terminating deflate block is flushed; the encoded bytes start at its current position.
+    /// <param name="output">Writable destination left open after the terminating deflate block is flushed; the encoded bytes start at its current position.
     /// <para>写出结束 deflate 块并刷新后保持打开的写入目标；编码数据从其当前位置开始写出。</para></param>
-    /// <param name="options">
-    /// Only <see cref="CompressionOptions.Level"/> is read; a single stream is produced, so <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is ignored.
+    /// <param name="options">Only <see cref="CompressionOptions.Level"/> is read; a single stream is produced, so <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is ignored.
     /// <para>仅读取 <see cref="CompressionOptions.Level"/>；流式路径只生成单个流，因此忽略 <see cref="CompressionOptions.MaxDegreeOfParallelism"/>。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -181,15 +162,10 @@ public static class DeflateCompressor
     internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
         => new DeflateStream(new NonDisposingStream(output), CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true);
 
-    /// <summary>
-    /// Streaming DEFLATE decompression.
-    /// <para>流式 DEFLATE 解压。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable deflate stream. When it supports seeking, concatenated members are decoded one after another and the position ends after the last member that fits; a non-seekable stream yields a single member and stops wherever the decoder ran out of input. The stream is left open.
+    /// <summary>Streaming DEFLATE decompression.<para>流式 DEFLATE 解压。</para></summary>
+    /// <param name="input">Readable deflate stream. When it supports seeking, concatenated members are decoded one after another and the position ends after the last member that fits; a non-seekable stream yields a single member and stops wherever the decoder ran out of input. The stream is left open.
     /// <para>可读的 deflate 流。支持定位时会依次解码串接的多个成员，位置停在最后一个完整成员之后；不支持定位时只解出单个成员，并在解码器读尽输入处停止。流保持打开。</para></param>
-    /// <param name="output">
-    /// Writable destination for the decoded bytes, written in fixed buffers with no size cap; it is not closed.
+    /// <param name="output">Writable destination for the decoded bytes, written in fixed buffers with no size cap; it is not closed.
     /// <para>解码字节的写入目标，按固定缓冲写出不设大小上限，不会被本调用关闭。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -261,18 +237,13 @@ public static class DeflateCompressor
     internal static Stream CreateDecompressionStream(Stream input)
         => new SCDeflateStream(new NonDisposingStream(input), SCCompressionMode.Decompress);
 
-    /// <summary>
-    /// Streaming DEFLATE decompression with output limit (decompression bomb protection).
-    /// <para>流式 DEFLATE 解压，带输出上限（防解压炸弹）。</para>
-    /// </summary>
-    /// <param name="source">
-    /// Readable deflate stream decoded member by member through an 80 KiB pooled buffer; seeking behaves as in the unbounded overload and the stream is left open.
+    /// <summary>Streaming DEFLATE decompression with output limit (decompression bomb protection).
+    /// <para>流式 DEFLATE 解压，带输出上限（防解压炸弹）。</para></summary>
+    /// <param name="source">Readable deflate stream decoded member by member through an 80 KiB pooled buffer; seeking behaves as in the unbounded overload and the stream is left open.
     /// <para>可读的 deflate 流，使用 80 KiB 池化缓冲逐成员解码；定位行为与无上限重载一致，流保持打开。</para></param>
-    /// <param name="destination">
-    /// Writable destination; the cumulative check runs before each write, so bytes beyond the budget never reach it.
+    /// <param name="destination">Writable destination; the cumulative check runs before each write, so bytes beyond the budget never reach it.
     /// <para>写入目标；每次写入前先检查累计字节数，超出预算的字节不会落入该流。</para></param>
-    /// <param name="maxOutputBytes">
-    /// Inclusive cap summed across all decoded members, not per member; <c>0</c> allows an empty result only.
+    /// <param name="maxOutputBytes">Inclusive cap summed across all decoded members, not per member; <c>0</c> allows an empty result only.
     /// <para>对所有已解码成员求和后的含上限，而非单个成员的上限；<c>0</c> 表示只允许空结果。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="destination"/> is <see langword="null"/>.
     /// <para><paramref name="source"/> 或 <paramref name="destination"/> 为 <see langword="null"/>。</para></exception>

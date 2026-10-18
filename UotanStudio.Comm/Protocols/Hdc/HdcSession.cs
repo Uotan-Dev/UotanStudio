@@ -32,17 +32,14 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
         _releaseLease = releaseLease;
     }
 
-    /// <summary>
-    /// Creates a non-owning view of an authenticated direct connection. The owner must outlive its leases.
-    /// <para>创建已认证直连的非拥有式视图。持有者必须比其租约存活更久。</para>
-    /// </summary>
-    /// <param name="releaseLease">
-    /// Optional callback invoked exactly once when the lease is disposed.
-    /// <para>可选回调，在租约释放时恰好调用一次。</para>
-    /// </param>
+    /// <summary>Creates a non-owning view of an authenticated direct connection. The owner must outlive its leases.
+    /// <para>创建已认证直连的非拥有式视图。持有者必须比其租约存活更久。</para></summary>
+    /// <param name="releaseLease">Optional callback invoked exactly once when the lease is disposed.
+    /// <para>可选回调，在租约释放时恰好调用一次。</para></param>
     /// <returns>A lease session sharing this session's direct connection; disposing it never closes the connection.
     /// <para>共享本会话直连的租约会话；释放它不会关闭连接。</para></returns>
-    /// <exception cref="ObjectDisposedException">This session is disposed. <para>本会话已释放。</para></exception>
+    /// <exception cref="ObjectDisposedException">This session is disposed.
+    /// <para>本会话已释放。</para></exception>
     /// <exception cref="InvalidOperationException">The session is not an authenticated direct connection.
     /// <para>会话不是已认证的直连。</para></exception>
     public HdcSession CreateLease(Action? releaseLease = null)

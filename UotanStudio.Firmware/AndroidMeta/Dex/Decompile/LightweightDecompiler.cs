@@ -68,12 +68,9 @@ public static class LightweightDecompiler
         return JavaCodegen.RenderClass(dex, cls, CachedResolver(dex), options);
     }
 
-    /// <summary>
-    /// Decompiles a single method.
-    /// <para>反编译单个方法。</para>
-    /// </summary>
-    /// <param name="dex">Parsed DEX file owning the method. <para>拥有该方法的已解析 DEX 文件。</para></param>
-    /// <param name="method">Encoded method to render. <para>待渲染的已编码方法。</para></param>
+    /// <summary>Decompiles a single method.<para>反编译单个方法。</para></summary>
+    /// <param name="dex">Parsed DEX file owning the method.<para>拥有该方法的已解析 DEX 文件。</para></param>
+    /// <param name="method">Encoded method to render.<para>待渲染的已编码方法。</para></param>
     /// <param name="cls">Declaring class, or <see langword="null"/> when unknown; supplying it enables class-scoped context such as the owner name.
     /// <para>声明类；未知时为 <see langword="null"/>，提供后可启用含属主名在内的类级上下文。</para></param>
     /// <param name="options">Emission options; <see langword="null"/> uses <c>DecompileOptions.Default</c>.

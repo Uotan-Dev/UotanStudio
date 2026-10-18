@@ -198,19 +198,17 @@ public static class RockchipResourceImage
         return ReadRockchipResourceMetadata(input);
     }
 
-    /// <summary>
-    /// Extracts RSCE entries with bounded streaming and atomic per-file publication.
-    /// <para>以有界流式方式提取 RSCE 条目，并对每个文件进行原子发布。</para>
-    /// </summary>
-    /// <param name="sourcePath">RSCE container path. <para>RSCE 容器路径。</para></param>
-    /// <param name="outputDirectory">Destination directory. <para>输出目录。</para></param>
+    /// <summary>Extracts RSCE entries with bounded streaming and atomic per-file publication.
+    /// <para>以有界流式方式提取 RSCE 条目，并对每个文件进行原子发布。</para></summary>
+    /// <param name="sourcePath">RSCE container path.<para>RSCE 容器路径。</para></param>
+    /// <param name="outputDirectory">Destination directory.<para>输出目录。</para></param>
     /// <param name="selectedEntries">Optional case-insensitive entry filter; null extracts all entries.
     /// <para>可选的不区分大小写条目过滤器；为 null 时提取全部条目。</para></param>
     /// <param name="overwrite">Whether existing destination files may be replaced.
     /// <para>是否允许替换已有目标文件。</para></param>
     /// <param name="cancellationToken">Cancellation token checked during directory reads and payload copies.
     /// <para>在读取目录和复制负载期间检查的取消令牌。</para></param>
-    /// <returns>The number of committed files. <para>已提交文件数。</para></returns>
+    /// <returns>The number of committed files.<para>已提交文件数。</para></returns>
     public static int ExtractRockchipResource(
         string sourcePath,
         string outputDirectory,
@@ -244,19 +242,14 @@ public static class RockchipResourceImage
         return count;
     }
 
-    /// <summary>
-    /// Builds a canonical unsigned RSCE container from a flat directory.
-    /// The output is canonical and unsigned; it claims no checksum and no byte fidelity with any
-    /// original OEM package.
-    /// <para>从扁平目录构建标准无签名 RSCE 容器。输出是标准且无签名的；不声明任何校验和，也不声明与任何 OEM 原包的字节保真。</para>
-    /// </summary>
-    /// <param name="inputDirectory">Directory containing resource files.
-    /// <para>包含资源文件的目录。</para></param>
+    /// <summary>Builds a canonical unsigned RSCE container from a flat directory. The output is canonical and unsigned; it claims no checksum and no byte fidelity with any original OEM package.
+    /// <para>从扁平目录构建标准无签名 RSCE 容器。输出是标准且无签名的；不声明任何校验和，也不声明与任何 OEM 原包的字节保真。</para></summary>
+    /// <param name="inputDirectory">Directory containing resource files.<para>包含资源文件的目录。</para></param>
     /// <param name="outputPath">Destination RSCE path, published atomically.
     /// <para>以原子方式发布的目标 RSCE 路径。</para></param>
     /// <param name="cancellationToken">Cancellation token checked during planning and copying.
     /// <para>在规划和复制期间检查的取消令牌。</para></param>
-    /// <returns>The number of entries written. <para>写入的条目数。</para></returns>
+    /// <returns>The number of entries written.<para>写入的条目数。</para></returns>
     public static int BuildRockchipResource(
         string inputDirectory,
         string outputPath,

@@ -183,24 +183,16 @@ public sealed class VersionKeyProvider : IKeyProvider
 {
     private readonly Dictionary<int, NtpiVersionKey> _versionKeys;
 
-    /// <summary>
-    /// Initializes a new instance of VersionKeyProvider with the specified version numbers.
-    /// <para>使用指定的版本号初始化 VersionKeyProvider 的新实例。</para>
-    /// </summary>
-    /// <param name="major">
-    /// Major version component read from the package header. <para>从包头部读取的主版本号。</para>
-    /// </param>
-    /// <param name="minor">
-    /// Minor version component read from the package header. <para>从包头部读取的次版本号。</para>
-    /// </param>
-    /// <param name="patch">
-    /// Patch version component; a patch mismatch alone still resolves to the key set registered for the same major and
-    /// minor pair. <para>修订版本号；仅修订号不同时仍会落到同一主次号登记的密钥集。</para>
-    /// </param>
-    /// <exception cref="UnsupportedVersionException">
-    /// No key set is registered for the given version triple or for its major and minor pair.
-    /// <para>该版本三元组及其主次号组合均未登记密钥集。</para>
-    /// </exception>
+    /// <summary>Initializes a new instance of VersionKeyProvider with the specified version numbers.
+    /// <para>使用指定的版本号初始化 VersionKeyProvider 的新实例。</para></summary>
+    /// <param name="major">Major version component read from the package header.
+    /// <para>从包头部读取的主版本号。</para></param>
+    /// <param name="minor">Minor version component read from the package header.
+    /// <para>从包头部读取的次版本号。</para></param>
+    /// <param name="patch">Patch version component; a patch mismatch alone still resolves to the key set registered for the same major and minor pair.
+    /// <para>修订版本号；仅修订号不同时仍会落到同一主次号登记的密钥集。</para></param>
+    /// <exception cref="UnsupportedVersionException">No key set is registered for the given version triple or for its major and minor pair.
+    /// <para>该版本三元组及其主次号组合均未登记密钥集。</para></exception>
     public VersionKeyProvider(ulong major, ulong minor, ulong patch)
     {
         var keys = NtpiVersionRegistry.GetKeysForVersion(major, minor, patch)
@@ -208,19 +200,11 @@ public sealed class VersionKeyProvider : IKeyProvider
         _versionKeys = keys;
     }
 
-    /// <summary>
-    /// Returns the encryption key.
-    /// <para>返回加密密钥。</para>
-    /// </summary>
-    /// <param name="regionType">
-    /// Region kind whose key material is requested; its numeric value is the key index within the version's dictionary.
-    /// <para>需要取其密钥材料的区域种类；其数值即该版本字典中的密钥索引。</para>
-    /// </param>
-    /// <returns>
-    /// Fresh copies of the region's key and IV, or <see langword="null"/> when this version registers no key for that
-    /// region type.
-    /// <para>该区域密钥与 IV 的新副本；此版本未为该区域类型登记密钥时返回 <see langword="null"/>。</para>
-    /// </returns>
+    /// <summary>Returns the encryption key.<para>返回加密密钥。</para></summary>
+    /// <param name="regionType">Region kind whose key material is requested; its numeric value is the key index within the version's dictionary.
+    /// <para>需要取其密钥材料的区域种类；其数值即该版本字典中的密钥索引。</para></param>
+    /// <returns>Fresh copies of the region's key and IV, or <see langword="null"/> when this version registers no key for that region type.
+    /// <para>该区域密钥与 IV 的新副本；此版本未为该区域类型登记密钥时返回 <see langword="null"/>。</para></returns>
     public (byte[] Key, byte[] Iv)? GetKey(RegionType regionType)
     {
         return _versionKeys.TryGetValue((int)regionType, out var versionKey)
@@ -383,22 +367,13 @@ internal sealed class BufferedEncryptStream : Stream
     public override long Length => throw new NotSupportedException();
     public override long Position { get => _buffer.Length; set => throw new NotSupportedException(); }
 
-    /// <summary>
-    /// Writes bytes to the stream.
-    /// <para>向流写入字节。</para>
-    /// </summary>
-    /// <param name="buffer">
-    /// Plaintext source array whose range is appended to the pending buffer.
-    /// <para>将其区间追加到待加密缓冲区的明文源数组。</para>
-    /// </param>
-    /// <param name="offset">
-    /// Index in <paramref name="buffer"/> of the first plaintext byte.
-    /// <para><paramref name="buffer"/> 中首个明文字节的索引。</para>
-    /// </param>
-    /// <param name="count">
-    /// Number of plaintext bytes appended; the buffered total never passes the configured maximum.
-    /// <para>追加的明文字节数；缓冲区累计量不会超过配置的上限。</para>
-    /// </param>
+    /// <summary>Writes bytes to the stream.<para>向流写入字节。</para></summary>
+    /// <param name="buffer">Plaintext source array whose range is appended to the pending buffer.
+    /// <para>将其区间追加到待加密缓冲区的明文源数组。</para></param>
+    /// <param name="offset">Index in <paramref name="buffer"/> of the first plaintext byte.
+    /// <para><paramref name="buffer"/> 中首个明文字节的索引。</para></param>
+    /// <param name="count">Number of plaintext bytes appended; the buffered total never passes the configured maximum.
+    /// <para>追加的明文字节数；缓冲区累计量不会超过配置的上限。</para></param>
     public override void Write(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
@@ -437,22 +412,13 @@ internal sealed class BufferedEncryptStream : Stream
         _buffer.Write(buffer);
     }
 
-    /// <summary>
-    /// Throws because this operation is not supported.
-    /// <para>此操作不受支持，调用时抛出异常。</para>
-    /// </summary>
-    /// <param name="buffer">
-    /// Destination array; never read because the call always throws.
-    /// <para>目标数组；因调用必定抛出异常而不会被读取。</para>
-    /// </param>
-    /// <param name="offset">
-    /// Write index into <paramref name="buffer"/>; never read because the call always throws.
-    /// <para><paramref name="buffer"/> 中的写入起始索引；因调用必定抛出异常而不会被读取。</para>
-    /// </param>
-    /// <param name="count">
-    /// Requested byte count; never read because the call always throws.
-    /// <para>请求读取的字节数；因调用必定抛出异常而不会被读取。</para>
-    /// </param>
+    /// <summary>Throws because this operation is not supported.<para>此操作不受支持，调用时抛出异常。</para></summary>
+    /// <param name="buffer">Destination array; never read because the call always throws.
+    /// <para>目标数组；因调用必定抛出异常而不会被读取。</para></param>
+    /// <param name="offset">Write index into <paramref name="buffer"/>; never read because the call always throws.
+    /// <para><paramref name="buffer"/> 中的写入起始索引；因调用必定抛出异常而不会被读取。</para></param>
+    /// <param name="count">Requested byte count; never read because the call always throws.
+    /// <para>请求读取的字节数；因调用必定抛出异常而不会被读取。</para></param>
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
     /// <summary>

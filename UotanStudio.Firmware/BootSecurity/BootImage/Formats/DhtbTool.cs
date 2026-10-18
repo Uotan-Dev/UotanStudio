@@ -266,19 +266,14 @@ public static class DhtbTool
         return result;
     }
 
-    /// <summary>
-    /// Parses DHTB from a file.
-    /// <para>从文件解析 DHTB。</para>
-    /// </summary>
+    /// <summary>Parses DHTB from a file.<para>从文件解析 DHTB。</para></summary>
     /// <param name="filePath">Path to the DHTB container; the file is read fully into memory before parsing.
     /// <para>DHTB 容器路径；解析前会把整个文件读入内存。</para></param>
-    /// <returns>The parse result; an unreadable or non-DHTB file yields <see cref="DhtbResult.IsValid"/>
-    /// <see langword="false"/> only after the bytes were loaded successfully.
+    /// <returns>The parse result; an unreadable or non-DHTB file yields <see cref="DhtbResult.IsValid"/> <see langword="false"/> only after the bytes were loaded successfully.
     /// <para>解析结果；只有在字节成功读取后，非 DHTB 文件才会给出 <see cref="DhtbResult.IsValid"/> 为 <see langword="false"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>.
     /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="FileNotFoundException">The file does not exist.
-    /// <para>文件不存在。</para></exception>
+    /// <exception cref="FileNotFoundException">The file does not exist.<para>文件不存在。</para></exception>
     /// <exception cref="DirectoryNotFoundException">The path specifies an unknown directory.
     /// <para>路径指向不存在的目录。</para></exception>
     /// <exception cref="UnauthorizedAccessException">The caller lacks read permission for the file.
@@ -291,18 +286,12 @@ public static class DhtbTool
         return Parse(data);
     }
 
-    /// <summary>
-    /// Decompresses kernel data from DHTB.
-    /// <para>解压缩 DHTB 中的内核数据。</para>
-    /// </summary>
+    /// <summary>Decompresses kernel data from DHTB.<para>解压缩 DHTB 中的内核数据。</para></summary>
     /// <param name="data">Whole DHTB container; it is parsed on every call.
     /// <para>完整的 DHTB 容器；每次调用都会重新解析。</para></param>
-    /// <returns>An empty array when no kernel region was extracted; the stored bytes unchanged when
-    /// <see cref="BootCompressor.Detect(byte[])"/> finds no known container, and also when the detected
-    /// decoder fails.
+    /// <returns>An empty array when no kernel region was extracted; the stored bytes unchanged when <see cref="BootCompressor.Detect(byte[])"/> finds no known container, and also when the detected decoder fails.
     /// <para>未提取到内核区域时返回空数组；<see cref="BootCompressor.Detect(byte[])"/> 未识别到已知容器时原样返回存储字节，检测到类型但解码失败时同样原样返回。</para></returns>
-    /// <exception cref="CompressionException">The container could not be parsed, as reported by
-    /// <see cref="DhtbResult.IsValid"/>.
+    /// <exception cref="CompressionException">The container could not be parsed, as reported by <see cref="DhtbResult.IsValid"/>.
     /// <para>容器无法解析，即 <see cref="DhtbResult.IsValid"/> 为假。</para></exception>
     public static byte[] DecompressKernel(byte[] data)
     {

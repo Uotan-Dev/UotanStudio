@@ -4,22 +4,12 @@ using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.VisualPlugins;
 
-/// <summary>
-/// A prepared graph replacement applied as one undoable operation.
-/// <para>一份已准备好的图替换结果，作为单步可撤销操作应用。</para>
-/// </summary>
-/// <param name="Nodes">
-/// Nodes of the resulting graph.
-/// <para>结果图中的节点。</para>
-/// </param>
-/// <param name="Connections">
-/// Connections of the resulting graph.
-/// <para>结果图中的连线。</para>
-/// </param>
-/// <param name="Composite">
-/// Created composite node, or null for an expansion.
-/// <para>新建的复合节点；展开操作为 null。</para>
-/// </param>
+/// <summary>A prepared graph replacement applied as one undoable operation.
+/// <para>一份已准备好的图替换结果，作为单步可撤销操作应用。</para></summary>
+/// <param name="Nodes">Nodes of the resulting graph.<para>结果图中的节点。</para></param>
+/// <param name="Connections">Connections of the resulting graph.<para>结果图中的连线。</para></param>
+/// <param name="Composite">Created composite node, or null for an expansion.
+/// <para>新建的复合节点；展开操作为 null。</para></param>
 public sealed record CompositeGraphEditPlan(IReadOnlyList<FlowNodeViewModel> Nodes,
     IReadOnlyList<NodeConnectionViewModel> Connections, CompositeNodeViewModel? Composite);
 
@@ -29,38 +19,16 @@ public sealed record CompositeGraphEditPlan(IReadOnlyList<FlowNodeViewModel> Nod
 /// </summary>
 public static class CompositeGraphService
 {
-    /// <summary>
-    /// Replaces a selected subgraph and reconnects all boundary edges.
-    /// <para>替换选中的子图，并重新连接全部边界连线。</para>
-    /// </summary>
-    /// <param name="name">
-    /// Display name of the new composite.
-    /// <para>新复合节点的显示名称。</para>
-    /// </param>
-    /// <param name="id">
-    /// Identifier of the new composite package.
-    /// <para>新复合包的标识。</para>
-    /// </param>
-    /// <param name="allNodes">
-    /// Nodes of the whole graph.
-    /// <para>整个图的节点。</para>
-    /// </param>
-    /// <param name="allConnections">
-    /// Connections of the whole graph.
-    /// <para>整个图的连线。</para>
-    /// </param>
-    /// <param name="selectedNodes">
-    /// Nodes to encapsulate.
-    /// <para>要封装的节点。</para>
-    /// </param>
-    /// <param name="boundary">
-    /// Precomputed boundary interfaces, analyzed when null.
-    /// <para>预先算出的边界接口；为 null 时现算。</para>
-    /// </param>
-    /// <returns>
-    /// The replacement graph with the composite node.
-    /// <para>含复合节点的替换图。</para>
-    /// </returns>
+    /// <summary>Replaces a selected subgraph and reconnects all boundary edges.
+    /// <para>替换选中的子图，并重新连接全部边界连线。</para></summary>
+    /// <param name="name">Display name of the new composite.<para>新复合节点的显示名称。</para></param>
+    /// <param name="id">Identifier of the new composite package.<para>新复合包的标识。</para></param>
+    /// <param name="allNodes">Nodes of the whole graph.<para>整个图的节点。</para></param>
+    /// <param name="allConnections">Connections of the whole graph.<para>整个图的连线。</para></param>
+    /// <param name="selectedNodes">Nodes to encapsulate.<para>要封装的节点。</para></param>
+    /// <param name="boundary">Precomputed boundary interfaces, analyzed when null.
+    /// <para>预先算出的边界接口；为 null 时现算。</para></param>
+    /// <returns>The replacement graph with the composite node.<para>含复合节点的替换图。</para></returns>
     public static CompositeGraphEditPlan CreateEncapsulation(string name, string id,
         IReadOnlyList<FlowNodeViewModel> allNodes, IReadOnlyList<NodeConnectionViewModel> allConnections,
         IReadOnlyList<FlowNodeViewModel> selectedNodes, CompositeBoundaryAnalysis? boundary = null)
@@ -115,26 +83,12 @@ public static class CompositeGraphService
         return new CompositeGraphEditPlan([.. allNodes.Except(selectedNodes), composite], connections, composite);
     }
 
-    /// <summary>
-    /// Expands a composite with fresh instance identities and restores its boundary connections.
-    /// <para>以全新实例标识展开复合节点，并恢复其边界连线。</para>
-    /// </summary>
-    /// <param name="allNodes">
-    /// Nodes of the whole graph.
-    /// <para>整个图的节点。</para>
-    /// </param>
-    /// <param name="allConnections">
-    /// Connections of the whole graph.
-    /// <para>整个图的连线。</para>
-    /// </param>
-    /// <param name="composite">
-    /// Composite node to expand.
-    /// <para>要展开的复合节点。</para>
-    /// </param>
-    /// <returns>
-    /// The replacement graph holding the expanded nodes.
-    /// <para>含展开后节点的替换图。</para>
-    /// </returns>
+    /// <summary>Expands a composite with fresh instance identities and restores its boundary connections.
+    /// <para>以全新实例标识展开复合节点，并恢复其边界连线。</para></summary>
+    /// <param name="allNodes">Nodes of the whole graph.<para>整个图的节点。</para></param>
+    /// <param name="allConnections">Connections of the whole graph.<para>整个图的连线。</para></param>
+    /// <param name="composite">Composite node to expand.<para>要展开的复合节点。</para></param>
+    /// <returns>The replacement graph holding the expanded nodes.<para>含展开后节点的替换图。</para></returns>
     public static CompositeGraphEditPlan CreateExpansion(IReadOnlyList<FlowNodeViewModel> allNodes,
         IReadOnlyList<NodeConnectionViewModel> allConnections, CompositeNodeViewModel composite)
     {

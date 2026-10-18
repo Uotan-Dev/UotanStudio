@@ -82,15 +82,11 @@ public sealed class Nb0EntryHeader
         }
     }
 
-    /// <summary>
-    /// Reads and constructs an Nb0EntryHeader instance from a binary reader.
-    /// <para>从二进制读取器中读取并构造一个 Nb0EntryHeader 实例。</para>
-    /// </summary>
-    /// <param name="reader">
-    /// Reader positioned at the start of a 64-byte header record.
-    /// <para>定位到 64 字节头记录起始处的读取器。</para>
-    /// </param>
-    /// <returns>The parsed header. <para>解析后的头部。</para></returns>
+    /// <summary>Reads and constructs an Nb0EntryHeader instance from a binary reader.
+    /// <para>从二进制读取器中读取并构造一个 Nb0EntryHeader 实例。</para></summary>
+    /// <param name="reader">Reader positioned at the start of a 64-byte header record.
+    /// <para>定位到 64 字节头记录起始处的读取器。</para></param>
+    /// <returns>The parsed header.<para>解析后的头部。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="reader"/> is <see langword="null"/>.
     /// <para><paramref name="reader"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="EndOfStreamException">The stream has fewer than 64 bytes remaining.
@@ -113,23 +109,14 @@ public sealed class Nb0EntryHeader
         return header;
     }
 
-    /// <summary>
-    /// Writes the current entry header to the specified binary writer.
-    /// <para>将当前条目头写入指定的二进制写入器。</para>
-    /// </summary>
-    /// <param name="writer">
-    /// Destination writer. The name is written as printable ASCII into the fixed slot and the untouched
-    /// trailing bytes stay zero, so the slot always ends with a NUL terminator.
-    /// <para>目标写入器。名称以可打印 ASCII 写入定宽槽位，未写入的尾部字节保持为零，因此槽位始终以 NUL 结束符收尾。</para>
-    /// </param>
+    /// <summary>Writes the current entry header to the specified binary writer.
+    /// <para>将当前条目头写入指定的二进制写入器。</para></summary>
+    /// <param name="writer">Destination writer. The name is written as printable ASCII into the fixed slot and the untouched trailing bytes stay zero, so the slot always ends with a NUL terminator.
+    /// <para>目标写入器。名称以可打印 ASCII 写入定宽槽位，未写入的尾部字节保持为零，因此槽位始终以 NUL 结束符收尾。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="writer"/> is <see langword="null"/>.
     /// <para><paramref name="writer"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">
-    /// <see cref="Name"/> holds a character outside printable ASCII, or is longer than
-    /// <see cref="UsableNameBytes"/> bytes, neither of which the fixed Name field can store.
-    /// <para><see cref="Name"/> 含超出可打印 ASCII 范围的字符，或长度超过 <see cref="UsableNameBytes"/> 字节，
-    /// 定宽 Name 字段都无法保存。</para>
-    /// </exception>
+    /// <exception cref="InvalidDataException"><see cref="Name"/> holds a character outside printable ASCII, or is longer than <see cref="UsableNameBytes"/> bytes, neither of which the fixed Name field can store.
+    /// <para><see cref="Name"/> 含超出可打印 ASCII 范围的字符，或长度超过 <see cref="UsableNameBytes"/> 字节， 定宽 Name 字段都无法保存。</para></exception>
     public void Write(BinaryWriter writer)
     {
         ArgumentNullException.ThrowIfNull(writer);
@@ -141,25 +128,16 @@ public sealed class Nb0EntryHeader
         writer.Write(EncodeName(Name));
     }
 
-    /// <summary>
-    /// Writes the entry header to a pre-allocated byte buffer, avoiding intermediate allocation.
-    /// <para>将条目头写入预分配的字节缓冲区,避免中间分配。</para>
-    /// </summary>
-    /// <param name="buffer">
-    /// Destination buffer with at least <see cref="StructSize"/> bytes; integers are written little-endian
-    /// at offsets 0, 4, 8, 12 and the 48-byte name at offset 16.
-    /// <para>至少含 <see cref="StructSize"/> 字节的目标缓冲区；整数以小端写入偏移 0、4、8、12，48 字节名称写入偏移 16。</para>
-    /// </param>
+    /// <summary>Writes the entry header to a pre-allocated byte buffer, avoiding intermediate allocation.
+    /// <para>将条目头写入预分配的字节缓冲区,避免中间分配。</para></summary>
+    /// <param name="buffer">Destination buffer with at least <see cref="StructSize"/> bytes; integers are written little-endian at offsets 0, 4, 8, 12 and the 48-byte name at offset 16.
+    /// <para>至少含 <see cref="StructSize"/> 字节的目标缓冲区；整数以小端写入偏移 0、4、8、12，48 字节名称写入偏移 16。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="buffer"/> is <see langword="null"/>.
     /// <para><paramref name="buffer"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="buffer"/> is shorter than <see cref="StructSize"/> bytes.
     /// <para><paramref name="buffer"/> 长度小于 <see cref="StructSize"/> 字节。</para></exception>
-    /// <exception cref="InvalidDataException">
-    /// <see cref="Name"/> holds a character outside printable ASCII, or is longer than
-    /// <see cref="UsableNameBytes"/> bytes, neither of which the fixed Name field can store.
-    /// <para><see cref="Name"/> 含超出可打印 ASCII 范围的字符，或长度超过 <see cref="UsableNameBytes"/> 字节，
-    /// 定宽 Name 字段都无法保存。</para>
-    /// </exception>
+    /// <exception cref="InvalidDataException"><see cref="Name"/> holds a character outside printable ASCII, or is longer than <see cref="UsableNameBytes"/> bytes, neither of which the fixed Name field can store.
+    /// <para><see cref="Name"/> 含超出可打印 ASCII 范围的字符，或长度超过 <see cref="UsableNameBytes"/> 字节， 定宽 Name 字段都无法保存。</para></exception>
     public void WriteToBuffer(byte[] buffer)
     {
         ArgumentNullException.ThrowIfNull(buffer);
@@ -176,25 +154,16 @@ public sealed class Nb0EntryHeader
         EncodeName(Name).CopyTo(buffer.AsSpan(16, NameLength));
     }
 
-    /// <summary>
-    /// Reads the entry header from a byte buffer.
-    /// <para>从字节缓冲区读取条目头。</para>
-    /// </summary>
-    /// <param name="buffer">
-    /// Source buffer holding a header record whose integers are little-endian.
-    /// <para>持有头记录的源缓冲区，其中整数为小端。</para>
-    /// </param>
-    /// <param name="offset">
-    /// Byte offset in <paramref name="buffer"/> where the header starts. Defaults to 0.
-    /// <para><paramref name="buffer"/> 中头记录起始的字节偏移，默认为 0。</para>
-    /// </param>
-    /// <returns>The parsed header. <para>解析后的头部。</para></returns>
+    /// <summary>Reads the entry header from a byte buffer.<para>从字节缓冲区读取条目头。</para></summary>
+    /// <param name="buffer">Source buffer holding a header record whose integers are little-endian.
+    /// <para>持有头记录的源缓冲区，其中整数为小端。</para></param>
+    /// <param name="offset">Byte offset in <paramref name="buffer"/> where the header starts. Defaults to 0.
+    /// <para><paramref name="buffer"/> 中头记录起始的字节偏移，默认为 0。</para></param>
+    /// <returns>The parsed header.<para>解析后的头部。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="buffer"/> is <see langword="null"/>.
     /// <para><paramref name="buffer"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="buffer"/> does not contain <see cref="StructSize"/> bytes at <paramref name="offset"/>.
-    /// <para><paramref name="buffer"/> 在 <paramref name="offset"/> 处不足 <see cref="StructSize"/> 字节。</para>
-    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="buffer"/> does not contain <see cref="StructSize"/> bytes at <paramref name="offset"/>.
+    /// <para><paramref name="buffer"/> 在 <paramref name="offset"/> 处不足 <see cref="StructSize"/> 字节。</para></exception>
     public static Nb0EntryHeader ReadFromBuffer(byte[] buffer, int offset = 0)
     {
         ArgumentNullException.ThrowIfNull(buffer);

@@ -1,6 +1,5 @@
 using System.Text;
 using UotanStudio.Firmware.AndroidMeta.Dex;
-using UotanStudio.Firmware.AndroidMeta.Dex.Models;
 using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 using Xunit;
 

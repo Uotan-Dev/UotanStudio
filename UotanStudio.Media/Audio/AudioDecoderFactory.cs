@@ -190,22 +190,16 @@ public sealed unsafe class GStreamerAudioDecoder(AudioCodecId codec) : IAudioDec
         _pipeline = new GstPipeline($"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps=\"{caps}\" ! {decoder} ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,layout=interleaved,channels=2,rate=48000 ! appsink name=output sync=false max-buffers=32 drop=false enable-last-sample=false");
         if (codec == AudioCodecId.Flac && !codecConfig.IsEmpty) _pipeline.Push(codecConfig, 0);
     }
-    /// <summary>
-    /// Pushes one compressed packet into the pipeline with the given timestamp, then immediately drains decoded
-    /// PCM through the frame callback.
-    /// <para>将一帧压缩数据包连同时间戳推入管线，随后立即抽取解码出的 PCM 并经帧回调交付。</para>
-    /// </summary>
-    /// <param name="packet">
-    /// One compressed audio packet, non-empty and at most 16 MiB.
-    /// <para>单个压缩音频数据包，非空且不超过 16 MiB。</para>
-    /// </param>
-    /// <param name="timestampTicks">
-    /// Packet presentation time in 100-nanosecond ticks, forwarded to the pipeline source.
-    /// <para>数据包呈现时间，以 100 纳刻（tick）为单位，会转发给管线源。</para>
-    /// </param>
+    /// <summary>Pushes one compressed packet into the pipeline with the given timestamp, then immediately drains decoded PCM through the frame callback.
+    /// <para>将一帧压缩数据包连同时间戳推入管线，随后立即抽取解码出的 PCM 并经帧回调交付。</para></summary>
+    /// <param name="packet">One compressed audio packet, non-empty and at most 16 MiB.
+    /// <para>单个压缩音频数据包，非空且不超过 16 MiB。</para></param>
+    /// <param name="timestampTicks">Packet presentation time in 100-nanosecond ticks, forwarded to the pipeline source.
+    /// <para>数据包呈现时间，以 100 纳刻（tick）为单位，会转发给管线源。</para></param>
     /// <exception cref="InvalidOperationException">Called from inside a frame callback, or the decoder is not initialized.
     /// <para>在帧回调内部被调用，或解码器尚未初始化。</para></exception>
-    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed.
+    /// <para>解码器已被释放。</para></exception>
     /// <exception cref="InvalidDataException">The packet is empty or exceeds the size limit.
     /// <para>数据包为空或超出大小上限。</para></exception>
     public void Decode(ReadOnlySpan<byte> packet, long timestampTicks)

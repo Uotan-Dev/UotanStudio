@@ -148,20 +148,14 @@ internal abstract partial class UsbDevice : IDisposable
     /// <returns>The chunk transfer result. <para>分块传输结果。</para></returns>
     protected abstract UsbChunkResult WriteChunk(IntPtr buffer, int length, int timeoutMs);
 
-    /// <summary>
-    /// Asynchronously performs a single chunked bulk read.
-    /// <para>异步执行单次分块批量读取。</para>
-    /// Backends with a native asynchronous transfer path (WinUSB overlapped, Linux usbfs
-    /// URBs, libusb transfers) override this to avoid blocking a thread-pool thread; the
-    /// default implementation runs <see cref="ReadChunk"/> on the thread pool.
-    /// <para>具有原生异步传输路径的后端（WinUSB 重叠 I/O、Linux usbfs URB、libusb 传输）
-    /// 覆盖此方法以避免阻塞线程池线程；默认实现在线程池上运行 <see cref="ReadChunk"/>。</para>
-    /// </summary>
-    /// <param name="buffer">The pinned destination buffer pointer. <para>已固定的目标缓冲区指针。</para></param>
-    /// <param name="length">The number of bytes to read. <para>要读取的字节数。</para></param>
-    /// <param name="timeoutMs">The timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests. <para>用于监视取消请求的令牌。</para></param>
-    /// <returns>A task that resolves to the chunk transfer result. <para>分块传输结果任务。</para></returns>
+    /// <summary>Asynchronously performs a single chunked bulk read.
+    /// <para>异步执行单次分块批量读取。</para>Backends with a native asynchronous transfer path (WinUSB overlapped, Linux usbfs URBs, libusb transfers) override this to avoid blocking a thread-pool thread; the default implementation runs <see cref="ReadChunk"/> on the thread pool.<para>具有原生异步传输路径的后端（WinUSB 重叠 I/O、Linux usbfs URB、libusb 传输） 覆盖此方法以避免阻塞线程池线程；默认实现在线程池上运行 <see cref="ReadChunk"/>。</para></summary>
+    /// <param name="buffer">The pinned destination buffer pointer.<para>已固定的目标缓冲区指针。</para></param>
+    /// <param name="length">The number of bytes to read.<para>要读取的字节数。</para></param>
+    /// <param name="timeoutMs">The timeout in milliseconds.<para>超时时间（毫秒）。</para></param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.
+    /// <para>用于监视取消请求的令牌。</para></param>
+    /// <returns>A task that resolves to the chunk transfer result.<para>分块传输结果任务。</para></returns>
     protected virtual Task<UsbChunkResult> ReadChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
         => UsbAsyncExecution.Run(() => ReadChunk(buffer, length, timeoutMs), cancellationToken);
 

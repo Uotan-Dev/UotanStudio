@@ -12,25 +12,16 @@ namespace UotanStudio.Services.Flash;
 /// </summary>
 public static class BatchFlashService
 {
-    /// <summary>
-    /// Flashes the given partition images in order; a single-partition failure never aborts the
-    /// rest, and per-partition progress is reported through <paramref name="progress"/> and
-    /// broadcast as <see cref="FlashProgressMessage"/>.
-    /// <para>顺序刷写给定的分区镜像；任一分区失败都不会中断其余分区，逐分区进度经
-    /// <paramref name="progress"/> 回报并以 <see cref="FlashProgressMessage"/> 广播。</para>
-    /// </summary>
-    /// <param name="device">The target device. <para>目标设备。</para></param>
-    /// <param name="entries">
-    /// The partitions to flash: (partition name, full image file path).
-    /// <para>待刷写分区列表：(分区名, 镜像文件完整路径)。</para>
-    /// </param>
-    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
-    /// <param name="ct">Cancellation token; stops the remaining partitions when requested. <para>取消令牌；请求取消后停止刷写剩余分区。</para></param>
-    /// <returns>
-    /// Aggregate result: success only when every partition succeeded, otherwise the failed
-    /// partitions are listed.
-    /// <para>汇总结果：仅当全部分区成功时为成功，否则列出失败分区。</para>
-    /// </returns>
+    /// <summary>Flashes the given partition images in order; a single-partition failure never aborts the rest, and per-partition progress is reported through <paramref name="progress"/> and broadcast as <see cref="FlashProgressMessage"/>.
+    /// <para>顺序刷写给定的分区镜像；任一分区失败都不会中断其余分区，逐分区进度经 <paramref name="progress"/> 回报并以 <see cref="FlashProgressMessage"/> 广播。</para></summary>
+    /// <param name="device">The target device.<para>目标设备。</para></param>
+    /// <param name="entries">The partitions to flash: (partition name, full image file path).
+    /// <para>待刷写分区列表：(分区名, 镜像文件完整路径)。</para></param>
+    /// <param name="progress">Optional flash progress reporter.<para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token; stops the remaining partitions when requested.
+    /// <para>取消令牌；请求取消后停止刷写剩余分区。</para></param>
+    /// <returns>Aggregate result: success only when every partition succeeded, otherwise the failed partitions are listed.
+    /// <para>汇总结果：仅当全部分区成功时为成功，否则列出失败分区。</para></returns>
     public static async Task<FlashResult> FlashSelectedAsync(
         DeviceInfo device,
         IReadOnlyList<(string Partition, string ImagePath)> entries,

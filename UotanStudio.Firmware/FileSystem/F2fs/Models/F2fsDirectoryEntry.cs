@@ -98,10 +98,8 @@ internal sealed record F2fsDirectoryEntry
         };
     }
 
-    /// <summary>
-    /// Parses a flat F2FS directory data area into entries in slot order.
-    /// <para>把扁平的 F2FS 目录数据区域按槽顺序解析为条目。</para>
-    /// </summary>
+    /// <summary>Parses a flat F2FS directory data area into entries in slot order.
+    /// <para>把扁平的 F2FS 目录数据区域按槽顺序解析为条目。</para></summary>
     /// <param name="area">Flat directory data area; the bitmap occupies its first <paramref name="bitmapSize"/> bytes, then <paramref name="reservedSize"/> bytes, then <paramref name="slotCount"/> 11-byte dentry records and finally <paramref name="slotCount"/> 8-byte name slots.
     /// <para>扁平的目录数据区域：前 <paramref name="bitmapSize"/> 字节是位图，随后 <paramref name="reservedSize"/> 字节保留，接着是 <paramref name="slotCount"/> 条 11 字节 dentry 记录，最后是 <paramref name="slotCount"/> 个 8 字节名称槽。</para></param>
     /// <param name="bitmapSize">Bytes of the leading allocation bitmap, each bit marking one slot as in use.

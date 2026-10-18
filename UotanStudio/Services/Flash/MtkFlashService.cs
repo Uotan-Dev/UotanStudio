@@ -28,15 +28,15 @@ public static partial class MtkFlashService
             physicalPartition, steps, cancellationToken);
     }
 
-    /// <summary>Boots an identity-matched agent on a session the device lease already owns, then
-    /// prepares GPT-named operations against the live table.
+    /// <summary>Boots an identity-matched agent on a session the device lease already owns, then prepares GPT-named operations against the live table.
     /// <para>在设备租约已持有的会话上启动按身份匹配的代理，随后针对实时表准备按 GPT 名寻址的操作。</para></summary>
-    /// <param name="session">A leased session in the created state. <para>处于已创建状态的已租用会话。</para></param>
+    /// <param name="session">A leased session in the created state.<para>处于已创建状态的已租用会话。</para></param>
     /// <param name="protocol">Explicit DA family; no detection or fallback is performed.
     /// <para>显式的 DA 家族；不执行检测或回退。</para></param>
     /// <param name="startup">Parsed loader profile, storage family, identity policy and companion resources.
     /// <para>已解析的加载器配置、存储族、身份策略与伴随资源。</para></param>
-    /// <param name="physicalPartition">Explicit physical user region to observe. <para>显式指定的待观测物理用户区域。</para></param>
+    /// <param name="physicalPartition">Explicit physical user region to observe.
+    /// <para>显式指定的待观测物理用户区域。</para></param>
     /// <param name="steps">Explicit named operations; copied before asynchronous startup.
     /// <para>显式命名的操作；在异步启动前完成复制。</para></param>
     /// <param name="cancellationToken">Cancellation for startup, metadata and source preflight.

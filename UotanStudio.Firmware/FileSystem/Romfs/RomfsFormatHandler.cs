@@ -36,18 +36,14 @@ internal sealed class RomfsFormatHandler : IReadonlyFormatHandler
         return HeaderProbe.ProbeMagic(filePath, 8, 0, "-rom1fs-"u8);
     }
 
-    /// <summary>
-    /// Reads the volume metadata and lists every entry path without extracting file data.
-    /// <para>读取卷元数据并列出全部条目路径，不解出文件数据。</para>
-    /// </summary>
+    /// <summary>Reads the volume metadata and lists every entry path without extracting file data.
+    /// <para>读取卷元数据并列出全部条目路径，不解出文件数据。</para></summary>
     /// <param name="filePath">RomFS image file, opened read-only on a worker thread.
     /// <para>RomFS 镜像文件；在工作线程上以只读方式打开。</para></param>
     /// <param name="cancellationToken">Token checked around the tree walk.
     /// <para>在目录树遍历前后检查的令牌。</para></param>
-    /// <returns>An <c>Ok</c> result whose metadata carries volume name, size and entry counts and whose
-    /// entries list the extractable file paths; a <c>Fail</c> result with the error message when the image
-    /// cannot be parsed. <para><c>Ok</c> 结果的元数据包含卷名、大小与条目计数，明细行列出可解出文件路径；
-    /// 镜像无法解析时返回带错误消息的 <c>Fail</c> 结果。</para></returns>
+    /// <returns>An <c>Ok</c> result whose metadata carries volume name, size and entry counts and whose entries list the extractable file paths; a <c>Fail</c> result with the error message when the image cannot be parsed.
+    /// <para><c>Ok</c> 结果的元数据包含卷名、大小与条目计数，明细行列出可解出文件路径； 镜像无法解析时返回带错误消息的 <c>Fail</c> 结果。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)

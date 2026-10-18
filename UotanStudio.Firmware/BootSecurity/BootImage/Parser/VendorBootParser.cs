@@ -137,20 +137,16 @@ public class VendorBootParser : IDisposable
     /// </value>
     public List<VendorRamdiskTableEntry> RamdiskTable { get; } = [];
 
-    /// <summary>
-    /// Opens a vendor boot image file and parses it, transferring the opened stream's ownership to the parser.
-    /// <para>打开 Vendor Boot 镜像文件并解析，打开的流归解析器持有。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path of an existing file opened with shared read access; the parser keeps the handle until disposal or the next parse.
-    /// <para>已存在文件的路径，以共享读方式打开；解析器持有句柄直至释放或下一次解析。</para>
-    /// </param>
-    /// <exception cref="ArgumentException"><paramref name="filePath"/> is <see langword="null"/> or empty. <para><paramref name="filePath"/> 为 <see langword="null"/> 或空。</para></exception>
-    /// <exception cref="ObjectDisposedException">The parser has been disposed. <para>解析器已被释放。</para></exception>
-    /// <exception cref="ImageParseException">
-    /// The magic, version, geometry or any component/table range is invalid; the file stream is closed and state reset.
-    /// <para>魔数、版本、几何信息或任一组件/表范围非法；此时文件流被关闭且状态被重置。</para>
-    /// </exception>
+    /// <summary>Opens a vendor boot image file and parses it, transferring the opened stream's ownership to the parser.
+    /// <para>打开 Vendor Boot 镜像文件并解析，打开的流归解析器持有。</para></summary>
+    /// <param name="filePath">Path of an existing file opened with shared read access; the parser keeps the handle until disposal or the next parse.
+    /// <para>已存在文件的路径，以共享读方式打开；解析器持有句柄直至释放或下一次解析。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="ObjectDisposedException">The parser has been disposed.
+    /// <para>解析器已被释放。</para></exception>
+    /// <exception cref="ImageParseException">The magic, version, geometry or any component/table range is invalid; the file stream is closed and state reset.
+    /// <para>魔数、版本、几何信息或任一组件/表范围非法；此时文件流被关闭且状态被重置。</para></exception>
     public void ParseFile(string filePath)
     {
         ThrowIfDisposed();
@@ -159,20 +155,16 @@ public class VendorBootParser : IDisposable
         AttachSource(stream);
     }
 
-    /// <summary>
-    /// Parses a vendor boot image from a byte array; the array is copied, so later caller mutations do not affect the parse.
-    /// <para>从字节数组解析 Vendor Boot 镜像；数组会被复制，调用方后续的修改不影响解析结果。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete image bytes; the parser owns an in-memory copy until disposal or the next parse.
-    /// <para>完整镜像字节；该内存副本由解析器持有，直至释放或下一次解析。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>. <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ObjectDisposedException">The parser has been disposed. <para>解析器已被释放。</para></exception>
-    /// <exception cref="ImageParseException">
-    /// The magic, version, geometry or any component/table range is invalid; state is reset.
-    /// <para>魔数、版本、几何信息或任一组件/表范围非法；状态被重置。</para>
-    /// </exception>
+    /// <summary>Parses a vendor boot image from a byte array; the array is copied, so later caller mutations do not affect the parse.
+    /// <para>从字节数组解析 Vendor Boot 镜像；数组会被复制，调用方后续的修改不影响解析结果。</para></summary>
+    /// <param name="data">Complete image bytes; the parser owns an in-memory copy until disposal or the next parse.
+    /// <para>完整镜像字节；该内存副本由解析器持有，直至释放或下一次解析。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ObjectDisposedException">The parser has been disposed.
+    /// <para>解析器已被释放。</para></exception>
+    /// <exception cref="ImageParseException">The magic, version, geometry or any component/table range is invalid; state is reset.
+    /// <para>魔数、版本、几何信息或任一组件/表范围非法；状态被重置。</para></exception>
     public void Parse(byte[] data)
     {
         ThrowIfDisposed();
@@ -389,24 +381,17 @@ public class VendorBootParser : IDisposable
         _bootconfigOffset = offset;
     }
 
-    /// <summary>
-    /// Gets the declared length in bytes of a component without materializing any data.
-    /// <para>获得指定组件的声明长度（字节），不物化任何数据。</para>
-    /// </summary>
-    /// <param name="component">
-    /// Component to measure.
-    /// <para>要度量的组件。</para>
-    /// </param>
-    /// <returns>
-    /// The declared size in bytes; <c>0</c> when the component is absent from the image (for example bootconfig on a version 3 header).
-    /// <para>声明的字节大小；组件在镜像中缺失时为 <c>0</c>（例如版本 3 头部的 bootconfig）。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="component"/> is not a defined <see cref="VendorBootComponent"/> value.
-    /// <para><paramref name="component"/> 不是已定义的 <see cref="VendorBootComponent"/> 值。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">No image has been parsed yet. <para>尚未解析任何镜像。</para></exception>
-    /// <exception cref="ObjectDisposedException">The parser has been disposed. <para>解析器已被释放。</para></exception>
+    /// <summary>Gets the declared length in bytes of a component without materializing any data.
+    /// <para>获得指定组件的声明长度（字节），不物化任何数据。</para></summary>
+    /// <param name="component">Component to measure.<para>要度量的组件。</para></param>
+    /// <returns>The declared size in bytes; <c>0</c> when the component is absent from the image (for example bootconfig on a version 3 header).
+    /// <para>声明的字节大小；组件在镜像中缺失时为 <c>0</c>（例如版本 3 头部的 bootconfig）。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="component"/> is not a defined <see cref="VendorBootComponent"/> value.
+    /// <para><paramref name="component"/> 不是已定义的 <see cref="VendorBootComponent"/> 值。</para></exception>
+    /// <exception cref="InvalidOperationException">No image has been parsed yet.
+    /// <para>尚未解析任何镜像。</para></exception>
+    /// <exception cref="ObjectDisposedException">The parser has been disposed.
+    /// <para>解析器已被释放。</para></exception>
     public long GetComponentLength(VendorBootComponent component)
     {
         lock (_sourceLock)
@@ -422,26 +407,19 @@ public class VendorBootParser : IDisposable
         }
     }
 
-    /// <summary>
-    /// Exposes a component as a bounded read-only stream without copying its data.
-    /// <para>以有界只读流形式暴露指定组件（不复制组件数据；流的生命周期由调用方管理，底层源流由解析器持有）。</para>
-    /// </summary>
-    /// <param name="component">
-    /// Component to expose.
-    /// <para>要暴露的组件。</para>
-    /// </param>
-    /// <returns>
-    /// A stream covering exactly the declared range; closing it leaves the source open. The view stays readable
-    /// only while the parser is undisposed and no newer parse has been started.
-    /// <para>恰好覆盖声明范围的流；关闭它不会关闭底层源。视图仅在解析器未释放且未开始更新的解析期间可读。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="component"/> is not a defined value.
-    /// <para><paramref name="component"/> 不是已定义的值。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">No image has been parsed yet. <para>尚未解析任何镜像。</para></exception>
-    /// <exception cref="ObjectDisposedException">The parser has been disposed. <para>解析器已被释放。</para></exception>
-    /// <exception cref="ImageParseException">The component range does not fit within the source. <para>组件范围超出源流。</para></exception>
+    /// <summary>Exposes a component as a bounded read-only stream without copying its data.
+    /// <para>以有界只读流形式暴露指定组件（不复制组件数据；流的生命周期由调用方管理，底层源流由解析器持有）。</para></summary>
+    /// <param name="component">Component to expose.<para>要暴露的组件。</para></param>
+    /// <returns>A stream covering exactly the declared range; closing it leaves the source open. The view stays readable only while the parser is undisposed and no newer parse has been started.
+    /// <para>恰好覆盖声明范围的流；关闭它不会关闭底层源。视图仅在解析器未释放且未开始更新的解析期间可读。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="component"/> is not a defined value.
+    /// <para><paramref name="component"/> 不是已定义的值。</para></exception>
+    /// <exception cref="InvalidOperationException">No image has been parsed yet.
+    /// <para>尚未解析任何镜像。</para></exception>
+    /// <exception cref="ObjectDisposedException">The parser has been disposed.
+    /// <para>解析器已被释放。</para></exception>
+    /// <exception cref="ImageParseException">The component range does not fit within the source.
+    /// <para>组件范围超出源流。</para></exception>
     public Stream ExtractComponentStream(VendorBootComponent component)
     {
         lock (_sourceLock)
@@ -460,25 +438,19 @@ public class VendorBootParser : IDisposable
         }
     }
 
-    /// <summary>
-    /// Copies a component exactly to the destination stream (throws EndOfStreamException on premature EOF).
-    /// <para>将指定组件精确复制到目标流（提前 EOF 抛 EndOfStreamException）。</para>
-    /// </summary>
-    /// <param name="destination">
-    /// Writable stream that receives exactly the declared component bytes; its position advances and it stays open.
-    /// <para>接收恰好声明组件字节数的可写流；位置前移且保持打开。</para>
-    /// </param>
-    /// <param name="component">
-    /// Component to copy.
-    /// <para>要复制的组件。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="destination"/> is <see langword="null"/>.
-    /// <para><paramref name="destination"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="component"/> is not a defined value. <para><paramref name="component"/> 不是已定义的值。</para></exception>
-    /// <exception cref="InvalidOperationException">No image has been parsed yet. <para>尚未解析任何镜像。</para></exception>
-    /// <exception cref="ObjectDisposedException">The parser has been disposed. <para>解析器已被释放。</para></exception>
+    /// <summary>Copies a component exactly to the destination stream (throws EndOfStreamException on premature EOF).
+    /// <para>将指定组件精确复制到目标流（提前 EOF 抛 EndOfStreamException）。</para></summary>
+    /// <param name="destination">Writable stream that receives exactly the declared component bytes; its position advances and it stays open.
+    /// <para>接收恰好声明组件字节数的可写流；位置前移且保持打开。</para></param>
+    /// <param name="component">Component to copy.<para>要复制的组件。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="destination"/> is <see langword="null"/>.
+    /// <para><paramref name="destination"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="component"/> is not a defined value.
+    /// <para><paramref name="component"/> 不是已定义的值。</para></exception>
+    /// <exception cref="InvalidOperationException">No image has been parsed yet.
+    /// <para>尚未解析任何镜像。</para></exception>
+    /// <exception cref="ObjectDisposedException">The parser has been disposed.
+    /// <para>解析器已被释放。</para></exception>
     public void ExtractComponentToFile(Stream destination, VendorBootComponent component)
     {
         ArgumentNullException.ThrowIfNull(destination);
@@ -486,25 +458,19 @@ public class VendorBootParser : IDisposable
         StreamCopy.CopyExactly(source, destination, source.Length);
     }
 
-    /// <summary>
-    /// Streams a component to a file, creating or overwriting destinationPath.
-    /// <para>将指定组件流式写入文件（创建或覆盖 destinationPath）。</para>
-    /// </summary>
-    /// <param name="destinationPath">
-    /// File path opened with <c>FileMode.Create</c>; an existing file is replaced.
-    /// <para>以 <c>FileMode.Create</c> 打开的文件路径；已存在的文件会被替换。</para>
-    /// </param>
-    /// <param name="component">
-    /// Component to write.
-    /// <para>要写入的组件。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="destinationPath"/> is <see langword="null"/> or empty.
-    /// <para><paramref name="destinationPath"/> 为 <see langword="null"/> 或空。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="component"/> is not a defined value. <para><paramref name="component"/> 不是已定义的值。</para></exception>
-    /// <exception cref="InvalidOperationException">No image has been parsed yet. <para>尚未解析任何镜像。</para></exception>
-    /// <exception cref="ObjectDisposedException">The parser has been disposed. <para>解析器已被释放。</para></exception>
+    /// <summary>Streams a component to a file, creating or overwriting destinationPath.
+    /// <para>将指定组件流式写入文件（创建或覆盖 destinationPath）。</para></summary>
+    /// <param name="destinationPath">File path opened with <c>FileMode.Create</c>; an existing file is replaced.
+    /// <para>以 <c>FileMode.Create</c> 打开的文件路径；已存在的文件会被替换。</para></param>
+    /// <param name="component">Component to write.<para>要写入的组件。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="destinationPath"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="destinationPath"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="component"/> is not a defined value.
+    /// <para><paramref name="component"/> 不是已定义的值。</para></exception>
+    /// <exception cref="InvalidOperationException">No image has been parsed yet.
+    /// <para>尚未解析任何镜像。</para></exception>
+    /// <exception cref="ObjectDisposedException">The parser has been disposed.
+    /// <para>解析器已被释放。</para></exception>
     public void ExtractComponentToFile(string destinationPath, VendorBootComponent component)
     {
         ArgumentException.ThrowIfNullOrEmpty(destinationPath);
@@ -513,29 +479,20 @@ public class VendorBootParser : IDisposable
         StreamCopy.CopyExactly(source, destination, source.Length);
     }
 
-    /// <summary>
-    /// Exposes one ramdisk table entry as a bounded read-only stream (the entry offset is relative to the start of the vendor ramdisk).
-    /// <para>以有界只读流形式暴露 ramdisk 表中的某个条目（偏移相对于 Vendor RAMDisk 起始处）。</para>
-    /// </summary>
-    /// <param name="entry">
-    /// Table entry, typically taken from <see cref="RamdiskTable"/>.
-    /// <para>表条目，通常取自 <see cref="RamdiskTable"/>。</para>
-    /// </param>
-    /// <returns>
-    /// A stream covering exactly <see cref="VendorRamdiskTableEntry.RamdiskSize"/> bytes inside the vendor ramdisk region;
-    /// closing it leaves the source open.
-    /// <para>恰好覆盖 Vendor RAMDisk 区域内 <see cref="VendorRamdiskTableEntry.RamdiskSize"/> 字节的流；关闭它不会关闭底层源。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="entry"/> is <see langword="null"/>.
-    /// <para><paramref name="entry"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">No image has been parsed yet. <para>尚未解析任何镜像。</para></exception>
-    /// <exception cref="ObjectDisposedException">The parser has been disposed. <para>解析器已被释放。</para></exception>
-    /// <exception cref="ImageParseException">
-    /// The entry range falls outside the vendor ramdisk, the offset overflows, or the range does not fit within the source.
-    /// <para>条目范围超出 Vendor RAMDisk、偏移溢出，或范围超出源流。</para>
-    /// </exception>
+    /// <summary>Exposes one ramdisk table entry as a bounded read-only stream (the entry offset is relative to the start of the vendor ramdisk).
+    /// <para>以有界只读流形式暴露 ramdisk 表中的某个条目（偏移相对于 Vendor RAMDisk 起始处）。</para></summary>
+    /// <param name="entry">Table entry, typically taken from <see cref="RamdiskTable"/>.
+    /// <para>表条目，通常取自 <see cref="RamdiskTable"/>。</para></param>
+    /// <returns>A stream covering exactly <see cref="VendorRamdiskTableEntry.RamdiskSize"/> bytes inside the vendor ramdisk region; closing it leaves the source open.
+    /// <para>恰好覆盖 Vendor RAMDisk 区域内 <see cref="VendorRamdiskTableEntry.RamdiskSize"/> 字节的流；关闭它不会关闭底层源。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="entry"/> is <see langword="null"/>.
+    /// <para><paramref name="entry"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidOperationException">No image has been parsed yet.
+    /// <para>尚未解析任何镜像。</para></exception>
+    /// <exception cref="ObjectDisposedException">The parser has been disposed.
+    /// <para>解析器已被释放。</para></exception>
+    /// <exception cref="ImageParseException">The entry range falls outside the vendor ramdisk, the offset overflows, or the range does not fit within the source.
+    /// <para>条目范围超出 Vendor RAMDisk、偏移溢出，或范围超出源流。</para></exception>
     public Stream ExtractRamdiskStream(VendorRamdiskTableEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -563,26 +520,22 @@ public class VendorBootParser : IDisposable
         }
     }
 
-    /// <summary>
-    /// Streams one ramdisk table entry to a file, creating or overwriting destinationPath.
-    /// <para>将 ramdisk 表中的某个条目流式写入文件（创建或覆盖 destinationPath）。</para>
-    /// </summary>
-    /// <param name="destinationPath">
-    /// File path opened with <c>FileMode.Create</c>; an existing file is replaced.
-    /// <para>以 <c>FileMode.Create</c> 打开的文件路径；已存在的文件会被替换。</para>
-    /// </param>
-    /// <param name="entry">
-    /// Table entry, typically taken from <see cref="RamdiskTable"/>.
-    /// <para>表条目，通常取自 <see cref="RamdiskTable"/>。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="destinationPath"/> is <see langword="null"/> or empty.
-    /// <para><paramref name="destinationPath"/> 为 <see langword="null"/> 或空。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException"><paramref name="entry"/> is <see langword="null"/>. <para><paramref name="entry"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidOperationException">No image has been parsed yet. <para>尚未解析任何镜像。</para></exception>
-    /// <exception cref="ObjectDisposedException">The parser has been disposed. <para>解析器已被释放。</para></exception>
-    /// <exception cref="ImageParseException">The entry range falls outside the vendor ramdisk or the offset overflows. <para>条目范围超出 Vendor RAMDisk 或偏移溢出。</para></exception>
+    /// <summary>Streams one ramdisk table entry to a file, creating or overwriting destinationPath.
+    /// <para>将 ramdisk 表中的某个条目流式写入文件（创建或覆盖 destinationPath）。</para></summary>
+    /// <param name="destinationPath">File path opened with <c>FileMode.Create</c>; an existing file is replaced.
+    /// <para>以 <c>FileMode.Create</c> 打开的文件路径；已存在的文件会被替换。</para></param>
+    /// <param name="entry">Table entry, typically taken from <see cref="RamdiskTable"/>.
+    /// <para>表条目，通常取自 <see cref="RamdiskTable"/>。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="destinationPath"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="destinationPath"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="entry"/> is <see langword="null"/>.
+    /// <para><paramref name="entry"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidOperationException">No image has been parsed yet.
+    /// <para>尚未解析任何镜像。</para></exception>
+    /// <exception cref="ObjectDisposedException">The parser has been disposed.
+    /// <para>解析器已被释放。</para></exception>
+    /// <exception cref="ImageParseException">The entry range falls outside the vendor ramdisk or the offset overflows.
+    /// <para>条目范围超出 Vendor RAMDisk 或偏移溢出。</para></exception>
     public void ExtractRamdiskToFile(string destinationPath, VendorRamdiskTableEntry entry)
     {
         ArgumentException.ThrowIfNullOrEmpty(destinationPath);

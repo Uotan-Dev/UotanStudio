@@ -97,33 +97,21 @@ public sealed record MtkAutoStartup
 /// </summary>
 public static partial class MtkBootstrap
 {
-    /// <summary>
-    /// Handshakes over an already-open transport, selects the loader entry from the reported identity and
-    /// starts the selected stock DA protocol. The session takes ownership of the transport, and every
-    /// failure path disposes it.
-    /// <para>在已打开的传输上握手，由上报的身份选定加载器条目并启动所选标准 DA 协议。会话接管传输所有权，
-    /// 所有失败路径都会释放它。</para>
-    /// </summary>
+    /// <summary>Handshakes over an already-open transport, selects the loader entry from the reported identity and starts the selected stock DA protocol. The session takes ownership of the transport, and every failure path disposes it.
+    /// <para>在已打开的传输上握手，由上报的身份选定加载器条目并启动所选标准 DA 协议。会话接管传输所有权， 所有失败路径都会释放它。</para></summary>
     /// <param name="transport">The open transport selected by physical identity or explicit COM/TTY name.
     /// <para>按物理标识或显式 COM/TTY 名称选定的已打开传输。</para></param>
     /// <param name="protocol">The explicitly selected protocol; no detection or fallback is performed.
     /// <para>显式选定的协议；不进行探测或回退。</para></param>
     /// <param name="startup">Container, storage, identity policy and companion resources.
     /// <para>容器、存储、身份策略与伴随资源。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>
-    /// A caller-owned storage-ready session; this workflow issues no storage write or erase command.
-    /// <para>由调用方持有、已就绪存储的会话；本流程不下发任何存储写入或擦除命令。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="transport"/> or <paramref name="startup"/> is null.
-    /// <para><paramref name="transport"/> 或 <paramref name="startup"/> 为 null。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The container does not resolve to exactly one entry for the reported identity; no DA byte was uploaded.
-    /// <para>容器未针对上报的身份解析为唯一条目；未上传任何 DA 字节。</para>
-    /// </exception>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
+    /// <returns>A caller-owned storage-ready session; this workflow issues no storage write or erase command.
+    /// <para>由调用方持有、已就绪存储的会话；本流程不下发任何存储写入或擦除命令。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="transport"/> or <paramref name="startup"/> is null.
+    /// <para><paramref name="transport"/> 或 <paramref name="startup"/> 为 null。</para></exception>
+    /// <exception cref="InvalidOperationException">The container does not resolve to exactly one entry for the reported identity; no DA byte was uploaded.
+    /// <para>容器未针对上报的身份解析为唯一条目；未上传任何 DA 字节。</para></exception>
     public static Task<MtkSession> MatchAsync(ICommTransport transport, MtkDaProtocol protocol,
         MtkAutoStartup startup, CancellationToken cancellationToken = default)
     {
@@ -133,31 +121,21 @@ public static partial class MtkBootstrap
             async () => transport, ownsTransport: false);
     }
 
-    /// <summary>
-    /// Opens one explicit serial port, handshakes, selects the loader entry from the reported identity and
-    /// starts the selected stock DA protocol.
-    /// <para>打开某一个显式串口并握手，由上报的身份选定加载器条目，随后启动所选标准 DA 协议。</para>
-    /// </summary>
+    /// <summary>Opens one explicit serial port, handshakes, selects the loader entry from the reported identity and starts the selected stock DA protocol.
+    /// <para>打开某一个显式串口并握手，由上报的身份选定加载器条目，随后启动所选标准 DA 协议。</para></summary>
     /// <param name="serial">Explicit port and line settings; no probing or fallback is performed.
     /// <para>显式的端口与线路参数；不进行探测或回退。</para></param>
     /// <param name="protocol">The explicitly selected protocol; no detection or fallback is performed.
     /// <para>显式选定的协议；不进行探测或回退。</para></param>
     /// <param name="startup">Container, storage, identity policy and companion resources.
     /// <para>容器、存储、身份策略与伴随资源。</para></param>
-    /// <param name="cancellationToken">The startup cancellation token.
-    /// <para>启动过程取消令牌。</para></param>
-    /// <returns>
-    /// A caller-owned storage-ready session; this workflow issues no storage write or erase command.
-    /// <para>由调用方持有、已就绪存储的会话；本流程不下发任何存储写入或擦除命令。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="serial"/> or <paramref name="startup"/> is null.
-    /// <para><paramref name="serial"/> 或 <paramref name="startup"/> 为 null。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The container does not resolve to exactly one entry for the reported identity; no DA byte was uploaded.
-    /// <para>容器未针对上报的身份解析为唯一条目；未上传任何 DA 字节。</para>
-    /// </exception>
+    /// <param name="cancellationToken">The startup cancellation token.<para>启动过程取消令牌。</para></param>
+    /// <returns>A caller-owned storage-ready session; this workflow issues no storage write or erase command.
+    /// <para>由调用方持有、已就绪存储的会话；本流程不下发任何存储写入或擦除命令。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="serial"/> or <paramref name="startup"/> is null.
+    /// <para><paramref name="serial"/> 或 <paramref name="startup"/> 为 null。</para></exception>
+    /// <exception cref="InvalidOperationException">The container does not resolve to exactly one entry for the reported identity; no DA byte was uploaded.
+    /// <para>容器未针对上报的身份解析为唯一条目；未上传任何 DA 字节。</para></exception>
     public static Task<MtkSession> MatchSerialAsync(SerialConnectionOptions serial, MtkDaProtocol protocol,
         MtkAutoStartup startup, CancellationToken cancellationToken = default)
     {
@@ -201,42 +179,26 @@ public static partial class MtkBootstrap
         }
     }
 
-    /// <summary>
-    /// Handshakes a caller-owned session, selects the loader entry from the identity the device reports and
-    /// starts the selected stock DA protocol on that same session.
-    /// <para>在调用方持有的会话上握手，由设备上报的身份选定加载器条目，并在同一会话上启动所选标准 DA 协议。</para>
-    /// </summary>
+    /// <summary>Handshakes a caller-owned session, selects the loader entry from the identity the device reports and starts the selected stock DA protocol on that same session.
+    /// <para>在调用方持有的会话上握手，由设备上报的身份选定加载器条目，并在同一会话上启动所选标准 DA 协议。</para></summary>
     /// <remarks>
-    /// <para>The session keeps the transport and timeout choices made when its lease was created, so the
-    /// startup timeouts are validated here but never re-applied. A failure disposes the borrowed session
-    /// because the protocol state after a partial startup is unknown.</para>
-    /// <para>会话保留其租约创建时确定的传输与超时选择，因此这里的启动超时只做校验而不重新套用。
-    /// 失败会释放所借用的会话，因为部分启动完成后的协议状态未知。</para>
-    /// </remarks>
+    /// <para>The session keeps the transport and timeout choices made when its lease was created, so the startup timeouts are validated here but never re-applied. A failure disposes the borrowed session because the protocol state after a partial startup is unknown.</para>
+    /// <para>会话保留其租约创建时确定的传输与超时选择，因此这里的启动超时只做校验而不重新套用。 失败会释放所借用的会话，因为部分启动完成后的协议状态未知。</para></remarks>
     /// <param name="session">A session in the created state which the caller owns.
     /// <para>处于已创建状态、由调用方持有的会话。</para></param>
     /// <param name="protocol">The explicitly selected protocol; no detection or fallback is performed.
     /// <para>显式选定的协议；不进行探测或回退。</para></param>
     /// <param name="startup">Container, storage, identity policy and companion resources.
     /// <para>容器、存储、身份策略与伴随资源。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>
-    /// The same session once storage discovery has completed; no storage write or erase command is issued.
-    /// <para>存储发现完成后的同一会话；不下发任何存储写入或擦除命令。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="session"/> or <paramref name="startup"/> is null.
-    /// <para><paramref name="session"/> 或 <paramref name="startup"/> 为 null。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// The identity or storage policy is not a defined value.
-    /// <para>身份或存储策略不是已定义的值。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The container does not resolve to exactly one entry for the reported identity; no DA byte was uploaded.
-    /// <para>容器未针对上报的身份解析为唯一条目；未上传任何 DA 字节。</para>
-    /// </exception>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
+    /// <returns>The same session once storage discovery has completed; no storage write or erase command is issued.
+    /// <para>存储发现完成后的同一会话；不下发任何存储写入或擦除命令。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="session"/> or <paramref name="startup"/> is null.
+    /// <para><paramref name="session"/> 或 <paramref name="startup"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentException">The identity or storage policy is not a defined value.
+    /// <para>身份或存储策略不是已定义的值。</para></exception>
+    /// <exception cref="InvalidOperationException">The container does not resolve to exactly one entry for the reported identity; no DA byte was uploaded.
+    /// <para>容器未针对上报的身份解析为唯一条目；未上传任何 DA 字节。</para></exception>
     public static async Task<MtkSession> MatchAsync(MtkSession session, MtkDaProtocol protocol,
         MtkAutoStartup startup, CancellationToken cancellationToken = default)
     {

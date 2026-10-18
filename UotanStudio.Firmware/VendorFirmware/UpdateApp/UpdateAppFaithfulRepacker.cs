@@ -28,22 +28,14 @@ public static class UpdateAppFaithfulRepacker
 
     private static readonly SearchValues<char> ForbiddenNameChars = SearchValues.Create(['/', '\\', '\0', ':']);
 
-    /// <summary>
-    /// Validates that a container is within the faithful-repack bounds without writing any artifacts.
-    /// <para>仅校验容器是否处于保真重打包限制内，不写出任何产物。</para>
-    /// </summary>
-    /// <param name="sourcePath">
-    /// Container path to scan; a missing file or framing error declines capture.
-    /// <para>待扫描的容器路径；文件缺失或帧结构错误都会拒绝捕获。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked while enumerating framed entries. <para>在枚举帧区域条目期间检查。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> when the container has entries and every header and non-payload layout region stays
-    /// inside its bounds; <see langword="false"/> means only the canonical rebuild applies.
-    /// <para>容器有条目且全部头部与非载荷布局区域均在限制内时返回 <see langword="true"/>；<see langword="false"/> 表示仅可用标准重建。</para>
-    /// </returns>
+    /// <summary>Validates that a container is within the faithful-repack bounds without writing any artifacts.
+    /// <para>仅校验容器是否处于保真重打包限制内，不写出任何产物。</para></summary>
+    /// <param name="sourcePath">Container path to scan; a missing file or framing error declines capture.
+    /// <para>待扫描的容器路径；文件缺失或帧结构错误都会拒绝捕获。</para></param>
+    /// <param name="cancellationToken">Checked while enumerating framed entries.
+    /// <para>在枚举帧区域条目期间检查。</para></param>
+    /// <returns><see langword="true"/> when the container has entries and every header and non-payload layout region stays inside its bounds; <see langword="false"/> means only the canonical rebuild applies.
+    /// <para>容器有条目且全部头部与非载荷布局区域均在限制内时返回 <see langword="true"/>；<see langword="false"/> 表示仅可用标准重建。</para></returns>
     public static bool TryValidateCapture(string sourcePath, CancellationToken cancellationToken)
     {
         try
@@ -58,31 +50,17 @@ public static class UpdateAppFaithfulRepacker
         }
     }
 
-    /// <summary>
-    /// Captures the faithful reconstruction configuration for a just-extracted container: raw headers enter the
-    /// repack JSON and every non-payload byte region enters a bounded layout artifact stored beside the metadata.
-    /// <para>为刚解包的容器捕获保真重建配置：原始头部写入重打包 JSON，全部非载荷字节区域写入元数据旁的有界布局产物。</para>
-    /// </summary>
-    /// <param name="metadata">
-    /// Metadata instance receiving the <c>updateApp</c> configuration node and, when limits are exceeded or the
-    /// extraction was filtered, the reduced packing capability and notes.
-    /// <para>接收 <c>updateApp</c> 配置节点的元数据实例；超出限制或解包被筛选时降级打包能力并写入说明。</para>
-    /// </param>
-    /// <param name="sourcePath">
-    /// Source container that was extracted. <para>已解包的源容器。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Extraction directory holding the committed <c>&lt;name&gt;.img</c> payload files.
-    /// <para>持有已提交的 <c>&lt;name&gt;.img</c> 载荷文件的解包目录。</para>
-    /// </param>
-    /// <param name="metadataDirectory">
-    /// Directory in which the layout artifact and metadata JSON are published.
-    /// <para>发布布局产物与元数据 JSON 的目录。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked during scanning, artifact writing and hashing; cancellation propagates.
-    /// <para>在扫描、产物写入与哈希期间检查；取消会向上抛出。</para>
-    /// </param>
+    /// <summary>Captures the faithful reconstruction configuration for a just-extracted container: raw headers enter the repack JSON and every non-payload byte region enters a bounded layout artifact stored beside the metadata.
+    /// <para>为刚解包的容器捕获保真重建配置：原始头部写入重打包 JSON，全部非载荷字节区域写入元数据旁的有界布局产物。</para></summary>
+    /// <param name="metadata">Metadata instance receiving the <c>updateApp</c> configuration node and, when limits are exceeded or the extraction was filtered, the reduced packing capability and notes.
+    /// <para>接收 <c>updateApp</c> 配置节点的元数据实例；超出限制或解包被筛选时降级打包能力并写入说明。</para></param>
+    /// <param name="sourcePath">Source container that was extracted.<para>已解包的源容器。</para></param>
+    /// <param name="outputDirectory">Extraction directory holding the committed <c>&lt;name&gt;.img</c> payload files.
+    /// <para>持有已提交的 <c>&lt;name&gt;.img</c> 载荷文件的解包目录。</para></param>
+    /// <param name="metadataDirectory">Directory in which the layout artifact and metadata JSON are published.
+    /// <para>发布布局产物与元数据 JSON 的目录。</para></param>
+    /// <param name="cancellationToken">Checked during scanning, artifact writing and hashing; cancellation propagates.
+    /// <para>在扫描、产物写入与哈希期间检查；取消会向上抛出。</para></param>
     /// <exception cref="InvalidDataException">Layout accounting is inconsistent or a payload size drifted after extraction.
     /// <para>布局记账不一致，或载荷大小在解包后发生变化。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
@@ -163,29 +141,19 @@ public static class UpdateAppFaithfulRepacker
             "use the canonical rebuild for new content.";
     }
 
-    /// <summary>
-    /// Rebuilds a container from captured configuration: raw headers, verbatim payload files and the layout
-    /// artifact are streamed back in the original order, and any CRC16-table entry payload is re-verified first.
-    /// <para>依据捕获的配置重建容器：按原顺序回流式写出原始头部、原样载荷文件与布局产物；带 CRC16 表的条目先重新校验载荷。</para>
-    /// </summary>
-    /// <param name="config">
-    /// The <c>updateApp</c> configuration node written by <see cref="Capture"/>. <para>由 <see cref="Capture"/> 写入的 <c>updateApp</c> 配置节点。</para>
-    /// </param>
-    /// <param name="inputPath">
-    /// Extraction directory containing the payload files. <para>包含载荷文件的解包目录。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination container path, published atomically. <para>目标容器路径，以原子方式发布。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked throughout planning and writing; cancellation leaves no partial output.
-    /// <para>在规划与写入全程检查；取消时不会留下部分输出。</para>
-    /// </param>
-    /// <returns>
-    /// The framed entry count written to the new container. <para>写入新容器的帧区域条目数。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">The configuration is malformed or out of bounds, a payload file is
-    /// missing or changed size, or a header or per-block CRC16 check fails.
+    /// <summary>Rebuilds a container from captured configuration: raw headers, verbatim payload files and the layout artifact are streamed back in the original order, and any CRC16-table entry payload is re-verified first.
+    /// <para>依据捕获的配置重建容器：按原顺序回流式写出原始头部、原样载荷文件与布局产物；带 CRC16 表的条目先重新校验载荷。</para></summary>
+    /// <param name="config">The <c>updateApp</c> configuration node written by <see cref="Capture"/>.
+    /// <para>由 <see cref="Capture"/> 写入的 <c>updateApp</c> 配置节点。</para></param>
+    /// <param name="inputPath">Extraction directory containing the payload files.
+    /// <para>包含载荷文件的解包目录。</para></param>
+    /// <param name="outputPath">Destination container path, published atomically.
+    /// <para>目标容器路径，以原子方式发布。</para></param>
+    /// <param name="cancellationToken">Checked throughout planning and writing; cancellation leaves no partial output.
+    /// <para>在规划与写入全程检查；取消时不会留下部分输出。</para></param>
+    /// <returns>The framed entry count written to the new container.
+    /// <para>写入新容器的帧区域条目数。</para></returns>
+    /// <exception cref="InvalidDataException">The configuration is malformed or out of bounds, a payload file is missing or changed size, or a header or per-block CRC16 check fails.
     /// <para>配置格式错误或超限、载荷文件缺失或大小已变，或头部/逐块 CRC16 校验失败。</para></exception>
     /// <exception cref="IOException">The artifact or payload cannot be read, or publication fails.
     /// <para>无法读取产物或载荷，或发布失败。</para></exception>

@@ -26,16 +26,14 @@ public static class DtbFormat
         return Read(data.AsSpan());
     }
 
-    /// <summary>
-    /// Parses a device tree from a span in DTB format.
-    /// <para>从 DTB 格式的字节跨度解析设备树。</para>
-    /// </summary>
+    /// <summary>Parses a device tree from a span in DTB format.
+    /// <para>从 DTB 格式的字节跨度解析设备树。</para></summary>
     /// <param name="data">Span covering the complete DTB image; trailing bytes beyond total_size are ignored.
     /// <para>覆盖完整 DTB 镜像的跨度；total_size 之后的尾部字节被忽略。</para></param>
     /// <returns>The parsed device tree, including memory reservations and the root node tree.
     /// <para>解析后的设备树，包含内存保留项与根节点树。</para></returns>
-    /// <exception cref="InvalidDataException">The FDT magic is wrong, declared sizes exceed the span, or the
-    /// structure block is malformed. <para>FDT 魔数错误、声明大小超出跨度，或结构块无效。</para></exception>
+    /// <exception cref="InvalidDataException">The FDT magic is wrong, declared sizes exceed the span, or the structure block is malformed.
+    /// <para>FDT 魔数错误、声明大小超出跨度，或结构块无效。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">A header offset or size points outside the span.
     /// <para>表头偏移或大小指向跨度之外。</para></exception>
     /// <example>

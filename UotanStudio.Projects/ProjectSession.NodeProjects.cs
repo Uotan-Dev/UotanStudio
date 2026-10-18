@@ -2,26 +2,18 @@ namespace UotanStudio.Services.Projects;
 
 public sealed partial class ProjectSession
 {
-    /// <summary>
-    /// Registers and writes an empty node project (<c>nodes/&lt;name&gt;.uotannode</c>) in the open solution and
-    /// opens it as the active canvas. A duplicate name throws; an existing active canvas hands the active role
-    /// to the new project.
-    /// <para>在当前解决方案中登记并写入一个空的节点项目（<c>nodes/&lt;name&gt;.uotannode</c>），把它作为活动
-    /// 画布打开。名称重复时抛出异常；解决方案中已有其他活动画布时会被移交给新项目。</para>
-    /// </summary>
-    /// <param name="name">Node project name, also the file base name; must pass
-    /// <see cref="ProjectValidation.ValidateName"/>. <para>节点项目名，同时作为文件基本名，需通过
-    /// <see cref="ProjectValidation.ValidateName"/>。</para></param>
+    /// <summary>Registers and writes an empty node project (<c>nodes/&lt;name&gt;.uotannode</c>) in the open solution and opens it as the active canvas. A duplicate name throws; an existing active canvas hands the active role to the new project.
+    /// <para>在当前解决方案中登记并写入一个空的节点项目（<c>nodes/&lt;name&gt;.uotannode</c>），把它作为活动 画布打开。名称重复时抛出异常；解决方案中已有其他活动画布时会被移交给新项目。</para></summary>
+    /// <param name="name">Node project name, also the file base name; must pass <see cref="ProjectValidation.ValidateName"/>.
+    /// <para>节点项目名，同时作为文件基本名，需通过 <see cref="ProjectValidation.ValidateName"/>。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the staged writes.
     /// <para>取消门等待与暂存写入。</para></param>
-    /// <returns><see langword="true"/> when the project was written and opened; <see langword="false"/> when
-    /// the operation was gated. <para>项目成功写入并打开时返回 <see langword="true"/>；操作被门拦截时返回
-    /// <see langword="false"/>。</para></returns>
+    /// <returns><see langword="true"/> when the project was written and opened; <see langword="false"/> when the operation was gated.
+    /// <para>项目成功写入并打开时返回 <see langword="true"/>；操作被门拦截时返回 <see langword="false"/>。</para></returns>
     /// <exception cref="InvalidOperationException">No solution is open, or the name is already registered.
     /// <para>尚未打开解决方案，或该名称已登记。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="name"/> fails
-    /// <see cref="ProjectValidation.ValidateName"/>. <para><paramref name="name"/> 未通过
-    /// <see cref="ProjectValidation.ValidateName"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="name"/> fails <see cref="ProjectValidation.ValidateName"/>.
+    /// <para><paramref name="name"/> 未通过 <see cref="ProjectValidation.ValidateName"/>。</para></exception>
     /// <exception cref="IOException">The staged node project or solution file could not be committed.
     /// <para>暂存的节点项目或解决方案文件无法提交。</para></exception>
     public async Task<bool> CreateNodeProjectAsync(string name, CancellationToken cancellationToken = default)
@@ -74,17 +66,13 @@ public sealed partial class ProjectSession
         return created;
     }
 
-    /// <summary>
-    /// Loads a registered node project into the editor as an open document and makes it the active canvas.
-    /// <para>把已登记的节点项目载入编辑器成为打开的文档，并设为活动画布。</para>
-    /// </summary>
-    /// <param name="name">Registered node project name. <para>已登记的节点项目名。</para></param>
+    /// <summary>Loads a registered node project into the editor as an open document and makes it the active canvas.
+    /// <para>把已登记的节点项目载入编辑器成为打开的文档，并设为活动画布。</para></summary>
+    /// <param name="name">Registered node project name.<para>已登记的节点项目名。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the reads.
     /// <para>取消门等待与各项读取。</para></param>
-    /// <returns><see langword="true"/> when the document was opened; <see langword="false"/> when no node
-    /// project matches <paramref name="name"/> or the operation was gated.
-    /// <para>文档成功打开时返回 <see langword="true"/>；没有匹配 <paramref name="name"/> 的节点项目或
-    /// 操作被门拦截时返回 <see langword="false"/>。</para></returns>
+    /// <returns><see langword="true"/> when the document was opened; <see langword="false"/> when no node project matches <paramref name="name"/> or the operation was gated.
+    /// <para>文档成功打开时返回 <see langword="true"/>；没有匹配 <paramref name="name"/> 的节点项目或 操作被门拦截时返回 <see langword="false"/>。</para></returns>
     /// <exception cref="InvalidDataException">The registered node project file cannot be read.
     /// <para>已登记的节点项目文件无法读取。</para></exception>
     public async Task<bool> OpenNodeProjectAsync(string name, CancellationToken cancellationToken = default)
@@ -140,19 +128,13 @@ public sealed partial class ProjectSession
         return closed;
     }
 
-    /// <summary>
-    /// Unregisters a node project: closes its editor document and removes it from the solution list while
-    /// leaving the <c>.uotannode</c> file on disk untouched.
-    /// <para>注销一个节点项目：关闭其编辑器文档并从解决方案清单移除，磁盘上的 <c>.uotannode</c> 文件保持
-    /// 不变。</para>
-    /// </summary>
-    /// <param name="name">Registered node project name. <para>已登记的节点项目名。</para></param>
+    /// <summary>Unregisters a node project: closes its editor document and removes it from the solution list while leaving the <c>.uotannode</c> file on disk untouched.
+    /// <para>注销一个节点项目：关闭其编辑器文档并从解决方案清单移除，磁盘上的 <c>.uotannode</c> 文件保持 不变。</para></summary>
+    /// <param name="name">Registered node project name.<para>已登记的节点项目名。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the solution rewrite.
     /// <para>取消门等待与解决方案重写。</para></param>
-    /// <returns><see langword="true"/> when the registration was removed and the solution rewritten;
-    /// <see langword="false"/> when no node project matches <paramref name="name"/>.
-    /// <para>登记成功移除并重写解决方案时返回 <see langword="true"/>；没有匹配项时返回
-    /// <see langword="false"/>。</para></returns>
+    /// <returns><see langword="true"/> when the registration was removed and the solution rewritten; <see langword="false"/> when no node project matches <paramref name="name"/>.
+    /// <para>登记成功移除并重写解决方案时返回 <see langword="true"/>；没有匹配项时返回 <see langword="false"/>。</para></returns>
     public async Task<bool> RemoveNodeProjectAsync(string name, CancellationToken cancellationToken = default)
     {
         var removed = false;

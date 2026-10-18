@@ -12,25 +12,13 @@ public sealed partial class PayloadBuilder
 {
     private int? _compressionWorkers;
 
-    /// <summary>
-    /// Limits concurrent operation compression to the given worker count for this builder.
-    /// <para>把本构建器的并发操作压缩限制为给定位数的工作者。</para>
-    /// </summary>
-    /// <param name="workers">
-    /// Number of compression slots used per partition batch; the setting is stored until the build reads it and
-    /// applies to every codec, including <c>CompressionType.None</c>, whose slots store their chunks verbatim.
-    /// The effective count is further capped so two resident batches fit the worker memory budget.
-    /// <para>每个分区批次使用的压缩槽数量；该设置被保存直至构建时读取，并对所有编解码器生效，包含
-    /// <c>CompressionType.None</c>，其槽位原样存储各自的块。实际数量还会被进一步限制，使两批常驻缓冲落在
-    /// 工作者内存预算内。</para>
-    /// </param>
-    /// <returns>
-    /// This builder, so calls can be chained. <para>本构建器，便于链式调用。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="workers"/> is below <c>1</c> or above <see cref="Core.FirmwareParallelism.MaximumWorkers"/>.
-    /// <para><paramref name="workers"/> 小于 <c>1</c> 或大于 <see cref="Core.FirmwareParallelism.MaximumWorkers"/>。</para>
-    /// </exception>
+    /// <summary>Limits concurrent operation compression to the given worker count for this builder.
+    /// <para>把本构建器的并发操作压缩限制为给定位数的工作者。</para></summary>
+    /// <param name="workers">Number of compression slots used per partition batch; the setting is stored until the build reads it and applies to every codec, including <c>CompressionType.None</c>, whose slots store their chunks verbatim. The effective count is further capped so two resident batches fit the worker memory budget.
+    /// <para>每个分区批次使用的压缩槽数量；该设置被保存直至构建时读取，并对所有编解码器生效，包含 <c>CompressionType.None</c>，其槽位原样存储各自的块。实际数量还会被进一步限制，使两批常驻缓冲落在 工作者内存预算内。</para></param>
+    /// <returns>This builder, so calls can be chained.<para>本构建器，便于链式调用。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="workers"/> is below <c>1</c> or above <see cref="Core.FirmwareParallelism.MaximumWorkers"/>.
+    /// <para><paramref name="workers"/> 小于 <c>1</c> 或大于 <see cref="Core.FirmwareParallelism.MaximumWorkers"/>。</para></exception>
     public PayloadBuilder WithCompressionWorkers(int workers)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(workers, 1);

@@ -94,10 +94,7 @@ internal sealed record F2fsNodeFooter
         };
     }
 
-    /// <summary>
-    /// Writes the footer into the tail of a node page.
-    /// <para>将页脚写入节点页末尾。</para>
-    /// </summary>
+    /// <summary>Writes the footer into the tail of a node page.<para>将页脚写入节点页末尾。</para></summary>
     /// <param name="node">Destination node page with at least <see cref="F2fsNode.NodeSize"/> writable bytes; a shorter buffer is rejected before anything is written.
     /// <para>目标节点页，可写字节至少为 <see cref="F2fsNode.NodeSize"/>；缓冲区过短时在写入任何内容前就被拒绝。</para></param>
     /// <param name="nid">Node id written at the start of the footer, equal to the inode number for an inode node.

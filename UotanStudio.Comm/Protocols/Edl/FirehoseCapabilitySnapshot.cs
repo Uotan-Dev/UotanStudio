@@ -250,24 +250,24 @@ public sealed record FirehoseCapabilitySnapshot : CapabilitySnapshot
         _ => FeatureSupport.Unknown
     };
 
-    /// <summary>
-    /// Builds the snapshot from one configure acknowledgement, the negotiated configuration, and the
-    /// geometry observed during the same configuration window.
-    /// <para>由单个 configure 确认应答、协商后的配置，以及同一配置窗口内观测到的几何信息构建快照。</para>
-    /// </summary>
-    /// <param name="configureResponse">The final normal-mode configure ACK. <para>最终的普通模式 configure ACK。</para></param>
+    /// <summary>Builds the snapshot from one configure acknowledgement, the negotiated configuration, and the geometry observed during the same configuration window.
+    /// <para>由单个 configure 确认应答、协商后的配置，以及同一配置窗口内观测到的几何信息构建快照。</para></summary>
+    /// <param name="configureResponse">The final normal-mode configure ACK.
+    /// <para>最终的普通模式 configure ACK。</para></param>
     /// <param name="configuration">The negotiated mutable configuration; copied, never referenced.
     /// <para>协商后的可变配置；复制而非引用。</para></param>
-    /// <param name="geometry">The validated geometry observed so far, when any. <para>迄今观测到的经校验几何信息（若有）。</para></param>
-    /// <param name="requiresReconnect">Whether the session already requires a reconnect. <para>会话是否已需要重连。</para></param>
-    /// <param name="capturedAtUtc">The capture instant. <para>捕获时刻。</para></param>
-    /// <param name="supportedFunctions">Functions the target listed in its &lt;nop&gt; report, used
-    /// only to upgrade capabilities the acknowledgement left undeclared; null when none were reported.
+    /// <param name="geometry">The validated geometry observed so far, when any.
+    /// <para>迄今观测到的经校验几何信息（若有）。</para></param>
+    /// <param name="requiresReconnect">Whether the session already requires a reconnect.
+    /// <para>会话是否已需要重连。</para></param>
+    /// <param name="capturedAtUtc">The capture instant.<para>捕获时刻。</para></param>
+    /// <param name="supportedFunctions">Functions the target listed in its &lt;nop&gt; report, used only to upgrade capabilities the acknowledgement left undeclared; null when none were reported.
     /// <para>目标在 &lt;nop; 报告中列出的功能，仅用于提升应答未声明的能力；未报告时为 null。</para></param>
-    /// <returns>The immutable snapshot. <para>不可变快照。</para></returns>
+    /// <returns>The immutable snapshot.<para>不可变快照。</para></returns>
     /// <exception cref="ArgumentNullException">The response or configuration is <see langword="null"/>.
     /// <para>应答或配置为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException">The response is not an acknowledgement. <para>应答不是确认。</para></exception>
+    /// <exception cref="ArgumentException">The response is not an acknowledgement.
+    /// <para>应答不是确认。</para></exception>
     public static FirehoseCapabilitySnapshot FromConfigureAck(FirehoseResponse configureResponse,
         FirehoseConfiguration configuration, FirehoseStorageGeometry? geometry, bool requiresReconnect,
         DateTimeOffset capturedAtUtc, IReadOnlySet<string>? supportedFunctions = null)

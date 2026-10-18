@@ -88,19 +88,15 @@ public sealed class HashingReadStream : Stream
     /// <para>读取时转发到底层流；设置始终抛出 <see cref="NotSupportedException"/>。</para></value>
     public override long Position { get => _inner.Position; set => throw new NotSupportedException(); }
 
-    /// <summary>
-    /// Reads bytes from the stream into the buffer.
-    /// <para>从流中读取字节到缓冲区。</para>
-    /// </summary>
-    /// <param name="buffer">Destination array receiving the bytes; the digest covers exactly the range
-    /// starting at <paramref name="offset"/> and spanning the returned byte count.
+    /// <summary>Reads bytes from the stream into the buffer.<para>从流中读取字节到缓冲区。</para></summary>
+    /// <param name="buffer">Destination array receiving the bytes; the digest covers exactly the range starting at <paramref name="offset"/> and spanning the returned byte count.
     /// <para>接收字节的目标数组；摘要覆盖的范围恰好是从 <paramref name="offset"/> 起、长度等于返回字节数的区间。</para></param>
     /// <param name="offset">Index in <paramref name="buffer"/> where the inner stream starts writing.
     /// <para>底层流在 <paramref name="buffer"/> 中开始写入的索引。</para></param>
     /// <param name="count">Maximum number of bytes requested from the inner stream.
     /// <para>向底层流请求的最大字节数。</para></param>
-    /// <returns>The number of bytes returned by the inner stream and folded into the digest; <c>0</c> at
-    /// end of stream. <para>底层流返回并入摘要的字节数；流结束时为 <c>0</c>。</para></returns>
+    /// <returns>The number of bytes returned by the inner stream and folded into the digest; <c>0</c> at end of stream.
+    /// <para>底层流返回并入摘要的字节数；流结束时为 <c>0</c>。</para></returns>
     public override int Read(byte[] buffer, int offset, int count)
     {
         var read = _inner.Read(buffer, offset, count);

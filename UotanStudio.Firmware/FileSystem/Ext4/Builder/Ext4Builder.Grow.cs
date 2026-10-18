@@ -27,35 +27,14 @@ public sealed partial class Ext4Builder
     private const uint FeatureCompatSparseSuper = 0x0010;
     private const uint FeatureRoCompatMetadataCsum = 0x0400;
 
-    /// <summary>
-    /// Enlarges an existing ext4 image by appending whole block groups, adding free capacity
-    /// for later file insertion while preserving every existing inode, data block and directory.
-    /// <para>通过追加整块块组扩大既有 ext4 镜像，为后续写入预留空闲容量，同时完整保留现有的 inode、数据块与目录。</para>
-    /// </summary>
-    /// <remarks>
-    /// Grow mirrors the layout produced by <see cref="Ext4Builder"/>: it patches the superblock counters,
-    /// rebuilds the group descriptor array, lays fresh block/inode bitmaps and zeroed inode tables for the
-    /// appended groups, and rewrites every sparse-super backup (superblock + GDT) plus the resize inode so
-    /// the enlarged group set stays internally consistent.
-    /// <para>Grow 复用 <see cref="Ext4Builder"/> 的布局：修补超级块计数、重建块组描述符数组、为新增组写入位图与清零的
-    /// inode 表，并重写所有 sparse-super 备份（超级块 + GDT）以及 resize inode，使扩大后的块组集合内部保持一致。</para>
-    /// Current limits (surfaced as <see cref="NotSupportedException"/>, not silently violated):
-    /// <list type="bullet">
-    /// <item>Classic sparse-super images only (no <c>sparse_super2</c>).</item>
-    /// <item>The appended groups must still fit the existing primary GDT block count — growing past it would
-    /// require relocating the reserved GDT blocks, which is not implemented.</item>
-    /// <item>Growth is quantised to whole block groups; the request is rounded up.</item>
-    /// </list>
-    /// <para>当前的限制（以 <see cref="NotSupportedException"/> 明确抛出，绝不静默违反）：仅支持传统 sparse-super
-    /// （不支持 <c>sparse_super2</c>）；新增组必须仍落在既有主 GDT 块数之内（超出需要重定位保留 GDT，尚未实现）；
-    /// 增长以整块组为单位，请求向上取整。</para>
-    /// </remarks>
-    /// <param name="imagePath">
-    /// Path to the ext4 image file modified in place. <para>就地修改的 ext4 镜像路径。</para>
-    /// </param>
-    /// <param name="targetBlocks">
-    /// Desired total block count; rounded up to a whole block group. <para>目标总块数，向上取整到整块组。</para>
-    /// </param>
+    /// <summary>Enlarges an existing ext4 image by appending whole block groups, adding free capacity for later file insertion while preserving every existing inode, data block and directory.
+    /// <para>通过追加整块块组扩大既有 ext4 镜像，为后续写入预留空闲容量，同时完整保留现有的 inode、数据块与目录。</para></summary>
+    /// <remarks>Grow mirrors the layout produced by <see cref="Ext4Builder"/>: it patches the superblock counters, rebuilds the group descriptor array, lays fresh block/inode bitmaps and zeroed inode tables for the appended groups, and rewrites every sparse-super backup (superblock + GDT) plus the resize inode so the enlarged group set stays internally consistent.
+    /// <para>Grow 复用 <see cref="Ext4Builder"/> 的布局：修补超级块计数、重建块组描述符数组、为新增组写入位图与清零的 inode 表，并重写所有 sparse-super 备份（超级块 + GDT）以及 resize inode，使扩大后的块组集合内部保持一致。</para>Current limits (surfaced as <see cref="NotSupportedException"/>, not silently violated): <list type="bullet"> <item>Classic sparse-super images only (no <c>sparse_super2</c>).</item> <item>The appended groups must still fit the existing primary GDT block count — growing past it would require relocating the reserved GDT blocks, which is not implemented.</item> <item>Growth is quantised to whole block groups; the request is rounded up.</item> </list><para>当前的限制（以 <see cref="NotSupportedException"/> 明确抛出，绝不静默违反）：仅支持传统 sparse-super （不支持 <c>sparse_super2</c>）；新增组必须仍落在既有主 GDT 块数之内（超出需要重定位保留 GDT，尚未实现）； 增长以整块组为单位，请求向上取整。</para></remarks>
+    /// <param name="imagePath">Path to the ext4 image file modified in place.
+    /// <para>就地修改的 ext4 镜像路径。</para></param>
+    /// <param name="targetBlocks">Desired total block count; rounded up to a whole block group.
+    /// <para>目标总块数，向上取整到整块组。</para></param>
     public static void Grow(string imagePath, long targetBlocks)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);

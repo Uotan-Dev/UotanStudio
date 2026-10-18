@@ -659,20 +659,20 @@ public sealed class FlashService : IFlashService
         IProgress<FlashProgress>? progress, CancellationToken ct)
         => await FlashEdlPartitionAsync(session, entry, imageDir, programmerPath, progress, ct, verify: false).ConfigureAwait(false);
 
-    /// <summary>
-    /// Uploads a package-supplied Firehose programmer before programming a manifest entry, with an
-    /// optional read-back verification after a successful write.
-    /// <para>上传包内 Firehose programmer（可选）后编程清单条目，并可在写入成功后执行回读校验。</para>
-    /// </summary>
-    /// <param name="session">The EDL session, initialized on demand. <para>按需初始化的 EDL 会话。</para></param>
-    /// <param name="entry">The target rawprogram entry. <para>目标 rawprogram 条目。</para></param>
-    /// <param name="imageDir">The image file directory. <para>镜像文件所在目录。</para></param>
-    /// <param name="programmerPath">Path of the Firehose programmer, or null to skip the upload. <para>Firehose programmer 路径，为 null 时跳过上传。</para></param>
-    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
-    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
-    /// <param name="verify">Whether to read the programmed range back and compare it with the source file. <para>是否回读已编程范围并与源文件比对。</para></param>
-    /// <param name="initialization">Options governing session initialization, or null for the defaults. <para>控制会话初始化的选项，为 null 时使用默认值。</para></param>
-    /// <returns>The flash result. <para>刷写结果。</para></returns>
+    /// <summary>Uploads a package-supplied Firehose programmer before programming a manifest entry, with an optional read-back verification after a successful write.
+    /// <para>上传包内 Firehose programmer（可选）后编程清单条目，并可在写入成功后执行回读校验。</para></summary>
+    /// <param name="session">The EDL session, initialized on demand.<para>按需初始化的 EDL 会话。</para></param>
+    /// <param name="entry">The target rawprogram entry.<para>目标 rawprogram 条目。</para></param>
+    /// <param name="imageDir">The image file directory.<para>镜像文件所在目录。</para></param>
+    /// <param name="programmerPath">Path of the Firehose programmer, or null to skip the upload.
+    /// <para>Firehose programmer 路径，为 null 时跳过上传。</para></param>
+    /// <param name="progress">Optional flash progress reporter.<para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <param name="verify">Whether to read the programmed range back and compare it with the source file.
+    /// <para>是否回读已编程范围并与源文件比对。</para></param>
+    /// <param name="initialization">Options governing session initialization, or null for the defaults.
+    /// <para>控制会话初始化的选项，为 null 时使用默认值。</para></param>
+    /// <returns>The flash result.<para>刷写结果。</para></returns>
     public async Task<FlashResult> FlashEdlPartitionAsync(
         EdlSession session, RawProgramEntry entry, string imageDir, string? programmerPath,
         IProgress<FlashProgress>? progress, CancellationToken ct, bool verify,
@@ -938,19 +938,18 @@ public sealed class FlashService : IFlashService
         IProgress<FlashProgress>? progress, CancellationToken ct)
         => await FlashRkdlAsync(device, partition, imagePath, loaderPath: null, progress, ct).ConfigureAwait(false);
 
-    /// <summary>
-    /// RKDL path that programs a partition with an explicitly given loader path, discovered in
-    /// the image directory when null.
-    /// <para>RKDL 路径：按显式给出的 loader 路径刷写分区，为 null 时在镜像目录中自动发现。</para>
-    /// </summary>
-    /// <param name="device">The target device. <para>目标设备。</para></param>
-    /// <param name="partition">The target partition name. <para>目标分区名。</para></param>
-    /// <param name="imagePath">Full path of the image file. <para>镜像文件完整路径。</para></param>
-    /// <param name="loaderPath">Optional Rockchip loader file, auto-discovered in the image directory when null. <para>为 null 时在镜像目录自动发现的可选 Rockchip loader 文件。</para></param>
-    /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
-    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
-    /// <param name="verify">Whether to read the written range back and compare it with the source image. <para>写入成功后是否回读写入范围并与源镜像比对。</para></param>
-    /// <returns>The flash result. <para>刷写结果。</para></returns>
+    /// <summary>RKDL path that programs a partition with an explicitly given loader path, discovered in the image directory when null.
+    /// <para>RKDL 路径：按显式给出的 loader 路径刷写分区，为 null 时在镜像目录中自动发现。</para></summary>
+    /// <param name="device">The target device.<para>目标设备。</para></param>
+    /// <param name="partition">The target partition name.<para>目标分区名。</para></param>
+    /// <param name="imagePath">Full path of the image file.<para>镜像文件完整路径。</para></param>
+    /// <param name="loaderPath">Optional Rockchip loader file, auto-discovered in the image directory when null.
+    /// <para>为 null 时在镜像目录自动发现的可选 Rockchip loader 文件。</para></param>
+    /// <param name="progress">Optional flash progress reporter.<para>可选的刷写进度报告器。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <param name="verify">Whether to read the written range back and compare it with the source image.
+    /// <para>写入成功后是否回读写入范围并与源镜像比对。</para></param>
+    /// <returns>The flash result.<para>刷写结果。</para></returns>
     public static async Task<FlashResult> FlashRkdlAsync(
         DeviceInfo device, string partition, string imagePath, string? loaderPath,
         IProgress<FlashProgress>? progress, CancellationToken ct, bool verify = false)
@@ -1308,19 +1307,14 @@ public sealed class FlashService : IFlashService
     public static bool IsRelativeStartSector(string value)
         => value.Trim().TrimEnd('.').StartsWith("NUM_DISK_SECTORS-", StringComparison.Ordinal);
 
-    /// <summary>
-    /// Parses a rawprogram start_sector: absolute expressions return as-is, while
-    /// <c>NUM_DISK_SECTORS-</c> relative expressions resolve against the LUN's sector count.
-    /// <para>解析 rawprogram 的 start_sector：绝对表达式直接返回，<c>NUM_DISK_SECTORS-</c> 相对表达式
-    /// 按该 LUN 的扇区总数求出绝对扇区。</para>
-    /// </summary>
-    /// <param name="value">The literal start_sector text. <para>清单里的 start_sector 原文。</para></param>
-    /// <param name="numDiskSectors">The physical partition's sector count used to resolve a relative expression. <para>用于解析相对表达式的物理分区扇区总数。</para></param>
-    /// <returns>The absolute start sector. <para>绝对起始扇区。</para></returns>
-    /// <exception cref="InvalidOperationException">
-    /// A relative expression lacks a sector count, or the offset falls outside the disk.
-    /// <para>相对表达式未提供扇区总数，或该偏移落在盘外。</para>
-    /// </exception>
+    /// <summary>Parses a rawprogram start_sector: absolute expressions return as-is, while <c>NUM_DISK_SECTORS-</c> relative expressions resolve against the LUN's sector count.
+    /// <para>解析 rawprogram 的 start_sector：绝对表达式直接返回，<c>NUM_DISK_SECTORS-</c> 相对表达式 按该 LUN 的扇区总数求出绝对扇区。</para></summary>
+    /// <param name="value">The literal start_sector text.<para>清单里的 start_sector 原文。</para></param>
+    /// <param name="numDiskSectors">The physical partition's sector count used to resolve a relative expression.
+    /// <para>用于解析相对表达式的物理分区扇区总数。</para></param>
+    /// <returns>The absolute start sector.<para>绝对起始扇区。</para></returns>
+    /// <exception cref="InvalidOperationException">A relative expression lacks a sector count, or the offset falls outside the disk.
+    /// <para>相对表达式未提供扇区总数，或该偏移落在盘外。</para></exception>
     public static long ParseStartSectorValue(string value, long numDiskSectors)
     {
         if (!IsRelativeStartSector(value))

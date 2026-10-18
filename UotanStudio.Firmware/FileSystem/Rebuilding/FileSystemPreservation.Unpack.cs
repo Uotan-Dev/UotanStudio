@@ -10,25 +10,21 @@ namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 /// </summary>
 public static partial class FileSystemPreservation
 {
-    /// <summary>
-    /// Parses a private frozen source so extraction, inspection and the retained image have identical input bytes.
-    /// <para>对源镜像做私有冻结副本解析，确保解包、检查与保留镜像使用完全一致的输入字节。</para>
-    /// </summary>
+    /// <summary>Parses a private frozen source so extraction, inspection and the retained image have identical input bytes.
+    /// <para>对源镜像做私有冻结副本解析，确保解包、检查与保留镜像使用完全一致的输入字节。</para></summary>
     /// <param name="handler">Read-only format handler whose metadata describes the source.
     /// <para>元数据描述该源镜像的只读格式处理器。</para></param>
     /// <param name="sourcePath">Source image file; copied byte-for-byte into a temporary snapshot and verified unchanged.
     /// <para>源镜像文件；按字节复制到临时快照并校验未被改动。</para></param>
-    /// <param name="outputDirectory">Directory that receives the extraction output. <para>接收解包输出的目录。</para></param>
-    /// <param name="options">Unpack options; <c>FileSystemProgress</c> drives byte progress and <c>ErofsExtraDevicePaths</c>
-    /// supplies EROFS external devices (frozen alongside the source). May be <see langword="null"/>.
-    /// <para>解包选项；<c>FileSystemProgress</c> 驱动字节进度，<c>ErofsExtraDevicePaths</c> 提供 EROFS 外部设备
-    /// （与源镜像一同冻结）。可为 <see langword="null"/>。</para></param>
-    /// <param name="cancellationToken">Cancels snapshot copying and extraction; cancellation propagates and the
-    /// temporary snapshot directory is removed. <para>取消快照复制与解包；取消会向外传播并删除临时快照目录。</para></param>
+    /// <param name="outputDirectory">Directory that receives the extraction output.
+    /// <para>接收解包输出的目录。</para></param>
+    /// <param name="options">Unpack options; <c>FileSystemProgress</c> drives byte progress and <c>ErofsExtraDevicePaths</c> supplies EROFS external devices (frozen alongside the source). May be <see langword="null"/>.
+    /// <para>解包选项；<c>FileSystemProgress</c> 驱动字节进度，<c>ErofsExtraDevicePaths</c> 提供 EROFS 外部设备 （与源镜像一同冻结）。可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Cancels snapshot copying and extraction; cancellation propagates and the temporary snapshot directory is removed.
+    /// <para>取消快照复制与解包；取消会向外传播并删除临时快照目录。</para></param>
     /// <param name="unpack">Extraction delegate invoked with the frozen copy path instead of the original.
     /// <para>以冻结副本路径而非原始路径调用的解包委托。</para></param>
-    /// <returns>The delegate's result with the temporary snapshot path replaced by the original source path in the
-    /// summary; any non-cancellation failure becomes a fail result.
+    /// <returns>The delegate's result with the temporary snapshot path replaced by the original source path in the summary; any non-cancellation failure becomes a fail result.
     /// <para>委托结果，其摘要中的临时快照路径会被替换为原始源路径；除取消外的失败均转为失败结果。</para></returns>
     /// <exception cref="OperationCanceledException">The token was cancelled during snapshotting or extraction.
     /// <para>快照或解包期间令牌被取消。</para></exception>

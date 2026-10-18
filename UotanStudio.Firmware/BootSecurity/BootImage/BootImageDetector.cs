@@ -335,23 +335,19 @@ public static class BootImageDetector
         return result;
     }
 
-    /// <summary>
-    /// Detects the file format.
-    /// <para>检测文件格式。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Existing file to probe; only the leading bytes, at most the first 4096, are read.
-    /// <para>待探测的现有文件；仅读取起始字节，至多前 4096 个。</para>
-    /// </param>
-    /// <returns>
-    /// Detection outcome whose <see cref="DetectionResult.FilePath"/> property is set to
-    /// <paramref name="filePath"/>.
-    /// <para>检测结果，其 <see cref="DetectionResult.FilePath"/> 属性被设置为 <paramref name="filePath"/>。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException"><paramref name="filePath"/> is empty. <para><paramref name="filePath"/> 为空。</para></exception>
-    /// <exception cref="FileNotFoundException">The file or its directory does not exist. <para>文件或所在目录不存在。</para></exception>
-    /// <exception cref="UnauthorizedAccessException">The caller lacks read permission. <para>调用方没有读取权限。</para></exception>
-    /// <exception cref="IOException">The file could not be opened or read. <para>文件无法打开或读取。</para></exception>
+    /// <summary>Detects the file format.<para>检测文件格式。</para></summary>
+    /// <param name="filePath">Existing file to probe; only the leading bytes, at most the first 4096, are read.
+    /// <para>待探测的现有文件；仅读取起始字节，至多前 4096 个。</para></param>
+    /// <returns>Detection outcome whose <see cref="DetectionResult.FilePath"/> property is set to <paramref name="filePath"/>.
+    /// <para>检测结果，其 <see cref="DetectionResult.FilePath"/> 属性被设置为 <paramref name="filePath"/>。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is empty.
+    /// <para><paramref name="filePath"/> 为空。</para></exception>
+    /// <exception cref="FileNotFoundException">The file or its directory does not exist.
+    /// <para>文件或所在目录不存在。</para></exception>
+    /// <exception cref="UnauthorizedAccessException">The caller lacks read permission.
+    /// <para>调用方没有读取权限。</para></exception>
+    /// <exception cref="IOException">The file could not be opened or read.
+    /// <para>文件无法打开或读取。</para></exception>
     public static DetectionResult DetectFile(string filePath)
     {
 
@@ -362,29 +358,17 @@ public static class BootImageDetector
         return result;
     }
 
-    /// <summary>
-    /// Unified parsing of boot image.
-    /// <para>统一解析 boot 镜像。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Candidate image bytes; the format dispatch follows <see cref="Detect"/>.
-    /// <para>待解析的镜像字节；格式分发依据 <see cref="Detect"/>。</para>
-    /// </param>
-    /// <returns>
-    /// Result carrying the detected format. AOSP, vendor boot, MTK, Samsung, DHTB, Tegra and zImage
-    /// sections are filled when parsing succeeds; Unknown, ChromeOS and Payload report success with
-    /// empty sections, and a parse failure leaves <see cref="UnifiedResult.Success"/> false with the
-    /// exception message in <see cref="UnifiedResult.ErrorMessage"/>.
-    /// <para>返回携带检测格式的结果。解析成功时填充 AOSP、vendor boot、MTK、三星、DHTB、Tegra
-    /// 与 zImage 各段；Unknown、ChromeOS、Payload 视为成功但各段为空；解析失败时
-    /// <see cref="UnifiedResult.Success"/> 为 false，异常消息写入 <see cref="UnifiedResult.ErrorMessage"/>。</para>
-    /// </returns>
+    /// <summary>Unified parsing of boot image.<para>统一解析 boot 镜像。</para></summary>
+    /// <param name="data">Candidate image bytes; the format dispatch follows <see cref="Detect"/>.
+    /// <para>待解析的镜像字节；格式分发依据 <see cref="Detect"/>。</para></param>
+    /// <returns>Result carrying the detected format. AOSP, vendor boot, MTK, Samsung, DHTB, Tegra and zImage sections are filled when parsing succeeds; Unknown, ChromeOS and Payload report success with empty sections, and a parse failure leaves <see cref="UnifiedResult.Success"/> false with the exception message in <see cref="UnifiedResult.ErrorMessage"/>.
+    /// <para>返回携带检测格式的结果。解析成功时填充 AOSP、vendor boot、MTK、三星、DHTB、Tegra 与 zImage 各段；Unknown、ChromeOS、Payload 视为成功但各段为空；解析失败时 <see cref="UnifiedResult.Success"/> 为 false，异常消息写入 <see cref="UnifiedResult.ErrorMessage"/>。</para></returns>
     /// <example>
     /// <code>
     /// var result = BootImageDetector.Parse(File.ReadAllBytes("boot.img"));
     /// if (result.Success &amp;&amp; result.Format == BootImageDetector.ImageFormat.AospBoot)
     /// {
-    ///     File.WriteAllBytes("kernel", result.Kernel);
+    /// File.WriteAllBytes("kernel", result.Kernel);
     /// }
     /// </code>
     /// </example>
@@ -445,26 +429,21 @@ public static class BootImageDetector
         return result;
     }
 
-    /// <summary>
-    /// Unified parsing of boot image file.
-    /// <para>统一解析 boot 镜像文件。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// File to parse; vendor boot images are parsed from the file stream through <see cref="VendorBootParser.ParseFile"/>,
-    /// while every other format is read completely into memory before parsing.
-    /// <para>待解析的文件；vendor boot 镜像经 <see cref="VendorBootParser.ParseFile"/> 直接从文件流解析，
-    /// 其余格式在解析前完整读入内存。</para>
-    /// </param>
-    /// <returns>
-    /// Unified result for the file content, following the same success and error semantics as
-    /// <see cref="Parse"/>.
-    /// <para>针对文件内容的统一结果，成功与错误语义与 <see cref="Parse"/> 一致。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException"><paramref name="filePath"/> is empty. <para><paramref name="filePath"/> 为空。</para></exception>
-    /// <exception cref="NotSupportedException">The path is in an unsupported form. <para>路径形式不受支持。</para></exception>
-    /// <exception cref="FileNotFoundException">The file or its directory does not exist. <para>文件或所在目录不存在。</para></exception>
-    /// <exception cref="UnauthorizedAccessException">The caller lacks read permission. <para>调用方没有读取权限。</para></exception>
-    /// <exception cref="IOException">The file could not be opened or read. <para>文件无法打开或读取。</para></exception>
+    /// <summary>Unified parsing of boot image file.<para>统一解析 boot 镜像文件。</para></summary>
+    /// <param name="filePath">File to parse; vendor boot images are parsed from the file stream through <see cref="VendorBootParser.ParseFile"/>, while every other format is read completely into memory before parsing.
+    /// <para>待解析的文件；vendor boot 镜像经 <see cref="VendorBootParser.ParseFile"/> 直接从文件流解析， 其余格式在解析前完整读入内存。</para></param>
+    /// <returns>Unified result for the file content, following the same success and error semantics as <see cref="Parse"/>.
+    /// <para>针对文件内容的统一结果，成功与错误语义与 <see cref="Parse"/> 一致。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is empty.
+    /// <para><paramref name="filePath"/> 为空。</para></exception>
+    /// <exception cref="NotSupportedException">The path is in an unsupported form.
+    /// <para>路径形式不受支持。</para></exception>
+    /// <exception cref="FileNotFoundException">The file or its directory does not exist.
+    /// <para>文件或所在目录不存在。</para></exception>
+    /// <exception cref="UnauthorizedAccessException">The caller lacks read permission.
+    /// <para>调用方没有读取权限。</para></exception>
+    /// <exception cref="IOException">The file could not be opened or read.
+    /// <para>文件无法打开或读取。</para></exception>
     public static UnifiedResult ParseFile(string filePath)
     {
         var detection = Detect(ReadDetectionPrefix(filePath));

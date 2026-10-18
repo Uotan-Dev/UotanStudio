@@ -7,17 +7,16 @@ public sealed partial class MtkSession
 {
     /// <summary>Queries one XML system property using a bounded, source-bound document transfer.
     /// <para>使用有界、绑定来源的文档传输查询单个 XML 系统属性。</para></summary>
-    /// <remarks>The generic envelope name is preserved, not guessed or treated as a trusted vendor schema.
-    /// The accepted shape contains one direct item with an exact key and an optional scalar version.
-    /// The result is returned only after END/START; no session authorization state is changed.</remarks>
+    /// <remarks>The generic envelope name is preserved, not guessed or treated as a trusted vendor
+    /// schema. The accepted shape contains one direct item with an exact key and an optional scalar
+    /// version. The result is returned only after END/START; no session authorization state is changed.</remarks>
     /// <param name="key">Exact nonblank property key, at most 128 XML-compatible characters.
     /// <para>精确的非空白属性键，最长 128 个 XML 兼容字符。</para></param>
     /// <param name="timeoutMs">Cooperative whole-operation deadline, from one millisecond through 24 hours.
     /// <para>整次操作的协作式截止时间，范围从 1 毫秒到 24 小时。</para></param>
     /// <param name="cancellationToken">Cancellation for waiting and the complete query.
     /// <para>用于等待与完整查询的取消令牌。</para></param>
-    /// <returns>An immutable, non-authoritative property report.
-    /// <para>不可变、不具授权效力的属性报告。</para></returns>
+    /// <returns>An immutable, non-authoritative property report.<para>不可变、不具授权效力的属性报告。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="key"/> is blank or contains characters invalid in XML.
     /// <para><paramref name="key"/> 为空白或包含 XML 非法字符。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="key"/> is longer than 128 characters or <paramref name="timeoutMs"/> is out of bounds.
@@ -38,14 +37,9 @@ public sealed partial class MtkSession
 
     /// <summary>Queries DA.SLA, optionally asserting the property-envelope profile selected by the caller.
     /// <para>查询 DA.SLA，并按需断言调用方选定的属性信封配置。</para></summary>
-    /// <remarks>No envelope is inferred from the reply and the reported name is never rewritten. Only exact
-    /// ENABLED and DISABLED values are classified; other nonempty values remain Unknown. Failure never
-    /// returns a disabled indication. Even DisabledReported is an agent statement, not proof of
-    /// authorization or device authenticity.
-    /// <para>不从回复推断信封，也不改写上报的名称。仅精确的 ENABLED 与 DISABLED 值会被分类；其他非空值仍为
-    /// Unknown。失败绝不返回已禁用的指示。即便 DisabledReported 也只是代理的陈述，不构成授权或设备真实性证据。</para></remarks>
-    /// <param name="expectedEnvelopeName">Exact unqualified outer element name selected from the caller's loader
-    /// profile, or <see langword="null"/> to accept the envelope the agent reports.
+    /// <remarks>No envelope is inferred from the reply and the reported name is never rewritten. Only exact ENABLED and DISABLED values are classified; other nonempty values remain Unknown. Failure never returns a disabled indication. Even DisabledReported is an agent statement, not proof of authorization or device authenticity.
+    /// <para>不从回复推断信封，也不改写上报的名称。仅精确的 ENABLED 与 DISABLED 值会被分类；其他非空值仍为 Unknown。失败绝不返回已禁用的指示。即便 DisabledReported 也只是代理的陈述，不构成授权或设备真实性证据。</para></remarks>
+    /// <param name="expectedEnvelopeName">Exact unqualified outer element name selected from the caller's loader profile, or <see langword="null"/> to accept the envelope the agent reports.
     /// <para>来自调用方加载器配置、精确的不带命名空间前缀的外层元素名；为 <see langword="null"/> 时接受代理上报的信封。</para></param>
     /// <param name="timeoutMs">Cooperative whole-operation deadline, from one millisecond through 24 hours.
     /// <para>整次操作的协作式截止时间，范围从 1 毫秒到 24 小时。</para></param>
@@ -55,8 +49,7 @@ public sealed partial class MtkSession
     /// <para>属性本身及其保守的文本 SLA 指示。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="expectedEnvelopeName"/> is blank or not a valid XML local name.
     /// <para><paramref name="expectedEnvelopeName"/> 为空白或不是合法的 XML 局部名。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="expectedEnvelopeName"/> is longer than 128 characters
-    /// or <paramref name="timeoutMs"/> is out of bounds.
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="expectedEnvelopeName"/> is longer than 128 characters or <paramref name="timeoutMs"/> is out of bounds.
     /// <para><paramref name="expectedEnvelopeName"/> 超过 128 个字符，或 <paramref name="timeoutMs"/> 越界。</para></exception>
     /// <exception cref="XmlException"><paramref name="expectedEnvelopeName"/> fails XML name validation.
     /// <para><paramref name="expectedEnvelopeName"/> 未通过 XML 名称校验。</para></exception>

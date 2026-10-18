@@ -7,20 +7,10 @@ namespace UotanStudio.Comm.Devices.Services;
 
 public sealed partial class DeviceController
 {
-    /// <summary>Waits for a released MTK, EDL, Fastboot or Rockchip bootrom (RKDL) USB endpoint to
-    /// disappear and opens its uniquely matched replacement.
+    /// <summary>Waits for a released MTK, EDL, Fastboot or Rockchip bootrom (RKDL) USB endpoint to disappear and opens its uniquely matched replacement.
     /// <para>等待已释放的 MTK、EDL、Fastboot 或 Rockchip bootrom（RKDL）USB 端点消失，并打开唯一匹配的替代端点。</para></summary>
-    /// <remarks>The previous lease must be disposed before calling. This method never sends a reboot,
-    /// changes USB speed, uploads an agent or replays a command. It requires a nonempty OS container ID,
-    /// preserves the USB backend, and validates that identity again on the opened handle before creating
-    /// a session. Missing container metadata, ambiguous interfaces, stale snapshots and open failures
-    /// are not retried or replaced with serial, VID/PID or enumeration-order guesses. A returned MTK
-    /// session is uninitialized; reconnecting alone does not recover a running DA's protocol state.
-    /// Do not call from inside the previous lease's command dispatcher.
-    /// <para>调用前必须释放旧租约。本方法不发送重启、不更改 USB 速度、不上传代理，也不重放命令。
-    /// 必须具有非空的操作系统容器 ID，保持 USB 后端不变，并在创建会话前再次核验已打开句柄的身份。
-    /// 缺失容器元数据、接口歧义、过期快照和打开失败均不重试，也不改用序列号、VID/PID 或枚举顺序猜测。
-    /// 返回的 MTK 会话未初始化；仅重连不会恢复运行中 DA 的协议状态。不得在旧租约的命令调度器内部调用。</para></remarks>
+    /// <remarks>The previous lease must be disposed before calling. This method never sends a reboot, changes USB speed, uploads an agent or replays a command. It requires a nonempty OS container ID, preserves the USB backend, and validates that identity again on the opened handle before creating a session. Missing container metadata, ambiguous interfaces, stale snapshots and open failures are not retried or replaced with serial, VID/PID or enumeration-order guesses. A returned MTK session is uninitialized; reconnecting alone does not recover a running DA's protocol state. Do not call from inside the previous lease's command dispatcher.
+    /// <para>调用前必须释放旧租约。本方法不发送重启、不更改 USB 速度、不上传代理，也不重放命令。 必须具有非空的操作系统容器 ID，保持 USB 后端不变，并在创建会话前再次核验已打开句柄的身份。 缺失容器元数据、接口歧义、过期快照和打开失败均不重试，也不改用序列号、VID/PID 或枚举顺序猜测。 返回的 MTK 会话未初始化；仅重连不会恢复运行中 DA 的协议状态。不得在旧租约的命令调度器内部调用。</para></remarks>
     /// <param name="previous">The endpoint captured from the previous lease, including observed USB container metadata.
     /// <para>从旧租约捕获的端点，包括已观测的 USB 容器元数据。</para></param>
     /// <param name="kind">The explicitly expected MTK, EDL, Fastboot or Rockchip bootrom session kind.
@@ -33,8 +23,7 @@ public sealed partial class DeviceController
     /// <para>由调用方持有的唯一识别替代端点租约。</para></returns>
     /// <exception cref="NotSupportedException">The endpoint lacks stable container evidence or the session kind is unsupported.
     /// <para>端点缺少稳定的容器证据或不支持该会话类型。</para></exception>
-    /// <exception cref="InvalidOperationException">An open lease still holds the previous endpoint or any endpoint
-    /// of the same physical device, several endpoints match, or a snapshot is stale.
+    /// <exception cref="InvalidOperationException">An open lease still holds the previous endpoint or any endpoint of the same physical device, several endpoints match, or a snapshot is stale.
     /// <para>仍有活动租约持有旧端点或同一物理设备上的任一端点、多个端点匹配或快照已过期。</para></exception>
     /// <exception cref="IOException">The opened USB handle does not match the selected endpoint and container.
     /// <para>已打开的 USB 句柄与所选端点和容器不匹配。</para></exception>
@@ -48,14 +37,8 @@ public sealed partial class DeviceController
 
     /// <summary>Waits for USB re-enumeration using an explicitly selected container or physical-port policy.
     /// <para>使用显式选择的容器或物理端口策略等待 USB 重枚举。</para></summary>
-    /// <remarks>The physical-port policy permits a device without a container ID to reconnect at the same
-    /// observed bus and port chain. It cannot distinguish replacement hardware on that port and is not
-    /// an authentication mechanism. Neither policy falls back to serial numbers, VID/PID or list order.
-    /// The old lease must be released; the old endpoint must disappear; ambiguous matches are rejected.
-    /// The opened handle is rechecked before session creation. No protocol commands are sent.
-    /// <para>物理端口策略允许没有容器 ID 的设备在相同的已观测总线与端口链上重连。
-    /// 它无法区分该端口上被替换的硬件，也不是认证机制。两种策略均不回退到序列号、VID/PID 或列表顺序。
-    /// 必须释放旧租约并观测到旧端点消失，歧义匹配会被拒绝。创建会话前重新检查打开的句柄，不发送协议命令。</para></remarks>
+    /// <remarks>The physical-port policy permits a device without a container ID to reconnect at the same observed bus and port chain. It cannot distinguish replacement hardware on that port and is not an authentication mechanism. Neither policy falls back to serial numbers, VID/PID or list order. The old lease must be released; the old endpoint must disappear; ambiguous matches are rejected. The opened handle is rechecked before session creation. No protocol commands are sent.
+    /// <para>物理端口策略允许没有容器 ID 的设备在相同的已观测总线与端口链上重连。 它无法区分该端口上被替换的硬件，也不是认证机制。两种策略均不回退到序列号、VID/PID 或列表顺序。 必须释放旧租约并观测到旧端点消失，歧义匹配会被拒绝。创建会话前重新检查打开的句柄，不发送协议命令。</para></remarks>
     /// <param name="previous">The endpoint captured from the released lease.
     /// <para>从已释放租约捕获的端点。</para></param>
     /// <param name="kind">The explicitly expected MTK, EDL, Fastboot or Rockchip bootrom session.

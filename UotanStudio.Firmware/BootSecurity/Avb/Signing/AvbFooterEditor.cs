@@ -9,35 +9,22 @@ namespace UotanStudio.Firmware.BootSecurity.Avb.Signing;
 /// </summary>
 internal static class AvbFooterEditor
 {
-    /// <summary>
-    /// Publishes the original unsigned image bytes recorded by a valid trailing AVB footer.
-    /// <para>发布由镜像末尾合法 AVB 尾部记录的原始未签名镜像字节。</para>
-    /// </summary>
-    /// <param name="imagePath">
-    /// Existing signed partition image to read. <para>要读取的已签名分区镜像。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination file; parent directories are created when missing. <para>目标文件；缺失的父目录会被创建。</para>
-    /// </param>
-    /// <param name="overwrite">
-    /// Whether an existing <paramref name="outputPath"/> may be replaced. <para>是否允许替换已存在的 <paramref name="outputPath"/>。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the footer read and the byte copy; the partial temporary file is discarded on cancellation.
-    /// <para>取消尾部读取与字节复制；取消时未完成的临时文件会被丢弃。</para>
-    /// </param>
-    /// <returns>
-    /// A result reporting the restored byte count and output path, or a failure when no valid footer or
-    /// consistent ranges are found; I/O errors are folded into a failure result.
-    /// <para>成功时报告恢复的字节数与输出路径；未找到有效尾部或范围不一致时返回失败；I/O 错误会被归入失败结果。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="imagePath"/> or <paramref name="outputPath"/> is null or whitespace.
-    /// <para><paramref name="imagePath"/> 或 <paramref name="outputPath"/> 为 null 或空白。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para>
-    /// </exception>
+    /// <summary>Publishes the original unsigned image bytes recorded by a valid trailing AVB footer.
+    /// <para>发布由镜像末尾合法 AVB 尾部记录的原始未签名镜像字节。</para></summary>
+    /// <param name="imagePath">Existing signed partition image to read.
+    /// <para>要读取的已签名分区镜像。</para></param>
+    /// <param name="outputPath">Destination file; parent directories are created when missing.
+    /// <para>目标文件；缺失的父目录会被创建。</para></param>
+    /// <param name="overwrite">Whether an existing <paramref name="outputPath"/> may be replaced.
+    /// <para>是否允许替换已存在的 <paramref name="outputPath"/>。</para></param>
+    /// <param name="cancellationToken">Cancels the footer read and the byte copy; the partial temporary file is discarded on cancellation.
+    /// <para>取消尾部读取与字节复制；取消时未完成的临时文件会被丢弃。</para></param>
+    /// <returns>A result reporting the restored byte count and output path, or a failure when no valid footer or consistent ranges are found; I/O errors are folded into a failure result.
+    /// <para>成功时报告恢复的字节数与输出路径；未找到有效尾部或范围不一致时返回失败；I/O 错误会被归入失败结果。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="imagePath"/> or <paramref name="outputPath"/> is null or whitespace.
+    /// <para><paramref name="imagePath"/> 或 <paramref name="outputPath"/> 为 null 或空白。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public static async Task<FirmwareOpResult> RemoveFooterAsync(
         string imagePath,
         string outputPath,

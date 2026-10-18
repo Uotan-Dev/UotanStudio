@@ -53,22 +53,13 @@ public readonly record struct Nv12Coefficients(int LumaOffset, int LumaScale, in
 /// </summary>
 public static class Nv12ConversionTable
 {
-    /// <summary>
-    /// Returns the conversion constants for a matrix and range pair.
-    /// <para>返回指定矩阵与范围组合的转换常量。</para>
-    /// </summary>
-    /// <param name="matrix">
-    /// The chroma matrix to apply; <see cref="VideoColorMatrix.Auto"/> resolves to BT.601, matching the
-    /// default of the CPU converter.
-    /// <para>要应用的色度矩阵；<see cref="VideoColorMatrix.Auto"/> 解析为 BT.601，与 CPU 转换器默认值一致。</para>
-    /// </param>
-    /// <param name="range">
-    /// The nominal range to apply; <see cref="VideoColorRange.Auto"/> resolves to limited range.
-    /// <para>要应用的标称范围；<see cref="VideoColorRange.Auto"/> 解析为有限范围。</para>
-    /// </param>
-    /// <returns>
-    /// The fixed-point constants for the pair. <para>该组合对应的定点常量。</para>
-    /// </returns>
+    /// <summary>Returns the conversion constants for a matrix and range pair.
+    /// <para>返回指定矩阵与范围组合的转换常量。</para></summary>
+    /// <param name="matrix">The chroma matrix to apply; <see cref="VideoColorMatrix.Auto"/> resolves to BT.601, matching the default of the CPU converter.
+    /// <para>要应用的色度矩阵；<see cref="VideoColorMatrix.Auto"/> 解析为 BT.601，与 CPU 转换器默认值一致。</para></param>
+    /// <param name="range">The nominal range to apply; <see cref="VideoColorRange.Auto"/> resolves to limited range.
+    /// <para>要应用的标称范围；<see cref="VideoColorRange.Auto"/> 解析为有限范围。</para></param>
+    /// <returns>The fixed-point constants for the pair.<para>该组合对应的定点常量。</para></returns>
     public static Nv12Coefficients For(VideoColorMatrix matrix, VideoColorRange range)
     {
         var full = range == VideoColorRange.Full;

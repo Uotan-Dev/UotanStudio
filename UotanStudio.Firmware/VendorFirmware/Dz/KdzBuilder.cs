@@ -49,8 +49,7 @@ internal static class KdzBuilder
     /// <para>指定物理成员顺序的目录索引排列；可为空。</para></param>
     /// <param name="cancellationToken">Cancels copying, hashing and publication.
     /// <para>取消复制、哈希计算和发布。</para></param>
-    /// <returns>A task completing after verified publication.
-    /// <para>经验证的输出发布完成后结束的任务。</para></returns>
+    /// <returns>A task completing after verified publication.<para>经验证的输出发布完成后结束的任务。</para></returns>
     public static Task BuildAsync(IReadOnlyList<KdzSource> entries, string outputPath, long dataStart = 4096,
         IReadOnlyList<int>? payloadOrder = null, CancellationToken cancellationToken = default)
     {

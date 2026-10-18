@@ -7,12 +7,8 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    /// <summary>
-    /// Queries DA2 SLA and, when enabled, completes one authorized challenge-response exchange.
-    /// Unknown or rejected status never means authentication is disabled. No key fallback is attempted.
-    /// <para>查询 DA2 SLA，并在启用时完成一次授权的挑战响应交换。
-    /// 未知或被拒绝的状态不表示认证已禁用；不会尝试回退密钥。</para>
-    /// </summary>
+    /// <summary>Queries DA2 SLA and, when enabled, completes one authorized challenge-response exchange. Unknown or rejected status never means authentication is disabled. No key fallback is attempted.
+    /// <para>查询 DA2 SLA，并在启用时完成一次授权的挑战响应交换。 未知或被拒绝的状态不表示认证已禁用；不会尝试回退密钥。</para></summary>
     /// <param name="responder">The explicit signing provider, required only when the device reports SLA enabled.
     /// <para>显式签名提供方，仅在设备报告启用 SLA 时必需。</para></param>
     /// <param name="timeoutMs">The cooperative exchange deadline, from 1 ms to 24 hours.

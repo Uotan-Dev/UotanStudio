@@ -6,19 +6,12 @@ namespace UotanStudio.Firmware.VendorFirmware.NTPi;
 
 internal static class StructHelper
 {
-    /// <summary>
-    /// Reads an NtpiHeader (48 bytes) from a byte span.
-    /// <para>从字节跨度读取 NtpiHeader(48 字节)。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Bytes starting at the record; at least 48 bytes are required and trailing bytes beyond the record are ignored.
-    /// <para>从记录起始处提供的字节；至少需要 48 字节，记录之后的多余字节会被忽略。</para>
-    /// </param>
-    /// <returns>
-    /// A header carrying the raw magic bytes, the padding word, the three version components and the first region
-    /// header; the magic itself is not checked.
-    /// <para>携带原始魔数字节、填充字、三个版本分量与首个区域头的头部；魔数本身未被校验。</para>
-    /// </returns>
+    /// <summary>Reads an NtpiHeader (48 bytes) from a byte span.
+    /// <para>从字节跨度读取 NtpiHeader(48 字节)。</para></summary>
+    /// <param name="data">Bytes starting at the record; at least 48 bytes are required and trailing bytes beyond the record are ignored.
+    /// <para>从记录起始处提供的字节；至少需要 48 字节，记录之后的多余字节会被忽略。</para></param>
+    /// <returns>A header carrying the raw magic bytes, the padding word, the three version components and the first region header; the magic itself is not checked.
+    /// <para>携带原始魔数字节、填充字、三个版本分量与首个区域头的头部；魔数本身未被校验。</para></returns>
     public static NtpiHeader ReadNtpiHeader(ReadOnlySpan<byte> data)
     {
         return new NtpiHeader
@@ -45,19 +38,12 @@ internal static class StructHelper
         };
     }
 
-    /// <summary>
-    /// Reads a RegionBlockHeader (40 bytes) from a byte span.
-    /// <para>从字节跨度读取 RegionBlockHeader(40 字节)。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Bytes starting at the record; at least 40 bytes are required and trailing bytes beyond the record are ignored.
-    /// <para>从记录起始处提供的字节；至少需要 40 字节，记录之后的多余字节会被忽略。</para>
-    /// </param>
-    /// <returns>
-    /// A block header whose ThisHeader describes the current region, NextHeader the following region in the chain and
-    /// RealSize the exact decrypted payload length.
-    /// <para>返回的块头中 ThisHeader 描述当前区域，NextHeader 描述链中的下一个区域，RealSize 为解密后载荷的精确长度。</para>
-    /// </returns>
+    /// <summary>Reads a RegionBlockHeader (40 bytes) from a byte span.
+    /// <para>从字节跨度读取 RegionBlockHeader(40 字节)。</para></summary>
+    /// <param name="data">Bytes starting at the record; at least 40 bytes are required and trailing bytes beyond the record are ignored.
+    /// <para>从记录起始处提供的字节；至少需要 40 字节，记录之后的多余字节会被忽略。</para></param>
+    /// <returns>A block header whose ThisHeader describes the current region, NextHeader the following region in the chain and RealSize the exact decrypted payload length.
+    /// <para>返回的块头中 ThisHeader 描述当前区域，NextHeader 描述链中的下一个区域，RealSize 为解密后载荷的精确长度。</para></returns>
     public static RegionBlockHeader ReadRegionBlockHeader(ReadOnlySpan<byte> data)
     {
         return new RegionBlockHeader
@@ -68,20 +54,12 @@ internal static class StructHelper
         };
     }
 
-    /// <summary>
-    /// Reads an NtEncodeHeader (112 bytes) from a byte span.
-    /// <para>从字节跨度读取 NtEncodeHeader(112 字节)。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Bytes starting at the record; at least 112 bytes are required and trailing bytes beyond the record are ignored.
-    /// The declared key and IV fields are copied out as fresh arrays of 32 bytes each.
-    /// <para>从记录起始处提供的字节；至少需要 112 字节，记录之后的多余字节会被忽略。声明的密钥与 IV 字段被复制为各 32 字节的新数组。</para>
-    /// </param>
-    /// <returns>
-    /// A header carrying the 8-byte magic, the codec selector fields, the reserved padding word, the two size fields,
-    /// the key and IV arrays and the declared key and IV lengths; the magic is not checked.
-    /// <para>返回的头部携带 8 字节魔数、编解码选择字段、保留填充字、两个长度字段、密钥与 IV 数组以及声明的密钥和 IV 长度；魔数未被校验。</para>
-    /// </returns>
+    /// <summary>Reads an NtEncodeHeader (112 bytes) from a byte span.
+    /// <para>从字节跨度读取 NtEncodeHeader(112 字节)。</para></summary>
+    /// <param name="data">Bytes starting at the record; at least 112 bytes are required and trailing bytes beyond the record are ignored. The declared key and IV fields are copied out as fresh arrays of 32 bytes each.
+    /// <para>从记录起始处提供的字节；至少需要 112 字节，记录之后的多余字节会被忽略。声明的密钥与 IV 字段被复制为各 32 字节的新数组。</para></param>
+    /// <returns>A header carrying the 8-byte magic, the codec selector fields, the reserved padding word, the two size fields, the key and IV arrays and the declared key and IV lengths; the magic is not checked.
+    /// <para>返回的头部携带 8 字节魔数、编解码选择字段、保留填充字、两个长度字段、密钥与 IV 数组以及声明的密钥和 IV 长度；魔数未被校验。</para></returns>
     public static NtEncodeHeader ReadNtEncodeHeader(ReadOnlySpan<byte> data)
     {
         return new NtEncodeHeader
@@ -119,23 +97,14 @@ internal static class StructHelper
             && data[4] == (byte)'C' && data[5] == (byte)'O' && data[6] == (byte)'D' && data[7] == (byte)'E';
     }
 
-    /// <summary>
-    /// Validates whether the byte array at the given offset starts with "NTENCODE".
-    /// <para>验证字节数组从指定偏移开始是否为 "NTENCODE"。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Buffer holding the record; <see langword="null"/> reports no match instead of throwing.
-    /// <para>容纳记录的缓冲区；为 <see langword="null"/> 时报告不匹配而不抛出异常。</para>
-    /// </param>
-    /// <param name="offset">
-    /// Index in <paramref name="data"/> of the first magic byte; a negative index or one leaving fewer
-    /// than 8 bytes reports no match.
-    /// <para><paramref name="data"/> 中魔数首字节的索引；索引为负或剩余不足 8 字节时报告不匹配。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> when the eight bytes at <paramref name="offset"/> are the ASCII magic
-    /// "NTENCODE". <para><paramref name="offset"/> 处的 8 字节为 ASCII 魔数 "NTENCODE" 时返回 <see langword="true"/>。</para>
-    /// </returns>
+    /// <summary>Validates whether the byte array at the given offset starts with "NTENCODE".
+    /// <para>验证字节数组从指定偏移开始是否为 "NTENCODE"。</para></summary>
+    /// <param name="data">Buffer holding the record; <see langword="null"/> reports no match instead of throwing.
+    /// <para>容纳记录的缓冲区；为 <see langword="null"/> 时报告不匹配而不抛出异常。</para></param>
+    /// <param name="offset">Index in <paramref name="data"/> of the first magic byte; a negative index or one leaving fewer than 8 bytes reports no match.
+    /// <para><paramref name="data"/> 中魔数首字节的索引；索引为负或剩余不足 8 字节时报告不匹配。</para></param>
+    /// <returns><see langword="true"/> when the eight bytes at <paramref name="offset"/> are the ASCII magic "NTENCODE".
+    /// <para><paramref name="offset"/> 处的 8 字节为 ASCII 魔数 "NTENCODE" 时返回 <see langword="true"/>。</para></returns>
     public static bool IsNtEncodeMagic(byte[] data, int offset = 0) => data is not null && offset >= 0 && offset + 8 <= data.Length && IsNtEncodeMagic(data.AsSpan(offset, 8));
 
     /// <summary>
@@ -152,39 +121,22 @@ internal static class StructHelper
     /// </returns>
     public static ulong ReadNtEncodeOriginalSize(ReadOnlySpan<byte> data) => BinaryPrimitives.ReadUInt64LittleEndian(data[32..]);
 
-    /// <summary>
-    /// Reads the OriginalSize field of NtEncodeHeader from a byte array at the given offset.
-    /// <para>从字节数组指定偏移读取 NtEncodeHeader 的 OriginalSize 字段。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Buffer holding the record; the field is read from <paramref name="offset"/> plus 32.
-    /// <para>容纳记录的缓冲区；字段取自 <paramref name="offset"/> 加 32 处。</para>
-    /// </param>
-    /// <param name="offset">
-    /// Index in <paramref name="data"/> of the start of the record; an offset leaving fewer than 40 bytes
-    /// for the field fails the read.
-    /// <para><paramref name="data"/> 中记录的起始索引；留下的字节不足 40 时读取失败。</para>
-    /// </param>
-    /// <returns>
-    /// The little-endian unsigned original size stored at offset 32 of the record.
-    /// <para>记录偏移 32 处按小端存放的无符号原始长度。</para>
-    /// </returns>
+    /// <summary>Reads the OriginalSize field of NtEncodeHeader from a byte array at the given offset.
+    /// <para>从字节数组指定偏移读取 NtEncodeHeader 的 OriginalSize 字段。</para></summary>
+    /// <param name="data">Buffer holding the record; the field is read from <paramref name="offset"/> plus 32.
+    /// <para>容纳记录的缓冲区；字段取自 <paramref name="offset"/> 加 32 处。</para></param>
+    /// <param name="offset">Index in <paramref name="data"/> of the start of the record; an offset leaving fewer than 40 bytes for the field fails the read.
+    /// <para><paramref name="data"/> 中记录的起始索引；留下的字节不足 40 时读取失败。</para></param>
+    /// <returns>The little-endian unsigned original size stored at offset 32 of the record.
+    /// <para>记录偏移 32 处按小端存放的无符号原始长度。</para></returns>
     public static ulong ReadNtEncodeOriginalSize(byte[] data, int offset = 0) => BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(offset + 32));
 
-    /// <summary>
-    /// Reads an NtDecompressHeader (112 bytes) from a byte span.
-    /// <para>从字节跨度读取 NtDecompressHeader(112 字节)。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Bytes starting at the record; at least 112 bytes are required and trailing bytes beyond the record are ignored.
-    /// The 72 reserved bytes at offsets 40..112 are copied out as a fresh array.
-    /// <para>从记录起始处提供的字节；至少需要 112 字节，记录之后的多余字节会被忽略。偏移 40..112 的 72 个保留字节被复制为新数组。</para>
-    /// </param>
-    /// <returns>
-    /// A header carrying the 8-byte magic, the primary type and decompression subtype, the reserved 8-byte field at
-    /// offset 16, the processed and original sizes, and the reserved tail; the magic is not checked.
-    /// <para>返回的头部携带 8 字节魔数、主类型与解压子类型、偏移 16 处的 8 字节保留字段、已处理与原始长度以及保留尾部；魔数未被校验。</para>
-    /// </returns>
+    /// <summary>Reads an NtDecompressHeader (112 bytes) from a byte span.
+    /// <para>从字节跨度读取 NtDecompressHeader(112 字节)。</para></summary>
+    /// <param name="data">Bytes starting at the record; at least 112 bytes are required and trailing bytes beyond the record are ignored. The 72 reserved bytes at offsets 40..112 are copied out as a fresh array.
+    /// <para>从记录起始处提供的字节；至少需要 112 字节，记录之后的多余字节会被忽略。偏移 40..112 的 72 个保留字节被复制为新数组。</para></param>
+    /// <returns>A header carrying the 8-byte magic, the primary type and decompression subtype, the reserved 8-byte field at offset 16, the processed and original sizes, and the reserved tail; the magic is not checked.
+    /// <para>返回的头部携带 8 字节魔数、主类型与解压子类型、偏移 16 处的 8 字节保留字段、已处理与原始长度以及保留尾部；魔数未被校验。</para></returns>
     public static NtDecompressHeader ReadNtDecompressHeader(ReadOnlySpan<byte> data)
     {
         return new NtDecompressHeader
@@ -250,19 +202,11 @@ internal static class StructHelper
         BinaryPrimitives.WriteUInt64LittleEndian(destination[32..], header.RealSize);
     }
 
-    /// <summary>
-    /// Writes an NtEncodeHeader to a byte span.
-    /// <para>将 NtEncodeHeader 写入字节跨度。</para>
-    /// </summary>
-    /// <param name="header">
-    /// Header whose magic, codec selectors, padding, sizes, key and IV fields and declared lengths are serialized; the
-    /// arrays are copied as stored and are not resized to their record widths.
-    /// <para>要序列化魔数、编解码选择字段、填充、长度、密钥与 IV 字段以及声明长度的头部；数组按现有长度复制，不会补齐到记录宽度。</para>
-    /// </param>
-    /// <param name="destination">
-    /// Target span starting at the record position; 112 bytes are written and any remaining capacity is left untouched.
-    /// <para>从记录位置起始的目标跨度；写入 112 字节，其后容量保持不变。</para>
-    /// </param>
+    /// <summary>Writes an NtEncodeHeader to a byte span.<para>将 NtEncodeHeader 写入字节跨度。</para></summary>
+    /// <param name="header">Header whose magic, codec selectors, padding, sizes, key and IV fields and declared lengths are serialized; the arrays are copied as stored and are not resized to their record widths.
+    /// <para>要序列化魔数、编解码选择字段、填充、长度、密钥与 IV 字段以及声明长度的头部；数组按现有长度复制，不会补齐到记录宽度。</para></param>
+    /// <param name="destination">Target span starting at the record position; 112 bytes are written and any remaining capacity is left untouched.
+    /// <para>从记录位置起始的目标跨度；写入 112 字节，其后容量保持不变。</para></param>
     public static void WriteNtEncodeHeader(NtEncodeHeader header, Span<byte> destination)
     {
         header.Magic.AsSpan().CopyTo(destination);
@@ -278,19 +222,12 @@ internal static class StructHelper
         BinaryPrimitives.WriteUInt32LittleEndian(destination[108..], header.IvSize);
     }
 
-    /// <summary>
-    /// Writes an NtDecompressHeader to a byte span.
-    /// <para>将 NtDecompressHeader 写入字节跨度。</para>
-    /// </summary>
-    /// <param name="header">
-    /// Header whose magic, primary type, decompression subtype, reserved word, sizes and reserved tail are serialized;
-    /// the tail array is copied as stored and is not resized to its 72-byte record width.
-    /// <para>要序列化魔数、主类型、解压子类型、保留字段、长度与保留尾部的头部；尾部数组按现有长度复制，不会补齐到 72 字节的记录宽度。</para>
-    /// </param>
-    /// <param name="destination">
-    /// Target span starting at the record position; 112 bytes are written and any remaining capacity is left untouched.
-    /// <para>从记录位置起始的目标跨度；写入 112 字节，其后容量保持不变。</para>
-    /// </param>
+    /// <summary>Writes an NtDecompressHeader to a byte span.
+    /// <para>将 NtDecompressHeader 写入字节跨度。</para></summary>
+    /// <param name="header">Header whose magic, primary type, decompression subtype, reserved word, sizes and reserved tail are serialized; the tail array is copied as stored and is not resized to its 72-byte record width.
+    /// <para>要序列化魔数、主类型、解压子类型、保留字段、长度与保留尾部的头部；尾部数组按现有长度复制，不会补齐到 72 字节的记录宽度。</para></param>
+    /// <param name="destination">Target span starting at the record position; 112 bytes are written and any remaining capacity is left untouched.
+    /// <para>从记录位置起始的目标跨度；写入 112 字节，其后容量保持不变。</para></param>
     public static void WriteNtDecompressHeader(NtDecompressHeader header, Span<byte> destination)
     {
         header.Magic.AsSpan().CopyTo(destination);

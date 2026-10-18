@@ -18,10 +18,8 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
 {
     private const int MaximumOutputChars = 16 * 1024;
 
-    /// <summary>
-    /// Translates a host path into the form the native tools see.
-    /// <para>把主机路径转换为本机工具可见的形式。</para>
-    /// </summary>
+    /// <summary>Translates a host path into the form the native tools see.
+    /// <para>把主机路径转换为本机工具可见的形式。</para></summary>
     /// <param name="path">Host path resolved with <c>Path.GetFullPath</c> before translation.
     /// <para>转换前先经 <c>Path.GetFullPath</c> 解析的主机路径。</para></param>
     /// <param name="cancellationToken">Cancels the <c>wslpath</c> process and kills its tree.
@@ -60,10 +58,8 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
         return translated;
     }
 
-    /// <summary>
-    /// Translates a host path into the form the native tools see: plain full-path resolution outside Windows, an awaited <c>wslpath</c> run through <see cref="RunAsync"/> inside the configured WSL distribution on Windows.
-    /// <para>将主机路径转换为本机工具可见的形式：非 Windows 平台直接解析完整路径；Windows 在已配置的 WSL 发行版内经由 <see cref="RunAsync"/> 等待运行 <c>wslpath</c>。</para>
-    /// </summary>
+    /// <summary>Translates a host path into the form the native tools see: plain full-path resolution outside Windows, an awaited <c>wslpath</c> run through <see cref="RunAsync"/> inside the configured WSL distribution on Windows.
+    /// <para>将主机路径转换为本机工具可见的形式：非 Windows 平台直接解析完整路径；Windows 在已配置的 WSL 发行版内经由 <see cref="RunAsync"/> 等待运行 <c>wslpath</c>。</para></summary>
     /// <param name="path">Host path resolved with <c>Path.GetFullPath</c> before translation.
     /// <para>转换前先经 <c>Path.GetFullPath</c> 解析的主机路径。</para></param>
     /// <param name="cancellationToken">Cancels the <c>wslpath</c> process and kills its tree.
@@ -168,10 +164,8 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
         return new NativeToolResult(process.ExitCode, output.ToString());
     }
 
-    /// <summary>
-    /// Starts one tool process without a shell and captures its merged output.
-    /// <para>以无 shell 方式启动一个工具进程并捕获其合并输出。</para>
-    /// </summary>
+    /// <summary>Starts one tool process without a shell and captures its merged output.
+    /// <para>以无 shell 方式启动一个工具进程并捕获其合并输出。</para></summary>
     /// <param name="tool">Executable name started directly on Linux, or the command run inside the WSL distribution on Windows.
     /// <para>Linux 下直接启动的可执行文件名；Windows 下为在 WSL 发行版内执行的命令。</para></param>
     /// <param name="arguments">Argument strings passed verbatim, one list entry per argument, never re-parsed by a shell.
@@ -182,8 +176,7 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
     /// <para>携带退出码与有界合并输出的任务。</para></returns>
     /// <exception cref="PlatformNotSupportedException">Windows without a configured WSL distribution.
     /// <para>Windows 下未配置 WSL 发行版。</para></exception>
-    /// <exception cref="IOException">The process could not be started.
-    /// <para>无法启动进程。</para></exception>
+    /// <exception cref="IOException">The process could not be started.<para>无法启动进程。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled during startup, output capture, or exit wait.
     /// <para>在启动、输出捕获或等待退出期间令牌被取消。</para></exception>
     public async Task<NativeToolResult> RunAsync(string tool, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
@@ -261,10 +254,8 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
         }
     }
 
-    /// <summary>
-    /// Builds an ext4 image from a staging directory with <c>make_ext4fs</c>.
-    /// <para>使用 <c>make_ext4fs</c> 从暂存目录构建 ext4 镜像。</para>
-    /// </summary>
+    /// <summary>Builds an ext4 image from a staging directory with <c>make_ext4fs</c>.
+    /// <para>使用 <c>make_ext4fs</c> 从暂存目录构建 ext4 镜像。</para></summary>
     /// <param name="sourceDir">Staging directory tree loaded into the image; must exist.
     /// <para>要装入镜像的暂存目录树；必须存在。</para></param>
     /// <param name="outputPath">Destination image path; an existing file is replaced only after all checks pass.
@@ -383,10 +374,8 @@ public sealed class NativeFileSystemTools(string? wslDistribution = null)
         }
     }
 
-    /// <summary>
-    /// Builds an ext4 image from a staging directory with the Android 9.0+ <c>mke2fs</c> and <c>e2fsdroid</c> pipeline.
-    /// <para>使用 Android 9.0+ 的 <c>mke2fs</c> 与 <c>e2fsdroid</c> 两阶段流水线从暂存目录构建 ext4 镜像。</para>
-    /// </summary>
+    /// <summary>Builds an ext4 image from a staging directory with the Android 9.0+ <c>mke2fs</c> and <c>e2fsdroid</c> pipeline.
+    /// <para>使用 Android 9.0+ 的 <c>mke2fs</c> 与 <c>e2fsdroid</c> 两阶段流水线从暂存目录构建 ext4 镜像。</para></summary>
     /// <param name="sourceDir">Staging directory tree loaded by <c>e2fsdroid</c>; must exist.
     /// <para>由 <c>e2fsdroid</c> 装载的暂存目录树；必须存在。</para></param>
     /// <param name="outputPath">Destination image path; an existing file is replaced only after all checks pass.

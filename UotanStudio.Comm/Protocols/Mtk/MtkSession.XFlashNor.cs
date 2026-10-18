@@ -2,8 +2,7 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    /// <summary>Erases a NOR range with an explicitly supplied device-profile erase-block size.
-    /// The NOR information query reports page size only; no erase geometry is guessed.
+    /// <summary>Erases a NOR range with an explicitly supplied device-profile erase-block size. The NOR information query reports page size only; no erase geometry is guessed.
     /// <para>使用显式提供的设备配置擦除块大小擦除 NOR 范围。NOR 信息查询只上报页大小，不猜测擦除几何信息。</para></summary>
     /// <param name="offset">The nonnegative erase-block-aligned byte offset.
     /// <para>非负且按擦除块对齐的字节偏移。</para></param>

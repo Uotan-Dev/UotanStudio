@@ -140,20 +140,14 @@ internal static class ApkV1Signer
         return unfolded[6..nameEnd];
     }
 
-    /// <summary>
-    /// Builds the v1 signature file (.SF) for the given manifest bytes.
-    /// <para>为给定清单字节构建 v1 签名文件（.SF）。</para>
-    /// </summary>
-    /// <param name="manifestBytes">Complete MANIFEST.MF bytes.
-    /// <para>完整的 MANIFEST.MF 字节。</para></param>
+    /// <summary>Builds the v1 signature file (.SF) for the given manifest bytes.
+    /// <para>为给定清单字节构建 v1 签名文件（.SF）。</para></summary>
+    /// <param name="manifestBytes">Complete MANIFEST.MF bytes.<para>完整的 MANIFEST.MF 字节。</para></param>
     /// <param name="protectedSchemeIds">APK signature scheme IDs to protect (e.g. 2 and 3).
     /// <para>要保护的 APK 签名方案 ID（如 2 和 3）。</para></param>
-    /// <returns>UTF-8 .SF bytes: main section with SHA-256-Digest-Manifest plus, per manifest section, a
-    /// Name/SHA-256-Digest pair mirroring the manifest order.
-    /// <para>UTF-8 的 .SF 字节：含 SHA-256-Digest-Manifest 的主段，随后按清单顺序为每个清单段生成
-    /// Name/SHA-256-Digest 对。</para></returns>
-    /// <exception cref="InvalidDataException">The manifest is malformed: a section lacks the leading
-    /// <c>Name: </c> attribute or the trailing blank line.
+    /// <returns>UTF-8 .SF bytes: main section with SHA-256-Digest-Manifest plus, per manifest section, a Name/SHA-256-Digest pair mirroring the manifest order.
+    /// <para>UTF-8 的 .SF 字节：含 SHA-256-Digest-Manifest 的主段，随后按清单顺序为每个清单段生成 Name/SHA-256-Digest 对。</para></returns>
+    /// <exception cref="InvalidDataException">The manifest is malformed: a section lacks the leading <c>Name: </c> attribute or the trailing blank line.
     /// <para>清单格式无效：某段缺少开头的 <c>Name: </c> 属性或结尾空行。</para></exception>
     public static byte[] BuildSignatureFile(byte[] manifestBytes, IReadOnlyList<int> protectedSchemeIds)
     {
@@ -189,20 +183,13 @@ internal static class ApkV1Signer
         return buffer.ToArray();
     }
 
-    /// <summary>
-    /// Signs the signature file with the user's custom key, producing a detached PKCS#7 CMS
-    /// ContentInfo in DER encoding. Uses the platform SignedCms implementation,
-    /// AOT-compatible and cross-platform.
-    /// <para>使用用户自定义密钥对签名文件签名，产出 DER 编码的分离式 PKCS#7 CMS ContentInfo。
-    /// 使用平台 SignedCms 实现，AOT 兼容且跨平台。</para>
-    /// </summary>
-    /// <param name="sfBytes">Complete signature file bytes to sign.
-    /// <para>待签名的完整签名文件字节。</para></param>
+    /// <summary>Signs the signature file with the user's custom key, producing a detached PKCS#7 CMS ContentInfo in DER encoding. Uses the platform SignedCms implementation, AOT-compatible and cross-platform.
+    /// <para>使用用户自定义密钥对签名文件签名，产出 DER 编码的分离式 PKCS#7 CMS ContentInfo。 使用平台 SignedCms 实现，AOT 兼容且跨平台。</para></summary>
+    /// <param name="sfBytes">Complete signature file bytes to sign.<para>待签名的完整签名文件字节。</para></param>
     /// <param name="keyMaterial">Private key and leaf certificate used for the CMS signature.
     /// <para>用于 CMS 签名的私钥与叶子证书。</para></param>
-    /// <returns>DER-encoded PKCS#7 CMS ContentInfo with a detached SHA-256 signature over
-    /// <paramref name="sfBytes"/>. <para>DER 编码的 PKCS#7 CMS ContentInfo，携带对
-    /// <paramref name="sfBytes"/> 的分离式 SHA-256 签名。</para></returns>
+    /// <returns>DER-encoded PKCS#7 CMS ContentInfo with a detached SHA-256 signature over <paramref name="sfBytes"/>.
+    /// <para>DER 编码的 PKCS#7 CMS ContentInfo，携带对 <paramref name="sfBytes"/> 的分离式 SHA-256 签名。</para></returns>
     /// <exception cref="NotSupportedException">The key material carries neither an RSA nor an ECDSA key.
     /// <para>密钥材料既不是 RSA 也不是 ECDSA 私钥。</para></exception>
     public static byte[] SignSignatureFile(byte[] sfBytes, ApkSignerKeyMaterial keyMaterial)

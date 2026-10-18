@@ -85,21 +85,15 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>
-    /// Reads a region-agnostic absolute range of Legacy eMMC storage across the regions the agent
-    /// initialized, matching the reference handler's whole-flash and raw-sector reads
-    /// (Library/DA/mtk_da_handler.py:285-312) on the same chunked exchange the partition paths use.
-    /// <para>在与区域无关的绝对范围上读取 Legacy eMMC 存储，跨越代理已初始化的各区域，对应参考处理程序的
-    /// 整片与原始扇区读取（Library/DA/mtk_da_handler.py:285-312），并复用分区路径使用的同一套分块交换。</para>
-    /// </summary>
+    /// <summary>Reads a region-agnostic absolute range of Legacy eMMC storage across the regions the agent initialized, matching the reference handler's whole-flash and raw-sector reads (Library/DA/mtk_da_handler.py:285-312) on the same chunked exchange the partition paths use.
+    /// <para>在与区域无关的绝对范围上读取 Legacy eMMC 存储，跨越代理已初始化的各区域，对应参考处理程序的 整片与原始扇区读取（Library/DA/mtk_da_handler.py:285-312），并复用分区路径使用的同一套分块交换。</para></summary>
     /// <param name="area">An address space built from this session's current Legacy inventory.
     /// <para>基于本会话当前 Legacy 清单构建的地址空间。</para></param>
     /// <param name="offset">The nonnegative, 512-aligned absolute offset.
     /// <para>非负且按 512 对齐的绝对偏移。</para></param>
     /// <param name="length">The positive, 512-aligned absolute byte count.
     /// <para>正数且按 512 对齐的绝对字节数。</para></param>
-    /// <param name="destination">A writable stream which remains open.
-    /// <para>保持打开的可写流。</para></param>
+    /// <param name="destination">A writable stream which remains open.<para>保持打开的可写流。</para></param>
     /// <param name="timeoutMs">The cooperative deadline for each chunk, from 1 ms through 24 hours.
     /// <para>每个分块的协作式截止时间，范围 1 毫秒至 24 小时。</para></param>
     /// <param name="progress">Optional cumulative bytes delivered across every chunk of the walk.
@@ -112,13 +106,12 @@ public sealed partial class MtkSession
     /// <para><paramref name="area"/> 或 <paramref name="destination"/> 为 null。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="destination"/> is not writable.
     /// <para><paramref name="destination"/> 不可写。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The range is unaligned, exceeds the reported address
-    /// space, or <paramref name="timeoutMs"/> is out of bounds.
+    /// <exception cref="ArgumentOutOfRangeException">The range is unaligned, exceeds the reported address space, or <paramref name="timeoutMs"/> is out of bounds.
     /// <para>范围未对齐、超出上报的地址空间，或 <paramref name="timeoutMs"/> 越界。</para></exception>
-    /// <exception cref="NotSupportedException"><paramref name="area"/> was not built by the Legacy discovery
-    /// path. <para><paramref name="area"/> 不是由 Legacy 发现路径构建的。</para></exception>
-    /// <exception cref="InvalidOperationException">Legacy storage is not ready, or the map belongs to a
-    /// different storage inventory. <para>Legacy 存储未就绪，或该映射属于另一份存储清单。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="area"/> was not built by the Legacy discovery path.
+    /// <para><paramref name="area"/> 不是由 Legacy 发现路径构建的。</para></exception>
+    /// <exception cref="InvalidOperationException">Legacy storage is not ready, or the map belongs to a different storage inventory.
+    /// <para>Legacy 存储未就绪，或该映射属于另一份存储清单。</para></exception>
     /// <exception cref="MtkProtocolException">A chunk faulted the exchange; the Legacy family faults.
     /// <para>某个分块使交换失败；Legacy 家族进入 fault 状态。</para></exception>
     /// <exception cref="TimeoutException">A chunk deadline expired; the session cannot be replayed.
@@ -169,21 +162,15 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>
-    /// Reads a region-agnostic absolute range of XML storage across the named regions the agent reported,
-    /// matching the reference handler's whole-flash and raw-sector reads
-    /// (Library/DA/mtk_da_handler.py:285-312) on the same chunked exchange the partition paths use.
-    /// <para>在与区域无关的绝对范围上读取 XML 存储，跨越代理上报的各命名区域，对应参考处理程序的整片与原始
-    /// 扇区读取（Library/DA/mtk_da_handler.py:285-312），并复用分区路径使用的同一套分块交换。</para>
-    /// </summary>
+    /// <summary>Reads a region-agnostic absolute range of XML storage across the named regions the agent reported, matching the reference handler's whole-flash and raw-sector reads (Library/DA/mtk_da_handler.py:285-312) on the same chunked exchange the partition paths use.
+    /// <para>在与区域无关的绝对范围上读取 XML 存储，跨越代理上报的各命名区域，对应参考处理程序的整片与原始 扇区读取（Library/DA/mtk_da_handler.py:285-312），并复用分区路径使用的同一套分块交换。</para></summary>
     /// <param name="area">An address space built from this session's current XML geometry.
     /// <para>基于本会话当前 XML 几何信息构建的地址空间。</para></param>
     /// <param name="offset">The nonnegative, block-aligned absolute offset.
     /// <para>非负且按块对齐的绝对偏移。</para></param>
     /// <param name="length">The positive, block-aligned absolute byte count.
     /// <para>正数且按块对齐的绝对字节数。</para></param>
-    /// <param name="destination">A writable stream which remains open.
-    /// <para>保持打开的可写流。</para></param>
+    /// <param name="destination">A writable stream which remains open.<para>保持打开的可写流。</para></param>
     /// <param name="timeoutMs">The cooperative deadline for each chunk, from 1 ms through 24 hours.
     /// <para>每个分块的协作式截止时间，范围 1 毫秒至 24 小时。</para></param>
     /// <param name="progress">Optional cumulative bytes delivered across every chunk of the walk.
@@ -196,14 +183,11 @@ public sealed partial class MtkSession
     /// <para><paramref name="area"/> 或 <paramref name="destination"/> 为 null。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="destination"/> is not writable.
     /// <para><paramref name="destination"/> 不可写。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The range is unaligned, exceeds the reported address
-    /// space, or <paramref name="timeoutMs"/> is out of bounds.
+    /// <exception cref="ArgumentOutOfRangeException">The range is unaligned, exceeds the reported address space, or <paramref name="timeoutMs"/> is out of bounds.
     /// <para>范围未对齐、超出上报的地址空间，或 <paramref name="timeoutMs"/> 越界。</para></exception>
-    /// <exception cref="NotSupportedException"><paramref name="area"/> was not built by the XML discovery
-    /// path, or a region it names is reserved for authenticated access.
+    /// <exception cref="NotSupportedException"><paramref name="area"/> was not built by the XML discovery path, or a region it names is reserved for authenticated access.
     /// <para><paramref name="area"/> 不是由 XML 发现路径构建的，或其命名的区域为认证访问保留。</para></exception>
-    /// <exception cref="InvalidOperationException">XML storage geometry is unknown, no XML channel is
-    /// attached, or the map belongs to a different geometry observation.
+    /// <exception cref="InvalidOperationException">XML storage geometry is unknown, no XML channel is attached, or the map belongs to a different geometry observation.
     /// <para>尚未发现 XML 存储几何信息、未附加 XML 通道，或该映射属于另一份几何观测。</para></exception>
     /// <exception cref="MtkProtocolException">A chunk faulted the exchange; the XML family faults.
     /// <para>某个分块使交换失败；XML 家族进入 fault 状态。</para></exception>

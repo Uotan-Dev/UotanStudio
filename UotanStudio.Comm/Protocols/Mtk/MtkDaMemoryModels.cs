@@ -242,16 +242,13 @@ public static class MtkDaMemoryAccess
 
     /// <summary>Reports whether a window reaches into the documented eFuse capture window.
     /// <para>报告某个窗口是否伸入已记载的 eFuse 采集窗口。</para></summary>
-    /// <remarks>
-    /// The eFuse window is the only OTP-adjacent span the reference addresses with ordinary download-agent
-    /// reads, and it does so only from <c>da memdump</c> (Library/DA/mtk_da_handler.py:794-795 and
-    /// :808-809). Every other path must treat it as off limits, which is the same discipline the RPMB
-    /// commands keep by addressing the replay-protected area through its own commands rather than through
-    /// ordinary storage (MtkRpmbAccess.cs).
-    /// 该 eFuse 窗口是参考用普通下载代理读取寻址的唯一 OTP 相邻范围，且仅在 <c>da memdump</c> 中如此
-    /// （Library/DA/mtk_da_handler.py:794-795 与 :808-809）。其他所有路径都必须把它视为禁区，这与 RPMB
-    /// 命令所持的纪律相同：重放保护区域只经其专用命令寻址，而不走普通存储路径。
-    /// </remarks>
+    /// <remarks>The eFuse window is the only OTP-adjacent span the reference addresses with ordinary
+    /// download-agent reads, and it does so only from <c>da memdump</c>
+    /// (Library/DA/mtk_da_handler.py:794-795 and :808-809). Every other path must treat it as off
+    /// limits, which is the same discipline the RPMB commands keep by addressing the replay-protected
+    /// area through its own commands rather than through ordinary storage (MtkRpmbAccess.cs). 该 eFuse
+    /// 窗口是参考用普通下载代理读取寻址的唯一 OTP 相邻范围，且仅在 <c>da memdump</c>中如此 （Library/DA/mtk_da_handler.py:794-795 与
+    /// :808-809）。其他所有路径都必须把它视为禁区，这与 RPMB 命令所持的纪律相同：重放保护区域只经其专用命令寻址，而不走普通存储路径。</remarks>
     /// <param name="startAddress">The inclusive first address of the window. 起始（含）地址。</param>
     /// <param name="endAddress">The exclusive last address of the window. 结束（不含）地址。</param>
     /// <returns><see langword="true"/> when the window shares any byte with the eFuse span.
@@ -435,17 +432,8 @@ public readonly record struct MtkDaMemoryRange(uint StartAddress, int LengthByte
 
     /// <summary>Builds a labelled window inside the dynamic-RAM region.
     /// <para>构造动态 RAM 区域内一个带标签的窗口。</para></summary>
-    /// <remarks>
-    /// The reference gives no whole-memory default that fits this window model: its fallback dynamic-RAM
-    /// length is <c>0x100000000 - dramaddr</c>, that is <c>0xC0000000</c> bytes, which exceeds both the
-    /// ceiling of a paged capture and the width of a 32-bit signed length
-    /// (Library/DA/mtk_da_handler.py:788-789 and :806-807). A caller who wants dynamic RAM therefore names
-    /// a bounded sub-window, or takes the agent-reported geometry through <see cref="ForReportedRegion"/>.
-    /// <para>参考实现没有能适配本窗口模型的整存默认值：其动态 RAM 回退长度为 <c>0x100000000 - dramaddr</c>，
-    /// 即 <c>0xC0000000</c> 字节，既超过分页采集上限，也超过 32 位有符号长度宽度
-    /// （Library/DA/mtk_da_handler.py:788-789 与 :806-807）。因此需要读取动态 RAM 的调用方必须指定有界子窗口，
-    /// 或通过 <see cref="ForReportedRegion"/> 采用代理上报的几何信息。</para>
-    /// </remarks>
+    /// <remarks>The reference gives no whole-memory default that fits this window model: its fallback dynamic-RAM length is <c>0x100000000 - dramaddr</c>, that is <c>0xC0000000</c> bytes, which exceeds both the ceiling of a paged capture and the width of a 32-bit signed length (Library/DA/mtk_da_handler.py:788-789 and :806-807). A caller who wants dynamic RAM therefore names a bounded sub-window, or takes the agent-reported geometry through <see cref="ForReportedRegion"/>.
+    /// <para>参考实现没有能适配本窗口模型的整存默认值：其动态 RAM 回退长度为 <c>0x100000000 - dramaddr</c>， 即 <c>0xC0000000</c> 字节，既超过分页采集上限，也超过 32 位有符号长度宽度 （Library/DA/mtk_da_handler.py:788-789 与 :806-807）。因此需要读取动态 RAM 的调用方必须指定有界子窗口， 或通过 <see cref="ForReportedRegion"/> 采用代理上报的几何信息。</para></remarks>
     /// <param name="startAddress">The inclusive first address. 起始（含）地址。</param>
     /// <param name="lengthBytes">The positive byte count. 正数字节数。</param>
     /// <returns>A window labelled with the dynamic-RAM region. 标记为动态 RAM 区域的窗口。</returns>
@@ -454,31 +442,25 @@ public readonly record struct MtkDaMemoryRange(uint StartAddress, int LengthByte
 
     /// <summary>Builds a window from the RAM geometry the download agent reported for itself.
     /// <para>依据下载代理自报的内存几何信息构造窗口。</para></summary>
-    /// <remarks>
-    /// Only the XFlash family answers the RAM-info device-control query, and it carries the static and
-    /// dynamic region type, base and size as six little-endian doublewords or quadwords
-    /// (Library/DA/xflash/xflash_param.py:52 with Library/DA/xflash/xflash_lib.py:473-492, stored into the
-    /// configuration at :1073 and preferred by the memory dump at
-    /// Library/DA/mtk_da_handler.py:796-801). The XML client's equivalent call sits inside the commented
-    /// block of <c>reinit</c> (Library/DA/xml/xml_lib.py:984-990) and the Legacy client has none, so both
-    /// of those families keep the documented defaults and this factory is unavailable to them.
-    /// 只有 XFlash 家族会应答内存信息器件控制查询，其以六个小端双字或四字携带静态与动态区域的类型、基址与大小
+    /// <remarks>Only the XFlash family answers the RAM-info device-control query, and it carries the
+    /// static and dynamic region type, base and size as six little-endian doublewords or quadwords
+    /// (Library/DA/xflash/xflash_param.py:52 with Library/DA/xflash/xflash_lib.py:473-492, stored into
+    /// the configuration at :1073 and preferred by the memory dump at
+    /// Library/DA/mtk_da_handler.py:796-801). The XML client's equivalent call sits inside the
+    /// commented block of <c>reinit</c>(Library/DA/xml/xml_lib.py:984-990) and the Legacy client has
+    /// none, so both of those families keep the documented defaults and this factory is unavailable to
+    /// them. 只有 XFlash 家族会应答内存信息器件控制查询，其以六个小端双字或四字携带静态与动态区域的类型、基址与大小
     /// （Library/DA/xflash/xflash_param.py:52，配合 Library/DA/xflash/xflash_lib.py:473-492，在 :1073 写入配置，
-    /// 并在 Library/DA/mtk_da_handler.py:796-801 被内存转储优先采用）。XML 客户端的对应调用位于
-    /// <c>reinit</c> 的注释块之内（Library/DA/xml/xml_lib.py:984-990），Legacy 客户端则完全没有，因此这两个家族
-    /// 沿用已记载的默认值，也无法使用本工厂方法。
-    /// </remarks>
-    /// <param name="reported">One reported region, as decoded by
-    /// <see cref="MtkXFlashRamInfo"/>. 已解码的单个上报区域。</param>
-    /// <param name="region">The region label to apply; only <see cref="MtkDaMemoryRegion.Sram"/> and
-    /// <see cref="MtkDaMemoryRegion.Dram"/> are reported. 要应用的区域标签；仅
-    /// <see cref="MtkDaMemoryRegion.Sram"/> 与 <see cref="MtkDaMemoryRegion.Dram"/> 会被上报。</param>
+    /// 并在 Library/DA/mtk_da_handler.py:796-801 被内存转储优先采用）。XML 客户端的对应调用位于 <c>reinit</c>
+    /// 的注释块之内（Library/DA/xml/xml_lib.py:984-990），Legacy 客户端则完全没有，因此这两个家族 沿用已记载的默认值，也无法使用本工厂方法。</remarks>
+    /// <param name="reported">One reported region, as decoded by <see cref="MtkXFlashRamInfo"/>.
+    /// 已解码的单个上报区域。</param>
+    /// <param name="region">The region label to apply; only <see cref="MtkDaMemoryRegion.Sram"/>and
+    /// <see cref="MtkDaMemoryRegion.Dram"/>are reported. 要应用的区域标签；仅
+    /// <see cref="MtkDaMemoryRegion.Sram"/>与 <see cref="MtkDaMemoryRegion.Dram"/>会被上报。</param>
     /// <returns>The window the agent itself declared. 代理自行声明的窗口。</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="region"/> is not a reported region,
-    /// the reported base does not fit the 32-bit agent address space, or the reported size is zero or wider
-    /// than <see cref="MtkDaMemoryAccess.MaximumRegionCaptureBytes"/>.
-    /// <para><paramref name="region"/> 不是会上报的区域、上报基址无法容纳于 32 位代理地址空间，或上报大小
-    /// 为零或超过 <see cref="MtkDaMemoryAccess.MaximumRegionCaptureBytes"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="region"/> is not a reported region, the reported base does not fit the 32-bit agent address space, or the reported size is zero or wider than <see cref="MtkDaMemoryAccess.MaximumRegionCaptureBytes"/>.
+    /// <para><paramref name="region"/> 不是会上报的区域、上报基址无法容纳于 32 位代理地址空间，或上报大小 为零或超过 <see cref="MtkDaMemoryAccess.MaximumRegionCaptureBytes"/>。</para></exception>
     public static MtkDaMemoryRange ForReportedRegion(MtkXFlashRamRegion reported, MtkDaMemoryRegion region)
     {
         if (region is not (MtkDaMemoryRegion.Sram or MtkDaMemoryRegion.Dram))
@@ -514,28 +496,21 @@ public readonly record struct MtkDaMemoryRange(uint StartAddress, int LengthByte
 
     /// <summary>Checks the bounds a capture loop needs before the first device byte is requested.
     /// <para>在请求首个设备字节之前校验采集循环所需的边界。</para></summary>
-    /// <remarks>
-    /// The step alignment is required because the reference loop emits exactly
-    /// <see cref="MtkDaMemoryAccess.DumpStepWords"/> doublewords per command and never a short tail
-    /// (Library/DA/mtk_daloader.py:351-352). This is the boot-ROM walk, so a window labelled for any other
-    /// region is refused rather than walked one doubleword at a time, and a window that reaches the eFuse
-    /// span is refused because only <see cref="ValidateCapture"/> admits that region
-    /// (Library/DA/mtk_da_handler.py:794-795 and :808-809).
-    /// 之所以要求步长对齐，是因为参考循环每条命令精确发出
-    /// <see cref="MtkDaMemoryAccess.DumpStepWords"/> 个双字，从不处理较短的尾部
-    /// （Library/DA/mtk_daloader.py:351-352）。本校验属于 boot-ROM 遍历，因此标记为其他区域的窗口会被拒绝，
-    /// 而不会逐双字遍历；伸入 eFuse 范围的窗口同样被拒绝，因为只有 <see cref="ValidateCapture"/> 接受该区域
-    /// （Library/DA/mtk_da_handler.py:794-795 与 :808-809）。
-    /// </remarks>
+    /// <remarks>The step alignment is required because the reference loop emits exactly
+    /// <see cref="MtkDaMemoryAccess.DumpStepWords"/>doublewords per command and never a short tail
+    /// (Library/DA/mtk_daloader.py:351-352). This is the boot-ROM walk, so a window labelled for any
+    /// other region is refused rather than walked one doubleword at a time, and a window that reaches
+    /// the eFuse span is refused because only <see cref="ValidateCapture"/>admits that region
+    /// (Library/DA/mtk_da_handler.py:794-795 and :808-809). 之所以要求步长对齐，是因为参考循环每条命令精确发出
+    /// <see cref="MtkDaMemoryAccess.DumpStepWords"/>个双字，从不处理较短的尾部
+    /// （Library/DA/mtk_daloader.py:351-352）。本校验属于 boot-ROM 遍历，因此标记为其他区域的窗口会被拒绝， 而不会逐双字遍历；伸入 eFuse
+    /// 范围的窗口同样被拒绝，因为只有 <see cref="ValidateCapture"/>接受该区域 （Library/DA/mtk_da_handler.py:794-795 与
+    /// :808-809）。</remarks>
     /// <param name="parameterName">The caller parameter to name in a thrown argument error.
     /// <para>抛出参数错误时要指名的调用方参数。</para></param>
-    /// <exception cref="ArgumentOutOfRangeException">The length is not positive, exceeds
-    /// <see cref="MtkDaMemoryAccess.MaximumDumpBytes"/>, the window leaves the 32-bit address space, the
-    /// window is labelled for a region other than the boot ROM, or it reaches the eFuse span.
-    /// <para>长度非正、超过 <see cref="MtkDaMemoryAccess.MaximumDumpBytes"/>、窗口越出 32 位地址空间、窗口标记
-    /// 为 boot-ROM 以外的区域，或伸入 eFuse 范围。</para></exception>
-    /// <exception cref="ArgumentException">The length is not a whole multiple of
-    /// <see cref="MtkDaMemoryAccess.DumpStepBytes"/>.
+    /// <exception cref="ArgumentOutOfRangeException">The length is not positive, exceeds <see cref="MtkDaMemoryAccess.MaximumDumpBytes"/>, the window leaves the 32-bit address space, the window is labelled for a region other than the boot ROM, or it reaches the eFuse span.
+    /// <para>长度非正、超过 <see cref="MtkDaMemoryAccess.MaximumDumpBytes"/>、窗口越出 32 位地址空间、窗口标记 为 boot-ROM 以外的区域，或伸入 eFuse 范围。</para></exception>
+    /// <exception cref="ArgumentException">The length is not a whole multiple of <see cref="MtkDaMemoryAccess.DumpStepBytes"/>.
     /// <para>长度不是 <see cref="MtkDaMemoryAccess.DumpStepBytes"/> 的整数倍。</para></exception>
     public void Validate(string parameterName)
     {
@@ -575,21 +550,15 @@ public readonly record struct MtkDaMemoryRange(uint StartAddress, int LengthByte
 
     /// <summary>Checks the bounds a paged region capture needs before the first device byte is requested.
     /// <para>在请求首个设备字节之前校验分页区域采集所需的边界。</para></summary>
-    /// <remarks>
-    /// The reference pages a whole region through the bulk read primitive and never requires step alignment,
-    /// so only the span, the address space and the region policy are checked here
+    /// <remarks>The reference pages a whole region through the bulk read primitive and never requires
+    /// step alignment, so only the span, the address space and the region policy are checked here
     /// (Library/DA/mtk_da_handler.py:784-813 with :597-624).
-    /// 参考通过批量读取原语为整块区域分页，从不要求步长对齐，因此此处只校验范围、地址空间与区域策略
-    /// （Library/DA/mtk_da_handler.py:784-813，配合 :597-624）。
-    /// </remarks>
+    /// 参考通过批量读取原语为整块区域分页，从不要求步长对齐，因此此处只校验范围、地址空间与区域策略 （Library/DA/mtk_da_handler.py:784-813，配合
+    /// :597-624）。</remarks>
     /// <param name="parameterName">The caller parameter to name in a thrown argument error.
     /// <para>抛出参数错误时要指名的调用方参数。</para></param>
-    /// <exception cref="ArgumentOutOfRangeException">The length is not positive, exceeds
-    /// <see cref="MtkDaMemoryAccess.MaximumRegionCaptureBytes"/>, the window leaves the 32-bit address space,
-    /// <paramref name="parameterName"/> names an undefined region, an eFuse-labelled window leaves the
-    /// documented eFuse span, or a window of another region reaches into it.
-    /// <para>长度非正、超过 <see cref="MtkDaMemoryAccess.MaximumRegionCaptureBytes"/>、窗口越出 32 位地址空间、
-    /// 区域未定义、标记为 eFuse 的窗口越出已记载的 eFuse 范围，或其他区域的窗口伸入该范围。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The length is not positive, exceeds <see cref="MtkDaMemoryAccess.MaximumRegionCaptureBytes"/>, the window leaves the 32-bit address space, <paramref name="parameterName"/> names an undefined region, an eFuse-labelled window leaves the documented eFuse span, or a window of another region reaches into it.
+    /// <para>长度非正、超过 <see cref="MtkDaMemoryAccess.MaximumRegionCaptureBytes"/>、窗口越出 32 位地址空间、 区域未定义、标记为 eFuse 的窗口越出已记载的 eFuse 范围，或其他区域的窗口伸入该范围。</para></exception>
     public void ValidateCapture(string parameterName)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(LengthBytes);

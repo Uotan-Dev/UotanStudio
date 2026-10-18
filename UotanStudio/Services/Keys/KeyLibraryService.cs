@@ -97,21 +97,25 @@ public sealed class KeyLibraryService
     /// <param name="ExportedFiles">The exported file paths.<para>导出文件的路径列表。</para></param>
     public sealed record ApkCertificateBundle(ManagedKey Key, IReadOnlyList<string> ExportedFiles);
 
-    /// <summary>
-    /// Generates an APK signing key pair and self-signed certificate, registers it in the library, and
-    /// exports the requested formats without overwriting existing files.
-    /// <para>生成 APK 签名密钥对与自签证书，登记进密钥库，并按请求的格式导出，绝不覆盖已存在的文件。</para>
-    /// </summary>
-    /// <param name="name">Library entry name and export base file name. <para>库条目名与导出基础文件名。</para></param>
-    /// <param name="keyPassword">Optional private-key password (also protects JKS/PKCS12 integrity via the keystore password when provided separately). <para>可选私钥密码。</para></param>
-    /// <param name="storePassword">Keystore password for JKS/PKCS12 integrity and encryption; required for JKS. <para>JKS/PKCS12 的密钥库密码；JKS 必填。</para></param>
-    /// <param name="validityYears">Certificate validity in years (1–100). <para>证书有效年数（1–100）。</para></param>
-    /// <param name="subject">Certificate subject fields (CN required; O/OU/L/ST/C optional). <para>证书主题字段（CN 必填，O/OU/L/ST/C 可选）。</para></param>
-    /// <param name="keyType">Key algorithm selection. <para>密钥算法选择。</para></param>
-    /// <param name="format">Export bundle choice. <para>导出格式组合。</para></param>
-    /// <param name="outputDirectory">Directory for the exported files (created when missing). <para>导出文件目录（缺失时创建）。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The registered library key and the exported file paths. <para>登记的库条目与导出文件路径。</para></returns>
+    /// <summary>Generates an APK signing key pair and self-signed certificate, registers it in the library, and exports the requested formats without overwriting existing files.
+    /// <para>生成 APK 签名密钥对与自签证书，登记进密钥库，并按请求的格式导出，绝不覆盖已存在的文件。</para></summary>
+    /// <param name="name">Library entry name and export base file name.
+    /// <para>库条目名与导出基础文件名。</para></param>
+    /// <param name="keyPassword">Optional private-key password (also protects JKS/PKCS12 integrity via the keystore password when provided separately).
+    /// <para>可选私钥密码。</para></param>
+    /// <param name="storePassword">Keystore password for JKS/PKCS12 integrity and encryption; required for JKS.
+    /// <para>JKS/PKCS12 的密钥库密码；JKS 必填。</para></param>
+    /// <param name="validityYears">Certificate validity in years (1–100).
+    /// <para>证书有效年数（1–100）。</para></param>
+    /// <param name="subject">Certificate subject fields (CN required; O/OU/L/ST/C optional).
+    /// <para>证书主题字段（CN 必填，O/OU/L/ST/C 可选）。</para></param>
+    /// <param name="keyType">Key algorithm selection.<para>密钥算法选择。</para></param>
+    /// <param name="format">Export bundle choice.<para>导出格式组合。</para></param>
+    /// <param name="outputDirectory">Directory for the exported files (created when missing).
+    /// <para>导出文件目录（缺失时创建）。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The registered library key and the exported file paths.
+    /// <para>登记的库条目与导出文件路径。</para></returns>
     public ApkCertificateBundle GenerateApkCertificate(
         string name,
         string? keyPassword,

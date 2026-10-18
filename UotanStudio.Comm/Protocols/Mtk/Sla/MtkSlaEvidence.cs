@@ -92,19 +92,13 @@ public sealed record MtkSlaEvidence
         ResourceSha256Hex = ChallengeSha256Hex
     };
 
-    /// <summary>
-    /// Classifies an exception raised inside an authorization exchange into the failure stage and
-    /// its detail token without altering the exception the caller observes.
-    /// <para>将授权交换内抛出的异常分类到失败阶段及其详情标记，不改变调用方观察到的异常。</para>
-    /// </summary>
-    /// <param name="error">The observed failure. <para>观察到的失败。</para></param>
+    /// <summary>Classifies an exception raised inside an authorization exchange into the failure stage and its detail token without altering the exception the caller observes.
+    /// <para>将授权交换内抛出的异常分类到失败阶段及其详情标记，不改变调用方观察到的异常。</para></summary>
+    /// <param name="error">The observed failure.<para>观察到的失败。</para></param>
     /// <param name="deadlineExpired">Whether the cooperative exchange deadline itself fired.
     /// <para>协作式交换截止时间是否已触发。</para></param>
-    /// <returns>
-    /// The failure stage and matching <c>SlaRejected</c>, <c>SlaTimeout</c> or
-    /// <c>ProviderCancelled</c> classification token.
-    /// <para>失败阶段及匹配的 <c>SlaRejected</c>、<c>SlaTimeout</c> 或 <c>ProviderCancelled</c> 分类标记。</para>
-    /// </returns>
+    /// <returns>The failure stage and matching <c>SlaRejected</c>, <c>SlaTimeout</c> or <c>ProviderCancelled</c> classification token.
+    /// <para>失败阶段及匹配的 <c>SlaRejected</c>、<c>SlaTimeout</c> 或 <c>ProviderCancelled</c> 分类标记。</para></returns>
     public static (MtkSlaEvidenceStage Stage, string Token) ClassifyFailure(Exception error, bool deadlineExpired)
         => error switch
         {

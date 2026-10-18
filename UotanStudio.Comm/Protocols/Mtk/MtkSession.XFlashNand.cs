@@ -4,13 +4,9 @@ public sealed partial class MtkSession
 {
     /// <summary>Reads an explicitly selected NAND page stream with no host-side ECC, randomization or bad-block remapping.
     /// <para>读取显式选定的 NAND 页流，不在主机执行 ECC、随机化或坏块重映射。</para></summary>
-    /// <remarks>The profile must match the selected DA's eight-word extension and length convention.
-    /// Progress counts stream bytes, not addressed main-area bytes. Partial output on failure is not rolled back.
-    /// <see cref="XFlashStorageTransferTimeoutMs"/> bounds the cooperative exchange.
-    /// <para>配置必须匹配所选 DA 的八字扩展与长度约定。进度计量流字节，而不是寻址的主区字节。
-    /// <see cref="XFlashStorageTransferTimeoutMs"/> 限制协作式交换的时间。
-    /// 失败时不会回滚部分输出。</para></remarks>
-    /// <param name="offset">The page-aligned main-area byte address. <para>按页对齐的主区字节地址。</para></param>
+    /// <remarks>The profile must match the selected DA's eight-word extension and length convention. Progress counts stream bytes, not addressed main-area bytes. Partial output on failure is not rolled back. <see cref="XFlashStorageTransferTimeoutMs"/> bounds the cooperative exchange.
+    /// <para>配置必须匹配所选 DA 的八字扩展与长度约定。进度计量流字节，而不是寻址的主区字节。 <see cref="XFlashStorageTransferTimeoutMs"/> 限制协作式交换的时间。 失败时不会回滚部分输出。</para></remarks>
+    /// <param name="offset">The page-aligned main-area byte address.<para>按页对齐的主区字节地址。</para></param>
     /// <param name="mainLength">The positive page-aligned main-area span, excluding spare bytes.
     /// <para>正数且按页对齐的主区跨度，不含备用字节。</para></param>
     /// <param name="options">The explicit address, data-mode and length-unit profile.
@@ -37,12 +33,9 @@ public sealed partial class MtkSession
 
     /// <summary>Writes an exact NAND page stream without padding, conversion or automatic erase.
     /// <para>精确写入 NAND 页流，不执行填充、转换或自动擦除。</para></summary>
-    /// <remarks>Source records follow the selected page/spare mode. Each packet contains whole records
-    /// within the negotiated bound. The agent owns ECC, randomization and bad-block handling.
-    /// No command is replayed after a failure or an uncertain completion.
-    /// <para>源记录遵循选定的页与备用区模式。每包在协商上限内包含完整记录。
-    /// ECC、随机化和坏块处理由代理负责。失败或完成状态不确定后不重放命令。</para></remarks>
-    /// <param name="offset">The page-aligned main-area byte address. <para>按页对齐的主区字节地址。</para></param>
+    /// <remarks>Source records follow the selected page/spare mode. Each packet contains whole records within the negotiated bound. The agent owns ECC, randomization and bad-block handling. No command is replayed after a failure or an uncertain completion.
+    /// <para>源记录遵循选定的页与备用区模式。每包在协商上限内包含完整记录。 ECC、随机化和坏块处理由代理负责。失败或完成状态不确定后不重放命令。</para></remarks>
+    /// <param name="offset">The page-aligned main-area byte address.<para>按页对齐的主区字节地址。</para></param>
     /// <param name="mainLength">The positive page-aligned main-area span, excluding spare bytes.
     /// <para>正数且按页对齐的主区跨度，不含备用字节。</para></param>
     /// <param name="options">The explicit address, data-mode and length-unit profile.
@@ -73,11 +66,9 @@ public sealed partial class MtkSession
 
     /// <summary>Requests an explicit NAND erase action over complete erase blocks and waits for final confirmation.
     /// <para>在完整擦除块范围内请求显式 NAND 擦除动作，并等待最终确认。</para></summary>
-    /// <remarks>Force erase and bad-block marking occur only when explicitly selected.
-    /// Cancellation or timeout cannot undo a device-accepted action; such sessions are faulted.
-    /// <para>仅在显式选择时才执行强制擦除或坏块标记。
-    /// 取消或超时无法撤销设备已接受的动作；此类会话会失效。</para></remarks>
-    /// <param name="offset">The erase-block-aligned main-area address. <para>按擦除块对齐的主区地址。</para></param>
+    /// <remarks>Force erase and bad-block marking occur only when explicitly selected. Cancellation or timeout cannot undo a device-accepted action; such sessions are faulted.
+    /// <para>仅在显式选择时才执行强制擦除或坏块标记。 取消或超时无法撤销设备已接受的动作；此类会话会失效。</para></remarks>
+    /// <param name="offset">The erase-block-aligned main-area address.<para>按擦除块对齐的主区地址。</para></param>
     /// <param name="mainLength">The positive erase-block-aligned main-area span.
     /// <para>正数且按擦除块对齐的主区跨度。</para></param>
     /// <param name="policy">The caller-selected NAND address and extension policy.

@@ -299,22 +299,22 @@ public static partial class PayloadParser
 
 
 
-    /// <summary>
-    /// Reads payload metadata from a local file, handling both raw payload.bin and ZIP-wrapped payloads.
-    /// <para>从本地文件读取载荷元数据，支持原始 payload.bin 和 ZIP 包裹的载荷。</para>
-    /// </summary>
-    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
-    /// <returns>Block size, manifest/signature geometry, base offset, parsed manifest, max timestamp, dynamic
-    /// partition metadata (empty when absent), signature fields and the list of non-empty partition names.
-    /// <para>块大小、清单/签名几何、基准偏移、已解析清单、最大时间戳、动态分区元数据（缺失时为空对象）、
-    /// 签名字段以及非空分区名列表。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
+    /// <summary>Reads payload metadata from a local file, handling both raw payload.bin and ZIP-wrapped payloads.
+    /// <para>从本地文件读取载荷元数据，支持原始 payload.bin 和 ZIP 包裹的载荷。</para></summary>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank.
+    /// <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <returns>Block size, manifest/signature geometry, base offset, parsed manifest, max timestamp, dynamic partition metadata (empty when absent), signature fields and the list of non-empty partition names.
+    /// <para>块大小、清单/签名几何、基准偏移、已解析清单、最大时间戳、动态分区元数据（缺失时为空对象）、 签名字段以及非空分区名列表。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank.
+    /// <para><paramref name="filePath"/> 为空白。</para></exception>
     /// <exception cref="InvalidPayloadMagicException">The file magic is neither a ZIP header nor the payload <c>CrAU</c> magic.
     /// <para>文件魔数既非 ZIP 头也非载荷 <c>CrAU</c> 魔数。</para></exception>
     /// <exception cref="InvalidManifestException">The ZIP lacks a payload entry, or the manifest/signature bytes are truncated.
     /// <para>ZIP 缺少载荷条目，或清单/签名字节被截断。</para></exception>
-    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
+    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range.
+    /// <para>清单 minor 版本超出支持范围。</para></exception>
     public static PayloadMetadata GetPayloadMetadata(string filePath)
     {
         Guard.ThrowIfNull(filePath);
@@ -329,19 +329,26 @@ public static partial class PayloadParser
         }
     }
 
-    /// <summary>
-    /// Asynchronously reads payload metadata from a local file.
-    /// <para>从本地文件异步读取载荷元数据。</para>
-    /// </summary>
-    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
-    /// <param name="cancellationToken">Cancels metadata reads and ZIP materialization. <para>取消元数据读取与 ZIP 物化。</para></param>
-    /// <returns>The same metadata shape as <see cref="GetPayloadMetadata(string)"/>. <para>与 <see cref="GetPayloadMetadata(string)"/> 相同的元数据形态。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
-    /// <exception cref="InvalidPayloadMagicException">The file is neither a payload nor a ZIP archive. <para>文件既不是载荷也不是 ZIP 归档。</para></exception>
-    /// <exception cref="InvalidManifestException">The payload entry is missing or the manifest is truncated. <para>载荷条目缺失或清单被截断。</para></exception>
-    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
+    /// <summary>Asynchronously reads payload metadata from a local file.
+    /// <para>从本地文件异步读取载荷元数据。</para></summary>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank.
+    /// <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <param name="cancellationToken">Cancels metadata reads and ZIP materialization.
+    /// <para>取消元数据读取与 ZIP 物化。</para></param>
+    /// <returns>The same metadata shape as <see cref="GetPayloadMetadata(string)"/>.
+    /// <para>与 <see cref="GetPayloadMetadata(string)"/> 相同的元数据形态。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank.
+    /// <para><paramref name="filePath"/> 为空白。</para></exception>
+    /// <exception cref="InvalidPayloadMagicException">The file is neither a payload nor a ZIP archive.
+    /// <para>文件既不是载荷也不是 ZIP 归档。</para></exception>
+    /// <exception cref="InvalidManifestException">The payload entry is missing or the manifest is truncated.
+    /// <para>载荷条目缺失或清单被截断。</para></exception>
+    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range.
+    /// <para>清单 minor 版本超出支持范围。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌被取消。</para></exception>
     public static async Task<PayloadMetadata> GetPayloadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         Guard.ThrowIfNull(filePath);
@@ -350,19 +357,15 @@ public static partial class PayloadParser
         return BuildMetadata(manifest, header);
     }
 
-    /// <summary>
-    /// Reads payload metadata from a stream.
-    /// <para>从流中读取载荷元数据。</para>
-    /// </summary>
-    /// <param name="stream">Payload stream positioned at the start of the header; the caller keeps ownership and
-    /// the stream is not closed. When seekable, reading advances past the metadata signature; otherwise the
-    /// signature bytes are consumed.
-    /// <para>定位在头部起始处的载荷流；所有权仍属调用方且不会被关闭。可 seek 时读取会跳过元数据签名，
-    /// 否则消耗签名字节。</para></param>
+    /// <summary>Reads payload metadata from a stream.<para>从流中读取载荷元数据。</para></summary>
+    /// <param name="stream">Payload stream positioned at the start of the header; the caller keeps ownership and the stream is not closed. When seekable, reading advances past the metadata signature; otherwise the signature bytes are consumed.
+    /// <para>定位在头部起始处的载荷流；所有权仍属调用方且不会被关闭。可 seek 时读取会跳过元数据签名， 否则消耗签名字节。</para></param>
     /// <returns>The parsed metadata, same shape as <see cref="GetPayloadMetadata(string)"/>.
     /// <para>解析后的元数据，形态与 <see cref="GetPayloadMetadata(string)"/> 相同。</para></returns>
-    /// <exception cref="InvalidManifestException">The manifest or metadata signature is truncated. <para>清单或元数据签名被截断。</para></exception>
-    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
+    /// <exception cref="InvalidManifestException">The manifest or metadata signature is truncated.
+    /// <para>清单或元数据签名被截断。</para></exception>
+    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range.
+    /// <para>清单 minor 版本超出支持范围。</para></exception>
     public static PayloadMetadata GetPayloadMetadata(Stream stream)
     {
         Guard.ThrowIfNull(stream, nameof(stream));
@@ -370,19 +373,20 @@ public static partial class PayloadParser
         return BuildMetadata(manifest, header);
     }
 
-    /// <summary>
-    /// Asynchronously reads payload metadata from a stream.
-    /// <para>从流中异步读取载荷元数据。</para>
-    /// </summary>
-    /// <param name="stream">Payload stream positioned at the start of the header; not closed, and the signature
-    /// region is skipped or consumed as in the synchronous overload.
+    /// <summary>Asynchronously reads payload metadata from a stream.
+    /// <para>从流中异步读取载荷元数据。</para></summary>
+    /// <param name="stream">Payload stream positioned at the start of the header; not closed, and the signature region is skipped or consumed as in the synchronous overload.
     /// <para>定位在头部起始处的载荷流；不会被关闭，签名区域按同步重载的方式跳过或消耗。</para></param>
-    /// <param name="cancellationToken">Cancels between reads; a pending read is aborted mid-flight. <para>在读取间隙取消；挂起的读取会被中途打断。</para></param>
+    /// <param name="cancellationToken">Cancels between reads; a pending read is aborted mid-flight.
+    /// <para>在读取间隙取消；挂起的读取会被中途打断。</para></param>
     /// <returns>The parsed metadata, same shape as <see cref="GetPayloadMetadata(string)"/>.
     /// <para>解析后的元数据，形态与 <see cref="GetPayloadMetadata(string)"/> 相同。</para></returns>
-    /// <exception cref="InvalidManifestException">The manifest or metadata signature is truncated. <para>清单或元数据签名被截断。</para></exception>
-    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
+    /// <exception cref="InvalidManifestException">The manifest or metadata signature is truncated.
+    /// <para>清单或元数据签名被截断。</para></exception>
+    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range.
+    /// <para>清单 minor 版本超出支持范围。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌被取消。</para></exception>
     public static async Task<PayloadMetadata> GetPayloadMetadataAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         Guard.ThrowIfNull(stream, nameof(stream));
@@ -444,29 +448,32 @@ public static partial class PayloadParser
         return PartitionInfoHelper.ComputePartitionInfo(metadata.Manifest);
     }
 
-    /// <summary>
-    /// Extracts partitions from a local payload file. ZIP-wrapped payloads first materialize the
-    /// embedded payload.bin to a temporary file, then extract from that file.
-    /// <para>从本地载荷文件中提取分区。ZIP 包裹的载荷先把内嵌 payload.bin 物化到临时文件，再从该文件提取。</para>
-    /// </summary>
-    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <summary>Extracts partitions from a local payload file. ZIP-wrapped payloads first materialize the embedded payload.bin to a temporary file, then extract from that file.
+    /// <para>从本地载荷文件中提取分区。ZIP 包裹的载荷先把内嵌 payload.bin 物化到临时文件，再从该文件提取。</para></summary>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank.
+    /// <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
     /// <param name="extractFiles">Partition names to extract; <see langword="null"/> or empty extracts every named partition in the manifest.
     /// <para>要提取的分区名；为 <see langword="null"/> 或空时提取清单中全部有名字分区。</para></param>
-    /// <param name="outputDir">Destination directory for <c>{partition}.img</c> files; <see langword="null"/> or empty
-    /// uses the process current directory and a missing directory is created. Partition names that would escape it are rejected.
+    /// <param name="outputDir">Destination directory for <c>{partition}.img</c> files; <see langword="null"/> or empty uses the process current directory and a missing directory is created. Partition names that would escape it are rejected.
     /// <para><c>{partition}.img</c> 的输出目录；为 <see langword="null"/> 或空时使用进程当前目录，缺失目录会被创建；逃逸该目录的分区名会被拒绝。</para></param>
-    /// <param name="sourcePayloadPath">Full payload or ZIP used as base-image source for source-dependent operations;
-    /// base images go to temporary files deleted in all paths. <para>为源依赖操作提供基座镜像的完整载荷或 ZIP；基座镜像写入临时文件并在任何路径下删除。</para></param>
+    /// <param name="sourcePayloadPath">Full payload or ZIP used as base-image source for source-dependent operations; base images go to temporary files deleted in all paths.
+    /// <para>为源依赖操作提供基座镜像的完整载荷或 ZIP；基座镜像写入临时文件并在任何路径下删除。</para></param>
     /// <param name="sourceImages">Per-partition pre-supplied base image paths; takes precedence over <paramref name="sourcePayloadPath"/> for a partition.
     /// <para>按分区预先提供的基座镜像路径；对某分区优先于 <paramref name="sourcePayloadPath"/>。</para></param>
     /// <param name="maximumPartitionBytes">Upper bound on one partition's output bytes, enforced before writing; must be positive.
     /// <para>单分区输出字节上限，写入前校验；必须为正数。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumPartitionBytes"/> is zero or negative. <para><paramref name="maximumPartitionBytes"/> 为零或负数。</para></exception>
-    /// <exception cref="InvalidPayloadMagicException">The file is neither a payload nor a ZIP archive. <para>文件既不是载荷也不是 ZIP 归档。</para></exception>
-    /// <exception cref="InvalidManifestException">The payload entry is missing or the manifest is truncated. <para>载荷条目缺失或清单被截断。</para></exception>
-    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank.
+    /// <para><paramref name="filePath"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumPartitionBytes"/> is zero or negative.
+    /// <para><paramref name="maximumPartitionBytes"/> 为零或负数。</para></exception>
+    /// <exception cref="InvalidPayloadMagicException">The file is neither a payload nor a ZIP archive.
+    /// <para>文件既不是载荷也不是 ZIP 归档。</para></exception>
+    /// <exception cref="InvalidManifestException">The payload entry is missing or the manifest is truncated.
+    /// <para>载荷条目缺失或清单被截断。</para></exception>
+    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range.
+    /// <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="PartitionExtractionException">A partition escapes the output directory, exceeds the byte cap, or lacks its required base image.
     /// <para>分区逃逸输出目录、超出字节上限，或缺少所需的基座镜像。</para></exception>
     /// <exception cref="Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
@@ -474,20 +481,26 @@ public static partial class PayloadParser
     public static void Extract(string filePath, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
         => ExtractFileCore(filePath, extractFiles, outputDir, sourcePayloadPath, sourceImages, maximumPartitionBytes, null, PayloadExtractor.DefaultMaximumZstdDictBytes);
 
-    /// <summary>
-    /// Extracts partitions from a payload file while threading external raw content dictionaries into
-    /// REPLACE_ZSTD operations, honoring the <c>max_zstd_dict_raw_size</c> ceiling.
-    /// <para>从载荷文件提取分区，并把外部原始内容字典贯穿到 REPLACE_ZSTD 操作，遵循 <c>max_zstd_dict_raw_size</c> 上限。</para>
-    /// </summary>
-    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
-    /// <param name="extractFiles">Partition names to extract; null or empty extracts every named partition. <para>要提取的分区名；为 null 或空时提取全部有名字分区。</para></param>
-    /// <param name="outputDir">Destination directory; null keeps the manifest-derived default. <para>目标目录；为 null 时使用按清单推导的默认值。</para></param>
-    /// <param name="zstdDictionaries">Dictionaries keyed by partition name; a partition without an entry keeps the dictionary-free path. <para>按分区名索引的字典；缺少条目的分区沿用无字典路径。</para></param>
-    /// <param name="maximumZstdDictRawSize">Ceiling for each supplied dictionary; larger dictionaries fail before decoding; must be positive. <para>单个字典的上限；超限字典在解码前失败；必须为正数。</para></param>
-    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
-    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> or <paramref name="zstdDictionaries"/> is <see langword="null"/>. <para><paramref name="filePath"/> 或 <paramref name="zstdDictionaries"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumZstdDictRawSize"/> is not positive. <para><paramref name="maximumZstdDictRawSize"/> 不为正数。</para></exception>
-    /// <exception cref="PayloadException">The payload is unsupported, a partition escapes the output directory, a dictionary exceeds its ceiling, or a frame cannot be decoded. <para>载荷不受支持、分区逃逸输出目录、字典超出上限，或帧无法解码。</para></exception>
+    /// <summary>Extracts partitions from a payload file while threading external raw content dictionaries into REPLACE_ZSTD operations, honoring the <c>max_zstd_dict_raw_size</c> ceiling.
+    /// <para>从载荷文件提取分区，并把外部原始内容字典贯穿到 REPLACE_ZSTD 操作，遵循 <c>max_zstd_dict_raw_size</c> 上限。</para></summary>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank.
+    /// <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <param name="extractFiles">Partition names to extract; null or empty extracts every named partition.
+    /// <para>要提取的分区名；为 null 或空时提取全部有名字分区。</para></param>
+    /// <param name="outputDir">Destination directory; null keeps the manifest-derived default.
+    /// <para>目标目录；为 null 时使用按清单推导的默认值。</para></param>
+    /// <param name="zstdDictionaries">Dictionaries keyed by partition name; a partition without an entry keeps the dictionary-free path.
+    /// <para>按分区名索引的字典；缺少条目的分区沿用无字典路径。</para></param>
+    /// <param name="maximumZstdDictRawSize">Ceiling for each supplied dictionary; larger dictionaries fail before decoding; must be positive.
+    /// <para>单个字典的上限；超限字典在解码前失败；必须为正数。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank.
+    /// <para><paramref name="filePath"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> or <paramref name="zstdDictionaries"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 或 <paramref name="zstdDictionaries"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumZstdDictRawSize"/> is not positive.
+    /// <para><paramref name="maximumZstdDictRawSize"/> 不为正数。</para></exception>
+    /// <exception cref="PayloadException">The payload is unsupported, a partition escapes the output directory, a dictionary exceeds its ceiling, or a frame cannot be decoded.
+    /// <para>载荷不受支持、分区逃逸输出目录、字典超出上限，或帧无法解码。</para></exception>
     public static void ExtractWithZstdDictionaries(string filePath, string[]? extractFiles, string? outputDir,
         IReadOnlyDictionary<string, byte[]> zstdDictionaries,
         long maximumZstdDictRawSize = PayloadExtractor.DefaultMaximumZstdDictBytes)
@@ -526,49 +539,44 @@ public static partial class PayloadParser
         }
     }
 
-    /// <summary>
-    /// Asynchronously extracts partitions from a local payload file. ZIP-wrapped payloads first
-    /// materialize the embedded payload.bin to a temporary file with byte progress, then extract
-    /// from that file.
-    /// <para>从本地载荷文件中异步提取分区。ZIP 包裹的载荷先把内嵌 payload.bin 物化到临时文件并上报字节进度，
-    /// 再从该文件提取。</para>
-    /// </summary>
-    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank. <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
+    /// <summary>Asynchronously extracts partitions from a local payload file. ZIP-wrapped payloads first materialize the embedded payload.bin to a temporary file with byte progress, then extract from that file.
+    /// <para>从本地载荷文件中异步提取分区。ZIP 包裹的载荷先把内嵌 payload.bin 物化到临时文件并上报字节进度， 再从该文件提取。</para></summary>
+    /// <param name="filePath">Local payload file or ZIP update package; must be non-blank.
+    /// <para>本地载荷文件或 ZIP 升级包；不得为空白。</para></param>
     /// <param name="extractFiles">Partition names to extract; <see langword="null"/> or empty extracts every named partition in the manifest.
     /// <para>要提取的分区名；为 <see langword="null"/> 或空时提取清单中全部有名字分区。</para></param>
-    /// <param name="outputDir">Destination directory for <c>{partition}.img</c> files; <see langword="null"/> or empty
-    /// uses the process current directory and a missing directory is created. Partition names that would escape it are rejected.
+    /// <param name="outputDir">Destination directory for <c>{partition}.img</c> files; <see langword="null"/> or empty uses the process current directory and a missing directory is created. Partition names that would escape it are rejected.
     /// <para><c>{partition}.img</c> 的输出目录；为 <see langword="null"/> 或空时使用进程当前目录，缺失目录会被创建；逃逸该目录的分区名会被拒绝。</para></param>
-    /// <param name="cancellationToken">Cancels materialization and extraction between reads. <para>在读取间隙取消物化与提取。</para></param>
-    /// <param name="sourcePayloadPath">Full payload or ZIP used as base-image source for source-dependent operations;
-    /// base images go to temporary files deleted in all paths. <para>为源依赖操作提供基座镜像的完整载荷或 ZIP；基座镜像写入临时文件并在任何路径下删除。</para></param>
+    /// <param name="cancellationToken">Cancels materialization and extraction between reads.
+    /// <para>在读取间隙取消物化与提取。</para></param>
+    /// <param name="sourcePayloadPath">Full payload or ZIP used as base-image source for source-dependent operations; base images go to temporary files deleted in all paths.
+    /// <para>为源依赖操作提供基座镜像的完整载荷或 ZIP；基座镜像写入临时文件并在任何路径下删除。</para></param>
     /// <param name="sourceImages">Per-partition pre-supplied base image paths; takes precedence over <paramref name="sourcePayloadPath"/> for a partition.
     /// <para>按分区预先提供的基座镜像路径；对某分区优先于 <paramref name="sourcePayloadPath"/>。</para></param>
     /// <param name="maximumPartitionBytes">Upper bound on one partition's output bytes, enforced before writing; must be positive.
     /// <para>单分区输出字节上限，写入前校验；必须为正数。</para></param>
-    /// <param name="byteProgress">
-    /// Optional byte-level progress callback receiving (Processed, Total) tuples covering the whole
-    /// job; when a container (ZIP materialization) phase is present it maps to the leading bytes and
-    /// the partition extraction to the remainder, so Total is the combined job size. Reports are
-    /// throttled to at most one per 100 ms plus forced reports at stage boundaries and a final
-    /// (total, total) flush. Total is 0 when no reliable estimate exists.
-    /// <para>可选的字节级进度回调，覆盖整个作业并上报 (Processed, Total)；存在容器（ZIP 物化）阶段时
-    /// 其映射到前置字节，分区提取映射到其余部分，Total 为作业总字节。上报节流为每 100ms 至多一次，
-    /// 阶段边界与最终各上报一次 (total, total)。无可靠总量时 Total 为 0。</para>
-    /// </param>
-    /// <returns>A task that completes when all selected partitions are extracted. <para>在全部所选分区提取完成后结束的任务。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank. <para><paramref name="filePath"/> 为空白。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumPartitionBytes"/> is zero or negative. <para><paramref name="maximumPartitionBytes"/> 为零或负数。</para></exception>
-    /// <exception cref="InvalidPayloadMagicException">The file is neither a payload nor a ZIP archive. <para>文件既不是载荷也不是 ZIP 归档。</para></exception>
+    /// <param name="byteProgress">Optional byte-level progress callback receiving (Processed, Total) tuples covering the whole job; when a container (ZIP materialization) phase is present it maps to the leading bytes and the partition extraction to the remainder, so Total is the combined job size. Reports are throttled to at most one per 100 ms plus forced reports at stage boundaries and a final (total, total) flush. Total is 0 when no reliable estimate exists.
+    /// <para>可选的字节级进度回调，覆盖整个作业并上报 (Processed, Total)；存在容器（ZIP 物化）阶段时 其映射到前置字节，分区提取映射到其余部分，Total 为作业总字节。上报节流为每 100ms 至多一次， 阶段边界与最终各上报一次 (total, total)。无可靠总量时 Total 为 0。</para></param>
+    /// <returns>A task that completes when all selected partitions are extracted.
+    /// <para>在全部所选分区提取完成后结束的任务。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is blank.
+    /// <para><paramref name="filePath"/> 为空白。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumPartitionBytes"/> is zero or negative.
+    /// <para><paramref name="maximumPartitionBytes"/> 为零或负数。</para></exception>
+    /// <exception cref="InvalidPayloadMagicException">The file is neither a payload nor a ZIP archive.
+    /// <para>文件既不是载荷也不是 ZIP 归档。</para></exception>
     /// <exception cref="InvalidManifestException">The payload entry is missing, the manifest is truncated, or sizes exceed the supported range.
     /// <para>载荷条目缺失、清单被截断，或大小超出支持范围。</para></exception>
-    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range. <para>清单 minor 版本超出支持范围。</para></exception>
+    /// <exception cref="DeltaPayloadNotSupportedException">The manifest minor version is outside the supported range.
+    /// <para>清单 minor 版本超出支持范围。</para></exception>
     /// <exception cref="PartitionExtractionException">A partition escapes the output directory, exceeds the byte cap, or lacks its required base image.
     /// <para>分区逃逸输出目录、超出字节上限，或缺少所需的基座镜像。</para></exception>
     /// <exception cref="Diff.Zucchini.ZucchiniException">A Zucchini operation blob is not decodable or declares an executable type this library cannot apply; it is raised before any partition output is created.
     /// <para>Zucchini 操作数据块无法解码，或声明了本库无法应用的可执行类型；该异常在创建任何分区输出之前抛出。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was cancelled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌被取消。</para></exception>
     public static async Task ExtractAsync(string filePath, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null, long maximumPartitionBytes = PayloadExtractor.DefaultMaximumPartitionBytes)
     {
         Guard.ThrowIfNull(filePath);

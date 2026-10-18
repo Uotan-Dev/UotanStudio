@@ -44,53 +44,31 @@ public static class UsbProtocolClassifier
             : null;
     }
 
-    /// <summary>
-    /// Classifies from an explicit VID/PID pair and one interface triple, using the same rules as
-    /// <see cref="Classify(UsbDeviceInfo)"/>, so topology nodes and endpoint inventory never disagree.
-    /// <para>按显式 VID/PID 与单个接口三元组分类，规则与 <see cref="Classify(UsbDeviceInfo)"/> 完全一致，
-    /// 因此拓扑节点与端点清单的结论永不分歧。</para>
-    /// </summary>
-    /// <param name="vendorId">
-    /// USB vendor id. <para>USB 厂商 ID。</para>
-    /// </param>
-    /// <param name="productId">
-    /// USB product id, or null when the node carries none. <para>USB 产品 ID；节点未携带时为 null。</para>
-    /// </param>
-    /// <param name="interfaceClass">
-    /// bInterfaceClass, or null when unknown. <para>bInterfaceClass；未知时为 null。</para>
-    /// </param>
-    /// <param name="interfaceSubClass">
-    /// bInterfaceSubClass, or null when unknown. <para>bInterfaceSubClass；未知时为 null。</para>
-    /// </param>
-    /// <param name="interfaceProtocol">
-    /// bInterfaceProtocol, or null when unknown. <para>bInterfaceProtocol；未知时为 null。</para>
-    /// </param>
-    /// <returns>
-    /// The protocol name, or <see langword="null"/> when nothing identifies a known protocol.
-    /// <para>协议名；没有任何已知协议特征时返回 <see langword="null"/>。</para>
-    /// </returns>
+    /// <summary>Classifies from an explicit VID/PID pair and one interface triple, using the same rules as <see cref="Classify(UsbDeviceInfo)"/>, so topology nodes and endpoint inventory never disagree.
+    /// <para>按显式 VID/PID 与单个接口三元组分类，规则与 <see cref="Classify(UsbDeviceInfo)"/> 完全一致， 因此拓扑节点与端点清单的结论永不分歧。</para></summary>
+    /// <param name="vendorId">USB vendor id.<para>USB 厂商 ID。</para></param>
+    /// <param name="productId">USB product id, or null when the node carries none.
+    /// <para>USB 产品 ID；节点未携带时为 null。</para></param>
+    /// <param name="interfaceClass">bInterfaceClass, or null when unknown.
+    /// <para>bInterfaceClass；未知时为 null。</para></param>
+    /// <param name="interfaceSubClass">bInterfaceSubClass, or null when unknown.
+    /// <para>bInterfaceSubClass；未知时为 null。</para></param>
+    /// <param name="interfaceProtocol">bInterfaceProtocol, or null when unknown.
+    /// <para>bInterfaceProtocol；未知时为 null。</para></param>
+    /// <returns>The protocol name, or <see langword="null"/> when nothing identifies a known protocol.
+    /// <para>协议名；没有任何已知协议特征时返回 <see langword="null"/>。</para></returns>
     public static string? Classify(ushort vendorId, ushort? productId, byte? interfaceClass,
         byte? interfaceSubClass, byte? interfaceProtocol)
         => ClassifyBootrom(vendorId, productId) ?? ClassifyInterface(interfaceClass, interfaceSubClass,
             interfaceProtocol);
 
-    /// <summary>
-    /// Maps one interface triple to a debug-bridge protocol name.
-    /// <para>把单个接口三元组映射到调试桥协议名。</para>
-    /// </summary>
-    /// <param name="interfaceClass">
-    /// bInterfaceClass. <para>bInterfaceClass。</para>
-    /// </param>
-    /// <param name="interfaceSubClass">
-    /// bInterfaceSubClass. <para>bInterfaceSubClass。</para>
-    /// </param>
-    /// <param name="interfaceProtocol">
-    /// bInterfaceProtocol. <para>bInterfaceProtocol。</para>
-    /// </param>
-    /// <returns>
-    /// <c>hdc</c>, <c>adb</c> or <c>fastboot</c>, or <see langword="null"/> for any other triple.
-    /// <para><c>hdc</c>、<c>adb</c> 或 <c>fastboot</c>；其它三元组返回 <see langword="null"/>。</para>
-    /// </returns>
+    /// <summary>Maps one interface triple to a debug-bridge protocol name.
+    /// <para>把单个接口三元组映射到调试桥协议名。</para></summary>
+    /// <param name="interfaceClass">bInterfaceClass.<para>bInterfaceClass。</para></param>
+    /// <param name="interfaceSubClass">bInterfaceSubClass.<para>bInterfaceSubClass。</para></param>
+    /// <param name="interfaceProtocol">bInterfaceProtocol.<para>bInterfaceProtocol。</para></param>
+    /// <returns><c>hdc</c>, <c>adb</c> or <c>fastboot</c>, or <see langword="null"/> for any other triple.
+    /// <para><c>hdc</c>、<c>adb</c> 或 <c>fastboot</c>；其它三元组返回 <see langword="null"/>。</para></returns>
     public static string? ClassifyInterface(byte? interfaceClass, byte? interfaceSubClass,
         byte? interfaceProtocol) =>
         (interfaceClass, interfaceSubClass, interfaceProtocol) switch

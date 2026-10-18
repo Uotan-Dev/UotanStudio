@@ -198,26 +198,13 @@ internal sealed class DzFileHeader
     /// </summary>
     public const int Size = 512;
 
-    /// <summary>
-    /// Parses the DZ file header from a byte array.
-    /// <para>从字节数组解析 DZ 文件头。</para>
-    /// </summary>
-    /// <param name="buffer">
-    /// Buffer holding at least <see cref="Size"/> header bytes; only the first <see cref="Size"/>
-    /// bytes are read and the magic field is not validated here.
-    /// <para>至少包含 <see cref="Size"/> 个头部字节的缓冲区；仅读取前 <see cref="Size"/> 字节，
-    /// 且此处不校验魔数字段。</para>
-    /// </param>
-    /// <returns>
-    /// A header instance whose array fields are fresh copies, so later edits to
-    /// <paramref name="buffer"/> do not change the result.
-    /// <para>解析得到的头部实例，其数组字段均为新副本，因此后续修改
-    /// <paramref name="buffer"/> 不会影响结果。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="buffer"/> is shorter than <see cref="Size"/> bytes.
-    /// <para><paramref name="buffer"/> 的长度小于 <see cref="Size"/> 字节。</para>
-    /// </exception>
+    /// <summary>Parses the DZ file header from a byte array.<para>从字节数组解析 DZ 文件头。</para></summary>
+    /// <param name="buffer">Buffer holding at least <see cref="Size"/> header bytes; only the first <see cref="Size"/> bytes are read and the magic field is not validated here.
+    /// <para>至少包含 <see cref="Size"/> 个头部字节的缓冲区；仅读取前 <see cref="Size"/> 字节， 且此处不校验魔数字段。</para></param>
+    /// <returns>A header instance whose array fields are fresh copies, so later edits to <paramref name="buffer"/> do not change the result.
+    /// <para>解析得到的头部实例，其数组字段均为新副本，因此后续修改 <paramref name="buffer"/> 不会影响结果。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="buffer"/> is shorter than <see cref="Size"/> bytes.
+    /// <para><paramref name="buffer"/> 的长度小于 <see cref="Size"/> 字节。</para></exception>
     public static DzFileHeader FromBytes(byte[] buffer)
     {
         if (buffer.Length < Size)
@@ -391,26 +378,13 @@ public sealed class DzChunkHeader
     /// </summary>
     public const int Size = 512;
 
-    /// <summary>
-    /// Parses a DZ chunk header from a byte array.
-    /// <para>从字节数组解析 DZ 块头。</para>
-    /// </summary>
-    /// <param name="buffer">
-    /// Buffer holding at least <see cref="Size"/> chunk-header bytes; only the first
-    /// <see cref="Size"/> bytes are read and the magic field is not validated here.
-    /// <para>至少包含 <see cref="Size"/> 个块头字节的缓冲区；仅读取前 <see cref="Size"/> 字节，
-    /// 且此处不校验魔数字段。</para>
-    /// </param>
-    /// <returns>
-    /// A chunk-header instance whose array fields are fresh copies, so later edits to
-    /// <paramref name="buffer"/> do not change the result.
-    /// <para>解析得到的块头实例，其数组字段均为新副本，因此后续修改
-    /// <paramref name="buffer"/> 不会影响结果。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="buffer"/> is shorter than <see cref="Size"/> bytes.
-    /// <para><paramref name="buffer"/> 的长度小于 <see cref="Size"/> 字节。</para>
-    /// </exception>
+    /// <summary>Parses a DZ chunk header from a byte array.<para>从字节数组解析 DZ 块头。</para></summary>
+    /// <param name="buffer">Buffer holding at least <see cref="Size"/> chunk-header bytes; only the first <see cref="Size"/> bytes are read and the magic field is not validated here.
+    /// <para>至少包含 <see cref="Size"/> 个块头字节的缓冲区；仅读取前 <see cref="Size"/> 字节， 且此处不校验魔数字段。</para></param>
+    /// <returns>A chunk-header instance whose array fields are fresh copies, so later edits to <paramref name="buffer"/> do not change the result.
+    /// <para>解析得到的块头实例，其数组字段均为新副本，因此后续修改 <paramref name="buffer"/> 不会影响结果。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="buffer"/> is shorter than <see cref="Size"/> bytes.
+    /// <para><paramref name="buffer"/> 的长度小于 <see cref="Size"/> 字节。</para></exception>
     public static DzChunkHeader FromBytes(byte[] buffer)
     {
         if (buffer.Length < Size)
@@ -502,28 +476,13 @@ public struct KdzHeader
     /// </summary>
     public const int Size = 272;
 
-    /// <summary>
-    /// Parses a KDZ partition header from a byte array.
-    /// <para>从字节数组解析 KDZ 分区头。</para>
-    /// </summary>
-    /// <param name="buffer">
-    /// Buffer holding at least <see cref="Size"/> entry bytes; only the first <see cref="Size"/>
-    /// bytes are read and the name is not decoded here.
-    /// <para>至少包含 <see cref="Size"/> 个记录字节的缓冲区；仅读取前 <see cref="Size"/> 字节，
-    /// 且此处不解码名称。</para>
-    /// </param>
-    /// <returns>
-    /// A value holding a fresh copy of the name bytes plus the decoded length and offset, so later
-    /// edits to <paramref name="buffer"/> do not change the result. Bounds against the real file
-    /// length are checked by the caller, not here.
-    /// <para>包含名称字节新副本以及解码得到的长度与偏移的值，因此后续修改
-    /// <paramref name="buffer"/> 不会影响结果；针对真实文件长度的边界检查由调用方完成，而非此
-    /// 处。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="buffer"/> is shorter than <see cref="Size"/> bytes.
-    /// <para><paramref name="buffer"/> 的长度小于 <see cref="Size"/> 字节。</para>
-    /// </exception>
+    /// <summary>Parses a KDZ partition header from a byte array.<para>从字节数组解析 KDZ 分区头。</para></summary>
+    /// <param name="buffer">Buffer holding at least <see cref="Size"/> entry bytes; only the first <see cref="Size"/> bytes are read and the name is not decoded here.
+    /// <para>至少包含 <see cref="Size"/> 个记录字节的缓冲区；仅读取前 <see cref="Size"/> 字节， 且此处不解码名称。</para></param>
+    /// <returns>A value holding a fresh copy of the name bytes plus the decoded length and offset, so later edits to <paramref name="buffer"/> do not change the result. Bounds against the real file length are checked by the caller, not here.
+    /// <para>包含名称字节新副本以及解码得到的长度与偏移的值，因此后续修改 <paramref name="buffer"/> 不会影响结果；针对真实文件长度的边界检查由调用方完成，而非此 处。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="buffer"/> is shorter than <see cref="Size"/> bytes.
+    /// <para><paramref name="buffer"/> 的长度小于 <see cref="Size"/> 字节。</para></exception>
     public static KdzHeader FromBytes(byte[] buffer)
     {
         return buffer.Length < Size

@@ -104,40 +104,27 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     /// </value>
     public VideoPixelFormat FramePixelFormat => ExportActive ? VideoPixelFormat.Bgra32 : VideoPixelFormat.Nv12;
 
-    /// <summary>
-    /// Registers the frame callback and verifies that VideoToolbox hardware decoding is available for the codec;
-    /// no decompression session exists yet. The calling thread becomes the owning thread for all later calls.
-    /// <para>登记帧回调并校验 VideoToolbox 对该编码的硬件解码可用性；此时尚不解压会话。调用线程成为后续
-    /// 所有调用的所属线程。</para>
-    /// </summary>
-    /// <param name="codec">H.264 or H.265; AV1 is rejected. <para>H.264 或 H.265；AV1 会被拒绝。</para></param>
-    /// <param name="width">
-    /// Expected frame width in pixels, from 1 to 16 384; actual output geometry follows the parameter sets.
-    /// <para>预期帧宽度（像素），1 到 16 384；实际输出几何由参数集决定。</para>
-    /// </param>
-    /// <param name="height">
-    /// Expected frame height in pixels, from 1 to 16 384.
-    /// <para>预期帧高度（像素），1 到 16 384。</para>
-    /// </param>
-    /// <param name="frameCallback">
-    /// Receives every decoded NV12 frame on the calling thread; the frame is disposed once the callback returns,
-    /// so consumers must copy or convert within it.
-    /// <para>在调用线程上接收每个解码出的 NV12 帧；回调返回后帧即被释放，消费方须在其内部完成复制或转换。</para>
-    /// </param>
-    /// <exception cref="PlatformNotSupportedException">The current OS is not macOS. <para>当前系统不是 macOS。</para></exception>
-    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
+    /// <summary>Registers the frame callback and verifies that VideoToolbox hardware decoding is available for the codec; no decompression session exists yet. The calling thread becomes the owning thread for all later calls.
+    /// <para>登记帧回调并校验 VideoToolbox 对该编码的硬件解码可用性；此时尚不解压会话。调用线程成为后续 所有调用的所属线程。</para></summary>
+    /// <param name="codec">H.264 or H.265; AV1 is rejected.<para>H.264 或 H.265；AV1 会被拒绝。</para></param>
+    /// <param name="width">Expected frame width in pixels, from 1 to 16 384; actual output geometry follows the parameter sets.
+    /// <para>预期帧宽度（像素），1 到 16 384；实际输出几何由参数集决定。</para></param>
+    /// <param name="height">Expected frame height in pixels, from 1 to 16 384.
+    /// <para>预期帧高度（像素），1 到 16 384。</para></param>
+    /// <param name="frameCallback">Receives every decoded NV12 frame on the calling thread; the frame is disposed once the callback returns, so consumers must copy or convert within it.
+    /// <para>在调用线程上接收每个解码出的 NV12 帧；回调返回后帧即被释放，消费方须在其内部完成复制或转换。</para></param>
+    /// <exception cref="PlatformNotSupportedException">The current OS is not macOS.
+    /// <para>当前系统不是 macOS。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed.
+    /// <para>解码器已被释放。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="frameCallback"/> is <see langword="null"/>.
     /// <para><paramref name="frameCallback"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The dimensions exceed the supported limits or the codec is not H.264/H.265.
     /// <para>尺寸超出支持上限，或编码不是 H.264/H.265。</para></exception>
-    /// <exception cref="InvalidOperationException">
-    /// Called from a callback or another thread, or a VideoToolbox or CoreVideo call failed.
-    /// <para>在回调内或其他线程上调用，或 VideoToolbox、CoreVideo 调用失败。</para>
-    /// </exception>
-    /// <exception cref="NotSupportedException">
-    /// Hardware-accelerated decoding is unavailable for the codec.
-    /// <para>该编码没有硬件加速解码能力。</para>
-    /// </exception>
+    /// <exception cref="InvalidOperationException">Called from a callback or another thread, or a VideoToolbox or CoreVideo call failed.
+    /// <para>在回调内或其他线程上调用，或 VideoToolbox、CoreVideo 调用失败。</para></exception>
+    /// <exception cref="NotSupportedException">Hardware-accelerated decoding is unavailable for the codec.
+    /// <para>该编码没有硬件加速解码能力。</para></exception>
     public void Initialize(VideoCodecId codec, int width, int height, Action<DecodedVideoFrame> frameCallback)
     {
         if (!OperatingSystem.IsMacOS()) throw new PlatformNotSupportedException();
@@ -168,28 +155,18 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     public void Decode(ReadOnlySpan<byte> accessUnit)
         => Decode(accessUnit, checked(_sequence++ * 166667));
 
-    /// <summary>
-    /// Decodes one Annex-B access unit with an explicit timestamp.
-    /// <para>解码一个带显式时间戳的 Annex-B 访问单元。</para>
-    /// </summary>
-    /// <param name="accessUnit">
-    /// One Annex-B access unit; parameter sets may share it with picture data.
-    /// <para>单个 Annex-B 访问单元；参数集可与图像数据同包。</para>
-    /// </param>
-    /// <param name="timestampTicks">
-    /// Presentation time in 100-nanosecond ticks, carried into the sample buffer timing.
-    /// <para>呈现时间，以 100 纳刻（tick）为单位，会写入样本缓冲的时间信息。</para>
-    /// </param>
-    /// <exception cref="ObjectDisposedException">The decoder was disposed. <para>解码器已被释放。</para></exception>
-    /// <exception cref="InvalidOperationException">
-    /// The decoder is not initialized, called from a callback or another thread, or a VideoToolbox call failed.
-    /// <para>解码器未初始化、在回调内或其他线程上调用，或 VideoToolbox 调用失败。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A picture arrived before complete parameter sets, an NAL header or parameter set is truncated or excessive,
-    /// or the decoded pixel buffer has an invalid plane layout.
-    /// <para>图像先于完整参数集到达、NAL 头或参数集被截断或过大，或解码像素缓冲的平面布局无效。</para>
-    /// </exception>
+    /// <summary>Decodes one Annex-B access unit with an explicit timestamp.
+    /// <para>解码一个带显式时间戳的 Annex-B 访问单元。</para></summary>
+    /// <param name="accessUnit">One Annex-B access unit; parameter sets may share it with picture data.
+    /// <para>单个 Annex-B 访问单元；参数集可与图像数据同包。</para></param>
+    /// <param name="timestampTicks">Presentation time in 100-nanosecond ticks, carried into the sample buffer timing.
+    /// <para>呈现时间，以 100 纳刻（tick）为单位，会写入样本缓冲的时间信息。</para></param>
+    /// <exception cref="ObjectDisposedException">The decoder was disposed.
+    /// <para>解码器已被释放。</para></exception>
+    /// <exception cref="InvalidOperationException">The decoder is not initialized, called from a callback or another thread, or a VideoToolbox call failed.
+    /// <para>解码器未初始化、在回调内或其他线程上调用，或 VideoToolbox 调用失败。</para></exception>
+    /// <exception cref="InvalidDataException">A picture arrived before complete parameter sets, an NAL header or parameter set is truncated or excessive, or the decoded pixel buffer has an invalid plane layout.
+    /// <para>图像先于完整参数集到达、NAL 头或参数集被截断或过大，或解码像素缓冲的平面布局无效。</para></exception>
     /// <exception cref="NotSupportedException">The decoded pixel buffer is not 8-bit NV12 with two planes.
     /// <para>解码像素缓冲不是双平面 8 位 NV12。</para></exception>
     public void Decode(ReadOnlySpan<byte> accessUnit, long timestampTicks)

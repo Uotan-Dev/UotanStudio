@@ -23,17 +23,11 @@ public sealed class ProtoDefinition
     /// <para>从零开始的 <c>type_ids</c> 索引；默认空数组表示方法没有参数，对应磁盘上的 <c>parameters_off</c> 字段为零。</para></value>
     public int[] ParameterTypeIndices { get; set; } = [];
 
-    /// <summary>
-    /// Computes the shorty string (e.g. "VIL") for writing.
-    /// <para>计算 shorty 字符串（如 "VIL"），供写出时使用。</para>
-    /// </summary>
-    /// <param name="dex">
-    /// File model whose <c>Types</c> table resolves <see cref="ReturnTypeIndex"/> and every entry of
-    /// <see cref="ParameterTypeIndices"/>.
-    /// <para>其 <c>Types</c> 表用于解析 <see cref="ReturnTypeIndex"/> 与 <see cref="ParameterTypeIndices"/> 各条目的文件模型。</para>
-    /// </param>
-    /// <returns>The return-type letter followed by one letter per parameter: array and object descriptors
-    /// collapse to <c>L</c>, primitive descriptors keep their leading letter.
+    /// <summary>Computes the shorty string (e.g. "VIL") for writing.
+    /// <para>计算 shorty 字符串（如 "VIL"），供写出时使用。</para></summary>
+    /// <param name="dex">File model whose <c>Types</c> table resolves <see cref="ReturnTypeIndex"/> and every entry of <see cref="ParameterTypeIndices"/>.
+    /// <para>其 <c>Types</c> 表用于解析 <see cref="ReturnTypeIndex"/> 与 <see cref="ParameterTypeIndices"/> 各条目的文件模型。</para></param>
+    /// <returns>The return-type letter followed by one letter per parameter: array and object descriptors collapse to <c>L</c>, primitive descriptors keep their leading letter.
     /// <para>返回类型字母后接每个参数一个字母：数组与对象描述符归并为 <c>L</c>，基本类型描述符保留首字母。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException">An index does not address an entry of <c>dex.Types</c>.
     /// <para>某个索引无法命中 <c>dex.Types</c> 中的条目。</para></exception>

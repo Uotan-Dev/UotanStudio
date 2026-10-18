@@ -78,10 +78,8 @@ internal static class PrivAppPermissionsPatch
         return entries;
     }
 
-    /// <summary>
-    /// Adds one package and permission allow entry to the document.
-    /// <para>向文档添加一条包名与权限授权条目。</para>
-    /// </summary>
+    /// <summary>Adds one package and permission allow entry to the document.
+    /// <para>向文档添加一条包名与权限授权条目。</para></summary>
     /// <param name="text">XML document text, bounded by <see cref="TextPatch.MaxCharacters"/>.
     /// <para>XML 文档文本，大小受 <see cref="TextPatch.MaxCharacters"/> 限制。</para></param>
     /// <param name="packageName">Granting application package name; non-blank, at most 200 characters, no control characters.
@@ -133,10 +131,8 @@ internal static class PrivAppPermissionsPatch
         return Serialize(text, document, 1);
     }
 
-    /// <summary>
-    /// Removes every allow entry matching the package and permission pair in any supported shape.
-    /// <para>移除所有匹配该包名与权限对的授权条目，支持任意形态。</para>
-    /// </summary>
+    /// <summary>Removes every allow entry matching the package and permission pair in any supported shape.
+    /// <para>移除所有匹配该包名与权限对的授权条目，支持任意形态。</para></summary>
     /// <param name="text">XML document text, bounded by <see cref="TextPatch.MaxCharacters"/>.
     /// <para>XML 文档文本，大小受 <see cref="TextPatch.MaxCharacters"/> 限制。</para></param>
     /// <param name="packageName">Granting application package name; non-blank, at most 200 characters, no control characters.

@@ -148,20 +148,12 @@ public sealed record DeviceEndpoint
     /// </value>
     public DeviceEndpointId Id => new(Source, Transport, Address);
 
-    /// <summary>
-    /// Compares every recorded field by value, including the observed USB details.
-    /// <para>按值比较全部已记录字段，其中包含已观测的 USB 详细信息。</para>
-    /// </summary>
-    /// <param name="other">
-    /// The endpoint to compare with this instance, or <see langword="null"/>.
-    /// <para>与本实例比较的端点，或 <see langword="null"/>。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> when every recorded field of the two endpoints carries the same value;
-    /// otherwise <see langword="false"/>.
-    /// <para>两个端点的全部已记录字段取值都相同时为 <see langword="true"/>；否则为
-    /// <see langword="false"/>。</para>
-    /// </returns>
+    /// <summary>Compares every recorded field by value, including the observed USB details.
+    /// <para>按值比较全部已记录字段，其中包含已观测的 USB 详细信息。</para></summary>
+    /// <param name="other">The endpoint to compare with this instance, or <see langword="null"/>.
+    /// <para>与本实例比较的端点，或 <see langword="null"/>。</para></param>
+    /// <returns><see langword="true"/> when every recorded field of the two endpoints carries the same value; otherwise <see langword="false"/>.
+    /// <para>两个端点的全部已记录字段取值都相同时为 <see langword="true"/>；否则为 <see langword="false"/>。</para></returns>
     public bool Equals(DeviceEndpoint? other)
     {
         if (other is null)
@@ -432,20 +424,12 @@ public sealed record DeviceEndpoint
     }
 }
 
-/// <summary>
-/// Identity includes the discovery source and transport namespace.
-/// <para>标识包含发现源与传输命名空间。</para>
-/// </summary>
-/// <param name="Source">
-/// Name of the discovery source that reported the endpoint.
-/// <para>上报该端点的发现源名称。</para>
-/// </param>
-/// <param name="Transport">
-/// Transport namespace key the opener resolves.
-/// <para>开启器所解析的传输命名空间键。</para>
-/// </param>
-/// <param name="Address">
-/// Exact address of the endpoint inside that transport namespace.
-/// <para>该端点在对应传输命名空间内的精确地址。</para>
-/// </param>
+/// <summary>Identity includes the discovery source and transport namespace.
+/// <para>标识包含发现源与传输命名空间。</para></summary>
+/// <param name="Source">Name of the discovery source that reported the endpoint.
+/// <para>上报该端点的发现源名称。</para></param>
+/// <param name="Transport">Transport namespace key the opener resolves.
+/// <para>开启器所解析的传输命名空间键。</para></param>
+/// <param name="Address">Exact address of the endpoint inside that transport namespace.
+/// <para>该端点在对应传输命名空间内的精确地址。</para></param>
 public readonly record struct DeviceEndpointId(string Source, string Transport, string Address);

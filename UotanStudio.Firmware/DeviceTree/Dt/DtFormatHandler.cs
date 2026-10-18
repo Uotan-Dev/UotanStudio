@@ -114,21 +114,18 @@ public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
         }
     }
 
-    /// <summary>
-    /// Extracts the firmware contents asynchronously.
-    /// <para>异步提取固件内容。</para>
-    /// </summary>
-    /// <param name="filePath">DTB or DTBO image to extract. <para>要提取的 DTB 或 DTBO 镜像。</para></param>
-    /// <param name="outputDirectory">Destination directory, created when missing; DTBO writes overlays plus
-    /// repack metadata, DTB writes <c>.dts</c> and a summary text file.
+    /// <summary>Extracts the firmware contents asynchronously.<para>异步提取固件内容。</para></summary>
+    /// <param name="filePath">DTB or DTBO image to extract.<para>要提取的 DTB 或 DTBO 镜像。</para></param>
+    /// <param name="outputDirectory">Destination directory, created when missing; DTBO writes overlays plus repack metadata, DTB writes <c>.dts</c> and a summary text file.
     /// <para>目标目录，缺失时创建；DTBO 写出 overlay 与重打包元数据，DTB 写出 <c>.dts</c> 与摘要文本文件。</para></param>
-    /// <param name="options">Optional output-size limit, overwrite policy and progress sink; <see langword="null"/>
-    /// uses defaults. <para>可选的输出大小上限、覆盖策略与进度回调；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="options">Optional output-size limit, overwrite policy and progress sink; <see langword="null"/> uses defaults.
+    /// <para>可选的输出大小上限、覆盖策略与进度回调；为 <see langword="null"/> 时使用默认值。</para></param>
     /// <param name="cancellationToken">Cancels staged extraction; a canceled run leaves the destination untouched.
     /// <para>取消暂存式提取；被取消的运行不会改动目标目录。</para></param>
-    /// <returns>A task whose result lists the written files on success or carries the failure message;
-    /// format errors do not throw. <para>任务结果在成功时列出已写文件，失败时携带错误消息；格式错误不抛异常。</para></returns>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <returns>A task whose result lists the written files on success or carries the failure message; format errors do not throw.
+    /// <para>任务结果在成功时列出已写文件，失败时携带错误消息；格式错误不抛异常。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -162,21 +159,17 @@ public sealed class DtFormatHandler : IFormatHandler, IRepackMetadataProvider
         }
     }
 
-    /// <summary>
-    /// Packs the input into firmware asynchronously.
-    /// <para>异步将输入打包为固件。</para>
-    /// </summary>
-    /// <param name="inputPath">A directory containing DTBO repack metadata, or a DTB/DTBO file; a DTBO file
-    /// is revalidated and copied whole, a DTB is parsed and rewritten.
+    /// <summary>Packs the input into firmware asynchronously.<para>异步将输入打包为固件。</para></summary>
+    /// <param name="inputPath">A directory containing DTBO repack metadata, or a DTB/DTBO file; a DTBO file is revalidated and copied whole, a DTB is parsed and rewritten.
     /// <para>包含 DTBO 重打包元数据的目录，或 DTB/DTBO 文件；DTBO 文件重新校验后整体复制，DTB 解析后重写。</para></param>
     /// <param name="outputPath">Destination file, replaced atomically via a temporary file.
     /// <para>目标文件，通过临时文件原子替换。</para></param>
-    /// <param name="cancellationToken">Cancels the write; the temporary output is deleted and the previous
-    /// destination content is kept. <para>取消写入；临时输出被删除并保留目标的原有内容。</para></param>
-    /// <returns>A task whose result reports success with the output path or a failure message for a missing
-    /// or unrecognized input; format errors do not throw.
+    /// <param name="cancellationToken">Cancels the write; the temporary output is deleted and the previous destination content is kept.
+    /// <para>取消写入；临时输出被删除并保留目标的原有内容。</para></param>
+    /// <returns>A task whose result reports success with the output path or a failure message for a missing or unrecognized input; format errors do not throw.
     /// <para>任务结果在成功时报告输出路径，在输入缺失或无法识别时给出失败消息；格式错误不抛异常。</para></returns>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try

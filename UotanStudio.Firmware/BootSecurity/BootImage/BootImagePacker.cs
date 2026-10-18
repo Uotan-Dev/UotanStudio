@@ -190,12 +190,9 @@ internal class BootImagePacker
         FileExtraction.WriteAtomic(outputPath, PackToStream);
     }
 
-    /// <summary>
-    /// Asynchronously packs the boot image to a file, honoring cancellation during the write.
-    /// <para>异步打包 Boot 镜像到文件，写入期间响应取消。</para>
-    /// </summary>
-    /// <param name="outputPath">
-    /// Destination path; the image is first written to a temporary file and the target is replaced only after the write completes.
+    /// <summary>Asynchronously packs the boot image to a file, honoring cancellation during the write.
+    /// <para>异步打包 Boot 镜像到文件，写入期间响应取消。</para></summary>
+    /// <param name="outputPath">Destination path; the image is first written to a temporary file and the target is replaced only after the write completes.
     /// <para>目标文件路径；先写入临时文件，写入完成后才替换目标文件。</para></param>
     /// <param name="cancellationToken">Token checked before the publish, during padding and between component transfers.
     /// <para>在发布前、填充期间与组件传输之间检查的取消令牌。</para></param>
@@ -205,30 +202,18 @@ internal class BootImagePacker
     /// <para><paramref name="outputPath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The target or one of its parent directories is a symbolic link or reparse point.
     /// <para>目标或其任一上级目录为符号链接或重解析点。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled; the existing
-    /// target file, if any, is left untouched.
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled; the existing target file, if any, is left untouched.
     /// <para><paramref name="cancellationToken"/> 已被触发；已有目标文件（如存在）保持不变。</para></exception>
     public Task PackToFileAsync(string outputPath, CancellationToken cancellationToken = default)
         => FileExtraction.WriteAtomicAsync(outputPath, output => PackToStreamAsync(output, cancellationToken),
             cancellationToken: cancellationToken);
 
-    /// <summary>
-    /// Writes the image to the given stream.
-    /// <para>将镜像写入指定流。</para>
-    /// </summary>
-    /// <param name="output">
-    /// Writable stream positioned at the start of the image so that page alignment is measured from it; it is left
-    /// open and not flushed.
+    /// <summary>Writes the image to the given stream.<para>将镜像写入指定流。</para></summary>
+    /// <param name="output">Writable stream positioned at the start of the image so that page alignment is measured from it; it is left open and not flushed.
     /// <para>可写流，需定位在镜像起始处以正确计算页对齐；写入后保持打开且不刷新。</para></param>
-    /// <exception cref="ArgumentException">The header version is unknown, the page size for V0–V2 is not a power of two
-    /// from 2048 to 65536, the page size for V3/V4 is neither <c>0</c> nor one of 2048, 4096, 8192, 16384, the
-    /// command line exceeds the header field or contains a NUL character, or the <see cref="Role"/> assertion fails
-    /// (init_boot with a non-empty kernel or wrong version, recovery above version 2).
-    /// <para>头部版本未知、V0–V2 页大小不是 2048 至 65536 之间的 2 的幂、V3/V4 页大小既不是 <c>0</c> 也不属于
-    /// 2048、4096、8192、16384、命令行超出头部字段长度或包含 NUL 字符，或 <see cref="Role"/> 约束失败
-    /// （init_boot 携带非空 kernel 或版本不符、recovery 高于版本 2）。</para></exception>
-    /// <exception cref="OverflowException">A component length or aligned offset on the V3/V4 path exceeds the stored
-    /// <c>uint32</c> field range.
+    /// <exception cref="ArgumentException">The header version is unknown, the page size for V0–V2 is not a power of two from 2048 to 65536, the page size for V3/V4 is neither <c>0</c> nor one of 2048, 4096, 8192, 16384, the command line exceeds the header field or contains a NUL character, or the <see cref="Role"/> assertion fails (init_boot with a non-empty kernel or wrong version, recovery above version 2).
+    /// <para>头部版本未知、V0–V2 页大小不是 2048 至 65536 之间的 2 的幂、V3/V4 页大小既不是 <c>0</c> 也不属于 2048、4096、8192、16384、命令行超出头部字段长度或包含 NUL 字符，或 <see cref="Role"/> 约束失败 （init_boot 携带非空 kernel 或版本不符、recovery 高于版本 2）。</para></exception>
+    /// <exception cref="OverflowException">A component length or aligned offset on the V3/V4 path exceeds the stored <c>uint32</c> field range.
     /// <para>V3/V4 路径上的组件长度或对齐偏移超出 <c>uint32</c> 字段范围。</para></exception>
     public void PackToStream(Stream output)
     {
@@ -245,34 +230,21 @@ internal class BootImagePacker
         }
     }
 
-    /// <summary>
-    /// Asynchronously writes the image to the given stream, checking cancellation before each section and during
-    /// padding and component transfers.
-    /// <para>异步将镜像写入指定流，在每个区段开始前以及填充与组件传输期间响应取消。</para>
-    /// </summary>
-    /// <param name="output">
-    /// Writable stream positioned at the start of the image so that page alignment is measured from it; it is left
-    /// open and not flushed.
+    /// <summary>Asynchronously writes the image to the given stream, checking cancellation before each section and during padding and component transfers.
+    /// <para>异步将镜像写入指定流，在每个区段开始前以及填充与组件传输期间响应取消。</para></summary>
+    /// <param name="output">Writable stream positioned at the start of the image so that page alignment is measured from it; it is left open and not flushed.
     /// <para>可写流，需定位在镜像起始处以正确计算页对齐；写入后保持打开且不刷新。</para></param>
-    /// <param name="cancellationToken">Token forwarded to the asynchronous writes; components backed by component
-    /// files are copied through bounded synchronous transfers, so the token is only checked around those sections.
+    /// <param name="cancellationToken">Token forwarded to the asynchronous writes; components backed by component files are copied through bounded synchronous transfers, so the token is only checked around those sections.
     /// <para>传递给异步写入的取消令牌；由组件文件后备来源提供的组件以有界同步方式复制，令牌仅在这些区段前后检查。</para></param>
     /// <returns>A task that completes once the full image has been written.
     /// <para>在完整镜像写入完成后结束的任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="output"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException">The header version is unknown, the page size for V0–V2 is not a power of two
-    /// from 2048 to 65536, the page size for V3/V4 is neither <c>0</c> nor one of 2048, 4096, 8192, 16384, the
-    /// command line exceeds the header field or contains a NUL character, or the <see cref="Role"/> assertion fails
-    /// (init_boot with a non-empty kernel or wrong version, recovery above version 2).
-    /// <para>头部版本未知、V0–V2 页大小不是 2048 至 65536 之间的 2 的幂、V3/V4 页大小既不是 <c>0</c> 也不属于
-    /// 2048、4096、8192、16384、命令行超出头部字段长度或包含 NUL 字符，或 <see cref="Role"/> 约束失败
-    /// （init_boot 携带非空 kernel 或版本不符、recovery 高于版本 2）。</para></exception>
-    /// <exception cref="OverflowException">A component length or aligned offset on the V3/V4 path exceeds the stored
-    /// <c>uint32</c> field range.
+    /// <exception cref="ArgumentException">The header version is unknown, the page size for V0–V2 is not a power of two from 2048 to 65536, the page size for V3/V4 is neither <c>0</c> nor one of 2048, 4096, 8192, 16384, the command line exceeds the header field or contains a NUL character, or the <see cref="Role"/> assertion fails (init_boot with a non-empty kernel or wrong version, recovery above version 2).
+    /// <para>头部版本未知、V0–V2 页大小不是 2048 至 65536 之间的 2 的幂、V3/V4 页大小既不是 <c>0</c> 也不属于 2048、4096、8192、16384、命令行超出头部字段长度或包含 NUL 字符，或 <see cref="Role"/> 约束失败 （init_boot 携带非空 kernel 或版本不符、recovery 高于版本 2）。</para></exception>
+    /// <exception cref="OverflowException">A component length or aligned offset on the V3/V4 path exceeds the stored <c>uint32</c> field range.
     /// <para>V3/V4 路径上的组件长度或对齐偏移超出 <c>uint32</c> 字段范围。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled; bytes already
-    /// written stay written.
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled; bytes already written stay written.
     /// <para><paramref name="cancellationToken"/> 已被触发；已写入的字节仍保留。</para></exception>
     public async Task PackToStreamAsync(Stream output, CancellationToken cancellationToken = default)
     {

@@ -2,28 +2,16 @@ namespace UotanStudio.Comm.Protocols.Edl.FlashBundle;
 
 public sealed partial class FlashBundleOrchestrator
 {
-    /// <summary>
-    /// Captures and preflights an ordered package before storage writes, retaining parsed
-    /// manifests and source handles until completion. Device preflight and execution share
-    /// one operation lease. This does not prevent in-place file changes on every platform.
-    /// <para>在存储写入前按顺序捕获并预检整个包，直到完成为止保留已解析的清单与源句柄。
-    /// 设备预检与执行共享同一个操作租约。这不能在所有平台上阻止文件被就地修改。</para>
-    /// </summary>
-    /// <param name="bundles">One to 256 manifests. All must use the same DryRun mode.
-    /// UFS provisioning is permitted only in the final manifest. Collections must not be
-    /// mutated during synchronous capture. At most 1024 source handles and 65536
-    /// selected program/patch entries are retained.
-    /// <para>1 到 256 个清单，全部必须使用相同的 DryRun 模式；仅最后一个清单允许执行
-    /// UFS 配置。同步捕获期间不得修改集合。最多保留 1024 个源句柄和 65536 个已选
-    /// program/patch 条目。</para></param>
+    /// <summary>Captures and preflights an ordered package before storage writes, retaining parsed manifests and source handles until completion. Device preflight and execution share one operation lease. This does not prevent in-place file changes on every platform.
+    /// <para>在存储写入前按顺序捕获并预检整个包，直到完成为止保留已解析的清单与源句柄。 设备预检与执行共享同一个操作租约。这不能在所有平台上阻止文件被就地修改。</para></summary>
+    /// <param name="bundles">One to 256 manifests. All must use the same DryRun mode. UFS provisioning is permitted only in the final manifest. Collections must not be mutated during synchronous capture. At most 1024 source handles and 65536 selected program/patch entries are retained.
+    /// <para>1 到 256 个清单，全部必须使用相同的 DryRun 模式；仅最后一个清单允许执行 UFS 配置。同步捕获期间不得修改集合。最多保留 1024 个源句柄和 65536 个已选 program/patch 条目。</para></param>
     /// <param name="progress">Per-bundle progress; callbacks must not wait for this session.
     /// <para>逐包进度回调；回调不得等待本会话。</para></param>
     /// <param name="cancellationToken">Cancellation for preparation, waiting and execution.
     /// <para>用于准备、等待与执行的取消令牌。</para></param>
-    /// <returns>Ordered execution results, stopping at the first failed bundle; in DryRun
-    /// mode, ordered offline inspection results. Preparation failures throw before writes.
-    /// <para>按顺序返回的执行结果，遇到第一个失败的包即停止；DryRun 模式下按顺序返回
-    /// 离线检查结果。准备失败会在写入前抛出异常。</para></returns>
+    /// <returns>Ordered execution results, stopping at the first failed bundle; in DryRun mode, ordered offline inspection results. Preparation failures throw before writes.
+    /// <para>按顺序返回的执行结果，遇到第一个失败的包即停止；DryRun 模式下按顺序返回 离线检查结果。准备失败会在写入前抛出异常。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="bundles"/> is <see langword="null"/> or contains a <see langword="null"/> element.
     /// <para><paramref name="bundles"/> 为 <see langword="null"/> 或包含 <see langword="null"/> 元素。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The manifest count is outside one to 256.

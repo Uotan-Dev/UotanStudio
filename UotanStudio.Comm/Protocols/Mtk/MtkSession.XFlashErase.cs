@@ -2,23 +2,16 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    /// <summary>
-    /// Requests device-side formatting of an aligned physical range and waits for its
-    /// explicit completion status. Cancellation or timeout cannot stop an erase already
-    /// accepted by the device; such sessions are faulted and must not be retried blindly.
-    /// <para>请求设备端格式化一段对齐的物理范围，并等待其显式的完成状态。取消或超时
-    /// 无法阻止设备已接受的擦除；此类会话会进入 fault 状态，且不得盲目重试。</para>
-    /// </summary>
+    /// <summary>Requests device-side formatting of an aligned physical range and waits for its explicit completion status. Cancellation or timeout cannot stop an erase already accepted by the device; such sessions are faulted and must not be retried blindly.
+    /// <para>请求设备端格式化一段对齐的物理范围，并等待其显式的完成状态。取消或超时 无法阻止设备已接受的擦除；此类会话会进入 fault 状态，且不得盲目重试。</para></summary>
     /// <param name="partitionId">The discovered XFlash physical partition identifier, excluding RPMB.
     /// <para>已发现的 XFlash 物理分区标识符，不含 RPMB。</para></param>
     /// <param name="offset">The block-aligned byte offset within the physical partition.
     /// <para>物理分区内按块对齐的字节偏移。</para></param>
-    /// <param name="length">The positive block-aligned byte count.
-    /// <para>正数、按块对齐的字节数。</para></param>
+    /// <param name="length">The positive block-aligned byte count.<para>正数、按块对齐的字节数。</para></param>
     /// <param name="timeoutMs">The entire exchange budget after acquiring the operation gate, from 1 ms to 24 hours.
     /// <para>获取操作门之后整次交换的时间预算，范围从 1 毫秒到 24 小时。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>A task that completes when the device confirms erase completion.
     /// <para>在设备确认擦除完成后返回的异步任务。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="timeoutMs"/> is outside 1 ms to 24 hours.
@@ -27,8 +20,7 @@ public sealed partial class MtkSession
     /// <para>存储未就绪或尚未发现。</para></exception>
     /// <exception cref="NotSupportedException">NOR requires the explicit erase geometry accepted by <see cref="EraseXFlashNorStorageAsync"/>.
     /// <para>NOR 必须使用 <see cref="EraseXFlashNorStorageAsync"/> 接受的显式擦除几何信息。</para></exception>
-    /// <exception cref="MtkProtocolException">The device returned an unexpected status, exceeded the bounded
-    /// continuation count, or requested an unsupported wait interval.
+    /// <exception cref="MtkProtocolException">The device returned an unexpected status, exceeded the bounded continuation count, or requested an unsupported wait interval.
     /// <para>设备返回意外状态、超出有界的续轮次数，或请求了不支持的等待间隔。</para></exception>
     /// <exception cref="TimeoutException">The deadline expired; the device may still be erasing and must not be retried blindly.
     /// <para>截止时间到期；设备可能仍在擦除，不得盲目重试。</para></exception>

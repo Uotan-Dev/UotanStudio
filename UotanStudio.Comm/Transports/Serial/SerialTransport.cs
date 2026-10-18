@@ -3,22 +3,20 @@ using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Transports.Serial;
 
-/// <summary>
-/// An <see cref="ICommTransport"/> implementation backed by a system serial port.
-/// <para>基于系统串口的 <see cref="ICommTransport"/> 实现。</para>
-/// Uses <see cref="SerialPort"/> and supports runtime baud-rate changes.
-/// <para>使用 <see cref="SerialPort"/>，并支持运行时切换波特率。</para>
-/// </summary>
-/// <remarks>
-/// Initializes a new <see cref="SerialTransport"/> for the specified port.
-/// <para>为指定端口初始化新的 <see cref="SerialTransport"/>。</para>
-/// </remarks>
-/// <param name="portName">The serial port name (e.g. "COM3" or "/dev/ttyUSB0"). <para>串口名称（如 "COM3" 或 "/dev/ttyUSB0"）。</para></param>
-/// <param name="baudRate">The baud rate. Default is 3000000. <para>波特率。默认 3000000。</para></param>
-/// <param name="parity">The parity setting. Default is <see cref="Parity.None"/>. <para>奇偶校验设置。默认 <see cref="Parity.None"/>。</para></param>
-/// <param name="dataBits">The number of data bits. Default is 8. <para>数据位数。默认 8。</para></param>
-/// <param name="stopBits">The stop bits setting. Default is <see cref="StopBits.One"/>. <para>停止位设置。默认 <see cref="StopBits.One"/>。</para></param>
-/// <param name="handshake">The handshake setting. Default is <see cref="Handshake.RequestToSend"/>. <para>握手设置。默认 <see cref="Handshake.RequestToSend"/>。</para></param>
+/// <summary>An <see cref="ICommTransport"/> implementation backed by a system serial port.
+/// <para>基于系统串口的 <see cref="ICommTransport"/> 实现。</para>Uses <see cref="SerialPort"/> and supports runtime baud-rate changes.<para>使用 <see cref="SerialPort"/>，并支持运行时切换波特率。</para></summary>
+/// <remarks>Initializes a new <see cref="SerialTransport"/> for the specified port.
+/// <para>为指定端口初始化新的 <see cref="SerialTransport"/>。</para></remarks>
+/// <param name="portName">The serial port name (e.g. "COM3" or "/dev/ttyUSB0").
+/// <para>串口名称（如 "COM3" 或 "/dev/ttyUSB0"）。</para></param>
+/// <param name="baudRate">The baud rate. Default is 3000000.<para>波特率。默认 3000000。</para></param>
+/// <param name="parity">The parity setting. Default is <see cref="Parity.None"/>.
+/// <para>奇偶校验设置。默认 <see cref="Parity.None"/>。</para></param>
+/// <param name="dataBits">The number of data bits. Default is 8.<para>数据位数。默认 8。</para></param>
+/// <param name="stopBits">The stop bits setting. Default is <see cref="StopBits.One"/>.
+/// <para>停止位设置。默认 <see cref="StopBits.One"/>。</para></param>
+/// <param name="handshake">The handshake setting. Default is <see cref="Handshake.RequestToSend"/>.
+/// <para>握手设置。默认 <see cref="Handshake.RequestToSend"/>。</para></param>
 public sealed class SerialTransport(
     string portName,
     int baudRate = 3000000,
@@ -253,19 +251,15 @@ public sealed class SerialTransport(
         }
     }
 
-    /// <summary>
-    /// Reads up to <paramref name="length"/> bytes into a caller-provided buffer. Returns as
-    /// soon as any data is available; throws <see cref="TimeoutException"/> if no data arrives
-    /// within <paramref name="timeoutMs"/>.
-    /// <para>将最多 <paramref name="length"/> 个字节读取到调用方提供的缓冲区。一旦有数据即返回；
-    /// 若在 <paramref name="timeoutMs"/> 内无数据到达则抛出 <see cref="TimeoutException"/>。</para>
-    /// </summary>
-    /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
-    /// <param name="offset">The destination offset. <para>目标偏移量。</para></param>
-    /// <param name="length">The maximum number of bytes to read. <para>最多读取的字节数。</para></param>
-    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
-    /// <returns>The number of bytes read. <para>实际读取的字节数。</para></returns>
-    /// <exception cref="TimeoutException">No data arrived within the timeout. <para>超时时间内无数据到达。</para></exception>
+    /// <summary>Reads up to <paramref name="length"/> bytes into a caller-provided buffer. Returns as soon as any data is available; throws <see cref="TimeoutException"/> if no data arrives within <paramref name="timeoutMs"/>.
+    /// <para>将最多 <paramref name="length"/> 个字节读取到调用方提供的缓冲区。一旦有数据即返回； 若在 <paramref name="timeoutMs"/> 内无数据到达则抛出 <see cref="TimeoutException"/>。</para></summary>
+    /// <param name="buffer">The destination buffer.<para>目标缓冲区。</para></param>
+    /// <param name="offset">The destination offset.<para>目标偏移量。</para></param>
+    /// <param name="length">The maximum number of bytes to read.<para>最多读取的字节数。</para></param>
+    /// <param name="timeoutMs">Timeout in milliseconds.<para>超时时间（毫秒）。</para></param>
+    /// <returns>The number of bytes read.<para>实际读取的字节数。</para></returns>
+    /// <exception cref="TimeoutException">No data arrived within the timeout.
+    /// <para>超时时间内无数据到达。</para></exception>
     public int Read(byte[] buffer, int offset, int length, int timeoutMs)
     {
         var port = EnsureConnected();

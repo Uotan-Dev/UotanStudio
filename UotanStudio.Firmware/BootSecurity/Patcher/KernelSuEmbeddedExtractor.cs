@@ -30,19 +30,13 @@ internal static class KernelSuEmbeddedExtractor
         return [.. found.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase)];
     }
 
-    /// <summary>
-    /// Extracts the verified kernel module matching one KMI from the embedded asset store of a libksud-style library.
-    /// <para>从 libksud 类库的内置资源存储中提取与指定 KMI 匹配的已校验内核模块。</para>
-    /// </summary>
-    /// <param name="so">Bytes of the shared library to parse. <para>待解析的共享库字节。</para></param>
-    /// <param name="kmi">
-    /// Target KMI compared case-insensitively against asset names.
-    /// <para>与资源名称进行不区分大小写比较的目标 KMI。</para>
-    /// </param>
-    /// <returns>
-    /// The extracted ELF module bytes, or <c>null</c> when no verified asset matches or the container fails to parse.
-    /// <para>提取出的 ELF 模块字节；无匹配的已校验资源或容器解析失败时为 <c>null</c>。</para>
-    /// </returns>
+    /// <summary>Extracts the verified kernel module matching one KMI from the embedded asset store of a libksud-style library.
+    /// <para>从 libksud 类库的内置资源存储中提取与指定 KMI 匹配的已校验内核模块。</para></summary>
+    /// <param name="so">Bytes of the shared library to parse.<para>待解析的共享库字节。</para></param>
+    /// <param name="kmi">Target KMI compared case-insensitively against asset names.
+    /// <para>与资源名称进行不区分大小写比较的目标 KMI。</para></param>
+    /// <returns>The extracted ELF module bytes, or <c>null</c> when no verified asset matches or the container fails to parse.
+    /// <para>提取出的 ELF 模块字节；无匹配的已校验资源或容器解析失败时为 <c>null</c>。</para></returns>
     public static byte[]? ExtractForKmi(ReadOnlySpan<byte> so, string kmi)
     {
         try

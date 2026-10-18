@@ -11,26 +11,14 @@ namespace UotanStudio.Services.Scripting;
 /// </summary>
 public static class ScriptToolCatalog
 {
-    /// <summary>
-    /// Creates the tool table for one script execution.
-    /// <para>为一次脚本执行创建工具表。</para>
-    /// </summary>
-    /// <param name="context">
-    /// Execution context that owns resources registered by the tools.
-    /// <para>持有工具所注册资源的执行上下文。</para>
-    /// </param>
-    /// <param name="gateway">
-    /// Gateway dispatching device and flash operations for the tools.
-    /// <para>为工具分发设备与刷写操作的网关。</para>
-    /// </param>
-    /// <param name="httpClient">
-    /// Client that download entries call to fetch remote content.
-    /// <para>下载条目获取远端内容所调用的客户端。</para>
-    /// </param>
-    /// <returns>
-    /// The tool table keyed by hierarchical tool name.
-    /// <para>以层级工具名为键的工具表。</para>
-    /// </returns>
+    /// <summary>Creates the tool table for one script execution.<para>为一次脚本执行创建工具表。</para></summary>
+    /// <param name="context">Execution context that owns resources registered by the tools.
+    /// <para>持有工具所注册资源的执行上下文。</para></param>
+    /// <param name="gateway">Gateway dispatching device and flash operations for the tools.
+    /// <para>为工具分发设备与刷写操作的网关。</para></param>
+    /// <param name="httpClient">Client that download entries call to fetch remote content.
+    /// <para>下载条目获取远端内容所调用的客户端。</para></param>
+    /// <returns>The tool table keyed by hierarchical tool name.<para>以层级工具名为键的工具表。</para></returns>
     public static IReadOnlyDictionary<string, ScriptTool> Create(
         INodeExecutionContext context,
         IScriptToolGateway gateway,

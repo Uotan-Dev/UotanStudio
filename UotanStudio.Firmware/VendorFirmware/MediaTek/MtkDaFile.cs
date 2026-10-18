@@ -104,35 +104,19 @@ public sealed class MtkDaFile : IDisposable
         }
     }
 
-    /// <summary>
-    /// Opens a bounded view of an explicitly selected region on the retained file.
-    /// This does not validate its suitability for a device or interpret <c>StartOffset</c>.
-    /// <para>在已保留的文件上打开显式选定区域的有界视图。这不校验区域对设备的适用性，也不解释 <c>StartOffset</c>。</para>
-    /// </summary>
-    /// <param name="entryIndex">
-    /// The zero-based directory entry index.
-    /// <para>从零开始的目录条目索引。</para>
-    /// </param>
-    /// <param name="regionIndex">
-    /// The zero-based region index within that entry.
-    /// <para>该条目内从零开始的区域索引。</para>
-    /// </param>
-    /// <param name="content">
-    /// Whether the declared signature suffix is included.
-    /// <para>是否包含声明的签名字节后缀。</para>
-    /// </param>
-    /// <returns>
-    /// A caller-owned read-only stream; disposing it does not close this file owner.
-    /// <para>调用方拥有的只读流；释放它不会关闭本文件持有者。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// An index is out of range, or <paramref name="content"/> is not a defined value.
-    /// <para>索引超出范围，或 <paramref name="content"/> 不是已定义的值。</para>
-    /// </exception>
-    /// <exception cref="ObjectDisposedException">
-    /// This owner has already been disposed.
-    /// <para>本持有者已被释放。</para>
-    /// </exception>
+    /// <summary>Opens a bounded view of an explicitly selected region on the retained file. This does not validate its suitability for a device or interpret <c>StartOffset</c>.
+    /// <para>在已保留的文件上打开显式选定区域的有界视图。这不校验区域对设备的适用性，也不解释 <c>StartOffset</c>。</para></summary>
+    /// <param name="entryIndex">The zero-based directory entry index.<para>从零开始的目录条目索引。</para></param>
+    /// <param name="regionIndex">The zero-based region index within that entry.
+    /// <para>该条目内从零开始的区域索引。</para></param>
+    /// <param name="content">Whether the declared signature suffix is included.
+    /// <para>是否包含声明的签名字节后缀。</para></param>
+    /// <returns>A caller-owned read-only stream; disposing it does not close this file owner.
+    /// <para>调用方拥有的只读流；释放它不会关闭本文件持有者。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">An index is out of range, or <paramref name="content"/> is not a defined value.
+    /// <para>索引超出范围，或 <paramref name="content"/> 不是已定义的值。</para></exception>
+    /// <exception cref="ObjectDisposedException">This owner has already been disposed.
+    /// <para>本持有者已被释放。</para></exception>
     public Stream OpenRegion(int entryIndex, int regionIndex, MtkDaRegionContent content)
     {
         lock (_gate)

@@ -71,12 +71,9 @@ public static class ElfReader
 
     /// <summary>Reads a file on a worker thread; cancellation is checked before every metadata read.
     /// <para>在工作线程上读取文件；每次读取元数据前都会检查取消。</para></summary>
-    /// <param name="path">
-    /// Path opened read-only with shared read access; the handle is closed when the task completes.
-    /// <para>以只读共享读方式打开的路径；任务结束时句柄即关闭。</para>
-    /// </param>
-    /// <param name="cancellationToken">Token checked before each read; a canceled run faults the task with
-    /// <see cref="OperationCanceledException"/>.
+    /// <param name="path">Path opened read-only with shared read access; the handle is closed when the task completes.
+    /// <para>以只读共享读方式打开的路径；任务结束时句柄即关闭。</para></param>
+    /// <param name="cancellationToken">Token checked before each read; a canceled run faults the task with <see cref="OperationCanceledException"/>.
     /// <para>每次读取前检查的令牌；被取消时任务以 <see cref="OperationCanceledException"/> 失败。</para></param>
     /// <returns>A task producing the validated <see cref="ElfInfo"/> for the file.
     /// <para>产生该文件已校验 <see cref="ElfInfo"/> 的任务。</para></returns>
@@ -84,8 +81,7 @@ public static class ElfReader
     /// <para><paramref name="path"/> 不存在。</para></exception>
     /// <exception cref="ExecutableCorruptedException">The file is not a valid ELF image. Surfaces as a faulted task.
     /// <para>文件不是有效的 ELF 镜像；表现为失败任务。</para></exception>
-    /// <exception cref="InvalidDataException">An ELF table or segment range exceeds the shared input-bound
-    /// validator. Surfaces as a faulted task.
+    /// <exception cref="InvalidDataException">An ELF table or segment range exceeds the shared input-bound validator. Surfaces as a faulted task.
     /// <para>ELF 表或段范围超出共享输入边界校验器；表现为失败任务。</para></exception>
     public static Task<ElfInfo> ReadAsync(string path, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
@@ -95,23 +91,19 @@ public static class ElfReader
 
     /// <summary>Reads metadata from the start of a seekable stream, leaving it open and restoring its position.
     /// <para>从可寻址流的开头读取元数据，不关闭流并恢复其位置。</para></summary>
-    /// <param name="stream">Readable, seekable stream positioned anywhere; all table offsets are resolved
-    /// from file start and the stream is not owned.
+    /// <param name="stream">Readable, seekable stream positioned anywhere; all table offsets are resolved from file start and the stream is not owned.
     /// <para>任意位置处的可读、可寻址流；所有表偏移都相对文件开头解析，流所有权不归本方法。</para></param>
     /// <param name="cancellationToken">Token checked before and after every read.
     /// <para>每次读取前后都检查的令牌。</para></param>
-    /// <returns>Validated metadata with extended counts resolved; section names are resolved only when the
-    /// file carries a string table.
+    /// <returns>Validated metadata with extended counts resolved; section names are resolved only when the file carries a string table.
     /// <para>已校验的元数据（扩展计数已解析）；仅当文件带有字符串表时才解析节名。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException">The stream cannot be read or cannot seek.
     /// <para>流不可读或不可寻址。</para></exception>
-    /// <exception cref="ExecutableCorruptedException">The header, section links, ranges, alignments or string
-    /// table are malformed, truncated, or exceed the bounded entry and name limits.
+    /// <exception cref="ExecutableCorruptedException">The header, section links, ranges, alignments or string table are malformed, truncated, or exceed the bounded entry and name limits.
     /// <para>头部、节链接、范围、对齐或字符串表格式错误、被截断，或超出条目与名称的有界上限。</para></exception>
-    /// <exception cref="InvalidDataException">A program-header or section-header table or data range exceeds the
-    /// shared input-bound validator.
+    /// <exception cref="InvalidDataException">A program-header or section-header table or data range exceeds the shared input-bound validator.
     /// <para>程序头表、节头表或数据范围超出共享输入边界校验器。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>

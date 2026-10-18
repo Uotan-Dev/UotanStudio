@@ -36,23 +36,18 @@ public static partial class AvbSigner
     /// <summary>VBMeta header flag bit that disables verification entirely. <para>完全禁用校验的 VBMeta 头标志位。</para></summary>
     public const uint VbmetaFlagVerificationDisabled = 0x2;
 
-    /// <summary>
-    /// Disables AVB verification on a VBMeta image by setting the verification-disabled flags and zeroing the authentication block.
-    /// <para>通过设置禁用校验标志并清零认证块来禁用 VBMeta 镜像的 AVB 校验。</para>
-    /// </summary>
-    /// <param name="vbmetaPath">
-    /// Existing standalone vbmeta file whose first <see cref="HeaderSize"/> bytes must carry the AVB0 magic and an in-range authentication block size.
-    /// <para>已存在的独立 vbmeta 文件；前 <see cref="HeaderSize"/> 字节必须带 AVB0 魔数，且认证块大小在有效范围内。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination written through a temporary file and moved into place atomically; the temporary file is deleted if writing fails. Must differ from <paramref name="vbmetaPath"/>.
-    /// <para>目标路径；经临时文件写入并原子替换，写入失败时删除临时文件。必须与 <paramref name="vbmetaPath"/> 不同。</para>
-    /// </param>
+    /// <summary>Disables AVB verification on a VBMeta image by setting the verification-disabled flags and zeroing the authentication block.
+    /// <para>通过设置禁用校验标志并清零认证块来禁用 VBMeta 镜像的 AVB 校验。</para></summary>
+    /// <param name="vbmetaPath">Existing standalone vbmeta file whose first <see cref="HeaderSize"/> bytes must carry the AVB0 magic and an in-range authentication block size.
+    /// <para>已存在的独立 vbmeta 文件；前 <see cref="HeaderSize"/> 字节必须带 AVB0 魔数，且认证块大小在有效范围内。</para></param>
+    /// <param name="outputPath">Destination written through a temporary file and moved into place atomically; the temporary file is deleted if writing fails. Must differ from <paramref name="vbmetaPath"/>.
+    /// <para>目标路径；经临时文件写入并原子替换，写入失败时删除临时文件。必须与 <paramref name="vbmetaPath"/> 不同。</para></param>
     /// <param name="cancellationToken">Cancels reads and writes; cancellation is rethrown, not converted to a failure result.
     /// <para>取消读写；取消会重新抛出，而不是转换为失败结果。</para></param>
     /// <returns>Success result reporting the patched output size and the <c>flags-patched</c> algorithm label, or a failure result explaining rejected input.
     /// <para>成功结果报告修补后的输出大小与 <c>flags-patched</c> 算法标签；被拒绝的输入返回说明原因的失败结果。</para></returns>
-    /// <exception cref="IOException">Either path cannot be resolved to a full path. <para>任一路径无法解析为完整路径。</para></exception>
+    /// <exception cref="IOException">Either path cannot be resolved to a full path.
+    /// <para>任一路径无法解析为完整路径。</para></exception>
     public static async Task<AvbSignResult> DisableVbmetaVerificationAsync(
         string vbmetaPath,
         string outputPath,
@@ -147,20 +142,14 @@ public static partial class AvbSigner
         }
     }
 
-    /// <summary>
-    /// Rebuilds and signs a VBMeta image with hash descriptors from a source VBMeta.
-    /// <para>从源 VBMeta 重建并签名带有哈希描述符的 VBMeta 镜像。</para>
-    /// </summary>
-    /// <param name="vbmetaPath">
-    /// Source vbmeta supplying the required-version, rollback-index, flags and release-string header fields; must exist and carry the AVB0 magic.
-    /// <para>提供必需版本、回滚索引、标志与发布字符串等头部字段的源 vbmeta；必须存在且带 AVB0 魔数。</para>
-    /// </param>
+    /// <summary>Rebuilds and signs a VBMeta image with hash descriptors from a source VBMeta.
+    /// <para>从源 VBMeta 重建并签名带有哈希描述符的 VBMeta 镜像。</para></summary>
+    /// <param name="vbmetaPath">Source vbmeta supplying the required-version, rollback-index, flags and release-string header fields; must exist and carry the AVB0 magic.
+    /// <para>提供必需版本、回滚索引、标志与发布字符串等头部字段的源 vbmeta；必须存在且带 AVB0 魔数。</para></param>
     /// <param name="key">RSA private key; the modulus must be 2048, 4096 or 8192 bits, otherwise the operation returns a failure result.
     /// <para>RSA 私钥；模数必须为 2048、4096 或 8192 位，否则返回失败结果。</para></param>
-    /// <param name="outputPath">
-    /// Destination published atomically after signature validation; must differ from <paramref name="vbmetaPath"/>.
-    /// <para>签名验证后原子发布的目标路径；必须与 <paramref name="vbmetaPath"/> 不同。</para>
-    /// </param>
+    /// <param name="outputPath">Destination published atomically after signature validation; must differ from <paramref name="vbmetaPath"/>.
+    /// <para>签名验证后原子发布的目标路径；必须与 <paramref name="vbmetaPath"/> 不同。</para></param>
     /// <param name="descriptors">Hash descriptors serialized into the auxiliary block; partition names must be ASCII up to 255 bytes, salt and digest up to 255 bytes each, and the algorithm name up to 32 bytes.
     /// <para>序列化进辅助块的哈希描述符；分区名须为至多 255 字节的 ASCII，盐与摘要各至多 255 字节，算法名至多 32 字节。</para></param>
     /// <param name="cancellationToken">Cancels the header read and the output write; cancellation is rethrown, not converted to a failure result.
@@ -248,26 +237,18 @@ public static partial class AvbSigner
         }
     }
 
-    /// <summary>
-    /// Rebuilds and signs a VBMeta image with a mixed set of descriptor types from a source VBMeta.
-    /// <para>从源 VBMeta 重建并签名带有混合描述符类型的 VBMeta 镜像。</para>
-    /// </summary>
+    /// <summary>Rebuilds and signs a VBMeta image with a mixed set of descriptor types from a source VBMeta.
+    /// <para>从源 VBMeta 重建并签名带有混合描述符类型的 VBMeta 镜像。</para></summary>
     /// <typeparam name="TDescriptor">Element type of the descriptor list; only the supported descriptor models are serialized.
     /// <para>描述符列表的元素类型；仅受支持的描述符模型会被序列化。</para></typeparam>
-    /// <param name="vbmetaPath">
-    /// Source vbmeta supplying the required-version, rollback-index, flags and release-string header fields; must exist and carry the AVB0 magic.
-    /// <para>提供必需版本、回滚索引、标志与发布字符串等头部字段的源 vbmeta；必须存在且带 AVB0 魔数。</para>
-    /// </param>
+    /// <param name="vbmetaPath">Source vbmeta supplying the required-version, rollback-index, flags and release-string header fields; must exist and carry the AVB0 magic.
+    /// <para>提供必需版本、回滚索引、标志与发布字符串等头部字段的源 vbmeta；必须存在且带 AVB0 魔数。</para></param>
     /// <param name="key">RSA private key; the modulus must be 2048, 4096 or 8192 bits, otherwise the operation returns a failure result.
     /// <para>RSA 私钥；模数必须为 2048、4096 或 8192 位，否则返回失败结果。</para></param>
-    /// <param name="outputPath">
-    /// Destination published atomically after signature validation; must differ from <paramref name="vbmetaPath"/>.
-    /// <para>签名验证后原子发布的目标路径；必须与 <paramref name="vbmetaPath"/> 不同。</para>
-    /// </param>
-    /// <param name="descriptors">
-    /// Heterogeneous list of hash, hashtree, kernel command line, chain partition or property descriptor models; unsupported element types fail the operation.
-    /// <para>哈希、哈希树、内核命令行、链式分区或属性描述符模型的混合列表；不支持的元素类型会使操作失败。</para>
-    /// </param>
+    /// <param name="outputPath">Destination published atomically after signature validation; must differ from <paramref name="vbmetaPath"/>.
+    /// <para>签名验证后原子发布的目标路径；必须与 <paramref name="vbmetaPath"/> 不同。</para></param>
+    /// <param name="descriptors">Heterogeneous list of hash, hashtree, kernel command line, chain partition or property descriptor models; unsupported element types fail the operation.
+    /// <para>哈希、哈希树、内核命令行、链式分区或属性描述符模型的混合列表；不支持的元素类型会使操作失败。</para></param>
     /// <param name="cancellationToken">Cancels the header read and the output write; cancellation is rethrown, not converted to a failure result.
     /// <para>取消头部读取与输出写入；取消会重新抛出，而不是转换为失败结果。</para></param>
     /// <returns>Success result with algorithm name, descriptor count and output size, or a failure result explaining rejected input.
@@ -363,27 +344,24 @@ public static partial class AvbSigner
         }
     }
 
-    /// <summary>
-    /// Adds an AVB dm-verity hashtree footer to a partition image: builds the Merkle hash tree, appends a signed VBMeta with a hashtree descriptor, and writes the standard footer.
-    /// <para>为分区镜像追加 AVB dm-verity 哈希树尾部：构建 Merkle 哈希树，追加带有哈希树描述符的 已签名 VBMeta，并写入标准尾部。</para>
-    /// </summary>
+    /// <summary>Adds an AVB dm-verity hashtree footer to a partition image: builds the Merkle hash tree, appends a signed VBMeta with a hashtree descriptor, and writes the standard footer.
+    /// <para>为分区镜像追加 AVB dm-verity 哈希树尾部：构建 Merkle 哈希树，追加带有哈希树描述符的 已签名 VBMeta，并写入标准尾部。</para></summary>
     /// <param name="imagePath">Raw or Sparse partition image; a valid footer selects original content before rebuilding the 4096-byte-block tree.
     /// <para>原始或 Sparse 分区镜像；存在有效 footer 时先选取原始内容，再按 4096 字节块重建哈希树。</para></param>
     /// <param name="partitionName">Name recorded in the hashtree descriptor; ASCII, non-empty, at most 255 bytes.
     /// <para>写入哈希树描述符的分区名；ASCII、非空、至多 255 字节。</para></param>
     /// <param name="key">RSA private key; the modulus must be 2048, 4096 or 8192 bits, otherwise the operation returns a failure result.
     /// <para>RSA 私钥；模数必须为 2048、4096 或 8192 位，否则返回失败结果。</para></param>
-    /// <param name="outputPath">
-    /// Destination assembled in a temporary file and moved into place on success; the temporary file is deleted on any failure. Must differ from <paramref name="imagePath"/>.
-    /// <para>目标路径；在临时文件中组装并在成功后原子替换，任何失败都会删除临时文件。必须与 <paramref name="imagePath"/> 不同。</para>
-    /// </param>
+    /// <param name="outputPath">Destination assembled in a temporary file and moved into place on success; the temporary file is deleted on any failure. Must differ from <paramref name="imagePath"/>.
+    /// <para>目标路径；在临时文件中组装并在成功后原子替换，任何失败都会删除临时文件。必须与 <paramref name="imagePath"/> 不同。</para></param>
     /// <param name="salt">Salt bytes bound into the tree; when <see langword="null"/>, a cryptographically random 32-byte salt is generated.
     /// <para>绑定进哈希树的盐值字节；为 <see langword="null"/> 时生成密码学随机的 32 字节盐。</para></param>
     /// <param name="cancellationToken">Cancels copying, tree writing and VBMeta emission; cancellation is rethrown after the temporary file is deleted.
     /// <para>取消复制、写树与 VBMeta 输出；取消会在删除临时文件后重新抛出。</para></param>
     /// <returns>Success result with tree layout output size and one descriptor, or a failure result explaining rejected input.
     /// <para>包含哈希树布局输出大小与单个描述符的成功结果；被拒绝的输入返回说明原因的失败结果。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>. <para><paramref name="key"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>.
+    /// <para><paramref name="key"/> 为 <see langword="null"/>。</para></exception>
     public static Task<AvbSignResult> AddHashtreeFooterAsync(
         string imagePath,
         string partitionName,
@@ -397,25 +375,22 @@ public static partial class AvbSigner
             cancellationToken);
     }
 
-    /// <summary>
-    /// Adds an AVB hash footer to a partition image: computes the salted SHA-256 digest while streaming, appends a signed VBMeta with a hash descriptor, and writes the standard footer.
-    /// <para>为分区镜像追加 AVB 哈希尾部：流式计算加盐 SHA-256 摘要，追加带有哈希描述符的 已签名 VBMeta，并写入标准尾部。</para>
-    /// </summary>
+    /// <summary>Adds an AVB hash footer to a partition image: computes the salted SHA-256 digest while streaming, appends a signed VBMeta with a hash descriptor, and writes the standard footer.
+    /// <para>为分区镜像追加 AVB 哈希尾部：流式计算加盐 SHA-256 摘要，追加带有哈希描述符的 已签名 VBMeta，并写入标准尾部。</para></summary>
     /// <param name="imagePath">Raw or Sparse partition streamed in logical 64 KiB blocks; existing valid footer metadata and padding are excluded from the new digest.
     /// <para>按逻辑 64 KiB 块读取的原始或 Sparse 分区；已有合法 footer 的元数据和填充不计入新摘要。</para></param>
     /// <param name="partitionName">Name recorded in the hash descriptor; ASCII, non-empty, at most 255 bytes.
     /// <para>写入哈希描述符的分区名；ASCII、非空、至多 255 字节。</para></param>
     /// <param name="key">RSA private key; the modulus must be 2048, 4096 or 8192 bits, otherwise the operation returns a failure result.
     /// <para>RSA 私钥；模数必须为 2048、4096 或 8192 位，否则返回失败结果。</para></param>
-    /// <param name="outputPath">
-    /// Destination assembled in a GUID-suffixed temporary file and moved into place on success; the temporary file is deleted on any failure. Must differ from <paramref name="imagePath"/>.
-    /// <para>目标路径；在带 GUID 后缀的临时文件中组装并在成功后原子替换，任何失败都会删除临时文件。必须与 <paramref name="imagePath"/> 不同。</para>
-    /// </param>
+    /// <param name="outputPath">Destination assembled in a GUID-suffixed temporary file and moved into place on success; the temporary file is deleted on any failure. Must differ from <paramref name="imagePath"/>.
+    /// <para>目标路径；在带 GUID 后缀的临时文件中组装并在成功后原子替换，任何失败都会删除临时文件。必须与 <paramref name="imagePath"/> 不同。</para></param>
     /// <param name="cancellationToken">Cancels the streaming copy and footer writes; cancellation is rethrown after the temporary file is deleted.
     /// <para>取消流式复制与尾部写入；取消会在删除临时文件后重新抛出。</para></param>
     /// <returns>Success result reporting the signed output file size, or a failure result explaining rejected input.
     /// <para>报告签名后输出文件大小的成功结果；被拒绝的输入返回说明原因的失败结果。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>. <para><paramref name="key"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>.
+    /// <para><paramref name="key"/> 为 <see langword="null"/>。</para></exception>
     public static Task<AvbSignResult> AddHashFooterAsync(
         string imagePath,
         string partitionName,

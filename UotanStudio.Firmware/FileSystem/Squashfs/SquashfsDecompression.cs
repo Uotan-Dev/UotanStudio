@@ -1,4 +1,3 @@
-using System.Buffers;
 using UotanStudio.Compress;
 using UotanStudio.Compress.Codecs.Lz4;
 using UotanStudio.Compress.Codecs.Lzo;

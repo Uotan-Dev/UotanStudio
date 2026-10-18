@@ -5,34 +5,23 @@ namespace UotanStudio.Comm.Protocols.Fastboot;
 
 public sealed partial class FastbootSession
 {
-    /// <summary>
-    /// Updates the super partition metadata: downloads the metadata image and sends
-    /// update-super:&lt;partition&gt;[:wipe].
-    /// <para>更新 super 分区元数据：下载元数据镜像并发送 update-super:&lt;分区&gt;[:wipe]。</para>
-    /// </summary>
-    /// <param name="partition">
-    /// Super partition name to update; must not be empty.
-    /// <para>要更新的 super 分区名；不得为空。</para>
-    /// </param>
-    /// <param name="metadataImage">
-    /// Metadata image stream read from its current position for its whole <see cref="Stream.Length"/>; the caller retains ownership.
-    /// <para>元数据镜像流，从当前位置按整个 <see cref="Stream.Length"/> 读取；所有权由调用方保留。</para>
-    /// </param>
-    /// <param name="wipe">
-    /// When <see langword="true"/>, appends <c>:wipe</c> so the device also wipes the partition contents.
-    /// <para>为 <see langword="true"/> 时追加 <c>:wipe</c>，使设备同时清除分区内容。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives the cumulative downloaded byte count; may be <see langword="null"/>.
-    /// <para>接收累计已下载字节数；可为 <see langword="null"/>。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the download between chunks; an in-flight device write is not interrupted.
-    /// <para>在分块下载的各块之间取消；不会打断正在进行的设备写入。</para>
-    /// </param>
-    /// <returns>The parsed update-super response. <para>解析后的 update-super 响应。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="partition"/> is empty. <para><paramref name="partition"/> 为空。</para></exception>
-    /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
+    /// <summary>Updates the super partition metadata: downloads the metadata image and sends update-super:&lt;partition&gt;[:wipe].
+    /// <para>更新 super 分区元数据：下载元数据镜像并发送 update-super:&lt;分区&gt;[:wipe]。</para></summary>
+    /// <param name="partition">Super partition name to update; must not be empty.
+    /// <para>要更新的 super 分区名；不得为空。</para></param>
+    /// <param name="metadataImage">Metadata image stream read from its current position for its whole <see cref="Stream.Length"/>; the caller retains ownership.
+    /// <para>元数据镜像流，从当前位置按整个 <see cref="Stream.Length"/> 读取；所有权由调用方保留。</para></param>
+    /// <param name="wipe">When <see langword="true"/>, appends <c>:wipe</c> so the device also wipes the partition contents.
+    /// <para>为 <see langword="true"/> 时追加 <c>:wipe</c>，使设备同时清除分区内容。</para></param>
+    /// <param name="progress">Receives the cumulative downloaded byte count; may be <see langword="null"/>.
+    /// <para>接收累计已下载字节数；可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Cancels the download between chunks; an in-flight device write is not interrupted.
+    /// <para>在分块下载的各块之间取消；不会打断正在进行的设备写入。</para></param>
+    /// <returns>The parsed update-super response.<para>解析后的 update-super 响应。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="partition"/> is empty.
+    /// <para><paramref name="partition"/> 为空。</para></exception>
+    /// <exception cref="ObjectDisposedException">The session has been disposed.
+    /// <para>会话已释放。</para></exception>
     public FastbootResponse UpdateSuper(string partition, Stream metadataImage, bool wipe = false, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -47,31 +36,19 @@ public sealed partial class FastbootSession
             : FastbootConstants.CommandUpdateSuper + partition);
     }
 
-    /// <summary>
-    /// Updates the super partition metadata from a metadata image file.
-    /// <para>从元数据镜像文件更新 super 分区元数据。</para>
-    /// </summary>
-    /// <param name="partition">
-    /// Super partition name to update; must not be empty.
-    /// <para>要更新的 super 分区名；不得为空。</para>
-    /// </param>
-    /// <param name="metadataImagePath">
-    /// Path to the metadata image file, opened for reading and closed when the call returns.
-    /// <para>元数据镜像文件路径；以只读方式打开，调用返回时关闭。</para>
-    /// </param>
-    /// <param name="wipe">
-    /// When <see langword="true"/>, requests a super wipe alongside the metadata update.
-    /// <para>为 <see langword="true"/> 时在更新元数据的同时请求清除 super。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives the cumulative downloaded byte count; may be <see langword="null"/>.
-    /// <para>接收累计已下载字节数；可为 <see langword="null"/>。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the download between chunks.
-    /// <para>在分块下载的各块之间取消。</para>
-    /// </param>
-    /// <returns>The parsed update-super response. <para>解析后的 update-super 响应。</para></returns>
+    /// <summary>Updates the super partition metadata from a metadata image file.
+    /// <para>从元数据镜像文件更新 super 分区元数据。</para></summary>
+    /// <param name="partition">Super partition name to update; must not be empty.
+    /// <para>要更新的 super 分区名；不得为空。</para></param>
+    /// <param name="metadataImagePath">Path to the metadata image file, opened for reading and closed when the call returns.
+    /// <para>元数据镜像文件路径；以只读方式打开，调用返回时关闭。</para></param>
+    /// <param name="wipe">When <see langword="true"/>, requests a super wipe alongside the metadata update.
+    /// <para>为 <see langword="true"/> 时在更新元数据的同时请求清除 super。</para></param>
+    /// <param name="progress">Receives the cumulative downloaded byte count; may be <see langword="null"/>.
+    /// <para>接收累计已下载字节数；可为 <see langword="null"/>。</para></param>
+    /// <param name="cancellationToken">Cancels the download between chunks.
+    /// <para>在分块下载的各块之间取消。</para></param>
+    /// <returns>The parsed update-super response.<para>解析后的 update-super 响应。</para></returns>
     public FastbootResponse UpdateSuper(string partition, string metadataImagePath, bool wipe = false, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         using var fs = File.OpenRead(metadataImagePath);
@@ -243,20 +220,19 @@ public sealed partial class FastbootSession
     public FastbootResponse OemCommand(string oemCommand)
         => ExecuteCommand(FastbootConstants.CommandOem + oemCommand);
 
-    /// <summary>
-    /// Boots the device using a boot image from a stream: downloads the image and sends
-    /// the boot command.
-    /// <para>使用来自流的启动镜像启动设备：下载镜像并发送 boot 命令。</para>
-    /// </summary>
+    /// <summary>Boots the device using a boot image from a stream: downloads the image and sends the boot command.
+    /// <para>使用来自流的启动镜像启动设备：下载镜像并发送 boot 命令。</para></summary>
     /// <param name="stream">Boot image stream read for <paramref name="length"/> bytes from its current position; the caller retains ownership.
     /// <para>启动镜像流，从当前位置读取 <paramref name="length"/> 字节；所有权由调用方保留。</para></param>
     /// <param name="length">Exact byte length to download; must be positive and not exceed the negotiated max download size.
     /// <para>要下载的精确字节长度；必须为正且不超过协商的最大下载大小。</para></param>
     /// <param name="progress">Receives the cumulative downloaded byte count; may be <see langword="null"/>.
     /// <para>接收累计已下载字节数；可为 <see langword="null"/>。</para></param>
-    /// <param name="cancellationToken">Cancels the download between chunks. <para>在分块下载的各块之间取消。</para></param>
-    /// <returns>The parsed boot response. <para>解析后的 boot 响应。</para></returns>
-    /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
+    /// <param name="cancellationToken">Cancels the download between chunks.
+    /// <para>在分块下载的各块之间取消。</para></param>
+    /// <returns>The parsed boot response.<para>解析后的 boot 响应。</para></returns>
+    /// <exception cref="ObjectDisposedException">The session has been disposed.
+    /// <para>会话已释放。</para></exception>
     public FastbootResponse Boot(Stream stream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();

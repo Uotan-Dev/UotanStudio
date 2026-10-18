@@ -20,31 +20,17 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
         return aes;
     }
 
-    /// <summary>
-    /// Decrypts the input data.
-    /// <para>解密输入数据。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Cipher text whose length must be a non-zero multiple of the 16-byte block size.
-    /// <para>密文，长度必须是 16 字节块大小的非零整数倍。</para>
-    /// </param>
-    /// <param name="key">
-    /// AES key material; the underlying provider requires a valid AES key size.
-    /// <para>AES 密钥材料；密钥长度必须是底层提供程序支持的 AES 有效值。</para>
-    /// </param>
-    /// <param name="iv">The 16-byte initialization vector. <para>16 字节初始化向量。</para></param>
-    /// <returns>
-    /// The decrypted bytes as a newly allocated array.
-    /// <para>解密后的字节，以新分配的数组返回。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="data"/>, <paramref name="key"/> or <paramref name="iv"/> is <see langword="null"/>.
-    /// <para><paramref name="data"/>、<paramref name="key"/> 或 <paramref name="iv"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// The data length is zero or not a multiple of the block size.
-    /// <para>数据长度为 0 或不是块大小的整数倍。</para>
-    /// </exception>
+    /// <summary>Decrypts the input data.<para>解密输入数据。</para></summary>
+    /// <param name="data">Cipher text whose length must be a non-zero multiple of the 16-byte block size.
+    /// <para>密文，长度必须是 16 字节块大小的非零整数倍。</para></param>
+    /// <param name="key">AES key material; the underlying provider requires a valid AES key size.
+    /// <para>AES 密钥材料；密钥长度必须是底层提供程序支持的 AES 有效值。</para></param>
+    /// <param name="iv">The 16-byte initialization vector.<para>16 字节初始化向量。</para></param>
+    /// <returns>The decrypted bytes as a newly allocated array.<para>解密后的字节，以新分配的数组返回。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/>, <paramref name="key"/> or <paramref name="iv"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/>、<paramref name="key"/> 或 <paramref name="iv"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException">The data length is zero or not a multiple of the block size.
+    /// <para>数据长度为 0 或不是块大小的整数倍。</para></exception>
     public byte[] Decrypt(byte[] data, byte[] key, byte[] iv)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -65,27 +51,16 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
         return decryptor.TransformFinalBlock(data, 0, data.Length);
     }
 
-    /// <summary>
-    /// Encrypts the input data.
-    /// <para>加密输入数据。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext bytes; an empty array is allowed and produces empty output.
-    /// <para>明文字节；允许空数组，输出同样为空。</para>
-    /// </param>
-    /// <param name="key">
-    /// AES key material; the underlying provider requires a valid AES key size.
-    /// <para>AES 密钥材料；密钥长度必须是底层提供程序支持的 AES 有效值。</para>
-    /// </param>
-    /// <param name="iv">The 16-byte initialization vector. <para>16 字节初始化向量。</para></param>
-    /// <returns>
-    /// The cipher text, zero-padded up to the next multiple of the 16-byte block size.
-    /// <para>密文，已零填充至 16 字节块大小的下一个整数倍。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="data"/>, <paramref name="key"/> or <paramref name="iv"/> is <see langword="null"/>.
-    /// <para><paramref name="data"/>、<paramref name="key"/> 或 <paramref name="iv"/> 为 <see langword="null"/>。</para>
-    /// </exception>
+    /// <summary>Encrypts the input data.<para>加密输入数据。</para></summary>
+    /// <param name="data">Plaintext bytes; an empty array is allowed and produces empty output.
+    /// <para>明文字节；允许空数组，输出同样为空。</para></param>
+    /// <param name="key">AES key material; the underlying provider requires a valid AES key size.
+    /// <para>AES 密钥材料；密钥长度必须是底层提供程序支持的 AES 有效值。</para></param>
+    /// <param name="iv">The 16-byte initialization vector.<para>16 字节初始化向量。</para></param>
+    /// <returns>The cipher text, zero-padded up to the next multiple of the 16-byte block size.
+    /// <para>密文，已零填充至 16 字节块大小的下一个整数倍。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/>, <paramref name="key"/> or <paramref name="iv"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/>、<paramref name="key"/> 或 <paramref name="iv"/> 为 <see langword="null"/>。</para></exception>
     public byte[] Encrypt(byte[] data, byte[] key, byte[] iv)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -100,35 +75,20 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
         return encryptor.TransformFinalBlock(paddedData, 0, paddedData.Length);
     }
 
-    /// <summary>
-    /// Creates a stream that decrypts the input.
-    /// <para>创建用于解密输入的流。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable cipher-text stream consumed from its current position.
-    /// <para>从当前位置开始读取的密文可读流。</para>
-    /// </param>
-    /// <param name="key">
-    /// AES key material; the underlying provider requires a valid AES key size.
-    /// <para>AES 密钥材料；密钥长度必须是底层提供程序支持的 AES 有效值。</para>
-    /// </param>
-    /// <param name="iv">The 16-byte initialization vector. <para>16 字节初始化向量。</para></param>
-    /// <param name="leaveOpen">
-    /// When <see langword="false"/>, disposing the returned stream also closes <paramref name="input"/>.
-    /// <para>为 <see langword="false"/> 时，释放返回流会同时关闭 <paramref name="input"/>。</para>
-    /// </param>
-    /// <returns>
-    /// A read-oriented, non-seekable decrypting stream that owns its AES instance and transform
-    /// until disposed.
-    /// <para>面向读取、不可寻址的解密流；其内部的 AES 实例与转换对象由该流持有直至被释放。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="input"/>, <paramref name="key"/> or <paramref name="iv"/> is <see langword="null"/>.
-    /// <para><paramref name="input"/>、<paramref name="key"/> 或 <paramref name="iv"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="input"/> cannot be read. <para><paramref name="input"/> 不可读。</para>
-    /// </exception>
+    /// <summary>Creates a stream that decrypts the input.<para>创建用于解密输入的流。</para></summary>
+    /// <param name="input">Readable cipher-text stream consumed from its current position.
+    /// <para>从当前位置开始读取的密文可读流。</para></param>
+    /// <param name="key">AES key material; the underlying provider requires a valid AES key size.
+    /// <para>AES 密钥材料；密钥长度必须是底层提供程序支持的 AES 有效值。</para></param>
+    /// <param name="iv">The 16-byte initialization vector.<para>16 字节初始化向量。</para></param>
+    /// <param name="leaveOpen">When <see langword="false"/>, disposing the returned stream also closes <paramref name="input"/>.
+    /// <para>为 <see langword="false"/> 时，释放返回流会同时关闭 <paramref name="input"/>。</para></param>
+    /// <returns>A read-oriented, non-seekable decrypting stream that owns its AES instance and transform until disposed.
+    /// <para>面向读取、不可寻址的解密流；其内部的 AES 实例与转换对象由该流持有直至被释放。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/>, <paramref name="key"/> or <paramref name="iv"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/>、<paramref name="key"/> 或 <paramref name="iv"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="input"/> cannot be read.
+    /// <para><paramref name="input"/> 不可读。</para></exception>
     public Stream CreateDecryptStream(Stream input, byte[] key, byte[] iv, bool leaveOpen = true)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -158,36 +118,20 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
         }
     }
 
-    /// <summary>
-    /// Creates a stream that encrypts the output.
-    /// <para>创建用于加密输出的流。</para>
-    /// </summary>
-    /// <param name="output">
-    /// Writable destination stream; disposed together with the returned stream when
-    /// <paramref name="leaveOpen"/> is <see langword="false"/>.
-    /// <para>可写目标流；当 <paramref name="leaveOpen"/> 为 <see langword="false"/> 时，随返回流一起被关闭。</para>
-    /// </param>
-    /// <param name="key">
-    /// AES key material; the underlying provider requires a valid AES key size.
-    /// <para>AES 密钥材料；密钥长度必须是底层提供程序支持的 AES 有效值。</para>
-    /// </param>
-    /// <param name="iv">The 16-byte initialization vector. <para>16 字节初始化向量。</para></param>
-    /// <param name="leaveOpen">
-    /// When <see langword="false"/>, disposing the returned stream also closes <paramref name="output"/>.
-    /// <para>为 <see langword="false"/> 时，释放返回流会同时关闭 <paramref name="output"/>。</para>
-    /// </param>
-    /// <returns>
-    /// A write-only, non-seekable encrypting stream whose <c>Position</c> reports bytes written;
-    /// disposing it zero-pads the trailing partial block before finalizing.
-    /// <para>只写、不可寻址的加密流，其 <c>Position</c> 返回已写入字节数；释放时会先把末尾不完整块零填充再结束。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="output"/>, <paramref name="key"/> or <paramref name="iv"/> is <see langword="null"/>.
-    /// <para><paramref name="output"/>、<paramref name="key"/> 或 <paramref name="iv"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="output"/> cannot be written. <para><paramref name="output"/> 不可写。</para>
-    /// </exception>
+    /// <summary>Creates a stream that encrypts the output.<para>创建用于加密输出的流。</para></summary>
+    /// <param name="output">Writable destination stream; disposed together with the returned stream when <paramref name="leaveOpen"/> is <see langword="false"/>.
+    /// <para>可写目标流；当 <paramref name="leaveOpen"/> 为 <see langword="false"/> 时，随返回流一起被关闭。</para></param>
+    /// <param name="key">AES key material; the underlying provider requires a valid AES key size.
+    /// <para>AES 密钥材料；密钥长度必须是底层提供程序支持的 AES 有效值。</para></param>
+    /// <param name="iv">The 16-byte initialization vector.<para>16 字节初始化向量。</para></param>
+    /// <param name="leaveOpen">When <see langword="false"/>, disposing the returned stream also closes <paramref name="output"/>.
+    /// <para>为 <see langword="false"/> 时，释放返回流会同时关闭 <paramref name="output"/>。</para></param>
+    /// <returns>A write-only, non-seekable encrypting stream whose <c>Position</c> reports bytes written; disposing it zero-pads the trailing partial block before finalizing.
+    /// <para>只写、不可寻址的加密流，其 <c>Position</c> 返回已写入字节数；释放时会先把末尾不完整块零填充再结束。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="output"/>, <paramref name="key"/> or <paramref name="iv"/> is <see langword="null"/>.
+    /// <para><paramref name="output"/>、<paramref name="key"/> 或 <paramref name="iv"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="output"/> cannot be written.
+    /// <para><paramref name="output"/> 不可写。</para></exception>
     public Stream CreateEncryptStream(Stream output, byte[] key, byte[] iv, bool leaveOpen = true)
     {
         ArgumentNullException.ThrowIfNull(output);
@@ -341,22 +285,14 @@ public sealed class KeyMapKeyProvider
 {
     private readonly byte[] _keyMap;
 
-    /// <summary>
-    /// Initializes a new instance of KeyMapKeyProvider with the specified KeyMap data.
-    /// <para>使用指定的 KeyMap 数据初始化 KeyMapKeyProvider 的新实例。</para>
-    /// </summary>
-    /// <param name="keyMap">
-    /// Key-map bytes retained by reference without copying; later mutations of the array are
-    /// visible to derived keys.
-    /// <para>按引用保留、不做复制的 KeyMap 字节；对该数组的后续修改会影响派生的密钥。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="keyMap"/> is <see langword="null"/>.
-    /// <para><paramref name="keyMap"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="keyMap"/> is empty. <para><paramref name="keyMap"/> 为空。</para>
-    /// </exception>
+    /// <summary>Initializes a new instance of KeyMapKeyProvider with the specified KeyMap data.
+    /// <para>使用指定的 KeyMap 数据初始化 KeyMapKeyProvider 的新实例。</para></summary>
+    /// <param name="keyMap">Key-map bytes retained by reference without copying; later mutations of the array are visible to derived keys.
+    /// <para>按引用保留、不做复制的 KeyMap 字节；对该数组的后续修改会影响派生的密钥。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="keyMap"/> is <see langword="null"/>.
+    /// <para><paramref name="keyMap"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="keyMap"/> is empty.
+    /// <para><paramref name="keyMap"/> 为空。</para></exception>
     public KeyMapKeyProvider(byte[] keyMap)
     {
         ArgumentNullException.ThrowIfNull(keyMap);
@@ -367,23 +303,14 @@ public sealed class KeyMapKeyProvider
         _keyMap = keyMap;
     }
 
-    /// <summary>
-    /// Gets the AES-256 key for the specified key index and block index.
-    /// <para>根据密钥索引和块索引获取对应的 AES-256 密钥。</para>
-    /// </summary>
-    /// <param name="keyIndex">
-    /// The caller-selected key index; combined with <paramref name="blockIdx"/> it selects the window offset.
-    /// <para>调用方选择的密钥索引；与 <paramref name="blockIdx"/> 共同决定窗口偏移。</para>
-    /// </param>
-    /// <param name="blockIdx">
-    /// The block ordinal added to <paramref name="keyIndex"/> before the offset is folded into the key map.
-    /// <para>块序号，与 <paramref name="keyIndex"/> 相加后折入 KeyMap 长度范围内。</para>
-    /// </param>
-    /// <returns>
-    /// A newly allocated 32-byte key window starting at <c>(keyIndex + blockIdx) × 32</c> modulo
-    /// the key-map length, wrapping across the array end.
-    /// <para>新分配的 32 字节密钥窗口，起始偏移为 <c>(keyIndex + blockIdx) × 32</c> 对 KeyMap 长度取模，并在数组尾部环绕。</para>
-    /// </returns>
+    /// <summary>Gets the AES-256 key for the specified key index and block index.
+    /// <para>根据密钥索引和块索引获取对应的 AES-256 密钥。</para></summary>
+    /// <param name="keyIndex">The caller-selected key index; combined with <paramref name="blockIdx"/> it selects the window offset.
+    /// <para>调用方选择的密钥索引；与 <paramref name="blockIdx"/> 共同决定窗口偏移。</para></param>
+    /// <param name="blockIdx">The block ordinal added to <paramref name="keyIndex"/> before the offset is folded into the key map.
+    /// <para>块序号，与 <paramref name="keyIndex"/> 相加后折入 KeyMap 长度范围内。</para></param>
+    /// <returns>A newly allocated 32-byte key window starting at <c>(keyIndex + blockIdx) × 32</c> modulo the key-map length, wrapping across the array end.
+    /// <para>新分配的 32 字节密钥窗口，起始偏移为 <c>(keyIndex + blockIdx) × 32</c> 对 KeyMap 长度取模，并在数组尾部环绕。</para></returns>
     public byte[] GetKey(int keyIndex, int blockIdx)
     {
         var key = new byte[32];
@@ -391,29 +318,18 @@ public sealed class KeyMapKeyProvider
         return key;
     }
 
-    /// <summary>
-    /// Writes the AES-256 key into the caller-provided buffer, avoiding heap allocation.
-    /// <para>根据密钥索引和块索引将 AES-256 密钥写入调用方提供的缓冲区,避免堆分配。</para>
-    /// </summary>
-    /// <param name="keyIndex">
-    /// The caller-selected key index; combined with <paramref name="blockIdx"/> it selects the window offset.
-    /// <para>调用方选择的密钥索引；与 <paramref name="blockIdx"/> 共同决定窗口偏移。</para>
-    /// </param>
-    /// <param name="blockIdx">
-    /// The block ordinal added to <paramref name="keyIndex"/> before the offset is folded into the key map.
-    /// <para>块序号，与 <paramref name="keyIndex"/> 相加后折入 KeyMap 长度范围内。</para>
-    /// </param>
-    /// <param name="destination">
-    /// Buffer receiving exactly the first 32 bytes of the key window; bytes beyond index 31 are untouched.
-    /// <para>接收密钥窗口前 32 字节的缓冲区；索引 31 之后的字节不会被修改。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="destination"/> is <see langword="null"/>.
-    /// <para><paramref name="destination"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="destination"/> is shorter than 32 bytes. <para><paramref name="destination"/> 少于 32 字节。</para>
-    /// </exception>
+    /// <summary>Writes the AES-256 key into the caller-provided buffer, avoiding heap allocation.
+    /// <para>根据密钥索引和块索引将 AES-256 密钥写入调用方提供的缓冲区,避免堆分配。</para></summary>
+    /// <param name="keyIndex">The caller-selected key index; combined with <paramref name="blockIdx"/> it selects the window offset.
+    /// <para>调用方选择的密钥索引；与 <paramref name="blockIdx"/> 共同决定窗口偏移。</para></param>
+    /// <param name="blockIdx">The block ordinal added to <paramref name="keyIndex"/> before the offset is folded into the key map.
+    /// <para>块序号，与 <paramref name="keyIndex"/> 相加后折入 KeyMap 长度范围内。</para></param>
+    /// <param name="destination">Buffer receiving exactly the first 32 bytes of the key window; bytes beyond index 31 are untouched.
+    /// <para>接收密钥窗口前 32 字节的缓冲区；索引 31 之后的字节不会被修改。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="destination"/> is <see langword="null"/>.
+    /// <para><paramref name="destination"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="destination"/> is shorter than 32 bytes.
+    /// <para><paramref name="destination"/> 少于 32 字节。</para></exception>
     public void GetKey(int keyIndex, int blockIdx, byte[] destination)
     {
         ArgumentNullException.ThrowIfNull(destination);

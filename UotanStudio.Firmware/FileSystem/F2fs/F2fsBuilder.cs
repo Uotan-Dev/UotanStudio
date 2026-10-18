@@ -58,15 +58,13 @@ public sealed partial class F2fsBuilder
 
     private const uint MaxDirHashDepth = 63;
 
-    /// <summary>
-    /// Builds an F2FS image from sourceDirectory and returns it as a byte array.
-    /// <para>从 sourceDirectory 构建 f2fs 镜像并以字节数组返回。</para>
-    /// </summary>
+    /// <summary>Builds an F2FS image from sourceDirectory and returns it as a byte array.
+    /// <para>从 sourceDirectory 构建 f2fs 镜像并以字节数组返回。</para></summary>
     /// <param name="sourceDirectory">Source directory tree whose files, directories and symlinks are embedded in the image.
     /// <para>要写入镜像的源目录树，其中的文件、目录与符号链接都会入图。</para></param>
     /// <param name="options">Layout, sparse and compression options; <see langword="null"/> applies the defaults.
     /// <para>布局、稀疏与压缩选项；为 <see langword="null"/> 时使用默认值。</para></param>
-    /// <returns>The complete F2FS image bytes. <para>完整的 F2FS 镜像字节。</para></returns>
+    /// <returns>The complete F2FS image bytes.<para>完整的 F2FS 镜像字节。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="sourceDirectory"/> is <see langword="null"/>.
     /// <para><paramref name="sourceDirectory"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidOperationException">The built image is larger than the maximum byte-array length.
@@ -95,16 +93,12 @@ public sealed partial class F2fsBuilder
         }
     }
 
-    /// <summary>
-    /// Builds an F2FS image from sourceDirectory and atomically writes it to outputPath (a temporary file in the same directory is flushed first, then moved over the destination).
-    /// <para>从 sourceDirectory 构建 f2fs 镜像并原子写入 outputPath （先写同目录临时文件，刷新成功后再覆盖目标）。</para>
-    /// </summary>
+    /// <summary>Builds an F2FS image from sourceDirectory and atomically writes it to outputPath (a temporary file in the same directory is flushed first, then moved over the destination).
+    /// <para>从 sourceDirectory 构建 f2fs 镜像并原子写入 outputPath （先写同目录临时文件，刷新成功后再覆盖目标）。</para></summary>
     /// <param name="sourceDirectory">Source directory tree to embed; the destination and staging files are excluded from the scan.
     /// <para>要嵌入的源目录树；目标文件与暂存文件会在扫描时排除。</para></param>
-    /// <param name="outputPath">Destination image path; its parent directory is created and an existing file is replaced.
-    /// With <c>AndroidNativeProfile</c> the native tool chain writes this path instead of the staged build.
-    /// <para>目标镜像路径；会自动创建父目录并覆盖已有文件。启用 <c>AndroidNativeProfile</c> 时改由原生工具
-    /// 写入该路径。</para></param>
+    /// <param name="outputPath">Destination image path; its parent directory is created and an existing file is replaced. With <c>AndroidNativeProfile</c> the native tool chain writes this path instead of the staged build.
+    /// <para>目标镜像路径；会自动创建父目录并覆盖已有文件。启用 <c>AndroidNativeProfile</c> 时改由原生工具 写入该路径。</para></param>
     /// <param name="options">Layout, sparse and compression options; <see langword="null"/> applies the defaults.
     /// <para>布局、稀疏与压缩选项；为 <see langword="null"/> 时使用默认值。</para></param>
     /// <exception cref="ArgumentException"><paramref name="sourceDirectory"/> is blank.
@@ -115,15 +109,8 @@ public sealed partial class F2fsBuilder
     /// <para>源目录不存在。</para></exception>
     /// <exception cref="OperationCanceledException"><c>options.CancellationToken</c> is cancelled before or during the build.
     /// <para><c>options.CancellationToken</c> 在构建前或构建中被取消。</para></exception>
-    /// <remarks>
-    /// This is the explicit synchronous boundary of the F2FS build. The managed pipeline is synchronous code; the
-    /// AndroidNativeProfile branch waits on the WSL native-tool asynchronous pipeline at this synchronous boundary
-    /// because the native builder only exposes an asynchronous implementation. Asynchronous callers should use
-    /// <see cref="BuildAsync"/> instead.
-    /// <para>本方法是 F2FS 构建的显式同步边界。托管管线本身是同步代码；由于原生构建器只提供异步实现，
-    /// AndroidNativeProfile 分支在该同步边界上等待经由 WSL 原生工具的异步管线。异步调用方应改用
-    /// <see cref="BuildAsync"/>。</para>
-    /// </remarks>
+    /// <remarks>This is the explicit synchronous boundary of the F2FS build. The managed pipeline is synchronous code; the AndroidNativeProfile branch waits on the WSL native-tool asynchronous pipeline at this synchronous boundary because the native builder only exposes an asynchronous implementation. Asynchronous callers should use <see cref="BuildAsync"/> instead.
+    /// <para>本方法是 F2FS 构建的显式同步边界。托管管线本身是同步代码；由于原生构建器只提供异步实现， AndroidNativeProfile 分支在该同步边界上等待经由 WSL 原生工具的异步管线。异步调用方应改用 <see cref="BuildAsync"/>。</para></remarks>
     public static void Build(string sourceDirectory, string outputPath, F2fsOptions? options = null)
     {
         FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
@@ -160,16 +147,12 @@ public sealed partial class F2fsBuilder
         BuildManaged(sourceDirectory, outputPath, options, progress);
     }
 
-    /// <summary>
-    /// Builds an F2FS image from sourceDirectory and atomically writes it to outputPath.
-    /// <para>从 sourceDirectory 构建 f2fs 镜像并原子写入 outputPath。</para>
-    /// </summary>
+    /// <summary>Builds an F2FS image from sourceDirectory and atomically writes it to outputPath.
+    /// <para>从 sourceDirectory 构建 f2fs 镜像并原子写入 outputPath。</para></summary>
     /// <param name="sourceDirectory">Source directory tree to embed; the destination and staging files are excluded from the scan.
     /// <para>要嵌入的源目录树；目标文件与暂存文件会在扫描时排除。</para></param>
-    /// <param name="outputPath">Destination image path; its parent directory is created and an existing file is replaced.
-    /// With <c>AndroidNativeProfile</c> the native tool chain writes this path instead of the staged build.
-    /// <para>目标镜像路径；会自动创建父目录并覆盖已有文件。启用 <c>AndroidNativeProfile</c> 时改由原生工具
-    /// 写入该路径。</para></param>
+    /// <param name="outputPath">Destination image path; its parent directory is created and an existing file is replaced. With <c>AndroidNativeProfile</c> the native tool chain writes this path instead of the staged build.
+    /// <para>目标镜像路径；会自动创建父目录并覆盖已有文件。启用 <c>AndroidNativeProfile</c> 时改由原生工具 写入该路径。</para></param>
     /// <param name="options">Layout, sparse and compression options; <see langword="null"/> applies the defaults.
     /// <para>布局、稀疏与压缩选项；为 <see langword="null"/> 时使用默认值。</para></param>
     /// <returns>A task that completes once the image has been published to <paramref name="outputPath"/>.
@@ -182,12 +165,8 @@ public sealed partial class F2fsBuilder
     /// <para>源目录不存在。</para></exception>
     /// <exception cref="OperationCanceledException"><c>options.CancellationToken</c> is cancelled before or during the build.
     /// <para><c>options.CancellationToken</c> 在构建前或构建中被取消。</para></exception>
-    /// <remarks>
-    /// The AndroidNativeProfile branch directly awaits the WSL native-tool pipeline; the managed pipeline is
-    /// synchronous CPU and file I/O work executed by this method before the task completes.
-    /// <para>AndroidNativeProfile 分支直接等待经由 WSL 原生工具的管线；托管管线是同步的 CPU 与文件 I/O 工作，
-    /// 由本方法在任务完成前执行。</para>
-    /// </remarks>
+    /// <remarks>The AndroidNativeProfile branch directly awaits the WSL native-tool pipeline; the managed pipeline is synchronous CPU and file I/O work executed by this method before the task completes.
+    /// <para>AndroidNativeProfile 分支直接等待经由 WSL 原生工具的管线；托管管线是同步的 CPU 与文件 I/O 工作， 由本方法在任务完成前执行。</para></remarks>
     public static async Task BuildAsync(string sourceDirectory, string outputPath, F2fsOptions? options = null)
     {
         FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
@@ -238,14 +217,11 @@ public sealed partial class F2fsBuilder
         }
     }
 
-    /// <summary>
-    /// Builds an F2FS image from sourceDirectory starting at the output stream's current position.
-    /// <para>从 sourceDirectory 构建 f2fs 镜像并从输出流当前 Position 写入。</para>
-    /// </summary>
+    /// <summary>Builds an F2FS image from sourceDirectory starting at the output stream's current position.
+    /// <para>从 sourceDirectory 构建 f2fs 镜像并从输出流当前 Position 写入。</para></summary>
     /// <param name="sourceDirectory">Source directory tree to embed; a <see cref="FileStream"/> output and the staging file are excluded from the scan.
     /// <para>要嵌入的源目录树；输出若为 <see cref="FileStream"/> 以及暂存文件会在扫描时排除。</para></param>
-    /// <param name="output">Writable destination stream; the image is written from the current position, and a
-    /// stream that cannot be resized without mutation receives the image via a temporary staging file.
+    /// <param name="output">Writable destination stream; the image is written from the current position, and a stream that cannot be resized without mutation receives the image via a temporary staging file.
     /// <para>可写的目标流；镜像从当前 Position 写入，无法无损改长的流经临时暂存文件转写。</para></param>
     /// <param name="options">Layout, sparse and compression options; <see langword="null"/> applies the defaults.
     /// <para>布局、稀疏与压缩选项；为 <see langword="null"/> 时使用默认值。</para></param>

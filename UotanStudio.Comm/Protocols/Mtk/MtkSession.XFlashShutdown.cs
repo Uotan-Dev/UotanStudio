@@ -5,21 +5,14 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    /// <summary>
-    /// Explicitly requests shutdown or a boot-mode transition from a storage-ready XFlash
-    /// agent. Both statuses must confirm success before the session becomes terminal.
-    /// No reboot is performed automatically by flashing or disposal.
-    /// <para>向存储就绪的 XFlash agent 显式请求关机或启动模式切换。两个状态都必须
-    /// 确认成功后会话才进入终态。刷写或释放不会自动执行重启。</para>
-    /// </summary>
-    /// <remarks>
-    /// Requires caller authorization. Uses synchronous target completion with watchdog,
-    /// download-bit, RTC-preservation and USB-retention flags cleared. These flags and the
-    /// requested boot mode are target-dependent; ACK does not prove boot or durable storage.
-    /// The owned transport is disconnected, not reset, after acknowledgement. A disconnect
-    /// failure leaves the acknowledged terminal state observable; Dispose still releases it.
-    /// In-flight cancellation or loss of the final response faults the session without retry.
-    /// </remarks>
+    /// <summary>Explicitly requests shutdown or a boot-mode transition from a storage-ready XFlash agent. Both statuses must confirm success before the session becomes terminal. No reboot is performed automatically by flashing or disposal.
+    /// <para>向存储就绪的 XFlash agent 显式请求关机或启动模式切换。两个状态都必须 确认成功后会话才进入终态。刷写或释放不会自动执行重启。</para></summary>
+    /// <remarks>Requires caller authorization. Uses synchronous target completion with watchdog,
+    /// download-bit, RTC-preservation and USB-retention flags cleared. These flags and the requested
+    /// boot mode are target-dependent; ACK does not prove boot or durable storage. The owned transport
+    /// is disconnected, not reset, after acknowledgement. A disconnect failure leaves the acknowledged
+    /// terminal state observable; Dispose still releases it. In-flight cancellation or loss of the
+    /// final response faults the session without retry.</remarks>
     /// <param name="mode">The explicitly authorized target power/boot request.
     /// <para>显式授权的目标电源/启动请求。</para></param>
     /// <param name="cancellationToken">Cancellation for waiting and the command exchange.

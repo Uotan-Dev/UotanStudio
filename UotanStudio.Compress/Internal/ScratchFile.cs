@@ -15,23 +15,14 @@ namespace UotanStudio.Compress.Internal;
 /// </remarks>
 internal static class ScratchFile
 {
-    /// <summary>
-    /// Builds a unique scratch path inside the system temporary directory with the given prefix and extension.
-    /// <para>在系统临时目录内按给定前缀与扩展名构造唯一的刮擦路径。</para>
-    /// </summary>
-    /// <param name="prefix">
-    /// File-name prefix placed before the GUID; an empty value leaves a name that starts with the separating dash.
-    /// <para>置于 GUID 之前的文件名前缀；为空时名称以分隔短横线开头。</para>
-    /// </param>
-    /// <param name="extension">
-    /// File-name suffix appended after the GUID, for example <c>.tmp</c>.
-    /// <para>追加在 GUID 之后的文件名后缀，例如 <c>.tmp</c>。</para>
-    /// </param>
-    /// <returns>
-    /// A path inside the system temporary directory built from <paramref name="prefix"/>, a fresh GUID and
-    /// <paramref name="extension"/>; no file is created.
-    /// <para>系统临时目录内由 <paramref name="prefix"/>、新 GUID 与 <paramref name="extension"/> 组成的路径，不会创建文件。</para>
-    /// </returns>
+    /// <summary>Builds a unique scratch path inside the system temporary directory with the given prefix and extension.
+    /// <para>在系统临时目录内按给定前缀与扩展名构造唯一的刮擦路径。</para></summary>
+    /// <param name="prefix">File-name prefix placed before the GUID; an empty value leaves a name that starts with the separating dash.
+    /// <para>置于 GUID 之前的文件名前缀；为空时名称以分隔短横线开头。</para></param>
+    /// <param name="extension">File-name suffix appended after the GUID, for example <c>.tmp</c>.
+    /// <para>追加在 GUID 之后的文件名后缀，例如 <c>.tmp</c>。</para></param>
+    /// <returns>A path inside the system temporary directory built from <paramref name="prefix"/>, a fresh GUID and <paramref name="extension"/>; no file is created.
+    /// <para>系统临时目录内由 <paramref name="prefix"/>、新 GUID 与 <paramref name="extension"/> 组成的路径，不会创建文件。</para></returns>
     public static string CreateScratchPath(string prefix, string extension = ".tmp")
         => Path.Combine(Path.GetTempPath(), $"{prefix}-{Guid.NewGuid():N}{extension}");
 }

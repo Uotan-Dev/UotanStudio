@@ -13,24 +13,24 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// </summary>
 public sealed partial class FirehoseProtocol
 {
-    /// <summary>
-    /// Requests the SHA256 digest the target computes for a flash range.
-    /// <para>请求目标为一段闪存范围计算并上报的 SHA256 摘要。</para>
-    /// </summary>
-    /// <param name="startSector">The absolute starting sector. <para>绝对起始扇区。</para></param>
-    /// <param name="numSectors">The number of sectors to hash; must be positive. <para>待计算哈希的扇区数；必须为正。</para></param>
-    /// <param name="physicalPartition">The physical storage region or LUN. <para>物理存储区域或 LUN。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>
-    /// The 32-byte digest, or <see langword="null"/> when the target rejects the command or reports no digest.
-    /// <para>32 字节摘要；目标拒绝该命令或未上报摘要时为 <see langword="null"/>。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="numSectors"/> is not positive, or the
-    /// range leaves the configured storage geometry. <para><paramref name="numSectors"/> 非正，或范围超出
-    /// 已配置的存储几何。</para></exception>
-    /// <exception cref="EdlException">The transport fails or times out. <para>传输层失败或超时。</para></exception>
-    /// <exception cref="OperationCanceledException">The token is cancelled. <para>令牌被取消。</para></exception>
-    /// <exception cref="ObjectDisposedException">The protocol has been disposed. <para>协议已被释放。</para></exception>
+    /// <summary>Requests the SHA256 digest the target computes for a flash range.
+    /// <para>请求目标为一段闪存范围计算并上报的 SHA256 摘要。</para></summary>
+    /// <param name="startSector">The absolute starting sector.<para>绝对起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors to hash; must be positive.
+    /// <para>待计算哈希的扇区数；必须为正。</para></param>
+    /// <param name="physicalPartition">The physical storage region or LUN.
+    /// <para>物理存储区域或 LUN。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The 32-byte digest, or <see langword="null"/> when the target rejects the command or reports no digest.
+    /// <para>32 字节摘要；目标拒绝该命令或未上报摘要时为 <see langword="null"/>。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="numSectors"/> is not positive, or the range leaves the configured storage geometry.
+    /// <para><paramref name="numSectors"/> 非正，或范围超出 已配置的存储几何。</para></exception>
+    /// <exception cref="EdlException">The transport fails or times out.
+    /// <para>传输层失败或超时。</para></exception>
+    /// <exception cref="OperationCanceledException">The token is cancelled.
+    /// <para>令牌被取消。</para></exception>
+    /// <exception cref="ObjectDisposedException">The protocol has been disposed.
+    /// <para>协议已被释放。</para></exception>
     public async Task<byte[]?> GetSha256DigestAsync(long startSector, long numSectors, int physicalPartition = 0,
         CancellationToken cancellationToken = default)
     {

@@ -150,19 +150,12 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
     /// <para>可变的 <see cref="InstallOperation"/> 消息重复列表；空列表对序列化消息无贡献。</para></value>
     public RepeatedField<InstallOperation> Operations { get; } = [];
 
-    /// <summary>
-    /// Determines whether this update equals another object by delegating to the typed comparison.
-    /// <para>通过转向强类型比较，判定本更新是否与另一对象相等。</para>
-    /// </summary>
-    /// <param name="obj">
-    /// Reference to compare; only a <see cref="PartitionUpdate"/> instance can be equal.
-    /// <para>待比较的引用；仅 <see cref="PartitionUpdate"/> 实例可能相等。</para>
-    /// </param>
-    /// <returns><see langword="true"/> when <paramref name="obj"/> is an update whose fields, optional
-    /// presence and retained unknown fields match this message; <see langword="false"/> for
-    /// <see langword="null"/> or any other type. <para>当 <paramref name="obj"/> 为分区更新且其字段、可选字段的
-    /// 存在性以及保留的未知字段都与本消息一致时返回 <see langword="true"/>；对 <see langword="null"/>
-    /// 或其他类型返回 <see langword="false"/>。</para></returns>
+    /// <summary>Determines whether this update equals another object by delegating to the typed comparison.
+    /// <para>通过转向强类型比较，判定本更新是否与另一对象相等。</para></summary>
+    /// <param name="obj">Reference to compare; only a <see cref="PartitionUpdate"/> instance can be equal.
+    /// <para>待比较的引用；仅 <see cref="PartitionUpdate"/> 实例可能相等。</para></param>
+    /// <returns><see langword="true"/> when <paramref name="obj"/> is an update whose fields, optional presence and retained unknown fields match this message; <see langword="false"/> for <see langword="null"/> or any other type.
+    /// <para>当 <paramref name="obj"/> 为分区更新且其字段、可选字段的 存在性以及保留的未知字段都与本消息一致时返回 <see langword="true"/>；对 <see langword="null"/> 或其他类型返回 <see langword="false"/>。</para></returns>
     public override bool Equals(object? obj) => Equals(obj as PartitionUpdate);
 
     /// <summary>
@@ -179,20 +172,9 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
     public bool Equals(PartitionUpdate? other)
         => other is not null && (ReferenceEquals(other, this) || (PartitionName == other.PartitionName && RunPostinstall == other.RunPostinstall && PostinstallPath == other.PostinstallPath && FilesystemType == other.FilesystemType && PostinstallOptional == other.PostinstallOptional && Equals(OldPartitionInfo, other.OldPartitionInfo) && Equals(NewPartitionInfo, other.NewPartitionInfo) && Operations.Equals(other.Operations) && Equals(_unknownFields, other._unknownFields)));
 
-    /// <summary>
-    /// Computes the hash code of this update.
-    /// <para>计算本更新的哈希代码。</para>
-    /// </summary>
-    /// <returns>
-    /// Base value <c>1</c> XOR-folded with the <see cref="PartitionName"/> hash only when the name is
-    /// non-empty, the <see cref="OldPartitionInfo"/>, <see cref="NewPartitionInfo"/> and unknown-field
-    /// hashes only when those messages are present, the <see cref="Operations"/> hash always, and the
-    /// four optional postinstall hashes folded in as <c>0</c> when absent; equal updates therefore hash
-    /// alike. <para>以 <c>1</c> 为基数，仅当 <see cref="PartitionName"/> 非空时异或其哈希代码；
-    /// <see cref="OldPartitionInfo"/>、<see cref="NewPartitionInfo"/> 与未知字段的哈希代码仅在相应消息存在时
-    /// 异或；<see cref="Operations"/> 始终异或，四个可选 postinstall 字段缺失时按 <c>0</c> 计入，因此相等的
-    /// 更新哈希相同。</para>
-    /// </returns>
+    /// <summary>Computes the hash code of this update.<para>计算本更新的哈希代码。</para></summary>
+    /// <returns>Base value <c>1</c> XOR-folded with the <see cref="PartitionName"/> hash only when the name is non-empty, the <see cref="OldPartitionInfo"/>, <see cref="NewPartitionInfo"/> and unknown-field hashes only when those messages are present, the <see cref="Operations"/> hash always, and the four optional postinstall hashes folded in as <c>0</c> when absent; equal updates therefore hash alike.
+    /// <para>以 <c>1</c> 为基数，仅当 <see cref="PartitionName"/> 非空时异或其哈希代码； <see cref="OldPartitionInfo"/>、<see cref="NewPartitionInfo"/> 与未知字段的哈希代码仅在相应消息存在时 异或；<see cref="Operations"/> 始终异或，四个可选 postinstall 字段缺失时按 <c>0</c> 计入，因此相等的 更新哈希相同。</para></returns>
     public override int GetHashCode()
     {
         var hash = 1;

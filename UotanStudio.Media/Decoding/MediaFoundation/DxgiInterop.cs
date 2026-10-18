@@ -120,17 +120,10 @@ internal static unsafe partial class DxgiInterop
     public static int ReleaseSync(nint keyedMutex, ulong key) =>
         ((delegate* unmanaged[Stdcall]<nint, ulong, int>)(*(nint***)keyedMutex)[8])(keyedMutex, key);
 
-    /// <summary>
-    /// Returns the adapter whose LUID matches <paramref name="adapterLuid"/> with one reference held,
-    /// or <see cref="nint.Zero"/> when no adapter matches; the caller releases the pointer.
-    /// <para>返回 LUID 与 <paramref name="adapterLuid"/> 一致且持有一个引用的适配器；无匹配时返回
-    /// <see cref="nint.Zero"/>，由调用方释放指针。</para>
-    /// </summary>
-    /// <param name="adapterLuid">
-    /// LUID bytes to match, 8 bytes of low part followed by high part; a span of any other
-    /// length matches no adapter.
-    /// <para>待匹配的 LUID 字节，低位在前共 8 字节；其他长度的区间匹配不到任何适配器。</para>
-    /// </param>
+    /// <summary>Returns the adapter whose LUID matches <paramref name="adapterLuid"/> with one reference held, or <see cref="nint.Zero"/> when no adapter matches; the caller releases the pointer.
+    /// <para>返回 LUID 与 <paramref name="adapterLuid"/> 一致且持有一个引用的适配器；无匹配时返回 <see cref="nint.Zero"/>，由调用方释放指针。</para></summary>
+    /// <param name="adapterLuid">LUID bytes to match, 8 bytes of low part followed by high part; a span of any other length matches no adapter.
+    /// <para>待匹配的 LUID 字节，低位在前共 8 字节；其他长度的区间匹配不到任何适配器。</para></param>
     /// <exception cref="InvalidOperationException">A DXGI call failed.
     /// <para>某个 DXGI 调用失败。</para></exception>
     public static nint FindAdapterByLuid(ReadOnlySpan<byte> adapterLuid)

@@ -71,15 +71,12 @@ internal sealed class MpkFormatHandler : IReadonlyFormatHandler
         }
     }
 
-    /// <summary>
-    /// Extracts the archive payloads into the output directory.
-    /// <para>将归档负载提取到输出目录。</para>
-    /// </summary>
-    /// <param name="filePath">Archive to unpack; never modified. <para>待解包的归档；不会被修改。</para></param>
+    /// <summary>Extracts the archive payloads into the output directory.
+    /// <para>将归档负载提取到输出目录。</para></summary>
+    /// <param name="filePath">Archive to unpack; never modified.<para>待解包的归档；不会被修改。</para></param>
     /// <param name="outputDirectory">Destination directory, created when absent.
     /// <para>目标目录，不存在时创建。</para></param>
-    /// <param name="options">Entry selection and overwrite policy; <see langword="null"/> extracts everything.
-    /// Selection compares the stored paths case-insensitively.
+    /// <param name="options">Entry selection and overwrite policy; <see langword="null"/> extracts everything. Selection compares the stored paths case-insensitively.
     /// <para>条目选择与覆盖策略；传 <see langword="null"/> 时全部解出。选择按存储路径忽略大小写比较。</para></param>
     /// <param name="cancellationToken">Cancels extraction; nothing partial is claimed as success.
     /// <para>取消解包；部分完成不会被声称为成功。</para></param>

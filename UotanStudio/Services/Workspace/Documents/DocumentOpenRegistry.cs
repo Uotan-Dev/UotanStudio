@@ -339,27 +339,15 @@ internal static class DocumentOpenRegistry
     public static DocumentOpenDescriptor? ByInstance(object dockable) =>
         _descriptors.FirstOrDefault(d => d.ViewModelType.IsInstanceOfType(dockable));
 
-    /// <summary>
-    /// Automatic-mode format routing: evaluates the detection predicates in priority order and returns
-    /// the first matching mode, degrading to extension-only routing without a header sample.
-    /// <para>自动模式格式路由：按优先级顺序判定检测谓词，取首个命中规则的打开方式；无头部样本时退化为扩展名路由。</para>
-    /// </summary>
-    /// <param name="path">
-    /// A file name or full path.
-    /// <para>文件名或完整路径。</para>
-    /// </param>
-    /// <param name="header">
-    /// Optional loaded file-header bytes; header-dependent rules are skipped when <c>null</c>.
-    /// <para>可选的已加载文件头部字节；为 <c>null</c> 时跳过依赖头部的规则。</para>
-    /// </param>
-    /// <param name="detection">
-    /// Optional format-detection result; a non-<c>ExtensionOnly</c> confidence routes by format name.
-    /// <para>可选的格式检测结果；非 <c>ExtensionOnly</c> 置信度时按格式名路由。</para>
-    /// </param>
-    /// <returns>
-    /// The mode of the first matching rule, or Auto when none match.
-    /// <para>首个命中规则的打开方式；无命中时为 Auto。</para>
-    /// </returns>
+    /// <summary>Automatic-mode format routing: evaluates the detection predicates in priority order and returns the first matching mode, degrading to extension-only routing without a header sample.
+    /// <para>自动模式格式路由：按优先级顺序判定检测谓词，取首个命中规则的打开方式；无头部样本时退化为扩展名路由。</para></summary>
+    /// <param name="path">A file name or full path.<para>文件名或完整路径。</para></param>
+    /// <param name="header">Optional loaded file-header bytes; header-dependent rules are skipped when <c>null</c>.
+    /// <para>可选的已加载文件头部字节；为 <c>null</c> 时跳过依赖头部的规则。</para></param>
+    /// <param name="detection">Optional format-detection result; a non-<c>ExtensionOnly</c> confidence routes by format name.
+    /// <para>可选的格式检测结果；非 <c>ExtensionOnly</c> 置信度时按格式名路由。</para></param>
+    /// <returns>The mode of the first matching rule, or Auto when none match.
+    /// <para>首个命中规则的打开方式；无命中时为 Auto。</para></returns>
     public static EditorOpenMode ResolveMode(string path, byte[]? header, FormatDetectionResult? detection)
     {
         var extension = new Lazy<EditorOpenMode>(() => ResolveExtensionOnly(path));

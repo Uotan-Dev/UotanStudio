@@ -227,21 +227,17 @@ public static class BackupService
         return new BackupResult { Success = true, Summary = $"Restored '{partition}' ({totalBytes} bytes) via fastboot flash.", Bytes = totalBytes };
     }
 
-    /// <summary>
-    /// EDL device-level backup: resolves the target partition geometry from a rawprogram via
-    /// <see cref="ResolveEdlPartitionGeometry"/>, opens a session and delegates to the
-    /// geometry-based session-level overload.
-    /// <para>EDL 设备级备份：通过 <see cref="ResolveEdlPartitionGeometry"/> 解析 rawprogram
-    /// 定位目标分区几何信息，打开会话后委托给几何参数重载
-    /// <see cref="BackupEdlPartitionAsync(EdlSession, string, long, long, string, IProgress{BackupProgress}?, CancellationToken)"/>。</para>
-    /// </summary>
-    /// <param name="device">The target device. <para>目标设备。</para></param>
-    /// <param name="partition">Target partition name (matched by label/filename in the rawprogram). <para>目标分区名（按 label/filename 匹配 rawprogram）。</para></param>
-    /// <param name="outPath">Full path of the output file. <para>落盘文件完整路径。</para></param>
-    /// <param name="rawProgramPath">Path of the rawprogram XML file providing the partition geometry. <para>提供分区几何信息的 rawprogram XML 文件路径。</para></param>
-    /// <param name="progress">Optional backup progress reporter. <para>可选的备份进度报告器。</para></param>
-    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The backup result. <para>备份结果。</para></returns>
+    /// <summary>EDL device-level backup: resolves the target partition geometry from a rawprogram via <see cref="ResolveEdlPartitionGeometry"/>, opens a session and delegates to the geometry-based session-level overload.
+    /// <para>EDL 设备级备份：通过 <see cref="ResolveEdlPartitionGeometry"/> 解析 rawprogram 定位目标分区几何信息，打开会话后委托给几何参数重载 <see cref="BackupEdlPartitionAsync(EdlSession, string, long, long, string, IProgress{BackupProgress}?, CancellationToken)"/>。</para></summary>
+    /// <param name="device">The target device.<para>目标设备。</para></param>
+    /// <param name="partition">Target partition name (matched by label/filename in the rawprogram).
+    /// <para>目标分区名（按 label/filename 匹配 rawprogram）。</para></param>
+    /// <param name="outPath">Full path of the output file.<para>落盘文件完整路径。</para></param>
+    /// <param name="rawProgramPath">Path of the rawprogram XML file providing the partition geometry.
+    /// <para>提供分区几何信息的 rawprogram XML 文件路径。</para></param>
+    /// <param name="progress">Optional backup progress reporter.<para>可选的备份进度报告器。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The backup result.<para>备份结果。</para></returns>
     public static async Task<BackupResult> BackupEdlPartitionAsync(
         DeviceInfo device, string partition, string outPath, string rawProgramPath,
         IProgress<BackupProgress>? progress, CancellationToken ct)
@@ -301,20 +297,19 @@ public static class BackupService
             outPath, progress, ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// EDL backup core (geometry-based): streams a partition to disk with an explicit start
-    /// sector and sector count via a Firehose <c>read</c>.
-    /// <para>EDL 备份核心（几何参数版）：按显式起始扇区与扇区数经 Firehose <c>read</c> 流式落盘。</para>
-    /// </summary>
-    /// <param name="session">The EDL session, initialized on demand. <para>EDL 会话（按需初始化）。</para></param>
-    /// <param name="partition">Target partition name (used for progress reporting and the read filename). <para>目标分区名（用于进度展示与 read 文件名）。</para></param>
-    /// <param name="startSector">The start sector. <para>起始扇区。</para></param>
-    /// <param name="sectorCount">The number of sectors to read. <para>要读取的扇区数。</para></param>
-    /// <param name="outPath">Full path of the output file. <para>落盘文件完整路径。</para></param>
-    /// <param name="progress">Optional backup progress reporter. <para>可选的备份进度报告器。</para></param>
-    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The backup result. <para>备份结果。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the start sector is negative or the sector count is not positive. <para>起始扇区为负或扇区数为非正时抛出。</para></exception>
+    /// <summary>EDL backup core (geometry-based): streams a partition to disk with an explicit start sector and sector count via a Firehose <c>read</c>.
+    /// <para>EDL 备份核心（几何参数版）：按显式起始扇区与扇区数经 Firehose <c>read</c> 流式落盘。</para></summary>
+    /// <param name="session">The EDL session, initialized on demand.<para>EDL 会话（按需初始化）。</para></param>
+    /// <param name="partition">Target partition name (used for progress reporting and the read filename).
+    /// <para>目标分区名（用于进度展示与 read 文件名）。</para></param>
+    /// <param name="startSector">The start sector.<para>起始扇区。</para></param>
+    /// <param name="sectorCount">The number of sectors to read.<para>要读取的扇区数。</para></param>
+    /// <param name="outPath">Full path of the output file.<para>落盘文件完整路径。</para></param>
+    /// <param name="progress">Optional backup progress reporter.<para>可选的备份进度报告器。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The backup result.<para>备份结果。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the start sector is negative or the sector count is not positive.
+    /// <para>起始扇区为负或扇区数为非正时抛出。</para></exception>
     public static async Task<BackupResult> BackupEdlPartitionAsync(
         EdlSession session, string partition, long startSector, long sectorCount,
         string outPath, IProgress<BackupProgress>? progress, CancellationToken ct)

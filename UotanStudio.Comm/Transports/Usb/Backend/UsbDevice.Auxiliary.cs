@@ -92,20 +92,16 @@ internal abstract partial class UsbDevice
         _ = ControlTransfer(setup, null, 0, 0, DefaultTimeoutMs);
     }
 
-    /// <summary>
-    /// Reads bytes from an interrupt IN endpoint into a caller-provided buffer.
-    /// <para>从中断 IN 端点将数据读取到调用方提供的缓冲区。</para>
-    /// The default implementation reports the capability as unsupported; backends that can
-    /// perform interrupt transfers (usbfs/libusb/WinUSB) override this method.
-    /// <para>默认实现报告该能力不受支持；可执行中断传输的后端（usbfs/libusb/WinUSB）
-    /// 覆盖此方法。</para>
-    /// </summary>
-    /// <param name="endpointAddress">The interrupt IN endpoint address (bit 7 set). <para>中断 IN 端点地址（bit 7 置位）。</para></param>
-    /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
-    /// <param name="offset">The destination offset. <para>目标偏移量。</para></param>
-    /// <param name="length">Maximum number of bytes to read. <para>最多读取的字节数。</para></param>
-    /// <param name="timeoutMs">The timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
-    /// <returns>The read result with byte count and outcome flags. <para>包含字节数与结果标志的读取结果。</para></returns>
+    /// <summary>Reads bytes from an interrupt IN endpoint into a caller-provided buffer.
+    /// <para>从中断 IN 端点将数据读取到调用方提供的缓冲区。</para>The default implementation reports the capability as unsupported; backends that can perform interrupt transfers (usbfs/libusb/WinUSB) override this method.<para>默认实现报告该能力不受支持；可执行中断传输的后端（usbfs/libusb/WinUSB） 覆盖此方法。</para></summary>
+    /// <param name="endpointAddress">The interrupt IN endpoint address (bit 7 set).
+    /// <para>中断 IN 端点地址（bit 7 置位）。</para></param>
+    /// <param name="buffer">The destination buffer.<para>目标缓冲区。</para></param>
+    /// <param name="offset">The destination offset.<para>目标偏移量。</para></param>
+    /// <param name="length">Maximum number of bytes to read.<para>最多读取的字节数。</para></param>
+    /// <param name="timeoutMs">The timeout in milliseconds.<para>超时时间（毫秒）。</para></param>
+    /// <returns>The read result with byte count and outcome flags.
+    /// <para>包含字节数与结果标志的读取结果。</para></returns>
     public virtual UsbReadResult ReadInterrupt(byte endpointAddress, byte[] buffer, int offset, int length, int timeoutMs)
         => throw new NotSupportedException("The backend does not support interrupt endpoint transfers.");
 

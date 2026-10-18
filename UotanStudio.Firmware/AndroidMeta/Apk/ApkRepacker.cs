@@ -60,21 +60,28 @@ internal static class ApkRepacker
     private const ushort Utf8Flag = 0x0800;
     private const ushort AlignmentExtraFieldId = 0xd935;
 
-    /// <summary>
-    /// Repacks a directory into an APK file. The output is written to a sibling temporary file
-    /// and atomically replaces the target on success.
-    /// <para>把目录重打包为 APK 文件。输出先写入同级临时文件，成功后原子替换目标。</para>
-    /// </summary>
-    /// <param name="inputDirectory">Existing directory enumerated recursively; each file becomes an entry named by its relative path. <para>递归枚举的已存在目录；每个文件成为以其相对路径命名的条目。</para></param>
-    /// <param name="outputPath">Destination APK path; an existing file is replaced only after the archive is fully written. <para>目标 APK 路径；仅在归档完整写出后才替换既有文件。</para></param>
-    /// <param name="options">Repacking options; <see langword="null"/> uses the <see cref="ApkRepackOptions"/> defaults. <para>重打包选项；为 <see langword="null"/> 时使用 <see cref="ApkRepackOptions"/> 默认值。</para></param>
-    /// <param name="cancellationToken">Observed during collection and per-entry writing; cancellation leaves the existing output untouched. <para>在条目收集与逐条写入期间生效；取消时保持既有输出不动。</para></param>
-    /// <exception cref="DirectoryNotFoundException"><paramref name="inputDirectory"/> is blank or does not exist. <para><paramref name="inputDirectory"/> 为空或不存在。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="outputPath"/> is blank. <para><paramref name="outputPath"/> 为空白。</para></exception>
-    /// <exception cref="InvalidDataException">The input directory holds no files, more than 65535 entries, or any entry or archive beyond the 32-bit ZIP limits. <para>输入目录没有文件、条目超过 65535 个，或有条目/整包超出 32 位 ZIP 上限。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
-    /// <exception cref="OverflowException">An entry's offsets or sizes exceed the 32-bit fields written into its headers. <para>条目的偏移或大小超出写入头部所需的 32 位字段。</para></exception>
-    /// <exception cref="IOException">The temporary file cannot be written or moved onto the target. <para>临时文件无法写入或无法移动到目标。</para></exception>
+    /// <summary>Repacks a directory into an APK file. The output is written to a sibling temporary file and atomically replaces the target on success.
+    /// <para>把目录重打包为 APK 文件。输出先写入同级临时文件，成功后原子替换目标。</para></summary>
+    /// <param name="inputDirectory">Existing directory enumerated recursively; each file becomes an entry named by its relative path.
+    /// <para>递归枚举的已存在目录；每个文件成为以其相对路径命名的条目。</para></param>
+    /// <param name="outputPath">Destination APK path; an existing file is replaced only after the archive is fully written.
+    /// <para>目标 APK 路径；仅在归档完整写出后才替换既有文件。</para></param>
+    /// <param name="options">Repacking options; <see langword="null"/> uses the <see cref="ApkRepackOptions"/> defaults.
+    /// <para>重打包选项；为 <see langword="null"/> 时使用 <see cref="ApkRepackOptions"/> 默认值。</para></param>
+    /// <param name="cancellationToken">Observed during collection and per-entry writing; cancellation leaves the existing output untouched.
+    /// <para>在条目收集与逐条写入期间生效；取消时保持既有输出不动。</para></param>
+    /// <exception cref="DirectoryNotFoundException"><paramref name="inputDirectory"/> is blank or does not exist.
+    /// <para><paramref name="inputDirectory"/> 为空或不存在。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="outputPath"/> is blank.
+    /// <para><paramref name="outputPath"/> 为空白。</para></exception>
+    /// <exception cref="InvalidDataException">The input directory holds no files, more than 65535 entries, or any entry or archive beyond the 32-bit ZIP limits.
+    /// <para>输入目录没有文件、条目超过 65535 个，或有条目/整包超出 32 位 ZIP 上限。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    /// <exception cref="OverflowException">An entry's offsets or sizes exceed the 32-bit fields written into its headers.
+    /// <para>条目的偏移或大小超出写入头部所需的 32 位字段。</para></exception>
+    /// <exception cref="IOException">The temporary file cannot be written or moved onto the target.
+    /// <para>临时文件无法写入或无法移动到目标。</para></exception>
     public static void Repack(string inputDirectory, string outputPath, ApkRepackOptions? options = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(inputDirectory) || !Directory.Exists(inputDirectory))

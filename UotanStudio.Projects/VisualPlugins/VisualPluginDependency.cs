@@ -67,22 +67,14 @@ public sealed class VisualPluginDependency
             || TryParseVersion(MaximumVersionExclusive, out var maximum) && actual < maximum;
     }
 
-    /// <summary>
-    /// Accepts canonical three-component nonnegative Int32 versions, without prefixes or suffixes.
-    /// <para>仅接受规范的、非负 Int32 的三段版本号，不允许任何前缀或后缀。</para>
-    /// </summary>
-    /// <param name="text">
-    /// Candidate version text; null and strings longer than 32 characters are rejected.
-    /// <para>候选版本文本；null 以及超过 32 个字符的字符串会被拒绝。</para>
-    /// </param>
-    /// <param name="version">
-    /// The parsed version on success; reset to <c>0.0.0</c> when parsing fails.
-    /// <para>成功时写入解析出的版本；解析失败时重置为 <c>0.0.0</c>。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> only for an exact major.minor.patch form whose three components round-trip to the original text with no build, revision, padding or trailing separators.
-    /// <para>仅当文本恰为 major.minor.patch 形式、三段可原样往返且不含 build、revision、填充或多余分隔符时返回 <see langword="true"/>。</para>
-    /// </returns>
+    /// <summary>Accepts canonical three-component nonnegative Int32 versions, without prefixes or suffixes.
+    /// <para>仅接受规范的、非负 Int32 的三段版本号，不允许任何前缀或后缀。</para></summary>
+    /// <param name="text">Candidate version text; null and strings longer than 32 characters are rejected.
+    /// <para>候选版本文本；null 以及超过 32 个字符的字符串会被拒绝。</para></param>
+    /// <param name="version">The parsed version on success; reset to <c>0.0.0</c> when parsing fails.
+    /// <para>成功时写入解析出的版本；解析失败时重置为 <c>0.0.0</c>。</para></param>
+    /// <returns><see langword="true"/> only for an exact major.minor.patch form whose three components round-trip to the original text with no build, revision, padding or trailing separators.
+    /// <para>仅当文本恰为 major.minor.patch 形式、三段可原样往返且不含 build、revision、填充或多余分隔符时返回 <see langword="true"/>。</para></returns>
     public static bool TryParseVersion(string? text, out Version version)
     {
         version = new Version(0, 0, 0);

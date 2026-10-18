@@ -116,19 +116,13 @@ public sealed class MtkXmlStorageInfo
     /// <para>校验常规块访问，不进行截断或取整，也不允许访问需认证的区域。</para></summary>
     /// <param name="regionName">An exact XML region token from this geometry.
     /// <para>来自本几何信息的精确 XML 区域标记。</para></param>
-    /// <param name="offset">Nonnegative block-aligned byte offset.
-    /// <para>非负、按块对齐的字节偏移。</para></param>
-    /// <param name="length">Positive block-aligned byte count.
-    /// <para>为正、按块对齐的字节数。</para></param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="regionName"/> is <see langword="null"/>.
+    /// <param name="offset">Nonnegative block-aligned byte offset.<para>非负、按块对齐的字节偏移。</para></param>
+    /// <param name="length">Positive block-aligned byte count.<para>为正、按块对齐的字节数。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="regionName"/> is <see langword="null"/>.
     /// <para><paramref name="regionName"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="offset"/> is negative, <paramref name="length"/> is not positive, the region was not
-    /// reported, or the range is unaligned or exceeds reported capacity.
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> is negative, <paramref name="length"/> is not positive, the region was not reported, or the range is unaligned or exceeds reported capacity.
     /// <para><paramref name="offset"/> 为负、<paramref name="length"/> 非正、区域未上报，或范围未对齐或超出上报容量。</para></exception>
-    /// <exception cref="NotSupportedException">
-    /// <paramref name="regionName"/> names a region reserved for a separate authenticated protocol.
+    /// <exception cref="NotSupportedException"><paramref name="regionName"/> names a region reserved for a separate authenticated protocol.
     /// <para><paramref name="regionName"/> 指向为单独已认证协议保留的区域。</para></exception>
     public void ValidateRange(string regionName, long offset, long length)
     {

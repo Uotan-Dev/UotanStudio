@@ -140,8 +140,7 @@ public sealed class MtkFlashAreaMap
     /// <para>覆盖所有具有正数上报容量的普通 eMMC 区域的空间。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="storage"/> is null.
     /// <para><paramref name="storage"/> 为 null。</para></exception>
-    /// <exception cref="NotSupportedException">The Legacy agent was initialized for NOR or NAND, which its
-    /// dedicated geometry methods own instead of the region-walked eMMC inventory.
+    /// <exception cref="NotSupportedException">The Legacy agent was initialized for NOR or NAND, which its dedicated geometry methods own instead of the region-walked eMMC inventory.
     /// <para>Legacy 代理以 NOR 或 NAND 初始化；这些由各自的专用几何方法负责，而非可遍历的 eMMC 清单。</para></exception>
     /// <exception cref="InvalidOperationException">No ordinary region reported a positive capacity.
     /// <para>没有任何普通区域上报正数容量。</para></exception>
@@ -209,20 +208,15 @@ public sealed class MtkFlashAreaMap
     /// <summary>Splits an absolute walk range into per-region segments without touching the device.
     /// <para>把绝对遍历范围按区域切分，不接触设备。</para></summary>
     /// <remarks>
-    /// <para>Every bound is checked before any segment is allocated, so a fabricated offset or length can
-    /// never produce a large list or an overflowed sum. Segments follow the reported region order and never
-    /// span a region the map does not list.</para>
-    /// <para>在分配任何片段之前先完成全部边界检查，因此伪造的偏移或长度既不会产生庞大的列表，也不会造成累加
-    /// 溢出。片段按上报区域顺序排列，绝不跨越映射未列出的区域。</para>
-    /// </remarks>
+    /// <para>Every bound is checked before any segment is allocated, so a fabricated offset or length can never produce a large list or an overflowed sum. Segments follow the reported region order and never span a region the map does not list.</para>
+    /// <para>在分配任何片段之前先完成全部边界检查，因此伪造的偏移或长度既不会产生庞大的列表，也不会造成累加 溢出。片段按上报区域顺序排列，绝不跨越映射未列出的区域。</para></remarks>
     /// <param name="offset">The nonnegative absolute byte offset, aligned to <see cref="AlignmentBytes"/>.
     /// <para>非负且按 <see cref="AlignmentBytes"/> 对齐的绝对字节偏移。</para></param>
     /// <param name="length">The positive absolute byte count, aligned to <see cref="AlignmentBytes"/>.
     /// <para>正数且按 <see cref="AlignmentBytes"/> 对齐的绝对字节长度。</para></param>
     /// <returns>One to <c>64</c> contiguous, ordered segments covering exactly the requested bytes.
     /// <para>1 到 <c>64</c> 个连续、有序且恰好覆盖请求字节的片段。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">The offset is negative, the length is not positive,
-    /// either operand is unaligned, or the range extends past <see cref="TotalBytes"/>.
+    /// <exception cref="ArgumentOutOfRangeException">The offset is negative, the length is not positive, either operand is unaligned, or the range extends past <see cref="TotalBytes"/>.
     /// <para>偏移为负、长度不是正数、任一操作数未对齐，或该范围超出 <see cref="TotalBytes"/>。</para></exception>
     public IReadOnlyList<MtkFlashAreaSegment> Plan(long offset, long length)
     {

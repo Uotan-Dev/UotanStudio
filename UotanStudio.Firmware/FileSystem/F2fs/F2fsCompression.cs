@@ -97,10 +97,7 @@ internal static class F2fsCompression
         return result;
     }
 
-    /// <summary>
-    /// Decompresses a data cluster.
-    /// <para>解压缩一个数据簇。</para>
-    /// </summary>
+    /// <summary>Decompresses a data cluster.<para>解压缩一个数据簇。</para></summary>
     /// <param name="compressedData">Codec payload following the 24-byte cluster header; it is passed to the decoder unchanged.
     /// <para>24 字节簇头部之后的编解码载荷，原样交给解码器。</para></param>
     /// <param name="algorithm">Codec that produced the payload; a value outside <see cref="CompressionAlgorithm"/> is rejected.

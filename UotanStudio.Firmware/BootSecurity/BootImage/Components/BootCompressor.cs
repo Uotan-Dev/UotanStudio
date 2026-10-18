@@ -86,30 +86,16 @@ public static class BootCompressor
         return data[0] == 0x5D && data[1] == 0x00 && data[2] == 0x00 ? CompressionType.Lzma : CompressionType.None;
     }
 
-    /// <summary>
-    /// Decompresses data, or returns null when unsupported or on failure.
-    /// <para>解压数据；失败或格式不受支持时返回 null。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Compressed container held entirely in memory; <see langword="null"/> or empty input yields <see langword="null"/>.
-    /// <para>完整驻留内存的压缩容器；<see langword="null"/> 或空输入返回 <see langword="null"/>。</para>
-    /// </param>
-    /// <param name="type">
-    /// Container format to attempt regardless of the actual contents; <c>CompressionType.None</c> decodes to an empty array and unsupported values yield <see langword="null"/>.
-    /// <para>无论实际内容为何、要尝试的容器格式；<c>CompressionType.None</c> 会解码为空数组，不受支持的值返回 <see langword="null"/>。</para>
-    /// </param>
-    /// <returns>
-    /// The decompressed bytes, or <see langword="null"/> when the format is unsupported or any decoding error occurs; all exceptions raised by the underlying codecs are swallowed.
-    /// <para>解压后的字节；当格式不受支持或出现任何解码错误时返回 <see langword="null"/>，底层编解码器抛出的异常全部被吞没。</para>
-    /// </returns>
-    /// <remarks>
-    /// Every container is decoded through the compression library, and its bzip2 reader is built with
-    /// decompressConcatenated enabled, so a payload that concatenates several back-to-back bzip2 streams now decodes
-    /// into the members joined in order instead of being rejected after the first stream the way the previous
-    /// single-stream reader left it.
-    /// <para>所有容器统一经由压缩库解码，其中 bzip2 读取器以启用串接解压的方式构造，因此把多个首尾相连的 bzip2
-    /// 流拼接在一起的载荷现在会按成员顺序解码并合并输出，而不再像此前只支持单流的读取器那样在第一段之后被拒绝。</para>
-    /// </remarks>
+    /// <summary>Decompresses data, or returns null when unsupported or on failure.
+    /// <para>解压数据；失败或格式不受支持时返回 null。</para></summary>
+    /// <param name="data">Compressed container held entirely in memory; <see langword="null"/> or empty input yields <see langword="null"/>.
+    /// <para>完整驻留内存的压缩容器；<see langword="null"/> 或空输入返回 <see langword="null"/>。</para></param>
+    /// <param name="type">Container format to attempt regardless of the actual contents; <c>CompressionType.None</c> decodes to an empty array and unsupported values yield <see langword="null"/>.
+    /// <para>无论实际内容为何、要尝试的容器格式；<c>CompressionType.None</c> 会解码为空数组，不受支持的值返回 <see langword="null"/>。</para></param>
+    /// <returns>The decompressed bytes, or <see langword="null"/> when the format is unsupported or any decoding error occurs; all exceptions raised by the underlying codecs are swallowed.
+    /// <para>解压后的字节；当格式不受支持或出现任何解码错误时返回 <see langword="null"/>，底层编解码器抛出的异常全部被吞没。</para></returns>
+    /// <remarks>Every container is decoded through the compression library, and its bzip2 reader is built with decompressConcatenated enabled, so a payload that concatenates several back-to-back bzip2 streams now decodes into the members joined in order instead of being rejected after the first stream the way the previous single-stream reader left it.
+    /// <para>所有容器统一经由压缩库解码，其中 bzip2 读取器以启用串接解压的方式构造，因此把多个首尾相连的 bzip2 流拼接在一起的载荷现在会按成员顺序解码并合并输出，而不再像此前只支持单流的读取器那样在第一段之后被拒绝。</para></remarks>
     public static byte[]? TryDecompress(byte[] data, CompressionType type)
     {
         if (data is null || data.Length == 0)
@@ -222,29 +208,14 @@ public static class BootCompressor
             ? []
             : CompressionService.Compress(data, format);
 
-    /// <summary>
-    /// Compresses data with the boot-family encoding selected by the type label.
-    /// <para>按类型标签选定的 boot 家族编码压缩数据。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext buffer held entirely in memory; <see langword="null"/> yields <see langword="null"/>.
-    /// <para>完整驻留内存的明文缓冲区；<see langword="null"/> 输入返回 <see langword="null"/>。</para>
-    /// </param>
-    /// <param name="type">
-    /// Target label; only <see cref="CompressionType.Gzip"/>, <see cref="CompressionType.Zopfli"/>,
-    /// <see cref="CompressionType.Lz4Legacy"/> and <see cref="CompressionType.Lz4Lg"/> have boot-family encodings.
-    /// <para>目标标签；仅 <see cref="CompressionType.Gzip"/>、<see cref="CompressionType.Zopfli"/>、
-    /// <see cref="CompressionType.Lz4Legacy"/> 与 <see cref="CompressionType.Lz4Lg"/> 存在 boot 家族合法编码。</para>
-    /// </param>
-    /// <returns>
-    /// The compressed bytes whose leading magic is recognized back by <see cref="Detect(byte[])"/> for a non-empty payload;
-    /// an empty payload yields the codec's empty-stream encoding, which carries no magic and detects as
-    /// <see cref="CompressionType.None"/>. Returns <see langword="null"/> when the label has no boot-family encoding
-    /// or the codec fails; all codec exceptions are swallowed.
-    /// <para>非空输入时返回压缩字节，其首部魔数可被 <see cref="Detect(byte[])"/> 重新识别；空输入产生编解码器的空流编码，
-    /// 不含魔数，检测结果为 <see cref="CompressionType.None"/>。标签没有 boot 家族编码或编解码失败时返回
-    /// <see langword="null"/>，编解码器异常全部被吞没。</para>
-    /// </returns>
+    /// <summary>Compresses data with the boot-family encoding selected by the type label.
+    /// <para>按类型标签选定的 boot 家族编码压缩数据。</para></summary>
+    /// <param name="data">Plaintext buffer held entirely in memory; <see langword="null"/> yields <see langword="null"/>.
+    /// <para>完整驻留内存的明文缓冲区；<see langword="null"/> 输入返回 <see langword="null"/>。</para></param>
+    /// <param name="type">Target label; only <see cref="CompressionType.Gzip"/>, <see cref="CompressionType.Zopfli"/>, <see cref="CompressionType.Lz4Legacy"/> and <see cref="CompressionType.Lz4Lg"/> have boot-family encodings.
+    /// <para>目标标签；仅 <see cref="CompressionType.Gzip"/>、<see cref="CompressionType.Zopfli"/>、 <see cref="CompressionType.Lz4Legacy"/> 与 <see cref="CompressionType.Lz4Lg"/> 存在 boot 家族合法编码。</para></param>
+    /// <returns>The compressed bytes whose leading magic is recognized back by <see cref="Detect(byte[])"/> for a non-empty payload; an empty payload yields the codec's empty-stream encoding, which carries no magic and detects as <see cref="CompressionType.None"/>. Returns <see langword="null"/> when the label has no boot-family encoding or the codec fails; all codec exceptions are swallowed.
+    /// <para>非空输入时返回压缩字节，其首部魔数可被 <see cref="Detect(byte[])"/> 重新识别；空输入产生编解码器的空流编码， 不含魔数，检测结果为 <see cref="CompressionType.None"/>。标签没有 boot 家族编码或编解码失败时返回 <see langword="null"/>，编解码器异常全部被吞没。</para></returns>
     public static byte[]? TryCompress(byte[] data, CompressionType type)
     {
         if (data is null || !TryMapCompressibleFormat(type, out var format))
@@ -262,22 +233,14 @@ public static class BootCompressor
         }
     }
 
-    /// <summary>
-    /// Span-based overload of <see cref="TryCompress(byte[], CompressionType)"/> for callers holding slices.
-    /// <para><see cref="TryCompress(byte[], CompressionType)"/> 的 Span 重载，供持有切片的调用方使用。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext span copied into a buffer before encoding; an empty span produces the codec's empty-stream encoding.
-    /// <para>编码前先复制到缓冲区的明文切片；空切片生成编解码器的空流编码。</para>
-    /// </param>
-    /// <param name="type">
-    /// Target label with a boot-family encoding; see <see cref="TryCompress(byte[], CompressionType)"/>.
-    /// <para>具有 boot 家族编码的目标标签；参见 <see cref="TryCompress(byte[], CompressionType)"/>。</para>
-    /// </param>
-    /// <param name="compressed">
-    /// The compressed bytes on success; <see langword="null"/> when the label is unsupported or encoding fails.
-    /// <para>成功时为压缩字节；标签不受支持或编码失败时为 <see langword="null"/>。</para>
-    /// </param>
+    /// <summary>Span-based overload of <see cref="TryCompress(byte[], CompressionType)"/> for callers holding slices.
+    /// <para><see cref="TryCompress(byte[], CompressionType)"/> 的 Span 重载，供持有切片的调用方使用。</para></summary>
+    /// <param name="data">Plaintext span copied into a buffer before encoding; an empty span produces the codec's empty-stream encoding.
+    /// <para>编码前先复制到缓冲区的明文切片；空切片生成编解码器的空流编码。</para></param>
+    /// <param name="type">Target label with a boot-family encoding; see <see cref="TryCompress(byte[], CompressionType)"/>.
+    /// <para>具有 boot 家族编码的目标标签；参见 <see cref="TryCompress(byte[], CompressionType)"/>。</para></param>
+    /// <param name="compressed">The compressed bytes on success; <see langword="null"/> when the label is unsupported or encoding fails.
+    /// <para>成功时为压缩字节；标签不受支持或编码失败时为 <see langword="null"/>。</para></param>
     /// <returns><see langword="true"/> when the span was compressed successfully.
     /// <para>切片压缩成功时返回 <see langword="true"/>。</para></returns>
     public static bool TryCompress(ReadOnlySpan<byte> data, CompressionType type, out byte[]? compressed)
@@ -299,25 +262,13 @@ public static class BootCompressor
         }
     }
 
-    /// <summary>
-    /// Compresses data with the boot-family encoding selected by the type label, reporting failures instead of
-    /// returning <see langword="null"/>.
-    /// <para>按类型标签选定的 boot 家族编码压缩数据，失败时抛出异常而非返回 <see langword="null"/>。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext buffer to compress. <para>待压缩的明文缓冲区。</para>
-    /// </param>
-    /// <param name="type">
-    /// Target label; only gzip-family and legacy-LZ4-family labels are accepted.
-    /// <para>目标标签；仅接受 gzip 家族与传统 LZ4 家族标签。</para>
-    /// </param>
-    /// <returns>
-    /// The compressed bytes; for a non-empty payload the stream magic is recognized back by <see cref="Detect(byte[])"/>,
-    /// while an empty payload yields the codec's empty-stream encoding without magic, matching how boot images
-    /// store empty components as size-0 sections instead of compressed streams.
-    /// <para>压缩后的字节；非空输入的流魔数可被 <see cref="Detect(byte[])"/> 重新识别，而空输入产生编解码器的空流编码且
-    /// 不含魔数，与 boot 镜像将空组件存为 0 长度区段而非压缩流的方式一致。</para>
-    /// </returns>
+    /// <summary>Compresses data with the boot-family encoding selected by the type label, reporting failures instead of returning <see langword="null"/>.
+    /// <para>按类型标签选定的 boot 家族编码压缩数据，失败时抛出异常而非返回 <see langword="null"/>。</para></summary>
+    /// <param name="data">Plaintext buffer to compress.<para>待压缩的明文缓冲区。</para></param>
+    /// <param name="type">Target label; only gzip-family and legacy-LZ4-family labels are accepted.
+    /// <para>目标标签；仅接受 gzip 家族与传统 LZ4 家族标签。</para></param>
+    /// <returns>The compressed bytes; for a non-empty payload the stream magic is recognized back by <see cref="Detect(byte[])"/>, while an empty payload yields the codec's empty-stream encoding without magic, matching how boot images store empty components as size-0 sections instead of compressed streams.
+    /// <para>压缩后的字节；非空输入的流魔数可被 <see cref="Detect(byte[])"/> 重新识别，而空输入产生编解码器的空流编码且 不含魔数，与 boot 镜像将空组件存为 0 长度区段而非压缩流的方式一致。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="NotSupportedException">The label has no boot-family encoding.

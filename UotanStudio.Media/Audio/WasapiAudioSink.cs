@@ -143,21 +143,20 @@ public sealed unsafe partial class WasapiAudioSink : IAudioSink
         }
         catch { Close(); throw; }
     }
-    /// <summary>
-    /// Writes interleaved PCM bytes to the endpoint in block-aligned chunks, waiting up to two
-    /// seconds of silence for the device to consume data before each successful hand-off.
-    /// <para>按块对齐的分片向端点写入交错 PCM 字节；每次成功交付前最多等待两秒让设备消费数据。</para>
-    /// </summary>
-    /// <param name="pcm">
-    /// PCM bytes whose length is a multiple of the open format's block alignment and within the
-    /// bounded packet size; an empty span returns immediately.
-    /// <para>长度必须是已打开格式块对齐的整数倍且不超过有界的包大小；空 span 立即返回。</para>
-    /// </param>
-    /// <exception cref="InvalidOperationException">The sink is not open, it was called from another thread, or a WASAPI call fails. <para>输出端未打开、在其他线程调用，或 WASAPI 调用失败时抛出。</para></exception>
-    /// <exception cref="ArgumentException">The length exceeds the packet limit or is not block-aligned. <para>长度超过包上限或未块对齐时抛出。</para></exception>
-    /// <exception cref="TimeoutException">The endpoint stops consuming PCM for two seconds. <para>端点连续两秒不消费 PCM 时抛出。</para></exception>
-    /// <exception cref="InvalidDataException">The endpoint reports padding beyond its capacity. <para>端点报告的填充超出其容量时抛出。</para></exception>
-    /// <exception cref="ObjectDisposedException">The sink has been disposed. <para>输出端已释放时抛出。</para></exception>
+    /// <summary>Writes interleaved PCM bytes to the endpoint in block-aligned chunks, waiting up to two seconds of silence for the device to consume data before each successful hand-off.
+    /// <para>按块对齐的分片向端点写入交错 PCM 字节；每次成功交付前最多等待两秒让设备消费数据。</para></summary>
+    /// <param name="pcm">PCM bytes whose length is a multiple of the open format's block alignment and within the bounded packet size; an empty span returns immediately.
+    /// <para>长度必须是已打开格式块对齐的整数倍且不超过有界的包大小；空 span 立即返回。</para></param>
+    /// <exception cref="InvalidOperationException">The sink is not open, it was called from another thread, or a WASAPI call fails.
+    /// <para>输出端未打开、在其他线程调用，或 WASAPI 调用失败时抛出。</para></exception>
+    /// <exception cref="ArgumentException">The length exceeds the packet limit or is not block-aligned.
+    /// <para>长度超过包上限或未块对齐时抛出。</para></exception>
+    /// <exception cref="TimeoutException">The endpoint stops consuming PCM for two seconds.
+    /// <para>端点连续两秒不消费 PCM 时抛出。</para></exception>
+    /// <exception cref="InvalidDataException">The endpoint reports padding beyond its capacity.
+    /// <para>端点报告的填充超出其容量时抛出。</para></exception>
+    /// <exception cref="ObjectDisposedException">The sink has been disposed.
+    /// <para>输出端已释放时抛出。</para></exception>
     public void Write(ReadOnlySpan<byte> pcm)
     {
         CheckThread();

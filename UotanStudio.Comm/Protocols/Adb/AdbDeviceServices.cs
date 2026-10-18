@@ -50,17 +50,13 @@ internal sealed class AdbDeviceServices(AdbConnection connection) : IAdbDeviceSe
     /// <returns>The remount command output. <para>remount 命令的输出文本。</para></returns>
     public string Remount() => RunService("remount:");
 
-    /// <summary>
-    /// Reads a system property through the shell after validating the key against
-    /// the property-name character set, so a crafted key cannot introduce shell
-    /// metacharacters into the command line.
-    /// <para>先按属性名字符集校验键再通过 shell 读取系统属性，构造的键无法向命令行注入 shell 元字符。</para>
-    /// </summary>
+    /// <summary>Reads a system property through the shell after validating the key against the property-name character set, so a crafted key cannot introduce shell metacharacters into the command line.
+    /// <para>先按属性名字符集校验键再通过 shell 读取系统属性，构造的键无法向命令行注入 shell 元字符。</para></summary>
     /// <param name="key">The property key, limited to letters, digits, dot, underscore, hyphen, at sign and colon.
     /// <para>属性名，仅限字母、数字、点、下划线、连字符、@ 与冒号。</para></param>
-    /// <returns>The property value, trimmed. <para>去除首尾空白的属性值。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="key"/> is empty or contains characters outside the
-    /// property-name set. <para><paramref name="key"/> 为空或包含属性名字符集以外的字符。</para></exception>
+    /// <returns>The property value, trimmed.<para>去除首尾空白的属性值。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="key"/> is empty or contains characters outside the property-name set.
+    /// <para><paramref name="key"/> 为空或包含属性名字符集以外的字符。</para></exception>
     /// <exception cref="TimeoutException">A read timed out while the shell stream was still open.
     /// <para>shell 流仍打开时读取超时。</para></exception>
     public string GetProp(string key)

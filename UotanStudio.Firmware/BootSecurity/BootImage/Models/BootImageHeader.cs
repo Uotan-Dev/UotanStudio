@@ -255,20 +255,11 @@ public class BootImageHeader
         return sb.ToString();
     }
 
-    /// <summary>
-    /// Parses header information from text format.
-    /// <para>从文本格式解析头部信息。</para>
-    /// </summary>
-    /// <param name="content">
-    /// Whole header-file text using <c>key=value</c> lines; blank lines and lines starting with <c>#</c>
-    /// are skipped, and unrecognized keys are ignored. Hexadecimal values may carry a <c>0x</c> prefix.
-    /// <para>完整的头部文件文本，使用 <c>key=value</c> 行；跳过空行和以 <c>#</c> 开头的行，未识别的键被忽略；
-    /// 十六进制值可以带 <c>0x</c> 前缀。</para></param>
-    /// <returns>A header populated from the recognized keys, with defaults kept for absent ones;
-    /// <see langword="null"/> when the text is unparseable (a bad value, an unknown version name,
-    /// or <see langword="null"/> content). The method catches all parse failures and never throws.
-    /// <para>按已识别键填充的头部，缺省键保留默认值；文本无法解析（坏值、未知版本名或 <see langword="null"/> 内容）
-    /// 时返回 <see langword="null"/>。该方法捕获所有解析失败且不抛出异常。</para></returns>
+    /// <summary>Parses header information from text format.<para>从文本格式解析头部信息。</para></summary>
+    /// <param name="content">Whole header-file text using <c>key=value</c> lines; blank lines and lines starting with <c>#</c> are skipped, and unrecognized keys are ignored. Hexadecimal values may carry a <c>0x</c> prefix.
+    /// <para>完整的头部文件文本，使用 <c>key=value</c> 行；跳过空行和以 <c>#</c> 开头的行，未识别的键被忽略； 十六进制值可以带 <c>0x</c> 前缀。</para></param>
+    /// <returns>A header populated from the recognized keys, with defaults kept for absent ones; <see langword="null"/> when the text is unparseable (a bad value, an unknown version name, or <see langword="null"/> content). The method catches all parse failures and never throws.
+    /// <para>按已识别键填充的头部，缺省键保留默认值；文本无法解析（坏值、未知版本名或 <see langword="null"/> 内容） 时返回 <see langword="null"/>。该方法捕获所有解析失败且不抛出异常。</para></returns>
     public static BootImageHeader? ParseHeaderFile(string content)
     {
         try

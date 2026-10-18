@@ -56,20 +56,17 @@ public sealed partial class MtkSession
 
     /// <summary>Sets the meta boot mode flag triple through the documented control code.
     /// <para>通过已记载的控制码设置 meta 启动模式标志三元组。</para></summary>
-    /// <remarks>
-    /// The payload reproduces <c>set_meta</c> (Library/DA/xflash/xflash_lib.py:206-239): three bytes
-    /// of boot mode, connection type and interface id, where UART and USB select meta boot and
-    /// <see cref="MtkXFlashMetaBootMode.Off"/> restores the normal boot flags.
-    /// 载荷复现 <c>set_meta</c>（Library/DA/xflash/xflash_lib.py:206-239）：启动模式、连接类型与接口 id
-    /// 三个字节，UART 与 USB 选择 meta 启动，<see cref="MtkXFlashMetaBootMode.Off"/> 恢复正常启动标志。
-    /// </remarks>
+    /// <remarks>The payload reproduces <c>set_meta</c>(Library/DA/xflash/xflash_lib.py:206-239): three
+    /// bytes of boot mode, connection type and interface id, where UART and USB select meta boot and
+    /// <see cref="MtkXFlashMetaBootMode.Off"/>restores the normal boot flags. 载荷复现 <c>set_meta</c>
+    /// （Library/DA/xflash/xflash_lib.py:206-239）：启动模式、连接类型与接口 id 三个字节，UART 与 USB 选择 meta 启动，
+    /// <see cref="MtkXFlashMetaBootMode.Off"/>恢复正常启动标志。</remarks>
     /// <param name="mode">The boot mode to request. 要请求的启动模式。</param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>A task that completes after the agent acknowledged the flag triple.
     /// <para>在代理确认标志三元组后完成的任务。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="mode"/> is not a defined boot
-    /// mode; no byte was sent. <para><paramref name="mode"/> 不是已定义的启动模式；未发送任何字节。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="mode"/> is not a defined boot mode; no byte was sent.
+    /// <para><paramref name="mode"/> 不是已定义的启动模式；未发送任何字节。</para></exception>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
     /// <exception cref="MtkProtocolException">A status was rejected; the XFlash family faults.
@@ -99,17 +96,13 @@ public sealed partial class MtkSession
 
     /// <summary>Enables or disables the eMMC hardware reset pin through the documented control code.
     /// <para>通过已记载的控制码启用或禁用 eMMC 硬件复位引脚。</para></summary>
-    /// <remarks>
-    /// The reference defines the control code (Library/DA/xflash/xflash_param.py:31) without any call
-    /// site, so the payload follows the SET-family little-endian word convention with no further
-    /// layout invented.
-    /// 参考只定义了该控制码（Library/DA/xflash/xflash_param.py:31），没有任何调用点，因此载荷遵循 SET 家族
-    /// 的小端字约定，不再发明其他布局。
-    /// </remarks>
+    /// <remarks>The reference defines the control code (Library/DA/xflash/xflash_param.py:31) without
+    /// any call site, so the payload follows the SET-family little-endian word convention with no
+    /// further layout invented. 参考只定义了该控制码（Library/DA/xflash/xflash_param.py:31），没有任何调用点，因此载荷遵循 SET 家族
+    /// 的小端字约定，不再发明其他布局。</remarks>
     /// <param name="enable"><see langword="true"/> enables the hardware reset pin.
     /// <para><see langword="true"/> 启用硬件复位引脚。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>A task that completes after the agent acknowledged the flag.
     /// <para>在代理确认该标志后完成的任务。</para></returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
@@ -126,20 +119,17 @@ public sealed partial class MtkSession
 
     /// <summary>Marks the start of one download through the documented 0x080001 marker.
     /// <para>通过已记载的 0x080001 标记声明一次下载开始。</para></summary>
-    /// <remarks>
-    /// The reference keeps its only call commented out (Library/DA/xflash/xflash_lib.py:856), so this
-    /// path follows the established parameterless device-control exchange and keeps the reply bytes
-    /// opaque; the marker changes no storage content by itself.
+    /// <remarks>The reference keeps its only call commented out (Library/DA/xflash/xflash_lib.py:856),
+    /// so this path follows the established parameterless device-control exchange and keeps the reply
+    /// bytes opaque; the marker changes no storage content by itself.
     /// 参考唯一的调用处于注释状态（Library/DA/xflash/xflash_lib.py:856），因此本路径遵循已确立的无参数器件
-    /// 控制交互并把回复字节保持为不透明内容；该标记本身不改变任何存储内容。
-    /// </remarks>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// 控制交互并把回复字节保持为不透明内容；该标记本身不改变任何存储内容。</remarks>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The exact reply bytes. 精确的回复字节。</returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
-    /// <exception cref="MtkProtocolException">A status was rejected or the reply is malformed; the
-    /// XFlash family faults. <para>某状态被拒绝或回复格式错误；XFlash 家族进入 fault 状态。</para></exception>
+    /// <exception cref="MtkProtocolException">A status was rejected or the reply is malformed; the XFlash family faults.
+    /// <para>某状态被拒绝或回复格式错误；XFlash 家族进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
     /// <para>调用方在任一协作点取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session is disposed.
@@ -150,19 +140,15 @@ public sealed partial class MtkSession
 
     /// <summary>Marks the end of one download through the documented 0x080002 marker.
     /// <para>通过已记载的 0x080002 标记声明一次下载结束。</para></summary>
-    /// <remarks>
-    /// The reference defines the code without a call site, so this path follows the established
-    /// parameterless device-control exchange and keeps the reply bytes opaque.
-    /// 参考只定义了该控制码而没有调用点，因此本路径遵循已确立的无参数器件控制交互，并把回复字节保持为
-    /// 不透明内容。
-    /// </remarks>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <remarks>The reference defines the code without a call site, so this path follows the
+    /// established parameterless device-control exchange and keeps the reply bytes opaque.
+    /// 参考只定义了该控制码而没有调用点，因此本路径遵循已确立的无参数器件控制交互，并把回复字节保持为 不透明内容。</remarks>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The exact reply bytes. 精确的回复字节。</returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
-    /// <exception cref="MtkProtocolException">A status was rejected or the reply is malformed; the
-    /// XFlash family faults. <para>某状态被拒绝或回复格式错误；XFlash 家族进入 fault 状态。</para></exception>
+    /// <exception cref="MtkProtocolException">A status was rejected or the reply is malformed; the XFlash family faults.
+    /// <para>某状态被拒绝或回复格式错误；XFlash 家族进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
     /// <para>调用方在任一协作点取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session is disposed.
@@ -173,20 +159,16 @@ public sealed partial class MtkSession
 
     /// <summary>Disables the eMMC hardware reset pin through the documented 0x080004 marker.
     /// <para>通过已记载的 0x080004 标记禁用 eMMC 硬件复位引脚。</para></summary>
-    /// <remarks>
-    /// The reference defines the code without a call site (Library/DA/xflash/xflash_param.py:62), so
-    /// this path follows the established parameterless device-control exchange and keeps the reply
-    /// bytes opaque.
-    /// 参考只定义了该控制码而没有调用点（Library/DA/xflash/xflash_param.py:62），因此本路径遵循已确立的
-    /// 无参数器件控制交互，并把回复字节保持为不透明内容。
-    /// </remarks>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <remarks>The reference defines the code without a call site
+    /// (Library/DA/xflash/xflash_param.py:62), so this path follows the established parameterless
+    /// device-control exchange and keeps the reply bytes opaque.
+    /// 参考只定义了该控制码而没有调用点（Library/DA/xflash/xflash_param.py:62），因此本路径遵循已确立的 无参数器件控制交互，并把回复字节保持为不透明内容。</remarks>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The exact reply bytes. 精确的回复字节。</returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
     /// <para>未附加 XFlash 一阶段代理。</para></exception>
-    /// <exception cref="MtkProtocolException">A status was rejected or the reply is malformed; the
-    /// XFlash family faults. <para>某状态被拒绝或回复格式错误；XFlash 家族进入 fault 状态。</para></exception>
+    /// <exception cref="MtkProtocolException">A status was rejected or the reply is malformed; the XFlash family faults.
+    /// <para>某状态被拒绝或回复格式错误；XFlash 家族进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
     /// <para>调用方在任一协作点取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session is disposed.

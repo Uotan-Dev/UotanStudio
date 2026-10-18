@@ -30,22 +30,14 @@ public static class Crc32c
     private static readonly uint[] Table = InitTable();
     private static readonly uint[] SliceTable = InitSliceTable();
 
-    /// <summary>
-    /// Computes the CRC32c of the data starting from <paramref name="seed"/> (crc32c_le register semantics).
-    /// <para>以 <paramref name="seed"/> 为寄存器初值计算数据的 CRC32c（crc32c_le 寄存器语义）。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Bytes to hash; an empty span returns <paramref name="seed"/> unchanged.
-    /// <para>参与计算的字节；空区间原样返回 <paramref name="seed"/>。</para>
-    /// </param>
-    /// <param name="seed">
-    /// Register initial value; use <c>0xFFFF_FFFF</c> to start a fresh checksum or a previous result to continue it.
-    /// <para>寄存器初值；首次计算用 <c>0xFFFF_FFFF</c>，续算传入上一次的结果。</para>
-    /// </param>
-    /// <returns>
-    /// The CRC32c register value after consuming the data.
-    /// <para>消费完数据后的 CRC32c 寄存器值。</para>
-    /// </returns>
+    /// <summary>Computes the CRC32c of the data starting from <paramref name="seed"/> (crc32c_le register semantics).
+    /// <para>以 <paramref name="seed"/> 为寄存器初值计算数据的 CRC32c（crc32c_le 寄存器语义）。</para></summary>
+    /// <param name="data">Bytes to hash; an empty span returns <paramref name="seed"/> unchanged.
+    /// <para>参与计算的字节；空区间原样返回 <paramref name="seed"/>。</para></param>
+    /// <param name="seed">Register initial value; use <c>0xFFFF_FFFF</c> to start a fresh checksum or a previous result to continue it.
+    /// <para>寄存器初值；首次计算用 <c>0xFFFF_FFFF</c>，续算传入上一次的结果。</para></param>
+    /// <returns>The CRC32c register value after consuming the data.
+    /// <para>消费完数据后的 CRC32c 寄存器值。</para></returns>
     public static uint Compute(ReadOnlySpan<byte> data, uint seed = InitialSeed)
     {
         var crc = seed;

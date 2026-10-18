@@ -102,29 +102,18 @@ internal static class ZImageTool
             magic.SequenceEqual(new byte[] { 0x01, 0x6F, 0x28, 0x18 });
     }
 
-    /// <summary>
-    /// Parses the zImage header, decodes its address fields with the detected byte order, and copies the
-    /// compressed payload found by scanning forward from offset 0x40 for a recognized compressed stream.
-    /// <para>解析 zImage 头部，按检测到的字节序解码地址字段，并拷贝从偏移 0x40 向后扫描到的可识别压缩流载荷。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Full zImage bytes; must be at least 0x40 long for the magic to match.
+    /// <summary>Parses the zImage header, decodes its address fields with the detected byte order, and copies the compressed payload found by scanning forward from offset 0x40 for a recognized compressed stream.
+    /// <para>解析 zImage 头部，按检测到的字节序解码地址字段，并拷贝从偏移 0x40 向后扫描到的可识别压缩流载荷。</para></summary>
+    /// <param name="data">Full zImage bytes; must be at least 0x40 long for the magic to match.
     /// <para>完整的 zImage 字节；至少 0x40 字节长才可能匹配魔数。</para></param>
-    /// <returns>
-    /// A valid result with <see cref="ParseResult.CompressedPayload"/> holding the payload from its start
-    /// offset to the end of the input, or an invalid result whose <see cref="ParseResult.ErrorMessage"/>
-    /// reports an invalid magic, an unsupported magic, or a missing payload. The parse never throws on
-    /// malformed input.
-    /// <para>有效结果中 <see cref="ParseResult.CompressedPayload"/> 保存从载荷起始偏移到输入末尾的字节；
-    /// 无效结果的 <see cref="ParseResult.ErrorMessage"/> 会报告魔数无效、魔数不受支持或未找到载荷。
-    /// 解析对畸形输入不抛出异常。</para>
-    /// </returns>
+    /// <returns>A valid result with <see cref="ParseResult.CompressedPayload"/> holding the payload from its start offset to the end of the input, or an invalid result whose <see cref="ParseResult.ErrorMessage"/> reports an invalid magic, an unsupported magic, or a missing payload. The parse never throws on malformed input.
+    /// <para>有效结果中 <see cref="ParseResult.CompressedPayload"/> 保存从载荷起始偏移到输入末尾的字节； 无效结果的 <see cref="ParseResult.ErrorMessage"/> 会报告魔数无效、魔数不受支持或未找到载荷。 解析对畸形输入不抛出异常。</para></returns>
     /// <example>
     /// <code>
     /// ZImageTool.ParseResult result = ZImageTool.Parse(imageBytes);
     /// if (result.IsValid)
     /// {
-    ///     Console.WriteLine($"Payload: {result.CompressionType}, {result.CompressedSize} bytes");
+    /// Console.WriteLine($"Payload: {result.CompressionType}, {result.CompressedSize} bytes");
     /// }
     /// </code>
     /// </example>

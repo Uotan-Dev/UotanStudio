@@ -4,17 +4,11 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    /// <summary>
-    /// Backs up an exactly named GPT partition after revalidating the snapshot under the
-    /// same operation lease as the data read. No repair, slot inference or retry is performed.
-    /// <para>在与数据读取同一操作租约下重新校验快照后，备份名称完全匹配的 GPT 分区。
-    /// 不执行修复、槽位推断或重试。</para>
-    /// </summary>
-    /// <remarks>
-    /// The destination is replaced only after successful transfer and staging-file flush.
-    /// This does not freeze device contents or promise a point-in-time storage snapshot.
-    /// Progress excludes metadata reads; callbacks must not wait on this session.
-    /// </remarks>
+    /// <summary>Backs up an exactly named GPT partition after revalidating the snapshot under the same operation lease as the data read. No repair, slot inference or retry is performed.
+    /// <para>在与数据读取同一操作租约下重新校验快照后，备份名称完全匹配的 GPT 分区。 不执行修复、槽位推断或重试。</para></summary>
+    /// <remarks>The destination is replaced only after successful transfer and staging-file flush. This
+    /// does not freeze device contents or promise a point-in-time storage snapshot. Progress excludes
+    /// metadata reads; callbacks must not wait on this session.</remarks>
     /// <param name="snapshot">A GPT observation from this session's current storage geometry.
     /// <para>来自本会话当前存储几何信息的 GPT 观测结果。</para></param>
     /// <param name="partitionName">Exact case-sensitive name, rejecting absent or ambiguous entries.

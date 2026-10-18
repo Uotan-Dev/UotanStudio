@@ -25,11 +25,8 @@ public sealed class LuaScriptEngine
     /// </summary>
     public const int MaximumScriptLength = VisualPluginValidation.MaximumScriptLength;
 
-    /// <summary>
-    /// Runs one script to completion and returns its first return value converted to a string,
-    /// or an empty string when the script returns nothing.
-    /// <para>把脚本执行到结束并返回其首个返回值的字符串转换；脚本无返回值时返回空字符串。</para>
-    /// </summary>
+    /// <summary>Runs one script to completion and returns its first return value converted to a string, or an empty string when the script returns nothing.
+    /// <para>把脚本执行到结束并返回其首个返回值的字符串转换；脚本无返回值时返回空字符串。</para></summary>
     /// <param name="script">The Lua source to execute.<para>要执行的 Lua 源码。</para></param>
     /// <param name="chunkName">Chunk name used in interpreter diagnostics, usually the plugin id.
     /// <para>解释器诊断使用的块名，通常是插件 Id。</para></param>
@@ -37,11 +34,12 @@ public sealed class LuaScriptEngine
     /// <para>以 <c>tool</c> 暴露给脚本的工具面；每个条目是一个具名能力。</para></param>
     /// <param name="context">Node execution context backing the <c>ctx</c> and <c>ui</c> tables.
     /// <para>支撑 <c>ctx</c> 与 <c>ui</c> 表的节点执行上下文。</para></param>
-    /// <param name="cancellationToken">Token cancelling script execution.<para>取消脚本执行的令牌。</para></param>
+    /// <param name="cancellationToken">Token cancelling script execution.
+    /// <para>取消脚本执行的令牌。</para></param>
     /// <returns>The first script return value as a string, or an empty string.
     /// <para>脚本首个返回值的字符串形式；无返回值时为空字符串。</para></returns>
-    /// <exception cref="ArgumentException">Thrown when the script is empty or exceeds
-    /// <see cref="MaximumScriptLength"/>. <para>脚本为空或超过 <see cref="MaximumScriptLength"/> 时抛出。</para></exception>
+    /// <exception cref="ArgumentException">Thrown when the script is empty or exceeds <see cref="MaximumScriptLength"/>.
+    /// <para>脚本为空或超过 <see cref="MaximumScriptLength"/> 时抛出。</para></exception>
     public async Task<string> RunAsync(string script, string chunkName,
         IReadOnlyDictionary<string, ScriptTool> tools,
         INodeExecutionContext context, CancellationToken cancellationToken)

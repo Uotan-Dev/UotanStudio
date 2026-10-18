@@ -477,42 +477,26 @@ internal static class ChromeOsTool
     internal static bool HasMagic(ReadOnlySpan<byte> data)
         => data.Length >= 8 && data[..8].SequenceEqual("CHROMEOS"u8);
 
-    /// <summary>
-    /// Extracts the kernel data. This entry point performs no extraction and rejects every call.
-    /// <para>提取内核数据。此入口不执行任何提取，并拒绝所有调用。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Candidate image buffer; it is not read before the call is rejected.
-    /// <para>待处理的镜像缓冲区；在调用被拒绝前不会被读取。</para>
-    /// </param>
-    /// <returns>
-    /// Nothing; the call always fails, so the declared kernel payload is never produced.
-    /// <para>不返回任何内容；调用总是失败，因此不会产生所声明的内核数据。</para>
-    /// </returns>
-    /// <exception cref="NotSupportedException">
-    /// Always thrown. <para>始终抛出。</para>
-    /// </exception>
+    /// <summary>Extracts the kernel data. This entry point performs no extraction and rejects every call.
+    /// <para>提取内核数据。此入口不执行任何提取，并拒绝所有调用。</para></summary>
+    /// <param name="data">Candidate image buffer; it is not read before the call is rejected.
+    /// <para>待处理的镜像缓冲区；在调用被拒绝前不会被读取。</para></param>
+    /// <returns>Nothing; the call always fails, so the declared kernel payload is never produced.
+    /// <para>不返回任何内容；调用总是失败，因此不会产生所声明的内核数据。</para></returns>
+    /// <exception cref="NotSupportedException">Always thrown.<para>始终抛出。</para></exception>
     public static byte[]? ExtractKernel(byte[] data)
     {
         throw new NotSupportedException(
             "ChromeOS kernel extraction is not inlined in this simplified port.");
     }
 
-    /// <summary>
-    /// Verifies the signature. This entry point performs no verification and rejects every call.
-    /// <para>验证签名。此入口不执行任何验证，并拒绝所有调用。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Candidate image buffer; it is not read before the call is rejected.
-    /// <para>待处理的镜像缓冲区；在调用被拒绝前不会被读取。</para>
-    /// </param>
-    /// <returns>
-    /// Nothing; the call always fails, so no verdict is produced.
-    /// <para>不返回任何内容；调用总是失败，因此不会给出结论。</para>
-    /// </returns>
-    /// <exception cref="NotSupportedException">
-    /// Always thrown. <para>始终抛出。</para>
-    /// </exception>
+    /// <summary>Verifies the signature. This entry point performs no verification and rejects every call.
+    /// <para>验证签名。此入口不执行任何验证，并拒绝所有调用。</para></summary>
+    /// <param name="data">Candidate image buffer; it is not read before the call is rejected.
+    /// <para>待处理的镜像缓冲区；在调用被拒绝前不会被读取。</para></param>
+    /// <returns>Nothing; the call always fails, so no verdict is produced.
+    /// <para>不返回任何内容；调用总是失败，因此不会给出结论。</para></returns>
+    /// <exception cref="NotSupportedException">Always thrown.<para>始终抛出。</para></exception>
     public static bool VerifySignature(byte[] data)
     {
         throw new NotSupportedException(

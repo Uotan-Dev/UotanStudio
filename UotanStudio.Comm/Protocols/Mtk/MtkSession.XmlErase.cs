@@ -6,16 +6,13 @@ public sealed partial class MtkSession
 {
     /// <summary>Requests XML device-side erase of an explicitly selected, aligned physical range.
     /// <para>请求 XML 设备端擦除显式选定的、对齐的物理范围。</para></summary>
-    /// <remarks>
-    /// The caller must authorize this destructive operation. This profile requires initial OK,
+    /// <remarks>The caller must authorize this destructive operation. This profile requires initial OK,
     /// bounded progress handling, END/OK, START and the trailing OK consumed by the reference erase
     /// wrapper. No timeout probing, retry, rollback, zero-fill or secure-erasure guarantee is provided.
-    /// Cancellation cannot stop an erase already accepted by the agent.
-    /// </remarks>
+    /// Cancellation cannot stop an erase already accepted by the agent.</remarks>
     /// <param name="regionName">An exact XML physical-region token from the discovered geometry, excluding RPMB.
     /// <para>来自已发现几何信息的精确 XML 物理区域令牌，不含 RPMB。</para></param>
-    /// <param name="offset">Nonnegative block-aligned byte offset.
-    /// <para>非负、块对齐的字节偏移。</para></param>
+    /// <param name="offset">Nonnegative block-aligned byte offset.<para>非负、块对齐的字节偏移。</para></param>
     /// <param name="length">Positive block-aligned byte count bounded by reported capacity.
     /// <para>正数、块对齐的字节数，受上报容量限制。</para></param>
     /// <param name="timeoutMs">Cooperative whole-operation deadline, from one millisecond through 24 hours.

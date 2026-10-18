@@ -64,30 +64,15 @@ public sealed class NodeExecutionEngine
     /// </summary>
     public event EventHandler<ExecutionCompletedEventArgs>? ExecutionCompleted;
 
-    /// <summary>
-    /// Asynchronously executes the workflow formed by the given nodes and connections.
-    /// <para>异步执行给定节点和连接构成的工作流。</para>
-    /// </summary>
-    /// <param name="nodes">
-    /// The nodes of the workflow.
-    /// <para>工作流包含的节点。</para>
-    /// </param>
-    /// <param name="connections">
-    /// List of connections (source → target), determining execution order and data flow.
-    /// <para>连接列表（源→目标），用于确定执行顺序与数据流。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation token.
-    /// <para>取消令牌。</para>
-    /// </param>
-    /// <param name="options">
-    /// Shared staging, resource scope and interaction options for the run.
-    /// <para>本次运行的共享暂存、资源作用域与交互选项。</para>
-    /// </param>
-    /// <returns>
-    /// Execution result.
-    /// <para>执行结果。</para>
-    /// </returns>
+    /// <summary>Asynchronously executes the workflow formed by the given nodes and connections.
+    /// <para>异步执行给定节点和连接构成的工作流。</para></summary>
+    /// <param name="nodes">The nodes of the workflow.<para>工作流包含的节点。</para></param>
+    /// <param name="connections">List of connections (source → target), determining execution order and data flow.
+    /// <para>连接列表（源→目标），用于确定执行顺序与数据流。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <param name="options">Shared staging, resource scope and interaction options for the run.
+    /// <para>本次运行的共享暂存、资源作用域与交互选项。</para></param>
+    /// <returns>Execution result.<para>执行结果。</para></returns>
     public async Task<ExecutionResult> ExecuteAsync(
         IReadOnlyList<FlowNodeViewModel> nodes,
         IReadOnlyList<NodeConnection> connections,

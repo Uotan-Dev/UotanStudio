@@ -125,39 +125,32 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     /// <exception cref="ObjectDisposedException">The image was already destroyed. <para>图像已被销毁。</para></exception>
     public nint Handle => _image != 0 ? _image : throw new ObjectDisposedException(nameof(EglDmaBufImage));
 
-    /// <summary>
-    /// Imports the requested DRM layer, preserving per-object format modifiers.
-    /// <para>导入指定的 DRM 层，并保留每个对象的格式修饰符（modifier）。</para>
-    /// </summary>
-    /// <param name="eglDisplay">
-    /// An initialized EGL display on the caller's renderer thread.
-    /// <para>调用方渲染器线程上已初始化的 EGL display。</para>
-    /// </param>
+    /// <summary>Imports the requested DRM layer, preserving per-object format modifiers.
+    /// <para>导入指定的 DRM 层，并保留每个对象的格式修饰符（modifier）。</para></summary>
+    /// <param name="eglDisplay">An initialized EGL display on the caller's renderer thread.
+    /// <para>调用方渲染器线程上已初始化的 EGL display。</para></param>
     /// <param name="surface">The live DMA-BUF descriptor exported from a VA surface.
     /// <para>从 VA 表面导出的有效 DMA-BUF 描述符。</para></param>
     /// <param name="layerIndex">Index of the layer to import; separate-layer exports expose one layer per plane group.
     /// <para>要导入的层索引；SEPARATE_LAYERS 导出按平面组各暴露一个层。</para></param>
-    /// <returns>
-    /// An owned EGLImage wrapper that must be disposed on the same renderer thread.
-    /// <para>已拥有的 EGLImage 包装器，必须在同一渲染器线程上释放。</para>
-    /// </returns>
+    /// <returns>An owned EGLImage wrapper that must be disposed on the same renderer thread.
+    /// <para>已拥有的 EGLImage 包装器，必须在同一渲染器线程上释放。</para></returns>
     /// <exception cref="PlatformNotSupportedException">The current OS is not Linux.
     /// <para>当前操作系统不是 Linux。</para></exception>
-    /// <exception cref="ArgumentNullException"><c>surface</c> is null. <para><c>surface</c> 为 null。</para></exception>
-    /// <exception cref="ObjectDisposedException">The source surface was disposed. <para>源表面已被释放。</para></exception>
-    /// <exception cref="ArgumentException"><c>eglDisplay</c> is zero. <para><c>eglDisplay</c> 为零。</para></exception>
+    /// <exception cref="ArgumentNullException"><c>surface</c> is null.
+    /// <para><c>surface</c> 为 null。</para></exception>
+    /// <exception cref="ObjectDisposedException">The source surface was disposed.
+    /// <para>源表面已被释放。</para></exception>
+    /// <exception cref="ArgumentException"><c>eglDisplay</c> is zero.
+    /// <para><c>eglDisplay</c> 为零。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><c>layerIndex</c> is outside the layer set.
     /// <para><c>layerIndex</c> 超出层集合范围。</para></exception>
-    /// <exception cref="NotSupportedException">
-    /// EGL DMA-BUF or modifier import is unavailable, or a layer has a plane count outside the supported 1 to 3 range.
-    /// <para>EGL 不支持 DMA-BUF 或 modifier 导入，或层的平面数不在支持的 1 到 3 范围内。</para>
-    /// </exception>
+    /// <exception cref="NotSupportedException">EGL DMA-BUF or modifier import is unavailable, or a layer has a plane count outside the supported 1 to 3 range.
+    /// <para>EGL 不支持 DMA-BUF 或 modifier 导入，或层的平面数不在支持的 1 到 3 范围内。</para></exception>
     /// <exception cref="InvalidDataException">A DRM object index or plane is inconsistent.
     /// <para>DRM 对象索引或平面数据不一致。</para></exception>
-    /// <exception cref="InvalidOperationException">
-    /// <c>eglCreateImageKHR</c> rejected the attribute list.
-    /// <para><c>eglCreateImageKHR</c> 拒绝了属性列表。</para>
-    /// </exception>
+    /// <exception cref="InvalidOperationException"><c>eglCreateImageKHR</c> rejected the attribute list.
+    /// <para><c>eglCreateImageKHR</c> 拒绝了属性列表。</para></exception>
     public static EglDmaBufImage Import(nint eglDisplay, DmaBufSurface surface, int layerIndex = 0)
     {
         if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException();
@@ -199,19 +192,13 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
         }
     }
 
-    /// <summary>
-    /// Imports the requested DRM layer on the caller's current EGL display. The import itself binds
-    /// no context; the returned wrapper must be disposed on the renderer thread.
-    /// <para>在调用方当前的 EGL display 上导入指定 DRM 层。导入本身不绑定上下文；返回的包装器必须在渲染器线程上释放。</para>
-    /// </summary>
+    /// <summary>Imports the requested DRM layer on the caller's current EGL display. The import itself binds no context; the returned wrapper must be disposed on the renderer thread.
+    /// <para>在调用方当前的 EGL display 上导入指定 DRM 层。导入本身不绑定上下文；返回的包装器必须在渲染器线程上释放。</para></summary>
     /// <param name="surface">The live DMA-BUF descriptor exported from a VA surface.
     /// <para>从 VA 表面导出的有效 DMA-BUF 描述符。</para></param>
-    /// <param name="layerIndex">Index of the layer to import.
-    /// <para>要导入的层索引。</para></param>
-    /// <returns>
-    /// An owned EGLImage wrapper that must be disposed on the same renderer thread.
-    /// <para>已拥有的 EGLImage 包装器，必须在同一渲染器线程上释放。</para>
-    /// </returns>
+    /// <param name="layerIndex">Index of the layer to import.<para>要导入的层索引。</para></param>
+    /// <returns>An owned EGLImage wrapper that must be disposed on the same renderer thread.
+    /// <para>已拥有的 EGLImage 包装器，必须在同一渲染器线程上释放。</para></returns>
     /// <exception cref="InvalidOperationException">No EGL display is current on this thread.
     /// <para>该线程上没有当前的 EGL display。</para></exception>
     /// <exception cref="NotSupportedException">EGL DMA-BUF import is unavailable.
@@ -223,31 +210,18 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
         return Import(display, surface, layerIndex);
     }
 
-    /// <summary>
-    /// Creates a GL texture in the current context, binds this image to it, and returns the binding
-    /// for Skia texture adoption.
-    /// <para>在当前上下文中创建 GL 纹理并绑定此图像，返回供 Skia 纹理采纳的绑定。</para>
-    /// </summary>
-    /// <param name="externalOes">
-    /// <see langword="true"/> for a GLES <c>GL_TEXTURE_EXTERNAL_OES</c> binding; <see langword="false"/> for desktop GL <c>GL_TEXTURE_2D</c>.
-    /// <para>为 <see langword="true"/> 时使用 GLES 的 <c>GL_TEXTURE_EXTERNAL_OES</c>；为 <see langword="false"/> 时使用桌面 GL 的 <c>GL_TEXTURE_2D</c>。</para>
-    /// </param>
-    /// <param name="glFormat">
-    /// The GL internal format reported to the texture consumer, such as <c>GL_R8</c> for a luma layer.
-    /// <para>报告给纹理使用方的 GL 内部格式，例如亮度层使用 <c>GL_R8</c>。</para>
-    /// </param>
-    /// <returns>
-    /// The created texture object id and the bound target constant.
-    /// <para>新建的纹理对象 ID 与绑定的 target 常量。</para>
-    /// </returns>
-    /// <exception cref="InvalidOperationException">
-    /// The call comes from a thread other than the owning renderer thread.
-    /// <para>调用来自除所属渲染器线程之外的其他线程。</para>
-    /// </exception>
-    /// <exception cref="NotSupportedException">
-    /// The current context lacks the required EGL image extension or its entrypoints.
-    /// <para>当前上下文缺少所需的 EGL image 扩展或其入口点。</para>
-    /// </exception>
+    /// <summary>Creates a GL texture in the current context, binds this image to it, and returns the binding for Skia texture adoption.
+    /// <para>在当前上下文中创建 GL 纹理并绑定此图像，返回供 Skia 纹理采纳的绑定。</para></summary>
+    /// <param name="externalOes"><see langword="true"/> for a GLES <c>GL_TEXTURE_EXTERNAL_OES</c> binding; <see langword="false"/> for desktop GL <c>GL_TEXTURE_2D</c>.
+    /// <para>为 <see langword="true"/> 时使用 GLES 的 <c>GL_TEXTURE_EXTERNAL_OES</c>；为 <see langword="false"/> 时使用桌面 GL 的 <c>GL_TEXTURE_2D</c>。</para></param>
+    /// <param name="glFormat">The GL internal format reported to the texture consumer, such as <c>GL_R8</c> for a luma layer.
+    /// <para>报告给纹理使用方的 GL 内部格式，例如亮度层使用 <c>GL_R8</c>。</para></param>
+    /// <returns>The created texture object id and the bound target constant.
+    /// <para>新建的纹理对象 ID 与绑定的 target 常量。</para></returns>
+    /// <exception cref="InvalidOperationException">The call comes from a thread other than the owning renderer thread.
+    /// <para>调用来自除所属渲染器线程之外的其他线程。</para></exception>
+    /// <exception cref="NotSupportedException">The current context lacks the required EGL image extension or its entrypoints.
+    /// <para>当前上下文缺少所需的 EGL image 扩展或其入口点。</para></exception>
     public (uint TextureId, uint Target) CreateBoundTexture(bool externalOes, uint glFormat)
     {
         CheckThread();

@@ -27,8 +27,7 @@ public sealed record MtkScatterPackageResolution(MtkScatterStorage Storage, stri
 /// <para>解析时的磁盘字节长度。</para></param>
 public sealed record MtkScatterPackageRow(MtkScatterPartition Partition, string ImagePath, long Length);
 
-/// <summary>A DA directory entry with a complete bounded stage-one/stage-two region pair, keyed for
-/// explicit index selection by its hardware identity fields.
+/// <summary>A DA directory entry with a complete bounded stage-one/stage-two region pair, keyed for explicit index selection by its hardware identity fields.
 /// <para>带有完整有界 stage-one/stage-two 区域对的 DA 目录条目，以硬件身份字段作为显式索引选择的键。</para></summary>
 /// <param name="Index">Zero-based directory index to submit as the explicit entry selection.
 /// <para>作为显式条目选择提交的从零开始目录索引。</para></param>
@@ -97,8 +96,8 @@ public static class MtkScatterPackage
     /// <para><paramref name="scatterPath"/> 为空或仅空白。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="document"/> is <see langword="null"/>.
     /// <para><paramref name="document"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">The document exceeds count limits, holds null entries, or
-    /// resolves past <see cref="MaxPlanSteps"/> rows. <para>文档超出数量上限、含空条目或解析出超过 <see cref="MaxPlanSteps"/> 条。</para></exception>
+    /// <exception cref="InvalidDataException">The document exceeds count limits, holds null entries, or resolves past <see cref="MaxPlanSteps"/> rows.
+    /// <para>文档超出数量上限、含空条目或解析出超过 <see cref="MaxPlanSteps"/> 条。</para></exception>
     public static MtkScatterPackageResolution Resolve(string scatterPath, MtkScatterDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -155,14 +154,12 @@ public static class MtkScatterPackage
     /// <para>指向 <see cref="MtkScatterPackageResolution.Rows"/> 的从零开始索引。</para></param>
     /// <param name="verify">Whether written extents require readback; passed through unchanged.
     /// <para>写入范围是否需要回读；原样透传。</para></param>
-    /// <returns>The scatter flash step for this row.
-    /// <para>该行的 scatter 刷写步骤。</para></returns>
+    /// <returns>The scatter flash step for this row.<para>该行的 scatter 刷写步骤。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or its rows are null.
     /// <para><paramref name="resolution"/> 或其行为 null。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows or
-    /// the row count exceeds the plan-step limit. <para><paramref name="rowIndex"/> 越界，或行数超出计划步数上限。</para></exception>
-    /// <exception cref="InvalidDataException">A row or its partition entry is null, or a valid sparse
-    /// header declares a target capacity that overflows or is empty.
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows or the row count exceeds the plan-step limit.
+    /// <para><paramref name="rowIndex"/> 越界，或行数超出计划步数上限。</para></exception>
+    /// <exception cref="InvalidDataException">A row or its partition entry is null, or a valid sparse header declares a target capacity that overflows or is empty.
     /// <para>某行或其分区条目为 null，或有效稀疏头声明的目标容量溢出或为空。</para></exception>
     public static MtkScatterFlashStep CreateStep(MtkScatterPackageResolution resolution, int rowIndex, bool verify)
     {
@@ -193,8 +190,7 @@ public static class MtkScatterPackage
             "Only eMMC and UFS scatter storage families have a physical user region.")
     };
 
-    /// <summary>Lists the DA directory entries of a loader file that carry a complete usable DA1/DA2
-    /// region pair, in original directory-index order.
+    /// <summary>Lists the DA directory entries of a loader file that carry a complete usable DA1/DA2 region pair, in original directory-index order.
     /// <para>列出加载器文件中带有完整可用 DA1/DA2 区域对的 DA 目录条目，按原目录索引顺序排列。</para></summary>
     /// <param name="loaderPath">Explicit path to an all-in-one DA loader container.
     /// <para>一体化 DA 加载器容器的显式路径。</para></param>
@@ -406,11 +402,8 @@ public static class MtkScatterPackage
         return new MtkPartitionFlashStep(MtkFlashStepKind.Erase, name, 0, size, null, 0, Verify: false);
     }
 
-    /// <summary>
-    /// Builds the raw write operation for one resolved row addressed by GPT partition name, for the
-    /// Legacy download agent.
-    /// <para>为一个按 GPT 分区名寻址的已解析条目构造 Legacy 下载代理使用的原始写入操作。</para>
-    /// </summary>
+    /// <summary>Builds the raw write operation for one resolved row addressed by GPT partition name, for the Legacy download agent.
+    /// <para>为一个按 GPT 分区名寻址的已解析条目构造 Legacy 下载代理使用的原始写入操作。</para></summary>
     /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
     /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
     /// <param name="rowIndex">Zero-based index into <see cref="MtkScatterPackageResolution.Rows"/>.
@@ -422,8 +415,7 @@ public static class MtkScatterPackage
     /// <para><paramref name="resolution"/> 或其行为 null。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows.
     /// <para><paramref name="rowIndex"/> 越界。</para></exception>
-    /// <exception cref="InvalidDataException">A row or its partition entry is null, the entry has no
-    /// partition name, or the image exceeds the range limits.
+    /// <exception cref="InvalidDataException">A row or its partition entry is null, the entry has no partition name, or the image exceeds the range limits.
     /// <para>某行或其分区条目为 null、条目缺少分区名，或镜像超出范围上限。</para></exception>
     /// <exception cref="NotSupportedException">The row's image is a sparse container.
     /// <para>该行的镜像是稀疏容器。</para></exception>
@@ -546,12 +538,8 @@ public static class MtkScatterPackage
         return (row, partition.Name);
     }
 
-    /// <summary>
-    /// Builds the raw write operation for one resolved row addressed by GPT partition name, for the XML
-    /// download agent, rounding the extent up to the block granularity the scatter layout declares.
-    /// <para>为一个按 GPT 分区名寻址的已解析条目构造 XML 下载代理使用的原始写入操作，范围向上取整到
-    /// scatter 布局声明的块粒度。</para>
-    /// </summary>
+    /// <summary>Builds the raw write operation for one resolved row addressed by GPT partition name, for the XML download agent, rounding the extent up to the block granularity the scatter layout declares.
+    /// <para>为一个按 GPT 分区名寻址的已解析条目构造 XML 下载代理使用的原始写入操作，范围向上取整到 scatter 布局声明的块粒度。</para></summary>
     /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
     /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
     /// <param name="rowIndex">Zero-based index into <see cref="MtkScatterPackageResolution.Rows"/>.
@@ -561,10 +549,10 @@ public static class MtkScatterPackage
     /// <returns>The XML raw write step for this row.<para>该行的 XML 原始写入步骤。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or its rows are null.
     /// <para><paramref name="resolution"/> 或其行为 null。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows or the
-    /// block granularity is unsupported. <para><paramref name="rowIndex"/> 越界，或块粒度不受支持。</para></exception>
-    /// <exception cref="InvalidDataException">A row or its partition entry is null, or the entry has no
-    /// partition name. <para>某行或其分区条目为 null，或条目缺少分区名。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rowIndex"/> is outside the rows or the block granularity is unsupported.
+    /// <para><paramref name="rowIndex"/> 越界，或块粒度不受支持。</para></exception>
+    /// <exception cref="InvalidDataException">A row or its partition entry is null, or the entry has no partition name.
+    /// <para>某行或其分区条目为 null，或条目缺少分区名。</para></exception>
     /// <exception cref="NotSupportedException">The row's image is a sparse container.
     /// <para>该行的镜像是稀疏容器。</para></exception>
     public static MtkXmlPartitionFlashStep CreateXmlStep(MtkScatterPackageResolution resolution, int rowIndex,
@@ -577,22 +565,19 @@ public static class MtkScatterPackage
             AlignToBlock(row.Length, block), row.ImagePath, 0, verify, PadSourceTail: true);
     }
 
-    /// <summary>
-    /// Builds the XML erase operation for one scatter entry; the range is the entry's declared capacity
-    /// rounded up to the block granularity the scatter layout declares.
-    /// <para>为一个 scatter 条目构造 XML 擦除操作；范围取该条目声明容量并向上取整到 scatter 布局声明的块粒度。</para>
-    /// </summary>
+    /// <summary>Builds the XML erase operation for one scatter entry; the range is the entry's declared capacity rounded up to the block granularity the scatter layout declares.
+    /// <para>为一个 scatter 条目构造 XML 擦除操作；范围取该条目声明容量并向上取整到 scatter 布局声明的块粒度。</para></summary>
     /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
     /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
     /// <param name="partition">The erase-eligible scatter entry, usually from <see cref="ListEraseTargets"/>.
     /// <para>可擦除的 scatter 条目，通常来自 <see cref="ListEraseTargets"/>。</para></param>
     /// <returns>A GPT-named erase step.<para>GPT 命名的擦除步骤。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or
-    /// <paramref name="partition"/> is null. <para><paramref name="resolution"/> 或 <paramref name="partition"/> 为 null。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException">The layout declares a block granularity outside the
-    /// supported range. <para>布局声明的块粒度越界。</para></exception>
-    /// <exception cref="InvalidDataException">The entry has no partition name or declares an unusable
-    /// capacity. <para>条目缺少分区名或声明容量不可用。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="resolution"/> or <paramref name="partition"/> is null.
+    /// <para><paramref name="resolution"/> 或 <paramref name="partition"/> 为 null。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The layout declares a block granularity outside the supported range.
+    /// <para>布局声明的块粒度越界。</para></exception>
+    /// <exception cref="InvalidDataException">The entry has no partition name or declares an unusable capacity.
+    /// <para>条目缺少分区名或声明容量不可用。</para></exception>
     public static MtkXmlPartitionFlashStep CreateXmlEraseStep(MtkScatterPackageResolution resolution,
         MtkScatterPartition partition)
     {

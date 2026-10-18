@@ -1,17 +1,12 @@
 namespace UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 
-/// <summary>
-/// Key set for a Qualcomm-based OFP package: every material field is stored as a hex string and the
-/// derivation turns it into a 16-byte AES key and IV.
-/// <para>基于高通平台 OFP 包的密钥集合：各材料字段均以十六进制字符串存储，派生过程将其转换为 16 字节的 AES 密钥与 IV。</para>
-/// </summary>
+/// <summary>Key set for a Qualcomm-based OFP package: every material field is stored as a hex string and the derivation turns it into a 16-byte AES key and IV.
+/// <para>基于高通平台 OFP 包的密钥集合：各材料字段均以十六进制字符串存储，派生过程将其转换为 16 字节的 AES 密钥与 IV。</para></summary>
 /// <param name="KeyId">Identifier the QC provider looks the entry up by, e.g. <c>V1.6.17</c>.
 /// <para>QC 提供者检索该条目所用的标识符，例如 <c>V1.6.17</c>。</para></param>
-/// <param name="Mc">Hex-encoded merchant code; its decoded bytes are the buffer that gets de-obfuscated
-/// against the key and IV material.
+/// <param name="Mc">Hex-encoded merchant code; its decoded bytes are the buffer that gets de-obfuscated against the key and IV material.
 /// <para>十六进制编码的商户码；其解码字节是被去混淆处理的缓冲，分别与密钥和 IV 材料作用。</para></param>
-/// <param name="UserKey">Hex-encoded obfuscated key material; the <c>Mc</c> bytes are XORed with it and
-/// nibble-swapped, and the first 16 characters of the MD5 hex digest of that result become the AES key.
+/// <param name="UserKey">Hex-encoded obfuscated key material; the <c>Mc</c> bytes are XORed with it and nibble-swapped, and the first 16 characters of the MD5 hex digest of that result become the AES key.
 /// <para>十六进制编码的混淆密钥材料；将 <c>Mc</c> 字节与其异或并做半字节交换，取结果 MD5 十六进制摘要的前 16 个字符作为 AES 密钥。</para></param>
 /// <param name="Ivec">Hex-encoded obfuscated IV material; the same procedure with <c>Mc</c> yields the AES IV.
 /// <para>十六进制编码的混淆 IV 材料；以同样方式与 <c>Mc</c> 作用得到 AES IV。</para></param>
@@ -24,31 +19,19 @@ public sealed record QcKeyEntry(
     string Ivec,
     string Description);
 
-/// <summary>
-/// Key set for a MediaTek-based OFP package. An entry carries either the 3-element shape
-/// (<c>Mc</c> plus wrapped key and IV) or the 2-element shape (direct key and IV text), and the
-/// corresponding <see cref="Is3Element"/> / <see cref="Is2Element"/> flag selects the derivation.
-/// <para>基于联发科平台 OFP 包的密钥集合。条目要么是 3 元素形态（<c>Mc</c> 加包装密钥与 IV），
-/// 要么是 2 元素形态（直接密钥与 IV 文本），由对应的 <see cref="Is3Element"/> / <see cref="Is2Element"/> 标记决定派生路径。</para>
-/// </summary>
+/// <summary>Key set for a MediaTek-based OFP package. An entry carries either the 3-element shape (<c>Mc</c> plus wrapped key and IV) or the 2-element shape (direct key and IV text), and the corresponding <see cref="Is3Element"/> / <see cref="Is2Element"/> flag selects the derivation.
+/// <para>基于联发科平台 OFP 包的密钥集合。条目要么是 3 元素形态（<c>Mc</c> 加包装密钥与 IV）， 要么是 2 元素形态（直接密钥与 IV 文本），由对应的 <see cref="Is3Element"/> / <see cref="Is2Element"/> 标记决定派生路径。</para></summary>
 /// <param name="KeyId">Identifier the MTK provider looks the entry up by, e.g. <c>MTK0</c>.
 /// <para>MTK 提供者检索该条目所用的标识符，例如 <c>MTK0</c>。</para></param>
-/// <param name="Mc">Hex-encoded merchant code used as the shuffle mask for the wrapped fields;
-/// <see langword="null"/> on a 2-element entry.
+/// <param name="Mc">Hex-encoded merchant code used as the shuffle mask for the wrapped fields; <see langword="null"/> on a 2-element entry.
 /// <para>作为包装字段混淆掩码的十六进制编码商户码；2 元素条目为 <see langword="null"/>。</para></param>
-/// <param name="EncAesKey">Hex-encoded wrapped key; its bytes are XORed with <c>Mc</c>, nibble-swapped,
-/// and the first 16 characters of the MD5 hex digest become the AES key. <see langword="null"/> on a
-/// 2-element entry.
-/// <para>十六进制编码的包装密钥；其字节与 <c>Mc</c> 异或并做半字节交换，取 MD5 十六进制摘要的前 16 个字符作为 AES 密钥。
-/// 2 元素条目为 <see langword="null"/>。</para></param>
-/// <param name="EncAesIv">Hex-encoded wrapped IV processed the same way to produce the AES IV;
-/// <see langword="null"/> on a 2-element entry.
+/// <param name="EncAesKey">Hex-encoded wrapped key; its bytes are XORed with <c>Mc</c>, nibble-swapped, and the first 16 characters of the MD5 hex digest become the AES key. <see langword="null"/> on a 2-element entry.
+/// <para>十六进制编码的包装密钥；其字节与 <c>Mc</c> 异或并做半字节交换，取 MD5 十六进制摘要的前 16 个字符作为 AES 密钥。 2 元素条目为 <see langword="null"/>。</para></param>
+/// <param name="EncAesIv">Hex-encoded wrapped IV processed the same way to produce the AES IV; <see langword="null"/> on a 2-element entry.
 /// <para>以同样方式处理得到 AES IV 的十六进制编码包装 IV；2 元素条目为 <see langword="null"/>。</para></param>
-/// <param name="DirectAesKey">AES key text used verbatim as UTF-8 bytes; <see langword="null"/> on a
-/// 3-element entry.
+/// <param name="DirectAesKey">AES key text used verbatim as UTF-8 bytes; <see langword="null"/> on a 3-element entry.
 /// <para>按 UTF-8 字节原样使用的 AES 密钥文本；3 元素条目为 <see langword="null"/>。</para></param>
-/// <param name="DirectAesIv">AES IV text used verbatim as UTF-8 bytes; <see langword="null"/> on a
-/// 3-element entry.
+/// <param name="DirectAesIv">AES IV text used verbatim as UTF-8 bytes; <see langword="null"/> on a 3-element entry.
 /// <para>按 UTF-8 字节原样使用的 AES IV 文本；3 元素条目为 <see langword="null"/>。</para></param>
 /// <param name="Description">Free-text device note shown to the user; the derivation ignores it.
 /// <para>向用户展示的自由文本机型说明；派生过程会忽略它。</para></param>
@@ -80,17 +63,11 @@ public sealed record MtkKeyEntry(
     public bool Is2Element => DirectAesKey is not null && DirectAesIv is not null;
 }
 
-/// <summary>
-/// Key set for an OPS package payload: the mailbox blob the OPS cipher consumes together with the
-/// shared round-key core.
-/// <para>OPS 包负载的密钥集合：OPS 算法与共享轮密钥核心一同消费的 mailbox 数据块。</para>
-/// </summary>
-/// <param name="KeyId">Key identifier, e.g. <c>mbox5</c>; identifiers starting with <c>mbox</c> are routed
-/// to the OPS provider.
+/// <summary>Key set for an OPS package payload: the mailbox blob the OPS cipher consumes together with the shared round-key core.
+/// <para>OPS 包负载的密钥集合：OPS 算法与共享轮密钥核心一同消费的 mailbox 数据块。</para></summary>
+/// <param name="KeyId">Key identifier, e.g. <c>mbox5</c>; identifiers starting with <c>mbox</c> are routed to the OPS provider.
 /// <para>密钥标识符，例如 <c>mbox5</c>；以 <c>mbox</c> 开头的标识符会被路由到 OPS 提供者。</para></param>
-/// <param name="MBox">Raw mailbox bytes; the built-in entries are 62 bytes long and a custom entry's length
-/// is not validated before the cipher reads it. The array is held by reference, so it must not be mutated
-/// after the entry is created.
+/// <param name="MBox">Raw mailbox bytes; the built-in entries are 62 bytes long and a custom entry's length is not validated before the cipher reads it. The array is held by reference, so it must not be mutated after the entry is created.
 /// <para>原始 mailbox 字节；内置条目为 62 字节，自定义条目的长度在进入算法读取前不做校验。数组按引用持有，因此条目创建后不得再修改。</para></param>
 /// <param name="Description">Free-text build or device note shown to the user.
 /// <para>面向用户展示的自由文本版本或机型说明。</para></param>

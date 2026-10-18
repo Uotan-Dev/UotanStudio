@@ -6,14 +6,12 @@ public sealed partial class MtkSession
 {
     /// <summary>Reads an XML storage range to a sibling staging file and publishes only after full protocol success.
     /// <para>将 XML 存储范围读取到同目录的临时暂存文件，仅在协议完全成功后发布。</para></summary>
-    /// <remarks>The existing destination is preserved on transfer failure. Its directory must already exist.
-    /// Full byte progress is not final handshake or publication success.</remarks>
+    /// <remarks>The existing destination is preserved on transfer failure. Its directory must already
+    /// exist. Full byte progress is not final handshake or publication success.</remarks>
     /// <param name="regionName">The exact discovered XML physical-region token.
     /// <para>已发现的精确 XML 物理区域令牌。</para></param>
-    /// <param name="offset">The nonnegative block-aligned byte offset.
-    /// <para>非负、块对齐的字节偏移。</para></param>
-    /// <param name="length">The positive block-aligned byte count.
-    /// <para>正数、块对齐的字节数。</para></param>
+    /// <param name="offset">The nonnegative block-aligned byte offset.<para>非负、块对齐的字节偏移。</para></param>
+    /// <param name="length">The positive block-aligned byte count.<para>正数、块对齐的字节数。</para></param>
     /// <param name="destinationPath">The file to publish after a complete read.
     /// <para>读取完整后才发布的文件路径。</para></param>
     /// <param name="timeoutMs">Cooperative protocol deadline, from one millisecond through 24 hours.
@@ -43,14 +41,13 @@ public sealed partial class MtkSession
 
     /// <summary>Compares a complete XML read with a caller-owned reference stream without stopping at the first mismatch.
     /// <para>将一次完整的 XML 读取与调用方拥有的参考流逐字节比较，遇到首个不匹配后不停止。</para></summary>
-    /// <remarks>A result requires final protocol success. This is a separate read, not an atomic write-and-verify transaction.
-    /// The reference remains open, with its position advanced by the compared bytes.</remarks>
+    /// <remarks>A result requires final protocol success. This is a separate read, not an atomic
+    /// write-and-verify transaction.</remarks>
     /// <param name="regionName">The exact discovered XML physical-region token.
     /// <para>已发现的精确 XML 物理区域令牌。</para></param>
     /// <param name="offset">The nonnegative block-aligned device byte offset.
     /// <para>非负、块对齐的设备字节偏移。</para></param>
-    /// <param name="length">The positive block-aligned byte count.
-    /// <para>正数、块对齐的字节数。</para></param>
+    /// <param name="length">The positive block-aligned byte count.<para>正数、块对齐的字节数。</para></param>
     /// <param name="expected">Readable reference positioned at the first expected byte.
     /// <para>定位在首个期望字节处的可读参考流。</para></param>
     /// <param name="timeoutMs">Cooperative protocol deadline, from one millisecond through 24 hours.

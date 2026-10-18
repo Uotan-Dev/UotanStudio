@@ -90,3 +90,6 @@ static UotanStudio.Hash.Digests.Sha256.ComputeHash(System.IO.Stream! source) -> 
 static UotanStudio.Hash.Digests.Sha384.ComputeHash(System.IO.Stream! source) -> byte[]!
 static UotanStudio.Hash.Digests.Sha512.ComputeHash(System.IO.Stream! source) -> byte[]!
 UotanStudio.Hash.Digests.DigestAccumulator.GetCurrentHash() -> byte[]!
+static UotanStudio.Hash.Sums.WordXor16LittleEndian.Compute(System.ReadOnlySpan<byte> data) -> ushort
+static UotanStudio.Hash.Sums.WordXor16LittleEndian.Compute(System.ReadOnlySpan<byte> data, ushort previousResult) -> ushort
+UotanStudio.Hash.Sums.WordXor16LittleEndian

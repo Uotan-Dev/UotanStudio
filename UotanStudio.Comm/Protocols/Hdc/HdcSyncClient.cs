@@ -183,24 +183,36 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
         SendStream(input, remotePath, input.Length, holdTimestamp, cancellationToken);
     }
 
-    /// <summary>
-    /// Sends a bounded regular-file tree using one daemon task. Like official HDC, empty trees are rejected and empty directories are omitted.
-    /// <para>使用单个守护进程任务发送有界的常规文件树。与官方 HDC 一致：拒绝空树，省略空目录。</para>
-    /// </summary>
-    /// <param name="localPath">Root directory to enumerate; reparse points under it abort the walk.<para>要枚举的根目录；其下的重新解析点会中止遍历。</para></param>
-    /// <param name="remotePath">Absolute device path without quotes or control characters.<para>不含引号或控制字符的绝对设备路径。</para></param>
-    /// <param name="holdTimestamp">Preserve each source file's timestamps on the device.<para>在设备上保留各源文件的时间戳。</para></param>
-    /// <param name="maximumBytes">Total byte budget for all files; exceeding it fails the whole send.<para>全部文件的总字节预算；超出则整体发送失败。</para></param>
-    /// <param name="maximumFiles">Maximum number of files in one task; at least 1.<para>单个任务的最大文件数；至少为 1。</para></param>
-    /// <param name="cancellationToken">Cancels between files and between packets.<para>在文件之间与数据包之间取消。</para></param>
-    /// <exception cref="ArgumentException"><paramref name="remotePath"/> is not an absolute, control-character-free device path. <para><paramref name="remotePath"/> 不是绝对且不含控制字符的设备路径。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumBytes"/> is negative or <paramref name="maximumFiles"/> is below 1. <para><paramref name="maximumBytes"/> 为负或 <paramref name="maximumFiles"/> 小于 1。</para></exception>
-    /// <exception cref="DirectoryNotFoundException"><paramref name="localPath"/> is not an existing directory. <para><paramref name="localPath"/> 不是现有目录。</para></exception>
-    /// <exception cref="IOException">A link was encountered, a directory entry or byte budget was exceeded, the tree is empty, or the channel fails. <para>遇到链接、条目数或字节预算超限、树为空或通道失败。</para></exception>
-    /// <exception cref="InvalidDataException">A daemon reply violates the transfer protocol. <para>守护进程回复违反传输协议。</para></exception>
-    /// <exception cref="ObjectDisposedException">This client has been disposed. <para>本客户端已释放。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled. <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    /// <exception cref="TimeoutException">The daemon did not answer within the response deadline. <para>守护进程未在响应期限内答复。</para></exception>
+    /// <summary>Sends a bounded regular-file tree using one daemon task. Like official HDC, empty trees are rejected and empty directories are omitted.
+    /// <para>使用单个守护进程任务发送有界的常规文件树。与官方 HDC 一致：拒绝空树，省略空目录。</para></summary>
+    /// <param name="localPath">Root directory to enumerate; reparse points under it abort the walk.
+    /// <para>要枚举的根目录；其下的重新解析点会中止遍历。</para></param>
+    /// <param name="remotePath">Absolute device path without quotes or control characters.
+    /// <para>不含引号或控制字符的绝对设备路径。</para></param>
+    /// <param name="holdTimestamp">Preserve each source file's timestamps on the device.
+    /// <para>在设备上保留各源文件的时间戳。</para></param>
+    /// <param name="maximumBytes">Total byte budget for all files; exceeding it fails the whole send.
+    /// <para>全部文件的总字节预算；超出则整体发送失败。</para></param>
+    /// <param name="maximumFiles">Maximum number of files in one task; at least 1.
+    /// <para>单个任务的最大文件数；至少为 1。</para></param>
+    /// <param name="cancellationToken">Cancels between files and between packets.
+    /// <para>在文件之间与数据包之间取消。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="remotePath"/> is not an absolute, control-character-free device path.
+    /// <para><paramref name="remotePath"/> 不是绝对且不含控制字符的设备路径。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumBytes"/> is negative or <paramref name="maximumFiles"/> is below 1.
+    /// <para><paramref name="maximumBytes"/> 为负或 <paramref name="maximumFiles"/> 小于 1。</para></exception>
+    /// <exception cref="DirectoryNotFoundException"><paramref name="localPath"/> is not an existing directory.
+    /// <para><paramref name="localPath"/> 不是现有目录。</para></exception>
+    /// <exception cref="IOException">A link was encountered, a directory entry or byte budget was exceeded, the tree is empty, or the channel fails.
+    /// <para>遇到链接、条目数或字节预算超限、树为空或通道失败。</para></exception>
+    /// <exception cref="InvalidDataException">A daemon reply violates the transfer protocol.
+    /// <para>守护进程回复违反传输协议。</para></exception>
+    /// <exception cref="ObjectDisposedException">This client has been disposed.
+    /// <para>本客户端已释放。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    /// <exception cref="TimeoutException">The daemon did not answer within the response deadline.
+    /// <para>守护进程未在响应期限内答复。</para></exception>
     public void SendDirectory(string localPath, string remotePath, bool holdTimestamp = true,
         long maximumBytes = 64L * 1024 * 1024 * 1024, int maximumFiles = 100000, CancellationToken cancellationToken = default)
     {
@@ -252,22 +264,31 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
         channel.SendCommand(HdcCommand.FileFinish, [0]);
     }
 
-    /// <summary>
-    /// Sends the declared number of bytes without buffering the whole file.
-    /// <para>发送声明的字节数，不缓冲整个文件。</para>
-    /// </summary>
-    /// <param name="source">Readable stream supplying exactly <paramref name="fileSize"/> bytes; a <see cref="FileStream"/> keeps its name for the display path and timestamps.<para>提供恰好 <paramref name="fileSize"/> 个可读字节的流；<see cref="FileStream"/> 会保留其文件名用于显示路径与时间戳。</para></param>
-    /// <param name="remotePath">Absolute device path without quotes or control characters.<para>不含引号或控制字符的绝对设备路径。</para></param>
-    /// <param name="fileSize">Exact byte count transferred; negative sizes are rejected up front.<para>精确的传输字节数；负值会被预先拒绝。</para></param>
-    /// <param name="holdTimestamp">Preserve timestamps; effective only when <paramref name="source"/> is a <see cref="FileStream"/>.<para>保留时间戳；仅当 <paramref name="source"/> 是 <see cref="FileStream"/> 时生效。</para></param>
+    /// <summary>Sends the declared number of bytes without buffering the whole file.
+    /// <para>发送声明的字节数，不缓冲整个文件。</para></summary>
+    /// <param name="source">Readable stream supplying exactly <paramref name="fileSize"/> bytes; a <see cref="FileStream"/> keeps its name for the display path and timestamps.
+    /// <para>提供恰好 <paramref name="fileSize"/> 个可读字节的流；<see cref="FileStream"/> 会保留其文件名用于显示路径与时间戳。</para></param>
+    /// <param name="remotePath">Absolute device path without quotes or control characters.
+    /// <para>不含引号或控制字符的绝对设备路径。</para></param>
+    /// <param name="fileSize">Exact byte count transferred; negative sizes are rejected up front.
+    /// <para>精确的传输字节数；负值会被预先拒绝。</para></param>
+    /// <param name="holdTimestamp">Preserve timestamps; effective only when <paramref name="source"/> is a <see cref="FileStream"/>.
+    /// <para>保留时间戳；仅当 <paramref name="source"/> 是 <see cref="FileStream"/> 时生效。</para></param>
     /// <param name="cancellationToken">Cancels between bounded packets.<para>在有界数据包之间取消。</para></param>
-    /// <exception cref="ArgumentException"><paramref name="remotePath"/> is not an absolute, control-character-free device path. <para><paramref name="remotePath"/> 不是绝对且不含控制字符的设备路径。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="fileSize"/> is negative. <para><paramref name="fileSize"/> 为负。</para></exception>
-    /// <exception cref="EndOfStreamException"><paramref name="source"/> ends before <paramref name="fileSize"/> bytes are sent. <para><paramref name="source"/> 在发满 <paramref name="fileSize"/> 字节前提前结束。</para></exception>
-    /// <exception cref="InvalidDataException">The daemon completion reply is not the expected single-byte value. <para>守护进程完成回复不是预期的单字节值。</para></exception>
-    /// <exception cref="ObjectDisposedException">This client has been disposed. <para>本客户端已释放。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled. <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    /// <exception cref="TimeoutException">The daemon did not answer within the response deadline. <para>守护进程未在响应期限内答复。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="remotePath"/> is not an absolute, control-character-free device path.
+    /// <para><paramref name="remotePath"/> 不是绝对且不含控制字符的设备路径。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="fileSize"/> is negative.
+    /// <para><paramref name="fileSize"/> 为负。</para></exception>
+    /// <exception cref="EndOfStreamException"><paramref name="source"/> ends before <paramref name="fileSize"/> bytes are sent.
+    /// <para><paramref name="source"/> 在发满 <paramref name="fileSize"/> 字节前提前结束。</para></exception>
+    /// <exception cref="InvalidDataException">The daemon completion reply is not the expected single-byte value.
+    /// <para>守护进程完成回复不是预期的单字节值。</para></exception>
+    /// <exception cref="ObjectDisposedException">This client has been disposed.
+    /// <para>本客户端已释放。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    /// <exception cref="TimeoutException">The daemon did not answer within the response deadline.
+    /// <para>守护进程未在响应期限内答复。</para></exception>
     public void SendStream(Stream source, string remotePath, long fileSize, bool holdTimestamp = true, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -301,19 +322,26 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
         return config;
     }
 
-    /// <summary>
-    /// Receives to a unique sibling staging file, publishing only after full protocol completion.
-    /// <para>接收到唯一的同级暂存文件，仅在协议完整结束后发布。</para>
-    /// </summary>
-    /// <param name="remotePath">Absolute device path without quotes or control characters.<para>不含引号或控制字符的绝对设备路径。</para></param>
-    /// <param name="localPath">Destination file path; it is replaced atomically on success and untouched when the transfer fails.<para>目标文件路径；成功时被原子替换，失败时保持原样。</para></param>
-    /// <param name="cancellationToken">Cancels between chunks; the staging file is then deleted.<para>在数据块之间取消；取消后暂存文件会被删除。</para></param>
-    /// <exception cref="ArgumentException"><paramref name="remotePath"/> is not an absolute, control-character-free device path. <para><paramref name="remotePath"/> 不是绝对且不含控制字符的设备路径。</para></exception>
-    /// <exception cref="EndOfStreamException">The daemon ends the file before the declared size arrives. <para>守护进程在声明大小到达前提前结束文件。</para></exception>
-    /// <exception cref="IOException">The staging file cannot be created or published, or the channel fails. <para>无法创建或发布暂存文件，或通道失败。</para></exception>
-    /// <exception cref="InvalidDataException">A daemon reply violates the transfer protocol. <para>守护进程回复违反传输协议。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled. <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    /// <exception cref="TimeoutException">The daemon did not answer within the response deadline. <para>守护进程未在响应期限内答复。</para></exception>
+    /// <summary>Receives to a unique sibling staging file, publishing only after full protocol completion.
+    /// <para>接收到唯一的同级暂存文件，仅在协议完整结束后发布。</para></summary>
+    /// <param name="remotePath">Absolute device path without quotes or control characters.
+    /// <para>不含引号或控制字符的绝对设备路径。</para></param>
+    /// <param name="localPath">Destination file path; it is replaced atomically on success and untouched when the transfer fails.
+    /// <para>目标文件路径；成功时被原子替换，失败时保持原样。</para></param>
+    /// <param name="cancellationToken">Cancels between chunks; the staging file is then deleted.
+    /// <para>在数据块之间取消；取消后暂存文件会被删除。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="remotePath"/> is not an absolute, control-character-free device path.
+    /// <para><paramref name="remotePath"/> 不是绝对且不含控制字符的设备路径。</para></exception>
+    /// <exception cref="EndOfStreamException">The daemon ends the file before the declared size arrives.
+    /// <para>守护进程在声明大小到达前提前结束文件。</para></exception>
+    /// <exception cref="IOException">The staging file cannot be created or published, or the channel fails.
+    /// <para>无法创建或发布暂存文件，或通道失败。</para></exception>
+    /// <exception cref="InvalidDataException">A daemon reply violates the transfer protocol.
+    /// <para>守护进程回复违反传输协议。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    /// <exception cref="TimeoutException">The daemon did not answer within the response deadline.
+    /// <para>守护进程未在响应期限内答复。</para></exception>
     public void Recv(string remotePath, string localPath, CancellationToken cancellationToken = default)
     {
         var destination = Path.GetFullPath(localPath);
@@ -328,19 +356,25 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
         finally { if (File.Exists(temp)) File.Delete(temp); }
     }
 
-    /// <summary>
-    /// Receives a single regular file, checking every chunk offset and the declared final size.
-    /// <para>接收单个常规文件，校验每个数据块偏移与声明的最终大小。</para>
-    /// </summary>
-    /// <param name="remotePath">Absolute device path without quotes or control characters.<para>不含引号或控制字符的绝对设备路径。</para></param>
-    /// <param name="destination">Writable stream receiving the contents in order; bytes already written stay on failure.<para>按序接收内容的可写流；失败时已写入的字节保留。</para></param>
+    /// <summary>Receives a single regular file, checking every chunk offset and the declared final size.
+    /// <para>接收单个常规文件，校验每个数据块偏移与声明的最终大小。</para></summary>
+    /// <param name="remotePath">Absolute device path without quotes or control characters.
+    /// <para>不含引号或控制字符的绝对设备路径。</para></param>
+    /// <param name="destination">Writable stream receiving the contents in order; bytes already written stay on failure.
+    /// <para>按序接收内容的可写流；失败时已写入的字节保留。</para></param>
     /// <param name="cancellationToken">Cancels between chunks.<para>在数据块之间取消。</para></param>
-    /// <exception cref="ArgumentException"><paramref name="remotePath"/> is not an absolute, control-character-free device path. <para><paramref name="remotePath"/> 不是绝对且不含控制字符的设备路径。</para></exception>
-    /// <exception cref="EndOfStreamException">A zero-length chunk arrives before the declared size is reached. <para>在达到声明大小前收到零长度数据块。</para></exception>
-    /// <exception cref="InvalidDataException">A chunk offset or length violates the declared size, or the completion reply is malformed. <para>数据块偏移或长度违反声明大小，或完成回复格式错误。</para></exception>
-    /// <exception cref="ObjectDisposedException">This client has been disposed. <para>本客户端已释放。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled. <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    /// <exception cref="TimeoutException">The daemon did not answer within the response deadline. <para>守护进程未在响应期限内答复。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="remotePath"/> is not an absolute, control-character-free device path.
+    /// <para><paramref name="remotePath"/> 不是绝对且不含控制字符的设备路径。</para></exception>
+    /// <exception cref="EndOfStreamException">A zero-length chunk arrives before the declared size is reached.
+    /// <para>在达到声明大小前收到零长度数据块。</para></exception>
+    /// <exception cref="InvalidDataException">A chunk offset or length violates the declared size, or the completion reply is malformed.
+    /// <para>数据块偏移或长度违反声明大小，或完成回复格式错误。</para></exception>
+    /// <exception cref="ObjectDisposedException">This client has been disposed.
+    /// <para>本客户端已释放。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    /// <exception cref="TimeoutException">The daemon did not answer within the response deadline.
+    /// <para>守护进程未在响应期限内答复。</para></exception>
     public void RecvStream(string remotePath, Stream destination, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -354,23 +388,34 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
         if (finished.Payload is not [0]) throw new InvalidDataException("Invalid HDC receive completion.");
     }
 
-    /// <summary>
-    /// Receives a directory into a new local directory with bounded entries and total size; publishes only on completion.
-    /// <para>将目录接收到新的本地目录，条目数与总大小均有上限；仅在完整结束后发布。</para>
-    /// </summary>
-    /// <param name="remotePath">Absolute device directory path without quotes or control characters.<para>不含引号或控制字符的绝对设备目录路径。</para></param>
-    /// <param name="localPath">New local destination directory; the staging tree is moved into place only after the daemon completes.<para>新的本地目标目录；仅在守护进程完成后才将暂存树移动到该位置。</para></param>
-    /// <param name="maximumBytes">Total byte budget across all announced entries; exceeding it fails the whole receive.<para>所有声明条目的总字节预算；超出则整体接收失败。</para></param>
-    /// <param name="maximumFiles">Maximum number of files in one receive; at least 1.<para>单次接收的最大文件数；至少为 1。</para></param>
-    /// <param name="cancellationToken">Cancels between entries and chunks; the staging tree is then deleted.<para>在条目与数据块之间取消；取消后暂存树会被删除。</para></param>
-    /// <exception cref="ArgumentException"><paramref name="remotePath"/> is not an absolute, control-character-free device path. <para><paramref name="remotePath"/> 不是绝对且不含控制字符的设备路径。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumBytes"/> is negative or <paramref name="maximumFiles"/> is below 1. <para><paramref name="maximumBytes"/> 为负或 <paramref name="maximumFiles"/> 小于 1。</para></exception>
-    /// <exception cref="EndOfStreamException">The daemon ends a file before its declared size arrives. <para>守护进程在声明大小到达前提前结束文件。</para></exception>
-    /// <exception cref="IOException"><paramref name="localPath"/> already exists. <para><paramref name="localPath"/> 已存在。</para></exception>
-    /// <exception cref="InvalidDataException">An entry name is unsafe, a limit is exceeded, or a reply violates the protocol. <para>条目名不安全、超出限制或回复违反协议。</para></exception>
-    /// <exception cref="ObjectDisposedException">This client has been disposed. <para>本客户端已释放。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled. <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    /// <exception cref="TimeoutException">The daemon did not answer within the response deadline. <para>守护进程未在响应期限内答复。</para></exception>
+    /// <summary>Receives a directory into a new local directory with bounded entries and total size; publishes only on completion.
+    /// <para>将目录接收到新的本地目录，条目数与总大小均有上限；仅在完整结束后发布。</para></summary>
+    /// <param name="remotePath">Absolute device directory path without quotes or control characters.
+    /// <para>不含引号或控制字符的绝对设备目录路径。</para></param>
+    /// <param name="localPath">New local destination directory; the staging tree is moved into place only after the daemon completes.
+    /// <para>新的本地目标目录；仅在守护进程完成后才将暂存树移动到该位置。</para></param>
+    /// <param name="maximumBytes">Total byte budget across all announced entries; exceeding it fails the whole receive.
+    /// <para>所有声明条目的总字节预算；超出则整体接收失败。</para></param>
+    /// <param name="maximumFiles">Maximum number of files in one receive; at least 1.
+    /// <para>单次接收的最大文件数；至少为 1。</para></param>
+    /// <param name="cancellationToken">Cancels between entries and chunks; the staging tree is then deleted.
+    /// <para>在条目与数据块之间取消；取消后暂存树会被删除。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="remotePath"/> is not an absolute, control-character-free device path.
+    /// <para><paramref name="remotePath"/> 不是绝对且不含控制字符的设备路径。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumBytes"/> is negative or <paramref name="maximumFiles"/> is below 1.
+    /// <para><paramref name="maximumBytes"/> 为负或 <paramref name="maximumFiles"/> 小于 1。</para></exception>
+    /// <exception cref="EndOfStreamException">The daemon ends a file before its declared size arrives.
+    /// <para>守护进程在声明大小到达前提前结束文件。</para></exception>
+    /// <exception cref="IOException"><paramref name="localPath"/> already exists.
+    /// <para><paramref name="localPath"/> 已存在。</para></exception>
+    /// <exception cref="InvalidDataException">An entry name is unsafe, a limit is exceeded, or a reply violates the protocol.
+    /// <para>条目名不安全、超出限制或回复违反协议。</para></exception>
+    /// <exception cref="ObjectDisposedException">This client has been disposed.
+    /// <para>本客户端已释放。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    /// <exception cref="TimeoutException">The daemon did not answer within the response deadline.
+    /// <para>守护进程未在响应期限内答复。</para></exception>
     public void RecvDirectory(string remotePath, string localPath, long maximumBytes, int maximumFiles = 100000, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

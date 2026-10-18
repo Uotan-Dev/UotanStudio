@@ -89,13 +89,11 @@ public static class UfsProvisionProfileLoader
             [SlotField] = SlotField
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Reads and validates a provisioning profile from a file path.
-    /// <para>从文件路径读取并校验 provisioning 配置文件。</para>
-    /// </summary>
-    /// <param name="path">Path to the profile document. <para>配置文件路径。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The validated profile. <para>校验通过的配置文件。</para></returns>
+    /// <summary>Reads and validates a provisioning profile from a file path.
+    /// <para>从文件路径读取并校验 provisioning 配置文件。</para></summary>
+    /// <param name="path">Path to the profile document.<para>配置文件路径。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The validated profile.<para>校验通过的配置文件。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="path"/> is empty or whitespace.
     /// <para><paramref name="path"/> 为空或仅含空白。</para></exception>
     /// <exception cref="FileNotFoundException"><paramref name="path"/> does not exist.
@@ -128,14 +126,11 @@ public static class UfsProvisionProfileLoader
         return await LoadCoreAsync(bounded, path, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Reads and validates a provisioning profile from a stream, consuming at most
-    /// <see cref="UfsProvisionProfile.MaximumProfileBytes"/> bytes.
-    /// <para>从流中读取并校验 provisioning 配置文件，最多消费 <see cref="UfsProvisionProfile.MaximumProfileBytes"/> 字节。</para>
-    /// </summary>
-    /// <param name="stream">The document stream; it stays open. <para>文件流；保持打开。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The validated profile. <para>校验通过的配置文件。</para></returns>
+    /// <summary>Reads and validates a provisioning profile from a stream, consuming at most <see cref="UfsProvisionProfile.MaximumProfileBytes"/> bytes.
+    /// <para>从流中读取并校验 provisioning 配置文件，最多消费 <see cref="UfsProvisionProfile.MaximumProfileBytes"/> 字节。</para></summary>
+    /// <param name="stream">The document stream; it stays open.<para>文件流；保持打开。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The validated profile.<para>校验通过的配置文件。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The stream yields more than the input limit, is not well-formed, or violates a documented bound.

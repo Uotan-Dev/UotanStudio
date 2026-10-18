@@ -142,20 +142,16 @@ internal sealed class MtkFormatHandler : IReadonlyFormatHandler
         }
     }
 
-    /// <summary>
-    /// Unpacks the description: DA containers release their region payloads, scatter manifests are
-    /// copied so image files referenced beside them can be resolved by callers.
-    /// <para>解包描述文件：DA 容器释出各区域负载；scatter 清单被复制，供调用方解析其旁边引用的镜像文件。</para>
-    /// </summary>
+    /// <summary>Unpacks the description: DA containers release their region payloads, scatter manifests are copied so image files referenced beside them can be resolved by callers.
+    /// <para>解包描述文件：DA 容器释出各区域负载；scatter 清单被复制，供调用方解析其旁边引用的镜像文件。</para></summary>
     /// <param name="filePath">Manifest or container to unpack; never modified.
     /// <para>待解包的清单或容器；不会被修改。</para></param>
     /// <param name="outputDirectory">Destination directory, created when absent.
     /// <para>目标目录，不存在时创建。</para></param>
     /// <param name="options">Overwrite policy and progress sink; <see langword="null"/> uses defaults.
     /// <para>覆盖策略与进度回调；传 <see langword="null"/> 时使用默认值。</para></param>
-    /// <param name="cancellationToken">Cancels the extraction. <para>取消解包。</para></param>
-    /// <returns>Outcome listing the written files with sizes.
-    /// <para>结果对象列出已写入的文件及其大小。</para></returns>
+    /// <param name="cancellationToken">Cancels the extraction.<para>取消解包。</para></param>
+    /// <returns>Outcome listing the written files with sizes.<para>结果对象列出已写入的文件及其大小。</para></returns>
     /// <exception cref="OperationCanceledException">The token was canceled.
     /// <para>令牌被取消。</para></exception>
     public async Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory,

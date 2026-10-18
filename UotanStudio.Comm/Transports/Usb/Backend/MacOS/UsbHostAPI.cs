@@ -177,20 +177,16 @@ internal static partial class UsbHostAPI
         return unchecked((int)code);
     }
 
-    /// <summary>
-    /// Synchronous control transfer on the device's default endpoint
-    /// (<c>sendDeviceRequest:data:bytesTransferred:completionTimeout:error:</c>).
-    /// <para>设备默认端点上的同步控制传输。</para>
-    /// </summary>
-    /// <param name="device">IOUSBHostDevice instance. <para>IOUSBHostDevice 实例。</para></param>
-    /// <param name="request">Setup packet. <para>建立包。</para></param>
-    /// <param name="buffer">
-    /// Data stage buffer; null for zero-length requests.
-    /// <para>数据阶段缓冲；零长度请求为 null。</para>
-    /// </param>
-    /// <param name="timeoutMs">Completion timeout in ms (0 = wait forever). <para>完成超时（毫秒，0 表示无限等待）。</para></param>
-    /// <param name="transferred">Actual data-stage byte count. <para>实际传输字节数。</para></param>
-    /// <returns>IOReturn code (0 on success). <para>IOReturn 码（成功为 0）。</para></returns>
+    /// <summary>Synchronous control transfer on the device's default endpoint (<c>sendDeviceRequest:data:bytesTransferred:completionTimeout:error:</c>).
+    /// <para>设备默认端点上的同步控制传输。</para></summary>
+    /// <param name="device">IOUSBHostDevice instance.<para>IOUSBHostDevice 实例。</para></param>
+    /// <param name="request">Setup packet.<para>建立包。</para></param>
+    /// <param name="buffer">Data stage buffer; null for zero-length requests.
+    /// <para>数据阶段缓冲；零长度请求为 null。</para></param>
+    /// <param name="timeoutMs">Completion timeout in ms (0 = wait forever).
+    /// <para>完成超时（毫秒，0 表示无限等待）。</para></param>
+    /// <param name="transferred">Actual data-stage byte count.<para>实际传输字节数。</para></param>
+    /// <returns>IOReturn code (0 on success).<para>IOReturn 码（成功为 0）。</para></returns>
     public static int SendDeviceRequest(IntPtr device, UsbHostDeviceRequest request, byte[]? buffer, int timeoutMs, out int transferred)
     {
         transferred = 0;
@@ -388,19 +384,15 @@ internal static partial class UsbHostAPI
         return data;
     }
 
-    /// <summary>
-    /// Synchronous control transfer through an interface pipe
-    /// (<c>sendControlRequest:data:bytesTransferred:completionTimeout:error:</c>).
-    /// <para>经接口管道的同步控制传输。</para>
-    /// </summary>
-    /// <param name="pipe">Pipe object pointer carrying the request. <para>承载该请求的管道对象指针。</para></param>
-    /// <param name="request">Setup packet. <para>建立包。</para></param>
-    /// <param name="buffer">
-    /// Data stage buffer; null for zero-length requests.
-    /// <para>数据阶段缓冲；零长度请求为 null。</para>
-    /// </param>
-    /// <param name="timeoutMs">Completion timeout in ms (0 = wait forever). <para>完成超时（毫秒，0 表示无限等待）。</para></param>
-    /// <param name="transferred">Actual data-stage byte count. <para>实际传输字节数。</para></param>
+    /// <summary>Synchronous control transfer through an interface pipe (<c>sendControlRequest:data:bytesTransferred:completionTimeout:error:</c>).
+    /// <para>经接口管道的同步控制传输。</para></summary>
+    /// <param name="pipe">Pipe object pointer carrying the request.<para>承载该请求的管道对象指针。</para></param>
+    /// <param name="request">Setup packet.<para>建立包。</para></param>
+    /// <param name="buffer">Data stage buffer; null for zero-length requests.
+    /// <para>数据阶段缓冲；零长度请求为 null。</para></param>
+    /// <param name="timeoutMs">Completion timeout in ms (0 = wait forever).
+    /// <para>完成超时（毫秒，0 表示无限等待）。</para></param>
+    /// <param name="transferred">Actual data-stage byte count.<para>实际传输字节数。</para></param>
     public static int SendControlRequest(IntPtr pipe, UsbHostDeviceRequest request, byte[]? buffer, int timeoutMs, out int transferred)
     {
         transferred = 0;

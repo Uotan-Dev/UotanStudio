@@ -38,22 +38,14 @@ public sealed class NtpiReader : IDisposable
     /// </summary>
     internal const long MaximumInMemoryExtractedBytes = 512L * 1024 * 1024;
 
-    /// <summary>
-    /// Initializes a new instance of NtpiReader with the specified crypto provider and compressor.
-    /// <para>使用指定的加密提供者和压缩器初始化 NtpiReader 的新实例。</para>
-    /// </summary>
-    /// <param name="cryptoProvider">
-    /// AES-CBC or other provider used to decrypt region payloads and per-file key material.
-    /// <para>用于解密区域载荷与逐文件密钥材料的 AES-CBC 或其他加密提供者。</para>
-    /// </param>
-    /// <param name="compressor">
-    /// Codec used to decompress file bodies after decryption.
-    /// <para>解密后用于解压文件数据的编解码器。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="cryptoProvider"/> or <paramref name="compressor"/> is <see langword="null"/>.
-    /// <para><paramref name="cryptoProvider"/> 或 <paramref name="compressor"/> 为 <see langword="null"/>。</para>
-    /// </exception>
+    /// <summary>Initializes a new instance of NtpiReader with the specified crypto provider and compressor.
+    /// <para>使用指定的加密提供者和压缩器初始化 NtpiReader 的新实例。</para></summary>
+    /// <param name="cryptoProvider">AES-CBC or other provider used to decrypt region payloads and per-file key material.
+    /// <para>用于解密区域载荷与逐文件密钥材料的 AES-CBC 或其他加密提供者。</para></param>
+    /// <param name="compressor">Codec used to decompress file bodies after decryption.
+    /// <para>解密后用于解压文件数据的编解码器。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="cryptoProvider"/> or <paramref name="compressor"/> is <see langword="null"/>.
+    /// <para><paramref name="cryptoProvider"/> 或 <paramref name="compressor"/> 为 <see langword="null"/>。</para></exception>
     public NtpiReader(ICryptoProvider cryptoProvider, ILzma2Compressor compressor)
     {
         ArgumentNullException.ThrowIfNull(cryptoProvider);
@@ -74,37 +66,22 @@ public sealed class NtpiReader : IDisposable
     public static NtpiReader CreateDefault()
         => new(new AesCbcCryptoProvider(), new Lzma2Compressor());
 
-    /// <summary>
-    /// Reads the file information of an NTPI firmware package, without extracting files.
-    /// <para>读取 NTPI 固件包的文件信息,包括版本号、区域列表和文件条目,不提取文件。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Package to inspect; region payloads are walked with the streaming size caps of the region walker and Region6 contributes only its size.
-    /// <para>待检查的包；区域载荷按区域遍历器的流式大小上限遍历，Region6 只记录长度。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token observed between regions during the walk; the default (none) token cannot cancel.
-    /// <para>遍历期间在区域之间检查的取消令牌；默认（无）令牌不可取消。</para>
-    /// </param>
-    /// <returns>
-    /// The version triple, one <c>(type, size)</c> record per region — Region6 is reported by size only — and the parsed
-    /// <see cref="FileEntry"/> list when a FileIndex region is present; otherwise <see cref="NtpiFileInfo.FileEntries"/> stays empty.
-    /// <para>版本号三元组、每个区域一条 <c>(类型, 长度)</c> 记录（Region6 仅报告长度），存在 FileIndex 区域时还包含解析出的
-    /// <see cref="FileEntry"/> 列表；否则 <see cref="NtpiFileInfo.FileEntries"/> 保持为空。</para>
-    /// </returns>
-    /// <exception cref="ObjectDisposedException">
-    /// The reader has been disposed. <para>读取器已被释放。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="filePath"/> does not exist. <para><paramref name="filePath"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidFormatException">
-    /// The magic, header, region chain or FileIndex XML is invalid, or a region exceeds the streaming region limit.
-    /// <para>魔数、头部、区域链或 FileIndex XML 无效，或某个区域超出流式区域大小上限。</para>
-    /// </exception>
+    /// <summary>Reads the file information of an NTPI firmware package, without extracting files.
+    /// <para>读取 NTPI 固件包的文件信息,包括版本号、区域列表和文件条目,不提取文件。</para></summary>
+    /// <param name="filePath">Package to inspect; region payloads are walked with the streaming size caps of the region walker and Region6 contributes only its size.
+    /// <para>待检查的包；区域载荷按区域遍历器的流式大小上限遍历，Region6 只记录长度。</para></param>
+    /// <param name="cancellationToken">Token observed between regions during the walk; the default (none) token cannot cancel.
+    /// <para>遍历期间在区域之间检查的取消令牌；默认（无）令牌不可取消。</para></param>
+    /// <returns>The version triple, one <c>(type, size)</c> record per region — Region6 is reported by size only — and the parsed <see cref="FileEntry"/> list when a FileIndex region is present; otherwise <see cref="NtpiFileInfo.FileEntries"/> stays empty.
+    /// <para>版本号三元组、每个区域一条 <c>(类型, 长度)</c> 记录（Region6 仅报告长度），存在 FileIndex 区域时还包含解析出的 <see cref="FileEntry"/> 列表；否则 <see cref="NtpiFileInfo.FileEntries"/> 保持为空。</para></returns>
+    /// <exception cref="ObjectDisposedException">The reader has been disposed.
+    /// <para>读取器已被释放。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="filePath"/> does not exist.
+    /// <para><paramref name="filePath"/> 不存在。</para></exception>
+    /// <exception cref="InvalidFormatException">The magic, header, region chain or FileIndex XML is invalid, or a region exceeds the streaming region limit.
+    /// <para>魔数、头部、区域链或 FileIndex XML 无效，或某个区域超出流式区域大小上限。</para></exception>
     /// <example>
     /// <code>
     /// using var reader = NtpiReader.CreateDefault();
@@ -126,73 +103,36 @@ public sealed class NtpiReader : IDisposable
         return ReadInfoCore(stream, cancellationToken);
     }
 
-    /// <summary>
-    /// Unpacks an NTPI firmware package using trusted output limits.
-    /// <para>使用可信输出限制将 NTPI 固件包解包到指定目录。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Package to unpack; it is opened read-only and never modified.
-    /// <para>待解包的固件包；以只读方式打开，不会被修改。</para>
-    /// </param>
-    /// <param name="outputDir">
-    /// Destination directory, created when absent. Files are written under <see cref="Path.GetFileName(string)"/> of
-    /// the entry name, so entries that differ only by directory part overwrite each other.
-    /// <para>目标目录，不存在时创建。文件按条目名的 <see cref="Path.GetFileName(string)"/> 写入，因此仅目录部分不同的条目会相互覆盖。</para>
-    /// </param>
-    /// <param name="options">
-    /// Trusted output budget; <see langword="null"/> applies a default <see cref="NtpiUnpackOptions"/>, whose declared
-    /// output stays bounded by the default per-file and total limits. Unless <see cref="NtpiUnpackOptions.DisableOutputLimits"/> is set, a negative limit is
-    /// rejected and the declared lengths are checked against the per-file and running totals before any file is written.
-    /// <para>可信输出预算；传 <see langword="null"/> 时使用默认 <see cref="NtpiUnpackOptions"/>，其声明输出仍受默认单文件与总长度上限约束。未设置 <see cref="NtpiUnpackOptions.DisableOutputLimits"/> 时，负数上限会被拒绝，并在写入任何文件之前
-    /// 按单文件上限与累计总上限检查各条目声明的长度。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Sink notified after each handled file; <see langword="null"/> reports nothing.
-    /// <para>每处理完一个文件后通知的回调；传 <see langword="null"/> 表示不上报。</para>
-    /// </param>
-    /// <param name="fileFilter">
-    /// Predicate over the archive entry name; <see langword="null"/> unpacks every entry. Filtered-out files are still
-    /// counted as completed.
-    /// <para>作用于条目名的谓词；传 <see langword="null"/> 时解出全部条目。被过滤掉的条目仍计入已完成数。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token observed between files and extraction blocks; the default (none) token cannot cancel.
-    /// <para>在文件之间与解压块之间检查的取消令牌；默认（无）令牌不可取消。</para>
-    /// </param>
-    /// <remarks>
-    /// Each file is written to a temporary path and moved into place with overwrite enabled, so a failed file leaves no
-    /// partial output for that file; files completed by earlier iterations stay on disk.
-    /// <para>每个文件先写入临时路径，再以允许覆盖的方式移动到目标位置，因此失败的文件本身不会残留半成品；此前已完成的文件仍保留在磁盘上。</para>
-    /// </remarks>
-    /// <exception cref="ObjectDisposedException">
-    /// The reader has been disposed. <para>读取器已被释放。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="filePath"/>, <paramref name="outputDir"/> or <paramref name="options"/> is <see langword="null"/>.
-    /// <para><paramref name="filePath"/>、<paramref name="outputDir"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// Output limits are enabled and <paramref name="options"/> carries a negative byte limit.
-    /// <para>启用输出限制且 <paramref name="options"/> 含负数字节上限。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="filePath"/> does not exist. <para><paramref name="filePath"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidFormatException">
-    /// A declared output exceeds the trusted per-file or total limit, the declared total overflows <see cref="long"/>, an
-    /// entry has a negative original length, the Region6 or KeyMap region is missing while file entries exist, or the
-    /// package structure fails validation.
-    /// <para>某个声明的输出超出可信的单文件或总上限，声明的总长度使 <see cref="long"/> 溢出，条目原始长度为负，
-    /// 存在文件条目却缺少 Region6 或 KeyMap 区域，或包结构校验失败。</para>
-    /// </exception>
-    /// <exception cref="IntegrityVerificationException">
-    /// The SHA-256 recorded for a file does not match the extracted bytes.
-    /// <para>文件记录的 SHA-256 与解出的字节不一致。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was canceled before or during the extraction.
-    /// <para><paramref name="cancellationToken"/> 在解包开始前或进行中被取消。</para>
-    /// </exception>
+    /// <summary>Unpacks an NTPI firmware package using trusted output limits.
+    /// <para>使用可信输出限制将 NTPI 固件包解包到指定目录。</para></summary>
+    /// <param name="filePath">Package to unpack; it is opened read-only and never modified.
+    /// <para>待解包的固件包；以只读方式打开，不会被修改。</para></param>
+    /// <param name="outputDir">Destination directory, created when absent. Files are written under <see cref="Path.GetFileName(string)"/> of the entry name, so entries that differ only by directory part overwrite each other.
+    /// <para>目标目录，不存在时创建。文件按条目名的 <see cref="Path.GetFileName(string)"/> 写入，因此仅目录部分不同的条目会相互覆盖。</para></param>
+    /// <param name="options">Trusted output budget; <see langword="null"/> applies a default <see cref="NtpiUnpackOptions"/>, whose declared output stays bounded by the default per-file and total limits. Unless <see cref="NtpiUnpackOptions.DisableOutputLimits"/> is set, a negative limit is rejected and the declared lengths are checked against the per-file and running totals before any file is written.
+    /// <para>可信输出预算；传 <see langword="null"/> 时使用默认 <see cref="NtpiUnpackOptions"/>，其声明输出仍受默认单文件与总长度上限约束。未设置 <see cref="NtpiUnpackOptions.DisableOutputLimits"/> 时，负数上限会被拒绝，并在写入任何文件之前 按单文件上限与累计总上限检查各条目声明的长度。</para></param>
+    /// <param name="progress">Sink notified after each handled file; <see langword="null"/> reports nothing.
+    /// <para>每处理完一个文件后通知的回调；传 <see langword="null"/> 表示不上报。</para></param>
+    /// <param name="fileFilter">Predicate over the archive entry name; <see langword="null"/> unpacks every entry. Filtered-out files are still counted as completed.
+    /// <para>作用于条目名的谓词；传 <see langword="null"/> 时解出全部条目。被过滤掉的条目仍计入已完成数。</para></param>
+    /// <param name="cancellationToken">Token observed between files and extraction blocks; the default (none) token cannot cancel.
+    /// <para>在文件之间与解压块之间检查的取消令牌；默认（无）令牌不可取消。</para></param>
+    /// <remarks>Each file is written to a temporary path and moved into place with overwrite enabled, so a failed file leaves no partial output for that file; files completed by earlier iterations stay on disk.
+    /// <para>每个文件先写入临时路径，再以允许覆盖的方式移动到目标位置，因此失败的文件本身不会残留半成品；此前已完成的文件仍保留在磁盘上。</para></remarks>
+    /// <exception cref="ObjectDisposedException">The reader has been disposed.
+    /// <para>读取器已被释放。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/>, <paramref name="outputDir"/> or <paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/>、<paramref name="outputDir"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">Output limits are enabled and <paramref name="options"/> carries a negative byte limit.
+    /// <para>启用输出限制且 <paramref name="options"/> 含负数字节上限。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="filePath"/> does not exist.
+    /// <para><paramref name="filePath"/> 不存在。</para></exception>
+    /// <exception cref="InvalidFormatException">A declared output exceeds the trusted per-file or total limit, the declared total overflows <see cref="long"/>, an entry has a negative original length, the Region6 or KeyMap region is missing while file entries exist, or the package structure fails validation.
+    /// <para>某个声明的输出超出可信的单文件或总上限，声明的总长度使 <see cref="long"/> 溢出，条目原始长度为负， 存在文件条目却缺少 Region6 或 KeyMap 区域，或包结构校验失败。</para></exception>
+    /// <exception cref="IntegrityVerificationException">The SHA-256 recorded for a file does not match the extracted bytes.
+    /// <para>文件记录的 SHA-256 与解出的字节不一致。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was canceled before or during the extraction.
+    /// <para><paramref name="cancellationToken"/> 在解包开始前或进行中被取消。</para></exception>
     /// <example>
     /// <code>
     /// using var reader = NtpiReader.CreateDefault();
@@ -306,53 +246,28 @@ public sealed class NtpiReader : IDisposable
         }
     }
 
-    /// <summary>
-    /// Parses the NTPI firmware package into memory, returning header, region data, and extracted files.
-    /// <para>将 NTPI 固件包解析到内存中,返回头部、区域数据与提取的文件。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Package to parse; the whole Region6 and every decrypted file are held in memory at once. Region6 is capped at
-    /// 256 MiB and the decoded files at 512 MiB cumulatively, so larger packages must be unpacked with
-    /// <see cref="Unpack"/>; no <see cref="NtpiUnpackOptions"/> output limit applies to this path.
-    /// <para>待解析的包；整个 Region6 与每个解密后的文件会同时驻留内存。Region6 上限为 256 MiB，解码文件累计上限为
-    /// 512 MiB，因此更大的包必须改用 <see cref="Unpack"/> 解包；此路径不受 <see cref="NtpiUnpackOptions"/> 的输出限制约束。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token observed between regions and extracted files; the default (none) token cannot cancel.
-    /// <para>在区域与文件提取之间检查的取消令牌；默认（无）令牌不可取消。</para>
-    /// </param>
-    /// <returns>
-    /// The header, a payload entry per region type (Region6 keyed by <see cref="RegionType.Region6"/> holds its raw
-    /// bytes when present), the FileIndex entries, and <see cref="NtpiParsedFile.ExtractedFiles"/> keyed by the archive
-    /// entry name — empty when the package declares no files.
-    /// <para>返回头部、每个区域类型一条载荷（存在时以 <see cref="RegionType.Region6"/> 为键保存其原始字节）、FileIndex 条目，
-    /// 以及以归档条目名为键的 <see cref="NtpiParsedFile.ExtractedFiles"/>；包未声明文件时该项为空。</para>
-    /// </returns>
-    /// <exception cref="ObjectDisposedException">
-    /// The reader has been disposed. <para>读取器已被释放。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="filePath"/> is <see langword="null"/>. <para><paramref name="filePath"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="filePath"/> does not exist. <para><paramref name="filePath"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidFormatException">
-    /// The package structure is invalid, file entries exist while Region6 or the KeyMap region is missing, or the
-    /// declared Region6/decoded sizes exceed the in-memory parse limits.
-    /// <para>包结构无效，存在文件条目却缺少 Region6 或 KeyMap 区域，或声明的 Region6/解码大小超出内存解析上限。</para>
-    /// </exception>
-    /// <exception cref="IntegrityVerificationException">
-    /// The SHA-256 recorded for a file does not match the decrypted bytes.
-    /// <para>文件记录的 SHA-256 与解密得到的字节不一致。</para>
-    /// </exception>
-    /// <exception cref="EndOfStreamException">
-    /// The file ends before the recorded Region6 length can be read. <para>文件在读完记录的 Region6 长度之前就结束。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was canceled before or during parsing.
-    /// <para><paramref name="cancellationToken"/> 在解析开始前或进行中被取消。</para>
-    /// </exception>
+    /// <summary>Parses the NTPI firmware package into memory, returning header, region data, and extracted files.
+    /// <para>将 NTPI 固件包解析到内存中,返回头部、区域数据与提取的文件。</para></summary>
+    /// <param name="filePath">Package to parse; the whole Region6 and every decrypted file are held in memory at once. Region6 is capped at 256 MiB and the decoded files at 512 MiB cumulatively, so larger packages must be unpacked with <see cref="Unpack"/>; no <see cref="NtpiUnpackOptions"/> output limit applies to this path.
+    /// <para>待解析的包；整个 Region6 与每个解密后的文件会同时驻留内存。Region6 上限为 256 MiB，解码文件累计上限为 512 MiB，因此更大的包必须改用 <see cref="Unpack"/> 解包；此路径不受 <see cref="NtpiUnpackOptions"/> 的输出限制约束。</para></param>
+    /// <param name="cancellationToken">Token observed between regions and extracted files; the default (none) token cannot cancel.
+    /// <para>在区域与文件提取之间检查的取消令牌；默认（无）令牌不可取消。</para></param>
+    /// <returns>The header, a payload entry per region type (Region6 keyed by <see cref="RegionType.Region6"/> holds its raw bytes when present), the FileIndex entries, and <see cref="NtpiParsedFile.ExtractedFiles"/> keyed by the archive entry name — empty when the package declares no files.
+    /// <para>返回头部、每个区域类型一条载荷（存在时以 <see cref="RegionType.Region6"/> 为键保存其原始字节）、FileIndex 条目， 以及以归档条目名为键的 <see cref="NtpiParsedFile.ExtractedFiles"/>；包未声明文件时该项为空。</para></returns>
+    /// <exception cref="ObjectDisposedException">The reader has been disposed.
+    /// <para>读取器已被释放。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>.
+    /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="filePath"/> does not exist.
+    /// <para><paramref name="filePath"/> 不存在。</para></exception>
+    /// <exception cref="InvalidFormatException">The package structure is invalid, file entries exist while Region6 or the KeyMap region is missing, or the declared Region6/decoded sizes exceed the in-memory parse limits.
+    /// <para>包结构无效，存在文件条目却缺少 Region6 或 KeyMap 区域，或声明的 Region6/解码大小超出内存解析上限。</para></exception>
+    /// <exception cref="IntegrityVerificationException">The SHA-256 recorded for a file does not match the decrypted bytes.
+    /// <para>文件记录的 SHA-256 与解密得到的字节不一致。</para></exception>
+    /// <exception cref="EndOfStreamException">The file ends before the recorded Region6 length can be read.
+    /// <para>文件在读完记录的 Region6 长度之前就结束。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was canceled before or during parsing.
+    /// <para><paramref name="cancellationToken"/> 在解析开始前或进行中被取消。</para></exception>
     public NtpiParsedFile Parse(string filePath, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();

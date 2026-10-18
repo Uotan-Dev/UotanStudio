@@ -181,22 +181,12 @@ public sealed class VisualPluginManager
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>
-    /// Installs or replaces a package after bounded parsing and structural validation.
-    /// <para>在有界解析与结构校验之后安装或替换一个包。</para>
-    /// </summary>
-    /// <param name="sourcePath">
-    /// Path of the package file to install.
-    /// <para>要安装的包文件路径。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token cancelling the pending installation.
-    /// <para>取消待执行安装的令牌。</para>
-    /// </param>
-    /// <returns>
-    /// The registration describing the installed package.
-    /// <para>描述已安装包的注册信息。</para>
-    /// </returns>
+    /// <summary>Installs or replaces a package after bounded parsing and structural validation.
+    /// <para>在有界解析与结构校验之后安装或替换一个包。</para></summary>
+    /// <param name="sourcePath">Path of the package file to install.<para>要安装的包文件路径。</para></param>
+    /// <param name="cancellationToken">Token cancelling the pending installation.
+    /// <para>取消待执行安装的令牌。</para></param>
+    /// <returns>The registration describing the installed package.<para>描述已安装包的注册信息。</para></returns>
     public async Task<VisualPluginRegistration> InstallAsync(string sourcePath,
         CancellationToken cancellationToken = default)
     {
@@ -224,22 +214,13 @@ public sealed class VisualPluginManager
         }
     }
 
-    /// <summary>
-    /// Installs or replaces an already-built package after structural validation.
-    /// <para>在结构校验之后安装或替换一个已构建的包。</para>
-    /// </summary>
-    /// <param name="package">
-    /// The package to install; it must already pass <see cref="VisualPluginValidation.Validate"/>.
-    /// <para>要安装的包；它必须已经通过 <see cref="VisualPluginValidation.Validate"/>。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the publication while preserving the previous target.
-    /// <para>取消发布过程，同时保留原有目标。</para>
-    /// </param>
-    /// <returns>
-    /// The registration describing the installed package.
-    /// <para>描述已安装包的注册信息。</para>
-    /// </returns>
+    /// <summary>Installs or replaces an already-built package after structural validation.
+    /// <para>在结构校验之后安装或替换一个已构建的包。</para></summary>
+    /// <param name="package">The package to install; it must already pass <see cref="VisualPluginValidation.Validate"/>.
+    /// <para>要安装的包；它必须已经通过 <see cref="VisualPluginValidation.Validate"/>。</para></param>
+    /// <param name="cancellationToken">Cancels the publication while preserving the previous target.
+    /// <para>取消发布过程，同时保留原有目标。</para></param>
+    /// <returns>The registration describing the installed package.<para>描述已安装包的注册信息。</para></returns>
     public async Task<VisualPluginRegistration> InstallPackageAsync(VisualPluginPackage package,
         CancellationToken cancellationToken = default)
     {
@@ -271,30 +252,16 @@ public sealed class VisualPluginManager
         }
     }
 
-    /// <summary>
-    /// Builds and installs one script-node package from a <c>.lua</c> source file.
-    /// <para>由 <c>.lua</c> 源文件构建并安装一个脚本节点包。</para>
-    /// </summary>
-    /// <param name="luaPath">
-    /// Path to the Lua source file.
-    /// <para>Lua 源文件的路径。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the read and installation.
-    /// <para>取消读取与安装过程。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="luaPath"/> is null, empty, or whitespace.
-    /// <para><paramref name="luaPath"/> 为 null、空或仅空白。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The script is empty, exceeds the package bound, or fails validation.
-    /// <para>脚本为空、超出包大小上限或未通过校验。</para>
-    /// </exception>
-    /// <returns>
-    /// The registration describing the installed package.
-    /// <para>描述已安装包的注册信息。</para>
-    /// </returns>
+    /// <summary>Builds and installs one script-node package from a <c>.lua</c> source file.
+    /// <para>由 <c>.lua</c> 源文件构建并安装一个脚本节点包。</para></summary>
+    /// <param name="luaPath">Path to the Lua source file.<para>Lua 源文件的路径。</para></param>
+    /// <param name="cancellationToken">Cancels the read and installation.
+    /// <para>取消读取与安装过程。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="luaPath"/> is null, empty, or whitespace.
+    /// <para><paramref name="luaPath"/> 为 null、空或仅空白。</para></exception>
+    /// <exception cref="InvalidDataException">The script is empty, exceeds the package bound, or fails validation.
+    /// <para>脚本为空、超出包大小上限或未通过校验。</para></exception>
+    /// <returns>The registration describing the installed package.<para>描述已安装包的注册信息。</para></returns>
     public async Task<VisualPluginRegistration> InstallScriptAsync(string luaPath,
         CancellationToken cancellationToken = default)
     {
@@ -307,22 +274,12 @@ public sealed class VisualPluginManager
         return await InstallPackageAsync(package, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Enables or disables an installed node package without modifying its portable content.
-    /// <para>启用或禁用一个已安装的节点包，不修改其可移植内容。</para>
-    /// </summary>
-    /// <param name="pluginId">
-    /// Identifier of the installed package.
-    /// <para>已安装包的标识。</para>
-    /// </param>
-    /// <param name="enabled">
-    /// Whether the package becomes active.
-    /// <para>该包是否转为活动。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token cancelling the pending state write.
-    /// <para>取消待执行状态写入的令牌。</para>
-    /// </param>
+    /// <summary>Enables or disables an installed node package without modifying its portable content.
+    /// <para>启用或禁用一个已安装的节点包，不修改其可移植内容。</para></summary>
+    /// <param name="pluginId">Identifier of the installed package.<para>已安装包的标识。</para></param>
+    /// <param name="enabled">Whether the package becomes active.<para>该包是否转为活动。</para></param>
+    /// <param name="cancellationToken">Token cancelling the pending state write.
+    /// <para>取消待执行状态写入的令牌。</para></param>
     public async Task SetEnabledAsync(string pluginId, bool enabled,
         CancellationToken cancellationToken = default)
     {
@@ -341,26 +298,14 @@ public sealed class VisualPluginManager
         }
     }
 
-    /// <summary>
-    /// Atomically replaces an installed package without changing its activation state.
-    /// <para>原子地替换已安装的包，不改变其激活状态。</para>
-    /// </summary>
-    /// <param name="registration">
-    /// Registration of the package being replaced.
-    /// <para>被替换包的注册信息。</para>
-    /// </param>
-    /// <param name="package">
-    /// Replacement package content.
-    /// <para>替换后的包内容。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token cancelling the pending publication.
-    /// <para>取消待执行发布的令牌。</para>
-    /// </param>
-    /// <returns>
-    /// The refreshed registration for the replacement.
-    /// <para>替换后刷新得到的注册信息。</para>
-    /// </returns>
+    /// <summary>Atomically replaces an installed package without changing its activation state.
+    /// <para>原子地替换已安装的包，不改变其激活状态。</para></summary>
+    /// <param name="registration">Registration of the package being replaced.
+    /// <para>被替换包的注册信息。</para></param>
+    /// <param name="package">Replacement package content.<para>替换后的包内容。</para></param>
+    /// <param name="cancellationToken">Token cancelling the pending publication.
+    /// <para>取消待执行发布的令牌。</para></param>
+    /// <returns>The refreshed registration for the replacement.<para>替换后刷新得到的注册信息。</para></returns>
     public async Task<VisualPluginRegistration> UpdateAsync(VisualPluginRegistration registration,
         VisualPluginPackage package, CancellationToken cancellationToken = default)
     {

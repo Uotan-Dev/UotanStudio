@@ -28,18 +28,11 @@ public sealed class ElfFile
     /// <summary>PT_LOAD 段：(vaddr, offset, filesz, flags)，按 vaddr 升序。</summary>
     private readonly List<(ulong Vaddr, ulong Offset, ulong Filesz, uint Flags)> _segs = new();
 
-    /// <summary>
-    /// Parses the ELF header and collects the PT_LOAD program headers with a non-zero file size, sorted by
-    /// virtual address; program header entries past the end of the buffer are omitted.
-    /// <para>解析 ELF 头部，收集文件大小非零的 PT_LOAD 程序头并按虚拟地址升序排列；超出缓冲区末尾的程序头条目会被忽略。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete little-endian ELF64 file bytes; the array is retained by <see cref="Data"/> and must not be
-    /// mutated afterwards.
-    /// <para>完整的小端序 ELF64 文件字节；数组由 <see cref="Data"/> 持有，之后不得修改。</para>
-    /// </param>
-    /// <exception cref="InvalidDataException">The buffer is shorter than 64 bytes, the ELF magic is wrong,
-    /// the class is not ELF64, or the data is not little-endian.
+    /// <summary>Parses the ELF header and collects the PT_LOAD program headers with a non-zero file size, sorted by virtual address; program header entries past the end of the buffer are omitted.
+    /// <para>解析 ELF 头部，收集文件大小非零的 PT_LOAD 程序头并按虚拟地址升序排列；超出缓冲区末尾的程序头条目会被忽略。</para></summary>
+    /// <param name="data">Complete little-endian ELF64 file bytes; the array is retained by <see cref="Data"/> and must not be mutated afterwards.
+    /// <para>完整的小端序 ELF64 文件字节；数组由 <see cref="Data"/> 持有，之后不得修改。</para></param>
+    /// <exception cref="InvalidDataException">The buffer is shorter than 64 bytes, the ELF magic is wrong, the class is not ELF64, or the data is not little-endian.
     /// <para>缓冲区不足 64 字节、ELF 魔数错误、不是 ELF64，或数据不是小端序。</para></exception>
     public ElfFile(byte[] data)
     {

@@ -9,15 +9,11 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    /// <summary>
-    /// Queries XML DA2 SLA and completes one challenge-response exchange under exclusive session ownership.
-    /// <para>查询 XML DA2 SLA，并在独占会话期间完成一次挑战响应交换。</para>
-    /// </summary>
-    /// <param name="expectedEnvelopeName">The property envelope asserted from the loader profile, or
-    /// <see langword="null"/> to accept the envelope the agent reports.
+    /// <summary>Queries XML DA2 SLA and completes one challenge-response exchange under exclusive session ownership.
+    /// <para>查询 XML DA2 SLA，并在独占会话期间完成一次挑战响应交换。</para></summary>
+    /// <param name="expectedEnvelopeName">The property envelope asserted from the loader profile, or <see langword="null"/> to accept the envelope the agent reports.
     /// <para>加载器配置断言的属性信封名称；为 <see langword="null"/> 时接受代理实际上报的信封。</para></param>
-    /// <param name="responder">The authorized provider, required when SLA is enabled.
-    /// It receives UTF-8 device information and the decoded rnd field.
+    /// <param name="responder">The authorized provider, required when SLA is enabled. It receives UTF-8 device information and the decoded rnd field.
     /// <para>启用 SLA 时必需的授权提供方，接收 UTF-8 设备信息与解码的 rnd 字段。</para></param>
     /// <param name="timeoutMs">The cooperative deadline from 1 ms through 24 hours.
     /// <para>范围为 1 毫秒至 24 小时的协作式截止时间。</para></param>

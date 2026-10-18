@@ -33,38 +33,20 @@ public static class QcnReader
     private const string FileVersionName = "File_Version";
     private const string MobilePropertyInfoName = "Mobile_Property_Info";
 
-    /// <summary>
-    /// Parses the QCN file at the given path into an editable <see cref="QcnDocument"/>.
-    /// <para>将指定路径的 QCN 文件解析为可编辑的 <see cref="QcnDocument"/>。</para>
-    /// </summary>
-    /// <param name="path">
-    /// The QCN file path.
-    /// <para>QCN 文件路径。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation token carried through the container and stream reads.
-    /// <para>取消令牌，贯穿容器与流读取。</para>
-    /// </param>
-    /// <returns>
-    /// The parsed document.
-    /// <para>解析后的文档。</para>
-    /// </returns>
-    /// <exception cref="QcnException">
-    /// The file exceeds the size limit.
-    /// <para>文件超过大小上限。</para>
-    /// </exception>
-    /// <exception cref="InvalidCompoundFileMagicException">
-    /// The file is not an OLE2/CFB container.
-    /// <para>文件不是 OLE2/CFB 容器。</para>
-    /// </exception>
-    /// <exception cref="CompoundFileException">
-    /// The container structure is corrupted or unsupported.
-    /// <para>容器结构损坏或不受支持。</para>
-    /// </exception>
-    /// <exception cref="InvalidQcnFormatException">
-    /// The container has no <c>NV_ITEM_ARRAY</c> record, or the record header violates the 136-byte layout.
-    /// <para>容器中不存在 <c>NV_ITEM_ARRAY</c> 记录，或记录头违反 136 字节布局。</para>
-    /// </exception>
+    /// <summary>Parses the QCN file at the given path into an editable <see cref="QcnDocument"/>.
+    /// <para>将指定路径的 QCN 文件解析为可编辑的 <see cref="QcnDocument"/>。</para></summary>
+    /// <param name="path">The QCN file path.<para>QCN 文件路径。</para></param>
+    /// <param name="cancellationToken">Cancellation token carried through the container and stream reads.
+    /// <para>取消令牌，贯穿容器与流读取。</para></param>
+    /// <returns>The parsed document.<para>解析后的文档。</para></returns>
+    /// <exception cref="QcnException">The file exceeds the size limit.
+    /// <para>文件超过大小上限。</para></exception>
+    /// <exception cref="InvalidCompoundFileMagicException">The file is not an OLE2/CFB container.
+    /// <para>文件不是 OLE2/CFB 容器。</para></exception>
+    /// <exception cref="CompoundFileException">The container structure is corrupted or unsupported.
+    /// <para>容器结构损坏或不受支持。</para></exception>
+    /// <exception cref="InvalidQcnFormatException">The container has no <c>NV_ITEM_ARRAY</c> record, or the record header violates the 136-byte layout.
+    /// <para>容器中不存在 <c>NV_ITEM_ARRAY</c> 记录，或记录头违反 136 字节布局。</para></exception>
     public static async Task<QcnDocument> ParseAsync(string path, CancellationToken cancellationToken = default)
     {
         var length = new FileInfo(path).Length;

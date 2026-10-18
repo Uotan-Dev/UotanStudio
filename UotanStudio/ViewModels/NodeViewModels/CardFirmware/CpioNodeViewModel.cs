@@ -56,20 +56,10 @@ public class CpioNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>
-    /// Dispatches CPIO logic by the node type key (TypeKey): Firmware.Cpio.Unpack unpacks a CPIO/TAR archive,
-    /// and Firmware.Cpio.Pack packs a directory into a CPIO archive.
-    /// <para>按节点类型键（TypeKey）分发对应的 CPIO 逻辑：Firmware.Cpio.Unpack 解包 CPIO/TAR 归档、
-    /// Firmware.Cpio.Pack 将目录打包为 CPIO 归档。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context.
-    /// <para>执行上下文。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Dispatches CPIO logic by the node type key (TypeKey): Firmware.Cpio.Unpack unpacks a CPIO/TAR archive, and Firmware.Cpio.Pack packs a directory into a CPIO archive.
+    /// <para>按节点类型键（TypeKey）分发对应的 CPIO 逻辑：Firmware.Cpio.Unpack 解包 CPIO/TAR 归档、 Firmware.Cpio.Pack 将目录打包为 CPIO 归档。</para></summary>
+    /// <param name="context">The execution context.<para>执行上下文。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         try

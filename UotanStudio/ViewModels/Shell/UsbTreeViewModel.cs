@@ -36,22 +36,11 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         /// <summary>The capability summary shown as the selector tooltip. <para>能力摘要，用作选择器提示。</para></summary>
         [ObservableProperty] private string _description = string.Empty;
 
-        /// <summary>
-        /// Creates a backend option.
-        /// <para>创建后端选项。</para>
-        /// </summary>
-        /// <param name="backend">
-        /// The backend this option stands for; <see langword="null"/> means automatic selection.
-        /// <para>该选项代表的后端；<see langword="null"/> 表示自动选择。</para>
-        /// </param>
-        /// <param name="displayFactory">
-        /// The display-text factory.
-        /// <para>显示文本工厂。</para>
-        /// </param>
-        /// <param name="descriptionFactory">
-        /// The capability-summary factory.
-        /// <para>能力摘要工厂。</para>
-        /// </param>
+        /// <summary>Creates a backend option.<para>创建后端选项。</para></summary>
+        /// <param name="backend">The backend this option stands for; <see langword="null"/> means automatic selection.
+        /// <para>该选项代表的后端；<see langword="null"/> 表示自动选择。</para></param>
+        /// <param name="displayFactory">The display-text factory.<para>显示文本工厂。</para></param>
+        /// <param name="descriptionFactory">The capability-summary factory.<para>能力摘要工厂。</para></param>
         public UsbTreeBackendOption(UsbTopologyBackendKind? backend, Func<string> displayFactory,
             Func<string> descriptionFactory)
         {

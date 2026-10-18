@@ -22,21 +22,23 @@ internal static class AvbPartitionVerifier
     private const int MaximumSaltSize = 16 * 1024 * 1024;
     private sealed record TreeLevel(long Offset, long Size);
 
-    /// <summary>
-    /// Checks a descriptor against a caller-owned partition stream without writing or loading the whole image.
-    /// <para>按描述符检查调用方拥有的分区流，不写入也不整体加载镜像。</para>
-    /// </summary>
+    /// <summary>Checks a descriptor against a caller-owned partition stream without writing or loading the whole image.
+    /// <para>按描述符检查调用方拥有的分区流，不写入也不整体加载镜像。</para></summary>
     /// <param name="image">Readable, seekable raw partition stream, starting logically at offset zero; its position is restored.
     /// <para>可读、可定位的原始分区流，逻辑起点为偏移零；结束时恢复位置。</para></param>
     /// <param name="descriptor">Hash or hashtree metadata whose signature and trust are checked independently.
     /// <para>哈希或哈希树元数据，其签名和信任单独检查。</para></param>
-    /// <param name="cancellationToken">Cancels reads and block processing. <para>取消读取和块处理。</para></param>
+    /// <param name="cancellationToken">Cancels reads and block processing.
+    /// <para>取消读取和块处理。</para></param>
     /// <returns>Content and stored-tree results with separate, unevaluated FEC status.
     /// <para>内容和存储树结果，另附未评估的 FEC 状态。</para></returns>
-    /// <exception cref="ArgumentNullException">An input is null. <para>某个输入为 null。</para></exception>
-    /// <exception cref="ArgumentException">The stream cannot read or seek. <para>流不可读或不可定位。</para></exception>
-    /// <exception cref="EndOfStreamException">Declared bytes cannot be read completely. <para>无法完整读取声明的字节。</para></exception>
-    /// <exception cref="OperationCanceledException">Cancellation was requested. <para>请求了取消。</para></exception>
+    /// <exception cref="ArgumentNullException">An input is null.<para>某个输入为 null。</para></exception>
+    /// <exception cref="ArgumentException">The stream cannot read or seek.
+    /// <para>流不可读或不可定位。</para></exception>
+    /// <exception cref="EndOfStreamException">Declared bytes cannot be read completely.
+    /// <para>无法完整读取声明的字节。</para></exception>
+    /// <exception cref="OperationCanceledException">Cancellation was requested.
+    /// <para>请求了取消。</para></exception>
     public static async Task<AvbPartitionVerifyResult> VerifyAsync(
         Stream image, AvbDescriptorInfo descriptor, CancellationToken cancellationToken = default)
     {
@@ -182,13 +184,17 @@ internal static class AvbPartitionVerifier
     /// <para>调用方持有的可读、可定位原始镜像；结束后恢复位置。</para></param>
     /// <param name="descriptor">Separately authenticated hash or hashtree descriptor.
     /// <para>需要单独认证的哈希或哈希树描述符。</para></param>
-    /// <param name="cancellationToken">Cancels content and parity reads. <para>取消内容与校验码读取。</para></param>
+    /// <param name="cancellationToken">Cancels content and parity reads.
+    /// <para>取消内容与校验码读取。</para></param>
     /// <returns>Independent content, stored-tree and FEC results; invalid parity does not change the content result.
     /// <para>独立的内容、存储树与 FEC 结果；校验码不匹配不改变内容结果。</para></returns>
-    /// <exception cref="ArgumentNullException">An input is null. <para>输入为 null。</para></exception>
-    /// <exception cref="ArgumentException">The stream cannot read or seek. <para>流不可读或不可定位。</para></exception>
-    /// <exception cref="EndOfStreamException">Declared bytes cannot be read. <para>无法读取声明的字节。</para></exception>
-    /// <exception cref="OperationCanceledException">Cancellation was requested. <para>请求了取消。</para></exception>
+    /// <exception cref="ArgumentNullException">An input is null.<para>输入为 null。</para></exception>
+    /// <exception cref="ArgumentException">The stream cannot read or seek.
+    /// <para>流不可读或不可定位。</para></exception>
+    /// <exception cref="EndOfStreamException">Declared bytes cannot be read.
+    /// <para>无法读取声明的字节。</para></exception>
+    /// <exception cref="OperationCanceledException">Cancellation was requested.
+    /// <para>请求了取消。</para></exception>
     public static async Task<AvbPartitionVerifyResult> VerifyWithFecAsync(
         Stream image, AvbDescriptorInfo descriptor, CancellationToken cancellationToken = default)
     {

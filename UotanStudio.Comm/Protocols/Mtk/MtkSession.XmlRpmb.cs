@@ -8,44 +8,23 @@ public sealed partial class MtkSession
     private const string XmlReadRpmbCommand = "CMD:CUSTOMRPMBR";
     private const string XmlReadUfsRpmbCommand = "CMD:CUSTOMURPMBR";
 
-    /// <summary>
-    /// Reads a bounded run of RPMB frames through the XML DA's custom RPMB command.
-    /// <para>通过 XML DA 的自定义 RPMB 命令读取有界的连续帧。</para>
-    /// </summary>
-    /// <remarks>
-    /// One frame is one XML command exchange: the command element, its <c>OK</c>, the frame index as a
-    /// four-byte little-endian payload, a two-byte result message and then the frame data, closed by
-    /// <c>CMD:END</c> and the following <c>CMD:START</c>
-    /// (<c>mtkclient/Library/DA/xml/extension/v6.py:301-321</c>, command text built by
-    /// <c>mtkclient/Library/DA/xml/xml_cmd.py:18-27</c>). The XML DA reports no RPMB status control code, so
-    /// <see cref="QueryXFlashRpmbStatusAsync"/> has no counterpart here. The first frame the device refuses stops
-    /// the run and is never replayed.
-    /// <para>一帧即一次 XML 命令交换：命令元素、其 <c>OK</c>、以小端四字节发送的帧序号、一个两字节结果消息，
-    /// 随后是帧数据，最后由 <c>CMD:END</c> 与紧随的 <c>CMD:START</c> 收尾
-    /// （<c>mtkclient/Library/DA/xml/extension/v6.py:301-321</c>，命令文本由
-    /// <c>mtkclient/Library/DA/xml/xml_cmd.py:18-27</c> 构造）。XML DA 没有上报 RPMB 状态控制码，
-    /// 因此 <see cref="QueryXFlashRpmbStatusAsync"/> 在此没有对应方法。设备拒绝的首帧会终止本次读取且绝不重放。</para>
-    /// </remarks>
+    /// <summary>Reads a bounded run of RPMB frames through the XML DA's custom RPMB command.
+    /// <para>通过 XML DA 的自定义 RPMB 命令读取有界的连续帧。</para></summary>
+    /// <remarks>One frame is one XML command exchange: the command element, its <c>OK</c>, the frame index as a four-byte little-endian payload, a two-byte result message and then the frame data, closed by <c>CMD:END</c> and the following <c>CMD:START</c> (<c>mtkclient/Library/DA/xml/extension/v6.py:301-321</c>, command text built by <c>mtkclient/Library/DA/xml/xml_cmd.py:18-27</c>). The XML DA reports no RPMB status control code, so <see cref="QueryXFlashRpmbStatusAsync"/> has no counterpart here. The first frame the device refuses stops the run and is never replayed.
+    /// <para>一帧即一次 XML 命令交换：命令元素、其 <c>OK</c>、以小端四字节发送的帧序号、一个两字节结果消息， 随后是帧数据，最后由 <c>CMD:END</c> 与紧随的 <c>CMD:START</c> 收尾 （<c>mtkclient/Library/DA/xml/extension/v6.py:301-321</c>，命令文本由 <c>mtkclient/Library/DA/xml/xml_cmd.py:18-27</c> 构造）。XML DA 没有上报 RPMB 状态控制码， 因此 <see cref="QueryXFlashRpmbStatusAsync"/> 在此没有对应方法。设备拒绝的首帧会终止本次读取且绝不重放。</para></remarks>
     /// <param name="range">The validated frame-aligned range to read.
     /// <para>要读取的、已校验的帧对齐范围。</para></param>
     /// <param name="options">Optional bounds and deadline; <see langword="null"/> uses the read-only defaults.
     /// <para>可选的边界与截止时间；<see langword="null"/> 使用只读默认值。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>One result per addressed frame plus the concatenated delivered bytes.
     /// <para>每个已寻址帧的结果，以及拼接后的已交付字节。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The range is empty, unbounded or outside the reported RPMB capacity.
-    /// <para>范围为空、无界或超出上报的 RPMB 容量。</para>
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The XML storage geometry is unknown, no channel is attached, or the reported RPMB area is empty.
-    /// <para>XML 存储几何信息未知、未附加通道，或上报的 RPMB 区域为空。</para>
-    /// </exception>
-    /// <exception cref="MtkProtocolException">
-    /// A message, result frame or data frame violated the protocol; the family faults without retry.
-    /// <para>某条消息、结果帧或数据帧违反协议；该协议族进入 fault 状态且不重试。</para>
-    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">The range is empty, unbounded or outside the reported RPMB capacity.
+    /// <para>范围为空、无界或超出上报的 RPMB 容量。</para></exception>
+    /// <exception cref="InvalidOperationException">The XML storage geometry is unknown, no channel is attached, or the reported RPMB area is empty.
+    /// <para>XML 存储几何信息未知、未附加通道，或上报的 RPMB 区域为空。</para></exception>
+    /// <exception cref="MtkProtocolException">A message, result frame or data frame violated the protocol; the family faults without retry.
+    /// <para>某条消息、结果帧或数据帧违反协议；该协议族进入 fault 状态且不重试。</para></exception>
     /// <exception cref="TimeoutException">The exchange deadline expired; the family faults.
     /// <para>交换截止时间到期；该协议族进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.

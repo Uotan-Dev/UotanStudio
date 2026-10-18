@@ -25,24 +25,19 @@ internal sealed class CommDeviceTransportOpener(
 {
     private readonly int _hdcPort = hdcPort ?? HdcServerClient.DefaultServerPort;
 
-    /// <summary>
-    /// Opens exactly the endpoint's own transport without changing routes; an <c>edl</c> endpoint
-    /// whose device was bound as a COM port falls back to that serial port.
-    /// <para>只打开端点自身的传输且不改变路由；设备已被驱动绑定为 COM 口的 <c>edl</c> 端点回退到该串口。</para>
-    /// </summary>
+    /// <summary>Opens exactly the endpoint's own transport without changing routes; an <c>edl</c> endpoint whose device was bound as a COM port falls back to that serial port.
+    /// <para>只打开端点自身的传输且不改变路由；设备已被驱动绑定为 COM 口的 <c>edl</c> 端点回退到该串口。</para></summary>
     /// <param name="endpoint">The endpoint produced by discovery; anything unrecognized is rejected.
     /// <para>发现层产出的端点；任何无法识别的输入都会被拒绝。</para></param>
-    /// <param name="cancellationToken">Cancels the open; a validation already in flight keeps its own
-    /// bounded socket timeouts.
+    /// <param name="cancellationToken">Cancels the open; a validation already in flight keeps its own bounded socket timeouts.
     /// <para>取消打开过程；已在执行的校验保留其自身有界的套接字超时。</para></param>
-    /// <returns>An owned transport bound to the exact endpoint.
-    /// <para>绑定到该精确端点的受管传输。</para></returns>
+    /// <returns>An owned transport bound to the exact endpoint.<para>绑定到该精确端点的受管传输。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="endpoint"/> is <see langword="null"/>.
     /// <para><paramref name="endpoint"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="IOException">The route precondition, the server probe, or the target
-    /// validation failed. <para>路由前置条件、server 探测或目标校验失败。</para></exception>
-    /// <exception cref="NotSupportedException">The endpoint matches none of the configured opener
-    /// routes. <para>端点不匹配任何已配置的开启器路由。</para></exception>
+    /// <exception cref="IOException">The route precondition, the server probe, or the target validation failed.
+    /// <para>路由前置条件、server 探测或目标校验失败。</para></exception>
+    /// <exception cref="NotSupportedException">The endpoint matches none of the configured opener routes.
+    /// <para>端点不匹配任何已配置的开启器路由。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public async Task<IAsyncDisposable> OpenAsync(DeviceEndpoint endpoint, CancellationToken cancellationToken)

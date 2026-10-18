@@ -144,19 +144,23 @@ internal class LinuxUsbDevice : UsbDevice
         _claimedInterfaces.Clear();
     }
 
-    /// <summary>
-    /// Executes a control transfer through the usbfs control ioctl, validating the length before any handle inspection because <c>WLength</c> is a 16-bit field that would otherwise truncate silently. The managed infinite-timeout sentinel is mapped to the kernel's zero "wait forever" encoding.
-    /// <para>通过 usbfs 控制 ioctl 执行控制传输；因 <c>WLength</c> 为 16 位字段、否则会静默截断，长度在任何句柄检查之前校验。托管的无限超时哨兵值映射为内核的 0（"永久等待"）编码。</para>
-    /// </summary>
-    /// <param name="setupPacket">The setup packet for the control request. <para>控制请求的 Setup 包。</para></param>
-    /// <param name="buffer">The data buffer, or <c>null</c> for zero-length transfers. <para>数据缓冲区；零长度传输时为 <c>null</c>。</para></param>
-    /// <param name="offset">The byte offset within the buffer. <para>缓冲区内的字节偏移量。</para></param>
-    /// <param name="length">The number of bytes to transfer, at most 65535. <para>要传输的字节数，最大 65535。</para></param>
-    /// <param name="timeoutMs">The timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
-    /// <returns>The number of bytes transferred. <para>已传输的字节数。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> exceeds the 16-bit <c>WLength</c> range. <para>当 <paramref name="length"/> 超过 16 位 <c>WLength</c> 范围时抛出。</para></exception>
-    /// <exception cref="UsbDeviceHandleClosedException">Thrown when the device handle is closed. <para>当设备句柄已关闭时抛出。</para></exception>
-    /// <exception cref="IOException">Thrown when the control ioctl fails. <para>当控制 ioctl 失败时抛出。</para></exception>
+    /// <summary>Executes a control transfer through the usbfs control ioctl, validating the length before any handle inspection because <c>WLength</c> is a 16-bit field that would otherwise truncate silently. The managed infinite-timeout sentinel is mapped to the kernel's zero "wait forever" encoding.
+    /// <para>通过 usbfs 控制 ioctl 执行控制传输；因 <c>WLength</c> 为 16 位字段、否则会静默截断，长度在任何句柄检查之前校验。托管的无限超时哨兵值映射为内核的 0（"永久等待"）编码。</para></summary>
+    /// <param name="setupPacket">The setup packet for the control request.
+    /// <para>控制请求的 Setup 包。</para></param>
+    /// <param name="buffer">The data buffer, or <c>null</c> for zero-length transfers.
+    /// <para>数据缓冲区；零长度传输时为 <c>null</c>。</para></param>
+    /// <param name="offset">The byte offset within the buffer.<para>缓冲区内的字节偏移量。</para></param>
+    /// <param name="length">The number of bytes to transfer, at most 65535.
+    /// <para>要传输的字节数，最大 65535。</para></param>
+    /// <param name="timeoutMs">The timeout in milliseconds.<para>超时时间（毫秒）。</para></param>
+    /// <returns>The number of bytes transferred.<para>已传输的字节数。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> exceeds the 16-bit <c>WLength</c> range.
+    /// <para>当 <paramref name="length"/> 超过 16 位 <c>WLength</c> 范围时抛出。</para></exception>
+    /// <exception cref="UsbDeviceHandleClosedException">Thrown when the device handle is closed.
+    /// <para>当设备句柄已关闭时抛出。</para></exception>
+    /// <exception cref="IOException">Thrown when the control ioctl fails.
+    /// <para>当控制 ioctl 失败时抛出。</para></exception>
     public override int ControlTransfer(UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs)
     {
         if (length > ushort.MaxValue)

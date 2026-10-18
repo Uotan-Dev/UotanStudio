@@ -31,23 +31,16 @@ public static class VisualPluginBundle
     private const int MaximumDirectorySize = 1024 * 1024;
     private const string ManifestName = "manifest.json";
 
-    /// <summary>
-    /// Reads bounded metadata. Resource hashes are checked when resources are consumed.
-    /// <para>读取有界的元数据。资源哈希在消费资源时才校验。</para>
-    /// </summary>
-    /// <param name="path">
-    /// Bundle file to open. Its ZIP central directory is preflighted first under strict bounds (no ZIP64, no multidisk layout, capped entry count and directory size) before the archive is parsed.
-    /// <para>待打开的包文件。先在其 ZIP 中央目录上执行严格边界的预检（不支持 ZIP64 和多盘布局，条目数与目录大小均有上限），然后再解析归档。</para>
-    /// </param>
-    /// <returns>
-    /// Validated package. Every scope, including embedded composite packages, retains the full path of this bundle as its source identity and a shared root snapshot that later reads re-validate against.
-    /// <para>校验通过的包。每个作用域（含内嵌复合包）都会保留本包的完整路径作为来源标识，并持有一份共享的根快照，供后续读取时重新校验。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// Preflight rejected the archive, the manifest is missing, oversized, truncated or followed by extra bytes, its JSON structure is unsupported, the package fails validation, or the entries do not exactly match the declared resources.
-    /// <para>预检拒绝该归档；清单缺失、超限、被截断或尾部有多余字节；JSON 结构不受支持；包校验失败；或条目与声明的资源不完全一致。</para>
-    /// </exception>
-    /// <exception cref="IOException">The file cannot be opened or read. <para>文件无法打开或读取。</para></exception>
+    /// <summary>Reads bounded metadata. Resource hashes are checked when resources are consumed.
+    /// <para>读取有界的元数据。资源哈希在消费资源时才校验。</para></summary>
+    /// <param name="path">Bundle file to open. Its ZIP central directory is preflighted first under strict bounds (no ZIP64, no multidisk layout, capped entry count and directory size) before the archive is parsed.
+    /// <para>待打开的包文件。先在其 ZIP 中央目录上执行严格边界的预检（不支持 ZIP64 和多盘布局，条目数与目录大小均有上限），然后再解析归档。</para></param>
+    /// <returns>Validated package. Every scope, including embedded composite packages, retains the full path of this bundle as its source identity and a shared root snapshot that later reads re-validate against.
+    /// <para>校验通过的包。每个作用域（含内嵌复合包）都会保留本包的完整路径作为来源标识，并持有一份共享的根快照，供后续读取时重新校验。</para></returns>
+    /// <exception cref="InvalidDataException">Preflight rejected the archive, the manifest is missing, oversized, truncated or followed by extra bytes, its JSON structure is unsupported, the package fails validation, or the entries do not exactly match the declared resources.
+    /// <para>预检拒绝该归档；清单缺失、超限、被截断或尾部有多余字节；JSON 结构不受支持；包校验失败；或条目与声明的资源不完全一致。</para></exception>
+    /// <exception cref="IOException">The file cannot be opened or read.
+    /// <para>文件无法打开或读取。</para></exception>
     public static VisualPluginPackage Load(string path)
     {
         using var file = OpenBundle(path);
@@ -85,28 +78,18 @@ public static class VisualPluginBundle
         return package;
     }
 
-    /// <summary>
-    /// Streams the package resources into a sibling temporary ZIP and publishes it atomically.
-    /// <para>将包内资源以流式写入同级临时 ZIP，并在校验通过后原子发布。</para>
-    /// </summary>
-    /// <param name="path">
-    /// Destination bundle path; it is resolved to a full path and may be overwritten on success.
-    /// <para>目标包路径；会被解析为完整路径，成功后可能被覆盖。</para>
-    /// </param>
-    /// <param name="package">
-    /// Package to write; it must pass structural validation, its manifest must stay within the size
-    /// limit, and every resource must be readable from its local source or an attached bundle.
-    /// <para>待写入的包；必须通过结构化校验，清单大小不得超限，且每个资源都必须可从其本地源或所附包中读取。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before staging, per resource, and before the final move; cancellation propagates and the destination keeps its previous content.
-    /// <para>在暂存前、每个资源写入时以及最终移动前均会检查；取消会向上传播，目标文件保持原有内容。</para>
-    /// </param>
-    /// <returns>A task that completes once the bundle is published. <para>包发布完成后结束的异步任务。</para></returns>
-    /// <exception cref="InvalidDataException">
-    /// The package fails validation, the manifest exceeds its size limit, or a resource has no source or does not match its declared length or SHA-256.
-    /// <para>包校验失败、清单超出大小限制，或资源没有来源、与其声明的长度或 SHA-256 不符。</para>
-    /// </exception>
+    /// <summary>Streams the package resources into a sibling temporary ZIP and publishes it atomically.
+    /// <para>将包内资源以流式写入同级临时 ZIP，并在校验通过后原子发布。</para></summary>
+    /// <param name="path">Destination bundle path; it is resolved to a full path and may be overwritten on success.
+    /// <para>目标包路径；会被解析为完整路径，成功后可能被覆盖。</para></param>
+    /// <param name="package">Package to write; it must pass structural validation, its manifest must stay within the size limit, and every resource must be readable from its local source or an attached bundle.
+    /// <para>待写入的包；必须通过结构化校验，清单大小不得超限，且每个资源都必须可从其本地源或所附包中读取。</para></param>
+    /// <param name="cancellationToken">Checked before staging, per resource, and before the final move; cancellation propagates and the destination keeps its previous content.
+    /// <para>在暂存前、每个资源写入时以及最终移动前均会检查；取消会向上传播，目标文件保持原有内容。</para></param>
+    /// <returns>A task that completes once the bundle is published.
+    /// <para>包发布完成后结束的异步任务。</para></returns>
+    /// <exception cref="InvalidDataException">The package fails validation, the manifest exceeds its size limit, or a resource has no source or does not match its declared length or SHA-256.
+    /// <para>包校验失败、清单超出大小限制，或资源没有来源、与其声明的长度或 SHA-256 不符。</para></exception>
     /// <exception cref="IOException">The temporary or destination file cannot be written or moved.
     /// <para>临时文件或目标文件无法写入或移动。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
@@ -163,31 +146,20 @@ public static class VisualPluginBundle
         }
     }
 
-    /// <summary>
-    /// Copies one resource with bounded memory and exact length and hash checks.
-    /// <para>以有界内存和精确的长度与哈希校验复制单个资源。</para>
-    /// </summary>
-    /// <param name="package">
-    /// Scope whose own asset list is searched and whose structure is validated before copying.
-    /// <para>复制前先校验其结构、并在其自身资源列表中查找目标的作用域。</para>
-    /// </param>
-    /// <param name="id">
-    /// Resource identifier, matched case-sensitively against the scope's asset ids.
-    /// <para>资源标识符，与作用域的资产 id 进行区分大小写的匹配。</para>
-    /// </param>
-    /// <param name="destination">
-    /// Writable stream owned and kept open by the caller; it is neither closed nor rewound, and a failed
-    /// check can leave partially written content in it.
-    /// <para>由调用方持有并保持打开的可写流；本方法既不关闭也不回退它，校验失败时其中可能残留已部分写入的内容。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels reads and writes; cancellation propagates. <para>取消读取与写入；取消会向上传播。</para>
-    /// </param>
-    /// <returns>A task that completes once the verified bytes are written. <para>校验通过的字节全部写入后结束的异步任务。</para></returns>
-    /// <exception cref="InvalidDataException">
-    /// The package fails validation, the id is unknown, the resource has neither a local source nor a bundle path, the source is truncated or longer than declared, or its SHA-256 does not match (compared case-insensitively).
-    /// <para>包校验失败、id 未知、资源既无本地源也无包路径、来源被截断或长于声明值，或其 SHA-256 不匹配（比较不区分大小写）。</para>
-    /// </exception>
+    /// <summary>Copies one resource with bounded memory and exact length and hash checks.
+    /// <para>以有界内存和精确的长度与哈希校验复制单个资源。</para></summary>
+    /// <param name="package">Scope whose own asset list is searched and whose structure is validated before copying.
+    /// <para>复制前先校验其结构、并在其自身资源列表中查找目标的作用域。</para></param>
+    /// <param name="id">Resource identifier, matched case-sensitively against the scope's asset ids.
+    /// <para>资源标识符，与作用域的资产 id 进行区分大小写的匹配。</para></param>
+    /// <param name="destination">Writable stream owned and kept open by the caller; it is neither closed nor rewound, and a failed check can leave partially written content in it.
+    /// <para>由调用方持有并保持打开的可写流；本方法既不关闭也不回退它，校验失败时其中可能残留已部分写入的内容。</para></param>
+    /// <param name="cancellationToken">Cancels reads and writes; cancellation propagates.
+    /// <para>取消读取与写入；取消会向上传播。</para></param>
+    /// <returns>A task that completes once the verified bytes are written.
+    /// <para>校验通过的字节全部写入后结束的异步任务。</para></returns>
+    /// <exception cref="InvalidDataException">The package fails validation, the id is unknown, the resource has neither a local source nor a bundle path, the source is truncated or longer than declared, or its SHA-256 does not match (compared case-insensitively).
+    /// <para>包校验失败、id 未知、资源既无本地源也无包路径、来源被截断或长于声明值，或其 SHA-256 不匹配（比较不区分大小写）。</para></exception>
     /// <exception cref="IOException">The source file or bundle cannot be opened or read.
     /// <para>源文件或包无法打开或读取。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.

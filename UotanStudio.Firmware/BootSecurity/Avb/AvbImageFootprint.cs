@@ -12,16 +12,13 @@ namespace UotanStudio.Firmware.BootSecurity.Avb;
 /// </summary>
 public static class AvbImageFootprint
 {
-    /// <summary>
-    /// Loads the verified byte count from an image's AVB footer, transparently handling sparse containers.
-    /// <para>从镜像的 AVB footer 读取受校验字节数，并透明处理稀疏容器。</para>
-    /// </summary>
-    /// <param name="imagePath">Raw or sparse image file. <para>原始或稀疏镜像文件。</para></param>
-    /// <param name="cancellationToken">
-    /// Cancels before and during the scan; a cancelled call rethrows. <para>在扫描前后取消；被取消时重新抛出。</para>
-    /// </param>
-    /// <returns>The footer's original image size in bytes, or <see langword="null"/> when the image carries
-    /// no supported footer. <para>footer 记录的原始镜像字节数；镜像无受支持 footer 时返回 <see langword="null"/>。</para></returns>
+    /// <summary>Loads the verified byte count from an image's AVB footer, transparently handling sparse containers.
+    /// <para>从镜像的 AVB footer 读取受校验字节数，并透明处理稀疏容器。</para></summary>
+    /// <param name="imagePath">Raw or sparse image file.<para>原始或稀疏镜像文件。</para></param>
+    /// <param name="cancellationToken">Cancels before and during the scan; a cancelled call rethrows.
+    /// <para>在扫描前后取消；被取消时重新抛出。</para></param>
+    /// <returns>The footer's original image size in bytes, or <see langword="null"/> when the image carries no supported footer.
+    /// <para>footer 记录的原始镜像字节数；镜像无受支持 footer 时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="FileNotFoundException"><paramref name="imagePath"/> does not exist.
     /// <para><paramref name="imagePath"/> 不存在。</para></exception>
     /// <exception cref="InvalidDataException">The sparse image declares more chunks than the accepted bound.

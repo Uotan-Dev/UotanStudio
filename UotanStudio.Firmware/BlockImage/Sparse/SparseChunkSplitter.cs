@@ -63,27 +63,15 @@ public static class SparseChunkSplitter
     private const int MaximumParts = 4096;
     private const long MaximumBytes = 1L << 40;
 
-    /// <summary>
-    /// Resolves all sibling chunks sharing the selected file's exact prefix and classifies the set.
-    /// <para>解析与所选文件共享准确前缀的全部同级分片，并判定集合形态。</para>
-    /// </summary>
-    /// <param name="selectedPath">
-    /// Any numbered member of the set.
-    /// <para>集合中任意带编号的成员。</para>
-    /// </param>
-    /// <returns>
-    /// An ordered set with the detected variant and the summed physical length.
-    /// <para>带有判定形态与物理长度总和的有序集合。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="selectedPath"/> is blank.
-    /// <para><paramref name="selectedPath"/> 为空白。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The name, numbering, size, or the per-part sparse geometry is invalid, the parts mix sparse and
-    /// raw shapes, or the raw-slice shape has ragged piece sizes that cannot come from one fixed-size split.
-    /// <para>名称、编号、大小或单片稀疏几何无效、各片混合稀疏与原始形态，或原始切片形态的尺寸不齐而无法来自同一固定大小拆分。</para>
-    /// </exception>
+    /// <summary>Resolves all sibling chunks sharing the selected file's exact prefix and classifies the set.
+    /// <para>解析与所选文件共享准确前缀的全部同级分片，并判定集合形态。</para></summary>
+    /// <param name="selectedPath">Any numbered member of the set.<para>集合中任意带编号的成员。</para></param>
+    /// <returns>An ordered set with the detected variant and the summed physical length.
+    /// <para>带有判定形态与物理长度总和的有序集合。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="selectedPath"/> is blank.
+    /// <para><paramref name="selectedPath"/> 为空白。</para></exception>
+    /// <exception cref="InvalidDataException">The name, numbering, size, or the per-part sparse geometry is invalid, the parts mix sparse and raw shapes, or the raw-slice shape has ragged piece sizes that cannot come from one fixed-size split.
+    /// <para>名称、编号、大小或单片稀疏几何无效、各片混合稀疏与原始形态，或原始切片形态的尺寸不齐而无法来自同一固定大小拆分。</para></exception>
     public static SparseChunkSet Inspect(string selectedPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(selectedPath);
@@ -175,42 +163,23 @@ public static class SparseChunkSplitter
         throw new InvalidDataException("Sparsechunk pieces mix self-contained sparse images and raw slices.");
     }
 
-    /// <summary>
-    /// Merges a validated set into one image, publishing through a temporary file.
-    /// <para>将已校验集合合并为一个镜像，经临时文件发布。</para>
-    /// </summary>
-    /// <param name="selectedPath">
-    /// Any member used to resolve siblings.
-    /// <para>用于定位同级分片的任一成员。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination image; an existing file is replaced only after the merge completed.
-    /// <para>目标镜像；已存在的文件仅在合并完成后才被替换。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Optional byte progress over the physical input; <see langword="null"/> reports nothing.
-    /// <para>可选的按物理输入字节进度；<see langword="null"/> 不报告。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation checked between pieces and between buffer transfers; cancellation leaves the destination untouched.
-    /// <para>在各分片之间与缓冲区传输之间检查；取消不会改动目标。</para>
-    /// </param>
-    /// <returns>
-    /// The validated set that was merged.
-    /// <para>已合并的已校验集合。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="outputPath"/> is blank or resolves to one of the inputs.
-    /// <para><paramref name="outputPath"/> 为空白，或其解析结果就是某个输入。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The set fails inspection or the self-contained pieces cannot be unified into one geometry.
-    /// <para>集合未通过检查，或自包含分片无法统一为一份几何。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was cancelled.
-    /// <para><paramref name="cancellationToken"/> 被取消。</para>
-    /// </exception>
+    /// <summary>Merges a validated set into one image, publishing through a temporary file.
+    /// <para>将已校验集合合并为一个镜像，经临时文件发布。</para></summary>
+    /// <param name="selectedPath">Any member used to resolve siblings.
+    /// <para>用于定位同级分片的任一成员。</para></param>
+    /// <param name="outputPath">Destination image; an existing file is replaced only after the merge completed.
+    /// <para>目标镜像；已存在的文件仅在合并完成后才被替换。</para></param>
+    /// <param name="progress">Optional byte progress over the physical input; <see langword="null"/> reports nothing.
+    /// <para>可选的按物理输入字节进度；<see langword="null"/> 不报告。</para></param>
+    /// <param name="cancellationToken">Cancellation checked between pieces and between buffer transfers; cancellation leaves the destination untouched.
+    /// <para>在各分片之间与缓冲区传输之间检查；取消不会改动目标。</para></param>
+    /// <returns>The validated set that was merged.<para>已合并的已校验集合。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="outputPath"/> is blank or resolves to one of the inputs.
+    /// <para><paramref name="outputPath"/> 为空白，或其解析结果就是某个输入。</para></exception>
+    /// <exception cref="InvalidDataException">The set fails inspection or the self-contained pieces cannot be unified into one geometry.
+    /// <para>集合未通过检查，或自包含分片无法统一为一份几何。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     public static async Task<SparseChunkSet> MergeAsync(string selectedPath, string outputPath,
         IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -248,49 +217,24 @@ public static class SparseChunkSplitter
         return set;
     }
 
-    /// <summary>
-    /// Splits a raw image into fixed-size <c>&lt;basePath&gt;.sparsechunk.NN</c> pieces, each published
-    /// atomically. Sparse inputs are rejected: their pieces must be regenerated as self-contained
-    /// sparse images through <c>SparseImageConverter.ResparseImage</c> instead of byte slicing.
-    /// <para>将原始镜像拆分为固定大小的 <c>&lt;basePath&gt;.sparsechunk.NN</c> 分片，每片原子发布。
-    /// 稀疏输入会被拒绝：其分片必须经 <c>SparseImageConverter.ResparseImage</c> 重新生成为自包含稀疏镜像，而不是字节切片。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Raw image to slice; it must exist and must not start with the sparse header magic.
-    /// <para>待切分的原始镜像；必须存在且开头不得为稀疏头部魔数。</para>
-    /// </param>
-    /// <param name="basePath">
-    /// Piece name prefix; the zero-padded two-digit piece index is appended after <c>.sparsechunk.</c>
-    /// <para>分片名前缀；<c>.sparsechunk.</c> 之后追加补零的两位分片序号。</para>
-    /// </param>
-    /// <param name="chunkSizeBytes">
-    /// Physical bytes per piece except the final remainder; must be at least 1.
-    /// <para>除最后余量外每片的物理字节数；至少为 1。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation checked between piece publications; earlier pieces remain on disk.
-    /// <para>在各分片发布之间检查；取消后已发布的前序分片会留在磁盘上。</para>
-    /// </param>
-    /// <returns>
-    /// The produced piece paths in merge order.
-    /// <para>按合并顺序排列的产出分片路径。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// A path is blank or <paramref name="chunkSizeBytes"/> is below 1.
-    /// <para>路径为空白，或 <paramref name="chunkSizeBytes"/> 小于 1。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The input is empty, is a sparse container, or would need more than 4096 pieces.
-    /// <para>输入为空、是稀疏容器，或需要超过 4096 个分片。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// The input does not exist.
-    /// <para>输入不存在。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was cancelled.
-    /// <para><paramref name="cancellationToken"/> 被取消。</para>
-    /// </exception>
+    /// <summary>Splits a raw image into fixed-size <c>&lt;basePath&gt;.sparsechunk.NN</c> pieces, each published atomically. Sparse inputs are rejected: their pieces must be regenerated as self-contained sparse images through <c>SparseImageConverter.ResparseImage</c> instead of byte slicing.
+    /// <para>将原始镜像拆分为固定大小的 <c>&lt;basePath&gt;.sparsechunk.NN</c> 分片，每片原子发布。 稀疏输入会被拒绝：其分片必须经 <c>SparseImageConverter.ResparseImage</c> 重新生成为自包含稀疏镜像，而不是字节切片。</para></summary>
+    /// <param name="inputPath">Raw image to slice; it must exist and must not start with the sparse header magic.
+    /// <para>待切分的原始镜像；必须存在且开头不得为稀疏头部魔数。</para></param>
+    /// <param name="basePath">Piece name prefix; the zero-padded two-digit piece index is appended after <c>.sparsechunk.</c>
+    /// <para>分片名前缀；<c>.sparsechunk.</c> 之后追加补零的两位分片序号。</para></param>
+    /// <param name="chunkSizeBytes">Physical bytes per piece except the final remainder; must be at least 1.
+    /// <para>除最后余量外每片的物理字节数；至少为 1。</para></param>
+    /// <param name="cancellationToken">Cancellation checked between piece publications; earlier pieces remain on disk.
+    /// <para>在各分片发布之间检查；取消后已发布的前序分片会留在磁盘上。</para></param>
+    /// <returns>The produced piece paths in merge order.<para>按合并顺序排列的产出分片路径。</para></returns>
+    /// <exception cref="ArgumentException">A path is blank or <paramref name="chunkSizeBytes"/> is below 1.
+    /// <para>路径为空白，或 <paramref name="chunkSizeBytes"/> 小于 1。</para></exception>
+    /// <exception cref="InvalidDataException">The input is empty, is a sparse container, or would need more than 4096 pieces.
+    /// <para>输入为空、是稀疏容器，或需要超过 4096 个分片。</para></exception>
+    /// <exception cref="FileNotFoundException">The input does not exist.<para>输入不存在。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     public static Task<IReadOnlyList<string>> SplitRawAsync(string inputPath, string basePath,
         long chunkSizeBytes, CancellationToken cancellationToken = default)
     {

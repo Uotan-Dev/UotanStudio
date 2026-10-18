@@ -12,22 +12,13 @@ namespace UotanStudio.ViewModels.Nodes;
 /// </summary>
 public sealed class NodeProjectDocument
 {
-    /// <summary>
-    /// Creates a node project canvas document.
-    /// <para>创建一个节点项目画布文档。</para>
-    /// </summary>
-    /// <param name="name">
-    /// The node project name; an unregistered draft canvas uses an empty name.
-    /// <para>节点项目名称；未登记到解决方案的草稿画布使用空名称。</para>
-    /// </param>
-    /// <param name="nodes">
-    /// Optional existing node collection, used to adopt the editor's live canvas as the document content.
-    /// <para>可选的既有节点集合，用于把编辑器的当前画布接管为文档内容。</para>
-    /// </param>
-    /// <param name="connections">
-    /// Optional existing connection collection.
-    /// <para>可选的既有连接集合。</para>
-    /// </param>
+    /// <summary>Creates a node project canvas document.<para>创建一个节点项目画布文档。</para></summary>
+    /// <param name="name">The node project name; an unregistered draft canvas uses an empty name.
+    /// <para>节点项目名称；未登记到解决方案的草稿画布使用空名称。</para></param>
+    /// <param name="nodes">Optional existing node collection, used to adopt the editor's live canvas as the document content.
+    /// <para>可选的既有节点集合，用于把编辑器的当前画布接管为文档内容。</para></param>
+    /// <param name="connections">Optional existing connection collection.
+    /// <para>可选的既有连接集合。</para></param>
     public NodeProjectDocument(string name,
         ObservableCollection<FlowNodeViewModel>? nodes = null,
         ObservableCollection<NodeConnectionViewModel>? connections = null)

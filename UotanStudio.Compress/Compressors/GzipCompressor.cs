@@ -10,23 +10,15 @@ namespace UotanStudio.Compress.Compressors;
 /// </summary>
 public static class GzipCompressor
 {
-    /// <summary>
-    /// GZIP compression.
-    /// <para>GZIP 压缩。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext compressed in one pass.
-    /// <para>一次性压缩的明文字节。</para></param>
-    /// <param name="options">
-    /// <see cref="CompressionOptions.Level"/> selects the BCL level band (0 and below no compression, 1-3 fastest, 4-8 optimal, 9 and above smallest size, unset optimal); <see cref="CompressionOptions.MaxDegreeOfParallelism"/> above 1 encodes independent 1 MiB chunks in parallel and concatenates the resulting members.
+    /// <summary>GZIP compression.<para>GZIP 压缩。</para></summary>
+    /// <param name="data">Plaintext compressed in one pass.<para>一次性压缩的明文字节。</para></param>
+    /// <param name="options"><see cref="CompressionOptions.Level"/> selects the BCL level band (0 and below no compression, 1-3 fastest, 4-8 optimal, 9 and above smallest size, unset optimal); <see cref="CompressionOptions.MaxDegreeOfParallelism"/> above 1 encodes independent 1 MiB chunks in parallel and concatenates the resulting members.
     /// <para><see cref="CompressionOptions.Level"/> 决定 BCL 等级档位（0 及以下不压缩、1-3 最快、4-8 最优、9 及以上最小，未设置按最优）；<see cref="CompressionOptions.MaxDegreeOfParallelism"/> 大于 1 时并行压缩相互独立的 1 MiB 块，并串接生成的成员。</para></param>
-    /// <returns>
-    /// A gzip payload, or several concatenated members when the parallel chunk path was taken.
+    /// <returns>A gzip payload, or several concatenated members when the parallel chunk path was taken.
     /// <para>gzip 数据；走并行分块路径时为多个串接的成员。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="CompressionException">The encoder failed.
-    /// <para>编码器执行失败。</para></exception>
+    /// <exception cref="CompressionException">The encoder failed.<para>编码器执行失败。</para></exception>
     public static byte[] Compress(byte[] data, CompressionOptions? options = null)
     {
         if (data == null)
@@ -69,16 +61,10 @@ public static class GzipCompressor
         }
     }
 
-    /// <summary>
-    /// GZIP decompression.
-    /// <para>GZIP 解压。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete gzip payload, treated as untrusted input; the whole expansion is buffered in memory and the stored CRC-32 and ISIZE trailer fields are verified by the reader.
+    /// <summary>GZIP decompression.<para>GZIP 解压。</para></summary>
+    /// <param name="data">Complete gzip payload, treated as untrusted input; the whole expansion is buffered in memory and the stored CRC-32 and ISIZE trailer fields are verified by the reader.
     /// <para>完整的 gzip 数据，按不可信输入处理；解压结果整体驻留内存，读取器会校验尾部的 CRC-32 与 ISIZE 字段。</para></param>
-    /// <returns>
-    /// The decoded bytes, with no output cap applied.
-    /// <para>解码后的字节，不施加输出上限。</para></returns>
+    /// <returns>The decoded bytes, with no output cap applied.<para>解码后的字节，不施加输出上限。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="CompressionException">The header is malformed, the body is corrupt, the checksum does not match, or the payload is truncated.
@@ -104,18 +90,12 @@ public static class GzipCompressor
         }
     }
 
-    /// <summary>
-    /// Streaming GZIP compression.
-    /// <para>流式 GZIP 压缩。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable source copied into the encoder in fixed buffers until end of stream; ownership stays with the caller.
+    /// <summary>Streaming GZIP compression.<para>流式 GZIP 压缩。</para></summary>
+    /// <param name="input">Readable source copied into the encoder in fixed buffers until end of stream; ownership stays with the caller.
     /// <para>按固定缓冲逐块拷入编码器的可读源流，直至流末尾；所有权归调用方。</para></param>
-    /// <param name="output">
-    /// Writable destination left open after the header, deflate body and trailer have been written; the gzip payload starts at its current position.
+    /// <param name="output">Writable destination left open after the header, deflate body and trailer have been written; the gzip payload starts at its current position.
     /// <para>写出头部、deflate 主体和尾部后保持打开的写入目标；gzip 数据从其当前位置开始。</para></param>
-    /// <param name="options">
-    /// Only <see cref="CompressionOptions.Level"/> is read; a single member is produced, so <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is ignored.
+    /// <param name="options">Only <see cref="CompressionOptions.Level"/> is read; a single member is produced, so <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is ignored.
     /// <para>仅读取 <see cref="CompressionOptions.Level"/>；流式路径只生成单个成员，因此忽略 <see cref="CompressionOptions.MaxDegreeOfParallelism"/>。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -160,15 +140,10 @@ public static class GzipCompressor
     internal static Stream CreateCompressionStream(Stream output, CompressionOptions? options)
         => new GZipStream(new NonDisposingStream(output), CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true);
 
-    /// <summary>
-    /// Streaming GZIP decompression.
-    /// <para>流式 GZIP 解压。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable gzip payload consumed in fixed buffers; the stream is left open and stops where the reader finished decoding.
+    /// <summary>Streaming GZIP decompression.<para>流式 GZIP 解压。</para></summary>
+    /// <param name="input">Readable gzip payload consumed in fixed buffers; the stream is left open and stops where the reader finished decoding.
     /// <para>按固定缓冲读取的可读 gzip 数据；流保持打开，停在读取器解码完成的位置。</para></param>
-    /// <param name="output">
-    /// Writable destination with no size cap, so an oversized payload is written out in full; it is not closed.
+    /// <param name="output">Writable destination with no size cap, so an oversized payload is written out in full; it is not closed.
     /// <para>不设上限的写入目标，因此过大的数据会被完整写出；不会被本调用关闭。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -210,18 +185,13 @@ public static class GzipCompressor
     internal static Stream CreateDecompressionStream(Stream input)
         => new GZipStream(new NonDisposingStream(input), CompressionMode.Decompress, leaveOpen: true);
 
-    /// <summary>
-    /// Streaming GZIP decompression with output limit (decompression bomb protection).
-    /// <para>流式 GZIP 解压，带输出上限（防解压炸弹）。</para>
-    /// </summary>
-    /// <param name="source">
-    /// Readable gzip payload decoded through an 80 KiB pooled buffer; the stream is left open.
+    /// <summary>Streaming GZIP decompression with output limit (decompression bomb protection).
+    /// <para>流式 GZIP 解压，带输出上限（防解压炸弹）。</para></summary>
+    /// <param name="source">Readable gzip payload decoded through an 80 KiB pooled buffer; the stream is left open.
     /// <para>可读的 gzip 数据，使用 80 KiB 池化缓冲逐块解码；流保持打开。</para></param>
-    /// <param name="destination">
-    /// Writable destination; the cumulative check runs before each write, so bytes beyond the budget never reach it.
+    /// <param name="destination">Writable destination; the cumulative check runs before each write, so bytes beyond the budget never reach it.
     /// <para>写入目标；每次写入前先检查累计字节数，超出预算的字节不会落入该流。</para></param>
-    /// <param name="maxOutputBytes">
-    /// Inclusive cap on the decoded total, checked against the actual expansion rather than the four-byte ISIZE field, which is capped at 4 GiB by the format; <c>0</c> allows an empty result only.
+    /// <param name="maxOutputBytes">Inclusive cap on the decoded total, checked against the actual expansion rather than the four-byte ISIZE field, which is capped at 4 GiB by the format; <c>0</c> allows an empty result only.
     /// <para>解压总量的含上限，按实际展开字节检查，而非格式中最大仅 4 GiB 的 ISIZE 字段；<c>0</c> 表示只允许空结果。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="destination"/> is <see langword="null"/>.
     /// <para><paramref name="source"/> 或 <paramref name="destination"/> 为 <see langword="null"/>。</para></exception>

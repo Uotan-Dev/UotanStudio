@@ -2,13 +2,8 @@ using UotanStudio.Services.Execution;
 
 namespace UotanStudio.Services.Scripting;
 
-/// <summary>
-/// One capability exposed to a plugin script through the <c>tool</c> table. Tools with
-/// <see cref="RequiresConfirmation"/> set are gated centrally by <see cref="LuaScriptEngine"/>
-/// before <see cref="Invoke"/> runs.
-/// <para>经 <c>tool</c> 表暴露给插件脚本的一项能力。设置了 <see cref="RequiresConfirmation"/> 的工具会在
-/// <see cref="Invoke"/> 运行前由 <see cref="LuaScriptEngine"/> 统一把关。</para>
-/// </summary>
+/// <summary>One capability exposed to a plugin script through the <c>tool</c> table. Tools with <see cref="RequiresConfirmation"/> set are gated centrally by <see cref="LuaScriptEngine"/> before <see cref="Invoke"/> runs.
+/// <para>经 <c>tool</c> 表暴露给插件脚本的一项能力。设置了 <see cref="RequiresConfirmation"/> 的工具会在 <see cref="Invoke"/> 运行前由 <see cref="LuaScriptEngine"/> 统一把关。</para></summary>
 /// <param name="Name">Hierarchical dot-separated tool name the script uses.
 /// <para>脚本使用的以点分段的层级工具名。</para></param>
 /// <param name="Invoke">Delegate invoked after any required confirmation.

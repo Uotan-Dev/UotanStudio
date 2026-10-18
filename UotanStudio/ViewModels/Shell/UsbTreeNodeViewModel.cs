@@ -25,26 +25,13 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     /// Whether the node is expanded, bound two-way to <c>TreeViewItem.IsExpanded</c>.</summary>
     [ObservableProperty] private bool _isExpanded;
 
-    /// <summary>
-    /// Creates a topology node view model.
-    /// <para>创建拓扑节点视图模型。</para>
-    /// </summary>
-    /// <param name="node">
-    /// The underlying flat node.
-    /// <para>底层扁平节点。</para>
-    /// </param>
-    /// <param name="capabilities">
-    /// The capabilities of the backend that produced this node, which decide the "not provided" wording.
-    /// <para>产出该节点的后端能力，决定各字段的「不提供」措辞。</para>
-    /// </param>
-    /// <param name="children">
-    /// The already-built child view models.
-    /// <para>已构建的子节点视图模型。</para>
-    /// </param>
-    /// <param name="depth">
-    /// The node depth with the root at 0, used by the default expansion policy.
-    /// <para>节点深度，根为 0；用于默认展开策略。</para>
-    /// </param>
+    /// <summary>Creates a topology node view model.<para>创建拓扑节点视图模型。</para></summary>
+    /// <param name="node">The underlying flat node.<para>底层扁平节点。</para></param>
+    /// <param name="capabilities">The capabilities of the backend that produced this node, which decide the "not provided" wording.
+    /// <para>产出该节点的后端能力，决定各字段的「不提供」措辞。</para></param>
+    /// <param name="children">The already-built child view models.<para>已构建的子节点视图模型。</para></param>
+    /// <param name="depth">The node depth with the root at 0, used by the default expansion policy.
+    /// <para>节点深度，根为 0；用于默认展开策略。</para></param>
     public UsbTreeNodeViewModel(UsbTopologyNode node, UsbTopologyCapabilities capabilities,
         IReadOnlyList<UsbTreeNodeViewModel> children, int depth)
     {

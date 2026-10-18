@@ -238,104 +238,66 @@ public sealed class RepackMetadata
             ? partitionName[..^2]
             : partitionName;
 
-    /// <summary>
-    /// Resolves the consolidated metadata directory for a given extraction output path and project root.
-    /// Returns <c>{projectRoot}/.uotan/metadata/{partitionName}</c>.
-    /// <para>为给定解包输出路径和项目根目录解析统一元数据目录。返回 <c>{projectRoot}/.uotan/metadata/{partitionName}</c>。</para>
-    /// </summary>
-    /// <param name="extractionOutputDirectory">
-    /// Extraction output path accepted for call-site convenience; the returned path does not depend on it.
-    /// <para>为方便调用方而保留的解包输出路径；返回路径并不依赖它。</para>
-    /// </param>
-    /// <param name="projectRoot">
-    /// Project root holding the <c>.uotan</c> state directory. <para>持有 <c>.uotan</c> 状态目录的项目根。</para>
-    /// </param>
-    /// <param name="partitionName">
-    /// Partition name used as the final directory segment. <para>作为最后一级目录段的分区名。</para>
-    /// </param>
-    /// <returns>
-    /// The consolidated metadata directory path; the directory itself is not created.
-    /// <para>统一元数据目录路径；不会创建该目录。</para>
-    /// </returns>
+    /// <summary>Resolves the consolidated metadata directory for a given extraction output path and project root. Returns <c>{projectRoot}/.uotan/metadata/{partitionName}</c>.
+    /// <para>为给定解包输出路径和项目根目录解析统一元数据目录。返回 <c>{projectRoot}/.uotan/metadata/{partitionName}</c>。</para></summary>
+    /// <param name="extractionOutputDirectory">Extraction output path accepted for call-site convenience; the returned path does not depend on it.
+    /// <para>为方便调用方而保留的解包输出路径；返回路径并不依赖它。</para></param>
+    /// <param name="projectRoot">Project root holding the <c>.uotan</c> state directory.
+    /// <para>持有 <c>.uotan</c> 状态目录的项目根。</para></param>
+    /// <param name="partitionName">Partition name used as the final directory segment.
+    /// <para>作为最后一级目录段的分区名。</para></param>
+    /// <returns>The consolidated metadata directory path; the directory itself is not created.
+    /// <para>统一元数据目录路径；不会创建该目录。</para></returns>
     public static string ResolveMetadataDirectory(string extractionOutputDirectory, string projectRoot, string partitionName)
     {
         var stateDir = Path.Combine(projectRoot, ".uotan");
         return Path.Combine(stateDir, MetadataFolderName, partitionName);
     }
 
-    /// <summary>
-    /// Reads bounded, versioned metadata for an extraction directory.
-    /// <para>读取解包目录的有界且带版本的元数据。</para>
-    /// </summary>
-    /// <param name="directory">
-    /// Extraction directory whose metadata is read. <para>要读取其元数据的解包目录。</para>
-    /// </param>
-    /// <returns>
-    /// The validated metadata, or <see langword="null"/> when no metadata file exists at the resolved location.
-    /// <para>校验通过的元数据；解析位置不存在元数据文件时返回 <see langword="null"/>。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// The stored file is a symbolic link, exceeds 256 MiB, or fails schema validation.
-    /// <para>存储文件为符号链接、超过 256 MiB 或未通过模式校验。</para>
-    /// </exception>
-    /// <exception cref="JsonException">
-    /// The stored file is not valid JSON. <para>存储文件不是合法 JSON。</para>
-    /// </exception>
+    /// <summary>Reads bounded, versioned metadata for an extraction directory.
+    /// <para>读取解包目录的有界且带版本的元数据。</para></summary>
+    /// <param name="directory">Extraction directory whose metadata is read.
+    /// <para>要读取其元数据的解包目录。</para></param>
+    /// <returns>The validated metadata, or <see langword="null"/> when no metadata file exists at the resolved location.
+    /// <para>校验通过的元数据；解析位置不存在元数据文件时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="InvalidDataException">The stored file is a symbolic link, exceeds 256 MiB, or fails schema validation.
+    /// <para>存储文件为符号链接、超过 256 MiB 或未通过模式校验。</para></exception>
+    /// <exception cref="JsonException">The stored file is not valid JSON.
+    /// <para>存储文件不是合法 JSON。</para></exception>
     public static RepackMetadata? Read(string directory)
     {
         var path = ResolveMetadataPath(directory);
         return path is null ? null : ReadFromAbsolute(path);
     }
 
-    /// <summary>
-    /// Reads bounded metadata for an extraction directory under an explicit context. Explicit
-    /// project-root / local-directory contexts never consult
-    /// <see cref="DefaultMetadataRoot"/> and never cross-fallback.
-    /// <para>在显式上下文下读取解包目录的有界元数据。显式工程根／本地目录上下文绝不读取
-    /// <see cref="DefaultMetadataRoot"/>，也绝不交叉回退。</para>
-    /// </summary>
-    /// <param name="directory">
-    /// Extraction directory whose metadata is read. <para>要读取其元数据的解包目录。</para>
-    /// </param>
-    /// <param name="context">
-    /// Explicit context resolving the metadata path at call time. <para>在调用时解析元数据路径的显式上下文。</para>
-    /// </param>
-    /// <returns>
-    /// The validated metadata, or <see langword="null"/> when the context resolves no existing path.
-    /// <para>校验通过的元数据；上下文解析出的路径不存在时返回 <see langword="null"/>。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// The stored file is a symbolic link, exceeds 256 MiB, or fails schema validation.
-    /// <para>存储文件为符号链接、超过 256 MiB 或未通过模式校验。</para>
-    /// </exception>
-    /// <exception cref="JsonException">
-    /// The stored file is not valid JSON. <para>存储文件不是合法 JSON。</para>
-    /// </exception>
+    /// <summary>Reads bounded metadata for an extraction directory under an explicit context. Explicit project-root / local-directory contexts never consult <see cref="DefaultMetadataRoot"/> and never cross-fallback.
+    /// <para>在显式上下文下读取解包目录的有界元数据。显式工程根／本地目录上下文绝不读取 <see cref="DefaultMetadataRoot"/>，也绝不交叉回退。</para></summary>
+    /// <param name="directory">Extraction directory whose metadata is read.
+    /// <para>要读取其元数据的解包目录。</para></param>
+    /// <param name="context">Explicit context resolving the metadata path at call time.
+    /// <para>在调用时解析元数据路径的显式上下文。</para></param>
+    /// <returns>The validated metadata, or <see langword="null"/> when the context resolves no existing path.
+    /// <para>校验通过的元数据；上下文解析出的路径不存在时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="InvalidDataException">The stored file is a symbolic link, exceeds 256 MiB, or fails schema validation.
+    /// <para>存储文件为符号链接、超过 256 MiB 或未通过模式校验。</para></exception>
+    /// <exception cref="JsonException">The stored file is not valid JSON.
+    /// <para>存储文件不是合法 JSON。</para></exception>
     public static RepackMetadata? Read(string directory, RepackMetadataContext context)
     {
         var path = context.ResolveMetadataPath(directory);
         return path is null ? null : ReadFromAbsolute(path);
     }
 
-    /// <summary>
-    /// Reads metadata from a specific absolute path (used after pointer resolution and by tests).
-    /// <para>从指定绝对路径读取元数据（指针解析后及测试使用）。</para>
-    /// </summary>
-    /// <param name="absolutePath">
-    /// Absolute path of the metadata file; a missing file yields <see langword="null"/>.
-    /// <para>元数据文件的绝对路径；文件不存在时返回 <see langword="null"/>。</para>
-    /// </param>
-    /// <returns>
-    /// The validated metadata, or <see langword="null"/> when the file does not exist.
-    /// <para>校验通过的元数据；文件不存在时返回 <see langword="null"/>。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// The file is a symbolic link, exceeds 256 MiB, or fails schema, version, format-name or field validation.
-    /// <para>文件为符号链接、超过 256 MiB，或未通过模式、版本、格式名与字段校验。</para>
-    /// </exception>
-    /// <exception cref="JsonException">
-    /// The file content is not valid JSON. <para>文件内容不是合法 JSON。</para>
-    /// </exception>
+    /// <summary>Reads metadata from a specific absolute path (used after pointer resolution and by tests).
+    /// <para>从指定绝对路径读取元数据（指针解析后及测试使用）。</para></summary>
+    /// <param name="absolutePath">Absolute path of the metadata file; a missing file yields <see langword="null"/>.
+    /// <para>元数据文件的绝对路径；文件不存在时返回 <see langword="null"/>。</para></param>
+    /// <returns>The validated metadata, or <see langword="null"/> when the file does not exist.
+    /// <para>校验通过的元数据；文件不存在时返回 <see langword="null"/>。</para></returns>
+    /// <exception cref="InvalidDataException">The file is a symbolic link, exceeds 256 MiB, or fails schema, version, format-name or field validation.
+    /// <para>文件为符号链接、超过 256 MiB，或未通过模式、版本、格式名与字段校验。</para></exception>
+    /// <exception cref="JsonException">The file content is not valid JSON.
+    /// <para>文件内容不是合法 JSON。</para></exception>
     public static RepackMetadata? ReadFromAbsolute(string absolutePath)
     {
         if (!File.Exists(absolutePath)) return null;
@@ -351,39 +313,22 @@ public sealed class RepackMetadata
         return metadata;
     }
 
-    /// <summary>
-    /// Resolves the actual metadata file path for an extraction directory. When an ambient
-    /// metadata root is set (project open), the consolidated location is used exclusively;
-    /// otherwise the extraction directory itself is checked. Returns <c>null</c> if absent.
-    /// <para>解析解包目录的实际元数据文件路径。设置了环境元数据根（项目打开）时只使用统一位置；
-    /// 否则只检查解包目录自身。不存在时返回 <c>null</c>。</para>
-    /// </summary>
-    /// <param name="extractionDirectory">
-    /// Extraction directory to resolve for. <para>要解析的解包目录。</para>
-    /// </param>
-    /// <returns>
-    /// Absolute path of the existing metadata file, or <see langword="null"/> when none is found.
-    /// <para>已存在的元数据文件绝对路径；未找到时返回 <see langword="null"/>。</para>
-    /// </returns>
+    /// <summary>Resolves the actual metadata file path for an extraction directory. When an ambient metadata root is set (project open), the consolidated location is used exclusively; otherwise the extraction directory itself is checked. Returns <c>null</c> if absent.
+    /// <para>解析解包目录的实际元数据文件路径。设置了环境元数据根（项目打开）时只使用统一位置； 否则只检查解包目录自身。不存在时返回 <c>null</c>。</para></summary>
+    /// <param name="extractionDirectory">Extraction directory to resolve for.
+    /// <para>要解析的解包目录。</para></param>
+    /// <returns>Absolute path of the existing metadata file, or <see langword="null"/> when none is found.
+    /// <para>已存在的元数据文件绝对路径；未找到时返回 <see langword="null"/>。</para></returns>
     public static string? ResolveActualMetadataPath(string extractionDirectory)
         => ResolveMetadataPath(extractionDirectory);
 
-    /// <summary>
-    /// Resolves the actual metadata file path under an explicit context. Explicit contexts are
-    /// evaluated immediately and never re-read <see cref="DefaultMetadataRoot"/> after awaits.
-    /// <para>在显式上下文下解析实际元数据文件路径。显式上下文立即求值，
-    /// await 之后绝不重读 <see cref="DefaultMetadataRoot"/>。</para>
-    /// </summary>
-    /// <param name="extractionDirectory">
-    /// Extraction directory to resolve for. <para>要解析的解包目录。</para>
-    /// </param>
-    /// <param name="context">
-    /// Explicit context evaluated at call time. <para>在调用时求值的显式上下文。</para>
-    /// </param>
-    /// <returns>
-    /// The metadata path resolved by the context, or <see langword="null"/> when it resolves nothing.
-    /// <para>上下文解析出的元数据路径；未解析到任何路径时返回 <see langword="null"/>。</para>
-    /// </returns>
+    /// <summary>Resolves the actual metadata file path under an explicit context. Explicit contexts are evaluated immediately and never re-read <see cref="DefaultMetadataRoot"/> after awaits.
+    /// <para>在显式上下文下解析实际元数据文件路径。显式上下文立即求值， await 之后绝不重读 <see cref="DefaultMetadataRoot"/>。</para></summary>
+    /// <param name="extractionDirectory">Extraction directory to resolve for.
+    /// <para>要解析的解包目录。</para></param>
+    /// <param name="context">Explicit context evaluated at call time.<para>在调用时求值的显式上下文。</para></param>
+    /// <returns>The metadata path resolved by the context, or <see langword="null"/> when it resolves nothing.
+    /// <para>上下文解析出的元数据路径；未解析到任何路径时返回 <see langword="null"/>。</para></returns>
     public static string? ResolveActualMetadataPath(string extractionDirectory, RepackMetadataContext context)
         => context.ResolveMetadataPath(extractionDirectory);
 
@@ -449,20 +394,12 @@ public sealed class RepackMetadata
         }
     }
 
-    /// <summary>
-    /// Identifies generated metadata files so directory packers can exclude them from payloads.
-    /// Recognizes both direct metadata and pointer files.
-    /// <para>识别生成的元数据文件（含指针文件），供目录打包器从有效载荷中排除。</para>
-    /// </summary>
-    /// <param name="path">
-    /// File to inspect; only files named <see cref="FileName"/> (case-insensitively) are considered.
-    /// <para>要检查的文件；只有文件名（不区分大小写）等于 <see cref="FileName"/> 的文件才会被判定。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> for a readable, non-reparse pointer file or valid repack metadata within the size
-    /// bound; <see langword="false"/> for any other file, including unreadable or malformed ones.
-    /// <para>可读、非重解析点、在大小限制内的指针文件或有效元数据返回 <see langword="true"/>；其他文件（包括不可读或格式错误的）返回 <see langword="false"/>。</para>
-    /// </returns>
+    /// <summary>Identifies generated metadata files so directory packers can exclude them from payloads. Recognizes both direct metadata and pointer files.
+    /// <para>识别生成的元数据文件（含指针文件），供目录打包器从有效载荷中排除。</para></summary>
+    /// <param name="path">File to inspect; only files named <see cref="FileName"/> (case-insensitively) are considered.
+    /// <para>要检查的文件；只有文件名（不区分大小写）等于 <see cref="FileName"/> 的文件才会被判定。</para></param>
+    /// <returns><see langword="true"/> for a readable, non-reparse pointer file or valid repack metadata within the size bound; <see langword="false"/> for any other file, including unreadable or malformed ones.
+    /// <para>可读、非重解析点、在大小限制内的指针文件或有效元数据返回 <see langword="true"/>；其他文件（包括不可读或格式错误的）返回 <see langword="false"/>。</para></returns>
     public static bool IsMetadataFile(string path)
     {
         if (!Path.GetFileName(path).Equals(FileName, StringComparison.OrdinalIgnoreCase)) return false;
@@ -483,106 +420,52 @@ public sealed class RepackMetadata
         }
     }
 
-    /// <summary>
-    /// Runs an extraction delegate and writes unified repack metadata afterwards.
-    /// Checks for existing metadata before running the extraction to fail fast.
-    /// <para>运行解包委托并随后写入统一打包元数据。在运行解包前检查已有元数据以快速失败。</para>
-    /// </summary>
-    /// <param name="handler">
-    /// Format handler whose name and source metadata are published with the record.
-    /// <para>其格式名与来源元数据会随记录一起发布的格式处理器。</para>
-    /// </param>
-    /// <param name="sourcePath">
-    /// Source image path recorded in the metadata. <para>记录进元数据的源镜像路径。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Extraction output directory. <para>解包输出目录。</para>
-    /// </param>
-    /// <param name="options">
-    /// Unpack options; when <c>Overwrite</c> is disabled an existing metadata file fails the operation
-    /// before extraction, otherwise a pre-existing file must already be recognized metadata. When
-    /// <c>MetadataOnly</c> is set and the handler supports that mode, <paramref name="unpack"/> is never
-    /// invoked and only the metadata is published; unsupported handlers fail instead of extracting files.
-    /// <para>解包选项；<c>Overwrite</c> 关闭时已存在的元数据文件会在解包前使操作失败，否则已存在文件必须本身是可识别的元数据。
-    /// 设置 <c>MetadataOnly</c> 且处理器支持该模式时不会调用 <paramref name="unpack"/>，仅发布元数据；
-    /// 不支持的处理器会直接失败而不是写出文件。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before extraction; cancellation is rethrown to the caller and never converted to a failure result.
-    /// <para>解包前检查；取消异常会重新抛给调用方，绝不转换为失败结果。</para>
-    /// </param>
-    /// <param name="unpack">
-    /// Extraction delegate to run; its failure result is returned without writing metadata.
-    /// <para>要运行的解包委托；其失败结果会直接返回且不写入元数据。</para>
-    /// </param>
-    /// <param name="metadataRoot">
-    /// Metadata root override forwarded to the write step; <see langword="null"/> uses ambient resolution.
-    /// <para>转发给写入步骤的元数据根覆盖；<see langword="null"/> 表示使用环境解析。</para>
-    /// </param>
-    /// <returns>
-    /// The extraction result after metadata is published on success; a failure result carrying the exception
-    /// message when the pre-check or write step throws.
-    /// <para>成功发布元数据后的解包结果；预检查或写入步骤抛出异常时返回携带异常信息的失败结果。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> is signaled before or during the operation.
-    /// <para><paramref name="cancellationToken"/> 在操作前或操作中被触发。</para>
-    /// </exception>
+    /// <summary>Runs an extraction delegate and writes unified repack metadata afterwards. Checks for existing metadata before running the extraction to fail fast.
+    /// <para>运行解包委托并随后写入统一打包元数据。在运行解包前检查已有元数据以快速失败。</para></summary>
+    /// <param name="handler">Format handler whose name and source metadata are published with the record.
+    /// <para>其格式名与来源元数据会随记录一起发布的格式处理器。</para></param>
+    /// <param name="sourcePath">Source image path recorded in the metadata.
+    /// <para>记录进元数据的源镜像路径。</para></param>
+    /// <param name="outputDirectory">Extraction output directory.<para>解包输出目录。</para></param>
+    /// <param name="options">Unpack options; when <c>Overwrite</c> is disabled an existing metadata file fails the operation before extraction, otherwise a pre-existing file must already be recognized metadata. When <c>MetadataOnly</c> is set and the handler supports that mode, <paramref name="unpack"/> is never invoked and only the metadata is published; unsupported handlers fail instead of extracting files.
+    /// <para>解包选项；<c>Overwrite</c> 关闭时已存在的元数据文件会在解包前使操作失败，否则已存在文件必须本身是可识别的元数据。 设置 <c>MetadataOnly</c> 且处理器支持该模式时不会调用 <paramref name="unpack"/>，仅发布元数据； 不支持的处理器会直接失败而不是写出文件。</para></param>
+    /// <param name="cancellationToken">Checked before extraction; cancellation is rethrown to the caller and never converted to a failure result.
+    /// <para>解包前检查；取消异常会重新抛给调用方，绝不转换为失败结果。</para></param>
+    /// <param name="unpack">Extraction delegate to run; its failure result is returned without writing metadata.
+    /// <para>要运行的解包委托；其失败结果会直接返回且不写入元数据。</para></param>
+    /// <param name="metadataRoot">Metadata root override forwarded to the write step; <see langword="null"/> uses ambient resolution.
+    /// <para>转发给写入步骤的元数据根覆盖；<see langword="null"/> 表示使用环境解析。</para></param>
+    /// <returns>The extraction result after metadata is published on success; a failure result carrying the exception message when the pre-check or write step throws.
+    /// <para>成功发布元数据后的解包结果；预检查或写入步骤抛出异常时返回携带异常信息的失败结果。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is signaled before or during the operation.
+    /// <para><paramref name="cancellationToken"/> 在操作前或操作中被触发。</para></exception>
     public static async Task<FirmwareOpResult> UnpackAsync(IReadonlyFormatHandler handler, string sourcePath,
         string outputDirectory, UnpackOptions? options, CancellationToken cancellationToken, Func<Task<FirmwareOpResult>> unpack,
         string? metadataRoot = null)
         => await UnpackAsync(handler, sourcePath, outputDirectory, options, cancellationToken, unpack,
             RepackMetadataContext.Unspecified, metadataRoot).ConfigureAwait(false);
 
-    /// <summary>
-    /// Runs an extraction delegate and writes unified repack metadata afterwards.
-    /// <para>运行解包委托并随后写入统一打包元数据。</para>
-    /// </summary>
-    /// <param name="handler">
-    /// Format handler whose name and source metadata are published with the record.
-    /// <para>其格式名与来源元数据会随记录一起发布的格式处理器。</para>
-    /// </param>
-    /// <param name="sourcePath">
-    /// Source image path recorded in the metadata. <para>记录进元数据的源镜像路径。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Extraction output directory. <para>解包输出目录。</para>
-    /// </param>
-    /// <param name="options">
-    /// Unpack options; when <c>Overwrite</c> is disabled an existing metadata file fails the operation
-    /// before extraction, otherwise a pre-existing file must already be recognized metadata. When
-    /// <c>MetadataOnly</c> is set and the handler supports that mode, <paramref name="unpack"/> is never
-    /// invoked and only the metadata is published; unsupported handlers fail instead of extracting files.
-    /// <para>解包选项；<c>Overwrite</c> 关闭时已存在的元数据文件会在解包前使操作失败，否则已存在文件必须本身是可识别的元数据。
-    /// 设置 <c>MetadataOnly</c> 且处理器支持该模式时不会调用 <paramref name="unpack"/>，仅发布元数据；
-    /// 不支持的处理器会直接失败而不是写出文件。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before extraction; cancellation is rethrown to the caller and never converted to a failure result.
-    /// <para>解包前检查；取消异常会重新抛给调用方，绝不转换为失败结果。</para>
-    /// </param>
-    /// <param name="unpack">
-    /// Extraction delegate to run; its failure result is returned without writing metadata.
-    /// <para>要运行的解包委托；其失败结果会直接返回且不写入元数据。</para>
-    /// </param>
-    /// <param name="context">
-    /// Metadata context captured at call time; an explicit context decides the write root and never
-    /// consults <see cref="DefaultMetadataRoot"/> after awaits.
-    /// <para>在调用时固定的元数据上下文；显式上下文决定写入根，await 之后绝不读取 <see cref="DefaultMetadataRoot"/>。</para>
-    /// </param>
-    /// <param name="metadataRoot">
-    /// Metadata root override consulted only when the context is unspecified.
-    /// <para>仅在上下文未指定时参考的元数据根覆盖。</para>
-    /// </param>
-    /// <returns>
-    /// The extraction result after metadata is published on success; a failure result carrying the exception
-    /// message when the pre-check or write step throws.
-    /// <para>成功发布元数据后的解包结果；预检查或写入步骤抛出异常时返回携带异常信息的失败结果。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> is signaled before or during the operation.
-    /// <para><paramref name="cancellationToken"/> 在操作前或操作中被触发。</para>
-    /// </exception>
+    /// <summary>Runs an extraction delegate and writes unified repack metadata afterwards.
+    /// <para>运行解包委托并随后写入统一打包元数据。</para></summary>
+    /// <param name="handler">Format handler whose name and source metadata are published with the record.
+    /// <para>其格式名与来源元数据会随记录一起发布的格式处理器。</para></param>
+    /// <param name="sourcePath">Source image path recorded in the metadata.
+    /// <para>记录进元数据的源镜像路径。</para></param>
+    /// <param name="outputDirectory">Extraction output directory.<para>解包输出目录。</para></param>
+    /// <param name="options">Unpack options; when <c>Overwrite</c> is disabled an existing metadata file fails the operation before extraction, otherwise a pre-existing file must already be recognized metadata. When <c>MetadataOnly</c> is set and the handler supports that mode, <paramref name="unpack"/> is never invoked and only the metadata is published; unsupported handlers fail instead of extracting files.
+    /// <para>解包选项；<c>Overwrite</c> 关闭时已存在的元数据文件会在解包前使操作失败，否则已存在文件必须本身是可识别的元数据。 设置 <c>MetadataOnly</c> 且处理器支持该模式时不会调用 <paramref name="unpack"/>，仅发布元数据； 不支持的处理器会直接失败而不是写出文件。</para></param>
+    /// <param name="cancellationToken">Checked before extraction; cancellation is rethrown to the caller and never converted to a failure result.
+    /// <para>解包前检查；取消异常会重新抛给调用方，绝不转换为失败结果。</para></param>
+    /// <param name="unpack">Extraction delegate to run; its failure result is returned without writing metadata.
+    /// <para>要运行的解包委托；其失败结果会直接返回且不写入元数据。</para></param>
+    /// <param name="context">Metadata context captured at call time; an explicit context decides the write root and never consults <see cref="DefaultMetadataRoot"/> after awaits.
+    /// <para>在调用时固定的元数据上下文；显式上下文决定写入根，await 之后绝不读取 <see cref="DefaultMetadataRoot"/>。</para></param>
+    /// <param name="metadataRoot">Metadata root override consulted only when the context is unspecified.
+    /// <para>仅在上下文未指定时参考的元数据根覆盖。</para></param>
+    /// <returns>The extraction result after metadata is published on success; a failure result carrying the exception message when the pre-check or write step throws.
+    /// <para>成功发布元数据后的解包结果；预检查或写入步骤抛出异常时返回携带异常信息的失败结果。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is signaled before or during the operation.
+    /// <para><paramref name="cancellationToken"/> 在操作前或操作中被触发。</para></exception>
     public static async Task<FirmwareOpResult> UnpackAsync(IReadonlyFormatHandler handler, string sourcePath,
         string outputDirectory, UnpackOptions? options, CancellationToken cancellationToken, Func<Task<FirmwareOpResult>> unpack,
         RepackMetadataContext context, string? metadataRoot = null)
@@ -614,46 +497,28 @@ public sealed class RepackMetadata
         catch (Exception ex) { return FirmwareOpResult.Fail(ex.Message); }
     }
 
-    /// <summary>
-    /// Writes source and packing metadata after a successful extraction.
-    /// <para>解包成功后写入来源和打包元数据。</para>
-    /// </summary>
-    /// <param name="handler">
-    /// Format handler whose name and source metadata are published with the record.
-    /// <para>其格式名与来源元数据会随记录一起发布的格式处理器。</para>
-    /// </param>
-    /// <param name="sourcePath">
-    /// Source image path recorded in the metadata. <para>记录进元数据的源镜像路径。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Extraction output directory; the metadata file is placed here unless a root applies.
-    /// <para>解包输出目录；未应用元数据根时元数据文件写入此目录。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels before and during publication; a cancelled operation leaves the previous target untouched.
-    /// <para>在发布前与发布中取消；被取消的操作不会改动原有目标文件。</para>
-    /// </param>
-    /// <param name="extractionProperties">
-    /// Additional key/value pairs merged over the handler-reported source properties;
-    /// <see langword="null"/> adds none. <para>合并到处理器所报来源属性之上的附加键值对；<see langword="null"/> 表示不追加。</para>
-    /// </param>
-    /// <param name="metadataRoot">
-    /// Metadata root override; when <see langword="null"/> the ambient <see cref="DefaultMetadataRoot"/> applies.
-    /// <para>元数据根覆盖；为 <see langword="null"/> 时应用环境 <see cref="DefaultMetadataRoot"/>。</para>
-    /// </param>
-    /// <returns>
-    /// A task completed once the metadata JSON is published. <para>元数据 JSON 发布完成后结束的任务。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> is signaled. <para><paramref name="cancellationToken"/> 被触发。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The target already holds a non-metadata file reserved for repack metadata, or publishing fails.
-    /// <para>目标位置已有被打包元数据保留的非元数据文件，或发布失败。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The serialized metadata exceeds 256 MiB. <para>序列化后的元数据超过 256 MiB。</para>
-    /// </exception>
+    /// <summary>Writes source and packing metadata after a successful extraction.
+    /// <para>解包成功后写入来源和打包元数据。</para></summary>
+    /// <param name="handler">Format handler whose name and source metadata are published with the record.
+    /// <para>其格式名与来源元数据会随记录一起发布的格式处理器。</para></param>
+    /// <param name="sourcePath">Source image path recorded in the metadata.
+    /// <para>记录进元数据的源镜像路径。</para></param>
+    /// <param name="outputDirectory">Extraction output directory; the metadata file is placed here unless a root applies.
+    /// <para>解包输出目录；未应用元数据根时元数据文件写入此目录。</para></param>
+    /// <param name="cancellationToken">Cancels before and during publication; a cancelled operation leaves the previous target untouched.
+    /// <para>在发布前与发布中取消；被取消的操作不会改动原有目标文件。</para></param>
+    /// <param name="extractionProperties">Additional key/value pairs merged over the handler-reported source properties; <see langword="null"/> adds none.
+    /// <para>合并到处理器所报来源属性之上的附加键值对；<see langword="null"/> 表示不追加。</para></param>
+    /// <param name="metadataRoot">Metadata root override; when <see langword="null"/> the ambient <see cref="DefaultMetadataRoot"/> applies.
+    /// <para>元数据根覆盖；为 <see langword="null"/> 时应用环境 <see cref="DefaultMetadataRoot"/>。</para></param>
+    /// <returns>A task completed once the metadata JSON is published.
+    /// <para>元数据 JSON 发布完成后结束的任务。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    /// <exception cref="IOException">The target already holds a non-metadata file reserved for repack metadata, or publishing fails.
+    /// <para>目标位置已有被打包元数据保留的非元数据文件，或发布失败。</para></exception>
+    /// <exception cref="InvalidDataException">The serialized metadata exceeds 256 MiB.
+    /// <para>序列化后的元数据超过 256 MiB。</para></exception>
     public static async Task WriteAsync(IReadonlyFormatHandler handler, string sourcePath, string outputDirectory,
         CancellationToken cancellationToken = default, IReadOnlyDictionary<string, string>? extractionProperties = null,
         string? metadataRoot = null)
@@ -663,58 +528,32 @@ public sealed class RepackMetadata
         await WriteAsyncCore(handler, sourcePath, outputDirectory, cancellationToken, extractionProperties, effectiveRoot).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Writes source and packing metadata using an explicit context.
-    /// <para>以显式上下文写入来源和打包元数据。</para>
-    /// </summary>
-    /// <remarks>
-    /// When <paramref name="context"/> is unspecified (default), <paramref name="metadataRoot"/>
-    /// keeps its historical meaning and the ambient <see cref="DefaultMetadataRoot"/> applies;
-    /// an explicit context supersedes <paramref name="metadataRoot"/> (mutually exclusive).
-    /// <para><paramref name="context"/> 未指定（默认）时 <paramref name="metadataRoot"/> 保持原有
-    /// 语义并应用环境 <see cref="DefaultMetadataRoot"/>；显式上下文优先于
-    /// <paramref name="metadataRoot"/>（两者互斥）。</para>
-    /// </remarks>
-    /// <param name="handler">
-    /// Format handler whose name and source metadata are published with the record.
-    /// <para>其格式名与来源元数据会随记录一起发布的格式处理器。</para>
-    /// </param>
-    /// <param name="sourcePath">
-    /// Source image path recorded in the metadata. <para>记录进元数据的源镜像路径。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Extraction output directory; the metadata file is placed here unless a root applies.
-    /// <para>解包输出目录；未应用元数据根时元数据文件写入此目录。</para>
-    /// </param>
-    /// <param name="context">
-    /// Metadata context captured at call time; it resolves the write root and is never re-evaluated after awaits.
-    /// <para>在调用时固定的元数据上下文；由它解析写入根，await 之后绝不重新求值。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels before and during publication; a cancelled operation leaves the previous target untouched.
-    /// <para>在发布前与发布中取消；被取消的操作不会改动原有目标文件。</para>
-    /// </param>
-    /// <param name="extractionProperties">
-    /// Additional key/value pairs merged over the handler-reported source properties;
-    /// <see langword="null"/> adds none. <para>合并到处理器所报来源属性之上的附加键值对；<see langword="null"/> 表示不追加。</para>
-    /// </param>
-    /// <param name="metadataRoot">
-    /// Metadata root consulted only when the context is unspecified.
-    /// <para>仅在上下文未指定时参考的元数据根。</para>
-    /// </param>
-    /// <returns>
-    /// A task completed once the metadata JSON is published. <para>元数据 JSON 发布完成后结束的任务。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> is signaled. <para><paramref name="cancellationToken"/> 被触发。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The target already holds a non-metadata file reserved for repack metadata, or publishing fails.
-    /// <para>目标位置已有被打包元数据保留的非元数据文件，或发布失败。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The serialized metadata exceeds 256 MiB. <para>序列化后的元数据超过 256 MiB。</para>
-    /// </exception>
+    /// <summary>Writes source and packing metadata using an explicit context.
+    /// <para>以显式上下文写入来源和打包元数据。</para></summary>
+    /// <remarks>When <paramref name="context"/> is unspecified (default), <paramref name="metadataRoot"/> keeps its historical meaning and the ambient <see cref="DefaultMetadataRoot"/> applies; an explicit context supersedes <paramref name="metadataRoot"/> (mutually exclusive).
+    /// <para><paramref name="context"/> 未指定（默认）时 <paramref name="metadataRoot"/> 保持原有 语义并应用环境 <see cref="DefaultMetadataRoot"/>；显式上下文优先于 <paramref name="metadataRoot"/>（两者互斥）。</para></remarks>
+    /// <param name="handler">Format handler whose name and source metadata are published with the record.
+    /// <para>其格式名与来源元数据会随记录一起发布的格式处理器。</para></param>
+    /// <param name="sourcePath">Source image path recorded in the metadata.
+    /// <para>记录进元数据的源镜像路径。</para></param>
+    /// <param name="outputDirectory">Extraction output directory; the metadata file is placed here unless a root applies.
+    /// <para>解包输出目录；未应用元数据根时元数据文件写入此目录。</para></param>
+    /// <param name="context">Metadata context captured at call time; it resolves the write root and is never re-evaluated after awaits.
+    /// <para>在调用时固定的元数据上下文；由它解析写入根，await 之后绝不重新求值。</para></param>
+    /// <param name="cancellationToken">Cancels before and during publication; a cancelled operation leaves the previous target untouched.
+    /// <para>在发布前与发布中取消；被取消的操作不会改动原有目标文件。</para></param>
+    /// <param name="extractionProperties">Additional key/value pairs merged over the handler-reported source properties; <see langword="null"/> adds none.
+    /// <para>合并到处理器所报来源属性之上的附加键值对；<see langword="null"/> 表示不追加。</para></param>
+    /// <param name="metadataRoot">Metadata root consulted only when the context is unspecified.
+    /// <para>仅在上下文未指定时参考的元数据根。</para></param>
+    /// <returns>A task completed once the metadata JSON is published.
+    /// <para>元数据 JSON 发布完成后结束的任务。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    /// <exception cref="IOException">The target already holds a non-metadata file reserved for repack metadata, or publishing fails.
+    /// <para>目标位置已有被打包元数据保留的非元数据文件，或发布失败。</para></exception>
+    /// <exception cref="InvalidDataException">The serialized metadata exceeds 256 MiB.
+    /// <para>序列化后的元数据超过 256 MiB。</para></exception>
     public static async Task WriteAsync(IReadonlyFormatHandler handler, string sourcePath, string outputDirectory,
         RepackMetadataContext context, CancellationToken cancellationToken = default,
         IReadOnlyDictionary<string, string>? extractionProperties = null, string? metadataRoot = null)
@@ -767,28 +606,18 @@ public sealed class RepackMetadata
     }
 
     /// <summary>Atomically saves bounded directory metadata.<para>原子保存有大小限制的目录元数据。</para></summary>
-    /// <param name="outputDirectory">
-    /// Directory receiving <see cref="FileName"/>; it is created when missing.
-    /// <para>接收 <see cref="FileName"/> 的目录；不存在时会被创建。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels serialization or the final move; a cancelled operation leaves the previous target file intact.
-    /// <para>取消序列化或最终移动；被取消的操作保留原有目标文件。</para>
-    /// </param>
-    /// <returns>
-    /// A task completed after the temporary file has replaced the target in a single move.
-    /// <para>临时文件经单次移动替换目标文件后结束的任务。</para>
-    /// </returns>
-    /// <exception cref="IOException">
-    /// The target exists and is not recognized metadata, or the write or move fails.
-    /// <para>目标已存在且不是可识别的元数据，或写入或移动失败。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The serialized metadata exceeds 256 MiB. <para>序列化后的元数据超过 256 MiB。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> is signaled. <para><paramref name="cancellationToken"/> 被触发。</para>
-    /// </exception>
+    /// <param name="outputDirectory">Directory receiving <see cref="FileName"/>; it is created when missing.
+    /// <para>接收 <see cref="FileName"/> 的目录；不存在时会被创建。</para></param>
+    /// <param name="cancellationToken">Cancels serialization or the final move; a cancelled operation leaves the previous target file intact.
+    /// <para>取消序列化或最终移动；被取消的操作保留原有目标文件。</para></param>
+    /// <returns>A task completed after the temporary file has replaced the target in a single move.
+    /// <para>临时文件经单次移动替换目标文件后结束的任务。</para></returns>
+    /// <exception cref="IOException">The target exists and is not recognized metadata, or the write or move fails.
+    /// <para>目标已存在且不是可识别的元数据，或写入或移动失败。</para></exception>
+    /// <exception cref="InvalidDataException">The serialized metadata exceeds 256 MiB.
+    /// <para>序列化后的元数据超过 256 MiB。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public async Task SaveAsync(string outputDirectory, CancellationToken cancellationToken = default)
     {
         var path = Path.GetFullPath(Path.Combine(outputDirectory, FileName));

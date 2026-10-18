@@ -122,50 +122,30 @@ public static class BinaryPattern
         return matches;
     }
 
-    /// <summary>
-    /// Finds overlapping matches at absolute aligned offsets, skipping the first requested matches.
-    /// Length -1 means the remaining stream. The remaining match count must equal expectedMatches.
-    /// <para>在绝对对齐偏移处查找可重叠的匹配，并跳过前若干次匹配。长度 <c>-1</c> 表示流的剩余部分。剩余匹配数量必须等于 expectedMatches。</para>
-    /// </summary>
-    /// <param name="source">
-    /// Readable, seekable stream scanned for the pattern. <para>用于扫描模式的可读、可寻址流。</para>
-    /// </param>
-    /// <param name="find">
-    /// Hexadecimal pattern bytes to locate. <para>待定位的十六进制模式字节。</para>
-    /// </param>
-    /// <param name="mask">
-    /// Optional hex mask selecting significant bits; defaults to all bits when empty and must contain one. <para>可选的十六进制掩码，用于选取有效位；为空时默认全部位，且至少需含一位。</para>
-    /// </param>
-    /// <param name="offset">
-    /// Absolute stream offset where the scan begins. <para>扫描开始的绝对流偏移。</para>
-    /// </param>
-    /// <param name="length">
-    /// Number of bytes to scan; <c>-1</c> means the remainder of the stream. <para>要扫描的字节数；<c>-1</c> 表示流的剩余部分。</para>
-    /// </param>
-    /// <param name="alignment">
-    /// Match offsets must be a multiple of this value, from <c>1</c> to <c>1048576</c>. <para>匹配偏移必须是此值的倍数，范围 <c>1</c> 到 <c>1048576</c>。</para>
-    /// </param>
-    /// <param name="skip">
-    /// Number of leading matches to ignore, up to <c>100000</c>. <para>要忽略的前导匹配数量，最多 <c>100000</c>。</para>
-    /// </param>
-    /// <param name="expectedMatches">
-    /// Required remaining match count; a differing count aborts, up to <c>100000</c>. <para>要求的剩余匹配数量；数量不符即中止，最多 <c>100000</c>。</para>
-    /// </param>
-    /// <param name="token">
-    /// Cancels reads periodically during the scan. <para>在扫描期间定期取消读取。</para>
-    /// </param>
-    /// <returns>
-    /// The absolute offsets of the accepted matches, in ascending order.
-    /// <para>被接受匹配的绝对偏移，按升序排列。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="source"/> is not readable and seekable.
-    /// <para><paramref name="source"/> 不可读或不可寻址。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A hex pattern or mask is malformed, the range or match limits are out of bounds, or the match count differs from <paramref name="expectedMatches"/>.
-    /// <para>十六进制模式或掩码格式错误、范围或匹配上限越界，或匹配数量与 <paramref name="expectedMatches"/> 不符。</para>
-    /// </exception>
+    /// <summary>Finds overlapping matches at absolute aligned offsets, skipping the first requested matches. Length -1 means the remaining stream. The remaining match count must equal expectedMatches.
+    /// <para>在绝对对齐偏移处查找可重叠的匹配，并跳过前若干次匹配。长度 <c>-1</c> 表示流的剩余部分。剩余匹配数量必须等于 expectedMatches。</para></summary>
+    /// <param name="source">Readable, seekable stream scanned for the pattern.
+    /// <para>用于扫描模式的可读、可寻址流。</para></param>
+    /// <param name="find">Hexadecimal pattern bytes to locate.<para>待定位的十六进制模式字节。</para></param>
+    /// <param name="mask">Optional hex mask selecting significant bits; defaults to all bits when empty and must contain one.
+    /// <para>可选的十六进制掩码，用于选取有效位；为空时默认全部位，且至少需含一位。</para></param>
+    /// <param name="offset">Absolute stream offset where the scan begins.
+    /// <para>扫描开始的绝对流偏移。</para></param>
+    /// <param name="length">Number of bytes to scan; <c>-1</c> means the remainder of the stream.
+    /// <para>要扫描的字节数；<c>-1</c> 表示流的剩余部分。</para></param>
+    /// <param name="alignment">Match offsets must be a multiple of this value, from <c>1</c> to <c>1048576</c>.
+    /// <para>匹配偏移必须是此值的倍数，范围 <c>1</c> 到 <c>1048576</c>。</para></param>
+    /// <param name="skip">Number of leading matches to ignore, up to <c>100000</c>.
+    /// <para>要忽略的前导匹配数量，最多 <c>100000</c>。</para></param>
+    /// <param name="expectedMatches">Required remaining match count; a differing count aborts, up to <c>100000</c>.
+    /// <para>要求的剩余匹配数量；数量不符即中止，最多 <c>100000</c>。</para></param>
+    /// <param name="token">Cancels reads periodically during the scan.<para>在扫描期间定期取消读取。</para></param>
+    /// <returns>The absolute offsets of the accepted matches, in ascending order.
+    /// <para>被接受匹配的绝对偏移，按升序排列。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="source"/> is not readable and seekable.
+    /// <para><paramref name="source"/> 不可读或不可寻址。</para></exception>
+    /// <exception cref="InvalidDataException">A hex pattern or mask is malformed, the range or match limits are out of bounds, or the match count differs from <paramref name="expectedMatches"/>.
+    /// <para>十六进制模式或掩码格式错误、范围或匹配上限越界，或匹配数量与 <paramref name="expectedMatches"/> 不符。</para></exception>
     public static async Task<IReadOnlyList<long>> FindAsync(Stream source, string find, string mask,
         long offset, long length, int alignment, int skip, int expectedMatches, CancellationToken token)
     {

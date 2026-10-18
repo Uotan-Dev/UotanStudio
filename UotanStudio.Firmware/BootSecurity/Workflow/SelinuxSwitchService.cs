@@ -24,21 +24,15 @@ public enum SelinuxSwitchMode
 /// <para>生成可审计的 SELinux 命令行切换方案，并可选择将其应用到 boot 镜像。</para></summary>
 internal sealed class SelinuxSwitchService
 {
-    /// <summary>
-    /// Reads the boot image command line and builds an immutable switch plan without modifying the input file.
-    /// <para>读取 boot 镜像的命令行并构建不可变的切换方案，不修改输入文件。</para>
-    /// </summary>
-    /// <param name="bootPath">Path to the Android boot image to inspect. <para>要检查的 Android boot 镜像路径。</para></param>
-    /// <param name="mode">Target SELinux mode for the updated command line. <para>更新后命令行采用的目标 SELinux 模式。</para></param>
-    /// <returns>
-    /// A plan carrying the original and updated command lines; existing <c>androidboot.selinux=…</c> and
-    /// <c>selinux=0</c> tokens are removed first, and for non-<see cref="SelinuxSwitchMode.Disable"/>
-    /// modes the corresponding <c>androidboot.selinux=…</c> token is appended.
-    /// <para>包含原始与更新后命令行的方案；先移除既有的 <c>androidboot.selinux=…</c> 和 <c>selinux=0</c>
-    /// 标记，非 <see cref="SelinuxSwitchMode.Disable"/> 模式再追加对应的 <c>androidboot.selinux=…</c> 标记。</para>
-    /// </returns>
-    /// <exception cref="ImageParseException">
-    /// The boot image at <paramref name="bootPath"/> has an invalid header or magic.
+    /// <summary>Reads the boot image command line and builds an immutable switch plan without modifying the input file.
+    /// <para>读取 boot 镜像的命令行并构建不可变的切换方案，不修改输入文件。</para></summary>
+    /// <param name="bootPath">Path to the Android boot image to inspect.
+    /// <para>要检查的 Android boot 镜像路径。</para></param>
+    /// <param name="mode">Target SELinux mode for the updated command line.
+    /// <para>更新后命令行采用的目标 SELinux 模式。</para></param>
+    /// <returns>A plan carrying the original and updated command lines; existing <c>androidboot.selinux=…</c> and <c>selinux=0</c> tokens are removed first, and for non-<see cref="SelinuxSwitchMode.Disable"/> modes the corresponding <c>androidboot.selinux=…</c> token is appended.
+    /// <para>包含原始与更新后命令行的方案；先移除既有的 <c>androidboot.selinux=…</c> 和 <c>selinux=0</c> 标记，非 <see cref="SelinuxSwitchMode.Disable"/> 模式再追加对应的 <c>androidboot.selinux=…</c> 标记。</para></returns>
+    /// <exception cref="ImageParseException">The boot image at <paramref name="bootPath"/> has an invalid header or magic.
     /// <para><paramref name="bootPath"/> 处的 boot 镜像头部或魔数无效。</para></exception>
     /// <exception cref="FileNotFoundException">No boot image exists at <paramref name="bootPath"/>.
     /// <para><paramref name="bootPath"/> 处不存在 boot 镜像。</para></exception>
@@ -57,17 +51,17 @@ internal sealed class SelinuxSwitchService
             ["boot header command line only", "SELinux policy binaries and file_contexts are unchanged", "real-device behavior requires separate validation"]);
     }
 
-    /// <summary>
-    /// Applies a plan produced by <see cref="CreatePlan"/> and writes the repacked boot image to the output path.
-    /// <para>应用 <see cref="CreatePlan"/> 生成的方案，并将重新打包的 boot 镜像写出到输出路径。</para>
-    /// </summary>
-    /// <param name="plan">The plan produced by <see cref="CreatePlan"/>. <para>由 <see cref="CreatePlan"/> 生成的方案。</para></param>
-    /// <param name="outputPath">Destination file; an existing file is replaced. <para>目标文件；已存在的文件会被替换。</para></param>
+    /// <summary>Applies a plan produced by <see cref="CreatePlan"/> and writes the repacked boot image to the output path.
+    /// <para>应用 <see cref="CreatePlan"/> 生成的方案，并将重新打包的 boot 镜像写出到输出路径。</para></summary>
+    /// <param name="plan">The plan produced by <see cref="CreatePlan"/>.
+    /// <para>由 <see cref="CreatePlan"/> 生成的方案。</para></param>
+    /// <param name="outputPath">Destination file; an existing file is replaced.
+    /// <para>目标文件；已存在的文件会被替换。</para></param>
     /// <param name="cancellationToken">Cancels the write; the temporary file is deleted and the cancellation is rethrown.
     /// <para>取消写出；临时文件会被删除，取消异常会重新抛出。</para></param>
-    /// <returns>A task completed once the repacked image is published. <para>重新打包的镜像发布完成后完成的任务。</para></returns>
-    /// <exception cref="ImageParseException">
-    /// The boot image at <c>plan.BootPath</c> cannot be parsed.
+    /// <returns>A task completed once the repacked image is published.
+    /// <para>重新打包的镜像发布完成后完成的任务。</para></returns>
+    /// <exception cref="ImageParseException">The boot image at <c>plan.BootPath</c> cannot be parsed.
     /// <para><c>plan.BootPath</c> 处的 boot 镜像无法解析。</para></exception>
     /// <exception cref="IOException">The temporary write or the move onto <paramref name="outputPath"/> failed.
     /// <para>临时写出或在移动到 <paramref name="outputPath"/> 时失败。</para></exception>

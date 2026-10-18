@@ -68,33 +68,21 @@ public sealed class VisualPluginAsset
         SourcePath = SourcePath
     };
 
-    /// <summary>
-    /// Captures a selected file's identity without loading its contents into memory.
-    /// <para>捕获所选文件的身份信息，而不把其内容整体读入内存。</para>
-    /// </summary>
-    /// <param name="id">
-    /// Portable resource identifier stored on the returned asset as-is.
-    /// <para>存入返回资源的可移植资源标识符，原样保存。</para>
-    /// </param>
-    /// <param name="path">
-    /// File to hash; it is opened read-shared, streamed through SHA-256 in bounded chunks, and closed before returning.
-    /// <para>待计算哈希的文件；以共享读方式打开，用有界分块经 SHA-256 流式处理，返回前即关闭。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels the incremental hash; cancellation propagates and no asset is returned.
-    /// <para>取消增量哈希；取消会向上传播且不会返回资源。</para>
-    /// </param>
-    /// <returns>
-    /// Asset carrying the file's display name, exact length, lowercase-hex SHA-256 and full source path.
-    /// <para>包含文件显示名、精确长度、小写十六进制 SHA-256 和完整源路径的资源。</para>
-    /// </returns>
+    /// <summary>Captures a selected file's identity without loading its contents into memory.
+    /// <para>捕获所选文件的身份信息，而不把其内容整体读入内存。</para></summary>
+    /// <param name="id">Portable resource identifier stored on the returned asset as-is.
+    /// <para>存入返回资源的可移植资源标识符，原样保存。</para></param>
+    /// <param name="path">File to hash; it is opened read-shared, streamed through SHA-256 in bounded chunks, and closed before returning.
+    /// <para>待计算哈希的文件；以共享读方式打开，用有界分块经 SHA-256 流式处理，返回前即关闭。</para></param>
+    /// <param name="cancellationToken">Cancels the incremental hash; cancellation propagates and no asset is returned.
+    /// <para>取消增量哈希；取消会向上传播且不会返回资源。</para></param>
+    /// <returns>Asset carrying the file's display name, exact length, lowercase-hex SHA-256 and full source path.
+    /// <para>包含文件显示名、精确长度、小写十六进制 SHA-256 和完整源路径的资源。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="path"/> is null, empty, or contains invalid characters.
     /// <para><paramref name="path"/> 为 null、空或包含无效字符。</para></exception>
-    /// <exception cref="InvalidDataException">
-    /// The file exceeds <see cref="VisualPluginBundle.MaximumAssetSize"/>, shrank mid-read, or grew beyond its recorded length.
-    /// <para>文件超过 <see cref="VisualPluginBundle.MaximumAssetSize"/>、读取中途变短或超出记录的长度。</para>
-    /// </exception>
-    /// <exception cref="IOException">The file cannot be opened. <para>文件无法打开。</para></exception>
+    /// <exception cref="InvalidDataException">The file exceeds <see cref="VisualPluginBundle.MaximumAssetSize"/>, shrank mid-read, or grew beyond its recorded length.
+    /// <para>文件超过 <see cref="VisualPluginBundle.MaximumAssetSize"/>、读取中途变短或超出记录的长度。</para></exception>
+    /// <exception cref="IOException">The file cannot be opened.<para>文件无法打开。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
     /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     public static async Task<VisualPluginAsset> FromFileAsync(string id, string path,

@@ -2,49 +2,39 @@ namespace UotanStudio.Services.Projects;
 
 public sealed partial class ProjectSession
 {
-    /// <summary>
-    /// Renames a solution reference, preserving its directory and editor file identities.
-    /// <para>重命名解决方案中的引用，其目录与编辑器文件身份保持不变。</para>
-    /// </summary>
+    /// <summary>Renames a solution reference, preserving its directory and editor file identities.
+    /// <para>重命名解决方案中的引用，其目录与编辑器文件身份保持不变。</para></summary>
     /// <param name="name">Current display name of the sub-project, matched case-insensitively.
     /// <para>子项目当前显示名，按大小写不敏感匹配。</para></param>
     /// <param name="newName">Replacement display name; must pass <see cref="ProjectValidation.ValidateName"/>.
     /// <para>替换后的显示名，需通过 <see cref="ProjectValidation.ValidateName"/>。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the solution rewrite.
     /// <para>取消门等待与解决方案重写。</para></param>
-    /// <returns><see langword="true"/> when the reference was renamed and persisted; <see langword="false"/>
-    /// when no sub-project matches <paramref name="name"/> or the operation was gated.
-    /// <para>引用成功重命名并持久化时返回 <see langword="true"/>；没有匹配 <paramref name="name"/> 的
-    /// 子项目或操作被门拦截时返回 <see langword="false"/>。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="newName"/> is blank, longer than 255
-    /// characters, or contains control or path-separator characters.
+    /// <returns><see langword="true"/> when the reference was renamed and persisted; <see langword="false"/> when no sub-project matches <paramref name="name"/> or the operation was gated.
+    /// <para>引用成功重命名并持久化时返回 <see langword="true"/>；没有匹配 <paramref name="name"/> 的 子项目或操作被门拦截时返回 <see langword="false"/>。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="newName"/> is blank, longer than 255 characters, or contains control or path-separator characters.
     /// <para><paramref name="newName"/> 为空白、超过 255 个字符，或包含控制字符/路径分隔符。</para></exception>
-    /// <exception cref="InvalidOperationException">No solution is open, or the new name is already used
-    /// by another sub-project. <para>尚未打开解决方案，或新名称已被其他子项目占用。</para></exception>
-    /// <exception cref="InvalidDataException">The current solution file cannot be read or fails
-    /// validation. <para>当前解决方案文件无法读取或未通过校验。</para></exception>
+    /// <exception cref="InvalidOperationException">No solution is open, or the new name is already used by another sub-project.
+    /// <para>尚未打开解决方案，或新名称已被其他子项目占用。</para></exception>
+    /// <exception cref="InvalidDataException">The current solution file cannot be read or fails validation.
+    /// <para>当前解决方案文件无法读取或未通过校验。</para></exception>
     public Task<bool> RenameSubProjectAsync(string name, string newName, CancellationToken cancellationToken = default)
     {
         ProjectValidation.ValidateName(newName);
         return EditSubProjectReferenceAsync(name, newName, cancellationToken);
     }
 
-    /// <summary>
-    /// Removes a reference without deleting any project files. The last reference cannot be removed.
-    /// <para>仅移除引用，不删除任何工程文件；最后一个引用不可移除。</para>
-    /// </summary>
+    /// <summary>Removes a reference without deleting any project files. The last reference cannot be removed.
+    /// <para>仅移除引用，不删除任何工程文件；最后一个引用不可移除。</para></summary>
     /// <param name="name">Display name of the sub-project to remove, matched case-insensitively.
     /// <para>待移除子项目的显示名，按大小写不敏感匹配。</para></param>
     /// <param name="cancellationToken">Cancels the gate wait and the solution rewrite.
     /// <para>取消门等待与解决方案重写。</para></param>
-    /// <returns><see langword="true"/> when the reference has been removed and the solution reloaded;
-    /// <see langword="false"/> when no sub-project matches <paramref name="name"/> or the operation was
-    /// gated. <para>引用成功移除并重新加载解决方案时返回 <see langword="true"/>；没有匹配
-    /// <paramref name="name"/> 的子项目或操作被门拦截时返回 <see langword="false"/>。</para></returns>
-    /// <exception cref="InvalidOperationException">No solution is open, or this is the last remaining
-    /// reference. <para>尚未打开解决方案，或这是最后一个引用。</para></exception>
-    /// <exception cref="InvalidDataException">The current solution, the replacement active sub-project,
-    /// or the reloaded solution cannot be read.
+    /// <returns><see langword="true"/> when the reference has been removed and the solution reloaded; <see langword="false"/> when no sub-project matches <paramref name="name"/> or the operation was gated.
+    /// <para>引用成功移除并重新加载解决方案时返回 <see langword="true"/>；没有匹配 <paramref name="name"/> 的子项目或操作被门拦截时返回 <see langword="false"/>。</para></returns>
+    /// <exception cref="InvalidOperationException">No solution is open, or this is the last remaining reference.
+    /// <para>尚未打开解决方案，或这是最后一个引用。</para></exception>
+    /// <exception cref="InvalidDataException">The current solution, the replacement active sub-project, or the reloaded solution cannot be read.
     /// <para>当前解决方案、替换后的活动子项目或重新加载的解决方案无法读取。</para></exception>
     public Task<bool> RemoveSubProjectAsync(string name, CancellationToken cancellationToken = default)
         => EditSubProjectReferenceAsync(name, null, cancellationToken);

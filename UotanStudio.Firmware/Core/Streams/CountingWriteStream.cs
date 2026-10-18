@@ -16,12 +16,8 @@ public sealed class CountingWriteStream : Stream
     private bool _disposed;
     private readonly Action<int>? _bytesWritten;
 
-    /// <summary>
-    /// Creates a limited counting write stream.
-    /// <para>创建受限计数写入流。</para>
-    /// </summary>
-    /// <param name="inner">Writable stream the bytes are forwarded to.
-    /// <para>字节转发到的可写流。</para></param>
+    /// <summary>Creates a limited counting write stream.<para>创建受限计数写入流。</para></summary>
+    /// <param name="inner">Writable stream the bytes are forwarded to.<para>字节转发到的可写流。</para></param>
     /// <param name="maximumBytes">Cumulative byte budget; zero allows no writes at all and must be non-negative.
     /// <para>累计字节预算；为 0 表示不允许任何写入，取值必须非负。</para></param>
     /// <param name="leaveOpen">When <see langword="true"/>, disposing this wrapper leaves <paramref name="inner"/> open.

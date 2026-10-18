@@ -56,25 +56,17 @@ public sealed record SerialConnectionOptions
 
     /// <summary>Opens only the selected port and transfers ownership to the caller on success.
     /// <para>仅打开所选端口，并在成功后将所有权移交给调用方。</para></summary>
-    /// <remarks>
-    /// Native opening is not cancellable mid-call; cancellation is checked again before publishing the transport.
-    /// <para>原生打开过程在调用中途不可取消；在发布传输之前会再次检查取消。</para>
-    /// </remarks>
-    /// <param name="cancellationToken">
-    /// Cancels the attempt before the native open and again before the transport is published;
-    /// it does not abort an open already in progress.
-    /// <para>在原生打开之前以及发布传输之前各检查一次取消；不会中断正在进行的打开操作。</para>
-    /// </param>
+    /// <remarks>Native opening is not cancellable mid-call; cancellation is checked again before publishing the transport.
+    /// <para>原生打开过程在调用中途不可取消；在发布传输之前会再次检查取消。</para></remarks>
+    /// <param name="cancellationToken">Cancels the attempt before the native open and again before the transport is published; it does not abort an open already in progress.
+    /// <para>在原生打开之前以及发布传输之前各检查一次取消；不会中断正在进行的打开操作。</para></param>
     /// <returns>The connected serial transport, now owned by the caller.
     /// <para>已连接的串口传输，此时由调用方持有。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// The port name is null or blank, or the framing or flow-control settings are invalid.
-    /// <para>端口名称为 null 或空白，或成帧、流控设置无效。</para>
-    /// </exception>
+    /// <exception cref="ArgumentException">The port name is null or blank, or the framing or flow-control settings are invalid.
+    /// <para>端口名称为 null 或空白，或成帧、流控设置无效。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The baud rate or the timeout is not positive.
     /// <para>波特率或超时值不是正数。</para></exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled before the transport was published.
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled before the transport was published.
     /// <para>在发布传输之前 <paramref name="cancellationToken"/> 已触发。</para></exception>
     public async Task<SerialTransport> ConnectAsync(CancellationToken cancellationToken = default)
     {

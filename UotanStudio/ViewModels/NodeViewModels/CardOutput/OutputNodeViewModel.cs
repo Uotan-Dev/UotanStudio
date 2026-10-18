@@ -76,19 +76,10 @@ public class OutputNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>
-    /// Dispatches the output logic by the node type key (TypeKey): Feedback.Log.Write writes a log entry, Feedback.Progress.Report reports
-    /// progress, and File.Artifact.Publish writes a file.
-    /// <para>按节点类型键（TypeKey）分发对应的输出逻辑：Feedback.Log.Write 写日志、Feedback.Progress.Report 上报进度、File.Artifact.Publish 保存文件。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context.
-    /// <para>执行上下文。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Dispatches the output logic by the node type key (TypeKey): Feedback.Log.Write writes a log entry, Feedback.Progress.Report reports progress, and File.Artifact.Publish writes a file.
+    /// <para>按节点类型键（TypeKey）分发对应的输出逻辑：Feedback.Log.Write 写日志、Feedback.Progress.Report 上报进度、File.Artifact.Publish 保存文件。</para></summary>
+    /// <param name="context">The execution context.<para>执行上下文。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {
         switch (TypeKey)

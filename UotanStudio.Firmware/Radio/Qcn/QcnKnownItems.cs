@@ -63,22 +63,12 @@ public static class QcnKnownItems
         [4678] = new("WLAN MAC Address", "Security")
     }.ToFrozenDictionary();
 
-    /// <summary>
-    /// Looks up the dictionary entry of a numbered NV item.
-    /// <para>查询编号 NV 条目的字典项。</para>
-    /// </summary>
-    /// <param name="id">
-    /// The NV item id.
-    /// <para>NV 条目 id。</para>
-    /// </param>
-    /// <param name="item">
-    /// The matching entry; <c>null</c> when not found.
-    /// <para>命中的字典项；未命中时为 <c>null</c>。</para>
-    /// </param>
-    /// <returns>
-    /// <c>true</c> when the id is known.
-    /// <para>命中返回 <c>true</c>。</para>
-    /// </returns>
+    /// <summary>Looks up the dictionary entry of a numbered NV item.
+    /// <para>查询编号 NV 条目的字典项。</para></summary>
+    /// <param name="id">The NV item id.<para>NV 条目 id。</para></param>
+    /// <param name="item">The matching entry; <c>null</c> when not found.
+    /// <para>命中的字典项；未命中时为 <c>null</c>。</para></param>
+    /// <returns><c>true</c> when the id is known.<para>命中返回 <c>true</c>。</para></returns>
     public static bool TryGet(ushort id, out QcnKnownItem? item)
     {
         if (Items.TryGetValue(id, out var found))

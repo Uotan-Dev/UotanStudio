@@ -13,27 +13,11 @@ internal static class NodeDataUtil
 {
     internal const int MaxInMemoryBytes = 64 * 1024 * 1024;
 
-    /// <summary>
-    /// Determines whether two port types can be connected: either side being
-    /// <see cref="NodePortType.Any"/> permits the connection; <see cref="NodePortType.Device"/>
-    /// only connects to <see cref="NodePortType.Device"/> or <see cref="NodePortType.Any"/>;
-    /// otherwise the types must match.
-    /// <para>判断两个端口类型是否可以连接：任意一方为 <see cref="NodePortType.Any"/> 则允许连接；
-    /// <see cref="NodePortType.Device"/> 仅能与 <see cref="NodePortType.Device"/> 或
-    /// <see cref="NodePortType.Any"/> 连接；其余要求类型相同。</para>
-    /// </summary>
-    /// <param name="source">
-    /// The source (output) port type.
-    /// <para>源端口（输出）类型。</para>
-    /// </param>
-    /// <param name="target">
-    /// The target (input) port type.
-    /// <para>目标端口（输入）类型。</para>
-    /// </param>
-    /// <returns>
-    /// Whether the connection is allowed.
-    /// <para>是否可以连接。</para>
-    /// </returns>
+    /// <summary>Determines whether two port types can be connected: either side being <see cref="NodePortType.Any"/> permits the connection; <see cref="NodePortType.Device"/> only connects to <see cref="NodePortType.Device"/> or <see cref="NodePortType.Any"/>; otherwise the types must match.
+    /// <para>判断两个端口类型是否可以连接：任意一方为 <see cref="NodePortType.Any"/> 则允许连接； <see cref="NodePortType.Device"/> 仅能与 <see cref="NodePortType.Device"/> 或 <see cref="NodePortType.Any"/> 连接；其余要求类型相同。</para></summary>
+    /// <param name="source">The source (output) port type.<para>源端口（输出）类型。</para></param>
+    /// <param name="target">The target (input) port type.<para>目标端口（输入）类型。</para></param>
+    /// <returns>Whether the connection is allowed.<para>是否可以连接。</para></returns>
     public static bool CanConnect(NodePortType source, NodePortType target)
     {
         if (source == NodePortType.Any || target == NodePortType.Any) return true;
@@ -42,21 +26,11 @@ internal static class NodeDataUtil
         return source == target;
     }
 
-    /// <summary>
-    /// Converts a port value to a <see cref="DetectedDevice"/>: <see cref="DetectedDevice"/> values are
-    /// returned as-is; <see cref="DeviceInfo"/> values yield their <see cref="DeviceInfo.Device"/>;
-    /// anything else yields <c>null</c>.
-    /// <para>把端口值转换为 <see cref="DetectedDevice"/>：值为 <see cref="DetectedDevice"/> 时原样返回；
-    /// 值为 <see cref="DeviceInfo"/> 时返回其 <see cref="DeviceInfo.Device"/>；其余返回 <c>null</c>。</para>
-    /// </summary>
-    /// <param name="value">
-    /// The port value.
-    /// <para>端口值。</para>
-    /// </param>
-    /// <returns>
-    /// The device handle; <c>null</c> when not convertible.
-    /// <para>设备句柄；无法转换时返回 <c>null</c>。</para>
-    /// </returns>
+    /// <summary>Converts a port value to a <see cref="DetectedDevice"/>: <see cref="DetectedDevice"/> values are returned as-is; <see cref="DeviceInfo"/> values yield their <see cref="DeviceInfo.Device"/>; anything else yields <c>null</c>.
+    /// <para>把端口值转换为 <see cref="DetectedDevice"/>：值为 <see cref="DetectedDevice"/> 时原样返回； 值为 <see cref="DeviceInfo"/> 时返回其 <see cref="DeviceInfo.Device"/>；其余返回 <c>null</c>。</para></summary>
+    /// <param name="value">The port value.<para>端口值。</para></param>
+    /// <returns>The device handle; <c>null</c> when not convertible.
+    /// <para>设备句柄；无法转换时返回 <c>null</c>。</para></returns>
     public static DetectedDevice? ToDevice(object? value)
     {
         return value switch
@@ -180,22 +154,11 @@ internal static class NodeDataUtil
         };
     }
 
-    /// <summary>
-    /// Converts a port value to a boolean: booleans are returned as-is; strings <c>true</c>/<c>1</c>/<c>yes</c> are true; non-zero numbers are true.
-    /// <para>把端口值转换为布尔：布尔原样；字符串 <c>true</c>/<c>1</c>/<c>yes</c> 视为真；数值非零视为真。</para>
-    /// </summary>
-    /// <param name="value">
-    /// The port value.
-    /// <para>端口值。</para>
-    /// </param>
-    /// <param name="fallback">
-    /// The default value when undecidable.
-    /// <para>无法判定时的默认值。</para>
-    /// </param>
-    /// <returns>
-    /// The converted boolean.
-    /// <para>转换后的布尔值。</para>
-    /// </returns>
+    /// <summary>Converts a port value to a boolean: booleans are returned as-is; strings <c>true</c>/<c>1</c>/<c>yes</c> are true; non-zero numbers are true.
+    /// <para>把端口值转换为布尔：布尔原样；字符串 <c>true</c>/<c>1</c>/<c>yes</c> 视为真；数值非零视为真。</para></summary>
+    /// <param name="value">The port value.<para>端口值。</para></param>
+    /// <param name="fallback">The default value when undecidable.<para>无法判定时的默认值。</para></param>
+    /// <returns>The converted boolean.<para>转换后的布尔值。</para></returns>
     public static bool ToBool(object? value, bool fallback = false)
     {
         return value switch
@@ -210,22 +173,11 @@ internal static class NodeDataUtil
         };
     }
 
-    /// <summary>
-    /// Converts a port value to a 32-bit integer, returning <paramref name="fallback"/> on failure.
-    /// <para>把端口值转换为 32 位整数，失败时返回 <paramref name="fallback"/>。</para>
-    /// </summary>
-    /// <param name="value">
-    /// The port value.
-    /// <para>端口值。</para>
-    /// </param>
-    /// <param name="fallback">
-    /// The default value on conversion failure.
-    /// <para>转换失败时的默认值。</para>
-    /// </param>
-    /// <returns>
-    /// The converted integer.
-    /// <para>转换后的整数。</para>
-    /// </returns>
+    /// <summary>Converts a port value to a 32-bit integer, returning <paramref name="fallback"/> on failure.
+    /// <para>把端口值转换为 32 位整数，失败时返回 <paramref name="fallback"/>。</para></summary>
+    /// <param name="value">The port value.<para>端口值。</para></param>
+    /// <param name="fallback">The default value on conversion failure.<para>转换失败时的默认值。</para></param>
+    /// <returns>The converted integer.<para>转换后的整数。</para></returns>
     public static int ToInt(object? value, int fallback = 0)
     {
         return value switch
@@ -240,22 +192,11 @@ internal static class NodeDataUtil
         };
     }
 
-    /// <summary>
-    /// Converts a port value to a double, returning <paramref name="fallback"/> on failure.
-    /// <para>把端口值转换为双精度浮点数，失败时返回 <paramref name="fallback"/>。</para>
-    /// </summary>
-    /// <param name="value">
-    /// The port value.
-    /// <para>端口值。</para>
-    /// </param>
-    /// <param name="fallback">
-    /// The default value on conversion failure.
-    /// <para>转换失败时的默认值。</para>
-    /// </param>
-    /// <returns>
-    /// The converted double.
-    /// <para>转换后的浮点数。</para>
-    /// </returns>
+    /// <summary>Converts a port value to a double, returning <paramref name="fallback"/> on failure.
+    /// <para>把端口值转换为双精度浮点数，失败时返回 <paramref name="fallback"/>。</para></summary>
+    /// <param name="value">The port value.<para>端口值。</para></param>
+    /// <param name="fallback">The default value on conversion failure.<para>转换失败时的默认值。</para></param>
+    /// <returns>The converted double.<para>转换后的浮点数。</para></returns>
     public static double ToDouble(object? value, double fallback = 0)
     {
         return value switch

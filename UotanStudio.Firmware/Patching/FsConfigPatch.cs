@@ -26,32 +26,19 @@ public static class FsConfigPatch
     /// <see cref="FsConfigModes"/> 格式化器决定。</para>
     /// </summary>
     private const ushort DefaultDirectoryMode = 0x1ED;
-    /// <summary>
-    /// Rebases a partition-owned fs_config document under the configured root and partition prefix.
-    /// <para>把分区自有的 fs_config 文档改基到配置的根与分区前缀之下。</para>
-    /// </summary>
-    /// <param name="text">
-    /// The existing fs_config source text. <para>现有的 fs_config 源文本。</para>
-    /// </param>
-    /// <param name="rootPrefix">
-    /// Configured relative root such as <c>system/</c>; blank segments, traversal segments and absolute roots are rejected.
-    /// <para>配置的相对根前缀（如 <c>system/</c>）；空段、穿越段与绝对根会被拒绝。</para>
-    /// </param>
-    /// <param name="partition">
-    /// Merged partition name (<c>[A-Za-z0-9_-]</c>, at most 64 characters), e.g. <c>my_product</c>.
-    /// <para>被合并的分区名（<c>[A-Za-z0-9_-]</c>，至多 64 个字符），如 <c>my_product</c>。</para>
-    /// </param>
-    /// <param name="token">
-    /// Cancels the bounded line scan. <para>取消有界的逐行扫描。</para>
-    /// </param>
-    /// <returns>
-    /// The rebased document with accounting details. <para>改基后的文档及其计数信息。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// The root prefix or partition is invalid, the source contains NUL, or a size limit is exceeded.
-    /// <para>根前缀或分区无效、源文本包含 NUL，或超出大小上限。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException"><paramref name="token"/> was signaled. <para><paramref name="token"/> 被触发。</para></exception>
+    /// <summary>Rebases a partition-owned fs_config document under the configured root and partition prefix.
+    /// <para>把分区自有的 fs_config 文档改基到配置的根与分区前缀之下。</para></summary>
+    /// <param name="text">The existing fs_config source text.<para>现有的 fs_config 源文本。</para></param>
+    /// <param name="rootPrefix">Configured relative root such as <c>system/</c>; blank segments, traversal segments and absolute roots are rejected.
+    /// <para>配置的相对根前缀（如 <c>system/</c>）；空段、穿越段与绝对根会被拒绝。</para></param>
+    /// <param name="partition">Merged partition name (<c>[A-Za-z0-9_-]</c>, at most 64 characters), e.g. <c>my_product</c>.
+    /// <para>被合并的分区名（<c>[A-Za-z0-9_-]</c>，至多 64 个字符），如 <c>my_product</c>。</para></param>
+    /// <param name="token">Cancels the bounded line scan.<para>取消有界的逐行扫描。</para></param>
+    /// <returns>The rebased document with accounting details.<para>改基后的文档及其计数信息。</para></returns>
+    /// <exception cref="InvalidDataException">The root prefix or partition is invalid, the source contains NUL, or a size limit is exceeded.
+    /// <para>根前缀或分区无效、源文本包含 NUL，或超出大小上限。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="token"/> was signaled.
+    /// <para><paramref name="token"/> 被触发。</para></exception>
     public static FsConfigRebaseResult Rebase(string text, string rootPrefix, string partition, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -130,36 +117,20 @@ public static class FsConfigPatch
             !string.Equals(text, result, StringComparison.Ordinal));
     }
 
-    /// <summary>
-    /// Adds a missing metadata entry; equivalent existing ownership/permissions preserve opaque trailing data.
-    /// <para>添加缺失的元数据条目；已存在的等价所有权/权限会保留不透明的尾部数据。</para>
-    /// </summary>
-    /// <param name="text">
-    /// The existing fs_config source text. <para>现有的 fs_config 源文本。</para>
-    /// </param>
-    /// <param name="path">
-    /// Literal image path whose trailing slashes are trimmed for matching. <para>用于匹配的字面镜像路径（尾部斜杠会被裁去）。</para>
-    /// </param>
-    /// <param name="uid">
-    /// Unsigned decimal user identity. <para>无符号十进制用户标识。</para>
-    /// </param>
-    /// <param name="gid">
-    /// Unsigned decimal group identity. <para>无符号十进制组标识。</para>
-    /// </param>
-    /// <param name="mode">
-    /// Octal permission mode limited to the low twelve bits. <para>八进制权限模式，仅限低十二位。</para>
-    /// </param>
-    /// <param name="token">
-    /// Cancels the bounded line scan. <para>取消有界的逐行扫描。</para>
-    /// </param>
-    /// <returns>
-    /// The patch result with the resulting text, the number of matched existing entries and whether the text changed.
-    /// <para>补丁结果，包含结果文本、匹配到的现有条目数量以及文本是否发生变化。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// The path, size or field syntax is invalid, the path is duplicated, or an existing entry holds different values.
-    /// <para>路径、大小或字段语法无效、路径重复，或现有条目的取值不同。</para>
-    /// </exception>
+    /// <summary>Adds a missing metadata entry; equivalent existing ownership/permissions preserve opaque trailing data.
+    /// <para>添加缺失的元数据条目；已存在的等价所有权/权限会保留不透明的尾部数据。</para></summary>
+    /// <param name="text">The existing fs_config source text.<para>现有的 fs_config 源文本。</para></param>
+    /// <param name="path">Literal image path whose trailing slashes are trimmed for matching.
+    /// <para>用于匹配的字面镜像路径（尾部斜杠会被裁去）。</para></param>
+    /// <param name="uid">Unsigned decimal user identity.<para>无符号十进制用户标识。</para></param>
+    /// <param name="gid">Unsigned decimal group identity.<para>无符号十进制组标识。</para></param>
+    /// <param name="mode">Octal permission mode limited to the low twelve bits.
+    /// <para>八进制权限模式，仅限低十二位。</para></param>
+    /// <param name="token">Cancels the bounded line scan.<para>取消有界的逐行扫描。</para></param>
+    /// <returns>The patch result with the resulting text, the number of matched existing entries and whether the text changed.
+    /// <para>补丁结果，包含结果文本、匹配到的现有条目数量以及文本是否发生变化。</para></returns>
+    /// <exception cref="InvalidDataException">The path, size or field syntax is invalid, the path is duplicated, or an existing entry holds different values.
+    /// <para>路径、大小或字段语法无效、路径重复，或现有条目的取值不同。</para></exception>
     public static TextPatchResult Add(string text, string path, string uid, string gid, string mode, CancellationToken token)
     {
         var desired = new FsConfigEntry(ParseIdentity(uid), ParseIdentity(gid), ParseMode(mode));
@@ -178,39 +149,24 @@ public static class FsConfigPatch
         return new TextPatchResult(result, 0, true);
     }
 
-    /// <summary>
-    /// Deletes one physical entry line. A missing entry is unchanged unless an old-value guard requires it.
-    /// <para>删除一条物理条目行。除非旧值守卫要求，缺失条目时保持文本不变。</para>
-    /// </summary>
-    /// <param name="text">
-    /// The existing fs_config source text. <para>现有的 fs_config 源文本。</para>
-    /// </param>
-    /// <param name="path">
-    /// Literal image path identifying the entry to remove. <para>标识待删除条目的字面镜像路径。</para>
-    /// </param>
-    /// <param name="checkOldValue">
-    /// When <see langword="true"/>, the entry must exist and match the expected values. <para>为 <see langword="true"/> 时，条目必须存在并与期望值一致。</para>
-    /// </param>
-    /// <param name="expectedUid">
-    /// Unsigned decimal user identity required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的无符号十进制用户标识。</para>
-    /// </param>
-    /// <param name="expectedGid">
-    /// Unsigned decimal group identity required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的无符号十进制组标识。</para>
-    /// </param>
-    /// <param name="expectedMode">
-    /// Octal permission mode required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的八进制权限模式。</para>
-    /// </param>
-    /// <param name="token">
-    /// Cancels the bounded line scan. <para>取消有界的逐行扫描。</para>
-    /// </param>
-    /// <returns>
-    /// The patch result with the line removed, the number of matched entries and whether the text changed.
-    /// <para>补丁结果，包含删除该行后的文本、匹配条目数量以及文本是否发生变化。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// The path or size is invalid, the path is duplicated, or the old-value guard is set and the entry is missing or different.
-    /// <para>路径或大小无效、路径重复，或设置了旧值守卫但条目缺失或不一致。</para>
-    /// </exception>
+    /// <summary>Deletes one physical entry line. A missing entry is unchanged unless an old-value guard requires it.
+    /// <para>删除一条物理条目行。除非旧值守卫要求，缺失条目时保持文本不变。</para></summary>
+    /// <param name="text">The existing fs_config source text.<para>现有的 fs_config 源文本。</para></param>
+    /// <param name="path">Literal image path identifying the entry to remove.
+    /// <para>标识待删除条目的字面镜像路径。</para></param>
+    /// <param name="checkOldValue">When <see langword="true"/>, the entry must exist and match the expected values.
+    /// <para>为 <see langword="true"/> 时，条目必须存在并与期望值一致。</para></param>
+    /// <param name="expectedUid">Unsigned decimal user identity required when <paramref name="checkOldValue"/> is set.
+    /// <para>当 <paramref name="checkOldValue"/> 置位时要求的无符号十进制用户标识。</para></param>
+    /// <param name="expectedGid">Unsigned decimal group identity required when <paramref name="checkOldValue"/> is set.
+    /// <para>当 <paramref name="checkOldValue"/> 置位时要求的无符号十进制组标识。</para></param>
+    /// <param name="expectedMode">Octal permission mode required when <paramref name="checkOldValue"/> is set.
+    /// <para>当 <paramref name="checkOldValue"/> 置位时要求的八进制权限模式。</para></param>
+    /// <param name="token">Cancels the bounded line scan.<para>取消有界的逐行扫描。</para></param>
+    /// <returns>The patch result with the line removed, the number of matched entries and whether the text changed.
+    /// <para>补丁结果，包含删除该行后的文本、匹配条目数量以及文本是否发生变化。</para></returns>
+    /// <exception cref="InvalidDataException">The path or size is invalid, the path is duplicated, or the old-value guard is set and the entry is missing or different.
+    /// <para>路径或大小无效、路径重复，或设置了旧值守卫但条目缺失或不一致。</para></exception>
     public static TextPatchResult Delete(string text, string path, bool checkOldValue, string expectedUid,
         string expectedGid, string expectedMode, CancellationToken token)
     {
@@ -230,27 +186,15 @@ public static class FsConfigPatch
         end = end < 0 ? text.Length : end + 1;
         return new TextPatchResult(text[..start] + text[end..], 1, true);
     }
-    /// <summary>
-    /// Reads one exact image path. Mode tokens are octal.
-    /// <para>读取一个精确的镜像路径。模式记号为八进制。</para>
-    /// </summary>
-    /// <param name="text">
-    /// The fs_config source text. <para>fs_config 源文本。</para>
-    /// </param>
-    /// <param name="path">
-    /// Literal image path to resolve. <para>待解析的字面镜像路径。</para>
-    /// </param>
-    /// <param name="token">
-    /// Cancels the bounded line scan. <para>取消有界的逐行扫描。</para>
-    /// </param>
-    /// <returns>
-    /// The parsed user, group and permission mode for the entry.
-    /// <para>该条目解析后的用户、组与权限模式。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// The path or size is invalid, the path is missing or duplicated, or a field fails to parse.
-    /// <para>路径或大小无效、路径缺失或重复，或某个字段解析失败。</para>
-    /// </exception>
+    /// <summary>Reads one exact image path. Mode tokens are octal.
+    /// <para>读取一个精确的镜像路径。模式记号为八进制。</para></summary>
+    /// <param name="text">The fs_config source text.<para>fs_config 源文本。</para></param>
+    /// <param name="path">Literal image path to resolve.<para>待解析的字面镜像路径。</para></param>
+    /// <param name="token">Cancels the bounded line scan.<para>取消有界的逐行扫描。</para></param>
+    /// <returns>The parsed user, group and permission mode for the entry.
+    /// <para>该条目解析后的用户、组与权限模式。</para></returns>
+    /// <exception cref="InvalidDataException">The path or size is invalid, the path is missing or duplicated, or a field fails to parse.
+    /// <para>路径或大小无效、路径缺失或重复，或某个字段解析失败。</para></exception>
     public static FsConfigEntry Read(string text, string path, CancellationToken token)
     {
         var fields = Select(text, path, token);
@@ -258,48 +202,27 @@ public static class FsConfigPatch
         string Value(int index) => text.Substring(fields[index].Start, fields[index].Length);
     }
 
-    /// <summary>
-    /// Replaces uid/gid/permissions only, retaining the path, separators and opaque trailing capability data.
-    /// <para>仅替换 uid/gid/权限，保留路径、分隔符和不透明的尾部能力数据。</para>
-    /// </summary>
-    /// <param name="text">
-    /// The existing fs_config source text. <para>现有的 fs_config 源文本。</para>
-    /// </param>
-    /// <param name="path">
-    /// Literal image path identifying the entry to edit. <para>标识待编辑条目的字面镜像路径。</para>
-    /// </param>
-    /// <param name="uid">
-    /// Unsigned decimal user identity to write. <para>要写入的无符号十进制用户标识。</para>
-    /// </param>
-    /// <param name="gid">
-    /// Unsigned decimal group identity to write. <para>要写入的无符号十进制组标识。</para>
-    /// </param>
-    /// <param name="mode">
-    /// Octal permission mode to write. <para>要写入的八进制权限模式。</para>
-    /// </param>
-    /// <param name="checkOldValue">
-    /// When <see langword="true"/>, the current values must equal the expected ones. <para>为 <see langword="true"/> 时，当前值必须与期望值相等。</para>
-    /// </param>
-    /// <param name="expectedUid">
-    /// Unsigned decimal user identity required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的无符号十进制用户标识。</para>
-    /// </param>
-    /// <param name="expectedGid">
-    /// Unsigned decimal group identity required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的无符号十进制组标识。</para>
-    /// </param>
-    /// <param name="expectedMode">
-    /// Octal permission mode required when <paramref name="checkOldValue"/> is set. <para>当 <paramref name="checkOldValue"/> 置位时要求的八进制权限模式。</para>
-    /// </param>
-    /// <param name="token">
-    /// Cancels the bounded line scan. <para>取消有界的逐行扫描。</para>
-    /// </param>
-    /// <returns>
-    /// The patch result with the value fields rewritten, one matched entry and whether the text changed.
-    /// <para>补丁结果，包含重写值字段后的文本、一个匹配条目以及文本是否发生变化。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// The path, size or field syntax is invalid, the path is missing or duplicated, the result exceeds the size limit, or the old-value guard fails.
-    /// <para>路径、大小或字段语法无效、路径缺失或重复、结果超出大小上限，或旧值守卫校验失败。</para>
-    /// </exception>
+    /// <summary>Replaces uid/gid/permissions only, retaining the path, separators and opaque trailing capability data.
+    /// <para>仅替换 uid/gid/权限，保留路径、分隔符和不透明的尾部能力数据。</para></summary>
+    /// <param name="text">The existing fs_config source text.<para>现有的 fs_config 源文本。</para></param>
+    /// <param name="path">Literal image path identifying the entry to edit.
+    /// <para>标识待编辑条目的字面镜像路径。</para></param>
+    /// <param name="uid">Unsigned decimal user identity to write.<para>要写入的无符号十进制用户标识。</para></param>
+    /// <param name="gid">Unsigned decimal group identity to write.<para>要写入的无符号十进制组标识。</para></param>
+    /// <param name="mode">Octal permission mode to write.<para>要写入的八进制权限模式。</para></param>
+    /// <param name="checkOldValue">When <see langword="true"/>, the current values must equal the expected ones.
+    /// <para>为 <see langword="true"/> 时，当前值必须与期望值相等。</para></param>
+    /// <param name="expectedUid">Unsigned decimal user identity required when <paramref name="checkOldValue"/> is set.
+    /// <para>当 <paramref name="checkOldValue"/> 置位时要求的无符号十进制用户标识。</para></param>
+    /// <param name="expectedGid">Unsigned decimal group identity required when <paramref name="checkOldValue"/> is set.
+    /// <para>当 <paramref name="checkOldValue"/> 置位时要求的无符号十进制组标识。</para></param>
+    /// <param name="expectedMode">Octal permission mode required when <paramref name="checkOldValue"/> is set.
+    /// <para>当 <paramref name="checkOldValue"/> 置位时要求的八进制权限模式。</para></param>
+    /// <param name="token">Cancels the bounded line scan.<para>取消有界的逐行扫描。</para></param>
+    /// <returns>The patch result with the value fields rewritten, one matched entry and whether the text changed.
+    /// <para>补丁结果，包含重写值字段后的文本、一个匹配条目以及文本是否发生变化。</para></returns>
+    /// <exception cref="InvalidDataException">The path, size or field syntax is invalid, the path is missing or duplicated, the result exceeds the size limit, or the old-value guard fails.
+    /// <para>路径、大小或字段语法无效、路径缺失或重复、结果超出大小上限，或旧值守卫校验失败。</para></exception>
     public static TextPatchResult Edit(string text, string path, string uid, string gid, string mode,
         bool checkOldValue, string expectedUid, string expectedGid, string expectedMode, CancellationToken token)
     {

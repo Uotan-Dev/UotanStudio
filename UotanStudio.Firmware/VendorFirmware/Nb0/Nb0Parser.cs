@@ -22,30 +22,22 @@ public static class Nb0Parser
         ([0x73, 0x71, 0x73, 0x68], "squashfs"),
     ];
 
-    /// <summary>
-    /// Parses the NB0 firmware file at the specified path and returns metadata information.
-    /// <para>解析指定路径的 NB0 固件文件,返回元数据信息。</para>
-    /// </summary>
-    /// <param name="filePath">Path to an existing NB0 file; it is opened read-only with
-    /// <see cref="FileShare.Read"/> sharing, sequential-access hints and a 64 KiB buffer, and is
-    /// closed before this call returns.
-    /// <para>已存在的 NB0 文件路径；文件以只读、<see cref="FileShare.Read"/> 共享、顺序访问提示
-    /// 和 64 KiB 缓冲打开，并在本调用返回前关闭。</para></param>
+    /// <summary>Parses the NB0 firmware file at the specified path and returns metadata information.
+    /// <para>解析指定路径的 NB0 固件文件,返回元数据信息。</para></summary>
+    /// <param name="filePath">Path to an existing NB0 file; it is opened read-only with <see cref="FileShare.Read"/> sharing, sequential-access hints and a 64 KiB buffer, and is closed before this call returns.
+    /// <para>已存在的 NB0 文件路径；文件以只读、<see cref="FileShare.Read"/> 共享、顺序访问提示 和 64 KiB 缓冲打开，并在本调用返回前关闭。</para></param>
     /// <returns>Parsed metadata with entries, inferred types, firmware inference and warnings.
     /// <para>解析得到的元数据，包含条目、推断类型、固件推断结果与警告。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>.
     /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="filePath"/> is empty, or the file is
-    /// truncated below the 4-byte entry-count header.
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is empty, or the file is truncated below the 4-byte entry-count header.
     /// <para><paramref name="filePath"/> 为空，或文件在 4 字节条目数头部之前被截断。</para></exception>
-    /// <exception cref="FileNotFoundException">The file does not exist.
-    /// <para>文件不存在。</para></exception>
+    /// <exception cref="FileNotFoundException">The file does not exist.<para>文件不存在。</para></exception>
     /// <exception cref="IOException">The file could not be opened or read.
     /// <para>文件无法打开或读取。</para></exception>
-    /// <exception cref="EndOfStreamException">The file ends before the entry count or a declared
-    /// entry header is fully read. <para>文件在条目数或某个声明的条目头读完之前结束。</para></exception>
-    /// <exception cref="Nb0CorruptedException">The declared entry count exceeds
-    /// <see cref="int.MaxValue"/>, or the file is too small to hold the declared entry table.
+    /// <exception cref="EndOfStreamException">The file ends before the entry count or a declared entry header is fully read.
+    /// <para>文件在条目数或某个声明的条目头读完之前结束。</para></exception>
+    /// <exception cref="Nb0CorruptedException">The declared entry count exceeds <see cref="int.MaxValue"/>, or the file is too small to hold the declared entry table.
     /// <para>声明的条目数超过 <see cref="int.MaxValue"/>，或文件小到不足以容纳声明的条目表。</para></exception>
     /// <example>
     /// <code>
@@ -60,31 +52,24 @@ public static class Nb0Parser
         return ParseFromStream(stream);
     }
 
-    /// <summary>
-    /// Asynchronously parses the NB0 firmware file at the specified path and returns metadata information.
-    /// <para>异步解析指定路径的 NB0 固件文件,返回元数据信息。</para>
-    /// </summary>
-    /// <param name="filePath">Path to an existing NB0 file; it is opened read-only with
-    /// <see cref="FileShare.Read"/> sharing, asynchronous sequential-access hints and a 64 KiB
-    /// buffer, and is closed when the returned task completes.
-    /// <para>已存在的 NB0 文件路径；文件以只读、<see cref="FileShare.Read"/> 共享、异步顺序访问
-    /// 提示和 64 KiB 缓冲打开，并在返回的任务完成时关闭。</para></param>
-    /// <param name="cancellationToken">Cancels file reads between entry headers; checked once per
-    /// entry. <para>取消条目之间的文件读取；每处理一个条目检查一次。</para></param>
+    /// <summary>Asynchronously parses the NB0 firmware file at the specified path and returns metadata information.
+    /// <para>异步解析指定路径的 NB0 固件文件,返回元数据信息。</para></summary>
+    /// <param name="filePath">Path to an existing NB0 file; it is opened read-only with <see cref="FileShare.Read"/> sharing, asynchronous sequential-access hints and a 64 KiB buffer, and is closed when the returned task completes.
+    /// <para>已存在的 NB0 文件路径；文件以只读、<see cref="FileShare.Read"/> 共享、异步顺序访问 提示和 64 KiB 缓冲打开，并在返回的任务完成时关闭。</para></param>
+    /// <param name="cancellationToken">Cancels file reads between entry headers; checked once per entry.
+    /// <para>取消条目之间的文件读取；每处理一个条目检查一次。</para></param>
     /// <returns>A task producing parsed metadata with entries, inferred types and warnings.
     /// <para>产生已解析元数据（含条目、推断类型与警告）的任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is <see langword="null"/>.
     /// <para><paramref name="filePath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="filePath"/> is empty.
     /// <para><paramref name="filePath"/> 为空。</para></exception>
-    /// <exception cref="FileNotFoundException">The file does not exist.
-    /// <para>文件不存在。</para></exception>
+    /// <exception cref="FileNotFoundException">The file does not exist.<para>文件不存在。</para></exception>
     /// <exception cref="IOException">The file could not be opened or read.
     /// <para>文件无法打开或读取。</para></exception>
-    /// <exception cref="EndOfStreamException">The file ends before the entry count or a declared
-    /// entry header is fully read. <para>文件在条目数或某个声明的条目头读完之前结束。</para></exception>
-    /// <exception cref="Nb0CorruptedException">The declared entry count exceeds
-    /// <see cref="int.MaxValue"/>, or the file is too small to hold the declared entry table.
+    /// <exception cref="EndOfStreamException">The file ends before the entry count or a declared entry header is fully read.
+    /// <para>文件在条目数或某个声明的条目头读完之前结束。</para></exception>
+    /// <exception cref="Nb0CorruptedException">The declared entry count exceeds <see cref="int.MaxValue"/>, or the file is too small to hold the declared entry table.
     /// <para>声明的条目数超过 <see cref="int.MaxValue"/>，或文件小到不足以容纳声明的条目表。</para></exception>
     /// <exception cref="OperationCanceledException">Cancellation was requested while reading.
     /// <para>读取过程中请求了取消。</para></exception>
@@ -95,31 +80,21 @@ public static class Nb0Parser
         return await ParseFromStreamAsync(stream, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Parses an NB0 firmware file from a stream and returns metadata information.
-    /// <para>从流中解析 NB0 固件文件,返回元数据信息。</para>
-    /// </summary>
-    /// <param name="stream">Readable stream positioned at the start of the NB0 metadata (the
-    /// little-endian 4-byte entry count). It is left open after the call and must not be disposed
-    /// by the reader until parsing completes; seekable streams enable the entry-table size check,
-    /// magic detection and exact <see cref="Nb0Metadata.TotalSize"/>, while non-seekable streams
-    /// skip those steps and estimate the total size.
-    /// <para>定位在 NB0 元数据开头（小端 4 字节条目数）的可读流。调用结束后流保持打开，
-    /// 解析完成前不得释放；可寻址流可进行条目表大小核对、魔数检测并得到精确的
-    /// <see cref="Nb0Metadata.TotalSize"/>，不可寻址流则跳过这些步骤并估算总大小。</para></param>
+    /// <summary>Parses an NB0 firmware file from a stream and returns metadata information.
+    /// <para>从流中解析 NB0 固件文件,返回元数据信息。</para></summary>
+    /// <param name="stream">Readable stream positioned at the start of the NB0 metadata (the little-endian 4-byte entry count). It is left open after the call and must not be disposed by the reader until parsing completes; seekable streams enable the entry-table size check, magic detection and exact <see cref="Nb0Metadata.TotalSize"/>, while non-seekable streams skip those steps and estimate the total size.
+    /// <para>定位在 NB0 元数据开头（小端 4 字节条目数）的可读流。调用结束后流保持打开， 解析完成前不得释放；可寻址流可进行条目表大小核对、魔数检测并得到精确的 <see cref="Nb0Metadata.TotalSize"/>，不可寻址流则跳过这些步骤并估算总大小。</para></param>
     /// <returns>Parsed metadata with entries, inferred types, firmware inference and warnings.
     /// <para>解析得到的元数据，包含条目、推断类型、固件推断结果与警告。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException">The stream yields fewer than 4 bytes for the entry count.
     /// <para>流中可读的条目数字节不足 4 字节。</para></exception>
-    /// <exception cref="IOException">A read from the stream failed. <para>读取流失败。</para></exception>
-    /// <exception cref="EndOfStreamException">The stream ends before a declared entry header is
-    /// fully read. <para>流在某个声明的条目头读完之前结束。</para></exception>
-    /// <exception cref="Nb0CorruptedException">The declared entry count exceeds
-    /// <see cref="int.MaxValue"/>, or a seekable stream is too small to hold the declared entry
-    /// table. <para>声明的条目数超过 <see cref="int.MaxValue"/>，或可寻址流小到不足以容纳声明的
-    /// 条目表。</para></exception>
+    /// <exception cref="IOException">A read from the stream failed.<para>读取流失败。</para></exception>
+    /// <exception cref="EndOfStreamException">The stream ends before a declared entry header is fully read.
+    /// <para>流在某个声明的条目头读完之前结束。</para></exception>
+    /// <exception cref="Nb0CorruptedException">The declared entry count exceeds <see cref="int.MaxValue"/>, or a seekable stream is too small to hold the declared entry table.
+    /// <para>声明的条目数超过 <see cref="int.MaxValue"/>，或可寻址流小到不足以容纳声明的 条目表。</para></exception>
     public static Nb0Metadata ParseFromStream(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -128,31 +103,20 @@ public static class Nb0Parser
         return ParseCore(reader);
     }
 
-    /// <summary>
-    /// Asynchronously parses an NB0 firmware file from a stream and returns metadata information.
-    /// <para>异步从流中解析 NB0 固件文件,返回元数据信息。</para>
-    /// </summary>
-    /// <param name="stream">Readable stream positioned at the start of the NB0 metadata (the
-    /// little-endian 4-byte entry count). It is left open after the call; seekable streams enable
-    /// the entry-table size check, magic detection and exact <see cref="Nb0Metadata.TotalSize"/>,
-    /// while non-seekable streams skip those steps and estimate the total size.
-    /// <para>定位在 NB0 元数据开头（小端 4 字节条目数）的可读流。调用结束后流保持打开；
-    /// 可寻址流可进行条目表大小核对、魔数检测并得到精确的 <see cref="Nb0Metadata.TotalSize"/>，
-    /// 不可寻址流则跳过这些步骤并估算总大小。</para></param>
-    /// <param name="cancellationToken">Cancels header and entry reads; checked once per entry.
-    /// The returned task then faults with <see cref="OperationCanceledException"/>.
-    /// <para>取消头部与条目的读取；每个条目检查一次。届时返回的任务将以
-    /// <see cref="OperationCanceledException"/> 失败。</para></param>
+    /// <summary>Asynchronously parses an NB0 firmware file from a stream and returns metadata information.
+    /// <para>异步从流中解析 NB0 固件文件,返回元数据信息。</para></summary>
+    /// <param name="stream">Readable stream positioned at the start of the NB0 metadata (the little-endian 4-byte entry count). It is left open after the call; seekable streams enable the entry-table size check, magic detection and exact <see cref="Nb0Metadata.TotalSize"/>, while non-seekable streams skip those steps and estimate the total size.
+    /// <para>定位在 NB0 元数据开头（小端 4 字节条目数）的可读流。调用结束后流保持打开； 可寻址流可进行条目表大小核对、魔数检测并得到精确的 <see cref="Nb0Metadata.TotalSize"/>， 不可寻址流则跳过这些步骤并估算总大小。</para></param>
+    /// <param name="cancellationToken">Cancels header and entry reads; checked once per entry. The returned task then faults with <see cref="OperationCanceledException"/>.
+    /// <para>取消头部与条目的读取；每个条目检查一次。届时返回的任务将以 <see cref="OperationCanceledException"/> 失败。</para></param>
     /// <returns>A task producing parsed metadata with entries, inferred types and warnings.
     /// <para>产生已解析元数据（含条目、推断类型与警告）的任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="EndOfStreamException">The stream ends before the entry count or a declared
-    /// entry header is fully read. <para>流在条目数或某个声明的条目头读完之前结束。</para></exception>
-    /// <exception cref="Nb0CorruptedException">The declared entry count exceeds
-    /// <see cref="int.MaxValue"/>, or a seekable stream is too small to hold the declared entry
-    /// table. <para>声明的条目数超过 <see cref="int.MaxValue"/>，或可寻址流小到不足以容纳声明的
-    /// 条目表。</para></exception>
+    /// <exception cref="EndOfStreamException">The stream ends before the entry count or a declared entry header is fully read.
+    /// <para>流在条目数或某个声明的条目头读完之前结束。</para></exception>
+    /// <exception cref="Nb0CorruptedException">The declared entry count exceeds <see cref="int.MaxValue"/>, or a seekable stream is too small to hold the declared entry table.
+    /// <para>声明的条目数超过 <see cref="int.MaxValue"/>，或可寻址流小到不足以容纳声明的 条目表。</para></exception>
     /// <exception cref="OperationCanceledException">Cancellation was requested while reading.
     /// <para>读取过程中请求了取消。</para></exception>
     public static async Task<Nb0Metadata> ParseFromStreamAsync(Stream stream, CancellationToken cancellationToken = default)

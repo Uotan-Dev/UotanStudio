@@ -133,27 +133,22 @@ public static partial class FirehoseXmlBuilder
         return sb.ToString();
     }
 
-    /// <summary>
-    /// Builds a &lt;program&gt; XML command with digest table attributes for Verified Image
-    /// Programming (VIP).
-    /// <para>构建带摘要表属性的 &lt;program&gt; XML 命令，用于验证镜像编程（VIP）。</para>
-    /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
-    /// <param name="numPartitionSectors">The number of sectors to program. <para>待编程扇区数。</para></param>
-    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
-    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
-    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
-    /// <param name="digest">The hex string of the SHA256 digest. <para>SHA256 摘要的十六进制字符串。</para></param>
-    /// <param name="digestSignature">The base64-encoded signature of the digest. <para>摘要的 Base64 编码签名。</para></param>
-    /// <param name="signatureSize">The size of the signature in bytes. <para>签名大小（字节）。</para></param>
-    /// <param name="label">Optional partition label. <para>可选分区标签。</para></param>
-    /// <param name="slot">Optional slot number. <para>可选槽位编号。</para></param>
-    /// <returns>The program XML string with digest attributes. <para>带摘要属性的编程 XML 字符串。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="digest"/> is not one SHA-256 width in hexadecimal, or <paramref name="signatureSize"/> does
-    /// not equal the decoded length of <paramref name="digestSignature"/>.
-    /// <para><paramref name="digest"/> 不是十六进制表示的单个 SHA-256 宽度，或 <paramref name="signatureSize"/>
-    /// 不等于 <paramref name="digestSignature"/> 解码后的长度。</para></exception>
+    /// <summary>Builds a &lt;program&gt; XML command with digest table attributes for Verified Image Programming (VIP).
+    /// <para>构建带摘要表属性的 &lt;program&gt; XML 命令，用于验证镜像编程（VIP）。</para></summary>
+    /// <param name="sectorSizeInBytes">The sector size in bytes.<para>扇区大小（字节）。</para></param>
+    /// <param name="numPartitionSectors">The number of sectors to program.<para>待编程扇区数。</para></param>
+    /// <param name="filename">The target filename.<para>目标文件名。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number.<para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector.<para>起始扇区。</para></param>
+    /// <param name="digest">The hex string of the SHA256 digest.<para>SHA256 摘要的十六进制字符串。</para></param>
+    /// <param name="digestSignature">The base64-encoded signature of the digest.
+    /// <para>摘要的 Base64 编码签名。</para></param>
+    /// <param name="signatureSize">The size of the signature in bytes.<para>签名大小（字节）。</para></param>
+    /// <param name="label">Optional partition label.<para>可选分区标签。</para></param>
+    /// <param name="slot">Optional slot number.<para>可选槽位编号。</para></param>
+    /// <returns>The program XML string with digest attributes.<para>带摘要属性的编程 XML 字符串。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="digest"/> is not one SHA-256 width in hexadecimal, or <paramref name="signatureSize"/> does not equal the decoded length of <paramref name="digestSignature"/>.
+    /// <para><paramref name="digest"/> 不是十六进制表示的单个 SHA-256 宽度，或 <paramref name="signatureSize"/> 不等于 <paramref name="digestSignature"/> 解码后的长度。</para></exception>
     /// <exception cref="FormatException"><paramref name="digestSignature"/> is not well-formed base64.
     /// <para><paramref name="digestSignature"/> 不是合法的 Base64。</para></exception>
     public static string BuildProgramWithDigest(long sectorSizeInBytes, long numPartitionSectors,
@@ -200,21 +195,17 @@ public static partial class FirehoseXmlBuilder
         return sb.ToString();
     }
 
-    /// <summary>
-    /// Builds the &lt;read&gt; XML command.
-    /// <para>构建 &lt;read&gt; XML 命令。</para>
-    /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
-    /// <param name="numPartitionSectors">The number of sectors to read. <para>待读取扇区数。</para></param>
-    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
-    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
-    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
-    /// <param name="label">Optional partition label. <para>可选分区标签。</para></param>
-    /// <param name="slot">Optional slot number. <para>可选槽位编号。</para></param>
-    /// <param name="pagesPerBlock">The NAND pages-per-block hint, written as the <c>PAGES_PER_BLOCK</c>
-    /// attribute only when positive; zero omits the attribute.
+    /// <summary>Builds the &lt;read&gt; XML command.<para>构建 &lt;read&gt; XML 命令。</para></summary>
+    /// <param name="sectorSizeInBytes">The sector size in bytes.<para>扇区大小（字节）。</para></param>
+    /// <param name="numPartitionSectors">The number of sectors to read.<para>待读取扇区数。</para></param>
+    /// <param name="filename">The target filename.<para>目标文件名。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number.<para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector.<para>起始扇区。</para></param>
+    /// <param name="label">Optional partition label.<para>可选分区标签。</para></param>
+    /// <param name="slot">Optional slot number.<para>可选槽位编号。</para></param>
+    /// <param name="pagesPerBlock">The NAND pages-per-block hint, written as the <c>PAGES_PER_BLOCK</c> attribute only when positive; zero omits the attribute.
     /// <para>NAND 每块页数提示；仅当为正时以 <c>PAGES_PER_BLOCK</c> 属性写出，为零时省略该属性。</para></param>
-    /// <returns>The read XML string. <para>读取 XML 字符串。</para></returns>
+    /// <returns>The read XML string.<para>读取 XML 字符串。</para></returns>
     public static string BuildRead(long sectorSizeInBytes, long numPartitionSectors,
         string filename, int physicalPartitionNumber, long startSector,
         string? label = null, int? slot = null, long pagesPerBlock = 0)
@@ -359,20 +350,15 @@ public static partial class FirehoseXmlBuilder
         return checked(numPartitionSectors * sectorSizeInBytes);
     }
 
-    /// <summary>
-    /// Builds the &lt;getsha256digest&gt; XML command asking the target to hash a flash range
-    ///.
-    /// <para>构建 &lt;getsha256digest&gt; XML 命令，请求目标对一段闪存范围计算哈希
-    /// 。</para>
-    /// </summary>
-    /// <param name="sectorSizeInBytes">The sector size in bytes. <para>扇区大小（字节）。</para></param>
-    /// <param name="numPartitionSectors">The number of sectors to hash. <para>待计算哈希的扇区数。</para></param>
-    /// <param name="physicalPartitionNumber">The physical partition number. <para>物理分区编号。</para></param>
-    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
-    /// <param name="slot">Optional slot number emitted as the <c>slot</c> attribute when non-zero
-    ///.
+    /// <summary>Builds the &lt;getsha256digest&gt; XML command asking the target to hash a flash range .
+    /// <para>构建 &lt;getsha256digest&gt; XML 命令，请求目标对一段闪存范围计算哈希。</para></summary>
+    /// <param name="sectorSizeInBytes">The sector size in bytes.<para>扇区大小（字节）。</para></param>
+    /// <param name="numPartitionSectors">The number of sectors to hash.<para>待计算哈希的扇区数。</para></param>
+    /// <param name="physicalPartitionNumber">The physical partition number.<para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector.<para>起始扇区。</para></param>
+    /// <param name="slot">Optional slot number emitted as the <c>slot</c> attribute when non-zero .
     /// <para>可选槽位编号；非零时以 <c>slot</c> 属性输出。</para></param>
-    /// <returns>The getsha256digest XML string. <para>getsha256digest XML 字符串。</para></returns>
+    /// <returns>The getsha256digest XML string.<para>getsha256digest XML 字符串。</para></returns>
     public static string BuildGetSha256Digest(long sectorSizeInBytes, long numPartitionSectors,
         int physicalPartitionNumber, long startSector, int? slot = null)
     {
@@ -393,19 +379,15 @@ public static partial class FirehoseXmlBuilder
         return sb.ToString();
     }
 
-    /// <summary>
-    /// Builds the &lt;poke&gt; XML command writing a bounded big-endian hex literal to target memory
-    ///.
-    /// <para>构建 &lt;poke&gt; XML 命令，向目标内存写入有界的大端十六进制字面量
-    /// 。</para>
-    /// </summary>
-    /// <param name="address">The target memory address. <para>目标内存地址。</para></param>
-    /// <param name="sizeInBytes">The number of bytes to write (1-8). <para>待写入字节数（1-8）。</para></param>
+    /// <summary>Builds the &lt;poke&gt; XML command writing a bounded big-endian hex literal to target memory .
+    /// <para>构建 &lt;poke&gt; XML 命令，向目标内存写入有界的大端十六进制字面量。</para></summary>
+    /// <param name="address">The target memory address.<para>目标内存地址。</para></param>
+    /// <param name="sizeInBytes">The number of bytes to write (1-8).<para>待写入字节数（1-8）。</para></param>
     /// <param name="valueHex">The big-endian hex literal with the <c>0x</c> prefix.
     /// <para>带 <c>0x</c> 前缀的大端十六进制字面量。</para></param>
     /// <param name="uppercaseSize">Whether the size attribute uses the <c>SizeInBytes</c> spelling.
     /// <para>大小属性是否使用 <c>SizeInBytes</c> 拼写。</para></param>
-    /// <returns>The poke XML string. <para>poke XML 字符串。</para></returns>
+    /// <returns>The poke XML string.<para>poke XML 字符串。</para></returns>
     public static string BuildPoke(long address, int sizeInBytes, string valueHex, bool uppercaseSize = false)
     {
         var sizeAttribute = uppercaseSize ? "SizeInBytes" : "size_in_bytes";

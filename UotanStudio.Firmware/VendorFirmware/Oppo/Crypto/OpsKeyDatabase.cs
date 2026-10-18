@@ -102,17 +102,9 @@ public static class OpsKeyDatabase
     /// </value>
     public static IReadOnlyList<OpsKeyEntry> Entries => KeyEntries;
 
-    /// <summary>
-    /// Finds an OPS key entry by its key identifier.
-    /// <para>根据密钥标识符查找 OPS 密钥条目。</para>
-    /// </summary>
-    /// <param name="keyId">
-    /// Key identifier such as <c>mbox5</c>; matched case-insensitively. A <see langword="null"/> value
-    /// simply yields no match.
-    /// <para>
-    /// 形如 <c>mbox5</c> 的密钥标识符；按不区分大小写匹配。传入 <see langword="null"/> 时只会匹配失败。
-    /// </para>
-    /// </param>
+    /// <summary>Finds an OPS key entry by its key identifier.<para>根据密钥标识符查找 OPS 密钥条目。</para></summary>
+    /// <param name="keyId">Key identifier such as <c>mbox5</c>; matched case-insensitively. A <see langword="null"/> value simply yields no match.
+    /// <para> 形如 <c>mbox5</c> 的密钥标识符；按不区分大小写匹配。传入 <see langword="null"/> 时只会匹配失败。 </para></param>
     /// <returns>The matching entry, or <see langword="null"/> when the identifier is unknown.
     /// <para>匹配的条目；标识符未知时返回 <see langword="null"/>。</para></returns>
     public static OpsKeyEntry? FindByKeyId(string keyId)

@@ -46,19 +46,10 @@ public class DatNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>
-    /// Dispatches DAT writing logic by the node type key (TypeKey): Build.Dat.Convert writes the DAT image pair
-    /// from the input image.
-    /// <para>按节点类型键（TypeKey）分发 DAT 写出逻辑：Build.Dat.Convert 从输入镜像写出 DAT 镜像对。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context.
-    /// <para>执行上下文。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Dispatches DAT writing logic by the node type key (TypeKey): Build.Dat.Convert writes the DAT image pair from the input image.
+    /// <para>按节点类型键（TypeKey）分发 DAT 写出逻辑：Build.Dat.Convert 从输入镜像写出 DAT 镜像对。</para></summary>
+    /// <param name="context">The execution context.<para>执行上下文。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         try

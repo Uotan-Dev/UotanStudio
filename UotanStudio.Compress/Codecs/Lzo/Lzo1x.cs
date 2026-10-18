@@ -43,25 +43,15 @@ internal static class Lzo1x
     private const int M4Marker = 16;
     private const long Max255Count = (long.MaxValue / 255) - 2;
 
-    /// <summary>
-    /// Decompresses an LZO1X bitstream into output with full bounds checking.
-    /// <para>解压 LZO1X 位流到 output，带完整边界检查。</para>
-    /// </summary>
-    /// <param name="input">LZO1X bitstream to decode, treated as untrusted; fewer than three available
-    /// bytes are reported as <see cref="LzoStatus.InputOverrun"/> and an optional two-byte version header
-    /// is consumed when the stream starts with <c>17</c>.
-    /// <para>待解码的 LZO1X 位流，按不可信输入处理；可用字节少于三个时报告 <see cref="LzoStatus.InputOverrun"/>，
-    /// 位流以 <c>17</c> 开头时消费其前两字节的版本头。</para></param>
-    /// <param name="output">Destination buffer whose length is the decode capacity; it is written only
-    /// when the returned status is <see cref="LzoStatus.Ok"/> and is left untouched otherwise.
+    /// <summary>Decompresses an LZO1X bitstream into output with full bounds checking.
+    /// <para>解压 LZO1X 位流到 output，带完整边界检查。</para></summary>
+    /// <param name="input">LZO1X bitstream to decode, treated as untrusted; fewer than three available bytes are reported as <see cref="LzoStatus.InputOverrun"/> and an optional two-byte version header is consumed when the stream starts with <c>17</c>.
+    /// <para>待解码的 LZO1X 位流，按不可信输入处理；可用字节少于三个时报告 <see cref="LzoStatus.InputOverrun"/>， 位流以 <c>17</c> 开头时消费其前两字节的版本头。</para></param>
+    /// <param name="output">Destination buffer whose length is the decode capacity; it is written only when the returned status is <see cref="LzoStatus.Ok"/> and is left untouched otherwise.
     /// <para>目标缓冲区，其长度即解码容量上限；仅当返回状态为 <see cref="LzoStatus.Ok"/> 时写入，否则保持不变。</para></param>
-    /// <param name="bytesWritten">Bytes the decoder produced, reported under every status and <c>0</c> when
-    /// it stopped before emitting anything; on failure this count is not mirrored into
-    /// <paramref name="output"/>.
-    /// <para>解码器产生的字节数，任何状态下都会给出，在尚未写出内容前停止时为 <c>0</c>；失败时该数值不会写入
-    /// <paramref name="output"/>。</para></param>
-    /// <returns>The status of the decode attempt.
-    /// <para>本次解码尝试的状态。</para></returns>
+    /// <param name="bytesWritten">Bytes the decoder produced, reported under every status and <c>0</c> when it stopped before emitting anything; on failure this count is not mirrored into <paramref name="output"/>.
+    /// <para>解码器产生的字节数，任何状态下都会给出，在尚未写出内容前停止时为 <c>0</c>；失败时该数值不会写入 <paramref name="output"/>。</para></param>
+    /// <returns>The status of the decode attempt.<para>本次解码尝试的状态。</para></returns>
     public static LzoStatus TryDecompress(ReadOnlySpan<byte> input, Span<byte> output, out int bytesWritten)
     {
         bytesWritten = 0;
@@ -482,22 +472,15 @@ internal static class Lzo1x
         }
     }
 
-    /// <summary>
-    /// Decompresses requiring an exact output size; any failure (including a size mismatch) throws InvalidDataException.
-    /// <para>解压并要求精确的输出大小；任何失败（含长度不符）抛出 InvalidDataException。</para>
-    /// </summary>
-    /// <param name="input">LZO1X bitstream to decode, treated as untrusted; an empty or otherwise
-    /// sub-three-byte input fails with <see cref="LzoStatus.InputOverrun"/> even when
-    /// <paramref name="expectedSize"/> is <c>0</c>.
-    /// <para>待解码的 LZO1X 位流，按不可信输入处理；空输入或不足三字节的输入都会以
-    /// <see cref="LzoStatus.InputOverrun"/> 失败，即使 <paramref name="expectedSize"/> 为 <c>0</c>。</para></param>
-    /// <param name="expectedSize">Exact decompressed size in bytes; a buffer of this length is allocated
-    /// up front and a produced byte count that differs from it is a failure.
+    /// <summary>Decompresses requiring an exact output size; any failure (including a size mismatch) throws InvalidDataException.
+    /// <para>解压并要求精确的输出大小；任何失败（含长度不符）抛出 InvalidDataException。</para></summary>
+    /// <param name="input">LZO1X bitstream to decode, treated as untrusted; an empty or otherwise sub-three-byte input fails with <see cref="LzoStatus.InputOverrun"/> even when <paramref name="expectedSize"/> is <c>0</c>.
+    /// <para>待解码的 LZO1X 位流，按不可信输入处理；空输入或不足三字节的输入都会以 <see cref="LzoStatus.InputOverrun"/> 失败，即使 <paramref name="expectedSize"/> 为 <c>0</c>。</para></param>
+    /// <param name="expectedSize">Exact decompressed size in bytes; a buffer of this length is allocated up front and a produced byte count that differs from it is a failure.
     /// <para>精确的解压后大小（字节）；会预先分配该长度的缓冲区，实际产出字节数与之不同即视为失败。</para></param>
     /// <returns>The fully filled buffer of <paramref name="expectedSize"/> bytes.
     /// <para>填满的缓冲区，长度为 <paramref name="expectedSize"/> 字节。</para></returns>
-    /// <exception cref="InvalidDataException">The bitstream failed to decode, or the decoded byte count
-    /// differs from <paramref name="expectedSize"/>.
+    /// <exception cref="InvalidDataException">The bitstream failed to decode, or the decoded byte count differs from <paramref name="expectedSize"/>.
     /// <para>位流解码失败，或解码得到的字节数与 <paramref name="expectedSize"/> 不一致。</para></exception>
     public static byte[] Decompress(ReadOnlySpan<byte> input, int expectedSize)
     {
@@ -518,19 +501,14 @@ internal static class Lzo1x
         return result;
     }
 
-    /// <summary>
-    /// Compresses the input with lzo1x_1 (bitstream version 0).
-    /// <para>以 lzo1x_1（位流版本 0）压缩输入。</para>
-    /// </summary>
-    /// <param name="input">Uncompressed bytes to encode with the lzo1x_1 variant; an empty span is valid
-    /// and yields only the three-byte end marker. The span length also sizes the intermediate worst-case
-    /// buffer as <c>length + length / 16 + 64 + 3</c> bytes.
-    /// <para>要以 lzo1x_1 变体编码的未压缩字节；空区间合法且仅产出三字节的结束标记。区间长度同时按
-    /// <c>长度 + 长度 / 16 + 64 + 3</c> 字节估算中间的 worst-case 缓冲区。</para></param>
+    /// <summary>Compresses the input with lzo1x_1 (bitstream version 0).
+    /// <para>以 lzo1x_1（位流版本 0）压缩输入。</para></summary>
+    /// <param name="input">Uncompressed bytes to encode with the lzo1x_1 variant; an empty span is valid and yields only the three-byte end marker. The span length also sizes the intermediate worst-case buffer as <c>length + length / 16 + 64 + 3</c> bytes.
+    /// <para>要以 lzo1x_1 变体编码的未压缩字节；空区间合法且仅产出三字节的结束标记。区间长度同时按 <c>长度 + 长度 / 16 + 64 + 3</c> 字节估算中间的 worst-case 缓冲区。</para></param>
     /// <returns>The LZO1X bitstream, trimmed to the number of bytes the encoder wrote.
     /// <para>LZO1X 位流，已按编码器实际写出的字节数裁剪。</para></returns>
-    /// <exception cref="InvalidOperationException">The encoder reported a status other than
-    /// <see cref="LzoStatus.Ok"/>. <para>编码器返回了 <see cref="LzoStatus.Ok"/> 之外的状态。</para></exception>
+    /// <exception cref="InvalidOperationException">The encoder reported a status other than <see cref="LzoStatus.Ok"/>.
+    /// <para>编码器返回了 <see cref="LzoStatus.Ok"/> 之外的状态。</para></exception>
     public static byte[] Compress(ReadOnlySpan<byte> input)
     {
         var worst = input.Length + (input.Length / 16) + 64 + 3;

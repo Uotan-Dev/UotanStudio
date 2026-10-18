@@ -45,19 +45,12 @@ internal static class AccessFlags
     /// <summary>Bit <c>0x20000</c>, printed as <c>declared-synchronized</c>. <para>位 <c>0x20000</c>，输出为 <c>declared-synchronized</c>。</para></summary>
     public const uint DeclaredSynchronized = 0x20000;
 
-    /// <summary>
-    /// Formats the access flags into modifiers, interpreting shared bits as field modifiers.
-    /// <para>把访问标志格式化为修饰符列表，共享位按字段修饰符解释。</para>
-    /// </summary>
-    /// <param name="flags">
-    /// Raw <c>access_flags</c> value; bits outside the defined constants are ignored.
-    /// <para>原始 <c>access_flags</c> 值；已定义常量之外的位会被忽略。</para>
-    /// </param>
-    /// <returns>
-    /// Modifier names in constant order, separated by a single space, or <see cref="string.Empty"/>
-    /// when no listed bit is set.
-    /// <para>按常量顺序以单个空格分隔的修饰符名；没有任何已列出的位被置位时返回 <see cref="string.Empty"/>。</para>
-    /// </returns>
+    /// <summary>Formats the access flags into modifiers, interpreting shared bits as field modifiers.
+    /// <para>把访问标志格式化为修饰符列表，共享位按字段修饰符解释。</para></summary>
+    /// <param name="flags">Raw <c>access_flags</c> value; bits outside the defined constants are ignored.
+    /// <para>原始 <c>access_flags</c> 值；已定义常量之外的位会被忽略。</para></param>
+    /// <returns>Modifier names in constant order, separated by a single space, or <see cref="string.Empty"/> when no listed bit is set.
+    /// <para>按常量顺序以单个空格分隔的修饰符名；没有任何已列出的位被置位时返回 <see cref="string.Empty"/>。</para></returns>
     public static string Format(uint flags)
         => FormatCore(flags, method: false);
 

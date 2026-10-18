@@ -38,31 +38,18 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
     /// </value>
     public OppFormat SupportedFormat => OppFormat.Ops;
 
-    /// <summary>
-    /// Decrypts an OPS payload block with the named key.
-    /// <para>使用指定密钥解密 OPS 负载块。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Ciphertext bytes; left untouched, the result is a separate array.
-    /// <para>密文字节；保持原样不变，结果为独立数组。</para>
-    /// </param>
-    /// <param name="keyId">
-    /// OPS key identifier, for example <c>mbox5</c>; resolved against the built-in table first and the
-    /// custom keys second.
-    /// <para>
-    /// OPS 密钥标识符（例如 <c>mbox5</c>）；先在内置表中解析，再在自定义密钥中解析。
-    /// </para>
-    /// </param>
-    /// <returns>
-    /// The decrypted bytes, exactly as long as <paramref name="data"/>.
-    /// <para>解密后的字节，长度与 <paramref name="data"/> 完全一致。</para>
-    /// </returns>
+    /// <summary>Decrypts an OPS payload block with the named key.
+    /// <para>使用指定密钥解密 OPS 负载块。</para></summary>
+    /// <param name="data">Ciphertext bytes; left untouched, the result is a separate array.
+    /// <para>密文字节；保持原样不变，结果为独立数组。</para></param>
+    /// <param name="keyId">OPS key identifier, for example <c>mbox5</c>; resolved against the built-in table first and the custom keys second.
+    /// <para> OPS 密钥标识符（例如 <c>mbox5</c>）；先在内置表中解析，再在自定义密钥中解析。 </para></param>
+    /// <returns>The decrypted bytes, exactly as long as <paramref name="data"/>.
+    /// <para>解密后的字节，长度与 <paramref name="data"/> 完全一致。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="OppDecryptionException">
-    /// <paramref name="keyId"/> matches neither a built-in nor a custom key.
-    /// <para><paramref name="keyId"/> 在内置密钥与自定义密钥中均无匹配。</para>
-    /// </exception>
+    /// <exception cref="OppDecryptionException"><paramref name="keyId"/> matches neither a built-in nor a custom key.
+    /// <para><paramref name="keyId"/> 在内置密钥与自定义密钥中均无匹配。</para></exception>
     public byte[] Decrypt(byte[] data, string keyId)
     {
         Guard.ThrowIfNull(data);
@@ -77,31 +64,18 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
         return buffer;
     }
 
-    /// <summary>
-    /// Encrypts a block with the named OPS key, the exact inverse of <see cref="Decrypt(byte[],string)"/>.
-    /// <para>使用指定的 OPS 密钥加密数据块，是 <see cref="Decrypt(byte[],string)"/> 的完全逆运算。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext bytes; left untouched, the result is a separate array.
-    /// <para>明文字节；保持原样不变，结果为独立数组。</para>
-    /// </param>
-    /// <param name="keyId">
-    /// OPS key identifier, for example <c>mbox5</c>; resolved against the built-in table first and the
-    /// custom keys second.
-    /// <para>
-    /// OPS 密钥标识符（例如 <c>mbox5</c>）；先在内置表中解析，再在自定义密钥中解析。
-    /// </para>
-    /// </param>
-    /// <returns>
-    /// The encrypted bytes, exactly as long as <paramref name="data"/>.
-    /// <para>加密后的字节，长度与 <paramref name="data"/> 完全一致。</para>
-    /// </returns>
+    /// <summary>Encrypts a block with the named OPS key, the exact inverse of <see cref="Decrypt(byte[],string)"/>.
+    /// <para>使用指定的 OPS 密钥加密数据块，是 <see cref="Decrypt(byte[],string)"/> 的完全逆运算。</para></summary>
+    /// <param name="data">Plaintext bytes; left untouched, the result is a separate array.
+    /// <para>明文字节；保持原样不变，结果为独立数组。</para></param>
+    /// <param name="keyId">OPS key identifier, for example <c>mbox5</c>; resolved against the built-in table first and the custom keys second.
+    /// <para> OPS 密钥标识符（例如 <c>mbox5</c>）；先在内置表中解析，再在自定义密钥中解析。 </para></param>
+    /// <returns>The encrypted bytes, exactly as long as <paramref name="data"/>.
+    /// <para>加密后的字节，长度与 <paramref name="data"/> 完全一致。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="OppDecryptionException">
-    /// <paramref name="keyId"/> matches neither a built-in nor a custom key.
-    /// <para><paramref name="keyId"/> 在内置密钥与自定义密钥中均无匹配。</para>
-    /// </exception>
+    /// <exception cref="OppDecryptionException"><paramref name="keyId"/> matches neither a built-in nor a custom key.
+    /// <para><paramref name="keyId"/> 在内置密钥与自定义密钥中均无匹配。</para></exception>
     public byte[] Encrypt(byte[] data, string keyId)
     {
         Guard.ThrowIfNull(data);
@@ -116,33 +90,20 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
         return buffer;
     }
 
-    /// <summary>
-    /// Decrypts the input stream block by block with the named OPS key and appends the result to
-    /// <paramref name="output"/>. Neither stream is repositioned or closed.
-    /// <para>使用指定的 OPS 密钥逐块解密输入流，并把结果追加写入 <paramref name="output"/>。两个流都不会被重定位或关闭。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable stream positioned at the start of the ciphertext; consumed to its end.
-    /// <para>定位在密文起始处的可读流，会被读取到末尾。</para>
-    /// </param>
-    /// <param name="output">
-    /// Writable stream that receives the plaintext at its current position.
-    /// <para>在当前写入位置接收明文的 writable 流。</para>
-    /// </param>
-    /// <param name="keyId">
-    /// OPS key identifier, for example <c>mbox5</c>.
-    /// <para>OPS 密钥标识符（例如 <c>mbox5</c>）。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked between block transfers; a signalled token stops before the next write.
-    /// <para>在各块传输之间检查；令牌已触发时在下一次写入前停止。</para>
-    /// </param>
+    /// <summary>Decrypts the input stream block by block with the named OPS key and appends the result to <paramref name="output"/>. Neither stream is repositioned or closed.
+    /// <para>使用指定的 OPS 密钥逐块解密输入流，并把结果追加写入 <paramref name="output"/>。两个流都不会被重定位或关闭。</para></summary>
+    /// <param name="input">Readable stream positioned at the start of the ciphertext; consumed to its end.
+    /// <para>定位在密文起始处的可读流，会被读取到末尾。</para></param>
+    /// <param name="output">Writable stream that receives the plaintext at its current position.
+    /// <para>在当前写入位置接收明文的 writable 流。</para></param>
+    /// <param name="keyId">OPS key identifier, for example <c>mbox5</c>.
+    /// <para>OPS 密钥标识符（例如 <c>mbox5</c>）。</para></param>
+    /// <param name="cancellationToken">Checked between block transfers; a signalled token stops before the next write.
+    /// <para>在各块传输之间检查；令牌已触发时在下一次写入前停止。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="OppDecryptionException">
-    /// <paramref name="keyId"/> matches neither a built-in nor a custom key.
-    /// <para><paramref name="keyId"/> 在内置密钥与自定义密钥中均无匹配。</para>
-    /// </exception>
+    /// <exception cref="OppDecryptionException"><paramref name="keyId"/> matches neither a built-in nor a custom key.
+    /// <para><paramref name="keyId"/> 在内置密钥与自定义密钥中均无匹配。</para></exception>
     public void Decrypt(Stream input, Stream output, string keyId, CancellationToken cancellationToken)
     {
         Guard.ThrowIfNull(input);
@@ -155,33 +116,20 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
         ProcessStream(input, output, rkey, entry, encrypt: false, cancellationToken);
     }
 
-    /// <summary>
-    /// Encrypts the input stream block by block with the named OPS key and appends the result to
-    /// <paramref name="output"/>. Neither stream is repositioned or closed.
-    /// <para>使用指定的 OPS 密钥逐块加密输入流，并把结果追加写入 <paramref name="output"/>。两个流都不会被重定位或关闭。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable stream positioned at the start of the plaintext; consumed to its end.
-    /// <para>定位在明文起始处的可读流，会被读取到末尾。</para>
-    /// </param>
-    /// <param name="output">
-    /// Writable stream that receives the ciphertext at its current position.
-    /// <para>在当前写入位置接收密文的可写流。</para>
-    /// </param>
-    /// <param name="keyId">
-    /// OPS key identifier, for example <c>mbox5</c>.
-    /// <para>OPS 密钥标识符（例如 <c>mbox5</c>）。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked between block transfers; a signalled token stops before the next write.
-    /// <para>在各块传输之间检查；令牌已触发时在下一次写入前停止。</para>
-    /// </param>
+    /// <summary>Encrypts the input stream block by block with the named OPS key and appends the result to <paramref name="output"/>. Neither stream is repositioned or closed.
+    /// <para>使用指定的 OPS 密钥逐块加密输入流，并把结果追加写入 <paramref name="output"/>。两个流都不会被重定位或关闭。</para></summary>
+    /// <param name="input">Readable stream positioned at the start of the plaintext; consumed to its end.
+    /// <para>定位在明文起始处的可读流，会被读取到末尾。</para></param>
+    /// <param name="output">Writable stream that receives the ciphertext at its current position.
+    /// <para>在当前写入位置接收密文的可写流。</para></param>
+    /// <param name="keyId">OPS key identifier, for example <c>mbox5</c>.
+    /// <para>OPS 密钥标识符（例如 <c>mbox5</c>）。</para></param>
+    /// <param name="cancellationToken">Checked between block transfers; a signalled token stops before the next write.
+    /// <para>在各块传输之间检查；令牌已触发时在下一次写入前停止。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="OppDecryptionException">
-    /// <paramref name="keyId"/> matches neither a built-in nor a custom key.
-    /// <para><paramref name="keyId"/> 在内置密钥与自定义密钥中均无匹配。</para>
-    /// </exception>
+    /// <exception cref="OppDecryptionException"><paramref name="keyId"/> matches neither a built-in nor a custom key.
+    /// <para><paramref name="keyId"/> 在内置密钥与自定义密钥中均无匹配。</para></exception>
     public void Encrypt(Stream input, Stream output, string keyId, CancellationToken cancellationToken)
     {
         Guard.ThrowIfNull(input);
@@ -247,25 +195,12 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
         }
     }
 
-    /// <summary>
-    /// Automatically infers the key and decrypts data, trying all OPS keys.
-    /// <para>自动推断密钥并解密数据，尝试所有 OPS 密钥。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Ciphertext of an OPS XML block; the buffer is never modified.
-    /// <para>OPS XML 块的密文；传入数组不会被修改。</para>
-    /// </param>
-    /// <returns>
-    /// UTF-8 plaintext cut after the last <c>&gt;</c> when a <c>&lt;?xml</c> declaration is found under a
-    /// built-in key, the untruncated bytes when the declaration sits at offset zero and no trailing junk
-    /// follows, or <see langword="null"/> when no built-in key yields an XML declaration. Custom keys are
-    /// not part of the search.
-    /// <para>
-    /// 当某个内置密钥可解出 <c>&lt;?xml</c> 声明时，返回在最后一个 <c>&gt;</c> 之后截断的 UTF-8 明文；
-    /// 声明位于偏移 0 且其后无多余字节时返回未截断的字节；无任何内置密钥解出 XML 声明时返回
-    /// <see langword="null"/>。自定义密钥不参与搜索。
-    /// </para>
-    /// </returns>
+    /// <summary>Automatically infers the key and decrypts data, trying all OPS keys.
+    /// <para>自动推断密钥并解密数据，尝试所有 OPS 密钥。</para></summary>
+    /// <param name="data">Ciphertext of an OPS XML block; the buffer is never modified.
+    /// <para>OPS XML 块的密文；传入数组不会被修改。</para></param>
+    /// <returns>UTF-8 plaintext cut after the last <c>&gt;</c> when a <c>&lt;?xml</c> declaration is found under a built-in key, the untruncated bytes when the declaration sits at offset zero and no trailing junk follows, or <see langword="null"/> when no built-in key yields an XML declaration. Custom keys are not part of the search.
+    /// <para> 当某个内置密钥可解出 <c>&lt;?xml</c> 声明时，返回在最后一个 <c>&gt;</c> 之后截断的 UTF-8 明文； 声明位于偏移 0 且其后无多余字节时返回未截断的字节；无任何内置密钥解出 XML 声明时返回 <see langword="null"/>。自定义密钥不参与搜索。 </para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
     public byte[]? AutoDecrypt(byte[] data)
@@ -303,23 +238,12 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
         return null;
     }
 
-    /// <summary>
-    /// Automatically detects OPS key and decrypts XML data.
-    /// <para>自动探测 OPS 密钥并解密 XML 数据。</para>
-    /// </summary>
-    /// <param name="encryptedXml">
-    /// Ciphertext of an OPS XML block; the array is never modified.
-    /// <para>OPS XML 块的密文；传入数组不会被修改。</para>
-    /// </param>
-    /// <returns>
-    /// The decrypted XML, starting at its <c>&lt;?xml</c> declaration and cut after the last
-    /// <c>&gt;</c>, paired with the <c>mbox</c> identifier that produced it; <see langword="null"/> when
-    /// no built-in key yields an XML declaration. Keys that throw a malformed-text error are skipped.
-    /// <para>
-    /// 解密后的 XML，从其 <c>&lt;?xml</c> 声明起、在最后一个 <c>&gt;</c> 之后截断，并附上产生该结果的
-    /// <c>mbox</c> 标识符；无任何内置密钥解出 XML 声明时返回 <see langword="null"/>。抛出文本格式错误的密钥会被跳过。
-    /// </para>
-    /// </returns>
+    /// <summary>Automatically detects OPS key and decrypts XML data.
+    /// <para>自动探测 OPS 密钥并解密 XML 数据。</para></summary>
+    /// <param name="encryptedXml">Ciphertext of an OPS XML block; the array is never modified.
+    /// <para>OPS XML 块的密文；传入数组不会被修改。</para></param>
+    /// <returns>The decrypted XML, starting at its <c>&lt;?xml</c> declaration and cut after the last <c>&gt;</c>, paired with the <c>mbox</c> identifier that produced it; <see langword="null"/> when no built-in key yields an XML declaration. Keys that throw a malformed-text error are skipped.
+    /// <para> 解密后的 XML，从其 <c>&lt;?xml</c> 声明起、在最后一个 <c>&gt;</c> 之后截断，并附上产生该结果的 <c>mbox</c> 标识符；无任何内置密钥解出 XML 声明时返回 <see langword="null"/>。抛出文本格式错误的密钥会被跳过。 </para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="encryptedXml"/> is <see langword="null"/>.
     /// <para><paramref name="encryptedXml"/> 为 <see langword="null"/>。</para></exception>
     public (string Xml, string KeyId)? AutoDecryptOpsXml(byte[] encryptedXml)
@@ -405,19 +329,12 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
         return false;
     }
 
-    /// <summary>
-    /// Queries whether the specified key identifier is supported.
-    /// <para>查询是否支持指定的密钥标识符。</para>
-    /// </summary>
-    /// <param name="keyId">
-    /// Key identifier to test; built-in identifiers match case-insensitively, custom ones only under the
-    /// exact string they were added with.
-    /// <para>待测试的密钥标识符；内置标识符按不区分大小写匹配，自定义标识符必须与添加时的字符串完全一致。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> when a built-in or custom OPS key carries that identifier.
-    /// <para>内置或自定义 OPS 密钥中存在该标识符时为 <see langword="true"/>。</para>
-    /// </returns>
+    /// <summary>Queries whether the specified key identifier is supported.
+    /// <para>查询是否支持指定的密钥标识符。</para></summary>
+    /// <param name="keyId">Key identifier to test; built-in identifiers match case-insensitively, custom ones only under the exact string they were added with.
+    /// <para>待测试的密钥标识符；内置标识符按不区分大小写匹配，自定义标识符必须与添加时的字符串完全一致。</para></param>
+    /// <returns><see langword="true"/> when a built-in or custom OPS key carries that identifier.
+    /// <para>内置或自定义 OPS 密钥中存在该标识符时为 <see langword="true"/>。</para></returns>
     public bool IsSupported(string keyId) => OpsKeyDatabase.FindByKeyId(keyId) != null || _customKeys.ContainsKey(keyId);
 
     /// <summary>
@@ -445,21 +362,13 @@ public sealed class OpsFormatCryptoProvider : IOppFormatCryptoProvider
         return result;
     }
 
-    /// <summary>
-    /// Adds a custom key.
-    /// <para>添加自定义密钥。</para>
-    /// </summary>
-    /// <param name="keyEntry">
-    /// An <see cref="OpsKeyEntry"/> instance. Reusing an existing identifier replaces that entry and
-    /// drops its cached round key, so the next operation re-derives it.
-    /// <para><see cref="OpsKeyEntry"/> 实例。复用已有标识符会替换该条目并丢弃其缓存轮密钥，下次操作时重新派生。</para>
-    /// </param>
+    /// <summary>Adds a custom key.<para>添加自定义密钥。</para></summary>
+    /// <param name="keyEntry">An <see cref="OpsKeyEntry"/> instance. Reusing an existing identifier replaces that entry and drops its cached round key, so the next operation re-derives it.
+    /// <para><see cref="OpsKeyEntry"/> 实例。复用已有标识符会替换该条目并丢弃其缓存轮密钥，下次操作时重新派生。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="keyEntry"/> is <see langword="null"/>.
     /// <para><paramref name="keyEntry"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="keyEntry"/> is not an <see cref="OpsKeyEntry"/>.
-    /// <para><paramref name="keyEntry"/> 不是 <see cref="OpsKeyEntry"/>。</para>
-    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="keyEntry"/> is not an <see cref="OpsKeyEntry"/>.
+    /// <para><paramref name="keyEntry"/> 不是 <see cref="OpsKeyEntry"/>。</para></exception>
     public void AddCustomKey(object keyEntry)
     {
         Guard.ThrowIfNull(keyEntry);

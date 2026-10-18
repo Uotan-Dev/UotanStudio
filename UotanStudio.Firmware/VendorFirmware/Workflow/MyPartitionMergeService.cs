@@ -98,42 +98,31 @@ public sealed class MyPartitionMergeService
 {
     private const long MaximumSidecarBytes = 8 * 1024 * 1024;
 
-    /// <summary>
-    /// Runs the merge described by <see cref="MyPartitionMergeService"/>.
-    /// <para>执行 <see cref="MyPartitionMergeService"/> 所描述的合并。</para>
-    /// </summary>
-    /// <param name="myPartitionDirectory">
-    /// Extracted my-partition root whose top-level entries are relocated. <para>待迁移其顶层条目的 my 分区解包根目录。</para>
-    /// </param>
-    /// <param name="targetSystemDirectory">
-    /// Extracted system partition root receiving the moved tree under the configured relative root.
-    /// <para>按配置的相对根接收迁移树的 system 分区解包根。</para>
-    /// </param>
-    /// <param name="configDirectory">
-    /// Directory holding the plain <c>file_contexts</c> and <c>fs_config</c> sidecars; <see langword="null"/> falls
-    /// back to the consolidated metadata sidecars and the moved partition root itself. Rebased copies replace the
-    /// originals atomically. <para>持有裸名 <c>file_contexts</c> 与 <c>fs_config</c> 附属文件的目录；为
-    /// <see langword="null"/> 时依次回退到统一元数据附属文件与移动后分区根目录自带的附属文件。
-    /// 改基后的副本以原子方式替换原文件。</para>
-    /// </param>
-    /// <param name="options">
-    /// Merge placement; <see langword="null"/> uses defaults. <para>合并布局；为 <see langword="null"/> 时使用默认值。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Optional stage progress sink. <para>可选的阶段进度回调。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before each phase; cancellation aborts before any destination file is replaced.
-    /// <para>在每个阶段前检查；取消时不会替换任何目标文件。</para>
-    /// </param>
-    /// <returns>
-    /// The merge outcome with move, rebase, import and fold accounting. <para>包含移动、改基、导入与折叠统计的合并结果。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">A path is blank or an option value is invalid. <para>路径为空或选项值无效。</para></exception>
-    /// <exception cref="DirectoryNotFoundException">An input directory is missing. <para>输入目录缺失。</para></exception>
-    /// <exception cref="InvalidDataException">A sidecar is unreadable, oversized or malformed. <para>附属文件不可读、超限或格式错误。</para></exception>
-    /// <exception cref="IOException">A destination conflict blocks the move or publication fails. <para>目标冲突阻碍移动，或发布失败。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    /// <summary>Runs the merge described by <see cref="MyPartitionMergeService"/>.
+    /// <para>执行 <see cref="MyPartitionMergeService"/> 所描述的合并。</para></summary>
+    /// <param name="myPartitionDirectory">Extracted my-partition root whose top-level entries are relocated.
+    /// <para>待迁移其顶层条目的 my 分区解包根目录。</para></param>
+    /// <param name="targetSystemDirectory">Extracted system partition root receiving the moved tree under the configured relative root.
+    /// <para>按配置的相对根接收迁移树的 system 分区解包根。</para></param>
+    /// <param name="configDirectory">Directory holding the plain <c>file_contexts</c> and <c>fs_config</c> sidecars; <see langword="null"/> falls back to the consolidated metadata sidecars and the moved partition root itself. Rebased copies replace the originals atomically.
+    /// <para>持有裸名 <c>file_contexts</c> 与 <c>fs_config</c> 附属文件的目录；为 <see langword="null"/> 时依次回退到统一元数据附属文件与移动后分区根目录自带的附属文件。 改基后的副本以原子方式替换原文件。</para></param>
+    /// <param name="options">Merge placement; <see langword="null"/> uses defaults.
+    /// <para>合并布局；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="progress">Optional stage progress sink.<para>可选的阶段进度回调。</para></param>
+    /// <param name="cancellationToken">Checked before each phase; cancellation aborts before any destination file is replaced.
+    /// <para>在每个阶段前检查；取消时不会替换任何目标文件。</para></param>
+    /// <returns>The merge outcome with move, rebase, import and fold accounting.
+    /// <para>包含移动、改基、导入与折叠统计的合并结果。</para></returns>
+    /// <exception cref="ArgumentException">A path is blank or an option value is invalid.
+    /// <para>路径为空或选项值无效。</para></exception>
+    /// <exception cref="DirectoryNotFoundException">An input directory is missing.
+    /// <para>输入目录缺失。</para></exception>
+    /// <exception cref="InvalidDataException">A sidecar is unreadable, oversized or malformed.
+    /// <para>附属文件不可读、超限或格式错误。</para></exception>
+    /// <exception cref="IOException">A destination conflict blocks the move or publication fails.
+    /// <para>目标冲突阻碍移动，或发布失败。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<MyPartitionMergeResult> MergeAsync(string myPartitionDirectory, string targetSystemDirectory,
         string? configDirectory, MyPartitionMergeOptions? options = null, IFirmwareProgress? progress = null,
         CancellationToken cancellationToken = default)

@@ -32,32 +32,25 @@ public sealed record MtkScatterStorage(string Name, string BootChannel, ulong Bl
 
 /// <summary>Untrusted partition declarations. Addresses and file names are not resolved or executable.
 /// <para>不可信的分区声明。地址与文件名未经解析，也不具备可执行性。</para></summary>
-/// <param name="Index">The exact SYS index token.
-/// <para>原样的 SYS 索引标记。</para></param>
-/// <param name="Name">The partition name.
-/// <para>分区名称。</para></param>
+/// <param name="Index">The exact SYS index token.<para>原样的 SYS 索引标记。</para></param>
+/// <param name="Name">The partition name.<para>分区名称。</para></param>
 /// <param name="FileName">The literal file name, including the NONE sentinel.
 /// <para>字面文件名，包含 NONE 哨兵值。</para></param>
 /// <param name="IsDownload">The manifest's download flag, not user confirmation.
 /// <para>清单中的下载标志，不代表用户确认。</para></param>
 /// <param name="Type">The declared image type, not content detection.
 /// <para>声明的镜像类型，不是内容探测结果。</para></param>
-/// <param name="LinearStartAddress">The declared linear address.
-/// <para>声明的线性起始地址。</para></param>
+/// <param name="LinearStartAddress">The declared linear address.<para>声明的线性起始地址。</para></param>
 /// <param name="PhysicalStartAddress">The separate declared physical address.
 /// <para>单独声明的物理起始地址。</para></param>
 /// <param name="Size">The declared byte size; sentinel values remain uninterpreted.
 /// <para>声明的字节大小；哨兵值保持未解释。</para></param>
-/// <param name="Region">The literal storage region token.
-/// <para>字面的存储区域标记。</para></param>
-/// <param name="Storage">The literal hardware-storage token.
-/// <para>字面的硬件存储标记。</para></param>
+/// <param name="Region">The literal storage region token.<para>字面的存储区域标记。</para></param>
+/// <param name="Storage">The literal hardware-storage token.<para>字面的硬件存储标记。</para></param>
 /// <param name="BoundaryCheck">The manifest boundary-check flag, never an instruction to disable host checks.
 /// <para>清单的边界检查标志，绝不能作为关闭宿主检查的指令。</para></param>
-/// <param name="IsReserved">The reserved-entry flag.
-/// <para>保留条目标志。</para></param>
-/// <param name="OperationType">The literal operation policy token.
-/// <para>字面的操作策略标记。</para></param>
+/// <param name="IsReserved">The reserved-entry flag.<para>保留条目标志。</para></param>
+/// <param name="OperationType">The literal operation policy token.<para>字面的操作策略标记。</para></param>
 /// <param name="Fields">All fields, including extensions which callers must not silently treat as supported.
 /// <para>全部字段，包含调用方不得默认视为受支持的扩展字段。</para></param>
 public sealed record MtkScatterPartition(string Index, string Name, string FileName, bool IsDownload, string Type,

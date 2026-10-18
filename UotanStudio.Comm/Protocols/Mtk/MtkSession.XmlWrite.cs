@@ -4,51 +4,25 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    /// <summary>
-    /// Writes exactly a selected aligned XML storage range from a caller-owned stream.
-    /// <para>从调用方持有的流精确写入选定的、按块对齐的 XML 存储范围。</para>
-    /// </summary>
-    /// <remarks>
-    /// The caller must authorize this destructive operation and keep the source stable and exclusive.
-    /// No padding, clamping, source-path resolution, automatic authentication, retry or rollback is
-    /// performed. An interrupted exchange may have changed storage even when no progress was reported.
-    /// ACKs and END/START are agent reports, not independent persistence or readback verification.
-    /// <para>调用方必须授权这一破坏性操作，并保持源数据稳定且独占。不进行填充、截断、源路径解析、
-    /// 自动认证、重试或回滚。被打断的交换即使未上报任何进度，也可能已经改写了存储。
-    /// ACK 与 END/START 只是代理的上报，并非独立的持久化或回读校验。</para>
-    /// </remarks>
-    /// <param name="regionName">
-    /// An exact XML physical-region token from the discovered geometry, excluding RPMB.
-    /// <para>来自已发现几何信息的精确 XML 物理区域标识，不含 RPMB。</para>
-    /// </param>
-    /// <param name="offset">
-    /// Nonnegative block-aligned byte offset.
-    /// <para>非负、按块对齐的字节偏移。</para>
-    /// </param>
-    /// <param name="length">
-    /// Positive block-aligned byte count bounded by reported capacity.
-    /// <para>正数、按块对齐、受上报容量约束的字节数。</para>
-    /// </param>
-    /// <param name="source">
-    /// Readable source positioned at the selected bytes; remains caller-owned.
-    /// <para>定位到选定字节处、可读的源；所有权仍归调用方。</para>
-    /// </param>
-    /// <param name="timeoutMs">
-    /// Cooperative whole-operation deadline, from one millisecond through 24 hours.
-    /// <para>整个操作的协作式截止时间，从 1 毫秒到 24 小时。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Cumulative packet-acknowledged bytes; full progress is not final command completion.
-    /// <para>累计已被确认的数据包字节数；进度跑完不代表命令最终完成。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation for waiting and the exchange; cannot roll back device changes.
-    /// <para>用于等待和交换的取消令牌；无法回滚设备上的更改。</para>
-    /// </param>
-    /// <returns>
-    /// A task that completes once the write exchange and the final END/START command completion are acknowledged.
-    /// <para>在写入交换与最终 END/START 命令完成均被确认之后完成的任务。</para>
-    /// </returns>
+    /// <summary>Writes exactly a selected aligned XML storage range from a caller-owned stream.
+    /// <para>从调用方持有的流精确写入选定的、按块对齐的 XML 存储范围。</para></summary>
+    /// <remarks>The caller must authorize this destructive operation and keep the source stable and exclusive. No padding, clamping, source-path resolution, automatic authentication, retry or rollback is performed. An interrupted exchange may have changed storage even when no progress was reported. ACKs and END/START are agent reports, not independent persistence or readback verification.
+    /// <para>调用方必须授权这一破坏性操作，并保持源数据稳定且独占。不进行填充、截断、源路径解析、 自动认证、重试或回滚。被打断的交换即使未上报任何进度，也可能已经改写了存储。 ACK 与 END/START 只是代理的上报，并非独立的持久化或回读校验。</para></remarks>
+    /// <param name="regionName">An exact XML physical-region token from the discovered geometry, excluding RPMB.
+    /// <para>来自已发现几何信息的精确 XML 物理区域标识，不含 RPMB。</para></param>
+    /// <param name="offset">Nonnegative block-aligned byte offset.<para>非负、按块对齐的字节偏移。</para></param>
+    /// <param name="length">Positive block-aligned byte count bounded by reported capacity.
+    /// <para>正数、按块对齐、受上报容量约束的字节数。</para></param>
+    /// <param name="source">Readable source positioned at the selected bytes; remains caller-owned.
+    /// <para>定位到选定字节处、可读的源；所有权仍归调用方。</para></param>
+    /// <param name="timeoutMs">Cooperative whole-operation deadline, from one millisecond through 24 hours.
+    /// <para>整个操作的协作式截止时间，从 1 毫秒到 24 小时。</para></param>
+    /// <param name="progress">Cumulative packet-acknowledged bytes; full progress is not final command completion.
+    /// <para>累计已被确认的数据包字节数；进度跑完不代表命令最终完成。</para></param>
+    /// <param name="cancellationToken">Cancellation for waiting and the exchange; cannot roll back device changes.
+    /// <para>用于等待和交换的取消令牌；无法回滚设备上的更改。</para></param>
+    /// <returns>A task that completes once the write exchange and the final END/START command completion are acknowledged.
+    /// <para>在写入交换与最终 END/START 命令完成均被确认之后完成的任务。</para></returns>
     /// <exception cref="InvalidOperationException">Storage geometry has not been discovered or the XML DA channel is not attached.
     /// <para>尚未发现存储几何信息，或 XML DA 通道未附加。</para></exception>
     /// <exception cref="TimeoutException">The cooperative write deadline expired; storage may already have changed.

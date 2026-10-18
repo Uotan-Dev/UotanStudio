@@ -109,27 +109,22 @@ public sealed class FilesystemEquivalenceReport
     public static FilesystemEquivalenceReport FromOperationResult(FirmwareOpResult? result)
         => FromMetadata(result?.Metadata);
 
-    /// <summary>
-    /// Streams the produced image through SHA-256 and evaluates only the byte dimension.
-    /// <para>将产出镜像流式计入 SHA-256，仅评估字节维度。</para>
-    /// </summary>
-    /// <param name="producedImage">Readable stream positioned at the start of the produced image; the caller
-    /// keeps ownership. <para>定位在产出镜像起始处的可读流；所有权仍归调用方。</para></param>
+    /// <summary>Streams the produced image through SHA-256 and evaluates only the byte dimension.
+    /// <para>将产出镜像流式计入 SHA-256，仅评估字节维度。</para></summary>
+    /// <param name="producedImage">Readable stream positioned at the start of the produced image; the caller keeps ownership.
+    /// <para>定位在产出镜像起始处的可读流；所有权仍归调用方。</para></param>
     /// <param name="expectedSha256Hex">Recorded source digest as 64 hexadecimal characters, either case.
     /// <para>以 64 个十六进制字符记录的源摘要，大小写均可。</para></param>
-    /// <param name="expectedLength">Recorded source length in bytes; a seekable stream whose length already
-    /// disagrees short-circuits to <see cref="FirmwareEquivalenceState.NotEquivalent"/>.
+    /// <param name="expectedLength">Recorded source length in bytes; a seekable stream whose length already disagrees short-circuits to <see cref="FirmwareEquivalenceState.NotEquivalent"/>.
     /// <para>记录的源字节长度；长度已经不一致的可寻址流直接短路为不等价。</para></param>
     /// <param name="cancellationToken">Cancels the digest loop between blocks.
     /// <para>在摘要循环的各数据块之间取消。</para></param>
-    /// <returns><see cref="FirmwareEquivalenceState.Equivalent"/> or
-    /// <see cref="FirmwareEquivalenceState.NotEquivalent"/>; this evaluator always runs, so it never returns
-    /// <see cref="FirmwareEquivalenceState.NotEvaluated"/>.
+    /// <returns><see cref="FirmwareEquivalenceState.Equivalent"/> or <see cref="FirmwareEquivalenceState.NotEquivalent"/>; this evaluator always runs, so it never returns <see cref="FirmwareEquivalenceState.NotEvaluated"/>.
     /// <para>返回等价或不等价；本评估器总会执行，因此绝不返回不评估。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="producedImage"/> or
-    /// <paramref name="expectedSha256Hex"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentException"><paramref name="expectedSha256Hex"/> is not exactly 64 hexadecimal
-    /// characters, or <paramref name="producedImage"/> cannot be read.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="producedImage"/>or
+    /// <paramref name="expectedSha256Hex"/>is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="expectedSha256Hex"/>is not exactly 64
+    /// hexadecimal characters, or <paramref name="producedImage"/>cannot be read.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="expectedLength"/> is negative.
     /// <para><paramref name="expectedLength"/> 为负数。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.

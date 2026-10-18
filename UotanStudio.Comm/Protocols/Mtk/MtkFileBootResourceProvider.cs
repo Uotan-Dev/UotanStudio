@@ -34,15 +34,13 @@ public sealed class MtkFileBootResourceProvider : IMtkBootResourceProvider
     /// <para>按所请求种类打开显式选定的文件作为持有资源。</para></summary>
     /// <param name="device">Identity queried from the target; the file selection is independent of it.
     /// <para>从目标查询到的身份；文件选择与其无关。</para></param>
-    /// <param name="kind">The requested resource kind. <para>所请求的资源种类。</para></param>
-    /// <param name="cancellationToken">Cancellation for the file open.
-    /// <para>用于文件打开的取消令牌。</para></param>
+    /// <param name="kind">The requested resource kind.<para>所请求的资源种类。</para></param>
+    /// <param name="cancellationToken">Cancellation for the file open.<para>用于文件打开的取消令牌。</para></param>
     /// <returns>An owned read-only stream positioned at the first byte.
     /// <para>定位在首字节的只读持有流。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> is undefined.
     /// <para><paramref name="kind"/> 未定义。</para></exception>
-    /// <exception cref="InvalidOperationException">No file was selected for the requested kind, the
-    /// file is absent or unreadable, or it exceeds the addressable byte count.
+    /// <exception cref="InvalidOperationException">No file was selected for the requested kind, the file is absent or unreadable, or it exceeds the addressable byte count.
     /// <para>所请求种类未选定文件，文件缺失或不可读，或超出可寻址字节数。</para></exception>
     public Task<MtkBootResource> OpenAsync(MtkDeviceInfo device, MtkBootResourceKind kind,
         CancellationToken cancellationToken)

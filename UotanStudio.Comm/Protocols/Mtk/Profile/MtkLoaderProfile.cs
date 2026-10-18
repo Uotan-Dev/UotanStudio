@@ -107,23 +107,13 @@ public sealed class MtkLoaderProfile
         }
     }
 
-    /// <summary>
-    /// Evaluates every structurally valid entry against the queried device identity, applying the
-    /// exact or minimum-revision policy. This is a pure decision made before any device I/O: a
-    /// non-<see cref="MtkProfileDecision.SingleMatch"/> outcome must stop the upload.
-    /// <para>依据已查询的设备身份，按精确或最低版本策略评估每个结构有效的条目。这是在任何设备 I/O 之前做出的
-    /// 纯决策：非 <see cref="MtkProfileDecision.SingleMatch"/> 的结果必须阻止上传。</para>
-    /// </summary>
-    /// <param name="device">
-    /// The identity returned by the boot handshake. <para>由 boot 握手返回的身份信息。</para>
-    /// </param>
-    /// <param name="match">
-    /// The revision comparison policy. <para>版本比较策略。</para>
-    /// </param>
-    /// <returns>
-    /// The explained selection carrying the container hash.
-    /// <para>携带容器哈希的、带解释的选择结果。</para>
-    /// </returns>
+    /// <summary>Evaluates every structurally valid entry against the queried device identity, applying the exact or minimum-revision policy. This is a pure decision made before any device I/O: a non-<see cref="MtkProfileDecision.SingleMatch"/> outcome must stop the upload.
+    /// <para>依据已查询的设备身份，按精确或最低版本策略评估每个结构有效的条目。这是在任何设备 I/O 之前做出的 纯决策：非 <see cref="MtkProfileDecision.SingleMatch"/> 的结果必须阻止上传。</para></summary>
+    /// <param name="device">The identity returned by the boot handshake.
+    /// <para>由 boot 握手返回的身份信息。</para></param>
+    /// <param name="match">The revision comparison policy.<para>版本比较策略。</para></param>
+    /// <returns>The explained selection carrying the container hash.
+    /// <para>携带容器哈希的、带解释的选择结果。</para></returns>
     public MtkProfileSelection SelectEntry(MtkDeviceInfo device,
         MtkDaIdentityMatch match = MtkDaIdentityMatch.Exact)
     {
@@ -193,21 +183,12 @@ public sealed class MtkLoaderProfile
         };
     }
 
-    /// <summary>
-    /// Builds the upload-stage evidence that a profile decision has gated a bring-up attempt; used
-    /// by session bootstrap paths before any agent byte is sent.
-    /// <para>构建表明配置决策已对启动尝试进行门控的上传阶段证据；供会话启动路径在发送任何代理字节之前使用。</para>
-    /// </summary>
-    /// <param name="selection">
-    /// The evaluated selection. <para>已评估的选择结果。</para>
-    /// </param>
-    /// <param name="outcome">
-    /// The observed consequence for the run. <para>本次运行观察到的后果。</para>
-    /// </param>
-    /// <returns>
-    /// A <see cref="Common.Evidence.ProtocolEvidence"/> in phase <c>da-profile</c>.
-    /// <para>处于 <c>da-profile</c> 阶段的 <see cref="Common.Evidence.ProtocolEvidence"/>。</para>
-    /// </returns>
+    /// <summary>Builds the upload-stage evidence that a profile decision has gated a bring-up attempt; used by session bootstrap paths before any agent byte is sent.
+    /// <para>构建表明配置决策已对启动尝试进行门控的上传阶段证据；供会话启动路径在发送任何代理字节之前使用。</para></summary>
+    /// <param name="selection">The evaluated selection.<para>已评估的选择结果。</para></param>
+    /// <param name="outcome">The observed consequence for the run.<para>本次运行观察到的后果。</para></param>
+    /// <returns>A <see cref="Common.Evidence.ProtocolEvidence"/> in phase <c>da-profile</c>.
+    /// <para>处于 <c>da-profile</c> 阶段的 <see cref="Common.Evidence.ProtocolEvidence"/>。</para></returns>
     public Common.Evidence.ProtocolEvidence BuildGateEvidence(MtkProfileSelection selection,
         Common.Evidence.CommandOutcomeKind outcome)
     {

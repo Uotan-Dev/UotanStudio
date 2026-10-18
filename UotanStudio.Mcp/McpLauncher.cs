@@ -45,12 +45,8 @@ public static class McpLauncher
         await host.RunAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Runs the MCP server alongside the desktop UI, injecting the host-equivalent delivery
-    /// tool-preparation service so delivery_build works in companion mode.
-    /// <para>伴随桌面 UI 运行 MCP 服务器，注入与宿主等价的交付工具准备服务，
-    /// 使 delivery_build 在伴随模式可用。</para>
-    /// </summary>
+    /// <summary>Runs the MCP server alongside the desktop UI, injecting the host-equivalent delivery tool-preparation service so delivery_build works in companion mode.
+    /// <para>伴随桌面 UI 运行 MCP 服务器，注入与宿主等价的交付工具准备服务， 使 delivery_build 在伴随模式可用。</para></summary>
     /// <param name="args">Launch arguments read by <see cref="McpServerConfig.Parse"/>; the sandbox root still applies, so companion mode confines client paths as well.
     /// <para>由 <see cref="McpServerConfig.Parse"/> 读取的启动参数；沙箱根目录依然生效，伴随模式同样限制客户端路径。</para></param>
     /// <param name="deviceManager">Host-supplied gateway that owns device enumeration and transactions for every tool call.

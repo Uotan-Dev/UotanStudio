@@ -18,14 +18,11 @@ internal sealed class OfpQcCryptoProvider(IOppLogger? logger = null) : IOppForma
 
     public OppFormat SupportedFormat => OppFormat.OfpQc;
 
-    /// <summary>
-    /// Decrypts data using the specified key.
-    /// <para>使用指定密钥解密数据。</para>
-    /// </summary>
+    /// <summary>Decrypts data using the specified key.<para>使用指定密钥解密数据。</para></summary>
     /// <param name="data">Ciphertext of the OFP QC container; it is read only and never modified in place.
     /// <para>OFP QC 容器的密文；仅读取，绝不就地修改。</para></param>
-    /// <param name="keyId">QC key identifier, matched case-insensitively against the built-in database and
-    /// the custom keys. <para>QC 密钥标识符，与内置密钥库和自定义密钥按忽略大小写匹配。</para></param>
+    /// <param name="keyId">QC key identifier, matched case-insensitively against the built-in database and the custom keys.
+    /// <para>QC 密钥标识符，与内置密钥库和自定义密钥按忽略大小写匹配。</para></param>
     /// <returns>The AES-128-CFB plaintext as a newly allocated array.
     /// <para>以新分配数组返回的 AES-128-CFB 明文。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
@@ -43,14 +40,11 @@ internal sealed class OfpQcCryptoProvider(IOppLogger? logger = null) : IOppForma
         return AesCfb128.Decrypt(data, aesKey, aesIv);
     }
 
-    /// <summary>
-    /// Encrypts data using the specified key.
-    /// <para>使用指定密钥加密数据。</para>
-    /// </summary>
+    /// <summary>Encrypts data using the specified key.<para>使用指定密钥加密数据。</para></summary>
     /// <param name="data">Plaintext of the OFP QC container; it is read only and never modified in place.
     /// <para>OFP QC 容器的明文；仅读取，绝不就地修改。</para></param>
-    /// <param name="keyId">QC key identifier, matched case-insensitively against the built-in database and
-    /// the custom keys. <para>QC 密钥标识符，与内置密钥库和自定义密钥按忽略大小写匹配。</para></param>
+    /// <param name="keyId">QC key identifier, matched case-insensitively against the built-in database and the custom keys.
+    /// <para>QC 密钥标识符，与内置密钥库和自定义密钥按忽略大小写匹配。</para></param>
     /// <returns>The AES-128-CFB ciphertext as a newly allocated array.
     /// <para>以新分配数组返回的 AES-128-CFB 密文。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
@@ -68,20 +62,17 @@ internal sealed class OfpQcCryptoProvider(IOppLogger? logger = null) : IOppForma
         return AesCfb128.Encrypt(data, aesKey, aesIv);
     }
 
-    /// <summary>
-    /// Decrypts stream data using the specified key.
-    /// <para>使用指定密钥解密流数据。</para>
-    /// </summary>
-    /// <param name="input">Readable source stream positioned where the QC payload starts; the provider reads
-    /// it but never closes it. <para>定位到 QC 负载起始处的可读取源流；提供者只读取且绝不关闭。</para></param>
-    /// <param name="output">Stream receiving the plaintext; the provider writes to it, and neither flushes nor
-    /// closes it. <para>接收明文的流；提供者向其写入，且既不调用刷新也不关闭。</para></param>
-    /// <param name="keyId">QC key identifier, matched case-insensitively against the built-in database and
-    /// the custom keys. <para>QC 密钥标识符，与内置密钥库和自定义密钥按忽略大小写匹配。</para></param>
+    /// <summary>Decrypts stream data using the specified key.<para>使用指定密钥解密流数据。</para></summary>
+    /// <param name="input">Readable source stream positioned where the QC payload starts; the provider reads it but never closes it.
+    /// <para>定位到 QC 负载起始处的可读取源流；提供者只读取且绝不关闭。</para></param>
+    /// <param name="output">Stream receiving the plaintext; the provider writes to it, and neither flushes nor closes it.
+    /// <para>接收明文的流；提供者向其写入，且既不调用刷新也不关闭。</para></param>
+    /// <param name="keyId">QC key identifier, matched case-insensitively against the built-in database and the custom keys.
+    /// <para>QC 密钥标识符，与内置密钥库和自定义密钥按忽略大小写匹配。</para></param>
     /// <param name="cancellationToken">Forwarded to the AES-128-CFB stream loop and checked between blocks.
     /// <para>贯穿传给 AES-128-CFB 的流式循环，并在各块之间检查。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is
-    /// <see langword="null"/>. <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="OppDecryptionException"><paramref name="keyId"/> resolves to no QC key.
     /// <para><paramref name="keyId"/> 无法解析为任何 QC 密钥。</para></exception>
     public void Decrypt(Stream input, Stream output, string keyId, CancellationToken cancellationToken)
@@ -96,21 +87,17 @@ internal sealed class OfpQcCryptoProvider(IOppLogger? logger = null) : IOppForma
         AesCfb128.Decrypt(input, output, aesKey, aesIv, cancellationToken);
     }
 
-    /// <summary>
-    /// Encrypts stream data using the specified key.
-    /// <para>使用指定密钥加密流数据。</para>
-    /// </summary>
-    /// <param name="input">Readable source stream positioned where the plaintext payload starts; the provider
-    /// reads it but never closes it.
+    /// <summary>Encrypts stream data using the specified key.<para>使用指定密钥加密流数据。</para></summary>
+    /// <param name="input">Readable source stream positioned where the plaintext payload starts; the provider reads it but never closes it.
     /// <para>定位到明文负载起始处的可读取源流；提供者只读取且绝不关闭。</para></param>
-    /// <param name="output">Stream receiving the ciphertext; the provider writes to it, and neither flushes nor
-    /// closes it. <para>接收密文的流；提供者向其写入，且既不调用刷新也不关闭。</para></param>
-    /// <param name="keyId">QC key identifier, matched case-insensitively against the built-in database and
-    /// the custom keys. <para>QC 密钥标识符，与内置密钥库和自定义密钥按忽略大小写匹配。</para></param>
+    /// <param name="output">Stream receiving the ciphertext; the provider writes to it, and neither flushes nor closes it.
+    /// <para>接收密文的流；提供者向其写入，且既不调用刷新也不关闭。</para></param>
+    /// <param name="keyId">QC key identifier, matched case-insensitively against the built-in database and the custom keys.
+    /// <para>QC 密钥标识符，与内置密钥库和自定义密钥按忽略大小写匹配。</para></param>
     /// <param name="cancellationToken">Forwarded to the AES-128-CFB stream loop and checked between blocks.
     /// <para>贯穿传给 AES-128-CFB 的流式循环，并在各块之间检查。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is
-    /// <see langword="null"/>. <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="OppDecryptionException"><paramref name="keyId"/> resolves to no QC key.
     /// <para><paramref name="keyId"/> 无法解析为任何 QC 密钥。</para></exception>
     public void Encrypt(Stream input, Stream output, string keyId, CancellationToken cancellationToken)

@@ -6,12 +6,8 @@ public sealed partial class MtkSession
 {
     /// <summary>Programs complete Legacy NAND blocks using the explicit SDK B3 raw-page profile.
     /// <para>通过显式 SDK B3 原始页配置编程完整的 Legacy NAND 块。</para></summary>
-    /// <remarks>No implicit erase, padding, bad-block skipping, retransmission or readback is performed.
-    /// A failed or cancelled exchange faults the session; programmed bytes cannot be rolled back.
-    /// The source remains open and bytes beyond the selected span are not consumed.
-    /// The SDK MT2694 transport variant is not supported by this profile.
-    /// <para>不隐含执行擦除、填充、跳过坏块、重传或回读。交换失败或取消将使会话故障，已编程字节无法回滚。
-    /// 源流保持打开，选定跨度以外的字节不会被消费。此配置不支持 SDK MT2694 传输变体。</para></remarks>
+    /// <remarks>No implicit erase, padding, bad-block skipping, retransmission or readback is performed. A failed or cancelled exchange faults the session; programmed bytes cannot be rolled back. The source remains open and bytes beyond the selected span are not consumed. The SDK MT2694 transport variant is not supported by this profile.
+    /// <para>不隐含执行擦除、填充、跳过坏块、重传或回读。交换失败或取消将使会话故障，已编程字节无法回滚。 源流保持打开，选定跨度以外的字节不会被消费。此配置不支持 SDK MT2694 传输变体。</para></remarks>
     /// <param name="offset">The main-area byte offset aligned to the erase-block size.
     /// <para>按擦除块大小对齐的主区字节偏移。</para></param>
     /// <param name="mainLength">The positive main-area span of complete blocks, excluding spare bytes.

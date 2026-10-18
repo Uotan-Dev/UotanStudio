@@ -21,46 +21,26 @@ public sealed class CpioArchiveWriter
 
     private const long MaximumNewAsciiNameBytes = uint.MaxValue - 1L;
 
-    /// <summary>
-    /// Writes all provided entries to a CPIO stream in the selected format.
-    /// <para>将提供的全部条目以所选格式写入 CPIO 流。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Writable destination kept open by the writer; entry data streams are disposed once consumed or on failure.
-    /// <para>可写目标流，写入器不会将其关闭；条目数据流在被消费或失败时会被释放。</para>
-    /// </param>
-    /// <param name="entries">
-    /// Entries to serialize; repeat hardlink groups collapse to zero-length records after the data carrier.
-    /// <para>待序列化的条目；重复的硬链接组在数据载体之后折叠为零长度记录。</para>
-    /// </param>
-    /// <param name="format">
-    /// Target CPIO format; <see cref="ArchiveFormat.Tar"/> and <see cref="ArchiveFormat.Ustar"/> write nothing and <see cref="ArchiveFormat.Unknown"/> is skipped silently.
-    /// <para>目标 CPIO 格式；<see cref="ArchiveFormat.Tar"/> 与 <see cref="ArchiveFormat.Ustar"/> 不写入任何内容，<see cref="ArchiveFormat.Unknown"/> 被静默跳过。</para>
-    /// </param>
-    /// <param name="options">
-    /// Optional write settings such as the trailer record; <see langword="null"/> uses <c>WriteOptions</c> defaults.
-    /// <para>可选写入设置（如尾部记录）；<see langword="null"/> 使用 <c>WriteOptions</c> 默认值。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="stream"/> is not writable, or <paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>.
-    /// <para><paramref name="stream"/> 不可写，或 <paramref name="stream"/>、<paramref name="entries"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArchiveCorruptedException">
-    /// A payload length is negative or mismatches its declaration, or an HP special device carries data.
-    /// <para>负载长度为负或与声明不符，或 HP 特殊设备包含数据。</para>
-    /// </exception>
-    /// <exception cref="ArchiveUnsupportedFeatureException">
-    /// A payload length or an entry name is unrepresentable in the chosen format.
-    /// <para>负载长度或条目名称无法被所选格式表示。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A CRC payload cannot be spooled to scratch storage.
-    /// <para>CRC 负载无法暂存到临时存储。</para>
-    /// </exception>
-    /// <exception cref="NotSupportedException">
-    /// <paramref name="format"/> is a value outside the known archive formats.
-    /// <para><paramref name="format"/> 为已知归档格式之外的取值。</para>
-    /// </exception>
+    /// <summary>Writes all provided entries to a CPIO stream in the selected format.
+    /// <para>将提供的全部条目以所选格式写入 CPIO 流。</para></summary>
+    /// <param name="stream">Writable destination kept open by the writer; entry data streams are disposed once consumed or on failure.
+    /// <para>可写目标流，写入器不会将其关闭；条目数据流在被消费或失败时会被释放。</para></param>
+    /// <param name="entries">Entries to serialize; repeat hardlink groups collapse to zero-length records after the data carrier.
+    /// <para>待序列化的条目；重复的硬链接组在数据载体之后折叠为零长度记录。</para></param>
+    /// <param name="format">Target CPIO format; <see cref="ArchiveFormat.Tar"/> and <see cref="ArchiveFormat.Ustar"/> write nothing and <see cref="ArchiveFormat.Unknown"/> is skipped silently.
+    /// <para>目标 CPIO 格式；<see cref="ArchiveFormat.Tar"/> 与 <see cref="ArchiveFormat.Ustar"/> 不写入任何内容，<see cref="ArchiveFormat.Unknown"/> 被静默跳过。</para></param>
+    /// <param name="options">Optional write settings such as the trailer record; <see langword="null"/> uses <c>WriteOptions</c> defaults.
+    /// <para>可选写入设置（如尾部记录）；<see langword="null"/> 使用 <c>WriteOptions</c> 默认值。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="stream"/> is not writable, or <paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 不可写，或 <paramref name="stream"/>、<paramref name="entries"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArchiveCorruptedException">A payload length is negative or mismatches its declaration, or an HP special device carries data.
+    /// <para>负载长度为负或与声明不符，或 HP 特殊设备包含数据。</para></exception>
+    /// <exception cref="ArchiveUnsupportedFeatureException">A payload length or an entry name is unrepresentable in the chosen format.
+    /// <para>负载长度或条目名称无法被所选格式表示。</para></exception>
+    /// <exception cref="InvalidDataException">A CRC payload cannot be spooled to scratch storage.
+    /// <para>CRC 负载无法暂存到临时存储。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="format"/> is a value outside the known archive formats.
+    /// <para><paramref name="format"/> 为已知归档格式之外的取值。</para></exception>
     public void WriteAll(Stream stream, IEnumerable<ArchiveEntry> entries, ArchiveFormat format, WriteOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(stream);

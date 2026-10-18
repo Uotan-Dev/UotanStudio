@@ -99,76 +99,28 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
     /// <returns>The fastboot response. fastboot 响应。</returns>
     public FastbootResponse WipeSuper() => _session.WipeSuper(MainPartition);
 
-    /// <summary>
-    /// Flashes a prebuilt super image (LP metadata + logical partition data) to the device.
-    /// <para>将预构建的 super 镜像（LP 元数据 + 逻辑分区数据）刷写到设备。</para>
-    /// </summary>
-    /// <remarks>
-    /// A compact metadata image (one geometry block followed by one metadata table) is applied first
-    /// through <c>update-super</c>, which recreates the logical partitions on the device; each
-    /// logical partition's data is then streamed with <c>download</c> + <c>flash</c>, reading
-    /// linear extents directly out of the image (zero extents are zero-filled). This mirrors
-    /// the AOSP fastboot <c>flash super</c> flow.
-    /// <para>先通过 <c>update-super</c> 应用精简元数据镜像（一块 geometry 后接一份元数据表），
-    /// 由设备重建逻辑分区；随后将每个逻辑分区的数据通过 <c>download</c> + <c>flash</c>
-    /// 流式刷写，线性 extent 直接从镜像中读取（零 extent 补零）。此流程对应 AOSP fastboot 的
-    /// <c>flash super</c> 语义。</para>
-    /// <para>
-    /// The stream handed to <c>update-super</c> is deliberately the compact
-    /// <c>SerializeGeometry ‖ SerializeMetadata</c> pair — a single 4096-byte geometry slot at offset
-    /// 0 immediately followed by the metadata header and tables, with no reserved prefix and no
-    /// backup geometry. That is the shape three independent producers in this repository agree on:
-    /// the host's standalone <c>super_empty</c> apply path, <c>UotanStudio.Delivery</c>'s generated
-    /// <c>super_empty.img</c>, and the third fallback branch of
-    /// <c>MetadataReader.ReadFromImageStream</c>, which exists precisely to parse that layout.
-    /// It is <em>not</em> the shape <c>MetadataWriter.WriteToImageStream</c> produces: that one writes
-    /// a complete raw super image (4096 reserved zero bytes at offset 0, the primary geometry at 4096,
-    /// its backup at 8192, then each primary metadata slot and its backup near the end of the device),
-    /// because it has to place data inside a full-sized partition image rather than describe one.
-    /// Substituting the full-image layout here would disagree with the other two producers and with
-    /// the reader fallback that accepts them.
-    /// </para>
-    /// <para>
-    /// 交给 <c>update-super</c> 的流刻意采用精简形态 <c>SerializeGeometry ‖ SerializeMetadata</c>——
-    /// 偏移 0 处是单个 4096 字节的 geometry 槽，紧随其后是元数据头与表，既无保留前缀也无备份 geometry。
-    /// 仓库内三个独立生产者对这一形态达成一致：宿主的独立 <c>super_empty</c> 应用路径、
-    /// <c>UotanStudio.Delivery</c> 生成的 <c>super_empty.img</c>，以及
-    /// <c>MetadataReader.ReadFromImageStream</c> 的第三个回退分支（它正是为解析该布局而存在）。
-    /// 这与 <c>MetadataWriter.WriteToImageStream</c> 的产物<em>不同</em>：后者写出的是完整 super 裸镜像
-    /// （偏移 0 处 4096 字节保留零、4096 处主 geometry、8192 处备份 geometry，随后是各主元数据槽及其
-    /// 位于设备末尾附近的备份），因为它必须把数据放进一个全尺寸分区镜像，而不是描述一个镜像。
-    /// 在此处改用完整镜像布局会与另外两个生产者以及接受它们的读取回退分支相矛盾。
-    /// </para>
-    /// <para>
-    /// Every check that can be answered without mutating the device runs before <c>update-super</c>:
-    /// extent bounds against the image, the device's super capacity against the image and its block
-    /// device, and each logical partition's expanded size against <c>max-download-size</c>. Committing
-    /// the metadata first and discovering an unflashable partition afterwards would leave the device
-    /// with declared-but-empty partitions, which does not boot, and the protocol offers no rollback.
-    /// </para>
-    /// <para>所有无需改动设备即可回答的检查都在 <c>update-super</c> 之前完成：extent 相对镜像的边界、
-    /// 设备 super 容量相对镜像及其块设备、以及每个逻辑分区的展开尺寸相对 <c>max-download-size</c>。
-    /// 若先提交元数据、之后才发现某个分区无法刷写，设备就会留下“已声明但为空”的分区而无法启动，
-    /// 且协议不提供回滚。</para>
-    /// </remarks>
+    /// <summary>Flashes a prebuilt super image (LP metadata + logical partition data) to the device.
+    /// <para>将预构建的 super 镜像（LP 元数据 + 逻辑分区数据）刷写到设备。</para></summary>
+    /// <remarks>A compact metadata image (one geometry block followed by one metadata table) is applied first through <c>update-super</c>, which recreates the logical partitions on the device; each logical partition's data is then streamed with <c>download</c> + <c>flash</c>, reading linear extents directly out of the image (zero extents are zero-filled). This mirrors the AOSP fastboot <c>flash super</c> flow.
+    /// <para>先通过 <c>update-super</c> 应用精简元数据镜像（一块 geometry 后接一份元数据表）， 由设备重建逻辑分区；随后将每个逻辑分区的数据通过 <c>download</c> + <c>flash</c> 流式刷写，线性 extent 直接从镜像中读取（零 extent 补零）。此流程对应 AOSP fastboot 的 <c>flash super</c> 语义。</para><para> The stream handed to <c>update-super</c> is deliberately the compact <c>SerializeGeometry ‖ SerializeMetadata</c> pair — a single 4096-byte geometry slot at offset 0 immediately followed by the metadata header and tables, with no reserved prefix and no backup geometry. That is the shape three independent producers in this repository agree on: the host's standalone <c>super_empty</c> apply path, <c>UotanStudio.Delivery</c>'s generated <c>super_empty.img</c>, and the third fallback branch of <c>MetadataReader.ReadFromImageStream</c>, which exists precisely to parse that layout. It is <em>not</em> the shape <c>MetadataWriter.WriteToImageStream</c> produces: that one writes a complete raw super image (4096 reserved zero bytes at offset 0, the primary geometry at 4096, its backup at 8192, then each primary metadata slot and its backup near the end of the device), because it has to place data inside a full-sized partition image rather than describe one. Substituting the full-image layout here would disagree with the other two producers and with the reader fallback that accepts them. </para><para> 交给 <c>update-super</c> 的流刻意采用精简形态 <c>SerializeGeometry ‖ SerializeMetadata</c>—— 偏移 0 处是单个 4096 字节的 geometry 槽，紧随其后是元数据头与表，既无保留前缀也无备份 geometry。 仓库内三个独立生产者对这一形态达成一致：宿主的独立 <c>super_empty</c> 应用路径、 <c>UotanStudio.Delivery</c> 生成的 <c>super_empty.img</c>，以及 <c>MetadataReader.ReadFromImageStream</c> 的第三个回退分支（它正是为解析该布局而存在）。 这与 <c>MetadataWriter.WriteToImageStream</c> 的产物<em>不同</em>：后者写出的是完整 super 裸镜像 （偏移 0 处 4096 字节保留零、4096 处主 geometry、8192 处备份 geometry，随后是各主元数据槽及其 位于设备末尾附近的备份），因为它必须把数据放进一个全尺寸分区镜像，而不是描述一个镜像。 在此处改用完整镜像布局会与另外两个生产者以及接受它们的读取回退分支相矛盾。 </para><para> Every check that can be answered without mutating the device runs before <c>update-super</c>: extent bounds against the image, the device's super capacity against the image and its block device, and each logical partition's expanded size against <c>max-download-size</c>. Committing the metadata first and discovering an unflashable partition afterwards would leave the device with declared-but-empty partitions, which does not boot, and the protocol offers no rollback. </para><para>所有无需改动设备即可回答的检查都在 <c>update-super</c> 之前完成：extent 相对镜像的边界、 设备 super 容量相对镜像及其块设备、以及每个逻辑分区的展开尺寸相对 <c>max-download-size</c>。 若先提交元数据、之后才发现某个分区无法刷写，设备就会留下“已声明但为空”的分区而无法启动， 且协议不提供回滚。</para></remarks>
     /// <param name="superImagePath">The prebuilt super image file path. 预构建的 super 镜像文件路径。</param>
-    /// <param name="wipe">Whether to wipe the super partition before updating its metadata.
-    /// 更新元数据前是否擦除 super 分区。</param>
+    /// <param name="wipe">Whether to wipe the super partition before updating its metadata. 更新元数据前是否擦除
+    /// super 分区。</param>
     /// <param name="progress">Optional progress reporter for download/upload byte counts.
     /// 可选的进度报告器（下载/上传字节数）。</param>
     /// <param name="cancellationToken">The cancellation token. 取消令牌。</param>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="superImagePath"/> is null
-    /// or empty. <paramref name="superImagePath"/> 为 null 或空时抛出。</exception>
-    /// <exception cref="FileNotFoundException">Thrown when the super image file does not exist.
-    /// super 镜像文件不存在时抛出。</exception>
-    /// <exception cref="InvalidDataException">Thrown when the file is not a readable super image, when its
-    /// extents fall outside the image, or when its declared super capacity disagrees with the device.
-    /// 文件不是可读的 super 镜像、其 extent 落在镜像之外，或其声明的 super 容量与设备不一致时抛出。</exception>
-    /// <exception cref="FastbootException">Thrown when a fastboot command fails, or when a logical partition
-    /// is larger than the device's max-download-size and could never be streamed.
-    /// fastboot 命令失败，或某逻辑分区大于设备 max-download-size 因而永远无法流式传输时抛出。</exception>
-    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is cancelled.
-    /// <paramref name="cancellationToken"/> 被取消时抛出。</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="superImagePath"/>is null or
+    /// empty. <paramref name="superImagePath"/>为 null 或空时抛出。</exception>
+    /// <exception cref="FileNotFoundException">Thrown when the super image file does not exist. super
+    /// 镜像文件不存在时抛出。</exception>
+    /// <exception cref="InvalidDataException">Thrown when the file is not a readable super image, when
+    /// its extents fall outside the image, or when its declared super capacity disagrees with the
+    /// device. 文件不是可读的 super 镜像、其 extent 落在镜像之外，或其声明的 super 容量与设备不一致时抛出。</exception>
+    /// <exception cref="FastbootException">Thrown when a fastboot command fails, or when a logical
+    /// partition is larger than the device's max-download-size and could never be streamed. fastboot
+    /// 命令失败，或某逻辑分区大于设备 max-download-size 因而永远无法流式传输时抛出。</exception>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/>is
+    /// cancelled. <paramref name="cancellationToken"/>被取消时抛出。</exception>
     public void FlashSuper(
         string superImagePath,
         bool wipe = false,

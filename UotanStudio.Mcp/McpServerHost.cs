@@ -50,11 +50,8 @@ public sealed class McpServerHost
         SigningKeys = signingKeys;
     }
 
-    /// <summary>
-    /// Assembles the host from an existing sandbox plus flash gate, so the HTTP exposure path
-    /// registers exactly the same tool set.
-    /// <para>用现成的沙箱与刷写门控组装宿主，供 HTTP 暴露路径复用同一套工具注册。</para>
-    /// </summary>
+    /// <summary>Assembles the host from an existing sandbox plus flash gate, so the HTTP exposure path registers exactly the same tool set.
+    /// <para>用现成的沙箱与刷写门控组装宿主，供 HTTP 暴露路径复用同一套工具注册。</para></summary>
     /// <param name="sandbox">Path confine shared by every file-touching tool; must not be <see langword="null"/>.
     /// <para>所有文件类工具共用的路径限制；不得为 <see langword="null"/>。</para></param>
     /// <param name="allowFlash">Registers the flashing/wiping/reboot tools when <see langword="true"/>.

@@ -6,23 +6,13 @@ namespace UotanStudio.ViewModels.Workspace;
 
 internal partial class ImageViewModel
 {
-    /// <summary>
-    /// Copies the given external files into the project <c>images/</c> directory (auto-suffixing on name
-    /// collision), creating image entries and recording history.
-    /// <para>将若干外部文件复制进项目 <c>images/</c> 目录（重名自动加后缀），建立镜像条目并登记历史。</para>
-    /// </summary>
-    /// <param name="paths">
-    /// Source file paths to import.
-    /// <para>要导入的源文件路径列表。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Overall weighted percentage (0–100) computed against the total bytes of all files; monotonic
-    /// <para>整体加权百分比（0–100）：按所有待复制文件总字节数折算，跨文件单调递增，不会回跳。</para>
-    /// across files so the progress bar never jumps back.</param>
-    /// <param name="byteProgress">
-    /// Overall byte progress: <c>Processed</c> is accumulated completed bytes, <c>Total</c> is the
-    /// <para>整体字节进度：<c>Processed</c> 为累计已完成字节数，<c>Total</c> 为所有待复制文件总字节数。</para>
-    /// total bytes of all files to copy.</param>
+    /// <summary>Copies the given external files into the project <c>images/</c> directory (auto-suffixing on name collision), creating image entries and recording history.
+    /// <para>将若干外部文件复制进项目 <c>images/</c> 目录（重名自动加后缀），建立镜像条目并登记历史。</para></summary>
+    /// <param name="paths">Source file paths to import.<para>要导入的源文件路径列表。</para></param>
+    /// <param name="progress">Overall weighted percentage (0–100) computed against the total bytes of all files; monotonic
+    /// <para>整体加权百分比（0–100）：按所有待复制文件总字节数折算，跨文件单调递增，不会回跳。</para>across files so the progress bar never jumps back.</param>
+    /// <param name="byteProgress">Overall byte progress: <c>Processed</c> is accumulated completed bytes, <c>Total</c> is the
+    /// <para>整体字节进度：<c>Processed</c> 为累计已完成字节数，<c>Total</c> 为所有待复制文件总字节数。</para>total bytes of all files to copy.</param>
     public async Task ImportAsync(string[] paths, IProgress<double>? progress = null,
         IProgress<(long Processed, long Total)>? byteProgress = null, CancellationToken cancellationToken = default)
     {

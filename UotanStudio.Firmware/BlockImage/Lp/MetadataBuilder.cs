@@ -11,61 +11,35 @@ public sealed class MetadataBuilder
     private LpMetadataGeometry _geometry;
     private ulong _nextLinearSector;
 
-    /// <summary>
-    /// Creates a builder for the given device size and metadata layout.
-    /// <para>为给定设备大小与元数据布局创建构建器。</para>
-    /// </summary>
-    /// <param name="deviceSize">
-    /// Total super size in bytes, a multiple of the default 4096-byte logical block size.
-    /// <para>super 总大小（字节），须为默认 4096 字节逻辑块大小的整数倍。</para>
-    /// </param>
-    /// <param name="metadataMaxSize">
-    /// Per-slot metadata capacity in bytes.
-    /// <para>每个槽位的元数据容量（字节）。</para>
-    /// </param>
-    /// <param name="metadataSlotCount">
-    /// Number of metadata slots reserved by the geometry.
-    /// <para>几何信息预留的元数据槽位数量。</para>
-    /// </param>
-    /// <returns>
-    /// A builder whose data area starts after the reserved metadata region with a 4096-byte logical block size.
-    /// <para>返回数据区紧随预留元数据区域、逻辑块大小为 4096 字节的构建器。</para>
-    /// </returns>
+    /// <summary>Creates a builder for the given device size and metadata layout.
+    /// <para>为给定设备大小与元数据布局创建构建器。</para></summary>
+    /// <param name="deviceSize">Total super size in bytes, a multiple of the default 4096-byte logical block size.
+    /// <para>super 总大小（字节），须为默认 4096 字节逻辑块大小的整数倍。</para></param>
+    /// <param name="metadataMaxSize">Per-slot metadata capacity in bytes.
+    /// <para>每个槽位的元数据容量（字节）。</para></param>
+    /// <param name="metadataSlotCount">Number of metadata slots reserved by the geometry.
+    /// <para>几何信息预留的元数据槽位数量。</para></param>
+    /// <returns>A builder whose data area starts after the reserved metadata region with a 4096-byte logical block size.
+    /// <para>返回数据区紧随预留元数据区域、逻辑块大小为 4096 字节的构建器。</para></returns>
     public static MetadataBuilder New(ulong deviceSize, uint metadataMaxSize, uint metadataSlotCount)
         => New(deviceSize, metadataMaxSize, metadataSlotCount, 4096);
 
-    /// <summary>
-    /// Creates a builder with an explicit logical block size; extent addresses remain 512-byte sectors.
-    /// <para>按指定逻辑块大小创建构建器；extent 地址仍以 512 字节扇区计量。</para>
-    /// </summary>
-    /// <param name="deviceSize">
-    /// Total super size in bytes; it must be a multiple of <paramref name="logicalBlockSize"/> and leave room for the metadata plus at least one logical block.
-    /// <para>super 总大小（字节）；须为 <paramref name="logicalBlockSize"/> 的整数倍，并在元数据之外至少留出一个逻辑块。</para>
-    /// </param>
-    /// <param name="metadataMaxSize">
-    /// Per-slot metadata capacity in bytes, validated together with the geometry dimensions.
-    /// <para>每个槽位的元数据容量（字节），随几何尺寸一并校验。</para>
-    /// </param>
-    /// <param name="metadataSlotCount">
-    /// Number of metadata slots reserved by the geometry.
-    /// <para>几何信息预留的元数据槽位数量。</para>
-    /// </param>
-    /// <param name="logicalBlockSize">
-    /// Alignment unit in bytes; must be at least one sector and a power of two.
-    /// <para>对齐单位（字节）；须不小于一个扇区且为 2 的幂。</para>
-    /// </param>
-    /// <returns>
-    /// A builder that lays out a single <c>super</c> block device starting at the first aligned data sector.
-    /// <para>返回从首个对齐数据扇区开始排布单一 <c>super</c> 块设备的构建器。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="deviceSize"/> is not block-aligned or too small for the reserved layout.
-    /// <para><paramref name="deviceSize"/> 未按块对齐，或不足以容纳预留布局。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The resulting geometry dimensions are invalid or excessive.
-    /// <para>得到的几何尺寸无效或超出上限。</para>
-    /// </exception>
+    /// <summary>Creates a builder with an explicit logical block size; extent addresses remain 512-byte sectors.
+    /// <para>按指定逻辑块大小创建构建器；extent 地址仍以 512 字节扇区计量。</para></summary>
+    /// <param name="deviceSize">Total super size in bytes; it must be a multiple of <paramref name="logicalBlockSize"/> and leave room for the metadata plus at least one logical block.
+    /// <para>super 总大小（字节）；须为 <paramref name="logicalBlockSize"/> 的整数倍，并在元数据之外至少留出一个逻辑块。</para></param>
+    /// <param name="metadataMaxSize">Per-slot metadata capacity in bytes, validated together with the geometry dimensions.
+    /// <para>每个槽位的元数据容量（字节），随几何尺寸一并校验。</para></param>
+    /// <param name="metadataSlotCount">Number of metadata slots reserved by the geometry.
+    /// <para>几何信息预留的元数据槽位数量。</para></param>
+    /// <param name="logicalBlockSize">Alignment unit in bytes; must be at least one sector and a power of two.
+    /// <para>对齐单位（字节）；须不小于一个扇区且为 2 的幂。</para></param>
+    /// <returns>A builder that lays out a single <c>super</c> block device starting at the first aligned data sector.
+    /// <para>返回从首个对齐数据扇区开始排布单一 <c>super</c> 块设备的构建器。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="deviceSize"/> is not block-aligned or too small for the reserved layout.
+    /// <para><paramref name="deviceSize"/> 未按块对齐，或不足以容纳预留布局。</para></exception>
+    /// <exception cref="InvalidDataException">The resulting geometry dimensions are invalid or excessive.
+    /// <para>得到的几何尺寸无效或超出上限。</para></exception>
     public static MetadataBuilder New(ulong deviceSize, uint metadataMaxSize, uint metadataSlotCount, uint logicalBlockSize)
     {
         var geometry = new LpMetadataGeometry
@@ -103,37 +77,20 @@ public sealed class MetadataBuilder
         };
     }
 
-    /// <summary>
-    /// Adds a partition, rounding its size up to a logical block; an empty partition has no extents.
-    /// <para>添加分区，大小向上对齐逻辑块；空分区不分配 extent。</para>
-    /// </summary>
-    /// <param name="name">
-    /// Partition name: 1 to 36 ASCII bytes without NUL, limited to ASCII letters, digits and underscores, unique across partitions.
-    /// <para>分区名：1 至 36 个 ASCII 字节且不含 NUL，仅限 ASCII 字母、数字与下划线，且在所有分区间唯一。</para>
-    /// </param>
-    /// <param name="groupName">
-    /// Owning group name, checked by the shared ASCII length and NUL rules but not restricted to letters, digits and underscores;
-    /// the group itself is checked when <see cref="Build"/> runs.
-    /// <para>所属组名，按共用的 ASCII 长度与 NUL 规则校验，但不限定为字母、数字与下划线；组本身的存在性在 <see cref="Build"/> 时检查。</para>
-    /// </param>
-    /// <param name="sizeInBytes">
-    /// Requested partition size, aligned up and appended to the next free linear extent position.
-    /// <para>请求的分区大小，向上对齐后追加到下一个空闲线性 extent 位置。</para>
-    /// </param>
-    /// <param name="attributes">
-    /// Raw LP partition attribute flags stored unchanged.
-    /// <para>原样保存的 LP 分区属性标志。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// A name is empty, longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, contains NUL, uses a character
-    /// outside its documented set, or is duplicated; or the aligned size does not fit the device data area.
-    /// <para>名称为空、超过 <see cref="MetadataFormat.NameFieldBytes"/> 字节、含 NUL、使用了其文档约定的字符集之外的字符，
-    /// 或名称重复；也可能是对齐后的大小超出设备数据区。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The builder geometry fails validation.
-    /// <para>构建器几何信息未通过校验。</para>
-    /// </exception>
+    /// <summary>Adds a partition, rounding its size up to a logical block; an empty partition has no extents.
+    /// <para>添加分区，大小向上对齐逻辑块；空分区不分配 extent。</para></summary>
+    /// <param name="name">Partition name: 1 to 36 ASCII bytes without NUL, limited to ASCII letters, digits and underscores, unique across partitions.
+    /// <para>分区名：1 至 36 个 ASCII 字节且不含 NUL，仅限 ASCII 字母、数字与下划线，且在所有分区间唯一。</para></param>
+    /// <param name="groupName">Owning group name, checked by the shared ASCII length and NUL rules but not restricted to letters, digits and underscores; the group itself is checked when <see cref="Build"/> runs.
+    /// <para>所属组名，按共用的 ASCII 长度与 NUL 规则校验，但不限定为字母、数字与下划线；组本身的存在性在 <see cref="Build"/> 时检查。</para></param>
+    /// <param name="sizeInBytes">Requested partition size, aligned up and appended to the next free linear extent position.
+    /// <para>请求的分区大小，向上对齐后追加到下一个空闲线性 extent 位置。</para></param>
+    /// <param name="attributes">Raw LP partition attribute flags stored unchanged.
+    /// <para>原样保存的 LP 分区属性标志。</para></param>
+    /// <exception cref="ArgumentException">A name is empty, longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, contains NUL, uses a character outside its documented set, or is duplicated; or the aligned size does not fit the device data area.
+    /// <para>名称为空、超过 <see cref="MetadataFormat.NameFieldBytes"/> 字节、含 NUL、使用了其文档约定的字符集之外的字符， 或名称重复；也可能是对齐后的大小超出设备数据区。</para></exception>
+    /// <exception cref="InvalidDataException">The builder geometry fails validation.
+    /// <para>构建器几何信息未通过校验。</para></exception>
     public void AddPartition(string name, string groupName, ulong sizeInBytes, uint attributes = 0)
     {
         ValidateName(name, "partition", nameof(name));
@@ -160,28 +117,14 @@ public sealed class MetadataBuilder
         _partitions.Add(partition);
     }
 
-    /// <summary>
-    /// Adds a partition group.
-    /// <para>添加分区组。</para>
-    /// </summary>
-    /// <param name="name">
-    /// Group name: 1 to 36 ASCII bytes without NUL, unique across groups.
-    /// <para>组名：1 至 36 个 ASCII 字节且不含 NUL，在所有组间唯一。</para>
-    /// </param>
-    /// <param name="maximumSize">
-    /// Combined partition-size budget in bytes; <c>0</c> means unlimited.
-    /// <para>分区合计大小预算（字节）；<c>0</c> 表示不限制。</para>
-    /// </param>
-    /// <param name="flags">
-    /// Raw LP group flags stored unchanged.
-    /// <para>原样保存的 LP 组标志。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// The name is empty, longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, contains NUL,
-    /// contains a character above <c>U+007F</c>, or is already added.
-    /// <para>名称为空、超过 <see cref="MetadataFormat.NameFieldBytes"/> 字节、含 NUL、含大于 <c>U+007F</c>
-    /// 的字符，或已经添加。</para>
-    /// </exception>
+    /// <summary>Adds a partition group.<para>添加分区组。</para></summary>
+    /// <param name="name">Group name: 1 to 36 ASCII bytes without NUL, unique across groups.
+    /// <para>组名：1 至 36 个 ASCII 字节且不含 NUL，在所有组间唯一。</para></param>
+    /// <param name="maximumSize">Combined partition-size budget in bytes; <c>0</c> means unlimited.
+    /// <para>分区合计大小预算（字节）；<c>0</c> 表示不限制。</para></param>
+    /// <param name="flags">Raw LP group flags stored unchanged.<para>原样保存的 LP 组标志。</para></param>
+    /// <exception cref="ArgumentException">The name is empty, longer than <see cref="MetadataFormat.NameFieldBytes"/> bytes, contains NUL, contains a character above <c>U+007F</c>, or is already added.
+    /// <para>名称为空、超过 <see cref="MetadataFormat.NameFieldBytes"/> 字节、含 NUL、含大于 <c>U+007F</c> 的字符，或已经添加。</para></exception>
     public void AddGroup(string name, ulong maximumSize, uint flags = 0)
     {
         ValidateName(name, "group", nameof(name));
@@ -195,22 +138,13 @@ public sealed class MetadataBuilder
         });
     }
 
-    /// <summary>
-    /// Exports the built metadata.
-    /// <para>导出构建的元数据。</para>
-    /// </summary>
-    /// <returns>
-    /// A single-device <see cref="LpMetadata"/> with a synthetic <c>default</c> group when none was added, partition entries resolved to group indices, and extents appended in add order.
-    /// <para>返回单设备的 <see cref="LpMetadata"/>：未添加组时会合成一个 <c>default</c> 组，分区条目已解析为组索引，extent 按添加顺序追加。</para>
-    /// </returns>
-    /// <exception cref="InvalidOperationException">
-    /// A partition references a missing group, or the partitions of a group exceed its nonzero maximum size.
-    /// <para>分区引用了不存在的组，或某组成员分区的合计大小超出其非零上限。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The builder geometry fails validation.
-    /// <para>构建器几何信息未通过校验。</para>
-    /// </exception>
+    /// <summary>Exports the built metadata.<para>导出构建的元数据。</para></summary>
+    /// <returns>A single-device <see cref="LpMetadata"/> with a synthetic <c>default</c> group when none was added, partition entries resolved to group indices, and extents appended in add order.
+    /// <para>返回单设备的 <see cref="LpMetadata"/>：未添加组时会合成一个 <c>default</c> 组，分区条目已解析为组索引，extent 按添加顺序追加。</para></returns>
+    /// <exception cref="InvalidOperationException">A partition references a missing group, or the partitions of a group exceed its nonzero maximum size.
+    /// <para>分区引用了不存在的组，或某组成员分区的合计大小超出其非零上限。</para></exception>
+    /// <exception cref="InvalidDataException">The builder geometry fails validation.
+    /// <para>构建器几何信息未通过校验。</para></exception>
     public LpMetadata Build()
     {
         MetadataReader.ValidateGeometry(_geometry);

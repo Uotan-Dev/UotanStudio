@@ -26,52 +26,28 @@ internal static class GptTableWriter
     private const ulong MinimumReservedArrayBytes = 16384;
     private const ulong MaximumAttributes = 0x0000000000000007;
 
-    /// <summary>
-    /// Creates an unattached table with the canonical layout: primary array at LBA 2, backup array
-    /// ending one block before the backup header, and usable ranges derived from the array size.
-    /// <para>创建使用规范布局的独立表：主数组位于 LBA 2，备份数组结束于备份头部前一块，可用区间由数组大小推导。</para>
-    /// </summary>
-    /// <param name="diskId">
-    /// Disk identifier written into both headers; <see cref="Guid.Empty"/> is rejected.
-    /// <para>写入两个头部的磁盘标识符；拒绝 <see cref="Guid.Empty"/>。</para>
-    /// </param>
-    /// <param name="blockSize">
-    /// Logical block size, a power of two from 512 through 65536.
-    /// <para>逻辑块大小，须为 512 至 65536 之间 2 的幂。</para>
-    /// </param>
-    /// <param name="blockCount">
-    /// Device capacity in blocks; must be at least 6 and fit signed stream addressing.
-    /// <para>以块计的设备容量；至少为 6 且须能用有符号流偏移寻址。</para>
-    /// </param>
-    /// <param name="partitions">
-    /// Entries in emit order; slot indexes are reassigned from the position in this list.
-    /// <para>按输出顺序排列的条目；槽位索引按列表中的位置重新分配。</para>
-    /// </param>
-    /// <param name="entryCount">
-    /// Total entry slots in each array, from 1 through 65536; defaults to the conventional 128.
-    /// <para>每个数组的条目槽位总数，范围 1 至 65536；默认沿用常见的 128。</para>
-    /// </param>
-    /// <param name="entrySize">
-    /// Bytes per entry slot, a power of two from 128 through 4096.
-    /// <para>每个条目槽位的字节数，须为 128 至 4096 之间 2 的幂。</para>
-    /// </param>
-    /// <returns>
-    /// A table whose byte ranges, layout fields and metadata fingerprint match what the writer emits.
-    /// <para>返回的表，其字节范围、布局字段与元数据指纹均与写入器输出一致。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="diskId"/> is empty, or two entries share a unique GUID.
-    /// <para><paramref name="diskId"/> 为空，或两个条目共享相同的唯一 GUID。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The geometry or entry dimensions are outside the supported range, or more partitions were supplied
-    /// than there are entry slots.
-    /// <para>几何或条目维度超出支持范围，或提供的分区数量超过条目槽位数。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A partition range, attribute bit or name (including embedded NUL) is not encodable, or ranges overlap.
-    /// <para>分区范围、属性位或名称（含内嵌 NUL）不可编码，或范围存在重叠。</para>
-    /// </exception>
+    /// <summary>Creates an unattached table with the canonical layout: primary array at LBA 2, backup array ending one block before the backup header, and usable ranges derived from the array size.
+    /// <para>创建使用规范布局的独立表：主数组位于 LBA 2，备份数组结束于备份头部前一块，可用区间由数组大小推导。</para></summary>
+    /// <param name="diskId">Disk identifier written into both headers; <see cref="Guid.Empty"/> is rejected.
+    /// <para>写入两个头部的磁盘标识符；拒绝 <see cref="Guid.Empty"/>。</para></param>
+    /// <param name="blockSize">Logical block size, a power of two from 512 through 65536.
+    /// <para>逻辑块大小，须为 512 至 65536 之间 2 的幂。</para></param>
+    /// <param name="blockCount">Device capacity in blocks; must be at least 6 and fit signed stream addressing.
+    /// <para>以块计的设备容量；至少为 6 且须能用有符号流偏移寻址。</para></param>
+    /// <param name="partitions">Entries in emit order; slot indexes are reassigned from the position in this list.
+    /// <para>按输出顺序排列的条目；槽位索引按列表中的位置重新分配。</para></param>
+    /// <param name="entryCount">Total entry slots in each array, from 1 through 65536; defaults to the conventional 128.
+    /// <para>每个数组的条目槽位总数，范围 1 至 65536；默认沿用常见的 128。</para></param>
+    /// <param name="entrySize">Bytes per entry slot, a power of two from 128 through 4096.
+    /// <para>每个条目槽位的字节数，须为 128 至 4096 之间 2 的幂。</para></param>
+    /// <returns>A table whose byte ranges, layout fields and metadata fingerprint match what the writer emits.
+    /// <para>返回的表，其字节范围、布局字段与元数据指纹均与写入器输出一致。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="diskId"/> is empty, or two entries share a unique GUID.
+    /// <para><paramref name="diskId"/> 为空，或两个条目共享相同的唯一 GUID。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The geometry or entry dimensions are outside the supported range, or more partitions were supplied than there are entry slots.
+    /// <para>几何或条目维度超出支持范围，或提供的分区数量超过条目槽位数。</para></exception>
+    /// <exception cref="InvalidDataException">A partition range, attribute bit or name (including embedded NUL) is not encodable, or ranges overlap.
+    /// <para>分区范围、属性位或名称（含内嵌 NUL）不可编码，或范围存在重叠。</para></exception>
     public static GptTable Create(Guid diskId, int blockSize, ulong blockCount,
         IReadOnlyList<GptPartition> partitions, uint entryCount = 128, uint entrySize = 128)
     {
@@ -155,39 +131,20 @@ internal static class GptTableWriter
             layout.PrimaryArrayLba, layout.BackupArrayLba);
     }
 
-    /// <summary>
-    /// Writes the protective MBR, both headers and both entry arrays into a seekable destination at
-    /// the layout recorded by the table. The stream length is never changed and bytes outside the
-    /// metadata regions are untouched.
-    /// <para>按表记录的布局将保护性 MBR、两个头部与两个条目数组写入可寻址目标。不改变流长度，元数据区域之外的字节保持不动。</para>
-    /// </summary>
-    /// <param name="target">
-    /// Caller-owned writable, seekable stream of at least <c>BlockCount * BlockSize</c> bytes; it is
-    /// not flushed or closed and its position is restored on every exit.
-    /// <para>调用方持有的可写、可寻址流，长度至少为 <c>BlockCount * BlockSize</c> 字节；不刷新也不关闭，
-    /// 无论成功与否其位置都会恢复。</para>
-    /// </param>
-    /// <param name="table">
-    /// Validated or created table; every invariant the reader enforces is re-checked here before any
-    /// byte is written.
-    /// <para>已读取或新创建的表；写入任何字节前会在此重新校验读取器强制的全部不变量。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation checked before each region write.
-    /// <para>在每个区域写入前检查的取消令牌。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="target"/> cannot be written or seeked.
-    /// <para><paramref name="target"/> 不可写或不可寻址。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The table violates a GPT invariant, or the stream is shorter than the declared capacity.
-    /// <para>表违反 GPT 不变量，或流短于声明容量。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Writes the protective MBR, both headers and both entry arrays into a seekable destination at the layout recorded by the table. The stream length is never changed and bytes outside the metadata regions are untouched.
+    /// <para>按表记录的布局将保护性 MBR、两个头部与两个条目数组写入可寻址目标。不改变流长度，元数据区域之外的字节保持不动。</para></summary>
+    /// <param name="target">Caller-owned writable, seekable stream of at least <c>BlockCount * BlockSize</c> bytes; it is not flushed or closed and its position is restored on every exit.
+    /// <para>调用方持有的可写、可寻址流，长度至少为 <c>BlockCount * BlockSize</c> 字节；不刷新也不关闭， 无论成功与否其位置都会恢复。</para></param>
+    /// <param name="table">Validated or created table; every invariant the reader enforces is re-checked here before any byte is written.
+    /// <para>已读取或新创建的表；写入任何字节前会在此重新校验读取器强制的全部不变量。</para></param>
+    /// <param name="cancellationToken">Cancellation checked before each region write.
+    /// <para>在每个区域写入前检查的取消令牌。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="target"/> cannot be written or seeked.
+    /// <para><paramref name="target"/> 不可写或不可寻址。</para></exception>
+    /// <exception cref="InvalidDataException">The table violates a GPT invariant, or the stream is shorter than the declared capacity.
+    /// <para>表违反 GPT 不变量，或流短于声明容量。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public static void WriteRegions(Stream target, GptTable table, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -241,35 +198,20 @@ internal static class GptTableWriter
         }
     }
 
-    /// <summary>
-    /// Publishes a new disk image that contains only the table's metadata over a zero-filled
-    /// capacity, using a temporary file and an atomic replacement of the destination.
-    /// <para>发布仅包含表元数据、其余容量补零的新磁盘镜像，使用临时文件并原子替换目标。</para>
-    /// </summary>
-    /// <param name="targetPath">
-    /// Destination image path; an existing file is replaced only after the whole image has been written.
-    /// <para>目标镜像路径；已存在的文件仅在整张镜像完整写出后被替换。</para>
-    /// </param>
-    /// <param name="table">
-    /// Validated or created table; its capacity fixes the produced file length.
-    /// <para>已读取或新创建的表；其容量决定生成文件的长度。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation checked before and during the writes; cancellation leaves the destination untouched.
-    /// <para>在写入之前与期间检查的取消令牌；取消不会改动目标。</para>
-    /// </param>
-    /// <exception cref="InvalidDataException">
-    /// The table violates a GPT invariant.
-    /// <para>表违反 GPT 不变量。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The destination or its temporary publication file cannot be written.
-    /// <para>无法写入目标或其临时发布文件。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Publishes a new disk image that contains only the table's metadata over a zero-filled capacity, using a temporary file and an atomic replacement of the destination.
+    /// <para>发布仅包含表元数据、其余容量补零的新磁盘镜像，使用临时文件并原子替换目标。</para></summary>
+    /// <param name="targetPath">Destination image path; an existing file is replaced only after the whole image has been written.
+    /// <para>目标镜像路径；已存在的文件仅在整张镜像完整写出后被替换。</para></param>
+    /// <param name="table">Validated or created table; its capacity fixes the produced file length.
+    /// <para>已读取或新创建的表；其容量决定生成文件的长度。</para></param>
+    /// <param name="cancellationToken">Cancellation checked before and during the writes; cancellation leaves the destination untouched.
+    /// <para>在写入之前与期间检查的取消令牌；取消不会改动目标。</para></param>
+    /// <exception cref="InvalidDataException">The table violates a GPT invariant.
+    /// <para>表违反 GPT 不变量。</para></exception>
+    /// <exception cref="IOException">The destination or its temporary publication file cannot be written.
+    /// <para>无法写入目标或其临时发布文件。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public static void WriteNewImage(string targetPath, GptTable table, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
@@ -283,42 +225,24 @@ internal static class GptTableWriter
         }, cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Copies a base disk image and overwrites its GPT metadata regions with the table.
-    /// <para>复制基础磁盘镜像并用该表覆写其 GPT 元数据区域。</para>
-    /// </summary>
-    /// <param name="baseImagePath">
-    /// Source disk image; it is only read and never modified.
-    /// <para>源磁盘镜像；仅读取，绝不修改。</para>
-    /// </param>
-    /// <param name="targetPath">
-    /// Destination image path, replaced atomically only after the copy and metadata write succeed.
-    /// <para>目标镜像路径；仅在复制与元数据写入成功后原子替换。</para>
-    /// </param>
-    /// <param name="table">
-    /// Validated or created table describing the destination geometry.
-    /// <para>描述目标几何的已读取或新创建的表。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation checked through the copy and the metadata writes.
-    /// <para>在复制与元数据写入期间持续检查的取消令牌。</para>
-    /// </param>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="baseImagePath"/> does not exist.
-    /// <para><paramref name="baseImagePath"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The table violates a GPT invariant or its capacity differs from the base image length.
-    /// <para>表违反 GPT 不变量，或其容量与基础镜像长度不一致。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The destination or its temporary publication file cannot be written.
-    /// <para>无法写入目标或其临时发布文件。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Copies a base disk image and overwrites its GPT metadata regions with the table.
+    /// <para>复制基础磁盘镜像并用该表覆写其 GPT 元数据区域。</para></summary>
+    /// <param name="baseImagePath">Source disk image; it is only read and never modified.
+    /// <para>源磁盘镜像；仅读取，绝不修改。</para></param>
+    /// <param name="targetPath">Destination image path, replaced atomically only after the copy and metadata write succeed.
+    /// <para>目标镜像路径；仅在复制与元数据写入成功后原子替换。</para></param>
+    /// <param name="table">Validated or created table describing the destination geometry.
+    /// <para>描述目标几何的已读取或新创建的表。</para></param>
+    /// <param name="cancellationToken">Cancellation checked through the copy and the metadata writes.
+    /// <para>在复制与元数据写入期间持续检查的取消令牌。</para></param>
+    /// <exception cref="FileNotFoundException"><paramref name="baseImagePath"/> does not exist.
+    /// <para><paramref name="baseImagePath"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The table violates a GPT invariant or its capacity differs from the base image length.
+    /// <para>表违反 GPT 不变量，或其容量与基础镜像长度不一致。</para></exception>
+    /// <exception cref="IOException">The destination or its temporary publication file cannot be written.
+    /// <para>无法写入目标或其临时发布文件。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public static void ApplyToImageFile(string baseImagePath, string targetPath, GptTable table,
         CancellationToken cancellationToken = default)
     {

@@ -19,26 +19,16 @@ public static class AXmlWriter
     private const ushort ResXmlCdataType = 0x0104;
     private const uint NoIndex = 0xFFFFFFFF;
 
-    /// <summary>
-    /// Serializes the model into AXML bytes. The string pool is rebuilt with source entries kept at the head in their original order, followed by strings not already present.
-    /// <para>把模型序列化为 AXML 字节。字符串池重建时保留源条目在头部及其原有顺序，其后追加尚未出现的字符串。</para>
-    /// </summary>
-    /// <param name="doc">
-    /// Document model to serialize; its <c>Root</c> must be a parsed or hand-built element tree.
-    /// <para>要序列化的文档模型；其 <c>Root</c> 必须是已解析或手工构建的元素树。</para>
-    /// </param>
-    /// <returns>
-    /// The complete little-endian AXML image, starting with the 8-byte root header.
-    /// <para>完整的 little-endian AXML 镜像，以 8 字节根头部开始。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="doc"/> is <see langword="null"/>.
-    /// <para><paramref name="doc"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="AXmlException">
-    /// The document has no root element, or a string referenced by the tree is absent from the rebuilt pool.
-    /// <para>文档没有根元素，或元素树引用的字符串在重建后的池中缺失。</para>
-    /// </exception>
+    /// <summary>Serializes the model into AXML bytes. The string pool is rebuilt with source entries kept at the head in their original order, followed by strings not already present.
+    /// <para>把模型序列化为 AXML 字节。字符串池重建时保留源条目在头部及其原有顺序，其后追加尚未出现的字符串。</para></summary>
+    /// <param name="doc">Document model to serialize; its <c>Root</c> must be a parsed or hand-built element tree.
+    /// <para>要序列化的文档模型；其 <c>Root</c> 必须是已解析或手工构建的元素树。</para></param>
+    /// <returns>The complete little-endian AXML image, starting with the 8-byte root header.
+    /// <para>完整的 little-endian AXML 镜像，以 8 字节根头部开始。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="doc"/> is <see langword="null"/>.
+    /// <para><paramref name="doc"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="AXmlException">The document has no root element, or a string referenced by the tree is absent from the rebuilt pool.
+    /// <para>文档没有根元素，或元素树引用的字符串在重建后的池中缺失。</para></exception>
     /// <example>
     /// <code language="csharp">
     /// byte[] bytes = AXmlWriter.Write(doc);

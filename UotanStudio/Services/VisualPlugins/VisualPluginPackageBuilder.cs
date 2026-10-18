@@ -89,16 +89,15 @@ public static class VisualPluginPackageBuilder
         return package;
     }
 
-    /// <summary>
-    /// Builds a script-node package from inline Lua source, without an internal graph or public ports.
-    /// <para>从内联 Lua 源码构建脚本节点包，不含内部图或对外端口。</para>
-    /// </summary>
-    /// <param name="name">The user-visible package name. <para>用户可见的包名称。</para></param>
-    /// <param name="id">The package id; normalized through <see cref="NormalizeId"/>. <para>包标识；会经 <see cref="NormalizeId"/> 归一化。</para></param>
-    /// <param name="script">The Lua source stored in the package. <para>包内保存的 Lua 源码。</para></param>
-    /// <param name="author">The package author attribution. <para>包的作者署名。</para></param>
-    /// <param name="version">The package version. <para>包版本。</para></param>
-    /// <returns>The validated script-node package. <para>通过校验的脚本节点包。</para></returns>
+    /// <summary>Builds a script-node package from inline Lua source, without an internal graph or public ports.
+    /// <para>从内联 Lua 源码构建脚本节点包，不含内部图或对外端口。</para></summary>
+    /// <param name="name">The user-visible package name.<para>用户可见的包名称。</para></param>
+    /// <param name="id">The package id; normalized through <see cref="NormalizeId"/>.
+    /// <para>包标识；会经 <see cref="NormalizeId"/> 归一化。</para></param>
+    /// <param name="script">The Lua source stored in the package.<para>包内保存的 Lua 源码。</para></param>
+    /// <param name="author">The package author attribution.<para>包的作者署名。</para></param>
+    /// <param name="version">The package version.<para>包版本。</para></param>
+    /// <returns>The validated script-node package.<para>通过校验的脚本节点包。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="name"/> or <paramref name="script"/> is empty.
     /// <para><paramref name="name"/> 或 <paramref name="script"/> 为空。</para></exception>
     /// <exception cref="InvalidDataException">Validation reports errors, such as an over-long script.

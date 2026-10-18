@@ -74,23 +74,12 @@ public class OpsHeader
     /// <see langword="true"/>；该检查忽略其它所有字段。</para></value>
     public bool IsValid => Magic == OpsConstants.OPS_MAGIC;
 
-    /// <summary>
-    /// Parses an OpsHeader from a read-only byte span
-    /// <para>从只读字节跨度解析OpsHeader</para>
-    /// </summary>
-    /// <param name="data">
-    /// Buffer holding the whole declared header, at least <see cref="OpsConstants.HEADER_SIZE"/>
-    /// bytes; the first four bytes are decoded as ASCII and offsets 4 through 23 are read as
-    /// little-endian unsigned 32-bit values. Bytes beyond offset 23 are ignored, and only the first
-    /// 24 bytes are consumed even though a longer buffer is required.
-    /// <para>承载完整声明头部的缓冲区，长度至少为 <see cref="OpsConstants.HEADER_SIZE"/> 字节；
-    /// 前 4 字节按 ASCII 解码，偏移 4 至 23 按小端序无符号 32 位值读取。偏移 23 之后的字节被忽略，
-    /// 即使要求更长的缓冲区，实际也只消费前 24 字节。</para></param>
-    /// <returns>A header populated from the span; <see cref="IsValid"/> is not consulted, so an
-    /// unrelated magic still produces an object.
+    /// <summary>Parses an OpsHeader from a read-only byte span<para>从只读字节跨度解析OpsHeader</para></summary>
+    /// <param name="data">Buffer holding the whole declared header, at least <see cref="OpsConstants.HEADER_SIZE"/> bytes; the first four bytes are decoded as ASCII and offsets 4 through 23 are read as little-endian unsigned 32-bit values. Bytes beyond offset 23 are ignored, and only the first 24 bytes are consumed even though a longer buffer is required.
+    /// <para>承载完整声明头部的缓冲区，长度至少为 <see cref="OpsConstants.HEADER_SIZE"/> 字节； 前 4 字节按 ASCII 解码，偏移 4 至 23 按小端序无符号 32 位值读取。偏移 23 之后的字节被忽略， 即使要求更长的缓冲区，实际也只消费前 24 字节。</para></param>
+    /// <returns>A header populated from the span; <see cref="IsValid"/> is not consulted, so an unrelated magic still produces an object.
     /// <para>由该跨度填充的头部；不会调用 <see cref="IsValid"/>，因此非 OPS 魔数同样会返回对象。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="data"/> is shorter than <see cref="OpsConstants.HEADER_SIZE"/> bytes.
+    /// <exception cref="ArgumentException"><paramref name="data"/> is shorter than <see cref="OpsConstants.HEADER_SIZE"/> bytes.
     /// <para><paramref name="data"/> 短于 <see cref="OpsConstants.HEADER_SIZE"/> 字节。</para></exception>
     public static OpsHeader FromBytes(ReadOnlySpan<byte> data)
     {
@@ -166,22 +155,12 @@ public class OpsEntry
     /// 由文件打包时本属性提供待写入的字节，否则载荷会从源流复制。</para></value>
     public byte[] Data { get; set; } = [];
 
-    /// <summary>
-    /// Parses an OpsEntry from a read-only byte span
-    /// <para>从只读字节跨度解析OpsEntry</para>
-    /// </summary>
-    /// <param name="data">
-    /// Buffer holding one complete entry record, at least <see cref="OpsConstants.ENTRY_HEADER_SIZE"/>
-    /// bytes; offsets 0, 4 and 8 are read as little-endian unsigned 32-bit values and offsets 12
-    /// through 31 as the ASCII name.
-    /// <para>承载一条完整条目记录的缓冲区，长度至少为
-    /// <see cref="OpsConstants.ENTRY_HEADER_SIZE"/> 字节；偏移 0、4、8 按小端序无符号 32 位值读取，
-    /// 偏移 12 至 31 按 ASCII 名称读取。</para></param>
-    /// <returns>The parsed record with an empty <see cref="Data"/>; the payload itself is not touched
-    /// and no offset or size bound is checked here.
+    /// <summary>Parses an OpsEntry from a read-only byte span<para>从只读字节跨度解析OpsEntry</para></summary>
+    /// <param name="data">Buffer holding one complete entry record, at least <see cref="OpsConstants.ENTRY_HEADER_SIZE"/> bytes; offsets 0, 4 and 8 are read as little-endian unsigned 32-bit values and offsets 12 through 31 as the ASCII name.
+    /// <para>承载一条完整条目记录的缓冲区，长度至少为 <see cref="OpsConstants.ENTRY_HEADER_SIZE"/> 字节；偏移 0、4、8 按小端序无符号 32 位值读取， 偏移 12 至 31 按 ASCII 名称读取。</para></param>
+    /// <returns>The parsed record with an empty <see cref="Data"/>; the payload itself is not touched and no offset or size bound is checked here.
     /// <para>解析得到的记录，其 <see cref="Data"/> 为空；本方法不读取载荷本身，也不校验偏移或长度上限。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="data"/> is shorter than <see cref="OpsConstants.ENTRY_HEADER_SIZE"/> bytes.
+    /// <exception cref="ArgumentException"><paramref name="data"/> is shorter than <see cref="OpsConstants.ENTRY_HEADER_SIZE"/> bytes.
     /// <para><paramref name="data"/> 短于 <see cref="OpsConstants.ENTRY_HEADER_SIZE"/> 字节。</para></exception>
     public static OpsEntry FromBytes(ReadOnlySpan<byte> data)
     {

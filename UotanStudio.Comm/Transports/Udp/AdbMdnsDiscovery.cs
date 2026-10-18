@@ -80,17 +80,11 @@ internal static class AdbMdnsDiscovery
         => await BrowseAsync([AdbTlsService, AdbLegacyService], timeout ?? DefaultTimeout,
             static accumulator => accumulator.IsAdb, null, ct).ConfigureAwait(false);
 
-    /// <summary>
-    /// Polls the <c>_adb-tls-pairing._tcp</c> service until the instance with the
-    /// expected name appears (the phone starts advertising after the QR code is
-    /// scanned) and returns its pairing endpoint, or <c>null</c> when the deadline
-    /// passes without a match.
-    /// <para>轮询 <c>_adb-tls-pairing._tcp</c> 服务，直到出现期望名称的实例（手机
-    /// 扫码后开始广播）并返回其配对端点；超过期限仍无匹配时返回 <c>null</c>。</para>
-    /// </summary>
+    /// <summary>Polls the <c>_adb-tls-pairing._tcp</c> service until the instance with the expected name appears (the phone starts advertising after the QR code is scanned) and returns its pairing endpoint, or <c>null</c> when the deadline passes without a match.
+    /// <para>轮询 <c>_adb-tls-pairing._tcp</c> 服务，直到出现期望名称的实例（手机 扫码后开始广播）并返回其配对端点；超过期限仍无匹配时返回 <c>null</c>。</para></summary>
     /// <param name="instanceName">The expected instance label, i.e. the QR "S" field.
     /// <para>期望的实例标签，即二维码的 "S" 字段。</para></param>
-    /// <param name="timeout">Overall wait deadline. <para>整体等待期限。</para></param>
+    /// <param name="timeout">Overall wait deadline.<para>整体等待期限。</para></param>
     /// <param name="ct">Cancellation token. 取消令牌。</param>
     /// <returns>The pairing service instance, or <c>null</c> on timeout.
     /// <para>配对服务实例；超时返回 <c>null</c>。</para></returns>
@@ -104,16 +98,11 @@ internal static class AdbMdnsDiscovery
             device => MatchesInstanceLabel(device.Instance, instanceName), timeout, ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Polls the <c>_adb-tls-connect._tcp</c> service until an instance resolves to
-    /// the supplied device IP address and returns it (the secure connect port), or
-    /// <c>null</c> when the deadline passes without a match.
-    /// <para>轮询 <c>_adb-tls-connect._tcp</c> 服务，直到某个实例解析到给定设备 IP
-    /// 并返回该实例（安全连接端口）；超过期限仍无匹配时返回 <c>null</c>。</para>
-    /// </summary>
+    /// <summary>Polls the <c>_adb-tls-connect._tcp</c> service until an instance resolves to the supplied device IP address and returns it (the secure connect port), or <c>null</c> when the deadline passes without a match.
+    /// <para>轮询 <c>_adb-tls-connect._tcp</c> 服务，直到某个实例解析到给定设备 IP 并返回该实例（安全连接端口）；超过期限仍无匹配时返回 <c>null</c>。</para></summary>
     /// <param name="address">The device IP address discovered during pairing.
     /// <para>配对阶段发现的设备 IP 地址。</para></param>
-    /// <param name="timeout">Overall wait deadline. <para>整体等待期限。</para></param>
+    /// <param name="timeout">Overall wait deadline.<para>整体等待期限。</para></param>
     /// <param name="ct">Cancellation token. 取消令牌。</param>
     /// <returns>The TLS connect service instance, or <c>null</c> on timeout.
     /// <para>TLS 连接服务实例；超时返回 <c>null</c>。</para></returns>

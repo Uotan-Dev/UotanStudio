@@ -106,29 +106,26 @@ public static class FstabPatch
         return new TextPatchResult(result, 0, true);
     }
 
-    /// <summary>
-    /// Reads selected raw fields; repeated mount points require an explicit expected count or filesystem selector.
-    /// <para>读取选中字段的原始文本；挂载点重复时必须显式给出期望匹配数量或文件系统选择条件。</para>
-    /// </summary>
+    /// <summary>Reads selected raw fields; repeated mount points require an explicit expected count or filesystem selector.
+    /// <para>读取选中字段的原始文本；挂载点重复时必须显式给出期望匹配数量或文件系统选择条件。</para></summary>
     /// <param name="text">fstab source bounded by <see cref="TextPatch.MaxCharacters"/> and free of NUL.
     /// <para>长度不超过 <see cref="TextPatch.MaxCharacters"/> 且不含 NUL 的 fstab 源文本。</para></param>
-    /// <param name="mountPoint">Second-column token identifying the entries to read. <para>用于标识待读条目的第二列记号。</para></param>
+    /// <param name="mountPoint">Second-column token identifying the entries to read.
+    /// <para>用于标识待读条目的第二列记号。</para></param>
     /// <param name="fileSystem">Third-column token narrowing the selection; empty matches every filesystem.
     /// <para>缩小选择范围的第三列记号；为空时匹配所有文件系统。</para></param>
-    /// <param name="field">Column to return. <para>要返回的列。</para></param>
+    /// <param name="field">Column to return.<para>要返回的列。</para></param>
     /// <param name="expectedMatches">Exact number of entries that must match, from 0 to 100000.
     /// <para>必须匹配的条目数量，取值 <c>0</c> 到 <c>100000</c>。</para></param>
-    /// <param name="token">Checked while scanning lines. <para>在扫描行时都会检查。</para></param>
+    /// <param name="token">Checked while scanning lines.<para>在扫描行时都会检查。</para></param>
     /// <returns>The exact source span of <paramref name="field"/> for each matching entry, in document order.
     /// <para>按文档顺序返回每个匹配条目中 <paramref name="field"/> 列的精确源码片段。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="field"/> is not a defined <see cref="FstabField"/>.
     /// <para><paramref name="field"/> 不是已定义的 <see cref="FstabField"/>。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="text"/> is <see langword="null"/>.
     /// <para><paramref name="text"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">A selector token is invalid, an entry line lacks the five fields, more than 100000
-    /// lines or matching entries are scanned, or the entry count differs from <paramref name="expectedMatches"/>.
-    /// <para>选择记号非法、条目行缺少五个字段、扫描的行数或匹配条目超过 100000，或条目数量与
-    /// <paramref name="expectedMatches"/> 不符。</para></exception>
+    /// <exception cref="InvalidDataException">A selector token is invalid, an entry line lacks the five fields, more than 100000 lines or matching entries are scanned, or the entry count differs from <paramref name="expectedMatches"/>.
+    /// <para>选择记号非法、条目行缺少五个字段、扫描的行数或匹配条目超过 100000，或条目数量与 <paramref name="expectedMatches"/> 不符。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="token"/> was signaled.
     /// <para><paramref name="token"/> 已发出取消信号。</para></exception>
     public static IReadOnlyList<string> Read(string text, string mountPoint, string fileSystem, FstabField field,
@@ -138,54 +135,42 @@ public static class FstabPatch
         return [.. Select(text, mountPoint, fileSystem, expectedMatches, token).Select(row => text.Substring(row[(int)field].Start, row[(int)field].Length))];
     }
 
-    /// <summary>
-    /// Edits selected fields with optional full-field old-value guards.
-    /// <para>编辑选中的字段，可选启用针对整字段旧值的守卫。</para>
-    /// </summary>
+    /// <summary>Edits selected fields with optional full-field old-value guards.
+    /// <para>编辑选中的字段，可选启用针对整字段旧值的守卫。</para></summary>
     /// <example>
     /// <code>
     /// FstabPatch.Apply(fstab, "/vendor", "", FstabField.MountOptions,
-    ///     FstabOperation.SetFlag, "", "rw", false, "", 1, token);
+    /// FstabOperation.SetFlag, "", "rw", false, "", 1, token);
     /// </code>
     /// </example>
     /// <param name="text">fstab source bounded by <see cref="TextPatch.MaxCharacters"/> and free of NUL.
     /// <para>长度不超过 <see cref="TextPatch.MaxCharacters"/> 且不含 NUL 的 fstab 源文本。</para></param>
-    /// <param name="mountPoint">Second-column token identifying the entries to edit. <para>用于标识待编辑条目的第二列记号。</para></param>
+    /// <param name="mountPoint">Second-column token identifying the entries to edit.
+    /// <para>用于标识待编辑条目的第二列记号。</para></param>
     /// <param name="fileSystem">Third-column token narrowing the selection; empty matches every filesystem.
     /// <para>缩小选择范围的第三列记号；为空时匹配所有文件系统。</para></param>
-    /// <param name="field">Column being edited. <para>正在编辑的列。</para></param>
-    /// <param name="operation">How the field is rewritten. <para>字段的重写方式。</para></param>
-    /// <param name="value">Replacement token for <see cref="FstabOperation.SetValue"/>, or the option value appended after
-    /// <c>=</c> for <see cref="FstabOperation.SetFlag"/>; an empty option value writes the bare flag. Ignored by
-    /// <see cref="FstabOperation.DeleteFlag"/> and <see cref="FstabOperation.DeleteEntry"/>.
-    /// <para><see cref="FstabOperation.SetValue"/> 的替换记号，或 <see cref="FstabOperation.SetFlag"/> 时追加在 <c>=</c>
-    /// 之后的选项值；选项值为空时只写入裸标志。<see cref="FstabOperation.DeleteFlag"/> 与
-    /// <see cref="FstabOperation.DeleteEntry"/> 会忽略它。</para></param>
+    /// <param name="field">Column being edited.<para>正在编辑的列。</para></param>
+    /// <param name="operation">How the field is rewritten.<para>字段的重写方式。</para></param>
+    /// <param name="value">Replacement token for <see cref="FstabOperation.SetValue"/>, or the option value appended after <c>=</c> for <see cref="FstabOperation.SetFlag"/>; an empty option value writes the bare flag. Ignored by <see cref="FstabOperation.DeleteFlag"/> and <see cref="FstabOperation.DeleteEntry"/>.
+    /// <para><see cref="FstabOperation.SetValue"/> 的替换记号，或 <see cref="FstabOperation.SetFlag"/> 时追加在 <c>=</c> 之后的选项值；选项值为空时只写入裸标志。<see cref="FstabOperation.DeleteFlag"/> 与 <see cref="FstabOperation.DeleteEntry"/> 会忽略它。</para></param>
     /// <param name="flag">Option name matched on the text before its <c>=</c>; required by the two flag operations.
     /// <para>按 <c>=</c> 之前的文本匹配的选项名；两种标志操作都必须提供。</para></param>
-    /// <param name="checkOldValue">Compares the current raw field text with <paramref name="expectedOldValue"/> for every matched
-    /// entry. <para>对每个匹配条目，将当前字段的原始文本与 <paramref name="expectedOldValue"/> 比较。</para></param>
-    /// <param name="expectedOldValue">Raw field text each matched entry must currently hold when
-    /// <paramref name="checkOldValue"/> is set. <para>启用 <paramref name="checkOldValue"/> 时每个匹配条目当前必须具有的字段原始文本。</para></param>
+    /// <param name="checkOldValue">Compares the current raw field text with <paramref name="expectedOldValue"/> for every matched entry.
+    /// <para>对每个匹配条目，将当前字段的原始文本与 <paramref name="expectedOldValue"/> 比较。</para></param>
+    /// <param name="expectedOldValue">Raw field text each matched entry must currently hold when <paramref name="checkOldValue"/> is set.
+    /// <para>启用 <paramref name="checkOldValue"/> 时每个匹配条目当前必须具有的字段原始文本。</para></param>
     /// <param name="expectedMatches">Exact number of entries that must match, from 0 to 100000.
     /// <para>必须匹配的条目数量，取值 <c>0</c> 到 <c>100000</c>。</para></param>
-    /// <param name="token">Checked while rebuilding output for each matched entry. <para>在为每个匹配条目重建输出时都会检查。</para></param>
-    /// <returns>
-    /// The patched source, the number of matched entries and whether the text differs from <paramref name="text"/>.
-    /// <see cref="FstabOperation.DeleteEntry"/> removes whole lines, and a flag edit that empties the option list writes
-    /// <c>defaults</c>. <para>补丁后的源代码、匹配的条目数量，以及文本是否与 <paramref name="text"/> 不同。
-    /// <see cref="FstabOperation.DeleteEntry"/> 会删除整行；若标志编辑清空了选项列表，则写入 <c>defaults</c>。</para>
-    /// </returns>
+    /// <param name="token">Checked while rebuilding output for each matched entry.
+    /// <para>在为每个匹配条目重建输出时都会检查。</para></param>
+    /// <returns>The patched source, the number of matched entries and whether the text differs from <paramref name="text"/>. <see cref="FstabOperation.DeleteEntry"/> removes whole lines, and a flag edit that empties the option list writes <c>defaults</c>.
+    /// <para>补丁后的源代码、匹配的条目数量，以及文本是否与 <paramref name="text"/> 不同。 <see cref="FstabOperation.DeleteEntry"/> 会删除整行；若标志编辑清空了选项列表，则写入 <c>defaults</c>。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="field"/> is not a defined <see cref="FstabField"/>.
     /// <para><paramref name="field"/> 不是已定义的 <see cref="FstabField"/>。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="text"/> is <see langword="null"/>.
     /// <para><paramref name="text"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">The operation is undefined or a flag edit targets a field other than mount options or
-    /// fs_mgr flags, a token is malformed, the flag name contains <c>=</c> or <c>,</c>, the source holds empty flag items or
-    /// duplicate target flags, the entry count or format is unexpected, the old-value guard fails, or the output exceeds the
-    /// configuration limit. <para>操作未定义，或标志类编辑指向了挂载选项与 fs_mgr 标志之外的列，或某个记号格式非法，
-    /// 或标志名包含 <c>=</c> 或 <c>,</c>，或源文本存在空选项或重复的目标标志，或条目数量与格式不符合预期，
-    /// 或旧值守卫校验失败，或输出超出配置上限。</para></exception>
+    /// <exception cref="InvalidDataException">The operation is undefined or a flag edit targets a field other than mount options or fs_mgr flags, a token is malformed, the flag name contains <c>=</c> or <c>,</c>, the source holds empty flag items or duplicate target flags, the entry count or format is unexpected, the old-value guard fails, or the output exceeds the configuration limit.
+    /// <para>操作未定义，或标志类编辑指向了挂载选项与 fs_mgr 标志之外的列，或某个记号格式非法， 或标志名包含 <c>=</c> 或 <c>,</c>，或源文本存在空选项或重复的目标标志，或条目数量与格式不符合预期， 或旧值守卫校验失败，或输出超出配置上限。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="token"/> was signaled.
     /// <para><paramref name="token"/> 已发出取消信号。</para></exception>
     public static TextPatchResult Apply(string text, string mountPoint, string fileSystem, FstabField field,

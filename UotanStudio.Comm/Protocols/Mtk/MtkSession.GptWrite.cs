@@ -89,17 +89,11 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>
-    /// Programs the device's own primary and backup GPT copies from one validated Legacy snapshot using the <c>sdmmc_write_data</c> exchange; the partition identity travels inside the command header, so a write needs no preceding region switch.
-    /// <para>依据一份已校验的 Legacy 快照写回设备自身的主、备 GPT 副本，使用 <c>sdmmc_write_data</c> 交互；分区标识随命令头携带，因此写入前无需切换区域。</para>
-    /// </summary>
+    /// <summary>Programs the device's own primary and backup GPT copies from one validated Legacy snapshot using the <c>sdmmc_write_data</c> exchange; the partition identity travels inside the command header, so a write needs no preceding region switch.
+    /// <para>依据一份已校验的 Legacy 快照写回设备自身的主、备 GPT 副本，使用 <c>sdmmc_write_data</c> 交互；分区标识随命令头携带，因此写入前无需切换区域。</para></summary>
     /// <remarks>
-    /// <para>Same scope limit as the XFlash path: only the table this session just read is re-programmed, with no
-    /// foreign GPT, no geometry rewrite, no partition payload and no resize. The live table is re-read under this
-    /// lease before the first byte, every extent is compared after the write and a fresh parse follows.</para>
-    /// <para>与 XFlash 路径相同的范围限制：只重新编程本会话刚刚读到的分区表，不接受外部 GPT、不改写几何信息、
-    /// 不触碰分区数据、不调整容量。在提交首个字节之前于本租约下重新读取实时表，写入后逐范围比对并重新解析。</para>
-    /// </remarks>
+    /// <para>Same scope limit as the XFlash path: only the table this session just read is re-programmed, with no foreign GPT, no geometry rewrite, no partition payload and no resize. The live table is re-read under this lease before the first byte, every extent is compared after the write and a fresh parse follows.</para>
+    /// <para>与 XFlash 路径相同的范围限制：只重新编程本会话刚刚读到的分区表，不接受外部 GPT、不改写几何信息、 不触碰分区数据、不调整容量。在提交首个字节之前于本租约下重新读取实时表，写入后逐范围比对并重新解析。</para></remarks>
     /// <param name="snapshot">A validated Legacy GPT observation from this session's current inventory.
     /// <para>来自本会话当前清单、已校验的 Legacy GPT 观测结果。</para></param>
     /// <param name="progress">Optional phase-local progress per programmed extent.
@@ -110,10 +104,9 @@ public sealed partial class MtkSession
     /// <para>已编程总量，以及分别观察到的字节、结构与容量等价性。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is null.
     /// <para><paramref name="snapshot"/> 为 null。</para></exception>
-    /// <exception cref="InvalidOperationException">Legacy storage is not ready, or the snapshot belongs to a
-    /// different storage inventory. <para>Legacy 存储未就绪，或该快照属于另一份存储清单。</para></exception>
-    /// <exception cref="InvalidDataException">The live table drifted before the write, an extent did not read
-    /// back identically, or the re-parsed table differs from what was programmed.
+    /// <exception cref="InvalidOperationException">Legacy storage is not ready, or the snapshot belongs to a different storage inventory.
+    /// <para>Legacy 存储未就绪，或该快照属于另一份存储清单。</para></exception>
+    /// <exception cref="InvalidDataException">The live table drifted before the write, an extent did not read back identically, or the re-parsed table differs from what was programmed.
     /// <para>实时表在写入前发生变化、某个范围回读不一致，或重新解析的分区表与所编程内容不同。</para></exception>
     /// <exception cref="NotSupportedException">The Legacy agent reports storage without 512-byte GPT geometry.
     /// <para>Legacy 代理上报的存储不具备 512 字节的 GPT 几何。</para></exception>
@@ -163,17 +156,11 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>
-    /// Programs the device's own primary and backup GPT copies from one validated XML snapshot through <c>CMD:WRITE-FLASH</c>, then reads them back with <c>CMD:READ-FLASH</c> using the same region token, offset and length.
-    /// <para>依据一份已校验的 XML 快照，经 <c>CMD:WRITE-FLASH</c> 写回设备自身的主、备 GPT 副本，随后用 <c>CMD:READ-FLASH</c> 以相同区域令牌、偏移与长度回读。</para>
-    /// </summary>
+    /// <summary>Programs the device's own primary and backup GPT copies from one validated XML snapshot through <c>CMD:WRITE-FLASH</c>, then reads them back with <c>CMD:READ-FLASH</c> using the same region token, offset and length.
+    /// <para>依据一份已校验的 XML 快照，经 <c>CMD:WRITE-FLASH</c> 写回设备自身的主、备 GPT 副本，随后用 <c>CMD:READ-FLASH</c> 以相同区域令牌、偏移与长度回读。</para></summary>
     /// <remarks>
-    /// <para>Same scope limit as the other families: only the table this session just read is re-programmed, with
-    /// no foreign GPT, no geometry rewrite, no partition payload and no resize. The live table is re-read under
-    /// this lease before the first byte, every extent is compared after the write and a fresh parse follows.</para>
-    /// <para>与其他家族相同的范围限制：只重新编程本会话刚刚读到的分区表，不接受外部 GPT、不改写几何信息、不触碰
-    /// 分区数据、不调整容量。在提交首个字节之前于本租约下重新读取实时表，写入后逐范围比对并重新解析。</para>
-    /// </remarks>
+    /// <para>Same scope limit as the other families: only the table this session just read is re-programmed, with no foreign GPT, no geometry rewrite, no partition payload and no resize. The live table is re-read under this lease before the first byte, every extent is compared after the write and a fresh parse follows.</para>
+    /// <para>与其他家族相同的范围限制：只重新编程本会话刚刚读到的分区表，不接受外部 GPT、不改写几何信息、不触碰 分区数据、不调整容量。在提交首个字节之前于本租约下重新读取实时表，写入后逐范围比对并重新解析。</para></remarks>
     /// <param name="snapshot">A validated XML GPT observation from this session's current geometry.
     /// <para>来自本会话当前几何信息、已校验的 XML GPT 观测结果。</para></param>
     /// <param name="progress">Optional phase-local progress per programmed extent.
@@ -184,11 +171,9 @@ public sealed partial class MtkSession
     /// <para>已编程总量，以及分别观察到的字节、结构与容量等价性。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is null.
     /// <para><paramref name="snapshot"/> 为 null。</para></exception>
-    /// <exception cref="InvalidOperationException">XML storage geometry is unknown, no XML channel is attached,
-    /// or the snapshot belongs to a different geometry observation.
+    /// <exception cref="InvalidOperationException">XML storage geometry is unknown, no XML channel is attached, or the snapshot belongs to a different geometry observation.
     /// <para>尚未发现 XML 存储几何信息、未附加 XML 通道，或该快照属于另一份几何观测。</para></exception>
-    /// <exception cref="InvalidDataException">The live table drifted before the write, an extent did not read
-    /// back identically, or the re-parsed table differs from what was programmed.
+    /// <exception cref="InvalidDataException">The live table drifted before the write, an extent did not read back identically, or the re-parsed table differs from what was programmed.
     /// <para>实时表在写入前发生变化、某个范围回读不一致，或重新解析的分区表与所编程内容不同。</para></exception>
     /// <exception cref="NotSupportedException">The snapshot names an authenticated region.
     /// <para>该快照命名了需认证的区域。</para></exception>

@@ -223,27 +223,17 @@ public static class ElfTool
             : ElfType.Unknown;
     }
 
-    /// <summary>
-    /// Parses the ELF file.
-    /// <para>解析 ELF 文件。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Whole image buffer; at least 64 bytes are required before any field is read.
-    /// <para>完整镜像缓冲区；读取任何字段前至少需要 64 字节。</para>
-    /// </param>
-    /// <returns>
-    /// A result whose <see cref="ElfResult.IsValid"/> is set only for a recognised magic. Fields whose
-    /// offset falls past the end of <paramref name="data"/> stay 0, and failures are reported through
-    /// <see cref="ElfResult.ErrorMessage"/> instead of an exception.
-    /// <para>仅当魔数被识别时 <see cref="ElfResult.IsValid"/> 才为真。偏移超出 <paramref name="data"/>
-    /// 末尾的字段保持为 0，失败信息通过 <see cref="ElfResult.ErrorMessage"/> 报告而不会抛出异常。</para>
-    /// </returns>
+    /// <summary>Parses the ELF file.<para>解析 ELF 文件。</para></summary>
+    /// <param name="data">Whole image buffer; at least 64 bytes are required before any field is read.
+    /// <para>完整镜像缓冲区；读取任何字段前至少需要 64 字节。</para></param>
+    /// <returns>A result whose <see cref="ElfResult.IsValid"/> is set only for a recognised magic. Fields whose offset falls past the end of <paramref name="data"/> stay 0, and failures are reported through <see cref="ElfResult.ErrorMessage"/> instead of an exception.
+    /// <para>仅当魔数被识别时 <see cref="ElfResult.IsValid"/> 才为真。偏移超出 <paramref name="data"/> 末尾的字段保持为 0，失败信息通过 <see cref="ElfResult.ErrorMessage"/> 报告而不会抛出异常。</para></returns>
     /// <example>
     /// <code language="csharp">
     /// var header = ElfTool.Parse(imageBytes);
     /// if (header.IsValid)
     /// {
-    ///     Console.WriteLine($"{header.Type} entry 0x{header.EntryPoint:X}");
+    /// Console.WriteLine($"{header.Type} entry 0x{header.EntryPoint:X}");
     /// }
     /// </code>
     /// </example>
@@ -294,23 +284,11 @@ public static class ElfTool
         return result;
     }
 
-    /// <summary>
-    /// Extracts the ELF file size from the header.
-    /// <para>提取 ELF 文件大小。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Whole image buffer, handed to <see cref="Parse"/> first.
-    /// <para>完整镜像缓冲区，会先交给 <see cref="Parse"/>。</para>
-    /// </param>
-    /// <returns>
-    /// The section header table offset plus the product of the parsed section-header count and the
-    /// entry-size field read from the same header slot, using the 32-bit offsets for <see cref="ElfType.Elf32"/>
-    /// and the 64-bit offsets otherwise. Returns 0 when the header does not parse; reads past the end of
-    /// the buffer contribute 0, so a truncated image yields a lower bound rather than an error.
-    /// <para>节头表偏移加上解析出的节头数量与同一头部槽位读到的条目大小字段的乘积；<see cref="ElfType.Elf32"/>
-    /// 使用 32 位偏移，其余使用 64 位偏移。头部无法解析时返回 0；超出缓冲区末尾的读取按 0 计算，因此被截断的镜像
-    /// 只会给出偏小的下界而不会报错。</para>
-    /// </returns>
+    /// <summary>Extracts the ELF file size from the header.<para>提取 ELF 文件大小。</para></summary>
+    /// <param name="data">Whole image buffer, handed to <see cref="Parse"/> first.
+    /// <para>完整镜像缓冲区，会先交给 <see cref="Parse"/>。</para></param>
+    /// <returns>The section header table offset plus the product of the parsed section-header count and the entry-size field read from the same header slot, using the 32-bit offsets for <see cref="ElfType.Elf32"/> and the 64-bit offsets otherwise. Returns 0 when the header does not parse; reads past the end of the buffer contribute 0, so a truncated image yields a lower bound rather than an error.
+    /// <para>节头表偏移加上解析出的节头数量与同一头部槽位读到的条目大小字段的乘积；<see cref="ElfType.Elf32"/> 使用 32 位偏移，其余使用 64 位偏移。头部无法解析时返回 0；超出缓冲区末尾的读取按 0 计算，因此被截断的镜像 只会给出偏小的下界而不会报错。</para></returns>
     public static ulong GetElfSize(byte[] data)
     {
         var result = Parse(data);
@@ -333,24 +311,11 @@ public static class ElfTool
         }
     }
 
-    /// <summary>
-    /// Enumerates all sections of an ELF file.
-    /// <para>枚举 ELF 文件的全部节。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Whole image buffer; entries are walked with the native section header size (40 for 32-bit, 64 for
-    /// 64-bit), so the entry size recorded in the header is only checked for being non-zero.
-    /// <para>完整镜像缓冲区；条目按原生节头大小（32 位为 40，64 位为 64）遍历，因此头部记录的条目大小只检查是否非 0。</para>
-    /// </param>
-    /// <returns>
-    /// Sections in table order, stopping at the first entry whose header would extend past the buffer.
-    /// The list is empty for <see langword="null"/> data, an unrecognised magic, a zero entry size or
-    /// section count, a string-table index that is not below the section count, and whenever reading the
-    /// table throws. Never <see langword="null"/>.
-    /// <para>按节头表顺序返回的节，遇到首个头部条目超出缓冲区末尾时停止。参数为 <see langword="null"/>、魔数无法识别、
-    /// 条目大小或节数量为 0、字符串表索引不小于节数量，以及读取节头表抛出异常时，返回空列表。
-    /// 返回值永不为 <see langword="null"/>。</para>
-    /// </returns>
+    /// <summary>Enumerates all sections of an ELF file.<para>枚举 ELF 文件的全部节。</para></summary>
+    /// <param name="data">Whole image buffer; entries are walked with the native section header size (40 for 32-bit, 64 for 64-bit), so the entry size recorded in the header is only checked for being non-zero.
+    /// <para>完整镜像缓冲区；条目按原生节头大小（32 位为 40，64 位为 64）遍历，因此头部记录的条目大小只检查是否非 0。</para></param>
+    /// <returns>Sections in table order, stopping at the first entry whose header would extend past the buffer. The list is empty for <see langword="null"/> data, an unrecognised magic, a zero entry size or section count, a string-table index that is not below the section count, and whenever reading the table throws. Never <see langword="null"/>.
+    /// <para>按节头表顺序返回的节，遇到首个头部条目超出缓冲区末尾时停止。参数为 <see langword="null"/>、魔数无法识别、 条目大小或节数量为 0、字符串表索引不小于节数量，以及读取节头表抛出异常时，返回空列表。 返回值永不为 <see langword="null"/>。</para></returns>
     public static List<ElfSection> GetSections(byte[] data)
     {
         var sections = new List<ElfSection>();
@@ -414,34 +379,18 @@ public static class ElfTool
         return sections;
     }
 
-    /// <summary>
-    /// Strips a named section from the ELF binary by zeroing its data, setting sh_size to 0, and sh_type to SHT_NULL.
-    /// <para>剥离 ELF 文件中指定名称的节。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Untrusted image buffer; it is never modified in place.
-    /// <para>不可信的镜像缓冲区；不会就地修改原数组。</para>
-    /// </param>
-    /// <param name="sectionName">
-    /// Section name compared by ordinal rule (case-sensitive, culture-insensitive); every entry with
-    /// that exact name is stripped.
-    /// <para>按序数码点规则（区分大小写、与文化无关）比较的节名；所有同名条目都会被剥离。</para>
-    /// </param>
-    /// <returns>
-    /// A modified copy in which each matching section's bytes are zeroed only when the whole range lies
-    /// inside the image, and whose header entry has its type field set to 0 and its size field set to 0
-    /// at the 32- or 64-bit offset for the detected class. Entries outside the buffer keep their header
-    /// bytes. An unrecognised name returns a byte-identical copy.
-    /// <para>返回修改后的副本：仅当匹配节的完整范围位于镜像内时才清零其字节，并在其头部条目中把类型字段置 0，
-    /// 按检测到的类别在 32 位或 64 位偏移处把大小字段置 0。超出缓冲区范围的条目保留其头部字节。名称未匹配时返回逐字节相同的副本。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="data"/> or <paramref name="sectionName"/> is <see langword="null"/>.
-    /// <para><paramref name="data"/> 或 <paramref name="sectionName"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ElfPatchingException">
-    /// The buffer does not start with a recognised ELF 32/64 magic. <para>缓冲区开头不是可识别的 ELF 32/64 魔数。</para>
-    /// </exception>
+    /// <summary>Strips a named section from the ELF binary by zeroing its data, setting sh_size to 0, and sh_type to SHT_NULL.
+    /// <para>剥离 ELF 文件中指定名称的节。</para></summary>
+    /// <param name="data">Untrusted image buffer; it is never modified in place.
+    /// <para>不可信的镜像缓冲区；不会就地修改原数组。</para></param>
+    /// <param name="sectionName">Section name compared by ordinal rule (case-sensitive, culture-insensitive); every entry with that exact name is stripped.
+    /// <para>按序数码点规则（区分大小写、与文化无关）比较的节名；所有同名条目都会被剥离。</para></param>
+    /// <returns>A modified copy in which each matching section's bytes are zeroed only when the whole range lies inside the image, and whose header entry has its type field set to 0 and its size field set to 0 at the 32- or 64-bit offset for the detected class. Entries outside the buffer keep their header bytes. An unrecognised name returns a byte-identical copy.
+    /// <para>返回修改后的副本：仅当匹配节的完整范围位于镜像内时才清零其字节，并在其头部条目中把类型字段置 0， 按检测到的类别在 32 位或 64 位偏移处把大小字段置 0。超出缓冲区范围的条目保留其头部字节。名称未匹配时返回逐字节相同的副本。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> or <paramref name="sectionName"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 或 <paramref name="sectionName"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ElfPatchingException">The buffer does not start with a recognised ELF 32/64 magic.
+    /// <para>缓冲区开头不是可识别的 ELF 32/64 魔数。</para></exception>
     /// <example>
     /// <code language="csharp">
     /// byte[] stripped = ElfTool.StripSection(bootKernel, ".debug_info");
@@ -464,33 +413,17 @@ public static class ElfTool
         return sections.Count == 0 ? (byte[])data.Clone() : StripSections(data, sections);
     }
 
-    /// <summary>
-    /// Strips the matching sections from an ELF file.
-    /// <para>批量剥离 ELF 文件中匹配的节。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Untrusted image buffer; it is never modified in place.
-    /// <para>不可信的镜像缓冲区；不会就地修改原数组。</para>
-    /// </param>
-    /// <param name="names">
-    /// Patterns compared by ordinal rule (case-sensitive, culture-insensitive): an exact name, or a
-    /// pattern ending in <c>*</c> that matches names sharing the preceding prefix. The sequence is
-    /// enumerated once before matching.
-    /// <para>按序数码点规则（区分大小写、与文化无关）比较的模式：完整名称，或以 <c>*</c> 结尾、按去掉 <c>*</c> 后的前缀匹配的名称。该序列在匹配前只枚举一次。</para>
-    /// </param>
-    /// <returns>
-    /// A modified copy applying the same data zeroing and section header rewriting as
-    /// <see cref="StripSection(byte[], string)"/>; a byte-identical copy when no pattern matches.
-    /// <para>返回修改后的副本，其数据清零与节头改写规则与 <see cref="StripSection(byte[], string)"/> 一致；
-    /// 无模式匹配时返回逐字节相同的副本。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="data"/> or <paramref name="names"/> is <see langword="null"/>.
-    /// <para><paramref name="data"/> 或 <paramref name="names"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ElfPatchingException">
-    /// The buffer does not start with a recognised ELF 32/64 magic. <para>缓冲区开头不是可识别的 ELF 32/64 魔数。</para>
-    /// </exception>
+    /// <summary>Strips the matching sections from an ELF file.<para>批量剥离 ELF 文件中匹配的节。</para></summary>
+    /// <param name="data">Untrusted image buffer; it is never modified in place.
+    /// <para>不可信的镜像缓冲区；不会就地修改原数组。</para></param>
+    /// <param name="names">Patterns compared by ordinal rule (case-sensitive, culture-insensitive): an exact name, or a pattern ending in <c>*</c> that matches names sharing the preceding prefix. The sequence is enumerated once before matching.
+    /// <para>按序数码点规则（区分大小写、与文化无关）比较的模式：完整名称，或以 <c>*</c> 结尾、按去掉 <c>*</c> 后的前缀匹配的名称。该序列在匹配前只枚举一次。</para></param>
+    /// <returns>A modified copy applying the same data zeroing and section header rewriting as <see cref="StripSection(byte[], string)"/>; a byte-identical copy when no pattern matches.
+    /// <para>返回修改后的副本，其数据清零与节头改写规则与 <see cref="StripSection(byte[], string)"/> 一致； 无模式匹配时返回逐字节相同的副本。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> or <paramref name="names"/> is <see langword="null"/>.
+    /// <para><paramref name="data"/> 或 <paramref name="names"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ElfPatchingException">The buffer does not start with a recognised ELF 32/64 magic.
+    /// <para>缓冲区开头不是可识别的 ELF 32/64 魔数。</para></exception>
     public static byte[] StripSectionsByName(byte[] data, IEnumerable<string> names)
     {
         ArgumentNullException.ThrowIfNull(data);

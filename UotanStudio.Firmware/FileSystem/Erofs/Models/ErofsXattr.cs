@@ -622,10 +622,8 @@ internal static class ErofsXattr
     public static long GetSharedXattrByteOffset(uint sharedId)
         => (long)sharedId * SharedIdUnitSize;
 
-    /// <summary>
-    /// Resolves the full xattr name from the default prefix, the long-prefix table, or both; an index the image does not define is reported as corruption.
-    /// <para>由默认前缀、长前缀表或两者组合解析完整扩展属性名；镜像未定义的索引按损坏上报。</para>
-    /// </summary>
+    /// <summary>Resolves the full xattr name from the default prefix, the long-prefix table, or both; an index the image does not define is reported as corruption.
+    /// <para>由默认前缀、长前缀表或两者组合解析完整扩展属性名；镜像未定义的索引按损坏上报。</para></summary>
     /// <param name="nameIndex">On-disk <c>e_name_index</c>; the <c>0x80</c> bit selects the long-prefix table and the remaining seven bits are its index.
     /// <para>磁盘上的 <c>e_name_index</c>；<c>0x80</c> 位表示改用长前缀表，其余七位是该表的索引。</para></param>
     /// <param name="rawName">Stored short-name bytes decoded with the file-name encoding; an empty span contributes nothing to the result.
@@ -634,8 +632,8 @@ internal static class ErofsXattr
     /// <para>由 <see cref="ParsePrefixTable"/> 得到的表；镜像未定义时为 <see langword="null"/>，此时带长前缀的名称无法解析。</para></param>
     /// <returns>The default prefix of the resolved base index, then the long-prefix infix when present, then the decoded short name.
     /// <para>解析出的基准索引对应的默认前缀，其次是长前缀 infix（存在时），最后是解码后的短名。</para></returns>
-    /// <exception cref="FileSystemCorruptedException">The name index is 5, above 6, names an unknown long prefix,
-    /// or names no default prefix.<para>名称索引为 5、大于 6、指名未知长前缀，或未指名任何默认前缀。</para></exception>
+    /// <exception cref="FileSystemCorruptedException">The name index is 5, above 6, names an unknown long prefix, or names no default prefix.
+    /// <para>名称索引为 5、大于 6、指名未知长前缀，或未指名任何默认前缀。</para></exception>
     public static string ResolveName(
         byte nameIndex,
         ReadOnlySpan<byte> rawName,
@@ -714,10 +712,8 @@ internal static class ErofsXattr
         }
     }
 
-    /// <summary>
-    /// Reads one erofs_xattr_entry (4-byte header + e_name + e_value) at offset in data and resolves its full name.
-    /// <para>在 data 的 offset 处读取一个 erofs_xattr_entry（4 字节头 + e_name + e_value），并解析出完整名称。</para>
-    /// </summary>
+    /// <summary>Reads one erofs_xattr_entry (4-byte header + e_name + e_value) at offset in data and resolves its full name.
+    /// <para>在 data 的 offset 处读取一个 erofs_xattr_entry（4 字节头 + e_name + e_value），并解析出完整名称。</para></summary>
     /// <param name="data">Buffer holding the record, an ibody or the shared xattr area.
     /// <para>容纳该记录的缓冲区，即 ibody 或共享 xattr 区。</para></param>
     /// <param name="offset">Byte offset of the 4-byte entry header inside <paramref name="data"/>; a negative offset, or one leaving fewer than 4 header bytes or fewer than name plus value bytes, fails the read.
@@ -779,19 +775,13 @@ internal static class ErofsXattr
     public static List<ErofsXattrEntry> ParseInline(ReadOnlySpan<byte> inodeData, int icount)
         => ParseInline(inodeData, icount, null);
 
-    /// <summary>
-    /// Parses the inline xattr list (with a long-prefix table). prefixTable comes from ParsePrefixTable; when null, long-prefix entries fall back to their raw names.
-    /// <para>解析 inline xattr 列表（带长前缀表）。</para>
-    /// </summary>
-    /// <param name="inodeData">Inode bytes whose inline xattr ibody is read from the start of the span;
-    /// a span shorter than the ibody derived from <paramref name="icount"/> is reported as malformed.
-    /// <para>inode 字节，其开头的 inline xattr ibody 即解析来源；跨度短于由 <paramref name="icount"/> 推导的
-    /// ibody 时按格式错误上报。</para></param>
-    /// <param name="icount">Inline xattr entry count read from the inode; zero or a negative value means
-    /// there is no ibody and the result is empty.
+    /// <summary>Parses the inline xattr list (with a long-prefix table). prefixTable comes from ParsePrefixTable; when null, long-prefix entries fall back to their raw names.
+    /// <para>解析 inline xattr 列表（带长前缀表）。</para></summary>
+    /// <param name="inodeData">Inode bytes whose inline xattr ibody is read from the start of the span; a span shorter than the ibody derived from <paramref name="icount"/> is reported as malformed.
+    /// <para>inode 字节，其开头的 inline xattr ibody 即解析来源；跨度短于由 <paramref name="icount"/> 推导的 ibody 时按格式错误上报。</para></param>
+    /// <param name="icount">Inline xattr entry count read from the inode; zero or a negative value means there is no ibody and the result is empty.
     /// <para>取自 inode 的 inline xattr 条目数；为 0 或负数表示没有 ibody，结果为空。</para></param>
-    /// <param name="prefixTable">Table from <see cref="ParsePrefixTable"/>, or <see langword="null"/> when
-    /// the image defines none.
+    /// <param name="prefixTable">Table from <see cref="ParsePrefixTable"/>, or <see langword="null"/> when the image defines none.
     /// <para>由 <see cref="ParsePrefixTable"/> 得到的表；镜像未定义时为 <see langword="null"/>。</para></param>
     /// <returns>The inline entries in on-disk order, empty when <paramref name="icount"/> is not positive.
     /// <para>按磁盘顺序得到的内联条目；<paramref name="icount"/> 非正数时为空。</para></returns>
@@ -832,10 +822,8 @@ internal static class ErofsXattr
         return result;
     }
 
-    /// <summary>
-    /// Reads and resolves the shared xattr entry identified by sharedId from the shared xattr area (bytes starting at the superblock.xattr_blkaddr block).
-    /// <para>在共享 xattr 区（自 superblock.xattr_blkaddr 块起始的字节区）中按 sharedId 读取并解析 一个共享条目。</para>
-    /// </summary>
+    /// <summary>Reads and resolves the shared xattr entry identified by sharedId from the shared xattr area (bytes starting at the superblock.xattr_blkaddr block).
+    /// <para>在共享 xattr 区（自 superblock.xattr_blkaddr 块起始的字节区）中按 sharedId 读取并解析 一个共享条目。</para></summary>
     /// <param name="sharedArea">Shared xattr area bytes, read from the block addressed by the superblock's <c>xattr_blkaddr</c>.
     /// <para>共享 xattr 区字节，取自超级块 <c>xattr_blkaddr</c> 所指的数据块。</para></param>
     /// <param name="sharedId">Id slot from the ibody's shared id array; the record starts at <paramref name="sharedId"/> multiplied by 4 bytes.

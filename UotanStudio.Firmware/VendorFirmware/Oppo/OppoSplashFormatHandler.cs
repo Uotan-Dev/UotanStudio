@@ -73,17 +73,15 @@ internal sealed class OppoSplashFormatHandler : IReadonlyFormatHandler
         }
     }
 
-    /// <summary>
-    /// Decompresses the splash payloads into the output directory as raw image files.
-    /// <para>将 splash 负载解压为原始镜像文件写入输出目录。</para>
-    /// </summary>
-    /// <param name="filePath">Splash image to unpack; never modified. <para>待解包的 splash 镜像；不会被修改。</para></param>
+    /// <summary>Decompresses the splash payloads into the output directory as raw image files.
+    /// <para>将 splash 负载解压为原始镜像文件写入输出目录。</para></summary>
+    /// <param name="filePath">Splash image to unpack; never modified.
+    /// <para>待解包的 splash 镜像；不会被修改。</para></param>
     /// <param name="outputDirectory">Destination directory, created when absent.
     /// <para>目标目录，不存在时创建。</para></param>
-    /// <param name="options">Entry selection, decompression ceiling and overwrite policy; selection
-    /// compares stored names case-insensitively. <see langword="null"/> uses defaults.
+    /// <param name="options">Entry selection, decompression ceiling and overwrite policy; selection compares stored names case-insensitively. <see langword="null"/> uses defaults.
     /// <para>条目选择、解压上限与覆盖策略；选择按存储名忽略大小写比较。传 <see langword="null"/> 时使用默认值。</para></param>
-    /// <param name="cancellationToken">Cancels extraction. <para>取消解包。</para></param>
+    /// <param name="cancellationToken">Cancels extraction.<para>取消解包。</para></param>
     /// <returns>Outcome listing written files with their decompressed sizes.
     /// <para>结果对象列出已写入的文件及其解压后大小。</para></returns>
     /// <exception cref="OperationCanceledException">The token was canceled.

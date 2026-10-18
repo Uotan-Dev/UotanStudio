@@ -87,24 +87,15 @@ public sealed class OppoFormatHandler : IReadonlyFormatHandler
         return strongExtension;
     }
 
-    /// <summary>
-    /// Reads format metadata without unpacking.
-    /// <para>读取格式元数据（不解包）。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path to the Oppo firmware file to inspect.
-    /// <para>要检查的 Oppo 固件文件路径。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token observed before and during parsing; cancelling it aborts the operation.
-    /// <para>在解析前后观察的令牌；取消它会中止操作。</para>
-    /// </param>
+    /// <summary>Reads format metadata without unpacking.<para>读取格式元数据（不解包）。</para></summary>
+    /// <param name="filePath">Path to the Oppo firmware file to inspect.
+    /// <para>要检查的 Oppo 固件文件路径。</para></param>
+    /// <param name="cancellationToken">Token observed before and during parsing; cancelling it aborts the operation.
+    /// <para>在解析前后观察的令牌；取消它会中止操作。</para></param>
     /// <returns>A task whose result carries the format fields, per-entry component list and a status message; parsing errors are folded into a failed result.
     /// <para>任务结果携带格式字段、逐条目组件列表与状态消息；解析错误被折叠为失败结果。</para></returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled.
-    /// <para><paramref name="cancellationToken"/> 已被发出取消信号。</para>
-    /// </exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 已被发出取消信号。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         return Task.Run(async () =>
@@ -227,32 +218,19 @@ public sealed class OppoFormatHandler : IReadonlyFormatHandler
 
     private sealed record CachedArchive(string FullPath, long Length, DateTime LastWriteTimeUtc, OppArchive Archive);
 
-    /// <summary>
-    /// Unpacks the firmware file to the output directory.
-    /// <para>将固件文件解包到输出目录。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Path to the Oppo firmware file to unpack.
-    /// <para>要解包的 Oppo 固件文件路径。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Destination directory; created when it does not exist.
-    /// <para>目标目录；不存在时会创建。</para>
-    /// </param>
-    /// <param name="options">
-    /// Unpack options carrying the overwrite policy and progress reporter, or <see langword="null"/> for the defaults.
-    /// <para>包含覆盖策略与进度报告的解包选项；为 <see langword="null"/> 时使用默认值。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token observed before and during extraction; cancelling it aborts the operation.
-    /// <para>在解包前后观察的令牌；取消它会中止操作。</para>
-    /// </param>
+    /// <summary>Unpacks the firmware file to the output directory.<para>将固件文件解包到输出目录。</para></summary>
+    /// <param name="filePath">Path to the Oppo firmware file to unpack.
+    /// <para>要解包的 Oppo 固件文件路径。</para></param>
+    /// <param name="outputDirectory">Destination directory; created when it does not exist.
+    /// <para>目标目录；不存在时会创建。</para></param>
+    /// <param name="options">Unpack options carrying the overwrite policy and progress reporter, or <see langword="null"/> for the defaults.
+    /// <para>包含覆盖策略与进度报告的解包选项；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="cancellationToken">Token observed before and during extraction; cancelling it aborts the operation.
+    /// <para>在解包前后观察的令牌；取消它会中止操作。</para></param>
     /// <returns>A task whose result reports the extracted entry count and names, or a failed result when extraction errors occur.
     /// <para>任务结果报告解包的条目数与名称；解包出错时返回失败结果。</para></returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled.
-    /// <para><paramref name="cancellationToken"/> 已被发出取消信号。</para>
-    /// </exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 已被发出取消信号。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => Core.Repacking.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -343,28 +321,17 @@ public sealed class OppoFormatHandler : IReadonlyFormatHandler
         return !name.Contains('/');
     }
 
-    /// <summary>
-    /// Pack operation.
-    /// <para>打包操作。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Source directory or file to pack; unused because packing is unsupported.
-    /// <para>要打包的源目录或文件；由于不支持打包而未使用。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination archive path; unused because packing is unsupported.
-    /// <para>目标归档路径；由于不支持打包而未使用。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token checked before the unsupported result is produced; cancelling it aborts the operation.
-    /// <para>在生成不支持结果前检查的令牌；取消它会中止操作。</para>
-    /// </param>
+    /// <summary>Pack operation.<para>打包操作。</para></summary>
+    /// <param name="inputPath">Source directory or file to pack; unused because packing is unsupported.
+    /// <para>要打包的源目录或文件；由于不支持打包而未使用。</para></param>
+    /// <param name="outputPath">Destination archive path; unused because packing is unsupported.
+    /// <para>目标归档路径；由于不支持打包而未使用。</para></param>
+    /// <param name="cancellationToken">Token checked before the unsupported result is produced; cancelling it aborts the operation.
+    /// <para>在生成不支持结果前检查的令牌；取消它会中止操作。</para></param>
     /// <returns>A task whose result is always a failed <see cref="FirmwareOpResult"/>; this handler only reads and unpacks Oppo firmware.
     /// <para>任务结果始终为失败的 <see cref="FirmwareOpResult"/>；本处理器仅读取与解包 Oppo 固件。</para></returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled.
-    /// <para><paramref name="cancellationToken"/> 已被发出取消信号。</para>
-    /// </exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 已被发出取消信号。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>

@@ -58,12 +58,9 @@ public sealed partial class MtkSession
 
     /// <summary>Executes the explicitly requested Legacy NAND erase action on whole erase blocks.
     /// <para>对完整擦除块执行显式请求的 Legacy NAND 擦除动作。</para></summary>
-    /// <remarks>Force erase and bad-block marking require explicit selection. Device error records fault the
-    /// session even when the agent offers to continue. Acknowledgement is not proof that bad blocks were erased.
-    /// <para>强制擦除和坏块标记必须显式选择。即使代理允许继续，设备错误记录仍会使会话故障。
-    /// 确认不证明坏块已被擦除。</para></remarks>
-    /// <param name="offset">The erase-block-aligned main-area offset.
-    /// <para>按擦除块对齐的主区偏移。</para></param>
+    /// <remarks>Force erase and bad-block marking require explicit selection. Device error records fault the session even when the agent offers to continue. Acknowledgement is not proof that bad blocks were erased.
+    /// <para>强制擦除和坏块标记必须显式选择。即使代理允许继续，设备错误记录仍会使会话故障。 确认不证明坏块已被擦除。</para></remarks>
+    /// <param name="offset">The erase-block-aligned main-area offset.<para>按擦除块对齐的主区偏移。</para></param>
     /// <param name="length">The positive erase-block-aligned main-area span.
     /// <para>正数且按擦除块对齐的主区跨度。</para></param>
     /// <param name="options">The explicit wire, addressing and action policy.

@@ -168,21 +168,11 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     internal Task OpenDocumentAsync(Services.Workspace.Documents.DocumentOpenRequest request)
         => OpenDocumentAsync(request.Path ?? string.Empty, request.Mode);
 
-    /// <summary>
-    /// Asynchronously opens the document at the given path: focuses it if the path is already open in
-    /// the document area; otherwise creates a <see cref="FileViewModel"/>, resolves the syntax language
-    /// by extension, adds it to the document area and activates it.
-    /// <para>异步打开指定路径的文档：若该路径已在文档区打开则聚焦并返回；否则创建
-    /// <see cref="FileViewModel"/>，按扩展名解析语法语言，加入文档区并激活。</para>
-    /// </summary>
-    /// <param name="path">
-    /// The path of the document file to open.
-    /// <para>要打开的文档文件路径。</para>
-    /// </param>
-    /// <param name="mode">
-    /// The requested open mode; default <c>Auto</c> decided by file type+extension.
-    /// <para>请求的打开方式；默认 <c>Auto</c> 由文件类型+后缀综合判定。</para>
-    /// </param>
+    /// <summary>Asynchronously opens the document at the given path: focuses it if the path is already open in the document area; otherwise creates a <see cref="FileViewModel"/>, resolves the syntax language by extension, adds it to the document area and activates it.
+    /// <para>异步打开指定路径的文档：若该路径已在文档区打开则聚焦并返回；否则创建 <see cref="FileViewModel"/>，按扩展名解析语法语言，加入文档区并激活。</para></summary>
+    /// <param name="path">The path of the document file to open.<para>要打开的文档文件路径。</para></param>
+    /// <param name="mode">The requested open mode; default <c>Auto</c> decided by file type+extension.
+    /// <para>请求的打开方式；默认 <c>Auto</c> 由文件类型+后缀综合判定。</para></param>
     public async Task OpenDocumentAsync(string path, EditorOpenMode mode = EditorOpenMode.Auto)
     {
         if (string.IsNullOrWhiteSpace(path))

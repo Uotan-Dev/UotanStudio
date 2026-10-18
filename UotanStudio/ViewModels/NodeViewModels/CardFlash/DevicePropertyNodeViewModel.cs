@@ -45,19 +45,10 @@ public class DevicePropertyNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>
-    /// Dispatches the property query logic by the node type key (TypeKey): Device.Property.Read queries the
-    /// device property and outputs the value.
-    /// <para>按节点类型键（TypeKey）分发属性查询逻辑：Device.Property.Read 查询设备属性并输出值。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context.
-    /// <para>执行上下文。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Dispatches the property query logic by the node type key (TypeKey): Device.Property.Read queries the device property and outputs the value.
+    /// <para>按节点类型键（TypeKey）分发属性查询逻辑：Device.Property.Read 查询设备属性并输出值。</para></summary>
+    /// <param name="context">The execution context.<para>执行上下文。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         try

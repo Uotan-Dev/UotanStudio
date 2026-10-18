@@ -47,36 +47,26 @@ internal sealed class HarmonyUpdateAppPrimitives
     private const int MaximumStagedDepth = 16;
     private const long MaximumSidecarBytes = 8 * 1024 * 1024;
 
-    /// <summary>
-    /// Extracts the named logical partitions from a super image, tolerating names that the image does not carry
-    /// and reporting them separately.
-    /// <para>从 super 镜像提取命名逻辑分区，容忍镜像中不存在的名称并单独报告。</para>
-    /// </summary>
-    /// <param name="superImagePath">
-    /// Raw or sparse super image; it is opened read-only. <para>原始或稀疏 super 镜像；以只读方式打开。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Directory receiving one <c>&lt;name&gt;.img</c> per present partition; existing outputs are never replaced.
-    /// <para>为每个存在的分区接收一个 <c>&lt;名称&gt;.img</c> 的目录；绝不替换已有输出。</para>
-    /// </param>
-    /// <param name="partitionNames">
-    /// Requested partition names (for example <c>system</c>, <c>cust</c>, <c>hw_product</c>), matched case-insensitively.
-    /// <para>请求的分区名（如 <c>system</c>、<c>cust</c>、<c>hw_product</c>），按不区分大小写匹配。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Optional stage progress forwarded to the LP extractor. <para>转发给 LP 提取器的可选阶段进度。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before reading and throughout extraction; cancellation propagates.
-    /// <para>在读取前与整个提取期间检查；取消会向上抛出。</para>
-    /// </param>
-    /// <returns>
-    /// The extracted and missing name lists alongside the output directory. <para>提取与缺失名称列表以及输出目录。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">The name list is empty or exceeds 64 entries. <para>名称列表为空或超过 64 项。</para></exception>
+    /// <summary>Extracts the named logical partitions from a super image, tolerating names that the image does not carry and reporting them separately.
+    /// <para>从 super 镜像提取命名逻辑分区，容忍镜像中不存在的名称并单独报告。</para></summary>
+    /// <param name="superImagePath">Raw or sparse super image; it is opened read-only.
+    /// <para>原始或稀疏 super 镜像；以只读方式打开。</para></param>
+    /// <param name="outputDirectory">Directory receiving one <c>&lt;name&gt;.img</c> per present partition; existing outputs are never replaced.
+    /// <para>为每个存在的分区接收一个 <c>&lt;名称&gt;.img</c> 的目录；绝不替换已有输出。</para></param>
+    /// <param name="partitionNames">Requested partition names (for example <c>system</c>, <c>cust</c>, <c>hw_product</c>), matched case-insensitively.
+    /// <para>请求的分区名（如 <c>system</c>、<c>cust</c>、<c>hw_product</c>），按不区分大小写匹配。</para></param>
+    /// <param name="progress">Optional stage progress forwarded to the LP extractor.
+    /// <para>转发给 LP 提取器的可选阶段进度。</para></param>
+    /// <param name="cancellationToken">Checked before reading and throughout extraction; cancellation propagates.
+    /// <para>在读取前与整个提取期间检查；取消会向上抛出。</para></param>
+    /// <returns>The extracted and missing name lists alongside the output directory.
+    /// <para>提取与缺失名称列表以及输出目录。</para></returns>
+    /// <exception cref="ArgumentException">The name list is empty or exceeds 64 entries.
+    /// <para>名称列表为空或超过 64 项。</para></exception>
     /// <exception cref="InvalidDataException">The super image cannot be parsed or extraction fails.
     /// <para>super 镜像无法解析，或提取失败。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public async Task<HarmonySuperExtractionResult> ExtractSuperPartitionsAsync(string superImagePath,
         string outputDirectory, IReadOnlyCollection<string> partitionNames, IFirmwareProgress? progress = null,
         CancellationToken cancellationToken = default)
@@ -114,31 +104,23 @@ internal sealed class HarmonyUpdateAppPrimitives
         return new HarmonySuperExtractionResult(wanted, missing, outputDirectory);
     }
 
-    /// <summary>
-    /// Stages every file of an init file set into an extracted system directory tree.
-    /// <para>把 init 文件集中的全部文件按相对布局注入已解包 system 目录树。</para>
-    /// </summary>
-    /// <param name="targetSystemDirectory">
-    /// Extracted system directory tree receiving the staged files; it must already exist.
-    /// <para>接收注入文件的已解包 system 目录树；必须已存在。</para>
-    /// </param>
-    /// <param name="initFileSetDirectory">
-    /// Host directory holding the replacement init and libfs_mgr files. <para>存放待替换 init 与 libfs_mgr 文件的主机目录。</para>
-    /// </param>
-    /// <param name="relativeTargetDirectory">
-    /// Safe relative path inside the system tree (default <c>init</c>). <para>system 树内的安全相对路径（默认 <c>init</c>）。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before every file copy; cancellation leaves already published files intact.
-    /// <para>在每个文件拷贝前检查；取消时已发布文件保持不变。</para>
-    /// </param>
-    /// <returns>
-    /// The number of staged files. <para>注入的文件数量。</para>
-    /// </returns>
-    /// <exception cref="DirectoryNotFoundException">Either directory is missing. <para>任一目录不存在。</para></exception>
+    /// <summary>Stages every file of an init file set into an extracted system directory tree.
+    /// <para>把 init 文件集中的全部文件按相对布局注入已解包 system 目录树。</para></summary>
+    /// <param name="targetSystemDirectory">Extracted system directory tree receiving the staged files; it must already exist.
+    /// <para>接收注入文件的已解包 system 目录树；必须已存在。</para></param>
+    /// <param name="initFileSetDirectory">Host directory holding the replacement init and libfs_mgr files.
+    /// <para>存放待替换 init 与 libfs_mgr 文件的主机目录。</para></param>
+    /// <param name="relativeTargetDirectory">Safe relative path inside the system tree (default <c>init</c>).
+    /// <para>system 树内的安全相对路径（默认 <c>init</c>）。</para></param>
+    /// <param name="cancellationToken">Checked before every file copy; cancellation leaves already published files intact.
+    /// <para>在每个文件拷贝前检查；取消时已发布文件保持不变。</para></param>
+    /// <returns>The number of staged files.<para>注入的文件数量。</para></returns>
+    /// <exception cref="DirectoryNotFoundException">Either directory is missing.
+    /// <para>任一目录不存在。</para></exception>
     /// <exception cref="InvalidDataException">The relative target escapes the tree, the file set is too large, or a path is unsafe.
     /// <para>相对目标逃逸出目录树、文件集过大，或路径不安全。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<int> StageInitFileSetAsync(string targetSystemDirectory, string initFileSetDirectory,
         string relativeTargetDirectory = "init", CancellationToken cancellationToken = default)
         => Task.Run(() => StageCore(targetSystemDirectory, initFileSetDirectory, relativeTargetDirectory, cancellationToken),
@@ -183,29 +165,21 @@ internal sealed class HarmonyUpdateAppPrimitives
         return staged;
     }
 
-    /// <summary>
-    /// Regenerates mergeable filesystem metadata in a configuration directory: <c>file_contexts</c> and
-    /// <c>fs_config</c> are rebased through the patch helpers and replaced atomically.
-    /// <para>重新生成配置目录中的可合并文件系统元数据：<c>file_contexts</c> 与 <c>fs_config</c> 经补丁辅助函数改基并原子替换。</para>
-    /// </summary>
-    /// <param name="configDirectory">
-    /// Directory holding both sidecar files. <para>同时持有两个附属文件的目录。</para>
-    /// </param>
-    /// <param name="mountPrefix">
-    /// Absolute file_contexts mount prefix, e.g. <c>/system</c>. <para>file_contexts 的绝对挂载前缀，例如 <c>/system</c>。</para>
-    /// </param>
-    /// <param name="partition">
-    /// Partition name appended to both prefixes. <para>追加到两个前缀之后的分区名。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked during each line scan; cancellation propagates. <para>在每次逐行扫描期间检查；取消会向上抛出。</para>
-    /// </param>
-    /// <returns>
-    /// The rebase accounting and regex warnings. <para>改基统计与正则警告列表。</para>
-    /// </returns>
+    /// <summary>Regenerates mergeable filesystem metadata in a configuration directory: <c>file_contexts</c> and <c>fs_config</c> are rebased through the patch helpers and replaced atomically.
+    /// <para>重新生成配置目录中的可合并文件系统元数据：<c>file_contexts</c> 与 <c>fs_config</c> 经补丁辅助函数改基并原子替换。</para></summary>
+    /// <param name="configDirectory">Directory holding both sidecar files.
+    /// <para>同时持有两个附属文件的目录。</para></param>
+    /// <param name="mountPrefix">Absolute file_contexts mount prefix, e.g. <c>/system</c>.
+    /// <para>file_contexts 的绝对挂载前缀，例如 <c>/system</c>。</para></param>
+    /// <param name="partition">Partition name appended to both prefixes.
+    /// <para>追加到两个前缀之后的分区名。</para></param>
+    /// <param name="cancellationToken">Checked during each line scan; cancellation propagates.
+    /// <para>在每次逐行扫描期间检查；取消会向上抛出。</para></param>
+    /// <returns>The rebase accounting and regex warnings.<para>改基统计与正则警告列表。</para></returns>
     /// <exception cref="InvalidDataException">A sidecar is missing, oversized or malformed.
     /// <para>附属文件缺失、超限或格式错误。</para></exception>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public Task<HarmonyMetadataRegenerationResult> RegenerateMergeMetadataAsync(string configDirectory,
         string mountPrefix, string partition, CancellationToken cancellationToken = default)
         => Task.Run(() => RegenerateCore(configDirectory, mountPrefix, partition, cancellationToken), cancellationToken);

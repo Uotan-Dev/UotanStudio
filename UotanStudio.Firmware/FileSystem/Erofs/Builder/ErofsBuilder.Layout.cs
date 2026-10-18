@@ -232,20 +232,13 @@ public sealed partial class ErofsBuilder
             }
         }
 
-        /// <summary>
-        /// Creates the build context: captures the superblock checksum window and computes the layout
-        /// origin (extra device table, compression configuration, and inode table start offsets).
-        /// <para>创建构建上下文：捕获超级块校验和窗口并计算布局起点（额外设备表、压缩配置与 inode 表
-        /// 的起始偏移）。</para>
-        /// </summary>
-        /// <param name="root">Root of the collected node tree.
-        /// <para>收集到的节点树根节点。</para></param>
-        /// <param name="options">Validated build options.
-        /// <para>经校验的构建选项。</para></param>
+        /// <summary>Creates the build context: captures the superblock checksum window and computes the layout origin (extra device table, compression configuration, and inode table start offsets).
+        /// <para>创建构建上下文：捕获超级块校验和窗口并计算布局起点（额外设备表、压缩配置与 inode 表 的起始偏移）。</para></summary>
+        /// <param name="root">Root of the collected node tree.<para>收集到的节点树根节点。</para></param>
+        /// <param name="options">Validated build options.<para>经校验的构建选项。</para></param>
         /// <param name="output">Offset-wrapped destination stream the window is captured on.
         /// <para>捕获窗口所用的偏移包装输出流。</para></param>
-        /// <returns>The initialized build context.
-        /// <para>初始化完成的构建上下文。</para></returns>
+        /// <returns>The initialized build context.<para>初始化完成的构建上下文。</para></returns>
         public static ImageBuildContext Create(ErofsInode root, ErofsOptions options, OffsetStream output)
         {
             var blockSize = options.BlockSize;

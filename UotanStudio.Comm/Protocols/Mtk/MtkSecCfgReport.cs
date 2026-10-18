@@ -244,36 +244,23 @@ public sealed record MtkSecCfgV4Report(
 
 /// <summary>The decoded version 3 secure-boot configuration header.
 /// <para>已解码的版本 3 安全启动配置头部。</para></summary>
-/// <remarks>
-/// Only the plaintext banner and header dwords documented at seccfg.py:183-199 are decoded. The
-/// body behind the header is opaque without the target's SEJ engine, so its length and digest are
-/// preserved instead of its bytes; see <see cref="MtkSecCfg"/> for the refusal rationale.
-/// <para>仅解码 seccfg.py:183-199 记载的明文标头与头部双字。头部之后的内容在没有目标 SEJ 引擎时不可读，
-/// 因此保留其长度与摘要而非字节；拒绝理由见 <see cref="MtkSecCfg"/>。</para>
-/// </remarks>
+/// <remarks>Only the plaintext banner and header dwords documented at seccfg.py:183-199 are decoded. The body behind the header is opaque without the target's SEJ engine, so its length and digest are preserved instead of its bytes; see <see cref="MtkSecCfg"/> for the refusal rationale.
+/// <para>仅解码 seccfg.py:183-199 记载的明文标头与头部双字。头部之后的内容在没有目标 SEJ 引擎时不可读， 因此保留其长度与摘要而非字节；拒绝理由见 <see cref="MtkSecCfg"/>。</para></remarks>
 /// <param name="BannerHex">The exact 16 banner bytes as uppercase hex.
 /// <para>16 个标头字节的精确大写十六进制表示。</para></param>
-/// <param name="Magic">The raw structure magic dword.
-/// <para>原始结构魔数双字。</para></param>
-/// <param name="Version">The raw configuration version dword.
-/// <para>原始配置版本双字。</para></param>
-/// <param name="Size">The raw declared structure size dword.
-/// <para>原始声明结构大小双字。</para></param>
-/// <param name="EncryptionOffset">The raw encryption offset dword.
-/// <para>原始加密偏移双字。</para></param>
-/// <param name="EncryptionLength">The raw encryption length dword used by the documented writer to
-/// mark the state (seccfg.py:192, :233 and :236).
+/// <param name="Magic">The raw structure magic dword.<para>原始结构魔数双字。</para></param>
+/// <param name="Version">The raw configuration version dword.<para>原始配置版本双字。</para></param>
+/// <param name="Size">The raw declared structure size dword.<para>原始声明结构大小双字。</para></param>
+/// <param name="EncryptionOffset">The raw encryption offset dword.<para>原始加密偏移双字。</para></param>
+/// <param name="EncryptionLength">The raw encryption length dword used by the documented writer to mark the state (seccfg.py:192, :233 and :236).
 /// <para>原始加密长度双字，已记载的写入器用它标识状态（seccfg.py:192、:233 与 :236）。</para></param>
 /// <param name="SoftwareLockTry">The raw single-byte software lock attempt counter.
 /// <para>原始单字节软件锁定尝试计数。</para></param>
 /// <param name="SoftwareLockDone">The raw single-byte software lock completion counter.
 /// <para>原始单字节软件锁定完成计数。</para></param>
-/// <param name="PageSize">The raw 16-bit page size.
-/// <para>原始 16 位页大小。</para></param>
-/// <param name="PageCount">The raw 32-bit page count.
-/// <para>原始 32 位页数。</para></param>
-/// <param name="EndFlag">The raw end marker dword.
-/// <para>原始结束标志双字。</para></param>
+/// <param name="PageSize">The raw 16-bit page size.<para>原始 16 位页大小。</para></param>
+/// <param name="PageCount">The raw 32-bit page count.<para>原始 32 位页数。</para></param>
+/// <param name="EndFlag">The raw end marker dword.<para>原始结束标志双字。</para></param>
 /// <param name="BodyLength">The byte length of the opaque body between the header and the end marker.
 /// <para>头部与结束标志之间不透明主体的字节长度。</para></param>
 /// <param name="BodySha256Hex">The SHA-256 digest of those opaque body bytes.
@@ -313,8 +300,7 @@ public sealed record MtkSecCfgV3Report(
 
 /// <summary>A secure-boot configuration read from a device partition, bound to its location.
 /// <para>从设备分区读取的安全启动配置，并绑定其位置。</para></summary>
-/// <param name="Format">The layout selected from the image header.
-/// <para>依据镜像头部选择的布局。</para></param>
+/// <param name="Format">The layout selected from the image header.<para>依据镜像头部选择的布局。</para></param>
 /// <param name="PartitionId">The discovered physical region the image was read from.
 /// <para>读取该镜像所用的已发现物理区域。</para></param>
 /// <param name="PartitionName">The exact GPT partition name the image was read from.
@@ -344,14 +330,8 @@ public sealed record MtkSecCfgView(
 
 /// <summary>The receipt for a secure-boot configuration image written to a partition.
 /// <para>安全启动配置镜像写入某分区后的回执。</para></summary>
-/// <remarks>
-/// The receipt records what the host submitted and where. It does not claim the target accepted the
-/// new lock state semantically: the reference client treats a successful write as an acknowledgement
-/// only (Library/DA/xflash/extension/xflash.py:598-601), so verifying the result requires a separate
-/// read.
-/// <para>回执只记录主机提交了什么以及写到哪里，并不声称目标在语义上接受了新的锁定状态：参考客户端把成功
-/// 写入仅当作一次确认（Library/DA/xflash/extension/xflash.py:598-601），因此验证结果需要另行读取。</para>
-/// </remarks>
+/// <remarks>The receipt records what the host submitted and where. It does not claim the target accepted the new lock state semantically: the reference client treats a successful write as an acknowledgement only (Library/DA/xflash/extension/xflash.py:598-601), so verifying the result requires a separate read.
+/// <para>回执只记录主机提交了什么以及写到哪里，并不声称目标在语义上接受了新的锁定状态：参考客户端把成功 写入仅当作一次确认（Library/DA/xflash/extension/xflash.py:598-601），因此验证结果需要另行读取。</para></remarks>
 /// <param name="PartitionName">The exact GPT partition name written. 被写入的精确 GPT 分区名。</param>
 /// <param name="PartitionIndex">The zero-based GPT entry index written.
 /// <para>被写入条目的从零开始 GPT 索引。</para></param>

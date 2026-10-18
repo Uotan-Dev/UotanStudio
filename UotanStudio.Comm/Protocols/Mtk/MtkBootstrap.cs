@@ -11,31 +11,17 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// </summary>
 public static partial class MtkBootstrap
 {
-    /// <summary>
-    /// Takes ownership of a selected open transport, validates resources and initializes the selected stock DA protocol.
-    /// The session is returned only after storage discovery; all failures dispose the owned transport.
-    /// Null argument checks occur before ownership transfer.
-    /// <para>接管所选定的已打开传输，校验资源并初始化所选标准 DA 协议。仅在存储发现完成后才返回会话；
-    /// 所有失败路径都会释放所接管的传输。空值参数检查发生在所有权转移之前。</para>
-    /// </summary>
-    /// <param name="transport">
-    /// The open transport selected by physical identity or explicit COM/TTY name.
-    /// <para>按物理标识或显式 COM/TTY 名称选定的已打开传输。</para>
-    /// </param>
+    /// <summary>Takes ownership of a selected open transport, validates resources and initializes the selected stock DA protocol. The session is returned only after storage discovery; all failures dispose the owned transport. Null argument checks occur before ownership transfer.
+    /// <para>接管所选定的已打开传输，校验资源并初始化所选标准 DA 协议。仅在存储发现完成后才返回会话； 所有失败路径都会释放所接管的传输。空值参数检查发生在所有权转移之前。</para></summary>
+    /// <param name="transport">The open transport selected by physical identity or explicit COM/TTY name.
+    /// <para>按物理标识或显式 COM/TTY 名称选定的已打开传输。</para></param>
     /// <param name="protocol">The explicitly selected protocol; no detection or fallback is performed.
     /// <para>显式选定的协议；不进行探测或回退。</para></param>
-    /// <param name="options">
-    /// Explicit resource selections and identity policy.
-    /// <para>显式的资源选择与身份策略。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The operation cancellation token.
-    /// <para>操作取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// A caller-owned storage-ready session; this workflow issues no storage write or erase command.
-    /// <para>由调用方持有、已就绪存储的会话；本流程不下发任何存储写入或擦除命令。</para>
-    /// </returns>
+    /// <param name="options">Explicit resource selections and identity policy.
+    /// <para>显式的资源选择与身份策略。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
+    /// <returns>A caller-owned storage-ready session; this workflow issues no storage write or erase command.
+    /// <para>由调用方持有、已就绪存储的会话；本流程不下发任何存储写入或擦除命令。</para></returns>
     public static Task<MtkSession> InitializeAsync(ICommTransport transport, MtkDaProtocol protocol, MtkBootstrapOptions options,
         CancellationToken cancellationToken = default)
     {
@@ -44,28 +30,17 @@ public static partial class MtkBootstrap
         return InitializeCoreAsync(transport, protocol, options, null, cancellationToken);
     }
 
-    /// <summary>
-    /// Preflights and retains the selected loader before opening one explicit serial port, then starts the selected DA.
-    /// <para>在打开某一个显式串口之前预检并保留所选加载器，随后启动所选 DA。</para>
-    /// </summary>
-    /// <param name="serial">
-    /// Explicit port and line settings; no probing or fallback is performed.
-    /// <para>显式的端口与线路参数；不进行探测或回退。</para>
-    /// </param>
+    /// <summary>Preflights and retains the selected loader before opening one explicit serial port, then starts the selected DA.
+    /// <para>在打开某一个显式串口之前预检并保留所选加载器，随后启动所选 DA。</para></summary>
+    /// <param name="serial">Explicit port and line settings; no probing or fallback is performed.
+    /// <para>显式的端口与线路参数；不进行探测或回退。</para></param>
     /// <param name="protocol">The explicitly selected protocol; no detection or fallback is performed.
     /// <para>显式选定的协议；不进行探测或回退。</para></param>
-    /// <param name="options">
-    /// Explicit loader, stages, identity and storage selections.
-    /// <para>显式的加载器、阶段、身份与存储选择。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The startup cancellation token.
-    /// <para>启动过程取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// A caller-owned storage-ready session. Starting agents is not inherently side-effect-free.
-    /// <para>由调用方持有、已就绪存储的会话。启动代理本身并非无副作用。</para>
-    /// </returns>
+    /// <param name="options">Explicit loader, stages, identity and storage selections.
+    /// <para>显式的加载器、阶段、身份与存储选择。</para></param>
+    /// <param name="cancellationToken">The startup cancellation token.<para>启动过程取消令牌。</para></param>
+    /// <returns>A caller-owned storage-ready session. Starting agents is not inherently side-effect-free.
+    /// <para>由调用方持有、已就绪存储的会话。启动代理本身并非无副作用。</para></returns>
     public static Task<MtkSession> ConnectSerialAsync(SerialConnectionOptions serial, MtkDaProtocol protocol, MtkBootstrapOptions options,
         CancellationToken cancellationToken = default) =>
         ConnectSerialCoreAsync(serial, protocol, options, static async (settings, token) =>

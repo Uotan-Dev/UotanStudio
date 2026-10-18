@@ -305,22 +305,15 @@ public sealed class ProjectContext
         => RootDirectory is null ? null : Path.Combine(RootDirectory,
             nodeProject.RelativePath.Replace('/', Path.DirectorySeparatorChar));
 
-    /// <summary>
-    /// Opens the specified solution: sets the solution path/name and directory layout, scans for
-    /// sub-projects (<c>*.uotanfw</c> files). State belongs to each sub-project.
-    /// <para>打开指定解决方案：设置解决方案路径/名称与目录布局，扫描子项目（<c>*.uotanfw</c> 文件），
-    /// 状态目录由各子项目独立持有。</para>
-    /// </summary>
-    /// <param name="solutionPath">
-    /// Full path of the solution file (<c>.uotan</c>). <para>解决方案文件（<c>.uotan</c>）全路径。</para>
-    /// </param>
-    /// <param name="snapshot">
-    /// The loaded solution snapshot (used to read sub-project references). <para>已加载的解决方案快照（读取子项目引用）。</para>
-    /// </param>
+    /// <summary>Opens the specified solution: sets the solution path/name and directory layout, scans for sub-projects (<c>*.uotanfw</c> files). State belongs to each sub-project.
+    /// <para>打开指定解决方案：设置解决方案路径/名称与目录布局，扫描子项目（<c>*.uotanfw</c> 文件）， 状态目录由各子项目独立持有。</para></summary>
+    /// <param name="solutionPath">Full path of the solution file (<c>.uotan</c>).
+    /// <para>解决方案文件（<c>.uotan</c>）全路径。</para></param>
+    /// <param name="snapshot">The loaded solution snapshot (used to read sub-project references).
+    /// <para>已加载的解决方案快照（读取子项目引用）。</para></param>
     /// <exception cref="ArgumentException"><paramref name="solutionPath"/> is empty or only whitespace.
     /// <para><paramref name="solutionPath"/> 为空或仅包含空白字符。</para></exception>
-    /// <exception cref="InvalidDataException"><paramref name="snapshot"/> carries an unsupported format version,
-    /// too many sub-projects, a null reference, or a duplicate name.
+    /// <exception cref="InvalidDataException"><paramref name="snapshot"/> carries an unsupported format version, too many sub-projects, a null reference, or a duplicate name.
     /// <para><paramref name="snapshot"/> 的格式版本不受支持、子项目过多、引用为空或名称重复。</para></exception>
     public void OpenSolution(string solutionPath, SolutionSnapshot? snapshot = null)
     {

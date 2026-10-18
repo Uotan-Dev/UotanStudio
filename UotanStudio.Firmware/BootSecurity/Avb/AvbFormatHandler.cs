@@ -175,10 +175,7 @@ internal sealed class AvbFormatHandler : IReadonlyFormatHandler
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Extracts the firmware contents asynchronously.
-    /// <para>异步提取固件内容。</para>
-    /// </summary>
+    /// <summary>Extracts the firmware contents asynchronously.<para>异步提取固件内容。</para></summary>
     /// <param name="filePath">Signed VBMeta image (extracts <c>.authentication.bin</c> and <c>.auxiliary.bin</c>) or footer-bearing partition image (extracts <c>.vbmeta.bin</c>); footer-declared ranges are validated before reading.
     /// <para>已签名 VBMeta 镜像（提取 <c>.authentication.bin</c> 与 <c>.auxiliary.bin</c>），或带尾部的分区镜像（提取 <c>.vbmeta.bin</c>）；读取前校验尾部声明的范围。</para></param>
     /// <param name="outputDirectory">Created on demand; receives the extracted files plus a repack metadata record after a successful extraction.

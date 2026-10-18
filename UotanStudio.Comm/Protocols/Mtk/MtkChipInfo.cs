@@ -4,25 +4,13 @@ namespace UotanStudio.Comm.Protocols.Mtk.Security;
 
 /// <summary>The chip identity reported by the download agent device-control query.
 /// <para>下载代理设备控制查询上报的芯片身份。</para></summary>
-/// <remarks>
-/// The reference client sends the get-chip-id control code and decodes the reply as five
-/// little-endian 16-bit words in this order (Library/DA/xflash/xflash_lib.py:448-471 with
-/// Library/DA/xflash/xflash_param.py:53). The raw reply bytes are preserved so a later revision of
-/// the agent can be compared byte for byte instead of re-derived from the decoded fields.
-/// <para>参考客户端发送取得芯片标识的控制码，并把回复按五个小端 16 位字依此顺序解码
-/// （Library/DA/xflash/xflash_lib.py:448-471，控制码见 Library/DA/xflash/xflash_param.py:53）。
-/// 保留原始回复字节，便于在代理版本变更时逐字节比较，而不是仅从解码字段反推。</para>
-/// </remarks>
-/// <param name="HardwareCode">The raw hardware code word.
-/// <para>原始硬件代码字。</para></param>
-/// <param name="HardwareSubCode">The raw hardware subcode word.
-/// <para>原始硬件子代码字。</para></param>
-/// <param name="HardwareVersion">The raw hardware revision word.
-/// <para>原始硬件修订字。</para></param>
-/// <param name="SoftwareVersion">The raw software revision word.
-/// <para>原始软件修订字。</para></param>
-/// <param name="ChipEvolution">The raw chip evolution word.
-/// <para>原始芯片演进字。</para></param>
+/// <remarks>The reference client sends the get-chip-id control code and decodes the reply as five little-endian 16-bit words in this order (Library/DA/xflash/xflash_lib.py:448-471 with Library/DA/xflash/xflash_param.py:53). The raw reply bytes are preserved so a later revision of the agent can be compared byte for byte instead of re-derived from the decoded fields.
+/// <para>参考客户端发送取得芯片标识的控制码，并把回复按五个小端 16 位字依此顺序解码 （Library/DA/xflash/xflash_lib.py:448-471，控制码见 Library/DA/xflash/xflash_param.py:53）。 保留原始回复字节，便于在代理版本变更时逐字节比较，而不是仅从解码字段反推。</para></remarks>
+/// <param name="HardwareCode">The raw hardware code word.<para>原始硬件代码字。</para></param>
+/// <param name="HardwareSubCode">The raw hardware subcode word.<para>原始硬件子代码字。</para></param>
+/// <param name="HardwareVersion">The raw hardware revision word.<para>原始硬件修订字。</para></param>
+/// <param name="SoftwareVersion">The raw software revision word.<para>原始软件修订字。</para></param>
+/// <param name="ChipEvolution">The raw chip evolution word.<para>原始芯片演进字。</para></param>
 /// <param name="ReplyHex">The exact reply bytes as uppercase hex.
 /// <para>回复字节的大写十六进制表示。</para></param>
 public sealed record MtkXFlashChipId(

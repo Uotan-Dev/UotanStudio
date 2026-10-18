@@ -8,55 +8,26 @@ namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
 public sealed partial class PayloadBuilder
 {
-    /// <summary>
-    /// Adds an incremental partition built from a source base image and its target image: unchanged
-    /// blocks are emitted as SOURCE_COPY operations (no payload data, hashed against the source) and
-    /// changed blocks as REPLACE operations.
-    /// <para>由源基座镜像和目标镜像构建增量分区。未变更块输出为 SOURCE_COPY 操作（不占用载荷数据，
-    /// 哈希基于源镜像），变更块输出为 REPLACE 操作。</para>
-    /// </summary>
-    /// <remarks>
-    /// Requires block-aligned source and target; their lengths may differ. SOURCE_COPY needs minor version &#8805; 2,
-    /// which is raised automatically. A full REPLACE payload remains the fallback when the incremental
-    /// encoding would not shrink the transfer; callers decide whether to prefer this path.
-    /// <para>要求源与目标块对齐，允许长度不同；SOURCE_COPY 需次版本号 &#8805; 2，此处自动提升。
-    /// 当增量编码无法缩小传输时应回退到完整 REPLACE 载荷，由调用方决定是否采用本路径。</para>
-    /// </remarks>
-    /// <param name="partitionName">
-    /// Partition written by this update; duplicate names across the builder are rejected at build time.
-    /// <para>本次更新写入的分区名；构建时拒绝构建器内重复的分区名。</para>
-    /// </param>
-    /// <param name="targetImagePath">
-    /// Desired image file, which must exist and be block-aligned; it is opened by the build, not by this call.
-    /// <para>期望的镜像文件，必须存在且块对齐；由构建过程打开，而非本调用。</para>
-    /// </param>
-    /// <param name="sourceImagePath">
-    /// Base image file the device is assumed to hold; it must exist and be block-aligned.
-    /// <para>设备被认为持有的基座镜像文件，必须存在且块对齐。</para>
-    /// </param>
-    /// <param name="compression">
-    /// Codec applied to the changed blocks of a REPLACE operation; only <see cref="CompressionType.None"/>,
-    /// <see cref="CompressionType.BZip2"/> and <see cref="CompressionType.Xz"/> are emitted.
-    /// <para>应用于 REPLACE 操作变更块的编解码器；仅会生成 <see cref="CompressionType.None"/>、
-    /// <see cref="CompressionType.BZip2"/> 与 <see cref="CompressionType.Xz"/>。</para>
-    /// </param>
-    /// <returns>
-    /// This builder, so calls can be chained. The minor version is raised to <c>2</c> when it is lower.
-    /// <para>本构建器，便于链式调用。次版本号低于 <c>2</c> 时会被提升到 <c>2</c>。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="partitionName"/> is empty or whitespace, one of the paths is empty or whitespace, or
-    /// <paramref name="compression"/> requests a codec this builder does not emit.
-    /// <para><paramref name="partitionName"/> 为空或仅含空白、某个路径为空或仅含空白，或 <paramref name="compression"/>
-    /// 请求了本构建器不生成的编解码器。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="compression"/> is not a defined member. <para><paramref name="compression"/> 不是已定义的成员。</para>
-    /// </exception>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="targetImagePath"/> or <paramref name="sourceImagePath"/> does not exist.
-    /// <para><paramref name="targetImagePath"/> 或 <paramref name="sourceImagePath"/> 不存在。</para>
-    /// </exception>
+    /// <summary>Adds an incremental partition built from a source base image and its target image: unchanged blocks are emitted as SOURCE_COPY operations (no payload data, hashed against the source) and changed blocks as REPLACE operations.
+    /// <para>由源基座镜像和目标镜像构建增量分区。未变更块输出为 SOURCE_COPY 操作（不占用载荷数据， 哈希基于源镜像），变更块输出为 REPLACE 操作。</para></summary>
+    /// <remarks>Requires block-aligned source and target; their lengths may differ. SOURCE_COPY needs minor version &#8805; 2, which is raised automatically. A full REPLACE payload remains the fallback when the incremental encoding would not shrink the transfer; callers decide whether to prefer this path.
+    /// <para>要求源与目标块对齐，允许长度不同；SOURCE_COPY 需次版本号 &#8805; 2，此处自动提升。 当增量编码无法缩小传输时应回退到完整 REPLACE 载荷，由调用方决定是否采用本路径。</para></remarks>
+    /// <param name="partitionName">Partition written by this update; duplicate names across the builder are rejected at build time.
+    /// <para>本次更新写入的分区名；构建时拒绝构建器内重复的分区名。</para></param>
+    /// <param name="targetImagePath">Desired image file, which must exist and be block-aligned; it is opened by the build, not by this call.
+    /// <para>期望的镜像文件，必须存在且块对齐；由构建过程打开，而非本调用。</para></param>
+    /// <param name="sourceImagePath">Base image file the device is assumed to hold; it must exist and be block-aligned.
+    /// <para>设备被认为持有的基座镜像文件，必须存在且块对齐。</para></param>
+    /// <param name="compression">Codec applied to the changed blocks of a REPLACE operation; only <see cref="CompressionType.None"/>, <see cref="CompressionType.BZip2"/> and <see cref="CompressionType.Xz"/> are emitted.
+    /// <para>应用于 REPLACE 操作变更块的编解码器；仅会生成 <see cref="CompressionType.None"/>、 <see cref="CompressionType.BZip2"/> 与 <see cref="CompressionType.Xz"/>。</para></param>
+    /// <returns>This builder, so calls can be chained. The minor version is raised to <c>2</c> when it is lower.
+    /// <para>本构建器，便于链式调用。次版本号低于 <c>2</c> 时会被提升到 <c>2</c>。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="partitionName"/> is empty or whitespace, one of the paths is empty or whitespace, or <paramref name="compression"/> requests a codec this builder does not emit.
+    /// <para><paramref name="partitionName"/> 为空或仅含空白、某个路径为空或仅含空白，或 <paramref name="compression"/> 请求了本构建器不生成的编解码器。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="compression"/> is not a defined member.
+    /// <para><paramref name="compression"/> 不是已定义的成员。</para></exception>
+    /// <exception cref="FileNotFoundException"><paramref name="targetImagePath"/> or <paramref name="sourceImagePath"/> does not exist.
+    /// <para><paramref name="targetImagePath"/> 或 <paramref name="sourceImagePath"/> 不存在。</para></exception>
     public PayloadBuilder AddPartitionIncremental(string partitionName, string targetImagePath, string sourceImagePath, CompressionType compression = CompressionType.None)
     {
         ArgumentNullException.ThrowIfNull(partitionName);

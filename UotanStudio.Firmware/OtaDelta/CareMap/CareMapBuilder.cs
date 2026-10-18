@@ -44,36 +44,23 @@ public static class CareMapBuilder
     public static bool IsSupportedPartition(string? partitionName) =>
         partitionName is not null && Array.IndexOf(SupportedPartitionNames, partitionName) >= 0;
 
-    /// <summary>
-    /// Builds the care-map record for one partition image.
-    /// <para>为单个分区镜像构建 care map 记录。</para>
-    /// </summary>
-    /// <param name="partitionName">
-    /// Partition the image belongs to; only <see cref="SupportedPartitions"/> produce a record.
-    /// <para>镜像所属分区；只有 <see cref="SupportedPartitions"/> 中的分区才会产生记录。</para>
-    /// </param>
-    /// <param name="imagePath">
-    /// Raw or sparse image file. <para>原始或 sparse 镜像文件。</para>
-    /// </param>
-    /// <param name="verifiedImageBytes">
-    /// Byte count covered by verification, read from the image's AVB footer by the caller.
-    /// <para>受校验覆盖的字节数，由调用方从镜像的 AVB footer 读取后传入。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels before and during the scan; a cancelled call rethrows.
-    /// <para>在扫描前后取消；被取消时重新抛出。</para>
-    /// </param>
+    /// <summary>Builds the care-map record for one partition image.
+    /// <para>为单个分区镜像构建 care map 记录。</para></summary>
+    /// <param name="partitionName">Partition the image belongs to; only <see cref="SupportedPartitions"/> produce a record.
+    /// <para>镜像所属分区；只有 <see cref="SupportedPartitions"/> 中的分区才会产生记录。</para></param>
+    /// <param name="imagePath">Raw or sparse image file.<para>原始或 sparse 镜像文件。</para></param>
+    /// <param name="verifiedImageBytes">Byte count covered by verification, read from the image's AVB footer by the caller.
+    /// <para>受校验覆盖的字节数，由调用方从镜像的 AVB footer 读取后传入。</para></param>
+    /// <param name="cancellationToken">Cancels before and during the scan; a cancelled call rethrows.
+    /// <para>在扫描前后取消；被取消时重新抛出。</para></param>
     /// <returns>The record, or <see langword="null"/> when the partition is not eligible.
     /// <para>记录；当分区不受支持时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="FileNotFoundException"><paramref name="imagePath"/> does not exist.
     /// <para><paramref name="imagePath"/> 不存在。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="verifiedImageBytes"/> is not positive.
     /// <para><paramref name="verifiedImageBytes"/> 不是正数。</para></exception>
-    /// <exception cref="InvalidDataException">The sparse image uses a block size other than
-    /// <see cref="CareMap.BlockSize"/>, the verified length is not smaller than the image on disk, or
-    /// clipping leaves no block to verify.
-    /// <para>sparse 镜像使用了非 <see cref="CareMap.BlockSize"/> 的块大小；受校验长度不小于磁盘上的镜像长度；
-    /// 或裁剪后没有任何待校验块。</para></exception>
+    /// <exception cref="InvalidDataException">The sparse image uses a block size other than <see cref="CareMap.BlockSize"/>, the verified length is not smaller than the image on disk, or clipping leaves no block to verify.
+    /// <para>sparse 镜像使用了非 <see cref="CareMap.BlockSize"/> 的块大小；受校验长度不小于磁盘上的镜像长度； 或裁剪后没有任何待校验块。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> is signaled.
     /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public static CareMapPartitionInfo? TryBuildFromImage(string partitionName, string imagePath,

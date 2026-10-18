@@ -16,21 +16,14 @@ namespace UotanStudio.Compress;
 /// </example>
 public static class CompressionService
 {
-    /// <summary>
-    /// Compresses data.
-    /// <para>压缩数据。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext buffer to compress; an empty array produces the codec's empty-stream encoding.
+    /// <summary>Compresses data.<para>压缩数据。</para></summary>
+    /// <param name="data">Plaintext buffer to compress; an empty array produces the codec's empty-stream encoding.
     /// <para>待压缩的明文字节；空数组会生成该编解码器的空流编码。</para></param>
-    /// <param name="format">
-    /// Target container, resolved through the format registry.
+    /// <param name="format">Target container, resolved through the format registry.
     /// <para>目标容器格式，通过格式注册表解析。</para></param>
-    /// <param name="options">
-    /// Optional level, dictionary size and parallelism tuning; <see langword="null"/> keeps every codec default.
+    /// <param name="options">Optional level, dictionary size and parallelism tuning; <see langword="null"/> keeps every codec default.
     /// <para>可选的等级、字典大小与并行度调优；为 <see langword="null"/> 时全部采用编解码器默认值。</para></param>
-    /// <returns>
-    /// The compressed bytes. For <see cref="CompressionFormat.None"/> the input array is returned unchanged and by reference.
+    /// <returns>The compressed bytes. For <see cref="CompressionFormat.None"/> the input array is returned unchanged and by reference.
     /// <para>压缩后的字节；<see cref="CompressionFormat.None"/> 按引用原样返回输入数组。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
@@ -49,18 +42,11 @@ public static class CompressionService
         return CompressCore(data, format, options);
     }
 
-    /// <summary>
-    /// Decompresses data.
-    /// <para>解压数据。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete compressed payload, treated as untrusted input.
+    /// <summary>Decompresses data.<para>解压数据。</para></summary>
+    /// <param name="data">Complete compressed payload, treated as untrusted input.
     /// <para>完整的压缩数据，按不可信输入处理。</para></param>
-    /// <param name="format">
-    /// Container the payload is decoded with.
-    /// <para>用于解码该数据的容器格式。</para></param>
-    /// <returns>
-    /// The decompressed bytes, whose size equals whatever the payload expands to; no output cap is applied. For <see cref="CompressionFormat.None"/> the input array is returned unchanged and by reference.
+    /// <param name="format">Container the payload is decoded with.<para>用于解码该数据的容器格式。</para></param>
+    /// <returns>The decompressed bytes, whose size equals whatever the payload expands to; no output cap is applied. For <see cref="CompressionFormat.None"/> the input array is returned unchanged and by reference.
     /// <para>解压后的字节，大小完全取决于数据的展开结果，不施加输出上限；<see cref="CompressionFormat.None"/> 按引用原样返回输入数组。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
@@ -80,21 +66,14 @@ public static class CompressionService
     }
 
 
-    /// <summary>
-    /// Streaming compression.
-    /// <para>流式压缩。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable source positioned where the plaintext starts; it is read to end of stream and never closed by this call.
+    /// <summary>Streaming compression.<para>流式压缩。</para></summary>
+    /// <param name="input">Readable source positioned where the plaintext starts; it is read to end of stream and never closed by this call.
     /// <para>定位在明文起始处的可读源流，读取到流末尾且不会被本调用关闭。</para></param>
-    /// <param name="output">
-    /// Writable destination for the encoded bytes; it is flushed and finalized by the codec but left open for the caller.
+    /// <param name="output">Writable destination for the encoded bytes; it is flushed and finalized by the codec but left open for the caller.
     /// <para>编码字节的写入目标；由编解码器刷新并写出结尾结构，但保持打开交由调用方处理。</para></param>
-    /// <param name="format">
-    /// Target container. <see cref="CompressionFormat.None"/> copies the input verbatim; gzip, zlib, deflate, Brotli, bzip2 and LZ4 frame go through their streaming encoders, while XZ, LZMA, Zstandard, LZ4 legacy and LZOP use their dedicated block-frame writers, and the XZ writer spools its payload to a temporary file.
+    /// <param name="format">Target container. <see cref="CompressionFormat.None"/> copies the input verbatim; gzip, zlib, deflate, Brotli, bzip2 and LZ4 frame go through their streaming encoders, while XZ, LZMA, Zstandard, LZ4 legacy and LZOP use their dedicated block-frame writers, and the XZ writer spools its payload to a temporary file.
     /// <para>目标容器格式。<see cref="CompressionFormat.None"/> 原样复制输入；gzip、zlib、deflate、Brotli、bzip2 与 LZ4 帧走各自的流式编码器，而 XZ、LZMA、Zstandard、LZ4 传统格式与 LZOP 使用专用的块帧写出路径，其中 XZ 会把载荷暂存到临时文件。</para></param>
-    /// <param name="options">
-    /// Optional tuning; <see langword="null"/> keeps every codec default.
+    /// <param name="options">Optional tuning; <see langword="null"/> keeps every codec default.
     /// <para>可选调优参数；为 <see langword="null"/> 时全部采用编解码器默认值。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -169,19 +148,12 @@ public static class CompressionService
         }
     }
 
-    /// <summary>
-    /// Streaming decompression.
-    /// <para>流式解压。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable compressed payload positioned at its first byte; it is not closed by this call.
+    /// <summary>Streaming decompression.<para>流式解压。</para></summary>
+    /// <param name="input">Readable compressed payload positioned at its first byte; it is not closed by this call.
     /// <para>定位在压缩数据起始处的可读流，不会被本调用关闭。</para></param>
-    /// <param name="output">
-    /// Writable destination for the decoded bytes; it is not closed and not flushed beyond what the codec performs.
+    /// <param name="output">Writable destination for the decoded bytes; it is not closed and not flushed beyond what the codec performs.
     /// <para>解码字节的写入目标，不会被本调用关闭，除编解码器自身的写入外不做额外刷新。</para></param>
-    /// <param name="format">
-    /// Container the payload is decoded with.
-    /// <para>用于解码该数据的容器格式。</para></param>
+    /// <param name="format">Container the payload is decoded with.<para>用于解码该数据的容器格式。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="format"/> is unknown or cannot decompress.
@@ -193,24 +165,17 @@ public static class CompressionService
     public static void Decompress(Stream input, Stream output, CompressionFormat format)
         => Decompress(input, output, format, long.MaxValue, CancellationToken.None);
 
-    /// <summary>
-    /// Decompresses a stream with a unified output limit and cancellation support.
-    /// <para>使用统一输出上限和取消支持进行流式解压。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable compressed payload positioned at its first byte; the caller keeps ownership and must close it.
+    /// <summary>Decompresses a stream with a unified output limit and cancellation support.
+    /// <para>使用统一输出上限和取消支持进行流式解压。</para></summary>
+    /// <param name="input">Readable compressed payload positioned at its first byte; the caller keeps ownership and must close it.
     /// <para>定位在压缩数据起始处的可读流；所有权属于调用方，需由调用方关闭。</para></param>
-    /// <param name="output">
-    /// Writable destination wrapped internally in a counting stream, so writes are checked before they reach it; it is left open.
+    /// <param name="output">Writable destination wrapped internally in a counting stream, so writes are checked before they reach it; it is left open.
     /// <para>写入目标在内部被计数流包装，写入先校验再落地；该流保持打开。</para></param>
-    /// <param name="format">
-    /// Container the payload is decoded with. <see cref="CompressionFormat.None"/> copies the input unchanged and <see cref="CompressionFormat.Zopfli"/> decodes through the gzip reader.
+    /// <param name="format">Container the payload is decoded with. <see cref="CompressionFormat.None"/> copies the input unchanged and <see cref="CompressionFormat.Zopfli"/> decodes through the gzip reader.
     /// <para>用于解码的容器格式：<see cref="CompressionFormat.None"/> 原样复制输入，<see cref="CompressionFormat.Zopfli"/> 通过 gzip 读取器解码。</para></param>
-    /// <param name="maximumOutputBytes">
-    /// Inclusive cap on total decoded bytes, checked before each write so the limit is never overshot; pass <see cref="long.MaxValue"/> to leave the output effectively unbounded.
+    /// <param name="maximumOutputBytes">Inclusive cap on total decoded bytes, checked before each write so the limit is never overshot; pass <see cref="long.MaxValue"/> to leave the output effectively unbounded.
     /// <para>解压输出总字节数的含上限，在每次写入前检查，因此不会超出限制；传入 <see cref="long.MaxValue"/> 表示实质上不限大小。</para></param>
-    /// <param name="cancellationToken">
-    /// Token observed before the first byte is read and on every write through the counting wrapper; there is no asynchronous I/O here, so cancellation surfaces as a throw rather than a returned task.
+    /// <param name="cancellationToken">Token observed before the first byte is read and on every write through the counting wrapper; there is no asynchronous I/O here, so cancellation surfaces as a throw rather than a returned task.
     /// <para>在读取首字节前以及每次通过计数包装写入时检查；本方法不含异步 I/O，取消以抛出异常的方式体现。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -227,27 +192,18 @@ public static class CompressionService
     public static void Decompress(Stream input, Stream output, CompressionFormat format, long maximumOutputBytes, CancellationToken cancellationToken = default)
         => DecompressWithOptions(input, output, format, maximumOutputBytes, null, cancellationToken);
 
-    /// <summary>
-    /// Decompresses a stream with a unified output limit, cancellation support and optional tuning.
-    /// <para>使用统一输出上限、取消支持与可选调优进行流式解压。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable compressed payload positioned at its first byte; the caller keeps ownership and must close it.
+    /// <summary>Decompresses a stream with a unified output limit, cancellation support and optional tuning.
+    /// <para>使用统一输出上限、取消支持与可选调优进行流式解压。</para></summary>
+    /// <param name="input">Readable compressed payload positioned at its first byte; the caller keeps ownership and must close it.
     /// <para>定位在压缩数据起始处的可读流；所有权属于调用方，需由调用方关闭。</para></param>
-    /// <param name="output">
-    /// Writable destination wrapped internally in a counting stream, so writes are checked before they reach it; it is left open.
+    /// <param name="output">Writable destination wrapped internally in a counting stream, so writes are checked before they reach it; it is left open.
     /// <para>写入目标在内部被计数流包装，写入先校验再落地；该流保持打开。</para></param>
-    /// <param name="format">
-    /// Container the payload is decoded with.
-    /// <para>用于解码的容器格式。</para></param>
-    /// <param name="maximumOutputBytes">
-    /// Inclusive cap on total decoded bytes, checked before each write so the limit is never overshot.
+    /// <param name="format">Container the payload is decoded with.<para>用于解码的容器格式。</para></param>
+    /// <param name="maximumOutputBytes">Inclusive cap on total decoded bytes, checked before each write so the limit is never overshot.
     /// <para>解压输出总字节数的含上限，在每次写入前检查，因此不会超出限制。</para></param>
-    /// <param name="options">
-    /// Optional tuning; <see langword="null"/> keeps every codec default. Only <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is read on this path, by the block-oriented LZOP decoder that can decode independent blocks concurrently while still emitting them in block order.
+    /// <param name="options">Optional tuning; <see langword="null"/> keeps every codec default. Only <see cref="CompressionOptions.MaxDegreeOfParallelism"/> is read on this path, by the block-oriented LZOP decoder that can decode independent blocks concurrently while still emitting them in block order.
     /// <para>可选调优参数；为 <see langword="null"/> 时全部采用编解码器默认值。本路径只读取 <see cref="CompressionOptions.MaxDegreeOfParallelism"/>，供按块组织的 LZOP 解码器并发解码相互独立的块，同时仍按块顺序写出。</para></param>
-    /// <param name="cancellationToken">
-    /// Token observed before the first byte is read and on every write through the counting wrapper.
+    /// <param name="cancellationToken">Token observed before the first byte is read and on every write through the counting wrapper.
     /// <para>在读取首字节前以及每次通过计数包装写入时检查。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -337,23 +293,16 @@ public static class CompressionService
         throw new CompressionException($"Streaming decompression is not supported for format: {format}");
     }
 
-    /// <summary>
-    /// Creates the incremental decoder for a compressed payload, putting no output cap of its own on the decoded bytes and leaving the read loop, its bound and its cancellation to the caller.
-    /// <para>为压缩数据创建增量解码流，本身不对解码字节施加任何输出上限，读取循环、限额与取消均由调用方掌握。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable payload positioned at its first byte; ownership stays with the caller, and disposing the returned stream leaves it open.
+    /// <summary>Creates the incremental decoder for a compressed payload, putting no output cap of its own on the decoded bytes and leaving the read loop, its bound and its cancellation to the caller.
+    /// <para>为压缩数据创建增量解码流，本身不对解码字节施加任何输出上限，读取循环、限额与取消均由调用方掌握。</para></summary>
+    /// <param name="input">Readable payload positioned at its first byte; ownership stays with the caller, and disposing the returned stream leaves it open.
     /// <para>定位在首字节处的可读数据；所有权归调用方，释放返回的流不会关闭它。</para></param>
-    /// <param name="format">
-    /// Container the payload is decoded with. An incremental reader exists for <see cref="CompressionFormat.None"/>, <see cref="CompressionFormat.Gzip"/>, <see cref="CompressionFormat.Zlib"/>, <see cref="CompressionFormat.Deflate"/>, <see cref="CompressionFormat.Brotli"/>, <see cref="CompressionFormat.Lz4"/>, <see cref="CompressionFormat.Bzip2"/>, <see cref="CompressionFormat.Xz"/>, <see cref="CompressionFormat.Zstd"/> and <see cref="CompressionFormat.Zopfli"/>, where <see cref="CompressionFormat.None"/> reads <paramref name="input"/> unchanged.
+    /// <param name="format">Container the payload is decoded with. An incremental reader exists for <see cref="CompressionFormat.None"/>, <see cref="CompressionFormat.Gzip"/>, <see cref="CompressionFormat.Zlib"/>, <see cref="CompressionFormat.Deflate"/>, <see cref="CompressionFormat.Brotli"/>, <see cref="CompressionFormat.Lz4"/>, <see cref="CompressionFormat.Bzip2"/>, <see cref="CompressionFormat.Xz"/>, <see cref="CompressionFormat.Zstd"/> and <see cref="CompressionFormat.Zopfli"/>, where <see cref="CompressionFormat.None"/> reads <paramref name="input"/> unchanged.
     /// <para>用于解码的容器格式。具备增量读取器的格式为 <see cref="CompressionFormat.None"/>、<see cref="CompressionFormat.Gzip"/>、<see cref="CompressionFormat.Zlib"/>、<see cref="CompressionFormat.Deflate"/>、<see cref="CompressionFormat.Brotli"/>、<see cref="CompressionFormat.Lz4"/>、<see cref="CompressionFormat.Bzip2"/>、<see cref="CompressionFormat.Xz"/>、<see cref="CompressionFormat.Zstd"/> 与 <see cref="CompressionFormat.Zopfli"/>，其中 <see cref="CompressionFormat.None"/> 原样读取 <paramref name="input"/>。</para></param>
-    /// <returns>
-    /// A readable stream of decoded bytes that enforces no size limit; the caller stops or bounds its own reads. Use <see cref="M:UotanStudio.Compress.CompressionService.Decompress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,System.Int64,System.Threading.CancellationToken)"/> when one bounded copy describes the work instead.
+    /// <returns>A readable stream of decoded bytes that enforces no size limit; the caller stops or bounds its own reads. Use <see cref="M:UotanStudio.Compress.CompressionService.Decompress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,System.Int64,System.Threading.CancellationToken)"/> when one bounded copy describes the work instead.
     /// <para>解码字节的可读流，不强制任何大小上限，需要限额时由调用方自行停止或界定读取。若一次带上限的拷贝即可描述该工作，请改用 <see cref="M:UotanStudio.Compress.CompressionService.Decompress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,System.Int64,System.Threading.CancellationToken)"/>。</para></returns>
-    /// <remarks>
-    /// The returned stream is the codec reader itself, so a malformed payload surfaces from the reader on the next read rather than from this call. Where the codec reader stops at the end of the first member or frame, a concatenated payload needs the copy entry, which walks every member.
-    /// <para>返回的流就是编解码读取器本身，因此损坏的数据会在下一次读取时由读取器抛出，而不是在本调用抛出。读取器只覆盖首个成员或帧的格式，串联数据仍需会遍历全部成员的拷贝入口。</para>
-    /// </remarks>
+    /// <remarks>The returned stream is the codec reader itself, so a malformed payload surfaces from the reader on the next read rather than from this call. Where the codec reader stops at the end of the first member or frame, a concatenated payload needs the copy entry, which walks every member.
+    /// <para>返回的流就是编解码读取器本身，因此损坏的数据会在下一次读取时由读取器抛出，而不是在本调用抛出。读取器只覆盖首个成员或帧的格式，串联数据仍需会遍历全部成员的拷贝入口。</para></remarks>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="format"/> is unknown or cannot decompress.
@@ -369,8 +318,8 @@ public static class CompressionService
     /// int read;
     /// while ((read = reader.Read(buffer)) > 0)
     /// {
-    ///     cancellationToken.ThrowIfCancellationRequested();
-    ///     output.Write(buffer, 0, Math.Min(read, budget));
+    /// cancellationToken.ThrowIfCancellationRequested();
+    /// output.Write(buffer, 0, Math.Min(read, budget));
     /// }
     /// </code>
     /// </example>
@@ -406,21 +355,15 @@ public static class CompressionService
         }
     }
 
-    /// <summary>
-    /// Creates the incremental encoder that writes into a caller-owned destination, putting no size cap of its own on the encoded bytes.
-    /// <para>创建写入调用方目标流的增量编码器，本身不对编码字节施加大小上限。</para>
-    /// </summary>
-    /// <param name="output">
-    /// Writable destination for the encoded bytes starting at its current position; ownership stays with the caller, and disposing the returned stream leaves it open.
+    /// <summary>Creates the incremental encoder that writes into a caller-owned destination, putting no size cap of its own on the encoded bytes.
+    /// <para>创建写入调用方目标流的增量编码器，本身不对编码字节施加大小上限。</para></summary>
+    /// <param name="output">Writable destination for the encoded bytes starting at its current position; ownership stays with the caller, and disposing the returned stream leaves it open.
     /// <para>从其当前位置开始接收编码字节的可写目标流；所有权归调用方，释放返回的流不会关闭它。</para></param>
-    /// <param name="format">
-    /// Target container. An incremental writer exists for <see cref="CompressionFormat.None"/>, <see cref="CompressionFormat.Gzip"/>, <see cref="CompressionFormat.Zlib"/>, <see cref="CompressionFormat.Deflate"/>, <see cref="CompressionFormat.Brotli"/>, <see cref="CompressionFormat.Lz4"/>, <see cref="CompressionFormat.Bzip2"/> and <see cref="CompressionFormat.Zstd"/>, where <see cref="CompressionFormat.None"/> writes the bytes it receives unchanged.
+    /// <param name="format">Target container. An incremental writer exists for <see cref="CompressionFormat.None"/>, <see cref="CompressionFormat.Gzip"/>, <see cref="CompressionFormat.Zlib"/>, <see cref="CompressionFormat.Deflate"/>, <see cref="CompressionFormat.Brotli"/>, <see cref="CompressionFormat.Lz4"/>, <see cref="CompressionFormat.Bzip2"/> and <see cref="CompressionFormat.Zstd"/>, where <see cref="CompressionFormat.None"/> writes the bytes it receives unchanged.
     /// <para>目标容器格式。具备增量写出器的格式为 <see cref="CompressionFormat.None"/>、<see cref="CompressionFormat.Gzip"/>、<see cref="CompressionFormat.Zlib"/>、<see cref="CompressionFormat.Deflate"/>、<see cref="CompressionFormat.Brotli"/>、<see cref="CompressionFormat.Lz4"/>、<see cref="CompressionFormat.Bzip2"/> 与 <see cref="CompressionFormat.Zstd"/>，其中 <see cref="CompressionFormat.None"/> 原样写出收到的字节。</para></param>
-    /// <param name="options">
-    /// Optional level tuning; <see langword="null"/> keeps every codec default. Chunking has no effect because one incremental stream is produced, and bzip2 ignores the level entirely because its block size is fixed.
+    /// <param name="options">Optional level tuning; <see langword="null"/> keeps every codec default. Chunking has no effect because one incremental stream is produced, and bzip2 ignores the level entirely because its block size is fixed.
     /// <para>可选的等级调优；为 <see langword="null"/> 时全部采用编解码器默认值。增量写出只生成单个流，因此并行分块不生效；bzip2 的块大小固定，其等级也被忽略。</para></param>
-    /// <returns>
-    /// A writable stream of the encoded container. Disposing it writes the codec trailer and flushes it into <paramref name="output"/>, so the caller must dispose the returned stream before consuming <paramref name="output"/>.
+    /// <returns>A writable stream of the encoded container. Disposing it writes the codec trailer and flushes it into <paramref name="output"/>, so the caller must dispose the returned stream before consuming <paramref name="output"/>.
     /// <para>编码容器字节的可写流。释放它会写出编解码器尾部结构并刷入 <paramref name="output"/>，因此调用方必须先释放返回的流，再消费 <paramref name="output"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -435,7 +378,7 @@ public static class CompressionService
     /// using var encoded = new MemoryStream();
     /// using (var writer = CompressionService.CreateCompressionStream(encoded, CompressionFormat.Gzip))
     /// {
-    ///     writer.Write(payload);
+    /// writer.Write(payload);
     /// }
     /// </code>
     /// </example>

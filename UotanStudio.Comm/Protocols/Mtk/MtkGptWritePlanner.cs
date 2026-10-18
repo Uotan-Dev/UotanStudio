@@ -75,14 +75,12 @@ public static class MtkGptWritePlanner
     /// <para>为一个已校验的 XFlash 快照规划两份 GPT 范围。</para></summary>
     /// <param name="snapshot">The observation whose table, region and geometry are written back.
     /// <para>要写回其分区表、区域与几何信息的观测结果。</para></param>
-    /// <returns>The primary extent followed by the backup extent.
-    /// <para>返回主范围，其后是备份范围。</para></returns>
+    /// <returns>The primary extent followed by the backup extent.<para>返回主范围，其后是备份范围。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is null.
     /// <para><paramref name="snapshot"/> 为 null。</para></exception>
     /// <exception cref="InvalidOperationException">The snapshot no longer describes a reported region.
     /// <para>该快照不再描述某个已上报的区域。</para></exception>
-    /// <exception cref="InvalidDataException">The table's block size disagrees with the region, its declared
-    /// capacity exceeds the region, or its layout violates a GPT invariant.
+    /// <exception cref="InvalidDataException">The table's block size disagrees with the region, its declared capacity exceeds the region, or its layout violates a GPT invariant.
     /// <para>表的块大小与区域不一致、声明容量超出区域，或布局违反 GPT 不变量。</para></exception>
     /// <exception cref="OverflowException">A block product or byte offset exceeds the supported range.
     /// <para>块乘积或字节偏移超出支持范围。</para></exception>
@@ -111,16 +109,14 @@ public static class MtkGptWritePlanner
     /// <para>为一个已校验的 Legacy 快照规划两份 GPT 范围。</para></summary>
     /// <param name="snapshot">The observation whose table, region and inventory are written back.
     /// <para>要写回其分区表、区域与清单信息的观测结果。</para></param>
-    /// <returns>The primary extent followed by the backup extent.
-    /// <para>返回主范围，其后是备份范围。</para></returns>
+    /// <returns>The primary extent followed by the backup extent.<para>返回主范围，其后是备份范围。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is null.
     /// <para><paramref name="snapshot"/> 为 null。</para></exception>
     /// <exception cref="InvalidOperationException">The snapshot no longer describes a reported region.
     /// <para>该快照不再描述某个已上报的区域。</para></exception>
-    /// <exception cref="NotSupportedException">The Legacy agent was initialized for storage whose block size
-    /// is not the fixed Legacy GPT geometry. <para>Legacy 代理初始化的存储不具备 Legacy GPT 的固定几何。</para></exception>
-    /// <exception cref="InvalidDataException">The table's block size disagrees with the region, its declared
-    /// capacity exceeds the region, or its layout violates a GPT invariant.
+    /// <exception cref="NotSupportedException">The Legacy agent was initialized for storage whose block size is not the fixed Legacy GPT geometry.
+    /// <para>Legacy 代理初始化的存储不具备 Legacy GPT 的固定几何。</para></exception>
+    /// <exception cref="InvalidDataException">The table's block size disagrees with the region, its declared capacity exceeds the region, or its layout violates a GPT invariant.
     /// <para>表的块大小与区域不一致、声明容量超出区域，或布局违反 GPT 不变量。</para></exception>
     /// <exception cref="OverflowException">A block product or byte offset exceeds the supported range.
     /// <para>块乘积或字节偏移超出支持范围。</para></exception>
@@ -156,16 +152,14 @@ public static class MtkGptWritePlanner
     /// <para>为一个已校验的 XML 快照规划两份 GPT 范围。</para></summary>
     /// <param name="snapshot">The observation whose table, named region and geometry are written back.
     /// <para>要写回其分区表、命名区域与几何信息的观测结果。</para></param>
-    /// <returns>The primary extent followed by the backup extent.
-    /// <para>返回主范围，其后是备份范围。</para></returns>
+    /// <returns>The primary extent followed by the backup extent.<para>返回主范围，其后是备份范围。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is null.
     /// <para><paramref name="snapshot"/> 为 null。</para></exception>
     /// <exception cref="InvalidOperationException">The snapshot no longer describes a reported region.
     /// <para>该快照不再描述某个已上报的区域。</para></exception>
     /// <exception cref="NotSupportedException">The named region is reserved for authenticated access.
     /// <para>该命名区域为认证访问保留。</para></exception>
-    /// <exception cref="InvalidDataException">The table's block size disagrees with the region, its declared
-    /// capacity exceeds the region, or its layout violates a GPT invariant.
+    /// <exception cref="InvalidDataException">The table's block size disagrees with the region, its declared capacity exceeds the region, or its layout violates a GPT invariant.
     /// <para>表的块大小与区域不一致、声明容量超出区域，或布局违反 GPT 不变量。</para></exception>
     /// <exception cref="OverflowException">A block product or byte offset exceeds the supported range.
     /// <para>块乘积或字节偏移超出支持范围。</para></exception>

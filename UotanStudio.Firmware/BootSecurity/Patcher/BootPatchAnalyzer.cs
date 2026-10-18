@@ -15,25 +15,18 @@ namespace UotanStudio.Firmware.BootSecurity.Patcher;
 /// </summary>
 public static class BootPatchAnalyzer
 {
-    /// <summary>
-    /// Returns all ABI/KMI metadata discovered in a KernelSU APK or ZIP.
-    /// <para>返回在 KernelSU 的 APK 或 ZIP 中发现的全部 ABI/KMI 元数据。</para>
-    /// </summary>
-    /// <param name="path">
-    /// Package file path, opened read-only with FileShare.Read.
-    /// <para>包文件路径，以只读且 FileShare.Read 方式打开。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before opening and between entry scans.
-    /// <para>在打开前与条目扫描之间检查。</para>
-    /// </param>
-    /// <returns>
-    /// Detection metadata plus verified embedded assets;
-    /// every list is empty when the package is not detected as KernelSU.
-    /// <para>检测元数据与已校验的内置资源；包未被识别为 KernelSU 时各列表均为空。</para>
-    /// </returns>
-    /// <exception cref="IOException">The package file cannot be opened. <para>无法打开包文件。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <summary>Returns all ABI/KMI metadata discovered in a KernelSU APK or ZIP.
+    /// <para>返回在 KernelSU 的 APK 或 ZIP 中发现的全部 ABI/KMI 元数据。</para></summary>
+    /// <param name="path">Package file path, opened read-only with FileShare.Read.
+    /// <para>包文件路径，以只读且 FileShare.Read 方式打开。</para></param>
+    /// <param name="cancellationToken">Checked before opening and between entry scans.
+    /// <para>在打开前与条目扫描之间检查。</para></param>
+    /// <returns>Detection metadata plus verified embedded assets; every list is empty when the package is not detected as KernelSU.
+    /// <para>检测元数据与已校验的内置资源；包未被识别为 KernelSU 时各列表均为空。</para></returns>
+    /// <exception cref="IOException">The package file cannot be opened.
+    /// <para>无法打开包文件。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static async Task<KernelSuPackageInfo> AnalyzeKernelSuPackageAsync(string path, CancellationToken cancellationToken = default)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan);
@@ -54,25 +47,18 @@ public static class BootPatchAnalyzer
         return new(detection.Architectures, detection.Kmis ?? [], assets);
     }
 
-    /// <summary>
-    /// Detects the CPU architecture from an Android boot kernel image.
-    /// <para>从 Android boot 镜像的内核中检测 CPU 架构。</para>
-    /// </summary>
-    /// <param name="bootPath">Boot image file path parsed from disk. <para>从磁盘解析的 boot 镜像文件路径。</para></param>
-    /// <param name="cancellationToken">
-    /// Checked after parsing, before kernel inspection.
-    /// <para>在解析完成后、检查内核前检查。</para>
-    /// </param>
-    /// <returns>
-    /// An ABI name such as <c>arm64</c> or <c>x64</c>, or <c>null</c> when the kernel
-    /// cannot be decompressed or matches no architecture.
-    /// <para>形如 <c>arm64</c>、<c>x64</c> 的 ABI 名称；内核无法解压或不匹配任何架构时为 <c>null</c>。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="bootPath"/> is null or whitespace.
-    /// <para><paramref name="bootPath"/> 为 null 或空白。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <summary>Detects the CPU architecture from an Android boot kernel image.
+    /// <para>从 Android boot 镜像的内核中检测 CPU 架构。</para></summary>
+    /// <param name="bootPath">Boot image file path parsed from disk.
+    /// <para>从磁盘解析的 boot 镜像文件路径。</para></param>
+    /// <param name="cancellationToken">Checked after parsing, before kernel inspection.
+    /// <para>在解析完成后、检查内核前检查。</para></param>
+    /// <returns>An ABI name such as <c>arm64</c> or <c>x64</c>, or <c>null</c> when the kernel cannot be decompressed or matches no architecture.
+    /// <para>形如 <c>arm64</c>、<c>x64</c> 的 ABI 名称；内核无法解压或不匹配任何架构时为 <c>null</c>。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="bootPath"/> is null or whitespace.
+    /// <para><paramref name="bootPath"/> 为 null 或空白。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static async Task<string?> DetectBootArchitectureAsync(string bootPath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(bootPath);
@@ -85,25 +71,18 @@ public static class BootPatchAnalyzer
         return kernel is null ? null : DetectKernelArchitecture(kernel);
     }
 
-    /// <summary>
-    /// Extracts the KernelSU KMI string from the kernel embedded in an Android boot image,
-    /// running the parse on the thread pool.
-    /// <para>从 Android boot 镜像内置内核中提取 KernelSU KMI 字符串，解析在线程池上运行。</para>
-    /// </summary>
-    /// <param name="bootPath">Boot image file path parsed from disk. <para>从磁盘解析的 boot 镜像文件路径。</para></param>
-    /// <param name="cancellationToken">
-    /// Honored by the thread-pool scheduling and checked after parsing.
-    /// <para>由线程池调度遵守，并在解析完成后检查。</para>
-    /// </param>
-    /// <returns>
-    /// The KMI string, or <c>null</c> when the kernel cannot be decompressed or carries no extractable version.
-    /// <para>KMI 字符串；内核无法解压或不含可提取版本时为 <c>null</c>。</para>
-    /// </returns>
+    /// <summary>Extracts the KernelSU KMI string from the kernel embedded in an Android boot image, running the parse on the thread pool.
+    /// <para>从 Android boot 镜像内置内核中提取 KernelSU KMI 字符串，解析在线程池上运行。</para></summary>
+    /// <param name="bootPath">Boot image file path parsed from disk.
+    /// <para>从磁盘解析的 boot 镜像文件路径。</para></param>
+    /// <param name="cancellationToken">Honored by the thread-pool scheduling and checked after parsing.
+    /// <para>由线程池调度遵守，并在解析完成后检查。</para></param>
+    /// <returns>The KMI string, or <c>null</c> when the kernel cannot be decompressed or carries no extractable version.
+    /// <para>KMI 字符串；内核无法解压或不含可提取版本时为 <c>null</c>。</para></returns>
     /// <exception cref="OperationCanceledException">The token was canceled before or during the scheduled work.
     /// <para>令牌在调度任务期间或之前被取消。</para></exception>
-    /// <remarks>
-    /// Boot image parse failures surface through the returned task from <c>BootImageParser.ParseFile</c>.
-    /// </remarks>
+    /// <remarks>Boot image parse failures surface through the returned task from
+    /// <c>BootImageParser.ParseFile</c>.</remarks>
     public static Task<string?> DetectBootKmiAsync(string bootPath, CancellationToken cancellationToken = default)
         => Task.Run(() =>
         {
@@ -116,20 +95,14 @@ public static class BootPatchAnalyzer
             return kernel is null ? null : KernelVersionExtractor.ExtractKmi(kernel);
         }, cancellationToken);
 
-    /// <summary>
-    /// Detects the architecture and KernelSU KMI of the kernel embedded in an Android boot image in one parse
-    /// and one decompression.
-    /// <para>在一次解析与一次解压中同时检测 Android boot 镜像内嵌内核的架构与 KernelSU KMI。</para>
-    /// </summary>
-    /// <param name="bootPath">Boot image file path parsed from disk. <para>从磁盘解析的 boot 镜像文件路径。</para></param>
-    /// <param name="cancellationToken">
-    /// Honored by the thread-pool scheduling and checked after parsing.
-    /// <para>由线程池调度遵守，并在解析完成后检查。</para>
-    /// </param>
-    /// <returns>
-    /// The detected ABI name and KMI string; each is <c>null</c> when the kernel cannot be decompressed or
-    /// carries no matching marker. <para>检测到的 ABI 名称与 KMI 字符串；内核无法解压或不含对应标记时分别为 <c>null</c>。</para>
-    /// </returns>
+    /// <summary>Detects the architecture and KernelSU KMI of the kernel embedded in an Android boot image in one parse and one decompression.
+    /// <para>在一次解析与一次解压中同时检测 Android boot 镜像内嵌内核的架构与 KernelSU KMI。</para></summary>
+    /// <param name="bootPath">Boot image file path parsed from disk.
+    /// <para>从磁盘解析的 boot 镜像文件路径。</para></param>
+    /// <param name="cancellationToken">Honored by the thread-pool scheduling and checked after parsing.
+    /// <para>由线程池调度遵守，并在解析完成后检查。</para></param>
+    /// <returns>The detected ABI name and KMI string; each is <c>null</c> when the kernel cannot be decompressed or carries no matching marker.
+    /// <para>检测到的 ABI 名称与 KMI 字符串；内核无法解压或不含对应标记时分别为 <c>null</c>。</para></returns>
     /// <exception cref="OperationCanceledException">The token was canceled before or during the scheduled work.
     /// <para>令牌在调度任务期间或之前被取消。</para></exception>
     public static Task<BootKernelInfo> DetectBootKernelAsync(string bootPath, CancellationToken cancellationToken = default)
@@ -178,22 +151,17 @@ public static class BootPatchAnalyzer
         return null;
     }
 
-    /// <summary>
-    /// Detects the package family, ABIs, Magisk options and KernelSU KMIs from a package file on disk.
-    /// <para>从磁盘上的包文件检测类型族、ABI、Magisk 选项与 KernelSU KMI。</para>
-    /// </summary>
-    /// <param name="path">
-    /// Package file path, opened read-only with FileShare.Read.
-    /// <para>包文件路径，以只读且 FileShare.Read 方式打开。</para>
-    /// </param>
-    /// <param name="cancellationToken">Propagated into the stream-based analysis. <para>传递到基于流的分析流程。</para></param>
+    /// <summary>Detects the package family, ABIs, Magisk options and KernelSU KMIs from a package file on disk.
+    /// <para>从磁盘上的包文件检测类型族、ABI、Magisk 选项与 KernelSU KMI。</para></summary>
+    /// <param name="path">Package file path, opened read-only with FileShare.Read.
+    /// <para>包文件路径，以只读且 FileShare.Read 方式打开。</para></param>
+    /// <param name="cancellationToken">Propagated into the stream-based analysis.
+    /// <para>传递到基于流的分析流程。</para></param>
     /// <returns>A detection record; unknown family and empty lists when nothing matches.
     /// <para>检测结果记录；无匹配时为未知类型族与空列表。</para></returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="path"/> is null or whitespace.
-    /// <para><paramref name="path"/> 为 null 或空白。</para>
-    /// </exception>
-    /// <exception cref="IOException">The file cannot be opened. <para>无法打开该文件。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is null or whitespace.
+    /// <para><paramref name="path"/> 为 null 或空白。</para></exception>
+    /// <exception cref="IOException">The file cannot be opened.<para>无法打开该文件。</para></exception>
     public static async Task<BootPatchDetection> AnalyzeAsync(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -201,35 +169,24 @@ public static class BootPatchAnalyzer
         return await AnalyzeAsync(path, stream, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Detects package metadata from an open stream; the path only contributes its file extension.
-    /// <para>从打开的流中检测包元数据；路径仅提供其文件扩展名。</para>
-    /// </summary>
-    /// <param name="path">
-    /// Original file name; a <c>.ko</c> extension selects the kernel-module fast path.
-    /// <para>原始文件名；<c>.ko</c> 扩展名会选择内核模块快速路径。</para>
-    /// </param>
-    /// <param name="stream">
-    /// Package stream read from its current position and left open.
-    /// <para>从当前位置读取的包流，读取后保持打开。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before reading and during every bounded read.
-    /// <para>在读取前及每次有界读取期间检查。</para>
-    /// </param>
+    /// <summary>Detects package metadata from an open stream; the path only contributes its file extension.
+    /// <para>从打开的流中检测包元数据；路径仅提供其文件扩展名。</para></summary>
+    /// <param name="path">Original file name; a <c>.ko</c> extension selects the kernel-module fast path.
+    /// <para>原始文件名；<c>.ko</c> 扩展名会选择内核模块快速路径。</para></param>
+    /// <param name="stream">Package stream read from its current position and left open.
+    /// <para>从当前位置读取的包流，读取后保持打开。</para></param>
+    /// <param name="cancellationToken">Checked before reading and during every bounded read.
+    /// <para>在读取前及每次有界读取期间检查。</para></param>
     /// <returns>A detection record; unknown family with empty lists when no package marker matches.
     /// <para>检测结果记录；无包标记匹配时为未知类型族与空列表。</para></returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="stream"/> is <see langword="null"/>.
-    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para>
-    /// </exception>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="NotSupportedException">A non-<c>.ko</c> package was handed a stream that cannot seek.
     /// <para>非 <c>.ko</c> 包传入了不可寻址的流。</para></exception>
-    /// <exception cref="InvalidDataException">
-    /// A payload read exceeds the bounded size limit.
-    /// <para>某次负载读取超出有界大小上限。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="InvalidDataException">A payload read exceeds the bounded size limit.
+    /// <para>某次负载读取超出有界大小上限。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static async Task<BootPatchDetection> AnalyzeAsync(string path, Stream stream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);

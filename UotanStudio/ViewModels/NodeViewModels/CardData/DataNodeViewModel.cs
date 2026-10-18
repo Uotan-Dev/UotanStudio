@@ -104,20 +104,10 @@ public class DataNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>
-    /// Dispatches data-processing logic by the node type key (TypeKey): File.Binary.Read reads a file, Data.Value.Convert performs
-    /// conversion, Validation.Data.Hash computes a hash, and Data.Value.Compare compares two data chunks.
-    /// <para>按节点类型键（TypeKey）分发对应的数据处理逻辑：File.Binary.Read 读取文件、Data.Value.Convert 做格式转换、
-    /// Validation.Data.Hash 计算哈希、Data.Value.Compare 比较两段数据。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context.
-    /// <para>执行上下文。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Dispatches data-processing logic by the node type key (TypeKey): File.Binary.Read reads a file, Data.Value.Convert performs conversion, Validation.Data.Hash computes a hash, and Data.Value.Compare compares two data chunks.
+    /// <para>按节点类型键（TypeKey）分发对应的数据处理逻辑：File.Binary.Read 读取文件、Data.Value.Convert 做格式转换、 Validation.Data.Hash 计算哈希、Data.Value.Compare 比较两段数据。</para></summary>
+    /// <param name="context">The execution context.<para>执行上下文。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         var token = context.CancellationToken;

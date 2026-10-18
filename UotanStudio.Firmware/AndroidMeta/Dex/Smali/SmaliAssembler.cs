@@ -9,30 +9,18 @@ namespace UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 /// </summary>
 public static partial class SmaliAssembler
 {
-    /// <remarks>
-    /// The project-specific .packed-switch-raw and .sparse-switch-raw blocks retain signed decimal code-unit offsets
-    /// in unreferenced tables; these directives are an extension of standard Smali syntax.
-    /// <para>项目专用的 .packed-switch-raw 和 .sparse-switch-raw 块保留无引用表的有符号十进制代码单元偏移，属于标准 Smali 语法的扩展。</para>
-    /// </remarks>
-    /// <summary>
-    /// Parses text emitted by <see cref="Disassembler"/>.
-    /// <para>解析由 <see cref="Disassembler"/> 输出的文本。</para>
-    /// </summary>
-    /// <param name="smali">
-    /// Whole-file smali text; unsupported syntax fails assembly rather than being discarded.
-    /// <para>整文件 smali 文本；不支持的语法会导致汇编失败，不会被丢弃。</para>
-    /// </param>
-    /// <returns>
-    /// A <see cref="DexFile"/> model with canonically ordered identifier tables and relocated references.
-    /// <para>返回标识符表已按规范排序且引用已重定位的 <see cref="DexFile"/> 模型。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="smali"/> is <see langword="null"/>. <para><paramref name="smali"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="FormatException">
-    /// The text declares no <c>.class</c>, contains malformed or unsupported syntax, or ends inside a method.
-    /// <para>文本未声明 <c>.class</c>，包含非法或不支持的语法，或在方法内部结束。</para>
-    /// </exception>
+    /// <remarks>The project-specific .packed-switch-raw and .sparse-switch-raw blocks retain signed decimal code-unit offsets in unreferenced tables; these directives are an extension of standard Smali syntax.
+    /// <para>项目专用的 .packed-switch-raw 和 .sparse-switch-raw 块保留无引用表的有符号十进制代码单元偏移，属于标准 Smali 语法的扩展。</para></remarks>
+    /// <summary>Parses text emitted by <see cref="Disassembler"/>.
+    /// <para>解析由 <see cref="Disassembler"/> 输出的文本。</para></summary>
+    /// <param name="smali">Whole-file smali text; unsupported syntax fails assembly rather than being discarded.
+    /// <para>整文件 smali 文本；不支持的语法会导致汇编失败，不会被丢弃。</para></param>
+    /// <returns>A <see cref="DexFile"/> model with canonically ordered identifier tables and relocated references.
+    /// <para>返回标识符表已按规范排序且引用已重定位的 <see cref="DexFile"/> 模型。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="smali"/> is <see langword="null"/>.
+    /// <para><paramref name="smali"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="FormatException">The text declares no <c>.class</c>, contains malformed or unsupported syntax, or ends inside a method.
+    /// <para>文本未声明 <c>.class</c>，包含非法或不支持的语法，或在方法内部结束。</para></exception>
     public static DexFile Assemble(string smali)
     {
         ArgumentNullException.ThrowIfNull(smali);

@@ -28,10 +28,8 @@ internal static class SparseWriter
     /// </remarks>
     private const int FillPatternWidth = 64 * 1024;
 
-    /// <summary>
-    /// Writes the sparse image to the stream (sparse format).
-    /// <para>将稀疏镜像写入流(稀疏格式)。</para>
-    /// </summary>
+    /// <summary>Writes the sparse image to the stream (sparse format).
+    /// <para>将稀疏镜像写入流(稀疏格式)。</para></summary>
     /// <param name="sparseFile">Source model; not modified. Don't-care chunks are inserted for gaps and for the trailing region below the declared total blocks, oversized RAW chunks are split so each fits a 32-bit total size, and every chunk header's total size is rewritten to the value implied by its type, block count and the header's geometry.
     /// <para>源模型；不会被修改。在空隙及低于声明总块数的尾部区域会插入 don't-care 块，超大 RAW 块会被拆分以适配 32 位总大小，且每个块头部的总大小都会按其类型、块数与头部几何重写。</para></param>
     /// <param name="stream">Caller-owned writable destination; it is not flushed or closed. The declared chunk count and, when covered chunks extend past it, the total block count are raised in the emitted header; header sizes beyond the base sizes are padded with zeros.

@@ -15,42 +15,24 @@ internal sealed class Nb0Packer
 {
     private const int DefaultBufferSize = 1024 * 1024;
 
-    /// <summary>
-    /// Packs the specified entry list into an NB0 firmware file.
-    /// <para>将指定条目列表打包为 NB0 固件文件。</para>
-    /// </summary>
-    /// <param name="outputFilePath">
-    /// Destination path; an existing file is replaced (<c>FileMode.Create</c>).
-    /// <para>目标路径；已存在的文件会被替换（<c>FileMode.Create</c>）。</para>
-    /// </param>
-    /// <param name="entries">
-    /// Entries to write; each carries either in-memory data or a source file path.
-    /// <para>要写入的条目；每个条目携带内存数据或源文件路径。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives a report after each entry is written; <see langword="null"/> disables reporting.
-    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="outputFilePath"/> is <see langword="null"/> or empty.
-    /// <para><paramref name="outputFilePath"/> 为 <see langword="null"/> 或空。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="entries"/> is <see langword="null"/>. <para><paramref name="entries"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// An entry's data length or source file length does not match its declared header size, or an entry
-    /// name cannot be stored in the 48-byte ASCII Name field.
-    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para>
-    /// </exception>
-    /// <exception cref="EndOfStreamException">
-    /// A file-backed source ended before its declared size was read.
-    /// <para>基于文件的源在达到声明大小前提前结束。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The output file or a source file cannot be opened or written.
-    /// <para>无法打开或写入输出文件/源文件。</para>
-    /// </exception>
+    /// <summary>Packs the specified entry list into an NB0 firmware file.
+    /// <para>将指定条目列表打包为 NB0 固件文件。</para></summary>
+    /// <param name="outputFilePath">Destination path; an existing file is replaced (<c>FileMode.Create</c>).
+    /// <para>目标路径；已存在的文件会被替换（<c>FileMode.Create</c>）。</para></param>
+    /// <param name="entries">Entries to write; each carries either in-memory data or a source file path.
+    /// <para>要写入的条目；每个条目携带内存数据或源文件路径。</para></param>
+    /// <param name="progress">Receives a report after each entry is written; <see langword="null"/> disables reporting.
+    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="outputFilePath"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="outputFilePath"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="entries"/> is <see langword="null"/>.
+    /// <para><paramref name="entries"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException">An entry's data length or source file length does not match its declared header size, or an entry name cannot be stored in the 48-byte ASCII Name field.
+    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para></exception>
+    /// <exception cref="EndOfStreamException">A file-backed source ended before its declared size was read.
+    /// <para>基于文件的源在达到声明大小前提前结束。</para></exception>
+    /// <exception cref="IOException">The output file or a source file cannot be opened or written.
+    /// <para>无法打开或写入输出文件/源文件。</para></exception>
     public void Pack(string outputFilePath, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(outputFilePath);
@@ -60,45 +42,26 @@ internal sealed class Nb0Packer
         PackToStream(stream, entries, progress);
     }
 
-    /// <summary>
-    /// Asynchronously packs the specified entry list into an NB0 firmware file.
-    /// <para>异步将指定条目列表打包为 NB0 固件文件。</para>
-    /// </summary>
-    /// <param name="outputFilePath">
-    /// Destination path; an existing file is replaced (<c>FileMode.Create</c>).
-    /// <para>目标路径；已存在的文件会被替换（<c>FileMode.Create</c>）。</para>
-    /// </param>
-    /// <param name="entries">
-    /// Entries to write; each carries either in-memory data or a source file path.
-    /// <para>要写入的条目；每个条目携带内存数据或源文件路径。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives a report after each entry is written; <see langword="null"/> disables reporting.
-    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before each entry and between copy blocks; a partial output file is left in place.
-    /// <para>在每个条目前及复制块之间检查；取消后可能残留不完整的输出文件。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="outputFilePath"/> is <see langword="null"/> or empty.
-    /// <para><paramref name="outputFilePath"/> 为 <see langword="null"/> 或空。</para>
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="entries"/> is <see langword="null"/>. <para><paramref name="entries"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// An entry's data length or source file length does not match its declared header size, or an entry
-    /// name cannot be stored in the 48-byte ASCII Name field.
-    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The output file or a source file cannot be opened or written.
-    /// <para>无法打开或写入输出文件/源文件。</para>
-    /// </exception>
+    /// <summary>Asynchronously packs the specified entry list into an NB0 firmware file.
+    /// <para>异步将指定条目列表打包为 NB0 固件文件。</para></summary>
+    /// <param name="outputFilePath">Destination path; an existing file is replaced (<c>FileMode.Create</c>).
+    /// <para>目标路径；已存在的文件会被替换（<c>FileMode.Create</c>）。</para></param>
+    /// <param name="entries">Entries to write; each carries either in-memory data or a source file path.
+    /// <para>要写入的条目；每个条目携带内存数据或源文件路径。</para></param>
+    /// <param name="progress">Receives a report after each entry is written; <see langword="null"/> disables reporting.
+    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para></param>
+    /// <param name="cancellationToken">Checked before each entry and between copy blocks; a partial output file is left in place.
+    /// <para>在每个条目前及复制块之间检查；取消后可能残留不完整的输出文件。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="outputFilePath"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="outputFilePath"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="entries"/> is <see langword="null"/>.
+    /// <para><paramref name="entries"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException">An entry's data length or source file length does not match its declared header size, or an entry name cannot be stored in the 48-byte ASCII Name field.
+    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    /// <exception cref="IOException">The output file or a source file cannot be opened or written.
+    /// <para>无法打开或写入输出文件/源文件。</para></exception>
     /// <returns>A task that completes once the container has been written.
     /// <para>在容器写入完成后结束的任务。</para></returns>
     public async Task PackAsync(string outputFilePath, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -110,38 +73,22 @@ internal sealed class Nb0Packer
         await PackToStreamAsync(stream, entries, progress, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Packs the specified entry list into NB0 format and writes it to the specified stream.
-    /// <para>将指定条目列表打包为 NB0 格式并写入指定的流。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Writable destination stream; it stays open after the call.
-    /// <para>可写的目标流；调用结束后保持打开。</para>
-    /// </param>
-    /// <param name="entries">
-    /// Entries to write; each carries either in-memory data or a source file path.
-    /// <para>要写入的条目；每个条目携带内存数据或源文件路径。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives a report after each entry is written; <see langword="null"/> disables reporting.
-    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>.
-    /// <para><paramref name="stream"/> 或 <paramref name="entries"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="stream"/> does not support writing. <para><paramref name="stream"/> 不支持写入。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// An entry's data length or source file length does not match its declared header size, or an entry
-    /// name cannot be stored in the 48-byte ASCII Name field.
-    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// A source file cannot be opened or the stream write fails.
-    /// <para>无法打开源文件或流写入失败。</para>
-    /// </exception>
+    /// <summary>Packs the specified entry list into NB0 format and writes it to the specified stream.
+    /// <para>将指定条目列表打包为 NB0 格式并写入指定的流。</para></summary>
+    /// <param name="stream">Writable destination stream; it stays open after the call.
+    /// <para>可写的目标流；调用结束后保持打开。</para></param>
+    /// <param name="entries">Entries to write; each carries either in-memory data or a source file path.
+    /// <para>要写入的条目；每个条目携带内存数据或源文件路径。</para></param>
+    /// <param name="progress">Receives a report after each entry is written; <see langword="null"/> disables reporting.
+    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 或 <paramref name="entries"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="stream"/> does not support writing.
+    /// <para><paramref name="stream"/> 不支持写入。</para></exception>
+    /// <exception cref="InvalidDataException">An entry's data length or source file length does not match its declared header size, or an entry name cannot be stored in the 48-byte ASCII Name field.
+    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para></exception>
+    /// <exception cref="IOException">A source file cannot be opened or the stream write fails.
+    /// <para>无法打开源文件或流写入失败。</para></exception>
     public void PackToStream(Stream stream, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -150,41 +97,24 @@ internal sealed class Nb0Packer
         WriteNb0Core(stream, [.. entries], progress, CancellationToken.None);
     }
 
-    /// <summary>
-    /// Asynchronously packs the specified entry list into NB0 format and writes it to the specified stream.
-    /// <para>异步将指定条目列表打包为 NB0 格式并写入指定的流。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Writable destination stream; it stays open after the call.
-    /// <para>可写的目标流；调用结束后保持打开。</para>
-    /// </param>
-    /// <param name="entries">
-    /// Entries to write; each carries either in-memory data or a source file path.
-    /// <para>要写入的条目；每个条目携带内存数据或源文件路径。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives a report after each entry is written; <see langword="null"/> disables reporting.
-    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked before each entry and between copy blocks; the writing core runs on the thread pool.
-    /// <para>在每个条目前及复制块之间检查；写入核心在线程池上运行。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>.
-    /// <para><paramref name="stream"/> 或 <paramref name="entries"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="stream"/> does not support writing. <para><paramref name="stream"/> 不支持写入。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// An entry's data length or source file length does not match its declared header size, or an entry
-    /// name cannot be stored in the 48-byte ASCII Name field.
-    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was signaled. <para><paramref name="cancellationToken"/> 被触发。</para>
-    /// </exception>
+    /// <summary>Asynchronously packs the specified entry list into NB0 format and writes it to the specified stream.
+    /// <para>异步将指定条目列表打包为 NB0 格式并写入指定的流。</para></summary>
+    /// <param name="stream">Writable destination stream; it stays open after the call.
+    /// <para>可写的目标流；调用结束后保持打开。</para></param>
+    /// <param name="entries">Entries to write; each carries either in-memory data or a source file path.
+    /// <para>要写入的条目；每个条目携带内存数据或源文件路径。</para></param>
+    /// <param name="progress">Receives a report after each entry is written; <see langword="null"/> disables reporting.
+    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para></param>
+    /// <param name="cancellationToken">Checked before each entry and between copy blocks; the writing core runs on the thread pool.
+    /// <para>在每个条目前及复制块之间检查；写入核心在线程池上运行。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 或 <paramref name="entries"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="stream"/> does not support writing.
+    /// <para><paramref name="stream"/> 不支持写入。</para></exception>
+    /// <exception cref="InvalidDataException">An entry's data length or source file length does not match its declared header size, or an entry name cannot be stored in the 48-byte ASCII Name field.
+    /// <para>条目的数据长度或源文件长度与声明的头部大小不一致，或条目名无法存入 48 字节 ASCII Name 字段。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     /// <returns>A task that completes once the container has been written to the stream.
     /// <para>在容器写入流完成后结束的任务。</para></returns>
     public async Task PackToStreamAsync(Stream stream, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -196,40 +126,22 @@ internal sealed class Nb0Packer
         await Task.Run(() => WriteNb0Core(stream, entryList, progress, cancellationToken), cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Packs all files in the specified directory into an NB0 firmware file (entry names use relative paths).
-    /// Files are enumerated recursively in ordinal name order; repack metadata files are skipped and entry
-    /// names use forward slashes.
-    /// <para>将指定目录中的所有文件打包为 NB0 固件文件（条目名使用相对路径）。文件按名称序号顺序递归枚举；
-    /// 跳过重打包元数据文件，条目名使用正斜杠。</para>
-    /// </summary>
-    /// <param name="sourceDirectory">
-    /// Directory whose files become the container entries. <para>其文件将成为容器条目的目录。</para>
-    /// </param>
-    /// <param name="outputFilePath">
-    /// Destination path; an existing file is replaced (<c>FileMode.Create</c>).
-    /// <para>目标路径；已存在的文件会被替换（<c>FileMode.Create</c>）。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives a report after each entry is written; <see langword="null"/> disables reporting.
-    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="sourceDirectory"/> or <paramref name="outputFilePath"/> is <see langword="null"/> or empty.
-    /// <para><paramref name="sourceDirectory"/> 或 <paramref name="outputFilePath"/> 为 <see langword="null"/> 或空。</para>
-    /// </exception>
-    /// <exception cref="DirectoryNotFoundException">
-    /// <paramref name="sourceDirectory"/> does not exist. <para><paramref name="sourceDirectory"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A source file length does not match the size recorded in its entry header, or a relative entry name
-    /// cannot be stored in the 48-byte ASCII Name field.
-    /// <para>源文件长度与条目头中记录的大小不一致，或相对条目名无法存入 48 字节 ASCII Name 字段。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The output file or a source file cannot be opened or written.
-    /// <para>无法打开或写入输出文件/源文件。</para>
-    /// </exception>
+    /// <summary>Packs all files in the specified directory into an NB0 firmware file (entry names use relative paths). Files are enumerated recursively in ordinal name order; repack metadata files are skipped and entry names use forward slashes.
+    /// <para>将指定目录中的所有文件打包为 NB0 固件文件（条目名使用相对路径）。文件按名称序号顺序递归枚举； 跳过重打包元数据文件，条目名使用正斜杠。</para></summary>
+    /// <param name="sourceDirectory">Directory whose files become the container entries.
+    /// <para>其文件将成为容器条目的目录。</para></param>
+    /// <param name="outputFilePath">Destination path; an existing file is replaced (<c>FileMode.Create</c>).
+    /// <para>目标路径；已存在的文件会被替换（<c>FileMode.Create</c>）。</para></param>
+    /// <param name="progress">Receives a report after each entry is written; <see langword="null"/> disables reporting.
+    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="sourceDirectory"/> or <paramref name="outputFilePath"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="sourceDirectory"/> 或 <paramref name="outputFilePath"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="DirectoryNotFoundException"><paramref name="sourceDirectory"/> does not exist.
+    /// <para><paramref name="sourceDirectory"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">A source file length does not match the size recorded in its entry header, or a relative entry name cannot be stored in the 48-byte ASCII Name field.
+    /// <para>源文件长度与条目头中记录的大小不一致，或相对条目名无法存入 48 字节 ASCII Name 字段。</para></exception>
+    /// <exception cref="IOException">The output file or a source file cannot be opened or written.
+    /// <para>无法打开或写入输出文件/源文件。</para></exception>
     public static void PackFromDirectory(string sourceDirectory, string outputFilePath, IProgress<Nb0PackProgress>? progress = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(sourceDirectory);
@@ -372,26 +284,14 @@ public sealed class Nb0PackerBuilder
 {
     private readonly List<Nb0Entry> _entries = [];
 
-    /// <summary>
-    /// Adds an in-memory data entry.
-    /// <para>添加一个内存数据条目。</para>
-    /// </summary>
-    /// <param name="name">
-    /// Entry name stored in the header; it must be printable ASCII of at most 47 bytes, the width the
-    /// 48-byte name slot holds once its NUL terminator is counted.
-    /// <para>存入头部的条目名；必须是长度不超过 47 字节的可打印 ASCII，即 48 字节名称槽位计入 NUL 结束符后
-    /// 可容纳的宽度。</para>
-    /// </param>
-    /// <param name="data">
-    /// Entry payload; the header size is taken from its length. <para>条目数据；头部大小取自其长度。</para>
-    /// </param>
-    /// <returns>This builder. <para>当前构建器。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// <paramref name="name"/> cannot be stored in the fixed name slot; the entry is refused instead of
-    /// being clipped or replaced by <c>'?'</c> characters.
-    /// <para><paramref name="name"/> 无法存入定宽名称槽位；该条目会被拒绝，而不是被截断或替换为 <c>'?'</c>。</para>
-    /// </exception>
+    /// <summary>Adds an in-memory data entry.<para>添加一个内存数据条目。</para></summary>
+    /// <param name="name">Entry name stored in the header; it must be printable ASCII of at most 47 bytes, the width the 48-byte name slot holds once its NUL terminator is counted.
+    /// <para>存入头部的条目名；必须是长度不超过 47 字节的可打印 ASCII，即 48 字节名称槽位计入 NUL 结束符后 可容纳的宽度。</para></param>
+    /// <param name="data">Entry payload; the header size is taken from its length.
+    /// <para>条目数据；头部大小取自其长度。</para></param>
+    /// <returns>This builder.<para>当前构建器。</para></returns>
+    /// <exception cref="InvalidDataException"><paramref name="name"/> cannot be stored in the fixed name slot; the entry is refused instead of being clipped or replaced by <c>'?'</c> characters.
+    /// <para><paramref name="name"/> 无法存入定宽名称槽位；该条目会被拒绝，而不是被截断或替换为 <c>'?'</c>。</para></exception>
     public Nb0PackerBuilder AddEntry(string name, byte[] data)
     {
         Nb0EntryHeader.ValidateName(name);
@@ -399,30 +299,16 @@ public sealed class Nb0PackerBuilder
         return this;
     }
 
-    /// <summary>
-    /// Adds a disk file entry.
-    /// <para>添加一个磁盘文件条目。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Source file; its current length is recorded as the entry size and the content is read at build time.
-    /// <para>源文件；其当前长度记录为条目大小，内容在构建时读取。</para>
-    /// </param>
-    /// <param name="entryName">
-    /// Name stored in the header; <see langword="null"/> uses the file's display name. Either form must be
-    /// printable ASCII of at most 47 bytes.
-    /// <para>存入头部的名称；为 <see langword="null"/> 时使用文件显示名。两种形式都必须是长度不超过 47 字节的
-    /// 可打印 ASCII。</para>
-    /// </param>
-    /// <returns>This builder. <para>当前构建器。</para>
-    /// </returns>
-    /// <exception cref="FileNotFoundException">
-    /// <paramref name="filePath"/> does not exist. <para><paramref name="filePath"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The resulting name cannot be stored in the fixed name slot; the file is refused at collection time,
-    /// before any container byte is written.
-    /// <para>得到的名称无法存入定宽名称槽位；该文件会在收集阶段被拒绝，此时尚未写出任何容器字节。</para>
-    /// </exception>
+    /// <summary>Adds a disk file entry.<para>添加一个磁盘文件条目。</para></summary>
+    /// <param name="filePath">Source file; its current length is recorded as the entry size and the content is read at build time.
+    /// <para>源文件；其当前长度记录为条目大小，内容在构建时读取。</para></param>
+    /// <param name="entryName">Name stored in the header; <see langword="null"/> uses the file's display name. Either form must be printable ASCII of at most 47 bytes.
+    /// <para>存入头部的名称；为 <see langword="null"/> 时使用文件显示名。两种形式都必须是长度不超过 47 字节的 可打印 ASCII。</para></param>
+    /// <returns>This builder.<para>当前构建器。</para></returns>
+    /// <exception cref="FileNotFoundException"><paramref name="filePath"/> does not exist.
+    /// <para><paramref name="filePath"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">The resulting name cannot be stored in the fixed name slot; the file is refused at collection time, before any container byte is written.
+    /// <para>得到的名称无法存入定宽名称槽位；该文件会在收集阶段被拒绝，此时尚未写出任何容器字节。</para></exception>
     public Nb0PackerBuilder AddFile(string filePath, string? entryName = null)
     {
         var name = entryName ?? Path.GetFileName(filePath);
@@ -431,28 +317,16 @@ public sealed class Nb0PackerBuilder
         return this;
     }
 
-    /// <summary>
-    /// Recursively adds all files in a directory.
-    /// <para>递归添加目录中的所有文件。</para>
-    /// </summary>
-    /// <param name="directoryPath">
-    /// Source directory; files are enumerated in ordinal name order and repack metadata files are skipped.
-    /// <para>源目录；文件按名称序号顺序枚举，跳过重打包元数据文件。</para>
-    /// </param>
-    /// <param name="prefix">
-    /// Optional leading path segment prepended with a forward slash to each relative entry name;
-    /// <see langword="null"/> or empty adds no prefix.
-    /// <para>可选的前导路径段，以正斜杠拼在每个相对条目名前；为 <see langword="null"/> 或空时不加前缀。</para>
-    /// </param>
-    /// <returns>This builder. <para>当前构建器。</para>
-    /// </returns>
-    /// <exception cref="DirectoryNotFoundException">
-    /// <paramref name="directoryPath"/> does not exist. <para><paramref name="directoryPath"/> 不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A relative entry name, with or without <paramref name="prefix"/>, cannot be stored in the fixed name
-    /// slot. <para>相对条目名（无论是否加上 <paramref name="prefix"/>）无法存入定宽名称槽位。</para>
-    /// </exception>
+    /// <summary>Recursively adds all files in a directory.<para>递归添加目录中的所有文件。</para></summary>
+    /// <param name="directoryPath">Source directory; files are enumerated in ordinal name order and repack metadata files are skipped.
+    /// <para>源目录；文件按名称序号顺序枚举，跳过重打包元数据文件。</para></param>
+    /// <param name="prefix">Optional leading path segment prepended with a forward slash to each relative entry name; <see langword="null"/> or empty adds no prefix.
+    /// <para>可选的前导路径段，以正斜杠拼在每个相对条目名前；为 <see langword="null"/> 或空时不加前缀。</para></param>
+    /// <returns>This builder.<para>当前构建器。</para></returns>
+    /// <exception cref="DirectoryNotFoundException"><paramref name="directoryPath"/> does not exist.
+    /// <para><paramref name="directoryPath"/> 不存在。</para></exception>
+    /// <exception cref="InvalidDataException">A relative entry name, with or without <paramref name="prefix"/>, cannot be stored in the fixed name slot.
+    /// <para>相对条目名（无论是否加上 <paramref name="prefix"/>）无法存入定宽名称槽位。</para></exception>
     public Nb0PackerBuilder AddDirectory(string directoryPath, string? prefix = null)
     {
         foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.Ordinal))
@@ -466,31 +340,17 @@ public sealed class Nb0PackerBuilder
         return this;
     }
 
-    /// <summary>
-    /// Packs the built entries to the output file.
-    /// <para>将构建的条目打包到输出文件。</para>
-    /// </summary>
-    /// <param name="outputFilePath">
-    /// Destination path; an existing file is replaced (<c>FileMode.Create</c>).
-    /// <para>目标路径；已存在的文件会被替换（<c>FileMode.Create</c>）。</para>
-    /// </param>
-    /// <param name="progress">
-    /// Receives a report after each entry is written; <see langword="null"/> disables reporting.
-    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="outputFilePath"/> is <see langword="null"/> or empty.
-    /// <para><paramref name="outputFilePath"/> 为 <see langword="null"/> 或空。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// A file-backed entry changed size between collection and packing, or an entry name cannot be stored in
-    /// the 48-byte ASCII Name field.
-    /// <para>基于文件的条目在收集与打包之间发生了大小变化，或条目名无法存入 48 字节 ASCII Name 字段。</para>
-    /// </exception>
-    /// <exception cref="IOException">
-    /// The output file or a source file cannot be opened or written.
-    /// <para>无法打开或写入输出文件/源文件。</para>
-    /// </exception>
+    /// <summary>Packs the built entries to the output file.<para>将构建的条目打包到输出文件。</para></summary>
+    /// <param name="outputFilePath">Destination path; an existing file is replaced (<c>FileMode.Create</c>).
+    /// <para>目标路径；已存在的文件会被替换（<c>FileMode.Create</c>）。</para></param>
+    /// <param name="progress">Receives a report after each entry is written; <see langword="null"/> disables reporting.
+    /// <para>每写入一个条目后收到报告；为 <see langword="null"/> 时不上报。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="outputFilePath"/> is <see langword="null"/> or empty.
+    /// <para><paramref name="outputFilePath"/> 为 <see langword="null"/> 或空。</para></exception>
+    /// <exception cref="InvalidDataException">A file-backed entry changed size between collection and packing, or an entry name cannot be stored in the 48-byte ASCII Name field.
+    /// <para>基于文件的条目在收集与打包之间发生了大小变化，或条目名无法存入 48 字节 ASCII Name 字段。</para></exception>
+    /// <exception cref="IOException">The output file or a source file cannot be opened or written.
+    /// <para>无法打开或写入输出文件/源文件。</para></exception>
     public void Build(string outputFilePath, IProgress<Nb0PackProgress>? progress = null)
     {
         var packer = new Nb0Packer();

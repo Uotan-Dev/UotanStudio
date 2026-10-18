@@ -113,14 +113,10 @@ internal static partial class VdexFile
         }
     }
 
-    /// <summary>
-    /// Replaces all DEX entries with validated standard DEX files and discards stale ART caches.
-    /// <para>使用经过验证的标准 DEX 替换所有条目并清除失效的 ART 缓存。</para>
-    /// </summary>
-    /// <remarks>
-    /// The result requires runtime verification and OAT recompilation; existing compiled code must not be reused.
-    /// <para>结果需要运行时重新验证和重新编译 OAT，不得复用原有机器码。</para>
-    /// </remarks>
+    /// <summary>Replaces all DEX entries with validated standard DEX files and discards stale ART caches.
+    /// <para>使用经过验证的标准 DEX 替换所有条目并清除失效的 ART 缓存。</para></summary>
+    /// <remarks>The result requires runtime verification and OAT recompilation; existing compiled code must not be reused.
+    /// <para>结果需要运行时重新验证和重新编译 OAT，不得复用原有机器码。</para></remarks>
     /// <param name="templatePath">The VDEX 006 or 010 template. VDEX 006 或 010 模板路径。</param>
     /// <param name="dexPaths">Replacement DEX paths in original order. 按原始顺序排列的替换 DEX 路径。</param>
     /// <param name="outputPath">The atomically replaced output path. 原子替换的输出路径。</param>

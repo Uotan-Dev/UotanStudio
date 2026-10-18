@@ -32,22 +32,14 @@ public static class Crc32Register
     private static readonly uint[] Table = InitTable();
     private static readonly uint[] SliceTable = InitSliceTable();
 
-    /// <summary>
-    /// Computes the CRC-32 of the data starting from <paramref name="seed"/> (register semantics, no final XOR).
-    /// <para>以 <paramref name="seed"/> 为寄存器初值计算数据的 CRC-32（寄存器语义，无最终异或）。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Bytes to hash; an empty span returns <paramref name="seed"/> unchanged.
-    /// <para>参与计算的字节；空区间原样返回 <paramref name="seed"/>。</para>
-    /// </param>
-    /// <param name="seed">
-    /// Register initial value, such as <c>0xFFFF_FFFF</c> or a format-specific constant.
-    /// <para>寄存器初值，例如 <c>0xFFFF_FFFF</c> 或格式专属常量。</para>
-    /// </param>
-    /// <returns>
-    /// The CRC-32 register value after consuming the data.
-    /// <para>消费完数据后的 CRC-32 寄存器值。</para>
-    /// </returns>
+    /// <summary>Computes the CRC-32 of the data starting from <paramref name="seed"/> (register semantics, no final XOR).
+    /// <para>以 <paramref name="seed"/> 为寄存器初值计算数据的 CRC-32（寄存器语义，无最终异或）。</para></summary>
+    /// <param name="data">Bytes to hash; an empty span returns <paramref name="seed"/> unchanged.
+    /// <para>参与计算的字节；空区间原样返回 <paramref name="seed"/>。</para></param>
+    /// <param name="seed">Register initial value, such as <c>0xFFFF_FFFF</c> or a format-specific constant.
+    /// <para>寄存器初值，例如 <c>0xFFFF_FFFF</c> 或格式专属常量。</para></param>
+    /// <returns>The CRC-32 register value after consuming the data.
+    /// <para>消费完数据后的 CRC-32 寄存器值。</para></returns>
     public static uint Compute(ReadOnlySpan<byte> data, uint seed)
     {
         if (seed == AllOnesSeed && data.Length >= HardwareFastPathMinimumLength)

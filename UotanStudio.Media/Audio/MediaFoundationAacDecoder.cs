@@ -76,25 +76,20 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
     /// </value>
     public int BitsPerSample => _bitsPerSample;
 
-    /// <summary>
-    /// Initializes the decoder, binds it to the calling thread, and starts Media Foundation; the
-    /// callback receives every decoded PCM frame synchronously during <see cref="Decode"/>.
-    /// <para>初始化解码器、将其绑定到调用线程并启动 Media Foundation；回调在 <see cref="Decode"/>
-    /// 期间同步接收每个解码出的 PCM 帧。</para>
-    /// </summary>
-    /// <param name="codecConfig">
-    /// Optional AAC AudioSpecificConfig, at most 64 bytes; an empty span lets the MFT derive the
-    /// format from the packets. <para>可选的 AAC AudioSpecificConfig，至多 64 字节；空 span 时由 MFT 从数据包推导格式。</para>
-    /// </param>
-    /// <param name="frameCallback">
-    /// Invoked for every decoded frame on the owning thread; the frame is disposed after the
-    /// callback returns, so consumers must copy or convert within it.
-    /// <para>每解出一帧时在属主线程调用；回调返回后帧被释放，消费方须在回调内复制或转换。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException"><paramref name="frameCallback"/> is <see langword="null"/>. <para><paramref name="frameCallback"/> 为 <see langword="null"/> 时抛出。</para></exception>
-    /// <exception cref="InvalidDataException">The codec configuration exceeds 64 bytes. <para>编码配置超过 64 字节时抛出。</para></exception>
-    /// <exception cref="InvalidOperationException">Called from a different thread than the previous initialization, reentered from a callback, or a COM/Media Foundation call fails. <para>与先前初始化的线程不同、从回调中重入，或 COM/Media Foundation 调用失败时抛出。</para></exception>
-    /// <exception cref="ObjectDisposedException">The decoder has been disposed. <para>解码器已释放时抛出。</para></exception>
+    /// <summary>Initializes the decoder, binds it to the calling thread, and starts Media Foundation; the callback receives every decoded PCM frame synchronously during <see cref="Decode"/>.
+    /// <para>初始化解码器、将其绑定到调用线程并启动 Media Foundation；回调在 <see cref="Decode"/> 期间同步接收每个解码出的 PCM 帧。</para></summary>
+    /// <param name="codecConfig">Optional AAC AudioSpecificConfig, at most 64 bytes; an empty span lets the MFT derive the format from the packets.
+    /// <para>可选的 AAC AudioSpecificConfig，至多 64 字节；空 span 时由 MFT 从数据包推导格式。</para></param>
+    /// <param name="frameCallback">Invoked for every decoded frame on the owning thread; the frame is disposed after the callback returns, so consumers must copy or convert within it.
+    /// <para>每解出一帧时在属主线程调用；回调返回后帧被释放，消费方须在回调内复制或转换。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="frameCallback"/> is <see langword="null"/>.
+    /// <para><paramref name="frameCallback"/> 为 <see langword="null"/> 时抛出。</para></exception>
+    /// <exception cref="InvalidDataException">The codec configuration exceeds 64 bytes.
+    /// <para>编码配置超过 64 字节时抛出。</para></exception>
+    /// <exception cref="InvalidOperationException">Called from a different thread than the previous initialization, reentered from a callback, or a COM/Media Foundation call fails.
+    /// <para>与先前初始化的线程不同、从回调中重入，或 COM/Media Foundation 调用失败时抛出。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder has been disposed.
+    /// <para>解码器已释放时抛出。</para></exception>
     public void Initialize(ReadOnlySpan<byte> codecConfig, Action<DecodedAudioFrame> frameCallback)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -130,19 +125,20 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
         _callback = frameCallback;
     }
 
-    /// <summary>
-    /// Feeds one compressed AAC packet into the MFT and drains the PCM output it produces.
-    /// <para>向 MFT 输入一个压缩的 AAC 包，并排空其产生的 PCM 输出。</para>
-    /// </summary>
-    /// <param name="packet">
-    /// One non-empty AAC access unit up to 16 MiB; the first call also builds the transform.
-    /// <para>一个非空且至多 16 MiB 的 AAC 访问单元；首次调用还会创建转换实例。</para>
-    /// </param>
-    /// <param name="timestampTicks">Presentation timestamp in ticks attached to the MFT sample. <para>附加到 MFT 样本的显示时间戳（tick）。</para></param>
-    /// <exception cref="InvalidDataException">The packet is empty or oversized, or the MFT reports invalid buffers or output geometry. <para>数据包为空或超限，或 MFT 报告非法缓冲区/输出几何时抛出。</para></exception>
-    /// <exception cref="InvalidOperationException">The decoder is not initialized, another thread called it, it was reentered from a callback, or a Media Foundation call fails or stalls. <para>解码器未初始化、由其他线程调用、从回调重入，或 Media Foundation 调用失败/停滞时抛出。</para></exception>
-    /// <exception cref="NotSupportedException">No synchronous Media Foundation AAC decoder or no 16-bit PCM output type exists. <para>不存在同步的 Media Foundation AAC 解码器或 16 位 PCM 输出类型时抛出。</para></exception>
-    /// <exception cref="ObjectDisposedException">The decoder has been disposed. <para>解码器已释放时抛出。</para></exception>
+    /// <summary>Feeds one compressed AAC packet into the MFT and drains the PCM output it produces.
+    /// <para>向 MFT 输入一个压缩的 AAC 包，并排空其产生的 PCM 输出。</para></summary>
+    /// <param name="packet">One non-empty AAC access unit up to 16 MiB; the first call also builds the transform.
+    /// <para>一个非空且至多 16 MiB 的 AAC 访问单元；首次调用还会创建转换实例。</para></param>
+    /// <param name="timestampTicks">Presentation timestamp in ticks attached to the MFT sample.
+    /// <para>附加到 MFT 样本的显示时间戳（tick）。</para></param>
+    /// <exception cref="InvalidDataException">The packet is empty or oversized, or the MFT reports invalid buffers or output geometry.
+    /// <para>数据包为空或超限，或 MFT 报告非法缓冲区/输出几何时抛出。</para></exception>
+    /// <exception cref="InvalidOperationException">The decoder is not initialized, another thread called it, it was reentered from a callback, or a Media Foundation call fails or stalls.
+    /// <para>解码器未初始化、由其他线程调用、从回调重入，或 Media Foundation 调用失败/停滞时抛出。</para></exception>
+    /// <exception cref="NotSupportedException">No synchronous Media Foundation AAC decoder or no 16-bit PCM output type exists.
+    /// <para>不存在同步的 Media Foundation AAC 解码器或 16 位 PCM 输出类型时抛出。</para></exception>
+    /// <exception cref="ObjectDisposedException">The decoder has been disposed.
+    /// <para>解码器已释放时抛出。</para></exception>
     public void Decode(ReadOnlySpan<byte> packet, long timestampTicks)
     {
         CheckReady();

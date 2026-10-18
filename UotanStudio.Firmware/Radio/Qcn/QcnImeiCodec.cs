@@ -18,26 +18,16 @@ public static class QcnImeiCodec
     /// </summary>
     public const int EncodedLength = 9;
 
-    /// <summary>
-    /// Decodes a 9-byte encoded IMEI into its 15 decimal digits.
-    /// <para>将 9 字节编码的 IMEI 解码为 15 位十进制数字串。</para>
-    /// </summary>
-    /// <param name="data">
-    /// The encoded data, at least <see cref="EncodedLength"/> bytes.
-    /// <para>编码数据，至少 <see cref="EncodedLength"/> 字节。</para>
-    /// </param>
-    /// <param name="imei">
-    /// The decoded 15-digit string; <c>null</c> when decoding fails.
-    /// <para>解码出的 15 位数字串；解码失败时为 <c>null</c>。</para>
-    /// </param>
-    /// <param name="checkDigitValid">
-    /// Whether the decoded check digit matches the Luhn check digit computed from the first 14 digits.
-    /// <para>解码出的校验位是否与按前 14 位计算的 Luhn 校验位一致。</para>
-    /// </param>
-    /// <returns>
-    /// <c>true</c> on success; <c>false</c> when the data is not a valid IMEI encoding.
-    /// <para>解码成功返回 <c>true</c>；数据不是有效的 IMEI 编码时返回 <c>false</c>。</para>
-    /// </returns>
+    /// <summary>Decodes a 9-byte encoded IMEI into its 15 decimal digits.
+    /// <para>将 9 字节编码的 IMEI 解码为 15 位十进制数字串。</para></summary>
+    /// <param name="data">The encoded data, at least <see cref="EncodedLength"/> bytes.
+    /// <para>编码数据，至少 <see cref="EncodedLength"/> 字节。</para></param>
+    /// <param name="imei">The decoded 15-digit string; <c>null</c> when decoding fails.
+    /// <para>解码出的 15 位数字串；解码失败时为 <c>null</c>。</para></param>
+    /// <param name="checkDigitValid">Whether the decoded check digit matches the Luhn check digit computed from the first 14 digits.
+    /// <para>解码出的校验位是否与按前 14 位计算的 Luhn 校验位一致。</para></param>
+    /// <returns><c>true</c> on success; <c>false</c> when the data is not a valid IMEI encoding.
+    /// <para>解码成功返回 <c>true</c>；数据不是有效的 IMEI 编码时返回 <c>false</c>。</para></returns>
     public static bool TryDecode(ReadOnlySpan<byte> data, out string? imei, out bool checkDigitValid)
     {
         imei = null;
@@ -76,22 +66,13 @@ public static class QcnImeiCodec
         return true;
     }
 
-    /// <summary>
-    /// Encodes a 15-digit IMEI (including its check digit) into the 9-byte NV representation.
-    /// <para>将 15 位 IMEI（含校验位）编码为 9 字节的 NV 表示。</para>
-    /// </summary>
-    /// <param name="imei">
-    /// The 15-digit IMEI string.
-    /// <para>15 位数字的 IMEI 字符串。</para>
-    /// </param>
-    /// <param name="destination">
-    /// The destination buffer, at least <see cref="EncodedLength"/> bytes.
-    /// <para>至少 <see cref="EncodedLength"/> 字节的目标缓冲区。</para>
-    /// </param>
-    /// <returns>
-    /// <c>true</c> on success; <c>false</c> when the input is not 15 digits.
-    /// <para>编码成功返回 <c>true</c>；输入不是 15 位数字时返回 <c>false</c>。</para>
-    /// </returns>
+    /// <summary>Encodes a 15-digit IMEI (including its check digit) into the 9-byte NV representation.
+    /// <para>将 15 位 IMEI（含校验位）编码为 9 字节的 NV 表示。</para></summary>
+    /// <param name="imei">The 15-digit IMEI string.<para>15 位数字的 IMEI 字符串。</para></param>
+    /// <param name="destination">The destination buffer, at least <see cref="EncodedLength"/> bytes.
+    /// <para>至少 <see cref="EncodedLength"/> 字节的目标缓冲区。</para></param>
+    /// <returns><c>true</c> on success; <c>false</c> when the input is not 15 digits.
+    /// <para>编码成功返回 <c>true</c>；输入不是 15 位数字时返回 <c>false</c>。</para></returns>
     public static bool TryEncode(ReadOnlySpan<char> imei, Span<byte> destination)
     {
         if (imei.Length != DigitCount || destination.Length < EncodedLength)
@@ -122,22 +103,12 @@ public static class QcnImeiCodec
         return true;
     }
 
-    /// <summary>
-    /// Computes the Luhn check digit over the first 14 digits of an IMEI.
-    /// <para>按 IMEI 前 14 位计算 Luhn 校验位。</para>
-    /// </summary>
-    /// <param name="digits">
-    /// The 14-digit IMEI prefix.
-    /// <para>14 位数字的 IMEI 前缀。</para>
-    /// </param>
-    /// <returns>
-    /// The check digit character.
-    /// <para>校验位数字的字符。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The input is not 14 digits or contains non-digit characters.
-    /// <para>输入长度不是 14 或包含非数字字符。</para>
-    /// </exception>
+    /// <summary>Computes the Luhn check digit over the first 14 digits of an IMEI.
+    /// <para>按 IMEI 前 14 位计算 Luhn 校验位。</para></summary>
+    /// <param name="digits">The 14-digit IMEI prefix.<para>14 位数字的 IMEI 前缀。</para></param>
+    /// <returns>The check digit character.<para>校验位数字的字符。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">The input is not 14 digits or contains non-digit characters.
+    /// <para>输入长度不是 14 或包含非数字字符。</para></exception>
     public static char ComputeCheckDigit(ReadOnlySpan<char> digits)
     {
         if (digits.Length != 14)

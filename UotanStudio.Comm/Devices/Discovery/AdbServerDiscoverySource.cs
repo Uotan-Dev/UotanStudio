@@ -38,19 +38,12 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
     /// <value>The stable name of this discovery source. <para>该发现源的稳定名称。</para></value>
     public string Name => $"adb-server@{host}:{port}";
 
-    /// <summary>
-    /// Lists the adb server's targets and projects each into a <c>server</c>-routed endpoint;
-    /// DNS-SD-keyed targets carry the endpoint resolved from the server's mDNS table.
-    /// <para>列出 adb server 的目标，并把每个目标投影为 <c>server</c> 路由端点；以 DNS-SD 实例名为键的
-    /// 目标附带 server mDNS 表解析出的端点。</para>
-    /// </summary>
-    /// <param name="cancellationToken">
-    /// Cancels the liveness probe and the target query. <para>取消存活探测与目标查询。</para>
-    /// </param>
-    /// <returns>
-    /// One endpoint per server target, or an empty list when the server is absent.
-    /// <para>每个 server 目标对应一个端点；server 不存在时为空列表。</para>
-    /// </returns>
+    /// <summary>Lists the adb server's targets and projects each into a <c>server</c>-routed endpoint; DNS-SD-keyed targets carry the endpoint resolved from the server's mDNS table.
+    /// <para>列出 adb server 的目标，并把每个目标投影为 <c>server</c> 路由端点；以 DNS-SD 实例名为键的 目标附带 server mDNS 表解析出的端点。</para></summary>
+    /// <param name="cancellationToken">Cancels the liveness probe and the target query.
+    /// <para>取消存活探测与目标查询。</para></param>
+    /// <returns>One endpoint per server target, or an empty list when the server is absent.
+    /// <para>每个 server 目标对应一个端点；server 不存在时为空列表。</para></returns>
     public async Task<IReadOnlyList<DeviceEndpoint>> DiscoverAsync(CancellationToken cancellationToken)
     {
         if (!await DebugBridgeRoute.IsListeningAsync(host, port, cancellationToken).ConfigureAwait(false))

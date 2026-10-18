@@ -162,17 +162,10 @@ public sealed class AdbAuthentication : IDisposable
         finally { File.Delete(temporary); }
     }
 
-    /// <summary>
-    /// Loads an existing identity from <paramref name="keyPath"/> without creating or repairing anything on
-    /// disk. Upstream keeps this split too: <c>load_key()</c> reads an <c>ADB_VENDOR_KEYS</c> entry and a
-    /// file it cannot parse is simply skipped, while only <c>load_userkey()</c> generates a key, and only at
-    /// the user key path.
-    /// <para>从 <paramref name="keyPath"/> 加载已存在的身份，不创建也不修复磁盘上的任何内容。上游同样区分：
-    /// <c>load_key()</c> 读取 <c>ADB_VENDOR_KEYS</c> 条目，无法解析的文件直接跳过；只有
-    /// <c>load_userkey()</c> 会生成密钥，且只在用户密钥路径上。</para>
-    /// </summary>
-    /// <param name="keyPath">The private key path to read. <para>待读取的私钥路径。</para></param>
-    /// <returns>The loaded identity. <para>加载的身份。</para></returns>
+    /// <summary>Loads an existing identity from <paramref name="keyPath"/> without creating or repairing anything on disk. Upstream keeps this split too: <c>load_key()</c> reads an <c>ADB_VENDOR_KEYS</c> entry and a file it cannot parse is simply skipped, while only <c>load_userkey()</c> generates a key, and only at the user key path.
+    /// <para>从 <paramref name="keyPath"/> 加载已存在的身份，不创建也不修复磁盘上的任何内容。上游同样区分： <c>load_key()</c> 读取 <c>ADB_VENDOR_KEYS</c> 条目，无法解析的文件直接跳过；只有 <c>load_userkey()</c> 会生成密钥，且只在用户密钥路径上。</para></summary>
+    /// <param name="keyPath">The private key path to read.<para>待读取的私钥路径。</para></param>
+    /// <returns>The loaded identity.<para>加载的身份。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="keyPath"/> is empty.
     /// <para><paramref name="keyPath"/> 为空。</para></exception>
     /// <exception cref="FileNotFoundException">No key file exists at <paramref name="keyPath"/>.
@@ -202,33 +195,12 @@ public sealed class AdbAuthentication : IDisposable
         }
     }
 
-    /// <summary>
-    /// Loads the host identity chain an ADB server offers to a device: the user identity from
-    /// <paramref name="keyPath"/> first, then every identity named by
-    /// <see cref="VendorKeysEnvironmentVariable"/>, ordered by the ascending SHA-256 fingerprint of
-    /// its public key and deduplicated by that fingerprint. Unreadable or wrong-width entries are
-    /// skipped, as upstream adb skips a key file it cannot parse.
-    /// <para>加载 ADB 服务器向设备提供的主机身份链：先是 <paramref name="keyPath"/> 中的用户身份，
-    /// 再是 <see cref="VendorKeysEnvironmentVariable"/> 指名的所有身份，其余身份按其公钥
-    /// SHA-256 指纹升序排列并按该指纹去重。无法读取或位数不匹配的条目会被跳过，正如上游 adb
-    /// 跳过无法解析的密钥文件。</para>
-    /// </summary>
-    /// <remarks>
-    /// Upstream keeps every private key in one fingerprint-keyed map (<c>g_keys</c> in
-    /// <c>client/auth.cpp</c>), so its attempt order is the fingerprint order; the order has no
-    /// protocol meaning because adbd accepts any authorized key. The user identity is hoisted to the
-    /// front here so the default key is offered first, and the public-key payload announced after the
-    /// chain is exhausted always comes from that user identity, matching
-    /// <c>adb_auth_get_userkey()</c>.
-    /// <para>上游把所有私钥存放在以指纹为键的同一个映射表（<c>client/auth.cpp</c> 的 <c>g_keys</c>）里，
-    /// 因此其尝试顺序就是指纹顺序；该顺序没有协议含义，因为 adbd 接受任何已授权的密钥。此处把用户身份
-    /// 提到最前以保证默认密钥优先被提供，且身份链耗尽后通告的公钥负载始终来自该用户身份，与
-    /// <c>adb_auth_get_userkey()</c> 一致。</para>
-    /// </remarks>
-    /// <param name="keyPath">
-    /// The user private key path; defaults to <see cref="DefaultKeyFilePath"/>.
-    /// <para>用户私钥路径；默认为 <see cref="DefaultKeyFilePath"/>。</para>
-    /// </param>
+    /// <summary>Loads the host identity chain an ADB server offers to a device: the user identity from <paramref name="keyPath"/> first, then every identity named by <see cref="VendorKeysEnvironmentVariable"/>, ordered by the ascending SHA-256 fingerprint of its public key and deduplicated by that fingerprint. Unreadable or wrong-width entries are skipped, as upstream adb skips a key file it cannot parse.
+    /// <para>加载 ADB 服务器向设备提供的主机身份链：先是 <paramref name="keyPath"/> 中的用户身份， 再是 <see cref="VendorKeysEnvironmentVariable"/> 指名的所有身份，其余身份按其公钥 SHA-256 指纹升序排列并按该指纹去重。无法读取或位数不匹配的条目会被跳过，正如上游 adb 跳过无法解析的密钥文件。</para></summary>
+    /// <remarks>Upstream keeps every private key in one fingerprint-keyed map (<c>g_keys</c> in <c>client/auth.cpp</c>), so its attempt order is the fingerprint order; the order has no protocol meaning because adbd accepts any authorized key. The user identity is hoisted to the front here so the default key is offered first, and the public-key payload announced after the chain is exhausted always comes from that user identity, matching <c>adb_auth_get_userkey()</c>.
+    /// <para>上游把所有私钥存放在以指纹为键的同一个映射表（<c>client/auth.cpp</c> 的 <c>g_keys</c>）里， 因此其尝试顺序就是指纹顺序；该顺序没有协议含义，因为 adbd 接受任何已授权的密钥。此处把用户身份 提到最前以保证默认密钥优先被提供，且身份链耗尽后通告的公钥负载始终来自该用户身份，与 <c>adb_auth_get_userkey()</c> 一致。</para></remarks>
+    /// <param name="keyPath">The user private key path; defaults to <see cref="DefaultKeyFilePath"/>.
+    /// <para>用户私钥路径；默认为 <see cref="DefaultKeyFilePath"/>。</para></param>
     /// <returns>The ordered identities, containing at least the user identity. The caller disposes them.
     /// <para>有序身份列表，至少包含用户身份；由调用方释放。</para></returns>
     /// <exception cref="IOException">The user key file exists but cannot be parsed.
@@ -336,19 +308,13 @@ public sealed class AdbAuthentication : IDisposable
     /// <value>The 32-byte digest. <para>32 字节摘要。</para></value>
     public byte[] PublicKeyFingerprint => Sha256.ComputeHash(_rsa.ExportSubjectPublicKeyInfo());
 
-    /// <summary>
-    /// Signs the token with RSA-PKCS1 + SHA1 (ADB signature), the same construction as upstream
-    /// <c>RSA_sign(NID_sha1, token, TOKEN_SIZE, ...)</c> in <c>adb_auth_sign</c>.
-    /// <para>用私钥以 RSA-PKCS1 + SHA1 对令牌签名，与上游 <c>adb_auth_sign</c> 中
-    /// <c>RSA_sign(NID_sha1, token, TOKEN_SIZE, ...)</c> 的构造一致。</para>
-    /// </summary>
+    /// <summary>Signs the token with RSA-PKCS1 + SHA1 (ADB signature), the same construction as upstream <c>RSA_sign(NID_sha1, token, TOKEN_SIZE, ...)</c> in <c>adb_auth_sign</c>.
+    /// <para>用私钥以 RSA-PKCS1 + SHA1 对令牌签名，与上游 <c>adb_auth_sign</c> 中 <c>RSA_sign(NID_sha1, token, TOKEN_SIZE, ...)</c> 的构造一致。</para></summary>
     /// <param name="token">The token to sign; must be exactly <see cref="TokenSize"/> bytes.
     /// <para>待签名的令牌；必须恰为 <see cref="TokenSize"/> 字节。</para></param>
-    /// <returns>The RSA-SHA1 signature. <para>RSA-SHA1 签名。</para></returns>
-    /// <exception cref="ArgumentException"><paramref name="token"/> is null or not
-    /// <see cref="TokenSize"/> bytes, which means the peer is not issuing adbd AUTH challenges.
-    /// <para><paramref name="token"/> 为 <see langword="null"/> 或长度不是
-    /// <see cref="TokenSize"/> 字节，说明对端并未下发 adbd 的 AUTH 挑战。</para></exception>
+    /// <returns>The RSA-SHA1 signature.<para>RSA-SHA1 签名。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="token"/> is null or not <see cref="TokenSize"/> bytes, which means the peer is not issuing adbd AUTH challenges.
+    /// <para><paramref name="token"/> 为 <see langword="null"/> 或长度不是 <see cref="TokenSize"/> 字节，说明对端并未下发 adbd 的 AUTH 挑战。</para></exception>
     public byte[] SignToken(byte[] token)
     {
         ArgumentNullException.ThrowIfNull(token);
@@ -373,17 +339,12 @@ public sealed class AdbAuthentication : IDisposable
     /// <returns>The public key payload bytes. <para>公钥负载字节。</para></returns>
     public byte[] BuildPublicKeyPayload(string? comment = null) => BuildPublicKeyPayload(_rsa, comment);
 
-    /// <summary>
-    /// Builds the ADB public key payload for an arbitrary RSA key:
-    /// base64(RSAPublicKey) + " user@host\0".
-    /// <para>为任意 RSA 密钥构建 ADB 公钥负载：base64(RSAPublicKey) + " user@host\0"。</para>
-    /// </summary>
-    /// <param name="rsa">The RSA key to encode. <para>待编码的 RSA 密钥。</para></param>
-    /// <param name="comment">
-    /// Optional comment appended after the key; defaults to "user@host".
-    /// <para>追加在密钥后的可选注释；默认为 "user@host"。</para>
-    /// </param>
-    /// <returns>The public key payload bytes. <para>公钥负载字节。</para></returns>
+    /// <summary>Builds the ADB public key payload for an arbitrary RSA key: base64(RSAPublicKey) + " user@host\0".
+    /// <para>为任意 RSA 密钥构建 ADB 公钥负载：base64(RSAPublicKey) + " user@host\0"。</para></summary>
+    /// <param name="rsa">The RSA key to encode.<para>待编码的 RSA 密钥。</para></param>
+    /// <param name="comment">Optional comment appended after the key; defaults to "user@host".
+    /// <para>追加在密钥后的可选注释；默认为 "user@host"。</para></param>
+    /// <returns>The public key payload bytes.<para>公钥负载字节。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="rsa"/> is <c>null</c>.
     /// <para><paramref name="rsa"/> 为 <c>null</c>。</para></exception>
     public static byte[] BuildPublicKeyPayload(RSA rsa, string? comment = null)

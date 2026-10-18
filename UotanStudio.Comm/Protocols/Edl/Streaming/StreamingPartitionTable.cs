@@ -3,24 +3,18 @@ using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Edl.Streaming;
 
-/// <summary>
-/// One entry of the streaming on-device partition table: the decoded section name, the start LBA,
-/// the sector count, the three attribute bytes, and the flash selector
-/// (get_partitions, streaming.py:649-682).
-/// <para>流式设备分区表中的一条记录：解码后的段名、起始 LBA、扇区数、三个属性字节与闪存选择器
-/// （get_partitions，streaming.py:649-682）。</para>
-/// </summary>
+/// <summary>One entry of the streaming on-device partition table: the decoded section name, the start LBA, the sector count, the three attribute bytes, and the flash selector (get_partitions, streaming.py:649-682).
+/// <para>流式设备分区表中的一条记录：解码后的段名、起始 LBA、扇区数、三个属性字节与闪存选择器 （get_partitions，streaming.py:649-682）。</para></summary>
 /// <param name="Name">The partition name with the leading storage-class prefix removed.
 /// <para>去除存储类别前导后的分区名。</para></param>
-/// <param name="StartLba">The start LBA recorded by the table or computed for the legacy
-/// layout. <para>表内记录、或旧版布局下推算出的起始 LBA。</para></param>
-/// <param name="Sectors">The masked sector count, length plus spare truncated to 16 bits like
-/// the reference. <para>按参考做法掩码为 16 位的长度加备用扇区数
-/// 。</para></param>
-/// <param name="Attribute1">The first raw attribute byte. <para>第一个原始属性字节。</para></param>
-/// <param name="Attribute2">The second raw attribute byte. <para>第二个原始属性字节。</para></param>
-/// <param name="Attribute3">The third raw attribute byte. <para>第三个原始属性字节。</para></param>
-/// <param name="WhichFlash">The flash selector byte. <para>闪存选择器字节。</para></param>
+/// <param name="StartLba">The start LBA recorded by the table or computed for the legacy layout.
+/// <para>表内记录、或旧版布局下推算出的起始 LBA。</para></param>
+/// <param name="Sectors">The masked sector count, length plus spare truncated to 16 bits like the reference.
+/// <para>按参考做法掩码为 16 位的长度加备用扇区数。</para></param>
+/// <param name="Attribute1">The first raw attribute byte.<para>第一个原始属性字节。</para></param>
+/// <param name="Attribute2">The second raw attribute byte.<para>第二个原始属性字节。</para></param>
+/// <param name="Attribute3">The third raw attribute byte.<para>第三个原始属性字节。</para></param>
+/// <param name="WhichFlash">The flash selector byte.<para>闪存选择器字节。</para></param>
 public sealed record StreamingPartitionEntry(
     string Name,
     uint StartLba,
@@ -105,20 +99,14 @@ public sealed class StreamingPartitionTable
         Entries = entries;
     }
 
-    /// <summary>
-    /// Parses a raw streaming partition table image (the reference reads it with the 512-byte
-    /// on-device table size, streaming.py:15, 243-246).
-    /// <para>解析原始流式分区表映像。</para>
-    /// </summary>
-    /// <param name="table">The raw table bytes; at most
-    /// <see cref="StreamingConstants.PartitionTableBytes"/> long.
+    /// <summary>Parses a raw streaming partition table image (the reference reads it with the 512-byte on-device table size, streaming.py:15, 243-246).
+    /// <para>解析原始流式分区表映像。</para></summary>
+    /// <param name="table">The raw table bytes; at most <see cref="StreamingConstants.PartitionTableBytes"/> long.
     /// <para>原始表字节，至多 <see cref="StreamingConstants.PartitionTableBytes"/> 字节。</para></param>
-    /// <returns>The parsed table. <para>解析后的表。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image is shorter than the
-    /// 16-byte header or longer than <see cref="StreamingConstants.PartitionTableBytes"/>.
+    /// <returns>The parsed table.<para>解析后的表。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the image is shorter than the 16-byte header or longer than <see cref="StreamingConstants.PartitionTableBytes"/>.
     /// <para>映像短于 16 字节头或长于 <see cref="StreamingConstants.PartitionTableBytes"/> 时抛出。</para></exception>
-    /// <exception cref="StreamingException">Thrown when the header record count exceeds the space
-    /// the image can hold, or a record name leaves the reference storage-class prefix format.
+    /// <exception cref="StreamingException">Thrown when the header record count exceeds the space the image can hold, or a record name leaves the reference storage-class prefix format.
     /// <para>头部记录数超出映像可容纳的空间，或记录名不符合参考的存储类别前缀格式时抛出。</para></exception>
     public static StreamingPartitionTable Parse(ReadOnlySpan<byte> table)
     {

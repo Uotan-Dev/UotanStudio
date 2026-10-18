@@ -62,32 +62,26 @@ public sealed partial class MtkSession
 
     /// <summary>Reads consecutive sixteen-bit register words through the preloader read command.
     /// <para>通过 preloader 读取命令读取连续的十六位寄存器字。</para></summary>
-    /// <remarks>
-    /// The framing mirrors <c>read</c> with <c>length == 16</c>
-    /// (<c>mtkclient/Library/mtk_preloader.py:388-405</c>): the command byte, the big-endian address
-    /// and the big-endian word count are each echoed, then one status word, the big-endian payload,
-    /// and a closing status word arrive. Where the reference returns an empty list after a refusal,
-    /// this path raises a protocol fault and faults the session.
-    /// 帧结构对应 <c>length == 16</c> 的 <c>read</c>（<c>mtkclient/Library/mtk_preloader.py:388-405</c>）：
-    /// 命令字节、大端地址与大端字数逐一回显，随后到达一个状态字、大端载荷与收尾状态字。参考在被拒绝后
-    /// 返回空列表，而本路径抛出协议错误并使会话进入 fault 状态。
-    /// </remarks>
+    /// <remarks>The framing mirrors <c>read</c>with <c>length == 16</c>(
+    /// <c>mtkclient/Library/mtk_preloader.py:388-405</c>): the command byte, the big-endian address and
+    /// the big-endian word count are each echoed, then one status word, the big-endian payload, and a
+    /// closing status word arrive. Where the reference returns an empty list after a refusal, this path
+    /// raises a protocol fault and faults the session. 帧结构对应 <c>length == 16</c>的 <c>read</c>（
+    /// <c>mtkclient/Library/mtk_preloader.py:388-405</c>）： 命令字节、大端地址与大端字数逐一回显，随后到达一个状态字、大端载荷与收尾状态字。</remarks>
     /// <param name="address">The first register address; words walk upward by two bytes.
     /// <para>起始寄存器地址；字按两字节向上递增。</para></param>
     /// <param name="wordCount">The positive word count, limited so one exchange stays within
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/> bytes. 正数字数，其上限保证单次交换不超过
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/> 字节。</param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>bytes. 正数字数，其上限保证单次交换不超过
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>字节。</param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The values exactly as the big-endian wire delivered them.
     /// <para>与大端线路交付一致的取值。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">The word count is not positive or the window
-    /// leaves the 32-bit address space; no byte was sent.
+    /// <exception cref="ArgumentOutOfRangeException">The word count is not positive or the window leaves the 32-bit address space; no byte was sent.
     /// <para>字数非正，或窗口越出 32 位地址空间；未发送任何字节。</para></exception>
     /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
     /// <para>会话不处于 preloader 命令阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">An echo, status word or the payload was invalid; the
-    /// session faults. <para>回显、状态字或载荷无效；会话进入 fault 状态。</para></exception>
+    /// <exception cref="MtkProtocolException">An echo, status word or the payload was invalid; the session faults.
+    /// <para>回显、状态字或载荷无效；会话进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
     /// <para>调用方在任一协作点取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session is disposed.
@@ -131,30 +125,25 @@ public sealed partial class MtkSession
 
     /// <summary>Reads consecutive thirty-two-bit register words through the preloader read command.
     /// <para>通过 preloader 读取命令读取连续的三十二位寄存器字。</para></summary>
-    /// <remarks>
-    /// The framing mirrors <c>read</c> with <c>length == 32</c>
-    /// (<c>mtkclient/Library/mtk_preloader.py:388-405</c>) and is the same exchange the reference
-    /// exploit drivers use. Where the reference returns an empty list after a refusal, this path
-    /// raises a protocol fault and faults the session.
-    /// 帧结构对应 <c>length == 32</c> 的 <c>read</c>（<c>mtkclient/Library/mtk_preloader.py:388-405</c>），
-    /// 与参考漏洞驱动使用的交换相同。参考在被拒绝后返回空列表，而本路径抛出协议错误并使会话进入 fault 状态。
-    /// </remarks>
+    /// <remarks>The framing mirrors <c>read</c>with <c>length == 32</c>(
+    /// <c>mtkclient/Library/mtk_preloader.py:388-405</c>) and is the same exchange the reference
+    /// exploit drivers use. Where the reference returns an empty list after a refusal, this path raises
+    /// a protocol fault and faults the session. 帧结构对应 <c>length == 32</c>的 <c>read</c>（
+    /// <c>mtkclient/Library/mtk_preloader.py:388-405</c>）， 与参考漏洞驱动使用的交换相同。</remarks>
     /// <param name="address">The first doubleword address; words walk upward by four bytes.
     /// <para>起始双字地址；字按四字节向上递增。</para></param>
     /// <param name="dwordCount">The positive doubleword count, limited so one exchange stays within
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/> bytes. 正数双字数，其上限保证单次交换不超过
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/> 字节。</param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>bytes. 正数双字数，其上限保证单次交换不超过
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>字节。</param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The values exactly as the big-endian wire delivered them.
     /// <para>与大端线路交付一致的取值。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">The doubleword count is not positive or the
-    /// window leaves the 32-bit address space; no byte was sent.
+    /// <exception cref="ArgumentOutOfRangeException">The doubleword count is not positive or the window leaves the 32-bit address space; no byte was sent.
     /// <para>双字数非正，或窗口越出 32 位地址空间；未发送任何字节。</para></exception>
     /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
     /// <para>会话不处于 preloader 命令阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">An echo, status word or the payload was invalid; the
-    /// session faults. <para>回显、状态字或载荷无效；会话进入 fault 状态。</para></exception>
+    /// <exception cref="MtkProtocolException">An echo, status word or the payload was invalid; the session faults.
+    /// <para>回显、状态字或载荷无效；会话进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
     /// <para>调用方在任一协作点取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session is disposed.
@@ -316,25 +305,20 @@ public sealed partial class MtkSession
 
     /// <summary>Asks a preloader running as DA to boot the named partition through command 0x71.
     /// <para>通过命令 0x71 请求作为 DA 运行的 preloader 引导指定分区。</para></summary>
-    /// <remarks>
-    /// <c>jump_to_partition</c> (<c>mtkclient/Library/mtk_preloader.py:501-509</c>) truncates the
-    /// UTF-8 name to 64 bytes, pads it with nulls to exactly 64, echoes the opcode, then writes the
+    /// <remarks><c>jump_to_partition</c>( <c>mtkclient/Library/mtk_preloader.py:501-509</c>) truncates
+    /// the UTF-8 name to 64 bytes, pads it with nulls to exactly 64, echoes the opcode, then writes the
     /// name field without an echo check and accepts a single status word. The partition boot changes
     /// device state, so the exchange is only attempted when the caller confirms it.
-    /// <c>jump_to_partition</c>（<c>mtkclient/Library/mtk_preloader.py:501-509</c>）把 UTF-8 名称截断到
-    /// 64 字节并用 NUL 补齐到恰好 64 字节，回显操作码后写入名称字段（不校验回显），并接受单个状态字。
-    /// 分区引导会改变设备状态，因此仅在调用方确认后才发起交换。
-    /// </remarks>
-    /// <param name="partitionName">The partition name; its UTF-8 encoding is truncated or padded to
-    /// exactly 64 bytes. <para>分区名称；其 UTF-8 编码被截断或补齐到恰好 64 字节。</para></param>
+    /// <c>jump_to_partition</c>（ <c>mtkclient/Library/mtk_preloader.py:501-509</c>）把 UTF-8 名称截断到 64
+    /// 字节并用 NUL 补齐到恰好 64 字节，回显操作码后写入名称字段（不校验回显），并接受单个状态字。 分区引导会改变设备状态，因此仅在调用方确认后才发起交换。</remarks>
+    /// <param name="partitionName">The partition name; its UTF-8 encoding is truncated or padded to exactly 64 bytes.
+    /// <para>分区名称；其 UTF-8 编码被截断或补齐到恰好 64 字节。</para></param>
     /// <param name="confirm">The explicit caller opt-in that authorizes the jump.
     /// <para>授权本次跳转的显式调用方选择。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>A task that completes after the status word was accepted.
     /// <para>在状态字被接受后完成的任务。</para></returns>
-    /// <exception cref="UnauthorizedAccessException"><paramref name="confirm"/> is
-    /// <see langword="false"/>; no byte was sent and the session keeps its stage.
+    /// <exception cref="UnauthorizedAccessException"><paramref name="confirm"/> is <see langword="false"/>; no byte was sent and the session keeps its stage.
     /// <para><paramref name="confirm"/> 为 <see langword="false"/>；未发送任何字节，会话保持原阶段。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="partitionName"/> is empty.
     /// <para><paramref name="partitionName"/> 为空。</para></exception>
@@ -432,35 +416,31 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Reads consecutive thirty-two-bit register words and keeps the raw big-endian wire
-    /// bytes. <para>读取连续的三十二位寄存器字，并保留原始大端线路字节。</para></summary>
-    /// <remarks>
-    /// The framing mirrors <c>read</c> with <c>length == 32</c> and <c>direct=True</c>
-    /// (<c>mtkclient/Library/mtk_preloader.py:388-410</c> with
+    /// <summary>Reads consecutive thirty-two-bit register words and keeps the raw big-endian wire bytes.
+    /// <para>读取连续的三十二位寄存器字，并保留原始大端线路字节。</para></summary>
+    /// <remarks>The framing mirrors <c>read</c>with <c>length == 32</c>and <c>direct=True</c>(
+    /// <c>mtkclient/Library/mtk_preloader.py:388-410</c>with
     /// <c>Library/Connection/devicehandler.py:104-115</c>): the exchange is identical to
     /// <see cref="ReadPreloader32Async"/>, but the reply bytes are returned in wire order without
-    /// re-packing each doubleword, so callers that need byte identity keep it exactly.
-    /// 帧结构对应 <c>length == 32</c> 且 <c>direct=True</c> 的 <c>read</c>
-    /// （<c>mtkclient/Library/mtk_preloader.py:388-410</c>，配合
+    /// re-packing each doubleword, so callers that need byte identity keep it exactly. 帧结构对应
+    /// <c>length == 32</c>且 <c>direct=True</c>的 <c>read</c>（
+    /// <c>mtkclient/Library/mtk_preloader.py:388-410</c>，配合
     /// <c>Library/Connection/devicehandler.py:104-115</c>）：交互与 <see cref="ReadPreloader32Async"/>
-    /// 相同，但回复字节按线路顺序原样返回、不重排双字，需要字节恒等的调用方可以精确保留。
-    /// </remarks>
+    /// 相同，但回复字节按线路顺序原样返回、不重排双字，需要字节恒等的调用方可以精确保留。</remarks>
     /// <param name="address">The first doubleword address; words walk upward by four bytes.
     /// <para>起始双字地址；字按四字节向上递增。</para></param>
     /// <param name="dwordCount">The positive doubleword count, limited so one exchange stays within
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/> bytes. 正数双字数，其上限保证单次交换不超过
-    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/> 字节。</param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>bytes. 正数双字数，其上限保证单次交换不超过
+    /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>字节。</param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The payload bytes exactly as the wire delivered them.
     /// <para>与线路交付一致的载荷字节。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">The doubleword count is not positive or the
-    /// window leaves the 32-bit address space; no byte was sent.
+    /// <exception cref="ArgumentOutOfRangeException">The doubleword count is not positive or the window leaves the 32-bit address space; no byte was sent.
     /// <para>双字数非正，或窗口越出 32 位地址空间；未发送任何字节。</para></exception>
     /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
     /// <para>会话不处于 preloader 命令阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">An echo, status word or the payload was invalid; the
-    /// session faults. <para>回显、状态字或载荷无效；会话进入 fault 状态。</para></exception>
+    /// <exception cref="MtkProtocolException">An echo, status word or the payload was invalid; the session faults.
+    /// <para>回显、状态字或载荷无效；会话进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
     /// <para>调用方在任一协作点取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session is disposed.
@@ -613,27 +593,22 @@ public sealed partial class MtkSession
 
     /// <summary>Disables the target watchdog with the chip-specific write sequence the reference defines.
     /// <para>使用参考实现定义的、按芯片区分的写序列禁用目标看门狗。</para></summary>
-    /// <remarks>
-    /// The steps come from <see cref="MtkPreloaderWatchdogTable.Resolve"/>; chips upstream leaves
-    /// without a sequence are refused with <see cref="NotSupportedException"/> naming the hardware
-    /// code rather than being driven with invented registers. See the class remarks for the upstream
-    /// branch sources.
-    /// 步骤来自 <see cref="MtkPreloaderWatchdogTable.Resolve"/>；上游未记录序列的芯片会以指名硬件码的
-    /// <see cref="NotSupportedException"/> 被拒绝，而不是用凭空编造的寄存器去驱动。上游分支来源见类备注。
-    /// </remarks>
+    /// <remarks>The steps come from <see cref="MtkPreloaderWatchdogTable.Resolve"/>; chips upstream
+    /// leaves without a sequence are refused with <see cref="NotSupportedException"/>naming the
+    /// hardware code rather than being driven with invented registers. See the class remarks for the
+    /// upstream branch sources. 步骤来自 <see cref="MtkPreloaderWatchdogTable.Resolve"/>
+    /// ；上游未记录序列的芯片会以指名硬件码的 <see cref="NotSupportedException"/>被拒绝，而不是用凭空编造的寄存器去驱动。上游分支来源见类备注。</remarks>
     /// <param name="confirmWrite">The explicit caller opt-in that authorizes the writes.
     /// <para>授权这些写入的显式调用方选择。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>A task that completes after every documented step was acknowledged.
     /// <para>在每个已记载步骤均被确认后完成的任务。</para></returns>
-    /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is
-    /// <see langword="false"/>; no byte was sent and the session keeps its stage.
+    /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is <see langword="false"/>; no byte was sent and the session keeps its stage.
     /// <para><paramref name="confirmWrite"/> 为 <see langword="false"/>；未发送任何字节，会话保持原阶段。</para></exception>
-    /// <exception cref="NotSupportedException">The reference table records no disable sequence for the
-    /// queried hardware code; no byte was sent. <para>参考表没有为查询到的硬件码记录禁用序列；未发送任何字节。</para></exception>
-    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage or
-    /// the identity was never queried. <para>会话不处于 preloader 命令阶段，或从未查询身份。</para></exception>
+    /// <exception cref="NotSupportedException">The reference table records no disable sequence for the queried hardware code; no byte was sent.
+    /// <para>参考表没有为查询到的硬件码记录禁用序列；未发送任何字节。</para></exception>
+    /// <exception cref="InvalidOperationException">The session is not in the preloader command stage or the identity was never queried.
+    /// <para>会话不处于 preloader 命令阶段，或从未查询身份。</para></exception>
     /// <exception cref="MtkProtocolException">A step was refused; the session faults.
     /// <para>某一步被拒绝；会话进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
@@ -782,32 +757,28 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Reads a bounded memory window through chunked big-endian thirty-two-bit reads and
-    /// re-emits it little-endian. <para>通过分块的大端三十二位读取读取有界内存窗口，并按小端重新输出。</para></summary>
-    /// <remarks>
-    /// The reference <c>peek</c> handler for the preloader (<c>mtkclient/Library/mtk_main.py:323-345</c>)
-    /// requests at most 512 bytes per READ32 command, decodes the big-endian reply, and re-packs each
-    /// doubleword little-endian; the tail is rounded up to a whole word on the wire and trimmed
-    /// afterwards, exactly like the Legacy DA reader. A refused or short chunk is a protocol fault
-    /// here rather than an empty or short result.
-    /// preloader 的参考 <c>peek</c> 处理程序（<c>mtkclient/Library/mtk_main.py:323-345</c>）每条 READ32
-    /// 命令最多请求 512 字节，解码大端回复后把每个双字按小端重新打包；线路上的尾部向上取整到完整双字并在
-    /// 之后裁剪，与 Legacy DA 读取器一致。被拒绝或过短的分块在这里是协议错误，而不是空或短结果。
-    /// </remarks>
+    /// <summary>Reads a bounded memory window through chunked big-endian thirty-two-bit reads and re-emits it little-endian.
+    /// <para>通过分块的大端三十二位读取读取有界内存窗口，并按小端重新输出。</para></summary>
+    /// <remarks>The reference <c>peek</c>handler for the preloader (
+    /// <c>mtkclient/Library/mtk_main.py:323-345</c>) requests at most 512 bytes per READ32 command,
+    /// decodes the big-endian reply, and re-packs each doubleword little-endian; the tail is rounded up
+    /// to a whole word on the wire and trimmed afterwards, exactly like the Legacy DA reader. A refused
+    /// or short chunk is a protocol fault here rather than an empty or short result. preloader 的参考
+    /// <c>peek</c>处理程序（ <c>mtkclient/Library/mtk_main.py:323-345</c>）每条 READ32 命令最多请求 512
+    /// 字节，解码大端回复后把每个双字按小端重新打包；线路上的尾部向上取整到完整双字并在 之后裁剪，与 Legacy DA 读取器一致。被拒绝或过短的分块在这里是协议错误，而不是空或短结果。</remarks>
     /// <param name="address">The start address of the window. 窗口起始地址。</param>
     /// <param name="length">The positive byte count, limited to
     /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>. 正数字节数，上限为
     /// <see cref="MtkDaMemoryAccess.MaximumWordLoopReadBytes"/>。</param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>Exactly <paramref name="length"/> little-endian bytes.
     /// <para>恰好 <paramref name="length"/> 字节的小端内容。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">The length is out of bounds or the window leaves
-    /// the 32-bit address space; no byte was sent. <para>长度越界，或窗口越出 32 位地址空间；未发送任何字节。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The length is out of bounds or the window leaves the 32-bit address space; no byte was sent.
+    /// <para>长度越界，或窗口越出 32 位地址空间；未发送任何字节。</para></exception>
     /// <exception cref="InvalidOperationException">The session is not in the preloader command stage.
     /// <para>会话不处于 preloader 命令阶段。</para></exception>
-    /// <exception cref="MtkProtocolException">A chunk was refused, malformed, or short; the session
-    /// faults. <para>某分块被拒绝、格式错误或过短；会话进入 fault 状态。</para></exception>
+    /// <exception cref="MtkProtocolException">A chunk was refused, malformed, or short; the session faults.
+    /// <para>某分块被拒绝、格式错误或过短；会话进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled at any cooperative point.
     /// <para>调用方在任一协作点取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session is disposed.

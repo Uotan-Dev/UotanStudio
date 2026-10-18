@@ -178,30 +178,18 @@ public sealed record MtkStorageCapabilitySnapshot : CapabilitySnapshot
         }.Validate();
     }
 
-    /// <summary>
-    /// Projects a validated XML DA hardware report into the unified contract.
-    /// <para>将经过校验的 XML DA 硬件报告投影为统一契约。</para>
-    /// </summary>
-    /// <param name="storage">
-    /// The parsed XML geometry with its fixed-order region names.
-    /// <para>包含固定顺序区域名的已解析 XML 几何信息。</para>
-    /// </param>
-    /// <param name="storageGeneration">
-    /// The session generation to stamp, or <see langword="null"/> for a standalone projection.
-    /// <para>要标记的会话代际；独立投影为 <see langword="null"/>。</para>
-    /// </param>
-    /// <param name="evidence">
-    /// The evidence that produced the report, or <see langword="null"/> to synthesize a projection record.
-    /// <para>产生该报告的证据；为 <see langword="null"/> 时合成一条投影记录。</para>
-    /// </param>
-    /// <param name="capturedAtUtc">
-    /// The capture instant, defaulting to the current UTC time.
-    /// <para>捕获时刻，默认为当前 UTC 时间。</para>
-    /// </param>
-    /// <returns>
-    /// A validated snapshot preserving the XML region tokens as canonical names.
-    /// <para>保留 XML 区域标记作为规范名称的已校验快照。</para>
-    /// </returns>
+    /// <summary>Projects a validated XML DA hardware report into the unified contract.
+    /// <para>将经过校验的 XML DA 硬件报告投影为统一契约。</para></summary>
+    /// <param name="storage">The parsed XML geometry with its fixed-order region names.
+    /// <para>包含固定顺序区域名的已解析 XML 几何信息。</para></param>
+    /// <param name="storageGeneration">The session generation to stamp, or <see langword="null"/> for a standalone projection.
+    /// <para>要标记的会话代际；独立投影为 <see langword="null"/>。</para></param>
+    /// <param name="evidence">The evidence that produced the report, or <see langword="null"/> to synthesize a projection record.
+    /// <para>产生该报告的证据；为 <see langword="null"/> 时合成一条投影记录。</para></param>
+    /// <param name="capturedAtUtc">The capture instant, defaulting to the current UTC time.
+    /// <para>捕获时刻，默认为当前 UTC 时间。</para></param>
+    /// <returns>A validated snapshot preserving the XML region tokens as canonical names.
+    /// <para>保留 XML 区域标记作为规范名称的已校验快照。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="storage"/> is <see langword="null"/>.
     /// <para><paramref name="storage"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidOperationException">The report contains conflicting regions.
@@ -225,30 +213,18 @@ public sealed record MtkStorageCapabilitySnapshot : CapabilitySnapshot
         }.Validate();
     }
 
-    /// <summary>
-    /// Projects a validated Legacy DA inventory into the unified contract.
-    /// <para>将经过校验的 Legacy DA 清单投影为统一契约。</para>
-    /// </summary>
-    /// <param name="storage">
-    /// The parsed Legacy geometry for the explicitly selected family.
-    /// <para>显式选定家族的已解析 Legacy 几何信息。</para>
-    /// </param>
-    /// <param name="storageGeneration">
-    /// The session generation to stamp, or <see langword="null"/> for a standalone projection.
-    /// <para>要标记的会话代际；独立投影为 <see langword="null"/>。</para>
-    /// </param>
-    /// <param name="evidence">
-    /// The evidence that produced the report, or <see langword="null"/> to synthesize a projection record.
-    /// <para>产生该报告的证据；为 <see langword="null"/> 时合成一条投影记录。</para>
-    /// </param>
-    /// <param name="capturedAtUtc">
-    /// The capture instant, defaulting to the current UTC time.
-    /// <para>捕获时刻，默认为当前 UTC 时间。</para>
-    /// </param>
-    /// <returns>
-    /// A validated snapshot preserving the Legacy CID and firmware revision.
-    /// <para>保留 Legacy CID 与固件版本的已校验快照。</para>
-    /// </returns>
+    /// <summary>Projects a validated Legacy DA inventory into the unified contract.
+    /// <para>将经过校验的 Legacy DA 清单投影为统一契约。</para></summary>
+    /// <param name="storage">The parsed Legacy geometry for the explicitly selected family.
+    /// <para>显式选定家族的已解析 Legacy 几何信息。</para></param>
+    /// <param name="storageGeneration">The session generation to stamp, or <see langword="null"/> for a standalone projection.
+    /// <para>要标记的会话代际；独立投影为 <see langword="null"/>。</para></param>
+    /// <param name="evidence">The evidence that produced the report, or <see langword="null"/> to synthesize a projection record.
+    /// <para>产生该报告的证据；为 <see langword="null"/> 时合成一条投影记录。</para></param>
+    /// <param name="capturedAtUtc">The capture instant, defaulting to the current UTC time.
+    /// <para>捕获时刻，默认为当前 UTC 时间。</para></param>
+    /// <returns>A validated snapshot preserving the Legacy CID and firmware revision.
+    /// <para>保留 Legacy CID 与固件版本的已校验快照。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="storage"/> is <see langword="null"/>.
     /// <para><paramref name="storage"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidOperationException">The report contains conflicting regions.
@@ -297,21 +273,13 @@ public sealed record MtkStorageCapabilitySnapshot : CapabilitySnapshot
         }.Validate();
     }
 
-    /// <summary>
-    /// Finds the first region with the requested identity.
-    /// <para>查找第一个具有指定身份的分区。</para>
-    /// </summary>
-    /// <param name="kind">
-    /// The region identity to locate; <see cref="MtkStorageRegionKind.Unknown"/> is not a lookup key.
-    /// <para>要定位的区域身份；<see cref="MtkStorageRegionKind.Unknown"/> 不是可查找的键。</para>
-    /// </param>
-    /// <returns>
-    /// The matching region, or <see langword="null"/> when the profile never reported it; a null
-    /// result must fail closed instead of standing in for ordinary storage.
-    /// <para>匹配的区域；配置从未上报时为 <see langword="null"/>；查找结果为空时必须失败关闭，不得当作普通存储。</para>
-    /// </returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> is
-    /// <see cref="MtkStorageRegionKind.Unknown"/>.
+    /// <summary>Finds the first region with the requested identity.
+    /// <para>查找第一个具有指定身份的分区。</para></summary>
+    /// <param name="kind">The region identity to locate; <see cref="MtkStorageRegionKind.Unknown"/> is not a lookup key.
+    /// <para>要定位的区域身份；<see cref="MtkStorageRegionKind.Unknown"/> 不是可查找的键。</para></param>
+    /// <returns>The matching region, or <see langword="null"/> when the profile never reported it; a null result must fail closed instead of standing in for ordinary storage.
+    /// <para>匹配的区域；配置从未上报时为 <see langword="null"/>；查找结果为空时必须失败关闭，不得当作普通存储。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> is <see cref="MtkStorageRegionKind.Unknown"/>.
     /// <para><paramref name="kind"/> 为 <see cref="MtkStorageRegionKind.Unknown"/>。</para></exception>
     public MtkStorageRegionCapability? FindRegion(MtkStorageRegionKind kind)
     {
@@ -376,21 +344,11 @@ public sealed record MtkStorageCapabilitySnapshot : CapabilitySnapshot
         && ReadPacketBytes == other.ReadPacketBytes
         && ReportedDeviceType == other.ReportedDeviceType;
 
-    /// <summary>
-    /// Checks the snapshot for internal contradictions.
-    /// <para>检查快照的内部矛盾。</para>
-    /// </summary>
-    /// <returns>
-    /// The validated snapshot, so the check chains onto an object initializer.
-    /// <para>通过校验的快照本身，使检查可链式接在对象初始化器之后。</para>
-    /// </returns>
-    /// <exception cref="InvalidOperationException">
-    /// The region list is empty or duplicated, an authenticated region is not RPMB or vice versa,
-    /// RPMB posture contradicts the region list, a negative capacity was carried, or the NAND/NOR
-    /// companion records contradict the family.
-    /// <para>区域列表为空或重复、需认证区域不是 RPMB（或反之）、RPMB 姿态与区域列表矛盾、
-    /// 携带负容量，或 NAND/NOR 附属记录与家族矛盾。</para>
-    /// </exception>
+    /// <summary>Checks the snapshot for internal contradictions.<para>检查快照的内部矛盾。</para></summary>
+    /// <returns>The validated snapshot, so the check chains onto an object initializer.
+    /// <para>通过校验的快照本身，使检查可链式接在对象初始化器之后。</para></returns>
+    /// <exception cref="InvalidOperationException">The region list is empty or duplicated, an authenticated region is not RPMB or vice versa, RPMB posture contradicts the region list, a negative capacity was carried, or the NAND/NOR companion records contradict the family.
+    /// <para>区域列表为空或重复、需认证区域不是 RPMB（或反之）、RPMB 姿态与区域列表矛盾、 携带负容量，或 NAND/NOR 附属记录与家族矛盾。</para></exception>
     public MtkStorageCapabilitySnapshot Validate()
     {
         if (Regions.Count == 0)

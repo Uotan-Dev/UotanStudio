@@ -20,31 +20,19 @@ public sealed class EdlRuleProgrammerSelector : IEdlProgrammerSelector
     /// </summary>
     public static EdlRuleProgrammerSelector Instance { get; } = new();
 
-    /// <summary>
-    /// Evaluates every catalog descriptor against the identity and classifies the run.
-    /// <para>对照身份评估目录中的每个描述符，并对本次评估定性。</para>
-    /// </summary>
-    /// <param name="identity">
-    /// The Sahara-reported identity, or <see langword="null"/>. <para>Sahara 上报的身份，或 <see langword="null"/>。</para>
-    /// </param>
-    /// <param name="catalog">
-    /// The validated catalog. <para>已校验的目录。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation checked before evaluation. <para>评估前检查的取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// The selection with per-candidate reasons; <see cref="EdlProgrammerSelection.Descriptor"/> is set
-    /// only for <see cref="EdlProgrammerMatchDecision.Matched"/>.
-    /// <para>含逐候选理由的选择结果；仅在 <see cref="EdlProgrammerMatchDecision.Matched"/> 时设置
-    /// <see cref="EdlProgrammerSelection.Descriptor"/>。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="catalog"/> is <see langword="null"/>. <para><paramref name="catalog"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// The token was already cancelled. <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Evaluates every catalog descriptor against the identity and classifies the run.
+    /// <para>对照身份评估目录中的每个描述符，并对本次评估定性。</para></summary>
+    /// <param name="identity">The Sahara-reported identity, or <see langword="null"/>.
+    /// <para>Sahara 上报的身份，或 <see langword="null"/>。</para></param>
+    /// <param name="catalog">The validated catalog.<para>已校验的目录。</para></param>
+    /// <param name="cancellationToken">Cancellation checked before evaluation.
+    /// <para>评估前检查的取消令牌。</para></param>
+    /// <returns>The selection with per-candidate reasons; <see cref="EdlProgrammerSelection.Descriptor"/> is set only for <see cref="EdlProgrammerMatchDecision.Matched"/>.
+    /// <para>含逐候选理由的选择结果；仅在 <see cref="EdlProgrammerMatchDecision.Matched"/> 时设置 <see cref="EdlProgrammerSelection.Descriptor"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="catalog"/> is <see langword="null"/>.
+    /// <para><paramref name="catalog"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was already cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public EdlProgrammerSelection Select(SaharaDeviceIdentity? identity, EdlProgrammerCatalog catalog,
         CancellationToken cancellationToken)
     {

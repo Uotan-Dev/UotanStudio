@@ -72,21 +72,21 @@ public static class CompressionFile
     public static void DecompressFile(string inputPath, string outputPath, CompressionFormat format)
         => DecompressFile(inputPath, outputPath, format, long.MaxValue, CancellationToken.None);
 
-    /// <summary>
-    /// Decompresses a file with a limit, atomically replacing the destination on success and cleaning the temporary file on failure.
-    /// <para>按指定格式有界解压文件；成功后原子替换目标，失败时清理临时文件。</para>
-    /// </summary>
-    /// <param name="inputPath">Compressed source file. <para>压缩源文件。</para></param>
-    /// <param name="outputPath">Destination file. <para>目标文件。</para></param>
-    /// <param name="format">Compression format to decode. <para>要解码的压缩格式。</para></param>
-    /// <param name="maximumOutputBytes">Hard cap on decoded output size. <para>解压输出的硬性大小上限。</para></param>
+    /// <summary>Decompresses a file with a limit, atomically replacing the destination on success and cleaning the temporary file on failure.
+    /// <para>按指定格式有界解压文件；成功后原子替换目标，失败时清理临时文件。</para></summary>
+    /// <param name="inputPath">Compressed source file.<para>压缩源文件。</para></param>
+    /// <param name="outputPath">Destination file.<para>目标文件。</para></param>
+    /// <param name="format">Compression format to decode.<para>要解码的压缩格式。</para></param>
+    /// <param name="maximumOutputBytes">Hard cap on decoded output size.
+    /// <para>解压输出的硬性大小上限。</para></param>
     /// <param name="cancellationToken">Cancels the copy; the destination keeps its prior content.
     /// <para>取消复制；目标保持原有内容。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="inputPath"/> or <paramref name="outputPath"/>
-    /// is null or empty. <para><paramref name="inputPath"/> 或 <paramref name="outputPath"/> 为 null 或空。</para></exception>
+    /// <exception cref="ArgumentNullException"><paramref name="inputPath"/> or <paramref name="outputPath"/> is null or empty.
+    /// <para><paramref name="inputPath"/> 或 <paramref name="outputPath"/> 为 null 或空。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumOutputBytes"/> is negative.
     /// <para><paramref name="maximumOutputBytes"/> 为负数。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static void DecompressFile(string inputPath, string outputPath, CompressionFormat format, long maximumOutputBytes, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(inputPath)) throw new ArgumentNullException(nameof(inputPath));
@@ -114,21 +114,21 @@ public static class CompressionFile
     public static void DecompressFileAuto(string inputPath, string outputPath)
         => DecompressFileAuto(inputPath, outputPath, long.MaxValue, CancellationToken.None);
 
-    /// <summary>
-    /// Detects and decompresses a file with an output limit.
-    /// <para>自动检测并解压文件，同时限制输出大小。</para>
-    /// </summary>
+    /// <summary>Detects and decompresses a file with an output limit.
+    /// <para>自动检测并解压文件，同时限制输出大小。</para></summary>
     /// <param name="inputPath">Source file; its magic bytes drive detection, with the extension as fallback.
     /// <para>源文件；由魔数字节驱动检测，扩展名作为回退。</para></param>
-    /// <param name="outputPath">Destination file. <para>目标文件。</para></param>
-    /// <param name="maximumOutputBytes">Hard cap on decoded output size. <para>解压输出的硬性大小上限。</para></param>
-    /// <param name="cancellationToken">Cancels before and during the copy; the destination keeps its prior
-    /// content. <para>在复制开始前及进行中可取消；目标保持原有内容。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="inputPath"/> or <paramref name="outputPath"/>
-    /// is null or empty. <para><paramref name="inputPath"/> 或 <paramref name="outputPath"/> 为 null 或空。</para></exception>
+    /// <param name="outputPath">Destination file.<para>目标文件。</para></param>
+    /// <param name="maximumOutputBytes">Hard cap on decoded output size.
+    /// <para>解压输出的硬性大小上限。</para></param>
+    /// <param name="cancellationToken">Cancels before and during the copy; the destination keeps its prior content.
+    /// <para>在复制开始前及进行中可取消；目标保持原有内容。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="inputPath"/> or <paramref name="outputPath"/> is null or empty.
+    /// <para><paramref name="inputPath"/> 或 <paramref name="outputPath"/> 为 null 或空。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumOutputBytes"/> is negative.
     /// <para><paramref name="maximumOutputBytes"/> 为负数。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     public static void DecompressFileAuto(string inputPath, string outputPath, long maximumOutputBytes, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(inputPath))

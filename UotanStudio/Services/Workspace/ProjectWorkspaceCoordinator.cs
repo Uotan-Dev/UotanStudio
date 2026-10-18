@@ -27,19 +27,12 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
     public void ClearImages() => ImageViewModel.EnsureInstance().Images.Clear();
     public void ApplySettings(ProjectSettingsDto settings) => ProjectSettingViewModel.EnsureInstance().ApplyFromDto(settings);
 
-    /// <summary>
-    /// Root-change notification: with <paramref name="preserveDocuments"/> false all open documents
-    /// close; with true they stay and their records re-resolve against the new root.
-    /// <para>工程根目录变更通知：为 false 时关闭全部已打开文档，为 true 时保留并让记录按新根重算。</para>
-    /// </summary>
-    /// <param name="rootDirectory">
-    /// The new project root; null leaves open documents untouched.
-    /// <para>新的工程根目录；为 null 时不改动已打开文档。</para>
-    /// </param>
-    /// <param name="preserveDocuments">
-    /// True to keep open documents through the change.
-    /// <para>为真时变更过程中保留已打开文档。</para>
-    /// </param>
+    /// <summary>Root-change notification: with <paramref name="preserveDocuments"/> false all open documents close; with true they stay and their records re-resolve against the new root.
+    /// <para>工程根目录变更通知：为 false 时关闭全部已打开文档，为 true 时保留并让记录按新根重算。</para></summary>
+    /// <param name="rootDirectory">The new project root; null leaves open documents untouched.
+    /// <para>新的工程根目录；为 null 时不改动已打开文档。</para></param>
+    /// <param name="preserveDocuments">True to keep open documents through the change.
+    /// <para>为真时变更过程中保留已打开文档。</para></param>
     public void ChangeProjectRoot(string? rootDirectory, bool preserveDocuments)
     {
         if (preserveDocuments || rootDirectory is null) return;

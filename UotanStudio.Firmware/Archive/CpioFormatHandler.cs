@@ -134,26 +134,15 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
         return false;
     }
 
-    /// <summary>
-    /// Reads format metadata without unpacking.
-    /// <para>读取格式元数据（不解包）。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Archive file to enumerate; parsing runs on the thread pool.
-    /// <para>要枚举的归档文件；解析在线程池上执行。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancel token checked before the run and between listed entries.
-    /// <para>在运行前及各条目列举之间检查的取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// An <see cref="FirmwareOpResult"/> with the detected format, entry count, names and sizes on success, or a failure result when the archive cannot be listed; parse errors are captured into the result.
-    /// <para>成功时返回包含检测格式、条目数量、名称与大小的 <see cref="FirmwareOpResult"/>；归档无法列举时返回失败结果；解析错误被捕获进结果。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Reads format metadata without unpacking.<para>读取格式元数据（不解包）。</para></summary>
+    /// <param name="filePath">Archive file to enumerate; parsing runs on the thread pool.
+    /// <para>要枚举的归档文件；解析在线程池上执行。</para></param>
+    /// <param name="cancellationToken">Cancel token checked before the run and between listed entries.
+    /// <para>在运行前及各条目列举之间检查的取消令牌。</para></param>
+    /// <returns>An <see cref="FirmwareOpResult"/> with the detected format, entry count, names and sizes on success, or a failure result when the archive cannot be listed; parse errors are captured into the result.
+    /// <para>成功时返回包含检测格式、条目数量、名称与大小的 <see cref="FirmwareOpResult"/>；归档无法列举时返回失败结果；解析错误被捕获进结果。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -202,34 +191,19 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Unpacks the firmware file to the output directory.
-    /// <para>将固件文件解包到输出目录。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// CPIO or TAR archive to extract; the archive itself is not modified.
-    /// <para>要解包的 CPIO 或 TAR 归档；归档本身不会被修改。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Destination directory for the extracted entries.
-    /// <para>解出条目的目标目录。</para>
-    /// </param>
-    /// <param name="options">
-    /// Optional extraction settings; only its overwrite flag is consulted here, defaulting to overwrite enabled.
-    /// <para>可选解包设置；此处仅参考其覆盖标志，默认允许覆盖。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancel token checked before extraction and honored by the underlying task scheduling.
-    /// <para>在解包前检查并被底层任务调度遵守的取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// An <see cref="FirmwareOpResult"/> listing the extracted entry names on success, or a failure result when extraction throws; only <see cref="OperationCanceledException"/> escapes.
-    /// <para>成功时返回列出已解出条目名的 <see cref="FirmwareOpResult"/>；解包抛出异常时返回失败结果；仅 <see cref="OperationCanceledException"/> 会向外抛出。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Unpacks the firmware file to the output directory.<para>将固件文件解包到输出目录。</para></summary>
+    /// <param name="filePath">CPIO or TAR archive to extract; the archive itself is not modified.
+    /// <para>要解包的 CPIO 或 TAR 归档；归档本身不会被修改。</para></param>
+    /// <param name="outputDirectory">Destination directory for the extracted entries.
+    /// <para>解出条目的目标目录。</para></param>
+    /// <param name="options">Optional extraction settings; only its overwrite flag is consulted here, defaulting to overwrite enabled.
+    /// <para>可选解包设置；此处仅参考其覆盖标志，默认允许覆盖。</para></param>
+    /// <param name="cancellationToken">Cancel token checked before extraction and honored by the underlying task scheduling.
+    /// <para>在解包前检查并被底层任务调度遵守的取消令牌。</para></param>
+    /// <returns>An <see cref="FirmwareOpResult"/> listing the extracted entry names on success, or a failure result when extraction throws; only <see cref="OperationCanceledException"/> escapes.
+    /// <para>成功时返回列出已解出条目名的 <see cref="FirmwareOpResult"/>；解包抛出异常时返回失败结果；仅 <see cref="OperationCanceledException"/> 会向外抛出。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -275,30 +249,18 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Packs a directory as CPIO, restoring captured dialect, compression and entry headers when metadata is available.
-    /// <para>将目录打包为 CPIO；有元数据时还原所记录的方言、压缩封装和条目头字段。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Directory tree to enumerate; symlinked entries are stored as symbolic links and repack metadata files are skipped.
-    /// <para>要枚举的目录树；符号链接条目以符号链接形式存储，重打包元数据文件被跳过。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination archive, atomically replaced only after the temporary output is verified.
-    /// <para>目标归档；仅在临时输出校验通过后才原子替换。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation token observed during enumeration, streaming copies, hashing and verification.
-    /// <para>取消令牌贯穿枚举、流式复制、哈希计算和输出校验。</para>
-    /// </param>
-    /// <returns>
-    /// An <see cref="FirmwareOpResult"/> listing the packed entry names on success, or a failure result when the input is not a directory or a source file changes during packing; only <see cref="OperationCanceledException"/> escapes.
-    /// <para>成功时返回列出已打包条目名的 <see cref="FirmwareOpResult"/>；输入不是目录或打包期间源文件变化时返回失败结果；仅 <see cref="OperationCanceledException"/> 会向外抛出。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Packs a directory as CPIO, restoring captured dialect, compression and entry headers when metadata is available.
+    /// <para>将目录打包为 CPIO；有元数据时还原所记录的方言、压缩封装和条目头字段。</para></summary>
+    /// <param name="inputPath">Directory tree to enumerate; symlinked entries are stored as symbolic links and repack metadata files are skipped.
+    /// <para>要枚举的目录树；符号链接条目以符号链接形式存储，重打包元数据文件被跳过。</para></param>
+    /// <param name="outputPath">Destination archive, atomically replaced only after the temporary output is verified.
+    /// <para>目标归档；仅在临时输出校验通过后才原子替换。</para></param>
+    /// <param name="cancellationToken">Cancellation token observed during enumeration, streaming copies, hashing and verification.
+    /// <para>取消令牌贯穿枚举、流式复制、哈希计算和输出校验。</para></param>
+    /// <returns>An <see cref="FirmwareOpResult"/> listing the packed entry names on success, or a failure result when the input is not a directory or a source file changes during packing; only <see cref="OperationCanceledException"/> escapes.
+    /// <para>成功时返回列出已打包条目名的 <see cref="FirmwareOpResult"/>；输入不是目录或打包期间源文件变化时返回失败结果；仅 <see cref="OperationCanceledException"/> 会向外抛出。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>

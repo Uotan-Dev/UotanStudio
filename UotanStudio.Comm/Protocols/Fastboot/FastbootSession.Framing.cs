@@ -50,28 +50,13 @@ public sealed partial class FastbootSession
         }
     }
 
-    /// <summary>
-    /// Receives and parses a fastboot protocol response.
-    /// <para>接收并解析 fastboot 协议响应。</para>
-    /// </summary>
+    /// <summary>Receives and parses a fastboot protocol response.
+    /// <para>接收并解析 fastboot 协议响应。</para></summary>
     /// <remarks>
-    /// <para>Incoming bytes are accumulated at byte level (never re-decoded per packet, so a multi-byte
-    /// UTF-8 sequence split across packets survives) into a session-held buffer. Frames are consumed from
-    /// that buffer one at a time, and whatever the transport delivered past a terminal frame is retained for
-    /// the next call instead of being silently dropped, so a trailing INFO after OKAY desynchronizes neither
-    /// the stream nor the next command's reply. INFO lines and TEXT content are accumulated onto the returned
-    /// response; the call returns only at a terminal OKAY/FAIL/DATA frame (or an unrecoverable unknown
-    /// prefix), with the timeout deadline fixed from the command start.</para>
-    /// <para>入站字节按字节级累积到会话持有的缓冲区（绝不按包重复解码，跨包拆分的 UTF-8 多字节序列得以
-    /// 保留），帧从该缓冲区逐个消费；传输在终止帧之后送达的字节会保留给下一次调用而非被静默丢弃，因此
-    /// OKAY 之后的尾随 INFO 既不会破坏流，也不会错误归因到下一条命令的应答。INFO 行与 TEXT 内容累积到
-    /// 返回的响应对象上；仅在到达终止 OKAY/FAIL/DATA 帧（或出现不可恢复的未知前缀）时返回。超时截止
-    /// 时间自命令开始固定不变。</para>
-    /// </remarks>
-    /// <param name="timeoutMs">
-    /// Overall receive deadline in milliseconds; when <see langword="null"/> the session timeout is used. The deadline is fixed at call start.
-    /// <para>整体接收截止时间（毫秒）；为 <see langword="null"/> 时使用会话超时。截止时间在调用开始时即固定。</para>
-    /// </param>
+    /// <para>Incoming bytes are accumulated at byte level (never re-decoded per packet, so a multi-byte UTF-8 sequence split across packets survives) into a session-held buffer. Frames are consumed from that buffer one at a time, and whatever the transport delivered past a terminal frame is retained for the next call instead of being silently dropped, so a trailing INFO after OKAY desynchronizes neither the stream nor the next command's reply. INFO lines and TEXT content are accumulated onto the returned response; the call returns only at a terminal OKAY/FAIL/DATA frame (or an unrecoverable unknown prefix), with the timeout deadline fixed from the command start.</para>
+    /// <para>入站字节按字节级累积到会话持有的缓冲区（绝不按包重复解码，跨包拆分的 UTF-8 多字节序列得以 保留），帧从该缓冲区逐个消费；传输在终止帧之后送达的字节会保留给下一次调用而非被静默丢弃，因此 OKAY 之后的尾随 INFO 既不会破坏流，也不会错误归因到下一条命令的应答。INFO 行与 TEXT 内容累积到 返回的响应对象上；仅在到达终止 OKAY/FAIL/DATA 帧（或出现不可恢复的未知前缀）时返回。超时截止 时间自命令开始固定不变。</para></remarks>
+    /// <param name="timeoutMs">Overall receive deadline in milliseconds; when <see langword="null"/> the session timeout is used. The deadline is fixed at call start.
+    /// <para>整体接收截止时间（毫秒）；为 <see langword="null"/> 时使用会话超时。截止时间在调用开始时即固定。</para></param>
     /// <returns>The parsed response; <see cref="FastbootResponse.State"/> reports Success/Fail/Data/Timeout/Unknown.
     /// <para>解析后的响应；<see cref="FastbootResponse.State"/> 报告 Success/Fail/Data/Timeout/Unknown。</para></returns>
     public FastbootResponse ReceiveResponse(int? timeoutMs = null)

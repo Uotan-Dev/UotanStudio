@@ -156,19 +156,13 @@ public sealed class ProjectDataWorkspace : IProjectWorkspace
         if (wasActive) ActiveWorkflowName = Workflows.Keys.FirstOrDefault();
     }
 
-    /// <summary>
-    /// Validates the snapshot through <see cref="NodeProjectSnapshot.EnsureSupportedVersion"/> and stores it
-    /// under the given node project name; performs no I/O.
-    /// <para>先经 <see cref="NodeProjectSnapshot.EnsureSupportedVersion"/> 校验快照，再按给定节点项目名存储；
-    /// 不执行任何 I/O。</para>
-    /// </summary>
-    /// <param name="name">Node project name identifying the document. <para>标识文档的节点项目名称。</para></param>
-    /// <param name="snapshot">Snapshot to validate and store. <para>待校验并存储的快照。</para></param>
-    /// <returns>A completed task when the snapshot is accepted. <para>快照通过校验时已完成的任务。</para></returns>
-    /// <exception cref="InvalidDataException">
-    /// The snapshot uses an unsupported format version or describes an invalid graph.
-    /// <para>快照使用了不受支持的格式版本或描述了无效的图。</para>
-    /// </exception>
+    /// <summary>Validates the snapshot through <see cref="NodeProjectSnapshot.EnsureSupportedVersion"/> and stores it under the given node project name; performs no I/O.
+    /// <para>先经 <see cref="NodeProjectSnapshot.EnsureSupportedVersion"/> 校验快照，再按给定节点项目名存储； 不执行任何 I/O。</para></summary>
+    /// <param name="name">Node project name identifying the document.<para>标识文档的节点项目名称。</para></param>
+    /// <param name="snapshot">Snapshot to validate and store.<para>待校验并存储的快照。</para></param>
+    /// <returns>A completed task when the snapshot is accepted.<para>快照通过校验时已完成的任务。</para></returns>
+    /// <exception cref="InvalidDataException">The snapshot uses an unsupported format version or describes an invalid graph.
+    /// <para>快照使用了不受支持的格式版本或描述了无效的图。</para></exception>
     public Task RestoreWorkflowAsync(string name, NodeProjectSnapshot snapshot)
     {
         snapshot.EnsureSupportedVersion();

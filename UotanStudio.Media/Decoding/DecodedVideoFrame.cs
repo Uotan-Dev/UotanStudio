@@ -59,30 +59,19 @@ public class DecodedVideoFrame : IDisposable
     /// <summary>False only for decoder-owned storage borrowed until the callback returns.</summary>
     internal bool ReturnBufferToPool { get; init; } = true;
 
-    /// <summary>
-    /// Creates a frame over an existing buffer, optionally skipping the NV12 plane-length
-    /// check so borrowed or derived layouts can validate their own size.
-    /// <para>基于既有缓冲区创建帧；可跳过 NV12 平面长度校验，让借用或派生布局自行确认大小。</para>
-    /// </summary>
-    /// <param name="buffer">
-    /// Buffer holding the plane data; borrowed native frames pass an empty array.
-    /// <para>承载平面数据的缓冲区；借用的原生帧传入空数组。</para>
-    /// </param>
-    /// <param name="length">Valid byte count in <paramref name="buffer"/>; compared against the array only when it is non-empty. <para><paramref name="buffer"/> 中的有效字节数；仅当缓冲区非空时才与数组长度比较。</para></param>
-    /// <param name="width">Frame width in pixels. <para>帧宽度（像素）。</para></param>
-    /// <param name="height">Frame height in pixels. <para>帧高度（像素）。</para></param>
-    /// <param name="stride">
-    /// Row pitch in bytes (may exceed width for alignment).
-    /// <para>行距（字节），为对齐可能大于宽度。</para>
-    /// </param>
-    /// <param name="timestampTicks">Presentation timestamp in ticks. <para>显示时间戳（tick）。</para></param>
-    /// <param name="pixelFormat">
-    /// The layout the buffer actually holds; only <see cref="VideoPixelFormat.Nv12"/> is checked
-    /// against the plane total, so packed layouts such as <see cref="VideoPixelFormat.Bgra32"/>
-    /// validate their own size.
-    /// <para>缓冲区实际持有的布局；仅 <see cref="VideoPixelFormat.Nv12"/> 会按平面总长校验，
-    /// 因此 <see cref="VideoPixelFormat.Bgra32"/> 等打包布局自行确认大小。</para>
-    /// </param>
+    /// <summary>Creates a frame over an existing buffer, optionally skipping the NV12 plane-length check so borrowed or derived layouts can validate their own size.
+    /// <para>基于既有缓冲区创建帧；可跳过 NV12 平面长度校验，让借用或派生布局自行确认大小。</para></summary>
+    /// <param name="buffer">Buffer holding the plane data; borrowed native frames pass an empty array.
+    /// <para>承载平面数据的缓冲区；借用的原生帧传入空数组。</para></param>
+    /// <param name="length">Valid byte count in <paramref name="buffer"/>; compared against the array only when it is non-empty.
+    /// <para><paramref name="buffer"/> 中的有效字节数；仅当缓冲区非空时才与数组长度比较。</para></param>
+    /// <param name="width">Frame width in pixels.<para>帧宽度（像素）。</para></param>
+    /// <param name="height">Frame height in pixels.<para>帧高度（像素）。</para></param>
+    /// <param name="stride">Row pitch in bytes (may exceed width for alignment).
+    /// <para>行距（字节），为对齐可能大于宽度。</para></param>
+    /// <param name="timestampTicks">Presentation timestamp in ticks.<para>显示时间戳（tick）。</para></param>
+    /// <param name="pixelFormat">The layout the buffer actually holds; only <see cref="VideoPixelFormat.Nv12"/> is checked against the plane total, so packed layouts such as <see cref="VideoPixelFormat.Bgra32"/> validate their own size.
+    /// <para>缓冲区实际持有的布局；仅 <see cref="VideoPixelFormat.Nv12"/> 会按平面总长校验， 因此 <see cref="VideoPixelFormat.Bgra32"/> 等打包布局自行确认大小。</para></param>
     protected DecodedVideoFrame(byte[] buffer, int length, int width, int height, int stride, long timestampTicks, VideoPixelFormat pixelFormat)
     {
         if (buffer is null)
@@ -113,22 +102,23 @@ public class DecodedVideoFrame : IDisposable
         TimestampTicks = timestampTicks;
     }
 
-    /// <summary>
-    /// Creates a frame that takes ownership of an existing pooled buffer.
-    /// <para>创建一个接管现有池化缓冲区所有权的帧。</para>
-    /// </summary>
-    /// <param name="buffer">The pooled buffer holding the NV12 planes. <para>持有 NV12 平面的池化缓冲区。</para></param>
-    /// <param name="length">The number of valid bytes in <paramref name="buffer"/>. <para><paramref name="buffer"/> 中的有效字节数。</para></param>
-    /// <param name="width">Frame width in pixels. <para>帧宽度（像素）。</para></param>
-    /// <param name="height">Frame height in pixels. <para>帧高度（像素）。</para></param>
-    /// <param name="stride">
-    /// Row pitch in bytes of the NV12 buffer (may exceed width for alignment).
-    /// <para>NV12 缓冲区的行距（字节），为对齐可能大于宽度。</para>
-    /// </param>
-    /// <param name="timestampTicks">Presentation timestamp in ticks. <para>显示时间戳（tick）。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="buffer"/> is <see langword="null"/>. <para><paramref name="buffer"/> 为 <see langword="null"/> 时抛出。</para></exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="length"/> is negative, exceeds <paramref name="buffer"/>, or the geometry is out of range. <para><paramref name="length"/> 为负、超出缓冲区，或几何参数超出范围时抛出。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="length"/> is smaller than the NV12 plane total. <para><paramref name="length"/> 小于 NV12 平面所需总字节数时抛出。</para></exception>
+    /// <summary>Creates a frame that takes ownership of an existing pooled buffer.
+    /// <para>创建一个接管现有池化缓冲区所有权的帧。</para></summary>
+    /// <param name="buffer">The pooled buffer holding the NV12 planes.
+    /// <para>持有 NV12 平面的池化缓冲区。</para></param>
+    /// <param name="length">The number of valid bytes in <paramref name="buffer"/>.
+    /// <para><paramref name="buffer"/> 中的有效字节数。</para></param>
+    /// <param name="width">Frame width in pixels.<para>帧宽度（像素）。</para></param>
+    /// <param name="height">Frame height in pixels.<para>帧高度（像素）。</para></param>
+    /// <param name="stride">Row pitch in bytes of the NV12 buffer (may exceed width for alignment).
+    /// <para>NV12 缓冲区的行距（字节），为对齐可能大于宽度。</para></param>
+    /// <param name="timestampTicks">Presentation timestamp in ticks.<para>显示时间戳（tick）。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="buffer"/> is <see langword="null"/>.
+    /// <para><paramref name="buffer"/> 为 <see langword="null"/> 时抛出。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="length"/> is negative, exceeds <paramref name="buffer"/>, or the geometry is out of range.
+    /// <para><paramref name="length"/> 为负、超出缓冲区，或几何参数超出范围时抛出。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="length"/> is smaller than the NV12 plane total.
+    /// <para><paramref name="length"/> 小于 NV12 平面所需总字节数时抛出。</para></exception>
     public DecodedVideoFrame(byte[] buffer, int length, int width, int height, int stride, long timestampTicks)
     {
         if (buffer is null)

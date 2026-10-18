@@ -23,10 +23,8 @@ internal sealed class NativeSepolicyTools(NativeFileSystemTools tools)
 
     private const int MaximumSelectorLength = 128;
 
-    /// <summary>
-    /// Runs <c>sesearch -A</c> against a binary policy file and parses the printed rules.
-    /// <para>针对二进制策略文件运行 <c>sesearch -A</c> 并把打印出的规则解析为条目。</para>
-    /// </summary>
+    /// <summary>Runs <c>sesearch -A</c> against a binary policy file and parses the printed rules.
+    /// <para>针对二进制策略文件运行 <c>sesearch -A</c> 并把打印出的规则解析为条目。</para></summary>
     /// <param name="policyPath">Host path of the binary policy file (for example a pre-CIL <c>sepolicy</c>); the file must exist.
     /// <para>二进制策略文件的宿主路径（例如 pre-CIL 的 <c>sepolicy</c>）；文件必须存在。</para></param>
     /// <param name="query">Optional source type, target type, object class and permission selectors; <see langword="null"/> selects every allow rule.
@@ -77,15 +75,13 @@ internal sealed class NativeSepolicyTools(NativeFileSystemTools tools)
         return rules;
     }
 
-    /// <summary>
-    /// Runs the read-only <c>seinfo -a</c> summary over a binary policy file and returns the raw result.
-    /// <para>对二进制策略文件运行只读的 <c>seinfo -a</c> 汇总，原样返回运行结果。</para>
-    /// </summary>
+    /// <summary>Runs the read-only <c>seinfo -a</c> summary over a binary policy file and returns the raw result.
+    /// <para>对二进制策略文件运行只读的 <c>seinfo -a</c> 汇总，原样返回运行结果。</para></summary>
     /// <param name="policyPath">Host path of the binary policy file; the file must exist.
     /// <para>二进制策略文件的宿主路径；文件必须存在。</para></param>
     /// <param name="cancellationToken">Cancels path translation and the tool run.
     /// <para>取消路径转换与工具运行。</para></param>
-    /// <returns>The raw summary output of <c>seinfo</c>. <para><c>seinfo</c> 的原始汇总输出。</para></returns>
+    /// <returns>The raw summary output of <c>seinfo</c>.<para><c>seinfo</c> 的原始汇总输出。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="policyPath"/> is <see langword="null"/>.
     /// <para><paramref name="policyPath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="FileNotFoundException">The policy file does not exist.

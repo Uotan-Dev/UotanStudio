@@ -11,29 +11,17 @@ namespace UotanStudio.Firmware.Archive.Formats.Tar;
 /// </summary>
 public sealed class TarArchiveWriter
 {
-    /// <summary>
-    /// Writes all supplied entries to a TAR stream.
-    /// <para>将所有提供的条目写入 TAR 流。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Writable destination kept open by the writer.
-    /// <para>可写目标流，写入器不会将其关闭。</para>
-    /// </param>
-    /// <param name="entries">
-    /// Entries to serialize; any entry data stream is disposed once consumed or on failure.
-    /// <para>待序列化的条目；条目的数据流在被消费或失败时会被释放。</para>
-    /// </param>
-    /// <param name="format">
-    /// <see cref="ArchiveFormat.Tar"/> selects PAX records with extended attributes; any other value selects Ustar.
-    /// <para><see cref="ArchiveFormat.Tar"/> 选择带扩展属性的 PAX 记录；其他值选择 Ustar。</para>
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>. <para><paramref name="stream"/> 或 <paramref name="entries"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArchiveCorruptedException">
-    /// A declared length contradicts the entry data, or a source carries bytes beyond its declared length.
-    /// <para>声明长度与条目数据不符，或源数据超出声明长度。</para>
-    /// </exception>
+    /// <summary>Writes all supplied entries to a TAR stream.<para>将所有提供的条目写入 TAR 流。</para></summary>
+    /// <param name="stream">Writable destination kept open by the writer.
+    /// <para>可写目标流，写入器不会将其关闭。</para></param>
+    /// <param name="entries">Entries to serialize; any entry data stream is disposed once consumed or on failure.
+    /// <para>待序列化的条目；条目的数据流在被消费或失败时会被释放。</para></param>
+    /// <param name="format"><see cref="ArchiveFormat.Tar"/> selects PAX records with extended attributes; any other value selects Ustar.
+    /// <para><see cref="ArchiveFormat.Tar"/> 选择带扩展属性的 PAX 记录；其他值选择 Ustar。</para></param>
+    /// <exception cref="ArgumentException"><paramref name="stream"/> or <paramref name="entries"/> is <see langword="null"/>.
+    /// <para><paramref name="stream"/> 或 <paramref name="entries"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArchiveCorruptedException">A declared length contradicts the entry data, or a source carries bytes beyond its declared length.
+    /// <para>声明长度与条目数据不符，或源数据超出声明长度。</para></exception>
     public void WriteAll(Stream stream, IEnumerable<ArchiveEntry> entries, ArchiveFormat format)
     {
         ArgumentNullException.ThrowIfNull(stream);

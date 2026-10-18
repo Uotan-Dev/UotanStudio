@@ -209,19 +209,10 @@ public static class StreamingNandRegisters
         return isWideFlash ? status != 0xFFFF0000 : status != 0xFF0000;
     }
 
-    /// <summary>
-    /// Evaluates the ECC verdict after a codeword read.
-    /// <para>评估一次码字读后的 ECC 结论。</para>
-    /// When the buffer-error bit is set and the ECC-corrected bit of the command-register window
-    /// reads clear, the read is an uncorrectable error (-1); otherwise the corrected-bit count is the
-    /// low five bits. The window test <c>(NAND_FLASH_CMD + 0xEC) &amp; 0x40</c> feeds the word read
-    /// back from <c>NAND_FLASH_CMD</c>, because the <c>nandregs</c> attribute is itself a mempeek; the
-    /// operand is therefore that peeked value, not an address.
-    /// <para>当缓冲区错误位为 1 且命令寄存器窗口中 ECC 已纠正位读到 0 时为不可纠错（-1），否则低 5 位
-    /// 是纠正位数。窗口测试 <c>(NAND_FLASH_CMD + 0xEC) &amp; 0x40</c> 用的是从 <c>NAND_FLASH_CMD</c>
-    /// 读回的那个字，因为 <c>nandregs</c> 属性本身就是一次 mempeek，所以这里的入参是该读回值而不是地址。</para>
-    /// </summary>
-    /// <param name="bufferStatus">The raw NAND_BUFFER_STATUS value. <para>原始 NAND_BUFFER_STATUS 值。</para></param>
+    /// <summary>Evaluates the ECC verdict after a codeword read.
+    /// <para>评估一次码字读后的 ECC 结论。</para>When the buffer-error bit is set and the ECC-corrected bit of the command-register window reads clear, the read is an uncorrectable error (-1); otherwise the corrected-bit count is the low five bits. The window test <c>(NAND_FLASH_CMD + 0xEC) &amp; 0x40</c> feeds the word read back from <c>NAND_FLASH_CMD</c>, because the <c>nandregs</c> attribute is itself a mempeek; the operand is therefore that peeked value, not an address.<para>当缓冲区错误位为 1 且命令寄存器窗口中 ECC 已纠正位读到 0 时为不可纠错（-1），否则低 5 位 是纠正位数。窗口测试 <c>(NAND_FLASH_CMD + 0xEC) &amp; 0x40</c> 用的是从 <c>NAND_FLASH_CMD</c> 读回的那个字，因为 <c>nandregs</c> 属性本身就是一次 mempeek，所以这里的入参是该读回值而不是地址。</para></summary>
+    /// <param name="bufferStatus">The raw NAND_BUFFER_STATUS value.
+    /// <para>原始 NAND_BUFFER_STATUS 值。</para></param>
     /// <param name="flashCommandRegisterValue">The word read back from NAND_FLASH_CMD.
     /// <para>从 NAND_FLASH_CMD 读回的字。</para></param>
     /// <returns>-1 for an uncorrectable error, else the corrected-bit count.

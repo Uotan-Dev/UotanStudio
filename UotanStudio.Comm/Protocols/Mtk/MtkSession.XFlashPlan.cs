@@ -2,23 +2,15 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
-    /// <summary>
-    /// Executes a preflighted one-shot plan under one session operation lease. Failure stops
-    /// subsequent operations without replay or rollback. Progress callbacks must not wait
-    /// synchronously for another operation on this session.
-    /// <para>在单个会话操作租约下执行预先校验过的一次性计划。失败会中止后续操作，
-    /// 且不会重放或回滚。进度回调不得同步等待本会话的另一个操作。</para>
-    /// </summary>
+    /// <summary>Executes a preflighted one-shot plan under one session operation lease. Failure stops subsequent operations without replay or rollback. Progress callbacks must not wait synchronously for another operation on this session.
+    /// <para>在单个会话操作租约下执行预先校验过的一次性计划。失败会中止后续操作， 且不会重放或回滚。进度回调不得同步等待本会话的另一个操作。</para></summary>
     /// <param name="plan">A retained plan prepared against this session's exact storage snapshot.
     /// <para>基于本会话确切存储快照准备的、已被持有的计划。</para></param>
     /// <param name="progress">Optional phase-local progress; success is indicated by the returned result.
     /// <para>可选的阶段内进度；是否成功以返回结果为准。</para></param>
-    /// <param name="eraseTimeoutMs">The deadline for each erase range.
-    /// <para>每个擦除范围的截止时间。</para></param>
-    /// <param name="cancellationToken">The operation cancellation token.
-    /// <para>操作取消令牌。</para></param>
-    /// <returns>Completion totals, excluding sparse holes.
-    /// <para>完成总量，不含稀疏空洞。</para></returns>
+    /// <param name="eraseTimeoutMs">The deadline for each erase range.<para>每个擦除范围的截止时间。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
+    /// <returns>Completion totals, excluding sparse holes.<para>完成总量，不含稀疏空洞。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="plan"/> is null.
     /// <para><paramref name="plan"/> 为 null。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="eraseTimeoutMs"/> is outside 1 ms to 24 hours.

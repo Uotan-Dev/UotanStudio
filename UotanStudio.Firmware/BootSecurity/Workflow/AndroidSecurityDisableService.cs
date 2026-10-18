@@ -74,35 +74,24 @@ internal static class AndroidSecurityDisableService
 {
     private const int MaximumFstabBytes = 4 * 1024 * 1024;
 
-    /// <summary>
-    /// Patches each fstab, optionally disables VBMeta verification, and atomically publishes all results
-    /// from a staging directory, restoring prior outputs when any publication step fails.
-    /// <para>逐个修补 fstab，可选地禁用 VBMeta 校验，并从暂存目录原子化发布全部结果；任一发布步骤失败时恢复原有输出。</para>
-    /// </summary>
-    /// <param name="request">
-    /// Inputs describing the fstab files, optional vbmeta image, output directory and enabled steps.
-    /// <para>描述 fstab 文件、可选 vbmeta 镜像、输出目录与启用步骤的输入。</para>
-    /// </param>
-    /// <param name="cancellationToken">Checked before each file and before each publish move; a canceled run never
-    /// overwrites outputs that were not already rolled back.
+    /// <summary>Patches each fstab, optionally disables VBMeta verification, and atomically publishes all results from a staging directory, restoring prior outputs when any publication step fails.
+    /// <para>逐个修补 fstab，可选地禁用 VBMeta 校验，并从暂存目录原子化发布全部结果；任一发布步骤失败时恢复原有输出。</para></summary>
+    /// <param name="request">Inputs describing the fstab files, optional vbmeta image, output directory and enabled steps.
+    /// <para>描述 fstab 文件、可选 vbmeta 镜像、输出目录与启用步骤的输入。</para></param>
+    /// <param name="cancellationToken">Checked before each file and before each publish move; a canceled run never overwrites outputs that were not already rolled back.
     /// <para>在每个文件处理前与每次发布移动前检查；被取消的运行不会留下未回滚的覆盖。</para></param>
     /// <returns>Absolute output paths in request order plus change descriptions; unchanged fstab files add no entry.
     /// <para>按请求顺序返回的输出绝对路径及变更描述；内容未变的 fstab 文件不产生条目。</para></returns>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="request"/> is <see langword="null"/>.
-    /// <para><paramref name="request"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">The output directory is blank, no security change is requested, or
-    /// verification disabling is enabled without a vbmeta path.
+    /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.
+    /// <para><paramref name="request"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException">The output directory is blank, no security change is requested, or verification disabling is enabled without a vbmeta path.
     /// <para>输出目录为空白、未请求任何安全变更，或启用校验禁用却未提供 vbmeta 路径。</para></exception>
-    /// <exception cref="FileNotFoundException">
-    /// An fstab or vbmeta input file does not exist.
-    /// <para>某个 fstab 或 vbmeta 输入文件不存在。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">An fstab exceeds 4 MiB, output file names collide, or the VBMeta
-    /// rewrite reported failure.
+    /// <exception cref="FileNotFoundException">An fstab or vbmeta input file does not exist.
+    /// <para>某个 fstab 或 vbmeta 输入文件不存在。</para></exception>
+    /// <exception cref="InvalidDataException">An fstab exceeds 4 MiB, output file names collide, or the VBMeta rewrite reported failure.
     /// <para>某个 fstab 超过 4 MiB、输出文件名冲突，或 VBMeta 重写报告失败。</para></exception>
-    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled.
+    /// <para>令牌被取消。</para></exception>
     /// <exception cref="AggregateException">Publication failed and rolling back already-published files also failed.
     /// <para>发布失败且回滚已发布文件同样失败。</para></exception>
     public static async Task<AndroidSecurityDisableResult> ApplyAsync(

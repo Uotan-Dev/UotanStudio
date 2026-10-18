@@ -52,24 +52,14 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
     /// <value>The stable name of this discovery source. <para>该发现源的稳定名称。</para></value>
     public string Name => SourceName;
 
-    /// <summary>
-    /// Enumerates backend USB devices and projects each into a <c>direct-usb</c> endpoint; while a
-    /// debug-bridge server is listening, that protocol's endpoints are suppressed.
-    /// <para>枚举后端的 USB 设备并把每个设备投影为 <c>direct-usb</c> 端点；调试桥 server 监听时
-    /// 抑制该协议的端点。</para>
-    /// </summary>
-    /// <param name="cancellationToken">
-    /// Cancels USB enumeration; it is re-checked once enumeration completes.
-    /// <para>取消 USB 枚举；枚举完成后会再次检查取消。</para>
-    /// </param>
-    /// <returns>
-    /// The surviving direct-USB endpoints in enumeration order.
-    /// <para>按枚举顺序保留下来的 direct-usb 端点。</para>
-    /// </returns>
-    /// <exception cref="InvalidDataException">
-    /// A device was enumerated without an exact device key or device path.
-    /// <para>某设备枚举结果缺少精确的设备键或设备路径。</para>
-    /// </exception>
+    /// <summary>Enumerates backend USB devices and projects each into a <c>direct-usb</c> endpoint; while a debug-bridge server is listening, that protocol's endpoints are suppressed.
+    /// <para>枚举后端的 USB 设备并把每个设备投影为 <c>direct-usb</c> 端点；调试桥 server 监听时 抑制该协议的端点。</para></summary>
+    /// <param name="cancellationToken">Cancels USB enumeration; it is re-checked once enumeration completes.
+    /// <para>取消 USB 枚举；枚举完成后会再次检查取消。</para></param>
+    /// <returns>The surviving direct-USB endpoints in enumeration order.
+    /// <para>按枚举顺序保留下来的 direct-usb 端点。</para></returns>
+    /// <exception cref="InvalidDataException">A device was enumerated without an exact device key or device path.
+    /// <para>某设备枚举结果缺少精确的设备键或设备路径。</para></exception>
     public async Task<IReadOnlyList<DeviceEndpoint>> DiscoverAsync(CancellationToken cancellationToken)
     {
         using var probeScope = DebugBridgeRoute.BeginProbeScope();

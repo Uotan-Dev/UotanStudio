@@ -163,29 +163,21 @@ public sealed partial class EdlSession : IProtocolSession
         }
     }
 
-    /// <summary>
-    /// Attaches the endpoint evidence used to publish relink offers when this link fails.
-    /// <para>附加端点证据，用于本链路失败时生成重链提议。</para>
-    /// </summary>
+    /// <summary>Attaches the endpoint evidence used to publish relink offers when this link fails.
+    /// <para>附加端点证据，用于本链路失败时生成重链提议。</para></summary>
     /// <remarks>The caller supplies the endpoint the session transport was leased on together with the
     /// lease generation; the session never opens or reopens transports itself. Calling this after a
     /// failure means the next failure publishes an offer.</remarks>
-    /// <param name="previousEndpoint">
-    /// The exact endpoint currently backing this session. <para>当前支撑本会话的精确端点。</para>
-    /// </param>
-    /// <param name="generation">
-    /// The transport generation stamped on the lease, or <see langword="null"/>.
-    /// <para>租约盖印的传输代际，或 <see langword="null"/>。</para>
-    /// </param>
-    /// <param name="timeout">
-    /// Recommended relink wait budget between 1 ms and 24 h. <para>建议的重链等待预算，介于 1 毫秒与 24 小时。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="previousEndpoint"/> is <see langword="null"/>. <para><paramref name="previousEndpoint"/> 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The timeout leaves the supported range. <para>截止时间超出支持范围。</para>
-    /// </exception>
+    /// <param name="previousEndpoint">The exact endpoint currently backing this session.
+    /// <para>当前支撑本会话的精确端点。</para></param>
+    /// <param name="generation">The transport generation stamped on the lease, or <see langword="null"/>.
+    /// <para>租约盖印的传输代际，或 <see langword="null"/>。</para></param>
+    /// <param name="timeout">Recommended relink wait budget between 1 ms and 24 h.
+    /// <para>建议的重链等待预算，介于 1 毫秒与 24 小时。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="previousEndpoint"/> is <see langword="null"/>.
+    /// <para><paramref name="previousEndpoint"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException">The timeout leaves the supported range.
+    /// <para>截止时间超出支持范围。</para></exception>
     public void AttachRelinkContext(DeviceEndpoint previousEndpoint, TransportGeneration? generation = null,
         TimeSpan? timeout = null)
     {
@@ -337,35 +329,23 @@ public sealed partial class EdlSession : IProtocolSession
 
     /// <summary>Initializes with an evidence-backed programmer selection and a mandatory hash preflight.
     /// <para>使用有证据支撑的 programmer 选择结果与强制哈希预检初始化。</para></summary>
-    /// <remarks>The selection must be <see cref="EdlProgrammerMatchDecision.Matched"/> with a descriptor,
-    /// and the SHA-256 measured from <paramref name="programmerImage"/> must equal both the descriptor hash
-    /// and, when recorded, the selection's measured hash. Any violation fails before the operation gate is
-    /// entered, so no byte reaches the device. The stream must be readable and seekable.</remarks>
-    /// <param name="selection">
-    /// The catalog selection produced for this device. <para>针对该设备生成的目录选择结果。</para>
-    /// </param>
-    /// <param name="programmerImage">
-    /// The caller-owned programmer stream. <para>调用方持有的 programmer 流。</para>
-    /// </param>
-    /// <param name="options">
-    /// Optional immutable startup requirements. <para>可选的不可变启动要求。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The operation cancellation token. <para>操作取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// A task completing after preflight, Sahara upload and Firehose configuration succeed.
-    /// <para>在预检、Sahara 上传与 Firehose 配置均成功后完成的任务。</para>
-    /// </returns>
-    /// <exception cref="EdlException">
-    /// The decision is not a unique match (<see cref="EdlErrorCode.NeedsProgrammerSelection"/>) or the
-    /// measured hash contradicts the descriptor (<see cref="EdlErrorCode.ProgrammerMismatch"/>).
-    /// <para>结论并非唯一匹配（<see cref="EdlErrorCode.NeedsProgrammerSelection"/>），或实测哈希与描述符矛盾
-    /// （<see cref="EdlErrorCode.ProgrammerMismatch"/>）。</para>
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// The stream cannot be hashed without device interaction. <para>流无法在不接触设备的情况下完成哈希。</para>
-    /// </exception>
+    /// <remarks>The selection must be <see cref="EdlProgrammerMatchDecision.Matched"/>with a
+    /// descriptor, and the SHA-256 measured from <paramref name="programmerImage"/>must equal both the
+    /// descriptor hash and, when recorded, the selection's measured hash. Any violation fails before
+    /// the operation gate is entered, so no byte reaches the device. The stream must be readable and
+    /// seekable.</remarks>
+    /// <param name="selection">The catalog selection produced for this device.
+    /// <para>针对该设备生成的目录选择结果。</para></param>
+    /// <param name="programmerImage">The caller-owned programmer stream.
+    /// <para>调用方持有的 programmer 流。</para></param>
+    /// <param name="options">Optional immutable startup requirements.<para>可选的不可变启动要求。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
+    /// <returns>A task completing after preflight, Sahara upload and Firehose configuration succeed.
+    /// <para>在预检、Sahara 上传与 Firehose 配置均成功后完成的任务。</para></returns>
+    /// <exception cref="EdlException">The decision is not a unique match (<see cref="EdlErrorCode.NeedsProgrammerSelection"/>) or the measured hash contradicts the descriptor (<see cref="EdlErrorCode.ProgrammerMismatch"/>).
+    /// <para>结论并非唯一匹配（<see cref="EdlErrorCode.NeedsProgrammerSelection"/>），或实测哈希与描述符矛盾 （<see cref="EdlErrorCode.ProgrammerMismatch"/>）。</para></exception>
+    /// <exception cref="ArgumentException">The stream cannot be hashed without device interaction.
+    /// <para>流无法在不接触设备的情况下完成哈希。</para></exception>
     public async Task InitializeAsync(EdlProgrammerSelection selection, Stream programmerImage,
         EdlInitializationOptions? options, CancellationToken cancellationToken = default)
     {
@@ -672,28 +652,16 @@ public sealed partial class EdlSession : IProtocolSession
         return await Firehose!.ReadAsync(startSector, numSectors, filename, physicalPartition, cancellationToken);
     }
 
-    /// <summary>
-    /// Streams a partition range into a caller-owned destination without allocating a
-    /// destination-sized buffer, hashing every transferred byte and reporting cumulative progress.
-    /// <para>将分区范围流式写入调用方持有的目标，不分配等同目标大小的缓冲，对每个传输字节计算
-    /// 哈希并上报累计进度。</para>
-    /// </summary>
-    /// <remarks>
-    /// Unlike <see cref="ReadPartitionAsync"/>, this path is not bounded by the 16 MiB in-memory
-    /// limit. Atomic publication is a host responsibility: publish by writing to a temporary file
-    /// and renaming it only after this call returns; a cancelled or failed read leaves the
-    /// destination partially written and must never be published as a completed backup. Short
-    /// reads and hash mismatches throw before a result is produced.
-    /// <para>与 <see cref="ReadPartitionAsync"/> 不同，本路径不受 16 MiB 内存上限约束。原子发布
-    /// 是宿主职责：先写临时文件，只在本调用返回后重命名发布；被取消或失败的读取会留下部分写入的
-    /// 目标，绝不能作为完成备份发布。短读与哈希不符会在产出结果前抛出。</para>
-    /// </remarks>
+    /// <summary>Streams a partition range into a caller-owned destination without allocating a destination-sized buffer, hashing every transferred byte and reporting cumulative progress.
+    /// <para>将分区范围流式写入调用方持有的目标，不分配等同目标大小的缓冲，对每个传输字节计算 哈希并上报累计进度。</para></summary>
+    /// <remarks>Unlike <see cref="ReadPartitionAsync"/>, this path is not bounded by the 16 MiB in-memory limit. Atomic publication is a host responsibility: publish by writing to a temporary file and renaming it only after this call returns; a cancelled or failed read leaves the destination partially written and must never be published as a completed backup. Short reads and hash mismatches throw before a result is produced.
+    /// <para>与 <see cref="ReadPartitionAsync"/> 不同，本路径不受 16 MiB 内存上限约束。原子发布 是宿主职责：先写临时文件，只在本调用返回后重命名发布；被取消或失败的读取会留下部分写入的 目标，绝不能作为完成备份发布。短读与哈希不符会在产出结果前抛出。</para></remarks>
     /// <param name="destination">Writable, caller-owned destination stream kept open for the whole call.
     /// <para>可写、由调用方持有并在整个调用期间保持打开的目标流。</para></param>
-    /// <param name="startSector">The starting sector. <para>起始扇区。</para></param>
-    /// <param name="numSectors">The number of sectors. <para>扇区数量。</para></param>
-    /// <param name="filename">The target filename. <para>目标文件名。</para></param>
-    /// <param name="physicalPartition">The physical partition number. <para>物理分区编号。</para></param>
+    /// <param name="startSector">The starting sector.<para>起始扇区。</para></param>
+    /// <param name="numSectors">The number of sectors.<para>扇区数量。</para></param>
+    /// <param name="filename">The target filename.<para>目标文件名。</para></param>
+    /// <param name="physicalPartition">The physical partition number.<para>物理分区编号。</para></param>
     /// <param name="progress">Optional cumulative transferred bytes; not evidence of completion.
     /// <para>可选的累计传输字节；不是完成证据。</para></param>
     /// <param name="expectedSha256Hex">Optional lowercase hex SHA-256 the transferred bytes must match.
@@ -702,8 +670,7 @@ public sealed partial class EdlSession : IProtocolSession
     /// <para>贯穿传输与目标写入的取消令牌。</para></param>
     /// <returns>The measured result with length, hash, and the device acknowledgement.
     /// <para>带长度、哈希与设备确认的计量结果。</para></returns>
-    /// <exception cref="EdlException">Thrown for short reads, missing completion acknowledgements, or
-    /// hash contradictions; the partially written destination is left unpublished.
+    /// <exception cref="EdlException">Thrown for short reads, missing completion acknowledgements, or hash contradictions; the partially written destination is left unpublished.
     /// <para>短读、缺失完成确认或哈希矛盾时抛出；部分写入的目标保持未发布。</para></exception>
     public async Task<EdlStreamReadResult> ReadPartitionToStreamAsync(Stream destination, long startSector, long numSectors,
         string filename = "partition.bin", int physicalPartition = 0, IProgress<long>? progress = null,

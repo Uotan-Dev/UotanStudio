@@ -95,28 +95,24 @@ public static class ScrcpyControlMessageWriter
         return msg;
     }
 
-    /// <summary>
-    /// Builds TYPE_INJECT_TOUCH_EVENT (32 bytes).
-    /// <para>构建 TYPE_INJECT_TOUCH_EVENT（32 字节）。</para>
-    /// </summary>
-    /// <param name="action">Motion action (down/up/move). <para>动作（按下/抬起/移动）。</para></param>
+    /// <summary>Builds TYPE_INJECT_TOUCH_EVENT (32 bytes).
+    /// <para>构建 TYPE_INJECT_TOUCH_EVENT（32 字节）。</para></summary>
+    /// <param name="action">Motion action (down/up/move).<para>动作（按下/抬起/移动）。</para></param>
     /// <param name="pointerId">Pointer id as signed 64-bit (<see cref="ScrcpyConstants.PointerIdMouse"/> = -2).
     /// <para>指针 ID（有符号 64 位，鼠标为 -2）。</para></param>
-    /// <param name="x">X in video pixel coordinates. <para>视频像素坐标 X。</para></param>
-    /// <param name="y">Y in video pixel coordinates. <para>视频像素坐标 Y。</para></param>
-    /// <param name="width">Decoded frame width. <para>解码帧宽度。</para></param>
-    /// <param name="height">Decoded frame height. <para>解码帧高度。</para></param>
+    /// <param name="x">X in video pixel coordinates.<para>视频像素坐标 X。</para></param>
+    /// <param name="y">Y in video pixel coordinates.<para>视频像素坐标 Y。</para></param>
+    /// <param name="width">Decoded frame width.<para>解码帧宽度。</para></param>
+    /// <param name="height">Decoded frame height.<para>解码帧高度。</para></param>
     /// <param name="pressure">Fixed-point pressure 0..0xFFFF (0xFFFF = 1.0).
     /// <para>定点压力 0..0xFFFF（0xFFFF = 1.0）。</para></param>
     /// <param name="actionButton">Button associated with the action (press/release).
     /// <para>与动作关联的按键（按下/释放）。</para></param>
     /// <param name="buttons">Current AMOTION_EVENT_BUTTON_* button state.
     /// <para>当前 AMOTION_EVENT_BUTTON_* 按键状态。</para></param>
-    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="width"/> or <paramref name="height"/> is not positive, or a coordinate is outside the frame.
-    /// <para><paramref name="width"/> 或 <paramref name="height"/> 不为正，或坐标超出帧范围。</para>
-    /// </exception>
+    /// <returns>The encoded message.<para>编码后的消息。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="width"/> or <paramref name="height"/> is not positive, or a coordinate is outside the frame.
+    /// <para><paramref name="width"/> 或 <paramref name="height"/> 不为正，或坐标超出帧范围。</para></exception>
     public static byte[] InjectTouchEvent(
         byte action,
         long pointerId,
@@ -139,36 +135,24 @@ public static class ScrcpyControlMessageWriter
         return msg;
     }
 
-    /// <summary>
-    /// Builds TYPE_INJECT_SCROLL_EVENT (21 bytes).
-    /// <para>构建 TYPE_INJECT_SCROLL_EVENT（21 字节）。</para>
-    /// </summary>
-    /// <param name="x">X in video pixel coordinates. <para>视频像素坐标 X。</para></param>
-    /// <param name="y">Y in video pixel coordinates. <para>视频像素坐标 Y。</para></param>
-    /// <param name="width">Decoded frame width. <para>解码帧宽度。</para></param>
-    /// <param name="height">Decoded frame height. <para>解码帧高度。</para></param>
+    /// <summary>Builds TYPE_INJECT_SCROLL_EVENT (21 bytes).
+    /// <para>构建 TYPE_INJECT_SCROLL_EVENT（21 字节）。</para></summary>
+    /// <param name="x">X in video pixel coordinates.<para>视频像素坐标 X。</para></param>
+    /// <param name="y">Y in video pixel coordinates.<para>视频像素坐标 Y。</para></param>
+    /// <param name="width">Decoded frame width.<para>解码帧宽度。</para></param>
+    /// <param name="height">Decoded frame height.<para>解码帧高度。</para></param>
     /// <param name="hScroll">Horizontal scroll in ticks, positive scrolls right.
     /// <para>水平滚动刻度，正数向右。</para></param>
     /// <param name="vScroll">Vertical scroll in ticks, positive scrolls up (wire semantics).
     /// <para>垂直滚动刻度，正数向上（线路语义）。</para></param>
-    /// <param name="buttons">AMOTION_EVENT_BUTTON_* mask. <para>AMOTION_EVENT_BUTTON_* 掩码。</para></param>
-    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="width"/> or <paramref name="height"/> is not positive, or a coordinate is outside the frame.
-    /// <para><paramref name="width"/> 或 <paramref name="height"/> 不为正，或坐标超出帧范围。</para>
-    /// </exception>
+    /// <param name="buttons">AMOTION_EVENT_BUTTON_* mask.
+    /// <para>AMOTION_EVENT_BUTTON_* 掩码。</para></param>
+    /// <returns>The encoded message.<para>编码后的消息。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="width"/> or <paramref name="height"/> is not positive, or a coordinate is outside the frame.
+    /// <para><paramref name="width"/> 或 <paramref name="height"/> 不为正，或坐标超出帧范围。</para></exception>
     /// <remarks>
-    /// <para>
-    /// 滚动量为 i16 定点数，布局为 type(1) + position(12) + hScroll(2) + vScroll(2) + buttons(4)。
-    /// 服务端会把解码出的 [-1, 1] 定点值再乘 16 才作为最终滚动量（其注释说明实际范围是 [-16, 16]），
-    /// 因此 1 刻度对应 0x0800。
-    /// </para>
-    /// <para>
-    /// Scroll amounts are i16 fixed-point; layout: type(1) + position(12) + hScroll(2) +
-    /// vScroll(2) + buttons(4). The server multiplies the decoded [-1, 1] fixed-point value by 16
-    /// before using it (its reader comment states the real range is [-16, 16]), so one tick is 0x0800.
-    /// </para>
-    /// </remarks>
+    /// <para> 滚动量为 i16 定点数，布局为 type(1) + position(12) + hScroll(2) + vScroll(2) + buttons(4)。 服务端会把解码出的 [-1, 1] 定点值再乘 16 才作为最终滚动量（其注释说明实际范围是 [-16, 16]）， 因此 1 刻度对应 0x0800。 </para>
+    /// <para> Scroll amounts are i16 fixed-point; layout: type(1) + position(12) + hScroll(2) + vScroll(2) + buttons(4). The server multiplies the decoded [-1, 1] fixed-point value by 16 before using it (its reader comment states the real range is [-16, 16]), so one tick is 0x0800. </para></remarks>
     public static byte[] InjectScrollEvent(int x, int y, int width, int height, float hScroll, float vScroll, uint buttons = 0)
     {
         var msg = new byte[21];
@@ -248,17 +232,15 @@ public static class ScrcpyControlMessageWriter
     public static byte[] SetDisplayPower(bool on)
         => [ScrcpyConstants.ControlTypeSetDisplayPower, on ? ScrcpyConstants.DisplayPowerOn : ScrcpyConstants.DisplayPowerOff];
 
-    /// <summary>
-    /// Builds TYPE_SET_CLIPBOARD (type + sequence id + paste flag + length + text).
-    /// <para>构建 TYPE_SET_CLIPBOARD（类型 + 序号 + 粘贴标志 + 长度 + 文本）。</para>
-    /// </summary>
+    /// <summary>Builds TYPE_SET_CLIPBOARD (type + sequence id + paste flag + length + text).
+    /// <para>构建 TYPE_SET_CLIPBOARD（类型 + 序号 + 粘贴标志 + 长度 + 文本）。</para></summary>
     /// <param name="text">Clipboard content (max 300 UTF-8 bytes).
     /// <para>剪贴板内容（UTF-8 最多 300 字节）。</para></param>
     /// <param name="paste">Whether to also paste on the focused field.
     /// <para>是否同时粘贴到焦点输入框。</para></param>
     /// <param name="sequence">Request sequence echoed by ACK_CLIPBOARD.
     /// <para>由 ACK_CLIPBOARD 回显的请求序号。</para></param>
-    /// <returns>The encoded message. <para>编码后的消息。</para></returns>
+    /// <returns>The encoded message.<para>编码后的消息。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="text"/> encodes to more than 300 UTF-8 bytes.
     /// <para><paramref name="text"/> 的 UTF-8 编码超过 300 字节。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="text"/> is <see langword="null"/>.

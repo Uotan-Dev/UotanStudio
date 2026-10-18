@@ -63,20 +63,10 @@ public class SuperNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>
-    /// Dispatches super logic by the node type key (TypeKey): Image.Super.Unpack extracts logical partitions
-    /// from a super image, and Image.Super.Pack synthesizes a super image from partition images.
-    /// <para>按节点类型键（TypeKey）分发对应的 super 逻辑：Image.Super.Unpack 从 super 镜像解出逻辑分区、
-    /// Image.Super.Pack 将分区镜像合成为 super 镜像。</para>
-    /// </summary>
-    /// <param name="context">
-    /// The execution context.
-    /// <para>执行上下文。</para>
-    /// </param>
-    /// <returns>
-    /// A task representing the asynchronous execution.
-    /// <para>表示异步执行的任务。</para>
-    /// </returns>
+    /// <summary>Dispatches super logic by the node type key (TypeKey): Image.Super.Unpack extracts logical partitions from a super image, and Image.Super.Pack synthesizes a super image from partition images.
+    /// <para>按节点类型键（TypeKey）分发对应的 super 逻辑：Image.Super.Unpack 从 super 镜像解出逻辑分区、 Image.Super.Pack 将分区镜像合成为 super 镜像。</para></summary>
+    /// <param name="context">The execution context.<para>执行上下文。</para></param>
+    /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
     {
         try

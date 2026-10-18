@@ -134,10 +134,8 @@ internal sealed class DatFormatHandler : IFormatHandler
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Reconstructs the partition image from a full-OTA DAT pair.
-    /// <para>由全量 OTA DAT 镜像对重建分区镜像。</para>
-    /// </summary>
+    /// <summary>Reconstructs the partition image from a full-OTA DAT pair.
+    /// <para>由全量 OTA DAT 镜像对重建分区镜像。</para></summary>
     /// <param name="filePath">Transfer-list or companion data file path identifying the DAT pair.
     /// <para>标识 DAT 镜像对的 transfer list 或配套数据文件路径。</para></param>
     /// <param name="outputDirectory">Directory that receives the reconstructed <c>&lt;stem&gt;.img</c>.
@@ -146,8 +144,7 @@ internal sealed class DatFormatHandler : IFormatHandler
     /// <para>可选解包选项；其进度接收器收到百分比更新。可为 <see langword="null"/>。</para></param>
     /// <param name="cancellationToken">Cancels the reconstruction; cancellation faults the returned task.
     /// <para>取消重建；取消时返回的任务将以异常结束。</para></param>
-    /// <returns>Success with the output image name and size metadata, or a failure when the pair is incomplete,
-    /// the list does not parse, the pair is incremental, or writing fails.
+    /// <returns>Success with the output image name and size metadata, or a failure when the pair is incomplete, the list does not parse, the pair is incremental, or writing fails.
     /// <para>成功时返回输出镜像名与大小元数据；镜像对不完整、解析失败、增量对或写入失败时返回失败结果。</para></returns>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
@@ -231,56 +228,34 @@ internal sealed class DatFormatHandler : IFormatHandler
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Packs a source image (raw or Android-sparse) into the DAT image pair.
-    /// <para>将源镜像（原始或 Android 稀疏）打包为 DAT 镜像对。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Source image path. A sparse image is converted to raw before block-splitting.
-    /// <para>源镜像路径。稀疏镜像会先转为原始镜像再分块。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Either a directory (the pair takes the input image's stem) or an explicit
-    /// <c>&lt;stem&gt;.transfer.list</c> path (the sibling data file is derived from it).
-    /// <para>目录（以源镜像词干命名镜像对）或显式 <c>&lt;词干&gt;.transfer.list</c> 路径（同级数据文件由它推导）。</para>
-    /// </param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>Success with the written pair file names and total byte count, or a failure when the input,
-    /// derived names or the staged write is rejected.
+    /// <summary>Packs a source image (raw or Android-sparse) into the DAT image pair.
+    /// <para>将源镜像（原始或 Android 稀疏）打包为 DAT 镜像对。</para></summary>
+    /// <param name="inputPath">Source image path. A sparse image is converted to raw before block-splitting.
+    /// <para>源镜像路径。稀疏镜像会先转为原始镜像再分块。</para></param>
+    /// <param name="outputPath">Either a directory (the pair takes the input image's stem) or an explicit <c>&lt;stem&gt;.transfer.list</c> path (the sibling data file is derived from it).
+    /// <para>目录（以源镜像词干命名镜像对）或显式 <c>&lt;词干&gt;.transfer.list</c> 路径（同级数据文件由它推导）。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>Success with the written pair file names and total byte count, or a failure when the input, derived names or the staged write is rejected.
     /// <para>成功时返回写出的镜像对文件名与总字节数；输入、派生名称或暂存写入被拒时返回失败结果。</para></returns>
-    /// <remarks>
-    /// Both files land together or the previous pair stays intact; on failure the staging
-    /// directory and backups are removed so a partial write never replaces the user's existing
-    /// <c>.new.dat</c> / <c>.transfer.list</c> with mismatched halves.
-    /// <para>两个文件要么一起落盘，要么保留原有镜像对不变；失败时清理暂存与备份，避免半写状态覆盖用户已有的
-    /// <c>.new.dat</c> / <c>.transfer.list</c> 组合。</para>
-    /// </remarks>
+    /// <remarks>Both files land together or the previous pair stays intact; on failure the staging directory and backups are removed so a partial write never replaces the user's existing <c>.new.dat</c> / <c>.transfer.list</c> with mismatched halves.
+    /// <para>两个文件要么一起落盘，要么保留原有镜像对不变；失败时清理暂存与备份，避免半写状态覆盖用户已有的 <c>.new.dat</c> / <c>.transfer.list</c> 组合。</para></remarks>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
         => PackAsync(inputPath, outputPath, (IProgress<FileSystemByteProgress>?)null, cancellationToken);
 
-    /// <summary>
-    /// Packs a source image (raw or Android-sparse) into the DAT image pair, reporting byte progress.
-    /// <para>将源镜像（原始或 Android 稀疏）打包为 DAT 镜像对，并上报字节进度。</para>
-    /// </summary>
+    /// <summary>Packs a source image (raw or Android-sparse) into the DAT image pair, reporting byte progress.
+    /// <para>将源镜像（原始或 Android 稀疏）打包为 DAT 镜像对，并上报字节进度。</para></summary>
     /// <param name="inputPath">Source image path; a sparse image is converted to raw before block-splitting.
     /// <para>源镜像路径；稀疏镜像会先转为原始镜像再分块。</para></param>
-    /// <param name="outputPath">Either a directory (the pair takes the input image's stem) or an explicit
-    /// <c>&lt;stem&gt;.transfer.list</c> path (the sibling data file is derived from it).
+    /// <param name="outputPath">Either a directory (the pair takes the input image's stem) or an explicit <c>&lt;stem&gt;.transfer.list</c> path (the sibling data file is derived from it).
     /// <para>目录（以源镜像词干命名镜像对）或显式 <c>&lt;词干&gt;.transfer.list</c> 路径（同级数据文件由它推导）。</para></param>
     /// <param name="progress">Byte progress sink for the DAT writing stage; may be <see langword="null"/>.
     /// <para>DAT 写入阶段的字节进度接收器；可为 <see langword="null"/>。</para></param>
     /// <param name="cancellationToken">Cancels the pack; after rollback the returned task faults with the cancellation.
     /// <para>取消打包；回滚后返回的任务以取消异常结束。</para></param>
-    /// <returns>Success with the written pair file names and total byte count, or a failure when the input is
-    /// missing, derived names or directories conflict, or the staged write fails.
+    /// <returns>Success with the written pair file names and total byte count, or a failure when the input is missing, derived names or directories conflict, or the staged write fails.
     /// <para>成功时返回写出的镜像对文件名与总字节数；输入缺失、派生名称或目录冲突、暂存写入失败时返回失败结果。</para></returns>
-    /// <remarks>
-    /// Both files land together or the previous pair stays intact; on failure the staging directory and backups
-    /// are removed so a partial write never replaces the user's existing <c>.new.dat</c> / <c>.transfer.list</c>
-    /// with mismatched halves.
-    /// <para>两个文件要么一起落盘，要么保留原有镜像对不变；失败时清理暂存与备份，避免半写状态覆盖用户已有的
-    /// <c>.new.dat</c> / <c>.transfer.list</c> 组合。</para>
-    /// </remarks>
+    /// <remarks>Both files land together or the previous pair stays intact; on failure the staging directory and backups are removed so a partial write never replaces the user's existing <c>.new.dat</c> / <c>.transfer.list</c> with mismatched halves.
+    /// <para>两个文件要么一起落盘，要么保留原有镜像对不变；失败时清理暂存与备份，避免半写状态覆盖用户已有的 <c>.new.dat</c> / <c>.transfer.list</c> 组合。</para></remarks>
     public Task<FirmwareOpResult> PackAsync(
         string inputPath,
         string outputPath,

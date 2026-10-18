@@ -58,22 +58,13 @@ public sealed class NtpiFormatHandler : IFormatHandler, IRepackMetadataProvider
         return HeaderProbe.ProbeMagic(filePath, 4, 0, "NTPI"u8);
     }
 
-    /// <summary>
-    /// Reads the firmware metadata asynchronously.
-    /// <para>异步读取固件元数据。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// NTPI package to inspect; a missing or malformed package yields a failure result rather than an exception.
-    /// <para>待检查的 NTPI 包；文件缺失或格式错误时返回失败结果，而不是抛出异常。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Observed by the synchronous reader between regions; the call itself still runs synchronously on the caller.
-    /// <para>由同步读取器在区域之间检查；调用本身仍在调用方线程上同步执行。</para>
-    /// </param>
-    /// <returns>
-    /// A completed task. Success carries a <c>NTPI v&amp;lt;major&amp;gt;.&amp;lt;minor&amp;gt;.&amp;lt;patch&amp;gt;</c> summary, the file-entry names in <see cref="FirmwareOpResult.Entries"/>, and the keys <c>MajorVersion</c>, <c>MinorVersion</c>, <c>PatchVersion</c>, <c>RegionCount</c> and <c>FileCount</c> in <see cref="FirmwareOpResult.Metadata"/>; any thrown error becomes a failure result whose summary is the exception message.
-    /// <para>已完成的任务。成功时摘要形如 <c>NTPI v&amp;lt;major&amp;gt;.&amp;lt;minor&amp;gt;.&amp;lt;patch&amp;gt;</c>，<see cref="FirmwareOpResult.Entries"/> 为文件条目名，<see cref="FirmwareOpResult.Metadata"/> 包含 <c>MajorVersion</c>、<c>MinorVersion</c>、<c>PatchVersion</c>、<c>RegionCount</c> 与 <c>FileCount</c>；任何异常都会变成以异常消息为摘要的失败结果。</para>
-    /// </returns>
+    /// <summary>Reads the firmware metadata asynchronously.<para>异步读取固件元数据。</para></summary>
+    /// <param name="filePath">NTPI package to inspect; a missing or malformed package yields a failure result rather than an exception.
+    /// <para>待检查的 NTPI 包；文件缺失或格式错误时返回失败结果，而不是抛出异常。</para></param>
+    /// <param name="cancellationToken">Observed by the synchronous reader between regions; the call itself still runs synchronously on the caller.
+    /// <para>由同步读取器在区域之间检查；调用本身仍在调用方线程上同步执行。</para></param>
+    /// <returns>A completed task. Success carries a <c>NTPI v&amp;lt;major&amp;gt;.&amp;lt;minor&amp;gt;.&amp;lt;patch&amp;gt;</c> summary, the file-entry names in <see cref="FirmwareOpResult.Entries"/>, and the keys <c>MajorVersion</c>, <c>MinorVersion</c>, <c>PatchVersion</c>, <c>RegionCount</c> and <c>FileCount</c> in <see cref="FirmwareOpResult.Metadata"/>; any thrown error becomes a failure result whose summary is the exception message.
+    /// <para>已完成的任务。成功时摘要形如 <c>NTPI v&amp;lt;major&amp;gt;.&amp;lt;minor&amp;gt;.&amp;lt;patch&amp;gt;</c>，<see cref="FirmwareOpResult.Entries"/> 为文件条目名，<see cref="FirmwareOpResult.Metadata"/> 包含 <c>MajorVersion</c>、<c>MinorVersion</c>、<c>PatchVersion</c>、<c>RegionCount</c> 与 <c>FileCount</c>；任何异常都会变成以异常消息为摘要的失败结果。</para></returns>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -99,34 +90,19 @@ public sealed class NtpiFormatHandler : IFormatHandler, IRepackMetadataProvider
         }
     }
 
-    /// <summary>
-    /// Extracts the firmware contents asynchronously.
-    /// <para>异步提取固件内容。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// NTPI package to unpack; the input file is opened read-only and never modified.
-    /// <para>待解包的 NTPI 包；输入文件以只读方式打开，不会被修改。</para>
-    /// </param>
-    /// <param name="outputDirectory">
-    /// Destination directory, created when absent. Each extracted file is written under its base name only, so entries that share a name collide and the last one wins.
-    /// <para>目标目录，不存在时创建。每个解出的文件只按基础名写入，因此同名条目会相互覆盖，以最后一个为准。</para>
-    /// </param>
-    /// <param name="options">
-    /// Extraction knobs; <see langword="null"/> uses the defaults. Only <see cref="UnpackOptions.Progress"/> is consulted, and it receives a percentage derived from completed files. Entry selection is not honoured: every file is extracted. <see cref="UnpackOptions.Overwrite"/> applies to the repack metadata file that is written afterwards — when it is <see langword="false"/> and that file already exists, the operation fails before any extraction.
-    /// <para>解包参数；传 <see langword="null"/> 时使用默认值。只有 <see cref="UnpackOptions.Progress"/> 会被使用，其收到按已完成文件数换算的百分比。不支持条目筛选，所有文件都会被解出。<see cref="UnpackOptions.Overwrite"/> 只作用于随后写入的重打包元数据文件——为 <see langword="false"/> 且该文件已存在时，操作在任何解包之前就失败。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Observed by the synchronous reader between files and extraction blocks; cancellation surfaces as a failure result via the caught <see cref="OperationCanceledException"/>.
-    /// <para>由同步读取器在文件之间与解压块之间检查；取消会经由捕获的 <see cref="OperationCanceledException"/> 转为失败结果。</para>
-    /// </param>
-    /// <returns>
-    /// A task whose result reports the recursive count of files in <paramref name="outputDirectory"/> after extraction, including files that were already there. On success the repack metadata for the package is written into the same directory; reader faults such as a missing Region6 or an exceeded output limit become a failure result carrying the exception message.
-    /// <para>返回的任务结果在成功时报告解包后 <paramref name="outputDirectory"/> 内的递归文件数（包含原有文件），并把该包的重复打包元数据写入同一目录；Region6 缺失、超出输出上限等读取器错误会变成以异常消息为摘要的失败结果。</para>
-    /// </returns>
-    /// <exception cref="OperationCanceledException">
-    /// <paramref name="cancellationToken"/> was already signalled when the call started.
-    /// <para>调用开始时 <paramref name="cancellationToken"/> 已被取消。</para>
-    /// </exception>
+    /// <summary>Extracts the firmware contents asynchronously.<para>异步提取固件内容。</para></summary>
+    /// <param name="filePath">NTPI package to unpack; the input file is opened read-only and never modified.
+    /// <para>待解包的 NTPI 包；输入文件以只读方式打开，不会被修改。</para></param>
+    /// <param name="outputDirectory">Destination directory, created when absent. Each extracted file is written under its base name only, so entries that share a name collide and the last one wins.
+    /// <para>目标目录，不存在时创建。每个解出的文件只按基础名写入，因此同名条目会相互覆盖，以最后一个为准。</para></param>
+    /// <param name="options">Extraction knobs; <see langword="null"/> uses the defaults. Only <see cref="UnpackOptions.Progress"/> is consulted, and it receives a percentage derived from completed files. Entry selection is not honoured: every file is extracted. <see cref="UnpackOptions.Overwrite"/> applies to the repack metadata file that is written afterwards — when it is <see langword="false"/> and that file already exists, the operation fails before any extraction.
+    /// <para>解包参数；传 <see langword="null"/> 时使用默认值。只有 <see cref="UnpackOptions.Progress"/> 会被使用，其收到按已完成文件数换算的百分比。不支持条目筛选，所有文件都会被解出。<see cref="UnpackOptions.Overwrite"/> 只作用于随后写入的重打包元数据文件——为 <see langword="false"/> 且该文件已存在时，操作在任何解包之前就失败。</para></param>
+    /// <param name="cancellationToken">Observed by the synchronous reader between files and extraction blocks; cancellation surfaces as a failure result via the caught <see cref="OperationCanceledException"/>.
+    /// <para>由同步读取器在文件之间与解压块之间检查；取消会经由捕获的 <see cref="OperationCanceledException"/> 转为失败结果。</para></param>
+    /// <returns>A task whose result reports the recursive count of files in <paramref name="outputDirectory"/> after extraction, including files that were already there. On success the repack metadata for the package is written into the same directory; reader faults such as a missing Region6 or an exceeded output limit become a failure result carrying the exception message.
+    /// <para>返回的任务结果在成功时报告解包后 <paramref name="outputDirectory"/> 内的递归文件数（包含原有文件），并把该包的重复打包元数据写入同一目录；Region6 缺失、超出输出上限等读取器错误会变成以异常消息为摘要的失败结果。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was already signalled when the call started.
+    /// <para>调用开始时 <paramref name="cancellationToken"/> 已被取消。</para></exception>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
             cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
@@ -148,26 +124,15 @@ public sealed class NtpiFormatHandler : IFormatHandler, IRepackMetadataProvider
         }
     }
 
-    /// <summary>
-    /// Packs the input into firmware asynchronously.
-    /// <para>异步将输入打包为固件。</para>
-    /// </summary>
-    /// <param name="inputPath">
-    /// Source directory whose files become the package contents; any other kind of path yields a failure result.
-    /// <para>作为包内容来源的目录；其他类型的路径会返回失败结果。</para>
-    /// </param>
-    /// <param name="outputPath">
-    /// Destination package file, published atomically and replaced when it already exists.
-    /// <para>目标包文件，以原子方式发布，已存在时会被替换。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Accepted for interface uniformity; the underlying <see cref="NtpiWriter"/> is synchronous, so the pack runs to completion and the token is never observed.
-    /// <para>仅为保持接口一致而保留；底层 <see cref="NtpiWriter"/> 是同步实现，打包会执行到底且不会检查该令牌。</para>
-    /// </param>
-    /// <returns>
-    /// A task whose result reports the recursive count of files under <paramref name="inputPath"/>. Packing uses the default AES-CBC/LZMA pipeline and version 1.3.0; a missing directory, an unregistered version, or any writer fault produces a failure result carrying the exception message instead of an exception.
-    /// <para>返回的任务结果报告 <paramref name="inputPath"/> 下的递归文件数。打包使用默认的 AES-CBC/LZMA 流水线和版本 1.3.0；目录缺失、版本未注册或写入器出错时返回以异常消息为摘要的失败结果，而不抛出异常。</para>
-    /// </returns>
+    /// <summary>Packs the input into firmware asynchronously.<para>异步将输入打包为固件。</para></summary>
+    /// <param name="inputPath">Source directory whose files become the package contents; any other kind of path yields a failure result.
+    /// <para>作为包内容来源的目录；其他类型的路径会返回失败结果。</para></param>
+    /// <param name="outputPath">Destination package file, published atomically and replaced when it already exists.
+    /// <para>目标包文件，以原子方式发布，已存在时会被替换。</para></param>
+    /// <param name="cancellationToken">Accepted for interface uniformity; the underlying <see cref="NtpiWriter"/> is synchronous, so the pack runs to completion and the token is never observed.
+    /// <para>仅为保持接口一致而保留；底层 <see cref="NtpiWriter"/> 是同步实现，打包会执行到底且不会检查该令牌。</para></param>
+    /// <returns>A task whose result reports the recursive count of files under <paramref name="inputPath"/>. Packing uses the default AES-CBC/LZMA pipeline and version 1.3.0; a missing directory, an unregistered version, or any writer fault produces a failure result carrying the exception message instead of an exception.
+    /// <para>返回的任务结果报告 <paramref name="inputPath"/> 下的递归文件数。打包使用默认的 AES-CBC/LZMA 流水线和版本 1.3.0；目录缺失、版本未注册或写入器出错时返回以异常消息为摘要的失败结果，而不抛出异常。</para></returns>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try

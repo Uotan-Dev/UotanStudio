@@ -23,20 +23,13 @@ public static class LibUsbRuntime
     /// <para>已配置的绝对路径；未配置时为 <see langword="null"/>。</para></value>
     public static string? LibraryPath => LibUsbNativeLoader.LibraryPath;
 
-    /// <summary>
-    /// Registers the absolute path of the native libusb runtime and pre-loads it so the bare SONAME resolves.
-    /// Throws <see cref="FileNotFoundException"/> when the file does not exist; registration must happen before
-    /// the first native call, and a later path change does not take effect.
-    /// <para>注册原生 libusb 运行时的绝对路径并预加载，使裸 SONAME 可解析。文件不存在时抛
-    /// <see cref="FileNotFoundException"/>；注册在首次原生调用前完成，之后再改路径不生效。</para>
-    /// </summary>
-    /// <param name="libraryPath">Absolute path to <c>libusb-1.0.dylib</c>, <c>libusb-1.0.so</c> or
-    /// <c>libusb-1.0.dll</c>. <para><c>libusb-1.0.dylib</c>、<c>libusb-1.0.so</c> 或
-    /// <c>libusb-1.0.dll</c> 的绝对路径。</para></param>
+    /// <summary>Registers the absolute path of the native libusb runtime and pre-loads it so the bare SONAME resolves. Throws <see cref="FileNotFoundException"/> when the file does not exist; registration must happen before the first native call, and a later path change does not take effect.
+    /// <para>注册原生 libusb 运行时的绝对路径并预加载，使裸 SONAME 可解析。文件不存在时抛 <see cref="FileNotFoundException"/>；注册在首次原生调用前完成，之后再改路径不生效。</para></summary>
+    /// <param name="libraryPath">Absolute path to <c>libusb-1.0.dylib</c>, <c>libusb-1.0.so</c> or <c>libusb-1.0.dll</c>.
+    /// <para><c>libusb-1.0.dylib</c>、<c>libusb-1.0.so</c> 或 <c>libusb-1.0.dll</c> 的绝对路径。</para></param>
     /// <exception cref="ArgumentException"><paramref name="libraryPath"/> is blank.
     /// <para><paramref name="libraryPath"/> 为空白。</para></exception>
-    /// <exception cref="FileNotFoundException">The file does not exist.
-    /// <para>文件不存在。</para></exception>
+    /// <exception cref="FileNotFoundException">The file does not exist.<para>文件不存在。</para></exception>
     public static void SetLibraryPath(string libraryPath)
         => LibUsbNativeLoader.SetLibraryPath(libraryPath);
 }

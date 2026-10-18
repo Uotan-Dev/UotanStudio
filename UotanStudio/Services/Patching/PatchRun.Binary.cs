@@ -8,17 +8,20 @@ public sealed partial class PatchRun
     private readonly Dictionary<string, List<PatchBinaryPreview>> _binaryPreviews = new(PatchPath.Comparer);
     private readonly HashSet<string> _truncatedBinaryPreviews = new(PatchPath.Comparer);
     private int _binaryPreviewCount;
-    /// <summary>Stages an equal-length binary patch without modifying the source or publishing early.<para>暂存等长的二进制补丁，不修改源文件，也不提前发布。</para></summary>
+    /// <summary>Stages an equal-length binary patch without modifying the source or publishing early.
+    /// <para>暂存等长的二进制补丁，不修改源文件，也不提前发布。</para></summary>
     /// <param name="path">The confined file path to patch.<para>要打补丁的受限文件路径。</para></param>
     /// <param name="find">The hexadecimal pattern to search for.<para>要搜索的十六进制模式。</para></param>
     /// <param name="findMask">The mask pairing with the search pattern.<para>与搜索模式配对的掩码。</para></param>
     /// <param name="replacement">The hexadecimal replacement bytes.<para>替换用的十六进制字节。</para></param>
     /// <param name="replaceMask">The mask pairing with the replacement.<para>与替换字节配对的掩码。</para></param>
-    /// <param name="offset">The starting byte offset of the search window.<para>搜索窗口的起始字节偏移。</para></param>
+    /// <param name="offset">The starting byte offset of the search window.
+    /// <para>搜索窗口的起始字节偏移。</para></param>
     /// <param name="length">The byte length of the search window.<para>搜索窗口的字节长度。</para></param>
     /// <param name="alignment">The required match alignment in bytes.<para>要求的匹配字节对齐。</para></param>
     /// <param name="skip">The number of leading matches to skip.<para>要跳过的开头匹配数量。</para></param>
-    /// <param name="expectedMatches">The required match count, or zero for any.<para>要求的匹配数量，零表示不限。</para></param>
+    /// <param name="expectedMatches">The required match count, or zero for any.
+    /// <para>要求的匹配数量，零表示不限。</para></param>
     /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
     /// <returns>The offsets of the applied replacements.<para>已应用替换的偏移列表。</para></returns>
     public async Task<IReadOnlyList<long>> StageBinaryAsync(string path, string find, string findMask,

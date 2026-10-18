@@ -72,19 +72,15 @@ internal sealed class AllwinnerImageWtyFormatHandler : IReadonlyFormatHandler
         }
     }
 
-    /// <summary>
-    /// Extracts the container payloads into the output directory; zero-length entries are skipped.
-    /// <para>将容器负载提取到输出目录；长度为 0 的条目会被跳过。</para>
-    /// </summary>
-    /// <param name="filePath">Container to unpack; never modified. <para>待解包的容器；不会被修改。</para></param>
+    /// <summary>Extracts the container payloads into the output directory; zero-length entries are skipped.
+    /// <para>将容器负载提取到输出目录；长度为 0 的条目会被跳过。</para></summary>
+    /// <param name="filePath">Container to unpack; never modified.<para>待解包的容器；不会被修改。</para></param>
     /// <param name="outputDirectory">Destination directory, created when absent.
     /// <para>目标目录，不存在时创建。</para></param>
-    /// <param name="options">Entry selection and overwrite policy; selection compares entry names
-    /// case-insensitively. <see langword="null"/> extracts everything.
+    /// <param name="options">Entry selection and overwrite policy; selection compares entry names case-insensitively. <see langword="null"/> extracts everything.
     /// <para>条目选择与覆盖策略；选择按条目名忽略大小写比较。传 <see langword="null"/> 时全部解出。</para></param>
-    /// <param name="cancellationToken">Cancels extraction. <para>取消解包。</para></param>
-    /// <returns>Outcome listing the written files with sizes.
-    /// <para>结果对象列出已写入的文件及其大小。</para></returns>
+    /// <param name="cancellationToken">Cancels extraction.<para>取消解包。</para></param>
+    /// <returns>Outcome listing the written files with sizes.<para>结果对象列出已写入的文件及其大小。</para></returns>
     /// <exception cref="OperationCanceledException">The token was canceled.
     /// <para>令牌被取消。</para></exception>
     public async Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory,

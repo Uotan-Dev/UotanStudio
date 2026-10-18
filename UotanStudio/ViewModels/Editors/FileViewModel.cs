@@ -137,21 +137,11 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
             ? string.Empty
             : string.Format(LanguageService.Instance.GetString("Dock_File_FormatFormat"), DetectedFormat);
 
-    /// <summary>
-    /// Asynchronously loads the file content at the given path into <see cref="Text"/> and initializes
-    /// <see cref="FilePath"/>; the document is not marked dirty during or after loading.
-    /// Whether hex viewing is enabled is decided by extension and content.
-    /// <para>异步读取指定文件内容到 <see cref="Text"/>，并初始化 <see cref="FilePath"/>；
-    /// 加载期间与加载完成后均不标记为已修改。按扩展名与内容综合判定是否启用 16 进制查看。</para>
-    /// </summary>
-    /// <param name="path">
-    /// The file path to load.
-    /// <para>要加载的文件路径。</para>
-    /// </param>
-    /// <param name="mode">
-    /// The requested open mode; default <c>Auto</c>, decided by type+extension+content.
-    /// <para>请求的打开方式；默认 <c>Auto</c>，按类型+后缀+内容综合判定。</para>
-    /// </param>
+    /// <summary>Asynchronously loads the file content at the given path into <see cref="Text"/> and initializes <see cref="FilePath"/>; the document is not marked dirty during or after loading. Whether hex viewing is enabled is decided by extension and content.
+    /// <para>异步读取指定文件内容到 <see cref="Text"/>，并初始化 <see cref="FilePath"/>； 加载期间与加载完成后均不标记为已修改。按扩展名与内容综合判定是否启用 16 进制查看。</para></summary>
+    /// <param name="path">The file path to load.<para>要加载的文件路径。</para></param>
+    /// <param name="mode">The requested open mode; default <c>Auto</c>, decided by type+extension+content.
+    /// <para>请求的打开方式；默认 <c>Auto</c>，按类型+后缀+内容综合判定。</para></param>
     public async Task LoadContentAsync(string path, EditorOpenMode mode = EditorOpenMode.Auto)
     {
         if (string.IsNullOrWhiteSpace(path))

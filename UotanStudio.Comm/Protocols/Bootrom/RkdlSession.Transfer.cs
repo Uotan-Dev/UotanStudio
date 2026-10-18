@@ -4,26 +4,14 @@ namespace UotanStudio.Comm.Protocols.Bootrom;
 
 public sealed partial class RkdlSession
 {
-    /// <summary>
-    /// Writes the given GPT image to the device.
-    /// <para>将给定 GPT 镜像写入设备。</para>
-    /// The image may be a 34-sector master table only (the backup table is then generated from it) or
-    /// a 67-sector master+backup image (34 + 33 sectors, both written verbatim). The tables are
-    /// updated for the device's total sector count and written at LBA 0 / LBA (total - 33).
-    /// <para>镜像可以是仅 34 扇区的主表（此时据此生成备份表），也可以是 67 扇区的主+备镜像
-    /// （34 + 33 扇区，两者都原样写入）。表会按设备总扇区数更新，并写入 LBA 0 / LBA（总扇区 - 33）。</para>
-    /// </summary>
-    /// <param name="gptData">The GPT image bytes. <para>GPT 镜像字节。</para></param>
-    /// <param name="progress">Optional progress callback (bytes written). <para>可选进度回调（已写入字节数）。</para></param>
-    /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
-    /// <exception cref="RkdlException">The image is smaller than the 34-sector primary table, the
-    /// device-reported sector count is not greater than <see cref="RkdlGpt.BackupSectors"/> or
-    /// exceeds <see cref="uint.MaxValue"/>, or a WRITE_LBA transaction failed. The sector count is
-    /// validated as a <see cref="long"/> before the unsigned cast, so a malformed device response
-    /// is rejected instead of wrapping into an LBA that would overwrite user data.
-    /// <para>镜像小于 34 扇区主表、设备报告的扇区数未大于 <see cref="RkdlGpt.BackupSectors"/>
-    /// 或超过 <see cref="uint.MaxValue"/>，或 WRITE_LBA 事务失败。扇区数在无符号转型前按
-    /// <see cref="long"/> 校验，因此畸形设备响应会被拒绝，而不会回绕成一个覆盖用户数据的 LBA。</para></exception>
+    /// <summary>Writes the given GPT image to the device.
+    /// <para>将给定 GPT 镜像写入设备。</para>The image may be a 34-sector master table only (the backup table is then generated from it) or a 67-sector master+backup image (34 + 33 sectors, both written verbatim). The tables are updated for the device's total sector count and written at LBA 0 / LBA (total - 33).<para>镜像可以是仅 34 扇区的主表（此时据此生成备份表），也可以是 67 扇区的主+备镜像 （34 + 33 扇区，两者都原样写入）。表会按设备总扇区数更新，并写入 LBA 0 / LBA（总扇区 - 33）。</para></summary>
+    /// <param name="gptData">The GPT image bytes.<para>GPT 镜像字节。</para></param>
+    /// <param name="progress">Optional progress callback (bytes written).
+    /// <para>可选进度回调（已写入字节数）。</para></param>
+    /// <param name="cancellationToken">A cancellation token.<para>取消令牌。</para></param>
+    /// <exception cref="RkdlException">The image is smaller than the 34-sector primary table, the device-reported sector count is not greater than <see cref="RkdlGpt.BackupSectors"/> or exceeds <see cref="uint.MaxValue"/>, or a WRITE_LBA transaction failed. The sector count is validated as a <see cref="long"/> before the unsigned cast, so a malformed device response is rejected instead of wrapping into an LBA that would overwrite user data.
+    /// <para>镜像小于 34 扇区主表、设备报告的扇区数未大于 <see cref="RkdlGpt.BackupSectors"/> 或超过 <see cref="uint.MaxValue"/>，或 WRITE_LBA 事务失败。扇区数在无符号转型前按 <see cref="long"/> 校验，因此畸形设备响应会被拒绝，而不会回绕成一个覆盖用户数据的 LBA。</para></exception>
     public void WriteGPT(byte[] gptData, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -68,38 +56,22 @@ public sealed partial class RkdlSession
         WriteLBA(backupLba, backupStream, backup.Length, null, cancellationToken);
     }
 
-    /// <summary>
-    /// Writes data to flash at the specified LBA address (in 512-byte sectors) using
-    /// WRITE_LBA (0x15) CBW/CSW transactions.
-    /// <para>使用 WRITE_LBA（0x15）CBW/CSW 事务，将数据写入指定 LBA 地址（512 字节扇区）。</para>
-    /// Each chunk is chunked by <see cref="RkdlConstants.TransferChunkSize"/> and filled from the
-    /// stream with a read loop, so a short <see cref="Stream.Read(byte[], int, int)"/> never truncates
-    /// a chunk, never repeats source bytes and never writes zero padding into the middle of the image;
-    /// only the final chunk of a non sector-multiple <paramref name="length"/> is zero padded up to a
-    /// sector boundary.
-    /// <para>每个分块按 <see cref="RkdlConstants.TransferChunkSize"/> 划分，并用读循环从流中填满，
-    /// 因此 <see cref="Stream.Read(byte[], int, int)"/> 的短读既不会截断分块，也不会重复源字节或把补零写进镜像
-    /// 中段；只有当 <paramref name="length"/> 不是扇区整数倍时，最后一个分块才会向上补零到扇区边界。</para>
-    /// </summary>
+    /// <summary>Writes data to flash at the specified LBA address (in 512-byte sectors) using WRITE_LBA (0x15) CBW/CSW transactions.
+    /// <para>使用 WRITE_LBA（0x15）CBW/CSW 事务，将数据写入指定 LBA 地址（512 字节扇区）。</para>Each chunk is chunked by <see cref="RkdlConstants.TransferChunkSize"/> and filled from the stream with a read loop, so a short <see cref="Stream.Read(byte[], int, int)"/> never truncates a chunk, never repeats source bytes and never writes zero padding into the middle of the image; only the final chunk of a non sector-multiple <paramref name="length"/> is zero padded up to a sector boundary.<para>每个分块按 <see cref="RkdlConstants.TransferChunkSize"/> 划分，并用读循环从流中填满， 因此 <see cref="Stream.Read(byte[], int, int)"/> 的短读既不会截断分块，也不会重复源字节或把补零写进镜像 中段；只有当 <paramref name="length"/> 不是扇区整数倍时，最后一个分块才会向上补零到扇区边界。</para></summary>
     /// <param name="address">The start LBA; must fit in an unsigned 32-bit value.
     /// <para>起始 LBA；必须能容纳于无符号 32 位值。</para></param>
     /// <param name="dataStream">The source stream read sequentially; not disposed by this call.
     /// <para>被顺序读取的源流；本调用不会释放它。</para></param>
-    /// <param name="length">Total bytes to transfer from the stream; a trailing partial sector is
-    /// zero padded on the wire. <para>需从流中转出的总字节数；尾部不完整扇区在线上补零。</para></param>
+    /// <param name="length">Total bytes to transfer from the stream; a trailing partial sector is zero padded on the wire.
+    /// <para>需从流中转出的总字节数；尾部不完整扇区在线上补零。</para></param>
     /// <param name="progress">Optional receiver of cumulative source bytes written.
     /// <para>可选的累计已写出源字节接收器。</para></param>
-    /// <param name="cancellationToken">Checked before each chunk; the token does not interrupt an
-    /// in-flight synchronous bulk transfer. <para>每个分块前检查；令牌不会打断进行中的同步批量传输。</para></param>
+    /// <param name="cancellationToken">Checked before each chunk; the token does not interrupt an in-flight synchronous bulk transfer.
+    /// <para>每个分块前检查；令牌不会打断进行中的同步批量传输。</para></param>
     /// <returns>The number of source bytes transferred, equal to <paramref name="length"/> on success.
     /// <para>成功时转出的源字节数，等于 <paramref name="length"/>。</para></returns>
-    /// <exception cref="RkdlException">The address is out of range, the byte length rounded up to
-    /// 512-byte sectors leaves the addressed range beyond the device geometry, the device geometry
-    /// is unusable because READ_FLASH_INFO reported an invalid sector count
-    /// (<see cref="RkdlError.FlashInfoFailed"/>), a bulk write was short, or a CSW reported
-    /// failure. <para>地址越界、字节长度向上取整为 512 字节扇区后所寻址范围超出设备几何、因
-    /// READ_FLASH_INFO 报告无效扇区数导致设备几何不可用（<see cref="RkdlError.FlashInfoFailed"/>）、
-    /// 批量写入过短或 CSW 报告失败。</para></exception>
+    /// <exception cref="RkdlException">The address is out of range, the byte length rounded up to 512-byte sectors leaves the addressed range beyond the device geometry, the device geometry is unusable because READ_FLASH_INFO reported an invalid sector count (<see cref="RkdlError.FlashInfoFailed"/>), a bulk write was short, or a CSW reported failure.
+    /// <para>地址越界、字节长度向上取整为 512 字节扇区后所寻址范围超出设备几何、因 READ_FLASH_INFO 报告无效扇区数导致设备几何不可用（<see cref="RkdlError.FlashInfoFailed"/>）、 批量写入过短或 CSW 报告失败。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="dataStream"/> is <c>null</c>.
     /// <para><paramref name="dataStream"/> 为 <c>null</c>。</para></exception>
     /// <exception cref="EndOfStreamException">The stream ended before <paramref name="length"/> bytes were read.
@@ -180,36 +152,22 @@ public sealed partial class RkdlSession
         finally { System.Buffers.ArrayPool<byte>.Shared.Return(buffer); }
     }
 
-    /// <summary>
-    /// Reads data from flash at the specified LBA address (in 512-byte sectors) using
-    /// READ_LBA (0x14) CBW/CSW transactions, chunked by
-    /// <see cref="RkdlConstants.TransferChunkSize"/>. The output is written in full sectors.
-    /// <para>使用 READ_LBA（0x14）CBW/CSW 事务，从指定 LBA 地址读取 flash 数据
-    /// （512 字节扇区），按 <see cref="RkdlConstants.TransferChunkSize"/> 分块。
-    /// 输出按完整扇区写入。</para>
-    /// </summary>
+    /// <summary>Reads data from flash at the specified LBA address (in 512-byte sectors) using READ_LBA (0x14) CBW/CSW transactions, chunked by <see cref="RkdlConstants.TransferChunkSize"/>. The output is written in full sectors.
+    /// <para>使用 READ_LBA（0x14）CBW/CSW 事务，从指定 LBA 地址读取 flash 数据 （512 字节扇区），按 <see cref="RkdlConstants.TransferChunkSize"/> 分块。 输出按完整扇区写入。</para></summary>
     /// <param name="address">The start LBA; must fit in an unsigned 32-bit value.
     /// <para>起始 LBA；必须能容纳于无符号 32 位值。</para></param>
     /// <param name="outputStream">The destination stream written sequentially; not disposed by this call.
     /// <para>被顺序写入的目标流；本调用不会释放它。</para></param>
-    /// <param name="length">Total bytes to read from flash; the final chunk is rounded up to full
-    /// sectors on the wire and trimmed to <paramref name="length"/> in the output.
-    /// <para>需从 flash 读取的总字节数；最后一个分块在线上按完整扇区向上取整，写入输出时裁剪至
-    /// <paramref name="length"/>。</para></param>
+    /// <param name="length">Total bytes to read from flash; the final chunk is rounded up to full sectors on the wire and trimmed to <paramref name="length"/> in the output.
+    /// <para>需从 flash 读取的总字节数；最后一个分块在线上按完整扇区向上取整，写入输出时裁剪至 <paramref name="length"/>。</para></param>
     /// <param name="progress">Optional receiver of cumulative bytes written to the output stream.
     /// <para>可选的累计写入输出流字节数接收器。</para></param>
-    /// <param name="cancellationToken">Checked before each chunk; the token does not interrupt an
-    /// in-flight synchronous bulk transfer. <para>每个分块前检查；令牌不会打断进行中的同步批量传输。</para></param>
-    /// <returns>The number of bytes written to <paramref name="outputStream"/>, equal to
-    /// <paramref name="length"/> on success. <para>写入 <paramref name="outputStream"/> 的字节数，
-    /// 成功时等于 <paramref name="length"/>。</para></returns>
-    /// <exception cref="RkdlException">The address is out of range, the byte length rounded up to
-    /// 512-byte sectors leaves the addressed range beyond the device geometry, the device geometry
-    /// is unusable because READ_FLASH_INFO reported an invalid sector count
-    /// (<see cref="RkdlError.FlashInfoFailed"/>), the device signaled EOF early, or a CSW reported
-    /// failure. <para>地址越界、字节长度向上取整为 512 字节扇区后所寻址范围超出设备几何、因
-    /// READ_FLASH_INFO 报告无效扇区数导致设备几何不可用（<see cref="RkdlError.FlashInfoFailed"/>）、
-    /// 设备提前报告 EOF 或 CSW 报告失败。</para></exception>
+    /// <param name="cancellationToken">Checked before each chunk; the token does not interrupt an in-flight synchronous bulk transfer.
+    /// <para>每个分块前检查；令牌不会打断进行中的同步批量传输。</para></param>
+    /// <returns>The number of bytes written to <paramref name="outputStream"/>, equal to <paramref name="length"/> on success.
+    /// <para>写入 <paramref name="outputStream"/> 的字节数， 成功时等于 <paramref name="length"/>。</para></returns>
+    /// <exception cref="RkdlException">The address is out of range, the byte length rounded up to 512-byte sectors leaves the addressed range beyond the device geometry, the device geometry is unusable because READ_FLASH_INFO reported an invalid sector count (<see cref="RkdlError.FlashInfoFailed"/>), the device signaled EOF early, or a CSW reported failure.
+    /// <para>地址越界、字节长度向上取整为 512 字节扇区后所寻址范围超出设备几何、因 READ_FLASH_INFO 报告无效扇区数导致设备几何不可用（<see cref="RkdlError.FlashInfoFailed"/>）、 设备提前报告 EOF 或 CSW 报告失败。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="outputStream"/> is <c>null</c>.
     /// <para><paramref name="outputStream"/> 为 <c>null</c>。</para></exception>
     /// <exception cref="ObjectDisposedException">The session was disposed.

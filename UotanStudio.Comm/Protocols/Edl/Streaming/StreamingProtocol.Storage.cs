@@ -6,23 +6,15 @@ namespace UotanStudio.Comm.Protocols.Edl.Streaming;
 /// <summary>Flash-mode entry, raw partition-table transfer, section programming and stream close for the streaming protocol. <para>流式协议的进入刷写模式、原始分区表传输、分节编程与流关闭。</para></summary>
 public sealed partial class StreamingProtocol
 {
-    /// <summary>
-    /// Runs the secure-mode negotiation followed by the qclose exchange that puts the target into
-    /// flash mode.
-    /// <para>执行安全模式协商，随后执行让目标进入闪存模式的 qclose 交换。</para>
-    /// The qclose outcome is logged but does not abort the entry; the returned value reports whether
-    /// the target acknowledged the secure-mode negotiation.
-    /// <para>qclose 结果只记录而不中断进入；返回值报告目标是否确认了安全模式协商。</para>
-    /// </summary>
+    /// <summary>Runs the secure-mode negotiation followed by the qclose exchange that puts the target into flash mode.
+    /// <para>执行安全模式协商，随后执行让目标进入闪存模式的 qclose 交换。</para>The qclose outcome is logged but does not abort the entry; the returned value reports whether the target acknowledged the secure-mode negotiation.<para>qclose 结果只记录而不中断进入；返回值报告目标是否确认了安全模式协商。</para></summary>
     /// <param name="confirm">Pass <see langword="true"/> to confirm the flash-mode transition.
     /// <para>传 <see langword="true"/> 以确认切换到闪存模式。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns><see langword="true"/> when the target acknowledged secure mode.
     /// <para>目标确认安全模式时为 <see langword="true"/>。</para></returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is
-    /// <see langword="false"/>; the refusal happens before the operation lease and before any
-    /// byte reaches the wire. <para><paramref name="confirm"/> 为 <see langword="false"/> 时抛出；
-    /// 拒绝发生在取得操作租约之前，任何字节都不落到线上。</para></exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="confirm"/> is <see langword="false"/>; the refusal happens before the operation lease and before any byte reaches the wire.
+    /// <para><paramref name="confirm"/> 为 <see langword="false"/> 时抛出； 拒绝发生在取得操作租约之前，任何字节都不落到线上。</para></exception>
     /// <exception cref="OperationCanceledException">The token was cancelled.
     /// <para>令牌被取消。</para></exception>
     public async Task<bool> EnterFlashModeAsync(bool confirm, CancellationToken cancellationToken = default)

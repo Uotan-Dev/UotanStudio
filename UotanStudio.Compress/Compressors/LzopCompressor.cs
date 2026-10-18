@@ -47,15 +47,11 @@ internal static class LzopCompressor
     /// <para>前九字节与 <see cref="Magic"/> 相同时为 <see langword="true"/>；其后的头部与块结构不做检查。</para></returns>
     public static bool IsLzopFormat(byte[]? data) => data is { Length: >= MagicSize } && data.AsSpan(0, MagicSize).SequenceEqual(Magic);
 
-    /// <summary>
-    /// Decompresses an LZOP file into its original bytes.
-    /// <para>将 LZOP 文件解压为原始字节。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete LZOP payload; this overload puts no cap on the expansion size.
+    /// <summary>Decompresses an LZOP file into its original bytes.
+    /// <para>将 LZOP 文件解压为原始字节。</para></summary>
+    /// <param name="data">Complete LZOP payload; this overload puts no cap on the expansion size.
     /// <para>完整的 LZOP 数据；本重载不限制解压后大小。</para></param>
-    /// <returns>
-    /// The decoded bytes of every block up to the terminating zero-size block.
+    /// <returns>The decoded bytes of every block up to the terminating zero-size block.
     /// <para>直到终止零块之前所有块解码后的字节。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
@@ -63,19 +59,13 @@ internal static class LzopCompressor
     /// <para>魔数、版本、头部校验和、块大小或块校验和非法，声明了 LZO 过滤器，或块解码结果与声明大小不符。</para></exception>
     public static byte[] Decompress(byte[] data) => Decompress(data, long.MaxValue);
 
-    /// <summary>
-    /// Decompresses LZOP data with a total output limit.
-    /// <para>解压 LZOP 数据并限制总输出大小。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Complete LZOP payload, treated as untrusted input.
+    /// <summary>Decompresses LZOP data with a total output limit.
+    /// <para>解压 LZOP 数据并限制总输出大小。</para></summary>
+    /// <param name="data">Complete LZOP payload, treated as untrusted input.
     /// <para>完整的 LZOP 数据，按不可信输入处理。</para></param>
-    /// <param name="maximumOutputBytes">
-    /// Inclusive cap on the decoded total, checked block by block before any write.
+    /// <param name="maximumOutputBytes">Inclusive cap on the decoded total, checked block by block before any write.
     /// <para>解压总量的含上限，在写入前逐块检查。</para></param>
-    /// <returns>
-    /// The decoded bytes.
-    /// <para>解码后的字节。</para></returns>
+    /// <returns>The decoded bytes.<para>解码后的字节。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumOutputBytes"/> is negative.
@@ -91,18 +81,13 @@ internal static class LzopCompressor
         return output.ToArray();
     }
 
-    /// <summary>
-    /// Streams LZOP blocks to the output while enforcing a cumulative output limit.
-    /// <para>逐块流式解压 LZOP 数据并限制累计输出。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable payload positioned at its magic; header integers are big-endian and only the bytes up to the terminating zero block are consumed. The stream is not closed.
+    /// <summary>Streams LZOP blocks to the output while enforcing a cumulative output limit.
+    /// <para>逐块流式解压 LZOP 数据并限制累计输出。</para></summary>
+    /// <param name="input">Readable payload positioned at its magic; header integers are big-endian and only the bytes up to the terminating zero block are consumed. The stream is not closed.
     /// <para>定位在魔数处的可读数据；头部整数按大端解析，只消费到终止零块为止的字节，不会关闭该流。</para></param>
-    /// <param name="output">
-    /// Writable destination receiving one verified block at a time, so a later failure leaves the earlier blocks written; it is not closed.
+    /// <param name="output">Writable destination receiving one verified block at a time, so a later failure leaves the earlier blocks written; it is not closed.
     /// <para>每次写入一个已通过校验的块的写入目标，因此后续失败时前面的块已写出；不会被本调用关闭。</para></param>
-    /// <param name="maximumOutputBytes">
-    /// Inclusive cap on the decoded total; both the declared block size and the remaining budget are checked before the block is read, so a payload needing more than the budget is refused without writing it.
+    /// <param name="maximumOutputBytes">Inclusive cap on the decoded total; both the declared block size and the remaining budget are checked before the block is read, so a payload needing more than the budget is refused without writing it.
     /// <para>解压总量的含上限；读取块之前同时检查声明的块大小与剩余预算，超出预算的数据在写出前即被拒绝。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -113,21 +98,15 @@ internal static class LzopCompressor
     public static void Decompress(Stream input, Stream output, long maximumOutputBytes)
         => Decompress(input, output, maximumOutputBytes, maxDegreeOfParallelism: null);
 
-    /// <summary>
-    /// Streams LZOP blocks to the output with an optional per-block parallelism degree.
-    /// <para>逐块流式解压 LZOP 数据，并可指定逐块并行度。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable payload positioned at its magic; blocks are read in ascending order and only the bytes up to the terminating zero block are consumed. The stream is not closed.
+    /// <summary>Streams LZOP blocks to the output with an optional per-block parallelism degree.
+    /// <para>逐块流式解压 LZOP 数据，并可指定逐块并行度。</para></summary>
+    /// <param name="input">Readable payload positioned at its magic; blocks are read in ascending order and only the bytes up to the terminating zero block are consumed. The stream is not closed.
     /// <para>定位在魔数处的可读数据；块按升序读取，只消费到终止零块为止的字节，不会关闭该流。</para></param>
-    /// <param name="output">
-    /// Writable destination receiving blocks strictly in block order, so a later failure leaves the earlier blocks written; it is not closed.
+    /// <param name="output">Writable destination receiving blocks strictly in block order, so a later failure leaves the earlier blocks written; it is not closed.
     /// <para>严格按块顺序接收块的写入目标，因此后续失败时前面的块已写出；不会被本调用关闭。</para></param>
-    /// <param name="maximumOutputBytes">
-    /// Inclusive cap on the decoded total; the declared block size is checked against the remaining budget as each block is read, so a payload needing more than the budget is refused before its bytes are decoded.
+    /// <param name="maximumOutputBytes">Inclusive cap on the decoded total; the declared block size is checked against the remaining budget as each block is read, so a payload needing more than the budget is refused before its bytes are decoded.
     /// <para>解压总量的含上限；读取每个块时即用剩余预算检查其声明大小，超出预算的数据在解码前即被拒绝。</para></param>
-    /// <param name="maxDegreeOfParallelism">
-    /// <see langword="null"/> or 1 and below decodes blocks sequentially; above 1 decodes that many blocks concurrently, capped by the number of blocks staged in one batch, while the bytes written and therefore the output remain identical to the sequential run.
+    /// <param name="maxDegreeOfParallelism"><see langword="null"/> or 1 and below decodes blocks sequentially; above 1 decodes that many blocks concurrently, capped by the number of blocks staged in one batch, while the bytes written and therefore the output remain identical to the sequential run.
     /// <para>为 <see langword="null"/> 或小于等于 1 时串行解码各块；大于 1 时并发解码相应数量的块（不超过单个批次内的块数），写出的字节及其顺序与串行结果完全一致。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -276,15 +255,11 @@ internal static class LzopCompressor
         }
     }
 
-    /// <summary>
-    /// Compresses data into an LZOP (lzop) byte array.
-    /// <para>将数据压缩为 LZOP（lzop）格式的字节数组。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Plaintext taken in full from the array; an empty array produces a header followed by the terminating zero block.
+    /// <summary>Compresses data into an LZOP (lzop) byte array.
+    /// <para>将数据压缩为 LZOP（lzop）格式的字节数组。</para></summary>
+    /// <param name="data">Plaintext taken in full from the array; an empty array produces a header followed by the terminating zero block.
     /// <para>整体取自数组的明文字节；空数组产生头部加终止零块。</para></param>
-    /// <returns>
-    /// The magic, a big-endian header closed by its Adler-32 checksum, one block per 256 KiB of input, and the terminating zero block.
+    /// <returns>The magic, a big-endian header closed by its Adler-32 checksum, one block per 256 KiB of input, and the terminating zero block.
     /// <para>魔数、以大端写出并以 Adler-32 校验和收尾的头部、每 256 KiB 输入对应的一个块，以及终止零块。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
@@ -303,15 +278,11 @@ internal static class LzopCompressor
         return output.ToArray();
     }
 
-    /// <summary>
-    /// Compresses the input stream into the LZOP (lzop) format in 256 KiB blocks.
-    /// <para>将输入流按 256 KiB 块压缩为 LZOP（lzop）格式并写入输出流。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable source drained block by block until end of stream, so the plaintext is never held in memory as a whole; ownership stays with the caller.
+    /// <summary>Compresses the input stream into the LZOP (lzop) format in 256 KiB blocks.
+    /// <para>将输入流按 256 KiB 块压缩为 LZOP（lzop）格式并写入输出流。</para></summary>
+    /// <param name="input">Readable source drained block by block until end of stream, so the plaintext is never held in memory as a whole; ownership stays with the caller.
     /// <para>逐块读取直至流末尾的可读源流，明文不会整体驻留内存；所有权归调用方。</para></param>
-    /// <param name="output">
-    /// Writable destination appended from its current position and left open; each block stores both sizes and an uncompressed Adler-32, with a compressed Adler-32 only when LZO1X-1 encoding is smaller than its input.
+    /// <param name="output">Writable destination appended from its current position and left open; each block stores both sizes and an uncompressed Adler-32, with a compressed Adler-32 only when LZO1X-1 encoding is smaller than its input.
     /// <para>从当前位置追加并保持打开的写入目标；每块写出两个大小和原始数据 Adler-32，仅在 LZO1X-1 编码小于输入时附加压缩数据 Adler-32。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
@@ -320,18 +291,13 @@ internal static class LzopCompressor
     public static void Compress(Stream input, Stream output)
         => Compress(input, output, maxDegreeOfParallelism: null);
 
-    /// <summary>
-    /// Compresses the input stream into the LZOP (lzop) format in 256 KiB blocks with an optional parallelism degree.
-    /// <para>将输入流按 256 KiB 块压缩为 LZOP（lzop）格式，并可指定并行度。</para>
-    /// </summary>
-    /// <param name="input">
-    /// Readable source drained block by block until end of stream, so the plaintext is never held in memory as a whole beyond the staged batch; ownership stays with the caller.
+    /// <summary>Compresses the input stream into the LZOP (lzop) format in 256 KiB blocks with an optional parallelism degree.
+    /// <para>将输入流按 256 KiB 块压缩为 LZOP（lzop）格式，并可指定并行度。</para></summary>
+    /// <param name="input">Readable source drained block by block until end of stream, so the plaintext is never held in memory as a whole beyond the staged batch; ownership stays with the caller.
     /// <para>逐块读取直至流末尾的可读源流，除已暂存的批次外明文不会整体驻留内存；所有权归调用方。</para></param>
-    /// <param name="output">
-    /// Writable destination appended from its current position and left open; blocks are emitted strictly in input order, so the container bytes are identical for every degree.
+    /// <param name="output">Writable destination appended from its current position and left open; blocks are emitted strictly in input order, so the container bytes are identical for every degree.
     /// <para>从当前位置追加并保持打开的写入目标；块严格按输入顺序写出，因此任何并行度下容器字节都完全一致。</para></param>
-    /// <param name="maxDegreeOfParallelism">
-    /// <see langword="null"/> or 1 and below encodes blocks sequentially; above 1 encodes that many blocks concurrently, capped by the number of blocks staged in one batch, while each block is still written in input order and the container bytes stay identical to the sequential result.
+    /// <param name="maxDegreeOfParallelism"><see langword="null"/> or 1 and below encodes blocks sequentially; above 1 encodes that many blocks concurrently, capped by the number of blocks staged in one batch, while each block is still written in input order and the container bytes stay identical to the sequential result.
     /// <para>为 <see langword="null"/> 或小于等于 1 时串行编码各块；大于 1 时并发编码相应数量的块（不超过单个批次内的块数），各块仍按输入顺序写出，容器字节与串行结果完全一致。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>

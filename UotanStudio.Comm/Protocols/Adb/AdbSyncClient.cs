@@ -76,18 +76,15 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         return _stream;
     }
 
-    /// <summary>
-    /// Stats a remote file/directory.
-    /// <para>异步查询单个远端文件或目录状态。</para>
-    /// </summary>
+    /// <summary>Stats a remote file/directory.<para>异步查询单个远端文件或目录状态。</para></summary>
     /// <param name="remotePath">Device-side path to stat.<para>待查询的设备侧路径。</para></param>
-    /// <param name="cancellationToken">Cancels the request or the reply wait.<para>取消请求或应答等待。</para></param>
-    /// <returns>A task resolving to the entry, or <see langword="null"/> when the peer reports the path as
-    /// absent. <para>结果为条目的任务；对端报告路径不存在时返回 <see langword="null"/>。</para></returns>
+    /// <param name="cancellationToken">Cancels the request or the reply wait.
+    /// <para>取消请求或应答等待。</para></param>
+    /// <returns>A task resolving to the entry, or <see langword="null"/> when the peer reports the path as absent.
+    /// <para>结果为条目的任务；对端报告路径不存在时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id, or
-    /// reported a message longer than <see cref="InboundMaxChunkBytes"/>.
+    /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id, or reported a message longer than <see cref="InboundMaxChunkBytes"/>.
     /// <para>对端拒绝请求、返回非预期标识，或上报超过 <see cref="InboundMaxChunkBytes"/> 的消息。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
@@ -123,10 +120,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         return new SyncEntry(mode, size, time, name);
     }
 
-    /// <summary>
-    /// Lists a remote directory.
-    /// <para>异步列出远端目录内容。</para>
-    /// </summary>
+    /// <summary>Lists a remote directory.<para>异步列出远端目录内容。</para></summary>
     /// <param name="remotePath">Device-side directory path.<para>设备侧目录路径。</para></param>
     /// <param name="cancellationToken">Cancels the listing between records and during a read.
     /// <para>在记录之间与读取期间取消列举。</para></param>
@@ -134,8 +128,7 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// <para>结果为结束标记之前收到的全部条目的任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id, or
-    /// reported a record longer than <see cref="InboundMaxChunkBytes"/>.
+    /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id, or reported a record longer than <see cref="InboundMaxChunkBytes"/>.
     /// <para>对端拒绝请求、返回非预期标识，或上报超过 <see cref="InboundMaxChunkBytes"/> 的记录。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
@@ -186,17 +179,16 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         return entries;
     }
 
-    /// <summary>
-    /// Pushes a local file to the device.
-    /// <para>异步将本地文件推送到设备。</para>
-    /// </summary>
-    /// <param name="localPath">Existing local file opened for reading.<para>以只读方式打开的已存在本地文件。</para></param>
+    /// <summary>Pushes a local file to the device.<para>异步将本地文件推送到设备。</para></summary>
+    /// <param name="localPath">Existing local file opened for reading.
+    /// <para>以只读方式打开的已存在本地文件。</para></param>
     /// <param name="remotePath">Destination path on the device.<para>设备上的目标路径。</para></param>
     /// <param name="mode">Unix permission bits, sent as octal.<para>以八进制发送的 Unix 权限位。</para></param>
-    /// <param name="mtime">Device-side modification timestamp in seconds.<para>设备侧修改时间（秒）。</para></param>
-    /// <param name="cancellationToken">Cancels the push between packets.<para>在数据包之间取消推送。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="localPath"/> or
-    /// <paramref name="remotePath"/> is <see langword="null"/>.
+    /// <param name="mtime">Device-side modification timestamp in seconds.
+    /// <para>设备侧修改时间（秒）。</para></param>
+    /// <param name="cancellationToken">Cancels the push between packets.
+    /// <para>在数据包之间取消推送。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="localPath"/> or <paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="localPath"/> 或 <paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="FileNotFoundException"><paramref name="localPath"/> does not exist.
     /// <para><paramref name="localPath"/> 不存在。</para></exception>
@@ -214,19 +206,16 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         await PushStreamAsync(fs, remotePath, mode, mtime, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Pushes a stream to the device.
-    /// <para>异步将流推送到设备。</para>
-    /// </summary>
-    /// <param name="source">Read to end-of-stream in this client's chunk sizes; ownership stays with the
-    /// holder of the stream. <para>按本客户端的块大小读至流末尾；所有权仍归流的原持有者。</para></param>
+    /// <summary>Pushes a stream to the device.<para>异步将流推送到设备。</para></summary>
+    /// <param name="source">Read to end-of-stream in this client's chunk sizes; ownership stays with the holder of the stream.
+    /// <para>按本客户端的块大小读至流末尾；所有权仍归流的原持有者。</para></param>
     /// <param name="remotePath">Destination path on the device.<para>设备上的目标路径。</para></param>
     /// <param name="mode">Unix permission bits, sent as octal.<para>以八进制发送的 Unix 权限位。</para></param>
     /// <param name="mtime">Device-side modification timestamp in seconds; <c>0</c> means the current UTC time.
     /// <para>设备侧修改时间（秒）；<c>0</c> 表示传输时的当前 UTC 时间。</para></param>
-    /// <param name="cancellationToken">Cancels the push between packets.<para>在数据包之间取消推送。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="source"/> or
-    /// <paramref name="remotePath"/> is <see langword="null"/>.
+    /// <param name="cancellationToken">Cancels the push between packets.
+    /// <para>在数据包之间取消推送。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="source"/> 或 <paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The device rejected the transfer or answered with an unexpected id.
     /// <para>设备拒绝传输或返回了非预期标识。</para></exception>
@@ -273,15 +262,13 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         await ExpectResponseAsync(stream, "push", cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Pulls a remote file into a local file.
-    /// <para>异步将设备上的远端文件拉取到本地文件。</para>
-    /// </summary>
+    /// <summary>Pulls a remote file into a local file.<para>异步将设备上的远端文件拉取到本地文件。</para></summary>
     /// <param name="remotePath">Device-side source file.<para>设备侧源文件。</para></param>
-    /// <param name="localPath">Local destination; created or truncated.<para>本地目标；不存在则创建，存在则截断。</para></param>
-    /// <param name="cancellationToken">Cancels the pull between packets.<para>在数据包之间取消拉取。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> or
-    /// <paramref name="localPath"/> is <see langword="null"/>.
+    /// <param name="localPath">Local destination; created or truncated.
+    /// <para>本地目标；不存在则创建，存在则截断。</para></param>
+    /// <param name="cancellationToken">Cancels the pull between packets.
+    /// <para>在数据包之间取消拉取。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> or <paramref name="localPath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 或 <paramref name="localPath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The device rejected the transfer or answered with an unexpected id.
     /// <para>设备拒绝传输或返回了非预期标识。</para></exception>
@@ -296,16 +283,13 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         await PullStreamAsync(remotePath, fs, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Pulls a remote file into a stream.
-    /// <para>异步将远端文件拉取到流中。</para>
-    /// </summary>
+    /// <summary>Pulls a remote file into a stream.<para>异步将远端文件拉取到流中。</para></summary>
     /// <param name="remotePath">Device-side source file.<para>设备侧源文件。</para></param>
-    /// <param name="destination">Written sequentially from the current position; ownership stays with the
-    /// holder of the stream. <para>从当前位置顺序写入；所有权仍归流的原持有者。</para></param>
-    /// <param name="cancellationToken">Cancels the pull between packets.<para>在数据包之间取消拉取。</para></param>
-    /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> or
-    /// <paramref name="destination"/> is <see langword="null"/>.
+    /// <param name="destination">Written sequentially from the current position; ownership stays with the holder of the stream.
+    /// <para>从当前位置顺序写入；所有权仍归流的原持有者。</para></param>
+    /// <param name="cancellationToken">Cancels the pull between packets.
+    /// <para>在数据包之间取消拉取。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> or <paramref name="destination"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 或 <paramref name="destination"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The device rejected the transfer or answered with an unexpected id.
     /// <para>设备拒绝传输或返回了非预期标识。</para></exception>

@@ -76,23 +76,14 @@ internal sealed class AdbTlsTransport : ICommTransport
     /// </summary>
     public bool IsConnected => !_disposed && _stream is not null;
 
-    /// <summary>
-    /// Initializes a new TLS ADB transport. The TCP connection and the A_STLS/TLS upgrade are
-    /// both established here, so the protocol layer never writes an ADB message onto a wire that
-    /// the daemon is still reading as a handshake.
-    /// <para>初始化新的 TLS ADB 传输。TCP 连接与 A_STLS/TLS 升级都在此处完成，协议层不会把 ADB
-    /// 消息写到设备仍当作握手在读的线路上。</para>
-    /// </summary>
+    /// <summary>Initializes a new TLS ADB transport. The TCP connection and the A_STLS/TLS upgrade are both established here, so the protocol layer never writes an ADB message onto a wire that the daemon is still reading as a handshake.
+    /// <para>初始化新的 TLS ADB 传输。TCP 连接与 A_STLS/TLS 升级都在此处完成，协议层不会把 ADB 消息写到设备仍当作握手在读的线路上。</para></summary>
     /// <param name="host">Host name or IP address of the device. 设备的主机名或 IP 地址。</param>
     /// <param name="port">TCP port of the secure adbd service. adbd 安全服务的 TCP 端口。</param>
-    /// <param name="clientCertificate">
-    /// The certificate derived from the host identity key for this handshake.
-    /// <para>本次握手由主机身份密钥派生的证书。</para>
-    /// </param>
-    /// <param name="connectTimeoutMs">Connection timeout in milliseconds.
-    /// 连接超时（毫秒）。</param>
-    /// <exception cref="ArgumentException">The host is empty.
-    /// <para>主机为空。</para></exception>
+    /// <param name="clientCertificate">The certificate derived from the host identity key for this handshake.
+    /// <para>本次握手由主机身份密钥派生的证书。</para></param>
+    /// <param name="connectTimeoutMs">Connection timeout in milliseconds. 连接超时（毫秒）。</param>
+    /// <exception cref="ArgumentException">The host is empty.<para>主机为空。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The port or timeout is out of range.
     /// <para>端口或超时超出范围。</para></exception>
     public AdbTlsTransport(string host, int port, X509Certificate2 clientCertificate, int connectTimeoutMs = 5000)

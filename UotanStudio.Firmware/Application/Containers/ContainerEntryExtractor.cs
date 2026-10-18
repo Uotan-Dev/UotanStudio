@@ -27,31 +27,21 @@ public static class ContainerEntryExtractor
     /// <para>默认提取预算：每次调用最多 64 GiB 解压输出。</para></summary>
     public const long DefaultMaximumOutputBytes = 64L * 1024 * 1024 * 1024;
 
-    /// <summary>
-    /// Extracts the selected entries from a container (sync wrapper for background threads).
-    /// <para>从容器按勾选条目定向提取（同步包装，供后台线程调用）。</para>
-    /// </summary>
-    /// <param name="containerPath">Container file path. <para>容器文件路径。</para></param>
-    /// <param name="selectedNames">
-    /// Selected inner entries: super/payload partition names, or full ZIP entry paths.
-    /// <para>勾选的内部条目：super/payload 分区名，或 ZIP 条目完整路径。</para>
-    /// </param>
-    /// <param name="fromPayloadOnly">
-    /// Extract payload partitions only (true when a ZIP's payload section alone is selected).
-    /// <para>仅提取 payload 分区（ZIP 容器只勾选 payload 部分时为 true）。</para>
-    /// </param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <param name="outputDirectory">
-    /// Output directory; when <see langword="null"/>, next to the container.
-    /// <para>输出目录；<see langword="null"/> 时输出到容器所在目录。</para>
-    /// </param>
-    /// <param name="progress">0-100 percent progress. <para>0-100 百分比进度。</para></param>
-    /// <param name="byteProgress">Cumulative processed bytes and total. <para>累计已处理字节与总量。</para></param>
-    /// <param name="maximumOutputBytes">
-    /// Decompressed output byte budget; exceeded is rejected so an untrusted container cannot fill the disk.
-    /// <para>解压输出字节上限；超过即拒绝，防止不可信容器耗尽磁盘。</para>
-    /// </param>
-    /// <returns>The extraction result. <para>提取结果。</para></returns>
+    /// <summary>Extracts the selected entries from a container (sync wrapper for background threads).
+    /// <para>从容器按勾选条目定向提取（同步包装，供后台线程调用）。</para></summary>
+    /// <param name="containerPath">Container file path.<para>容器文件路径。</para></param>
+    /// <param name="selectedNames">Selected inner entries: super/payload partition names, or full ZIP entry paths.
+    /// <para>勾选的内部条目：super/payload 分区名，或 ZIP 条目完整路径。</para></param>
+    /// <param name="fromPayloadOnly">Extract payload partitions only (true when a ZIP's payload section alone is selected).
+    /// <para>仅提取 payload 分区（ZIP 容器只勾选 payload 部分时为 true）。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <param name="outputDirectory">Output directory; when <see langword="null"/>, next to the container.
+    /// <para>输出目录；<see langword="null"/> 时输出到容器所在目录。</para></param>
+    /// <param name="progress">0-100 percent progress.<para>0-100 百分比进度。</para></param>
+    /// <param name="byteProgress">Cumulative processed bytes and total.<para>累计已处理字节与总量。</para></param>
+    /// <param name="maximumOutputBytes">Decompressed output byte budget; exceeded is rejected so an untrusted container cannot fill the disk.
+    /// <para>解压输出字节上限；超过即拒绝，防止不可信容器耗尽磁盘。</para></param>
+    /// <returns>The extraction result.<para>提取结果。</para></returns>
     public static async Task<ContainerExtractionResult> ExtractAsync(
         string containerPath,
         IReadOnlyList<string> selectedNames,

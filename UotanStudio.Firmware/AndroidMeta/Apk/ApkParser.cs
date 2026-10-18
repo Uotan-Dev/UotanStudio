@@ -13,18 +13,23 @@ namespace UotanStudio.Firmware.AndroidMeta.Apk;
 /// </summary>
 public static class ApkParser
 {
-    /// <summary>
-    /// Analyzes an APK file and extracts its metadata.
-    /// <para>分析 APK 文件并提取元数据。</para>
-    /// </summary>
-    /// <param name="apkPath">Path to the APK on disk; the file must exist and is opened for reading only. <para>磁盘上的 APK 路径；文件必须存在且仅以只读方式打开。</para></param>
-    /// <param name="preferredLanguage">Locale for the localized application label, for example <c>en-US</c>; <see langword="null"/> keeps the default configuration. <para>本地化应用名称所用的语言，例如 <c>en-US</c>；为 <see langword="null"/> 时取默认配置。</para></param>
-    /// <returns>A populated <see cref="ApkInfo"/>; unresolvable fields keep their empty or zero defaults. <para>填充完成的 <see cref="ApkInfo"/>；无法解析的字段保持空值或零默认。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="apkPath"/> is <see langword="null"/>. <para><paramref name="apkPath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="FileNotFoundException">No file exists at <paramref name="apkPath"/>. <para><paramref name="apkPath"/> 处没有文件。</para></exception>
-    /// <exception cref="InvalidDataException">The ZIP is malformed, or a manifest, icon or resources entry exceeds its read limit. <para>ZIP 结构非法，或清单、图标、resources 条目超出读取上限。</para></exception>
-    /// <exception cref="AXmlException">The embedded binary-XML manifest cannot be parsed. <para>内嵌的二进制 XML 清单无法解析。</para></exception>
-    /// <exception cref="ArscException">The embedded resource table cannot be parsed. <para>内嵌的资源表无法解析。</para></exception>
+    /// <summary>Analyzes an APK file and extracts its metadata.<para>分析 APK 文件并提取元数据。</para></summary>
+    /// <param name="apkPath">Path to the APK on disk; the file must exist and is opened for reading only.
+    /// <para>磁盘上的 APK 路径；文件必须存在且仅以只读方式打开。</para></param>
+    /// <param name="preferredLanguage">Locale for the localized application label, for example <c>en-US</c>; <see langword="null"/> keeps the default configuration.
+    /// <para>本地化应用名称所用的语言，例如 <c>en-US</c>；为 <see langword="null"/> 时取默认配置。</para></param>
+    /// <returns>A populated <see cref="ApkInfo"/>; unresolvable fields keep their empty or zero defaults.
+    /// <para>填充完成的 <see cref="ApkInfo"/>；无法解析的字段保持空值或零默认。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="apkPath"/> is <see langword="null"/>.
+    /// <para><paramref name="apkPath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="FileNotFoundException">No file exists at <paramref name="apkPath"/>.
+    /// <para><paramref name="apkPath"/> 处没有文件。</para></exception>
+    /// <exception cref="InvalidDataException">The ZIP is malformed, or a manifest, icon or resources entry exceeds its read limit.
+    /// <para>ZIP 结构非法，或清单、图标、resources 条目超出读取上限。</para></exception>
+    /// <exception cref="AXmlException">The embedded binary-XML manifest cannot be parsed.
+    /// <para>内嵌的二进制 XML 清单无法解析。</para></exception>
+    /// <exception cref="ArscException">The embedded resource table cannot be parsed.
+    /// <para>内嵌的资源表无法解析。</para></exception>
     /// <example>
     /// <code language="csharp">
     /// ApkInfo info = ApkParser.Analyze(apkPath);

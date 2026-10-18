@@ -10,28 +10,13 @@ namespace UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 /// </summary>
 public static partial class Disassembler
 {
-    /// <remarks>
-    /// Unreferenced switch tables use project-specific .packed-switch-raw or .sparse-switch-raw blocks,
-    /// retaining signed code-unit offsets without inventing a case-label origin.
-    /// <para>无引用 switch 表使用项目专用的 .packed-switch-raw 或 .sparse-switch-raw 块，保留有符号代码单元偏移而不虚构标签起点。</para>
-    /// </remarks>
-    /// <summary>
-    /// Disassembles the entire DEX file into text.
-    /// <para>反汇编整个 DEX 文件为文本。</para>
-    /// </summary>
-    /// <param name="dex">
-    /// Parsed image whose header and class, string, type, field and method tables supply every printed value.
-    /// <para>已解析的镜像，其头部与类、字符串、字段、类型、方法表提供全部输出内容。</para>
-    /// </param>
-    /// <returns>
-    /// A leading <c># DEX v</c> comment holding the header version plus the class, string, type and method counts,
-    /// then one blank-line separated block per entry of <see cref="DexFile.Classes"/>. The whole text is built in
-    /// memory, so its size grows with the input. Out-of-range table indices print as <c>"?"</c> or as an empty
-    /// string, so malformed input still yields text instead of an error.
-    /// <para>以 <c># DEX v</c> 注释开头，包含头部版本号以及类、字符串、类型与方法计数；随后按 <see cref="DexFile.Classes"/>
-    /// 顺序为每个条目输出一个以空行分隔的块。全部文本在内存中构造，因此大小随输入增长。越界的表索引打印为 <c>"?"</c>
-    /// 或空字符串，畸形输入依然产出文本而不会报错。</para>
-    /// </returns>
+    /// <remarks>Unreferenced switch tables use project-specific .packed-switch-raw or .sparse-switch-raw blocks, retaining signed code-unit offsets without inventing a case-label origin.
+    /// <para>无引用 switch 表使用项目专用的 .packed-switch-raw 或 .sparse-switch-raw 块，保留有符号代码单元偏移而不虚构标签起点。</para></remarks>
+    /// <summary>Disassembles the entire DEX file into text.<para>反汇编整个 DEX 文件为文本。</para></summary>
+    /// <param name="dex">Parsed image whose header and class, string, type, field and method tables supply every printed value.
+    /// <para>已解析的镜像，其头部与类、字符串、字段、类型、方法表提供全部输出内容。</para></param>
+    /// <returns>A leading <c># DEX v</c> comment holding the header version plus the class, string, type and method counts, then one blank-line separated block per entry of <see cref="DexFile.Classes"/>. The whole text is built in memory, so its size grows with the input. Out-of-range table indices print as <c>"?"</c> or as an empty string, so malformed input still yields text instead of an error.
+    /// <para>以 <c># DEX v</c> 注释开头，包含头部版本号以及类、字符串、类型与方法计数；随后按 <see cref="DexFile.Classes"/> 顺序为每个条目输出一个以空行分隔的块。全部文本在内存中构造，因此大小随输入增长。越界的表索引打印为 <c>"?"</c> 或空字符串，畸形输入依然产出文本而不会报错。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="dex"/> is <see langword="null"/>.
     /// <para><paramref name="dex"/> 为 <see langword="null"/>。</para></exception>
     /// <example>
@@ -59,27 +44,16 @@ public static partial class Disassembler
         return sb.ToString();
     }
 
-    /// <summary>
-    /// Disassembles a single class into smali-style text.
-    /// <para>反汇编单个类为 smali 风格文本。</para>
-    /// </summary>
-    /// <param name="dex">Tables used to resolve the type, string, method and proto references of the class and its
-    /// members. <para>用于解析该类及其成员所指向的类型、字符串、方法与 proto 引用的各张表。</para></param>
-    /// <param name="cls">Class model to render; it is printed from its own data and does not have to be a member of
-    /// <paramref name="dex"/>. <para>要渲染的类模型；按其自身数据输出，不要求属于 <paramref name="dex"/>。</para></param>
-    /// <returns>
-    /// The <c>.class</c> line with formatted access flags, a <c>.super</c> line only when the superclass index is
-    /// non-negative, one <c>.implements</c> line per interface, a <c>.source</c> line only when the source index is
-    /// non-negative, the class annotation blocks, then the static fields (each followed by its static value when
-    /// the static-value array has a slot for it) and the instance fields, and finally every direct and virtual
-    /// method. A field whose index resolves to no <c>field_ids</c> entry is skipped without notice, and the whole
-    /// block is built in memory. <para>输出带格式化访问标志的 <c>.class</c> 行；仅当父类索引非负时输出 <c>.super</c> 行；
-    /// 每个接口输出一行 <c>.implements</c>；仅当源文件索引非负时输出 <c>.source</c> 行；随后是类级注解块、静态字段
-    /// （静态值数组存在对应槽位时附带其初始值）与实例字段，最后是全部直接方法与虚方法。索引找不到 <c>field_ids</c>
-    /// 条目的字段会被静默跳过，整块文本在内存中构造。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException"><paramref name="dex"/> or <paramref name="cls"/> is
-    /// <see langword="null"/>. <para><paramref name="dex"/> 或 <paramref name="cls"/> 为 <see langword="null"/>。</para></exception>
+    /// <summary>Disassembles a single class into smali-style text.
+    /// <para>反汇编单个类为 smali 风格文本。</para></summary>
+    /// <param name="dex">Tables used to resolve the type, string, method and proto references of the class and its members.
+    /// <para>用于解析该类及其成员所指向的类型、字符串、方法与 proto 引用的各张表。</para></param>
+    /// <param name="cls">Class model to render; it is printed from its own data and does not have to be a member of <paramref name="dex"/>.
+    /// <para>要渲染的类模型；按其自身数据输出，不要求属于 <paramref name="dex"/>。</para></param>
+    /// <returns>The <c>.class</c> line with formatted access flags, a <c>.super</c> line only when the superclass index is non-negative, one <c>.implements</c> line per interface, a <c>.source</c> line only when the source index is non-negative, the class annotation blocks, then the static fields (each followed by its static value when the static-value array has a slot for it) and the instance fields, and finally every direct and virtual method. A field whose index resolves to no <c>field_ids</c> entry is skipped without notice, and the whole block is built in memory.
+    /// <para>输出带格式化访问标志的 <c>.class</c> 行；仅当父类索引非负时输出 <c>.super</c> 行； 每个接口输出一行 <c>.implements</c>；仅当源文件索引非负时输出 <c>.source</c> 行；随后是类级注解块、静态字段 （静态值数组存在对应槽位时附带其初始值）与实例字段，最后是全部直接方法与虚方法。索引找不到 <c>field_ids</c> 条目的字段会被静默跳过，整块文本在内存中构造。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="dex"/> or <paramref name="cls"/> is <see langword="null"/>.
+    /// <para><paramref name="dex"/> 或 <paramref name="cls"/> 为 <see langword="null"/>。</para></exception>
     public static string DisassembleClass(DexFile dex, ClassDefinition cls)
     {
         ArgumentNullException.ThrowIfNull(dex);
@@ -163,41 +137,23 @@ public static partial class Disassembler
         }
     }
 
-    /// <summary>
-    /// Disassembles a single method into smali-style text (including instructions and branch labels).
-    /// <para>反汇编单个方法为 smali 风格文本（含指令与分支标签）。</para>
-    /// </summary>
+    /// <summary>Disassembles a single method into smali-style text (including instructions and branch labels).
+    /// <para>反汇编单个方法为 smali 风格文本（含指令与分支标签）。</para></summary>
     /// <param name="dex">Tables used to resolve the method, proto, string and type references of the body.
     /// <para>用于解析方法体中方法、proto、字符串与类型引用的各张表。</para></param>
-    /// <param name="encodedMethod">Method entry supplying the <c>method_idx</c>, access flags and code item; its
-    /// decoded <see cref="Instruction"/> list is printed as supplied, and the raw code units are decoded on demand
-    /// only when that list is empty. <para>提供 <c>method_idx</c>、访问标志与 code item 的方法条目；已解码的
-    /// <see cref="Instruction"/> 列表非空时按其原样输出，为空时才按需解码原始代码单元。</para></param>
-    /// <param name="cls">Owning class used to look up method-level and parameter annotations; <see langword="null"/>
-    /// omits every annotation block while the declaration and bytecode still print.
+    /// <param name="encodedMethod">Method entry supplying the <c>method_idx</c>, access flags and code item; its decoded <see cref="Instruction"/> list is printed as supplied, and the raw code units are decoded on demand only when that list is empty.
+    /// <para>提供 <c>method_idx</c>、访问标志与 code item 的方法条目；已解码的 <see cref="Instruction"/> 列表非空时按其原样输出，为空时才按需解码原始代码单元。</para></param>
+    /// <param name="cls">Owning class used to look up method-level and parameter annotations; <see langword="null"/> omits every annotation block while the declaration and bytecode still print.
     /// <para>用于查找方法级注解与参数注解的所属类；为 <see langword="null"/> 时不输出任何注解块，但声明行与字节码照常输出。</para></param>
-    /// <returns>
-    /// The <c>.method</c> line with formatted flags and parameter and return descriptors; for a method with a
-    /// code item the <c>.registers</c> line, annotation blocks, then one instruction per line
-    /// with <c>:label_XXXX</c>, <c>:try_start_</c>, <c>:try_end_</c> and <c>:catch</c> labels, closed by
-    /// <c>.end method</c>. A body without a code item prints as the declaration followed by <c>.end method</c>.
-    /// Label and catch addresses are derived from try and handler offsets that are not validated
-    /// against the instruction stream, and the whole text is built in memory. Empty when the
-    /// <c>method_idx</c> resolves to no <c>method_ids</c> entry.
-    /// <para>输出带格式化标志与参数、返回类型描述符的 <c>.method</c> 行；方法含 code item 时接着输出 <c>.registers</c>
-    /// 行、注解块，然后每行一条指令，并插入 <c>:label_XXXX</c>、<c>:try_start_</c>、
-    /// <c>:try_end_</c> 与 <c>:catch</c> 标签，以 <c>.end method</c> 结束。没有 code item 的方法体只输出声明行与
-    /// <c>.end method</c>。
-    /// 标签与 catch 地址取自不与指令流比对的 try 和处理程序偏移，全部文本在内存中构造。<c>method_idx</c>
-    /// 找不到 <c>method_ids</c> 条目时返回空字符串。</para>
-    /// </returns>
-    /// <exception cref="ArgumentNullException"><paramref name="dex"/> or <paramref name="encodedMethod"/> is
-    /// <see langword="null"/>. <para><paramref name="dex"/> 或 <paramref name="encodedMethod"/> 为 <see langword="null"/>。</para></exception>
+    /// <returns>The <c>.method</c> line with formatted flags and parameter and return descriptors; for a method with a code item the <c>.registers</c> line, annotation blocks, then one instruction per line with <c>:label_XXXX</c>, <c>:try_start_</c>, <c>:try_end_</c> and <c>:catch</c> labels, closed by <c>.end method</c>. A body without a code item prints as the declaration followed by <c>.end method</c>. Label and catch addresses are derived from try and handler offsets that are not validated against the instruction stream, and the whole text is built in memory. Empty when the <c>method_idx</c> resolves to no <c>method_ids</c> entry.
+    /// <para>输出带格式化标志与参数、返回类型描述符的 <c>.method</c> 行；方法含 code item 时接着输出 <c>.registers</c> 行、注解块，然后每行一条指令，并插入 <c>:label_XXXX</c>、<c>:try_start_</c>、 <c>:try_end_</c> 与 <c>:catch</c> 标签，以 <c>.end method</c> 结束。没有 code item 的方法体只输出声明行与 <c>.end method</c>。 标签与 catch 地址取自不与指令流比对的 try 和处理程序偏移，全部文本在内存中构造。<c>method_idx</c> 找不到 <c>method_ids</c> 条目时返回空字符串。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="dex"/> or <paramref name="encodedMethod"/> is <see langword="null"/>.
+    /// <para><paramref name="dex"/> 或 <paramref name="encodedMethod"/> 为 <see langword="null"/>。</para></exception>
     /// <example>
     /// <code>
     /// foreach (var method in cls.DirectMethods)
     /// {
-    ///     Console.Write(Disassembler.DisassembleMethod(dex, method, cls));
+    /// Console.Write(Disassembler.DisassembleMethod(dex, method, cls));
     /// }
     /// </code>
     /// </example>

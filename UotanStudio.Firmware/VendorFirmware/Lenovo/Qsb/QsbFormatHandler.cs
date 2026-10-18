@@ -86,19 +86,16 @@ internal sealed class QsbFormatHandler : IReadonlyFormatHandler
         }
     }
 
-    /// <summary>
-    /// Merges every chunk group declared by the manifest into <c>{prefix}.img</c> files.
-    /// <para>将清单声明的每个分块组合并为 <c>{prefix}.img</c> 文件。</para>
-    /// </summary>
+    /// <summary>Merges every chunk group declared by the manifest into <c>{prefix}.img</c> files.
+    /// <para>将清单声明的每个分块组合并为 <c>{prefix}.img</c> 文件。</para></summary>
     /// <param name="filePath">Rawprogram manifest; chunk files are resolved beside it.
     /// <para>rawprogram 清单；分块文件在其所在目录解析。</para></param>
     /// <param name="outputDirectory">Destination directory, created when absent.
     /// <para>目标目录，不存在时创建。</para></param>
     /// <param name="options">Output ceiling and overwrite policy; <see langword="null"/> uses defaults.
     /// <para>输出上限与覆盖策略；传 <see langword="null"/> 时使用默认值。</para></param>
-    /// <param name="cancellationToken">Cancels the merge. <para>取消本次合并。</para></param>
-    /// <returns>Outcome listing the merged images with sizes.
-    /// <para>结果对象列出合并后的镜像及其大小。</para></returns>
+    /// <param name="cancellationToken">Cancels the merge.<para>取消本次合并。</para></param>
+    /// <returns>Outcome listing the merged images with sizes.<para>结果对象列出合并后的镜像及其大小。</para></returns>
     /// <exception cref="OperationCanceledException">The token was canceled.
     /// <para>令牌被取消。</para></exception>
     public async Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory,

@@ -2,19 +2,12 @@ using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
-/// <summary>
-/// Implements the Sahara protocol handshake for EDL (Emergency Download Mode) devices.
-/// Protocol flow: passive HELLO read → HELLO_RESP → READ_DATA/READ_DATA64 loop → END_OF_IMAGE → DONE → DONE_RESPONSE → complete.
-/// <para>实现 EDL（紧急下载模式）设备的 Sahara 协议握手。协议流程：被动读取 HELLO → HELLO_RESP →
-/// READ_DATA/READ_DATA64 循环 → END_OF_IMAGE → DONE → DONE_RESPONSE → 完成。</para>
-/// </summary>
-/// <remarks>
-/// Initializes a new instance of the <see cref="SaharaProtocol"/> class.
-/// <para>初始化 <see cref="SaharaProtocol"/> 类的新实例。</para>
-/// </remarks>
+/// <summary>Implements the Sahara protocol handshake for EDL (Emergency Download Mode) devices. Protocol flow: passive HELLO read → HELLO_RESP → READ_DATA/READ_DATA64 loop → END_OF_IMAGE → DONE → DONE_RESPONSE → complete.
+/// <para>实现 EDL（紧急下载模式）设备的 Sahara 协议握手。协议流程：被动读取 HELLO → HELLO_RESP → READ_DATA/READ_DATA64 循环 → END_OF_IMAGE → DONE → DONE_RESPONSE → 完成。</para></summary>
+/// <remarks>Initializes a new instance of the <see cref="SaharaProtocol"/> class.
+/// <para>初始化 <see cref="SaharaProtocol"/> 类的新实例。</para></remarks>
 /// <param name="transport">The device transport.<para>设备传输层。</para></param>
-/// <param name="timeoutMs">Optional timeout in milliseconds; <see langword="null"/> selects
-/// <see cref="EdlConstants.DefaultCommandTimeoutMs"/>.
+/// <param name="timeoutMs">Optional timeout in milliseconds; <see langword="null"/> selects <see cref="EdlConstants.DefaultCommandTimeoutMs"/>.
 /// <para>可选的超时（毫秒）；<see langword="null"/> 选择 <see cref="EdlConstants.DefaultCommandTimeoutMs"/>。</para></param>
 public sealed partial class SaharaProtocol(ICommTransport transport, int? timeoutMs = null)
 {

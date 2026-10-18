@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Collections.Concurrent;
 using System.Text;
 using UotanStudio.Firmware.Archive.Internal;
@@ -15,57 +14,24 @@ namespace UotanStudio.Firmware.Archive.Extraction;
 /// </summary>
 public sealed class CpioExtractor
 {
-    /// <summary>
-    /// Extracts archive entries to a destination directory.
-    /// <para>将归档条目解包到目标目录。</para>
-    /// </summary>
-    /// <param name="entries">
-    /// Entries consumed in enumeration order; payloads come from in-memory data,
-    /// <see cref="ArchiveEntry.DataStream"/> or <see cref="ArchiveEntry.DataStreamFactory"/>.
-    /// Streams opened from a factory are disposed by this call; a supplied
-    /// <see cref="ArchiveEntry.DataStream"/> stays open and owned by the caller.
-    /// <para>按枚举顺序消费的条目；负载来自内存数据、<see cref="ArchiveEntry.DataStream"/>
-    /// 或 <see cref="ArchiveEntry.DataStreamFactory"/>。由工厂打开的流在本次调用中释放；
-    /// 外部提供的 <see cref="ArchiveEntry.DataStream"/> 保持打开，所有权归调用方。</para>
-    /// </param>
-    /// <param name="destinationDirectory">
-    /// Directory resolved to a full path and created when missing; every write is confined beneath
-    /// it.
-    /// <para>解析为完整路径、缺失时创建的目标目录；所有写入都被约束在其内部。</para>
-    /// </param>
-    /// <param name="options">
-    /// Filtering, overwrite and restore behaviour; <see langword="null"/> uses the
-    /// <see cref="ExtractOptions"/> defaults.
-    /// <para>过滤、覆盖与还原行为选项；为 <see langword="null"/> 时使用
-    /// <see cref="ExtractOptions"/> 默认值。</para>
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// <paramref name="entries"/> or <paramref name="destinationDirectory"/> is
-    /// <see langword="null"/>.
-    /// <para><paramref name="entries"/> 或 <paramref name="destinationDirectory"/>
-    /// 为 <see langword="null"/>。</para>
-    /// </exception>
-    /// <exception cref="ArchiveCorruptedException">
-    /// An entry path escapes the destination, declares a negative or mismatched length, or is
-    /// absolute under <see cref="AbsolutePathPolicy.Reject"/>.
-    /// <para>条目路径逃出目标目录、声明长度为负或不匹配，或在 <see cref="AbsolutePathPolicy.Reject"/>
-    /// 策略下为绝对路径。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The destination has no filesystem root, or an extraction path traverses a symbolic link or
-    /// reparse point.
-    /// <para>目标目录没有文件系统根，或解包路径穿过符号链接或重解析点。</para>
-    /// </exception>
-    /// <exception cref="EndOfStreamException">
-    /// A payload stream ends before its declared length.
-    /// <para>负载流在达到声明长度前提前结束。</para>
-    /// </exception>
-    /// <exception cref="DirectoryNotFoundException">
-    /// A parent directory is missing and <see cref="ExtractOptions.MakeDirectories"/> is
-    /// <see langword="false"/>.
-    /// <para>父目录不存在且 <see cref="ExtractOptions.MakeDirectories"/> 为
-    /// <see langword="false"/>。</para>
-    /// </exception>
+    /// <summary>Extracts archive entries to a destination directory.
+    /// <para>将归档条目解包到目标目录。</para></summary>
+    /// <param name="entries">Entries consumed in enumeration order; payloads come from in-memory data, <see cref="ArchiveEntry.DataStream"/> or <see cref="ArchiveEntry.DataStreamFactory"/>. Streams opened from a factory are disposed by this call; a supplied <see cref="ArchiveEntry.DataStream"/> stays open and owned by the caller.
+    /// <para>按枚举顺序消费的条目；负载来自内存数据、<see cref="ArchiveEntry.DataStream"/> 或 <see cref="ArchiveEntry.DataStreamFactory"/>。由工厂打开的流在本次调用中释放； 外部提供的 <see cref="ArchiveEntry.DataStream"/> 保持打开，所有权归调用方。</para></param>
+    /// <param name="destinationDirectory">Directory resolved to a full path and created when missing; every write is confined beneath it.
+    /// <para>解析为完整路径、缺失时创建的目标目录；所有写入都被约束在其内部。</para></param>
+    /// <param name="options">Filtering, overwrite and restore behaviour; <see langword="null"/> uses the <see cref="ExtractOptions"/> defaults.
+    /// <para>过滤、覆盖与还原行为选项；为 <see langword="null"/> 时使用 <see cref="ExtractOptions"/> 默认值。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="entries"/> or <paramref name="destinationDirectory"/> is <see langword="null"/>.
+    /// <para><paramref name="entries"/> 或 <paramref name="destinationDirectory"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArchiveCorruptedException">An entry path escapes the destination, declares a negative or mismatched length, or is absolute under <see cref="AbsolutePathPolicy.Reject"/>.
+    /// <para>条目路径逃出目标目录、声明长度为负或不匹配，或在 <see cref="AbsolutePathPolicy.Reject"/> 策略下为绝对路径。</para></exception>
+    /// <exception cref="InvalidDataException">The destination has no filesystem root, or an extraction path traverses a symbolic link or reparse point.
+    /// <para>目标目录没有文件系统根，或解包路径穿过符号链接或重解析点。</para></exception>
+    /// <exception cref="EndOfStreamException">A payload stream ends before its declared length.
+    /// <para>负载流在达到声明长度前提前结束。</para></exception>
+    /// <exception cref="DirectoryNotFoundException">A parent directory is missing and <see cref="ExtractOptions.MakeDirectories"/> is <see langword="false"/>.
+    /// <para>父目录不存在且 <see cref="ExtractOptions.MakeDirectories"/> 为 <see langword="false"/>。</para></exception>
     public void ExtractToDirectory(IEnumerable<ArchiveEntry> entries, string destinationDirectory, ExtractOptions? options = null)
         => ExtractToDirectory(entries, destinationDirectory, options, entryProgress: null, totalEntries: 0);
 

@@ -48,14 +48,10 @@ public sealed class FatParser : IDisposable
         _declaredVolumeBytes = ReadDeclaredVolumeBytes(boot, _filesystem);
     }
 
-    /// <summary>
-    /// Opens a FAT volume image carried by a caller-owned stream.
-    /// <para>由调用方持有的流打开 FAT 卷镜像。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Seekable stream over the volume; ownership stays with the caller.
-    /// <para>承载该卷的可定位流；所有权保留在调用方。</para>
-    /// </param>
+    /// <summary>Opens a FAT volume image carried by a caller-owned stream.
+    /// <para>由调用方持有的流打开 FAT 卷镜像。</para></summary>
+    /// <param name="stream">Seekable stream over the volume; ownership stays with the caller.
+    /// <para>承载该卷的可定位流；所有权保留在调用方。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException"><paramref name="stream"/> is not seekable.
@@ -174,22 +170,12 @@ public sealed class FatParser : IDisposable
     /// </value>
     public bool IsCapacityEquivalent => DeclaredVolumeBytes == _imageLength;
 
-    /// <summary>
-    /// Determines whether a file carries a FAT12/FAT16/FAT32 volume boot record with geometry the parser
-    /// accepts.
-    /// <para>判断文件是否携带本解析器可接受的 FAT12/FAT16/FAT32 卷引导记录。</para>
-    /// </summary>
-    /// <param name="filePath">
-    /// Candidate image path; blank, missing, short or unreadable paths yield <see langword="false"/>.
-    /// <para>候选镜像路径；空白、缺失、过短或不可读时返回 <see langword="false"/>。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> only when the 0x55AA boot signature, the file-system type name at offset 54
-    /// or 82, and every BIOS parameter block field pass validation; any read failure is reported as a
-    /// non-match.
-    /// <para>仅当 0x55AA 引导签名、偏移 54 或 82 的文件系统类型名以及全部 BIOS 参数块字段均通过校验时为
-    /// <see langword="true"/>；读取失败按不匹配处理。</para>
-    /// </returns>
+    /// <summary>Determines whether a file carries a FAT12/FAT16/FAT32 volume boot record with geometry the parser accepts.
+    /// <para>判断文件是否携带本解析器可接受的 FAT12/FAT16/FAT32 卷引导记录。</para></summary>
+    /// <param name="filePath">Candidate image path; blank, missing, short or unreadable paths yield <see langword="false"/>.
+    /// <para>候选镜像路径；空白、缺失、过短或不可读时返回 <see langword="false"/>。</para></param>
+    /// <returns><see langword="true"/> only when the 0x55AA boot signature, the file-system type name at offset 54 or 82, and every BIOS parameter block field pass validation; any read failure is reported as a non-match.
+    /// <para>仅当 0x55AA 引导签名、偏移 54 或 82 的文件系统类型名以及全部 BIOS 参数块字段均通过校验时为 <see langword="true"/>；读取失败按不匹配处理。</para></returns>
     public static bool IsFatImage(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -208,20 +194,12 @@ public sealed class FatParser : IDisposable
         }
     }
 
-    /// <summary>
-    /// Determines whether a stream starts with an acceptable FAT volume boot record.
-    /// <para>判断流是否以可接受的 FAT 卷引导记录开始。</para>
-    /// </summary>
-    /// <param name="stream">
-    /// Seekable stream; its position is restored before returning.
-    /// <para>可定位的流；返回前恢复其位置。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> when the boot record and its geometry pass validation; <see langword="false"/>
-    /// for unseekable or short streams and any read failure.
-    /// <para>引导记录及其几何信息通过校验时为 <see langword="true"/>；不可定位、过短的流与任何读取错误为
-    /// <see langword="false"/>。</para>
-    /// </returns>
+    /// <summary>Determines whether a stream starts with an acceptable FAT volume boot record.
+    /// <para>判断流是否以可接受的 FAT 卷引导记录开始。</para></summary>
+    /// <param name="stream">Seekable stream; its position is restored before returning.
+    /// <para>可定位的流；返回前恢复其位置。</para></param>
+    /// <returns><see langword="true"/> when the boot record and its geometry pass validation; <see langword="false"/> for unseekable or short streams and any read failure.
+    /// <para>引导记录及其几何信息通过校验时为 <see langword="true"/>；不可定位、过短的流与任何读取错误为 <see langword="false"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.
     /// <para><paramref name="stream"/> 为 <see langword="null"/>。</para></exception>
     public static bool IsFatStream(Stream stream)
@@ -248,26 +226,14 @@ public sealed class FatParser : IDisposable
         }
     }
 
-    /// <summary>
-    /// Validates a FAT volume boot record already held in a header buffer.
-    /// <para>校验已保存在头部缓冲区中的 FAT 卷引导记录。</para>
-    /// </summary>
-    /// <param name="header">
-    /// Leading bytes of the candidate image; shorter than <c>512</c> bytes yields <see langword="false"/>.
-    /// <para>候选镜像的起始字节；不足 <c>512</c> 字节时返回 <see langword="false"/>。</para>
-    /// </param>
-    /// <param name="imageLength">
-    /// Total bytes of the image when known, used to require that the cluster data area actually starts
-    /// inside the file; <see langword="null"/> skips that bound, which is what a caller probing only a
-    /// header prefix of a wrapped image can offer.
-    /// <para>已知时传入镜像总字节数，用于要求簇数据区确实落在文件内；传 <see langword="null"/> 表示跳过该上限，
-    /// 适用于只探测到包装镜像头部前缀的调用方。</para>
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> when the boot signature, the file-system type name and the BIOS parameter block
-    /// geometry pass validation.
-    /// <para>引导签名、文件系统类型名与 BIOS 参数块几何信息均通过校验时返回 <see langword="true"/>。</para>
-    /// </returns>
+    /// <summary>Validates a FAT volume boot record already held in a header buffer.
+    /// <para>校验已保存在头部缓冲区中的 FAT 卷引导记录。</para></summary>
+    /// <param name="header">Leading bytes of the candidate image; shorter than <c>512</c> bytes yields <see langword="false"/>.
+    /// <para>候选镜像的起始字节；不足 <c>512</c> 字节时返回 <see langword="false"/>。</para></param>
+    /// <param name="imageLength">Total bytes of the image when known, used to require that the cluster data area actually starts inside the file; <see langword="null"/> skips that bound, which is what a caller probing only a header prefix of a wrapped image can offer.
+    /// <para>已知时传入镜像总字节数，用于要求簇数据区确实落在文件内；传 <see langword="null"/> 表示跳过该上限， 适用于只探测到包装镜像头部前缀的调用方。</para></param>
+    /// <returns><see langword="true"/> when the boot signature, the file-system type name and the BIOS parameter block geometry pass validation.
+    /// <para>引导签名、文件系统类型名与 BIOS 参数块几何信息均通过校验时返回 <see langword="true"/>。</para></returns>
     public static bool IsFatBootRecord(ReadOnlySpan<byte> header, long? imageLength = null) =>
         header.Length >= BootRecordBytes && header[510] == 0x55 && header[511] == 0xAA
         && ValidateGeometry(header, imageLength);
@@ -294,23 +260,15 @@ public sealed class FatParser : IDisposable
         return _index.Entries;
     }
 
-    /// <summary>
-    /// Reads one file's bytes into the caller's stream.
-    /// <para>把单个文件的字节读入调用方提供的流。</para>
-    /// </summary>
-    /// <param name="path">
-    /// Image-relative path as returned by <see cref="ListFiles"/>; comparison ignores case, matching the
-    /// file system's own case-insensitive name lookup.
-    /// <para><see cref="ListFiles"/> 返回的镜像相对路径；比较忽略大小写，与文件系统自身的大小写不敏感名一致。</para>
-    /// </param>
-    /// <param name="output">
-    /// Destination stream; it is written from its current position and never closed here.
-    /// <para>目标流；从其当前位置写入且此处不关闭。</para>
-    /// </param>
+    /// <summary>Reads one file's bytes into the caller's stream.
+    /// <para>把单个文件的字节读入调用方提供的流。</para></summary>
+    /// <param name="path">Image-relative path as returned by <see cref="ListFiles"/>; comparison ignores case, matching the file system's own case-insensitive name lookup.
+    /// <para><see cref="ListFiles"/> 返回的镜像相对路径；比较忽略大小写，与文件系统自身的大小写不敏感名一致。</para></param>
+    /// <param name="output">Destination stream; it is written from its current position and never closed here.
+    /// <para>目标流；从其当前位置写入且此处不关闭。</para></param>
     /// <exception cref="ArgumentException"><paramref name="path"/> is blank.
     /// <para><paramref name="path"/> 为空白。</para></exception>
-    /// <exception cref="FileNotFoundException">No file has that path.
-    /// <para>该路径不存在文件。</para></exception>
+    /// <exception cref="FileNotFoundException">No file has that path.<para>该路径不存在文件。</para></exception>
     /// <exception cref="FileSystemCorruptedException">The file's extents lie beyond the image length.
     /// <para>文件区间超出镜像长度。</para></exception>
     public void ReadFile(string path, Stream output)
@@ -335,36 +293,20 @@ public sealed class FatParser : IDisposable
         }
     }
 
-    /// <summary>
-    /// Extracts the whole volume tree into a host directory.
-    /// <para>把整棵卷目录树解包到主机目录。</para>
-    /// </summary>
-    /// <param name="outputDirectory">
-    /// Destination root; entry names are resolved through <see cref="FileExtraction"/> so no entry can
-    /// escape it.
-    /// <para>目标根目录；条目名经 <see cref="FileExtraction"/> 解析，任何条目都无法逃逸。</para>
-    /// </param>
-    /// <param name="overwrite">
-    /// Whether an existing destination file may be replaced.
-    /// <para>是否允许替换已存在的目标文件。</para>
-    /// </param>
-    /// <param name="maximumOutputBytes">
-    /// Cumulative write budget for the whole extraction.
-    /// <para>整个解包过程的累计写入预算。</para>
-    /// </param>
-    /// <param name="byteProgress">
-    /// Receives cumulative processed and total bytes; <see langword="null"/> reports nothing.
-    /// <para>接收累计已处理与总字节数；<see langword="null"/> 表示不报告。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Checked per entry and per copy chunk.
-    /// <para>按条目和按复制块检查。</para>
-    /// </param>
-    /// <returns>
-    /// The image paths of the written files, plus the paths that could not be read because their clusters lie
-    /// beyond the image end; the second list is empty on a capacity-equivalent volume.
-    /// <para>已写出文件的镜像路径，以及因簇落在镜像末尾之外而无法读取的路径；容量等价的卷上第二个列表为空。</para>
-    /// </returns>
+    /// <summary>Extracts the whole volume tree into a host directory.
+    /// <para>把整棵卷目录树解包到主机目录。</para></summary>
+    /// <param name="outputDirectory">Destination root; entry names are resolved through <see cref="FileExtraction"/> so no entry can escape it.
+    /// <para>目标根目录；条目名经 <see cref="FileExtraction"/> 解析，任何条目都无法逃逸。</para></param>
+    /// <param name="overwrite">Whether an existing destination file may be replaced.
+    /// <para>是否允许替换已存在的目标文件。</para></param>
+    /// <param name="maximumOutputBytes">Cumulative write budget for the whole extraction.
+    /// <para>整个解包过程的累计写入预算。</para></param>
+    /// <param name="byteProgress">Receives cumulative processed and total bytes; <see langword="null"/> reports nothing.
+    /// <para>接收累计已处理与总字节数；<see langword="null"/> 表示不报告。</para></param>
+    /// <param name="cancellationToken">Checked per entry and per copy chunk.
+    /// <para>按条目和按复制块检查。</para></param>
+    /// <returns>The image paths of the written files, plus the paths that could not be read because their clusters lie beyond the image end; the second list is empty on a capacity-equivalent volume.
+    /// <para>已写出文件的镜像路径，以及因簇落在镜像末尾之外而无法读取的路径；容量等价的卷上第二个列表为空。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="outputDirectory"/> is blank.
     /// <para><paramref name="outputDirectory"/> 为空白。</para></exception>
     /// <exception cref="FileSystemCorruptedException">A file exceeds the output budget.

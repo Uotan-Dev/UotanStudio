@@ -16,42 +16,24 @@ public static partial class GptReader
     private const ulong MaximumArrayBytes = 16 * 1024 * 1024;
     private static readonly UnicodeEncoding NameEncoding = new(false, false, true);
 
-    /// <summary>
-    /// Validates both headers and byte-identical entry arrays from a whole-device address space.
-    /// <para>在整个设备地址空间上校验两个头部以及逐字节一致的条目数组。</para>
-    /// </summary>
-    /// <param name="source">
-    /// Caller-owned readable, seekable stream; its position is restored on every exit.
-    /// <para>由调用方持有的可读、可定位流；无论成功与否其位置都会恢复。</para>
-    /// </param>
-    /// <param name="blockSize">
-    /// Logical block size, a power of two from 512 through 65536.
-    /// <para>逻辑块大小，须为 512 至 65536 之间 2 的幂。</para>
-    /// </param>
-    /// <param name="blockCount">
-    /// Device capacity in logical blocks; must fit signed stream addressing.
-    /// <para>以逻辑块计的设备容量；须能用有符号流偏移寻址。</para>
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancellation checked between bounded reads.
-    /// <para>在各次有界读取之间检查的取消令牌。</para>
-    /// </param>
-    /// <returns>
-    /// Validated partition metadata and checked byte ranges, without reading partition contents.
-    /// <para>已校验的分区元数据与经过检查的字节范围，不读取分区内容。</para>
-    /// </returns>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="source"/> cannot be read or seeked, or the geometry is out of range.
-    /// <para><paramref name="source"/> 不可读或不可定位，或几何参数超出范围。</para>
-    /// </exception>
-    /// <exception cref="InvalidDataException">
-    /// The signature, CRC, geometry, identities or entry arrays fail validation.
-    /// <para>签名、CRC、几何、标识或条目数组未通过校验。</para>
-    /// </exception>
-    /// <exception cref="OperationCanceledException">
-    /// The token was cancelled.
-    /// <para>令牌已被取消。</para>
-    /// </exception>
+    /// <summary>Validates both headers and byte-identical entry arrays from a whole-device address space.
+    /// <para>在整个设备地址空间上校验两个头部以及逐字节一致的条目数组。</para></summary>
+    /// <param name="source">Caller-owned readable, seekable stream; its position is restored on every exit.
+    /// <para>由调用方持有的可读、可定位流；无论成功与否其位置都会恢复。</para></param>
+    /// <param name="blockSize">Logical block size, a power of two from 512 through 65536.
+    /// <para>逻辑块大小，须为 512 至 65536 之间 2 的幂。</para></param>
+    /// <param name="blockCount">Device capacity in logical blocks; must fit signed stream addressing.
+    /// <para>以逻辑块计的设备容量；须能用有符号流偏移寻址。</para></param>
+    /// <param name="cancellationToken">Cancellation checked between bounded reads.
+    /// <para>在各次有界读取之间检查的取消令牌。</para></param>
+    /// <returns>Validated partition metadata and checked byte ranges, without reading partition contents.
+    /// <para>已校验的分区元数据与经过检查的字节范围，不读取分区内容。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="source"/> cannot be read or seeked, or the geometry is out of range.
+    /// <para><paramref name="source"/> 不可读或不可定位，或几何参数超出范围。</para></exception>
+    /// <exception cref="InvalidDataException">The signature, CRC, geometry, identities or entry arrays fail validation.
+    /// <para>签名、CRC、几何、标识或条目数组未通过校验。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.
+    /// <para>令牌已被取消。</para></exception>
     public static GptTable Read(Stream source, int blockSize, ulong blockCount,
         CancellationToken cancellationToken = default)
     {

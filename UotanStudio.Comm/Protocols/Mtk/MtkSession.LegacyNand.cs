@@ -6,14 +6,9 @@ public sealed partial class MtkSession
 {
     /// <summary>Reads an explicit Legacy NAND raw-page range using the SDK 64-bit readback protocol.
     /// <para>使用 SDK 64 位读回协议读取显式的 Legacy NAND 原始页范围。</para></summary>
-    /// <remarks>The zero container-length profile has no per-packet device status prefix.
-    /// Page geometry, record size, total length and each checksum must match before output is acknowledged.
-    /// No 32-bit fallback, retransmission, bad-block remapping or spare-area conversion is performed.
-    /// Output may be partial on failure; file publishers must use temporary files.
-    /// <para>零容器长度配置没有逐包设备状态前缀。确认输出前必须匹配页几何、记录大小、总长度与各包校验和。
-    /// 不执行 32 位协议回退、重传、坏块重映射或备用区转换。失败时输出可能不完整；文件发布方必须使用临时文件。</para></remarks>
-    /// <param name="offset">The page-aligned main-area byte offset.
-    /// <para>按页对齐的主区字节偏移。</para></param>
+    /// <remarks>The zero container-length profile has no per-packet device status prefix. Page geometry, record size, total length and each checksum must match before output is acknowledged. No 32-bit fallback, retransmission, bad-block remapping or spare-area conversion is performed. Output may be partial on failure; file publishers must use temporary files.
+    /// <para>零容器长度配置没有逐包设备状态前缀。确认输出前必须匹配页几何、记录大小、总长度与各包校验和。 不执行 32 位协议回退、重传、坏块重映射或备用区转换。失败时输出可能不完整；文件发布方必须使用临时文件。</para></remarks>
+    /// <param name="offset">The page-aligned main-area byte offset.<para>按页对齐的主区字节偏移。</para></param>
     /// <param name="mainLength">The positive page-aligned main-area span, excluding spare bytes.
     /// <para>正数且按页对齐的主区跨度，不含备用字节。</para></param>
     /// <param name="destination">The caller-owned writable stream, which remains open.

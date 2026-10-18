@@ -28,23 +28,18 @@ internal static class AdbPairingConnection
     private const int ConnectTimeoutMs = 5000;
     private const int SocketTimeoutMs = 8000;
 
-    /// <summary>
-    /// Pairs with the device's pairing service. The device must currently be showing the
-    /// pairing dialog (pairing code or QR code) so the one-time password is valid.
-    /// <para>与设备配对服务完成配对。设备当前必须停在配对对话框（配对码或二维码），
-    /// 一次性密码才有效。</para>
-    /// </summary>
-    /// <param name="host">The device IP address. <para>设备 IP 地址。</para></param>
-    /// <param name="port">The pairing service TCP port. <para>配对服务 TCP 端口。</para></param>
-    /// <param name="password">The one-time pairing password. <para>一次性配对密码。</para></param>
+    /// <summary>Pairs with the device's pairing service. The device must currently be showing the pairing dialog (pairing code or QR code) so the one-time password is valid.
+    /// <para>与设备配对服务完成配对。设备当前必须停在配对对话框（配对码或二维码）， 一次性密码才有效。</para></summary>
+    /// <param name="host">The device IP address.<para>设备 IP 地址。</para></param>
+    /// <param name="port">The pairing service TCP port.<para>配对服务 TCP 端口。</para></param>
+    /// <param name="password">The one-time pairing password.<para>一次性配对密码。</para></param>
     /// <param name="cancellationToken">Cancels the connection and protocol exchange.
     /// <para>取消连接与协议交互。</para></param>
     /// <returns>The device GUID reported in the pairing exchange.
     /// <para>配对交互中设备报告的 GUID。</para></returns>
     /// <exception cref="ArgumentException">Arguments are blank or out of range.
     /// <para>参数为空或超出范围。</para></exception>
-    /// <exception cref="IOException">The TLS handshake, SPAKE2 exchange or PeerInfo
-    /// decryption failed (a wrong or expired pairing password fails here).
+    /// <exception cref="IOException">The TLS handshake, SPAKE2 exchange or PeerInfo decryption failed (a wrong or expired pairing password fails here).
     /// <para>TLS 握手、SPAKE2 交互或 PeerInfo 解密失败（密码错误或过期在此失败）。</para></exception>
     /// <exception cref="OperationCanceledException">The token was canceled.
     /// <para>令牌被取消。</para></exception>
