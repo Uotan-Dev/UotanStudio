@@ -16,10 +16,16 @@ namespace UotanStudio.Compress.Codecs.Zstd;
 /// own path.</para>
 /// <para>The bytes the span encode overload that takes no window bound writes match the single-frame path of the
 /// array-level compressor for the same level and payload: a zstd frame is destination-independent, so no content-size
-/// flag, content checksum or window override is applied there and no frame is emitted for an empty payload. The only
-/// context setting either direction can be asked for is a window log, and it is aimed at formats that must bound the
-/// window together with an equally bounded decode; a rented context has that setting cleared again before it returns
-/// to the cache.</para>
+/// flag, content checksum or window override is applied there and no frame is emitted for an empty payload.</para>
+/// <para>A window is the only context setting either direction can be asked for. The encode side writes it into the
+/// frame header and clears it again before the context returns to the cache, because a zstd compression context keeps
+/// a parameter across <c>Wrap</c> calls and an uncleared window would silently re-appear in the next caller's frame.
+/// The decode side never touches its cached context: <c>ZSTD_d_windowLogMax</c> is not consulted by the one-shot
+/// frame decode ZstdSharp performs, so the ceiling is enforced by reading the declared window out of the frame header
+/// before any decoding happens.</para>
+/// <para>每个方向唯一的上下文设置就是窗口。编码侧把它写入帧头，并在上下文回到缓存前再次清零，因为 zstd 压缩上下文会在
+/// <c>Wrap</c> 调用之间保留该参数，未清零的窗口会静默出现在下一个调用方写出的帧里。解码侧完全不碰它缓存的上下文：
+/// ZstdSharp 所执行的一次性帧解码并不查看 <c>ZSTD_d_windowLogMax</c>，因此上限改为在任何解码之前从帧头读取所声明的窗口来执行。</para>
 /// </remarks>
 internal static class ZstdBlockCodec
 {
@@ -128,24 +134,29 @@ internal static class ZstdBlockCodec
         => Decompress(source, destination, maximumWindowLog: 0);
 
     /// <summary>
-    /// Decompresses one standalone zstd frame into a caller-owned span while bounding the window the frame may declare,
+    /// Decompresses one standalone zstd frame into a caller-owned span while bounding the window the frame declares,
     /// and reports the produced byte count.
-    /// <para>在限制帧可声明的窗口的前提下，把一个独立的 zstd 帧解压到调用方持有的 span，并报告实际产出的字节数。</para>
+    /// <para>在限制帧所声明窗口的前提下，把一个独立的 zstd 帧解压到调用方持有的 span，并报告实际产出的字节数。</para>
     /// </summary>
     /// <param name="source">Complete frame bytes; an empty source produces nothing and returns <c>0</c> without
     /// touching a decompression context. <para>完整的帧字节；空源不产出内容，也不接触解压上下文，直接返回 <c>0</c>。</para></param>
     /// <param name="destination">Destination span written from its start; it must be large enough for the whole
     /// decoded frame. <para>从起始处写入的目标 span；其容量必须容纳整个解码帧。</para></param>
-    /// <param name="maximumWindowLog">Upper bound applied to the frame's declared window through
-    /// <c>ZSTD_d_windowLogMax</c> when it is greater than <c>0</c>; <c>0</c> keeps the engine default. Untrusted frames
-    /// that declare a larger window then fail to decode instead of making the engine allocate that window.
-    /// <para>大于 <c>0</c> 时经 <c>ZSTD_d_windowLogMax</c> 施加于帧所声明的窗口；<c>0</c> 保持引擎默认值。声明更大窗口的不可信帧
-    /// 因此解码失败，而不是让引擎按该窗口分配内存。</para></param>
+    /// <param name="maximumWindowLog">Ceiling on the window the frame may declare, expressed as a power of two and
+    /// read from the frame header before any decoding starts; <c>0</c> keeps the unbounded path, and a value of
+    /// <c>64</c> or above cannot be exceeded by any declared window. An untrusted frame declaring a larger window
+    /// fails here instead of reaching the engine, which bounds nothing on this path: its
+    /// <c>ZSTD_d_windowLogMax</c> setting is not consulted by the one-shot frame decode.
+    /// <para>帧可声明窗口的上限，以 2 的幂表示，在任何解码开始前从帧头读取；<c>0</c> 保持不设限的路径，而
+    /// <c>64</c> 及以上不可能被任何声明的窗口超出。声明更大窗口的不可信帧在此失败而不进入引擎：该一次性帧解码
+    /// 并不会查看引擎的 <c>ZSTD_d_windowLogMax</c> 设置。</para></param>
     /// <returns>The number of decoded bytes written into <paramref name="destination"/>.
     /// <para>写入 <paramref name="destination"/> 的解码字节数。</para></returns>
-    /// <exception cref="CompressionException">The frame is malformed, declares a window above
-    /// <paramref name="maximumWindowLog"/>, or the destination is too small; the underlying ZstdSharp error is the inner
-    /// exception. <para>帧无效、声明的窗口超出 <paramref name="maximumWindowLog"/>，或目标容量不足；ZstdSharp 的原始错误为内部异常。</para></exception>
+    /// <exception cref="CompressionException">The frame declares a window above <paramref name="maximumWindowLog"/>,
+    /// which is reported without an inner exception, or it is malformed or needs more bytes than
+    /// <paramref name="destination"/> holds, where the underlying ZstdSharp error is the inner exception.
+    /// <para>帧声明的窗口超出 <paramref name="maximumWindowLog"/>（此情形无内部异常），或帧无效、目标容量不足；
+    /// 后两种情形的 ZstdSharp 原始错误为内部异常。</para></exception>
     internal static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, int maximumWindowLog)
     {
         if (source.IsEmpty)
@@ -153,14 +164,14 @@ internal static class ZstdBlockCodec
             return 0;
         }
 
+        if (maximumWindowLog > 0)
+        {
+            RefuseOversizedWindow(source, maximumWindowLog);
+        }
+
         var lease = DecompressorCache.Rent();
         try
         {
-            if (maximumWindowLog > 0)
-            {
-                lease.SetParameter(ZSTD_dParameter.ZSTD_d_windowLogMax, maximumWindowLog);
-            }
-
             return lease.Unwrap(source, destination);
         }
         catch (ZstdException ex)
@@ -174,6 +185,46 @@ internal static class ZstdBlockCodec
     }
 
     /// <summary>
+    /// Reads the window a frame declares out of its header and refuses the frame when that window exceeds the
+    /// caller's ceiling, leaving the destination untouched.
+    /// <para>从帧头读出该帧声明的窗口，并在其超出调用方上限时拒绝该帧，目标缓冲区保持未被写入。</para>
+    /// </summary>
+    /// <param name="source">Frame bytes to inspect. <para>待检查的帧字节。</para></param>
+    /// <param name="maximumWindowLog">Window log the declared window must stay within. <para>所声明窗口必须落入的窗口对数上限。</para></param>
+    /// <remarks>
+    /// <para>Any non-zero return from the header read means the buffer does not hold a parseable frame header, whether
+    /// because it is shorter than the header or because the magic is wrong, and is left to the decode call, which
+    /// reports it as the malformed frame it is. Only a zero return fills the header fields, so no window is ever read
+    /// from an unfilled struct.</para>
+    /// <para>读取帧头返回非零即表示缓冲区并不含有可解析的帧头——无论是因为短于帧头还是因为魔数错误——都交由解码调用
+    /// 按其真实情况报为无效帧。只有返回零才会填好帧头字段，因此绝不会从未填充的结构里读出窗口。</para>
+    /// </remarks>
+    /// <exception cref="CompressionException">The declared window is larger than the ceiling.
+    /// <para>所声明的窗口大于上限。</para></exception>
+    private static void RefuseOversizedWindow(ReadOnlySpan<byte> source, int maximumWindowLog)
+    {
+        var ceiling = maximumWindowLog >= 64 ? ulong.MaxValue : 1UL << maximumWindowLog;
+        ZSTD_frameHeader header = default;
+        unsafe
+        {
+            fixed (byte* frame = source)
+            {
+                if (Methods.ZSTD_getFrameHeader(&header, frame, (UIntPtr)source.Length) != UIntPtr.Zero)
+                {
+                    return;
+                }
+            }
+        }
+
+        if (header.windowSize > ceiling)
+        {
+            throw new CompressionException(
+                $"ZSTD block declares a {header.windowSize} byte window above the {ceiling} byte ceiling. "
+                + $"ZSTD 块声明的窗口为 {header.windowSize} 字节，超出 {ceiling} 字节的上限。");
+        }
+    }
+
+    /// <summary>
     /// Decompresses one standalone zstd frame into a fresh array of the declared decoded length.
     /// <para>把一个独立的 zstd 帧解压到按声明解码长度新建的数组。</para>
     /// </summary>
@@ -183,9 +234,10 @@ internal static class ZstdBlockCodec
     /// <para>调用方期望的解码长度，同时也是返回数组的长度；解码字节数多于或少于该长度时按失败处理，而不是静默截断或补零。</para></param>
     /// <returns>A new array holding the decoded bytes, empty when <paramref name="expectedSize"/> is <c>0</c>.
     /// <para>保存解码字节的新数组；<paramref name="expectedSize"/> 为 <c>0</c> 时为空数组。</para></returns>
-    /// <exception cref="CompressionException">The frame is malformed or its decoded length differs from
-    /// <paramref name="expectedSize"/>; the underlying ZstdSharp error is the inner exception.
-    /// <para>帧无效，或其解码长度与 <paramref name="expectedSize"/> 不符；ZstdSharp 的原始错误为内部异常。</para></exception>
+    /// <exception cref="CompressionException">The frame is malformed, needs more bytes than
+    /// <paramref name="expectedSize"/> (the underlying ZstdSharp error is the inner exception), or produces fewer than
+    /// the declared count. <para>帧无效，或所需解码字节多于 <paramref name="expectedSize"/>（ZstdSharp 的原始错误为内部异常），
+    /// 或产出的字节少于声明数量。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="expectedSize"/> is negative.
     /// <para><paramref name="expectedSize"/> 为负数。</para></exception>
     internal static byte[] Decompress(ReadOnlySpan<byte> source, int expectedSize)
@@ -196,16 +248,16 @@ internal static class ZstdBlockCodec
             return [];
         }
 
-        var decoded = Decompress(source, new byte[expectedSize]);
-        if (decoded != expectedSize)
+        var decoded = new byte[expectedSize];
+        var written = Decompress(source, decoded);
+        if (written != expectedSize)
         {
             throw new CompressionException(
-                $"ZSTD block decoded to {decoded} bytes while {expectedSize} were declared. "
-                + $"ZSTD 块解出 {decoded} 字节，与声明的 {expectedSize} 字节不符。");
+                $"ZSTD block decoded to {written} bytes while {expectedSize} were declared. "
+                + $"ZSTD 块解出 {written} 字节，与声明的 {expectedSize} 字节不符。");
         }
 
-        var result = new byte[expectedSize];
-        return Decompress(source, result) == expectedSize ? result : [];
+        return decoded;
     }
 
     /// <summary>

@@ -140,8 +140,47 @@ public class CompressionBlockCodecTests
         var unconstrained = new byte[payload.Length];
         var constrained = new byte[payload.Length];
         Assert.Equal(payload.Length, ZstdBlockCodec.Decompress(frame.AsSpan(0, written), unconstrained));
-        Assert.Equal(payload.Length, ZstdBlockCodec.Decompress(frame.AsSpan(0, written), constrained, maximumWindowLog: 12));
+        Assert.Equal(payload.Length, ZstdBlockCodec.Decompress(frame.AsSpan(0, written), constrained, maximumWindowLog: 32));
         Assert.Equal(unconstrained, constrained);
+    }
+
+    [Fact]
+    public void ZstdBlockCodec_Decompress_WindowCeilingBelowDeclaredWindow_FailsWithoutWritingTheDestination()
+    {
+        var payload = BuildRepeatingPayload(256 * 1024);
+        var frame = new byte[ZstdBlockCodec.MaximumCompressedSize(payload.Length)];
+        var written = ZstdBlockCodec.Compress(payload, frame, level: 19);
+
+        var destination = new byte[payload.Length];
+        var exception = Assert.Throws<CompressionException>(
+            () => ZstdBlockCodec.Decompress(frame.AsSpan(0, written), destination, maximumWindowLog: 12));
+
+        Assert.True(destination.All(static value => value == 0),
+            "A refused frame must fail on its declared window before any byte is decoded.");
+        Assert.Contains("ceiling", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ZstdBlockCodec_Decompress_ZeroCeiling_KeepsTheUnboundedPath()
+    {
+        var payload = BuildRepeatingPayload(256 * 1024);
+        var frame = new byte[ZstdBlockCodec.MaximumCompressedSize(payload.Length)];
+        var written = ZstdBlockCodec.Compress(payload, frame, level: 19);
+
+        Assert.Equal(payload.Length, ZstdBlockCodec.Decompress(frame.AsSpan(0, written), new byte[payload.Length], maximumWindowLog: 0));
+    }
+
+    [Fact]
+    public void ZstdBlockCodec_Decompress_ArrayHintLargerThanFrame_IsRejected()
+    {
+        var payload = BuildRepeatingPayload(ClusterSize);
+        var frame = new byte[ZstdBlockCodec.MaximumCompressedSize(payload.Length)];
+        var written = ZstdBlockCodec.Compress(payload, frame);
+
+        var exception = Assert.Throws<CompressionException>(
+            () => ZstdBlockCodec.Decompress(frame.AsSpan(0, written), payload.Length * 2));
+
+        Assert.Contains("declared", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -159,6 +198,24 @@ public class CompressionBlockCodecTests
         var decoded = new byte[payload.Length];
         Assert.Equal(payload.Length, ZstdBlockCodec.Decompress(bounded.AsSpan(0, boundedLength), decoded, maximumWindowLog: 12));
         Assert.Equal(payload, decoded);
+    }
+
+    [Fact]
+    public void ZstdBlockCodec_Compress_WindowedCallThenDefaultCall_WritesTheDefaultFrameAgain()
+    {
+        var payload = BuildDistantlyRepeatedPayload(64 * 1024);
+        var first = new byte[ZstdBlockCodec.MaximumCompressedSize(payload.Length)];
+        var firstLength = ZstdBlockCodec.Compress(payload, first, level: 19);
+        var windowed = new byte[ZstdBlockCodec.MaximumCompressedSize(payload.Length)];
+        var windowedLength = ZstdBlockCodec.Compress(payload, windowed, level: 19, windowLog: 12);
+        Assert.True(windowedLength != firstLength, $"The window override must be observable on the same payload: {windowedLength} vs {firstLength}.");
+
+        var again = new byte[ZstdBlockCodec.MaximumCompressedSize(payload.Length)];
+        var againLength = ZstdBlockCodec.Compress(payload, again, level: 19);
+
+        Assert.Equal(firstLength, againLength);
+        Assert.True(first.AsSpan(0, firstLength).SequenceEqual(again.AsSpan(0, againLength)),
+            "A window log left on the cached compressor would reappear in the next caller's frame.");
     }
 
     [Fact]
