@@ -14,16 +14,10 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 public sealed class InteractionElementDescriptor
 {
     /// <summary>
-    /// Workflow type key of the element (such as <c>UI.Field.Text</c>).
-    /// <para>元素的工作流类型键（如 <c>UI.Field.Text</c>）。</para>
+    /// Workflow type key of the element (such as <c>UI.Field.Create</c>).
+    /// <para>元素的工作流类型键（如 <c>UI.Field.Create</c>）。</para>
     /// </summary>
     public required string TypeKey { get; init; }
-
-    /// <summary>
-    /// Interaction field kind for field elements; null for non-field elements.
-    /// <para>字段类元素对应的交互字段种类；非字段元素为 null。</para>
-    /// </summary>
-    public InteractionElementKind? FieldKind { get; init; }
 
     /// <summary>
     /// Declares the port set on a freshly created node.
@@ -39,52 +33,69 @@ public sealed class InteractionElementDescriptor
 }
 
 /// <summary>
-/// Registry of all <c>UI.*</c> element descriptors; adding an element only requires one descriptor entry.
-/// <para>全部 <c>UI.*</c> 元素描述符的注册表；新增元素只需补一个描述符条目。</para>
+/// Registry of all <c>UI.*</c> element descriptors. Element families that differ only in one discriminator value
+/// are served by a single node carrying that value on a <c>Kind</c> or <c>Mode</c> input port, so the toolbox exposes
+/// one builder per element family rather than one per variant.
+/// <para>全部 <c>UI.*</c> 元素描述符的注册表。仅靠单一判别取值区分的元素家族由一个节点承载，判别值写在 <c>Kind</c> 或 <c>Mode</c>
+/// 输入端口上，因此工具箱按元素家族给出一个构造器，而不是按变体各给一个。</para>
 /// </summary>
 internal static class InteractionElements
 {
+    internal static readonly NodeInputDeclaration Kind = new("Kind", NodePortType.Text, "TextField")
+    {
+        Choices = ["TextField", "NumberField", "BooleanField", "ChoiceField", "MultiChoiceField",
+            "FileField", "DirectoryField", "SavePathField"],
+        IsConfiguration = true
+    };
+
+    internal static readonly NodeInputDeclaration ContentKind = new("Kind", NodePortType.Text, "Text")
+    {
+        Choices = ["Text", "Divider", "Image"],
+        IsConfiguration = true
+    };
+
+    internal static readonly NodeInputDeclaration LayoutKind = new("Kind", NodePortType.Text, "Row")
+    {
+        Choices = ["Row", "Column", "Group", "Pages"],
+        IsConfiguration = true
+    };
+
+    internal static readonly NodeInputDeclaration ProgressMode = new("Mode", NodePortType.Text, "Update")
+    {
+        Choices = ["Open", "Update", "Close"],
+        IsConfiguration = true
+    };
+
+    internal static readonly NodeInputDeclaration DialogMode = new("Mode", NodePortType.Text, "Show")
+    {
+        Choices = ["Show", "Confirm"],
+        IsConfiguration = true
+    };
+
     private static readonly IReadOnlyDictionary<string, InteractionElementDescriptor> Descriptors =
         new Dictionary<string, InteractionElementDescriptor>(StringComparer.Ordinal)
         {
-            ["UI.Content.Text"] = new()
+            ["UI.Content.Create"] = new()
             {
-                TypeKey = "UI.Content.Text",
+                TypeKey = "UI.Content.Create",
                 DeclarePorts = node =>
                 {
-                    node.In(new NodeInputDeclaration("Text", NodePortType.Text, string.Empty) { Multiline = true });
+                    node.In(ContentKind);
+                    node.In(new NodeInputDeclaration("Text", NodePortType.Text, string.Empty)
+                    {
+                        Multiline = true,
+                        VisibleWhen = NodePortVisibility.MayEqualAny(ContentKind, "Text")
+                    });
+                    node.In(new NodeInputDeclaration("Path", NodePortType.Path, string.Empty)
+                    {
+                        VisibleWhen = NodePortVisibility.MayEqualAny(ContentKind, "Image")
+                    });
                     node.Out(new NodeOutputDeclaration("Component", NodePortType.UiComponent));
                 },
                 Execute = ExecuteContentAsync
             },
-            ["UI.Content.Divider"] = new()
-            {
-                TypeKey = "UI.Content.Divider",
-                DeclarePorts = node => node.Out(new NodeOutputDeclaration("Component", NodePortType.UiComponent)),
-                Execute = ExecuteContentAsync
-            },
-            ["UI.Content.Image"] = new()
-            {
-                TypeKey = "UI.Content.Image",
-                DeclarePorts = node =>
-                {
-                    node.In(new NodeInputDeclaration("Path", NodePortType.Path, string.Empty));
-                    node.Out(new NodeOutputDeclaration("Component", NodePortType.UiComponent));
-                },
-                Execute = ExecuteContentImageAsync
-            },
-            ["UI.Field.Text"] = Field("Text", InteractionElementKind.TextField),
-            ["UI.Field.Number"] = Field("Number", InteractionElementKind.NumberField),
-            ["UI.Field.Boolean"] = Field("Boolean", InteractionElementKind.BooleanField),
-            ["UI.Field.Choice"] = Field("Choice", InteractionElementKind.ChoiceField),
-            ["UI.Field.MultiChoice"] = Field("MultiChoice", InteractionElementKind.MultiChoiceField),
-            ["UI.Field.File"] = Field("File", InteractionElementKind.FileField),
-            ["UI.Field.Directory"] = Field("Directory", InteractionElementKind.DirectoryField),
-            ["UI.Field.SavePath"] = Field("SavePath", InteractionElementKind.SavePathField),
-            ["UI.Layout.Row"] = Layout("Row"),
-            ["UI.Layout.Column"] = Layout("Column"),
-            ["UI.Layout.Group"] = Layout("Group"),
-            ["UI.Layout.Pages"] = Layout("Pages"),
+            ["UI.Field.Create"] = Field(),
+            ["UI.Layout.Create"] = Layout(),
             ["UI.Condition.Equals"] = new()
             {
                 TypeKey = "UI.Condition.Equals",
@@ -110,7 +121,7 @@ internal static class InteractionElements
                 },
                 Execute = ExecuteFormAsync
             },
-            ["UI.Dialog.Show"] = Dialog(isConfirmation: false),
+            ["UI.Dialog"] = Dialog(),
             ["UI.Result.Read"] = new()
             {
                 TypeKey = "UI.Result.Read",
@@ -126,71 +137,136 @@ internal static class InteractionElements
                 },
                 Execute = ExecuteResultAsync
             },
-            ["UI.Dialog.Confirm"] = Dialog(isConfirmation: true),
             ["UI.Notification.Show"] = Feedback(),
-            ["UI.Progress.Open"] = Feedback(withHandleOutput: true),
-            ["UI.Progress.Update"] = ProgressHandle(withProgressInputs: true),
-            ["UI.Progress.Close"] = ProgressHandle(withProgressInputs: false)
+            ["UI.Progress"] = new()
+            {
+                TypeKey = "UI.Progress",
+                DeclarePorts = node =>
+                {
+                    node.In(new NodeInputDeclaration("Flow", NodePortType.Flow));
+                    node.In(ProgressMode);
+                    node.In(new NodeInputDeclaration("Title", NodePortType.Text, string.Empty)
+                    {
+                        VisibleWhen = NodePortVisibility.MayEqualAny(ProgressMode, "Open")
+                    });
+                    node.In(new NodeInputDeclaration("Message", NodePortType.Text, string.Empty)
+                    {
+                        VisibleWhen = NodePortVisibility.MayEqualAny(ProgressMode, "Open", "Update")
+                    });
+                    node.In(new NodeInputDeclaration("Handle", NodePortType.Record)
+                    {
+                        VisibleWhen = NodePortVisibility.MayEqualAny(ProgressMode, "Update", "Close")
+                    });
+                    node.In(new NodeInputDeclaration("Progress", NodePortType.Number, 0d)
+                    {
+                        VisibleWhen = NodePortVisibility.MayEqualAny(ProgressMode, "Update")
+                    });
+                    node.Out(new NodeOutputDeclaration("Completed", NodePortType.Flow));
+                    node.Out(new NodeOutputDeclaration("Handle", NodePortType.Record));
+                },
+                Execute = ExecuteProgressAsync
+            }
         };
 
     internal static IReadOnlyList<string> TypeKeys { get; } =
     [
-        "UI.Content.Text", "UI.Content.Divider", "UI.Content.Image",
-        "UI.Field.Text", "UI.Field.Number", "UI.Field.Boolean", "UI.Field.Choice", "UI.Field.MultiChoice",
-        "UI.Field.File", "UI.Field.Directory", "UI.Field.SavePath",
-        "UI.Layout.Row", "UI.Layout.Column", "UI.Layout.Group", "UI.Layout.Pages",
-        "UI.Condition.Equals", "UI.Form.Create", "UI.Dialog.Show", "UI.Result.Read",
-        "UI.Dialog.Confirm", "UI.Notification.Show", "UI.Progress.Open", "UI.Progress.Update", "UI.Progress.Close"
+        "UI.Content.Create", "UI.Field.Create", "UI.Layout.Create",
+        "UI.Condition.Equals", "UI.Form.Create", "UI.Dialog", "UI.Result.Read",
+        "UI.Notification.Show", "UI.Progress"
     ];
 
     internal static bool TryGetDescriptor(string typeKey, out InteractionElementDescriptor descriptor)
         => Descriptors.TryGetValue(typeKey, out descriptor!);
 
-    private static InteractionElementDescriptor Field(string suffix, InteractionElementKind kind) => new()
+    /// <summary>Maps a field element kind to the port type its value is carried on.
+    /// <para>把字段元素种类映射到其取值所用的端口类型。</para></summary>
+    /// <param name="kind">The declared field kind. <para>声明的字段种类。</para></param>
+    /// <returns>The port type for that kind's value. <para>该种类取值对应的端口类型。</para></returns>
+    internal static NodePortType FieldType(InteractionElementKind kind) => kind switch
     {
-        TypeKey = "UI.Field." + suffix,
-        FieldKind = kind,
+        InteractionElementKind.NumberField => NodePortType.Number,
+        InteractionElementKind.BooleanField => NodePortType.Boolean,
+        InteractionElementKind.MultiChoiceField => NodePortType.List,
+        InteractionElementKind.FileField or InteractionElementKind.DirectoryField or InteractionElementKind.SavePathField => NodePortType.Path,
+        _ => NodePortType.Text
+    };
+
+    /// <summary>Parses the discriminator value of a field, layout or content builder node.
+    /// <para>解析字段、布局或内容构造器节点的判别取值。</para></summary>
+    /// <param name="discriminator">The raw discriminator text. <para>判别端口的原始文本。</para></param>
+    /// <returns>The parsed kind. <para>解析出的元素种类。</para></returns>
+    /// <exception cref="InvalidDataException">Thrown when the discriminator names no interaction element kind.
+    /// <para>判别值不对应任何交互元素种类时抛出。</para></exception>
+    internal static InteractionElementKind ParseKind(string discriminator) =>
+        Enum.TryParse<InteractionElementKind>(discriminator, ignoreCase: false, out var kind)
+            ? kind
+            : throw new InvalidDataException($"Unknown interaction element kind '{discriminator}'.");
+
+    private static InteractionElementDescriptor Field() => new()
+    {
+        TypeKey = "UI.Field.Create",
         DeclarePorts = node =>
         {
+            node.In(Kind);
             node.In(new NodeInputDeclaration("Field ID", NodePortType.Text, Guid.NewGuid().ToString("N")) { IsConfiguration = true, Advanced = true });
             node.In(new NodeInputDeclaration("Label", NodePortType.Text, string.Empty));
             node.In(new NodeInputDeclaration("Description", NodePortType.Text, string.Empty) { Advanced = true });
             node.In(new NodeInputDeclaration("Required", NodePortType.Boolean, false));
             node.In(new NodeInputDeclaration("Max Length", NodePortType.Number, 4096d) { Advanced = true });
-            node.In(new NodeInputDeclaration("Default",
-                kind == InteractionElementKind.NumberField ? NodePortType.Number : kind == InteractionElementKind.BooleanField ? NodePortType.Boolean : NodePortType.Text,
-                kind == InteractionElementKind.BooleanField ? false : string.Empty));
-            if (kind is InteractionElementKind.ChoiceField or InteractionElementKind.MultiChoiceField)
+            node.In(new NodeInputDeclaration("Default", NodePortType.Text, string.Empty));
+            node.In(new NodeInputDeclaration("Options", NodePortType.Text, string.Empty)
             {
-                node.In(new NodeInputDeclaration("Options", NodePortType.Text, string.Empty) { Multiline = true });
-            }
-            if (kind == InteractionElementKind.NumberField)
+                Multiline = true,
+                VisibleWhen = NodePortVisibility.MayEqualAny(Kind, "ChoiceField", "MultiChoiceField")
+            });
+            node.In(new NodeInputDeclaration("Minimum", NodePortType.Text, string.Empty)
             {
-                node.In(new NodeInputDeclaration("Minimum", NodePortType.Text, string.Empty) { Advanced = true });
-                node.In(new NodeInputDeclaration("Maximum", NodePortType.Text, string.Empty) { Advanced = true });
-            }
+                Advanced = true,
+                VisibleWhen = NodePortVisibility.MayEqualAny(Kind, "NumberField")
+            });
+            node.In(new NodeInputDeclaration("Maximum", NodePortType.Text, string.Empty)
+            {
+                Advanced = true,
+                VisibleWhen = NodePortVisibility.MayEqualAny(Kind, "NumberField")
+            });
             node.In(new NodeInputDeclaration("Sensitive", NodePortType.Boolean, false) { Advanced = true });
-            node.Input.Single(port => port.Title == "Sensitive").PropertyChanged += (_, args) =>
-            {
-                if (args.PropertyName == nameof(NodeConnectorViewModel.InitialValue))
-                {
-                    node.Input.Single(port => port.Title == "Default").IsSensitive =
-                        node.Input.Single(port => port.Title == "Sensitive").InitialValue is true;
-                }
-            };
             node.In(new NodeInputDeclaration("Visible When", NodePortType.Record) { Advanced = true });
             node.In(new NodeInputDeclaration("Enabled When", NodePortType.Record) { Advanced = true });
             node.In(new NodeInputDeclaration("Required When", NodePortType.Record) { Advanced = true });
             node.Out(new NodeOutputDeclaration("Component", NodePortType.UiComponent));
+
+            // The Default port carries the field value, so its type follows the declared kind exactly as the
+            // per-kind nodes used to require, and a sensitive field keeps masking its default in the panel.
+            var kindPort = node.Input.Single(port => port.Title == "Kind");
+            var defaultPort = node.Input.Single(port => port.Title == "Default");
+            var sensitivePort = node.Input.Single(port => port.Title == "Sensitive");
+            defaultPort.PortType = FieldType(ParseKind(KindText(kindPort)));
+            kindPort.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(NodeConnectorViewModel.InitialValue)
+                    && kindPort.InitialValue is string value
+                    && Enum.TryParse<InteractionElementKind>(value, out var kind))
+                {
+                    defaultPort.PortType = FieldType(kind);
+                }
+            };
+            sensitivePort.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(NodeConnectorViewModel.InitialValue))
+                {
+                    defaultPort.IsSensitive = sensitivePort.InitialValue is true;
+                }
+            };
         },
         Execute = ExecuteFieldAsync
     };
 
-    private static InteractionElementDescriptor Layout(string suffix) => new()
+    private static InteractionElementDescriptor Layout() => new()
     {
-        TypeKey = "UI.Layout." + suffix,
+        TypeKey = "UI.Layout.Create",
         DeclarePorts = node =>
         {
+            node.In(LayoutKind);
             node.In(new NodeInputDeclaration("Label", NodePortType.Text, string.Empty));
             node.In(new NodeInputDeclaration("First", NodePortType.UiComponent));
             node.In(new NodeInputDeclaration("Second", NodePortType.UiComponent));
@@ -199,21 +275,29 @@ internal static class InteractionElements
         Execute = ExecuteLayoutAsync
     };
 
-    private static InteractionElementDescriptor Dialog(bool isConfirmation) => new()
+    private static string KindText(NodeConnectorViewModel port) =>
+        Convert.ToString(port.InitialValue, CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private static InteractionElementDescriptor Dialog() => new()
     {
-        TypeKey = isConfirmation ? "UI.Dialog.Confirm" : "UI.Dialog.Show",
+        TypeKey = "UI.Dialog",
         DeclarePorts = node =>
         {
             node.In(new NodeInputDeclaration("Flow", NodePortType.Flow));
-            if (node.TypeKey == "UI.Dialog.Show")
+            node.In(DialogMode);
+            node.In(new NodeInputDeclaration("Form", NodePortType.UiForm)
             {
-                node.In(new NodeInputDeclaration("Form", NodePortType.UiForm) { Required = true });
-            }
-            else
+                VisibleWhen = NodePortVisibility.MayEqualAny(DialogMode, "Show")
+            });
+            node.In(new NodeInputDeclaration("Title", NodePortType.Text, string.Empty)
             {
-                node.In(new NodeInputDeclaration("Title", NodePortType.Text, string.Empty));
-                node.In(new NodeInputDeclaration("Message", NodePortType.Text, string.Empty) { Multiline = true });
-            }
+                VisibleWhen = NodePortVisibility.MayEqualAny(DialogMode, "Confirm")
+            });
+            node.In(new NodeInputDeclaration("Message", NodePortType.Text, string.Empty)
+            {
+                Multiline = true,
+                VisibleWhen = NodePortVisibility.MayEqualAny(DialogMode, "Confirm")
+            });
             node.In(new NodeInputDeclaration("Timeout Seconds", NodePortType.Number, 0d) { Advanced = true });
             node.Out(new NodeOutputDeclaration("Submitted", NodePortType.Flow));
             node.Out(new NodeOutputDeclaration("Cancelled", NodePortType.Flow));
@@ -223,44 +307,23 @@ internal static class InteractionElements
         Execute = ExecuteDialogAsync
     };
 
-    private static InteractionElementDescriptor Feedback(bool withHandleOutput = false) => new()
+    private static InteractionElementDescriptor Feedback() => new()
     {
-        TypeKey = withHandleOutput ? "UI.Progress.Open" : "UI.Notification.Show",
+        TypeKey = "UI.Notification.Show",
         DeclarePorts = node =>
         {
             node.In(new NodeInputDeclaration("Flow", NodePortType.Flow));
             node.In(new NodeInputDeclaration("Title", NodePortType.Text, string.Empty));
             node.In(new NodeInputDeclaration("Message", NodePortType.Text, string.Empty));
             node.Out(new NodeOutputDeclaration("Completed", NodePortType.Flow));
-            if (withHandleOutput)
-            {
-                node.Out(new NodeOutputDeclaration("Handle", NodePortType.Record));
-            }
         },
         Execute = ExecuteFeedbackAsync
-    };
-
-    private static InteractionElementDescriptor ProgressHandle(bool withProgressInputs) => new()
-    {
-        TypeKey = withProgressInputs ? "UI.Progress.Update" : "UI.Progress.Close",
-        DeclarePorts = node =>
-        {
-            node.In(new NodeInputDeclaration("Flow", NodePortType.Flow));
-            node.In(new NodeInputDeclaration("Handle", NodePortType.Record) { Required = true });
-            if (withProgressInputs)
-            {
-                node.In(new NodeInputDeclaration("Message", NodePortType.Text, string.Empty));
-                node.In(new NodeInputDeclaration("Progress", NodePortType.Number, 0d));
-            }
-            node.Out(new NodeOutputDeclaration("Completed", NodePortType.Flow));
-        },
-        Execute = ExecuteProgressHandleAsync
     };
 
     private static Task ExecuteFieldAsync(InteractionNodeViewModel node, INodeExecutionContext context)
     {
         _ = context;
-        var kind = ParseFieldKind(node.TypeKey);
+        var kind = ParseKind(node.Text("Kind"));
         node.WriteOutput("Component", new InteractionElement
         {
             Id = node.Text("Field ID"),
@@ -270,8 +333,13 @@ internal static class InteractionElements
             Required = node.Bool("Required"),
             Sensitive = node.Bool("Sensitive"),
             MaxLength = node.ReadMaximumLength(),
-            DefaultValue = InteractionNodeViewModel.Value(node.ReadInput("Default"),
-                kind == InteractionElementKind.NumberField ? "Number" : kind == InteractionElementKind.BooleanField ? "Boolean" : kind == InteractionElementKind.MultiChoiceField ? "List" : "Text"),
+            DefaultValue = InteractionNodeViewModel.Value(node.ReadInput("Default"), kind switch
+            {
+                InteractionElementKind.NumberField => "Number",
+                InteractionElementKind.BooleanField => "Boolean",
+                InteractionElementKind.MultiChoiceField => "List",
+                _ => "Text"
+            }),
             Options = node.Text("Options").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries),
             Minimum = node.OptionalNumber("Minimum"),
             Maximum = node.OptionalNumber("Maximum"),
@@ -289,7 +357,7 @@ internal static class InteractionElements
         node.WriteOutput("Component", new InteractionElement
         {
             Id = node.InstanceId,
-            Kind = Enum.Parse<InteractionElementKind>(node.TypeKey[10..]),
+            Kind = ParseKind(node.Text("Kind")),
             Label = node.Text("Label"),
             Children = children
         });
@@ -299,50 +367,54 @@ internal static class InteractionElements
     private static async Task ExecuteFeedbackAsync(InteractionNodeViewModel node, INodeExecutionContext context)
     {
         var feedback = context.Interactions as IWorkflowFeedbackService ?? throw new NotSupportedException("The host does not support feedback.");
-        if (node.TypeKey == "UI.Notification.Show")
+        await feedback.NotifyAsync(node.Text("Title"), node.Text("Message"), context.CancellationToken).ConfigureAwait(false);
+        node.WriteOutput("Completed", true);
+    }
+
+    private static async Task ExecuteProgressAsync(InteractionNodeViewModel node, INodeExecutionContext context)
+    {
+        switch (node.Text("Mode"))
         {
-            await feedback.NotifyAsync(node.Text("Title"), node.Text("Message"), context.CancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            var handle = await feedback.OpenProgressAsync(node.Text("Title"), node.Text("Message"), context.CancellationToken).ConfigureAwait(false);
-            try
-            {
-                context.RegisterResource(handle);
-            }
-            catch
-            {
-                await handle.DisposeAsync().ConfigureAwait(false);
-                throw;
-            }
-            node.WriteOutput("Handle", handle);
+            case "Update":
+                await node.Require<IInteractionProgress>("Handle").UpdateAsync(node.Text("Message"),
+                    Convert.ToDouble(node.ReadInput("Progress"), CultureInfo.InvariantCulture), context.CancellationToken).ConfigureAwait(false);
+                break;
+            case "Close":
+                await node.Require<IInteractionProgress>("Handle").DisposeAsync().ConfigureAwait(false);
+                break;
+            default:
+                var feedback = context.Interactions as IWorkflowFeedbackService
+                    ?? throw new NotSupportedException("The host does not support feedback.");
+                var handle = await feedback.OpenProgressAsync(node.Text("Title"), node.Text("Message"), context.CancellationToken).ConfigureAwait(false);
+                try
+                {
+                    context.RegisterResource(handle);
+                }
+                catch
+                {
+                    await handle.DisposeAsync().ConfigureAwait(false);
+                    throw;
+                }
+                node.WriteOutput("Handle", handle);
+                break;
         }
         node.WriteOutput("Completed", true);
     }
 
-    private static async Task ExecuteProgressHandleAsync(InteractionNodeViewModel node, INodeExecutionContext context)
+    private static async Task ExecuteContentAsync(InteractionNodeViewModel node, INodeExecutionContext context)
     {
-        if (node.TypeKey == "UI.Progress.Update")
+        var kind = ParseKind(node.Text("Kind"));
+        if (kind == InteractionElementKind.Image)
         {
-            await node.Require<IInteractionProgress>("Handle").UpdateAsync(node.Text("Message"),
-                Convert.ToDouble(node.ReadInput("Progress"), CultureInfo.InvariantCulture), context.CancellationToken).ConfigureAwait(false);
-            node.WriteOutput("Completed", true);
+            await ExecuteContentImageAsync(node, context).ConfigureAwait(false);
             return;
         }
-        await node.Require<IInteractionProgress>("Handle").DisposeAsync().ConfigureAwait(false);
-        node.WriteOutput("Completed", true);
-    }
-
-    private static Task ExecuteContentAsync(InteractionNodeViewModel node, INodeExecutionContext context)
-    {
-        _ = context;
         node.WriteOutput("Component", new InteractionElement
         {
             Id = node.InstanceId,
-            Kind = node.TypeKey.EndsWith("Text", StringComparison.Ordinal) ? InteractionElementKind.Text : InteractionElementKind.Divider,
+            Kind = kind,
             Label = node.Text("Text")
         });
-        return Task.CompletedTask;
     }
 
     private static async Task ExecuteContentImageAsync(InteractionNodeViewModel node, INodeExecutionContext context)
@@ -388,7 +460,7 @@ internal static class InteractionElements
 
     private static async Task ExecuteDialogAsync(InteractionNodeViewModel node, INodeExecutionContext context)
     {
-        var dialogForm = node.TypeKey == "UI.Dialog.Show" ? node.Require<InteractionForm>("Form") : new InteractionForm
+        var dialogForm = node.Text("Mode") != "Confirm" ? node.Require<InteractionForm>("Form") : new InteractionForm
         {
             Title = node.Text("Title"),
             Content = new InteractionElement { Id = "message", Kind = InteractionElementKind.Text, Label = node.Text("Message") }
@@ -455,17 +527,4 @@ internal static class InteractionElements
         }
         return Task.CompletedTask;
     }
-
-    private static InteractionElementKind ParseFieldKind(string typeKey) => typeKey[9..] switch
-    {
-        "Text" => InteractionElementKind.TextField,
-        "Number" => InteractionElementKind.NumberField,
-        "Boolean" => InteractionElementKind.BooleanField,
-        "Choice" => InteractionElementKind.ChoiceField,
-        "MultiChoice" => InteractionElementKind.MultiChoiceField,
-        "File" => InteractionElementKind.FileField,
-        "Directory" => InteractionElementKind.DirectoryField,
-        "SavePath" => InteractionElementKind.SavePathField,
-        _ => throw new InvalidDataException("Unknown field kind.")
-    };
 }

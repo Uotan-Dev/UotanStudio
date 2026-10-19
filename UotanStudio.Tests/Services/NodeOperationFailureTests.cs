@@ -9,6 +9,7 @@ using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Interactions;
+using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
 using Xunit;
@@ -22,9 +23,17 @@ public sealed class NodeOperationFailureTests
     [InlineData("Build.Slots.Merge")]
     public async Task ExecuteAsync_UnsupportedLegacyBuild_FailsWithoutPublishingBytes(string typeKey)
     {
-        var descriptor = NodeFactoryRegistrar.Descriptors.Single(candidate => candidate.TypeKey == typeKey);
-        Assert.False(descriptor.IsToolboxVisible);
-        var node = descriptor.Factory();
+        Assert.False(NodeTypeRegistry.Contains(typeKey));
+        Assert.True(WorkflowReconstruction.TryCreateNode(
+            new NodeDto
+            {
+                InstanceId = "legacy",
+                TypeKey = typeKey,
+                Category = "Build",
+                InputPorts = [new NodePortDto { Title = "Image", PortType = "Data" }]
+            },
+            out var created, preserveUnknown: true));
+        var node = Assert.IsType<MissingNodeViewModel>(created);
         var precedingEffect = new EffectNode();
         foreach (var input in node.Input)
         {
@@ -169,130 +178,6 @@ public sealed class NodeOperationFailureTests
             var tampered = await FirmwareService.Instance.VerifyAvbAsync(signedPath,
                 cancellationToken: TestContext.Current.CancellationToken);
             Assert.False(tampered.Success);
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task ExtractPayloadAsync_RequestedPartition_ExposesExistingImagePath()
-    {
-        var directory = Path.Combine(Path.GetTempPath(), $"node-payload-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(directory);
-        try
-        {
-            var source = Path.Combine(directory, "boot.img");
-            var expected = new byte[4096];
-            expected[0] = 42;
-            await File.WriteAllBytesAsync(source, expected, TestContext.Current.CancellationToken);
-            var payload = Path.Combine(directory, "payload.bin");
-            using (var builder = new UotanStudio.Firmware.OtaDelta.Payload.Builder.PayloadBuilder())
-            {
-                await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
-            }
-            var node = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
-                descriptor.TypeKey == "Firmware.Container.Extract").Factory();
-            node.Input.Single(port => port.Title == "Firmware").InitialValue = payload;
-            node.Input.Single(port => port.Title == "Partition Name").InitialValue = "boot";
-
-            var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([node], [],
-                TestContext.Current.CancellationToken);
-
-            Assert.Equal(ExecutionStatus.Succeeded, result.Status);
-            var imagePath = Assert.IsType<string>(node.Output.Single(port => port.Title == "Image File").Data);
-            var artifact = Assert.IsType<UotanStudio.Services.Projects.FileArtifact>(
-                node.Output.Single(port => port.Title == "Image").Data);
-            Assert.Equal(imagePath, artifact.Path);
-            Assert.Equal(Path.GetDirectoryName(imagePath), node.Output.Single(port => port.Title == "Output Dir").Data);
-            Assert.EndsWith("boot.img", imagePath);
-            Assert.Equal(expected, await File.ReadAllBytesAsync(imagePath, TestContext.Current.CancellationToken));
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task ExtractPayloadAsync_LegacyImageData_PublishesImageBytes()
-    {
-        var directory = Path.Combine(Path.GetTempPath(), $"node-payload-publish-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(directory);
-        try
-        {
-            var source = Path.Combine(directory, "boot.img");
-            var expected = new byte[4096];
-            expected[0] = 42;
-            expected[2] = 255;
-            expected[3] = 17;
-            await File.WriteAllBytesAsync(source, expected, TestContext.Current.CancellationToken);
-            var payload = Path.Combine(directory, "payload.bin");
-            using (var builder = new UotanStudio.Firmware.OtaDelta.Payload.Builder.PayloadBuilder())
-            {
-                await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
-            }
-            var extract = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
-                descriptor.TypeKey == "Firmware.Container.Extract").Factory();
-            extract.Input.Single(port => port.Title == "Firmware").InitialValue = payload;
-            extract.Input.Single(port => port.Title == "Partition Name").InitialValue = "boot";
-            var publish = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
-                descriptor.TypeKey == "File.Artifact.Publish").Factory();
-            var destination = Path.Combine(directory, "published.img");
-            publish.Input.Single(port => port.Title == "Path").InitialValue = destination;
-
-            var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([extract, publish],
-                [new NodeConnection
-                {
-                    SourceInstanceId = extract.InstanceId, SourceConnector = "Image",
-                    TargetInstanceId = publish.InstanceId, TargetConnector = "Data"
-                }], TestContext.Current.CancellationToken);
-
-            Assert.Equal(ExecutionStatus.Succeeded, result.Status);
-            Assert.Equal(expected, await File.ReadAllBytesAsync(destination, TestContext.Current.CancellationToken));
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task CreateDeltaAsync_PublishedData_PreservesGeneratedPatchBytes()
-    {
-        var directory = Directory.CreateTempSubdirectory("node-delta-").FullName;
-        var token = TestContext.Current.CancellationToken;
-        try
-        {
-            var source = Path.Combine(directory, "source.img");
-            var target = Path.Combine(directory, "target.img");
-            var published = Path.Combine(directory, "published.bsdiff");
-            await File.WriteAllBytesAsync(source, Enumerable.Range(0, 16 * 1024)
-                .Select(index => (byte)(index % 251)).ToArray(), token);
-            await File.WriteAllBytesAsync(target, Enumerable.Range(0, 16 * 1024)
-                .Select(index => (byte)((index + 17) % 251)).ToArray(), token);
-            var delta = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
-                descriptor.TypeKey == "Build.Ota.CreateDelta").Factory();
-            delta.Input.Single(port => port.Title == "Source").InitialValue = source;
-            delta.Input.Single(port => port.Title == "Target").InitialValue = target;
-            var publish = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
-                descriptor.TypeKey == "File.Artifact.Publish").Factory();
-            publish.Input.Single(port => port.Title == "Path").InitialValue = published;
-
-            var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([delta, publish],
-                [new NodeConnection
-                {
-                    SourceInstanceId = delta.InstanceId, SourceConnector = "Delta",
-                    TargetInstanceId = publish.InstanceId, TargetConnector = "Data"
-                }], token);
-
-            Assert.Equal(ExecutionStatus.Succeeded, result.Status);
-            var artifact = Assert.IsType<UotanStudio.Services.Projects.FileArtifact>(
-                delta.Output.Single(port => port.Title == "Delta").Data);
-            var patch = await File.ReadAllBytesAsync(artifact.Path, token);
-            Assert.True(patch.AsSpan().StartsWith("BSDIFF40"u8));
-            Assert.Equal(patch, await File.ReadAllBytesAsync(published, token));
         }
         finally
         {
@@ -592,20 +477,10 @@ public sealed class NodeOperationFailureTests
 
     [Theory]
     [InlineData("Device.Partition.Flash")]
-    [InlineData("Device.Partition.Erase")]
     [InlineData("Device.Power.Reboot")]
-    [InlineData("Device.Storage.EraseAll")]
-    [InlineData("Device.Ota.Sideload")]
     [InlineData("Firmware.Container.Unpack")]
     [InlineData("Firmware.Container.Pack")]
-    [InlineData("Firmware.Container.Extract")]
-    [InlineData("Firmware.Cpio.Unpack")]
-    [InlineData("Firmware.Cpio.Pack")]
-    [InlineData("Image.Super.Unpack")]
     [InlineData("Image.Super.Pack")]
-    [InlineData("Image.Sparse.Convert")]
-    [InlineData("Build.Dat.Convert")]
-    [InlineData("Build.Ota.CreateDelta")]
     public async Task ExecuteAsync_MissingOperationInputs_FailsAndBlocksDependent(string typeKey)
     {
         var node = NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == typeKey).Factory();

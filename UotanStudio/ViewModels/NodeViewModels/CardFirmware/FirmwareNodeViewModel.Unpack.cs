@@ -69,7 +69,18 @@ public partial class FirmwareNodeViewModel
             var oppo = await service.ExtractOppoAsync(path, outputDir, true, context.CancellationToken).ConfigureAwait(false);
             if (!oppo.Success)
             {
-                throw new InvalidDataException($"Unpack failed: {boot.Summary} | {oppo.Summary}");
+                // Neither boot nor OPPO layout matched, so the registered format handlers decide: this is how
+                // cpio/tar, super, sparse, payload and filesystem images reach the generic unpack node.
+                var detected = await service.UnpackDetectedAsync(path, outputDir, context.CancellationToken).ConfigureAwait(false);
+                if (!detected.Success)
+                {
+                    throw new InvalidDataException($"Unpack failed: {boot.Summary} | {oppo.Summary} | {detected.Summary}");
+                }
+
+                WriteOutput("Output Dir", outputDir);
+                WriteOutput("Partitions", detected.Entries);
+                context.Log.Write(LogLevel.Info, Title, $"{detected.Summary}  已解包。");
+                return;
             }
 
             WriteOutput("Output Dir", outputDir);

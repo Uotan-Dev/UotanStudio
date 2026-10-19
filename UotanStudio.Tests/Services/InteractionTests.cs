@@ -42,7 +42,7 @@ public sealed class InteractionTests
     [Fact]
     public void BuildNodeDtos_SensitiveDefault_OmitsValueAndMasksPreview()
     {
-        var field = InteractionNodeViewModel.Create("UI.Field.Text");
+        var field = InteractionTestNodes.Create("UI.Field.Text");
         field.Input.Single(port => port.Title == "Sensitive").InitialValue = true;
         var secret = field.Input.Single(port => port.Title == "Default");
         secret.InitialValue = "do-not-save";
@@ -56,11 +56,11 @@ public sealed class InteractionTests
     [Fact]
     public void Refresh_StaticForm_AutoExposesTypedStableFieldAndPreservesConnectionOnRename()
     {
-        var field = InteractionNodeViewModel.Create("UI.Field.Number");
+        var field = InteractionTestNodes.Create("UI.Field.Number");
         field.Input.Single(port => port.Title == "Field ID").InitialValue = "capacity";
         field.Input.Single(port => port.Title == "Label").InitialValue = "Capacity";
         var form = InteractionNodeViewModel.Create("UI.Form.Create");
-        var dialog = InteractionNodeViewModel.Create("UI.Dialog.Show");
+        var dialog = InteractionNodeViewModel.Create("UI.Dialog");
         FlowNodeViewModel[] nodes = [field, form, dialog];
         NodeConnectionViewModel[] edges =
         [
@@ -80,7 +80,7 @@ public sealed class InteractionTests
     [Fact]
     public void ApplyFieldSchema_ConnectedFieldTypeChanges_KeepsEndpointAndBlocksExecution()
     {
-        var dialog = InteractionNodeViewModel.Create("UI.Dialog.Show");
+        var dialog = InteractionNodeViewModel.Create("UI.Dialog");
         dialog.ApplyFieldSchema([new InteractionFieldSchema("field", "Value", NodePortType.Text)], true, []);
         var output = dialog.Output.Single(port => port.PortId == "field.field");
         var target = new NodeConnectorViewModel { Title = "Target", PortType = NodePortType.Text, IsInput = true };
@@ -96,7 +96,8 @@ public sealed class InteractionTests
     {
         var feedback = new FeedbackPresenter();
         var engine = new NodeExecutionEngine(new TestExecutionContext(feedback));
-        var node = InteractionNodeViewModel.Create("UI.Progress.Open");
+        var node = InteractionNodeViewModel.Create("UI.Progress");
+        node.Input.Single(port => port.Title == "Mode").InitialValue = "Open";
         var result = await engine.ExecuteAsync([node], [], TestContext.Current.CancellationToken, new NodeExecutionOptions { Interactions = feedback });
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.True(feedback.Handle.Disposed);
@@ -107,7 +108,8 @@ public sealed class InteractionTests
     {
         var presenter = new ResultPresenter(new InteractionResult { Outcome = InteractionOutcome.Cancelled });
         var engine = new NodeExecutionEngine(new TestExecutionContext(presenter));
-        var node = InteractionNodeViewModel.Create("UI.Dialog.Confirm");
+        var node = InteractionNodeViewModel.Create("UI.Dialog");
+        node.Input.Single(port => port.Title == "Mode").InitialValue = "Confirm";
         var submitted = new BranchProbe();
         var cancelled = new BranchProbe();
         var waiting = false;
@@ -251,7 +253,7 @@ public sealed class InteractionTests
     [Fact]
     public async Task ExecuteAsync_CancelledDialog_DoesNotLeakPreviousSubmittedValues()
     {
-        var node = InteractionNodeViewModel.Create("UI.Dialog.Show");
+        var node = InteractionNodeViewModel.Create("UI.Dialog");
         foreach (var port in node.Input)
         {
             port.Data = port.InitialValue;
@@ -275,7 +277,7 @@ public sealed class InteractionTests
     [Fact]
     public async Task ExecuteAsync_ComposedFieldAndForm_PreservesFieldIdentityAcrossLabelChanges()
     {
-        var field = InteractionNodeViewModel.Create("UI.Field.Text");
+        var field = InteractionTestNodes.Create("UI.Field.Text");
         foreach (var port in field.Input)
         {
             port.Data = port.InitialValue;

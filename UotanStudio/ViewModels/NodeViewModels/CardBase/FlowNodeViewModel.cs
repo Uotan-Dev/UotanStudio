@@ -229,47 +229,6 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the configurable value type of the node (Text/Number/Boolean/Path), edited in the properties
-    /// panel for configurable nodes such as constants. Defaults to <c>Text</c>; ignored by non-configurable nodes.
-    /// <para>获取或设置节点可配置值的类型（Text/Number/Boolean/Path），供常量等可配置节点在属性面板编辑。
-    /// 默认 <c>Text</c>；非可配置节点忽略。</para>
-    /// </summary>
-    public virtual string NodeValueType
-    {
-        get => field;
-        set
-        {
-            if (!IsEditingLocked)
-            {
-                SetProperty(ref field, value);
-            }
-        }
-    } = "Text";
-
-    /// <summary>
-    /// Gets or sets the configurable value of the node, edited in the properties panel for configurable nodes;
-    /// ignored by non-configurable nodes.
-    /// <para>获取或设置节点可配置的值，供常量等可配置节点在属性面板编辑；非可配置节点忽略。</para>
-    /// </summary>
-    public virtual string NodeValue
-    {
-        get => field;
-        set
-        {
-            if (!IsEditingLocked)
-            {
-                SetProperty(ref field, value);
-            }
-        }
-    } = string.Empty;
-
-    /// <summary>
-    /// Gets whether the node is a constant-input node (the properties panel shows the constant editor for it).
-    /// <para>获取节点是否为常量输入节点（属性面板据此显示常量编辑区）。</para>
-    /// </summary>
-    public virtual bool IsConstantNode => false;
-
-    /// <summary>
     /// Gets whether the node is a project-image reference node (the properties panel shows the image picker for it).
     /// <para>获取节点是否为工程镜像引用节点（属性面板据此显示镜像选择编辑区）。</para>
     /// </summary>
@@ -301,12 +260,6 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// <para>获取可选的工程镜像相对路径列表（ProjectImage 节点属性面板绑定）；非镜像节点返回空列表。</para>
     /// </summary>
     public virtual IReadOnlyList<string> AvailableImages => [];
-
-    /// <summary>
-    /// The selectable value types (Text/Number/Boolean/Path), used by the properties-panel combo box.
-    /// <para>可配置值类型的可选项（Text/Number/Boolean/Path），供属性面板下拉框使用。</para>
-    /// </summary>
-    public static IReadOnlyList<string> ValueTypeOptions { get; } = ["Text", "Number", "Boolean", "Path"];
 
     /// <summary>
     /// Gets the collection of input connectors for the node.

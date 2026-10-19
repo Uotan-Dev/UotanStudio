@@ -113,7 +113,8 @@ public sealed class WorkflowInteractionPreflightTests
     public async Task ExecuteAsync_UnsupportedInteraction_RejectsBeforeIndependentEffects(bool nested)
     {
         var effect = new EffectNode();
-        FlowNodeViewModel interactive = InteractionNodeViewModel.Create("UI.Dialog.Confirm");
+        FlowNodeViewModel interactive = InteractionNodeViewModel.Create("UI.Dialog");
+        interactive.Input.Single(port => port.Title == "Mode").InitialValue = "Confirm";
         if (nested)
         {
             interactive = Wrap(Wrap(interactive, "inner"), "outer");
@@ -130,7 +131,7 @@ public sealed class WorkflowInteractionPreflightTests
     [Fact]
     public async Task ExecuteAsync_UiDefinitionsOnly_DoesNotRequireInteractiveHost()
     {
-        var content = InteractionNodeViewModel.Create("UI.Content.Text");
+        var content = InteractionTestNodes.Create("UI.Content.Text");
 
         var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([content], [], TestContext.Current.CancellationToken);
 

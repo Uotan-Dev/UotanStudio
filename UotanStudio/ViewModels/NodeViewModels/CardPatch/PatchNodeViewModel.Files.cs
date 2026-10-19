@@ -1,4 +1,3 @@
-using UotanStudio.Firmware.Patching;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Patching;
 
@@ -12,6 +11,22 @@ public sealed partial class PatchNodeViewModel
         var token = context.CancellationToken;
         switch (TypeKey)
         {
+            case "Binary.Search":
+                var searchIsReplace = Text("Operation").Trim() == "Replace";
+                var searchOffsets = searchIsReplace
+                    ? await run.StageBinaryAsync(Text("Path"), Text("Find"), Text("Find Mask"), Text("Replacement"), Text("Replace Mask"),
+                        long.Parse(Text("Start Offset"), System.Globalization.CultureInfo.InvariantCulture),
+                        long.Parse(Text("Search Length"), System.Globalization.CultureInfo.InvariantCulture),
+                        int.Parse(Text("Alignment"), System.Globalization.CultureInfo.InvariantCulture),
+                        int.Parse(Text("Skip Matches"), System.Globalization.CultureInfo.InvariantCulture), Count(), token).ConfigureAwait(false)
+                    : await run.FindBinaryAsync(Text("Path"), Text("Find"), Text("Find Mask"),
+                        long.Parse(Text("Start Offset"), System.Globalization.CultureInfo.InvariantCulture),
+                        long.Parse(Text("Search Length"), System.Globalization.CultureInfo.InvariantCulture),
+                        int.Parse(Text("Alignment"), System.Globalization.CultureInfo.InvariantCulture),
+                        int.Parse(Text("Skip Matches"), System.Globalization.CultureInfo.InvariantCulture), Count(), token).ConfigureAwait(false);
+                WriteOutput("Offsets", searchOffsets);
+                WriteOutput("Count", searchOffsets.Count);
+                break;
             case "Binary.Pattern.Find":
             case "Binary.Pattern.Replace":
                 var offsets = TypeKey == "Binary.Pattern.Replace"
@@ -28,56 +43,8 @@ public sealed partial class PatchNodeViewModel
                 WriteOutput("Offsets", offsets);
                 WriteOutput("Count", offsets.Count);
                 return;
-            case "Validation.Format.Detect":
-                var expectedFormat = PatchFormatKind.Unknown;
-                var required = PatchFormatEvidence.Structure;
-                if (!string.IsNullOrWhiteSpace(Text("Expected Format")))
-                {
-                    if (!Enum.TryParse(Text("Expected Format"), out expectedFormat) || !Enum.IsDefined(expectedFormat)
-                        || expectedFormat == PatchFormatKind.Unknown
-                        || !Enum.TryParse(Text("Required Evidence"), out required) || required is not PatchFormatEvidence.Signature and not PatchFormatEvidence.Structure)
-                    {
-                        throw new InvalidDataException("Invalid format precondition.");
-                    }
-                }
-                var probe = await run.ProbeFormatAsync(Text("Path"), expectedFormat, token).ConfigureAwait(false);
-                WriteOutput("Format", probe.Format.ToString());
-                WriteOutput("Evidence", probe.Evidence.ToString());
-                WriteOutput("Detail", probe.Detail);
-                WriteOutput("Structure Valid", !probe.Rejected && probe.Evidence == PatchFormatEvidence.Structure);
-                if (expectedFormat != PatchFormatKind.Unknown)
-                {
-                    WriteOutput("Match", probe.Matches(expectedFormat, required));
-                }
-                return;
             case "Workspace.Directory.Open":
                 WriteOutput("Workspace", run.OpenWorkspace(Text("Root")));
-                return;
-            case "Validation.File.Hash":
-            case "Validation.Hash.Verify":
-                var hash = await run.HashAsync(Text("Path"), token).ConfigureAwait(false);
-                if (TypeKey == "Validation.Hash.Verify")
-                {
-                    var expected = Text("Expected Hash");
-                    if (expected.Length != 64 || !expected.All(char.IsAsciiHexDigit))
-                    {
-                        throw new InvalidDataException("Expected hash must contain exactly 64 hexadecimal characters.");
-                    }
-                    if (!string.Equals(hash, expected, StringComparison.OrdinalIgnoreCase))
-                    {
-                        throw new PatchConflictException(Text("Path"));
-                    }
-                    WriteOutput("Valid", true);
-                }
-                WriteOutput("Hash", hash);
-                return;
-            case "Validation.Count.Assert":
-                var actual = Convert.ToDouble(ReadInput("Count"), System.Globalization.CultureInfo.InvariantCulture);
-                if (!double.IsFinite(actual) || actual != Count())
-                {
-                    throw new InvalidDataException("Patch result count does not match the expected count.");
-                }
-                WriteOutput("Valid", true);
                 return;
         }
         var workspace = ReadInput("Workspace") as PatchWorkspace
@@ -85,6 +52,9 @@ public sealed partial class PatchNodeViewModel
         run.CheckWorkspace(workspace);
         switch (TypeKey)
         {
+            case "Workspace.File":
+                await ExecuteWorkspaceFileNode(context).ConfigureAwait(false);
+                break;
             case "Workspace.Partition.Resolve":
                 var mapped = PatchPartitionPath.Resolve(workspace, Text("Partition"), Text("Layout"), Text("Partition Path"));
                 var resolved = workspace.Resolve(mapped);
@@ -114,11 +84,6 @@ public sealed partial class PatchNodeViewModel
                 break;
             case "Workspace.File.Exists":
                 WriteOutput("Exists", await run.ExistsAsync(workspace.Resolve(Text("Relative Path")), token).ConfigureAwait(false));
-                break;
-            case "Validation.Changes.Verify":
-                await run.VerifyChangesAsync(workspace,
-                    Text("Expected Paths").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries), token).ConfigureAwait(false);
-                WriteOutput("Valid", true);
                 break;
         }
         WriteOutput("Workspace", workspace);

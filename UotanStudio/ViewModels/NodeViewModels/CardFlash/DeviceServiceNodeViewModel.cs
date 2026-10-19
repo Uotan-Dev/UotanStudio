@@ -8,10 +8,9 @@ using UotanStudio.Services.Scripting;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// Device service node view model exposing device state, partition table, A/B slot, recovery wipe, and
-/// shell operations through the shared <see cref="IScriptToolGateway"/>.
-/// <para>设备服务节点视图模型：通过共享的 <see cref="IScriptToolGateway"/> 暴露设备状态、分区表、
-/// A/B 槽位、恢复模式擦除与 shell 操作。</para>
+/// Device service node view model exposing the partition table and shell operations through
+/// the shared <see cref="IScriptToolGateway"/>.
+/// <para>设备服务节点视图模型：通过共享的 <see cref="IScriptToolGateway"/> 暴露分区表读取与 shell 操作。</para>
 /// </summary>
 public class DeviceServiceNodeViewModel : FlowNodeViewModel
 {
@@ -29,23 +28,6 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
     public DeviceServiceNodeViewModel(string title, IScriptToolGateway? gateway = null) : base(title, NodeCategory.Flash)
     {
         _gateway = gateway ?? DeviceScriptToolGateway.Default;
-    }
-
-    /// <summary>
-    /// Creates a default device state query node.
-    /// <para>创建默认的设备状态查询节点。</para>
-    /// </summary>
-    public static DeviceServiceNodeViewModel CreateStateQueryNode()
-    {
-        var node = new DeviceServiceNodeViewModel("Device State")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Device.State.Query"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Protocol", PortType = NodePortType.Text });
-        node.Output.Add(new NodeConnectorViewModel { Title = "State", PortType = NodePortType.Text });
-        return node;
     }
 
     /// <summary>
@@ -68,61 +50,6 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
         });
         node.Output.Add(new NodeConnectorViewModel { Title = "Count", PortType = NodePortType.Number });
         node.Output.Add(new NodeConnectorViewModel { Title = "Partitions", PortType = NodePortType.Text });
-        return node;
-    }
-
-    /// <summary>
-    /// Creates a default active slot query node.
-    /// <para>创建默认的活动槽位查询节点。</para>
-    /// </summary>
-    public static DeviceServiceNodeViewModel CreateSlotQueryNode()
-    {
-        var node = new DeviceServiceNodeViewModel("Query Slot")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Device.Slot.Query"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Slot", PortType = NodePortType.Text });
-        return node;
-    }
-
-    /// <summary>
-    /// Creates a default active slot switch node.
-    /// <para>创建默认的活动槽位切换节点。</para>
-    /// </summary>
-    public static DeviceServiceNodeViewModel CreateSlotSwitchNode()
-    {
-        var node = new DeviceServiceNodeViewModel("Switch Slot")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Device.Slot.Switch"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Slot", PortType = NodePortType.Text });
-        return node;
-    }
-
-    /// <summary>
-    /// Creates a default recovery wipe node.
-    /// <para>创建默认的恢复模式擦除节点。</para>
-    /// </summary>
-    public static DeviceServiceNodeViewModel CreateRecoveryCleanNode()
-    {
-        var node = new DeviceServiceNodeViewModel("Recovery Wipe")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Device.Recovery.Clean"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
-        node.Input.Add(new NodeConnectorViewModel
-        {
-            Title = "Mode",
-            PortType = NodePortType.Text,
-            InitialValue = "factoryreset",
-            Choices = [new NodePortChoice("Factory Reset"), new NodePortChoice("Format Data")]
-        });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Output", PortType = NodePortType.Text });
         return node;
     }
 
@@ -151,20 +78,8 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
             context.CancellationToken.ThrowIfCancellationRequested();
             switch (TypeKey)
             {
-                case "Device.State.Query":
-                    ExecuteStateQuery(context);
-                    break;
                 case "Device.Table.Read":
                     await ExecutePartitionTableReadAsync(context).ConfigureAwait(false);
-                    break;
-                case "Device.Slot.Query":
-                    await ExecuteSlotQueryAsync(context).ConfigureAwait(false);
-                    break;
-                case "Device.Slot.Switch":
-                    await ExecuteSlotSwitchAsync(context).ConfigureAwait(false);
-                    break;
-                case "Device.Recovery.Clean":
-                    await ExecuteRecoveryCleanAsync(context).ConfigureAwait(false);
                     break;
                 case "Device.Shell.Command":
                     await ExecuteShellCommandAsync(context).ConfigureAwait(false);
@@ -185,14 +100,6 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
         }
     }
 
-    private void ExecuteStateQuery(INodeExecutionContext context)
-    {
-        var device = RequireDevice(context);
-        WriteOutput("Protocol", ProtocolText(device));
-        WriteOutput("State", device.State);
-        context.Log.Write(LogLevel.Info, Title, $"Device {device.Serial}: {ProtocolText(device)} / {device.State}");
-    }
-
     private async Task ExecutePartitionTableReadAsync(INodeExecutionContext context)
     {
         var device = RequireDevice(context);
@@ -201,29 +108,6 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
             .ConfigureAwait(false);
         WriteOutput("Count", (double)partitions.Count);
         WriteOutput("Partitions", string.Join('\n', partitions.Select(entry => $"{entry.Name}={entry.Size}")));
-    }
-
-    private async Task ExecuteSlotQueryAsync(INodeExecutionContext context)
-    {
-        var device = RequireDevice(context);
-        var slot = await _gateway.GetCurrentSlotAsync(device, context.CancellationToken).ConfigureAwait(false);
-        WriteOutput("Slot", slot);
-    }
-
-    private async Task ExecuteSlotSwitchAsync(INodeExecutionContext context)
-    {
-        var device = RequireDevice(context);
-        var slot = await _gateway.SetOtherSlotAsync(device, context.CancellationToken).ConfigureAwait(false);
-        WriteOutput("Slot", slot);
-    }
-
-    private async Task ExecuteRecoveryCleanAsync(INodeExecutionContext context)
-    {
-        var device = RequireDevice(context);
-        var mode = NormalizeMode(Text(ReadInput("Mode")));
-        var output = await _gateway.RecoveryCleanAsync(device, mode, context.CancellationToken)
-            .ConfigureAwait(false);
-        WriteOutput("Output", output);
     }
 
     private async Task ExecuteShellCommandAsync(INodeExecutionContext context)
@@ -254,24 +138,6 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
         bool value => value,
         string text => bool.TryParse(text, out var parsed) && parsed,
         _ => false
-    };
-
-    private static string NormalizeMode(string? value) => value?.Trim().ToLowerInvariant() switch
-    {
-        "factory reset" or "factoryreset" => "factoryreset",
-        "format data" or "formatdata" => "formatdata",
-        _ => value?.Trim() ?? string.Empty
-    };
-
-    private static string ProtocolText(DetectedDevice device) => device.Protocol switch
-    {
-        DeviceProtocolKind.Adb => "adb",
-        DeviceProtocolKind.Fastboot => "fastboot",
-        DeviceProtocolKind.Edl => "edl",
-        DeviceProtocolKind.Rkdl => "rkdl",
-        DeviceProtocolKind.Mtk => "mtk",
-        DeviceProtocolKind.Hdc => "hdc",
-        _ => "unknown"
     };
 
     private static string? Text(object? value) => Convert.ToString(value, CultureInfo.InvariantCulture);

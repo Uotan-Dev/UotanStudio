@@ -30,7 +30,7 @@ public sealed class PluginRegistryTests
     [Fact]
     public void Shared_WithoutExplicitInitialization_ExposesBuiltInCatalog()
     {
-        Assert.Contains("Data.Value.Constant", PluginRegistry.Shared.BuiltInTypeKeys);
+        Assert.Contains("File.Binary.Read", PluginRegistry.Shared.BuiltInTypeKeys);
         Assert.NotEmpty(PluginRegistry.Shared.Descriptors);
     }
 

@@ -7,9 +7,6 @@ public partial class NodeEditorViewModel
     public Services.Workspace.IWorkflowDocuments? Documents { get; set; }
     private IReadOnlyList<NodeConnectorViewModel> _selectedParameterInputs = [];
 
-    public IReadOnlyList<NodePortChoice> ValueTypeChoices { get; } =
-        [.. FlowNodeViewModel.ValueTypeOptions.Select(value => new NodePortChoice(value, "Node_PortType_"))];
-
     /// <summary>Hides unconnected advanced and irrelevant inputs on canvas nodes.<para>在画布节点上隐藏未连接的高级输入与无关输入。</para></summary>
     /// <value>True when compact presentation is enabled.<para>启用紧凑呈现时为 True。</para></value>
     public bool CompactNodes

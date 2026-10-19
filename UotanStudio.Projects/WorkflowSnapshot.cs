@@ -151,26 +151,6 @@ public sealed class NodeDto
     public VisualPluginPackage? CompositePackage { get; set; }
 
     /// <summary>
-    /// Configurable node value type, when the node exposes one.
-    /// <para>节点暴露可配置值时的值类型。</para>
-    /// </summary>
-    /// <value>
-    /// Type discriminator of the configurable value; <see langword="null"/> when the node exposes none.
-    /// <para>可配置值的类型判别符；节点未暴露可配置值时为 <see langword="null"/>。</para>
-    /// </value>
-    public string? NodeValueType { get; set; }
-
-    /// <summary>
-    /// Configurable node value, when the node exposes one.
-    /// <para>节点暴露的可配置值本身。</para>
-    /// </summary>
-    /// <value>
-    /// Configured value stored as text, interpreted through <see cref="NodeValueType"/>; <see langword="null"/> when unset.
-    /// <para>以文本存储的配置值，需结合 <see cref="NodeValueType"/> 解释；未设置时为 <see langword="null"/>。</para>
-    /// </value>
-    public string? NodeValue { get; set; }
-
-    /// <summary>
     /// Selected project-image relative path, when the node references an image.
     /// <para>节点引用镜像时所选的项目镜像相对路径。</para>
     /// </summary>

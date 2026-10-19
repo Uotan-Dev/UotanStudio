@@ -14,7 +14,7 @@
       "RequiresInteraction"
     ],
     "RequiredNodeTypes": [
-      "UI.Dialog.Show",
+      "UI.Dialog",
       "UI.Field.Text",
       "UI.Form.Create",
       "UI.Result.Read"
@@ -167,11 +167,11 @@
       },
       {
         "InstanceId": "7b74ea34b1ad4f42b91ce4508122898e",
-        "Title": "UI.Dialog.Show",
+        "Title": "UI.Dialog",
         "Category": "Output",
         "X": 0,
         "Y": 0,
-        "TypeKey": "UI.Dialog.Show",
+        "TypeKey": "UI.Dialog",
         "InputInitialValues": {
           "Timeout Seconds": "0"
         },

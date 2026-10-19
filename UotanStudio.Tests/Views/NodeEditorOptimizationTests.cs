@@ -33,8 +33,8 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
     {
         using var first = new NodeEditorViewModel();
         using var second = new NodeEditorViewModel();
-        var a = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        var b = NodeTypeRegistry.Create("Data.Value.Constant")!;
+        var a = NodeTypeRegistry.Create("File.Binary.Read")!;
+        var b = NodeTypeRegistry.Create("File.Binary.Read")!;
         first.AddNode(a);
         second.AddNode(b);
         first.SetSelection([a]);
@@ -113,7 +113,7 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
     public Task Delete_RemovedNodeChanges_DoNotEnterCurrentUndoHistory() => OnUiAsync(() =>
     {
         using var editor = new NodeEditorViewModel();
-        var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
+        var node = NodeTypeRegistry.Create("File.Binary.Read")!;
         editor.AddNode(node);
         editor.SetSelection([node]);
         editor.DeleteSelectedCommand.Execute(null);
@@ -139,7 +139,7 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
     public Task Load_InvalidGraph_PreservesCanvasSelectionAndHistory(string invalidity) => OnUiAsync(async () =>
     {
         using var editor = new NodeEditorViewModel();
-        var existing = NodeTypeRegistry.Create("Data.Value.Constant")!;
+        var existing = NodeTypeRegistry.Create("File.Binary.Read")!;
         editor.AddNode(existing);
         editor.SetSelection([existing]);
         var snapshot = Snapshot();
@@ -192,26 +192,26 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
     public Task Clipboard_EmbeddedComposite_FreezesDefinitionAndKeepsIndependentCopies() => OnUiAsync(() =>
     {
         using var editor = new NodeEditorViewModel();
-        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        constant.NodeValue = "before";
+        var constant = NodeTypeRegistry.Create("File.Binary.Read")!;
+        constant.CustomName = "before";
         var package = UotanStudio.Services.VisualPlugins.VisualPluginPackageBuilder.Create(
             "Composite", "tests.clipboard", VisualPluginKind.CompositeNode, [constant], []);
         var composite = new CompositeNodeViewModel(package) { CustomName = "Composite alias" };
         editor.AddNode(composite);
         editor.SetSelection([composite]);
         editor.ExecuteAction(NodeEditorAction.Copy);
-        package.Graph.Nodes[0].NodeValue = "changed original";
+        package.Graph.Nodes[0].CustomName = "changed original";
         editor.ExecuteAction(NodeEditorAction.Paste);
         Assert.True(editor.Nodes.Count == 2, editor.ExecutionStatus);
         var first = Assert.IsType<CompositeNodeViewModel>(editor.SelectedNode);
-        Assert.Equal("before", first.Package.Graph.Nodes[0].NodeValue);
+        Assert.Equal("before", first.Package.Graph.Nodes[0].CustomName);
         Assert.Equal("Composite alias", first.CustomName);
-        first.Package.Graph.Nodes[0].NodeValue = "changed paste";
+        first.Package.Graph.Nodes[0].CustomName = "changed paste";
 
         editor.ExecuteAction(NodeEditorAction.Paste);
 
         var second = Assert.IsType<CompositeNodeViewModel>(editor.SelectedNode);
-        Assert.Equal("before", second.Package.Graph.Nodes[0].NodeValue);
+        Assert.Equal("before", second.Package.Graph.Nodes[0].CustomName);
         Assert.NotSame(first.Package, second.Package);
     });
 
@@ -219,7 +219,7 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
     public Task Import_InvalidConnection_DoesNotAppendPartialTemplate() => OnUiAsync(() =>
     {
         using var editor = new NodeEditorViewModel();
-        var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
+        var node = NodeTypeRegistry.Create("File.Binary.Read")!;
         editor.AddNode(node);
         var graph = Snapshot();
         graph.Connections[0].SourcePortId = "invalid";
@@ -272,7 +272,7 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
             Assert.True(view.FindControl<ProgressBar>("WorkflowProgress")!.IsVisible);
             Assert.InRange(editor.ExecutionProgress, 0.49, 0.51);
 
-            editor.AddNode(NodeTypeRegistry.Create("Data.Value.Constant")!);
+            editor.AddNode(NodeTypeRegistry.Create("File.Binary.Read")!);
             editor.DeleteSelectedCommand.Execute(null);
             editor.Undo();
             editor.Clear();
@@ -369,7 +369,7 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
     public Task Layout_ViewportWidths_KeepToolbarAndCanvasWithinWindow(int width) => OnUiAsync(() =>
     {
         using var editor = new NodeEditorViewModel();
-        editor.AddNode(NodeTypeRegistry.Create("Data.Value.Constant")!);
+        editor.AddNode(NodeTypeRegistry.Create("File.Binary.Read")!);
         var view = new NodeEditorView { DataContext = editor };
         var window = new Window { Content = view, Width = width, Height = 800 };
         try
@@ -469,8 +469,8 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
     public Task Navigation_DistantNodes_FitsFocusesAndInsertsInsideViewport() => OnUiAsync(() =>
     {
         using var editor = new NodeEditorViewModel();
-        var a = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        var b = NodeTypeRegistry.Create("Data.Value.Constant")!;
+        var a = NodeTypeRegistry.Create("File.Binary.Read")!;
+        var b = NodeTypeRegistry.Create("File.Binary.Read")!;
         a.Location = new(-1200, -500);
         b.Location = new(1600, 800);
         editor.AddNode(a);
@@ -496,7 +496,7 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
             editor.SetSelection([b]);
             view.NavigateCanvas(NodeViewportAction.FocusSelection);
             Assert.Equal(1, canvas.Zoom);
-            var added = NodeTypeRegistry.Create("Data.Value.Constant")!;
+            var added = NodeTypeRegistry.Create("File.Binary.Read")!;
             editor.AddNode(added);
             Assert.InRange((added.Location.X + canvas.OffsetX) * canvas.Zoom, 0, surface.Bounds.Width);
             Assert.InRange((added.Location.Y + canvas.OffsetY) * canvas.Zoom, 0, surface.Bounds.Height);
@@ -515,8 +515,8 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
     {
         using var main = new NodeEditorViewModel();
         using var composite = new NodeEditorViewModel(false);
-        main.AddNode(NodeTypeRegistry.Create("Data.Value.Constant")!);
-        composite.AddNode(NodeTypeRegistry.Create("Data.Value.Constant")!);
+        main.AddNode(NodeTypeRegistry.Create("File.Binary.Read")!);
+        composite.AddNode(NodeTypeRegistry.Create("File.Binary.Read")!);
         var view = new NodeEditorView { DataContext = composite };
         var window = new Window { Content = view, Width = 1200, Height = 800 };
         try
@@ -533,46 +533,6 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
         }
         finally
         {
-            window.Close();
-        }
-    });
-
-    [Fact]
-    public Task Properties_LanguageAndTypeChanges_PreserveStableValuesAndBoundedCoordinates() => OnUiAsync(() =>
-    {
-        using var editor = new NodeEditorViewModel();
-        var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        node.Location = new(218.285714285714, -244.285714285714);
-        editor.AddNode(node);
-        editor.SetSelection([node]);
-        var view = new NodeEditorView { DataContext = editor };
-        var window = new Window { Content = view, Width = 1200, Height = 800 };
-        var language = LanguageService.Instance.CurrentLanguage;
-        try
-        {
-            window.Show();
-            window.UpdateLayout();
-            var selector = view.FindControl<ComboBox>("ConstantValueTypeSelector")!;
-            Assert.Equal("Text", selector.SelectedValue);
-            selector.SelectedItem = editor.ValueTypeChoices.Single(choice => choice.Value == "Number");
-            Assert.Equal("Number", node.NodeValueType);
-            Assert.Equal(NodePortType.Number, node.Output[0].PortType);
-            foreach (var locale in new[] { "zh-CN", "en-US" })
-            {
-                LanguageService.Instance.ApplyLanguage(locale);
-                Dispatcher.UIThread.RunJobs();
-                window.UpdateLayout();
-                var expected = LanguageService.Instance.GetString("Node_PortType_Number");
-                Assert.Contains(selector.GetVisualDescendants().OfType<TextBlock>(), text => text.Text == expected);
-                Assert.Equal("Number", selector.SelectedValue);
-                Assert.Equal("Number", node.NodeValueType);
-            }
-            var location = view.FindControl<TextBlock>("NodeLocationText")!;
-            Assert.DoesNotContain("285714", location.Text ?? string.Empty, StringComparison.Ordinal);
-        }
-        finally
-        {
-            LanguageService.Instance.ApplyLanguage(language);
             window.Close();
         }
     });
@@ -625,7 +585,7 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
         using var editor = new NodeEditorViewModel();
         var alpha = new NodeProjectDocument("alpha");
         editor.OpenDocument(alpha);
-        var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
+        var node = NodeTypeRegistry.Create("File.Binary.Read")!;
         editor.AddNode(node);
 
         editor.OpenDocument(new NodeProjectDocument("beta"));
@@ -652,7 +612,7 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
     {
         using var editor = new NodeEditorViewModel();
         editor.OpenDocument(new NodeProjectDocument("alpha"));
-        editor.AddNode(NodeTypeRegistry.Create("Data.Value.Constant")!);
+        editor.AddNode(NodeTypeRegistry.Create("File.Binary.Read")!);
         Assert.True(editor.CanUndo);
 
         editor.OpenDocument(new NodeProjectDocument("beta"));
@@ -675,7 +635,7 @@ public sealed class NodeEditorOptimizationTests(NodeEditorUiFixture fixture)
     {
         using var editor = new NodeEditorViewModel();
         editor.OpenDocument(new NodeProjectDocument("alpha"));
-        editor.AddNode(NodeTypeRegistry.Create("Data.Value.Constant")!);
+        editor.AddNode(NodeTypeRegistry.Create("File.Binary.Read")!);
         editor.OpenDocument(new NodeProjectDocument("beta"));
 
         editor.CloseAllDocuments();

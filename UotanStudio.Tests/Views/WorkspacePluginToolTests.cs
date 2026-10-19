@@ -18,7 +18,7 @@ public sealed class WorkspacePluginToolTests
         var manager = new VisualPluginManager(temp.Path);
         using var tool = new PluginToolViewModel(manager);
         var package = VisualPluginPackageBuilder.Create("Patch plan", "tests.workspace-patch-plan",
-            VisualPluginKind.WorkflowTemplate, [NodeTypeRegistry.Create("Data.Value.Constant")!], []);
+            VisualPluginKind.WorkflowTemplate, [NodeTypeRegistry.Create("File.Binary.Read")!], []);
 
         await VisualPluginFile.SaveAsync(Path.Combine(temp.Path, "patch-plan.uotanplugin.json"), package,
             TestContext.Current.CancellationToken);

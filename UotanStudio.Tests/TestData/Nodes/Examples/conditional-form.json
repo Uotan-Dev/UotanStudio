@@ -15,7 +15,7 @@
     ],
     "RequiredNodeTypes": [
       "UI.Condition.Equals",
-      "UI.Dialog.Show",
+      "UI.Dialog",
       "UI.Field.Boolean",
       "UI.Field.Number",
       "UI.Form.Create",
@@ -363,11 +363,11 @@
       },
       {
         "InstanceId": "ad165249934a4cfb8ed59e260aba72b6",
-        "Title": "UI.Dialog.Show",
+        "Title": "UI.Dialog",
         "Category": "Output",
         "X": 0,
         "Y": 0,
-        "TypeKey": "UI.Dialog.Show",
+        "TypeKey": "UI.Dialog",
         "InputInitialValues": {
           "Timeout Seconds": "0"
         },

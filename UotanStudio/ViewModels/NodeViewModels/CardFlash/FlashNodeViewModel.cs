@@ -9,9 +9,9 @@ using UotanStudio.ViewModels.Devices;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// Flash operation node view model, providing device connection, partition flashing, erasing,
+/// Flash operation node view model, providing device connection, partition flashing,
 /// and reboot capabilities, all wired to the real backend services.
-/// <para>烧录操作节点视图模型，提供设备连接、分区刷入、擦除和重启功能，均接入真实后端服务。</para>
+/// <para>烧录操作节点视图模型，提供设备连接、分区刷入和重启功能，均接入真实后端服务。</para>
 /// </summary>
 public class FlashNodeViewModel : FlowNodeViewModel
 {
@@ -47,24 +47,6 @@ public class FlashNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// Creates a default erase node.
-    /// <para>创建默认的擦除节点。</para>
-    /// </summary>
-    public static FlashNodeViewModel CreateEraseNode()
-    {
-        var node = new FlashNodeViewModel("Erase Partition")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Device.Partition.Erase"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Partition", PortType = NodePortType.Text });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Result", PortType = NodePortType.Boolean });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
-        return node;
-    }
-
-    /// <summary>
     /// Creates a default reboot node.
     /// <para>创建默认的重启节点。</para>
     /// </summary>
@@ -81,8 +63,8 @@ public class FlashNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>Dispatches flash logic by the node type key (TypeKey): Device.Partition.Flash calls <see cref="FlashService.FlashImageAsync"/>, Device.Partition.Erase calls <see cref="FlashService.ErasePartitionAsync"/>, and Device.Power.Reboot calls <see cref="DeviceMonitorService.RebootAsync"/>. A missing device logs a warning and short-circuits.
-    /// <para>按节点类型键（TypeKey）分发对应的烧录逻辑：Device.Partition.Flash 调 <see cref="FlashService.FlashImageAsync"/>、Device.Partition.Erase 调 <see cref="FlashService.ErasePartitionAsync"/>、Device.Power.Reboot 调 <see cref="DeviceMonitorService.RebootAsync"/>。设备缺失时告警并短路。</para></summary>
+    /// <summary>Dispatches flash logic by the node type key (TypeKey): Device.Partition.Flash calls <see cref="FlashService.FlashImageAsync"/> and Device.Power.Reboot calls <see cref="DeviceMonitorService.RebootAsync"/>. A missing device logs a warning and short-circuits.
+    /// <para>按节点类型键（TypeKey）分发对应的烧录逻辑：Device.Partition.Flash 调 <see cref="FlashService.FlashImageAsync"/>、Device.Power.Reboot 调 <see cref="DeviceMonitorService.RebootAsync"/>。设备缺失时告警并短路。</para></summary>
     /// <param name="context">The execution context.<para>执行上下文。</para></param>
     /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
@@ -94,9 +76,6 @@ public class FlashNodeViewModel : FlowNodeViewModel
             {
                 case "Device.Partition.Flash":
                     await ExecuteFlashAsync(context).ConfigureAwait(false);
-                    break;
-                case "Device.Partition.Erase":
-                    await ExecuteEraseAsync(context).ConfigureAwait(false);
                     break;
                 case "Device.Power.Reboot":
                     await ExecuteRebootAsync(context).ConfigureAwait(false);
@@ -160,42 +139,6 @@ public class FlashNodeViewModel : FlowNodeViewModel
             result.Success
                 ? $"{result.Summary}  刷写完成。"
                 : $"Flash failed: {result.Summary}  刷写失败。");
-    }
-
-    private async Task ExecuteEraseAsync(INodeExecutionContext context)
-    {
-        var device = NodeDataUtil.ToDevice(ReadInput("Device"));
-        if (device is null)
-        {
-            context.Log.Write(LogLevel.Warn, Title, "No device connected. 未连接设备。");
-            WriteOutput("Result", false);
-            WriteOutput("Status", "no-device");
-            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
-        }
-
-        var partition = Text(ReadInput("Partition"));
-        if (string.IsNullOrWhiteSpace(partition))
-        {
-            context.Log.Write(LogLevel.Warn, Title, "No partition specified. 未指定分区。");
-            WriteOutput("Result", false);
-            WriteOutput("Status", "missing-partition");
-            throw new InvalidOperationException(LanguageService.Instance.GetString("Node_Device_InvalidInput"));
-        }
-
-        var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
-        var result = await FlashService.Default.ErasePartitionAsync(
-            new DeviceInfo(device), partition, progress, context.CancellationToken).ConfigureAwait(false);
-
-        WriteOutput("Result", result.Success);
-        WriteOutput("Status", result.Summary);
-        if (!result.Success)
-        {
-            throw new InvalidOperationException(result.Summary);
-        }
-        context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title,
-            result.Success
-                ? $"{result.Summary}  擦除完成。"
-                : $"Erase failed: {result.Summary}  擦除失败。");
     }
 
     private async Task ExecuteRebootAsync(INodeExecutionContext context)

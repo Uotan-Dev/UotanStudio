@@ -211,7 +211,7 @@ public sealed class PatchRunTests : IDisposable
             source = new CompositeNodeViewModel(package);
             outputPort = "done";
         }
-        var fail = PatchNodeViewModel.Create("Validation.Boolean.Assert");
+        var fail = PatchNodeViewModel.Create("File.Text.Read");
         var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([source, fail],
             [Connect(source, outputPort, fail, "Flow")], Token);
         Assert.NotEqual(ExecutionStatus.Succeeded, result.Status);
@@ -238,32 +238,29 @@ public sealed class PatchRunTests : IDisposable
         var source = await WriteAsync("source.prop", "ro.test=ready\n");
         var open = PatchNodeViewModel.Create("Workspace.Directory.Open");
         Set(open, "Root", _root);
-        var import = PatchNodeViewModel.Create("Workspace.File.Import");
+        var import = PatchNodeViewModel.Create("Workspace.File");
+        Set(import, "Operation", "Import");
         Set(import, "Source", source);
         Set(import, "Relative Path", "temporary.prop");
-        var copy = PatchNodeViewModel.Create("Workspace.File.Import");
+        var copy = PatchNodeViewModel.Create("Workspace.File");
+        Set(copy, "Operation", "Import");
         Set(copy, "Source", source);
         Set(copy, "Relative Path", "result.prop");
-        var delete = PatchNodeViewModel.Create("Workspace.File.Delete");
+        var delete = PatchNodeViewModel.Create("Workspace.File");
+        Set(delete, "Operation", "Delete");
         Set(delete, "Relative Path", "temporary.prop");
-        var find = PatchNodeViewModel.Create("Workspace.File.Find");
+        var find = PatchNodeViewModel.Create("Workspace.File");
+        Set(find, "Operation", "Find");
         Set(find, "Pattern", "result.prop");
         var read = PatchNodeViewModel.Create("File.Text.Read");
-        var verify = PatchNodeViewModel.Create("Validation.Changes.Verify");
-        Set(verify, "Expected Paths", "result.prop");
-        var hash = PatchNodeViewModel.Create("Validation.Hash.Verify");
-        Set(hash, "Path", Path.Combine(_root, "result.prop"));
-        Set(hash, "Expected Hash", Convert.ToHexString(SHA256.HashData("ro.test=ready\n"u8)));
-        var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([open, import, copy, delete, find, read, verify, hash],
+        var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([open, import, copy, delete, find, read],
             [Connect(open, "Workspace", import, "Workspace"), Connect(import, "Workspace", copy, "Workspace"),
              Connect(copy, "Workspace", delete, "Workspace"), Connect(delete, "Workspace", find, "Workspace"),
-             Connect(find, "Path", read, "Path"), Connect(delete, "Workspace", verify, "Workspace"),
-             Connect(verify, "Completed", hash, "Flow")], Token);
+             Connect(find, "Path", read, "Path")], Token);
 
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.Equal(PatchRunOutcome.Applied, result.PatchOutcome);
         Assert.Equal("ro.test=ready\n", read.Output.Single(port => port.Title == "Text").Data);
-        Assert.True((bool)hash.Output.Single(port => port.Title == "Valid").Data!);
         Assert.False(File.Exists(Path.Combine(_root, "temporary.prop")));
         Assert.Equal("ro.test=ready\n", await File.ReadAllTextAsync(Path.Combine(_root, "result.prop"), Token));
         Assert.Single(result.PatchChanges, change => change.Kind != PatchChangeKind.Unchanged);

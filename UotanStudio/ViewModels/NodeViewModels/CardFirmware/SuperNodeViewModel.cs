@@ -6,8 +6,8 @@ using UotanStudio.Services.Firmware;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// Super (logical partition) operation node view model, providing super image unpacking and synthesis.
-/// <para>super（逻辑分区）操作节点视图模型，提供 super 镜像解包与合成功能。</para>
+/// Super (logical partition) operation node view model, providing super image synthesis.
+/// <para>super（逻辑分区）操作节点视图模型，提供 super 镜像合成功能。</para>
 /// </summary>
 public class SuperNodeViewModel : FlowNodeViewModel
 {
@@ -21,22 +21,6 @@ public class SuperNodeViewModel : FlowNodeViewModel
     /// </param>
     public SuperNodeViewModel(string title) : base(title, NodeCategory.Firmware)
     {
-    }
-
-    /// <summary>
-    /// Creates a default super unpack node.
-    /// <para>创建默认的 super 解包节点。</para>
-    /// </summary>
-    public static SuperNodeViewModel CreateSuperUnpackNode()
-    {
-        var node = new SuperNodeViewModel("Super Unpack")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Image.Super.Unpack"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Super Path", PortType = NodePortType.Path });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Output Dir", PortType = NodePortType.Path });
-        return node;
     }
 
     /// <summary>
@@ -63,8 +47,8 @@ public class SuperNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>Dispatches super logic by the node type key (TypeKey): Image.Super.Unpack extracts logical partitions from a super image, and Image.Super.Pack synthesizes a super image from partition images.
-    /// <para>按节点类型键（TypeKey）分发对应的 super 逻辑：Image.Super.Unpack 从 super 镜像解出逻辑分区、 Image.Super.Pack 将分区镜像合成为 super 镜像。</para></summary>
+    /// <summary>Dispatches super logic by the node type key (TypeKey): Image.Super.Pack synthesizes a super image from partition images.
+    /// <para>按节点类型键（TypeKey）分发对应的 super 逻辑：Image.Super.Pack 将分区镜像合成为 super 镜像。</para></summary>
     /// <param name="context">The execution context.<para>执行上下文。</para></param>
     /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override async Task ExecuteAsync(INodeExecutionContext context)
@@ -73,9 +57,6 @@ public class SuperNodeViewModel : FlowNodeViewModel
         {
             switch (TypeKey)
             {
-                case "Image.Super.Unpack":
-                    await ExecuteUnpackAsync(context).ConfigureAwait(false);
-                    break;
                 case "Image.Super.Pack":
                     await ExecutePackAsync(context).ConfigureAwait(false);
                     break;
@@ -93,27 +74,6 @@ public class SuperNodeViewModel : FlowNodeViewModel
             context.Log.Write(LogLevel.Error, Title, $"Super node failed: {ex.Message}  super 节点执行失败。");
             throw;
         }
-    }
-
-    private async Task ExecuteUnpackAsync(INodeExecutionContext context)
-    {
-        var superPath = PathText(ReadInput("Super Path"));
-        if (string.IsNullOrWhiteSpace(superPath) || !File.Exists(superPath))
-        {
-            throw new InvalidOperationException($"Super image not found: {superPath ?? "<empty>"}  找不到 super 镜像。");
-        }
-
-        var outputDir = DeriveOutputDir(superPath);
-        var result = await FirmwareService.Instance
-            .UnpackSuperAsync(superPath, outputDir, context.CancellationToken)
-            .ConfigureAwait(false);
-        if (!result.Success)
-        {
-            throw new InvalidOperationException($"Super unpack failed: {result.Summary}  解包 super 失败。");
-        }
-
-        WriteOutput("Output Dir", outputDir);
-        context.Log.Write(LogLevel.Info, Title, $"{result.Summary}  已解包。");
     }
 
     private async Task ExecutePackAsync(INodeExecutionContext context)
@@ -186,12 +146,5 @@ public class SuperNodeViewModel : FlowNodeViewModel
     {
         var number = NodeDataUtil.ToDouble(value, fallback);
         return number <= 0 ? fallback : Convert.ToUInt32(number, System.Globalization.CultureInfo.InvariantCulture);
-    }
-
-    private static string DeriveOutputDir(string sourcePath)
-    {
-        var directory = Path.GetDirectoryName(sourcePath) ?? ".";
-        var name = Path.GetFileNameWithoutExtension(sourcePath);
-        return Path.Combine(directory, string.IsNullOrEmpty(name) ? "out" : name + "_out");
     }
 }

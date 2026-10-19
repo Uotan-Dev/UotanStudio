@@ -11,9 +11,6 @@
              x:Class="UotanStudio.Views.Nodes.NodeEditorView"
              x:DataType="vm:NodeEditorViewModel">
     <UserControl.Resources>
-        <DataTemplate x:Key="ValueTypeTemplate" DataType="{x:Type nodeVm:NodePortChoice}">
-            <TextBlock Text="{Binding DisplayName}" />
-        </DataTemplate>
         <DataTemplate x:Key="ToolboxOperationTemplate" DataType="{x:Type vm:NodeToolboxItem}">
             <Grid ColumnDefinitions="*,Auto,28" Margin="0,1">
                 <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
@@ -519,29 +516,6 @@
                                 <TextBlock Grid.Column="1" Text="{Binding SelectedTypeDisplay}"
                                            FontSize="12" TextTrimming="CharacterEllipsis" />
                             </Grid>
-                            <StackPanel Spacing="4" IsVisible="{Binding CanEditBatchConstant}">
-                                <Separator Margin="0,4" />
-                                <TextBlock Text="{DynamicResource Node_BatchConstant}" FontSize="11"
-                                           FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" />
-                                <Grid ColumnDefinitions="Auto,*">
-                                    <TextBlock Grid.Column="0" Text="{DynamicResource Node_Const_ValueType}"
-                                               FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
-                                               Margin="0,4,8,0" VerticalAlignment="Center" />
-                                    <ComboBox Grid.Column="1" FontSize="12"
-                                              ItemsSource="{Binding ValueTypeChoices}"
-                                              ItemTemplate="{StaticResource ValueTypeTemplate}"
-                                              SelectedValueBinding="{Binding Value, DataType={x:Type nodeVm:NodePortChoice}}"
-                                              SelectedValue="{Binding BatchNodeValueType, Mode=TwoWay}" />
-                                </Grid>
-                                <Grid ColumnDefinitions="Auto,*">
-                                    <TextBlock Grid.Column="0" Text="{DynamicResource Node_Const_Value}"
-                                               FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
-                                               Margin="0,4,8,0" />
-                                    <TextBox Grid.Column="1" FontSize="12" Height="24"
-                                             Text="{Binding BatchNodeValue, Mode=TwoWay}"
-                                             PlaceholderText="{DynamicResource Node_BatchMixed}" />
-                                </Grid>
-                            </StackPanel>
                             <StackPanel Spacing="4" IsVisible="{Binding CanEditBatchProjectImage}">
                                 <Separator Margin="0,4" />
                                 <Grid ColumnDefinitions="Auto,*">
@@ -645,31 +619,6 @@
                             </Grid>
 
                             <Separator Margin="0,4" />
-
-                            <!-- 常量节点的值类型与值编辑器 -->
-                            <StackPanel Spacing="4"
-                                        IsVisible="{Binding SelectedNode.IsConstantNode}">
-                                <Grid ColumnDefinitions="Auto,*">
-                                    <TextBlock Grid.Column="0" Text="{DynamicResource Node_Const_ValueType}"
-                                               FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
-                                               Margin="0,4,8,0" VerticalAlignment="Center" />
-                                    <ComboBox x:Name="ConstantValueTypeSelector" Grid.Column="1" FontSize="12"
-                                              ItemsSource="{Binding ValueTypeChoices}"
-                                              ItemTemplate="{StaticResource ValueTypeTemplate}"
-                                              SelectedValueBinding="{Binding Value, DataType={x:Type nodeVm:NodePortChoice}}"
-                                              SelectedValue="{Binding SelectedNode.NodeValueType, Mode=TwoWay}" />
-                                </Grid>
-                                <Grid ColumnDefinitions="Auto,*">
-                                    <TextBlock Grid.Column="0" Text="{DynamicResource Node_Const_Value}"
-                                               FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
-                                               Margin="0,4,8,0" />
-                                    <TextBox Grid.Column="1" FontSize="12" Height="24"
-                                             Text="{Binding SelectedNode.NodeValue, Mode=TwoWay}" />
-                                </Grid>
-                                <TextBlock FontSize="11"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"
-                                           Text="{DynamicResource Node_Const_Hint}" TextWrapping="Wrap" />
-                            </StackPanel>
 
                             <!-- 工程镜像引用节点的镜像选择编辑区 -->
                             <StackPanel Spacing="4"

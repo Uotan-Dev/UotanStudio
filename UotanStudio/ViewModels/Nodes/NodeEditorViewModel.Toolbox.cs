@@ -25,7 +25,7 @@ public partial class NodeEditorViewModel
         ToolboxCategories.Clear();
         NodeFactoryRegistrar.RegisterAll();
         var language = LanguageService.Instance;
-        string[] categories = ["Inputs", "Workspace", "Data", "Validation", "Configuration", "Firmware", "Build", "Device", "Mirroring", "Flow", "Interaction", "Composite", "Script"];
+        string[] categories = ["Inputs", "Workspace", "Data", "Validation", "Configuration", "Firmware", "Device", "Flow", "Interaction", "Composite", "Script"];
         foreach (var category in categories)
         {
             var descriptors = NodeFactoryRegistrar.Descriptors.Where(descriptor =>
@@ -58,7 +58,6 @@ public partial class NodeEditorViewModel
     private static NodeCategory GetToolboxNodeCategory(string category) => category switch
     {
         "Device" => NodeCategory.Flash,
-        "Mirroring" => NodeCategory.Flash,
         "Flow" => NodeCategory.Flow,
         "Interaction" => NodeCategory.Output,
         "Firmware" or "Build" => NodeCategory.Firmware,

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
 using UotanStudio.Firmware.Patching;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Patching;
@@ -50,6 +49,9 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
             case "Image.Xattr.Delete":
                 await ExecuteImageXattrEditAsync(context).ConfigureAwait(false);
                 break;
+            case "Image.Xattr.Edit":
+                await ExecuteImageXattrAsync(context).ConfigureAwait(false);
+                break;
             case "Image.Xattr.Read":
                 var xattr = await GetRun(context).ReadImageXattrAsync(Text("Path"), Text("File System"), Text("Image Path"),
                     Text("Attribute Name"), token).ConfigureAwait(false);
@@ -58,6 +60,7 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
                 break;
             case "Image.File.ReadAttributes":
             case "Image.File.SetAttributes":
+            case "Image.File.Attributes":
                 await ExecuteImageAttributesAsync(context).ConfigureAwait(false);
                 break;
             case "Image.Edit.CollectText":
@@ -75,6 +78,22 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
                 WriteOutput("Encoding", imageText.Encoding);
                 WriteOutput("Hash", imageText.Sha256);
                 break;
+            case "Image.Text.Edit":
+                if (Text("Operation") == "Read")
+                {
+                    var readText = await GetRun(context).ReadImageTextAsync(Text("Path"), Text("File System"), Text("Image Path"), token).ConfigureAwait(false);
+                    WriteOutput("Text", readText.Text);
+                    WriteOutput("Encoding", readText.Encoding);
+                    WriteOutput("Hash", readText.Sha256);
+                    break;
+                }
+                WriteOutput("Changed", await GetRun(context).StageImageTextAsync(Text("Path"), Text("File System"),
+                    Text("Image Path"), Text("Text"), Text("Encoding"), Text("Expected Hash"),
+                    PositiveImageBytes("Image Capacity"), PositiveImageBytes("Extraction Budget"), token).ConfigureAwait(false));
+                break;
+            case "Config.Edit":
+                ExecuteConfigEdit(token);
+                break;
             case "Config.FileContexts.Edit":
                 ExecuteFileContextNode(token);
                 break;
@@ -88,17 +107,18 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
             case "Config.InitRc.AddSection":
             case "Config.InitRc.AddCommand":
             case "Config.InitRc.EditCommand":
+            case "Config.InitRc.Edit":
                 ExecuteInitRcNode(token);
                 break;
             case "Config.Fstab.Edit":
                 ExecuteFstabNode(token);
                 break;
-            case "Validation.Applicability.Check":
             case "Flow.Applicability.Gate":
                 ExecuteApplicabilityNode(context);
                 break;
             case "Resource.Asset.Open":
             case "Resource.Asset.ReadText":
+            case "Resource.Asset.Read":
             case "Workspace.Asset.Stage":
                 await ExecuteAssetNodeAsync(context).ConfigureAwait(false);
                 break;
@@ -116,16 +136,21 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
                 await GetRun(context).StageTextAsync(Text("Output Path"), Text("Text"), Text("Encoding"), PatchFileMode.Add, token).ConfigureAwait(false);
                 WriteOutput("Path", Path.GetFullPath(Text("Output Path")));
                 break;
-            case "Validation.Condition.Evaluate":
-                WriteOutput("Match", await EvaluateConditionAsync(context).ConfigureAwait(false));
-                break;
-            case "Validation.Boolean.Assert":
-                if (!Boolean("Condition"))
-                {
-                    throw new InvalidDataException(string.IsNullOrWhiteSpace(Text("Reason"))
-                        ? Services.LanguageService.Instance.GetString("Node_Patch_AssertionFailed") : Text("Reason"));
-                }
-                WriteOutput("Valid", true);
+            case "Binary.Search":
+                var binaryIsReplace = Text("Operation").Trim() == "Replace";
+                var binaryOffsets = binaryIsReplace
+                    ? await GetRun(context).StageBinaryAsync(Text("Path"), Text("Find"), Text("Find Mask"), Text("Replacement"), Text("Replace Mask"),
+                        long.Parse(Text("Start Offset"), System.Globalization.CultureInfo.InvariantCulture),
+                        long.Parse(Text("Search Length"), System.Globalization.CultureInfo.InvariantCulture),
+                        int.Parse(Text("Alignment"), System.Globalization.CultureInfo.InvariantCulture),
+                        int.Parse(Text("Skip Matches"), System.Globalization.CultureInfo.InvariantCulture), Count(), token).ConfigureAwait(false)
+                    : await GetRun(context).FindBinaryAsync(Text("Path"), Text("Find"), Text("Find Mask"),
+                        long.Parse(Text("Start Offset"), System.Globalization.CultureInfo.InvariantCulture),
+                        long.Parse(Text("Search Length"), System.Globalization.CultureInfo.InvariantCulture),
+                        int.Parse(Text("Alignment"), System.Globalization.CultureInfo.InvariantCulture),
+                        int.Parse(Text("Skip Matches"), System.Globalization.CultureInfo.InvariantCulture), Count(), token).ConfigureAwait(false);
+                WriteOutput("Offsets", binaryOffsets);
+                WriteOutput("Count", binaryOffsets.Count);
                 break;
             case "Config.Text.Edit":
                 SetResult(TextPatch.Apply(Text("Text"), Text("Find"), Text("Replacement"),
@@ -168,11 +193,10 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// Shared applicability evaluation for Validation.Applicability.Check and Flow.Applicability.Gate: evaluates,
-    /// records, and turns Conflict into an exception. The two TypeKeys differ only in port layout
-    /// (Gate carries the branch via Apply/Skip Flow outputs).
-    /// <para>Validation.Applicability.Check 与 Flow.Applicability.Gate 共用的适用性判定：求值、记录并把 Conflict 转为异常。
-    /// 两个 TypeKey 的差异只在端口布局（Gate 以 Apply/Skip Flow 输出承载分支）。</para>
+    /// Applicability evaluation behind Flow.Applicability.Gate: evaluates, records, and turns Conflict into an
+    /// exception. The branch is carried by the Apply/Skip Flow outputs instead of a Completed flow edge.
+    /// <para>Flow.Applicability.Gate 使用的适用性判定：求值、记录并把 Conflict 转为异常。分支由 Apply/Skip Flow 输出承载，
+    /// 不再依赖 Completed 流程边。</para>
     /// </summary>
     private void ExecuteApplicabilityNode(INodeExecutionContext context)
     {
@@ -189,39 +213,8 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
         }
     }
 
-    private async Task<bool> EvaluateConditionAsync(INodeExecutionContext context)
-    {
-        var value = Text("Value");
-        var pathInput = Input.First(port => port.Title == "Path");
-        var path = pathInput.HasRuntimeSource || !string.IsNullOrWhiteSpace(Text("Path")) ? Text("Path") : value;
-        var expected = Text("Expected Value");
-        if (value.Length > TextPatch.MaxCharacters || path.Length > TextPatch.MaxCharacters || expected.Length > 16_384)
-        {
-            throw new InvalidDataException("Condition input exceeds the size limit.");
-        }
-        return Text("Operation") switch
-        {
-            "Equals" => string.Equals(value, expected, StringComparison.Ordinal),
-            "Contains" => value.Contains(expected, StringComparison.Ordinal),
-            "Regex" => Regex.IsMatch(value, expected, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1)),
-            "VersionRange" => ParseVersion(value) >= ParseVersion(expected) && ParseVersion(value) <= ParseVersion(Text("Upper Version")),
-            "FileExists" => await GetRun(context).ExistsAsync(path, context.CancellationToken).ConfigureAwait(false),
-            "DirectoryExists" => await GetRun(context).DirectoryExistsAsync(path, context.CancellationToken).ConfigureAwait(false),
-            _ => throw new InvalidDataException("Invalid condition operation.")
-        };
-    }
-
     private string Text(string title) => Convert.ToString(ReadInput(title), CultureInfo.InvariantCulture) ?? string.Empty;
 
-    private static Version ParseVersion(string text)
-    {
-        if (int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var major))
-        {
-            return new Version(major, 0, 0, 0);
-        }
-        var version = Version.Parse(text);
-        return new Version(version.Major, version.Minor, Math.Max(0, version.Build), Math.Max(0, version.Revision));
-    }
     private bool Boolean(string title) => ReadInput(title) is bool value ? value : bool.Parse(Text(title));
 
     private int Count()
@@ -234,9 +227,9 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
         return (int)value;
     }
 
-    private T Operation<T>() where T : struct, Enum
+    private T Operation<T>(string title = "Operation") where T : struct, Enum
     {
-        if (!Enum.TryParse<T>(Text("Operation"), out var result) || !Enum.IsDefined(result))
+        if (!Enum.TryParse<T>(Text(title), out var result) || !Enum.IsDefined(result))
         {
             throw new InvalidDataException("Invalid patch operation.");
         }

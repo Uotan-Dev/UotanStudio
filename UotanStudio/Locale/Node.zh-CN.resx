@@ -153,9 +153,6 @@
   <data name="Node_BatchSelectedSuffix" xml:space="preserve">
     <value>个节点已选中</value>
   </data>
-  <data name="Node_BatchConstant" xml:space="preserve">
-    <value>共同常量属性</value>
-  </data>
   <data name="Node_BatchMixed" xml:space="preserve">
     <value>值不一致</value>
   </data>
@@ -207,15 +204,6 @@
   <data name="Node_StatusReady" xml:space="preserve">
     <value>就绪</value>
   </data>
-  <data name="Node_Const_ValueType" xml:space="preserve">
-    <value>值类型</value>
-  </data>
-  <data name="Node_Const_Value" xml:space="preserve">
-    <value>值</value>
-  </data>
-  <data name="Node_Const_Hint" xml:space="preserve">
-    <value>向连接的下游端口广播固定值。</value>
-  </data>
   <data name="Node_ProjImg_Select" xml:space="preserve">
     <value>镜像</value>
   </data>
@@ -234,35 +222,8 @@
   <data name="Node_Boot_CommandLine_Edit" xml:space="preserve">
     <value>编辑 boot 命令行</value>
   </data>
-  <data name="Node_Firmware_Container_Extract" xml:space="preserve">
-    <value>提取分区</value>
-  </data>
-  <data name="Node_Build_Ota_CreateDelta" xml:space="preserve">
-    <value>OTA 差分</value>
-  </data>
-  <data name="Node_Build_Signature_Merge" xml:space="preserve">
-    <value>不支持的签名字节拼接</value>
-  </data>
-  <data name="Node_Build_Slots_Merge" xml:space="preserve">
-    <value>不支持的槽位字节拼接</value>
-  </data>
-  <data name="Node_Firmware_Cpio_Unpack" xml:space="preserve">
-    <value>解包 CPIO</value>
-  </data>
-  <data name="Node_Firmware_Cpio_Pack" xml:space="preserve">
-    <value>打包 CPIO</value>
-  </data>
-  <data name="Node_Image_Super_Unpack" xml:space="preserve">
-    <value>解包 super</value>
-  </data>
   <data name="Node_Image_Super_Pack" xml:space="preserve">
     <value>合成 super</value>
-  </data>
-  <data name="Node_Image_Sparse_Convert" xml:space="preserve">
-    <value>稀疏转换</value>
-  </data>
-  <data name="Node_Build_Dat_Convert" xml:space="preserve">
-    <value>写出 DAT</value>
   </data>
   <data name="Node_Device_Target_Select" xml:space="preserve">
     <value>选择设备</value>
@@ -273,41 +234,17 @@
   <data name="Node_Device_Partition_Flash" xml:space="preserve">
     <value>刷入分区</value>
   </data>
-  <data name="Node_Device_Partition_Erase" xml:space="preserve">
-    <value>擦除分区</value>
-  </data>
   <data name="Node_Device_Power_Reboot" xml:space="preserve">
     <value>重启设备</value>
   </data>
-  <data name="Node_Device_Storage_EraseAll" xml:space="preserve">
-    <value>全部擦除</value>
-  </data>
-  <data name="Node_Device_Ota_Sideload" xml:space="preserve">
-    <value>OTA 侧载</value>
-  </data>
-  <data name="Node_Device_State_Query" xml:space="preserve">
-    <value>查询设备状态</value>
-  </data>
   <data name="Node_Device_Table_Read" xml:space="preserve">
     <value>读取分区表</value>
-  </data>
-  <data name="Node_Device_Slot_Query" xml:space="preserve">
-    <value>查询活动槽位</value>
-  </data>
-  <data name="Node_Device_Slot_Switch" xml:space="preserve">
-    <value>切换活动槽位</value>
-  </data>
-  <data name="Node_Device_Recovery_Clean" xml:space="preserve">
-    <value>恢复模式擦除</value>
   </data>
   <data name="Node_Device_Shell_Command" xml:space="preserve">
     <value>执行 Shell 命令</value>
   </data>
   <data name="Node_File_Binary_Read" xml:space="preserve">
     <value>读取文件</value>
-  </data>
-  <data name="Node_Data_Value_Constant" xml:space="preserve">
-    <value>常量</value>
   </data>
   <data name="Node_Resource_Project_Image" xml:space="preserve">
     <value>工程镜像</value>
@@ -345,18 +282,6 @@
   <data name="Node_Network_File_Download" xml:space="preserve">
     <value>联网下载</value>
   </data>
-  <data name="Node_Mirroring_Session_Start" xml:space="preserve">
-    <value>开始投屏</value>
-  </data>
-  <data name="Node_Mirroring_Session_Stop" xml:space="preserve">
-    <value>停止投屏</value>
-  </data>
-  <data name="Node_Flow_Execution_Start" xml:space="preserve">
-    <value>开始</value>
-  </data>
-  <data name="Node_Flow_Execution_End" xml:space="preserve">
-    <value>结束</value>
-  </data>
   <data name="Node_Flow_Condition_Branch" xml:space="preserve">
     <value>条件分支</value>
   </data>
@@ -371,9 +296,6 @@
   </data>
   <data name="Node_Flow_Execution_Terminate" xml:space="preserve">
     <value>终止</value>
-  </data>
-  <data name="Node_Feedback_Log_Write" xml:space="preserve">
-    <value>日志输出</value>
   </data>
   <data name="Node_Feedback_Progress_Report" xml:space="preserve">
     <value>进度报告</value>
@@ -717,9 +639,6 @@
   <data name="Node_Status_Cancelled" xml:space="preserve">
     <value>已取消</value>
   </data>
-  <data name="Node_Build_Apk_Sign" xml:space="preserve">
-    <value>APK 签名</value>
-  </data>
   <data name="Node_CatPatch" xml:space="preserve">
     <value>固件补丁</value>
   </data>
@@ -728,12 +647,6 @@
   </data>
   <data name="Node_File_Text_Publish" xml:space="preserve">
     <value>写出新配置文件</value>
-  </data>
-  <data name="Node_Validation_Condition_Evaluate" xml:space="preserve">
-    <value>补丁条件判断</value>
-  </data>
-  <data name="Node_Validation_Boolean_Assert" xml:space="preserve">
-    <value>补丁断言</value>
   </data>
   <data name="Node_Config_Text_Edit" xml:space="preserve">
     <value>文本补丁</value>
@@ -746,9 +659,6 @@
   </data>
   <data name="Node_Patch_SelectFolder" xml:space="preserve">
     <value>选择补丁目标目录</value>
-  </data>
-  <data name="Node_Patch_AssertionFailed" xml:space="preserve">
-    <value>补丁断言失败，已停止此分支。</value>
   </data>
   <data name="Node_Conn_Root" xml:space="preserve">
     <value>目标根目录</value>
@@ -809,6 +719,114 @@
   </data>
   <data name="Node_Conn_Values" xml:space="preserve">
     <value>值列表</value>
+  </data>
+  <data name="Node_Image_Text_Edit" xml:space="preserve">
+    <value>镜像内文本</value>
+  </data>
+  <data name="Node_Image_File_Attributes" xml:space="preserve">
+    <value>镜像文件属性</value>
+  </data>
+  <data name="Node_Image_Xattr_Edit" xml:space="preserve">
+    <value>镜像扩展属性</value>
+  </data>
+  <data name="Node_Config_InitRc_Edit" xml:space="preserve">
+    <value>编辑 Android init.rc</value>
+  </data>
+  <data name="Node_Resource_Asset_Read" xml:space="preserve">
+    <value>读取包内资源</value>
+  </data>
+  <data name="Node_Choice_Read" xml:space="preserve">
+    <value>读取</value>
+  </data>
+  <data name="Node_Choice_Write" xml:space="preserve">
+    <value>写入</value>
+  </data>
+  <data name="Node_Choice_Query" xml:space="preserve">
+    <value>查询</value>
+  </data>
+  <data name="Node_Choice_Hash" xml:space="preserve">
+    <value>计算哈希</value>
+  </data>
+  <data name="Node_Choice_Verify" xml:space="preserve">
+    <value>校验</value>
+  </data>
+  <data name="Node_Choice_Select" xml:space="preserve">
+    <value>选择</value>
+  </data>
+  <data name="Node_Choice_ReadText" xml:space="preserve">
+    <value>读取文本</value>
+  </data>
+  <data name="Node_Conn_EditOperation" xml:space="preserve">
+    <value>编辑操作</value>
+  </data>
+  <data name="Node_Choice_FindReferences" xml:space="preserve">
+    <value>检查引用</value>
+  </data>
+  <data name="Node_Choice_AddSection" xml:space="preserve">
+    <value>新增区块</value>
+  </data>
+  <data name="Node_Choice_AddCommand" xml:space="preserve">
+    <value>新增条目</value>
+  </data>
+  <data name="Node_Choice_EditCommand" xml:space="preserve">
+    <value>编辑命令</value>
+  </data>
+  <data name="Node_Choice_EditArgument" xml:space="preserve">
+    <value>编辑参数</value>
+  </data>
+  <data name="Node_Choice_EditHeader" xml:space="preserve">
+    <value>编辑头部</value>
+  </data>
+  <data name="Node_Config_Edit" xml:space="preserve">
+    <value>编辑配置</value>
+  </data>
+  <data name="Node_Patch_ConfigTargetHint" xml:space="preserve">
+    <value>JSON Pointer 或 XPath。init.rc 请用 Selector。</value>
+  </data>
+  <data name="Node_Choice_ReplaceHeader" xml:space="preserve">
+    <value>替换头部</value>
+  </data>
+  <data name="Node_Choice_AddStatement" xml:space="preserve">
+    <value>新增语句</value>
+  </data>
+  <data name="Node_Choice_Text" xml:space="preserve">
+    <value>纯文本</value>
+  </data>
+  <data name="Node_Choice_Property" xml:space="preserve">
+    <value>属性</value>
+  </data>
+  <data name="Node_Choice_Fstab" xml:space="preserve">
+    <value>fstab</value>
+  </data>
+  <data name="Node_Choice_InitRc" xml:space="preserve">
+    <value>init.rc</value>
+  </data>
+  <data name="Node_Choice_FileContexts" xml:space="preserve">
+    <value>file_contexts</value>
+  </data>
+  <data name="Node_Choice_FsConfig" xml:space="preserve">
+    <value>fs_config</value>
+  </data>
+  <data name="Node_Conn_FstabOperation" xml:space="preserve">
+    <value>fstab 操作</value>
+  </data>
+  <data name="Node_Conn_FileSystemType" xml:space="preserve">
+    <value>文件系统类型</value>
+  </data>
+  <data name="Node_Workspace_File" xml:space="preserve">
+    <value>工作区文件</value>
+  </data>
+  <data name="Node_Binary_Search" xml:space="preserve">
+    <value>二进制搜索</value>
+  </data>
+  <data name="Node_Conn_FileMode" xml:space="preserve">
+    <value>文件模式</value>
+  </data>
+  <data name="Node_Choice_Compare" xml:space="preserve">
+    <value>比较</value>
+  </data>
+  <data name="Node_Choice_Stage" xml:space="preserve">
+    <value>暂存</value>
   </data>
   <data name="Node_Choice_aes" xml:space="preserve">
     <value>AES-256-CBC</value>
@@ -918,18 +936,6 @@
   <data name="Node_Workspace_File_Exists" xml:space="preserve">
     <value>检查待应用文件</value>
   </data>
-  <data name="Node_Validation_File_Hash" xml:space="preserve">
-    <value>计算文件 SHA-256</value>
-  </data>
-  <data name="Node_Validation_Hash_Verify" xml:space="preserve">
-    <value>验证文件 SHA-256</value>
-  </data>
-  <data name="Node_Validation_Count_Assert" xml:space="preserve">
-    <value>验证结果数量</value>
-  </data>
-  <data name="Node_Validation_Changes_Verify" xml:space="preserve">
-    <value>验证变更文件集合</value>
-  </data>
   <data name="Node_Conn_Workspace" xml:space="preserve">
     <value>补丁工作目录</value>
   </data>
@@ -956,9 +962,6 @@
   </data>
   <data name="Node_Patch_PreviewHint" xml:space="preserve">
     <value>执行校验并显示待应用变更，不发布文件。</value>
-  </data>
-  <data name="Node_Patch_PreviewUnsupported" xml:space="preserve">
-    <value>此流程包含尚不支持预览的节点，未执行。</value>
   </data>
   <data name="Node_Patch_PreviewFinished" xml:space="preserve">
     <value>补丁预览完成，未修改原文件。</value>
@@ -1053,9 +1056,6 @@
   <data name="Node_Patch_IniHint" xml:space="preserve">
     <value>采用区分大小写的 [节名称] 和 键=值 语法；节名称留空表示全局。# 和 ; 仅在行首表示注释，在值内按普通字符处理。不接受重复节、重复键或多行值。</value>
   </data>
-  <data name="Node_Validation_Format_Detect" xml:space="preserve">
-    <value>探测文件格式</value>
-  </data>
   <data name="Node_Workspace_File_Find" xml:space="preserve">
     <value>查找待应用目录中的文件</value>
   </data>
@@ -1076,30 +1076,6 @@
   </data>
   <data name="Node_Conn_RelativePaths" xml:space="preserve">
     <value>相对路径列表</value>
-  </data>
-  <data name="Node_Patch_FormatHint" xml:space="preserve">
-    <value>读取待应用内容，不以扩展名判断。结构检查目前覆盖 JSON、XML、指定方言的 INI、ELF、Sparse 和 vbmeta；其他已识别格式只报告签名。此检查不验证哈希、数字签名、文件系统一致性或设备兼容性。</value>
-  </data>
-  <data name="Node_PatchFormat_Unknown" xml:space="preserve">
-    <value>未找到支持的内容签名或配置结构</value>
-  </data>
-  <data name="Node_PatchFormat_SignatureOnly" xml:space="preserve">
-    <value>命中内容签名；尚未检查结构</value>
-  </data>
-  <data name="Node_PatchFormat_Configuration" xml:space="preserve">
-    <value>配置已通过解析及大小、深度、复杂度限制检查</value>
-  </data>
-  <data name="Node_PatchFormat_ElfTables" xml:space="preserve">
-    <value>已检查 ELF 头和元数据表范围；未验证运行及动态链接</value>
-  </data>
-  <data name="Node_PatchFormat_SparseChunks" xml:space="preserve">
-    <value>已检查 Sparse 头、块范围和块数；未验证 CRC</value>
-  </data>
-  <data name="Node_PatchFormat_AvbDescriptors" xml:space="preserve">
-    <value>已检查 vbmeta 元数据和描述符范围；未验证签名与信任链</value>
-  </data>
-  <data name="Node_PatchFormat_RejectedStructure" xml:space="preserve">
-    <value>结构损坏、截断、不受支持或超出限制；不满足格式条件</value>
   </data>
   <data name="Node_Choice_Unknown" xml:space="preserve">
     <value>未知</value>
@@ -1191,12 +1167,6 @@
   <data name="Node_Choice_Structure" xml:space="preserve">
     <value>结构检查通过</value>
   </data>
-  <data name="Node_Resource_Asset_Open" xml:space="preserve">
-    <value>选择包内资源</value>
-  </data>
-  <data name="Node_Resource_Asset_ReadText" xml:space="preserve">
-    <value>读取资源文本</value>
-  </data>
   <data name="Node_Workspace_Asset_Stage" xml:space="preserve">
     <value>暂存包内资源</value>
   </data>
@@ -1240,7 +1210,7 @@
     <value>请等待当前操作结束后再编辑资源。</value>
   </data>
   <data name="Plugin_ResourceHelp" xml:space="preserve">
-    <value>在“选择包内资源”节点中填写这些 ID。移除仍被引用的资源会导致执行失败。保存或导出后才会包含资源变更。</value>
+    <value>在“读取包内资源”节点中填写这些 ID。移除仍被引用的资源会导致执行失败。保存或导出后才会包含资源变更。</value>
   </data>
   <data name="Plugin_DependencyUnavailable" xml:space="preserve">
     <value>依赖包不可用或未启用：{0}</value>
@@ -1274,9 +1244,6 @@
   </data>
   <data name="Plugin_Version" xml:space="preserve">
     <value>包版本</value>
-  </data>
-  <data name="Node_Validation_Applicability_Check" xml:space="preserve">
-    <value>检查补丁适用性</value>
   </data>
   <data name="Node_Conn_Compatible" xml:space="preserve">
     <value>目标兼容</value>
@@ -1560,15 +1527,6 @@
   <data name="Node_Conn_FsMgrFlags" xml:space="preserve">
     <value>fs_mgr 标志</value>
   </data>
-  <data name="Node_Patch_FstabAddHint" xml:space="preserve">
-    <value>使用现有换行风格追加五列条目。同一挂载点和文件系统已有完全相同条目时保持不变；条目重复或字段不同则报告冲突。其他文件系统候选条目保持不变。数量表示原有命中数，新增时为零。需连接写入或暂存节点才会发布文本。不验证设备标志支持或实际挂载能力。</value>
-  </data>
-  <data name="Node_Config_InitRc_Query" xml:space="preserve">
-    <value>查询 Android init.rc</value>
-  </data>
-  <data name="Node_Config_InitRc_EditCommand" xml:space="preserve">
-    <value>编辑 Android init.rc</value>
-  </data>
   <data name="Node_Conn_SectionKind" xml:space="preserve">
     <value>区块类型</value>
   </data>
@@ -1593,9 +1551,6 @@
   <data name="Node_Patch_InitRcHint" xml:space="preserve">
     <value>按服务名、完整动作触发表达式或导入路径选择，精确检查区块和条目数量。指令名留空时查询头部。编辑仅替换或删除块内条目；替换文本需包含相同指令名及参数。旧值检查比较完整原始条目。引号、转义和续行遵循 Android init 语法。不展开导入和属性，不验证设备专用命令、服务选项或可启动性。编辑后需连接暂存或写入节点才能发布。</value>
   </data>
-  <data name="Node_Config_InitRc_AddCommand" xml:space="preserve">
-    <value>新增 Android init.rc 条目</value>
-  </data>
   <data name="Node_Conn_Statement" xml:space="preserve">
     <value>完整条目</value>
   </data>
@@ -1605,17 +1560,11 @@
   <data name="Node_Patch_InitRcAddHint" xml:space="preserve">
     <value>向选中服务或动作块末尾追加一条命令。身份由指令名和指定数量的前置参数组成：唯一服务选项填零，按属性名识别 setprop 填一。已有相同解析词时保留原文；身份重复或其余参数不同则报告冲突，其他身份可以共存。数量表示已有该条目的区块数。新增条目使用四空格缩进及文档换行风格。不验证命令语义或可启动性。</value>
   </data>
-  <data name="Node_Config_InitRc_AddSection" xml:space="preserve">
-    <value>新增 Android init.rc 区块</value>
-  </data>
   <data name="Node_Conn_SectionText" xml:space="preserve">
     <value>完整区块文本</value>
   </data>
   <data name="Node_Patch_InitRcAddSectionHint" xml:space="preserve">
     <value>输入一个完整的 service、on 或 import 区块。以服务名、完整动作触发词序列或导入路径识别身份。已有区块的头部和有序块内条目解析词完全相同时保持不变；身份重复或内容不同则报告冲突。片段原样追加，保留内部换行及注释；必要的分隔和末尾换行采用目标文档风格。数量在已有等价区块时为一，新增时为零。不展开导入或验证运行语义，需连接暂存或写入节点发布。</value>
-  </data>
-  <data name="Node_Config_InitRc_EditHeader" xml:space="preserve">
-    <value>编辑 Android init.rc 头部</value>
   </data>
   <data name="Node_Patch_InitRcHeaderHint" xml:space="preserve">
     <value>精确选择一个服务、动作或导入区块，提供同类型的完整替换头部，不包含块内条目或行尾注释。保留块内内容、缩进和原有行尾注释。可按完整原始头部检查旧值。新身份与其他区块冲突时拒绝修改。重命名不会同步改写 start/stop 命令或其他引用，需另行检查。不验证运行命令、触发条件或路径语义。通过暂存或写入节点发布。</value>
@@ -1638,17 +1587,11 @@
   <data name="Node_Patch_InitRcPlacementHint" xml:space="preserve">
     <value>区块末尾保留原有追加行为。前后插入要求每个选中区块恰有一条解析词相同的块内命令。锚点需填写完整条目，不包含行尾注释；保留其续行。重复应用时，已有条目须位于锚点指定侧的相邻命令位置（忽略独立注释和空行），位置不同则报告冲突。</value>
   </data>
-  <data name="Node_Config_InitRc_EditArgument" xml:space="preserve">
-    <value>编辑 Android init.rc 参数</value>
-  </data>
   <data name="Node_Conn_ArgumentIndex" xml:space="preserve">
     <value>参数索引</value>
   </data>
   <data name="Node_Patch_InitRcArgumentHint" xml:space="preserve">
     <value>参数从零编号，不包含指令名：setprop key value 的值索引为一，service name executable 的程序索引为一。指令名留空时选择单个头部。新值和预期旧值填写解析后的文本，不填写 init 引号语法；自动生成转义。只能修改已有参数，保留其他间距、引号、注释及参数。头部身份冲突时拒绝修改，不同步改写引用。不验证运行语义，通过暂存或写入节点发布。</value>
-  </data>
-  <data name="Node_Config_InitRc_FindReferences" xml:space="preserve">
-    <value>检查 init 服务引用</value>
   </data>
   <data name="Node_Conn_ExternalServices" xml:space="preserve">
     <value>外部服务名称</value>
@@ -1698,9 +1641,6 @@
   <data name="Node_Patch_FsConfigHint" xml:space="preserve">
     <value>编辑 UotanStudio 重建器读取的空格分隔元数据方言。UID/GID 为无符号十进制；权限使用十进制（493）或带前导零的八进制（0755），不采用无前导零的 Android 八进制写法。查询输出带前导零的八进制。按镜像内原始路径精确选择一条，重复则拒绝。编辑输出十进制权限，保留尾部能力数据但不解析或应用它。仅修改旁路元数据文本，不直接改变宿主权限或镜像。重建集成、SELinux 标签及扩展属性需使用相应操作。</value>
   </data>
-  <data name="Node_Patch_FsConfigEntryHint" xml:space="preserve">
-    <value>采用 UotanStudio 元数据方言：十进制 UID/GID，十进制或带前导零的八进制权限。新增时追加缺失路径，尾部能力占位为零；已有相同属主和权限时保留原文及不透明能力数据，值不同或路径重复则冲突。删除移除完整条目行；缺失时保持不变，启用旧值检查则要求存在。数量表示原有命中数。不增删实际文件、不应用能力或重建镜像，需另行组合相应操作。</value>
-  </data>
   <data name="Node_Config_FileContexts_Edit" xml:space="preserve">
     <value>编辑 file_contexts 标签</value>
   </data>
@@ -1743,12 +1683,6 @@
   <data name="Node_Patch_FileContextHint" xml:space="preserve">
     <value>按路径表达式原始写法和文件类型限定精确选择一条文本规则。未限定类型仅选择两列规则，不匹配所有类型。不执行正则或转换为宿主路径。编辑只替换上下文词，保留顺序、间距及独立注释。身份重复、字段格式错误或旧值不符时拒绝。上下文形式检查不等于加载策略验证；规则重叠与优先级、编译后的上下文及实际镜像扩展属性发布仍需单独处理。</value>
   </data>
-  <data name="Node_Patch_FileContextEntryHint" xml:space="preserve">
-    <value>以路径表达式原文和类型限定作为身份。新增追加缺失规则；已有相同标签时不变，不同标签或身份重复则冲突。删除移除整行规则；缺失时不变，启用旧标签检查则要求存在。数量表示原有命中数。其他规则保持顺序，但增删规则可能改变有效标签：不检查正则重叠、优先级或加载策略有效性，不直接修改镜像扩展属性。</value>
-  </data>
-  <data name="Node_Image_Text_Read" xml:space="preserve">
-    <value>读取文件系统镜像内文本</value>
-  </data>
   <data name="Node_Choice_Direct" xml:space="preserve">
     <value>直连</value>
   </data>
@@ -1766,9 +1700,6 @@
   </data>
   <data name="Node_Patch_ImageReadTextHint" xml:space="preserve">
     <value>从原始 EXT4/EROFS 镜像按原始路径读取普通文件，支持读取已暂存的镜像替换结果。拒绝链接、越界路径、特殊文件和超过 16 MiB 的文件，解码文本最多 4 Mi 字符。目录枚举有条目与路径预算并支持取消。读取前后检查完整镜像哈希，并保留为发布依赖。哈希输出标识提取的文件。Sparse/Super/Payload 容器需另行解包。本节点仅负责读取，镜像修改及重建需另行处理。</value>
-  </data>
-  <data name="Node_Image_Text_Stage" xml:space="preserve">
-    <value>写入文件系统镜像内文本</value>
   </data>
   <data name="Node_Conn_ImageCapacity" xml:space="preserve">
     <value>镜像容量（字节）</value>
@@ -1803,29 +1734,14 @@
   <data name="Node_Patch_ImageBatchHint" xml:space="preserve">
     <value>通过“镜像修改集”串联收集节点，第一个收集节点的修改集输入留空。每个节点添加一个不同的现有文件修改，不立即改变镜像。最多 256 项，每份文本最多 4 Mi 字符，合计最多 16 Mi 字符。应用节点校验全部旧哈希，一次重建并暂存一个镜像；预览丢弃结果。容量必填。修改集不可变，分支之间互不修改。</value>
   </data>
-  <data name="Node_Image_File_ReadAttributes" xml:space="preserve">
-    <value>读取镜像文件属性</value>
-  </data>
-  <data name="Node_Image_File_SetAttributes" xml:space="preserve">
-    <value>设置镜像文件属性</value>
-  </data>
   <data name="Node_Patch_InvalidImageAttributes" xml:space="preserve">
     <value>UID/GID 必须是无符号十进制整数，权限必须是三位或四位八进制数字。</value>
   </data>
   <data name="Node_Patch_ImageAttributesHint" xml:space="preserve">
     <value>读取或修改原始 EXT4/EROFS 镜像内实际 inode 的 UID/GID 和权限，支持根目录（/），不跟随链接。UID/GID 使用无符号十进制；权限使用三位或四位八进制（644、0755、4755），查询输出四位。设置保留文件类型，可校验旧属性，并按容量限制重建暂存。属性相同则跳过重建。硬链接别名共享修改；访问 ACL 的所有者、掩码或组、其他用户权限遵循 chmod 规则，命名条目保持不变。格式错误的 ACL 会被拒绝。ACL、capability、SELinux 编辑、AVB 签名及设备验证需另行处理。</value>
   </data>
-  <data name="Node_Image_Xattr_Read" xml:space="preserve">
-    <value>读取镜像扩展属性</value>
-  </data>
   <data name="Node_Patch_ImageReadXattrHint" xml:space="preserve">
     <value>从当前暂存的 EXT4/EROFS 镜像读取一个扩展属性，不跟随链接。数据输出最多 64 KiB 原始字节，“存在”输出区分空值与属性缺失。属性名使用包含命名空间点号的可打印 ASCII，最多 255 字符。镜像保留为发布依赖。不自动解码文本、校验 SELinux 策略或解释 capability、ACL。</value>
-  </data>
-  <data name="Node_Image_Xattr_Set" xml:space="preserve">
-    <value>设置镜像用户扩展属性</value>
-  </data>
-  <data name="Node_Image_Xattr_Delete" xml:space="preserve">
-    <value>删除镜像用户扩展属性</value>
   </data>
   <data name="Node_Conn_HexValue" xml:space="preserve">
     <value>十六进制值</value>
@@ -1887,14 +1803,8 @@
   <data name="Node_Category_Firmware" xml:space="preserve">
     <value>固件与镜像</value>
   </data>
-  <data name="Node_Category_Build" xml:space="preserve">
-    <value>构建与交付</value>
-  </data>
   <data name="Node_Category_Device" xml:space="preserve">
     <value>设备操作</value>
-  </data>
-  <data name="Node_Category_Mirroring" xml:space="preserve">
-    <value>投屏</value>
   </data>
   <data name="Node_Category_Flow" xml:space="preserve">
     <value>流程控制</value>
@@ -1932,21 +1842,6 @@
   <data name="Node_Family_Xattr" xml:space="preserve">
     <value>扩展属性</value>
   </data>
-  <data name="Node_Family_FileContexts" xml:space="preserve">
-    <value>SELinux 文件上下文</value>
-  </data>
-  <data name="Node_Family_FsConfig" xml:space="preserve">
-    <value>文件归属与权限</value>
-  </data>
-  <data name="Node_Family_InitRc" xml:space="preserve">
-    <value>Android init.rc</value>
-  </data>
-  <data name="Node_Family_Fstab" xml:space="preserve">
-    <value>Android fstab</value>
-  </data>
-  <data name="Node_Family_Pattern" xml:space="preserve">
-    <value>二进制模式</value>
-  </data>
   <data name="Node_Family_Partition" xml:space="preserve">
     <value>分区</value>
   </data>
@@ -1956,38 +1851,11 @@
   <data name="Node_Family_Asset" xml:space="preserve">
     <value>包内资源</value>
   </data>
-  <data name="Node_Family_Format" xml:space="preserve">
-    <value>格式</value>
-  </data>
-  <data name="Node_Family_Json" xml:space="preserve">
-    <value>JSON</value>
-  </data>
-  <data name="Node_Family_Ini" xml:space="preserve">
-    <value>INI</value>
-  </data>
   <data name="Node_Family_Directory" xml:space="preserve">
     <value>目录</value>
   </data>
-  <data name="Node_Family_Hash" xml:space="preserve">
-    <value>哈希</value>
-  </data>
-  <data name="Node_Family_Count" xml:space="preserve">
-    <value>数量</value>
-  </data>
-  <data name="Node_Family_Changes" xml:space="preserve">
-    <value>变更</value>
-  </data>
   <data name="Node_Family_Condition" xml:space="preserve">
     <value>条件</value>
-  </data>
-  <data name="Node_Family_Boolean" xml:space="preserve">
-    <value>布尔检查</value>
-  </data>
-  <data name="Node_Family_AndroidProperty" xml:space="preserve">
-    <value>Android 属性</value>
-  </data>
-  <data name="Node_Family_Xml" xml:space="preserve">
-    <value>XML</value>
   </data>
   <data name="Node_Family_Container" xml:space="preserve">
     <value>固件容器</value>
@@ -1995,26 +1863,8 @@
   <data name="Node_Family_Signature" xml:space="preserve">
     <value>签名</value>
   </data>
-  <data name="Node_Family_Apk" xml:space="preserve">
-    <value>APK</value>
-  </data>
-  <data name="Node_Family_Ota" xml:space="preserve">
-    <value>OTA</value>
-  </data>
-  <data name="Node_Family_Slots" xml:space="preserve">
-    <value>槽位</value>
-  </data>
-  <data name="Node_Family_Cpio" xml:space="preserve">
-    <value>CPIO</value>
-  </data>
   <data name="Node_Family_Super" xml:space="preserve">
     <value>Super</value>
-  </data>
-  <data name="Node_Family_Sparse" xml:space="preserve">
-    <value>Sparse</value>
-  </data>
-  <data name="Node_Family_Dat" xml:space="preserve">
-    <value>DAT</value>
   </data>
   <data name="Node_Family_Target" xml:space="preserve">
     <value>设备选择</value>
@@ -2024,9 +1874,6 @@
   </data>
   <data name="Node_Family_Power" xml:space="preserve">
     <value>电源与重启</value>
-  </data>
-  <data name="Node_Family_Storage" xml:space="preserve">
-    <value>设备存储</value>
   </data>
   <data name="Node_Family_Binary" xml:space="preserve">
     <value>二进制文件</value>
@@ -2049,17 +1896,11 @@
   <data name="Node_Family_Bytes" xml:space="preserve">
     <value>字节</value>
   </data>
-  <data name="Node_Family_GitHub" xml:space="preserve">
-    <value>GitHub</value>
-  </data>
   <data name="Node_Family_Execution" xml:space="preserve">
     <value>执行</value>
   </data>
   <data name="Node_Family_Collection" xml:space="preserve">
     <value>集合</value>
-  </data>
-  <data name="Node_Family_Log" xml:space="preserve">
-    <value>日志</value>
   </data>
   <data name="Node_Family_Progress" xml:space="preserve">
     <value>进度</value>
@@ -2181,9 +2022,6 @@
   <data name="Node_Device_RebootFailed" xml:space="preserve">
     <value>设备拒绝了重启请求。</value>
   </data>
-  <data name="Node_Mirroring_NoSession" xml:space="preserve">
-    <value>投屏会话未激活。</value>
-  </data>
   <data name="Node_Category_Workspace" xml:space="preserve">
     <value>工作区操作</value>
   </data>
@@ -2228,5 +2066,14 @@
   </data>
   <data name="Node_Document_TextRequired" xml:space="preserve">
     <value>需要文本值，空文本将清空文档。</value>
+  </data>
+  <data name="Node_Load_RetiredType" xml:space="preserve">
+    <value>该节点类型已从节点库删除，请用现存节点重建该流程。</value>
+  </data>
+  <data name="Node_UI_Dialog" xml:space="preserve">
+    <value>对话框</value>
+  </data>
+  <data name="Node_UI_Progress" xml:space="preserve">
+    <value>进度</value>
   </data>
 </root>

@@ -183,7 +183,7 @@ internal static class WorkflowInteractionPreflight
         {
             return LanguageService.Instance.GetString("Node_Interaction_UnsupportedHost");
         }
-        if (typeKey.StartsWith("UI.Progress.", StringComparison.Ordinal) || typeKey == "UI.Notification.Show")
+        if (typeKey.StartsWith("UI.Progress", StringComparison.Ordinal) || typeKey == "UI.Notification.Show")
         {
             if (host is not IWorkflowFeedbackService { SupportsFeedback: true })
             {

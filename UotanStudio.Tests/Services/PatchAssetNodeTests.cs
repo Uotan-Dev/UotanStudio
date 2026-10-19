@@ -56,7 +56,8 @@ public sealed class PatchAssetNodeTests
             Assets = [await VisualPluginAsset.FromFileAsync("config", source, token)]
         };
         await File.WriteAllTextAsync(source, "modified", token);
-        var asset = PatchNodeViewModel.Create("Resource.Asset.Open");
+        var asset = PatchNodeViewModel.Create("Resource.Asset.Read");
+        Set(asset, "Operation", "Select");
         Set(asset, "Asset ID", "config");
         var workspace = PatchNodeViewModel.Create("Workspace.Directory.Open");
         Set(workspace, "Root", temp.Path);
@@ -98,7 +99,8 @@ public sealed class PatchAssetNodeTests
         var token = TestContext.Current.CancellationToken;
         var package = await PackageAsync(temp.Path, "resource content", token);
         var output = Path.Combine(temp.Path, "target");
-        var asset = PatchNodeViewModel.Create("Resource.Asset.Open");
+        var asset = PatchNodeViewModel.Create("Resource.Asset.Read");
+        Set(asset, "Operation", "Select");
         Set(asset, "Asset ID", "config");
         var workspace = PatchNodeViewModel.Create("Workspace.Directory.Open");
         Set(workspace, "Root", temp.Path);
@@ -128,16 +130,18 @@ public sealed class PatchAssetNodeTests
         Directory.CreateDirectory(innerDirectory);
         var parent = await PackageAsync(temp.Path, "parent", token);
         var inner = await PackageAsync(innerDirectory, "inner", token);
-        var select = PatchNodeViewModel.Create("Resource.Asset.Open");
+        var select = PatchNodeViewModel.Create("Resource.Asset.Read");
+        Set(select, "Operation", "Select");
         Set(select, "Asset ID", "config");
-        inner.Manifest.RequiredNodeTypes = ["Resource.Asset.Open"];
+        inner.Manifest.RequiredNodeTypes = ["Resource.Asset.Read"];
         inner.Graph.Nodes = WorkflowPersistenceService.BuildNodeDtos([select]);
         inner.Outputs = [new VisualPluginPortDefinition
         {
             Id = "asset", Name = "Asset", NodeInstanceId = select.InstanceId, PortId = "asset", PortType = "PatchAsset"
         }];
         var composite = new CompositeNodeViewModel(inner);
-        var read = PatchNodeViewModel.Create("Resource.Asset.ReadText");
+        var read = PatchNodeViewModel.Create("Resource.Asset.Read");
+        Set(read, "Operation", "ReadText");
 
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([composite, read],
             [Connect(composite, "asset", read, "Asset")], token, new NodeExecutionOptions { Package = parent });
@@ -163,9 +167,11 @@ public sealed class PatchAssetNodeTests
         var write = PatchNodeViewModel.Create("File.Text.Publish");
         Set(write, "Output Path", output);
         Set(write, "Text", "staged");
-        var asset = PatchNodeViewModel.Create("Resource.Asset.Open");
+        var asset = PatchNodeViewModel.Create("Resource.Asset.Read");
+        Set(asset, "Operation", "Select");
         Set(asset, "Asset ID", "config");
-        var read = PatchNodeViewModel.Create("Resource.Asset.ReadText");
+        var read = PatchNodeViewModel.Create("Resource.Asset.Read");
+        Set(read, "Operation", "ReadText");
 
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([write, asset, read],
             [Connect(write, "Completed", asset, "Flow"), Connect(asset, "Asset", read, "Asset")], token,
@@ -195,7 +201,8 @@ public sealed class PatchAssetNodeTests
     [Fact]
     public async Task Execute_ResourceWithoutPackageScope_FailsClearly()
     {
-        var node = PatchNodeViewModel.Create("Resource.Asset.Open");
+        var node = PatchNodeViewModel.Create("Resource.Asset.Read");
+        Set(node, "Operation", "Select");
         Set(node, "Asset ID", "config");
 
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([node], [], TestContext.Current.CancellationToken);
@@ -228,7 +235,8 @@ public sealed class PatchAssetNodeTests
     public void BuildRuntime_AssetPortsAndId_PreserveTypedContract()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var node = PatchNodeViewModel.Create("Resource.Asset.Open");
+        var node = PatchNodeViewModel.Create("Resource.Asset.Read");
+        Set(node, "Operation", "Select");
         Set(node, "Asset ID", "portable-config");
         var snapshot = new WorkflowSnapshot { Nodes = WorkflowPersistenceService.BuildNodeDtos([node]) };
 

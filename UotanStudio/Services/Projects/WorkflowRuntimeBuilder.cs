@@ -22,12 +22,23 @@ internal static class WorkflowRuntimeBuilder
             if (!WorkflowReconstruction.TryCreateNode(dto, out var node, preserveUnknown,
                     restoreInstanceId: restoreInstanceIds))
             {
-                errors.Add($"Node type '{dto.TypeKey}' is unavailable.");
+                errors.Add(NodeTypeAlias.RefusedTypeKeys.Contains(dto.TypeKey)
+                    ? $"{LanguageService.Instance.GetString("Node_Load_RetiredType")} {dto.TypeKey}"
+                    : $"Node type '{dto.TypeKey}' is unavailable.");
                 continue;
             }
 
-            WorkflowReconstruction.RestoreInitialValues(node, dto.InputInitialValues,
-                dto.InputInitialValuesByPortId);
+            var alias = NodeTypeAlias.Find(dto.TypeKey);
+            if (alias is not null && node.TypeKey == alias.TargetTypeKey)
+            {
+                WorkflowReconstruction.RestoreAliasedValues(node, dto.InputInitialValues, alias);
+            }
+            else
+            {
+                WorkflowReconstruction.RestoreInitialValues(node, dto.InputInitialValues,
+                    dto.InputInitialValuesByPortId);
+            }
+
             node.Location = new Avalonia.Point(dto.X, dto.Y);
             nodes.Add(node);
             if (string.IsNullOrWhiteSpace(dto.InstanceId) || !created.TryAdd(dto.InstanceId, node))

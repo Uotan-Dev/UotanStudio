@@ -7,8 +7,8 @@ using UotanStudio.Services.Projects;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// Output node view model, providing log output, progress report, and result saving capabilities.
-/// <para>输出节点视图模型，提供日志输出、进度报告和结果保存功能。</para>
+/// Output node view model, providing progress report and result saving capabilities.
+/// <para>输出节点视图模型，提供进度报告和结果保存功能。</para>
 /// </summary>
 public class OutputNodeViewModel : FlowNodeViewModel
 {
@@ -22,23 +22,6 @@ public class OutputNodeViewModel : FlowNodeViewModel
     /// </param>
     public OutputNodeViewModel(string title) : base(title, NodeCategory.Output)
     {
-    }
-
-    /// <summary>
-    /// Creates a default log output node.
-    /// <para>创建默认的日志输出节点。</para>
-    /// </summary>
-    public static OutputNodeViewModel CreateLogNode()
-    {
-        var node = new OutputNodeViewModel("Log Output")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Feedback.Log.Write"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Message", PortType = NodePortType.Text });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Level", PortType = NodePortType.Text });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Stdout", PortType = NodePortType.Boolean, InitialValue = false });
-        return node;
     }
 
     /// <summary>
@@ -76,17 +59,14 @@ public class OutputNodeViewModel : FlowNodeViewModel
         return node;
     }
 
-    /// <summary>Dispatches the output logic by the node type key (TypeKey): Feedback.Log.Write writes a log entry, Feedback.Progress.Report reports progress, and File.Artifact.Publish writes a file.
-    /// <para>按节点类型键（TypeKey）分发对应的输出逻辑：Feedback.Log.Write 写日志、Feedback.Progress.Report 上报进度、File.Artifact.Publish 保存文件。</para></summary>
+    /// <summary>Dispatches the output logic by the node type key (TypeKey): Feedback.Progress.Report reports progress and File.Artifact.Publish writes a file.
+    /// <para>按节点类型键（TypeKey）分发对应的输出逻辑：Feedback.Progress.Report 上报进度、File.Artifact.Publish 保存文件。</para></summary>
     /// <param name="context">The execution context.<para>执行上下文。</para></param>
     /// <returns>A task representing the asynchronous execution.<para>表示异步执行的任务。</para></returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {
         switch (TypeKey)
         {
-            case "Feedback.Log.Write":
-                ExecuteLog(context);
-                break;
             case "Feedback.Progress.Report":
                 ExecuteProgress(context);
                 break;
@@ -98,19 +78,6 @@ public class OutputNodeViewModel : FlowNodeViewModel
 
         context.CancellationToken.ThrowIfCancellationRequested();
         return Task.CompletedTask;
-    }
-
-    private void ExecuteLog(INodeExecutionContext context)
-    {
-        var message = NodeDataUtil.ToDisplay(ReadInput("Message"));
-        var levelText = (Convert.ToString(ReadInput("Level"), CultureInfo.InvariantCulture) ?? "info").Trim().ToLowerInvariant();
-        var level = ParseLogLevel(levelText) ?? LogLevel.Info;
-        context.Log.Write(level, Title, message);
-
-        if (NodeDataUtil.ToBool(ReadInput("Stdout"), false))
-        {
-            Console.WriteLine($"[{Title}] {message}");
-        }
     }
 
     private void ExecuteProgress(INodeExecutionContext context)
@@ -139,19 +106,5 @@ public class OutputNodeViewModel : FlowNodeViewModel
         WriteOutput("Path", fullPath);
         WriteOutput("Artifact", new FileArtifact(fullPath));
         context.Log.Write(LogLevel.Info, Title, $"Saved {length} bytes to '{path}'.");
-    }
-
-    private static LogLevel? ParseLogLevel(string text)
-    {
-        return text switch
-        {
-            "trace" => LogLevel.Trace,
-            "debug" => LogLevel.Debug,
-            "info" or "information" => LogLevel.Info,
-            "warn" or "warning" => LogLevel.Warn,
-            "error" => LogLevel.Error,
-            "fatal" or "critical" => LogLevel.Fatal,
-            _ => null
-        };
     }
 }

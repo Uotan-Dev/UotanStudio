@@ -31,6 +31,10 @@ internal static class WorkflowReconstruction
             RestoreInstanceId(node, dto, restoreInstanceId);
             return true;
         }
+        if (NodeTypeAlias.RefusedTypeKeys.Contains(dto.TypeKey))
+        {
+            return false;
+        }
         if (!NodeTypeRegistry.Contains(dto.TypeKey))
         {
             var alias = NodeTypeAlias.Find(dto.TypeKey);
@@ -53,14 +57,6 @@ internal static class WorkflowReconstruction
             return true;
         }
         node = NodeTypeRegistry.Create(dto.TypeKey)!;
-        if (dto.NodeValueType is not null && node.IsConstantNode)
-        {
-            node.NodeValueType = dto.NodeValueType;
-        }
-        if (dto.NodeValue is not null && node.IsConstantNode)
-        {
-            node.NodeValue = dto.NodeValue;
-        }
         if (dto.SelectedImage is not null && node.IsProjectImageNode)
         {
             node.SelectedImage = dto.SelectedImage;
@@ -106,6 +102,35 @@ internal static class WorkflowReconstruction
                 if (input is null || input.PortType == NodePortType.Flow) continue;
                 input.InitialValue = ConvertInputValue(input.PortType, value);
             }
+        }
+    }
+
+    /// <summary>Restores a retired node's saved values onto its merged successor.
+    /// <para>把退役节点已保存的取值恢复到合并后的继任节点上。</para></summary>
+    /// <param name="node">The successor node created from the alias. <para>由别名创建出的继任节点。</para></param>
+    /// <param name="values">Initial values keyed by the retired node's port title. <para>按退役节点端口标题索引的初始值。</para></param>
+    /// <param name="alias">The matched alias supplying the port and value renames. <para>命中的别名，提供端口与取值改名。</para></param>
+    /// <remarks>Only the title-keyed map is consulted: a retired node's stable port identity can name the
+    /// successor's discriminator port with a value that belongs to a different port.
+    /// <para>只使用按标题索引的映射：退役端口的稳定标识可能正好指向继任节点的判别端口，而该取值其实属于另一个端口。</para></remarks>
+    internal static void RestoreAliasedValues(FlowNodeViewModel node, Dictionary<string, string>? values,
+        NodeTypeAliasEntry alias)
+    {
+        if (values is not { Count: > 0 })
+        {
+            return;
+        }
+
+        foreach (var (title, rawValue) in values)
+        {
+            var targetTitle = alias.PortRenames is { } renames
+                && renames.TryGetValue(title, out var renamed) ? renamed : title;
+            var value = alias.ValueRenames is { } overrides
+                && overrides.TryGetValue(targetTitle + "=" + rawValue, out var replacement)
+                    ? replacement : rawValue;
+            var input = node.Input.FirstOrDefault(port => string.Equals(port.Title, targetTitle, StringComparison.Ordinal));
+            if (input is null || input.PortType == NodePortType.Flow) continue;
+            input.InitialValue = ConvertInputValue(input.PortType, value);
         }
     }
 

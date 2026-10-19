@@ -30,7 +30,7 @@ public sealed class PatchGateTests
         composite.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortId = "flow", PortType = NodePortType.Flow });
         var controller = scenario == "zero-loop"
             ? (FlowNodeViewModel)FlowControlNodeViewModel.CreateLoopNode()
-            : PatchNodeViewModel.Create("Validation.Boolean.Assert");
+            : Gate(true, false, false);
         if (scenario == "zero-loop")
         {
             controller.Input.Single(port => port.Title == "Count").InitialValue = 0;
@@ -46,7 +46,7 @@ public sealed class PatchGateTests
             await cancellation.CancelAsync();
         }
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([controller, composite],
-            [Connect(controller, scenario == "zero-loop" ? "Body" : "Completed", composite, "Flow")],
+            [Connect(controller, scenario == "zero-loop" ? "Body" : "Apply", composite, "Flow")],
             cancellation.Token, options);
 
         var row = Assert.Single(result.CompositeExecutions);
@@ -64,7 +64,7 @@ public sealed class PatchGateTests
     [Fact]
     public async Task Execute_UpstreamFailure_ReportsCompositeSkipWithoutInvokingPackage()
     {
-        var failure = PatchNodeViewModel.Create("Validation.Boolean.Assert");
+        var failure = Gate(true, false, false);
         var invoked = false;
         var composite = new CompositeNodeViewModel(new VisualPluginPackage
         {
@@ -77,7 +77,7 @@ public sealed class PatchGateTests
         });
         composite.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortId = "flow", PortType = NodePortType.Flow });
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([failure, composite],
-            [Connect(failure, "Completed", composite, "Flow")], TestContext.Current.CancellationToken);
+            [Connect(failure, "Apply", composite, "Flow")], TestContext.Current.CancellationToken);
 
         var row = Assert.Single(result.CompositeExecutions);
         Assert.False(invoked);
@@ -198,7 +198,7 @@ public sealed class PatchGateTests
         var gate = Gate(true, true, false);
         var target = Path.Combine(temp.Path, "target");
         var write = Writer(target);
-        var start = FlowControlNodeViewModel.CreateStartNode();
+        var bypass = FlowControlNodeViewModel.CreateDelayNode();
         var connections = new List<NodeConnection>();
         if (wiring is "join" or "bypass" or "data")
         {
@@ -210,10 +210,10 @@ public sealed class PatchGateTests
         }
         if (wiring == "bypass")
         {
-            connections.Add(Connect(start, start.Output.Single().Title, write, "Flow"));
+            connections.Add(Connect(bypass, bypass.Output.Single().Title, write, "Flow"));
         }
 
-        var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([gate, start, write], connections,
+        var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([gate, bypass, write], connections,
             TestContext.Current.CancellationToken);
 
         Assert.Equal(ExecutionStatus.Failed, result.Status);
@@ -224,15 +224,19 @@ public sealed class PatchGateTests
     }
 
     [Theory]
-    [InlineData("Image.Text.Stage")]
-    [InlineData("Image.Edit.Apply")]
-    [InlineData("Image.File.SetAttributes")]
-    [InlineData("Image.Xattr.Set")]
-    [InlineData("Image.Xattr.Delete")]
-    public async Task Execute_UnguardedImageWrite_RejectsBeforeAnyNodeExecutes(string type)
+    [InlineData("Image.Text.Edit", "Write")]
+    [InlineData("Image.Edit.Apply", "")]
+    [InlineData("Image.File.Attributes", "Set")]
+    [InlineData("Image.Xattr.Edit", "Set")]
+    [InlineData("Image.Xattr.Edit", "Delete")]
+    public async Task Execute_UnguardedImageWrite_RejectsBeforeAnyNodeExecutes(string type, string operation)
     {
         var gate = Gate(true, true, false);
         var write = PatchNodeViewModel.Create(type);
+        if (operation.Length > 0)
+        {
+            write.Input.Single(port => port.Title == "Operation").InitialValue = operation;
+        }
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([gate, write], [],
             TestContext.Current.CancellationToken);
         Assert.Equal(ExecutionStatus.Failed, result.Status);

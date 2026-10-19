@@ -16,8 +16,8 @@ public sealed class CompositeCollapseTests(NodeEditorUiFixture fixture)
         await Dispatch(() =>
         {
             using var editor = new NodeEditorViewModel();
-            var first = NodeTypeRegistry.Create("Data.Value.Constant")!;
-            var second = NodeTypeRegistry.Create("Data.Value.Constant")!;
+            var first = NodeTypeRegistry.Create("File.Binary.Read")!;
+            var second = NodeTypeRegistry.Create("File.Binary.Read")!;
             editor.AddNode(first);
             editor.AddNode(second);
             editor.SetSelection([first, second]);
@@ -47,12 +47,12 @@ public sealed class CompositeCollapseTests(NodeEditorUiFixture fixture)
         await Dispatch(() =>
         {
             using var editor = new NodeEditorViewModel();
-            var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
+            var node = NodeTypeRegistry.Create("File.Binary.Read")!;
             editor.AddNode(node);
             editor.SetSelection([node]);
             editor.EncapsulateSelection("Single", editor.AnalyzeSelection());
             editor.ExpandSelectedComposite();
-            editor.AddNode(NodeTypeRegistry.Create("Data.Value.Constant")!);
+            editor.AddNode(NodeTypeRegistry.Create("File.Binary.Read")!);
 
             Assert.False(editor.CanCollapseExpandedComposite);
         });
@@ -64,7 +64,7 @@ public sealed class CompositeCollapseTests(NodeEditorUiFixture fixture)
         await Dispatch(() =>
         {
             using var editor = new NodeEditorViewModel();
-            var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
+            var node = NodeTypeRegistry.Create("File.Binary.Read")!;
             editor.AddNode(node);
             editor.SetSelection([node]);
             editor.EncapsulateSelection("Single", editor.AnalyzeSelection());

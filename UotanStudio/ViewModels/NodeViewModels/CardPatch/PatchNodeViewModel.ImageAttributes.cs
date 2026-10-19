@@ -9,7 +9,8 @@ public sealed partial class PatchNodeViewModel
     private async Task ExecuteImageAttributesAsync(INodeExecutionContext context)
     {
         var run = GetRun(context);
-        if (TypeKey == "Image.File.ReadAttributes")
+        if (TypeKey == "Image.File.ReadAttributes"
+            || TypeKey == "Image.File.Attributes" && Text("Operation") == "Read")
         {
             var attributes = await run.ReadImageAttributesAsync(Text("Path"), Text("File System"), Text("Image Path"), context.CancellationToken).ConfigureAwait(false);
             WriteOutput("UID", attributes.Uid.ToString(CultureInfo.InvariantCulture));

@@ -14,7 +14,7 @@ public sealed class PatchNodePortDeclarationTests
             .OfType<PatchNodeViewModel>()
             .ToList();
 
-        Assert.Equal(47, patchNodes.Count);
+        Assert.Equal(15, patchNodes.Count);
         Assert.All(patchNodes, node =>
         {
             Assert.Equal("Flow", node.Input[0].Title);

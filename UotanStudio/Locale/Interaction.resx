@@ -90,80 +90,20 @@
   <data name="Interaction_Error_Path" xml:space="preserve">
     <value>Enter a valid output path.</value>
   </data>
-  <data name="Node_UI_Content_Text" xml:space="preserve">
-    <value>Text content</value>
-  </data>
-  <data name="Node_UI_Content_Divider" xml:space="preserve">
-    <value>Divider</value>
-  </data>
-  <data name="Node_UI_Content_Image" xml:space="preserve">
-    <value>Image content</value>
-  </data>
-  <data name="Node_UI_Field_Text" xml:space="preserve">
-    <value>Text field</value>
-  </data>
-  <data name="Node_UI_Field_Number" xml:space="preserve">
-    <value>Number field</value>
-  </data>
-  <data name="Node_UI_Field_Boolean" xml:space="preserve">
-    <value>Confirmation field</value>
-  </data>
-  <data name="Node_UI_Field_Choice" xml:space="preserve">
-    <value>Choice field</value>
-  </data>
-  <data name="Node_UI_Field_MultiChoice" xml:space="preserve">
-    <value>Multiple choice</value>
-  </data>
-  <data name="Node_UI_Field_File" xml:space="preserve">
-    <value>File field</value>
-  </data>
-  <data name="Node_UI_Field_Directory" xml:space="preserve">
-    <value>Directory field</value>
-  </data>
-  <data name="Node_UI_Field_SavePath" xml:space="preserve">
-    <value>Save path field</value>
-  </data>
-  <data name="Node_UI_Layout_Row" xml:space="preserve">
-    <value>Row layout</value>
-  </data>
-  <data name="Node_UI_Layout_Column" xml:space="preserve">
-    <value>Column layout</value>
-  </data>
-  <data name="Node_UI_Layout_Group" xml:space="preserve">
-    <value>Field group</value>
-  </data>
-  <data name="Node_UI_Layout_Pages" xml:space="preserve">
-    <value>Page layout</value>
-  </data>
   <data name="Node_UI_Condition_Equals" xml:space="preserve">
     <value>Field equals condition</value>
   </data>
   <data name="Node_UI_Form_Create" xml:space="preserve">
     <value>Create form</value>
   </data>
-  <data name="Node_UI_Dialog_Show" xml:space="preserve">
-    <value>Show form dialog</value>
-  </data>
   <data name="Node_UI_Result_Read" xml:space="preserve">
     <value>Read submitted field</value>
-  </data>
-  <data name="Node_UI_Dialog_Confirm" xml:space="preserve">
-    <value>Request confirmation</value>
   </data>
   <data name="Interaction_Error_Type" xml:space="preserve">
     <value>The field value has the wrong type.</value>
   </data>
   <data name="Node_UI_Notification_Show" xml:space="preserve">
     <value>Show notification</value>
-  </data>
-  <data name="Node_UI_Progress_Open" xml:space="preserve">
-    <value>Open progress</value>
-  </data>
-  <data name="Node_UI_Progress_Update" xml:space="preserve">
-    <value>Update progress</value>
-  </data>
-  <data name="Node_UI_Progress_Close" xml:space="preserve">
-    <value>Close progress</value>
   </data>
   <data name="Node_Conn_FieldID" xml:space="preserve">
     <value>Field ID</value>
@@ -251,5 +191,17 @@
   </data>
   <data name="Node_Conn_Title" xml:space="preserve">
     <value>Title</value>
+  </data>
+  <data name="Node_UI_Content_Create" xml:space="preserve">
+    <value>Interface Content</value>
+  </data>
+  <data name="Node_UI_Field_Create" xml:space="preserve">
+    <value>Form Field</value>
+  </data>
+  <data name="Node_UI_Layout_Create" xml:space="preserve">
+    <value>Layout Container</value>
+  </data>
+  <data name="Node_Conn_Kind" xml:space="preserve">
+    <value>Kind</value>
   </data>
 </root>

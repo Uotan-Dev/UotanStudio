@@ -5,8 +5,8 @@ using UotanStudio.Services.Execution;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// Flow control node view model, providing start, end, conditional branch, loop, delay, parallel, and termination capabilities.
-/// <para>流程控制节点视图模型，提供开始、结束、条件分支、循环、延迟、并行和终止功能。</para>
+/// Flow control node view model, providing conditional branch, loop, delay, parallel, and termination capabilities.
+/// <para>流程控制节点视图模型，提供条件分支、循环、延迟、并行和终止功能。</para>
 /// </summary>
 public class FlowControlNodeViewModel : FlowNodeViewModel
 {
@@ -20,36 +20,6 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     /// </param>
     public FlowControlNodeViewModel(string title) : base(title, NodeCategory.Flow)
     {
-    }
-
-    /// <summary>
-    /// Creates a default start node (workflow entry point).
-    /// <para>创建默认的开始节点（工作流入口）。</para>
-    /// </summary>
-    public static FlowControlNodeViewModel CreateStartNode()
-    {
-        var node = new FlowControlNodeViewModel("Start")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Flow.Execution.Start"
-        };
-        node.Output.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
-        return node;
-    }
-
-    /// <summary>
-    /// Creates a default end node (workflow exit point).
-    /// <para>创建默认的结束节点（工作流出口）。</para>
-    /// </summary>
-    public static FlowControlNodeViewModel CreateEndNode()
-    {
-        var node = new FlowControlNodeViewModel("End")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Flow.Execution.End"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
-        return node;
     }
 
     /// <summary>
@@ -155,12 +125,6 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     {
         switch (TypeKey)
         {
-            case "Flow.Execution.Start":
-                context.Log.Write(LogLevel.Info, Title, "Workflow entered.  工作流入口。");
-                break;
-            case "Flow.Execution.End":
-                context.Log.Write(LogLevel.Info, Title, "Workflow reached the end node.  到达结束节点。");
-                break;
             case "Flow.Condition.Branch":
                 ExecuteBranch(context);
                 break;

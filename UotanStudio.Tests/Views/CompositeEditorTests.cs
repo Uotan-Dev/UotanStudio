@@ -15,10 +15,10 @@ public sealed class CompositeEditorTests(NodeEditorUiFixture fixture)
         await Dispatch(() =>
         {
             using var editor = new NodeEditorViewModel();
-            var first = NodeTypeRegistry.Create("Data.Value.Constant")!;
-            var second = NodeTypeRegistry.Create("Data.Value.Constant")!;
-            first.NodeValue = "one";
-            second.NodeValue = "two";
+            var first = NodeTypeRegistry.Create("File.Binary.Read")!;
+            var second = NodeTypeRegistry.Create("File.Binary.Read")!;
+            first.CustomName = "one";
+            second.CustomName = "two";
             editor.AddNode(first);
             editor.AddNode(second);
             editor.SetSelection([first, second]);
@@ -33,7 +33,7 @@ public sealed class CompositeEditorTests(NodeEditorUiFixture fixture)
             Assert.IsType<CompositeNodeViewModel>(Assert.Single(editor.Nodes));
             editor.ExpandSelectedComposite();
             Assert.Equal(2, editor.Nodes.Count);
-            Assert.Equal(new[] { "one", "two" }, editor.Nodes.Select(node => node.NodeValue));
+            Assert.Equal(new[] { "one", "two" }, editor.Nodes.Select(node => node.CustomName));
             editor.Undo();
             Assert.IsType<CompositeNodeViewModel>(Assert.Single(editor.Nodes));
         });
@@ -45,8 +45,8 @@ public sealed class CompositeEditorTests(NodeEditorUiFixture fixture)
         await Dispatch(async () =>
         {
             using var source = new NodeEditorViewModel();
-            var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
-            constant.NodeValue = "saved";
+            var constant = NodeTypeRegistry.Create("File.Binary.Read")!;
+            constant.CustomName = "saved";
             source.AddNode(constant);
             source.SetSelection([constant]);
             source.EncapsulateSelection("Local", source.AnalyzeSelection());
@@ -56,10 +56,10 @@ public sealed class CompositeEditorTests(NodeEditorUiFixture fixture)
             using var restored = new NodeEditorViewModel();
             await restored.LoadFromAsync(snapshot);
             var composite = Assert.IsType<CompositeNodeViewModel>(Assert.Single(restored.Nodes));
-            Assert.Equal("saved", Assert.Single(composite.Package.Graph.Nodes).NodeValue);
+            Assert.Equal("saved", Assert.Single(composite.Package.Graph.Nodes).CustomName);
             restored.SetSelection([composite]);
             restored.ExpandSelectedComposite();
-            Assert.Equal("saved", Assert.Single(restored.Nodes).NodeValue);
+            Assert.Equal("saved", Assert.Single(restored.Nodes).CustomName);
         });
     }
 
@@ -69,7 +69,7 @@ public sealed class CompositeEditorTests(NodeEditorUiFixture fixture)
         await Dispatch(async () =>
         {
             using var editor = new NodeEditorViewModel();
-            var existing = NodeTypeRegistry.Create("Data.Value.Constant")!;
+            var existing = NodeTypeRegistry.Create("File.Binary.Read")!;
             editor.AddNode(existing);
             await Assert.ThrowsAsync<InvalidDataException>(() => editor.LoadFromAsync(new WorkflowSnapshot { FormatVersion = 2 }));
             Assert.Same(existing, Assert.Single(editor.Nodes));
@@ -99,7 +99,7 @@ public sealed class CompositeEditorTests(NodeEditorUiFixture fixture)
         await Dispatch(() =>
         {
             using var editor = new NodeEditorViewModel();
-            var source = NodeTypeRegistry.Create("Data.Value.Constant")!;
+            var source = NodeTypeRegistry.Create("File.Binary.Read")!;
             var target = new FlowNodeViewModel("target", NodeCategory.Data);
             target.Input.Add(new NodeConnectorViewModel { Title = "Input", IsInput = true, PortType = NodePortType.Text });
             editor.AddNode(source);

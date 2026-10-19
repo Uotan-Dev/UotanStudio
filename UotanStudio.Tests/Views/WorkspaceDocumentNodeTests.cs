@@ -30,7 +30,9 @@ public sealed class WorkspaceDocumentNodeTests(NodeEditorUiFixture fixture)
                 dock.VisibleDockables!.Add(document);
                 dock.ActiveDockable = document;
                 var resolve = NodeFactoryRegistrar.Descriptors.Single(item => item.TypeKey == "Workspace.Document.Resolve").Factory();
-                var edit = NodeFactoryRegistrar.Descriptors.Single(item => item.TypeKey == "Config.Text.Edit").Factory();
+                var edit = NodeFactoryRegistrar.Descriptors.Single(item => item.TypeKey == "Config.Edit").Factory();
+                edit.Input.Single(port => port.Title == "Format").InitialValue = "Text";
+                edit.Input.Single(port => port.Title == "Operation").InitialValue = "Replace";
                 edit.Input.Single(port => port.Title == "Find").InitialValue = "unsaved";
                 edit.Input.Single(port => port.Title == "Replacement").InitialValue = "node edit";
                 var replace = NodeFactoryRegistrar.Descriptors.Single(item => item.TypeKey == "Workspace.Document.ReplaceText").Factory();

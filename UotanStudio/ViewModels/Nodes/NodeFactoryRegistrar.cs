@@ -72,18 +72,34 @@ public sealed record NodeDescriptor(
     /// <value>The required device state declaration.<para>所要求的设备状态声明。</para></value>
     public DeviceRequiredState RequiredDeviceState { get; init; } = DeviceRequiredState.None;
 
+    /// <summary>
+    /// Declared object family for the second toolbox level. Two-segment keys whose second segment names the
+    /// operation rather than the object, such as <c>Config.Edit</c>, must declare the object explicitly.
+    /// <para>声明的二级工具箱对象族。第二段是动作而非对象名的两段式键（如 <c>Config.Edit</c>）必须显式声明对象。</para>
+    /// </summary>
+    /// <value>The declared family, or null to derive it from the type key.<para>声明的对象族名；为 null 时由类型键推导。</para></value>
+    public string? DeclaredFamily { get; init; }
+
     /// <summary>Object family naming the second toolbox level.<para>为工具箱第二层级命名的对象族。</para></summary>
     /// <value>The family segment derived from the type key.<para>由类型键推导出的族名段。</para></value>
-    public string Family => TypeKey.Split('.') is [_, var family, ..] ? family : TypeKey;
+    public string Family => DeclaredFamily ?? (TypeKey.Split('.') is [_, var family, ..] ? family : TypeKey);
+
+    /// <summary>
+    /// Retired type keys merged into this node. Kept as stable search terms so a name that disappeared from the
+    /// catalog still resolves to its successor in the toolbox.
+    /// <para>已并入本节点的停用类型键，保留为稳定检索词，使已从目录消失的名称仍能在工具箱中命中继任节点。</para>
+    /// </summary>
+    /// <value>The retired type keys served by this node.<para>由本节点承接的停用类型键。</para></value>
+    public IReadOnlyList<string> Aliases { get; init; } = [];
 
     /// <summary>Stable technical search terms augment localized display labels.<para>补充本地化显示标签的稳定技术检索词。</para></summary>
     /// <value>The technical search terms for this node.<para>该节点的技术检索词条。</para></value>
     public IReadOnlyList<string> SearchKeywords => TypeKey switch
     {
-        "Binary.Pattern.Replace" => [TypeKey, CategoryPath, Family, "hexpatch", "hex", "binary"],
-        "Device.Partition.Flash" => [TypeKey, CategoryPath, Family, "boot", "bootloader", "super", "fastboot"],
-        "Config.AndroidProperty.Edit" => [TypeKey, CategoryPath, Family, "build.prop", "property"],
-        _ => [TypeKey, CategoryPath, Family]
+        "Binary.Search" => [TypeKey, CategoryPath, Family, "hexpatch", "hex", "binary", .. Aliases],
+        "Config.Edit" => [TypeKey, CategoryPath, Family, "build.prop", "property", .. Aliases],
+        "Device.Partition.Flash" => [TypeKey, CategoryPath, Family, "boot", "bootloader", "super", "fastboot", .. Aliases],
+        _ => [TypeKey, CategoryPath, Family, .. Aliases]
     };
 }
 

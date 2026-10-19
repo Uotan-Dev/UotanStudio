@@ -13,86 +13,34 @@ internal static class NodeCatalogSeed
         D("Workspace.Document.Resolve", "Node_Workspace_Document_Resolve", "Workspace", () => WorkspaceDocumentNodeViewModel.Create("Workspace.Document.Resolve")),
         D("Workspace.Document.ReadText", "Node_Workspace_Document_ReadText", "Workspace", () => WorkspaceDocumentNodeViewModel.Create("Workspace.Document.ReadText")),
         D("Workspace.Document.ReplaceText", "Node_Workspace_Document_ReplaceText", "Workspace", () => WorkspaceDocumentNodeViewModel.Create("Workspace.Document.ReplaceText")),
-        P("Image.Text.Read", "Node_Image_Text_Read", "Configuration", () => PatchNodeViewModel.Create("Image.Text.Read")),
-        P("Image.Text.Stage", "Node_Image_Text_Stage", "Configuration", () => PatchNodeViewModel.Create("Image.Text.Stage")),
+        P("Image.Text.Edit", "Node_Image_Text_Edit", "Configuration", () => PatchNodeViewModel.Create("Image.Text.Edit")),
         P("Image.Edit.CollectText", "Node_Image_Edit_CollectText", "Configuration", () => PatchNodeViewModel.Create("Image.Edit.CollectText")),
         P("Image.Edit.Apply", "Node_Image_Edit_Apply", "Configuration", () => PatchNodeViewModel.Create("Image.Edit.Apply")),
-        P("Image.File.ReadAttributes", "Node_Image_File_ReadAttributes", "Configuration", () => PatchNodeViewModel.Create("Image.File.ReadAttributes")),
-        P("Image.Xattr.Read", "Node_Image_Xattr_Read", "Configuration", () => PatchNodeViewModel.Create("Image.Xattr.Read")),
-        P("Image.Xattr.Set", "Node_Image_Xattr_Set", "Configuration", () => PatchNodeViewModel.Create("Image.Xattr.Set")),
-        P("Image.Xattr.Delete", "Node_Image_Xattr_Delete", "Configuration", () => PatchNodeViewModel.Create("Image.Xattr.Delete")),
-        P("Image.File.SetAttributes", "Node_Image_File_SetAttributes", "Configuration", () => PatchNodeViewModel.Create("Image.File.SetAttributes")),
-        P("Config.FileContexts.Edit", "Node_Config_FileContexts_Edit", "Configuration", () => PatchNodeViewModel.Create("Config.FileContexts.Edit")),
-        P("Config.FsConfig.Edit", "Node_Config_FsConfig_Edit", "Configuration", () => PatchNodeViewModel.Create("Config.FsConfig.Edit")),
-        P("Config.InitRc.FindReferences", "Node_Config_InitRc_FindReferences", "Configuration", () => PatchNodeViewModel.Create("Config.InitRc.FindReferences")),
-        P("Config.InitRc.EditArgument", "Node_Config_InitRc_EditArgument", "Configuration", () => PatchNodeViewModel.Create("Config.InitRc.EditArgument")),
-        P("Config.InitRc.EditHeader", "Node_Config_InitRc_EditHeader", "Configuration", () => PatchNodeViewModel.Create("Config.InitRc.EditHeader")),
-        P("Config.InitRc.AddSection", "Node_Config_InitRc_AddSection", "Configuration", () => PatchNodeViewModel.Create("Config.InitRc.AddSection")),
-        P("Config.InitRc.AddCommand", "Node_Config_InitRc_AddCommand", "Configuration", () => PatchNodeViewModel.Create("Config.InitRc.AddCommand")),
-        P("Config.InitRc.Query", "Node_Config_InitRc_Query", "Configuration", () => PatchNodeViewModel.Create("Config.InitRc.Query")),
-        P("Config.InitRc.EditCommand", "Node_Config_InitRc_EditCommand", "Configuration", () => PatchNodeViewModel.Create("Config.InitRc.EditCommand")),
-        P("Config.Fstab.Edit", "Node_Config_Fstab_Edit", "Configuration", () => PatchNodeViewModel.Create("Config.Fstab.Edit")),
-        P("Binary.Pattern.Replace", "Node_Binary_Pattern_Replace", "Data", () => PatchNodeViewModel.Create("Binary.Pattern.Replace")),
-        P("Binary.Pattern.Find", "Node_Binary_Pattern_Find", "Data", () => PatchNodeViewModel.Create("Binary.Pattern.Find")),
+        P("Image.File.Attributes", "Node_Image_File_Attributes", "Configuration", () => PatchNodeViewModel.Create("Image.File.Attributes")),
+        P("Image.Xattr.Edit", "Node_Image_Xattr_Edit", "Configuration", () => PatchNodeViewModel.Create("Image.Xattr.Edit")),
+        P("Config.Edit", "Node_Config_Edit", "Configuration", () => PatchNodeViewModel.Create("Config.Edit")),
+        P("Binary.Search", "Node_Binary_Search", "Data", () => PatchNodeViewModel.Create("Binary.Search")),
         P("Workspace.Partition.Resolve", "Node_Workspace_Partition_Resolve", "Firmware", () => PatchNodeViewModel.Create("Workspace.Partition.Resolve")),
         P("Flow.Applicability.Gate", "Node_Flow_Applicability_Gate", "Flow", () => PatchNodeViewModel.Create("Flow.Applicability.Gate")),
-        P("Validation.Applicability.Check", "Node_Validation_Applicability_Check", "Validation", () => PatchNodeViewModel.Create("Validation.Applicability.Check")),
-        P("Resource.Asset.Open", "Node_Resource_Asset_Open", "Inputs", () => PatchNodeViewModel.Create("Resource.Asset.Open")),
-        P("Resource.Asset.ReadText", "Node_Resource_Asset_ReadText", "Inputs", () => PatchNodeViewModel.Create("Resource.Asset.ReadText")),
+        P("Resource.Asset.Read", "Node_Resource_Asset_Read", "Inputs", () => PatchNodeViewModel.Create("Resource.Asset.Read")),
+        P("Workspace.File", "Node_Workspace_File", "Workspace", () => PatchNodeViewModel.Create("Workspace.File")),
         P("Workspace.Asset.Stage", "Node_Workspace_Asset_Stage", "Workspace", () => PatchNodeViewModel.Create("Workspace.Asset.Stage")),
-        P("Validation.Format.Detect", "Node_Validation_Format_Detect", "Validation", () => PatchNodeViewModel.Create("Validation.Format.Detect")),
-        P("Workspace.File.Find", "Node_Workspace_File_Find", "Workspace", () => PatchNodeViewModel.Create("Workspace.File.Find")),
-        P("Config.Json.Edit", "Node_Config_Json_Edit", "Configuration", () => PatchNodeViewModel.Create("Config.Json.Edit")),
-        P("Config.Ini.Edit", "Node_Config_Ini_Edit", "Configuration", () => PatchNodeViewModel.Create("Config.Ini.Edit")),
         P("Workspace.Directory.Open", "Node_Workspace_Directory_Open", "Workspace", () => PatchNodeViewModel.Create("Workspace.Directory.Open")),
-        P("Workspace.Text.Stage", "Node_Workspace_Text_Stage", "Workspace", () => PatchNodeViewModel.Create("Workspace.Text.Stage")),
-        P("Workspace.File.Import", "Node_Workspace_File_Import", "Workspace", () => PatchNodeViewModel.Create("Workspace.File.Import")),
-        P("Workspace.File.Delete", "Node_Workspace_File_Delete", "Workspace", () => PatchNodeViewModel.Create("Workspace.File.Delete")),
-        P("Workspace.File.Exists", "Node_Workspace_File_Exists", "Workspace", () => PatchNodeViewModel.Create("Workspace.File.Exists")),
-        P("Validation.File.Hash", "Node_Validation_File_Hash", "Validation", () => PatchNodeViewModel.Create("Validation.File.Hash")),
-        P("Validation.Hash.Verify", "Node_Validation_Hash_Verify", "Validation", () => PatchNodeViewModel.Create("Validation.Hash.Verify")),
-        P("Validation.Count.Assert", "Node_Validation_Count_Assert", "Validation", () => PatchNodeViewModel.Create("Validation.Count.Assert")),
-        P("Validation.Changes.Verify", "Node_Validation_Changes_Verify", "Validation", () => PatchNodeViewModel.Create("Validation.Changes.Verify")),
         P("File.Text.Read", "Node_File_Text_Read", "Data", () => PatchNodeViewModel.Create("File.Text.Read")),
-        P("Validation.Condition.Evaluate", "Node_Validation_Condition_Evaluate", "Validation", () => PatchNodeViewModel.Create("Validation.Condition.Evaluate")),
-        P("Validation.Boolean.Assert", "Node_Validation_Boolean_Assert", "Validation", () => PatchNodeViewModel.Create("Validation.Boolean.Assert")),
-        P("Config.Text.Edit", "Node_Config_Text_Edit", "Configuration", () => PatchNodeViewModel.Create("Config.Text.Edit")),
-        P("Config.AndroidProperty.Edit", "Node_Config_AndroidProperty_Edit", "Configuration", () => PatchNodeViewModel.Create("Config.AndroidProperty.Edit")),
-        P("Config.Xml.Edit", "Node_Config_Xml_Edit", "Configuration", () => PatchNodeViewModel.Create("Config.Xml.Edit")),
         P("File.Text.Publish", "Node_File_Text_Publish", "Data", () => PatchNodeViewModel.Create("File.Text.Publish")),
         D("Firmware.Container.Unpack", "Node_Firmware_Container_Unpack", "Firmware", FirmwareNodeViewModel.CreateUnpackNode),
         D("Firmware.Container.Pack", "Node_Firmware_Container_Pack", "Firmware", FirmwareNodeViewModel.CreatePackNode),
         D("Validation.Signature.Verify", "Node_Validation_Signature_Verify", "Validation", FirmwareNodeViewModel.CreateVerifyNode),
         D("Boot.CommandLine.Edit", "Node_Boot_CommandLine_Edit", "Composite", FirmwareNodeViewModel.CreateCmdlineEditNode),
-        D("Build.Apk.Sign", "Node_Build_Apk_Sign", "Build", () => new ApkSignNodeViewModel()),
-        D("Firmware.Container.Extract", "Node_Firmware_Container_Extract", "Firmware", FirmwareNodeViewModel.CreateExtractNode),
-        D("Build.Ota.CreateDelta", "Node_Build_Ota_CreateDelta", "Build", ExtendedFirmwareNodeViewModel.CreateOtaDeltaNode),
-        D("Build.Signature.Merge", "Node_Build_Signature_Merge", "Build",
-            ExtendedFirmwareNodeViewModel.CreateMergeSignatureNode) with { IsToolboxVisible = false },
-        D("Build.Slots.Merge", "Node_Build_Slots_Merge", "Build",
-            ExtendedFirmwareNodeViewModel.CreateMergeDualSlotNode) with { IsToolboxVisible = false },
-        D("Firmware.Cpio.Unpack", "Node_Firmware_Cpio_Unpack", "Firmware", CpioNodeViewModel.CreateCpioUnpackNode),
-        D("Firmware.Cpio.Pack", "Node_Firmware_Cpio_Pack", "Firmware", CpioNodeViewModel.CreateCpioPackNode),
-        D("Image.Super.Unpack", "Node_Image_Super_Unpack", "Firmware", SuperNodeViewModel.CreateSuperUnpackNode),
         D("Image.Super.Pack", "Node_Image_Super_Pack", "Firmware", SuperNodeViewModel.CreateSuperPackNode),
-        D("Image.Sparse.Convert", "Node_Image_Sparse_Convert", "Firmware", SparseNodeViewModel.CreateSparseNode),
-        D("Build.Dat.Convert", "Node_Build_Dat_Convert", "Build", DatNodeViewModel.CreateDatNode),
         D("Device.Target.Select", "Node_Device_Target_Select", "Device", SelectDeviceNodeViewModel.CreateSelectDeviceNode),
         D("Device.Property.Read", "Node_Device_Property_Read", "Device", DevicePropertyNodeViewModel.CreateDevicePropertyNode),
         D("Device.Partition.Flash", "Node_Device_Partition_Flash", "Device", FlashNodeViewModel.CreateFlashNode, true),
-        D("Device.Partition.Erase", "Node_Device_Partition_Erase", "Device", FlashNodeViewModel.CreateEraseNode, true),
         D("Device.Power.Reboot", "Node_Device_Power_Reboot", "Device", FlashNodeViewModel.CreateRebootNode, true),
-        D("Device.Storage.EraseAll", "Node_Device_Storage_EraseAll", "Device", ExtendedFlashNodeViewModel.CreateEraseAllNode, true),
-        D("Device.Ota.Sideload", "Node_Device_Ota_Sideload", "Device", ExtendedFlashNodeViewModel.CreateOtaSideloadNode, true),
-        D("Device.State.Query", "Node_Device_State_Query", "Device", DeviceServiceNodeViewModel.CreateStateQueryNode),
         D("Device.Table.Read", "Node_Device_Table_Read", "Device", DeviceServiceNodeViewModel.CreatePartitionTableReadNode),
-        D("Device.Slot.Query", "Node_Device_Slot_Query", "Device", DeviceServiceNodeViewModel.CreateSlotQueryNode),
-        D("Device.Slot.Switch", "Node_Device_Slot_Switch", "Device", DeviceServiceNodeViewModel.CreateSlotSwitchNode, true),
-        D("Device.Recovery.Clean", "Node_Device_Recovery_Clean", "Device", DeviceServiceNodeViewModel.CreateRecoveryCleanNode, true),
         D("Device.Shell.Command", "Node_Device_Shell_Command", "Device", DeviceServiceNodeViewModel.CreateShellCommandNode, true),
         D("File.Binary.Read", "Node_File_Binary_Read", "Data", DataNodeViewModel.CreateFileReadNode),
         D("File.Artifact.Open", "Node_File_Artifact_Open", "Data", () => new ArtifactNodeViewModel()),
-        D("Data.Value.Constant", "Node_Data_Value_Constant", "Data", ConstantNodeViewModel.CreateConstantNode),
         D("Resource.Project.Image", "Node_Resource_Project_Image", "Inputs", ProjectImageNodeViewModel.CreateProjectImageNode),
         D("Data.Cipher.Decrypt", "Node_Data_Cipher_Decrypt", "Data", DecryptNodeViewModel.CreateDecryptNode),
         D("Data.Compression.Decompress", "Node_Data_Compression_Decompress", "Data", DecompressNodeViewModel.CreateDecompressNode),
@@ -105,21 +53,43 @@ internal static class NodeCatalogSeed
         D("Data.Compression.Compress", "Node_Data_Compression_Compress", "Data", ExtendedDataNodeViewModel.CreateCompressNode),
         D("Data.Bytes.Swap", "Node_Data_Bytes_Swap", "Data", ExtendedDataNodeViewModel.CreateByteSwapNode),
         D("Network.File.Download", "Node_Network_File_Download", "Inputs", () => NetworkNodeViewModel.CreateDownloadNode()),
-        D("Mirroring.Session.Start", "Node_Mirroring_Session_Start", "Mirroring", MirroringNodeViewModel.CreateStartNode),
-        D("Mirroring.Session.Stop", "Node_Mirroring_Session_Stop", "Mirroring", MirroringNodeViewModel.CreateStopNode),
-        D("Flow.Execution.Start", "Node_Flow_Execution_Start", "Flow", FlowControlNodeViewModel.CreateStartNode),
-        D("Flow.Execution.End", "Node_Flow_Execution_End", "Flow", FlowControlNodeViewModel.CreateEndNode),
         D("Flow.Condition.Branch", "Node_Flow_Condition_Branch", "Flow", FlowControlNodeViewModel.CreateBranchNode),
         D("Flow.Collection.Loop", "Node_Flow_Collection_Loop", "Flow", FlowControlNodeViewModel.CreateLoopNode),
         D("Flow.Execution.Delay", "Node_Flow_Execution_Delay", "Flow", FlowControlNodeViewModel.CreateDelayNode),
         D("Flow.Execution.Parallel", "Node_Flow_Execution_Parallel", "Flow", FlowControlNodeViewModel.CreateParallelNode),
         D("Flow.Execution.Terminate", "Node_Flow_Execution_Terminate", "Flow", FlowControlNodeViewModel.CreateTerminateNode),
-        D("Feedback.Log.Write", "Node_Feedback_Log_Write", "Interaction", OutputNodeViewModel.CreateLogNode),
         D("Feedback.Progress.Report", "Node_Feedback_Progress_Report", "Interaction", OutputNodeViewModel.CreateProgressNode),
         D("File.Artifact.Publish", "Node_File_Artifact_Publish", "Data", OutputNodeViewModel.CreateSaveNode),
         .. InteractionNodeViewModel.TypeKeys.Select(typeKey => D(typeKey, "Node_" + typeKey.Replace('.', '_'), "Interaction",
             () => InteractionNodeViewModel.Create(typeKey)))
     ];
+
+    /// <summary>
+    /// Retired or toolbox-withdrawn type keys grouped under the node that serves them, used as toolbox search
+    /// terms only. Load-time migration lives in <see cref="Services.Projects.NodeTypeAlias"/>.
+    /// <para>已停用或已从工具箱撤下的类型键，按其现任继任节点分组，仅用作工具箱检索词。加载期迁移位于
+    /// <see cref="Services.Projects.NodeTypeAlias"/>。</para>
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string[]> MergedTypeKeys =
+        new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["Image.Text.Edit"] = ["Image.Text.Read", "Image.Text.Stage"],
+            ["Image.File.Attributes"] = ["Image.File.ReadAttributes", "Image.File.SetAttributes"],
+            ["Image.Xattr.Edit"] = ["Image.Xattr.Read", "Image.Xattr.Set", "Image.Xattr.Delete"],
+            ["Resource.Asset.Read"] = ["Resource.Asset.Open", "Resource.Asset.ReadText"],
+            ["Binary.Search"] = ["Binary.Pattern.Find", "Binary.Pattern.Replace"],
+            ["Workspace.File"] = ["Workspace.File.Find", "Workspace.File.Exists", "Workspace.File.Import",
+                "Workspace.File.Delete", "Workspace.Text.Stage"],
+            ["UI.Field.Create"] = ["UI.Field.Text", "UI.Field.Number", "UI.Field.Boolean", "UI.Field.Choice",
+                "UI.Field.MultiChoice", "UI.Field.File", "UI.Field.Directory", "UI.Field.SavePath"],
+            ["UI.Layout.Create"] = ["UI.Layout.Row", "UI.Layout.Column", "UI.Layout.Group", "UI.Layout.Pages"],
+            ["UI.Content.Create"] = ["UI.Content.Text", "UI.Content.Divider", "UI.Content.Image"],
+            ["Config.Edit"] = ["Config.Text.Edit", "Config.Json.Edit", "Config.Ini.Edit", "Config.Xml.Edit",
+                "Config.AndroidProperty.Edit", "Config.Fstab.Edit", "Config.FileContexts.Edit",
+                "Config.FsConfig.Edit", "Config.InitRc.Edit", "Config.InitRc.Query", "Config.InitRc.EditCommand",
+                "Config.InitRc.EditArgument", "Config.InitRc.EditHeader", "Config.InitRc.AddSection",
+                "Config.InitRc.AddCommand", "Config.InitRc.FindReferences"]
+        };
 
     /// <summary>Builds the toolbox descriptor for one composite-node package.<para>为单个组合节点软件包构建工具箱描述符。</para></summary>
     /// <param name="package">Composite package supplying the graph and manifest.<para>提供图与清单的组合软件包。</para></param>
@@ -165,8 +135,7 @@ internal static class NodeCatalogSeed
         {
             capabilities |= NodeCapability.ControlFlow | NodeCapability.PatchSafe;
         }
-        if (typeKey.StartsWith("Device.", StringComparison.Ordinal)
-            || typeKey.StartsWith("Mirroring.", StringComparison.Ordinal))
+        if (typeKey.StartsWith("Device.", StringComparison.Ordinal))
         {
             capabilities |= NodeCapability.RequiresDevice;
         }
@@ -176,7 +145,7 @@ internal static class NodeCatalogSeed
         }
         if (typeKey.StartsWith("Build.", StringComparison.Ordinal)
             || typeKey.StartsWith("Firmware.", StringComparison.Ordinal)
-            || typeKey is "Image.Super.Pack" or "Image.Super.Unpack" or "Image.Sparse.Convert")
+            || typeKey == "Image.Super.Pack")
         {
             capabilities |= NodeCapability.ProducesArtifact;
         }
@@ -184,8 +153,7 @@ internal static class NodeCatalogSeed
         {
             capabilities |= NodeCapability.MutatesDevice;
         }
-        if (typeKey is "Device.Target.Select" or "Device.Property.Read" or "Device.State.Query"
-            or "Device.Table.Read" or "Device.Slot.Query")
+        if (typeKey is "Device.Target.Select" or "Device.Property.Read" or "Device.Table.Read")
         {
             capabilities |= NodeCapability.ReadsDevice;
         }
@@ -193,16 +161,16 @@ internal static class NodeCatalogSeed
         {
             capabilities |= NodeCapability.ProducesArtifact | NodeCapability.PublishesFile;
         }
-        if (typeKey is "Data.Value.Constant" or "Resource.Project.Image" or "Feedback.Log.Write" or "Feedback.Progress.Report")
+        if (typeKey is "Resource.Project.Image" or "Feedback.Progress.Report")
         {
             capabilities |= NodeCapability.PatchSafe;
         }
         if (typeKey.StartsWith("UI.", StringComparison.Ordinal))
         {
             capabilities |= NodeCapability.PatchSafe;
-            if (typeKey.StartsWith("UI.Dialog.", StringComparison.Ordinal)
-                || typeKey.StartsWith("UI.Notification.", StringComparison.Ordinal)
-                || typeKey.StartsWith("UI.Progress.", StringComparison.Ordinal))
+            if (typeKey == "UI.Dialog"
+                || typeKey == "UI.Notification.Show"
+                || typeKey.StartsWith("UI.Progress", StringComparison.Ordinal))
             {
                 capabilities |= NodeCapability.RequiresInteraction;
             }
@@ -211,7 +179,9 @@ internal static class NodeCatalogSeed
         {
             CategoryPath = category,
             RequiresConfirmation = requiresConfirmation,
-            RequiredDeviceState = DeviceRequiredStateFor(typeKey)
+            RequiredDeviceState = DeviceRequiredStateFor(typeKey),
+            DeclaredFamily = typeKey == "Config.Edit" ? "Config" : null,
+            Aliases = MergedTypeKeys.TryGetValue(typeKey, out var merged) ? merged : []
         };
     }
 
@@ -220,17 +190,9 @@ internal static class NodeCatalogSeed
         "Device.Target.Select" => DeviceRequiredState.AnyDevice,
         "Device.Property.Read" => DeviceRequiredState.Adb | DeviceRequiredState.Fastboot,
         "Device.Power.Reboot" => DeviceRequiredState.Adb | DeviceRequiredState.Fastboot,
-        "Device.Ota.Sideload" => DeviceRequiredState.Adb,
         "Device.Partition.Flash" => DeviceRequiredState.Fastboot,
-        "Device.Partition.Erase" => DeviceRequiredState.Fastboot,
-        "Device.Storage.EraseAll" => DeviceRequiredState.Fastboot,
-        "Device.State.Query" => DeviceRequiredState.AnyDevice,
         "Device.Table.Read" => DeviceRequiredState.Fastboot,
-        "Device.Slot.Query" => DeviceRequiredState.Fastboot,
-        "Device.Slot.Switch" => DeviceRequiredState.Fastboot,
-        "Device.Recovery.Clean" => DeviceRequiredState.Adb,
         "Device.Shell.Command" => DeviceRequiredState.Adb,
-        "Mirroring.Session.Start" => DeviceRequiredState.Adb,
         _ => DeviceRequiredState.None
     };
 
@@ -242,9 +204,10 @@ internal static class NodeCatalogSeed
         {
             capabilities &= ~NodeCapability.PatchOperation;
         }
-        if (typeKey is "File.Text.Publish" or "Workspace.Text.Stage" or "Workspace.File.Import"
-            or "Workspace.File.Delete" or "Workspace.Asset.Stage" or "Binary.Pattern.Replace" or "Image.Text.Stage"
-            or "Image.Edit.Apply" or "Image.File.SetAttributes" or "Image.Xattr.Set" or "Image.Xattr.Delete")
+        if (typeKey is "File.Text.Publish" or "Workspace.File" or "Config.Edit"
+            or "Workspace.Asset.Stage" or "Binary.Search"
+            or "Image.Edit.Apply"
+            or "Image.Xattr.Edit" or "Image.Text.Edit" or "Image.File.Attributes")
         {
             capabilities |= NodeCapability.StagedWrite;
         }
@@ -256,9 +219,7 @@ internal static class NodeCatalogSeed
         if ((capabilities.HasFlag(NodeCapability.MutatesDevice)
             || capabilities.HasFlag(NodeCapability.ProducesArtifact)
             || capabilities.HasFlag(NodeCapability.PublishesFile)
-            || node.TypeKey is "Device.Property.Read" or "Device.State.Query" or "Device.Table.Read"
-                or "Device.Slot.Query" or "Mirroring.Session.Start" or "Mirroring.Session.Stop"
-                or "Feedback.Log.Write" or "Feedback.Progress.Report")
+            || node.TypeKey is "Device.Property.Read" or "Device.Table.Read" or "Feedback.Progress.Report")
             && node.Input.All(port => port.PortType != NodePortType.Flow))
         {
             node.Input.Add(new NodeConnectorViewModel

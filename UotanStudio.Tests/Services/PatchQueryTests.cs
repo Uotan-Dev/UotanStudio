@@ -100,59 +100,6 @@ public sealed class PatchQueryTests : IDisposable
         await Assert.ThrowsAsync<PatchConflictException>(() => run.CompleteAsync(true, Token));
     }
 
-    [Fact]
-    public async Task Execute_StagedDiscoveryConditionsAndFormatCheck_UsesOneViewAndRestoresSettings()
-    {
-        var open = PatchNodeViewModel.Create("Workspace.Directory.Open");
-        Set(open, "Root", _root);
-        var stage = PatchNodeViewModel.Create("Workspace.Text.Stage");
-        Set(stage, "Relative Path", "nested/config.bin");
-        Set(stage, "Operation", "Add");
-        Set(stage, "Text", "{\"enabled\":true}");
-        var find = PatchNodeViewModel.Create("Workspace.File.Find");
-        Set(find, "Pattern", "nested/*.bin");
-        var check = PatchNodeViewModel.Create("Validation.Format.Detect");
-        Set(check, "Expected Format", "Json");
-        Set(check, "Required Evidence", "Structure");
-        var condition = PatchNodeViewModel.Create("Validation.Condition.Evaluate");
-        Set(condition, "Operation", "FileExists");
-        var directory = PatchNodeViewModel.Create("Validation.Condition.Evaluate");
-        Set(directory, "Operation", "DirectoryExists");
-        Set(directory, "Value", Path.Combine(_root, "nested"));
-        NodeFactoryRegistrar.RegisterAll();
-        var snapshot = new WorkflowSnapshot { Nodes = WorkflowPersistenceService.BuildNodeDtos([check]) };
-        check = Assert.IsType<PatchNodeViewModel>(Assert.Single(WorkflowRuntimeBuilder.Build(snapshot, false).Nodes));
-        var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([open, stage, find, check, condition, directory],
-            [Connect(open, "Workspace", stage, "Workspace"), Connect(stage, "Workspace", find, "Workspace"),
-             Connect(find, "Path", check, "Path"), Connect(find, "Path", condition, "Path"), Connect(stage, "Completed", directory, "Flow")],
-            Token, new NodeExecutionOptions { Preview = true });
-        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
-        Assert.Equal("nested/config.bin", find.Output.Single(port => port.Title == "Relative Path").Data);
-        Assert.True(Assert.IsType<bool>(check.Output.Single(port => port.Title == "Match").Data));
-        Assert.True(Assert.IsType<bool>(condition.Output.Single(port => port.Title == "Match").Data));
-        Assert.True(Assert.IsType<bool>(directory.Output.Single(port => port.Title == "Match").Data));
-        Assert.Equal("Json", check.Output.Single(port => port.Title == "Format").Data);
-        Assert.False(Directory.Exists(Path.Combine(_root, "nested")));
-    }
-
-    [Fact]
-    public async Task Execute_FailedFormatAssertion_DiscardsPriorStaging()
-    {
-        var writer = PatchNodeViewModel.Create("File.Text.Publish");
-        var path = Path.Combine(_root, "not-json.bin");
-        Set(writer, "Output Path", path);
-        Set(writer, "Text", "{broken}");
-        var check = PatchNodeViewModel.Create("Validation.Format.Detect");
-        Set(check, "Expected Format", "Json");
-        Set(check, "Required Evidence", "Structure");
-        var assert = PatchNodeViewModel.Create("Validation.Boolean.Assert");
-        var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([writer, check, assert],
-            [Connect(writer, "Path", check, "Path"), Connect(check, "Match", assert, "Condition")], Token);
-        Assert.NotEqual(ExecutionStatus.Succeeded, result.Status);
-        Assert.Equal(PatchRunOutcome.Discarded, result.PatchOutcome);
-        Assert.False(File.Exists(path));
-    }
-
     private static void Set(FlowNodeViewModel node, string port, object value) => node.Input.Single(input => input.Title == port).InitialValue = value;
     private static NodeConnection Connect(FlowNodeViewModel source, string output, FlowNodeViewModel target, string input) => new()
     {

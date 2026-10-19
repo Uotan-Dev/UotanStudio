@@ -16,10 +16,10 @@ public sealed class CompositeBoundaryTests
     public async Task CreateEncapsulation_CompleteTextInputForm_DoesNotRequireOptionalConditions()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var field = InteractionNodeViewModel.Create("UI.Field.Text");
+        var field = InteractionTestNodes.Create("UI.Field.Text");
         field.Input.Single(port => port.Title == "Field ID").InitialValue = "value";
         var form = InteractionNodeViewModel.Create("UI.Form.Create");
-        var dialog = InteractionNodeViewModel.Create("UI.Dialog.Show");
+        var dialog = InteractionNodeViewModel.Create("UI.Dialog");
         var plan = CompositeGraphService.CreateEncapsulation("Input", "tests.input-text", [field, form, dialog],
             [new(field.Output.Single(), form.Input.Single(port => port.Title == "Content")),
                 new(form.Output.Single(), dialog.Input.Single(port => port.Title == "Form"))], [field, form, dialog]);
@@ -35,17 +35,46 @@ public sealed class CompositeBoundaryTests
     }
 
     [Theory]
-    [InlineData("UI.Dialog.Show", "Form")]
     [InlineData("UI.Form.Create", "Content")]
     [InlineData("UI.Result.Read", "Values")]
-    [InlineData("UI.Progress.Update", "Handle")]
     public void Analyze_MissingRequiredInteractionData_AutomaticallyExposesInput(string typeKey, string title)
     {
-        var node = InteractionNodeViewModel.Create(typeKey);
+        var node = InteractionTestNodes.Create(typeKey);
         var analysis = CompositeBoundaryAnalyzer.Analyze([node], []);
 
         var required = Assert.Single(analysis.Inputs, port => port.Required);
         Assert.Equal(node.Input.Single(port => port.Title == title).StableId, required.PortId);
+    }
+
+    [Fact]
+    public void Analyze_ModeConditionalInteractionPorts_AreNotStaticallyRequired()
+    {
+        foreach (var typeKey in new[] { "UI.Dialog", "UI.Progress" })
+        {
+            var node = InteractionNodeViewModel.Create(typeKey);
+            Assert.DoesNotContain(CompositeBoundaryAnalyzer.Analyze([node], []).Inputs, port => port.Required);
+        }
+    }
+
+    [Theory]
+    [InlineData("UI.Dialog", "Show")]
+    [InlineData("UI.Progress", "Update")]
+    public async Task ExecuteAsync_ModeNeedsDataButNoneArrives_FailsBeforeAnyInteraction(string typeKey, string mode)
+    {
+        var node = InteractionNodeViewModel.Create(typeKey);
+        node.Input.Single(port => port.Title == "Mode").InitialValue = mode;
+        foreach (var port in node.Input)
+        {
+            port.Data = port.InitialValue;
+        }
+        var presenter = new SubmittedTextPresenter();
+
+        var result = await new NodeExecutionEngine(new SilentLog()).ExecuteAsync([node], [],
+            TestContext.Current.CancellationToken,
+            new NodeExecutionOptions { Interactions = new QueuedWorkflowInteractionService(presenter) });
+
+        Assert.Equal(ExecutionStatus.Failed, result.Status);
+        Assert.Equal(0, presenter.Calls);
     }
 
     [Fact]
@@ -149,9 +178,9 @@ public sealed class CompositeBoundaryTests
     public void CreateEncapsulation_BoundaryFanout_ExpansionRestoresEdgesWithoutMutatingOriginal()
     {
         NodeFactoryRegistrar.RegisterAll();
-        var source = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        var first = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        var second = NodeTypeRegistry.Create("Data.Value.Constant")!;
+        var source = NodeTypeRegistry.Create("File.Binary.Read")!;
+        var first = NodeTypeRegistry.Create("File.Binary.Read")!;
+        var second = NodeTypeRegistry.Create("File.Binary.Read")!;
         first.Location = new Avalonia.Point(20, 30);
         second.Location = new Avalonia.Point(320, 150);
         var target = Node("target");

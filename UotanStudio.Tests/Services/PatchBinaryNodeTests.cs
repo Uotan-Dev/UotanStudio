@@ -58,13 +58,15 @@ public sealed class PatchBinaryNodeTests
         var path = Path.Combine(temp.Path, "image");
         var token = TestContext.Current.CancellationToken;
         await File.WriteAllBytesAsync(path, [0xA1, 0xB2, 0xC3], token);
-        var node = PatchNodeViewModel.Create("Binary.Pattern.Replace");
+        var node = PatchNodeViewModel.Create("Binary.Search");
+        node.Input.Single(port => port.Title == "Operation").InitialValue = "Replace";
         node.Input.Single(port => port.Title == "Path").InitialValue = path;
         node.Input.Single(port => port.Title == "Find").InitialValue = "A1 B2";
         node.Input.Single(port => port.Title == "Replacement").InitialValue = "00 0F";
         node.Input.Single(port => port.Title == "Replace Mask").InitialValue = "00 0F";
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([node], [], token, new NodeExecutionOptions { Preview = preview });
 
+        Assert.True(result.Status == ExecutionStatus.Succeeded, "DIAG status=" + result.Status + " err=" + result.ErrorMessage + " nodeErr=" + node.ExecutionError);
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.Equal(preview ? PatchRunOutcome.Previewed : PatchRunOutcome.Applied, result.PatchOutcome);
         Assert.Equal(new byte[] { 0xA1, preview ? (byte)0xB2 : (byte)0xBF, 0xC3 }, await File.ReadAllBytesAsync(path, token));
@@ -80,7 +82,8 @@ public sealed class PatchBinaryNodeTests
     public async Task Execute_UnguardedBinaryReplace_RejectsBeforeWriting()
     {
         var gate = PatchNodeViewModel.Create("Flow.Applicability.Gate");
-        var replace = PatchNodeViewModel.Create("Binary.Pattern.Replace");
+        var replace = PatchNodeViewModel.Create("Binary.Search");
+        replace.Input.Single(port => port.Title == "Operation").InitialValue = "Replace";
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([gate, replace], [], TestContext.Current.CancellationToken);
         Assert.Equal(ExecutionStatus.Failed, result.Status);
         Assert.Equal(NodeExecutionStatus.Idle, replace.ExecutionStatus);
@@ -96,7 +99,8 @@ public sealed class PatchBinaryNodeTests
         await File.WriteAllTextAsync(path, "old", token);
         await using var run = new PatchRun();
         await run.StageTextAsync(path, "hello", "utf8", PatchFileMode.Replace, token);
-        var node = PatchNodeViewModel.Create("Binary.Pattern.Find");
+        var node = PatchNodeViewModel.Create("Binary.Search");
+        node.Input.Single(port => port.Title == "Operation").InitialValue = "Find";
         node.Input.Single(port => port.Title == "Path").InitialValue = path;
         node.Input.Single(port => port.Title == "Find").InitialValue = "65 6c";
         var result = await new NodeExecutionEngine(new Log()).ExecuteAsync([node], [], token, new NodeExecutionOptions { SharedPatches = run });

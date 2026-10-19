@@ -410,10 +410,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         {
             node.RefreshLocalization();
         }
-        foreach (var choice in ValueTypeChoices)
-        {
-            choice.RefreshLocalization();
-        }
         PatchReview.RefreshLocalization();
         InitializeToolbox();
         RefreshVisibleToolbox();
@@ -696,27 +692,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <summary>Gets the common type key, or a localized mixed-value label when selected nodes differ.</summary>
     public string SelectedTypeDisplay => CommonSelectionDisplay(nodes => nodes.Select(node => node.TypeKey));
 
-    /// <summary>Gets whether every selected node supports constant-value editing.</summary>
-    public bool CanEditBatchConstant => IsMultipleSelection && _selectedNodes.All(node => node.IsConstantNode);
-
     /// <summary>Gets whether every selected node supports project-image editing.</summary>
     public bool CanEditBatchProjectImage => IsMultipleSelection && _selectedNodes.All(node => node.IsProjectImageNode);
-
-    /// <summary>Gets or sets the common constant value type for the current selection.</summary>
-    public string BatchNodeValueType
-    {
-        get => CommonSelectionValue(nodes => nodes.Select(node => node.NodeValueType));
-        set => ApplyBatchNodeProperty(node => node.NodeValueType, (node, value) => node.NodeValueType = value,
-            value, nameof(BatchNodeValueType));
-    }
-
-    /// <summary>Gets or sets the common constant value for the current selection.</summary>
-    public string BatchNodeValue
-    {
-        get => CommonSelectionValue(nodes => nodes.Select(node => node.NodeValue));
-        set => ApplyBatchNodeProperty(node => node.NodeValue, (node, value) => node.NodeValue = value,
-            value, nameof(BatchNodeValue));
-    }
 
     /// <summary>Gets or sets the common selected image for the current selection.</summary>
     public string BatchSelectedImage
@@ -748,9 +725,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         string value,
         string propertyName)
     {
-        if (!CanEditBatchConstant
-            && (propertyName == nameof(BatchNodeValueType)
-                || propertyName == nameof(BatchNodeValue))) return;
         if (!CanEditBatchProjectImage && propertyName == nameof(BatchSelectedImage)) return;
 
         var commands = _selectedNodes
@@ -810,10 +784,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(DeleteSelectionText));
         OnPropertyChanged(nameof(SelectedCategoryDisplay));
         OnPropertyChanged(nameof(SelectedTypeDisplay));
-        OnPropertyChanged(nameof(CanEditBatchConstant));
         OnPropertyChanged(nameof(CanEditBatchProjectImage));
-        OnPropertyChanged(nameof(BatchNodeValueType));
-        OnPropertyChanged(nameof(BatchNodeValue));
         OnPropertyChanged(nameof(BatchSelectedImage));
         RefreshBatchInputs();
         DeleteSelectedCommand.NotifyCanExecuteChanged();
@@ -823,8 +794,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     {
         OnPropertyChanged(nameof(SelectedCategoryDisplay));
         OnPropertyChanged(nameof(SelectedTypeDisplay));
-        OnPropertyChanged(nameof(BatchNodeValueType));
-        OnPropertyChanged(nameof(BatchNodeValue));
         OnPropertyChanged(nameof(BatchSelectedImage));
         RefreshBatchInputs();
     }
@@ -895,15 +864,13 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private static IEnumerable<string> TrackedProperties(object target) => target switch
     {
-        FlowNodeViewModel => ["NodeValueType", "NodeValue", "SelectedImage", "CustomName"],
+        FlowNodeViewModel => ["SelectedImage", "CustomName"],
         NodeConnectorViewModel => ["InitialValue"],
         _ => []
     };
 
     private static object? ReadTrackedValue(object target, string property) => (target, property) switch
     {
-        (FlowNodeViewModel node, "NodeValueType") => node.NodeValueType,
-        (FlowNodeViewModel node, "NodeValue") => node.NodeValue,
         (FlowNodeViewModel node, "SelectedImage") => node.SelectedImage,
         (FlowNodeViewModel node, "CustomName") => node.CustomName,
         (NodeConnectorViewModel connector, "InitialValue") => connector.InitialValue,
@@ -914,12 +881,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     {
         switch (target, property)
         {
-            case (FlowNodeViewModel node, "NodeValueType"):
-                node.NodeValueType = value as string ?? "Text";
-                break;
-            case (FlowNodeViewModel node, "NodeValue"):
-                node.NodeValue = value as string ?? string.Empty;
-                break;
             case (FlowNodeViewModel node, "SelectedImage"):
                 node.SelectedImage = value as string ?? string.Empty;
                 break;

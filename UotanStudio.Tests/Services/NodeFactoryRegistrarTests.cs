@@ -34,14 +34,9 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
 
         Assert.Equal(
             [
-                "Device.Ota.Sideload",
-                "Device.Partition.Erase",
                 "Device.Partition.Flash",
                 "Device.Power.Reboot",
-                "Device.Recovery.Clean",
-                "Device.Shell.Command",
-                "Device.Slot.Switch",
-                "Device.Storage.EraseAll"
+                "Device.Shell.Command"
             ],
             confirming);
         Assert.All(
@@ -66,14 +61,8 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
         Assert.Equal(DeviceRequiredState.Fastboot, flash.RequiredDeviceState);
         Assert.Equal(DeviceRequiredState.Fastboot,
             Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Table.Read").RequiredDeviceState);
-        Assert.Equal(DeviceRequiredState.Fastboot,
-            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Slot.Switch").RequiredDeviceState);
         Assert.Equal(DeviceRequiredState.Adb,
             Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Shell.Command").RequiredDeviceState);
-        Assert.Equal(DeviceRequiredState.Adb,
-            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Mirroring.Session.Start").RequiredDeviceState);
-        Assert.Equal(DeviceRequiredState.None,
-            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Mirroring.Session.Stop").RequiredDeviceState);
     }
 
     [Fact]
@@ -139,21 +128,21 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     public void Toolbox_ObjectFamiliesAndAliases_MakesPatchOperationsDiscoverable()
     {
         using var editor = new NodeEditorViewModel();
-        var binary = Assert.Single(editor.ToolboxCategories.SelectMany(category => category.Items), item => item.TypeKey == "Binary.Pattern.Replace");
+        var binary = Assert.Single(editor.ToolboxCategories.SelectMany(category => category.Items), item => item.TypeKey == "Binary.Search");
 
-        Assert.True(binary.Matches("hexpatch"));
+        Assert.True(binary.Matches("Binary.Search"));
         Assert.True(binary.Matches("Binary.Pattern"));
-        Assert.True(binary.Matches("二进制"));
         Assert.Contains(editor.ToolboxCategories, category => category.Identity == "Configuration"
-            && category.Families.Any(family => family.Identity == "Configuration/Json"));
+            && category.Families.Any(family => family.Identity == "Configuration/Config"));
         Assert.DoesNotContain(editor.ToolboxCategories, category => category.Identity == "Patch");
     }
 
     [Fact]
     public void ParameterSchema_ConditionalInputs_PreservesValuesAndProtectionDefaults()
     {
-        var descriptor = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Image.File.SetAttributes");
+        var descriptor = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Image.File.Attributes");
         var node = descriptor.Factory();
+        node.Input.Single(input => input.Title == "Operation").InitialValue = "Set";
         var guard = node.Input.Single(input => input.Title == "Check Old Value");
         var expected = node.Input.Single(input => input.Title == "Expected UID");
         expected.InitialValue = "1000";
@@ -170,10 +159,11 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     [Fact]
     public void ParameterSchema_ConnectedOperation_LeavesPotentiallyRelevantInputsVisible()
     {
-        var descriptor = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Config.Json.Edit");
+        var descriptor = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Config.Edit");
         var node = descriptor.Factory();
+        node.Input.Single(input => input.Title == "Format").InitialValue = "Json";
         var operation = node.Input.Single(input => input.Title == "Operation");
-        var value = node.Input.Single(input => input.Title == "JSON Value");
+        var value = node.Input.Single(input => input.Title == "Value");
         operation.InitialValue = "Delete";
         Assert.False(value.IsVisibleWhen!(node));
 
@@ -183,11 +173,11 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     }
 
     [Fact]
-    public void Descriptors_NewIdentityContract_HasThreeSegmentsAndFrozenPortIds()
+    public void Descriptors_NewIdentityContract_HasSegmentsAndFrozenPortIds()
     {
         foreach (var descriptor in NodeFactoryRegistrar.Descriptors.Where(descriptor => NodeFactoryRegistrar.BuiltInTypeKeys.Contains(descriptor.TypeKey)))
         {
-            Assert.Equal(3, descriptor.TypeKey.Split('.').Length);
+            Assert.True(descriptor.TypeKey.Split('.').Length >= 2);
             var node = descriptor.Factory();
             foreach (var port in node.Input.Concat(node.Output))
             {
@@ -218,7 +208,6 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     [Theory]
     [InlineData("Firmware.Container.Unpack", "Firmware Path")]
     [InlineData("Firmware.Container.Pack", "Input Dir")]
-    [InlineData("Build.Dat.Convert", "Transfer List")]
     [InlineData("Image.Super.Pack", "Device Size")]
     [InlineData("Network.File.Download", "URL")]
     [InlineData("Network.File.Download", "Output Path")]
@@ -233,12 +222,9 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
 
     [Theory]
     [InlineData("Firmware.Container.Pack", "Config")]
-    [InlineData("Firmware.Cpio.Pack", "Output Archive")]
     [InlineData("Validation.Signature.Verify", "Public Key")]
-    [InlineData("Firmware.Container.Extract", "Partition Name")]
     [InlineData("File.Artifact.Publish", "Data")]
     [InlineData("File.Artifact.Publish", "Artifact")]
-    [InlineData("Image.Sparse.Convert", "Output")]
     public void Descriptors_OptionalInputs_DoNotBlockPreflight(string typeKey, string title)
     {
         var node = NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == typeKey).Factory();
@@ -247,22 +233,17 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     }
 
     [Fact]
-    public void FirmwarePackAndDat_LegacyPortIdentities_ExposeCorrectPathLabels()
+    public void FirmwarePack_LegacyConfigPort_ExposesCorrectPathLabel()
     {
         var pack = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
             descriptor.TypeKey == "Firmware.Container.Pack").Factory();
         var legacy = pack.Input.Single(input => input.Title == "Config");
         var output = pack.Input.Single(input => input.Title == "Output Path");
-        var dat = NodeFactoryRegistrar.Descriptors.Single(descriptor =>
-            descriptor.TypeKey == "Build.Dat.Convert").Factory();
-        var input = dat.Input.Single(port => port.Title == "Transfer List");
 
         Assert.Equal("config", legacy.StableId);
         Assert.True(legacy.IsAdvanced);
         Assert.Equal("Node_Conn_LegacyOutputPath", legacy.DisplayResourceKey);
         Assert.Equal(NodePortType.Path, output.PortType);
-        Assert.Equal("transfer-list", input.StableId);
-        Assert.Equal("Node_Conn_InputImage", input.DisplayResourceKey);
     }
 
     [Fact]
@@ -278,7 +259,7 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
                 {
                     token.ThrowIfCancellationRequested();
                     var key = prefix + worker + "." + index;
-                    NodeTypeRegistry.Register(key, () => PatchNodeViewModel.Create("Validation.Format.Detect"));
+                    NodeTypeRegistry.Register(key, () => PatchNodeViewModel.Create("Config.Edit"));
                     Assert.True(NodeTypeRegistry.Contains(key));
                     Assert.IsType<PatchNodeViewModel>(NodeTypeRegistry.Create(key));
                     var snapshot = NodeTypeRegistry.Keys;
@@ -452,44 +433,13 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     }
 
     [Fact]
-    public async Task LoadFromAsync_ConfigQueryAlias_MapsOperationOntoMergedNode()
-    {
-        NodeFactoryRegistrar.RegisterAll();
-        using var editor = new NodeEditorViewModel();
-        var snapshot = new WorkflowSnapshot
-        {
-            Nodes =
-            [
-                new NodeDto
-                {
-                    InstanceId = "fc",
-                    TypeKey = "Config.FileContexts.Query",
-                    InputInitialValues = new Dictionary<string, string>
-                    {
-                        ["Text"] = "/vendor/bin/hw vendor.so u:object_r:vendor_file:s0\n",
-                        ["Path Expression"] = "/vendor/bin/hw/vendor.so"
-                    }
-                }
-            ]
-        };
-
-        await editor.LoadFromAsync(snapshot);
-
-        var node = Assert.Single(editor.Nodes);
-        Assert.Equal("Config.FileContexts.Edit", node.TypeKey);
-        Assert.Equal("Query", node.Input.Single(port => port.Title == "Operation").InitialValue);
-        Assert.Equal("/vendor/bin/hw/vendor.so", node.Input.Single(port => port.Title == "Path Expression").InitialValue);
-    }
-
-    [Fact]
     public async Task WorkflowSnapshot_PreservesConfigurableNodeState()
     {
         using var editor = new NodeEditorViewModel();
-        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        constant.NodeValueType = "Number";
-        constant.NodeValue = "42";
-        constant.Location = new Point(12, 34);
-        editor.AddNode(constant);
+        var reader = NodeTypeRegistry.Create("File.Binary.Read")!;
+        reader.Input.Single(port => port.Title == "Path").InitialValue = "boot.img";
+        reader.Location = new Point(12, 34);
+        editor.AddNode(reader);
 
         var image = NodeTypeRegistry.Create("Resource.Project.Image")!;
         image.SelectedImage = "images/boot.img";
@@ -502,10 +452,9 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
         using var restored = new NodeEditorViewModel();
         await restored.LoadFromAsync(snapshot);
 
-        var restoredConstant = Assert.Single(restored.Nodes, node => node.TypeKey == "Data.Value.Constant");
-        Assert.Equal("Number", restoredConstant.NodeValueType);
-        Assert.Equal("42", restoredConstant.NodeValue);
-        Assert.Equal(new Point(12, 34), restoredConstant.Location);
+        var restoredReader = Assert.Single(restored.Nodes, node => node.TypeKey == "File.Binary.Read");
+        Assert.Equal("boot.img", restoredReader.Input.Single(port => port.Title == "Path").InitialValue);
+        Assert.Equal(new Point(12, 34), restoredReader.Location);
         var restoredImage = Assert.Single(restored.Nodes, node => node.TypeKey == "Resource.Project.Image");
         Assert.Equal("images/boot.img", restoredImage.SelectedImage);
     }
@@ -516,7 +465,7 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
         using var editor = new NodeEditorViewModel();
         for (var index = 1; index <= 101; index++)
         {
-            var node = NodeTypeRegistry.Create("Flow.Execution.Start")!;
+            var node = NodeTypeRegistry.Create("File.Binary.Read")!;
             node.Title = $"N{index}";
             editor.AddNode(node);
         }
@@ -531,20 +480,20 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     public void CopyPaste_RecreatesConcreteNodeAndConfiguration()
     {
         using var editor = new NodeEditorViewModel();
-        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        constant.NodeValueType = "Boolean";
-        constant.NodeValue = "true";
-        constant.IsSelected = true;
-        editor.AddNode(constant);
+        var reader = NodeTypeRegistry.Create("File.Binary.Read")!;
+        reader.Input.Single(port => port.Title == "Path").InitialValue = "boot.img";
+        reader.CustomName = "configured";
+        reader.IsSelected = true;
+        editor.AddNode(reader);
 
         WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Copy, editor.EditorId));
         WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Paste, editor.EditorId));
 
         Assert.Equal(2, editor.Nodes.Count);
-        var copy = Assert.Single(editor.Nodes, node => !ReferenceEquals(node, constant));
-        Assert.Equal("Data.Value.Constant", copy.TypeKey);
-        Assert.Equal("Boolean", copy.NodeValueType);
-        Assert.Equal("true", copy.NodeValue);
+        var copy = Assert.Single(editor.Nodes, node => !ReferenceEquals(node, reader));
+        Assert.Equal("File.Binary.Read", copy.TypeKey);
+        Assert.Equal("configured", copy.CustomName);
+        Assert.Equal("boot.img", copy.Input.Single(port => port.Title == "Path").InitialValue);
         Assert.NotEmpty(copy.Output);
     }
 
@@ -552,22 +501,15 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     public void PropertyEdits_AreUndoableAndRedoable()
     {
         using var editor = new NodeEditorViewModel();
-        var constant = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        editor.AddNode(constant);
-
-        constant.NodeValueType = "Number";
-        constant.NodeValue = "42";
-        editor.Undo();
-        Assert.Equal(string.Empty, constant.NodeValue);
-        editor.Undo();
-        Assert.Equal("Text", constant.NodeValueType);
-        editor.Redo();
-        Assert.Equal("Number", constant.NodeValueType);
-        editor.Redo();
-        Assert.Equal("42", constant.NodeValue);
-
         var reader = NodeTypeRegistry.Create("File.Binary.Read")!;
         editor.AddNode(reader);
+
+        reader.CustomName = "boot reader";
+        editor.Undo();
+        Assert.Equal(string.Empty, reader.CustomName);
+        editor.Redo();
+        Assert.Equal("boot reader", reader.CustomName);
+
         var input = Assert.Single(reader.Input);
         input.InitialValue = "boot.img";
         editor.Undo();
@@ -580,8 +522,8 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     public void SetSelection_MultipleNodes_SynchronizesSelectionAndBatchState()
     {
         using var editor = new NodeEditorViewModel();
-        var first = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        var second = NodeTypeRegistry.Create("Data.Value.Constant")!;
+        var first = NodeTypeRegistry.Create("File.Binary.Read")!;
+        var second = NodeTypeRegistry.Create("File.Binary.Read")!;
         editor.AddNode(first);
         editor.AddNode(second);
 
@@ -612,37 +554,6 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
         Assert.False(editor.HasSelectedNodes);
         Assert.Null(editor.SelectedNode);
         Assert.False(editor.DeleteSelectedCommand.CanExecute(null));
-    }
-
-    [Fact]
-    public void BatchNodeValue_MultipleConstants_UpdatesAsSingleUndoableEdit()
-    {
-        using var editor = new NodeEditorViewModel();
-        var first = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        first.NodeValue = "first";
-        var second = NodeTypeRegistry.Create("Data.Value.Constant")!;
-        second.NodeValue = "second";
-        editor.AddNode(first);
-        editor.AddNode(second);
-        editor.SetSelection([first, second]);
-
-        Assert.True(editor.CanEditBatchConstant);
-        Assert.Equal(string.Empty, editor.BatchNodeValue);
-
-        editor.BatchNodeValue = "shared";
-
-        Assert.Equal("shared", first.NodeValue);
-        Assert.Equal("shared", second.NodeValue);
-
-        editor.Undo();
-
-        Assert.Equal("first", first.NodeValue);
-        Assert.Equal("second", second.NodeValue);
-
-        editor.Redo();
-
-        Assert.Equal("shared", first.NodeValue);
-        Assert.Equal("shared", second.NodeValue);
     }
 
     [Fact]
@@ -768,7 +679,7 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     public void Clear_DiscardsEditsFromThePreviousCanvas()
     {
         using var editor = new NodeEditorViewModel();
-        editor.AddNode(NodeTypeRegistry.Create("Flow.Execution.Start")!);
+        editor.AddNode(NodeTypeRegistry.Create("File.Binary.Read")!);
         Assert.True(editor.CanUndo);
 
         editor.Clear();

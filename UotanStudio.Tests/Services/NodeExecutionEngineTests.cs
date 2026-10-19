@@ -331,7 +331,7 @@ public sealed class NodeExecutionEngineTests
         {
             owner.Input[0].InitialValue = 2;
         }
-        var dialog = FlowNode("Dialog", "UI.Dialog.Show", ["Flow"], ["Submitted", "Cancelled"]);
+        var dialog = FlowNode("Dialog", "UI.Dialog", ["Flow"], ["Submitted", "Cancelled"]);
         var submitted = FlowNode("Submitted", "Test.Submit", ["Flow"], ["Completed"]);
         var cancelled = FlowNode("Cancelled", "Test.Cancel", ["Flow"], ["Completed"]);
         var join = FlowNode("Join", "Test.Join", ["Flow"], []);
@@ -373,7 +373,7 @@ public sealed class NodeExecutionEngineTests
     {
         var loop = FlowNode("Loop", "Flow.Collection.Loop", ["Count"], ["Body"]);
         loop.Input[0].InitialValue = 2;
-        var dialog = FlowNode("Dialog", "UI.Dialog.Show", ["Flow"], ["Submitted", "Cancelled"]);
+        var dialog = FlowNode("Dialog", "UI.Dialog", ["Flow"], ["Submitted", "Cancelled"]);
         var accepted = FlowNode("Accepted", "Test.Accepted", ["Flow"], []);
         var rejected = FlowNode("Rejected", "Test.Rejected", ["Flow"], []);
         var prompts = 0;

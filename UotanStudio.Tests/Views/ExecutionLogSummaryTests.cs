@@ -20,7 +20,7 @@ public sealed class ExecutionLogSummaryTests(NodeEditorUiFixture fixture)
             dispatchTask = fixture.Session.Dispatch(async () =>
             {
                 using var editor = new NodeEditorViewModel();
-                editor.AddNode(NodeTypeRegistry.Create("Data.Value.Constant")!);
+                editor.AddNode(NodeTypeRegistry.Create("Flow.Condition.Branch")!);
 
                 if (preview)
                 {

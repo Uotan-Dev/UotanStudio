@@ -7,7 +7,6 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 public sealed class MissingNodeViewModel : FlowNodeViewModel
 {
     private readonly string _reason;
-    private readonly bool _hasNodeValue;
     private readonly bool _hasSelectedImage;
 
     /// <summary>Creates a placeholder while preserving the serialized port surface.<para>创建占位节点并保留序列化的端口结构。</para></summary>
@@ -18,10 +17,7 @@ public sealed class MissingNodeViewModel : FlowNodeViewModel
         Enum.TryParse<NodeCategory>(dto.Category, true, out var category) ? category : NodeCategory.Plugin)
     {
         TypeKey = dto.TypeKey;
-        NodeValueType = dto.NodeValueType ?? "Text";
-        NodeValue = dto.NodeValue ?? string.Empty;
         SelectedImage = dto.SelectedImage ?? string.Empty;
-        _hasNodeValue = dto.NodeValueType is not null || dto.NodeValue is not null;
         _hasSelectedImage = dto.SelectedImage is not null;
         _reason = reason;
         AddPorts(Input, dto.InputPorts, true);
@@ -31,10 +27,6 @@ public sealed class MissingNodeViewModel : FlowNodeViewModel
     /// <summary>Marks the node as unavailable because its implementation is missing.<para>因缺少实现而将节点标记为不可用。</para></summary>
     /// <value>Always true.<para>恒为真。</para></value>
     public override bool IsUnavailable => true;
-
-    /// <summary>Reports constant-node status from the serialized node value.<para>依据序列化的节点值报告常量节点状态。</para></summary>
-    /// <value>True when the serialized data carries a node value.<para>序列化数据带有节点值时为真。</para></value>
-    public override bool IsConstantNode => _hasNodeValue;
 
     /// <summary>Reports project-image-node status from the serialized selection.<para>依据序列化的选择项报告项目镜像节点状态。</para></summary>
     /// <value>True when the serialized data carries a selected image.<para>序列化数据带有已选镜像时为真。</para></value>

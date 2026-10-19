@@ -128,7 +128,8 @@ public sealed class VisualPluginResourceEditorTests(NodeEditorUiFixture fixture)
                     Assert.Equal("config", Assert.IsType<VisualPluginAsset>(Assert.Single(list.Items)).Id);
                     Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), block => block.Text == "config" && block.IsVisible);
 
-                    var resource = PatchNodeViewModel.Create("Resource.Asset.Open");
+                    var resource = PatchNodeViewModel.Create("Resource.Asset.Read");
+                    resource.Input.Single(port => port.Title == "Operation").InitialValue = "Select";
                     resource.Input.Single(port => port.Title == "Asset ID").InitialValue = "config";
                     editor.Nodes.Add(resource);
                     await editor.PreviewCommand.ExecuteAsync(null);
@@ -139,7 +140,7 @@ public sealed class VisualPluginResourceEditorTests(NodeEditorUiFixture fixture)
                     {
                         LanguageService.Instance.ApplyLanguage(locale);
                         Dispatcher.UIThread.RunJobs();
-                        Assert.Equal(locale == "en-US" ? "Select package resource" : "选择包内资源", resource.LocalizedTitle);
+                        Assert.Equal(locale == "en-US" ? "Read package resource" : "读取包内资源", resource.LocalizedTitle);
                         Assert.Equal(locale == "en-US" ? "Resource ID" : "资源 ID",
                             resource.Input.Single(port => port.Title == "Asset ID").LocalizedTitle);
                         Assert.Equal(locale == "en-US" ? "Add file" : "添加文件", window.FindControl<Button>("AddResourceButton")!.Content);

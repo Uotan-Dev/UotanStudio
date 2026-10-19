@@ -1150,6 +1150,28 @@ public sealed class FirmwareService
     }
 
     /// <summary>
+    /// Unpacks any container the registered format handlers can read, resolving the handler by detection instead of
+    /// by an explicitly named format, and writing repack metadata from the same detected handler.
+    /// <para>解包任意被注册格式处理器可读的容器：按探测而非显式格式名选择处理器，并用同一个被探测到的处理器写出重打包元数据。</para>
+    /// </summary>
+    /// <param name="containerPath">The container or image file path. <para>容器或镜像文件路径。</para></param>
+    /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result, failing when no registered handler can read the input. <para>操作结果；无任何注册处理器可读时失败。</para></returns>
+    public Task<FirmwareOpResult> UnpackDetectedAsync(string containerPath, string outputDirectory, CancellationToken cancellationToken = default)
+        => CompleteUnpackAsync(containerPath, outputDirectory,
+            () => UnpackDetectedCoreAsync(containerPath, outputDirectory, cancellationToken), cancellationToken,
+            context: CaptureOperationContext(outputDirectory));
+
+    private static async Task<FirmwareOpResult> UnpackDetectedCoreAsync(string containerPath, string outputDirectory, CancellationToken cancellationToken)
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        var handler = FormatDetector.Detect(containerPath)
+            ?? throw new InvalidDataException("No registered format handler can read this container.");
+        return FirmwareOpResult.From(await handler.UnpackAsync(containerPath, outputDirectory, cancellationToken: cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
     /// Unpacks an ext4, EROFS or F2FS image to a directory with the matching streaming parser, failing without output otherwise.
     /// <para>用匹配的流式解析器将 ext4、EROFS 或 F2FS 镜像解包到目录，其余镜像失败且不写出文件。</para>
     /// </summary>

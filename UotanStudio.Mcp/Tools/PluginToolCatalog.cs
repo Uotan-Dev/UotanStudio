@@ -18,7 +18,7 @@ internal static class PluginToolCatalog
     [
         new("list_formats", "firmware", null, true, false, false,
             static _ => FirmwareToolFactory.CreateListFormats()),
-        new("detect_format", "firmware", "Validation.Format.Detect", true, false, false,
+        new("detect_format", "firmware", null, true, false, false,
             static context => FirmwareToolFactory.CreateDetectFormat(context.Sandbox)),
         new("read_metadata", "firmware", null, true, false, false,
             static context => FirmwareToolFactory.CreateReadMetadata(context.Sandbox)),
@@ -28,7 +28,7 @@ internal static class PluginToolCatalog
             static context => FirmwareToolFactory.CreateUnpackFirmware(context.Sandbox)),
         new("pack_firmware", "firmware", "Firmware.Container.Pack", false, false, false,
             static context => FirmwareToolFactory.CreatePackFirmware(context.Sandbox)),
-        new("extract_container_entries", "firmware", "Firmware.Container.Extract", false, false, false,
+        new("extract_container_entries", "firmware", null, false, false, false,
             static context => FirmwareToolFactory.CreateExtractContainerEntries(context.Sandbox)),
         new("merge_sparse_chunks", "firmware", null, false, false, false,
             static context => FirmwareToolFactory.CreateMergeSparseChunks(context.Sandbox)),
@@ -117,7 +117,7 @@ internal static class PluginToolCatalog
             static context => DeviceToolFactory.CreateDeviceShell(context.DeviceManager)),
         new("recovery_clean", "device", null, false, true, true,
             static context => DeviceToolFactory.CreateRecoveryClean(context.DeviceManager)),
-        new("fastboot_erase", "device", "Device.Partition.Erase", false, true, true,
+        new("fastboot_erase", "device", null, false, true, true,
             static context => DeviceToolFactory.CreateFastbootErase(context.DeviceManager)),
         new("fastboot_flash", "device", "Device.Partition.Flash", false, true, true,
             static context => DeviceToolFactory.CreateFastbootFlash(context.Sandbox, context.DeviceManager))

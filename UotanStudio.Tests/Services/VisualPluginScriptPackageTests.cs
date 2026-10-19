@@ -51,11 +51,11 @@ public sealed class VisualPluginScriptPackageTests
             {
                 Id = "tests.template-script",
                 Name = "Template with script",
-                RequiredNodeTypes = ["Data.Value.Constant"]
+                RequiredNodeTypes = ["File.Binary.Read"]
             },
             Graph = new WorkflowSnapshot
             {
-                Nodes = [new NodeDto { InstanceId = "constant", TypeKey = "Data.Value.Constant" }]
+                Nodes = [new NodeDto { InstanceId = "constant", TypeKey = "File.Binary.Read" }]
             }
         };
 

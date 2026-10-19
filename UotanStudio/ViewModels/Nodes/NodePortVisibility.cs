@@ -40,56 +40,15 @@ public static class NodePortVisibility
         => node => !EqualsValue(node, source, value);
 
     /// <summary>
-    /// Visible while the referenced initial value equals none of the given values (or the port is connected upstream).
-    /// <para>引用端口初值不等于任一给定值（或已连接上游）时可见。</para>
-    /// </summary>
-    /// <param name="source">The referenced input declaration. <para>被引用的输入端口声明。</para></param>
-    /// <param name="values">The values that hide the port. <para>触发隐藏的取值列表。</para></param>
-    /// <returns>A predicate assignable to <see cref="NodeInputDeclaration.VisibleWhen"/>. <para>可挂到 <see cref="NodeInputDeclaration.VisibleWhen"/> 的可见性谓词。</para></returns>
-    public static Func<FlowNodeViewModel, bool> NotEqualsAny(NodeInputDeclaration source, params string[] values)
-        => node => values.All(value => !EqualsValue(node, source, value));
-
-    /// <summary>
     /// Visible while the referenced port may equal any given value: connected upstream or the initial value matches one
-    /// of the values. Unlike <see cref="NotEqualsAny"/>, a connected upstream keeps the port visible.
-    /// <para>引用端口可能等于任一给定值时可见：已连接上游，或初值命中给定值之一。与 <see cref="NotEqualsAny"/> 的差异在于连接上游时保持可见而非隐藏。</para>
+    /// of the values, because a connection defers the value to execution time.
+    /// <para>引用端口可能等于任一给定值时可见：已连接上游，或初值命中给定值之一；连接上游意味着取值要到执行期才确定。</para>
     /// </summary>
     /// <param name="source">The referenced input declaration. <para>被引用的输入端口声明。</para></param>
     /// <param name="values">The values that keep the port visible. <para>保持可见的取值列表。</para></param>
     /// <returns>A predicate assignable to <see cref="NodeInputDeclaration.VisibleWhen"/>. <para>可挂到 <see cref="NodeInputDeclaration.VisibleWhen"/> 的可见性谓词。</para></returns>
     public static Func<FlowNodeViewModel, bool> MayEqualAny(NodeInputDeclaration source, params string[] values)
         => node => values.Any(value => MayEqual(node, source, value));
-
-    /// <summary>
-    /// Whether the referenced initial value equals any of the given values; reused by richer composed predicates.
-    /// <para>判断引用端口初值是否等于任一给定值，供更复杂的组合谓词复用。</para>
-    /// </summary>
-    /// <param name="node">The node owning the port. <para>拥有该端口的节点。</para></param>
-    /// <param name="source">The referenced input declaration. <para>被引用的输入端口声明。</para></param>
-    /// <param name="values">The values to compare against. <para>参与比较的取值列表。</para></param>
-    /// <returns>true when any value matches. <para>命中任一取值时为 true。</para></returns>
-    internal static bool EqualsAny(FlowNodeViewModel node, NodeInputDeclaration source, params string[] values)
-        => values.Any(value => EqualsValue(node, source, value));
-
-    /// <summary>
-    /// Whether the referenced initial value contains non-whitespace text.
-    /// <para>判断引用端口初值是否包含非空白文本。</para>
-    /// </summary>
-    /// <param name="node">The node owning the port. <para>拥有该端口的节点。</para></param>
-    /// <param name="source">The referenced input declaration. <para>被引用的输入端口声明。</para></param>
-    /// <returns>true when the initial value is non-whitespace. <para>初值非空白时为 true。</para></returns>
-    internal static bool HasText(FlowNodeViewModel node, NodeInputDeclaration source) => HasText(node, source.Title);
-
-    /// <summary>
-    /// Whether the initial value of the port with the given title contains non-whitespace text; usable by predicates
-    /// composed during the declaration's own initialization.
-    /// <para>判断指定标题端口的初值是否包含非空白文本，供声明自身初始化期间的谓词复用。</para>
-    /// </summary>
-    /// <param name="node">The node owning the port. <para>拥有该端口的节点。</para></param>
-    /// <param name="title">The port title. <para>端口标题。</para></param>
-    /// <returns>true when the initial value is non-whitespace. <para>初值非空白时为 true。</para></returns>
-    internal static bool HasText(FlowNodeViewModel node, string title)
-        => !string.IsNullOrWhiteSpace(Convert.ToString(node.Input.First(input => input.Title == title).InitialValue));
 
     private static bool ReadBoolean(FlowNodeViewModel node, NodeInputDeclaration source)
     {

@@ -40,28 +40,6 @@ public sealed class EntryPointCompatibilityTests
     }
 
     [Fact]
-    public async Task CanvasLoad_PreservesFactoryTitlesLocationsAndIdConnections()
-    {
-        var editor = new NodeEditorViewModel();
-        try
-        {
-            await editor.LoadFromAsync(new WorkflowSnapshot
-            {
-                Nodes = [new() { TypeKey = "Flow.Execution.Start", InstanceId = "a", Title = "Saved title", X = 12, Y = 34 },
-                    new() { TypeKey = "Flow.Execution.End", InstanceId = "b" }],
-                Connections = [new() { SourceInstanceId = "A", TargetInstanceId = "B", SourceConnectorTitle = "Flow", TargetConnectorTitle = "Flow" }]
-            });
-            Assert.Equal("Start", editor.Nodes[0].Title);
-            Assert.Equal(12, editor.Nodes[0].Location.X);
-            Assert.Equal(34, editor.Nodes[0].Location.Y);
-            var connection = Assert.Single(editor.Connections);
-            Assert.Same(editor.Nodes[0].Output[0], connection.Source);
-            Assert.Same(editor.Nodes[1].Input[0], connection.Target);
-        }
-        finally { WeakReferenceMessenger.Default.UnregisterAll(editor); }
-    }
-
-    [Fact]
     public async Task SparseUnpack_ProducesRawImageFile()
     {
         using var temp = new TempDirectory();

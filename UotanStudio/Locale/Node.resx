@@ -153,9 +153,6 @@
   <data name="Node_BatchSelectedSuffix" xml:space="preserve">
     <value>nodes selected</value>
   </data>
-  <data name="Node_BatchConstant" xml:space="preserve">
-    <value>Common constant properties</value>
-  </data>
   <data name="Node_BatchMixed" xml:space="preserve">
     <value>Mixed values</value>
   </data>
@@ -207,15 +204,6 @@
   <data name="Node_StatusReady" xml:space="preserve">
     <value>Ready</value>
   </data>
-  <data name="Node_Const_ValueType" xml:space="preserve">
-    <value>Value Type</value>
-  </data>
-  <data name="Node_Const_Value" xml:space="preserve">
-    <value>Value</value>
-  </data>
-  <data name="Node_Const_Hint" xml:space="preserve">
-    <value>Broadcasts a fixed value to connected downstream ports.</value>
-  </data>
   <data name="Node_ProjImg_Select" xml:space="preserve">
     <value>Image</value>
   </data>
@@ -234,35 +222,8 @@
   <data name="Node_Boot_CommandLine_Edit" xml:space="preserve">
     <value>Boot Cmdline Edit</value>
   </data>
-  <data name="Node_Firmware_Container_Extract" xml:space="preserve">
-    <value>Extract Partition</value>
-  </data>
-  <data name="Node_Build_Ota_CreateDelta" xml:space="preserve">
-    <value>OTA Delta</value>
-  </data>
-  <data name="Node_Build_Signature_Merge" xml:space="preserve">
-    <value>Unsupported signature append</value>
-  </data>
-  <data name="Node_Build_Slots_Merge" xml:space="preserve">
-    <value>Unsupported slot concatenation</value>
-  </data>
-  <data name="Node_Firmware_Cpio_Unpack" xml:space="preserve">
-    <value>CPIO Unpack</value>
-  </data>
-  <data name="Node_Firmware_Cpio_Pack" xml:space="preserve">
-    <value>CPIO Pack</value>
-  </data>
-  <data name="Node_Image_Super_Unpack" xml:space="preserve">
-    <value>Super Unpack</value>
-  </data>
   <data name="Node_Image_Super_Pack" xml:space="preserve">
     <value>Super Pack</value>
-  </data>
-  <data name="Node_Image_Sparse_Convert" xml:space="preserve">
-    <value>Sparse Convert</value>
-  </data>
-  <data name="Node_Build_Dat_Convert" xml:space="preserve">
-    <value>Write DAT</value>
   </data>
   <data name="Node_Device_Target_Select" xml:space="preserve">
     <value>Select Device</value>
@@ -273,41 +234,17 @@
   <data name="Node_Device_Partition_Flash" xml:space="preserve">
     <value>Flash Partition</value>
   </data>
-  <data name="Node_Device_Partition_Erase" xml:space="preserve">
-    <value>Erase Partition</value>
-  </data>
   <data name="Node_Device_Power_Reboot" xml:space="preserve">
     <value>Reboot Device</value>
   </data>
-  <data name="Node_Device_Storage_EraseAll" xml:space="preserve">
-    <value>Erase All</value>
-  </data>
-  <data name="Node_Device_Ota_Sideload" xml:space="preserve">
-    <value>OTA Sideload</value>
-  </data>
-  <data name="Node_Device_State_Query" xml:space="preserve">
-    <value>Query Device State</value>
-  </data>
   <data name="Node_Device_Table_Read" xml:space="preserve">
     <value>Read Partition Table</value>
-  </data>
-  <data name="Node_Device_Slot_Query" xml:space="preserve">
-    <value>Query Slot</value>
-  </data>
-  <data name="Node_Device_Slot_Switch" xml:space="preserve">
-    <value>Switch Slot</value>
-  </data>
-  <data name="Node_Device_Recovery_Clean" xml:space="preserve">
-    <value>Recovery Wipe</value>
   </data>
   <data name="Node_Device_Shell_Command" xml:space="preserve">
     <value>Run Shell Command</value>
   </data>
   <data name="Node_File_Binary_Read" xml:space="preserve">
     <value>Read File</value>
-  </data>
-  <data name="Node_Data_Value_Constant" xml:space="preserve">
-    <value>Constant</value>
   </data>
   <data name="Node_Resource_Project_Image" xml:space="preserve">
     <value>Project Image</value>
@@ -345,18 +282,6 @@
   <data name="Node_Network_File_Download" xml:space="preserve">
     <value>Download</value>
   </data>
-  <data name="Node_Mirroring_Session_Start" xml:space="preserve">
-    <value>Start Mirroring</value>
-  </data>
-  <data name="Node_Mirroring_Session_Stop" xml:space="preserve">
-    <value>Stop Mirroring</value>
-  </data>
-  <data name="Node_Flow_Execution_Start" xml:space="preserve">
-    <value>Start</value>
-  </data>
-  <data name="Node_Flow_Execution_End" xml:space="preserve">
-    <value>End</value>
-  </data>
   <data name="Node_Flow_Condition_Branch" xml:space="preserve">
     <value>Branch</value>
   </data>
@@ -371,9 +296,6 @@
   </data>
   <data name="Node_Flow_Execution_Terminate" xml:space="preserve">
     <value>Terminate</value>
-  </data>
-  <data name="Node_Feedback_Log_Write" xml:space="preserve">
-    <value>Log Output</value>
   </data>
   <data name="Node_Feedback_Progress_Report" xml:space="preserve">
     <value>Progress Report</value>
@@ -717,9 +639,6 @@
   <data name="Node_Status_Cancelled" xml:space="preserve">
     <value>Cancelled</value>
   </data>
-  <data name="Node_Build_Apk_Sign" xml:space="preserve">
-    <value>Sign APK</value>
-  </data>
   <data name="Node_CatPatch" xml:space="preserve">
     <value>Firmware patches</value>
   </data>
@@ -728,12 +647,6 @@
   </data>
   <data name="Node_File_Text_Publish" xml:space="preserve">
     <value>Write new configuration file</value>
-  </data>
-  <data name="Node_Validation_Condition_Evaluate" xml:space="preserve">
-    <value>Evaluate patch condition</value>
-  </data>
-  <data name="Node_Validation_Boolean_Assert" xml:space="preserve">
-    <value>Assert patch condition</value>
   </data>
   <data name="Node_Config_Text_Edit" xml:space="preserve">
     <value>Patch text</value>
@@ -746,9 +659,6 @@
   </data>
   <data name="Node_Patch_SelectFolder" xml:space="preserve">
     <value>Select patch target directory</value>
-  </data>
-  <data name="Node_Patch_AssertionFailed" xml:space="preserve">
-    <value>Patch assertion failed; this branch has stopped.</value>
   </data>
   <data name="Node_Conn_Root" xml:space="preserve">
     <value>Target root</value>
@@ -809,6 +719,114 @@
   </data>
   <data name="Node_Conn_Values" xml:space="preserve">
     <value>Values</value>
+  </data>
+  <data name="Node_Image_Text_Edit" xml:space="preserve">
+    <value>Image text</value>
+  </data>
+  <data name="Node_Image_File_Attributes" xml:space="preserve">
+    <value>Image file attributes</value>
+  </data>
+  <data name="Node_Image_Xattr_Edit" xml:space="preserve">
+    <value>Image extended attribute</value>
+  </data>
+  <data name="Node_Config_InitRc_Edit" xml:space="preserve">
+    <value>Edit Android init.rc</value>
+  </data>
+  <data name="Node_Resource_Asset_Read" xml:space="preserve">
+    <value>Read package resource</value>
+  </data>
+  <data name="Node_Choice_Read" xml:space="preserve">
+    <value>Read</value>
+  </data>
+  <data name="Node_Choice_Write" xml:space="preserve">
+    <value>Write</value>
+  </data>
+  <data name="Node_Choice_Query" xml:space="preserve">
+    <value>Query</value>
+  </data>
+  <data name="Node_Choice_Hash" xml:space="preserve">
+    <value>Hash</value>
+  </data>
+  <data name="Node_Choice_Verify" xml:space="preserve">
+    <value>Verify</value>
+  </data>
+  <data name="Node_Choice_Select" xml:space="preserve">
+    <value>Select</value>
+  </data>
+  <data name="Node_Choice_ReadText" xml:space="preserve">
+    <value>Read text</value>
+  </data>
+  <data name="Node_Conn_EditOperation" xml:space="preserve">
+    <value>Edit operation</value>
+  </data>
+  <data name="Node_Choice_FindReferences" xml:space="preserve">
+    <value>Find references</value>
+  </data>
+  <data name="Node_Choice_AddSection" xml:space="preserve">
+    <value>Add section</value>
+  </data>
+  <data name="Node_Choice_AddCommand" xml:space="preserve">
+    <value>Add command</value>
+  </data>
+  <data name="Node_Choice_EditCommand" xml:space="preserve">
+    <value>Edit command</value>
+  </data>
+  <data name="Node_Choice_EditArgument" xml:space="preserve">
+    <value>Edit argument</value>
+  </data>
+  <data name="Node_Choice_EditHeader" xml:space="preserve">
+    <value>Edit header</value>
+  </data>
+  <data name="Node_Config_Edit" xml:space="preserve">
+    <value>Edit configuration</value>
+  </data>
+  <data name="Node_Patch_ConfigTargetHint" xml:space="preserve">
+    <value>JSON Pointer or XPath. For init.rc use Selector.</value>
+  </data>
+  <data name="Node_Choice_ReplaceHeader" xml:space="preserve">
+    <value>Replace header</value>
+  </data>
+  <data name="Node_Choice_AddStatement" xml:space="preserve">
+    <value>Add statement</value>
+  </data>
+  <data name="Node_Choice_Text" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="Node_Choice_Property" xml:space="preserve">
+    <value>Property</value>
+  </data>
+  <data name="Node_Choice_Fstab" xml:space="preserve">
+    <value>fstab</value>
+  </data>
+  <data name="Node_Choice_InitRc" xml:space="preserve">
+    <value>init.rc</value>
+  </data>
+  <data name="Node_Choice_FileContexts" xml:space="preserve">
+    <value>file_contexts</value>
+  </data>
+  <data name="Node_Choice_FsConfig" xml:space="preserve">
+    <value>fs_config</value>
+  </data>
+  <data name="Node_Conn_FstabOperation" xml:space="preserve">
+    <value>Fstab operation</value>
+  </data>
+  <data name="Node_Conn_FileSystemType" xml:space="preserve">
+    <value>File system type</value>
+  </data>
+  <data name="Node_Workspace_File" xml:space="preserve">
+    <value>Workspace file</value>
+  </data>
+  <data name="Node_Binary_Search" xml:space="preserve">
+    <value>Binary search</value>
+  </data>
+  <data name="Node_Conn_FileMode" xml:space="preserve">
+    <value>File mode</value>
+  </data>
+  <data name="Node_Choice_Compare" xml:space="preserve">
+    <value>Compare</value>
+  </data>
+  <data name="Node_Choice_Stage" xml:space="preserve">
+    <value>Stage</value>
   </data>
   <data name="Node_Choice_aes" xml:space="preserve">
     <value>AES-256-CBC</value>
@@ -918,18 +936,6 @@
   <data name="Node_Workspace_File_Exists" xml:space="preserve">
     <value>Check staged file</value>
   </data>
-  <data name="Node_Validation_File_Hash" xml:space="preserve">
-    <value>Hash file (SHA-256)</value>
-  </data>
-  <data name="Node_Validation_Hash_Verify" xml:space="preserve">
-    <value>Verify file SHA-256</value>
-  </data>
-  <data name="Node_Validation_Count_Assert" xml:space="preserve">
-    <value>Assert result count</value>
-  </data>
-  <data name="Node_Validation_Changes_Verify" xml:space="preserve">
-    <value>Verify changed file set</value>
-  </data>
   <data name="Node_Conn_Workspace" xml:space="preserve">
     <value>Patch workspace</value>
   </data>
@@ -956,9 +962,6 @@
   </data>
   <data name="Node_Patch_PreviewHint" xml:space="preserve">
     <value>Validate and review staged changes without publishing files.</value>
-  </data>
-  <data name="Node_Patch_PreviewUnsupported" xml:space="preserve">
-    <value>This workflow contains nodes that do not support preview; nothing was executed.</value>
   </data>
   <data name="Node_Patch_PreviewFinished" xml:space="preserve">
     <value>Patch preview completed; original files were not changed.</value>
@@ -1053,9 +1056,6 @@
   <data name="Node_Patch_IniHint" xml:space="preserve">
     <value>Case-sensitive [section] and key=value syntax. An empty section selects global keys. # and ; start whole-line comments; inside values they are literal. Duplicate sections/keys and multiline values are rejected.</value>
   </data>
-  <data name="Node_Validation_Format_Detect" xml:space="preserve">
-    <value>Inspect file format</value>
-  </data>
   <data name="Node_Workspace_File_Find" xml:space="preserve">
     <value>Find staged workspace files</value>
   </data>
@@ -1076,30 +1076,6 @@
   </data>
   <data name="Node_Conn_RelativePaths" xml:space="preserve">
     <value>Relative paths</value>
-  </data>
-  <data name="Node_Patch_FormatHint" xml:space="preserve">
-    <value>Inspects staged content, not the extension. Structure checks currently cover JSON, XML, explicit INI, ELF, sparse and vbmeta. Other recognized formats report signature only. This does not verify hashes, signatures, filesystem consistency or device compatibility.</value>
-  </data>
-  <data name="Node_PatchFormat_Unknown" xml:space="preserve">
-    <value>No supported content signature or configuration structure found</value>
-  </data>
-  <data name="Node_PatchFormat_SignatureOnly" xml:space="preserve">
-    <value>Content signature found; structure has not been validated</value>
-  </data>
-  <data name="Node_PatchFormat_Configuration" xml:space="preserve">
-    <value>Configuration parsed within the size, depth and complexity limits</value>
-  </data>
-  <data name="Node_PatchFormat_ElfTables" xml:space="preserve">
-    <value>ELF header and metadata table ranges checked; execution and dynamic linking not verified</value>
-  </data>
-  <data name="Node_PatchFormat_SparseChunks" xml:space="preserve">
-    <value>Sparse header, chunk ranges and block totals checked; CRC not verified</value>
-  </data>
-  <data name="Node_PatchFormat_AvbDescriptors" xml:space="preserve">
-    <value>VBMeta metadata and descriptor ranges checked; signature and trust chain not verified</value>
-  </data>
-  <data name="Node_PatchFormat_RejectedStructure" xml:space="preserve">
-    <value>Malformed, truncated, unsupported or over-limit structure; cannot satisfy the precondition</value>
   </data>
   <data name="Node_Choice_Unknown" xml:space="preserve">
     <value>Unknown</value>
@@ -1191,12 +1167,6 @@
   <data name="Node_Choice_Structure" xml:space="preserve">
     <value>Validated structure</value>
   </data>
-  <data name="Node_Resource_Asset_Open" xml:space="preserve">
-    <value>Select package resource</value>
-  </data>
-  <data name="Node_Resource_Asset_ReadText" xml:space="preserve">
-    <value>Read resource text</value>
-  </data>
   <data name="Node_Workspace_Asset_Stage" xml:space="preserve">
     <value>Stage package resource</value>
   </data>
@@ -1240,7 +1210,7 @@
     <value>Wait for the current operation to finish before editing resources.</value>
   </data>
   <data name="Plugin_ResourceHelp" xml:space="preserve">
-    <value>Use these IDs in Select package resource nodes. Removing a referenced resource causes execution to fail. Save or export to include changes.</value>
+    <value>Use these IDs in Read package resource nodes. Removing a referenced resource causes execution to fail. Save or export to include changes.</value>
   </data>
   <data name="Plugin_DependencyUnavailable" xml:space="preserve">
     <value>Required package is unavailable or disabled: {0}</value>
@@ -1274,9 +1244,6 @@
   </data>
   <data name="Plugin_Version" xml:space="preserve">
     <value>Package version</value>
-  </data>
-  <data name="Node_Validation_Applicability_Check" xml:space="preserve">
-    <value>Check patch applicability</value>
   </data>
   <data name="Node_Conn_Compatible" xml:space="preserve">
     <value>Compatible target</value>
@@ -1560,15 +1527,6 @@
   <data name="Node_Conn_FsMgrFlags" xml:space="preserve">
     <value>fs_mgr flags</value>
   </data>
-  <data name="Node_Patch_FstabAddHint" xml:space="preserve">
-    <value>Appends five fields using the existing newline style. An identical mount-point/filesystem entry is unchanged; a duplicate or different entry with that pair is a conflict. Other filesystem candidates remain untouched. Count reports existing matches (zero for a new entry). Text is not published until connected to a write/stage node. Device-specific flags and mountability are not validated.</value>
-  </data>
-  <data name="Node_Config_InitRc_Query" xml:space="preserve">
-    <value>Query Android init.rc</value>
-  </data>
-  <data name="Node_Config_InitRc_EditCommand" xml:space="preserve">
-    <value>Edit Android init.rc</value>
-  </data>
   <data name="Node_Conn_SectionKind" xml:space="preserve">
     <value>Section kind</value>
   </data>
@@ -1593,9 +1551,6 @@
   <data name="Node_Patch_InitRcHint" xml:space="preserve">
     <value>Select a service name, an exact action trigger expression, or an import path. Section and statement counts are exact. An empty directive queries the header. Editing replaces or deletes body statements only; replacement includes the same directive name and its arguments. Old-value checks compare the complete raw statement. Quotes, escapes and continuations follow Android init syntax. Imports and properties are not expanded. This does not validate device-specific commands, service options or bootability. Connect edited text to a stage/write node to publish.</value>
   </data>
-  <data name="Node_Config_InitRc_AddCommand" xml:space="preserve">
-    <value>Add Android init.rc statement</value>
-  </data>
   <data name="Node_Conn_Statement" xml:space="preserve">
     <value>Statement</value>
   </data>
@@ -1605,17 +1560,11 @@
   <data name="Node_Patch_InitRcAddHint" xml:space="preserve">
     <value>Append one statement to selected service/action bodies. Identity includes the directive and the specified number of leading arguments: zero for a unique service option, one for a setprop property key. Identical decoded tokens preserve the original; duplicate identities or different remaining arguments are conflicts. Other identities coexist. Count reports sections already containing the statement. New statements use four-space indentation and the document newline style. This does not validate command semantics or bootability.</value>
   </data>
-  <data name="Node_Config_InitRc_AddSection" xml:space="preserve">
-    <value>Add Android init.rc section</value>
-  </data>
   <data name="Node_Conn_SectionText" xml:space="preserve">
     <value>Complete section text</value>
   </data>
   <data name="Node_Patch_InitRcAddSectionHint" xml:space="preserve">
     <value>Supply exactly one complete service, action or import section. Identity is the service name, exact action trigger tokens or import path. An existing section with identical decoded header and ordered body tokens is unchanged; duplicate identities or different contents are conflicts. The fragment is appended verbatim, preserving its internal newlines and comments; required separator/end newlines follow the target document. Count is one for an existing equivalent section, zero when added. Imports are not expanded and runtime semantics are not validated. Connect to a stage/write node to publish.</value>
-  </data>
-  <data name="Node_Config_InitRc_EditHeader" xml:space="preserve">
-    <value>Edit Android init.rc header</value>
   </data>
   <data name="Node_Patch_InitRcHeaderHint" xml:space="preserve">
     <value>Select exactly one service, action or import. Supply its complete replacement header of the same kind, without body or trailing comment. Preserves the body, indentation and existing trailing comment. Optional old-value checks compare the complete raw header. A new identity conflicting with another section is rejected. Renaming does not update start/stop commands or other references; check those separately. Runtime command, trigger and path semantics are not validated. Publish using a stage/write node.</value>
@@ -1638,17 +1587,11 @@
   <data name="Node_Patch_InitRcPlacementHint" xml:space="preserve">
     <value>End preserves the existing append behavior. Before/after requires exactly one body statement with matching decoded tokens in each selected section. Supply the full anchor without a trailing comment. Continuations remain intact. Repeated application requires the existing statement to be the adjacent body statement on the selected side, ignoring comment-only/blank lines; a different position is a conflict.</value>
   </data>
-  <data name="Node_Config_InitRc_EditArgument" xml:space="preserve">
-    <value>Edit Android init.rc argument</value>
-  </data>
   <data name="Node_Conn_ArgumentIndex" xml:space="preserve">
     <value>Argument index</value>
   </data>
   <data name="Node_Patch_InitRcArgumentHint" xml:space="preserve">
     <value>Zero-based argument index excludes the directive: setprop key value uses index 1 for value; service name executable uses index 1 for executable. Empty directive selects a single header. Value and expected old value are decoded text, not quoted init syntax; escaping is generated automatically. Existing arguments only; unrelated spacing, quotes, comments and tokens are preserved. Header identity conflicts are rejected; references are not rewritten. Runtime semantics are not validated. Publish using a stage/write node.</value>
-  </data>
-  <data name="Node_Config_InitRc_FindReferences" xml:space="preserve">
-    <value>Check init service references</value>
   </data>
   <data name="Node_Conn_ExternalServices" xml:space="preserve">
     <value>External service names</value>
@@ -1698,9 +1641,6 @@
   <data name="Node_Patch_FsConfigHint" xml:space="preserve">
     <value>Edits the space-delimited metadata dialect consumed by UotanStudio builders. UID/GID are unsigned decimal; modes are decimal (493) or zero-prefixed octal (0755), not unprefixed Android octal. Query returns zero-prefixed octal. Select exactly one literal image path; duplicates fail. Edits emit decimal permissions and retain trailing capability data without interpreting or applying it. This changes sidecar text, not host permissions or an image directly. Rebuild integration, SELinux labels and xattrs require their own operations.</value>
   </data>
-  <data name="Node_Patch_FsConfigEntryHint" xml:space="preserve">
-    <value>UotanStudio metadata dialect: decimal UID/GID, decimal or zero-prefixed octal permissions. Add appends a missing literal path with trailing capability placeholder 0; identical ownership/permissions preserve existing source and opaque capability data, while different values or duplicate paths conflict. Delete removes the whole entry line; absent entries are unchanged unless an old-value guard requires one. Count reports existing matches. Does not add/delete the actual file, apply capabilities or rebuild an image; compose those operations separately.</value>
-  </data>
   <data name="Node_Config_FileContexts_Edit" xml:space="preserve">
     <value>Edit file_contexts label</value>
   </data>
@@ -1743,12 +1683,6 @@
   <data name="Node_Patch_FileContextHint" xml:space="preserve">
     <value>Select one text rule by its exact path-expression spelling and file-kind qualifier. Unqualified selects only a two-field rule, not every kind. Regexes are not executed or converted to host paths. Edit replaces only the context token, preserving order, spacing and full-line comments. Duplicate identities, malformed fields and old-value mismatches fail. Context shape checking is not loaded-policy validation; overlap/precedence, compiled contexts and actual image xattr publication remain separate.</value>
   </data>
-  <data name="Node_Patch_FileContextEntryHint" xml:space="preserve">
-    <value>Identity is the exact path expression plus file-kind qualifier. Add appends a missing rule; an identical existing label is unchanged and a different label or duplicate identity conflicts. Delete removes the whole rule line; missing is unchanged unless an old-label guard requires it. Count reports existing matches. Other rules retain their order, but adding/removing rules can affect effective labels: regex overlap, precedence and loaded-policy validity are not checked. Does not modify image xattrs directly.</value>
-  </data>
-  <data name="Node_Image_Text_Read" xml:space="preserve">
-    <value>Read text inside filesystem image</value>
-  </data>
   <data name="Node_Choice_Direct" xml:space="preserve">
     <value>Direct</value>
   </data>
@@ -1766,9 +1700,6 @@
   </data>
   <data name="Node_Patch_ImageReadTextHint" xml:space="preserve">
     <value>Reads a literal regular file from a raw EXT4/EROFS image, including staged image replacements. Links, traversal, special files and files over 16 MiB are rejected; decoded text is limited to 4 Mi characters. Enumeration has entry/path budgets and supports cancellation. The full image hash is checked before/after reading and retained as a publication dependency. Hash output identifies the extracted file. Sparse/Super/Payload containers require separate extraction. This node reads only; image modification/rebuild is separate.</value>
-  </data>
-  <data name="Node_Image_Text_Stage" xml:space="preserve">
-    <value>Write text inside filesystem image</value>
   </data>
   <data name="Node_Conn_ImageCapacity" xml:space="preserve">
     <value>Image capacity (bytes)</value>
@@ -1803,29 +1734,14 @@
   <data name="Node_Patch_ImageBatchHint" xml:space="preserve">
     <value>Chain collection nodes through Image edits; leave the first collection input unconnected. Each adds one distinct existing file without modifying the image. Limits: 256 files, 4 Mi characters per text and 16 Mi characters total. Apply validates all old hashes, rebuilds once and stages one image; preview discards it. Capacity is required. Collections are immutable so branches do not alter each other.</value>
   </data>
-  <data name="Node_Image_File_ReadAttributes" xml:space="preserve">
-    <value>Read image file attributes</value>
-  </data>
-  <data name="Node_Image_File_SetAttributes" xml:space="preserve">
-    <value>Set image file attributes</value>
-  </data>
   <data name="Node_Patch_InvalidImageAttributes" xml:space="preserve">
     <value>UID/GID must be unsigned decimal integers; permission mode must contain three or four octal digits.</value>
   </data>
   <data name="Node_Patch_ImageAttributesHint" xml:space="preserve">
     <value>Reads or changes actual inode UID/GID and permissions in raw EXT4/EROFS, including root (/), without following links. UID/GID use unsigned decimal; mode uses three or four octal digits (644, 0755, 4755). Query returns four digits. Set retains file type, optionally checks old attributes and stages a capacity-limited rebuild. Identical attributes skip rebuilding. Hardlink aliases share changes; access ACL owner/mask-or-group/other permissions follow chmod rules while named entries remain intact. Malformed ACLs are rejected. ACL/capability/SELinux editing, AVB signing and device acceptance are separate.</value>
   </data>
-  <data name="Node_Image_Xattr_Read" xml:space="preserve">
-    <value>Read image extended attribute</value>
-  </data>
   <data name="Node_Patch_ImageReadXattrHint" xml:space="preserve">
     <value>Reads one raw extended attribute from the current EXT4/EROFS image, without following links. Data contains at most 64 KiB of original bytes. Exists distinguishes an empty value from a missing attribute. Names use printable ASCII with a namespace dot, up to 255 characters. The image remains a publication dependency. No text decoding, SELinux policy checks or capability/ACL interpretation is performed.</value>
-  </data>
-  <data name="Node_Image_Xattr_Set" xml:space="preserve">
-    <value>Set image user attribute</value>
-  </data>
-  <data name="Node_Image_Xattr_Delete" xml:space="preserve">
-    <value>Delete image user attribute</value>
   </data>
   <data name="Node_Conn_HexValue" xml:space="preserve">
     <value>Hex value</value>
@@ -1887,14 +1803,8 @@
   <data name="Node_Category_Firmware" xml:space="preserve">
     <value>Firmware and images</value>
   </data>
-  <data name="Node_Category_Build" xml:space="preserve">
-    <value>Build and delivery</value>
-  </data>
   <data name="Node_Category_Device" xml:space="preserve">
     <value>Device operations</value>
-  </data>
-  <data name="Node_Category_Mirroring" xml:space="preserve">
-    <value>Screen mirroring</value>
   </data>
   <data name="Node_Category_Flow" xml:space="preserve">
     <value>Flow control</value>
@@ -1932,21 +1842,6 @@
   <data name="Node_Family_Xattr" xml:space="preserve">
     <value>Extended attributes</value>
   </data>
-  <data name="Node_Family_FileContexts" xml:space="preserve">
-    <value>SELinux file contexts</value>
-  </data>
-  <data name="Node_Family_FsConfig" xml:space="preserve">
-    <value>File ownership and modes</value>
-  </data>
-  <data name="Node_Family_InitRc" xml:space="preserve">
-    <value>Android init.rc</value>
-  </data>
-  <data name="Node_Family_Fstab" xml:space="preserve">
-    <value>Android fstab</value>
-  </data>
-  <data name="Node_Family_Pattern" xml:space="preserve">
-    <value>Binary patterns</value>
-  </data>
   <data name="Node_Family_Partition" xml:space="preserve">
     <value>Partitions</value>
   </data>
@@ -1956,38 +1851,11 @@
   <data name="Node_Family_Asset" xml:space="preserve">
     <value>Package resources</value>
   </data>
-  <data name="Node_Family_Format" xml:space="preserve">
-    <value>Formats</value>
-  </data>
-  <data name="Node_Family_Json" xml:space="preserve">
-    <value>JSON</value>
-  </data>
-  <data name="Node_Family_Ini" xml:space="preserve">
-    <value>INI</value>
-  </data>
   <data name="Node_Family_Directory" xml:space="preserve">
     <value>Directories</value>
   </data>
-  <data name="Node_Family_Hash" xml:space="preserve">
-    <value>Hashes</value>
-  </data>
-  <data name="Node_Family_Count" xml:space="preserve">
-    <value>Counts</value>
-  </data>
-  <data name="Node_Family_Changes" xml:space="preserve">
-    <value>Changes</value>
-  </data>
   <data name="Node_Family_Condition" xml:space="preserve">
     <value>Conditions</value>
-  </data>
-  <data name="Node_Family_Boolean" xml:space="preserve">
-    <value>Boolean checks</value>
-  </data>
-  <data name="Node_Family_AndroidProperty" xml:space="preserve">
-    <value>Android properties</value>
-  </data>
-  <data name="Node_Family_Xml" xml:space="preserve">
-    <value>XML</value>
   </data>
   <data name="Node_Family_Container" xml:space="preserve">
     <value>Firmware containers</value>
@@ -1995,26 +1863,8 @@
   <data name="Node_Family_Signature" xml:space="preserve">
     <value>Signatures</value>
   </data>
-  <data name="Node_Family_Apk" xml:space="preserve">
-    <value>APK</value>
-  </data>
-  <data name="Node_Family_Ota" xml:space="preserve">
-    <value>OTA</value>
-  </data>
-  <data name="Node_Family_Slots" xml:space="preserve">
-    <value>Slots</value>
-  </data>
-  <data name="Node_Family_Cpio" xml:space="preserve">
-    <value>CPIO</value>
-  </data>
   <data name="Node_Family_Super" xml:space="preserve">
     <value>Super</value>
-  </data>
-  <data name="Node_Family_Sparse" xml:space="preserve">
-    <value>Sparse</value>
-  </data>
-  <data name="Node_Family_Dat" xml:space="preserve">
-    <value>DAT</value>
   </data>
   <data name="Node_Family_Target" xml:space="preserve">
     <value>Device selection</value>
@@ -2024,9 +1874,6 @@
   </data>
   <data name="Node_Family_Power" xml:space="preserve">
     <value>Power and reboot</value>
-  </data>
-  <data name="Node_Family_Storage" xml:space="preserve">
-    <value>Device storage</value>
   </data>
   <data name="Node_Family_Binary" xml:space="preserve">
     <value>Binary files</value>
@@ -2049,17 +1896,11 @@
   <data name="Node_Family_Bytes" xml:space="preserve">
     <value>Bytes</value>
   </data>
-  <data name="Node_Family_GitHub" xml:space="preserve">
-    <value>GitHub</value>
-  </data>
   <data name="Node_Family_Execution" xml:space="preserve">
     <value>Execution</value>
   </data>
   <data name="Node_Family_Collection" xml:space="preserve">
     <value>Collections</value>
-  </data>
-  <data name="Node_Family_Log" xml:space="preserve">
-    <value>Logs</value>
   </data>
   <data name="Node_Family_Progress" xml:space="preserve">
     <value>Progress</value>
@@ -2181,9 +2022,6 @@
   <data name="Node_Device_RebootFailed" xml:space="preserve">
     <value>The device rejected the reboot request.</value>
   </data>
-  <data name="Node_Mirroring_NoSession" xml:space="preserve">
-    <value>The mirroring session is not active.</value>
-  </data>
   <data name="Node_Category_Workspace" xml:space="preserve">
     <value>Workspace operations</value>
   </data>
@@ -2228,5 +2066,14 @@
   </data>
   <data name="Node_Document_TextRequired" xml:space="preserve">
     <value>A text value is required. Empty text clears the document.</value>
+  </data>
+  <data name="Node_Load_RetiredType" xml:space="preserve">
+    <value>This node type was removed from the node library; rebuild the workflow with the surviving nodes.</value>
+  </data>
+  <data name="Node_UI_Dialog" xml:space="preserve">
+    <value>Dialog</value>
+  </data>
+  <data name="Node_UI_Progress" xml:space="preserve">
+    <value>Progress</value>
   </data>
 </root>

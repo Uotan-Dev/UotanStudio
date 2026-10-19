@@ -1,3 +1,4 @@
+using UotanStudio.Projects.Interactions;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.NodeViewModels;
 
@@ -18,7 +19,7 @@ public static class InteractionSchemaResolver
                 || connections.Any(connection => ReferenceEquals(connection.Target, sensitivity));
         }
         var owners = nodes.SelectMany(node => node.Output.Select(port => (port, node))).ToDictionary(pair => pair.port, pair => pair.node);
-        foreach (var dialog in nodes.OfType<InteractionNodeViewModel>().Where(node => node.TypeKey == "UI.Dialog.Show"))
+        foreach (var dialog in nodes.OfType<InteractionNodeViewModel>().Where(node => node.TypeKey == "UI.Dialog"))
         {
             List<InteractionFieldSchema> fields = [];
             HashSet<FlowNodeViewModel> visited = [];
@@ -68,14 +69,10 @@ public static class InteractionSchemaResolver
                     return false;
                 }
                 var label = node.Input.Single(port => port.Title == "Label").InitialValue as string;
-                var type = node.TypeKey switch
-                {
-                    "UI.Field.Number" => NodePortType.Number,
-                    "UI.Field.Boolean" => NodePortType.Boolean,
-                    "UI.Field.MultiChoice" => NodePortType.List,
-                    "UI.Field.File" or "UI.Field.Directory" or "UI.Field.SavePath" => NodePortType.Path,
-                    _ => NodePortType.Text
-                };
+                var kind = node.Input.Single(port => port.Title == "Kind").InitialValue as string;
+                var type = Enum.TryParse<InteractionElementKind>(kind, out var parsedKind)
+                    ? InteractionElements.FieldType(parsedKind)
+                    : NodePortType.Text;
                 var sensitive = node.Input.Single(port => port.Title == "Default").IsSensitive;
                 fields.Add(new InteractionFieldSchema(id, string.IsNullOrWhiteSpace(label) ? id : label, type, sensitive));
                 return true;

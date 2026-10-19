@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using UotanStudio.Firmware.Patching;
 using UotanStudio.Services;
 using UotanStudio.Services.Patching;
@@ -34,22 +35,6 @@ internal static class PatchNodePorts
     private static readonly NodeInputDeclaration EditDeleteOperation =
         new("Operation", NodePortType.Text, "Set") { Choices = ["Query", "Set", "Delete"] };
 
-    private static readonly NodeInputDeclaration ConditionOperation =
-        new("Operation", NodePortType.Text, "Equals")
-        {
-            Choices = ["Equals", "Contains", "Regex", "VersionRange", "FileExists", "DirectoryExists"]
-        };
-
-    private const string ConditionValueTitle = "Value";
-
-    private static readonly NodeInputDeclaration ConditionValue =
-        new(ConditionValueTitle, NodePortType.Text, string.Empty)
-        {
-            Multiline = true,
-            VisibleWhen = current => !NodePortVisibility.EqualsAny(current, ConditionOperation, "FileExists", "DirectoryExists")
-                || NodePortVisibility.HasText(current, ConditionValueTitle)
-        };
-
     private static readonly NodeInputDeclaration UidInput = new("UID", NodePortType.Text, "0");
     private static readonly NodeInputDeclaration GidInput = new("GID", NodePortType.Text, "0");
     private static readonly NodeInputDeclaration ModeInput = new("Mode", NodePortType.Text, "0644");
@@ -80,6 +65,59 @@ internal static class PatchNodePorts
 
     private static readonly NodeInputDeclaration AssetInput =
         new("Asset", NodePortType.PatchAsset) { HintResourceKey = "Node_Patch_AssetHint", Required = true };
+
+    private static readonly NodeInputDeclaration AssetReadOperation =
+        new("Operation", NodePortType.Text, "Select") { Choices = ["Select", "ReadText"] };
+
+    private static readonly NodeInputDeclaration AssetReadId =
+        new("Asset ID", NodePortType.Text, string.Empty)
+        {
+            HintResourceKey = "Node_Patch_AssetHint",
+            VisibleWhen = NodePortVisibility.MayEqualAny(AssetReadOperation, "Select")
+        };
+
+    private static readonly NodeInputDeclaration XattrOperation =
+        new("Operation", NodePortType.Text, "Read") { Choices = ["Read", "Set", "Delete"] };
+
+    private static readonly NodeInputDeclaration XattrAttributeName =
+        new("Attribute Name", NodePortType.Text, "security.selinux");
+
+    private static readonly NodeInputDeclaration XattrHexValue =
+        new("Hex Value", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(XattrOperation, "Set")
+        };
+
+    private static readonly NodeInputDeclaration XattrCheckOldValue =
+        new("Check Old Value", NodePortType.Boolean, false) { Advanced = true, VisibleWhen = NodePortVisibility.MayEqualAny(XattrOperation, "Set", "Delete") };
+
+    private static readonly NodeInputDeclaration XattrExpectedExists =
+        new("Expected Exists", NodePortType.Boolean, true) { Advanced = true, VisibleWhen = NodePortVisibility.NotEquals(XattrOperation, "Read") };
+
+    private static readonly NodeInputDeclaration XattrExpectedHexValue =
+        new("Expected Hex Value", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            Advanced = true,
+            VisibleWhen = node => NodePortVisibility.MayEqualAny(XattrOperation, "Set")(node)
+                && NodePortVisibility.IsOnAll(XattrCheckOldValue, XattrExpectedExists)(node)
+        };
+
+    private static readonly NodeInputDeclaration XattrImageCapacity =
+        new("Image Capacity", NodePortType.Text, string.Empty)
+        {
+            Advanced = true,
+            HintResourceKey = "Node_Patch_ImageCapacityHint",
+            VisibleWhen = NodePortVisibility.NotEquals(XattrOperation, "Read")
+        };
+
+    private static readonly NodeInputDeclaration XattrExtractionBudget =
+        new("Extraction Budget", NodePortType.Text, "68719476736")
+        {
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.NotEquals(XattrOperation, "Read")
+        };
 
     private static readonly NodeInputDeclaration Selector = new("Selector", NodePortType.Text, string.Empty);
     private static readonly NodeInputDeclaration Directive = new("Directive", NodePortType.Text, string.Empty);
@@ -129,7 +167,160 @@ internal static class PatchNodePorts
     private static readonly NodeInputDeclaration InitRcEditCommandOperation =
         new("Operation", NodePortType.Text, "Replace") { Choices = Enum.GetNames<InitRcOperation>() };
 
-    private static readonly string[] FormatKinds = [.. Enum.GetNames<PatchFormatKind>().Where(name => name != "Unknown")];
+    private const string InitRcOperationTitle = "Operation";
+
+    private const string InitRcEditOperationTitle = "Edit Operation";
+
+    private const string InitRcBodyEditOperation = "EditCommand";
+
+    private const string InitRcDeleteOperation = "Delete";
+
+    private static readonly NodeInputDeclaration InitRcEditOperation =
+        new(InitRcOperationTitle, NodePortType.Text, "Query")
+        {
+            Choices = ["Query", "FindReferences", "EditCommand", "EditArgument", "EditHeader", "AddSection", "AddCommand"]
+        };
+
+    /// <summary>
+    /// Selects replace or delete for the body-statement edit operation. It keeps the legacy title of the former
+    /// <c>Config.InitRc.EditCommand</c> node but cannot reuse plain "Operation", because port titles are stable identities
+    /// and a second "Operation" input would duplicate the dispatch selector's identity on the same node.
+    /// <para>为正文语句编辑选择替换或删除。沿用旧 <c>Config.InitRc.EditCommand</c> 节点的语义，但不能复用纯 "Operation"：
+    /// 端口标题就是稳定标识，同一节点上第二个 "Operation" 输入会与分派选择器重复标识。</para>
+    /// </summary>
+    private static readonly NodeInputDeclaration InitRcEditCommandMode =
+        new(InitRcEditOperationTitle, NodePortType.Text, "Replace")
+        {
+            Choices = Enum.GetNames<InitRcOperation>(),
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, InitRcBodyEditOperation)
+        };
+
+    private static readonly NodeInputDeclaration InitRcSection =
+        new("Section Kind", NodePortType.Text, "Service")
+        {
+            Choices = ["Service", "Action", "Import"],
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "Query", "EditCommand", "EditArgument", "EditHeader")
+        };
+
+    private static readonly NodeInputDeclaration InitRcSelector =
+        new("Selector", NodePortType.Text, string.Empty)
+        {
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "Query", "EditCommand", "EditArgument", "EditHeader", "AddCommand")
+        };
+
+    private static readonly NodeInputDeclaration InitRcDirective =
+        new("Directive", NodePortType.Text, string.Empty)
+        {
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "Query", "EditCommand", "EditArgument")
+        };
+
+    private static readonly NodeInputDeclaration InitRcReplacement =
+        new("Replacement", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = node => NodePortVisibility.MayEqualAny(InitRcEditOperation, "EditHeader")(node)
+                || NodePortVisibility.MayEqualAny(InitRcEditOperation, InitRcBodyEditOperation)(node)
+                && TextValue(node, InitRcEditCommandMode.Title) != InitRcDeleteOperation
+        };
+
+    private static readonly NodeInputDeclaration InitRcArgumentIndex =
+        new("Argument Index", NodePortType.Number, 0d)
+        {
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "EditArgument")
+        };
+
+    private static readonly NodeInputDeclaration InitRcArgumentValue =
+        new("Value", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "EditArgument")
+        };
+
+    private static readonly NodeInputDeclaration InitRcSectionText =
+        new("Section Text", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "AddSection")
+        };
+
+    private static readonly NodeInputDeclaration InitRcStatement =
+        new("Statement", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "AddCommand")
+        };
+
+    private static readonly NodeInputDeclaration InitRcIdentityArguments =
+        new("Identity Arguments", NodePortType.Number, 0d)
+        {
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "AddCommand")
+        };
+
+    private static readonly NodeInputDeclaration InitRcEditPlacement =
+        new("Placement", NodePortType.Text, "End")
+        {
+            Choices = ["End", "BeforeAnchor", "AfterAnchor"],
+            HintResourceKey = "Node_Patch_InitRcPlacementHint",
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "AddCommand")
+        };
+
+    private static readonly NodeInputDeclaration InitRcAnchorStatement =
+        new("Anchor Statement", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = node => NodePortVisibility.MayEqualAny(InitRcEditOperation, "AddCommand")(node)
+                && NodePortVisibility.NotEquals(InitRcEditPlacement, "End")(node)
+        };
+
+    private static readonly NodeInputDeclaration InitRcExternalServiceNames =
+        new("External Services", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "FindReferences")
+        };
+
+    private static readonly NodeInputDeclaration InitRcSectionCount =
+        new("Expected Sections", NodePortType.Number, 1d)
+        {
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "Query", "EditCommand", "EditArgument", "AddCommand")
+        };
+
+    private static readonly NodeInputDeclaration InitRcMatchCount =
+        new("Expected Matches", NodePortType.Number, 1d)
+        {
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "Query", "EditCommand", "EditArgument")
+        };
+
+    private static readonly NodeInputDeclaration InitRcOldValueCheck =
+        new("Check Old Value", NodePortType.Boolean, false)
+        {
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(InitRcEditOperation, "EditCommand", "EditArgument", "EditHeader")
+        };
+
+    private static readonly NodeInputDeclaration InitRcOldValue =
+        new("Expected Old Value", NodePortType.Text, string.Empty)
+        {
+            Advanced = true,
+            VisibleWhen = node => NodePortVisibility.MayEqualAny(InitRcEditOperation, "EditCommand", "EditArgument", "EditHeader")(node)
+                && NodePortVisibility.IsOn(InitRcOldValueCheck)(node)
+        };
+
+    private static readonly NodeOutputDeclaration InitRcTextOutput = new("Text", NodePortType.Text);
+    private static readonly NodeOutputDeclaration InitRcCountOutput = new("Count", NodePortType.Number);
+    private static readonly NodeOutputDeclaration InitRcChangedOutput = new("Changed", NodePortType.Boolean);
+    private static readonly NodeOutputDeclaration InitRcValueOutput = new("Value", NodePortType.Text);
+    private static readonly NodeOutputDeclaration InitRcValuesOutput = new("Values", NodePortType.Any);
+    private static readonly NodeOutputDeclaration InitRcReferencesValidOutput = new("References Valid", NodePortType.Boolean);
+    private static readonly NodeOutputDeclaration InitRcServicesOutput = new("Services", NodePortType.Any);
+    private static readonly NodeOutputDeclaration InitRcMissingServicesOutput = new("Missing Services", NodePortType.Any);
+    private static readonly NodeOutputDeclaration InitRcDynamicReferencesOutput = new("Dynamic References", NodePortType.Any);
+    private static readonly NodeOutputDeclaration InitRcInvalidReferencesOutput = new("Invalid References", NodePortType.Any);
+    private static readonly NodeOutputDeclaration InitRcAmbiguousServicesOutput = new("Ambiguous Services", NodePortType.Any);
 
     private static readonly string[] PatchFileModes = Enum.GetNames<PatchFileMode>();
 
@@ -144,8 +335,6 @@ internal static class PatchNodePorts
     private static readonly NodeOutputDeclaration HashOutput = new("Hash", NodePortType.Text);
     private static readonly NodeOutputDeclaration DataOutput = new("Data", NodePortType.Data);
     private static readonly NodeOutputDeclaration ChangedOutput = new("Changed", NodePortType.Boolean);
-    private static readonly NodeOutputDeclaration ValidOutput = new("Valid", NodePortType.Boolean);
-    private static readonly NodeOutputDeclaration MatchOutput = new("Match", NodePortType.Boolean);
     private static readonly NodeOutputDeclaration ResultCount = new("Count", NodePortType.Number);
     private static readonly NodeOutputDeclaration NameOutput = new("Name", NodePortType.Text);
     private static readonly NodeOutputDeclaration LengthOutput = new("Length", NodePortType.Number);
@@ -159,10 +348,6 @@ internal static class PatchNodePorts
     private static readonly NodeOutputDeclaration ContextOutput = new("Context", NodePortType.Text);
     private static readonly NodeOutputDeclaration AssetOutput = new("Asset", NodePortType.PatchAsset);
     private static readonly NodeOutputDeclaration ImageEditsOutput = new("Image Edits", NodePortType.ImageEdits);
-    private static readonly NodeOutputDeclaration FormatOutput = new("Format", NodePortType.Text) { ValueResourcePrefix = "Node_Choice_" };
-    private static readonly NodeOutputDeclaration EvidenceOutput = new("Evidence", NodePortType.Text) { ValueResourcePrefix = "Node_Choice_" };
-    private static readonly NodeOutputDeclaration DetailOutput = new("Detail", NodePortType.Text) { ValueResourcePrefix = "Node_PatchFormat_" };
-    private static readonly NodeOutputDeclaration StructureValidOutput = new("Structure Valid", NodePortType.Boolean);
 
     private static NodeOutputDeclaration[] ResultOutputs() => [TextOutput, ResultCount, ChangedOutput];
     private static NodeOutputDeclaration[] QueryOutputs() => [QueryValueOutput, QueryValuesOutput, QueryCountOutput];
@@ -183,6 +368,7 @@ internal static class PatchNodePorts
                 new NodeInputDeclaration("Text", NodePortType.Text, string.Empty) { Multiline = true },
                 TextEncoding, ExpectedHash, ImageCapacity, ExtractionBudget],
             [ChangedOutput]),
+        ["Image.Text.Edit"] = ImageTextEdit(),
         ["Image.Edit.CollectText"] = Set(
             [ImageEditsInput, ImagePathBuildProp,
                 new NodeInputDeclaration("Text", NodePortType.Text, string.Empty) { Multiline = true },
@@ -199,12 +385,19 @@ internal static class PatchNodePorts
                 UidInput, GidInput, ModeInput, CheckOldValue, ExpectedUid, ExpectedGid, ExpectedMode,
                 ImageCapacity, ExtractionBudget],
             [ChangedOutput]),
+        ["Image.File.Attributes"] = ImageFileAttributes(),
         ["Image.Xattr.Read"] = Set(
             [RequiredPath("Node_Patch_ImageReadXattrHint"), FileSystemChoice, ImagePathBuildProp,
                 new NodeInputDeclaration("Attribute Name", NodePortType.Text, "security.selinux")],
             [DataOutput, ExistsOutput]),
         ["Image.Xattr.Set"] = ImageXattrEdit(withHexValue: true),
         ["Image.Xattr.Delete"] = ImageXattrEdit(withHexValue: false),
+        ["Image.Xattr.Edit"] = Set(
+            [RequiredPath("Node_Patch_ImageReadXattrHint"), FileSystemChoice, ImagePathBuildProp, XattrOperation,
+                XattrAttributeName, XattrHexValue, XattrCheckOldValue, XattrExpectedExists, XattrExpectedHexValue,
+                XattrImageCapacity, XattrExtractionBudget],
+            [DataOutput, ExistsOutput, ChangedOutput]),
+        ["Config.Edit"] = ConfigEdit(),
         ["Config.FileContexts.Edit"] = FileContexts(),
         ["Config.FsConfig.Edit"] = FsConfig(),
         ["Config.InitRc.FindReferences"] = InitRc(typeKey: "Config.InitRc.FindReferences"),
@@ -214,8 +407,10 @@ internal static class PatchNodePorts
         ["Config.InitRc.AddCommand"] = InitRc(typeKey: "Config.InitRc.AddCommand"),
         ["Config.InitRc.Query"] = InitRc(typeKey: "Config.InitRc.Query"),
         ["Config.InitRc.EditCommand"] = InitRc(typeKey: "Config.InitRc.EditCommand"),
+        ["Config.InitRc.Edit"] = InitRcEdit(),
         ["Config.Fstab.Edit"] = Fstab(),
         ["Binary.Pattern.Replace"] = BinaryPattern(isReplace: true),
+        ["Binary.Search"] = BinarySearch(),
         ["Binary.Pattern.Find"] = BinaryPattern(isReplace: false),
         ["Workspace.Partition.Resolve"] = Set(
             [WorkspaceInput,
@@ -231,21 +426,17 @@ internal static class PatchNodePorts
                 PartitionPathInput],
             [WorkspaceOutput, PathOutput, RelativePathOutput, ExistsOutput]),
         ["Flow.Applicability.Gate"] = Applicability(gate: true),
-        ["Validation.Applicability.Check"] = Applicability(gate: false),
         ["Resource.Asset.Open"] = Set(
             [new NodeInputDeclaration("Asset ID", NodePortType.Text, string.Empty) { HintResourceKey = "Node_Patch_AssetHint" }],
             [AssetOutput, NameOutput, LengthOutput, HashOutput]),
         ["Resource.Asset.ReadText"] = Set(
             [AssetInput],
             [TextOutput, EncodingOutput, HashOutput]),
+        ["Resource.Asset.Read"] = AssetRead(),
         ["Workspace.Asset.Stage"] = Set(
             [AssetInput, WorkspaceInput, RelativePathInput, new NodeInputDeclaration("Operation", NodePortType.Text, "Add") { Choices = PatchFileModes }],
             [WorkspaceOutput]),
-        ["Validation.Format.Detect"] = Set(
-            [RequiredPath("Node_Patch_FormatHint"),
-                new NodeInputDeclaration("Expected Format", NodePortType.Text, string.Empty) { Choices = FormatKinds },
-                new NodeInputDeclaration("Required Evidence", NodePortType.Text, "Structure") { Choices = ["Signature", "Structure"] }],
-            [MatchOutput, FormatOutput, EvidenceOutput, DetailOutput, StructureValidOutput]),
+        ["Workspace.File"] = WorkspaceFile(),
         ["Workspace.File.Find"] = Set(
             [WorkspaceInput,
                 new NodeInputDeclaration("Pattern", NodePortType.Text, "vendor/etc/*.xml"),
@@ -275,33 +466,9 @@ internal static class PatchNodePorts
         ["Workspace.File.Exists"] = Set(
             [WorkspaceInput, RelativePathInput],
             [WorkspaceOutput, ExistsOutput]),
-        ["Validation.File.Hash"] = Set(
-            [RequiredPath()],
-            [HashOutput]),
-        ["Validation.Hash.Verify"] = Set(
-            [RequiredPath(), ExpectedHash],
-            [ValidOutput, HashOutput]),
-        ["Validation.Count.Assert"] = Set(
-            [new NodeInputDeclaration("Count", NodePortType.Number, 0d), ExpectedMatches],
-            [ValidOutput]),
-        ["Validation.Changes.Verify"] = Set(
-            [WorkspaceInput,
-                new NodeInputDeclaration("Expected Paths", NodePortType.Text, string.Empty) { Multiline = true }],
-            [WorkspaceOutput, ValidOutput]),
         ["File.Text.Read"] = Set(
             [RequiredPath()],
             [TextOutput, EncodingOutput, HashOutput]),
-        ["Validation.Condition.Evaluate"] = Set(
-            [ConditionValue,
-                new NodeInputDeclaration("Path", NodePortType.Path, string.Empty) { VisibleWhen = NodePortVisibility.MayEqualAny(ConditionOperation, "FileExists", "DirectoryExists") },
-                new NodeInputDeclaration("Expected Value", NodePortType.Text, string.Empty) { VisibleWhen = NodePortVisibility.NotEqualsAny(ConditionOperation, "FileExists", "DirectoryExists") },
-                new NodeInputDeclaration("Upper Version", NodePortType.Text, string.Empty) { VisibleWhen = NodePortVisibility.MayEqualAny(ConditionOperation, "VersionRange") },
-                ConditionOperation],
-            [MatchOutput]),
-        ["Validation.Boolean.Assert"] = Set(
-            [new NodeInputDeclaration("Condition", NodePortType.Boolean, false),
-                new NodeInputDeclaration("Reason", NodePortType.Text, string.Empty)],
-            [ValidOutput]),
         ["Config.Text.Edit"] = Set(
             [new NodeInputDeclaration("Text", NodePortType.Text, string.Empty) { Multiline = true },
                 new NodeInputDeclaration("Find", NodePortType.Text, string.Empty) { Multiline = true },
@@ -385,6 +552,111 @@ internal static class PatchNodePorts
         inputs.Add(ImageCapacity);
         inputs.Add(ExtractionBudget);
         return Set(inputs, [ChangedOutput]);
+    }
+
+    private static NodePortSet AssetRead()
+    {
+        var asset = new NodeInputDeclaration("Asset", NodePortType.PatchAsset)
+        {
+            HintResourceKey = "Node_Patch_AssetHint",
+            VisibleWhen = NodePortVisibility.MayEqualAny(AssetReadOperation, "ReadText")
+        };
+        return Set(
+            [AssetReadOperation, AssetReadId, asset],
+            [AssetOutput, NameOutput, LengthOutput, HashOutput, TextOutput, EncodingOutput]);
+    }
+
+    private static NodePortSet ImageFileAttributes()
+    {
+        var path = new NodeInputDeclaration("Path", NodePortType.Path)
+        {
+            Required = true,
+            HintResourceKey = "Node_Patch_ImageAttributesHint"
+        };
+        var operation = new NodeInputDeclaration("Operation", NodePortType.Text, "Read")
+        {
+            Choices = ["Read", "Set"]
+        };
+        var system = new NodeInputDeclaration("File System", NodePortType.Text, "EXT4") { Choices = ["EXT4", "EROFS"] };
+        var imagePath = new NodeInputDeclaration("Image Path", NodePortType.Text, "/build.prop");
+        var uid = new NodeInputDeclaration("UID", NodePortType.Text, "0") { VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Set") };
+        var gid = new NodeInputDeclaration("GID", NodePortType.Text, "0") { VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Set") };
+        var mode = new NodeInputDeclaration("Mode", NodePortType.Text, "0644") { VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Set") };
+        var guard = new NodeInputDeclaration("Check Old Value", NodePortType.Boolean, false)
+        {
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Set")
+        };
+        var expectedUid = new NodeInputDeclaration("Expected UID", NodePortType.Text, "0")
+        {
+            Advanced = true,
+            VisibleWhen = node => NodePortVisibility.IsOn(guard)(node) && NodePortVisibility.MayEqualAny(operation, "Set")(node)
+        };
+        var expectedGid = new NodeInputDeclaration("Expected GID", NodePortType.Text, "0")
+        {
+            Advanced = true,
+            VisibleWhen = node => NodePortVisibility.IsOn(guard)(node) && NodePortVisibility.MayEqualAny(operation, "Set")(node)
+        };
+        var expectedMode = new NodeInputDeclaration("Expected Mode", NodePortType.Text, "0644")
+        {
+            Advanced = true,
+            VisibleWhen = node => NodePortVisibility.IsOn(guard)(node) && NodePortVisibility.MayEqualAny(operation, "Set")(node)
+        };
+        var capacity = new NodeInputDeclaration("Image Capacity", NodePortType.Text, string.Empty)
+        {
+            Advanced = true,
+            HintResourceKey = "Node_Patch_ImageCapacityHint",
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Set")
+        };
+        var budget = new NodeInputDeclaration("Extraction Budget", NodePortType.Text, "68719476736")
+        {
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Set")
+        };
+        return Set(
+            [path, operation, system, imagePath, uid, gid, mode, guard, expectedUid, expectedGid, expectedMode, capacity, budget],
+            [UidOutput, GidOutput, ModeOutput, ChangedOutput]);
+    }
+
+    private static NodePortSet ImageTextEdit()
+    {
+        var path = new NodeInputDeclaration("Path", NodePortType.Path) { Required = true };
+        var operation = new NodeInputDeclaration("Operation", NodePortType.Text, "Read")
+        {
+            Choices = ["Read", "Write"]
+        };
+        var system = new NodeInputDeclaration("File System", NodePortType.Text, "EXT4") { Choices = ["EXT4", "EROFS"] };
+        var imagePath = new NodeInputDeclaration("Image Path", NodePortType.Text, "/build.prop");
+        var text = new NodeInputDeclaration("Text", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Write")
+        };
+        var encoding = new NodeInputDeclaration("Encoding", NodePortType.Text, "utf8")
+        {
+            Choices = ["utf8", "utf8-bom", "utf16-le", "utf16-be"],
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Write")
+        };
+        var expectedHash = new NodeInputDeclaration("Expected Hash", NodePortType.Text, string.Empty)
+        {
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Write")
+        };
+        var capacity = new NodeInputDeclaration("Image Capacity", NodePortType.Text, string.Empty)
+        {
+            Advanced = true,
+            HintResourceKey = "Node_Patch_ImageCapacityHint",
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Write")
+        };
+        var budget = new NodeInputDeclaration("Extraction Budget", NodePortType.Text, "68719476736")
+        {
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Write")
+        };
+        return Set(
+            [path, operation, system, imagePath, text, encoding, expectedHash, capacity, budget],
+            [TextOutput, EncodingOutput, HashOutput, ChangedOutput]);
     }
 
     private static NodePortSet FileContexts()
@@ -493,6 +765,24 @@ internal static class PatchNodePorts
         return Set(inputs, QueryOutputs());
     }
 
+    private static NodePortSet InitRcEdit()
+    {
+        return Set(
+            [MultilineText("Node_Patch_InitRcEditHint"),
+                InitRcEditOperation, InitRcSection, InitRcSelector, InitRcDirective, InitRcReplacement,
+                InitRcArgumentIndex, InitRcArgumentValue, InitRcSectionText, InitRcStatement,
+                InitRcIdentityArguments, InitRcEditPlacement, InitRcAnchorStatement,
+                InitRcExternalServiceNames, InitRcSectionCount, InitRcMatchCount,
+                InitRcOldValueCheck, InitRcOldValue,
+                InitRcEditCommandMode],
+            [InitRcTextOutput, InitRcCountOutput, InitRcChangedOutput, InitRcValueOutput, InitRcValuesOutput,
+                InitRcReferencesValidOutput, InitRcServicesOutput, InitRcMissingServicesOutput,
+                InitRcDynamicReferencesOutput, InitRcInvalidReferencesOutput, InitRcAmbiguousServicesOutput]);
+    }
+
+    private static string TextValue(FlowNodeViewModel node, string title)
+        => Convert.ToString(node.Input.First(input => input.Title == title).InitialValue) ?? string.Empty;
+
     private static NodePortSet Fstab()
     {
         return Set(
@@ -536,6 +826,34 @@ internal static class PatchNodePorts
         inputs.Add(new NodeInputDeclaration("Skip Matches", NodePortType.Text, "0") { Advanced = true });
         inputs.Add(ExpectedMatches);
         return Set(inputs, [new NodeOutputDeclaration("Offsets", NodePortType.Any), ResultCount]);
+    }
+
+    private static NodePortSet BinarySearch()
+    {
+        var operation = new NodeInputDeclaration("Operation", NodePortType.Text, "Find")
+        {
+            Choices = ["Find", "Replace"]
+        };
+        var replacement = new NodeInputDeclaration("Replacement", NodePortType.Text, string.Empty)
+        {
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Replace")
+        };
+        var replaceMask = new NodeInputDeclaration("Replace Mask", NodePortType.Text, string.Empty)
+        {
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Replace")
+        };
+        return Set(
+            [RequiredPath("Node_Patch_BinaryFindHint"), operation,
+                new NodeInputDeclaration("Find", NodePortType.Text, string.Empty) { HintResourceKey = "Node_Patch_BinaryFindHint" },
+                new NodeInputDeclaration("Find Mask", NodePortType.Text, string.Empty) { Advanced = true },
+                replacement, replaceMask,
+                new NodeInputDeclaration("Start Offset", NodePortType.Text, "0") { Advanced = true },
+                new NodeInputDeclaration("Search Length", NodePortType.Text, "-1") { Advanced = true },
+                new NodeInputDeclaration("Alignment", NodePortType.Text, "1") { Advanced = true },
+                new NodeInputDeclaration("Skip Matches", NodePortType.Text, "0") { Advanced = true },
+                ExpectedMatches],
+            [new NodeOutputDeclaration("Offsets", NodePortType.Any), ResultCount]);
     }
 
     private static NodePortSet Structured(bool isJson)
@@ -598,5 +916,289 @@ internal static class PatchNodePorts
             outputs.Add(new NodeOutputDeclaration("Skip", NodePortType.Flow));
         }
         return new NodePortSet(inputs, outputs) { CompletesFlow = !gate };
+    }
+
+    /// <summary>
+    /// Unified configuration editor: one node addresses every supported configuration format through the
+    /// <c>Format</c> selector and performs the requested operation through <c>Operation</c>. Address ports stay hidden
+    /// until the matching format is selected, so the panel shows only the fields the chosen format understands.
+    /// <para>统一配置编辑器：一个节点通过 <c>Format</c> 选择器覆盖全部受支持的配置格式，并通过 <c>Operation</c>
+    /// 执行所需操作。寻址端口在选中匹配格式前保持隐藏，面板只展示所选格式能理解的字段。</para>
+    /// </summary>
+    private static NodePortSet WorkspaceFile()
+    {
+        var operation = new NodeInputDeclaration("Operation", NodePortType.Text, "Find")
+        {
+            Choices = ["Find", "Exists", "Import", "Delete", "Stage"]
+        };
+        var pattern = new NodeInputDeclaration("Pattern", NodePortType.Text, "vendor/etc/*.xml")
+        {
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Find")
+        };
+        var relativePath = new NodeInputDeclaration("Relative Path", NodePortType.Text, string.Empty) { Required = true };
+        var source = new NodeInputDeclaration("Source", NodePortType.Path, string.Empty)
+        {
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Import")
+        };
+        var text = new NodeInputDeclaration("Text", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Stage")
+        };
+        var encoding = new NodeInputDeclaration("Encoding", NodePortType.Text, "utf8")
+        {
+            Choices = ["utf8", "utf8-bom", "utf16-le", "utf16-be"],
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Stage")
+        };
+        var fileMode = new NodeInputDeclaration("File Mode", NodePortType.Text, "Add")
+        {
+            Choices = PatchFileModes,
+            VisibleWhen = node => NodePortVisibility.MayEqualAny(operation, "Import", "Stage")(node)
+        };
+        var expectedHash = new NodeInputDeclaration("Expected Hash", NodePortType.Text, string.Empty) { Advanced = true };
+        var expectedMatches = new NodeInputDeclaration("Expected Matches", NodePortType.Number, 1d)
+        {
+            Advanced = true,
+            VisibleWhen = NodePortVisibility.MayEqualAny(operation, "Find")
+        };
+        return Set(
+            [WorkspaceInput, operation, pattern, relativePath, source, text, encoding, fileMode, expectedHash, expectedMatches],
+            [WorkspaceOutput, ExistsOutput, PathOutput, RelativePathOutput, FilesOutput, RelativePathsOutput, ResultCount]);
+    }
+
+    private static NodePortSet ConfigEdit()
+    {
+        var format = new NodeInputDeclaration("Format", NodePortType.Text, "Text")
+        {
+            Choices = ["Text", "Json", "Ini", "Xml", "Property", "Fstab", "InitRc", "FileContexts", "FsConfig"]
+        };
+        var operation = new NodeInputDeclaration("Operation", NodePortType.Text, "Query")
+        {
+            Choices = ["Query", "Set", "Add", "Delete", "InsertBefore", "InsertAfter", "ReplaceHeader",
+                "AddStatement", "AddSection", "FindReferences"]
+        };
+        var text = new NodeInputDeclaration("Text", NodePortType.Text, string.Empty) { Multiline = true };
+
+        bool IsFormat(FlowNodeViewModel node, params string[] formats)
+            => formats.Any(value => NodePortVisibility.MayEqualAny(format, value)(node));
+
+        static string TextOf(FlowNodeViewModel node, NodeInputDeclaration port)
+            => Convert.ToString(node.Input.First(input => input.Title == port.Title).Data
+                ?? node.Input.First(input => input.Title == port.Title).InitialValue, CultureInfo.InvariantCulture) ?? string.Empty;
+
+        var target = new NodeInputDeclaration("Target", NodePortType.Text, string.Empty)
+        {
+            HintResourceKey = "Node_Patch_ConfigTargetHint",
+            VisibleWhen = node => IsFormat(node, "Json")
+        };
+        var section = new NodeInputDeclaration("Section", NodePortType.Text, string.Empty)
+        {
+            VisibleWhen = node => IsFormat(node, "Ini", "InitRc")
+        };
+        var key = new NodeInputDeclaration("Key", NodePortType.Text, string.Empty)
+        {
+            VisibleWhen = node => IsFormat(node, "Ini", "Property")
+        };
+        var namespaces = new NodeInputDeclaration("Namespaces", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            Advanced = true,
+            VisibleWhen = node => IsFormat(node, "Xml")
+        };
+        var attributeName = new NodeInputDeclaration("Attribute Name", NodePortType.Text, string.Empty)
+        {
+            VisibleWhen = node => IsFormat(node, "Xml")
+        };
+        var mountPoint = new NodeInputDeclaration("Mount Point", NodePortType.Text, "/system")
+        {
+            VisibleWhen = node => IsFormat(node, "Fstab")
+        };
+        var blockDevice = new NodeInputDeclaration("Block Device", NodePortType.Text, "system")
+        {
+            VisibleWhen = node => IsFormat(node, "Fstab")
+        };
+        var fileSystem = new NodeInputDeclaration("File System Type", NodePortType.Text, "ext4")
+        {
+            VisibleWhen = node => IsFormat(node, "Fstab")
+        };
+        var mountOptions = new NodeInputDeclaration("Mount Options", NodePortType.Text, "ro")
+        {
+            VisibleWhen = node => IsFormat(node, "Fstab")
+        };
+        var fsMgrFlags = new NodeInputDeclaration("Fs Mgr Flags", NodePortType.Text, "wait,logical")
+        {
+            VisibleWhen = node => IsFormat(node, "Fstab")
+        };
+        var field = new NodeInputDeclaration("Field", NodePortType.Text, "FsMgrFlags")
+        {
+            Choices = Enum.GetNames<FstabField>(),
+            VisibleWhen = node => IsFormat(node, "Fstab")
+        };
+        var flagName = new NodeInputDeclaration("Flag Name", NodePortType.Text, string.Empty)
+        {
+            VisibleWhen = node => IsFormat(node, "Fstab")
+        };
+        var sectionKind = new NodeInputDeclaration("Section Kind", NodePortType.Text, "Service")
+        {
+            Choices = Enum.GetNames<InitRcSection>(),
+            VisibleWhen = node => IsFormat(node, "InitRc")
+        };
+        var selector = new NodeInputDeclaration("Selector", NodePortType.Text, string.Empty)
+        {
+            VisibleWhen = node => IsFormat(node, "InitRc")
+        };
+        var directive = new NodeInputDeclaration("Directive", NodePortType.Text, string.Empty)
+        {
+            VisibleWhen = node => IsFormat(node, "InitRc")
+        };
+        var context = new NodeInputDeclaration("Context", NodePortType.Text, "u:object_r:vendor_file:s0")
+        {
+            VisibleWhen = node => IsFormat(node, "FileContexts")
+                && NodePortVisibility.MayEqualAny(operation, "Add", "Set")(node)
+        };
+        var pathExpression = new NodeInputDeclaration("Path Expression", NodePortType.Text, string.Empty)
+        {
+            VisibleWhen = node => IsFormat(node, "FileContexts")
+        };
+        var fileKind = new NodeInputDeclaration("File Kind", NodePortType.Text, "Any")
+        {
+            Choices = ["Any", "Regular", "Directory", "Symlink", "Block", "Character", "Pipe", "Socket"],
+            VisibleWhen = node => IsFormat(node, "FileContexts")
+        };
+        var imagePath = new NodeInputDeclaration("Image Path", NodePortType.Text, string.Empty)
+        {
+            VisibleWhen = node => IsFormat(node, "FsConfig")
+        };
+        var uid = new NodeInputDeclaration("UID", NodePortType.Text, "0")
+        {
+            VisibleWhen = node => IsFormat(node, "FsConfig")
+        };
+        var gid = new NodeInputDeclaration("GID", NodePortType.Text, "0")
+        {
+            VisibleWhen = node => IsFormat(node, "FsConfig")
+        };
+        var mode = new NodeInputDeclaration("Mode", NodePortType.Text, "0644")
+        {
+            VisibleWhen = node => IsFormat(node, "FsConfig")
+        };
+        var value = new NodeInputDeclaration("Value", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = node => IsFormat(node, "Json", "Ini", "Xml", "Property", "Fstab", "FsConfig", "InitRc")
+                && NodePortVisibility.MayEqualAny(operation, "Set", "Add", "AddStatement", "ReplaceHeader")(node)
+        };
+        var find = new NodeInputDeclaration("Find", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = node => IsFormat(node, "Text")
+                && NodePortVisibility.MayEqualAny(operation, "Set", "InsertBefore", "InsertAfter", "Delete")(node)
+        };
+        var replacement = new NodeInputDeclaration("Replacement", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = node => IsFormat(node, "Text")
+                && NodePortVisibility.MayEqualAny(operation, "Set", "InsertBefore", "InsertAfter")(node)
+        };
+        var sectionText = new NodeInputDeclaration("Section Text", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = node => IsFormat(node, "InitRc")
+                && NodePortVisibility.MayEqualAny(operation, "AddSection")(node)
+        };
+        var statement = new NodeInputDeclaration("Statement", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = node => IsFormat(node, "InitRc")
+                && NodePortVisibility.MayEqualAny(operation, "AddStatement")(node)
+        };
+        var identityArguments = new NodeInputDeclaration("Identity Arguments", NodePortType.Number, 0d)
+        {
+            Advanced = true,
+            VisibleWhen = node => IsFormat(node, "InitRc")
+                && NodePortVisibility.MayEqualAny(operation, "AddStatement")(node)
+        };
+        var placement = new NodeInputDeclaration("Placement", NodePortType.Text, "End")
+        {
+            Choices = Enum.GetNames<InitRcInsertion>(),
+            VisibleWhen = node => IsFormat(node, "InitRc")
+                && NodePortVisibility.MayEqualAny(operation, "AddStatement")(node)
+        };
+        var anchor = new NodeInputDeclaration("Anchor Statement", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            VisibleWhen = node => IsFormat(node, "InitRc")
+                && NodePortVisibility.MayEqualAny(operation, "AddStatement")(node)
+                && !string.Equals(TextOf(node, placement), "End", StringComparison.Ordinal)
+        };
+        var systemFilter = new NodeInputDeclaration("File System Filter", NodePortType.Text, string.Empty)
+        {
+            Advanced = true,
+            VisibleWhen = node => IsFormat(node, "Fstab")
+        };
+        var externalServices = new NodeInputDeclaration("External Services", NodePortType.Text, string.Empty)
+        {
+            Multiline = true,
+            Advanced = true,
+            VisibleWhen = node => IsFormat(node, "InitRc")
+                && NodePortVisibility.MayEqualAny(operation, "FindReferences")(node)
+        };
+        var fstabOperation = new NodeInputDeclaration("Fstab Operation", NodePortType.Text, "SetValue")
+        {
+            Choices = Enum.GetNames<FstabOperation>(),
+            VisibleWhen = node => IsFormat(node, "Fstab")
+                && NodePortVisibility.MayEqualAny(operation, "Set", "Delete")(node)
+        };
+        var regex = new NodeInputDeclaration("Regex", NodePortType.Boolean, false)
+        {
+            VisibleWhen = node => IsFormat(node, "Text")
+                && NodePortVisibility.MayEqualAny(operation, "Set", "InsertBefore", "InsertAfter", "Delete")(node)
+        };
+        var allowCreate = new NodeInputDeclaration("Allow Create", NodePortType.Boolean, false)
+        {
+            Advanced = true,
+            VisibleWhen = node => IsFormat(node, "Json", "Ini", "Property")
+                && NodePortVisibility.MayEqualAny(operation, "Set")(node)
+        };
+        var checkOldValue = new NodeInputDeclaration("Check Old Value", NodePortType.Boolean, false)
+        {
+            Advanced = true,
+            VisibleWhen = node => NodePortVisibility.MayEqualAny(operation, "Set", "Delete")(node)
+        };
+        var expectedOldValue = new NodeInputDeclaration("Expected Old Value", NodePortType.Text, string.Empty)
+        {
+            Advanced = true,
+            VisibleWhen = node => NodePortVisibility.IsOn(checkOldValue)(node)
+                && NodePortVisibility.MayEqualAny(operation, "Set", "Delete")(node)
+        };
+        var expectedUid = new NodeInputDeclaration("Expected UID", NodePortType.Text, "0")
+        {
+            Advanced = true,
+            VisibleWhen = node => NodePortVisibility.IsOn(checkOldValue)(node) && IsFormat(node, "FsConfig")
+        };
+        var expectedGid = new NodeInputDeclaration("Expected GID", NodePortType.Text, "0")
+        {
+            Advanced = true,
+            VisibleWhen = node => NodePortVisibility.IsOn(checkOldValue)(node) && IsFormat(node, "FsConfig")
+        };
+        var expectedMode = new NodeInputDeclaration("Expected Mode", NodePortType.Text, "0644")
+        {
+            Advanced = true,
+            VisibleWhen = node => NodePortVisibility.IsOn(checkOldValue)(node) && IsFormat(node, "FsConfig")
+        };
+        var expectedMatches = new NodeInputDeclaration("Expected Matches", NodePortType.Number, 1d)
+        {
+            Advanced = true
+        };
+        return Set(
+            [format, operation, text, target, section, key, namespaces, attributeName, mountPoint, blockDevice,
+                fileSystem, mountOptions, fsMgrFlags, field, flagName, sectionKind, selector, directive, context,
+                pathExpression, fileKind, imagePath, uid, gid, mode, value, find, replacement, regex, allowCreate,
+                checkOldValue, expectedOldValue, expectedUid, expectedGid, expectedMode, expectedMatches, sectionText,
+                statement, identityArguments, placement, anchor, systemFilter, externalServices, fstabOperation],
+            [TextOutput, ResultCount, ChangedOutput, QueryValueOutput, QueryValuesOutput,
+                ExistsOutput, ContextOutput, UidOutput, GidOutput, ModeOutput,
+                InitRcReferencesValidOutput, InitRcServicesOutput, InitRcMissingServicesOutput,
+                InitRcDynamicReferencesOutput, InitRcInvalidReferencesOutput, InitRcAmbiguousServicesOutput]);
     }
 }

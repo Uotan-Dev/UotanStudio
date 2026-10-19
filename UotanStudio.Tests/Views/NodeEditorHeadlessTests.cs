@@ -83,7 +83,7 @@ public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
             dispatchTask = fixture.Session.Dispatch(() =>
             {
                 using var editor = new NodeEditorViewModel();
-                var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
+                var node = NodeTypeRegistry.Create("File.Binary.Read")!;
                 editor.AddNode(node);
                 var connection = new NodeConnectionViewModel(
                     new NodeConnectorViewModel { Anchor = new Point(50, 50) },
@@ -166,7 +166,7 @@ public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
             dispatchTask = fixture.Session.Dispatch(() =>
             {
                 using var editor = new NodeEditorViewModel();
-                var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
+                var node = NodeTypeRegistry.Create("File.Binary.Read")!;
                 editor.AddNode(node);
                 var connection = new NodeConnectionViewModel(new NodeConnectorViewModel(), new NodeConnectorViewModel());
                 editor.Connections.Add(connection);
@@ -305,8 +305,8 @@ public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
                 Assert.False(selectionBox.IsVisible);
                 Assert.False(deleteButton.IsEnabled);
 
-                var first = NodeTypeRegistry.Create("Data.Value.Constant")!;
-                var second = NodeTypeRegistry.Create("Data.Value.Constant")!;
+                var first = NodeTypeRegistry.Create("File.Binary.Read")!;
+                var second = NodeTypeRegistry.Create("File.Binary.Read")!;
                 editor.AddNode(first);
                 editor.AddNode(second);
                 editor.SetSelection([first, second]);
@@ -380,7 +380,7 @@ public sealed class NodeEditorHeadlessTests(NodeEditorUiFixture fixture)
                 var view = new NodeEditorView { DataContext = editor };
                 var item = editor.ToolboxCategories
                     .SelectMany(category => category.Items)
-                    .Single(candidate => candidate.TypeKey == "Image.File.SetAttributes");
+                    .Single(candidate => candidate.TypeKey == "Image.File.Attributes");
                 var actualNodeViewModel = item.CreateNode();
                 editor.Nodes.Add(actualNodeViewModel);
                 var window = new Window { Content = view, Width = 1200, Height = 700 };

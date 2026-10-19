@@ -20,7 +20,7 @@ public sealed class NodeExecutionVisualStateTests(NodeEditorUiFixture fixture)
             dispatchTask = fixture.Session.Dispatch(() =>
             {
                 using var editor = new NodeEditorViewModel();
-                var node = NodeTypeRegistry.Create("Data.Value.Constant")!;
+                var node = NodeTypeRegistry.Create("File.Binary.Read")!;
                 editor.AddNode(node);
 
                 var view = new NodeEditorView { DataContext = editor };

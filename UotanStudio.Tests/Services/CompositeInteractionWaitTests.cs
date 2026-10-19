@@ -20,8 +20,10 @@ public sealed class CompositeInteractionWaitTests
     {
         NodeFactoryRegistrar.RegisterAll();
         var parallel = FlowControlNodeViewModel.CreateParallelNode();
-        var first = InteractionNodeViewModel.Create("UI.Dialog.Confirm");
-        var second = InteractionNodeViewModel.Create("UI.Dialog.Confirm");
+        var first = InteractionNodeViewModel.Create("UI.Dialog");
+        var second = InteractionNodeViewModel.Create("UI.Dialog");
+        first.Input.Single(port => port.Title == "Mode").InitialValue = "Confirm";
+        second.Input.Single(port => port.Title == "Mode").InitialValue = "Confirm";
         first.Input.Single(port => port.Title == "Title").InitialValue = "first";
         second.Input.Single(port => port.Title == "Title").InitialValue = "second";
         NodeConnectionViewModel[] edges =
