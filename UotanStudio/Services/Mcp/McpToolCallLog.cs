@@ -30,11 +30,11 @@ public sealed class McpToolCallLog : IMcpToolCallAudit
     }
 
     /// <summary>
-    /// This member is documented below.
-    /// <para>向统一日志追加一条工具调用。</para>
+    /// <para>Appends one tool call to the unified log, at warning level when the tool reported failure.</para>
+    /// <para>向统一日志追加一条工具调用；工具报告失败时使用警告级别。</para>
     /// </summary>
-    /// <param name="record">The observed call.
-    /// <para>被观察到的调用。</para></param>
+    /// <param name="record">The observed call, whose arguments are logged verbatim.
+    /// <para>被观察到的调用，其参数按原样写入日志。</para></param>
     public void RecordToolCall(McpToolCallRecord record)
     {
         LogService.Instance.Write(

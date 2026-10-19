@@ -153,7 +153,7 @@ public sealed class McpServerHost
 
     /// <summary>Builds the server options every transport (stdio, HTTP) shares.
     /// <para>构建各传输（stdio、HTTP）共用的服务器选项。</para></summary>
-    internal static McpServerOptions CreateOptions(IReadOnlyList<McpServerTool> tools) => CreateOptions(tools, null);
+    internal static McpServerOptions CreateOptions(IReadOnlyList<McpServerTool> tools) => CreateOptions(tools, null, audit: null);
 
     /// <summary>
     /// Builds the shared server options, declaring the resources capability when resources are supplied.
@@ -162,10 +162,30 @@ public sealed class McpServerHost
     /// <param name="tools">Tool set for this host. <para>本次宿主的工具集合。</para></param>
     /// <param name="resources">Resource collection for this host; <see langword="null"/> keeps the server tools-only.
     /// <para>本次宿主的资源集合；为 <see langword="null"/> 时服务器仍只暴露工具。</para></param>
+    /// <param name="audit">Sink observing every served tool call; <see langword="null"/> leaves the call-tool pipeline
+    /// unfiltered so nothing is recorded. <para>观察每次工具调用的接收端；为 <see langword="null"/> 时不加过滤器，不记录任何调用。</para></param>
     /// <returns>The options passed to <see cref="McpServer.Create"/>. <para>传给 <see cref="McpServer.Create"/> 的选项。</para></returns>
     internal static McpServerOptions CreateOptions(
         IReadOnlyList<McpServerTool> tools,
-        IReadOnlyList<McpServerResource>? resources)
+        IReadOnlyList<McpServerResource>? resources,
+        IMcpToolCallAudit? audit) => CreateOptions(tools, resources, audit is null ? null : McpToolCallAuditFilter.Create(audit));
+
+    /// <summary>
+    /// Builds the shared server options around an already built call-tool filter, so a transport that must apply the
+    /// same pipeline for every session shares the filter instance instead of rebuilding it per session.
+    /// <para>围绕已构建好的工具调用过滤器构建共用服务器选项，使每个会话都必须套用同一流水线的传输共享该过滤器实例，
+    /// 而不必按会话重建。</para>
+    /// </summary>
+    /// <param name="tools">Tool set for this host. <para>本次宿主的工具集合。</para></param>
+    /// <param name="resources">Resource collection for this host; <see langword="null"/> keeps the server tools-only.
+    /// <para>本次宿主的资源集合；为 <see langword="null"/> 时服务器仍只暴露工具。</para></param>
+    /// <param name="callToolFilter">Filter installed at the head of the call-tool pipeline; <see langword="null"/> leaves
+    /// the pipeline unfiltered. <para>安装在工具调用流水线头部的过滤器；为 <see langword="null"/> 时流水线不加过滤器。</para></param>
+    /// <returns>The options passed to <see cref="McpServer.Create"/>. <para>传给 <see cref="McpServer.Create"/> 的选项。</para></returns>
+    internal static McpServerOptions CreateOptions(
+        IReadOnlyList<McpServerTool> tools,
+        IReadOnlyList<McpServerResource>? resources,
+        McpRequestFilter<CallToolRequestParams, CallToolResult>? callToolFilter)
     {
         var options = new McpServerOptions
         {
@@ -195,6 +215,11 @@ public sealed class McpServerHost
             };
         }
 
+        if (callToolFilter is not null)
+        {
+            options.Filters.Request.CallToolFilters = [callToolFilter];
+        }
+
         return options;
     }
 
@@ -204,10 +229,13 @@ public sealed class McpServerHost
     /// </summary>
     /// <param name="cancellationToken">Stops the message loop; the transport and registered tools are left to unwind.
     /// <para>停止消息循环；传输与已注册工具由其自行收敛。</para></param>
+    /// <param name="audit">Sink observing every tool call the stdio server serves; <see langword="null"/> leaves the
+    /// call-tool pipeline unfiltered so nothing is recorded.
+    /// <para>观察 stdio 服务器所处理工具调用的接收端；为 <see langword="null"/> 时不加过滤器，不记录任何调用。</para></param>
     /// <returns>A task that completes when the stdio session ends. <para>stdio 会话结束时完成的任务。</para></returns>
-    public async Task RunAsync(CancellationToken cancellationToken)
+    public async Task RunAsync(CancellationToken cancellationToken, IMcpToolCallAudit? audit = null)
     {
-        var options = CreateOptions(BuildTools(), BuildResources());
+        var options = CreateOptions(BuildTools(), BuildResources(), audit);
 
         var server = McpServer.Create(
             new StdioServerTransport("uotanstudio"),

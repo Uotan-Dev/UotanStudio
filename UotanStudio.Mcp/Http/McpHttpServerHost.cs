@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using UotanStudio.Mcp.Tools;
 
 namespace UotanStudio.Mcp.Http;
 
@@ -48,6 +49,7 @@ public sealed class McpHttpServerHost : IAsyncDisposable
     private readonly IReadOnlyList<McpServerResource> _resources;
     private readonly ILoggerFactory? _loggerFactory;
     private readonly ILogger? _logger;
+    private readonly IMcpToolCallAudit? _audit;
     private readonly ConcurrentDictionary<TcpClient, byte> _connections = new();
     private readonly Lock _sync = new();
 
@@ -64,18 +66,25 @@ public sealed class McpHttpServerHost : IAsyncDisposable
     /// <param name="resources">Resources and resource templates every session serves; <see langword="null"/>
     /// or empty registers none. <para>会话服务的资源与资源模板；为 <see langword="null"/> 或空时不注册。</para></param>
     /// <param name="loggerFactory">Optional SDK diagnostics logger factory. <para>可选的 SDK 诊断日志工厂。</para></param>
+    /// <param name="audit">Sink observing every tool call served by any session; <see langword="null"/> records nothing.
+    /// One filter instance is built here and shared by every session, so the pipeline a client reaches through this
+    /// listener is the same one the stdio server installs.
+    /// <para>观察任一会话所处理工具调用的接收端；为 <see langword="null"/> 时不记录。此处构建的过滤器实例由所有会话共享，
+    /// 因此客户端经该监听器到达的流水线与 stdio 服务器安装的一致。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="tools"/> is <see langword="null"/>.
     /// <para><paramref name="tools"/> 为 <see langword="null"/>。</para></exception>
     public McpHttpServerHost(
         IReadOnlyList<McpServerTool> tools,
         IReadOnlyList<McpServerResource>? resources = null,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        IMcpToolCallAudit? audit = null)
     {
         ArgumentNullException.ThrowIfNull(tools);
         _tools = tools;
         _resources = resources ?? [];
         _loggerFactory = loggerFactory;
         _logger = loggerFactory?.CreateLogger("UotanStudio.Mcp");
+        _audit = audit;
     }
 
     /// <summary>Gets a value indicating whether the port is currently served.
@@ -114,7 +123,9 @@ public sealed class McpHttpServerHost : IAsyncDisposable
 
             var cancellation = new CancellationTokenSource();
             var transport = new StreamableHttpServerTransport(_loggerFactory);
-            var session = new Session(listener, transport, McpServer.Create(transport, McpServerHost.CreateOptions(_tools, _resources), _loggerFactory), cancellation);
+            var callToolFilter = _audit is null ? null : McpToolCallAuditFilter.Create(_audit);
+            var options = McpServerHost.CreateOptions(_tools, _resources, callToolFilter);
+            var session = new Session(listener, transport, McpServer.Create(transport, options, _loggerFactory), cancellation);
 
             _session = session;
             Port = ((IPEndPoint)listener.LocalEndpoint).Port;

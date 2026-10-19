@@ -64,7 +64,7 @@ sealed class Program
             };
             try
             {
-                Mcp.McpLauncher.RunHeadlessAsync(args, cts.Token).GetAwaiter().GetResult();
+                Mcp.McpLauncher.RunHeadlessAsync(args, cts.Token, Services.Mcp.McpToolCallLog.Instance).GetAwaiter().GetResult();
                 return 0;
             }
             catch (OperationCanceledException)
@@ -77,7 +77,8 @@ sealed class Program
         {
             _ = Task.Run(() => Mcp.McpLauncher.RunCompanionAsync(
                 args, new Services.Mcp.DesktopDeviceManagerGateway(),
-                () => new Services.Delivery.DeliveryKeyProvider()));
+                () => new Services.Delivery.DeliveryKeyProvider(),
+                audit: Services.Mcp.McpToolCallLog.Instance));
         }
 
         var mirrorFlag = Array.IndexOf(args, "--open-screen-mirror");

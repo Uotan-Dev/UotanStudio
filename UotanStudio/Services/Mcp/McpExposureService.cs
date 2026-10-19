@@ -115,7 +115,7 @@ internal sealed class McpExposureService
             var serverHost = new McpServerHost(sandbox, allowFlash,
                 new DesktopDeviceManagerGateway(), McpLauncher.CreateDesktopDeliveryTools(),
                 () => new Delivery.DeliveryKeyProvider());
-            var host = new McpHttpServerHost(serverHost.BuildTools(), serverHost.BuildResources());
+            var host = new McpHttpServerHost(serverHost.BuildTools(), serverHost.BuildResources(), loggerFactory: null, McpToolCallLog.Instance);
             host.Start(effectivePort);
 
             _host = host;

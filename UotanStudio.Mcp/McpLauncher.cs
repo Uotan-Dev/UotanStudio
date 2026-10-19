@@ -36,13 +36,16 @@ public static class McpLauncher
     /// <para>由 <see cref="McpServerConfig.Parse"/> 读取的启动参数，含 <c>--mcp-root</c> 与 <c>--allow-flash</c>。</para></param>
     /// <param name="cancellationToken">Stops the stdio loop; defaults to no cancellation.
     /// <para>停止 stdio 循环；默认不取消。</para></param>
+    /// <param name="audit">Sink observing every served tool call; <see langword="null"/> records nothing.
+    /// <para>观察每次工具调用的接收端；为 <see langword="null"/> 时不记录。</para></param>
     /// <returns>A task that completes when the transport closes or cancellation is observed.
     /// <para>在传输关闭或观察到取消时完成的任务。</para></returns>
-    public static async Task RunHeadlessAsync(string[] args, CancellationToken cancellationToken = default)
+    public static async Task RunHeadlessAsync(string[] args, CancellationToken cancellationToken = default,
+        Tools.IMcpToolCallAudit? audit = null)
     {
         Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
         var host = new McpServerHost(McpServerConfig.Parse(args));
-        await host.RunAsync(cancellationToken).ConfigureAwait(false);
+        await host.RunAsync(cancellationToken, audit).ConfigureAwait(false);
     }
 
     /// <summary>Runs the MCP server alongside the desktop UI, injecting the host-equivalent delivery tool-preparation service so delivery_build works in companion mode.
@@ -55,17 +58,20 @@ public static class McpLauncher
     /// <para>宿主提供的签名密钥供应器，供 <c>delivery_build</c> 使用；为 <see langword="null"/> 时签名计划如实失败。</para></param>
     /// <param name="cancellationToken">Stops the stdio loop; defaults to no cancellation.
     /// <para>停止 stdio 循环；默认不取消。</para></param>
+    /// <param name="audit">Sink observing every served tool call; <see langword="null"/> records nothing.
+    /// <para>观察每次工具调用的接收端；为 <see langword="null"/> 时不记录。</para></param>
     /// <returns>A task that completes when the transport closes or cancellation is observed.
     /// <para>在传输关闭或观察到取消时完成的任务。</para></returns>
     public static async Task RunCompanionAsync(string[] args, Tools.IDeviceManagerGateway deviceManager,
         Func<Services.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Tools.IMcpToolCallAudit? audit = null)
     {
         var config = McpServerConfig.Parse(args);
         var host = new McpServerHost(
             new PathSandbox(config.RootDirectory), config.AllowFlash, deviceManager,
             CreateDesktopDeliveryTools(), signingKeys);
-        await host.RunAsync(cancellationToken).ConfigureAwait(false);
+        await host.RunAsync(cancellationToken, audit).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -22,7 +22,7 @@ public sealed class McpToolCallAuditTests
     [Fact]
     public void CreateOptions_WithoutAudit_LeavesCallToolPipelineUnfiltered()
     {
-        var options = McpServerHost.CreateOptions([], null);
+        var options = McpServerHost.CreateOptions([], null, audit: null);
 
         Assert.Empty(options.Filters.Request.CallToolFilters);
     }
