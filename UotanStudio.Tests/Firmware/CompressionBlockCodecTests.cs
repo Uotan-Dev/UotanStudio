@@ -49,7 +49,7 @@ public class CompressionBlockCodecTests
         var payload = BuildRepeatingPayload(ClusterSize);
         var block = new byte[Lz4BlockCodec.MaximumOutputSize(payload.Length)];
 
-        var written = Lz4BlockCodec.Encode(payload, block, level);
+        var written = Lz4BlockCodec.Encode(payload, block, (int)level);
         Assert.InRange(written, 1, block.Length);
 
         var decoded = new byte[payload.Length];
@@ -62,7 +62,7 @@ public class CompressionBlockCodecTests
     {
         var payload = BuildRepeatingPayload(ClusterSize);
         var block = new byte[Lz4BlockCodec.MaximumOutputSize(payload.Length)];
-        var written = Lz4BlockCodec.Encode(payload, block, Lz4BlockLevel.Fast);
+        var written = Lz4BlockCodec.Encode(payload, block, (int)Lz4BlockLevel.Fast);
 
         Assert.True(Lz4BlockCodec.Decode(block.AsSpan(0, written), new byte[64]) < 0);
     }
@@ -72,7 +72,7 @@ public class CompressionBlockCodecTests
     {
         var payload = BuildRepeatingPayload(ClusterSize);
         var block = new byte[Lz4BlockCodec.MaximumOutputSize(payload.Length)];
-        var written = Lz4BlockCodec.Encode(payload, block, Lz4BlockLevel.Fast);
+        var written = Lz4BlockCodec.Encode(payload, block, (int)Lz4BlockLevel.Fast);
 
         var prefix = new byte[payload.Length / 2];
         var produced = Lz4BlockCodec.PartialDecode(block.AsSpan(0, written), prefix);
@@ -86,7 +86,7 @@ public class CompressionBlockCodecTests
     {
         var payload = BuildRepeatingPayload(ClusterSize);
         var block = new byte[Lz4BlockCodec.MaximumOutputSize(payload.Length)];
-        var written = Lz4BlockCodec.Encode(payload, block, Lz4BlockLevel.High);
+        var written = Lz4BlockCodec.Encode(payload, block, (int)Lz4BlockLevel.High);
 
         var partial = new byte[payload.Length];
         var full = new byte[payload.Length];
@@ -100,7 +100,7 @@ public class CompressionBlockCodecTests
     [Fact]
     public void Lz4BlockCodec_Encode_EmptySource_WritesNothing()
     {
-        Assert.Equal(0, Lz4BlockCodec.Encode([], new byte[Lz4BlockCodec.MaximumOutputSize(0)], Lz4BlockLevel.Fast));
+        Assert.Equal(0, Lz4BlockCodec.Encode([], new byte[Lz4BlockCodec.MaximumOutputSize(0)], (int)Lz4BlockLevel.Fast));
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class CompressionBlockCodecTests
         var unconstrained = new byte[payload.Length];
         var constrained = new byte[payload.Length];
         Assert.Equal(payload.Length, ZstdBlockCodec.Decompress(frame.AsSpan(0, written), unconstrained));
-        Assert.Equal(payload.Length, ZstdBlockCodec.Decompress(frame.AsSpan(0, written), constrained, windowLog: 12));
+        Assert.Equal(payload.Length, ZstdBlockCodec.Decompress(frame.AsSpan(0, written), constrained, maximumWindowLog: 12));
         Assert.Equal(unconstrained, constrained);
     }
 
@@ -157,7 +157,7 @@ public class CompressionBlockCodecTests
         Assert.True(boundedLength > plainLength, $"A 4 KiB window must lose the 64 KiB cross-half match: {boundedLength} vs {plainLength}.");
 
         var decoded = new byte[payload.Length];
-        Assert.Equal(payload.Length, ZstdBlockCodec.Decompress(bounded.AsSpan(0, boundedLength), decoded, windowLog: 12));
+        Assert.Equal(payload.Length, ZstdBlockCodec.Decompress(bounded.AsSpan(0, boundedLength), decoded, maximumWindowLog: 12));
         Assert.Equal(payload, decoded);
     }
 

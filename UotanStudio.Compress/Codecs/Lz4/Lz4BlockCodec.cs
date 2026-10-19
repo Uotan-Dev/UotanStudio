@@ -80,6 +80,29 @@ internal static class Lz4BlockCodec
         => LZ4Codec.Decode(source, destination);
 
     /// <summary>
+    /// Decompresses as much of one frameless LZ4 block as fits into the destination and reports how many bytes that was.
+    /// <para>尽可能多地解压单个无帧 LZ4 块到目标缓冲区，并报告实际产出的字节数。</para>
+    /// </summary>
+    /// <param name="source">Stored block bytes, treated as untrusted. <para>存储的块字节，按不可信输入处理。</para></param>
+    /// <param name="destination">Decode capacity; the sequence stops once it is full, so the produced bytes are the
+    /// prefix of the block's plaintext rather than an error.
+    /// <para>解码容量；填满即停止，因此产出的是块明文的开头一段而非错误。</para></param>
+    /// <returns>Number of bytes written, which may equal <paramref name="destination"/>'s length when the block continues
+    /// past it. A negative value means the bitstream ran out of input or is corrupt.
+    /// <para>写入的字节数；块继续超出目标长度时等于 <paramref name="destination"/> 的长度。负值表示位流输入耗尽或已损坏。</para></returns>
+    /// <remarks>
+    /// <para>Formats whose stored block may be a prefix of the plaintext they describe — the LZ4DIFF source of an OTA
+    /// delta patch — need this instead of <see cref="Decode"/>: a full decode would report an error for a block that is
+    /// simply longer than the destination, while the prefix it does produce is exactly the payload those formats store.
+    /// The partner of <see cref="Decode"/> stays K4os so the partial path and the strict path read the same bitstream
+    /// dialect.</para>    /// <para>存储块可能只是其明文前缀的格式——OTA 增量补丁的 LZ4DIFF 源——需要本方法而非 <see cref="Decode"/>：
+    /// 完整解码会把「块本身长于目标」报成错误，而它实际产出的前缀正是这类格式所存储的载荷。与 <see cref="Decode"/>
+    /// 同样落在 K4os 上，使部分解码与严格解码读的是同一种位流方言。</para>
+    /// </remarks>
+    internal static int PartialDecode(ReadOnlySpan<byte> source, Span<byte> destination)
+        => LZ4Codec.PartialDecode(source, destination);
+
+    /// <summary>
     /// Projects an integer on the K4os level scale onto the enumeration the block codec consumes.
     /// <para>把 K4os 级别尺度上的整数投影为块编解码器使用的枚举值。</para>
     /// </summary>
