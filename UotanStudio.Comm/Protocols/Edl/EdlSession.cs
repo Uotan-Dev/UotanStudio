@@ -69,11 +69,13 @@ public sealed partial class EdlSession : IProtocolSession
     public bool IsConnected => !_disposed && Transport.IsConnected && Firehose?.RequiresReconnect != true;
 
     /// <summary>
-    /// Gets whether Firehose has been configured.
-    /// <para>Firehose 是否已配置。</para>
+    /// Gets whether the session reached its configured protocol state, either a Firehose configure or the
+    /// streaming DLOAD switch.
+    /// <para>获取会话是否已抵达其配置态，即 Firehose 已配置或已切换到流式 DLOAD。</para>
     /// </summary>
-    /// <value><c>true</c> after a successful Sahara handshake plus Firehose configure; a failed
-    /// initialization leaves this <c>false</c>. <para>Sahara 握手与 Firehose 配置均成功后为
+    /// <value><c>true</c> after a successful Sahara handshake plus Firehose configure, or after a
+    /// command-mode switch to the streaming DLOAD backend; a failed initialization leaves this
+    /// <c>false</c>. <para>Sahara 握手与 Firehose 配置均成功，或已按命令模式切换到流式 DLOAD 后端后为
     /// <c>true</c>；初始化失败时保持 <c>false</c>。</para></value>
     public bool IsConfigured { get; private set; }
 
@@ -444,6 +446,7 @@ public sealed partial class EdlSession : IProtocolSession
                     streamDloadSelected = true;
                     Backend = EdlDownloadBackend.StreamDload;
                     SetProtocolState(EdlProtocolState.Streaming);
+                    IsConfigured = true;
                     RecordInitializationEvidence("stream-dload-selected", CommandOutcomeKind.Completed,
                         "The command-mode Sahara target switched to the streaming DLOAD backend.", null, null);
                 }
@@ -460,7 +463,7 @@ public sealed partial class EdlSession : IProtocolSession
 
             if (!streamDloadSelected)
             {
-                await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: false).ConfigureAwait(false);
+                await Firehose!.ConfigureCoreAsync(30, cancellationToken, deferStorageDetection: true).ConfigureAwait(false);
                 await Firehose.CompleteStorageConfigurationOwnedAsync(cancellationToken).ConfigureAwait(false);
                 IsConfigured = true;
                 LinkStage = EdlLinkStage.FirehoseReady;
@@ -557,8 +560,11 @@ public sealed partial class EdlSession : IProtocolSession
     };
 
     /// <summary>
-    /// Ensures the session is initialized (handshake + configure).
-    /// <para>确保会话已初始化（握手 + 配置）。</para>
+    /// Ensures the session is initialized (handshake + configure) without rebuilding an already configured
+    /// session or a link that was handed to the streaming DLOAD backend, whose Sahara exchange can happen only
+    /// once per link.
+    /// <para>确保会话已初始化（握手 + 配置），不重建已配置的会话或已交接给流式 DLOAD 后端的链路，因为
+    /// 后者的 Sahara 交换在一条链路上只能发生一次。</para>
     /// </summary>
     /// <param name="programmerImage">Optional programmer image stream. <para>可选的编程器镜像流。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
@@ -567,18 +573,22 @@ public sealed partial class EdlSession : IProtocolSession
     {
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
-        if (!IsConfigured)
+        if (IsConfigured || _protocolState == EdlProtocolState.Streaming)
         {
-            await InitializeAsync(programmerImage, cancellationToken);
+            return;
         }
+
+        await InitializeAsync(programmerImage, cancellationToken);
     }
 
     /// <summary>
-    /// Ensures the session is initialized with explicit startup requirements.
-    /// <para>确保会话按显式启动要求初始化。</para>
+    /// Ensures the session is initialized with explicit startup requirements, or returns immediately for an
+    /// already configured session or a link that was handed to the streaming DLOAD backend.
+    /// <para>确保会话按显式启动要求初始化；对已配置的会话或已交接给流式 DLOAD 后端的链路直接返回。</para>
     /// </summary>
     /// <remarks>Startup requirements are validated even when the session is already configured, so a late request
-    /// for configuration options fails loudly instead of being skipped.</remarks>
+    /// for configuration options fails loudly instead of being skipped. A streaming DLOAD link is never
+    /// re-handshaken, because its Sahara exchange can happen only once.</remarks>
     /// <param name="programmerImage">Optional programmer image stream. <para>可选的编程器镜像流。</para></param>
     /// <param name="options">Immutable startup requirements, or <see langword="null"/> for the defaults.
     /// <para>不可变的启动要求；为 <see langword="null"/> 时使用默认值。</para></param>
@@ -595,10 +605,12 @@ public sealed partial class EdlSession : IProtocolSession
             return;
         }
 
-        if (!IsConfigured)
+        if (IsConfigured || _protocolState == EdlProtocolState.Streaming)
         {
-            await InitializeAsync(programmerImage, cancellationToken).ConfigureAwait(false);
+            return;
         }
+
+        await InitializeAsync(programmerImage, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

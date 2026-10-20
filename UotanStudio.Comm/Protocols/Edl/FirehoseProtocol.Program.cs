@@ -445,13 +445,21 @@ public sealed partial class FirehoseProtocol
 
                 ThrowIfDisposed();
                 cancellationToken.ThrowIfCancellationRequested();
+                long written;
                 try
                 {
-                    await _transport.WriteAsync(buffer, 0, toRead, zlpTimeout, cancellationToken).ConfigureAwait(false);
+                    written = await _transport.WriteAsync(buffer, 0, toRead, zlpTimeout, cancellationToken).ConfigureAwait(false);
                 }
                 catch (TimeoutException ex)
                 {
                     throw new EdlException(EdlErrorCode.WritePortTimeout, ex.Message, ex);
+                }
+
+                if (written != toRead)
+                {
+                    _faulted = true;
+                    throw new EdlException(EdlErrorCode.WritePortTimeout,
+                        $"The transport accepted {written} of {toRead} raw payload bytes; the block is not replayed because its accepted length is unknown.");
                 }
 
                 bytesWritten += toRead;

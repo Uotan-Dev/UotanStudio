@@ -383,10 +383,16 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// Sends a configure command and negotiates payload sizes (and the sector size).
     /// <para>发送配置命令并协商负载大小（及扇区大小）。</para>
     /// </summary>
+    /// <remarks>A single attempt that reads no response is retried within <paramref name="maxRetries"/>, because the
+    /// target may still be starting Firehose; the session only becomes unreusable when the whole budget expires
+    /// without any response or when the target faults it.
+    /// <para>单次尝试完全读不到响应时会在 <paramref name="maxRetries"/> 内重试，因为目标可能仍在启动 Firehose；
+    /// 只有整个预算耗尽仍无任何响应，或目标使会话失效时，会话才不可复用。</para></remarks>
     /// <param name="maxRetries">Maximum number of retry attempts. <para>最大重试次数。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The Firehose response. <para>Firehose 响应。</para></returns>
-    /// <exception cref="EdlException">Thrown when configure fails or the device disconnects. <para>配置失败或设备断开时抛出。</para></exception>
+    /// <exception cref="EdlException">Thrown when configure fails, the target disconnects, or no response arrives
+    /// within the retry budget. <para>配置失败、设备断开，或重试预算内没有任何响应时抛出。</para></exception>
     public async Task<FirehoseResponse> ConfigureAsync(int maxRetries = 30, CancellationToken cancellationToken = default)
     {
         using var operation = await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
@@ -399,6 +405,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     {
         ThrowIfDisposed();
         var attemptedStorageTypes = new HashSet<FirehoseStorageType> { Configuration.StorageType };
+        EdlException? lastTimeout = null;
         for (var attempt = 0; attempt < maxRetries; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -419,12 +426,15 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             FirehoseResponse response;
             try
             {
-                response = await SendCommandAndWaitResponseAsync(xml, cancellationToken, perAttemptTimeoutMs, perAttemptTimeoutMs);
+                response = await SendCommandAndWaitResponseAsync(xml, cancellationToken, perAttemptTimeoutMs, perAttemptTimeoutMs,
+                    tolerateResponseTimeout: true);
             }
             catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.TransportTimeout or EdlErrorCode.ReadPortTimeout)
             {
-                throw new EdlException(EdlErrorCode.ConnectionLost,
-                    "Configure timed out; reconnect rather than reusing a potentially delayed acknowledgement.", ex);
+                lastTimeout = ex;
+                DiscardPendingResponseBytes();
+                Log($"Configure attempt {attempt + 1}/{maxRetries} timed out ({ex.Message}); retrying within the attempt budget.");
+                continue;
             }
 
             if (response.IsRawMode)
@@ -443,11 +453,15 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                     xml = FirehoseXmlBuilder.BuildConfigure(Configuration);
                     try
                     {
-                        response = await SendCommandAndWaitResponseAsync(xml, cancellationToken, perAttemptTimeoutMs);
+                        response = await SendCommandAndWaitResponseAsync(xml, cancellationToken, perAttemptTimeoutMs,
+                            tolerateResponseTimeout: true);
                     }
                     catch (EdlException ex) when (ex.ErrorCode is EdlErrorCode.TransportTimeout or EdlErrorCode.ReadPortTimeout)
                     {
-                        throw new EdlException(EdlErrorCode.ConnectionLost, "Configure renegotiation timed out; reconnect.", ex);
+                        lastTimeout = ex;
+                        DiscardPendingResponseBytes();
+                        Log($"Configure renegotiation attempt {attempt + 1}/{maxRetries} timed out ({ex.Message}); retrying within the attempt budget.");
+                        continue;
                     }
 
                     if (!response.IsAck || response.IsRawMode)
@@ -501,8 +515,15 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             return response;
         }
 
-        throw new EdlException(EdlErrorCode.ConfigureFailed,
-            $"Firehose configure failed after {maxRetries} attempts (timeout).");
+        _faulted = true;
+        _lastFailureKind = EdlFailureKind.ConnectionLost;
+        var message = $"Configure received no target response within {maxRetries} attempts; " +
+            "reconnect rather than reusing a potentially delayed acknowledgement.";
+        var failure = lastTimeout is null
+            ? new EdlException(EdlErrorCode.ConnectionLost, message)
+            : new EdlException(EdlErrorCode.ConnectionLost, message, lastTimeout);
+        failure.FailureKind = EdlFailureKind.ConnectionLost;
+        throw failure;
     }
 
     /// <summary>
@@ -634,9 +655,11 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         {
             await AutoDetectSectorSizeCoreAsync(cancellationToken).ConfigureAwait(false);
         }
-        else if (Configuration.SectorSize == 0)
+
+        if (Configuration.SectorSize == 0)
         {
-            Configuration.SectorSize = EdlConstants.DefaultSectorSizeSmall;
+            Configuration.SectorSize = DefaultSectorSizeFor(Configuration.StorageType);
+            Log($"Storage detection left no sector size; using the {Configuration.SectorSize}-byte default for {Configuration.StorageType}.");
         }
 
         CaptureCapabilities();
@@ -784,9 +807,11 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
     /// <summary>
     /// Auto-detects the sector size via &lt;getstorageinfo physical_partition_number="0"/&gt;
-    /// and stores it in the configuration; falls back to a storage-type default.
+    /// and stores it in the configuration; falls back to a storage-type default. NAND is not interrogated
+    /// because its layout has no usable sector size, so it takes the 4096-byte default.
     /// <para>通过 &lt;getstorageinfo physical_partition_number="0"/&gt; 自动检测扇区大小并存入
-    /// 配置；失败时按存储类型回退默认值。</para>
+    /// 配置；失败时按存储类型回退默认值。NAND 不参与查询，因为其布局没有可用的扇区大小，直接采用
+    /// 4096 字节默认值。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>A task representing the asynchronous operation. <para>表示异步操作的任务。</para></returns>
@@ -796,11 +821,28 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         await AutoDetectSectorSizeCoreAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Resolves the fallback sector size used when auto-detection yields nothing: NAND, UFS and SPI NOR
+    /// are page-addressed with 4096-byte sectors, while eMMC and unknown media keep the 512-byte default.
+    /// <para>自动检测无结果时解析回退扇区大小：NAND、UFS 与 SPI NOR 以 4096 字节页寻址，而 eMMC 与未知介质
+    /// 保留 512 字节默认值。</para>
+    /// </summary>
+    /// <param name="storageType">The storage type reported by configure. <para>configure 上报的存储类型。</para></param>
+    /// <returns>The fallback sector size in bytes. <para>回退扇区大小（字节）。</para></returns>
+    private static long DefaultSectorSizeFor(FirehoseStorageType storageType) => storageType switch
+    {
+        FirehoseStorageType.Nand or FirehoseStorageType.Ufs or FirehoseStorageType.Spinor
+            => EdlConstants.DefaultSectorSizeLarge,
+        _ => EdlConstants.DefaultSectorSizeSmall
+    };
+
     private async Task AutoDetectSectorSizeCoreAsync(CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
         if (Configuration.StorageType == FirehoseStorageType.Nand)
         {
+            Configuration.SectorSize = DefaultSectorSizeFor(FirehoseStorageType.Nand);
+            Log($"NAND storage reports no getstorageinfo sector size; using the {Configuration.SectorSize}-byte default.");
             return;
         }
 
@@ -825,11 +867,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
         if (sectorSize <= 0)
         {
-            sectorSize = Configuration.StorageType switch
-            {
-                FirehoseStorageType.Ufs or FirehoseStorageType.Spinor => EdlConstants.DefaultSectorSizeLarge,
-                _ => EdlConstants.DefaultSectorSizeSmall
-            };
+            sectorSize = DefaultSectorSizeFor(Configuration.StorageType);
             Log($"Using default sector size for {Configuration.StorageType}: {sectorSize}");
         }
 
@@ -853,10 +891,16 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <para>非 <see langword="null"/> 时（对从不确认读写的 loader 对应 <c>--skipresponse</c>），只写入命令
     /// 字节并返回该合成确认，而不读取任何目标响应。其原始模式位必须已与命令数据阶段所需一致，且不会缩短
     /// 任何超时。</para></param>
+    /// <param name="tolerateResponseTimeout">When <see langword="true"/>, a response timeout leaves the session
+    /// reusable and propagates unchanged so a bounded retry loop can resolve it; every other failure still faults
+    /// the session. Only the configure negotiation uses this, because its retries send the same idempotent command.
+    /// <para>为 <see langword="true"/> 时，响应超时不使会话失效，而是原样向上抛出，交由有界重试循环处理；
+    /// 其他失败仍会使会话失效。只有 configure 协商使用它，因为其重试发送的是同一个幂等命令。</para></param>
     /// <returns>The Firehose response. Firehose 响应。</returns>
     private async Task<FirehoseResponse> SendCommandAndWaitResponseAsync(string xml, CancellationToken cancellationToken,
         int? responseTimeoutMs = null, int? writeTimeoutMs = null, Action<string>? logObserver = null,
-        Action<FirehoseDataBlock>? blockObserver = null, FirehoseResponse? skipResponseAcknowledgement = null)
+        Action<FirehoseDataBlock>? blockObserver = null, FirehoseResponse? skipResponseAcknowledgement = null,
+        bool tolerateResponseTimeout = false)
     {
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
@@ -873,7 +917,11 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
         }
         catch (Exception ex)
         {
-            _faulted = true;
+            if (!(tolerateResponseTimeout
+                && ex is EdlException { ErrorCode: EdlErrorCode.TransportTimeout or EdlErrorCode.ReadPortTimeout }))
+            {
+                _faulted = true;
+            }
             RecordFailure(ex);
             throw;
         }

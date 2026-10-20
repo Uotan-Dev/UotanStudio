@@ -410,8 +410,8 @@ internal static class EdlConstants
     public const int RawReadChunkBytes = 1024 * 1024;
 
     /// <summary>
-    /// Sector size assumed for UFS and SPI NOR storage when auto-detection is unavailable.
-    /// <para>自动检测不可用时 UFS 与 SPI NOR 存储采用的扇区大小。</para>
+    /// Sector size assumed for NAND, UFS and SPI NOR storage when auto-detection is unavailable.
+    /// <para>自动检测不可用时 NAND、UFS 与 SPI NOR 存储采用的扇区大小。</para>
     /// </summary>
     public const long DefaultSectorSizeLarge = 4096;
 

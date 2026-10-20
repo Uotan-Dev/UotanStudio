@@ -104,6 +104,15 @@ public sealed partial class FirehoseProtocol
         throw new EdlException(EdlErrorCode.TransportTimeout, "Timed out waiting for a complete Firehose response.");
     }
 
+    /// <summary>
+    /// Discards bytes retained from an incomplete response so a bounded retry starts from a clean
+    /// receive buffer instead of parsing a stale fragment. Only the configure retry path uses this;
+    /// every other failure faults the session.
+    /// <para>丢弃未完成响应残留的字节，使有界重试从干净的接收缓冲区开始，而不是解析陈旧残片。
+    /// 只有 configure 重试路径使用；其他失败都会使会话失效。</para>
+    /// </summary>
+    private void DiscardPendingResponseBytes() => _rxBufferBytes = 0;
+
     private void ShiftRxBufferLeft(int bytes)
     {
         var remaining = _rxBufferBytes - bytes;

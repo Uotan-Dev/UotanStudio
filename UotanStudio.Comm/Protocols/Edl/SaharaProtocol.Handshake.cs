@@ -428,10 +428,25 @@ public sealed partial class SaharaProtocol
     }
 
     /// <summary>
-    /// Checks if the data looks like a Firehose XML response.
-    /// <para>检查数据是否看起来像 Firehose XML 响应。</para>
+    /// Checks if the data looks like a Firehose XML response after skipping the NUL packet padding and ASCII
+    /// whitespace a target emits before its document.
+    /// <para>在跳过目标在文档之前输出的 NUL 包填充与 ASCII 空白后，检查数据是否看起来像 Firehose XML 响应。</para>
     /// </summary>
     /// <param name="d">The data to check. 要检查的数据。</param>
-    /// <returns><c>true</c> if the data starts with &lt;?xml. 如果数据以 &lt;?xml 开头则返回 <c>true</c>。</returns>
-    private static bool LooksLikeFirehoseXml(byte[] d) => d != null && d.Length >= 5 && d[0] == (byte)'<' && d[1] == (byte)'?' && d[2] == (byte)'x' && d[3] == (byte)'m' && d[4] == (byte)'l';
+    /// <returns><c>true</c> if the first non-padding bytes are &lt;?xml. 如果首个非填充字节起为 &lt;?xml 则返回 <c>true</c>。</returns>
+    private static bool LooksLikeFirehoseXml(byte[] d)
+    {
+        if (d is null)
+        {
+            return false;
+        }
+
+        var start = 0;
+        while (start < d.Length && EdlConstants.DocumentLeadingPadding.Contains(d[start]))
+        {
+            start++;
+        }
+
+        return d.AsSpan(start).StartsWith("<?xml"u8);
+    }
 }
