@@ -5,6 +5,7 @@ using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Workspace;
 using Xunit;
 
@@ -14,14 +15,20 @@ namespace UotanStudio.Tests.Projects;
 [Collection("Workspace state")]
 public sealed class SubProjectMetadataIsolationTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-owner-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDirectory _temp = new();
+    private readonly List<TempDirectory> _outside = [];
+    private string _root => _temp.Path;
     private readonly string? _ambient = RepackMetadata.DefaultMetadataRoot;
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
-    public SubProjectMetadataIsolationTests() => Directory.CreateDirectory(_root);
 
     /// <summary>A package destination outside the project root (the flat root is the solution's directory).</summary>
-    private string OutsideRoot(string name) => Path.Combine(Path.GetTempPath(), Path.GetFileName(_root) + "-" + name);
+    private string OutsideRoot(string name)
+    {
+        var directory = new TempDirectory();
+        _outside.Add(directory);
+        return Path.Combine(directory.Path, name);
+    }
 
     private async Task<ProjectSession> CreateAsync()
     {
@@ -224,6 +231,11 @@ public sealed class SubProjectMetadataIsolationTests : IDisposable
     {
         ProjectContextService.Instance.CloseProject();
         RepackMetadata.DefaultMetadataRoot = _ambient;
-        Directory.Delete(_root, true);
+        foreach (var directory in _outside)
+        {
+            directory.Dispose();
+        }
+
+        _temp.Dispose();
     }
 }

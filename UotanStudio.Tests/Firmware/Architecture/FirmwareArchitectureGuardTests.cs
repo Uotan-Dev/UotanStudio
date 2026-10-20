@@ -1,3 +1,4 @@
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware.Architecture;
@@ -137,7 +138,8 @@ public class FirmwareArchitectureGuardTests
     [Fact]
     public void ScanDirectory_SyntheticFlatTree_AttributesFlatContextReferencesOnly()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"uotan-arch-flat-{Guid.NewGuid():N}", "UotanStudio.Firmware");
+        using var temp = new TempDirectory();
+        var root = Path.Combine(temp.Path, "UotanStudio.Firmware");
         var fileSystemDirectory = Path.Combine(root, "FileSystem");
         var blockImageDirectory = Path.Combine(root, "BlockImage");
         Directory.CreateDirectory(fileSystemDirectory);
@@ -156,17 +158,10 @@ public class FirmwareArchitectureGuardTests
             }
             """);
 
-        try
-        {
-            var contextEdges = FirmwareContextDependencyScanner.AggregateContextEdges(FirmwareContextDependencyScanner.ScanDirectory(root));
+        var contextEdges = FirmwareContextDependencyScanner.AggregateContextEdges(FirmwareContextDependencyScanner.ScanDirectory(root));
 
-            var edge = Assert.Single(contextEdges);
-            Assert.Equal("FileSystem -> BlockImage", edge.Key);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        var edge = Assert.Single(contextEdges);
+        Assert.Equal("FileSystem -> BlockImage", edge.Key);
     }
 
     [Fact]

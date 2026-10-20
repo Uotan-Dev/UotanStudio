@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Services.Projects;
 using UotanStudio.Tests.Projects;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Workspace;
 using Xunit;
 
@@ -11,16 +12,13 @@ namespace UotanStudio.Tests.Services;
 [Collection("Workspace state")]
 public sealed class ProjectOperationsBoundaryTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-project-boundary-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDirectory _temp = new();
+    private string _root => _temp.Path;
     private readonly List<string> _destinations = [];
     private readonly TestWorkspace _workspace = new();
     private readonly ProjectOperationsService _projects;
 
-    public ProjectOperationsBoundaryTests()
-    {
-        Directory.CreateDirectory(_root);
-        _projects = new(_workspace);
-    }
+    public ProjectOperationsBoundaryTests() => _projects = new(_workspace);
 
     [Fact]
     public async Task ImportAsync_RawImage_CopiesAndKeepsProjectImage()
@@ -398,6 +396,7 @@ public sealed class ProjectOperationsBoundaryTests : IDisposable
         RemoveDirectoryIfUnlocked(_root);
         foreach (var destination in _destinations)
             RemoveDirectoryIfUnlocked(destination);
+        _temp.Dispose();
     }
 
     private static void RemoveDirectoryIfUnlocked(string path)

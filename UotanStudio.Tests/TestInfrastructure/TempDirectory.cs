@@ -53,11 +53,51 @@ public sealed class TempDirectory : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
+        for (var attempt = 0; attempt < 50; attempt++)
+        {
+            try
+            {
+                if (!Directory.Exists(Path))
+                {
+                    return;
+                }
+
+                if (attempt > 0)
+                {
+                    ClearReadOnly(Path);
+                }
+
+                Directory.Delete(Path, recursive: true);
+                return;
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+
+            Thread.Sleep(attempt < 10 ? 25 : 100);
+        }
+    }
+
+    private static void ClearReadOnly(string root)
+    {
         try
         {
-            Directory.Delete(Path, recursive: true);
+            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            {
+                var attributes = File.GetAttributes(file);
+                if ((attributes & FileAttributes.ReadOnly) != 0)
+                {
+                    File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
+                }
+            }
         }
-        catch
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
         {
         }
     }

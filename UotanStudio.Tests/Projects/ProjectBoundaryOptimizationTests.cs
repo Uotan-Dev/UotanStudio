@@ -1,15 +1,16 @@
 using System.IO.Compression;
 using UotanStudio.Services.Projects;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Projects;
 
 public sealed class ProjectBoundaryOptimizationTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-boundaries-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDirectory _temp = new();
     private static CancellationToken Token => TestContext.Current.CancellationToken;
-    public ProjectBoundaryOptimizationTests() => Directory.CreateDirectory(_root);
-    public void Dispose() => Directory.Delete(_root, true);
+    private string _root => _temp.Path;
+    public void Dispose() => _temp.Dispose();
 
     [Fact]
     public async Task FailedSave_RestoresAllPreviouslyPublishedMetadata()
@@ -44,7 +45,7 @@ public sealed class ProjectBoundaryOptimizationTests : IDisposable
         var imagePath = Path.Combine(session.Context.EnsureImagesDirectory(), "boot.img");
         await File.WriteAllBytesAsync(imagePath, [1, 2, 3, 4], Token);
         data.Images.Add(new() { RelativePath = session.Context.RelativePath(imagePath)! });
-        var archivePath = Path.Combine(Path.GetTempPath(), Path.GetFileName(_root) + "-project.zip");
+        var archivePath = Path.Combine(_root, "package.zip");
         await session.ExportPackageAsync(archivePath, Token);
         var imported = new ProjectSession();
         Assert.True(await imported.ImportPackageAsync(archivePath, Path.Combine(_root, "imported"), Token));

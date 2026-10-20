@@ -1,15 +1,16 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
 public sealed class AvbFooterEditorTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-avb-footer-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDirectory _temp = new();
+    private string _root => _temp.Path;
 
-    public AvbFooterEditorTests() => Directory.CreateDirectory(_root);
 
     [Fact]
     public async Task RemoveFooterAsync_ValidFooter_RestoresOriginalBytes()
@@ -61,7 +62,7 @@ public sealed class AvbFooterEditorTests : IDisposable
         Assert.Equal([9, 8, 7], await File.ReadAllBytesAsync(output, TestContext.Current.CancellationToken));
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose() => _temp.Dispose();
 
     private static byte[] BuildSignedImage(byte[] original)
     {

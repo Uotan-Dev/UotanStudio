@@ -11,9 +11,9 @@ namespace UotanStudio.Tests.Firmware;
 
 public sealed class AvbResignTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-avb-resign-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDirectory _temp = new();
+    private string _root => _temp.Path;
 
-    public AvbResignTests() => Directory.CreateDirectory(_root);
 
     [Theory]
     [InlineData(512, 4096, 8192)]
@@ -265,7 +265,7 @@ public sealed class AvbResignTests : IDisposable
         Assert.True(stream.CanRead);
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose() => _temp.Dispose();
 
     private sealed class CancelingStream(byte[] data, CancellationTokenSource cancellation) : MemoryStream(data, writable: false)
     {

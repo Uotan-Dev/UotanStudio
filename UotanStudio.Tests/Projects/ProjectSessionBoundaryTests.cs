@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Services.Projects;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Projects;
@@ -8,15 +9,13 @@ namespace UotanStudio.Tests.Projects;
 /// <summary>Exercises project operations through data only, without constructing a desktop workspace.</summary>
 public sealed class ProjectSessionBoundaryTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-project-boundary-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDirectory _temp = new();
+    private string _root => _temp.Path;
     private readonly TestWorkspace _workspace = new();
+    private readonly List<TempDirectory> _destinations = [];
     private readonly ProjectSession _projects;
 
-    public ProjectSessionBoundaryTests()
-    {
-        Directory.CreateDirectory(_root);
-        _projects = new(_workspace);
-    }
+    public ProjectSessionBoundaryTests() => _projects = new(_workspace);
 
     [Fact]
     public async Task OpenProject_OldNodeSchema_PreservesCurrentContextAndWorkspace()
@@ -180,9 +179,14 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
 
     private string DestinationRoot(bool existing)
     {
-        var dir = Path.Combine(Path.GetTempPath(), Path.GetFileName(_root) + "-dest-" + Guid.NewGuid().ToString("N"));
-        if (existing) Directory.CreateDirectory(dir);
-        return dir;
+        var directory = new TempDirectory();
+        if (!existing)
+        {
+            directory.Dispose();
+        }
+
+        _destinations.Add(directory);
+        return directory.Path;
     }
 
     [Theory]
@@ -574,7 +578,12 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
     public void Dispose()
     {
         _projects.Context.CloseProject();
-        Directory.Delete(_root, recursive: true);
+        foreach (var destination in _destinations)
+        {
+            destination.Dispose();
+        }
+
+        _temp.Dispose();
     }
 
     private sealed class TestWorkspace : IProjectWorkspace

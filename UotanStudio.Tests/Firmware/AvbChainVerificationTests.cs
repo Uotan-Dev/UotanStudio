@@ -352,14 +352,10 @@ public sealed class AvbChainVerificationTests
 
     private sealed class Fixture : IDisposable
     {
-        private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-avb-chain-" + Guid.NewGuid().ToString("N"));
+        private readonly TempDirectory _temp = new();
+        private string _root => _temp.Path;
         private readonly RSA _key = SigningTestKeys.Create();
         public Dictionary<string, string> Paths { get; } = new(StringComparer.Ordinal);
-
-        public Fixture()
-        {
-            Directory.CreateDirectory(_root);
-        }
 
         public AvbChainVerifyOptions Options(string root = "vbmeta", string suffix = "", bool trust = true, bool nested = false,
             IReadOnlyDictionary<uint, ulong>? rollback = null) => new()
@@ -445,7 +441,7 @@ public sealed class AvbChainVerificationTests
         public void Dispose()
         {
             _key.Dispose();
-            Directory.Delete(_root, recursive: true);
+            _temp.Dispose();
         }
     }
 }

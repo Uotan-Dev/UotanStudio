@@ -6,11 +6,11 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
-public sealed class AvbFecResignTests
+public sealed class AvbFecResignTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-avb-fec-resign-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDirectory _temp = new();
+    private string _root => _temp.Path;
 
-    public AvbFecResignTests() => Directory.CreateDirectory(_root);
 
     [Theory]
     [InlineData(1U, 4096, 4096, 8193)]
@@ -192,4 +192,6 @@ public sealed class AvbFecResignTests
         Assert.Equal(new byte[] { 9, 8, 7 }, await File.ReadAllBytesAsync(output, token));
         Assert.Empty(Directory.GetFiles(_root, "*.tmp-*"));
     }
+
+    public void Dispose() => _temp.Dispose();
 }
