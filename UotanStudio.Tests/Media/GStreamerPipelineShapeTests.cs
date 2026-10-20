@@ -11,7 +11,7 @@ public sealed class GStreamerPipelineShapeTests
     private const string Element = "avdec_h264";
     private const string InputCaps = "video/x-h264,stream-format=byte-stream,alignment=au,width=640,height=480";
     private const string OutputCaps = "video/x-raw,format=NV12";
-    private const string SinkTail = "appsink name=output sync=false max-buffers=8 drop=false enable-last-sample=false";
+    private const string SinkTail = "appsink name=output sync=false max-buffers=2 drop=true enable-last-sample=false";
 
     private static string Build(GStreamerPlanePath path)
         => GStreamerVideoDecoder.BuildPipeline(Parser, Element, InputCaps, OutputCaps, path);
