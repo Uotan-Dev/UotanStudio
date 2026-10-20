@@ -32,7 +32,7 @@
 
 ## 可见性边界
 
-本库所有类型都是 public，新增或调整公共成员必须登记 `PublicAPI.Unshipped.txt` 并写中英双语 XML 注释（`TreatWarningsAsErrors` 使 `CS1591`/`RS0016` 直接失败）。`Properties/AssemblyInfo.cs` 的 `InternalsVisibleTo` 只开放给 `UotanStudio.Tests` 与 `UotanStudio.Benchmarks`；其他项目一律通过公共契约消费，不得以扩大 `InternalsVisibleTo` 的方式绕开文档要求。
+本库所有类型都是 public，新增或调整公共成员必须写中英双语 XML 注释（`TreatWarningsAsErrors` 使 `CS1591` 直接失败）。公开 API 形态不受基线文件约束，不再维护 `PublicAPI.*.txt`。`Properties/AssemblyInfo.cs` 的 `InternalsVisibleTo` 只开放给 `UotanStudio.Tests` 与 `UotanStudio.Benchmarks`；其他项目一律通过公共契约消费，不得以扩大 `InternalsVisibleTo` 的方式绕开文档要求。
 
 ## 转发边界
 
