@@ -122,7 +122,7 @@ public sealed partial class FastbootSession
 
         SendCommand(FastbootConstants.CommandDownload + length.ToString("x8"));
 
-        var rawResponse = ReceiveResponse();
+        var rawResponse = ReceiveResponse(cancellationToken: cancellationToken);
         if (rawResponse.State != FastbootResponseState.Data)
         {
             return rawResponse;
@@ -177,7 +177,7 @@ public sealed partial class FastbootSession
             ArrayPool<byte>.Shared.Return(chunkBuffer);
         }
 
-        var terminal = ReceiveResponse();
+        var terminal = ReceiveResponse(cancellationToken: cancellationToken);
         _pendingDownloadBytes = 0;
         if (terminal.State is FastbootResponseState.Timeout)
         {
@@ -324,10 +324,10 @@ public sealed partial class FastbootSession
         return DownloadData(fs, fs.Length, progress, cancellationToken);
     }
 
-    /// <summary>Executes a command that yields a DATA response, then receives the announced payload into the specified stream and awaits the trailing OKAY/FAIL. Used by fetch/upload/get_staged Style commands.
-    /// <para>执行会产生 DATA 响应的命令，将声明的负载接收到指定流，并等待随后的 OKAY/FAIL。 供 fetch/upload/get_staged 类命令使用。</para></summary>
-    /// <param name="command">Raw command sent first (e.g. <c>upload:&lt;name&gt;</c>); it must answer with a DATA frame.
-    /// <para>首先发送的原始命令（如 <c>upload:&lt;name&gt;</c>）；必须返回 DATA 帧。</para></param>
+    /// <summary>Executes a command that yields a DATA response, then receives the announced payload into the specified stream and awaits the trailing OKAY/FAIL. Used by the fetch and upload helpers.
+    /// <para>执行会产生 DATA 响应的命令，将声明的负载接收到指定流，并等待随后的 OKAY/FAIL。供 fetch 与 upload 辅助方法使用。</para></summary>
+    /// <param name="command">Raw command sent first (e.g. <c>upload</c> or <c>fetch:</c>); it must answer with a DATA frame.
+    /// <para>首先发送的原始命令（如 <c>upload</c> 或 <c>fetch:</c>）；必须返回 DATA 帧。</para></param>
     /// <param name="output">Stream the payload is appended to at its current position; the caller keeps ownership.
     /// <para>在当前位置追加载负载的流；所有权由调用方保留。</para></param>
     /// <param name="progress">Receives the cumulative received byte count after each chunk; may be <see langword="null"/>.
@@ -355,7 +355,7 @@ public sealed partial class FastbootSession
         }
 
         ReadDataPayload(response.DataSize, output, progress, cancellationToken);
-        return ReceiveResponse();
+        return ReceiveResponse(cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -374,7 +374,7 @@ public sealed partial class FastbootSession
     {
         ThrowIfDisposed();
         ReadDataPayload(size, output, progress, cancellationToken);
-        return ReceiveResponse();
+        return ReceiveResponse(cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -435,36 +435,39 @@ public sealed partial class FastbootSession
         return take;
     }
 
-    /// <summary>Uploads a file from the device following an upload: command and writes it to the specified stream.
-    /// <para>执行 upload: 命令从设备上传文件并写入指定流。</para></summary>
-    /// <param name="filename">Device-side file path appended after <c>upload:</c>.
-    /// <para>追加在 <c>upload:</c> 之后的设备侧文件路径。</para></param>
-    /// <param name="output">Stream the file content is appended to at its current position; the caller keeps ownership.
-    /// <para>在当前位置追加文件内容的流；所有权由调用方保留。</para></param>
+    /// <summary>Uploads the data staged on the device with the AOSP <c>upload</c> command and writes it to the specified stream.
+    /// <para>执行 AOSP 的 <c>upload</c> 命令把设备上暂存的数据上传并写入指定流。</para>
+    /// The wire command is the bare word <c>upload</c>: the device returns whatever a previous <c>download</c> staged, so no filename travels with it.
+    /// <para>线命令是裸词 <c>upload</c>：设备返回先前 <c>download</c> 暂存的内容，因此命令不携带文件名。</para></summary>
+    /// <param name="filename">Retained for source compatibility only; the AOSP <c>upload</c> command carries no filename, so this value is not sent.
+    /// <para>仅为源码兼容保留；AOSP 的 <c>upload</c> 命令不携带文件名，因此该值不会发送。</para></param>
+    /// <param name="output">Stream the uploaded content is appended to at its current position; the caller keeps ownership.
+    /// <para>在当前位置追加已上传内容的流；所有权由调用方保留。</para></param>
     /// <param name="progress">Receives the cumulative received byte count after each chunk; may be <see langword="null"/>.
     /// <para>每个分块接收后接收累计字节数；可为 <see langword="null"/>。</para></param>
     /// <param name="cancellationToken">Checked before every transport read; cancelling aborts the upload mid-payload.
     /// <para>每次传输读取前检查；取消会在传输中途终止上传。</para></param>
     /// <returns>The trailing OKAY/FAIL response after the payload.
     /// <para>负载之后的 OKAY/FAIL 终态响应。</para></returns>
-    /// <exception cref="FastbootException">The <c>upload:</c> command did not answer with a DATA response.
-    /// <para><c>upload:</c> 命令未返回 DATA 响应。</para></exception>
+    /// <exception cref="FastbootException">The <c>upload</c> command did not answer with a DATA response.
+    /// <para><c>upload</c> 命令未返回 DATA 响应。</para></exception>
     /// <exception cref="EndOfStreamException">The device stopped sending before the announced payload size.
     /// <para>设备在声明的负载大小传完前停止发送。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
     /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     public FastbootResponse UploadToStream(string filename, Stream output, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
-        => UploadData(FastbootConstants.CommandUpload + filename, output, progress, cancellationToken);
+        => UploadData(FastbootConstants.CommandUpload, output, progress, cancellationToken);
 
     /// <summary>
-    /// Uploads a file from the device and saves it to the specified output path.
-    /// <para>从设备上传文件并保存到指定输出路径。</para>
+    /// Uploads the data staged on the device and saves it to the specified output path.
+    /// <para>从设备上传暂存数据并保存到指定输出路径。</para>
     /// </summary>
-    /// <param name="filename">Device-side file path appended after <c>upload:</c>. <para>追加在 <c>upload:</c> 之后的设备侧文件路径。</para></param>
+    /// <param name="filename">Retained for source compatibility only; the AOSP <c>upload</c> command carries no filename, so this value is not sent.
+    /// <para>仅为源码兼容保留；AOSP 的 <c>upload</c> 命令不携带文件名，因此该值不会发送。</para></param>
     /// <param name="outputPath">Local destination file, created or truncated before the transfer starts. <para>本地目标文件，在传输开始前创建或截断。</para></param>
     /// <returns>The trailing OKAY/FAIL response after the payload. <para>负载之后的 OKAY/FAIL 终态响应。</para></returns>
     /// <exception cref="IOException">The destination path cannot be created or written. <para>目标路径无法创建或写入。</para></exception>
-    /// <exception cref="FastbootException">The <c>upload:</c> command did not answer with a DATA response. <para><c>upload:</c> 命令未返回 DATA 响应。</para></exception>
+    /// <exception cref="FastbootException">The <c>upload</c> command did not answer with a DATA response. <para><c>upload</c> 命令未返回 DATA 响应。</para></exception>
     public FastbootResponse Upload(string filename, string outputPath)
     {
         using var fs = File.Create(outputPath);
@@ -472,17 +475,18 @@ public sealed partial class FastbootSession
     }
 
     /// <summary>
-    /// Uploads a file from the device and returns its contents as a byte array.
-    /// <para>从设备上传文件并以字节数组形式返回其内容。</para>
+    /// Uploads the data staged on the device and returns its contents as a byte array.
+    /// <para>从设备上传暂存数据并以字节数组形式返回其内容。</para>
     /// </summary>
-    /// <param name="filename">Device-side file path appended after <c>upload:</c>. <para>追加在 <c>upload:</c> 之后的设备侧文件路径。</para></param>
-    /// <returns>The complete file content buffered in memory. <para>缓冲在内存中的完整文件内容。</para></returns>
+    /// <param name="filename">Retained for source compatibility only; the AOSP <c>upload</c> command carries no filename, so this value is not sent.
+    /// <para>仅为源码兼容保留；AOSP 的 <c>upload</c> 命令不携带文件名，因此该值不会发送。</para></param>
+    /// <returns>The complete uploaded content buffered in memory. <para>缓冲在内存中的完整上传内容。</para></returns>
     /// <exception cref="FastbootException">The command did not answer with DATA, or the transfer did not end in OKAY. <para>命令未返回 DATA，或传输未以 OKAY 结束。</para></exception>
     /// <exception cref="EndOfStreamException">The device stopped sending before the announced payload size. <para>设备在声明的负载大小传完前停止发送。</para></exception>
     public byte[] UploadToBytes(string filename)
     {
         using var ms = new MemoryStream();
-        var response = UploadData(FastbootConstants.CommandUpload + filename, ms);
+        var response = UploadData(FastbootConstants.CommandUpload, ms);
         return response.State != FastbootResponseState.Success
             ? throw new FastbootException(response.State, "upload failed: " + response.Text)
             : ms.ToArray();
@@ -495,8 +499,8 @@ public sealed partial class FastbootSession
     /// <param name="output">The stream to write the fetched data to.<para>写入获取数据的流。</para></param>
     /// <param name="offset">Byte offset within the partition to start fetching.
     /// <para>分区内开始获取的字节偏移。</para></param>
-    /// <param name="size">Number of bytes to fetch, or -1 for the entire partition.
-    /// <para>要获取的字节数，-1 表示整个分区。</para></param>
+    /// <param name="size">Number of bytes to fetch, or -1 for the entire partition. A size segment is appended only when the resolved size is positive; a -1 request whose partition size the device does not report therefore sends the offset alone instead of a <c>:0</c> size.
+    /// <para>要获取的字节数，-1 表示整个分区。仅当解析出的尺寸大于 0 时才追加 size 段；因此设备未报告分区大小的 -1 请求只发送 offset，而不会发送 <c>:0</c> 尺寸。</para></param>
     /// <param name="progress">Receives the cumulative fetched byte count.
     /// <para>接收累计已获取字节数。</para></param>
     /// <param name="cancellationToken">A cancellation token.<para>取消令牌。</para></param>
@@ -540,7 +544,7 @@ public sealed partial class FastbootSession
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var chunk = Math.Min(maxFetchSize, size - fetched);
-                var res = UploadData($"{FastbootConstants.CommandFetch}{targetPartition}:{offset + fetched:x}:{chunk:x}", output,
+                var res = UploadData($"{FastbootConstants.CommandFetch}{targetPartition}:0x{offset + fetched:x8}:0x{chunk:x8}", output,
                     cancellationToken: cancellationToken);
                 if (res.State != FastbootResponseState.Success)
                 {
@@ -553,10 +557,10 @@ public sealed partial class FastbootSession
             return new FastbootResponse { State = FastbootResponseState.Success };
         }
 
-        var finalCommand = $"{FastbootConstants.CommandFetch}{targetPartition}:{offset:x}";
-        if (size >= 0)
+        var finalCommand = $"{FastbootConstants.CommandFetch}{targetPartition}:0x{offset:x8}";
+        if (size > 0)
         {
-            finalCommand += $":{size:x}";
+            finalCommand += $":0x{size:x8}";
         }
 
         return UploadData(finalCommand, output, progress, cancellationToken);

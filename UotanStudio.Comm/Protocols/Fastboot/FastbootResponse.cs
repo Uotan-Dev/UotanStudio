@@ -24,10 +24,10 @@ public enum FastbootResponseState
     /// </summary>
     /// <remarks>
     /// Non-terminal marker: a response whose parsing ended on a TEXT frame is still incomplete, so
-    /// <see cref="FastbootSession.ReceiveResponse(int?)"/> keeps accumulating until a terminal frame
+    /// <see cref="FastbootSession.ReceiveResponse"/> keeps accumulating until a terminal frame
     /// arrives and never hands this state to a caller.
     /// <para>非终止标记：解析停在 TEXT 帧上的响应尚未完成，因此
-    /// <see cref="FastbootSession.ReceiveResponse(int?)"/> 会继续累积直到终止帧到达，绝不会把该状态交给
+    /// <see cref="FastbootSession.ReceiveResponse"/> 会继续累积直到终止帧到达，绝不会把该状态交给
     /// 调用方。</para>
     /// </remarks>
     Text,
@@ -44,12 +44,12 @@ public enum FastbootResponseState
     /// </summary>
     /// <remarks>
     /// Non-terminal marker: a response whose parsing ended on an INFO frame is still incomplete, so
-    /// <see cref="FastbootSession.ReceiveResponse(int?)"/> keeps accumulating until a terminal frame
+    /// <see cref="FastbootSession.ReceiveResponse"/> keeps accumulating until a terminal frame
     /// arrives and never hands this state to a caller. Leaving the state at the default
     /// <see cref="Success"/> here instead would make the parser return after the first INFO line and
     /// truncate every multi-line reply (<c>getvar:all</c> above all).
     /// <para>非终止标记：解析停在 INFO 帧上的响应尚未完成，因此
-    /// <see cref="FastbootSession.ReceiveResponse(int?)"/> 会继续累积直到终止帧到达，绝不会把该状态交给
+    /// <see cref="FastbootSession.ReceiveResponse"/> 会继续累积直到终止帧到达，绝不会把该状态交给
     /// 调用方。若此处把状态留在默认的 <see cref="Success"/>，解析器会在第一行 INFO 之后就返回，从而截断
     /// 所有多行应答（尤其是 <c>getvar:all</c>）。</para>
     /// </remarks>
@@ -194,16 +194,14 @@ public class FastbootResponse
 }
 
 /// <summary>
-/// Exception thrown when a fastboot command fails.
-/// <para>fastboot 命令失败时抛出的异常。</para>
+/// Exception thrown when a fastboot command fails, carrying the terminal response state.
+/// <para>fastboot 命令失败时抛出的异常，携带终止响应状态。</para>
 /// </summary>
-/// <remarks>
-/// Initializes a new instance of the <see cref="FastbootException"/> class.
-/// <para>初始化 <see cref="FastbootException"/> 类的新实例。</para>
-/// </remarks>
-/// <param name="state">The response state. 响应状态。</param>
-/// <param name="message">The error message. 错误消息。</param>
-internal class FastbootException(FastbootResponseState state, string message) : Exception($"fastboot {state}: {message}")
+/// <param name="state">The response state that caused the failure.
+/// <para>导致失败的响应状态。</para></param>
+/// <param name="message">The error message.
+/// <para>错误消息。</para></param>
+public class FastbootException(FastbootResponseState state, string message) : Exception($"fastboot {state}: {message}")
 {
     /// <summary>
     /// Gets the response state.

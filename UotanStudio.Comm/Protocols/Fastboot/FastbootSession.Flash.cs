@@ -63,7 +63,15 @@ public sealed partial class FastbootSession
     /// <param name="size">Requested partition size in bytes. <para>请求的分区大小（字节）。</para></param>
     /// <returns>The parsed create-logical-partition response. <para>解析后的 create-logical-partition 响应。</para></returns>
     public FastbootResponse CreateLogicalPartition(string partition, long size)
-        => ExecuteCommand($"{FastbootConstants.CommandCreateLogicalPartition}{partition}:{size}");
+    {
+        var response = ExecuteCommand($"{FastbootConstants.CommandCreateLogicalPartition}{partition}:{size}");
+        if (response.IsSuccess)
+        {
+            InvalidateVariableCache();
+        }
+
+        return response;
+    }
 
     /// <summary>
     /// Deletes a logical partition. Requires userspace fastboot mode.
@@ -72,7 +80,15 @@ public sealed partial class FastbootSession
     /// <param name="partition">Logical partition name to delete. <para>要删除的逻辑分区名。</para></param>
     /// <returns>The parsed delete-logical-partition response. <para>解析后的 delete-logical-partition 响应。</para></returns>
     public FastbootResponse DeleteLogicalPartition(string partition)
-        => ExecuteCommand(FastbootConstants.CommandDeleteLogicalPartition + partition);
+    {
+        var response = ExecuteCommand(FastbootConstants.CommandDeleteLogicalPartition + partition);
+        if (response.IsSuccess)
+        {
+            InvalidateVariableCache();
+        }
+
+        return response;
+    }
 
     /// <summary>
     /// Resizes a logical partition to the specified size. Requires userspace fastboot mode.
@@ -82,16 +98,26 @@ public sealed partial class FastbootSession
     /// <param name="size">New partition size in bytes. <para>新分区大小（字节）。</para></param>
     /// <returns>The parsed resize-logical-partition response. <para>解析后的 resize-logical-partition 响应。</para></returns>
     public FastbootResponse ResizeLogicalPartition(string partition, long size)
-        => ExecuteCommand($"{FastbootConstants.CommandResizeLogicalPartition}{partition}:{size}");
+    {
+        var response = ExecuteCommand($"{FastbootConstants.CommandResizeLogicalPartition}{partition}:{size}");
+        if (response.IsSuccess)
+        {
+            InvalidateVariableCache();
+        }
+
+        return response;
+    }
 
     /// <summary>
-    /// Wipes the super partition via the device-side wipe-super command.
-    /// <para>通过设备侧 wipe-super 命令清除 super 分区。</para>
+    /// Wipes the super partition the way upstream <c>fastboot wipe-super</c> does: sends
+    /// <c>update-super:&lt;partition&gt;:wipe</c>. There is no <c>wipe-super:</c> wire command.
+    /// <para>按上游 <c>fastboot wipe-super</c> 的方式清除 super 分区：发送
+    /// <c>update-super:&lt;分区&gt;:wipe</c>。线协议中不存在 <c>wipe-super:</c> 命令。</para>
     /// </summary>
     /// <param name="partition">Super partition name to wipe. <para>要清除的 super 分区名。</para></param>
-    /// <returns>The parsed wipe-super response. <para>解析后的 wipe-super 响应。</para></returns>
+    /// <returns>The parsed update-super response. <para>解析后的 update-super 响应。</para></returns>
     public FastbootResponse WipeSuper(string partition)
-        => ExecuteCommand(FastbootConstants.CommandWipeSuper + partition);
+        => ExecuteCommand(FastbootConstants.CommandUpdateSuper + partition + ":wipe");
 
     /// <summary>
     /// Sends a flashing sub-command to the device (e.g. unlock, lock, get_unlock_ability).
@@ -331,22 +357,25 @@ public sealed partial class FastbootSession
         => ExecuteCommand(FastbootConstants.CommandErase + partition);
 
     /// <summary>
-    /// Formats the specified partition.
-    /// <para>格式化指定分区。</para>
-    /// </summary>
-    /// <param name="partition">Partition name to format. <para>要格式化的分区名。</para></param>
-    /// <returns>The parsed format response. <para>解析后的 format 响应。</para></returns>
-    public FastbootResponse FormatPartition(string partition)
-        => ExecuteCommand(FastbootConstants.CommandFormat + partition);
-
-    /// <summary>
-    /// Reboots the device. Optionally into a target (recovery, bootloader, etc.).
-    /// <para>重启设备，可指定目标（recovery、bootloader 等）。</para>
+    /// Reboots the device. Optionally into a target (recovery, bootloader, fastbootd, etc.). A successful
+    /// reboot into fastbootd re-enumerates the device, so the cached variables are dropped.
+    /// <para>重启设备，可指定目标（recovery、bootloader、fastbootd 等）。成功重启到 fastbootd 会重新
+    /// 枚举设备，因此缓存变量会被清空。</para>
     /// </summary>
     /// <param name="target">Reboot target suffix, or <see langword="null"/> for a plain reboot. <para>重启目标后缀；为 <see langword="null"/> 时执行普通重启。</para></param>
     /// <returns>The parsed reboot response. <para>解析后的 reboot 响应。</para></returns>
     public FastbootResponse Reboot(string? target = null)
-        => ExecuteCommand(string.IsNullOrEmpty(target) ? FastbootConstants.CommandReboot : FastbootConstants.CommandReboot + "-" + target);
+    {
+        var response = ExecuteCommand(string.IsNullOrEmpty(target)
+            ? FastbootConstants.CommandReboot
+            : FastbootConstants.CommandReboot + "-" + target);
+        if (response.IsSuccess && string.Equals(target, "fastboot", StringComparison.OrdinalIgnoreCase))
+        {
+            InvalidateVariableCache();
+        }
+
+        return response;
+    }
 
     /// <summary>
     /// Continues boot, exiting fastboot mode.
@@ -363,6 +392,14 @@ public sealed partial class FastbootSession
     /// <param name="slot">Slot suffix to activate (for example <c>_a</c> or <c>_b</c>). <para>要激活的槽位后缀（如 <c>_a</c> 或 <c>_b</c>）。</para></param>
     /// <returns>The parsed set-active response. <para>解析后的 set-active 响应。</para></returns>
     public FastbootResponse SetActiveSlot(string slot)
-        => ExecuteCommand(FastbootConstants.CommandSetActive + slot);
+    {
+        var response = ExecuteCommand(FastbootConstants.CommandSetActive + slot);
+        if (response.IsSuccess)
+        {
+            InvalidateVariableCache();
+        }
+
+        return response;
+    }
 
 }

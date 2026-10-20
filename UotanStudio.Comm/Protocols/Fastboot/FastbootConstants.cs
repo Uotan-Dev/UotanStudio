@@ -19,6 +19,14 @@ public static class FastbootConstants
     public const int ResponseBufferSize = 256;
 
     /// <summary>
+    /// Safety ceiling on bytes the response framer retains while waiting for a terminal frame, so a
+    /// hostile device that keeps streaming unparsable bytes cannot grow the buffer without bound.
+    /// <para>响应成帧器等待终止帧期间保留字节数的安全上限，使持续发送无法解析字节的恶意设备
+    /// 无法无界增长缓冲区。</para>
+    /// </summary>
+    public const int MaxPendingResponseBytes = 1024 * 1024;
+
+    /// <summary>
     /// Maximum per-transfer write size.
     /// <para>单次传输最大写入大小。</para>
     /// </summary>
@@ -117,14 +125,18 @@ public static class FastbootConstants
     public const string CommandFetch = "fetch:";
 
     /// <summary>
-    /// upload command prefix.
-    /// <para>upload 命令前缀。</para>
+    /// upload command: retrieves the data staged by a previous download (e.g. a boot image). AOSP
+    /// defines it as the bare word <c>upload</c>, with no colon and no filename.
+    /// <para>upload 命令：取回先前 download 暂存的数据（如启动镜像）。AOSP 将其定义为裸词
+    /// <c>upload</c>，不带冒号也不带文件名。</para>
     /// </summary>
-    public const string CommandUpload = "upload:";
+    public const string CommandUpload = "upload";
 
     /// <summary>
-    /// get_staged command: retrieves data staged by a previous download (e.g. boot image).
-    /// <para>get_staged 命令：取回先前 download 暂存的数据（如 boot 镜像）。</para>
+    /// Legacy get_staged command name. Retained for source compatibility only; it is never sent on
+    /// the wire because AOSP retrieves staged data with <see cref="CommandUpload"/>.
+    /// <para>遗留的 get_staged 命令名。仅为源码兼容保留；AOSP 用 <see cref="CommandUpload"/> 取回
+    /// 暂存数据，因此本常量绝不在线协议中发送。</para>
     /// </summary>
     public const string CommandGetStaged = "get_staged";
 
@@ -141,9 +153,12 @@ public static class FastbootConstants
     public const string CommandErase = "erase:";
 
     /// <summary>
-    /// format command prefix.
-    /// <para>format 命令前缀。</para>
+    /// Legacy format command prefix. Not part of the AOSP fastboot protocol and never sent on the
+    /// wire; retained for source compatibility only.
+    /// <para>遗留的 format 命令前缀。不属于 AOSP fastboot 协议，也绝不在线协议中发送；
+    /// 仅为源码兼容保留。</para>
     /// </summary>
+    [Obsolete("format: is not an AOSP fastboot command and is never sent on the wire; erase the partition instead.")]
     public const string CommandFormat = "format:";
 
     /// <summary>
@@ -171,8 +186,11 @@ public static class FastbootConstants
     public const string CommandResizeLogicalPartition = "resize-logical-partition:";
 
     /// <summary>
-    /// wipe-super command prefix (wipe-super:partition).
-    /// <para>wipe-super 命令前缀（wipe-super:分区）。</para>
+    /// Host-side <c>wipe-super</c> command name. It is not a fastboot wire command: upstream
+    /// <c>fastboot wipe-super</c> sends <see cref="CommandUpdateSuper"/> followed by the partition
+    /// name and <c>:wipe</c>.
+    /// <para>宿主侧 <c>wipe-super</c> 命令名。它不是 fastboot 线协议命令：上游
+    /// <c>fastboot wipe-super</c> 发送 <see cref="CommandUpdateSuper"/>，后接分区名与 <c>:wipe</c>。</para>
     /// </summary>
     public const string CommandWipeSuper = "wipe-super:";
 

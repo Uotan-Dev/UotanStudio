@@ -76,8 +76,17 @@ public sealed partial class FastbootSession : IProtocolSession
         /// <summary>Appends a whole read to the buffer, growing it when needed.
         /// <para>把一次读取整体追加进缓冲区，必要时扩容。</para></summary>
         /// <param name="data">Bytes delivered by one transport read. <para>一次传输读取送达的字节。</para></param>
+        /// <exception cref="FastbootException">The read would push the retained bytes past
+        /// <see cref="FastbootConstants.MaxPendingResponseBytes"/>.
+        /// <para>本次读取会使保留字节超过 <see cref="FastbootConstants.MaxPendingResponseBytes"/>。</para></exception>
         public void Append(ReadOnlySpan<byte> data)
         {
+            if (data.Length > FastbootConstants.MaxPendingResponseBytes - _length)
+            {
+                throw new FastbootException(FastbootResponseState.Fail,
+                    $"pending response buffer exceeded {FastbootConstants.MaxPendingResponseBytes} bytes");
+            }
+
             if (_buffer.Length < _length + data.Length)
             {
                 var grown = new byte[Math.Max(_buffer.Length * 2, _length + data.Length)];
@@ -113,12 +122,6 @@ public sealed partial class FastbootSession : IProtocolSession
 
     private bool _disposed;
 
-    /// <summary>
-    /// Gets the underlying USB session when the transport is USB-based; otherwise, <c>null</c>.
-    /// <para>获取底层 USB 会话；传输非 USB 时返回 <c>null</c>。</para>
-    /// </summary>
-    private UsbDeviceTransport? Usb => Transport as UsbDeviceTransport;
-
     /// <summary>Protocol identifier reported to the host layer. <para>上报给宿主层的协议标识符。</para></summary>
     /// <value>Always the literal <c>fastboot</c>. <para>始终为字面量 <c>fastboot</c>。</para></value>
     public string ProtocolName => "fastboot";
@@ -138,8 +141,7 @@ public sealed partial class FastbootSession : IProtocolSession
     internal FastbootSession(ICommTransport transport, int? timeoutMs = null)
     {
         Transport = transport ?? throw new ArgumentNullException(nameof(transport));
-        var defaultTimeoutMs = Usb?.Session.DefaultTimeoutMs ?? 0;
-        _timeoutMs = timeoutMs ?? (defaultTimeoutMs > 0 ? defaultTimeoutMs : FastbootConstants.DefaultResponseTimeoutSeconds * 1000);
+        _timeoutMs = timeoutMs ?? FastbootConstants.DefaultResponseTimeoutSeconds * 1000;
     }
 
     /// <summary>
@@ -158,13 +160,16 @@ public sealed partial class FastbootSession : IProtocolSession
     }
 
     /// <summary>
-    /// Sends a getvar query and returns the variable value, or empty on FAIL/timeout
-    /// (matching AOSP behavior where an unknown variable yields no value).
-    /// <para>发送 getvar 查询并返回变量值，FAIL/超时时返回空（与 AOSP 未知变量无值的行为一致）。</para>
+    /// Sends a getvar query and returns the variable value, or empty unless the device answers
+    /// OKAY (matching AOSP behavior where an unknown variable yields no value).
+    /// <para>发送 getvar 查询并返回变量值；除设备应答 OKAY 外一律返回空（与 AOSP 未知变量无值的
+    /// 行为一致）。</para>
     /// </summary>
     /// <param name="key">Variable name without the <c>getvar:</c> prefix, matched case-sensitively in the cache. <para>不含 <c>getvar:</c> 前缀的变量名，在缓存中按大小写敏感匹配。</para></param>
-    /// <param name="useCache">When <see langword="true"/>, consults and updates the session getvar cache; pass <see langword="false"/> to force a fresh query. <para>为 <see langword="true"/> 时查询并更新会话 getvar 缓存；传 <see langword="false"/> 强制重新查询。</para></param>
-    /// <returns>The reported value, or <see cref="string.Empty"/> when the device answers FAIL or the exchange times out. <para>设备上报的值；设备回答 FAIL 或交换超时时返回 <see cref="string.Empty"/>。</para></returns>
+    /// <param name="useCache">When <see langword="true"/>, consults and updates the session getvar cache; a non-OKAY reply is never cached. Pass <see langword="false"/> to force a fresh query.
+    /// <para>为 <see langword="true"/> 时查询并更新会话 getvar 缓存；非 OKAY 应答绝不写入缓存。传 <see langword="false"/> 强制重新查询。</para></param>
+    /// <returns>The reported value, or <see cref="string.Empty"/> when the device answers FAIL, times out, answers DATA or sends an unrecognized status.
+    /// <para>设备上报的值；设备回答 FAIL、超时、回答 DATA 或发送无法识别的状态时返回 <see cref="string.Empty"/>。</para></returns>
     /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
     public string GetVariable(string key, bool useCache = true)
     {
@@ -174,7 +179,7 @@ public sealed partial class FastbootSession : IProtocolSession
         }
 
         var response = ExecuteCommand(FastbootConstants.CommandGetVar + key);
-        if (response.State is FastbootResponseState.Fail or FastbootResponseState.Timeout)
+        if (response.State != FastbootResponseState.Success)
         {
             return string.Empty;
         }
@@ -186,6 +191,19 @@ public sealed partial class FastbootSession : IProtocolSession
         }
 
         return value;
+    }
+
+    /// <summary>
+    /// Drops every cached getvar answer, slot probe and negotiated max-download-size so commands
+    /// that change the device layout cannot leave stale values behind.
+    /// <para>清空全部 getvar 应答、槽位探测与已协商的 max-download-size 缓存，使改变设备布局的命令
+    /// 不会留下过期值。</para>
+    /// </summary>
+    internal void InvalidateVariableCache()
+    {
+        _varCache.Clear();
+        _hasSlotCache.Clear();
+        _maxDownloadSize = null;
     }
 
     /// <summary>

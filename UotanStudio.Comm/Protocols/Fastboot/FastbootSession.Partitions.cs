@@ -175,8 +175,13 @@ public sealed partial class FastbootSession
     /// <para>按键查询单个设备变量并返回包含错误信息的详细结果。</para>
     /// </summary>
     /// <param name="key">The variable key. <para>变量名。</para></param>
-    /// <param name="useCache">Whether to use the cached value. <para>是否使用缓存值。</para></param>
-    /// <returns>A tuple of value, success flag, and error message. <para>值、成功标志与错误信息的三元组。</para></returns>
+    /// <param name="useCache">Whether to use the cached value; only an OKAY answer is cached.
+    /// <para>是否使用缓存值；仅 OKAY 应答会写入缓存。</para></param>
+    /// <returns>A tuple of value, success flag, and error message. Only an OKAY answer reports success
+    /// with a value; Unknown/Data/Fail/Timeout return an empty value, <see langword="false"/>, and a
+    /// description.
+    /// <para>值、成功标志与错误信息的三元组。仅 OKAY 应答报告成功并携带值；
+    /// Unknown/Data/Fail/Timeout 返回空值、<see langword="false"/> 与描述信息。</para></returns>
     public (string Value, bool Success, string? ErrorMessage) GetVarWithResult(string key, bool useCache = true)
     {
         if (useCache && _varCache.TryGetValue(key, out var cached))
@@ -185,14 +190,19 @@ public sealed partial class FastbootSession
         }
 
         var response = ExecuteCommand(FastbootConstants.CommandGetVar + key);
-        if (response.State is FastbootResponseState.Fail)
+        if (response.State != FastbootResponseState.Success)
         {
-            return (string.Empty, false, response.Info);
-        }
+            if (response.State is FastbootResponseState.Fail)
+            {
+                return (string.Empty, false, response.Info);
+            }
 
-        if (response.State is FastbootResponseState.Timeout)
-        {
-            return (string.Empty, false, "Timeout waiting for device response");
+            if (response.State is FastbootResponseState.Timeout)
+            {
+                return (string.Empty, false, "Timeout waiting for device response");
+            }
+
+            return (string.Empty, false, $"Unexpected response state {response.State}: {response.Info}");
         }
 
         if (useCache)

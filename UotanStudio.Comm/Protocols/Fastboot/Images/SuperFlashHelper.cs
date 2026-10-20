@@ -93,8 +93,10 @@ internal sealed class SuperFlashHelper(FastbootSession session, string mainParti
         => _session.ResizeLogicalPartition(name, size);
 
     /// <summary>
-    /// Wipes the super partition via <c>wipe-super</c>.
-    /// <para>通过 <c>wipe-super</c> 清除 super 分区。</para>
+    /// Wipes the super partition through <c>update-super:&lt;partition&gt;:wipe</c>, the wire command
+    /// upstream <c>fastboot wipe-super</c> uses.
+    /// <para>通过 <c>update-super:&lt;分区&gt;:wipe</c> 清除 super 分区，这也是上游
+    /// <c>fastboot wipe-super</c> 使用的线命令。</para>
     /// </summary>
     /// <returns>The fastboot response. fastboot 响应。</returns>
     public FastbootResponse WipeSuper() => _session.WipeSuper(MainPartition);

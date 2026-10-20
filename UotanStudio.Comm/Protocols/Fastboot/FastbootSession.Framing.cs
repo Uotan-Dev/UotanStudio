@@ -53,13 +53,17 @@ public sealed partial class FastbootSession
     /// <summary>Receives and parses a fastboot protocol response.
     /// <para>接收并解析 fastboot 协议响应。</para></summary>
     /// <remarks>
-    /// <para>Incoming bytes are accumulated at byte level (never re-decoded per packet, so a multi-byte UTF-8 sequence split across packets survives) into a session-held buffer. Frames are consumed from that buffer one at a time, and whatever the transport delivered past a terminal frame is retained for the next call instead of being silently dropped, so a trailing INFO after OKAY desynchronizes neither the stream nor the next command's reply. INFO lines and TEXT content are accumulated onto the returned response; the call returns only at a terminal OKAY/FAIL/DATA frame (or an unrecoverable unknown prefix), with the timeout deadline fixed from the command start.</para>
-    /// <para>入站字节按字节级累积到会话持有的缓冲区（绝不按包重复解码，跨包拆分的 UTF-8 多字节序列得以 保留），帧从该缓冲区逐个消费；传输在终止帧之后送达的字节会保留给下一次调用而非被静默丢弃，因此 OKAY 之后的尾随 INFO 既不会破坏流，也不会错误归因到下一条命令的应答。INFO 行与 TEXT 内容累积到 返回的响应对象上；仅在到达终止 OKAY/FAIL/DATA 帧（或出现不可恢复的未知前缀）时返回。超时截止 时间自命令开始固定不变。</para></remarks>
-    /// <param name="timeoutMs">Overall receive deadline in milliseconds; when <see langword="null"/> the session timeout is used. The deadline is fixed at call start.
-    /// <para>整体接收截止时间（毫秒）；为 <see langword="null"/> 时使用会话超时。截止时间在调用开始时即固定。</para></param>
+    /// <para>Incoming bytes are accumulated at byte level (never re-decoded per packet, so a multi-byte UTF-8 sequence split across packets survives) into a session-held buffer. Frames are consumed from that buffer one at a time, and whatever the transport delivered past a terminal frame is retained for the next call instead of being silently dropped, so a trailing INFO after OKAY desynchronizes neither the stream nor the next command's reply. INFO lines and TEXT content are accumulated onto the returned response; the call returns only at a terminal OKAY/FAIL/DATA frame (or an unrecoverable unknown prefix), with the timeout deadline extended by every consumed INFO/TEXT frame (the AOSP keep-alive) and otherwise fixed from the command start.</para>
+    /// <para>入站字节按字节级累积到会话持有的缓冲区（绝不按包重复解码，跨包拆分的 UTF-8 多字节序列得以 保留），帧从该缓冲区逐个消费；传输在终止帧之后送达的字节会保留给下一次调用而非被静默丢弃，因此 OKAY 之后的尾随 INFO 既不会破坏流，也不会错误归因到下一条命令的应答。INFO 行与 TEXT 内容累积到 返回的响应对象上；仅在到达终止 OKAY/FAIL/DATA 帧（或出现不可恢复的未知前缀）时返回。超时截止 时间会因每消费到一帧 INFO/TEXT 而顺延（AOSP 的保活语义），其余情况自命令开始固定不变。</para></remarks>
+    /// <param name="timeoutMs">Overall receive deadline in milliseconds; when <see langword="null"/> the session timeout is used. Every consumed INFO/TEXT frame restarts the deadline.
+    /// <para>整体接收截止时间（毫秒）；为 <see langword="null"/> 时使用会话超时。每消费到一帧 INFO/TEXT 都会重新开始计时。</para></param>
+    /// <param name="cancellationToken">Cancels the wait for a terminal frame; the token bounds the total duration even when INFO/TEXT frames keep extending the deadline.
+    /// <para>取消对终止帧的等待；即使 INFO/TEXT 帧不断顺延截止时间，令牌仍约束总时长。</para></param>
     /// <returns>The parsed response; <see cref="FastbootResponse.State"/> reports Success/Fail/Data/Timeout/Unknown.
     /// <para>解析后的响应；<see cref="FastbootResponse.State"/> 报告 Success/Fail/Data/Timeout/Unknown。</para></returns>
-    public FastbootResponse ReceiveResponse(int? timeoutMs = null)
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    public FastbootResponse ReceiveResponse(int? timeoutMs = null, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
 
@@ -76,6 +80,7 @@ public sealed partial class FastbootSession
             var zeroReads = 0;
             while (true)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var offset = 0;
                 while (true)
                 {
@@ -87,6 +92,11 @@ public sealed partial class FastbootSession
 
                     offset += consumed;
                     zeroReads = 0;
+                    if (response.State is FastbootResponseState.Info or FastbootResponseState.Text)
+                    {
+                        startTimestamp = Stopwatch.GetTimestamp();
+                    }
+
                     if (response.State is FastbootResponseState.Success
                         or FastbootResponseState.Fail
                         or FastbootResponseState.Data
@@ -95,6 +105,8 @@ public sealed partial class FastbootSession
                         _pendingBytes.RemoveFromStart(offset);
                         return response;
                     }
+
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
 
                 if (offset > 0)
@@ -127,6 +139,15 @@ public sealed partial class FastbootSession
                 }
 
                 zeroReads = 0;
+                if (readLen > FastbootConstants.MaxPendingResponseBytes - _pendingBytes.Count)
+                {
+                    ResetTransportAfterAbandon();
+                    response.State = FastbootResponseState.Fail;
+                    response.Info = $"device response exceeded the {FastbootConstants.MaxPendingResponseBytes}-byte pending buffer limit";
+                    response.Text = response.Info;
+                    return response;
+                }
+
                 _pendingBytes.Append(buffer.AsSpan(0, readLen));
             }
 
@@ -187,7 +208,7 @@ public sealed partial class FastbootSession
             var content = ExtractFrameContent(pending, offset + 4, out var frameEnd);
             response.Info = content;
             response.Text = textBuffer?.ToString() ?? content;
-            return frameEnd - offset;
+            return SkipFramePadding(pending, frameEnd) - offset;
         }
 
         if (IsPrefixAt(pending, offset, 'I', 'N', 'F', 'O') || IsPrefixAt(pending, offset, 'T', 'E', 'X', 'T'))
@@ -229,9 +250,7 @@ public sealed partial class FastbootSession
             }
 
             response.State = isInfo ? FastbootResponseState.Info : FastbootResponseState.Text;
-
-            var padding = pending[endIdx..].IndexOfAnyExcept(ResponseDelimiters);
-            return (padding < 0 ? pending.Length : endIdx + padding) - offset;
+            return SkipFramePadding(pending, endIdx) - offset;
         }
 
         var dataEnd = FindDataEnd(pending, offset + 4);
@@ -255,7 +274,7 @@ public sealed partial class FastbootSession
         response.State = FastbootResponseState.Data;
         response.DataSize = dataSize;
         response.Text = textBuffer?.ToString() ?? string.Empty;
-        return dataEnd < pending.Length && pending[dataEnd] == '\0' ? dataEnd + 1 - offset : available;
+        return SkipFramePadding(pending, dataEnd) - offset;
     }
 
     /// <summary>
@@ -263,7 +282,8 @@ public sealed partial class FastbootSession
     /// packet), or to the end of the buffer when no NUL follows (an exact TCP frame), with a single
     /// trailing NUL trimmed only in the latter case. <paramref name="frameEnd"/> reports the byte
     /// position just past the frame so any bytes beyond it stay in the pending buffer for the next
-    /// response instead of being silently dropped.
+    /// response instead of being silently dropped; <c>SkipFramePadding</c> then consumes the padding
+    /// that belongs to this frame.
     /// <para>提取终止帧的内容：到第一个 NUL 为止（USB 补齐包），无 NUL 时取到缓冲区末尾（TCP 精确帧），
     /// 后者仅去除一个尾随 NUL。<paramref name="frameEnd"/> 报告帧之后的字节位置，超出部分保留在
     /// 待解析缓冲区中留给下一个响应，而不是被静默丢弃。</para>
@@ -285,6 +305,37 @@ public sealed partial class FastbootSession
         }
 
         return DecodeUtf8(pending, start, pending.Length);
+    }
+
+    /// <summary>
+    /// Advances past the NUL/CR/LF padding that belongs to the frame just parsed, stopping at the
+    /// first byte that is not padding. Stopping there keeps the first byte of the next response in
+    /// the pending buffer, so consecutive frames that carry no padding (an exact TCP stream) are
+    /// never mistaken for padding and swallowed.
+    /// <para>越过刚解析帧所属的 NUL/CR/LF 填充，并在第一个非填充字节处停止。停在该处可把下一条
+    /// 响应的首字节留在待解析缓冲区中，因此不带填充的连续帧（精确的 TCP 流）绝不会被当作填充吞掉。</para>
+    /// </summary>
+    /// <param name="pending">Session-held pending byte buffer. 会话持有的待解析字节缓冲区。</param>
+    /// <param name="position">First byte after the parsed frame content. 已解析帧内容之后的第一个字节。</param>
+    /// <returns>The first position at or after <paramref name="position"/> that is not padding.
+    /// <para>从 <paramref name="position"/> 起首个不是填充字节的位置。</para></returns>
+    private static int SkipFramePadding(ReadOnlySpan<byte> pending, int position)
+    {
+        var start = position;
+        while (position < pending.Length && ResponseDelimiters.Contains(pending[position]))
+        {
+            position++;
+        }
+
+        // A DATA response is followed by its payload, whose first byte is arbitrary and may itself be
+        // NUL/CR/LF. Only consume the run when it ends at the next response prefix (or at the buffer
+        // end); otherwise those bytes are payload, not padding.
+        if (position < pending.Length && !IsKnownPrefixAt(pending, position))
+        {
+            return start;
+        }
+
+        return position;
     }
 
     /// <summary>

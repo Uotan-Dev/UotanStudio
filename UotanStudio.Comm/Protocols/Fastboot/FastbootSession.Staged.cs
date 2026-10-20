@@ -18,15 +18,15 @@ public sealed partial class FastbootSession
     /// <param name="cancellationToken">Checked before every transport read; cancelling aborts the transfer mid-payload.
     /// <para>每次传输读取前检查；取消会在传输中途终止。</para></param>
     /// <returns>The trailing OKAY/FAIL response after the staged payload; callers must check it, because a
-    /// failed <c>get_staged</c> leaves only a truncated payload in <paramref name="output"/>.
-    /// <para>暂存负载之后的终止 OKAY/FAIL 响应；调用方必须检查它，因为失败的 <c>get_staged</c>
+    /// failed <c>upload</c> leaves only a truncated payload in <paramref name="output"/>.
+    /// <para>暂存负载之后的终止 OKAY/FAIL 响应；调用方必须检查它，因为失败的 <c>upload</c>
     /// 只会在 <paramref name="output"/> 中留下截断的负载。</para></returns>
     /// <exception cref="FastbootException">The device did not answer the command with a DATA frame. <para>设备未以 DATA 帧应答该命令。</para></exception>
     /// <exception cref="EndOfStreamException">The device stopped sending before the announced payload size. <para>设备在声明的负载大小传完前停止发送。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled. <para><paramref name="cancellationToken"/> 被取消。</para></exception>
     /// <exception cref="ObjectDisposedException">The session has been disposed. <para>会话已释放。</para></exception>
     public FastbootResponse GetStagedToStream(Stream output, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
-        => UploadData(FastbootConstants.CommandGetStaged, output, progress, cancellationToken);
+        => UploadData(FastbootConstants.CommandUpload, output, progress, cancellationToken);
 
     /// <summary>Retrieves staged data from the device and writes it to a file.
     /// <para>从设备获取暂存数据并写入文件。</para>The terminal response is returned rather than discarded: the destination file exists and holds whatever the device streamed, so a FAIL after a partial payload would otherwise leave a silently truncated file.<para>终止响应被返回而非丢弃：目标文件已经存在并保存了设备流式送出的内容，因此负载中途出现 FAIL 时，否则会留下一个被静默截断的文件。</para></summary>
@@ -132,28 +132,22 @@ public sealed partial class FastbootSession
     }
 
     /// <summary>
-    /// Wipes user data by erasing and formatting userdata, cache, and metadata partitions.
-    /// <para>通过擦除并格式化 userdata、cache 和 metadata 分区来清除用户数据。</para>
-    /// Every erase/format response is checked: this is the destructive factory-wipe equivalent, so a
-    /// skipped or failed partition surfaces as an exception instead of a silent partial wipe.
-    /// <para>每个擦除/格式化响应都会被检查：这是破坏性的恢复出厂等价操作，被跳过或失败的分区会以异常
-    /// 呈现而非静默的部分清除。</para>
+    /// Wipes user data by erasing the userdata, cache, and metadata partitions, matching the upstream
+    /// <c>fastboot -w</c> wire behavior. Only <c>erase:</c> is sent; the non-AOSP <c>format:</c> command
+    /// is never used.
+    /// <para>通过擦除 userdata、cache 和 metadata 分区来清除用户数据，与上游 <c>fastboot -w</c> 的线协议
+    /// 行为一致。只发送 <c>erase:</c>，绝不使用不属于 AOSP 的 <c>format:</c> 命令。</para>
+    /// Every erase response is checked: this is the destructive factory-wipe equivalent, so a failed
+    /// partition surfaces as an exception instead of a silent partial wipe.
+    /// <para>每个擦除响应都会被检查：这是破坏性的恢复出厂等价操作，失败的分区会以异常呈现而非静默的部分清除。</para>
     /// </summary>
-    /// <exception cref="FastbootException">A partition could not be erased or formatted.
-    /// <para>某分区无法擦除或格式化。</para></exception>
+    /// <exception cref="FastbootException">A partition could not be erased.
+    /// <para>某分区无法擦除。</para></exception>
     public void WipeUserData()
     {
         foreach (var partition in new[] { "userdata", "cache", "metadata" })
         {
-            var partitionType = GetPartitionType(partition);
-            if (string.IsNullOrEmpty(partitionType))
-            {
-                throw new FastbootException(FastbootResponseState.Fail,
-                    $"wipe aborted: device does not report a partition-type for '{partition}'.");
-            }
-
             ErasePartition(partition).ThrowIfFailed();
-            FormatPartition(partition).ThrowIfFailed();
         }
     }
 
