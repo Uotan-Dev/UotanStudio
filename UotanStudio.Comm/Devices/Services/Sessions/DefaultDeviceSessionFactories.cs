@@ -166,8 +166,18 @@ internal sealed class MtkDeviceSessionFactory : IDeviceSessionFactory
             throw new NotSupportedException($"The endpoint must not receive MTK commands: {classification.Reason}");
         }
 
+        var selection = MtkCommandInterfacePolicy.Select(usb.DeviceInfo, null,
+            usb.EndpointIn, usb.EndpointOut);
+        if (selection.Status is not (MtkCommandInterfaceStatus.Selected or MtkCommandInterfaceStatus.NoMetadata))
+        {
+            throw new NotSupportedException(
+                $"The endpoint does not expose a usable MTK command interface: {selection.Reason}");
+        }
+
         var session = new MtkSession(new UsbDeviceTransport(usb));
+        session.NoteUsbDescriptor(usb.DeviceInfo);
         session.NoteModeDiscovery(classification);
+        session.NoteCommandInterfaceSelection(selection);
         return Task.FromResult<object>(session);
     }
 }
