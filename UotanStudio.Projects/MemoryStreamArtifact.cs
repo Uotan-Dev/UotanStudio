@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 namespace UotanStudio.Services.Projects;
 
 /// <summary>
@@ -33,7 +35,23 @@ public sealed class MemoryStreamArtifact : StreamArtifact
     public override string? DisplayName { get; }
 
     /// <inheritdoc />
-    public override Stream OpenRead() => new MemoryStream(_payload.ToArray(), writable: false);
+    /// <remarks>
+    /// The returned stream wraps the payload instead of copying it, and it is created with
+    /// <c>publiclyVisible: false</c> so the underlying array is never handed to the caller; readers can only observe
+    /// the same immutable snapshot the artifact was constructed with. A payload that does not expose a whole array
+    /// (for example one produced by slicing a larger buffer through a custom memory manager) falls back to a copy.
+    /// <para>返回的流包裹载荷而不复制，并以 <c>publiclyVisible: false</c> 创建，底层数组因此从不交给调用方；读取者只能
+    /// 观察到构造时所依据的同一份不可变快照。若载荷不暴露为整块数组（例如经自定义内存管理器从更大缓冲切出），则回退为复制。</para>
+    /// </remarks>
+    public override Stream OpenRead()
+    {
+        if (MemoryMarshal.TryGetArray(_payload, out var segment) && segment.Array is { } array)
+        {
+            return new MemoryStream(array, segment.Offset, segment.Count, writable: false, publiclyVisible: false);
+        }
+
+        return new MemoryStream(_payload.ToArray(), writable: false);
+    }
 
     /// <inheritdoc />
     public override ValueTask DisposeAsync() => ValueTask.CompletedTask;

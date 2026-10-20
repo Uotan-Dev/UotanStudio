@@ -364,10 +364,12 @@ public sealed class ProjectContext
             var candidates = Directory.EnumerateDirectories(RootDirectory)
                 .Where(directory => !IsReservedDirectory(directory)
                     && (File.GetAttributes(directory) & FileAttributes.ReparsePoint) == 0)
+                .Select(Path.GetFullPath)
                 .ToArray();
+            var candidatePaths = new HashSet<string>(candidates, StringComparer.OrdinalIgnoreCase);
             foreach (var directory in candidates)
             {
-                if (candidates.Any(other => IsStrictlyWithinDirectory(directory, other))) continue;
+                if (HasCandidateAncestor(directory, candidatePaths)) continue;
                 foreach (var fwFile in Directory.EnumerateFiles(directory, "*.uotanfw"))
                     subProjects.Add(new(Path.GetFileNameWithoutExtension(fwFile), directory, fwFile,
                         Path.Combine(directory, "images"), Path.Combine(directory, "output")));
@@ -380,13 +382,38 @@ public sealed class ProjectContext
         Changed?.Invoke();
     }
 
-    /// <summary>Whether <paramref name="candidate"/> is strictly inside <paramref name="parent"/>.</summary>
-    private static bool IsStrictlyWithinDirectory(string candidate, string parent)
+    /// <summary>
+    /// Whether any of <paramref name="candidatePaths"/> is a strict ancestor directory of
+    /// <paramref name="directory"/>, which is what excludes a nested candidate from being treated as a sub-project.
+    /// <para><paramref name="candidatePaths"/> 中是否存在 <paramref name="directory"/> 的严格上级目录，用于把嵌套的
+    /// 候选目录排除在子项目之外。</para>
+    /// </summary>
+    /// <remarks>
+    /// The walk climbs the ancestor chain instead of comparing every candidate with every other one, so the cost is
+    /// the directory depth per candidate rather than the square of the candidate count. All paths arrive already
+    /// normalized, so each level costs one comparison and no further <see cref="Path.GetFullPath(string)"/> call.
+    /// <para>本方法沿上级链上溯，而非把每个候选与其余候选两两比较，因此代价是「候选数 × 目录深度」而不是候选数的平方。
+    /// 所有路径都已规范化，因此每层只需一次比较，不再调用 <see cref="Path.GetFullPath(string)"/>。</para>
+    /// </remarks>
+    /// <param name="directory">Normalized candidate directory path. <para>已规范化的候选目录路径。</para></param>
+    /// <param name="candidatePaths">Normalized sibling candidates compared case-insensitively.
+    /// <para>已规范化的同级候选集合，按不区分大小写比较。</para></param>
+    /// <returns><see langword="true"/> when a strict ancestor of <paramref name="directory"/> is one of the candidates.
+    /// <para>当 <paramref name="directory"/> 的某个严格上级目录属于候选集合时为 <see langword="true"/>。</para></returns>
+    private static bool HasCandidateAncestor(string directory, HashSet<string> candidatePaths)
     {
-        if (string.Equals(Path.GetFullPath(candidate), Path.GetFullPath(parent), StringComparison.OrdinalIgnoreCase))
-            return false;
-        var parentRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent)) + Path.DirectorySeparatorChar;
-        return Path.GetFullPath(candidate).StartsWith(parentRoot, StringComparison.OrdinalIgnoreCase);
+        var parent = Path.GetDirectoryName(directory);
+        while (!string.IsNullOrEmpty(parent))
+        {
+            if (candidatePaths.Contains(parent))
+            {
+                return true;
+            }
+
+            parent = Path.GetDirectoryName(parent);
+        }
+
+        return false;
     }
 
     private static bool IsReservedDirectory(string path)
