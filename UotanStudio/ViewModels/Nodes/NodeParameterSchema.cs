@@ -27,7 +27,7 @@ internal static class NodeParameterSchema
             "Device.Power.Reboot" => ["Device"],
             "File.Binary.Read" or "File.Artifact.Open" => ["Path"],
             "Data.Value.Convert" => ["Input"],
-            "Validation.Data.Hash" or "Data.Bytes.Slice" or "Data.Bytes.Swap"
+            "Data.Bytes.Slice" or "Data.Bytes.Swap"
                 or "Data.Compression.Compress" or "Data.Compression.Decompress" => ["Data"],
             "Data.Value.Compare" or "Data.Bytes.Concat" => ["Data A", "Data B"],
             "Data.Cipher.Encrypt" or "Data.Cipher.Decrypt" => ["Data", "Key"],

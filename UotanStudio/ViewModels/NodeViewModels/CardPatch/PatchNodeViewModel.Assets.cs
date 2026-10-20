@@ -8,8 +8,7 @@ public sealed partial class PatchNodeViewModel
 {
     private async Task ExecuteAssetNodeAsync(INodeExecutionContext context)
     {
-        if (TypeKey == "Resource.Asset.Open"
-            || TypeKey == "Resource.Asset.Read" && Text("Operation") == "Select")
+        if (TypeKey == "Resource.Asset.Read" && Text("Operation") == "Select")
         {
             var package = context.Package
                 ?? throw new InvalidDataException(LanguageService.Instance.GetString("Node_Patch_MissingPackage"));

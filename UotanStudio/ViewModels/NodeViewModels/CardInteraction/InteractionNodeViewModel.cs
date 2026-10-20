@@ -138,7 +138,8 @@ public sealed class InteractionNodeViewModel : FlowNodeViewModel
         var port = Input[^1];
         port.IsAdvanced = declaration.Advanced;
         port.IsConfiguration = declaration.IsConfiguration;
-        port.IsVisibleWhen = declaration.VisibleWhen;
+        port.IsVisibleWhen = declaration.VisibleWhen
+            ?? (declaration.Rule is { } rule ? rule.IsSatisfiedBy : null);
     }
 
     internal void Out(NodeOutputDeclaration declaration) => Out(declaration.Title, declaration.PortType);

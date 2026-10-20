@@ -26,6 +26,8 @@ namespace UotanStudio.ViewModels.Nodes;
 /// <para>是否为配置操作而非资源承载端口。</para></param>
 /// <param name="VisibleWhen">Optional visibility predicate; when it returns false the port is hidden from the panel and canvas while persisted values remain intact.
 /// <para>可选的可见性谓词，返回 false 时端口在面板与画布上隐藏但保留持久化值。</para></param>
+/// <param name="Rule">Optional declarative visibility condition; equivalent to <paramref name="VisibleWhen"/> but readable as data by hosts and third-party panels.
+/// <para>可选的声明式可见性条件；与 <paramref name="VisibleWhen"/> 等价，但能以数据形式被宿主与第三方面板读取。</para></param>
 public sealed record NodeInputDeclaration(
     string Title,
     NodePortType PortType,
@@ -37,7 +39,17 @@ public sealed record NodeInputDeclaration(
     bool Required = false,
     bool Advanced = false,
     bool IsConfiguration = false,
-    Func<FlowNodeViewModel, bool>? VisibleWhen = null);
+    Func<FlowNodeViewModel, bool>? VisibleWhen = null,
+    NodePortRule? Rule = null)
+{
+    /// <summary>
+    /// Gets the title of every controlling port the visibility condition reads.
+    /// <para>获取可见性条件读取的全部控制端口标题。</para>
+    /// </summary>
+    /// <value>The referenced titles; empty when the port is always visible. <para>被引用的标题；端口始终可见时为空。</para></value>
+    public IReadOnlyList<string> VisibilityDependencies
+        => Rule is { } rule ? [rule.PortTitle] : [];
+}
 
 /// <summary>Declarative output port definition; the single source of truth for the output title, type and value localization prefix.
 /// <para>声明式输出端口定义，是输出端口标题、类型与取值本地化前缀的唯一来源。</para></summary>
@@ -47,10 +59,13 @@ public sealed record NodeInputDeclaration(
 /// <para>端口类型，约束连接兼容性。</para></param>
 /// <param name="ValueResourcePrefix">Optional localization prefix; when set, string outputs resolve localized text as <c>prefix + value</c>.
 /// <para>可选的取值本地化前缀，非空时输出字符串按 <c>前缀 + 值</c> 查找本地化文本。</para></param>
+/// <param name="FlowRole">Optional control-flow role read by the engine for flow outputs.
+/// <para>流输出端口上供引擎读取的可选控制流角色。</para></param>
 public sealed record NodeOutputDeclaration(
     string Title,
     NodePortType PortType,
-    string? ValueResourcePrefix = null);
+    string? ValueResourcePrefix = null,
+    NodeFlowRole FlowRole = NodeFlowRole.None);
 
 /// <summary>Complete port declaration for one node type: inputs and outputs in construction order, with <see cref="CompletesFlow"/> controlling whether the standard Completed flow output is appended.
 /// <para>一个节点类型的完整端口声明：输入与输出按构造顺序排列，<see cref="CompletesFlow"/> 控制是否追加标准 Completed 流输出。</para></summary>

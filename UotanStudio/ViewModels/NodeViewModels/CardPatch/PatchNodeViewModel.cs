@@ -35,8 +35,36 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
         {
             node.AddOutput(declaration);
         }
+        node.ApplyAssetIdChoices();
         return node;
     }
+
+    /// <summary>
+    /// Offers the asset identifier of the resource read node as a selection over the current project resources, so a
+    /// mistyped identifier is caught while editing instead of at execution time. The port type and its declaration
+    /// stay unchanged: an identifier outside the offered list remains typable and is validated when the node runs.
+    /// <para>把资源读取节点的资源标识提供为当前项目资源的选择项，使拼错的标识在编辑时就能发现，而不是等到执行期。端口类型
+    /// 与其声明保持不变：提供列表之外的标识仍可填写，并在节点运行时校验。</para>
+    /// </summary>
+    private void ApplyAssetIdChoices()
+    {
+        if (TypeKey is not "Resource.Asset.Read")
+        {
+            return;
+        }
+        var assetId = Input.FirstOrDefault(port => string.Equals(port.Title, "Asset ID", StringComparison.Ordinal));
+        if (assetId is not null)
+        {
+            NodeResourceIdChoices.Apply(assetId);
+        }
+    }
+
+    /// <inheritdoc />
+    public override NodeFlowKind FlowKind => TypeKey switch
+    {
+        "Flow.Applicability.Gate" => NodeFlowKind.Branch,
+        _ => NodeFlowKind.None
+    };
 
     /// <inheritdoc />
     public override async Task ExecuteAsync(INodeExecutionContext context)
@@ -116,7 +144,6 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
             case "Flow.Applicability.Gate":
                 ExecuteApplicabilityNode(context);
                 break;
-            case "Resource.Asset.Open":
             case "Resource.Asset.ReadText":
             case "Resource.Asset.Read":
             case "Workspace.Asset.Stage":
@@ -247,10 +274,15 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
     {
         AddInput(declaration.Title, declaration.PortType, declaration.InitialValue, declaration.Multiline,
             declaration.Directory, declaration.Choices?.ToArray(), declaration.HintResourceKey);
+        var port = Input[^1];
+        port.IsAdvanced = declaration.Advanced;
+        port.IsConfiguration = declaration.IsConfiguration;
+        port.IsVisibleWhen = declaration.VisibleWhen
+            ?? (declaration.Rule is { } rule ? rule.IsSatisfiedBy : null);
     }
 
     private void AddOutput(NodeOutputDeclaration declaration)
-        => AddOutput(declaration.Title, declaration.PortType, declaration.ValueResourcePrefix);
+        => AddOutput(declaration.Title, declaration.PortType, declaration.ValueResourcePrefix, declaration.FlowRole);
 
     private long PositiveImageBytes(string title)
     {
@@ -281,14 +313,16 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
         });
     }
 
-    private void AddOutput(string title, NodePortType type, string? valueResourcePrefix = null)
+    private void AddOutput(string title, NodePortType type, string? valueResourcePrefix = null,
+        NodeFlowRole flowRole = NodeFlowRole.None)
     {
         Output.Add(new NodeConnectorViewModel
         {
             Title = title,
             PortId = NodeConnectorViewModel.CreateStableId(title),
             PortType = type,
-            ValueResourcePrefix = valueResourcePrefix
+            ValueResourcePrefix = valueResourcePrefix,
+            FlowRole = flowRole
         });
     }
 }

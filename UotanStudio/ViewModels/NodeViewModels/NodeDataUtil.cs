@@ -23,8 +23,11 @@ internal static class NodeDataUtil
         if (source == NodePortType.Any || target == NodePortType.Any) return true;
         if (source == NodePortType.Device) return target == NodePortType.Device;
         if (target == NodePortType.Device) return source == NodePortType.Device;
+        if (IsByteCarrier(source) && IsByteCarrier(target)) return true;
         return source == target;
     }
+
+    private static bool IsByteCarrier(NodePortType type) => type is NodePortType.Data or NodePortType.Artifact;
 
     /// <summary>Converts a port value to a <see cref="DetectedDevice"/>: <see cref="DetectedDevice"/> values are returned as-is; <see cref="DeviceInfo"/> values yield their <see cref="DeviceInfo.Device"/>; anything else yields <c>null</c>.
     /// <para>把端口值转换为 <see cref="DetectedDevice"/>：值为 <see cref="DetectedDevice"/> 时原样返回； 值为 <see cref="DeviceInfo"/> 时返回其 <see cref="DeviceInfo.Device"/>；其余返回 <c>null</c>。</para></summary>
@@ -61,10 +64,67 @@ internal static class NodeDataUtil
             byte[] bytes when bytes.Length <= MaxInMemoryBytes => bytes,
             byte[] => throw new InvalidDataException("The in-memory node data limit was exceeded. Use a file artifact for large inputs."),
             Services.Projects.FileArtifact artifact => ReadFileBytes(artifact.Path, cancellationToken),
+            Services.Projects.StreamArtifact artifact => ReadArtifactBytes(artifact, cancellationToken),
             string text when File.Exists(text) => ReadFileBytes(text, cancellationToken),
             string text => EncodeText(text),
             _ => EncodeText(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty)
         };
+    }
+
+    /// <summary>
+    /// Opens a readable stream over a port value, preferring the streaming path so a large payload is never
+    /// materialized. Returns <c>null</c> when the value carries no bytes at all.
+    /// <para>在端口值上打开可读流，优先走流式路径，使大载荷从不整体物化。值不含任何字节时返回 <c>null</c>。</para>
+    /// </summary>
+    /// <param name="value">The port value. <para>端口值。</para></param>
+    /// <returns>An owned readable stream, or <c>null</c> when the value is absent.
+    /// <para>由调用方持有的可读流；值为空时为 <c>null</c>。</para></returns>
+    /// <remarks>
+    /// A caller that only needs a bounded view should use this overload instead of <see cref="ToBytes"/>: the byte
+    /// overload still refuses payloads above <see cref="MaxInMemoryBytes"/>.
+    /// <para>只需要有界视图的调用方应使用本重载而不是 <see cref="ToBytes"/>：字节重载仍会拒绝超过 <see cref="MaxInMemoryBytes"/> 的载荷。</para>
+    /// </remarks>
+    public static Stream? OpenRead(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            Services.Projects.StreamArtifact artifact => artifact.OpenRead(),
+            Services.Projects.FileArtifact artifact => new FileStream(artifact.Path, FileMode.Open, FileAccess.Read,
+                FileShare.Read, 128 * 1024, FileOptions.SequentialScan),
+            byte[] bytes => new MemoryStream(bytes, writable: false),
+            ReadOnlyMemory<byte> memory => new MemoryStream(memory.ToArray(), writable: false),
+            Stream stream => stream,
+            string text when File.Exists(text) => new FileStream(text, FileMode.Open, FileAccess.Read,
+                FileShare.Read, 128 * 1024, FileOptions.SequentialScan),
+            _ => new MemoryStream(EncodeText(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty),
+                writable: false)
+        };
+    }
+
+    private static byte[] ReadArtifactBytes(Services.Projects.StreamArtifact artifact, CancellationToken cancellationToken)
+    {
+        if (artifact.Length is { } length && length > MaxInMemoryBytes)
+        {
+            throw new InvalidDataException("The in-memory node data limit was exceeded. Stream the artifact instead of materializing it.");
+        }
+
+        using var stream = artifact.OpenRead();
+        using var buffer = new MemoryStream();
+        var chunk = new byte[128 * 1024];
+        var total = 0;
+        int read;
+        while ((read = stream.Read(chunk, 0, chunk.Length)) != 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            total = checked(total + read);
+            if (total > MaxInMemoryBytes)
+            {
+                throw new InvalidDataException("The in-memory node data limit was exceeded. Stream the artifact instead of materializing it.");
+            }
+            buffer.Write(chunk, 0, read);
+        }
+        return buffer.ToArray();
     }
 
     internal static byte[] ReadFileBytes(string path, CancellationToken cancellationToken)
@@ -170,6 +230,22 @@ internal static class NodeDataUtil
             byte[] bytes => bytes.Length > 0 && bytes[0] != 0,
             _ when decimal.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Number, CultureInfo.InvariantCulture, out var n) => n != 0,
             _ => fallback
+        };
+    }
+
+    /// <summary>Converts a port value to an ordered list: <see cref="IReadOnlyList{T}"/> instances pass through, any other material enumerable is copied, and anything else yields an empty list.
+    /// <para>把端口值转换为有序列表：<see cref="IReadOnlyList{T}"/> 实例原样返回，其他可枚举物复制为列表，其余返回空列表。</para></summary>
+    /// <param name="value">The port value.<para>端口值。</para></param>
+    /// <returns>The list; empty when the value carries no sequence.<para>列表；值不承载序列时为空。</para></returns>
+    public static IReadOnlyList<object?> ToList(object? value)
+    {
+        return value switch
+        {
+            null => [],
+            IReadOnlyList<object?> list => list,
+            string => [],
+            System.Collections.IEnumerable enumerable => [.. enumerable.Cast<object?>()],
+            _ => []
         };
     }
 
