@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Google.Protobuf;
-using K4os.Compression.LZ4;
 using UotanStudio.Compress.Codecs.Lz4;
 using UotanStudio.Hash.Digests;
 
@@ -39,7 +38,7 @@ internal static class Lz4DiffApplier
             {
                 var padding = 0;
                 if (sourceInfo.ZeroPadding) while (padding < Math.Min(4096, stored.Length) && stored[padding] == 0) padding++;
-                if (LZ4Codec.PartialDecode(stored[padding..], plain) != plain.Length) throw new InvalidDataException("LZ4DIFF source decompression length mismatch.");
+                if (Lz4BlockCodec.PartialDecode(stored[padding..], plain) != plain.Length) throw new InvalidDataException("LZ4DIFF source decompression length mismatch.");
             }
             sourcePosition += block.StoredLength;
         }
