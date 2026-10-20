@@ -1,3 +1,7 @@
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
+
 namespace UotanStudio.Firmware.BootSecurity.Avb;
 
 /// <summary>Generates and compares Android AVB Reed-Solomon FEC parity over a raw partition prefix.
@@ -12,6 +16,136 @@ internal static class AvbFecCodec
     private const int CodewordSize = 255;
     private static readonly byte[] Exponents = CreateExponents();
     private static readonly byte[] Logarithms = CreateLogarithms();
+
+    /// <summary>
+    /// The lane width the nibble-split field multiply works on.
+    /// <para>nibble-split 域乘法处理的通道宽度。</para>
+    /// </summary>
+    private const int VectorLane = 16;
+
+    /// <summary>
+    /// The mask that isolates one nibble of each lane.
+    /// <para>隔离每个通道一个半字节的掩码。</para>
+    /// </summary>
+    private static readonly Vector128<byte> NibbleMask = Vector128.Create((byte)0x0F);
+
+    /// <summary>
+    /// Whether the processor lowers a 16-byte lane permute to a single instruction, which the nibble-split field multiply
+    /// requires: <c>pshufb</c> under SSSE3 on x86 and <c>tbl</c> under AdvSIMD on ARM. Without it the portable permute
+    /// degrades into software emulation that is slower than the scalar table walk, so the scalar path is kept.
+    /// <para>处理器是否把 16 字节通道置换降为单条指令，nibble-split 域乘法依赖该能力：x86 上是 SSSE3 的 <c>pshufb</c>，
+    /// ARM 上是 AdvSIMD 的 <c>tbl</c>。不具备时，可移植置换会退化为比标量查表更慢的软件模拟，因此保留标量路径。</para>
+    /// </summary>
+    private static bool CanVectorizeMultiply => Ssse3.IsSupported || AdvSimd.IsSupported;
+
+    /// <summary>
+    /// Builds the two 16-entry tables that multiply any byte by <paramref name="coefficient"/> through a nibble split.
+    /// <para>构造把任意字节乘以 <paramref name="coefficient"/> 的两张 16 项 nibble 表。</para>
+    /// </summary>
+    /// <param name="coefficient">Field element the tables are built for; zero is rejected by the caller.
+    /// <para>建表所用的域元素；零值由调用方排除。</para></param>
+    /// <returns>The table for the low nibble and the table for the high nibble.
+    /// <para>低半字节表与高半字节表。</para></returns>
+    private static (Vector128<byte> Low, Vector128<byte> High) BuildMultiplyTables(byte coefficient)
+    {
+        Span<byte> low = stackalloc byte[VectorLane];
+        Span<byte> high = stackalloc byte[VectorLane];
+        for (var nibble = 0; nibble < VectorLane; nibble++)
+        {
+            low[nibble] = Multiply(coefficient, (byte)nibble);
+            high[nibble] = Multiply(coefficient, (byte)(nibble << 4));
+        }
+
+        return (Vector128.Create(low), Vector128.Create(high));
+    }
+
+    /// <summary>
+    /// Multiplies sixteen field elements by the constant folded into <paramref name="low"/> and <paramref name="high"/>.
+    /// <para>把十六个域元素乘以折叠进 <paramref name="low"/> 与 <paramref name="high"/> 的常数。</para>
+    /// </summary>
+    /// <param name="value">Sixteen field elements. <para>十六个域元素。</para></param>
+    /// <param name="low">Low-nibble product table. <para>低半字节积表。</para></param>
+    /// <param name="high">High-nibble product table. <para>高半字节积表。</para></param>
+    /// <returns>The per-lane products. <para>逐通道的积。</para></returns>
+    private static Vector128<byte> MultiplyVector(Vector128<byte> value, Vector128<byte> low, Vector128<byte> high)
+    {
+        var lowNibble = value & NibbleMask;
+        var highNibble = Vector128.ShiftRightLogical(value.AsUInt16(), 4).AsByte() & NibbleMask;
+        return Vector128.Shuffle(low, lowNibble) ^ Vector128.Shuffle(high, highNibble);
+    }
+
+    /// <summary>
+    /// XORs <paramref name="source"/> scaled by <paramref name="coefficient"/> into <paramref name="destination"/>,
+    /// vectorized when the processor can permute a 16-byte lane in one instruction.
+    /// <para>把按 <paramref name="coefficient"/> 缩放的 <paramref name="source"/> 异或进 <paramref name="destination"/>；
+    /// 处理器能以单条指令置换 16 字节通道时向量化执行。</para>
+    /// </summary>
+    /// <remarks>
+    /// A zero coefficient leaves the destination untouched, which reproduces the scalar loop's short circuit on a zero
+    /// source byte because the field product is zero either way. Field addition is associative and commutative, so
+    /// accumulating a row across several calls cannot change the result.
+    /// <para>系数为零时不改动目标，这与标量循环对零源字节的短路等价，因为两种情况下的域乘积都是零。域加法满足结合律与
+    /// 交换律，因此分多次调用累加同一行不会改变结果。</para>
+    /// </remarks>
+    /// <param name="destination">Row the scaled source is XORed into; it must be at least as long as the source.
+    /// <para>被异或的目标行；长度不得小于源。</para></param>
+    /// <param name="source">Row of field elements to scale. <para>要缩放的域元素行。</para></param>
+    /// <param name="coefficient">Field element every source byte is multiplied by.
+    /// <para>源字节逐字节相乘的域元素。</para></param>
+    internal static void XorMultiplyConstant(Span<byte> destination, ReadOnlySpan<byte> source, byte coefficient)
+    {
+        if (coefficient == 0 || source.IsEmpty)
+        {
+            return;
+        }
+
+        if (!CanVectorizeMultiply || source.Length < VectorLane)
+        {
+            XorMultiplyConstantScalar(destination, source, coefficient);
+            return;
+        }
+
+        var (low, high) = BuildMultiplyTables(coefficient);
+        var offset = 0;
+        for (; offset <= source.Length - VectorLane; offset += VectorLane)
+        {
+            var product = MultiplyVector(Vector128.Create(source.Slice(offset, VectorLane)), low, high);
+            var lane = destination.Slice(offset, VectorLane);
+            (product ^ Vector128.Create(lane)).CopyTo(lane);
+        }
+
+        for (; offset < source.Length; offset++)
+        {
+            destination[offset] ^= Multiply(coefficient, source[offset]);
+        }
+    }
+
+    /// <summary>
+    /// The byte-at-a-time reference form of <see cref="XorMultiplyConstant(Span{byte}, ReadOnlySpan{byte}, byte)"/>,
+    /// which is also its fallback when the processor cannot permute a lane in one instruction.
+    /// <para><see cref="XorMultiplyConstant(Span{byte}, ReadOnlySpan{byte}, byte)"/> 的逐字节参考实现，同时是处理器无法
+    /// 用单条指令置换通道时的回退路径。</para>
+    /// </summary>
+    /// <remarks>
+    /// Exposed to the test assembly so both forms can be compared directly on machines that only ever execute one of them.
+    /// <para>开放给测试程序集，使两种形态在只可能执行其中一条路径的机器上也能直接互相对比。</para>
+    /// </remarks>
+    /// <param name="destination">Row the scaled source is XORed into. <para>被异或的目标行。</para></param>
+    /// <param name="source">Row of field elements to scale. <para>要缩放的域元素行。</para></param>
+    /// <param name="coefficient">Field element every source byte is multiplied by.
+    /// <para>源字节逐字节相乘的域元素。</para></param>
+    internal static void XorMultiplyConstantScalar(Span<byte> destination, ReadOnlySpan<byte> source, byte coefficient)
+    {
+        if (coefficient == 0 || source.IsEmpty)
+        {
+            return;
+        }
+
+        for (var index = 0; index < source.Length; index++)
+        {
+            destination[index] ^= Multiply(coefficient, source[index]);
+        }
+    }
 
     /// <summary>Calculates the parity byte count without the standalone fec footer.
     /// <para>计算不包含独立 fec footer 的校验码字节数。</para></summary>
@@ -209,50 +343,62 @@ internal static class AvbFecCodec
                 {
                     return false;
                 }
+                var rootCount = (int)roots;
                 var outputs = new byte[erased.Length][];
                 for (var slot = 0; slot < erased.Length; slot++)
                 {
                     outputs[slot] = new byte[BlockSize];
                 }
-                var residual = new byte[roots];
+
+                var residual = new byte[rootCount][];
+                for (var root = 0; root < rootCount; root++)
+                {
+                    residual[root] = new byte[BlockSize];
+                }
+
                 for (var column = 0; column < BlockSize; column++)
                 {
-                    for (var root = 0; root < roots; root++)
+                    for (var root = 0; root < rootCount; root++)
                     {
-                        residual[root] = parity[column * (int)roots + root];
+                        residual[root][column] = parity[column * rootCount + root];
                     }
-                    for (var symbol = 0; symbol < dataSymbols; symbol++)
+                }
+
+                for (var symbol = 0; symbol < dataSymbols; symbol++)
+                {
+                    if (Array.IndexOf(erased, symbol) >= 0)
                     {
-                        if (Array.IndexOf(erased, symbol) >= 0)
-                        {
-                            continue;
-                        }
-                        var value = data[symbol * BlockSize + column];
-                        if (value != 0)
-                        {
-                            for (var root = 0; root < roots; root++)
-                            {
-                                residual[root] ^= Multiply(value, basis[symbol][root]);
-                            }
-                        }
+                        continue;
                     }
-                    for (var slot = 0; slot < erased.Length; slot++)
+
+                    var source = data.AsSpan(symbol * BlockSize, BlockSize);
+                    for (var root = 0; root < rootCount; root++)
                     {
-                        byte sum = 0;
-                        for (var root = 0; root < roots; root++)
-                        {
-                            sum ^= Multiply(transforms[slot][root], residual[root]);
-                        }
-                        outputs[slot][column] = sum;
+                        XorMultiplyConstant(residual[root], source, basis[symbol][root]);
                     }
-                    for (var root = erased.Length; root < roots; root++)
+                }
+
+                for (var slot = 0; slot < erased.Length; slot++)
+                {
+                    var destination = outputs[slot].AsSpan();
+                    for (var root = 0; root < rootCount; root++)
                     {
-                        byte check = 0;
-                        for (var source = 0; source < roots; source++)
+                        XorMultiplyConstant(destination, residual[root], transforms[slot][root]);
+                    }
+                }
+
+                if (erased.Length < rootCount)
+                {
+                    var check = new byte[BlockSize];
+                    for (var root = erased.Length; root < rootCount; root++)
+                    {
+                        Array.Clear(check);
+                        for (var source = 0; source < rootCount; source++)
                         {
-                            check ^= Multiply(transforms[root][source], residual[source]);
+                            XorMultiplyConstant(check, residual[source], transforms[root][source]);
                         }
-                        if (check != 0)
+
+                        if (check.AsSpan().IndexOfAnyExcept((byte)0) >= 0)
                         {
                             return false;
                         }

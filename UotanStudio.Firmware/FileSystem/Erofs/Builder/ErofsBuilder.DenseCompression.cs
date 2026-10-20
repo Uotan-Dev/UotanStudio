@@ -32,7 +32,7 @@ public sealed partial class ErofsBuilder
     /// 该跨度受已声明 pcluster 大小约束，否则受格式上限约束，因为 <see cref="ErofsOptions.MaxPclusterSize"/>
     /// 描述的是镜像的物理 pcluster 大小。</para></summary>
     private static ErofsPclusterPlan[]? TryPlanDenseCompressed(ErofsInode node, int blockSize, ErofsOptions options,
-        ErofsStagingBatch batch, ErofsLz4Context? lz4)
+        ErofsStagingBatch batch, ErofsEncoderContext context)
     {
         var clusterSize = node.LogicalClusterSize;
         var bigPcluster = DeclaredBigPcluster(options);
@@ -44,8 +44,10 @@ public sealed partial class ErofsBuilder
         if (inputLimit < clusterSize) return null;
         using var input = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read,
             65536, FileOptions.SequentialScan);
-        var raw = new byte[(int)Math.Min((long)node.Size, inputLimit)];
-        var encoded = new byte[ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, raw.Length)];
+        var rawCapacity = (int)Math.Min((long)node.Size, inputLimit);
+        var encodedCapacity = ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, rawCapacity);
+        var raw = ArrayPool<byte>.Shared.Rent(rawCapacity);
+        var encoded = ArrayPool<byte>.Shared.Rent(encodedCapacity);
         var accepted = ArrayPool<byte>.Shared.Rent(Math.Max(1, frameLimit));
         try
         {
@@ -54,7 +56,7 @@ public sealed partial class ErofsBuilder
             while (position < (long)node.Size)
             {
                 options.CancellationToken.ThrowIfCancellationRequested();
-                var available = (int)Math.Min((long)node.Size - position, raw.Length);
+                var available = (int)Math.Min((long)node.Size - position, rawCapacity);
                 var buffered = 0;
                 var bestLength = 0;
                 var bestEncoded = 0;
@@ -67,7 +69,7 @@ public sealed partial class ErofsBuilder
                         input.ReadExactly(raw, buffered, length - buffered);
                         buffered = length;
                     }
-                    var size = ErofsPlannerCompression.Compress(options, lz4, raw, 0, length, encoded, encoded.Length);
+                    var size = ErofsPlannerCompression.Compress(options, context, raw, 0, length, encoded, encodedCapacity);
                     if (size <= 0 || size > frameLimit) return false;
                     if (size > blockSize && (int)(position % clusterSize) + length < 2 * clusterSize) return false;
                     bestLength = length;
@@ -117,6 +119,8 @@ public sealed partial class ErofsBuilder
         finally
         {
             ArrayPool<byte>.Shared.Return(accepted);
+            ArrayPool<byte>.Shared.Return(encoded);
+            ArrayPool<byte>.Shared.Return(raw);
         }
     }
 

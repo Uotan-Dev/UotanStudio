@@ -23,6 +23,20 @@ internal class PayloadExtractor
     /// <para>分区提取期间创建的文件流所用的缓冲区大小（字节）。</para>
     private const int CopyBufferSize = 81920;
 
+    /// <summary>
+    /// Buffer size for the temporary partition file, which must stay effectively unbuffered. The base image is
+    /// copied through the <see cref="FileStream"/> while every install operation writes positionally through
+    /// <c>RandomAccess</c> on the same file handle, so buffered base-image bytes would remain pending and a
+    /// worker-thread flush would write them over the regions other workers already patched, corrupting the
+    /// partition. A size of one byte makes every write pass through, so the two write directions never
+    /// disagree about the file content.
+    /// <para>临时分区文件的缓冲区大小，必须保持事实上无缓冲。基座镜像经 <see cref="FileStream"/> 复制，而每个安装操作
+    /// 都通过同一文件句柄上的 <c>RandomAccess</c> 定位写入，因此缓冲中的基座镜像字节会滞留，随后工作线程的刷写会把这些
+    /// 字节写到其他工作者已经打好补丁的区段上，破坏分区内容。取一字节使每次写入都直接下落，两条写入方向因此不会对文件
+    /// 内容产生分歧。</para>
+    /// </summary>
+    private const int UnbufferedOutputBufferSize = 1;
+
     private readonly long maximumPartitionBytes;
     private readonly IReadOnlyDictionary<string, byte[]>? zstdDictionaries;
     private readonly long maximumZstdDictBytes;
@@ -268,7 +282,7 @@ internal class PayloadExtractor
         var tempPath = TempFileHelper.CreateAdjacentPath(fullOutputPath);
         try
         {
-            using (var outFile = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, CopyBufferSize))
+            using (var outFile = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, UnbufferedOutputBufferSize))
             {
                 if (totalSize > 0)
                 {

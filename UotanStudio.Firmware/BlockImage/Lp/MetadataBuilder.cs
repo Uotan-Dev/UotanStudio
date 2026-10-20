@@ -167,13 +167,19 @@ public sealed class MetadataBuilder
             BlockDevices = [_blockDevice]
         };
 
+        var groupIndexByName = new Dictionary<string, uint>(metadata.Groups.Count, StringComparer.Ordinal);
+        for (var index = 0; index < metadata.Groups.Count; index++)
+        {
+            groupIndexByName.TryAdd(metadata.Groups[index].NameString, (uint)index);
+        }
+
         foreach (var p in _partitions)
         {
-            var groupIndex = (uint)metadata.Groups.FindIndex(g => g.NameString == p.GroupName);
-            if (groupIndex == uint.MaxValue)
+            if (!groupIndexByName.TryGetValue(p.GroupName, out var groupIndex))
             {
                 throw new InvalidOperationException($"Group '{p.GroupName}' not found for partition '{p.Name}'.");
             }
+
             metadata.Partitions.Add(new LpMetadataPartition
             {
                 Name = Encoding.UTF8.GetBytes(p.Name),

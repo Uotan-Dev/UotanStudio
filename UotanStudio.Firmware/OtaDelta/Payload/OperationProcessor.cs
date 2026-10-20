@@ -172,7 +172,7 @@ internal static class OperationProcessor
             try
             {
                 oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
-                using var decoded = new MemoryStream();
+                using var decoded = new MemoryStream(checked((int)output.Length));
                 using (var decoder = new StrictBrotliReadStream(new MemoryStream(patchBytes, 0, patchLength, writable: false)))
                 using (var bounded = new CountingWriteStream(decoded, maximumOperationBytes, leaveOpen: true, cancellationToken: ct))
                     decoder.CopyTo(bounded);

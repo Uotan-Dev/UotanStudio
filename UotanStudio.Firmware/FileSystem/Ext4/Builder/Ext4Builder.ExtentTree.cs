@@ -40,15 +40,7 @@ public sealed partial class Ext4Builder
                 read += n;
             }
 
-            var allZero = true;
-            for (var i = 0; i < want; i++)
-            {
-                if (buffer[i] != 0)
-                {
-                    allZero = false;
-                    break;
-                }
-            }
+            var allZero = buffer.AsSpan(0, want).IndexOfAnyExcept((byte)0) < 0;
 
             if (allZero)
             {
@@ -273,24 +265,31 @@ public sealed partial class Ext4Builder
 
         var target = node.AttributeValue ?? (node.IsSymlink ? Encoding.UTF8.GetBytes(node.SymlinkTarget ?? string.Empty) : null);
         using var input = target is null ? File.OpenRead(node.FullPath) : null;
-        var buffer = new byte[blockSize];
-        foreach (var extent in node.Extents)
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(blockSize);
+        try
         {
-            for (var i = 0; i < extent.Len; i++)
+            foreach (var extent in node.Extents)
             {
-                var logical = (long)extent.Logical + i;
-                var offset = checked(((long)extent.Start + i) * blockSize);
-                var sourceOffset = checked(logical * blockSize);
-                var count = checked((int)Math.Min(blockSize, node.Size - sourceOffset));
-                if (target is not null)
-                    target.AsSpan(checked((int)sourceOffset), count).CopyTo(buffer);
-                else
+                for (var i = 0; i < extent.Len; i++)
                 {
-                    input!.Position = sourceOffset;
-                    input.ReadExactly(buffer.AsSpan(0, count));
+                    var logical = (long)extent.Logical + i;
+                    var offset = checked(((long)extent.Start + i) * blockSize);
+                    var sourceOffset = checked(logical * blockSize);
+                    var count = checked((int)Math.Min(blockSize, node.Size - sourceOffset));
+                    if (target is not null)
+                        target.AsSpan(checked((int)sourceOffset), count).CopyTo(buffer);
+                    else
+                    {
+                        input!.Position = sourceOffset;
+                        input.ReadExactly(buffer.AsSpan(0, count));
+                    }
+                    WriteAt(output, baseOffset, offset, buffer, count);
                 }
-                WriteAt(output, baseOffset, offset, buffer, count);
             }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

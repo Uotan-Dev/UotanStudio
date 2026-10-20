@@ -615,16 +615,24 @@ public sealed class CpioExtractor
     private static void CopyExactly(Stream source, Stream destination, long length, string entryName,
         CancellationToken cancellationToken = default)
     {
-        var buffer = new byte[81920];
-        var remaining = length;
-        while (remaining > 0)
+        const int chunkSize = 81920;
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(chunkSize);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var read = source.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
-            cancellationToken.ThrowIfCancellationRequested();
-            if (read == 0) throw new EndOfStreamException($"Entry '{entryName}' ended before its declared length.");
-            destination.Write(buffer, 0, read);
-            remaining -= read;
+            var remaining = length;
+            while (remaining > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = source.Read(buffer, 0, (int)Math.Min(chunkSize, remaining));
+                cancellationToken.ThrowIfCancellationRequested();
+                if (read == 0) throw new EndOfStreamException($"Entry '{entryName}' ended before its declared length.");
+                destination.Write(buffer, 0, read);
+                remaining -= read;
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

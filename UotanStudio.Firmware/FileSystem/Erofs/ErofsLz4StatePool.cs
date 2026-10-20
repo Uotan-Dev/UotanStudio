@@ -116,14 +116,16 @@ internal sealed class ErofsLz4StatePool : IDisposable
 }
 
 /// <summary>
-/// Entry points the EROFS planners use for their probe encodings: a probe reuses the worker's LZ4 context when
-/// the node's algorithm is LZ4, and otherwise falls back to the stateless dispatch, so codecs without a reusable
-/// context keep their existing behaviour. The destination capacity is always the full codec bound, because a
-/// destination capped at the frame limit makes liblz4's destination-filling encoder replace a match with a
-/// literal tail and still report the whole span as consumed, which changes frames the planner accepts.
-/// <para>EROFS 规划器用于探测编码的入口：节点算法为 LZ4 时复用该工作者的 LZ4 上下文，否则退回无状态分派，
-/// 使没有可复用上下文的算法保持原有行为。目标容量始终取编解码器的完整上界，因为把目标限制到帧上限会让 liblz4
-/// 的填满目标编码器把匹配换成字面量尾巴却仍报告整段已被消费，从而改变规划器接受的帧。</para>
+/// Entry point the EROFS planners use for their probe encodings: a probe runs through the worker's
+/// <see cref="ErofsEncoderContext"/>, which retains one LZ4 context, one ZSTD compressor and one MicroLZMA
+/// encoder for the whole payload instead of constructing a backend per probe. The destination capacity is
+/// always the full codec bound, because a destination capped at the frame limit makes liblz4's
+/// destination-filling encoder replace a match with a literal tail and still report the whole span as consumed,
+/// which changes frames the planner accepts.
+/// <para>EROFS 规划器用于探测编码的入口：探测经该工作者的 <see cref="ErofsEncoderContext"/> 执行，它在整份负载期间
+/// 保留一个 LZ4 上下文、一个 ZSTD 压缩器与一个 MicroLZMA 编码器，而不是每次探测都构造后端。目标容量始终取
+/// 编解码器的完整上界，因为把目标限制到帧上限会让 liblz4 的填满目标编码器把匹配换成字面量尾巴却仍报告整段已被消费，
+/// 从而改变规划器接受的帧。</para>
 /// </summary>
 internal static class ErofsPlannerCompression
 {
@@ -133,9 +135,9 @@ internal static class ErofsPlannerCompression
     /// </summary>
     /// <param name="options">Codec settings of the node being planned.
     /// <para>正在规划的节点的编解码设置。</para></param>
-    /// <param name="context">LZ4 context borrowed by the calling worker, or <see langword="null"/> when the
-    /// node's algorithm has no reusable context. <para>调用工作者借用的 LZ4 上下文；节点算法没有可复用
-    /// 上下文时为 <see langword="null"/>。</para></param>
+    /// <param name="context">Encoder state borrowed by the calling worker for the payload being planned, or
+    /// <see langword="null"/> to allocate private state for this call.
+    /// <para>调用工作者为正在规划的负载借用的编码器状态；为 <see langword="null"/> 时仅为本调用分配私有状态。</para></param>
     /// <param name="source">Buffer holding the candidate bytes. <para>存放候选字节的缓冲区。</para></param>
     /// <param name="sourceIndex">Offset in <paramref name="source"/> where the candidate starts.
     /// <para><paramref name="source"/> 中候选的起始偏移。</para></param>
@@ -144,9 +146,7 @@ internal static class ErofsPlannerCompression
     /// <param name="targetLength">Destination capacity in bytes. <para>目标容量（字节）。</para></param>
     /// <returns>The encoded length, or <c>0</c> when the frame does not fit the destination.
     /// <para>编码长度；帧放不进目标时为 <c>0</c>。</para></returns>
-    internal static int Compress(ErofsOptions options, ErofsLz4Context? context, byte[] source, int sourceIndex,
+    internal static int Compress(ErofsOptions options, ErofsEncoderContext? context, byte[] source, int sourceIndex,
         int sourceLength, byte[] target, int targetLength)
-        => context is not null && options.Algorithm == ErofsCompressionAlgorithm.Lz4
-            ? ErofsCompression.AlgorithmCompressLz4(options, context, source, sourceIndex, sourceLength, target, 0, targetLength)
-            : ErofsCompression.AlgorithmCompress(options, source, sourceIndex, sourceLength, target, 0, targetLength);
+        => ErofsCompression.AlgorithmCompress(options, context, source, sourceIndex, sourceLength, target, 0, targetLength);
 }

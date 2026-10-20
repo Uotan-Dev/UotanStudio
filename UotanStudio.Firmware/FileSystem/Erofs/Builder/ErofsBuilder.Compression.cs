@@ -228,34 +228,31 @@ public sealed partial class ErofsBuilder
     }
 
     private static ErofsPclusterPlan[]? TryPlanCompressed(ErofsInode node, int blockSize, ErofsOptions options,
-        Core.CompressionPayloadStaging staging, ErofsLz4StatePool lz4States)
+        Core.CompressionPayloadStaging staging, ErofsCodecStatePool codecStates)
     {
         using var batch = new ErofsStagingBatch(staging);
-        var lz4 = options.Algorithm == ErofsCompressionAlgorithm.Lz4 ? lz4States.Rent(options.Lz4HighCompression) : null;
+        var context = codecStates.Rent();
         try
         {
             if (options.OptimizeCompression && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
             {
-                var dense = TryPlanDenseCompressed(node, blockSize, options, batch, lz4);
+                var dense = TryPlanDenseCompressed(node, blockSize, options, batch, context);
                 if (dense is null || ClosesSafely(node, dense, blockSize))
                 {
                     return dense;
                 }
             }
 
-            return PlanClusterRestartCompressed(node, blockSize, options, batch, lz4);
+            return PlanClusterRestartCompressed(node, blockSize, options, batch, context);
         }
         finally
         {
-            if (lz4 is not null)
-            {
-                lz4States.Return(lz4);
-            }
+            codecStates.Return(context);
         }
     }
 
     private static ErofsPclusterPlan[]? PlanClusterRestartCompressed(ErofsInode node, int blockSize,
-        ErofsOptions options, ErofsStagingBatch batch, ErofsLz4Context? lz4)
+        ErofsOptions options, ErofsStagingBatch batch, ErofsEncoderContext codec)
     {
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         var clusterSize = node.LogicalClusterSize;
@@ -302,7 +299,7 @@ public sealed partial class ErofsBuilder
 
                     FillReadWindow(fs, raw, rawLength, pos, candidateLen, ref windowBase, ref windowFilled);
                     outLen = ErofsPlannerCompression.Compress(
-                        options, lz4, raw, (int)(pos - windowBase), candidateLen, compressed, compressedLength);
+                        options, codec, raw, (int)(pos - windowBase), candidateLen, compressed, compressedLength);
                     if (outLen <= 0 || outLen > frameLimit)
                     {
                         return false;
@@ -544,66 +541,77 @@ public sealed partial class ErofsBuilder
         Core.CompressionPayloadStaging staging)
     {
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var raw = new byte[node.Pclusters!.Max(p => p.SourceLength)];
-        var compressed = new byte[ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, raw.Length)];
-        foreach (var p in node.Pclusters!)
+        var rawLength = node.Pclusters!.Max(static p => p.SourceLength);
+        var compressedCapacity = ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, rawLength);
+        var raw = System.Buffers.ArrayPool<byte>.Shared.Rent(rawLength);
+        var compressed = System.Buffers.ArrayPool<byte>.Shared.Rent(compressedCapacity);
+        using var codec = new ErofsEncoderContext();
+        try
         {
-            options.CancellationToken.ThrowIfCancellationRequested();
-            if (p.Fragment)
+            foreach (var p in node.Pclusters!)
             {
-                continue;
-            }
-
-            if (p.Plain)
-            {
-                fs.Position = p.SourceOffset;
-                fs.ReadExactly(raw, 0, p.SourceLength);
-                var offset = checked((long)p.BlockAddress * blockSize);
-                if (p.InterlacedOffset > 0)
+                options.CancellationToken.ThrowIfCancellationRequested();
+                if (p.Fragment)
                 {
-                    WriteInterlacedFrame(output, raw, p, offset, blockSize);
                     continue;
                 }
 
-                WriteAt(output, offset, raw, p.SourceLength);
-                WriteZeroes(output, offset + p.SourceLength, blockSize - p.SourceLength);
-                continue;
-            }
-
-            int outLen;
-            if (p.StagedOffset >= 0)
-            {
-                outLen = p.CompressedLength;
-                staging.Read(p.StagedOffset, compressed.AsSpan(0, outLen));
-            }
-            else
-            {
-                fs.Position = p.SourceOffset;
-                fs.ReadExactly(raw, 0, p.SourceLength);
-                outLen = ErofsCompression.AlgorithmCompress(
-                    options, raw, 0, p.SourceLength, compressed, 0, compressed.Length);
-                if (outLen != p.CompressedLength)
+                if (p.Plain)
                 {
-                    throw new FileSystemCorruptedException(
-                        $"Compressed length mismatch for '{node.FullPath}': {outLen} != {p.CompressedLength}.");
+                    fs.Position = p.SourceOffset;
+                    fs.ReadExactly(raw, 0, p.SourceLength);
+                    var offset = checked((long)p.BlockAddress * blockSize);
+                    if (p.InterlacedOffset > 0)
+                    {
+                        WriteInterlacedFrame(output, raw, p, offset, blockSize);
+                        continue;
+                    }
+
+                    WriteAt(output, offset, raw, p.SourceLength);
+                    WriteZeroes(output, offset + p.SourceLength, blockSize - p.SourceLength);
+                    continue;
                 }
-            }
 
-            if (node.InlineCompressedTail && ReferenceEquals(p, node.Pclusters![^1]))
-            {
-                var tailStart = node.MetaOffset + GetInodeRecordSize(node, blockSize) - outLen;
-                WriteAt(output, tailStart, compressed, outLen);
-                continue;
-            }
+                int outLen;
+                if (p.StagedOffset >= 0)
+                {
+                    outLen = p.CompressedLength;
+                    staging.Read(p.StagedOffset, compressed.AsSpan(0, outLen));
+                }
+                else
+                {
+                    fs.Position = p.SourceOffset;
+                    fs.ReadExactly(raw, 0, p.SourceLength);
+                    outLen = ErofsCompression.AlgorithmCompress(
+                        options, codec, raw, 0, p.SourceLength, compressed, 0, compressedCapacity);
+                    if (outLen != p.CompressedLength)
+                    {
+                        throw new FileSystemCorruptedException(
+                            $"Compressed length mismatch for '{node.FullPath}': {outLen} != {p.CompressedLength}.");
+                    }
+                }
 
-            var blockBytes = CeilDiv(p.CompressedLength, blockSize) * blockSize;
-            var start = checked(p.BlockAddress * blockSize);
-            if (outLen < blockBytes)
-            {
-                WriteZeroes(output, start, blockBytes - outLen);
-            }
+                if (node.InlineCompressedTail && ReferenceEquals(p, node.Pclusters![^1]))
+                {
+                    var tailStart = node.MetaOffset + GetInodeRecordSize(node, blockSize) - outLen;
+                    WriteAt(output, tailStart, compressed, outLen);
+                    continue;
+                }
 
-            WriteAt(output, start + blockBytes - outLen, compressed, outLen);
+                var blockBytes = CeilDiv(p.CompressedLength, blockSize) * blockSize;
+                var start = checked(p.BlockAddress * blockSize);
+                if (outLen < blockBytes)
+                {
+                    WriteZeroes(output, start, blockBytes - outLen);
+                }
+
+                WriteAt(output, start + blockBytes - outLen, compressed, outLen);
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(raw);
+            System.Buffers.ArrayPool<byte>.Shared.Return(compressed);
         }
     }
 
@@ -1352,6 +1360,8 @@ public sealed partial class ErofsBuilder
     /// </summary>
     private static readonly byte[] ZeroBuffer = new byte[1 << 16];
 
+    private const int HashChunkBytes = 1 << 20;
+
     /// <summary>
     /// Writes the packed inode's fragment data area: each fragment slot's source bytes are streamed to its offset inside the packed region (unwritten gaps stay zeroed by the image's preallocation).
     /// <para>写出 packed inode 的碎片数据区：把每个碎片槽位按文件内偏移写入数据区对应位置 （槽位之间未写的空白由镜像预分配/置零保证为零）。</para>
@@ -1558,18 +1568,25 @@ public sealed partial class ErofsBuilder
     {
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var hash = Sha256.CreateAccumulator();
-        var buffer = new byte[1 << 20];
-        var remaining = (long)node.Size;
-        while (remaining > 0)
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(HashChunkBytes);
+        try
         {
-            token.ThrowIfCancellationRequested();
-            var count = (int)Math.Min(buffer.Length, remaining);
-            fs.ReadExactly(buffer, 0, count);
-            hash.Append(buffer.AsSpan(0, count));
-            remaining -= count;
-        }
+            var remaining = (long)node.Size;
+            while (remaining > 0)
+            {
+                token.ThrowIfCancellationRequested();
+                var count = (int)Math.Min((long)HashChunkBytes, remaining);
+                fs.ReadExactly(buffer, 0, count);
+                hash.Append(buffer.AsSpan(0, count));
+                remaining -= count;
+            }
 
-        return hash.GetHashAndReset();
+            return hash.GetHashAndReset();
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     /// <summary>
@@ -1587,17 +1604,24 @@ public sealed partial class ErofsBuilder
 
         using var source = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         source.Position = sourceOffset;
-        var buffer = new byte[1 << 20];
-        var remaining = length;
-        var pos = targetOffset;
-        while (remaining > 0)
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(HashChunkBytes);
+        try
         {
-            token.ThrowIfCancellationRequested();
-            var count = (int)Math.Min(buffer.Length, remaining);
-            source.ReadExactly(buffer, 0, count);
-            WriteAt(output, pos, buffer, count);
-            pos += count;
-            remaining -= count;
+            var remaining = length;
+            var pos = targetOffset;
+            while (remaining > 0)
+            {
+                token.ThrowIfCancellationRequested();
+                var count = (int)Math.Min((long)HashChunkBytes, remaining);
+                source.ReadExactly(buffer, 0, count);
+                WriteAt(output, pos, buffer, count);
+                pos += count;
+                remaining -= count;
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

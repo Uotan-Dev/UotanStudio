@@ -58,9 +58,14 @@ public readonly record struct FileSystemByteProgress(FileSystemWorkStage Stage, 
 }
 
 /// <summary>Aggregates parallel writes and bounds notification frequency without estimating byte counts.</summary>
+/// <remarks>
+/// The counter is updated with one interlocked add and the throttle window is claimed with one compare-exchange,
+/// so a write never waits for another worker's write. A monitor around this path would serialize every extracted
+/// block of every worker: the extraction writes one block at a time, so a lock here costs one contended
+/// acquisition per block and is the difference between near-linear and flat parallel scaling.
+/// </remarks>
 internal sealed class ExtractionByteCounter
 {
-    private readonly Lock gate = new();
     private readonly IProgress<(long Processed, long Total)>? progress;
     private readonly CancellationToken token;
     private readonly long total;
@@ -91,19 +96,24 @@ internal sealed class ExtractionByteCounter
     internal void Add(long count)
     {
         token.ThrowIfCancellationRequested();
-        lock (gate)
+        var processedNow = Interlocked.Add(ref processed, count);
+        var stamp = Stopwatch.GetTimestamp();
+        var last = Volatile.Read(ref lastReport);
+        if (Stopwatch.GetElapsedTime(last, stamp).TotalMilliseconds < 100)
         {
-            processed = Math.Min(checked(processed + count), total);
-            if (Stopwatch.GetElapsedTime(lastReport).TotalMilliseconds < 100) return;
-            lastReport = Stopwatch.GetTimestamp();
-            progress?.Report((processed, total));
+            return;
         }
+
+        if (Interlocked.CompareExchange(ref lastReport, stamp, last) != last)
+        {
+            return;
+        }
+
+        progress?.Report((Math.Min(processedNow, total), total));
     }
 
     internal void Complete()
-    {
-        lock (gate) progress?.Report((processed, total));
-    }
+        => progress?.Report((Math.Min(Volatile.Read(ref processed), total), total));
 }
 
 /// <summary>Tags synchronous backend measurements before the UI schedules their delivery.</summary>

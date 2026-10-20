@@ -911,6 +911,8 @@ public sealed partial class F2fsBuilder
                 new() { HashCode = 0, Ino = node.Parent?.Ino ?? node.Ino, NameLen = 2, FileType = F2fsDirectoryEntry.TypeDirectory, Name = ".." },
             },
         };
+        List<int> blockSlots = [blocks[0].Sum(static e => e.SlotCount)];
+        List<uint> levelStartBlocks = [0];
 
         uint currentDepth = 0;
         foreach (var child in node.Children.OrderBy(static c => c.Name, StringComparer.Ordinal))
@@ -939,7 +941,7 @@ public sealed partial class F2fsBuilder
             while (true)
             {
                 var bucketBlocksCount = BucketBlocks(level);
-                var baseIndex = DirBlockIndex(level, entry.HashCode % DirBuckets(level));
+                var baseIndex = DirBlockIndex(level, entry.HashCode % DirBuckets(level), levelStartBlocks);
                 var placed = false;
                 for (var b = 0; b < bucketBlocksCount; b++)
                 {
@@ -947,11 +949,13 @@ public sealed partial class F2fsBuilder
                     while (blocks.Count <= index)
                     {
                         blocks.Add([]);
+                        blockSlots.Add(0);
                     }
 
-                    if (blocks[index].Sum(static e => e.SlotCount) + slots <= F2fsDirectoryEntry.SlotsPerBlock)
+                    if (blockSlots[index] + slots <= F2fsDirectoryEntry.SlotsPerBlock)
                     {
                         blocks[index].Add(entry);
+                        blockSlots[index] += slots;
                         placed = true;
                         break;
                     }
@@ -994,18 +998,18 @@ public sealed partial class F2fsBuilder
         => level < MaxDirHashDepth / 2 ? 2u : 4u;
 
     /// <summary>
-    /// Computes the block index of one bucket at a directory hash level.
-    /// <para>计算目录哈希层级中某个桶所在的块下标。</para>
+    /// Computes the block index of one bucket at a directory hash level: the level's start block is read from a forward-only cache that accumulates each level's terms once instead of rescanning every lower level on each probe.
+    /// <para>计算目录哈希层级中某个桶所在的块下标：层级起始块取自只向前推进的缓存，每层的块数只累加一次，不再每次探测都重扫更低层级。</para>
     /// </summary>
-    private static uint DirBlockIndex(uint level, uint bucket)
+    private static uint DirBlockIndex(uint level, uint bucket, List<uint> levelStartBlocks)
     {
-        uint index = 0;
-        for (var i = 0u; i < level; i++)
+        while ((uint)levelStartBlocks.Count <= level)
         {
-            index += DirBuckets(i) * BucketBlocks(i);
+            var lastLevel = (uint)(levelStartBlocks.Count - 1);
+            levelStartBlocks.Add(levelStartBlocks[^1] + DirBuckets(lastLevel) * BucketBlocks(lastLevel));
         }
 
-        return index + bucket * BucketBlocks(level);
+        return levelStartBlocks[(int)level] + bucket * BucketBlocks(level);
     }
 
     private static byte[] BuildDirBlock(List<F2fsDirectoryEntry> entries)

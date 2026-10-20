@@ -653,17 +653,34 @@ internal sealed class SquashfsParser
         }
     }
 
+    /// <summary>
+    /// Writes a run of zero bytes for a don't-care block through the shared chunk buffer.
+    /// <para>经共享分块缓冲为 don't-care 块写出一段零字节。</para>
+    /// </summary>
+    /// <remarks>
+    /// A crafted inode can carry more block entries than its file length needs, which makes
+    /// <paramref name="count"/> negative; the rejected length is then allocated on purpose so the overflow fault
+    /// that bounded this write before stays the same.
+    /// <para>被构造的 inode 可以携带超过文件长度所需的块条目数，此时 <paramref name="count"/> 为负；这里刻意仍按该
+    /// 被拒绝的长度做一次分配，以保持此前已由该写入边界给出的溢出故障不变。</para>
+    /// </remarks>
     private static void ZeroFill(Stream destination, long count, CancellationToken cancellationToken)
     {
-        var chunk = new byte[Math.Min(count, 81920)];
+        if (count < 0)
+        {
+            _ = new byte[Math.Min(count, (long)ZeroChunk.Length)];
+        }
+
         while (count > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var take = (int)Math.Min(chunk.Length, count);
-            destination.Write(chunk, 0, take);
+            var take = (int)Math.Min(count, ZeroChunk.Length);
+            destination.Write(ZeroChunk, 0, take);
             count -= take;
         }
     }
+
+    private static readonly byte[] ZeroChunk = new byte[81920];
 
     private void Walk(SquashfsInode directory, string parentPath, int depth, List<SquashfsEntry> sink, CancellationToken cancellationToken)
     {
@@ -692,10 +709,12 @@ internal sealed class SquashfsParser
     private IEnumerable<(string Name, SquashfsInode Inode)> ReadDirectoryEntries(SquashfsInode directory)
     {
         var cursor = _directoryTable.CreateCursor(directory.DirectoryBlock, directory.DirectoryOffset);
+        var header = new byte[12];
+        var fixedPart = new byte[8];
         var consumed = 0L;
         while (consumed < directory.DirectorySize)
         {
-            var header = cursor.ReadBytes(12);
+            cursor.ReadExactly(header);
             consumed += 12;
             var count = U32(header, 0);
             var blockStart = (long)U32(header, 4);
@@ -706,7 +725,7 @@ internal sealed class SquashfsParser
 
             for (var i = 0; i <= (int)count; i++)
             {
-                var fixedPart = cursor.ReadBytes(8);
+                cursor.ReadExactly(fixedPart);
                 consumed += 8;
                 var offset = U16(fixedPart, 0);
                 var type = U16(fixedPart, 4);
@@ -737,7 +756,8 @@ internal sealed class SquashfsParser
     private SquashfsInode ReadInode(long relativeBlock, int offset)
     {
         var cursor = _inodeTable.CreateCursor(relativeBlock, offset);
-        var baseFields = cursor.ReadBytes(16);
+        Span<byte> baseFields = stackalloc byte[16];
+        cursor.ReadExactly(baseFields);
         var rawType = U16(baseFields, 0);
         var mode = U16(baseFields, 2);
         var uid = U16(baseFields, 4);
@@ -775,7 +795,8 @@ internal sealed class SquashfsParser
     /// </summary>
     private SquashfsInode ReadDirectoryInode(SquashfsMetadataStream.Cursor cursor, SquashfsInode inode, bool extended)
     {
-        var body = cursor.ReadBytes(extended ? 24 : 16);
+        Span<byte> body = stackalloc byte[24];
+        cursor.ReadExactly(body[..(extended ? 24 : 16)]);
         if (extended)
         {
             inode.DirectorySize = U32(body, 4);
@@ -808,7 +829,8 @@ internal sealed class SquashfsParser
         long xattr = -1;
         if (!extended)
         {
-            var body = cursor.ReadBytes(16);
+            Span<byte> body = stackalloc byte[16];
+            cursor.ReadExactly(body);
             start = U32(body, 0);
             fragment = U32(body, 4);
             fragmentOffset = (int)U32(body, 8);
@@ -816,7 +838,8 @@ internal sealed class SquashfsParser
         }
         else
         {
-            var body = cursor.ReadBytes(40);
+            Span<byte> body = stackalloc byte[40];
+            cursor.ReadExactly(body);
             start = (long)U64(body, 0);
             size = unchecked((long)U64(body, 8));
             sparse = U64(body, 16) != 0;
@@ -854,7 +877,8 @@ internal sealed class SquashfsParser
     /// </summary>
     private SquashfsInode ReadSymlinkInode(SquashfsMetadataStream.Cursor cursor, SquashfsInode inode, bool extended)
     {
-        var body = cursor.ReadBytes(8);
+        Span<byte> body = stackalloc byte[8];
+        cursor.ReadExactly(body);
         var targetLength = U32(body, 4);
         if (targetLength > 4096)
         {
@@ -865,7 +889,9 @@ internal sealed class SquashfsParser
         inode.Size = inode.Target.LongLength;
         if (extended)
         {
-            inode.XattrIndex = InvalidIfSentinel(U32(cursor.ReadBytes(4), 0));
+            Span<byte> xattrIndex = stackalloc byte[4];
+            cursor.ReadExactly(xattrIndex);
+            inode.XattrIndex = InvalidIfSentinel(U32(xattrIndex, 0));
         }
         return inode;
     }
@@ -876,9 +902,10 @@ internal sealed class SquashfsParser
     /// </summary>
     private SquashfsInode ReadSpecialInode(SquashfsMetadataStream.Cursor cursor, SquashfsInode inode, SquashfsEntryKind kind, bool extended)
     {
-        var body = cursor.ReadBytes(kind is SquashfsEntryKind.Fifo or SquashfsEntryKind.Socket
+        Span<byte> body = stackalloc byte[12];
+        cursor.ReadExactly(body[..(kind is SquashfsEntryKind.Fifo or SquashfsEntryKind.Socket
             ? (extended ? 8 : 4)
-            : (extended ? 12 : 8));
+            : (extended ? 12 : 8))]);
         var xattrReadOffset = 0;
         if (kind is SquashfsEntryKind.BlockDevice or SquashfsEntryKind.CharDevice)
         {

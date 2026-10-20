@@ -688,8 +688,8 @@ public sealed partial class ErofsParser
         int decodedLen;
         try
         {
-            decodedLen = ErofsCompression.AlgorithmDecompress(
-                algorithm, context.Compressed, inputMargin, compressedByteLen - inputMargin, context.Decoded, 0, decodedTarget);
+            decodedLen = DecompressPcluster(
+                algorithm, context.Compressed, inputMargin, compressedByteLen - inputMargin, context.Decoded, decodedTarget);
         }
         catch (Exception ex) when (ex is InvalidDataException or FileSystemException or InvalidOperationException or ArgumentException)
         {
@@ -1313,8 +1313,8 @@ public sealed partial class ErofsParser
             {
                 throw new FileSystemCorruptedException("EROFS compressed extent is entirely zero-padded.");
             }
-            decodedLength = ErofsCompression.AlgorithmDecompress(
-                algorithm, compressed, inputMargin, compressedLength - inputMargin, decoded, 0, (int)logicalLength);
+            decodedLength = DecompressPcluster(
+                algorithm, compressed, inputMargin, compressedLength - inputMargin, decoded, (int)logicalLength);
         }
         catch (Exception ex) when (ex is InvalidDataException or FileSystemException or InvalidOperationException or ArgumentException)
         {

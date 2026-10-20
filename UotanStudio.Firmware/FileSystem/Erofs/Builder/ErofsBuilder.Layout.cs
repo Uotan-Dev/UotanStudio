@@ -658,7 +658,7 @@ public sealed partial class ErofsBuilder
         {
             var staging = EnsureStagedCompression();
             var hints = ErofsCompressHints.Compile(Options.CompressHints, Options);
-            using var lz4States = new ErofsLz4StatePool();
+            using var codecStates = new ErofsCodecStatePool();
             Core.FirmwareParallelism.ForEach(Ordered, node =>
             {
                 Options.CancellationToken.ThrowIfCancellationRequested();
@@ -678,7 +678,7 @@ public sealed partial class ErofsBuilder
                         ? node.CompressionOptions.WithCompressHint(hint.PclusterSize, hint.Algorithm)
                         : node.CompressionOptions;
                     node.CompressionOptions = nodeOptions;
-                    node.Pclusters = TryPlanCompressed(node, BlockSize, nodeOptions, staging, lz4States);
+                    node.Pclusters = TryPlanCompressed(node, BlockSize, nodeOptions, staging, codecStates);
                 }
                 if (node.Pclusters is not null) progress?.Add((int)node.Size);
             });
@@ -1312,8 +1312,8 @@ public sealed partial class ErofsBuilder
                 node.FullPath = path;
                 node.CompressionOptions = containerOptions;
                 node.LogicalClusterSize = BlockSize;
-                using var lz4States = new ErofsLz4StatePool();
-                node.Pclusters = TryPlanCompressed(node, BlockSize, containerOptions, staging, lz4States);
+                using var codecStates = new ErofsCodecStatePool();
+                node.Pclusters = TryPlanCompressed(node, BlockSize, containerOptions, staging, codecStates);
             }
             catch
             {

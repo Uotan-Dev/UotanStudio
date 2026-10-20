@@ -86,6 +86,7 @@ internal static class DatReader
     private static void Execute(TransferList list, Stream newData, Stream? patch, FileStream output, IProgress<double>? progress, CancellationToken cancellationToken)
     {
         var stashes = new Dictionary<string, FileStream>(StringComparer.Ordinal);
+        var zeros = new byte[64 * 1024];
         long stashBlocks = 0;
         var index = 0;
         try
@@ -106,7 +107,6 @@ internal static class DatReader
                     case TransferListCommandKind.Erase:
                         using (var target = WriteRanges(output, command.Ranges))
                         {
-                            var zeros = new byte[64 * 1024];
                             while (target.Position < target.Length)
                             {
                                 cancellationToken.ThrowIfCancellationRequested();

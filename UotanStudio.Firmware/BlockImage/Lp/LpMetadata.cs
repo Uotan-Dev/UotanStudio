@@ -98,20 +98,43 @@ public sealed class LpMetadata
     {
         MetadataReader.ValidateGeometry(Geometry);
 
-        foreach (var partition in Partitions)
+        var partitionNames = new string[Partitions.Count];
+        for (var index = 0; index < partitionNames.Length; index++)
         {
-            ValidateName(partition.NameString, nameof(Partitions));
-            if (partition.NameString.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_'))
-                throw new ArgumentException("LP partition names allow only ASCII letters, digits, and underscores.", nameof(Partitions));
-            if (Partitions.Count(p => p.NameString == partition.NameString) > 1)
-                throw new ArgumentException("Partition name already exists.", nameof(Partitions));
+            partitionNames[index] = Partitions[index].NameString;
         }
 
-        foreach (var group in Groups)
+        var partitionNameCounts = CountOccurrences(partitionNames);
+        for (var index = 0; index < partitionNames.Length; index++)
         {
-            ValidateName(group.NameString, nameof(Groups));
-            if (Groups.Count(g => g.NameString == group.NameString) > 1)
+            var name = partitionNames[index];
+            ValidateName(name, nameof(Partitions));
+            if (name.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_'))
+            {
+                throw new ArgumentException("LP partition names allow only ASCII letters, digits, and underscores.", nameof(Partitions));
+            }
+
+            if (partitionNameCounts[name] > 1)
+            {
+                throw new ArgumentException("Partition name already exists.", nameof(Partitions));
+            }
+        }
+
+        var groupNames = new string[Groups.Count];
+        for (var index = 0; index < groupNames.Length; index++)
+        {
+            groupNames[index] = Groups[index].NameString;
+        }
+
+        var groupNameCounts = CountOccurrences(groupNames);
+        for (var index = 0; index < groupNames.Length; index++)
+        {
+            var name = groupNames[index];
+            ValidateName(name, nameof(Groups));
+            if (groupNameCounts[name] > 1)
+            {
                 throw new ArgumentException("Group name already exists.", nameof(Groups));
+            }
         }
 
         var groupBytes = new ulong[Groups.Count];
@@ -123,8 +146,25 @@ public sealed class LpMetadata
                 groupBytes[(int)partition.GroupIndex] = checked(groupBytes[(int)partition.GroupIndex] + Extents[(int)index].NumSectors * MetadataFormat.LP_SECTOR_SIZE);
             var maximumSize = Groups[(int)partition.GroupIndex].MaximumSize;
             if (maximumSize != 0 && groupBytes[(int)partition.GroupIndex] > maximumSize)
-                throw new InvalidOperationException($"Partitions exceed the maximum size of group '{Groups[(int)partition.GroupIndex].NameString}'.");
+            {
+                throw new InvalidOperationException($"Partitions exceed the maximum size of group '{groupNames[(int)partition.GroupIndex]}'.");
+            }
         }
+    }
+
+    /// <summary>
+    /// Counts how many times each name occurs, using the same ordinal equality the per-record scans used.
+    /// <para>按逐条扫描所使用的同一序数相等规则，统计每个名称出现的次数。</para>
+    /// </summary>
+    private static Dictionary<string, int> CountOccurrences(string[] names)
+    {
+        var counts = new Dictionary<string, int>(names.Length, StringComparer.Ordinal);
+        foreach (var name in names)
+        {
+            counts[name] = counts.GetValueOrDefault(name) + 1;
+        }
+
+        return counts;
     }
 
     private static void ValidateName(string name, string parameterName)

@@ -244,6 +244,25 @@ internal sealed class SquashfsMetadataStream
             return result;
         }
 
+        /// <summary>Reads exactly the requested bytes into a caller-owned span.
+        /// <para>精确读取请求的字节数到调用方持有的跨度。</para></summary>
+        /// <param name="destination">Buffer receiving the decoded table bytes; may cross windows.
+        /// <para>接收解码表字节的缓冲区；可跨窗口。</para></param>
+        /// <exception cref="FileSystemCorruptedException">The window chain ended before <paramref name="destination"/> was filled.
+        /// <para>窗口链在填满 <paramref name="destination"/> 前结束时抛出。</para></exception>
+        internal void ReadExactly(Span<byte> destination)
+        {
+            var filled = 0;
+            while (filled < destination.Length)
+            {
+                EnsureAvailable(1);
+                var take = Math.Min(destination.Length - filled, _window.Length - _position);
+                _window.AsSpan(_position, take).CopyTo(destination[filled..]);
+                _position += take;
+                filled += take;
+            }
+        }
+
         /// <summary>Skips forward through the table bytes.
         /// <para>在表字节中向前跳过。</para></summary>
         /// <param name="count">Byte count to skip; may cross windows. <para>需跳过的字节数；可跨窗口。</para></param>

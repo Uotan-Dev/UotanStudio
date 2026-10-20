@@ -134,6 +134,27 @@ public sealed partial class ErofsParser : IDisposable
     private const int CopyBufferSize = 1 << 20;
 
     /// <summary>
+    /// Write buffer used for one extracted payload. A pcluster-by-pcluster write through a default 4 KiB
+    /// buffer costs one syscall per block; this buffer coalesces sixteen blocks per write, which is what keeps
+    /// the parallel extractors from blocking in write calls. It stays below the 85 KiB large-object threshold
+    /// on purpose: the buffer is allocated per payload, so a larger one would turn every extraction into
+    /// large-object-heap churn.
+    /// <para>单个被解出负载使用的写缓冲。逐 pcluster 写入若走默认 4 KiB 缓冲，每个块就是一次系统调用；
+    /// 本缓冲把十六个块合并为一次写入，使并行解包不再阻塞在写调用上。它刻意保持在 85 KiB 大对象阈值之下：
+    /// 缓冲按负载分配，更大的缓冲会让每次解包都变成大对象堆抖动。</para>
+    /// </summary>
+    private const int ExtractWriteBufferSize = 1 << 16;
+
+    /// <summary>
+    /// Bytes gathered per overlapped write chunk. The chunk is rented from the shared pool, so this size costs
+    /// no large-object-heap allocation per file, and it is large enough that one write stays in flight while the
+    /// next chunk is decoded.
+    /// <para>每次重叠写入分块汇集的字节数。分块从共享池租用，因此该尺寸不会让每个文件产生大对象堆分配，
+    /// 同时足够大，使上一块仍在传输时下一块已经在解码。</para>
+    /// </summary>
+    private const int ExtractOverlappedChunkSize = 1 << 20;
+
+    /// <summary>
     /// Superblock CRC32c seed used by the EROFS checksum, mirroring the builder.
     /// <para>超级块 CRC32c 种子，与构建器侧使用相同值。</para>
     /// </summary>
@@ -164,6 +185,7 @@ public sealed partial class ErofsParser : IDisposable
     private long _pathCharacters;
     private List<string> _directoryPaths = [];
     private readonly List<ErofsFileEntry> _directoryEntries = [];
+    private readonly ErofsDecoderStatePool _decoderStates = new();
     private UnifiedInode? _packedInode;
     private UnifiedInode? _rootInode;
 
@@ -646,9 +668,25 @@ public sealed partial class ErofsParser : IDisposable
         foreach (var directory in _directoryPaths)
             Directory.CreateDirectory(hostPaths.Resolve(directory));
         var firstSizes = entries.GroupBy(e => e.Path, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Size, StringComparer.Ordinal);
-        var totalBytes = entries.Where(e => overwrite || !File.Exists(hostPaths.Resolve(e.Path)))
-            .Sum(e => e.IsSymlink ? System.Text.Encoding.UTF8.GetByteCount(e.SymlinkTarget ?? string.Empty)
-                : e.IsSpecialFile ? 0L : firstSizes[e.Path]);
+        var targets = new string[entries.Count];
+        for (var index = 0; index < entries.Count; index++)
+        {
+            targets[index] = hostPaths.Resolve(entries[index].Path);
+        }
+
+        var totalBytes = 0L;
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var candidate = entries[index];
+            if (!overwrite && File.Exists(targets[index]))
+            {
+                continue;
+            }
+
+            totalBytes += candidate.IsSymlink
+                ? System.Text.Encoding.UTF8.GetByteCount(candidate.SymlinkTarget ?? string.Empty)
+                : candidate.IsSpecialFile ? 0L : firstSizes[candidate.Path];
+        }
         var bytes = new Core.ExtractionByteCounter(totalBytes, byteProgress, cancellationToken);
         var totalCount = entries.Count;
         var processedCount = 0;
@@ -656,13 +694,14 @@ public sealed partial class ErofsParser : IDisposable
         IProgress<(long Processed, long Total)>? entrySink = progress is null ? null : new Core.EntryCountProgress(progress);
         var entryProgress = new Core.ProgressThrottle(totalCount, entrySink, cancellationToken);
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        var groups = entries.GroupBy(entry => hostPaths.Resolve(entry.Path), comparer).ToArray();
+        var groups = Enumerable.Range(0, entries.Count).GroupBy(index => targets[index], comparer).ToArray();
         Core.FirmwareParallelism.ForEach(groups, group =>
         {
-            foreach (var entry in group)
+            foreach (var index in group)
             {
+                var entry = entries[index];
                 cancellationToken.ThrowIfCancellationRequested();
-                var target = hostPaths.Resolve(entry.Path);
+                var target = targets[index];
                 var parent = Path.GetDirectoryName(target);
                 if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
                 if (overwrite || !File.Exists(target))
@@ -694,6 +733,7 @@ public sealed partial class ErofsParser : IDisposable
     /// </summary>
     public void Dispose()
     {
+        _decoderStates.Dispose();
         _packedData?.Dispose();
         if (_deviceStreams is not null)
         {
@@ -957,18 +997,60 @@ public sealed partial class ErofsParser : IDisposable
         }
     }
 
+    /// <summary>
+    /// Writes one payload into <paramref name="path"/> through the overlapped writer, so the next chunk is
+    /// decoded while the previous one is still being written. A failed direct write removes the partially
+    /// created file, which keeps a failed extraction from leaving a truncated target behind.
+    /// <para>经重叠写入器把一个负载写入 <paramref name="path"/>，使上一块仍在写入时下一块已经在解码。直写失败时会
+    /// 删除已部分创建的文件，因此失败的解包不会留下被截断的目标文件。</para>
+    /// </summary>
+    /// <param name="path">Destination file path. <para>目标文件路径。</para></param>
+    /// <param name="nid">Inode whose data is written. <para>写出其数据的 inode。</para></param>
+    /// <param name="bytes">Shared byte counter receiving this payload's written bytes.
+    /// <para>接收本负载已写字节的共享计数器。</para></param>
+    /// <param name="mode">Creation mode: <see cref="FileMode.CreateNew"/> for a target that must not exist,
+    /// <see cref="FileMode.Create"/> for a staging path the caller replaces. <para>创建模式：目标不得存在时用
+    /// <see cref="FileMode.CreateNew"/>，调用方随后替换的暂存路径用 <see cref="FileMode.Create"/>。</para></param>
+    private void WriteExtractedFile(string path, ulong nid, Core.ExtractionByteCounter bytes, FileMode mode)
+    {
+        var created = false;
+        try
+        {
+            using (var file = new FileStream(path, mode, FileAccess.Write, FileShare.None, 1,
+                       FileOptions.SequentialScan))
+            {
+                created = mode == FileMode.CreateNew;
+                using var overlapped = new Core.Streams.OverlappedWriteStream(file, ExtractOverlappedChunkSize);
+                using var counted = bytes.Wrap(overlapped);
+                WriteFileData(nid, ReadInode(nid), counted);
+            }
+        }
+        catch when (created)
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (IOException)
+            {
+            }
+
+            throw;
+        }
+    }
+
     private void ExtractFileAtomic(string target, ulong nid, bool overwrite, Core.ExtractionByteCounter bytes)
     {
+        if (!File.Exists(target))
+        {
+            WriteExtractedFile(target, nid, bytes, FileMode.CreateNew);
+            return;
+        }
+
         var tempPath = TempFileHelper.CreateAdjacentPath(target);
         try
         {
-            using (var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
-            {
-                using var counted = bytes.Wrap(output);
-                WriteFileData(nid, ReadInode(nid), counted);
-                output.Flush(flushToDisk: true);
-            }
-
+            WriteExtractedFile(tempPath, nid, bytes, FileMode.Create);
             File.Move(tempPath, target, overwrite);
         }
         catch

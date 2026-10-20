@@ -276,9 +276,9 @@ internal static class ErofsCompression
         {
             ErofsAlgorithm.Lz4 => CompressLz4(source, sourceIndex, sourceLength, target, targetIndex, targetLength,
                 compressionLevel, highCompression),
-            ErofsAlgorithm.Lzma => CompressLzma(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel, dictSize),
+            ErofsAlgorithm.Lzma => CompressLzma(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel, dictSize, reusableEncoder: null),
             ErofsAlgorithm.Deflate => CompressDeflate(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel, windowBits),
-            ErofsAlgorithm.Zstd => CompressZstd(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel, windowBits),
+            ErofsAlgorithm.Zstd => CompressZstd(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel, windowBits, reusableCompressor: null),
             _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, "Unknown EROFS compression algorithm."),
         };
     }
@@ -315,6 +315,66 @@ internal static class ErofsCompression
             options.Algorithm == ErofsCompressionAlgorithm.Lz4 && options.Lz4HighCompression,
             options.DictionarySize,
             options.WindowBits == 0 && options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : options.WindowBits);
+
+    /// <summary>Compresses one pcluster through a caller-owned codec context, so a planning loop reuses one
+    /// ZSTD compressor and one MicroLZMA encoder across all of its probes instead of constructing them per
+    /// probe. The emitted bytes are identical to the context-free overload: every backend receives its full
+    /// parameter set before each encode, which the codec-state pool guarantees by keying the retained ZSTD
+    /// compressor on its level and window log and by re-applying the LZMA coder properties per call.
+    /// <para>经调用方持有的编解码器上下文压缩单个 pcluster，使规划循环在全部探测之间复用一个 ZSTD 压缩器与一个
+    /// MicroLZMA 编码器，而不是每次探测都构造。输出字节与不带上下文的重载逐字节相同：每个后端在每次编码前都会收到
+    /// 完整参数集，编解码状态池以级别与窗口对数作为保留 ZSTD 压缩器的键，并逐次重新应用 LZMA 编码属性。</para>
+    /// </summary>
+    /// <param name="options">Image-wide codec settings; the level, dictionary size and window are resolved
+    /// exactly as the context-free overload resolves them. <para>镜像级编解码设置；级别、字典大小与窗口的解析方式
+    /// 与不带上下文的重载完全相同。</para></param>
+    /// <param name="context">Encoder state borrowed for this payload, or <see langword="null"/> to allocate
+    /// private state for this call. <para>为本负载借用的编码器状态；为 <see langword="null"/> 时仅为本调用分配
+    /// 私有状态。</para></param>
+    /// <param name="source">Buffer holding the uncompressed input. <para>存放未压缩输入的缓冲区。</para></param>
+    /// <param name="sourceIndex">Offset in <paramref name="source"/> where the input region starts.
+    /// <para><paramref name="source"/> 中输入区域的起始偏移。</para></param>
+    /// <param name="sourceLength">Number of input bytes read from <paramref name="sourceIndex"/>.
+    /// <para>自 <paramref name="sourceIndex"/> 起读取的输入字节数。</para></param>
+    /// <param name="target">Buffer the compressed bytes are written into. <para>写入压缩字节的缓冲区。</para></param>
+    /// <param name="targetIndex">Offset in <paramref name="target"/> where the output region starts.
+    /// <para><paramref name="target"/> 中输出区域的起始偏移。</para></param>
+    /// <param name="targetLength">Number of bytes reserved for the output inside <paramref name="target"/>.
+    /// <para><paramref name="target"/> 中为输出预留的字节数。</para></param>
+    /// <returns>The number of compressed bytes written to <paramref name="target"/>; the LZ4 branch returns zero
+    /// when the block does not fit the destination. <para>写入 <paramref name="target"/> 的压缩字节数；LZ4 分支在块
+    /// 放不下目标时返回 0。</para></returns>
+    internal static int AlgorithmCompress(
+        ErofsOptions options,
+        ErofsEncoderContext? context,
+        byte[] source,
+        int sourceIndex,
+        int sourceLength,
+        byte[] target,
+        int targetIndex,
+        int targetLength)
+    {
+        ValidateRange(source, sourceIndex, sourceLength, nameof(source));
+        ValidateRange(target, targetIndex, targetLength, nameof(target));
+        var level = Math.Max(1, options.CompressionLevel);
+        var windowBits = options.WindowBits == 0 && options.Algorithm == ErofsCompressionAlgorithm.Zstd
+            ? 20
+            : options.WindowBits;
+        return options.Algorithm switch
+        {
+            ErofsCompressionAlgorithm.Lz4 => CompressLz4(source, sourceIndex, sourceLength, target, targetIndex,
+                targetLength, level, options.Lz4HighCompression, context?.RentLz4(options.Lz4HighCompression)),
+            ErofsCompressionAlgorithm.Lzma => CompressLzma(source, sourceIndex, sourceLength, target, targetIndex,
+                targetLength, level, options.DictionarySize, context?.LzmaEncoder),
+            ErofsCompressionAlgorithm.Deflate => CompressDeflate(source, sourceIndex, sourceLength, target,
+                targetIndex, targetLength, level, windowBits),
+            ErofsCompressionAlgorithm.Zstd => CompressZstd(source, sourceIndex, sourceLength, target, targetIndex,
+                targetLength, level, windowBits,
+                context?.RentZstd(Math.Clamp(level, -5, 22), windowBits)),
+            _ => throw new ArgumentOutOfRangeException(nameof(options), options.Algorithm,
+                "Unknown EROFS compression algorithm."),
+        };
+    }
 
     /// <summary>Algorithm-dispatched decompression (dictSize/windowBits use the codec defaults).
     /// <para>按算法分派解压（dictSize/windowBits 使用默认值）。</para></summary>
@@ -363,6 +423,10 @@ internal static class ErofsCompression
     /// <para>MicroLZMA 字典字节数；<c>0</c> 使用 8 MiB，小于 4096 的值提升到 4096，其余算法忽略。</para></param>
     /// <param name="windowBits">Validated DEFLATE window bits (8..15 or <c>0</c>) and the ZSTD maximum window log; ignored by LZ4 and LZMA.
     /// <para>经校验的 DEFLATE 窗口位数（8..15 或 <c>0</c>）与 ZSTD 最大窗口对数；LZ4 与 LZMA 忽略。</para></param>
+    /// <param name="context">Decoder state held by the reading context, so consecutive pclusters reuse one ZSTD
+    /// decompressor and one MicroLZMA decoder instead of rebuilding their workspace; <see langword="null"/>
+    /// allocates private state for this call. <para>读取上下文持有的解码器状态，使相邻 pcluster 复用一个 ZSTD
+    /// 解压器与一个 MicroLZMA 解码器而不必重建工作区；为 <see langword="null"/> 时仅为本调用分配私有状态。</para></param>
     /// <returns>The number of decompressed bytes written to <paramref name="target"/>.
     /// <para>写入 <paramref name="target"/> 的解压字节数。</para></returns>
     public static int AlgorithmDecompress(
@@ -374,7 +438,8 @@ internal static class ErofsCompression
         int targetIndex,
         int targetLength,
         int dictSize,
-        int windowBits)
+        int windowBits,
+        ErofsDecoderContext? context = null)
     {
         ValidateRange(source, sourceIndex, sourceLength, nameof(source));
         ValidateRange(target, targetIndex, targetLength, nameof(target));
@@ -382,9 +447,9 @@ internal static class ErofsCompression
         return algorithm switch
         {
             ErofsAlgorithm.Lz4 => DecompressLz4(source, sourceIndex, sourceLength, target, targetIndex, targetLength),
-            ErofsAlgorithm.Lzma => DecompressLzma(source, sourceIndex, sourceLength, target, targetIndex, targetLength, dictSize),
+            ErofsAlgorithm.Lzma => DecompressLzma(source, sourceIndex, sourceLength, target, targetIndex, targetLength, dictSize, context),
             ErofsAlgorithm.Deflate => DecompressDeflate(source, sourceIndex, sourceLength, target, targetIndex, targetLength, windowBits),
-            ErofsAlgorithm.Zstd => DecompressZstd(source, sourceIndex, sourceLength, target, targetIndex, targetLength, windowBits),
+            ErofsAlgorithm.Zstd => DecompressZstd(source, sourceIndex, sourceLength, target, targetIndex, targetLength, windowBits, context),
             _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, "Unknown EROFS compression algorithm."),
         };
     }
@@ -502,7 +567,8 @@ internal static class ErofsCompression
         int targetIndex,
         int targetLength,
         int compressionLevel,
-        int dictSize)
+        int dictSize,
+        Encoder? reusableEncoder)
     {
         if (sourceLength == 0)
         {
@@ -514,7 +580,7 @@ internal static class ErofsCompression
         const int pb = 2;
         const int lp = 0;
         const int lc = 3;
-        var encoder = new Encoder();
+        var encoder = reusableEncoder ?? new Encoder();
         encoder.SetCoderProperties(
             [CoderPropID.DictionarySize, CoderPropID.PosStateBits, CoderPropID.LitContextBits,
                 CoderPropID.LitPosBits, CoderPropID.Algorithm, CoderPropID.NumFastBytes],
@@ -555,7 +621,8 @@ internal static class ErofsCompression
         byte[] target,
         int targetIndex,
         int targetLength,
-        int dictSize)
+        int dictSize,
+        ErofsDecoderContext? context)
     {
         if (sourceLength == 0)
         {
@@ -576,11 +643,11 @@ internal static class ErofsCompression
             dictionarySize = 1 << 12;
         }
 
-        var properties = new byte[5];
+        var properties = context?.LzmaProperties ?? new byte[5];
         properties[0] = propertyByte;
         BinaryPrimitives.WriteUInt32LittleEndian(properties.AsSpan(1), (uint)dictionarySize);
 
-        var decoder = new Decoder();
+        var decoder = context?.LzmaDecoder ?? new Decoder();
         decoder.SetDecoderProperties(properties);
 
         var rebuilt = System.Buffers.ArrayPool<byte>.Shared.Rent(sourceLength);
@@ -748,19 +815,31 @@ internal static class ErofsCompression
         int targetIndex,
         int targetLength,
         int compressionLevel,
-        int windowLog)
+        int windowLog,
+        Compressor? reusableCompressor)
     {
         if (sourceLength == 0)
         {
             return 0;
         }
 
-        using var compressor = new Compressor(Math.Clamp(compressionLevel, -5, 22));
-        if (windowLog > 0)
+        if (reusableCompressor is null)
         {
-            compressor.SetParameter(ZSTD_cParameter.ZSTD_c_windowLog, windowLog);
+            using var compressor = new Compressor(Math.Clamp(compressionLevel, -5, 22));
+            if (windowLog > 0)
+            {
+                compressor.SetParameter(ZSTD_cParameter.ZSTD_c_windowLog, windowLog);
+            }
+
+            return CompressZstdFrame(compressor, source, sourceIndex, sourceLength, target, targetIndex, targetLength);
         }
 
+        return CompressZstdFrame(reusableCompressor, source, sourceIndex, sourceLength, target, targetIndex, targetLength);
+    }
+
+    private static int CompressZstdFrame(Compressor compressor, byte[] source, int sourceIndex, int sourceLength,
+        byte[] target, int targetIndex, int targetLength)
+    {
         try
         {
             return compressor.Wrap(source.AsSpan(sourceIndex, sourceLength), target.AsSpan(targetIndex, targetLength));
@@ -783,19 +862,32 @@ internal static class ErofsCompression
         byte[] target,
         int targetIndex,
         int targetLength,
-        int windowLog)
+        int windowLog,
+        ErofsDecoderContext? context)
     {
         if (sourceLength == 0)
         {
             return 0;
         }
 
-        using var decompressor = new Decompressor();
-        if (windowLog > 0)
+        if (context is null)
         {
-            decompressor.SetParameter(ZSTD_dParameter.ZSTD_d_windowLogMax, windowLog);
+            using var decompressor = new Decompressor();
+            if (windowLog > 0)
+            {
+                decompressor.SetParameter(ZSTD_dParameter.ZSTD_d_windowLogMax, windowLog);
+            }
+
+            return DecompressZstdFrame(decompressor, source, sourceIndex, sourceLength, target, targetIndex, targetLength);
         }
 
+        return DecompressZstdFrame(context.RentZstd(windowLog), source, sourceIndex, sourceLength, target, targetIndex,
+            targetLength);
+    }
+
+    private static int DecompressZstdFrame(Decompressor decompressor, byte[] source, int sourceIndex,
+        int sourceLength, byte[] target, int targetIndex, int targetLength)
+    {
         try
         {
             return decompressor.Unwrap(source.AsSpan(sourceIndex, sourceLength), target.AsSpan(targetIndex, targetLength));
