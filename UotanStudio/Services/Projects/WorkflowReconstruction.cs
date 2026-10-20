@@ -1,4 +1,5 @@
 using System.Globalization;
+using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Services.Projects;
@@ -7,6 +8,36 @@ namespace UotanStudio.Services.Projects;
 /// <para>画布与命令行加载共用的节点创建、输入转换与端点查找。</para></summary>
 internal static class WorkflowReconstruction
 {
+    private static readonly Lock CatalogGate = new();
+    private static bool _catalogPublished;
+
+    /// <summary>
+    /// Publishes the current node catalog into the type registry the first time a workflow is reconstructed.
+    /// Registration is otherwise an ambient side effect of whichever component happened to run first, so a retired
+    /// type key migrated through its alias needed the successor to be registered already - a cold process turned
+    /// that migration into an unavailable-node placeholder. Registering a node publishes it immediately and
+    /// unregistering removes it, so republishing the catalog resurrects nothing a caller withdrew.
+    /// <para>首次重建工作流时把当前节点目录发布进类型注册表。否则注册就是“谁先运行谁顺手注册”的环境副作用：经别名迁移的
+    /// 退役类型键要求继任节点已经注册，冷启动进程会把这次迁移变成不可用节点占位符。注册节点会立即发布、注销会立即移除，
+    /// 因此重新发布目录不会复活调用方已撤回的节点。</para>
+    /// </summary>
+    private static void EnsureCatalogPublished()
+    {
+        if (_catalogPublished)
+        {
+            return;
+        }
+
+        lock (CatalogGate)
+        {
+            if (!_catalogPublished)
+            {
+                NodeFactoryRegistrar.RegisterAll();
+                _catalogPublished = true;
+            }
+        }
+    }
+
     /// <summary>Creates a registered node or, when requested, a lossless unavailable-node placeholder.
     /// <para>创建已注册的节点，或按需创建无损保留的不可用节点占位符。</para></summary>
     /// <param name="dto">The serialized node description.<para>序列化后的节点描述。</para></param>
@@ -19,6 +50,7 @@ internal static class WorkflowReconstruction
     {
         node = null!;
         if (string.IsNullOrEmpty(dto.TypeKey)) return false;
+        EnsureCatalogPublished();
         if (dto.CompositePackage is { } embedded)
         {
             var errors = VisualPluginValidation.Validate(embedded);
@@ -64,6 +96,10 @@ internal static class WorkflowReconstruction
         if (!string.IsNullOrWhiteSpace(dto.CustomName))
         {
             node.CustomName = dto.CustomName;
+        }
+        if (dto.MapGraph is { } mapGraph && node is ListMapNodeViewModel map)
+        {
+            map.MapGraph = mapGraph;
         }
         RestoreInstanceId(node, dto, restoreInstanceId);
         return true;

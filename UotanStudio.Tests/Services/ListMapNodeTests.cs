@@ -90,6 +90,35 @@ public sealed class ListMapNodeTests
         Assert.Null(node.Output.Single(port => port.Title == "Count").Data);
     }
 
+    [Fact]
+    public void SaveAndLoad_MapNodeWithEmbeddedGraph_RestoresTheSubGraph()
+    {
+        var node = MapNode(["a"]);
+
+        var dto = Assert.Single(WorkflowPersistenceService.BuildNodeDtos([node]));
+        var restored = Assert.Single(WorkflowRuntimeBuilder.Build(new WorkflowSnapshot { Nodes = [dto] },
+            preserveUnknown: false).Nodes);
+
+        var map = Assert.IsType<ListMapNodeViewModel>(restored);
+        Assert.Equal(1, map.MapGraph?.Nodes.Count);
+        Assert.Equal(TransformerKey, map.MapGraph?.Nodes[0].TypeKey);
+    }
+
+    [Fact]
+    public async Task Map_LoadedFromSnapshot_RunsTheRestoredSubGraph()
+    {
+        var node = MapNode(["a", "b"]);
+        var dto = Assert.Single(WorkflowPersistenceService.BuildNodeDtos([node]));
+
+        var restored = Assert.IsType<ListMapNodeViewModel>(Assert.Single(WorkflowRuntimeBuilder.Build(
+            new WorkflowSnapshot { Nodes = [dto] }, preserveUnknown: false).Nodes));
+        Seed(restored, "List", new object?[] { "a", "b" });
+        var result = await RunAsync(restored);
+
+        Assert.True(result.Status == ExecutionStatus.Succeeded, result.ErrorMessage);
+        Assert.Equal(["a!", "b!"], ReadResults(restored).Cast<string>());
+    }
+
     private static FlowNodeViewModel Factory()
         => NodeFactoryRegistrar.Descriptors.Single(item => item.TypeKey == "Data.List.Map").Factory();
 

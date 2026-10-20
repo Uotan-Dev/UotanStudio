@@ -151,6 +151,16 @@ public sealed class NodeDto
     public VisualPluginPackage? CompositePackage { get; set; }
 
     /// <summary>
+    /// Sub-graph executed once per input element by a map-over-list node.
+    /// <para>列表映射节点对每个输入元素执行一次的子图。</para>
+    /// </summary>
+    /// <value>
+    /// The embedded mapping graph, or <see langword="null"/> when the node carries none.
+    /// <para>内嵌映射图；节点未携带时为 <see langword="null"/>。</para>
+    /// </value>
+    public WorkflowSnapshot? MapGraph { get; set; }
+
+    /// <summary>
     /// Selected project-image relative path, when the node references an image.
     /// <para>节点引用镜像时所选的项目镜像相对路径。</para>
     /// </summary>

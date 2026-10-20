@@ -49,6 +49,7 @@ public static class WorkflowPersistenceService
                 Y = n.Location.Y,
                 TypeKey = n.TypeKey,
                 CompositePackage = (n as CompositeNodeViewModel)?.Package,
+                MapGraph = (n as ListMapNodeViewModel)?.MapGraph,
                 SelectedImage = n.IsProjectImageNode ? n.SelectedImage : null,
                 CustomName = string.IsNullOrWhiteSpace(n.CustomName) ? null : n.CustomName,
                 InputInitialValues = BuildInitialValueMap(n, useStableIds: false),
