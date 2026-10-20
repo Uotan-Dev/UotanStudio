@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:views="using:UotanStudio.Views.Nodes"
              xmlns:vm="using:UotanStudio.ViewModels.Nodes"
              xmlns:nodify="clr-namespace:NodifyM.Avalonia.Controls;assembly=NodifyM.Avalonia"
              xmlns:nodeVm="using:UotanStudio.ViewModels.NodeViewModels"
@@ -12,34 +13,39 @@
              x:DataType="vm:NodeEditorViewModel">
     <UserControl.Resources>
         <DataTemplate x:Key="ToolboxOperationTemplate" DataType="{x:Type vm:NodeToolboxItem}">
-            <Grid ColumnDefinitions="*,Auto,28" Margin="0,1">
-                <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                        Padding="6,4" Click="OnToolboxItemClicked" ToolTip.Tip="{Binding TypeKey}">
-                    <StackPanel Spacing="1">
-                        <TextBlock Text="{Binding Name}" FontSize="12" TextWrapping="Wrap" />
-                        <TextBlock Text="{DynamicResource Node_Toolbox_Destructive}" FontSize="10"
-                                   Foreground="{DynamicResource LogErrorBrush}" IsVisible="{Binding RequiresConfirmation}" />
-                    </StackPanel>
-                </Button>
-                <Button Grid.Column="1" Content="⋯" Padding="4" IsVisible="{Binding HasPresets}"
-                        ToolTip.Tip="{DynamicResource Node_Toolbox_Presets}" Tag="toolbox-preset">
-                    <Button.Flyout>
-                        <Flyout>
-                            <ItemsControl ItemsSource="{Binding Presets}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type vm:NodeToolboxPreset}">
-                                        <Button Content="{Binding Name}" Command="{Binding CreateCommand}"
-                                                HorizontalAlignment="Stretch" Margin="0,2" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </Flyout>
-                    </Button.Flyout>
-                </Button>
-                <Button Grid.Column="2" Content="{Binding FavoriteGlyph}" Command="{Binding ToggleFavoriteCommand}"
-                        Classes.favorite="{Binding IsFavorite}"
-                        ToolTip.Tip="{Binding FavoriteHint}" Padding="2" VerticalAlignment="Stretch" />
-            </Grid>
+            <Panel Margin="0,1">
+                <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Margin="6,6,0,2"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           IsVisible="{Binding IsHeading}" />
+                <Grid ColumnDefinitions="*,Auto,28" IsVisible="{Binding IsOperation}">
+                    <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Padding="6,4" Click="OnToolboxItemClicked" ToolTip.Tip="{Binding TypeKey}">
+                        <StackPanel Spacing="1">
+                            <TextBlock Text="{Binding Name}" FontSize="12" TextWrapping="Wrap" />
+                            <TextBlock Text="{DynamicResource Node_Toolbox_Destructive}" FontSize="10"
+                                       Foreground="{DynamicResource LogErrorBrush}" IsVisible="{Binding RequiresConfirmation}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="1" Content="⋯" Padding="4" IsVisible="{Binding HasPresets}"
+                            ToolTip.Tip="{DynamicResource Node_Toolbox_Presets}" Tag="toolbox-preset">
+                        <Button.Flyout>
+                            <Flyout>
+                                <ItemsControl ItemsSource="{Binding Presets}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:NodeToolboxPreset}">
+                                            <Button Content="{Binding Name}" Command="{Binding CreateCommand}"
+                                                    HorizontalAlignment="Stretch" Margin="0,2" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button Grid.Column="2" Content="{Binding FavoriteGlyph}" Command="{Binding ToggleFavoriteCommand}"
+                            Classes.favorite="{Binding IsFavorite}"
+                            ToolTip.Tip="{Binding FavoriteHint}" Padding="2" VerticalAlignment="Stretch" />
+                </Grid>
+            </Panel>
         </DataTemplate>
     </UserControl.Resources>
     <UserControl.Styles>
@@ -268,10 +274,14 @@
         <!-- 底部状态栏 -->
         <Border DockPanel.Dock="Bottom" Padding="8,4"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                 <TextBlock x:Name="WorkflowStatusText" Text="{Binding ExecutionStatus}" TextTrimming="CharacterEllipsis"
                            ToolTip.Tip="{Binding ExecutionStatus}" FontSize="12" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center"
+                <TextBlock x:Name="CanvasHintText" Grid.Column="1" FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis"
+                           Text="{DynamicResource Node_CanvasHint}"
+                           IsVisible="{Binding $parent[views:NodeEditorView].CanvasHintVisible}" />
+                <TextBlock Grid.Column="2" FontSize="11" VerticalAlignment="Center"
                            Foreground="{DynamicResource SecondaryTextBrush}">
                     <Run Text="{Binding Zoom, StringFormat='{}{0:P0}'}" />
                     <Run Text=" | " />
@@ -281,7 +291,7 @@
                     <Run Text="{Binding Connections.Count, Mode=OneWay}" />
                     <Run Text="{DynamicResource Node_ConnectionsLabel}" />
                 </TextBlock>
-                <ProgressBar x:Name="WorkflowProgress" Grid.Row="1" Grid.ColumnSpan="2" Height="3" Margin="0,4,0,0"
+                <ProgressBar x:Name="WorkflowProgress" Grid.Row="1" Grid.ColumnSpan="3" Height="3" Margin="0,4,0,0"
                              Minimum="0" Maximum="1" Value="{Binding ExecutionProgress}" IsVisible="{Binding IsExecuting}" />
             </Grid>
         </Border>
@@ -396,28 +406,8 @@
                            FontWeight="SemiBold" FontSize="13"
                            Margin="8,8,8,4" />
                 <ScrollViewer>
-                    <ItemsControl ItemsSource="{Binding VisibleToolboxCategories}" Margin="4" IsEnabled="{Binding CanEditGraph}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:NodeToolboxCategory}">
-                                <Expander Header="{Binding Name}" IsExpanded="{Binding IsExpanded, Mode=TwoWay}" Margin="0,2">
-                                    <StackPanel Margin="4,0">
-                                        <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding !HasFamilies}"
-                                                      ItemTemplate="{StaticResource ToolboxOperationTemplate}" />
-                                        <ItemsControl ItemsSource="{Binding Families}" IsVisible="{Binding HasFamilies}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate DataType="{x:Type vm:NodeToolboxCategory}">
-                                                    <Expander Header="{Binding Name}" IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
-                                                        <ItemsControl ItemsSource="{Binding Items}"
-                                                                      ItemTemplate="{StaticResource ToolboxOperationTemplate}" />
-                                                    </Expander>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-                                </Expander>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding VisibleToolboxItems}" Margin="4" IsEnabled="{Binding CanEditGraph}"
+                                  ItemTemplate="{StaticResource ToolboxOperationTemplate}" />
                 </ScrollViewer>
             </DockPanel>
         </Border>

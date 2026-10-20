@@ -149,6 +149,8 @@ public partial class NodeEditorView
     private void UpdateResponsivePanes()
     {
         var narrow = PaneLayout.Bounds.Width < 900;
+        var hintWidth = Bounds.Width > 0 ? Bounds.Width : PaneLayout.Bounds.Width;
+        CanvasHintVisible = hintWidth >= CanvasHintMinimumWidth;
         if (narrow != _isNarrowLayout)
         {
             _isNarrowLayout = narrow;

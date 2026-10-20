@@ -23,6 +23,18 @@ public partial class NodeEditorView : UserControl
     private const double RightPaneMinimum = 280;
     private const double ConnectionHitTestThickness = 10;
 
+    /// <summary>
+    /// Width below which the gesture hint leaves the status bar so the zoom, node and connection counts keep the
+    /// whole line on a narrow editor.
+    /// <para>低于该宽度时状态栏不显示手势提示，窄窗口下缩放与节点、连线计数仍能占满整行。</para>
+    /// </summary>
+    internal const double CanvasHintMinimumWidth = 860;
+
+    /// <summary>Whether the status bar still has room for the canvas gesture hint. <para>状态栏是否仍有空间显示画布手势提示。</para></summary>
+    internal static readonly DirectProperty<NodeEditorView, bool> CanvasHintVisibleProperty =
+        AvaloniaProperty.RegisterDirect<NodeEditorView, bool>(nameof(CanvasHintVisible), view => view.CanvasHintVisible);
+
+    private bool _canvasHintVisible;
     private bool _draggingLeft;
     private bool _draggingRight;
     private double _dragOriginX;
@@ -36,12 +48,19 @@ public partial class NodeEditorView : UserControl
     private Point _toolboxDragOrigin;
     private bool _suppressToolboxClick;
     private Dictionary<FlowNodeViewModel, Point>? _nodeDragStartLocations;
+    private bool _selectionBoxDragging;
     private IPointer? _selectionBoxPointer;
     private Point _selectionBoxStart;
-    private bool _selectionBoxDragging;
     private bool _selectionBoxMoved;
     private string? _dropPreviewTypeKey;
     private FlowNodeViewModel? _dropPreviewNode;
+
+    /// <summary>Gets or sets whether the canvas gesture hint is shown in the status bar. <para>获取或设置状态栏是否显示画布手势提示。</para></summary>
+    internal bool CanvasHintVisible
+    {
+        get => _canvasHintVisible;
+        set => SetAndRaise(CanvasHintVisibleProperty, ref _canvasHintVisible, value);
+    }
 
     public NodeEditorView()
     {
@@ -50,17 +69,8 @@ public partial class NodeEditorView : UserControl
 
         Editor.SelectionChanged += OnEditorSelectionChanged;
         Editor.AddHandler(KeyDownEvent, OnEditorKeyDown, RoutingStrategies.Bubble);
-        Editor.AddHandler(PointerPressedEvent, OnEditorPointerPressed,
-            RoutingStrategies.Tunnel, handledEventsToo: true);
+        AttachCanvasGestureHandlers();
         Editor.AddHandler(PointerReleasedEvent, OnEditorPointerReleased,
-            RoutingStrategies.Bubble, handledEventsToo: true);
-        EditorSurface.AddHandler(PointerPressedEvent, OnSelectionBoxPressed,
-            RoutingStrategies.Tunnel, handledEventsToo: true);
-        EditorSurface.AddHandler(PointerMovedEvent, OnSelectionBoxMoved,
-            RoutingStrategies.Bubble, handledEventsToo: true);
-        EditorSurface.AddHandler(PointerReleasedEvent, OnSelectionBoxReleased,
-            RoutingStrategies.Bubble, handledEventsToo: true);
-        EditorSurface.AddHandler(PointerCaptureLostEvent, OnSelectionBoxCaptureLost,
             RoutingStrategies.Bubble, handledEventsToo: true);
 
         PaneLayout.SizeChanged += (_, _) => ApplyPaneMinimums();
@@ -242,6 +252,18 @@ public partial class NodeEditorView : UserControl
     }
 
     /// <summary>
+    /// Applies the pane minimums and the status-bar hint once the editor has its final size, which is what decides
+    /// whether the gesture hint fits next to the zoom and count labels.
+    /// <para>编辑器尺寸确定后应用栏宽下限与状态栏提示的可见性。</para>
+    /// </summary>
+    /// <param name="e">The size changed arguments.</param>
+    protected override void OnSizeChanged(SizeChangedEventArgs e)
+    {
+        base.OnSizeChanged(e);
+        ApplyPaneMinimums();
+    }
+
+    /// <summary>
     /// When the canvas node selection changes, sync the first added node to the ViewModel to drive the properties panel.
     /// <para>画布节点选中变更时，将新增选中中的第一个节点同步到 ViewModel，驱动右侧属性面板。</para>
     /// </summary>
@@ -267,65 +289,6 @@ public partial class NodeEditorView : UserControl
         {
             new VisualPluginEditorWindow(registration).Show();
         }
-    }
-
-    private void OnSelectionBoxPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (e.GetCurrentPoint(EditorSurface).Properties.PointerUpdateKind
-            != PointerUpdateKind.RightButtonPressed)
-        {
-            return;
-        }
-
-        _selectionBoxPointer = e.Pointer;
-        _selectionBoxStart = e.GetPosition(EditorSurface);
-        _selectionBoxDragging = true;
-        _selectionBoxMoved = false;
-        UpdateSelectionBox(_selectionBoxStart, _selectionBoxStart);
-        e.Pointer.Capture(EditorSurface);
-        e.Handled = true;
-    }
-
-    private void OnSelectionBoxMoved(object? sender, PointerEventArgs e)
-    {
-        if (!_selectionBoxDragging || e.Pointer != _selectionBoxPointer) return;
-        var position = e.GetPosition(EditorSurface);
-        var delta = _selectionBoxStart - position;
-        _selectionBoxMoved |= Math.Sqrt((delta.X * delta.X) + (delta.Y * delta.Y)) > 4;
-        UpdateSelectionBox(_selectionBoxStart, position);
-        e.Handled = true;
-    }
-
-    private void OnSelectionBoxReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        if (!_selectionBoxDragging || e.Pointer != _selectionBoxPointer) return;
-        var position = e.GetPosition(EditorSurface);
-        if (_selectionBoxMoved) SelectNodesInRectangle(_selectionBoxStart, position);
-        EndSelectionBox(e.Pointer);
-        e.Handled = true;
-    }
-
-    private void OnSelectionBoxCaptureLost(object? sender, PointerCaptureLostEventArgs e)
-    {
-        if (_selectionBoxDragging) EndSelectionBox(e.Pointer);
-    }
-
-    private void EndSelectionBox(IPointer pointer)
-    {
-        _selectionBoxDragging = false;
-        _selectionBoxPointer = null;
-        SelectionBox.IsVisible = false;
-        if (pointer.Captured == EditorSurface) pointer.Capture(null);
-    }
-
-    private void UpdateSelectionBox(Point first, Point second)
-    {
-        var rectangle = CreateSelectionRectangle(first, second);
-        Canvas.SetLeft(SelectionBox, rectangle.X);
-        Canvas.SetTop(SelectionBox, rectangle.Y);
-        SelectionBox.Width = rectangle.Width;
-        SelectionBox.Height = rectangle.Height;
-        SelectionBox.IsVisible = _selectionBoxMoved;
     }
 
     private IReadOnlyList<FlowNodeViewModel> NodesIntersectingSelection(Point first, Point second)
@@ -363,6 +326,38 @@ public partial class NodeEditorView : UserControl
         return selected.Count;
     }
 
+    /// <summary>
+    /// Shows the box selection rectangle while the left drag is in progress.
+    /// <para>Shows the box selection rectangle while the left drag is in progress.</para>
+    /// </summary>
+    /// <param name="first">Where the press started, in surface coordinates.</param>
+    /// <param name="second">The current pointer position, in surface coordinates.</param>
+    private void UpdateSelectionBox(Point first, Point second)
+    {
+        var rectangle = CreateSelectionRectangle(first, second);
+        Canvas.SetLeft(SelectionBox, rectangle.X);
+        Canvas.SetTop(SelectionBox, rectangle.Y);
+        SelectionBox.Width = rectangle.Width;
+        SelectionBox.Height = rectangle.Height;
+        SelectionBox.IsVisible = _selectionBoxMoved;
+    }
+
+    /// <summary>
+    /// Ends the box selection: hides the rectangle, drops the pointer capture and stops reporting an active box drag.
+    /// <para>Ends the box selection: hides the rectangle, drops the pointer capture and stops reporting an active box drag.</para>
+    /// </summary>
+    /// <param name="pointer">The pointer that owned the box drag.</param>
+    private void EndSelectionBox(IPointer pointer)
+    {
+        _selectionBoxDragging = false;
+        _selectionBoxPointer = null;
+        SelectionBox.IsVisible = false;
+        if (pointer.Captured == Editor)
+        {
+            pointer.Capture(null);
+        }
+    }
+
     internal static Rect CreateSelectionRectangle(Point first, Point second) => new(
         Math.Min(first.X, second.X),
         Math.Min(first.Y, second.Y),
@@ -389,29 +384,53 @@ public partial class NodeEditorView : UserControl
         }
     }
 
+    /// <summary>
+    /// Left press that the canvas gesture state machine accepted records where the selected nodes were before a
+    /// possible drag, so the release can record one undoable move.
+    /// <para>被画布手势状态机接受的左键按下会记录选中节点的拖动前位置，以便松开时记录一次可撤销的移动。</para>
+    /// </summary>
+    /// <param name="sender">The editor that routed the event.</param>
+    /// <param name="e">The press arguments.</param>
     private void OnEditorPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(Editor).Properties.IsLeftButtonPressed
-            || DataContext is not NodeEditorViewModel vm)
+            || DataContext is not NodeEditorViewModel
+            || _canvasGesture != CanvasGesture.Pending)
         {
             return;
         }
 
-        var connection = FindConnectionAt(e);
-        if (connection?.DataContext is NodeConnectionViewModel selected)
-        {
-            if (e.KeyModifiers.HasFlag(KeyModifiers.Alt)) return;
-            Editor.SelectedItems = new List<FlowNodeViewModel>();
-            vm.SelectConnection(selected);
-            Editor.Focus();
-            _nodeDragStartLocations = null;
-            e.Handled = true;
-            return;
-        }
-        vm.SelectConnection(null);
         _nodeDragStartLocations = Editor.SelectedItems?
             .OfType<FlowNodeViewModel>()
             .ToDictionary(node => node, node => node.Location);
+    }
+
+    /// <summary>
+    /// Left release: records one undoable move for the nodes that ended somewhere other than where the drag started.
+    /// The pre-drag locations are consumed here, after which a further release has nothing left to record.
+    /// <para>Left release: records one undoable move for the nodes that ended somewhere other than where the drag started.</para>
+    /// </summary>
+    /// <param name="sender">The editor that routed the event.</param>
+    /// <param name="e">The release arguments.</param>
+    private void OnEditorPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_nodeDragStartLocations is not { Count: > 0 } startLocations
+            || DataContext is not NodeEditorViewModel vm)
+        {
+            _nodeDragStartLocations = null;
+            return;
+        }
+
+        var command = new MoveNodeCommand();
+        foreach (var (node, originalLocation) in startLocations)
+        {
+            command.AddTarget(node, originalLocation, node.Location);
+        }
+        _nodeDragStartLocations = null;
+        if (command.HasTargets)
+        {
+            vm.Record(command);
+        }
     }
 
     private NodifyM.Avalonia.Controls.Connection? FindConnectionAt(PointerEventArgs e)
@@ -505,27 +524,6 @@ public partial class NodeEditorView : UserControl
         {
             vm.SelectConnection(null);
             e.Handled = true;
-        }
-    }
-
-    private void OnEditorPointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        if (_nodeDragStartLocations is not { Count: > 0 }
-            || DataContext is not NodeEditorViewModel vm)
-        {
-            _nodeDragStartLocations = null;
-            return;
-        }
-
-        var command = new MoveNodeCommand();
-        foreach (var (node, originalLocation) in _nodeDragStartLocations)
-        {
-            command.AddTarget(node, originalLocation, node.Location);
-        }
-        _nodeDragStartLocations = null;
-        if (command.HasTargets)
-        {
-            vm.Record(command);
         }
     }
 
@@ -629,8 +627,7 @@ public partial class NodeEditorView : UserControl
     }
 
     private static NodeToolboxItem? FindToolboxItem(NodeEditorViewModel vm, string typeKey) =>
-        vm.ToolboxCategories
-            .SelectMany(category => category.Items)
+        vm.ToolboxItems
             .FirstOrDefault(candidate => string.Equals(candidate.TypeKey, typeKey, StringComparison.OrdinalIgnoreCase));
 
     private void OnCanvasDragOver(object? sender, DragEventArgs e)

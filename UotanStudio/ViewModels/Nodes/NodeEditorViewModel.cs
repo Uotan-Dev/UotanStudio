@@ -235,16 +235,17 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     } = LanguageService.Instance.GetString("Node_StatusReady");
 
     /// <summary>
-    /// Gets the full list of node toolbox categories, populated from registered plugins.
-    /// <para>获取节点工具箱分类列表（全量，由插件注册填充）。</para>
+    /// Gets the full flat list of toolbox operations, populated from registered plugins.
+    /// <para>获取工具箱操作的全量平铺列表，由插件注册填充。</para>
     /// </summary>
-    public ObservableCollection<NodeToolboxCategory> ToolboxCategories { get; } = [];
+    public ObservableCollection<NodeToolboxItem> ToolboxItems { get; } = [];
 
     /// <summary>
-    /// Gets the search-filtered toolbox category view bound by the UI.
-    /// <para>获取搜索过滤后的工具箱分类视图，UI 绑定此项。</para>
+    /// Gets the search-filtered toolbox view bound by the UI. It holds the favorites and recently used shortcut
+    /// headings followed by every operation.
+    /// <para>获取搜索过滤后的工具箱视图，UI 绑定此项。它包含收藏与最近使用两个快捷分组标题，其后是全部操作。</para>
     /// </summary>
-    public ObservableCollection<NodeToolboxCategory> VisibleToolboxCategories
+    public ObservableCollection<NodeToolboxItem> VisibleToolboxItems
     {
         get => field;
         private set => SetProperty(ref field, value);
@@ -1342,11 +1343,6 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         }
         return null;
     }
-
-    /// <summary>
-    /// <para>应用搜索过滤，更新 <see cref="VisibleToolboxCategories"/>。</para>
-    /// Applies the search filter, updating <see cref="VisibleToolboxCategories"/>.
-    /// </summary>
 
     /// <summary>
     /// <para>断开连接器上的所有连接，由 NodifyEditor 的 DisconnectConnectorCommand 触发。</para>

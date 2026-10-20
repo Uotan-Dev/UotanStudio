@@ -9,8 +9,11 @@ public partial class NodeEditorViewModel
 {
     private readonly List<string> _favoriteNodeTypes = [];
     private readonly List<string> _recentNodeTypes = [];
-    private readonly HashSet<string> _expandedNodeCategories = new(StringComparer.Ordinal);
     private bool _toolboxPreferencesLoaded;
+
+    /// <summary>Order in which the flat toolbox lists operations; it keeps related operations next to each other without grouping them.<para>平铺工具箱中操作的排列顺序，让同类操作相邻但不分组。</para></summary>
+    private static readonly string[] ToolboxCategoryOrder =
+        ["Inputs", "Workspace", "Data", "Validation", "Configuration", "Firmware", "Device", "Flow", "Interaction", "Composite", "Script"];
 
     private void InitializeToolbox()
     {
@@ -19,86 +22,82 @@ public partial class NodeEditorViewModel
             var settings = SettingsPersistenceService.Instance.LoadSettings();
             _favoriteNodeTypes.AddRange(settings.FavoriteNodeTypes.Take(256));
             _recentNodeTypes.AddRange(settings.RecentNodeTypes.Take(12));
-            _expandedNodeCategories.UnionWith(settings.ExpandedNodeCategories.Take(256));
             _toolboxPreferencesLoaded = true;
         }
-        ToolboxCategories.Clear();
+        ToolboxItems.Clear();
         NodeFactoryRegistrar.RegisterAll();
         var language = LanguageService.Instance;
-        string[] categories = ["Inputs", "Workspace", "Data", "Validation", "Configuration", "Firmware", "Device", "Flow", "Interaction", "Composite", "Script"];
-        foreach (var category in categories)
+        var items = NodeFactoryRegistrar.Descriptors
+            .Where(descriptor => descriptor.IsToolboxVisible && ToolboxCategoryOrder.Contains(descriptor.CategoryPath))
+            .OrderBy(descriptor => Array.IndexOf(ToolboxCategoryOrder, descriptor.CategoryPath))
+            .ThenBy(descriptor => FamilyName(descriptor.Family, language), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(descriptor => descriptor.DisplayName ?? language.GetString(descriptor.NameResourceKey), StringComparer.OrdinalIgnoreCase)
+            .Select(descriptor => new NodeToolboxItem(descriptor, language, _favoriteNodeTypes.Contains(descriptor.TypeKey),
+                ToggleToolboxFavorite, AddToolboxPreset));
+        foreach (var item in items)
         {
-            var descriptors = NodeFactoryRegistrar.Descriptors.Where(descriptor =>
-                descriptor.IsToolboxVisible && descriptor.CategoryPath == category).ToArray();
-            if (descriptors.Length == 0)
-            {
-                continue;
-            }
-            var items = new ObservableCollection<NodeToolboxItem>(descriptors.Select(descriptor =>
-                new NodeToolboxItem(descriptor, language, _favoriteNodeTypes.Contains(descriptor.TypeKey), ToggleToolboxFavorite, AddToolboxPreset)));
-            var families = items.GroupBy(item => item.FamilyId).OrderBy(group => group.First().FamilyName)
-                .Select(group => CreateToolboxCategory(category + "/" + group.Key, group.First().FamilyName,
-                    new ObservableCollection<NodeToolboxItem>(group.OrderBy(item => item.Name)), [])).ToArray();
-            ToolboxCategories.Add(CreateToolboxCategory(category, language.GetString("Node_Category_" + category), items, families));
+            ToolboxItems.Add(item);
         }
+        RefreshVisibleToolbox();
     }
 
-    private NodeToolboxCategory CreateToolboxCategory(string identity, string name, ObservableCollection<NodeToolboxItem> items,
-        IReadOnlyList<NodeToolboxCategory> families, bool? expanded = null)
+    /// <summary>Resolves the localized family name, falling back to the raw family identifier.<para>解析族名的本地化文本，缺少资源时回退到族标识。</para></summary>
+    private static string FamilyName(string family, LanguageService language)
     {
-        return new NodeToolboxCategory(name, GetToolboxNodeCategory(identity.Split('/')[0]), items)
-        {
-            Identity = identity,
-            Families = families,
-            IsExpanded = expanded ?? _expandedNodeCategories.Contains(identity),
-            ExpansionChanged = OnToolboxExpansionChanged
-        };
+        var key = "Node_Family_" + family;
+        var name = language.GetString(key);
+        return name == key ? family : name;
     }
-
-    private static NodeCategory GetToolboxNodeCategory(string category) => category switch
-    {
-        "Device" => NodeCategory.Flash,
-        "Flow" => NodeCategory.Flow,
-        "Interaction" => NodeCategory.Output,
-        "Firmware" or "Build" => NodeCategory.Firmware,
-        "Composite" => NodeCategory.Plugin,
-        "Script" => NodeCategory.Plugin,
-        _ => NodeCategory.Data
-    };
 
     private void RefreshVisibleToolbox()
     {
         var keyword = (SearchText ?? string.Empty).Trim();
-        VisibleToolboxCategories.Clear();
+        VisibleToolboxItems.Clear();
         if (keyword.Length == 0)
         {
-            AddShortcutCategory("Favorites", _favoriteNodeTypes);
-            AddShortcutCategory("Recent", _recentNodeTypes);
-            foreach (var category in ToolboxCategories)
+            AddShortcutItems(_favoriteNodeTypes);
+            AddShortcutItems(_recentNodeTypes);
+            foreach (var item in ToolboxItems)
             {
-                VisibleToolboxCategories.Add(category);
+                VisibleToolboxItems.Add(item);
             }
             return;
         }
-        foreach (var category in ToolboxCategories)
+        var byKey = ToolboxItems.ToDictionary(item => item.TypeKey, StringComparer.Ordinal);
+        foreach (var shortcut in ShortcutGroups)
         {
-            var matches = category.Items.Where(item => item.Matches(keyword) || category.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var matches = shortcut.Keys.Where(byKey.ContainsKey).Select(key => byKey[key])
+                .Where(item => item.Matches(keyword)).ToArray();
             if (matches.Length > 0)
             {
-
-                VisibleToolboxCategories.Add(new NodeToolboxCategory(category.Name, category.Category, new(matches)) { IsExpanded = true });
+                VisibleToolboxItems.Add(NodeToolboxItem.CreateHeading(shortcut.Title));
+                foreach (var item in matches)
+                {
+                    VisibleToolboxItems.Add(item);
+                }
             }
+        }
+        foreach (var item in ToolboxItems.Where(item => item.Matches(keyword)))
+        {
+            VisibleToolboxItems.Add(item);
         }
     }
 
-    private void AddShortcutCategory(string identity, IReadOnlyList<string> keys)
+    private IEnumerable<(string Title, IReadOnlyList<string> Keys)> ShortcutGroups =>
+        [("Favorites", _favoriteNodeTypes), ("Recent", _recentNodeTypes)];
+
+    private void AddShortcutItems(IReadOnlyList<string> keys)
     {
-        var byKey = ToolboxCategories.SelectMany(category => category.Items).ToDictionary(item => item.TypeKey, StringComparer.Ordinal);
+        var byKey = ToolboxItems.ToDictionary(item => item.TypeKey, StringComparer.Ordinal);
         var items = keys.Distinct(StringComparer.Ordinal).Where(byKey.ContainsKey).Select(key => byKey[key]).ToArray();
         if (items.Length > 0)
         {
-            VisibleToolboxCategories.Add(CreateToolboxCategory(identity,
-                LanguageService.Instance.GetString("Node_Toolbox_" + identity), new(items), [], expanded: true));
+            var identity = ReferenceEquals(keys, _favoriteNodeTypes) ? "Favorites" : "Recent";
+            VisibleToolboxItems.Add(NodeToolboxItem.CreateHeading(LanguageService.Instance.GetString("Node_Toolbox_" + identity)));
+            foreach (var item in items)
+            {
+                VisibleToolboxItems.Add(item);
+            }
         }
     }
 
@@ -145,21 +144,6 @@ public partial class NodeEditorViewModel
         RecordToolboxUse(node.TypeKey);
     }
 
-    private void OnToolboxExpansionChanged(NodeToolboxCategory category)
-    {
-        _expandedNodeCategories.Clear();
-        _expandedNodeCategories.UnionWith(SettingsPersistenceService.Instance.LoadSettings().ExpandedNodeCategories.Take(256));
-        if (category.IsExpanded)
-        {
-            _expandedNodeCategories.Add(category.Identity);
-        }
-        else
-        {
-            _expandedNodeCategories.Remove(category.Identity);
-        }
-        SaveToolboxPreferences(settings => settings.ExpandedNodeCategories = [.. _expandedNodeCategories]);
-    }
-
     private static void SaveToolboxPreferences(Action<AppSettings> update)
     {
         var settings = SettingsPersistenceService.Instance.LoadSettings();
@@ -168,34 +152,7 @@ public partial class NodeEditorViewModel
     }
 }
 
-/// <summary>A toolbox category or object family. Search results retain concrete items without nesting.<para>工具箱分类或对象族。搜索结果保留具体条目而不嵌套。</para></summary>
-/// <param name="name">Display name of the category.<para>分类的显示名称。</para></param>
-/// <param name="category">Node category this entry groups by.<para>此条目据以分组的节点类别。</para></param>
-/// <param name="items">Items shown inside the category.<para>分类内展示的条目。</para></param>
-public sealed class NodeToolboxCategory(string name, NodeCategory category, ObservableCollection<NodeToolboxItem> items) : ViewModelBase
-{
-    public string Name { get; } = name;
-    public NodeCategory Category { get; } = category;
-    public ObservableCollection<NodeToolboxItem> Items { get; } = items;
-    public string Identity { get; init; } = string.Empty;
-    public IReadOnlyList<NodeToolboxCategory> Families { get; init; } = [];
-    public bool HasFamilies => Families.Count > 0;
-    public Action<NodeToolboxCategory>? ExpansionChanged { get; init; }
-
-    public bool IsExpanded
-    {
-        get;
-        set
-        {
-            if (SetProperty(ref field, value))
-            {
-                ExpansionChanged?.Invoke(this);
-            }
-        }
-    }
-}
-
-/// <summary>One concrete operation, with searchable contract identity and a persistent favorite action.<para>单个具体操作，带有可搜索的契约标识与可持久化的收藏动作。</para></summary>
+/// <summary>One concrete operation in the flat toolbox list, with searchable contract identity and a persistent favorite action.<para>平铺工具箱列表中的一个具体操作，带有可搜索的契约标识与可持久化的收藏动作。</para></summary>
 public sealed class NodeToolboxItem : ViewModelBase
 {
     private readonly IReadOnlyList<string> _keywords = [];
@@ -212,6 +169,8 @@ public sealed class NodeToolboxItem : ViewModelBase
     public bool HasPresets => Presets.Count > 0;
     public string FavoriteGlyph => IsFavorite ? "★" : "☆";
     public string FavoriteHint => LanguageService.Instance.GetString(IsFavorite ? "Node_Toolbox_Unfavorite" : "Node_Toolbox_Favorite");
+    public bool IsHeading => CreateNode is null;
+    public bool IsOperation => CreateNode is not null;
 
     public bool IsFavorite
     {
@@ -225,6 +184,19 @@ public sealed class NodeToolboxItem : ViewModelBase
             }
         }
     }
+
+    private NodeToolboxItem(string name, Func<FlowNodeViewModel>? createNode, string typeKey)
+    {
+        Name = name;
+        CreateNode = createNode!;
+        TypeKey = typeKey;
+        ToggleFavoriteCommand = new RelayCommand(() => { });
+    }
+
+    /// <summary>Creates a non-interactive heading that separates the favorites and recently used operations.<para>创建一个不可交互的标题，用于分隔收藏与最近使用的操作。</para></summary>
+    /// <param name="title">Localized heading text.<para>本地化的标题文本。</para></param>
+    /// <returns>A heading entry whose operation members are unused.<para>一个标题条目，其操作成员不使用。</para></returns>
+    public static NodeToolboxItem CreateHeading(string title) => new(title, null, "heading:" + title);
 
     public NodeToolboxItem(NodeDescriptor descriptor, LanguageService language, bool isFavorite = false,
         Action<NodeToolboxItem>? toggleFavorite = null, Action<FlowNodeViewModel>? addPreset = null)
@@ -256,9 +228,9 @@ public sealed class NodeToolboxItem : ViewModelBase
     /// <summary>Finds localized names, technical identities and aliases without depending on the active category.<para>在不依赖当前分类的情况下匹配本地化名称、技术标识与别名。</para></summary>
     /// <param name="keyword">Search text compared case-insensitively.<para>按不区分大小写方式比较的搜索文本。</para></param>
     /// <returns>True when a name, family or alias contains the keyword.<para>名称、族名或别名包含该关键字时为 True。</para></returns>
-    public bool Matches(string keyword) => Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+    public bool Matches(string keyword) => IsOperation && (Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)
         || FamilyName.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-        || _keywords.Any(value => value.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        || _keywords.Any(value => value.Contains(keyword, StringComparison.OrdinalIgnoreCase)));
 }
 
 /// <summary>A named creation preset that changes data defaults without introducing another operation identity.<para>命名创建预设，只改变数据默认值，不引入新的操作标识。</para></summary>
