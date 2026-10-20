@@ -31,15 +31,19 @@ internal static class NodeCatalogSeed
         D("Firmware.Container.Unpack", "Node_Firmware_Container_Unpack", "Firmware", FirmwareNodeViewModel.CreateUnpackNode),
         D("Firmware.Container.Pack", "Node_Firmware_Container_Pack", "Firmware", FirmwareNodeViewModel.CreatePackNode),
         D("Validation.Signature.Verify", "Node_Validation_Signature_Verify", "Validation", FirmwareNodeViewModel.CreateVerifyNode),
+        D("Validation.Vbmeta.Sign", "Node_Validation_Vbmeta_Sign", "Validation", VbmetaSignNodeViewModel.CreateSignNode),
         D("Boot.CommandLine.Edit", "Node_Boot_CommandLine_Edit", "Composite", FirmwareNodeViewModel.CreateCmdlineEditNode),
         D("Image.Super.Pack", "Node_Image_Super_Pack", "Firmware", SuperNodeViewModel.CreateSuperPackNode),
+        D("Image.Super.Unpack", "Node_Image_Super_Unpack", "Firmware", SuperUnpackNodeViewModel.CreateUnpackNode),
         D("Device.Target.Select", "Node_Device_Target_Select", "Device", SelectDeviceNodeViewModel.CreateSelectDeviceNode),
         D("Device.Property.Read", "Node_Device_Property_Read", "Device", DevicePropertyNodeViewModel.CreateDevicePropertyNode),
         D("Device.Partition.Flash", "Node_Device_Partition_Flash", "Device", FlashNodeViewModel.CreateFlashNode, true),
         D("Device.Power.Reboot", "Node_Device_Power_Reboot", "Device", FlashNodeViewModel.CreateRebootNode, true),
         D("Device.Table.Read", "Node_Device_Table_Read", "Device", DeviceServiceNodeViewModel.CreatePartitionTableReadNode),
+        D("Device.Partition.Read", "Node_Device_Partition_Read", "Device", DevicePartitionReadNodeViewModel.CreateReadNode),
         D("Device.Shell.Command", "Node_Device_Shell_Command", "Device", DeviceServiceNodeViewModel.CreateShellCommandNode, true),
         D("File.Binary.Read", "Node_File_Binary_Read", "Data", DataNodeViewModel.CreateFileReadNode),
+        D("File.Bytes.Write", "Node_File_Bytes_Write", "Data", FileBytesNodeViewModel.CreateWriteNode),
         D("File.Artifact.Open", "Node_File_Artifact_Open", "Data", () => new ArtifactNodeViewModel()),
         D("Resource.Project.Image", "Node_Resource_Project_Image", "Inputs", ProjectImageNodeViewModel.CreateProjectImageNode),
         D("Data.Cipher.Decrypt", "Node_Data_Cipher_Decrypt", "Data", DecryptNodeViewModel.CreateDecryptNode),
@@ -52,6 +56,10 @@ internal static class NodeCatalogSeed
         D("Data.Cipher.Encrypt", "Node_Data_Cipher_Encrypt", "Data", ExtendedDataNodeViewModel.CreateEncryptNode),
         D("Data.Compression.Compress", "Node_Data_Compression_Compress", "Data", ExtendedDataNodeViewModel.CreateCompressNode),
         D("Data.Bytes.Swap", "Node_Data_Bytes_Swap", "Data", ExtendedDataNodeViewModel.CreateByteSwapNode),
+        D("Data.List.FromText", "Node_Data_List_FromText", "Data", DataListNodeViewModel.CreateFromTextNode),
+        D("Data.List.ElementAt", "Node_Data_List_ElementAt", "Data", DataListNodeViewModel.CreateElementAtNode),
+        D("Data.List.Count", "Node_Data_List_Count", "Data", DataListNodeViewModel.CreateCountNode),
+        D("Data.List.Map", "Node_Data_List_Map", "Data", ListMapNodeViewModel.CreateMapNode),
         D("Network.File.Download", "Node_Network_File_Download", "Inputs", () => NetworkNodeViewModel.CreateDownloadNode()),
         D("Flow.Condition.Branch", "Node_Flow_Condition_Branch", "Flow", FlowControlNodeViewModel.CreateBranchNode),
         D("Flow.Collection.Loop", "Node_Flow_Collection_Loop", "Flow", FlowControlNodeViewModel.CreateLoopNode),
@@ -97,12 +105,8 @@ internal static class NodeCatalogSeed
     /// <returns>The descriptor naming the node type and its factory.<para>指明节点类型与其工厂的描述符。</para></returns>
     internal static NodeDescriptor CreateCompositePluginDescriptor(VisualPluginPackage package,
         Func<IReadOnlyList<string>>? validateExecution) =>
-        new(package.NodeTypeKey,
-            string.Empty,
-            () => new CompositeNodeViewModel(package, validateExecution),
-            Capabilities: ParseCapabilities(package.Manifest.Capabilities),
-            DisplayName: package.Manifest.Name)
-        { CategoryPath = "Composite" };
+        CreatePluginDescriptor(package, "Composite",
+            () => new CompositeNodeViewModel(package, validateExecution));
 
     /// <summary>Builds the toolbox descriptor for one script-node package.<para>为单个脚本节点软件包构建工具箱描述符。</para></summary>
     /// <param name="package">Script package supplying the Lua source and manifest.<para>提供 Lua 源码与清单的脚本软件包。</para></param>
@@ -110,12 +114,38 @@ internal static class NodeCatalogSeed
     /// <returns>The descriptor naming the node type and its factory.<para>指明节点类型与其工厂的描述符。</para></returns>
     internal static NodeDescriptor CreateScriptPluginDescriptor(VisualPluginPackage package,
         Func<IReadOnlyList<string>>? validateExecution) =>
-        new(package.NodeTypeKey,
+        CreatePluginDescriptor(package, "Script",
+            () => new ScriptNodeViewModel(package, validateExecution));
+
+    /// <summary>
+    /// Builds a plugin descriptor with the same policy surface as a built-in node: a manifest declaring
+    /// <see cref="NodeCapability.MutatesDevice"/> requires the run-time confirmation that built-in mutating nodes
+    /// require, and the manifest name doubles as a stable search term so plugins are discoverable in the toolbox.
+    /// <para>构建与内置节点具有相同策略面的插件描述符：清单声明 <see cref="NodeCapability.MutatesDevice"/> 时，
+    /// 像内置变更节点一样要求运行期确认；清单名称同时作为稳定检索词，使插件在工具箱中可被检索。</para>
+    /// </summary>
+    /// <param name="package">Plugin package supplying the manifest.<para>提供清单的插件软件包。</para></param>
+    /// <param name="category">Presentation category for the toolbox.<para>工具箱呈现分类。</para></param>
+    /// <param name="factory">Factory building the node instance.<para>构建节点实例的工厂。</para></param>
+    /// <returns>The plugin descriptor.<para>插件描述符。</para></returns>
+    private static NodeDescriptor CreatePluginDescriptor(VisualPluginPackage package, string category,
+        Func<FlowNodeViewModel> factory)
+    {
+        var capabilities = ParseCapabilities(package.Manifest.Capabilities);
+        return new NodeDescriptor(package.NodeTypeKey,
             string.Empty,
-            () => new ScriptNodeViewModel(package, validateExecution),
-            Capabilities: ParseCapabilities(package.Manifest.Capabilities),
+            factory,
+            Capabilities: capabilities,
             DisplayName: package.Manifest.Name)
-        { CategoryPath = "Script" };
+        {
+            CategoryPath = category,
+            RequiresConfirmation = capabilities.HasFlag(NodeCapability.MutatesDevice),
+            RequiredDeviceState = capabilities.HasFlag(NodeCapability.RequiresDevice)
+                ? DeviceRequiredState.AnyDevice
+                : DeviceRequiredState.None,
+            Aliases = string.IsNullOrWhiteSpace(package.Manifest.Name) ? [] : [package.Manifest.Name]
+        };
+    }
 
     private static NodeCapability ParseCapabilities(IEnumerable<string> capabilities)
     {
@@ -145,7 +175,7 @@ internal static class NodeCatalogSeed
         }
         if (typeKey.StartsWith("Build.", StringComparison.Ordinal)
             || typeKey.StartsWith("Firmware.", StringComparison.Ordinal)
-            || typeKey == "Image.Super.Pack")
+            || typeKey is "Image.Super.Pack" or "Image.Super.Unpack")
         {
             capabilities |= NodeCapability.ProducesArtifact;
         }
@@ -153,15 +183,16 @@ internal static class NodeCatalogSeed
         {
             capabilities |= NodeCapability.MutatesDevice;
         }
-        if (typeKey is "Device.Target.Select" or "Device.Property.Read" or "Device.Table.Read")
+        if (typeKey is "Device.Target.Select" or "Device.Property.Read" or "Device.Table.Read" or "Device.Partition.Read")
         {
             capabilities |= NodeCapability.ReadsDevice;
         }
-        if (typeKey is "File.Text.Publish" or "File.Artifact.Publish")
+        if (typeKey is "File.Text.Publish" or "File.Artifact.Publish" or "File.Bytes.Write" or "Validation.Vbmeta.Sign")
         {
             capabilities |= NodeCapability.ProducesArtifact | NodeCapability.PublishesFile;
         }
-        if (typeKey is "Resource.Project.Image" or "Feedback.Progress.Report")
+        if (typeKey is "Resource.Project.Image" or "Resource.Asset.Read" or "Feedback.Progress.Report"
+            or "Validation.Data.Hash" or "Data.Value.Compare" or "Data.Value.Convert")
         {
             capabilities |= NodeCapability.PatchSafe;
         }
@@ -192,6 +223,7 @@ internal static class NodeCatalogSeed
         "Device.Power.Reboot" => DeviceRequiredState.Adb | DeviceRequiredState.Fastboot,
         "Device.Partition.Flash" => DeviceRequiredState.Fastboot,
         "Device.Table.Read" => DeviceRequiredState.Fastboot,
+        "Device.Partition.Read" => DeviceRequiredState.Fastboot,
         "Device.Shell.Command" => DeviceRequiredState.Adb,
         _ => DeviceRequiredState.None
     };

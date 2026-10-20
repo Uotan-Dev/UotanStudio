@@ -41,7 +41,14 @@ public class DecompressNodeViewModel : FlowNodeViewModel
             Title = "Algorithm",
             PortType = NodePortType.Text,
             InitialValue = "gzip",
-            Choices = [.. new[] { "gzip", "deflate" }.Select(value => new NodePortChoice(value))]
+            Choices =
+            [
+                .. new[]
+                {
+                    "gzip", "zlib", "deflate", "brotli", "lz4", "lz4legacy",
+                    "lzma", "xz", "bzip2", "zstd", "lzop"
+                }.Select(value => new NodePortChoice(value))
+            ]
         });
         node.Output.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
         return node;
@@ -83,13 +90,8 @@ public class DecompressNodeViewModel : FlowNodeViewModel
         }
 
         var algorithm = (Convert.ToString(ReadInput("Algorithm"), CultureInfo.InvariantCulture) ?? "gzip").Trim().ToLowerInvariant();
-
-        var decompressed = algorithm switch
-        {
-            "deflate" => DecompressWith(data, mode => CompressionService.CreateDecompressionStream(mode, CompressionFormat.Deflate), context.CancellationToken),
-            "gzip" => DecompressWith(data, mode => CompressionService.CreateDecompressionStream(mode, CompressionFormat.Gzip), context.CancellationToken),
-            _ => throw new InvalidDataException($"Unsupported compression algorithm '{algorithm}'.")
-        };
+        var format = ExtendedDataNodeViewModel.ResolveCompressionFormat(algorithm);
+        var decompressed = DecompressWith(data, mode => CompressionService.CreateDecompressionStream(mode, format), context.CancellationToken);
         WriteOutput("Data", decompressed);
         context.Log.Write(LogLevel.Info, Title, $"Decompressed {data.Length} -> {decompressed.Length} bytes ({algorithm}).  已解压。");
     }

@@ -3,6 +3,7 @@ using Avalonia;
 using UotanStudio.Compress;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
+using UotanStudio.Services.Projects;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
@@ -100,7 +101,14 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
             Title = "Algorithm",
             PortType = NodePortType.Text,
             InitialValue = "gzip",
-            Choices = [.. new[] { "gzip", "deflate" }.Select(value => new NodePortChoice(value))]
+            Choices =
+            [
+                .. new[]
+                {
+                    "gzip", "zlib", "deflate", "brotli", "lz4", "lz4legacy",
+                    "lzma", "xz", "bzip2", "zstd", "lzop"
+                }.Select(value => new NodePortChoice(value))
+            ]
         });
         node.Output.Add(new NodeConnectorViewModel { Title = "Compressed", PortType = NodePortType.Data });
         return node;
@@ -235,22 +243,58 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     /// </param>
     private void ExecuteCompress(INodeExecutionContext context)
     {
-        var data = NodeDataUtil.ToBytes(ReadInput("Data"));
+        var algorithm = (Convert.ToString(ReadInput("Algorithm"), System.Globalization.CultureInfo.InvariantCulture) ?? "gzip").Trim().ToLowerInvariant();
+        var format = ResolveCompressionFormat(algorithm);
+        var source = ReadInput("Data");
+
+        if (source is StreamArtifact artifact)
+        {
+            Func<Stream, Stream> factory = mode => CompressionService.CreateCompressionStream(mode, format);
+            var staged = CompressArtifact(artifact, factory, context.CancellationToken);
+            if (!TryTakeOwnership(context, staged))
+            {
+                return;
+            }
+            WriteOutput("Compressed", staged);
+            context.Log.Write(LogLevel.Info, Title,
+                $"Compressed a {artifact.Length?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"} byte artifact ({algorithm}).  已压缩工件。");
+            return;
+        }
+
+        var data = NodeDataUtil.ToBytes(source);
         if (data == null)
         {
             throw new InvalidDataException("No data was provided for compression.");
         }
 
-        var algorithm = (Convert.ToString(ReadInput("Algorithm"), System.Globalization.CultureInfo.InvariantCulture) ?? "gzip").Trim().ToLowerInvariant();
-        var compressed = algorithm switch
-        {
-            "deflate" => CompressWith(data, mode => CompressionService.CreateCompressionStream(mode, CompressionFormat.Deflate)),
-            "gzip" => CompressWith(data, mode => CompressionService.CreateCompressionStream(mode, CompressionFormat.Gzip)),
-            _ => throw new InvalidDataException($"Unsupported compression algorithm '{algorithm}'.")
-        };
+        var compressed = CompressWith(data, mode => CompressionService.CreateCompressionStream(mode, format));
         WriteOutput("Compressed", compressed);
         context.Log.Write(LogLevel.Info, Title, $"Compressed {data.Length} -> {compressed.Length} bytes ({algorithm}).  已压缩。");
     }
+
+    /// <summary>
+    /// Resolves the compression container for a declared algorithm name.
+    /// <para>把声明的算法名解析为压缩容器格式。</para>
+    /// </summary>
+    /// <param name="algorithm">Lower-case algorithm name declared by the node. <para>节点声明的小写算法名。</para></param>
+    /// <returns>The matching container format. <para>匹配的容器格式。</para></returns>
+    /// <exception cref="InvalidDataException">The algorithm is unknown or cannot compress. <para>算法未知或不可压缩。</para></exception>
+    internal static CompressionFormat ResolveCompressionFormat(string algorithm) => algorithm switch
+    {
+        "gzip" => CompressionFormat.Gzip,
+        "zlib" => CompressionFormat.Zlib,
+        "deflate" => CompressionFormat.Deflate,
+        "brotli" => CompressionFormat.Brotli,
+        "lz4" => CompressionFormat.Lz4,
+        "lz4legacy" => CompressionFormat.Lz4Legacy,
+        "lzma" => CompressionFormat.Lzma,
+        "xz" => CompressionFormat.Xz,
+        "bzip2" => CompressionFormat.Bzip2,
+        "zstd" => CompressionFormat.Zstd,
+        "lzop" => CompressionFormat.Lzop,
+        _ => throw new InvalidDataException(
+            $"Unsupported compression algorithm '{algorithm}'. Supported: gzip, zlib, deflate, brotli, lz4, lz4legacy, lzma, xz, bzip2, zstd, lzop.  不支持的压缩算法。")
+    };
 
     private void ExecuteByteSwap(INodeExecutionContext context)
     {
@@ -307,5 +351,58 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
         }
 
         return output.ToArray();
+    }
+
+    private static bool TryTakeOwnership(INodeExecutionContext context, StreamArtifact artifact)
+    {
+        try
+        {
+            context.RegisterResource(artifact);
+            return true;
+        }
+        catch (NotSupportedException)
+        {
+            artifact.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
+            throw new InvalidOperationException(
+                "A streamed node output requires an execution context that owns runtime resources.");
+        }
+    }
+
+    private static StreamArtifact CompressArtifact(StreamArtifact source, Func<Stream, Stream> factory,
+        CancellationToken cancellationToken)
+    {
+        var staging = Path.Combine(Path.GetTempPath(), $"uotan-node-{Guid.NewGuid():N}.bin");
+        FileStream target;
+        long length;
+        try
+        {
+            target = new FileStream(staging, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None,
+                128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        }
+        catch
+        {
+            throw new IOException("The staged node output could not be created.");
+        }
+
+        try
+        {
+            using (var input = source.OpenRead())
+            using (var pipe = factory(target))
+            {
+                input.CopyTo(pipe, 128 * 1024);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            target.Flush(true);
+            length = target.Length;
+        }
+        catch
+        {
+            target.Dispose();
+            File.Delete(staging);
+            throw;
+        }
+
+        target.Dispose();
+        return new StagedStreamArtifact(staging, length);
     }
 }

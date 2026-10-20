@@ -11,8 +11,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Services;
 
-[Collection("Node editor UI")]
-public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
+public sealed class NodeFactoryRegistrarTests
 {
     [Fact]
     public void FacadeAndRegistry_PublishSameSnapshot()
@@ -80,12 +79,7 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     [Fact]
     public async Task RegisterVisualPlugin_ConcurrentUpdates_PreservesDescriptorSnapshotsAndPackages()
     {
-        Task dispatch;
-        using (ExecutionContext.SuppressFlow())
-        {
-            dispatch = fixture.DispatchAsync(RegisterConcurrentPluginsAsync, TestContext.Current.CancellationToken);
-        }
-        await dispatch.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await RegisterConcurrentPluginsAsync().WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
     }
 
     private static async Task RegisterConcurrentPluginsAsync()
@@ -128,13 +122,12 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     public void Toolbox_ObjectFamiliesAndAliases_MakesPatchOperationsDiscoverable()
     {
         using var editor = new NodeEditorViewModel();
-        var binary = Assert.Single(editor.ToolboxCategories.SelectMany(category => category.Items), item => item.TypeKey == "Binary.Search");
+        var binary = Assert.Single(editor.ToolboxItems, item => item.TypeKey == "Binary.Search");
 
         Assert.True(binary.Matches("Binary.Search"));
         Assert.True(binary.Matches("Binary.Pattern"));
-        Assert.Contains(editor.ToolboxCategories, category => category.Identity == "Configuration"
-            && category.Families.Any(family => family.Identity == "Configuration/Config"));
-        Assert.DoesNotContain(editor.ToolboxCategories, category => category.Identity == "Patch");
+        Assert.Contains(editor.ToolboxItems, item => item.FamilyId == "Config");
+        Assert.DoesNotContain(editor.ToolboxItems, item => item.TypeKey.StartsWith("Patch.", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -343,7 +336,7 @@ public sealed class NodeFactoryRegistrarTests(Views.NodeEditorUiFixture fixture)
     {
         using var editor = new NodeEditorViewModel();
 
-        var toolboxItems = editor.ToolboxCategories.SelectMany(category => category.Items).ToArray();
+        var toolboxItems = editor.ToolboxItems.ToArray();
         Assert.Equal(NodeFactoryRegistrar.Descriptors.Count(descriptor => descriptor.IsToolboxVisible), toolboxItems.Length);
         Assert.Equal(
             NodeFactoryRegistrar.Descriptors.Where(descriptor => descriptor.IsToolboxVisible)

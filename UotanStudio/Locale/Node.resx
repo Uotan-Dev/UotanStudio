@@ -138,6 +138,9 @@
   <data name="Node_ToggleMinimap" xml:space="preserve">
     <value>Toggle Minimap</value>
   </data>
+  <data name="Node_CanvasHint" xml:space="preserve">
+    <value>Left drag: box select | Right drag: pan canvas (keeps selection)</value>
+  </data>
   <data name="Node_DeleteSelected" xml:space="preserve">
     <value>Delete nodes</value>
   </data>
@@ -219,11 +222,17 @@
   <data name="Node_Validation_Signature_Verify" xml:space="preserve">
     <value>Assert AVB vbmeta signature</value>
   </data>
+  <data name="Node_Validation_Vbmeta_Sign" xml:space="preserve">
+    <value>Sign VBMeta</value>
+  </data>
   <data name="Node_Boot_CommandLine_Edit" xml:space="preserve">
     <value>Boot Cmdline Edit</value>
   </data>
   <data name="Node_Image_Super_Pack" xml:space="preserve">
     <value>Super Pack</value>
+  </data>
+  <data name="Node_Image_Super_Unpack" xml:space="preserve">
+    <value>Unpack Super</value>
   </data>
   <data name="Node_Device_Target_Select" xml:space="preserve">
     <value>Select Device</value>
@@ -240,11 +249,29 @@
   <data name="Node_Device_Table_Read" xml:space="preserve">
     <value>Read Partition Table</value>
   </data>
+  <data name="Node_Device_Partition_Read" xml:space="preserve">
+    <value>Read Partition</value>
+  </data>
   <data name="Node_Device_Shell_Command" xml:space="preserve">
     <value>Run Shell Command</value>
   </data>
   <data name="Node_File_Binary_Read" xml:space="preserve">
     <value>Read File</value>
+  </data>
+  <data name="Node_File_Bytes_Write" xml:space="preserve">
+    <value>Write Bytes</value>
+  </data>
+  <data name="Node_Data_List_FromText" xml:space="preserve">
+    <value>Text to List</value>
+  </data>
+  <data name="Node_Data_List_ElementAt" xml:space="preserve">
+    <value>List Element</value>
+  </data>
+  <data name="Node_Data_List_Count" xml:space="preserve">
+    <value>List Count</value>
+  </data>
+  <data name="Node_Data_List_Map" xml:space="preserve">
+    <value>Map List</value>
   </data>
   <data name="Node_Resource_Project_Image" xml:space="preserve">
     <value>Project Image</value>

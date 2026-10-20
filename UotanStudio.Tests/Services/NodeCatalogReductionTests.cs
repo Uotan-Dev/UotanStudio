@@ -14,8 +14,8 @@ public sealed class NodeCatalogReductionTests
         NodeFactoryRegistrar.RegisterAll();
         var builtIn = NodeFactoryRegistrar.BuiltInTypeKeys;
 
-        Assert.Equal(59, builtIn.Count);
-        Assert.Equal(59, NodeFactoryRegistrar.Descriptors
+        Assert.Equal(67, builtIn.Count);
+        Assert.Equal(67, NodeFactoryRegistrar.Descriptors
             .Count(descriptor => descriptor.IsToolboxVisible && builtIn.Contains(descriptor.TypeKey)));
     }
 
@@ -43,8 +43,8 @@ public sealed class NodeCatalogReductionTests
 
         Assert.Equal(
             [
-                "Device.Partition.Flash", "Device.Power.Reboot", "Device.Property.Read", "Device.Shell.Command",
-                "Device.Table.Read", "Device.Target.Select"
+                "Device.Partition.Flash", "Device.Partition.Read", "Device.Power.Reboot", "Device.Property.Read",
+                "Device.Shell.Command", "Device.Table.Read", "Device.Target.Select"
             ],
             NodeFactoryRegistrar.Descriptors
                 .Where(descriptor => descriptor.TypeKey.StartsWith("Device.", StringComparison.Ordinal))
@@ -183,6 +183,18 @@ public sealed class NodeCatalogReductionTests
 
         Assert.False(WorkflowReconstruction.TryCreateNode(
             new NodeDto { InstanceId = "n", TypeKey = typeKey, Category = "Data" }, out _, preserveUnknown: true));
+    }
+
+    [Fact]
+    public void Descriptors_EverySeededTypeKey_IsNotRefusedAtLoad()
+    {
+        NodeFactoryRegistrar.RegisterAll();
+
+        foreach (var typeKey in NodeFactoryRegistrar.BuiltInTypeKeys)
+        {
+            Assert.False(NodeTypeAlias.RefusedTypeKeys.Contains(typeKey),
+                $"'{typeKey}' is seeded in the toolbox yet refused when a saved workflow is loaded.");
+        }
     }
 
     [Fact]

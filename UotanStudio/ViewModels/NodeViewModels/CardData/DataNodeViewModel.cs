@@ -37,7 +37,7 @@ public class DataNodeViewModel : FlowNodeViewModel
             TypeKey = "File.Binary.Read"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Path", PortType = NodePortType.Path });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Artifact });
         return node;
     }
 
@@ -76,6 +76,19 @@ public class DataNodeViewModel : FlowNodeViewModel
             TypeKey = "Validation.Data.Hash"
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Text",
+            PortType = NodePortType.Text,
+            IsVisibleWhen = static owner => owner.Input.First(port => port.Title == "Data") is { HasConnectedSource: false }
+        });
+        node.Input.Add(new NodeConnectorViewModel
+        {
+            Title = "Encoding",
+            PortType = NodePortType.Text,
+            InitialValue = "utf8",
+            Choices = [.. new[] { "utf8", "utf16le", "ascii" }.Select(value => new NodePortChoice(value))]
+        });
         node.Input.Add(new NodeConnectorViewModel
         {
             Title = "Algorithm",
@@ -141,9 +154,28 @@ public class DataNodeViewModel : FlowNodeViewModel
             throw new FileNotFoundException("File input was not found.", path);
         }
 
-        var bytes = await NodeDataUtil.ReadFileBytesAsync(path, context.CancellationToken).ConfigureAwait(false);
-        WriteOutput("Data", bytes);
-        context.Log.Write(LogLevel.Info, Title, $"Read {bytes.Length} bytes from '{path}'  已读取。");
+        var length = new FileInfo(path).Length;
+        if (length <= NodeDataUtil.MaxInMemoryBytes)
+        {
+            var bytes = await NodeDataUtil.ReadFileBytesAsync(path, context.CancellationToken).ConfigureAwait(false);
+            WriteOutput("Data", bytes);
+            context.Log.Write(LogLevel.Info, Title, $"Read {bytes.Length} bytes from '{path}'  已读取。");
+            return;
+        }
+
+        var artifact = new Services.Projects.FileStreamArtifact(path);
+        try
+        {
+            context.RegisterResource(artifact);
+        }
+        catch (NotSupportedException)
+        {
+            await artifact.DisposeAsync().ConfigureAwait(false);
+            throw new InvalidOperationException(
+                "A large file artifact requires an execution context that owns runtime resources.");
+        }
+        WriteOutput("Data", artifact);
+        context.Log.Write(LogLevel.Info, Title, $"Opened '{path}' as a {length} byte artifact  已作为工件打开。");
     }
 
     private void ExecuteConvert(INodeExecutionContext context)
@@ -179,9 +211,21 @@ public class DataNodeViewModel : FlowNodeViewModel
     private void ExecuteChecksum(INodeExecutionContext context)
     {
         var data = NodeDataUtil.ToBytes(ReadInput("Data"), context.CancellationToken);
-        if (data == null)
+        if (data is null)
         {
-            throw new InvalidDataException("No Data input was provided.");
+            var text = Convert.ToString(ReadInput("Text"), System.Globalization.CultureInfo.InvariantCulture);
+            if (string.IsNullOrEmpty(text))
+            {
+                throw new InvalidDataException("No Data or Text input was provided.");
+            }
+            var encoding = (Convert.ToString(ReadInput("Encoding"), System.Globalization.CultureInfo.InvariantCulture) ?? "utf8").Trim().ToLowerInvariant();
+            data = encoding switch
+            {
+                "utf8" => Encoding.UTF8.GetBytes(text),
+                "utf16le" => Encoding.Unicode.GetBytes(text),
+                "ascii" => Encoding.ASCII.GetBytes(text),
+                _ => throw new InvalidDataException($"Unsupported text encoding '{encoding}'.  不支持的文本编码。")
+            };
         }
 
         var algorithm = (Convert.ToString(ReadInput("Algorithm"), System.Globalization.CultureInfo.InvariantCulture) ?? "sha256").Trim().ToLowerInvariant();

@@ -331,7 +331,6 @@ public sealed class NodeOperationFailureTests
     }
 
     [Theory]
-    [InlineData("File.Binary.Read", "Path")]
     [InlineData("Data.Value.Convert", "Input")]
     public async Task ExecuteAsync_OversizedFileData_FailsBeforeMaterializingInput(string typeKey, string portTitle)
     {
@@ -351,6 +350,32 @@ public sealed class NodeOperationFailureTests
             Assert.Equal(ExecutionStatus.Failed, result.Status);
             Assert.Contains("in-memory node data limit", node.ExecutionError);
             Assert.All(node.Output, port => Assert.Null(port.Data));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_OversizedFileRead_PublishesStreamArtifactInsteadOfMaterializing()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"node-large-{Guid.NewGuid():N}.bin");
+        try
+        {
+            await using (var file = new FileStream(path, FileMode.CreateNew))
+            {
+                file.SetLength(64L * 1024 * 1024 + 1);
+            }
+            var node = NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == "File.Binary.Read").Factory();
+            node.Input.Single(port => port.Title == "Path").InitialValue = path;
+
+            var result = await new NodeExecutionEngine(new TestLog()).ExecuteAsync([node], [],
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+            var data = node.Output.Single(port => port.Title == "Data").Data;
+            Assert.IsAssignableFrom<UotanStudio.Services.Projects.StreamArtifact>(data);
         }
         finally
         {

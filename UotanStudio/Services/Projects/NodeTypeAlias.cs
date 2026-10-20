@@ -171,7 +171,7 @@ internal static class NodeTypeAlias
         "Validation.Format.Detect", "Validation.File.Sha256",
         "Validation.File.Hash", "Validation.Hash.Verify", "Validation.Boolean.Assert", "Validation.Count.Assert",
         "Validation.Condition.Evaluate",
-        "Firmware.Cpio.Unpack", "Firmware.Cpio.Pack", "Image.Super.Unpack", "Image.Sparse.Convert",
+        "Firmware.Cpio.Unpack", "Firmware.Cpio.Pack", "Image.Sparse.Convert",
         "Firmware.Container.Extract", "Build.Dat.Convert", "Build.Ota.CreateDelta", "Build.Apk.Sign",
         "Device.Partition.Erase", "Device.Storage.EraseAll", "Device.Slot.Query", "Device.Slot.Switch",
         "Device.Recovery.Clean", "Device.Ota.Sideload", "Device.State.Query",

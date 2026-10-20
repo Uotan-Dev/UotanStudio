@@ -138,6 +138,9 @@
   <data name="Node_ToggleMinimap" xml:space="preserve">
     <value>切换小地图</value>
   </data>
+  <data name="Node_CanvasHint" xml:space="preserve">
+    <value>左键框选 | 右键拖拽画布（保持已选框选目标）</value>
+  </data>
   <data name="Node_DeleteSelected" xml:space="preserve">
     <value>删除节点</value>
   </data>
@@ -219,11 +222,17 @@
   <data name="Node_Validation_Signature_Verify" xml:space="preserve">
     <value>断言 AVB vbmeta 签名有效</value>
   </data>
+  <data name="Node_Validation_Vbmeta_Sign" xml:space="preserve">
+    <value>签名 VBMeta</value>
+  </data>
   <data name="Node_Boot_CommandLine_Edit" xml:space="preserve">
     <value>编辑 boot 命令行</value>
   </data>
   <data name="Node_Image_Super_Pack" xml:space="preserve">
     <value>合成 super</value>
+  </data>
+  <data name="Node_Image_Super_Unpack" xml:space="preserve">
+    <value>解包 super</value>
   </data>
   <data name="Node_Device_Target_Select" xml:space="preserve">
     <value>选择设备</value>
@@ -240,11 +249,29 @@
   <data name="Node_Device_Table_Read" xml:space="preserve">
     <value>读取分区表</value>
   </data>
+  <data name="Node_Device_Partition_Read" xml:space="preserve">
+    <value>回读分区</value>
+  </data>
   <data name="Node_Device_Shell_Command" xml:space="preserve">
     <value>执行 Shell 命令</value>
   </data>
   <data name="Node_File_Binary_Read" xml:space="preserve">
     <value>读取文件</value>
+  </data>
+  <data name="Node_File_Bytes_Write" xml:space="preserve">
+    <value>写出字节</value>
+  </data>
+  <data name="Node_Data_List_FromText" xml:space="preserve">
+    <value>文本转列表</value>
+  </data>
+  <data name="Node_Data_List_ElementAt" xml:space="preserve">
+    <value>取列表元素</value>
+  </data>
+  <data name="Node_Data_List_Count" xml:space="preserve">
+    <value>列表计数</value>
+  </data>
+  <data name="Node_Data_List_Map" xml:space="preserve">
+    <value>列表映射</value>
   </data>
   <data name="Node_Resource_Project_Image" xml:space="preserve">
     <value>工程镜像</value>

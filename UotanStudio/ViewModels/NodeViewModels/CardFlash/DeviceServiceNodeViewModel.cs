@@ -50,6 +50,8 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
         });
         node.Output.Add(new NodeConnectorViewModel { Title = "Count", PortType = NodePortType.Number });
         node.Output.Add(new NodeConnectorViewModel { Title = "Partitions", PortType = NodePortType.Text });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Entries", PortType = NodePortType.List });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Names", PortType = NodePortType.List });
         return node;
     }
 
@@ -108,6 +110,8 @@ public class DeviceServiceNodeViewModel : FlowNodeViewModel
             .ConfigureAwait(false);
         WriteOutput("Count", (double)partitions.Count);
         WriteOutput("Partitions", string.Join('\n', partitions.Select(entry => $"{entry.Name}={entry.Size}")));
+        WriteOutput("Entries", (IReadOnlyList<object?>)[.. partitions.Select(entry => (object?)$"{entry.Name}={entry.Size}")]);
+        WriteOutput("Names", (IReadOnlyList<object?>)[.. partitions.Select(entry => (object?)entry.Name)]);
     }
 
     private async Task ExecuteShellCommandAsync(INodeExecutionContext context)
