@@ -1,5 +1,6 @@
 using SevenZip;
 using SevenZip.Compression.LZMA;
+using UotanStudio.Compress.Internal;
 
 namespace UotanStudio.Compress.Compressors;
 
@@ -10,6 +11,76 @@ namespace UotanStudio.Compress.Compressors;
 public static class LzmaCompressor
 {
     private const uint EncoderDefaultDictionarySize = 1u << 23;
+
+    /// <summary>
+    /// Growth soft limit for the pooled output buffer of the array-returning overloads: the buffer doubles until this
+    /// size and grows by the required amount afterwards, so a short payload never rents a large block.
+    /// <para>返回数组的重载所用池化输出缓冲的增长软上限：缓冲倍增到该尺寸后改为按需增长，因此短载荷不会租用大块。</para>
+    /// </summary>
+    private const int ArrayOutputSoftLimit = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// Marks the cache holding encoders used by the array overload, whose coder properties stay at the SDK defaults for
+    /// the lifetime of the instance.
+    /// <para>标记「数组重载所用、属性在整个实例生命周期内保持 SDK 默认值」的编码器缓存。</para>
+    /// </summary>
+    private sealed class DefaultEncoderProfile;
+
+    /// <summary>
+    /// Marks the cache holding encoders used by the stream overload, which sets explicit coder properties on every call.
+    /// <para>标记「流重载所用、每次调用都显式设置编码属性」的编码器缓存。</para>
+    /// </summary>
+    private sealed class ExplicitEncoderProfile;
+
+    /// <summary>
+    /// Marks the cache holding decoders, whose properties are supplied per call from the payload header.
+    /// <para>标记解码器缓存；其属性每次由载荷头部提供。</para>
+    /// </summary>
+    private sealed class DecoderProfile;
+
+    /// <summary>
+    /// Hands out one idle coder per profile with an exclusive-rental contract: a caller arriving while one is checked out
+    /// constructs its own, so no caller ever waits on another and no coder is observed half-consumed.
+    /// <para>按 profile 借出空闲编解码器，采用独占借用契约：借用期间到来的第二个调用方自行新建，因此不会有调用方等待他人，
+    /// 也不会观测到处于半消费状态的实例。</para>
+    /// </summary>
+    /// <remarks>
+    /// Two encoder profiles exist because the array overload relies on the SDK's default properties while the stream
+    /// overload sets its own; pooling them together would leak one profile's properties into the other and change the
+    /// encoded bytes.
+    /// <para>之所以分成两个编码器 profile，是因为数组重载依赖 SDK 默认属性而流重载自带属性；若合池，一个 profile 的属性会
+    /// 泄漏到另一个，从而改变编码字节。</para>
+    /// </remarks>
+    private static class CoderCache<TProfile, TCoder>
+        where TProfile : class
+        where TCoder : class, new()
+    {
+        private static readonly Lock Gate = new();
+        private static TCoder? Idle;
+
+        internal static TCoder Rent()
+        {
+            lock (Gate)
+            {
+                var idle = Idle;
+                if (idle is not null)
+                {
+                    Idle = null;
+                    return idle;
+                }
+            }
+
+            return new TCoder();
+        }
+
+        internal static void Return(TCoder coder)
+        {
+            lock (Gate)
+            {
+                Idle = coder;
+            }
+        }
+    }
 
     /// <summary>LZMA compression (outputs .lzma format: 5-byte properties + 8-byte uncompressed size + compressed data).
     /// <para>LZMA 压缩（输出 .lzma 格式：5 字节属性 + 8 字节未压缩大小 + 压缩数据）。</para></summary>
@@ -27,11 +98,11 @@ public static class LzmaCompressor
             throw new ArgumentNullException(nameof(data));
         }
 
+        var encoder = CoderCache<DefaultEncoderProfile, Encoder>.Rent();
         try
         {
-            var encoder = new Encoder();
             using var input = new MemoryStream(data);
-            using var output = new MemoryStream();
+            using var output = new PooledWriteStream(ArrayOutputSoftLimit);
 
             encoder.WriteCoderProperties(output);
 
@@ -42,11 +113,15 @@ public static class LzmaCompressor
             }
 
             encoder.Code(input, output, data.Length, -1, null);
-            return output.ToArray();
+            return output.Buffer.AsSpan(0, output.WrittenLength).ToArray();
         }
         catch (Exception ex)
         {
             throw new CompressionException("LZMA 压缩失败", ex);
+        }
+        finally
+        {
+            CoderCache<DefaultEncoderProfile, Encoder>.Return(encoder);
         }
     }
 
@@ -74,24 +149,29 @@ public static class LzmaCompressor
 
         try
         {
-            var encoder = new Encoder();
-
-
-            encoder.SetCoderProperties(
-                [CoderPropID.DictionarySize, CoderPropID.PosStateBits, CoderPropID.LitPosBits, CoderPropID.LitContextBits, CoderPropID.EndMarker],
-                [(int)EncoderDefaultDictionarySize, 2, 0, 3, true]);
-
-            encoder.WriteCoderProperties(output);
-
-
-            var dataSize = input.CanSeek ? input.Length - input.Position : -1;
-            for (var i = 0; i < 8; i++)
+            var encoder = CoderCache<ExplicitEncoderProfile, Encoder>.Rent();
+            try
             {
-                output.WriteByte((byte)((ulong)dataSize >> (8 * i)));
+                encoder.SetCoderProperties(
+                    [CoderPropID.DictionarySize, CoderPropID.PosStateBits, CoderPropID.LitPosBits, CoderPropID.LitContextBits, CoderPropID.EndMarker],
+                    [(int)EncoderDefaultDictionarySize, 2, 0, 3, true]);
+
+                encoder.WriteCoderProperties(output);
+
+
+                var dataSize = input.CanSeek ? input.Length - input.Position : -1;
+                for (var i = 0; i < 8; i++)
+                {
+                    output.WriteByte((byte)((ulong)dataSize >> (8 * i)));
+                }
+
+
+                encoder.Code(input, output, -1, -1, null);
             }
-
-
-            encoder.Code(input, output, -1, -1, null);
+            finally
+            {
+                CoderCache<ExplicitEncoderProfile, Encoder>.Return(encoder);
+            }
         }
         catch (CompressionException)
         {
@@ -121,9 +201,9 @@ public static class LzmaCompressor
         try
         {
             using var input = new MemoryStream(data);
-            using var output = new MemoryStream();
+            using var output = new PooledWriteStream(ArrayOutputSoftLimit);
             Decompress(input, output);
-            return output.ToArray();
+            return output.Buffer.AsSpan(0, output.WrittenLength).ToArray();
         }
         catch (CompressionException)
         {
@@ -159,29 +239,35 @@ public static class LzmaCompressor
 
         try
         {
-            var decoder = new Decoder();
-
-            var properties = new byte[5];
-            if (ReadExactly(input, properties, 5) != 5)
+            var decoder = CoderCache<DecoderProfile, Decoder>.Rent();
+            try
             {
-                throw new CompressionException("LZMA 数据格式无效：缺少属性字节");
+                var properties = new byte[5];
+                if (ReadExactly(input, properties, 5) != 5)
+                {
+                    throw new CompressionException("LZMA 数据格式无效：缺少属性字节");
+                }
+
+                decoder.SetDecoderProperties(properties);
+
+                var fileSizeBytes = new byte[8];
+                if (ReadExactly(input, fileSizeBytes, 8) != 8)
+                {
+                    throw new CompressionException("LZMA 数据格式无效：缺少大小字段");
+                }
+
+                long fileSize = 0;
+                for (var i = 0; i < 8; i++)
+                {
+                    fileSize |= (long)fileSizeBytes[i] << (8 * i);
+                }
+
+                decoder.Code(input, output, -1, fileSize, null);
             }
-
-            decoder.SetDecoderProperties(properties);
-
-            var fileSizeBytes = new byte[8];
-            if (ReadExactly(input, fileSizeBytes, 8) != 8)
+            finally
             {
-                throw new CompressionException("LZMA 数据格式无效：缺少大小字段");
+                CoderCache<DecoderProfile, Decoder>.Return(decoder);
             }
-
-            long fileSize = 0;
-            for (var i = 0; i < 8; i++)
-            {
-                fileSize |= (long)fileSizeBytes[i] << (8 * i);
-            }
-
-            decoder.Code(input, output, -1, fileSize, null);
         }
         catch (CompressionException)
         {

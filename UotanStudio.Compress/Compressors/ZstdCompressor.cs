@@ -1,4 +1,5 @@
 using System.Buffers;
+using UotanStudio.Compress.Codecs.Zstd;
 using UotanStudio.Compress.Internal;
 using ZstdSharp;
 
@@ -39,8 +40,16 @@ public static class ZstdCompressor
                 return parallel;
             }
 
-            using var compressor = new Compressor(options?.Level ?? 3);
-            return compressor.Wrap(data).ToArray();
+            var level = options?.Level ?? 3;
+            var compressor = ZstdBlockCodec.CompressorCache.Rent(level);
+            try
+            {
+                return compressor.Wrap(data).ToArray();
+            }
+            finally
+            {
+                ZstdBlockCodec.CompressorCache.Return(level, compressor);
+            }
         }
         catch (Exception ex)
         {
@@ -54,8 +63,16 @@ public static class ZstdCompressor
     /// </summary>
     private static void CompressChunk(byte[] data, int start, int count, CompressionOptions? options, Stream destination)
     {
-        using var compressor = new Compressor(options?.Level ?? 3);
-        destination.Write(compressor.Wrap(data.AsSpan(start, count)));
+        var level = options?.Level ?? 3;
+        var compressor = ZstdBlockCodec.CompressorCache.Rent(level);
+        try
+        {
+            destination.Write(compressor.Wrap(data.AsSpan(start, count)));
+        }
+        finally
+        {
+            ZstdBlockCodec.CompressorCache.Return(level, compressor);
+        }
     }
 
     /// <summary>
@@ -76,8 +93,15 @@ public static class ZstdCompressor
 
         try
         {
-            using var decompressor = new Decompressor();
-            return decompressor.Unwrap(data).ToArray();
+            var decompressor = ZstdBlockCodec.DecompressorCache.Rent();
+            try
+            {
+                return decompressor.Unwrap(data).ToArray();
+            }
+            finally
+            {
+                ZstdBlockCodec.DecompressorCache.Return(decompressor);
+            }
         }
         catch (Exception ex)
         {
@@ -230,15 +254,15 @@ public static class ZstdCompressor
         var inputLengths = new int[degree];
         var frameLengths = new int[degree];
         var contexts = new Compressor[degree];
-        for (var slot = 0; slot < degree; slot++)
-        {
-            buffers[slot] = ArrayPool<byte>.Shared.Rent(chunkSize);
-            frames[slot] = ArrayPool<byte>.Shared.Rent(frameBound);
-            contexts[slot] = new Compressor(level);
-        }
-
         try
         {
+            for (var slot = 0; slot < degree; slot++)
+            {
+                buffers[slot] = ArrayPool<byte>.Shared.Rent(chunkSize);
+                frames[slot] = ArrayPool<byte>.Shared.Rent(frameBound);
+                contexts[slot] = ZstdBlockCodec.CompressorCache.Rent(level);
+            }
+
             var framesWritten = 0;
             while (true)
             {
@@ -272,9 +296,20 @@ public static class ZstdCompressor
         {
             for (var slot = 0; slot < degree; slot++)
             {
-                contexts[slot].Dispose();
-                ArrayPool<byte>.Shared.Return(buffers[slot]);
-                ArrayPool<byte>.Shared.Return(frames[slot]);
+                if (contexts[slot] is { } context)
+                {
+                    ZstdBlockCodec.CompressorCache.Return(level, context);
+                }
+
+                if (buffers[slot] is { } buffer)
+                {
+                    ArrayPool<byte>.Shared.Return(buffer);
+                }
+
+                if (frames[slot] is { } frame)
+                {
+                    ArrayPool<byte>.Shared.Return(frame);
+                }
             }
         }
     }

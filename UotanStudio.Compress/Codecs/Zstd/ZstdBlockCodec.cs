@@ -275,7 +275,7 @@ internal static class ZstdBlockCodec
     /// 独占所有者并在归还时存回；借用期间来的第二个调用方自行新建，因此不会有调用方等待他人。上下文从不并发共享，
     /// 也就不会出现处于半消费状态被观测到的情况。被挤出槽位的上下文按构造必为空闲，因为借用会在同一把锁内移除槽位条目。</para>
     /// </remarks>
-    private static class CompressorCache
+    internal static class CompressorCache
     {
         private static readonly Lock Gate = new();
         private static readonly Dictionary<int, Holder> Idle = [];
@@ -316,7 +316,7 @@ internal static class ZstdBlockCodec
     /// <see cref="CompressorCache"/>.
     /// <para>跨调用复用同一个 zstd 解压上下文，独占借用契约与 <see cref="CompressorCache"/> 相同。</para>
     /// </summary>
-    private static class DecompressorCache
+    internal static class DecompressorCache
     {
         private static readonly Lock Gate = new();
         private static Decompressor? Idle;

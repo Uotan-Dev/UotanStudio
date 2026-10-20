@@ -517,64 +517,73 @@ internal static class Lz4Compressor
         output.Write(magic, 0, magic.Length);
 
         var dop = Parallelism.Resolve(maxDegreeOfParallelism, int.MaxValue);
-        var chunks = new List<byte[]>(dop);
-
-        while (true)
+        var maxEncoded = Lz4BlockCodec.MaximumOutputSize(BlockChunkSize);
+        var sources = new byte[dop][];
+        var destinations = new byte[dop][];
+        for (var slot = 0; slot < dop; slot++)
         {
+            sources[slot] = ArrayPool<byte>.Shared.Rent(BlockChunkSize);
+            destinations[slot] = ArrayPool<byte>.Shared.Rent(maxEncoded);
+        }
 
-            chunks.Clear();
-            while (chunks.Count < dop)
+        var lengths = new int[dop];
+        var sizes = new int[dop];
+        try
+        {
+            while (true)
             {
-                var chunk = new byte[BlockChunkSize];
-                var read = ReadUpTo(input, chunk);
-                if (read == 0)
+                var staged = 0;
+                while (staged < dop)
+                {
+                    var read = ReadUpTo(input, sources[staged].AsSpan(0, BlockChunkSize));
+                    if (read == 0)
+                    {
+                        break;
+                    }
+
+                    lengths[staged] = read;
+                    staged++;
+                }
+
+                if (staged == 0)
                 {
                     break;
                 }
 
-                if (read < chunk.Length)
+                if (staged > 1 && dop > 1)
                 {
-                    Array.Resize(ref chunk, read);
+                    Parallel.For(0, staged, new ParallelOptions { MaxDegreeOfParallelism = dop }, i =>
+                    {
+                        sizes[i] = Lz4BlockCodec.Encode(
+                            sources[i].AsSpan(0, lengths[i]), destinations[i].AsSpan(0, maxEncoded), (int)level);
+                    });
+                }
+                else
+                {
+                    for (var i = 0; i < staged; i++)
+                    {
+                        sizes[i] = Lz4BlockCodec.Encode(
+                            sources[i].AsSpan(0, lengths[i]), destinations[i].AsSpan(0, maxEncoded), (int)level);
+                    }
                 }
 
-                chunks.Add(chunk);
-            }
-            if (chunks.Count == 0)
-            {
-                break;
-            }
-
-
-            var compressed = new byte[chunks.Count][];
-            var sizes = new int[chunks.Count];
-            if (chunks.Count > 1 && dop > 1)
-            {
-                Parallel.For(0, chunks.Count, new ParallelOptions { MaxDegreeOfParallelism = dop }, i =>
+                for (var i = 0; i < staged; i++)
                 {
-                    var buf = new byte[Lz4BlockCodec.MaximumOutputSize(chunks[i].Length)];
-                    sizes[i] = Lz4BlockCodec.Encode(chunks[i], buf, (int)level);
-                    compressed[i] = buf;
-                });
-            }
-            else
-            {
-                for (var i = 0; i < chunks.Count; i++)
-                {
-                    var buf = new byte[Lz4BlockCodec.MaximumOutputSize(chunks[i].Length)];
-                    sizes[i] = Lz4BlockCodec.Encode(chunks[i], buf, (int)level);
-                    compressed[i] = buf;
+                    var size = sizes[i];
+                    output.WriteByte((byte)(size & 0xFF));
+                    output.WriteByte((byte)((size >> 8) & 0xFF));
+                    output.WriteByte((byte)((size >> 16) & 0xFF));
+                    output.WriteByte((byte)((size >> 24) & 0xFF));
+                    output.Write(destinations[i], 0, size);
                 }
             }
-
-
-            for (var i = 0; i < chunks.Count; i++)
+        }
+        finally
+        {
+            for (var slot = 0; slot < dop; slot++)
             {
-                var size = sizes[i];
-                output.WriteByte((byte)(size & 0xFF));
-                output.WriteByte((byte)((size >> 8) & 0xFF));
-                output.WriteByte((byte)((size >> 16) & 0xFF));
-                output.WriteByte((byte)((size >> 24) & 0xFF));
-                output.Write(compressed[i], 0, size);
+                ArrayPool<byte>.Shared.Return(sources[slot]);
+                ArrayPool<byte>.Shared.Return(destinations[slot]);
             }
         }
     }
@@ -583,12 +592,12 @@ internal static class Lz4Compressor
     /// Reads up to buffer.Length bytes; returns the actual count read (may be short at EOF).
     /// <para>尽力读满 buffer（遇到 EOF 时返回实际读取字节数）。</para>
     /// </summary>
-    private static int ReadUpTo(Stream input, byte[] buffer)
+    private static int ReadUpTo(Stream input, Span<byte> buffer)
     {
         var read = 0;
         while (read < buffer.Length)
         {
-            var n = input.Read(buffer, read, buffer.Length - read);
+            var n = input.Read(buffer[read..]);
             if (n <= 0)
             {
                 break;

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Compress.Codecs.Lzo;
 using UotanStudio.Compress.Internal;
@@ -25,6 +26,15 @@ internal static class LzopCompressor
 
     private const ushort LzopVersion = 0x0940;
     private const int CompressBlockSize = 256 * 1024;
+
+    /// <summary>
+    /// Growth soft limit for the pooled output buffer of the array-returning decompression overload: the buffer
+    /// doubles until this size and grows by the required amount afterwards, so a small archive never rents a large
+    /// block while a large one stops paying for repeated doublings.
+    /// <para>返回数组的解压重载所用池化输出缓冲的增长软上限：缓冲倍增到该尺寸后改为按需增长，因此小归档不会租用大块，
+    /// 大归档也不必反复支付倍增成本。</para>
+    /// </summary>
+    private const int ArrayOutputSoftLimit = 4 * 1024 * 1024;
 
     private const int HeaderContentLength = 25;
 
@@ -76,9 +86,9 @@ internal static class LzopCompressor
     {
         ArgumentNullException.ThrowIfNull(data);
         using var input = new MemoryStream(data, writable: false);
-        using var output = new MemoryStream();
-        Decompress(input, output, maximumOutputBytes);
-        return output.ToArray();
+        using var output = new PooledWriteStream(ArrayOutputSoftLimit);
+        Decompress(input, output, Math.Min(maximumOutputBytes, int.MaxValue));
+        return output.Buffer.AsSpan(0, output.WrittenLength).ToArray();
     }
 
     /// <summary>Streams LZOP blocks to the output while enforcing a cumulative output limit.
@@ -216,10 +226,11 @@ internal static class LzopCompressor
                         ? ReadUInt32(input, "compressed Adler-32") : uncompressedAdler32;
                     var compressedCrc32 = hasCompressedCrc32 && compressedSize < uncompressedSize
                         ? ReadUInt32(input, "compressed CRC-32") : uncompressedCrc32;
-                    var block = ReadBytes(input, (int)compressedSize, "block data");
+                    var blockLength = (int)compressedSize;
+                    var block = RentBlock(input, blockLength);
 
                     totalOutput = checked(totalOutput + uncompressedSize);
-                    staged.Add(new DecompressedBlock(block, (int)uncompressedSize, uncompressedAdler32, uncompressedCrc32, compressedAdler32, compressedCrc32));
+                    staged.Add(new DecompressedBlock(block, blockLength, (int)uncompressedSize, uncompressedAdler32, uncompressedCrc32, compressedAdler32, compressedCrc32));
                 }
 
                 if (staged.Count > 1)
@@ -236,10 +247,20 @@ internal static class LzopCompressor
                     staged[0].Decode(checks);
                 }
 
-                foreach (var slot in staged)
+                try
                 {
-                    slot.ThrowIfFailed();
-                    output.Write(slot.Decoded, 0, slot.Decoded.Length);
+                    foreach (var slot in staged)
+                    {
+                        slot.ThrowIfFailed();
+                        output.Write(slot.Decoded, 0, slot.DecodedLength);
+                    }
+                }
+                finally
+                {
+                    foreach (var slot in staged)
+                    {
+                        slot.ReturnBuffers();
+                    }
                 }
 
                 if (ended)
@@ -478,18 +499,50 @@ internal static class LzopCompressor
 
     private static uint ReadUInt32(Stream input, string field) => BinaryPrimitives.ReadUInt32BigEndian(ReadBytes(input, 4, field));
 
+    /// <summary>
+    /// Reads one block body into a pooled buffer, returning it to the pool if the read fails so a truncated stream
+    /// cannot strand a block-sized rental.
+    /// <para>把一个块体读入池化缓冲；读取失败时立即归还，因此被截断的流不会遗漏一块大小的租用。</para>
+    /// </summary>
+    /// <param name="input">Source stream positioned at the block body.
+    /// <para>定位在块体起始处的来源流。</para></param>
+    /// <param name="count">Exact block body length in bytes; the trailing capacity of the rented buffer is unused.
+    /// <para>块体的精确字节数；租用缓冲的尾部容量不使用。</para></param>
+    /// <returns>The rented buffer holding the block body. <para>持有块体的租用缓冲。</para></returns>
+    /// <exception cref="CompressionException">The stream ended before <paramref name="count"/> bytes.
+    /// <para>在读完 <paramref name="count"/> 字节之前流已结束。</para></exception>
+    private static byte[] RentBlock(Stream input, int count)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(count);
+        try
+        {
+            input.ReadExactly(buffer, 0, count);
+            return buffer;
+        }
+        catch (EndOfStreamException ex)
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+            throw new CompressionException("Invalid LZOP data: truncated block data.", ex);
+        }
+        catch
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+            throw;
+        }
+    }
+
     private static uint Checksum(byte[] data, bool crc32) => crc32 ? Crc32Hash(data, 0, data.Length) : Adler32(data, 0, data.Length);
 
     /// <summary>
     /// Performs bounds-checked LZO1X-1 decompression that never writes past the output buffer.
     /// <para>执行带边界检查的 LZO1X-1 解压，绝不越界写出输出缓冲区。</para>
     /// </summary>
-    private static int Lzo1xDecompressSafe(byte[] input, int inputStart, int inputLen, byte[] output)
+    private static int Lzo1xDecompressSafe(byte[] input, int inputStart, int inputLen, byte[] output, int outputLength)
     {
         var ip = inputStart;
         var ipEnd = inputStart + inputLen;
         var op = 0;
-        var opEnd = output.Length;
+        var opEnd = outputLength;
         var t = 0;
 
         if (ip >= ipEnd)
@@ -790,13 +843,50 @@ internal static class LzopCompressor
     /// <para>一个已暂存的 LZOP 输入块：原始字节、声明的大小与校验和。解码与校验在工作线程上执行并把结果留给有序
     /// 写出方重新抛出，因此无论哪个槽位失败，抵达调用方的异常都保持原有类型与消息。</para>
     /// </summary>
-    private sealed class DecompressedBlock(byte[] block, int uncompressedSize, uint uncompressedAdler32, uint uncompressedCrc32, uint compressedAdler32, uint compressedCrc32)
+    private sealed class DecompressedBlock(byte[] block, int blockLength, int uncompressedSize, uint uncompressedAdler32, uint uncompressedCrc32, uint compressedAdler32, uint compressedCrc32)
     {
         private CompressionException? _failure;
+        private bool _ownsDecoded;
 
         /// <summary>The decoded bytes, valid once <see cref="Decode"/> finished without storing a failure.
         /// <para>解码后的字节；<see cref="Decode"/> 未记录失败而完成时有效。</para></summary>
         public byte[] Decoded { get; private set; } = [];
+
+        /// <summary>
+        /// The number of decoded bytes in <see cref="Decoded"/>, which is shorter than the array when it came from the pool.
+        /// <para><see cref="Decoded"/> 中有效解码字节数；当缓冲来自池时该值小于数组长度。</para>
+        /// </summary>
+        public int DecodedLength { get; private set; }
+
+        /// <summary>
+        /// Returns the rented input and decode buffers so the next batch reuses them instead of allocating another
+        /// pair of block-sized arrays.
+        /// <para>归还租用的输入缓冲与解码缓冲，使下一批次复用它们而不是再分配一对块大小的数组。</para>
+        /// </summary>
+        /// <remarks>
+        /// The input buffer is returned unconditionally because the staging loop always rents it; the decode buffer is
+        /// returned only when this block rented one, since a stored block decodes in place over its input.
+        /// <para>输入缓冲总是归还，因为暂存循环总是租用它；解码缓冲仅在确实租用过时归还，因为存储块直接在其输入上就地解码。</para>
+        /// </remarks>
+        public void ReturnBuffers()
+        {
+            if (_ownsDecoded)
+            {
+                var decoded = Decoded;
+                Decoded = [];
+                DecodedLength = 0;
+                _ownsDecoded = false;
+                if (decoded.Length > 0)
+                {
+                    ArrayPool<byte>.Shared.Return(decoded);
+                }
+            }
+
+            if (block.Length > 0)
+            {
+                ArrayPool<byte>.Shared.Return(block);
+            }
+        }
 
         /// <summary>
         /// Verifies the stored-block checksums, decodes the block when it is compressed, and verifies the decoded checksums.
@@ -808,29 +898,50 @@ internal static class LzopCompressor
         {
             try
             {
-                if (checks.HasCompressedAdler32 && Adler32(block, 0, block.Length) != compressedAdler32)
+                if (checks.HasCompressedAdler32 && Adler32(block, 0, blockLength) != compressedAdler32)
                     throw new CompressionException("Invalid LZOP data: compressed Adler-32 mismatch.");
-                if (checks.HasCompressedCrc32 && Crc32Hash(block, 0, block.Length) != compressedCrc32)
+                if (checks.HasCompressedCrc32 && Crc32Hash(block, 0, blockLength) != compressedCrc32)
                     throw new CompressionException("Invalid LZOP data: compressed CRC-32 mismatch.");
 
                 byte[] decoded;
-                if (block.Length == uncompressedSize)
+                int decodedLength;
+                if (blockLength == uncompressedSize)
                 {
                     decoded = block;
+                    decodedLength = blockLength;
                 }
                 else
                 {
-                    decoded = new byte[uncompressedSize];
-                    var count = Lzo1xDecompressSafe(block, 0, block.Length, decoded);
-                    if (count != decoded.Length)
+                    var rented = ArrayPool<byte>.Shared.Rent(uncompressedSize);
+                    int count;
+                    try
+                    {
+                        count = Lzo1xDecompressSafe(block, 0, blockLength, rented, uncompressedSize);
+                    }
+                    catch
+                    {
+                        ArrayPool<byte>.Shared.Return(rented);
+                        throw;
+                    }
+
+                    if (count != uncompressedSize)
+                    {
+                        ArrayPool<byte>.Shared.Return(rented);
                         throw new CompressionException($"Invalid LZOP data: block decompressed to {count} bytes, expected {uncompressedSize}.");
+                    }
+
+                    decoded = rented;
+                    decodedLength = uncompressedSize;
+                    _ownsDecoded = true;
                 }
 
-                if (checks.HasUncompressedAdler32 && Adler32(decoded, 0, decoded.Length) != uncompressedAdler32)
-                    throw new CompressionException("Invalid LZOP data: uncompressed Adler-32 mismatch.");
-                if (checks.HasUncompressedCrc32 && Crc32Hash(decoded, 0, decoded.Length) != uncompressedCrc32)
-                    throw new CompressionException("Invalid LZOP data: uncompressed CRC-32 mismatch.");
                 Decoded = decoded;
+                DecodedLength = decodedLength;
+
+                if (checks.HasUncompressedAdler32 && Adler32(decoded, 0, decodedLength) != uncompressedAdler32)
+                    throw new CompressionException("Invalid LZOP data: uncompressed Adler-32 mismatch.");
+                if (checks.HasUncompressedCrc32 && Crc32Hash(decoded, 0, decodedLength) != uncompressedCrc32)
+                    throw new CompressionException("Invalid LZOP data: uncompressed CRC-32 mismatch.");
             }
             catch (CompressionException ex)
             {

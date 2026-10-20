@@ -52,28 +52,44 @@ internal static class Lzo1x
     /// <param name="bytesWritten">Bytes the decoder produced, reported under every status and <c>0</c> when it stopped before emitting anything; on failure this count is not mirrored into <paramref name="output"/>.
     /// <para>解码器产生的字节数，任何状态下都会给出，在尚未写出内容前停止时为 <c>0</c>；失败时该数值不会写入 <paramref name="output"/>。</para></param>
     /// <returns>The status of the decode attempt.<para>本次解码尝试的状态。</para></returns>
+    /// <remarks>
+    /// The decode lands in a pooled scratch buffer and only the produced bytes are copied back on success, so a
+    /// rejected bitstream cannot disturb <paramref name="output"/> without snapshotting it first, and the bytes past
+    /// the produced count keep whatever the caller had there. This keeps the allocation per call independent of the
+    /// destination size, which matters because SquashFS and F2FS call this once per compressed block.
+    /// <para>解码落在池化暂存缓冲区中，仅在成功时回写产出的字节，因此被拒绝的位流不会扰动
+    /// <paramref name="output"/>，无需先做快照，且产出字节数之后的内容保留调用方原值。这样每次调用的分配量与目标
+    /// 大小无关，这对 SquashFS 与 F2FS 逐压缩块调用本方法的场景很重要。</para>
+    /// </remarks>
     public static LzoStatus TryDecompress(ReadOnlySpan<byte> input, Span<byte> output, out int bytesWritten)
     {
         bytesWritten = 0;
 
 
-        // The contract leaves the destination untouched when the decode fails, while the core reports how far
-        // it got. Snapshot the caller's bytes first so a rejected stream can be restored exactly, and let a
-        // successful decode land straight in the caller's buffer without an intermediate copy.
-        var preserved = output.Length == 0 ? Span<byte>.Empty : new byte[output.Length];
-        if (!preserved.IsEmpty)
+        if (output.IsEmpty)
         {
-            output.CopyTo(preserved);
+            var (emptyStatus, emptyWritten) = TryDecompressCore(input, output);
+            bytesWritten = emptyWritten;
+            return emptyStatus;
         }
 
-        var (status, written) = TryDecompressCore(input, output);
-        bytesWritten = written;
-        if (status != LzoStatus.Ok)
+        var scratch = ArrayPool<byte>.Shared.Rent(output.Length);
+        try
         {
-            preserved.CopyTo(output);
-        }
+            var decoded = scratch.AsSpan(0, output.Length);
+            var (status, written) = TryDecompressCore(input, decoded);
+            bytesWritten = written;
+            if (status == LzoStatus.Ok)
+            {
+                decoded[..written].CopyTo(output);
+            }
 
-        return status;
+            return status;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(scratch);
+        }
     }
 
     /// <summary>
