@@ -1,8 +1,9 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:avalonia="https://irihi.tech/iconica/tdesign"
              xmlns:imaging="clr-namespace:Avalonia.Media.Imaging;assembly=Avalonia.Base"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
              xmlns:workspace="using:UotanStudio.ViewModels.Workspace"
@@ -19,7 +20,7 @@
       <Grid ColumnDefinitions="44,*,72,Auto" RowDefinitions="Auto,Auto" Height="44" ToolTip.Tip="{Binding Path}">
         <Grid Grid.Column="0" Grid.RowSpan="2" Width="36" Height="36" HorizontalAlignment="Left">
           <Image Classes="entry-icon" Classes.directory="{Binding IsDirectory}" />
-          <avalonia:MaterialIcon Kind="LinkVariant" Width="12" Height="12" IsVisible="{Binding IsSymlink}"
+          <avalonia:Link Width="12" Height="12" IsVisible="{Binding IsSymlink}"
                                  HorizontalAlignment="Right" VerticalAlignment="Bottom" />
         </Grid>
         <TextBlock Grid.Column="1" Classes="entry-name" Text="{Binding Name}" FontSize="12" LineHeight="14"
@@ -35,7 +36,7 @@
       <Grid RowDefinitions="52,30" RowSpacing="4" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}">
         <Grid Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center">
           <Image Classes="entry-icon" Classes.directory="{Binding IsDirectory}" />
-          <avalonia:MaterialIcon Kind="LinkVariant" Width="14" Height="14" IsVisible="{Binding IsSymlink}"
+          <avalonia:Link Width="14" Height="14" IsVisible="{Binding IsSymlink}"
                                  HorizontalAlignment="Right" VerticalAlignment="Bottom" />
         </Grid>
         <TextBlock Grid.Row="1" Text="{Binding Name}" FontSize="11" LineHeight="14"
@@ -54,7 +55,7 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.Small avalonia|MaterialIcon, ToggleButton.Small avalonia|MaterialIcon">
+    <Style Selector="Button.Small avalonia|TDesignIconBase, ToggleButton.Small avalonia|TDesignIconBase">
       <Setter Property="Width" Value="12" />
       <Setter Property="Height" Value="12" />
     </Style>
@@ -127,11 +128,11 @@
                     HorizontalAlignment="Right">
           <Button Classes="Small" Command="{Binding ExtractSelectedCommand}"
                   ToolTip.Tip="{DynamicResource FileManager_Extract}" AutomationProperties.Name="{DynamicResource FileManager_Extract}">
-            <avalonia:MaterialIcon Kind="DownloadOutline" />
+            <avalonia:Download />
           </Button>
           <Button Classes="Small" Command="{Binding RefreshCommand}"
                   ToolTip.Tip="{DynamicResource FileManager_Refresh}" AutomationProperties.Name="{DynamicResource FileManager_Refresh}">
-            <avalonia:MaterialIcon Kind="Refresh" />
+            <avalonia:Refresh />
           </Button>
           <ToggleButton x:Name="ViewModeButton" Classes="Small" IsChecked="{Binding IsGridView, Mode=TwoWay}"
                         AutomationProperties.Name="{DynamicResource FileManager_ViewMode}">
@@ -142,8 +143,8 @@
               </Panel>
             </ToolTip.Tip>
             <Panel>
-              <avalonia:MaterialIcon Kind="ViewGridOutline" IsVisible="{Binding !IsGridView}" />
-              <avalonia:MaterialIcon Kind="ViewListOutline" IsVisible="{Binding IsGridView}" />
+              <avalonia:GridView IsVisible="{Binding !IsGridView}" />
+              <avalonia:ViewList IsVisible="{Binding IsGridView}" />
             </Panel>
           </ToggleButton>
         </StackPanel>
@@ -185,8 +186,8 @@
             <Grid ColumnDefinitions="Auto,*" ToolTip.Tip="{Binding Path}">
               <!-- 目录树图标与项目资源管理器同款：空心文件夹 + 家族色。 -->
               <!-- Directory-tree icons match the project explorer: outline folder plus family colour. -->
-              <avalonia:MaterialIcon Kind="FolderOutline" Width="16" Height="16"
-                                     Foreground="{x:Static workspace:ExplorerIconPalette.Folder}"
+              <avalonia:Folder Width="16" Height="16"
+                                     Stroke1="{x:Static workspace:ExplorerIconPalette.Folder}"
                                      VerticalAlignment="Center" />
               <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Margin="6,0,0,0"
                          TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
@@ -199,7 +200,7 @@
               Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" IsHitTestVisible="False" />
       <GridSplitter x:Name="PaneSplitter" Grid.Column="1" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
                     HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent" Cursor="SizeWestEast" />
-      <avalonia:MaterialIcon x:Name="SplitterGrip" Grid.Column="1" Kind="DragVertical" Width="7" Height="20"
+      <controls:AppIcon x:Name="SplitterGrip" Kind="DragHandle" Grid.Column="1" Width="7" Height="20"
                              HorizontalAlignment="Center" VerticalAlignment="Center"
                              Foreground="{DynamicResource EditorPaneSplitterGripBrush}" IsHitTestVisible="False" Opacity="0.8" />
 
@@ -208,7 +209,7 @@
           <Grid ColumnDefinitions="Auto,*">
             <Button Classes="Small" Command="{Binding NavigateUpCommand}"
                     ToolTip.Tip="{DynamicResource FileManager_NavigateUp}" AutomationProperties.Name="{DynamicResource FileManager_NavigateUp}">
-              <avalonia:MaterialIcon Kind="ArrowUp" />
+              <avalonia:ArrowUp />
             </Button>
             <TextBlock Grid.Column="1" Text="{Binding CurrentPath}" Margin="8,0,0,0" FontSize="12"
                        FontFamily="Consolas" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"

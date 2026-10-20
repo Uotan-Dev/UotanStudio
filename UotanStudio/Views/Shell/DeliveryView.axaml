@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="using:UotanStudio.Views.Controls"
-             xmlns:icons="using:Material.Icons.Avalonia"
+             xmlns:icons="https://irihi.tech/iconica/tdesign"
              xmlns:vm="using:UotanStudio.ViewModels.Workspace"
              x:Class="UotanStudio.Views.Shell.DeliveryView">
     <UserControl.Styles>
@@ -93,7 +93,7 @@
                                     ToolTip.Tip="{DynamicResource PackDialog_BrowseOutput}"
                                     AutomationProperties.Name="{DynamicResource PackDialog_SelectFolder}">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <icons:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                    <icons:FolderOpen Width="16" Height="16" VerticalAlignment="Center" />
                                     <TextBlock Text="{DynamicResource PackDialog_SelectFolder}" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>

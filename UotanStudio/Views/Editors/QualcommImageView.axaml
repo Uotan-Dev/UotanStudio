@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:UotanStudio.ViewModels.Editors"
-             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:icons="https://irihi.tech/iconica/tdesign"
              x:Class="UotanStudio.Views.Editors.QualcommImageView"
              x:DataType="vm:QualcommImageViewModel">
     <DockPanel>
@@ -17,7 +17,7 @@
                     <Button Grid.Column="1" Click="OnSelectImage"
                             ToolTip.Tip="{DynamicResource Dock_Qualcomm_ChooseImage}"
                             VerticalAlignment="Center">
-                        <icons:MaterialIcon Kind="FolderOpenOutline" Width="18" Height="18" />
+                        <icons:FolderOpen Width="18" Height="18" />
                     </Button>
                 </Grid>
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
@@ -27,15 +27,15 @@
                              ToolTip.Tip="{DynamicResource Dock_Qualcomm_RootHint}" />
                     <Button Grid.Column="2" Click="OnSelectRoot"
                             ToolTip.Tip="{DynamicResource Dock_Qualcomm_ChooseRoot}">
-                        <icons:MaterialIcon Kind="FolderOpenOutline" Width="18" Height="18" />
+                        <icons:FolderOpen Width="18" Height="18" />
                     </Button>
                     <Button Grid.Column="3" Command="{Binding AnalyzeCommand}"
                             ToolTip.Tip="{DynamicResource Dock_Qualcomm_Analyze}">
-                        <icons:MaterialIcon Kind="Magnify" Width="18" Height="18" />
+                        <icons:Search Width="18" Height="18" />
                     </Button>
                     <Button Grid.Column="4" Command="{Binding CancelCommand}" IsEnabled="{Binding IsBusy}"
                             ToolTip.Tip="{DynamicResource Dock_Qualcomm_Cancel}">
-                        <icons:MaterialIcon Kind="Close" Width="18" Height="18" />
+                        <icons:Close Width="18" Height="18" />
                     </Button>
                 </Grid>
             </StackPanel>
@@ -52,7 +52,7 @@
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 <Button Grid.Column="1" Click="OnExport" IsEnabled="{Binding HasResults}"
                         ToolTip.Tip="{DynamicResource Dock_Qualcomm_Export}">
-                    <icons:MaterialIcon Kind="ExportVariant" Width="18" Height="18" />
+                    <icons:Export Width="18" Height="18" />
                 </Button>
             </Grid>
         </Border>

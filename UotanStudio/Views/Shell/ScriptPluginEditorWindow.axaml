@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:UotanStudio.Views.Controls"
-        xmlns:icons="using:Material.Icons.Avalonia"
+        xmlns:icons="https://irihi.tech/iconica/tdesign"
         x:Class="UotanStudio.Views.Shell.ScriptPluginEditorWindow"
         Width="900" Height="680" MinWidth="640" MinHeight="420"
         ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
@@ -11,19 +11,19 @@
         <Border Padding="10,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <icons:MaterialIcon Kind="ScriptTextPlayOutline" Width="18" Height="18" />
+                    <icons:PlayCircleStroke Width="18" Height="18" />
                     <TextBlock x:Name="PluginNameText" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <TextBlock x:Name="PluginVersionText" FontSize="11" Opacity="0.65" VerticalAlignment="Center" />
                 </StackPanel>
                 <Button x:Name="ExportScriptButton" Grid.Column="1" Height="32" Padding="12,0" Click="ExportScriptClick">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <icons:MaterialIcon Kind="FileExportOutline" Width="16" Height="16" />
+                        <icons:FileExport Width="16" Height="16" />
                         <TextBlock Text="{DynamicResource Plugin_ExportScript}" />
                     </StackPanel>
                 </Button>
                 <Button x:Name="SaveScriptButton" Grid.Column="2" Height="32" Padding="12,0" Click="SaveClick">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <icons:MaterialIcon Kind="ContentSaveOutline" Width="16" Height="16" />
+                        <icons:Save Width="16" Height="16" />
                         <TextBlock Text="{DynamicResource Plugin_SaveScript}" />
                     </StackPanel>
                 </Button>

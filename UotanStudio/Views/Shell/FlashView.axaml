@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:icons="using:Material.Icons.Avalonia"
+             xmlns:icons="https://irihi.tech/iconica/tdesign"
              xmlns:vm="using:UotanStudio.ViewModels.Shell"
              xmlns:ursa="using:Ursa.Controls"
              mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="820"
@@ -159,7 +159,7 @@
                                                 <Button Grid.Column="1" Padding="4,0" MinWidth="30"
                                                         Click="OnChoosePartitionImageClick"
                                                         ToolTip.Tip="{DynamicResource Flash_ChooseFile}">
-                                                    <icons:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" />
+                                                    <icons:FolderOpen Width="16" Height="16" />
                                                 </Button>
                                             </Grid>
                                         </DataTemplate>
@@ -187,7 +187,7 @@
                         <!-- Empty state overlays the grid so an unloaded package shows guidance instead of bare headers. -->
                         <StackPanel IsVisible="{Binding !HasVisiblePartitions}" IsHitTestVisible="False"
                                     HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6" MaxWidth="320">
-                            <icons:MaterialIcon Kind="FormatListBulleted" Width="28" Height="28"
+                            <icons:ViewList Width="28" Height="28"
                                                 HorizontalAlignment="Center" Opacity="0.5" />
                             <TextBlock Text="{DynamicResource Flash_NoPartitions}" HorizontalAlignment="Center" />
                             <TextBlock Text="{DynamicResource Flash_NoPartitionsHint}" HorizontalAlignment="Center"

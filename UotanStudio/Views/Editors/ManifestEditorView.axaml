@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:avalonia="https://irihi.tech/iconica/tdesign"
              xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
@@ -26,8 +26,7 @@
                 VerticalContentAlignment="Center"
                 Click="OnToggleRightViewClick"
                 ToolTip.Tip="{DynamicResource Dock_Manifest_ToggleRightView}">
-          <avalonia:MaterialIcon x:Name="RightViewLayoutIcon"
-                                 Kind="ViewSplitVertical"
+          <controls:AppIcon x:Name="RightViewLayoutIcon" Kind="SplitVertical"
                                  Width="12" Height="12" />
         </Button>
       </Grid>
@@ -72,12 +71,11 @@
                     Background="Transparent"
                     Cursor="SizeWestEast"
                     ZIndex="1" />
-      <avalonia:MaterialIcon Grid.Column="1"
-                             Kind="DragVertical"
+      <avalonia:DragMove Grid.Column="1"
                              Width="7" Height="20"
                              HorizontalAlignment="Center"
                              VerticalAlignment="Center"
-                             Foreground="{DynamicResource EditorPaneSplitterGripBrush}"
+                             Stroke1="{DynamicResource EditorPaneSplitterGripBrush}"
                              IsHitTestVisible="False"
                              Opacity="0.8"
                              ZIndex="2" />
@@ -126,9 +124,8 @@
                       Background="Transparent"
                       Cursor="SizeNorthSouth"
                       ZIndex="1" />
-        <avalonia:MaterialIcon x:Name="RightPaneSplitterGrip"
+        <controls:AppIcon x:Name="RightPaneSplitterGrip" Kind="DragHandle"
                                Grid.Row="1"
-                               Kind="DragHorizontal"
                                Width="20" Height="7"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"

@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:UotanStudio.ViewModels.Workspace"
-             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:icons="https://irihi.tech/iconica/tdesign"
              x:Class="UotanStudio.Views.Workspace.AiAssistantView"
              x:DataType="vm:AiAssistantViewModel">
     <UserControl.Resources>
@@ -46,7 +46,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
                     <Button Classes="ai-tool" ToolTip.Tip="{DynamicResource AI_History}"
                             AutomationProperties.Name="{DynamicResource AI_History}">
-                        <icons:MaterialIcon Kind="History" Width="16" Height="16" />
+                        <icons:History Width="16" Height="16" />
                         <Button.Flyout>
                             <Flyout Placement="BottomEdgeAlignedRight">
                                 <StackPanel Width="240" Spacing="8">
@@ -65,15 +65,15 @@
                     </Button>
                     <Button Classes="ai-tool" Command="{Binding NewConversationCommand}"
                             ToolTip.Tip="{DynamicResource AI_NewConversation}" AutomationProperties.Name="{DynamicResource AI_NewConversation}">
-                        <icons:MaterialIcon Kind="ChatPlusOutline" Width="16" Height="16" />
+                        <icons:ChatAdd Width="16" Height="16" />
                     </Button>
                     <Button Classes="ai-tool" Command="{Binding ClearConversationCommand}"
                             ToolTip.Tip="{DynamicResource AI_ClearConversation}" AutomationProperties.Name="{DynamicResource AI_ClearConversation}">
-                        <icons:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
+                        <icons:Delete Width="16" Height="16" />
                     </Button>
                     <Button Classes="ai-tool" Command="{Binding OpenSettingsCommand}"
                             ToolTip.Tip="{DynamicResource Settings_AI}" AutomationProperties.Name="{DynamicResource Settings_AI}">
-                        <icons:MaterialIcon Kind="CogOutline" Width="16" Height="16" />
+                        <icons:Setting Width="16" Height="16" />
                     </Button>
                 </StackPanel>
             </Grid>
@@ -83,10 +83,10 @@
             <Grid MinHeight="112">
                 <StackPanel IsVisible="{Binding !SelectedConversation.Messages.Count}" Spacing="10" Margin="12,24"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <icons:MaterialIcon Kind="LightningBoltOutline" Width="36" Height="36"
-                                        Foreground="{DynamicResource AccentColor}" IsVisible="{Binding SelectedConversation.IsAgent}" />
-                    <icons:MaterialIcon Kind="ChatOutline" Width="36" Height="36"
-                                        Foreground="{DynamicResource AccentColor}" IsVisible="{Binding !SelectedConversation.IsAgent}" />
+                    <icons:Thunder Width="36" Height="36"
+                                        Stroke1="{DynamicResource AccentColor}" IsVisible="{Binding SelectedConversation.IsAgent}" />
+                    <icons:Chat Width="36" Height="36"
+                                        Stroke1="{DynamicResource AccentColor}" IsVisible="{Binding !SelectedConversation.IsAgent}" />
                     <TextBlock Text="{DynamicResource AI_Agent}" FontSize="22" FontWeight="SemiBold"
                                HorizontalAlignment="Center" IsVisible="{Binding SelectedConversation.IsAgent}" />
                     <TextBlock Text="{DynamicResource AI_Chat}" FontSize="22" FontWeight="SemiBold"
@@ -115,7 +115,7 @@
                             <DataTemplate x:DataType="vm:AiAttachment">
                                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Height="28"
                                       ToolTip.Tip="{Binding Path}">
-                                    <icons:MaterialIcon Kind="FileDocumentOutline" Width="14" Height="14" />
+                                    <icons:File Width="14" Height="14" />
                                     <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11"
                                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                     <Button Grid.Column="2" Classes="ai-tool"
@@ -123,7 +123,7 @@
                                             CommandParameter="{Binding}"
                                             ToolTip.Tip="{DynamicResource AI_RemoveFile}"
                                             AutomationProperties.Name="{DynamicResource AI_RemoveFile}">
-                                        <icons:MaterialIcon Kind="Close" Width="14" Height="14" />
+                                        <icons:Close Width="14" Height="14" />
                                     </Button>
                                 </Grid>
                             </DataTemplate>
@@ -156,7 +156,7 @@
                 <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
                     <Button Name="AddFilesButton" Classes="ai-tool" Click="OnAddFilesClick"
                             ToolTip.Tip="{DynamicResource AI_AddFiles}" AutomationProperties.Name="{DynamicResource AI_AddFiles}">
-                        <icons:MaterialIcon Kind="Paperclip" Width="16" Height="16" />
+                        <icons:Attach Width="16" Height="16" />
                     </Button>
                     <CheckBox Grid.Column="1" IsChecked="{Binding SelectedConversation.IncludeActiveDocument, Mode=TwoWay}"
                               FontSize="11" MinHeight="24" Padding="0"
@@ -166,7 +166,7 @@
                     </CheckBox>
                     <Button Grid.Column="2" Classes="ai-tool" Command="{Binding SendMessageCommand}"
                             ToolTip.Tip="{DynamicResource AI_Send}" AutomationProperties.Name="{DynamicResource AI_Send}">
-                        <icons:MaterialIcon Kind="SendOutline" Width="18" Height="18" />
+                        <icons:Send Width="18" Height="18" />
                     </Button>
                 </Grid>
                 <TextBlock Grid.Row="4" Text="{Binding SelectedConversation.AttachmentError}"

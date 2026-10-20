@@ -2,7 +2,7 @@
 			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-			 xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+			 xmlns:avalonia="https://irihi.tech/iconica/tdesign"
 			 xmlns:vm="using:UotanStudio.ViewModels.Shell"
 			 xmlns:workspaceviews="using:UotanStudio.Views.Workspace"
 			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -26,7 +26,7 @@
 			<!-- First entry of the bottom workspace bar: flash. -->
 			<ContentPage Name="FlashTab">
 				<ContentPage.Icon>
-					<avalonia:MaterialIcon Kind="Flash" Width="18" Margin="0 -10 0 0" />
+					<avalonia:Thunder Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
 					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Flash}" FontSize="13" FontWeight="SemiBold" />
@@ -34,7 +34,7 @@
 			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>
-					<avalonia:MaterialIcon Kind="MonitorDashboard" Width="18" Margin="0 -10 0 0" />
+					<avalonia:Dashboard1 Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
 					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Workspace}" FontSize="13" FontWeight="SemiBold" />
@@ -43,7 +43,7 @@
 			</ContentPage>
 			<ContentPage Name="DeliveryTab">
 				<ContentPage.Icon>
-					<avalonia:MaterialIcon Kind="PackageVariantClosed" Width="18" Margin="0 -10 0 0" />
+					<avalonia:Gift Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
 					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Delivery}" FontSize="13" FontWeight="SemiBold" />
@@ -51,7 +51,7 @@
 			</ContentPage>
 			<ContentPage Name="NodeEditorTab" DataContext="{Binding NodeEditorVM}">
 				<ContentPage.Icon>
-					<avalonia:MaterialIcon Kind="ScriptTextPlayOutline" Width="18" Margin="0 -10 0 0" />
+					<avalonia:PlayCircleStroke Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
 					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Node}" FontSize="13" FontWeight="SemiBold" />
@@ -59,7 +59,7 @@
 			</ContentPage>
 			<ContentPage Name="SettingsTab" DataContext="{Binding SettingsVM}">
 				<ContentPage.Icon>
-					<avalonia:MaterialIcon Kind="CogOutline" Width="18" Margin="0 -10 0 0" />
+					<avalonia:Setting Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
 					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Settings}" FontSize="13" FontWeight="SemiBold" />

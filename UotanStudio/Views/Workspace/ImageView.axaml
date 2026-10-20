@@ -5,7 +5,7 @@
              xmlns:viewmodels="using:UotanStudio.ViewModels.Workspace"
              xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:ursa="using:Ursa.Controls"
-             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:avalonia="https://irihi.tech/iconica/tdesign"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Views.Workspace.ImageView"
              x:DataType="viewmodels:ImageViewModel">
@@ -32,7 +32,7 @@
                             VerticalAlignment="Center"
                             Command="{Binding DeleteSelectedCommand}"
                             ToolTip.Tip="{DynamicResource ImageView_DeleteSelected}">
-                        <avalonia:MaterialIcon Kind="DeleteOutline" Width="14" Height="14" />
+                        <avalonia:Delete Width="14" Height="14" />
                     </Button>
 
                     <Border Grid.Column="1"
@@ -71,7 +71,7 @@
                             VerticalAlignment="Center"
                             Command="{Binding RefreshCommand}"
                             ToolTip.Tip="{DynamicResource ImageView_Refresh}">
-                        <avalonia:MaterialIcon Kind="Refresh" Width="14" Height="14" />
+                        <avalonia:Refresh Width="14" Height="14" />
                     </Button>
                 </Grid>
 
@@ -106,54 +106,54 @@
                                              Opening="OnImageMenuOpening">
                                     <MenuItem Classes="unpack-action" Header="{DynamicResource ImageView_ExtractSelected}" IsEnabled="{Binding !IsDirectory}" Click="OnExtractMenuClick">
                                         <MenuItem.Icon>
-                                            <avalonia:MaterialIcon Kind="PackageDown" Width="16" Height="16" />
+                                            <avalonia:FileDownload Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <MenuItem Classes="ext4-action" Header="{DynamicResource ImageView_Ext4Minimize}" Click="OnExt4MinimizeMenuClick">
                                         <MenuItem.Icon>
-                                            <avalonia:MaterialIcon Kind="ArrowCollapseVertical" Width="16" Height="16" />
+                                            <avalonia:ShrinkVertical Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <MenuItem Classes="ext4-action" Header="{DynamicResource ImageView_Ext4RepairMinimize}" Click="OnExt4RepairMinimizeMenuClick">
                                         <MenuItem.Icon>
-                                            <avalonia:MaterialIcon Kind="Wrench" Width="16" Height="16" />
+                                            <avalonia:Tools Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeImg}" Click="OnSynthesizeImgMenuClick">
                                         <MenuItem.Icon>
-                                            <avalonia:MaterialIcon Kind="ImagePlus" Width="16" Height="16" />
+                                            <avalonia:ImageAdd Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeBr}" Click="OnSynthesizeBrMenuClick">
                                         <MenuItem.Icon>
-                                            <avalonia:MaterialIcon Kind="ArchivePlus" Width="16" Height="16" />
+                                            <avalonia:FileZip Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <Separator Classes="pack-action" />
                                     <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeSuper}" Click="OnSynthesizeSuperMenuClick">
                                         <MenuItem.Icon>
-                                            <avalonia:MaterialIcon Kind="LayersPlus" Width="16" Height="16" />
+                                            <avalonia:Layers Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeDat}" Click="OnSynthesizeDatMenuClick">
                                         <MenuItem.Icon>
-                                            <avalonia:MaterialIcon Kind="FileMultipleOutline" Width="16" Height="16" />
+                                            <avalonia:FileCopy Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <MenuItem Classes="flash-action" Header="{DynamicResource ImageView_Flash}" Click="OnFlashSelectedMenuClick">
                                         <MenuItem.Icon>
-                                            <avalonia:MaterialIcon Kind="Flash" Width="16" Height="16" />
+                                            <avalonia:Thunder Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <MenuItem Classes="boot-action" Header="{DynamicResource ImageView_BootPatch}" IsEnabled="False" Click="OnBootPatchMenuClick">
                                         <MenuItem.Icon>
-                                            <avalonia:MaterialIcon Kind="Build" Width="16" Height="16" />
+                                            <avalonia:Tools Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <Separator />
                                     <MenuItem Header="{DynamicResource Menu_Delete}" Click="OnDeleteMenuClick">
                                         <MenuItem.Icon>
-                                            <avalonia:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
+                                            <avalonia:Delete Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                 </ContextMenu>
@@ -230,7 +230,7 @@
                                     Command="{Binding ExtractSelectedCommand}"
                                     ToolTip.Tip="{DynamicResource ImageView_ExtractHint}">
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:MaterialIcon Grid.Column="0" Kind="PackageDown" Width="14" Height="14" />
+                                    <avalonia:FileDownload Grid.Column="0" Width="14" Height="14" />
                                     <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_ExtractSelected}"
                                                FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />
@@ -241,7 +241,7 @@
                                     Command="{Binding FlashSelectedCommand}"
                                     ToolTip.Tip="{DynamicResource ImageView_FlashSelectedHint}">
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:MaterialIcon Grid.Column="0" Kind="Flash" Width="14" Height="14" />
+                                    <avalonia:Thunder Grid.Column="0" Width="14" Height="14" />
                                     <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_FlashSelected}"
                                                FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />
@@ -254,7 +254,7 @@
                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                     Command="{Binding SynthesizeImgCommand}">
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:MaterialIcon Grid.Column="0" Kind="ImagePlus" Width="14" Height="14" />
+                                    <avalonia:ImageAdd Grid.Column="0" Width="14" Height="14" />
                                     <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeImg}"
                                                FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />
@@ -265,7 +265,7 @@
                                         HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                         Command="{Binding SynthesizeBrCommand}">
                                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                        <avalonia:MaterialIcon Grid.Column="0" Kind="ArchivePlus" Width="14" Height="14" />
+                                        <avalonia:FileZip Grid.Column="0" Width="14" Height="14" />
                                         <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeBr}"
                                                    FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
                                                    VerticalAlignment="Center" MaxLines="2" />
@@ -276,7 +276,7 @@
                                         Command="{Binding SynthesizeDatCommand}"
                                         ToolTip.Tip="{DynamicResource ImageView_DatHint}">
                                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                        <avalonia:MaterialIcon Grid.Column="0" Kind="FileMultipleOutline" Width="14" Height="14" />
+                                        <avalonia:FileCopy Grid.Column="0" Width="14" Height="14" />
                                         <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeDat}"
                                                    FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
                                                    VerticalAlignment="Center" MaxLines="2" />
@@ -292,7 +292,7 @@
                                     Command="{Binding FlashSelectedCommand}"
                                     ToolTip.Tip="{DynamicResource ImageView_FlashSelectedHint}">
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:MaterialIcon Grid.Column="0" Kind="Flash" Width="14" Height="14" />
+                                    <avalonia:Thunder Grid.Column="0" Width="14" Height="14" />
                                     <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_FlashSelected}"
                                                FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />
@@ -302,7 +302,7 @@
                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                     Click="OnPackRomClick">
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:MaterialIcon Grid.Column="0" Kind="Archive" Width="14" Height="14" />
+                                    <avalonia:FileZip Grid.Column="0" Width="14" Height="14" />
                                     <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_PackRom}"
                                                FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />

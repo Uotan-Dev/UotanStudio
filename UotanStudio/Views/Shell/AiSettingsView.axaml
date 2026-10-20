@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:UotanStudio.ViewModels.Shell"
-             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:icons="https://irihi.tech/iconica/tdesign"
              x:Class="UotanStudio.Views.Shell.AiSettingsView"
              x:DataType="vm:AiSettingsViewModel">
     <StackPanel Spacing="8">
@@ -20,8 +20,8 @@
                           Width="32" Height="32" Padding="6"
                           ToolTip.Tip="{DynamicResource Settings_AIToggleKey}" AutomationProperties.Name="{DynamicResource Settings_AIToggleKey}">
                 <Grid>
-                    <icons:MaterialIcon Kind="EyeOutline" Width="16" Height="16" IsVisible="{Binding !IsApiKeyVisible}" />
-                    <icons:MaterialIcon Kind="EyeOffOutline" Width="16" Height="16" IsVisible="{Binding IsApiKeyVisible}" />
+                    <icons:Browse Width="16" Height="16" IsVisible="{Binding !IsApiKeyVisible}" />
+                    <icons:BrowseOff Width="16" Height="16" IsVisible="{Binding IsApiKeyVisible}" />
                 </Grid>
             </ToggleButton>
         </Grid>
@@ -30,7 +30,7 @@
             <TextBlock Text="{DynamicResource Settings_AIModels}" FontSize="13" VerticalAlignment="Center" />
             <Button Grid.Column="1" Command="{Binding FetchModelsCommand}" Padding="8,4">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                    <icons:MaterialIcon Kind="Refresh" Width="14" Height="14" />
+                    <icons:Refresh Width="14" Height="14" />
                     <TextBlock Text="{DynamicResource Settings_AIFetchModels}" FontSize="12" />
                 </StackPanel>
             </Button>

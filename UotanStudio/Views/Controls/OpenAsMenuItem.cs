@@ -2,11 +2,10 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using CommunityToolkit.Mvvm.Messaging;
-using Material.Icons;
-using Material.Icons.Avalonia;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Messages;
 using UotanStudio.Services.Workspace.Documents;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Views.Controls;
@@ -118,18 +117,18 @@ public sealed class OpenAsMenuItem : MenuItem
 
     /// <summary>
     /// Builds one child: the header binds a DynamicResource for live language switching, the icon
-    /// resolves from the descriptor's MaterialIconKind name, and the click sends an
+    /// resolves from the descriptor's semantic icon identifier, and the click sends an
     /// <see cref="OpenDocumentRequestMessage"/>.
-    /// <para>构建单个子项：标题绑定 DynamicResource 以支持语言热切换，图标按描述符的
-    /// MaterialIconKind 名称解析，点击发送 <see cref="OpenDocumentRequestMessage"/>。</para>
+    /// <para>构建单个子项：标题绑定 DynamicResource 以支持语言热切换，图标按描述符的语义图标标识解析，
+    /// 点击发送 <see cref="OpenDocumentRequestMessage"/>。</para>
     /// </summary>
-    private static MenuItem BuildItem(string localeKey, EditorOpenMode? mode, string? iconKind)
+    private static MenuItem BuildItem(string localeKey, EditorOpenMode? mode, AppIconKind? iconKind)
     {
         var item = new MenuItem { Tag = mode };
         item.Bind(HeaderProperty, new DynamicResourceExtension(localeKey));
-        if (!string.IsNullOrEmpty(iconKind) && Enum.TryParse<MaterialIconKind>(iconKind, out var kind))
+        if (iconKind is { } kind)
         {
-            item.Icon = new MaterialIcon { Kind = kind, Width = 16, Height = 16 };
+            item.Icon = new AppIcon { Kind = kind, Width = 16, Height = 16 };
         }
 
         item.Click += OnOpenWith;

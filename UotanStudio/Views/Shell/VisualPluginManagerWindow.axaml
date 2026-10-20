@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:UotanStudio.ViewModels.Shell"
         xmlns:plugins="using:UotanStudio.Services.VisualPlugins"
-        xmlns:icons="using:Material.Icons.Avalonia"
+        xmlns:icons="https://irihi.tech/iconica/tdesign"
         x:Class="UotanStudio.Views.Shell.VisualPluginManagerWindow"
         x:DataType="vm:VisualPluginManagerViewModel"
         Title="{DynamicResource Menu_VisualPluginManager}"
@@ -40,13 +40,13 @@
                            VerticalAlignment="Center" />
                 <Button Grid.Column="1" Classes="plugin-action" Click="ImportClick">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <icons:MaterialIcon Kind="FileImportOutline" Width="16" Height="16" />
+                        <icons:FileImport Width="16" Height="16" />
                         <TextBlock Text="{DynamicResource Plugin_Import}" />
                     </StackPanel>
                 </Button>
                 <Button Grid.Column="2" Width="32" Height="32" Padding="0" Click="RefreshClick"
                         ToolTip.Tip="{DynamicResource Plugin_Refresh}">
-                    <icons:MaterialIcon Kind="Refresh" Width="16" Height="16" />
+                    <icons:Refresh Width="16" Height="16" />
                 </Button>
             </Grid>
             <Grid Grid.Row="2">
@@ -127,7 +127,7 @@
                                 Click="EnableClick" IsVisible="{Binding SelectedPlugin.ShowEnableAction}" />
                         <Button Classes="plugin-action" Click="RemoveClick">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <icons:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
+                                <icons:Delete Width="16" Height="16" />
                                 <TextBlock Text="{DynamicResource Plugin_Remove}" />
                             </StackPanel>
                         </Button>

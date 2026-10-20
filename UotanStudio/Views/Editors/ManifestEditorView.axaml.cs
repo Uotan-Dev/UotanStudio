@@ -2,8 +2,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using CommunityToolkit.Mvvm.Messaging;
-using Material.Icons;
 using UotanStudio.Messages;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.Views.Controls;
 
@@ -89,10 +89,10 @@ public partial class ManifestEditorView : UserControl
         RightPaneSplitter.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         RightPaneSplitter.Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
 
-        RightPaneSplitterGrip.Kind = MaterialIconKind.DragHorizontal;
+        RightPaneSplitterGrip.Kind = AppIconKind.DragHandle;
         RightPaneSplitterGrip.Width = 20;
         RightPaneSplitterGrip.Height = 7;
-        RightViewLayoutIcon.Kind = MaterialIconKind.ViewSplitVertical;
+        RightViewLayoutIcon.Kind = AppIconKind.SplitVertical;
     }
 
     private void ApplySideBySideLayout()
@@ -113,10 +113,10 @@ public partial class ManifestEditorView : UserControl
         RightPaneSplitter.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
         RightPaneSplitter.Cursor = new Cursor(StandardCursorType.SizeWestEast);
 
-        RightPaneSplitterGrip.Kind = MaterialIconKind.DragVertical;
+        RightPaneSplitterGrip.Kind = AppIconKind.DragHandle;
         RightPaneSplitterGrip.Width = 7;
         RightPaneSplitterGrip.Height = 20;
-        RightViewLayoutIcon.Kind = MaterialIconKind.ViewSplitHorizontal;
+        RightViewLayoutIcon.Kind = AppIconKind.SplitHorizontal;
     }
 
     private static RowDefinitions CreateRows(double firstWeight, double secondWeight)

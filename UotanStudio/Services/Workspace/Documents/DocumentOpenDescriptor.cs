@@ -1,3 +1,4 @@
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
 
@@ -30,9 +31,9 @@ internal sealed record DocumentOpenDescriptor
     /// <value>The ascending menu position, or a negative value. <para>升序菜单位置，或为负值。</para></value>
     public int MenuOrder { get; init; } = -1;
 
-    /// <summary>The MaterialIconKind name for the menu icon; null when iconless. <para>菜单图标的 MaterialIconKind 名称；无图标时为 null。</para></summary>
-    /// <value>The icon name, or null when iconless. <para>图标名称，无图标时为 null。</para></value>
-    public string? IconKind { get; init; }
+    /// <summary>The semantic Iconica icon for the menu entry; null when the entry is iconless. <para>菜单项的 Iconica 语义图标；无图标时为 null。</para></summary>
+    /// <value>The icon identifier, or null when iconless. <para>图标标识，无图标时为 null。</para></value>
+    public AppIconKind? IconKind { get; init; }
 
     /// <summary>The automatic-mode routing probe (extension/magic), populated during format consolidation. <para>自动模式路由谓词（扩展名/魔数），在格式收敛阶段填充。</para></summary>
     /// <value>The predicate consulted in automatic mode, or null. <para>自动模式下询问的谓词，或为 null。</para></value>

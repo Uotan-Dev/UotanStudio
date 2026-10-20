@@ -1,5 +1,5 @@
-using Material.Icons;
 using UotanStudio.Services.Firmware;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Workspace;
 using Xunit;
 
@@ -61,7 +61,7 @@ public sealed class ExplorerConversionScopeTests
     [Fact]
     public void ExplorerIconCatalog_OpticalDiscImage_KeepsDiskGlyphWhileConversionStaysClosed()
     {
-        Assert.Equal(MaterialIconKind.Harddisk, new ExplorerNode("installer.iso", isDirectory: false).IconKind);
+        Assert.Equal(AppIconKind.HardDisk, new ExplorerNode("installer.iso", isDirectory: false).IconKind);
         Assert.False(new ExplorerNode("installer.iso", isDirectory: false).SupportsFormatConversion);
     }
 }

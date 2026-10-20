@@ -25,11 +25,11 @@
     <PackageVersion Include="Dock.Model" Version="12.1.0.12" />
     <PackageVersion Include="Dock.Model.Avalonia" Version="12.1.0.12" />
     <PackageVersion Include="Dock.Model.Mvvm" Version="12.1.0.12" />
+    <PackageVersion Include="Irihi.Iconica.TDesign" Version="1.0.0" />
     <PackageVersion Include="Irihi.Ursa" Version="2.2.0" />
     <PackageVersion Include="Irihi.Ursa.Themes.Semi" Version="2.2.0" />
     <!-- Irihi.Lingua i18n source generator: turns Locale/*.resx into strongly-typed reactive managers. -->
     <PackageVersion Include="Irihi.Lingua" Version="1.0.0" />
-    <PackageVersion Include="Material.Icons.Avalonia" Version="3.0.2" />
     <PackageVersion Include="Semi.Avalonia" Version="12.1.0.1" />
     <PackageVersion Include="Semi.Avalonia.AvaloniaEdit" Version="12.0.0" />
     <PackageVersion Include="Semi.Avalonia.DataGrid" Version="12.1.0.1" />

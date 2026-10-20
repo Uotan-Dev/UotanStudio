@@ -5,7 +5,7 @@
    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
    xmlns:views="using:UotanStudio.Views.Shell"
    xmlns:app="using:UotanStudio"
-   xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+   xmlns:avalonia="https://irihi.tech/iconica/tdesign"
    xmlns:devices="using:UotanStudio.ViewModels.Devices"
    xmlns:conv="using:UotanStudio.Converters"
    mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -52,30 +52,30 @@
 					</MenuItem.Header>
 					<MenuItem Header="{DynamicResource Menu_NewSolution}" Command="{Binding MenuVM.NewProjectCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="FolderPlus" Width="16" Height="16" />
+							<avalonia:FolderAdd Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Explorer_NewFolder}" Command="{Binding MenuVM.NewFolderCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="FolderPlusOutline" Width="16" Height="16" />
+							<avalonia:FolderAdd Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Explorer_NewFile}" Command="{Binding MenuVM.NewFileCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="FilePlusOutline" Width="16" Height="16" />
+							<avalonia:FileAdd Width="16" Height="16" />
 						</MenuItem.Icon>
 						</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_OpenProject}" Command="{Binding MenuVM.OpenProjectCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="FolderOpen" Width="16" Height="16" />
+							<avalonia:FolderOpen Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_OpenRecent}"
 							  IsEnabled="{Binding MenuVM.HasRecentProjects}"
 							  ItemsSource="{Binding MenuVM.RecentProjects}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="History" Width="16" Height="16" />
+							<avalonia:History Width="16" Height="16" />
 						</MenuItem.Icon>
 						<!-- 注意：不能用 ItemTemplate 嵌套 MenuItem（会容器套容器且外层无 Command 被禁用），
 						     须用 ItemContainerTheme 直接给生成的 MenuItem 容器设置 Header/Command。 -->
@@ -88,50 +88,50 @@
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_OpenFolder}" Command="{Binding MenuVM.OpenFolderCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" />
+							<avalonia:FolderOpen Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_OpenFile}" Command="{Binding MenuVM.OpenFileCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="FileDocumentOutline" Width="16" Height="16" />
+							<avalonia:File Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_Save}" Command="{Binding MenuVM.SaveCommand}" InputGesture="Ctrl+S">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="ContentSave" Width="16" Height="16" />
+							<avalonia:Save Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_SaveAs}" Command="{Binding MenuVM.SaveAsCommand}" InputGesture="Ctrl+Shift+S">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="ContentSaveEditOutline" Width="16" Height="16" />
+							<avalonia:FileEdit Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_NewNodeProject}" Command="{Binding MenuVM.CreateNodeProjectCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="SitemapOutline" Width="16" Height="16" />
+							<avalonia:Sitemap Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_ImportImage}" Command="{Binding MenuVM.ImportImageCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="FileImport" Width="16" Height="16" />
+							<avalonia:FileImport Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_ExportImage}" Command="{Binding MenuVM.ExportImageCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="FileExport" Width="16" Height="16" />
+							<avalonia:FileExport Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_Export}" Command="{Binding MenuVM.ExportCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="Export" Width="16" Height="16" />
+							<avalonia:Export Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_Exit}" Command="{Binding MenuVM.ExitCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="ExitToApp" Width="16" Height="16" />
+							<avalonia:Logout Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 				</MenuItem>
@@ -143,50 +143,50 @@
 					</MenuItem.Header>
 					<MenuItem Header="{DynamicResource FindReplace_Find}" Command="{Binding MenuVM.FindCommand}" InputGesture="Ctrl+F">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="Magnify" Width="16" Height="16" />
+							<avalonia:Search Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource FindReplace_Replace}" Command="{Binding MenuVM.ReplaceCommand}" InputGesture="Ctrl+H">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="FindReplace" Width="16" Height="16" />
+							<avalonia:Search Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_Undo}" Command="{Binding MenuVM.UndoCommand}" InputGesture="Ctrl+Z">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="Undo" Width="16" Height="16" />
+							<avalonia:Rollback Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_Redo}" Command="{Binding MenuVM.RedoCommand}" InputGesture="Ctrl+Y">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="Redo" Width="16" Height="16" />
+							<avalonia:Forward Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_Cut}" Command="{Binding MenuVM.CutCommand}" InputGesture="Ctrl+X">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="ContentCut" Width="16" Height="16" />
+							<avalonia:Cut Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_Copy}" Command="{Binding MenuVM.CopyCommand}" InputGesture="Ctrl+C">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="ContentCopy" Width="16" Height="16" />
+							<avalonia:Copy Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_Paste}" Command="{Binding MenuVM.PasteCommand}" InputGesture="Ctrl+V">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="ContentPaste" Width="16" Height="16" />
+							<avalonia:Paste Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_Delete}" Command="{Binding MenuVM.DeleteCommand}" InputGesture="Delete">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
+							<avalonia:Delete Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_SelectAll}" Command="{Binding MenuVM.SelectAllCommand}" InputGesture="Ctrl+A">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="SelectAll" Width="16" Height="16" />
+							<avalonia:CheckDouble Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 				</MenuItem>
@@ -198,53 +198,53 @@
 					</MenuItem.Header>
 					<MenuItem Header="{DynamicResource Menu_Workspace}" Command="{Binding MenuVM.GoToWorkspaceCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="MonitorDashboard" Width="16" Height="16" />
+							<avalonia:Dashboard1 Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_NodeEditor}" Command="{Binding MenuVM.GoToNodeEditorCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="ScriptTextPlayOutline" Width="16" Height="16" />
+							<avalonia:PlayCircleStroke Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_Settings}" Command="{Binding MenuVM.GoToSettingsCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="CogOutline" Width="16" Height="16" />
+							<avalonia:Setting Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_MultiColumnFileBrowser}" Command="{Binding MenuVM.GoToCompareCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="FileCompare" Width="16" Height="16" />
+							<avalonia:FileCopy Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_ToggleMinimap}" Command="{Binding MenuVM.ToggleMinimapCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="MapOutline" Width="16" Height="16" />
+							<avalonia:MapOutline Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_ZoomIn}" Command="{Binding MenuVM.ZoomInCommand}" InputGesture="Ctrl++">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="MagnifyPlusOutline" Width="16" Height="16" />
+							<avalonia:ZoomIn Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_ZoomOut}" Command="{Binding MenuVM.ZoomOutCommand}" InputGesture="Ctrl+-">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="MagnifyMinusOutline" Width="16" Height="16" />
+							<avalonia:ZoomOut Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_ResetZoom}" Command="{Binding MenuVM.ResetZoomCommand}" InputGesture="Ctrl+0">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="Restore" Width="16" Height="16" />
+							<avalonia:History Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_RunWorkflow}" Command="{Binding MenuVM.RunWorkflowCommand}" InputGesture="F5">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="Play" Width="16" Height="16" />
+							<avalonia:PlayCircleStroke Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_StopWorkflow}" Command="{Binding MenuVM.StopWorkflowCommand}" InputGesture="Shift+F5">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="Stop" Width="16" Height="16" />
+							<avalonia:StopCircleStroke Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 				</MenuItem>
@@ -300,43 +300,43 @@
 				 </MenuItem.Header>
 				 <MenuItem Header="{DynamicResource Menu_DeviceManager}" Command="{Binding MenuVM.OpenDeviceCommand}">
 					<MenuItem.Icon>
-						<avalonia:MaterialIcon Kind="Devices" Width="16" Height="16" />
+						<avalonia:Device Width="16" Height="16" />
 					</MenuItem.Icon>
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_KeyManager}" Command="{Binding MenuVM.OpenKeyManagerCommand}">
-					<MenuItem.Icon><avalonia:MaterialIcon Kind="KeyChain" Width="16" Height="16" /></MenuItem.Icon>
+					<MenuItem.Icon><avalonia:Key Width="16" Height="16" /></MenuItem.Icon>
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_VisualPluginManager}" Command="{Binding MenuVM.OpenVisualPluginManagerCommand}">
-					<MenuItem.Icon><avalonia:MaterialIcon Kind="PuzzleOutline" Width="16" Height="16" /></MenuItem.Icon>
+					<MenuItem.Icon><avalonia:App Width="16" Height="16" /></MenuItem.Icon>
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_ApkSigner}" Command="{Binding MenuVM.OpenApkSignerCommand}">
-					<MenuItem.Icon><avalonia:MaterialIcon Kind="FileCertificateOutline" Width="16" Height="16" /></MenuItem.Icon>
+					<MenuItem.Icon><avalonia:Certificate Width="16" Height="16" /></MenuItem.Icon>
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_FileChecksum}" Command="{Binding MenuVM.OpenFileChecksumCommand}">
-					<MenuItem.Icon><avalonia:MaterialIcon Kind="FileCheckOutline" Width="16" Height="16" /></MenuItem.Icon>
+					<MenuItem.Icon><avalonia:FileSafety Width="16" Height="16" /></MenuItem.Icon>
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_BootPatch}" Command="{Binding MenuVM.OpenBootPatchCommand}">
-					<MenuItem.Icon><avalonia:MaterialIcon Kind="Build" Width="16" Height="16" /></MenuItem.Icon>
+					<MenuItem.Icon><avalonia:Tools Width="16" Height="16" /></MenuItem.Icon>
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_LogWindow}" Command="{Binding MenuVM.OpenLogWindowCommand}">
 					<MenuItem.Icon>
-						<avalonia:MaterialIcon Kind="ScrollTextOutline" Width="16" Height="16" />
+						<avalonia:File Width="16" Height="16" />
 					</MenuItem.Icon>
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_UsbTreeWindow}" Command="{Binding MenuVM.OpenUsbTreeCommand}">
 					<MenuItem.Icon>
-						<avalonia:MaterialIcon Kind="FileTreeOutline" Width="16" Height="16" />
+						<avalonia:Sitemap Width="16" Height="16" />
 					</MenuItem.Icon>
 				 </MenuItem>
 				 <Separator />
 				 <MenuItem Header="{DynamicResource Menu_CompareFiles}" Command="{Binding MenuVM.CompareFilesCommand}">
 					<MenuItem.Icon>
-						<avalonia:MaterialIcon Kind="FileCompare" Width="16" Height="16" />
+						<avalonia:FileCopy Width="16" Height="16" />
 					</MenuItem.Icon>
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_CompareFolders}" Command="{Binding MenuVM.CompareFoldersCommand}">
 					<MenuItem.Icon>
-						<avalonia:MaterialIcon Kind="FolderMultipleOutline" Width="16" Height="16" />
+						<avalonia:Folder Width="16" Height="16" />
 					</MenuItem.Icon>
 				 </MenuItem>
 				</MenuItem>
@@ -348,18 +348,18 @@
 					</MenuItem.Header>
 					<MenuItem Header="{DynamicResource Menu_Documentation}" Command="{Binding MenuVM.DocumentationCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="FileDocumentOutline" Width="16" Height="16" />
+							<avalonia:File Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Menu_ReportIssue}" Command="{Binding MenuVM.ReportIssueCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="BugOutline" Width="16" Height="16" />
+							<avalonia:Bug Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_About}" Command="{Binding MenuVM.AboutCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="InformationOutline" Width="16" Height="16" />
+							<avalonia:InfoCircle Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 				</MenuItem>
@@ -381,8 +381,8 @@
 						  AutomationProperties.Name="{DynamicResource Device_Reboot}">
 					<MenuItem.Header>
 						<Grid ColumnDefinitions="16,12" ColumnSpacing="6">
-							<avalonia:MaterialIcon Kind="Power" Width="16" Height="16" />
-							<avalonia:MaterialIcon Grid.Column="1" Kind="ChevronDown" Width="12" Height="12" />
+							<avalonia:Poweroff Width="16" Height="16" />
+							<avalonia:ChevronDown Grid.Column="1" Width="12" Height="12" />
 						</Grid>
 					</MenuItem.Header>
 					<!-- 图标走菜单项标准的 Icon 槽、文字左对齐；ToggleType 仍为默认 None，
@@ -393,32 +393,32 @@
 					<MenuItem Header="{DynamicResource Device_RebootSystem}"
 							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="system">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="Restart" Width="16" Height="16" />
+							<avalonia:Rotate Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Device_RebootBootloader}"
 							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="bootloader">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="IntegratedCircuit" Width="16" Height="16" />
+							<avalonia:Cpu Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Device_RebootFastbootd}"
 							  IsEnabled="{Binding DeviceVM.CanRebootToFastbootd}"
 							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="fastbootd">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="ProgressDownload" Width="16" Height="16" />
+							<avalonia:CloudDownload Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Device_RebootRecovery}"
 							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="recovery">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="NetworkOutline" Width="16" Height="16" />
+							<avalonia:Internet Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 					<MenuItem Header="{DynamicResource Device_RebootEdl}"
 							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="edl">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="DownloadOutline" Width="16" Height="16" />
+							<avalonia:Download Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 				</MenuItem>
@@ -427,7 +427,7 @@
 						  AutomationProperties.Name="{DynamicResource Device_Select}">
 					<MenuItem.Header>
 						<Grid ColumnDefinitions="16,*,12" ColumnSpacing="8" MinWidth="132" MaxWidth="280">
-							<avalonia:MaterialIcon Kind="Cellphone" Width="16" Height="16" />
+							<avalonia:Mobile Width="16" Height="16" />
 							<!-- 未选中时显示占位文本，选中后显示设备名（两块互斥切换，保留本地化资源引用）。 -->
 							<TextBlock Grid.Column="1" Text="{DynamicResource Device_Select}"
 									   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -435,7 +435,7 @@
 							<TextBlock Grid.Column="1" Text="{Binding DeviceVM.SelectedDeviceName}"
 									   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
 									   IsVisible="{Binding DeviceVM.HasSelectedDevice}" />
-							<avalonia:MaterialIcon Grid.Column="2" Kind="ChevronDown" Width="12" Height="12" />
+							<avalonia:ChevronDown Grid.Column="2" Width="12" Height="12" />
 						</Grid>
 					</MenuItem.Header>
 					<!-- 空态：未检测到设备时显示禁用占位项。 -->
@@ -446,7 +446,7 @@
 					<MenuItem x:Name="DeviceSelectorManagerItem" Header="{DynamicResource Menu_DeviceManager}"
 							  Command="{Binding MenuVM.OpenDeviceCommand}">
 						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="Devices" Width="16" Height="16" />
+							<avalonia:Device Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
 				</MenuItem>

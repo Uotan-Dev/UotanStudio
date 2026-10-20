@@ -1,8 +1,9 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:avalonia="https://irihi.tech/iconica/tdesign"
              xmlns:edit="using:AvaloniaEdit"
              xmlns:vm="using:UotanStudio.ViewModels.Compare"
              xmlns:compareviews="using:UotanStudio.Views.Compare"
@@ -71,7 +72,7 @@
                 Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsLeftEmpty}" />
         <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*,Auto"
               Margin="{Binding Depth, Converter={x:Static compareviews:DepthToIndentConverter.Instance}}">
-          <avalonia:MaterialIcon Grid.Column="0" Kind="{Binding LeftIconKind}" Foreground="{Binding LeftIconBrush}"
+          <controls:AppIcon Grid.Column="0" Kind="{Binding LeftIconKind}" Foreground="{Binding LeftIconBrush}"
                                  Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center"
                                  Margin="0,0,4,0" IsVisible="{Binding ShowLeftIcon}" />
           <TextBlock Grid.Column="1" Text="{Binding LeftLine}" FontSize="11" Opacity="0.6" MinWidth="32"
@@ -131,7 +132,7 @@
                 Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsRightEmpty}" />
         <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*,Auto"
               Margin="{Binding Depth, Converter={x:Static compareviews:DepthToIndentConverter.Instance}}">
-          <avalonia:MaterialIcon Grid.Column="0" Kind="{Binding RightIconKind}" Foreground="{Binding RightIconBrush}"
+          <controls:AppIcon Grid.Column="0" Kind="{Binding RightIconKind}" Foreground="{Binding RightIconBrush}"
                                  Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center"
                                  Margin="0,0,4,0" IsVisible="{Binding ShowRightIcon}" />
           <TextBlock Grid.Column="1" Text="{Binding RightLine}" FontSize="11" Opacity="0.6" MinWidth="32"
@@ -167,27 +168,27 @@
               <Button Classes="Small" Command="{Binding ReloadCommand}"
                       ToolTip.Tip="{DynamicResource Compare_Refresh}"
                       AutomationProperties.Name="{DynamicResource Compare_Refresh}">
-                <avalonia:MaterialIcon Kind="Refresh" />
+                <avalonia:Refresh />
               </Button>
               <Button Classes="Small" Command="{Binding GoUpCommand}"
                       ToolTip.Tip="{DynamicResource Compare_GoUp}"
                       AutomationProperties.Name="{DynamicResource Compare_GoUp}">
-                <avalonia:MaterialIcon Kind="ArrowUpBold" />
+                <avalonia:ArrowUp />
               </Button>
               <Button Classes="Small" Command="{Binding ToggleHexViewCommand}" IsVisible="{Binding ShowHexToggle}"
                       ToolTip.Tip="{DynamicResource Compare_HexRaw}"
                       AutomationProperties.Name="{DynamicResource Compare_HexRaw}">
-                <avalonia:MaterialIcon Kind="CodeBraces" />
+                <avalonia:Brackets />
               </Button>
               <Button Classes="Small" Command="{Binding PrevDiffCommand}" IsVisible="{Binding ShowDiffNavigation}"
                       ToolTip.Tip="{DynamicResource Compare_PrevDiff}"
                       AutomationProperties.Name="{DynamicResource Compare_PrevDiff}">
-                <avalonia:MaterialIcon Kind="ArrowUp" />
+                <avalonia:ArrowUp />
               </Button>
               <Button Classes="Small" Command="{Binding NextDiffCommand}" IsVisible="{Binding ShowDiffNavigation}"
                       ToolTip.Tip="{DynamicResource Compare_NextDiff}"
                       AutomationProperties.Name="{DynamicResource Compare_NextDiff}">
-                <avalonia:MaterialIcon Kind="ArrowDown" />
+                <avalonia:ArrowDown />
               </Button>
             </StackPanel>
             <TextBox Grid.Column="1" Classes="Small" Height="22" MinHeight="0" FontSize="11" Padding="4,0"
@@ -199,19 +200,19 @@
               <Button Classes="Small" Command="{Binding ConfirmPathCommand}"
                       ToolTip.Tip="{DynamicResource Compare_LoadPath}"
                       AutomationProperties.Name="{DynamicResource Compare_LoadPath}">
-                <avalonia:MaterialIcon Kind="Check" />
+                <avalonia:Check />
               </Button>
               <!-- 文本对比编辑后出现：把本列内容写回文件（保留原编码与换行风格）。 -->
               <!-- Appears after text-comparison edits: writes this column's content back to the file. -->
               <Button Classes="Small" Command="{Binding SaveCommand}" IsVisible="{Binding IsDirty}"
                       ToolTip.Tip="{DynamicResource Compare_SaveFile}"
                       AutomationProperties.Name="{DynamicResource Compare_SaveFile}">
-                <avalonia:MaterialIcon Kind="ContentSave" />
+                <avalonia:Save />
               </Button>
               <Button Classes="Small" Command="{Binding CloseCommand}" IsVisible="{Binding CanClose}"
                       ToolTip.Tip="{DynamicResource Compare_CloseColumn}"
                       AutomationProperties.Name="{DynamicResource Compare_CloseColumn}">
-                <avalonia:MaterialIcon Kind="Close" />
+                <avalonia:Close />
               </Button>
             </StackPanel>
           </Grid>
@@ -293,7 +294,7 @@
           <!-- 列内空态提示 -->
           <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6" Margin="12"
                       IsVisible="{Binding ShowHint}">
-            <avalonia:MaterialIcon Kind="FolderSearchOutline" Width="24" Height="24" Opacity="0.3"
+            <avalonia:FolderSearch Width="24" Height="24" Opacity="0.3"
                                    HorizontalAlignment="Center" />
             <TextBlock Text="{DynamicResource Compare_ColumnHint}" IsVisible="{Binding IsBrowsing}"
                        FontSize="12" Opacity="0.6" TextAlignment="Center" TextWrapping="Wrap" />
@@ -328,7 +329,7 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.Small avalonia|MaterialIcon">
+    <Style Selector="Button.Small avalonia|TDesignIconBase">
       <Setter Property="Width" Value="12" />
       <Setter Property="Height" Value="12" />
     </Style>
@@ -347,7 +348,7 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.tree-expander avalonia|MaterialIcon">
+    <Style Selector="Button.tree-expander avalonia|TDesignIconBase">
       <Setter Property="Width" Value="12" />
       <Setter Property="Height" Value="12" />
       <Setter Property="Opacity" Value="0.7" />
@@ -384,12 +385,12 @@
             <Button Classes="Small" Command="{Binding CopyLeftToRightCommand}"
                     ToolTip.Tip="{DynamicResource Compare_CopyLeftToRight}"
                     AutomationProperties.Name="{DynamicResource Compare_CopyLeftToRight}">
-              <avalonia:MaterialIcon Kind="ArrowRight" />
+              <avalonia:ArrowRight />
             </Button>
             <Button Classes="Small" Command="{Binding CopyRightToLeftCommand}"
                     ToolTip.Tip="{DynamicResource Compare_CopyRightToLeft}"
                     AutomationProperties.Name="{DynamicResource Compare_CopyRightToLeft}">
-              <avalonia:MaterialIcon Kind="ArrowLeft" />
+              <avalonia:ArrowLeft />
             </Button>
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
@@ -403,14 +404,14 @@
                 </Panel>
               </ToolTip.Tip>
               <Panel>
-                <avalonia:MaterialIcon Kind="FileCompare" IsVisible="{Binding !IsComparing}" />
-                <avalonia:MaterialIcon Kind="CloseCircleOutline" IsVisible="{Binding IsComparing}" />
+                <avalonia:FileCopy IsVisible="{Binding !IsComparing}" />
+                <avalonia:CloseCircle IsVisible="{Binding IsComparing}" />
               </Panel>
             </Button>
             <Button Classes="Small" Click="OnAddFoldersClick"
                     ToolTip.Tip="{DynamicResource Compare_AddFolder}"
                     AutomationProperties.Name="{DynamicResource Compare_AddFolder}">
-              <avalonia:MaterialIcon Kind="FolderPlusOutline" />
+              <avalonia:FolderAdd />
             </Button>
           </StackPanel>
         </Grid>

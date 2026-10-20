@@ -3,7 +3,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:viewmodels="using:UotanStudio.ViewModels.Workspace"
-    xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:avalonia="https://irihi.tech/iconica/tdesign"
     mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
     x:Class="UotanStudio.Views.Workspace.PropertiesView"
     x:DataType="viewmodels:PropertiesViewModel">
@@ -11,7 +11,7 @@
     <!-- 无选择占位 -->
     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"
                 IsVisible="{Binding !HasSelection}">
-      <avalonia:MaterialIcon Kind="CursorDefaultClickOutline" Width="32" Height="32" Opacity="0.3"
+      <avalonia:Cursor Width="32" Height="32" Opacity="0.3"
                              HorizontalAlignment="Center" />
       <TextBlock Text="{DynamicResource Dock_Properties_NoSelection}"
                  FontSize="12" Opacity="0.5" HorizontalAlignment="Center" />

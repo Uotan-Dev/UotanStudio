@@ -1,14 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:avalonia="https://irihi.tech/iconica/tdesign"
              xmlns:plugins="using:UotanStudio.Services.VisualPlugins"
              xmlns:vm="using:UotanStudio.ViewModels.Workspace"
              x:Class="UotanStudio.Views.Workspace.PatchToolView"
              x:DataType="vm:PluginToolViewModel">
     <Grid Margin="12" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <avalonia:MaterialIcon Kind="PuzzleOutline" Width="20" Height="20"
-                                  Foreground="{DynamicResource AccentColor}" />
+            <avalonia:App Width="20" Height="20"
+                                  Stroke1="{DynamicResource AccentColor}" />
             <TextBlock Text="{DynamicResource Dock_Plugins}" FontWeight="SemiBold" VerticalAlignment="Center" />
         </StackPanel>
         <TextBlock Grid.Row="1" Text="{DynamicResource PluginTool_Description}" TextWrapping="Wrap"
@@ -35,7 +35,7 @@
                                         CommandParameter="{Binding}" Padding="8,4"
                                         ToolTip.Tip="{DynamicResource Plugin_UseTemplate}">
                                     <StackPanel Orientation="Horizontal" Spacing="4">
-                                        <avalonia:MaterialIcon Kind="Play" Width="16" Height="16" />
+                                        <avalonia:PlayCircleStroke Width="16" Height="16" />
                                         <TextBlock Text="{DynamicResource Plugin_UseTemplate}" />
                                     </StackPanel>
                                 </Button>

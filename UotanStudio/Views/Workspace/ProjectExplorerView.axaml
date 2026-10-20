@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:icons="https://irihi.tech/iconica/tdesign"
              xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Workspace"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -24,14 +24,14 @@
                         <controls:OpenAsMenuItem Header="{DynamicResource Explorer_OpenAsMenu}"
                                   IsVisible="{Binding !IsDirectory}">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="OpenInNew" />
+                                <icons:ArrowRightUp />
                             </MenuItem.Icon>
                         </controls:OpenAsMenuItem>
                         <!-- 可转换的镜像类文件：格式转换（确认后输出到子项目 output/，进度显示在镜像管理面板） -->
                         <MenuItem Header="{DynamicResource Explorer_ConvertFormat}"
                                   IsVisible="{Binding SupportsFormatConversion}">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="SwapHorizontal" />
+                                <icons:Swap />
                             </MenuItem.Icon>
                             <MenuItem Header="{DynamicResource Explorer_ConvertSparse}" Click="OnConvertSparse" />
                             <MenuItem Header="{DynamicResource Explorer_ConvertImgToDat}" Click="OnConvertImgToDat" />
@@ -41,31 +41,31 @@
                         <MenuItem Header="{DynamicResource Explorer_Checksum}"
                                   IsVisible="{Binding !IsDirectory}" Click="OnChecksum">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="FileCheckOutline" />
+                                <icons:FileSafety />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_Add}" IsVisible="{Binding IsDirectory}">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="PlusOutline" />
+                                <icons:Add />
                             </MenuItem.Icon>
                             <MenuItem Header="{DynamicResource Explorer_NewEmptySubProject}" Click="OnNewEmptySubProject">
                                 <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="FolderPlusOutline" />
+                                    <icons:FolderAdd />
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem Header="{DynamicResource Explorer_ImportExistingSubProject}" Click="OnImportExistingSubProject">
                                 <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="FolderArrowDownOutline" />
+                                    <icons:FolderMove />
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem Header="{DynamicResource Explorer_NewFile}" Click="OnNewFile">
                                 <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="FilePlusOutline" />
+                                    <icons:FileAdd />
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem Header="{DynamicResource Explorer_NewFolder}" Click="OnNewFolder">
                                 <MenuItem.Icon>
-                                    <icons:MaterialIcon Kind="FolderAddOutline" />
+                                    <icons:FolderAdd />
                                 </MenuItem.Icon>
                             </MenuItem>
                         </MenuItem>
@@ -74,12 +74,12 @@
                         <Separator IsVisible="{Binding !IsDirectory}" />
                         <MenuItem Header="{DynamicResource Explorer_Unpack}" IsVisible="{Binding !IsDirectory}" Click="OnUnpack">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="PackageDown" />
+                                <icons:FileDownload />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_SplitVolumes}" IsVisible="{Binding !IsDirectory}">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="FileMultipleOutline" />
+                                <icons:FileCopy />
                             </MenuItem.Icon>
                             <MenuItem Header="{DynamicResource Explorer_SplitImport}" Click="OnImportSplitVolumes" />
                             <MenuItem Header="{DynamicResource Explorer_SplitReconstruct}" Click="OnReconstructSplitDat" />
@@ -87,47 +87,47 @@
                         <Separator />
                         <MenuItem Header="{DynamicResource Menu_Cut}" Click="OnCut">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="ContentCut" />
+                                <icons:Cut />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Menu_Copy}" Click="OnCopy">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="ContentCopy" />
+                                <icons:Copy />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Menu_Paste}" Click="OnPaste">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="ContentPaste" />
+                                <icons:Paste />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Menu_Delete}" Click="OnDelete">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="DeleteOutline" />
+                                <icons:Delete />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_Rename}" Click="OnRename">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="RenameBoxOutline" />
+                                <icons:Rename />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_CopyFullPath}" Click="OnCopyFullPath">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="ClipboardTextOutline" />
+                                <icons:Paste />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_OpenInFileExplorer}" Click="OnOpenInFileExplorer">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="FolderOpenOutline" />
+                                <icons:FolderOpen />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_OpenInMultiColumnBrowser}" Click="OnOpenInCompareView">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="ViewColumnOutline" />
+                                <icons:ViewColumn />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_OpenInTerminal}" IsVisible="{Binding IsDirectory}" Click="OnOpenInTerminal">
                             <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="Console" />
+                                <icons:Terminal />
                             </MenuItem.Icon>
                         </MenuItem>
                     </ContextMenu></Template>
@@ -139,7 +139,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="6">
                     <!-- 图标按节点类型/扩展名区分，与 VS 解决方案管理器一致；占位节点不显示图标。 -->
                     <!-- Icons follow the node type/extension, mirroring the VS Solution Explorer; placeholders show none. -->
-                    <icons:MaterialIcon Kind="{Binding IconKind}" Width="16" Height="16"
+                    <controls:AppIcon Kind="{Binding IconKind}" Width="16" Height="16"
                                         Foreground="{Binding IconBrush}"
                                         VerticalAlignment="Center" IsVisible="{Binding !IsPlaceholder}" />
                     <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" />

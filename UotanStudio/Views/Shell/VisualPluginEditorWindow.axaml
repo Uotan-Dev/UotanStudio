@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:nodes="using:UotanStudio.Views.Nodes"
         xmlns:vm="using:UotanStudio.ViewModels.Nodes"
-        xmlns:icons="using:Material.Icons.Avalonia"
+        xmlns:icons="https://irihi.tech/iconica/tdesign"
         xmlns:project="clr-namespace:UotanStudio.Services.Projects;assembly=UotanStudio.Projects"
         x:Class="UotanStudio.Views.Shell.VisualPluginEditorWindow"
         x:DataType="vm:NodeEditorViewModel"
@@ -15,13 +15,13 @@
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <Button Content="{DynamicResource Node_EditInterface}" Click="EditInterfaceClick" IsEnabled="{Binding !IsExecuting}" />
-                    <icons:MaterialIcon Kind="PuzzleOutline" Width="18" Height="18" />
+                    <icons:App Width="18" Height="18" />
                     <TextBlock x:Name="PluginNameText" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <TextBlock x:Name="PluginVersionText" FontSize="11" Opacity="0.65" VerticalAlignment="Center" />
                 </StackPanel>
                 <Button x:Name="SavePluginButton" Grid.Column="1" Height="32" Padding="12,0" Click="SaveClick">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <icons:MaterialIcon Kind="ContentSaveOutline" Width="16" Height="16" />
+                        <icons:Save Width="16" Height="16" />
                         <TextBlock Text="{DynamicResource Plugin_SaveGraph}" />
                     </StackPanel>
                 </Button>

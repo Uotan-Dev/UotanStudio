@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:UotanStudio.Views.Shell"
         xmlns:chrome="using:Avalonia.Controls.Chrome"
-        xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        xmlns:icons="https://irihi.tech/iconica/tdesign"
         xmlns:ursa="using:Ursa.Controls"
         x:Class="UotanStudio.Views.Shell.NewProjectWindow"
         Title="{DynamicResource Menu_NewProject}"
@@ -120,7 +120,7 @@
                             ToolTip.Tip="{DynamicResource NewProject_BrowseLocation}"
                             AutomationProperties.Name="{DynamicResource NewProject_BrowseLocation}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <icons:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                            <icons:FolderOpen Width="16" Height="16" VerticalAlignment="Center" />
                             <TextBlock Text="{DynamicResource NewProject_SelectFolder}" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
@@ -140,7 +140,7 @@
                             <Button Name="ClearImagesButton" IsVisible="False" Classes="Small" Padding="4"
                                     Click="OnClearImagesClick" ToolTip.Tip="{DynamicResource NewProject_ClearImages}"
                                     AutomationProperties.Name="{DynamicResource NewProject_ClearImages}">
-                                <icons:MaterialIcon Kind="Close" Width="14" Height="14" />
+                                <icons:Close Width="14" Height="14" />
                             </Button>
                         </TextBox.InnerRightContent>
                     </TextBox>
@@ -148,7 +148,7 @@
                             ToolTip.Tip="{DynamicResource NewProject_BrowseImages}"
                             AutomationProperties.Name="{DynamicResource NewProject_BrowseImages}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <icons:MaterialIcon Kind="FileMultipleOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                            <icons:FileCopy Width="16" Height="16" VerticalAlignment="Center" />
                             <TextBlock Text="{DynamicResource NewProject_SelectImages}" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>

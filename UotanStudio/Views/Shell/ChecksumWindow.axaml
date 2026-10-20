@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:chrome="using:Avalonia.Controls.Chrome"
         xmlns:shell="using:UotanStudio.ViewModels.Shell"
-        xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        xmlns:icons="https://irihi.tech/iconica/tdesign"
         x:Class="UotanStudio.Views.Shell.ChecksumWindow"
         x:DataType="shell:ChecksumViewModel"
         Title="{DynamicResource Checksum_Title}"
@@ -108,9 +108,9 @@
         <TextBlock Text="{DynamicResource Checksum_PasteAndVerify}" VerticalAlignment="Center" />
         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
                     IsVisible="{Binding HasMatchResult}">
-          <icons:MaterialIcon Kind="CheckCircleOutline" Width="16" Height="16" Foreground="Green"
+          <icons:CheckCircle Width="16" Height="16" Stroke1="Green"
                               IsVisible="{Binding PasteIsCorrect}" />
-          <icons:MaterialIcon Kind="CloseCircleOutline" Width="16" Height="16" Foreground="Red"
+          <icons:CloseCircle Width="16" Height="16" Stroke1="Red"
                               IsVisible="{Binding !PasteIsCorrect}" />
           <TextBlock Text="{DynamicResource Checksum_Correct}" Foreground="Green"
                      VerticalAlignment="Center" IsVisible="{Binding PasteIsCorrect}" />

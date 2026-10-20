@@ -114,14 +114,14 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
-            Name = "Material.Icons",
-            Description = "Material 设计图标集合（工具栏/菜单图标）",
-            RepositoryUrl = "https://github.com/SkankyDev/Material.Icons",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/SkankyDev/Material.Icons/blob/main/LICENSE",
-            AuthorName = "SkankyDev",
-            AuthorGitHubUrl = "https://github.com/SkankyDev",
-            AuthorAvatarUrl = "https://github.com/SkankyDev.png"
+            Name = "Irihi.Iconica.TDesign",
+            Description = "Avalonia 原生图标控件库（TDesign 图标集，工具栏/菜单图标）",
+            RepositoryUrl = "https://github.com/irihitech/Irihi.Iconica",
+            LicenseName = "Apache-2.0",
+            LicenseUrl = "https://github.com/irihitech/Irihi.Iconica/blob/main/LICENSE",
+            AuthorName = "IRIHI Technology Co., Ltd.",
+            AuthorGitHubUrl = "https://github.com/irihitech",
+            AuthorAvatarUrl = "https://github.com/irihitech.png"
         },
         new OpenSourceProject
         {

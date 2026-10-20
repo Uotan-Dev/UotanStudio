@@ -1,6 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:icons="https://irihi.tech/iconica/tdesign"
              x:Class="UotanStudio.Views.Controls.FindReplacePanel"
              AutomationProperties.Name="{DynamicResource FindReplace_Title}">
   <UserControl.Styles>
@@ -20,7 +20,7 @@
       <Setter Property="Background" Value="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource AccentColor}" />
     </Style>
-    <Style Selector="Button.find-tool icons|MaterialIcon, ToggleButton.find-tool icons|MaterialIcon">
+    <Style Selector="Button.find-tool icons|TDesignIconBase, ToggleButton.find-tool icons|TDesignIconBase">
       <Setter Property="Width" Value="16" />
       <Setter Property="Height" Value="16" />
     </Style>
@@ -48,29 +48,29 @@
     <Grid ColumnDefinitions="22,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="2" RowSpacing="3">
       <ToggleButton Name="ReplaceToggle" Classes="find-tool" IsChecked="True">
         <Grid Width="16" Height="16">
-          <icons:MaterialIcon Kind="ChevronUp" IsVisible="{Binding #ReplaceToggle.IsChecked}" />
-          <icons:MaterialIcon Kind="ChevronDown" IsVisible="{Binding !#ReplaceToggle.IsChecked}" />
+          <icons:ChevronUp IsVisible="{Binding #ReplaceToggle.IsChecked}" />
+          <icons:ChevronDown IsVisible="{Binding !#ReplaceToggle.IsChecked}" />
         </Grid>
       </ToggleButton>
       <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="2">
         <TextBox Name="FindBox" Classes="find-input" PlaceholderText="{DynamicResource FindReplace_FindPlaceholder}"
                  AutomationProperties.Name="{DynamicResource FindReplace_Find}">
           <TextBox.InnerRightContent>
-            <icons:MaterialIcon Kind="Magnify" Width="14" Height="14" Margin="0,0,4,0" Opacity="0.65" />
+            <icons:Search Width="14" Height="14" Margin="0,0,4,0" Opacity="0.65" />
           </TextBox.InnerRightContent>
         </TextBox>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="1">
           <Button Name="PreviousButton" Click="OnPreviousClick" Classes="find-tool" IsEnabled="False" ToolTip.Tip="{DynamicResource FindReplace_Previous}"
                   AutomationProperties.Name="{DynamicResource FindReplace_Previous}">
-            <icons:MaterialIcon Kind="ArrowUp" />
+            <icons:ArrowUp />
           </Button>
           <Button Name="NextButton" Click="OnNextClick" Classes="find-tool" IsEnabled="False" ToolTip.Tip="{DynamicResource FindReplace_Next}"
                   AutomationProperties.Name="{DynamicResource FindReplace_Next}">
-            <icons:MaterialIcon Kind="ArrowDown" />
+            <icons:ArrowDown />
           </Button>
           <Button Name="CloseButton" Classes="find-tool" Click="OnCloseClick" ToolTip.Tip="{DynamicResource FindReplace_Close}"
                   AutomationProperties.Name="{DynamicResource FindReplace_Close}">
-            <icons:MaterialIcon Kind="Close" />
+            <icons:Close />
           </Button>
         </StackPanel>
       </Grid>
@@ -82,11 +82,11 @@
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="1" Margin="0,0,23,0">
           <Button Name="ReplaceButton" Click="OnReplaceClick" Classes="find-tool" IsEnabled="False" ToolTip.Tip="{DynamicResource FindReplace_Replace}"
                   AutomationProperties.Name="{DynamicResource FindReplace_Replace}">
-            <icons:MaterialIcon Kind="FindReplace" />
+            <icons:Search />
           </Button>
           <Button Name="ReplaceAllButton" Click="OnReplaceAllClick" Classes="find-tool" IsEnabled="False" ToolTip.Tip="{DynamicResource FindReplace_ReplaceAll}"
                   AutomationProperties.Name="{DynamicResource FindReplace_ReplaceAll}">
-            <icons:MaterialIcon Kind="TextBoxMultipleOutline" />
+            <icons:File />
           </Button>
         </StackPanel>
       </Grid>
@@ -95,19 +95,19 @@
         <StackPanel Orientation="Horizontal" Spacing="1">
           <ToggleButton Name="MatchCaseToggle" Classes="find-tool" ToolTip.Tip="{DynamicResource FindReplace_MatchCase}"
                         AutomationProperties.Name="{DynamicResource FindReplace_MatchCase}">
-            <icons:MaterialIcon Kind="FormatLetterCase" />
+            <icons:Text />
           </ToggleButton>
           <ToggleButton Name="WholeWordToggle" Classes="find-tool" ToolTip.Tip="{DynamicResource FindReplace_WholeWord}"
                         AutomationProperties.Name="{DynamicResource FindReplace_WholeWord}">
-            <icons:MaterialIcon Kind="FormatLetterMatches" />
+            <icons:TextformatUnderline />
           </ToggleButton>
           <ToggleButton Name="RegexToggle" Classes="find-tool" ToolTip.Tip="{DynamicResource FindReplace_Regex}"
                         AutomationProperties.Name="{DynamicResource FindReplace_Regex}">
-            <icons:MaterialIcon Kind="Regex" />
+            <icons:Code />
           </ToggleButton>
           <ToggleButton Name="PreserveCaseToggle" Classes="find-tool" ToolTip.Tip="{DynamicResource FindReplace_PreserveCase}"
                         AutomationProperties.Name="{DynamicResource FindReplace_PreserveCase}">
-            <icons:MaterialIcon Kind="FormatLetterCaseUpper" />
+            <icons:Text />
           </ToggleButton>
         </StackPanel>
         <ComboBox Name="ScopeBox" Grid.Column="1" Margin="4,0,0,0" HorizontalAlignment="Stretch"

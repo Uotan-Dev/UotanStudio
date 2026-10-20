@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:UotanStudio.ViewModels.Workspace"
              xmlns:edit="using:AvaloniaEdit"
-             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:icons="https://irihi.tech/iconica/tdesign"
              x:Class="UotanStudio.Views.Workspace.WorkspaceLogView"
              x:DataType="vm:WorkspaceLogViewModel">
   <Grid RowDefinitions="Auto,*">
@@ -44,18 +44,18 @@
                  VerticalContentAlignment="Center" Text="{Binding SearchText, Mode=TwoWay}"
                  PlaceholderText="{DynamicResource Log_Search}" AutomationProperties.Name="{DynamicResource Log_Search}">
           <TextBox.InnerLeftContent>
-            <icons:MaterialIcon Kind="Magnify" Width="12" Height="12" Margin="4,0,0,0" />
+            <icons:Search Width="12" Height="12" Margin="4,0,0,0" />
           </TextBox.InnerLeftContent>
           <TextBox.InnerRightContent>
             <Button Classes="Small" Width="18" Height="18" MinHeight="0" Padding="2"
                     Command="{Binding ClearSearchCommand}" ToolTip.Tip="{DynamicResource Log_ClearSearch}">
-              <icons:MaterialIcon Kind="Close" Width="10" Height="10" />
+              <icons:Close Width="10" Height="10" />
             </Button>
           </TextBox.InnerRightContent>
         </TextBox>
         <Button Name="ClearLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
                 VerticalAlignment="Center" Click="OnClearClick" ToolTip.Tip="{DynamicResource Log_Clear}">
-          <icons:MaterialIcon Kind="DeleteOutline" Width="12" Height="12" />
+          <icons:Delete Width="12" Height="12" />
         </Button>
       </WrapPanel>
     </Border>

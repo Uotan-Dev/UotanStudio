@@ -3,17 +3,17 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Dock.Avalonia.Controls;
-using Material.Icons;
-using Material.Icons.Avalonia;
 using UotanStudio.Services;
+using UotanStudio.ViewModels;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Workspace;
 
 /// <summary>
 /// Fills in icons for the Dock theme's own menus. The theme's context menus and header MenuFlyout are not
-/// ordinary controls and cannot be styled, so after the menu opens we match its resolved headers to Material icons.
+/// ordinary controls and cannot be styled, so after the menu opens we match its resolved headers to Iconica icons.
 /// <para>为 Dock 主题自带的菜单补齐图标。主题中的右键菜单与顶栏 MenuFlyout 不是普通控件、无法用样式覆盖，
-/// 因此菜单打开后按其已解析的标题匹配对应的 Material 图标。</para>
+/// 因此菜单打开后按其已解析的标题匹配对应的 Iconica 图标。</para>
 /// </summary>
 internal static class DockMenuIcons
 {
@@ -73,14 +73,14 @@ internal static class DockMenuIcons
 
             if (item.Icon is null && ResolveIcon(item.Header) is { } kind)
             {
-                item.Icon = new MaterialIcon { Kind = kind, Width = 16, Height = 16 };
+                item.Icon = new AppIcon { Kind = kind, Width = 16, Height = 16 };
             }
 
             ApplyItems(item.Items);
         }
     }
 
-    private static MaterialIconKind? ResolveIcon(object? header)
+    private static AppIconKind? ResolveIcon(object? header)
     {
         var text = (header?.ToString() ?? string.Empty).Trim();
         var accessKey = text.LastIndexOf(" (_", StringComparison.Ordinal);
@@ -97,67 +97,67 @@ internal static class DockMenuIcons
         var lang = LanguageService.Instance;
         if (text == lang.GetString("DockMenu_Float"))
         {
-            return MaterialIconKind.OpenInNew;
+            return AppIconKind.Float;
         }
 
         if (text == lang.GetString("DockMenu_FloatAll"))
         {
-            return MaterialIconKind.WindowRestore;
+            return AppIconKind.FloatAll;
         }
 
         if (text == lang.GetString("DockMenu_Show"))
         {
-            return MaterialIconKind.EyeOutline;
+            return AppIconKind.Show;
         }
 
         if (text == lang.GetString("DockMenu_Dock"))
         {
-            return MaterialIconKind.Pin;
+            return AppIconKind.Pin;
         }
 
         if (text == lang.GetString("DockMenu_AutoHide"))
         {
-            return MaterialIconKind.PinOff;
+            return AppIconKind.PinOff;
         }
 
         if (text == lang.GetString("DockMenu_DockAsDocument"))
         {
-            return MaterialIconKind.Tab;
+            return AppIconKind.Tab;
         }
 
         if (text == lang.GetString("DockMenu_CloseOthers"))
         {
-            return MaterialIconKind.CloseBoxMultipleOutline;
+            return AppIconKind.CloseOthers;
         }
 
         if (text == lang.GetString("DockMenu_CloseAll"))
         {
-            return MaterialIconKind.CloseBoxMultiple;
+            return AppIconKind.CloseAll;
         }
 
         if (text == lang.GetString("DockMenu_Close"))
         {
-            return MaterialIconKind.Close;
+            return AppIconKind.Close;
         }
 
         if (text == lang.GetString("DockMenu_TabLayout"))
         {
-            return MaterialIconKind.Tab;
+            return AppIconKind.Tab;
         }
 
         if (text == lang.GetString("DockMenu_TabsLeft"))
         {
-            return MaterialIconKind.ArrowLeft;
+            return AppIconKind.TabsLeft;
         }
 
         if (text == lang.GetString("DockMenu_TabsTop"))
         {
-            return MaterialIconKind.ArrowUp;
+            return AppIconKind.TabsTop;
         }
 
         if (text == lang.GetString("DockMenu_TabsRight"))
         {
-            return MaterialIconKind.ArrowRight;
+            return AppIconKind.TabsRight;
         }
 
         return null;

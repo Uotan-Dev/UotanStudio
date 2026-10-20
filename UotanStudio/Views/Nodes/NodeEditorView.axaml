@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:avalonia="https://irihi.tech/iconica/tdesign"
              xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:views="using:UotanStudio.Views.Nodes"
              xmlns:vm="using:UotanStudio.ViewModels.Nodes"
@@ -103,7 +103,7 @@
                                 <Button Width="22" Background="Transparent" Classes="flat"
                                         Tag="{Binding Name}" Click="OnNodeTabClosed"
                                         ToolTip.Tip="{DynamicResource Node_CloseTab}">
-                                    <avalonia:MaterialIcon Kind="Close" Width="12" Height="12" />
+                                    <avalonia:Close Width="12" Height="12" />
                                 </Button>
                             </StackPanel>
                         </Border>
@@ -128,45 +128,45 @@
                     <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2,8,2">
                         <Button Width="28" Height="28" Padding="0" Click="OnUndoClick" IsEnabled="{Binding CanUndo}"
                                 ToolTip.Tip="{DynamicResource Node_Undo}">
-                            <avalonia:MaterialIcon Kind="Undo" Width="16" Height="16" />
+                            <avalonia:Rollback Width="16" Height="16" />
                         </Button>
                         <Button Width="28" Height="28" Padding="0" Click="OnRedoClick" IsEnabled="{Binding CanRedo}"
                                 ToolTip.Tip="{DynamicResource Node_Redo}">
-                            <avalonia:MaterialIcon Kind="Redo" Width="16" Height="16" />
+                            <avalonia:Forward Width="16" Height="16" />
                         </Button>
                     </WrapPanel>
                     <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2,8,2">
                         <Button Width="28" Height="28" Padding="0" Click="OnImportTemplateClick"
                                 ToolTip.Tip="{DynamicResource Node_ImportTemplate}">
-                            <avalonia:MaterialIcon Kind="FileImportOutline" Width="16" Height="16" />
+                            <avalonia:FileImport Width="16" Height="16" />
                         </Button>
                         <Button Width="28" Height="28" Padding="0" Click="OnExportTemplateClick"
                                 ToolTip.Tip="{DynamicResource Node_ExportTemplate}">
-                            <avalonia:MaterialIcon Kind="FileExportOutline" Width="16" Height="16" />
+                            <avalonia:FileExport Width="16" Height="16" />
                         </Button>
                     </WrapPanel>
                     <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2,8,2">
                         <Button Width="28" Height="28" Padding="0" Click="OnEncapsulateClick"
                                 ToolTip.Tip="{DynamicResource Node_Encapsulate}" IsEnabled="{Binding HasSelectedNodes}">
-                            <avalonia:MaterialIcon Kind="Group" Width="16" Height="16" />
+                            <avalonia:Layers Width="16" Height="16" />
                         </Button>
                         <Button Width="28" Height="28" Padding="0" Click="OnExpandCompositeClick"
                                 ToolTip.Tip="{DynamicResource Node_ExpandComposite}">
-                            <avalonia:MaterialIcon Kind="Ungroup" Width="16" Height="16" />
+                            <avalonia:ViewModule Width="16" Height="16" />
                         </Button>
                         <Button x:Name="CollapseCompositeButton" Width="28" Height="28" Padding="0"
                                 Click="OnCollapseCompositeClick"
                                 IsVisible="{Binding CanCollapseExpandedComposite}"
                                 ToolTip.Tip="{DynamicResource Node_CollapseComposite}">
-                            <avalonia:MaterialIcon Kind="Undo" Width="16" Height="16" />
+                            <avalonia:Rollback Width="16" Height="16" />
                         </Button>
                         <Button Width="28" Height="28" Padding="0" Click="OnEditCompositeClick"
                                 ToolTip.Tip="{DynamicResource Plugin_EditGraph}">
-                            <avalonia:MaterialIcon Kind="PencilOutline" Width="16" Height="16" />
+                            <avalonia:Edit Width="16" Height="16" />
                         </Button>
                         <Button Width="28" Height="28" Padding="0" Click="OnExportCompositeClick"
                                 ToolTip.Tip="{DynamicResource Node_ExportComposite}">
-                            <avalonia:MaterialIcon Kind="PuzzleOutline" Width="16" Height="16" />
+                            <avalonia:App Width="16" Height="16" />
                         </Button>
                     </WrapPanel>
                 </WrapPanel>
@@ -178,7 +178,7 @@
                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,2">
                     <Button x:Name="ValidateGraphButton" Width="28" Height="28" Padding="0"
                             Command="{Binding ValidateGraphCommand}" ToolTip.Tip="{DynamicResource Node_ValidateGraph}">
-                        <avalonia:MaterialIcon Kind="CheckAll" Width="16" Height="16" />
+                        <avalonia:CheckDouble Width="16" Height="16" />
                     </Button>
                     <Button x:Name="PreviewPatchButton" Height="28" Padding="8,0"
                             Command="{Binding PreviewCommand}"
@@ -187,12 +187,12 @@
                     <Button Width="28" Height="28" Padding="0"
                             Command="{Binding RunCommand}"
                             ToolTip.Tip="{DynamicResource Node_Run}">
-                        <avalonia:MaterialIcon Kind="Play" Width="16" Height="16" Foreground="Green" />
+                        <avalonia:PlayCircleStroke Width="16" Height="16" Stroke1="Green" />
                     </Button>
                     <Button Width="28" Height="28" Padding="0"
                             Command="{Binding StopCommand}"
                             ToolTip.Tip="{DynamicResource Node_Stop}">
-                        <avalonia:MaterialIcon Kind="Stop" Width="16" Height="16" Foreground="Red" />
+                        <avalonia:StopCircleStroke Width="16" Height="16" Stroke1="Red" />
                     </Button>
                 </WrapPanel>
 
@@ -206,7 +206,7 @@
                         <Button Width="28" Height="28" Padding="0"
                                 Command="{Binding ZoomOutCommand}"
                                 ToolTip.Tip="{DynamicResource Node_ZoomOut}">
-                            <avalonia:MaterialIcon Kind="Minus" Width="16" Height="16" />
+                            <avalonia:Minus Width="16" Height="16" />
                         </Button>
                         <TextBlock Text="{Binding Zoom, StringFormat='{}{0:P0}'}"
                                    VerticalAlignment="Center" Width="50"
@@ -214,42 +214,42 @@
                         <Button Width="28" Height="28" Padding="0"
                                 Command="{Binding ZoomInCommand}"
                                 ToolTip.Tip="{DynamicResource Node_ZoomIn}">
-                            <avalonia:MaterialIcon Kind="Plus" Width="16" Height="16" />
+                            <avalonia:Add Width="16" Height="16" />
                         </Button>
                         <Button Width="28" Height="28" Padding="0"
                                 Command="{Binding ResetZoomCommand}"
                                 ToolTip.Tip="{DynamicResource Node_ResetZoom}">
-                            <avalonia:MaterialIcon Kind="Magnify" Width="16" Height="16" />
+                            <avalonia:Search Width="16" Height="16" />
                         </Button>
                         <Button x:Name="FitAllButton" Width="28" Height="28" Padding="0"
                                 Command="{Binding FitAllCommand}" ToolTip.Tip="{DynamicResource Node_FitAll}">
-                            <avalonia:MaterialIcon Kind="FitToScreenOutline" Width="16" Height="16" />
+                            <avalonia:Fullscreen Width="16" Height="16" />
                         </Button>
                         <Button Width="28" Height="28" Padding="0"
                                 Command="{Binding FocusSelectionCommand}"
                                 IsEnabled="{Binding HasSelectedNodes}" ToolTip.Tip="{DynamicResource Node_FocusSelection}">
-                            <avalonia:MaterialIcon Kind="Crosshairs" Width="16" Height="16" />
+                            <avalonia:Focus Width="16" Height="16" />
                         </Button>
                         <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
                                 Margin="4,0" />
                         <ToggleButton Width="28" Height="28" Padding="0"
                                       IsChecked="{Binding ShowMinimap}"
                                       ToolTip.Tip="{DynamicResource Node_ToggleMinimap}">
-                            <avalonia:MaterialIcon Kind="Map" Width="16" Height="16" />
+                            <avalonia:Map Width="16" Height="16" />
                         </ToggleButton>
                         <ToggleButton Width="28" Height="28" Padding="0" IsChecked="{Binding CompactNodes}"
                                       ToolTip.Tip="{DynamicResource Node_CompactNodes}">
-                            <avalonia:MaterialIcon Kind="ViewCompactOutline" Width="16" Height="16" />
+                            <avalonia:ViewModule Width="16" Height="16" />
                         </ToggleButton>
                     </WrapPanel>
                     <StackPanel x:Name="NarrowPaneControls" IsVisible="False" Orientation="Horizontal" Spacing="4" Margin="0,2">
                         <ToggleButton x:Name="ToolboxPaneToggle" Width="28" Height="28" Padding="0"
                                       Click="OnToolboxPaneToggle" ToolTip.Tip="{DynamicResource Node_Toolbox}">
-                            <avalonia:MaterialIcon Kind="ToolboxOutline" Width="16" Height="16" />
+                            <avalonia:Tools Width="16" Height="16" />
                         </ToggleButton>
                         <ToggleButton x:Name="PropertiesPaneToggle" Width="28" Height="28" Padding="0"
                                       Click="OnPropertiesPaneToggle" ToolTip.Tip="{DynamicResource Node_Properties}">
-                            <avalonia:MaterialIcon Kind="Tune" Width="16" Height="16" />
+                            <avalonia:Filter Width="16" Height="16" />
                         </ToggleButton>
                     </StackPanel>
                     <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2">
@@ -259,7 +259,7 @@
                                 IsEnabled="{Binding CanDeleteSelection}"
                                 ToolTip.Tip="{Binding DeleteSelectionText}">
                             <StackPanel Orientation="Horizontal" Spacing="4">
-                                <avalonia:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
+                                <avalonia:Delete Width="16" Height="16" />
                                 <TextBlock x:Name="DeleteSelectedLabel"
                                            Text="{Binding DeleteSelectionText}"
                                            MaxWidth="180" TextTrimming="CharacterEllipsis"
@@ -358,7 +358,7 @@
                                 <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnFocusFailureClick"
                                         ToolTip.Tip="{Binding ExecutionError}" Margin="0,1">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <avalonia:MaterialIcon Kind="AlertCircleOutline" Width="16" Height="16" />
+                                        <avalonia:ErrorCircle Width="16" Height="16" />
                                         <TextBlock Text="{Binding DisplayHeader}" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                 </Button>
@@ -435,7 +435,7 @@
                                 <SolidColorBrush Color="{DynamicResource CardBackground}" />
                             </Border.Background>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <avalonia:MaterialIcon Kind="PuzzleOutline" Width="16" Height="16" />
+                                <avalonia:App Width="16" Height="16" />
                                 <TextBlock Text="{DynamicResource Node_PluginWorkspace}" FontWeight="SemiBold"
                                            FontSize="12" VerticalAlignment="Center" />
                             </StackPanel>
@@ -464,7 +464,7 @@
                                     IsEnabled="{Binding !!SelectedVisualPlugin}"
                                     IsVisible="{Binding !!EditableVisualPlugins.Count}">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <avalonia:MaterialIcon Kind="GraphOutline" Width="15" Height="15" />
+                                    <avalonia:ChartLine Width="15" Height="15" />
                                     <TextBlock Text="{DynamicResource Node_OpenPluginEditor}" />
                                 </StackPanel>
                             </Button>
@@ -674,7 +674,7 @@
                                                     IsVisible="{Binding CanBrowsePath}"
                                                     Click="OnBrowsePathClick"
                                                     Tag="{Binding}" ToolTip.Tip="{DynamicResource Node_BrowsePath}">
-                                                <avalonia:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" />
+                                                <avalonia:FolderOpen Width="16" Height="16" />
                                             </Button>
                                             <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SourceDescription}"
                                                        IsVisible="{Binding HasConnectedSource}" TextWrapping="Wrap" FontSize="12" />

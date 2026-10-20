@@ -1,14 +1,14 @@
 using BenchmarkDotNet.Attributes;
-using Material.Icons;
-using Material.Icons.Avalonia;
 using UotanStudio.Composition;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Services;
 using UotanStudio.Benchmarks.Infrastructure;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
+using UotanStudio.Views.Controls;
 using UotanStudio.Views.Shell;
 using UotanStudio.Views.Workspace;
 
@@ -93,7 +93,7 @@ public class StartupBenchmarks
         var properties = new PropertiesViewModel();
         using var log = new WorkspaceLogViewModel();
         using var adbLog = new AdbLogViewModel();
-        var icon = new MaterialIcon { Kind = MaterialIconKind.FileDocumentOutline };
+        var icon = new AppIcon { Kind = AppIconKind.File };
         using var workspace = new WorkspaceViewModel();
         return Task.FromResult((workspace.Layout is null ? 0 : 1) + (properties is null ? 0 : 1) + (icon is null ? 0 : 1));
     });

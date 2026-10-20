@@ -1,5 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:UotanStudio.ViewModels.Shell" xmlns:keys="using:UotanStudio.Services.Keys" xmlns:icons="using:Material.Icons.Avalonia"
+        xmlns:vm="using:UotanStudio.ViewModels.Shell" xmlns:keys="using:UotanStudio.Services.Keys" xmlns:icons="https://irihi.tech/iconica/tdesign"
         xmlns:views="using:UotanStudio.Views.Shell"
         x:Class="UotanStudio.Views.Shell.KeyManagerWindow" x:DataType="vm:KeyManagerViewModel"
         Title="{DynamicResource Menu_KeyManager}" Width="880" Height="606" MinWidth="800" MinHeight="540"
@@ -80,7 +80,7 @@
                     <Button Grid.Column="1" Classes="key-action" Content="{DynamicResource Keys_New}" Command="{Binding NewKeyCommand}" Click="NewClick" />
                     <Button Grid.Column="2" Classes="key-action" Width="32" Padding="0" Command="{Binding RefreshCommand}"
                             ToolTip.Tip="{DynamicResource Keys_Refresh}" AutomationProperties.Name="{DynamicResource Keys_Refresh}">
-                        <icons:MaterialIcon Kind="Refresh" Width="16" Height="16" />
+                        <icons:Refresh Width="16" Height="16" />
                     </Button>
                 </Grid>
                 <ListBox Name="KeyList" Grid.Row="2" Classes="key-list" ItemsSource="{Binding Keys}" SelectedItem="{Binding SelectedKey}"
@@ -118,7 +118,7 @@
                                     <Button Grid.Column="1" Classes="Small" Width="28" Height="28" MinWidth="0" Padding="0"
                                             VerticalAlignment="Center" Click="DeleteClick" ToolTip.Tip="{DynamicResource Keys_Delete}"
                                             AutomationProperties.Name="{DynamicResource Keys_Delete}">
-                                        <icons:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
+                                        <icons:Delete Width="16" Height="16" />
                                     </Button>
                                 </Grid>
                             </Border>
@@ -174,7 +174,7 @@
                                 </StackPanel>
                             </Grid>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <icons:MaterialIcon Kind="InformationOutline" Width="16" Height="16" />
+                                <icons:InfoCircle Width="16" Height="16" />
                                 <TextBlock Classes="certificate-section" Text="{DynamicResource Keys_CertificateHolder}" />
                             </StackPanel>
                             <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="8">
@@ -204,7 +204,7 @@
                                 </StackPanel>
                             </Grid>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <icons:MaterialIcon Kind="Key" Width="16" Height="16" />
+                                <icons:Key Width="16" Height="16" />
                                 <TextBlock Classes="certificate-section" Text="{DynamicResource Keys_KeyConfiguration}" />
                             </StackPanel>
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
@@ -228,7 +228,7 @@
                                 </StackPanel>
                             </Grid>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <icons:MaterialIcon Kind="FileDocumentOutline" Width="16" Height="16" />
+                                <icons:File Width="16" Height="16" />
                                 <TextBlock Classes="certificate-section" Text="{DynamicResource Keys_OutputFormat}" />
                             </StackPanel>
                             <StackPanel Spacing="4">

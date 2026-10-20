@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:avalonia="https://irihi.tech/iconica/tdesign"
              xmlns:vm="using:UotanStudio.ViewModels.Devices"
              mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Devices.DeviceView"
@@ -103,7 +103,7 @@
                         <Button x:Name="DisconnectDeviceButton" Classes="DeviceIconButton"
                                 Command="{Binding DisconnectCommand}"
                                 ToolTip.Tip="{DynamicResource Device_Disconnect}">
-                            <avalonia:MaterialIcon Kind="LinkOff" Width="16" Height="16" Foreground="Red" />
+                            <avalonia:LinkUnlink Width="16" Height="16" Stroke1="Red" />
                         </Button>
                         <Border Classes="ToolbarDivider" />
                         <Button Classes="DeviceIconButton"
@@ -111,14 +111,14 @@
                                 CommandParameter="system"
                                 IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
                                 ToolTip.Tip="{DynamicResource Device_RebootSystem}">
-                            <avalonia:MaterialIcon Kind="Restart" Width="16" Height="16" />
+                            <avalonia:Rotate Width="16" Height="16" />
                         </Button>
                         <Button Classes="DeviceIconButton"
                                 Command="{Binding RebootCommand}"
                                 CommandParameter="bootloader"
                                 IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
                                 ToolTip.Tip="{DynamicResource Device_RebootBootloader}">
-                            <avalonia:MaterialIcon Kind="IntegratedCircuit" Width="16" Height="16" />
+                            <avalonia:Cpu Width="16" Height="16" />
                         </Button>
                         <!-- Fastbootd 是用户空间 fastboot：ADB 走 reboot fastboot，Fastboot 走 reboot-fastboot。 -->
                         <!-- Fastbootd is userspace fastboot: ADB uses reboot fastboot, Fastboot uses reboot-fastboot. -->
@@ -127,21 +127,21 @@
                                 CommandParameter="fastbootd"
                                 IsEnabled="{Binding CanRebootToFastbootd}"
                                 ToolTip.Tip="{DynamicResource Device_RebootFastbootd}">
-                            <avalonia:MaterialIcon Kind="ProgressDownload" Width="16" Height="16" />
+                            <avalonia:CloudDownload Width="16" Height="16" />
                         </Button>
                         <Button Classes="DeviceIconButton"
                                 Command="{Binding RebootCommand}"
                                 CommandParameter="recovery"
                                 IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
                                 ToolTip.Tip="{DynamicResource Device_RebootRecovery}">
-                            <avalonia:MaterialIcon Kind="NetworkOutline" Width="16" Height="16" />
+                            <avalonia:Internet Width="16" Height="16" />
                         </Button>
                         <Button Classes="DeviceIconButton"
                                 Command="{Binding RebootCommand}"
                                 CommandParameter="edl"
                                 IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
                                 ToolTip.Tip="{DynamicResource Device_RebootEdl}">
-                            <avalonia:MaterialIcon Kind="DownloadOutline" Width="16" Height="16" />
+                            <avalonia:Download Width="16" Height="16" />
                         </Button>
                         <Border Classes="ToolbarDivider" />
                         <!-- 快速固件操作：命令按选中设备协议启用（CanExecute）。 -->
@@ -149,12 +149,12 @@
                         <Button Classes="DeviceIconButton"
                                 Command="{Binding OpenAdbShellCommand}"
                                 ToolTip.Tip="{DynamicResource Device_OpenAdbShell}">
-                            <avalonia:MaterialIcon Kind="Terminal" Width="16" Height="16" />
+                            <avalonia:Terminal Width="16" Height="16" />
                         </Button>
                         <Button Classes="DeviceIconButton"
                                 Command="{Binding ScreenMirrorCommand}"
                                 ToolTip.Tip="{DynamicResource Device_ScreenMirror}">
-                            <avalonia:MaterialIcon Kind="Cast" Width="16" Height="16" />
+                            <avalonia:Cast Width="16" Height="16" />
                         </Button>
                         <Button Classes="DeviceActionButton" Content="HDC"
                                 IsVisible="{Binding SelectedDevice.IsHdc, FallbackValue=False}">
@@ -203,17 +203,17 @@
                                 <Button x:Name="ConnectRemoteButton" Grid.Column="2" Classes="DeviceIconButton"
                                         Command="{Binding ConnectRemoteCommand}"
                                         ToolTip.Tip="{DynamicResource Device_RemoteConnect}">
-                                    <avalonia:MaterialIcon Kind="LinkVariant" Width="16" Height="16" />
+                                    <avalonia:Link Width="16" Height="16" />
                                 </Button>
                                 <Button x:Name="QrPairingButton" Grid.Column="3" Classes="DeviceIconButton"
                                         Command="{Binding OpenQrPairingCommand}"
                                         ToolTip.Tip="{DynamicResource Device_QrPair}">
-                                    <avalonia:MaterialIcon Kind="QrcodeScan" Width="16" Height="16" />
+                                    <avalonia:Scan Width="16" Height="16" />
                                 </Button>
                                 <Button x:Name="CancelConnectionButton" Grid.Column="4" Classes="DeviceIconButton"
                                         Command="{Binding CancelConnectionCommand}"
                                         ToolTip.Tip="{DynamicResource Device_RemoteCancel}">
-                                    <avalonia:MaterialIcon Kind="Close" Width="16" Height="16" />
+                                    <avalonia:Close Width="16" Height="16" />
                                 </Button>
                             </Grid>
                             <TextBlock x:Name="RemoteAddressError" Text="{DynamicResource Device_RemoteInvalidAddress}"
@@ -240,7 +240,7 @@
                             Command="{Binding ForceRefreshCommand}"
                             IsEnabled="{Binding !IsRefreshing}"
                             ToolTip.Tip="{DynamicResource Device_Refresh}">
-                        <avalonia:MaterialIcon Kind="Refresh" Width="16" Height="16" />
+                        <avalonia:Refresh Width="16" Height="16" />
                     </Button>
                 </Grid>
 
@@ -249,7 +249,7 @@
                     <StackPanel IsVisible="{Binding HasNoDevices}"
                                 HorizontalAlignment="Center" VerticalAlignment="Center"
                                 Spacing="6">
-                        <avalonia:MaterialIcon Kind="Devices" Width="40" Height="40" Opacity="0.25"
+                        <avalonia:Device Width="40" Height="40" Opacity="0.25"
                                                HorizontalAlignment="Center" />
                         <TextBlock Text="{DynamicResource Device_NoDevices}"
                                    Opacity="0.7" HorizontalAlignment="Center"
@@ -342,7 +342,7 @@
                 <!-- 占位提示 -->
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6"
                             IsVisible="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNull}}">
-                    <avalonia:MaterialIcon Kind="Devices" Width="44" Height="44" Opacity="0.25"
+                    <avalonia:Device Width="44" Height="44" Opacity="0.25"
                                            HorizontalAlignment="Center" />
                     <TextBlock Text="{DynamicResource Device_DetailPlaceholder}"
                                Opacity="0.5" HorizontalAlignment="Center" />

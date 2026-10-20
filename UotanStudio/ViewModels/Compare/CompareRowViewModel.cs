@@ -1,7 +1,6 @@
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Material.Icons;
 using UotanStudio.Services.Compare;
 using UotanStudio.ViewModels.Workspace;
 
@@ -390,7 +389,7 @@ public sealed class CompareRowViewModel : ObservableObject
 
     /// <summary>The kind of the left glyph.<para>左侧图标的类型。</para></summary>
     /// <value>The tree-row icon, or a generic file icon when no glyph is rendered.<para>目录树行的图标；不渲染图标时回退为通用文件图标。</para></value>
-    public MaterialIconKind LeftIconKind => LeftIcon?.Kind ?? MaterialIconKind.FileOutline;
+    public AppIconKind LeftIconKind => LeftIcon?.Kind ?? AppIconKind.File;
 
     /// <summary>The colour of the left glyph.<para>左侧图标的颜色。</para></summary>
     /// <value>The brush paired with the left icon, or <c>null</c>.<para>左侧图标对应的画刷，或为 <c>null</c>。</para></value>
@@ -398,7 +397,7 @@ public sealed class CompareRowViewModel : ObservableObject
 
     /// <summary>The kind of the right glyph.<para>右侧图标的类型。</para></summary>
     /// <value>The tree-row icon, or a generic file icon when no glyph is rendered.<para>目录树行的图标；不渲染图标时回退为通用文件图标。</para></value>
-    public MaterialIconKind RightIconKind => RightIcon?.Kind ?? MaterialIconKind.FileOutline;
+    public AppIconKind RightIconKind => RightIcon?.Kind ?? AppIconKind.File;
 
     /// <summary>The colour of the right glyph.<para>右侧图标的颜色。</para></summary>
     /// <value>The brush paired with the right icon, or <c>null</c>.<para>右侧图标对应的画刷，或为 <c>null</c>。</para></value>

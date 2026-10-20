@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:UotanStudio.Views.Controls"
              xmlns:delivery="using:UotanStudio.ViewModels.Shell"
-             xmlns:icons="using:Material.Icons.Avalonia"
+             xmlns:icons="https://irihi.tech/iconica/tdesign"
              x:Class="UotanStudio.Views.Controls.DeliveryCompositionView">
     <UserControl.Styles>
         <Style Selector="Button#StartCompositionOutputButton">
@@ -85,7 +85,7 @@
                                                     <ColumnDefinition Width="Auto" SharedSizeGroup="ImageSize" />
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
-                                                <icons:MaterialIcon Kind="DragVertical" Width="12" Height="18" VerticalAlignment="Center"
+                                                <icons:DragMove Width="12" Height="18" VerticalAlignment="Center"
                                                                    Opacity="0.5" Cursor="SizeAll" />
                                                 <Border Grid.Column="1" Width="30" IsVisible="{Binding ShowSuperChoice}">
                                                     <CheckBox IsChecked="{Binding IncludeInSuper, Mode=TwoWay}" MinHeight="0" MinWidth="0" Padding="0"
@@ -106,7 +106,7 @@
                                                             IsVisible="{Binding IsZeroSize}"
                                                             Click="OnRemoveZeroPartitionClick" ToolTip.Tip="{DynamicResource Menu_Delete}"
                                                             AutomationProperties.Name="{DynamicResource Menu_Delete}">
-                                                        <icons:MaterialIcon Kind="Close" Width="14" Height="14" />
+                                                        <icons:Close Width="14" Height="14" />
                                                     </Button>
                                                 </Grid>
                                                 <TextBlock Grid.Column="4" Text="{Binding SourceDisplay}" IsVisible="{Binding !IsZeroSize}"

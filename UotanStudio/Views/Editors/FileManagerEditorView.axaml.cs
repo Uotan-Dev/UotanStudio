@@ -2,7 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
-using Material.Icons;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Editors;
 
 namespace UotanStudio.Views.Editors;
@@ -76,7 +76,7 @@ public partial class FileManagerEditorView : UserControl
         SplitterLine.Height = stacked ? 3 : double.NaN;
         SplitterLine.HorizontalAlignment = stacked ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
         SplitterLine.VerticalAlignment = stacked ? VerticalAlignment.Center : VerticalAlignment.Stretch;
-        SplitterGrip.Kind = stacked ? MaterialIconKind.DragHorizontal : MaterialIconKind.DragVertical;
+        SplitterGrip.Kind = AppIconKind.DragHandle;
         SplitterGrip.Width = stacked ? 20 : 7;
         SplitterGrip.Height = stacked ? 7 : 20;
         _stacked = stacked;

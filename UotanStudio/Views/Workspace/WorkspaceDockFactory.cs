@@ -4,13 +4,13 @@ using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
-using Material.Icons;
-using Material.Icons.Avalonia;
 using UotanStudio.Services;
 using UotanStudio.Services.Workspace;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Workspace;
 
@@ -92,7 +92,7 @@ public class WorkspaceDockFactory : Factory
                 Spacing = 8,
                 Children =
                 {
-                    new MaterialIcon { Kind = MaterialIconKind.FileDocumentOutline, Width = 48, Height = 48, Opacity = 0.4 },
+                    new AppIcon { Kind = AppIconKind.File, Width = 48, Height = 48, Opacity = 0.4 },
                     new TextBlock
                     {
                         Text = svc.GetString("Dock_NoDocumentOpen"),

@@ -2,6 +2,7 @@ using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Firmware.Executable.Elf;
+using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.Views.Controls;
@@ -24,7 +25,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(FileViewModel),
             LocaleKey = "Explorer_OpenAsText",
             MenuOrder = 5,
-            IconKind = "FileDocumentOutline",
+            IconKind = AppIconKind.File,
             Open = static (w, r) => r.Mode == EditorOpenMode.Auto
                 ? w.OpenDocumentAsync(r.Path!, EditorOpenMode.Auto)
                 : w.OpenTextAsync(r.Path!, r.Mode),
@@ -38,7 +39,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(ElfInfoViewModel),
             LocaleKey = "Explorer_OpenAsElf",
             MenuOrder = 1,
-            IconKind = "FileDocumentOutline",
+            IconKind = AppIconKind.File,
             Probe = static r => IsElfHeader(ProbeHeader(r)),
             Open = static (w, r) => w.OpenElfAsync(r.Path!),
             GetPath = vm => ((ElfInfoViewModel)vm).FilePath,
@@ -51,7 +52,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(QualcommImageViewModel),
             LocaleKey = "Explorer_OpenAsQualcomm",
             MenuOrder = 2,
-            IconKind = "Chip",
+            IconKind = AppIconKind.Chip,
             Open = static (w, r) => w.OpenQualcommAsync(r.Path!),
             GetPath = vm => ((QualcommImageViewModel)vm).FilePath,
             Cleanup = vm => ((QualcommImageViewModel)vm).Cleanup(),
@@ -63,7 +64,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(QcnEditorViewModel),
             LocaleKey = "Explorer_OpenAsQcn",
             MenuOrder = 3,
-            IconKind = "RadioTower",
+            IconKind = AppIconKind.RadioTower,
             Probe = static r => FileOpenMode.IsQcnExtension(Path.GetExtension(r.Path ?? string.Empty)),
             Open = static (w, r) => w.OpenQcnAsync(r.Path!),
             GetPath = vm => ((QcnEditorViewModel)vm).FilePath,
@@ -88,7 +89,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(LogEditorViewModel),
             LocaleKey = "Explorer_OpenAsLog",
             MenuOrder = 6,
-            IconKind = "TextBoxMultipleOutline",
+            IconKind = AppIconKind.TextLines,
             Probe = static r => IsLogExtension(Path.GetExtension(r.Path ?? string.Empty)),
             Open = static (w, r) => w.OpenLogAsync(r.Path!),
             GetPath = vm => ((LogEditorViewModel)vm).FilePath,
@@ -102,7 +103,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(HexEditorViewModel),
             LocaleKey = "Explorer_OpenAsHex",
             MenuOrder = 7,
-            IconKind = "CodeBraces",
+            IconKind = AppIconKind.CodeBraces,
             Probe = static r => FileOpenMode.IsKnownBinaryExtension(Path.GetExtension(r.Path ?? string.Empty)),
             Open = static (w, r) => w.OpenHexAsync(r.Path!),
             GetPath = vm => ((HexEditorViewModel)vm).FilePath,
@@ -115,7 +116,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(DtbEditorViewModel),
             LocaleKey = "Explorer_OpenAsDtb",
             MenuOrder = 8,
-            IconKind = "FileTreeOutline",
+            IconKind = AppIconKind.DeviceTree,
             Probe = static r =>
             {
                 var ext = Path.GetExtension(r.Path ?? string.Empty);
@@ -132,7 +133,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(DexEditorViewModel),
             LocaleKey = "Explorer_OpenAsDex",
             MenuOrder = 9,
-            IconKind = "FileCodeOutline",
+            IconKind = AppIconKind.FileCode,
             Probe = static r =>
             {
                 var ext = Path.GetExtension(r.Path ?? string.Empty);
@@ -150,7 +151,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(ManifestEditorViewModel),
             LocaleKey = "Explorer_OpenAsAxml",
             MenuOrder = 10,
-            IconKind = "FileXmlBox",
+            IconKind = AppIconKind.FileXml,
             Probe = static r => UotanStudio.Firmware.AndroidMeta.AXml.AXmlParser.IsAxml(ProbeHeader(r)),
             Open = static (w, r) => w.OpenManifestAsync(r.Path!),
             GetPath = vm => ((ManifestEditorViewModel)vm).FilePath,
@@ -163,7 +164,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(ArscEditorViewModel),
             LocaleKey = "Explorer_OpenAsArsc",
             MenuOrder = 11,
-            IconKind = "DatabaseOutline",
+            IconKind = AppIconKind.Database,
             Probe = static r => FileOpenMode.IsArscExtension(Path.GetExtension(r.Path ?? string.Empty)),
             Open = static (w, r) => w.OpenArscAsync(r.Path!),
             GetPath = vm => ((ArscEditorViewModel)vm).FilePath,
@@ -176,7 +177,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(ApkEditorViewModel),
             LocaleKey = "Explorer_OpenAsApk",
             MenuOrder = 12,
-            IconKind = "Android",
+            IconKind = AppIconKind.Android,
             Probe = static r => FileOpenMode.IsApkExtension(Path.GetExtension(r.Path ?? string.Empty)),
             Open = static (w, r) => w.OpenApkAsync(r.Path!),
             GetPath = vm => ((ApkEditorViewModel)vm).FilePath,
@@ -188,7 +189,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(FirmwareInfoViewModel),
             LocaleKey = "Explorer_OpenAsFirmware",
             MenuOrder = 13,
-            IconKind = "PackageOutline",
+            IconKind = AppIconKind.Package,
             Probe = static r =>
             {
                 var ext = Path.GetExtension(r.Path ?? string.Empty);
@@ -205,7 +206,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(FileManagerEditorViewModel),
             LocaleKey = "Explorer_OpenAsFileSystem",
             MenuOrder = 14,
-            IconKind = "FolderSearchOutline",
+            IconKind = AppIconKind.FolderSearch,
             Probe = static r =>
             {
                 var ext = Path.GetExtension(r.Path ?? string.Empty);
