@@ -27,7 +27,9 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
     public override UsbApiCapabilities GetCapabilities()
     {
         var isHarmonyOS = IsHarmonyOS.Value;
-        var notes = "Native transport is synchronous; async access is currently adapter-based and hot-plug monitoring is polling-based.";
+        var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        var isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+        var notes = "WinUSB overlapped I/O (Windows) and USBDEVFS URBs (Linux) implement bulk and interrupt async I/O natively; macOS IOUSBHost/IOKit calls are synchronous. Hot-plug monitoring is event-driven on Windows (WM_DEVICECHANGE) and Linux (uevent netlink), and polling-based on macOS.";
 
         if (isHarmonyOS)
         {
@@ -43,8 +45,8 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
             SupportsDeviceSessions = true,
             SupportsControlTransfers = true,
             SupportsInterfaceConfigSwitching = true,
-            SupportsNativeAsyncIo = false,
-            SupportsNativeHotPlugMonitoring = false,
+            SupportsNativeAsyncIo = isWindows || isLinux,
+            SupportsNativeHotPlugMonitoring = isWindows || isLinux,
             RequiresExternalRuntime = false,
             ResetReenumeratesDevice = true,
             Notes = notes,

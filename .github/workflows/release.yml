@@ -103,9 +103,14 @@ jobs:
         run: |
           $stage = Join-Path $env:RUNNER_TEMP "pkg"
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          $exclude = @('*.pdb', '*.dbg', '*.xml', '*LICENSE*', 'COPYING')
+          $exclude = @('*.pdb', '*.dbg', '*.xml', 'COPYING')
+          $keep = @('libusb-LICENSE.txt')
           Get-ChildItem "$env:RUNNER_TEMP/publish" -Recurse -File |
-            Where-Object { $name = $_.Name; $p = $_.FullName; -not (($exclude | Where-Object { $name -like $_ }) -or $p -like "*.dSYM*") } |
+            Where-Object {
+              $name = $_.Name; $p = $_.FullName
+              if ($keep -contains $name) { return $true }
+              -not (($exclude | Where-Object { $name -like $_ }) -or ($name -like '*LICENSE*') -or $p -like "*.dSYM*")
+            } |
             ForEach-Object {
               $rel = $_.FullName.Substring("$env:RUNNER_TEMP/publish".Length).TrimStart('\','/')
               $dst = Join-Path $stage $rel
@@ -119,7 +124,8 @@ jobs:
         shell: bash
         run: |
           cd "$RUNNER_TEMP/publish"
-          find . -type f \( -name "*.pdb" -o -name "*.dbg" -o -name "*.xml" -o -name "*LICENSE*" -o -name "COPYING" \) -delete
+          find . -type f \( -name "*.pdb" -o -name "*.dbg" -o -name "*.xml" -o -name "COPYING" \) -delete
+          find . -type f -name "*LICENSE*" ! -name "libusb-LICENSE.txt" -delete
           rm -rf *.dSYM
           chmod +x UotanStudio.Desktop 2>/dev/null || true
           find . -type d -empty -delete

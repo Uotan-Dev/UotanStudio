@@ -40,9 +40,10 @@ internal sealed class LibUsbTopologyProvider : IUsbTopologyProvider
     /// <inheritdoc />
     /// <remarks>
     /// Availability is the LibUsbDotNet runtime probe of <see cref="LibUsbFinder.IsRuntimeAvailable"/>:
-    /// the native library must be present and <c>libusb_init</c> must succeed.
+    /// the native library must be next to the application or registered explicitly, and
+    /// <c>libusb_init</c> must succeed.
     /// <para>可用性即 <see cref="LibUsbFinder.IsRuntimeAvailable"/> 的 LibUsbDotNet 运行时探测：原生库必须
-    /// 存在且 <c>libusb_init</c> 必须成功。</para>
+    /// 位于程序目录或已显式注册，且 <c>libusb_init</c> 必须成功。</para>
     /// </remarks>
     public bool IsAvailable => LibUsbFinder.IsRuntimeAvailable(out _);
 

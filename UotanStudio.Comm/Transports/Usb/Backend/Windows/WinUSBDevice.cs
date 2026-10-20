@@ -203,12 +203,12 @@ internal partial class WinUSBDevice : UsbDevice
 
         if (!WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _readBulkID, AUTO_CLEAR_STALL, 1, ref bTrue))
         {
-            UsbTrace.Log($"WinUSB: AUTO_CLEAR_STALL policy on bulk IN pipe 0x{_readBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
+            UsbTrace.LogFormatted($"WinUSB: AUTO_CLEAR_STALL policy on bulk IN pipe 0x{_readBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
         }
 
         if (!WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _writeBulkID, AUTO_CLEAR_STALL, 1, ref bTrue))
         {
-            UsbTrace.Log($"WinUSB: AUTO_CLEAR_STALL policy on bulk OUT pipe 0x{_writeBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
+            UsbTrace.LogFormatted($"WinUSB: AUTO_CLEAR_STALL policy on bulk OUT pipe 0x{_writeBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
         }
 
         SetReadPipeTimeout(SessionOptions?.ReadPipeTimeoutMs ?? DefaultTimeoutMs);
@@ -217,12 +217,12 @@ internal partial class WinUSBDevice : UsbDevice
         var readRawIo = RawIoEnabled ? bTrue : bFalse;
         if (!WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _readBulkID, RAW_IO, 1, ref readRawIo))
         {
-            UsbTrace.Log($"WinUSB: RAW_IO policy on bulk IN pipe 0x{_readBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
+            UsbTrace.LogFormatted($"WinUSB: RAW_IO policy on bulk IN pipe 0x{_readBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
         }
 
         if (!WinUsb_SetPipePolicy(_winUsbHandle.DangerousGetHandle(), _writeBulkID, SHORT_PACKET_TERMINATE, 1, ref bFalse))
         {
-            UsbTrace.Log($"WinUSB: SHORT_PACKET_TERMINATE policy on bulk OUT pipe 0x{_writeBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
+            UsbTrace.LogFormatted($"WinUSB: SHORT_PACKET_TERMINATE policy on bulk OUT pipe 0x{_writeBulkID:X2} failed err={Marshal.GetLastWin32Error()}.");
         }
 
         return 0;
@@ -323,7 +323,7 @@ internal partial class WinUSBDevice : UsbDevice
             var timeout = (uint)effective;
             if (!WinUsb_SetPipePolicy(usb, pipeId, PIPE_TRANSFER_TIMEOUT, 4, ref timeout))
             {
-                UsbTrace.Log($"WinUSB: PIPE_TRANSFER_TIMEOUT on pipe 0x{pipeId:X2} ({effective} ms) failed err={Marshal.GetLastWin32Error()}.");
+                UsbTrace.LogFormatted($"WinUSB: PIPE_TRANSFER_TIMEOUT on pipe 0x{pipeId:X2} ({effective} ms) failed err={Marshal.GetLastWin32Error()}.");
             }
 
             Volatile.Write(ref cache, effective);

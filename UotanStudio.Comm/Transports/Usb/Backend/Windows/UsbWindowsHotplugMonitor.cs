@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -15,6 +16,11 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 /// Falls back to <see cref="UsbDeviceMonitor"/> polling at the caller when the hidden window
 /// cannot be created (e.g. headless/restricted sessions).
 /// <para>无法创建隐藏窗口（例如受限会话）时，由调用方回退到 <see cref="UsbDeviceMonitor"/> 轮询。</para>
+/// The constructor waits a bounded time for the window and the device-notification registrations
+/// to complete and throws when that startup fails, so the failure surfaces synchronously instead
+/// of only through the error callback.
+/// <para>构造函数在有界时间内等待窗口和设备通知注册完成；启动失败时抛出异常，使失败同步暴露，
+/// 而不只是经错误回调报告。</para>
 /// </summary>
 internal sealed class UsbWindowsHotplugMonitor : IDisposable
 {
@@ -24,9 +30,14 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     private readonly Lock _gate = new();
     private readonly Win32API.WndProcDelegate _wndProc;
     private readonly Thread? _thread;
+    private readonly ManualResetEventSlim _ready = new(initialState: false);
+    private Exception? _startupError;
     private IntPtr _hwnd;
     private Dictionary<string, UsbDeviceInfo> _lastSnapshot = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
+    private int _polling, _pending;
+
+    private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(2);
 
     private static readonly Guid[] InterfaceGuids =
     [
@@ -54,6 +65,21 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
             Name = "UotanStudio.Comm Windows USB hotplug"
         };
         _thread.Start();
+
+        if (!_ready.Wait(StartupTimeout))
+        {
+            Dispose();
+            throw new TimeoutException(
+                $"The Windows USB hotplug message window did not become ready within {StartupTimeout.TotalSeconds:0.#} s.");
+        }
+
+        if (Volatile.Read(ref _startupError) is { } startupError)
+        {
+            Dispose();
+            throw new InvalidOperationException(
+                "The Windows USB hotplug message window could not be created; falling back to polling.",
+                startupError);
+        }
     }
 
     private void MessagePump()
@@ -67,6 +93,7 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
             HInstance = Win32API.GetModuleHandleW(null)
         };
 
+        var readySignalled = false;
         try
         {
             if (Win32API.RegisterClassW(ref wc) == 0 && Marshal.GetLastWin32Error() != 1410)
@@ -74,10 +101,22 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
                 throw new InvalidOperationException($"RegisterClassW failed: {Marshal.GetLastWin32Error()}");
             }
 
-            _hwnd = Win32API.CreateWindowExW(0, className, string.Empty, 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, wc.HInstance, IntPtr.Zero);
-            if (_hwnd == IntPtr.Zero)
+            var hwnd = Win32API.CreateWindowExW(0, className, string.Empty, 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, wc.HInstance, IntPtr.Zero);
+            if (hwnd == IntPtr.Zero)
             {
                 throw new InvalidOperationException($"CreateWindowExW failed: {Marshal.GetLastWin32Error()}");
+            }
+
+            bool disposed;
+            lock (_gate)
+            {
+                _hwnd = hwnd;
+                disposed = _disposed;
+            }
+
+            if (disposed)
+            {
+                _ = Win32API.PostMessageW(hwnd, Win32API.WM_QUIT, IntPtr.Zero, IntPtr.Zero);
             }
 
             foreach (var guid in InterfaceGuids)
@@ -92,13 +131,19 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
                 try
                 {
                     Marshal.StructureToPtr(filter, filterPtr, false);
-                    _ = Win32API.RegisterDeviceNotificationW(_hwnd, filterPtr, Win32API.DEVICE_NOTIFY_WINDOW_HANDLE);
+                    if (Win32API.RegisterDeviceNotificationW(hwnd, filterPtr, Win32API.DEVICE_NOTIFY_WINDOW_HANDLE) == IntPtr.Zero)
+                    {
+                        throw new Win32Exception(Marshal.GetLastWin32Error(), $"RegisterDeviceNotificationW failed for {guid}.");
+                    }
                 }
                 finally
                 {
                     Marshal.FreeHGlobal(filterPtr);
                 }
             }
+
+            _ready.Set();
+            readySignalled = true;
 
             while (Win32API.GetMessageW(out var msg, IntPtr.Zero, 0, 0))
             {
@@ -108,16 +153,38 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
         }
         catch (Exception ex)
         {
-            _onError?.Invoke(ex);
+            if (readySignalled)
+            {
+                _onError?.Invoke(ex);
+            }
+            else
+            {
+                Volatile.Write(ref _startupError, ex);
+            }
+
             UsbTrace.Log($"UsbWindowsHotplugMonitor Message pump failed: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
-            Marshal.FreeHGlobal(classNamePtr);
-            if (_hwnd != IntPtr.Zero)
+            try
             {
-                _ = Win32API.DestroyWindow(_hwnd);
+                _ready.Set();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+
+            Marshal.FreeHGlobal(classNamePtr);
+            IntPtr hwnd;
+            lock (_gate)
+            {
+                hwnd = _hwnd;
                 _hwnd = IntPtr.Zero;
+            }
+
+            if (hwnd != IntPtr.Zero)
+            {
+                _ = Win32API.DestroyWindow(hwnd);
             }
         }
     }
@@ -135,18 +202,41 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
 
     private void TriggerPoll()
     {
-        _ = Task.Run(() =>
+        Interlocked.Exchange(ref _pending, 1);
+        if (Interlocked.CompareExchange(ref _polling, 1, 0) != 0)
         {
-            try
+            return;
+        }
+
+        _ = Task.Run(PollLoop);
+    }
+
+    private void PollLoop()
+    {
+        try
+        {
+            do
             {
-                PollOnce();
+                try
+                {
+                    PollOnce();
+                }
+                catch (Exception ex)
+                {
+                    _onError?.Invoke(ex);
+                    UsbTrace.Log($"UsbWindowsHotplugMonitor poll failed: {ex.GetType().Name}: {ex.Message}");
+                }
             }
-            catch (Exception ex)
+            while (Interlocked.Exchange(ref _pending, 0) != 0);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _polling, 0);
+            if (Volatile.Read(ref _pending) != 0)
             {
-                _onError?.Invoke(ex);
-                UsbTrace.Log($"UsbWindowsHotplugMonitor poll failed: {ex.GetType().Name}: {ex.Message}");
+                TriggerPoll();
             }
-        });
+        }
     }
 
     private void PollOnce()
@@ -181,6 +271,7 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
 
     public void Dispose()
     {
+        IntPtr hwnd;
         lock (_gate)
         {
             if (_disposed)
@@ -189,16 +280,20 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
             }
 
             _disposed = true;
+            hwnd = _hwnd;
         }
 
-        var hwnd = _hwnd;
-        _hwnd = IntPtr.Zero;
         if (hwnd != IntPtr.Zero)
         {
             _ = Win32API.PostMessageW(hwnd, Win32API.WM_QUIT, IntPtr.Zero, IntPtr.Zero);
-            _thread?.Join(TimeSpan.FromSeconds(2));
         }
 
+        if (_thread is { } thread && thread != Thread.CurrentThread)
+        {
+            _ = thread.Join(TimeSpan.FromSeconds(2));
+        }
+
+        _ready.Dispose();
         _lastSnapshot.Clear();
     }
 }

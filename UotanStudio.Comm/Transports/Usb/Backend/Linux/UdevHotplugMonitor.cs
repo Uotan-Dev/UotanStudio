@@ -21,6 +21,7 @@ internal sealed class UdevHotplugMonitor : IDisposable
     private const int NetlinkKobjectUevent = 15;
     private const int SockDGram = 2;
     private const int SockCloexec = 0x80000;
+    private static readonly TimeSpan ReceiveShutdownTimeout = TimeSpan.FromSeconds(2);
 
     private readonly Func<IReadOnlyList<UsbDeviceInfo>> _enumerator;
     private readonly Action<IReadOnlyList<UsbDeviceChange>> _onChanged;
@@ -29,7 +30,10 @@ internal sealed class UdevHotplugMonitor : IDisposable
     private readonly int _socket;
     private Dictionary<string, UsbDeviceInfo> _lastSnapshot;
     private CancellationTokenSource? _receiveLoop;
-    private bool _disposed;
+    private Task? _receiveTask;
+    private volatile bool _disposed;
+    private CancellationToken _token;
+    private int _polling, _pending;
 
     public UdevHotplugMonitor(
         Func<IReadOnlyList<UsbDeviceInfo>> enumerator,
@@ -67,56 +71,95 @@ internal sealed class UdevHotplugMonitor : IDisposable
 
         _lastSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
         _receiveLoop = new CancellationTokenSource();
-        _ = Task.Run(() => ReceiveLoop(_receiveLoop.Token));
+        _token = _receiveLoop.Token;
+        _receiveTask = Task.Run(() => ReceiveLoop(_token));
     }
 
     private void ReceiveLoop(CancellationToken cancellationToken)
     {
         var buffer = new byte[8192];
-        var lastEventTicks = 0L;
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            var received = ReceiveFrom(buffer);
-
-            if (received <= 0)
+            while (!cancellationToken.IsCancellationRequested)
             {
-                if (!ShouldRetryAfterReceive(received, Marshal.GetLastWin32Error()))
+                var received = ReceiveFrom(buffer);
+                if (_disposed)
                 {
-                    break;
+                    return;
                 }
 
-                continue;
-            }
-
-            if (!IsUsbDeviceUevent(buffer, received))
-            {
-                continue;
-            }
-
-            var now = Environment.TickCount64;
-            if (now - lastEventTicks < 100)
-            {
-                continue;
-            }
-
-            lastEventTicks = now;
-            _ = Task.Run(async () =>
-            {
-                try
+                if (received <= 0)
                 {
-                    await Task.Delay(200, cancellationToken).ConfigureAwait(false);
+                    if (!ShouldRetryAfterReceive(received, Marshal.GetLastWin32Error()))
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                if (!IsUsbDeviceUevent(buffer, received))
+                {
+                    continue;
+                }
+
+                TriggerPoll();
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _onError?.Invoke(ex);
+            UsbTrace.Log($"UdevHotplugMonitor receive loop failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private void TriggerPoll()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        Interlocked.Exchange(ref _pending, 1);
+        if (Interlocked.CompareExchange(ref _polling, 1, 0) != 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                do
+                {
+                    await Task.Delay(100, _token).ConfigureAwait(false);
                     PollOnce();
                 }
-                catch (OperationCanceledException)
+                while (Interlocked.Exchange(ref _pending, 0) != 0);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (Exception ex)
+            {
+                _onError?.Invoke(ex);
+                UsbTrace.Log($"UdevHotplugMonitor poll failed: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _polling, 0);
+                if (!_disposed && Volatile.Read(ref _pending) != 0)
                 {
+                    TriggerPoll();
                 }
-                catch (Exception ex)
-                {
-                    _onError?.Invoke(ex);
-                    UsbTrace.Log($"UdevHotplugMonitor poll failed: {ex.GetType().Name}: {ex.Message}");
-                }
-            }, cancellationToken);
-        }
+            }
+        }, _token);
     }
 
     /// <summary>Blocking recvfrom into the managed buffer; isolated so the loop stays await-safe.</summary>
@@ -165,6 +208,11 @@ internal sealed class UdevHotplugMonitor : IDisposable
 
     private void PollOnce()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         var currentSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
         List<UsbDeviceChange>? changes;
         lock (_gate)
@@ -194,6 +242,8 @@ internal sealed class UdevHotplugMonitor : IDisposable
 
     public void Dispose()
     {
+        Task? receiveTask;
+        CancellationTokenSource? lifetime;
         lock (_gate)
         {
             if (_disposed)
@@ -202,13 +252,41 @@ internal sealed class UdevHotplugMonitor : IDisposable
             }
 
             _disposed = true;
+            receiveTask = _receiveTask;
+            _receiveTask = null;
+            lifetime = _receiveLoop;
+            _receiveLoop = null;
         }
 
-        _receiveLoop?.Cancel();
-        _receiveLoop?.Dispose();
-        _receiveLoop = null;
+        lifetime?.Cancel();
         UdevLibcInterop.close(_socket);
-        _lastSnapshot.Clear();
+        if (receiveTask is not null)
+        {
+            try
+            {
+                receiveTask.WaitAsync(ReceiveShutdownTimeout).GetAwaiter().GetResult();
+            }
+            catch (TimeoutException)
+            {
+                UsbTrace.Log("UdevHotplugMonitor receive loop did not stop within the shutdown timeout.");
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (Exception ex)
+            {
+                UsbTrace.Log($"UdevHotplugMonitor receive loop faulted during shutdown: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        lifetime?.Dispose();
+        lock (_gate)
+        {
+            _lastSnapshot.Clear();
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]

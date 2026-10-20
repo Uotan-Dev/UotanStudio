@@ -7,6 +7,9 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
 internal static partial class WinUSBFinder
 {
+    private const int UsbDeviceDescriptorBytes = 18;
+    private const int UsbStringDescriptorBufferBytes = 256;
+
     private static string GetDeviceInstanceId(IntPtr devInfoSet, ref Win32API.SpDevInfoData devInfoData)
     {
         Win32API.SetupDiGetDeviceInstanceIdW(devInfoSet, ref devInfoData, IntPtr.Zero, 0, out var required);
@@ -221,7 +224,7 @@ internal static partial class WinUSBFinder
                 }
             }
 
-            UsbTrace.Log($"WinUSBFinder: fell back to DeviceClasses GUIDs for [{instanceId}]: {string.Join(", ", fallback)}");
+            UsbTrace.LogFormatted($"WinUSBFinder: fell back to DeviceClasses GUIDs for [{instanceId}]: {string.Join(", ", fallback)}");
         }
 
         return result;
@@ -243,7 +246,7 @@ internal static partial class WinUSBFinder
         }
     }
 
-    private static bool PathMatchesFilter(string path, UsbDeviceFilter? filter)
+    private static bool PathMatchesFilter(string path, UsbDeviceFilter? filter, ushort? vid, ushort? pid)
     {
         if (filter == null)
         {
@@ -263,15 +266,13 @@ internal static partial class WinUSBFinder
             return true;
         }
 
-        (var vid, var pid) = TryParseVidPid(path);
-
         return (!filter.VendorId.HasValue || (vid.HasValue && vid.Value == filter.VendorId.Value)) && (!filter.ProductId.HasValue || (pid.HasValue && pid.Value == filter.ProductId.Value));
     }
 
     private static (ushort? vid, ushort? pid) TryParseVidPid(string path)
     {
-        var vidMatch = Regex.Match(path, @"VID_([0-9A-Fa-f]{4})", RegexOptions.IgnoreCase);
-        var pidMatch = Regex.Match(path, @"PID_([0-9A-Fa-f]{4})", RegexOptions.IgnoreCase);
+        var vidMatch = VidPattern().Match(path);
+        var pidMatch = PidPattern().Match(path);
 
         ushort? vid = null;
         ushort? pid = null;
@@ -288,6 +289,12 @@ internal static partial class WinUSBFinder
 
         return (vid, pid);
     }
+
+    [GeneratedRegex("VID_([0-9A-Fa-f]{4})", RegexOptions.IgnoreCase)]
+    private static partial Regex VidPattern();
+
+    [GeneratedRegex("PID_([0-9A-Fa-f]{4})", RegexOptions.IgnoreCase)]
+    private static partial Regex PidPattern();
 
     /// <summary>
     /// Creates a metadata-only WinUSB device (no open handle) so a busy device stays
@@ -474,7 +481,7 @@ internal static partial class WinUSBFinder
     /// <para>短暂打开 WinUSB 句柄读取设备描述符与 iSerial 字符串描述符；不查询管道、
     /// 不设置策略、不认领接口，句柄随即关闭。读取失败一律返回 <c>null</c>。</para>
     /// </summary>
-    private static string? PeekSerialNumber(string path)
+    private static unsafe string? PeekSerialNumber(string path)
     {
         var hUsb = Win32API.SimpleCreateHandle(path, true);
         if (hUsb == Win32API.INVALID_HANDLE_VALUE)
@@ -490,33 +497,26 @@ internal static partial class WinUSBFinder
             }
 
             using var safeHandle = new SafeWinUsbHandle(winUsbHandle);
-            var ptr = Marshal.AllocHGlobal(18);
-            try
+            byte* buffer = stackalloc byte[UsbStringDescriptorBufferBytes];
+            if (!WinUSBAPI.WinUsb_GetDescriptor(safeHandle.DangerousGetHandle(), WinUSBAPI.USB_DEVICE_DESCRIPTOR_TYPE,
+                0, 0, (IntPtr)buffer, UsbDeviceDescriptorBytes, out _))
             {
-                if (!WinUSBAPI.WinUsb_GetDescriptor(safeHandle.DangerousGetHandle(), WinUSBAPI.USB_DEVICE_DESCRIPTOR_TYPE,
-                    0, 0, ptr, 18, out _))
-                {
-                    return null;
-                }
-
-                var iSerial = Marshal.PtrToStructure<Win32API.USBDeviceDescriptor>(ptr).ISerialNumber;
-                if (iSerial == 0)
-                {
-                    return null;
-                }
-
-                if (!WinUSBAPI.WinUsb_GetDescriptor(safeHandle.DangerousGetHandle(), WinUSBAPI.USB_STRING_DESCRIPTOR_TYPE,
-                    iSerial, 0x0409, ptr, 254, out var transferred) || transferred <= 2)
-                {
-                    return null;
-                }
-
-                return Marshal.PtrToStringUni(ptr + 2, (int)(transferred - 2) / 2)?.TrimEnd('\0');
+                return null;
             }
-            finally
+
+            var iSerial = Marshal.PtrToStructure<Win32API.USBDeviceDescriptor>((IntPtr)buffer).ISerialNumber;
+            if (iSerial == 0)
             {
-                Marshal.FreeHGlobal(ptr);
+                return null;
             }
+
+            if (!WinUSBAPI.WinUsb_GetDescriptor(safeHandle.DangerousGetHandle(), WinUSBAPI.USB_STRING_DESCRIPTOR_TYPE,
+                iSerial, 0x0409, (IntPtr)buffer, UsbStringDescriptorBufferBytes - 1, out var transferred) || transferred <= 2)
+            {
+                return null;
+            }
+
+            return Marshal.PtrToStringUni((IntPtr)(buffer + 2), (int)(transferred - 2) / 2)?.TrimEnd('\0');
         }
         finally
         {

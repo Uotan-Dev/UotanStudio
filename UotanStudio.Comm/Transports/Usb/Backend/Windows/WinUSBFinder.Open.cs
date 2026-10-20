@@ -20,7 +20,7 @@ internal static partial class WinUSBFinder
         var hDevice = Win32API.SimpleCreateHandle(path);
         if (hDevice == Win32API.INVALID_HANDLE_VALUE)
         {
-            UsbTrace.Log($"WinUSBFinder: ProbeDevice cannot open [{path}] - reported with metadata only.");
+            UsbTrace.LogFormatted($"WinUSBFinder: ProbeDevice cannot open [{path}] - reported with metadata only.");
             return AttachEnumeratedSerial(CreateMetadataOnlyDevice(path, vid ?? 0, pid ?? 0), serial);
         }
 
@@ -51,7 +51,7 @@ internal static partial class WinUSBFinder
                 return dev;
             }
 
-            UsbTrace.Log($"WinUSBFinder: ProbeDevice legacy open failed for [{path}] - reported with metadata only.");
+            UsbTrace.LogFormatted($"WinUSBFinder: ProbeDevice legacy open failed for [{path}] - reported with metadata only.");
             return dev;
         }
 
@@ -67,7 +67,7 @@ internal static partial class WinUSBFinder
             return winDev;
         }
 
-        UsbTrace.Log($"WinUSBFinder: ProbeDevice WinUSB open failed for [{path}] - reported with metadata only.");
+        UsbTrace.LogFormatted($"WinUSBFinder: ProbeDevice WinUSB open failed for [{path}] - reported with metadata only.");
         return AttachEnumeratedSerial(winDev, serial);
     }
 
@@ -93,7 +93,7 @@ internal static partial class WinUSBFinder
             return dev;
         }
 
-        UsbTrace.Log($"WinUSBFinder: TryOpenWinUSB open failed for [{path}] - reported with metadata only.");
+        UsbTrace.LogFormatted($"WinUSBFinder: TryOpenWinUSB open failed for [{path}] - reported with metadata only.");
         return AttachEnumeratedSerial(dev, serial);
     }
 

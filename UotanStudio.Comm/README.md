@@ -279,11 +279,23 @@ confirmation, not just a button.
 
 ## Native runtime registration
 
-The libusb binaries are not shipped with the repository. `Transports/Usb/Backend/LibUsb/LibUsbRuntime.cs` is the
-public entry a host uses to register the absolute path of a prepared native library; it forwards to the internal
-`LibUsbNativeLoader`, which stays out of reach across assemblies. `UotanStudio/Services/NativeBin/NativeBinProvisioner.cs`
-downloads the file for the active RID and registers it through that entry. Neither the internal `CommKit` nor
-`UsbCommunicationLayer` is reachable from the host, which is why this dedicated public surface exists.
+`Native/LibUsb` carries the libusb binaries for the supported RIDs. `UotanStudio.Comm.csproj` selects the
+directory matching the build's `LibUsbRuntimeIdentifier`, copies its platform library
+(`libusb-1.0.dll`, `libusb-1.0.dylib`, `libusb-1.0.so`/`libusb-1.0.so.0`) and `libusb-LICENSE.txt` next to the
+application, and the content items flow through `ProjectReference`; the host neither downloads nor copies the
+library for a supported RID.
+
+The libusb backend is enabled only when that platform file is present in the application directory or an explicit
+path is registered. A libusb installed elsewhere on the system does not enable it. `Transports/Usb/Backend/LibUsb/LibUsbRuntime.cs`
+is the public entry a host uses to register the absolute path of a prepared native library; it forwards to the
+internal `LibUsbNativeLoader`, which stays out of reach across assemblies. The same registration is surfaced as
+`CommKit.SetLibusbLibraryPath` and, internally, as `UsbCommunicationLayer.SetLibusbLibraryPath`; the path is
+validated and pre-loaded, so a system installation is usable once its file is named explicitly. Registering after a
+failed availability probe re-enables the backend; switching the runtime after a successful native call is not
+supported.
+
+`UotanStudio/Services/NativeBin/NativeBinProvisioner.cs` remains the fallback for a RID without a bundled file: it
+downloads the runtime for the active RID, verifies its SHA-256 and registers the cached path through that entry.
 
 ## Validation
 

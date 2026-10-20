@@ -312,12 +312,31 @@ internal static partial class LibUsbFinder
         };
     }
 
+    /// <summary>
+    /// Probes whether the libusb backend can run here. The runtime must be the file the caller
+    /// registered or the platform library copied next to the application; a libusb that is only
+    /// installed elsewhere on the system is deliberately not accepted, and
+    /// <c>libusb_init</c> must then succeed.
+    /// <para>探测 libusb 后端在当前环境是否可运行。运行时必须是调用者注册的文件或复制到程序目录的
+    /// 平台库；仅安装在系统其他位置的 libusb 有意不被接受，随后 <c>libusb_init</c> 必须成功。</para>
+    /// </summary>
+    /// <param name="reason">A short failure reason, or <c>null</c> on success.
+    /// <para>失败原因的简短说明；成功时为 <c>null</c>。</para></param>
+    /// <returns><c>true</c> when the runtime is loaded and initializes.
+    /// <para>运行时已加载且初始化成功时为 <c>true</c>。</para></returns>
     public static bool IsRuntimeAvailable(out string? reason)
     {
         reason = null;
+        if (!LibUsbNativeLoader.TryEnsureLoaded(out var libraryPath))
+        {
+            reason = "native libusb runtime is neither next to the application nor explicitly registered";
+            UsbTrace.Log($"LibUsb runtime probe failed: {reason}");
+            return false;
+        }
+
         if (!IsNativeRuntimePresent())
         {
-            reason = "native libusb runtime not found";
+            reason = $"native libusb runtime did not resolve from '{libraryPath}'";
             UsbTrace.Log($"LibUsb runtime probe failed: {reason}");
             return false;
         }

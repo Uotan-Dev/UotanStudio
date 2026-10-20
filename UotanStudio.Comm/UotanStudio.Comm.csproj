@@ -33,10 +33,10 @@
 
   <Target Name="ValidateLibUsbRuntime" BeforeTargets="PrepareForBuild">
     <Warning Condition="!Exists('$(MSBuildProjectDirectory)/Native/LibUsb/$(LibUsbRuntimeIdentifier)')"
-             Text="No bundled libusb runtime for '$(LibUsbRuntimeIdentifier)'. Supply a compatible system library or configure CommKit.SetLibusbLibraryPath." />
+             Text="No bundled libusb runtime for '$(LibUsbRuntimeIdentifier)' under Native/LibUsb. Place a compatible libusb next to the application or register its absolute path with UsbCommunicationLayer.SetLibusbLibraryPath (or CommKit.SetLibusbLibraryPath); a system-installed libusb that is neither bundled nor registered does not enable the backend." />
     <Message Condition="!Exists('$(MSBuildProjectDirectory)/Native/LibUsb/$(LibUsbRuntimeIdentifier)')"
              Importance="High"
-             Text="libusb binaries are no longer vendored; the runtime downloads the required file on first use via NativeBinProvisioner. Call UsbCommunicationLayer.SetLibusbLibraryPath (or CommKit.SetLibusbLibraryPath) to point at a system-installed libusb instead." />
+             Text="libusb binaries are vendored under Native/LibUsb for the supported RIDs; this RID has no bundled file, so the libusb backend stays disabled unless a compatible library is placed next to the application or its absolute path is registered through UsbCommunicationLayer.SetLibusbLibraryPath (or CommKit.SetLibusbLibraryPath)." />
   </Target>
 
   <ItemGroup>

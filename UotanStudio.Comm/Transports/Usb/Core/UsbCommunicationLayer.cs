@@ -26,8 +26,8 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
     private DeviceCommunicationConfiguration Configuration => configuration ?? DeviceCommunicationConfiguration.Current;
 
     /// <summary>
-    /// Configures the absolute path to the native libusb runtime for the libusb backend. Must be called before the first enumeration or session open; the library is pre-loaded by absolute path so the bare SONAME resolves without relying on the loader's default search path.
-    /// <para>为 libusb 后端配置原生 libusb 运行库的绝对路径。必须在首次枚举或会话打开之前调用；通过绝对路径预加载，使裸 SONAME 的解析不依赖加载器的默认搜索路径。</para>
+    /// Configures the absolute path to the native libusb runtime for the libusb backend. Must be called before the first enumeration or session open; the library is pre-loaded by absolute path so the bare SONAME resolves without relying on the loader's default search path. Registering after a failed availability probe re-enables the backend; switching the runtime after a successful native call is not supported.
+    /// <para>为 libusb 后端配置原生 libusb 运行库的绝对路径。必须在首次枚举或会话打开之前调用；通过绝对路径预加载，使裸 SONAME 的解析不依赖加载器的默认搜索路径。探测失败之后再注册会重新启用后端；已经成功调用原生接口之后再切换运行库不受支持。</para>
     /// </summary>
     /// <param name="libraryPath">Absolute path to the native libusb runtime.
     /// <para>原生 libusb 运行时的绝对路径。</para></param>
@@ -186,7 +186,7 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
             apiKind = PreferredAutoApiKind();
         }
 
-        var interval = pollInterval ?? TimeSpan.FromSeconds(1);
+        var interval = pollInterval ?? TimeSpan.FromSeconds(2);
         if (interval <= TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(nameof(pollInterval));

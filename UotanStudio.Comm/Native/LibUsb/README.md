@@ -17,7 +17,9 @@
 Comm 和应用层 UotanStudio 都设置 `IsRidAgnostic=false`，使 Desktop 的目标 RID
 能穿过项目引用到达 Comm，避免在 Windows x64 主机发布 ARM64 时复制错误架构。
 在 Comm 与宿主之间插入的中间引用项目同样需要保留 RID 传递。不支持的 RID 会给出构建警告，
-此时需提供兼容的系统 libusb 或通过 `CommKit.SetLibusbLibraryPath` 指定运行库。
+此时 libusb 后端保持禁用，除非把兼容的 libusb 文件放在程序目录，或通过
+`CommKit.SetLibusbLibraryPath` / `LibUsbRuntime.SetLibraryPath` 注册其绝对路径；
+仅在系统路径安装 libusb 不会启用后端。显式注册的路径优先于程序目录中的文件，可用于系统安装位置。
 
 Windows 使用上游 release/MSYS2，macOS 使用
 Homebrew，Linux 使用 Debian/Ubuntu。不同平台来源版本可能不同，不能仅根据

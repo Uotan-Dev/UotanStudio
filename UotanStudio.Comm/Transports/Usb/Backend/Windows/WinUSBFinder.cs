@@ -7,6 +7,11 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 internal static partial class WinUSBFinder
 {
     private const string PreferWinUsbVidPid = "vid_18d1&pid_d00d";
+    private const int InterfaceDetailCbSizeX64 = 8;
+    private const int InterfaceDetailCbSizeX86 = 6;
+    private const int InterfaceDetailPathOffset = 4;
+    private const int StackInterfaceDetailBytes = 1024;
+    private const uint MinimumInterfaceDetailBytes = 6;
 
     /// <summary>
     /// Gets whether the SetupDi all-classes enumeration handle opened successfully during
@@ -18,10 +23,11 @@ internal static partial class WinUSBFinder
     public static bool LastSetupDiSucceeded { get; private set; }
 
     /// <summary>
-    /// Gets the number of USB device nodes (instance ids containing VID_) walked during
-    /// the last enumeration. A non-zero value proves the scan loop actually ran.
-    /// <para>获取上次枚举中遍历的 USB 设备节点数（含 VID_ 的实例 ID）。
-    /// 非零值证明扫描循环确实执行过。</para>
+    /// Gets the number of potential USB device nodes walked during the last enumeration: nodes whose
+    /// instance id uses the USB enumerator or (for compatibility) still contains <c>VID_</c>. A non-zero
+    /// value proves the scan loop actually ran.
+    /// <para>获取上次枚举中遍历的潜在 USB 设备节点数：实例 ID 使用 USB 枚举器、或（为兼容）
+    /// 仍包含 <c>VID_</c> 的节点。非零值证明扫描循环确实执行过。</para>
     /// </summary>
     public static int LastScannedNodeCount { get; private set; }
 
@@ -55,7 +61,7 @@ internal static partial class WinUSBFinder
         LastSetupDiSucceeded = devInfoSet != -1;
         if (devInfoSet == -1)
         {
-            UsbTrace.Log($"WinUSBFinder: SetupDiGetClassDevsW(all classes) failed err={Marshal.GetLastWin32Error()}");
+            UsbTrace.LogFormatted($"WinUSBFinder: SetupDiGetClassDevsW(all classes) failed err={Marshal.GetLastWin32Error()}");
             return devices;
         }
 
@@ -75,14 +81,13 @@ internal static partial class WinUSBFinder
                 }
 
                 var instanceId = GetDeviceInstanceId(devInfoSet, ref devInfoData);
-                if (string.IsNullOrEmpty(instanceId) ||
-                    instanceId.IndexOf("VID_", StringComparison.OrdinalIgnoreCase) < 0)
+                if (!IsPotentialUsbInstanceId(instanceId))
                 {
                     continue;
                 }
 
                 LastScannedNodeCount++;
-                UsbTrace.Log($"WinUSBFinder: node [{instanceId}]");
+                UsbTrace.LogFormatted($"WinUSBFinder: node [{instanceId}]");
                 foreach (var guid in ReadDeviceInterfaceGuids(instanceId, lazyDeviceClassGuids))
                 {
                     if (!seenGuids.Add(guid))
@@ -90,7 +95,7 @@ internal static partial class WinUSBFinder
                         continue;
                     }
 
-                    UsbTrace.Log($"WinUSBFinder:   interface GUID {guid}");
+                    UsbTrace.LogFormatted($"WinUSBFinder:   interface GUID {guid}");
                     EnumerateInterfacesForGuid(guid, filter, options, devices, uniqueKeys);
                 }
             }
@@ -116,7 +121,7 @@ internal static partial class WinUSBFinder
             Win32API.DIGCF_PRESENT | Win32API.DIGCF_DEVICEINTERFACE);
         if (devInfo == -1)
         {
-            UsbTrace.Log($"WinUSBFinder: SetupDiGetClassDevsW({guid}) failed err={Marshal.GetLastWin32Error()}");
+            UsbTrace.LogFormatted($"WinUSBFinder: SetupDiGetClassDevsW({guid}) failed err={Marshal.GetLastWin32Error()}");
             return;
         }
 
@@ -179,86 +184,140 @@ internal static partial class WinUSBFinder
 
         while (enumerator(index++, ref interfaceData))
         {
-            if (!Win32API.SetupDiGetDeviceInterfaceDetailW(devInfo, ref interfaceData, IntPtr.Zero, 0, out var detailSize, IntPtr.Zero))
+            ProcessInterface(devInfo, ref interfaceData, filter, options, devices, uniqueKeys);
+        }
+
+        UsbTrace.LogFormatted($"WinUSBFinder: EnumerateInterfacesCore done, lastErr={Marshal.GetLastWin32Error()}, devices={devices.Count}");
+    }
+
+    /// <summary>
+    /// Returns whether an instance id can belong to a USB node: USB enumerator instance ids start with
+    /// <c>USB\</c>, and the historical <c>VID_</c> containment branch stays for vendor-specific or
+    /// renamed instances the previous filter accepted.
+    /// <para>判断实例 ID 是否可能属于 USB 节点：USB 枚举器实例 ID 以 <c>USB\</c> 开头；
+    /// 历史上的 <c>VID_</c> 包含分支保留给旧过滤器接受的厂商自定义或重命名实例。</para>
+    /// </summary>
+    private static bool IsPotentialUsbInstanceId(string instanceId)
+    {
+        if (string.IsNullOrEmpty(instanceId))
+        {
+            return false;
+        }
+
+        return instanceId.StartsWith(@"USB\", StringComparison.OrdinalIgnoreCase) ||
+            instanceId.IndexOf("VID_", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    /// <summary>
+    /// Probes one interface's detail size, materializes the detail in a stack buffer when it fits and
+    /// falls back to the heap above that threshold, then opens or metadata-materializes the matching
+    /// device. VID/PID are parsed from the interface path exactly once and passed to the filter and the
+    /// metadata device.
+    /// <para>探测单个接口的详情长度，能在栈缓冲区容纳时在栈上获取详情，超过阈值才退回堆分配，
+    /// 然后打开或按元数据构造匹配设备。VID/PID 只从接口路径解析一次，并传给过滤器与元数据设备。</para>
+    /// </summary>
+    private static unsafe void ProcessInterface(
+        IntPtr devInfo,
+        ref Win32API.SpDeviceInterfaceData interfaceData,
+        UsbDeviceFilter? filter,
+        UsbSessionOptions? options,
+        List<UsbDevice> devices,
+        HashSet<string> uniqueKeys)
+    {
+        if (!Win32API.SetupDiGetDeviceInterfaceDetailW(devInfo, ref interfaceData, IntPtr.Zero, 0, out var detailSize, IntPtr.Zero))
+        {
+            var probeError = Marshal.GetLastWin32Error();
+            if (probeError != Win32API.ERROR_INSUFFICIENT_BUFFER)
             {
-                var probeError = Marshal.GetLastWin32Error();
-                if (probeError != Win32API.ERROR_INSUFFICIENT_BUFFER)
-                {
-                    UsbTrace.LogError($"WinUSBFinder: interface detail size probe failed err={probeError}; skipping interface.");
-                    continue;
-                }
-            }
-
-            if (detailSize is 0 or > int.MaxValue)
-            {
-                UsbTrace.LogError($"WinUSBFinder: interface detail size probe reported unusable size {detailSize}; skipping interface.");
-                continue;
-            }
-
-            var detailBuffer = Marshal.AllocHGlobal((int)detailSize);
-            try
-            {
-                var cbSize = IntPtr.Size == 8 ? 8 : 6;
-                var pathOffset = 4;
-                Marshal.WriteInt32(detailBuffer, cbSize);
-                var node = new Win32API.SpDevInfoData { CbSize = (uint)Marshal.SizeOf<Win32API.SpDevInfoData>() };
-                if (Win32API.SetupDiGetDeviceInterfaceDetailW(devInfo, ref interfaceData, detailBuffer, detailSize, out _, ref node))
-                {
-                    var path = Marshal.PtrToStringUni(new IntPtr(detailBuffer.ToInt64() + pathOffset)) ?? "";
-
-                    if (!PathMatchesFilter(path, filter))
-                    {
-                        continue;
-                    }
-
-                    var identity = CreateMetadataOnlyDevice(path, TryParseVidPid(path).vid ?? 0, TryParseVidPid(path).pid ?? 0);
-                    if (filter?.InterfaceClass is byte cls && identity.InterfaceClass != cls ||
-                        filter?.InterfaceSubClass is byte sub && identity.InterfaceSubClass != sub ||
-                        filter?.InterfaceProtocol is byte protocol && identity.InterfaceProtocol != protocol)
-                        continue;
-                    var isGoogleWinUsb = path.Contains(PreferWinUsbVidPid, StringComparison.OrdinalIgnoreCase);
-                    var instanceId = GetDeviceInstanceId(devInfo, ref node);
-                    var separator = instanceId.LastIndexOf('\\');
-                    var candidate = separator >= 0 ? instanceId[(separator + 1)..] : null;
-                    var serial = candidate is not null && !candidate.Contains('&') ? candidate : null;
-
-                    UsbDevice? device = null;
-                    if (isGoogleWinUsb)
-                    {
-                        UsbTrace.Log($"Prefers WinUSB for Google device: {path}");
-                        device = TryOpenWinUSB(path, options, serial);
-                    }
-
-                    device ??= ProbeDevice(path, options, serial);
-
-                    if (device != null)
-                    {
-                        device.DeviceInstanceId = instanceId;
-                        device.ContainerId = ReadContainerId(device.DeviceInstanceId);
-                        var key = BuildDeviceKey(device);
-                        if (uniqueKeys.Add(key))
-                        {
-                            UsbTrace.Log($"Confirmed device added: key={key} using {(device is WinUSBDevice ? "WinUSB" : "Legacy")}");
-                            devices.Add(device);
-                        }
-                        else
-                        {
-                            device.Dispose();
-                        }
-                    }
-                    else
-                    {
-                        UsbTrace.Log($"WinUSBFinder: ProbeDevice returned null for [{path}]");
-                    }
-                }
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(detailBuffer);
+                UsbTrace.LogError($"WinUSBFinder: interface detail size probe failed err={probeError}; skipping interface.");
+                return;
             }
         }
 
-        UsbTrace.Log($"WinUSBFinder: EnumerateInterfacesCore done, lastErr={Marshal.GetLastWin32Error()}, devices={devices.Count}");
+        if (detailSize is < MinimumInterfaceDetailBytes or > int.MaxValue)
+        {
+            UsbTrace.LogError($"WinUSBFinder: interface detail size probe reported unusable size {detailSize}; skipping interface.");
+            return;
+        }
+
+        var byteCount = (int)detailSize;
+        byte* buffer = stackalloc byte[StackInterfaceDetailBytes];
+        var heapBuffer = IntPtr.Zero;
+        if (byteCount > StackInterfaceDetailBytes)
+        {
+            heapBuffer = Marshal.AllocHGlobal(byteCount);
+            buffer = (byte*)heapBuffer.ToPointer();
+        }
+
+        try
+        {
+            var cbSize = IntPtr.Size == 8 ? InterfaceDetailCbSizeX64 : InterfaceDetailCbSizeX86;
+            Marshal.WriteInt32((IntPtr)buffer, cbSize);
+            var node = new Win32API.SpDevInfoData { CbSize = (uint)Marshal.SizeOf<Win32API.SpDevInfoData>() };
+            if (!Win32API.SetupDiGetDeviceInterfaceDetailW(devInfo, ref interfaceData, (IntPtr)buffer, detailSize, out _, ref node))
+            {
+                return;
+            }
+
+            var path = Marshal.PtrToStringUni(new IntPtr(buffer + InterfaceDetailPathOffset)) ?? string.Empty;
+            var (vid, pid) = TryParseVidPid(path);
+            if (!PathMatchesFilter(path, filter, vid, pid))
+            {
+                return;
+            }
+
+            var identity = CreateMetadataOnlyDevice(path, vid ?? 0, pid ?? 0);
+            var interfaceFilterMismatch =
+                (filter?.InterfaceClass is byte cls && identity.InterfaceClass != cls) ||
+                (filter?.InterfaceSubClass is byte sub && identity.InterfaceSubClass != sub) ||
+                (filter?.InterfaceProtocol is byte protocol && identity.InterfaceProtocol != protocol);
+            if (interfaceFilterMismatch)
+            {
+                return;
+            }
+
+            var isGoogleWinUsb = path.Contains(PreferWinUsbVidPid, StringComparison.OrdinalIgnoreCase);
+            var instanceId = GetDeviceInstanceId(devInfo, ref node);
+            var separator = instanceId.LastIndexOf('\\');
+            var candidate = separator >= 0 ? instanceId[(separator + 1)..] : null;
+            var serial = candidate is not null && !candidate.Contains('&') ? candidate : null;
+
+            UsbDevice? device = null;
+            if (isGoogleWinUsb)
+            {
+                UsbTrace.LogFormatted($"Prefers WinUSB for Google device: {path}");
+                device = TryOpenWinUSB(path, options, serial);
+            }
+
+            device ??= ProbeDevice(path, options, serial);
+
+            if (device != null)
+            {
+                device.DeviceInstanceId = instanceId;
+                device.ContainerId = ReadContainerId(device.DeviceInstanceId);
+                var key = BuildDeviceKey(device);
+                if (uniqueKeys.Add(key))
+                {
+                    UsbTrace.LogFormatted($"Confirmed device added: key={key} using {(device is WinUSBDevice ? "WinUSB" : "Legacy")}");
+                    devices.Add(device);
+                }
+                else
+                {
+                    device.Dispose();
+                }
+            }
+            else
+            {
+                UsbTrace.LogFormatted($"WinUSBFinder: ProbeDevice returned null for [{path}]");
+            }
+        }
+        finally
+        {
+            if (heapBuffer != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(heapBuffer);
+            }
+        }
     }
 
 }

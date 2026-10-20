@@ -25,6 +25,7 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
     private UsbContext? _context;
     private Dictionary<string, UsbDeviceInfo> _lastSnapshot = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
+    private int _polling, _pending;
 
     public UsbLibUsbHotplugMonitor(
         Func<IReadOnlyList<UsbDeviceInfo>> enumerator,
@@ -59,18 +60,46 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
     private void OnDeviceEvent(object? sender, DeviceEventArgs e)
     {
         _ = e;
-        _ = Task.Run(() =>
+        TriggerPoll();
+    }
+
+    private void TriggerPoll()
+    {
+        Interlocked.Exchange(ref _pending, 1);
+        if (Interlocked.CompareExchange(ref _polling, 1, 0) != 0)
         {
-            try
+            return;
+        }
+
+        _ = Task.Run(PollLoop);
+    }
+
+    private void PollLoop()
+    {
+        try
+        {
+            do
             {
-                PollOnce();
+                try
+                {
+                    PollOnce();
+                }
+                catch (Exception ex)
+                {
+                    _onError?.Invoke(ex);
+                    UsbTrace.Log($"UsbLibUsbHotplugMonitor poll failed: {ex.GetType().Name}: {ex.Message}");
+                }
             }
-            catch (Exception ex)
+            while (Interlocked.Exchange(ref _pending, 0) != 0);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _polling, 0);
+            if (Volatile.Read(ref _pending) != 0)
             {
-                _onError?.Invoke(ex);
-                UsbTrace.Log($"UsbLibUsbHotplugMonitor poll failed: {ex.GetType().Name}: {ex.Message}");
+                TriggerPoll();
             }
-        });
+        }
     }
 
     private void PollOnce()

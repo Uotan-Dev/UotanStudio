@@ -8,6 +8,8 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Linux;
 
 internal static class LinuxUsbFinder
 {
+    private const int O_RDONLY = 0;
+    private const string DefaultSysfsDevicesRoot = "/sys/bus/usb/devices";
     private static int _permissionDeniedCount;
     private static int _busyCount;
 
@@ -103,29 +105,21 @@ internal static class LinuxUsbFinder
             return devices;
         }
 
+        Dictionary<(int Bus, int Dev), string>? sysfsDeviceIndex = null;
         foreach (var bus_dir in Directory.GetDirectories(base_path))
         {
             foreach (var dev_path in Directory.GetFiles(bus_dir))
             {
                 LastScannedNodes++;
-                var fd = open(dev_path, O_RDWR | O_CLOEXEC);
+                var fd = open(dev_path, O_RDONLY | O_CLOEXEC);
                 if (fd < 0)
                 {
-                    var openErr = Marshal.GetLastWin32Error();
-                    if (openErr == EACCES)
+                    if (Marshal.GetLastWin32Error() == EACCES)
                     {
                         ReportPermissionDenied(dev_path);
                     }
-                    fd = open(dev_path, 0 | O_CLOEXEC);
-                    if (fd < 0)
-                    {
-                        var openErr2 = Marshal.GetLastWin32Error();
-                        if (openErr2 == EACCES)
-                        {
-                            ReportPermissionDenied(dev_path);
-                        }
-                        continue;
-                    }
+
+                    continue;
                 }
 
                 try
@@ -142,6 +136,7 @@ internal static class LinuxUsbFinder
                         continue;
                     }
 
+                    sysfsDeviceIndex ??= BuildSysfsDeviceIndex(DefaultSysfsDevicesRoot);
                     var dev = new LinuxUsbDevice
                     {
                         DevicePath = dev_path,
@@ -152,7 +147,7 @@ internal static class LinuxUsbFinder
                         InterfaceSubClass = info.InterfaceSubClass,
                         InterfaceProtocol = info.InterfaceProtocol,
                         InterfaceMetadataObserved = true,
-                        Speed = ResolveSpeed(dev_path, info.BcdUsb),
+                        Speed = ResolveSpeed(dev_path, info.BcdUsb, sysfsDeviceIndex),
                         Interfaces = info.Interfaces,
                         Ep_in = info.EndpointIn,
                         Ep_out = info.EndpointOut,
@@ -431,38 +426,47 @@ internal static class LinuxUsbFinder
     /// so the directory is located via the <c>busnum</c>/<c>devnum</c> attributes.
     /// <para>sysfs 按 <c>bus-port</c>（如 <c>1-1</c>）而非设备号命名设备目录，
     /// 因此通过 <c>busnum</c>/<c>devnum</c> 属性定位目录。</para>
-    /// The sysfs root is injectable for tests; production uses the real path.
-    /// <para>sysfs 根目录可注入以便测试；生产环境使用真实路径。</para>
+    /// The sysfs root is injectable for tests; production uses the real path. This overload builds
+    /// a single-pass index for a standalone resolution; whole-directory enumeration shares one index.
+    /// <para>sysfs 根目录可注入以便测试；生产环境使用真实路径。本重载为独立解析建立一次单趟
+    /// 索引；整目录枚举则共享同一份索引。</para>
     /// </summary>
+    /// <param name="devPath">The usbfs device node path. <para>usbfs 设备节点路径。</para></param>
+    /// <param name="bcdUsb">The device descriptor's BcdUSB field. <para>设备描述符的 BcdUSB 字段。</para></param>
+    /// <param name="sysfsDevicesRoot">The sysfs USB devices root. <para>sysfs USB 设备根目录。</para></param>
+    /// <returns>The resolved speed. <para>解析出的速度。</para></returns>
     internal static UsbDeviceSpeed ResolveSpeed(
         string devPath,
         ushort bcdUsb,
-        string sysfsDevicesRoot = "/sys/bus/usb/devices")
+        string sysfsDevicesRoot = DefaultSysfsDevicesRoot)
+        => ResolveSpeed(devPath, bcdUsb, BuildSysfsDeviceIndex(sysfsDevicesRoot));
+
+    /// <summary>
+    /// Resolves the speed from an index built once per enumeration instead of rescanning the whole
+    /// sysfs directory for every device.
+    /// <para>使用单轮枚举建立一次的索引解析速度，避免为每个设备重扫整个 sysfs 目录。</para>
+    /// </summary>
+    /// <param name="devPath">The usbfs device node path. <para>usbfs 设备节点路径。</para></param>
+    /// <param name="bcdUsb">The device descriptor's BcdUSB field. <para>设备描述符的 BcdUSB 字段。</para></param>
+    /// <param name="sysfsDeviceIndex">Bus/device number to sysfs directory map. <para>总线/设备号到 sysfs 目录的映射。</para></param>
+    /// <returns>The resolved speed. <para>解析出的速度。</para></returns>
+    private static UsbDeviceSpeed ResolveSpeed(
+        string devPath,
+        ushort bcdUsb,
+        IReadOnlyDictionary<(int Bus, int Dev), string> sysfsDeviceIndex)
     {
         try
         {
             var busPart = Path.GetFileName(Path.GetDirectoryName(devPath));
             var devPart = Path.GetFileName(devPath);
             if (int.TryParse(busPart, NumberStyles.Integer, CultureInfo.InvariantCulture, out var busNum) &&
-                int.TryParse(devPart, NumberStyles.Integer, CultureInfo.InvariantCulture, out var devNum))
+                int.TryParse(devPart, NumberStyles.Integer, CultureInfo.InvariantCulture, out var devNum) &&
+                sysfsDeviceIndex.TryGetValue((busNum, devNum), out var deviceDir))
             {
-                foreach (var deviceDir in Directory.EnumerateDirectories(sysfsDevicesRoot))
+                var sysfsSpeed = Path.Combine(deviceDir, "speed");
+                if (double.TryParse(File.ReadAllText(sysfsSpeed).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var mbps))
                 {
-                    if (!TryReadSysfsInt(Path.Combine(deviceDir, "busnum"), out var dirBus) ||
-                        !TryReadSysfsInt(Path.Combine(deviceDir, "devnum"), out var dirDev) ||
-                        dirBus != busNum || dirDev != devNum)
-                    {
-                        continue;
-                    }
-
-                    var sysfsSpeed = Path.Combine(deviceDir, "speed");
-                    if (File.Exists(sysfsSpeed) &&
-                        double.TryParse(File.ReadAllText(sysfsSpeed).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var mbps))
-                    {
-                        return UsbSpeedInference.FromMbps(mbps);
-                    }
-
-                    break;
+                    return UsbSpeedInference.FromMbps(mbps);
                 }
             }
         }
@@ -473,18 +477,48 @@ internal static class LinuxUsbFinder
         return InferSpeed(bcdUsb);
     }
 
+    /// <summary>
+    /// Builds a bus/device-number to sysfs directory index in one pass over the sysfs USB devices
+    /// root. The index is valid only for the enumeration that built it: no cross-call cache is kept,
+    /// so a hotplug between two scans is always visible.
+    /// <para>对 sysfs USB 设备根目录做一次遍历，建立总线/设备号到目录的索引。索引仅在建立它的
+    /// 那一轮枚举内有效：不保留跨调用缓存，因此两次扫描之间的热插拔总会被观察到。</para>
+    /// </summary>
+    /// <param name="sysfsDevicesRoot">The sysfs USB devices root. <para>sysfs USB 设备根目录。</para></param>
+    /// <returns>Bus/device number to directory map; empty when the root is unreadable.
+    /// <para>总线/设备号到目录的映射；根目录不可读时为空。</para></returns>
+    private static Dictionary<(int Bus, int Dev), string> BuildSysfsDeviceIndex(string sysfsDevicesRoot)
+    {
+        var index = new Dictionary<(int Bus, int Dev), string>();
+        try
+        {
+            foreach (var deviceDir in Directory.EnumerateDirectories(sysfsDevicesRoot))
+            {
+                if (TryReadSysfsInt(Path.Combine(deviceDir, "busnum"), out var busNum) &&
+                    TryReadSysfsInt(Path.Combine(deviceDir, "devnum"), out var devNum))
+                {
+                    index[(busNum, devNum)] = deviceDir;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return index;
+    }
+
     private static bool TryReadSysfsInt(string path, out int value)
     {
         value = 0;
         try
         {
-            return File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+            return int.TryParse(File.ReadAllText(path).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
         }
         catch
         {
             return false;
         }
     }
-
 
 }
