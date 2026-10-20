@@ -39,6 +39,7 @@ public partial class VisualPluginEditorWindow : Window
         Closed += (_, _) =>
         {
             _lifetime.Cancel();
+            NodePortChoiceSource.Clear();
             _toastManager?.CloseAll();
             _editor.Dispose();
         };
@@ -204,7 +205,17 @@ public partial class VisualPluginEditorWindow : Window
         _settingRequirements = false;
         _invalidRequirements = false;
         RequirementsError.IsVisible = false;
+        PublishResourceChoices();
     }
+
+    /// <summary>
+    /// Publishes the open package's asset identifiers as the candidates for resource identifier ports, so an
+    /// <c>Asset ID</c> port inside this graph offers exactly the assets the read node can resolve here. The source
+    /// is process-wide and replaced as a whole; the window clears it on close, so a graph outside a package editor
+    /// falls back to free text.
+    /// </summary>
+    private void PublishResourceChoices()
+        => NodePortChoiceSource.SetResources((_editor.ResourcePackage?.Assets ?? []).Select(asset => (asset.Id, asset.Name)));
 
     internal async Task AddResourceAsync(string id, string path, CancellationToken token)
     {
@@ -220,6 +231,7 @@ public partial class VisualPluginEditorWindow : Window
         }
         _resources.Add(asset);
         ResourceList.SelectedItem = asset;
+        PublishResourceChoices();
     }
 
     private async void AddResourceClick(object? sender, RoutedEventArgs e)
@@ -256,6 +268,7 @@ public partial class VisualPluginEditorWindow : Window
             {
                 _resources.Remove(asset);
                 _editor.ResourcePackage!.Assets = [.. _resources];
+                PublishResourceChoices();
             }
         }
         finally { EndResourceOperation(); }
