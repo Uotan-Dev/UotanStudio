@@ -37,6 +37,16 @@ public sealed class NodeExecutionEngineTests
     {
         public Func<INodeExecutionContext, Task>? Action { get; set; }
         public TestNodeViewModel(string title, NodeCategory category) : base(title, category) { }
+
+        /// <summary>Mirrors how a real control-flow node declares its engine behaviour, so the helper-built graphs exercise the same dispatch path as built-in and plugin nodes.<para>与真实控制流节点一样向引擎声明行为，使辅助方法构造的图与内置及插件节点走同一分派路径。</para></summary>
+        public override NodeFlowKind FlowKind => TypeKey switch
+        {
+            "Flow.Condition.Branch" => NodeFlowKind.Branch,
+            "Flow.Collection.Loop" => NodeFlowKind.Loop,
+            "Flow.Execution.Parallel" => NodeFlowKind.Parallel,
+            _ => NodeFlowKind.None
+        };
+
         public override Task ExecuteAsync(INodeExecutionContext context) => Action?.Invoke(context) ?? Task.CompletedTask;
     }
 
@@ -161,7 +171,19 @@ public sealed class NodeExecutionEngineTests
         }
         foreach (var output in outputs)
         {
-            node.Output.Add(new NodeConnectorViewModel { Title = output, PortType = NodePortType.Flow });
+            node.Output.Add(new NodeConnectorViewModel
+            {
+                Title = output,
+                PortType = NodePortType.Flow,
+                FlowRole = output switch
+                {
+                    "True" or "Apply" => NodeFlowRole.True,
+                    "False" or "Skip" => NodeFlowRole.False,
+                    "Body" => NodeFlowRole.Body,
+                    "Completed" => NodeFlowRole.Completed,
+                    _ => NodeFlowRole.None
+                }
+            });
         }
         return node;
     }

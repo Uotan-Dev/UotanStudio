@@ -22,6 +22,15 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     {
     }
 
+    /// <inheritdoc />
+    public override NodeFlowKind FlowKind => TypeKey switch
+    {
+        "Flow.Condition.Branch" or "Flow.Applicability.Gate" => NodeFlowKind.Branch,
+        "Flow.Collection.Loop" => NodeFlowKind.Loop,
+        "Flow.Execution.Parallel" => NodeFlowKind.Parallel,
+        _ => NodeFlowKind.None
+    };
+
     /// <summary>
     /// Creates a default branch node that selects execution paths based on a boolean input.
     /// <para>创建默认的条件分支节点，根据布尔输入选择执行路径。</para>
@@ -35,8 +44,8 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Condition", PortType = NodePortType.Boolean });
         node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow, MaxConnections = 1 });
-        node.Output.Add(new NodeConnectorViewModel { Title = "True", PortType = NodePortType.Flow });
-        node.Output.Add(new NodeConnectorViewModel { Title = "False", PortType = NodePortType.Flow });
+        node.Output.Add(new NodeConnectorViewModel { Title = "True", PortType = NodePortType.Flow, FlowRole = NodeFlowRole.True });
+        node.Output.Add(new NodeConnectorViewModel { Title = "False", PortType = NodePortType.Flow, FlowRole = NodeFlowRole.False });
         return node;
     }
 
@@ -53,8 +62,8 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
         };
         node.Input.Add(new NodeConnectorViewModel { Title = "Count", PortType = NodePortType.Number });
         node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Body", PortType = NodePortType.Flow });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Completed", PortType = NodePortType.Flow });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Body", PortType = NodePortType.Flow, FlowRole = NodeFlowRole.Body });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Completed", PortType = NodePortType.Flow, FlowRole = NodeFlowRole.Completed });
         node.Output.Add(new NodeConnectorViewModel { Title = "Index", PortType = NodePortType.Number });
         return node;
     }
@@ -138,11 +147,9 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
                 break;
             case "Flow.Execution.Terminate":
                 {
-                    var reason = NodeDataUtil.ToDisplay(ReadInput("Reason"));
+                    var declared = Convert.ToString(ReadInput("Reason"), System.Globalization.CultureInfo.InvariantCulture);
                     context.Log.Write(LogLevel.Warn, Title, "Terminate requested.  请求终止工作流。");
-                    throw new OperationCanceledException(string.IsNullOrEmpty(reason)
-                        ? "Workflow terminated by Terminate node"
-                        : $"Workflow terminated by Terminate node: {reason}");
+                    throw new WorkflowTerminatedException(declared);
                 }
             default:
                 return base.ExecuteAsync(context);

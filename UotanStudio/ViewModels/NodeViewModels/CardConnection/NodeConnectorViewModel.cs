@@ -1,6 +1,7 @@
 using System.Text;
 using NodifyM.Avalonia.ViewModelBase;
 using UotanStudio.Services;
+using UotanStudio.ViewModels.Nodes;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
@@ -99,11 +100,64 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
         }
     }
 
-    /// <summary>Stable choices whose labels are localized without changing persisted values.</summary>
-    public IReadOnlyList<NodePortChoice> Choices { get; init; } = [];
+    /// <summary>
+    /// Gets or sets the stable choices whose labels are localized without changing persisted values. The list is
+    /// assigned after construction when the available options depend on process state rather than on the port
+    /// declaration, so the dependent editor flags are raised here as well.
+    /// <para>获取或设置稳定选项列表，标签本地化不影响持久化取值。可选值依赖进程状态而非端口声明时，列表会在构造之后才被赋值，
+    /// 因此依赖它的编辑器标志也在这里一并通知。</para>
+    /// </summary>
+    /// <value>The current choice snapshot; empty when the port uses a text editor.
+    /// <para>当前选项快照；端口使用文本编辑器时为空。</para></value>
+    public IReadOnlyList<NodePortChoice> Choices
+    {
+        get => field;
+        set
+        {
+            if (!SetProperty(ref field, value ?? []))
+            {
+                return;
+            }
+            OnPropertyChanged(nameof(HasChoices));
+            OnPropertyChanged(nameof(SelectedChoice));
+            OnPropertyChanged(nameof(UsesTextEditor));
+            OnPropertyChanged(nameof(CanEditChoice));
+        }
+    } = [];
+
+    /// <summary>Locale suffix used by every localized choice label.</summary>
+    private const string DefaultChoiceResourcePrefix = "Node_Choice_";
+
+    /// <summary>
+    /// Makes <see cref="Choices"/> track the process-level resource candidates. The snapshot is taken at once and
+    /// every later publication refreshes the list with the dependent editor flags; because the source keeps weak
+    /// interest, a released port is collected without explicit unsubscription.
+    /// <para>让 <see cref="Choices"/> 跟踪进程级资源候选：立即取一次快照，此后每次发布都会连同依赖的编辑器标志一起刷新列表；
+    /// 来源只保留弱引用，已释放的端口无需显式退订即可回收。</para>
+    /// </summary>
+    internal void TrackResourceChoices()
+    {
+        Choices = NodePortChoiceSource.Resources;
+        NodePortChoiceSource.Track(this);
+    }
+
+    /// <summary>Receives a replacement of the process-level resource candidates.</summary>
+    /// <param name="choices">The newly published candidates.
+    /// <para>新发布的候选。</para></param>
+    internal void ApplyTrackedChoices(IReadOnlyList<NodePortChoice> choices) => Choices = choices;
 
     /// <summary>Whether execution requires a bound value or a configured default.</summary>
     public bool IsRequired { get; set; }
+
+    /// <summary>
+    /// Gets or sets the control-flow role of a flow output port. The engine reads this role instead of the port
+    /// title, so renaming a branch output never changes dispatch and a plugin node can declare the same roles.
+    /// <para>获取或设置流输出端口的控制流角色。引擎读取该角色而非端口标题，因此重命名分支输出不会改变分派，
+    /// 插件节点也能声明相同角色。</para>
+    /// </summary>
+    /// <value>The declared role; <see cref="NodeFlowRole.None"/> for non-flow or role-free ports.
+    /// <para>声明的角色；非流端口或无角色端口为 <see cref="NodeFlowRole.None"/>。</para></value>
+    public NodeFlowRole FlowRole { get; set; }
 
     /// <summary>Whether encapsulation should publish this parameter on the composite interface.</summary>
     public bool ExposeOnComposite { get; set; }

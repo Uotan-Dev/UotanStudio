@@ -164,6 +164,8 @@ public sealed class NodeExecutionEngine
             List<string> failedNodes = [];
             var failLock = new object();
             var aborted = false;
+            var terminated = false;
+            string? terminationReason = null;
             var byId = nodes.ToDictionary(n => n.InstanceId);
             var flowOut = BuildFlowEdges(nodes, connections);
             var gateError = PatchGatePolicy.Validate(nodes, connections, flowOut);
@@ -223,6 +225,13 @@ public sealed class NodeExecutionEngine
                     aborted = true;
                     break;
                 }
+                catch (WorkflowTerminatedException termination)
+                {
+                    _log.Write(LogLevel.Warn, "Engine", $"Execution terminated: {termination.Message}");
+                    terminated = true;
+                    terminationReason = termination.Reason;
+                    break;
+                }
                 if (!succeeded)
                 {
                     lock (failLock) { failedNodes.Add(node.InstanceId); }
@@ -262,10 +271,19 @@ public sealed class NodeExecutionEngine
                         aborted = true;
                         break;
                     }
+                    catch (WorkflowTerminatedException termination)
+                    {
+                        _log.Write(LogLevel.Warn, "Engine", $"Execution terminated during flow dispatch: {termination.Message}");
+                        terminated = true;
+                        terminationReason = termination.Reason;
+                        break;
+                    }
                 }
             }
 
-            var result = aborted && failedNodes.Count == 0
+            var result = terminated
+                ? ExecutionResult.Terminated(terminationReason)
+                : aborted && failedNodes.Count == 0
                 ? ExecutionResult.Cancelled()
                 : aborted
                     ? ExecutionResult.Failed("Execution stopped after a node failure", failedNodes)
@@ -420,6 +438,13 @@ public sealed class NodeExecutionEngine
             NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
             throw;
         }
+        catch (WorkflowTerminatedException)
+        {
+            compositeError = null;
+            node.ExecutionStatus = NodeExecutionStatus.Succeeded;
+            NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+            throw;
+        }
         catch (Exception ex)
         {
             compositeError = ex.Message;
@@ -471,7 +496,8 @@ public sealed class NodeExecutionEngine
         object failLock,
         NodeExecutionOptions options)
     {
-        if (node.TypeKey is not ("Flow.Condition.Branch" or "Flow.Applicability.Gate" or "Flow.Collection.Loop" or "Flow.Execution.Parallel"))
+        var flowKind = node.FlowKind;
+        if (flowKind == NodeFlowKind.None)
         {
             HashSet<FlowNodeViewModel> inactive = [];
             HashSet<FlowNodeViewModel> active = [];
@@ -493,15 +519,14 @@ public sealed class NodeExecutionEngine
                 skippedByBranch.Add(target.InstanceId);
             }
         }
-        switch (node.TypeKey)
+        switch (flowKind)
         {
-            case "Flow.Condition.Branch":
-            case "Flow.Applicability.Gate":
+            case NodeFlowKind.Branch:
                 {
-                    var isGate = node.TypeKey == "Flow.Applicability.Gate";
-                    var trueTitle = isGate ? "Apply" : "True";
-                    var falseTitle = isGate ? "Skip" : "False";
-                    var trueConnector = node.Output.FirstOrDefault(c => string.Equals(c.Title, trueTitle, StringComparison.Ordinal));
+                    var trueConnector = FlowOutput(node, NodeFlowRole.True);
+                    var falseConnector = FlowOutput(node, NodeFlowRole.False);
+                    var trueTitle = trueConnector?.Title ?? string.Empty;
+                    var falseTitle = falseConnector?.Title ?? string.Empty;
                     var condition = NodeDataUtil.ToBool(trueConnector?.Data, false);
                     var untakenTitle = condition ? falseTitle : trueTitle;
                     var untaken = CollectFlowReachable(node, untakenTitle, flowOut);
@@ -512,11 +537,11 @@ public sealed class NodeExecutionEngine
                     if (untaken.Count > 0)
                     {
                         _log.Write(LogLevel.Info, "Engine",
-                            $"Branch '{node.InstanceId}' took '{(condition ? "True" : "False")}', skipping {untaken.Count} downstream node(s)");
+                            $"Branch '{node.InstanceId}' took '{(condition ? trueTitle : falseTitle)}', skipping {untaken.Count} downstream node(s)");
                     }
                     break;
                 }
-            case "Flow.Collection.Loop":
+            case NodeFlowKind.Loop:
                 {
                     var requested = NodeDataUtil.ToInt(node.ReadInput("Count"), 0);
                     var iterations = Math.Clamp(requested, 0, MaxLoopIterations);
@@ -525,8 +550,10 @@ public sealed class NodeExecutionEngine
                         _log.Write(LogLevel.Warn, "Engine",
                             $"Loop '{node.InstanceId}' requested {requested} iterations, clamped to {MaxLoopIterations}");
                     }
-                    var body = CollectFlowReachable(node, "Body", flowOut);
-                    var completed = CollectFlowReachable(node, "Completed", flowOut);
+                    var bodyTitle = FlowOutput(node, NodeFlowRole.Body)?.Title ?? string.Empty;
+                    var completedTitle = FlowOutput(node, NodeFlowRole.Completed)?.Title ?? string.Empty;
+                    var body = CollectFlowReachable(node, bodyTitle, flowOut);
+                    var completed = CollectFlowReachable(node, completedTitle, flowOut);
                     body.ExceptWith(completed);
                     if (body.Count == 0) break;
                     if (iterations == 0)
@@ -560,7 +587,7 @@ public sealed class NodeExecutionEngine
                     foreach (var bodyNode in body) handledByFlow.Add(bodyNode.InstanceId);
                     break;
                 }
-            case "Flow.Execution.Parallel":
+            case NodeFlowKind.Parallel:
                 {
                     var branchConnectors = node.Output.Where(c => c.PortType == NodePortType.Flow).ToList();
                     if (branchConnectors.Count == 0) break;
@@ -763,6 +790,16 @@ public sealed class NodeExecutionEngine
     /// <param name="outputConnector">Title of the output port the edges start at.<para>边所出自的输出端口标题。</para></param>
     /// <param name="flowOut">Control-flow edges keyed by source instance ID.<para>以源实例 ID 为键的控制流边。</para></param>
     /// <returns>The reachable downstream nodes.<para>可达的下游节点集合。</para></returns>
+    /// <summary>
+    /// Finds the flow output carrying the given role, or <see langword="null"/> when the node declares none.
+    /// <para>按角色查找流输出端口；节点未声明该角色时为 <see langword="null"/>。</para>
+    /// </summary>
+    /// <param name="node">Node whose outputs are inspected.<para>要检查输出的节点。</para></param>
+    /// <param name="role">Requested role.<para>请求的角色。</para></param>
+    /// <returns>The matching output port.<para>匹配的输出端口。</para></returns>
+    private static NodeConnectorViewModel? FlowOutput(FlowNodeViewModel node, NodeFlowRole role)
+        => node.Output.FirstOrDefault(port => port.PortType == NodePortType.Flow && port.FlowRole == role);
+
     private static HashSet<FlowNodeViewModel> CollectFlowReachable(
         FlowNodeViewModel start, string outputConnector,
         Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> flowOut)
@@ -1071,6 +1108,18 @@ public sealed class ExecutionResult
     /// </summary>
     /// <returns>A result carrying the cancelled status.<para>带有取消状态的结果。</para></returns>
     public static ExecutionResult Cancelled() => new() { Status = ExecutionStatus.Cancelled };
+
+    /// <summary>
+    /// Creates a terminated result.
+    /// <para>创建终止结果。</para>
+    /// </summary>
+    /// <param name="reason">The reason reported by the Terminate node.<para>终止节点上报的原因。</para></param>
+    /// <returns>A result carrying the terminated status and the reason.<para>带有终止状态与原因的结果。</para></returns>
+    public static ExecutionResult Terminated(string? reason) => new()
+    {
+        Status = ExecutionStatus.Terminated,
+        ErrorMessage = reason
+    };
 }
 
 /// <summary>
@@ -1091,7 +1140,10 @@ public enum ExecutionStatus
     /// <summary>Failed. <para>失败。</para></summary>
     Failed,
 
-    /// <summary>Cancelled. <para>取消。</para></summary>
+    /// <summary>The workflow stopped because a Terminate node requested it, which is distinct from user cancellation. <para>工作流因终止节点请求而停止，与用户取消相区分。</para></summary>
+    Terminated,
+
+    /// <summary>Cancelled by the caller. <para>被调用方取消。</para></summary>
     Cancelled
 }
 

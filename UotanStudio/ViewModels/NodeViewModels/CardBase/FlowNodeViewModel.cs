@@ -229,6 +229,17 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     } = string.Empty;
 
     /// <summary>
+    /// Gets the control-flow behaviour this node declares to the engine. The engine dispatches by this declaration
+    /// and by <see cref="NodeConnectorViewModel.FlowRole"/> on the flow outputs, so a plugin node that declares the
+    /// same roles receives the same skip and loop semantics as a built-in node.
+    /// <para>获取节点向引擎声明的控制流行为。引擎据此与流输出端口上的
+    /// <see cref="NodeConnectorViewModel.FlowRole"/> 分派，因此声明了相同角色的插件节点与内置节点获得相同的跳过与循环语义。</para>
+    /// </summary>
+    /// <value>The declared behaviour; <see cref="NodeFlowKind.None"/> when the node only propagates values.
+    /// <para>声明的行为；节点仅传播取值时为 <see cref="NodeFlowKind.None"/>。</para></value>
+    public virtual NodeFlowKind FlowKind => NodeFlowKind.None;
+
+    /// <summary>
     /// Gets whether the node is a project-image reference node (the properties panel shows the image picker for it).
     /// <para>获取节点是否为工程镜像引用节点（属性面板据此显示镜像选择编辑区）。</para>
     /// </summary>
