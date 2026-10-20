@@ -67,10 +67,18 @@ internal static class EdlStreamingFlashService
         progress?.Report(new FlashProgress(partition.Name, 0,
             $"Programming {partition.Name} through the Streaming DLOAD backend at 0x{partition.StartLba:X8}... " +
             $"正在经流式 DLOAD 后端编程 {partition.Name}..."));
-        await using (var source = File.OpenRead(imagePath))
+        var chunkThrottle = CreateChunkThrottle(progress, partition.Name);
+        try
         {
-            await streaming.WriteFlashAsync(partition.StartLba, partition.Name, source, length,
-                ToChunkProgress(progress, partition.Name), confirmWrite: true, ct).ConfigureAwait(false);
+            await using (var source = File.OpenRead(imagePath))
+            {
+                await streaming.WriteFlashAsync(partition.StartLba, partition.Name, source, length,
+                    chunkThrottle, confirmWrite: true, ct).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            chunkThrottle?.Flush();
         }
 
         progress?.Report(new FlashProgress(partition.Name, 100, "Stream flash complete. 流式编程完成。"));
@@ -833,14 +841,28 @@ internal static class EdlStreamingFlashService
         return sectorBytes;
     }
 
-    private static IProgress<long>? ToChunkProgress(IProgress<FlashProgress>? progress, string partitionName)
+    /// <summary>
+    /// Builds the throttled sink the streaming program loop reports into. The 1024-byte wire chunk keeps its own
+    /// identity; only the emission of the streamed-byte status is bounded to one per window, and the caller
+    /// flushes the newest total once the loop returns, throws or is cancelled.
+    /// <para>构造流式编程循环要写入的受限节流接收器。1024 字节的线块保持自身身份，只是已流写字节状态的发布
+    /// 被限制为每个窗口一次；循环返回、抛出或被取消后由调用方刷新最新的总量。</para>
+    /// </summary>
+    /// <param name="progress">The sink receiving the flashing progress, or <see langword="null"/>.
+    /// <para>接收刷写进度的接收方，或为 <see langword="null"/>。</para></param>
+    /// <param name="partitionName">The partition name attached to every emitted status.
+    /// <para>附加到每条发出状态上的分区名。</para></param>
+    /// <returns>The throttle to flush when the write ends, or <see langword="null"/> when there is no sink.
+    /// <para>写入结束时用于刷新的节流器；没有接收方时为 <see langword="null"/>。</para></returns>
+    private static ThrottledFlashByteProgress? CreateChunkThrottle(IProgress<FlashProgress>? progress,
+        string partitionName)
     {
         if (progress is null)
         {
             return null;
         }
 
-        return new Progress<long>(captured =>
+        return new ThrottledFlashByteProgress(captured =>
             progress.Report(new FlashProgress(partitionName, 50,
                 $"Streamed {captured} bytes... 已流式写出 {captured} 字节...")));
     }

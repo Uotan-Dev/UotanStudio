@@ -92,6 +92,7 @@ internal static class MtkFlashAreaService
         var stagingPath = destination + ".uotan-" + Guid.NewGuid().ToString("N");
         long captured;
         string sha256Hex;
+        var reporter = new AreaProgress(family, length, progress);
         try
         {
             progress?.Report(new FlashProgress(family.ToString(), 0,
@@ -102,7 +103,6 @@ internal static class MtkFlashAreaService
                 FileShare.None, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
                 using var hashing = new HashingWriteStream(staging, leaveOpen: true);
-                var reporter = new AreaProgress(family, length, progress);
                 switch (family)
                 {
                     case MtkDaProtocol.XFlash:
@@ -136,6 +136,7 @@ internal static class MtkFlashAreaService
         }
         finally
         {
+            reporter.Flush();
             DiscardStaging(stagingPath);
         }
 
@@ -177,12 +178,26 @@ internal static class MtkFlashAreaService
         }
     }
 
+    /// <summary>
+    /// Turns the per-chunk delivered byte totals the walk reports into flashing progress, publishing at most one
+    /// status per window so a multi-gigabyte read cannot queue millions of records; <see cref="Flush"/> still
+    /// hands the newest total to the sink when the walk ends, faults or is cancelled.
+    /// <para>把遍历逐块上报的已交付字节总数转成刷写进度，每个窗口最多发布一条状态，因此数 GB 的读取不会排队
+    /// 上百万条记录；遍历结束、出错或被取消时，<see cref="Flush"/> 仍会把最新的总数交给接收方。</para>
+    /// </summary>
     private sealed class AreaProgress(MtkDaProtocol family, long totalBytes, IProgress<FlashProgress>? sink)
         : IProgress<long>
     {
-        public void Report(long value) => sink?.Report(new FlashProgress(family.ToString(),
-            totalBytes <= 0 ? 0 : (int)Math.Clamp(value * 100 / totalBytes, 0, 100),
-            $"Read {value} of {totalBytes} bytes of the {family} region-agnostic area..."));
+        private readonly ThrottledFlashByteProgress throttle = new(captured => sink?.Report(new FlashProgress(
+            family.ToString(),
+            totalBytes <= 0 ? 0 : (int)Math.Clamp(captured * 100 / totalBytes, 0, 100),
+            $"Read {captured} of {totalBytes} bytes of the {family} region-agnostic area...")));
+
+        public void Report(long value) => throttle.Report(value);
+
+        /// <summary>Publishes the newest delivered total the window suppressed.
+        /// <para>发布窗口所抑制的最新已交付总数。</para></summary>
+        internal void Flush() => throttle.Flush();
     }
 }
 

@@ -940,6 +940,17 @@ public sealed class FlashService : IFlashService
 
     /// <summary>RKDL path that programs a partition with an explicitly given loader path, discovered in the image directory when null.
     /// <para>RKDL 路径：按显式给出的 loader 路径刷写分区，为 null 时在镜像目录中自动发现。</para></summary>
+    /// <remarks>
+    /// <para>In maskrom mode the loader download and the flash write run in two phases: the loader is
+    /// downloaded on the maskrom lease, that lease is released, the device must re-enumerate as a
+    /// Rockchip loader, and only then is a new RKDL session opened for the parameter lookup and
+    /// <see cref="RkdlSession.WriteLBA"/>. No bulk command is ever sent over the old maskrom handle; if
+    /// the device does not re-enumerate, the flash fails instead of continuing.</para>
+    /// <para>设备处于 maskrom 模式时，loader 下载与刷写分两阶段执行：先在 maskrom 租约上下载 loader，
+    /// 释放该租约，等待设备以 Rockchip loader 模式重枚举，之后才打开新的 RKDL 会话做 parameter 查找与
+    /// <see cref="RkdlSession.WriteLBA"/>。绝不会在旧的 maskrom 句柄上发送批量命令；若设备未重枚举，
+    /// 刷写会直接失败而不会继续。</para>
+    /// </remarks>
     /// <param name="device">The target device.<para>目标设备。</para></param>
     /// <param name="partition">The target partition name.<para>目标分区名。</para></param>
     /// <param name="imagePath">Full path of the image file.<para>镜像文件完整路径。</para></param>
@@ -955,11 +966,16 @@ public sealed class FlashService : IFlashService
         IProgress<FlashProgress>? progress, CancellationToken ct, bool verify = false)
     {
         Report(progress, partition, 0, "Opening RKDL session... 正在打开 RKDL 会话...");
-        return await App.DeviceMonitor.RunRkdlAsync(device.Device, async rkdl =>
-        {
-            var imageDir = Path.GetDirectoryName(Path.GetFullPath(imagePath)) ?? string.Empty;
-            if (rkdl.IsMaskromMode)
+        var imageDir = Path.GetDirectoryName(Path.GetFullPath(imagePath)) ?? string.Empty;
+        return await App.DeviceMonitor.RunRkdlLoaderTransitionAsync<FlashResult>(
+            device.Device,
+            async (rkdl, token) =>
             {
+                if (!rkdl.IsMaskromMode)
+                {
+                    return null;
+                }
+
                 var loader = ResolveLoaderPath(loaderPath, imageDir);
                 if (loader is null)
                 {
@@ -968,78 +984,81 @@ public sealed class FlashService : IFlashService
                 }
 
                 Report(progress, partition, 5, $"Downloading loader {Path.GetFileName(loader)}... 正在下载 loader...");
-                var loaderBytes = await File.ReadAllBytesAsync(loader, ct).ConfigureAwait(false);
-                await rkdl.DownloadBootLoaderAsync(loaderBytes, ct).ConfigureAwait(false);
-            }
-
-            var parameterPath = FindParameterFile(imageDir);
-            if (parameterPath is null)
+                var loaderBytes = await File.ReadAllBytesAsync(loader, token).ConfigureAwait(false);
+                await rkdl.DownloadBootLoaderAsync(loaderBytes, token).ConfigureAwait(false);
+                return rkdl.CreateLoaderTransitionOffer();
+            },
+            async (rkdl, token) =>
             {
-                throw new InvalidOperationException(
-                    "No Rockchip parameter file (parameter / parameter.txt) found in the image directory; RKDL flashing requires the partition table. 镜像目录中未找到 Rockchip parameter 分区表。");
-            }
-
-            var partitions = RockchipParameterParser.Parse(parameterPath);
-            var imageName = Path.GetFileName(imagePath);
-            var imageNameWithoutExt = Path.GetFileNameWithoutExtension(imageName);
-            var target = partitions.FirstOrDefault(p =>
-                string.Equals(p.Name, partition, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(p.Name, imageName, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(p.Name, imageNameWithoutExt, StringComparison.OrdinalIgnoreCase));
-            if (target is null)
-            {
-                var available = string.Join(", ", partitions.Select(p => p.Name));
-                throw new InvalidOperationException(
-                    $"Partition '{partition}' not found in the Rockchip partition table. Available: {available} 分区不在 Rockchip 分区表中。");
-            }
-
-            Report(progress, partition, 15, $"Writing {Path.GetFileName(imagePath)} to {target.Name} (LBA 0x{target.OffsetSectors:X})... 正在写入分区...");
-            var result = await Task.Run(() => FlashRkdlPartition(rkdl, target, imagePath, progress, ct), ct).ConfigureAwait(false);
-            if (!verify || !result.Success)
-            {
-                return result;
-            }
-
-            var imageLength = new FileInfo(imagePath).Length;
-            if (imageLength <= 0)
-            {
-                result.Summary += " Read-back verification skipped (the image is empty). 已跳过回读校验（镜像为空）。";
-                return result;
-            }
-
-            Report(progress, target.Name, 100, $"Verifying read-back for {target.Name} at LBA 0x{target.OffsetSectors:X}... 正在回读校验...");
-            try
-            {
-                var matches = await Task.Run(async () =>
+                var parameterPath = FindParameterFile(imageDir);
+                if (parameterPath is null)
                 {
-                    using var readback = new RkdlReadbackStream(rkdl, target.OffsetSectors, imageLength);
-                    return await CompareReadbackAsync(imagePath, readback, imageLength, ct).ConfigureAwait(false);
-                }, ct).ConfigureAwait(false);
-                if (!matches)
+                    throw new InvalidOperationException(
+                        "No Rockchip parameter file (parameter / parameter.txt) found in the image directory; RKDL flashing requires the partition table. 镜像目录中未找到 Rockchip parameter 分区表。");
+                }
+
+                var partitions = RockchipParameterParser.Parse(parameterPath);
+                var imageName = Path.GetFileName(imagePath);
+                var imageNameWithoutExt = Path.GetFileNameWithoutExtension(imageName);
+                var target = partitions.FirstOrDefault(p =>
+                    string.Equals(p.Name, partition, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(p.Name, imageName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(p.Name, imageNameWithoutExt, StringComparison.OrdinalIgnoreCase));
+                if (target is null)
+                {
+                    var available = string.Join(", ", partitions.Select(p => p.Name));
+                    throw new InvalidOperationException(
+                        $"Partition '{partition}' not found in the Rockchip partition table. Available: {available} 分区不在 Rockchip 分区表中。");
+                }
+
+                Report(progress, partition, 15, $"Writing {Path.GetFileName(imagePath)} to {target.Name} (LBA 0x{target.OffsetSectors:X})... 正在写入分区...");
+                var result = await Task.Run(() => FlashRkdlPartition(rkdl, target, imagePath, progress, token), token).ConfigureAwait(false);
+                if (!verify || !result.Success)
+                {
+                    return result;
+                }
+
+                var imageLength = new FileInfo(imagePath).Length;
+                if (imageLength <= 0)
+                {
+                    result.Summary += " Read-back verification skipped (the image is empty). 已跳过回读校验（镜像为空）。";
+                    return result;
+                }
+
+                Report(progress, target.Name, 100, $"Verifying read-back for {target.Name} at LBA 0x{target.OffsetSectors:X}... 正在回读校验...");
+                try
+                {
+                    var matches = await Task.Run(async () =>
+                    {
+                        using var readback = new RkdlReadbackStream(rkdl, target.OffsetSectors, imageLength);
+                        return await CompareReadbackAsync(imagePath, readback, imageLength, token).ConfigureAwait(false);
+                    }, token).ConfigureAwait(false);
+                    if (!matches)
+                    {
+                        LogService.Instance.Write(LogLevel.Warn, "FlashService",
+                            $"RKDL read-back verification mismatch for '{target.Name}' at LBA 0x{target.OffsetSectors:X}.");
+                        return new FlashResult
+                        {
+                            Success = false,
+                            Summary = $"RKDL wrote {imageLength} bytes to '{target.Name}' but read-back verification failed (readback mismatch). RKDL 回读校验不一致。"
+                        };
+                    }
+
+                    result.Summary += " Read-back verification passed. 回读校验通过。";
+                    return result;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     LogService.Instance.Write(LogLevel.Warn, "FlashService",
-                        $"RKDL read-back verification mismatch for '{target.Name}' at LBA 0x{target.OffsetSectors:X}.");
+                        $"RKDL read-back verification could not complete for '{target.Name}': {ex.Message}");
                     return new FlashResult
                     {
                         Success = false,
-                        Summary = $"RKDL wrote {imageLength} bytes to '{target.Name}' but read-back verification failed (readback mismatch). RKDL 回读校验不一致。"
+                        Summary = $"RKDL wrote '{target.Name}' but read-back verification could not complete (possible readback mismatch): {ex.Message} RKDL 回读校验失败。"
                     };
                 }
-
-                result.Summary += " Read-back verification passed. 回读校验通过。";
-                return result;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                LogService.Instance.Write(LogLevel.Warn, "FlashService",
-                    $"RKDL read-back verification could not complete for '{target.Name}': {ex.Message}");
-                return new FlashResult
-                {
-                    Success = false,
-                    Summary = $"RKDL wrote '{target.Name}' but read-back verification could not complete (possible readback mismatch): {ex.Message} RKDL 回读校验失败。"
-                };
-            }
-        }, ct).ConfigureAwait(false);
+            },
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1053,6 +1072,10 @@ public sealed class FlashService : IFlashService
     /// <param name="progress">Optional flash progress reporter. <para>可选的刷写进度报告器。</para></param>
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The flash result. <para>刷写结果。</para></returns>
+    /// <exception cref="InvalidOperationException">The image needs more 512-byte sectors than
+    /// <see cref="RockchipPartition.SizeSectors"/> declares, so nothing is written.
+    /// <para>镜像所需的 512 字节扇区数超过 <see cref="RockchipPartition.SizeSectors"/> 声明的容量，
+    /// 因此不写入任何数据。</para></exception>
     public static FlashResult FlashRkdlPartition(
         RkdlSession session, RockchipPartition partitionInfo, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
@@ -1066,6 +1089,13 @@ public sealed class FlashService : IFlashService
 
         using var stream = File.OpenRead(imagePath);
         var totalBytes = stream.Length;
+        var requiredSectors = totalBytes <= 0 ? 0 : ((totalBytes - 1) / RkdlConstants.SectorSize) + 1;
+        if (requiredSectors > partitionInfo.SizeSectors)
+        {
+            throw new InvalidOperationException(
+                $"Image '{Path.GetFileName(imagePath)}' needs {requiredSectors} sectors ({totalBytes} bytes), more than the {partitionInfo.SizeSectors} sectors declared for partition '{partitionInfo.Name}' in the Rockchip parameter table; nothing was written. 镜像超出 parameter 表中该分区声明的容量，未写入任何数据。");
+        }
+
         Report(progress, partitionInfo.Name, 40, $"Writing image via RKDL WRITE_LBA at LBA 0x{partitionInfo.OffsetSectors:X}... 正在通过 RKDL 写入...");
         var byteProgress = new Progress<long>(written =>
             Report(progress, partitionInfo.Name,
