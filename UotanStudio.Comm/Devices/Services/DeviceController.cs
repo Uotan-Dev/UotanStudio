@@ -30,6 +30,9 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     private readonly Dictionary<DeviceEndpointId, DeviceLease> _openLeases = [];
     private readonly Dictionary<string, ulong> _transportGenerations = [];
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private Dictionary<string, (PhysicalDeviceIdentity Identity, string Protocols)>? _modeProjection;
+    private (ulong Sum, ulong Xor, int Count) _modeProjectionDigest;
+    private long _modeProjectionGeneration = -1;
 
     /// <summary>
     /// Raised after a physical USB device disappeared and its leases were released.
@@ -42,6 +45,14 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     /// <para>物理 USB 设备元数据变化（如模式切换）时触发。</para>
     /// </summary>
     public event Action<DeviceEndpoint>? DeviceChanged;
+
+    /// <summary>
+    /// Raised once per batch of OS USB topology changes observed by the removal watch, after leases tied to
+    /// removed or changed devices were released. Subscribers observe the change set; exceptions are isolated.
+    /// <para>移除监视每观察到一批 USB 拓扑变化、且已释放被移除或变更设备的租约后触发。
+    /// 订阅方只观察变化集；其异常会被隔离。</para>
+    /// </summary>
+    public event Action<IReadOnlyList<UsbDeviceChange>>? UsbTopologyChanged;
 
     /// <summary>
     /// Raised after each committed inventory: one transition per physical identity whose observed
@@ -149,7 +160,28 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
             var seen = new HashSet<DeviceEndpointId>();
             foreach (var source in _sources)
             {
-                var discovered = await source.DiscoverAsync(cancellationToken).ConfigureAwait(false);
+                IReadOnlyList<DeviceEndpoint> discovered;
+                try
+                {
+                    discovered = await source.DiscoverAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception)
+                {
+                    var previous = result.Endpoints
+                        .Where(endpoint => endpoint.Source == source.Name)
+                        .ToArray();
+                    if (previous.Length == 0)
+                    {
+                        throw;
+                    }
+
+                    discovered = previous;
+                }
+
                 cancellationToken.ThrowIfCancellationRequested();
                 foreach (var endpoint in discovered)
                 {
@@ -426,16 +458,35 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Emits one transition per physical identity whose observed protocol set changed. The previous
+    /// projection is reused while it was produced for the same committed generation, and both
+    /// projections are skipped when the current projection inputs hash to the previous digest.
+    /// Callers hold <c>_gate</c>, so the cached generation, digest and projection move together.
+    /// <para>为每个观测协议集合发生变化的物理身份发布一条迁移。上一次投影若对应同一个已提交代际
+    /// 则直接复用；新旧投影输入摘要相同时连投影本身也跳过。调用方持有 <c>_gate</c>，
+    /// 因此缓存的代际、摘要与投影总是一致更新。</para>
+    /// </summary>
     private ModeTransition[] ObserveModeTransitionsLocked(DeviceSnapshot previous, DeviceSnapshot current)
     {
-        var before = ModeProjections(previous.Endpoints);
+        var before = ResolveModeProjectionLocked(previous, out var beforeDigest);
         if (before.Count == 0)
         {
+            _modeProjection = null;
+            _modeProjectionGeneration = -1;
             return [];
         }
 
+        var currentDigest = ComputeModeDigest(current.Endpoints);
+        if (currentDigest == beforeDigest)
+        {
+            StoreModeProjectionLocked(current.Generation, currentDigest, before);
+            return [];
+        }
+
+        var after = BuildModeProjection(current.Endpoints, out _);
         List<ModeTransition> transitions = [];
-        foreach (var (key, (identity, protocols)) in ModeProjections(current.Endpoints))
+        foreach (var (key, (identity, protocols)) in after)
         {
             if (!before.TryGetValue(key, out var old) || string.Equals(old.Protocols, protocols, StringComparison.Ordinal))
             {
@@ -450,24 +501,147 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
             transitions.Add(new ModeTransition(identity, old.Protocols, protocols, generation, evidence, DateTimeOffset.UtcNow));
         }
 
+        StoreModeProjectionLocked(current.Generation, currentDigest, after);
         return [.. transitions];
     }
 
-    private static Dictionary<string, (PhysicalDeviceIdentity Identity, string Protocols)> ModeProjections(
-        ImmutableArray<DeviceEndpoint> endpoints)
+    /// <summary>
+    /// Returns the previous snapshot's projection, reusing the cached instance when it was built for
+    /// that same generation, and reports the digest of the inputs it was built from.
+    /// <para>返回上一份快照的投影：缓存由同一代际建立时直接复用，并给出其所依据输入的摘要。</para>
+    /// </summary>
+    private Dictionary<string, (PhysicalDeviceIdentity Identity, string Protocols)> ResolveModeProjectionLocked(
+        DeviceSnapshot previous,
+        out (ulong Sum, ulong Xor, int Count) digest)
     {
-        var raw = new Dictionary<string, (PhysicalDeviceIdentity Identity, SortedSet<string> Protocols)>(
-            StringComparer.Ordinal);
+        if (_modeProjection is { } cached && _modeProjectionGeneration == previous.Generation)
+        {
+            digest = _modeProjectionDigest;
+            return cached;
+        }
+
+        return BuildModeProjection(previous.Endpoints, out digest);
+    }
+
+    /// <summary>
+    /// Records the projection of one committed generation together with the digest of its inputs.
+    /// <para>记录某个已提交代际的投影及其输入摘要。</para>
+    /// </summary>
+    private void StoreModeProjectionLocked(
+        long generation,
+        (ulong Sum, ulong Xor, int Count) digest,
+        Dictionary<string, (PhysicalDeviceIdentity Identity, string Protocols)> projection)
+    {
+        _modeProjection = projection;
+        _modeProjectionDigest = digest;
+        _modeProjectionGeneration = generation;
+    }
+
+    /// <summary>
+    /// Hashes only the projection inputs (physical identity key plus protocol) into an
+    /// order-independent digest, so a refresh that leaves them untouched skips projection work.
+    /// Two accumulators plus the entry count make an accidental match effectively impossible.
+    /// <para>只对投影输入（物理身份键与协议）计算与顺序无关的摘要，使未改动它们的刷新跳过投影
+    /// 计算。双累加器加条目计数使偶然相同实际上不可能发生。</para>
+    /// </summary>
+    private static (ulong Sum, ulong Xor, int Count) ComputeModeDigest(ImmutableArray<DeviceEndpoint> endpoints)
+    {
+        ulong sum = 0;
+        ulong xor = 0;
+        var count = 0;
         foreach (var endpoint in endpoints)
         {
-            if (endpoint.UsbInfo is not { } info ||
-                PhysicalDeviceIdentity.From(info) is not { } identity ||
-                identity.ContainerId is null && identity.PhysicalPortPath is null ||
-                string.IsNullOrEmpty(endpoint.Protocol))
+            if (ModeIdentityOf(endpoint) is not { } identity || string.IsNullOrEmpty(endpoint.Protocol))
             {
                 continue;
             }
 
+            var item = MixModeItem(identity.Key, endpoint.Protocol);
+            unchecked
+            {
+                sum += item;
+                xor ^= item;
+            }
+
+            count++;
+        }
+
+        return (sum, xor, count);
+    }
+
+    /// <summary>
+    /// FNV-1a mixing of one identity key and protocol pair, used only for digest comparison.
+    /// <para>对单个身份键与协议对做 FNV-1a 混合，仅用于摘要比较。</para>
+    /// </summary>
+    private static ulong MixModeItem(string key, string protocol)
+    {
+        var hash = 14695981039346656037UL;
+        foreach (var ch in key)
+        {
+            hash = unchecked((hash ^ ch) * 1099511628211UL);
+        }
+
+        hash = unchecked((hash ^ 0x1FUL) * 1099511628211UL);
+        foreach (var ch in protocol)
+        {
+            hash = unchecked((hash ^ ch) * 1099511628211UL);
+        }
+
+        return hash;
+    }
+
+    /// <summary>
+    /// Returns the physical identity the mode projection uses for one endpoint, or <c>null</c> when the
+    /// endpoint carries no usable identity evidence. Shared by the digest and the projection so both
+    /// consume exactly the same inputs; callers still reject endpoints without a protocol.
+    /// <para>返回模式投影为某端点使用的物理身份；端点没有可用身份证据时返回 <c>null</c>。
+    /// 摘要与投影共用它，从而消费完全相同的输入；协议为空仍由调用方剔除。</para>
+    /// </summary>
+    private static PhysicalDeviceIdentity? ModeIdentityOf(DeviceEndpoint endpoint)
+    {
+        if (endpoint.UsbInfo is not { } info ||
+            PhysicalDeviceIdentity.From(info) is not { } identity ||
+            identity.ContainerId is null && identity.PhysicalPortPath is null)
+        {
+            return null;
+        }
+
+        return identity;
+    }
+
+    /// <summary>
+    /// Builds the per-identity protocol projection and, in the same pass, the digest of the inputs it
+    /// was built from, so a cached predecessor never needs a second derivation pass.
+    /// <para>在同一次遍历中构建按物理身份分组的协议投影及其输入摘要，使缓存的前一份投影不需要
+    /// 第二次推导遍历。</para>
+    /// </summary>
+    /// <param name="endpoints">The endpoints to project. <para>待投影的端点集合。</para></param>
+    /// <param name="digest">Receives the digest of the projection inputs. <para>接收投影输入摘要。</para></param>
+    /// <returns>The identity-keyed protocol projection. <para>按身份键分组的协议投影。</para></returns>
+    private static Dictionary<string, (PhysicalDeviceIdentity Identity, string Protocols)> BuildModeProjection(
+        ImmutableArray<DeviceEndpoint> endpoints,
+        out (ulong Sum, ulong Xor, int Count) digest)
+    {
+        var raw = new Dictionary<string, (PhysicalDeviceIdentity Identity, SortedSet<string> Protocols)>(
+            StringComparer.Ordinal);
+        ulong sum = 0;
+        ulong xor = 0;
+        var count = 0;
+        foreach (var endpoint in endpoints)
+        {
+            if (ModeIdentityOf(endpoint) is not { } identity || string.IsNullOrEmpty(endpoint.Protocol))
+            {
+                continue;
+            }
+
+            var item = MixModeItem(identity.Key, endpoint.Protocol);
+            unchecked
+            {
+                sum += item;
+                xor ^= item;
+            }
+
+            count++;
             if (!raw.TryGetValue(identity.Key, out var entry))
             {
                 raw[identity.Key] = entry = (identity, new SortedSet<string>(StringComparer.Ordinal));
@@ -482,6 +656,7 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
             joined[pair.Key] = (pair.Value.Identity, string.Join('+', pair.Value.Protocols));
         }
 
+        digest = (sum, xor, count);
         return joined;
     }
 

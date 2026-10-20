@@ -197,6 +197,8 @@ public sealed partial class DeviceController
                             HandleDeviceRemoved(change.Device, metadataChanged: true);
                         }
                     }
+
+                    RaiseSafe(() => UsbTopologyChanged?.Invoke(changes), "USB topology subscriber failed");
                 },
                 onError: onError);
             lock (_gate)
