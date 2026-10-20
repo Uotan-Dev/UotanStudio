@@ -133,11 +133,11 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the boot public key window at the documented eFuse offset.
     /// <para>在已记载的 eFuse 偏移处读取引导公钥窗口。</para></summary>
-    /// <remarks>The reference client peeks the 0x20 bytes starting at the eFuse base plus 0x90
-    /// (Library/DA/xflash/extension/xflash.py:630-636). The window is fetched as eight little-endian
+    /// <remarks>The reference client peeks the 0x30 bytes starting at the eFuse base plus 0x90
+    /// (Library/DA/xflash/extension/xflash.py:861-867). The window is fetched as twelve little-endian
     /// register doublewords, which is how the documented memory read assembles any longer request
-    /// (Library/DA/xflash/extension/xflash.py:353-370). 参考客户端窥探从 eFuse 基址加 0x90 开始的 0x20 字节
-    /// （Library/DA/xflash/extension/xflash.py:630-636）。该窗口按 8 个小端寄存器双字取回，这正是已记载
+    /// (Library/DA/xflash/extension/xflash.py:353-370). 参考客户端窥探从 eFuse 基址加 0x90 开始的 0x30 字节
+    /// （Library/DA/xflash/extension/xflash.py:861-867）。该窗口按 12 个小端寄存器双字取回，这正是已记载
     /// 内存读取拼装较长请求的方式（Library/DA/xflash/extension/xflash.py:353-370）。</remarks>
     /// <param name="efuseBase">The eFuse base address supplied by the device profile.
     /// <para>由设备配置提供的 eFuse 基址。</para></param>

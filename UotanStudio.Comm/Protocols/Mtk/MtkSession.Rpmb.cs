@@ -16,24 +16,28 @@ public sealed partial class MtkSession
     /// <para>原始数值，以及参考对照表提供含义时的已命名结果。</para>
     /// </returns>
     /// <exception cref="MtkProtocolException">
-    /// The reply is not exactly two bytes; the exchange faults and is never replayed.
-    /// <para>应答不是恰好两个字节；交换进入 fault 状态且绝不重放。</para>
+    /// The reply is empty or wider than eight bytes; the exchange faults and is never replayed.
+    /// <para>应答为空或超过八字节；交换进入 fault 状态且绝不重放。</para>
     /// </exception>
     /// <remarks>
-    /// The reference client unpacks exactly <c>&lt;H</c> from one frame before deciding whether frame data
-    /// follows: <c>mtkclient/Library/DA/xflash/extension/xflash.py:399-401</c> and
-    /// <c>mtkclient/Library/DA/xml/extension/v6.py:307-311</c>.
-    /// <para>参考客户端正是从一个帧中恰好解出 <c>&lt;H</c>，再决定是否跟随帧数据：
-    /// <c>mtkclient/Library/DA/xflash/extension/xflash.py:399-401</c> 与
-    /// <c>mtkclient/Library/DA/xml/extension/v6.py:307-311</c>。</para>
+    /// The reference client treats any frame whose length is not <c>0x100</c> as the little-endian error code
+    /// (<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-497</c> and
+    /// <c>mtkclient/Library/DA/xml/extension/v6.py:626-649</c>). The named error codes are small, so the low
+    /// sixteen bits are reported while wider codes stay visibly uninterpreted.
+    /// <para>参考客户端把任何长度不是 <c>0x100</c> 的帧视为小端错误码
+    /// （<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-497</c> 与
+    /// <c>mtkclient/Library/DA/xml/extension/v6.py:626-649</c>）。已命名的错误码都很小，因此上报低十六位，
+    /// 更宽的错误码保持未解释状态。</para>
     /// </remarks>
     private static MtkRpmbFrameOutcome ReadRpmbFrameOutcome(ReadOnlySpan<byte> reply)
     {
-        if (reply.Length != 2)
+        if (reply.Length is < 1 or > 8)
         {
-            throw new MtkProtocolException("The RPMB frame result must be exactly two bytes.");
+            throw new MtkProtocolException("The RPMB frame result is empty or wider than eight bytes.");
         }
-        var code = BinaryPrimitives.ReadUInt16LittleEndian(reply);
+        var code = reply.Length == 1
+            ? (ushort)reply[0]
+            : BinaryPrimitives.ReadUInt16LittleEndian(reply);
         return new MtkRpmbFrameOutcome(code, code <= (ushort)MtkRpmbFrameStatus.AuthenticationKeyNotProgrammed
             ? (MtkRpmbFrameStatus)code
             : null);

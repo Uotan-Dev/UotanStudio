@@ -28,7 +28,9 @@ public static class MtkModeClassifier
     private const ushort DownloadPid = 0x2000;
     private const ushort VcomPid = 0x2001;
     private const ushort PreloaderPid = 0x20FF;
+    private const ushort PreloaderAltPid = 0x201D;
     private const ushort PreloaderUsbPid = 0x3000;
+    private const ushort PreloaderLargePid = 0x6000;
     private const ushort LgVid = 0x1004;
     private const ushort OppoVid = 0x22D9;
     private const ushort SonyVid = 0x0FCE;
@@ -49,17 +51,17 @@ public static class MtkModeClassifier
     /// <remarks>
     /// <para>Product id <c>0x0003</c> is the only MediaTek port the reference table labels as a bootrom port
     /// (<c>mtkclient/config/usb_ids.py</c>, line 2), so it alone resolves to <see cref="MtkUsbMode.BootRom"/>
-    /// without endpoint evidence. <c>0x2000</c> (line 4), <c>0x2001</c> (line 5), <c>0x20FF</c> (line 6) and
-    /// <c>0x3000</c> (line 7) are all labelled as preloader ports and share one product-id space with the
-    /// running-DA stage, so they are disambiguated by bulk endpoint shape rather than by the product id
-    /// alone. The two newly accepted ids therefore take part in the same endpoint-shape group instead of the
-    /// unique bootrom case, and no <see cref="MtkUsbMode"/> member was added for them.</para>
+    /// without endpoint evidence. <c>0x6000</c> (line 3), <c>0x2000</c> (line 4), <c>0x2001</c> (line 5),
+    /// <c>0x201D</c> (line 6), <c>0x20FF</c> (line 7) and <c>0x3000</c> (line 8) are all labelled as
+    /// preloader ports and share one product-id space with the running-DA stage, so they are disambiguated
+    /// by bulk endpoint shape rather than by the product id alone. No <see cref="MtkUsbMode"/> member was
+    /// added for them.</para>
     /// <para>产品 ID <c>0x0003</c> 是参考表中唯一标注为 bootrom 端口的联发科端口
     /// （<c>mtkclient/config/usb_ids.py</c> 第 2 行），因此只有它无需端点证据即可判定为
-    /// <see cref="MtkUsbMode.BootRom"/>。<c>0x2000</c>（第 4 行）、<c>0x2001</c>（第 5 行）、<c>0x20FF</c>
-    /// （第 6 行）与 <c>0x3000</c>（第 7 行）都标注为 preloader 端口，并与运行中的 DA 阶段共用同一产品 ID
-    /// 空间，因此按 bulk 端点形状而非仅按产品 ID 消歧。新接受的这两个 ID 于是加入同一个端点形状分组，而不是
-    /// 唯一 bootrom 分支，也没有为它们新增 <see cref="MtkUsbMode"/> 成员。</para>
+    /// <see cref="MtkUsbMode.BootRom"/>。<c>0x6000</c>（第 3 行）、<c>0x2000</c>（第 4 行）、
+    /// <c>0x2001</c>（第 5 行）、<c>0x201D</c>（第 6 行）、<c>0x20FF</c>（第 7 行）与 <c>0x3000</c>
+    /// （第 8 行）都标注为 preloader 端口，并与运行中的 DA 阶段共用同一产品 ID 空间，因此按 bulk 端点形状
+    /// 而非仅按产品 ID 消歧，也没有为它们新增 <see cref="MtkUsbMode"/> 成员。</para>
     /// </remarks>
     public static MtkModeClassification Classify(UsbDeviceInfo device)
     {
@@ -78,10 +80,12 @@ public static class MtkModeClassifier
                     $"The bootrom product id 0x{BootRomPid:X4} is unique to the Boot ROM stage; interface metadata was not observed.");
         }
 
-        if (device.ProductId is not (DownloadPid or VcomPid or PreloaderPid or PreloaderUsbPid))
+        if (device.ProductId is not (DownloadPid or VcomPid or PreloaderPid or PreloaderAltPid or PreloaderUsbPid
+            or PreloaderLargePid))
         {
             return new MtkModeClassification(MtkUsbMode.Unknown,
-                $"The product id 0x{device.ProductId:X4} is not a known MediaTek boot product id (0x0003, 0x2000, 0x2001, 0x20FF, 0x3000).");
+                $"The product id 0x{device.ProductId:X4} is not a known MediaTek boot product id " +
+                "(0x0003, 0x2000, 0x2001, 0x201D, 0x20FF, 0x3000, 0x6000).");
         }
 
         if (!device.InterfaceMetadataObserved || device.Interfaces.Count == 0)

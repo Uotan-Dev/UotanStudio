@@ -18,12 +18,15 @@ public sealed record MtkXmlRuntimeOptions
     /// </value>
     public required MtkXmlChecksumLevel Checksum { get; init; }
     /// <summary>
-    /// Gets the explicit host OS token, not an inferred target compatibility profile.
-    /// <para>获取显式的主机操作系统标记，而不是推断出的目标兼容性配置。</para>
+    /// Gets the explicit host OS identifier. The reference always asks the target for the Linux runtime,
+    /// so this value is validated but no longer changes the serialized <c>system_os</c> token.
+    /// <para>获取显式的主机操作系统标识。参考实现始终向目标请求 Linux 运行时，因此该值只做校验，
+    /// 不再改变序列化的 <c>system_os</c> 标记。</para>
     /// </summary>
     /// <value>
-    /// The token serialized as <c>system_os</c> in the runtime command.
-    /// <para>在运行时命令中以 <c>system_os</c> 序列化的标记。</para>
+    /// The caller's host identifier; the runtime command always serializes <c>LINUX</c> as
+    /// <c>system_os</c>.
+    /// <para>调用方的主机标识；运行时命令始终以 <c>LINUX</c> 序列化 <c>system_os</c>。</para>
     /// </value>
     public required MtkXmlHostOs HostOs { get; init; }
     /// <summary>
@@ -76,8 +79,7 @@ public sealed record MtkXmlRuntimeOptions
         };
         var host = HostOs switch
         {
-            MtkXmlHostOs.Windows => "WINDOWS",
-            MtkXmlHostOs.Linux => "LINUX",
+            MtkXmlHostOs.Windows or MtkXmlHostOs.Linux => "LINUX",
             _ => throw new ArgumentOutOfRangeException(nameof(HostOs))
         };
         var battery = Battery switch

@@ -87,11 +87,11 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the boot public key window through the Legacy agent register command.
     /// <para>通过 Legacy 代理寄存器命令读取引导公钥窗口。</para></summary>
-    /// <remarks>The Legacy extension peeks the 0x20 bytes starting at the eFuse base plus 0x90
-    /// (Library/DA/legacy/extension/legacy.py:216-222); the documented Legacy memory reader assembles
+    /// <remarks>The Legacy extension peeks the 0x30 bytes starting at the eFuse base plus 0x90
+    /// (Library/DA/legacy/extension/legacy.py:296-302); the documented Legacy memory reader assembles
     /// such a window from single big-endian register reads and re-emits each value in little-endian
-    /// order (Library/DA/legacy/extension/legacy.py:96-115). Legacy 扩展窥探从 eFuse 基址加 0x90 开始的 0x20 字节
-    /// （Library/DA/legacy/extension/legacy.py:216-222）；已记载的 Legacy 内存读取器由单次大端寄存器读取
+    /// order (Library/DA/legacy/extension/legacy.py:96-115). Legacy 扩展窥探从 eFuse 基址加 0x90 开始的 0x30 字节
+    /// （Library/DA/legacy/extension/legacy.py:296-302）；已记载的 Legacy 内存读取器由单次大端寄存器读取
     /// 拼装该窗口，并把每个取值按小端重新输出（Library/DA/legacy/extension/legacy.py:96-115）。</remarks>
     /// <param name="efuseBase">The eFuse base address supplied by the device profile.
     /// <para>由设备配置提供的 eFuse 基址。</para></param>

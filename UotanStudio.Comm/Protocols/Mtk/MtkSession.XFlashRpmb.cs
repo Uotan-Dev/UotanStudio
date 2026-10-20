@@ -6,8 +6,8 @@ public sealed partial class MtkSession
 {
     private const uint XFlashDeviceControl = 0x010009;
     private const uint XFlashGetRpmbStatus = 0x040010;
-    private const uint XFlashCustomReadRpmb = 0x0F0006;
-    private const uint XFlashCustomReadUfsRpmb = 0x0F0009;
+    private const uint XFlashCustomRpmbRead = 0x0F0009;
+    private const uint UfsRpmbPartitionId = 4;
 
     /// <summary>Queries the agent's opaque RPMB status reply and reports the RPMB capacity from the discovered geometry.
     /// <para>查询代理不透明的 RPMB 状态应答，并报告已发现几何信息中的 RPMB 容量。</para></summary>
@@ -64,8 +64,8 @@ public sealed partial class MtkSession
 
     /// <summary>Reads a bounded run of RPMB frames through the XFlash DA-extension read command.
     /// <para>通过 XFlash DA 扩展读取命令读取有界的连续 RPMB 帧。</para></summary>
-    /// <remarks>Each frame is one complete command exchange: the device-control envelope, the read control code, the frame index as a four-byte little-endian field, a two-byte result frame and then the frame data (<c>mtkclient/Library/DA/xflash/extension/xflash.py:395-411</c>, codes at <c>mtkclient/Library/DA/xflash/extension/xflash.py:21-24</c>). The first frame the device refuses stops the run; the session never retries a refused frame.
-    /// <para>每一帧都是一次完整命令交换：设备控制封装、读取控制码、以小端四字节发送的帧序号、 一个两字节结果帧，随后才是帧数据（<c>mtkclient/Library/DA/xflash/extension/xflash.py:395-411</c>， 控制码见 <c>mtkclient/Library/DA/xflash/extension/xflash.py:21-24</c>）。设备拒绝的首帧会终止本次读取； 会话绝不会重试被拒绝的帧。</para></remarks>
+    /// <remarks>One exchange starts with the device-control envelope and <c>CUSTOM_RPMB_READ</c> (<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-497</c>, codes at <c>mtkclient/Library/DA/xflash/extension/xflash.py:21-32</c>), sends the first sector and the sector count as two little-endian words, reads one frame per sector (exactly 0x100 bytes is data, a short frame carries the error code) and finally reads one total status. The first frame the device refuses stops the frame loop and the run is never replayed.
+    /// <para>一次交换以设备控制封装与 <c>CUSTOM_RPMB_READ</c> 开始（<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-497</c>， 控制码见 <c>mtkclient/Library/DA/xflash/extension/xflash.py:21-32</c>），随后以小端四字节发送首帧与帧数量， 每个 sector 读取一帧（恰好 0x100 字节为数据，短帧携带错误码），最后读取一次总状态。设备拒绝的首帧会终止帧循环； 会话绝不会重试被拒绝的帧。</para></remarks>
     /// <param name="range">The validated frame-aligned range to read.
     /// <para>要读取的、已校验的帧对齐范围。</para></param>
     /// <param name="options">Optional bounds and deadline; <see langword="null"/> uses the read-only defaults.
@@ -109,15 +109,15 @@ public sealed partial class MtkSession
 
     /// <summary>Dumps the whole reported RPMB area of the active block-storage family.
     /// <para>转储当前块存储族完整上报的 RPMB 区域。</para></summary>
-    /// <remarks>The reference client derives the frame count by dividing the reported eMMC RPMB size by the fixed frame width (<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-498</c>); the UFS branch hardcodes a count instead of reading a size, and the UFS storage reply has no RPMB field at all (<c>mtkclient/Library/DA/xflash/xflash_lib.py:620-636</c>), so a UFS dump needs an explicit frame range.
-    /// <para>参考客户端用上报的 eMMC RPMB 大小除以固定帧宽度推导出帧数量 （<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-498</c>）；UFS 分支硬编码数量而不读取大小， 且 UFS 存储应答根本没有 RPMB 字段（<c>mtkclient/Library/DA/xflash/xflash_lib.py:620-636</c>）， 因此 UFS 转储必须显式给出帧范围。</para></remarks>
+    /// <remarks>The reference client derives the frame count by dividing the reported eMMC RPMB size by the fixed frame width (<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-498</c>). The UFS storage reply carries only lu2/lu1/lu0, so the <c>lu3</c> RPMB size defined by <c>mtkclient/Library/DA/storage.py:101-110</c> stays zero for this family and a UFS dump needs an explicit frame range.
+    /// <para>参考客户端用上报的 eMMC RPMB 大小除以固定帧宽度推导出帧数量 （<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-498</c>）。UFS 存储应答只携带 lu2/lu1/lu0， 因此 <c>mtkclient/Library/DA/storage.py:101-110</c> 定义的 <c>lu3</c> RPMB 大小在该家族保持为零， UFS 转储必须显式给出帧范围。</para></remarks>
     /// <param name="options">Optional bounds and deadline; <see langword="null"/> uses the read-only defaults.
     /// <para>可选的边界与截止时间；<see langword="null"/> 使用只读默认值。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The delivered frames as one opaque blob plus the reported capacity.
     /// <para>以不透明数据块交付的帧，以及上报的容量。</para></returns>
-    /// <exception cref="NotSupportedException">The active family reports no RPMB size field, which is the UFS case for XFlash.
-    /// <para>当前族未上报 RPMB 大小字段，即 XFlash 的 UFS 情形。</para></exception>
+    /// <exception cref="NotSupportedException">The active family reports no usable RPMB size field, which is the XFlash UFS case when lu3 is zero.
+    /// <para>当前族未上报可用的 RPMB 大小字段，即 XFlash UFS 的 lu3 为零情形。</para></exception>
     /// <exception cref="InvalidOperationException">The reported RPMB capacity is zero, absent, or not an exact multiple of the frame width.
     /// <para>上报的 RPMB 容量为零、缺失，或不是帧宽度的整数倍。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The area needs more frames than <see cref="MtkRpmbOptions.MaximumReadFrames"/>.
@@ -176,14 +176,16 @@ public sealed partial class MtkSession
 
     private long? ResolveXFlashRpmbCapacity(MtkRpmbTarget target)
     {
-        if (target == MtkRpmbTarget.Ufs)
-        {
-            return null;
-        }
         var storage = XFlashStorage ?? throw new InvalidOperationException("Storage has not been discovered.");
-        var region = storage.Regions.FirstOrDefault(region => region.RequiresAuthenticatedAccess)
-            ?? throw new InvalidOperationException("The reported XFlash geometry has no RPMB region.");
-        return region.CapacityBytes;
+        var region = target == MtkRpmbTarget.Ufs
+            ? storage.Regions.FirstOrDefault(region => region.PartitionId == UfsRpmbPartitionId)
+            : storage.Regions.FirstOrDefault(region => region.RequiresAuthenticatedAccess);
+        if (region is null)
+        {
+            throw new InvalidOperationException("The reported XFlash geometry has no RPMB region.");
+        }
+
+        return target == MtkRpmbTarget.Ufs && region.CapacityBytes == 0 ? null : region.CapacityBytes;
     }
 
     private async Task<MtkRpmbReadResult> ReadXFlashRpmbFramesOwnedAsync(MtkRpmbFrameRange range,
@@ -193,10 +195,14 @@ public sealed partial class MtkSession
         await RunRpmbExchangeAsync(async token =>
         {
             var channel = _xflash ?? throw new InvalidOperationException("XFlash was not initialized.");
+            await BeginXFlashRpmbReadAsync(channel, token).ConfigureAwait(false);
+            await channel.SendAsync(1, CreateRpmbFrameWord(range.StartFrame), token).ConfigureAwait(false);
+            await channel.SendAsync(1, CreateRpmbFrameWord(range.FrameCount), token).ConfigureAwait(false);
+            var frameRefused = false;
             for (var index = 0; index < range.FrameCount; index++)
             {
                 var frame = checked(range.StartFrame + index);
-                var (outcome, data) = await ReadXFlashRpmbFrameAsync(channel, target, frame, token).ConfigureAwait(false);
+                var (outcome, data) = await ReadXFlashRpmbFrameAsync(channel, frame, token).ConfigureAwait(false);
                 frames.Add(new MtkRpmbFrameResult
                 {
                     Frame = frame,
@@ -205,14 +211,26 @@ public sealed partial class MtkSession
                 });
                 if (!outcome.IsOkay)
                 {
+                    frameRefused = true;
                     break;
+                }
+            }
+
+            var status = await ReadXFlashValueAsync(channel, "rpmb read completion", token).ConfigureAwait(false);
+            if (status != 0)
+            {
+                RecordRpmbEvidence("rpmb-read", CommandOutcomeKind.Rejected,
+                    $"xflash rpmb frames {range.StartFrame}+{range.FrameCount} completed with status 0x{status:X8}.");
+                if (!frameRefused)
+                {
+                    throw new MtkProtocolException($"The XFlash RPMB read was rejected (0x{status:X8}).", status);
                 }
             }
         }, options.OperationTimeoutMs, FaultXFlashStorage, cancellationToken).ConfigureAwait(false);
         var accepted = frames.Count(frame => frame.Outcome.IsOkay);
         RecordRpmbEvidence("rpmb-read", accepted == range.FrameCount ? CommandOutcomeKind.Completed : CommandOutcomeKind.Rejected,
-            $"xflash rpmb read {(target == MtkRpmbTarget.Emmc ? XFlashCustomReadRpmb : XFlashCustomReadUfsRpmb):X8} " +
-            $"frames {range.StartFrame}+{range.FrameCount}; {accepted} accepted.");
+            $"xflash rpmb read 0x{XFlashCustomRpmbRead:X8} frames {range.StartFrame}+{range.FrameCount}; " +
+            $"{accepted} accepted.");
         return new MtkRpmbReadResult
         {
             Target = target,
@@ -224,42 +242,29 @@ public sealed partial class MtkSession
     }
 
     private async Task<(MtkRpmbFrameOutcome Outcome, byte[] Data)> ReadXFlashRpmbFrameAsync(MtkXFlashChannel channel,
-        MtkRpmbTarget target, long frame, CancellationToken cancellationToken)
+        long frame, CancellationToken cancellationToken)
     {
-        var command = target == MtkRpmbTarget.Emmc ? XFlashCustomReadRpmb : XFlashCustomReadUfsRpmb;
-        await RequireXFlashRpmbCommandAsync(channel, command, cancellationToken).ConfigureAwait(false);
-        await channel.SendAsync(1, CreateRpmbFrameWord(frame), cancellationToken).ConfigureAwait(false);
-        var reply = await channel.ReceiveAsync(2, cancellationToken).ConfigureAwait(false);
+        var reply = await channel.ReceiveAsync(MtkRpmbWire.FrameLength, cancellationToken).ConfigureAwait(false);
         if (reply.DataType != 1)
         {
-            throw new MtkProtocolException("The RPMB frame result arrived in a non-protocol frame.");
+            throw new MtkProtocolException("The RPMB frame arrived in a non-protocol frame.");
         }
+        if (reply.Payload.Length == MtkRpmbWire.FrameLength)
+        {
+            return (new MtkRpmbFrameOutcome(0, MtkRpmbFrameStatus.Okay), reply.Payload);
+        }
+
         var outcome = ReadRpmbFrameOutcome(reply.Payload);
-        if (!outcome.IsOkay)
-        {
-            var reported = await ReadXFlashValueAsync(channel, "rpmb frame refusal", cancellationToken).ConfigureAwait(false);
-            RecordRpmbEvidence("rpmb-frame", CommandOutcomeKind.Rejected,
-                $"xflash rpmb frame {frame} reported 0x{outcome.ReportedCode:X4}; completion status 0x{reported:X8} kept as evidence.");
-            return (outcome, []);
-        }
-        var data = await channel.ReceiveAsync(MtkRpmbWire.FrameLength, cancellationToken).ConfigureAwait(false);
-        if (data.DataType != 1)
-        {
-            throw new MtkProtocolException("RPMB frame data arrived in a non-protocol frame.");
-        }
-        if (data.Payload.Length != MtkRpmbWire.FrameLength)
-        {
-            throw new MtkProtocolException("The RPMB frame data does not match the fixed frame width.");
-        }
-        await ReadXFlashStatusAsync(channel, "rpmb frame data", cancellationToken).ConfigureAwait(false);
-        return (outcome, data.Payload);
+        RecordRpmbEvidence("rpmb-frame", CommandOutcomeKind.Rejected,
+            $"xflash rpmb frame {frame} reported 0x{outcome.ReportedCode:X4} in a {reply.Payload.Length}-byte frame.");
+        return (outcome, []);
     }
 
-    private async Task RequireXFlashRpmbCommandAsync(MtkXFlashChannel channel, uint command, CancellationToken cancellationToken)
+    private async Task BeginXFlashRpmbReadAsync(MtkXFlashChannel channel, CancellationToken cancellationToken)
     {
         await SendXFlashWordAsync(channel, XFlashDeviceControl, cancellationToken).ConfigureAwait(false);
         await ReadXFlashStatusAsync(channel, "rpmb device control", cancellationToken).ConfigureAwait(false);
-        await SendXFlashWordAsync(channel, command, cancellationToken).ConfigureAwait(false);
+        await SendXFlashWordAsync(channel, XFlashCustomRpmbRead, cancellationToken).ConfigureAwait(false);
         await ReadXFlashStatusAsync(channel, "rpmb command", cancellationToken).ConfigureAwait(false);
     }
 }

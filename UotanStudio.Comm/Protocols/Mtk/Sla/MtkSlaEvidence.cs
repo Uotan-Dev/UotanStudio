@@ -4,17 +4,17 @@ using UotanStudio.Hash.Digests;
 namespace UotanStudio.Comm.Protocols.Mtk.Sla;
 
 /// <summary>
-/// One immutable observation of an MTK authorization flow: which flow, which stage, which kind of
-/// responder served it, the SHA-256 digest of the challenge when one was read, and the outcome.
-/// <para>一条不可变的 MTK 授权流程观测记录：流程、阶段、响应提供方种类、读到挑战时的 SHA-256 摘要
+/// One immutable observation of an MTK authorization flow: which flow, which stage, the SHA-256 digest of the
+/// challenge when one was read, and the outcome.
+/// <para>一条不可变的 MTK 授权流程观测记录：流程、阶段、读到挑战时的 SHA-256 摘要
 /// （若读到），以及结果。</para>
 /// The challenge is only ever stored as a digest: raw challenge bytes, private keys, tokens and
 /// signed responses must never enter evidence, because evidence is serialised and may outlive the
-/// responder lifetime. "Device required authentication" and "authentication response accepted"
-/// are recorded as two separate entries; neither implies the other.
+/// exchange that produced it. "Device required authentication" and "authentication refused for lack
+/// of an authorized key source" are recorded as two separate entries; neither implies the other.
 /// <para>挑战只以摘要形式存储：原始挑战字节、私钥、token 与已签名响应绝不可进入证据，
-/// 因为证据会被序列化且生命周期可能超过响应方。"设备要求认证"与"认证响应被接受"
-/// 记为两条独立证据，彼此不互相蕴含。</para>
+/// 因为证据会被序列化且生命周期可能超过产生它的交换。"设备要求认证"与
+/// "因无授权密钥来源而拒绝认证"记为两条独立证据，彼此不互相蕴含。</para>
 /// </summary>
 public sealed record MtkSlaEvidence
 {
@@ -29,14 +29,6 @@ public sealed record MtkSlaEvidence
     /// <para>获取流程内部的观测点。</para>
     /// </summary>
     public required MtkSlaEvidenceStage Stage { get; init; }
-
-    /// <summary>
-    /// Gets which class of responder served the flow, or <see cref="MtkSlaResponderKind.None"/> when
-    /// the flow failed before a responder was consulted.
-    /// <para>获取服务该流程的响应提供方种类；流程在咨询响应方之前即失败时为
-    /// <see cref="MtkSlaResponderKind.None"/>。</para>
-    /// </summary>
-    public required MtkSlaResponderKind ResponderKind { get; init; }
 
     /// <summary>
     /// Gets the lowercase hexadecimal SHA-256 digest of the challenge bytes, when a challenge had

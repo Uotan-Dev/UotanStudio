@@ -58,8 +58,9 @@ public enum MtkRpmbFrameStatus
 /// <para>设备上报的单帧 RPMB 结果，保留原始线协议数值。</para>
 /// </summary>
 /// <param name="ReportedCode">
-/// The little-endian sixteen-bit number taken from the reply frame, unchanged.
-/// <para>从应答帧按小端读取的 16 位数值，未经修改。</para>
+/// The little-endian error code taken from a short reply frame, truncated to sixteen bits so the named
+/// zero-through-seven table stays applicable.
+/// <para>从短应答帧按小端读取的错误码，截断为 16 位以保持 0 至 7 的命名对照表适用。</para>
 /// </param>
 /// <param name="Status">
 /// The named meaning when <paramref name="ReportedCode"/> is zero through seven, otherwise
@@ -167,10 +168,10 @@ public sealed record MtkRpmbReadResult
     /// <para>获取设备几何信息上报的 RPMB 容量。</para>
     /// </summary>
     /// <value>
-    /// The reported byte capacity, or <see langword="null"/> when the selected interface's geometry has no
-    /// RPMB size field, which is the UFS case for the XFlash family.
-    /// <para>上报的字节容量；所选接口的几何信息没有 RPMB 大小字段时为 <see langword="null"/>，
-    /// 即 XFlash 族的 UFS 情形。</para>
+    /// The reported byte capacity, or <see langword="null"/> when the selected interface's geometry reports no
+    /// usable RPMB size, which is the XFlash UFS case while <c>lu3</c> stays zero.
+    /// <para>上报的字节容量；所选接口的几何信息未上报可用 RPMB 大小时为 <see langword="null"/>，
+    /// 即 XFlash 族 UFS 的 <c>lu3</c> 保持零值情形。</para>
     /// </value>
     public long? ReportedRpmbCapacityBytes { get; init; }
     /// <summary>
@@ -258,15 +259,19 @@ public sealed record MtkRpmbStatusResult
     /// </summary>
     /// <value>
     /// The reported byte size of the authenticated RPMB region, or <see langword="null"/> when the selected
-    /// interface's geometry carries no RPMB size field.
-    /// <para>已认证 RPMB 区域的上报字节大小；所选接口的几何信息没有 RPMB 大小字段时为
-    /// <see langword="null"/>。</para>
+    /// interface's geometry reports no usable RPMB size, which is the XFlash UFS case while <c>lu3</c> stays zero.
+    /// <para>已认证 RPMB 区域的上报字节大小；所选接口的几何信息未上报可用 RPMB 大小时为
+    /// <see langword="null"/>，即 XFlash 族 UFS 的 <c>lu3</c> 保持零值情形。</para>
     /// </value>
     /// <remarks>
-    /// For eMMC this is the third capacity field of the storage reply,
-    /// <c>mtkclient/Library/DA/xflash/xflash_lib.py:518-522</c>.
-    /// <para>对 eMMC 而言这是存储应答的第三个容量字段，
-    /// <c>mtkclient/Library/DA/xflash/xflash_lib.py:518-522</c>。</para>
+    /// For eMMC this is the RPMB capacity field of the storage reply
+    /// (<c>mtkclient/Library/DA/xflash/xflash_lib.py:440-478</c>). For UFS it is the <c>lu3</c> size, which the
+    /// XFlash storage reply does not carry and the reference therefore leaves zero
+    /// (<c>mtkclient/Library/DA/storage.py:101-110</c>).
+    /// <para>对 eMMC 而言这是存储应答中的 RPMB 容量字段
+    /// （<c>mtkclient/Library/DA/xflash/xflash_lib.py:440-478</c>）。对 UFS 而言这是 <c>lu3</c> 大小，
+    /// XFlash 存储应答不携带该字段，因此参考实现保持为零
+    /// （<c>mtkclient/Library/DA/storage.py:101-110</c>）。</para>
     /// </remarks>
     public long? ReportedRpmbCapacityBytes { get; init; }
     /// <summary>

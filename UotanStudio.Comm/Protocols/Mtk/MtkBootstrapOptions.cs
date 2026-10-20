@@ -164,6 +164,17 @@ public record MtkBootstrapOptions
     /// </value>
     public int HandshakeTimeoutMs { get; init; } = 100;
     /// <summary>
+    /// Gets whether the preloader watchdog is disabled after the identity query and before any download-agent upload.
+    /// <para>获取是否在身份查询之后、任何下载代理上传之前禁用 preloader 看门狗。</para>
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> by default, matching the upstream initialization for non-64-bit chips whose
+    /// reference table records a sequence; <see langword="false"/> skips every watchdog register write.
+    /// <para>默认 <see langword="true"/>，与上游对参考表记录了序列的非 64 位芯片的初始化一致；
+    /// <see langword="false"/> 会跳过所有看门狗寄存器写入。</para>
+    /// </value>
+    public bool DisablePreloaderWatchdog { get; init; } = true;
+    /// <summary>
     /// Gets the explicit provider for the boot byte-stream profile. No provider is invoked
     /// unless BootResourceOrder selects resources; this does not implement packet/ZLP USB authentication.
     /// <para>获取 boot 字节流配置的显式提供程序。除非 BootResourceOrder 选择了资源，否则不会调用任何提供程序；
@@ -186,15 +197,6 @@ public record MtkBootstrapOptions
     /// <para>按上传顺序排列的调用方选定资源种类；不使用 boot 资源时为空。</para>
     /// </value>
     public IReadOnlyList<MtkBootResourceKind> BootResourceOrder { get; init; } = [];
-    /// <summary>
-    /// Gets the authorized XFlash/XML DA2 signing provider, invoked only when DA2 reports SLA enabled.
-    /// Legacy profiles reject this setting.
-    /// <para>获取授权的 XFlash/XML DA2 签名提供方，仅在 DA2 报告启用 SLA 时调用。
-    /// Legacy 配置拒绝此设置。</para>
-    /// </summary>
-    /// <value>The provider, or null to reject enabled SLA without submitting a response.
-    /// <para>签名提供方；为 null 时，在启用 SLA 的情况下停止且不提交响应。</para></value>
-    public IMtkDaSlaResponder? DaSlaResponder { get; init; }
     /// <summary>
     /// Gets the cooperative SLA exchange deadline in milliseconds; no retry occurs on expiry.
     /// <para>获取协作式 SLA 交换的截止时间（毫秒）；超时后不会重试。</para>

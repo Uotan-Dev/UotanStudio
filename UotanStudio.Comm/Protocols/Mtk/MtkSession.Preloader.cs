@@ -591,6 +591,31 @@ public sealed partial class MtkSession
         await WriteAsync(checksumField, _timeoutMs, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Applies the upstream initialization watchdog policy: disable the watchdog only for a chip the
+    /// reference does not mark as 64-bit and for which the reference table records a sequence.
+    /// <para>应用上游初始化看门狗策略：仅对参考实现未标记为 64 位、且参考表记录了序列的芯片禁用看门狗。</para>
+    /// </summary>
+    /// <remarks>The upstream preloader initialization performs this write after the hardware code is known and before
+    /// the download-agent upload (<c>mtkclient/Library/mtk_preloader.py:208-211</c>). Calling it from the bootstrap keeps
+    /// the single <c>InitializeAsync</c> state machine intact instead of initializing the session twice.
+    /// <para>上游 preloader 初始化在硬件码已知之后、下载代理上传之前执行该写入
+    /// （<c>mtkclient/Library/mtk_preloader.py:208-211</c>）。由引导流程调用它可以保持唯一的
+    /// <c>InitializeAsync</c> 状态机，而不需要二次初始化会话。</para></remarks>
+    /// <param name="device">The identity already queried from the target. 已从目标查询到的身份信息。</param>
+    /// <param name="cancellationToken">The operation cancellation token. 操作取消令牌。</param>
+    internal async Task DisablePreloaderWatchdogForBootRomAsync(MtkDeviceInfo device,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        if (MtkPreloaderWatchdogTable.Is64BitHardware(device.HardwareCode)
+            || MtkPreloaderWatchdogTable.Resolve(device.HardwareCode, device.HardwareVersion).Count == 0)
+        {
+            return;
+        }
+
+        await DisablePreloaderWatchdogAsync(confirmWrite: true, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Disables the target watchdog with the chip-specific write sequence the reference defines.
     /// <para>使用参考实现定义的、按芯片区分的写序列禁用目标看门狗。</para></summary>
     /// <remarks>The steps come from <see cref="MtkPreloaderWatchdogTable.Resolve"/>; chips upstream

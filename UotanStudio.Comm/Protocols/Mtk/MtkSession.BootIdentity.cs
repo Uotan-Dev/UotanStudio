@@ -16,12 +16,14 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// 0xFE itself marks Boot ROM mode, <c>get_bromver</c> (lines 657-663) writes command 0xFF and reads
 /// one version byte, and <c>get_meid</c> (lines 932-958) / <c>get_socid</c> (lines 960-987) probe
 /// command 0xFE first, then write command 0xE1 or 0xE7, require the one-byte command echo, read the
-/// big-endian payload length, the payload itself and a little-endian two-byte completion status.</para>
+/// big-endian payload length, the payload itself and a little-endian two-byte completion status. The
+/// initialization path reuses the bootloader version it already read instead of probing 0xFE once more
+/// for each identifier.</para>
 /// <para>此处每个帧结构都转录自 <c>mtkclient/Library/mtk_preloader.py</c>：<c>get_blver</c>（第 664-673 行）
 /// 写入命令 0xFE 并读取一个版本字节，取值 0xFE 本身即标记 Boot ROM 模式；<c>get_bromver</c>（第 657-663 行）
 /// 写入命令 0xFF 并读取一个版本字节；<c>get_meid</c>（第 932-958 行）与 <c>get_socid</c>（第 960-987 行）
 /// 先用命令 0xFE 探测，再写入命令 0xE1 或 0xE7，要求单字节命令回显，随后读取大端载荷长度、载荷本体与
-/// 小端两字节完成状态。</para>
+/// 小端两字节完成状态。初始化路径复用已读取的 bootloader 版本，不再为每个标识重复探测 0xFE。</para>
 /// <para>During <c>InitializeAsync</c> every query is best-effort exactly like the reference, which
 /// keeps initializing when a target stays silent: a failed or refused query degrades the matching
 /// identity field to null, records evidence and never faults the session. The explicit public
@@ -159,7 +161,7 @@ public sealed partial class MtkSession
         {
             try
             {
-                var meid = await QueryBootIdentityBlobOwnedAsync(BootIdentityGetMeidCommand, "MEID",
+                var meid = await QueryBootIdentityBlobOwnedAsync(BootIdentityGetMeidCommand, "MEID", null,
                     cancellationToken).ConfigureAwait(false);
                 if (meid is not null)
                 {
@@ -208,7 +210,7 @@ public sealed partial class MtkSession
         {
             try
             {
-                var socid = await QueryBootIdentityBlobOwnedAsync(BootIdentityGetSocidCommand, "SOCID",
+                var socid = await QueryBootIdentityBlobOwnedAsync(BootIdentityGetSocidCommand, "SOCID", null,
                     cancellationToken).ConfigureAwait(false);
                 if (socid is not null)
                 {
@@ -276,7 +278,8 @@ public sealed partial class MtkSession
 
         try
         {
-            meid = await QueryBootIdentityBlobOwnedAsync(BootIdentityGetMeidCommand, "MEID", cancellationToken)
+            meid = await QueryBootIdentityBlobOwnedAsync(BootIdentityGetMeidCommand, "MEID", bootLoaderVersion,
+                    cancellationToken)
                 .ConfigureAwait(false);
             RecordSecurityEvidence("boot-identity", CommandOutcomeKind.Completed, DescribeIdentityBlob(meid));
         }
@@ -288,7 +291,8 @@ public sealed partial class MtkSession
 
         try
         {
-            socid = await QueryBootIdentityBlobOwnedAsync(BootIdentityGetSocidCommand, "SOCID", cancellationToken)
+            socid = await QueryBootIdentityBlobOwnedAsync(BootIdentityGetSocidCommand, "SOCID", bootLoaderVersion,
+                    cancellationToken)
                 .ConfigureAwait(false);
             RecordSecurityEvidence("boot-identity", CommandOutcomeKind.Completed, DescribeIdentityBlob(socid));
         }
@@ -329,14 +333,18 @@ public sealed partial class MtkSession
     /// <para>标识命令字节，0xE1 或 0xE7。</para></param>
     /// <param name="operation">The neutral operation name used in errors.
     /// <para>错误信息中使用的与本地化无关的操作名。</para></param>
+    /// <param name="knownBootLoaderVersion">The bootloader version byte already read by the caller, so the
+    /// 0xFE probe is not repeated; <see langword="null"/> probes once.
+    /// <para>调用方已读取的 bootloader 版本字节，因此不再重复 0xFE 探测；<see langword="null"/> 时探测一次。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
     /// <returns>The identifier bytes, or null when the probe reports no support.
     /// <para>标识字节；探测报告不支持时为 null。</para></returns>
     private async Task<byte[]?> QueryBootIdentityBlobOwnedAsync(byte identityCommand, string operation,
-        CancellationToken cancellationToken)
+        byte? knownBootLoaderVersion, CancellationToken cancellationToken)
     {
-        var probe = await ReadBootLoaderVersionOwnedAsync(cancellationToken).ConfigureAwait(false);
+        var probe = knownBootLoaderVersion
+            ?? await ReadBootLoaderVersionOwnedAsync(cancellationToken).ConfigureAwait(false);
         if (probe <= BootIdentityProbeUnsupportedMaximum)
         {
             return null;

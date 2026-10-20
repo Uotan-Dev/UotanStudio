@@ -41,8 +41,12 @@ public sealed class MtkXFlashStorageRegion
     /// <para>获取 XFlash 存储命令使用的分区标识符。</para>
     /// </summary>
     /// <value>
-    /// eMMC/UFS regions start at <c>1</c>; NOR uses the whole-device identifier <c>8</c>.
-    /// <para>eMMC/UFS 区域从 <c>1</c> 开始编号；NOR 使用整片标识符 <c>8</c>。</para>
+    /// eMMC/UFS regions start at <c>1</c>; NOR uses the whole-device identifier <c>8</c>. UFS uses
+    /// <c>1</c> = BOOT1, <c>2</c> = BOOT2, <c>3</c> = USER and <c>4</c> = RPMB, the identifiers
+    /// <c>mtkclient/Library/DA/storage.py:44-49</c> defines.
+    /// <para>eMMC/UFS 区域从 <c>1</c> 开始编号；NOR 使用整片标识符 <c>8</c>。UFS 使用
+    /// <c>1</c> = BOOT1、<c>2</c> = BOOT2、<c>3</c> = USER、<c>4</c> = RPMB，即
+    /// <c>mtkclient/Library/DA/storage.py:44-49</c> 定义的标识符。</para>
     /// </value>
     public uint PartitionId { get; }
     /// <summary>
@@ -126,9 +130,12 @@ public sealed class MtkXFlashStorageInfo
     /// <para>获取物理分区，包含容量为零的分区以及设备上报的 RPMB 分区。</para>
     /// </summary>
     /// <value>
-    /// Eight regions for eMMC, three for UFS, one whole-device region for NOR, or NAND's logical available area.
-    /// NAND physical capacity is available through <see cref="Nand"/> and requires dedicated access methods.
-    /// <para>eMMC 为八个区域，UFS 为三个，NOR 为一个整片区域，NAND 为逻辑可用区域。
+    /// Eight regions for eMMC, four for UFS, one whole-device region for NOR, or NAND's logical available area.
+    /// The UFS RPMB region is modeled as authenticated with the <c>lu3</c> size the reference leaves at zero
+    /// because the XFlash UFS reply carries only lu2/lu1/lu0. NAND physical capacity is available through
+    /// <see cref="Nand"/> and requires dedicated access methods.
+    /// <para>eMMC 为八个区域，UFS 为四个，NOR 为一个整片区域，NAND 为逻辑可用区域。UFS RPMB 区域以需认证标记建模，
+    /// 其 <c>lu3</c> 大小沿用参考实现因 XFlash UFS 应答只携带 lu2/lu1/lu0 而保留的零值。
     /// NAND 物理容量通过 <see cref="Nand"/> 提供，必须使用专用访问方法。</para>
     /// </value>
     public IReadOnlyList<MtkXFlashStorageRegion> Regions { get; }
@@ -272,18 +279,18 @@ public sealed class MtkXFlashStorageInfo
                 [new MtkXFlashStorageRegion(8, nand.AvailableSize, false)], string.Empty,
                 (int)writeLength, (int)readLength, nand);
         }
-        var count = kind == MtkXFlashStorageKind.Emmc ? 8 : 3;
+        var count = kind == MtkXFlashStorageKind.Emmc ? 8 : 4;
         var regions = new MtkXFlashStorageRegion[count];
         for (var index = 0; index < count; index++)
         {
-            var wireIndex = kind == MtkXFlashStorageKind.Emmc ? index : index switch { 0 => 1, 1 => 0, _ => 2 };
-            var size = BinaryPrimitives.ReadUInt64LittleEndian(geometry[(8 + wireIndex * 8)..]);
+            var wireIndex = kind == MtkXFlashStorageKind.Emmc ? index : index switch { 0 => 1, 1 => 0, 2 => 2, _ => -1 };
+            var size = wireIndex < 0 ? 0UL : BinaryPrimitives.ReadUInt64LittleEndian(geometry[(8 + wireIndex * 8)..]);
             if (size > long.MaxValue || size % blockSize != 0)
             {
                 throw new MtkProtocolException("The reported physical capacity overflows or is not block-aligned.");
             }
             regions[index] = new MtkXFlashStorageRegion((uint)index + 1, (long)size,
-                kind == MtkXFlashStorageKind.Emmc && index == 2);
+                kind == MtkXFlashStorageKind.Emmc ? index == 2 : index == 3);
         }
         if (!regions.Any(region => region.CapacityBytes > 0 && !region.RequiresAuthenticatedAccess))
         {

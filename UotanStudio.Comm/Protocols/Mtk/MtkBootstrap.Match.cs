@@ -65,6 +65,12 @@ public sealed record MtkAutoStartup
     /// <para>在初始反码字节握手中使用的正数逐字节预算。</para></value>
     public int HandshakeTimeoutMs { get; init; } = 100;
 
+    /// <summary>Gets whether the preloader watchdog is disabled after the identity query when the reference chip table records a sequence and the chip is not 64-bit.
+    /// <para>获取是否在身份查询之后、参考芯片表记录了序列且芯片不是 64 位时禁用 preloader 看门狗。</para></summary>
+    /// <value><see langword="true"/> by default, matching the upstream initialization; <see langword="false"/> skips every watchdog register write.
+    /// <para>默认 <see langword="true"/>，与上游初始化一致；<see langword="false"/> 会跳过所有看门狗寄存器写入。</para></value>
+    public bool DisablePreloaderWatchdog { get; init; } = true;
+
     /// <summary>Gets the UART log level sent to XFlash DA1.
     /// <para>获取发送给 XFlash DA1 的 UART 日志级别。</para></summary>
     /// <value>The numeric verbosity applied to the initialized agent.
@@ -156,6 +162,11 @@ public static partial class MtkBootstrap
         try
         {
             session = new MtkSession(transport, startup.TransferTimeoutMs, startup.HandshakeTimeoutMs);
+            if (transport is UsbDeviceTransport usb)
+            {
+                session.NoteUsbDescriptor(usb.Session.DeviceInfo);
+            }
+
             var device = await session.InitializeAsync(cancellationToken).ConfigureAwait(false);
             var options = BuildMatchedOptions(startup, device, protocol);
             return await InitializeCoreAsync(null, protocol, options, null, cancellationToken,
@@ -248,6 +259,7 @@ public static partial class MtkBootstrap
             DaLogLevel = startup.DaLogLevel,
             TransferTimeoutMs = startup.TransferTimeoutMs,
             HandshakeTimeoutMs = startup.HandshakeTimeoutMs,
+            DisablePreloaderWatchdog = startup.DisablePreloaderWatchdog,
             SlaTimeoutMs = startup.SlaTimeoutMs,
             BootResourceProvider = startup.BootResourceProvider,
             BootResourceOrder = startup.BootResourceOrder

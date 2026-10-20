@@ -28,6 +28,8 @@ public sealed record MtkXFlashUsbSpeed(MtkXFlashUsbSpeedKind Kind, string Text);
 
 public sealed partial class MtkSession
 {
+    private const uint XFlashTargetSystemOsLinux = 1;
+
     private const uint XFlashSync = 0x434E5953;
     private const uint XFlashSwitchUsbSpeed = 0x01000B;
     private const uint XFlashUsbSpeedVendorMagic = 0x0E8D2001;
@@ -121,7 +123,7 @@ public sealed partial class MtkSession
                 var environment = new byte[20];
                 BinaryPrimitives.WriteUInt32LittleEndian(environment, logLevel);
                 BinaryPrimitives.WriteUInt32LittleEndian(environment.AsSpan(4), 1);
-                BinaryPrimitives.WriteUInt32LittleEndian(environment.AsSpan(8), OperatingSystem.IsWindows() ? 0u : 1u);
+                BinaryPrimitives.WriteUInt32LittleEndian(environment.AsSpan(8), XFlashTargetSystemOsLinux);
                 await channel.SendAsync(1, environment, cancellationToken).ConfigureAwait(false);
                 await ReadXFlashStatusAsync(channel, "environment setup", cancellationToken).ConfigureAwait(false);
 
@@ -258,12 +260,15 @@ public sealed partial class MtkSession
     {
         ThrowIfDisposed();
         var frame = await channel.ReceiveAsync(cancellationToken).ConfigureAwait(false);
-        if (frame.DataType != 1 || frame.Payload.Length is not (2 or 4))
+        if (frame.DataType != 1 || frame.Payload.Length < 2 || frame.Payload.Length == 3)
         {
             throw new MtkProtocolException($"Invalid XFlash status frame during {operation}.");
         }
-        return frame.Payload.Length == 2
-            ? BinaryPrimitives.ReadUInt16LittleEndian(frame.Payload)
-            : BinaryPrimitives.ReadUInt32LittleEndian(frame.Payload);
+        if (frame.Payload.Length == 2)
+        {
+            return BinaryPrimitives.ReadUInt16LittleEndian(frame.Payload);
+        }
+
+        return BinaryPrimitives.ReadUInt32LittleEndian(frame.Payload);
     }
 }

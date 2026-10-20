@@ -6,12 +6,11 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 public sealed partial class MtkSession
 {
     private const string XmlReadRpmbCommand = "CMD:CUSTOMRPMBR";
-    private const string XmlReadUfsRpmbCommand = "CMD:CUSTOMURPMBR";
 
     /// <summary>Reads a bounded run of RPMB frames through the XML DA's custom RPMB command.
     /// <para>通过 XML DA 的自定义 RPMB 命令读取有界的连续帧。</para></summary>
-    /// <remarks>One frame is one XML command exchange: the command element, its <c>OK</c>, the frame index as a four-byte little-endian payload, a two-byte result message and then the frame data, closed by <c>CMD:END</c> and the following <c>CMD:START</c> (<c>mtkclient/Library/DA/xml/extension/v6.py:301-321</c>, command text built by <c>mtkclient/Library/DA/xml/xml_cmd.py:18-27</c>). The XML DA reports no RPMB status control code, so <see cref="QueryXFlashRpmbStatusAsync"/> has no counterpart here. The first frame the device refuses stops the run and is never replayed.
-    /// <para>一帧即一次 XML 命令交换：命令元素、其 <c>OK</c>、以小端四字节发送的帧序号、一个两字节结果消息， 随后是帧数据，最后由 <c>CMD:END</c> 与紧随的 <c>CMD:START</c> 收尾 （<c>mtkclient/Library/DA/xml/extension/v6.py:301-321</c>，命令文本由 <c>mtkclient/Library/DA/xml/xml_cmd.py:18-27</c> 构造）。XML DA 没有上报 RPMB 状态控制码， 因此 <see cref="QueryXFlashRpmbStatusAsync"/> 在此没有对应方法。设备拒绝的首帧会终止本次读取且绝不重放。</para></remarks>
+    /// <remarks>One exchange sends <c>CMD:CUSTOMRPMBR</c> once, waits for <c>OK</c>, sends the first sector and the sector count as two little-endian words, then reads one frame per sector: exactly 0x100 bytes is data and a short frame carries the error code. <c>CMD:END</c> and the following <c>CMD:START</c> close the command (<c>mtkclient/Library/DA/xml/extension/v6.py:626-649</c>, command text built by <c>mtkclient/Library/DA/xml/xml_cmd.py:18-27</c>). The XML DA reports no RPMB status control code, so <see cref="QueryXFlashRpmbStatusAsync"/> has no counterpart here. The first frame the device refuses stops the frame loop and is never replayed.
+    /// <para>一次交换只发送一次 <c>CMD:CUSTOMRPMBR</c> 并等待 <c>OK</c>，随后以小端四字节发送首帧与帧数量， 再为每个 sector 读取一帧：恰好 0x100 字节为数据，短帧携带错误码。最后以 <c>CMD:END</c> 与紧随的 <c>CMD:START</c> 收尾 （<c>mtkclient/Library/DA/xml/extension/v6.py:626-649</c>，命令文本由 <c>mtkclient/Library/DA/xml/xml_cmd.py:18-27</c> 构造）。XML DA 没有上报 RPMB 状态控制码， 因此 <see cref="QueryXFlashRpmbStatusAsync"/> 在此没有对应方法。设备拒绝的首帧会终止帧循环且绝不重放。</para></remarks>
     /// <param name="range">The validated frame-aligned range to read.
     /// <para>要读取的、已校验的帧对齐范围。</para></param>
     /// <param name="options">Optional bounds and deadline; <see langword="null"/> uses the read-only defaults.
@@ -135,9 +134,6 @@ public sealed partial class MtkSession
         return region.CapacityBytes;
     }
 
-    private static string GetXmlReadCommand(MtkRpmbTarget target) =>
-        target == MtkRpmbTarget.Emmc ? XmlReadRpmbCommand : XmlReadUfsRpmbCommand;
-
     private async Task<MtkRpmbReadResult> ReadXmlRpmbFramesOwnedAsync(MtkRpmbFrameRange range, MtkRpmbTarget target,
         long capacity, MtkRpmbOptions options, CancellationToken cancellationToken)
     {
@@ -145,10 +141,11 @@ public sealed partial class MtkSession
         await RunRpmbExchangeAsync(async token =>
         {
             var channel = _xml ?? throw new InvalidOperationException("The XML DA channel was not attached.");
+            await BeginXmlRpmbReadAsync(channel, range.StartFrame, range.FrameCount, token).ConfigureAwait(false);
             for (var index = 0; index < range.FrameCount; index++)
             {
                 var frame = checked(range.StartFrame + index);
-                var (outcome, data) = await ReadXmlRpmbFrameAsync(channel, GetXmlReadCommand(target), frame, token).ConfigureAwait(false);
+                var (outcome, data) = await ReadXmlRpmbFrameAsync(channel, frame, token).ConfigureAwait(false);
                 frames.Add(new MtkRpmbFrameResult
                 {
                     Frame = frame,
@@ -160,10 +157,12 @@ public sealed partial class MtkSession
                     break;
                 }
             }
+
+            await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
         }, options.OperationTimeoutMs, FaultXml, cancellationToken).ConfigureAwait(false);
         var accepted = frames.Count(frame => frame.Outcome.IsOkay);
         RecordRpmbEvidence("rpmb-read", accepted == range.FrameCount ? CommandOutcomeKind.Completed : CommandOutcomeKind.Rejected,
-            $"xml {GetXmlReadCommand(target)} frames {range.StartFrame}+{range.FrameCount}; {accepted} accepted.");
+            $"xml {XmlReadRpmbCommand} frames {range.StartFrame}+{range.FrameCount}; {accepted} accepted.");
         return new MtkRpmbReadResult
         {
             Target = target,
@@ -175,36 +174,28 @@ public sealed partial class MtkSession
     }
 
     private async Task<(MtkRpmbFrameOutcome Outcome, byte[] Data)> ReadXmlRpmbFrameAsync(MtkXmlChannel channel,
-        string command, long frame, CancellationToken token)
+        long frame, CancellationToken token)
     {
-        var outcome = await SendXmlRpmbRequestAsync(channel, command, frame, null, token).ConfigureAwait(false);
-        if (!outcome.IsOkay)
+        var reply = await channel.ReceivePayloadAsync(MtkRpmbWire.FrameLength, token).ConfigureAwait(false);
+        if (reply.Length == MtkRpmbWire.FrameLength)
         {
-            await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
-            RecordRpmbEvidence("rpmb-frame", CommandOutcomeKind.Rejected,
-                $"xml {command} frame {frame} reported 0x{outcome.ReportedCode:X4}.");
-            return (outcome, []);
+            return (new MtkRpmbFrameOutcome(0, MtkRpmbFrameStatus.Okay), reply);
         }
-        var data = await channel.ReceivePayloadAsync(MtkRpmbWire.FrameLength, token).ConfigureAwait(false);
-        if (data.Length != MtkRpmbWire.FrameLength)
-        {
-            throw new MtkProtocolException("The RPMB frame data does not match the fixed frame width.");
-        }
-        await CompleteXmlCommandOwnedAsync(channel, token).ConfigureAwait(false);
-        return (outcome, data);
+
+        var outcome = ReadRpmbFrameOutcome(reply);
+        RecordRpmbEvidence("rpmb-frame", CommandOutcomeKind.Rejected,
+            $"xml {XmlReadRpmbCommand} frame {frame} reported 0x{outcome.ReportedCode:X4} in a {reply.Length}-byte frame.");
+        return (outcome, []);
     }
 
-    private async Task<MtkRpmbFrameOutcome> SendXmlRpmbRequestAsync(MtkXmlChannel channel, string command,
-        long frame, byte[]? payload, CancellationToken token)
+    private async Task BeginXmlRpmbReadAsync(MtkXmlChannel channel, long sector, int sectors, CancellationToken token)
     {
         await channel.SendCommandAsync(new XElement("da", new XElement("version", "1.0"),
-            new XElement("command", command)), token).ConfigureAwait(false);
+            new XElement("command", XmlReadRpmbCommand)), token).ConfigureAwait(false);
         await RequireXmlOkAsync(channel, token).ConfigureAwait(false);
-        await channel.SendStreamAsync(new MemoryStream(CreateRpmbFrameWord(frame), writable: false), 4, token).ConfigureAwait(false);
-        if (payload is not null)
-        {
-            await channel.SendStreamAsync(new MemoryStream(payload, writable: false), payload.Length, token).ConfigureAwait(false);
-        }
-        return ReadRpmbFrameOutcome(await channel.ReceivePayloadAsync(2, token).ConfigureAwait(false));
+        await channel.SendStreamAsync(new MemoryStream(CreateRpmbFrameWord(sector), writable: false), 4, token)
+            .ConfigureAwait(false);
+        await channel.SendStreamAsync(new MemoryStream(CreateRpmbFrameWord(sectors), writable: false), 4, token)
+            .ConfigureAwait(false);
     }
 }

@@ -23,6 +23,10 @@ public sealed partial class MtkSession : IProtocolSession
     private const int AgentChunkLength = 1024;
     internal const int MaximumBootReadLength = 1024 * 1024;
     private const int MaximumXmlSourcePackets = 65536;
+    private const int BootHandshakeAttempts = 5;
+    private const int HandshakeDrainTimeoutMs = 50;
+    private const int HandshakeDrainLength = 0x100;
+    private static readonly byte[] BootHandshakeCommand = [0xA0, 0x0A, 0x50, 0x05];
     private readonly SemaphoreSlim _operation = new(1, 1);
     private readonly List<ProtocolEvidence> _evidence = [];
     private readonly int _timeoutMs;
@@ -32,6 +36,8 @@ public sealed partial class MtkSession : IProtocolSession
     private bool _uploadCompletionPending;
     private uint _agentAddress;
     private PhysicalDeviceIdentity? _physicalIdentity;
+    private ushort? _usbVendorId;
+    private ushort? _usbProductId;
     private volatile bool _disposed;
 
     /// <summary>Creates a session which takes ownership of the selected transport.</summary>
@@ -233,6 +239,7 @@ public sealed partial class MtkSession : IProtocolSession
         {
             var classification = MtkModeClassifier.Classify(device);
             var selection = MtkCommandInterfacePolicy.Select(device, options, boundEndpointIn, boundEndpointOut);
+            session.NoteUsbDescriptor(device);
             session.DiscoveredUsbMode = classification;
             session._physicalIdentity = PhysicalDeviceIdentity.From(device);
             session._evidence.Add(new ProtocolEvidence
@@ -243,16 +250,7 @@ public sealed partial class MtkSession : IProtocolSession
                     ? CommandOutcomeKind.Unknown : CommandOutcomeKind.Completed,
                 Detail = classification.Reason
             });
-            session._evidence.Add(new ProtocolEvidence
-            {
-                Protocol = "mtk",
-                Phase = "command-interface-selection",
-                Outcome = selection.Status == MtkCommandInterfaceStatus.Selected
-                    ? CommandOutcomeKind.Completed
-                    : selection.Status == MtkCommandInterfaceStatus.NoMetadata
-                        ? CommandOutcomeKind.Unknown : CommandOutcomeKind.Rejected,
-                Detail = selection.Reason
-            });
+            session.NoteCommandInterfaceSelection(selection);
             if (classification.Mode == MtkUsbMode.LoggingOnly)
             {
                 throw new InvalidOperationException($"The endpoint is logging-only and must not receive commands: {classification.Reason}");
@@ -302,15 +300,7 @@ public sealed partial class MtkSession : IProtocolSession
             NoteUploadStage(MtkDaUploadStage.Handshake);
             try
             {
-                foreach (var value in new byte[] { 0xA0, 0x0A, 0x50, 0x05 })
-                {
-                    await WriteAsync([value], _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
-                    var reply = await ReadAsync(1, _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
-                    if (reply[0] != (byte)(value ^ 0xFF))
-                    {
-                        throw new MtkProtocolException("The boot handshake echo did not match.");
-                    }
-                }
+                await RunBootHandshakeOwnedAsync(cancellationToken).ConfigureAwait(false);
 
                 NoteUploadStage(MtkDaUploadStage.ChipInfoRequested);
                 await EchoAsync([0xFD], cancellationToken).ConfigureAwait(false);
@@ -346,6 +336,94 @@ public sealed partial class MtkSession : IProtocolSession
         finally
         {
             _operation.Release();
+        }
+    }
+
+    /// <summary>Runs the complemented-byte boot handshake, using the reference's relaxed resynchronization only when descriptor evidence proves a non-Boot-ROM USB product id.
+    /// <para>执行反码字节 boot 握手；仅当描述符证据证明是非 Boot ROM 的 USB 产品 ID 时，才使用参考实现的宽松重同步。</para></summary>
+    /// <remarks>The Boot ROM product id keeps the strict single pass. Every other known USB product id first writes
+    /// 0xA0 without reading an echo, then retries the full four-byte sequence up to five times, draining stale input
+    /// and restarting from the first byte after each mismatch, as <c>mtkclient/Library/Port.py:147-192</c> does.
+    /// <para>Boot ROM 产品 ID 保持严格单趟语义。其他已知 USB 产品 ID 先单独写入 0xA0 且不读取回显，随后最多重试完整
+    /// 四字节序列五次；每次不匹配后清空陈旧输入并从首字节重同步，与 <c>mtkclient/Library/Port.py:147-192</c> 一致。</para></remarks>
+    /// <param name="cancellationToken">The operation cancellation token. 操作取消令牌。</param>
+    private async Task RunBootHandshakeOwnedAsync(CancellationToken cancellationToken)
+    {
+        if (!UsesRelaxedBootHandshake)
+        {
+            foreach (var value in BootHandshakeCommand)
+            {
+                await WriteAsync([value], _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
+                var reply = await ReadAsync(1, _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
+                if (reply[0] != (byte)(value ^ 0xFF))
+                {
+                    throw new MtkProtocolException("The boot handshake echo did not match.");
+                }
+            }
+
+            return;
+        }
+
+        await WriteAsync([BootHandshakeCommand[0]], _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
+        for (var attempt = 0; attempt < BootHandshakeAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (await TryRunRelaxedBootHandshakeAttemptOwnedAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+
+            await DiscardHandshakeInputOwnedAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        throw new MtkProtocolException(
+            $"The boot handshake did not synchronize after {BootHandshakeAttempts} attempts.");
+    }
+
+    /// <summary>Gets whether the observed USB product id is not a documented Boot ROM port.
+    /// <para>获取已观测 USB 产品 ID 是否不是已记载的 Boot ROM 端口。</para></summary>
+    /// <value><see langword="true"/> only when a USB descriptor was recorded and the pair is not a Boot ROM port;
+    /// serial transports and unknown ports keep the strict path.
+    /// <para>仅在已记录 USB 描述符且该组合不是 Boot ROM 端口时为 <see langword="true"/>；串口传输与未知端口保持严格路径。</para></value>
+    private bool UsesRelaxedBootHandshake => _usbProductId is { } productId && !IsBootRomUsbProduct(productId);
+
+    private bool IsBootRomUsbProduct(ushort productId) =>
+        productId == 0x0003
+        || (_usbVendorId == 0x0FCE
+            && productId is 0xF200 or 0xD1E9 or 0xD1E2 or 0xD1EC or 0xD1DD);
+
+    private async Task<bool> TryRunRelaxedBootHandshakeAttemptOwnedAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            foreach (var value in BootHandshakeCommand)
+            {
+                await WriteAsync([value], _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
+                var reply = await ReadAsync(1, _handshakeTimeoutMs, cancellationToken).ConfigureAwait(false);
+                if (reply[0] != (byte)(value ^ 0xFF))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch (Exception error) when (error is TimeoutException or MtkProtocolException)
+        {
+            return false;
+        }
+    }
+
+    private async Task DiscardHandshakeInputOwnedAsync(CancellationToken cancellationToken)
+    {
+        var buffer = new byte[HandshakeDrainLength];
+        try
+        {
+            _ = await Transport.ReadAsync(buffer, 0, buffer.Length, HandshakeDrainTimeoutMs, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
         }
     }
 
@@ -431,9 +509,17 @@ public sealed partial class MtkSession : IProtocolSession
                 var completion = await ReadAsync(4, _timeoutMs, cancellationToken).ConfigureAwait(false);
                 _uploadCompletionPending = false;
                 CheckStatus(BinaryPrimitives.ReadUInt16BigEndian(completion.AsSpan(2)), "DA upload completion");
-                if (BinaryPrimitives.ReadUInt16BigEndian(completion) != checksum)
+                var reportedChecksum = BinaryPrimitives.ReadUInt16BigEndian(completion);
+                if (reportedChecksum == 0)
                 {
-                    throw new MtkProtocolException("The uploaded agent checksum did not match the device response.");
+                    RecordSecurityEvidence("da-upload-checksum", CommandOutcomeKind.Completed,
+                        "warning: the device reported a zero agent checksum; continuing as the reference does.");
+                }
+                else if (reportedChecksum != checksum)
+                {
+                    RecordSecurityEvidence("da-upload-checksum", CommandOutcomeKind.Completed,
+                        $"warning: the device reported agent checksum 0x{reportedChecksum:X4} instead of the computed " +
+                        $"0x{checksum:X4}; continuing as the reference does.");
                 }
 
                 NoteUploadStage(MtkDaUploadStage.ChecksumConfirmed);
@@ -707,6 +793,42 @@ public sealed partial class MtkSession : IProtocolSession
             Outcome = classification.Mode == MtkUsbMode.Unknown
                 ? CommandOutcomeKind.Unknown : CommandOutcomeKind.Completed,
             Detail = classification.Reason
+        });
+    }
+
+    /// <summary>Records the observed USB descriptor identity so the boot handshake can follow the upstream
+    /// Boot ROM versus preloader distinction without probing the device.
+    /// <para>记录已观测的 USB 描述符身份，使 boot 握手无需探测设备即可遵循上游的 Boot ROM 与 preloader 区分。</para>
+    /// </summary>
+    /// <param name="device">The observed descriptors of the device behind the transport.
+    /// <para>传输之后设备的已观测描述符。</para></param>
+    internal void NoteUsbDescriptor(UsbDeviceInfo device)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        _usbVendorId = device.VendorId;
+        _usbProductId = device.ProductId;
+    }
+
+    /// <summary>Records a command-interface selection performed by an adoption path such as the device session
+    /// factory; only <see cref="MtkCommandInterfaceStatus.Selected"/> and <see cref="MtkCommandInterfaceStatus.NoMetadata"/>
+    /// are accepted there, so a logging-only or mismatched binding is evidence of a refusal.
+    /// <para>记录由设备会话工厂等接管路径执行的命令接口选择；该路径只接受
+    /// <see cref="MtkCommandInterfaceStatus.Selected"/> 与 <see cref="MtkCommandInterfaceStatus.NoMetadata"/>，
+    /// 因此仅日志或不匹配的绑定会被记录为拒绝证据。</para>
+    /// </summary>
+    /// <param name="selection">The selection with its reason. 带原因的选择结果。</param>
+    internal void NoteCommandInterfaceSelection(MtkCommandInterfaceResult selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        _evidence.Add(new ProtocolEvidence
+        {
+            Protocol = "mtk",
+            Phase = "command-interface-selection",
+            Outcome = selection.Status == MtkCommandInterfaceStatus.Selected
+                ? CommandOutcomeKind.Completed
+                : selection.Status == MtkCommandInterfaceStatus.NoMetadata
+                    ? CommandOutcomeKind.Unknown : CommandOutcomeKind.Rejected,
+            Detail = selection.Reason
         });
     }
 

@@ -9,13 +9,15 @@ namespace UotanStudio.Comm.Protocols.Mtk.Security;
 /// the value or peeks four bytes at it: an address below 0x1000 is returned as the four
 /// little-endian bytes of the value itself, and any other address is read from the target
 /// (Library/DA/xflash/extension/xflash.py:618-650). The same source reads the boot public key as
-/// the 0x20 bytes beginning at the eFuse base plus 0x90 (Library/DA/xflash/extension/xflash.py:630-636,
-/// repeated at Library/DA/legacy/extension/legacy.py:216-222). No other eFuse semantics are claimed.
+/// the 0x30 bytes beginning at the eFuse base plus 0x90 (Library/DA/xflash/extension/xflash.py:861-867,
+/// repeated at Library/DA/xmlflash/extension/v6.py:1229-1237 and
+/// Library/DA/legacy/extension/legacy.py:216-222). No other eFuse semantics are claimed.
 /// <para>参考客户端先按逐芯片表解析单元索引，然后要么上报取值、要么在该地址窥探 4 字节：小于 0x1000
 /// 的地址按该值本身的 4 个小端字节上报，其余地址则从目标读取
 /// （Library/DA/xflash/extension/xflash.py:618-650）。同一份源码把引导公钥读作从 eFuse 基址加 0x90
-/// 开始的 0x20 字节（Library/DA/xflash/extension/xflash.py:630-636，
-/// Library/DA/legacy/extension/legacy.py:216-222 同样如此）。除此之外不声称任何 eFuse 语义。</para>
+/// 开始的 0x30 字节（Library/DA/xflash/extension/xflash.py:861-867，
+/// Library/DA/xmlflash/extension/v6.py:1229-1237 与 Library/DA/legacy/extension/legacy.py:216-222 同样如此）。
+/// 除此之外不声称任何 eFuse 语义。</para>
 /// </remarks>
 public static class MtkEfuseAccess
 {
@@ -35,9 +37,9 @@ public static class MtkEfuseAccess
     public const uint PublicKeyOffset = 0x90;
 
     /// <summary>The byte length of the boot public key window
-    /// (Library/DA/xflash/extension/xflash.py:634).
-    /// <para>引导公钥窗口的字节长度（Library/DA/xflash/extension/xflash.py:634）。</para></summary>
-    public const int PublicKeyLength = 0x20;
+    /// (Library/DA/xflash/extension/xflash.py:865).
+    /// <para>引导公钥窗口的字节长度（Library/DA/xflash/extension/xflash.py:865）。</para></summary>
+    public const int PublicKeyLength = 0x30;
 
     /// <summary>The largest cell range a single request may cover.
     /// <para>单次请求可覆盖的最大单元数量。</para></summary>

@@ -123,10 +123,21 @@ public static partial class MtkBootstrap
                 }
 
                 session = new MtkSession(transport, options.TransferTimeoutMs, options.HandshakeTimeoutMs);
+                if (transport is UsbDeviceTransport usb)
+                {
+                    session.NoteUsbDescriptor(usb.Session.DeviceInfo);
+                }
+
                 device = await session.InitializeAsync(cancellationToken).ConfigureAwait(false);
             }
 
             ValidateIdentity(entry, device, options.IdentityMatch);
+            if (options.DisablePreloaderWatchdog)
+            {
+                await session.DisablePreloaderWatchdogForBootRomAsync(device, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             if (protocol == MtkDaProtocol.Legacy)
             {
                 await session.QueryLegacyBootVersionsAsync(cancellationToken).ConfigureAwait(false);
@@ -167,7 +178,7 @@ public static partial class MtkBootstrap
             }
             await session.UploadXFlashStageTwoAsync(stageTwo, second.LoadAddress, checked((int)stageTwo.Length),
                 cancellationToken: cancellationToken).ConfigureAwait(false);
-            await session.AuthenticateXFlashStageTwoAsync(options.DaSlaResponder, options.SlaTimeoutMs,
+            await session.RequireXFlashStageTwoSlaInactiveAsync(options.SlaTimeoutMs,
                 cancellationToken).ConfigureAwait(false);
             if (await session.DiscoverXFlashStorageAsync(options.StorageKind, cancellationToken).ConfigureAwait(false) is null)
             {
@@ -202,9 +213,9 @@ public static partial class MtkBootstrap
         {
             if (options.Legacy is null || options.Xml is not null
                 || options.StorageKind is not (MtkXFlashStorageKind.Emmc or MtkXFlashStorageKind.Nor or MtkXFlashStorageKind.Nand)
-                || options.StageTwoContent != MtkDaRegionContent.Complete || options.DaSlaResponder is not null)
+                || options.StageTwoContent != MtkDaRegionContent.Complete)
             {
-                throw new ArgumentException("Legacy startup requires an explicit eMMC, NOR or NAND profile and complete DA2; XML settings and XFlash/XML DA2 SLA responders are not applicable.", nameof(options));
+                throw new ArgumentException("Legacy startup requires an explicit eMMC, NOR or NAND profile and complete DA2; XML settings are not applicable.", nameof(options));
             }
             options.Legacy.Validate();
             MtkSession.ValidateLegacyEmi(options.EmiParameters);

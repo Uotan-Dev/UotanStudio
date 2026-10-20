@@ -16,7 +16,7 @@ public static partial class MtkBootstrap
         await session.UploadXmlStageTwoAsync(stageTwo, address, checked((int)stageTwo.Length),
             xml.OperationTimeoutMs, cancellationToken: cancellationToken).ConfigureAwait(false);
         await session.InitializeXmlStageTwoHardwareAsync(xml.OperationTimeoutMs, cancellationToken).ConfigureAwait(false);
-        await session.AuthenticateXmlStageTwoAsync(xml.SlaEnvelopeName, options.DaSlaResponder, options.SlaTimeoutMs,
+        await session.RequireXmlStageTwoSlaInactiveAsync(xml.SlaEnvelopeName, options.SlaTimeoutMs,
             cancellationToken).ConfigureAwait(false);
         var storage = await session.DiscoverXmlStorageAsync(xml.OperationTimeoutMs, cancellationToken).ConfigureAwait(false);
         var expected = options.StorageKind switch

@@ -60,6 +60,11 @@ public sealed record MtkPreloaderWatchdogRule(
 /// </remarks>
 public static class MtkPreloaderWatchdogTable
 {
+    private static readonly FrozenSet<ushort> SixtyFourBitHardwareCodes = new HashSet<ushort>
+    {
+        0x0907, 0x1229, 0x1236, 0x1296, 0x1375, 0x6899, 0x1471
+    }.ToFrozenSet();
+
     private static readonly FrozenSet<ushort> FixedAddressCodes = new HashSet<ushort>
     {
         0x2625, 0x2523, 0x7682, 0x7686, 0x5932
@@ -167,6 +172,19 @@ public static class MtkPreloaderWatchdogTable
         [0x8172] = 0x01202050,
         [0x8176] = 0x01202050
     }.ToFrozenDictionary();
+
+    /// <summary>Reports whether the reference chip table marks a hardware code as 64-bit.
+    /// <para>报告参考芯片表是否将某个硬件码标记为 64 位。</para></summary>
+    /// <remarks>The upstream preloader initialization skips the watchdog entirely for chips whose
+    /// <c>Chipconfig.has64bit</c> is true (<c>mtkclient/config/brom_config.py</c>), so this set transcribes
+    /// those hardware codes rather than inferring 64-bit support from the storage family.
+    /// <para>上游 preloader 初始化对 <c>Chipconfig.has64bit</c> 为 true 的芯片完全跳过看门狗
+    /// （<c>mtkclient/config/brom_config.py</c>），因此本集合转录这些硬件码，而不是根据存储家族推断 64 位支持。</para>
+    /// </remarks>
+    /// <param name="hardwareCode">The hardware code reported by command FD. 命令 FD 报告的硬件码。</param>
+    /// <returns><see langword="true"/> for a hardware code the reference marks as 64-bit.
+    /// <para>参考实现标记为 64 位的硬件码返回 <see langword="true"/>。</para></returns>
+    public static bool Is64BitHardware(ushort hardwareCode) => SixtyFourBitHardwareCodes.Contains(hardwareCode);
 
     /// <summary>Resolves the ordered watchdog-disable steps the reference defines for one chip.
     /// <para>为单芯片解析参考实现所定义的有序看门狗禁用步骤。</para></summary>
