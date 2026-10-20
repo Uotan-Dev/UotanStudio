@@ -505,6 +505,19 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
         }
     }
 
+    /// <summary>
+    /// Waits for one of the expected task commands, skipping echo traffic and the zero-length FILE_DATA that ends a
+    /// file. <para>等待预期任务命令之一，跳过回显流量与结束文件的零长度 FILE_DATA。</para>
+    /// </summary>
+    /// <param name="channel">The transfer channel. <para>传输通道。</para></param>
+    /// <param name="expected">The command being awaited. <para>正在等待的命令。</para></param>
+    /// <param name="ct">Cancels the wait. <para>取消等待。</para></param>
+    /// <param name="timeoutMs">Reply deadline in milliseconds. <para>应答期限（毫秒）。</para></param>
+    /// <param name="alternative">An optional second accepted command. <para>可选的第二个可接受命令。</para></param>
+    /// <returns>The received message. <para>收到的消息。</para></returns>
+    /// <exception cref="TimeoutException">The deadline passed without a matching command. <para>期限到达仍无匹配命令。</para></exception>
+    /// <exception cref="EndOfStreamException">The channel closed before the matching command. <para>通道在匹配命令之前关闭。</para></exception>
+    /// <exception cref="InvalidDataException">Another command arrived first. <para>先收到了其它命令。</para></exception>
     internal static HdcMessage Expect(HdcStream channel, HdcCommand expected, CancellationToken ct, int timeoutMs = 30000, HdcCommand? alternative = null)
     {
         var deadline = Environment.TickCount64 + timeoutMs;
@@ -520,8 +533,39 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
             }
             if (message.Command == expected || message.Command == alternative) return message;
             if (message.Command is HdcCommand.Echo or HdcCommand.EchoRaw) continue;
+            if (IsEndOfFileMarker(message, expected, alternative)) continue;
             throw new InvalidDataException($"Unexpected HDC task command {message.Command}; expected {expected}.");
         }
+    }
+
+    /// <summary>
+    /// Reports whether a message is the zero-length FILE_DATA the daemon sends together with FILE_FINISH to end a
+    /// file, while a FILE_FINISH is awaited. The marker is dropped instead of failing the transfer, because the
+    /// receive loops stop at the declared size and the completion frame may follow one more empty chunk.
+    /// <para>判断消息是否是在等待 FILE_FINISH 期间守护进程与 FILE_FINISH 一同发送的零长度 FILE_DATA。该标记被丢弃
+    /// 而不是令传输失败：接收循环在达到声明大小时停止，而完成帧之前可能还有一个空数据块。</para>
+    /// </summary>
+    /// <param name="message">The message read from the channel. <para>从通道读取的消息。</para></param>
+    /// <param name="expected">The command being awaited. <para>正在等待的命令。</para></param>
+    /// <param name="alternative">The optional second command being awaited. <para>可选的第二个正在等待的命令。</para></param>
+    /// <returns><see langword="true"/> when the message is an end-of-file marker. <para>消息是文件结束标记时为 <see langword="true"/>。</para></returns>
+    /// <exception cref="InvalidDataException">A non-empty FILE_DATA payload is not a valid transfer chunk.
+    /// <para>非空 FILE_DATA 负载不是合法的传输数据块。</para></exception>
+    private static bool IsEndOfFileMarker(HdcMessage message, HdcCommand expected, HdcCommand? alternative)
+    {
+        if (message.Command != HdcCommand.FileData
+            || (expected != HdcCommand.FileFinish && alternative != HdcCommand.FileFinish))
+        {
+            return false;
+        }
+
+        var payload = message.Payload;
+        if (payload is not { Length: > 0 })
+        {
+            return true;
+        }
+
+        return HdcTransferCodec.DecodeChunk(payload).Data.Length == 0;
     }
 
     internal static void ValidatePath(string path)

@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Text;
+using System.Globalization;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
@@ -70,7 +71,7 @@ public sealed class HdcConnection : IDisposable
     private string? _peerBanner;
     private bool _connected;
     private bool _disposed;
-    private string _peerVersionString = "";
+    private string _echoedHostVersion = "";
     private IReadOnlyDictionary<string, string> _peerCapabilities = new Dictionary<string, string>();
     private HdcForwardManager? _forwards;
 
@@ -135,11 +136,15 @@ public sealed class HdcConnection : IDisposable
     public string? PeerBanner => _peerBanner;
 
     /// <summary>
-    /// The version string reported by the daemon, without substituting our own protocol version.
-    /// <para>守护进程上报的版本字符串，不会用本端协议版本替换。</para>
+    /// Gets the host version text the peer echoes back in its handshake reply. It mirrors the version this host sent
+    /// rather than reporting a device version, so it must not be used as a device software version; the daemon's own
+    /// fields (such as <c>devname</c> inside <see cref="PeerCapabilities"/>) describe the device.
+    /// <para>获取对端在握手应答中回显的本机版本文本。它反映本机发送的版本而不是设备版本，因此不得当作设备软件版本；
+    /// 设备信息由守护进程自身字段（如 <see cref="PeerCapabilities"/> 中的 <c>devname</c>）描述。</para>
     /// </summary>
-    /// <value>The daemon handshake version; empty until the authentication handshake assigns it. <para>守护进程握手版本；认证握手赋值前为空字符串。</para></value>
-    public string PeerVersionString => _peerVersionString;
+    /// <value>The echoed handshake version; empty until the authentication handshake assigns it.
+    /// <para>回显的握手版本；认证握手赋值前为空字符串。</para></value>
+    public string EchoedHostVersion => _echoedHostVersion;
 
     /// <summary>
     /// Capabilities reported in the daemon's successful authentication response.
@@ -200,8 +205,9 @@ public sealed class HdcConnection : IDisposable
             DrainStaleBlocks(_transport, cancellationToken);
         }
 
+        var connectKey = ResolveConnectKey();
         Send(new HdcMessage(HdcCommand.Handshake, 0, _sessionId,
-            HdcDaemonCodec.Handshake(0, _sessionId, string.Empty, "authtype        1               1"u8, "Ver: 3.2.0f")));
+            HdcDaemonCodec.Handshake(0, _sessionId, connectKey, BuildHandshakeCapabilities(), "Ver: 3.2.0f")));
         var authenticated = false;
         var verifyType = _authentication.VerifyType;
         var authDeadline = Environment.TickCount64 + 120000;
@@ -222,7 +228,7 @@ public sealed class HdcConnection : IDisposable
                 throw new InvalidDataException("HDC authentication session mismatch.");
             _peerBanner = HdcConstants.HandshakeMessage;
             _peerVersion = HdcConstants.ProtocolVersion;
-            _peerVersionString = handshake.Version;
+            _echoedHostVersion = handshake.Version;
             if (handshake.State == 3)
             {
                 var capabilities = handshake.Buffer.AsSpan().StartsWith("authtype        "u8)
@@ -255,7 +261,7 @@ public sealed class HdcConnection : IDisposable
                 _ => throw new NotSupportedException($"HDC authentication state {handshake.State} is not supported."),
             };
             Send(new HdcMessage(HdcCommand.Handshake, 0, _sessionId,
-                HdcDaemonCodec.Handshake(handshake.State, handshake.SessionId, string.Empty, buffer, "Ver: 3.2.0f")));
+                HdcDaemonCodec.Handshake(handshake.State, handshake.SessionId, connectKey, buffer, "Ver: 3.2.0f")));
         }
         if (!authenticated) throw new UnauthorizedAccessException("HDC authorization did not complete.");
 
@@ -467,6 +473,68 @@ public sealed class HdcConnection : IDisposable
         if (notify) Send(HdcMessaging.BuildCommand(HdcCommand.ChannelClose, stream.ChannelId, [1]));
     }
 
+    /// <summary>
+    /// Returns the connect key announced in the handshake: the USB serial number when this session runs over USB and
+    /// the device descriptor carries one, otherwise an empty string, which is what a TCP session has always sent.
+    /// <para>返回握手中宣告的连接密钥：会话走 USB 且设备描述符携带序列号时使用该序列号，否则为空字符串（TCP 会话一直如此）。</para>
+    /// </summary>
+    /// <returns>The connect key, clamped to <see cref="HdcConstants.MaxConnectKeySize"/> bytes, or an empty string.
+    /// <para>连接密钥，长度限制在 <see cref="HdcConstants.MaxConnectKeySize"/> 字节内；无序列号时为空字符串。</para></returns>
+    private string ResolveConnectKey()
+    {
+        var serialNumber = (_transport as UsbDeviceTransport)?.Session.DeviceInfo.SerialNumber;
+        if (string.IsNullOrEmpty(serialNumber))
+        {
+            return string.Empty;
+        }
+
+        return serialNumber.Length <= HdcConstants.MaxConnectKeySize
+            ? serialNumber
+            : serialNumber[..HdcConstants.MaxConnectKeySize];
+    }
+
+    /// <summary>
+    /// Builds the capability TLV carried by the first handshake: the host auth-algorithm declaration plus a
+    /// <c>supportfeatures</c> entry naming the capabilities this host can report, each of which is then sent with its
+    /// value (<c>version</c>, <c>connection_type</c> and <c>os_type</c>), so the daemon can classify the session before
+    /// the first authentication round. <para>构建首个握手携带的能力 TLV：主机认证算法声明，加上列出本主机可上报能力名的
+    /// <c>supportfeatures</c> 条目，并随之为每个能力发送取值（<c>version</c>、<c>connection_type</c> 与
+    /// <c>os_type</c>），使守护进程在首轮认证之前即可识别会话。</para>
+    /// </summary>
+    /// <returns>The encoded capability TLV. <para>编码后的能力 TLV。</para></returns>
+    private byte[] BuildHandshakeCapabilities()
+    {
+        Dictionary<string, string> capabilities = new(StringComparer.Ordinal)
+        {
+            ["authtype"] = "1",
+            ["supportfeatures"] = "version,connection_type,os_type",
+            ["version"] = HdcConstants.ProtocolVersion.ToString(CultureInfo.InvariantCulture),
+            ["connection_type"] = _transport is UsbDeviceTransport ? "usb" : "tcp",
+            ["os_type"] = ResolveHostOsType(),
+        };
+        return HdcCapabilities.Encode(capabilities);
+    }
+
+    /// <summary>
+    /// Returns the host operating-system name advertised as the <c>os_type</c> capability.
+    /// <para>返回作为 <c>os_type</c> 能力宣告的主机操作系统名。</para>
+    /// </summary>
+    /// <returns>The platform name, or <c>unknown</c> on an unrecognized platform. <para>平台名；无法识别时为 <c>unknown</c>。</para></returns>
+    private static string ResolveHostOsType()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return "windows";
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return "macos";
+        }
+
+        return OperatingSystem.IsLinux() ? "linux" : "unknown";
+    }
+
     private void Send(HdcMessage message)
     {
         lock (_sendLock)
@@ -476,8 +544,10 @@ public sealed class HdcConnection : IDisposable
             {
                 WriteUsbHeader(1, (uint)packet.Length);
                 WriteExact(packet);
+                // A zero-length packet terminates only a short packet of known endpoint size; when the size is
+                // unknown, inventing a ZLP header would put an unframed block of zeros on the wire.
                 var packetSize = _usbOutPacketSize;
-                if (packetSize == 0 || packet.Length % packetSize == 0) WriteUsbHeader(0, 0);
+                if (packetSize > 0 && packet.Length % packetSize == 0) WriteUsbHeader(0, 0);
             }
             else WriteExact(packet);
         }
