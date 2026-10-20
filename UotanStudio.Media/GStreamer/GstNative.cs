@@ -155,6 +155,8 @@ internal static unsafe partial class GstNative
     [LibraryImport(Gst)] internal static partial nint gst_buffer_new_allocate(nint allocator, nuint size, nint parameters);
     [LibraryImport(Gst)] internal static partial nuint gst_buffer_fill(nint buffer, nuint offset, void* source, nuint size);
     [LibraryImport(Gst)] internal static partial nuint gst_buffer_extract(nint buffer, nuint offset, void* target, nuint size);
+    [LibraryImport(Gst)] internal static partial int gst_buffer_map(nint buffer, out MapInfo info, int flags);
+    [LibraryImport(Gst)] internal static partial void gst_buffer_unmap(nint buffer, in MapInfo info);
     [LibraryImport(Gst)] internal static partial nuint gst_buffer_get_size(nint buffer);
     [LibraryImport(Gst)] internal static partial nint gst_sample_get_buffer(nint sample);
     [LibraryImport(Gst)] internal static partial nint gst_sample_get_caps(nint sample);

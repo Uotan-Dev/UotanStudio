@@ -55,12 +55,17 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private int _inputRequests;
     private bool _drainComplete;
     private uint _inputColorSpace;
+    private VideoColorMatrix _colorMatrix = VideoColorMatrix.Bt601;
+    private VideoColorRange _colorRange = VideoColorRange.Limited;
     private byte[]? _readbackBuffer;
     private ExportSlotRing<MediaFoundationExportSlot>? _exportRing;
     private volatile bool _gpuExportEnabled;
     private Action<D3D11SharedVideoFrame>? _gpuExportFrameCallback;
     private long _exportDropped;
     private const int ExportSlotCount = 4;
+    private const int InputViewCacheCapacity = 4;
+    private readonly Dictionary<(nint Texture, uint Subresource), nint> _inputViews = new();
+    private readonly List<(nint Texture, uint Subresource)> _inputViewOrder = [];
 
     /// <summary>
     /// Whether a D3D11 media transform is currently configured.
@@ -122,7 +127,9 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     /// <para>共享纹理导出开启时为 <see cref="VideoPixelFormat.Bgra32"/>，由 staging 纹理回读时为
     /// <see cref="VideoPixelFormat.Nv12"/>。该值随时跟随 <see cref="GpuExportEnabled"/>，因此会话中途导出失败也会改变它。</para>
     /// </value>
-    public VideoPixelFormat FramePixelFormat => ExportActive ? VideoPixelFormat.Bgra32 : VideoPixelFormat.Nv12;
+    public VideoPixelFormat FramePixelFormat => ExportActive
+        ? VideoPixelFormat.Bgra32
+        : IsInitialized && !_options.PreferNv12Output ? VideoPixelFormat.Bgra32 : VideoPixelFormat.Nv12;
 
     /// <summary>Creates the D3D11 and Media Foundation hardware decode pipeline and registers the frame callback.
     /// <para>创建 D3D11 与 Media Foundation 硬件解码管线并登记帧回调。</para></summary>
@@ -485,8 +492,28 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
                 VideoFrameLimits.ValidateDimensions(_width, _height);
                 _ = MfCom.GetUInt32(type, MfInterop.MtVideoNominalRange, out var range);
                 _ = MfCom.GetUInt32(type, MfInterop.MtYuvMatrix, out var matrix);
-                if (_options.ColorRange != VideoColorRange.Auto) range = _options.ColorRange == VideoColorRange.Full ? 1u : 2u;
-                if (_options.ColorMatrix != VideoColorMatrix.Auto) matrix = _options.ColorMatrix == VideoColorMatrix.Bt709 ? 1u : 2u;
+                if (_options.ColorRange != VideoColorRange.Auto)
+                    range = _options.ColorRange == VideoColorRange.Full ? 1u : 2u;
+                if (_options.ColorMatrix != VideoColorMatrix.Auto)
+                    matrix = _options.ColorMatrix switch
+                    {
+                        VideoColorMatrix.Bt709 => 1u,
+                        VideoColorMatrix.Bt2020 => 4u,
+                        _ => 2u,
+                    };
+                _colorMatrix = matrix switch
+                {
+                    1 => VideoColorMatrix.Bt709,
+                    2 => VideoColorMatrix.Bt601,
+                    4 or 5 => VideoColorMatrix.Bt2020,
+                    _ => VideoColorMatrix.Bt601,
+                };
+                _colorRange = range switch
+                {
+                    1 => VideoColorRange.Full,
+                    2 => VideoColorRange.Limited,
+                    _ => VideoColorRange.Limited,
+                };
                 _inputColorSpace = ((range == 1 ? 2u : 1u) << 4) | (matrix == 1 ? 4u : 0u);
                 return true;
             }
@@ -498,6 +525,8 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private void BuildVideoProcessor()
     {
         ReleaseVideoProcessor();
+        ReleaseExportRing();
+        if (_colorMatrix == VideoColorMatrix.Bt2020) return;
         if (_options.PreferNv12Output && !_options.MediaFoundationPreferGpuExport) return;
         var content = new D3D11VideoProcessorContentDesc
         {
@@ -640,11 +669,14 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private void WaitForEventCondition(bool drain)
     {
         var deadline = Environment.TickCount64 + 5000;
+        var spin = new SpinWait();
         while (drain ? !_drainComplete : _inputRequests == 0)
         {
             if (Environment.TickCount64 >= deadline)
                 throw new TimeoutException("Hardware decoder event wait exceeded five seconds.");
-            if (!PumpEvent()) Thread.Sleep(1);
+            if (PumpEvent()) continue;
+            if (spin.NextSpinWillYield) Thread.Sleep(1);
+            else spin.SpinOnce();
         }
     }
     private void DiscardPendingEvents()
@@ -731,7 +763,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
                 try
                 {
                     Check(MfCom.DxgiSubresourceIndex(dxgiBuffer, out var subresource), "GetSubresourceIndex");
-                    if (_options.PreferNv12Output)
+                    if (_options.PreferNv12Output || _colorMatrix == VideoColorMatrix.Bt2020)
                     {
                         if (ExportActive) ExportSample(sourceTexture, subresource, timestamp);
                         else ReadBackNv12(sourceTexture, subresource, timestamp);
@@ -781,8 +813,8 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             using var frame = new DecodedVideoFrame(pixels, length, _width, _height, rowBytes, timestampTicks)
             {
                 ReturnBufferToPool = false,
-                ColorMatrix = (_inputColorSpace & 4) != 0 ? VideoColorMatrix.Bt709 : VideoColorMatrix.Bt601,
-                ColorRange = (_inputColorSpace & 0x30) == 0x20 ? VideoColorRange.Full : VideoColorRange.Limited,
+                ColorMatrix = _colorMatrix,
+                ColorRange = _colorRange,
             };
             for (var row = 0; row < _height; row++)
                 new ReadOnlySpan<byte>((byte*)mapped.pData + (nint)row * sourceStride, rowBytes)
@@ -827,36 +859,149 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         DxgiInterop.ReleaseSync(slot.KeyedMutex, 1);
         ring.CloseGate(slot);
         var frame = new D3D11SharedVideoFrame(ring, slot, slot.SharedHandle, _width, _height, timestampTicks,
-            (_inputColorSpace & 4) != 0 ? VideoColorMatrix.Bt709 : VideoColorMatrix.Bt601,
-            (_inputColorSpace & 0x30) == 0x20 ? VideoColorRange.Full : VideoColorRange.Limited);
+            _colorMatrix, _colorRange);
         _inCallback = true;
         try { _gpuExportFrameCallback!(frame); }
+        catch
+        {
+            frame.MarkPresented();
+            throw;
+        }
         finally { _inCallback = false; }
     }
 
+    /// <summary>
+    /// Blits one decoder texture into the destination view, reusing the processor input view cached for
+    /// the texture/subresource pair. Creating a view is the expensive part of the blit, so views stay
+    /// cached until the processor itself is rebuilt; when acquiring or using a cached view fails the
+    /// entry is released and the original per-frame create/blit/release path runs instead.
+    /// <para>把一个解码纹理搬运到目标视图，优先复用按纹理/子资源缓存的处理输入视图。创建视图是搬运中
+    /// 开销最大的部分，因此视图会缓存到处理器重建为止；获取或使用缓存视图失败时释放该条目并退回原先
+    /// “每帧新建/搬运/释放”的路径。</para>
+    /// </summary>
+    /// <param name="sourceTexture">The decoder-owned NV12 texture for this frame.
+    /// <para>该帧的解码器 NV12 纹理。</para></param>
+    /// <param name="subresource">The array slice reported by <c>IMFDXGIBuffer</c>.
+    /// <para><c>IMFDXGIBuffer</c> 报告的子资源。</para></param>
+    /// <param name="outputView">The destination video-processor output view.
+    /// <para>目标视频处理器输出视图。</para></param>
     private void BlitToOutput(nint sourceTexture, uint subresource, nint outputView)
+    {
+        if (TryBlitCached(sourceTexture, subresource, outputView)) return;
+        BlitFresh(sourceTexture, subresource, outputView);
+    }
+
+    private bool TryBlitCached(nint sourceTexture, uint subresource, nint outputView)
+    {
+        try
+        {
+            Blit(ObtainInputView(sourceTexture, subresource), outputView);
+            return true;
+        }
+        catch
+        {
+            ReleaseInputView((sourceTexture, subresource));
+            return false;
+        }
+    }
+
+    private void BlitFresh(nint sourceTexture, uint subresource, nint outputView)
     {
         var inputViewDesc = new D3D11Interop.VideoProcessorInputViewDesc
         {
             ViewDimension = D3D11Interop.VpivDimensionTexture2D,
             Texture2DArraySlice = subresource,
         };
-        Check(MfCom.D3DCreateVideoProcessorInputView(_videoDevice, sourceTexture, _processorEnumerator, inputViewDesc, out var inputView), "CreateVideoProcessorInputView");
+        nint inputView = 0;
         try
         {
-            var stream = new D3D11Interop.VideoProcessorStream
-            {
-                Enable = 1,
-                OutputIndex = 0,
-                InputFrameOrField = checked((int)_outputFrameCounter),
-                PastFrames = 0,
-                FutureFrames = 0,
-                InputFramePtr = inputView,
-            };
-            Check(MfCom.D3DVideoProcessorBlt(_videoContext, _processor, outputView, _outputFrameCounter, 1, stream), "VideoProcessorBlt");
-            _outputFrameCounter++;
+            Check(MfCom.D3DCreateVideoProcessorInputView(_videoDevice, sourceTexture, _processorEnumerator, inputViewDesc, out inputView), "CreateVideoProcessorInputView");
+            Blit(inputView, outputView);
         }
-        finally { MfCom.Release(inputView); }
+        finally { if (inputView != 0) MfCom.Release(inputView); }
+    }
+
+    private void Blit(nint inputView, nint outputView)
+    {
+        var stream = new D3D11Interop.VideoProcessorStream
+        {
+            Enable = 1,
+            OutputIndex = 0,
+            InputFrameOrField = checked((int)_outputFrameCounter),
+            PastFrames = 0,
+            FutureFrames = 0,
+            InputFramePtr = inputView,
+        };
+        Check(MfCom.D3DVideoProcessorBlt(_videoContext, _processor, outputView, _outputFrameCounter, 1, stream), "VideoProcessorBlt");
+        _outputFrameCounter++;
+    }
+
+    /// <summary>
+    /// Returns the cached input view for a texture/subresource pair, creating and caching it on a miss.
+    /// The cached view keeps its resource alive, so a hit address still refers to the same texture and no
+    /// descriptor check is needed on the hot path.
+    /// <para>返回纹理/子资源对应的缓存输入视图，未命中时创建并缓存。缓存视图会保持其资源存活，因此命中
+    /// 的地址仍指向同一纹理，热路径无需再检查纹理描述。</para>
+    /// </summary>
+    /// <param name="sourceTexture">The decoder-owned NV12 texture for this frame.
+    /// <para>该帧的解码器 NV12 纹理。</para></param>
+    /// <param name="subresource">The array slice reported by <c>IMFDXGIBuffer</c>.
+    /// <para><c>IMFDXGIBuffer</c> 报告的子资源。</para></param>
+    /// <returns>The retained input-view pointer stored in the cache.
+    /// <para>缓存持有的输入视图指针。</para></returns>
+    private nint ObtainInputView(nint sourceTexture, uint subresource)
+    {
+        var key = (sourceTexture, subresource);
+        if (_inputViews.TryGetValue(key, out nint cached)) return cached;
+        var inputViewDesc = new D3D11Interop.VideoProcessorInputViewDesc
+        {
+            ViewDimension = D3D11Interop.VpivDimensionTexture2D,
+            Texture2DArraySlice = subresource,
+        };
+        nint inputView = 0;
+        try
+        {
+            Check(MfCom.D3DCreateVideoProcessorInputView(_videoDevice, sourceTexture, _processorEnumerator, inputViewDesc, out inputView), "CreateVideoProcessorInputView");
+        }
+        catch
+        {
+            if (inputView != 0) MfCom.Release(inputView);
+            throw;
+        }
+        TrimInputViews();
+        _inputViews[key] = inputView;
+        _inputViewOrder.Add(key);
+        return inputView;
+    }
+
+    /// <summary>
+    /// Releases the oldest cached input views until a new entry fits inside the capacity. The list records
+    /// insertion order, so the first element is always the least recently created view.
+    /// <para>释放最旧的缓存输入视图，直到新条目能放入容量上限。列表记录插入顺序，因此首元素始终是最早
+    /// 创建的视图。</para>
+    /// </summary>
+    private void TrimInputViews()
+    {
+        while (_inputViews.Count >= InputViewCacheCapacity)
+        {
+            var oldest = _inputViewOrder[0];
+            _inputViewOrder.RemoveAt(0);
+            if (_inputViews.Remove(oldest, out nint evicted)) MfCom.Release(evicted);
+        }
+    }
+
+    private void ReleaseInputView((nint Texture, uint Subresource) key)
+    {
+        if (!_inputViews.Remove(key, out nint entry)) return;
+        _inputViewOrder.Remove(key);
+        MfCom.Release(entry);
+    }
+
+    private void ReleaseInputViews()
+    {
+        foreach (nint entry in _inputViews.Values) MfCom.Release(entry);
+        _inputViews.Clear();
+        _inputViewOrder.Clear();
     }
 
     private void ReadBack(long timestampTicks)
@@ -872,8 +1017,8 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             using var frame = new PointerDecodedVideoFrame((byte*)mapped.pData, required, _width, _height, stride, timestampTicks)
             {
                 ReturnBufferToPool = false,
-                ColorMatrix = (_inputColorSpace & 4) != 0 ? VideoColorMatrix.Bt709 : VideoColorMatrix.Bt601,
-                ColorRange = (_inputColorSpace & 0x30) == 0x20 ? VideoColorRange.Full : VideoColorRange.Limited,
+                ColorMatrix = _colorMatrix,
+                ColorRange = _colorRange,
             };
             _inCallback = true;
             try { _callback!(frame); } finally { _inCallback = false; }
@@ -913,6 +1058,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         _readbackBuffer = null;
         ReleaseTransformOnly();
         ReleaseVideoProcessor();
+        ReleaseExportRing();
         _callback = null;
         ReleaseD3D();
         if (_deviceManager != 0) { MfCom.Release(_deviceManager); _deviceManager = 0; }
@@ -922,17 +1068,22 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private void ReleaseVideoProcessor()
     {
+        ReleaseInputViews();
         _stagingWidth = _stagingHeight = 0;
-        if (_exportRing is not null)
-        {
-            _exportRing.Dispose();
-            _exportRing = null;
-        }
         if (_stagingTexture != 0) { MfCom.Release(_stagingTexture); _stagingTexture = 0; }
         if (_outputView != 0) { MfCom.Release(_outputView); _outputView = 0; }
         if (_outputTexture != 0) { MfCom.Release(_outputTexture); _outputTexture = 0; }
         if (_processor != 0) { MfCom.Release(_processor); _processor = 0; }
         if (_processorEnumerator != 0) { MfCom.Release(_processorEnumerator); _processorEnumerator = 0; }
+    }
+
+    private void ReleaseExportRing()
+    {
+        if (_exportRing is not null)
+        {
+            _exportRing.Dispose();
+            _exportRing = null;
+        }
     }
 
     private void ReleaseTransformOnly()

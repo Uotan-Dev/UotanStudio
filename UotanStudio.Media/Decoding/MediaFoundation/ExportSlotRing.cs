@@ -29,11 +29,13 @@ internal sealed class MediaFoundationExportSlot
 /// <para>
 /// The gate only schedules; the keyed mutex itself serializes actual GPU access. Renting, closing and
 /// opening the gate are safe from any thread. After <see cref="Dispose"/> the gate opens become no-ops,
-/// so a presentation completing during teardown cannot resurrect a slot.
+/// so a presentation completing during teardown cannot resurrect a slot. Opening a gate is idempotent:
+/// only the first report after a handoff reopens it.
 /// </para>
 /// <para>
 /// 闸门只负责调度；实际的 GPU 访问由键互锁串行化。租用、关闭与打开闸门均可在任意线程调用。
 /// <see cref="Dispose"/> 之后打开闸门变为空操作，销毁期间完成的呈现无法复活槽位。
+/// 打开闸门是幂等的：一次移交之后只有第一次报告会重新打开它。
 /// </para>
 /// </remarks>
 /// <typeparam name="TSlot">Caller-owned slot state. <para>调用方持有的槽位状态。</para></typeparam>
@@ -42,13 +44,7 @@ internal sealed class ExportSlotRing<TSlot> : IDisposable where TSlot : class
     private sealed class Entry(TSlot slot)
     {
         public readonly TSlot Slot = slot;
-        public TaskCompletionSource Gate = OpenGate();
-        private static TaskCompletionSource OpenGate()
-        {
-            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            gate.SetResult();
-            return gate;
-        }
+        public bool Open = true;
     }
 
     private readonly Lock _gateLock = new();
@@ -100,7 +96,7 @@ internal sealed class ExportSlotRing<TSlot> : IDisposable where TSlot : class
             if (_disposed) return null;
             foreach (Entry entry in _entries)
             {
-                if (!entry.Gate.Task.IsCompleted || !_tryAcquire(entry.Slot)) continue;
+                if (!entry.Open || !_tryAcquire(entry.Slot)) continue;
                 return entry.Slot;
             }
         }
@@ -110,29 +106,36 @@ internal sealed class ExportSlotRing<TSlot> : IDisposable where TSlot : class
 
     /// <summary>
     /// Closes the gate after the producer handed the texture off to the consumer; the slot becomes
-    /// rentable again once <see cref="MarkPresented"/> reports the compositor update finished.
-    /// <para>生产方把纹理移交给消费方后关闭闸门；待 <see cref="MarkPresented"/> 报告合成器更新完成后槽位方可再次租用。</para>
+    /// rentable again once <see cref="MarkPresented(TSlot)"/> reports the compositor update finished.
+    /// <para>生产方把纹理移交给消费方后关闭闸门；待 <see cref="MarkPresented(TSlot)"/> 报告合成器更新完成后槽位方可再次租用。</para>
     /// </summary>
     internal void CloseGate(TSlot slot)
     {
         lock (_gateLock)
         {
             if (_disposed) return;
-            Find(slot).Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Find(slot).Open = false;
             Interlocked.Increment(ref _submitted);
         }
     }
 
     /// <summary>
-    /// Opens the gate after the compositor update completed; idempotent, and a no-op after disposal.
-    /// <para>合成器更新完成后打开闸门；幂等，销毁后为空操作。</para>
+    /// Opens the gate after the compositor update completed; idempotent per handoff, and a no-op after disposal.
+    /// <para>合成器更新完成后打开闸门；每次移交只生效一次，销毁后为空操作。</para>
     /// </summary>
-    internal void MarkPresented(TSlot slot)
+    internal void MarkPresented(TSlot slot) => MarkPresented(slot, open: true);
+
+    /// <summary>
+    /// Opens the gate only when <paramref name="open"/> is set, so a late duplicate report cannot reopen a
+    /// newer handoff's gate.
+    /// <para>仅在 <paramref name="open"/> 为真时打开闸门，迟到的重复报告不会打开更新一次移交的闸门。</para>
+    /// </summary>
+    internal void MarkPresented(TSlot slot, bool open)
     {
         lock (_gateLock)
         {
-            if (_disposed) return;
-            Find(slot).Gate.TrySetResult();
+            if (_disposed || !open) return;
+            Find(slot).Open = true;
         }
     }
 
@@ -150,7 +153,8 @@ internal sealed class ExportSlotRing<TSlot> : IDisposable where TSlot : class
         {
             if (_disposed) return;
             _disposed = true;
-            leaked = [.. _entries.Select(entry => entry.Slot)];
+            leaked = new TSlot[_entries.Count];
+            for (var index = 0; index < _entries.Count; index++) leaked[index] = _entries[index].Slot;
             _entries.Clear();
         }
         foreach (TSlot slot in leaked) _destroySlot(slot);

@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 
 namespace UotanStudio.Media.Decoding;
 
@@ -143,6 +144,21 @@ public static unsafe class Nv12ToBgraConverter
         var yPlane = src;
         var uvPlane = src + (long)nv12Stride * height;
         var uvStride = nv12Stride;
+        var yOffset128 = Vector128.Create(yOffset);
+        var yScale128 = Vector128.Create(yScale);
+        var red128 = Vector128.Create(red);
+        var greenU128 = Vector128.Create(greenU);
+        var greenV128 = Vector128.Create(greenV);
+        var blue128 = Vector128.Create(blue);
+        var yOffset256 = Vector256.Create(yOffset);
+        var yScale256 = Vector256.Create(yScale);
+        var red256 = Vector256.Create(red);
+        var greenU256 = Vector256.Create(greenU);
+        var greenV256 = Vector256.Create(greenV);
+        var blue256 = Vector256.Create(blue);
+        var bias128 = Vector128.Create(128);
+        var bias256 = Vector256.Create(128);
+        var alpha256 = Vector256.Create(unchecked((int)0xff000000));
 
         for (var row = 0; row < height; row++)
         {
@@ -154,6 +170,34 @@ public static unsafe class Nv12ToBgraConverter
             var dstRow = dst + (long)row * dstStride;
 
             var col = 0;
+            if (Avx2.IsSupported)
+            {
+                for (; col <= width - 8; col += 8)
+                {
+                    var y = Avx2.ConvertToVector256Int32(Unsafe.ReadUnaligned<Vector128<byte>>(yRow + col));
+                    var cell = col >> 1;
+                    var d0 = SampleChroma(uvRow, uvRowNext, cell, width, verticalWeight) - 128;
+                    var e0 = SampleChroma(uvRow + 1, uvRowNext + 1, cell, width, verticalWeight) - 128;
+                    var d1 = SampleChroma(uvRow, uvRowNext, cell + 1, width, verticalWeight) - 128;
+                    var e1 = SampleChroma(uvRow + 1, uvRowNext + 1, cell + 1, width, verticalWeight) - 128;
+                    var d2 = SampleChroma(uvRow, uvRowNext, cell + 2, width, verticalWeight) - 128;
+                    var e2 = SampleChroma(uvRow + 1, uvRowNext + 1, cell + 2, width, verticalWeight) - 128;
+                    var d3 = SampleChroma(uvRow, uvRowNext, cell + 3, width, verticalWeight) - 128;
+                    var e3 = SampleChroma(uvRow + 1, uvRowNext + 1, cell + 3, width, verticalWeight) - 128;
+                    var d = Vector256.Create(d0, d0, d1, d1, d2, d2, d3, d3);
+                    var e = Vector256.Create(e0, e0, e1, e1, e2, e2, e3, e3);
+                    var c = (y - yOffset256) * yScale256 + bias256;
+                    var r = Vector256.ShiftRightArithmetic(c + e * red256, 8);
+                    var g = Vector256.ShiftRightArithmetic(c - d * greenU256 - e * greenV256, 8);
+                    var b = Vector256.ShiftRightArithmetic(c + d * blue256, 8);
+                    r = Vector256.Min(Vector256.Max(r, Vector256<int>.Zero), Vector256.Create(255));
+                    g = Vector256.Min(Vector256.Max(g, Vector256<int>.Zero), Vector256.Create(255));
+                    b = Vector256.Min(Vector256.Max(b, Vector256<int>.Zero), Vector256.Create(255));
+                    var pixels = b | Vector256.ShiftLeft(g, 8) | Vector256.ShiftLeft(r, 16) | alpha256;
+                    pixels.Store((int*)(dstRow + col * 4));
+                }
+            }
+
             if (Vector128.IsHardwareAccelerated)
             {
                 for (; col <= width - 4; col += 4)
@@ -166,10 +210,10 @@ public static unsafe class Nv12ToBgraConverter
                     var e1 = SampleChroma(uvRow + 1, uvRowNext + 1, cell + 1, width, verticalWeight) - 128;
                     var d = Vector128.Create(d0, d0, d1, d1);
                     var e = Vector128.Create(e0, e0, e1, e1);
-                    var c = (y - Vector128.Create(yOffset)) * Vector128.Create(yScale) + Vector128.Create(128);
-                    var r = Vector128.ShiftRightArithmetic(c + e * Vector128.Create(red), 8);
-                    var g = Vector128.ShiftRightArithmetic(c - d * Vector128.Create(greenU) - e * Vector128.Create(greenV), 8);
-                    var b = Vector128.ShiftRightArithmetic(c + d * Vector128.Create(blue), 8);
+                    var c = (y - yOffset128) * yScale128 + bias128;
+                    var r = Vector128.ShiftRightArithmetic(c + e * red128, 8);
+                    var g = Vector128.ShiftRightArithmetic(c - d * greenU128 - e * greenV128, 8);
+                    var b = Vector128.ShiftRightArithmetic(c + d * blue128, 8);
                     r = Vector128.Min(Vector128.Max(r, Vector128<int>.Zero), Vector128.Create(255));
                     g = Vector128.Min(Vector128.Max(g, Vector128<int>.Zero), Vector128.Create(255));
                     b = Vector128.Min(Vector128.Max(b, Vector128<int>.Zero), Vector128.Create(255));

@@ -288,7 +288,7 @@ public sealed unsafe class VaApiSession : IDisposable
     /// <summary>
     /// Waits for completion and exports read-only composed DRM PRIME layers.
     /// The caller must dispose the returned descriptor to close all exported file descriptors.
-    /// <para>等待解码完成并导出只读的合成 DRM PRIME 层。调用方必须释放返回的描述符，以关闭所有导出的文件描述符。</para>
+    /// <para>等待解码完成并导出只读的分离 DRM PRIME 层。调用方必须释放返回的描述符，以关闭所有导出的文件描述符。</para>
     /// </summary>
     /// <param name="index">Zero-based position in the pool created by <see cref="Configure"/>.
     /// <para>由 <see cref="Configure"/> 创建的池中的从零开始的索引。</para></param>
@@ -309,7 +309,7 @@ public sealed unsafe class VaApiSession : IDisposable
         var id = _surfaces[index];
         Check(VaNative.vaSyncSurface(_display, id), "sync surface");
         var descriptor = new DmaBufDescriptor();
-        Check(VaNative.vaExportSurfaceHandle(_display, id, 0x40000000, 1 | 8, &descriptor), "export DRM PRIME 2");
+        Check(VaNative.vaExportSurfaceHandle(_display, id, 0x40000000, 1 | 4, &descriptor), "export DRM PRIME 2");
         return new DmaBufSurface(descriptor);
     }
 

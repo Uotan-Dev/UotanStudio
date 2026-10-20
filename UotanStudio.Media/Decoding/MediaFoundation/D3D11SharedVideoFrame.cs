@@ -26,6 +26,7 @@ public sealed class D3D11SharedVideoFrame
 {
     private readonly ExportSlotRing<MediaFoundationExportSlot> _ring;
     private readonly MediaFoundationExportSlot _slot;
+    private int _presented;
 
     internal D3D11SharedVideoFrame(ExportSlotRing<MediaFoundationExportSlot> ring, MediaFoundationExportSlot slot,
         nint sharedHandle, int width, int height, long timestampTicks, VideoColorMatrix colorMatrix, VideoColorRange colorRange)
@@ -66,8 +67,10 @@ public sealed class D3D11SharedVideoFrame
     public VideoColorRange ColorRange { get; }
 
     /// <summary>
-    /// Reports that this frame left the presentation path (update completed, failed, or skipped).
-    /// <para>报告本帧已离开呈现路径（更新完成、失败或被跳过）。</para>
+    /// Reports that this frame left the presentation path (update completed, failed, or skipped). Only the
+    /// first call has an effect; the ring gate is not reopened for a newer frame.
+    /// <para>报告本帧已离开呈现路径（更新完成、失败或被跳过）。只有第一次调用生效，不会把更新一帧的闸门打开。</para>
     /// </summary>
-    public void MarkPresented() => _ring.MarkPresented(_slot);
+    public void MarkPresented()
+        => _ring.MarkPresented(_slot, Interlocked.Exchange(ref _presented, 1) == 0);
 }

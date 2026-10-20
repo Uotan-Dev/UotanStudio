@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
@@ -45,7 +45,7 @@ internal struct VaDmaBufFrame
 public sealed class DmaBufSurface : IDisposable
 {
     internal DmaBufDescriptor Descriptor;
-    private bool _disposed;
+    private int _disposed;
     internal DmaBufSurface(DmaBufDescriptor descriptor)
     {
         Descriptor = descriptor;
@@ -83,15 +83,14 @@ public sealed class DmaBufSurface : IDisposable
     /// <summary>Gets the number of DRM layers. <para>DRM 层数量。</para></summary>
     /// <value>A layer count between 1 and 4. <para>介于 1 到 4 的层计数。</para></value>
     public uint LayerCount => Descriptor.LayerCount;
-    internal void CheckAlive() => ObjectDisposedException.ThrowIf(_disposed, this);
+    internal void CheckAlive() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
     /// <summary>
     /// Closes every exported DMA-BUF file descriptor; safe to call more than once.
     /// <para>关闭所有导出的 DMA-BUF 文件描述符；可安全地多次调用。</para>
     /// </summary>
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         for (var i = 0; i < Math.Min(Descriptor.ObjectCount, 4); i++)
             if (Descriptor.Objects[i].Fd >= 0) _ = VaNative.close(Descriptor.Objects[i].Fd);
     }
@@ -108,6 +107,10 @@ public sealed class DmaBufSurface : IDisposable
 [SupportedOSPlatform("linux")]
 public sealed unsafe partial class EglDmaBufImage : IDisposable
 {
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<nint, EglImportSupport> ImportSupport = new();
+    private readonly record struct EglImportSupport(bool Import, bool Modifiers, nint Create, nint Destroy);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<nint, (bool ExternalOes, bool Image)> TextureSupport = new();
+    private static nint _glBindImage, _glGenTextures, _glBindTexture, _glTexParameteri, _glDeleteTextures;
     private readonly nint _display;
     private readonly int _thread = Environment.CurrentManagedThreadId;
     private readonly delegate* unmanaged<nint, nint, uint> _destroy;
@@ -157,16 +160,29 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
         ArgumentNullException.ThrowIfNull(surface);
         surface.CheckAlive();
         if (eglDisplay == 0) throw new ArgumentException("An initialized EGLDisplay is required.", nameof(eglDisplay));
-        var extensions = Marshal.PtrToStringUTF8(eglQueryString(eglDisplay, 0x3055)) ?? "";
-        var names = extensions.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (!names.Contains("EGL_EXT_image_dma_buf_import")) throw new NotSupportedException("EGL DMA-BUF import is unavailable.");
-        var modifiers = names.Contains("EGL_EXT_image_dma_buf_import_modifiers");
+        var support = ImportSupport.GetOrAdd(eglDisplay, static display =>
+        {
+            var extensions = eglQueryString(display, 0x3055);
+            var names = extensions == 0 ? string.Empty : Marshal.PtrToStringUTF8(extensions) ?? string.Empty;
+            var import = names.Contains("EGL_EXT_image_dma_buf_import", StringComparison.Ordinal);
+            return new EglImportSupport(import,
+                names.Contains("EGL_EXT_image_dma_buf_import_modifiers", StringComparison.Ordinal),
+                import ? eglGetProcAddress("eglCreateImageKHR") : 0,
+                import ? eglGetProcAddress("eglDestroyImageKHR") : 0);
+        });
+        if (!support.Import) throw new NotSupportedException("EGL DMA-BUF import is unavailable.");
+        var modifiers = support.Modifiers;
         var descriptor = surface.Descriptor;
         if (descriptor.LayerCount is < 1 or > 4) throw new NotSupportedException("The descriptor exposes no importable DRM layer.");
         if ((uint)layerIndex >= descriptor.LayerCount) throw new ArgumentOutOfRangeException(nameof(layerIndex));
         DmaBufLayer layer = descriptor.Layers[layerIndex];
         if (layer.Planes is < 1 or > 3) throw new NotSupportedException("EGL import supports one to three planes.");
-        List<int> attributes = [0x3057, checked((int)descriptor.Width), 0x3056, checked((int)descriptor.Height), 0x3271, unchecked((int)layer.Format)];
+        var attributes = new List<int>(6 + (int)layer.Planes * 9)
+        {
+            0x3057, checked((int)descriptor.Width),
+            0x3056, checked((int)descriptor.Height),
+            0x3271, unchecked((int)layer.Format),
+        };
         for (var i = 0; i < layer.Planes; i++)
         {
             var objectIndex = layer.ObjectIndices[i];
@@ -180,8 +196,8 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
                 throw new NotSupportedException("This surface requires EGL modifier import support.");
         }
         attributes.Add(0x3038);
-        var create = (delegate* unmanaged<nint, nint, uint, nint, int*, nint>)eglGetProcAddress("eglCreateImageKHR");
-        var destroy = (delegate* unmanaged<nint, nint, uint>)eglGetProcAddress("eglDestroyImageKHR");
+        var create = (delegate* unmanaged<nint, nint, uint, nint, int*, nint>)support.Create;
+        var destroy = (delegate* unmanaged<nint, nint, uint>)support.Destroy;
         if (create == null || destroy == null) throw new NotSupportedException("EGL image entrypoints are unavailable.");
         int[] array = [.. attributes];
         fixed (int* p = array)
@@ -225,27 +241,80 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     public (uint TextureId, uint Target) CreateBoundTexture(bool externalOes, uint glFormat)
     {
         CheckThread();
-        var extension = externalOes ? "GL_OES_EGL_image_external" : "GL_OES_EGL_image";
-        var getString = (delegate* unmanaged<uint, nint>)eglGetProcAddress("glGetString");
-        var extensions = getString == null ? "" : Marshal.PtrToStringUTF8(getString(0x1F03)) ?? "";
-        if (!extensions.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(extension))
-            throw new NotSupportedException($"A current context with {extension} is required.");
-        var bind = (delegate* unmanaged<uint, nint, void>)eglGetProcAddress("glEGLImageTargetTexture2DOES");
-        var generate = (delegate* unmanaged<uint, uint*, void>)eglGetProcAddress("glGenTextures");
-        var bindTexture = (delegate* unmanaged<uint, uint, void>)eglGetProcAddress("glBindTexture");
-        var parameter = (delegate* unmanaged<uint, uint, int, void>)eglGetProcAddress("glTexParameteri");
-        if (bind == null || generate == null || bindTexture == null || parameter == null)
+        var context = eglGetCurrentContext();
+        var supported = TextureSupport.GetOrAdd(context, static _ =>
+        {
+            var getString = (delegate* unmanaged<uint, nint>)eglGetProcAddress("glGetString");
+            var extensions = getString == null ? "" : Marshal.PtrToStringUTF8(getString(0x1F03)) ?? "";
+            return (extensions.Contains("GL_OES_EGL_image_external", StringComparison.Ordinal),
+                extensions.Contains("GL_OES_EGL_image", StringComparison.Ordinal));
+        });
+        if (externalOes ? !supported.ExternalOes : !supported.Image)
+            throw new NotSupportedException($"A current context with {(externalOes ? "GL_OES_EGL_image_external" : "GL_OES_EGL_image")} is required.");
+        EnsureTextureFunctions();
+        var generate = (delegate* unmanaged<uint, uint*, void>)_glGenTextures;
+        if (generate == null)
             throw new NotSupportedException("EGL image texture entrypoints are unavailable.");
-        var target = externalOes ? 0x8D65u : 0x0DE1u;
         uint texture = 0;
         generate(1, &texture);
         if (texture == 0) throw new InvalidOperationException("GL texture generation failed.");
-        bindTexture(target, texture);
+        try
+        {
+            BindToTexture(texture, externalOes);
+        }
+        catch
+        {
+            var delete = (delegate* unmanaged<uint, uint*, void>)_glDeleteTextures;
+            if (delete != null) delete(1, &texture);
+            throw;
+        }
+        return (texture, externalOes ? 0x8D65u : 0x0DE1u);
+    }
+
+    /// <summary>
+    /// Rebinds this image to a caller-owned texture id so a renderer can recycle texture objects across
+    /// frames instead of creating and deleting one per frame. The texture keeps its storage; only its
+    /// EGLImage source is replaced. Must run on the renderer thread with the owning GL context current.
+    /// <para>把本图像重新绑定到调用方已有的纹理 ID，渲染器因此可以跨帧复用纹理对象而不必逐帧创建/删除。
+    /// 纹理保留自身存储，只替换其 EGLImage 来源。必须在渲染器线程且所属 GL 上下文当前时调用。</para>
+    /// </summary>
+    /// <param name="textureId">Texture object previously returned by <see cref="CreateBoundTexture"/>.
+    /// <para>先前由 <see cref="CreateBoundTexture"/> 返回的纹理对象。</para></param>
+    /// <param name="externalOes"><see langword="true"/> to bind through <c>GL_TEXTURE_EXTERNAL_OES</c>,
+    /// <see langword="false"/> for <c>GL_TEXTURE_2D</c>.
+    /// <para>为 <see langword="true"/> 时经 <c>GL_TEXTURE_EXTERNAL_OES</c> 绑定，否则经 <c>GL_TEXTURE_2D</c>。</para></param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="textureId"/> is zero.
+    /// <para><paramref name="textureId"/> 为零。</para></exception>
+    /// <exception cref="InvalidOperationException">The call comes from a thread other than the owning renderer thread.
+    /// <para>调用来自除所属渲染器线程之外的其他线程。</para></exception>
+    /// <exception cref="NotSupportedException">The current context lacks the EGL image texture entrypoints.
+    /// <para>当前上下文缺少 EGL image 纹理入口点。</para></exception>
+    public void BindToTexture(uint textureId, bool externalOes)
+    {
+        if (textureId == 0) throw new ArgumentOutOfRangeException(nameof(textureId));
+        CheckThread();
+        EnsureTextureFunctions();
+        var bind = (delegate* unmanaged<uint, nint, void>)_glBindImage;
+        var bindTexture = (delegate* unmanaged<uint, uint, void>)_glBindTexture;
+        var parameter = (delegate* unmanaged<uint, uint, int, void>)_glTexParameteri;
+        if (bind == null || bindTexture == null || parameter == null)
+            throw new NotSupportedException("EGL image texture entrypoints are unavailable.");
+        var target = externalOes ? 0x8D65u : 0x0DE1u;
+        bindTexture(target, textureId);
         bind(target, Handle);
         parameter(target, 0x2800, 0x2600);
         parameter(target, 0x2801, 0x2600);
         bindTexture(target, 0);
-        return (texture, target);
+    }
+
+    private static void EnsureTextureFunctions()
+    {
+        if (_glBindImage != 0) return;
+        _glBindImage = eglGetProcAddress("glEGLImageTargetTexture2DOES");
+        _glGenTextures = eglGetProcAddress("glGenTextures");
+        _glBindTexture = eglGetProcAddress("glBindTexture");
+        _glTexParameteri = eglGetProcAddress("glTexParameteri");
+        _glDeleteTextures = eglGetProcAddress("glDeleteTextures");
     }
 
     /// <summary>
@@ -258,7 +327,8 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     public static void DeleteTexture(uint textureId)
     {
         if (textureId == 0) return;
-        var delete = (delegate* unmanaged<uint, uint*, void>)eglGetProcAddress("glDeleteTextures");
+        EnsureTextureFunctions();
+        var delete = (delegate* unmanaged<uint, uint*, void>)_glDeleteTextures;
         if (delete != null) delete(1, &textureId);
     }
     /// <summary>
@@ -284,4 +354,5 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     [LibraryImport("libEGL.so.1", StringMarshalling = StringMarshalling.Utf8)] private static partial nint eglGetProcAddress(string name);
     [LibraryImport("libEGL.so.1")] private static partial int eglGetError();
     [LibraryImport("libEGL.so.1")] private static partial nint eglGetCurrentDisplay();
+    [LibraryImport("libEGL.so.1")] private static partial nint eglGetCurrentContext();
 }

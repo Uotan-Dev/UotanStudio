@@ -326,11 +326,16 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
                 status = _session.Send([], 0);
                 if (status == 2 && ExportActive)
                 {
-                    var deadline = Environment.TickCount64 + 5000;
+                    var deadline = Environment.TickCount64 + ExportReleaseWaitMilliseconds;
+                    var reclaims = 0;
                     while (status == 2)
                     {
                         if (Environment.TickCount64 >= deadline)
-                            throw new InvalidDataException("VA-API decoder stalled behind an unreleased export frame for five seconds.");
+                        {
+                            if (!AbandonOutstandingExport() || ++reclaims > MaximumExportReclaimsPerSend)
+                                throw new InvalidDataException("VA-API decoder stalled behind an unreleased export frame.");
+                            deadline = Environment.TickCount64 + ExportReleaseWaitMilliseconds;
+                        }
                         Thread.Sleep(1);
                         ReadFrames(out _);
                         status = _session.Send([], 0);

@@ -11,16 +11,19 @@ namespace UotanStudio.Media.Decoding.MediaFoundation;
 /// <remarks>
 /// <para>
 /// Struct layouts and vtable slots follow dxgi.h (Windows SDK 10.0.26100). The keyed-mutex slots assume
-/// the interface chain IDXGIKeyedMutex → IDXGIObject → IUnknown: IUnknown occupies slots 0–2 and IDXGIObject
-/// occupies SetPrivateData (3), SetPrivateDataInterface (4), GetPrivateData (5) and GetParent (6), so
-/// AcquireSync is slot 7 and ReleaseSync is slot 8. IDXGIResource::GetSharedHandle is slot 8 for the same
-/// reason, because IDXGIDeviceSubObject::GetDevice occupies slot 7.
+/// the interface chain IDXGIKeyedMutex → IDXGIDeviceSubObject → IDXGIObject → IUnknown: IUnknown occupies
+/// slots 0–2, IDXGIObject occupies SetPrivateData (3), SetPrivateDataInterface (4), GetPrivateData (5) and
+/// GetParent (6), IDXGIDeviceSubObject occupies GetDevice (7), so AcquireSync is slot 8 and ReleaseSync is
+/// slot 9. IDXGIResource::GetSharedHandle is also slot 8 because it derives from IDXGIDeviceSubObject.
+/// IDXGIAdapter adds EnumOutputs (7), GetDesc (8) and CheckInterfaceSupport (9) after IDXGIObject.
 /// </para>
 /// <para>
 /// 结构体布局与 vtable 槽位遵循 dxgi.h（Windows SDK 10.0.26100）。键互锁的槽位按接口链
-/// IDXGIKeyedMutex → IDXGIObject → IUnknown 计算：IUnknown 占槽位 0–2，IDXGIObject 占 SetPrivateData（3）、
-/// SetPrivateDataInterface（4）、GetPrivateData（5）与 GetParent（6），因此 AcquireSync 为槽位 7、
-/// ReleaseSync 为槽位 8。同理 IDXGIResource::GetSharedHandle 为槽位 8（IDXGIDeviceSubObject::GetDevice 占槽位 7）。
+/// IDXGIKeyedMutex → IDXGIDeviceSubObject → IDXGIObject → IUnknown 计算：IUnknown 占槽位 0–2，
+/// IDXGIObject 占 SetPrivateData（3）、SetPrivateDataInterface（4）、GetPrivateData（5）与 GetParent（6），
+/// IDXGIDeviceSubObject 占 GetDevice（7），因此 AcquireSync 为槽位 8、ReleaseSync 为槽位 9。
+/// IDXGIResource::GetSharedHandle 同样为槽位 8（继承自 IDXGIDeviceSubObject）。
+/// IDXGIAdapter 在 IDXGIObject 之后依次是 EnumOutputs（7）、GetDesc（8）与 CheckInterfaceSupport（9）。
 /// </para>
 /// </remarks>
 [SupportedOSPlatform("windows")]
@@ -38,13 +41,13 @@ internal static unsafe partial class DxgiInterop
     /// IID_IDXGIResource.
     /// <para>IID_IDXGIResource。</para>
     /// </summary>
-    public static readonly Guid IidDxgiResource = new("0451E34F-7EA8-48C0-9A8E-1E0D6B4E9D24");
+    public static readonly Guid IidDxgiResource = new("035F3AB4-482E-4E50-B41F-8A7F8BD8960B");
 
     /// <summary>
     /// IID_IDXGIKeyedMutex.
     /// <para>IID_IDXGIKeyedMutex。</para>
     /// </summary>
-    public static readonly Guid IidDxgiKeyedMutex = new("9D8E1289-D7B3-4E22-9574-10D6AA696D97");
+    public static readonly Guid IidDxgiKeyedMutex = new("9D8E1289-D7B3-465F-8126-250E349AF85D");
 
     /// <summary>
     /// D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX.
@@ -78,18 +81,19 @@ internal static unsafe partial class DxgiInterop
     }
 
     /// <summary>
-    /// IDXGIAdapter.GetDesc (slot 7: IUnknown 0–2, IDXGIObject 3–6).
-    /// <para>IDXGIAdapter.GetDesc（槽位 7：IUnknown 0–2，IDXGIObject 3–6）。</para>
+    /// IDXGIAdapter.GetDesc (slot 8: EnumOutputs is 7).
+    /// <para>IDXGIAdapter.GetDesc（槽位 8：EnumOutputs 是 7）。</para>
     /// </summary>
     /// <param name="adapter">IDXGIAdapter interface pointer. <para>IDXGIAdapter 接口指针。</para></param>
     /// <param name="desc">
-    /// DXGI_ADAPTER_DESC written by the call; the slot's HRESULT is not surfaced by this wrapper.
-    /// <para>由该调用写入的 DXGI_ADAPTER_DESC；此包装不返回该槽位的 HRESULT。</para>
+    /// DXGI_ADAPTER_DESC written by the call.
+    /// <para>由该调用写入的 DXGI_ADAPTER_DESC。</para>
     /// </param>
-    public static void AdapterGetDesc(nint adapter, out DxgiAdapterDesc desc)
+    /// <returns>The HRESULT of the call.<para>该调用的 HRESULT。</para></returns>
+    public static int AdapterGetDesc(nint adapter, out DxgiAdapterDesc desc)
     {
         fixed (DxgiAdapterDesc* d = &desc)
-            ((delegate* unmanaged[Stdcall]<nint, DxgiAdapterDesc*, void>)(*(nint***)adapter)[7])(adapter, d);
+            return ((delegate* unmanaged[Stdcall]<nint, DxgiAdapterDesc*, int>)(*(nint***)adapter)[8])(adapter, d);
     }
 
     /// <summary>
@@ -105,20 +109,20 @@ internal static unsafe partial class DxgiInterop
     }
 
     /// <summary>
-    /// IDXGIKeyedMutex.AcquireSync (slot 7). With a zero timeout the call never blocks and returns
+    /// IDXGIKeyedMutex.AcquireSync (slot 8). With a zero timeout the call never blocks and returns
     /// <see cref="WaitTimeout"/> when another device owns the mutex.
-    /// <para>IDXGIKeyedMutex.AcquireSync（槽位 7）。超时为 0 时调用不会阻塞，互锁被其他设备持有时返回
+    /// <para>IDXGIKeyedMutex.AcquireSync（槽位 8）。超时为 0 时调用不会阻塞，互锁被其他设备持有时返回
     /// <see cref="WaitTimeout"/>。</para>
     /// </summary>
     public static int AcquireSync(nint keyedMutex, ulong key, uint timeoutMilliseconds) =>
-        ((delegate* unmanaged[Stdcall]<nint, ulong, uint, int>)(*(nint***)keyedMutex)[7])(keyedMutex, key, timeoutMilliseconds);
+        ((delegate* unmanaged[Stdcall]<nint, ulong, uint, int>)(*(nint***)keyedMutex)[8])(keyedMutex, key, timeoutMilliseconds);
 
     /// <summary>
-    /// IDXGIKeyedMutex.ReleaseSync (slot 8), handing the mutex over at <paramref name="key"/>.
-    /// <para>IDXGIKeyedMutex.ReleaseSync（槽位 8），以 <paramref name="key"/> 移交互锁。</para>
+    /// IDXGIKeyedMutex.ReleaseSync (slot 9), handing the mutex over at <paramref name="key"/>.
+    /// <para>IDXGIKeyedMutex.ReleaseSync（槽位 9），以 <paramref name="key"/> 移交互锁。</para>
     /// </summary>
     public static int ReleaseSync(nint keyedMutex, ulong key) =>
-        ((delegate* unmanaged[Stdcall]<nint, ulong, int>)(*(nint***)keyedMutex)[8])(keyedMutex, key);
+        ((delegate* unmanaged[Stdcall]<nint, ulong, int>)(*(nint***)keyedMutex)[9])(keyedMutex, key);
 
     /// <summary>Returns the adapter whose LUID matches <paramref name="adapterLuid"/> with one reference held, or <see cref="nint.Zero"/> when no adapter matches; the caller releases the pointer.
     /// <para>返回 LUID 与 <paramref name="adapterLuid"/> 一致且持有一个引用的适配器；无匹配时返回 <see cref="nint.Zero"/>，由调用方释放指针。</para></summary>
@@ -139,7 +143,7 @@ internal static unsafe partial class DxgiInterop
                 Check(hr, "EnumAdapters");
                 try
                 {
-                    AdapterGetDesc(adapter, out DxgiAdapterDesc desc);
+                    Check(AdapterGetDesc(adapter, out DxgiAdapterDesc desc), "GetDesc");
                     if (new ReadOnlySpan<byte>(&desc.AdapterLuidLowPart, 8).SequenceEqual(adapterLuid))
                     {
                         match = adapter;
@@ -174,9 +178,9 @@ internal unsafe struct DxgiAdapterDesc
     public uint DeviceId;
     public uint SubSysId;
     public uint Revision;
-    public uint AdapterLuidLowPart;
-    public int AdapterLuidHighPart;
     public nuint DedicatedVideoMemory;
     public nuint DedicatedSystemMemory;
     public nuint SharedSystemMemory;
+    public uint AdapterLuidLowPart;
+    public int AdapterLuidHighPart;
 }

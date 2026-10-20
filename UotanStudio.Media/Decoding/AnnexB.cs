@@ -7,8 +7,15 @@ internal static class AnnexB
 {
     internal static List<Range> Split(ReadOnlySpan<byte> data)
     {
-        VideoFrameLimits.ValidateAccessUnit(data);
         var result = new List<Range>();
+        Split(data, result);
+        return result;
+    }
+
+    internal static void Split(ReadOnlySpan<byte> data, List<Range> result)
+    {
+        result.Clear();
+        VideoFrameLimits.ValidateAccessUnit(data);
         var start = -1;
         for (var i = 0; i + 2 < data.Length; i++)
         {
@@ -36,23 +43,33 @@ internal static class AnnexB
         while (final > start && data[final - 1] == 0) final--;
         if (final == start) throw new InvalidDataException("Empty Annex-B NAL unit.");
         result.Add(start..final);
-        return result;
     }
 
-    internal static byte[] ToLengthPrefixed(ReadOnlySpan<byte> data, IReadOnlyList<Range> ranges)
+    internal static int LengthPrefixedSize(ReadOnlySpan<byte> data, IReadOnlyList<Range> ranges)
     {
         var size = 0;
         foreach (Range range in ranges) size = checked(size + 4 + data[range].Length);
         if (size > VideoFrameLimits.MaximumAccessUnitBytes) throw new InvalidDataException("Access unit exceeds 32 MiB.");
-        var result = new byte[size];
+        return size;
+    }
+
+    internal static void WriteLengthPrefixed(ReadOnlySpan<byte> data, IReadOnlyList<Range> ranges, Span<byte> destination)
+    {
         var offset = 0;
         foreach (Range range in ranges)
         {
             ReadOnlySpan<byte> nal = data[range];
-            BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(offset), (uint)nal.Length);
-            nal.CopyTo(result.AsSpan(offset + 4));
+            BinaryPrimitives.WriteUInt32BigEndian(destination.Slice(offset, 4), (uint)nal.Length);
+            nal.CopyTo(destination[(offset + 4)..]);
             offset += nal.Length + 4;
         }
+        if (offset != destination.Length) throw new ArgumentException("The destination does not match the NAL ranges.", nameof(destination));
+    }
+
+    internal static byte[] ToLengthPrefixed(ReadOnlySpan<byte> data, IReadOnlyList<Range> ranges)
+    {
+        var result = new byte[LengthPrefixedSize(data, ranges)];
+        WriteLengthPrefixed(data, ranges, result);
         return result;
     }
 }

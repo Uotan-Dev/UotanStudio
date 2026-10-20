@@ -266,14 +266,13 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
     {
         if (MfCom.GetAttributes(transform, out var attributes) >= 0 && attributes != 0)
         {
-            try { Check(MfCom.SetUInt32(attributes, new Guid("9c27891a-ed7a-40e1-88e8-b22727a024ee"), 1), "low latency attribute"); }
+            try { _ = MfCom.SetUInt32(attributes, new Guid("9c27891a-ed7a-40e1-88e8-b22727a024ee"), 1); }
             finally { MfCom.Release(attributes); }
         }
-        var hr = MfCom.QueryInterface(transform, new Guid("901db4c7-31ce-41a2-85dc-8fa0bf41b8da"), out var codecApi);
-        if (hr < 0) return;
+        if (MfCom.QueryInterface(transform, new Guid("901db4c7-31ce-41a2-85dc-8fa0bf41b8da"), out var codecApi) < 0) return;
         try
         {
-            Check(MfCom.SetCodecLowLatency(codecApi, new Guid("9c27891a-ed7a-40e1-88e8-b22727a024ee"), codec == VideoCodecId.H264), "enable low latency");
+            _ = MfCom.SetCodecLowLatency(codecApi, new Guid("9c27891a-ed7a-40e1-88e8-b22727a024ee"));
         }
         finally { MfCom.Release(codecApi); }
     }
@@ -306,7 +305,13 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
                 Check(MfCom.GetUInt64(type, MfInterop.MtFrameSize, out var size), "output dimensions");
                 _ = MfCom.GetUInt32(type, MfInterop.MtVideoNominalRange, out var range);
                 _ = MfCom.GetUInt32(type, MfInterop.MtYuvMatrix, out var matrix);
-                _colorMatrix = matrix switch { 1 => VideoColorMatrix.Bt709, 2 => VideoColorMatrix.Bt601, _ => VideoColorMatrix.Auto };
+                _colorMatrix = matrix switch
+                {
+                    1 => VideoColorMatrix.Bt709,
+                    2 => VideoColorMatrix.Bt601,
+                    4 or 5 => VideoColorMatrix.Bt2020,
+                    _ => VideoColorMatrix.Auto,
+                };
                 _colorRange = range switch { 1 => VideoColorRange.Full, 2 => VideoColorRange.Limited, _ => VideoColorRange.Auto };
                 _width = checked((int)(size >> 32));
                 _height = checked((int)(size & uint.MaxValue));
@@ -327,7 +332,12 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
     internal static bool ApplyColorOverrides(nint type, VideoColorMatrix matrix, VideoColorRange range)
     {
         if (matrix != VideoColorMatrix.Auto
-            && MfCom.SetUInt32(type, MfInterop.MtYuvMatrix, matrix == VideoColorMatrix.Bt709 ? 1u : 2u) < 0) return false;
+            && MfCom.SetUInt32(type, MfInterop.MtYuvMatrix, matrix switch
+            {
+                VideoColorMatrix.Bt709 => 1u,
+                VideoColorMatrix.Bt2020 => 4u,
+                _ => 2u,
+            }) < 0) return false;
         if (range != VideoColorRange.Auto
             && MfCom.SetUInt32(type, MfInterop.MtVideoNominalRange, range == VideoColorRange.Full ? 1u : 2u) < 0) return false;
         return true;
@@ -374,10 +384,13 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
             {
                 var required = VideoFrameLimits.Nv12Length(_width, _height, _stride);
                 if (length < required) throw new InvalidDataException("Truncated NV12 output.");
-                var pooled = ArrayPool<byte>.Shared.Rent(required);
                 _ = MfCom.GetTime(sample, out var timestamp);
-                using var frame = new DecodedVideoFrame(pooled, required, _width, _height, _stride, timestamp) { ColorMatrix = _colorMatrix, ColorRange = _colorRange };
-                new ReadOnlySpan<byte>((void*)source, required).CopyTo(pooled);
+                using var frame = new PointerDecodedVideoFrame((byte*)source, required, _width, _height, _stride,
+                    timestamp, VideoPixelFormat.Nv12)
+                {
+                    ColorMatrix = _colorMatrix,
+                    ColorRange = _colorRange
+                };
                 _inCallback = true;
                 try { _callback!(frame); }
                 finally { _inCallback = false; }

@@ -342,10 +342,9 @@ internal static unsafe class MfCom
         fixed (Guid* key = &iid) fixed (nint* p = &result)
             return ((delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)Slot(value, 0))(value, key, p);
     }
-    public static int SetCodecLowLatency(nint value, in Guid key, bool useUInt32)
+    public static int SetCodecLowLatency(nint value, in Guid key)
     {
-        var variant = useUInt32 ? new MfVariant { Type = 19, UInt32 = 1 }
-            : new MfVariant { Type = 11, Boolean = -1 };
+        var variant = new MfVariant { Type = 11, Boolean = -1 };
         fixed (Guid* k = &key)
             return ((delegate* unmanaged[Stdcall]<nint, Guid*, MfVariant*, int>)Slot(value, 9))(value, k, &variant);
     }

@@ -272,11 +272,33 @@ public sealed unsafe class PointerDecodedVideoFrame : DecodedVideoFrame
     /// <param name="stride">Bytes per BGRA row. 每行 BGRA 字节数。</param>
     /// <param name="timestampTicks">Presentation timestamp in ticks. 显示时间戳（tick）。</param>
     public PointerDecodedVideoFrame(byte* pointer, int length, int width, int height, int stride, long timestampTicks)
-        : base([], length, width, height, stride, timestampTicks, VideoPixelFormat.Bgra32)
+        : this(pointer, length, width, height, stride, timestampTicks, VideoPixelFormat.Bgra32)
     {
-        if (length < checked(width * height * 4))
+    }
+
+    /// <summary>
+    /// Creates a borrowed frame over native memory with the requested packed or plane layout; the storage
+    /// stays owned by the decoder and remains valid only until <see cref="DecodedVideoFrame.Dispose"/>.
+    /// <para>在原生内存上创建指定打包或平面布局的借用帧；存储仍归解码器所有，仅在
+    /// <see cref="DecodedVideoFrame.Dispose"/> 之前有效。</para>
+    /// </summary>
+    /// <param name="pointer">Native pixel memory owned by the decoder. 解码器持有的原生像素内存。</param>
+    /// <param name="length">Valid byte count starting at <paramref name="pointer"/>. <paramref name="pointer"/> 起的有效字节数。</param>
+    /// <param name="width">Frame width in pixels. 帧宽度（像素）。</param>
+    /// <param name="height">Frame height in pixels. 帧高度（像素）。</param>
+    /// <param name="stride">Row pitch in bytes. 每行字节数。</param>
+    /// <param name="timestampTicks">Presentation timestamp in ticks. 显示时间戳（tick）。</param>
+    /// <param name="pixelFormat">Layout the native memory holds. 原生内存承载的布局。</param>
+    internal PointerDecodedVideoFrame(byte* pointer, int length, int width, int height, int stride, long timestampTicks,
+        VideoPixelFormat pixelFormat)
+        : base([], length, width, height, stride, timestampTicks, pixelFormat)
+    {
+        var required = pixelFormat == VideoPixelFormat.Nv12
+            ? VideoFrameLimits.Nv12Length(width, height, stride)
+            : checked(width * height * 4);
+        if (length < required)
         {
-            throw new ArgumentException("The mapped memory does not contain a complete BGRA frame.", nameof(length));
+            throw new ArgumentException($"The mapped memory does not contain a complete {pixelFormat} frame.", nameof(length));
         }
 
         _pointer = pointer;

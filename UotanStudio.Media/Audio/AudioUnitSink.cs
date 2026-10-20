@@ -37,7 +37,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     private nint _unit;
     private AudioPcmRingBuffer? _staging;
     private int _channels = 2, _sampleRate;
-    private int _thread = Environment.CurrentManagedThreadId;
+    private int _thread;
     private GCHandle _self;
     private bool _disposed;
 
@@ -97,7 +97,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (channels is < 1 or > 2 || sampleRate is < 8000 or > 192000 || bitsPerSample != 16)
             throw new ArgumentOutOfRangeException(nameof(bitsPerSample), "Only 16-bit mono/stereo PCM input is accepted.");
-        if (_thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The sink must remain on its owning thread.");
+        if (_thread != 0 && _thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The sink must remain on its owning thread.");
         Close();
 
         var description = new AudioComponentDescription
@@ -135,6 +135,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
             Check(AudioOutputUnitStart(_unit), "AudioOutputUnitStart");
         }
         catch { Close(); throw; }
+        _thread = Environment.CurrentManagedThreadId;
         _channels = channels;
         _sampleRate = sampleRate;
     }
@@ -183,7 +184,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsOpen) throw new InvalidOperationException("Sink is not open.");
-        if (_thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The sink must remain on its owning thread.");
+        if (_thread != 0 && _thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The sink must remain on its owning thread.");
     }
 
     /// <summary>

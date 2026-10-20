@@ -24,7 +24,7 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
     private const uint FormatAac = 0x61616320;
     private const uint FormatPcm = 0x6C70636D;
     private const uint FlagsPackedSignedInt = 0x8 | 0x4;
-    private const uint PropertyMagicCookie = 0x6D616769;
+    private const uint PropertyMagicCookie = 0x61626364;
 
     private const int InputCallbackError = 1;
 
@@ -35,7 +35,7 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
     private int _packetBytes;
     private bool _packetConsumed;
     private int _sampleRate, _channels;
-    private int _thread = Environment.CurrentManagedThreadId;
+    private int _thread;
     private bool _disposed;
     private bool _inCallback;
 
@@ -87,7 +87,7 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(frameCallback);
         if (codecConfig.Length is 0 or > 64) throw new InvalidDataException("AAC AudioSpecificConfig is required (2-64 bytes).");
-        if (_thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The decoder must remain on its owning thread.");
+        if (_thread != 0 && _thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The decoder must remain on its owning thread.");
         Release();
         (var rate, var channels) = AudioFormatLimits.ParseAacConfig(codecConfig);
         var source = new AudioStreamBasicDescription
@@ -128,6 +128,7 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
         _sampleRate = rate;
         _channels = channels;
         _callback = frameCallback;
+        _thread = Environment.CurrentManagedThreadId;
     }
 
     /// <summary>Decodes one AAC packet through the converter and emits interleaved 16-bit PCM via the callback on the owning thread.
@@ -225,7 +226,7 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
         if (_inCallback) throw new InvalidOperationException("Decoder callbacks cannot reenter the decoder.");
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_converter == 0 || _callback is null) throw new InvalidOperationException("Audio decoder is not initialized.");
-        if (_thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The decoder must remain on its owning thread.");
+        if (_thread != 0 && _thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The decoder must remain on its owning thread.");
     }
 
     private void Release()
@@ -246,7 +247,7 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
     public void Dispose()
     {
         if (_disposed) return;
-        if (_inCallback || _thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("Dispose must run on the owner thread outside callbacks.");
+        if (_inCallback || _thread != 0 && _thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("Dispose must run on the owner thread outside callbacks.");
         _disposed = true;
         Release();
     }

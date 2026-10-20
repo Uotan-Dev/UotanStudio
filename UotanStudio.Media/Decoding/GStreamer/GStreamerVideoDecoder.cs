@@ -243,7 +243,7 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
         var stages = path == GStreamerPlanePath.DirectNv12
             ? $"{element} ! {outputCaps}"
             : $"{element} ! video/x-raw ! videoconvert ! {outputCaps}";
-        return $"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps={inputCaps} ! {parser} ! {stages} ! appsink name=output sync=false max-buffers=8 drop=false enable-last-sample=false";
+        return $"appsrc name=input is-live=true format=time block=false max-bytes={GstPipeline.MaximumQueuedBytes} caps={inputCaps} ! {parser} ! {stages} ! appsink name=output sync=false max-buffers=2 drop=true enable-last-sample=false";
     }
 
     /// <summary>
@@ -338,32 +338,71 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
         if (source == 0 || (meta == 0 && GstNative.gst_buffer_get_size(source) != (nuint)nativeSize)) throw new InvalidDataException("Unexpected GStreamer NV12 memory layout.");
         var stride = (width + 1) & ~1;
         var size = VideoFrameLimits.Nv12Length(width, height, stride);
-        var pixels = ArrayPool<byte>.Shared.Rent(size);
-        try
-        {
-            fixed (byte* target = pixels)
-            {
-                if (meta != 0)
-                {
-                    CopyPlane(meta, 0, target, stride, width, height);
-                    CopyPlane(meta, 1, target + height * stride, stride, stride, (height + 1) / 2);
-                }
-                else
-                {
-                    for (var y = 0; y < height; y++) CopyRow(source, y * nativeStride, target + y * stride, stride);
-                    for (var y = 0; y < (height + 1) / 2; y++) CopyRow(source, (nativeYHeight + y) * nativeStride, target + (height + y) * stride, stride);
-                }
-            }
-        }
-        catch { ArrayPool<byte>.Shared.Return(pixels); throw; }
         var color = new GstNative.Colorimetry();
         var colorText = GstNative.gst_structure_get_string(structure, "colorimetry");
         if (colorText != 0) GstNative.gst_video_colorimetry_from_string(out color, colorText);
-        using var frame = new DecodedVideoFrame(pixels, size, width, height, stride, GstNative.GetTimestamp(source))
+        var timestamp = GstNative.GetTimestamp(source);
+        var matrix = color.Matrix switch { 3 => VideoColorMatrix.Bt709, 4 => VideoColorMatrix.Bt601, 6 => VideoColorMatrix.Bt2020, _ => VideoColorMatrix.Auto };
+        var range = color.Range switch { 1 => VideoColorRange.Full, 2 => VideoColorRange.Limited, _ => VideoColorRange.Auto };
+        if (meta != 0 || nativeStride != stride)
         {
-            ColorMatrix = color.Matrix switch { 3 => VideoColorMatrix.Bt709, 4 => VideoColorMatrix.Bt601, 6 => VideoColorMatrix.Bt2020, _ => VideoColorMatrix.Auto },
-            ColorRange = color.Range switch { 1 => VideoColorRange.Full, 2 => VideoColorRange.Limited, _ => VideoColorRange.Auto },
-        };
+            var pixels = ArrayPool<byte>.Shared.Rent(size);
+            try
+            {
+                fixed (byte* target = pixels)
+                {
+                    if (meta != 0)
+                    {
+                        CopyPlane(meta, 0, target, stride, width, height);
+                        CopyPlane(meta, 1, target + height * stride, stride, stride, (height + 1) / 2);
+                    }
+                    else
+                    {
+                        if (GstNative.gst_buffer_map(source, out var map, 1) == 0)
+                            throw new InvalidDataException("GStreamer buffer is not mappable.");
+                        try
+                        {
+                            if ((nuint)nativeSize > map.Size) throw new InvalidDataException("GStreamer buffer is truncated.");
+                            var mapped = (byte*)map.Data;
+                            var chromaRows = (height + 1) / 2;
+                            for (var y = 0; y < height; y++)
+                                new ReadOnlySpan<byte>(mapped + y * nativeStride, stride)
+                                    .CopyTo(new Span<byte>(target + y * stride, stride));
+                            for (var y = 0; y < chromaRows; y++)
+                                new ReadOnlySpan<byte>(mapped + (nativeYHeight + y) * nativeStride, stride)
+                                    .CopyTo(new Span<byte>(target + (height + y) * stride, stride));
+                        }
+                        finally { GstNative.gst_buffer_unmap(source, in map); }
+                    }
+                }
+            }
+            catch { ArrayPool<byte>.Shared.Return(pixels); throw; }
+            using var copied = new DecodedVideoFrame(pixels, size, width, height, stride, timestamp)
+            {
+                ColorMatrix = matrix,
+                ColorRange = range,
+            };
+            DeliverFrame(copied);
+            return;
+        }
+        if (GstNative.gst_buffer_map(source, out var borrowed, 1) == 0)
+            throw new InvalidDataException("GStreamer buffer is not mappable.");
+        try
+        {
+            if ((nuint)nativeSize > borrowed.Size) throw new InvalidDataException("GStreamer buffer is truncated.");
+            using var frame = new PointerDecodedVideoFrame((byte*)borrowed.Data, nativeSize, width, height, stride,
+                timestamp, VideoPixelFormat.Nv12)
+            {
+                ColorMatrix = matrix,
+                ColorRange = range,
+            };
+            DeliverFrame(frame);
+        }
+        finally { GstNative.gst_buffer_unmap(source, in borrowed); }
+    }
+
+    private void DeliverFrame(DecodedVideoFrame frame)
+    {
         _inCallback = true;
         try { _callback!(frame); } finally { _inCallback = false; }
     }
@@ -384,10 +423,6 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
             }
         }
         finally { GstNative.gst_video_meta_unmap(meta, plane, ref map); }
-    }
-    private static void CopyRow(nint source, int offset, byte* target, int bytes)
-    {
-        if (GstNative.gst_buffer_extract(source, (nuint)offset, target, (nuint)bytes) != (nuint)bytes) throw new InvalidDataException("Truncated video plane.");
     }
     /// <summary>
     /// Signals end of stream and keeps pulling output until the pipeline reports EOS within five seconds.

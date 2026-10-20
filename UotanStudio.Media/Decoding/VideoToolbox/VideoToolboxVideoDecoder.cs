@@ -45,6 +45,9 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     private int _thread;
     private long _sequence;
     private bool _inCallback;
+    private bool _sessionBgra;
+    private readonly List<Range> _ranges = [];
+    private readonly List<Range> _payload = [];
 
     /// <summary>
     /// Whether a frame callback has been registered by a successful <see cref="Initialize"/>.
@@ -102,7 +105,7 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     /// <para>IOSurface 导出开启时为 <see cref="VideoPixelFormat.Bgra32"/>，从像素缓冲区复制平面时为
     /// <see cref="VideoPixelFormat.Nv12"/>。</para>
     /// </value>
-    public VideoPixelFormat FramePixelFormat => ExportActive ? VideoPixelFormat.Bgra32 : VideoPixelFormat.Nv12;
+    public VideoPixelFormat FramePixelFormat => _sessionBgra ? VideoPixelFormat.Bgra32 : VideoPixelFormat.Nv12;
 
     /// <summary>Registers the frame callback and verifies that VideoToolbox hardware decoding is available for the codec; no decompression session exists yet. The calling thread becomes the owning thread for all later calls.
     /// <para>登记帧回调并校验 VideoToolbox 对该编码的硬件解码可用性；此时尚不解压会话。调用线程成为后续 所有调用的所属线程。</para></summary>
@@ -172,10 +175,11 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     public void Decode(ReadOnlySpan<byte> accessUnit, long timestampTicks)
     {
         CheckReady();
-        List<Range> ranges = AnnexB.Split(accessUnit);
-        var payload = new List<Range>();
+        AnnexB.Split(accessUnit, _ranges);
+        var payload = _payload;
+        payload.Clear();
         var hasPicture = false;
-        foreach (Range range in ranges)
+        foreach (Range range in _ranges)
         {
             ReadOnlySpan<byte> nal = accessUnit[range];
             if (_codec == VideoCodecId.H265 && nal.Length < 2) throw new InvalidDataException("Truncated HEVC NAL header.");
@@ -193,25 +197,31 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
         if (_sps is null || _pps is null || _codec == VideoCodecId.H265 && _vps is null)
             throw new InvalidDataException("Video frame arrived before complete codec parameter sets.");
         if (_dirty || _session == 0) CreateSession();
-        var bytes = AnnexB.ToLengthPrefixed(accessUnit, payload);
-        VtNative.Check(VtNative.CMBlockBufferCreateWithMemoryBlock(0, 0, (nuint)bytes.Length, 0, 0, 0,
-            (nuint)bytes.Length, 0, out var block), "create block buffer");
+        var length = AnnexB.LengthPrefixedSize(accessUnit, payload);
+        var bytes = ArrayPool<byte>.Shared.Rent(length);
         try
         {
-            fixed (byte* data = bytes) VtNative.Check(VtNative.CMBlockBufferReplaceDataBytes(data, block, 0, (nuint)bytes.Length), "copy access unit");
-            var timing = new CmTiming { Presentation = CmTime.FromTicks(timestampTicks) };
-            var size = (nuint)bytes.Length;
-            VtNative.Check(VtNative.CMSampleBufferCreateReady(0, block, _format, 1, 1, &timing, 1, &size, out var sample), "create sample");
+            AnnexB.WriteLengthPrefixed(accessUnit, payload, bytes.AsSpan(0, length));
+            VtNative.Check(VtNative.CMBlockBufferCreateWithMemoryBlock(0, 0, (nuint)length, 0, 0, 0,
+                (nuint)length, 0, out var block), "create block buffer");
             try
             {
-                VtNative.Check(VtNative.VTDecompressionSessionDecodeFrame(_session, sample, 0, 0, out _), "decode frame");
-                VtNative.Check(VtNative.VTDecompressionSessionWaitForAsynchronousFrames(_session), "wait for frames");
-                Interlocked.Exchange(ref _error, null)?.Throw();
-                DeliverQueued();
+                fixed (byte* data = bytes) VtNative.Check(VtNative.CMBlockBufferReplaceDataBytes(data, block, 0, (nuint)length), "copy access unit");
+                var timing = new CmTiming { Presentation = CmTime.FromTicks(timestampTicks) };
+                var size = (nuint)length;
+                VtNative.Check(VtNative.CMSampleBufferCreateReady(0, block, _format, 1, 1, &timing, 1, &size, out var sample), "create sample");
+                try
+                {
+                    VtNative.Check(VtNative.VTDecompressionSessionDecodeFrame(_session, sample, 0, 0, out _), "decode frame");
+                    VtNative.Check(VtNative.VTDecompressionSessionWaitForAsynchronousFrames(_session), "wait for frames");
+                    Interlocked.Exchange(ref _error, null)?.Throw();
+                    DeliverQueued();
+                }
+                finally { VtNative.CFRelease(sample); }
             }
-            finally { VtNative.CFRelease(sample); }
+            finally { VtNative.CFRelease(block); ClearFrames(); }
         }
-        finally { VtNative.CFRelease(block); ClearFrames(); }
+        finally { ArrayPool<byte>.Shared.Return(bytes); }
     }
 
     /// <summary>
@@ -304,12 +314,12 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
             var exportAttributes = VtNative.PixelAttributes(VtNative.Bgra, gpuCompatible: true);
             try
             {
-                if (TryCreateSession(exportAttributes)) return;
+                if (TryCreateSession(exportAttributes, bgra: true)) return;
             }
             finally { VtNative.CFRelease(exportAttributes); }
         }
         var attributes = VtNative.PixelAttributes();
-        try { TryCreateSession(attributes); }
+        try { TryCreateSession(attributes, bgra: false); }
         finally { VtNative.CFRelease(attributes); }
     }
 
@@ -320,7 +330,7 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
     /// <para>以给定像素缓冲属性创建解压会话。VideoToolbox 拒绝该配置时返回 <see langword="false"/>，
     /// 不遗留任何会话，调用方可换属性重试。</para>
     /// </summary>
-    private bool TryCreateSession(nint attributes)
+    private bool TryCreateSession(nint attributes, bool bgra)
     {
         nint specification = 0;
         try
@@ -335,6 +345,7 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
                 if (_self.IsAllocated) _self.Free();
                 return false;
             }
+            _sessionBgra = bgra;
             _dirty = false;
             return true;
         }
@@ -425,7 +436,8 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
             var bytes = ArrayPool<byte>.Shared.Rent(length);
             try
             {
-                bytes.AsSpan(0, length).Clear();
+                var destination = bytes.AsSpan(0, length);
+                if ((width & 1) != 0) destination.Clear();
                 for (nuint plane = 0; plane < 2; plane++)
                 {
                     var rows = plane == 0 ? height : (height + 1) / 2;
@@ -435,29 +447,59 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
                     if (pointer == 0 || pitch < (nuint)rowBytes || pitch > VideoFrameLimits.MaximumFrameBytes
                         || VtNative.CVPixelBufferGetHeightOfPlane(image, plane) < (nuint)rows) throw new InvalidDataException("Invalid CoreVideo plane layout.");
                     var start = plane == 0 ? 0 : stride * height;
-                    for (var row = 0; row < rows; row++)
-                        new ReadOnlySpan<byte>((byte*)pointer + checked((nuint)row * pitch), rowBytes).CopyTo(bytes.AsSpan(start + row * stride, rowBytes));
-                }
-                VideoColorMatrix matrix = VideoColorMatrix.Auto;
-                var attachment = VtNative.CVBufferCopyAttachment(image, VtNative.Symbol(VtNative.Cv, "kCVImageBufferYCbCrMatrixKey"), 0);
-                if (attachment != 0)
-                {
-                    try
+                    if (pitch == (nuint)rowBytes && stride == rowBytes)
                     {
-                        if (VtNative.CFEqual(attachment, VtNative.Symbol(VtNative.Cv, "kCVImageBufferYCbCrMatrix_ITU_R_709_2")) != 0) matrix = VideoColorMatrix.Bt709;
-                        else if (VtNative.CFEqual(attachment, VtNative.Symbol(VtNative.Cv, "kCVImageBufferYCbCrMatrix_ITU_R_601_4")) != 0) matrix = VideoColorMatrix.Bt601;
+                        var planeLength = checked((int)((nuint)rows * (nuint)rowBytes));
+                        new ReadOnlySpan<byte>((byte*)pointer, planeLength).CopyTo(destination.Slice(start, planeLength));
                     }
-                    finally { VtNative.CFRelease(attachment); }
+                    else
+                    {
+                        for (var row = 0; row < rows; row++)
+                            new ReadOnlySpan<byte>((byte*)pointer + checked((nuint)row * pitch), rowBytes)
+                                .CopyTo(destination.Slice(start + row * stride, rowBytes));
+                    }
                 }
-                return new(bytes, length, width, height, stride, timestamp) { ColorMatrix = matrix, ColorRange = VideoColorRange.Limited };
+                return new(bytes, length, width, height, stride, timestamp)
+                {
+                    ColorMatrix = ReadColorMatrix(image),
+                    ColorRange = VideoColorRange.Limited,
+                };
             }
             catch { ArrayPool<byte>.Shared.Return(bytes); throw; }
         }
         finally { VtNative.Check(VtNative.CVPixelBufferUnlockBaseAddress(image, 1), "unlock decoded pixels"); }
     }
 
+    /// <summary>
+    /// Reads the <c>kCVImageBufferYCbCrMatrix</c> attachment and maps the two supported values to the
+    /// managed color matrix; any other or missing attachment stays <see cref="VideoColorMatrix.Auto"/>.
+    /// The attachment is always released before this method returns.
+    /// <para>读取 <c>kCVImageBufferYCbCrMatrix</c> 附件，并把两种受支持的值映射为托管色彩矩阵；缺失或
+    /// 其他附件保持 <see cref="VideoColorMatrix.Auto"/>。附件在方法返回前必定释放。</para>
+    /// </summary>
+    /// <param name="image">The CoreVideo pixel buffer carrying the attachment.
+    /// <para>携带该附件的 CoreVideo 像素缓冲。</para></param>
+    /// <returns>The reported color matrix, or <see cref="VideoColorMatrix.Auto"/> when unreported.
+    /// <para>报告的色彩矩阵；未报告时为 <see cref="VideoColorMatrix.Auto"/>。</para></returns>
+    private static VideoColorMatrix ReadColorMatrix(nint image)
+    {
+        VideoColorMatrix matrix = VideoColorMatrix.Auto;
+        var attachment = VtNative.CVBufferCopyAttachment(image, VtNative.Symbol(VtNative.Cv, "kCVImageBufferYCbCrMatrixKey"), 0);
+        if (attachment != 0)
+        {
+            try
+            {
+                if (VtNative.CFEqual(attachment, VtNative.Symbol(VtNative.Cv, "kCVImageBufferYCbCrMatrix_ITU_R_709_2")) != 0) matrix = VideoColorMatrix.Bt709;
+                else if (VtNative.CFEqual(attachment, VtNative.Symbol(VtNative.Cv, "kCVImageBufferYCbCrMatrix_ITU_R_601_4")) != 0) matrix = VideoColorMatrix.Bt601;
+            }
+            finally { VtNative.CFRelease(attachment); }
+        }
+        return matrix;
+    }
+
     private void ReleaseSession()
     {
+        _sessionBgra = false;
         if (_session != 0)
         {
             _ = VtNative.VTDecompressionSessionWaitForAsynchronousFrames(_session);
