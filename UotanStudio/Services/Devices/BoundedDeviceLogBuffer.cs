@@ -8,6 +8,12 @@ namespace UotanStudio.Services.Devices;
 /// <param name="maximumCharacters">Maximum number of retained source characters. <para>保留原始字符数的上限。</para></param>
 public sealed class BoundedDeviceLogBuffer(int maximumEntries = 5000, int maximumCharacters = 2 * 1024 * 1024)
 {
+    private readonly int _maximumEntries = maximumEntries > 0
+        ? maximumEntries
+        : throw new ArgumentOutOfRangeException(nameof(maximumEntries));
+    private readonly int _maximumCharacters = maximumCharacters > 0
+        ? maximumCharacters
+        : throw new ArgumentOutOfRangeException(nameof(maximumCharacters));
     private readonly Queue<AdbLogcatEntry> _entries = new();
     /// <summary>
     /// Current source-character count, excluding display formatting.
@@ -36,11 +42,15 @@ public sealed class BoundedDeviceLogBuffer(int maximumEntries = 5000, int maximu
     /// <param name="evicted">Callback per evicted entry; null to ignore eviction. <para>每个被驱逐条目的回调；为 null 时忽略驱逐通知。</para></param>
     public void Add(AdbLogcatEntry entry, Action<AdbLogcatEntry>? evicted = null)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumEntries);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumCharacters);
+        if (entry.RawText.Length > _maximumCharacters)
+        {
+            evicted?.Invoke(entry);
+            return;
+        }
+
         _entries.Enqueue(entry);
         CharacterCount += entry.RawText.Length;
-        while (_entries.Count > maximumEntries || CharacterCount > maximumCharacters)
+        while (_entries.Count > _maximumEntries || CharacterCount > _maximumCharacters)
         {
             var removed = Take();
             evicted?.Invoke(removed);

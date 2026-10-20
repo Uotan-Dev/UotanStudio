@@ -20,9 +20,16 @@ public sealed partial class DeviceMonitorService
         ArgumentNullException.ThrowIfNull(device);
         var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var registration = new LogStreamRegistration(linked);
+        LogStreamRegistration? replaced;
         lock (_logStreamLock)
         {
+            _activeLogStreams.TryGetValue(device.Key, out replaced);
             _activeLogStreams[device.Key] = registration;
+        }
+        if (replaced is not null)
+        {
+            try { replaced.Linked.Cancel(); }
+            catch (ObjectDisposedException) { }
         }
         var run = RunLogcatStreamingCoreAsync(device, onEntry, registration, cancellationToken);
         registration.Task = run;
@@ -47,7 +54,8 @@ public sealed partial class DeviceMonitorService
             return;
         }
 
-        registration.Linked.Cancel();
+        try { registration.Linked.Cancel(); }
+        catch (ObjectDisposedException) { return; }
         if (registration.Task is { } run)
         {
             try { await run.ConfigureAwait(false); }
@@ -75,7 +83,7 @@ public sealed partial class DeviceMonitorService
                     else
                         await Task.Run(() =>
                         {
-                            var opened = HdcDirectConnection.Open(device);
+                            var opened = HdcDirectConnection.Open(this, device);
                             using var lease = opened.Lease;
                             opened.Session.CreateShellClient("hilog -v year").ExecuteStreaming(bytes => decoder.Feed(bytes), null, cancellationToken);
                         }, cancellationToken).ConfigureAwait(false);

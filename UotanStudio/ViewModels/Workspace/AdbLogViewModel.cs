@@ -20,6 +20,10 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
     private readonly Func<DetectedDevice, Action<AdbLogcatEntry>, CancellationToken, Task> _stream;
     private readonly Func<DetectedDevice, CancellationToken, Task> _clearDeviceBuffers;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    private readonly List<AdbLogcatEntry> _batch = new(250);
+    private readonly List<AdbLogcatEntry> _appended = new(250);
+    private Action<AdbLogcatEntry>? _onEvicted;
+    private int _removedCount;
     private DeviceViewModel? _devices;
     private DeviceInfo? _selected;
     private CancellationTokenSource? _capture;
@@ -263,7 +267,8 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
     {
 
         if (IsPaused) return;
-        var batch = new List<AdbLogcatEntry>(250);
+        var batch = _batch;
+        batch.Clear();
         lock (_sync)
         {
             var characters = 0;
@@ -275,18 +280,25 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
             }
         }
         if (batch.Count == 0) return;
-        var removedCount = 0;
-        var appended = new List<AdbLogcatEntry>(batch.Count);
+        _removedCount = 0;
+        var evicted = _onEvicted ??= OnEvicted;
+        var appended = _appended;
+        appended.Clear();
         foreach (var entry in batch)
         {
-            _allLines.Add(entry, removed =>
-            {
-                if (removedCount < Lines.Count && ReferenceEquals(Lines[removedCount], removed)) removedCount++;
-            });
+            _allLines.Add(entry, evicted);
             if (MatchesFilter(entry)) appended.Add(entry);
         }
         if (HasSearchError) Lines.Replace([]);
-        else Lines.Apply(removedCount, appended);
+        else Lines.Apply(_removedCount, appended);
+    }
+
+    private void OnEvicted(AdbLogcatEntry removed)
+    {
+        if (_removedCount < Lines.Count && ReferenceEquals(Lines[_removedCount], removed))
+        {
+            _removedCount++;
+        }
     }
 
     private void StopCapture()

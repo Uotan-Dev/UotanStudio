@@ -33,6 +33,32 @@ public sealed class AdbLogcatDecoderTests
         decoder.Feed("\nnext\n"u8);
         Assert.Equal(2, lines.Count);
         Assert.Equal(AdbLogcatLineDecoder.MaximumLineLength, lines[0].Length);
+        Assert.EndsWith(AdbLogcatLineDecoder.TruncationMarker, lines[0], StringComparison.Ordinal);
         Assert.Equal("next", lines[1]);
+    }
+
+    [Fact]
+    public void Decoder_LineAtMaximumLength_EmitsVerbatimWithoutMarker()
+    {
+        var content = new string('x', AdbLogcatLineDecoder.MaximumLineLength);
+        var lines = new List<string>();
+        var decoder = new AdbLogcatLineDecoder(lines.Add);
+        decoder.Feed(Encoding.UTF8.GetBytes(content));
+        decoder.Feed("\n"u8);
+        Assert.Equal(content, Assert.Single(lines));
+    }
+
+    [Fact]
+    public void Decoder_LineOverMaximumLength_AppendsMarkerWithinMaximumLength()
+    {
+        var capacity = AdbLogcatLineDecoder.MaximumLineLength - AdbLogcatLineDecoder.TruncationMarker.Length;
+        var lines = new List<string>();
+        var decoder = new AdbLogcatLineDecoder(lines.Add);
+        decoder.Feed(Encoding.UTF8.GetBytes(new string('x', AdbLogcatLineDecoder.MaximumLineLength + 1)));
+        decoder.Feed("\n"u8);
+        var line = Assert.Single(lines);
+        Assert.Equal(AdbLogcatLineDecoder.MaximumLineLength, line.Length);
+        Assert.EndsWith(AdbLogcatLineDecoder.TruncationMarker, line, StringComparison.Ordinal);
+        Assert.Equal(new string('x', capacity), line[..capacity]);
     }
 }

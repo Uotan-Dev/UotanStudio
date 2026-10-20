@@ -74,6 +74,7 @@ public partial class AdbLogView : UserControl
         _scroller = null;
         _renderedEntries.Clear();
         _lines.Clear();
+        _columnTextCache.Clear();
         LogEditor.Document.Text = string.Empty;
     }
 
@@ -143,17 +144,47 @@ public partial class AdbLogView : UserControl
         var lineIndex = index == _renderedEntries.Count
             ? _lines.Count : _renderedEntries.Take(index).Sum(entry => entry.LineCount);
         var text = new StringBuilder();
+        var rendered = new List<(int Length, int LineCount)>();
+        var lines = new List<(LogLevel? Level, ILogLine? Entry)>();
         foreach (var entry in entries)
         {
-            var line = entry.Text.ReplaceLineEndings("\n") + "\n";
-            var lineCount = line.Count(character => character == '\n');
-            _renderedEntries.Insert(index++, (line.Length, lineCount));
-            _lines.Insert(lineIndex, (entry.Level, entry));
-            _lines.InsertRange(lineIndex + 1, Enumerable.Repeat<(LogLevel?, ILogLine?)>((entry.Level, null), lineCount - 1));
-            lineIndex += lineCount;
-            text.Append(line);
+            var body = entry.Text.ReplaceLineEndings("\n");
+            var lineCount = 1;
+            foreach (var character in body)
+            {
+                if (character == '\n')
+                {
+                    lineCount++;
+                }
+            }
+
+            rendered.Add((body.Length + 1, lineCount));
+            lines.Add((entry.Level, entry));
+            for (var continuation = 1; continuation < lineCount; continuation++)
+            {
+                lines.Add((entry.Level, null));
+            }
+
+            text.Append(body).Append('\n');
         }
-        if (text.Length > 0) LogEditor.Document.Insert(offset, text.ToString());
+
+        if (rendered.Count == 0)
+        {
+            return;
+        }
+
+        if (index == _renderedEntries.Count)
+        {
+            _renderedEntries.AddRange(rendered);
+            _lines.AddRange(lines);
+        }
+        else
+        {
+            _renderedEntries.InsertRange(index, rendered);
+            _lines.InsertRange(lineIndex, lines);
+        }
+
+        LogEditor.Document.Insert(offset, text.ToString());
     }
 
     private Vector? RemoveEntries(int index, int count)
@@ -179,7 +210,11 @@ public partial class AdbLogView : UserControl
         return preservedOffset;
     }
 
-    private void OnThemeChanged(object? sender, EventArgs e) => LogEditor.TextArea.TextView.Redraw();
+    private void OnThemeChanged(object? sender, EventArgs e)
+    {
+        _columnTextCache.Clear();
+        LogEditor.TextArea.TextView.Redraw();
+    }
 
     private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {

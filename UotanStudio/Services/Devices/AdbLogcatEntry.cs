@@ -79,8 +79,13 @@ public sealed partial record AdbLogcatEntry(string RawText, string Timestamp, in
             || !int.TryParse(match.Groups["tid"].ValueSpan, NumberStyles.None, CultureInfo.InvariantCulture, out var tid))
             return new(text, string.Empty, 0, 0, string.Empty, "-", '\0', text);
         var name = processNames is not null && processNames.TryGetValue(pid, out var value) ? value : "-";
-        return new(text, match.Groups["date"].Value + " " + match.Groups["time"].Value, pid, tid,
-            match.Groups["tag"].Value.TrimEnd(), name, match.Groups["level"].Value[0], match.Groups["message"].Value);
+        var date = match.Groups["date"];
+        var time = match.Groups["time"];
+        var tag = match.Groups["tag"];
+        var timestamp = string.Concat(text.AsSpan(date.Index, date.Length), " ", text.AsSpan(time.Index, time.Length));
+        return new(text, timestamp, pid, tid,
+            text.AsSpan(tag.Index, tag.Length).TrimEnd().ToString(), name,
+            text[match.Groups["level"].Index], match.Groups["message"].Value);
     }
 
     [GeneratedRegex(@"^(?<date>(?:[0-9]{4}-)?[0-9]{2}-[0-9]{2})[ \t]+(?<time>[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]+)[ \t]+(?<pid>[0-9]+)[ \t]+(?<tid>[0-9]+)[ \t]+(?<level>[VDIWEFA])[ \t]+(?<tag>.*?):[ \t](?<message>.*)$", RegexOptions.CultureInvariant)]

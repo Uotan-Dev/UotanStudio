@@ -8,6 +8,9 @@ namespace UotanStudio.Views.Workspace;
 
 public partial class AdbLogView
 {
+    /// <summary>Reuses laid-out column text across redraws and streaming inserts.<para>在重绘与流式插入之间复用已排版的列文本。</para></summary>
+    private readonly LogColumnTextCache _columnTextCache = new(4096);
+
     private sealed class LogPriorityBackgroundRenderer : IBackgroundRenderer
     {
         public KnownLayer Layer => KnownLayer.Background;
@@ -66,19 +69,20 @@ public partial class AdbLogView
         {
             foreach (var column in _columns)
                 if (column.Offset == offset)
-                    return new LogColumnElement(column.Text, column.Length, column.Width, column.IsPriority, column.TrimMiddle);
+                    return new LogColumnElement(column.Text, column.Length, column.Width, column.IsPriority,
+                        column.TrimMiddle, view._columnTextCache);
             throw new InvalidOperationException("No log column at the requested offset.");
         }
     }
 
-    private sealed class LogColumnElement(string text, int length, double width, bool isPriority, bool trimMiddle)
-        : VisualLineElement(1, length)
+    private sealed class LogColumnElement(string text, int length, double width, bool isPriority, bool trimMiddle,
+        LogColumnTextCache textCache) : VisualLineElement(1, length)
     {
         public bool IsPriority { get; } = isPriority;
 
         public override TextRun CreateTextRun(int startVisualColumn, ITextRunConstructionContext context) =>
             new LogColumnRun(text, width, context.TextView.DefaultLineHeight,
-                IsPriority ? 0 : context.TextView.WideSpaceWidth, IsPriority, trimMiddle, TextRunProperties);
+                IsPriority ? 0 : context.TextView.WideSpaceWidth, IsPriority, trimMiddle, TextRunProperties, textCache);
     }
 
     private sealed class LogColumnRun : DrawableTextRun
@@ -88,7 +92,7 @@ public partial class AdbLogView
         private readonly Rect _clipBounds;
 
         public LogColumnRun(string text, double width, double lineHeight, double padding, bool centered, bool trimMiddle,
-            TextRunProperties properties)
+            TextRunProperties properties, LogColumnTextCache textCache)
         {
             Properties = properties;
 
@@ -98,13 +102,7 @@ public partial class AdbLogView
             Size = new Size(width, height);
             Baseline = -metrics.Ascent * scale;
             _clipBounds = new Rect(0, (height - lineHeight) / 2, width, lineHeight);
-            _text = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-                properties.Typeface, properties.FontRenderingEmSize, properties.ForegroundBrush)
-            {
-                MaxTextWidth = Math.Max(1, width - padding),
-                MaxLineCount = 1,
-                Trimming = trimMiddle ? TextTrimming.PrefixCharacterEllipsis : TextTrimming.CharacterEllipsis
-            };
+            _text = textCache.GetOrCreate(text, Math.Max(1, width - padding), trimMiddle, properties);
             _textOffset = new Point(centered ? (width - _text.WidthIncludingTrailingWhitespace) / 2 : 0,
                 (height - _text.Height) / 2);
         }
@@ -120,6 +118,55 @@ public partial class AdbLogView
                 drawingContext.DrawText(_text, origin + new Vector(_textOffset.X, _textOffset.Y));
         }
     }
+
+    /// <summary>
+    /// Bounded cache of laid-out column text keyed by text, available width, font and foreground brush.
+    /// Elements are only built on the UI thread, so the cache needs no locking; when the cap is reached the
+    /// whole table is dropped so streamed log text cannot grow it without bound.
+    /// <para>按文本、可用宽度、字体与前景画刷缓存已排版的列文本。元素只在 UI 线程构建，缓存无需加锁；
+    /// 达到上限时整体清空，避免持续流入的日志文本使其无界增长。</para>
+    /// </summary>
+    private sealed class LogColumnTextCache(int capacity)
+    {
+        private readonly Dictionary<ColumnTextKey, FormattedText> _entries = [];
+
+        public FormattedText GetOrCreate(string text, double maxWidth, bool trimMiddle, TextRunProperties properties)
+        {
+            var key = new ColumnTextKey(text, Math.Max(1, maxWidth), properties.Typeface,
+                properties.FontRenderingEmSize, properties.ForegroundBrush, trimMiddle, CultureInfo.CurrentCulture.Name);
+            if (_entries.TryGetValue(key, out var cached))
+            {
+                return cached;
+            }
+
+            if (_entries.Count >= capacity)
+            {
+                _entries.Clear();
+            }
+
+            var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                properties.Typeface, properties.FontRenderingEmSize, properties.ForegroundBrush)
+            {
+                MaxTextWidth = key.MaxWidth,
+                MaxLineCount = 1,
+                Trimming = trimMiddle ? TextTrimming.PrefixCharacterEllipsis : TextTrimming.CharacterEllipsis
+            };
+            _entries[key] = formatted;
+            return formatted;
+        }
+
+        public void Clear() => _entries.Clear();
+    }
+
+    /// <summary>Identifies one laid-out column text; brushes compare by reference while typefaces use their value equality.<para>标识一份已排版的列文本；画刷按引用比较，字体按其值相等性比较。</para></summary>
+    private readonly record struct ColumnTextKey(
+        string Text,
+        double MaxWidth,
+        Typeface Typeface,
+        double FontRenderingEmSize,
+        IBrush? ForegroundBrush,
+        bool TrimMiddle,
+        string CultureName);
 
     private static IBrush ContrastingText(Color background)
     {
