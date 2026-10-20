@@ -3,7 +3,7 @@ using UotanStudio.Comm.Protocols.Fastboot.Images;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Services.Firmware;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

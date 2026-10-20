@@ -1,6 +1,6 @@
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Services.Delivery;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Delivery;

@@ -4,7 +4,7 @@ using Material.Icons.Avalonia;
 using UotanStudio.Composition;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Services;
-using UotanStudio.Tests.Views;
+using UotanStudio.Benchmarks.Infrastructure;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Shell;
@@ -25,7 +25,6 @@ public class StartupBenchmarks
     public void Setup()
     {
         _fixture = new NodeEditorUiFixture();
-        _fixture.InitializeAsync().AsTask().GetAwaiter().GetResult();
         Run(() =>
         {
             LanguageService.Instance.Initialize();
@@ -48,7 +47,7 @@ public class StartupBenchmarks
     public Task<int> Nodes() => RunAsync(() =>
     {
         using var nodes = new NodeEditorViewModel();
-        return Task.FromResult(nodes.ToolboxCategories.Count);
+        return Task.FromResult(nodes.ToolboxItems.Count);
     });
 
     [Benchmark]

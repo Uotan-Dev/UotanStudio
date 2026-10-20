@@ -7,7 +7,7 @@
     "Name": "Conditional form",
     "Description": "",
     "Author": "",
-    "NodeApiVersion": 2,
+    "NodeApiVersion": 1,
     "Platforms": [],
     "Capabilities": [
       "PatchSafe",

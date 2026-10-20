@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.BootSecurity.Workflow;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

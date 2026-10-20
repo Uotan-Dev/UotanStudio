@@ -5,7 +5,7 @@ using UotanStudio.Firmware.AndroidMeta.Dex;
 using UotanStudio.Firmware.AndroidMeta.Dex.Models;
 using UotanStudio.Firmware.DeviceTree.Dt;
 using UotanStudio.Services.Workspace;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

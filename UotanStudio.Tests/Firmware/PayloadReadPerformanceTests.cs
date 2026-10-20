@@ -4,7 +4,7 @@ using UotanStudio.Compress;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

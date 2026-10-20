@@ -3,7 +3,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using UotanStudio.Services.Delivery;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Delivery;

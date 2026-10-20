@@ -15,8 +15,6 @@
     <ProjectReference Include="..\UotanStudio.Compress\UotanStudio.Compress.csproj" />
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
     <ProjectReference Include="..\UotanStudio\UotanStudio.csproj" />
-    <!-- Reuse the public headless app and test doubles (HeadlessTestApp, TempDirectory, FakeAdbDeviceTransport). -->
-    <ProjectReference Include="..\UotanStudio.Tests\UotanStudio.Tests.csproj" />
   </ItemGroup>
 
   <ItemGroup>

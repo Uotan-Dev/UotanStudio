@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Services.Delivery;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -4,7 +4,7 @@ using UotanStudio.Compress;
 using UotanStudio.Firmware.Archive;
 using UotanStudio.Firmware.Archive.Browsing;
 using UotanStudio.Firmware.Archive.Models;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.Views.Controls;
 using Xunit;
 

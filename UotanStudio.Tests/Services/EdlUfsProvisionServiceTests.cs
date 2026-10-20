@@ -2,7 +2,7 @@ using System.Text;
 using System.Xml.Linq;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Services.Flash;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

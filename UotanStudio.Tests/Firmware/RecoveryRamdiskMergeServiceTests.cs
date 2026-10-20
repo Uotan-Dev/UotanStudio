@@ -6,7 +6,7 @@ using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using UotanStudio.Firmware.BootSecurity.Workflow;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

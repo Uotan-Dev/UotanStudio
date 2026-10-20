@@ -1,7 +1,7 @@
 using System.Text;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

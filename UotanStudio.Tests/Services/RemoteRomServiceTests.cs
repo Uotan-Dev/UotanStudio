@@ -6,7 +6,7 @@ using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Builder;
 using UotanStudio.Services.Firmware;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

@@ -5,7 +5,7 @@ using K4os.Compression.LZ4;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Squashfs;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

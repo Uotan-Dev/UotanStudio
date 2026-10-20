@@ -4,7 +4,7 @@ using System.Text;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.OtaDelta.Diff;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

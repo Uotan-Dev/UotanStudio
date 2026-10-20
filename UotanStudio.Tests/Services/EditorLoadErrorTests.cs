@@ -1,4 +1,4 @@
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.Views.Controls;
 using Xunit;

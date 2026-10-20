@@ -3,7 +3,7 @@ using System.Text;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.VendorFirmware.NTPi;
 using UotanStudio.Firmware.VendorFirmware.NTPi.Models;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

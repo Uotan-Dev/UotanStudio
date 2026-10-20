@@ -5,7 +5,7 @@ using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using UotanStudio.Messages;
 using UotanStudio.Services.Projects;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;

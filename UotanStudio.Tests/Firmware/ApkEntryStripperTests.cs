@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.AndroidMeta.Apk;
 using UotanStudio.Firmware.AndroidMeta.Apk.Signing;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

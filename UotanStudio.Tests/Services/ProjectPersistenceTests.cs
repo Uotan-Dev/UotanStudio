@@ -1,5 +1,5 @@
 using UotanStudio.Services.Projects;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

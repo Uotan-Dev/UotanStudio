@@ -1,6 +1,6 @@
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -6,7 +6,7 @@ using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Services.Delivery;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Shell;
 using Xunit;
 

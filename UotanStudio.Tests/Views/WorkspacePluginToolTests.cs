@@ -1,6 +1,6 @@
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.VisualPlugins;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
 using UotanStudio.ViewModels.Workspace;

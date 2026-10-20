@@ -6,8 +6,7 @@ using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Workspace;
-using UotanStudio.Tests.Comm.TestDoubles;
-using UotanStudio.Tests.Views;
+using UotanStudio.Benchmarks.Infrastructure;
 using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Benchmarks.Performance;
@@ -105,7 +104,6 @@ public class LogBurstBenchmarks
     public void Setup()
     {
         _fixture = new NodeEditorUiFixture();
-        _fixture.InitializeAsync().AsTask().GetAwaiter().GetResult();
     }
 
     [GlobalCleanup]

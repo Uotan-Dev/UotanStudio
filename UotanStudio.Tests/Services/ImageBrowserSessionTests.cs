@@ -7,8 +7,8 @@ using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Services.FileManagement;
-using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.Firmware.Fat;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

@@ -1,7 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
-using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

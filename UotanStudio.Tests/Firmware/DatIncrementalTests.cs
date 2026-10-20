@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using BsDiff;
 using UotanStudio.Firmware.OtaDelta.Dat;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

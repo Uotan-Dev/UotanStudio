@@ -1,8 +1,8 @@
-﻿using UotanStudio.Firmware.BlockImage.Sparse;
+using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Mcp;
 using UotanStudio.Mcp.Tools;
 using UotanStudio.Services.Firmware;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

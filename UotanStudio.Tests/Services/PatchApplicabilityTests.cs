@@ -2,7 +2,7 @@ using UotanStudio.Firmware.Patching;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Patching;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.NodeViewModels;
 using Xunit;
 

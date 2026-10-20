@@ -5,7 +5,7 @@ using UotanStudio.Firmware.Archive;
 using UotanStudio.Firmware.Archive.Formats.Cpio;
 using UotanStudio.Firmware.Archive.Models;
 using UotanStudio.Firmware.Core.Repacking;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

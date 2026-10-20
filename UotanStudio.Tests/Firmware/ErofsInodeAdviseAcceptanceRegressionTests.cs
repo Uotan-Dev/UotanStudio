@@ -9,7 +9,7 @@ using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Metadata;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

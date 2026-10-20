@@ -5,7 +5,7 @@ using Google.Protobuf;
 using UotanStudio.Firmware.OtaDelta.Diff.Zucchini;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

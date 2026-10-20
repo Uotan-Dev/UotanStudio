@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using UotanStudio.Services.Workspace;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

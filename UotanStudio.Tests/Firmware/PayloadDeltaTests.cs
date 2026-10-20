@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using BsDiff;
 using Google.Protobuf;
@@ -123,6 +124,66 @@ public class PayloadDeltaTests
         }
     }
 
+    private sealed record StoredBlock(ulong Offset, ulong Length, ulong Stored);
+
+    private static byte[] BuildStoredLz4Patch(int length, byte[] inner)
+    {
+        var blocks = new[] { new StoredBlock(0, (ulong)length, (ulong)length) };
+        var header = Message(writer =>
+        {
+            Bytes(writer, 1, Info(blocks));
+            Bytes(writer, 2, Info(blocks));
+        });
+        var patch = new byte[16 + header.Length + inner.Length];
+        "LZ4DIFF"u8.CopyTo(patch);
+        BinaryPrimitives.WriteUInt32BigEndian(patch.AsSpan(7), 1);
+        BinaryPrimitives.WriteUInt32BigEndian(patch.AsSpan(11), (uint)header.Length);
+        header.CopyTo(patch, 16);
+        inner.CopyTo(patch, 16 + header.Length);
+        return patch;
+    }
+
+    private static byte[] Info(StoredBlock[] blocks) => Message(writer =>
+    {
+        Bytes(writer, 1, Message(child =>
+        {
+            Number(child, 1, 1);
+            Number(child, 2, 9);
+        }));
+        foreach (var block in blocks)
+        {
+            Bytes(writer, 2, Message(child =>
+            {
+                Number(child, 1, block.Offset);
+                Number(child, 2, block.Length);
+                Number(child, 3, block.Stored);
+            }));
+        }
+        Number(writer, 3, 0);
+    });
+
+    private static void Number(CodedOutputStream writer, int field, ulong value)
+    {
+        writer.WriteTag(field, WireFormat.WireType.Varint);
+        writer.WriteUInt64(value);
+    }
+
+    private static void Bytes(CodedOutputStream writer, int field, byte[] value)
+    {
+        writer.WriteTag(field, WireFormat.WireType.LengthDelimited);
+        writer.WriteBytes(ByteString.CopyFrom(value));
+    }
+
+    private static byte[] Message(Action<CodedOutputStream> write)
+    {
+        using var result = new MemoryStream();
+        using (var writer = new CodedOutputStream(result, true))
+        {
+            write(writer);
+        }
+        return result.ToArray();
+    }
+
     [Fact]
     public void Lz4diffBsdiff_WithBaseImage_ExtractsCorrectly()
     {
@@ -136,7 +197,7 @@ public class PayloadDeltaTests
 
         var bsdiffPatch = CreateBsdiffPatch(baseData, newData);
         Assert.NotEmpty(bsdiffPatch);
-        var lz4Patch = PayloadLz4DiffTests.BuildStoredPatch(baseData.Length, bsdiffPatch);
+        var lz4Patch = BuildStoredLz4Patch(baseData.Length, bsdiffPatch);
         Assert.NotEmpty(lz4Patch);
 
         var op = new InstallOperation

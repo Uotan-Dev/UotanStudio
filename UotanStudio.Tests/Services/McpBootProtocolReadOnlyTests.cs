@@ -8,8 +8,8 @@ using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Mcp;
 using UotanStudio.Mcp.Tools;
-using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.Tests.Firmware.Architecture;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

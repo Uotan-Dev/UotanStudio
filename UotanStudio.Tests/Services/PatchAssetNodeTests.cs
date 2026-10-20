@@ -3,7 +3,7 @@ using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Patching;
 using UotanStudio.Services.Projects;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
 using Xunit;

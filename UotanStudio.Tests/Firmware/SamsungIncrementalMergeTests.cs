@@ -4,7 +4,7 @@ using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Builder;
 using UotanStudio.Firmware.VendorFirmware.Workflow;
-using UotanStudio.Tests.Comm.TestDoubles;
+using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
