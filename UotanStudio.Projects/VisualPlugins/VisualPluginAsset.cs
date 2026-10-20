@@ -3,8 +3,9 @@ using System.Text.Json.Serialization;
 namespace UotanStudio.Services.Projects;
 
 /// <summary>
-/// Identity of one portable patch resource; source paths are local authoring state only.
-/// <para>单个可移植补丁资源的身份信息；源路径仅是本地编辑期间的状态。</para>
+/// Identity of one portable patch resource carried by two complementary path forms: an absolute local
+/// authoring source that is never written to JSON, and a portable project anchor that survives moving the project.
+/// <para>单个可移植补丁资源的身份信息，由两种互补的路径形式共同表达：从不写入 JSON 的本地绝对编辑源，以及在项目移动后依然有效的可移植项目锚点。</para>
 /// </summary>
 public sealed class VisualPluginAsset
 {
@@ -59,14 +60,90 @@ public sealed class VisualPluginAsset
     [JsonIgnore]
     public string? SourcePath { get; private set; }
 
+    /// <summary>
+    /// Portable project anchor: the resource path relative to the project root directory.
+    /// <para>可移植项目锚点：资源相对项目根目录的路径。</para>
+    /// </summary>
+    /// <value>
+    /// Root-relative path with <c>/</c> separators that is serialized with the resource and re-resolved against
+    /// whichever project root is open, so a moved project keeps its own resources attached; <see langword="null"/>
+    /// when the resource has no location inside a project, as for resources read out of a bundle.
+    /// <para>使用 <c>/</c> 分隔符的相对根目录路径，随资源一并序列化，并在每次打开项目时按当时的项目根重新解析，
+    /// 因此项目被移动后仍能挂上属于自己的资源；资源没有项目内位置时（例如从包内读取的资源）为 <see langword="null"/>。</para>
+    /// </value>
+    public string? RelativePath { get; set; }
+
     internal VisualPluginAsset Snapshot() => new()
     {
         Id = Id,
         Name = Name,
         Length = Length,
         Sha256 = Sha256,
-        SourcePath = SourcePath
+        SourcePath = SourcePath,
+        RelativePath = RelativePath
     };
+
+    /// <summary>Anchors a project-owned resource to its project root while keeping its absolute authoring source.
+    /// <para>在保留绝对编辑源的同时，把项目内的资源锚定到其项目根目录。</para></summary>
+    /// <param name="asset">Resource to anchor; the instance passed in is never mutated.
+    /// <para>待锚定的资源；传入的实例不会被修改。</para></param>
+    /// <param name="projectRoot">Project root directory that the resulting anchor is expressed against; it is
+    /// normalized and compared to the asset source path without requiring the front and back slashes to match.
+    /// <para>结果锚点所相对的项目根目录；该路径会被规范化，并在比较资源源路径时不要求正反斜杠写法一致。</para></param>
+    /// <returns>A new asset copying every field of <paramref name="asset"/>. Its <see cref="RelativePath"/> is the
+    /// source path expressed relative to <paramref name="projectRoot"/> with <c>/</c> separators when the source
+    /// path is non-empty and lies inside the root on the same volume; otherwise it is <see langword="null"/> and the
+    /// copy carries no project anchor. <see cref="SourcePath"/> is preserved either way.
+    /// <para>一个复制了 <paramref name="asset"/> 全部字段的新资源。当源路径非空且在同一卷内位于
+    /// <paramref name="projectRoot"/> 之下时，<see cref="RelativePath"/> 是源路径相对该根目录且使用 <c>/</c> 分隔的写法；
+    /// 否则为 <see langword="null"/>，副本不带项目锚点。无论哪种情况都会保留 <see cref="SourcePath"/>。</para></returns>
+    public static VisualPluginAsset WithProjectAnchor(VisualPluginAsset asset, string projectRoot)
+    {
+        var copy = asset.Snapshot();
+        copy.RelativePath = AnchorWithin(projectRoot, asset.SourcePath);
+        return copy;
+    }
+
+    /// <summary>Resolves the location the resource is read from for a given project root.
+    /// <para>针对给定的项目根目录解析该资源的读取位置。</para></summary>
+    /// <param name="projectRoot">Root directory of the open project; the portable <see cref="RelativePath"/> is
+    /// resolved against it, and it is ignored when the resource has no anchor.
+    /// <para>当前打开项目的根目录；可移植的 <see cref="RelativePath"/> 以其为基准解析，资源没有锚点时该参数被忽略。</para></param>
+    /// <returns>The normalized full path formed by combining <paramref name="projectRoot"/> with <see cref="RelativePath"/>
+    /// when an anchor exists, so a moved project resolves to its own copy; otherwise the recorded <see cref="SourcePath"/>
+    /// as-is, which is <see langword="null"/> for resources that only live inside a bundle.
+    /// <para>存在锚点时返回由 <paramref name="projectRoot"/> 与 <see cref="RelativePath"/> 组合成的完整路径，因此移动后的
+    /// 项目会解析到自己的那份副本；否则返回记录的 <see cref="SourcePath"/>，仅存在于包内的资源该值为
+    /// <see langword="null"/>。</para></returns>
+    public string? ResolveSourcePath(string projectRoot) => string.IsNullOrEmpty(RelativePath)
+        ? SourcePath
+        : Path.GetFullPath(Path.Combine(projectRoot, RelativePath));
+
+    private static string? AnchorWithin(string projectRoot, string? sourcePath)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath) || string.IsNullOrWhiteSpace(projectRoot))
+        {
+            return null;
+        }
+
+        var separators = new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+        var full = Path.GetFullPath(sourcePath);
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectRoot));
+        if (string.Equals(full, root, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar)
+            ? root
+            : root + Path.DirectorySeparatorChar;
+        if (!full.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return full[rootWithSeparator.Length..].Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
+    }
 
     /// <summary>Captures a selected file's identity without loading its contents into memory.
     /// <para>捕获所选文件的身份信息，而不把其内容整体读入内存。</para></summary>

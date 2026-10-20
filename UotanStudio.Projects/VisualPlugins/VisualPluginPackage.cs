@@ -121,6 +121,9 @@ public enum VisualPluginKind
 /// </summary>
 public sealed class VisualPluginManifest
 {
+    /// <summary>Highest node API level this host implements. <para>本宿主实现的最高节点 API 级别。</para></summary>
+    public const int CurrentNodeApiVersion = 1;
+
     /// <summary>Stable reverse-domain-style identifier. <para>稳定的反向域名风格标识符。</para></summary>
     /// <value>
     /// Identity used for dependency, conflict and node-type resolution; persists unchanged across package versions.
@@ -156,12 +159,12 @@ public sealed class VisualPluginManifest
     /// </value>
     public string Author { get; set; } = string.Empty;
 
-    /// <summary>Required host node API version. <para>所需的宿主节点 API 版本。</para></summary>
+    /// <summary>Minimum node API level this package requires. <para>本例包要求的最低节点 API 级别。</para></summary>
     /// <value>
-    /// Minimum node API level the graph relies on; defaults to <c>2</c>.
-    /// <para>图所依赖的最低节点 API 级别，默认 <c>2</c>。</para>
+    /// Minimum node API level the graph relies on; the level implemented by the host is given by <see cref="CurrentNodeApiVersion"/>, and a package is accepted while this value is between <c>1</c> and that level inclusive. Defaults to <see cref="CurrentNodeApiVersion"/>.
+    /// <para>图所依赖的最低节点 API 级别；宿主实现的级别由 <see cref="CurrentNodeApiVersion"/> 给出，取值在 <c>1</c> 到该级别之间（含两端）时包即被接受。默认值为 <see cref="CurrentNodeApiVersion"/>。</para>
     /// </value>
-    public int NodeApiVersion { get; set; } = 2;
+    public int NodeApiVersion { get; set; } = CurrentNodeApiVersion;
 
     /// <summary>Supported operating-system identifiers. An empty list means all host platforms. <para>支持的操作系统标识；空列表表示不限宿主平台。</para></summary>
     /// <value>

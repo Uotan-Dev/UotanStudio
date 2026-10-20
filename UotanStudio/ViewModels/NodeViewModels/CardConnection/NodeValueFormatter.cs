@@ -32,6 +32,7 @@ public static class NodeValueFormatter
             bool value => LanguageService.Instance.GetString(value ? "Node_Conn_True" : "Node_Conn_False"),
             PatchWorkspace workspace => workspace.Root,
             FileArtifact artifact => artifact.Path,
+            StreamArtifact artifact => DescribeArtifact(artifact),
             PatchAsset asset => asset.Name,
             PatchImageEdits edits => string.Join(Environment.NewLine,
                 edits.Items.Take(8).Select(edit => edit.Path[..Math.Min(edit.Path.Length, 160)])),
@@ -41,5 +42,11 @@ public static class NodeValueFormatter
             _ => string.Empty
         };
         return text.Length <= 800 ? text : text[..800] + "…";
+    }
+
+    private static string DescribeArtifact(StreamArtifact artifact)
+    {
+        var name = artifact.DisplayName ?? string.Empty;
+        return artifact.Length is { } length ? $"{name} ({length:N0} B)" : name;
     }
 }

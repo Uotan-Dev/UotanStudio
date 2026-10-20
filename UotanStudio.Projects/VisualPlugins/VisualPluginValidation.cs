@@ -195,8 +195,10 @@ public static partial class VisualPluginValidation
             errors.Add("Plugin name must contain between 1 and 128 characters.");
         if (string.IsNullOrWhiteSpace(manifest.Version) || manifest.Version.Length > 64)
             errors.Add("Plugin version must contain between 1 and 64 characters.");
-        if (manifest.NodeApiVersion != 2)
-            errors.Add($"Unsupported node API version {manifest.NodeApiVersion}.");
+        if (manifest.NodeApiVersion < 1)
+            errors.Add($"Invalid node API version {manifest.NodeApiVersion}; the host supports node API versions 1 through {VisualPluginManifest.CurrentNodeApiVersion}.");
+        else if (manifest.NodeApiVersion > VisualPluginManifest.CurrentNodeApiVersion)
+            errors.Add($"Unsupported node API version {manifest.NodeApiVersion}; the host supports node API versions 1 through {VisualPluginManifest.CurrentNodeApiVersion}.");
 
         var graph = package.Graph;
         if (graph.FormatVersion != WorkflowSnapshot.CurrentFormatVersion)

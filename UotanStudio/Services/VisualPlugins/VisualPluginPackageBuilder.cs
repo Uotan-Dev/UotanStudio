@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
@@ -11,6 +12,16 @@ namespace UotanStudio.Services.VisualPlugins;
 /// </summary>
 public static class VisualPluginPackageBuilder
 {
+    private const string PatchAssetReadTypeKey = "Resource.Asset.Read";
+
+    private const string PatchAssetOperationTitle = "Operation";
+
+    private const string PatchAssetSelectOperation = "Select";
+
+    private const string PatchAssetIdTitle = "Asset ID";
+
+    private const string PatchAssetInputTitle = "Asset";
+
     /// <summary>
     /// Creates a package from the current graph and derives dependencies and public ports.
     /// <para>从当前图创建包，并推导依赖与对外端口。</para>
@@ -22,10 +33,16 @@ public static class VisualPluginPackageBuilder
     /// <param name="connections">The graph connections to package. <para>待打包的图连接。</para></param>
     /// <param name="author">The author attribution written to the manifest. <para>写入清单的作者署名。</para></param>
     /// <param name="portable">True to strip machine-specific path defaults. <para>为真时移除机器相关的路径默认值。</para></param>
+    /// <param name="resourceSource">Package supplying the resources referenced by the graph, or <see langword="null"/> to export a graph without resources.
+    /// <para>为图提供被引用资源的包；导出不带资源的图时为 <see langword="null"/>。</para></param>
     /// <returns>The built package that passed validation. <para>构建完成并通过校验的包。</para></returns>
+    /// <exception cref="InvalidOperationException">The graph is empty or contains unavailable nodes.
+    /// <para>图为空或包含不可用节点。</para></exception>
+    /// <exception cref="InvalidDataException">The graph references resources without a <paramref name="resourceSource"/>, a referenced resource id is absent from it, or validation reports errors.
+    /// <para>图引用资源但缺少 <paramref name="resourceSource"/>、被引用的资源标识在其中不存在，或校验报错。</para></exception>
     public static VisualPluginPackage Create(string name, string id, VisualPluginKind kind,
         IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnectionViewModel> connections,
-        string author = "", bool portable = true)
+        string author = "", bool portable = true, VisualPluginPackage? resourceSource = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(nodes);
@@ -70,6 +87,8 @@ public static class VisualPluginPackageBuilder
             },
             Graph = graph
         };
+
+        package.Assets = CollectReferencedAssets(nodes, resourceSource);
 
         if (kind == VisualPluginKind.CompositeNode)
         {
@@ -141,7 +160,7 @@ public static class VisualPluginPackageBuilder
     {
         ArgumentNullException.ThrowIfNull(existing);
         var updated = Create(existing.Manifest.Name, existing.Manifest.Id, existing.Kind,
-            nodes, connections, existing.Manifest.Author, portable);
+            nodes, connections, existing.Manifest.Author, portable, existing);
         updated.Manifest.Version = existing.Manifest.Version;
         updated.Manifest.Description = existing.Manifest.Description;
         updated.Manifest.NodeApiVersion = existing.Manifest.NodeApiVersion;
@@ -190,6 +209,100 @@ public static class VisualPluginPackageBuilder
         var slug = builder.Length == 0 ? "workflow" : builder.ToString();
         return slug.Length >= 3 ? slug : "local." + slug;
     }
+
+    /// <summary>Gathers the portable resources referenced by asset-reading nodes so the exported bundle carries them.
+    /// <para>收集资源读取节点所引用的可移植资源，使导出的 bundle 一并携带。</para>
+    /// </summary>
+    /// <param name="nodes">The graph nodes to scan for resource references. <para>待扫描资源引用的图节点。</para></param>
+    /// <param name="resourceSource">The package supplying the resources, or <see langword="null"/>. <para>提供资源的包，或 <see langword="null"/>。</para></param>
+    /// <returns>Independent resource snapshots ordered by id, deduplicated ordinally. <para>按标识排序、按逐字符比较去重的独立资源快照。</para></returns>
+    /// <remarks>The graph is exported in <c>Select</c> mode only by reading the asset id, because the receiving host resolves
+    /// the resource through <c>PatchAsset.Resolve</c>; a resource the receiver cannot resolve is a defect reported here, not at run time.
+    /// <para>只有在 <c>Select</c> 模式下图才会按资源标识读取资源，因为接收方宿主通过 <c>PatchAsset.Resolve</c> 解析资源；
+    /// 接收方无法解析的资源必须在此处报错，而不是留到运行时。</para></remarks>
+    private static List<VisualPluginAsset> CollectReferencedAssets(IReadOnlyList<FlowNodeViewModel> nodes,
+        VisualPluginPackage? resourceSource)
+    {
+        var referencedIds = nodes
+            .Where(node => string.Equals(node.TypeKey, PatchAssetReadTypeKey, StringComparison.Ordinal))
+            .SelectMany(ReadAssetReferenceIds)
+            .ToHashSet(StringComparer.Ordinal);
+        if (referencedIds.Count == 0)
+        {
+            return [];
+        }
+
+        if (resourceSource is null)
+        {
+            throw new InvalidDataException(
+                $"The graph references patch resources ({string.Join(", ", referencedIds.Order(StringComparer.Ordinal))}) "
+                + "but no resource package was supplied for the export.");
+        }
+
+        var available = new Dictionary<string, VisualPluginAsset>(StringComparer.Ordinal);
+        foreach (var asset in resourceSource.Assets)
+        {
+            available.TryAdd(asset.Id, asset);
+        }
+
+        var missing = referencedIds.Where(id => !available.ContainsKey(id)).Order(StringComparer.Ordinal).ToArray();
+        if (missing.Length > 0)
+        {
+            throw new InvalidDataException(
+                $"The graph references patch resources that the resource package does not provide: {string.Join(", ", missing)}.");
+        }
+
+        return [.. referencedIds.Order(StringComparer.Ordinal).Select(id => available[id].Snapshot())];
+    }
+
+    private static IEnumerable<string> ReadAssetReferenceIds(FlowNodeViewModel node)
+    {
+        var operationPort = node.Input.FirstOrDefault(port => string.Equals(port.Title, PatchAssetOperationTitle, StringComparison.Ordinal));
+        if (operationPort is not null
+            && !string.Equals(ToInvariantText(operationPort.InitialValue), PatchAssetSelectOperation, StringComparison.Ordinal))
+        {
+            foreach (var id in ReadAssetIdsOfPort(node.Input.FirstOrDefault(
+                         port => string.Equals(port.Title, PatchAssetInputTitle, StringComparison.Ordinal))))
+            {
+                yield return id;
+            }
+            yield break;
+        }
+
+        foreach (var port in node.Input.Where(port => string.Equals(port.Title, PatchAssetIdTitle, StringComparison.Ordinal)))
+        {
+            foreach (var id in ReadAssetIdsOfPort(port))
+            {
+                yield return id;
+            }
+        }
+    }
+
+    private static IEnumerable<string> ReadAssetIdsOfPort(NodeConnectorViewModel? port)
+    {
+        if (port is null || port.PortType != NodePortType.Text || port.IsSensitive)
+        {
+            yield break;
+        }
+        if (ToInvariantText(port.InitialValue) is { } text && NormalizeAssetId(text) is { } id)
+        {
+            yield return id;
+        }
+    }
+
+    private static string? NormalizeAssetId(string text)
+    {
+        var trimmed = text.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
+
+    private static string? ToInvariantText(object? value) => value switch
+    {
+        null => null,
+        string text => text,
+        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+        _ => value.ToString()
+    };
 
     private static VisualPluginPortDefinition ClonePort(VisualPluginPortDefinition port) => new()
     {

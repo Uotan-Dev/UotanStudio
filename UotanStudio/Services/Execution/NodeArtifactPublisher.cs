@@ -37,6 +37,12 @@ internal static class NodeArtifactPublisher
                     case Stream source:
                         await source.CopyToAsync(output, 128 * 1024, cancellationToken).ConfigureAwait(false);
                         break;
+                    case StreamArtifact artifact:
+                        await using (var source = artifact.OpenRead())
+                        {
+                            await source.CopyToAsync(output, 128 * 1024, cancellationToken).ConfigureAwait(false);
+                        }
+                        break;
                     case FileArtifact artifact:
                         await using (var source = new FileStream(artifact.Path, FileMode.Open, FileAccess.Read, FileShare.Read,
                             128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
@@ -52,7 +58,7 @@ internal static class NodeArtifactPublisher
                         }
                         break;
                     default:
-                        throw new ArgumentException("Artifact input must be bytes, text, a file artifact or a readable stream.", nameof(data));
+                        throw new ArgumentException("Artifact input must be bytes, text, a file artifact, a stream artifact or a readable stream.", nameof(data));
                 }
                 await output.FlushAsync(cancellationToken).ConfigureAwait(false);
                 length = output.Length;
