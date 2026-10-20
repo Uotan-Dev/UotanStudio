@@ -35,26 +35,31 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// </summary>
     /// <returns>One entry per non-empty device line reported by <c>host:devices-l</c>, keeping its transport descriptor.
     /// <para>对应 <c>host:devices-l</c> 报告的每条非空设备行，并保留其传输描述符。</para></returns>
+    /// <remarks>
+    /// The server closes a control connection after answering one host request, so the version probe and the
+    /// device listing each use their own connection; only a transport upgrade keeps the socket open.
+    /// <para>server 应答一条 host 请求后即关闭该控制连接，因此版本探测与设备列表各用一条独立连接；
+    /// 只有传输升级会保持套接字打开。</para>
+    /// </remarks>
     /// <exception cref="IOException">The device list length is invalid, the server connection failed, or the server
     /// version is unreadable or older than the supported minimum. <para>设备列表长度非法、server 连接失败，或 server
     /// 版本不可读、低于支持的最低版本。</para></exception>
     public IReadOnlyList<AdbTargetInfo> ListTargets()
     {
-        using var client = new TcpClient { NoDelay = true };
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-        client.ConnectAsync(host, port, timeout.Token).AsTask().GetAwaiter().GetResult();
-        using var stream = client.GetStream();
-        stream.ReadTimeout = 10000;
-        stream.WriteTimeout = 10000;
-        LastServerVersion = RequestServerVersion(stream);
+        using (var versionStream = OpenControlStream())
+        {
+            LastServerVersion = RequestServerVersion(versionStream);
+        }
+
+        using var stream = OpenControlStream();
         Request(stream, "host:devices-l");
         Span<byte> lengthBytes = stackalloc byte[4];
-        stream.ReadExactly(lengthBytes);
+        ReadExactly(stream, lengthBytes, "host:devices-l");
         if (!int.TryParse(Encoding.ASCII.GetString(lengthBytes), NumberStyles.HexNumber,
                 CultureInfo.InvariantCulture, out var length) || length is < 0 or > 1048576)
             throw new IOException("Invalid ADB device list length.");
         var bytes = new byte[length];
-        stream.ReadExactly(bytes);
+        ReadExactly(stream, bytes, "host:devices-l");
         return AdbTargetInfo.Parse(Encoding.UTF8.GetString(bytes));
     }
 
@@ -73,7 +78,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     {
         Request(stream, "host:version");
         Span<byte> lengthBytes = stackalloc byte[4];
-        stream.ReadExactly(lengthBytes);
+        ReadExactly(stream, lengthBytes, "host:version");
         if (!int.TryParse(Encoding.ASCII.GetString(lengthBytes), NumberStyles.HexNumber, CultureInfo.InvariantCulture,
                 out var length) || length != 4)
         {
@@ -82,7 +87,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         }
 
         Span<byte> versionBytes = stackalloc byte[4];
-        stream.ReadExactly(versionBytes);
+        ReadExactly(stream, versionBytes, "host:version");
         if (!int.TryParse(Encoding.ASCII.GetString(versionBytes), NumberStyles.HexNumber, CultureInfo.InvariantCulture,
                 out var version))
         {
@@ -333,14 +338,14 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
             using var stream = await OpenHostStreamAsync(host, port, linked.Token).ConfigureAwait(false);
             await RequestAsync(stream, command, linked.Token).ConfigureAwait(false);
             var header = new byte[4];
-            await stream.ReadExactlyAsync(header, linked.Token).ConfigureAwait(false);
+            await ReadExactlyAsync(stream, header, command, linked.Token).ConfigureAwait(false);
             if (!int.TryParse(Encoding.ASCII.GetString(header), NumberStyles.HexNumber,
                     CultureInfo.InvariantCulture, out var length) || length is < 0 or > 65535)
             {
                 throw new IOException("Invalid ADB server response length.");
             }
             var bytes = new byte[length];
-            await stream.ReadExactlyAsync(bytes, linked.Token).ConfigureAwait(false);
+            await ReadExactlyAsync(stream, bytes, command, linked.Token).ConfigureAwait(false);
             return Encoding.UTF8.GetString(bytes).Trim();
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -385,14 +390,75 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
         await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
         var status = new byte[4];
-        await stream.ReadExactlyAsync(status, cancellationToken).ConfigureAwait(false);
+        await ReadExactlyAsync(stream, status, request, cancellationToken).ConfigureAwait(false);
         if (status.AsSpan().SequenceEqual("OKAY"u8)) return;
         if (!status.AsSpan().SequenceEqual("FAIL"u8)) throw new IOException("Invalid ADB server status.");
-        await stream.ReadExactlyAsync(status, cancellationToken).ConfigureAwait(false);
+        await ReadExactlyAsync(stream, status, request, cancellationToken).ConfigureAwait(false);
         var length = int.Parse(Encoding.ASCII.GetString(status), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
         var message = new byte[length];
-        await stream.ReadExactlyAsync(message, cancellationToken).ConfigureAwait(false);
+        await ReadExactlyAsync(stream, message, request, cancellationToken).ConfigureAwait(false);
         throw new IOException("ADB server: " + Encoding.UTF8.GetString(message));
+    }
+
+    /// <summary>
+    /// Reads exactly the requested bytes from a control socket and reports a closed or faulted connection
+    /// as an <see cref="IOException"/> naming the request, instead of a bare
+    /// <see cref="EndOfStreamException"/> that cannot be attributed to a protocol step.
+    /// <para>从控制套接字精确读取所需字节；连接关闭或故障时抛出带请求名的 <see cref="IOException"/>，
+    /// 而不是无法定位协议步骤的裸 <see cref="EndOfStreamException"/>。</para>
+    /// </summary>
+    /// <param name="stream">The control socket positioned at the reply bytes.
+    /// <para>定位在应答字节处的控制套接字。</para></param>
+    /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
+    /// <param name="request">The host request whose reply is being read.
+    /// <para>正在读取其应答的 host 请求。</para></param>
+    /// <exception cref="IOException">The peer closed the connection or the read failed.
+    /// <para>对端关闭连接或读取失败。</para></exception>
+    private static void ReadExactly(Stream stream, Span<byte> buffer, string request)
+    {
+        try
+        {
+            stream.ReadExactly(buffer);
+        }
+        catch (EndOfStreamException ex)
+        {
+            throw new IOException($"ADB server closed the connection without replying to '{request}'.", ex);
+        }
+        catch (IOException ex)
+        {
+            throw new IOException($"ADB server connection failed while reading the reply to '{request}'.", ex);
+        }
+    }
+
+    /// <summary>
+    /// Async form of <see cref="ReadExactly(Stream, Span{byte}, string)"/>.
+    /// <para><see cref="ReadExactly(Stream, Span{byte}, string)"/> 的异步形式。</para>
+    /// </summary>
+    /// <param name="stream">The control socket positioned at the reply bytes.
+    /// <para>定位在应答字节处的控制套接字。</para></param>
+    /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
+    /// <param name="request">The host request whose reply is being read.
+    /// <para>正在读取其应答的 host 请求。</para></param>
+    /// <param name="cancellationToken">Cancels the read. <para>取消读取。</para></param>
+    /// <returns>A task that completes after the buffer is filled.
+    /// <para>缓冲区读满后完成的任务。</para></returns>
+    /// <exception cref="IOException">The peer closed the connection or the read failed.
+    /// <para>对端关闭连接或读取失败。</para></exception>
+    private static async Task ReadExactlyAsync(Stream stream, Memory<byte> buffer, string request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await stream.ReadExactlyAsync(buffer, cancellationToken).ConfigureAwait(false);
+        }
+        catch (EndOfStreamException ex)
+        {
+            throw new IOException($"ADB server closed the connection without replying to '{request}'.", ex);
+        }
+        catch (IOException ex)
+        {
+            throw new IOException($"ADB server connection failed while reading the reply to '{request}'.", ex);
+        }
     }
 
     /// <summary>
@@ -411,6 +477,29 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     private Stream OpenTransport()
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
+        var stream = OpenControlStream();
+        try
+        {
+            Request(stream, "host:transport:" + serial);
+            return stream;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Opens one bounded control connection to the server. Each host request needs its own connection
+    /// because the server closes the socket after replying; only <c>host:transport:</c> upgrades it.
+    /// <para>打开一条受期限约束的 server 控制连接。每条 host 请求都需要独立连接，因为 server 应答后即
+    /// 关闭套接字；只有 <c>host:transport:</c> 会把它升级为设备传输。</para>
+    /// </summary>
+    /// <returns>A connected stream owning its socket; the caller disposes it.
+    /// <para>持有自身套接字的已连接流；由调用方释放。</para></returns>
+    private Stream OpenControlStream()
+    {
         var client = new TcpClient { NoDelay = true };
         try
         {
@@ -419,10 +508,13 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
             var stream = client.GetStream();
             stream.ReadTimeout = 10000;
             stream.WriteTimeout = 10000;
-            Request(stream, "host:transport:" + serial);
             return stream;
         }
-        catch { client.Dispose(); throw; }
+        catch
+        {
+            client.Dispose();
+            throw;
+        }
     }
 
     /// <summary>Pushes a local file using the ADB sync protocol and checks the device's final status. The remote path is sent with mode bits 0644 and the DONE marker carries the current UTC time.
@@ -467,12 +559,14 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         if (bytes.Length > 65535) throw new ArgumentOutOfRangeException(nameof(request));
         stream.Write(Encoding.ASCII.GetBytes(bytes.Length.ToString("X4", CultureInfo.InvariantCulture)));
         stream.Write(bytes);
-        Span<byte> status = stackalloc byte[4]; stream.ReadExactly(status);
+        Span<byte> status = stackalloc byte[4];
+        ReadExactly(stream, status, request);
         if (status.SequenceEqual("OKAY"u8)) return;
         if (!status.SequenceEqual("FAIL"u8)) throw new IOException("Invalid ADB server status.");
-        stream.ReadExactly(status);
+        ReadExactly(stream, status, request);
         var length = int.Parse(Encoding.ASCII.GetString(status), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-        var message = new byte[length]; stream.ReadExactly(message);
+        var message = new byte[length];
+        ReadExactly(stream, message, request);
         throw new IOException("ADB server: " + Encoding.UTF8.GetString(message));
     }
 }
