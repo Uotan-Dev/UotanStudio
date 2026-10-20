@@ -112,22 +112,47 @@ public static class RkdlConstants
     public const int LoaderRelinkTimeoutMs = 30000;
 
     /// <summary>
-    /// Product IDs of devices already in rockusb (loader) mode. Other PIDs under the
-    /// Rockchip VID that satisfy the generic bootrom rule are treated as maskrom or
-    /// bootrom devices.
-    /// <para>已处于 rockusb（loader）模式的设备产品 ID。Rockchip VID 下满足通用
-    /// bootrom 规则的其他 PID 按 maskrom 或 bootrom 设备处理。</para>
+    /// Product IDs of devices already in rockusb (loader) mode, taken from the Rockchip
+    /// device table of rkdeveloptool <c>RKScan.cpp</c> and the RKDL chip-ID mapping. Other
+    /// PIDs under the Rockchip VID that satisfy the generic bootrom rule are treated as
+    /// maskrom or bootrom devices.
+    /// <para>已处于 rockusb（loader）模式的设备产品 ID，取自 rkdeveloptool <c>RKScan.cpp</c>
+    /// 的 Rockchip 设备表与 RKDL 芯片 ID 映射。Rockchip VID 下满足通用 bootrom 规则的其他
+    /// PID 按 maskrom 或 bootrom 设备处理。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>Boundary: upstream distinguishes maskrom from loader with bit 0 of <c>bcdUSB</c>, but
+    /// <c>UsbDeviceInfo</c> carries no <c>bcdUSB</c> field and this repository does not widen the USB
+    /// abstraction for it. Classification is therefore PID-only: a loader PID listed here is opened in
+    /// loader mode, an unlisted loader PID is treated as maskrom (so its loader download is refused),
+    /// and a maskrom device sharing a listed PID is treated as loader (so its first CBW transaction
+    /// fails instead of receiving a loader). Real-hardware confirmation is required for any PID not
+    /// listed here.</para>
+    /// <para>边界：上游用 <c>bcdUSB</c> 的 bit 0 区分 maskrom 与 loader，但 <c>UsbDeviceInfo</c>
+    /// 没有 <c>bcdUSB</c> 字段，本仓库也不为此扩展 USB 抽象层，因此这里只按 PID 判定：列入本表的
+    /// loader PID 按 loader 模式打开；未列出的 loader PID 会被当作 maskrom，其 loader 下载请求会被
+    /// 拒绝；与表内 PID 相同的 maskrom 设备会被当作 loader，其首个 CBW 事务会失败而不会收到 loader。
+    /// 本表之外的 PID 需要真机确认。</para>
+    /// </remarks>
     public static readonly ushort[] KnownLoaderProductIds =
     [
+        0x281A,
+        0x290A,
+        0x292A,
+        0x300A,
+        0x300B,
         0x301A,
+        0x310A,
+        0x310B,
         0x310C,
         0x320A,
         0x320B,
         0x320C,
         0x330A,
+        0x330B,
         0x330C,
         0x350A,
+        0x350B,
     ];
 }
 

@@ -102,13 +102,16 @@ internal sealed class RkBootImage
     public uint SupportChip { get; private set; }
 
     /// <summary>
-    /// Gets whether the image is RC4 encrypted (ucRc4Flag). RC4 segment decryption is
-    /// not implemented, so such an image cannot be downloaded.
-    /// <para>获取镜像是否 RC4 加密（ucRc4Flag）。RC4 段解密没有实现，因此这类镜像无法下载。</para>
+    /// Gets whether the image declares RC4 encryption as disabled (ucRc4Flag, loader header
+    /// byte 44). Upstream RKBoot.cpp interprets a non-zero flag as "RC4 disabled", and
+    /// boot_merger writes 1 by default, so a normally built loader reports <c>true</c> here.
+    /// <para>获取镜像是否声明已禁用 RC4 加密（ucRc4Flag，loader 头第 44 字节）。上游
+    /// RKBoot.cpp 把非 0 解释为“禁用 RC4”，且 boot_merger 默认写入 1，因此通常构建出的
+    /// loader 在此为 <c>true</c>。</para>
     /// </summary>
-    /// <value><c>true</c> when ucRc4Flag (loader header byte 44) is non-zero.
-    /// <para>当 ucRc4Flag（loader 头第 44 字节）非零时为 <c>true</c>。</para></value>
-    public bool Rc4Enabled { get; private set; }
+    /// <value><c>true</c> when ucRc4Flag is non-zero, which means RC4 is disabled.
+    /// <para>ucRc4Flag 非 0（表示已禁用 RC4）时为 <c>true</c>。</para></value>
+    public bool Rc4DisabledFlag { get; private set; }
 
     /// <summary>
     /// Header tag for a full loader image ("BOOT", stored as LE u32 0x544F4F42).
@@ -165,7 +168,7 @@ internal sealed class RkBootImage
             Version = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(6)),
             MergeVersion = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(10)),
             SupportChip = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(21)),
-            Rc4Enabled = buffer[44] != 0,
+            Rc4DisabledFlag = buffer[44] != 0,
         };
 
         var count471 = buffer[25];

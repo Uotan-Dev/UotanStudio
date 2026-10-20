@@ -96,11 +96,16 @@ internal static class RkdlResetSubCode
 /// <param name="flags">The direction flags for the data phase. <para>数据阶段的方向标志。</para></param>
 /// <param name="transferLength">The data phase length in bytes (dwCBWTransferLength). <para>数据阶段长度（字节，dwCBWTransferLength）。</para></param>
 /// <param name="cbwcbLength">Length of the command block (0x06 or 0x0A). <para>命令块长度（0x06 或 0x0A）。</para></param>
-/// <param name="subCode">The value stored in the reserved command-block byte. <para>存入命令块保留字节的值。</para></param>
+/// <param name="subCode">The value stored in the reserved command-block byte: a sub code for
+/// reset/erase-system commands or the LUN for erase commands. <para>存入命令块保留字节的值：复位/擦除系统盘
+/// 命令的子码，或擦除命令的 LUN。</para></param>
 /// <param name="address">The LBA address, stored big-endian in the command block. <para>LBA 地址，在命令块中按大端序存储。</para></param>
 /// <param name="sectorLength">The sector count, stored big-endian in the command block. <para>扇区数，在命令块中按大端序存储。</para></param>
+/// <param name="flashCs">The value of the <c>ucFlashCS</c> command-block byte (erase target chip
+/// select); zero keeps the previous wire value. <para><c>ucFlashCS</c> 命令块字节（擦除目标片选）的取值；
+/// 零保持原有的线上取值。</para></param>
 internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transferLength, byte cbwcbLength,
-    byte subCode = 0, uint address = 0, ushort sectorLength = 0)
+    byte subCode = 0, uint address = 0, ushort sectorLength = 0, byte flashCs = 0)
 {
 
     /// <summary>
@@ -160,6 +165,15 @@ internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transf
     public ushort SectorLength { get; } = sectorLength;
 
     /// <summary>
+    /// Gets the <c>ucFlashCS</c> command-block byte, which selects the flash chip for erase
+    /// commands.
+    /// <para>获取 <c>ucFlashCS</c> 命令块字节，用于为擦除命令选择 flash 芯片。</para>
+    /// </summary>
+    /// <value>The flash chip select; zero unless the caller overrides it. <para>flash 片选；
+    /// 除调用方显式指定外为零。</para></value>
+    public byte FlashCs { get; } = flashCs;
+
+    /// <summary>
     /// Generates a random 4-byte CBW tag.
     /// <para>生成随机的 4 字节 CBW 标签。</para>
     /// </summary>
@@ -194,7 +208,7 @@ internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transf
         bytes[18] = (byte)(Address >> 16);
         bytes[19] = (byte)(Address >> 8);
         bytes[20] = (byte)Address;
-        bytes[21] = 0;
+        bytes[21] = FlashCs;
         bytes[22] = (byte)(SectorLength >> 8);
         bytes[23] = (byte)SectorLength;
         return bytes;

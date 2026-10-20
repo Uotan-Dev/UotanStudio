@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Numerics;
 
 namespace UotanStudio.Comm.Protocols.Bootrom;
 
@@ -115,13 +116,13 @@ public sealed partial class RkdlSession
     /// 之前就被拒绝。</para>
     /// Both arguments are expressed in the 32-bit <c>dwAddress</c> wire units the rockusb CBWCB
     /// carries, which <see cref="EraseLBA"/> documents as 512-byte sectors and which
-    /// <see cref="EraseBlocks"/> fills from its block arguments verbatim. This repository carries no
+    /// <see cref="EraseBlocks(uint, uint, bool)"/> fills from its block arguments verbatim. This repository carries no
     /// verified erase-block-to-sector ratio, so no unit conversion is applied here; see the
-    /// unverified-boundary note on <see cref="EraseBlocks"/>.
+    /// unverified-boundary note on <see cref="EraseBlocks(uint, uint, bool)"/>.
     /// <para>两个参数都以 rockusb CBWCB 承载的 32 位 <c>dwAddress</c> 线上单位表示；
-    /// <see cref="EraseLBA"/> 把它们记录为 512 字节扇区，<see cref="EraseBlocks"/> 则把自己的块参数
+    /// <see cref="EraseLBA"/> 把它们记录为 512 字节扇区，<see cref="EraseBlocks(uint, uint, bool)"/> 则把自己的块参数
     /// 原样填入。本仓库没有可核对的擦除块与扇区比例，因此此处不做单位换算；见
-    /// <see cref="EraseBlocks"/> 上的未验证边界说明。</para>
+    /// <see cref="EraseBlocks(uint, uint, bool)"/> 上的未验证边界说明。</para>
     /// </summary>
     /// <param name="address">The first addressed unit, as a signed value so a negative argument is
     /// rejected rather than cast. <para>首个被寻址的单位，用有符号值以便负参数被拒绝而非被转型。</para></param>
@@ -231,6 +232,60 @@ public sealed partial class RkdlSession
         => ResetDevice(RkdlResetSubCode.PowerOff);
 
     /// <summary>
+    /// Switches the device's active storage medium through a CHANGE_STORAGE (0x2A) CBW/CSW
+    /// transaction, passing <paramref name="storage"/> in the command block's reserved byte.
+    /// <para>通过 CHANGE_STORAGE（0x2A）CBW/CSW 事务切换设备当前存储介质，并把
+    /// <paramref name="storage"/> 写入命令块的保留字节。</para>
+    /// </summary>
+    /// <remarks>
+    /// <para>A storage change normally makes the device re-enumerate, so the cached flash geometry is
+    /// dropped once the command was acknowledged.</para>
+    /// <para>切换存储介质通常会让设备重新枚举，因此命令得到应答后即丢弃缓存的闪存几何。</para>
+    /// </remarks>
+    /// <param name="storage">The storage identifier sent as <c>ucReserved</c>.
+    /// <para>作为 <c>ucReserved</c> 发送的存储标识。</para></param>
+    /// <exception cref="RkdlException">The session is disposed, or the CSW reported failure.
+    /// <para>会话已释放，或 CSW 报告失败。</para></exception>
+    public void ChangeStorage(byte storage)
+    {
+        ThrowIfDisposed();
+        var cbw = new RkdlCbw(RkdlCommand.ChangeStorage, RkdlFrame.DirectionOut, 0,
+            RkdlFrame.CbwcbLengthShort, subCode: storage);
+        WriteCbw(cbw);
+        var csw = ReadCsw(cbw.Tag, recovery: true);
+        if (!csw.IsSuccess)
+        {
+            throw new RkdlException(RkdlError.TransferFailed, $"CHANGE_STORAGE {storage} failed, CSW status = {csw.Status}.");
+        }
+
+        InvalidateFlashGeometry();
+    }
+
+    /// <summary>
+    /// Reads the supported storage mediums through a READ_STORAGE (0x2B) CBW/CSW transaction. The
+    /// device returns a 4-byte little-endian bitmask, and the index of the first set bit is the
+    /// storage identifier the device currently reports.
+    /// <para>通过 READ_STORAGE（0x2B）CBW/CSW 事务读取支持的存储介质。设备返回 4 字节小端位掩码，
+    /// 首个置位的下标即设备当前报告的存储标识。</para>
+    /// </summary>
+    /// <returns>The zero-based index of the first set bit in the storage bitmask.
+    /// <para>存储位掩码中首个置位从零开始的下标。</para></returns>
+    /// <exception cref="RkdlException">The data phase was shorter than 4 bytes, the CSW reported
+    /// failure, or the bitmask is zero. <para>数据阶段短于 4 字节、CSW 报告失败，或位掩码为零。</para></exception>
+    public int ReadStorage()
+    {
+        ThrowIfDisposed();
+        var data = ReadDataCommand(RkdlCommand.ReadStorage, 4, RkdlFrame.CbwcbLengthShort, 4, 4);
+        var mask = BinaryPrimitives.ReadUInt32LittleEndian(data);
+        if (mask == 0)
+        {
+            throw new RkdlException(RkdlError.ReadFailed, "READ_STORAGE returned an empty storage bitmask.");
+        }
+
+        return BitOperations.TrailingZeroCount(mask);
+    }
+
+    /// <summary>
     /// Erases flash blocks via ERASE_NORMAL (or ERASE_FORCE) CBW/CSW transactions, chunked at
     /// <see cref="RkdlConstants.MaxEraseBlocksPerCommand"/> blocks per command.
     /// <para>通过 ERASE_NORMAL（或 ERASE_FORCE）CBW/CSW 事务擦除 flash 块，每条命令最多
@@ -258,6 +313,27 @@ public sealed partial class RkdlSession
     /// or cannot be read because READ_FLASH_INFO failed, or a CSW reported failure.
     /// <para>会话已释放、范围超出设备几何或因 READ_FLASH_INFO 失败而无法读取几何，或 CSW 报告失败。</para></exception>
     public void EraseBlocks(uint blockPos, uint blockCount, bool force = false)
+        => EraseBlocks(blockPos, blockCount, force, lun: 0, ucFlashCs: 0);
+
+    /// <summary>
+    /// Erases flash blocks via ERASE_NORMAL (or ERASE_FORCE) CBW/CSW transactions, chunked at
+    /// <see cref="RkdlConstants.MaxEraseBlocksPerCommand"/> blocks per command and addressing the
+    /// explicitly selected LUN and flash chip select.
+    /// <para>通过 ERASE_NORMAL（或 ERASE_FORCE）CBW/CSW 事务擦除 flash 块，每条命令最多
+    /// <see cref="RkdlConstants.MaxEraseBlocksPerCommand"/> 个块，并显式指定 LUN 与 flash 片选。</para>
+    /// </summary>
+    /// <param name="blockPos">The first block to erase. <para>起始块号。</para></param>
+    /// <param name="blockCount">The number of blocks to erase. <para>要擦除的块数。</para></param>
+    /// <param name="force"><c>true</c> to use ERASE_FORCE (ignores bad-block markers).
+    /// <para>是否使用 ERASE_FORCE（忽略坏块标记）。</para></param>
+    /// <param name="lun">The LUN written to the command block's reserved byte. <para>写入命令块保留
+    /// 字节的 LUN。</para></param>
+    /// <param name="ucFlashCs">The flash chip select written to the command block's
+    /// <c>ucFlashCS</c> byte. <para>写入命令块 <c>ucFlashCS</c> 字节的 flash 片选。</para></param>
+    /// <exception cref="RkdlException">The session is disposed, the range exceeds the device geometry
+    /// or cannot be read because READ_FLASH_INFO failed, or a CSW reported failure.
+    /// <para>会话已释放、范围超出设备几何或因 READ_FLASH_INFO 失败而无法读取几何，或 CSW 报告失败。</para></exception>
+    public void EraseBlocks(uint blockPos, uint blockCount, bool force, byte lun, byte ucFlashCs)
     {
         ThrowIfDisposed();
         ValidateLbaRange(blockPos, blockCount);
@@ -268,7 +344,8 @@ public sealed partial class RkdlSession
         {
             var chunk = (ushort)Math.Min(remaining, RkdlConstants.MaxEraseBlocksPerCommand);
             var cbw = new RkdlCbw(opcode, RkdlFrame.DirectionOut, 0,
-                RkdlFrame.CbwcbLengthLong, address: (uint)position, sectorLength: chunk);
+                RkdlFrame.CbwcbLengthLong, subCode: lun, address: (uint)position, sectorLength: chunk,
+                flashCs: ucFlashCs);
             WriteCbw(cbw);
             var csw = ReadCsw(cbw.Tag);
             if (!csw.IsSuccess)

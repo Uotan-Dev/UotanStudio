@@ -93,7 +93,11 @@ public sealed partial class RkdlSession : IProtocolSession
     /// <summary>Gets whether the device is in rockusb mode (ready for flash operations).
     /// <para>设备是否处于 rockusb 模式（就绪可刷写）。</para></summary>
     /// <value><c>true</c> when the device is a Rockchip device whose product ID matches a known
-    /// loader-mode ID. <para>设备为 Rockchip 且产品 ID 命中已知 loader 模式 ID 时为 <c>true</c>。</para></value>
+    /// loader-mode ID; the classification is PID-only because <c>UsbDeviceInfo</c> exposes no
+    /// <c>bcdUSB</c> (see <see cref="RkdlConstants.KnownLoaderProductIds"/>).
+    /// <para>设备为 Rockchip 且产品 ID 命中已知 loader 模式 ID 时为 <c>true</c>；由于
+    /// <c>UsbDeviceInfo</c> 不暴露 <c>bcdUSB</c>，该判定只依据 PID
+    /// （见 <see cref="RkdlConstants.KnownLoaderProductIds"/>）。</para></value>
     public bool IsRockusbMode => IsRockchipDevice() && RkdlConstants.KnownLoaderProductIds.Contains(ProductId);
 
     /// <summary>
@@ -103,8 +107,12 @@ public sealed partial class RkdlSession : IProtocolSession
     /// <para>获取设备是否仍处于 Mask ROM（bootrom）模式，即产品 ID 不在已知 loader 模式 ID
     /// 之列的 Rockchip 设备。只有 maskrom 设备接受 0x0471/0x0472 loader 下载 vendor 请求。</para>
     /// </summary>
-    /// <value><c>true</c> for a Rockchip device whose product ID is not a known loader-mode ID.
-    /// <para>设备为 Rockchip 且产品 ID 不属于已知 loader 模式 ID 时为 <c>true</c>。</para></value>
+    /// <value><c>true</c> for a Rockchip device whose product ID is not a known loader-mode ID; an
+    /// unlisted loader PID is therefore treated as maskrom because no <c>bcdUSB</c> evidence is
+    /// available (see <see cref="RkdlConstants.KnownLoaderProductIds"/>).
+    /// <para>设备为 Rockchip 且产品 ID 不属于已知 loader 模式 ID 时为 <c>true</c>；由于没有
+    /// <c>bcdUSB</c> 证据，未列出的 loader PID 也会被当作 maskrom
+    /// （见 <see cref="RkdlConstants.KnownLoaderProductIds"/>）。</para></value>
     public bool IsMaskromMode => IsRockchipDevice() && !IsRockusbMode;
 
     /// <summary>

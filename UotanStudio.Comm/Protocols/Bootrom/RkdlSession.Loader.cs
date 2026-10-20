@@ -9,20 +9,27 @@ public sealed partial class RkdlSession
     /// </summary>
     /// <remarks>
     /// <para>The entry tables are parsed first, and the image is rejected before any vendor request is
-    /// sent when the loader is RC4 encrypted or when any entry declares a <c>dwDataDelay</c> above
-    /// <see cref="RkdlConstants.MaxLoaderDataDelayMs"/>. Every 471 (first-stage) entry is then sent
-    /// before every 472 (second-stage) entry through the 0x0471/0x0472 vendor requests, honouring each
-    /// entry's bounded settle delay, and the method finally waits
+    /// sent when any entry declares a <c>dwDataDelay</c> above
+    /// <see cref="RkdlConstants.MaxLoaderDataDelayMs"/>. Entries whose <c>DataSize</c> is zero are
+    /// skipped: they are neither sent nor delayed, matching upstream <c>RKBoot.cpp</c>. Every 471
+    /// (first-stage) entry is then sent before every 472 (second-stage) entry through the 0x0471/0x0472
+    /// vendor requests, honouring each entry's bounded settle delay, and the method finally waits
     /// <see cref="RkdlConstants.LoaderReenumerationSettleMs"/> milliseconds for re-enumeration.</para>
-    /// <para>先解析条目表；当 loader 为 RC4 加密，或任一条目声明的 <c>dwDataDelay</c> 超过
+    /// <para>先解析条目表；当任一条目声明的 <c>dwDataDelay</c> 超过
     /// <see cref="RkdlConstants.MaxLoaderDataDelayMs"/> 时，在任何 vendor 请求发出之前拒绝该镜像。
+    /// <c>DataSize</c> 为零的条目会被跳过：既不发送也不延时，与上游 <c>RKBoot.cpp</c> 一致。
     /// 随后先通过 0x0471 vendor 请求发送全部 471（第一阶段）条目，再通过 0x0472 请求发送全部
     /// 472（第二阶段）条目，并遵循每个条目有界的稳定延时；最后等待
     /// <see cref="RkdlConstants.LoaderReenumerationSettleMs"/> 毫秒让设备重新枚举。</para>
+    /// <para>The <c>ucRc4Flag</c> is informational: upstream <c>RKBoot.cpp</c> reads a non-zero value as
+    /// "RC4 disabled" and boot_merger writes 1 by default, so the flag is not a rejection condition and
+    /// entry payloads are sent verbatim either way.</para>
+    /// <para><c>ucRc4Flag</c> 仅作信息：上游 <c>RKBoot.cpp</c> 把非 0 值解释为“禁用 RC4”，
+    /// boot_merger 默认写入 1，因此该标志不是拒绝条件，条目负载始终原样发送。</para>
     /// <para>Completion of that settle window is not evidence that the device reached loader mode:
     /// <see cref="IsRockusbMode"/> derives from a device-info snapshot taken when this session was
     /// constructed and can never observe the transition, and the loader download switches the USB
-    /// product ID (maskrom <c>0x350B</c> versus
+    /// product ID (a maskrom PID versus
     /// <see cref="RkdlConstants.KnownLoaderProductIds"/>). Callers must re-observe the device through
     /// the device layer, using <see cref="CreateLoaderTransitionOffer"/>; whether a PID-switching
     /// bootrom transition passes the controller's USB reconnection validation needs real-device
@@ -30,7 +37,7 @@ public sealed partial class RkdlSession
     /// therefore only means every entry was transmitted, not that the loader took over.</para>
     /// <para>该稳定窗口的结束并不能证明设备已进入 loader 模式：<see cref="IsRockusbMode"/> 派生自本会话
     /// 构造时拍摄的设备信息快照，在会话内永远观测不到该模式变化，而且 loader 下载会切换 USB 产品 ID
-    /// （maskrom <c>0x350B</c> 与 <see cref="RkdlConstants.KnownLoaderProductIds"/> 之列的 loader ID）。
+    /// （maskrom PID 与 <see cref="RkdlConstants.KnownLoaderProductIds"/> 之列的 loader ID）。
     /// 调用方必须借助 <see cref="CreateLoaderTransitionOffer"/> 通过设备层重新观测设备；切换 PID 的
     /// bootrom 迁移能否通过控制器的 USB 重连校验需真机确认，本仓库未在硬件上验证。因此正的字节数
     /// 返回值只代表每个条目已发出，不代表 loader 已经接管。</para>
@@ -39,17 +46,12 @@ public sealed partial class RkdlSession
     /// <returns>The total number of bytes transferred; not a proof that the device entered loader
     /// mode. <para>实际传输的字节总数，并非设备已进入 loader 模式的证明。</para></returns>
     /// <exception cref="RkdlException">The device is not in maskrom mode, the image fails to parse,
-    /// the image sets the RC4 flag, any entry declares a <c>dwDataDelay</c> above
+    /// any entry declares a <c>dwDataDelay</c> above
     /// <see cref="RkdlConstants.MaxLoaderDataDelayMs"/> (the raw value from the untrusted loader
     /// file is quoted in the message and no vendor request is sent), or a vendor request was short.
-    /// An RC4 encrypted loader is rejected outright because entry payloads are sent verbatim: this
-    /// implementation has no RC4 segment decryption, so sending the ciphertext would leave the
-    /// device booting garbage while still reporting a positive byte count.
-    /// <para>设备不处于 maskrom 模式、镜像解析失败、镜像置位 RC4 标志、任一条目声明的
+    /// <para>设备不处于 maskrom 模式、镜像解析失败、任一条目声明的
     /// <c>dwDataDelay</c> 超过 <see cref="RkdlConstants.MaxLoaderDataDelayMs"/>（消息中会引用来自不受信
-    /// loader 文件的原始数值，且不会发出任何 vendor 请求），或 vendor 请求写入过短。RC4 加密的 loader
-    /// 会被直接拒绝，因为条目负载是原样发送的：本实现没有 RC4 段解密能力，发送密文会让设备加载垃圾
-    /// 数据，却仍然上报一个正字节数。</para></exception>
+    /// loader 文件的原始数值，且不会发出任何 vendor 请求），或 vendor 请求写入过短。</para></exception>
     public int DownloadBootLoader(byte[] loaderImage)
     {
         var image = PrepareLoaderImage(loaderImage);
@@ -58,6 +60,11 @@ public sealed partial class RkdlSession
 
         foreach (var entry in image.Entries471)
         {
+            if (entry.DataSize == 0)
+            {
+                continue;
+            }
+
             total += DeviceRequest(RkdlConstants.RkdlWIndex471, SliceEntry(loaderImage, entry));
             if (entry.DataDelay > 0)
             {
@@ -67,6 +74,11 @@ public sealed partial class RkdlSession
 
         foreach (var entry in image.Entries472)
         {
+            if (entry.DataSize == 0)
+            {
+                continue;
+            }
+
             total += DeviceRequest(RkdlConstants.RkdlWIndex472, SliceEntry(loaderImage, entry));
             if (entry.DataDelay > 0)
             {
@@ -99,6 +111,11 @@ public sealed partial class RkdlSession
 
         foreach (var entry in image.Entries471)
         {
+            if (entry.DataSize == 0)
+            {
+                continue;
+            }
+
             total += DeviceRequest(RkdlConstants.RkdlWIndex471, SliceEntry(loaderImage, entry));
             if (entry.DataDelay > 0)
             {
@@ -108,6 +125,11 @@ public sealed partial class RkdlSession
 
         foreach (var entry in image.Entries472)
         {
+            if (entry.DataSize == 0)
+            {
+                continue;
+            }
+
             total += DeviceRequest(RkdlConstants.RkdlWIndex472, SliceEntry(loaderImage, entry));
             if (entry.DataDelay > 0)
             {
@@ -150,9 +172,12 @@ public sealed partial class RkdlSession
 
     /// <summary>
     /// Runs every guard that must reject a loader image before the first vendor request: maskrom
-    /// mode, parse success, the RC4 flag, and the <c>dwDataDelay</c> bound of both entry tables.
+    /// mode, parse success, and the <c>dwDataDelay</c> bound of both entry tables. The
+    /// <c>ucRc4Flag</c> is not a guard: upstream reads a non-zero value as "RC4 disabled", and
+    /// zero-length entries are skipped because they are never sent or delayed.
     /// <para>执行所有必须在首个 vendor 请求之前拒绝 loader 镜像的守卫：maskrom 模式、解析成功、
-    /// RC4 标志以及两张条目表的 <c>dwDataDelay</c> 上界。</para>
+    /// 以及两张条目表的 <c>dwDataDelay</c> 上界。<c>ucRc4Flag</c> 不是守卫：上游把非 0 值解释为
+    /// “禁用 RC4”；零长度条目会被跳过，因为它们既不会被发送也不会延时。</para>
     /// </summary>
     /// <param name="loaderImage">The loader image bytes (RKBOOT .bin). <para>loader 镜像字节（RKBOOT .bin）。</para></param>
     /// <returns>The validated parsed image. <para>已通过校验的解析结果。</para></returns>
@@ -165,19 +190,24 @@ public sealed partial class RkdlSession
         }
 
         var image = RkBootImage.Parse(loaderImage);
-        if (image.Rc4Enabled)
-        {
-            throw new RkdlException(RkdlError.NotSupported,
-                "Loader image is RC4 encrypted (ucRc4Flag set); this implementation does not decrypt RC4 loader segments and refuses to send them as ciphertext.");
-        }
 
         foreach (var entry in image.Entries471)
         {
+            if (entry.DataSize == 0)
+            {
+                continue;
+            }
+
             RequireDataDelayWithinBound(entry);
         }
 
         foreach (var entry in image.Entries472)
         {
+            if (entry.DataSize == 0)
+            {
+                continue;
+            }
+
             RequireDataDelayWithinBound(entry);
         }
 
@@ -227,6 +257,10 @@ public sealed partial class RkdlSession
     /// <para>数据按 4096 字节分块发送，尾部追加 CRC-16/CCITT，并遵循 4094/4095 填充规则。该请求使用
     /// BmRequestType = 0x40、BRequest = 0x0C 与 wIndex = 0x0471。</para>
     /// </summary>
+    /// <remarks>The caller-supplied bytes are sent verbatim, exactly like the entries of
+    /// <see cref="DownloadBootLoader(byte[])"/>; no <c>ucRc4Flag</c> check is applied.
+    /// <para>调用方给定的字节原样发送，与 <see cref="DownloadBootLoader(byte[])"/> 的条目一致；
+    /// 此处不检查 <c>ucRc4Flag</c>。</para></remarks>
     /// <param name="loaderData">The loader image data. <para>loader 镜像数据。</para></param>
     /// <returns>The total number of bytes transferred. <para>实际传输的字节总数。</para></returns>
     public int DownloadBootLoader471(byte[] loaderData)
