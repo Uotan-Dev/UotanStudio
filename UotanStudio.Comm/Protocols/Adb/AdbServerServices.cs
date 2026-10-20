@@ -16,14 +16,28 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// <param name="port">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
 public sealed class AdbServerServices(string serial, string host = "127.0.0.1", int port = 5037)
 {
+    /// <summary>Oldest adb server protocol version accepted by this client (A_VERSION_MIN, 0x001F).
+    /// <para>本客户端接受的最旧 adb server 协议版本（A_VERSION_MIN，0x001F）。</para></summary>
+    private const int MinimumServerVersion = 0x001F;
+
+    /// <summary>Gets the protocol version reported by the adb server queried most recently in this process, or
+    /// <see langword="null"/> before the first answer. It is recorded for diagnostics only; a rejected server is
+    /// never restarted automatically.
+    /// <para>获取本进程最近查询的 adb server 报告的协议版本；首次应答前为 <see langword="null"/>。该值仅用于诊断，
+    /// 被拒绝的 server 绝不会被自动重启。</para></summary>
+    /// <value>The parsed <c>host:version</c> value, or <see langword="null"/> when no server answered yet.
+    /// <para>解析出的 <c>host:version</c> 值；尚无 server 应答时为 <see langword="null"/>。</para></value>
+    internal static int? LastServerVersion { get; private set; }
+
     /// <summary>
     /// Lists server-managed targets without selecting a device transport.
     /// <para>列出 server 管理的目标，不选择设备传输通道。</para>
     /// </summary>
     /// <returns>One entry per non-empty device line reported by <c>host:devices-l</c>, keeping its transport descriptor.
     /// <para>对应 <c>host:devices-l</c> 报告的每条非空设备行，并保留其传输描述符。</para></returns>
-    /// <exception cref="IOException">The device list length is invalid or the server connection failed.
-    /// <para>设备列表长度非法或 server 连接失败。</para></exception>
+    /// <exception cref="IOException">The device list length is invalid, the server connection failed, or the server
+    /// version is unreadable or older than the supported minimum. <para>设备列表长度非法、server 连接失败，或 server
+    /// 版本不可读、低于支持的最低版本。</para></exception>
     public IReadOnlyList<AdbTargetInfo> ListTargets()
     {
         using var client = new TcpClient { NoDelay = true };
@@ -32,6 +46,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         using var stream = client.GetStream();
         stream.ReadTimeout = 10000;
         stream.WriteTimeout = 10000;
+        LastServerVersion = RequestServerVersion(stream);
         Request(stream, "host:devices-l");
         Span<byte> lengthBytes = stackalloc byte[4];
         stream.ReadExactly(lengthBytes);
@@ -41,6 +56,46 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         var bytes = new byte[length];
         stream.ReadExactly(bytes);
         return AdbTargetInfo.Parse(Encoding.UTF8.GetString(bytes));
+    }
+
+    /// <summary>
+    /// Asks a freshly connected server for <c>host:version</c> and validates the reply, so an incompatible or
+    /// non-adb endpoint produces a diagnosable error instead of a misparsed device list. The server is never
+    /// restarted here. <para>向刚连接的 server 询问 <c>host:version</c> 并校验应答，使版本不兼容或非 adb 端点给出
+    /// 可诊断错误，而不是被误解析的设备列表。此处绝不重启 server。</para>
+    /// </summary>
+    /// <param name="stream">The control socket positioned at the start of a request.
+    /// <para>处于请求起始位置的控制套接字。</para></param>
+    /// <returns>The protocol version the server reported. <para>server 报告的协议版本。</para></returns>
+    /// <exception cref="IOException">The reply is not a four-digit hexadecimal version, or the server is older than
+    /// <see cref="MinimumServerVersion"/>. <para>应答不是四位十六进制版本，或 server 早于 <see cref="MinimumServerVersion"/>。</para></exception>
+    private static int RequestServerVersion(Stream stream)
+    {
+        Request(stream, "host:version");
+        Span<byte> lengthBytes = stackalloc byte[4];
+        stream.ReadExactly(lengthBytes);
+        if (!int.TryParse(Encoding.ASCII.GetString(lengthBytes), NumberStyles.HexNumber, CultureInfo.InvariantCulture,
+                out var length) || length != 4)
+        {
+            throw new IOException(
+                "Invalid ADB server version length; the endpoint on this port does not speak the adb server protocol.");
+        }
+
+        Span<byte> versionBytes = stackalloc byte[4];
+        stream.ReadExactly(versionBytes);
+        if (!int.TryParse(Encoding.ASCII.GetString(versionBytes), NumberStyles.HexNumber, CultureInfo.InvariantCulture,
+                out var version))
+        {
+            throw new IOException("Invalid ADB server version reply.");
+        }
+
+        if (version < MinimumServerVersion)
+        {
+            throw new IOException(
+                $"ADB server version 0x{version:X4} is older than the supported minimum 0x{MinimumServerVersion:X4}.");
+        }
+
+        return version;
     }
 
     /// <summary>

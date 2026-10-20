@@ -5,14 +5,18 @@ namespace UotanStudio.Comm.Protocols.Adb;
 
 /// <summary>
 /// Represents an ADB connection over a device transport: CNXN handshake, authentication,
-/// message dispatch loop, and stream multiplexing.
-/// <para>基于设备传输的 ADB 连接：CNXN 握手、认证、消息分发循环、流复用。</para>
+/// message dispatch loop, stream multiplexing, and the TLS upgrade when the peer answers CNXN with A_STLS.
+/// <para>基于设备传输的 ADB 连接：CNXN 握手、认证、消息分发循环、流复用，以及对端用 A_STLS 应答 CNXN 时的 TLS 升级。</para>
 /// </summary>
 internal sealed class AdbConnection : IDisposable
 {
     /// <summary>Deadline applied to one transport message, both when queueing for the send gate and when
     /// writing. <para>单条传输消息的期限，涵盖排队等待发送闸门与实际写入。</para></summary>
     private const int TransportDeadlineMs = 5000;
+
+    /// <summary>STLS version this client replies with when the peer offers the secure transport.
+    /// <para>对端提供安全传输时本客户端回复的 STLS 版本。</para></summary>
+    private const uint StlsVersion = 1;
 
     /// <summary>How long <see cref="Dispose"/> waits for the dispatch loop to observe the shutdown.
     /// <para><see cref="Dispose"/> 等待分发循环观察到关停信号的时长。</para></summary>
@@ -452,6 +456,8 @@ internal sealed class AdbConnection : IDisposable
     /// <param name="message">The message to send. <para>要发送的消息。</para></param>
     /// <exception cref="TimeoutException">The message did not reach the transport within the transport
     /// deadline. <para>消息未在传输期限内抵达传输层。</para></exception>
+    /// <exception cref="IOException">The transport accepted fewer bytes than requested; the connection is closed.
+    /// <para>传输接受的字节数少于请求值；连接已被关闭。</para></exception>
     private void Send(AdbMessage message)
     {
         if (!_sendLock.Wait(TransportDeadlineMs))
@@ -463,11 +469,11 @@ internal sealed class AdbConnection : IDisposable
         try
         {
             var header = AdbMessaging.SerializeHeader(message);
-            Transport.Write(header, 0, header.Length, TransportDeadlineMs);
+            VerifyWrite(Transport.Write(header, 0, header.Length, TransportDeadlineMs), header.Length);
 
             if (message.Payload is { Length: > 0 } payload)
             {
-                Transport.Write(payload, 0, payload.Length, TransportDeadlineMs);
+                VerifyWrite(Transport.Write(payload, 0, payload.Length, TransportDeadlineMs), payload.Length);
             }
         }
         finally
@@ -488,6 +494,8 @@ internal sealed class AdbConnection : IDisposable
     /// <para>消息未在传输期限内抵达传输层，且 <paramref name="cancellationToken"/> 未触发。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    /// <exception cref="IOException">The transport accepted fewer bytes than requested; the connection is closed.
+    /// <para>传输接受的字节数少于请求值；连接已被关闭。</para></exception>
     private async ValueTask SendAsync(AdbMessage message, CancellationToken cancellationToken)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -506,11 +514,15 @@ internal sealed class AdbConnection : IDisposable
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
             var header = AdbMessaging.SerializeHeader(message);
-            await Transport.WriteAsync(header, 0, header.Length, Timeout.Infinite, token).ConfigureAwait(false);
+            VerifyWrite(
+                await Transport.WriteAsync(header, 0, header.Length, Timeout.Infinite, token).ConfigureAwait(false),
+                header.Length);
 
             if (message.Payload is { Length: > 0 } payload)
             {
-                await Transport.WriteAsync(payload, 0, payload.Length, Timeout.Infinite, token).ConfigureAwait(false);
+                VerifyWrite(
+                    await Transport.WriteAsync(payload, 0, payload.Length, Timeout.Infinite, token).ConfigureAwait(false),
+                    payload.Length);
             }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -521,6 +533,38 @@ internal sealed class AdbConnection : IDisposable
         {
             _sendLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Rejects a transport write that accepted fewer bytes than it was given and tears the connection down, because
+    /// the stream is desynchronized once a frame is short written and the remainder must not be appended to it.
+    /// <para>拒绝实际写入字节数少于请求值的传输写入并断开连接：帧被短写后流已失步，剩余字节不得再追加进去。</para>
+    /// </summary>
+    /// <param name="written">The byte count the transport reported. <para>传输报告的写入字节数。</para></param>
+    /// <param name="length">The byte count the connection asked for. <para>连接请求写入的字节数。</para></param>
+    /// <exception cref="IOException">The transport accepted fewer bytes than requested and the connection was closed.
+    /// <para>传输接受的字节数少于请求值，连接已被关闭。</para></exception>
+    private void VerifyWrite(long written, int length)
+    {
+        if (written == length)
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            _connected = false;
+        }
+
+        try
+        {
+            _transport?.Dispose();
+        }
+        catch (Exception)
+        {
+        }
+
+        throw new IOException($"ADB transport accepted {written} of {length} bytes; the connection was closed.");
     }
 
     /// <summary>
@@ -539,9 +583,10 @@ internal sealed class AdbConnection : IDisposable
             cancellationToken).ConfigureAwait(false);
         (var command, var arg0, var arg1, var payloadLength, var payloadCrc) = AdbMessaging.ParseHeader(header);
 
-        if (payloadLength > AdbConstants.MaxPayload)
+        if (payloadLength > InboundPayloadLimit())
         {
-            throw new InvalidDataException($"ADB payload length {payloadLength} exceeds the protocol maximum.");
+            throw new InvalidDataException(
+                $"ADB payload length {payloadLength} exceeds the peer's negotiated payload limit.");
         }
 
         byte[]? payload = null;
@@ -554,6 +599,16 @@ internal sealed class AdbConnection : IDisposable
 
         return new AdbMessage(command, arg0, arg1, payload);
     }
+
+    /// <summary>
+    /// Returns the largest inbound payload accepted on this connection: the peer's advertised A_MAX_PAYLOAD capped
+    /// at the protocol maximum, or the protocol maximum itself until the peer advertises one.
+    /// <para>返回本连接接受的入站负载上限：对端宣告的 A_MAX_PAYLOAD 且不超过协议上限；对端尚未宣告时直接使用协议上限。</para>
+    /// </summary>
+    /// <returns>The inbound payload ceiling in bytes. <para>入站负载上限（字节）。</para></returns>
+    private uint InboundPayloadLimit() => PeerMaxPayload == 0
+        ? AdbConstants.MaxPayload
+        : Math.Min(PeerMaxPayload, AdbConstants.MaxPayload);
 
     /// <summary>
     /// Main message dispatch loop running as a long-running task.
@@ -586,6 +641,9 @@ internal sealed class AdbConnection : IDisposable
                         break;
                     case AdbCommand.Clse:
                         HandleClose(message);
+                        break;
+                    case AdbCommand.Stls:
+                        await HandleStlsAsync(message, cancellationToken).ConfigureAwait(false);
                         break;
                     case AdbCommand.Sync:
                         break;
@@ -668,6 +726,36 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
+    /// Handles the peer's A_STLS offer: replies with the 24-byte STLS header (version 1, correct magic) and upgrades
+    /// the transport to TLS, after which the loop keeps reading ADB messages over the encrypted stream. Upstream
+    /// ordering makes this the answer to our CNXN, so a plaintext device simply never sends it.
+    /// <para>处理对端的 A_STLS 提议：回复 24 字节 STLS 头（版本 1，magic 正确）并把传输升级为 TLS，之后循环继续在
+    /// 加密流上读取 ADB 消息。按上游顺序它是对主机 CNXN 的应答，因此明文设备根本不会发送它。</para>
+    /// </summary>
+    /// <param name="message">The A_STLS message. <para>A_STLS 消息。</para></param>
+    /// <param name="cancellationToken">Cancels the reply write. <para>取消应答写出。</para></param>
+    /// <exception cref="InvalidDataException">The peer requested an unsupported STLS version, or the transport cannot
+    /// provide TLS. <para>对端请求不支持的 STLS 版本，或传输无法提供 TLS。</para></exception>
+    /// <exception cref="IOException">The reply write or the TLS handshake failed.
+    /// <para>应答写出或 TLS 握手失败。</para></exception>
+    private async ValueTask HandleStlsAsync(AdbMessage message, CancellationToken cancellationToken)
+    {
+        if (_transport is not Transports.Tcp.AdbTlsTransport tls)
+        {
+            throw new InvalidDataException(
+                "ADB peer requested a TLS upgrade on a transport that cannot provide TLS.");
+        }
+
+        if (message.Arg0 != StlsVersion)
+        {
+            throw new InvalidDataException($"Unsupported ADB STLS version {message.Arg0}.");
+        }
+
+        await SendAsync(new AdbMessage(AdbCommand.Stls, StlsVersion, 0), cancellationToken).ConfigureAwait(false);
+        tls.UpgradeToTls();
+    }
+
+    /// <summary>
     /// Handles the OPEN message from the peer.
     /// <para>处理来自对端的 OPEN 消息。</para>
     /// </summary>
@@ -687,8 +775,11 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
-    /// Handles the OKAY message from the peer.
-    /// <para>处理来自对端的 OKAY 消息。</para>
+    /// Handles the OKAY message from the peer. A zero arg0 carries no remote stream id, so it is treated as the
+    /// flow-control acknowledgement of a WRTE, which releases the stream's outstanding write permit and never closes
+    /// an unknown stream; only a non-zero arg0 names the peer's remote id for our OPEN.
+    /// <para>处理来自对端的 OKAY 消息。arg0 为零时不携带远端流标识，因此按 WRTE 的流控确认处理：释放该流的在途
+    /// 写入许可，且绝不关闭未知流；只有非零 arg0 才携带对端为我们的 OPEN 分配的远端流标识。</para>
     /// </summary>
     /// <param name="message">The OKAY message. <para>OKAY 消息。</para></param>
     /// <param name="cancellationToken">Cancels the close reply sent to an unknown stream.
@@ -699,6 +790,14 @@ internal sealed class AdbConnection : IDisposable
         lock (_lock)
         {
             _streams.TryGetValue(message.Arg1, out stream);
+        }
+
+        if (message.Arg0 == 0)
+        {
+            // A zero arg0 carries no remote stream id; it is the flow-control acknowledgement of a WRTE, so the
+            // write pipeline advances without adopting an id or closing an unknown stream.
+            stream?.AcknowledgeWrite();
+            return;
         }
 
         if (stream is null)
@@ -738,17 +837,26 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
-    /// Handles the CLSE message from the peer.
-    /// <para>处理来自对端的 CLSE 消息。</para>
+    /// Handles the CLSE message from the peer. The frame is only applied when its arg1 names a locally known stream
+    /// and its arg0 either names that stream's peer id or is zero; unknown or foreign ownership is not treated as a
+    /// normal close, because a stale CLSE must never end a live stream.
+    /// <para>处理来自对端的 CLSE 消息。只有 arg1 指向本地已知的流，且 arg0 指向该流的对端 id 或为零时才应用；
+    /// 未知或不属于该流的归属不按正常关闭处理，陈旧的 CLSE 绝不能结束仍在使用的流。</para>
     /// </summary>
     /// <param name="message">The CLSE message. <para>CLSE 消息。</para></param>
     private void HandleClose(AdbMessage message)
     {
-        AdbStream? stream;
+        AdbStream? stream = null;
         lock (_lock)
         {
-            if (_streams.TryGetValue(message.Arg1, out stream))
+            if (message.Arg1 != 0 && _streams.TryGetValue(message.Arg1, out stream))
             {
+                // A CLSE whose peer id belongs to another stream is stale: closing on it would end a live stream.
+                if (message.Arg0 != 0 && stream.RemoteId != 0 && message.Arg0 != stream.RemoteId)
+                {
+                    return;
+                }
+
                 _streams.Remove(message.Arg1);
             }
         }

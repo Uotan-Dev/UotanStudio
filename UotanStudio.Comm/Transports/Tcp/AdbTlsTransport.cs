@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -12,23 +11,18 @@ using UotanStudio.Comm.Transports.Abstractions;
 namespace UotanStudio.Comm.Transports.Tcp;
 
 /// <summary>
-/// ADB transport to adbd's Android 11+ secure service (<c>_adb-tls-connect</c>). The
-/// upgrade is negotiated while the connection is established, before any ADB message is
-/// exchanged: the transport writes a 24-byte A_STLS header, reads the peer's 24-byte
-/// header, and when that header is A_STLS it performs the TLS 1.3 handshake presenting the
-/// certificate registered during pairing. Only then are bytes forwarded (starting with the
-/// device's in-TLS CNXN) to the ADB protocol layer. Announcing before reading is what makes
-/// the exchange safe whichever side the daemon speaks first, and it keeps the plaintext
-/// A_CNXN off a wire the daemon is still reading as a handshake. A peer that answers with a
-/// non-A_STLS header is not offering TLS, so that header is handed to the protocol layer
-/// untouched. Per AOSP trust-on-first-use semantics the device's self-signed server
-/// certificate is accepted without validation.
-/// <para>直连 adbd Android 11+ 安全服务（<c>_adb-tls-connect</c>）的 ADB 传输。升级在建立
-/// 连接时完成，先于任何 ADB 消息：传输层写出 24 字节 A_STLS 头，再读取对端的 24 字节头，
-/// 若该头是 A_STLS 就出示配对阶段登记的证书完成 TLS 1.3 握手，之后才把字节（从设备 TLS 内的
-/// CNXN 开始）交给 ADB 协议层。先宣告再读取，使无论设备先说还是我们先说都不会卡住，也让明文
-/// A_CNXN 不会落在设备仍当作握手来读的线路上。用非 A_STLS 头应答的设备没有提供 TLS，该头原样
-/// 交给协议层。按 AOSP trust-on-first-use 语义接受设备的自签服务端证书，不做校验。</para>
+/// ADB transport to adbd's Android 11+ secure service (<c>_adb-tls-connect</c>). Constructing or
+/// reconnecting it only establishes the plaintext TCP connection and never writes on the wire, because the
+/// upgrade is driven by the ADB protocol layer in upstream order: the host sends its A_CNXN first, and only a
+/// device that answers with A_STLS gets the 24-byte STLS reply followed by the TLS 1.3 client handshake
+/// presenting the certificate registered during pairing. Plaintext devices therefore keep speaking CNXN/AUTH
+/// on an untouched wire. Per AOSP trust-on-first-use semantics the device's self-signed server certificate is
+/// accepted without validation.
+/// <para>直连 adbd Android 11+ 安全服务（<c>_adb-tls-connect</c>）的 ADB 传输。构造或重连只建立明文 TCP
+/// 连接、不在线路上写任何字节，因为升级由 ADB 协议层按上游顺序驱动：主机先发 A_CNXN，只有以 A_STLS
+/// 应答的设备才会收到 24 字节 STLS 回复，随后出示配对阶段登记的证书完成 TLS 1.3 客户端握手。明文设备
+/// 因此在未被触碰的线路上继续使用 CNXN/AUTH。按 AOSP trust-on-first-use 语义接受设备的自签服务端证书，
+/// 不做校验。</para>
 /// <para>On Windows the platform stack (Schannel) rejects the in-memory host identity certificate because its
 /// private key is an ephemeral CNG key, so the handshake falls back to BouncyCastle TLS there. That fallback keeps
 /// the connection working but degrades <see cref="ReadAsync(byte[], int, int, int, CancellationToken)"/> and
@@ -44,10 +38,6 @@ namespace UotanStudio.Comm.Transports.Tcp;
 /// </summary>
 internal sealed class AdbTlsTransport : ICommTransport
 {
-    private const uint StlsCommand = 0x534C5453;
-    private const uint StlsVersion = 1;
-    private const int AdbHeaderSize = 24;
-
     private readonly X509Certificate2 _clientCertificate;
     private readonly int _connectTimeoutMs;
     private readonly bool _useManagedTls;
@@ -55,7 +45,7 @@ internal sealed class AdbTlsTransport : ICommTransport
     private TcpClient? _client;
     private TlsClientProtocol? _managedProtocol;
     private Stream? _stream;
-    private byte[]? _pendingHeader;
+    private bool _tlsActive;
     private bool _disposed;
 
     /// <summary>
@@ -76,8 +66,8 @@ internal sealed class AdbTlsTransport : ICommTransport
     /// </summary>
     public bool IsConnected => !_disposed && _stream is not null;
 
-    /// <summary>Initializes a new TLS ADB transport. The TCP connection and the A_STLS/TLS upgrade are both established here, so the protocol layer never writes an ADB message onto a wire that the daemon is still reading as a handshake.
-    /// <para>初始化新的 TLS ADB 传输。TCP 连接与 A_STLS/TLS 升级都在此处完成，协议层不会把 ADB 消息写到设备仍当作握手在读的线路上。</para></summary>
+    /// <summary>Initializes a new TLS ADB transport and opens only the plaintext TCP connection; the A_STLS/TLS upgrade happens later, when the protocol layer receives the peer's A_STLS after its own A_CNXN.
+    /// <para>初始化新的 TLS ADB 传输，只打开明文 TCP 连接；A_STLS/TLS 升级稍后进行，由协议层在收到对端针对自身 A_CNXN 的 A_STLS 后触发。</para></summary>
     /// <param name="host">Host name or IP address of the device. 设备的主机名或 IP 地址。</param>
     /// <param name="port">TCP port of the secure adbd service. adbd 安全服务的 TCP 端口。</param>
     /// <param name="clientCertificate">The certificate derived from the host identity key for this handshake.
@@ -110,8 +100,8 @@ internal sealed class AdbTlsTransport : ICommTransport
     }
 
     /// <summary>
-    /// Connects the transport, re-establishing the TCP connection if it was disconnected.
-    /// <para>连接传输；若已断开则重新建立 TCP 连接。</para>
+    /// Connects the transport, re-establishing the plaintext TCP connection if it was disconnected.
+    /// <para>连接传输；若已断开则重新建立明文 TCP 连接。</para>
     /// </summary>
     public void Connect()
     {
@@ -138,7 +128,7 @@ internal sealed class AdbTlsTransport : ICommTransport
         CloseManagedProtocol();
         _stream?.Dispose();
         _stream = null;
-        _pendingHeader = null;
+        _tlsActive = false;
         _client?.Dispose();
         _client = null;
     }
@@ -155,17 +145,15 @@ internal sealed class AdbTlsTransport : ICommTransport
     }
 
     /// <summary>
-    /// Reads exactly <paramref name="length"/> bytes, draining the plaintext header a
-    /// non-TLS peer answered the upgrade with first.
-    /// <para>精确读取 <paramref name="length"/> 个字节，先排空非 TLS 设备对升级的明文应答头。</para>
+    /// Reads exactly <paramref name="length"/> bytes from the current (plaintext or TLS) stream.
+    /// <para>从当前（明文或 TLS）流精确读取 <paramref name="length"/> 个字节。</para>
     /// </summary>
     public int Read(byte[] buffer, int offset, int length, int timeoutMs)
         => ReadAsync(buffer, offset, length, timeoutMs).GetAwaiter().GetResult();
 
     /// <summary>
-    /// Reads exactly <paramref name="length"/> bytes asynchronously, draining the plaintext
-    /// header a non-TLS peer answered the upgrade with first.
-    /// <para>异步精确读取 <paramref name="length"/> 个字节，先排空非 TLS 设备对升级的明文应答头。</para>
+    /// Reads exactly <paramref name="length"/> bytes asynchronously from the current (plaintext or TLS) stream.
+    /// <para>异步从当前（明文或 TLS）流精确读取 <paramref name="length"/> 个字节。</para>
     /// </summary>
     public async Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs,
         CancellationToken cancellationToken = default)
@@ -179,15 +167,6 @@ internal sealed class AdbTlsTransport : ICommTransport
         var totalRead = 0;
         while (totalRead < length)
         {
-            if (_pendingHeader is { Length: > 0 } pending)
-            {
-                var consumed = Math.Min(pending.Length, length - totalRead);
-                Array.Copy(pending, 0, buffer, offset + totalRead, consumed);
-                _pendingHeader = consumed < pending.Length ? pending[consumed..] : null;
-                totalRead += consumed;
-                continue;
-            }
-
             var read = await ReadFromStreamAsync(buffer, offset + totalRead, length - totalRead, timeoutMs,
                 cancellationToken).ConfigureAwait(false);
             if (read == 0)
@@ -270,10 +249,16 @@ internal sealed class AdbTlsTransport : ICommTransport
         CloseManagedProtocol();
         _stream?.Dispose();
         _stream = null;
+        _tlsActive = false;
         _client?.Dispose();
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Opens only the plaintext TCP connection. No byte is written here: the host CNXN and any TLS upgrade are
+    /// owned by the ADB protocol layer.
+    /// <para>只打开明文 TCP 连接。此处不写任何字节：主机 CNXN 与可能的 TLS 升级都由 ADB 协议层负责。</para>
+    /// </summary>
     private void CreateAndConnect()
     {
         TcpClient client = new() { NoDelay = true };
@@ -291,54 +276,47 @@ internal sealed class AdbTlsTransport : ICommTransport
 
             _client = client;
             _stream = client.GetStream();
-            NegotiateUpgrade();
+            _tlsActive = false;
         }
         catch
         {
             client.Dispose();
             _client = null;
             _stream = null;
-            _pendingHeader = null;
+            _tlsActive = false;
             throw;
         }
     }
 
     /// <summary>
-    /// Announces the TLS upgrade, then reads the peer's header: A_STLS upgrades the stream,
-    /// anything else is a plaintext daemon whose header is kept for the protocol layer.
-    /// <para>先宣告 TLS 升级，再读取对端头：A_STLS 升级流；其它头说明对端是明文守护进程，该头保留给
-    /// 协议层。</para>
+    /// Performs the TLS 1.3 client handshake on the already connected plaintext socket, presenting the certificate
+    /// derived from the host identity. The ADB protocol layer calls this after the peer answers the host CNXN with
+    /// A_STLS and the 24-byte STLS reply has been written; the transport only swaps its stream once the handshake
+    /// succeeds, so a failed handshake leaves the plaintext stream readable for diagnostics.
+    /// <para>在已连接的明文套接字上执行 TLS 1.3 客户端握手，并出示由主机身份派生的证书。ADB 协议层在对端以
+    /// A_STLS 应答主机 CNXN 且已写出 24 字节 STLS 回复之后调用它；只有握手成功传输才切换流，握手失败时明文流
+    /// 仍可读，便于诊断。</para>
     /// </summary>
-    private void NegotiateUpgrade()
+    /// <exception cref="InvalidOperationException">The transport is not connected, or it has already been upgraded.
+    /// <para>传输尚未连接，或已升级过。</para></exception>
+    /// <exception cref="IOException">The TLS handshake failed. <para>TLS 握手失败。</para></exception>
+    /// <exception cref="TimeoutException">The TLS handshake exceeded the connect timeout.
+    /// <para>TLS 握手超过连接超时。</para></exception>
+    public void UpgradeToTls()
     {
-        WriteAsync(BuildStlsHeader(StlsVersion), 0, AdbHeaderSize, _connectTimeoutMs).GetAwaiter().GetResult();
-
-        var header = new byte[AdbHeaderSize];
-        int read;
-        try
+        ThrowIfDisposed();
+        if (_stream is null)
         {
-            read = ReadFromStreamAsync(header, 0, AdbHeaderSize, _connectTimeoutMs, CancellationToken.None)
-                .GetAwaiter().GetResult();
-        }
-        catch (TimeoutException ex)
-        {
-            throw new TimeoutException(
-                $"The ADB device at {Host}:{Port} did not answer the TLS upgrade within {_connectTimeoutMs} ms.", ex);
+            throw new InvalidOperationException("ADB TLS transport is not connected.");
         }
 
-        if (read == 0)
+        if (_tlsActive)
         {
-            throw new IOException(
-                $"The ADB device at {Host}:{Port} closed the connection before the TLS upgrade.");
-        }
-
-        if (BinaryPrimitives.ReadUInt32LittleEndian(header) != StlsCommand)
-        {
-            _pendingHeader = header;
-            return;
+            throw new InvalidOperationException("ADB TLS transport is already upgraded.");
         }
 
         _stream = _useManagedTls ? UpgradeWithManagedTls() : UpgradeWithPlatformTls();
+        _tlsActive = true;
     }
 
     /// <summary>
@@ -513,18 +491,6 @@ internal sealed class AdbTlsTransport : ICommTransport
                     SignatureAndHashAlgorithm.rsa_pss_rsae_sha256);
             }
         }
-    }
-
-    private static byte[] BuildStlsHeader(uint version)
-    {
-        var header = new byte[AdbHeaderSize];
-        BinaryPrimitives.WriteUInt32LittleEndian(header, StlsCommand);
-        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(4), version);
-        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(8), 0);
-        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(12), 0);
-        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(16), 0);
-        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(20), StlsCommand ^ 0xFFFFFFFF);
-        return header;
     }
 
     private async Task<int> ReadFromStreamAsync(byte[] buffer, int offset, int length, int timeoutMs,

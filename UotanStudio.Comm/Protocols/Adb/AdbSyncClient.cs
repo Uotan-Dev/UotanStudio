@@ -48,6 +48,14 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     private const int V1HeaderSize = 8;
     private const uint DefaultMaxChunk = 64 * 1024;
 
+    /// <summary>Longest directory entry name upstream reports in a DENT record.
+    /// <para>上游在 DENT 记录中报告的最长目录条目名。</para></summary>
+    private const uint MaxDentNameLength = 255;
+
+    /// <summary>Bytes of the fixed sync_dent_v1 body that follows a LIST DONE id.
+    /// <para>LIST 的 DONE 标识之后固定 sync_dent_v1 主体的字节数。</para></summary>
+    private const int DentBodySize = 16;
+
     /// <summary>Inbound acceptance ceiling for DATA, DENT name and fail-message lengths; a peer reporting more
     /// is rejected as a protocol violation regardless of the outbound chunk size.
     /// <para>DATA、DENT 名称与失败消息长度的入站接受上限；上报更大值的对端一律按协议违规拒绝，与出站块大小无关。</para></summary>
@@ -80,8 +88,11 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// <param name="remotePath">Device-side path to stat.<para>待查询的设备侧路径。</para></param>
     /// <param name="cancellationToken">Cancels the request or the reply wait.
     /// <para>取消请求或应答等待。</para></param>
-    /// <returns>A task resolving to the entry, or <see langword="null"/> when the peer reports the path as absent.
-    /// <para>结果为条目的任务；对端报告路径不存在时返回 <see langword="null"/>。</para></returns>
+    /// <returns>A task resolving to the entry, or <see langword="null"/> when the path does not exist. The v1
+    /// service reports an absent path as an all-zero entry rather than FAIL, so a zero mode is translated to
+    /// <see langword="null"/>; an existing empty file keeps a non-zero mode and is returned normally.
+    /// <para>结果为条目的任务；路径不存在时返回 <see langword="null"/>。v1 服务对不存在的路径返回全零条目而不是
+    /// FAIL，因此零 mode 被转换成 <see langword="null"/>；已存在的空文件 mode 非零，会正常返回。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id, or reported a message longer than <see cref="InboundMaxChunkBytes"/>.
@@ -116,6 +127,12 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         var mode = BinaryPrimitives.ReadUInt32LittleEndian(body);
         var size = BinaryPrimitives.ReadUInt32LittleEndian(body.AsSpan(4));
         var time = BinaryPrimitives.ReadUInt32LittleEndian(body.AsSpan(8));
+        if (mode == 0)
+        {
+            // The v1 service answers STAT for a missing path with a zeroed entry instead of FAIL.
+            return null;
+        }
+
         var name = Path.GetFileName(remotePath.TrimEnd('/'));
         return new SyncEntry(mode, size, time, name);
     }
@@ -128,8 +145,8 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
     /// <para>结果为结束标记之前收到的全部条目的任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id, or reported a record longer than <see cref="InboundMaxChunkBytes"/>.
-    /// <para>对端拒绝请求、返回非预期标识，或上报超过 <see cref="InboundMaxChunkBytes"/> 的记录。</para></exception>
+    /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id, reported a record longer than <see cref="InboundMaxChunkBytes"/>, or sent a DENT whose name is longer than 255 bytes or contains a path separator.
+    /// <para>对端拒绝请求、返回非预期标识、上报超过 <see cref="InboundMaxChunkBytes"/> 的记录，或发送名称超过 255 字节、含路径分隔符的 DENT。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
     public async ValueTask<IReadOnlyList<SyncEntry>> ListAsync(string remotePath, CancellationToken cancellationToken = default)
@@ -149,6 +166,8 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
 
             if (id == SyncIds.Done)
             {
+                // Upstream sends a complete sync_dent_v1 for DONE: its 4-byte id plus a zeroed 16-byte body.
+                await ReadExactAsync(stream, DentBodySize, cancellationToken).ConfigureAwait(false);
                 break;
             }
 
@@ -171,8 +190,18 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
             var size = BinaryPrimitives.ReadUInt32LittleEndian(body.AsSpan(4));
             var time = BinaryPrimitives.ReadUInt32LittleEndian(body.AsSpan(8));
             var namelen = BinaryPrimitives.ReadUInt32LittleEndian(body.AsSpan(12));
+            if (namelen > MaxDentNameLength)
+            {
+                throw new InvalidDataException($"DENT name length {namelen} exceeds {MaxDentNameLength} bytes.");
+            }
+
             var nameBytes = await ReadExactAsync(stream, CheckedChunkLength(namelen, "DENT name"), cancellationToken)
                 .ConfigureAwait(false);
+            if (nameBytes.AsSpan().ContainsAny((byte)'/', (byte)'\\'))
+            {
+                throw new InvalidDataException("DENT name contains a path separator.");
+            }
+
             entries.Add(new SyncEntry(mode, size, time, Encoding.UTF8.GetString(nameBytes)));
         }
 

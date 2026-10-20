@@ -75,6 +75,10 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
     private const int FrameHeaderSize = 5;
     private const int MaxFramePayloadSize = 16 * 1024 * 1024;
 
+    /// <summary>Close-stdin frame (<c>kIdCloseStdin</c>, empty payload) sent once the shell v2 service is open.
+    /// <para>shell v2 服务打开后立即发送的关闭 stdin 帧（<c>kIdCloseStdin</c>，空负载）。</para></summary>
+    private static readonly byte[] CloseStdinFrame = [(byte)ShellFrameKind.CloseStdin, 0, 0, 0, 0];
+
     /// <summary>
     /// Incremental shell-v2 frame parser used across ADB WRTE chunk boundaries.
     /// <para>跨 ADB WRTE 块边界增量解析 shell v2 帧。</para>
@@ -198,6 +202,9 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
         await using var stream = await _connection
             .OpenProtocolStreamAsync(BuildServiceString(), cancellationToken)
             .ConfigureAwait(false);
+        // This client never forwards stdin, and shell,v2 keeps the command's stdin open until it is told otherwise,
+        // so commands that read stdin would otherwise block until the read deadline.
+        await stream.WriteAsync(CloseStdinFrame, cancellationToken).ConfigureAwait(false);
         var stdout = new MemoryStream();
         var stderr = new MemoryStream();
         var parser = new FrameParser();
@@ -260,6 +267,9 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
         await using var stream = await _connection
             .OpenProtocolStreamAsync(BuildServiceString(), cancellationToken)
             .ConfigureAwait(false);
+        // This client never forwards stdin, and shell,v2 keeps the command's stdin open until it is told otherwise,
+        // so commands that read stdin would otherwise block until the read deadline.
+        await stream.WriteAsync(CloseStdinFrame, cancellationToken).ConfigureAwait(false);
         var parser = new FrameParser();
         int? exitCode = null;
 

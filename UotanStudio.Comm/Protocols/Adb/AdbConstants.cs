@@ -84,6 +84,11 @@ internal enum AdbCommand : uint
     /// </summary>
     Open = 0x4E45504F,
     /// <summary>
+    /// Secure transport layer offer (A_STLS): the peer asks for the TLS upgrade after receiving our CNXN.
+    /// <para>安全传输层提议（A_STLS）：对端在收到主机 CNXN 后请求 TLS 升级。</para>
+    /// </summary>
+    Stls = 0x534C5453,
+    /// <summary>
     /// Sync (file transfer) stream.
     /// <para>同步（文件传输）流。</para>
     /// </summary>

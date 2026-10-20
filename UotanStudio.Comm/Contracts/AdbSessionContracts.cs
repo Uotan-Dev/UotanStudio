@@ -231,8 +231,9 @@ public interface IAdbSyncClient : IAsyncDisposable
     /// <param name="remotePath">Device-side path to stat. <para>待查询的设备侧路径。</para></param>
     /// <param name="cancellationToken">Cancels the request or the reply wait.
     /// <para>取消请求或应答等待。</para></param>
-    /// <returns>The mode, size and mtime entry; the mode is <c>0</c> when the peer reports the
-    /// path as absent. <para>包含 mode、size 与 mtime 的条目；对端报告路径不存在时 mode 为 <c>0</c>。</para></returns>
+    /// <returns>The mode, size and mtime entry, or <see langword="null"/> when the peer reports the path as
+    /// absent (the v1 service answers STAT with all-zero fields rather than FAIL). <para>包含 mode、size 与 mtime 的
+    /// 条目；对端报告路径不存在时返回 <see langword="null"/>（v1 服务对缺失路径以全零字段应答 STAT，而不是 FAIL）。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id,

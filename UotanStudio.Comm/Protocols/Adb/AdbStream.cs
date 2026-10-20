@@ -148,6 +148,24 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     }
 
     /// <summary>
+    /// Releases the outstanding write permit after the peer acknowledged a WRTE without reporting a remote stream id,
+    /// which is how a zero-arg0 OKAY advances the write pipeline instead of being dropped.
+    /// <para>在对端未上报远端流标识的情况下确认一个 WRTE 后释放在途写入许可；arg0 为零的 OKAY 因此推进写流水线而不是被丢弃。</para>
+    /// </summary>
+    internal void AcknowledgeWrite()
+    {
+        lock (_lock)
+        {
+            if (_closed || _disposed)
+            {
+                return;
+            }
+
+            ReleaseWritePermit();
+        }
+    }
+
+    /// <summary>
     /// Blocks until the stream is ready (OKAY received).
     /// <para>阻塞至流就绪（收到 OKAY）。</para>
     /// </summary>
