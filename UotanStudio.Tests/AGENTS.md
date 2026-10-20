@@ -1,6 +1,6 @@
 # UotanStudio.Tests 项目指令
 
-在本目录内写测试前读这份文件。仓库级规则在根 `AGENTS.md`，实测数字与门禁覆盖缺口在根 `VERIFICATION.md`。
+在本目录内写测试前读这份文件，并读被测项目根目录的 `AGENTS.md` 以确认该项目的边界与不变量。仓库级规则在根 `AGENTS.md`，实测数字与门禁覆盖缺口在根 `VERIFICATION.md`。
 
 ## 宿主与命令
 

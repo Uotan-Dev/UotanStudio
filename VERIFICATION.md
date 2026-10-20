@@ -2,21 +2,26 @@
 
 本文件记录门禁实测结果与未验证边界；每跑完一道门禁就更新"当前实测"一节。只写当前状态：一条测量配一个日期，不写轮次叙述、不写"上一轮"或"之前失败现在通过"。常驻约束与命令在根 `AGENTS.md`，测试工程写法在 `UotanStudio.Tests/AGENTS.md`。
 
-## 当前实测（2026-10-20，Windows x64，主树工作区，Debug）
+## 当前实测（2026-10-21，Windows x64，主树工作区，Debug）
 
 - `dotnet restore UotanStudio.slnx -p:Configuration=Debug`：成功。
 - `dotnet build UotanStudio.slnx --no-restore --nologo -c Debug --no-incremental`：0 错误、0 警告（含 `UotanStudio.Tests`）。
-- `dotnet format UotanStudio.slnx whitespace --no-restore --verify-no-changes` 与同上的 `style`：均通过。
-- `dotnet test --solution UotanStudio.slnx --no-restore --no-build`：6110 总数 / 6105 通过 / 0 失败 / 5 跳过，单轮 2m36s。
+- 本轮全量 Rebuild（`-t:Rebuild -m:1 -nodeReuse:false`）：0 错误、0 编译器警告；仅在并发测试宿主占用测试 exe 时出现文件复制重试告警，不计为代码告警。
+- `dotnet format UotanStudio.slnx whitespace --no-restore --verify-no-changes` 与同上的 `style`：均通过；本轮改动的 Media、Comm 设备/USB、宿主设备服务与日志视图、对应测试目录另跑 `--include` 两道门，零报告。
+- 全量测试（`UotanStudio.Tests.exe -noColor -noLogo`）：6578 总数 / 6572 通过 / 0 失败 / 6 跳过，单轮 1m33s–1m42s（共享工作树多次测量）。
+- `dotnet build UotanStudio.Comm/UotanStudio.Comm.csproj` 与 `UotanStudio/UotanStudio.csproj` 的 `--no-incremental -m:1 -nodeReuse:false`：均 0 错误、0 警告；全解 `--no-incremental` 在并发测试宿主占用测试输出时出现 MSB3021/MSB3027 文件锁错误，属环境冲突，不是编译器诊断。
+- 性能批次 `docs/perf/optimization-wave-2026-10-21-b.md` 的改动范围：15 个文件跑 `dotnet format … whitespace|style --verify-no-changes --include`，两道门零报告；`UotanStudio.Benchmarks` 的 5 个 ProfileRunner 负载产出镜像 `image sha256` 与该批次改动前逐字节相同（EROFS LZ4/ZSTD/LZMA 打包与解包、ext4 打包）。基准工程不在解决方案内，这道证据只能由 `--profile` 运行器给出。
+- `UotanStudio.IconVerification`（不在 `UotanStudio.slnx`）：156 个图标目标（108 个静态 TDesign 控件 + 48 个 `AppIconKind` 动态图标）headless 渲染检查 0 失败；单图与联系表输出到 `artifacts/icon-verification/`。
 - `TreatWarningsAsErrors=true` 生效于 6 个项目：`UotanStudio.Comm`、`UotanStudio.Compress`、`UotanStudio.Firmware`、`UotanStudio.Hash`、`UotanStudio.Media`、`UotanStudio.RegexInfer`。全解 0 警告同时意味着受管库的 `CS1591` 为 0。
 - 公共属性的 `<value>` 注释仍有未闭合缺口（最近一次度量约 257 处，2026-10-18），不影响构建门。
 - MCP 工具目录 `UotanStudio.Mcp/Tools/PluginToolCatalog.cs` 共 48 条描述符，其中 6 条 `FlashGated`，只在 `--allow-flash` 下注册。
 
-本轮 5 条跳过全部是环境或已知实现边界：
+本轮 6 条跳过全部是环境或已知实现边界：
 
 | 用例 | 原因 |
 | --- | --- |
 | `Media.VideoDecoderFactoryTests.Linux_CreatesDeferredBackendWithoutClaimingGpuSupport` | Linux 专属能力边界 |
+| `Media.ScreenMirrorTransportTests.OpenAdbLease_NetworkTargetWithoutServer_DoesNotOpenUsb` | 本机有 ADB server 在运行，“server 不存在”分支不可测 |
 | `Firmware.ErofsCorpusCompactIndexRebuildTests.PreservedRebuild_OfCorpusCompactIndexImage_ReExtractsEveryFileByteIdentical` | 未设 `UOTAN_EROFS_CORPUS` |
 | `Firmware.ErofsInodeModelEquivalenceTests.Decode_CorpusImageInode_MatchesIndependentDecodeForEveryField` | 未设 `UOTAN_EROFS_CORPUS` |
 | `Services.ScrcpyServerReleaseTests.BundledCatalog_DigestMatchesTheJarShippedWithTheApplication` | 测试宿主输出与检出仓库中都没有 `UotanStudio.Desktop/Assets/scrcpy-server.jar`，没有可哈希的出厂工件 |
@@ -24,17 +29,17 @@
 
 ## CI 门禁现状
 
-`.github/workflows/ci.yml` 跑 `setup-dotnet` 取 10.0.x、构建、whitespace 与 style 两道 `dotnet format`，然后 `dotnet test --solution UotanStudio.slnx --no-restore -c Release --minimum-expected-tests 7000`，Test 步骤 `timeout-minutes: 15`，不设置任何 `UOTAN_*`，因此门控用例自跳。`.github/workflows/release.yml` 只负责 NativeAOT 发布。
-
-CI 的 Test 步骤当前要求至少 7000 条，而套件实测 6110 条，因此该步骤会因下限不满足而失败。要么把下限调到与实测规模相称，要么补回测试；改任何一端都要在改完后重跑确认。
+`.github/workflows/ci.yml` 跑 `setup-dotnet` 取 10.0.x、构建、whitespace 与 style 两道 `dotnet format`，然后 `dotnet test --solution UotanStudio.slnx --no-restore -c Release --minimum-expected-tests 6000`，Test 步骤 `timeout-minutes: 15`，不设置任何 `UOTAN_*`，因此门控用例自跳。`.github/workflows/release.yml` 只负责 NativeAOT 发布。套件规模再变化时，Test 步骤的下限要跟着实测调，而不是靠放宽来掩盖删除。
 
 ## 门禁覆盖不到的地方
 
 - `UotanStudio.Benchmarks` 不在 `UotanStudio.slnx` 内，解决方案构建与测试门都不碰它。它 `PackageReference` 了 `Avalonia.Headless`，删掉 `Directory.Packages.props` 里对应的 `PackageVersion` 行会让它 `dotnet restore` 报 `NU1010`，而解决方案门依然全绿。
+- `UotanStudio.IconVerification` 同样故意不加入 `UotanStudio.slnx`，只能手动运行 `dotnet run --project UotanStudio.IconVerification/UotanStudio.IconVerification.csproj -c Debug`；它的自动断言覆盖非空形状、边界裁切、前景色占比、24 px 间距与 16/24/48/96 px 缩放，语义形状仍需查看 `artifacts/icon-verification/sheets/` 下的 PNG 联系表。
 - 增量构建不重跑分析器，会显示"0 个警告"；任何警告清点都要带 `--no-incremental`。
 - Debug 还原与构建都要显式 `-c Debug`（原因见根 `AGENTS.md` 的 Debug 构建条）。
 - 测试宿主输出必须留在仓库内，否则 `FirmwareContextDependencyScannerTests` 失败并额外产生环境跳过。
 - 共享工作树里并行会话重写 `bin/`/`obj/` 会伪造大批失败；判定红绿前先确认加载的字节与源码一致。`PayloadIncrementalBuilderTests` 家族在全量并发负载下出现过 SHA-256 与清单不符的红，单跑该类 14/14 通过。
+- `UotanStudio.Tests` 当前没有 `UotanStudio.Tests.Comm` 命名空间；`UotanStudio.Comm/README.md` 的 `FullyQualifiedName~UotanStudio.Tests.Comm` 过滤命令零匹配，Comm 协议/传输的回归只有零散的 wire-format、设备映射与集成测试。
 
 ## 未验证边界
 

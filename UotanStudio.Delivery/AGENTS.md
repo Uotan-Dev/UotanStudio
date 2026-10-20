@@ -1,12 +1,13 @@
 # UotanStudio.Delivery 项目指令
 
-在本目录内工作时读这份文件。项目定位、依赖方向说明与目录分组见同目录 `README.md`；仓库级规则（Git 与工作区纪律、不可信输入的通用上限、构建与测试命令、format 双门）在根 `AGENTS.md`，不在此重复。
+在本目录内工作时读这份文件。项目定位、依赖方向说明与目录分组见同目录 `README.md`；仓库级规则（Git 与工作区纪律、不可信输入的通用上限、构建与测试命令、format 双门）在根 `AGENTS.md`，宿主侧交付界面规则在 `UotanStudio/AGENTS.md`，不在此重复。
 
 ## 边界与可见性
 
 - 不得引用桌面宿主、界面、项目持久化服务或 `KeyLibraryService`；签名私钥只经 `Models/Signing.cs` 的 `IDeliverySigningKeyProvider` 注入。桌面侧适配在 `UotanStudio/Services/Delivery/`：`DeliveryKeyProvider`、`DeliveryPlanSerializer`、`DeliveryDynamicPartitions`。这条方向没有测试守护，只能靠评审维持。
 - 允许引用 `UotanStudio.Firmware` 与必要的第三方库（SharpCompress 等）。
 - 对外入口是 `Build/DeliveryService.cs`（公共门面，吃 `DeliveryPlan`）。`Build/Output.cs` 的 `DeliveryOutputService` 等实现细节保持 internal；外部工具（含命令行）要走公共门面，不得靠 `InternalsVisibleTo` 伸进内部。
+- csproj 设置 `GenerateDocumentationFile`，公共类型与成员要写中英双语 XML 注释；本项目不启用 `TreatWarningsAsErrors`，但不得用 `NoWarn` 隐藏新的文档或空引用警告。
 
 ## 计划与校验
 
