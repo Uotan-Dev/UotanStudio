@@ -19,6 +19,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     private readonly bool _monitorDevices;
     private readonly Func<DeviceProtocolKind, string, DetectedDevice?, CancellationToken, Task> _changeNetworkConnection;
     private Task? _refreshTask;
+    private readonly Dictionary<string, (string Signature, long Ticks)> _enrichedDevices = new(StringComparer.Ordinal);
+    private const long EnrichmentRefreshMilliseconds = 30_000;
 
     /// <summary>
     /// Gets the active device panel singleton, shared by the main window and the
@@ -244,6 +246,50 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     private Task RefreshDevicesAsync() => _refreshTask is { IsCompleted: false }
         ? _refreshTask : _refreshTask = RefreshDevicesCoreAsync();
 
+    private bool ShouldEnrich(DeviceInfo device)
+    {
+        var signature = $"{device.Protocol}:{device.State}";
+        var now = Environment.TickCount64;
+        if (_enrichedDevices.TryGetValue(device.Key, out var previous)
+            && previous.Signature == signature
+            && now - previous.Ticks < EnrichmentRefreshMilliseconds)
+        {
+            return false;
+        }
+
+        _enrichedDevices[device.Key] = (signature, now);
+        return true;
+    }
+
+    private void PruneEnrichmentCache()
+    {
+        if (_enrichedDevices.Count == 0)
+        {
+            return;
+        }
+
+        HashSet<string>? live = null;
+        List<string>? stale = null;
+        foreach (var key in _enrichedDevices.Keys)
+        {
+            live ??= new HashSet<string>(Devices.Select(device => device.Key), StringComparer.Ordinal);
+            if (!live.Contains(key))
+            {
+                (stale ??= []).Add(key);
+            }
+        }
+
+        if (stale is null)
+        {
+            return;
+        }
+
+        foreach (var key in stale)
+        {
+            _enrichedDevices.Remove(key);
+        }
+    }
+
     private async Task RefreshDevicesCoreAsync()
     {
         if (!_monitorDevices)
@@ -320,7 +366,9 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 .Where(x => x.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot
                         or DeviceProtocolKind.Hdc or DeviceProtocolKind.Edl
                     || (x.Protocol is DeviceProtocolKind.Mtk && x.State is "brom" or "preloader"))
+                .Where(ShouldEnrich)
                 .ToList();
+            PruneEnrichmentCache();
             if (enrichable.Count > 0)
             {
                 await Task.WhenAll(enrichable.Select(EnrichDeviceInfoAsync));

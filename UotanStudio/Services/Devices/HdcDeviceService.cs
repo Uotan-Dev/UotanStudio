@@ -40,7 +40,7 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
             text = await Task.Run(() =>
             {
                 ct.ThrowIfCancellationRequested();
-                var opened = HdcDirectConnection.Open(device);
+                var opened = HdcDirectConnection.Open(App.DeviceMonitor, device);
                 using var lease = opened.Lease;
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(TimeSpan.FromSeconds(30));
@@ -91,7 +91,7 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         {
             ValidateDevice(device);
             ct.ThrowIfCancellationRequested();
-            var opened = HdcDirectConnection.Open(device);
+            var opened = HdcDirectConnection.Open(App.DeviceMonitor, device);
             using var lease = opened.Lease;
             return operation(opened.Session);
         }, ct);

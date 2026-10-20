@@ -6,9 +6,14 @@ namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
 {
-    private IDisposable? _usbMonitor;
+    private static readonly TimeSpan DebugBridgeMonitorShutdownTimeout = TimeSpan.FromSeconds(2);
+
+    private Action<IReadOnlyList<UsbDeviceChange>>? _usbTopologyHandler;
     private Timer? _debounce;
     private CancellationTokenSource? _debugBridgeMonitorLifetime;
+    private Task? _debugBridgeMonitorTask;
+    private volatile bool _disposed;
+    private long _scanVersion;
 
     private async Task MonitorDebugBridgeTargetsAsync(CancellationToken ct)
     {
@@ -18,7 +23,7 @@ public sealed partial class DeviceMonitorService
         {
             while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
             {
-                var adb = await ReadAdbSnapshotAsync(ct).ConfigureAwait(false);
+                var adb = ReadAdbSnapshot(ct);
                 var hdc = await ReadHdcSnapshotAsync(ct).ConfigureAwait(false);
                 var snapshot = adb + "\nHDC\n" + hdc;
                 if (snapshot == previous)
@@ -37,9 +42,10 @@ public sealed partial class DeviceMonitorService
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (ObjectDisposedException) { }
     }
 
-    private static async Task<string> ReadAdbSnapshotAsync(CancellationToken ct)
+    private static string ReadAdbSnapshot(CancellationToken ct)
     {
         try
         {
@@ -103,27 +109,37 @@ public sealed partial class DeviceMonitorService
     {
         lock (_sync)
         {
-            if (_started)
+            if (_started || _disposed)
             {
                 return;
             }
 
             _started = true;
             _debugBridgeMonitorLifetime = new CancellationTokenSource();
-            _ = MonitorDebugBridgeTargetsAsync(_debugBridgeMonitorLifetime.Token);
+            _debugBridgeMonitorTask = MonitorDebugBridgeTargetsAsync(_debugBridgeMonitorLifetime.Token);
         }
 
         LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Device monitor starting (initial full USB scan).");
 
-        _usbMonitor = _controller.WatchUsb(changes =>
+        Action<IReadOnlyList<UsbDeviceChange>> handler = changes =>
         {
             LogDeviceChanges(changes);
             if (changes.Any(static c => IsRelevantDevice(c.Device)))
             {
                 ScheduleChange();
             }
-        }, onError: _ => { });
+        };
+        _controller.UsbTopologyChanged += handler;
+        lock (_sync)
+        {
+            if (_disposed)
+            {
+                _controller.UsbTopologyChanged -= handler;
+                return;
+            }
 
+            _usbTopologyHandler = handler;
+        }
     }
 
     /// <summary>
@@ -174,9 +190,42 @@ public sealed partial class DeviceMonitorService
     {
         lock (_sync)
         {
+            if (_disposed)
+            {
+                return;
+            }
+
+            Interlocked.Increment(ref _scanVersion);
             _cachedScan = null;
-            _debounce ??= new Timer(_ => DevicesChanged?.Invoke(this, EventArgs.Empty), null, 300, Timeout.Infinite);
+            _debounce ??= new Timer(_ => RaiseDevicesChanged(), null, 300, Timeout.Infinite);
             _debounce.Change(300, Timeout.Infinite);
+        }
+    }
+
+    private void RaiseDevicesChanged()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var handlers = DevicesChanged;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (EventHandler handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Write(LogLevel.Error, "DeviceMonitor",
+                    $"A DevicesChanged subscriber failed: {ex.GetType().Name}: {ex.Message}");
+            }
         }
     }
 
@@ -187,18 +236,58 @@ public sealed partial class DeviceMonitorService
     /// </summary>
     public void Dispose()
     {
-        _edlConnections.Dispose();
+        Task? monitorTask;
+        CancellationTokenSource? monitorLifetime;
         lock (_sync)
         {
-            _usbMonitor?.Dispose();
-            _usbMonitor = null;
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            if (_usbTopologyHandler is not null)
+            {
+                _controller.UsbTopologyChanged -= _usbTopologyHandler;
+                _usbTopologyHandler = null;
+            }
+
             _debounce?.Dispose();
             _debounce = null;
-            _debugBridgeMonitorLifetime?.Cancel();
-            _debugBridgeMonitorLifetime?.Dispose();
+            monitorTask = _debugBridgeMonitorTask;
+            _debugBridgeMonitorTask = null;
+            monitorLifetime = _debugBridgeMonitorLifetime;
             _debugBridgeMonitorLifetime = null;
             _started = false;
         }
+
+        monitorLifetime?.Cancel();
+        if (monitorTask is not null)
+        {
+            try
+            {
+                monitorTask.WaitAsync(DebugBridgeMonitorShutdownTimeout).GetAwaiter().GetResult();
+            }
+            catch (TimeoutException)
+            {
+                LogService.Instance.Write(LogLevel.Warn, "DeviceMonitor",
+                    "The debug bridge monitor did not stop within the shutdown timeout.");
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Write(LogLevel.Warn, "DeviceMonitor",
+                    $"The debug bridge monitor faulted during shutdown: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        monitorLifetime?.Dispose();
+        _edlConnections.Dispose();
         _controller.Dispose();
     }
 }

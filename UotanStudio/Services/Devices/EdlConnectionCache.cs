@@ -32,9 +32,37 @@ internal sealed class EdlConnectionCache(
     {
         internal readonly SemaphoreSlim Operation = new(1, 1);
         internal DeviceLease? Parked;
+        internal long ParkedAtMilliseconds;
         internal volatile EdlProtocolState State;
         internal volatile EdlDetailsSnapshot? Details;
         internal volatile bool Removed;
+    }
+
+    private const long ParkedLeaseIdleLimitMilliseconds = 60_000;
+
+    private static void Park(Entry entry, DeviceLease lease)
+    {
+        entry.Parked = lease;
+        Volatile.Write(ref entry.ParkedAtMilliseconds, Environment.TickCount64);
+    }
+
+    private static DeviceLease? TakeParked(Entry entry)
+    {
+        var lease = entry.Parked;
+        if (lease is null)
+        {
+            return null;
+        }
+
+        entry.Parked = null;
+        Volatile.Write(ref entry.ParkedAtMilliseconds, 0);
+        return lease;
+    }
+
+    private static void ClearParked(Entry entry)
+    {
+        entry.Parked = null;
+        Volatile.Write(ref entry.ParkedAtMilliseconds, 0);
     }
 
     private bool LeaseIsLive(DeviceLease lease)
@@ -104,11 +132,16 @@ internal sealed class EdlConnectionCache(
             if (entry.Parked is { } parked && !LeaseIsLive(parked))
             {
                 await entry.Parked.DisposeAsync().ConfigureAwait(false);
-                entry.Parked = null;
+                ClearParked(entry);
                 Publish(entry, EdlProtocolState.Unknown);
             }
-            entry.Parked ??= await open(device, cancellationToken).ConfigureAwait(false);
-            var session = RequireSession(entry.Parked);
+            if (entry.Parked is null)
+            {
+                Park(entry, await open(device, cancellationToken).ConfigureAwait(false));
+            }
+            var sessionLease = entry.Parked
+                ?? throw new InvalidOperationException("EDL probe did not obtain a lease.");
+            var session = RequireSession(sessionLease);
             var state = await session.ProbeProtocolAsync(cancellationToken).ConfigureAwait(false);
             Publish(entry, state);
             await CollectDetailsAsync(entry, session, state, cancellationToken).ConfigureAwait(false);
@@ -133,6 +166,7 @@ internal sealed class EdlConnectionCache(
         await entry.Operation.WaitAsync(cancellationToken).ConfigureAwait(false);
         DeviceLease? lease = null;
         EdlSession? session = null;
+        var succeeded = false;
         void OnProtocolChanged(object? sender, EdlProtocolState state) => Publish(entry, state);
         try
         {
@@ -140,8 +174,7 @@ internal sealed class EdlConnectionCache(
             {
                 throw new IOException("The EDL endpoint was removed.");
             }
-            lease = entry.Parked;
-            entry.Parked = null;
+            lease = TakeParked(entry);
             if (lease is not null && !LeaseIsLive(lease))
             {
                 await lease.DisposeAsync().ConfigureAwait(false);
@@ -158,6 +191,7 @@ internal sealed class EdlConnectionCache(
             cancellationToken.ThrowIfCancellationRequested();
             var result = await operation(session).ConfigureAwait(false);
             Publish(entry, session.ProtocolState);
+            succeeded = true;
             return result;
         }
         catch
@@ -175,7 +209,14 @@ internal sealed class EdlConnectionCache(
                 }
                 if (lease is not null)
                 {
-                    await lease.DisposeAsync().ConfigureAwait(false);
+                    if (succeeded && session is not null && !entry.Removed && LeaseIsLive(lease))
+                    {
+                        Park(entry, lease);
+                    }
+                    else
+                    {
+                        await lease.DisposeAsync().ConfigureAwait(false);
+                    }
                 }
             }
             finally
@@ -187,13 +228,18 @@ internal sealed class EdlConnectionCache(
 
     private void Publish(Entry entry, EdlProtocolState state)
     {
+        var notify = false;
         lock (_gate)
         {
             if (!_disposed && !entry.Removed && entry.State != state)
             {
                 entry.State = state;
-                changed();
+                notify = true;
             }
+        }
+        if (notify)
+        {
+            changed();
         }
     }
 
@@ -272,8 +318,9 @@ internal sealed class EdlConnectionCache(
         {
             if (entry.Removed)
             {
-                entry.Parked?.Dispose();
-                entry.Parked = null;
+                var parked = entry.Parked;
+                ClearParked(entry);
+                parked?.Dispose();
             }
         }
         finally
@@ -285,6 +332,8 @@ internal sealed class EdlConnectionCache(
     internal void RetainDevices(IReadOnlySet<string> keys)
     {
         List<Entry> removed = [];
+        List<Entry> idle = [];
+        var now = Environment.TickCount64;
         lock (_gate)
         {
             foreach (var (key, entry) in _entries.ToArray())
@@ -295,6 +344,11 @@ internal sealed class EdlConnectionCache(
                     _entries.Remove(key);
                     removed.Add(entry);
                 }
+                else if (entry.Parked is not null
+                    && now - Volatile.Read(ref entry.ParkedAtMilliseconds) >= ParkedLeaseIdleLimitMilliseconds)
+                {
+                    idle.Add(entry);
+                }
             }
         }
         foreach (var entry in removed)
@@ -303,6 +357,44 @@ internal sealed class EdlConnectionCache(
             {
                 Release(entry);
             }
+        }
+        foreach (var entry in idle)
+        {
+            ReclaimIdleParkedLease(entry);
+        }
+    }
+
+    private void ReclaimIdleParkedLease(Entry entry)
+    {
+        if (!entry.Operation.Wait(0))
+        {
+            return;
+        }
+
+        try
+        {
+            if (entry.Removed)
+            {
+                var abandoned = entry.Parked;
+                ClearParked(entry);
+                abandoned?.Dispose();
+                return;
+            }
+
+            var parked = entry.Parked;
+            if (parked is null
+                || Environment.TickCount64 - Volatile.Read(ref entry.ParkedAtMilliseconds) < ParkedLeaseIdleLimitMilliseconds)
+            {
+                return;
+            }
+
+            ClearParked(entry);
+            parked.Dispose();
+            Publish(entry, EdlProtocolState.Unknown);
+        }
+        finally
+        {
+            entry.Operation.Release();
         }
     }
 

@@ -10,6 +10,7 @@ namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
 {
+    private readonly Lock _scanLock = new();
     /// <summary>
     /// Full scan of the direct-USB endpoints plus the adb and HDC server targets, cached until the
     /// next device change.
@@ -24,9 +25,23 @@ public sealed partial class DeviceMonitorService
             return cached;
         }
 
-        var devices = ScanCore();
-        _cachedScan = devices;
-        return devices;
+        lock (_scanLock)
+        {
+            cached = _cachedScan;
+            if (cached is not null)
+            {
+                return cached;
+            }
+
+            var version = Interlocked.Read(ref _scanVersion);
+            var devices = ScanCore();
+            if (version == Interlocked.Read(ref _scanVersion))
+            {
+                _cachedScan = devices;
+            }
+
+            return devices;
+        }
     }
 
     /// <summary>

@@ -80,7 +80,8 @@ public partial class DeviceViewModel
         var endpoint = device.Device;
         try
         {
-            var state = await App.DeviceMonitor.ProbeEdlProtocolAsync(endpoint);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var state = await App.DeviceMonitor.ProbeEdlProtocolAsync(endpoint, timeout.Token);
             if (ReferenceEquals(device.Device, endpoint))
             {
                 device.EdlProtocol = state;
@@ -128,10 +129,6 @@ public partial class DeviceViewModel
 
         ApplyAdbProperties(device, info);
         device.HasSu = await FlashSuService.HasSuAsync(device.Device, CancellationToken.None);
-        if (SelectedDevice == device)
-        {
-            OnPropertyChanged(nameof(DeviceDetail));
-        }
         if (SelectedDevice == device)
         {
             OnPropertyChanged(nameof(DeviceDetail));

@@ -7,7 +7,7 @@ namespace UotanStudio.Tests.Devices;
 public sealed class DevicePropertyReaderTests
 {
     [Fact]
-    public void AdbProperties_QueriesAllLockSignalsInOrderAndUsesCallerLocalization()
+    public void AdbProperties_BatchGetprop_ReadsEveryPropertyFromOneCommand()
     {
         var commands = new List<string>();
         string Run(string command)
@@ -15,9 +15,11 @@ public sealed class DevicePropertyReaderTests
             commands.Add(command);
             return command switch
             {
-                "getprop ro.product.model" => "\r\nExample phone\r\n",
-                "getprop ro.secureboot.lockstate" => "not found",
-                "getprop ro.boot.vbmeta.device_state" => "locked",
+                "getprop" => "[ro.product.model]: [Example phone]\r\n"
+                    + "[ro.secureboot.lockstate]: [locked]\r\n"
+                    + "[ro.boot.vbmeta.device_state]: [locked]\r\n"
+                    + "[ro.boot.verifiedbootstate]: [green]\r\n"
+                    + "[ro.fastboot.unlock]: [false]\r\n",
                 "wm size" => "Physical size: 1080x2400\nOverride size: 720x1600",
                 "wm density" => "Physical density: 420",
                 "cat /proc/uptime" => "90061.0 123.0",
@@ -45,15 +47,21 @@ public sealed class DevicePropertyReaderTests
         Assert.Equal("1d1h1m1s", properties["uptime"]);
         Assert.Equal("75", properties["batteryLevel"]);
         Assert.Equal("--", properties["brand"]);
-        var first = commands.IndexOf("getprop ro.secureboot.lockstate");
-        string[] lockCommands =
+        Assert.Equal(1, commands.Count(command => command == "getprop"));
+        Assert.DoesNotContain(commands, command => command.StartsWith("getprop ", StringComparison.Ordinal));
+        string[] expectedCommands =
         [
-            "getprop ro.secureboot.lockstate",
-            "getprop ro.boot.vbmeta.device_state",
-            "getprop ro.boot.verifiedbootstate",
-            "getprop ro.fastboot.unlock",
+            "getprop",
+            "uname -r",
+            "wm size",
+            "wm density",
+            "cat /sys/devices/soc0/serial_number",
+            "cat /proc/uptime",
+            "dumpsys battery",
+            "cat /proc/meminfo | grep -E 'MemTotal|MemAvailable'",
+            "echo; df /storage/emulated 2>/dev/null || df /data 2>/dev/null || df /sdcard 2>/dev/null",
         ];
-        Assert.Equal(lockCommands, commands.Skip(first).Take(lockCommands.Length).ToArray());
+        Assert.Equal(expectedCommands, commands);
     }
 
     [Theory]
@@ -77,16 +85,47 @@ public sealed class DevicePropertyReaderTests
         string oemUnlock,
         string expected)
     {
+        string[] tableLines =
+        [
+            $"[ro.secureboot.lockstate]: [{lockstate}]",
+            $"[ro.boot.vbmeta.device_state]: [{deviceState}]",
+            $"[ro.boot.verifiedbootstate]: [{verifiedbootstate}]",
+            $"[ro.fastboot.unlock]: [{oemUnlock}]",
+        ];
         var properties = DevicePropertyReader.ReadAdbProperties(command => command switch
         {
-            "getprop ro.secureboot.lockstate" => lockstate,
-            "getprop ro.boot.vbmeta.device_state" => deviceState,
-            "getprop ro.boot.verifiedbootstate" => verifiedbootstate,
-            "getprop ro.fastboot.unlock" => oemUnlock,
+            "getprop" => string.Join('\n', tableLines),
             _ => "",
         }, key => key);
 
         Assert.Equal(expected, properties["bl"]);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("error: device offline")]
+    public void AdbProperties_UnusableBatchGetprop_FallsBackToPerKeyCommands(string batchOutput)
+    {
+        var commands = new List<string>();
+        string Run(string command)
+        {
+            commands.Add(command);
+            return command switch
+            {
+                "getprop" => batchOutput,
+                "getprop ro.product.model" => "Fallback phone",
+                "getprop ro.boot.vbmeta.device_state" => "unlocked",
+                _ => "",
+            };
+        }
+
+        var properties = DevicePropertyReader.ReadAdbProperties(Run, key => key);
+
+        Assert.Equal("Fallback phone", properties["model"]);
+        Assert.Equal("Device_Unlocked", properties["bl"]);
+        Assert.Equal(1, commands.Count(command => command == "getprop"));
+        Assert.Contains("getprop ro.product.brand", commands);
+        Assert.Contains("getprop ro.fastboot.unlock", commands);
     }
 
     [Fact]

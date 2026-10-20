@@ -48,14 +48,30 @@ internal static class DevicePropertyReader
     }
 
     /// <summary>
-    /// Queries ADB device properties and parses battery, memory and disk details.
-    /// <para>批量查询 ADB 设备属性并解析电池、内存、磁盘信息。</para>
+    /// Queries ADB device properties and parses battery, memory and disk details. All getprop keys are read
+    /// with one argument-less <c>getprop</c> call, which lists every set property; a key absent from that
+    /// table therefore resolves to "--". When the call yields no parsable table every key is queried
+    /// individually instead.
+    /// <para>批量查询 ADB 设备属性并解析电池、内存、磁盘信息。全部 getprop 键经一次无参 <c>getprop</c> 读取，
+    /// 该命令会列出所有已设置的属性，因此表中缺失的键解析为 "--"；命令没有可解析输出时改为逐键查询。</para>
     /// </summary>
     /// <param name="run">Runs a shell command on the device and returns its raw output.<para>在设备上执行 shell 命令并返回原始输出。</para></param>
     /// <param name="getString">Resolves a localized resource key into display text.<para>将本地化资源键解析为显示文本。</para></param>
     /// <returns>A key-to-value map of device properties and derived detail strings.<para>设备属性与派生详情字符串的键值映射。</para></returns>
     internal static Dictionary<string, string> ReadAdbProperties(Func<string, string> run, Func<string, string> getString)
     {
+        var propertyTable = TryReadPropertyTable(run);
+
+        string GetProperty(string name)
+        {
+            if (propertyTable is null)
+            {
+                return Clean(run("getprop " + name));
+            }
+
+            return propertyTable.TryGetValue(name, out var value) ? Clean(value) : Clean(string.Empty);
+        }
+
         string Get(string cmd)
         {
             return Clean(run(cmd));
@@ -63,23 +79,23 @@ internal static class DevicePropertyReader
 
         var map = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["brand"] = Get("getprop ro.product.brand"),
-            ["model"] = Get("getprop ro.product.model"),
-            ["android"] = Get("getprop ro.build.version.release"),
-            ["sdk"] = Get("getprop ro.build.version.sdk"),
-            ["codename"] = Get("getprop ro.product.device"),
-            ["cpuabi"] = Get("getprop ro.product.cpu.abi"),
-            ["cpucode"] = Get("getprop ro.board.platform"),
+            ["brand"] = GetProperty("ro.product.brand"),
+            ["model"] = GetProperty("ro.product.model"),
+            ["android"] = GetProperty("ro.build.version.release"),
+            ["sdk"] = GetProperty("ro.build.version.sdk"),
+            ["codename"] = GetProperty("ro.product.device"),
+            ["cpuabi"] = GetProperty("ro.product.cpu.abi"),
+            ["cpucode"] = GetProperty("ro.board.platform"),
             ["kernel"] = Get("uname -r"),
             ["resolution"] = ColonValue(run("wm size")),
             ["density"] = ColonValue(run("wm density")),
             ["boardid"] = Get("cat /sys/devices/soc0/serial_number"),
-            ["slot"] = Get("getprop ro.boot.slot_suffix"),
-            ["compile"] = Get("getprop ro.system.build.version.incremental"),
-            ["vndk"] = Get("getprop ro.vndk.version"),
+            ["slot"] = GetProperty("ro.boot.slot_suffix"),
+            ["compile"] = GetProperty("ro.system.build.version.incremental"),
+            ["vndk"] = GetProperty("ro.vndk.version"),
         };
 
-        map["bl"] = ReadBlState(Get, getString);
+        map["bl"] = ReadBlState(GetProperty, getString);
         map["uptime"] = FormatUptime(Get("cat /proc/uptime"), getString);
 
         var (bLevel, bText) = ParseBattery(run("dumpsys battery"));
@@ -98,19 +114,57 @@ internal static class DevicePropertyReader
     }
 
     /// <summary>
+    /// Reads the whole property table with a single argument-less <c>getprop</c> call and parses its
+    /// <c>[name]: [value]</c> lines. Returns <c>null</c> when the output is blank or contains no parsable
+    /// line so the caller can fall back to one query per key.
+    /// <para>用一次无参 <c>getprop</c> 读取整张属性表并解析 <c>[名称]: [值]</c> 行；输出为空或没有任何可解析行时
+    /// 返回 <c>null</c>，供调用方回退到逐键查询。</para>
+    /// </summary>
+    /// <param name="run">Runs a shell command on the device and returns its raw output.<para>在设备上执行 shell 命令并返回原始输出。</para></param>
+    /// <returns>The parsed property table, or <c>null</c> when the batch output is unusable.<para>解析出的属性表；批量输出不可用时为 <c>null</c>。</para></returns>
+    private static Dictionary<string, string>? TryReadPropertyTable(Func<string, string> run)
+    {
+        var raw = run("getprop");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var table = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var line in raw.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length < 7 || trimmed[0] != '[')
+            {
+                continue;
+            }
+
+            var separator = trimmed.IndexOf("]: [", StringComparison.Ordinal);
+            if (separator <= 1 || trimmed[^1] != ']' || trimmed.Length < separator + 5)
+            {
+                continue;
+            }
+
+            table[trimmed[1..separator]] = trimmed[(separator + 4)..^1];
+        }
+
+        return table.Count == 0 ? null : table;
+    }
+
+    /// <summary>
     /// Aggregates ADB bootloader lock-state signals into an unlocked, locked, or unknown verdict. Unlocked evidence
     /// wins because some devices keep reporting a locked vbmeta state after unlocking.
     /// <para>汇总 ADB 侧的 Bootloader 锁状态信号，得出已解锁、已上锁或未知的结论。解锁证据优先，因为部分设备解锁后仍上报 locked 的 vbmeta 状态。</para>
     /// </summary>
-    /// <param name="get">Runs a property query and returns the cleaned value.<para>执行属性查询并返回清理后的值。</para></param>
+    /// <param name="getProperty">Resolves one property name and returns the cleaned value; a missing key resolves to "--".<para>解析单个属性名并返回清理后的值；缺失的键解析为 "--"。</para></param>
     /// <param name="getString">Resolves a localized resource key into display text.<para>将本地化资源键解析为显示文本。</para></param>
     /// <returns>The localized unlocked or locked label, or "--" when no signal is present.<para>本地化的解锁或上锁标签；无信号时返回 "--"。</para></returns>
-    private static string ReadBlState(Func<string, string> get, Func<string, string> getString)
+    private static string ReadBlState(Func<string, string> getProperty, Func<string, string> getString)
     {
-        var lockstate = get("getprop ro.secureboot.lockstate").ToLowerInvariant();
-        var deviceState = get("getprop ro.boot.vbmeta.device_state").ToLowerInvariant();
-        var verifiedboot = get("getprop ro.boot.verifiedbootstate").ToLowerInvariant();
-        var oemUnlock = get("getprop ro.fastboot.unlock").ToLowerInvariant();
+        var lockstate = getProperty("ro.secureboot.lockstate").ToLowerInvariant();
+        var deviceState = getProperty("ro.boot.vbmeta.device_state").ToLowerInvariant();
+        var verifiedboot = getProperty("ro.boot.verifiedbootstate").ToLowerInvariant();
+        var oemUnlock = getProperty("ro.fastboot.unlock").ToLowerInvariant();
 
         if (lockstate == "unlocked" || deviceState == "unlocked" || verifiedboot == "orange" || oemUnlock == "true")
         {

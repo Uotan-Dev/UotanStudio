@@ -37,14 +37,14 @@ public sealed partial class DeviceMonitorService
     internal DeviceLease? OpenLeaseByKey(string deviceKey, DeviceSessionKind kind)
         => _controller.OpenLeaseByKeyAsync(deviceKey, kind).GetAwaiter().GetResult();
 
-    internal static DetectedDevice ResolveDirectUsbDevice(DetectedDevice device)
+    internal DetectedDevice ResolveDirectUsbDevice(DetectedDevice device)
     {
         if (!device.Key.StartsWith("adb:", StringComparison.Ordinal) &&
             !device.Key.StartsWith("hdc:", StringComparison.Ordinal))
         {
             return device;
         }
-        var matches = App.DeviceMonitor.ListUsbDevices()
+        var matches = ListUsbDevices()
             .Where(info => Classify(info) == device.Protocol &&
                 string.Equals(info.SerialNumber, device.Serial, StringComparison.Ordinal)).ToArray();
         var match = RequireUniqueUsbIdentity(matches);
@@ -139,7 +139,11 @@ public sealed partial class DeviceMonitorService
             throw new IOException("A manually registered network target needs a host:port address.");
         }
 
-        var isSecure = _manualNetworkTargets.TryGetValue(serial, out var requiresTls) && requiresTls;
+        bool isSecure;
+        lock (_networkTargetsLock)
+        {
+            isSecure = _manualNetworkTargets.TryGetValue(serial, out var requiresTls) && requiresTls;
+        }
         var address = serial;
         IAdbDeviceSession session;
         try
@@ -162,8 +166,11 @@ public sealed partial class DeviceMonitorService
             }
 
             address = DebugBridgeNetworkAddress.FormatEndpoint(host, resolved.Value);
-            _manualNetworkTargets.Remove(serial);
-            _manualNetworkTargets[address] = true;
+            lock (_networkTargetsLock)
+            {
+                _manualNetworkTargets.Remove(serial);
+                _manualNetworkTargets[address] = true;
+            }
             SavePairedNetworkTargets();
             try
             {
@@ -263,10 +270,10 @@ public sealed partial class DeviceMonitorService
             return (_controller.AdoptSession(endpoint, session), session);
         }
 
-        return HdcDirectConnection.Open(device);
+        return HdcDirectConnection.Open(this, device);
     }
 
-    /// <summary>Executes a shell command against the exact selected ADB server target.<para>针对精确选中的 ADB server 目标执行一条 shell 命令。</para></summary>
+    /// <summary>Executes a shell command against the exact selected ADB server target; the caller must have verified the target with <see cref="RequireAdbServerDevice"/> so a property batch does not re-list targets per command.<para>针对精确选中的 ADB server 目标执行一条 shell 命令；调用方须先用 <see cref="RequireAdbServerDevice"/> 校验目标，使一次属性批量不必每条命令都重新列出目标。</para></summary>
     /// <param name="device">The ADB server target to run against.<para>要执行命令的 ADB server 目标。</para></param>
     /// <param name="command">The shell command text.<para>shell 命令文本。</para></param>
     /// <returns>The output of the command.<para>命令输出文本。</para></returns>
@@ -277,7 +284,6 @@ public sealed partial class DeviceMonitorService
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
         if (!DebugBridgeRoute.UseAdbServer())
             throw new IOException("The ADB server is unavailable.");
-        EnsureAdbServerTarget(device.Serial);
         return new AdbServerServices(device.Serial,
             DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort)
             .RunShellAsync(command).GetAwaiter().GetResult();

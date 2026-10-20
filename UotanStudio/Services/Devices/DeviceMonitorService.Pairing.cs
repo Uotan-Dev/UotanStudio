@@ -121,7 +121,10 @@ public sealed partial class DeviceMonitorService
             throw;
         }
         session.Dispose();
-        _manualNetworkTargets[target] = true;
+        lock (_networkTargetsLock)
+        {
+            _manualNetworkTargets[target] = true;
+        }
         SavePairedNetworkTargets();
     }
 }

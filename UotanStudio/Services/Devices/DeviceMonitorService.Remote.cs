@@ -76,7 +76,10 @@ public sealed partial class DeviceMonitorService
             throw;
         }
         session.Dispose();
-        _manualNetworkTargets[target] = false;
+        lock (_networkTargetsLock)
+        {
+            _manualNetworkTargets[target] = false;
+        }
         SavePairedNetworkTargets();
     }
 
@@ -88,9 +91,12 @@ public sealed partial class DeviceMonitorService
     /// <returns><see langword="true"/> when this session registered the target.<para>该目标由本会话登记时为 <see langword="true"/>。</para></returns>
     internal bool TryDetachManualNetworkTarget(string target)
     {
-        if (!_manualNetworkTargets.Remove(target))
+        lock (_networkTargetsLock)
         {
-            return false;
+            if (!_manualNetworkTargets.Remove(target))
+            {
+                return false;
+            }
         }
         SavePairedNetworkTargets();
         return true;
@@ -100,9 +106,15 @@ public sealed partial class DeviceMonitorService
     /// Persists the target set after every registration so a restart can re-discover each port by IP.
     /// <para>登记或更新目标后立即持久化，重启时才能按 IP 重新发现端口。</para>
     /// </summary>
-    private void SavePairedNetworkTargets() =>
-        SettingsPersistenceService.Instance.UpdatePairedNetworkTargets(
-            [.. _manualNetworkTargets.Select(entry => new PairedNetworkTarget(entry.Key, entry.Value))]);
+    private void SavePairedNetworkTargets()
+    {
+        List<PairedNetworkTarget> snapshot;
+        lock (_networkTargetsLock)
+        {
+            snapshot = [.. _manualNetworkTargets.Select(entry => new PairedNetworkTarget(entry.Key, entry.Value))];
+        }
+        SettingsPersistenceService.Instance.UpdatePairedNetworkTargets(snapshot);
+    }
 
     /// <summary>
     /// Restores the remembered network targets from settings, with a bound on the entry count.
@@ -112,7 +124,10 @@ public sealed partial class DeviceMonitorService
     {
         foreach (var target in SettingsPersistenceService.Instance.LoadSettings().PairedNetworkTargets.Take(64))
         {
-            _manualNetworkTargets[target.Address] = target.RequiresTls;
+            lock (_networkTargetsLock)
+            {
+                _manualNetworkTargets[target.Address] = target.RequiresTls;
+            }
         }
     }
 
@@ -123,8 +138,18 @@ public sealed partial class DeviceMonitorService
     /// （扫码直连配对的安全端点）。</para>
     /// </summary>
     /// <value>The registered <c>host:port</c> values. <para>已登记的 <c>host:port</c> 集合。</para></value>
-    public IReadOnlyList<string> ManualNetworkTargets => [.. _manualNetworkTargets.Keys];
+    public IReadOnlyList<string> ManualNetworkTargets
+    {
+        get
+        {
+            lock (_networkTargetsLock)
+            {
+                return [.. _manualNetworkTargets.Keys];
+            }
+        }
+    }
 
+    private readonly Lock _networkTargetsLock = new();
     private readonly Dictionary<string, bool> _manualNetworkTargets = new(StringComparer.Ordinal);
 
     /// <summary>
