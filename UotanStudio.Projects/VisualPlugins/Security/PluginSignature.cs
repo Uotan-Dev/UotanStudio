@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Services.Projects;
 
@@ -126,7 +127,7 @@ public static class PluginSignature
     public static string ComputeFingerprint(AsymmetricAlgorithm key)
     {
         ArgumentNullException.ThrowIfNull(key);
-        return FingerprintPrefix + Convert.ToHexString(SHA256.HashData(key.ExportSubjectPublicKeyInfo()));
+        return FingerprintPrefix + Convert.ToHexString(Sha256.ComputeHash(key.ExportSubjectPublicKeyInfo()));
     }
 
     /// <summary>
