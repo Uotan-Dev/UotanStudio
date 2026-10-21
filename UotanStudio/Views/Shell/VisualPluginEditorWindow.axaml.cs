@@ -36,10 +36,11 @@ public partial class VisualPluginEditorWindow : Window
         ResourcePanel.IsEnabled = false;
         RequirementsPanel.IsEnabled = false;
         ResourceList.ItemsSource = _resources;
+        ReplaceResourceButton.IsEnabled = false;
         Closed += (_, _) =>
         {
             _lifetime.Cancel();
-            NodePortChoiceSource.Clear();
+            NodePortChoiceSource.Clear(this);
             _toastManager?.CloseAll();
             _editor.Dispose();
         };
@@ -209,13 +210,32 @@ public partial class VisualPluginEditorWindow : Window
     }
 
     /// <summary>
-    /// Publishes the open package's asset identifiers as the candidates for resource identifier ports, so an
-    /// <c>Asset ID</c> port inside this graph offers exactly the assets the read node can resolve here. The source
-    /// is process-wide and replaced as a whole; the window clears it on close, so a graph outside a package editor
-    /// falls back to free text.
+    /// Publishes the open package's asset identifiers and display names as the candidates for resource identifier
+    /// ports, so an <c>Asset ID</c> port inside this graph offers exactly the assets the read node can resolve here.
+    /// The source is process-wide and this window owns the published scope: closing it clears only its own scope, so
+    /// a second package editor keeps its candidates.
     /// </summary>
     private void PublishResourceChoices()
-        => NodePortChoiceSource.SetResources((_editor.ResourcePackage?.Assets ?? []).Select(asset => (asset.Id, asset.Name)));
+        => NodePortChoiceSource.SetResources(this, (_editor.ResourcePackage?.Assets ?? []).Select(asset => (asset.Id, asset.Name)));
+
+    private void ResourceListSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        => ReplaceResourceButton.IsEnabled = ResourceList.SelectedItem is VisualPluginAsset;
+
+    private async Task<IStorageFolder?> ResolveProjectStartLocationAsync()
+    {
+        if (ProjectContextService.Instance.RootDirectory is not { Length: > 0 } root || !Directory.Exists(root))
+        {
+            return null;
+        }
+        try
+        {
+            return await StorageProvider.TryGetFolderFromPathAsync(new Uri(Path.GetFullPath(root)));
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            return null;
+        }
+    }
 
     internal async Task AddResourceAsync(string id, string path, CancellationToken token)
     {
@@ -234,16 +254,73 @@ public partial class VisualPluginEditorWindow : Window
         PublishResourceChoices();
     }
 
+    internal async Task ReplaceResourceAsync(VisualPluginAsset target, string path, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        var package = _editor.ResourcePackage ?? throw new InvalidOperationException("No package is open.");
+        var previousAssets = package.Assets;
+        var index = previousAssets.FindIndex(asset => string.Equals(asset.Id, target.Id, StringComparison.Ordinal));
+        if (index < 0)
+        {
+            throw new InvalidOperationException("The selected resource is not part of the open package.");
+        }
+        var replacement = await VisualPluginAsset.FromFileAsync(target.Id, path, token);
+        var updatedAssets = previousAssets.ToArray();
+        updatedAssets[index] = replacement;
+        package.Assets = [.. updatedAssets];
+        var errors = VisualPluginValidation.Validate(package);
+        if (errors.Count != 0)
+        {
+            package.Assets = previousAssets;
+            throw new InvalidDataException(string.Join(Environment.NewLine, errors));
+        }
+        var resourceIndex = _resources.IndexOf(target);
+        if (resourceIndex >= 0)
+        {
+            _resources[resourceIndex] = replacement;
+        }
+        ResourceList.SelectedItem = replacement;
+        PublishResourceChoices();
+    }
+
+    private async void ReplaceResourceClick(object? sender, RoutedEventArgs e)
+    {
+        if (ResourceList.SelectedItem is not VisualPluginAsset asset) return;
+        if (!TryBeginResourceOperation()) return;
+        try
+        {
+            using var startFolder = await ResolveProjectStartLocationAsync();
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = LanguageService.Instance.GetString("Plugin_Resources"),
+                AllowMultiple = false,
+                SuggestedStartLocation = startFolder
+            });
+            if (files.FirstOrDefault()?.TryGetLocalPath() is { } path)
+            {
+                await ReplaceResourceAsync(asset, path, _lifetime.Token);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+        {
+            ShowResult(LanguageService.Instance.GetString("Plugin_OperationFailed", ex.Message), NotificationType.Error);
+        }
+        finally { EndResourceOperation(); }
+    }
+
     private async void AddResourceClick(object? sender, RoutedEventArgs e)
     {
         if (!TryBeginResourceOperation()) return;
         try
         {
             var id = ResourceIdText.Text?.Trim() ?? string.Empty;
+            using var startFolder = await ResolveProjectStartLocationAsync();
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
                 Title = LanguageService.Instance.GetString("Plugin_AddResource"),
-                AllowMultiple = false
+                AllowMultiple = false,
+                SuggestedStartLocation = startFolder
             });
             if (files.FirstOrDefault()?.TryGetLocalPath() is { } path)
             {

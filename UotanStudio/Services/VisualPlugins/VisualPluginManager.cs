@@ -872,6 +872,26 @@ public sealed class VisualPluginRegistration
         ? "Windows / Linux / macOS"
         : string.Join(", ", Package.Manifest.Platforms);
     /// <summary>
+    /// Package dependencies shown in the manager detail view.
+    /// <para>管理器详情区展示的包依赖。</para>
+    /// </summary>
+    /// <value>
+    /// The declared dependencies joined for display, each rendered as an id with its optional version range; empty when the package declares none.
+    /// <para>拼接以便显示的声明依赖，每项渲染为标识及其可选版本范围；包未声明依赖时为空。</para>
+    /// </value>
+    public string Dependencies => Package.Manifest.Dependencies.Count == 0
+        ? string.Empty
+        : string.Join(", ", Package.Manifest.Dependencies.Select(FormatDependency));
+    /// <summary>
+    /// Package conflicts shown in the manager detail view.
+    /// <para>管理器详情区展示的包冲突。</para>
+    /// </summary>
+    /// <value>
+    /// The declared conflicting package ids joined for display; empty when the package declares none.
+    /// <para>拼接以便显示的冲突包标识；包未声明冲突时为空。</para>
+    /// </value>
+    public string Conflicts => string.Join(", ", Package.Manifest.Conflicts);
+    /// <summary>
     /// Raw validation and dependency messages.
     /// <para>原始校验与依赖消息。</para>
     /// </summary>
@@ -889,6 +909,11 @@ public sealed class VisualPluginRegistration
     /// <para>格式化后的说明；包可用时为空。</para>
     /// </value>
     public string DisplayErrorText => IsAvailable ? string.Empty : UserError.WithDetails(ErrorText, "UserError_PluginUnavailable");
+
+    private static string FormatDependency(VisualPluginDependency dependency)
+        => dependency.MinimumVersion is null && dependency.MaximumVersionExclusive is null
+            ? dependency.Id
+            : $"{dependency.Id} [{dependency.MinimumVersion ?? "*"}, {dependency.MaximumVersionExclusive ?? "*"})";
 }
 
 internal sealed class VisualPluginManagerState

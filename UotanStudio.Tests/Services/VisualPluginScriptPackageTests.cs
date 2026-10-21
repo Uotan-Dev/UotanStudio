@@ -85,6 +85,27 @@ public sealed class VisualPluginScriptPackageTests
     }
 
     [Fact]
+    public async Task SaveAsync_ScriptPackage_WritesLoadableBundle()
+    {
+        using var temp = new TempDirectory();
+        var package = VisualPluginPackageBuilder.CreateScript("Slot reader", "tests.bundle-script", Script, "Tester", "3.0.0");
+        var bundlePath = Path.Combine(temp.Path, "bundle-script.uotanplugin");
+
+        await VisualPluginBundle.SaveAsync(bundlePath, package, TestContext.Current.CancellationToken);
+        var bytes = await File.ReadAllBytesAsync(bundlePath, TestContext.Current.CancellationToken);
+        var loaded = VisualPluginBundle.Load(bundlePath);
+
+        Assert.Equal((byte)0x50, bytes[0]);
+        Assert.Equal((byte)0x4B, bytes[1]);
+        Assert.Equal(VisualPluginKind.ScriptNode, loaded.Kind);
+        Assert.Equal(Script, loaded.Script);
+        Assert.Equal("tests.bundle-script", loaded.Manifest.Id);
+        Assert.Equal("Tester", loaded.Manifest.Author);
+        Assert.Equal("3.0.0", loaded.Manifest.Version);
+        Assert.Equal(package.NodeTypeKey, loaded.NodeTypeKey);
+    }
+
+    [Fact]
     public async Task InstallScriptAsync_ValidLua_RegistersEnabledScriptNode()
     {
         using var temp = new TempDirectory();

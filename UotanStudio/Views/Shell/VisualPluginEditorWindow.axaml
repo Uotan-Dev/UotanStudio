@@ -31,13 +31,14 @@
                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="10,2">
             <StackPanel Spacing="6">
                 <TextBlock Text="{DynamicResource Plugin_ResourceHelp}" TextWrapping="Wrap" Opacity="0.75" />
-                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="6">
                     <TextBox x:Name="ResourceIdText" PlaceholderText="{DynamicResource Plugin_ResourceId}" />
                     <Button x:Name="AddResourceButton" Grid.Column="1" Content="{DynamicResource Plugin_AddResource}" Click="AddResourceClick" />
                     <Button x:Name="RemoveResourceButton" Grid.Column="2" Content="{DynamicResource Plugin_RemoveResource}" Click="RemoveResourceClick" />
-                    <Button x:Name="ExportBundleButton" Grid.Column="3" Content="{DynamicResource Plugin_ExportBundle}" Click="ExportBundleClick" />
+                    <Button x:Name="ReplaceResourceButton" Grid.Column="3" Content="{DynamicResource Node_Choice_Replace}" Click="ReplaceResourceClick" />
+                    <Button x:Name="ExportBundleButton" Grid.Column="4" Content="{DynamicResource Plugin_ExportBundle}" Click="ExportBundleClick" />
                 </Grid>
-                <ListBox x:Name="ResourceList" MaxHeight="160">
+                <ListBox x:Name="ResourceList" MaxHeight="160" SelectionChanged="ResourceListSelectionChanged">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="project:VisualPluginAsset">
                             <Grid ColumnDefinitions="180,*,110" RowDefinitions="Auto,Auto" ColumnSpacing="10">

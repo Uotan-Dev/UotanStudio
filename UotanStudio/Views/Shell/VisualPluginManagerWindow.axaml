@@ -98,7 +98,7 @@
                                    TextWrapping="Wrap" IsVisible="{Binding !!SelectedPlugin.Description}" />
                     </StackPanel>
                     <Separator />
-                    <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                    <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                           RowSpacing="10" ColumnSpacing="10">
                         <TextBlock Text="{DynamicResource Plugin_Id}" Opacity="0.65" />
                         <SelectableTextBlock Grid.Column="1" Text="{Binding SelectedPlugin.Id}" TextWrapping="Wrap" />
@@ -113,6 +113,14 @@
                         <TextBlock Grid.Row="5" Text="{DynamicResource Plugin_Diagnostics}" Opacity="0.65" />
                         <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedPlugin.DisplayErrorText}"
                                    TextWrapping="Wrap" Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}" />
+                        <TextBlock Grid.Row="6" Text="{DynamicResource Plugin_Dependencies}" Opacity="0.65"
+                                   IsVisible="{Binding !!SelectedPlugin.Dependencies}" />
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding SelectedPlugin.Dependencies}"
+                                   TextWrapping="Wrap" IsVisible="{Binding !!SelectedPlugin.Dependencies}" />
+                        <TextBlock Grid.Row="7" Text="{DynamicResource Plugin_Conflicts}" Opacity="0.65"
+                                   IsVisible="{Binding !!SelectedPlugin.Conflicts}" />
+                        <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding SelectedPlugin.Conflicts}"
+                                   TextWrapping="Wrap" IsVisible="{Binding !!SelectedPlugin.Conflicts}" />
                     </Grid>
                     <WrapPanel ItemSpacing="8" LineSpacing="8">
                         <Button Classes="plugin-action" Content="{DynamicResource Plugin_UseTemplate}"

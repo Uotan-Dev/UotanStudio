@@ -15,18 +15,15 @@ namespace UotanStudio.ViewModels.Nodes;
 public static class NodeResourceIdChoices
 {
     /// <summary>
-    /// Attaches the process-level candidates to the port and keeps it current while the port is bound; nothing is
-    /// attached when no candidate has been published, so a project without resources keeps the plain text editor.
-    /// <para>把进程级候选附加到端口，并在端口绑定期间保持其最新；尚未发布任何候选时不附加，没有资源的项目仍使用纯文本编辑器。</para>
+    /// Makes the port mirror the process-level candidates and keeps it current while the port is alive, including
+    /// candidates published after this call; an empty candidate list leaves the plain text editor in place.
+    /// <para>让端口镜像进程级候选，并在端口存活期间保持其最新，包括本调用之后发布的候选；候选为空时仍使用纯文本编辑器。</para>
     /// </summary>
     /// <param name="port">The resource identifier port, whose title identifies the resource it reads.
     /// <para>资源标识端口，其标题标识它读取的资源。</para></param>
     public static void Apply(NodeConnectorViewModel port)
     {
         ArgumentNullException.ThrowIfNull(port);
-        if (NodePortChoiceSource.Resources.Count > 0)
-        {
-            port.TrackResourceChoices();
-        }
+        port.TrackResourceChoices();
     }
 }

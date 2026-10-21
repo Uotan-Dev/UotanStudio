@@ -25,6 +25,7 @@ public partial class ScriptPluginEditorWindow : Window
         InitializeComponent();
         SaveScriptButton.IsEnabled = false;
         ExportScriptButton.IsEnabled = false;
+        ExportBundleButton.IsEnabled = false;
         Closed += (_, _) =>
         {
             _lifetime.Cancel();
@@ -46,6 +47,7 @@ public partial class ScriptPluginEditorWindow : Window
         ScriptEditor.Text = registration.Package.Script;
         SaveScriptButton.IsEnabled = true;
         ExportScriptButton.IsEnabled = true;
+        ExportBundleButton.IsEnabled = true;
     }
 
     private async void SaveClick(object? sender, RoutedEventArgs e)
@@ -87,6 +89,36 @@ public partial class ScriptPluginEditorWindow : Window
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+        {
+            ShowResult(string.Format(LanguageService.Instance.GetString("Plugin_OperationFailed"),
+                UserError.Describe(ex)), NotificationType.Error);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async void ExportBundleClick(object? sender, RoutedEventArgs e)
+    {
+        if (_registration is null) return;
+        try
+        {
+            var package = VisualPluginPackageBuilder.CreateScript(_registration.Name, _registration.Id,
+                ScriptEditor.Text ?? string.Empty, _registration.Package.Manifest.Author, _registration.Version);
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = LanguageService.Instance.GetString("Plugin_ExportBundle"),
+                SuggestedFileName = _registration.Id + ".uotanplugin",
+                DefaultExtension = "uotanplugin",
+                FileTypeChoices = [new FilePickerFileType(LanguageService.Instance.GetString("Plugin_ExportBundle"))
+                {
+                    Patterns = ["*.uotanplugin"]
+                }]
+            });
+            if (file?.TryGetLocalPath() is { } path)
+            {
+                await VisualPluginBundle.SaveAsync(path, package, _lifetime.Token);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or ArgumentException)
         {
             ShowResult(string.Format(LanguageService.Instance.GetString("Plugin_OperationFailed"),
                 UserError.Describe(ex)), NotificationType.Error);
