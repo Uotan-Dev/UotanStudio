@@ -125,8 +125,15 @@ public sealed class ProjectOperationsService
     internal bool IsImageOperationRunning => DesktopWorkspace.IsImageOperationRunning;
     internal Func<Task<bool>>? BeforeProjectChangeAsync { get => _session.BeforeProjectChangeAsync; set => _session.BeforeProjectChangeAsync = value; }
     internal Task WaitForIdleAsync() => _session.WaitForIdleAsync();
-    internal Task AutoSaveAsync(bool persistProject = true, bool persistPageState = true)
-        => _session.AutoSaveAsync(persistProject, persistPageState);
+    internal async Task AutoSaveAsync(bool persistProject = true, bool persistPageState = true)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+        await _session.AutoSaveAsync(persistProject, persistPageState);
+        AttachedNodeEditor?.MarkAllSaved();
+    }
     public Task CreateNewSolutionAsync(string path, CancellationToken cancellationToken = default)
         => _session.CreateNewSolutionAsync(path, cancellationToken);
     public Task<bool> OpenProjectFromPathAsync(string path) => _session.OpenProjectFromPathAsync(path);
@@ -145,7 +152,17 @@ public sealed class ProjectOperationsService
 
     private NodeEditorViewModel? AttachedNodeEditor
         => _workspace is ProjectWorkspaceCoordinator coordinator ? coordinator.NodeEditor : null;
-    public Task SaveAsAsync(string path) => _session.SaveAsAsync(path);
+    /// <summary>Saves the project under a new path and clears every node-editor dirty flag after the save succeeds.
+    /// <para>把工程另存为新路径，并在保存成功后清除节点编辑器的全部脏标记。</para></summary>
+    /// <param name="path">Destination solution file path; the session switches to it only after publication succeeds.
+    /// <para>目标解决方案文件路径；仅在发布成功后才会切换到该路径。</para></param>
+    /// <returns>A task that completes after the copy is published and the session root switched.
+    /// <para>副本发布并切换会话根目录后完成的任务。</para></returns>
+    public async Task SaveAsAsync(string path)
+    {
+        await _session.SaveAsAsync(path);
+        AttachedNodeEditor?.MarkAllSaved();
+    }
     public Task ImportFilesAsync(string[] paths) => _session.ImportFilesAsync(paths);
     public Task AddSubProjectAsync(string fwPath) => _session.AddSubProjectAsync(fwPath);
     public Task ImportSubProjectAsync(string dirPath) => _session.ImportSubProjectAsync(dirPath);
