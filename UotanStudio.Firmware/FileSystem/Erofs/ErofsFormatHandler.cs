@@ -339,6 +339,7 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
                     Algorithm = algorithm,
                     Lz4HighCompression = lz4HighCompression,
                     CompressionLevel = compressionLevel,
+                    RejectIncompleteFeatures = true,
                     CancellationToken = cancellationToken,
                 };
                 if (FileSystemPackingOptions.TryReadPreservedTables(inputPath) is { } preservedTables)

@@ -463,6 +463,15 @@ public sealed class ErofsOptions
     public ErofsFeatureSet Features { get; set; } = ErofsFeatureSet.Auto;
 
     /// <summary>
+    /// When <see langword="true"/>, validation refuses a declared or layout-implied feature whose pack path
+    /// is not fully implemented. Public pack entry points set it; the direct builder leaves it off so callers
+    /// that deliberately exercise a partial layout can still do so.
+    /// <para>为 <see langword="true"/> 时，校验会拒绝声明或布局隐含的、打包路径尚未完整实现的特性。公开打包入口
+    /// 会开启它；直接构建器默认关闭，以便刻意验证部分布局的调用方仍可使用。</para>
+    /// </summary>
+    internal bool RejectIncompleteFeatures { get; set; }
+
+    /// <summary>
     /// Selects the dot-omitted dimension, the
     /// <see cref="UnifiedErofsInode.AdviseBitNlinkOneOrDotOmitted"/> inode advise bit. It has no superblock
     /// feature bit of its own, so it is declared beside <see cref="Features"/> rather than inside it.
@@ -916,6 +925,95 @@ public sealed class ErofsOptions
         }
 
         ResolveFeatureDeclaration();
+        ValidatePackableFeatures();
+    }
+
+    /// <summary>
+    /// Refuses a feature whose pack path is not fully implemented when
+    /// <see cref="RejectIncompleteFeatures"/> is set. The gate is separate from the layout checks because a
+    /// preserved source can declare a bit without any layout option naming it.
+    /// <para>当 <see cref="RejectIncompleteFeatures"/> 置位时拒绝打包尚未完整实现的特性。该校验与布局校验分离，
+    /// 因为保留来源可以声明某个位而没有任何布局选项指名它。</para>
+    /// </summary>
+    /// <remarks><c>48bit</c> is intentionally not in this mask: the reader already rejects a nonzero high half
+    /// on every layout that addresses blocks, so a 48bit image that reaches packing only uses the 32-bit-range
+    /// subset this writer models. Every other excluded bit can reach packing with a structure the writer cannot
+    /// reproduce faithfully. <para><c>48bit</c> 故意不在该掩码中：读取方已经在所有以块地址寻址的布局上拒绝非零
+    /// 高半部，因此能走到打包阶段的 48bit 镜像只会使用本写入方所建模的 32 位范围子集。其余被排除的位都可能带着
+    /// 写入方无法忠实复刻的结构进入打包。</para></remarks>
+    /// <exception cref="FileSystemUnsupportedFeatureException">An unsupported incompat or compat feature is
+    /// declared or implied. <para>声明或隐含了不支持的 incompat 或 compat 特性。</para></exception>
+    private void ValidatePackableFeatures()
+    {
+        if (!RejectIncompleteFeatures)
+        {
+            return;
+        }
+
+        const uint unsupportedIncompat = ErofsSuperblock.IncompatDeviceTable
+            | ErofsSuperblock.IncompatZtailpacking
+            | ErofsSuperblock.IncompatFragments
+            | ErofsSuperblock.IncompatXattrPrefixes;
+        const uint unsupportedCompat = ErofsSuperblock.CompatSharedEaInMetabox
+            | ErofsSuperblock.CompatPlainXattrPfx
+            | ErofsSuperblock.CompatIshareXattrs;
+
+        var incompat = FeaturesAuthoritative ? Features.IncompatBits : 0u;
+        var compat = FeaturesAuthoritative ? Features.CompatBits : 0u;
+
+        if (Fragments || AllFilesAsFragments || Dedup)
+        {
+            incompat |= ErofsSuperblock.IncompatFragments;
+        }
+        if (CompressedTailPacking)
+        {
+            incompat |= ErofsSuperblock.IncompatZtailpacking;
+        }
+        if (ExtraDeviceCount > 0)
+        {
+            incompat |= ErofsSuperblock.IncompatDeviceTable;
+        }
+        if (XattrNamePrefixes is { Count: > 0 } || SourceXattrPrefixes is { Count: > 0 }
+            || IshareXattrPrefix is not null)
+        {
+            incompat |= ErofsSuperblock.IncompatXattrPrefixes;
+            compat |= ErofsSuperblock.CompatPlainXattrPfx;
+        }
+        if (IshareXattrs)
+        {
+            compat |= ErofsSuperblock.CompatIshareXattrs;
+        }
+        if (SourceSharedEaInMetabox)
+        {
+            compat |= ErofsSuperblock.CompatSharedEaInMetabox;
+        }
+
+        if ((incompat & unsupportedIncompat) == 0 && (compat & unsupportedCompat) == 0)
+        {
+            return;
+        }
+
+        var names = new List<string>();
+        for (var bit = 1u; bit != 0 && bit <= unsupportedIncompat; bit <<= 1)
+        {
+            if ((incompat & unsupportedIncompat & bit) != 0)
+            {
+                names.Add(bit == ErofsSuperblock.IncompatDeviceTable
+                    ? "device_table/compr_head2"
+                    : ErofsFeatureTable.NameForIncompatBit(bit, ExtraDeviceCount));
+            }
+        }
+        for (var bit = 1u; bit != 0 && bit <= unsupportedCompat; bit <<= 1)
+        {
+            if ((compat & unsupportedCompat & bit) != 0)
+            {
+                names.AddRange(ErofsFeatureTable.AliasNames(bit, true));
+            }
+        }
+
+        throw new FileSystemUnsupportedFeatureException(
+            $"EROFS pack refused: the managed writer does not fully implement {string.Join(", ", names)}. "
+            + "Repack with a layout that does not declare these features.");
     }
 
     /// <summary>

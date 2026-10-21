@@ -327,6 +327,8 @@ internal static class ErofsRebuildMetadata
             LegacyCompatibility = parameters.LegacyCompatibility,
         };
 
+        options.RejectIncompleteFeatures = true;
+
         if (parameters.FeatureCompat is { } featureCompat && parameters.FeatureIncompat is { } featureIncompat)
         {
             options.Features = ErofsFeatureSet.FromWords(featureCompat, featureIncompat);
