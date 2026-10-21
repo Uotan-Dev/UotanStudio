@@ -45,6 +45,7 @@ public static class WorkflowPersistenceService
                 InstanceId = n.InstanceId,
                 Title = n.Title,
                 Category = n.Category.ToString(),
+                ExecutionStage = n.ExecutionStage,
                 X = n.Location.X,
                 Y = n.Location.Y,
                 TypeKey = n.TypeKey,

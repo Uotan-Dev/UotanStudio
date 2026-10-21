@@ -36,6 +36,11 @@ public sealed record NodeExecutionOptions
     /// <value>Whether preview mode is enabled.<para>是否启用预览模式。</para></value>
     public bool Preview { get; init; }
 
+    /// <summary>Keeps running later execution stages after a stage does not succeed; the default stops at the failed stage.
+    /// <para>阶段未成功时是否继续运行后续执行阶段；默认在失败阶段停止。</para></summary>
+    /// <value><see langword="true"/> to run the remaining stages anyway.<para>仍然运行剩余阶段时为 <see langword="true"/>。</para></value>
+    public bool ContinueAfterStageFailure { get; init; }
+
     /// <summary>Package-local resources available to this graph, overridden by nested composites.<para>本图可用的包内资源，由嵌套复合节点覆盖。</para></summary>
     /// <value>The package-local resource set.<para>包内资源集合。</para></value>
     public VisualPluginPackage? Package { get; init; }

@@ -117,6 +117,16 @@ public sealed class NodeDto
     public string Category { get; set; } = string.Empty;
 
     /// <summary>
+    /// Execution stage index of the node; the engine runs stages in ascending order.
+    /// <para>节点的执行阶段索引；引擎按升序执行各阶段。</para>
+    /// </summary>
+    /// <value>
+    /// Zero-based stage index; zero is the default stage that runs before every later stage.
+    /// <para>从零开始的阶段索引；零是默认阶段，先于所有后续阶段执行。</para>
+    /// </value>
+    public int ExecutionStage { get; set; }
+
+    /// <summary>
     /// Canvas X coordinate.
     /// <para>画布 X 坐标。</para>
     /// </summary>

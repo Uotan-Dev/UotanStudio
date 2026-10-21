@@ -20,6 +20,8 @@ public sealed class NodeExecutionEngine
     private readonly IUnifiedLog _log;
     private CancellationTokenSource? _cts;
     private volatile bool _isRunning;
+    private int _segmentIndex;
+    private int _segmentCount = 1;
     private PatchRun? _patches;
     private VisualPluginPackage? _package;
     private IWorkflowInteractionService _interactions = UnsupportedWorkflowInteractionService.Instance;
@@ -64,11 +66,13 @@ public sealed class NodeExecutionEngine
     /// </summary>
     public event EventHandler<ExecutionCompletedEventArgs>? ExecutionCompleted;
 
-    /// <summary>Asynchronously executes the workflow formed by the given nodes and connections.
-    /// <para>异步执行给定节点和连接构成的工作流。</para></summary>
+    /// <summary>Asynchronously executes the workflow formed by the given nodes and connections, one execution stage at a time.
+    /// <para>异步执行给定节点和连接构成的工作流，并逐个执行阶段推进。</para>
+    /// <para>Nodes of the same <see cref="FlowNodeViewModel.ExecutionStage"/> run together in ascending stage order; patch artifacts are published at each stage boundary, a failed stage stops the run unless <see cref="NodeExecutionOptions.ContinueAfterStageFailure"/> is set, and a connection whose endpoints sit in different stages is rejected before anything executes.</para>
+    /// <para>同一 <see cref="FlowNodeViewModel.ExecutionStage"/> 的节点按阶段升序一起运行；补丁产物在每个阶段边界发布；阶段失败会停止运行，除非设置了 <see cref="NodeExecutionOptions.ContinueAfterStageFailure"/>；端点位于不同阶段的连接会在任何执行之前被拒绝。</para></summary>
     /// <param name="nodes">The nodes of the workflow.<para>工作流包含的节点。</para></param>
-    /// <param name="connections">List of connections (source → target), determining execution order and data flow.
-    /// <para>连接列表（源→目标），用于确定执行顺序与数据流。</para></param>
+    /// <param name="connections">List of connections (source → target), determining execution order and data flow; every endpoint pair must share one stage.
+    /// <para>连接列表（源→目标），用于确定执行顺序与数据流；每条连接的两端必须位于同一阶段。</para></param>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <param name="options">Shared staging, resource scope and interaction options for the run.
     /// <para>本次运行的共享暂存、资源作用域与交互选项。</para></param>
@@ -97,224 +101,21 @@ public sealed class NodeExecutionEngine
 
         try
         {
-            foreach (var node in nodes)
-            {
-                node.ExecutionStatus = NodeExecutionStatus.Idle;
-                node.ExecutionError = string.Empty;
-                foreach (var input in node.Input)
-                {
-                    input.IsRuntimeSensitive = false;
-                    input.Data = input.InitialValue;
-                }
-                foreach (var output in node.Output)
-                {
-                    output.IsRuntimeSensitive = false;
-                    output.Data = null;
-                }
-            }
-            if (options.ValidatePackage is not null)
-            {
-                var errors = options.ValidatePackage();
-                if (errors.Count > 0)
-                {
-                    return RejectPreflight(nodes, string.Join(Environment.NewLine, errors));
-                }
-            }
-            var interactionError = WorkflowInteractionPreflight.Validate(nodes, _interactions, _documents is not null);
-            if (interactionError is not null)
-            {
-                return RejectPreflight(nodes, interactionError);
-            }
-            var graphIssues = WorkflowGraphValidation.ValidateRuntime(nodes, connections);
-            if (graphIssues.Count > 0)
-            {
-                RecordUnreachedComposites(nodes, CompositeSkipReason.PreflightRejected);
-                foreach (var node in nodes)
-                {
-                    node.ExecutionError = string.Join(Environment.NewLine,
-                        graphIssues.Where(issue => ReferenceEquals(issue.Node, node)).Select(issue => issue.Message));
-                    node.ExecutionStatus = node.ExecutionError.Length > 0 ? NodeExecutionStatus.Failed : NodeExecutionStatus.Skipped;
-                    NodeStatusChanged?.Invoke(this, new(node));
-                }
-                return RejectPreflight(nodes, string.Join(Environment.NewLine, graphIssues.Select(issue => issue.DisplayText)));
-            }
-            var destructiveError = await WorkflowInteractionPreflight.ConfirmDestructiveAsync(nodes, _interactions, token).ConfigureAwait(false);
-            if (destructiveError is not null)
-            {
-                return RejectPreflight(nodes, destructiveError);
-            }
-            var patchPolicy = PatchWorkflowPolicy.Inspect(nodes);
-            if ((_patches.Preview || patchPolicy.HasPatches) && !patchPolicy.Safe)
-            {
-                return RejectPreflight(nodes, LanguageService.Instance.GetString("Node_Patch_UnsupportedGraph"));
-            }
-            _log.Write(LogLevel.Info, "Engine", $"Starting execution with {nodes.Count} nodes, {connections?.Count ?? 0} connections");
-
-            var order = TopologicalSort(nodes, connections);
-            if (order == null)
-            {
-                _log.Write(LogLevel.Error, "Engine", "Cycle detected in workflow, cannot execute");
-                return RejectPreflight(nodes, "Cycle detected in workflow");
-            }
-
-            _log.Write(LogLevel.Debug, "Engine", $"Topological order computed: {order.Count} nodes");
-
-            var completed = 0;
-            var total = order.Count;
-            List<string> failedNodes = [];
-            var failLock = new object();
-            var aborted = false;
-            var terminated = false;
-            string? terminationReason = null;
-            var byId = nodes.ToDictionary(n => n.InstanceId);
-            var flowOut = BuildFlowEdges(nodes, connections);
-            var gateError = PatchGatePolicy.Validate(nodes, connections, flowOut);
-            if (gateError is not null)
-            {
-                return RejectPreflight(nodes, gateError);
-            }
-
-            HashSet<string> handledByFlow = [];
-            var skippedByBranch = GetInactiveEntryNodes(options.EntryActivation, connections);
-            HashSet<string> skippedByFailure = [];
-
-            foreach (var node in order)
-            {
-                if (token.IsCancellationRequested)
-                {
-                    _log.Write(LogLevel.Warn, "Engine", "Execution cancelled by user");
-                    aborted = true;
-                    break;
-                }
-
-                if (handledByFlow.Contains(node.InstanceId))
-                {
-                    completed++;
-                    continue;
-                }
-
-                if (skippedByBranch.Contains(node.InstanceId))
-                {
-                    RecordSkippedComposite(node, CompositeSkipReason.Condition);
-                    node.ExecutionStatus = NodeExecutionStatus.Skipped;
-                    NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
-                    _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' skipped by branch condition");
-                    completed++;
-                    continue;
-                }
-
-                if (skippedByFailure.Contains(node.InstanceId))
-                {
-                    RecordSkippedComposite(node, CompositeSkipReason.UpstreamFailure);
-                    node.ExecutionStatus = NodeExecutionStatus.Skipped;
-                    NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
-                    _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' skipped because an upstream node failed");
-                    completed++;
-                    continue;
-                }
-
-                bool succeeded;
-                try
-                {
-                    succeeded = await ExecuteSingleNodeAsync(node, byId, connections, token,
-                        p => SafeReportProgress(completed, total, p)).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    _log.Write(LogLevel.Warn, "Engine", "Execution cancelled by user");
-                    aborted = true;
-                    break;
-                }
-                catch (WorkflowTerminatedException termination)
-                {
-                    _log.Write(LogLevel.Warn, "Engine", $"Execution terminated: {termination.Message}");
-                    terminated = true;
-                    terminationReason = termination.Reason;
-                    break;
-                }
-                if (!succeeded)
-                {
-                    lock (failLock) { failedNodes.Add(node.InstanceId); }
-
-                    switch (options.FailurePolicy)
-                    {
-                        case ExecutionFailurePolicy.FailFast:
-                            aborted = true;
-                            break;
-                        case ExecutionFailurePolicy.SkipDependents:
-                            MarkDownstreamSkipped(node, byId, connections, skippedByFailure);
-                            break;
-                    }
-
-                    if (aborted)
-                        break;
-                }
-
-                completed++;
-                var progress = (double)completed / Math.Max(1, total);
-                ProgressChanged?.Invoke(this, progress);
-
-                if (succeeded)
-                {
-                    try
-                    {
-                        if (await ApplyFlowControlAsync(node, byId, connections, order, flowOut, token,
-                            handledByFlow, skippedByBranch, skippedByFailure, failedNodes, failLock, options).ConfigureAwait(false))
-                        {
-                            aborted = true;
-                            break;
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        _log.Write(LogLevel.Warn, "Engine", "Execution cancelled during flow control dispatch");
-                        aborted = true;
-                        break;
-                    }
-                    catch (WorkflowTerminatedException termination)
-                    {
-                        _log.Write(LogLevel.Warn, "Engine", $"Execution terminated during flow dispatch: {termination.Message}");
-                        terminated = true;
-                        terminationReason = termination.Reason;
-                        break;
-                    }
-                }
-            }
-
-            var result = terminated
-                ? ExecutionResult.Terminated(terminationReason)
-                : aborted && failedNodes.Count == 0
-                ? ExecutionResult.Cancelled()
-                : aborted
-                    ? ExecutionResult.Failed("Execution stopped after a node failure", failedNodes)
-                : failedNodes.Count > 0
-                    ? nodes.Any(node => node.ExecutionStatus == NodeExecutionStatus.Succeeded)
-                        ? ExecutionResult.PartiallySucceeded(failedNodes)
-                        : ExecutionResult.Failed("No nodes completed successfully", failedNodes)
-                    : ExecutionResult.Succeeded(total);
-
-            RecordUnreachedComposites(nodes, CompositeSkipReason.NotReached);
-            if (ownsPatches)
-            {
-                try
-                {
-                    await _patches.CompleteAsync(result.Status == ExecutionStatus.Succeeded, token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    result = ExecutionResult.Cancelled();
-                }
-                catch (Exception error)
-                {
-                    result = ExecutionResult.Failed(error.Message, failedNodes);
-                    _log.Write(LogLevel.Error, "Engine", error.Message);
-                }
-            }
-            result.PatchChanges = _patches.Changes;
-            result.PatchOutcome = _patches.Outcome;
-            result.CompositeExecutions = _patches.CompositeExecutions;
-            result.CompositeReportTruncated = _patches.CompositeReportTruncated;
-            _log.Write(aborted ? LogLevel.Warn : LogLevel.Info, "Engine", aborted ? "Execution aborted" : $"Execution completed: {result.Status}");
+            ResetRuntimeState(nodes);
+            var crossStageError = FindCrossStageConnection(nodes, connections);
+            var preview = _patches!.Preview;
+            var policyError = PatchWorkflowPolicy.InspectStages(nodes)
+                .Any(policy => (preview || policy.HasPatches) && !policy.Safe);
+            var segments = BuildExecutionSegments(nodes, connections);
+            var result = crossStageError is not null
+                ? RejectPreflight(nodes, crossStageError)
+                : policyError
+                    ? RejectPreflight(nodes, LanguageService.Instance.GetString("Node_Patch_UnsupportedGraph"))
+                    : segments.Count <= 1
+                        ? await RunSingleGraphAsync(nodes, connections, options, ownsPatches, token).ConfigureAwait(false)
+                        : await RunSegmentsAsync(segments, options, ownsPatches, token).ConfigureAwait(false);
+            _log.Write(result.Status == ExecutionStatus.Succeeded ? LogLevel.Info : LogLevel.Warn,
+                "Engine", $"Execution completed: {result.Status}");
             ExecutionCompleted?.Invoke(this, new ExecutionCompletedEventArgs(result));
             return result;
         }
@@ -343,6 +144,435 @@ public sealed class NodeExecutionEngine
             _cts?.Dispose();
             _cts = null;
         }
+    }
+
+    /// <summary>
+    /// One stage-scoped run of the graph; nodes of the same stage run together before the next stage starts.
+    /// <para>图的一次按阶段运行；同一阶段的节点一起执行，完成后才进入下一阶段。</para>
+    /// </summary>
+    private sealed record ExecutionSegment(int Stage, IReadOnlyList<FlowNodeViewModel> Nodes, IReadOnlyList<NodeConnection> Connections);
+
+    private static void ResetRuntimeState(IReadOnlyList<FlowNodeViewModel> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            node.ExecutionStatus = NodeExecutionStatus.Idle;
+            node.ExecutionError = string.Empty;
+            foreach (var input in node.Input)
+            {
+                input.IsRuntimeSensitive = false;
+                input.Data = input.InitialValue;
+            }
+            foreach (var output in node.Output)
+            {
+                output.IsRuntimeSensitive = false;
+                output.Data = null;
+            }
+        }
+    }
+
+    private async Task<ExecutionResult> RunSingleGraphAsync(
+        IReadOnlyList<FlowNodeViewModel> nodes,
+        IReadOnlyList<NodeConnection>? connections,
+        NodeExecutionOptions options,
+        bool ownsPatches,
+        CancellationToken token)
+    {
+        _segmentIndex = 0;
+        _segmentCount = 1;
+        var result = await ExecuteGraphAsync(nodes, connections, options, token).ConfigureAwait(false);
+        return await CompletePatchesAsync(result, ownsPatches, token).ConfigureAwait(false);
+    }
+
+    private async Task<ExecutionResult> RunSegmentsAsync(
+        IReadOnlyList<ExecutionSegment> segments,
+        NodeExecutionOptions options,
+        bool ownsPatches,
+        CancellationToken token)
+    {
+        List<ExecutionResult> results = new(segments.Count);
+        for (var index = 0; index < segments.Count; index++)
+        {
+            var segment = segments[index];
+            _segmentIndex = index;
+            _segmentCount = segments.Count;
+            if (ownsPatches && _patches is null)
+            {
+                _patches = new PatchRun(options.Preview);
+            }
+            _log.Write(LogLevel.Info, "Engine",
+                $"Execution stage {index + 1}/{segments.Count} starting with {segment.Nodes.Count} node(s)");
+            var result = await ExecuteGraphAsync(segment.Nodes, segment.Connections, options, token).ConfigureAwait(false);
+            result = await CompletePatchesAsync(result, ownsPatches, token).ConfigureAwait(false);
+            results.Add(result);
+            if (ownsPatches)
+            {
+                await DisposePatchRunAsync().ConfigureAwait(false);
+                _patches = null;
+            }
+            var stageFailed = result.Status is ExecutionStatus.Failed or ExecutionStatus.PartiallySucceeded;
+            if (result.Status is ExecutionStatus.Cancelled or ExecutionStatus.Terminated
+                || (stageFailed && !options.ContinueAfterStageFailure))
+            {
+                break;
+            }
+        }
+        return AggregateResults(results);
+    }
+
+    private async Task<ExecutionResult> ExecuteGraphAsync(
+        IReadOnlyList<FlowNodeViewModel> nodes,
+        IReadOnlyList<NodeConnection>? connections,
+        NodeExecutionOptions options,
+        CancellationToken token)
+    {
+        if (options.ValidatePackage is not null)
+        {
+            var errors = options.ValidatePackage();
+            if (errors.Count > 0)
+            {
+                return RejectPreflight(nodes, string.Join(Environment.NewLine, errors));
+            }
+        }
+        var interactionError = WorkflowInteractionPreflight.Validate(nodes, _interactions, _documents is not null);
+        if (interactionError is not null)
+        {
+            return RejectPreflight(nodes, interactionError);
+        }
+        var graphIssues = WorkflowGraphValidation.ValidateRuntime(nodes, connections ?? []);
+        if (graphIssues.Count > 0)
+        {
+            RecordUnreachedComposites(nodes, CompositeSkipReason.PreflightRejected);
+            foreach (var node in nodes)
+            {
+                node.ExecutionError = string.Join(Environment.NewLine,
+                    graphIssues.Where(issue => ReferenceEquals(issue.Node, node)).Select(issue => issue.Message));
+                node.ExecutionStatus = node.ExecutionError.Length > 0 ? NodeExecutionStatus.Failed : NodeExecutionStatus.Skipped;
+                NodeStatusChanged?.Invoke(this, new(node));
+            }
+            return RejectPreflight(nodes, string.Join(Environment.NewLine, graphIssues.Select(issue => issue.DisplayText)));
+        }
+        var destructiveError = await WorkflowInteractionPreflight.ConfirmDestructiveAsync(nodes, _interactions, token).ConfigureAwait(false);
+        if (destructiveError is not null)
+        {
+            return RejectPreflight(nodes, destructiveError);
+        }
+        var patchPolicy = PatchWorkflowPolicy.Inspect(nodes);
+        if ((_patches!.Preview || patchPolicy.HasPatches) && !patchPolicy.Safe)
+        {
+            return RejectPreflight(nodes, LanguageService.Instance.GetString("Node_Patch_UnsupportedGraph"));
+        }
+        _log.Write(LogLevel.Info, "Engine", $"Starting execution with {nodes.Count} nodes, {connections?.Count ?? 0} connections");
+
+        var order = TopologicalSort(nodes, connections);
+        if (order == null)
+        {
+            _log.Write(LogLevel.Error, "Engine", "Cycle detected in workflow, cannot execute");
+            return RejectPreflight(nodes, "Cycle detected in workflow");
+        }
+
+        _log.Write(LogLevel.Debug, "Engine", $"Topological order computed: {order.Count} nodes");
+
+        var completed = 0;
+        var total = order.Count;
+        List<string> failedNodes = [];
+        var failLock = new object();
+        var aborted = false;
+        var terminated = false;
+        string? terminationReason = null;
+        var byId = nodes.ToDictionary(n => n.InstanceId);
+        var flowOut = BuildFlowEdges(nodes, connections);
+        var gateError = PatchGatePolicy.Validate(nodes, connections, flowOut);
+        if (gateError is not null)
+        {
+            return RejectPreflight(nodes, gateError);
+        }
+
+        HashSet<string> handledByFlow = [];
+        var skippedByBranch = GetInactiveEntryNodes(options.EntryActivation, connections);
+        HashSet<string> skippedByFailure = [];
+
+        foreach (var node in order)
+        {
+            if (token.IsCancellationRequested)
+            {
+                _log.Write(LogLevel.Warn, "Engine", "Execution cancelled by user");
+                aborted = true;
+                break;
+            }
+
+            if (handledByFlow.Contains(node.InstanceId))
+            {
+                completed++;
+                continue;
+            }
+
+            if (skippedByBranch.Contains(node.InstanceId))
+            {
+                RecordSkippedComposite(node, CompositeSkipReason.Condition);
+                node.ExecutionStatus = NodeExecutionStatus.Skipped;
+                NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+                _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' skipped by branch condition");
+                completed++;
+                continue;
+            }
+
+            if (skippedByFailure.Contains(node.InstanceId))
+            {
+                RecordSkippedComposite(node, CompositeSkipReason.UpstreamFailure);
+                node.ExecutionStatus = NodeExecutionStatus.Skipped;
+                NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+                _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' skipped because an upstream node failed");
+                completed++;
+                continue;
+            }
+
+            bool succeeded;
+            try
+            {
+                succeeded = await ExecuteSingleNodeAsync(node, byId, connections, token,
+                    p => SafeReportProgress(completed, total, p)).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                _log.Write(LogLevel.Warn, "Engine", "Execution cancelled by user");
+                aborted = true;
+                break;
+            }
+            catch (WorkflowTerminatedException termination)
+            {
+                _log.Write(LogLevel.Warn, "Engine", $"Execution terminated: {termination.Message}");
+                terminated = true;
+                terminationReason = termination.Reason;
+                break;
+            }
+            if (!succeeded)
+            {
+                lock (failLock) { failedNodes.Add(node.InstanceId); }
+
+                switch (options.FailurePolicy)
+                {
+                    case ExecutionFailurePolicy.FailFast:
+                        aborted = true;
+                        break;
+                    case ExecutionFailurePolicy.SkipDependents:
+                        MarkDownstreamSkipped(node, byId, connections, skippedByFailure);
+                        break;
+                }
+
+                if (aborted)
+                    break;
+            }
+
+            completed++;
+            var progress = (double)completed / Math.Max(1, total);
+            ProgressChanged?.Invoke(this, progress);
+
+            if (succeeded)
+            {
+                try
+                {
+                    if (await ApplyFlowControlAsync(node, byId, connections, order, flowOut, token,
+                        handledByFlow, skippedByBranch, skippedByFailure, failedNodes, failLock, options).ConfigureAwait(false))
+                    {
+                        aborted = true;
+                        break;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    _log.Write(LogLevel.Warn, "Engine", "Execution cancelled during flow control dispatch");
+                    aborted = true;
+                    break;
+                }
+                catch (WorkflowTerminatedException termination)
+                {
+                    _log.Write(LogLevel.Warn, "Engine", $"Execution terminated during flow dispatch: {termination.Message}");
+                    terminated = true;
+                    terminationReason = termination.Reason;
+                    break;
+                }
+            }
+        }
+
+        var result = terminated
+            ? ExecutionResult.Terminated(terminationReason)
+            : aborted && failedNodes.Count == 0
+            ? ExecutionResult.Cancelled()
+            : aborted
+                ? ExecutionResult.Failed("Execution stopped after a node failure", failedNodes)
+            : failedNodes.Count > 0
+                ? nodes.Any(node => node.ExecutionStatus == NodeExecutionStatus.Succeeded)
+                    ? ExecutionResult.PartiallySucceeded(failedNodes)
+                    : ExecutionResult.Failed("No nodes completed successfully", failedNodes)
+                : ExecutionResult.Succeeded(total);
+
+        RecordUnreachedComposites(nodes, CompositeSkipReason.NotReached);
+        return result;
+    }
+
+    private async Task<ExecutionResult> CompletePatchesAsync(ExecutionResult result, bool ownsPatches, CancellationToken token)
+    {
+        if (_patches is null)
+        {
+            return result;
+        }
+        if (ownsPatches)
+        {
+            try
+            {
+                await _patches.CompleteAsync(result.Status == ExecutionStatus.Succeeded, token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                result = ExecutionResult.Cancelled();
+            }
+            catch (Exception error)
+            {
+                result = ExecutionResult.Failed(error.Message, result.FailedNodes);
+                _log.Write(LogLevel.Error, "Engine", error.Message);
+            }
+        }
+        result.PatchChanges = _patches.Changes;
+        result.PatchOutcome = _patches.Outcome;
+        result.CompositeExecutions = _patches.CompositeExecutions;
+        result.CompositeReportTruncated = _patches.CompositeReportTruncated;
+        return result;
+    }
+
+    private async Task DisposePatchRunAsync()
+    {
+        if (_patches is null)
+        {
+            return;
+        }
+        try
+        {
+            await _patches.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (IOException error)
+        {
+            _log.Write(LogLevel.Warn, "Engine", error.Message);
+        }
+        catch (UnauthorizedAccessException error)
+        {
+            _log.Write(LogLevel.Warn, "Engine", error.Message);
+        }
+    }
+
+    private static ExecutionResult AggregateResults(IReadOnlyList<ExecutionResult> results)
+    {
+        if (results.Count == 0)
+        {
+            return ExecutionResult.Succeeded(0);
+        }
+        var status = ExecutionStatus.Succeeded;
+        foreach (var result in results)
+        {
+            if (result.Status is ExecutionStatus.Cancelled or ExecutionStatus.Terminated)
+            {
+                status = result.Status;
+                break;
+            }
+        }
+        if (status == ExecutionStatus.Succeeded)
+        {
+            status = results.Any(result => result.Status == ExecutionStatus.Failed)
+                ? ExecutionStatus.Failed
+                : results.Any(result => result.Status == ExecutionStatus.PartiallySucceeded)
+                    ? ExecutionStatus.PartiallySucceeded
+                    : ExecutionStatus.Succeeded;
+        }
+        return new ExecutionResult
+        {
+            Status = status,
+            ExecutedCount = results.Sum(result => result.ExecutedCount),
+            FailedNodes = [.. results.SelectMany(result => result.FailedNodes)],
+            ErrorMessage = results.Select(result => result.ErrorMessage).FirstOrDefault(message => !string.IsNullOrEmpty(message)),
+            PatchChanges = [.. results.SelectMany(result => result.PatchChanges)],
+            PatchOutcome = CombinePatchOutcome(results),
+            CompositeExecutions = [.. results.SelectMany(result => result.CompositeExecutions)],
+            CompositeReportTruncated = results.Any(result => result.CompositeReportTruncated)
+        };
+    }
+
+    private static PatchRunOutcome CombinePatchOutcome(IReadOnlyList<ExecutionResult> results)
+    {
+        var outcomes = results.Select(result => result.PatchOutcome)
+            .Where(outcome => outcome != PatchRunOutcome.None).ToArray();
+        if (outcomes.Length == 0)
+        {
+            return PatchRunOutcome.None;
+        }
+        PatchRunOutcome[] priority =
+        [
+            PatchRunOutcome.RecoveryRequired,
+            PatchRunOutcome.Conflict,
+            PatchRunOutcome.RolledBack,
+            PatchRunOutcome.Discarded,
+            PatchRunOutcome.Applied,
+            PatchRunOutcome.AlreadyApplied,
+            PatchRunOutcome.Previewed,
+            PatchRunOutcome.Staged,
+            PatchRunOutcome.NotApplicable,
+            PatchRunOutcome.NoChanges
+        ];
+        foreach (var candidate in priority)
+        {
+            if (outcomes.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
+        return outcomes[^1];
+    }
+
+    private static List<ExecutionSegment> BuildExecutionSegments(
+        IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnection>? connections)
+    {
+        var groups = nodes.GroupBy(node => node.ExecutionStage).OrderBy(group => group.Key).ToList();
+        if (groups.Count <= 1)
+        {
+            var stage = groups.Count == 0 ? FlowNodeViewModel.DefaultExecutionStage : groups[0].Key;
+            return [new ExecutionSegment(stage, nodes, connections ?? [])];
+        }
+        List<ExecutionSegment> segments = new(groups.Count);
+        foreach (var group in groups)
+        {
+            var members = group.ToList();
+            var ids = members.Select(node => node.InstanceId).ToHashSet(StringComparer.Ordinal);
+            var edges = (connections ?? []).Where(edge =>
+                edge.SourceInstanceId is { } source && ids.Contains(source)
+                && edge.TargetInstanceId is { } target && ids.Contains(target)).ToList();
+            segments.Add(new ExecutionSegment(group.Key, members, edges));
+        }
+        return segments;
+    }
+
+    private static string? FindCrossStageConnection(IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnection>? connections)
+    {
+        if (connections is not { Count: > 0 })
+        {
+            return null;
+        }
+        Dictionary<string, int> stages = [];
+        foreach (var node in nodes)
+        {
+            stages[node.InstanceId] = node.ExecutionStage;
+        }
+        foreach (var connection in connections)
+        {
+            if (connection.SourceInstanceId is not { } source || connection.TargetInstanceId is not { } target)
+            {
+                continue;
+            }
+            if (stages.TryGetValue(source, out var sourceStage) && stages.TryGetValue(target, out var targetStage)
+                && sourceStage != targetStage)
+            {
+                return "A connection crosses execution stages; keep both endpoints inside the same stage.";
+            }
+        }
+        return null;
     }
 
     /// <summary>
@@ -912,6 +1142,10 @@ public sealed class NodeExecutionEngine
     {
         var clamped = Math.Clamp(localProgress, 0.0, 1.0);
         var overall = (completedBefore + clamped) / Math.Max(1, total);
+        if (_segmentCount > 1)
+        {
+            overall = (_segmentIndex + overall) / _segmentCount;
+        }
         ProgressChanged?.Invoke(this, Math.Clamp(overall, 0.0, 1.0));
     }
 

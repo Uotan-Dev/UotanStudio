@@ -48,6 +48,17 @@ internal static class WorkflowReconstruction
     internal static bool TryCreateNode(NodeDto dto, out FlowNodeViewModel node, bool preserveUnknown = false,
         bool restoreInstanceId = false)
     {
+        if (!TryCreateCore(dto, out node, preserveUnknown, restoreInstanceId))
+        {
+            return false;
+        }
+        node.ExecutionStage = dto.ExecutionStage;
+        return true;
+    }
+
+    private static bool TryCreateCore(NodeDto dto, out FlowNodeViewModel node, bool preserveUnknown,
+        bool restoreInstanceId)
+    {
         node = null!;
         if (string.IsNullOrEmpty(dto.TypeKey)) return false;
         EnsureCatalogPublished();

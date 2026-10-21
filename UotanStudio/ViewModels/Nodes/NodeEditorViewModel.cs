@@ -786,6 +786,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         var nextPrimary = primary is not null && selected.Contains(primary) ? primary : selected.FirstOrDefault();
         SelectedNode = nextPrimary;
         RefreshParameterPresentation();
+        RefreshExecutionStagePresentation();
         OnPropertyChanged(nameof(SelectedNodeCount));
         OnPropertyChanged(nameof(HasSelectedNodes));
         OnPropertyChanged(nameof(HasSelection));
@@ -806,6 +807,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(SelectedCategoryDisplay));
         OnPropertyChanged(nameof(SelectedTypeDisplay));
         OnPropertyChanged(nameof(BatchSelectedImage));
+        RefreshExecutionStagePresentation();
         RefreshBatchInputs();
     }
 
@@ -875,7 +877,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private static IEnumerable<string> TrackedProperties(object target) => target switch
     {
-        FlowNodeViewModel => ["SelectedImage", "CustomName"],
+        FlowNodeViewModel => ["SelectedImage", "CustomName", "ExecutionStage"],
         NodeConnectorViewModel => ["InitialValue"],
         _ => []
     };
@@ -884,6 +886,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     {
         (FlowNodeViewModel node, "SelectedImage") => node.SelectedImage,
         (FlowNodeViewModel node, "CustomName") => node.CustomName,
+        (FlowNodeViewModel node, "ExecutionStage") => node.ExecutionStage,
         (NodeConnectorViewModel connector, "InitialValue") => connector.InitialValue,
         _ => null
     };
@@ -897,6 +900,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
                 break;
             case (FlowNodeViewModel node, "CustomName"):
                 node.CustomName = value as string ?? string.Empty;
+                break;
+            case (FlowNodeViewModel node, "ExecutionStage"):
+                node.ExecutionStage = value is int stage ? stage : FlowNodeViewModel.DefaultExecutionStage;
                 break;
             case (NodeConnectorViewModel connector, "InitialValue"):
                 connector.InitialValue = value;
@@ -914,6 +920,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         else if (propertyName == nameof(FlowNodeViewModel.CustomName))
         {
             RefreshParameterPresentation();
+        }
+        else if (propertyName == nameof(FlowNodeViewModel.ExecutionStage))
+        {
+            RefreshExecutionStagePresentation();
         }
         if (propertyName is null || !TrackedProperties(target).Contains(propertyName, StringComparer.Ordinal)) return;
 
@@ -936,6 +946,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             }
         };
         Record(new PropertyChangeCommand($"Edit {propertyName}", setter, original, current));
+        if (propertyName == nameof(FlowNodeViewModel.ExecutionStage))
+        {
+            RefreshExecutionStagePresentation();
+        }
         if (target is FlowNodeViewModel editedNode)
         {
             ClearNodeValidation(editedNode);
@@ -1338,7 +1352,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         var node = e.Node;
         void Append()
         {
-            AppendExecutionLog($"{node.Title} -> {node.StatusDisplay}");
+            AppendExecutionLog($"{node.Title} [{node.ExecutionStageBadge}] -> {node.StatusDisplay}");
         }
 
         if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())

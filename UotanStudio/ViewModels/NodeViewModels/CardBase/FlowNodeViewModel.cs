@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
@@ -153,6 +154,39 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
         get;
         set => SetProperty(ref field, value);
     }
+
+    /// <summary>
+    /// Stage index used by nodes that declare no explicit stage; it always runs before later stages.
+    /// <para>未声明显式阶段的节点使用的阶段索引；它总是先于后续阶段执行。</para>
+    /// </summary>
+    public const int DefaultExecutionStage = 0;
+
+    /// <summary>
+    /// Gets or sets the execution stage this node belongs to; the engine runs stages in ascending order.
+    /// <para>获取或设置该节点所属的执行阶段；引擎按升序执行各阶段。</para>
+    /// </summary>
+    /// <value>
+    /// Zero-based stage index; <see cref="DefaultExecutionStage"/> when the node never declared one.
+    /// <para>从零开始的阶段索引；节点从未声明时为 <see cref="DefaultExecutionStage"/>。</para>
+    /// </value>
+    public int ExecutionStage
+    {
+        get => field;
+        set
+        {
+            if (!IsEditingLocked && SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ExecutionStageBadge));
+            }
+        }
+    } = DefaultExecutionStage;
+
+    /// <summary>
+    /// Compact badge for this node's execution stage, for example <c>S0</c>.
+    /// <para>该节点执行阶段的精简徽标，例如 <c>S0</c>。</para>
+    /// </summary>
+    /// <value><c>S</c> followed by <see cref="ExecutionStage"/>.<para>由 <c>S</c> 与 <see cref="ExecutionStage"/> 组成。</para></value>
+    public string ExecutionStageBadge => "S" + ExecutionStage.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Gets or sets whether the node is selected.

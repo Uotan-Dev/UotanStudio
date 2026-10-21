@@ -177,6 +177,17 @@
                             <avalonia:App Width="16" Height="16" />
                         </Button>
                     </WrapPanel>
+                    <!-- 设置选中节点的执行阶段；标签复用现有资源键。 -->
+                    <!-- Assign the execution stage of the selected nodes; the label reuses an existing resource key. -->
+                    <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2,8,2">
+                        <TextBlock Text="{DynamicResource Node_Choice_Stage}" FontSize="11"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}" />
+                        <ComboBox x:Name="ToolbarExecutionStageSelector" MinWidth="64" Height="28" FontSize="12"
+                                  ItemsSource="{Binding ExecutionStageLabels}"
+                                  SelectedItem="{Binding SelectedExecutionStageLabel, Mode=TwoWay}"
+                                  IsEnabled="{Binding HasSelectedNodes}"
+                                  ToolTip.Tip="{DynamicResource Node_Choice_Stage}" />
+                    </WrapPanel>
                 </WrapPanel>
 
                 <!-- 中栏：图校验、补丁预览与运行/停止。 -->
@@ -298,6 +309,10 @@
                     <Run Text=" | " />
                     <Run Text="{Binding Connections.Count, Mode=OneWay}" />
                     <Run Text="{DynamicResource Node_ConnectionsLabel}" />
+                    <Run Text=" | " />
+                    <Run Text="{DynamicResource Node_Choice_Stage}" />
+                    <Run Text=" " />
+                    <Run Text="{Binding SelectedExecutionStageLabel, Mode=OneWay}" />
                 </TextBlock>
                 <ProgressBar x:Name="WorkflowProgress" Grid.Row="1" Grid.ColumnSpan="3" Height="3" Margin="0,4,0,0"
                              Minimum="0" Maximum="1" Value="{Binding ExecutionProgress}" IsVisible="{Binding IsExecuting}" />
@@ -514,6 +529,21 @@
                                 <TextBlock Grid.Column="1" Text="{Binding SelectedTypeDisplay}"
                                            FontSize="12" TextTrimming="CharacterEllipsis" />
                             </Grid>
+                            <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,0">
+                                <TextBlock Grid.Column="0" Text="{DynamicResource Node_Choice_Stage}"
+                                           FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Margin="0,0,8,0" VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <ComboBox FontSize="12" Height="28" MinWidth="64"
+                                              ItemsSource="{Binding ExecutionStageLabels}"
+                                              SelectedItem="{Binding SelectedExecutionStageLabel, Mode=TwoWay}"
+                                              ToolTip.Tip="{DynamicResource Node_Choice_Stage}" />
+                                    <TextBlock Text="{DynamicResource Node_BatchMixed}" FontSize="11"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource SecondaryTextBrush}"
+                                               IsVisible="{Binding IsExecutionStageMixed}" />
+                                </StackPanel>
+                            </Grid>
                             <StackPanel Spacing="4" IsVisible="{Binding CanEditBatchProjectImage}">
                                 <Separator Margin="0,4" />
                                 <Grid ColumnDefinitions="Auto,*">
@@ -551,10 +581,17 @@
 
                         <StackPanel Margin="8" Spacing="6"
                                     IsVisible="{Binding IsSingleSelection}">
-                             <TextBlock Text="{Binding SelectedNode.DisplayHeader}"
-                                        FontWeight="SemiBold" FontSize="13"
-                                        TextWrapping="Wrap"
-                                       Margin="0,0,0,4" />
+                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,4">
+                                <TextBlock Text="{Binding SelectedNode.DisplayHeader}"
+                                           FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" />
+                                <Border CornerRadius="3" Padding="4,1" VerticalAlignment="Center"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                        BorderThickness="1">
+                                    <TextBlock Text="{Binding SelectedNode.ExecutionStageBadge}" FontSize="10"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </Border>
+                            </StackPanel>
                             <Separator Margin="0,4" />
 
                             <!-- 节点类别 -->
@@ -577,6 +614,18 @@
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding SelectedNode.StatusDisplay}"
                                            FontSize="12" />
+                            </Grid>
+
+                            <!-- 执行阶段 -->
+                            <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,0">
+                                <TextBlock Grid.Column="0" Text="{DynamicResource Node_Choice_Stage}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Margin="0,0,8,0" VerticalAlignment="Center" />
+                                <ComboBox Grid.Column="1" FontSize="12" Height="28"
+                                          ItemsSource="{Binding ExecutionStageLabels}"
+                                          SelectedItem="{Binding SelectedExecutionStageLabel, Mode=TwoWay}"
+                                          ToolTip.Tip="{DynamicResource Node_Choice_Stage}" />
                             </Grid>
 
                             <!-- 节点类型键 -->
@@ -749,14 +798,26 @@
                 <!-- 节点模板 -->
                 <nodify:NodifyEditor.ItemTemplate>
                     <DataTemplate DataType="{x:Type nodeVm:FlowNodeViewModel}">
-                                     <nodify:Node Header="{Binding DisplayHeader}"
-                                          Input="{Binding CanvasInputs}"
-                                          Output="{Binding Output}"
-                                          Location="{Binding Location, Mode=TwoWay}"
-                                          IsSelected="{Binding IsSelected, Mode=TwoWay}"
-                                          BorderBrush="{Binding NodeBorderBrush}"
-                                          BorderThickness="{Binding NodeBorderThickness}"
-                                          ToolTip.Tip="{Binding ValidationMessage}">
+                        <nodify:Node Input="{Binding CanvasInputs}"
+                                     Output="{Binding Output}"
+                                     Location="{Binding Location, Mode=TwoWay}"
+                                     IsSelected="{Binding IsSelected, Mode=TwoWay}"
+                                     BorderBrush="{Binding NodeBorderBrush}"
+                                     BorderThickness="{Binding NodeBorderThickness}"
+                                     ToolTip.Tip="{Binding ValidationMessage}">
+                            <nodify:Node.Header>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{Binding DisplayHeader}" FontWeight="SemiBold"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <Border CornerRadius="3" Padding="4,1" VerticalAlignment="Center"
+                                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                            BorderThickness="1">
+                                        <TextBlock Text="{Binding ExecutionStageBadge}" FontSize="10"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </Border>
+                                </StackPanel>
+                            </nodify:Node.Header>
                             <nodify:Node.InputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
                                     <nodify:NodeInput IsConnected="{Binding IsConnected}"
@@ -837,9 +898,21 @@
                         <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
                     </Border.RenderTransform>
                     <nodify:Node x:DataType="nodeVm:FlowNodeViewModel"
-                                 Header="{Binding DisplayHeader}"
                                  Input="{Binding CanvasInputs}"
                                  Output="{Binding Output}">
+                        <nodify:Node.Header>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{Binding DisplayHeader}" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <Border CornerRadius="3" Padding="4,1" VerticalAlignment="Center"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                        BorderThickness="1">
+                                    <TextBlock Text="{Binding ExecutionStageBadge}" FontSize="10"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </Border>
+                            </StackPanel>
+                        </nodify:Node.Header>
                         <nodify:Node.InputConnectorTemplate>
                             <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
                                 <nodify:NodeInput IsConnected="{Binding IsConnected}">
