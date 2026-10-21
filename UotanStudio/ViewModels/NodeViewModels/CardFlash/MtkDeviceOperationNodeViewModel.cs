@@ -229,6 +229,17 @@ public sealed class MtkDeviceOperationNodeViewModel : FlowNodeViewModel
             throw new NotSupportedException("The Device input must be an MTK target.");
         }
 
+        if (device is not null && operation is MtkNodeOperation.ReturnToBrom)
+        {
+            await App.DeviceMonitor.RunMtkAsync(device, async session =>
+            {
+                await RunCoreAsync(context, session, protocol, storage, null, operation, partition, image,
+                    scatter, outputPath, verify).ConfigureAwait(false);
+                return true;
+            }, context.CancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         var port = Text(ReadInput("Port")) ?? string.Empty;
         if (device is null && string.IsNullOrWhiteSpace(port))
         {
@@ -266,17 +277,6 @@ public sealed class MtkDeviceOperationNodeViewModel : FlowNodeViewModel
 
         if (device is not null)
         {
-            if (operation is MtkNodeOperation.ReturnToBrom)
-            {
-                await App.DeviceMonitor.RunMtkAsync(device, async session =>
-                {
-                    await RunCoreAsync(context, session, protocol, storage, null, operation, partition, image,
-                        scatter, outputPath, verify).ConfigureAwait(false);
-                    return true;
-                }, context.CancellationToken).ConfigureAwait(false);
-                return;
-            }
-
             var startup = await MtkNodeSupport.BuildStartupAsync(protocol, storage, loaderPath, emiPath,
                 context.CancellationToken).ConfigureAwait(false);
             await App.DeviceMonitor.RunMtkAsync(device, async session =>
