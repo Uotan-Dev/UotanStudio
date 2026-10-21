@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Metadata;
 using UnifiedChunkIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsChunkIdata;
@@ -10,7 +11,6 @@ using UnifiedDataLayout = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.Er
 using UnifiedFlatIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsFlatIdata;
 using UnifiedIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.IErofsIdata;
 using UnifiedInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
-using UnifiedInodeLayer = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInodeLayer;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs;
 
@@ -26,20 +26,20 @@ internal static class ErofsRebuildMetadata
     /// <summary>Projects parsed rebuild options into their persisted form. The raw superblock feature words and
     /// the dot-omitted dimension are stored only when the options carry a declaration, so a profile without one
     /// keeps both fields absent. The fragment dimensions and the metabox requirement are stored for every
-    /// profile, and every recorded inode carries its fragment shape and secondary algorithm as enumeration
-    /// member names so the document stays locale-free. The source inode number is recorded so the output
-    /// republishes the 32-bit <c>stat</c> identity of the source, and is left out for a source that recorded
-    /// none. Dimensions the format stores as raw bytes are recorded verbatim as base64 rather than as text,
-    /// because the on-disk device-slot tag may hold a digest and the chunk index table is a packed array: the
-    /// slot tag, the complete chunk format word with its index table, the per-inode <c>i_format</c> word with the
-    /// compacted-2B and interlaced shapes, and the superblock's extended-slot and directory-block geometry.
+    /// profile, and every recorded inode carries its fragment shape, secondary algorithm and metadata creation
+    /// type as enumeration member names so the document stays locale-free. The source inode number is recorded
+    /// so the output republishes the 32-bit <c>stat</c> identity of the source, and is left out for a source that
+    /// recorded none. Dimensions the format stores as raw bytes are recorded verbatim as base64 rather than as
+    /// text, because the on-disk device-slot tag may hold a digest and the chunk index table is a packed array:
+    /// the slot tag, the complete chunk format word with its index table, the per-inode <c>i_format</c> word with
+    /// the compacted-2B and interlaced shapes, and the superblock's extended-slot and directory-block geometry.
     /// <para>将解析得到的重建选项投影为持久化形式。仅在选项携带声明时才保存原始超级块特性字与 dot-omitted
     /// 维度，未携带声明的档案会让两个字段保持缺失。碎片维度与 metabox 要求对每个档案一律保存，且每条已记录
-    /// inode 都以枚举成员名携带其 fragment 形态与第二算法，使文档不依赖语言环境。源 inode 编号亦被记录，使
-    /// 输出重新发布源的 32 位 <c>stat</c> 身份；源未记录编号时则不写入。格式以原始字节保存的维度按 base64
-    /// 逐字记录而不做文本化，因为磁盘设备槽 tag 可能存放摘要，chunk 索引表则是打包数组：槽位 tag、含索引表的
-    /// 完整 chunk 格式字、逐 inode 的 <c>i_format</c> 字与紧凑 2 字节、交错形态，以及超级块的扩展槽与目录块
-    /// 几何。</para></summary>
+    /// inode 都以枚举成员名携带其 fragment 形态、第二算法与元数据创建类型，使文档不依赖语言环境。源 inode
+    /// 编号亦被记录，使输出重新发布源的 32 位 <c>stat</c> 身份；源未记录编号时则不写入。格式以原始字节保存的
+    /// 维度按 base64 逐字记录而不做文本化，因为磁盘设备槽 tag 可能存放摘要，chunk 索引表则是打包数组：槽位 tag、
+    /// 含索引表的完整 chunk 格式字、逐 inode 的 <c>i_format</c> 字与紧凑 2 字节、交错形态，以及超级块的扩展槽
+    /// 与目录块几何。</para></summary>
     /// <param name="options">Options derived from the verified source image.
     /// <para>由已校验源镜像推导出的选项。</para></param>
     /// <returns>The persisted profile holding every inherited dimension.
@@ -163,6 +163,7 @@ internal static class ErofsRebuildMetadata
                     SourceExtentRecordSize = extentState is { HasExtents: true } ? extentState.ExtentRecordSize : null,
                     FragmentShape = source.SourceFragmentShape.ToString(),
                     SecondaryAlgorithm = source.SecondaryAlgorithm?.ToString(),
+                    MetadataCreationType = source.MetadataCreationType?.ToString(),
                     ChunkBits = source.ChunkFormatBlkBits,
                     ChunkFormat = source.ChunkFormat,
                     ChunkIndexBase64 = EncodeChunkIndexTable(source),
@@ -246,28 +247,31 @@ internal static class ErofsRebuildMetadata
     /// absent: a device slot replays its recorded tag bytes instead of re-encoding text, a chunk-based inode
     /// takes the recorded chunk format word and index table, an inode takes the recorded <c>i_format</c> word
     /// with the compacted-2B and interlaced shapes, and the superblock takes the recorded extended-slot and
-    /// directory-block geometry only when the document carries them.
+    /// directory-block geometry only when the document carries them. The per-inode metadata creation type is
+    /// parsed from its recorded member name, so the rebuild honours both where the source record lived and
+    /// whether it was compact or extended; a profile without the entry keeps the derived form.
     /// <para>根据持久化档案重建 EROFS 选项；该档案属于不可信输入并会校验。记录了特性字的档案会让这两个字连同
     /// 保存的 dot-omitted 维度成为权威声明；早于这些字段的快照仍按推导式声明，使该重建与无档案路径逐字节一致。
     /// 未记录 all-fragments 的档案从已记录的 fragments 维度读取该 advise；未记录 metabox 要求或未记录逐 inode
     /// fragment 文本的档案则把这些维度还原为关闭与单算法。未记录 inode 编号的档案把编号还原为零，这正是该类快照
     /// 被采集时的语义。原始字节维度由各自的字段还原，缺失时退化为先前的推导：设备槽重放其记录的 tag 字节而不是
     /// 重新编码文本，chunk-based inode 取记录的 chunk 格式字与索引表，inode 取记录的 <c>i_format</c> 字以及紧凑
-    /// 2 字节与交错形态，超级块仅在文档携带时取记录的扩展槽与目录块几何。</para>
+    /// 2 字节与交错形态，超级块仅在文档携带时取记录的扩展槽与目录块几何。逐 inode 的元数据创建类型按其记录的
+    /// 成员名解析，使重建同时遵循源记录的位置与紧凑/扩展宽度；未携带该项的档案保持推导形态。</para>
     /// </summary>
     /// <param name="parameters">Persisted profile read from the metadata document.
     /// <para>从元数据文档读出的持久化档案。</para></param>
     /// <returns>The options a rebuild consumes, with the inherited declaration replayed when the profile carries
     /// one. <para>重建所消费的选项；档案携带声明时一并重放。</para></returns>
     /// <exception cref="FileSystemCorruptedException">The document holds an unknown algorithm, dot-omitted,
-    /// fragment-shape or secondary-algorithm name, an out-of-range field, a device table that cannot be
-    /// re-emitted, a device tag or chunk index table that is not base64 or does not fit its on-disk field, an
-    /// <c>i_format</c> word that raises bits the format does not define, a recorded inode algorithm without a
-    /// configuration record behind it, or a metabox requirement recorded without the metabox declaration it
-    /// needs.
-    /// <para>文档含未知的算法名、dot-omitted 名称、fragment 形态名或第二算法名、超出范围字段、无法重新输出的
-    /// 设备表、不是 base64 或超出其磁盘字段宽度的设备 tag 与 chunk 索引表、置有格式未定义位的 <c>i_format</c>
-    /// 字、缺少配置记录的已记录 inode 算法，或缺少 metabox 声明的 metabox 要求。</para></exception>
+    /// fragment-shape, secondary-algorithm or metadata-creation-type name, an out-of-range field, a device table
+    /// that cannot be re-emitted, a device tag or chunk index table that is not base64 or does not fit its
+    /// on-disk field, an <c>i_format</c> word that raises bits the format does not define, a recorded inode
+    /// algorithm without a configuration record behind it, or a metabox requirement recorded without the metabox
+    /// declaration it needs.
+    /// <para>文档含未知的算法名、dot-omitted 名称、fragment 形态名、第二算法名或元数据创建类型名、超出范围字段、
+    /// 无法重新输出的设备表、不是 base64 或超出其磁盘字段宽度的设备 tag 与 chunk 索引表、置有格式未定义位的
+    /// <c>i_format</c> 字、缺少配置记录的已记录 inode 算法，或缺少 metabox 声明的 metabox 要求。</para></exception>
     /// <exception cref="FileSystemUnsupportedFeatureException">The inherited incompat word declares a feature the
     /// managed writer can only parse. <para>继承的 incompat 字声明了写入方仅能解析的特性。</para></exception>
     internal static ErofsOptions Restore(ErofsRebuildParameters parameters)
@@ -427,7 +431,7 @@ internal static class ErofsRebuildMetadata
 
                 var node = new UnifiedInode
                 {
-                    Layer = UnifiedInodeLayer.Source,
+                    Layer = ErofsInodeLayer.Source,
                     Nid = inode.Nid,
                     Ino = inode.Ino ?? 0,
                     SourcePath = inode.Path,
@@ -442,6 +446,7 @@ internal static class ErofsRebuildMetadata
                     SourceAlgorithm = algorithm,
                     SourceFragmentShape = ParseFragmentShape(inode.FragmentShape),
                     SecondaryAlgorithm = ParseSecondaryAlgorithm(inode.SecondaryAlgorithm),
+                    MetadataCreationType = ParseMetadataCreationType(inode.MetadataCreationType),
                     XattrEntries = inode.Xattrs is { Count: > 0 } stored
                         ? [.. stored.Select(attribute => new ErofsXattrEntry
                         {
@@ -938,5 +943,34 @@ internal static class ErofsRebuildMetadata
 
         throw new FileSystemCorruptedException(
             $"Unknown EROFS secondary compression algorithm '{name}' in preserved metadata.");
+    }
+
+    /// <summary>
+    /// Reads the stored <c>ErofsInodeMetadataCreationType</c> member name recording both the location and the
+    /// width of one preserved inode's metadata record, which the extraction recorded as text so the document
+    /// stays locale-free. A profile without an entry leaves the creation form to the rebuild's own derivation.
+    /// <para>读取为单个保留 inode 元数据记录的位置与宽度保存的 <c>ErofsInodeMetadataCreationType</c> 成员名；
+    /// 解包阶段以文本记录，使文档不依赖语言环境。未记录该项的档案让创建形态由重建自行推导。</para>
+    /// </summary>
+    /// <param name="name">Stored member name, or <see langword="null"/> when the profile carries no entry for the
+    /// creation form. <para>保存的成员名；档案未记录创建形态时为 <see langword="null"/>。</para></param>
+    /// <returns>The recorded creation form, or <see langword="null"/> when nothing was stored.
+    /// <para>记录的创建形态；未保存时为 <see langword="null"/>。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The stored text is not a member name.
+    /// <para>保存的文本不是成员名。</para></exception>
+    private static ErofsInodeMetadataCreationType? ParseMetadataCreationType(string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return null;
+        }
+
+        if (ErofsInodeMetadataCreationType.TryParse(name, out var creationType))
+        {
+            return creationType;
+        }
+
+        throw new FileSystemCorruptedException(
+            $"Unknown EROFS inode metadata creation type '{name}' in preserved metadata.");
     }
 }

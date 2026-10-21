@@ -556,6 +556,12 @@ public sealed partial class ErofsBuilder
                     continue;
                 }
 
+                if (node.InlineCompressedTail && ReferenceEquals(p, node.Pclusters![^1]))
+                {
+
+                    continue;
+                }
+
                 if (p.Plain)
                 {
                     fs.Position = p.SourceOffset;
@@ -591,13 +597,6 @@ public sealed partial class ErofsBuilder
                     }
                 }
 
-                if (node.InlineCompressedTail && ReferenceEquals(p, node.Pclusters![^1]))
-                {
-                    var tailStart = node.MetaOffset + GetInodeRecordSize(node, blockSize) - outLen;
-                    WriteAt(output, tailStart, compressed, outLen);
-                    continue;
-                }
-
                 var blockBytes = CeilDiv(p.CompressedLength, blockSize) * blockSize;
                 var start = checked(p.BlockAddress * blockSize);
                 if (outLen < blockBytes)
@@ -611,6 +610,79 @@ public sealed partial class ErofsBuilder
         finally
         {
             System.Buffers.ArrayPool<byte>.Shared.Return(raw);
+            System.Buffers.ArrayPool<byte>.Shared.Return(compressed);
+        }
+    }
+
+    /// <summary>
+    /// Writes the final compressed pcluster into the inode metadata record when the node stores it inline.
+    /// The frame is read back from the build's staging file, or re-encoded from the source when no staged
+    /// offset was recorded; it is placed so that it ends at the record's measured end, which is the layout
+    /// <see cref="GetInodeRecordSize"/> already accounted for. A metabox resident passes its body-relative
+    /// slot offset, so the tail lands inside the container body exactly where the plain metadata area would
+    /// carry it.
+    /// <para>当节点把末尾压缩 pcluster 内联存放时，把它写入 inode 元数据记录。帧从本次构建的暂存文件读回，未记录
+    /// 暂存偏移时则从源重新编码；其结束位置对齐到记录的度量末端，这正是 <see cref="GetInodeRecordSize"/> 已经计入的
+    /// 布局。metabox 常驻节点传入其相对容器本体的槽位偏移，因此尾部落在容器本体内，与普通元数据区所携带的位置一致。</para>
+    /// </summary>
+    /// <param name="output">Destination stream in the coordinates of <paramref name="inodeOffset"/>.
+    /// <para>与 <paramref name="inodeOffset"/> 同坐标的目标流。</para></param>
+    /// <param name="inodeOffset">Byte offset of the inode record in <paramref name="output"/>.
+    /// <para>inode 记录在 <paramref name="output"/> 中的字节偏移。</para></param>
+    /// <param name="node">Node whose final pcluster is stored inline.
+    /// <para>末尾 pcluster 内联存放的节点。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes.
+    /// <para>以字节计的文件系统块大小。</para></param>
+    /// <param name="options">Validated build options used when the frame has to be re-encoded.
+    /// <para>需要重新编码帧时所使用的经校验构建选项。</para></param>
+    /// <param name="staging">Staging file holding accepted frames, or <see langword="null"/> when the build
+    /// staged none. <para>承载已接受帧的暂存文件；构建未暂存任何帧时为 <see langword="null"/>。</para></param>
+    /// <exception cref="FileSystemCorruptedException">Re-encoding the frame does not reproduce the recorded
+    /// compressed length. <para>重新编码的帧长度与记录的压缩长度不同。</para></exception>
+    private static void WriteInlineCompressedTail(Stream output, long inodeOffset, ErofsInode node,
+        int blockSize, ErofsOptions options, Core.CompressionPayloadStaging? staging)
+    {
+        var plan = node.Pclusters![^1];
+        var encodedLength = plan.CompressedLength;
+        var compressionOptions = node.CompressionOptions ?? options;
+        var capacity = plan.StagedOffset >= 0 && staging is not null
+            ? encodedLength
+            : ErofsCompression.MaximumOutputSize((ErofsAlgorithm)compressionOptions.Algorithm, plan.SourceLength);
+        var compressed = System.Buffers.ArrayPool<byte>.Shared.Rent(Math.Max(capacity, 1));
+        try
+        {
+            if (plan.StagedOffset >= 0 && staging is not null)
+            {
+                staging.Read(plan.StagedOffset, compressed.AsSpan(0, encodedLength));
+            }
+            else
+            {
+                var raw = System.Buffers.ArrayPool<byte>.Shared.Rent(Math.Max(plan.SourceLength, 1));
+                try
+                {
+                    using var source = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    source.Position = plan.SourceOffset;
+                    source.ReadExactly(raw, 0, plan.SourceLength);
+                    using var codec = new ErofsEncoderContext();
+                    var written = ErofsCompression.AlgorithmCompress(compressionOptions, codec, raw, 0,
+                        plan.SourceLength, compressed, 0, capacity);
+                    if (written != encodedLength)
+                    {
+                        throw new FileSystemCorruptedException(
+                            $"Inline compressed tail length mismatch for '{node.FullPath}': {written} != {encodedLength}.");
+                    }
+                }
+                finally
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(raw);
+                }
+            }
+
+            var tailStart = inodeOffset + GetInodeRecordSize(node, blockSize) - encodedLength;
+            WriteAt(output, tailStart, compressed, encodedLength);
+        }
+        finally
+        {
             System.Buffers.ArrayPool<byte>.Shared.Return(compressed);
         }
     }
@@ -1377,8 +1449,11 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Whether an uncompressed regular inode and its inline payload fit within one METABOX block.
-    /// <para>仅将 inode、扩展属性和内联数据整体能放入单个 METABOX 块的普通文件作为驻留记录。</para>
+    /// Whether an uncompressed regular inode and its complete metadata record fit within one METABOX block.
+    /// This is the fresh-build eligibility policy; a preserved rebuild follows each node's recorded metadata
+    /// creation type first and only falls back to this policy when the profile recorded none.
+    /// <para>未压缩的常规 inode 及其完整元数据记录是否能放入单个 METABOX 块。这是全新构建的资格策略；保留式重建
+    /// 优先遵循每个节点记录的元数据创建形态，仅在档案未记录形态时才退回该策略。</para>
     /// </summary>
     private static bool IsMetaboxEligible(ErofsInode node, int blockSize)
         => !node.IsDirectory
@@ -1391,12 +1466,12 @@ public sealed partial class ErofsBuilder
            && GetInodeRecordSize(node, blockSize) <= blockSize;
 
     /// <summary>
-    /// Assembles the metabox container body: every resident's inode record placed at its slot, followed by
-    /// that record's inline xattrs and inline tail data, plus the shared xattr area at its planned offset.
-    /// The body is produced as one buffer rather than written straight into the image because the container
-    /// may be encoded, and an encoder needs the whole payload addressable before it plans a single pcluster.
-    /// <para>装配 metabox 容器本体：把每个常驻 inode 的记录放到其槽位，紧随其内联 xattr 与内联尾部数据，并在
-    /// 规划的偏移处写入共享 xattr 区。本体以单个缓冲产出而不是直接写进镜像，因为容器可能被编码，而编码器需要
+    /// Assembles the metabox container body: every resident's complete metadata placed at its slot through
+    /// <see cref="WriteInodeMetadata"/>, plus the shared xattr area at its planned offset. The body is
+    /// produced as one buffer rather than written straight into the image because the container may be
+    /// encoded, and an encoder needs the whole payload addressable before it plans a single pcluster.
+    /// <para>装配 metabox 容器本体：经 <see cref="WriteInodeMetadata"/> 把每个常驻 inode 的完整元数据放到其槽位，
+    /// 并在规划的偏移处写入共享 xattr 区。本体以单个缓冲产出而不是直接写进镜像，因为容器可能被编码，而编码器需要
     /// 在规划任何 pcluster 之前就能寻址整个负载。</para>
     /// </summary>
     /// <param name="blockSize">Filesystem block size in bytes.
@@ -1414,29 +1489,25 @@ public sealed partial class ErofsBuilder
     /// <para>按槽位顺序排列的已编码共享 xattr 记录。</para></param>
     /// <param name="options">Validated build options the residents' records are built against.
     /// <para>构建常驻记录所依据的经校验选项。</para></param>
+    /// <param name="staging">Staging file holding accepted compressed frames, or <see langword="null"/> when
+    /// this build staged none. <para>承载已接受压缩帧的暂存文件；本次构建未暂存任何帧时为
+    /// <see langword="null"/>。</para></param>
     /// <returns>The zero-filled body buffer with every resident and shared xattr record in place. Gaps stay
     /// zero, which is what the image preallocation used to guarantee for the slot-wise writer.
     /// <para>已填入全部常驻记录与共享 xattr 记录、其余为零的本体缓冲。空隙保持为零，这正是逐槽位写入方原先
     /// 依赖镜像预分配保证的结果。</para></returns>
     private static byte[] BuildMetaboxContainerBody(int blockSize, ulong now, List<ErofsInode> residents,
-        long bodyLength, long sharedXattrOffset, List<byte[]> sharedXattrs, ErofsOptions options)
+        long bodyLength, long sharedXattrOffset, List<byte[]> sharedXattrs, ErofsOptions options,
+        Core.CompressionPayloadStaging? staging)
     {
         var body = new byte[checked((int)bodyLength)];
-        foreach (var resident in residents)
-        {
-            BuildInode(resident, blockSize, now, options);
-            var buffer = new byte[resident.OnDiskSize];
-            resident.WriteTo(buffer);
-            var slotOffset = checked((int)(resident.MetaboxSlot * ErofsSuperblock.CompactInodeSize));
-            buffer.CopyTo(body, slotOffset);
-            if (resident.XattrIbody.Length > 0)
-            {
-                resident.XattrIbody.CopyTo(body, slotOffset + resident.OnDiskSize);
-            }
 
-            if (resident.InlineData.Length > 0)
+        using (var bodyStream = new MemoryStream(body, writable: true))
+        {
+            foreach (var resident in residents)
             {
-                resident.InlineData.CopyTo(body, slotOffset + checked((int)resident.InlineDataOffset));
+                var slotOffset = checked(resident.MetaboxSlot * ErofsSuperblock.CompactInodeSize);
+                WriteInodeMetadata(bodyStream, slotOffset, resident, blockSize, now, options, staging);
             }
         }
 
@@ -1475,13 +1546,16 @@ public sealed partial class ErofsBuilder
     /// <para>按槽位顺序排列的已编码共享 xattr 记录。</para></param>
     /// <param name="options">Validated build options the residents' records are built against.
     /// <para>构建常驻记录所依据的经校验选项。</para></param>
+    /// <param name="staging">Staging file holding accepted compressed frames, or <see langword="null"/> when
+    /// this build staged none. <para>承载已接受压缩帧的暂存文件；本次构建未暂存任何帧时为
+    /// <see langword="null"/>。</para></param>
     private static void WriteMetaboxContainer(Stream output, ErofsInode metaboxNode, int blockSize, ulong now,
         List<ErofsInode> residents, long bodyLength, long sharedXattrOffset, List<byte[]> sharedXattrs,
-        ErofsOptions options)
+        ErofsOptions options, Core.CompressionPayloadStaging? staging)
     {
         var baseOffset = checked(metaboxNode.FlatBlockAddr * blockSize);
         var body = BuildMetaboxContainerBody(blockSize, now, residents, bodyLength, sharedXattrOffset,
-            sharedXattrs, options);
+            sharedXattrs, options, staging);
         WriteAt(output, baseOffset, body, body.Length);
     }
 
@@ -1505,12 +1579,15 @@ public sealed partial class ErofsBuilder
     /// <para>镜像坐标下的目标流。</para></param>
     /// <param name="node">Chunk-based file node whose index was filled by the address pass.
     /// <para>索引已由地址分配阶段填充的 chunk-based 文件节点。</para></param>
+    /// <param name="inodeOffset">Byte offset of the inode record in the same coordinates as
+    /// <paramref name="output"/>; a metabox resident passes its body-relative slot offset.
+    /// <para>inode 记录在 <paramref name="output"/> 同坐标下的字节偏移；metabox 常驻节点传入其相对容器本体的槽位偏移。</para></param>
     /// <exception cref="InvalidOperationException">The node carries no chunk index.
     /// <para>该节点不携带 chunk 索引。</para></exception>
     /// <exception cref="FileSystemUnsupportedFeatureException">A nonzero device id was requested while the
     /// node's format selects the 4-byte block map, which has no field for it.
     /// <para>节点格式选择 4 字节块映射时请求了非零设备号，而该形态没有承载设备号的字段。</para></exception>
-    private static void WriteChunkIndexTable(Stream output, ErofsInode node)
+    private static void WriteChunkIndexTable(Stream output, ErofsInode node, long inodeOffset)
     {
         var index = node.ChunkIndex ?? throw new InvalidOperationException("Chunk-based node has no chunk index.");
         var usesIndexes = node.UsesChunkIndexes;
@@ -1523,7 +1600,7 @@ public sealed partial class ErofsBuilder
         }
 
         var unit = usesIndexes ? ErofsInode.ChunkIndexEntrySize : ErofsInode.BlockMapEntrySize;
-        var tableOffset = AlignUp(node.MetaOffset + node.InlineDataOffset, unit);
+        var tableOffset = AlignUp(inodeOffset + node.InlineDataOffset, unit);
         var entries = new byte[checked(index.Length * unit)];
         var addrmask = node.Chunk48Bit ? ChunkIndex48BitMask : uint.MaxValue;
         var nullAddress = node.Chunk48Bit ? ChunkIndexNullAddress48 : uint.MaxValue;
@@ -1552,9 +1629,15 @@ public sealed partial class ErofsBuilder
     /// Writes a fragment inode's 8-byte z_erofs_map_header: h_fragmentoff is the byte offset inside the packed inode and h_clusterbits bit 7 (ZErofsMapHeader.FragmentInodeMask) marks a whole-file fragment.
     /// <para>写出 fragment inode 的 8 字节 z_erofs_map_header：h_fragmentoff = packed 区内字节偏移、 h_clusterbits bit7（ZErofsMapHeader.FragmentInodeMask）声明整文件 fragment。</para>
     /// </summary>
-    private static void WriteFragmentHeader(Stream output, ErofsInode node)
+    /// <param name="output">Destination stream in the coordinates of <paramref name="inodeOffset"/>.
+    /// <para>与 <paramref name="inodeOffset"/> 同坐标的目标流。</para></param>
+    /// <param name="node">Fragment inode whose map header is written.
+    /// <para>待写出映射头的 fragment inode。</para></param>
+    /// <param name="inodeOffset">Byte offset of the inode record in <paramref name="output"/>.
+    /// <para>inode 记录在 <paramref name="output"/> 中的字节偏移。</para></param>
+    private static void WriteFragmentHeader(Stream output, ErofsInode node, long inodeOffset)
     {
-        var headerOffset = node.MetaOffset + AlignUp(node.OnDiskSize + node.XattrISize, 8);
+        var headerOffset = inodeOffset + AlignUp(node.OnDiskSize + node.XattrISize, 8);
         var header = new byte[ZErofsMapHeader.Size];
         BinaryPrimitives.WriteUInt64LittleEndian(header, checked((ulong)node.FragmentOffset) | (1UL << 63));
         WriteAt(output, headerOffset, header, header.Length);
@@ -1657,5 +1740,26 @@ public sealed partial class ErofsBuilder
         }
 
         output.Write(data, 0, count);
+    }
+
+    /// <summary>
+    /// Writes a span at an absolute offset, skipping the seek when the stream already sits there. The inode
+    /// record is written from a bounded stack span, so this overload avoids materializing a temporary array
+    /// for every inode of a large image.
+    /// <para>在绝对偏移处写出一个跨度，流已位于该处时跳过定位。inode 记录由有界的栈上跨度写出，因此该重载避免为
+    /// 大镜像的每个 inode 生成临时数组。</para>
+    /// </summary>
+    /// <param name="output">Destination stream. <para>目标流。</para></param>
+    /// <param name="offset">Absolute write offset in the stream's coordinates.
+    /// <para>流坐标下的绝对写入偏移。</para></param>
+    /// <param name="data">Bytes to write. <para>待写出的字节。</para></param>
+    private static void WriteAt(Stream output, long offset, ReadOnlySpan<byte> data)
+    {
+        if (output.Position != offset)
+        {
+            output.Position = offset;
+        }
+
+        output.Write(data);
     }
 }

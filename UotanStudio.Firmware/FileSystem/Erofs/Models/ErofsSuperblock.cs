@@ -394,6 +394,11 @@ internal sealed class ErofsSuperblock
     /// <para>确保解析出的根 inode 编号适合超级块根字段：未声明 <c>48bit</c> 时为 16 位的
     /// <see cref="RootNid"/>，声明后根存放在 64 位的 <see cref="RootNid8b"/> 中，而 16 位字留给块计数的高半部分。</para>
     /// </summary>
+    /// <remarks>A root inode resident in the METABOX carries the METABOX flag in bit 63 and is stored in the
+    /// 64-bit <c>rootnid_8b</c> field; the flag is part of the nid, not a truncation error, so such a value is
+    /// accepted regardless of the 16-bit field's range. <para>常驻 METABOX 的根 inode 在第 63 位置有 METABOX 标志
+    /// 并存放在 64 位的 <c>rootnid_8b</c> 字段中；该标志是 nid 的一部分而不是截断错误，因此无论 16 位字段的范围如何
+    /// 都接受该值。</para></remarks>
     /// <param name="rootNid">The resolved root inode number to store in the superblock. <para>要写入超级块的已解析根 inode 编号。</para></param>
     /// <param name="has48Bit">Whether the declared feature word carries <c>48bit</c>.
     /// <para>已声明的特性字是否携带 <c>48bit</c>。</para></param>
@@ -403,6 +408,11 @@ internal sealed class ErofsSuperblock
     /// </exception>
     internal static void ValidateRootNidField(ulong rootNid, bool has48Bit)
     {
+        if ((rootNid & (1UL << 63)) != 0)
+        {
+            return;
+        }
+
         if (rootNid > (has48Bit ? ulong.MaxValue : ushort.MaxValue))
         {
             throw new InvalidOperationException(has48Bit

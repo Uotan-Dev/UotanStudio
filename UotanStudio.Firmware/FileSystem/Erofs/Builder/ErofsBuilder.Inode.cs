@@ -312,23 +312,56 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Reports the inode record width one node needs. A caller-declared format overrides the width the
-    /// metadata would otherwise select, and a forced compact record whose fields do not fit it fails loudly
-    /// instead of silently widening: the whole point of the option is the shape it names, so publishing a
-    /// different one would misreport the image. The automatic path keeps its existing precedence — a
-    /// preserved source that recorded an extended record, an extended timestamp, a wide owner or link count,
-    /// then the size and directory-subdirectory bounds.
-    /// <para>报告单个节点所需的 inode 记录宽度。调用方声明的形态优先于元数据本会选择的宽度，而强制紧凑记录装不下
-    /// 其字段时显式报错而非静默加宽：该选项的意义正是它所命名的形态，写出另一种会误报镜像。自动路径保持既有优先级
-    /// ——记录了扩展记录的保留源、扩展时间戳、宽所有者或链接数，随后是文件大小与目录子目录数上界。</para>
+    /// Reports the inode record width one node needs. A preserved source's recorded metadata creation type
+    /// overrides both the metadata-driven width and the caller-declared format, because it names the form the
+    /// source image actually used; a recorded compact form whose fields do not fit it fails loudly instead of
+    /// silently widening, and a forced format that contradicts the recorded one fails rather than being
+    /// ignored. Without a recorded type the automatic path keeps its existing precedence — an extended source
+    /// record, an extended timestamp, a wide owner or link count, then the size and directory-subdirectory
+    /// bounds.
+    /// <para>报告单个节点所需的 inode 记录宽度。保留式源记录的元数据创建形态优先于按元数据推导的宽度与调用方声明的
+    /// 形态，因为它指名源镜像实际使用的形式；记录的紧凑形式装不下其字段时显式报错而非静默加宽，而声明形态与记录
+    /// 形态冲突时同样报错而不是忽略记录。没有记录形态时，自动路径保持既有优先级——扩展源记录、扩展时间戳、宽所有者
+    /// 或链接数，随后是文件大小与目录子目录数上界。</para>
     /// </summary>
     /// <param name="node">Node about to be measured. <para>即将被度量的节点。</para></param>
     /// <returns>The record width in bytes. <para>记录宽度（字节）。</para></returns>
-    /// <exception cref="FileSystemUnsupportedFeatureException">The node was forced to the compact record
-    /// while one of its fields needs the extended one.
-    /// <para>节点被强制为紧凑记录，而其某个字段需要扩展记录。</para></exception>
+    /// <exception cref="FileSystemUnsupportedFeatureException">A recorded or forced compact record cannot hold
+    /// one of the node's fields, or the forced format contradicts the recorded creation form.
+    /// <para>记录或强制的紧凑记录装不下节点的某个字段，或强制形态与记录的创建形态冲突。</para></exception>
     private static long GetInodeHeaderSize(ErofsInode node)
     {
+        if (node.MetadataCreationType is { } creationType)
+        {
+            if (node.InodeFormat != ErofsInodeFormat.Auto)
+            {
+                var forcedExtended = node.InodeFormat == ErofsInodeFormat.Extended;
+                if (forcedExtended != creationType.IsExtended)
+                {
+                    throw new FileSystemUnsupportedFeatureException(
+                        $"EROFS preserved inode '{node.FullPath}' was recorded with a "
+                        + $"{(creationType.IsExtended ? "extended" : "compact")} metadata record, but the build "
+                        + $"forces the {(forcedExtended ? "extended" : "compact")} form, so the recorded creation "
+                        + "form cannot be honoured.");
+                }
+            }
+
+            if (creationType.IsExtended)
+            {
+                return ErofsInode.ExtendedSize;
+            }
+
+            var recordedReason = CompactRecordRejection(node, recordedCompact: true);
+            if (recordedReason is not null)
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"EROFS preserved inode '{node.FullPath}' was recorded with a compact metadata record, but "
+                    + $"its fields need the extended record: {recordedReason}.");
+            }
+
+            return ErofsInode.CompactSize;
+        }
+
         if (node.InodeFormat == ErofsInodeFormat.Extended)
         {
             return ErofsInode.ExtendedSize;
@@ -363,20 +396,27 @@ public sealed partial class ErofsBuilder
     /// <summary>
     /// Reports why a node cannot be stored in the 32-byte compact record, or <see langword="null"/> when it
     /// fits. Every field the extended record widens is checked, so a forced compact build names the exact
-    /// dimension that overflowed instead of failing with a generic message.
+    /// dimension that overflowed instead of failing with a generic message. A compact record whose width the
+    /// source image recorded keeps the volume-wide fixed nanoseconds, so <paramref name="recordedCompact"/>
+    /// does not let the presence of that volume-wide value demand the extended per-inode field; the delta
+    /// itself is validated when the record is serialized.
     /// <para>报告节点为何无法存入 32 字节紧凑记录，能装下时为 <see langword="null"/>。检查扩展记录加宽的每个
-    /// 字段，使强制紧凑构建指名溢出的确切维度，而不是给出笼统信息。</para>
+    /// 字段，使强制紧凑构建指名溢出的确切维度，而不是给出笼统信息。源镜像记录了宽度为紧凑的记录时，其纳秒取自
+    /// 卷级固定值，因此 <paramref name="recordedCompact"/> 不会仅因该卷级值存在就要求扩展的逐 inode 字段；
+    /// 增量本身在序列化记录时校验。</para>
     /// </summary>
     /// <param name="node">Node being tested. <para>待判定的节点。</para></param>
+    /// <param name="recordedCompact">Whether the compact width comes from a recorded creation type rather than
+    /// a forced build option. <para>紧凑宽度是来自记录的创建形态而不是强制的构建选项。</para></param>
     /// <returns>The reason in English, or <see langword="null"/>. <para>英文原因，或 <see langword="null"/>。</para></returns>
-    private static string? CompactRecordRejection(ErofsInode node)
+    private static string? CompactRecordRejection(ErofsInode node, bool recordedCompact = false)
     {
         if (node.SourceInode is { IsExtended: true })
         {
             return "the source image recorded an extended inode";
         }
 
-        if (node.RequiresExtendedTime)
+        if (!recordedCompact && node.RequiresExtendedTime)
         {
             return "its timestamp needs the extended form";
         }
@@ -442,7 +482,22 @@ public sealed partial class ErofsBuilder
         var effectiveTime = node.SourceInode?.CTime ?? (node.CTime is > 0 and <= long.MaxValue ? node.CTime : now);
         node.CTime = effectiveTime;
         node.CTimeNsec = node.SourceInode?.CTimeNsec ?? node.CTimeNsec;
-        node.Generation = node.IsExtended ? 0 : checked((uint)(effectiveTime - now));
+        if (node.IsExtended)
+        {
+            node.Generation = 0;
+        }
+        else
+        {
+            if (effectiveTime < now || effectiveTime - now > uint.MaxValue)
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"EROFS inode '{node.FullPath}' must use the compact record, but its mtime {effectiveTime} "
+                    + $"is not a non-negative delta of at most {uint.MaxValue} seconds from the {now} epoch, "
+                    + "which is the only timestamp form the compact record can store.");
+            }
+
+            node.Generation = (uint)(effectiveTime - now);
+        }
 
         if (node.XattrIbody.Length > 0)
         {
@@ -574,6 +629,75 @@ public sealed partial class ErofsBuilder
 
             node.DataLayout = ErofsDataLayout.Flat;
             node.Idata = new ErofsFlatIdata { BlockAddress = 0 };
+        }
+    }
+
+    /// <summary>
+    /// Serializes one inode's complete metadata: the record, its inline xattrs, and every tail structure the
+    /// plain metadata area and the metabox container body must both carry (an inline directory payload, a
+    /// fragment map header, a chunk index table, a compressed index table, or an inline compressed tail).
+    /// Writing through one method keeps the two placements byte-identical instead of letting the container
+    /// body silently omit the structures only the plain area used to write.
+    /// <para>序列化单个 inode 的完整元数据：记录、内联 xattr，以及普通元数据区与 metabox 容器本体都必须同样携带的
+    /// 全部尾部结构（内联目录负载、fragment 映射头、chunk 索引表、压缩索引表或内联压缩尾部）。经由单一方法写出使两种
+    /// 摆放逐字节一致，而不是让容器本体静默遗漏只有普通元数据区才会写出的结构。</para>
+    /// </summary>
+    /// <param name="output">Destination stream in the coordinates of <paramref name="inodeOffset"/>.
+    /// <para>与 <paramref name="inodeOffset"/> 同坐标的目标流。</para></param>
+    /// <param name="inodeOffset">Byte offset of the inode record in <paramref name="output"/>; a metabox
+    /// resident passes its body-relative slot offset. <para>inode 记录在 <paramref name="output"/> 中的字节偏移；
+    /// metabox 常驻节点传入其相对容器本体的槽位偏移。</para></param>
+    /// <param name="node">Node whose metadata is written. <para>待写出元数据的节点。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes.
+    /// <para>以字节计的文件系统块大小。</para></param>
+    /// <param name="now">Superblock epoch seconds the record is stamped against.
+    /// <para>记录所依据的超级块纪元秒。</para></param>
+    /// <param name="options">Validated build options. <para>经校验的构建选项。</para></param>
+    /// <param name="staging">Staging file holding accepted compressed frames, or <see langword="null"/> when
+    /// this build staged none. <para>承载已接受压缩帧的暂存文件；本次构建未暂存任何帧时为
+    /// <see langword="null"/>。</para></param>
+    private static void WriteInodeMetadata(Stream output, long inodeOffset, ErofsInode node, int blockSize,
+        ulong now, ErofsOptions options, Core.CompressionPayloadStaging? staging)
+    {
+        BuildInode(node, blockSize, now, options);
+        Span<byte> record = stackalloc byte[ErofsInode.ExtendedSize];
+        node.WriteTo(record);
+        WriteAt(output, inodeOffset, record[..node.OnDiskSize]);
+
+        if (node.XattrIbody.Length > 0)
+        {
+            WriteAt(output, inodeOffset + node.OnDiskSize, node.XattrIbody, node.XattrIbody.Length);
+        }
+
+        var cursor = inodeOffset + node.OnDiskSize + node.XattrISize;
+        if (node.IsDirectory)
+        {
+            if (node.DirectoryInline)
+            {
+                var payload = BuildDirPayload(node);
+                WriteAt(output, cursor, payload, payload.Length);
+            }
+        }
+        else if (node.IsFragment)
+        {
+            WriteFragmentHeader(output, node, inodeOffset);
+        }
+        else if (node.ChunkIndex is not null)
+        {
+            WriteChunkIndexTable(output, node, inodeOffset);
+        }
+        else if (node.Pclusters is not null)
+        {
+            WriteCompressedIndexes(output, AlignUp(cursor, 8), node, blockSize, node.CompressionOptions ?? options);
+        }
+        else if (node.InlineData.Length > 0)
+        {
+            WriteAt(output, cursor, node.InlineData, node.InlineData.Length);
+        }
+
+        if (node.InlineCompressedTail && node.Pclusters is not null)
+        {
+            WriteInlineCompressedTail(output, inodeOffset, node, blockSize, options, staging);
         }
     }
 }

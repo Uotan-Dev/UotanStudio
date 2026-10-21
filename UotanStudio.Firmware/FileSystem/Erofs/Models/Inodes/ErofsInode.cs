@@ -613,6 +613,19 @@ internal sealed class ErofsInode
     /// 置起（格式确实读自镜像），还原得到的节点则仅在档案记录了格式字时置起。</para></value>
     internal bool SourceIFormatRecorded { get; set; }
 
+    /// <summary>Metadata creation form of the source record, recorded while a preserved source is decoded:
+    /// whether the record lives in the plain metadata area, the METABOX container or the separate metadata
+    /// zone, and whether it uses the compact or the extended width. The form cannot be re-derived from the
+    /// record fields alone, because the METABOX location carried by nid bit 63 and the metazone relocation
+    /// carried by the superblock's metadata block address are both outside the record.
+    /// <para>源记录的元数据创建形态，在解码保留式源时记录：记录位于普通元数据区、METABOX 容器还是独立元数据区，
+    /// 以及采用紧凑还是扩展宽度。该形态无法仅由记录字段重新推导，因为 nid 第 63 位承载的 METABOX 位置与超级块
+    /// 元数据块地址承载的 metazone 迁移都不在记录之内。</para></summary>
+    /// <value><see langword="null"/> on a node whose creation form was not recorded, which keeps the rebuild's
+    /// previous derivation for that node. <para>未记录创建形态的节点为 <see langword="null"/>，重建对该节点保持
+    /// 此前的推导方式。</para></value>
+    internal ErofsInodeMetadataCreationType? MetadataCreationType { get; set; }
+
     /// <summary>Secondary algorithm the node's HEAD2 index rows name, or <see langword="null"/>.
     /// <para>该节点 HEAD2 索引行指名的第二算法，或 <see langword="null"/>。</para></summary>
     internal ErofsCompressionAlgorithm? SecondaryAlgorithm { get; set; }
@@ -962,10 +975,16 @@ internal sealed class ErofsInode
     /// <para>调用方是否在 METABOX 区定位到该记录。</para></param>
     /// <returns>The decoded inode with its flat, compressed or chunk-based addressing state.
     /// <para>解码得到的 inode，携带平坦、压缩或 chunk-based 寻址状态。</para></returns>
+    /// <remarks>A flat-inline inode carries no data block address, and a 48bit source leaves the null-address
+    /// high half (<c>0xFFFF</c>) in <c>i_nb</c>; that field is unused by the layout, so a nonzero value is only
+    /// rejected for layouts that really address data blocks. <para>flat-inline inode 不携带数据块地址，48bit 源会在
+    /// <c>i_nb</c> 中留下空地址的高半部（<c>0xFFFF</c>）；该字段在此布局中不使用，因此只有真正以块地址寻址数据的布局
+    /// 才会拒绝非零值。</para></remarks>
     /// <exception cref="FormatException">The region is too short, raises undefined <c>i_format</c> bits, or
-    /// carries a nonzero <c>i_nb</c> upper address half outside the 32-bit block window this reader models.
-    /// <para>区域过短、置有未定义的 <c>i_format</c> 位，或携带非零的 <c>i_nb</c> 地址高半部、超出本读取器
-    /// 所建模的 32 位块窗口。</para></exception>
+    /// carries a nonzero <c>i_nb</c> upper address half outside the 32-bit block window this reader models
+    /// on a layout that uses block addresses.
+    /// <para>区域过短、置有未定义的 <c>i_format</c> 位，或在使用块地址的布局上携带非零的 <c>i_nb</c> 地址高半部、
+    /// 超出本读取器所建模的 32 位块窗口。</para></exception>
     internal static ErofsInode FromBytes(ReadOnlySpan<byte> data, ulong nid, int blockSizeBits, bool inMetabox = false)
     {
         if (data.Length < 2)
@@ -983,12 +1002,14 @@ internal sealed class ErofsInode
 
         var mode = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]);
         var isDirectory = (mode & ModeTypeMask) == ModeDirectory;
+        var datalayout = (ErofsDataLayout)((format & DataLayoutMask) >> DataLayoutShift);
         var storesWideAddress = (format & FlagExtended) != 0
             || (format & AdviseBitNlinkOneOrDotOmitted) != 0 && !isDirectory;
         var wideAddressHighHalf = storesWideAddress && data.Length >= 8
             ? BinaryPrimitives.ReadUInt16LittleEndian(data[6..])
             : (ushort)0;
-        if (wideAddressHighHalf != 0)
+
+        if (wideAddressHighHalf != 0 && datalayout != ErofsDataLayout.Inline)
         {
             throw new FormatException(
                 $"EROFS inode i_nb 0x{wideAddressHighHalf:X4} extends the address past the 32-bit block window this reader models.");
@@ -998,7 +1019,7 @@ internal sealed class ErofsInode
         {
             Nid = nid,
             IFormat = format,
-            DataLayout = (ErofsDataLayout)((format & DataLayoutMask) >> DataLayoutShift),
+            DataLayout = datalayout,
             XattrICount = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
             Mode = mode,
             InMetabox = inMetabox,

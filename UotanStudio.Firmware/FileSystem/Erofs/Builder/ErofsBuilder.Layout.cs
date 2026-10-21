@@ -348,9 +348,10 @@ public sealed partial class ErofsBuilder
 
         /// <summary>
         /// Collects the pre-order node list, binds xattrs, and then binds either the edit plan entries
-        /// or the source-inode records by path, and finally flags nodes needing extended mtimes.
-        /// <para>收集先序节点列表、绑定 xattr，然后按编辑计划条目或按路径绑定源 inode 记录，
-        /// 最后为需要扩展 mtime 的节点打标。</para>
+        /// or the source-inode records by path, copies each bound source's recorded metadata creation type
+        /// onto the planned node, and finally flags nodes needing extended mtimes.
+        /// <para>收集先序节点列表、绑定 xattr，然后按编辑计划条目或按路径绑定源 inode 记录，把每个已绑定源的
+        /// 元数据创建形态复制到规划节点上，最后为需要扩展 mtime 的节点打标。</para>
         /// </summary>
         internal void CollectOrderedNodes()
         {
@@ -367,6 +368,7 @@ public sealed partial class ErofsBuilder
 
             foreach (var node in Ordered)
             {
+                node.MetadataCreationType ??= node.SourceInode?.MetadataCreationType;
                 var timestamp = node.SourceInode?.CTime ?? (node.CTime is > 0 and <= long.MaxValue ? node.CTime : Now);
                 var nanoseconds = node.SourceInode?.CTimeNsec ?? node.CTimeNsec;
                 node.RequiresExtendedTime = NeedsExtendedInodeTime(timestamp, Now, nanoseconds);
@@ -1300,7 +1302,7 @@ public sealed partial class ErofsBuilder
                     ? recovered
                     : Options;
             var body = BuildMetaboxContainerBody(BlockSize, Now, MetaboxResident!, MetaboxBodyLength,
-                SharedXattrMetaboxOffset, SharedXattrs, containerOptions);
+                SharedXattrMetaboxOffset, SharedXattrs, containerOptions, staging);
             var path = Path.Combine(Path.GetTempPath(), $"uotan-metabox-{Guid.NewGuid():N}.tmp");
             try
             {
@@ -1430,6 +1432,51 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
+        /// Refuses a preserved rebuild that cannot reproduce where a source inode's metadata record lived.
+        /// A metazone-typed record needs the metadata zone, and a metabox-typed record needs the metabox, so
+        /// either dimension being absent would silently move the record to the plain metadata area.
+        /// <para>拒绝无法复现源 inode 元数据记录位置的保留式重建。metazone 形态的记录需要元数据区，metabox 形态的
+        /// 记录需要 metabox；任一维度缺失都会把记录静默移到普通元数据区。</para>
+        /// </summary>
+        /// <exception cref="FileSystemUnsupportedFeatureException">A source record was created in the metadata
+        /// zone or the metabox, but this build disables that placement.
+        /// <para>源记录创建于元数据区或 metabox，而本次构建禁用了该摆放。</para></exception>
+        private void ValidatePreservedMetadataCreationTypes()
+        {
+            if (Options.SourceInodes is not { Count: > 0 })
+            {
+                return;
+            }
+
+            foreach (var node in Ordered)
+            {
+                Options.CancellationToken.ThrowIfCancellationRequested();
+                if (node.MetadataCreationType is not { } creationType
+                    || node.IsPacked
+                    || node.IsMetaboxContainer)
+                {
+                    continue;
+                }
+
+                var path = BuildImagePath(node);
+                if (creationType.IsMetazone && !Metazone)
+                {
+                    throw new FileSystemUnsupportedFeatureException(
+                        $"EROFS preserved inode '{path}' was recorded in the metadata zone, but this build has no "
+                        + "metadata zone (s_meta_blkaddr is zero), so the record would silently move to the plain "
+                        + "metadata area.");
+                }
+
+                if (creationType.IsMetabox && !Options.Metabox)
+                {
+                    throw new FileSystemUnsupportedFeatureException(
+                        $"EROFS preserved inode '{path}' was recorded in the metabox, but this build has the metabox "
+                        + "disabled, so the record would silently move to the plain metadata area.");
+                }
+            }
+        }
+
+        /// <summary>
         /// Selects metabox-resident inodes, assigns their slots, and appends the metabox container node.
         /// <para>挑选 metabox 常驻 inode、分配其槽位并追加 metabox 容器节点。</para>
         /// </summary>
@@ -1441,6 +1488,20 @@ public sealed partial class ErofsBuilder
         /// <para>容器节点追加在最后，因此每个常驻节点在有序列表中都位于它之前。地址分配阶段依赖该顺序：常驻
         /// 节点的序列化记录内嵌分配给它自身的数据块，所以容器本体只有在常驻节点地址已知之后才能装配，而那正是
         /// 遍历走到容器节点的时刻。</para>
+        /// <para>A preserved rebuild selects residents from the recorded metadata creation type: a source
+        /// inode the image recorded in the metabox keeps that placement, and a plain or metazone record is
+        /// never moved into the container. A node whose profile recorded no type (an older document) falls
+        /// back to the fresh-build eligibility policy, which is the only derivation available for it. A fresh
+        /// build keeps that policy as well: it admits plain, uncompressed inodes whose complete record fits
+        /// one block. Every resident is measured with <see cref="GetInodeRecordSize"/>; a record that would
+        /// cross a block boundary starts on the next boundary, and a record larger than one block (a large
+        /// chunk or compressed index) occupies consecutive blocks from its slot nid, which is how the reader
+        /// resolves the inode's metadata.</para>
+        /// <para>保留式重建按记录的元数据创建形态挑选常驻节点：镜像记录在 metabox 中的源 inode 保持该摆放，而
+        /// plain 或 metazone 记录绝不会被移入容器。档案未记录形态的节点（较早的文档）退回全新构建的资格策略，这是
+        /// 它唯一可用的推导。全新构建同样保持该策略：接纳完整记录能放入单块的、未压缩的普通 inode。每个常驻节点都用
+        /// <see cref="GetInodeRecordSize"/> 度量；会跨越块边界的记录从下一个边界开始，大于一个块的记录（较大的
+        /// chunk 或压缩索引）从槽位 nid 起占用连续块，读取方正是这样解析该 inode 的元数据。</para>
         /// <para>The container keeps <c>i_size</c> equal to its logical length whether or not its body is
         /// encoded: a reader derives the compressed cluster count from that length, so publishing the encoded
         /// length there would make the container decode truncated. What an encoded container gives up instead
@@ -1450,14 +1511,22 @@ public sealed partial class ErofsBuilder
         /// 因此在那里发布编码后长度会让容器解码被截断。编码后的容器放弃的是
         /// <see cref="ErofsInode.FlatBlocks"/>，因为此时它预留的块来自地址分配阶段所分配的 pcluster 规划。</para>
         /// </remarks>
+        /// <exception cref="FileSystemUnsupportedFeatureException">A preserved inode's recorded placement is
+        /// unavailable. <para>保留 inode 记录的摆放不可用。</para></exception>
         internal void PlanMetabox()
         {
+            ValidatePreservedMetadataCreationTypes();
             if (!Options.Metabox)
             {
                 return;
             }
 
-            MetaboxResident = [.. Ordered.Where(node => IsMetaboxEligible(node, BlockSize))];
+            var preserved = Options.SourceInodes is { Count: > 0 };
+            MetaboxResident = preserved
+                ? [.. Ordered.Where(node => node.MetadataCreationType is { } type
+                    ? type.IsMetabox
+                    : IsMetaboxEligible(node, BlockSize))]
+                : [.. Ordered.Where(node => IsMetaboxEligible(node, BlockSize))];
             var metaboxLength = 0L;
             foreach (var resident in MetaboxResident)
             {
@@ -1477,6 +1546,11 @@ public sealed partial class ErofsBuilder
                 metaboxLength = AlignUp(metaboxLength, BlockSize);
                 SharedXattrMetaboxOffset = metaboxLength;
                 metaboxLength = checked(metaboxLength + SharedXattrs.Sum(entry => AlignUp(entry.Length, ErofsXattr.EntryAlignment)));
+            }
+
+            if (Options.MetaboxContainerCompressed)
+            {
+                metaboxLength = AlignUp(metaboxLength, BlockSize);
             }
 
             if (MetaboxResident.Count > 0 || Options.MetaboxRequired || SharedXattrs.Count > 0)
@@ -2039,6 +2113,8 @@ public sealed partial class ErofsBuilder
         /// <para>镜像总块数。</para></returns>
         internal long AssignDataAddresses(long metaOff)
         {
+            foreach (var (alias, canonical) in Hardlinks) alias.Nid = canonical.Nid;
+
             var dataBlock = (Metazone
                 ? AlignUp(InodeTableOffset, BlockSize)
                 : AlignUp(metaOff, BlockSize)) / BlockSize;
@@ -2189,7 +2265,6 @@ public sealed partial class ErofsBuilder
                 Options.SavedByDeduplication = savedByDeduplication;
             }
 
-            foreach (var (alias, canonical) in Hardlinks) alias.Nid = canonical.Nid;
             ErofsSuperblock.ValidateRootNidField(Root.Nid);
             if (Options.FeaturesAuthoritative)
             {
@@ -2919,7 +2994,7 @@ public sealed partial class ErofsBuilder
                 else if (node.IsMetaboxContainer)
                 {
                     WriteMetaboxContainer(output, node, BlockSize, Now, MetaboxResident!, MetaboxBodyLength,
-                        SharedXattrMetaboxOffset, SharedXattrs, Options);
+                        SharedXattrMetaboxOffset, SharedXattrs, Options, StagedCompression);
                 }
                 else if (node.FlatBlockAddr >= 0 && node.FlatBlocks > 0 && node.DedupSource is null)
                 {
@@ -2935,82 +3010,30 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
-        /// Writes each non-metabox-resident node's inode record, inline xattrs, and trailing inline
-        /// payloads such as directory payloads, fragment headers, and compressed indexes.
-        /// <para>写出每个非 metabox 常驻节点的 inode 记录、inline xattr 以及目录负载、fragment 头与
-        /// 压缩索引等尾部负载数据。</para>
+        /// Writes each non-metabox-resident node's complete metadata through
+        /// <see cref="WriteInodeMetadata"/>: the inode record, its inline xattrs, and the trailing inline
+        /// payloads such as directory payloads, fragment headers, chunk/compressed indexes and an inline
+        /// compressed tail. A metabox resident is skipped because the container body writes the same
+        /// structures into its slot.
+        /// <para>经 <see cref="WriteInodeMetadata"/> 写出每个非 metabox 常驻节点的完整元数据：inode 记录、内联
+        /// xattr，以及目录负载、fragment 头、chunk/压缩索引与内联压缩尾部等内联尾部负载。metabox 常驻节点被跳过，
+        /// 因为容器本体会把同样的结构写入其槽位。</para>
         /// </summary>
         /// <param name="output">Destination stream in image coordinates.
         /// <para>镜像坐标下的目标流。</para></param>
         internal void WriteInodes(Stream output)
         {
-            var rented = ArrayPool<byte>.Shared.Rent(BlockSize);
-            try
+            foreach (var node in Ordered)
             {
-                foreach (var node in Ordered)
+                Options.CancellationToken.ThrowIfCancellationRequested();
+                if (node.IsMetaboxResident)
                 {
-                    Options.CancellationToken.ThrowIfCancellationRequested();
-                    if (node.IsMetaboxResident)
-                    {
-                        continue;
-                    }
-
-                    BuildInode(node, BlockSize, Now, Options);
-                    var inodeBuffer = AcquireInodeBuffer(rented, node.OnDiskSize);
-                    node.WriteTo(inodeBuffer);
-                    WriteAt(output, node.MetaOffset, inodeBuffer, node.OnDiskSize);
-
-                    if (node.XattrIbody.Length > 0)
-                    {
-                        WriteAt(output, node.MetaOffset + node.OnDiskSize, node.XattrIbody, node.XattrIbody.Length);
-                    }
-
-                    var cursor = node.MetaOffset + node.OnDiskSize + node.XattrISize;
-
-                    if (node.IsDirectory)
-                    {
-                        if (node.DirectoryInline)
-                        {
-                            WriteAt(output, cursor, BuildDirPayload(node), (int)EstimateDirPayloadLength(node));
-                        }
-                    }
-                    else if (node.IsFragment)
-                    {
-                        WriteFragmentHeader(output, node);
-                    }
-                    else if (node.ChunkIndex is not null)
-                    {
-                        WriteChunkIndexTable(output, node);
-                    }
-                    else if (node.Pclusters is not null)
-                    {
-                        WriteCompressedIndexes(output, AlignUp(cursor, 8), node, BlockSize, node.CompressionOptions!);
-                    }
-                    else if (node.InlineData.Length > 0)
-                    {
-                        WriteAt(output, cursor, node.InlineData, node.InlineData.Length);
-                    }
+                    continue;
                 }
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(rented);
+
+                WriteInodeMetadata(output, node.MetaOffset, node, BlockSize, Now, Options, StagedCompression);
             }
         }
-
-        /// <summary>
-        /// Returns the inode record destination, reusing one pooled buffer across the walk and falling back to a
-        /// right-sized allocation only for a record that outgrows it.
-        /// <para>返回 inode 记录的写入目标：整个遍历复用一个池化缓冲，仅在记录超出该缓冲时才退化为按尺寸精确分配。</para>
-        /// </summary>
-        /// <param name="rented">Buffer obtained from <see cref="ArrayPool{T}.Shared"/> sized at least <c>BlockSize</c>.
-        /// <para>从 <see cref="ArrayPool{T}.Shared"/> 取得、至少为 <c>BlockSize</c> 的缓冲。</para></param>
-        /// <param name="required">Bytes the inode record occupies.
-        /// <para>该 inode 记录占用的字节数。</para></param>
-        /// <returns>The buffer to write the record into, whose usable prefix is <paramref name="required"/> bytes.
-        /// <para>用于写入该记录的缓冲，其可用前缀为 <paramref name="required"/> 字节。</para></returns>
-        private static byte[] AcquireInodeBuffer(byte[] rented, int required)
-            => required <= rented.Length ? rented : new byte[required];
 
         /// <summary>
         /// Writes the CRC32c superblock checksum into the captured superblock window region when

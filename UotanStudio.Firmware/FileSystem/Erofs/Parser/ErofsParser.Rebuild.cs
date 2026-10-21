@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
+using UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 using UnifiedCompressedIdata = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsCompressedIdata;
 using UnifiedDataLayout = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsDataLayout;
 using UnifiedInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
@@ -427,6 +428,8 @@ public sealed partial class ErofsParser
         inode.SourceCompressed = isCompressed;
         inode.SourceAlgorithm = algorithm;
         inode.SourceFragmentShape = fragmentShape;
+        inode.MetadataCreationType = ErofsInodeMetadataCreationType.From(
+            inode.InMetabox, _superblock.MetaBlkAddr != 0, inode.IsExtended);
         inode.SecondaryAlgorithm = secondaryAlgorithm;
         AttachSourceXattrIbody(entry.Nid, inode, entry.Xattrs);
         if (inode.Idata is UnifiedCompressedIdata logicalIdata)

@@ -432,6 +432,20 @@ internal sealed class ErofsRebuildInode
     /// 第二算法。</para></value>
     public string? SecondaryAlgorithm { get; set; }
     /// <summary>
+    /// Gets the resolved <c>ErofsInodeMetadataCreationType</c> member name recording both where the source inode's
+    /// metadata record lived (plain metadata area, metabox container or separate metadata zone) and whether the
+    /// record was compact or extended. The name is stored as text so the document stays locale-free.
+    /// <para>获取同时记录源 inode 元数据记录位置（普通元数据区、metabox 容器或独立元数据区）与记录宽度（紧凑或
+    /// 扩展）的 <c>ErofsInodeMetadataCreationType</c> 成员名。名称以文本保存，使文档不依赖语言环境。</para>
+    /// </summary>
+    /// <value><c>PlainCompact</c>, <c>PlainExtended</c>, <c>MetaboxCompact</c>, <c>MetaboxExtended</c>,
+    /// <c>MetazoneCompact</c> or <c>MetazoneExtended</c>, or <see langword="null"/> when the snapshot carries no
+    /// entry for it; a null value leaves the creation form to the rebuild's own derivation.
+    /// <para>取值为 <c>PlainCompact</c>、<c>PlainExtended</c>、<c>MetaboxCompact</c>、<c>MetaboxExtended</c>、
+    /// <c>MetazoneCompact</c> 或 <c>MetazoneExtended</c>；档案未携带该项时为 <see langword="null"/>，此时创建
+    /// 形态由重建自行推导。</para></value>
+    public string? MetadataCreationType { get; set; }
+    /// <summary>
     /// Gets the log2 of the chunk size in filesystem blocks for a chunk-based source inode, or zero when the source file was not chunk-based. It replays h_clusterbits of a chunk-based inode, which stores the chunk size where other layouts store a logical cluster size.
     /// <para>获取基于分块的源 inode 的分块大小（以文件系统块为单位的 log2），源文件非分块时为 0。它重放分块 inode 的 h_clusterbits——该字段存放分块大小，而其他布局存放逻辑簇大小。</para>
     /// </summary>
