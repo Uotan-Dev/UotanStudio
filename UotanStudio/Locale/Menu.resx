@@ -738,4 +738,115 @@ Continue creating the project?</value>
   <data name="Keys_DefaultAutoNameHdc" xml:space="preserve">
     <value>Default HDC key</value>
   </data>
+  <data name="Plugin_Publisher" xml:space="preserve">
+    <value>Publisher</value>
+  </data>
+  <data name="Plugin_Fingerprint" xml:space="preserve">
+    <value>Fingerprint</value>
+  </data>
+  <data name="Plugin_Permissions" xml:space="preserve">
+    <value>Requested permissions</value>
+  </data>
+  <data name="Plugin_GrantedPermissions" xml:space="preserve">
+    <value>Granted permissions</value>
+  </data>
+  <data name="Plugin_Trust" xml:space="preserve">
+    <value>Trust</value>
+  </data>
+  <data name="Plugin_Trust_Unsigned" xml:space="preserve">
+    <value>Unsigned</value>
+  </data>
+  <data name="Plugin_Trust_Trusted" xml:space="preserve">
+    <value>Trusted</value>
+  </data>
+  <data name="Plugin_Trust_Unknown" xml:space="preserve">
+    <value>Not trusted</value>
+  </data>
+  <data name="Plugin_Trust_Changed" xml:space="preserve">
+    <value>Key changed</value>
+  </data>
+  <data name="Plugin_TrustPublisher" xml:space="preserve">
+    <value>Trust this publisher</value>
+  </data>
+  <data name="Plugin_Sign" xml:space="preserve">
+    <value>Sign package</value>
+  </data>
+  <data name="Plugin_Signed" xml:space="preserve">
+    <value>Package signed</value>
+  </data>
+  <data name="Plugin_UntrustPublisher" xml:space="preserve">
+    <value>Remove trust</value>
+  </data>
+  <data name="Plugin_TrustConfirmTitle" xml:space="preserve">
+    <value>Trust publisher</value>
+  </data>
+  <data name="Plugin_TrustConfirm" xml:space="preserve">
+    <value>Pin fingerprint {0} for publisher &apos;{1}&apos;? Packages signed by this publisher are accepted until the key changes.</value>
+  </data>
+  <data name="Plugin_UntrustConfirm" xml:space="preserve">
+    <value>Remove the pinned trust for &apos;{0}&apos;? Its signed packages become untrusted again.</value>
+  </data>
+  <data name="Plugin_Trusted" xml:space="preserve">
+    <value>Publisher trusted.</value>
+  </data>
+  <data name="Plugin_Untrusted" xml:space="preserve">
+    <value>Publisher trust removed.</value>
+  </data>
+  <data name="Plugin_PublisherUntrusted" xml:space="preserve">
+    <value>Publisher is not trusted; confirm its fingerprint to activate the plugin.</value>
+  </data>
+  <data name="Plugin_PublisherFingerprintChanged" xml:space="preserve">
+    <value>Publisher key changed since it was trusted; confirm the new fingerprint.</value>
+  </data>
+  <data name="Plugin_PermissionMissing" xml:space="preserve">
+    <value>The plugin lacks granted permissions: {0}.</value>
+  </data>
+  <data name="Plugin_PermissionsNone" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="Plugin_Permission_DeviceFlash" xml:space="preserve">
+    <value>flash device partitions</value>
+  </data>
+  <data name="Plugin_Permission_DeviceErase" xml:space="preserve">
+    <value>erase device partitions</value>
+  </data>
+  <data name="Plugin_Permission_DeviceShell" xml:space="preserve">
+    <value>run device shell commands</value>
+  </data>
+  <data name="Plugin_Permission_DeviceRecovery" xml:space="preserve">
+    <value>wipe data through recovery</value>
+  </data>
+  <data name="Plugin_Permission_DeviceControl" xml:space="preserve">
+    <value>reboot devices or switch slots</value>
+  </data>
+  <data name="Plugin_Permission_Network" xml:space="preserve">
+    <value>download remote content</value>
+  </data>
+  <data name="Plugin_Permission_FileWrite" xml:space="preserve">
+    <value>write files</value>
+  </data>
+  <data name="Plugin_Permission_PackageInstall" xml:space="preserve">
+    <value>install packages on devices</value>
+  </data>
+  <data name="Plugin_InstallTitle" xml:space="preserve">
+    <value>Install plugin</value>
+  </data>
+  <data name="Plugin_InstallTrustPrompt" xml:space="preserve">
+    <value>&apos;{0}&apos; is signed by {1} ({2}). Requested permissions: {3}. Trust this publisher and install?</value>
+  </data>
+  <data name="Plugin_InstallTrustChangedTitle" xml:space="preserve">
+    <value>Publisher key changed</value>
+  </data>
+  <data name="Plugin_InstallTrustChangedPrompt" xml:space="preserve">
+    <value>&apos;{0}&apos; is signed by {1}, but fingerprint {2} differs from the trusted key. Confirm the new key and install? Requested permissions: {3}.</value>
+  </data>
+  <data name="Plugin_InstallUnsignedTitle" xml:space="preserve">
+    <value>Install unsigned plugin</value>
+  </data>
+  <data name="Plugin_InstallUnsignedPrompt" xml:space="preserve">
+    <value>&apos;{0}&apos; is not signed, so its publisher cannot be verified. Install it locally and grant: {1}?</value>
+  </data>
+  <data name="Plugin_Install" xml:space="preserve">
+    <value>Install</value>
+  </data>
 </root>

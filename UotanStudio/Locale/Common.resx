@@ -3243,4 +3243,46 @@ Continue?</value>
   <data name="UserError_QcnSaveFailed" xml:space="preserve">
     <value>Failed to save the QCN file.</value>
   </data>
+  <data name="Scheme_Title" xml:space="preserve">
+    <value>Scheme</value>
+  </data>
+  <data name="Scheme_Open" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="Scheme_Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Scheme_Run" xml:space="preserve">
+    <value>Run</value>
+  </data>
+  <data name="Scheme_Stop" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="Scheme_Stages" xml:space="preserve">
+    <value>Stages</value>
+  </data>
+  <data name="Scheme_Inputs" xml:space="preserve">
+    <value>Inputs</value>
+  </data>
+  <data name="Scheme_Assets" xml:space="preserve">
+    <value>Assets</value>
+  </data>
+  <data name="Scheme_StageStatus" xml:space="preserve">
+    <value>Stage status</value>
+  </data>
+  <data name="Scheme_Result" xml:space="preserve">
+    <value>Result</value>
+  </data>
+  <data name="Scheme_Resume" xml:space="preserve">
+    <value>Resume</value>
+  </data>
+  <data name="Scheme_NoStages" xml:space="preserve">
+    <value>This scheme has no stages.</value>
+  </data>
+  <data name="Scheme_RunSucceeded" xml:space="preserve">
+    <value>Scheme run succeeded.</value>
+  </data>
+  <data name="Scheme_RunFailed" xml:space="preserve">
+    <value>Scheme run failed.</value>
+  </data>
 </root>

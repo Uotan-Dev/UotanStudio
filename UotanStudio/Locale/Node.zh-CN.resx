@@ -264,6 +264,63 @@
   <data name="Node_Device_Slot_Switch" xml:space="preserve">
     <value>切换活动槽位</value>
   </data>
+  <data name="Node_Device_Edl_Flash" xml:space="preserve">
+    <value>EDL 刷写分区</value>
+  </data>
+  <data name="Node_Device_Edl_Erase" xml:space="preserve">
+    <value>EDL 擦除分区</value>
+  </data>
+  <data name="Node_Device_Edl_Backup" xml:space="preserve">
+    <value>EDL 备份分区</value>
+  </data>
+  <data name="Node_Device_Edl_RepairGpt" xml:space="preserve">
+    <value>EDL 修复 GPT</value>
+  </data>
+  <data name="Node_Device_Edl_UfsProvision" xml:space="preserve">
+    <value>EDL UFS 配置</value>
+  </data>
+  <data name="Node_Device_Edl_ReadPartition" xml:space="preserve">
+    <value>EDL 回读分区</value>
+  </data>
+  <data name="Node_Device_Rkdl_Flash" xml:space="preserve">
+    <value>RKDL 刷写分区</value>
+  </data>
+  <data name="Node_Device_Rkdl_ReadPartition" xml:space="preserve">
+    <value>RKDL 回读分区</value>
+  </data>
+  <data name="Node_Device_Rkdl_Wait" xml:space="preserve">
+    <value>等待 RKDL 设备</value>
+  </data>
+  <data name="Node_Device_Adb_Push" xml:space="preserve">
+    <value>ADB 推送文件</value>
+  </data>
+  <data name="Node_Device_Adb_Pull" xml:space="preserve">
+    <value>ADB 拉取文件</value>
+  </data>
+  <data name="Node_Device_Fastboot_GetVariable" xml:space="preserve">
+    <value>Fastboot 读取变量</value>
+  </data>
+  <data name="Node_Device_Wait_ForDevice" xml:space="preserve">
+    <value>等待设备</value>
+  </data>
+  <data name="Node_Device_Mtk_Session" xml:space="preserve">
+    <value>MTK 会话</value>
+  </data>
+  <data name="Node_Device_Mtk_Operation" xml:space="preserve">
+    <value>MTK 操作</value>
+  </data>
+  <data name="Node_Device_Hdc_Wait" xml:space="preserve">
+    <value>等待 HDC</value>
+  </data>
+  <data name="Node_Device_Hdc_Shell" xml:space="preserve">
+    <value>HDC Shell</value>
+  </data>
+  <data name="Node_Device_Hdc_Push" xml:space="preserve">
+    <value>HDC 推送</value>
+  </data>
+  <data name="Node_Device_Hdc_Pull" xml:space="preserve">
+    <value>HDC 拉取</value>
+  </data>
   <data name="Node_File_Binary_Read" xml:space="preserve">
     <value>读取文件</value>
   </data>

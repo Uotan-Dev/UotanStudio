@@ -738,4 +738,115 @@
   <data name="Keys_DefaultAutoNameHdc" xml:space="preserve">
     <value>HDC 默认密钥</value>
   </data>
+  <data name="Plugin_Publisher" xml:space="preserve">
+    <value>发布者</value>
+  </data>
+  <data name="Plugin_Fingerprint" xml:space="preserve">
+    <value>指纹</value>
+  </data>
+  <data name="Plugin_Permissions" xml:space="preserve">
+    <value>所需权限</value>
+  </data>
+  <data name="Plugin_GrantedPermissions" xml:space="preserve">
+    <value>已授权限</value>
+  </data>
+  <data name="Plugin_Trust" xml:space="preserve">
+    <value>信任状态</value>
+  </data>
+  <data name="Plugin_Trust_Unsigned" xml:space="preserve">
+    <value>未签名</value>
+  </data>
+  <data name="Plugin_Trust_Trusted" xml:space="preserve">
+    <value>受信任</value>
+  </data>
+  <data name="Plugin_Trust_Unknown" xml:space="preserve">
+    <value>未信任</value>
+  </data>
+  <data name="Plugin_Trust_Changed" xml:space="preserve">
+    <value>密钥已变更</value>
+  </data>
+  <data name="Plugin_TrustPublisher" xml:space="preserve">
+    <value>信任此发布者</value>
+  </data>
+  <data name="Plugin_Sign" xml:space="preserve">
+    <value>签名包</value>
+  </data>
+  <data name="Plugin_Signed" xml:space="preserve">
+    <value>包已签名</value>
+  </data>
+  <data name="Plugin_UntrustPublisher" xml:space="preserve">
+    <value>移除信任</value>
+  </data>
+  <data name="Plugin_TrustConfirmTitle" xml:space="preserve">
+    <value>信任发布者</value>
+  </data>
+  <data name="Plugin_TrustConfirm" xml:space="preserve">
+    <value>为发布者“{1}”固定指纹 {0}？该发布者签名的包将被接受，直到密钥变更。</value>
+  </data>
+  <data name="Plugin_UntrustConfirm" xml:space="preserve">
+    <value>移除发布者“{0}”的固定信任？其已签名包将重新变为未信任。</value>
+  </data>
+  <data name="Plugin_Trusted" xml:space="preserve">
+    <value>已信任该发布者。</value>
+  </data>
+  <data name="Plugin_Untrusted" xml:space="preserve">
+    <value>已移除发布者信任。</value>
+  </data>
+  <data name="Plugin_PublisherUntrusted" xml:space="preserve">
+    <value>发布者未受信任；请确认其指纹后启用插件。</value>
+  </data>
+  <data name="Plugin_PublisherFingerprintChanged" xml:space="preserve">
+    <value>发布者密钥自上次信任后已变更；请确认新的指纹。</value>
+  </data>
+  <data name="Plugin_PermissionMissing" xml:space="preserve">
+    <value>插件缺少已授权限：{0}。</value>
+  </data>
+  <data name="Plugin_PermissionsNone" xml:space="preserve">
+    <value>无</value>
+  </data>
+  <data name="Plugin_Permission_DeviceFlash" xml:space="preserve">
+    <value>刷写设备分区</value>
+  </data>
+  <data name="Plugin_Permission_DeviceErase" xml:space="preserve">
+    <value>擦除设备分区</value>
+  </data>
+  <data name="Plugin_Permission_DeviceShell" xml:space="preserve">
+    <value>执行设备 shell 命令</value>
+  </data>
+  <data name="Plugin_Permission_DeviceRecovery" xml:space="preserve">
+    <value>通过恢复模式清除数据</value>
+  </data>
+  <data name="Plugin_Permission_DeviceControl" xml:space="preserve">
+    <value>重启设备或切换槽位</value>
+  </data>
+  <data name="Plugin_Permission_Network" xml:space="preserve">
+    <value>下载远端内容</value>
+  </data>
+  <data name="Plugin_Permission_FileWrite" xml:space="preserve">
+    <value>写入文件</value>
+  </data>
+  <data name="Plugin_Permission_PackageInstall" xml:space="preserve">
+    <value>在设备上安装软件包</value>
+  </data>
+  <data name="Plugin_InstallTitle" xml:space="preserve">
+    <value>安装插件</value>
+  </data>
+  <data name="Plugin_InstallTrustPrompt" xml:space="preserve">
+    <value>“{0}”由 {1}（{2}）签名。所需权限：{3}。信任该发布者并安装？</value>
+  </data>
+  <data name="Plugin_InstallTrustChangedTitle" xml:space="preserve">
+    <value>发布者密钥已变更</value>
+  </data>
+  <data name="Plugin_InstallTrustChangedPrompt" xml:space="preserve">
+    <value>“{0}”由 {1} 签名，但指纹 {2} 与已信任密钥不同。确认新密钥并安装？所需权限：{3}。</value>
+  </data>
+  <data name="Plugin_InstallUnsignedTitle" xml:space="preserve">
+    <value>安装未签名插件</value>
+  </data>
+  <data name="Plugin_InstallUnsignedPrompt" xml:space="preserve">
+    <value>“{0}”未签名，无法校验其发布者。仍然本地安装并授予：{1}？</value>
+  </data>
+  <data name="Plugin_Install" xml:space="preserve">
+    <value>安装</value>
+  </data>
 </root>

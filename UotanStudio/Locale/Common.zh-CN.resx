@@ -3243,4 +3243,46 @@
   <data name="UserError_QcnSaveFailed" xml:space="preserve">
     <value>保存 QCN 文件失败。</value>
   </data>
+  <data name="Scheme_Title" xml:space="preserve">
+    <value>方案</value>
+  </data>
+  <data name="Scheme_Open" xml:space="preserve">
+    <value>打开</value>
+  </data>
+  <data name="Scheme_Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Scheme_Run" xml:space="preserve">
+    <value>运行</value>
+  </data>
+  <data name="Scheme_Stop" xml:space="preserve">
+    <value>停止</value>
+  </data>
+  <data name="Scheme_Stages" xml:space="preserve">
+    <value>阶段</value>
+  </data>
+  <data name="Scheme_Inputs" xml:space="preserve">
+    <value>输入</value>
+  </data>
+  <data name="Scheme_Assets" xml:space="preserve">
+    <value>资源</value>
+  </data>
+  <data name="Scheme_StageStatus" xml:space="preserve">
+    <value>阶段状态</value>
+  </data>
+  <data name="Scheme_Result" xml:space="preserve">
+    <value>结果</value>
+  </data>
+  <data name="Scheme_Resume" xml:space="preserve">
+    <value>继续</value>
+  </data>
+  <data name="Scheme_NoStages" xml:space="preserve">
+    <value>该方案没有阶段。</value>
+  </data>
+  <data name="Scheme_RunSucceeded" xml:space="preserve">
+    <value>方案运行成功。</value>
+  </data>
+  <data name="Scheme_RunFailed" xml:space="preserve">
+    <value>方案运行失败。</value>
+  </data>
 </root>

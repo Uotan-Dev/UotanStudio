@@ -264,6 +264,63 @@
   <data name="Node_Device_Slot_Switch" xml:space="preserve">
     <value>Switch Active Slot</value>
   </data>
+  <data name="Node_Device_Edl_Flash" xml:space="preserve">
+    <value>EDL Flash Partition</value>
+  </data>
+  <data name="Node_Device_Edl_Erase" xml:space="preserve">
+    <value>EDL Erase Partition</value>
+  </data>
+  <data name="Node_Device_Edl_Backup" xml:space="preserve">
+    <value>EDL Backup Partition</value>
+  </data>
+  <data name="Node_Device_Edl_RepairGpt" xml:space="preserve">
+    <value>EDL Repair GPT</value>
+  </data>
+  <data name="Node_Device_Edl_UfsProvision" xml:space="preserve">
+    <value>EDL UFS Provision</value>
+  </data>
+  <data name="Node_Device_Edl_ReadPartition" xml:space="preserve">
+    <value>EDL Read Partition</value>
+  </data>
+  <data name="Node_Device_Rkdl_Flash" xml:space="preserve">
+    <value>RKDL Flash Partition</value>
+  </data>
+  <data name="Node_Device_Rkdl_ReadPartition" xml:space="preserve">
+    <value>RKDL Read Partition</value>
+  </data>
+  <data name="Node_Device_Rkdl_Wait" xml:space="preserve">
+    <value>Wait for RKDL Device</value>
+  </data>
+  <data name="Node_Device_Adb_Push" xml:space="preserve">
+    <value>ADB Push File</value>
+  </data>
+  <data name="Node_Device_Adb_Pull" xml:space="preserve">
+    <value>ADB Pull File</value>
+  </data>
+  <data name="Node_Device_Fastboot_GetVariable" xml:space="preserve">
+    <value>Fastboot Get Variable</value>
+  </data>
+  <data name="Node_Device_Wait_ForDevice" xml:space="preserve">
+    <value>Wait for Device</value>
+  </data>
+  <data name="Node_Device_Mtk_Session" xml:space="preserve">
+    <value>MTK Session</value>
+  </data>
+  <data name="Node_Device_Mtk_Operation" xml:space="preserve">
+    <value>MTK Operation</value>
+  </data>
+  <data name="Node_Device_Hdc_Wait" xml:space="preserve">
+    <value>Wait for HDC</value>
+  </data>
+  <data name="Node_Device_Hdc_Shell" xml:space="preserve">
+    <value>HDC Shell</value>
+  </data>
+  <data name="Node_Device_Hdc_Push" xml:space="preserve">
+    <value>HDC Push</value>
+  </data>
+  <data name="Node_Device_Hdc_Pull" xml:space="preserve">
+    <value>HDC Pull</value>
+  </data>
   <data name="Node_File_Binary_Read" xml:space="preserve">
     <value>Read File</value>
   </data>
