@@ -193,6 +193,7 @@ public sealed class VisualPluginTests
             VisualPluginKind.CompositeNode, [constant, reader], [], "Tester");
         package.Manifest.Version = "2.3.4";
         package.Manifest.Description = "Retained description";
+        package.Manifest.Author = "Retained author";
         package.Manifest.Platforms = ["windows", "linux"];
         var existingInput = Assert.Single(package.Inputs, input => input.NodeInstanceId == reader.InstanceId);
         existingInput.Id = "firmware-path";
@@ -210,7 +211,9 @@ public sealed class VisualPluginTests
         Assert.True(updatedInput.Required);
         Assert.Equal("2.3.4", updated.Manifest.Version);
         Assert.Equal("Retained description", updated.Manifest.Description);
+        Assert.Equal("Retained author", updated.Manifest.Author);
         Assert.Equal(["windows", "linux"], updated.Manifest.Platforms);
+        Assert.Equal(VisualPluginManifest.CurrentNodeApiVersion, updated.Manifest.NodeApiVersion);
         Assert.Empty(VisualPluginValidation.Validate(updated));
     }
 

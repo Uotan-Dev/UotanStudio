@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Services.Keys;
 using UotanStudio.Services.VisualPlugins;
 
 namespace UotanStudio.ViewModels.Shell;
@@ -15,6 +16,13 @@ public partial class VisualPluginManagerViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     private string _search = string.Empty;
+
+    [ObservableProperty]
+    private ManagedKey? _selectedPublisherKey;
+
+    /// <summary>Publisher keys available for signing the selected package.<para>可用于签名所选包的发布者密钥。</para></summary>
+    /// <value>Keys of <see cref="ManagedKeyKind.Publisher"/> loaded from the key library.<para>从密钥库加载的 <see cref="ManagedKeyKind.Publisher"/> 密钥。</para></value>
+    public ObservableCollection<ManagedKey> PublisherKeys { get; } = [];
 
     /// <summary>Packages visible under the current search filter.<para>当前搜索筛选条件下可见的包。</para></summary>
     /// <value>The filtered package collection.<para>经过滤的包集合。</para></value>
@@ -32,6 +40,7 @@ public partial class VisualPluginManagerViewModel : ViewModelBase, IDisposable
     {
         _manager = manager;
         _manager.Changed += OnManagerChanged;
+        RefreshPublisherKeys();
         RebuildVisiblePlugins();
     }
 
@@ -41,6 +50,18 @@ public partial class VisualPluginManagerViewModel : ViewModelBase, IDisposable
     public void Refresh() => _manager.Refresh();
 
     private void OnManagerChanged(object? sender, EventArgs e) => RebuildVisiblePlugins();
+
+    private void RefreshPublisherKeys()
+    {
+        var selectedId = SelectedPublisherKey?.Id;
+        PublisherKeys.Clear();
+        foreach (var key in new KeyLibraryService().List().Where(key => key.Kind == ManagedKeyKind.Publisher))
+        {
+            PublisherKeys.Add(key);
+        }
+        SelectedPublisherKey = PublisherKeys.FirstOrDefault(key =>
+            string.Equals(key.Id, selectedId, StringComparison.OrdinalIgnoreCase)) ?? PublisherKeys.FirstOrDefault();
+    }
 
     private void RebuildVisiblePlugins()
     {

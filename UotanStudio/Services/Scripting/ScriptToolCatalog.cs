@@ -2,6 +2,7 @@ using UotanStudio.Services.Devices;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Mirroring;
 using UotanStudio.Services.Network;
+using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Services.Scripting;
 
@@ -11,7 +12,7 @@ namespace UotanStudio.Services.Scripting;
 /// </summary>
 public static class ScriptToolCatalog
 {
-    /// <summary>Creates the tool table for one script execution.<para>为一次脚本执行创建工具表。</para></summary>
+    /// <summary>Creates the unfiltered tool table for one script execution.<para>为一次脚本执行创建未过滤的工具表。</para></summary>
     /// <param name="context">Execution context that owns resources registered by the tools.
     /// <para>持有工具所注册资源的执行上下文。</para></param>
     /// <param name="gateway">Gateway dispatching device and flash operations for the tools.
@@ -22,7 +23,24 @@ public static class ScriptToolCatalog
     public static IReadOnlyDictionary<string, ScriptTool> Create(
         INodeExecutionContext context,
         IScriptToolGateway gateway,
-        HttpClient httpClient)
+        HttpClient httpClient) => Create(context, gateway, httpClient, PluginPermission.All);
+
+    /// <summary>Creates the tool table filtered to the permissions a package may exercise.
+    /// <para>创建按包可行使权限过滤的工具表。</para></summary>
+    /// <param name="context">Execution context that owns resources registered by the tools.
+    /// <para>持有工具所注册资源的执行上下文。</para></param>
+    /// <param name="gateway">Gateway dispatching device and flash operations for the tools.
+    /// <para>为工具分发设备与刷写操作的网关。</para></param>
+    /// <param name="httpClient">Client that download entries call to fetch remote content.
+    /// <para>下载条目获取远端内容所调用的客户端。</para></param>
+    /// <param name="permissions">Permissions the running package may exercise; every tool whose required permission is missing is omitted from the returned surface, so the script cannot reach it.
+    /// <para>运行中的包可行使的权限；所需权限缺失的工具不会出现在返回的工具面中，脚本因而无法触达。</para></param>
+    /// <returns>The filtered tool table keyed by hierarchical tool name.<para>以层级工具名为键的过滤后工具表。</para></returns>
+    public static IReadOnlyDictionary<string, ScriptTool> Create(
+        INodeExecutionContext context,
+        IScriptToolGateway gateway,
+        HttpClient httpClient,
+        PluginPermission permissions)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(gateway);
@@ -50,7 +68,7 @@ public static class ScriptToolCatalog
             throw new InvalidOperationException("The 'serial' argument is required when the device list is not a single target.");
         }
 
-        return new Dictionary<string, ScriptTool>(StringComparer.Ordinal)
+        var tools = new Dictionary<string, ScriptTool>(StringComparer.Ordinal)
         {
             ["Device.Target.Select"] = new("Device.Target.Select", invocation =>
             {
@@ -182,7 +200,27 @@ public static class ScriptToolCatalog
                 return Task.FromResult(Result(("id", id)));
             })
         };
+        if (permissions == PluginPermission.All)
+        {
+            return tools;
+        }
+        foreach (var name in tools.Keys.Where(name => (RequiredPermission(name) & ~permissions) != 0).ToArray())
+        {
+            tools.Remove(name);
+        }
+        return tools;
     }
+
+    private static PluginPermission RequiredPermission(string toolName) => toolName switch
+    {
+        "Device.Partition.Flash" => PluginPermission.DeviceFlash,
+        "Device.Partition.Erase" => PluginPermission.DeviceErase,
+        "Device.Shell.Command" => PluginPermission.DeviceShell,
+        "Device.Recovery.Clean" => PluginPermission.DeviceRecovery,
+        "Device.Power.Reboot" or "Device.Slot.Switch" => PluginPermission.DeviceControl,
+        "Network.Download.File" => PluginPermission.Network | PluginPermission.FileWrite,
+        _ => PluginPermission.None
+    };
 
     private static string ProtocolText(DetectedDevice device) => device.Protocol switch
     {

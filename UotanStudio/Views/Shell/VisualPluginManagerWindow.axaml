@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:UotanStudio.ViewModels.Shell"
         xmlns:plugins="using:UotanStudio.Services.VisualPlugins"
+        xmlns:keys="using:UotanStudio.Services.Keys"
         xmlns:icons="https://irihi.tech/iconica/tdesign"
         x:Class="UotanStudio.Views.Shell.VisualPluginManagerWindow"
         x:DataType="vm:VisualPluginManagerViewModel"
@@ -98,7 +99,7 @@
                                    TextWrapping="Wrap" IsVisible="{Binding !!SelectedPlugin.Description}" />
                     </StackPanel>
                     <Separator />
-                    <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                    <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                           RowSpacing="10" ColumnSpacing="10">
                         <TextBlock Text="{DynamicResource Plugin_Id}" Opacity="0.65" />
                         <SelectableTextBlock Grid.Column="1" Text="{Binding SelectedPlugin.Id}" TextWrapping="Wrap" />
@@ -121,8 +122,34 @@
                                    IsVisible="{Binding !!SelectedPlugin.Conflicts}" />
                         <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding SelectedPlugin.Conflicts}"
                                    TextWrapping="Wrap" IsVisible="{Binding !!SelectedPlugin.Conflicts}" />
+                        <TextBlock Grid.Row="8" Text="{DynamicResource Plugin_Publisher}" Opacity="0.65" />
+                        <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding SelectedPlugin.PublisherText}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="9" Text="{DynamicResource Plugin_Fingerprint}" Opacity="0.65" />
+                        <SelectableTextBlock Grid.Row="9" Grid.Column="1" Text="{Binding SelectedPlugin.FingerprintText}"
+                                             TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="10" Text="{DynamicResource Plugin_Permissions}" Opacity="0.65" />
+                        <TextBlock Grid.Row="10" Grid.Column="1" Text="{Binding SelectedPlugin.PermissionText}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="11" Text="{DynamicResource Plugin_GrantedPermissions}" Opacity="0.65" />
+                        <TextBlock Grid.Row="11" Grid.Column="1" Text="{Binding SelectedPlugin.GrantedPermissionText}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="12" Text="{DynamicResource Plugin_Trust}" Opacity="0.65" />
+                        <TextBlock Grid.Row="12" Grid.Column="1" Text="{Binding SelectedPlugin.TrustText}"
+                                   TextWrapping="Wrap" />
                     </Grid>
                     <WrapPanel ItemSpacing="8" LineSpacing="8">
+                        <ComboBox Width="180" ItemsSource="{Binding PublisherKeys}"
+                                  SelectedItem="{Binding SelectedPublisherKey, Mode=TwoWay}"
+                                  PlaceholderText="{DynamicResource Plugin_Publisher}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="keys:ManagedKey">
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button Classes="plugin-action" Content="{DynamicResource Plugin_Sign}"
+                                Click="SignClick" IsEnabled="{Binding !!SelectedPublisherKey}" />
                         <Button Classes="plugin-action" Content="{DynamicResource Plugin_UseTemplate}"
                                 Click="UseTemplateClick" IsEnabled="{Binding SelectedPlugin.IsAvailable}"
                                 IsVisible="{Binding SelectedPlugin.IsTemplate}" />
@@ -133,6 +160,10 @@
                                 Click="DisableClick" IsVisible="{Binding SelectedPlugin.ShowDisableAction}" />
                         <Button Classes="plugin-action" Content="{DynamicResource Plugin_Enable}"
                                 Click="EnableClick" IsVisible="{Binding SelectedPlugin.ShowEnableAction}" />
+                        <Button Classes="plugin-action" Content="{DynamicResource Plugin_TrustPublisher}"
+                                Click="TrustPublisherClick" IsVisible="{Binding SelectedPlugin.ShowTrustAction}" />
+                        <Button Classes="plugin-action" Content="{DynamicResource Plugin_UntrustPublisher}"
+                                Click="UntrustPublisherClick" IsVisible="{Binding SelectedPlugin.ShowUntrustAction}" />
                         <Button Classes="plugin-action" Click="RemoveClick">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <icons:Delete Width="16" Height="16" />

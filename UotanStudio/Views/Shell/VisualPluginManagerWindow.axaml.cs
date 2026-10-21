@@ -3,6 +3,7 @@ using Avalonia.Controls.Notifications;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using UotanStudio.Services;
+using UotanStudio.Services.Keys;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.VisualPlugins;
 using UotanStudio.ViewModels.Shell;
@@ -43,10 +44,123 @@ public partial class VisualPluginManagerWindow : Window
             }]
         });
         if (files.FirstOrDefault()?.TryGetLocalPath() is not { } path) return;
-        var install = string.Equals(Path.GetExtension(path), ".lua", StringComparison.OrdinalIgnoreCase)
-            ? _manager.InstallScriptAsync(path)
-            : _manager.InstallAsync(path);
-        await RunAsync(() => install, "Plugin_Installed");
+        VisualPluginPackage package;
+        try
+        {
+            package = string.Equals(Path.GetExtension(path), ".lua", StringComparison.OrdinalIgnoreCase)
+                ? await BuildScriptPackageAsync(path)
+                : await VisualPluginFile.LoadAsync(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException
+                                       or ArgumentException)
+        {
+            ShowFailure(ex);
+            return;
+        }
+        if (await AskInstallConsentAsync(package) is not { } consent) return;
+        await RunAsync(() => _manager.InstallPackageAsync(package, consent), "Plugin_Installed");
+    }
+
+    private static async Task<VisualPluginPackage> BuildScriptPackageAsync(string luaPath)
+    {
+        var script = await File.ReadAllTextAsync(luaPath);
+        if (script.Length > VisualPluginValidation.MaximumScriptLength)
+        {
+            throw new InvalidDataException(
+                $"Plugin script exceeds {VisualPluginValidation.MaximumScriptLength} characters.");
+        }
+        var name = Path.GetFileNameWithoutExtension(luaPath);
+        return VisualPluginPackageBuilder.CreateScript(name, VisualPluginPackageBuilder.NormalizeId(name), script);
+    }
+
+    private async Task<VisualPluginInstallConsent?> AskInstallConsentAsync(VisualPluginPackage package)
+    {
+        var language = LanguageService.Instance;
+        var status = _manager.TrustStore.GetStatus(package);
+        var permissions = VisualPluginManager.DescribePermissions(PluginPermissions.Derive(package));
+        var publisher = package.Manifest.Publisher;
+        var (title, message) = status switch
+        {
+            PublisherTrustStatus.Unsigned => (
+                language.GetString("Plugin_InstallUnsignedTitle"),
+                string.Format(language.GetString("Plugin_InstallUnsignedPrompt"), package.Manifest.Name, permissions)),
+            PublisherTrustStatus.FingerprintMismatch => (
+                language.GetString("Plugin_InstallTrustChangedTitle"),
+                string.Format(language.GetString("Plugin_InstallTrustChangedPrompt"), package.Manifest.Name,
+                    DescribePublisher(publisher), publisher?.Fingerprint ?? string.Empty, permissions)),
+            _ => (
+                language.GetString("Plugin_InstallTitle"),
+                string.Format(language.GetString("Plugin_InstallTrustPrompt"), package.Manifest.Name,
+                    DescribePublisher(publisher), publisher?.Fingerprint ?? string.Empty, permissions))
+        };
+        if (!await DialogService.ConfirmAsync(this, title, message, language.GetString("Plugin_Install")))
+        {
+            return null;
+        }
+        return new VisualPluginInstallConsent
+        {
+            AllowUntrusted = true,
+            TrustPublisher = package.IsSigned,
+            Permissions = PluginPermissions.Derive(package)
+        };
+    }
+
+    private static string DescribePublisher(VisualPluginPublisher? publisher) => publisher switch
+    {
+        null => string.Empty,
+        { Name.Length: > 0 } => $"{publisher.Name} ({publisher.Id})",
+        _ => publisher.Id
+    };
+
+    private async void SignClick(object? sender, RoutedEventArgs e)
+    {
+        if (Model.SelectedPlugin is not { } registration || Model.SelectedPublisherKey is not { } publisher)
+        {
+            return;
+        }
+        await RunAsync(async () =>
+        {
+            using var privateKey = new KeyLibraryService().LoadPublisherPrivateKey(publisher);
+            var package = registration.Package;
+            PluginSignature.Sign(package, privateKey, publisher.Id, publisher.Name);
+            await _manager.UpdateAsync(registration, package, new VisualPluginInstallConsent
+            {
+                AllowUntrusted = true,
+                TrustPublisher = true,
+                Permissions = registration.GrantedPermissions
+            });
+        }, "Plugin_Signed");
+    }
+
+    private async void TrustPublisherClick(object? sender, RoutedEventArgs e)
+    {
+        if (Model.SelectedPlugin is not { } registration) return;
+        var language = LanguageService.Instance;
+        var confirmed = await DialogService.ConfirmAsync(this, language.GetString("Plugin_TrustConfirmTitle"),
+            string.Format(language.GetString("Plugin_TrustConfirm"), registration.FingerprintText,
+                string.IsNullOrEmpty(registration.PublisherId) ? registration.Name : registration.PublisherId),
+            language.GetString("Plugin_TrustPublisher"));
+        if (!confirmed) return;
+        await RunAsync(() =>
+        {
+            _manager.TrustPublisher(registration.Id);
+            return Task.CompletedTask;
+        }, "Plugin_Trusted");
+    }
+
+    private async void UntrustPublisherClick(object? sender, RoutedEventArgs e)
+    {
+        if (Model.SelectedPlugin is not { } registration) return;
+        var language = LanguageService.Instance;
+        var confirmed = await DialogService.ConfirmAsync(this, language.GetString("Plugin_UntrustPublisher"),
+            string.Format(language.GetString("Plugin_UntrustConfirm"), registration.PublisherId),
+            language.GetString("Plugin_UntrustPublisher"));
+        if (!confirmed) return;
+        await RunAsync(() =>
+        {
+            _manager.UntrustPublisher(registration.Id);
+            return Task.CompletedTask;
+        }, "Plugin_Untrusted");
     }
 
     private void RefreshClick(object? sender, RoutedEventArgs e) => Model.Refresh();
@@ -76,7 +190,7 @@ public partial class VisualPluginManagerWindow : Window
         switch (Model.SelectedPlugin)
         {
             case { Kind: VisualPluginKind.CompositeNode } composite:
-                new VisualPluginEditorWindow(composite).Show();
+                VisualPluginEditorWindow.ShowRegistration(composite);
                 break;
             case { Kind: VisualPluginKind.ScriptNode } script:
                 new ScriptPluginEditorWindow(script).Show();

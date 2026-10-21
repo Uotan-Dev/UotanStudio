@@ -9,7 +9,10 @@ namespace UotanStudio.Services.Projects;
 public sealed class VisualPluginPackage
 {
     /// <summary>Current visual-plugin file format. <para>当前可视化插件文件格式版本。</para></summary>
-    public const int CurrentFormatVersion = 3;
+    public const int CurrentFormatVersion = 4;
+
+    /// <summary>Oldest file format this host still reads. <para>本宿主仍可读取的最旧文件格式。</para></summary>
+    public const int MinimumReadableFormatVersion = 3;
 
     /// <summary>File format version. <para>文件格式版本。</para></summary>
     /// <value>
@@ -68,6 +71,15 @@ public sealed class VisualPluginPackage
     /// <para>从同包 <c>.uotanplugin</c> 归档解析出的资源描述符；列表非空时纯 JSON 持久化无效。</para>
     /// </value>
     public List<VisualPluginAsset> Assets { get; set; } = [];
+
+    /// <summary>Whether the package carries a publisher signature. <para>包是否携带发布者签名。</para></summary>
+    /// <value>
+    /// <see langword="true"/> when the manifest holds a non-empty algorithm and value; the signature itself is not verified here.
+    /// <para>清单中算法与值均非空时为 <see langword="true"/>；此处不校验签名本身。</para>
+    /// </value>
+    [JsonIgnore]
+    public bool IsSigned => Manifest?.Signature is { } signature
+        && !string.IsNullOrEmpty(signature.Algorithm) && !string.IsNullOrEmpty(signature.Value);
 
     /// <summary>Trusted archive location assigned by the loader, never accepted from JSON. <para>由加载器赋值的可信归档位置，绝不从 JSON 接受。</para></summary>
     /// <value>
@@ -200,6 +212,28 @@ public sealed class VisualPluginManifest
     /// <para>声明为与本包互斥的包标识。</para>
     /// </value>
     public List<string> Conflicts { get; set; } = [];
+
+    /// <summary>Declared permissions requested by the package. <para>包请求的声明式权限。</para></summary>
+    /// <value>
+    /// Stable <see cref="PluginPermission"/> names; the host adds the permissions derived from the graph and parses
+    /// these entries with <c>PluginPermissions.TryParse</c>.
+    /// <para>稳定的 <see cref="PluginPermission"/> 名称；宿主会并入由图推导的权限，并用 <c>PluginPermissions.TryParse</c> 解析这些条目。</para>
+    /// </value>
+    public List<string> Permissions { get; set; } = [];
+
+    /// <summary>Publisher identity bound by the signature. <para>由签名绑定的发布者身份。</para></summary>
+    /// <value>
+    /// Present on signed packages only; an unsigned package may carry no publisher at all.
+    /// <para>仅已签名包存在；未签名包可以完全没有发布者信息。</para>
+    /// </value>
+    public VisualPluginPublisher? Publisher { get; set; }
+
+    /// <summary>Signature over the canonical package payload. <para>覆盖规范化包载荷的签名。</para></summary>
+    /// <value>
+    /// <see langword="null"/> for an unsigned package; a present value is verified by <see cref="PluginSignature"/> on load.
+    /// <para>未签名包为 <see langword="null"/>；存在时由 <see cref="PluginSignature"/> 在加载时校验。</para>
+    /// </value>
+    public VisualPluginSignature? Signature { get; set; }
 }
 
 /// <summary>

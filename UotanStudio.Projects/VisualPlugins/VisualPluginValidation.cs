@@ -112,8 +112,11 @@ public static partial class VisualPluginValidation
         {
             errors.Add("Unknown visual-plugin package kind.");
         }
-        if (package.FormatVersion != VisualPluginPackage.CurrentFormatVersion)
+        if (package.FormatVersion is < VisualPluginPackage.MinimumReadableFormatVersion
+            or > VisualPluginPackage.CurrentFormatVersion)
+        {
             errors.Add($"Unsupported visual-plugin format version {package.FormatVersion}.");
+        }
 
         if (package.Assets is null || package.Assets.Count > VisualPluginBundle.MaximumAssetCount)
         {
@@ -199,6 +202,43 @@ public static partial class VisualPluginValidation
             errors.Add($"Invalid node API version {manifest.NodeApiVersion}; the host supports node API versions 1 through {VisualPluginManifest.CurrentNodeApiVersion}.");
         else if (manifest.NodeApiVersion > VisualPluginManifest.CurrentNodeApiVersion)
             errors.Add($"Unsupported node API version {manifest.NodeApiVersion}; the host supports node API versions 1 through {VisualPluginManifest.CurrentNodeApiVersion}.");
+
+        if (manifest.Permissions is null || manifest.Permissions.Count > 16
+            || manifest.Permissions.Any(string.IsNullOrWhiteSpace)
+            || manifest.Permissions.Any(name => !PluginPermissions.TryParse(name, out _))
+            || manifest.Permissions.Distinct(StringComparer.OrdinalIgnoreCase).Count() != manifest.Permissions.Count)
+        {
+            errors.Add("Plugin permissions must name known capabilities without duplicates.");
+        }
+        if (manifest.Publisher is { } publisher)
+        {
+            if (publisher.Id is null || !PluginIdPattern().IsMatch(publisher.Id)
+                || string.IsNullOrWhiteSpace(publisher.Name) || publisher.Name.Length > 128
+                || !PluginSignature.IsValidFingerprint(publisher.Fingerprint)
+                || !PluginSignature.IsValidPublicKey(publisher.PublicKey))
+            {
+                errors.Add("Plugin publisher identity, fingerprint or public key is invalid.");
+            }
+        }
+        if (manifest.Signature is { } signature)
+        {
+            if (manifest.Publisher is null)
+            {
+                errors.Add("A signed plugin must declare its publisher identity.");
+            }
+            else if (string.IsNullOrEmpty(signature.Value) || !PluginSignatureAlgorithms.IsKnown(signature.Algorithm))
+            {
+                errors.Add("Plugin signature algorithm or value is invalid.");
+            }
+            else
+            {
+                var verification = PluginSignature.Verify(package);
+                if (!verification.IsValid)
+                {
+                    errors.Add(verification.Error ?? "Plugin signature does not match its payload.");
+                }
+            }
+        }
 
         var graph = package.Graph;
         if (graph.FormatVersion != WorkflowSnapshot.CurrentFormatVersion)
@@ -381,6 +421,8 @@ public static partial class VisualPluginValidation
             }
         }
     }
+
+    internal static bool IsValidPluginId(string? id) => id is not null && PluginIdPattern().IsMatch(id);
 
     private static bool IsKnownPortType(string value) => value is
         "Any" or "Device" or "Flow" or "Path" or "Data" or "Text" or "Number" or "Boolean" or "PatchWorkspace" or "PatchAsset"

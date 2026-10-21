@@ -79,7 +79,7 @@ public sealed class ScriptNodeViewModel : FlowNodeViewModel
                 $"Script '{PluginId}' requires its exact installed script version {PluginVersion}.");
         }
 
-        var tools = ScriptToolCatalog.Create(context, _gateway, _httpClient);
+        var tools = ScriptToolCatalog.Create(context, _gateway, _httpClient, PluginPermissions.Derive(_package));
         try
         {
             await new LuaScriptEngine().RunAsync(_package.Script, TypeKey, tools, context,

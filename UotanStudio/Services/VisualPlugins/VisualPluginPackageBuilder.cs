@@ -172,6 +172,9 @@ public static class VisualPluginPackageBuilder
             MaximumVersionExclusive = dependency.MaximumVersionExclusive
         })];
         updated.Manifest.Conflicts = [.. existing.Manifest.Conflicts];
+        updated.Manifest.Permissions = [.. existing.Manifest.Permissions];
+        updated.Manifest.Publisher = existing.Manifest.Publisher;
+        updated.Manifest.Signature = null;
         updated.Assets = [.. existing.Assets];
         updated.BundlePath = existing.BundlePath;
         updated.BundleRoot = existing.BundleRoot;
