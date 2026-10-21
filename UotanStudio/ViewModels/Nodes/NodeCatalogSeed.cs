@@ -45,6 +45,8 @@ internal static class NodeCatalogSeed
         D("Device.Slot.Query", "Node_Device_Slot_Query", "Device", DeviceSlotNodeViewModel.CreateQueryNode),
         D("Device.Slot.Switch", "Node_Device_Slot_Switch", "Device", DeviceSlotNodeViewModel.CreateSwitchNode, true),
         D("Device.Shell.Command", "Node_Device_Shell_Command", "Device", DeviceServiceNodeViewModel.CreateShellCommandNode, true),
+        .. DeviceProtocolNodeSpecs.CreateDescriptors().Select(PrepareDescriptor),
+        .. MtkHdcNodeSpecs.CreateDescriptors().Select(PrepareDescriptor),
         D("File.Binary.Read", "Node_File_Binary_Read", "Data", DataNodeViewModel.CreateFileReadNode),
         D("File.Bytes.Write", "Node_File_Bytes_Write", "Data", FileBytesNodeViewModel.CreateWriteNode),
         D("File.Artifact.Open", "Node_File_Artifact_Open", "Data", () => new ArtifactNodeViewModel()),
@@ -219,6 +221,16 @@ internal static class NodeCatalogSeed
             Aliases = MergedTypeKeys.TryGetValue(typeKey, out var merged) ? merged : []
         };
     }
+
+    /// <summary>
+    /// Wraps a protocol descriptor factory with the shared runtime preparation: stable port ids, flow ports for
+    /// effectful nodes and the parameter schema.
+    /// <para>用共享运行期准备包装协议描述符工厂：稳定端口 ID、有效操作节点的流端口与参数架构。</para>
+    /// </summary>
+    /// <param name="descriptor">The protocol descriptor to prepare.<para>待准备的协议描述符。</para></param>
+    /// <returns>The descriptor whose factory prepares each created node.<para>工厂会准备每个已创建节点的描述符。</para></returns>
+    private static NodeDescriptor PrepareDescriptor(NodeDescriptor descriptor) =>
+        descriptor with { Factory = () => Prepare(descriptor.Factory(), descriptor.Capabilities) };
 
     private static DeviceRequiredState DeviceRequiredStateFor(string typeKey) => typeKey switch
     {

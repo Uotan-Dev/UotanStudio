@@ -106,10 +106,22 @@ public sealed record NodeDescriptor(
 [Flags]
 public enum DeviceRequiredState
 {
+    /// <summary>No device transport is required.<para>不需要任何设备传输。</para></summary>
     None = 0,
+    /// <summary>ADB (system, recovery or sideload).<para>ADB（system、recovery 或 sideload）。</para></summary>
     Adb = 1 << 0,
+    /// <summary>Fastboot (bootloader or fastbootd).<para>Fastboot（bootloader 或 fastbootd）。</para></summary>
     Fastboot = 1 << 1,
-    AnyDevice = Adb | Fastboot
+    /// <summary>Qualcomm EDL (9008).<para>高通 EDL（9008）。</para></summary>
+    Edl = 1 << 2,
+    /// <summary>Rockchip bootrom or loader.<para>瑞芯微 bootrom 或 loader。</para></summary>
+    Rkdl = 1 << 3,
+    /// <summary>MediaTek BootROM or download agent.<para>联发科 BootROM 或下载代理。</para></summary>
+    Mtk = 1 << 4,
+    /// <summary>OpenHarmony HDC over USB or the local hdc server.<para>经 USB 或本机 hdc server 的 OpenHarmony HDC。</para></summary>
+    Hdc = 1 << 5,
+    /// <summary>Every supported device transport.<para>所有受支持的设备传输。</para></summary>
+    AnyDevice = Adb | Fastboot | Edl | Rkdl | Mtk | Hdc
 }
 
 [Flags]

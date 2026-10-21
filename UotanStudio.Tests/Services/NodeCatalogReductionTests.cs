@@ -1,3 +1,4 @@
+using UotanStudio.Locale;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
@@ -14,8 +15,8 @@ public sealed class NodeCatalogReductionTests
         NodeFactoryRegistrar.RegisterAll();
         var builtIn = NodeFactoryRegistrar.BuiltInTypeKeys;
 
-        Assert.Equal(70, builtIn.Count);
-        Assert.Equal(70, NodeFactoryRegistrar.Descriptors
+        Assert.Equal(89, builtIn.Count);
+        Assert.Equal(89, NodeFactoryRegistrar.Descriptors
             .Count(descriptor => descriptor.IsToolboxVisible && builtIn.Contains(descriptor.TypeKey)));
     }
 
@@ -43,9 +44,14 @@ public sealed class NodeCatalogReductionTests
 
         Assert.Equal(
             [
-                "Device.Partition.Erase", "Device.Partition.Flash", "Device.Partition.Read", "Device.Power.Reboot",
-                "Device.Property.Read", "Device.Shell.Command", "Device.Slot.Query", "Device.Slot.Switch",
-                "Device.Table.Read", "Device.Target.Select"
+                "Device.Adb.Pull", "Device.Adb.Push", "Device.Edl.Backup", "Device.Edl.Erase", "Device.Edl.Flash",
+                "Device.Edl.ReadPartition", "Device.Edl.RepairGpt", "Device.Edl.UfsProvision",
+                "Device.Fastboot.GetVariable", "Device.Hdc.Pull", "Device.Hdc.Push", "Device.Hdc.Shell",
+                "Device.Hdc.Wait", "Device.Mtk.Operation", "Device.Mtk.Session", "Device.Partition.Erase",
+                "Device.Partition.Flash", "Device.Partition.Read", "Device.Power.Reboot", "Device.Property.Read",
+                "Device.Rkdl.Flash", "Device.Rkdl.ReadPartition", "Device.Rkdl.Wait", "Device.Shell.Command",
+                "Device.Slot.Query", "Device.Slot.Switch", "Device.Table.Read", "Device.Target.Select",
+                "Device.Wait.ForDevice"
             ],
             NodeFactoryRegistrar.Descriptors
                 .Where(descriptor => descriptor.TypeKey.StartsWith("Device.", StringComparison.Ordinal))
@@ -54,6 +60,54 @@ public sealed class NodeCatalogReductionTests
                 .ToArray());
         Assert.DoesNotContain(NodeFactoryRegistrar.Descriptors,
             descriptor => descriptor.TypeKey.StartsWith("Mirroring.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Descriptors_DeviceProtocolNodes_ExposePortsPolicyAndLocalizedName()
+    {
+        NodeFactoryRegistrar.RegisterAll();
+        (string TypeKey, DeviceRequiredState State, bool Confirming)[] expected =
+        [
+            ("Device.Adb.Pull", DeviceRequiredState.Adb, false),
+            ("Device.Adb.Push", DeviceRequiredState.Adb, true),
+            ("Device.Edl.Backup", DeviceRequiredState.Edl, false),
+            ("Device.Edl.Erase", DeviceRequiredState.Edl, true),
+            ("Device.Edl.Flash", DeviceRequiredState.Edl, true),
+            ("Device.Edl.ReadPartition", DeviceRequiredState.Edl, false),
+            ("Device.Edl.RepairGpt", DeviceRequiredState.Edl, true),
+            ("Device.Edl.UfsProvision", DeviceRequiredState.Edl, true),
+            ("Device.Fastboot.GetVariable", DeviceRequiredState.Fastboot, false),
+            ("Device.Hdc.Pull", DeviceRequiredState.Hdc, false),
+            ("Device.Hdc.Push", DeviceRequiredState.Hdc, true),
+            ("Device.Hdc.Shell", DeviceRequiredState.Hdc, true),
+            ("Device.Hdc.Wait", DeviceRequiredState.Hdc, false),
+            ("Device.Mtk.Operation", DeviceRequiredState.Mtk, true),
+            ("Device.Mtk.Session", DeviceRequiredState.Mtk, false),
+            ("Device.Rkdl.Flash", DeviceRequiredState.Rkdl, true),
+            ("Device.Rkdl.ReadPartition", DeviceRequiredState.Rkdl, false),
+            ("Device.Rkdl.Wait", DeviceRequiredState.Rkdl, false),
+            ("Device.Wait.ForDevice", DeviceRequiredState.AnyDevice, false)
+        ];
+
+        Assert.Equal(19, expected.Length);
+        foreach (var (typeKey, state, confirming) in expected)
+        {
+            Assert.True(NodeFactoryRegistrar.BuiltInTypeKeys.Contains(typeKey));
+            var descriptor = Assert.Single(NodeFactoryRegistrar.Descriptors,
+                candidate => candidate.TypeKey == typeKey);
+            Assert.Equal("Device", descriptor.CategoryPath);
+            Assert.Equal(state, descriptor.RequiredDeviceState);
+            Assert.Equal(confirming, descriptor.RequiresConfirmation);
+            Assert.Equal(confirming, descriptor.Capabilities.HasFlag(NodeCapability.MutatesDevice));
+            Assert.Contains(descriptor.NameResourceKey, LocaleKeySets.Node);
+            var node = NodeTypeRegistry.Create(typeKey);
+            Assert.NotNull(node);
+            Assert.Equal(typeKey, node.TypeKey);
+            Assert.NotEmpty(node.Input);
+            Assert.NotEmpty(node.Output);
+            Assert.All(node.Input.Concat(node.Output),
+                port => Assert.False(string.IsNullOrWhiteSpace(port.PortId)));
+        }
     }
 
     [Fact]

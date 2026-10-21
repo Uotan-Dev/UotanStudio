@@ -33,9 +33,18 @@ public sealed class NodeFactoryRegistrarTests
 
         Assert.Equal(
             [
+                "Device.Adb.Push",
+                "Device.Edl.Erase",
+                "Device.Edl.Flash",
+                "Device.Edl.RepairGpt",
+                "Device.Edl.UfsProvision",
+                "Device.Hdc.Push",
+                "Device.Hdc.Shell",
+                "Device.Mtk.Operation",
                 "Device.Partition.Erase",
                 "Device.Partition.Flash",
                 "Device.Power.Reboot",
+                "Device.Rkdl.Flash",
                 "Device.Shell.Command",
                 "Device.Slot.Switch"
             ],
@@ -64,6 +73,16 @@ public sealed class NodeFactoryRegistrarTests
             Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Table.Read").RequiredDeviceState);
         Assert.Equal(DeviceRequiredState.Adb,
             Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Shell.Command").RequiredDeviceState);
+        Assert.Equal(DeviceRequiredState.Edl,
+            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Edl.Flash").RequiredDeviceState);
+        Assert.Equal(DeviceRequiredState.Rkdl,
+            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Rkdl.Wait").RequiredDeviceState);
+        Assert.Equal(DeviceRequiredState.Mtk,
+            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Mtk.Operation").RequiredDeviceState);
+        Assert.Equal(DeviceRequiredState.Hdc,
+            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Hdc.Pull").RequiredDeviceState);
+        Assert.Equal(DeviceRequiredState.AnyDevice,
+            Assert.Single(NodeFactoryRegistrar.Descriptors, item => item.TypeKey == "Device.Wait.ForDevice").RequiredDeviceState);
     }
 
     [Fact]
@@ -291,12 +310,13 @@ public sealed class NodeFactoryRegistrarTests
     }
 
     [Fact]
-    public void Descriptors_DoNotContainRemovedHdcOrDexNodes()
+    public void Descriptors_DoNotContainRemovedLegacyHdcOrDexNodes()
     {
         var keys = NodeFactoryRegistrar.Descriptors.Select(d => d.TypeKey).ToArray();
 
-        Assert.DoesNotContain(keys, key => key.Contains("Hdc", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(keys, key => key.StartsWith("HDC.", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(keys, key => key.Contains("Dex", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("Device.Hdc.Wait", keys);
     }
 
     [Fact]
