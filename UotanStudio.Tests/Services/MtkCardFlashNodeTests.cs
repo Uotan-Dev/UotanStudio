@@ -1,6 +1,7 @@
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Execution;
+using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
 using Xunit;
 
@@ -180,6 +181,18 @@ public sealed class MtkCardFlashNodeTests
         Assert.Equal(NodePortType.Device, node.Output.Single(port => port.Title == "Device").PortType);
         Assert.Equal(NodePortType.Text, node.Output.Single(port => port.Title == "Status").PortType);
         Assert.Equal("Device.Mtk.Wait", node.TypeKey);
+    }
+
+    [Fact]
+    public void Wait_Spec_IsReadOnlyWithoutConfirmation()
+    {
+        var spec = MtkHdcNodeSpecs.All.Single(candidate => candidate.TypeKey == "Device.Mtk.Wait");
+
+        Assert.Equal<DeviceProtocolKind?>(DeviceProtocolKind.Mtk, spec.RequiredProtocol);
+        Assert.True(spec.Capabilities.HasFlag(NodeCapability.RequiresDevice));
+        Assert.True(spec.Capabilities.HasFlag(NodeCapability.ReadsDevice));
+        Assert.False(spec.Capabilities.HasFlag(NodeCapability.MutatesDevice));
+        Assert.False(spec.RequiresConfirmation);
     }
 
     [Fact]
