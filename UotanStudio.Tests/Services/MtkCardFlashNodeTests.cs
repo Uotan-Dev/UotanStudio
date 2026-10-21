@@ -156,15 +156,109 @@ public sealed class MtkCardFlashNodeTests
     }
 
     [Fact]
-    public void Operation_Ports_ExposeConfirmationAndResult()
+    public void Operation_Ports_ExposeConfirmationResultAndReturnTimeout()
     {
         var node = MtkDeviceOperationNodeViewModel.CreateOperationNode();
 
         Assert.Equal(NodePortType.Boolean, node.Input.Single(port => port.Title == "Confirm").PortType);
         Assert.Equal(NodePortType.Text, node.Input.Single(port => port.Title == "Operation").PortType);
+        Assert.Equal(NodePortType.Number, node.Input.Single(port => port.Title == "Timeout").PortType);
+        Assert.False(node.Input.Single(port => port.Title == "Timeout").IsRequired);
         Assert.Equal(NodePortType.Boolean, node.Output.Single(port => port.Title == "Result").PortType);
         Assert.Equal(NodePortType.Text, node.Output.Single(port => port.Title == "Status").PortType);
         Assert.Equal("Device.Mtk.Operation", node.TypeKey);
+    }
+
+    [Fact]
+    public void Wait_Ports_ExposeSerialProtocolAndTimeout()
+    {
+        var node = MtkWaitNodeViewModel.CreateWaitNode();
+
+        Assert.Equal(NodePortType.Text, node.Input.Single(port => port.Title == "Serial").PortType);
+        Assert.Equal(NodePortType.Text, node.Input.Single(port => port.Title == "Protocol").PortType);
+        Assert.Equal(NodePortType.Number, node.Input.Single(port => port.Title == "Timeout").PortType);
+        Assert.Equal(NodePortType.Device, node.Output.Single(port => port.Title == "Device").PortType);
+        Assert.Equal(NodePortType.Text, node.Output.Single(port => port.Title == "Status").PortType);
+        Assert.Equal("Device.Mtk.Wait", node.TypeKey);
+    }
+
+    [Fact]
+    public async Task Wait_NonPositiveTimeout_FailsBeforePolling()
+    {
+        var node = MtkWaitNodeViewModel.CreateWaitNode();
+        Seed(node, "Timeout", 0d);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => node.ExecuteAsync(new NodeContext()));
+
+        Assert.Equal("invalid-timeout", Status(node));
+        Assert.Null(node.Output.Single(port => port.Title == "Device").Data);
+    }
+
+    [Fact]
+    public async Task Wait_NonMtkProtocol_FailsBeforePolling()
+    {
+        var node = MtkWaitNodeViewModel.CreateWaitNode();
+        Seed(node, "Protocol", "adb");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => node.ExecuteAsync(new NodeContext()));
+
+        Assert.Equal("invalid-protocol", Status(node));
+        Assert.Null(node.Output.Single(port => port.Title == "Device").Data);
+    }
+
+    [Fact]
+    public async Task Operation_ReturnToBromWithoutConfirmation_FailsBeforeConnecting()
+    {
+        var node = MtkDeviceOperationNodeViewModel.CreateOperationNode();
+        Seed(node, "Operation", "ReturnToBrom");
+        Seed(node, "Confirm", false);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => node.ExecuteAsync(new NodeContext()));
+
+        Assert.True(failure.Message.Contains("Confirm", StringComparison.Ordinal));
+        Assert.Equal("confirmation-required", Status(node));
+        Assert.Equal(false, node.Output.Single(port => port.Title == "Result").Data);
+    }
+
+    [Fact]
+    public async Task Operation_ReturnToBromWithConfirmationButNoTransport_FailsBeforeConnecting()
+    {
+        var node = MtkDeviceOperationNodeViewModel.CreateOperationNode();
+        Seed(node, "Operation", "ReturnToBrom");
+        Seed(node, "Confirm", true);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => node.ExecuteAsync(new NodeContext()));
+
+        Assert.True(failure.Message.Contains("Port", StringComparison.Ordinal));
+        Assert.Equal("missing-transport", Status(node));
+    }
+
+    [Fact]
+    public async Task Operation_ReturnToBromNegativeTimeout_FailsBeforeConnecting()
+    {
+        var node = MtkDeviceOperationNodeViewModel.CreateOperationNode();
+        Seed(node, "Operation", "ReturnToBrom");
+        Seed(node, "Confirm", true);
+        Seed(node, "Timeout", -1d);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => node.ExecuteAsync(new NodeContext()));
+
+        Assert.Equal("invalid-timeout", Status(node));
+    }
+
+    [Fact]
+    public async Task Operation_ReturnToBromNonMtkDevice_FailsBeforeConnecting()
+    {
+        var node = MtkDeviceOperationNodeViewModel.CreateOperationNode();
+        Seed(node, "Operation", "ReturnToBrom");
+        Seed(node, "Confirm", true);
+        Seed(node, "Device", Device(DeviceProtocolKind.Adb, "ADB1"));
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => node.ExecuteAsync(new NodeContext()));
+
+        Assert.Equal("invalid-device", Status(node));
     }
 
     private static DetectedDevice Device(DeviceProtocolKind protocol, string serial) => new()

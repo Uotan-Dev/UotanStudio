@@ -279,6 +279,9 @@
   <data name="Node_Device_Edl_UfsProvision" xml:space="preserve">
     <value>EDL UFS Provision</value>
   </data>
+  <data name="Node_Device_Edl_UfsReset" xml:space="preserve">
+    <value>EDL UFS Reset</value>
+  </data>
   <data name="Node_Device_Edl_ReadPartition" xml:space="preserve">
     <value>EDL Read Partition</value>
   </data>
@@ -309,6 +312,9 @@
   <data name="Node_Device_Mtk_Operation" xml:space="preserve">
     <value>MTK Operation</value>
   </data>
+  <data name="Node_Device_Mtk_Wait" xml:space="preserve">
+    <value>Wait for MTK Device</value>
+  </data>
   <data name="Node_Device_Hdc_Wait" xml:space="preserve">
     <value>Wait for HDC</value>
   </data>
@@ -320,6 +326,24 @@
   </data>
   <data name="Node_Device_Hdc_Pull" xml:space="preserve">
     <value>HDC Pull</value>
+  </data>
+  <data name="Node_Device_Hdc_Install" xml:space="preserve">
+    <value>HDC Install</value>
+  </data>
+  <data name="Node_Device_Hdc_Uninstall" xml:space="preserve">
+    <value>HDC Uninstall</value>
+  </data>
+  <data name="Node_Device_Hdc_Property" xml:space="preserve">
+    <value>HDC Property</value>
+  </data>
+  <data name="Node_Device_Hdc_Forward" xml:space="preserve">
+    <value>HDC Forward</value>
+  </data>
+  <data name="Node_Device_Hdc_Remount" xml:space="preserve">
+    <value>HDC Remount</value>
+  </data>
+  <data name="Node_Device_Hdc_Disconnect" xml:space="preserve">
+    <value>HDC Disconnect</value>
   </data>
   <data name="Node_File_Binary_Read" xml:space="preserve">
     <value>Read File</value>

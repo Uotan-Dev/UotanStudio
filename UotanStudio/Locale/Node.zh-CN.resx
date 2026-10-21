@@ -279,6 +279,9 @@
   <data name="Node_Device_Edl_UfsProvision" xml:space="preserve">
     <value>EDL UFS 配置</value>
   </data>
+  <data name="Node_Device_Edl_UfsReset" xml:space="preserve">
+    <value>EDL UFS 复位</value>
+  </data>
   <data name="Node_Device_Edl_ReadPartition" xml:space="preserve">
     <value>EDL 回读分区</value>
   </data>
@@ -309,6 +312,9 @@
   <data name="Node_Device_Mtk_Operation" xml:space="preserve">
     <value>MTK 操作</value>
   </data>
+  <data name="Node_Device_Mtk_Wait" xml:space="preserve">
+    <value>等待 MTK 设备</value>
+  </data>
   <data name="Node_Device_Hdc_Wait" xml:space="preserve">
     <value>等待 HDC</value>
   </data>
@@ -320,6 +326,24 @@
   </data>
   <data name="Node_Device_Hdc_Pull" xml:space="preserve">
     <value>HDC 拉取</value>
+  </data>
+  <data name="Node_Device_Hdc_Install" xml:space="preserve">
+    <value>HDC 安装</value>
+  </data>
+  <data name="Node_Device_Hdc_Uninstall" xml:space="preserve">
+    <value>HDC 卸载</value>
+  </data>
+  <data name="Node_Device_Hdc_Property" xml:space="preserve">
+    <value>HDC 属性</value>
+  </data>
+  <data name="Node_Device_Hdc_Forward" xml:space="preserve">
+    <value>HDC 端口转发</value>
+  </data>
+  <data name="Node_Device_Hdc_Remount" xml:space="preserve">
+    <value>HDC 重新挂载</value>
+  </data>
+  <data name="Node_Device_Hdc_Disconnect" xml:space="preserve">
+    <value>HDC 断开</value>
   </data>
   <data name="Node_File_Binary_Read" xml:space="preserve">
     <value>读取文件</value>

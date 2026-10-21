@@ -16,13 +16,26 @@ public static class MtkHdcNodeSpecs
     /// </summary>
     public static IReadOnlyList<DeviceProtocolNodeSpec> All { get; } =
     [
+        new("Device.Hdc.Disconnect", DeviceProtocolKind.Hdc,
+            NodeCapability.RequiresDevice | NodeCapability.MutatesDevice, HdcDisconnectNodeViewModel.CreateDisconnectNode),
+        new("Device.Hdc.Forward", DeviceProtocolKind.Hdc,
+            NodeCapability.RequiresDevice | NodeCapability.PatchSafe, HdcForwardNodeViewModel.CreateForwardNode),
+        new("Device.Hdc.Install", DeviceProtocolKind.Hdc,
+            NodeCapability.RequiresDevice | NodeCapability.MutatesDevice, HdcInstallNodeViewModel.CreateInstallNode),
+        new("Device.Hdc.Property", DeviceProtocolKind.Hdc,
+            NodeCapability.RequiresDevice | NodeCapability.ReadsDevice | NodeCapability.PatchSafe,
+            HdcPropertyNodeViewModel.CreatePropertyNode),
         new("Device.Hdc.Pull", DeviceProtocolKind.Hdc,
             NodeCapability.RequiresDevice | NodeCapability.ReadsDevice | NodeCapability.PatchSafe,
             HdcPullNodeViewModel.CreatePullNode),
         new("Device.Hdc.Push", DeviceProtocolKind.Hdc,
             NodeCapability.RequiresDevice | NodeCapability.MutatesDevice, HdcPushNodeViewModel.CreatePushNode),
+        new("Device.Hdc.Remount", DeviceProtocolKind.Hdc,
+            NodeCapability.RequiresDevice | NodeCapability.MutatesDevice, HdcRemountNodeViewModel.CreateRemountNode),
         new("Device.Hdc.Shell", DeviceProtocolKind.Hdc,
             NodeCapability.RequiresDevice | NodeCapability.MutatesDevice, HdcShellNodeViewModel.CreateShellNode),
+        new("Device.Hdc.Uninstall", DeviceProtocolKind.Hdc,
+            NodeCapability.RequiresDevice | NodeCapability.MutatesDevice, HdcUninstallNodeViewModel.CreateUninstallNode),
         new("Device.Hdc.Wait", DeviceProtocolKind.Hdc,
             NodeCapability.RequiresDevice | NodeCapability.ReadsDevice | NodeCapability.PatchSafe,
             HdcWaitNodeViewModel.CreateWaitNode),
@@ -30,7 +43,10 @@ public static class MtkHdcNodeSpecs
             NodeCapability.RequiresDevice | NodeCapability.MutatesDevice, MtkDeviceOperationNodeViewModel.CreateOperationNode),
         new("Device.Mtk.Session", DeviceProtocolKind.Mtk,
             NodeCapability.RequiresDevice | NodeCapability.ReadsDevice | NodeCapability.PatchSafe,
-            MtkDeviceSessionNodeViewModel.CreateSessionNode)
+            MtkDeviceSessionNodeViewModel.CreateSessionNode),
+        new("Device.Mtk.Wait", DeviceProtocolKind.Mtk,
+            NodeCapability.RequiresDevice | NodeCapability.ReadsDevice | NodeCapability.PatchSafe,
+            MtkWaitNodeViewModel.CreateWaitNode)
     ];
 
     /// <summary>

@@ -15,6 +15,7 @@ public sealed class DeviceProtocolNodeTests
         "Device.Edl.Erase",
         "Device.Edl.RepairGpt",
         "Device.Edl.UfsProvision",
+        "Device.Edl.UfsReset",
         "Device.Rkdl.Flash",
         "Device.Adb.Push"
     ];
@@ -33,9 +34,9 @@ public sealed class DeviceProtocolNodeTests
     [Fact]
     public void Specs_CoverEveryProtocolTypeKeyWithMatchingFactories()
     {
-        Assert.Equal(13, DeviceProtocolNodeSpecs.All.Count);
-        Assert.Equal(13, DeviceProtocolNodeSpecs.CreateDescriptors().Count);
-        Assert.Equal(13, DeviceProtocolNodeSpecs.All.Select(static spec => spec.TypeKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(14, DeviceProtocolNodeSpecs.All.Count);
+        Assert.Equal(14, DeviceProtocolNodeSpecs.CreateDescriptors().Count);
+        Assert.Equal(14, DeviceProtocolNodeSpecs.All.Select(static spec => spec.TypeKey).Distinct(StringComparer.Ordinal).Count());
 
         foreach (var spec in DeviceProtocolNodeSpecs.All)
         {
@@ -89,6 +90,7 @@ public sealed class DeviceProtocolNodeTests
         Assert.Equal<DeviceProtocolKind?>(DeviceProtocolKind.Edl, Spec("Device.Edl.Backup").RequiredProtocol);
         Assert.Equal<DeviceProtocolKind?>(DeviceProtocolKind.Edl, Spec("Device.Edl.RepairGpt").RequiredProtocol);
         Assert.Equal<DeviceProtocolKind?>(DeviceProtocolKind.Edl, Spec("Device.Edl.UfsProvision").RequiredProtocol);
+        Assert.Equal<DeviceProtocolKind?>(DeviceProtocolKind.Edl, Spec("Device.Edl.UfsReset").RequiredProtocol);
         Assert.Equal<DeviceProtocolKind?>(DeviceProtocolKind.Edl, Spec("Device.Edl.ReadPartition").RequiredProtocol);
         Assert.Equal<DeviceProtocolKind?>(DeviceProtocolKind.Rkdl, Spec("Device.Rkdl.Flash").RequiredProtocol);
         Assert.Equal<DeviceProtocolKind?>(DeviceProtocolKind.Rkdl, Spec("Device.Rkdl.ReadPartition").RequiredProtocol);
@@ -174,6 +176,18 @@ public sealed class DeviceProtocolNodeTests
         AssertInput(node, "Profile", NodePortType.Path, required: true);
         AssertInput(node, "Programmer", NodePortType.Path, required: false);
         AssertInput(node, "Preview", NodePortType.Boolean, required: false);
+        AssertOutput(node, "Result", NodePortType.Boolean);
+        AssertOutput(node, "Status", NodePortType.Text);
+    }
+
+    [Fact]
+    public void EdlUfsReset_Ports_DeclareDeviceProgrammerAndConfirm()
+    {
+        var node = Create("Device.Edl.UfsReset");
+
+        AssertInput(node, "Device", NodePortType.Device, required: true);
+        AssertInput(node, "Programmer", NodePortType.Path, required: false);
+        AssertInput(node, "Confirm", NodePortType.Boolean, required: false);
         AssertOutput(node, "Result", NodePortType.Boolean);
         AssertOutput(node, "Status", NodePortType.Text);
     }
@@ -290,6 +304,7 @@ public sealed class DeviceProtocolNodeTests
     [InlineData("Device.Edl.Backup")]
     [InlineData("Device.Edl.RepairGpt")]
     [InlineData("Device.Edl.UfsProvision")]
+    [InlineData("Device.Edl.UfsReset")]
     [InlineData("Device.Edl.ReadPartition")]
     [InlineData("Device.Rkdl.Flash")]
     [InlineData("Device.Rkdl.ReadPartition")]
@@ -350,6 +365,18 @@ public sealed class DeviceProtocolNodeTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => node.ExecuteAsync(new NodeContext()));
 
         Assert.Equal("invalid-profile", node.Output.Single(port => port.Title == "Status").Data);
+    }
+
+    [Fact]
+    public async Task EdlUfsReset_WriteWithoutConfirmation_FailsBeforeOpeningASession()
+    {
+        var node = Create("Device.Edl.UfsReset");
+        Seed(node, "Device", FakeDevice(DeviceProtocolKind.Edl));
+        Seed(node, "Confirm", false);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => node.ExecuteAsync(new NodeContext()));
+
+        Assert.Equal("confirmation-required", node.Output.Single(port => port.Title == "Status").Data);
     }
 
     [Fact]
