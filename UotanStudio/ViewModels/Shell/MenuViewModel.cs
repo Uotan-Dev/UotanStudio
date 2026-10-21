@@ -590,6 +590,164 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// Opens a <c>.uotanscheme</c> file in the Scheme editor window.
+    /// <para>在 Scheme 编辑器窗口中打开 <c>.uotanscheme</c> 文件。</para>
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenSchemeAsync()
+    {
+        try
+        {
+            var path = await PickSchemeFileAsync();
+            if (path is null)
+            {
+                return;
+            }
+
+            await ShowSchemeEditorAsync(path);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Scheme", $"Open scheme failed: {ex.Message}");
+            var owner = DialogService.GetOwnerWindow();
+            if (owner is not null)
+            {
+                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
+                    UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens a blank Scheme editor with a fresh scheme identifier.
+    /// <para>打开带新 Scheme 标识符的空白 Scheme 编辑器。</para>
+    /// </summary>
+    [RelayCommand]
+    private async Task NewSchemeAsync()
+    {
+        try
+        {
+            await ShowSchemeEditorAsync(null);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Scheme", $"New scheme failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Opens a <c>.uotanscheme</c> file in the read-only operator window.
+    /// <para>在只读操作员窗口中打开 <c>.uotanscheme</c> 文件。</para>
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenSchemeOperatorAsync()
+    {
+        try
+        {
+            var path = await PickSchemeFileAsync();
+            if (path is null)
+            {
+                return;
+            }
+
+            await ShowSchemeOperatorAsync(path);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Scheme", $"Open scheme operator failed: {ex.Message}");
+            var owner = DialogService.GetOwnerWindow();
+            if (owner is not null)
+            {
+                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
+                    UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+            }
+        }
+    }
+
+    private static async Task<string?> PickSchemeFileAsync()
+    {
+        var topLevel = TopLevel;
+        if (topLevel is null || !topLevel.StorageProvider.CanOpen)
+        {
+            return null;
+        }
+
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Scheme_Open"),
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("UotanStudio Scheme") { Patterns = ["*.uotanscheme"] },
+                FilePickerFileTypes.All
+            ]
+        });
+        return files.FirstOrDefault()?.TryGetLocalPath();
+    }
+
+    private static async Task ShowSchemeEditorAsync(string? path)
+    {
+        SchemeEditorWindow window;
+        if (_schemeEditorWindow is { IsVisible: true } existing)
+        {
+            window = existing;
+            window.WindowState = WindowState.Normal;
+            window.Activate();
+            if (path is null)
+            {
+                window.ViewModel.NewScheme();
+            }
+        }
+        else
+        {
+            window = new SchemeEditorWindow();
+            _schemeEditorWindow = window;
+            window.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_schemeEditorWindow, window))
+                {
+                    _schemeEditorWindow = null;
+                }
+            };
+            window.Show();
+        }
+
+        if (path is not null)
+        {
+            await window.LoadAsync(path);
+        }
+    }
+
+    private static async Task ShowSchemeOperatorAsync(string? path)
+    {
+        SchemeOperatorWindow window;
+        if (_schemeOperatorWindow is { IsVisible: true } existing)
+        {
+            window = existing;
+            window.WindowState = WindowState.Normal;
+            window.Activate();
+        }
+        else
+        {
+            window = new SchemeOperatorWindow();
+            _schemeOperatorWindow = window;
+            window.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_schemeOperatorWindow, window))
+                {
+                    _schemeOperatorWindow = null;
+                }
+            };
+            window.Show();
+        }
+
+        if (path is not null)
+        {
+            await window.LoadAsync(path);
+        }
+    }
+
     private static async Task<string?> PickFolderAsync(Window owner, string titleKey)
     {
         if (!owner.StorageProvider.CanPickFolder) return null;
@@ -1355,6 +1513,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private static Window? _apkSigningWindow;
     private static Window? _bootPatchWindow;
     private static ChecksumWindow? _checksumWindow;
+    private static SchemeEditorWindow? _schemeEditorWindow;
+    private static SchemeOperatorWindow? _schemeOperatorWindow;
 
     /// <summary>Opens or activates the independent key library.</summary>
     [RelayCommand]

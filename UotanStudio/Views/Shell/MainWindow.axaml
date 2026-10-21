@@ -96,6 +96,16 @@
 							<avalonia:File Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
+					<MenuItem Header="{DynamicResource Scheme_Open}" Command="{Binding MenuVM.OpenSchemeCommand}">
+						<MenuItem.Icon>
+							<avalonia:Sitemap Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Dialog_NewFile}" Command="{Binding MenuVM.NewSchemeCommand}">
+						<MenuItem.Icon>
+							<avalonia:FileAdd Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_Save}" Command="{Binding MenuVM.SaveCommand}" InputGesture="Ctrl+S">
 						<MenuItem.Icon>
@@ -308,6 +318,9 @@
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_VisualPluginManager}" Command="{Binding MenuVM.OpenVisualPluginManagerCommand}">
 					<MenuItem.Icon><avalonia:App Width="16" Height="16" /></MenuItem.Icon>
+				 </MenuItem>
+				 <MenuItem Header="{DynamicResource Scheme_Title}" Command="{Binding MenuVM.OpenSchemeOperatorCommand}">
+					<MenuItem.Icon><avalonia:PlayCircleStroke Width="16" Height="16" /></MenuItem.Icon>
 				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_ApkSigner}" Command="{Binding MenuVM.OpenApkSignerCommand}">
 					<MenuItem.Icon><avalonia:Certificate Width="16" Height="16" /></MenuItem.Icon>

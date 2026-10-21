@@ -5,6 +5,7 @@ using UotanStudio.Firmware.Executable.Elf;
 using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Services.Workspace.Documents;
@@ -230,6 +231,14 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(ScreenMirrorViewModel),
             GetPath = _ => null,
             Cleanup = vm => { try { ((ScreenMirrorViewModel)vm).Cleanup(); } catch { } },
+            IsDocument = false,
+            Singleton = false,
+        },
+        new()
+        {
+            Kind = "Scheme",
+            ViewModelType = typeof(SchemeEditorViewModel),
+            GetPath = vm => ((SchemeEditorViewModel)vm).FilePath,
             IsDocument = false,
             Singleton = false,
         },
