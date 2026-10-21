@@ -28,7 +28,12 @@ public sealed partial class SchemeStageEditorViewModel : ObservableObject
         _projectWorkflowName = stage.ProjectWorkflowName ?? string.Empty;
         _embeddedWorkflowName = string.Empty;
         Graph = stage.Graph ?? new WorkflowSnapshot();
+        _inputs = [.. stage.Inputs];
+        _outputs = [.. stage.Outputs];
     }
+
+    private readonly List<SchemeStageInputBinding> _inputs;
+    private readonly List<SchemeStageOutputBinding> _outputs;
 
     /// <summary>
     /// Stable stage identifier.
@@ -181,7 +186,9 @@ public sealed partial class SchemeStageEditorViewModel : ObservableObject
         Kind = Kind,
         FailurePolicy = FailurePolicy,
         Graph = Graph,
-        ProjectWorkflowName = IsReference ? ProjectWorkflowName.Trim() : null
+        ProjectWorkflowName = IsReference ? ProjectWorkflowName.Trim() : null,
+        Inputs = [.. _inputs],
+        Outputs = [.. _outputs]
     };
 
     private void NotifyGraphChanged()

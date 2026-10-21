@@ -239,6 +239,33 @@ public sealed record SchemeRunOptions
     /// <value>The document host, or <see langword="null"/> when stage nodes cannot open documents.
     /// <para>文档宿主；阶段节点无法打开文档时为 <see langword="null"/>。</para></value>
     public IWorkflowDocuments? Documents { get; init; }
+
+    /// <summary>
+    /// Absolute asset paths keyed by declared asset id, already materialized by the caller.
+    /// <para>按声明资产 ID 索引的绝对资产路径，已由调用方物化。</para>
+    /// </summary>
+    /// <value>One entry per supplied asset; every declared asset must resolve to an existing file. When a stage
+    /// binding uses an id that matches a declared asset, the absolute asset path is injected into the bound port;
+    /// a literal and an earlier stage output still take precedence, and the asset wins over a same-named input.
+    /// <para>每个提供的资产一条记录；每个声明资产都必须解析到存在的文件。阶段绑定使用的 ID 与声明资产一致时，
+    /// 绝对资产路径会被注入绑定的端口；字面量与先前阶段输出仍然优先，资产优先于同名输入。</para></value>
+    public IReadOnlyDictionary<string, string> AssetPaths { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>
+    /// Directory the declared asset relative paths resolve against when <see cref="AssetPaths"/> is empty.
+    /// <para><see cref="AssetPaths"/> 为空时声明资产相对路径所基于的目录。</para>
+    /// </summary>
+    /// <value>The scheme directory, or <see langword="null"/> when the run supplies no asset source.
+    /// <para>Scheme 目录；本次运行未提供资产来源时为 <see langword="null"/>。</para></value>
+    public string? AssetDirectory { get; init; }
+
+    /// <summary>
+    /// Parent directory for the run-owned temporary asset directory created when assets must be materialized.
+    /// <para>需要物化资产时创建运行自有临时资产目录所用的父目录。</para>
+    /// </summary>
+    /// <value>The parent directory, or <see langword="null"/> to use the host temp directory.
+    /// <para>父目录；为 <see langword="null"/> 时使用主机临时目录。</para></value>
+    public string? TemporaryDirectory { get; init; }
 }
 
 /// <summary>
@@ -265,8 +292,8 @@ public sealed class SchemeRunner
     /// </summary>
     /// <param name="package">Scheme to run; its format version and structure must be valid.
     /// <para>要运行的 Scheme；其格式版本与结构必须有效。</para></param>
-    /// <param name="options">Inputs, resume point, preview flag and stage dependencies.
-    /// <para>输入、续跑点、预览标志与阶段依赖。</para></param>
+    /// <param name="options">Inputs, assets, resume point, preview flag and stage dependencies.
+    /// <para>输入、资产、续跑点、预览标志与阶段依赖。</para></param>
     /// <param name="cancellationToken">Cancels the current stage and stops the run.<para>取消当前阶段并停止运行。</para></param>
     /// <returns>The aggregate result carrying one entry per declared stage.
     /// <para>携带每个声明阶段一条记录的总结果。</para></returns>
@@ -281,118 +308,188 @@ public sealed class SchemeRunner
         options ??= SchemeRunOptions.Default;
         package.EnsureSupportedVersion();
 
-        var contractErrors = package.Validate();
-        if (contractErrors.Count > 0)
+        SchemeAssetStore? assetStore = null;
+        try
         {
-            return Failure(string.Join(Environment.NewLine, contractErrors));
-        }
-
-        var inputError = ValidateInputs(package, options);
-        if (inputError is not null)
-        {
-            return Failure(inputError);
-        }
-
-        var resumeIndex = 0;
-        if (!string.IsNullOrWhiteSpace(options.ResumeFromStageId))
-        {
-            resumeIndex = package.Stages.FindIndex(stage =>
-                string.Equals(stage.Id, options.ResumeFromStageId, StringComparison.Ordinal));
-            if (resumeIndex < 0)
+            var assets = await ResolveAssetsAsync(package, options, cancellationToken).ConfigureAwait(false);
+            if (assets.Error is not null)
             {
-                return Failure($"Resume stage '{options.ResumeFromStageId}' does not exist in scheme '{package.Id}'.");
+                return Failure(assets.Error);
             }
-        }
+            assetStore = assets.Store;
 
-        Dictionary<string, SchemeStageResult> completedById = new(StringComparer.Ordinal);
-        foreach (var completed in options.CompletedStages)
-        {
-            if (completed.Status is SchemeStageStatus.Executed or SchemeStageStatus.Reused)
+            var contractErrors = package.Validate();
+            if (contractErrors.Count > 0)
             {
-                completedById[completed.StageId] = completed;
+                return Failure(string.Join(Environment.NewLine, contractErrors));
             }
-        }
 
-        Dictionary<string, object?> stageOutputs = new(StringComparer.Ordinal);
-        List<SchemeStageResult> results = new(package.Stages.Count);
-        string? failedStageId = null;
-        var status = ExecutionStatus.Succeeded;
-        var stopped = false;
-        for (var index = 0; index < package.Stages.Count; index++)
-        {
-            var stage = package.Stages[index];
-            var completed = completedById.GetValueOrDefault(stage.Id);
-            if (completed is not null || index < resumeIndex)
+            var inputError = ValidateInputs(package, options, assets.Paths);
+            if (inputError is not null)
             {
-                if (completed is not null)
+                return Failure(inputError);
+            }
+
+            var resumeIndex = 0;
+            if (!string.IsNullOrWhiteSpace(options.ResumeFromStageId))
+            {
+                resumeIndex = package.Stages.FindIndex(stage =>
+                    string.Equals(stage.Id, options.ResumeFromStageId, StringComparison.Ordinal));
+                if (resumeIndex < 0)
                 {
-                    results.Add(Reused(completed));
-                    SeedOutputs(stageOutputs, stage.Id, completed.Outputs);
-                    _log.Write(LogLevel.Info, "Scheme", $"Stage '{stage.Id}' reused from an earlier run");
+                    return Failure($"Resume stage '{options.ResumeFromStageId}' does not exist in scheme '{package.Id}'.");
                 }
-                else
-                {
-                    results.Add(SkippedByResume(stage));
-                    _log.Write(LogLevel.Info, "Scheme", $"Stage '{stage.Id}' skipped by the resume point");
-                }
-                continue;
             }
 
-            var stageResult = await RunStageAsync(package, stage, options, stageOutputs, cancellationToken)
+            Dictionary<string, SchemeStageResult> completedById = new(StringComparer.Ordinal);
+            foreach (var completed in options.CompletedStages)
+            {
+                if (completed.Status is SchemeStageStatus.Executed or SchemeStageStatus.Reused)
+                {
+                    completedById[completed.StageId] = completed;
+                }
+            }
+
+            Dictionary<string, object?> stageOutputs = new(StringComparer.Ordinal);
+            List<SchemeStageResult> results = new(package.Stages.Count);
+            string? failedStageId = null;
+            var status = ExecutionStatus.Succeeded;
+            var stopped = false;
+            for (var index = 0; index < package.Stages.Count; index++)
+            {
+                var stage = package.Stages[index];
+                var completed = completedById.GetValueOrDefault(stage.Id);
+                if (completed is not null || index < resumeIndex)
+                {
+                    if (completed is not null)
+                    {
+                        results.Add(Reused(completed));
+                        SeedOutputs(stageOutputs, stage.Id, completed.Outputs);
+                        _log.Write(LogLevel.Info, "Scheme", $"Stage '{stage.Id}' reused from an earlier run");
+                    }
+                    else
+                    {
+                        results.Add(SkippedByResume(stage));
+                        _log.Write(LogLevel.Info, "Scheme", $"Stage '{stage.Id}' skipped by the resume point");
+                    }
+                    continue;
+                }
+
+                var stageResult = await RunStageAsync(package, stage, options, stageOutputs, assets.Paths,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                results.Add(stageResult);
+                if (stageResult.Status == SchemeStageStatus.Executed)
+                {
+                    SeedOutputs(stageOutputs, stage.Id, stageResult.Outputs);
+                    continue;
+                }
+
+                failedStageId ??= stage.Id;
+                if (stageResult.Status is SchemeStageStatus.Cancelled or SchemeStageStatus.Terminated)
+                {
+                    status = stageResult.Status == SchemeStageStatus.Cancelled
+                        ? ExecutionStatus.Cancelled
+                        : ExecutionStatus.Terminated;
+                    stopped = true;
+                    break;
+                }
+
+                if (stage.FailurePolicy == SchemeStageFailurePolicy.Stop)
+                {
+                    status = ExecutionStatus.Failed;
+                    stopped = true;
+                    break;
+                }
+
+                status = ExecutionStatus.PartiallySucceeded;
+                _log.Write(LogLevel.Warn, "Scheme", $"Stage '{stage.Id}' failed; continuing with the next stage");
+            }
+
+            if (stopped)
+            {
+                for (var index = results.Count; index < package.Stages.Count; index++)
+                {
+                    results.Add(NotRun(package.Stages[index]));
+                }
+            }
+
+            return new SchemeRunResult
+            {
+                Status = status,
+                Stages = results,
+                FailedStageId = failedStageId,
+                ErrorMessage = results.Select(result => result.ErrorMessage)
+                    .FirstOrDefault(message => !string.IsNullOrEmpty(message)),
+                DeviceStageIds = [.. results
+                    .Where(result => result.Kind == SchemeStageKind.Device
+                        && result.Status is SchemeStageStatus.Executed or SchemeStageStatus.Failed)
+                    .Select(result => result.StageId)],
+                ArtifactPaths = [.. results.SelectMany(result => result.ArtifactPaths).Distinct(StringComparer.Ordinal)]
+            };
+        }
+        finally
+        {
+            assetStore?.Dispose();
+        }
+    }
+
+    private sealed record AssetResolution(Dictionary<string, string> Paths, SchemeAssetStore? Store, string? Error);
+
+    private static async Task<AssetResolution> ResolveAssetsAsync(SchemePackage package, SchemeRunOptions options,
+        CancellationToken cancellationToken)
+    {
+        Dictionary<string, string> paths = new(StringComparer.Ordinal);
+        package.Normalize();
+        if (package.Assets.Count == 0)
+        {
+            return new AssetResolution(paths, null, null);
+        }
+
+        if (options.AssetPaths.Count > 0)
+        {
+            var checks = await SchemeAssetStore.ValidateAsync(package, options.AssetPaths, cancellationToken)
                 .ConfigureAwait(false);
-            results.Add(stageResult);
-            if (stageResult.Status == SchemeStageStatus.Executed)
+            var invalid = checks.FirstOrDefault(check => !check.IsValid);
+            if (invalid is not null)
             {
-                SeedOutputs(stageOutputs, stage.Id, stageResult.Outputs);
-                continue;
+                return new AssetResolution(paths, null,
+                    invalid.Error ?? $"Scheme asset '{invalid.AssetId}' is not available.");
             }
-
-            failedStageId ??= stage.Id;
-            if (stageResult.Status is SchemeStageStatus.Cancelled or SchemeStageStatus.Terminated)
+            foreach (var check in checks)
             {
-                status = stageResult.Status == SchemeStageStatus.Cancelled
-                    ? ExecutionStatus.Cancelled
-                    : ExecutionStatus.Terminated;
-                stopped = true;
-                break;
+                paths[check.AssetId] = check.SourcePath!;
             }
-
-            if (stage.FailurePolicy == SchemeStageFailurePolicy.Stop)
-            {
-                status = ExecutionStatus.Failed;
-                stopped = true;
-                break;
-            }
-
-            status = ExecutionStatus.PartiallySucceeded;
-            _log.Write(LogLevel.Warn, "Scheme", $"Stage '{stage.Id}' failed; continuing with the next stage");
+            return new AssetResolution(paths, null, null);
         }
 
-        if (stopped)
+        if (!string.IsNullOrWhiteSpace(options.AssetDirectory))
         {
-            for (var index = results.Count; index < package.Stages.Count; index++)
+            var destination = SchemeAssetStore.CreateRunDirectory(options.TemporaryDirectory, package.Id);
+            try
             {
-                results.Add(NotRun(package.Stages[index]));
+                var store = await SchemeAssetStore.MaterializeAsync(package, options.AssetDirectory, destination,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                foreach (var (assetId, path) in store.Paths)
+                {
+                    paths[assetId] = path;
+                }
+                return new AssetResolution(paths, store, null);
+            }
+            catch (InvalidDataException error)
+            {
+                TryDeleteDirectory(destination);
+                return new AssetResolution(paths, null, error.Message);
             }
         }
 
-        return new SchemeRunResult
-        {
-            Status = status,
-            Stages = results,
-            FailedStageId = failedStageId,
-            ErrorMessage = results.Select(result => result.ErrorMessage)
-                .FirstOrDefault(message => !string.IsNullOrEmpty(message)),
-            DeviceStageIds = [.. results
-                .Where(result => result.Kind == SchemeStageKind.Device
-                    && result.Status is SchemeStageStatus.Executed or SchemeStageStatus.Failed)
-                .Select(result => result.StageId)],
-            ArtifactPaths = [.. results.SelectMany(result => result.ArtifactPaths).Distinct(StringComparer.Ordinal)]
-        };
+        return new AssetResolution(paths, null,
+            $"Scheme asset '{package.Assets[0].Id}' is not materialized; supply asset paths or the scheme directory.");
     }
 
     private async Task<SchemeStageResult> RunStageAsync(SchemePackage package, SchemeStage stage,
-        SchemeRunOptions options, IReadOnlyDictionary<string, object?> previousOutputs, CancellationToken cancellationToken)
+        SchemeRunOptions options, IReadOnlyDictionary<string, object?> previousOutputs,
+        IReadOnlyDictionary<string, string> assetPaths, CancellationToken cancellationToken)
     {
         var snapshot = ResolveSnapshot(stage, options);
         if (snapshot is null)
@@ -415,7 +512,7 @@ public sealed class SchemeRunner
             return FailedStage(stage, string.Join(Environment.NewLine, runtime.Errors));
         }
 
-        var bindingError = ApplyInputs(package, stage, runtime, options.Inputs, previousOutputs);
+        var bindingError = ApplyInputs(package, stage, runtime, options.Inputs, previousOutputs, assetPaths);
         if (bindingError is not null)
         {
             return FailedStage(stage, bindingError);
@@ -479,7 +576,8 @@ public sealed class SchemeRunner
         return stage.Graph;
     }
 
-    private static string? ValidateInputs(SchemePackage package, SchemeRunOptions options)
+    private static string? ValidateInputs(SchemePackage package, SchemeRunOptions options,
+        IReadOnlyDictionary<string, string> assetPaths)
     {
         foreach (var definition in package.Inputs)
         {
@@ -488,6 +586,10 @@ public sealed class SchemeRunner
                 continue;
             }
             if (options.Inputs.TryGetValue(definition.Id, out var supplied) && !string.IsNullOrWhiteSpace(supplied))
+            {
+                continue;
+            }
+            if (assetPaths.ContainsKey(definition.Id))
             {
                 continue;
             }
@@ -501,11 +603,12 @@ public sealed class SchemeRunner
     }
 
     private static string? ApplyInputs(SchemePackage package, SchemeStage stage, WorkflowRuntime runtime,
-        IReadOnlyDictionary<string, string> suppliedInputs, IReadOnlyDictionary<string, object?> previousOutputs)
+        IReadOnlyDictionary<string, string> suppliedInputs, IReadOnlyDictionary<string, object?> previousOutputs,
+        IReadOnlyDictionary<string, string> assetPaths)
     {
         foreach (var binding in stage.Inputs)
         {
-            var value = ResolveBindingValue(package, binding, suppliedInputs, previousOutputs);
+            var value = ResolveBindingValue(package, binding, suppliedInputs, previousOutputs, assetPaths);
             if (value is null)
             {
                 var definition = package.Inputs.FirstOrDefault(input =>
@@ -535,7 +638,8 @@ public sealed class SchemeRunner
     }
 
     private static object? ResolveBindingValue(SchemePackage package, SchemeStageInputBinding binding,
-        IReadOnlyDictionary<string, string> suppliedInputs, IReadOnlyDictionary<string, object?> previousOutputs)
+        IReadOnlyDictionary<string, string> suppliedInputs, IReadOnlyDictionary<string, object?> previousOutputs,
+        IReadOnlyDictionary<string, string> assetPaths)
     {
         if (binding.Literal is { } literal)
         {
@@ -545,6 +649,10 @@ public sealed class SchemeRunner
         {
             var key = OutputKey(binding.SourceStageId, binding.SourceOutput ?? binding.InputId);
             return previousOutputs.TryGetValue(key, out var sourced) ? sourced : null;
+        }
+        if (assetPaths.TryGetValue(binding.InputId, out var assetPath))
+        {
+            return assetPath;
         }
         if (suppliedInputs.TryGetValue(binding.InputId, out var supplied))
         {
@@ -596,6 +704,21 @@ public sealed class SchemeRunner
     }
 
     private static string OutputKey(string stageId, string outputId) => stageId + "/" + outputId;
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Scheme", error.Message);
+        }
+    }
 
     private static SchemeStageResult Reused(SchemeStageResult completed) => new()
     {

@@ -22,7 +22,9 @@ public partial class SchemeEditorWindow : Window
     public SchemeEditorWindow()
     {
         InitializeComponent();
-        DataContext = new SchemeEditorViewModel();
+        var model = new SchemeEditorViewModel();
+        model.RefreshPublisherKeys();
+        DataContext = model;
         Closed += (_, _) =>
         {
             _lifetime.Cancel();
@@ -100,6 +102,66 @@ public partial class SchemeEditorWindow : Window
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Scheme", $"Save scheme failed: {ex.Message}");
+        }
+    }
+
+    private async void OnSignClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(ViewModel.FilePath))
+            {
+                var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+                {
+                    Title = LanguageService.Instance.GetString("Scheme_Save"),
+                    DefaultExtension = "uotanscheme",
+                    FileTypeChoices =
+                    [
+                        new FilePickerFileType("UotanStudio Scheme") { Patterns = ["*.uotanscheme"] }
+                    ]
+                });
+                if (file?.TryGetLocalPath() is not { } picked
+                    || !await ViewModel.SaveAsync(picked, _lifetime.Token))
+                {
+                    return;
+                }
+            }
+
+            await ViewModel.SignAsync(_lifetime.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Scheme", $"Sign scheme failed: {ex.Message}");
+        }
+    }
+
+    private async void OnImportAssetClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = LanguageService.Instance.GetString("Scheme_Assets"),
+                AllowMultiple = true,
+                FileTypeFilter = [FilePickerFileTypes.All]
+            });
+            foreach (var file in files)
+            {
+                if (file.TryGetLocalPath() is { } path)
+                {
+                    await ViewModel.ImportAssetAsync(path, _lifetime.Token);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Scheme", $"Import scheme asset failed: {ex.Message}");
         }
     }
 

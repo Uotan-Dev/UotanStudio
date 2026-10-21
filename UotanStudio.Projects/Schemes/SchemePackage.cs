@@ -90,6 +90,31 @@ public sealed class SchemePackage
     public Dictionary<string, string>? Metadata { get; set; }
 
     /// <summary>
+    /// Publisher identity bound by <see cref="Signature"/>.
+    /// <para>由 <see cref="Signature"/> 绑定的发布者身份。</para>
+    /// </summary>
+    /// <value>The publisher block with its public key and fingerprint, or <see langword="null"/> for an unsigned package.
+    /// <para>携带公钥与指纹的发布者块；未签名包为 <see langword="null"/>。</para></value>
+    public VisualPluginPublisher? Publisher { get; set; }
+
+    /// <summary>
+    /// Signature over the canonical scheme payload.
+    /// <para>覆盖规范化 Scheme 载荷的签名。</para>
+    /// </summary>
+    /// <value>The algorithm and base64 value, or <see langword="null"/> for an unsigned package.
+    /// <para>算法与 Base64 取值；未签名包为 <see langword="null"/>。</para></value>
+    public VisualPluginSignature? Signature { get; set; }
+
+    /// <summary>
+    /// Whether the package carries both a publisher identity and a non-empty signature.
+    /// <para>软件包是否同时携带发布者身份与非空签名。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when <see cref="Publisher"/> and a complete <see cref="Signature"/> are present.
+    /// <para><see cref="Publisher"/> 与完整的 <see cref="Signature"/> 均存在时为 <see langword="true"/>。</para></value>
+    public bool IsSigned => Publisher is not null
+        && Signature is { Algorithm.Length: > 0, Value.Length: > 0 };
+
+    /// <summary>
     /// Rejects a package stored with a format version this implementation cannot read.
     /// <para>拒绝本实现无法读取的存储格式版本。</para>
     /// </summary>

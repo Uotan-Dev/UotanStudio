@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:UotanStudio.ViewModels.Shell"
+        xmlns:keys="using:UotanStudio.Services.Keys"
         xmlns:icons="https://irihi.tech/iconica/tdesign"
         x:Class="UotanStudio.Views.Shell.SchemeEditorWindow"
         x:DataType="vm:SchemeEditorViewModel"
@@ -19,7 +20,7 @@
 
   <Grid RowDefinitions="Auto,Auto,*" Margin="0,32,0,0">
     <Border Padding="12,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8">
         <icons:Sitemap Width="20" Height="20" VerticalAlignment="Center" />
         <TextBlock Grid.Column="1" Text="{Binding FilePath}" VerticalAlignment="Center"
                    TextTrimming="CharacterEllipsis" Opacity="0.75" />
@@ -37,6 +38,23 @@
         </Button>
         <Button Grid.Column="4" Height="32" Padding="12,0" Click="OnNewClick"
                 Content="{DynamicResource Dialog_NewFile}" />
+        <ComboBox Grid.Column="5" Width="170" Height="32"
+                  ItemsSource="{Binding PublisherKeys}"
+                  SelectedItem="{Binding SelectedPublisherKey, Mode=TwoWay}"
+                  PlaceholderText="{DynamicResource Plugin_Publisher}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="keys:ManagedKey">
+              <TextBlock Text="{Binding Name}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button Grid.Column="6" Height="32" Padding="12,0" Click="OnSignClick"
+                ToolTip.Tip="{DynamicResource Plugin_Sign}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <icons:CheckDouble Width="16" Height="16" />
+            <TextBlock Text="{DynamicResource Plugin_Sign}" />
+          </StackPanel>
+        </Button>
       </Grid>
     </Border>
 
@@ -45,6 +63,7 @@
                  TextWrapping="Wrap" IsVisible="{Binding HasError}" />
       <TextBlock Text="{Binding ValidationText}" Foreground="DarkOrange" FontSize="12"
                  TextWrapping="Wrap" IsVisible="{Binding HasValidationMessages}" />
+      <TextBlock Text="{Binding SignatureText}" FontSize="12" Opacity="0.75" />
     </StackPanel>
 
     <Grid Grid.Row="2" ColumnDefinitions="460,*" ColumnSpacing="12" Margin="12">
@@ -107,8 +126,14 @@
 
           <Grid ColumnDefinitions="*,Auto">
             <TextBlock Text="{DynamicResource Scheme_Assets}" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Width="30" Height="28" Content="+" Click="OnAddAssetClick"
-                    ToolTip.Tip="{DynamicResource Scheme_Assets}" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+              <Button Width="30" Height="28" Content="+" Click="OnAddAssetClick"
+                      ToolTip.Tip="{DynamicResource Scheme_Assets}" />
+              <Button Width="30" Height="28" Click="OnImportAssetClick"
+                      ToolTip.Tip="{DynamicResource Scheme_Assets}">
+                <icons:FolderOpen Width="14" Height="14" />
+              </Button>
+            </StackPanel>
           </Grid>
           <ItemsControl ItemsSource="{Binding Assets}">
             <ItemsControl.ItemTemplate>

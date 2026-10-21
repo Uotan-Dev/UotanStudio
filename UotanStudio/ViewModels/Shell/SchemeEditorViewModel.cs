@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Security.Cryptography;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Services;
+using UotanStudio.Services.Keys;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Projects.Schemes;
 using UotanStudio.ViewModels.Nodes;
@@ -19,6 +21,12 @@ public sealed partial class SchemeEditorViewModel : ObservableObject
     private readonly Func<IReadOnlyList<string>> _workflowNames;
     private readonly Func<string, CancellationToken, Task<WorkflowSnapshot?>> _workflowLoader;
     private readonly Func<bool, WorkflowSnapshot?> _canvasSnapshot;
+    private readonly Func<IReadOnlyList<ManagedKey>> _publisherKeys;
+    private readonly Func<ManagedKey, AsymmetricAlgorithm> _publisherKeyLoader;
+    private readonly Func<string?> _stateDirectory;
+    private VisualPluginPublisher? _publisher;
+    private VisualPluginSignature? _signature;
+    private Dictionary<string, string>? _metadata;
 
     /// <summary>
     /// Creates the editor view model using the active project and node editor as workflow sources.
@@ -43,11 +51,45 @@ public sealed partial class SchemeEditorViewModel : ObservableObject
         Func<IReadOnlyList<string>>? workflowNames,
         Func<string, CancellationToken, Task<WorkflowSnapshot?>>? workflowLoader,
         Func<bool, WorkflowSnapshot?>? canvasSnapshot)
+        : this(workflowNames, workflowLoader, canvasSnapshot, null, null, null)
+    {
+    }
+
+    /// <summary>
+    /// Creates the editor view model with optional workflow, canvas, publisher-key and project-state overrides.
+    /// <para>创建可替换工作流、画布、发布者密钥与工程状态来源的编辑器视图模型。</para>
+    /// </summary>
+    /// <param name="workflowNames">Workflow-name provider, or <see langword="null"/> for the active project.
+    /// <para>工作流名称提供者；为 <see langword="null"/> 时读取当前工程。</para></param>
+    /// <param name="workflowLoader">Workflow snapshot loader, or <see langword="null"/> for the active project.
+    /// <para>工作流快照加载器；为 <see langword="null"/> 时读取当前工程。</para></param>
+    /// <param name="canvasSnapshot">Canvas snapshot provider, or <see langword="null"/> for the node editor.
+    /// <para>画布快照提供者；为 <see langword="null"/> 时读取节点编辑器。</para></param>
+    /// <param name="publisherKeys">Publisher key provider, or <see langword="null"/> for the key library.
+    /// <para>发布者密钥提供者；为 <see langword="null"/> 时读取密钥库。</para></param>
+    /// <param name="publisherKeyLoader">Publisher private-key loader, or <see langword="null"/> for the key library.
+    /// <para>发布者私钥加载器；为 <see langword="null"/> 时读取密钥库。</para></param>
+    /// <param name="stateDirectory">Active project state directory provider, or <see langword="null"/> for the project session.
+    /// <para>活动工程状态目录提供者；为 <see langword="null"/> 时读取工程会话。</para></param>
+    internal SchemeEditorViewModel(
+        Func<IReadOnlyList<string>>? workflowNames,
+        Func<string, CancellationToken, Task<WorkflowSnapshot?>>? workflowLoader,
+        Func<bool, WorkflowSnapshot?>? canvasSnapshot,
+        Func<IReadOnlyList<ManagedKey>>? publisherKeys,
+        Func<ManagedKey, AsymmetricAlgorithm>? publisherKeyLoader,
+        Func<string?>? stateDirectory)
     {
         _workflowNames = workflowNames ?? LoadWorkflowNames;
         _workflowLoader = workflowLoader ?? LoadProjectWorkflowAsync;
         _canvasSnapshot = canvasSnapshot ?? LoadCanvasSnapshot;
+        _publisherKeys = publisherKeys ?? LoadPublisherKeys;
+        _publisherKeyLoader = publisherKeyLoader ?? LoadPublisherKey;
+        _stateDirectory = stateDirectory ?? LoadStateDirectory;
         NewScheme();
+        if (publisherKeys is not null)
+        {
+            RefreshPublisherKeys();
+        }
     }
 
     /// <summary>
@@ -91,6 +133,35 @@ public sealed partial class SchemeEditorViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string _author = string.Empty;
+
+    /// <summary>
+    /// Whether the loaded or last signed package carries a publisher identity and signature.
+    /// <para>已加载或最近签名的软件包是否携带发布者身份与签名。</para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSigned;
+
+    /// <summary>
+    /// Localized signature state caption shown beside the sign action.
+    /// <para>显示在签名操作旁的本地化签名状态标题。</para>
+    /// </summary>
+    [ObservableProperty]
+    private string _signatureText = string.Empty;
+
+    /// <summary>
+    /// Publisher keys available for signing the scheme.
+    /// <para>可用于签名 Scheme 的发布者密钥。</para>
+    /// </summary>
+    /// <value>Keys of <see cref="ManagedKeyKind.Publisher"/> read through the configured provider.
+    /// <para>通过配置提供者读取的 <see cref="ManagedKeyKind.Publisher"/> 密钥。</para></value>
+    public ObservableCollection<ManagedKey> PublisherKeys { get; } = [];
+
+    /// <summary>
+    /// Publisher key selected for signing; <see langword="null"/> when the library holds none.
+    /// <para>选中用于签名的发布者密钥；密钥库为空时为 <see langword="null"/>。</para>
+    /// </summary>
+    [ObservableProperty]
+    private ManagedKey? _selectedPublisherKey;
 
     /// <summary>
     /// Last load, save or capture error; empty when the last operation succeeded.
@@ -194,7 +265,13 @@ public sealed partial class SchemeEditorViewModel : ObservableObject
             return false;
         }
 
+        var verification = SchemeSigner.Verify(package);
         ApplyPackage(package, path);
+        if (verification.IsSigned && !verification.IsValid)
+        {
+            LastError = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                LanguageService.Instance.GetString("Node_OperationFailed"), verification.Error);
+        }
         return true;
     }
 
@@ -216,6 +293,16 @@ public sealed partial class SchemeEditorViewModel : ObservableObject
         var package = BuildPackage();
         var errors = package.Validate();
         ValidationText = errors.Count == 0 ? string.Empty : string.Join(Environment.NewLine, errors);
+        var verification = SchemeSigner.Verify(package);
+        if (verification.IsSigned && !verification.IsValid)
+        {
+            package.Publisher = null;
+            package.Signature = null;
+            _publisher = null;
+            _signature = null;
+            IsSigned = false;
+            SignatureText = LanguageService.Instance.GetString("Plugin_Trust_Unsigned");
+        }
         var saved = await SchemeFile.SaveAsync(path, package, cancellationToken).ConfigureAwait(true);
         if (!saved)
         {
@@ -226,6 +313,153 @@ public sealed partial class SchemeEditorViewModel : ObservableObject
         FilePath = path;
         LastError = string.Empty;
         return true;
+    }
+
+    /// <summary>
+    /// Signs the saved scheme file with the selected publisher key and persists the signature.
+    /// <para>使用选中的发布者密钥为已保存的 Scheme 文件签名并持久化签名。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the atomic write. <para>取消原子写入。</para></param>
+    /// <returns><see langword="true"/> when the file now carries a valid signature.
+    /// <para>文件现在携带有效签名时返回 <see langword="true"/>。</para></returns>
+    public async Task<bool> SignAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(FilePath))
+        {
+            LastError = LanguageService.Instance.GetString("Dialog_SaveFailed");
+            return false;
+        }
+        if (SelectedPublisherKey is not { } publisherKey)
+        {
+            LastError = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                LanguageService.Instance.GetString("Node_OperationFailed"),
+                "Select a publisher key before signing the scheme.");
+            return false;
+        }
+
+        try
+        {
+            using var privateKey = _publisherKeyLoader(publisherKey);
+            var package = BuildPackage();
+            SchemeSigner.Sign(package, privateKey, publisherKey.Id, publisherKey.Name);
+            if (!await SchemeFile.SaveAsync(FilePath, package, cancellationToken).ConfigureAwait(true))
+            {
+                LastError = LanguageService.Instance.GetString("Dialog_SaveFailed");
+                return false;
+            }
+
+            _publisher = package.Publisher;
+            _signature = package.Signature;
+            IsSigned = true;
+            SignatureText = LanguageService.Instance.GetString("Plugin_Signed");
+            LastError = string.Empty;
+            ValidationText = string.Empty;
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            LastError = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                LanguageService.Instance.GetString("Node_OperationFailed"), ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Copies an asset file into the active project's <c>.uotan/scheme-assets/&lt;scheme-id&gt;/&lt;asset-id&gt;</c>
+    /// directory and adds a declaration whose relative path resolves from the scheme file or the project root.
+    /// <para>把资产文件复制进活动工程的 <c>.uotan/scheme-assets/&lt;scheme-id&gt;/&lt;asset-id&gt;</c> 目录，并添加一条
+    /// 相对路径可从 Scheme 文件或工程根解析的声明。</para>
+    /// </summary>
+    /// <param name="sourcePath">Existing asset file to copy. <para>要复制的现有资产文件。</para></param>
+    /// <param name="cancellationToken">Cancels the bounded copy. <para>取消有界复制。</para></param>
+    /// <returns><see langword="true"/> when a declaration was added.
+    /// <para>已添加声明时返回 <see langword="true"/>。</para></returns>
+    public async Task<bool> ImportAssetAsync(string sourcePath, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var stateDirectory = _stateDirectory();
+            if (string.IsNullOrWhiteSpace(stateDirectory))
+            {
+                LastError = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                    LanguageService.Instance.GetString("Node_OperationFailed"),
+                    "Scheme assets require an open project directory.");
+                return false;
+            }
+
+            Directory.CreateDirectory(stateDirectory);
+            var assetId = NextIdentifier("asset", Assets.Select(asset => asset.Id));
+            var destination = Path.Combine(SchemeAssetStore.GetProjectAssetDirectory(stateDirectory, Id), assetId);
+            var imported = await SchemeAssetStore.ImportAsync(sourcePath, destination, assetId, cancellationToken)
+                .ConfigureAwait(true);
+            var schemeDirectory = string.IsNullOrWhiteSpace(FilePath)
+                ? null
+                : Path.GetDirectoryName(Path.GetFullPath(FilePath));
+            var projectRoot = Path.GetDirectoryName(Path.GetFullPath(stateDirectory));
+            var relative = (schemeDirectory is null
+                    ? null
+                    : SchemeAssetStore.TryGetContainedRelativePath(schemeDirectory, imported.Path))
+                ?? (projectRoot is null
+                    ? null
+                    : SchemeAssetStore.TryGetContainedRelativePath(projectRoot, imported.Path));
+            if (relative is null)
+            {
+                LastError = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                    LanguageService.Instance.GetString("Node_OperationFailed"),
+                    $"Scheme asset '{imported.Path}' is outside the project directory.");
+                return false;
+            }
+
+            imported.Asset.RelativePath = relative;
+            Assets.Add(new SchemeAssetEditorViewModel(imported.Asset));
+            LastError = string.Empty;
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            LastError = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                LanguageService.Instance.GetString("Node_OperationFailed"), ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the publisher-key list from the configured provider and keeps the previous selection when possible.
+    /// <para>从配置的提供者重建发布者密钥列表，并尽可能保留先前选择。</para>
+    /// </summary>
+    public void RefreshPublisherKeys()
+    {
+        var selectedId = SelectedPublisherKey?.Id;
+        PublisherKeys.Clear();
+        try
+        {
+            foreach (var key in _publisherKeys())
+            {
+                if (key.Kind == ManagedKeyKind.Publisher)
+                {
+                    PublisherKeys.Add(key);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Scheme", $"Publisher keys cannot be read: {ex.Message}");
+        }
+        SelectedPublisherKey = PublisherKeys.FirstOrDefault(key =>
+            string.Equals(key.Id, selectedId, StringComparison.OrdinalIgnoreCase)) ?? PublisherKeys.FirstOrDefault();
     }
 
     /// <summary>
@@ -246,6 +480,16 @@ public sealed partial class SchemeEditorViewModel : ObservableObject
         Version = string.IsNullOrWhiteSpace(package.Version) ? "1.0.0" : package.Version;
         Description = package.Description ?? string.Empty;
         Author = package.Author ?? string.Empty;
+        _publisher = package.Publisher;
+        _signature = package.Signature;
+        _metadata = package.Metadata;
+        IsSigned = package.IsSigned;
+        var verification = SchemeSigner.Verify(package);
+        SignatureText = !package.IsSigned
+            ? LanguageService.Instance.GetString("Plugin_Trust_Unsigned")
+            : verification.IsValid
+                ? LanguageService.Instance.GetString("Plugin_Signed")
+                : LanguageService.Instance.GetString("Plugin_Trust_Changed");
 
         Inputs.Clear();
         foreach (var input in package.Inputs)
@@ -294,7 +538,10 @@ public sealed partial class SchemeEditorViewModel : ObservableObject
             Author = string.IsNullOrWhiteSpace(Author) ? null : Author.Trim(),
             Inputs = [.. Inputs.Select(input => input.ToDefinition())],
             Assets = [.. Assets.Select(asset => asset.ToAsset())],
-            Stages = [.. Stages.Select(stage => stage.ToStage())]
+            Stages = [.. Stages.Select(stage => stage.ToStage())],
+            Metadata = _metadata,
+            Publisher = _publisher,
+            Signature = _signature
         };
     }
 
@@ -581,6 +828,24 @@ public sealed partial class SchemeEditorViewModel : ObservableObject
         }
         return $"{prefix}{index}";
     }
+
+    private static IReadOnlyList<ManagedKey> LoadPublisherKeys()
+    {
+        try
+        {
+            return [.. new KeyLibraryService().List().Where(key => key.Kind == ManagedKeyKind.Publisher)];
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Scheme", $"Publisher keys cannot be read: {error.Message}");
+            return [];
+        }
+    }
+
+    private static AsymmetricAlgorithm LoadPublisherKey(ManagedKey key) =>
+        new KeyLibraryService().LoadPublisherPrivateKey(key);
+
+    private static string? LoadStateDirectory() => ProjectContextService.Instance.StateDirectory;
 
     private static IReadOnlyList<string> LoadWorkflowNames()
     {

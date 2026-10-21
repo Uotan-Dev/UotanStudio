@@ -22,7 +22,8 @@ public partial class SchemeOperatorWindow : Window
     public SchemeOperatorWindow()
     {
         InitializeComponent();
-        DataContext = new SchemeOperatorViewModel();
+        DataContext = new SchemeOperatorViewModel(
+            (title, message, accept) => DialogService.ConfirmAsync(this, title, message, accept));
         Closed += (_, _) =>
         {
             _lifetime.Cancel();
@@ -85,6 +86,18 @@ public partial class SchemeOperatorWindow : Window
     }
 
     private void OnStopClick(object? sender, RoutedEventArgs e) => ViewModel.Stop();
+
+    private async void OnTrustPublisherClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await ViewModel.ConfirmAndTrustPublisherAsync();
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Scheme", $"Trust scheme publisher failed: {ex.Message}");
+        }
+    }
 
     private async void OnBrowseInputClick(object? sender, RoutedEventArgs e)
     {
