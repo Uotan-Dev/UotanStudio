@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
+using System.Security.Cryptography;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.VisualPlugins;
 using UotanStudio.Tests.TestInfrastructure;
@@ -291,6 +292,90 @@ public sealed class VisualPluginBundleTests
         await VisualPluginBundle.CopyAssetAsync(updated, "resource", Stream.Null, TestContext.Current.CancellationToken);
 
         Assert.Equal("2.0.0", updated.Manifest.Version);
+    }
+
+    [Fact]
+    public async Task CopyAssetAsync_ProjectAnchoredAsset_ResolvesAgainstProjectRoot()
+    {
+        using var temp = new TempDirectory();
+        var root = Path.Combine(temp.Path, "project");
+        var directory = Path.Combine(root, ".uotan", "plugin-assets", "tests.resources");
+        Directory.CreateDirectory(directory);
+        var bytes = Enumerable.Range(0, 512).Select(index => (byte)index).ToArray();
+        await File.WriteAllBytesAsync(Path.Combine(directory, "config.bin"), bytes,
+            TestContext.Current.CancellationToken);
+        var package = CreatePackage();
+        package.Assets.Add(new VisualPluginAsset
+        {
+            Id = "config",
+            Name = "config.bin",
+            Length = bytes.LongLength,
+            Sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes)),
+            RelativePath = ".uotan/plugin-assets/tests.resources/config.bin"
+        });
+        using var output = new MemoryStream();
+
+        await VisualPluginBundle.CopyAssetAsync(package, "config", output, root,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(bytes, output.ToArray());
+    }
+
+    [Fact]
+    public async Task SaveAsync_ProjectAnchoredAsset_ExportsBytesThatNoLongerNeedTheProject()
+    {
+        using var temp = new TempDirectory();
+        var root = Path.Combine(temp.Path, "project");
+        var directory = Path.Combine(root, ".uotan", "plugin-assets", "tests.resources");
+        Directory.CreateDirectory(directory);
+        var bytes = Enumerable.Range(0, 512).Select(index => (byte)(index * 3)).ToArray();
+        await File.WriteAllBytesAsync(Path.Combine(directory, "config.bin"), bytes,
+            TestContext.Current.CancellationToken);
+        var package = CreatePackage();
+        package.Assets.Add(new VisualPluginAsset
+        {
+            Id = "config",
+            Name = "config.bin",
+            Length = bytes.LongLength,
+            Sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes)),
+            RelativePath = ".uotan/plugin-assets/tests.resources/config.bin"
+        });
+        var path = Path.Combine(temp.Path, "anchored.uotanplugin");
+
+        await VisualPluginBundle.SaveAsync(path, package, root, TestContext.Current.CancellationToken);
+        Directory.Delete(Path.Combine(temp.Path, "project"), recursive: true);
+        var loaded = VisualPluginBundle.Load(path);
+        var restored = Assert.Single(loaded.Assets);
+        Assert.Equal(".uotan/plugin-assets/tests.resources/config.bin", restored.RelativePath);
+        Assert.Null(restored.SourcePath);
+        using var output = new MemoryStream();
+        await VisualPluginBundle.CopyAssetAsync(loaded, "config", output, TestContext.Current.CancellationToken);
+
+        Assert.Equal(bytes, output.ToArray());
+    }
+
+    [Fact]
+    public async Task CopyAssetAsync_EscapingAnchor_IsRejectedInsteadOfReadingOutsideRoot()
+    {
+        using var temp = new TempDirectory();
+        var root = Path.Combine(temp.Path, "project");
+        Directory.CreateDirectory(root);
+        var outside = Path.Combine(temp.Path, "outside.bin");
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        await File.WriteAllBytesAsync(outside, bytes, TestContext.Current.CancellationToken);
+        var package = CreatePackage();
+        package.Assets.Add(new VisualPluginAsset
+        {
+            Id = "config",
+            Name = "outside.bin",
+            Length = bytes.LongLength,
+            Sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes)),
+            RelativePath = "../outside.bin"
+        });
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            VisualPluginBundle.CopyAssetAsync(package, "config", Stream.Null, root,
+                TestContext.Current.CancellationToken));
     }
 
     private static VisualPluginPackage CreatePackage() => new()

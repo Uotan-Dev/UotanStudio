@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Runtime.CompilerServices;
 using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
 using Avalonia.Interactivity;
@@ -22,6 +24,7 @@ public partial class VisualPluginEditorWindow : Window
     private readonly NodeEditorViewModel _editor = new(showVisualPluginWorkspace: false);
     private WindowToastManager? _toastManager;
     private VisualPluginManager _manager = VisualPluginManager.Instance;
+    private static readonly VisualPluginEditorInstanceTracker Instances = new();
     private readonly ObservableCollection<VisualPluginAsset> _resources = [];
     private bool _resourceBusy;
     private bool _settingRequirements;
@@ -44,6 +47,74 @@ public partial class VisualPluginEditorWindow : Window
             _toastManager?.CloseAll();
             _editor.Dispose();
         };
+    }
+
+    /// <summary>Shows the editor for an installed package, focusing the window already open for that package instead
+    /// of creating a second one so unsaved graph edits are not lost.
+    /// <para>显示已安装包的编辑器；该包已有打开窗口时聚焦该窗口而不是再建一个，避免丢失未保存的图编辑。</para></summary>
+    /// <param name="registration">Installed package to edit; it must describe a composite node.
+    /// <para>要编辑的已安装包；必须描述一个复合节点。</para></param>
+    /// <param name="manager">Manager receiving saved package updates, or <see langword="null"/> for the shared instance.
+    /// <para>接收保存后包更新的管理器；为 <see langword="null"/> 时使用共享实例。</para></param>
+    /// <returns>The newly created or already open editor window.
+    /// <para>新建或已打开的编辑器窗口。</para></returns>
+    internal static VisualPluginEditorWindow ShowRegistration(VisualPluginRegistration registration,
+        VisualPluginManager? manager = null)
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+        return ShowOrFocus(GetInstanceKey(registration), () => new VisualPluginEditorWindow(registration, manager));
+    }
+
+    /// <summary>Shows the editor for an embedded package, focusing the window already open for that package instance
+    /// instead of creating a second one so unsaved graph edits are not lost.
+    /// <para>显示内嵌包的编辑器；该包实例已有打开窗口时聚焦该窗口而不是再建一个，避免丢失未保存的图编辑。</para></summary>
+    /// <param name="package">Embedded composite package to edit.
+    /// <para>要编辑的内嵌复合包。</para></param>
+    /// <param name="publish">Callback receiving the updated package on save.
+    /// <para>保存时接收更新后包的回调。</para></param>
+    /// <returns>The newly created or already open editor window.
+    /// <para>新建或已打开的编辑器窗口。</para></returns>
+    internal static VisualPluginEditorWindow ShowLocal(VisualPluginPackage package,
+        Action<VisualPluginPackage> publish)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        ArgumentNullException.ThrowIfNull(publish);
+        return ShowOrFocus(GetInstanceKey(package), () => new VisualPluginEditorWindow(package, publish));
+    }
+
+    internal static string GetInstanceKey(VisualPluginRegistration registration)
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+        return "registration:" + registration.Id;
+    }
+
+    internal static string GetInstanceKey(VisualPluginPackage package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        return "local:" + package.Manifest.Id + ":"
+            + RuntimeHelpers.GetHashCode(package).ToString("X", CultureInfo.InvariantCulture);
+    }
+
+    private static VisualPluginEditorWindow ShowOrFocus(string key, Func<VisualPluginEditorWindow> create)
+    {
+        if (Instances.TryGet(key, out var existing) && existing is VisualPluginEditorWindow window)
+        {
+            if (window.IsVisible)
+            {
+                if (window.WindowState == WindowState.Minimized)
+                {
+                    window.WindowState = WindowState.Normal;
+                }
+                window.Activate();
+                return window;
+            }
+            Instances.Remove(key, window);
+        }
+        var created = create();
+        Instances.TryRegister(key, created);
+        created.Closed += (_, _) => Instances.Remove(key, created);
+        created.Show();
+        return created;
     }
 
     public VisualPluginEditorWindow(VisualPluginRegistration registration, VisualPluginManager? manager = null) : this()
@@ -200,6 +271,10 @@ public partial class VisualPluginEditorWindow : Window
         };
         _settingRequirements = true;
         VersionInput.Text = package.Manifest.Version;
+        AuthorInput.Text = package.Manifest.Author;
+        DescriptionInput.Text = package.Manifest.Description;
+        PlatformsInput.Text = string.Join(", ", package.Manifest.Platforms);
+        NodeApiVersionInput.Text = package.Manifest.NodeApiVersion.ToString(CultureInfo.InvariantCulture);
         DependenciesInput.Text = string.Join(Environment.NewLine, package.Manifest.Dependencies.Select(dependency =>
             $"{dependency.Id} {dependency.MinimumVersion ?? "*"} {dependency.MaximumVersionExclusive ?? "*"}"));
         ConflictsInput.Text = string.Join(Environment.NewLine, package.Manifest.Conflicts);
@@ -237,10 +312,38 @@ public partial class VisualPluginEditorWindow : Window
         }
     }
 
+    private static string? CurrentProjectRoot
+        => ProjectContextService.Instance.RootDirectory is { Length: > 0 } root && Directory.Exists(root)
+            ? Path.GetFullPath(root)
+            : null;
+
+    private async Task<VisualPluginAsset> CopyResourceAsync(string id, string path, CancellationToken token)
+    {
+        var package = _editor.ResourcePackage ?? throw new InvalidOperationException("No package is open.");
+        if (CurrentProjectRoot is { } root)
+        {
+            return await VisualPluginAssetStore.CopyIntoProjectAsync(id, path, root, package.Manifest.Id, token);
+        }
+        ShowResult(LanguageService.Instance.GetString("ImageView_NoProject"), NotificationType.Warning);
+        return await VisualPluginAsset.FromFileAsync(id, path, token);
+    }
+
     internal async Task AddResourceAsync(string id, string path, CancellationToken token)
     {
-        var asset = await VisualPluginAsset.FromFileAsync(id, path, token);
         var package = _editor.ResourcePackage ?? throw new InvalidOperationException("No package is open.");
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            throw new InvalidDataException("A resource id is required.");
+        }
+        if (package.Assets.Any(asset => string.Equals(asset.Id, id, StringComparison.Ordinal)))
+        {
+            throw new InvalidDataException($"Patch resource '{id}' already exists.");
+        }
+        if (package.Assets.Count >= VisualPluginBundle.MaximumAssetCount)
+        {
+            throw new InvalidDataException("Patch resources exceed the resource count limit.");
+        }
+        var asset = await CopyResourceAsync(id, path, token);
         var previous = package.Assets;
         package.Assets = [.. previous, asset];
         var errors = VisualPluginValidation.Validate(package);
@@ -264,7 +367,7 @@ public partial class VisualPluginEditorWindow : Window
         {
             throw new InvalidOperationException("The selected resource is not part of the open package.");
         }
-        var replacement = await VisualPluginAsset.FromFileAsync(target.Id, path, token);
+        var replacement = await CopyResourceAsync(target.Id, path, token);
         var updatedAssets = previousAssets.ToArray();
         updatedAssets[index] = replacement;
         package.Assets = [.. updatedAssets];
@@ -302,7 +405,7 @@ public partial class VisualPluginEditorWindow : Window
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or ArgumentException)
         {
             ShowResult(LanguageService.Instance.GetString("Plugin_OperationFailed", ex.Message), NotificationType.Error);
         }
@@ -329,7 +432,7 @@ public partial class VisualPluginEditorWindow : Window
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or ArgumentException)
         {
             ShowResult(LanguageService.Instance.GetString("Plugin_OperationFailed", ex.Message), NotificationType.Error);
         }
@@ -370,7 +473,14 @@ public partial class VisualPluginEditorWindow : Window
             if (file?.TryGetLocalPath() is { } path)
             {
                 var package = VisualPluginPackageBuilder.CreateUpdated(_editor.ResourcePackage!, _editor.Nodes, _editor.Connections);
-                await VisualPluginBundle.SaveAsync(path, package, _lifetime.Token);
+                if (CurrentProjectRoot is { } root)
+                {
+                    await VisualPluginBundle.SaveAsync(path, package, root, _lifetime.Token);
+                }
+                else
+                {
+                    await VisualPluginBundle.SaveAsync(path, package, _lifetime.Token);
+                }
             }
         }
         catch (OperationCanceledException) { }
@@ -415,6 +525,10 @@ public partial class VisualPluginEditorWindow : Window
         var previousDependencies = package.Manifest.Dependencies;
         var previousConflicts = package.Manifest.Conflicts;
         var previousVersion = package.Manifest.Version;
+        var previousAuthor = package.Manifest.Author;
+        var previousDescription = package.Manifest.Description;
+        var previousPlatforms = package.Manifest.Platforms;
+        var previousNodeApiVersion = package.Manifest.NodeApiVersion;
         try
         {
             List<VisualPluginDependency> dependencies = [];
@@ -432,6 +546,11 @@ public partial class VisualPluginEditorWindow : Window
             package.Manifest.Dependencies = dependencies;
             package.Manifest.Conflicts = [.. (ConflictsInput.Text ?? string.Empty).Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)];
             package.Manifest.Version = VersionInput.Text?.Trim() ?? string.Empty;
+            if (!VisualPluginManifestEditor.TryApply(package.Manifest, AuthorInput.Text, DescriptionInput.Text,
+                    PlatformsInput.Text, NodeApiVersionInput.Text))
+            {
+                throw new InvalidDataException();
+            }
             if (VisualPluginValidation.Validate(package).Count > 0) throw new InvalidDataException();
             _invalidRequirements = false;
         }
@@ -440,6 +559,10 @@ public partial class VisualPluginEditorWindow : Window
             package.Manifest.Dependencies = previousDependencies;
             package.Manifest.Conflicts = previousConflicts;
             package.Manifest.Version = previousVersion;
+            package.Manifest.Author = previousAuthor;
+            package.Manifest.Description = previousDescription;
+            package.Manifest.Platforms = previousPlatforms;
+            package.Manifest.NodeApiVersion = previousNodeApiVersion;
             _invalidRequirements = true;
         }
         RequirementsError.Text = LanguageService.Instance.GetString("Plugin_RequirementsInvalid");

@@ -57,7 +57,8 @@ public partial class NodeEditorView
     {
         if (DataContext is NodeEditorViewModel { SelectedNode: CompositeNodeViewModel composite, IsExecuting: false } vm)
         {
-            new VisualPluginEditorWindow(composite.Package, package => vm.ReplaceComposite(composite, package)).Show();
+            VisualPluginEditorWindow.ShowLocal(composite.Package,
+                package => vm.ReplaceComposite(composite, package));
         }
     }
 }

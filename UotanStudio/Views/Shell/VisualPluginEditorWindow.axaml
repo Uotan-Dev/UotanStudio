@@ -41,11 +41,12 @@
                 <ListBox x:Name="ResourceList" MaxHeight="160" SelectionChanged="ResourceListSelectionChanged">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="project:VisualPluginAsset">
-                            <Grid ColumnDefinitions="180,*,110" RowDefinitions="Auto,Auto" ColumnSpacing="10">
+                            <Grid ColumnDefinitions="180,*,110" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10">
                                 <TextBlock Text="{Binding Id}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Grid.Column="2" Text="{Binding Length, StringFormat='{}{0:N0} B'}" />
                                 <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Text="{Binding Sha256}" FontSize="10" Opacity="0.65" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="{Binding RelativePath}" FontSize="10" Opacity="0.55" TextTrimming="CharacterEllipsis" />
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -59,6 +60,23 @@
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
                     <TextBlock Text="{DynamicResource Plugin_Version}" VerticalAlignment="Center" />
                     <TextBox x:Name="VersionInput" Grid.Column="1" TextChanged="RequirementsChanged" MaxLength="64" />
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                    <TextBlock Text="{DynamicResource Plugin_Author}" VerticalAlignment="Center" />
+                    <TextBox x:Name="AuthorInput" Grid.Column="1" TextChanged="RequirementsChanged" MaxLength="256" />
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                    <TextBlock Text="{DynamicResource Node_Conn_Description}" VerticalAlignment="Center" />
+                    <TextBox x:Name="DescriptionInput" Grid.Column="1" TextChanged="RequirementsChanged"
+                             AcceptsReturn="True" MinHeight="48" MaxHeight="120" MaxLength="2048" />
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                    <TextBlock Text="{DynamicResource Plugin_Platforms}" VerticalAlignment="Center" />
+                    <TextBox x:Name="PlatformsInput" Grid.Column="1" TextChanged="RequirementsChanged" MaxLength="512" />
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                    <TextBlock Text="{DynamicResource About_Version}" VerticalAlignment="Center" />
+                    <TextBox x:Name="NodeApiVersionInput" Grid.Column="1" TextChanged="RequirementsChanged" MaxLength="3" />
                 </Grid>
                 <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
                     <TextBlock Text="{DynamicResource Plugin_Dependencies}" />

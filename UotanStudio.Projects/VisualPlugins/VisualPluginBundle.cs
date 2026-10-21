@@ -94,8 +94,36 @@ public static class VisualPluginBundle
     /// <para>临时文件或目标文件无法写入或移动。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
     /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
-    public static async Task SaveAsync(string path, VisualPluginPackage package,
+    public static Task SaveAsync(string path, VisualPluginPackage package,
         CancellationToken cancellationToken = default)
+        => SaveAsync(path, package, null, cancellationToken);
+
+    /// <summary>Streams the package resources into a sibling temporary ZIP and publishes it atomically, resolving
+    /// project-anchored resources against the supplied project root.
+    /// <para>将包内资源以流式写入同级临时 ZIP 并在校验通过后原子发布，同时按给定工程根解析项目锚点资源。</para>
+    /// </summary>
+    /// <param name="path">Destination bundle path; it is resolved to a full path and may be overwritten on success.
+    /// <para>目标包路径；会被解析为完整路径，成功后可能被覆盖。</para></param>
+    /// <param name="package">Package to write; it must pass structural validation and every resource must be readable
+    /// from its project anchor, local source or attached bundle.
+    /// <para>待写入的包；必须通过结构化校验，且每个资源都必须可从其项目锚点、本地源或所附包中读取。</para></param>
+    /// <param name="projectRoot">Project root used to resolve <see cref="VisualPluginAsset.RelativePath"/> anchors, or
+    /// <see langword="null"/> to use absolute sources and attached bundles only.
+    /// <para>用于解析 <see cref="VisualPluginAsset.RelativePath"/> 锚点的工程根；为 <see langword="null"/> 时仅使用绝对源和所附包。</para></param>
+    /// <param name="cancellationToken">Checked before staging, per resource, and before the final move; cancellation
+    /// propagates and the destination keeps its previous content.
+    /// <para>在暂存前、每个资源写入时以及最终移动前均会检查；取消会向上传播，目标文件保持原有内容。</para></param>
+    /// <returns>A task that completes once the bundle is published.
+    /// <para>包发布完成后结束的异步任务。</para></returns>
+    /// <exception cref="InvalidDataException">The package fails validation, the manifest exceeds its size limit, or a
+    /// resource has no source or does not match its declared length or SHA-256.
+    /// <para>包校验失败、清单超出大小限制，或资源没有来源、与其声明的长度或 SHA-256 不符。</para></exception>
+    /// <exception cref="IOException">The temporary or destination file cannot be written or moved.
+    /// <para>临时文件或目标文件无法写入或移动。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    public static async Task SaveAsync(string path, VisualPluginPackage package, string? projectRoot,
+        CancellationToken cancellationToken)
     {
         EnsureValid(package);
         cancellationToken.ThrowIfCancellationRequested();
@@ -128,7 +156,8 @@ public static class VisualPluginBundle
                             continue;
                         }
                         await using var output = archive.CreateEntry(entryName, CompressionLevel.NoCompression).Open();
-                        await CopyAssetAsync(scope, asset.Id, output, cancellationToken).ConfigureAwait(false);
+                        await CopyAssetAsync(scope, asset.Id, output, projectRoot, cancellationToken)
+                            .ConfigureAwait(false);
                     }
                 }
                 await file.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -164,15 +193,46 @@ public static class VisualPluginBundle
     /// <para>源文件或包无法打开或读取。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
     /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
-    public static async Task CopyAssetAsync(VisualPluginPackage package, string id, Stream destination,
+    public static Task CopyAssetAsync(VisualPluginPackage package, string id, Stream destination,
         CancellationToken cancellationToken = default)
+        => CopyAssetAsync(package, id, destination, null, cancellationToken);
+
+    /// <summary>Copies one resource with bounded memory and exact length and hash checks, resolving a project-anchored
+    /// resource against the supplied project root.
+    /// <para>以有界内存和精确的长度与哈希校验复制单个资源，并按给定工程根解析项目锚点资源。</para>
+    /// </summary>
+    /// <param name="package">Scope whose own asset list is searched and whose structure is validated before copying.
+    /// <para>复制前先校验其结构、并在其自身资源列表中查找目标的作用域。</para></param>
+    /// <param name="id">Resource identifier, matched case-sensitively against the scope's asset ids.
+    /// <para>资源标识符，与作用域的资产 id 进行区分大小写的匹配。</para></param>
+    /// <param name="destination">Writable stream owned and kept open by the caller; it is neither closed nor rewound,
+    /// and a failed check can leave partially written content in it.
+    /// <para>由调用方持有并保持打开的可写流；本方法既不关闭也不回退它，校验失败时其中可能残留已部分写入的内容。</para></param>
+    /// <param name="projectRoot">Project root used to resolve <see cref="VisualPluginAsset.RelativePath"/> for resources
+    /// that have no absolute authoring source and no attached bundle; <see langword="null"/> disables anchor resolution.
+    /// <para>用于为没有绝对编辑源、也没有所附包的资源解析 <see cref="VisualPluginAsset.RelativePath"/> 的工程根；
+    /// <see langword="null"/> 表示不解析锚点。</para></param>
+    /// <param name="cancellationToken">Cancels reads and writes; cancellation propagates.
+    /// <para>取消读取与写入；取消会向上传播。</para></param>
+    /// <returns>A task that completes once the verified bytes are written.
+    /// <para>校验通过的字节全部写入后结束的异步任务。</para></returns>
+    /// <exception cref="InvalidDataException">The package fails validation, the id is unknown, the resource has no
+    /// resolvable source, the source is truncated or longer than declared, or its SHA-256 does not match (compared
+    /// case-insensitively).
+    /// <para>包校验失败、id 未知、资源没有可解析来源、来源被截断或长于声明值，或其 SHA-256 不匹配（比较不区分大小写）。</para></exception>
+    /// <exception cref="IOException">The source file, anchored copy or bundle cannot be opened or read.
+    /// <para>源文件、锚定副本或包无法打开或读取。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 被取消。</para></exception>
+    public static async Task CopyAssetAsync(VisualPluginPackage package, string id, Stream destination,
+        string? projectRoot, CancellationToken cancellationToken)
     {
         EnsureValid(package);
         var asset = package.Assets.SingleOrDefault(candidate => string.Equals(candidate.Id, id, StringComparison.Ordinal))
             ?? throw new InvalidDataException($"Patch resource '{id}' does not exist.");
-        if (asset.SourcePath is not null)
+        if (ResolveLocalSource(package, asset, projectRoot) is { } sourcePath)
         {
-            await using var source = new FileStream(asset.SourcePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            await using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read,
                 131072, FileOptions.Asynchronous | FileOptions.SequentialScan);
             await CopyVerifiedAsync(source, destination, asset, cancellationToken).ConfigureAwait(false);
             return;
@@ -187,6 +247,19 @@ public static class VisualPluginBundle
         ValidateEntries(archive, package.BundleRoot ?? package);
         await using var entry = archive.GetEntry(GetEntryName(asset))!.Open();
         await CopyVerifiedAsync(entry, destination, asset, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string? ResolveLocalSource(VisualPluginPackage package, VisualPluginAsset asset, string? projectRoot)
+    {
+        if (asset.SourcePath is not null)
+        {
+            return asset.ResolveSourcePath(projectRoot ?? string.Empty) ?? asset.SourcePath;
+        }
+        if (package.BundlePath is null && !string.IsNullOrWhiteSpace(projectRoot))
+        {
+            return asset.ResolveSourcePath(projectRoot);
+        }
+        return null;
     }
 
     private static async Task CopyVerifiedAsync(Stream source, Stream destination, VisualPluginAsset asset,

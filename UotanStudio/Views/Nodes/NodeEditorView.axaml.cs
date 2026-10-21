@@ -287,7 +287,7 @@ public partial class NodeEditorView : UserControl
                 SelectedVisualPlugin: { Kind: VisualPluginKind.CompositeNode } registration
             })
         {
-            new VisualPluginEditorWindow(registration).Show();
+            VisualPluginEditorWindow.ShowRegistration(registration);
         }
     }
 

@@ -111,13 +111,66 @@ public sealed class VisualPluginAsset
     /// <para>当前打开项目的根目录；可移植的 <see cref="RelativePath"/> 以其为基准解析，资源没有锚点时该参数被忽略。</para></param>
     /// <returns>The normalized full path formed by combining <paramref name="projectRoot"/> with <see cref="RelativePath"/>
     /// when an anchor exists, so a moved project resolves to its own copy; otherwise the recorded <see cref="SourcePath"/>
-    /// as-is, which is <see langword="null"/> for resources that only live inside a bundle.
+    /// as-is, which is <see langword="null"/> for resources that only live inside a bundle. An anchor that escapes its
+    /// project root, is rooted, or is malformed resolves to <see langword="null"/> instead of a path outside the root.
     /// <para>存在锚点时返回由 <paramref name="projectRoot"/> 与 <see cref="RelativePath"/> 组合成的完整路径，因此移动后的
     /// 项目会解析到自己的那份副本；否则返回记录的 <see cref="SourcePath"/>，仅存在于包内的资源该值为
-    /// <see langword="null"/>。</para></returns>
-    public string? ResolveSourcePath(string projectRoot) => string.IsNullOrEmpty(RelativePath)
-        ? SourcePath
-        : Path.GetFullPath(Path.Combine(projectRoot, RelativePath));
+    /// <see langword="null"/>。越出项目根、为绝对路径或格式非法的锚点会解析为 <see langword="null"/>，而不是根目录之外
+    /// 的路径。</para></returns>
+    public string? ResolveSourcePath(string projectRoot)
+    {
+        if (string.IsNullOrEmpty(RelativePath))
+        {
+            return SourcePath;
+        }
+        if (string.IsNullOrWhiteSpace(projectRoot))
+        {
+            return null;
+        }
+        string full;
+        try
+        {
+            full = Path.GetFullPath(Path.Combine(Path.GetFullPath(projectRoot), RelativePath));
+        }
+        catch (Exception error) when (error is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectRoot));
+        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar)
+            ? root
+            : root + Path.DirectorySeparatorChar;
+        return full.StartsWith(rootWithSeparator, StringComparison.Ordinal) ? full : null;
+    }
+
+    /// <summary>Positions a copied resource identity at the project file that now stores it.
+    /// <para>把已复制资源的身份定位到当前实际存储它的项目文件。</para></summary>
+    /// <param name="asset">Captured identity whose content fields are copied as-is; the instance passed in is never mutated.
+    /// <para>已捕获的身份；其内容字段原样复制，传入的实例不会被修改。</para></param>
+    /// <param name="sourcePath">Full path of the copy inside <paramref name="projectRoot"/>; it must lie under that root on the same volume.
+    /// <para>位于 <paramref name="projectRoot"/> 内的副本完整路径；必须在同一卷内处于该根目录之下。</para></param>
+    /// <param name="projectRoot">Project root directory the portable anchor is expressed against.
+    /// <para>可移植锚点所相对的项目根目录。</para></param>
+    /// <returns>A new asset whose <see cref="SourcePath"/> is the normalized copy path and whose <see cref="RelativePath"/>
+    /// is that path relative to the root with <c>/</c> separators.
+    /// <para>一个新资源：<see cref="SourcePath"/> 为规范化的副本路径，<see cref="RelativePath"/> 为该路径相对根目录且使用
+    /// <c>/</c> 分隔的写法。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="sourcePath"/> is empty, <paramref name="projectRoot"/> is empty,
+    /// or the copy does not lie inside the root.
+    /// <para><paramref name="sourcePath"/> 为空、<paramref name="projectRoot"/> 为空，或副本不在根目录之内。</para></exception>
+    public static VisualPluginAsset WithProjectLocation(VisualPluginAsset asset, string sourcePath, string projectRoot)
+    {
+        ArgumentNullException.ThrowIfNull(asset);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectRoot);
+        var full = Path.GetFullPath(sourcePath);
+        var relative = AnchorWithin(projectRoot, full)
+            ?? throw new ArgumentException("The project resource must lie inside the project root.", nameof(sourcePath));
+        var copy = asset.Snapshot();
+        copy.SourcePath = full;
+        copy.RelativePath = relative;
+        return copy;
+    }
 
     private static string? AnchorWithin(string projectRoot, string? sourcePath)
     {
