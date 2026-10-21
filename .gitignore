@@ -455,17 +455,4 @@ $RECYCLE.BIN/
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
-/.atomcode
-.mcp.json
-
-# 本地调试工具（MCP 管道探测脚本、固件格式检查工具等）
-.tools/
-/.trae
-/.scratch
-/.qoder-scratch
-/docs
 /reference
-
-# 本地临时产物（一次性可视化输出、工作树移除前备份）
-/viz
-/.w0-verify-backup-*

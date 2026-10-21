@@ -2,6 +2,9 @@
 # Set default behavior to automatically normalize line endings.
 ###############################################################################
 * text=auto
+tools/gki-fs-lab/**/*.sh text eol=lf
+tools/gki-fs-lab/lab/Dockerfile text eol=lf
+tools/gki-fs-lab/lab/configs/* text eol=lf
 
 ###############################################################################
 # Set default behavior for command prompt diff.
