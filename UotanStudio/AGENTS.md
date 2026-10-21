@@ -26,7 +26,7 @@
 - 设置写入 `%AppData%/UotanStudio/settings.json`，使用临时文件 + 原子替换；新设置项同时加 `AppSettings` 与 `AppSettingsJsonContext`。未知或归档键留在 `AdditionalSettings`，损坏文件回退默认值。
 - MCP 暴露由 `McpExposureService` 启动：只监听 `127.0.0.1`；沙箱根为空或无法规范化时回退不受限沙箱，并强制关闭刷写门控；签名经 `DeliveryKeyProvider`。
 - `KeyLibraryService`（`%AppData%/UotanStudio/keys`）是密钥生成/导入/导出的唯一路径；发布与导出使用不覆盖语义，不得覆盖已有密钥或证书。
-- 节点身份与工厂只来自 `NodeFactoryRegistrar`；内置节点数被 `NodeCatalogReductionTests` 冻结为 70，增删节点要同步基线并通过 `NodeSchemaPortCoverageTests`。
+- 节点身份与工厂只来自 `NodeFactoryRegistrar`；内置节点数被 `NodeCatalogReductionTests` 冻结为 89，增删节点要同步基线并通过 `NodeSchemaPortCoverageTests`。
 
 ## 启动与呈现
 
