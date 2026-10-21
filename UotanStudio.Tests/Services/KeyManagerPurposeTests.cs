@@ -13,7 +13,12 @@ public sealed class KeyManagerPurposeTests : IDisposable
     {
         var model = new KeyManagerViewModel(new KeyLibraryService(Path.Combine(_root, "library")));
 
-        Assert.Equal(["ADB", "HDC", "Payload", "JAR", "APK", "ZIP"], model.Kinds);
+        Assert.Equal(["ADB", "HDC", "Payload", "JAR", "APK", "ZIP", "AVB", "Publisher"], model.Kinds);
+
+        model.KindIndex = 7;
+        Assert.True(model.IsPublisher);
+        Assert.True(model.IsBitsEditable);
+        Assert.Equal([3072, 4096], model.PayloadSizes);
 
         model.KindIndex = 3;
         Assert.True(model.IsJar);

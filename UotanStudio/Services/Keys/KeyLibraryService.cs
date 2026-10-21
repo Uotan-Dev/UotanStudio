@@ -9,12 +9,13 @@ using UotanStudio.Firmware.AndroidMeta.Apk;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Hash.Digests;
+using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Services.Keys;
 
 /// <summary>Supported key purposes; purpose determines the exported public key format.
 /// <para>受支持的密钥用途；用途决定导出的公钥格式。</para></summary>
-public enum ManagedKeyKind { Adb, Hdc, Payload, Jar, Apk, Zip, Avb }
+public enum ManagedKeyKind { Adb, Hdc, Payload, Jar, Apk, Zip, Avb, Publisher }
 
 /// <summary>Export bundle choices for a freshly generated APK signing certificate.
 /// <para>新生成 APK 签名证书的导出格式组合。</para></summary>
@@ -69,7 +70,7 @@ public sealed class KeyLibraryService
     public ManagedKey Generate(string name, ManagedKeyKind kind, int bits)
     {
         Validate(name, kind, bits);
-        if (kind == ManagedKeyKind.Apk && bits is 256 or 384 or 521)
+        if (kind is ManagedKeyKind.Apk or ManagedKeyKind.Publisher && bits is 256 or 384 or 521)
         {
             var curve = bits switch
             {
@@ -209,6 +210,55 @@ public sealed class KeyLibraryService
         if (start < 0 || headerEnd < 0 || end < 0) throw new InvalidDataException("证书 PEM 格式错误。");
         var base64 = string.Concat(text[(headerEnd + 1)..end].Where(static c => !char.IsWhiteSpace(c)));
         return X509CertificateLoader.LoadCertificate(Convert.FromBase64String(base64));
+    }
+
+    /// <summary>Exports the publisher public key as base64 SubjectPublicKeyInfo and checks it against the recorded fingerprint.
+    /// <para>把发布者公钥导出为 Base64 SubjectPublicKeyInfo，并与记录的指纹核对。</para></summary>
+    /// <param name="key">The Publisher library entry.<para>Publisher 库条目。</para></param>
+    /// <returns>The base64 key stored in a signed package manifest.<para>存入已签名包清单的 Base64 公钥。</para></returns>
+    /// <exception cref="InvalidOperationException"><paramref name="key"/> is not a Publisher key.<para><paramref name="key"/> 不是 Publisher 密钥。</para></exception>
+    /// <exception cref="InvalidDataException">The public key file is missing, malformed or does not match the fingerprint.<para>公钥文件缺失、格式错误或与指纹不符。</para></exception>
+    public string PublisherPublicKey(ManagedKey key)
+    {
+        if (key.Kind != ManagedKeyKind.Publisher)
+        {
+            throw new InvalidOperationException("Only Publisher keys export a plugin publisher public key.");
+        }
+        var text = PublicText(key);
+        using var publicKey = PluginPublisherKey.ImportPublicKeyPem(text);
+        if (!string.Equals(PluginSignature.ComputeFingerprint(publicKey), key.Fingerprint, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("Publisher public key does not match the library entry.");
+        }
+        return PluginSignature.ExportPublicKey(publicKey);
+    }
+
+    /// <summary>Loads the private key of a Publisher library entry and checks it against the recorded fingerprint.
+    /// <para>加载 Publisher 库条目的私钥，并与记录的指纹核对。</para></summary>
+    /// <param name="key">The Publisher library entry.<para>Publisher 库条目。</para></param>
+    /// <returns>A disposable key used to sign plugin packages; the caller owns it.<para>用于签名插件包的密钥，由调用方负责释放。</para></returns>
+    /// <exception cref="InvalidOperationException"><paramref name="key"/> is not a Publisher key.<para><paramref name="key"/> 不是 Publisher 密钥。</para></exception>
+    /// <exception cref="InvalidDataException">The private key is missing, unreadable or does not match the fingerprint.<para>私钥缺失、不可读或与指纹不符。</para></exception>
+    public AsymmetricAlgorithm LoadPublisherPrivateKey(ManagedKey key)
+    {
+        if (key.Kind != ManagedKeyKind.Publisher)
+        {
+            throw new InvalidOperationException("Only Publisher keys sign plugin packages.");
+        }
+        var privateKey = LoadAnyPrivateKey(PrivatePath(key));
+        try
+        {
+            if (!string.Equals(PluginSignature.ComputeFingerprint(privateKey), key.Fingerprint, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException("Publisher private key does not match the library entry.");
+            }
+            return privateKey;
+        }
+        catch
+        {
+            privateKey.Dispose();
+            throw;
+        }
     }
 
     /// <summary>Loads a bounded PEM/DER private key and verifies that private operations are available.
@@ -588,7 +638,7 @@ public sealed class KeyLibraryService
             {
                 ManagedKeyKind.Adb or ManagedKeyKind.Hdc => key.ExportPkcs8PrivateKeyPem() + "\n",
                 ManagedKeyKind.Apk or ManagedKeyKind.Payload or ManagedKeyKind.Zip or ManagedKeyKind.Avb
-                    => key.ExportPkcs8PrivateKeyPem(),
+                    or ManagedKeyKind.Publisher => key.ExportPkcs8PrivateKeyPem(),
                 _ => ((RSA)key).ExportRSAPrivateKeyPem(),
             };
             Write(path, privateText);
@@ -629,6 +679,7 @@ public sealed class KeyLibraryService
         ManagedKeyKind.Apk => "apk-key.pem",
         ManagedKeyKind.Zip => "zip-key.pem",
         ManagedKeyKind.Avb => "avb-key.pem",
+        ManagedKeyKind.Publisher => "publisher-key.pem",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -666,9 +717,10 @@ public sealed class KeyLibraryService
             ManagedKeyKind.Apk => bits is 2048 or 3072 or 4096 or 256 or 384 or 521,
             ManagedKeyKind.Zip => bits is 2048 or 4096,
             ManagedKeyKind.Avb => bits is 2048 or 4096,
+            ManagedKeyKind.Publisher => bits is 3072 or 4096 or 256,
             _ => false
         }))
-            throw new ArgumentException("密钥位数与用途不匹配：ADB 2048、HDC 3072、Payload/JAR/ZIP/AVB 2048/4096、APK RSA 2048–4096 或 EC 256/384/521。");
+            throw new ArgumentException("密钥位数与用途不匹配：ADB 2048、HDC 3072、Payload/JAR/ZIP/AVB 2048/4096、APK RSA 2048–4096 或 EC 256/384/521、Publisher RSA 3072/4096 或 EC 256。");
     }
 
     private static void Write(string path, string text)

@@ -17,12 +17,13 @@ public partial class KeyManagerViewModel : ViewModelBase
 
     private readonly Func<ManagedKeyKind, string?> _runtimeFingerprint = KeyLibraryService.GetRuntimeIdentityFingerprint;
     public ObservableCollection<ManagedKey> Keys { get; } = [];
-    public string[] Kinds { get; } = ["ADB", "HDC", "Payload", "JAR", "APK", "ZIP"];
+    public string[] Kinds { get; } = ["ADB", "HDC", "Payload", "JAR", "APK", "ZIP", "AVB", "Publisher"];
     public int[] PayloadSizes => KindIndex switch
     {
         0 => [2048],
         1 => [HdcAuthentication.KeyBits],
         3 => [2048, 4096],
+        7 => [3072, 4096],
         _ => [2048, 4096],
     };
     public string LibraryPath => _library.Root;
@@ -59,6 +60,10 @@ public partial class KeyManagerViewModel : ViewModelBase
     /// <para>当前是否选择了 ZIP（OTA 包签名）用途。</para>
     /// </summary>
     public bool IsZip => KindIndex == (int)ManagedKeyKind.Zip;
+    /// <summary>Whether the UI is showing the plugin publisher purpose.
+    /// <para>当前是否选择了插件发布者密钥用途。</para>
+    /// </summary>
+    public bool IsPublisher => KindIndex == (int)ManagedKeyKind.Publisher;
     /// <summary>Whether the selected purpose is backed by the managed key library.
     /// <para>当前用途是否由密钥库后端支持。</para>
     /// </summary>
@@ -66,7 +71,7 @@ public partial class KeyManagerViewModel : ViewModelBase
     /// <summary>Whether the key-size selector can be changed for the selected purpose.
     /// <para>当前用途是否允许调整密钥位数。</para>
     /// </summary>
-    public bool IsBitsEditable => IsPayload || IsJar || IsZip;
+    public bool IsBitsEditable => IsPayload || IsJar || IsZip || IsPublisher;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
@@ -196,11 +201,17 @@ public partial class KeyManagerViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsApkCertificate));
         OnPropertyChanged(nameof(IsJar));
         OnPropertyChanged(nameof(IsZip));
+        OnPropertyChanged(nameof(IsPublisher));
         OnPropertyChanged(nameof(IsLibraryPurpose));
         OnPropertyChanged(nameof(IsBitsEditable));
         OnPropertyChanged(nameof(IsOutputDirectoryRequired));
         OnPropertyChanged(nameof(PayloadSizes));
-        PayloadBits = value == 1 ? HdcAuthentication.KeyBits : 2048;
+        PayloadBits = value switch
+        {
+            1 => HdcAuthentication.KeyBits,
+            7 => 3072,
+            _ => 2048,
+        };
     }
 
     partial void OnAlgorithmIndexChanged(int value)
