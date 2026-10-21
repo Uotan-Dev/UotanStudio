@@ -43,7 +43,7 @@ public sealed class ErofsMetadataRoundTripTests
         Assert.Contains("\"sbExtSlots\": 3", json, StringComparison.Ordinal);
         Assert.Contains("\"dirBlkBits\": 12", json, StringComparison.Ordinal);
 
-        var restored = ErofsRebuildMetadata.Restore(FromJson(json));
+        var restored = RestoreForPartialLayout(FromJson(json));
         restored.Validate();
 
         Assert.Equal((byte?)3, restored.SourceSbExtSlots);
@@ -98,7 +98,7 @@ public sealed class ErofsMetadataRoundTripTests
             }
             """);
 
-        var restored = ErofsRebuildMetadata.Restore(document);
+        var restored = RestoreForPartialLayout(document);
         restored.Validate();
 
         Assert.Null(restored.SourceSbExtSlots);
@@ -135,7 +135,7 @@ public sealed class ErofsMetadataRoundTripTests
             }
             """);
 
-        var restored = ErofsRebuildMetadata.Restore(document);
+        var restored = RestoreForPartialLayout(document);
         restored.Validate();
 
         var descriptor = Assert.Single(restored.ExtraDeviceImages!);
@@ -157,7 +157,7 @@ public sealed class ErofsMetadataRoundTripTests
             SourceDeviceTable = [new ErofsSourceDevice(textTag, 4, 0x2000)],
         };
 
-        var restored = ErofsRebuildMetadata.Restore(FromJson(ToJson(ErofsRebuildMetadata.Capture(options))));
+        var restored = RestoreForPartialLayout(FromJson(ToJson(ErofsRebuildMetadata.Capture(options))));
         restored.Validate();
 
         var descriptor = Assert.Single(restored.ExtraDeviceImages!);
@@ -293,4 +293,19 @@ public sealed class ErofsMetadataRoundTripTests
     private static ErofsRebuildParameters FromJson(string json)
         => System.Text.Json.JsonSerializer.Deserialize(
             json, FileSystemPreservationJsonContext.Default.ErofsRebuildParameters)!;
+
+    /// <summary>
+    /// Restores a profile with the pack gate off. These cases deliberately exercise layouts the managed writer does
+    /// not fully pack: the public entry points refuse them, and the direct builder keeps that decision opt-in.
+    /// <para>在关闭打包闸门的情况下恢复档案。这些用例刻意验证托管写入方尚未完整打包的布局：公开入口会拒绝它们，
+    /// 而直接构建器把该决定保留为显式选择。</para>
+    /// </summary>
+    /// <param name="parameters">Persisted rebuild profile. <para>持久化的重建档案。</para></param>
+    /// <returns>The restored options without the pack gate. <para>不带打包闸门的恢复选项。</para></returns>
+    private static ErofsOptions RestoreForPartialLayout(ErofsRebuildParameters parameters)
+    {
+        var options = ErofsRebuildMetadata.Restore(parameters);
+        options.RejectIncompleteFeatures = false;
+        return options;
+    }
 }

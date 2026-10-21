@@ -723,6 +723,16 @@ public sealed class ErofsRebuildFeatureReplayTests
         => ErofsSuperblock.SuperblockOffset + ErofsSuperblock.SuperblockSize
             + superblock.SbExtSlots * ErofsSuperblock.ExtSlotSize;
 
+    /// <summary>
+    /// Captures and restores one source image for a byte-level replay, with the pack gate off because these cases
+    /// deliberately exercise layouts the managed writer does not fully pack through the direct builder path.
+    /// <para>为逐字节回放捕获并恢复一个源镜像，并关闭打包闸门，因为这些用例刻意在直接构建器路径上验证托管写入方
+    /// 尚未完整打包的布局。</para>
+    /// </summary>
+    /// <param name="image">Source EROFS image. <para>源 EROFS 镜像。</para></param>
+    /// <param name="directory">Directory receiving the extraction. <para>接收解包内容的目录。</para></param>
+    /// <returns>The extracted tree, the restored options and the captured profile.
+    /// <para>解包目录、恢复选项与捕获的档案。</para></returns>
     private static ReplayProfile Replay(byte[] image, string directory)
     {
         var extracted = Path.Combine(directory, "extracted");
@@ -733,7 +743,9 @@ public sealed class ErofsRebuildFeatureReplayTests
             profile = ErofsRebuildMetadata.Capture(parser.ReadRebuildOptions());
         }
 
-        return new ReplayProfile(extracted, ErofsRebuildMetadata.Restore(FromJson(ToJson(profile))), profile);
+        var restored = ErofsRebuildMetadata.Restore(FromJson(ToJson(profile)));
+        restored.RejectIncompleteFeatures = false;
+        return new ReplayProfile(extracted, restored, profile);
     }
 
     private static string ToJson(ErofsRebuildParameters parameters)
