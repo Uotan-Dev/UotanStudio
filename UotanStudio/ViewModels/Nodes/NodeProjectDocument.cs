@@ -47,6 +47,14 @@ public sealed class NodeProjectDocument
     public ObservableCollection<NodeConnectionViewModel> Connections { get; } = [];
 
     /// <summary>
+    /// Whether this document carries canvas edits that have not been persisted yet.
+    /// <para>文档是否包含尚未持久化的画布编辑。</para>
+    /// </summary>
+    /// <value><see langword="true"/> while the canvas differs from the last save.
+    /// <para>画布与最近一次保存不一致时为 <see langword="true"/>。</para></value>
+    public bool IsDirty { get; internal set; }
+
+    /// <summary>
     /// This document's undo stack.
     /// <para>文档的撤销栈。</para>
     /// </summary>

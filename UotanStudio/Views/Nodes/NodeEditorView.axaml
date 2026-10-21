@@ -118,13 +118,21 @@
         <Border DockPanel.Dock="Top" Padding="8,4"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
             <Grid x:Name="EditorToolbar" ColumnDefinitions="*,Auto,*">
-                <!-- 左栏：撤销重做、模板导入导出与复合节点操作。每个子组本身也可换行，
+                <!-- 左栏：保存、撤销重做、模板导入导出与复合节点操作。每个子组本身也可换行，
                      否则窄列下子组会按单行宽度撑出窗口。 -->
-                <!-- Left column: undo/redo, template import/export and composite node operations.
+                <!-- Left column: save, undo/redo, template import/export and composite node operations.
                      Each sub-group wraps too, otherwise it keeps its single-line width in a narrow column. -->
                 <WrapPanel x:Name="ToolbarEditGroup" Grid.Column="0" Orientation="Horizontal"
                            ItemSpacing="4" LineSpacing="4"
                            VerticalAlignment="Center" Margin="0,2,8,2" IsEnabled="{Binding CanEditGraph}">
+                    <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2,8,2">
+                        <Button Width="28" Height="28" Padding="0"
+                                Command="{Binding SaveCommand}"
+                                IsVisible="{Binding ResourcePackage, Converter={x:Static ObjectConverters.IsNull}}"
+                                ToolTip.Tip="{DynamicResource Menu_Save}">
+                            <avalonia:Save Width="16" Height="16" />
+                        </Button>
+                    </WrapPanel>
                     <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2,8,2">
                         <Button Width="28" Height="28" Padding="0" Click="OnUndoClick" IsEnabled="{Binding CanUndo}"
                                 ToolTip.Tip="{DynamicResource Node_Undo}">
@@ -747,7 +755,8 @@
                                           Location="{Binding Location, Mode=TwoWay}"
                                           IsSelected="{Binding IsSelected, Mode=TwoWay}"
                                           BorderBrush="{Binding NodeBorderBrush}"
-                                          BorderThickness="{Binding NodeBorderThickness}">
+                                          BorderThickness="{Binding NodeBorderThickness}"
+                                          ToolTip.Tip="{Binding ValidationMessage}">
                             <nodify:Node.InputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
                                     <nodify:NodeInput IsConnected="{Binding IsConnected}"

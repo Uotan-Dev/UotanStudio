@@ -25,6 +25,36 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
         internal set => SetProperty(ref field, value);
     } = string.Empty;
 
+    private string _validationMessage = string.Empty;
+
+    /// <summary>
+    /// The last graph-validation message for this node, used as the canvas tooltip.
+    /// <para>该节点最近一次图校验消息，用作画布节点的工具提示。</para>
+    /// </summary>
+    /// <value>The validation message, or <see langword="null"/> when the node passed validation.
+    /// <para>校验消息；节点通过校验时为 <see langword="null"/>。</para></value>
+    public string? ValidationMessage
+    {
+        get => string.IsNullOrEmpty(_validationMessage) ? null : _validationMessage;
+        internal set
+        {
+            if (!SetProperty(ref _validationMessage, value ?? string.Empty, nameof(ValidationMessage)))
+            {
+                return;
+            }
+            OnPropertyChanged(nameof(HasValidationError));
+            OnPropertyChanged(nameof(NodeBorderBrush));
+        }
+    }
+
+    /// <summary>
+    /// Whether this node currently carries a graph-validation message.
+    /// <para>该节点当前是否带有图校验消息。</para>
+    /// </summary>
+    /// <value><see langword="true"/> when <see cref="ValidationMessage"/> is not <see langword="null"/>.
+    /// <para><see cref="ValidationMessage"/> 非 <see langword="null"/> 时为 <see langword="true"/>。</para></value>
+    public bool HasValidationError => _validationMessage.Length > 0;
+
     /// <summary>Inputs currently exposed on the canvas; persisted inputs remain unchanged.</summary>
     public ObservableCollection<NodeConnectorViewModel> CanvasInputs { get; } = [];
 
@@ -176,10 +206,19 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     };
 
     /// <summary>
-    /// Gets the border brush used by the canvas. Selection takes precedence over execution state so a
-    /// selected node remains visible even when it is idle or has a transparent status border.
+    /// Gets the border brush used by the canvas. A validation error takes precedence, then a non-idle
+    /// execution status (running, failed, succeeded and so on), and only an idle node falls back to the
+    /// selection accent color.
+    /// <para>获取画布使用的边框画刷。校验错误优先，其次是非 Idle 执行状态（运行中、失败、成功等），
+    /// 只有空闲节点才回退到选中强调色。</para>
     /// </summary>
-    public IBrush NodeBorderBrush => IsSelected ? AccentBorderBrush : StatusBorderBrush;
+    public IBrush NodeBorderBrush => HasValidationError
+        ? FailureBorderBrush
+        : ExecutionStatus != NodeExecutionStatus.Idle
+            ? StatusBorderBrush
+            : IsSelected
+                ? AccentBorderBrush
+                : IdleBorderBrush;
 
     /// <summary>Gets the stronger border thickness used for selected nodes.</summary>
     public Thickness NodeBorderThickness => IsSelected ? new Thickness(3) : new Thickness(2);

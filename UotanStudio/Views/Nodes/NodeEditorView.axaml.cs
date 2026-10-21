@@ -773,7 +773,8 @@ public partial class NodeEditorView : UserControl
     }
 
     internal static bool IsOutputFilePath(NodeConnectorViewModel connector) =>
-        string.Equals(connector.Title, "Output Path", StringComparison.Ordinal);
+        connector.PortType == NodePortType.Path
+        && connector.Title is "Output Path" or "Output File" or "Destination";
 
     private void SetPathPickerUnavailableStatus()
     {
@@ -882,6 +883,23 @@ public partial class NodeEditorView : UserControl
     private async void OnNodeTabClosed(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: string name }) return;
+        if (DataContext is not NodeEditorViewModel vm) return;
+        if (vm.FindDocument(name) is { IsDirty: true })
+        {
+            if (TopLevel.GetTopLevel(this) is not Window owner)
+            {
+                return;
+            }
+            var language = Services.LanguageService.Instance;
+            var confirmed = await Services.DialogService.ConfirmAsync(owner,
+                language.GetString("Dialog_UnsavedTitle"),
+                string.Format(language.GetString("Dialog_UnsavedMessage"), name),
+                language.GetString("Dialog_DiscardChanges"));
+            if (!confirmed)
+            {
+                return;
+            }
+        }
         await ProjectOperationsService.Instance.CloseNodeProjectAsync(name);
     }
 }

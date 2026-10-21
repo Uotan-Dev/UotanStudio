@@ -62,6 +62,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<(object Target, string Property), object?> _trackedPropertyValues = [];
     private readonly Dictionary<object, PropertyChangedEventHandler> _propertyHandlers = [];
     private bool _suppressPropertyTracking;
+    private bool _suppressDirtyTracking;
 
     /// <summary>
     /// Unified log service instance, shared between the node editor and the execution engine.
@@ -159,6 +160,11 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private void OnConnectionsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
+        if (!_suppressDirtyTracking)
+        {
+            MarkDirty();
+        }
+        ClearConnectionValidation(e);
         Services.Interactions.InteractionSchemaResolver.Refresh(Nodes, Connections);
         RefreshParameterPresentation();
         if (_selectedConnection is not null && !Connections.Contains(_selectedConnection))
@@ -346,7 +352,8 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// </summary>
 
     private Action? _executionLogUnsubscribe;
-    private readonly HashSet<string> _executionLogSources = new(StringComparer.Ordinal);
+    private volatile HashSet<string> _executionLogSources = new(StringComparer.Ordinal);
+    private bool _executionPreview;
 
     /// <summary>
     /// <para>执行日志允许的日志来源集合（Engine、NodeEditor 或任一节点 Title）。</para>
@@ -518,6 +525,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             }
         }
         _redoStack.Clear();
+        MarkDirty();
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
         OnPropertyChanged(nameof(CanCollapseExpandedComposite));
@@ -549,6 +557,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             _suppressPropertyTracking = false;
         }
         _redoStack.Push(command);
+        MarkDirty();
         SetSelection([.. _selectedNodes.Where(Nodes.Contains)]);
         RefreshSelectionProperties();
         OnPropertyChanged(nameof(CanUndo));
@@ -583,6 +592,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             _suppressPropertyTracking = false;
         }
         _undoStack.Push(command);
+        MarkDirty();
         RefreshSelectionProperties();
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
@@ -926,6 +936,14 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             }
         };
         Record(new PropertyChangeCommand($"Edit {propertyName}", setter, original, current));
+        if (target is FlowNodeViewModel editedNode)
+        {
+            ClearNodeValidation(editedNode);
+        }
+        else if (target is NodeConnectorViewModel editedConnector)
+        {
+            ClearConnectorValidation(editedConnector);
+        }
     }
 
     /// <summary>
@@ -1099,6 +1117,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         foreach (var node in Nodes)
         {
             node.ExecutionError = string.Empty;
+            node.ValidationMessage = string.Empty;
             node.ExecutionStatus = NodeExecutionStatus.Idle;
         }
         PatchReview.Reset();
@@ -1106,14 +1125,20 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         ExecutionStatus = LanguageService.Instance.GetString("Node_Run");
         ExecutionProgress = 0.0;
         _runCts = new CancellationTokenSource();
+        _executionPreview = preview;
 
         ExecutionLog.Clear();
         AppendExecutionLog(LanguageService.Instance.GetString(preview ? "Node_Patch_Preview" : "Node_Run"));
+        PrepareExecutionLogSources();
+        _executionLogUnsubscribe?.Invoke();
+        _executionLogUnsubscribe = LogService.Instance.Subscribe(OnExecutionLogEnqueued);
 
         try
         {
             _engine ??= new NodeExecutionEngine(_log);
             _engine.ProgressChanged += OnExecutionProgress;
+            _engine.NodeStatusChanged += OnNodeStatusChanged;
+            _engine.ExecutionCompleted += OnExecutionCompleted;
 
             var nodes = Nodes.ToList();
             var issues = WorkflowGraphValidation.Validate(nodes, Connections);
@@ -1124,6 +1149,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
                     if (issue.Node is { } node)
                     {
                         node.ExecutionError = issue.Message;
+                        node.ValidationMessage = issue.Message;
                     }
                 }
                 throw new InvalidDataException(string.Join(Environment.NewLine, issues.Select(issue => issue.DisplayText)));
@@ -1188,6 +1214,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             IsExecuting = false;
             FailedNodes = [.. Nodes.Where(node => node.ExecutionStatus == NodeExecutionStatus.Failed || node.ExecutionError.Length > 0)];
             _engine?.ProgressChanged -= OnExecutionProgress;
+            _engine?.NodeStatusChanged -= OnNodeStatusChanged;
+            _engine?.ExecutionCompleted -= OnExecutionCompleted;
+            _executionLogUnsubscribe?.Invoke();
+            _executionLogUnsubscribe = null;
             _runCts?.Dispose();
             _runCts = null;
         }
@@ -1231,6 +1261,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         IsExecutionLogExpanded = false;
         ExecutionLog.Clear();
         _nextNodeLocation = DefaultNodeLocation;
+        MarkDirty();
     }
 
     private void DetachAllPropertyTracking()
@@ -1273,9 +1304,31 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>Appends one line to the execution log for the current run.</summary>
+    /// <summary>Rebuilds the filter sources for the current run so only the engine, the editor and node output reach the in-editor log.</summary>
+    private void PrepareExecutionLogSources()
+    {
+        var sources = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Engine",
+            "NodeEditor"
+        };
+        foreach (var node in Nodes)
+        {
+            if (!string.IsNullOrWhiteSpace(node.Title))
+            {
+                sources.Add(node.Title);
+            }
+        }
+        _executionLogSources = sources;
+    }
+
+    /// <summary>Appends one line to the execution log for the current run, dropping an immediately repeated line.</summary>
     private void AppendExecutionLog(string line)
     {
+        if (ExecutionLog.Count > 0 && string.Equals(ExecutionLog[^1], line, StringComparison.Ordinal))
+        {
+            return;
+        }
         ExecutionLog.Add(line);
     }
 
@@ -1323,9 +1376,34 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// Execution completion callback: appends the localized result summary on the UI thread.
+    /// <para>执行完成回调：在 UI 线程追加本地化的结果摘要。</para>
+    /// </summary>
     private void OnExecutionCompleted(object? sender, ExecutionCompletedEventArgs e)
     {
-        _log.Write(LogLevel.Info, "NodeEditor", $"Execution completed: {e.Result.Status}");
+        var result = e.Result;
+        var summary = result.Status switch
+        {
+            Services.Execution.ExecutionStatus.Succeeded
+                => LanguageService.Instance.GetString(_executionPreview ? "Node_Patch_PreviewFinished" : "Node_Patch_RunFinished"),
+            Services.Execution.ExecutionStatus.PartiallySucceeded
+                => LanguageService.Instance.GetString("Node_Patch_RunPartial", result.FailedNodes.Count),
+            Services.Execution.ExecutionStatus.Cancelled
+                => LanguageService.Instance.GetString("Node_Patch_RunCancelled"),
+            _ => UserError.WithDetails(result.ErrorMessage, "Node_Patch_RunFailed")
+        };
+
+        void Append() => AppendExecutionLog(summary);
+
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            Append();
+        }
+        else
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(Append);
+        }
     }
 
     /// <summary>
@@ -1392,19 +1470,28 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         EnsureEditable();
         var graph = BuildEditableGraph(snapshot, restoreInstanceIds: true);
         Clear();
-        foreach (var node in graph.Nodes)
+        _suppressDirtyTracking = true;
+        try
         {
-            Nodes.Add(node);
-            AttachNodePropertyTracking(node);
+            foreach (var node in graph.Nodes)
+            {
+                Nodes.Add(node);
+                AttachNodePropertyTracking(node);
+            }
+            foreach (var connection in graph.ViewConnections)
+            {
+                Connections.Add(connection);
+            }
         }
-        foreach (var connection in graph.ViewConnections)
+        finally
         {
-            Connections.Add(connection);
+            _suppressDirtyTracking = false;
         }
         _log.Write(LogLevel.Info, "NodeEditor",
             $"Loaded {Nodes.Count} node(s), {Connections.Count} connection(s) from snapshot");
         RefreshParameterPresentation();
         FitAll();
+        MarkSaved();
         return Task.CompletedTask;
     }
 
@@ -1487,6 +1574,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         _searchDebounceCts?.Dispose();
         _runCts?.Cancel();
         _runCts?.Dispose();
+        _engine?.ProgressChanged -= OnExecutionProgress;
+        _engine?.NodeStatusChanged -= OnNodeStatusChanged;
+        _engine?.ExecutionCompleted -= OnExecutionCompleted;
         _executionLogUnsubscribe?.Invoke();
         _executionLogUnsubscribe = null;
     }

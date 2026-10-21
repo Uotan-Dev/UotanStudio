@@ -133,7 +133,18 @@ public sealed class ProjectOperationsService
     internal ProjectOpenFailure OpenFailure => _session.OpenFailure;
     internal int? OpenFailureStoredVersion => _session.OpenFailureStoredVersion;
     internal string? OpenFailurePath => _session.OpenFailurePath;
-    public Task<bool> SaveAsync(bool saveActiveDocument = true) => _session.SaveAsync(saveActiveDocument);
+    public async Task<bool> SaveAsync(bool saveActiveDocument = true)
+    {
+        var saved = await _session.SaveAsync(saveActiveDocument);
+        if (saved)
+        {
+            AttachedNodeEditor?.MarkAllSaved();
+        }
+        return saved;
+    }
+
+    private NodeEditorViewModel? AttachedNodeEditor
+        => _workspace is ProjectWorkspaceCoordinator coordinator ? coordinator.NodeEditor : null;
     public Task SaveAsAsync(string path) => _session.SaveAsAsync(path);
     public Task ImportFilesAsync(string[] paths) => _session.ImportFilesAsync(paths);
     public Task AddSubProjectAsync(string fwPath) => _session.AddSubProjectAsync(fwPath);
