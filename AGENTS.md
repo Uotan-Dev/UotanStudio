@@ -27,6 +27,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 | `UotanStudio.Tests` | 唯一可执行测试宿主 | [AGENTS.md](UotanStudio.Tests/AGENTS.md) |
 | `UotanStudio.Benchmarks` | BenchmarkDotNet 基准与性能剖析 | [AGENTS.md](UotanStudio.Benchmarks/AGENTS.md) |
 | `UotanStudio.IconVerification` | 手动运行的 headless 图标验证宿主 | [AGENTS.md](UotanStudio.IconVerification/AGENTS.md) |
+| `UotanStudio.FilesystemFixture` | 手动运行的文件系统往返验证宿主 | [AGENTS.md](UotanStudio.FilesystemFixture/AGENTS.md) |
 | `UotanStudio.RegexInfer` | 从输入/输出样例确定性推导正则 | [AGENTS.md](UotanStudio.RegexInfer/AGENTS.md) |
 
 新增或删除子项目时，同步更新这张表与对应目录的 `AGENTS.md`；项目专属规则留在子文件，根文件只保留全局规则。
@@ -37,6 +38,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 - 设备读写（USB 句柄、TCP/UDP、串口、adb/HDC server 协议）只能由 `UotanStudio.Comm` 持有；宿主只消费 `DeviceController`/`DeviceLease`、`Contracts` 门面与公开协议客户端。scrcpy 归 `UotanStudio.Mirroring`，不属于 Comm 协议层。
 - `DeliveryPlan` 是交付后端唯一输入契约；宿主负责采集与恢复界面状态，后端负责校验与生成输出，模式互斥只在现有校验路径维护。
 - 固件、ZIP、Payload、文件系统镜像和设备返回数据都按不可信输入处理：流式与有界缓冲、偏移/长度/条目/解压大小上限、整数溢出防护、贯穿 `CancellationToken`、临时文件校验后原子替换；修改镜像要分别报告字节、结构、内容与容量等价性。
+- 测试夹具、诊断产物和一次性生成物必须创建在主机 `%TEMP%` 下并在使用后删除；不要把大镜像、语料或临时目录留在仓库、盘符根目录或用户目录。生产写入为原子替换而创建的临时文件仍放在目标同目录/同卷，完成或失败后删除。
 - 外部工具、WSL、QEMU、真实设备和 GPU 的验证边界必须单独说明；未执行的硬件、原生挂载、商店或性能验证不能写成已通过。
 
 ## 代码与文档

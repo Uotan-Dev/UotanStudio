@@ -10,7 +10,7 @@
 - `dotnet format UotanStudio.slnx whitespace --no-restore --verify-no-changes` 与同上的 `style`：均通过；本轮改动的 Media、Comm 设备/USB、宿主设备服务与日志视图、对应测试目录另跑 `--include` 两道门，零报告。
 - 全量测试（`UotanStudio.Tests.exe -noColor -noLogo`）：6578 总数 / 6572 通过 / 0 失败 / 6 跳过，单轮 1m33s–1m42s（共享工作树多次测量）。
 - `dotnet build UotanStudio.Comm/UotanStudio.Comm.csproj` 与 `UotanStudio/UotanStudio.csproj` 的 `--no-incremental -m:1 -nodeReuse:false`：均 0 错误、0 警告；全解 `--no-incremental` 在并发测试宿主占用测试输出时出现 MSB3021/MSB3027 文件锁错误，属环境冲突，不是编译器诊断。
-- 性能批次 `docs/perf/optimization-wave-2026-10-21-b.md` 的改动范围：15 个文件跑 `dotnet format … whitespace|style --verify-no-changes --include`，两道门零报告；`UotanStudio.Benchmarks` 的 5 个 ProfileRunner 负载产出镜像 `image sha256` 与该批次改动前逐字节相同（EROFS LZ4/ZSTD/LZMA 打包与解包、ext4 打包）。基准工程不在解决方案内，这道证据只能由 `--profile` 运行器给出。
+- 性能批次的改动范围：15 个文件跑 `dotnet format … whitespace|style --verify-no-changes --include`，两道门零报告；`UotanStudio.Benchmarks` 的 5 个 ProfileRunner 负载产出镜像 `image sha256` 与该批次改动前逐字节相同（EROFS LZ4/ZSTD/LZMA 打包与解包、ext4 打包）。基准工程不在解决方案内，这道证据只能由 `--profile` 运行器给出。
 - `UotanStudio.IconVerification`（不在 `UotanStudio.slnx`）：156 个图标目标（108 个静态 TDesign 控件 + 48 个 `AppIconKind` 动态图标）headless 渲染检查 0 失败；单图与联系表输出到 `artifacts/icon-verification/`。
 - `TreatWarningsAsErrors=true` 生效于 6 个项目：`UotanStudio.Comm`、`UotanStudio.Compress`、`UotanStudio.Firmware`、`UotanStudio.Hash`、`UotanStudio.Media`、`UotanStudio.RegexInfer`。全解 0 警告同时意味着受管库的 `CS1591` 为 0。
 - 公共属性的 `<value>` 注释仍有未闭合缺口（最近一次度量约 257 处，2026-10-18），不影响构建门。

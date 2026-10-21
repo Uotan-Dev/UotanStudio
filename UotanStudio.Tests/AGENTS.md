@@ -18,6 +18,7 @@
 - `--no-build` 只对当前字节负责：改过生产代码后先重建再跑，否则跑的是旧 dll；共享工作树里并行会话重写 `bin/` 会伪造出大批失败，判定前先确认加载的字节与源码一致。
 - 全量单轮的上限与 CI Test 步骤一致，为 15 分钟：超过就按挂死处理，先定位阻塞的 collection，不靠抬高上限。本地跑整套用同一个上限。
 - 测试宿主的输出目录必须留在仓库内。重定向到仓库外会让 `FirmwareContextDependencyScannerTests.TryFindRepositoryRoot_CurrentTestHostOutput_FindsCheckedOutSolution` 找不到 `UotanStudio.slnx` 而失败，并额外产生环境跳过。
+- 测试用例的临时文件、临时镜像、解压目录与诊断产物必须创建在主机 `%TEMP%`（`Path.GetTempPath()`）下，并在用例或夹具释放时删除；不得写到仓库根、盘符根、测试输出目录或 `artifacts/`。上一条只约束测试宿主输出，不约束这些临时文件。
 
 ## 写法
 
