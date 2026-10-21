@@ -255,6 +255,15 @@
   <data name="Node_Device_Shell_Command" xml:space="preserve">
     <value>执行 Shell 命令</value>
   </data>
+  <data name="Node_Device_Partition_Erase" xml:space="preserve">
+    <value>擦除分区</value>
+  </data>
+  <data name="Node_Device_Slot_Query" xml:space="preserve">
+    <value>查询活动槽位</value>
+  </data>
+  <data name="Node_Device_Slot_Switch" xml:space="preserve">
+    <value>切换活动槽位</value>
+  </data>
   <data name="Node_File_Binary_Read" xml:space="preserve">
     <value>读取文件</value>
   </data>

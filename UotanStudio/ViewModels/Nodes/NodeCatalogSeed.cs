@@ -41,6 +41,9 @@ internal static class NodeCatalogSeed
         D("Device.Power.Reboot", "Node_Device_Power_Reboot", "Device", FlashNodeViewModel.CreateRebootNode, true),
         D("Device.Table.Read", "Node_Device_Table_Read", "Device", DeviceServiceNodeViewModel.CreatePartitionTableReadNode),
         D("Device.Partition.Read", "Node_Device_Partition_Read", "Device", DevicePartitionReadNodeViewModel.CreateReadNode),
+        D("Device.Partition.Erase", "Node_Device_Partition_Erase", "Device", DevicePartitionEraseNodeViewModel.CreateEraseNode, true),
+        D("Device.Slot.Query", "Node_Device_Slot_Query", "Device", DeviceSlotNodeViewModel.CreateQueryNode),
+        D("Device.Slot.Switch", "Node_Device_Slot_Switch", "Device", DeviceSlotNodeViewModel.CreateSwitchNode, true),
         D("Device.Shell.Command", "Node_Device_Shell_Command", "Device", DeviceServiceNodeViewModel.CreateShellCommandNode, true),
         D("File.Binary.Read", "Node_File_Binary_Read", "Data", DataNodeViewModel.CreateFileReadNode),
         D("File.Bytes.Write", "Node_File_Bytes_Write", "Data", FileBytesNodeViewModel.CreateWriteNode),
@@ -183,9 +186,10 @@ internal static class NodeCatalogSeed
         {
             capabilities |= NodeCapability.MutatesDevice;
         }
-        if (typeKey is "Device.Target.Select" or "Device.Property.Read" or "Device.Table.Read" or "Device.Partition.Read")
+        if (typeKey is "Device.Target.Select" or "Device.Property.Read" or "Device.Table.Read" or "Device.Partition.Read"
+            or "Device.Slot.Query")
         {
-            capabilities |= NodeCapability.ReadsDevice;
+            capabilities |= NodeCapability.ReadsDevice | NodeCapability.PatchSafe;
         }
         if (typeKey is "File.Text.Publish" or "File.Artifact.Publish" or "File.Bytes.Write" or "Validation.Vbmeta.Sign")
         {
@@ -224,6 +228,9 @@ internal static class NodeCatalogSeed
         "Device.Partition.Flash" => DeviceRequiredState.Fastboot,
         "Device.Table.Read" => DeviceRequiredState.Fastboot,
         "Device.Partition.Read" => DeviceRequiredState.Fastboot,
+        "Device.Partition.Erase" => DeviceRequiredState.Fastboot,
+        "Device.Slot.Query" => DeviceRequiredState.Fastboot,
+        "Device.Slot.Switch" => DeviceRequiredState.Fastboot,
         "Device.Shell.Command" => DeviceRequiredState.Adb,
         _ => DeviceRequiredState.None
     };
@@ -232,7 +239,9 @@ internal static class NodeCatalogSeed
     {
         var descriptor = D(typeKey, resourceKey, category, factory);
         var capabilities = descriptor.Capabilities | NodeCapability.PatchOperation | NodeCapability.PatchSafe;
-        if (typeKey.StartsWith("Config.", StringComparison.Ordinal))
+        if (typeKey.StartsWith("Config.", StringComparison.Ordinal)
+            || typeKey is "Flow.Applicability.Gate" or "File.Text.Read"
+            or "Resource.Asset.Read" or "Workspace.Directory.Open")
         {
             capabilities &= ~NodeCapability.PatchOperation;
         }

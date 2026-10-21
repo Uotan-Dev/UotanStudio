@@ -24,7 +24,8 @@ internal static class NodeParameterSchema
             "Image.Super.Pack" => ["Output Path", "Device Size", "Partitions"],
             "Device.Property.Read" => ["Device", "Name"],
             "Device.Partition.Flash" => ["Device", "Partition", "Image"],
-            "Device.Power.Reboot" => ["Device"],
+            "Device.Power.Reboot" or "Device.Slot.Query" or "Device.Slot.Switch" => ["Device"],
+            "Device.Partition.Erase" => ["Device", "Partition"],
             "File.Binary.Read" or "File.Artifact.Open" => ["Path"],
             "Data.Value.Convert" => ["Input"],
             "Data.Bytes.Slice" or "Data.Bytes.Swap"

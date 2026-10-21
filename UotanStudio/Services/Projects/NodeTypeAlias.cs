@@ -173,7 +173,7 @@ internal static class NodeTypeAlias
         "Validation.Condition.Evaluate",
         "Firmware.Cpio.Unpack", "Firmware.Cpio.Pack", "Image.Sparse.Convert",
         "Firmware.Container.Extract", "Build.Dat.Convert", "Build.Ota.CreateDelta", "Build.Apk.Sign",
-        "Device.Partition.Erase", "Device.Storage.EraseAll", "Device.Slot.Query", "Device.Slot.Switch",
+        "Device.Storage.EraseAll",
         "Device.Recovery.Clean", "Device.Ota.Sideload", "Device.State.Query",
         "Mirroring.Session.Start", "Mirroring.Session.Stop",
         "Data.Value.Constant", "Feedback.Log.Write", "Flow.Execution.Start", "Flow.Execution.End",

@@ -255,6 +255,15 @@
   <data name="Node_Device_Shell_Command" xml:space="preserve">
     <value>Run Shell Command</value>
   </data>
+  <data name="Node_Device_Partition_Erase" xml:space="preserve">
+    <value>Erase Partition</value>
+  </data>
+  <data name="Node_Device_Slot_Query" xml:space="preserve">
+    <value>Query Active Slot</value>
+  </data>
+  <data name="Node_Device_Slot_Switch" xml:space="preserve">
+    <value>Switch Active Slot</value>
+  </data>
   <data name="Node_File_Binary_Read" xml:space="preserve">
     <value>Read File</value>
   </data>

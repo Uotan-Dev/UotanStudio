@@ -33,9 +33,11 @@ public sealed class NodeFactoryRegistrarTests
 
         Assert.Equal(
             [
+                "Device.Partition.Erase",
                 "Device.Partition.Flash",
                 "Device.Power.Reboot",
-                "Device.Shell.Command"
+                "Device.Shell.Command",
+                "Device.Slot.Switch"
             ],
             confirming);
         Assert.All(

@@ -14,8 +14,8 @@ public sealed class NodeCatalogReductionTests
         NodeFactoryRegistrar.RegisterAll();
         var builtIn = NodeFactoryRegistrar.BuiltInTypeKeys;
 
-        Assert.Equal(67, builtIn.Count);
-        Assert.Equal(67, NodeFactoryRegistrar.Descriptors
+        Assert.Equal(70, builtIn.Count);
+        Assert.Equal(70, NodeFactoryRegistrar.Descriptors
             .Count(descriptor => descriptor.IsToolboxVisible && builtIn.Contains(descriptor.TypeKey)));
     }
 
@@ -37,14 +37,15 @@ public sealed class NodeCatalogReductionTests
     }
 
     [Fact]
-    public void Descriptors_NoDeviceStateQueryOrSlotKeys_RemainRegistered()
+    public void Descriptors_DevicePrimitives_RemainRegistered()
     {
         NodeFactoryRegistrar.RegisterAll();
 
         Assert.Equal(
             [
-                "Device.Partition.Flash", "Device.Partition.Read", "Device.Power.Reboot", "Device.Property.Read",
-                "Device.Shell.Command", "Device.Table.Read", "Device.Target.Select"
+                "Device.Partition.Erase", "Device.Partition.Flash", "Device.Partition.Read", "Device.Power.Reboot",
+                "Device.Property.Read", "Device.Shell.Command", "Device.Slot.Query", "Device.Slot.Switch",
+                "Device.Table.Read", "Device.Target.Select"
             ],
             NodeFactoryRegistrar.Descriptors
                 .Where(descriptor => descriptor.TypeKey.StartsWith("Device.", StringComparison.Ordinal))
@@ -202,11 +203,11 @@ public sealed class NodeCatalogReductionTests
     {
         var runtime = WorkflowRuntimeBuilder.Build(new WorkflowSnapshot
         {
-            Nodes = [new NodeDto { InstanceId = "a", TypeKey = "Device.Partition.Erase", Category = "Device" }]
+            Nodes = [new NodeDto { InstanceId = "a", TypeKey = "Device.Storage.EraseAll", Category = "Device" }]
         }, preserveUnknown: true);
 
         var error = Assert.Single(runtime.Errors);
-        Assert.Contains("Device.Partition.Erase", error, StringComparison.Ordinal);
+        Assert.Contains("Device.Storage.EraseAll", error, StringComparison.Ordinal);
         Assert.Empty(runtime.Nodes);
     }
 

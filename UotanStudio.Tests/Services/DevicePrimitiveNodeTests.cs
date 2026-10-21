@@ -72,6 +72,106 @@ public sealed class DevicePrimitiveNodeTests
         Assert.Equal(NodePortType.List, split.Input.Single(port => port.Title == "List").PortType);
     }
 
+    [Fact]
+    public void PartitionErase_Descriptor_DeclaredDestructiveAndFastbootScoped()
+    {
+        var descriptor = NodeFactoryRegistrar.Descriptors.Single(item => item.TypeKey == "Device.Partition.Erase");
+
+        Assert.True(descriptor.Capabilities.HasFlag(NodeCapability.RequiresDevice));
+        Assert.True(descriptor.Capabilities.HasFlag(NodeCapability.MutatesDevice));
+        Assert.False(descriptor.Capabilities.HasFlag(NodeCapability.PatchSafe));
+        Assert.True(descriptor.RequiresConfirmation);
+        Assert.Equal(DeviceRequiredState.Fastboot, descriptor.RequiredDeviceState);
+    }
+
+    [Fact]
+    public void PartitionErase_Ports_ExposeResultAndStatus()
+    {
+        var node = Factory("Device.Partition.Erase");
+
+        Assert.Equal(NodePortType.Device, node.Input.Single(port => port.Title == "Device").PortType);
+        Assert.True(node.Input.Single(port => port.Title == "Partition").IsRequired);
+        Assert.Equal(NodePortType.Boolean, node.Output.Single(port => port.Title == "Result").PortType);
+        Assert.Equal(NodePortType.Text, node.Output.Single(port => port.Title == "Status").PortType);
+        Assert.Contains(node.Input, port => port.PortType == NodePortType.Flow);
+    }
+
+    [Fact]
+    public async Task PartitionErase_MissingDevice_FailsBeforeOpeningSession()
+    {
+        var node = Factory("Device.Partition.Erase");
+        Seed(node, "Partition", "userdata");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => node.ExecuteAsync(new NodeContext()));
+
+        Assert.Equal(false, node.Output.Single(port => port.Title == "Result").Data);
+        Assert.Equal("no-device", node.Output.Single(port => port.Title == "Status").Data);
+    }
+
+    [Fact]
+    public void SlotQuery_Descriptor_DeclaredReadOnlyAndFastbootScoped()
+    {
+        var descriptor = NodeFactoryRegistrar.Descriptors.Single(item => item.TypeKey == "Device.Slot.Query");
+
+        Assert.True(descriptor.Capabilities.HasFlag(NodeCapability.RequiresDevice));
+        Assert.True(descriptor.Capabilities.HasFlag(NodeCapability.ReadsDevice));
+        Assert.True(descriptor.Capabilities.HasFlag(NodeCapability.PatchSafe));
+        Assert.False(descriptor.Capabilities.HasFlag(NodeCapability.MutatesDevice));
+        Assert.False(descriptor.RequiresConfirmation);
+        Assert.Equal(DeviceRequiredState.Fastboot, descriptor.RequiredDeviceState);
+    }
+
+    [Fact]
+    public void SlotQuery_Ports_ExposeSlotAndStatus()
+    {
+        var node = Factory("Device.Slot.Query");
+
+        Assert.Equal(NodePortType.Device, Assert.Single(node.Input).PortType);
+        Assert.Equal(NodePortType.Text, node.Output.Single(port => port.Title == "Slot").PortType);
+        Assert.Equal(NodePortType.Text, node.Output.Single(port => port.Title == "Status").PortType);
+    }
+
+    [Fact]
+    public async Task SlotQuery_MissingDevice_FailsBeforeOpeningSession()
+    {
+        var node = Factory("Device.Slot.Query");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => node.ExecuteAsync(new NodeContext()));
+
+        Assert.Null(node.Output.Single(port => port.Title == "Slot").Data);
+    }
+
+    [Fact]
+    public void SlotSwitch_Descriptor_DeclaredDestructiveAndFastbootScoped()
+    {
+        var descriptor = NodeFactoryRegistrar.Descriptors.Single(item => item.TypeKey == "Device.Slot.Switch");
+
+        Assert.True(descriptor.Capabilities.HasFlag(NodeCapability.RequiresDevice));
+        Assert.True(descriptor.Capabilities.HasFlag(NodeCapability.MutatesDevice));
+        Assert.False(descriptor.Capabilities.HasFlag(NodeCapability.PatchSafe));
+        Assert.True(descriptor.RequiresConfirmation);
+        Assert.Equal(DeviceRequiredState.Fastboot, descriptor.RequiredDeviceState);
+    }
+
+    [Fact]
+    public async Task SlotSwitch_MissingDevice_FailsBeforeOpeningSession()
+    {
+        var node = Factory("Device.Slot.Switch");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => node.ExecuteAsync(new NodeContext()));
+
+        Assert.Null(node.Output.Single(port => port.Title == "Slot").Data);
+    }
+
+    private sealed class NodeContext : INodeExecutionContext
+    {
+        public IUnifiedLog Log { get; } = new TestLog();
+
+        public CancellationToken CancellationToken => TestContext.Current.CancellationToken;
+
+        public void ReportProgress(double progress) { }
+    }
+
     private static FlowNodeViewModel Factory(string typeKey)
         => NodeFactoryRegistrar.Descriptors.Single(descriptor => descriptor.TypeKey == typeKey).Factory();
 
