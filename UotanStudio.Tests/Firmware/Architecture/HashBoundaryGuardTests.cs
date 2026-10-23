@@ -14,15 +14,15 @@ namespace UotanStudio.Tests.Firmware.Architecture;
 /// documentation line, because the XML docs legitimately name the entry points they replaced.
 /// The scanned directories are the project folders the checked-out <c>UotanStudio.slnx</c> declares, so a
 /// project joins the gate the moment it joins the solution instead of waiting for an edited list here.
-/// <c>UotanStudio.Hash</c>, <c>UotanStudio.Tests</c> and <c>UotanStudio.Benchmarks</c> are outside the scanned
-/// set on purpose: the hash library owns the forwarded implementations, and the equivalence pins must call
-/// <c>System.IO.Hashing</c> directly to prove that the façade returns the same bytes as the BCL, and a gate
-/// that hid that call could not falsify it.
+/// <c>UotanStudio.Hash</c> and <c>UotanStudio.Tests</c> are outside the scanned set on purpose: the hash
+/// library owns the forwarded implementations, and the equivalence pins must call <c>System.IO.Hashing</c>
+/// directly to prove that the façade returns the same bytes as the BCL, and a gate that hid that call could
+/// not falsify it. <c>UotanStudio.Benchmarks</c> is scanned like any other project.
 /// <para>与其它架构门一致，这里按行做文本扫描。文档注释行不受规则约束，因为 XML 注释需要写出被替代的入口名。
 /// 扫描目录取自检出的 <c>UotanStudio.slnx</c> 所声明的工程文件夹，因此一个工程加入解决方案时即刻纳入该门，
-/// 不需要再回来维护列表。<c>UotanStudio.Hash</c>、<c>UotanStudio.Tests</c> 与 <c>UotanStudio.Benchmarks</c>
-/// 刻意不在扫描集内：哈希库自己持有被转发的实现，而等价性固定用例必须直接调用 <c>System.IO.Hashing</c>
-/// 才能证明门面与 BCL 产出相同字节，把该调用隐藏起来的门无法证伪。</para>
+/// 不需要再回来维护列表。<c>UotanStudio.Hash</c> 与 <c>UotanStudio.Tests</c> 刻意不在扫描集内：哈希库
+/// 自己持有被转发的实现，而等价性固定用例必须直接调用 <c>System.IO.Hashing</c> 才能证明门面与 BCL
+/// 产出相同字节，把该调用隐藏起来的门无法证伪；<c>UotanStudio.Benchmarks</c> 与其他工程一样纳入扫描。</para>
 /// </remarks>
 public partial class HashBoundaryGuardTests
 {
@@ -31,9 +31,14 @@ public partial class HashBoundaryGuardTests
     private static readonly string[] ProjectDirectoriesOutsideTheScan =
     [
         HashProjectDirectory,
-        "UotanStudio.Tests",
-        "UotanStudio.Benchmarks"
+        "UotanStudio.Tests"
     ];
+
+    private static readonly IReadOnlyDictionary<string, string> RetainedHashOracleFiles = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["UotanStudio.Benchmarks/Firmware/ChecksumSliceBenchmarks.cs"] =
+            "The slice benchmark measures the software CRC-32 table directly against the hardware path; both polynomial tables are the measurement input, not production hashing.",
+    };
 
     [Fact]
     public void ProductionSources_NoHashComputationOutsideTheHashLibrary()
@@ -48,6 +53,12 @@ public partial class HashBoundaryGuardTests
             foreach (var (path, content) in FirmwareContextDependencyScanner.ReadSourceFiles(absoluteDirectory))
             {
                 inspected++;
+                var relative = Path.GetRelativePath(repositoryRoot, path).Replace('\\', '/');
+                if (RetainedHashOracleFiles.ContainsKey(relative))
+                {
+                    continue;
+                }
+
                 offenders.AddRange(ScanContent(repositoryRoot, path, content));
             }
         }

@@ -26,7 +26,6 @@ public class CompressionImplementationBoundaryTests
         "reference",
         "UotanStudio.Compress",
         "UotanStudio.Tests",
-        "UotanStudio.Benchmarks",
     };
 
     private static readonly IReadOnlyDictionary<string, string> RetainedBclCompressionExceptions = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -65,7 +64,7 @@ public class CompressionImplementationBoundaryTests
         Assert.True(scanned.Count > 0, "The production scan found no C# source at all, so the boundary would pass vacuously.");
         Assert.DoesNotContain(scanned, path => path.StartsWith(CompressProjectDirectory + "/", StringComparison.Ordinal));
         Assert.DoesNotContain(scanned, path => path.StartsWith("UotanStudio.Tests/", StringComparison.Ordinal));
-        Assert.DoesNotContain(scanned, path => path.StartsWith("UotanStudio.Benchmarks/", StringComparison.Ordinal));
+        Assert.Contains(scanned, path => path.StartsWith("UotanStudio.Benchmarks/", StringComparison.Ordinal));
         Assert.DoesNotContain(scanned, path => path.StartsWith("reference/", StringComparison.Ordinal));
         Assert.DoesNotContain(scanned, IsBuildOutput);
     }
