@@ -1,5 +1,5 @@
 using Avalonia;
-using UotanStudio.Services.Mirroring;
+using UotanStudio.Mirroring;
 using UotanStudio.Views.Editors;
 using Xunit;
 
@@ -51,6 +51,6 @@ public class ScreenMirrorCoordinatesTests
         Assert.Equal(new PixelSize(2400, 1080), ScreenMirrorCoordinates.ResolveInjectionSize(announced, new PixelSize(2400, 1088)));
         Assert.Equal(new PixelSize(1088, 2400), ScreenMirrorCoordinates.ResolveInjectionSize(null, new PixelSize(1088, 2400)));
         Assert.Equal(new PixelSize(1088, 2400), ScreenMirrorCoordinates.ResolveInjectionSize(new ScrcpyVideoMetadata(0x68323634, 0, 2400), new PixelSize(1088, 2400)));
-        Assert.Equal(default, ScreenMirrorCoordinates.ResolveInjectionSize(announced, default));
+        Assert.Equal(new PixelSize(1080, 2400), ScreenMirrorCoordinates.ResolveInjectionSize(announced, default));
     }
 }

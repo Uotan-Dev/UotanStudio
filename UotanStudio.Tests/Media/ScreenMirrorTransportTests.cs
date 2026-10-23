@@ -4,6 +4,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Media;
 
+[Collection("Debug bridge route")]
 public sealed class ScreenMirrorTransportTests
 {
     [Fact]

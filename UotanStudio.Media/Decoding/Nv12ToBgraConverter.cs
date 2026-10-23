@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -22,6 +23,26 @@ namespace UotanStudio.Media.Decoding;
 /// </remarks>
 public static unsafe class Nv12ToBgraConverter
 {
+    /// <summary>Shuffle mask that gathers the even chroma bytes (Cb) into the low half of a register.
+    /// <para>把偶数位置的色度字节（Cb）收集到寄存器低半部的洗牌掩码。</para></summary>
+    private static readonly Vector128<byte> EvenBytesMask = Vector128.Create(
+        (byte)0, 2, 4, 6, 8, 10, 12, 14, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80);
+
+    /// <summary>Shuffle mask that gathers the odd chroma bytes (Cr) into the low half of a register.
+    /// <para>把奇数位置的色度字节（Cr）收集到寄存器低半部的洗牌掩码。</para></summary>
+    private static readonly Vector128<byte> OddBytesMask = Vector128.Create(
+        (byte)1, 3, 5, 7, 9, 11, 13, 15, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80);
+
+    /// <summary>Signed <c>3:1</c> weights that turn <c>pmaddubsw</c> into the horizontal chroma interpolation.
+    /// <para>把 <c>pmaddubsw</c> 变成水平色度插值的带符号 <c>3:1</c> 权重。</para></summary>
+    private static readonly Vector128<sbyte> HorizontalWeights = Vector128.Create(
+        (sbyte)3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1);
+
+    /// <summary>Shuffle mask that duplicates each of four chroma cells into a lane pair.
+    /// <para>把四个色度单元各自复制成一对通道的洗牌掩码。</para></summary>
+    private static readonly Vector128<byte> ChromaPairMask = Vector128.Create(
+        (byte)0, 0, 1, 1, 2, 2, 3, 3, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80);
+
     /// <summary>Computes the required BGRA buffer size for a frame.
     /// <para>计算一帧所需的 BGRA 缓冲区大小。</para></summary>
     /// <param name="width">Frame width in pixels.<para>帧宽度（像素）。</para></param>
@@ -143,7 +164,9 @@ public static unsafe class Nv12ToBgraConverter
         var blue = coefficients.BlueFromChromaBlue;
         var yPlane = src;
         var uvPlane = src + (long)nv12Stride * height;
-        var uvStride = nv12Stride;
+        var chromaWidth = (width + 1) >> 1;
+        var chromaRows = (height + 1) >> 1;
+        var sliceStride = chromaWidth + 16;
         var yOffset128 = Vector128.Create(yOffset);
         var yScale128 = Vector128.Create(yScale);
         var red128 = Vector128.Create(red);
@@ -159,109 +182,234 @@ public static unsafe class Nv12ToBgraConverter
         var bias128 = Vector128.Create(128);
         var bias256 = Vector256.Create(128);
         var alpha256 = Vector256.Create(unchecked((int)0xff000000));
-
-        for (var row = 0; row < height; row++)
+        var scratch = ArrayPool<byte>.Shared.Rent(checked(sliceStride * 6));
+        try
         {
-            var yRow = yPlane + (long)row * nv12Stride;
-            var chromaRow = row >> 1;
-            var uvRow = uvPlane + (long)chromaRow * uvStride;
-            var uvRowNext = uvRow + ((chromaRow + 1 < (height + 1) >> 1) ? uvStride : 0);
-            var verticalWeight = (row & 1) != 0 ? 1 : 0;
-            var dstRow = dst + (long)row * dstStride;
-
-            var col = 0;
-            if (Avx2.IsSupported)
+            fixed (byte* scratchPointer = scratch)
             {
-                for (; col <= width - 8; col += 8)
+                var upperCb = scratchPointer;
+                var upperCr = scratchPointer + sliceStride;
+                var lowerCb = scratchPointer + sliceStride * 2;
+                var lowerCr = scratchPointer + sliceStride * 3;
+                var blendedCb = scratchPointer + sliceStride * 4;
+                var blendedCr = scratchPointer + sliceStride * 5;
+                var cachedUpper = -1;
+                var cachedLower = -1;
+
+                for (var row = 0; row < height; row++)
                 {
-                    var y = Avx2.ConvertToVector256Int32(Unsafe.ReadUnaligned<Vector128<byte>>(yRow + col));
-                    var cell = col >> 1;
-                    var d0 = SampleChroma(uvRow, uvRowNext, cell, width, verticalWeight) - 128;
-                    var e0 = SampleChroma(uvRow + 1, uvRowNext + 1, cell, width, verticalWeight) - 128;
-                    var d1 = SampleChroma(uvRow, uvRowNext, cell + 1, width, verticalWeight) - 128;
-                    var e1 = SampleChroma(uvRow + 1, uvRowNext + 1, cell + 1, width, verticalWeight) - 128;
-                    var d2 = SampleChroma(uvRow, uvRowNext, cell + 2, width, verticalWeight) - 128;
-                    var e2 = SampleChroma(uvRow + 1, uvRowNext + 1, cell + 2, width, verticalWeight) - 128;
-                    var d3 = SampleChroma(uvRow, uvRowNext, cell + 3, width, verticalWeight) - 128;
-                    var e3 = SampleChroma(uvRow + 1, uvRowNext + 1, cell + 3, width, verticalWeight) - 128;
-                    var d = Vector256.Create(d0, d0, d1, d1, d2, d2, d3, d3);
-                    var e = Vector256.Create(e0, e0, e1, e1, e2, e2, e3, e3);
-                    var c = (y - yOffset256) * yScale256 + bias256;
-                    var r = Vector256.ShiftRightArithmetic(c + e * red256, 8);
-                    var g = Vector256.ShiftRightArithmetic(c - d * greenU256 - e * greenV256, 8);
-                    var b = Vector256.ShiftRightArithmetic(c + d * blue256, 8);
-                    r = Vector256.Min(Vector256.Max(r, Vector256<int>.Zero), Vector256.Create(255));
-                    g = Vector256.Min(Vector256.Max(g, Vector256<int>.Zero), Vector256.Create(255));
-                    b = Vector256.Min(Vector256.Max(b, Vector256<int>.Zero), Vector256.Create(255));
-                    var pixels = b | Vector256.ShiftLeft(g, 8) | Vector256.ShiftLeft(r, 16) | alpha256;
-                    pixels.Store((int*)(dstRow + col * 4));
-                }
-            }
+                    var yRow = yPlane + (long)row * nv12Stride;
+                    var chromaRow = row >> 1;
+                    if (cachedUpper != chromaRow)
+                    {
+                        if (cachedLower == chromaRow)
+                        {
+                            var swapCb = upperCb;
+                            upperCb = lowerCb;
+                            lowerCb = swapCb;
+                            var swapCr = upperCr;
+                            upperCr = lowerCr;
+                            lowerCr = swapCr;
+                            (cachedUpper, cachedLower) = (chromaRow, cachedUpper);
+                        }
+                        else
+                        {
+                            PrecomputeChromaRow(uvPlane + (long)chromaRow * nv12Stride, upperCb, upperCr, chromaWidth, nv12Stride);
+                            cachedUpper = chromaRow;
+                        }
+                    }
 
-            if (Vector128.IsHardwareAccelerated)
-            {
-                for (; col <= width - 4; col += 4)
-                {
-                    var y = Vector128.Create((int)yRow[col], yRow[col + 1], yRow[col + 2], yRow[col + 3]);
-                    var cell = col >> 1;
-                    var d0 = SampleChroma(uvRow, uvRowNext, cell, width, verticalWeight) - 128;
-                    var e0 = SampleChroma(uvRow + 1, uvRowNext + 1, cell, width, verticalWeight) - 128;
-                    var d1 = SampleChroma(uvRow, uvRowNext, cell + 1, width, verticalWeight) - 128;
-                    var e1 = SampleChroma(uvRow + 1, uvRowNext + 1, cell + 1, width, verticalWeight) - 128;
-                    var d = Vector128.Create(d0, d0, d1, d1);
-                    var e = Vector128.Create(e0, e0, e1, e1);
-                    var c = (y - yOffset128) * yScale128 + bias128;
-                    var r = Vector128.ShiftRightArithmetic(c + e * red128, 8);
-                    var g = Vector128.ShiftRightArithmetic(c - d * greenU128 - e * greenV128, 8);
-                    var b = Vector128.ShiftRightArithmetic(c + d * blue128, 8);
-                    r = Vector128.Min(Vector128.Max(r, Vector128<int>.Zero), Vector128.Create(255));
-                    g = Vector128.Min(Vector128.Max(g, Vector128<int>.Zero), Vector128.Create(255));
-                    b = Vector128.Min(Vector128.Max(b, Vector128<int>.Zero), Vector128.Create(255));
-                    var pixels = b | Vector128.ShiftLeft(g, 8) | Vector128.ShiftLeft(r, 16) | Vector128.Create(unchecked((int)0xff000000));
-                    pixels.Store((int*)(dstRow + col * 4));
-                }
-            }
+                    var rowCb = upperCb;
+                    var rowCr = upperCr;
+                    if ((row & 1) != 0)
+                    {
+                        var nextChromaRow = chromaRow + 1 < chromaRows ? chromaRow + 1 : chromaRow;
+                        if (cachedLower != nextChromaRow)
+                        {
+                            PrecomputeChromaRow(uvPlane + (long)nextChromaRow * nv12Stride, lowerCb, lowerCr, chromaWidth, nv12Stride);
+                            cachedLower = nextChromaRow;
+                        }
+                        BlendChromaRows(upperCb, lowerCb, blendedCb, chromaWidth);
+                        BlendChromaRows(upperCr, lowerCr, blendedCr, chromaWidth);
+                        rowCb = blendedCb;
+                        rowCr = blendedCr;
+                    }
 
-            for (; col < width; col += 2)
-            {
-                var cell = col >> 1;
-                var d = SampleChroma(uvRow, uvRowNext, cell, width, verticalWeight) - 128;
-                var e = SampleChroma(uvRow + 1, uvRowNext + 1, cell, width, verticalWeight) - 128;
+                    var dstRow = dst + (long)row * dstStride;
+                    var col = 0;
+                    if (Avx2.IsSupported)
+                    {
+                        for (; col <= width - 8; col += 8)
+                        {
+                            var y = Avx2.ConvertToVector256Int32(Unsafe.ReadUnaligned<Vector128<byte>>(yRow + col));
+                            var cell = col >> 1;
+                            var d = ExpandChroma(rowCb + cell) - bias256;
+                            var e = ExpandChroma(rowCr + cell) - bias256;
+                            var c = (y - yOffset256) * yScale256 + bias256;
+                            var r = Vector256.ShiftRightArithmetic(c + e * red256, 8);
+                            var g = Vector256.ShiftRightArithmetic(c - d * greenU256 - e * greenV256, 8);
+                            var b = Vector256.ShiftRightArithmetic(c + d * blue256, 8);
+                            r = Vector256.Min(Vector256.Max(r, Vector256<int>.Zero), Vector256.Create(255));
+                            g = Vector256.Min(Vector256.Max(g, Vector256<int>.Zero), Vector256.Create(255));
+                            b = Vector256.Min(Vector256.Max(b, Vector256<int>.Zero), Vector256.Create(255));
+                            var pixels = b | Vector256.ShiftLeft(g, 8) | Vector256.ShiftLeft(r, 16) | alpha256;
+                            pixels.Store((int*)(dstRow + col * 4));
+                        }
+                    }
 
-                for (var pixel = col; pixel < Math.Min(col + 2, width); pixel++)
-                {
-                    var c = yRow[pixel] - yOffset;
+                    if (Vector128.IsHardwareAccelerated)
+                    {
+                        for (; col <= width - 4; col += 4)
+                        {
+                            var y = Vector128.Create((int)yRow[col], yRow[col + 1], yRow[col + 2], yRow[col + 3]);
+                            var cell = col >> 1;
+                            var d0 = rowCb[cell] - 128;
+                            var d1 = rowCb[cell + 1] - 128;
+                            var e0 = rowCr[cell] - 128;
+                            var e1 = rowCr[cell + 1] - 128;
+                            var d = Vector128.Create(d0, d0, d1, d1);
+                            var e = Vector128.Create(e0, e0, e1, e1);
+                            var c = (y - yOffset128) * yScale128 + bias128;
+                            var r = Vector128.ShiftRightArithmetic(c + e * red128, 8);
+                            var g = Vector128.ShiftRightArithmetic(c - d * greenU128 - e * greenV128, 8);
+                            var b = Vector128.ShiftRightArithmetic(c + d * blue128, 8);
+                            r = Vector128.Min(Vector128.Max(r, Vector128<int>.Zero), Vector128.Create(255));
+                            g = Vector128.Min(Vector128.Max(g, Vector128<int>.Zero), Vector128.Create(255));
+                            b = Vector128.Min(Vector128.Max(b, Vector128<int>.Zero), Vector128.Create(255));
+                            var pixels = b | Vector128.ShiftLeft(g, 8) | Vector128.ShiftLeft(r, 16) | Vector128.Create(unchecked((int)0xff000000));
+                            pixels.Store((int*)(dstRow + col * 4));
+                        }
+                    }
 
-                    var r = (yScale * c + red * e + 128) >> 8;
-                    var g = (yScale * c - greenU * d - greenV * e + 128) >> 8;
-                    var b = (yScale * c + blue * d + 128) >> 8;
+                    for (; col < width; col += 2)
+                    {
+                        var cell = col >> 1;
+                        var d = rowCb[cell] - 128;
+                        var e = rowCr[cell] - 128;
 
-                    dstRow[pixel * 4 + 0] = Clamp(b);
-                    dstRow[pixel * 4 + 1] = Clamp(g);
-                    dstRow[pixel * 4 + 2] = Clamp(r);
-                    dstRow[pixel * 4 + 3] = 255;
+                        for (var pixel = col; pixel < Math.Min(col + 2, width); pixel++)
+                        {
+                            var c = yRow[pixel] - yOffset;
+
+                            var r = (yScale * c + red * e + 128) >> 8;
+                            var g = (yScale * c - greenU * d - greenV * e + 128) >> 8;
+                            var b = (yScale * c + blue * d + 128) >> 8;
+
+                            dstRow[pixel * 4 + 0] = Clamp(b);
+                            dstRow[pixel * 4 + 1] = Clamp(g);
+                            dstRow[pixel * 4 + 2] = Clamp(r);
+                            dstRow[pixel * 4 + 3] = 255;
+                        }
+                    }
                 }
             }
         }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(scratch);
+        }
+    }
+
+    /// <summary>
+    /// Precomputes the horizontal <c>3:1</c> chroma interpolation of one chroma row into per-cell Cb and Cr values.
+    /// <para>把一条色度行的水平 <c>3:1</c> 插值预计算成每个色度单元的 Cb 与 Cr 值。</para>
+    /// </summary>
+    /// <param name="row">Interleaved Cb/Cr chroma row. <para>交错的 Cb/Cr 色度行。</para></param>
+    /// <param name="destinationCb">Cb value per cell. <para>每个色度单元的 Cb 值。</para></param>
+    /// <param name="destinationCr">Cr value per cell. <para>每个色度单元的 Cr 值。</para></param>
+    /// <param name="chromaWidth">Number of chroma cells to produce. <para>要生成的色度单元数。</para></param>
+    /// <param name="rowStride">Row pitch in bytes of the chroma plane, used to bound the vector reads.
+    /// <para>色度平面的行距（字节），用于界定向量读取范围。</para></param>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    private static void PrecomputeChromaRow(byte* row, byte* destinationCb, byte* destinationCr, int chromaWidth, int rowStride)
+    {
+        var cell = 0;
+        if (Ssse3.IsSupported)
+        {
+            var vectorCells = chromaWidth - 9;
+            var pitchCells = (rowStride - 18) >> 1;
+            if (pitchCells < vectorCells)
+            {
+                vectorCells = pitchCells;
+            }
+
+            for (; cell <= vectorCells; cell += 8)
+            {
+                var current = Unsafe.ReadUnaligned<Vector128<byte>>(row + cell * 2);
+                var next = Unsafe.ReadUnaligned<Vector128<byte>>(row + cell * 2 + 2);
+                StoreHorizontal(destinationCb + cell, Ssse3.Shuffle(current, EvenBytesMask), Ssse3.Shuffle(next, EvenBytesMask));
+                StoreHorizontal(destinationCr + cell, Ssse3.Shuffle(current, OddBytesMask), Ssse3.Shuffle(next, OddBytesMask));
+            }
+        }
+
+        var last = chromaWidth - 1;
+        for (; cell < chromaWidth; cell++)
+        {
+            var next = cell < last ? cell + 1 : cell;
+            destinationCb[cell] = (byte)((row[cell * 2] * 3 + row[next * 2] + 2) >> 2);
+            destinationCr[cell] = (byte)((row[cell * 2 + 1] * 3 + row[next * 2 + 1] + 2) >> 2);
+        }
+    }
+
+    /// <summary>
+    /// Weights eight adjacent cell pairs with <c>pmaddubsw</c>, then rounds and packs them into eight bytes.
+    /// <para>用 <c>pmaddubsw</c> 对八对相邻色度单元加权，再取整并打包成八个字节。</para>
+    /// </summary>
+    /// <param name="destination">Cell destination; the first eight bytes are valid and the upper half is scratch.
+    /// <para>单元目标地址；前八个字节有效，上半部为临时数据。</para></param>
+    /// <param name="current">Eight cells starting at the current cell. <para>从当前单元开始的八个色度字节。</para></param>
+    /// <param name="next">Eight cells starting at the next cell. <para>从后一单元开始的八个色度字节。</para></param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void StoreHorizontal(byte* destination, Vector128<byte> current, Vector128<byte> next)
+    {
+        var pairs = Sse2.UnpackLow(current, next);
+        var scaled = Ssse3.MultiplyAddAdjacent(pairs, HorizontalWeights);
+        var rounded = Sse2.ShiftRightArithmetic(Sse2.Add(scaled, Vector128.Create((short)2)), 2);
+        Sse2.PackUnsignedSaturate(rounded, rounded).Store(destination);
+    }
+
+    /// <summary>
+    /// Blends two horizontally precomputed chroma rows with the odd-row <c>1:1</c> vertical mix.
+    /// <para>按奇数行的 <c>1:1</c> 垂直混合对两条已预计算的水平色度行取平均。</para>
+    /// </summary>
+    /// <param name="upper">Horizontally precomputed row of the current chroma row. <para>当前色度行的水平预计算结果。</para></param>
+    /// <param name="lower">Horizontally precomputed row of the next chroma row. <para>下一条色度行的水平预计算结果。</para></param>
+    /// <param name="destination">Blended value per cell. <para>每个色度单元的混合结果。</para></param>
+    /// <param name="chromaWidth">Number of chroma cells in both rows. <para>两条行的色度单元数。</para></param>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    private static void BlendChromaRows(byte* upper, byte* lower, byte* destination, int chromaWidth)
+    {
+        var cell = 0;
+        if (Sse2.IsSupported)
+        {
+            for (; cell + 16 <= chromaWidth; cell += 16)
+            {
+                Sse2.Average(Unsafe.ReadUnaligned<Vector128<byte>>(upper + cell), Unsafe.ReadUnaligned<Vector128<byte>>(lower + cell))
+                    .Store(destination + cell);
+            }
+        }
+
+        for (; cell < chromaWidth; cell++)
+        {
+            destination[cell] = (byte)((upper[cell] + lower[cell] + 1) >> 1);
+        }
+    }
+
+    /// <summary>
+    /// Loads four precomputed chroma cells and duplicates each value into a pair of 32-bit lanes.
+    /// <para>读取四个预计算的色度单元，并把每个值复制成一对 32 位通道。</para>
+    /// </summary>
+    /// <param name="source">Precomputed cells; four bytes are read. <para>预计算单元；读取四个字节。</para></param>
+    /// <returns>Eight lanes holding each cell value twice, in pixel order.
+    /// <para>八个通道，按像素顺序把每个单元值重复两次。</para></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector256<int> ExpandChroma(byte* source)
+    {
+        var duplicated = Ssse3.Shuffle(Vector128.Create(Unsafe.ReadUnaligned<uint>(source)).AsByte(), ChromaPairMask);
+        return Avx2.ConvertToVector256Int32(duplicated);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static byte Clamp(int value)
         => (byte)(value < 0 ? 0 : (value > 255 ? 255 : value));
-
-    /// <summary>
-    /// Samples one chroma channel bilinearly for the pixel pair at <paramref name="cell"/>:
-    /// horizontal 3:1 weighting toward the earlier column and, on odd luma rows, a 1:1 vertical
-    /// blend of the two chroma rows; the last chroma column clamps to itself.
-    /// <para>按双线性采样 <paramref name="cell"/> 处像素对的一个色度通道：水平按 3:1 加权靠前
-    /// 一列，奇数亮度行再把两个色度行按 1:1 混合；最后一个色度列钳制到自身。</para>
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int SampleChroma(byte* uvRow, byte* uvRowNext, int cell, int width, int verticalWeight)
-    {
-        var nextCell = cell + 1 < (width + 1) >> 1 ? cell + 1 : cell;
-        var upper = (uvRow[cell * 2] * 3 + uvRow[nextCell * 2] + 2) >> 2;
-        var lower = (uvRowNext[cell * 2] * 3 + uvRowNext[nextCell * 2] + 2) >> 2;
-        return verticalWeight != 0 ? (upper + lower + 1) >> 1 : upper;
-    }
 }

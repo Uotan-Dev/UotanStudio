@@ -33,7 +33,9 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
     private int _thread;
     private bool _disposed, _inCallback, _faulted, _ended, _exportFailed;
     private volatile bool _exportEnabled;
+    private readonly List<Range> _nalRanges = [];
     private byte[]? _configuration;
+    private int _configurationLength;
     private long _sequence;
     private int _generation;
     private DmaBufSurface? _outstandingSurface;
@@ -179,7 +181,7 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         _session?.Dispose();
         _session = null;
         _callback = null;
-        _configuration = null;
+        ClearConfiguration();
         _thread = Environment.CurrentManagedThreadId;
         _codec = codec;
         _sequence = 0;
@@ -230,7 +232,8 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
             var hasPicture = _codec == VideoCodecId.Av1 && Av1Obu.ContainsFrame(accessUnit);
             if (_codec != VideoCodecId.Av1)
             {
-                foreach (Range range in AnnexB.Split(accessUnit))
+                AnnexB.Split(accessUnit, _nalRanges);
+                foreach (Range range in _nalRanges)
                 {
                     ReadOnlySpan<byte> nal = accessUnit[range];
                     if (_codec == VideoCodecId.H265 && nal.Length < 2) throw new InvalidDataException("Truncated HEVC NAL header.");
@@ -239,50 +242,73 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
                 }
             }
             byte[]? combined = null;
-            if (_configuration is not null)
+            var combinedLength = 0;
+            if (_configuration is { } pendingConfiguration)
             {
-                var length = checked(_configuration.Length + accessUnit.Length);
-                if (length > VideoFrameLimits.MaximumAccessUnitBytes) throw new InvalidDataException("Pending access unit exceeds 32 MiB.");
-                combined = new byte[length];
-                _configuration.CopyTo(combined, 0);
-                accessUnit.CopyTo(combined.AsSpan(_configuration.Length));
-                accessUnit = combined;
+                combinedLength = checked(_configurationLength + accessUnit.Length);
+                if (combinedLength > VideoFrameLimits.MaximumAccessUnitBytes) throw new InvalidDataException("Pending access unit exceeds 32 MiB.");
+                combined = ArrayPool<byte>.Shared.Rent(combinedLength);
+                pendingConfiguration.AsSpan(0, _configurationLength).CopyTo(combined);
+                accessUnit.CopyTo(combined.AsSpan(_configurationLength));
+                accessUnit = combined.AsSpan(0, combinedLength);
             }
-            if (!hasPicture) { _configuration = combined ?? accessUnit.ToArray(); return; }
-            _configuration = null;
-            var status = _session!.Send(accessUnit, timestampTicks);
-            if (status == 2)
+            if (!hasPicture)
             {
-                ReadFrames(out var frames);
-                status = _session.Send(accessUnit, timestampTicks);
-                if (status == 2 && ExportActive)
+                if (combined is null)
                 {
-                    var deadline = Environment.TickCount64 + ExportReleaseWaitMilliseconds;
-                    var reclaims = 0;
-                    while (status == 2)
+                    combined = ArrayPool<byte>.Shared.Rent(accessUnit.Length);
+                    accessUnit.CopyTo(combined);
+                    combinedLength = accessUnit.Length;
+                }
+                ClearConfiguration();
+                _configuration = combined;
+                _configurationLength = combinedLength;
+                return;
+            }
+            try
+            {
+                ClearConfiguration();
+                var status = _session!.Send(accessUnit, timestampTicks);
+                if (status == 2)
+                {
+                    ReadFrames(out var frames);
+                    status = _session.Send(accessUnit, timestampTicks);
+                    if (status == 2 && ExportActive)
                     {
-                        if (Environment.TickCount64 >= deadline)
+                        var deadline = Environment.TickCount64 + ExportReleaseWaitMilliseconds;
+                        var reclaims = 0;
+                        while (status == 2)
                         {
-                            if (!AbandonOutstandingExport() || ++reclaims > MaximumExportReclaimsPerSend)
-                                throw new InvalidDataException("VA-API decoder stalled behind an unreleased export frame.");
-                            deadline = Environment.TickCount64 + ExportReleaseWaitMilliseconds;
+                            if (Environment.TickCount64 >= deadline)
+                            {
+                                if (!AbandonOutstandingExport() || ++reclaims > MaximumExportReclaimsPerSend)
+                                    throw new InvalidDataException("VA-API decoder stalled behind an unreleased export frame.");
+                                deadline = Environment.TickCount64 + ExportReleaseWaitMilliseconds;
+                            }
+                            Thread.Sleep(1);
+                            ReadFrames(out frames);
+                            status = _session.Send(accessUnit, timestampTicks);
                         }
-                        Thread.Sleep(1);
-                        ReadFrames(out frames);
-                        status = _session.Send(accessUnit, timestampTicks);
+                    }
+                    else if (status == 2 && frames == 0)
+                    {
+                        throw new InvalidDataException("VA-API decoder made no progress before retry.");
+                    }
+                    else if (status == 2)
+                    {
+                        ReadFrames(out _);
                     }
                 }
-                else if (status == 2 && frames == 0)
+                if (status != 0) throw new InvalidDataException("VA-API decoder did not accept the access unit.");
+                ReadFrames(out _);
+            }
+            finally
+            {
+                if (combined is not null)
                 {
-                    throw new InvalidDataException("VA-API decoder made no progress before retry.");
-                }
-                else if (status == 2)
-                {
-                    ReadFrames(out _);
+                    ArrayPool<byte>.Shared.Return(combined);
                 }
             }
-            if (status != 0) throw new InvalidDataException("VA-API decoder did not accept the access unit.");
-            ReadFrames(out _);
         }
         catch { _faulted = true; throw; }
     }
@@ -344,13 +370,27 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
             }
             if (status is not (0 or 3)) throw new InvalidDataException("VA-API decoder rejected EOS.");
             if (ReadFrames(out _) != 3) throw new InvalidDataException("VA-API decoder did not finish draining.");
-            _configuration = null;
+            ClearConfiguration();
             _ended = true;
         }
         catch { _faulted = true; throw; }
     }
 
     private bool ExportActive => _exportEnabled && !_exportFailed && DmabufFrameCallback is not null;
+
+    /// <summary>
+    /// Returns a pending access unit to the shared pool and clears the buffered configuration state.
+    /// <para>把待处理的访问单元归还共享缓冲区池，并清除缓存的配置状态。</para>
+    /// </summary>
+    private void ClearConfiguration()
+    {
+        if (_configuration is { } configuration)
+        {
+            ArrayPool<byte>.Shared.Return(configuration);
+        }
+        _configuration = null;
+        _configurationLength = 0;
+    }
 
     /// <summary>
     /// Delivers the held surface as a DMA-BUF frame. On failure the surface stays held and the export
@@ -463,7 +503,7 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         CheckReady(allowFault: true);
         _session!.Reset();
         _faulted = _ended = _exportFailed = false;
-        _configuration = null;
+        ClearConfiguration();
         _sequence = 0;
         _generation++;
     }
@@ -496,7 +536,7 @@ public sealed class VaApiVideoDecoder : IVideoDecoder
         _session?.Dispose();
         _session = null;
         _callback = null;
-        _configuration = null;
+        ClearConfiguration();
         _disposed = true;
     }
 }
