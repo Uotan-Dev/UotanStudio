@@ -84,6 +84,8 @@ Debug 构建必须显式写 `-c Debug`，还原也要带 `-p:Configuration=Debug
 
 测试命令、过滤器和跳过门控见 `UotanStudio.Tests/AGENTS.md`；性能基准见 `UotanStudio.Benchmarks/AGENTS.md`。项目硬性要求 NativeAOT：最终验证必须包含一次 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained -p:PublishAot=true`，且不得出现新的裁剪/AOT 警告；反射式 DI 注册、未标注的 JSON 反射序列化或动态程序集扫描都不被接受。修改完成后报告实际变更、构建命令、定向测试、跳过的测试和仍未验证的边界。
 
+内嵌资源以 zstd 帧入库：MiSans 字体（`UotanStudio/Fonts/*.ttf.zst`）、鸿蒙采集库（`UotanStudio.Mirroring/Assets/ohos/device/*.so.zst` 与同目录 `manifest.txt`）和 `update-binary-arm64`（`UotanStudio.Delivery/Assets/update-binary-arm64.zst`）。改对应源文件后运行 `dotnet run tools/compress-embedded-assets.cs` 重新生成压缩帧与清单，并把生成物与代码一起提交；压缩帧或清单缺失会使项目构建失败。
+
 ## Git 与工作区
 
 - 当前工作区可能包含多个并行功能改动。只编辑完成当前任务所需的文件，保留无关修改。

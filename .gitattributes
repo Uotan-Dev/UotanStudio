@@ -5,6 +5,8 @@
 tools/gki-fs-lab/**/*.sh text eol=lf
 tools/gki-fs-lab/lab/Dockerfile text eol=lf
 tools/gki-fs-lab/lab/configs/* text eol=lf
+# zstd frames are opaque binaries; never normalize or diff them as text.
+*.zst binary
 
 ###############################################################################
 # Set default behavior for command prompt diff.
