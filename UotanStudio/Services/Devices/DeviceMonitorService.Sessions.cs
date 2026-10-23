@@ -20,6 +20,13 @@ public sealed partial class DeviceMonitorService
     public string? ResolveDirectUsbOpenKey(DetectedDevice device)
     {
         ArgumentNullException.ThrowIfNull(device);
+        if (device.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc &&
+            DebugBridgeRoute.Mode == Comm.Routing.DebugBridgeRouteMode.ServerOnly)
+        {
+            throw new IOException(
+                "The ServerOnly route mode forbids direct debug access; open the server target instead.");
+        }
+
         if (device.Protocol == DeviceProtocolKind.Adb &&
             (device.Key.StartsWith("adb:", StringComparison.Ordinal) ||
                 DebugBridgeSessionOpener.AdbServerOwns(device.Serial)))
@@ -28,6 +35,22 @@ public sealed partial class DeviceMonitorService
             throw new IOException("HDC server owns this protocol; direct USB access is prohibited.");
         var direct = ResolveDirectUsbDevice(device);
         return direct.Transport == DeviceTransportKind.Usb ? direct.Key : null;
+    }
+
+    internal HdcSession OpenNetworkHdcSession(string host, int port)
+        => _controller.OpenNetworkHdcSession(host, port);
+
+    internal DeviceLease AdoptHdcSession(DeviceEndpoint endpoint, HdcSession session)
+    {
+        try
+        {
+            return _controller.AdoptSession(endpoint, session);
+        }
+        catch
+        {
+            session.Dispose();
+            throw;
+        }
     }
 
     /// <summary>Opens a lease for an exact stable physical key, or returns <c>null</c> when that key cannot open.<para>按精确的稳定物理键打开租约，该键无法打开时返回 <c>null</c>。</para></summary>
@@ -85,6 +108,14 @@ public sealed partial class DeviceMonitorService
                 throw new IOException("The selected ADB server target is unavailable. Refresh and select the USB target for direct access.");
             return OpenServerAdbLease(device.Serial);
         }
+
+        if (DebugBridgeRoute.Mode == Comm.Routing.DebugBridgeRouteMode.ServerOnly)
+        {
+            if (!DebugBridgeRoute.UseAdbServer())
+                throw new IOException("The ServerOnly route mode requires a listening ADB server.");
+            return OpenServerAdbLease(device.Serial);
+        }
+
         if (device.Key.StartsWith("adb-tcp:", StringComparison.Ordinal))
         {
             return OpenDirectNetworkAdbLease(device.Serial);
@@ -120,9 +151,36 @@ public sealed partial class DeviceMonitorService
             DisplayName = serial,
             Serial = serial,
             Route = "server",
+            RouteEpoch = DebugBridgeRoute.Current.Epoch,
             Protocol = "adb"
         };
-        return (_controller.AdoptSession(endpoint, session), session);
+        return (AdoptOwnedSession(endpoint, session), session);
+    }
+
+    /// <summary>
+    /// Adopts an already-opened session into a controller lease and disposes that session when the
+    /// adoption is rejected (for example because another route already holds the physical device).
+    /// <para>把已打开的会话纳入控制器租约；若纳入被拒绝（例如另一条路由已持有该物理设备）则释放该会话。</para>
+    /// </summary>
+    /// <param name="endpoint">The endpoint whose identity carries the reservation.
+    /// <para>承载占用登记、提供身份的端点。</para></param>
+    /// <param name="session">The opened session to adopt. <para>要纳入的已打开会话。</para></param>
+    /// <returns>The adopted lease. <para>已纳入的租约。</para></returns>
+    private DeviceLease AdoptOwnedSession(DeviceEndpoint endpoint, object session)
+    {
+        try
+        {
+            return _controller.AdoptSession(endpoint, session);
+        }
+        catch
+        {
+            if (session is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+
+            throw;
+        }
     }
 
     /// <summary>
@@ -191,9 +249,10 @@ public sealed partial class DeviceMonitorService
             DisplayName = address,
             Serial = address,
             Route = "direct",
+            RouteEpoch = DebugBridgeRoute.Current.Epoch,
             Protocol = "adb"
         };
-        return (_controller.AdoptSession(endpoint, session), session);
+        return (AdoptOwnedSession(endpoint, session), session);
     }
 
     /// <summary>
@@ -223,9 +282,9 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// Decides whether an HDC target must go through the local hdc server; non-USB targets are
-    /// rejected when no server is present.
-    /// <para>判断 HDC 目标是否应经本机 hdc server 交互；非 USB 目标无 server 时拒绝。</para>
+    /// Decides whether an HDC target must go through the local hdc server. USB and explicit TCP
+    /// targets can use the direct session path when no server is present.
+    /// <para>判断 HDC 目标是否应经本机 hdc server 交互。没有 server 时，USB 与显式 TCP 目标都可走直连会话。</para>
     /// </summary>
     /// <param name="device">The HDC target under consideration.<para>待判断的 HDC 目标。</para></param>
     /// <param name="host">The server address to probe.<para>要探测的 server 地址。</para></param>
@@ -235,24 +294,46 @@ public sealed partial class DeviceMonitorService
     {
         if (device.Protocol != DeviceProtocolKind.Hdc || string.IsNullOrWhiteSpace(device.Serial))
             throw new ArgumentException("An HDC target with a connect key is required.", nameof(device));
-        if (DebugBridgeRoute.UseHdcServer(host, port)) return true;
-        if (device.Transport != DeviceTransportKind.Usb)
-            throw new IOException("A non-USB HDC target requires the HDC server.");
-        return false;
+        if (DebugBridgeRoute.Mode == Comm.Routing.DebugBridgeRouteMode.ServerOnly)
+        {
+            if (!DebugBridgeRoute.UseHdcServer(host, port))
+            {
+                throw new IOException("The ServerOnly route mode requires a listening HDC server.");
+            }
+
+            return true;
+        }
+
+        if (device.Transport is not (DeviceTransportKind.Usb or DeviceTransportKind.Tcp))
+            throw new IOException("An HDC target requires a USB or TCP transport.");
+
+        // A manually registered HDC TCP target is direct by definition, matching ADB's adb-tcp targets.
+        if (device.Key.StartsWith("hdc-tcp:", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (!DebugBridgeRoute.UseHdcServer(host, port))
+        {
+            return false;
+        }
+
+        // A live server owns only the connect keys it actually lists; an unlisted device falls back
+        // to direct USB or TCP exactly like ADB's per-serial ownership check.
+        return DebugBridgeSessionOpener.HdcServerOwns(device.Serial, host, port);
     }
 
     /// <summary>
-    /// Opens an HDC session lease for the device: through the server when one is running, otherwise through
-    /// the exact USB key.
-    /// <para>为设备打开 HDC 会话租约：server 在运行时经 server，否则按精确稳定键直连 USB。</para>
+    /// Opens an HDC session lease for the device: through the server when it owns the target, otherwise
+    /// through the exact direct USB or TCP endpoint.
+    /// <para>为设备打开 HDC 会话租约：server 拥有该目标时经 server，否则走精确的直连 USB 或 TCP 端点。</para>
     /// </summary>
     /// <param name="device">The device whose HDC lease is opened.<para>要打开 HDC 租约的设备。</para></param>
     /// <returns>The lease and HDC session to dispose, or <c>null</c> for non-HDC devices.<para>需释放的租约与 HDC 会话，非 HDC 设备时为 <c>null</c>。</para></returns>
     public (DeviceLease Lease, HdcSession Session)? OpenHdcLease(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Hdc) return null;
-        _ = UseHdcServerFor(device);
-        if (DebugBridgeRoute.UseHdcServer())
+        if (UseHdcServerFor(device))
         {
             var port = HdcServerClient.DefaultServerPort;
             using var server = new HdcServerClient(DeviceCommunicationConfiguration.ServerHost, port);
@@ -265,9 +346,10 @@ public sealed partial class DeviceMonitorService
                 DisplayName = device.Serial,
                 Serial = device.Serial,
                 Route = "server",
+                RouteEpoch = DebugBridgeRoute.Current.Epoch,
                 Protocol = "hdc"
             };
-            return (_controller.AdoptSession(endpoint, session), session);
+            return (AdoptOwnedSession(endpoint, session), session);
         }
 
         return HdcDirectConnection.Open(this, device);

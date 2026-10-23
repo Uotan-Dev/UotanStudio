@@ -1,12 +1,20 @@
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
-using UotanStudio.Views.Devices;
+using UotanStudio.Services.Ui;
+using UotanStudio.UiAbstractions;
 
 namespace UotanStudio.ViewModels.Devices;
 
 public partial class DeviceViewModel
 {
+    /// <summary>
+    /// Window service used by connection commands that open host dialogs; the composition root assigns
+    /// the desktop implementation when the shell starts.
+    /// <para>连接命令打开宿主对话框时使用的窗口服务；Shell 启动时由组合根赋予桌面实现。</para>
+    /// </summary>
+    internal static IWindowService Windows { get; set; } = NullWindowService.Instance;
+
     private CancellationTokenSource? _connectionCancellation;
 
     public string RemoteAddress
@@ -104,15 +112,14 @@ public partial class DeviceViewModel
         {
             return;
         }
-        var owner = DialogService.GetOwnerWindow();
-        if (owner is null)
+        if (!Windows.HasOwnerWindow)
         {
             return;
         }
         IsConnectionBusy = true;
         try
         {
-            await new QrPairingWindow().ShowDialog(owner);
+            await Windows.ShowQrPairingAsync();
         }
         finally
         {

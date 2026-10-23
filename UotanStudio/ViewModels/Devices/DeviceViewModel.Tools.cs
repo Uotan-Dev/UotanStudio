@@ -41,12 +41,12 @@ public partial class DeviceViewModel
     /// Whether scrcpy mirroring can start for the selected device (requires the ADB protocol).
     /// <para>是否可对选中设备开启 scrcpy 投屏（需要 ADB 协议设备）。</para>
     /// </summary>
-    public bool CanScreenMirror => SelectedDevice?.Protocol is DeviceProtocolKind.Adb;
+    public bool CanScreenMirror => SelectedDevice?.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc;
 
     /// <summary>
-    /// Starts scrcpy mirroring for the selected ADB device: opens the workspace mirror document
-    /// and sends the request message.
-    /// <para>对选中的 ADB 设备开启 scrcpy 投屏：打开工作区投屏文档并发送请求消息。</para>
+    /// Starts mirroring for the selected device: scrcpy for ADB, ohscrcpy for HDC. Opens the
+    /// workspace mirror document and sends the request message.
+    /// <para>对选中的设备开启投屏：ADB 经 scrcpy，HDC 经 ohscrcpy。打开工作区投屏文档并发送请求消息。</para>
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanScreenMirror))]
     private void ScreenMirror()

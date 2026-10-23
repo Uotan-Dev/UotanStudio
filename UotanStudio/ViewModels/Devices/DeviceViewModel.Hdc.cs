@@ -2,6 +2,7 @@ using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Ui;
 
 namespace UotanStudio.ViewModels.Devices;
 
@@ -39,15 +40,34 @@ public partial class DeviceViewModel
             device.SdkVersion = await Parameter("const.ohos.apiversion");
             device.CpuAbi = await Parameter("const.product.cpu.abilist");
             device.CompileVersion = await Parameter("const.product.software.version");
+            await Optional("hidumper -c base", text =>
+            {
+                var details = DevicePropertyReader.ParseHarmonyBootDetails(text, LanguageService.Instance.GetString);
+                device.CpuCode = details.SocPlatform;
+                device.BoardId = details.BoardId;
+                device.BlStatus = details.LockState;
+                device.Slot = details.Slot;
+            });
+            await Optional("hidumper -s DisplayManagerService -a '-a'", text =>
+            {
+                device.Resolution = DevicePropertyReader.ParseHarmonyResolution(text);
+                device.Density = DevicePropertyReader.ParseHarmonyDensity(text);
+            });
+            await Optional("hidumper -s BatteryService -a '-i'", text =>
+            {
+                var (level, description) = DevicePropertyReader.ParseHarmonyBattery(text);
+                device.BatteryLevel = level;
+                device.BatteryText = description;
+            });
             await Optional("uname -r", text => device.Kernel = text.Trim());
-            await Optional("cat /proc/uptime", text => device.PowerOnTime = DevicePropertyReader.FormatUptime(text, LanguageService.Instance.GetString));
+            await Optional("uptime", text => device.PowerOnTime = DevicePropertyReader.FormatUptime(text, LanguageService.Instance.GetString));
             await Optional("cat /proc/meminfo", text =>
             {
                 var (level, description) = DevicePropertyReader.ParseMem(text);
                 device.MemLevel = level;
                 device.MemText = description;
             });
-            await Optional("df /data", text =>
+            await Optional("df -k /data", text =>
             {
                 var (level, description) = DevicePropertyReader.ParseDisk(text);
                 device.DiskLevel = level;

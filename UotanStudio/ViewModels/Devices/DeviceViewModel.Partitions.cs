@@ -4,6 +4,7 @@ using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
+using UotanStudio.Services.Ui;
 
 namespace UotanStudio.ViewModels.Devices;
 

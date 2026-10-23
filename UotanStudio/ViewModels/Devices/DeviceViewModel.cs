@@ -68,6 +68,12 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 {
                     device.NotifySelectionChanged();
                 }
+
+                WeakReferenceMessenger.Default.Send(new SelectedDeviceChangedMessage
+                {
+                    Protocol = value?.Protocol,
+                    Serial = value?.Serial
+                });
             }
         }
     }

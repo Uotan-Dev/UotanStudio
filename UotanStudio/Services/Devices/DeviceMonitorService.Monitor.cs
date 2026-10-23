@@ -49,7 +49,7 @@ public sealed partial class DeviceMonitorService
     {
         try
         {
-            if (!DebugBridgeRoute.AdbServerAvailable)
+            if (!DebugBridgeRoute.UseAdbServer())
             {
                 return "absent";
             }

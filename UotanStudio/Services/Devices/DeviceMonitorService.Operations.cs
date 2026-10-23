@@ -1,14 +1,12 @@
 using UotanStudio.Comm;
-using UotanStudio.Comm.Contracts;
-using UotanStudio.Comm.Devices;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Serial;
+using UotanStudio.Mirroring;
 using UotanStudio.Services.Flash;
-using UotanStudio.Services.Mirroring;
 
 namespace UotanStudio.Services.Devices;
 
@@ -68,8 +66,18 @@ public sealed partial class DeviceMonitorService
     /// <param name="device">The HDC network target to disconnect.<para>要断开的 HDC 网络目标。</para></param>
     /// <param name="cancellationToken">Cancels the disconnect.<para>取消断开操作。</para></param>
     /// <returns>The output reported by the target.<para>目标返回的输出文本。</para></returns>
-    public Task<string> HdcDisconnectAsync(DetectedDevice device, CancellationToken cancellationToken = default)
-        => HdcOperations.DisconnectAsync(device, cancellationToken);
+    public async Task<string> HdcDisconnectAsync(DetectedDevice device, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        if (device.Key.StartsWith("hdc-tcp:", StringComparison.Ordinal))
+        {
+            TryDetachManualHdcTarget(device.Serial);
+            await ForceRefreshAsync().ConfigureAwait(false);
+            return "Disconnected.";
+        }
+
+        return await HdcOperations.DisconnectAsync(device, cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>Enumerates serial endpoints without assigning an unverified device protocol.<para>枚举串口端点，不为其指派未经核实的设备协议。</para></summary>
     /// <returns>The available port names in ordinal order.<para>按序号排序的可用端口名。</para></returns>
@@ -173,8 +181,10 @@ public sealed partial class DeviceMonitorService
             {
                 using (session)
                 {
-                    var mirror = StartAdbServerMirror(device, jarPath, options);
-                    return new ManagedMirrorSession(mirror.Client, mirror.Shell, null);
+                    RequireAdbServerDevice(device);
+                    var server = new AdbServerServices(device.Serial, DeviceCommunicationConfiguration.ServerHost,
+                        DeviceCommunicationConfiguration.AdbServerPort);
+                    return MirrorSessionFacade.StartScrcpyOverAdbServer(server, jarPath, options);
                 }
             }
             finally
@@ -185,9 +195,7 @@ public sealed partial class DeviceMonitorService
 
         try
         {
-            session.Connect();
-            var mirror = StartAdbUsbMirror(session, jarPath, options);
-            return new ManagedMirrorSession(mirror.Client, mirror.Shell, session, lease);
+            return MirrorSessionFacade.StartScrcpyOverUsbSession(session, jarPath, options, lease);
         }
         catch
         {
@@ -195,37 +203,6 @@ public sealed partial class DeviceMonitorService
             CloseLease(lease);
             throw;
         }
-    }
-
-    private (ScrcpyClient Client, Stream Shell) StartAdbServerMirror(DetectedDevice device, string jarPath,
-        ScrcpyServerOptions options)
-    {
-        RequireAdbServerDevice(device);
-        ArgumentNullException.ThrowIfNull(options);
-        var server = new AdbServerServices(device.Serial, DeviceCommunicationConfiguration.ServerHost,
-            DeviceCommunicationConfiguration.AdbServerPort);
-        server.Push(jarPath, ScrcpyConstants.ServerDevicePath);
-        var shell = server.Open("shell:" + options.BuildShellCommand());
-        try { return (new ScrcpyClient(server, options), shell); }
-        catch { shell.Dispose(); throw; }
-    }
-
-    /// <summary>Deploys and opens a native USB mirror stream on a manager-created session.<para>在管理器创建的会话上部署并打开原生 USB 投屏流。</para></summary>
-    /// <param name="session">The native USB ADB session carrying the stream.<para>承载该流的原生 USB ADB 会话。</para></param>
-    /// <param name="jarPath">Path of the server jar to deploy.<para>要部署的服务 jar 路径。</para></param>
-    /// <param name="options">The server launch options.<para>服务启动选项。</para></param>
-    /// <returns>The mirror client and its shell stream.<para>投屏客户端及其 shell 流。</para></returns>
-    private static (ScrcpyClient Client, Stream Shell) StartAdbUsbMirror(IAdbDeviceSession session, string jarPath,
-        ScrcpyServerOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(session);
-        ArgumentNullException.ThrowIfNull(options);
-        if (session.UsesServer)
-            throw new ArgumentException("A native USB ADB session is required.", nameof(session));
-        ScrcpyServerManager.PushServerAsync(session, jarPath).ConfigureAwait(false).GetAwaiter().GetResult();
-        var shell = ScrcpyServerManager.StartServer(session, options).AsServiceStream();
-        try { return (new ScrcpyClient(session, options), shell); }
-        catch { shell.Dispose(); throw; }
     }
 
     /// <summary>Opens an external shell after verifying the selected server target.<para>校验所选 server 目标后打开一个外部 shell。</para></summary>
@@ -255,7 +232,15 @@ public sealed partial class DeviceMonitorService
         }
         if (device.Protocol == DeviceProtocolKind.Hdc)
         {
-            if (!UseHdcServerFor(device)) throw new IOException("HDC server is required for the interactive shell.");
+            if (!UseHdcServerFor(device))
+            {
+                var opened = HdcDirectConnection.Open(this, device);
+                using var lease = opened.Lease;
+                using var directShell = new HdcDeviceServices(opened.Session.Connection).OpenInteractiveShell();
+                await RelayHdcShellAsync(directShell, input, output, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             using var server = new HdcServerClient(DeviceCommunicationConfiguration.ServerHost,
                 HdcServerClient.DefaultServerPort);
             var target = server.ListTargetDetails().SingleOrDefault(item =>
@@ -298,6 +283,49 @@ public sealed partial class DeviceMonitorService
         }
     }
 
+    /// <summary>Relays an interactive HDC channel without requiring a host server.
+    /// <para>在不需要主机 server 的情况下转发交互式 HDC 通道。</para>
+    /// </summary>
+    private static async Task RelayHdcShellAsync(HdcStream shell, Stream input, Stream output, CancellationToken token)
+    {
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var writer = Task.Run(async () =>
+        {
+            try
+            {
+                var buffer = new byte[8192];
+                while (!lifetime.IsCancellationRequested)
+                {
+                    var count = await input.ReadAsync(buffer, lifetime.Token).ConfigureAwait(false);
+                    if (count == 0) break;
+                    shell.Write(buffer.AsSpan(0, count).ToArray());
+                }
+            }
+            catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+            catch (IOException) when (lifetime.IsCancellationRequested) { }
+        }, lifetime.Token);
+        try
+        {
+            while (!token.IsCancellationRequested && !shell.IsClosed)
+            {
+                byte[]? data;
+                try { data = await Task.Run(() => shell.Read(250), token).ConfigureAwait(false); }
+                catch (IOException) when (shell.IsClosed) { break; }
+                if (data is { Length: > 0 })
+                {
+                    await output.WriteAsync(data, token).ConfigureAwait(false);
+                    await output.FlushAsync(token).ConfigureAwait(false);
+                }
+            }
+        }
+        finally
+        {
+            await lifetime.CancelAsync().ConfigureAwait(false);
+            shell.Dispose();
+            await writer.ConfigureAwait(false);
+        }
+    }
+
     /// <summary>Stops the selected host server and refreshes the managed device list.<para>停止所选的本机 server 并刷新受管理的设备列表。</para></summary>
     /// <param name="cancellationToken">Cancels the stop request.<para>取消停止请求。</para></param>
     public Task StopAdbServerAsync(CancellationToken cancellationToken = default)
@@ -324,7 +352,7 @@ public sealed partial class DeviceMonitorService
         }
 
         TryDetachManualNetworkTarget(device.Serial);
-        if (DebugBridgeRoute.AdbServerAvailable)
+        if (DebugBridgeRoute.UseAdbServer())
         {
             await AdbServerServices.DisconnectAsync(device.Serial,
                 DeviceCommunicationConfiguration.ServerHost, DeviceCommunicationConfiguration.AdbServerPort, cancellationToken)

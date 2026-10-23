@@ -1,17 +1,47 @@
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Comm.Routing;
 
 namespace UotanStudio.Services.Devices;
 
-/// <summary>Opens a fresh authenticated direct-USB HDC session with its controller lease.
-/// <para>打开一条由控制器租约持有的全新已认证 USB 直连 HDC 会话。</para></summary>
+/// <summary>Opens a fresh authenticated direct HDC session with its controller lease.
+/// <para>打开一条由控制器租约持有的全新已认证 HDC 直连会话。</para></summary>
 internal static class HdcDirectConnection
 {
     internal static (DeviceLease Lease, HdcSession Session) Open(DeviceMonitorService monitor, DetectedDevice device)
     {
         if (DeviceMonitorService.UseHdcServerFor(device))
-            throw new IOException("HDC server appeared; direct USB access is prohibited. Retry through the server.");
+            throw new IOException("HDC server appeared; direct access is prohibited. Retry through the server.");
+
+        if (device.Transport == DeviceTransportKind.Tcp)
+        {
+            if (!DebugBridgeNetworkAddress.TrySplitEndpoint(device.Serial, out var host, out var port))
+                throw new IOException("A direct HDC network target needs a host:port address.");
+            var networkSession = monitor.OpenNetworkHdcSession(host, port);
+            try
+            {
+                networkSession.Connect();
+            }
+            catch
+            {
+                networkSession.Dispose();
+                throw;
+            }
+
+            var endpoint = new DeviceEndpoint
+            {
+                Source = "hdc-tcp",
+                Transport = "hdc-tcp",
+                Address = device.Serial,
+                DisplayName = device.Serial,
+                Serial = device.Serial,
+                Protocol = "hdc",
+                Route = "direct",
+                RouteEpoch = DebugBridgeRoute.Current.Epoch
+            };
+            return (monitor.AdoptHdcSession(endpoint, networkSession), networkSession);
+        }
 
         var direct = monitor.ResolveDirectUsbDevice(device);
         if (direct.Transport != DeviceTransportKind.Usb)

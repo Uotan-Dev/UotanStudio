@@ -140,6 +140,24 @@ public sealed partial class DeviceMonitorService
             });
         }
 
+        foreach (var target in ManualHdcTargets)
+        {
+            if (devices.Any(entry => string.Equals(entry.Serial, target, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            devices.Add(new DetectedDevice
+            {
+                Key = "hdc-tcp:" + target,
+                Serial = target,
+                NetworkAlias = resolvedEndpoints.Contains(target) ? target : null,
+                Protocol = DeviceProtocolKind.Hdc,
+                Transport = DeviceTransportKind.Tcp,
+                State = "device",
+            });
+        }
+
         _edlConnections.RetainDevices(devices.Where(device => device.Protocol == DeviceProtocolKind.Edl)
             .Select(device => device.Key).ToHashSet(StringComparer.Ordinal));
         return CoalesceSameEndpoint(devices);

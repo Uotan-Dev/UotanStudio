@@ -26,6 +26,24 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <summary>The selected endpoint used for device operations.</summary>
     public DetectedDevice Device { get; private set; } = endpoints[0];
 
+    /// <summary>
+    /// The device target passed to device-facing services; it follows the currently selected endpoint.
+    /// <para>传给面向设备服务的设备目标，随当前选中的端点变化。</para>
+    /// </summary>
+    public DeviceTarget Target => new(Connections, Device);
+
+    /// <summary>
+    /// Passes a device entry where a <see cref="DeviceTarget"/> is expected, keeping callers that still hold a
+    /// <see cref="DeviceInfo"/> source-compatible.
+    /// <para>在需要 <see cref="DeviceTarget"/> 的位置传入设备条目，使仍持有 <see cref="DeviceInfo"/> 的调用方保持兼容。</para>
+    /// </summary>
+    /// <param name="device">The device entry to convert. <para>要转换的设备条目。</para></param>
+    public static implicit operator DeviceTarget(DeviceInfo device)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        return device.Target;
+    }
+
     /// <summary>Whether the device has more than one communication endpoint.</summary>
     public bool HasMultipleConnections => Connections.Count > 1;
 

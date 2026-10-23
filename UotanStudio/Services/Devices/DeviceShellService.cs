@@ -30,8 +30,10 @@ internal static class DeviceShellService
         }
         else if (device.Protocol == DeviceProtocolKind.Hdc)
         {
-            var present = DeviceMonitorService.UseHdcServerFor(device);
-            RequireServerTarget(device, present, present && device.State == "device");
+            if (DeviceMonitorService.UseHdcServerFor(device))
+            {
+                RequireServerTarget(device, serverPresent: true, targetReady: device.State == "device");
+            }
         }
         else
         {

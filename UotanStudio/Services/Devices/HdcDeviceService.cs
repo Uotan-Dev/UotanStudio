@@ -86,6 +86,20 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         return !DeviceMonitorService.UseHdcServerFor(device, host, _port);
     }
 
+    private static string ResolveDeviceType(HdcSession session)
+    {
+        try
+        {
+            var text = Encoding.UTF8.GetString(
+                session.ExecuteCommand("param get const.product.devicetype").Stdout).Trim();
+            return string.IsNullOrWhiteSpace(text) || text == "--" ? "phone" : text;
+        }
+        catch
+        {
+            return "phone";
+        }
+    }
+
     private static Task<string> DirectTaskAsync(DetectedDevice device, Func<HdcSession, string> operation, CancellationToken ct)
         => Task.Run(() =>
         {
@@ -218,8 +232,16 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         if (!File.Exists(path) && !Directory.Exists(path)) throw new FileNotFoundException("Package not found.", path);
         if (!Directory.Exists(path) && Path.GetExtension(path).ToLowerInvariant() is not (".hap" or ".hsp" or ".app"))
             throw new ArgumentException("HDC installation requires a HAP, HSP or APP package.", nameof(localPath));
-        if (IsDirect(device)) return await DirectTaskAsync(device,
-            session => new HdcAppClient(session.Connection).Install(path, ct), ct).ConfigureAwait(false);
+        if (IsDirect(device)) return await DirectTaskAsync(device, session =>
+        {
+            if (string.Equals(Path.GetExtension(path), ".app", StringComparison.OrdinalIgnoreCase))
+            {
+                var deviceType = ResolveDeviceType(session);
+                return new HdcAppClient(session.Connection).InstallAppBundle(path, deviceType, cancellationToken: ct);
+            }
+
+            return new HdcAppClient(session.Connection).Install(path, ct);
+        }, ct).ConfigureAwait(false);
         var result = await RunFileTaskAsync(device, ["install", path], ct).ConfigureAwait(false);
         RequireApplicationSuccess(result, uninstall: false);
         return result;

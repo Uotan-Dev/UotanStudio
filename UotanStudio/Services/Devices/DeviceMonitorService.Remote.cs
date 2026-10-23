@@ -33,14 +33,51 @@ public sealed partial class DeviceMonitorService
 
         if (protocol == DeviceProtocolKind.Hdc)
         {
-            using var hdc = new HdcServerClient(DebugBridgeEndpoints.ServerHost, DebugBridgeEndpoints.HdcServerPort);
-            await hdc.ConnectTargetAsync(target, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (DebugBridgeRoute.UseHdcServer())
+            {
+                using var hdc = new HdcServerClient(DebugBridgeEndpoints.ServerHost, DebugBridgeEndpoints.HdcServerPort);
+                await hdc.ConnectTargetAsync(target, cancellationToken: cancellationToken).ConfigureAwait(false);
+                await ForceRefreshAsync().ConfigureAwait(false);
+                return;
+            }
+
+            if (DebugBridgeRoute.Mode == Comm.Routing.DebugBridgeRouteMode.ServerOnly)
+            {
+                throw new IOException("The ServerOnly route mode requires a listening HDC server.");
+            }
+
+            if (!DebugBridgeNetworkAddress.TrySplitEndpoint(target, out var hdcHost, out var hdcPort))
+            {
+                throw new IOException("A direct HDC network target needs a host:port address.");
+            }
+
+            var hdcSession = _controller.OpenNetworkHdcSession(hdcHost, hdcPort);
+            try
+            {
+                hdcSession.Connect();
+            }
+            catch
+            {
+                hdcSession.Dispose();
+                throw;
+            }
+            hdcSession.Dispose();
+            lock (_networkTargetsLock)
+            {
+                _manualHdcTargets.Add(target);
+            }
             await ForceRefreshAsync().ConfigureAwait(false);
             return;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        if (DebugBridgeRoute.AdbServerAvailable)
+        if (DebugBridgeRoute.Mode == Comm.Routing.DebugBridgeRouteMode.ServerOnly &&
+            !DebugBridgeRoute.UseAdbServer())
+        {
+            throw new IOException("The ServerOnly route mode requires a listening ADB server.");
+        }
+
+        if (DebugBridgeRoute.UseAdbServer())
         {
             await AdbServerServices.ConnectAsync(target, DebugBridgeEndpoints.ServerHost,
                 DebugBridgeEndpoints.AdbServerPort, cancellationToken).ConfigureAwait(false);
@@ -151,6 +188,31 @@ public sealed partial class DeviceMonitorService
 
     private readonly Lock _networkTargetsLock = new();
     private readonly Dictionary<string, bool> _manualNetworkTargets = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _manualHdcTargets = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// HDC network targets this session registered directly while no hdc server was listening.
+    /// <para>本会话在没有 hdc server 时直接登记的 HDC 网络目标。</para>
+    /// </summary>
+    /// <value>The registered HDC <c>host:port</c> values. <para>已登记的 HDC <c>host:port</c> 集合。</para></value>
+    public IReadOnlyList<string> ManualHdcTargets
+    {
+        get
+        {
+            lock (_networkTargetsLock)
+            {
+                return [.. _manualHdcTargets];
+            }
+        }
+    }
+
+    internal bool TryDetachManualHdcTarget(string target)
+    {
+        lock (_networkTargetsLock)
+        {
+            return _manualHdcTargets.Remove(target);
+        }
+    }
 
     /// <summary>
     /// The deadline for re-browsing the secure connect port by IP address after a failed handshake.

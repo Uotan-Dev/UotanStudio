@@ -174,4 +174,77 @@ public class DeviceProtocolMappingTests
     public void ShouldQueryMtkIdentity_GatedOnDescriptorStateAndFreshness(
         string state, bool hasMtkInfo, bool expected)
         => Assert.Equal(expected, DeviceViewModel.ShouldQueryMtkIdentity(state, hasMtkInfo));
+
+    [Fact]
+    public void Target_MultipleEndpoints_ReportsSelectedEndpointIdentity()
+    {
+        var first = new DetectedDevice
+        {
+            Key = "adb:first",
+            Serial = "first",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Usb
+        };
+        var second = new DetectedDevice
+        {
+            Key = "edl:second",
+            Serial = "second",
+            Protocol = DeviceProtocolKind.Edl,
+            Transport = DeviceTransportKind.Usb
+        };
+        var device = new DeviceInfo([first, second]);
+
+        var target = device.Target;
+
+        Assert.Equal(2, target.Endpoints.Count);
+        Assert.Same(device.Device, target.Endpoint);
+        Assert.Equal(DeviceProtocolKind.Adb, target.Protocol);
+        Assert.Equal(device.Serial, target.Serial);
+        Assert.Equal(device.Mode, target.Mode);
+        Assert.Equal(device.State, target.State);
+    }
+
+    [Fact]
+    public void Target_SelectedConnectionChanged_FollowsTheNewEndpoint()
+    {
+        var first = new DetectedDevice
+        {
+            Key = "adb:first",
+            Serial = "first",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Usb
+        };
+        var second = new DetectedDevice
+        {
+            Key = "edl:second",
+            Serial = "second",
+            Protocol = DeviceProtocolKind.Edl,
+            Transport = DeviceTransportKind.Usb
+        };
+        var device = new DeviceInfo([first, second]);
+
+        device.SelectedConnection = second;
+
+        Assert.Same(second, device.Target.Endpoint);
+        Assert.Equal(DeviceProtocolKind.Edl, device.Target.Protocol);
+        Assert.Equal("EDL", device.Target.Mode);
+    }
+
+    [Fact]
+    public void Target_ImplicitConversion_UsesTheSelectedEndpoint()
+    {
+        var endpoint = new DetectedDevice
+        {
+            Key = "fastboot:test",
+            Serial = "test",
+            Protocol = DeviceProtocolKind.Fastboot,
+            Transport = DeviceTransportKind.Usb
+        };
+        var device = new DeviceInfo(endpoint);
+
+        DeviceTarget target = device;
+
+        Assert.Same(endpoint, target.Endpoint);
+        Assert.Same(device.Device, target.Endpoint);
+    }
 }

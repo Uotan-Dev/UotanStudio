@@ -87,6 +87,13 @@ public sealed partial class DeviceMonitorService
             throw new IOException("The selected ADB server target is unavailable.");
         }
 
+        if (device.Key.StartsWith("adb-tcp:", StringComparison.Ordinal))
+        {
+            return serverOwns
+                ? OpenServerAdbLease(device.Serial)
+                : OpenDirectNetworkAdbLease(device.Serial);
+        }
+
         var lease = LeaseEndpoint(device, serverOwns, DeviceSessionKind.Adb, cancellationToken);
         if (!lease.TryGetSession<IAdbDeviceSession>(out var session))
         {

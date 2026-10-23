@@ -50,9 +50,17 @@ public sealed class UsbLogBridge : IUsbLogger
 
     internal static void LogServerAvailability(string host, int port, bool listening)
     {
+        var mode = DebugBridgeRoute.Mode;
+        var selection = mode switch
+        {
+            DebugBridgeRouteMode.ServerOnly => "server-only routing",
+            DebugBridgeRouteMode.DirectOnly => "direct-only routing",
+            DebugBridgeRouteMode.StartupFrozen => "frozen startup routing",
+            _ => listening ? "server routing" : "direct routing for unowned targets",
+        };
         var message = listening
-            ? $"Debug bridge server endpoint {host}:{port} is listening; device operations use the server."
-            : $"Debug bridge server connection refused at {host}:{port}; server is absent, using direct USB for available USB targets.";
+            ? $"Debug bridge server endpoint {host}:{port} is listening; current selection is {selection}."
+            : $"Debug bridge server connection refused at {host}:{port}; server is absent; current selection is {selection}.";
         LogService.Instance.Write(LogLevel.Info, "DeviceCommunication", message);
     }
 }
