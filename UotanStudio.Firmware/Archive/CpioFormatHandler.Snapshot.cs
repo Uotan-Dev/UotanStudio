@@ -1,3 +1,4 @@
+using UotanStudio.Compress;
 using UotanStudio.Firmware.Archive.Models;
 
 namespace UotanStudio.Firmware.Archive;
@@ -8,7 +9,8 @@ public sealed partial class CpioFormatHandler
     private static readonly Lock SnapshotGate = new();
     private static readonly List<RememberedArchive> RememberedArchives = [];
 
-    private sealed record ArchiveSnapshot(ArchiveFormat Format, IReadOnlyList<ArchiveEntrySummary> Entries);
+    private sealed record ArchiveSnapshot(ArchiveFormat Format, CompressionFormat Compression,
+        IReadOnlyList<ArchiveEntrySummary> Entries);
 
     private sealed record RememberedArchive(string Path, long Length, long WriteTimeUtcTicks, ArchiveSnapshot Snapshot);
 
@@ -49,7 +51,7 @@ public sealed partial class CpioFormatHandler
     }
 
     private static void RememberArchiveSnapshot(string sourcePath, ArchiveFormat format,
-        IReadOnlyList<ArchiveEntrySummary> entries)
+        CompressionFormat compression, IReadOnlyList<ArchiveEntrySummary> entries)
     {
         string fullPath;
         long length;
@@ -81,7 +83,8 @@ public sealed partial class CpioFormatHandler
                 }
             }
             RememberedArchives.Insert(0,
-                new RememberedArchive(fullPath, length, writeTimeUtcTicks, new ArchiveSnapshot(format, entries)));
+                new RememberedArchive(fullPath, length, writeTimeUtcTicks,
+                    new ArchiveSnapshot(format, compression, entries)));
             if (RememberedArchives.Count > MaximumRememberedArchives)
             {
                 RememberedArchives.RemoveRange(MaximumRememberedArchives,

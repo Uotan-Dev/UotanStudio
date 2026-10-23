@@ -97,42 +97,116 @@ public sealed partial class CpioFormatHandler
         public override void SetLength(long value) => throw new NotSupportedException();
     }
 
-    private static FileStream OpenArchiveForRead(string path, CancellationToken cancellationToken)
+    private FileStream OpenArchiveForRead(string path, CancellationToken cancellationToken,
+        out CompressionFormat compression)
     {
+        compression = CompressionFormat.None;
         var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        if (!IsCompressedCpioPath(path))
+        var compressedPath = IsCompressedCpioPath(path);
+        if (source.Length > MaximumArchiveBytes)
+        {
+            if (!compressedPath)
+            {
+                return source;
+            }
+
+            source.Dispose();
+            throw new ArchiveCorruptedException("Compressed CPIO input exceeds the 8 GiB limit.");
+        }
+
+        var detected = DetectCpioCompression(source);
+        if (detected == CompressionFormat.None)
+        {
+            if (!compressedPath)
+            {
+                return source;
+            }
+
+            source.Dispose();
+            throw new ArchiveCorruptedException("Compressed CPIO framing is not recognized.");
+        }
+
+        if (compressedPath)
+        {
+            try
+            {
+                var scratch = DecompressToScratch(source, detected, cancellationToken);
+                compression = detected;
+                return scratch;
+            }
+            finally
+            {
+                source.Dispose();
+            }
+        }
+
+        if (IsArchiveStream(source))
         {
             return source;
         }
 
+        if (TryDecompressToArchiveScratch(source, detected, cancellationToken) is { } decoded)
+        {
+            compression = detected;
+            source.Dispose();
+            return decoded;
+        }
+
+        source.Position = 0;
+        return source;
+    }
+
+    private FileStream? TryDecompressToArchiveScratch(Stream source, CompressionFormat compression,
+        CancellationToken cancellationToken)
+    {
+        FileStream? scratch = null;
         try
         {
-            if (source.Length > MaximumArchiveBytes)
+            scratch = DecompressToScratch(source, compression, cancellationToken);
+            if (IsArchiveStream(scratch))
             {
-                throw new ArchiveCorruptedException("Compressed CPIO input exceeds the 8 GiB limit.");
-            }
-            var compression = DetectCpioCompression(source);
-            if (compression == CompressionFormat.None)
-            {
-                throw new ArchiveCorruptedException("Compressed CPIO framing is not recognized.");
-            }
-
-            var scratch = CreateScratch();
-            try
-            {
-                CompressionService.Decompress(source, scratch, compression, MaximumArchiveBytes, cancellationToken);
-                scratch.Position = 0;
                 return scratch;
             }
-            catch
-            {
-                scratch.Dispose();
-                throw;
-            }
+
+            scratch.Dispose();
+            return null;
         }
-        finally
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            source.Dispose();
+            scratch?.Dispose();
+            return null;
+        }
+    }
+
+    private FileStream DecompressToScratch(Stream source, CompressionFormat compression,
+        CancellationToken cancellationToken)
+    {
+        var scratch = CreateScratch();
+        try
+        {
+            source.Position = 0;
+            CompressionService.Decompress(source, scratch, compression, MaximumArchiveBytes, cancellationToken);
+            scratch.Position = 0;
+            return scratch;
+        }
+        catch
+        {
+            scratch.Dispose();
+            throw;
+        }
+    }
+
+    private bool IsArchiveStream(Stream stream)
+    {
+        try
+        {
+            _ = _archive.DetectFormat(stream);
+            return true;
+        }
+        catch (Exception ex) when (ex is ArchiveException or EndOfStreamException or NotSupportedException
+            or ArgumentException or IOException)
+        {
+            return false;
         }
     }
 
@@ -170,14 +244,16 @@ public sealed partial class CpioFormatHandler
     {
         ArchiveFormat format;
         IReadOnlyList<ArchiveEntrySummary> sourceEntries;
+        CompressionFormat compression;
         if (TryGetArchiveSnapshot(sourcePath) is { } snapshot)
         {
             format = snapshot.Format;
+            compression = snapshot.Compression;
             sourceEntries = snapshot.Entries;
         }
         else
         {
-            using var source = OpenArchiveForRead(sourcePath, cancellationToken);
+            using var source = OpenArchiveForRead(sourcePath, cancellationToken, out compression);
             format = _archive.DetectFormat(source);
             if (format is ArchiveFormat.Tar or ArchiveFormat.Ustar)
             {
@@ -185,13 +261,6 @@ public sealed partial class CpioFormatHandler
                 return;
             }
             sourceEntries = ReadSummaries(source, format, cancellationToken);
-        }
-
-        var compression = CompressionFormat.None;
-        if (IsCompressedCpioPath(sourcePath))
-        {
-            using var compressed = File.OpenRead(sourcePath);
-            compression = DetectCpioCompression(compressed);
         }
 
         var entries = new JsonArray();

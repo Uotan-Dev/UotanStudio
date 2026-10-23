@@ -160,7 +160,7 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
                 }
                 else
                 {
-                    using var fs = OpenArchiveForRead(filePath, cancellationToken);
+                    using var fs = OpenArchiveForRead(filePath, cancellationToken, out _);
                     format = _archive.DetectFormat(fs);
                     summaries = ReadSummaries(fs, format, cancellationToken);
                 }
@@ -217,7 +217,7 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
             {
                 var extractOptions = new ExtractOptions { Overwrite = options?.Overwrite ?? true, CancellationToken = cancellationToken };
                 IReadOnlyList<string> entries;
-                using (var fs = OpenArchiveForRead(filePath, cancellationToken))
+                using (var fs = OpenArchiveForRead(filePath, cancellationToken, out var compression))
                 {
                     var format = _archive.DetectFormat(fs);
                     if (format is ArchiveFormat.Tar or ArchiveFormat.Ustar)
@@ -229,7 +229,7 @@ public sealed partial class CpioFormatHandler : IFormatHandler, IRepackMetadataP
                         var validated = CollectValidatedEntries(fs, format, cancellationToken);
                         _extractor.ExtractToDirectory(validated, outputDirectory, extractOptions);
                         entries = [.. validated.Select(entry => entry.Name)];
-                        RememberArchiveSnapshot(filePath, format, [.. validated.Select(Summarize)]);
+                        RememberArchiveSnapshot(filePath, format, compression, [.. validated.Select(Summarize)]);
                     }
                 }
 

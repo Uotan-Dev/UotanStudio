@@ -233,7 +233,7 @@ public sealed class CpioUnsupportedFeatureTests
         AppendLittleEndian32(result, Crc32.HashToUInt32(indexBytes));
 
         var footer = new List<byte>();
-        AppendLittleEndian32(footer, (uint)(indexBytes.Length / 4 - 1));
+        AppendLittleEndian32(footer, (uint)((indexBytes.Length + 4) / 4 - 1));
         footer.Add(0x00);
         footer.Add(checkId);
         var footerBytes = footer.ToArray();
