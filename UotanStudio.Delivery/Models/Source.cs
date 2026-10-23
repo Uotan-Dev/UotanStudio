@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>Locates sub-projects that contain Super/Payload source settings. <para>定位包含 Super/Payload 源配置的子项目。</para></summary>
 internal static class DeliverySourceSettings

@@ -1,6 +1,6 @@
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
-internal static partial class DeliveryScriptGenerator
+public static partial class DeliveryScriptGenerator
 {
     private static bool NeedsFastbootd(DeliveryFile file) => file.Fastbootd || file.IncludeInSuper;
 

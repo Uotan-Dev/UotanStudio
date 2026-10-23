@@ -2,20 +2,32 @@ using System.Globalization;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary><para>显式的分组容量与成员关系，Super 与 Payload 共用。</para>
 /// Explicit group capacity and membership, shared by Super and Payload.</summary>
-internal sealed record DeliveryGroup
+public sealed record DeliveryGroup
 {
+    /// <summary>
+    /// Gets or sets the Name value.
+    /// <para>获取或设置 Name 值。</para>
+    /// </summary>
     public string Name { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the Size value.
+    /// <para>获取或设置 Size 值。</para>
+    /// </summary>
     public ulong Size { get; init; }
+    /// <summary>
+    /// Gets or sets the Partitions value.
+    /// <para>获取或设置 Partitions 值。</para>
+    /// </summary>
     public List<string> Partitions { get; init; } = [];
 }
 
 /// <summary><para>解析、格式化并从源容器元数据还原显示的动态分区组配置。</para>
 /// Parses, formats, and restores display dynamic partition group configuration from source container metadata.</summary>
-internal static class DeliveryGroups
+public static class DeliveryGroups
 {
     /// <summary>
     /// Parses per-line "group size partitions…" text into a list of groups, validating names, sizes, and partitions for uniqueness.
@@ -49,7 +61,7 @@ internal static class DeliveryGroups
     /// Rebuilds groups from source container metadata: Payload sources parse the dynamic partition config, Super sources parse LP metadata groups and memberships.
     /// <para>从源容器元数据重建分组：Payload 来源解析动态分区配置，Super 来源解析 LP 元数据中的分组与分区归属。</para>
     /// </summary>
-    internal static List<DeliveryGroup> FromSource(DeliverySourceContainerSettings settings)
+    public static List<DeliveryGroup> FromSource(DeliverySourceContainerSettings settings)
     {
         if (settings.Kind == "payload")
         {

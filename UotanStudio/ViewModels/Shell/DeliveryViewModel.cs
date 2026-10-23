@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Delivery;
 using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Firmware;

@@ -5,10 +5,13 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using UotanStudio.Delivery;
 using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.Shell;
+using UotanStudio.Services.Ui;
+using UotanStudio.Services.Ui.Projects;
+using UotanStudio.UiAbstractions;
 
 namespace UotanStudio.Views.Shell;
 
@@ -33,7 +36,7 @@ public partial class DeliveryView
 
         ProjectOperationsService.Instance.CaptureDeliveryState = CaptureDeliveryState;
         InitializePayloadSigningKeys();
-        ManageZipKeysButton.Click += (_, _) => MenuViewModel.ShowKeyManagerWindow();
+        ManageZipKeysButton.Click += (_, _) => UiWindowService.Shared.ShowHostWindow(HostWindowKind.KeyManager);
         InitializeZipSigningKeys();
         Composition.ReadOptions = ReadDeliverySuperOptions;
         Composition.ReadPlan = CaptureDeliveryPlan;

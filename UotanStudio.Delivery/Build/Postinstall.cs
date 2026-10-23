@@ -1,6 +1,6 @@
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary><para>在不执行宿主机程序的前提下读取 update_engine postinstall 配置。</para>
 /// Reads update_engine postinstall configuration without executing programs on the host.</summary>

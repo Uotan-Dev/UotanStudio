@@ -5,8 +5,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using AvaloniaEdit.Document;
+using UotanStudio.Delivery;
 using UotanStudio.Services;
-using UotanStudio.Services.Delivery;
 using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Controls;

@@ -4,11 +4,11 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using Google.Protobuf;
+using UotanStudio.Delivery;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
-using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Firmware;
 using Xunit;
 

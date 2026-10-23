@@ -1,6 +1,6 @@
 using UotanStudio.Services;
 using UotanStudio.Services.Keys;
-using UotanStudio.ViewModels.Shell;
+using UotanStudio.UiAbstractions;
 
 namespace UotanStudio.Views.Shell;
 
@@ -36,7 +36,7 @@ public partial class DeliveryView
             }
             finally { _selectingPayloadKey = false; }
         };
-        ManagePayloadKeysButton.Click += (_, _) => MenuViewModel.ShowKeyManagerWindow();
+        ManagePayloadKeysButton.Click += (_, _) => UiWindowService.Shared.ShowHostWindow(HostWindowKind.KeyManager);
         RefreshPayloadSigningKeys();
     }
 

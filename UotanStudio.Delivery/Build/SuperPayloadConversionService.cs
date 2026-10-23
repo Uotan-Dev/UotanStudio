@@ -3,7 +3,7 @@ using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>
 /// Options for converting a Super image into a full update_engine Payload.

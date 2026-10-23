@@ -1,7 +1,7 @@
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>Disk space estimation ahead of a delivery export. <para>交付输出前的磁盘剩余空间估算。</para></summary>
-internal static class DiskSpaceEstimator
+public static class DiskSpaceEstimator
 {
     /// <summary><para>输出过程会同时产生中间文件与最终镜像，统一按源镜像总量的 2 倍估算需求。</para>
     /// The export writes intermediate files alongside the final images, so demand is estimated as twice the source image total.</summary>
@@ -19,7 +19,7 @@ internal static class DiskSpaceEstimator
     /// generated full Super (<see cref="DeliverySuperOptions.DeviceSize"/>, excluded for Super_Empty only), Payload partitions and a tool
     /// allowance, all multiplied by the safety factor. Missing, oversized, or unreadable sources count as zero; addition is
     /// bounded and never throws.</summary>
-    internal static long EstimateExportDemand(DeliveryPlan plan)
+    public static long EstimateExportDemand(DeliveryPlan plan)
     {
         if (plan.IsSuperEmptyOnly) return (4096L + plan.Super.MetadataSize) * SafetyFactor;
         var total = Add(SumSourceLengths(plan.Files), SumSourceLengths(plan.Container));
@@ -77,7 +77,7 @@ internal static class DiskSpaceEstimator
     /// Returns the free bytes on the drive hosting the directory, or -1 when it cannot be determined.</summary>
     /// <param name="directory"><para>目录路径；按其路径根（盘符/挂载点）查询。</para>
     /// Directory path; queried by its path root (drive letter / mount point).</param>
-    internal static long GetFreeBytes(string directory)
+    public static long GetFreeBytes(string directory)
     {
         try
         {
@@ -90,7 +90,7 @@ internal static class DiskSpaceEstimator
 
     /// <summary><para>查找最具体的挂载卷根路径，包含符号链接目录之下的目标。</para>
     /// Finds the most specific mounted volume root, including destinations below linked directories.</summary>
-    internal static string? GetVolumePath(string directory)
+    public static string? GetVolumePath(string directory)
     {
         try
         {

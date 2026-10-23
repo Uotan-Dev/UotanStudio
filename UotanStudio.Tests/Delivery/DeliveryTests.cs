@@ -2,10 +2,10 @@ using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
+using UotanStudio.Delivery;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
-using UotanStudio.Services.Delivery;
 using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Shell;
 using Xunit;
@@ -498,7 +498,7 @@ public sealed class DeliveryTests : IDisposable
         }, token: TestContext.Current.CancellationToken);
         using var compressed = File.OpenRead(Path.Combine(output, "super.zst"));
         using var decoded = new MemoryStream();
-        Compress.Compressors.ZstdCompressor.Decompress(compressed, decoded);
+        UotanStudio.Compress.Compressors.ZstdCompressor.Decompress(compressed, decoded);
         Assert.Equal(SHA256.HashData(File.ReadAllBytes(raw)), SHA256.HashData(decoded.ToArray()));
     }
 

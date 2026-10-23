@@ -2,8 +2,8 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Google.Protobuf;
+using UotanStudio.Delivery;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
-using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Keys;
 using Xunit;
 

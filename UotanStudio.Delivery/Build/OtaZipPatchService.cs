@@ -1,12 +1,13 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Hash.Digests;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>
 /// Selects which ZIP members an existing A/B OTA package replaces during a bounded patch.
@@ -367,8 +368,8 @@ public static class OtaZipPatchService
 
     /// <summary>Patches selected ZIP members and atomically publishes the new archive.
     /// <para>修补选定的 ZIP 成员并原子发布新归档。</para></summary>
-    /// <param name="inputPath">Source OTA ZIP read through <see cref="ZipFile.OpenRead(string)"/>; it stays open for reading only and is never modified.
-    /// <para>通过 <see cref="ZipFile.OpenRead(string)"/> 打开读取的源 OTA ZIP；仅只读，绝不被修改。</para></param>
+    /// <param name="inputPath">Source OTA ZIP read through <see cref="ZipContainer.OpenRead(string, ZipContainerOptions?)"/>; it stays open for reading only and is never modified.
+    /// <para>通过 <see cref="ZipContainer.OpenRead(string, ZipContainerOptions?)"/> 打开读取的源 OTA ZIP；仅只读，绝不被修改。</para></param>
     /// <param name="outputPath">Destination archive path, resolved to an absolute path and overwritten after the temporary archive is complete. The containing directory is created when missing.
     /// <para>目标归档路径，会被解析为绝对路径，并在临时归档完成后被覆盖写入。其所在目录不存在时会被创建。</para></param>
     /// <param name="options">Replacement map and whether a <c>payload.bin</c> swap is authorized.
@@ -422,8 +423,8 @@ public static class OtaZipPatchService
             await using (var target = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite,
                 FileShare.None, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
-                using var source = ZipFile.OpenRead(inputPath);
-                using var archive = new ZipArchive(target, ZipArchiveMode.Create, leaveOpen: true);
+                using var source = ZipContainer.OpenRead(inputPath);
+                using var archive = ZipContainer.Create(target, leaveOpen: true);
                 var copied = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var entry in source.Entries)
                 {
@@ -483,7 +484,7 @@ public static class OtaZipPatchService
         var properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            using var archive = ZipFile.OpenRead(zipPath);
+            using var archive = ZipContainer.OpenRead(zipPath);
             var entries = new HashSet<string>(StringComparer.Ordinal);
             foreach (var entry in archive.Entries)
             {
@@ -632,7 +633,7 @@ public static class OtaZipPatchService
 
     private static string ReadMetadataBase(string inputPath)
     {
-        using var archive = ZipFile.OpenRead(inputPath);
+        using var archive = ZipContainer.OpenRead(inputPath);
         var entry = archive.GetEntry("META-INF/com/android/metadata");
         if (entry is null)
         {
@@ -669,10 +670,14 @@ public static class OtaZipPatchService
 
     private static string NormalizeEntryName(string name)
     {
-        var normalized = name.Replace('\\', '/');
-        if (normalized.StartsWith('/') || normalized.Split('/').Any(part => part is "" or "." or ".."))
+        try
+        {
+            return ZipContainer.NormalizeEntryPath(name);
+        }
+        catch (ArgumentException)
+        {
             throw new InvalidDataException($"Unsafe OTA ZIP entry name: {name}");
-        return normalized;
+        }
     }
 
     private static Dictionary<string, string> ParseProperties(string content)

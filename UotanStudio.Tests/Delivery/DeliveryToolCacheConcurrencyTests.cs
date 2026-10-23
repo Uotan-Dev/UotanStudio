@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
-using UotanStudio.Services.Delivery;
+using UotanStudio.Delivery;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>Reflection-free entry point that lets hosts and headless consumers drive delivery validation, output listing, tool preparation and builds from a serialized JSON contract; only plain types cross the assembly boundary.
 /// <para>无反射的公开入口，使宿主与无头消费者能通过序列化 JSON 契约驱动交付校验、输出列表、工具准备与构建；跨越程序集边界的都是普通类型。</para></summary>

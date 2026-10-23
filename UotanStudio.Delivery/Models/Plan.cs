@@ -1,10 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>One immutable file or partition in a delivery snapshot. <para>交付快照中的单个不可变文件或分区条目。</para></summary>
-internal sealed record DeliveryFile
+public sealed record DeliveryFile
 {
     /// <summary>Full path of the source image; empty for generated entries. <para>源镜像的完整路径；生成的条目为空。</para></summary>
     public string SourcePath { get; init; } = "";
@@ -38,24 +38,68 @@ internal sealed record DeliveryFile
 
 /// <summary><para>Payload 选项与所选签名身份；不支持（旧）的输入仍以字段显式保留。</para>
 /// Payload options and selected signing identity; unsupported inputs remain explicit as fields.</summary>
-internal sealed record DeliveryPayloadOptions
+public sealed record DeliveryPayloadOptions
 {
+    /// <summary>
+    /// Gets or sets the Version value.
+    /// <para>获取或设置 Version 值。</para>
+    /// </summary>
     public uint Version { get; init; } = 2;
+    /// <summary>
+    /// Gets or sets the MinorVersion value.
+    /// <para>获取或设置 MinorVersion 值。</para>
+    /// </summary>
     public uint MinorVersion { get; init; }
+    /// <summary>
+    /// Gets or sets the DynamicPartitionsFile value.
+    /// <para>获取或设置 DynamicPartitionsFile 值。</para>
+    /// </summary>
     public string DynamicPartitionsFile { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the SignatureFile value.
+    /// <para>获取或设置 SignatureFile 值。</para>
+    /// </summary>
     public string SignatureFile { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the SigningKeyPath value.
+    /// <para>获取或设置 SigningKeyPath 值。</para>
+    /// </summary>
     public string SigningKeyPath { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the SigningKeyFingerprint value.
+    /// <para>获取或设置 SigningKeyFingerprint 值。</para>
+    /// </summary>
     public string SigningKeyFingerprint { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the BlockSize value.
+    /// <para>获取或设置 BlockSize 值。</para>
+    /// </summary>
     public uint BlockSize { get; init; } = 4096;
+    /// <summary>
+    /// Gets or sets the MaxTimestamp value.
+    /// <para>获取或设置 MaxTimestamp 值。</para>
+    /// </summary>
     public long MaxTimestamp { get; init; }
+    /// <summary>
+    /// Gets or sets the SecurityPatchLevel value.
+    /// <para>获取或设置 SecurityPatchLevel 值。</para>
+    /// </summary>
     public string SecurityPatchLevel { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the Compression value.
+    /// <para>获取或设置 Compression 值。</para>
+    /// </summary>
     public string Compression { get; init; } = "None";
+    /// <summary>
+    /// Gets or sets the PostinstallFile value.
+    /// <para>获取或设置 PostinstallFile 值。</para>
+    /// </summary>
     public string PostinstallFile { get; init; } = "";
 }
 
 /// <summary><para>显式单设备 LP 布局；尺寸单位均为字节，不使用稀疏文件长度。</para>
 /// Explicit single-device LP layout; sizes are bytes, never sparse file lengths.</summary>
-internal sealed record DeliverySuperOptions
+public sealed record DeliverySuperOptions
 {
     /// <summary>
     /// Zstd level used when compressing the Super image. Defaulted to 19 so repacking the original
@@ -92,25 +136,77 @@ internal sealed record DeliverySuperOptions
     /// <para>Super 块设备大小（字节）。没有可用的默认值：大于真实分区会使 liblp 拒绝元数据、所有动态分区不可用；小于真实分区则留下未分配尾部空间，并使后续 OTA 快照分配失败。</para>
     /// </summary>
     public ulong DeviceSize { get; init; }
+    /// <summary>
+    /// Gets or sets the MetadataSize value.
+    /// <para>获取或设置 MetadataSize 值。</para>
+    /// </summary>
     public uint MetadataSize { get; init; } = 65536;
+    /// <summary>
+    /// Gets or sets the Slots value.
+    /// <para>获取或设置 Slots 值。</para>
+    /// </summary>
     public uint Slots { get; init; } = 3;
+    /// <summary>
+    /// Gets or sets the BlockSize value.
+    /// <para>获取或设置 BlockSize 值。</para>
+    /// </summary>
     public uint BlockSize { get; init; } = 4096;
+    /// <summary>
+    /// Gets or sets the Group value.
+    /// <para>获取或设置 Group 值。</para>
+    /// </summary>
     public string Group { get; init; } = "qti_dynamic_partitions";
+    /// <summary>
+    /// Gets or sets the DeviceName value.
+    /// <para>获取或设置 DeviceName 值。</para>
+    /// </summary>
     public string DeviceName { get; init; } = "super";
+    /// <summary>
+    /// Gets or sets the Sparse value.
+    /// <para>获取或设置 Sparse 值。</para>
+    /// </summary>
     public bool Sparse { get; init; }
+    /// <summary>
+    /// Gets or sets the VirtualAb value.
+    /// <para>获取或设置 VirtualAb 值。</para>
+    /// </summary>
     public bool VirtualAb { get; init; }
+    /// <summary>
+    /// Gets or sets the DeviceType value.
+    /// <para>获取或设置 DeviceType 值。</para>
+    /// </summary>
     public string DeviceType { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the AutoZero value.
+    /// <para>获取或设置 AutoZero 值。</para>
+    /// </summary>
     public bool AutoZero { get; init; }
+    /// <summary>
+    /// Gets or sets the Empty value.
+    /// <para>获取或设置 Empty 值。</para>
+    /// </summary>
     public bool Empty { get; init; }
+    /// <summary>
+    /// Gets or sets the Zstd value.
+    /// <para>获取或设置 Zstd 值。</para>
+    /// </summary>
     public bool Zstd { get; init; }
+    /// <summary>
+    /// Gets or sets the Groups value.
+    /// <para>获取或设置 Groups 值。</para>
+    /// </summary>
     public List<DeliveryGroup> Groups { get; init; } = [];
 }
 
 /// <summary><para>独立于可变控件与工程全局状态的完整输出快照。</para>
 /// A complete output snapshot, separate from mutable controls and project globals.</summary>
-internal sealed record DeliveryPlan
+public sealed record DeliveryPlan
 {
-    internal bool IsSuperEmptyOnly => PackSuper && Super.Empty;
+    /// <summary>
+    /// Gets or sets the IsSuperEmptyOnly value.
+    /// <para>获取或设置 IsSuperEmptyOnly 值。</para>
+    /// </summary>
+    public bool IsSuperEmptyOnly => PackSuper && Super.Empty;
 
     /// <summary><para>投影出仅含元数据的输出快照，不改变已保存的镜像选择或脚本草稿。</para>
     /// Projects metadata-only output without changing the saved image selections or script drafts.</summary>
@@ -131,45 +227,157 @@ internal sealed record DeliveryPlan
         Slot = ""
     };
 
+    /// <summary>
+    /// Gets or sets the Version value.
+    /// <para>获取或设置 Version 值。</para>
+    /// </summary>
     public int Version { get; init; } = 1;
+    /// <summary>
+    /// Gets or sets the OutputDirectory value.
+    /// <para>获取或设置 OutputDirectory 值。</para>
+    /// </summary>
     public string OutputDirectory { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the OrganizeDirectory value.
+    /// <para>获取或设置 OrganizeDirectory 值。</para>
+    /// </summary>
     public bool OrganizeDirectory { get; init; } = true;
+    /// <summary>
+    /// Gets or sets the PackSuper value.
+    /// <para>获取或设置 PackSuper 值。</para>
+    /// </summary>
     public bool PackSuper { get; init; }
+    /// <summary>
+    /// Gets or sets the PackPayload value.
+    /// <para>获取或设置 PackPayload 值。</para>
+    /// </summary>
     public bool PackPayload { get; init; }
+    /// <summary>
+    /// Runs Payload.
+    /// <para>执行 Payload。</para>
+    /// </summary>
     public DeliveryPayloadOptions Payload { get; init; } = new();
+    /// <summary>
+    /// Runs Package.
+    /// <para>执行 Package。</para>
+    /// </summary>
     public DeliveryPackageOptions Package { get; init; } = new();
+    /// <summary>
+    /// Gets or sets the Recovery value.
+    /// <para>获取或设置 Recovery 值。</para>
+    /// </summary>
     public bool Recovery { get; init; }
+    /// <summary>
+    /// Gets or sets the ContainerConfirmed value.
+    /// <para>获取或设置 ContainerConfirmed 值。</para>
+    /// </summary>
     public bool ContainerConfirmed { get; init; }
+    /// <summary>
+    /// Runs Super.
+    /// <para>执行 Super。</para>
+    /// </summary>
     public DeliverySuperOptions Super { get; init; } = new();
+    /// <summary>
+    /// Gets or sets the Container value.
+    /// <para>获取或设置 Container 值。</para>
+    /// </summary>
     public List<DeliveryFile> Container { get; init; } = [];
+    /// <summary>
+    /// Gets or sets the Files value.
+    /// <para>获取或设置 Files 值。</para>
+    /// </summary>
     public List<DeliveryFile> Files { get; init; } = [];
+    /// <summary>
+    /// Gets or sets the Txt value.
+    /// <para>获取或设置 Txt 值。</para>
+    /// </summary>
     public bool Txt { get; init; } = true;
+    /// <summary>
+    /// Gets or sets the TxtVariants value.
+    /// <para>获取或设置 TxtVariants 值。</para>
+    /// </summary>
     public bool TxtVariants { get; init; }
+    /// <summary>
+    /// Gets or sets the Windows value.
+    /// <para>获取或设置 Windows 值。</para>
+    /// </summary>
     public bool Windows { get; init; }
+    /// <summary>
+    /// Gets or sets the Linux value.
+    /// <para>获取或设置 Linux 值。</para>
+    /// </summary>
     public bool Linux { get; init; }
+    /// <summary>
+    /// Gets or sets the MacOS value.
+    /// <para>获取或设置 MacOS 值。</para>
+    /// </summary>
     public bool MacOS { get; init; }
+    /// <summary>
+    /// Gets or sets the DeviceCodename value.
+    /// <para>获取或设置 DeviceCodename 值。</para>
+    /// </summary>
     public string DeviceCodename { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the Information value.
+    /// <para>获取或设置 Information 值。</para>
+    /// </summary>
     public string Information { get; init; } = "";
     /// <summary><para>打包成 ZIP 时的压缩包名称（不含扩展名），空则回退默认容器名。</para>
     /// Archive name used when packing into a ZIP; empty falls back to the default container name.</summary>
     public string ArchiveName { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the AskWipe value.
+    /// <para>获取或设置 AskWipe 值。</para>
+    /// </summary>
     public bool AskWipe { get; init; }
+    /// <summary>
+    /// Gets or sets the Reboot value.
+    /// <para>获取或设置 Reboot 值。</para>
+    /// </summary>
     public bool Reboot { get; init; }
+    /// <summary>
+    /// Gets or sets the Slot value.
+    /// <para>获取或设置 Slot 值。</para>
+    /// </summary>
     public string Slot { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the Scripts value.
+    /// <para>获取或设置 Scripts 值。</para>
+    /// </summary>
     public Dictionary<string, string> Scripts { get; init; } = [];
+    /// <summary>
+    /// Gets or sets the ScriptFingerprint value.
+    /// <para>获取或设置 ScriptFingerprint 值。</para>
+    /// </summary>
     public string ScriptFingerprint { get; init; } = "";
+    /// <summary>
+    /// Gets or sets the GeneratedScripts value.
+    /// <para>获取或设置 GeneratedScripts 值。</para>
+    /// </summary>
     public Dictionary<string, string> GeneratedScripts { get; init; } = [];
+    /// <summary>
+    /// Gets or sets the OpenScripts value.
+    /// <para>获取或设置 OpenScripts 值。</para>
+    /// </summary>
     public List<string> OpenScripts { get; init; } = [];
+    /// <summary>
+    /// Gets or sets the ScriptCarets value.
+    /// <para>获取或设置 ScriptCarets 值。</para>
+    /// </summary>
     public Dictionary<string, int> ScriptCarets { get; init; } = [];
+    /// <summary>
+    /// Gets or sets the LocalZstd value.
+    /// <para>获取或设置 LocalZstd 值。</para>
+    /// </summary>
     public Dictionary<string, string> LocalZstd { get; init; } = [];
 }
 
 /// <summary><para>通过解决方案文件状态段进行有界、AOT 安全的交付计划持久化；路径相对解决方案根存储。</para>
 /// Bounded AOT-safe plan persistence through the solution file state section; paths are stored relative to the solution root.</summary>
-internal static class DeliveryPlanStore
+public static class DeliveryPlanStore
 {
     /// <summary>Well-known key of the delivery plan inside the solution file's state section.</summary>
-    internal const string StateKey = "delivery";
+    public const string StateKey = "delivery";
 
     /// <summary>
     /// Serializes the delivery plan into a JSON element for the solution state section; paths become
@@ -181,7 +389,7 @@ internal static class DeliveryPlanStore
     /// 镜像归属（Files/Container）不写入：其源路径与大小在重开时可能已失效，因此每次启动或加载解决方案都从
     /// 空列表开始，由作者按当前工程重新选择；其余设置、输出目录与脚本配置照常保存。</para>
     /// </summary>
-    internal static JsonElement CaptureElement(string root, DeliveryPlan plan)
+    public static JsonElement CaptureElement(string root, DeliveryPlan plan)
     {
         var detached = plan with { Files = [], Container = [] };
         var stored = Rebase(detached, path => Path.IsPathRooted(path) ? Path.GetRelativePath(root, path) : path);
@@ -198,7 +406,7 @@ internal static class DeliveryPlanStore
     /// <para>从解决方案状态段还原交付计划；空值返回 null，非法结构抛错，路径转绝对。
     /// 旧的镜像归属条目一律丢弃，确保加载后的镜像列表为空。</para>
     /// </summary>
-    internal static DeliveryPlan? LoadFromState(JsonElement? state, string root)
+    public static DeliveryPlan? LoadFromState(JsonElement? state, string root)
     {
         if (state is not { } element || element.ValueKind is not (JsonValueKind.Object or JsonValueKind.String)) return null;
         if (element.GetRawText().Length > 8 * 1024 * 1024) throw new InvalidDataException("Delivery plan exceeds 8 MiB.");
@@ -242,6 +450,10 @@ internal static class DeliveryPlanStore
     };
 }
 
+/// <summary>
+/// Source-generated JSON contracts for delivery plans and their nested option records.
+/// <para>交付计划及其嵌套选项记录的源生成 JSON 契约。</para>
+/// </summary>
 [JsonSourceGenerationOptions(WriteIndented = true)]
 [JsonSerializable(typeof(DeliveryPlan))]
-internal partial class DeliveryJsonContext : JsonSerializerContext;
+public partial class DeliveryJsonContext : JsonSerializerContext;

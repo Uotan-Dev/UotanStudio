@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>
 /// Supplies private keys to delivery builders without coupling the delivery library to key storage. Hosts and

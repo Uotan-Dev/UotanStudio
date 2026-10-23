@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
-using System.IO.Compression;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Core.IO;
-using UotanStudio.Firmware.Infrastructure.Downloads;
 using UotanStudio.Hash.Digests;
+using UotanStudio.Net.Http;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>Pinned tool artifact: a zip archive or a raw single-file binary. <para>钉住的工具发布产物：zip 归档或原始单文件二进制。</para></summary>
 internal sealed record DeliveryToolPackage(string Name, string Url, string Sha256, string Prefix, bool Raw = false, string? Member = null);
@@ -15,7 +15,7 @@ internal sealed record DeliveryToolPackage(string Name, string Url, string Sha25
 /// Downloads pinned tool releases into a verified archive cache and materializes the selected platforms into staging.
 /// Pinned sources and SHA-256 checksums are declared per package below; Windows uses the official win64 bundle, while
 /// some Linux/macOS binaries use aspect-build's musl static single-file releases.</summary>
-internal sealed class DeliveryToolService(HttpClient client, string cacheDirectory) : IDeliveryTools
+public sealed class DeliveryToolService(HttpClient client, string cacheDirectory) : IDeliveryTools
 {
     /// <summary>
     /// One download gate per pinned package name, held across the cache check, the source speed probe, the download,
@@ -226,11 +226,11 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
 
     /// <summary>
     /// Returns the cached path for a tool package, downloading and verifying its SHA-256 when needed. Source selection
-    /// and speed probing are handled by <c>HttpDownload</c> in Firmware.Core; sources are tried fastest-first with a
+    /// and speed probing are handled by <c>HttpDownload</c> in UotanStudio.Net; sources are tried fastest-first with a
     /// SHA-256 check as the final guard. Concurrent calls for one package name are serialized by
     /// <see cref="CacheGates"/> while different package names never wait on each other.
     /// <para>取得（必要时下载并校验 SHA-256）指定工具包在缓存中的路径。源的选择与测速由
-    /// Firmware.Core 的 <c>HttpDownload</c> 负责，从快到慢依次尝试，SHA-256 校验兜底。同一包名的并发调用被
+    /// UotanStudio.Net 的 <c>HttpDownload</c> 负责，从快到慢依次尝试，SHA-256 校验兜底。同一包名的并发调用被
     /// <see cref="CacheGates"/> 串行，不同包名互不阻塞。</para>
     /// </summary>
     internal async Task<string> AcquireAsync(DeliveryToolPackage package, IProgress<DeliveryProgress>? progress, CancellationToken token)
@@ -302,7 +302,7 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
 
     internal static async Task ExtractAsync(string archive, string prefix, string target, CancellationToken token, string? member = null)
     {
-        using var zip = ZipFile.OpenRead(archive);
+        using var zip = ZipContainer.OpenRead(archive);
         if (zip.Entries.Count > 10000) throw new InvalidDataException("Too many tool archive entries.");
         long total = 0;
         var root = Path.GetFullPath(target) + Path.DirectorySeparatorChar;

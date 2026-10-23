@@ -8,17 +8,17 @@ using UotanStudio.Firmware.OtaDelta.Payload.Builder;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Hash.Digests;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary><para>构建完整 Payload，可选使用所选私钥签名，并生成标准 update_engine 属性哈希。</para>
 /// Builds a full payload, optionally signed with the selected private key, and standard update_engine property hashes.</summary>
-internal static class DeliveryPayloadBuilder
+public static class DeliveryPayloadBuilder
 {
     /// <summary>
     /// Validates the Payload plan: version, signature, block size, timestamp, compression, postinstall config, and partition uniqueness.
     /// <para>校验 Payload 计划：版本、签名文件、块大小、时间戳、压缩方式、postinstall 配置及分区的唯一性。</para>
     /// </summary>
-    internal static void Validate(DeliveryPlan plan)
+    public static void Validate(DeliveryPlan plan)
     {
         if (plan.Payload.Version != 2 || plan.Payload.MinorVersion != 0)
             throw new NotSupportedException("完整 Payload 目前支持主版本 2、次版本 0 / Full Payload requires version 2, minor 0.");
@@ -98,7 +98,7 @@ internal static class DeliveryPayloadBuilder
     /// Generates the update_engine dynamic partition configuration text from the plan's selected Super members and groups.
     /// <para>根据计划内选中的动态分区与 Super 分组配置生成 update_engine 的动态分区配置文件文本。</para>
     /// </summary>
-    internal static string GenerateDynamicLayout(DeliveryPlan plan)
+    public static string GenerateDynamicLayout(DeliveryPlan plan)
     {
         var selected = plan.Container.Where(f => f.IncludeInSuper).ToArray();
         if (selected.Length == 0 || !DeliveryValidation.IsPartition(plan.Super.Group) || plan.Super.DeviceSize == 0)

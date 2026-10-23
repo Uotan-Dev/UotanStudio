@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.Core.Streams;
@@ -14,10 +15,10 @@ using UotanStudio.Firmware.OtaDelta.Diff;
 using UotanStudio.Hash.Crc32Ieee;
 using UotanStudio.Hash.Digests;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>Metadata and user-owned certificate for ZIP delivery. <para>ZIP 交付的元数据与用户自有签名证书。</para></summary>
-internal sealed record DeliveryPackageOptions
+public sealed record DeliveryPackageOptions
 {
     /// <summary>Whether to output an A/B OTA package layout (requires Payload mode). <para>是否按 A/B OTA 包布局输出（需配合 Payload 模式）。</para></summary>
     public bool Ota { get; init; }
@@ -37,7 +38,7 @@ internal sealed record DeliveryPackageOptions
 
 /// <summary><para>以流式构建完整 A/B OTA 与自定义 Recovery 包，并用 Android 整文件格式对 ZIP 评论签名。</para>
 /// Streams full A/B OTA and custom Recovery packages; signs ZIP comments using Android's whole-file format.</summary>
-internal static partial class DeliveryPackageBuilder
+public static partial class DeliveryPackageBuilder
 {
     /// <summary>
     /// Validates the ZIP delivery plan: certificate/key pairing, OTA metadata, Recovery constraints, and DAT group integrity.
@@ -86,7 +87,7 @@ internal static partial class DeliveryPackageBuilder
             {
                 token.ThrowIfCancellationRequested();
                 await using var output = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, true);
-                using var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
+                using var zip = ZipContainer.Create(output, leaveOpen: true);
                 await WriteStoredAsync(zip, "payload.bin", Path.Combine(images, "payload.bin"), token);
                 await WriteStoredAsync(zip, "payload_properties.txt", Path.Combine(images, "payload_properties.txt"), token);
                 if (careMap is not null)
@@ -130,7 +131,7 @@ internal static partial class DeliveryPackageBuilder
             var path = Path.Combine(stage, DeliveryOutputService.ZipFileName(plan, "recovery.zip"));
             var dat = HasDat(plan);
             await using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite))
-            using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
+            using (var zip = ZipContainer.Create(output, leaveOpen: true))
             {
                 var hashes = new StringBuilder();
                 foreach (var file in Selected(plan))
@@ -598,20 +599,20 @@ internal static partial class DeliveryPackageBuilder
 
     /// <summary><para>判断文件名是否为 DAT/BR 刷写工件（.transfer.list/.new.dat[.br]/.patch.dat[.br]）。</para>
     /// Determines whether a filename is a DAT/BR flashing artifact (.transfer.list/.new.dat[.br]/.patch.dat[.br]).</summary>
-    internal static bool IsDatArtifact(string fileName) => DatFileSet.IsArtifact(fileName);
+    public static bool IsDatArtifact(string fileName) => DatFileSet.IsArtifact(fileName);
 
     /// <summary><para>判断文件名是否为可写入 Recovery 的工件（.img 或 DAT 工件）。</para>
     /// Determines whether a filename is a Recovery-flashable artifact (an .img or a DAT artifact).</summary>
-    internal static bool IsRecoveryArtifact(string fileName) =>
+    public static bool IsRecoveryArtifact(string fileName) =>
         fileName.EndsWith(".img", StringComparison.OrdinalIgnoreCase) || IsDatArtifact(fileName);
 
     /// <summary>Determines whether two filenames belong to the same DAT partition set. <para>判断两个文件名是否同属一个 DAT 分区组。</para></summary>
-    internal static bool SameDatSet(string first, string second) => IsDatArtifact(first) && IsDatArtifact(second)
+    public static bool SameDatSet(string first, string second) => IsDatArtifact(first) && IsDatArtifact(second)
         && string.Equals(DatStem(first), DatStem(second), StringComparison.OrdinalIgnoreCase);
 
     /// <summary><para>去掉 DAT 工件后缀返回分区基名；非工件返回原名。</para>
     /// Strips the DAT artifact suffix returning the partition stem; non-artifacts return the name unchanged.</summary>
-    internal static string DatStem(string fileName) => DatFileSet.Stem(fileName);
+    public static string DatStem(string fileName) => DatFileSet.Stem(fileName);
 
     private static void ValidateDatArtifacts(IReadOnlyList<DeliveryFile> files)
     {

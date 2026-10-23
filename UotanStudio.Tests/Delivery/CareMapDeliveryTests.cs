@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using UotanStudio.Delivery;
 using UotanStudio.Firmware.OtaDelta.CareMap;
-using UotanStudio.Services.Delivery;
 using Xunit;
 
 namespace UotanStudio.Tests.Delivery;

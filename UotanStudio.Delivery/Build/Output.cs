@@ -4,16 +4,17 @@ using System.IO.Compression;
 using System.Text;
 using UotanStudio.Compress;
 using UotanStudio.Compress.Compressors;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Application.Equivalence;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Hash.Digests;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary><para>导出过程中的进度快照：百分比、消息文本及可选的字节/条目/阶段详细信息。</para>
 /// A progress snapshot during an export: percent, message text, and optional byte/item/stage detail.</summary>
-internal sealed record DeliveryProgress(double Percent, string Message,
+public sealed record DeliveryProgress(double Percent, string Message,
     (long Processed, long Total)? Bytes = null, string? Stage = null,
     (long Processed, long Total)? Items = null, string? Detail = null,
     IReadOnlyDictionary<string, string>? Metadata = null);
@@ -113,7 +114,7 @@ internal sealed record DeliveryStagedEquivalence(
 }
 
 /// <summary>Prepares platform tools in a staging directory for a delivery plan. <para>按交付计划在暂存目录准备平台工具。</para></summary>
-internal interface IDeliveryTools
+public interface IDeliveryTools
 {
     /// <summary>
     /// Prepares the tools a delivery needs (platform-tools and zstd) into the bin layout under the staging directory.
@@ -124,7 +125,7 @@ internal interface IDeliveryTools
 
 /// <summary><para>先在暂存目录里逐个准备每个文件，再发布：覆盖调用方批准的目标，保留其余文件。</para>
 /// Prepares every file privately, then publishes: overwrites caller-approved destinations and keeps the rest.</summary>
-internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigningKeyProvider? signingKeys = null)
+public sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigningKeyProvider? signingKeys = null)
 {
     /// <summary>Firmware partition names written under <c>firmware-update/</c>; the frozen set reduces each image's
     /// placement decision to a single hash lookup.
@@ -635,7 +636,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     /// Returns the generated container filename in the organized layout (ota.zip / super.zip / super_empty.img / super.img / super.zst / payload.bin).
     /// <para>返回组织布局下生成的容器文件名（ota.zip / super.zip / super_empty.img / super.img / super.zst / payload.bin）。</para>
     /// </summary>
-    internal static string ContainerFileName(DeliveryPlan plan) => plan.PackPayload
+    public static string ContainerFileName(DeliveryPlan plan) => plan.PackPayload
         ? (plan.OrganizeDirectory ? ZipFileName(plan, "ota.zip") : "payload.bin")
         : plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty
             ? ZipFileName(plan, "super.zip")
@@ -653,7 +654,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     private static async Task CreateSuperArchiveAsync(string stage, string archivePath, CancellationToken token)
     {
         await using var output = new FileStream(archivePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, true);
-        using var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: false);
+        using var zip = ZipContainer.Create(output);
         foreach (var source in Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories)
             .Where(path => !path.Equals(archivePath, StringComparison.OrdinalIgnoreCase))
             .Order(StringComparer.Ordinal))
@@ -713,7 +714,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
 
     /// <summary><para>计算本次输出会写到的全部目标文件路径（完整绝对路径，含组织目录布局、脚本与容器）。</para>
     /// Computes every destination file path this export would write: full absolute paths including the organized layout, scripts, and containers.</summary>
-    internal static IEnumerable<string> PlannedOutputPaths(DeliveryPlan plan)
+    public static IEnumerable<string> PlannedOutputPaths(DeliveryPlan plan)
     {
         plan = plan.ForOutput();
         var output = Path.GetFullPath(plan.OutputDirectory);
@@ -731,7 +732,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
 
     /// <summary><para>提前扫描输出目录，返回本次输出会覆盖的已存在目标文件（排序去重）。</para>
     /// Scans the output directory in advance and returns planned destination files that already exist, sorted and deduplicated.</summary>
-    internal static string[] FindExistingOutputs(DeliveryPlan plan)
+    public static string[] FindExistingOutputs(DeliveryPlan plan)
         => [.. PlannedOutputPaths(plan).Where(File.Exists).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
 
     private static string[] Publish(string stage, string output, CancellationToken token, IReadOnlySet<string>? overwrite = null)

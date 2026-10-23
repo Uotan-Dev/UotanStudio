@@ -1,6 +1,6 @@
 using UotanStudio.Firmware.BlockImage.Lp;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>
 /// Shared Super capacity math for the delivery panel and the LP builder. Keeping the reserved-area
@@ -9,7 +9,7 @@ namespace UotanStudio.Services.Delivery;
 /// <para>交付面板与 LP 构建器共享的 Super 容量计算。保留区与块对齐规则集中在这里，
 /// 使面板预检与构建器 extent 分配不会对“分区是否放得下”给出不同结论。</para>
 /// </summary>
-internal static class DeliverySuperCapacity
+public static class DeliverySuperCapacity
 {
     /// <summary>Bytes in the reserved header/geometry/metadata area the builder excludes from the data area.
     /// <para>构建器从数据区中排除的头部、geometry 与元数据保留区字节数。</para></summary>
@@ -67,7 +67,11 @@ internal static class DeliverySuperCapacity
             throw new InvalidDataException("Super 大小必须按设备读数显式填写 / Super size must be entered explicitly; read the device with fastboot getvar super-partition-size.");
     }
 
-    internal static void Validate(IReadOnlyList<long> lengths, DeliverySuperOptions options)
+    /// <summary>
+    /// Runs Validate.
+    /// <para>执行 Validate。</para>
+    /// </summary>
+    public static void Validate(IReadOnlyList<long> lengths, DeliverySuperOptions options)
     {
         ValidateDeviceSize(options);
         if (options.BlockSize == 0)

@@ -2,9 +2,9 @@ using System.Globalization;
 using System.Text;
 using UotanStudio.Firmware.OtaDelta.Dat;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
-internal static partial class DeliveryPackageBuilder
+public static partial class DeliveryPackageBuilder
 {
     /// <summary><para>判断计划是否需要 DAT Recovery 包（纯 Recovery、非 Payload/Super，且选中了 DAT 工件）。</para>
     /// Determines whether the plan needs a DAT Recovery package (pure Recovery, not Payload/Super, with a selected DAT artifact).</summary>

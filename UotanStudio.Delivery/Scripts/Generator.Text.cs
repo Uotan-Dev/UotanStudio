@@ -1,8 +1,8 @@
 using System.Text;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
-internal static partial class DeliveryScriptGenerator
+public static partial class DeliveryScriptGenerator
 {
     /// <summary>Shares the existing device and author fields across executable script formats.</summary>
     internal static IEnumerable<string> BannerLines(DeliveryPlan plan, Func<string, string>? localize)

@@ -1,9 +1,9 @@
 using System.Collections.Frozen;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>Validation shared by preview, script generation, and file publication.</summary>
-internal static class DeliveryValidation
+public static class DeliveryValidation
 {
     /// <summary>Windows reserved device names, frozen with an OrdinalIgnoreCase comparer so repeated validation
     /// allocates neither an array nor a substring.
@@ -43,7 +43,7 @@ internal static class DeliveryValidation
     /// Determines whether a value is a valid partition name: up to 36 ASCII alphanumerics or underscores, plus hyphens in payload mode.
     /// <para>判断数值是否为合法分区名：最长 36 个 ASCII 字母数字或下划线，payload 模式额外允许连字符。</para>
     /// </summary>
-    internal static bool IsPartition(string value, bool payload = false) => value is not null && value.Length is > 0 and <= 36
+    public static bool IsPartition(string value, bool payload = false) => value is not null && value.Length is > 0 and <= 36
         && value[0] != '-'
         && value.All(c => char.IsAsciiLetterOrDigit(c) || c == '_' || payload && c == '-');
 
@@ -60,7 +60,7 @@ internal static class DeliveryValidation
     /// </summary>
     /// <param name="plan">The delivery plan to validate. <para>要校验的交付计划。</para></param>
     /// <param name="sources">Whether to check source files for existence and size. <para>是否校验源文件的存在与大小。</para></param>
-    internal static void Validate(DeliveryPlan plan, bool sources = true)
+    public static void Validate(DeliveryPlan plan, bool sources = true)
     {
         plan = plan.ForOutput();
         if (!plan.OrganizeDirectory && !plan.PackSuper && !plan.PackPayload) throw new InvalidDataException("请选择交付方式 / Select an output mode.");

@@ -4,12 +4,13 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Delivery;
 using UotanStudio.Messages;
 using UotanStudio.Services;
-using UotanStudio.Services.Delivery;
-using UotanStudio.Services.Execution;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui;
+using UotanStudio.Workflow.Execution;
 
 namespace UotanStudio.Views.Shell;
 

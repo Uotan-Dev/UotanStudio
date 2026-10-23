@@ -1,4 +1,4 @@
-using UotanStudio.Services.Delivery;
+using UotanStudio.Delivery;
 using Xunit;
 
 namespace UotanStudio.Tests.Delivery;

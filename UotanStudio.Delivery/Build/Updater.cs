@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary><para>复用原 ROM 的原生 Edify 解释器，而不是假定 shell 的 block_image_update 命令。</para>
 /// Reuses the original ROM's native Edify interpreter instead of assuming a shell block_image_update command.</summary>

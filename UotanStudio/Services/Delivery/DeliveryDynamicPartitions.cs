@@ -1,3 +1,4 @@
+using UotanStudio.Delivery;
 using UotanStudio.Services.Firmware;
 
 namespace UotanStudio.Services.Delivery;

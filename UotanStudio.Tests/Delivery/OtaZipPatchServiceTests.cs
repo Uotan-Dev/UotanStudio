@@ -4,8 +4,8 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Google.Protobuf;
+using UotanStudio.Delivery;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
-using UotanStudio.Services.Delivery;
 using Xunit;
 
 namespace UotanStudio.Tests.Delivery;

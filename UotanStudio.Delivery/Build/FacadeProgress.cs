@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>Public delivery progress contract: the internal <see cref="DeliveryProgress"/> flattened into a record that crosses the assembly boundary so facade callers can drive progress bars and statistics. Tuple fields become standalone scalars, so no ValueTuple is exposed on the public surface.
 /// <para>公共交付进度契约：把内部 <see cref="DeliveryProgress"/> 摊平为可跨程序集边界的记录，供门面调用方 驱动进度条与统计。元组字段被展开为独立标量，因此不向公共面暴露 ValueTuple。</para></summary>
@@ -28,7 +28,7 @@ public sealed record DeliveryBuildProgress(double Percent, string Message, strin
 /// Maps the internal progress record onto the public progress contract.
 /// <para>内部进度到公共进度契约的映射。</para>
 /// </summary>
-internal static class DeliveryBuildProgressMapper
+public static class DeliveryBuildProgressMapper
 {
     extension(DeliveryProgress value)
     {
@@ -50,7 +50,7 @@ internal static class DeliveryBuildProgressMapper
         /// <para>把公共进度契约还原为内部 <see cref="DeliveryProgress"/>，供已直接消费内部记录的宿主界面复用同一套
         /// 阶段统计逻辑。字节与条目度量只在两个分量同时存在时才重组为元组。</para>
         /// </summary>
-        internal DeliveryProgress ToDeliveryProgress()
+        public DeliveryProgress ToDeliveryProgress()
         {
             (long Processed, long Total)? bytes =
                 value.ProcessedBytes is { } processedBytes && value.TotalBytes is { } totalBytes

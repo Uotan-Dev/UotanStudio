@@ -2,11 +2,11 @@ using System.Text;
 using System.Text.Json;
 using UotanStudio.Hash.Digests;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary><para>根据已验证的计划生成脚本，绝不执行设备命令。</para>
 /// Generates scripts from one validated plan; never executes device commands.</summary>
-internal static partial class DeliveryScriptGenerator
+public static partial class DeliveryScriptGenerator
 {
     private static string ImagePath(DeliveryPlan plan, DeliveryFile file)
         => plan.PackSuper ? DeliveryOutputService.OrganizedImageRelativePath(file).Replace('\\', '/') : "images/" + file.FileName;
@@ -14,7 +14,7 @@ internal static partial class DeliveryScriptGenerator
     /// Computes a fingerprint over the plan's key fields to detect when generated scripts are stale relative to the installer contract.
     /// <para>对计划的关键字段计算脚本指纹，用于检测生成脚本是否随安装器契约或计划内容而过期。</para>
     /// </summary>
-    internal static string Fingerprint(DeliveryPlan plan)
+    public static string Fingerprint(DeliveryPlan plan)
     {
         using var hash = Sha256.CreateAccumulator();
         hash.Append("UotanStudio delivery scripts v3\n"u8);
@@ -29,7 +29,7 @@ internal static partial class DeliveryScriptGenerator
     /// 默认关闭且不影响任何既有输出。</para>
     /// <para>excludeOatArtifacts is an opt-in switch: when set, the shared file-orchestration result drops
     /// oat/ART compiled-artifact entries (.oat, .odex, .vdex); it defaults to off and never changes existing outputs.</para></summary>
-    internal static Dictionary<string, string> Generate(DeliveryPlan plan, Func<string, string>? localize = null,
+    public static Dictionary<string, string> Generate(DeliveryPlan plan, Func<string, string>? localize = null,
         bool excludeOatArtifacts = false)
     {
         DeliveryValidation.Validate(plan, false);

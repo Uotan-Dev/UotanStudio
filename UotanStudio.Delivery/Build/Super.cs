@@ -6,15 +6,15 @@ using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary><para>用绝对扇区地址与有界流构建实际的 LP 分区内容。</para>
 /// Builds actual LP partition contents using absolute sector addresses and bounded streams.</summary>
-internal static class DeliverySuperBuilder
+public static class DeliverySuperBuilder
 {
     /// <summary><para>展开 AutoZero 伴随分区并把分区名补全为 _a/_b 配对，同时校验名称合法且唯一。</para>
     /// Expands AutoZero companion partitions into _a/_b pairs and validates that names are valid and unique.</summary>
-    internal static List<DeliveryFile> ExpandPartitions(IReadOnlyList<DeliveryFile> files, DeliverySuperOptions options)
+    public static List<DeliveryFile> ExpandPartitions(IReadOnlyList<DeliveryFile> files, DeliverySuperOptions options)
     {
         var result = files.Select(f => options.AutoZero && !f.Partition.EndsWith("_a", StringComparison.Ordinal)
             && !f.Partition.EndsWith("_b", StringComparison.Ordinal) ? f with { Partition = f.Partition + "_a" } : f).ToList();
@@ -51,7 +51,7 @@ internal static class DeliverySuperBuilder
     /// size changed while the image was being written.
     /// <para>super 设备名放不进 LP 块设备名称字段、声明容量被超出，或写入镜像期间分区大小发生变化。</para>
     /// </exception>
-    internal static Task BuildAsync(IReadOnlyList<DeliveryFile> files, DeliverySuperOptions options, string output,
+    public static Task BuildAsync(IReadOnlyList<DeliveryFile> files, DeliverySuperOptions options, string output,
         IProgress<double>? progress = null, CancellationToken token = default,
         IProgress<DeliveryProgress>? detailProgress = null) => Task.Run(async () =>
     {

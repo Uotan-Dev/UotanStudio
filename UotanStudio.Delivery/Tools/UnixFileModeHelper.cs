@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Delivery;
+namespace UotanStudio.Delivery;
 
 /// <summary>
 /// Grants the standard 0755-style Unix permission bits to a delivered file so scripts and native tools stay
