@@ -4,7 +4,6 @@ using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Messages;
 using UotanStudio.Services.Devices;
-using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Services.Flash;
 
@@ -26,7 +25,7 @@ public static class BackupService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The backup result. <para>备份结果。</para></returns>
     public static async Task<BackupResult> BackupPartitionAsync(
-        DeviceInfo device, string partition, string outPath,
+        DeviceTarget device, string partition, string outPath,
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
         try
@@ -71,7 +70,7 @@ public static class BackupService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The restore result. <para>还原结果。</para></returns>
     public static async Task<BackupResult> RestorePartitionAsync(
-        DeviceInfo device, string partition, string imagePath,
+        DeviceTarget device, string partition, string imagePath,
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
         try
@@ -127,11 +126,11 @@ public static class BackupService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The backup result. <para>备份结果。</para></returns>
     private static BackupResult BackupFastbootDevice(
-        DeviceInfo device, string partition, string outPath,
+        DeviceTarget device, string partition, string outPath,
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-        return App.DeviceMonitor.RunFastboot(device.Device,
+        return App.DeviceMonitor.RunFastboot(device.Endpoint,
             session => BackupFastbootPartition(session, partition, outPath, progress, ct), ct);
     }
 
@@ -188,11 +187,11 @@ public static class BackupService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The restore result. <para>还原结果。</para></returns>
     private static BackupResult RestoreFastbootDevice(
-        DeviceInfo device, string partition, string imagePath,
+        DeviceTarget device, string partition, string imagePath,
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-        return App.DeviceMonitor.RunFastboot(device.Device,
+        return App.DeviceMonitor.RunFastboot(device.Endpoint,
             session => RestoreFastbootPartition(session, partition, imagePath, progress, ct), ct);
     }
 
@@ -239,7 +238,7 @@ public static class BackupService
     /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The backup result.<para>备份结果。</para></returns>
     public static async Task<BackupResult> BackupEdlPartitionAsync(
-        DeviceInfo device, string partition, string outPath, string rawProgramPath,
+        DeviceTarget device, string partition, string outPath, string rawProgramPath,
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(device);
@@ -249,7 +248,7 @@ public static class BackupService
         }
 
         var (startSector, sectorCount) = ResolveEdlPartitionGeometry(rawProgramPath, partition);
-        return await App.DeviceMonitor.RunEdlAsync(device.Device,
+        return await App.DeviceMonitor.RunEdlAsync(device.Endpoint,
             session => BackupEdlPartitionAsync(session, partition, startSector, sectorCount, outPath, progress, ct),
             ct).ConfigureAwait(false);
     }

@@ -3,7 +3,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:icons="https://irihi.tech/iconica/tdesign"
-             xmlns:vm="using:UotanStudio.ViewModels.Shell"
+             xmlns:vm="using:UotanStudio.ViewModels.Flash"
+             xmlns:vms="using:UotanStudio.ViewModels"
              xmlns:ursa="using:Ursa.Controls"
              mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="820"
              x:Class="UotanStudio.Views.Shell.FlashView"
@@ -43,6 +44,11 @@
             <Setter Property="Padding" Value="6,0" />
         </Style>
     </UserControl.Styles>
+    <UserControl.Resources>
+        <DataTemplate x:Key="LocalizedOptionTemplate" x:DataType="vms:LocalizedOption">
+            <TextBlock Text="{Binding DisplayName}" />
+        </DataTemplate>
+    </UserControl.Resources>
 
     <!-- 三份内容在同一网格中换位：宽屏为「日志 | 分区 | 操作」，窄屏把日志移到分区列表下方；
          窗口高度不足时由外层 ScrollViewer 提供整页纵向滚动。 -->
@@ -297,25 +303,18 @@
                                        IsVisible="{Binding #BundleActionRow.IsVisible}"
                                        VerticalAlignment="Center" FontSize="12" Opacity="0.8" />
                             <ComboBox Grid.Row="6" Grid.Column="1" Name="EdlSectorSizeBox" Height="28"
-                                      MinWidth="88" SelectedIndex="0"
+                                      MinWidth="88"
+                                      ItemTemplate="{StaticResource LocalizedOptionTemplate}"
                                       IsVisible="{Binding #BundleActionRow.IsVisible}"
-                                      AutomationProperties.Name="{DynamicResource Flash_EdlSectorSize}">
-                                <ComboBoxItem Content="{DynamicResource Flash_Auto}" />
-                                <ComboBoxItem Content="512" />
-                                <ComboBoxItem Content="2048" />
-                                <ComboBoxItem Content="4096" />
-                            </ComboBox>
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlSectorSize}" />
                             <TextBlock Grid.Row="7" Text="{DynamicResource Flash_EdlSlot}"
                                        IsVisible="{Binding #BundleActionRow.IsVisible}"
                                        VerticalAlignment="Center" FontSize="12" Opacity="0.8" />
                             <ComboBox Grid.Row="7" Grid.Column="1" Name="EdlSlotBox" Height="28"
-                                      MinWidth="88" SelectedIndex="0"
+                                      MinWidth="88"
+                                      ItemTemplate="{StaticResource LocalizedOptionTemplate}"
                                       IsVisible="{Binding #BundleActionRow.IsVisible}"
-                                      AutomationProperties.Name="{DynamicResource Flash_EdlSlot}">
-                                <ComboBoxItem Content="{DynamicResource Flash_Auto}" />
-                                <ComboBoxItem Content="1" />
-                                <ComboBoxItem Content="2" />
-                            </ComboBox>
+                                      AutomationProperties.Name="{DynamicResource Flash_EdlSlot}" />
                             <TextBlock Grid.Row="8" Text="{DynamicResource Flash_EdlWipeFirst}"
                                        IsVisible="{Binding #BundleActionRow.IsVisible}"
                                        VerticalAlignment="Center" FontSize="12" Opacity="0.8" />
@@ -495,12 +494,8 @@
                             <TextBlock Text="{DynamicResource Flash_MtkProtocol}" FontSize="12" Opacity="0.8" />
                             <ComboBox Name="MtkProtocolBox" Height="32" VerticalContentAlignment="Center"
                                       HorizontalAlignment="Stretch"
-                                      SelectedIndex="0"
-                                      AutomationProperties.Name="{DynamicResource Flash_MtkProtocol}">
-                                <ComboBoxItem Content="{DynamicResource Flash_MtkProtocolXFlash}" />
-                                <ComboBoxItem Content="{DynamicResource Flash_MtkProtocolLegacy}" />
-                                <ComboBoxItem Content="{DynamicResource Flash_MtkProtocolXml}" />
-                            </ComboBox>
+                                      ItemTemplate="{StaticResource LocalizedOptionTemplate}"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkProtocol}" />
                             <TextBlock Text="{DynamicResource Flash_MtkStorageKind}" FontSize="12" Opacity="0.8" />
                             <ComboBox Name="MtkStorageKindBox" Height="32" VerticalContentAlignment="Center"
                                       HorizontalAlignment="Stretch"
@@ -512,13 +507,9 @@
                                  otherwise the preloader and BootROM groups would stay unreachable forever. -->
                             <TextBlock Text="{DynamicResource Flash_MtkStage}" FontSize="12" Opacity="0.8" />
                             <ComboBox Name="MtkStageBox" Height="32" VerticalContentAlignment="Center"
-                                      HorizontalAlignment="Stretch" SelectedIndex="0"
-                                      AutomationProperties.Name="{DynamicResource Flash_MtkStage}">
-                                <ComboBoxItem Content="{DynamicResource Flash_MtkStageAuto}" />
-                                <ComboBoxItem Content="{DynamicResource Flash_MtkStageBootRom}" />
-                                <ComboBoxItem Content="{DynamicResource Flash_MtkStagePreloader}" />
-                                <ComboBoxItem Content="{DynamicResource Flash_MtkStageDa}" />
-                            </ComboBox>
+                                      HorizontalAlignment="Stretch"
+                                      ItemTemplate="{StaticResource LocalizedOptionTemplate}"
+                                      AutomationProperties.Name="{DynamicResource Flash_MtkStage}" />
                             <TextBlock Name="MtkStageText" Text="{DynamicResource Flash_MtkStageUndetermined}"
                                        FontSize="12" Opacity="0.8" TextWrapping="Wrap" />
                             <CheckBox Name="MtkAttachAgentBox" Content="{DynamicResource Flash_MtkAttachAgent}"
@@ -628,7 +619,8 @@
                                  unsupported combination is refused locally before any device contact. -->
                             <TextBlock Text="{DynamicResource Flash_MtkRpmbMode}" FontSize="12" Opacity="0.8" />
                             <ComboBox Name="MtkRpmbModeBox" Height="32" VerticalContentAlignment="Center"
-                                      HorizontalAlignment="Stretch" SelectedIndex="0"
+                                      HorizontalAlignment="Stretch"
+                                      ItemTemplate="{StaticResource LocalizedOptionTemplate}"
                                       AutomationProperties.Name="{DynamicResource Flash_MtkRpmbMode}" />
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                 <TextBox Name="MtkRpmbOffsetBox" Height="32" VerticalContentAlignment="Center"

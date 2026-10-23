@@ -1,5 +1,5 @@
 using UotanStudio.Comm.Protocols.Edl;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
 
@@ -23,12 +23,12 @@ internal static class EdlUfsProvisionService
     /// <param name="programmerPath">Optional programmer override path. <para>可选的编程器覆盖路径。</para></param>
     /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
     /// <returns>A result describing what would be sent. <para>描述将要发送内容的结果。</para></returns>
-    internal static async Task<FlashResult> PreviewAsync(DeviceInfo device, string profilePath,
+    internal static async Task<FlashResult> PreviewAsync(DeviceTarget device, string profilePath,
         IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null)
     {
         var profile = await UfsProvisionProfileLoader.LoadAsync(profilePath, ct).ConfigureAwait(false);
-        return await App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
             using var programmer = OpenProgrammer(programmerPath);
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
@@ -48,12 +48,12 @@ internal static class EdlUfsProvisionService
     /// <param name="programmerPath">Optional programmer override path. <para>可选的编程器覆盖路径。</para></param>
     /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
     /// <returns>The provisioning result. <para>写入结果。</para></returns>
-    internal static async Task<FlashResult> ProvisionAsync(DeviceInfo device, string profilePath, bool confirmed,
+    internal static async Task<FlashResult> ProvisionAsync(DeviceTarget device, string profilePath, bool confirmed,
         IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null)
     {
         var profile = await UfsProvisionProfileLoader.LoadAsync(profilePath, ct).ConfigureAwait(false);
-        return await App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
             using var programmer = OpenProgrammer(programmerPath);
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
@@ -74,11 +74,11 @@ internal static class EdlUfsProvisionService
     /// <param name="programmerPath">Optional programmer override path. <para>可选的编程器覆盖路径。</para></param>
     /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
     /// <returns>The reset result. <para>复位结果。</para></returns>
-    internal static async Task<FlashResult> ResetAsync(DeviceInfo device, bool confirmed,
+    internal static async Task<FlashResult> ResetAsync(DeviceTarget device, bool confirmed,
         IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null)
     {
-        return await App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
             using var programmer = OpenProgrammer(programmerPath);
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);

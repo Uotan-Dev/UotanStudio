@@ -6,7 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Logging;
 
-namespace UotanStudio.ViewModels.Shell;
+namespace UotanStudio.ViewModels.Flash;
 
 /// <summary>
 /// The stage a partition row has reached in the flash run.
@@ -94,13 +94,14 @@ public sealed partial class FlashPartitionEntry : ObservableObject
 }
 
 /// <summary>
-/// Flash page state: the partition list, its search filter and the selection summary.
-/// <para>烧录页面的界面状态：分区列表、搜索过滤与勾选汇总。</para>
+/// Flash page state and orchestration: the partition list, its search filter, the selection summary and every
+/// device-facing action the page starts.
+/// <para>烧录页面的状态与编排：分区列表、搜索过滤、勾选汇总，以及页面发起的全部面向设备动作。</para>
 /// </summary>
 /// <remarks>
-/// Only UI state lives here. The flash backend fills <see cref="Partitions"/> once wired; the page never infers
-/// which image belongs to which partition on its own.
-/// <para>这里只保存界面状态，刷写后端接入后由服务填充 <see cref="Partitions"/>；页面不自行推断镜像归属。</para>
+/// The partition rows come from the selected package; the view model never infers which image belongs to which
+/// partition on its own. Device operations run through the flash services against the selected device's target.
+/// <para>分区行来自所选刷机包；视图模型不自行推断镜像归属。设备操作经刷写服务针对所选设备的设备目标执行。</para>
 /// </remarks>
 public sealed partial class FlashViewModel : ObservableObject
 {
@@ -153,7 +154,7 @@ public sealed partial class FlashViewModel : ObservableObject
     /// <para>批量发布定时器：100ms 内补发未达阈值的行，使单条提示不会因为合批而延迟显示；无挂起行时停止，
     /// 页面空闲不产生周期唤醒。</para>
     /// </summary>
-    private readonly DispatcherTimer _logFlushTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    private DispatcherTimer? _logFlushTimer;
 
     /// <summary>
     /// Entries currently subscribed to <see cref="FlashPartitionEntry.PropertyChanged"/>; a Reset notification
@@ -163,11 +164,31 @@ public sealed partial class FlashViewModel : ObservableObject
     /// </summary>
     private readonly HashSet<FlashPartitionEntry> _subscribedEntries = [];
 
+    /// <summary>The flash backend used by every device-facing action on the page. <para>页面所有面向设备动作使用的刷写后端。</para></summary>
+    private readonly IFlashService _flashService;
+
     /// <summary>Creates the view model and hooks list changes and the batched log publish. <para>构造视图模型并挂接列表变更与日志批量发布。</para></summary>
-    public FlashViewModel()
+    public FlashViewModel() : this(FlashService.Default)
     {
+    }
+
+    /// <summary>
+    /// Creates the view model against a specific flash backend.
+    /// <para>以指定的刷写后端创建视图模型。</para>
+    /// </summary>
+    /// <param name="flashService">The flash backend to use.<para>要使用的刷写后端。</para></param>
+    internal FlashViewModel(IFlashService flashService)
+    {
+        ArgumentNullException.ThrowIfNull(flashService);
+        _flashService = flashService;
         Partitions.CollectionChanged += OnPartitionsChanged;
-        _logFlushTimer.Tick += (_, _) => FlushPendingLog();
+    }
+
+    private DispatcherTimer CreateLogFlushTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        timer.Tick += (_, _) => FlushPendingLog();
+        return timer;
     }
 
     /// <summary>All partition entries. <para>全部分区条目。</para></summary>
@@ -266,6 +287,7 @@ public sealed partial class FlashViewModel : ObservableObject
             return;
         }
 
+        _logFlushTimer ??= CreateLogFlushTimer();
         if (!_logFlushTimer.IsEnabled)
         {
             _logFlushTimer.Start();
@@ -281,7 +303,7 @@ public sealed partial class FlashViewModel : ObservableObject
     {
         if (_pendingLogLines == 0)
         {
-            _logFlushTimer.Stop();
+            _logFlushTimer?.Stop();
             return;
         }
 
@@ -297,7 +319,7 @@ public sealed partial class FlashViewModel : ObservableObject
         _pendingLogLines = 0;
         _pendingLogCharacters = 0;
         _logBuffer.Clear();
-        _logFlushTimer.Stop();
+        _logFlushTimer?.Stop();
         LogText = string.Empty;
     }
 
@@ -305,7 +327,7 @@ public sealed partial class FlashViewModel : ObservableObject
     {
         _pendingLogLines = 0;
         _pendingLogCharacters = 0;
-        _logFlushTimer.Stop();
+        _logFlushTimer?.Stop();
         TrimLogBuffer();
         LogText = _logBuffer.ToString();
     }

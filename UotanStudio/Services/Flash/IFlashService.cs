@@ -1,4 +1,4 @@
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
 
@@ -22,7 +22,7 @@ public interface IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The flash result describing success or failure. <para>描述成功或失败的刷写结果。</para></returns>
     Task<FlashResult> FlashImageAsync(
-        DeviceInfo device, string partition, string imagePath,
+        DeviceTarget device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct);
 
     /// <summary>
@@ -35,7 +35,7 @@ public interface IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The erase result. <para>擦除结果。</para></returns>
     Task<FlashResult> ErasePartitionAsync(
-        DeviceInfo device, string partition, IProgress<FlashProgress>? progress, CancellationToken ct);
+        DeviceTarget device, string partition, IProgress<FlashProgress>? progress, CancellationToken ct);
 
     /// <summary>
     /// Erases every partition on the device (fastboot protocol only).
@@ -46,7 +46,7 @@ public interface IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The erase result. <para>擦除结果。</para></returns>
     Task<FlashResult> EraseAllAsync(
-        DeviceInfo device, IProgress<FlashProgress>? progress, CancellationToken ct);
+        DeviceTarget device, IProgress<FlashProgress>? progress, CancellationToken ct);
 
     /// <summary>
     /// Pushes an OTA package to the device in recovery sideload mode via ADB.
@@ -58,7 +58,7 @@ public interface IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The sideload result. <para>侧载结果。</para></returns>
     Task<FlashResult> FlashSideloadAsync(
-        DeviceInfo device, string otaPackagePath, IProgress<FlashProgress>? progress, CancellationToken ct);
+        DeviceTarget device, string otaPackagePath, IProgress<FlashProgress>? progress, CancellationToken ct);
 
     /// <summary>
     /// Queries a device property (fastboot getvar / ADB getprop).
@@ -69,5 +69,5 @@ public interface IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The query result whose summary holds the name and value. <para>摘要中给出名称与值的查询结果。</para></returns>
     Task<FlashResult> GetDevicePropertyAsync(
-        DeviceInfo device, string propertyName, CancellationToken ct);
+        DeviceTarget device, string propertyName, CancellationToken ct);
 }

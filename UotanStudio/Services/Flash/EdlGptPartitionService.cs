@@ -1,7 +1,7 @@
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Firmware.BlockImage.Gpt;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
 
@@ -131,7 +131,7 @@ internal static class EdlGptPartitionService
     /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
     /// <param name="lun">The explicit LUN; null scans by name. <para>显式 LUN；为空时按名扫描。</para></param>
     /// <returns>The flash result. <para>刷写结果。</para></returns>
-    internal static async Task<FlashResult> FlashAsync(DeviceInfo device, string partition, string imagePath,
+    internal static async Task<FlashResult> FlashAsync(DeviceTarget device, string partition, string imagePath,
         bool verify, IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null, int? lun = null)
     {
@@ -141,7 +141,7 @@ internal static class EdlGptPartitionService
         }
 
         progress?.Report(new FlashProgress(partition, 0, "Reading the device partition table... 正在读取设备分区表..."));
-        return await App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
             using var programmer = OpenProgrammer(programmerPath);
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
@@ -188,12 +188,12 @@ internal static class EdlGptPartitionService
     /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
     /// <param name="lun">The explicit LUN; null scans by name. <para>显式 LUN；为空时按名扫描。</para></param>
     /// <returns>The erase result. <para>擦除结果。</para></returns>
-    internal static async Task<FlashResult> EraseAsync(DeviceInfo device, string partition,
+    internal static async Task<FlashResult> EraseAsync(DeviceTarget device, string partition,
         IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null, int? lun = null)
     {
         progress?.Report(new FlashProgress(partition, 0, "Reading the device partition table... 正在读取设备分区表..."));
-        return await App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
             using var programmer = OpenProgrammer(programmerPath);
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
@@ -239,13 +239,13 @@ internal static class EdlGptPartitionService
     /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
     /// <returns>The erase result whose summary lists the erased and the skipped partitions.
     /// <para>擦除结果，摘要列出已擦除与被跳过的分区。</para></returns>
-    internal static async Task<FlashResult> FactoryResetAsync(DeviceInfo device,
+    internal static async Task<FlashResult> FactoryResetAsync(DeviceTarget device,
         IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null)
     {
         progress?.Report(new FlashProgress("factory-reset", 0,
             "Reading the device partition tables... 正在读取设备分区表..."));
-        return await App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        return await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
             using var programmer = OpenProgrammer(programmerPath);
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
@@ -328,12 +328,12 @@ internal static class EdlGptPartitionService
     /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
     /// <param name="lun">The explicit LUN; null scans by name. <para>显式 LUN；为空时按名扫描。</para></param>
     /// <returns>The backup result. <para>备份结果。</para></returns>
-    internal static async Task<BackupResult> BackupAsync(DeviceInfo device, string partition, string outPath,
+    internal static async Task<BackupResult> BackupAsync(DeviceTarget device, string partition, string outPath,
         IProgress<BackupProgress>? progress, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null, int? lun = null)
     {
         progress?.Report(new BackupProgress(partition, 0, "Reading the device partition table... 正在读取设备分区表..."));
-        await App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        await App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
             using var programmer = OpenProgrammer(programmerPath);
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
@@ -383,10 +383,10 @@ internal static class EdlGptPartitionService
     /// <returns>The program result. <para>写入结果。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException">The selected LUN is negative. <para>所选 LUN 为负数。</para></exception>
     /// <exception cref="InvalidOperationException">The write was not confirmed, or the session has no Firehose protocol instance. <para>未确认写入，或会话缺少 Firehose 实例。</para></exception>
-    internal static Task<FlashResult> RepairGptAsync(DeviceInfo device, bool confirmed,
+    internal static Task<FlashResult> RepairGptAsync(DeviceTarget device, bool confirmed,
         IProgress<FlashProgress>? progress, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null, int physicalPartition = 0)
-        => App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        => App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
             if (!confirmed)
             {

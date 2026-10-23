@@ -1,5 +1,5 @@
 using UotanStudio.Comm.Protocols.Edl;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
 
@@ -90,9 +90,9 @@ internal static class EdlStorageControlService
     /// <param name="programmerPath">Optional programmer override path. <para>可选的编程器覆盖路径。</para></param>
     /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
     /// <returns>The set result. <para>设置结果。</para></returns>
-    internal static Task<FlashResult> SetBootableStorageDriveAsync(DeviceInfo device, int value, CancellationToken ct,
+    internal static Task<FlashResult> SetBootableStorageDriveAsync(DeviceTarget device, int value, CancellationToken ct,
         string? programmerPath = null, EdlInitializationOptions? initialization = null)
-        => App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        => App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
             using var programmer = OpenProgrammer(programmerPath);
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);
@@ -115,9 +115,9 @@ internal static class EdlStorageControlService
     /// <param name="programmerPath">Optional programmer override path. <para>可选的编程器覆盖路径。</para></param>
     /// <param name="initialization">Optional session authentication options. <para>可选的会话认证选项。</para></param>
     /// <returns>The digest result. <para>摘要结果。</para></returns>
-    internal static Task<EdlPartitionDigest> GetPartitionSha256Async(DeviceInfo device, string partition, int? lun,
+    internal static Task<EdlPartitionDigest> GetPartitionSha256Async(DeviceTarget device, string partition, int? lun,
         CancellationToken ct, string? programmerPath = null, EdlInitializationOptions? initialization = null)
-        => App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        => App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
             using var programmer = OpenProgrammer(programmerPath);
             await session.EnsureInitializedAsync(programmer, initialization, ct).ConfigureAwait(false);

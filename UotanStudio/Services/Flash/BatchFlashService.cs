@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
 
@@ -23,7 +23,7 @@ public static class BatchFlashService
     /// <returns>Aggregate result: success only when every partition succeeded, otherwise the failed partitions are listed.
     /// <para>汇总结果：仅当全部分区成功时为成功，否则列出失败分区。</para></returns>
     public static async Task<FlashResult> FlashSelectedAsync(
-        DeviceInfo device,
+        DeviceTarget device,
         IReadOnlyList<(string Partition, string ImagePath)> entries,
         IProgress<FlashProgress>? progress,
         CancellationToken ct)

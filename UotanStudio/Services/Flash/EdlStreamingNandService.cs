@@ -1,6 +1,6 @@
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.Streaming;
-using UotanStudio.ViewModels.Devices;
+using UotanStudio.Services.Devices;
 
 namespace UotanStudio.Services.Flash;
 
@@ -44,7 +44,7 @@ internal static class EdlStreamingNandService
     /// 表里没有该分区名。</para></exception>
     /// <exception cref="OperationCanceledException">Cancellation lands while the session is opening,
     /// initializing or the table is read. <para>取消发生在会话打开、初始化或读取分区表期间。</para></exception>
-    internal static Task<EdlStreamingBadBlockMapResult> ReadBadBlockMapAsync(DeviceInfo device, string partition,
+    internal static Task<EdlStreamingBadBlockMapResult> ReadBadBlockMapAsync(DeviceTarget device, string partition,
         EdlStreamingNandLayout layout, int blockCount, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null)
         => RunStreamingAsync(device,
@@ -100,7 +100,7 @@ internal static class EdlStreamingNandService
     /// <exception cref="InvalidOperationException">The session cannot be initialized as a Streaming DLOAD
     /// session, or the reported table lacks that name. <para>会话无法初始化为 Streaming DLOAD 会话，或上报的
     /// 表里没有该分区名。</para></exception>
-    internal static Task<EdlStreamingBadBlockWriteResult> MarkBlockBadAsync(DeviceInfo device, string partition,
+    internal static Task<EdlStreamingBadBlockWriteResult> MarkBlockBadAsync(DeviceTarget device, string partition,
         EdlStreamingNandLayout layout, uint block, bool confirmed, CancellationToken ct,
         string? programmerPath = null, EdlInitializationOptions? initialization = null)
     {
@@ -164,7 +164,7 @@ internal static class EdlStreamingNandService
     /// <exception cref="InvalidOperationException">The session cannot be initialized as a Streaming DLOAD
     /// session, or the reported table lacks that name. <para>会话无法初始化为 Streaming DLOAD 会话，或上报的
     /// 表里没有该分区名。</para></exception>
-    internal static Task<EdlStreamingBadBlockWriteResult> UnmarkBlockBadAsync(DeviceInfo device, string partition,
+    internal static Task<EdlStreamingBadBlockWriteResult> UnmarkBlockBadAsync(DeviceTarget device, string partition,
         EdlStreamingNandLayout layout, uint block, bool confirmed, CancellationToken ct,
         string? programmerPath = null, EdlInitializationOptions? initialization = null)
     {
@@ -224,7 +224,7 @@ internal static class EdlStreamingNandService
     /// <para>所传入的启动选项关闭了流式 DLOAD 开关。</para></exception>
     /// <exception cref="InvalidOperationException">The session cannot be initialized as a Streaming DLOAD
     /// session. <para>会话无法初始化为 Streaming DLOAD 会话。</para></exception>
-    internal static Task<EdlStreamingNandRegisterResult> ReadRegisterReportAsync(DeviceInfo device,
+    internal static Task<EdlStreamingNandRegisterResult> ReadRegisterReportAsync(DeviceTarget device,
         EdlStreamingNandLayout layout, CancellationToken ct, string? programmerPath = null,
         EdlInitializationOptions? initialization = null)
         => RunStreamingAsync(device, streaming => ReadRegisterReportCoreAsync(streaming, layout, ct), ct,
@@ -273,7 +273,7 @@ internal static class EdlStreamingNandService
     /// <exception cref="InvalidOperationException">The session cannot be initialized as a Streaming DLOAD
     /// session, or the reported table lacks that name. <para>会话无法初始化为 Streaming DLOAD 会话，或上报的
     /// 表里没有该分区名。</para></exception>
-    internal static Task<EdlStreamingNandEccResult> EvaluateCodewordStatusAsync(DeviceInfo device, string partition,
+    internal static Task<EdlStreamingNandEccResult> EvaluateCodewordStatusAsync(DeviceTarget device, string partition,
         EdlStreamingNandLayout layout, uint block, bool confirmed, CancellationToken ct,
         string? programmerPath = null, EdlInitializationOptions? initialization = null)
     {
@@ -333,7 +333,7 @@ internal static class EdlStreamingNandService
     /// streaming DLOAD switch. <para>请求未经确认，或启动选项关闭了流式 DLOAD 开关。</para></exception>
     /// <exception cref="InvalidOperationException">The session cannot be initialized as a Streaming DLOAD
     /// session. <para>会话无法初始化为 Streaming DLOAD 会话。</para></exception>
-    internal static Task<EdlStreamingControlResult> EnterFlashModeAsync(DeviceInfo device, bool confirmed,
+    internal static Task<EdlStreamingControlResult> EnterFlashModeAsync(DeviceTarget device, bool confirmed,
         CancellationToken ct, string? programmerPath = null, EdlInitializationOptions? initialization = null)
     {
         RequireFlashModeConfirmation(confirmed);
@@ -380,7 +380,7 @@ internal static class EdlStreamingNandService
     /// streaming DLOAD switch. <para>未选择受信模式，或启动选项关闭了流式 DLOAD 开关。</para></exception>
     /// <exception cref="InvalidOperationException">The session cannot be initialized as a Streaming DLOAD
     /// session. <para>会话无法初始化为 Streaming DLOAD 会话。</para></exception>
-    internal static Task<EdlStreamingControlResult> EnterSecureModeAsync(DeviceInfo device, bool trusted,
+    internal static Task<EdlStreamingControlResult> EnterSecureModeAsync(DeviceTarget device, bool trusted,
         CancellationToken ct, string? programmerPath = null, EdlInitializationOptions? initialization = null)
     {
         RequireTrustedMode(trusted);
@@ -434,7 +434,7 @@ internal static class EdlStreamingNandService
     /// <exception cref="InvalidOperationException">The file leaves the protocol ceiling, or the session cannot
     /// be initialized as a Streaming DLOAD session. <para>文件长度超出协议上限，或会话无法初始化为 Streaming
     /// DLOAD 会话。</para></exception>
-    internal static Task<EdlStreamingPartitionTableResult> SendPartitionTableAsync(DeviceInfo device,
+    internal static Task<EdlStreamingPartitionTableResult> SendPartitionTableAsync(DeviceTarget device,
         string tablePath, bool overrideExisting, bool confirmed, CancellationToken ct,
         string? programmerPath = null, EdlInitializationOptions? initialization = null)
     {
@@ -490,7 +490,7 @@ internal static class EdlStreamingNandService
     /// <para>所传入的启动选项关闭了流式 DLOAD 开关。</para></exception>
     /// <exception cref="InvalidOperationException">The session cannot be initialized as a Streaming DLOAD
     /// session. <para>会话无法初始化为 Streaming DLOAD 会话。</para></exception>
-    internal static Task<EdlStreamingControlResult> CloseStreamAsync(DeviceInfo device, CancellationToken ct,
+    internal static Task<EdlStreamingControlResult> CloseStreamAsync(DeviceTarget device, CancellationToken ct,
         string? programmerPath = null, EdlInitializationOptions? initialization = null)
         => RunStreamingAsync(device, streaming => CloseStreamCoreAsync(streaming, ct), ct,
             programmerPath, initialization);
@@ -524,13 +524,13 @@ internal static class EdlStreamingNandService
     /// <param name="initialization">Optional session startup requirements; <see langword="null"/> uses the
     /// streaming-DLOAD-only defaults. <para>可选的会话启动选项；为空时使用只启用流式 DLOAD 的默认值。</para></param>
     /// <returns>The result produced by the streaming action. <para>流式动作产生的结果。</para></returns>
-    private static Task<TResult> RunStreamingAsync<TResult>(DeviceInfo device,
+    private static Task<TResult> RunStreamingAsync<TResult>(DeviceTarget device,
         Func<StreamingProtocol, Task<TResult>> operation, CancellationToken ct, string? programmerPath,
         EdlInitializationOptions? initialization)
     {
         ArgumentNullException.ThrowIfNull(device);
         var options = RequireStreamDloadInitialization(initialization);
-        return App.DeviceMonitor.RunEdlAsync(device.Device, async session =>
+        return App.DeviceMonitor.RunEdlAsync(device.Endpoint, async session =>
         {
             var streaming = await InitializeStreamingSessionAsync(session, options, programmerPath, ct)
                 .ConfigureAwait(false);

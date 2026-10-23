@@ -7,8 +7,6 @@ using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Messages;
 using UotanStudio.Services.Devices;
-using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Services.Flash;
 
@@ -37,7 +35,7 @@ public sealed class FlashService : IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The flash result describing success or failure. <para>描述成功或失败的刷写结果。</para></returns>
     public async Task<FlashResult> FlashImageAsync(
-        DeviceInfo device, string partition, string imagePath,
+        DeviceTarget device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         try
@@ -88,7 +86,7 @@ public sealed class FlashService : IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The erase result. <para>擦除结果。</para></returns>
     public async Task<FlashResult> ErasePartitionAsync(
-        DeviceInfo device, string partition, IProgress<FlashProgress>? progress, CancellationToken ct)
+        DeviceTarget device, string partition, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         try
         {
@@ -109,7 +107,7 @@ public sealed class FlashService : IFlashService
             }
 
             Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-            return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Device, session =>
+            return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Endpoint, session =>
             {
                 ct.ThrowIfCancellationRequested();
                 Report(progress, partition, 30, $"Erasing {partition}... 正在擦除分区...");
@@ -144,7 +142,7 @@ public sealed class FlashService : IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The erase result. <para>擦除结果。</para></returns>
     public async Task<FlashResult> EraseAllAsync(
-        DeviceInfo device, IProgress<FlashProgress>? progress, CancellationToken ct)
+        DeviceTarget device, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         try
         {
@@ -156,7 +154,7 @@ public sealed class FlashService : IFlashService
             }
 
             Report(progress, null, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-            return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Device, session =>
+            return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Endpoint, session =>
             {
                 var partitions = EnumeratePartitions(session);
                 if (partitions.Count == 0)
@@ -207,7 +205,7 @@ public sealed class FlashService : IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The sideload result. <para>侧载结果。</para></returns>
     public async Task<FlashResult> FlashSideloadAsync(
-        DeviceInfo device, string otaPackagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
+        DeviceTarget device, string otaPackagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         try
         {
@@ -223,7 +221,7 @@ public sealed class FlashService : IFlashService
             }
 
             Report(progress, "sideload", 0, "Opening ADB session... 正在打开 ADB 会话...");
-            return await App.DeviceMonitor.RunAdbAsync(device.Device, async adb =>
+            return await App.DeviceMonitor.RunAdbAsync(device.Endpoint, async adb =>
             {
                 Report(progress, "sideload", 5, "Rebooting into sideload mode... 正在重启进入 sideload 模式...");
                 RebootToSideload(adb);
@@ -261,7 +259,7 @@ public sealed class FlashService : IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The query result whose summary holds the <c>name=value</c> pair. <para>摘要中给出 name=value 的查询结果。</para></returns>
     public async Task<FlashResult> GetDevicePropertyAsync(
-        DeviceInfo device, string propertyName, CancellationToken ct)
+        DeviceTarget device, string propertyName, CancellationToken ct)
     {
         try
         {
@@ -274,7 +272,7 @@ public sealed class FlashService : IFlashService
             if (device.Protocol == DeviceProtocolKind.Hdc)
             {
                 var value = await App.DeviceMonitor
-                    .HdcPropertyAsync(device.Device, propertyName, ct).ConfigureAwait(false);
+                    .HdcPropertyAsync(device.Endpoint, propertyName, ct).ConfigureAwait(false);
                 return new FlashResult { Success = true, Summary = $"{propertyName}={value}" };
             }
 
@@ -283,7 +281,7 @@ public sealed class FlashService : IFlashService
                 if (device.Protocol == DeviceProtocolKind.Fastboot)
                 {
                     Report(null, "fastboot", 0, $"Querying fastboot variable '{propertyName}'... 正在查询 fastboot 变量...");
-                    var fbValue = App.DeviceMonitor.RunFastboot(device.Device,
+                    var fbValue = App.DeviceMonitor.RunFastboot(device.Endpoint,
                         fastboot => fastboot.GetVariable(propertyName, useCache: false), ct);
                     Report(null, "fastboot", 100, $"Variable '{propertyName}' = '{fbValue}'. 变量查询完成。");
                     return new FlashResult { Success = true, Summary = $"{propertyName}={fbValue}" };
@@ -292,7 +290,7 @@ public sealed class FlashService : IFlashService
                 if (device.Protocol == DeviceProtocolKind.Adb)
                 {
                     Report(null, "adb", 0, $"Querying property '{propertyName}'... 正在查询系统属性...");
-                    var value = App.DeviceMonitor.RunAdb(device.Device,
+                    var value = App.DeviceMonitor.RunAdb(device.Endpoint,
                         adb => adb.CreateDeviceServices().GetProp(propertyName), ct);
                     Report(null, "adb", 100, $"Property '{propertyName}' = '{value}'. 属性查询完成。");
                     return new FlashResult { Success = true, Summary = $"{propertyName}={value}" };
@@ -361,16 +359,12 @@ public sealed class FlashService : IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The flash result. <para>刷写结果。</para></returns>
     private static async Task<FlashResult> FlashFastbootAsync(
-        DeviceInfo device, string partition, string imagePath,
+        DeviceTarget device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
-        var stateDir = ProjectContextService.Instance.Core.FindSubProject(imagePath)?.StateDirectory
-            ?? ProjectContextService.Instance.StateDirectory;
         Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
-        return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Device, session =>
+        return await Task.Run(() => App.DeviceMonitor.RunFastboot(device.Endpoint, session =>
         {
-            TryBackupBeforeFlash(session, partition, progress, ct, stateDir);
-
             var target = PrepareFlashTarget(session, partition, GetImageLogicalSize(imagePath), progress);
             var summary = FlashImageChunked(session, target, imagePath, progress, ct);
             Report(progress, target, 100, "Flash complete. 刷写完成。");
@@ -536,57 +530,6 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// Backs up the fastboot target partition to the project state directory before flashing when
-    /// auto-backup is enabled. A failed backup only logs a warning and never aborts the flash.
-    /// <para>启用自动备份时，在刷写前把 fastboot 目标分区备份到项目状态目录。备份失败仅记录警告，绝不中断刷写。</para>
-    /// </summary>
-    /// <param name="session">An open fastboot session. <para>已打开的 fastboot 会话。</para></param>
-    /// <param name="partition">The partition to back up. <para>待备份的分区。</para></param>
-    /// <param name="progress">Optional reporter sharing the flash progress channel. <para>与刷写共用进度通道的可选报告器。</para></param>
-    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
-    /// <param name="stateDir">The state directory for backups, or null for the temp directory. <para>存放备份的状态目录，为 null 时使用临时目录。</para></param>
-    private static void TryBackupBeforeFlash(
-        FastbootSession session, string partition,
-        IProgress<FlashProgress>? progress, CancellationToken ct, string? stateDir)
-    {
-        try
-        {
-            if (!SettingsPersistenceService.Instance.LoadSettings().AutoBackupBeforeFlash)
-            {
-                return;
-            }
-
-            var backupDir = Path.Combine(stateDir ?? Path.GetTempPath(), "backup");
-            Directory.CreateDirectory(backupDir);
-
-            var safePartition = partition.AsSpan().ContainsAny(PathSearchValues.InvalidFileName)
-                ? string.Concat(partition.Select(c => PathSearchValues.IsInvalidFileNameChar(c) ? '_' : c))
-                : partition;
-            var outPath = Path.Combine(backupDir, $"{safePartition}_{DateTime.Now:yyyyMMdd_HHmmss}.img");
-
-            var backupProgress = new Progress<BackupProgress>(bp =>
-                Report(progress, bp.Partition ?? partition, bp.Percent, bp.Status));
-            var result = BackupService.BackupFastbootPartition(session, partition, outPath, backupProgress, ct);
-            LogService.Instance.Write(
-                result.Success ? LogLevel.Info : LogLevel.Warn,
-                "FlashService",
-                result.Success
-                    ? $"Auto-backup before flash completed: {partition} -> {outPath}. 刷写前自动备份完成。"
-                    : $"Auto-backup before flash failed: {partition} ({result.Summary}); continuing flash. 刷写前自动备份失败，继续刷写。");
-        }
-        catch (OperationCanceledException)
-        {
-            LogService.Instance.Write(LogLevel.Warn, "FlashService",
-                "Auto-backup before flash canceled; continuing flash. 刷写前自动备份已取消，继续刷写。");
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Warn, "FlashService",
-                $"Auto-backup before flash failed: {partition} ({ex.Message}); continuing flash. 刷写前自动备份失败，继续刷写。");
-        }
-    }
-
-    /// <summary>
     /// EDL path: matches the partition in the image directory's rawprogram manifest and programs
     /// that single entry, locating it through the device partition table when no manifest is
     /// present.
@@ -599,7 +542,7 @@ public sealed class FlashService : IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The flash result. <para>刷写结果。</para></returns>
     private static async Task<FlashResult> FlashEdlAsync(
-        DeviceInfo device, string partition, string imagePath,
+        DeviceTarget device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Looking for EDL bundle... 正在查找 EDL 刷写包...");
@@ -622,7 +565,7 @@ public sealed class FlashService : IFlashService
             return new FlashResult { Success = false, Summary = $"Partition '{partition}' not found in rawprogram. 分区 '{partition}' 未在 rawprogram 中匹配到。" };
         }
 
-        return await App.DeviceMonitor.RunEdlAsync(device.Device,
+        return await App.DeviceMonitor.RunEdlAsync(device.Endpoint,
             edl => Default.FlashEdlPartitionAsync(edl, target, imageDir, progress, ct), ct).ConfigureAwait(false);
     }
 
@@ -934,7 +877,7 @@ public sealed class FlashService : IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The flash result. <para>刷写结果。</para></returns>
     public static async Task<FlashResult> FlashRkdlAsync(
-        DeviceInfo device, string partition, string imagePath,
+        DeviceTarget device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
         => await FlashRkdlAsync(device, partition, imagePath, loaderPath: null, progress, ct).ConfigureAwait(false);
 
@@ -962,13 +905,13 @@ public sealed class FlashService : IFlashService
     /// <para>写入成功后是否回读写入范围并与源镜像比对。</para></param>
     /// <returns>The flash result.<para>刷写结果。</para></returns>
     public static async Task<FlashResult> FlashRkdlAsync(
-        DeviceInfo device, string partition, string imagePath, string? loaderPath,
+        DeviceTarget device, string partition, string imagePath, string? loaderPath,
         IProgress<FlashProgress>? progress, CancellationToken ct, bool verify = false)
     {
         Report(progress, partition, 0, "Opening RKDL session... 正在打开 RKDL 会话...");
         var imageDir = Path.GetDirectoryName(Path.GetFullPath(imagePath)) ?? string.Empty;
         return await App.DeviceMonitor.RunRkdlLoaderTransitionAsync<FlashResult>(
-            device.Device,
+            device.Endpoint,
             async (rkdl, token) =>
             {
                 if (!rkdl.IsMaskromMode)
@@ -1123,11 +1066,11 @@ public sealed class FlashService : IFlashService
     /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>The flash result. <para>刷写结果。</para></returns>
     private static async Task<FlashResult> FlashAdbAsync(
-        DeviceInfo device, string partition, string imagePath,
+        DeviceTarget device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         Report(progress, partition, 0, "Opening ADB session... 正在打开 ADB 会话...");
-        return await App.DeviceMonitor.RunAdbAsync(device.Device, async adb =>
+        return await App.DeviceMonitor.RunAdbAsync(device.Endpoint, async adb =>
         {
             if (IsSideloadTarget(partition, imagePath))
             {
@@ -1381,7 +1324,8 @@ public sealed class FlashService : IFlashService
         {
             Span<byte> magic = stackalloc byte[4];
             return stream.Read(magic) == 4 &&
-                   magic[0] == 0x3A && magic[1] == 0xFF && magic[2] == 0x26 && magic[3] == 0xED;
+                   System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(magic)
+                   == UotanStudio.Firmware.BlockImage.Sparse.SparseFormat.SparseHeaderMagic;
         }
         finally
         {
