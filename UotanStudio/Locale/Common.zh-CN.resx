@@ -1875,6 +1875,9 @@
   <data name="Splash_Initializing" xml:space="preserve">
     <value>正在初始化...</value>
   </data>
+  <data name="Splash_Resources" xml:space="preserve">
+    <value>正在解压内置资源...</value>
+  </data>
   <data name="Splash_Settings" xml:space="preserve">
     <value>正在读取设置...</value>
   </data>
@@ -1893,17 +1896,20 @@
   <data name="Splash_FoundDevices" xml:space="preserve">
     <value>发现 {0} 台设备</value>
   </data>
+  <data name="Splash_NoDevices" xml:space="preserve">
+    <value>未发现设备</value>
+  </data>
   <data name="Splash_Preparing" xml:space="preserve">
     <value>正在准备主界面...</value>
   </data>
   <data name="Splash_Services" xml:space="preserve">
-    <value>正在加载工作区服务...</value>
+    <value>正在启动应用服务...</value>
   </data>
   <data name="Splash_Nodes" xml:space="preserve">
-    <value>正在准备节点编辑器...</value>
+    <value>正在准备编辑器...</value>
   </data>
   <data name="Splash_Workspace" xml:space="preserve">
-    <value>正在创建工作区布局...</value>
+    <value>正在构建工作区...</value>
   </data>
   <data name="MainWindow_Title" xml:space="preserve">
     <value>UotanStudio 固件工具箱</value>

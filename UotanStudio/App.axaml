@@ -35,7 +35,7 @@
         <semi:SemiPopupAnimations />
         <semi:DockSemiTheme />
         <Style Selector="Control">
-            <Setter Property="TextElement.FontFamily" Value="avares://UotanStudio/Assets/Fonts#MiSans" />
+            <Setter Property="TextElement.FontFamily" Value="fonts:UotanStudio/MiSans#MiSans" />
         </Style>
         <Style Selector="dock|DocumentControl">
             <Setter Property="ModifiedTemplate">

@@ -10,24 +10,24 @@
                ShowInTaskbar="False"
                WindowStartupLocation="CenterScreen"
                WindowDecorations="BorderOnly">
-    <!-- Ursa 主题启动窗：Logo + 应用名 + 启动状态文本 -->
+    <!-- Ursa 主题启动窗：Logo + 应用名 + 启动状态文本；进度条始终处于加载中状态，不表达具体百分比。
+         字体使用 SplashFontFamily（平台默认字体），因为此时内嵌 MiSans 资源尚未解压。 -->
     <DockPanel LastChildFill="True">
         <StackPanel DockPanel.Dock="Bottom" Margin="24,0,24,20" Spacing="8">
             <TextBlock Text="{Binding StatusText}"
+                       FontFamily="{Binding SplashFontFamily}"
                        FontSize="12" Opacity="0.7"
                        HorizontalAlignment="Center" />
-            <Grid Height="4" MinWidth="320">
-                <ProgressBar x:Name="BusyProgress" IsIndeterminate="True"
-                             IsVisible="{Binding IsInitializing}" Height="4" />
-                <ProgressBar x:Name="CompletedProgress" IsIndeterminate="False"
-                             IsVisible="{Binding !IsInitializing}" Value="100" Maximum="100" Height="4" />
-            </Grid>
+            <ProgressBar x:Name="BusyProgress" IsIndeterminate="True"
+                         MinWidth="320" Height="4" />
         </StackPanel>
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
             <Image Source="/Assets/UotanToolbox.png" Width="72" Height="72" />
             <TextBlock Text="UotanStudio" FontSize="26" FontWeight="Bold"
+                       FontFamily="{Binding SplashFontFamily}"
                        HorizontalAlignment="Center" />
             <TextBlock Text="{DynamicResource Splash_Subtitle}" FontSize="13" Opacity="0.6"
+                       FontFamily="{Binding SplashFontFamily}"
                        HorizontalAlignment="Center" />
         </StackPanel>
     </DockPanel>

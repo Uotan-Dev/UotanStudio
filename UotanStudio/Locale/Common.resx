@@ -1875,6 +1875,9 @@ Author: 暮间雾
   <data name="Splash_Initializing" xml:space="preserve">
     <value>Initializing...</value>
   </data>
+  <data name="Splash_Resources" xml:space="preserve">
+    <value>Decompressing bundled resources...</value>
+  </data>
   <data name="Splash_Settings" xml:space="preserve">
     <value>Loading settings...</value>
   </data>
@@ -1893,17 +1896,20 @@ Author: 暮间雾
   <data name="Splash_FoundDevices" xml:space="preserve">
     <value>{0} device(s) found</value>
   </data>
+  <data name="Splash_NoDevices" xml:space="preserve">
+    <value>No devices found</value>
+  </data>
   <data name="Splash_Preparing" xml:space="preserve">
     <value>Preparing main window...</value>
   </data>
   <data name="Splash_Services" xml:space="preserve">
-    <value>Loading workspace services...</value>
+    <value>Starting application services...</value>
   </data>
   <data name="Splash_Nodes" xml:space="preserve">
-    <value>Preparing node editor...</value>
+    <value>Preparing editors...</value>
   </data>
   <data name="Splash_Workspace" xml:space="preserve">
-    <value>Creating workspace layout...</value>
+    <value>Building the workspace...</value>
   </data>
   <data name="MainWindow_Title" xml:space="preserve">
     <value>UotanStudio</value>

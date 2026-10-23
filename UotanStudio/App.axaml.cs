@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.Messaging;
 #if DEBUG
@@ -11,6 +12,7 @@ using Dock.Avalonia.Diagnostics;
 #endif
 using Microsoft.Extensions.DependencyInjection;
 using UotanStudio.Composition;
+using UotanStudio.Fonts;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
@@ -150,14 +152,26 @@ public partial class App : Application
     {
         var stageTimer = Stopwatch.StartNew();
         var previousPhase = SplashPhase.Initializing;
-        async Task ReportAsync(SplashPhase phase)
+        async Task ReportAsync(SplashPhase phase, int deviceCount = -1)
         {
             LogService.Instance.Write(LogLevel.Info, "Startup",
                 $"{previousPhase}: {stageTimer.ElapsedMilliseconds} ms; starting {phase}.");
-            await splash.AdvanceAsync(phase);
+            await splash.AdvanceAsync(phase, deviceCount);
             previousPhase = phase;
             stageTimer.Restart();
         }
+        await ReportAsync(SplashPhase.Resources);
+        try
+        {
+            FontManager.Current.AddFontCollection(new ZstdEmbeddedFontCollection());
+        }
+        catch (Exception ex)
+        {
+            // A damaged bundle must not trap the user on the splash window; the platform font keeps the UI usable.
+            // 损坏的内嵌资源不应把用户困在启动窗上；回退到平台字体以保证界面可用。
+            LogService.Instance.Write(LogLevel.Error, "Startup", $"Bundled font registration failed: {ex.Message}");
+        }
+
         await ReportAsync(SplashPhase.Settings);
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
         Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
@@ -170,7 +184,6 @@ public partial class App : Application
         await ReportAsync(SplashPhase.ApplyingSettings);
         ApplyTheme(settings.ThemeMode);
         ApplyLanguage(settings.CultureName);
-        await splash.AdvanceAsync(SplashPhase.ApplyingSettings);
         McpExposureService.Instance.Apply(settings.McpExposeEnabled, settings.McpExposePort);
         McpClientConnectionService.Instance.Apply();
 
@@ -180,11 +193,13 @@ public partial class App : Application
         var scanTask = _desktopServices!.StartAndScanAsync();
 
         var devices = await scanTask.ConfigureAwait(true);
+        await ReportAsync(SplashPhase.DevicesFound, devices.Count);
 
         MainViewModel? preparedModel = null;
         try
         {
-            preparedModel = new MainViewModel(await ShellComposition.CreateAsync(ReportAsync, settings.CultureName));
+            preparedModel = new MainViewModel(await ShellComposition.CreateAsync(
+                phase => ReportAsync(phase), settings.CultureName));
             await ReportAsync(SplashPhase.Window);
             splashWindow.PreparedMainWindow = new MainWindow(preparedModel);
         }
@@ -209,9 +224,9 @@ public partial class App : Application
         LogService.Instance.Write(LogLevel.Info, "App",
             $"Startup sequence: initial USB scan found {devices.Count} device(s).");
 
+        await ReportAsync(SplashPhase.Ready);
         if (splashWindow.PreparedMainWindow is not null)
         {
-            await ReportAsync(SplashPhase.Ready);
             await splashWindow.PresentCompletionAsync();
         }
     }

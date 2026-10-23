@@ -18,6 +18,20 @@
     <EmbeddedResource Remove="Locale\**\*.resx" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- MiSans 字体以 zstd 帧随包，启动时由 ZstdEmbeddedFontCollection 解码到内存；LogicalName 与
+         MiSansFontData 中的常量一致，WithCulture=false 防止文件名被当成区域资源。 -->
+    <EmbeddedResource Include="Fonts\*.ttf.zst">
+      <LogicalName>UotanStudio.Fonts.%(Filename)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <Target Name="ValidateBundledFonts" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)/Fonts/MiSans-Regular.ttf.zst') or !Exists('$(MSBuildProjectDirectory)/Fonts/MiSans-Bold.ttf.zst')"
+           Text="Missing bundled MiSans zstd frames under Fonts/. Run 'dotnet run tools/compress-embedded-assets.cs' to regenerate them." />
+  </Target>
+
 
   <!--
     Emit the compiled version/channel/commit constants used by BuildInfo. Version.props feeds

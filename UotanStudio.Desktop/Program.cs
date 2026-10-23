@@ -128,7 +128,7 @@ sealed class Program
         builder = builder
             .With(new FontManagerOptions
             {
-                DefaultFamilyName = "avares://UotanStudio/Assets/Fonts#MiSans"
+                DefaultFamilyName = "fonts:UotanStudio/MiSans#MiSans"
             })
             .WithDockSettings(new DockSettingsOptions
             {
