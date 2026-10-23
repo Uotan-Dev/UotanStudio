@@ -3,10 +3,11 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:UotanStudio.ViewModels.Shell"
+             xmlns:vms="using:UotanStudio.ViewModels"
              xmlns:views="using:UotanStudio.Views.Shell"
              xmlns:app="using:UotanStudio"
              xmlns:models="using:UotanStudio.Models"
-             xmlns:mcp="using:UotanStudio.Services.Mcp"
+             xmlns:mcp="using:UotanStudio.Mcp"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="900"
              x:Class="UotanStudio.Views.Shell.SettingsView"
              x:DataType="vm:SettingsViewModel">
@@ -36,6 +37,55 @@
 
                     </StackPanel>
 
+                <!-- Section: Rendering -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{DynamicResource Settings_Rendering}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                    <TextBlock Text="{DynamicResource Settings_RenderingWaylandHint}" FontSize="12" Opacity="0.7"
+                               TextWrapping="Wrap" Margin="0,4,0,4"
+                               IsVisible="{Binding IsWaylandRendering}" />
+                    <TextBlock Text="{DynamicResource Settings_RenderingUnsupportedHint}" FontSize="12" Opacity="0.7"
+                               TextWrapping="Wrap" Margin="0,4,0,4"
+                               IsVisible="{Binding IsRenderingPlatformUnsupported}" />
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4">
+                        <TextBlock Text="{DynamicResource Settings_RenderingBackend}"
+                                   VerticalAlignment="Center" FontSize="13"
+                                   IsVisible="{Binding IsRenderingBackendConfigurable}" />
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding RenderingBackendOptions}"
+                                  SelectedIndex="{Binding RenderingBackendIndex, Mode=TwoWay}"
+                                  IsVisible="{Binding IsRenderingBackendConfigurable}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vms:LocalizedOption">
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Margin="0,4,0,0" FontSize="12" Opacity="0.7"
+                                   Text="{DynamicResource Settings_RenderingHint}" TextWrapping="Wrap"
+                                   IsVisible="{Binding IsRenderingBackendConfigurable}" />
+                        <TextBlock Grid.Row="2" Text="{DynamicResource Settings_CompositionMode}"
+                                   VerticalAlignment="Center" FontSize="13" Margin="0,8,0,0"
+                                   IsVisible="{Binding HasCompositionModeOptions}" />
+                        <ComboBox Grid.Row="2" Grid.Column="1" Margin="0,8,0,0"
+                                  ItemsSource="{Binding CompositionModeOptions}"
+                                  SelectedIndex="{Binding CompositionModeIndex, Mode=TwoWay}"
+                                  IsEnabled="{Binding IsCompositionModeEnabled}"
+                                  IsVisible="{Binding HasCompositionModeOptions}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vms:LocalizedOption">
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Margin="0,4,0,0" FontSize="12" Opacity="0.7"
+                                   Text="{DynamicResource Settings_CompositionModeHint}" TextWrapping="Wrap"
+                                   IsVisible="{Binding HasCompositionModeOptions}" />
+                    </Grid>
+                </StackPanel>
+
                 <!-- Section 2: Language -->
                 <StackPanel Spacing="8">
                     <TextBlock Text="{DynamicResource Settings_Language}" FontWeight="SemiBold" FontSize="16" />
@@ -61,17 +111,36 @@
                 <StackPanel Spacing="8">
                     <TextBlock Text="{DynamicResource Settings_DeviceCommunication}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="0,4">
                         <TextBlock Text="{DynamicResource Settings_UsbBackend}" VerticalAlignment="Center" />
-                        <ComboBox Grid.Column="1" SelectedIndex="{Binding DeviceUsbBackendIndex, Mode=TwoWay}" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="{DynamicResource Settings_UsbAuto}" />
-                            <ComboBoxItem Content="{DynamicResource Settings_UsbNative}" />
-                            <ComboBoxItem Content="{DynamicResource Settings_UsbLibusb}" />
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding UsbBackendOptions}"
+                                  SelectedIndex="{Binding DeviceUsbBackendIndex, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vms:LocalizedOption">
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
                         </ComboBox>
                         <TextBlock Grid.Row="1" Text="{DynamicResource Settings_AdbServer}" Margin="0,8,0,0" />
                         <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding AdbServerStatus}" Margin="0,8,0,0" />
                         <TextBlock Grid.Row="2" Text="{DynamicResource Settings_HdcServer}" Margin="0,8,0,0" />
                         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HdcServerStatus}" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="3" Text="{DynamicResource Settings_RouteMode}"
+                                   VerticalAlignment="Center" Margin="0,8,0,0" />
+                        <ComboBox Grid.Row="3" Grid.Column="1" Margin="0,8,0,0"
+                                  ItemsSource="{Binding RouteModeOptions}"
+                                  SelectedIndex="{Binding DeviceRouteModeIndex, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vms:LocalizedOption">
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Margin="0,8,0,0" FontSize="12" Opacity="0.7"
+                                   Text="{DynamicResource Settings_RouteModeHint}" TextWrapping="Wrap" />
                     </Grid>
                     <WrapPanel Orientation="Horizontal">
                         <Button Content="{DynamicResource Settings_StopAdbServer}" Command="{Binding StopAdbServerCommand}" Margin="0,0,8,8" />
@@ -84,7 +153,7 @@
                 <StackPanel Spacing="8">
                     <TextBlock Text="{DynamicResource Settings_General}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4">
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto" Margin="0,4">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_AutoSave}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <ToggleSwitch Grid.Row="0" Grid.Column="1"
@@ -93,12 +162,6 @@
                                    VerticalAlignment="Center" FontSize="13" />
                         <ToggleSwitch Grid.Row="1" Grid.Column="1"
                                       IsChecked="{Binding DebugMode, Mode=TwoWay}" />
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Settings_FlashAutoBackup}"
-                                   VerticalAlignment="Center" FontSize="13" />
-                        <ToggleSwitch Grid.Row="2" Grid.Column="1"
-                                      IsChecked="{Binding FlashAutoBackup, Mode=TwoWay}" />
-                        <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,4,0,0" FontSize="12" Opacity="0.7"
-                                   Text="{DynamicResource Settings_FlashAutoBackupDescription}" TextWrapping="Wrap" />
                     </Grid>
                 </StackPanel>
 
@@ -135,7 +198,7 @@
                     <!-- MCP 服务器连接列表 -->
                     <ItemsControl ItemsSource="{Binding McpServers}">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="mcp:McpServerConfig">
+                            <DataTemplate x:DataType="mcp:McpClientServerConfig">
                                 <Grid ColumnDefinitions="120,80,130,140,*,36,52" ColumnSpacing="6" Margin="0,3">
                                     <TextBox Grid.Column="0" Text="{Binding Name}"
                                              PlaceholderText="{DynamicResource Settings_McpServerName}" />

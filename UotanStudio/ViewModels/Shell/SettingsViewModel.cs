@@ -2,10 +2,12 @@ using System.Collections.ObjectModel;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Mcp;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Mcp;
+using UotanStudio.Services.Ui;
 
 namespace UotanStudio.ViewModels.Shell;
 
@@ -22,6 +24,35 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     public AiSettingsViewModel Ai { get; } = new();
 
     private AppSettings _appSettings;
+
+    private readonly LocalizedOptionSet _usbBackendOptions =
+        new("Settings_UsbAuto", "Settings_UsbNative", "Settings_UsbLibusb");
+
+    private readonly LocalizedOptionSet _routeModeOptions =
+        new("Settings_RouteModeAuto", "Settings_RouteModeServerOnly", "Settings_RouteModeDirectOnly",
+            "Settings_RouteModeStartupFrozen");
+
+    private readonly RenderingPlatform _renderingPlatform;
+    private readonly RenderingBackend[] _renderingBackends;
+    private readonly RenderingCompositionMode[] _compositionModes;
+    private readonly LocalizedOptionSet _renderingBackendOptions;
+    private readonly LocalizedOptionSet _compositionModeOptions;
+
+    private string? _activeBackendLabelKey;
+    private string? _activeCompositionLabelKey;
+
+    private int _renderingBackendIndex;
+    private int _compositionModeIndex;
+
+    /// <summary>
+    /// Gets the USB backend choices shown by the device-communication combo box. The entries
+    /// re-resolve their display text when the application language changes, so the closed combo box
+    /// switches immediately instead of waiting for the settings page to be rebuilt.
+    /// <para>获取设备通信下拉框显示的 USB 后端选项。应用语言切换时条目会重新解析显示文本，
+    /// 因此关闭状态的下拉框立即切换，而不是等待设置页重建。</para>
+    /// </summary>
+    /// <value>The localized options in backend order. <para>按后端顺序排列的本地化选项。</para></value>
+    public IReadOnlyList<LocalizedOption> UsbBackendOptions => _usbBackendOptions.Options;
 
     /// <summary>Persisted USB mode; existing sessions retain their backend until restart.</summary>
     public int DeviceUsbBackendIndex
@@ -41,6 +72,277 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             DebouncedSaveSettings();
         }
     }
+
+    /// <summary>
+    /// Gets the debug-bridge route choices shown by the route-mode combo box.
+    /// <para>获取路由模式下拉框显示的调试桥路由选项。</para>
+    /// </summary>
+    /// <value>The localized options in mode order. <para>按模式顺序排列的本地化选项。</para></value>
+    public IReadOnlyList<LocalizedOption> RouteModeOptions => _routeModeOptions.Options;
+
+    /// <summary>
+    /// Gets or sets the persisted debug-bridge route mode. The running process keeps the mode it
+    /// started with, so a change is saved and a restart prompt is shown instead of applying it live.
+    /// <para>获取或设置持久化的调试桥路由模式。运行中的进程保持启动时使用的模式，因此修改只会保存并弹出
+    /// 重启提示，不会立即生效。</para>
+    /// </summary>
+    public int DeviceRouteModeIndex
+    {
+        get => (int)_appSettings.DeviceCommunication.RouteMode;
+        set
+        {
+            if (value is < 0 or > 3 || DeviceRouteModeIndex == value)
+            {
+                return;
+            }
+
+            _appSettings.DeviceCommunication = _appSettings.DeviceCommunication with
+            {
+                RouteMode = (Comm.Routing.DebugBridgeRouteMode)value
+            };
+            OnPropertyChanged();
+            DebouncedSaveSettings();
+            Avalonia.Threading.Dispatcher.UIThread.Post(ShowRouteModeRestartPrompt);
+        }
+    }
+
+    private void ShowRouteModeRestartPrompt()
+    {
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is null)
+        {
+            return;
+        }
+
+        var language = LanguageService.Instance;
+        _ = DialogService.ShowAsync(owner,
+            language.GetString("Settings_RouteModeRestartTitle"),
+            language.GetString("Settings_RouteModeRestartMessage"),
+            Ursa.Controls.MessageBoxIcon.Warning);
+    }
+
+    /// <summary>
+    /// Gets the rendering backends the active platform supports, in display order.
+    /// <para>获取当前平台支持的渲染后端，按显示顺序排列。</para>
+    /// </summary>
+    /// <value>The localized backend options; the first entry is automatic.<para>本地化后端选项；第一项为自动。</para></value>
+    public IReadOnlyList<LocalizedOption> RenderingBackendOptions => _renderingBackendOptions.Options;
+
+    /// <summary>
+    /// Gets the composition modes the active platform supports, in display order.
+    /// <para>获取当前平台支持的合成模式，按显示顺序排列。</para>
+    /// </summary>
+    /// <value>The localized composition options; empty outside Windows.<para>本地化合成选项；Windows 之外为空。</para></value>
+    public IReadOnlyList<LocalizedOption> CompositionModeOptions => _compositionModeOptions.Options;
+
+    /// <summary>
+    /// Gets whether the active windowing backend exposes rendering-backend choices; the Wayland backend and
+    /// platforms without selectable options keep only the automatic entry.
+    /// <para>获取当前窗口后端是否提供渲染后端选项；Wayland 后端与没有可选选项的平台只保留自动项。</para>
+    /// </summary>
+    /// <value>True when the backend combo box should be shown.<para>应显示后端下拉框时为 true。</para></value>
+    public bool IsRenderingBackendConfigurable => !IsWaylandRendering && _renderingBackends.Length > 1;
+
+    /// <summary>
+    /// Gets whether the application runs on the native Wayland backend, which has no configurable rendering mode.
+    /// <para>获取应用是否运行在原生 Wayland 后端；该后端没有可配置的渲染模式。</para>
+    /// </summary>
+    /// <value>True when Wayland was detected from the running window.<para>从运行窗口检测到 Wayland 时为 true。</para></value>
+    public bool IsWaylandRendering => _renderingPlatform == RenderingPlatform.LinuxWayland;
+
+    /// <summary>
+    /// Gets whether the active platform exposes no rendering choices and is not Wayland, so the generic
+    /// unsupported hint applies.
+    /// <para>获取当前平台是否既没有渲染选项也不是 Wayland，从而显示通用的不支持提示。</para>
+    /// </summary>
+    /// <value>True when no configurable backend exists outside Wayland.<para>Wayland 之外没有任何可配置后端时为 true。</para></value>
+    public bool IsRenderingPlatformUnsupported => !IsWaylandRendering && _renderingBackends.Length <= 1;
+
+    /// <summary>
+    /// Gets whether the active platform exposes composition-mode choices.
+    /// <para>获取当前平台是否提供合成模式选项。</para>
+    /// </summary>
+    /// <value>True on Windows.<para>Windows 上为 true。</para></value>
+    public bool HasCompositionModeOptions => _compositionModes.Length > 0;
+
+    /// <summary>
+    /// Gets whether the selected rendering backend can honor a composition mode: only ANGLE/EGL with D3D11
+    /// registers Win32 composition, so automatic and ANGLE/EGL selections keep the choice meaningful.
+    /// <para>获取当前选择的渲染后端是否能配合合成模式：只有 ANGLE/EGL 取得 D3D11 时才注册 Win32 合成，
+    /// 因此仅自动与 ANGLE/EGL 选择保持该选项有效。</para>
+    /// </summary>
+    /// <value>True when the composition combo box should accept input.<para>合成模式下拉框可输入时为 true。</para></value>
+    public bool IsCompositionModeEnabled => HasCompositionModeOptions &&
+        _renderingBackends[_renderingBackendIndex] is RenderingBackend.Auto or RenderingBackend.AngleEgl;
+
+    /// <summary>
+    /// Gets or sets the persisted rendering backend index. The running process keeps the backend it started
+    /// with, so a change is saved and a restart prompt is shown instead of applying it live.
+    /// <para>获取或设置持久化的渲染后端索引。运行中的进程保持启动时使用的后端，因此修改只会保存并弹出重启提示，
+    /// 不会立即生效。</para>
+    /// </summary>
+    public int RenderingBackendIndex
+    {
+        get => _renderingBackendIndex;
+        set
+        {
+            if (_loading || value < 0 || value >= _renderingBackends.Length || _renderingBackendIndex == value)
+            {
+                return;
+            }
+
+            _renderingBackendIndex = value;
+            _appSettings.RenderingBackend = _renderingBackends[value];
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsCompositionModeEnabled));
+            DebouncedSaveSettings();
+            Avalonia.Threading.Dispatcher.UIThread.Post(ShowRenderingRestartPrompt);
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the persisted composition-mode index. The running process keeps the mode it started with,
+    /// so a change is saved and a restart prompt is shown instead of applying it live.
+    /// <para>获取或设置持久化的合成模式索引。运行中的进程保持启动时使用的模式，因此修改只会保存并弹出重启提示，
+    /// 不会立即生效。</para>
+    /// </summary>
+    public int CompositionModeIndex
+    {
+        get => _compositionModeIndex;
+        set
+        {
+            if (_loading || value < 0 || value >= _compositionModes.Length || _compositionModeIndex == value)
+            {
+                return;
+            }
+
+            _compositionModeIndex = value;
+            _appSettings.RenderingCompositionMode = _compositionModes[value];
+            OnPropertyChanged();
+            DebouncedSaveSettings();
+            Avalonia.Threading.Dispatcher.UIThread.Post(ShowRenderingRestartPrompt);
+        }
+    }
+
+    /// <summary>
+    /// Prompts that the saved rendering preferences take effect only after the process restarts.
+    /// <para>提示已保存的渲染偏好仅在进程重启后生效。</para>
+    /// </summary>
+    private void ShowRenderingRestartPrompt()
+    {
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is null)
+        {
+            return;
+        }
+
+        var language = LanguageService.Instance;
+        _ = DialogService.ShowAsync(owner,
+            language.GetString("Settings_RenderingRestartTitle"),
+            language.GetString("Settings_RenderingRestartMessage"),
+            Ursa.Controls.MessageBoxIcon.Warning);
+    }
+
+    /// <summary>
+    /// Resolves the locale resource key of one rendering backend label.
+    /// <para>解析一个渲染后端标签的语言资源键。</para>
+    /// </summary>
+    /// <param name="backend">The backend value.<para>后端取值。</para></param>
+    /// <returns>The locale key.<para>语言资源键。</para></returns>
+    private static string RenderingBackendLabelKey(RenderingBackend backend) => backend switch
+    {
+        RenderingBackend.Auto => "Settings_RenderingBackendAuto",
+        RenderingBackend.Software => "Settings_RenderingBackendSoftware",
+        RenderingBackend.AngleEgl => "Settings_RenderingBackendAngleEgl",
+        RenderingBackend.Wgl => "Settings_RenderingBackendWgl",
+        RenderingBackend.Vulkan => "Settings_RenderingBackendVulkan",
+        RenderingBackend.Glx => "Settings_RenderingBackendGlx",
+        RenderingBackend.Egl => "Settings_RenderingBackendEgl",
+        RenderingBackend.Metal => "Settings_RenderingBackendMetal",
+        RenderingBackend.OpenGl => "Settings_RenderingBackendOpenGl",
+        _ => "Settings_RenderingBackendAuto",
+    };
+
+    /// <summary>
+    /// Resolves the locale resource key of one composition-mode label.
+    /// <para>解析一个合成模式标签的语言资源键。</para>
+    /// </summary>
+    /// <param name="mode">The composition-mode value.<para>合成模式取值。</para></param>
+    /// <returns>The locale key.<para>语言资源键。</para></returns>
+    private static string CompositionModeLabelKey(RenderingCompositionMode mode) => mode switch
+    {
+        RenderingCompositionMode.Auto => "Settings_CompositionModeAuto",
+        RenderingCompositionMode.WinUIComposition => "Settings_CompositionModeWinUI",
+        RenderingCompositionMode.DirectComposition => "Settings_CompositionModeDirect",
+        RenderingCompositionMode.LowLatencyDxgiSwapChain => "Settings_CompositionModeLowLatency",
+        RenderingCompositionMode.RedirectionSurface => "Settings_CompositionModeRedirection",
+        _ => "Settings_CompositionModeAuto",
+    };
+
+    /// <summary>
+    /// Builds the backend combo entries: the automatic entry reports the backend the running process actually
+    /// uses, followed by the explicitly selectable backends.
+    /// <para>构建后端下拉条目：自动项报告运行进程实际使用的后端，其后是显式可选的后端。</para>
+    /// </summary>
+    /// <returns>The localized entries in display order.<para>按显示顺序排列的本地化条目。</para></returns>
+    private IEnumerable<LocalizedOption> BuildRenderingBackendOptions()
+    {
+        yield return LocalizedOption.FromFactory(() => ActiveBackendLabelKey() is { } key
+            ? string.Format(
+                LanguageService.Instance.GetString("Settings_RenderingBackendAuto"),
+                LanguageService.Instance.GetString(key))
+            : LanguageService.Instance.GetString("Settings_RenderingAutoSingle"));
+
+        foreach (var backend in _renderingBackends.Skip(1))
+        {
+            yield return LocalizedOption.FromResource(RenderingBackendLabelKey(backend));
+        }
+    }
+
+    /// <summary>
+    /// Builds the composition-mode combo entries: the automatic entry reports the composition host the running
+    /// process actually uses, followed by the explicitly selectable modes.
+    /// <para>构建合成模式下拉条目：自动项报告运行进程实际使用的合成宿主，其后是显式可选的模式。</para>
+    /// </summary>
+    /// <returns>The localized entries in display order; empty outside Windows.<para>按显示顺序排列的本地化条目；Windows 之外为空。</para></returns>
+    private IEnumerable<LocalizedOption> BuildCompositionModeOptions()
+    {
+        if (_compositionModes.Length == 0)
+        {
+            yield break;
+        }
+
+        yield return LocalizedOption.FromFactory(() => ActiveCompositionLabelKey() is { } key
+            ? string.Format(
+                LanguageService.Instance.GetString("Settings_CompositionModeAuto"),
+                LanguageService.Instance.GetString(key))
+            : LanguageService.Instance.GetString("Settings_RenderingAutoSingle"));
+
+        foreach (var mode in _compositionModes.Skip(1))
+        {
+            yield return LocalizedOption.FromResource(CompositionModeLabelKey(mode));
+        }
+    }
+
+    /// <summary>
+    /// Gets the locale key of the backend the running process uses, probing once and caching a successful result
+    /// so later language switches only re-resolve the label text.
+    /// <para>获取运行进程实际使用的后端资源键；探测一次并缓存成功结果，后续语言切换只重新解析标签文本。</para>
+    /// </summary>
+    /// <returns>The backend label key, or null when the backend cannot be observed.
+    /// <para>后端标签资源键；无法观测时为 null。</para></returns>
+    private string? ActiveBackendLabelKey()
+        => _activeBackendLabelKey ??= RenderingRuntimeProbe.DetectActiveBackendLabelKey();
+
+    /// <summary>
+    /// Gets the locale key of the composition host the running process uses, probing once and caching a successful
+    /// result so later language switches only re-resolve the label text.
+    /// <para>获取运行进程实际使用的合成宿主资源键；探测一次并缓存成功结果，后续语言切换只重新解析标签文本。</para>
+    /// </summary>
+    /// <returns>The composition label key, or null when the host cannot be observed.
+    /// <para>合成模式标签资源键；无法观测时为 null。</para></returns>
+    private string? ActiveCompositionLabelKey()
+        => _activeCompositionLabelKey ??= RenderingRuntimeProbe.DetectActiveCompositionLabelKey();
 
     private bool _stoppingServer;
     private string _serverActionKey = "Settings_ServerActionNone";
@@ -158,7 +460,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// Gets the MCP server connection list (data source for the MCP settings section).
     /// <para>获取 MCP 服务器连接列表（MCP 设置区块数据源）。</para>
     /// </summary>
-    public ObservableCollection<McpServerConfig> McpServers { get; } = [];
+    public ObservableCollection<McpClientServerConfig> McpServers { get; } = [];
 
     /// <summary>
     /// Gets the MCP transport kind list (data source for the transport combo box).
@@ -361,22 +663,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Gets or sets whether a partition is backed up over the selected protocol before it is flashed.
-    /// <para>获取或设置刷写分区前是否自动按当前协议备份该分区。</para>
-    /// </summary>
-    public bool FlashAutoBackup
-    {
-        get;
-        set
-        {
-            if (SetProperty(ref field, value))
-            {
-                DebouncedSaveSettings();
-            }
-        }
-    }
-
-    /// <summary>
     /// Gets or sets whether debug mode is enabled (when on, logs show Trace/Debug level diagnostic details).
     /// <para>获取或设置是否启用调试模式（开启后日志显示 Trace/Debug 级别详细诊断信息）。</para>
     /// </summary>
@@ -404,6 +690,12 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     internal SettingsViewModel(AppSettings settings, bool applyLanguage)
     {
         _appSettings = settings;
+
+        _renderingPlatform = RenderingRuntimeProbe.DetectWindowingPlatform();
+        _renderingBackends = [.. RenderingPreferenceCatalog.SupportedBackends(_renderingPlatform)];
+        _compositionModes = [.. RenderingPreferenceCatalog.SupportedCompositionModes(_renderingPlatform)];
+        _renderingBackendOptions = LocalizedOptionSet.FromOptions([.. BuildRenderingBackendOptions()]);
+        _compositionModeOptions = LocalizedOptionSet.FromOptions([.. BuildCompositionModeOptions()]);
 
         Languages = new ObservableCollection<LanguageInfo>(LanguageService.Instance.AvailableLanguages);
 
@@ -436,8 +728,15 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
                   ?? new LanguageInfo(settings.CultureName, settings.CultureName, settings.CultureName);
             SelectedThemeMode = settings.ThemeMode;
             AutoSave = settings.AutoSave;
-            FlashAutoBackup = settings.AutoBackupBeforeFlash;
             DebugMode = settings.DebugMode;
+
+            var renderingPlatform = _renderingPlatform;
+            _renderingBackendIndex = Math.Max(0, Array.IndexOf(
+                _renderingBackends,
+                RenderingPreferenceCatalog.Normalize(renderingPlatform, settings.RenderingBackend)));
+            _compositionModeIndex = Math.Max(0, Array.IndexOf(
+                _compositionModes,
+                RenderingPreferenceCatalog.NormalizeComposition(renderingPlatform, settings.RenderingCompositionMode)));
 
             LogService.Instance.ApplyDebugMode(settings.DebugMode);
 
@@ -449,7 +748,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             McpServers.Clear();
             foreach (var server in settings.McpServers)
             {
-                McpServers.Add(new McpServerConfig
+                McpServers.Add(new McpClientServerConfig
                 {
                     Name = server.Name,
                     Transport = server.Transport,
@@ -541,14 +840,21 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.CultureName = SelectedLanguage.IsSystemLanguage ? string.Empty : SelectedLanguage.CultureName;
         _appSettings.ThemeMode = SelectedThemeMode;
         _appSettings.AutoSave = AutoSave;
-        _appSettings.AutoBackupBeforeFlash = FlashAutoBackup;
         _appSettings.DebugMode = DebugMode;
         _appSettings.ErofsRebuildOptimization = ErofsRebuildOptimization;
+        if (IsRenderingBackendConfigurable)
+        {
+            _appSettings.RenderingBackend = _renderingBackends[_renderingBackendIndex];
+        }
+
+        if (HasCompositionModeOptions)
+        {
+            _appSettings.RenderingCompositionMode = _compositionModes[_compositionModeIndex];
+        }
 
         var latest = SettingsPersistenceService.Instance.LoadSettings();
         _appSettings.RecentProjects = latest.RecentProjects;
         _appSettings.FavoriteNodeTypes = latest.FavoriteNodeTypes;
-        _appSettings.RecentNodeTypes = latest.RecentNodeTypes;
         _appSettings.ExpandedNodeCategories = latest.ExpandedNodeCategories;
         _appSettings.PairedNetworkTargets = latest.PairedNetworkTargets;
 
@@ -585,6 +891,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(ServerActionStatus));
         OnPropertyChanged(nameof(AdbServerStatus));
         OnPropertyChanged(nameof(HdcServerStatus));
+        foreach (var member in DevelopmentMembers.All)
+        {
+            member.RefreshLocalizedText();
+        }
     }
 
     /// <summary>
@@ -595,7 +905,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private void AddMcpServer()
     {
         var index = McpServers.Count + 1;
-        McpServers.Add(new McpServerConfig
+        McpServers.Add(new McpClientServerConfig
         {
             Name = $"MCP Server {index}",
             Transport = McpTransportKind.Http,
@@ -610,7 +920,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     /// <param name="server">The server config to remove. <para>要删除的服务器配置。</para></param>
     [RelayCommand]
-    private void RemoveMcpServer(McpServerConfig? server)
+    private void RemoveMcpServer(McpClientServerConfig? server)
     {
         if (server is not null)
         {
