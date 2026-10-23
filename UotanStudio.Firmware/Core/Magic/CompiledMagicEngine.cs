@@ -4,7 +4,6 @@ using System.Collections.Frozen;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using UotanStudio.Firmware.Core.Magic.Generated;
 
 namespace UotanStudio.Firmware.Core.Magic;
 
@@ -65,7 +64,7 @@ public static class CompiledMagicEngine
                 return;
             }
 
-            using var ms = new MemoryStream(CompiledMagicData.Rules, writable: false);
+            using var ms = new MemoryStream(CompiledMagicRules.Rules, writable: false);
             using var br = new BinaryReader(ms, Encoding.UTF8, leaveOpen: false);
             var count = br.ReadUInt32();
             for (uint i = 0; i < count; i++)
