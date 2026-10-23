@@ -58,6 +58,14 @@
 - `dotnet build UotanStudio.slnx --no-restore --nologo -c Debug`：0 错误、0 警告；`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained -p:PublishAot=true` 成功，仅既有第三方 trim/AOT 警告。
 - 边界：重建不保留超级块特性位（`0x1499` → `0x58`）与 quota inode；该镜像无硬链接、符号链接、设备节点、压缩、大小写折叠、加密或 verity 内容；QEMU 为 TCG，不代表真实设备或厂商内核。证据在 `artifacts/gki-fs-lab/f2fs-real-20261024/`。
 
+## HDC 投屏（ohscrcpy / UI Test 扩展）
+
+- 设备路径：UI Test 版本探测 → 复用已有控制守护进程，需要新建时推送控制代理并备份/恢复 → 按架构/版本从 `ohos/device` 推送采集 `.so` → `fport` 把设备端 `localabstract:scrcpy_grpc_socket`、`localabstract:uitest_socket`（旧版本 `tcp:5000`、`tcp:8012`）映射到回环端口 → 客户端收 gRPC H.264 访问单元（`/ScrcpyService/onStart` 的 `ReplyMessage`）与 UI Test JSON。
+- 设备库来源：本机 DevEco Studio 26.0.0.821 的 `plugins/screen-mirroring/lib/hosScrcpy-1.0.20-beta.jar`（SHA-256 `62cba3701b635a9d9c906a70f18cbc43efd60b7bfd61e2bb18fb88b2c7dfb187`），15 个 `libscrcpy/*.so` 与 `uitest_agent*.so` 已由 `tools/deveco-mirroring/extract.ps1` 提取到 `UotanStudio.Mirroring/Assets/ohos/device/`，逐文件 SHA-256 记录在 `Assets/ohos/README.md`；此前 14 个文件与 `reference/HdcMirror` 拷贝逐字节一致，新增 `libscrcpy_server0.z.so`。提取成功只证明文件来源与完整性，不证明设备可加载。
+- 单元测试类：`UotanStudio.Tests.Media.OhscrcpyProtocolTests`、`UotanStudio.Tests.Mirroring.OhscrcpyServerManagerTests`、`UotanStudio.Tests.Mirroring.OhscrcpyClientTests`、`UotanStudio.Tests.Mirroring.ScrcpyToOhscrcpyControlAdapterTests`、`UotanStudio.Tests.Mirroring.MirrorSessionFacadeTests`；命令为 `dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class <FQCN> --minimum-expected-tests 1`，覆盖 gRPC 帧/`ReplyMessage` 解析、SPS 几何、控制消息映射、server-manager 代理/库选择与命令构造、客户端解复用、facade 校验。
+- 硬件边界：5XM0225C18001159（HarmonyOS 7.0.0.109）加载 `ohos/device` 下 2026 年采集库时，`dlopen` 因 protobuf/gRPC ABI 落后失败；模拟器缺 `libgrpc.z.so`，且其 `uitest start-daemon singleness` 报 `Client nativeCode not exist`。视频解码/播放与 UI 渲染未验证，不能写成已验证。
+- 直连 forward/控制链路：受 `UOTAN_HDC_MIRROR_DIRECT` 门控的 `OhscrcpyHdcIntegrationTests` 接受 HDC connect key 或直连守护进程 `host:port`。本轮尝试 `5XM0225C18001159` 未通过：DevEco 的 HDC server 正在运行，Comm 的 fail-closed USB 策略拒绝直连 USB 打开，因此 `HdcDirectConnection` 无法取得直连会话；这是环境边界，不是控制协议断言失败。停止 HDC server 或在无 server 的主机上重跑该门控用例前，直连链路仍未验证，跳过/失败都不算通过。
+
 ## 内嵌资源 zstd 化实测（2026-10-24，Windows x64，Debug/Release）
 
 ### 规则表（Firmware）
@@ -73,6 +81,13 @@
 - 程序集：`UotanStudio.dll` Debug 23,382,016 B → 17,742,848 B（−5.38 MiB）。
 - 运行时冒烟（真实 `UotanStudio.dll` + Win32/Skia 控制台宿主，反射实例化 `ZstdEmbeddedFontCollection`）：集合键 `fonts:UotanStudio/MiSans`，Regular 与 Bold 均解析为 `MiSans`、29,758 个字形；离屏渲染 `Uotan 中文字体` 得到 2,599 个非透明像素。冷构造（两张字形：资源读取 + zstd 解码 + Avalonia 复制到非托管）186.7 ms，首次 typeface 解析 6.0 ms。
 - 未验证：真实 GUI 首帧与整体启动耗时、主题/回退链在窗口中的表现；AOT 运行时的字体加载只由发布产物中包含五个逻辑资源名间接证明。
+
+### 鸿蒙采集库（Mirroring）
+
+- 生成物：15 个 `Assets/ohos/device/*.so` 共 11,204,026 B → 15 个 zstd 帧共 3,478,225 B（31.0%），加同目录 `manifest.txt`（文件名、解码长度、SHA-256）；`UotanStudio.Mirroring.dll` Debug 3,627,520 B。
+- 运行时：首次使用时物化到 `%TEMP%/UotanStudio/ohos-device/<清单 SHA-256 前 16 位>/`，逐文件校验长度与摘要后原子替换；`OhscrcpyDeviceAssetsTests` 3/3（目录存在、15 个 `*.so`、原始文件名保留、重复访问返回同一目录），`OhscrcpyServerManagerTests` 12/12。
+- 发布输出不再包含 `ohos/device` 松散文件（`publish/ohos/device` 只剩空目录）。
+- 未验证：真机/HDC 推送与 `dlopen`；多进程并发首次物化共用同名 `<name>.tmp` 的竞态未特殊处理。
 
 ### 卡刷更新器（Delivery）
 
