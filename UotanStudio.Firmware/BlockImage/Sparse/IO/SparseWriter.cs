@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
+using UotanStudio.Hash.Crc32c;
 using UotanStudio.Hash.Crc32Ieee;
 
 namespace UotanStudio.Firmware.BlockImage.Sparse.IO;
@@ -12,21 +13,6 @@ namespace UotanStudio.Firmware.BlockImage.Sparse.IO;
 internal static class SparseWriter
 {
     private const int BufferSize = 1024 * 1024;
-
-    /// <summary>Width of the repeated-pattern table used to checksum FILL chunks.
-    /// <para>用于校验 FILL 数据块的重复模式表宽度。</para></summary>
-    /// <remarks>
-    /// Kept as a multiple of the 4-byte pattern so every full-width append ends on a pattern boundary and the final
-    /// short append still starts at pattern offset 0; a length that is not a multiple of the table width therefore
-    /// needs no separate tail arithmetic. 64 KiB matches the tables used by <see cref="SparseReader"/> and
-    /// <see cref="SparseFile.WriteRawToStream(Stream)"/>, and is pooled rather than <c>stackalloc</c>-ed because a per-chunk
-    /// 64 KiB stack frame exceeds the small-buffer convention used elsewhere in this library.
-    /// <para>宽度保持为 4 字节模式的整数倍，使每次满宽追加都结束在模式边界上，末段不足宽度的追加仍从模式偏移 0 开始；
-    /// 因此不是表宽度整数倍的长度无需单独的尾部算术。64 KiB 与 <see cref="SparseReader"/> 和
-    /// <see cref="SparseFile.WriteRawToStream(Stream)"/> 使用的表一致，并采用池化而非 <c>stackalloc</c>：
-    /// 每块 64 KiB 的栈帧超出本库其他位置的小缓冲惯例。</para>
-    /// </remarks>
-    private const int FillPatternWidth = 64 * 1024;
 
     /// <summary>Writes the sparse image to the stream (sparse format).
     /// <para>将稀疏镜像写入流(稀疏格式)。</para></summary>
@@ -127,7 +113,7 @@ internal static class SparseWriter
             stream.Write(pad);
         }
 
-        Crc32IeeeAccumulator? crc = includeCrc ? new Crc32IeeeAccumulator() : null;
+        var crc = 0u;
         var buffer = ArrayPool<byte>.Shared.Rent(BufferSize);
         var headerBuf = new byte[outHeader.ChunkHeaderSize];
         var fillValData = new byte[4];
@@ -171,7 +157,11 @@ internal static class SparseWriter
                                     n = toRead;
                                 }
                                 stream.Write(buffer, 0, n);
-                                crc?.Append(buffer.AsSpan(0, n));
+                                if (includeCrc)
+                                {
+                                    crc = Crc32Combine.CombineIeee(crc, Crc32Ieee.Compute(buffer.AsSpan(0, n)), n);
+                                }
+
                                 written += n;
                             }
                             break;
@@ -182,20 +172,33 @@ internal static class SparseWriter
 
                             BinaryPrimitives.WriteUInt32LittleEndian(fillValData, chunk.FillValue);
                             stream.Write(fillValData, 0, 4);
-                            AppendRepeated(crc, chunk.FillValue, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
+                            if (includeCrc)
+                            {
+                                crc = AppendRepeated(crc, chunk.FillValue,
+                                    (long)chunk.Header.ChunkSize * outHeader.BlockSize);
+                            }
+
                             break;
                         }
 
                     case ChunkType.Raw:
                         break;
                     case ChunkType.DontCare:
-                        AppendZeros(crc, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
+                        if (includeCrc)
+                        {
+                            crc = AppendZeros(crc, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
+                        }
+
                         break;
                     case ChunkType.Crc32:
                         break;
                     default:
                         {
-                            AppendZeros(crc, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
+                            if (includeCrc)
+                            {
+                                crc = AppendZeros(crc, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
+                            }
+
                             break;
                         }
                 }
@@ -212,10 +215,13 @@ internal static class SparseWriter
                 };
                 trailingHeader.WriteTo(headerBuf);
                 stream.Write(headerBuf, 0, outHeader.ChunkHeaderSize);
-                AppendZeros(crc, (long)trailingBlocks * outHeader.BlockSize);
+                if (includeCrc)
+                {
+                    crc = AppendZeros(crc, (long)trailingBlocks * outHeader.BlockSize);
+                }
             }
 
-            if (includeCrc && crc is not null)
+            if (includeCrc)
             {
                 var crcHeader = new ChunkHeader
                 {
@@ -226,7 +232,7 @@ internal static class SparseWriter
                 crcHeader.WriteTo(headerBuf);
                 stream.Write(headerBuf, 0, outHeader.ChunkHeaderSize);
                 var crcBuf = new byte[4];
-                BinaryPrimitives.WriteUInt32LittleEndian(crcBuf, crc.GetCurrentHash());
+                BinaryPrimitives.WriteUInt32LittleEndian(crcBuf, crc);
                 stream.Write(crcBuf);
             }
         }
@@ -271,65 +277,71 @@ internal static class SparseWriter
     }
 
     /// <summary>
-    /// Appends a FILL chunk's expanded bytes to the streaming checksum through a pooled repeated-pattern table.
-    /// <para>经池化的重复模式表，把 FILL 数据块展开后的字节追加到流式校验和。</para>
+    /// Folds a FILL chunk's expanded bytes into the streaming checksum by hashing one pattern unit and combining the
+    /// repeated units through GF(2) doubling, so the cost is logarithmic in the run length.
+    /// <para>先哈希一个模式单元，再经 GF(2) 倍增合并重复单元，把 FILL 数据块展开后的字节并入流式校验和；
+    /// 成本随段长对数增长。</para>
     /// </summary>
-    /// <param name="crc">Checksum accumulator, or <see langword="null"/> when no checksum was requested, in which case nothing is rented and nothing is appended.
-    /// <para>校验和累加器；未请求校验和时为 <see langword="null"/>，此时不租用缓冲也不追加任何字节。</para></param>
+    /// <param name="crc">CRC-32 of everything written before the chunk. <para>数据块之前全部已写字节的 CRC-32。</para></param>
     /// <param name="fillValue">The little-endian 4-byte pattern repeated across the chunk's expanded region.
     /// <para>在数据块展开区域中重复的小端 4 字节模式。</para></param>
-    /// <param name="totalBytes">Expanded length, <c>ChunkSize * BlockSize</c>. Whole table widths plus one final remainder are appended; because the table width is a multiple of the pattern, a length that is not a multiple of 4 — possible when the header's block size is not a multiple of 4 — still receives exactly the leading <c>totalBytes % 4</c> pattern bytes, matching a byte-for-byte expansion.
-    /// <para>展开后的长度，即 <c>ChunkSize * BlockSize</c>。按整表宽度加上最后一次余量追加；由于表宽度是模式的整数倍，
-    /// 即使长度不是 4 的倍数（在头部块大小不是 4 的倍数时可能出现）也只追加模式前 <c>totalBytes % 4</c> 字节，与逐字节展开结果一致。</para></param>
-    private static void AppendRepeated(Crc32IeeeAccumulator? crc, uint fillValue, long totalBytes)
+    /// <param name="totalBytes">Expanded length, <c>ChunkSize * BlockSize</c>; a length that is not a multiple of four still receives exactly the leading <c>totalBytes % 4</c> pattern bytes, matching a byte-for-byte expansion.
+    /// <para>展开后的长度，即 <c>ChunkSize * BlockSize</c>；长度不是 4 的倍数时仍恰好追加模式前
+    /// <c>totalBytes % 4</c> 字节，与逐字节展开结果一致。</para></param>
+    /// <returns>The CRC-32 of the preceding bytes followed by the expanded pattern.
+    /// <para>前序字节后接展开模式后的 CRC-32。</para></returns>
+    private static uint AppendRepeated(uint crc, uint fillValue, long totalBytes)
     {
-        if (crc is null || totalBytes <= 0)
+        if (totalBytes <= 0)
         {
-            return;
+            return crc;
         }
 
-        var rented = ArrayPool<byte>.Shared.Rent(FillPatternWidth);
-        try
+        Span<byte> unit = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(unit, fillValue);
+        var units = totalBytes / 4;
+        var remainder = (int)(totalBytes % 4);
+        var repeated = 0u;
+        if (units > 0)
         {
-            var buf = rented.AsSpan(0, FillPatternWidth);
-            SparseFill.Fill(buf, fillValue);
-            var remaining = totalBytes;
+            var blockCrc = Crc32Ieee.Compute(unit);
+            long blockLength = 4;
+            var remaining = units;
             while (remaining > 0)
             {
-                var size = (int)Math.Min(buf.Length, remaining);
-                crc.Append(buf[..size]);
-                remaining -= size;
+                if ((remaining & 1) != 0)
+                {
+                    repeated = Crc32Combine.CombineIeee(repeated, blockCrc, blockLength);
+                }
+
+                remaining >>= 1;
+                if (remaining == 0)
+                {
+                    break;
+                }
+
+                blockCrc = Crc32Combine.CombineIeee(blockCrc, blockCrc, blockLength);
+                blockLength = checked(blockLength * 2);
             }
         }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented);
-        }
-    }
 
-    private static void AppendZeros(Crc32IeeeAccumulator? crc, long totalBytes)
-    {
-        if (crc is null)
+        if (remainder > 0)
         {
-            return;
+            repeated = Crc32Combine.CombineIeee(repeated, Crc32Ieee.Compute(unit[..remainder]), remainder);
         }
 
-        var rented = ArrayPool<byte>.Shared.Rent(FillPatternWidth);
-        try
-        {
-            var buf = rented.AsSpan(0, FillPatternWidth);
-            buf.Clear();
-            var remaining = totalBytes;
-            while (remaining > 0)
-            {
-                var n = (int)Math.Min(buf.Length, remaining);
-                crc.Append(buf[..n]);
-                remaining -= n;
-            }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented);
-        }
+        return Crc32Combine.CombineIeee(crc, repeated, totalBytes);
     }
+
+    /// <summary>
+    /// Advances the streaming checksum across a chunk's implicit zero bytes without materializing them.
+    /// <para>无需真正生成字节，即让流式校验和越过数据块的隐式零字节。</para>
+    /// </summary>
+    /// <param name="crc">CRC-32 of everything written before the zero run.
+    /// <para>零段之前全部已写字节的 CRC-32。</para></param>
+    /// <param name="totalBytes">The nonnegative zero-run length in bytes. <para>非负的零段长度（字节）。</para></param>
+    /// <returns>The CRC-32 of the preceding bytes followed by the zero run.
+    /// <para>前序字节后接零段后的 CRC-32。</para></returns>
+    private static uint AppendZeros(uint crc, long totalBytes)
+        => totalBytes <= 0 ? crc : Crc32Combine.AdvanceIeee(crc, totalBytes);
 }

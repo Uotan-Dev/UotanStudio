@@ -1,5 +1,7 @@
+using UotanStudio.Firmware.BlockImage;
+using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Firmware.BlockImage.Lp;
-using UotanStudio.Models;
+using UotanStudio.Firmware.BlockImage.Mbr;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Editors;
@@ -106,11 +108,11 @@ public sealed class PartitionEditorBandTests
             Assert.Empty(editor.CompileError);
             Assert.False(editor.IsDirty);
 
-            var reloaded = GptTable.Parse(File.ReadAllBytes(path));
-            Assert.Equal(2, reloaded.Entries.Count);
-            Assert.Equal("partition_2", reloaded.Entries[1].Name);
-            Assert.Equal(1064UL, reloaded.Entries[1].FirstLba);
-            Assert.Equal(4096UL - 1064UL, reloaded.Entries[1].LastLba - reloaded.Entries[1].FirstLba + 1);
+            Assert.True(GptImageEditor.TryRead(File.ReadAllBytes(path), out var reloaded));
+            Assert.Equal(2, reloaded.Partitions.Count);
+            Assert.Equal("partition_2", reloaded.Partitions[1].Name);
+            Assert.Equal(1064UL, reloaded.Partitions[1].FirstLba);
+            Assert.Equal(4096UL - 1064UL, reloaded.Partitions[1].LastLba - reloaded.Partitions[1].FirstLba + 1);
             editor.Cleanup();
         }
         finally
@@ -129,8 +131,8 @@ public sealed class PartitionEditorBandTests
             var remainingGuid = Guid.NewGuid();
             WriteGptImage(path, 1024UL * 1024,
             [
-                new GptEntry { TypeGuid = GptTable.DefaultTypeGuid, UniqueGuid = remainingGuid, FirstLba = 34, LastLba = 1057, Name = "keep" },
-                new GptEntry { TypeGuid = GptTable.DefaultTypeGuid, UniqueGuid = Guid.NewGuid(), FirstLba = 1058, LastLba = 1500, Name = "drop" }
+                new GptPartition(0, GptLayout.DefaultTypeGuid, remainingGuid, 34, 1057, 0, "keep", 34 * GptLayout.SectorSize, 1024 * GptLayout.SectorSize),
+                new GptPartition(1, GptLayout.DefaultTypeGuid, Guid.NewGuid(), 1058, 1500, 0, "drop", 1058 * GptLayout.SectorSize, 443 * GptLayout.SectorSize)
             ]);
             var editor = new PartitionEditorViewModel();
             await editor.LoadAsync(path);
@@ -144,10 +146,10 @@ public sealed class PartitionEditorBandTests
             await editor.SaveAsync();
             Assert.Empty(editor.CompileError);
 
-            var reloaded = GptTable.Parse(File.ReadAllBytes(path));
-            var entry = Assert.Single(reloaded.Entries);
+            Assert.True(GptImageEditor.TryRead(File.ReadAllBytes(path), out var reloaded));
+            var entry = Assert.Single(reloaded.Partitions);
             Assert.Equal("keep", entry.Name);
-            Assert.Equal(remainingGuid, entry.UniqueGuid);
+            Assert.Equal(remainingGuid, entry.Id);
             editor.Cleanup();
         }
         finally
@@ -327,19 +329,19 @@ public sealed class PartitionEditorBandTests
         foreach (var entry in entries)
         {
             fixture.Add(new GptFixtureEntry(
-                Guid.TryParse(entry.Type, out var type) ? type : GptTable.DefaultTypeGuid,
+                Guid.TryParse(entry.Type, out var type) ? type : GptLayout.DefaultTypeGuid,
                 Guid.NewGuid(), entry.StartSector, checked(entry.StartSector + entry.SizeSectors - 1), entry.Name));
         }
 
         GptFixtureImage.Write(path, diskSizeBytes, fixture);
     }
 
-    private static void WriteGptImage(string path, ulong diskSizeBytes, IReadOnlyList<GptEntry> entries)
+    private static void WriteGptImage(string path, ulong diskSizeBytes, IReadOnlyList<GptPartition> entries)
     {
         var fixture = new List<GptFixtureEntry>(entries.Count);
         foreach (var entry in entries)
         {
-            fixture.Add(new GptFixtureEntry(entry.TypeGuid, entry.UniqueGuid, entry.FirstLba, entry.LastLba, entry.Name));
+            fixture.Add(new GptFixtureEntry(entry.TypeId, entry.Id, entry.FirstLba, entry.LastLba, entry.Name));
         }
 
         GptFixtureImage.Write(path, diskSizeBytes, fixture);
@@ -350,7 +352,7 @@ public sealed class PartitionEditorBandTests
         Name = name,
         StartSector = start,
         SizeSectors = size,
-        Type = GptTable.DefaultTypeGuid.ToString("D")
+        Type = GptLayout.DefaultTypeGuid.ToString("D")
     };
 
     private static string CreateTempDirectory()

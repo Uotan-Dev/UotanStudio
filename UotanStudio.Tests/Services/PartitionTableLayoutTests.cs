@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
-using UotanStudio.Models;
+using UotanStudio.Firmware.BlockImage;
+using UotanStudio.Firmware.BlockImage.Gpt;
+using UotanStudio.Firmware.BlockImage.Mbr;
 using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Editors;
 using Xunit;
@@ -15,7 +17,7 @@ public sealed class PartitionTableLayoutTests
     private const int BackupHeaderSector = 80;
     private const int LastSector = 87;
     private const int DeclaredSlots = 32;
-    private const int ArrayBytes = DeclaredSlots * GptTable.EntrySize;
+    private const int ArrayBytes = DeclaredSlots * GptLayout.EntrySize;
 
     [Fact]
     public async Task LoadAsync_CombinedEdlGptBlob_ParsesEntriesFromCrcLocatedArrays()
@@ -74,11 +76,12 @@ public sealed class PartitionTableLayoutTests
                     saved.AsSpan(sector * SectorSize + 80)));
             }
 
-            var reloaded = GptTable.Parse(saved);
-            Assert.Equal(2, reloaded.Entries.Count);
-            Assert.Equal(8UL, reloaded.Entries[1].FirstLba);
-            Assert.Equal(8UL + 0x4000UL - 1UL, reloaded.Entries[1].LastLba);
-            Assert.Equal(GptTable.Parse(original).Entries[0].UniqueGuid, reloaded.Entries[0].UniqueGuid);
+            Assert.True(GptImageEditor.TryRead(saved, out var reloaded));
+            Assert.Equal(2, reloaded.Partitions.Count);
+            Assert.Equal(8UL, reloaded.Partitions[1].FirstLba);
+            Assert.Equal(8UL + 0x4000UL - 1UL, reloaded.Partitions[1].LastLba);
+            Assert.True(GptImageEditor.TryRead(original, out var originalTable));
+            Assert.Equal(originalTable.Partitions[0].Id, reloaded.Partitions[0].Id);
             editor.Cleanup();
         }
         finally
@@ -108,9 +111,9 @@ public sealed class PartitionTableLayoutTests
             Assert.Empty(editor.CompileError);
             var saved = File.ReadAllBytes(path);
             Assert.Equal(original.Length, saved.Length);
-            var reloaded = GptTable.Parse(saved);
-            Assert.Equal(["ssd", "partition_2"], reloaded.Entries.Select(e => e.Name));
-            Assert.Equal(GptTable.DefaultTypeGuid, reloaded.Entries[1].TypeGuid);
+            Assert.True(GptImageEditor.TryRead(saved, out var reloaded));
+            Assert.Equal(["ssd", "partition_2"], reloaded.Partitions.Select(e => e.Name));
+            Assert.Equal(GptLayout.DefaultTypeGuid, reloaded.Partitions[1].TypeId);
             Assert.Equal(DeclaredSlots, (int)BinaryPrimitives.ReadUInt32LittleEndian(
                 saved.AsSpan(PrimaryHeaderSector * SectorSize + 80)));
             editor.Cleanup();
@@ -162,24 +165,25 @@ public sealed class PartitionTableLayoutTests
         Assert.Contains("32-bit LBA limit", exception.Message, StringComparison.Ordinal);
     }
 
-    private static GptEntry Entry(ulong first, ulong last, string name) => new()
-    {
-        TypeGuid = GptTable.DefaultTypeGuid,
-        UniqueGuid = new Guid((int)first, (short)last, (short)name.Length, [1, 2, 3, 4, 5, 6, 7, 8]),
-        FirstLba = first,
-        LastLba = last,
-        Attributes = 0,
-        Name = name
-    };
+    private static GptPartition Entry(ulong first, ulong last, string name) => new(
+        0,
+        GptLayout.DefaultTypeGuid,
+        new Guid((int)first, (short)last, (short)name.Length, [1, 2, 3, 4, 5, 6, 7, 8]),
+        first,
+        last,
+        0,
+        name,
+        checked((long)(first * (ulong)GptLayout.SectorSize)),
+        last >= first ? checked((long)((last - first + 1) * (ulong)GptLayout.SectorSize)) : 0);
 
-    private static byte[] CreateCombinedBlob(IReadOnlyList<GptEntry> entries)
+    private static byte[] CreateCombinedBlob(IReadOnlyList<GptPartition> entries)
     {
         var standard = BuildStandardTableRegions(entries);
         var image = new byte[(LastSector + 1) * SectorSize];
         standard.AsSpan(0, SectorSize).CopyTo(image);
 
         var array = new byte[ArrayBytes];
-        standard.AsSpan((int)GptTable.EntriesStartLba * SectorSize, entries.Count * GptTable.EntrySize).CopyTo(array);
+        standard.AsSpan((int)GptLayout.EntriesStartLba * SectorSize, entries.Count * GptLayout.EntrySize).CopyTo(array);
         var arrayCrc = System.IO.Hashing.Crc32.HashToUInt32(array);
         array.CopyTo(image, PrimaryEntriesSector * SectorSize);
         array.CopyTo(image, BackupEntriesSector * SectorSize);
@@ -190,12 +194,12 @@ public sealed class PartitionTableLayoutTests
         return image;
     }
 
-    private static byte[] BuildStandardTableRegions(IReadOnlyList<GptEntry> entries)
+    private static byte[] BuildStandardTableRegions(IReadOnlyList<GptPartition> entries)
     {
         var fixture = new List<GptFixtureEntry>(entries.Count);
         foreach (var entry in entries)
         {
-            fixture.Add(new GptFixtureEntry(entry.TypeGuid, entry.UniqueGuid, entry.FirstLba, entry.LastLba, entry.Name));
+            fixture.Add(new GptFixtureEntry(entry.TypeId, entry.Id, entry.FirstLba, entry.LastLba, entry.Name));
         }
 
         return GptFixtureImage.Build(2UL * 1024 * 1024 * 1024, Guid.NewGuid(), fixture);
@@ -203,15 +207,15 @@ public sealed class PartitionTableLayoutTests
 
     private static void WriteHeader(byte[] image, byte[] standard, int sector, ulong selfLba, ulong alternateLba, ulong entriesLba, uint arrayCrc)
     {
-        standard.AsSpan(GptTable.HeaderOffset, GptTable.HeaderSize).CopyTo(image.AsSpan(sector * SectorSize));
-        var header = image.AsSpan(sector * SectorSize, GptTable.HeaderSize);
+        standard.AsSpan(GptLayout.HeaderOffset, GptLayout.HeaderSize).CopyTo(image.AsSpan(sector * SectorSize));
+        var header = image.AsSpan(sector * SectorSize, GptLayout.HeaderSize);
         BinaryPrimitives.WriteUInt64LittleEndian(header[24..], selfLba);
         BinaryPrimitives.WriteUInt64LittleEndian(header[32..], alternateLba);
         BinaryPrimitives.WriteUInt64LittleEndian(header[72..], entriesLba);
         BinaryPrimitives.WriteUInt32LittleEndian(header[80..], DeclaredSlots);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[GptTable.EntriesCrcOffset..], arrayCrc);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[GptTable.HeaderCrcOffset..], 0);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[GptTable.HeaderCrcOffset..], System.IO.Hashing.Crc32.HashToUInt32(header));
+        BinaryPrimitives.WriteUInt32LittleEndian(header[GptLayout.EntriesCrcOffset..], arrayCrc);
+        BinaryPrimitives.WriteUInt32LittleEndian(header[GptLayout.HeaderCrcOffset..], 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(header[GptLayout.HeaderCrcOffset..], System.IO.Hashing.Crc32.HashToUInt32(header));
     }
 
     private static void FillUnmodelledSectors(byte[] image)

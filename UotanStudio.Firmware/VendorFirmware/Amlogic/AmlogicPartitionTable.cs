@@ -1,13 +1,15 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.BlockImage;
+using UotanStudio.Firmware.BlockImage.Mbr;
 
-namespace UotanStudio.Models;
+namespace UotanStudio.Firmware.VendorFirmware.Amlogic;
 
 /// <summary>
 /// An Amlogic vendor partition-table entry (MBR-style slot plus a name-table name).
 /// <para>Amlogic 厂商私有分区表条目（MBR 风格槽位 + 名称表名称）。</para>
 /// </summary>
-public sealed class AmlogicPartition
+public sealed class AmlogicPartitionEntry
 {
     /// <summary>
     /// Whether the partition is bootable (0x80).
@@ -49,7 +51,7 @@ public sealed class AmlogicPartition
 /// Parsed Amlogic partition-table information.
 /// <para>解析出的 Amlogic 分区表信息。</para>
 /// </summary>
-public sealed class AmlogicTableInfo
+public sealed class AmlogicPartitionTableInfo
 {
     /// <summary>
     /// Disk signature (offset 440, little-endian).
@@ -63,7 +65,7 @@ public sealed class AmlogicTableInfo
     /// <para>分区列表。</para>
     /// </summary>
     /// <value>The partitions recovered from the image.<para>从镜像中恢复出的分区。</para></value>
-    public IReadOnlyList<AmlogicPartition> Partitions { get; init; } = [];
+    public IReadOnlyList<AmlogicPartitionEntry> Partitions { get; init; } = [];
 }
 
 /// <summary>
@@ -72,7 +74,7 @@ public sealed class AmlogicTableInfo
 /// <para>Amlogic 厂商分区表构建与解析：MBR 风格槽位、扩展 EBR 链、镜像起始的 <c>AMLPART!</c> 魔数，
 /// 以及存放分区名称的名称表。</para>
 /// </summary>
-public static class AmlogicTable
+public sealed class AmlogicPartitionTable
 {
     /// <summary>Sector size in bytes.<para>扇区大小（字节）。</para></summary>
     public const int SectorSize = 512;
@@ -102,7 +104,7 @@ public static class AmlogicTable
     public const int MaxEbrDepth = 64;
 
     /// <summary>Magic bytes written at the image start.<para>写入镜像起始的魔数字节。</para></summary>
-    public static readonly byte[] Magic = "AMLPART!"u8.ToArray();
+    public static ReadOnlySpan<byte> Magic => PartitionTableSignatures.AmlogicMagic;
 
     /// <summary>Default partition type.<para>默认分区类型。</para></summary>
     public const byte DefaultType = 0x83;
@@ -247,7 +249,7 @@ public static class AmlogicTable
     /// </summary>
     /// <param name="image">The image bytes to parse.<para>待解析的镜像字节。</para></param>
     /// <returns>The disk signature and the recovered partition list.<para>磁盘签名与恢复出的分区列表。</para></returns>
-    public static AmlogicTableInfo Parse(byte[] image)
+    public static AmlogicPartitionTableInfo Parse(byte[] image)
     {
         ArgumentNullException.ThrowIfNull(image);
         if (image.Length < SectorSize || !HasMagic(image))
@@ -261,7 +263,7 @@ public static class AmlogicTable
         }
 
         var diskSignature = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(DiskSignatureOffset));
-        List<AmlogicPartition> slots = [];
+        List<AmlogicPartitionEntry> slots = [];
         ulong? extendedStart = null;
 
         for (var i = 0; i < MaxPrimaryPartitions; i++)
@@ -307,7 +309,7 @@ public static class AmlogicTable
                 var size0 = BinaryPrimitives.ReadUInt32LittleEndian(entry0[12..]);
                 if (type0 != 0 && rel0 != 0 && size0 != 0)
                 {
-                    slots.Add(new AmlogicPartition
+                    slots.Add(new AmlogicPartitionEntry
                     {
                         Bootable = (entry0[0] & BootableFlag) != 0,
                         Type = type0,
@@ -345,11 +347,11 @@ public static class AmlogicTable
             }
         }
 
-        var partitions = new List<AmlogicPartition>(slots.Count);
+        var partitions = new List<AmlogicPartitionEntry>(slots.Count);
         for (var i = 0; i < slots.Count; i++)
         {
             var slot = slots[i];
-            partitions.Add(new AmlogicPartition
+            partitions.Add(new AmlogicPartitionEntry
             {
                 Bootable = slot.Bootable,
                 Type = slot.Type,
@@ -359,12 +361,12 @@ public static class AmlogicTable
             });
         }
 
-        return new AmlogicTableInfo { DiskSignature = diskSignature, Partitions = partitions };
+        return new AmlogicPartitionTableInfo { DiskSignature = diskSignature, Partitions = partitions };
     }
 
     private static bool IsExtendedType(byte type) => type is 0x05 or 0x0F or 0x85;
 
-    private static AmlogicPartition NewPartition(ReadOnlySpan<byte> slot, uint start, uint size) => new()
+    private static AmlogicPartitionEntry NewPartition(ReadOnlySpan<byte> slot, uint start, uint size) => new()
     {
         Bootable = (slot[0] & BootableFlag) != 0,
         Type = slot[4],

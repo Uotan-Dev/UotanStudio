@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 
 namespace UotanStudio.Hash.Crc32c;
@@ -11,13 +12,13 @@ namespace UotanStudio.Hash.Crc32c;
 /// </summary>
 /// <remarks>
 /// The small lengths are always consumed byte-at-a-time so the register semantics stay identical for every
-/// length and seed. When the processor supports SSE4.2 the full words go through the <c>crc32</c> instruction,
-/// which is the same crc32c_le register convention and evaluates bit-identically to the table walk; on other
-/// processors the loop consumes eight bytes per iteration through eight 256-entry tables (slice-by-8) and falls
-/// back to the byte-at-a-time table for the trailing remainder.
-/// <para>尾部不足一个字的字节始终逐字节消费，保证任意长度与 seed 下的寄存器语义一致。处理器支持 SSE4.2 时整字经
-/// <c>crc32</c> 指令处理，该指令遵循同一 crc32c_le 寄存器约定，结果与查表法逐位相同；其他处理器上热循环借助
-/// 8 张 256 项表每轮消费 8 字节（slice-by-8），尾部余数回退到逐字节查表。</para>
+/// length and seed. When the processor supports SSE4.2 (x86) or the ARM64 CRC extension, the full words go through
+/// the matching <c>crc32</c> instruction, which follows the same crc32c_le register convention and evaluates
+/// bit-identically to the table walk; on other processors the loop consumes eight bytes per iteration through eight
+/// 256-entry tables (slice-by-8) and falls back to the byte-at-a-time table for the trailing remainder.
+/// <para>尾部不足一个字的字节始终逐字节消费，保证任意长度与 seed 下的寄存器语义一致。处理器支持 SSE4.2（x86）或
+/// ARM64 CRC 扩展时整字经对应的 <c>crc32</c> 指令处理，该指令遵循同一 crc32c_le 寄存器约定，结果与查表法逐位相同；
+/// 其他处理器上热循环借助 8 张 256 项表每轮消费 8 字节（slice-by-8），尾部余数回退到逐字节查表。</para>
 /// </remarks>
 public static class Crc32c
 {
@@ -44,7 +45,9 @@ public static class Crc32c
     /// <returns>The CRC32c register value after consuming the data.
     /// <para>消费完数据后的 CRC32c 寄存器值。</para></returns>
     public static uint Compute(ReadOnlySpan<byte> data, uint seed = InitialSeed)
-        => Sse42.IsSupported ? ComputeHardware(data, seed) : ComputeSoftware(data, seed);
+        => Sse42.IsSupported
+            ? ComputeHardware(data, seed)
+            : Crc32.IsSupported ? ComputeArm(data, seed) : ComputeSoftware(data, seed);
 
     /// <summary>
     /// Consumes the data through the SSE4.2 <c>crc32</c> instruction, which implements exactly the
@@ -81,9 +84,45 @@ public static class Crc32c
     }
 
     /// <summary>
-    /// Portable slice-by-8 table walk used whenever SSE4.2 is unavailable; it produces the same register
-    /// values as the hardware path for every length and seed.
-    /// <para>SSE4.2 不可用时使用的可移植 slice-by-8 查表实现；对任意长度与 seed 都产出与硬件路径相同的寄存器值。</para>
+    /// Consumes the data through the ARM64 CRC extension, whose crc32c operations implement the same
+    /// crc32c_le register semantics as the x86 hardware path: the seed is the register value and no final
+    /// XOR is applied.
+    /// <para>经 ARM64 CRC 扩展消费数据，其 crc32c 指令实现与 x86 硬件路径相同的 crc32c_le 寄存器语义：seed 即
+    /// 寄存器值，且无最终异或。</para>
+    /// </summary>
+    /// <param name="data">Bytes to consume. <para>要消费的字节。</para></param>
+    /// <param name="seed">Register initial value carried through unchanged. <para>原样带入的寄存器初值。</para></param>
+    /// <returns>The updated register value. <para>更新后的寄存器值。</para></returns>
+    private static uint ComputeArm(ReadOnlySpan<byte> data, uint seed)
+    {
+        var crc = seed;
+        while (data.Length >= sizeof(ulong))
+        {
+            var low = BinaryPrimitives.ReadUInt32LittleEndian(data);
+            var high = BinaryPrimitives.ReadUInt32LittleEndian(data[sizeof(uint)..]);
+            crc = Crc32.ComputeCrc32C(crc, low);
+            crc = Crc32.ComputeCrc32C(crc, high);
+            data = data[sizeof(ulong)..];
+        }
+
+        while (data.Length >= sizeof(uint))
+        {
+            crc = Crc32.ComputeCrc32C(crc, BinaryPrimitives.ReadUInt32LittleEndian(data));
+            data = data[sizeof(uint)..];
+        }
+
+        foreach (var b in data)
+        {
+            crc = Crc32.ComputeCrc32C(crc, b);
+        }
+
+        return crc;
+    }
+
+    /// <summary>
+    /// Portable slice-by-8 table walk used whenever no hardware CRC extension is available; it produces the
+    /// same register values as the hardware paths for every length and seed.
+    /// <para>无可用硬件 CRC 扩展时使用的可移植 slice-by-8 查表实现；对任意长度与 seed 都产出与硬件路径相同的寄存器值。</para>
     /// </summary>
     /// <param name="data">Bytes to consume. <para>要消费的字节。</para></param>
     /// <param name="seed">Register initial value. <para>寄存器初值。</para></param>

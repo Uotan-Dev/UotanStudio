@@ -40,43 +40,6 @@ public enum PartitionTableSource
 }
 
 /// <summary>
-/// A normalized partition-table entry.
-/// <para>归一化的分区表条目。</para>
-/// </summary>
-public sealed class PartitionEntry
-{
-    /// <summary>
-    /// Partition name.
-    /// <para>分区名称。</para>
-    /// </summary>
-    /// <value>The partition name.<para>分区名称。</para></value>
-    public string Name { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Partition start sector (512-byte sectors).
-    /// <para>分区起始扇区（512 字节扇区）。</para>
-    /// </summary>
-    /// <value>The first sector of the partition.<para>分区的起始扇区。</para></value>
-    public ulong StartSector { get; set; }
-
-    /// <summary>
-    /// Partition size in 512-byte sectors.
-    /// <para>分区大小（512 字节扇区）。</para>
-    /// </summary>
-    /// <value>The partition size counted in sectors.<para>分区大小，以扇区计数。</para></value>
-    public ulong SizeSectors { get; set; }
-
-    /// <summary>
-    /// Partition type description: for LP the first extent's target type (<c>linear</c>/<c>zero</c>),
-    /// for Rockchip <c>mtd</c>.
-    /// <para>分区类型描述：LP 为第一个 extent 的目标类型（<c>linear</c>/<c>zero</c>），
-    /// Rockchip 为 <c>mtd</c>。</para>
-    /// </summary>
-    /// <value>The type description of the partition.<para>分区的类型描述。</para></value>
-    public string Type { get; set; } = string.Empty;
-}
-
-/// <summary>
 /// Partition sector value parse/format helpers (matching the Rockchip parameter syntax: 0x-hex,
 /// decimal and K/M/G/T suffixes are supported).
 /// <para>分区扇区值解析与格式化助手（与 Rockchip parameter 语法一致：

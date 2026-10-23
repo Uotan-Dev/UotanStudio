@@ -1,8 +1,9 @@
 using System.Buffers.Binary;
 using System.Runtime.ExceptionServices;
-using UotanStudio.Models;
+using UotanStudio.Firmware.BlockImage.Mbr;
+using UotanStudio.Services.Workspace.Documents;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.Views.Controls;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -57,9 +58,9 @@ public sealed class MbrDetectionTests
             File.WriteAllBytes(path, header);
             Assert.True(MbrTable.HasSignature(header));
             Assert.False(MbrTable.HasPartitionTable(header));
-            Assert.False(FileOpenMode.IsMbrImage(path));
-            Assert.NotEqual(EditorOpenMode.Partition, FileOpenMode.ResolveMode(path));
-            Assert.NotEqual(EditorOpenMode.Partition, FileOpenMode.ResolveMode(path, header));
+            Assert.False(DocumentFormatPolicy.IsMbrImage(path));
+            Assert.NotEqual(EditorOpenMode.Partition, DocumentFormatPolicy.ResolveMode(path));
+            Assert.NotEqual(EditorOpenMode.Partition, DocumentFormatPolicy.ResolveMode(path, header));
         }
         finally
         {
@@ -77,7 +78,7 @@ public sealed class MbrDetectionTests
         var header = new byte[512];
         WritePartition(header, type, start, size);
         Assert.True(MbrTable.HasPartitionTable(header));
-        Assert.Equal(EditorOpenMode.Partition, FileOpenMode.ResolveMode("disk.img", header));
+        Assert.Equal(EditorOpenMode.Partition, DocumentFormatPolicy.ResolveMode("disk.img", header));
     }
 
     [Theory]
@@ -110,11 +111,11 @@ public sealed class MbrDetectionTests
         var gpt = new byte[520];
         WritePartition(gpt, 0xEE, 1, uint.MaxValue);
         "EFI PART"u8.CopyTo(gpt.AsSpan(512));
-        Assert.Equal(EditorOpenMode.Partition, FileOpenMode.ResolveMode("disk.img", gpt));
+        Assert.Equal(EditorOpenMode.Partition, DocumentFormatPolicy.ResolveMode("disk.img", gpt));
 
         var lp = new byte[4100];
         BinaryPrimitives.WriteUInt32LittleEndian(lp.AsSpan(4096), 0x616C4467);
-        Assert.Equal(EditorOpenMode.Partition, FileOpenMode.ResolveMode("super.img", lp));
+        Assert.Equal(EditorOpenMode.Partition, DocumentFormatPolicy.ResolveMode("super.img", lp));
     }
 
     private static byte[] CreateFatBootRecord(bool fat32, int sectorBytes)

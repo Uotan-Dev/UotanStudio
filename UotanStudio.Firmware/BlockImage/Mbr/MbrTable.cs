@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Globalization;
 
-namespace UotanStudio.Models;
+namespace UotanStudio.Firmware.BlockImage.Mbr;
 
 /// <summary>
 /// An MBR partition-table entry (16-byte primary slot or a logical partition in the EBR chain).
@@ -64,7 +64,7 @@ public sealed class MbrTableInfo
 /// logical partitions carried through an extended EBR chain. Integers are little-endian.
 /// <para>经典 MBR 分区表构建与解析：0x55AA 签名、4 个 16 字节主分区槽位，逻辑分区经扩展分区 EBR 链承载。整数均为小端。</para>
 /// </summary>
-public static class MbrTable
+public sealed class MbrTable
 {
     /// <summary>Sector size in bytes.<para>扇区大小（字节）。</para></summary>
     public const int SectorSize = 512;
