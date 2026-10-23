@@ -27,7 +27,7 @@ internal abstract class XzBlockFilter
     /// The number of bytes that are final. The remaining tail bytes are not final yet and must be presented again at the front of the next chunk.
     /// <para>已定稿的字节数。剩余尾部字节尚未定稿，必须放到下一块数据的前端再次呈现。</para>
     /// </returns>
-    internal abstract int Transform(byte[] buffer, int length, long position);
+    internal abstract int Transform(Span<byte> buffer, int length, long position);
 
     /// <summary>
     /// Creates the inverse filter for a declared identifier and its property bytes.
@@ -118,7 +118,7 @@ internal sealed class XzDeltaFilter : XzBlockFilter
 
     internal override ulong Id => 0x03;
 
-    internal override int Transform(byte[] buffer, int length, long position)
+    internal override int Transform(Span<byte> buffer, int length, long position)
     {
         for (var i = 0; i < length; i++)
         {
@@ -144,7 +144,7 @@ internal sealed class XzArmFilter : XzBlockFilter
 {
     internal override ulong Id => 0x07;
 
-    internal override int Transform(byte[] buffer, int length, long position)
+    internal override int Transform(Span<byte> buffer, int length, long position)
     {
         var i = 0;
         var nowPosition = unchecked((uint)position);
@@ -176,7 +176,7 @@ internal sealed class XzArmThumbFilter : XzBlockFilter
 {
     internal override ulong Id => 0x08;
 
-    internal override int Transform(byte[] buffer, int length, long position)
+    internal override int Transform(Span<byte> buffer, int length, long position)
     {
         var i = 0;
         var nowPosition = unchecked((uint)position);
@@ -215,7 +215,7 @@ internal sealed class XzPowerPcFilter : XzBlockFilter
 {
     internal override ulong Id => 0x05;
 
-    internal override int Transform(byte[] buffer, int length, long position)
+    internal override int Transform(Span<byte> buffer, int length, long position)
     {
         var i = 0;
         var nowPosition = unchecked((uint)position);
@@ -249,7 +249,7 @@ internal sealed class XzSparcFilter : XzBlockFilter
 {
     internal override ulong Id => 0x09;
 
-    internal override int Transform(byte[] buffer, int length, long position)
+    internal override int Transform(Span<byte> buffer, int length, long position)
     {
         var i = 0;
         var nowPosition = unchecked((uint)position);
@@ -289,7 +289,7 @@ internal sealed class XzIa64Filter : XzBlockFilter
 {
     internal override ulong Id => 0x06;
 
-    internal override int Transform(byte[] buffer, int length, long position)
+    internal override int Transform(Span<byte> buffer, int length, long position)
     {
         var i = 0;
         var limit = length - 16;
@@ -312,7 +312,7 @@ internal sealed class XzIa64Filter : XzBlockFilter
                     if (((buffer[bytePosition + 3] >> shift) & 0x0F) == 0x05
                         && (((buffer[bytePosition - 1] | (buffer[bytePosition] << 8)) >> shift) & 0x70) == 0)
                     {
-                        var instruction = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(bytePosition));
+                        var instruction = BinaryPrimitives.ReadUInt32LittleEndian(buffer[bytePosition..]);
                         var normalized = instruction >> shift;
                         normalized = (normalized & 0xFFFFF) | ((normalized & 0x800000) >> 3);
                         normalized <<= 4;
@@ -323,7 +323,7 @@ internal sealed class XzIa64Filter : XzBlockFilter
                         normalized &= 0x8FFFFF;
                         instruction &= ~(0x8FFFFFu << shift);
                         instruction |= normalized << shift;
-                        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(bytePosition), instruction);
+                        BinaryPrimitives.WriteUInt32LittleEndian(buffer[bytePosition..], instruction);
                     }
 
                     mask++;
@@ -351,7 +351,7 @@ internal sealed class XzX86Filter : XzBlockFilter
 
     internal override ulong Id => 0x04;
 
-    internal override int Transform(byte[] buffer, int length, long position)
+    internal override int Transform(Span<byte> buffer, int length, long position)
     {
         if (length < 5)
         {
@@ -403,14 +403,14 @@ internal sealed class XzX86Filter : XzBlockFilter
                 continue;
             }
 
-            var source = unchecked(((uint)buffer[positionInBuffer + 4] << 24)
+            var value = unchecked(((uint)buffer[positionInBuffer + 4] << 24)
                 | ((uint)buffer[positionInBuffer + 3] << 16)
                 | ((uint)buffer[positionInBuffer + 2] << 8)
                 | buffer[positionInBuffer + 1]);
             uint destination;
             while (true)
             {
-                destination = unchecked(source - (ip + (uint)positionInBuffer + 5));
+                destination = unchecked(value - (ip + (uint)positionInBuffer + 5));
                 if (mask == 0)
                 {
                     break;
@@ -423,7 +423,7 @@ internal sealed class XzX86Filter : XzBlockFilter
                     break;
                 }
 
-                source ^= (1u << ((32 - bitPosition) & 31)) - 1;
+                value = destination ^ ((1u << ((32 - bitPosition) & 31)) - 1);
             }
 
             destination &= 0x1FFFFFF;

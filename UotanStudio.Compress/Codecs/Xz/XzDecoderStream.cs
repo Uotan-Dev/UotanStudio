@@ -17,7 +17,7 @@ namespace UotanStudio.Compress.Codecs.Xz;
 /// </summary>
 internal sealed class XzDecoderStream : Stream
 {
-    private const int RawChunkBytes = 64 * 1024;
+    private const int RawChunkBytes = 256 * 1024;
     private const int MaximumBlockHeaderBytes = 1024;
     private const int MaximumIndexRecords = 1 << 20;
     private const int MaximumDictionaryBytes = 512 * 1024 * 1024;
@@ -76,6 +76,18 @@ internal sealed class XzDecoderStream : Stream
         }
 
         return Read(buffer.AsSpan(offset, count));
+    }
+
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(Read(buffer.Span));
+    }
+
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(Read(buffer, offset, count));
     }
 
     public override int Read(Span<byte> buffer)
@@ -455,13 +467,13 @@ internal sealed class XzDecoderStream : Stream
         private readonly XzBlockFilter? _filter;
         private readonly LzmaStream _lzma;
         private readonly XzBlockCheck _check;
-        private readonly byte[] _buffer;
         private readonly byte[] _carry = new byte[16];
         private readonly long _dataStart;
         private readonly int _headerLength;
         private readonly int _checkLength;
         private readonly ulong? _declaredCompressed;
         private readonly ulong? _declaredUncompressed;
+        private byte[]? _buffer;
         private int _carryLength;
         private int _pendingOffset;
         private int _pendingCount;
@@ -487,7 +499,6 @@ internal sealed class XzDecoderStream : Stream
             _headerLength = headerLength;
             _check = XzBlockCheck.Create(checkType);
             _checkLength = XzBlockCheck.GetLength(checkType);
-            _buffer = ArrayPool<byte>.Shared.Rent(RawChunkBytes + 16);
             _dataStart = input.BytesRead;
             var property = new[] { lzma2Properties };
             _lzma = LzmaStream.Create(
@@ -507,7 +518,7 @@ internal sealed class XzDecoderStream : Stream
                 if (_pendingCount > 0)
                 {
                     var copy = Math.Min(destination.Length, _pendingCount);
-                    _buffer.AsSpan(_pendingOffset, copy).CopyTo(destination);
+                    _buffer!.AsSpan(_pendingOffset, copy).CopyTo(destination);
                     _pendingOffset += copy;
                     _pendingCount -= copy;
                     _check.Append(destination[..copy]);
@@ -517,18 +528,61 @@ internal sealed class XzDecoderStream : Stream
 
                 if (_lzmaEnded)
                 {
-                    if (_carryLength > 0)
+                    if (_carryLength == 0)
                     {
-                        _carry.AsSpan(0, _carryLength).CopyTo(_buffer);
-                        _pendingOffset = 0;
-                        _pendingCount = _carryLength;
+                        return 0;
+                    }
+
+                    if (destination.Length >= _carryLength)
+                    {
+                        _carry.AsSpan(0, _carryLength).CopyTo(destination);
+                        _check.Append(destination[.._carryLength]);
+                        _decodedTotal += _carryLength;
+                        var carried = _carryLength;
                         _carryLength = 0;
+                        return carried;
+                    }
+
+                    EnsureBuffer();
+                    _carry.AsSpan(0, _carryLength).CopyTo(_buffer);
+                    _pendingOffset = 0;
+                    _pendingCount = _carryLength;
+                    _carryLength = 0;
+                    continue;
+                }
+
+                if (destination.Length >= RawChunkBytes)
+                {
+                    var carry = _carryLength;
+                    if (carry > 0)
+                    {
+                        _carry.AsSpan(0, carry).CopyTo(destination);
+                    }
+
+                    var directRaw = _lzma.Read(destination[carry..]);
+                    if (directRaw == 0)
+                    {
+                        _lzmaEnded = true;
                         continue;
                     }
 
-                    return 0;
+                    var directLength = carry + directRaw;
+                    var directProcessed = _filter is null
+                        ? directLength
+                        : _filter.Transform(destination, directLength, _absoluteOffset);
+                    _carryLength = directLength - directProcessed;
+                    if (_carryLength > 0)
+                    {
+                        destination.Slice(directProcessed, _carryLength).CopyTo(_carry);
+                    }
+
+                    _absoluteOffset += directProcessed;
+                    _check.Append(destination[..directProcessed]);
+                    _decodedTotal += directProcessed;
+                    return directProcessed;
                 }
 
+                EnsureBuffer();
                 _carry.AsSpan(0, _carryLength).CopyTo(_buffer);
                 var raw = _lzma.Read(_buffer.AsSpan(_carryLength));
                 if (raw == 0)
@@ -538,7 +592,7 @@ internal sealed class XzDecoderStream : Stream
                 }
 
                 var length = _carryLength + raw;
-                var processed = _filter?.Transform(_buffer, length, _absoluteOffset) ?? length;
+                var processed = _filter is null ? length : _filter.Transform(_buffer, length, _absoluteOffset);
                 _carryLength = length - processed;
                 if (_carryLength > 0)
                 {
@@ -549,6 +603,11 @@ internal sealed class XzDecoderStream : Stream
                 _pendingOffset = 0;
                 _pendingCount = processed;
             }
+        }
+
+        private void EnsureBuffer()
+        {
+            _buffer ??= ArrayPool<byte>.Shared.Rent(RawChunkBytes + 16);
         }
 
         internal ulong Complete()
@@ -595,7 +654,11 @@ internal sealed class XzDecoderStream : Stream
 
             _disposed = true;
             _lzma.Dispose();
-            ArrayPool<byte>.Shared.Return(_buffer);
+            if (_buffer is { } buffer)
+            {
+                _buffer = null;
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
     }
 
