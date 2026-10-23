@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 
-namespace UotanStudio.Services.Mirroring;
+namespace UotanStudio.Mirroring;
 
 /// <summary>
 /// Parameters passed to the scrcpy server process.

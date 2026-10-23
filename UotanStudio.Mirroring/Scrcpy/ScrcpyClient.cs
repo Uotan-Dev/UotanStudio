@@ -1,8 +1,9 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Adb;
 
-namespace UotanStudio.Services.Mirroring;
+namespace UotanStudio.Mirroring;
 
 /// <summary>
 /// Decoded video stream metadata announced by the server on the first socket.
@@ -41,9 +42,40 @@ public sealed record ScrcpyVideoMetadata(uint CodecFourCc, int Width, int Height
 /// session and codec-config flags in bits 63 and 62 and the key-frame flag in bit 61.
 /// <para>包头部的原始时间戳字：微秒时间戳，第 63 位为会话标志、第 62 位为编码配置标志、第 61 位为关键帧标志。</para>
 /// </param>
-/// <param name="Data">The compressed access-unit bytes. <para>压缩访问单元字节。</para></param>
-public sealed record ScrcpyVideoFrame(long Pts, byte[] Data)
+/// <param name="Data">
+/// The compressed access-unit bytes; a pooled array can be longer than <see cref="PayloadLength"/>.
+/// <para>压缩访问单元字节；池化数组可能长于 <see cref="PayloadLength"/>。</para>
+/// </param>
+/// <remarks>
+/// Media payloads are rented from <see cref="ArrayPool{T}.Shared"/> and must be returned by calling
+/// <see cref="Dispose"/> once the decoder no longer reads them. Codec configuration packets are exact
+/// allocations because consumers retain them across frames.
+/// <para>媒体负载从 <see cref="ArrayPool{T}.Shared"/> 租用，解码器不再读取后必须调用 <see cref="Dispose"/> 归还。
+/// 编码配置包使用精确分配，因为消费方会在帧之间保留它们。</para>
+/// </remarks>
+public sealed record ScrcpyVideoFrame(long Pts, byte[] Data) : IDisposable
 {
+    private readonly int _payloadLength;
+    private readonly bool _pooled;
+    private int _disposed;
+
+    internal ScrcpyVideoFrame(long pts, byte[] data, int payloadLength)
+        : this(pts, data)
+    {
+        _payloadLength = payloadLength;
+        _pooled = true;
+    }
+
+    /// <summary>
+    /// Gets the number of valid bytes at the start of <see cref="Data"/>.
+    /// <para>获取 <see cref="Data"/> 起始处有效字节的数量。</para>
+    /// </summary>
+    /// <value>
+    /// The packet length announced by the header; never greater than <see cref="Data"/> length.
+    /// <para>头部宣告的包长度；不会大于 <see cref="Data"/> 的长度。</para>
+    /// </value>
+    public int PayloadLength => _pooled ? _payloadLength : Data.Length;
+
     /// <summary>
     /// Whether the packet's PTS word carries the codec-config flag.
     /// <para>该包的 PTS 字是否携带编码器配置标志。</para>
@@ -78,6 +110,23 @@ public sealed record ScrcpyVideoFrame(long Pts, byte[] Data)
     public long PresentationTimestampMicroseconds => !IsCodecConfig
         ? (long)((ulong)Pts & ScrcpyConstants.PacketTimestampMask)
         : throw new InvalidOperationException("Codec configuration has no presentation timestamp.");
+
+    /// <summary>
+    /// Returns a pooled payload to <see cref="ArrayPool{T}.Shared"/> after the decoder has consumed it.
+    /// <para>解码器消费完池化负载后将其归还给 <see cref="ArrayPool{T}.Shared"/>。</para>
+    /// </summary>
+    /// <remarks>
+    /// Frames created from an exact array are unaffected, and repeat calls are no-ops. The frame must not
+    /// be used after disposal.
+    /// <para>由精确数组创建的帧不受影响，重复调用无效果。释放后不得再使用该帧。</para>
+    /// </remarks>
+    public void Dispose()
+    {
+        if (_pooled && Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            ArrayPool<byte>.Shared.Return(Data);
+        }
+    }
 }
 
 /// <summary>
@@ -129,9 +178,40 @@ public sealed record ScrcpyAudioMetadata(uint CodecFourCc)
 /// Presentation timestamp; the config flag marks the codec config packet.
 /// <para>显示时间戳；配置标志表示编码器配置包。</para>
 /// </param>
-/// <param name="Data">The compressed audio packet bytes. <para>压缩音频包字节。</para></param>
-public sealed record ScrcpyAudioFrame(long Pts, byte[] Data)
+/// <param name="Data">
+/// The compressed audio packet bytes; a pooled array can be longer than <see cref="PayloadLength"/>.
+/// <para>压缩音频包字节；池化数组可能长于 <see cref="PayloadLength"/>。</para>
+/// </param>
+/// <remarks>
+/// Media payloads are rented from <see cref="ArrayPool{T}.Shared"/> and must be returned by calling
+/// <see cref="Dispose"/> once the decoder no longer reads them. Codec configuration packets are exact
+/// allocations and are never returned to the pool.
+/// <para>媒体负载从 <see cref="ArrayPool{T}.Shared"/> 租用，解码器不再读取后必须调用 <see cref="Dispose"/> 归还。
+/// 编码配置包使用精确分配，永远不会归还到池中。</para>
+/// </remarks>
+public sealed record ScrcpyAudioFrame(long Pts, byte[] Data) : IDisposable
 {
+    private readonly int _payloadLength;
+    private readonly bool _pooled;
+    private int _disposed;
+
+    internal ScrcpyAudioFrame(long pts, byte[] data, int payloadLength)
+        : this(pts, data)
+    {
+        _payloadLength = payloadLength;
+        _pooled = true;
+    }
+
+    /// <summary>
+    /// Gets the number of valid bytes at the start of <see cref="Data"/>.
+    /// <para>获取 <see cref="Data"/> 起始处有效字节的数量。</para>
+    /// </summary>
+    /// <value>
+    /// The packet length announced by the header; never greater than <see cref="Data"/> length.
+    /// <para>头部宣告的包长度；不会大于 <see cref="Data"/> 的长度。</para>
+    /// </value>
+    public int PayloadLength => _pooled ? _payloadLength : Data.Length;
+
     /// <summary>
     /// Whether the packet's PTS word carries the codec-config flag.
     /// <para>该包的 PTS 字是否携带编码器配置标志。</para>
@@ -156,6 +236,23 @@ public sealed record ScrcpyAudioFrame(long Pts, byte[] Data)
     public long PresentationTimestampMicroseconds => !IsCodecConfig
         ? (long)((ulong)Pts & ScrcpyConstants.PacketTimestampMask)
         : throw new InvalidOperationException("Codec configuration has no presentation timestamp.");
+
+    /// <summary>
+    /// Returns a pooled payload to <see cref="ArrayPool{T}.Shared"/> after the decoder has consumed it.
+    /// <para>解码器消费完池化负载后将其归还给 <see cref="ArrayPool{T}.Shared"/>。</para>
+    /// </summary>
+    /// <remarks>
+    /// Frames created from an exact array are unaffected, and repeat calls are no-ops. The frame must not
+    /// be used after disposal.
+    /// <para>由精确数组创建的帧不受影响，重复调用无效果。释放后不得再使用该帧。</para>
+    /// </remarks>
+    public void Dispose()
+    {
+        if (_pooled && Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            ArrayPool<byte>.Shared.Return(Data);
+        }
+    }
 }
 
 /// <summary>
@@ -198,16 +295,16 @@ public sealed record ScrcpyAudioFrame(long Pts, byte[] Data)
 /// 文本上限 1 MiB；越界即抛出异常，不进行无界分配。
 /// </para>
 /// </remarks>
-public sealed class ScrcpyClient : IDisposable
+internal sealed class ScrcpyClient : IDisposable
 {
     /// <summary>Upper bound for a single compressed video access unit, 32 MiB. <para>单个压缩视频访问单元的上限，32 MiB。</para></summary>
-    public const int MaxFrameLength = 32 * 1024 * 1024;
+    internal const int MaxFrameLength = 32 * 1024 * 1024;
 
     /// <summary>Upper bound for a single compressed audio packet, 4 MiB. <para>单个压缩音频包的上限，4 MiB。</para></summary>
-    public const int MaxAudioFrameLength = 4 * 1024 * 1024;
+    internal const int MaxAudioFrameLength = 4 * 1024 * 1024;
 
     /// <summary>Upper bound for device clipboard text, 1 MiB. <para>设备剪贴板文本上限，1 MiB。</para></summary>
-    public const int MaxClipboardLength = 1024 * 1024;
+    internal const int MaxClipboardLength = 1024 * 1024;
 
     private readonly Func<string, Stream> _open;
     private readonly ScrcpyServerOptions _options;
@@ -230,7 +327,7 @@ public sealed class ScrcpyClient : IDisposable
     /// <para>服务端启动时使用的选项；决定读取哪些 socket 与元数据。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="session"/> or <paramref name="options"/> is <see langword="null"/>.
     /// <para><paramref name="session"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para></exception>
-    public ScrcpyClient(Comm.Contracts.IAdbDeviceSession session, ScrcpyServerOptions options)
+    internal ScrcpyClient(Comm.Contracts.IAdbDeviceSession session, ScrcpyServerOptions options)
     {
         ArgumentNullException.ThrowIfNull(session);
         _open = session.OpenServiceStream;
@@ -245,7 +342,7 @@ public sealed class ScrcpyClient : IDisposable
     /// <para>服务端启动时使用的选项；决定读取哪些 socket 与元数据。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="server"/> or <paramref name="options"/> is <see langword="null"/>.
     /// <para><paramref name="server"/> 或 <paramref name="options"/> 为 <see langword="null"/>。</para></exception>
-    public ScrcpyClient(AdbServerServices server, ScrcpyServerOptions options)
+    internal ScrcpyClient(AdbServerServices server, ScrcpyServerOptions options)
     {
         ArgumentNullException.ThrowIfNull(server);
         _open = server.Open;
@@ -531,7 +628,9 @@ public sealed class ScrcpyClient : IDisposable
     /// <para>从视频 socket 读取一个分帧视频包，并先消费其间到达的会话包。</para>
     /// </summary>
     /// <param name="timeoutMs">Per-read timeout in milliseconds. <para>单次读取超时（毫秒）。</para></param>
-    /// <returns>The frame, or <see langword="null"/> when no header arrived before timeout.</returns>
+    /// <returns>The frame owned by the caller, which must dispose it after decoding, or
+    /// <see langword="null"/> when no header arrived before timeout.
+    /// <para>由调用方持有并在解码后释放的帧；超时未收到头部时为 <see langword="null"/>。</para></returns>
     /// <exception cref="InvalidOperationException">The client is not connected. <para>客户端尚未连接。</para></exception>
     /// <exception cref="EndOfStreamException">The server closed the video stream.</exception>
     public ScrcpyVideoFrame? ReadFrame(int timeoutMs)
@@ -565,14 +664,30 @@ public sealed class ScrcpyClient : IDisposable
                     $"Frame length {length} exceeds the {MaxFrameLength}-byte bound. 帧长度 {length} 超出 {MaxFrameLength} 字节上限。");
             }
 
-            var payload = GC.AllocateUninitializedArray<byte>(length);
-            if (!TryReadExactInto(stream, payload, timeoutMs))
+            var pooled = ((ulong)pts & ScrcpyConstants.PacketFlagConfig) == 0;
+            var payload = pooled
+                ? ArrayPool<byte>.Shared.Rent(length)
+                : GC.AllocateUninitializedArray<byte>(length);
+            try
             {
-                throw new InvalidDataException(
-                    $"Stream ended after 0/{length} expected bytes. 流在读取 0/{length} 字节后提前结束。");
+                if (!TryReadExactInto(stream, payload, length, timeoutMs))
+                {
+                    throw new InvalidDataException(
+                        $"Stream ended after 0/{length} expected bytes. 流在读取 0/{length} 字节后提前结束。");
+                }
+            }
+            catch
+            {
+                if (pooled)
+                {
+                    ArrayPool<byte>.Shared.Return(payload);
+                }
+                throw;
             }
 
-            return new ScrcpyVideoFrame(pts, payload);
+            return pooled
+                ? new ScrcpyVideoFrame(pts, payload, length)
+                : new ScrcpyVideoFrame(pts, payload);
         }
     }
 
@@ -581,7 +696,9 @@ public sealed class ScrcpyClient : IDisposable
     /// <remarks>Audio packets use the same 12-byte header as video (PTS + length). The payload bound is <see cref="MaxAudioFrameLength"/>; violations throw.
     /// <para>音频包与视频共用 12 字节头（PTS + 长度）。负载上限 <see cref="MaxAudioFrameLength"/>，越界即抛出。</para></remarks>
     /// <param name="timeoutMs">Per-read timeout in milliseconds.<para>单次读取超时（毫秒）。</para></param>
-    /// <returns>The frame, or <see langword="null"/> when no header arrived before timeout.</returns>
+    /// <returns>The frame owned by the caller, which must dispose non-config packets after decoding, or
+    /// <see langword="null"/> when no header arrived before timeout.
+    /// <para>由调用方持有、非配置包须在解码后释放的帧；超时未收到头部时为 <see langword="null"/>。</para></returns>
     /// <exception cref="InvalidOperationException">Thrown when audio is disabled or not connected.
     /// <para>音频未启用或未连接时抛出。</para></exception>
     /// <exception cref="EndOfStreamException">The server closed the audio stream.</exception>
@@ -615,14 +732,30 @@ public sealed class ScrcpyClient : IDisposable
                 $"Audio frame length {length} exceeds the {MaxAudioFrameLength}-byte bound. 音频帧长度 {length} 超出 {MaxAudioFrameLength} 字节上限。");
         }
 
-        var payload = GC.AllocateUninitializedArray<byte>(length);
-        if (!TryReadExactInto(stream, payload, timeoutMs))
+        var pooled = ((ulong)pts & ScrcpyConstants.PacketFlagConfig) == 0;
+        var payload = pooled
+            ? ArrayPool<byte>.Shared.Rent(length)
+            : GC.AllocateUninitializedArray<byte>(length);
+        try
         {
-            throw new InvalidDataException(
-                $"Stream ended after 0/{length} expected bytes. 流在读取 0/{length} 字节后提前结束。");
+            if (!TryReadExactInto(stream, payload, length, timeoutMs))
+            {
+                throw new InvalidDataException(
+                    $"Stream ended after 0/{length} expected bytes. 流在读取 0/{length} 字节后提前结束。");
+            }
+        }
+        catch
+        {
+            if (pooled)
+            {
+                ArrayPool<byte>.Shared.Return(payload);
+            }
+            throw;
         }
 
-        return new ScrcpyAudioFrame(pts, payload);
+        return pooled
+            ? new ScrcpyAudioFrame(pts, payload, length)
+            : new ScrcpyAudioFrame(pts, payload);
     }
 
     /// <summary>
@@ -733,24 +866,30 @@ public sealed class ScrcpyClient : IDisposable
 
     /// <summary>
     /// Fills the supplied buffer exactly once per call, so per-frame reads reuse the caller's header
-    /// scratch instead of allocating. Frame payloads escape to consumers via the returned frame records
-    /// and therefore cannot be pooled.
-    /// <para>每次调用精确填满给定缓冲区，使逐帧读取复用调用方的头部暂存而不是分配。帧负载经返回的
-    /// 帧记录交由消费者持有，因此不能池化。</para>
+    /// scratch instead of allocating.
+    /// <para>每次调用精确填满给定缓冲区，使逐帧读取复用调用方的头部暂存而不是分配。</para>
     /// </summary>
     private bool TryReadExactInto(Stream stream, byte[] buffer, int timeoutMs)
+        => TryReadExactInto(stream, buffer, buffer.Length, timeoutMs);
+
+    /// <summary>
+    /// Fills the first <paramref name="length"/> bytes of the supplied buffer exactly once per call, so a
+    /// pooled payload is read only up to its announced length.
+    /// <para>每次调用精确填满给定缓冲区的前 <paramref name="length"/> 字节，使池化负载只按宣告长度读取。</para>
+    /// </summary>
+    private bool TryReadExactInto(Stream stream, byte[] buffer, int length, int timeoutMs)
     {
-        if (buffer.Length == 0)
+        if (length == 0)
         {
             return true;
         }
 
         var offset = 0;
         if (stream.CanTimeout) stream.ReadTimeout = timeoutMs == 0 ? 1 : timeoutMs;
-        while (offset < buffer.Length)
+        while (offset < length)
         {
             int count;
-            try { count = stream.Read(buffer, offset, buffer.Length - offset); }
+            try { count = stream.Read(buffer, offset, length - offset); }
             catch (TimeoutException) when (offset == 0) { return false; }
             catch (IOException ex) when (offset == 0 && ex.InnerException is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut })
             { return false; }

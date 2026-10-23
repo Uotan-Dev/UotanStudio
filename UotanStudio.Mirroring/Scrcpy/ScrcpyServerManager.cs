@@ -1,7 +1,7 @@
 using System.Text;
 using UotanStudio.Comm.Contracts;
 
-namespace UotanStudio.Services.Mirroring;
+namespace UotanStudio.Mirroring;
 
 /// <summary>
 /// Deploys and launches the scrcpy server on a device over the self-hosted
@@ -21,7 +21,7 @@ namespace UotanStudio.Services.Mirroring;
 /// 打开——shell 流关闭时服务端随之退出（其 stdout 即服务端日志）。
 /// </para>
 /// </remarks>
-public static class ScrcpyServerManager
+internal static class ScrcpyServerManager
 {
     /// <summary>How long the kill command is given to report before the caller moves on.
     /// <para>结束命令在调用方继续之前被允许上报的时长。</para></summary>
@@ -44,7 +44,7 @@ public static class ScrcpyServerManager
     /// <para><paramref name="localJarPath"/> 不存在。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    public static async Task PushServerAsync(IAdbDeviceSession session, string localJarPath,
+    internal static async Task PushServerAsync(IAdbDeviceSession session, string localJarPath,
         CancellationToken cancellationToken = default)
     {
         if (session is null)
@@ -72,7 +72,7 @@ public static class ScrcpyServerManager
     /// The shell stream carrying the server log; keep it open while mirroring.
     /// <para>承载服务端日志的 shell 流；投屏期间保持打开。</para>
     /// </returns>
-    public static IAdbStream StartServer(IAdbDeviceSession session, ScrcpyServerOptions options)
+    internal static IAdbStream StartServer(IAdbDeviceSession session, ScrcpyServerOptions options)
     {
         if (session is null)
         {
@@ -94,7 +94,7 @@ public static class ScrcpyServerManager
     /// <para>结束命令执行完毕，或其应答等待到期后完成的任务。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.
     /// <para><paramref name="session"/> 为 <see langword="null"/>。</para></exception>
-    public static async Task StopServerAsync(IAdbDeviceSession session, CancellationToken cancellationToken = default)
+    internal static async Task StopServerAsync(IAdbDeviceSession session, CancellationToken cancellationToken = default)
     {
         if (session is null)
         {
@@ -126,7 +126,7 @@ public static class ScrcpyServerManager
     /// </summary>
     /// <param name="shellStream">The stream returned by <see cref="StartServer"/>. <para><see cref="StartServer"/> 返回的流。</para></param>
     /// <returns>Log text read so far. <para>当前读到的日志文本。</para></returns>
-    public static string DrainLog(IAdbStream shellStream)
+    internal static string DrainLog(IAdbStream shellStream)
     {
         var sb = new StringBuilder();
         while (shellStream.TryRead(out var chunk))

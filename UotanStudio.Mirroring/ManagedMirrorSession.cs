@@ -2,27 +2,44 @@ using System.Text;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Services;
 
-namespace UotanStudio.Services.Mirroring;
+namespace UotanStudio.Mirroring;
 
 /// <summary>Owns the ADB and scrcpy transports while presentation consumes decoded packets. Server log lines are forwarded to the optional <c>logSink</c> so this layer stays decoupled from any host logging service.
 /// <para>持有 ADB 与 scrcpy 传输直至呈现层消费解码包。 server 日志行转发给可选的 <c>logSink</c>，使本层与宿主日志服务解耦。</para></summary>
-/// <param name="client">The connected scrcpy client this session forwards frames and control to.
-/// <para>本会话转发帧与控制消息的目标、已连接的 scrcpy 客户端。</para></param>
-/// <param name="shell">Shell stream used to pump server log output; disposed with the session.
-/// <para>用于抽取服务端日志输出的 shell 流；随会话一同释放。</para></param>
-/// <param name="adbSession">Optional ADB device session owning the streams; disposed with the session.
-/// <para>可选的、持有这些流的 ADB 设备会话；随会话一同释放。</para></param>
-/// <param name="lease">Optional device lease released when the session is disposed.
-/// <para>可选的设备租约，在会话释放时一并释放。</para></param>
-/// <param name="logSink">Optional sink receiving decoded server log text; may be called from a background thread.
-/// <para>可选的接收端，用于接收解码后的服务端日志文本；可能由后台线程调用。</para></param>
-public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdbDeviceSession? adbSession,
-    DeviceLease? lease = null, Action<string>? logSink = null) : IDisposable
+public sealed class ManagedMirrorSession : IDisposable
 {
+    private readonly ScrcpyClient _client;
+    private readonly Stream _shell;
+    private readonly IAdbDeviceSession? _adbSession;
+    private readonly DeviceLease? _lease;
+    private readonly Action<string>? _logSink;
     private readonly StringBuilder _output = new();
     private readonly Lock _outputLock = new();
     private int _disposed;
     private bool _displayPowerOn = true;
+
+    /// <summary>Creates a session over a connected scrcpy client and the resources behind it.
+    /// <para>基于已连接的 scrcpy 客户端及其背后资源创建会话。</para>
+    /// </summary>
+    /// <param name="client">The connected scrcpy client this session forwards frames and control to.
+    /// <para>本会话转发帧与控制消息的目标、已连接的 scrcpy 客户端。</para></param>
+    /// <param name="shell">Shell stream used to pump server log output; disposed with the session.
+    /// <para>用于抽取服务端日志输出的 shell 流；随会话一同释放。</para></param>
+    /// <param name="adbSession">Optional ADB device session owning the streams; disposed with the session.
+    /// <para>可选的、持有这些流的 ADB 设备会话；随会话一同释放。</para></param>
+    /// <param name="lease">Optional device lease released when the session is disposed.
+    /// <para>可选的设备租约，在会话释放时一并释放。</para></param>
+    /// <param name="logSink">Optional sink receiving decoded server log text; may be called from a background thread.
+    /// <para>可选的接收端，用于接收解码后的服务端日志文本；可能由后台线程调用。</para></param>
+    internal ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdbDeviceSession? adbSession,
+        DeviceLease? lease = null, Action<string>? logSink = null)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+        _shell = shell ?? throw new ArgumentNullException(nameof(shell));
+        _adbSession = adbSession;
+        _lease = lease;
+        _logSink = logSink;
+    }
 
     /// <summary>Device name announced by the server during <see cref="Connect"/>.
     /// <para>在 <see cref="Connect"/> 期间服务端宣告的设备名。</para></summary>
@@ -30,13 +47,13 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     /// The device name with trailing NUL characters trimmed, or <see cref="string.Empty"/> before a successful connect.
     /// <para>已去除尾部 NUL 字符的设备名；成功连接之前为 <see cref="string.Empty"/>。</para>
     /// </value>
-    public string DeviceName => client.DeviceName;
+    public string DeviceName => _client.DeviceName;
 
     /// <summary>Video stream metadata captured during <see cref="Connect"/>.
     /// <para>在 <see cref="Connect"/> 期间捕获的视频流元数据。</para></summary>
     /// <value>The codec/width/height header, or <see langword="null"/> when the server did not send codec metadata.
     /// <para>编码/宽/高头部；服务端未发送编码元数据时为 <see langword="null"/>。</para></value>
-    public ScrcpyVideoMetadata? VideoMetadata => client.VideoMetadata;
+    public ScrcpyVideoMetadata? VideoMetadata => _client.VideoMetadata;
 
     /// <summary>Audio codec metadata captured during <see cref="Connect"/>.
     /// <para>在 <see cref="Connect"/> 期间捕获的音频编码元数据。</para></summary>
@@ -45,19 +62,19 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     /// metadata was not sent, or the server disabled audio.
     /// <para>四字符编码头部；未启用音频、未发送元数据或服务端禁用音频时为 <see langword="null"/>。</para>
     /// </value>
-    public ScrcpyAudioMetadata? AudioMetadata => client.AudioMetadata;
+    public ScrcpyAudioMetadata? AudioMetadata => _client.AudioMetadata;
 
     /// <summary>Whether the server explicitly refused the audio stream during the handshake.
     /// <para>服务端是否在握手期间显式拒绝了音频流。</para></summary>
     /// <value><see langword="true"/> when the server's codec id marked audio disabled and closed the audio stream.
     /// <para>服务端的编码标识表明音频已禁用、且音频流已关闭时为 <see langword="true"/>。</para></value>
-    public bool AudioDisabledByServer => client.AudioDisabledByServer;
+    public bool AudioDisabledByServer => _client.AudioDisabledByServer;
 
     /// <summary>Whether the scrcpy control socket is currently open.
     /// <para>scrcpy 控制 socket 当前是否已打开。</para></summary>
     /// <value><see langword="true"/> while a control stream is held and <see cref="SendControl"/> can be used.
     /// <para>持有控制流、可使用 <see cref="SendControl"/> 时为 <see langword="true"/>。</para></value>
-    public bool IsControlConnected => client.IsControlConnected;
+    public bool IsControlConnected => _client.IsControlConnected;
 
     /// <summary>Opens the scrcpy sockets, retrying up to twenty times at 250 ms intervals while the session is alive. Server error output captured meanwhile is folded into the thrown <see cref="IOException"/> message.
     /// <para>打开 scrcpy socket；在会话存活期间最多重试二十次、每次间隔 250 毫秒。 期间捕获的服务端错误输出会并入抛出的 <see cref="IOException"/> 消息。</para></summary>
@@ -74,7 +91,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
             {
                 try
                 {
-                    client.Connect(3000);
+                    _client.Connect(3000);
                     return;
                 }
                 catch (Exception) when (attempt < 19 && Volatile.Read(ref _disposed) == 0)
@@ -109,7 +126,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     /// <para>宣告的帧长度超出客户端上限。</para></exception>
     /// <exception cref="EndOfStreamException">The server closed the video stream mid-packet.
     /// <para>服务端在包读取中途关闭了视频流。</para></exception>
-    public ScrcpyVideoFrame? ReadFrame(int timeoutMs) => client.ReadFrame(timeoutMs);
+    public ScrcpyVideoFrame? ReadFrame(int timeoutMs) => _client.ReadFrame(timeoutMs);
 
     /// <summary>Reads one framed audio packet from the underlying scrcpy client.
     /// <para>从底层 scrcpy 客户端读取一个分帧音频包。</para></summary>
@@ -122,7 +139,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     /// <para>宣告的包长度超出客户端上限。</para></exception>
     /// <exception cref="EndOfStreamException">The server closed the audio stream mid-packet.
     /// <para>服务端在包读取中途关闭了音频流。</para></exception>
-    public ScrcpyAudioFrame? ReadAudioFrame(int timeoutMs) => client.ReadAudioFrame(timeoutMs);
+    public ScrcpyAudioFrame? ReadAudioFrame(int timeoutMs) => _client.ReadAudioFrame(timeoutMs);
 
     /// <summary>Writes one encoded control message to the device over the control socket.
     /// <para>经控制 socket 向设备发送一条编码后的控制消息。</para></summary>
@@ -130,7 +147,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     /// <para>由 <see cref="ScrcpyControlMessageWriter"/> 生成的消息。</para></param>
     /// <exception cref="InvalidOperationException">Control is disabled or the session is not connected.
     /// <para>控制未启用或会话尚未连接。</para></exception>
-    public void SendControl(byte[] message) => client.SendControl(message);
+    public void SendControl(byte[] message) => _client.SendControl(message);
 
     /// <summary>
     /// Polls one device → client message (clipboard payload or clipboard acknowledgement). The control socket is
@@ -144,7 +161,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     /// <para>设备消息；未到达时为 <see langword="null"/>。</para></returns>
     /// <exception cref="InvalidDataException">The device sent an over-long clipboard or an unknown message type.
     /// <para>设备发出超长剪贴板或未知消息类型。</para></exception>
-    public ScrcpyDeviceMessage? ReadDeviceMessage(int timeoutMs = 0) => client.TryReadDeviceMessage(timeoutMs);
+    public ScrcpyDeviceMessage? ReadDeviceMessage(int timeoutMs = 0) => _client.TryReadDeviceMessage(timeoutMs);
 
     /// <summary>
     /// Writes text into the device clipboard, optionally pasting it into the focused field. The UTF-8 payload is
@@ -159,7 +176,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     /// <exception cref="ArgumentException"><paramref name="text"/> encodes to more than 300 UTF-8 bytes.
     /// <para><paramref name="text"/> 的 UTF-8 编码超过 300 字节。</para></exception>
     public void SendClipboard(string text, bool paste, ulong sequence = 0)
-        => client.SendControl(ScrcpyControlMessageWriter.SetClipboard(text, paste, sequence));
+        => _client.SendControl(ScrcpyControlMessageWriter.SetClipboard(text, paste, sequence));
 
     /// <summary>
     /// Asks the device to send its clipboard; the result arrives as a
@@ -172,7 +189,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     /// <exception cref="InvalidOperationException">Control is disabled or the session is not connected.
     /// <para>控制未启用或会话尚未连接。</para></exception>
     public void RequestClipboard(byte copyKey = ScrcpyConstants.CopyKeyCopy)
-        => client.SendControl(ScrcpyControlMessageWriter.GetClipboard(copyKey));
+        => _client.SendControl(ScrcpyControlMessageWriter.GetClipboard(copyKey));
 
     /// <summary>
     /// Sends one Android BACK press as a down/up pair; the same message wakes a powered-off screen.
@@ -182,8 +199,8 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     /// <para>控制未启用或会话尚未连接。</para></exception>
     public void SendBack()
     {
-        client.SendControl(ScrcpyControlMessageWriter.BackOrScreenOn(ScrcpyConstants.ActionDown));
-        client.SendControl(ScrcpyControlMessageWriter.BackOrScreenOn(ScrcpyConstants.ActionUp));
+        _client.SendControl(ScrcpyControlMessageWriter.BackOrScreenOn(ScrcpyConstants.ActionDown));
+        _client.SendControl(ScrcpyControlMessageWriter.BackOrScreenOn(ScrcpyConstants.ActionUp));
         _displayPowerOn = true;
     }
 
@@ -198,7 +215,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
     public void ToggleDisplayPower()
     {
         _displayPowerOn = !_displayPowerOn;
-        client.SendControl(ScrcpyControlMessageWriter.SetDisplayPower(_displayPowerOn));
+        _client.SendControl(ScrcpyControlMessageWriter.SetDisplayPower(_displayPowerOn));
     }
 
     private void DrainServerOutput()
@@ -209,7 +226,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
             while (Volatile.Read(ref _disposed) == 0)
             {
                 int count;
-                try { count = shell.Read(buffer, 0, buffer.Length); }
+                try { count = _shell.Read(buffer, 0, buffer.Length); }
                 catch (TimeoutException) { continue; }
                 catch (IOException ex) when (ex.InnerException is System.Net.Sockets.SocketException
                 { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut })
@@ -221,7 +238,7 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
                     _output.Append(text);
                     if (_output.Length > 4096) _output.Remove(0, _output.Length - 4096);
                 }
-                logSink?.Invoke(text);
+                _logSink?.Invoke(text);
             }
         }
         catch (Exception) { }
@@ -236,24 +253,24 @@ public sealed class ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdb
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         try
         {
-            client.Dispose();
+            _client.Dispose();
         }
         finally
         {
             try
             {
-                shell.Dispose();
+                _shell.Dispose();
             }
             finally
             {
                 try
                 {
-                    adbSession?.Dispose();
+                    _adbSession?.Dispose();
                 }
                 finally
                 {
-                    if (lease is not null)
-                        lease.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                    if (_lease is not null)
+                        _lease.DisposeAsync().AsTask().GetAwaiter().GetResult();
                 }
             }
         }

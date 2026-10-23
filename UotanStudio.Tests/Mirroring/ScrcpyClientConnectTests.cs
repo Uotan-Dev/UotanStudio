@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Services.Mirroring;
+using UotanStudio.Mirroring;
 using Xunit;
 
 namespace UotanStudio.Tests.Mirroring;

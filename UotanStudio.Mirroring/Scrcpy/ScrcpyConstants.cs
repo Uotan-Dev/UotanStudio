@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Mirroring;
+namespace UotanStudio.Mirroring;
 
 /// <summary>
 /// scrcpy wire-protocol constants for the 5.x server protocol.

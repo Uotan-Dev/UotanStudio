@@ -1,8 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using UotanStudio.Firmware.Core.IO;
-using UotanStudio.Firmware.Infrastructure.Downloads;
 using UotanStudio.Hash.Digests;
+using UotanStudio.Net.Components.Scrcpy;
+using UotanStudio.Net.Http;
 
 namespace UotanStudio.Services.Scrcpy;
 
@@ -142,6 +143,25 @@ public sealed class ScrcpyServerService
         CacheRoot = string.IsNullOrWhiteSpace(cacheRoot) ? DefaultCacheRoot() : Path.GetFullPath(cacheRoot);
     }
 
+    /// <summary>Creates a service with an explicit mirror-list decision, so a test can pin the payload
+    /// to the origin without reading the persisted setting or probing mirrors.
+    /// <para>创建带显式镜像列表决策的服务，使测试无需读取持久化设置或探测镜像即可把载荷固定到源站。</para>
+    /// </summary>
+    /// <param name="client">HTTP client shared by the metadata read and the download.
+    /// <para>版本读取与下载共用的 HTTP 客户端。</para></param>
+    /// <param name="progress">Optional progress sink. <para>可选的进度上报目标。</para></param>
+    /// <param name="cacheRoot">Override for the store root. <para>存储根目录的覆盖值。</para></param>
+    /// <param name="useMirrorList">Whether mirror URLs may deliver the payload.
+    /// <para>是否允许镜像地址交付载荷。</para></param>
+    internal ScrcpyServerService(HttpClient client, IProgress<ScrcpyServerProgress>? progress, string? cacheRoot,
+        bool useMirrorList)
+        : this(client, progress, cacheRoot)
+    {
+        _useMirrorListOverride = useMirrorList;
+    }
+
+    private readonly bool? _useMirrorListOverride;
+
     /// <summary>Store root holding the manifest and the per-version jars.
     /// <para>保存清单与按版本存放的 jar 的存储根目录。</para></summary>
     /// <value>Absolute directory path: the constructor override, then the persisted setting, then
@@ -250,17 +270,36 @@ public sealed class ScrcpyServerService
         }
     }
 
-    /// <summary>Downloads the newest release unless the cache already holds it.
-    /// <para>下载最新发布版本，除非缓存中已经有它。</para></summary>
+    /// <summary>Downloads the newest release unless the cache already holds it. A missing local jar no
+    /// longer prevents the online provisioning path: when neither the cache nor a bundled jar exists,
+    /// the latest GitHub release is fetched (through the built-in mirrors when enabled) and installed.
+    /// <para>下载最新发布版本，除非缓存中已经有它。本地缺少 jar 不再阻断在线供给：缓存与随包 jar 都不存在时，
+    /// 会拉取 GitHub 最新发布（启用时经内置镜像加速）并安装。</para></summary>
     /// <param name="cancellationToken">Cancels the metadata read and the transfer. <para>取消元数据读取与传输。</para></param>
     /// <returns>The artifact to use: the newly provisioned release, an unchanged cache hit, or the bundled jar
     /// when the network is unavailable. <para>应使用的产物：新供给的版本、未变化的缓存命中，或网络不可用时的随包 jar。</para></returns>
+    /// <exception cref="FileNotFoundException">No local jar exists and the release feed could not be read.
+    /// <para>本地没有 jar 且无法读取 Release 源。</para></exception>
     public async Task<ScrcpyServerArtifact> EnsureLatestAsync(CancellationToken cancellationToken = default)
     {
-        var current = Resolve();
+        ScrcpyServerArtifact? current = null;
+        try
+        {
+            current = Resolve();
+        }
+        catch (FileNotFoundException)
+        {
+        }
+
         var release = await CheckAsync(cancellationToken).ConfigureAwait(false);
-        if (release is null) return current;
-        if (current.Source == ScrcpyServerSource.Provisioned
+        if (release is null)
+        {
+            return current ?? throw new FileNotFoundException(
+                "No scrcpy server jar is available locally and the GitHub release feed could not be reached.");
+        }
+
+        if (current is not null
+            && current.Source == ScrcpyServerSource.Provisioned
             && string.Equals(current.Version, release.Version, StringComparison.Ordinal)
             && string.Equals(current.Sha256, release.Sha256, StringComparison.OrdinalIgnoreCase))
         {
@@ -277,11 +316,52 @@ public sealed class ScrcpyServerService
         {
             throw;
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or HttpRequestException)
+        catch (Exception ex) when (current is not null &&
+            ex is IOException or InvalidDataException or HttpRequestException)
         {
             Report(new ScrcpyServerProgress(ScrcpyServerStage.Installing, release.Version, null, null, null,
                 $"Update to {release.Version} failed ({ex.Message}); continuing with {current.Version}. "));
             return current;
+        }
+    }
+
+    /// <summary>Resolves a usable jar, fetching and installing the latest release when the local cache and
+    /// the bundled copy are both absent. Intended for synchronous callers already on a background thread.
+    /// <para>解析可用的 jar；本地缓存与随包副本都不存在时拉取并安装最新发布。供已在后台线程上的同步调用方使用。</para>
+    /// </summary>
+    /// <returns>The resolved or freshly installed artifact. <para>已解析或刚安装的产物。</para></returns>
+    /// <exception cref="FileNotFoundException">No local jar exists and the release feed is unreachable.
+    /// <para>本地没有 jar 且 Release 源不可达。</para></exception>
+    public ScrcpyServerArtifact ResolveOrProvision()
+    {
+        try
+        {
+            return Resolve();
+        }
+        catch (FileNotFoundException)
+        {
+            return EnsureLatestAsync().GetAwaiter().GetResult();
+        }
+    }
+
+    /// <summary>Resolves a usable jar, fetching and installing the latest release when the local cache and
+    /// the bundled copy are both absent.
+    /// <para>解析可用的 jar；本地缓存与随包副本都不存在时拉取并安装最新发布。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the metadata read and the download.
+    /// <para>取消元数据读取与下载。</para></param>
+    /// <returns>The resolved or freshly installed artifact. <para>已解析或刚安装的产物。</para></returns>
+    /// <exception cref="FileNotFoundException">No local jar exists and the release feed is unreachable.
+    /// <para>本地没有 jar 且 Release 源不可达。</para></exception>
+    public async Task<ScrcpyServerArtifact> ResolveOrProvisionAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return Resolve();
+        }
+        catch (FileNotFoundException)
+        {
+            return await EnsureLatestAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -311,7 +391,7 @@ public sealed class ScrcpyServerService
                 Report(new ScrcpyServerProgress(ScrcpyServerStage.Downloading, release.Version, null,
                     sample.Processed, sample.Total, $"Downloading scrcpy server {release.Version}.")));
             Uri used;
-            if (ScrcpyServerSettingsStore.UseMirrorList)
+            if (_useMirrorListOverride ?? ScrcpyServerSettingsStore.UseMirrorList)
             {
                 used = await HttpDownload.DownloadAsync(_client, origin, staged, downloadProgress, cancellationToken)
                     .ConfigureAwait(false);
