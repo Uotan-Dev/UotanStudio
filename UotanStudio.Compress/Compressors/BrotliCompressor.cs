@@ -62,7 +62,7 @@ public static class BrotliCompressor
             using var input = new MemoryStream(data);
             using var brotli = new BrotliStream(input, CompressionMode.Decompress, leaveOpen: false);
             using var output = new MemoryStream();
-            brotli.CopyTo(output);
+            ExactCopy.ToEnd(brotli, output);
             return output.ToArray();
         }
         catch (Exception ex)
@@ -145,7 +145,7 @@ public static class BrotliCompressor
         try
         {
             using var brotli = new BrotliStream(input, CompressionMode.Decompress, leaveOpen: true);
-            brotli.CopyTo(output);
+            ExactCopy.ToEnd(brotli, output);
         }
         catch (Exception ex)
         {

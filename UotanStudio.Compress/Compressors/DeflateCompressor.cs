@@ -89,7 +89,7 @@ public static class DeflateCompressor
             {
                 using var sub = new MemoryStream(data, offset, data.Length - offset, writable: false);
                 using var deflate = new SCDeflateStream(sub, SCCompressionMode.Decompress);
-                deflate.CopyTo(output);
+                ExactCopy.ToEnd(deflate, output);
 
                 var consumed = deflate.TotalIn;
                 if (consumed <= 0)
@@ -193,7 +193,7 @@ public static class DeflateCompressor
                 {
                     var memberStart = input.Position;
                     using var deflate = new SCDeflateStream(new NonDisposingStream(input), SCCompressionMode.Decompress);
-                    deflate.CopyTo(output);
+                    ExactCopy.ToEnd(deflate, output);
 
                     var consumed = deflate.TotalIn;
                     if (consumed <= 0)
@@ -215,7 +215,7 @@ public static class DeflateCompressor
 
 
                 using var deflate = new SCDeflateStream(new NonDisposingStream(input), SCCompressionMode.Decompress);
-                deflate.CopyTo(output);
+                ExactCopy.ToEnd(deflate, output);
             }
         }
         catch (Exception ex)

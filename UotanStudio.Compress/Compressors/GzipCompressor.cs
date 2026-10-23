@@ -81,7 +81,7 @@ public static class GzipCompressor
             using var input = new MemoryStream(data);
             using var gzip = new GZipStream(input, CompressionMode.Decompress);
             using var output = new MemoryStream();
-            gzip.CopyTo(output);
+            ExactCopy.ToEnd(gzip, output);
             return output.ToArray();
         }
         catch (Exception ex)
@@ -164,7 +164,7 @@ public static class GzipCompressor
         try
         {
             using var gzip = new GZipStream(input, CompressionMode.Decompress, leaveOpen: true);
-            gzip.CopyTo(output);
+            ExactCopy.ToEnd(gzip, output);
         }
         catch (Exception ex)
         {

@@ -91,7 +91,7 @@ public static class ZlibCompressor
             {
                 using var sub = new MemoryStream(data, offset, data.Length - offset, writable: false);
                 using var zlib = new ZlibStream(sub, CompressionMode.Decompress);
-                zlib.CopyTo(output);
+                ExactCopy.ToEnd(zlib, output);
 
                 var consumed = zlib.TotalIn;
                 if (consumed <= 0)
@@ -194,7 +194,7 @@ public static class ZlibCompressor
                 {
                     var memberStart = input.Position;
                     using var zlib = new ZlibStream(new NonDisposingStream(input), CompressionMode.Decompress);
-                    zlib.CopyTo(output);
+                    ExactCopy.ToEnd(zlib, output);
 
                     var consumed = zlib.TotalIn;
                     if (consumed <= 0)
@@ -216,7 +216,7 @@ public static class ZlibCompressor
 
 
                 using var zlib = new ZlibStream(new NonDisposingStream(input), CompressionMode.Decompress);
-                zlib.CopyTo(output);
+                ExactCopy.ToEnd(zlib, output);
             }
         }
         catch (Exception ex)

@@ -285,7 +285,7 @@ public static class XzCompressor
         try
         {
             using var xzStream = new XzDecoderStream(input, leaveOpen: true);
-            xzStream.CopyTo(output);
+            ExactCopy.ToEnd(xzStream, output);
         }
         catch (Exception ex)
         {

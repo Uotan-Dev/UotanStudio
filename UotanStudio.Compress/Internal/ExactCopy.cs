@@ -56,4 +56,47 @@ internal static class ExactCopy
             ArrayPool<byte>.Shared.Return(buffer);
         }
     }
+
+    /// <summary>Transfer buffer size used by <see cref="ToEnd"/>; large enough to keep the copy loop cheap for
+    /// multi-megabyte partitions while staying pooled.
+    /// <para><see cref="ToEnd"/> 使用的传输缓冲大小：足够让多兆字节分区的复制循环保持廉价，同时仍然走池化。</para>
+    /// </summary>
+    internal const int BufferBytes = 256 * 1024;
+
+    /// <summary>Reads <paramref name="source"/> to its end and writes every byte to <paramref name="destination"/>.
+    /// <para>把 <paramref name="source"/> 读到末尾，并把每个字节写入 <paramref name="destination"/>。</para></summary>
+    /// <param name="source">Readable source; not closed by this call.
+    /// <para>可读源；本调用不会关闭它。</para></param>
+    /// <param name="destination">Writable sink; not flushed and not closed by this call.
+    /// <para>可写目标；本调用不会刷新也不会关闭它。</para></param>
+    /// <param name="cancellationToken">Checked before each read; a pending decode stops between chunks.
+    /// <para>每次读取前检查；挂起的解码在块之间停止。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="destination"/> is <see langword="null"/>.
+    /// <para><paramref name="source"/> 或 <paramref name="destination"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
+    /// <para><paramref name="cancellationToken"/> 已被取消。</para></exception>
+    internal static void ToEnd(Stream source, Stream destination, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(destination);
+        var buffer = ArrayPool<byte>.Shared.Rent(BufferBytes);
+        try
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = source.Read(buffer, 0, buffer.Length);
+                if (read == 0)
+                {
+                    return;
+                }
+
+                destination.Write(buffer, 0, read);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
 }

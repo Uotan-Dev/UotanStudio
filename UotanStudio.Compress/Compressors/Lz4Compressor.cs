@@ -69,7 +69,7 @@ internal static class Lz4Compressor
             using var input = new MemoryStream(data);
             using var decoder = LZ4Stream.Decode(input);
             using var output = new MemoryStream();
-            decoder.CopyTo(output);
+            ExactCopy.ToEnd(decoder, output);
             return output.ToArray();
         }
         catch (Exception ex)
@@ -149,7 +149,7 @@ internal static class Lz4Compressor
         try
         {
             using var decoder = LZ4Stream.Decode(input, leaveOpen: true);
-            decoder.CopyTo(output);
+            ExactCopy.ToEnd(decoder, output);
         }
         catch (Exception ex)
         {

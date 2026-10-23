@@ -97,7 +97,7 @@ public static class CompressionService
 
         if (format == CompressionFormat.None)
         {
-            input.CopyTo(output);
+            ExactCopy.ToEnd(input, output);
             return;
         }
 
@@ -230,7 +230,7 @@ public static class CompressionService
 
         if (format == CompressionFormat.None)
         {
-            input.CopyTo(output);
+            ExactCopy.ToEnd(input, output, cancellationToken);
             return;
         }
 

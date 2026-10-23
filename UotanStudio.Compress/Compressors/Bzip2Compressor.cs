@@ -81,7 +81,7 @@ public static class Bzip2Compressor
             using var input = new MemoryStream(data);
             using var bzip2 = BZip2Stream.Create(input, CompressionMode.Decompress, decompressConcatenated: true, leaveOpen: false);
             using var output = new MemoryStream();
-            bzip2.CopyTo(output);
+            ExactCopy.ToEnd(bzip2, output);
             return output.ToArray();
         }
         catch (Exception ex)
@@ -159,7 +159,7 @@ public static class Bzip2Compressor
         {
             using var buffered = new BufferedStream(new NonDisposingStream(input), 64 * 1024);
             using var bzip2 = BZip2Stream.Create(buffered, CompressionMode.Decompress, decompressConcatenated: true, leaveOpen: true);
-            bzip2.CopyTo(output);
+            ExactCopy.ToEnd(bzip2, output);
         }
         catch (Exception ex)
         {
