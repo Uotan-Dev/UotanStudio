@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Hash.Digests;
 
@@ -181,7 +182,10 @@ public sealed class AvbHashtreeResult : IDisposable
 internal static class AvbHashtreeBuilder
 {
     private const int Sha256Size = 32;
-    private const int ReadBufferSize = 64 * 1024;
+    private const int ReadBufferSize = 4 * 1024 * 1024;
+    private const int MaxHashBlocks = 256;
+    private const int HashBatchBytes = 4 * 1024;
+    private const int HashBatchDigests = HashBatchBytes / Sha256Size;
 
     /// <summary>
     /// <para>超过此大小的树改用临时文件后备存储，使构建与输出的峰值 RSS 受读缓冲约束而非整棵树。</para>
@@ -398,45 +402,139 @@ internal static class AvbHashtreeBuilder
     }
 
     /// <summary>
-    /// Streams the image in a single pass, computing each data block's digest into the level-0 region of the store.
-    /// <para>单遍流式读取镜像，逐数据块计算摘要并写入后备存储的第 0 层区域。</para>
+    /// Streams the image in a single pass, hashing complete data blocks in parallel and writing their digests to the
+    /// level-0 region in 4 KiB batches.
+    /// <para>单遍流式读取镜像，并行计算完整数据块的摘要，并按 4 KiB 批次把摘要写入后备存储的第 0 层区域。</para>
     /// </summary>
     private static void StreamLevel0IntoStore(Stream stream, byte[] salt, int dataBlockSize, AvbHashtreeResult.TreeStore store, int level0Offset,
         ref int digestIndex, CancellationToken cancellationToken)
     {
-        var buffer = new byte[ReadBufferSize];
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(ReadBufferSize);
         var block = new byte[dataBlockSize];
-        var digest = new byte[Sha256Size];
-        var blockFill = 0;
-        using var hasher = Sha256.CreateAccumulator();
-        int read;
-        while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+        var batch = new byte[HashBatchBytes];
+        var blockCapacity = Math.Max(1, Math.Min(ReadBufferSize / dataBlockSize, MaxHashBlocks));
+        var digests = new byte[blockCapacity * Sha256Size];
+        var slots = new int[blockCapacity];
+        for (var slot = 0; slot < slots.Length; slot++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var offset = 0;
-            while (offset < read)
-            {
-                var toCopy = Math.Min(read - offset, dataBlockSize - blockFill);
-                Array.Copy(buffer, offset, block, blockFill, toCopy);
-                blockFill += toCopy;
-                offset += toCopy;
-                if (blockFill == dataBlockSize)
-                {
-                    HashBlockTo(hasher, salt, block, digest);
-                    store.Write(level0Offset + (long)digestIndex * Sha256Size, digest);
-                    digestIndex = checked(digestIndex + 1);
-                    blockFill = 0;
-                }
-            }
+            slots[slot] = slot;
         }
 
-        if (blockFill > 0)
+        var hashers = new DigestAccumulator[blockCapacity];
+        var created = 0;
+        var batchFill = 0;
+        var blockFill = 0;
+        try
         {
-            Array.Clear(block, blockFill, dataBlockSize - blockFill);
-            HashBlockTo(hasher, salt, block, digest);
-            store.Write(level0Offset + (long)digestIndex * Sha256Size, digest);
-            digestIndex = checked(digestIndex + 1);
+            for (; created < hashers.Length; created++)
+            {
+                hashers[created] = Sha256.CreateAccumulator();
+            }
+
+            int read;
+            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var offset = 0;
+                if (blockFill > 0)
+                {
+                    var toCopy = Math.Min(read, dataBlockSize - blockFill);
+                    Array.Copy(buffer, 0, block, blockFill, toCopy);
+                    blockFill += toCopy;
+                    offset = toCopy;
+                    if (blockFill == dataBlockSize)
+                    {
+                        HashBlockTo(hashers[0], salt, block, digests.AsSpan(0, Sha256Size));
+                        AppendDigest(store, level0Offset, batch, digests.AsSpan(0, Sha256Size), ref digestIndex, ref batchFill);
+                        blockFill = 0;
+                    }
+                }
+
+                var fullBlocks = (read - offset) / dataBlockSize;
+                if (fullBlocks > 0)
+                {
+                    var processed = 0;
+                    while (processed < fullBlocks)
+                    {
+                        var count = Math.Min(blockCapacity, fullBlocks - processed);
+                        var chunkOffset = offset + (processed * dataBlockSize);
+                        FirmwareParallelism.ForEach(new ArraySegment<int>(slots, 0, count), (slot, _) =>
+                        {
+                            HashBlockTo(
+                                hashers[slot],
+                                salt,
+                                buffer.AsSpan(chunkOffset + (slot * dataBlockSize), dataBlockSize),
+                                digests.AsSpan(slot * Sha256Size, Sha256Size));
+                        });
+                        for (var slot = 0; slot < count; slot++)
+                        {
+                            AppendDigest(store, level0Offset, batch, digests.AsSpan(slot * Sha256Size, Sha256Size), ref digestIndex, ref batchFill);
+                        }
+
+                        processed += count;
+                    }
+
+                    offset += fullBlocks * dataBlockSize;
+                }
+
+                var remainder = read - offset;
+                if (remainder > 0)
+                {
+                    Array.Copy(buffer, offset, block, 0, remainder);
+                    blockFill = remainder;
+                }
+            }
+
+            if (blockFill > 0)
+            {
+                Array.Clear(block, blockFill, dataBlockSize - blockFill);
+                HashBlockTo(hashers[0], salt, block, digests.AsSpan(0, Sha256Size));
+                AppendDigest(store, level0Offset, batch, digests.AsSpan(0, Sha256Size), ref digestIndex, ref batchFill);
+            }
+
+            FlushDigestBatch(store, level0Offset, batch, batchFill, digestIndex);
         }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+            for (var slot = 0; slot < created; slot++)
+            {
+                hashers[slot].Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Appends one digest to the pending 4 KiB batch, flushing the batch when it is full.
+    /// <para>把一个摘要追加到待写入的 4 KiB 批次，批次填满时立即写入后备存储。</para>
+    /// </summary>
+    private static void AppendDigest(AvbHashtreeResult.TreeStore store, int level0Offset, byte[] batch, ReadOnlySpan<byte> digest,
+        ref int digestIndex, ref int batchFill)
+    {
+        digest.CopyTo(batch.AsSpan(batchFill * Sha256Size));
+        batchFill++;
+        digestIndex = checked(digestIndex + 1);
+        if (batchFill < HashBatchDigests)
+        {
+            return;
+        }
+
+        FlushDigestBatch(store, level0Offset, batch, batchFill, digestIndex);
+        batchFill = 0;
+    }
+
+    /// <summary>
+    /// Writes the digests accumulated in one batch to the level-0 region with a single store write.
+    /// <para>把当前批次累计的摘要作为单次后备存储写入写到第 0 层区域。</para>
+    /// </summary>
+    private static void FlushDigestBatch(AvbHashtreeResult.TreeStore store, int level0Offset, byte[] batch, int batchFill, int digestIndex)
+    {
+        if (batchFill == 0)
+        {
+            return;
+        }
+
+        store.Write(level0Offset + (long)(digestIndex - batchFill) * Sha256Size, batch.AsSpan(0, batchFill * Sha256Size));
     }
 
     /// <summary>

@@ -7,6 +7,27 @@ namespace UotanStudio.Firmware.BootSecurity.Avb;
 /// </summary>
 public sealed class AvbHashDescriptor
 {
+    /// <summary>Numeric AVB descriptor tag observed by a reader; descriptors built for signing leave it at 0.
+    /// <para>读取方观测到的 AVB 描述符数字标签；为签名构建的描述符保持 0。</para></summary>
+    /// <value>The tag from the vbmeta descriptor header; a hash descriptor carries <c>2</c>. Signing always writes
+    /// the tag implied by this type, so the value is not serialized.
+    /// <para>来自 vbmeta 描述符头部的标签；哈希描述符为 <c>2</c>。签名总是写出该类型隐含的标签，因此该值不参与序列化。</para></value>
+    public ulong Tag { get; init; }
+
+    /// <summary>dm-verity format version reported by a reader for descriptor kinds that store it; a hash
+    /// descriptor has no such field, so it stays 0.
+    /// <para>读取方为存储该字段的描述符类型报告的 dm-verity 格式版本；哈希描述符没有该字段，因此保持 0。</para></summary>
+    /// <value>The version number, or 0 for a parsed hash descriptor and for every descriptor built for signing.
+    /// <para>版本号；解析出的哈希描述符与所有为签名构建的描述符均为 0。</para></value>
+    public uint DmVerityVersion { get; init; }
+
+    /// <summary>Hash-tree block size reported by a reader for descriptor kinds that store it; a hash
+    /// descriptor has no such field, so it stays 0.
+    /// <para>读取方为存储该字段的描述符类型报告的哈希树块大小；哈希描述符没有该字段，因此保持 0。</para></summary>
+    /// <value>The block size in bytes, or 0 for a parsed hash descriptor and for every descriptor built for signing.
+    /// <para>字节块大小；解析出的哈希描述符与所有为签名构建的描述符均为 0。</para></value>
+    public ulong HashBlockSize { get; init; }
+
     /// <summary>
     /// ASCII partition name, non-empty and at most 255 bytes; validated when the descriptor is
     /// serialized for signing.

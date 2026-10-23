@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
@@ -13,6 +14,7 @@ namespace UotanStudio.Firmware.BootSecurity.Avb;
 internal static class AvbFecCodec
 {
     private const int BlockSize = 4096;
+    private const int ReadBufferSize = 64 * 1024;
     private const int CodewordSize = 255;
     private static readonly byte[] Exponents = CreateExponents();
     private static readonly byte[] Logarithms = CreateLogarithms();
@@ -528,57 +530,167 @@ internal static class AvbFecCodec
         {
             throw new ArgumentException("The source must be readable and seekable.", nameof(image));
         }
-        _ = CalculateParitySize(coveredBytes, roots);
+        var parityBytes = CalculateParitySize(coveredBytes, roots);
         cancellationToken.ThrowIfCancellationRequested();
+        var dataSymbols = CodewordSize - (int)roots;
+        var rounds = (coveredBytes / BlockSize + dataSymbols - 1) / dataSymbols;
         var originalPosition = image.Position;
         try
         {
-            var dataSymbols = CodewordSize - (int)roots;
-            var rounds = (coveredBytes / BlockSize + dataSymbols - 1) / dataSymbols;
-            var data = new byte[dataSymbols * BlockSize];
-            var parity = new byte[(int)roots * BlockSize];
-            var polynomial = CreateGenerator((int)roots);
-            for (var round = 0L; round < rounds; round++)
+            if (parityBytes > Core.FirmwareParallelism.WorkerMemoryBudgetBytes)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                for (var symbol = 0; symbol < dataSymbols; symbol++)
-                {
-                    var blockOffset = checked(((long)symbol * rounds + round) * BlockSize);
-                    var block = data.AsMemory(symbol * BlockSize, BlockSize);
-                    if (blockOffset >= coveredBytes)
-                    {
-                        block.Span.Clear();
-                        continue;
-                    }
-                    image.Position = blockOffset;
-                    await image.ReadExactlyAsync(block, cancellationToken).ConfigureAwait(false);
-                }
-                for (var index = 0; index < BlockSize; index++)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var code = parity.AsSpan(index * (int)roots, (int)roots);
-                    code.Clear();
-                    for (var symbol = 0; symbol < dataSymbols; symbol++)
-                    {
-                        var feedback = (byte)(data[symbol * BlockSize + index] ^ code[0]);
-                        for (var root = 0; root < code.Length - 1; root++)
-                        {
-                            code[root] = (byte)(code[root + 1] ^ Multiply(feedback, polynomial[root + 1]));
-                        }
-                        code[^1] = Multiply(feedback, polynomial[^1]);
-                    }
-                }
-                if (!await consume(parity, cancellationToken).ConfigureAwait(false))
-                {
-                    return false;
-                }
+                return await ProcessColumnMajorAsync(image, coveredBytes, roots, rounds, consume, cancellationToken).ConfigureAwait(false);
             }
-            return true;
+
+            return await ProcessRowMajorAsync(image, coveredBytes, roots, rounds, parityBytes, consume, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             image.Position = originalPosition;
         }
+    }
+
+    /// <summary>
+    /// Encodes parity in a single row-major pass: data blocks are read sequentially in bounded batches and accumulated
+    /// into their round's parity rows with the vectorized field multiply, then each round is emitted in interleaved order.
+    /// <para>按行优先单遍编码校验码：按有界批次顺序读取数据块，用向量化域乘法累加到所属轮次的校验行，再按交织顺序输出每轮校验码。</para>
+    /// </summary>
+    private static async Task<bool> ProcessRowMajorAsync(Stream image, long coveredBytes, uint roots, long rounds, long parityBytes,
+        Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>> consume, CancellationToken cancellationToken)
+    {
+        var rootCount = (int)roots;
+        var roundCount = checked((int)rounds);
+        var dataSymbols = CodewordSize - rootCount;
+        var coefficients = CreateParityCoefficients(dataSymbols, CreateGenerator(rootCount), rootCount);
+        var parity = ArrayPool<byte>.Shared.Rent(checked((int)parityBytes));
+        var roundParity = ArrayPool<byte>.Shared.Rent(rootCount * BlockSize);
+        var blocks = coveredBytes / BlockSize;
+        var blocksPerRead = (int)Math.Min(blocks, ReadBufferSize / BlockSize);
+        var readBuffer = ArrayPool<byte>.Shared.Rent(blocksPerRead * BlockSize);
+        try
+        {
+            parity.AsSpan(0, (int)parityBytes).Clear();
+            image.Position = 0;
+            var processed = 0L;
+            while (processed < blocks)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var count = (int)Math.Min(blocksPerRead, blocks - processed);
+                await image.ReadExactlyAsync(readBuffer.AsMemory(0, count * BlockSize), cancellationToken).ConfigureAwait(false);
+                for (var slot = 0; slot < count; slot++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var blockIndex = processed + slot;
+                    var symbol = (int)(blockIndex / rounds);
+                    var round = (int)(blockIndex % rounds);
+                    var coefficient = coefficients[symbol];
+                    var rowOffset = (int)((long)round * rootCount * BlockSize);
+                    var block = readBuffer.AsSpan(slot * BlockSize, BlockSize);
+                    for (var root = 0; root < rootCount; root++)
+                    {
+                        XorMultiplyConstant(parity.AsSpan(rowOffset + (root * BlockSize), BlockSize), block, coefficient[root]);
+                    }
+                }
+
+                processed += count;
+            }
+
+            var roundBytes = rootCount * BlockSize;
+            for (var round = 0; round < roundCount; round++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var roundOffset = round * roundBytes;
+                for (var column = 0; column < BlockSize; column++)
+                {
+                    for (var root = 0; root < rootCount; root++)
+                    {
+                        roundParity[(column * rootCount) + root] = parity[roundOffset + (root * BlockSize) + column];
+                    }
+                }
+
+                if (!await consume(roundParity.AsMemory(0, roundBytes), cancellationToken).ConfigureAwait(false))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(readBuffer);
+            ArrayPool<byte>.Shared.Return(roundParity);
+            ArrayPool<byte>.Shared.Return(parity);
+        }
+    }
+
+    /// <summary>
+    /// Encodes parity round by round for geometries whose complete parity state exceeds the worker memory budget.
+    /// <para>当完整校验状态超出工作内存预算时，按轮次逐列编码校验码。</para>
+    /// </summary>
+    private static async Task<bool> ProcessColumnMajorAsync(Stream image, long coveredBytes, uint roots, long rounds,
+        Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>> consume, CancellationToken cancellationToken)
+    {
+        var dataSymbols = CodewordSize - (int)roots;
+        var data = new byte[dataSymbols * BlockSize];
+        var parity = new byte[(int)roots * BlockSize];
+        var polynomial = CreateGenerator((int)roots);
+        for (var round = 0L; round < rounds; round++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            for (var symbol = 0; symbol < dataSymbols; symbol++)
+            {
+                var blockOffset = checked(((long)symbol * rounds + round) * BlockSize);
+                var block = data.AsMemory(symbol * BlockSize, BlockSize);
+                if (blockOffset >= coveredBytes)
+                {
+                    block.Span.Clear();
+                    continue;
+                }
+                image.Position = blockOffset;
+                await image.ReadExactlyAsync(block, cancellationToken).ConfigureAwait(false);
+            }
+            for (var index = 0; index < BlockSize; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var code = parity.AsSpan(index * (int)roots, (int)roots);
+                code.Clear();
+                for (var symbol = 0; symbol < dataSymbols; symbol++)
+                {
+                    var feedback = (byte)(data[symbol * BlockSize + index] ^ code[0]);
+                    for (var root = 0; root < code.Length - 1; root++)
+                    {
+                        code[root] = (byte)(code[root + 1] ^ Multiply(feedback, polynomial[root + 1]));
+                    }
+                    code[^1] = Multiply(feedback, polynomial[^1]);
+                }
+            }
+            if (!await consume(parity, cancellationToken).ConfigureAwait(false))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Computes one field coefficient per data symbol and parity root from the scalar generator, so a block can be
+    /// accumulated into every parity row with the vectorized multiply.
+    /// <para>用标量生成式算出每个数据符号与校验根对应的域系数，使数据块可通过向量化乘法累加到各校验行。</para>
+    /// </summary>
+    private static byte[][] CreateParityCoefficients(int dataSymbols, byte[] polynomial, int roots)
+    {
+        var coefficients = new byte[dataSymbols][];
+        for (var symbol = 0; symbol < dataSymbols; symbol++)
+        {
+            var unit = new byte[dataSymbols];
+            unit[symbol] = 1;
+            var parity = new byte[roots];
+            EncodeParity(unit, parity, polynomial, roots);
+            coefficients[symbol] = parity;
+        }
+
+        return coefficients;
     }
 
     private static void ValidateGeometry(long coveredBytes, uint roots)

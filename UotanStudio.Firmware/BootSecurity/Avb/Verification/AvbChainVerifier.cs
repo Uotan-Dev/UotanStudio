@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb.Verification;
@@ -159,9 +160,11 @@ public static partial class AvbChainVerifier
                 {
                     return Fail(name, "The AVB graph exceeds 16384 descriptors.");
                 }
-                foreach (var descriptor in signature.Descriptors)
+                var descriptors = signature.Descriptors;
+                for (var descriptorIndex = 0; descriptorIndex < descriptors.Count; descriptorIndex++)
                 {
                     _token.ThrowIfCancellationRequested();
+                    var descriptor = descriptors[descriptorIndex];
                     switch (descriptor.Tag)
                     {
                         case 0:
@@ -170,23 +173,18 @@ public static partial class AvbChainVerifier
                         case 1:
                         case 2:
                             {
-                                var target = ResolveName(descriptor, name);
-                                var targetPath = ResolvePath(target);
-                                AvbPartitionVerifyResult content;
-                                if (string.Equals(targetPath, path, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                                var end = descriptorIndex;
+                                while (end < descriptors.Count && descriptors[end].Tag is 1 or 2)
                                 {
-                                    content = await AvbPartitionVerifier.VerifyWithFecAsync(stream, descriptor, _token).ConfigureAwait(false);
+                                    end++;
                                 }
-                                else
+
+                                if (!await VerifyPartitionsAsync(name, descriptors, descriptorIndex, end - descriptorIndex).ConfigureAwait(false))
                                 {
-                                    await using var partition = await AvbImageSource.OpenAsync(targetPath, _token).ConfigureAwait(false);
-                                    content = await AvbPartitionVerifier.VerifyWithFecAsync(partition.Stream, descriptor, _token).ConfigureAwait(false);
+                                    return false;
                                 }
-                                _partitions.Add(new AvbChainPartitionResult { MetadataPartition = name, PartitionName = target, Content = content });
-                                if (!content.ContentIsValid || content.FecIsValid == false)
-                                {
-                                    return Fail(name, $"{target}: {content.ErrorMessage}");
-                                }
+
+                                descriptorIndex = end - 1;
                                 break;
                             }
                         case 4:
@@ -228,6 +226,51 @@ public static partial class AvbChainVerifier
                     _activePaths.Remove(path!);
                 }
             }
+        }
+
+        private async Task<bool> VerifyPartitionsAsync(string metadataName, IReadOnlyList<AvbDescriptorInfo> descriptors, int start, int count)
+        {
+            var targets = new string?[count];
+            var results = new AvbPartitionVerifyResult?[count];
+            var failures = new ExceptionDispatchInfo?[count];
+            var options = new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Core.FirmwareParallelism.Workers,
+                CancellationToken = _token
+            };
+            await Parallel.ForEachAsync(Enumerable.Range(0, count), options, async (slot, token) =>
+            {
+                try
+                {
+                    var descriptor = descriptors[start + slot];
+                    var target = ResolveName(descriptor, metadataName);
+                    targets[slot] = target;
+                    await using var partition = await AvbImageSource.OpenAsync(ResolvePath(target), token).ConfigureAwait(false);
+                    results[slot] = await AvbPartitionVerifier.VerifyWithFecAsync(partition.Stream, descriptor, token).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    failures[slot] = ExceptionDispatchInfo.Capture(ex);
+                }
+            }).ConfigureAwait(false);
+
+            for (var slot = 0; slot < count; slot++)
+            {
+                if (failures[slot] is { } failure)
+                {
+                    failure.Throw();
+                }
+
+                var content = results[slot]!;
+                var target = targets[slot]!;
+                _partitions.Add(new AvbChainPartitionResult { MetadataPartition = metadataName, PartitionName = target, Content = content });
+                if (!content.ContentIsValid || content.FecIsValid == false)
+                {
+                    return Fail(metadataName, $"{target}: {content.ErrorMessage}");
+                }
+            }
+
+            return true;
         }
 
         private bool Fail(string name, string message)
