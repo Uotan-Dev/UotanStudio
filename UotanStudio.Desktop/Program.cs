@@ -1,7 +1,9 @@
+using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Logging;
 using Avalonia.Media;
 using Dock.Settings;
+using UotanStudio.Services;
 
 namespace UotanStudio.Desktop;
 
@@ -23,6 +25,8 @@ sealed class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        var settings = Services.SettingsPersistenceService.Instance.LoadSettings();
+        Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
 
         if (args is ["--managed-device-shell", var protocolName, var serial])
         {
@@ -88,19 +92,40 @@ sealed class Program
         }
 
         App.StartupFiles = [.. args.Where(File.Exists)];
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        BuildAvaloniaApp(settings).StartWithClassicDesktopLifetime(args);
         return 0;
     }
 
     /// <summary>
-    /// Configures and returns the Avalonia application builder.
-    /// <para>配置并返回 Avalonia 应用构建器。</para>
+    /// Configures and returns the Avalonia application builder using the persisted rendering preferences.
+    /// <para>使用持久化的渲染偏好配置并返回 Avalonia 应用构建器。</para>
     /// </summary>
     /// <returns>The configured Avalonia <see cref="AppBuilder"/>. <para>配置完成的 Avalonia <see cref="AppBuilder"/>。</para></returns>
     public static AppBuilder BuildAvaloniaApp()
+        => BuildAvaloniaApp(Services.SettingsPersistenceService.Instance.LoadSettings());
+
+    /// <summary>
+    /// Configures and returns the Avalonia application builder from the supplied settings.
+    /// <para>根据给定的设置配置并返回 Avalonia 应用构建器。</para>
+    /// </summary>
+    /// <param name="settings">
+    /// Persisted settings supplying the rendering preferences.
+    /// <para>提供渲染偏好的持久化设置。</para>
+    /// </param>
+    /// <returns>The configured Avalonia <see cref="AppBuilder"/>. <para>配置完成的 Avalonia <see cref="AppBuilder"/>。</para></returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="settings"/> is null.
+    /// <para>当 <paramref name="settings"/> 为 null 时抛出。</para>
+    /// </exception>
+    public static AppBuilder BuildAvaloniaApp(AppSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+
         var builder = AppBuilder.Configure<App>()
-            .UsePlatformDetect()
+            .UsePlatformDetect();
+        builder = ApplyWindowingBackend(builder);
+        builder = ApplyRenderingPreferences(builder, settings);
+        builder = builder
             .With(new FontManagerOptions
             {
                 DefaultFamilyName = "avares://UotanStudio/Assets/Fonts#MiSans"
@@ -114,6 +139,177 @@ sealed class Program
         Logger.Sink = new FilteredTraceLogSink();
         return builder;
     }
+
+    /// <summary>
+    /// Selects the native Wayland windowing backend on Linux when a compositor is reachable, keeping the X11
+    /// backend otherwise.
+    /// <para>Linux 上在可连接合成器时选择原生 Wayland 窗口后端，否则保持 X11 后端。</para>
+    /// </summary>
+    /// <param name="builder">The application builder being configured.<para>正在配置的应用构建器。</para></param>
+    /// <returns>The builder carrying the windowing backend.<para>携带窗口后端的构建器。</para></returns>
+    private static AppBuilder ApplyWindowingBackend(AppBuilder builder) =>
+        OperatingSystem.IsLinux() ? UseLinuxWayland(builder) : builder;
+
+    /// <summary>
+    /// Enables Wayland with an X11 fallback. The platform types stay in this non-inlined method so the NativeAOT
+    /// trimmer removes the Wayland assemblies from Windows and macOS publishes.
+    /// <para>启用带 X11 回退的 Wayland。平台类型留在这个非内联方法中，使 NativeAOT 裁剪器能从 Windows 与 macOS
+    /// 发布中移除 Wayland 程序集。</para>
+    /// </summary>
+    /// <param name="builder">The application builder being configured.<para>正在配置的应用构建器。</para></param>
+    /// <returns>The builder with the Linux windowing backend configured.<para>配置了 Linux 窗口后端的构建器。</para></returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static AppBuilder UseLinuxWayland(AppBuilder builder) => builder.UseWaylandWithFallback();
+
+    /// <summary>
+    /// Applies the persisted rendering backend and composition mode to the platform options, falling back to
+    /// the automatic choice when the running platform does not accept them.
+    /// <para>把持久化的渲染后端与合成模式应用到平台选项；当前平台不接受时回退到自动。</para>
+    /// </summary>
+    /// <param name="builder">The application builder being configured.<para>正在配置的应用构建器。</para></param>
+    /// <param name="settings">The persisted settings.<para>持久化设置。</para></param>
+    /// <returns>The builder carrying the platform options.<para>携带平台选项的构建器。</para></returns>
+    private static AppBuilder ApplyRenderingPreferences(AppBuilder builder, AppSettings settings)
+    {
+        var platform = RenderingPreferenceCatalog.CurrentPlatform;
+        var backend = RenderingPreferenceCatalog.Normalize(platform, settings.RenderingBackend);
+        var composition = RenderingPreferenceCatalog.NormalizeComposition(
+            platform, settings.RenderingCompositionMode);
+        return platform switch
+        {
+            RenderingPlatform.Windows => ApplyWindowsRendering(builder, backend, composition),
+            RenderingPlatform.LinuxX11 => ApplyX11Rendering(builder, backend),
+            RenderingPlatform.MacOS => ApplyNativeRendering(builder, backend),
+            _ => builder,
+        };
+    }
+
+    /// <summary>
+    /// Applies the Win32 rendering and composition options; composition is only requested for the automatic and
+    /// ANGLE/EGL backends, which are the only paths that register a composition host.
+    /// <para>应用 Win32 渲染与合成选项；仅自动与 ANGLE/EGL 后端请求合成模式，因为只有这些路径会注册合成宿主。</para>
+    /// </summary>
+    /// <param name="builder">The application builder being configured.<para>正在配置的应用构建器。</para></param>
+    /// <param name="backend">The normalized backend.<para>规范化后的后端。</para></param>
+    /// <param name="composition">The normalized composition mode.<para>规范化后的合成模式。</para></param>
+    /// <returns>The configured builder.<para>配置完成的构建器。</para></returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static AppBuilder ApplyWindowsRendering(
+        AppBuilder builder, RenderingBackend backend, RenderingCompositionMode composition)
+    {
+        if (backend == RenderingBackend.Auto && composition == RenderingCompositionMode.Auto)
+        {
+            return builder;
+        }
+
+        var options = new Win32PlatformOptions();
+        if (WindowsRenderingModes(backend) is { } renderingModes)
+        {
+            options.RenderingMode = renderingModes;
+        }
+
+        if (backend is RenderingBackend.Auto or RenderingBackend.AngleEgl &&
+            WindowsCompositionModes(composition) is { } compositionModes)
+        {
+            options.CompositionMode = compositionModes;
+        }
+
+        return builder.With(options);
+    }
+
+    /// <summary>
+    /// Applies the X11 rendering option, which is the Linux platform selected by <c>UsePlatformDetect</c>.
+    /// <para>应用 X11 渲染选项，即 <c>UsePlatformDetect</c> 选定的 Linux 平台。</para>
+    /// </summary>
+    /// <param name="builder">The application builder being configured.<para>正在配置的应用构建器。</para></param>
+    /// <param name="backend">The normalized backend.<para>规范化后的后端。</para></param>
+    /// <returns>The configured builder.<para>配置完成的构建器。</para></returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static AppBuilder ApplyX11Rendering(AppBuilder builder, RenderingBackend backend) =>
+        X11RenderingModes(backend) is { } renderingModes
+            ? builder.With(new X11PlatformOptions { RenderingMode = renderingModes })
+            : builder;
+
+    /// <summary>
+    /// Applies the Avalonia.Native rendering option used by macOS.
+    /// <para>应用 macOS 使用的 Avalonia.Native 渲染选项。</para>
+    /// </summary>
+    /// <param name="builder">The application builder being configured.<para>正在配置的应用构建器。</para></param>
+    /// <param name="backend">The normalized backend.<para>规范化后的后端。</para></param>
+    /// <returns>The configured builder.<para>配置完成的构建器。</para></returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static AppBuilder ApplyNativeRendering(AppBuilder builder, RenderingBackend backend) =>
+        NativeRenderingModes(backend) is { } renderingModes
+            ? builder.With(new AvaloniaNativePlatformOptions { RenderingMode = renderingModes })
+            : builder;
+
+    /// <summary>
+    /// Builds the Win32 fallback list for the requested backend, always ending with software rendering.
+    /// <para>构造请求后端对应的 Win32 回退列表，始终以软件渲染兜底。</para>
+    /// </summary>
+    /// <param name="backend">The normalized backend.<para>规范化后的后端。</para></param>
+    /// <returns>The ordered modes, or null to keep the platform default.<para>有序模式；null 表示保持平台默认。</para></returns>
+    private static IReadOnlyList<Win32RenderingMode>? WindowsRenderingModes(RenderingBackend backend) => backend switch
+    {
+        RenderingBackend.AngleEgl => [Win32RenderingMode.AngleEgl, Win32RenderingMode.Software],
+        RenderingBackend.Software => [Win32RenderingMode.Software],
+        RenderingBackend.Wgl => [Win32RenderingMode.Wgl, Win32RenderingMode.Software],
+        RenderingBackend.Vulkan => [Win32RenderingMode.Vulkan, Win32RenderingMode.Software],
+        _ => null,
+    };
+
+    /// <summary>
+    /// Builds the Win32 composition fallback list for the requested mode, always ending with the redirection surface.
+    /// <para>构造请求合成模式对应的 Win32 回退列表，始终以重定向表面兜底。</para>
+    /// </summary>
+    /// <param name="composition">The normalized composition mode.<para>规范化后的合成模式。</para></param>
+    /// <returns>The ordered modes, or null to keep the platform default.<para>有序模式；null 表示保持平台默认。</para></returns>
+    private static IReadOnlyList<Win32CompositionMode>? WindowsCompositionModes(
+        RenderingCompositionMode composition) => composition switch
+        {
+            RenderingCompositionMode.WinUIComposition =>
+                [Win32CompositionMode.WinUIComposition, Win32CompositionMode.DirectComposition,
+                    Win32CompositionMode.RedirectionSurface],
+            RenderingCompositionMode.DirectComposition =>
+                [Win32CompositionMode.DirectComposition, Win32CompositionMode.RedirectionSurface],
+            RenderingCompositionMode.LowLatencyDxgiSwapChain =>
+                [Win32CompositionMode.LowLatencyDxgiSwapChain, Win32CompositionMode.RedirectionSurface],
+            RenderingCompositionMode.RedirectionSurface => [Win32CompositionMode.RedirectionSurface],
+            _ => null,
+        };
+
+    /// <summary>
+    /// Builds the X11 fallback list for the requested backend, always ending with software rendering.
+    /// <para>构造请求后端对应的 X11 回退列表，始终以软件渲染兜底。</para>
+    /// </summary>
+    /// <param name="backend">The normalized backend.<para>规范化后的后端。</para></param>
+    /// <returns>The ordered modes, or null to keep the platform default.<para>有序模式；null 表示保持平台默认。</para></returns>
+    private static IReadOnlyList<X11RenderingMode>? X11RenderingModes(RenderingBackend backend) => backend switch
+    {
+        RenderingBackend.Egl => [X11RenderingMode.Egl, X11RenderingMode.Glx, X11RenderingMode.Software],
+        RenderingBackend.Glx => [X11RenderingMode.Glx, X11RenderingMode.Software],
+        RenderingBackend.Software => [X11RenderingMode.Software],
+        RenderingBackend.Vulkan => [X11RenderingMode.Vulkan, X11RenderingMode.Software],
+        _ => null,
+    };
+
+    /// <summary>
+    /// Builds the Avalonia.Native fallback list for the requested backend, always ending with software rendering.
+    /// <para>构造 Avalonia.Native 后端对应的回退列表，始终以软件渲染兜底。</para>
+    /// </summary>
+    /// <param name="backend">The normalized backend.<para>规范化后的后端。</para></param>
+    /// <returns>The ordered modes, or null to keep the platform default.<para>有序模式；null 表示保持平台默认。</para></returns>
+    private static IReadOnlyList<AvaloniaNativeRenderingMode>? NativeRenderingModes(
+        RenderingBackend backend) => backend switch
+        {
+            RenderingBackend.Metal =>
+                [AvaloniaNativeRenderingMode.Metal, AvaloniaNativeRenderingMode.OpenGl,
+                    AvaloniaNativeRenderingMode.Software],
+            RenderingBackend.OpenGl =>
+                [AvaloniaNativeRenderingMode.OpenGl, AvaloniaNativeRenderingMode.Software],
+            RenderingBackend.Software => [AvaloniaNativeRenderingMode.Software],
+            _ => null,
+        };
 
     /// <summary>Writes warnings to Trace while filtering known empty-Dock binding noise.<para>把警告写入 Trace，并过滤已知的空 Dock 绑定噪声。</para></summary>
     private sealed class FilteredTraceLogSink : ILogSink

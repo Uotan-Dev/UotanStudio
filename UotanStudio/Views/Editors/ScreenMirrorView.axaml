@@ -35,21 +35,40 @@
     <Border Grid.Row="2"
             Padding="8,4"
             Background="{DynamicResource PageBackground}">
-      <StackPanel Orientation="Horizontal"
-                  Spacing="6">
+      <WrapPanel Orientation="Horizontal">
         <Button Content="{DynamicResource ScreenMirror_Back}"
+                Margin="0,0,6,0"
                 Click="OnBackClick"
                 AutomationProperties.Name="{DynamicResource ScreenMirror_Back}" />
+        <Button Content="{DynamicResource ScreenMirror_Home}"
+                Margin="0,0,6,0"
+                Click="OnHomeClick"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_Home}" />
+        <Button Content="{DynamicResource ScreenMirror_Recents}"
+                Margin="0,0,6,0"
+                Click="OnRecentsClick"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_Recents}" />
         <Button Content="{DynamicResource ScreenMirror_Power}"
+                Margin="0,0,6,0"
                 Click="OnPowerClick"
                 AutomationProperties.Name="{DynamicResource ScreenMirror_Power}" />
+        <Button Content="{DynamicResource ScreenMirror_VolumeDown}"
+                Margin="0,0,6,0"
+                Click="OnVolumeDownClick"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_VolumeDown}" />
+        <Button Content="{DynamicResource ScreenMirror_VolumeUp}"
+                Margin="0,0,6,0"
+                Click="OnVolumeUpClick"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_VolumeUp}" />
         <Button Content="{DynamicResource ScreenMirror_PushClipboard}"
+                Margin="0,0,6,0"
                 Click="OnPushClipboardClick"
                 AutomationProperties.Name="{DynamicResource ScreenMirror_PushClipboard}" />
         <Button Content="{DynamicResource ScreenMirror_PullClipboard}"
+                Margin="0,0,6,0"
                 Click="OnPullClipboardClick"
                 AutomationProperties.Name="{DynamicResource ScreenMirror_PullClipboard}" />
-      </StackPanel>
+      </WrapPanel>
     </Border>
   </Grid>
 </UserControl>

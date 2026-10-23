@@ -3,7 +3,7 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using UotanStudio.Services.Mirroring;
+using UotanStudio.Mirroring;
 using UotanStudio.ViewModels.Editors;
 
 namespace UotanStudio.Views.Editors;
@@ -75,6 +75,14 @@ public partial class ScreenMirrorView : UserControl
     }
 
     private void OnBackClick(object? sender, RoutedEventArgs e) => ViewModel?.SendBack();
+
+    private void OnHomeClick(object? sender, RoutedEventArgs e) => ViewModel?.SendHome();
+
+    private void OnRecentsClick(object? sender, RoutedEventArgs e) => ViewModel?.SendRecents();
+
+    private void OnVolumeDownClick(object? sender, RoutedEventArgs e) => ViewModel?.AdjustVolume(up: false);
+
+    private void OnVolumeUpClick(object? sender, RoutedEventArgs e) => ViewModel?.AdjustVolume(up: true);
 
     private void OnPowerClick(object? sender, RoutedEventArgs e) => ViewModel?.ToggleDisplayPower();
 
@@ -179,7 +187,7 @@ public partial class ScreenMirrorView : UserControl
 
     private void OnFramePresented(object? sender, EventArgs e)
     {
-        WaitingLabel.IsVisible = ViewModel?.VideoPixelSize.Width is not > 0;
+        WaitingLabel.IsVisible = ViewModel?.HasPresentedVideo != true;
         FrameImage.InvalidateVisual();
     }
 
@@ -190,7 +198,7 @@ public partial class ScreenMirrorView : UserControl
     {
         base.OnPointerPressed(e);
         if (ViewModel is { } selected)
-            Services.Workspace.DocumentNotifications.Publish(selected);
+            Services.Ui.Workspace.DocumentNotifications.Publish(selected);
         if (_pressedPointer is not null || _subscribed is null) return;
         var button = ActionButton(e.GetCurrentPoint(FrameImage).Properties.PointerUpdateKind);
         if (button == 0 || !TranslateTouch(e, false, out var point)) return;

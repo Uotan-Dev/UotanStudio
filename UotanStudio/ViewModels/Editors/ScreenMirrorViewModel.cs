@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Text;
 using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -11,7 +12,8 @@ using UotanStudio.Media.Acceleration.Linux;
 using UotanStudio.Media.Decoding;
 using UotanStudio.Media.Decoding.MediaFoundation;
 using UotanStudio.Media.Decoding.VideoToolbox;
-using UotanStudio.Services.Mirroring;
+using UotanStudio.Mirroring;
+using UotanStudio.Services.Devices;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -36,7 +38,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// </remarks>
 public partial class ScreenMirrorViewModel : Document
 {
-    private ManagedMirrorSession? _client;
+    private MirrorSessionFacade? _client;
     private int _starting;
     private readonly Lock _frameLock = new();
     private Views.Editors.ScreenMirrorPixelBuffer? _pendingFrame;
@@ -45,6 +47,14 @@ public partial class ScreenMirrorViewModel : Document
     internal Views.Editors.ScreenMirrorGpuPresenter GpuPresenter { get; private set; } = new();
     internal PixelSize VideoPixelSize => GpuPresenter.IsAvailable && GpuPresenter.PixelSize is { Width: > 0 } size ? size : Frame?.PixelSize ?? default;
     internal PixelSize InjectionVideoSize => Views.Editors.ScreenMirrorCoordinates.ResolveInjectionSize(StreamMetadata, VideoPixelSize);
+
+    /// <summary>
+    /// Whether any video output has arrived, including a GPU-composited frame that never materializes
+    /// as a bitmap; the waiting overlay is hidden once this becomes true.
+    /// <para>是否已收到任何视频输出，包括不会生成位图的 GPU 合成帧；一旦为真即隐藏等待覆盖文字。</para>
+    /// </summary>
+    internal bool HasPresentedVideo => StreamMetadata is not null || Frame is not null ||
+        GpuPresenter.Draws > 0 || GpuPresenter.CompositedFrames > 0;
 
     private CancellationTokenSource? _cts;
     private Thread? _decodeThread;
@@ -148,33 +158,50 @@ public partial class ScreenMirrorViewModel : Document
         _serial = serial;
         ApplyMirrorSettingsCommand.NotifyCanExecuteChanged();
         StatusText = GetLocalizedString("ScreenMirror_Preparing");
-        _startTask = Task.Run(() =>
+        _startTask = Task.Run(async () =>
         {
             try
             {
-                var device = App.DeviceMonitor.Scan()
-                    .SingleOrDefault(candidate => candidate.Serial == serial &&
-                        candidate.Protocol == Services.Devices.DeviceProtocolKind.Adb)
+                var candidates = App.DeviceMonitor.Scan()
+                    .Where(candidate => candidate.Serial == serial &&
+                        candidate.Protocol is Services.Devices.DeviceProtocolKind.Adb or Services.Devices.DeviceProtocolKind.Hdc)
+                    .ToArray();
+                var device = candidates.FirstOrDefault(candidate => candidate.Protocol == Services.Devices.DeviceProtocolKind.Adb)
+                    ?? candidates.FirstOrDefault(candidate => candidate.Protocol == Services.Devices.DeviceProtocolKind.Hdc)
                     ?? throw new InvalidOperationException($"Device {serial} is not connected.");
-                var artifact = Services.Scrcpy.ScrcpyServerService.Shared.Resolve();
-                Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
-                    $"scrcpy server {artifact.Version} ({artifact.Source}) at {artifact.Path}.");
-                var options = CreateOptionsFromSettings(artifact.Version);
-                _streamOptions = options;
                 StatusText = GetLocalizedString("ScreenMirror_Installing");
-                var mirror = App.DeviceMonitor.StartMirror(
-                    device, artifact.Path, options);
+
+                MirrorSessionFacade facade;
+                if (device.Protocol == Services.Devices.DeviceProtocolKind.Hdc)
+                {
+                    var hap = await Services.Scrcpy.OhscrcpyServerService.Shared
+                        .ResolveOrProvisionAsync().ConfigureAwait(false);
+                    Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
+                        $"ohscrcpy server {hap.Version} ({hap.Source}) at {hap.Path}.");
+                    facade = MirrorSessionFacade.FromOhscrcpy(App.DeviceMonitor.StartOhscrcpyMirror(device));
+                }
+                else
+                {
+                    var artifact = await Services.Scrcpy.ScrcpyServerService.Shared
+                        .ResolveOrProvisionAsync().ConfigureAwait(false);
+                    Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
+                        $"scrcpy server {artifact.Version} ({artifact.Source}) at {artifact.Path}.");
+                    var options = CreateOptionsFromSettings(artifact.Version, SupportsScrcpyAudio(device));
+                    _streamOptions = options;
+                    facade = MirrorSessionFacade.FromScrcpy(App.DeviceMonitor.StartMirror(
+                        device, artifact.Path, options));
+                }
+
                 if (_disposed)
                 {
-                    mirror.Dispose();
+                    facade.Dispose();
                     return;
                 }
-                _client = mirror;
+                _client = facade;
                 if (_disposed)
                 {
-
                     _client = null;
-                    mirror.Dispose();
+                    facade.Dispose();
                     return;
                 }
                 StatusText = GetLocalizedString("ScreenMirror_Connecting");
@@ -231,7 +258,7 @@ public partial class ScreenMirrorViewModel : Document
         }
     }
 
-    private void ControlLoop(ManagedMirrorSession client, CancellationToken token)
+    private void ControlLoop(MirrorSessionFacade client, CancellationToken token)
     {
         while (!token.IsCancellationRequested && !_disposed)
         {
@@ -271,8 +298,18 @@ public partial class ScreenMirrorViewModel : Document
 
         _disposed = true;
         GpuPresenter.Dispose();
+        StopSessionCore();
+        StatusText = GetLocalizedString("ScreenMirror_Stopped");
+    }
+
+    /// <summary>
+    /// Stops the current server session while keeping this document reusable: cancels the loops,
+    /// disposes the client and clears the presented frame, without marking the view model disposed.
+    /// <para>停止当前服务端会话但保留文档可复用：取消循环、释放客户端并清除已呈现帧，不把视图模型标记为已释放。</para>
+    /// </summary>
+    private void StopSessionCore()
+    {
         _cts?.Cancel();
-        _client?.Dispose();
         lock (_frameLock)
         {
             _pendingFrame = null;
@@ -306,10 +343,10 @@ public partial class ScreenMirrorViewModel : Document
         _controlThread = null;
 
         _client?.Dispose();
-
         _client = null;
         _cts?.Dispose();
         _cts = null;
+        _startTask = null;
 
         var oldFrame = Frame;
         void ReleaseBitmap()
@@ -320,8 +357,48 @@ public partial class ScreenMirrorViewModel : Document
         }
         if (Dispatcher.UIThread.CheckAccess()) ReleaseBitmap();
         else Dispatcher.UIThread.Post(ReleaseBitmap);
+    }
 
-        StatusText = GetLocalizedString("ScreenMirror_Stopped");
+    /// <summary>
+    /// Retargets this document to another ADB device, stopping the previous session first. Called on
+    /// the UI thread when the device-list selection changes.
+    /// <para>把本文档切换到另一台 ADB 设备，先停止旧会话。设备列表选中项变化时在 UI 线程调用。</para>
+    /// </summary>
+    /// <param name="serial">Serial of the new mirror target.
+    /// <para>新投屏目标的序列号。</para></param>
+    internal void RetargetTo(string serial)
+    {
+        if (_disposed || string.IsNullOrWhiteSpace(serial) || _starting != 0)
+        {
+            return;
+        }
+
+        if (string.Equals(_serial, serial, StringComparison.Ordinal) && _client is not null)
+        {
+            return;
+        }
+
+        StopSessionCore();
+        _serial = serial;
+        StartForDevice(serial);
+    }
+
+    /// <summary>
+    /// Stops the current session and reports that the selected protocol cannot use scrcpy mirroring.
+    /// <para>停止当前会话，并报告所选协议无法使用 scrcpy 投屏。</para>
+    /// </summary>
+    /// <param name="resourceKey">Localized notice key for the selected protocol.
+    /// <para>所选协议对应的本地化提示键。</para></param>
+    internal void ShowUnsupported(string resourceKey)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        StopSessionCore();
+        _serial = null;
+        StatusText = GetLocalizedString(resourceKey);
     }
 
     /// <summary>
@@ -393,10 +470,26 @@ public partial class ScreenMirrorViewModel : Document
     /// <summary>Sends one Android BACK press. <para>发送一次 Android「返回」按压。</para></summary>
     public void SendBack() => SendSession(client => client.SendBack());
 
+    /// <summary>Sends one Android HOME press. <para>发送一次 Android「主屏幕」按压。</para></summary>
+    public void SendHome() => SendKeyTap(3);
+
+    /// <summary>Sends one Android APP_SWITCH (recents) press. <para>发送一次 Android「多任务」按压。</para></summary>
+    public void SendRecents() => SendKeyTap(187);
+
+    /// <summary>Sends one volume up or down press. <para>发送一次音量加或音量减按压。</para></summary>
+    /// <param name="up">Whether to raise (true) or lower the volume. <para>调高音量为 true，调低为 false。</para></param>
+    public void AdjustVolume(bool up) => SendKeyTap(up ? 24 : 25);
+
+    private void SendKeyTap(int keyCode)
+    {
+        InjectKeyCode(ScrcpyConstants.ActionDown, keyCode, 0);
+        InjectKeyCode(ScrcpyConstants.ActionUp, keyCode, 0);
+    }
+
     /// <summary>Toggles the device screen power. <para>切换设备屏幕电源状态。</para></summary>
     public void ToggleDisplayPower() => SendSession(client => client.ToggleDisplayPower());
 
-    private void SendSession(Action<ManagedMirrorSession> send)
+    private void SendSession(Action<MirrorSessionFacade> send)
     {
         var client = _client;
         if (client is null || !client.IsControlConnected)
@@ -432,7 +525,7 @@ public partial class ScreenMirrorViewModel : Document
         }
     }
 
-    private void DecodeLoop(ManagedMirrorSession client, CancellationToken token)
+    private void DecodeLoop(MirrorSessionFacade client, CancellationToken token)
     {
         try
         {
@@ -481,47 +574,53 @@ public partial class ScreenMirrorViewModel : Document
                             }
                             continue;
                         }
-                        Interlocked.Add(ref _receivedBytes, packet.Data.Length);
-                        if (awaitBoundary && !packet.IsCodecConfig)
-                        {
-                            if (Environment.TickCount64 >= boundaryDeadline)
-                                throw new InvalidDataException("The server produced no key frame after the decoder rebuild.");
-                            skipped++;
-                            continue;
-                        }
-                        awaitBoundary = false;
-                        if (packet.IsCodecConfig)
-                        {
-
-                            if (packet.Data.Length > 1024 * 1024) throw new InvalidDataException("Excessive scrcpy codec configuration.");
-                            configuration = packet.Data;
-                            continue;
-                        }
-                        var timestampTicks = checked(packet.PresentationTimestampMicroseconds * 10);
-                        Interlocked.Increment(ref _receivedFrames);
                         try
                         {
-                            if (configuration is null) decoder.Decode(packet.Data, timestampTicks);
-                            else
+                            Interlocked.Add(ref _receivedBytes, packet.PayloadLength);
+                            if (awaitBoundary && !packet.IsCodecConfig)
                             {
-                                var length = checked(configuration.Length + packet.Data.Length);
-                                if (length > 32 * 1024 * 1024) throw new InvalidDataException("Excessive scrcpy access unit.");
-                                var combined = ArrayPool<byte>.Shared.Rent(length);
-                                try
-                                {
-                                    configuration.CopyTo(combined, 0);
-                                    packet.Data.CopyTo(combined, configuration.Length);
-                                    decoder.Decode(combined.AsSpan(0, length), timestampTicks);
-                                    configuration = null;
-                                }
-                                finally { ArrayPool<byte>.Shared.Return(combined); }
+                                if (Environment.TickCount64 >= boundaryDeadline)
+                                    throw new InvalidDataException("The server produced no key frame after the decoder rebuild.");
+                                skipped++;
+                                continue;
                             }
-                            if (failures != 0) failures = 0;
+                            awaitBoundary = false;
+                            if (packet.IsCodecConfig)
+                            {
+                                if (packet.PayloadLength > 1024 * 1024) throw new InvalidDataException("Excessive scrcpy codec configuration.");
+                                configuration = packet.Data;
+                                continue;
+                            }
+                            var timestampTicks = checked(packet.PresentationTimestampMicroseconds * 10);
+                            Interlocked.Increment(ref _receivedFrames);
+                            try
+                            {
+                                if (configuration is null) decoder.Decode(packet.Data.AsSpan(0, packet.PayloadLength), timestampTicks);
+                                else
+                                {
+                                    var length = checked(configuration.Length + packet.PayloadLength);
+                                    if (length > 32 * 1024 * 1024) throw new InvalidDataException("Excessive scrcpy access unit.");
+                                    var combined = ArrayPool<byte>.Shared.Rent(length);
+                                    try
+                                    {
+                                        configuration.CopyTo(combined, 0);
+                                        packet.Data.AsSpan(0, packet.PayloadLength).CopyTo(combined.AsSpan(configuration.Length));
+                                        decoder.Decode(combined.AsSpan(0, length), timestampTicks);
+                                        configuration = null;
+                                    }
+                                    finally { ArrayPool<byte>.Shared.Return(combined); }
+                                }
+                                if (failures != 0) failures = 0;
+                            }
+                            catch (Exception error) when (MirrorDecoderRecovery.IsRecoverable(error))
+                            {
+                                if (++failures < MirrorDecoderRecovery.ConsecutiveFailuresBeforeRebuild) continue;
+                                throw;
+                            }
                         }
-                        catch (Exception error) when (MirrorDecoderRecovery.IsRecoverable(error))
+                        finally
                         {
-                            if (++failures < MirrorDecoderRecovery.ConsecutiveFailuresBeforeRebuild) continue;
-                            throw;
+                            if (!packet.IsCodecConfig) packet.Dispose();
                         }
                     }
                     return;
@@ -727,7 +826,7 @@ public partial class ScreenMirrorViewModel : Document
         }
     }
 
-    private void RenderBgra(byte[] bgra, int width, int height, int sourceStride)
+    private unsafe void RenderBgra(byte[] bgra, int width, int height, int sourceStride)
     {
         var bitmap = Frame;
         if (bitmap is null || bitmap.PixelSize.Width != width || bitmap.PixelSize.Height != height)
@@ -744,6 +843,15 @@ public partial class ScreenMirrorViewModel : Document
         var stride = framebuffer.RowBytes;
         var rowBytes = Math.Min(width * 4, stride);
         var dst = framebuffer.Address;
+        var total = rowBytes * (long)height;
+        if (sourceStride == stride && rowBytes == stride && total <= bgra.Length)
+        {
+            fixed (byte* source = bgra)
+            {
+                Buffer.MemoryCopy(source, (void*)dst, total, total);
+            }
+            return;
+        }
 
         for (var row = 0; row < height; row++)
         {
@@ -754,10 +862,17 @@ public partial class ScreenMirrorViewModel : Document
     private static string GetLocalizedString(string key)
         => Services.LanguageService.Instance.GetString(key);
 
-    /// <summary>Builds server options from the persisted app settings and the resolved jar version.
-    /// <para>按持久化应用设置与已解析的 jar 版本构建服务端选项。</para>
+    /// <summary>
+    /// Builds server options from the persisted app settings and the resolved jar version. Audio is
+    /// dropped for devices older than Android 11 because the scrcpy server refuses to start its audio
+    /// capture there and the whole mirror would fail with a missing abstract socket.
+    /// <para>按持久化应用设置与已解析的 jar 版本构建服务端选项。Android 11 之前的设备会关闭音频，
+    /// 因为 scrcpy 服务端在这些设备上拒绝启动音频采集，否则整个投屏会因抽象套接字缺失而失败。</para>
     /// </summary>
-    private ScrcpyServerOptions CreateOptionsFromSettings(string serverVersion)
+    /// <param name="serverVersion">Version string pushed with the jar. <para>随 jar 推送的版本串。</para></param>
+    /// <param name="allowAudio">Whether the device supports scrcpy audio capture.
+    /// <para>设备是否支持 scrcpy 音频采集。</para></param>
+    private ScrcpyServerOptions CreateOptionsFromSettings(string serverVersion, bool allowAudio)
     {
         _activeSettings = PendingSettings.Copy();
         var settings = _activeSettings;
@@ -768,9 +883,23 @@ public partial class ScreenMirrorViewModel : Document
             MaxFps = settings.ScreenMirrorMaxFps,
             MaxSize = settings.ScreenMirrorMaxSize,
             VideoCodec = settings.ScreenMirrorVideoCodec,
-            Audio = settings.ScreenMirrorAudioEnabled,
+            Audio = allowAudio && settings.ScreenMirrorAudioEnabled,
             AudioCodec = settings.ScreenMirrorAudioCodec,
             Control = settings.ScreenMirrorControl,
         };
+    }
+
+    private static bool SupportsScrcpyAudio(DetectedDevice device)
+    {
+        try
+        {
+            var sdk = App.DeviceMonitor.RunAdb(device, session =>
+                Encoding.UTF8.GetString(session.ExecuteCommand("getprop ro.build.version.sdk").Stdout).Trim());
+            return int.TryParse(sdk, out var value) && value >= 30;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

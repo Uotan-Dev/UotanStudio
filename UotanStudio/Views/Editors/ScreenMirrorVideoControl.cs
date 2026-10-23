@@ -12,6 +12,25 @@ namespace UotanStudio.Views.Editors;
 public sealed class ScreenMirrorVideoControl : Control
 {
     /// <summary>
+    /// Creates the video control and attaches the composition surface when its view-model arrives
+    /// after the visual tree attachment, as happens when a document view is rebuilt for a language
+    /// or theme change.
+    /// <para>创建视频控件；当视图模型在可视树挂载之后才到达时（例如语言或主题切换重建文档视图），
+    /// 同样挂载合成表面。</para>
+    /// </summary>
+    public ScreenMirrorVideoControl()
+    {
+        DataContextChanged += (_, _) =>
+        {
+            if (VisualRoot is not null && DataContext is ScreenMirrorViewModel model)
+            {
+                _ = model.GpuPresenter.AttachCompositionVisualAsync(this);
+                InvalidateVisual();
+            }
+        };
+    }
+
+    /// <summary>
     /// Attaches the hosted composition surface for the bound presenter when this control enters the visual tree.
     /// <para>当该控件进入可视树时，为绑定的呈现器挂载托管的合成表面。</para>
     /// </summary>
@@ -68,13 +87,15 @@ public sealed class ScreenMirrorVideoControl : Control
         base.Render(context);
         if (DataContext is not ScreenMirrorViewModel model) return;
         var bounds = new Rect(Bounds.Size);
-        if (!model.GpuPresenter.UsesCompositionSurface && !model.GpuPresenter.IsAvailable && model.Frame is { } bitmap)
+        if (!model.GpuPresenter.UsesCompositionSurface && model.Frame is { } bitmap)
         {
             var size = bitmap.Size;
             var scale = Math.Min(bounds.Width / size.Width, bounds.Height / size.Height);
             var destination = new Rect((bounds.Width - size.Width * scale) / 2, (bounds.Height - size.Height * scale) / 2, size.Width * scale, size.Height * scale);
             context.DrawImage(bitmap, new Rect(size), destination);
+            return;
         }
+
         context.Custom(model.GpuPresenter.CreateOperation(bounds));
     }
 }

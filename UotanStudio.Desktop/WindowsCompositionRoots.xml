@@ -1,0 +1,7 @@
+<linker>
+  <assembly fullname="Avalonia.Win32">
+    <type fullname="Avalonia.Win32.WindowImpl">
+      <property name="CompositionEffectsSurface" />
+    </type>
+  </assembly>
+</linker>

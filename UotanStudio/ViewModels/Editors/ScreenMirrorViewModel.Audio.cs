@@ -7,7 +7,7 @@ public partial class ScreenMirrorViewModel
 {
     private string _audioBackend = string.Empty;
     internal string AudioBackend => _audioBackend;
-    private void AudioLoop(Services.Mirroring.ManagedMirrorSession client, CancellationToken token)
+    private void AudioLoop(UotanStudio.Mirroring.MirrorSessionFacade client, CancellationToken token)
     {
         IAudioDecoder? decoder = null;
         IAudioSink? sink = null;
@@ -75,21 +75,28 @@ public partial class ScreenMirrorViewModel
             while (!token.IsCancellationRequested)
             {
                 var packet = client.ReadAudioFrame(1000);
-                if (decoder is null) continue;
                 try
                 {
+                    if (decoder is null) continue;
                     if (packet is null) { decoder.Poll(); continue; }
                     if (packet.IsCodecConfig)
                     {
-                        decoder.Initialize(packet.Data, OnAudioFrame);
+                        decoder.Initialize(packet.Data.AsSpan(0, packet.PayloadLength), OnAudioFrame);
                         continue;
                     }
-                    if (decoder.IsInitialized) decoder.Decode(packet.Data, checked(packet.PresentationTimestampMicroseconds * 10));
+                    if (decoder.IsInitialized) decoder.Decode(packet.Data.AsSpan(0, packet.PayloadLength), checked(packet.PresentationTimestampMicroseconds * 10));
                 }
                 catch (Exception error) when (!token.IsCancellationRequested)
                 {
                     LogService.Instance.Write(LogLevel.Warn, "ScreenMirror", $"Audio decode stopped; draining transport: {error.Message}");
-                    decoder.Dispose(); decoder = null;
+                    decoder?.Dispose(); decoder = null;
+                }
+                finally
+                {
+                    if (packet is not null && !packet.IsCodecConfig)
+                    {
+                        packet.Dispose();
+                    }
                 }
             }
         }

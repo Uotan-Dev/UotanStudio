@@ -1,5 +1,5 @@
 using Avalonia;
-using UotanStudio.Services.Mirroring;
+using UotanStudio.Mirroring;
 
 namespace UotanStudio.Views.Editors;
 
@@ -16,9 +16,14 @@ internal static class ScreenMirrorCoordinates
     /// <returns>The pixel size to report as the event position.<para>作为事件位置上报的像素尺寸。</para></returns>
     internal static PixelSize ResolveInjectionSize(ScrcpyVideoMetadata? announced, PixelSize frame)
     {
-        if (announced is not { Width: > 0, Height: > 0 } || frame is not { Width: > 0, Height: > 0 })
+        if (announced is not { Width: > 0, Height: > 0 })
         {
             return frame;
+        }
+
+        if (frame is not { Width: > 0, Height: > 0 })
+        {
+            return new PixelSize(announced.Width, announced.Height);
         }
 
         return (frame.Width > frame.Height) == (announced.Width > announced.Height)

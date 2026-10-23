@@ -38,6 +38,8 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     private int _compositionProbeCompleted;
     private int _compositionWidth, _compositionHeight;
     private long _compositedFrames;
+    private long _detachedSinceTicks;
+    private int _attaching;
     private readonly Dictionary<nint, CompositionImport> _imports = new();
     internal bool IsAvailable => _available;
     internal long Draws => Interlocked.Read(ref _draws);
@@ -121,26 +123,45 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     internal async Task AttachCompositionVisualAsync(Visual host)
     {
         Dispatcher.UIThread.VerifyAccess();
+        Volatile.Write(ref _attaching, 1);
         DetachCompositionVisual();
         lock (_gate)
         {
-            if (_closed || _failed) { Volatile.Write(ref _compositionProbeCompleted, 1); return; }
+            if (_closed || _failed)
+            {
+                Volatile.Write(ref _detachedSinceTicks, Environment.TickCount64);
+                Volatile.Write(ref _attaching, 0);
+                Volatile.Write(ref _compositionProbeCompleted, 1);
+                return;
+            }
         }
         try
         {
             var generation = Volatile.Read(ref _compositionGeneration);
             var elementVisual = ElementComposition.GetElementVisual(host);
-            if (elementVisual is null) return;
+            if (elementVisual is null)
+            {
+                DisableComposition("element visual unavailable");
+                return;
+            }
             var interop = await elementVisual.Compositor.TryGetCompositionGpuInterop();
             if (Volatile.Read(ref _compositionGeneration) != generation) return;
-            if (interop is null) return;
+            if (interop is null)
+            {
+                DisableComposition("compositor exposes no GPU interop");
+                return;
+            }
             var keyedMutex = interop.SupportedImageHandleTypes.Contains(KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle)
                 && interop.GetSynchronizationCapabilities(KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle)
                     .HasFlag(CompositionGpuImportedImageSynchronizationCapabilities.KeyedMutex);
             var iosurface = interop.SupportedImageHandleTypes.Contains(KnownPlatformGraphicsExternalImageHandleTypes.IOSurfaceRef)
                 && interop.GetSynchronizationCapabilities(KnownPlatformGraphicsExternalImageHandleTypes.IOSurfaceRef)
                     .HasFlag(CompositionGpuImportedImageSynchronizationCapabilities.Automatic);
-            if (!keyedMutex && !iosurface) return;
+            if (!keyedMutex && !iosurface)
+            {
+                DisableComposition("compositor supports no external image handle type");
+                return;
+            }
             var surface = elementVisual.Compositor.CreateDrawingSurface();
             var visual = elementVisual.Compositor.CreateSurfaceVisual();
             visual.Surface = surface;
@@ -169,6 +190,8 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         }
         finally
         {
+            Volatile.Write(ref _detachedSinceTicks, Environment.TickCount64);
+            Volatile.Write(ref _attaching, 0);
             Volatile.Write(ref _compositionProbeCompleted, 1);
         }
     }
@@ -180,6 +203,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     internal void DetachCompositionVisual()
     {
         Dispatcher.UIThread.VerifyAccess();
+        Volatile.Write(ref _detachedSinceTicks, Environment.TickCount64);
         CompositionDrawingSurface? surface;
         CompositionSurfaceVisual? visual;
         Visual? host;
@@ -247,10 +271,35 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         if (!UsesCompositionSurface)
         {
             frame.MarkPresented();
-            return false;
+            return RetainGpuExportWhileSurfaceMissing();
         }
         Dispatcher.UIThread.Post(() => PresentSharedTexture(frame), DispatcherPriority.Render);
         return true;
+    }
+
+    /// <summary>
+    /// Decides whether to keep GPU export enabled while the composition surface is temporarily
+    /// missing. A dock move detaches and reattaches the visual; dropping frames during that window
+    /// keeps the decoder on GPU export. Once attaching has finished and no surface appears within
+    /// the grace period, the caller returns false so the decode path falls back to NV12/bitmap
+    /// instead of staying black forever.
+    /// <para>判定合成表面暂时缺失时是否保持 GPU 导出。停靠移动会先分离再重新挂载可视对象，
+    /// 该窗口内丢弃帧可让解码器保持 GPU 导出；若挂载结束后的宽限期内仍没有表面，则返回 false，
+    /// 让解码路径回退到 NV12/位图，而不是永远黑屏。</para>
+    /// </summary>
+    private bool RetainGpuExportWhileSurfaceMissing()
+    {
+        if (_closed || _failed || _compositionFailed)
+        {
+            return false;
+        }
+
+        if (Volatile.Read(ref _attaching) != 0)
+        {
+            return true;
+        }
+
+        return Environment.TickCount64 - Volatile.Read(ref _detachedSinceTicks) < 2000;
     }
 
     /// <summary>
@@ -269,7 +318,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         if (!UsesCompositionSurface)
         {
             frame.MarkPresented();
-            return false;
+            return RetainGpuExportWhileSurfaceMissing();
         }
         Dispatcher.UIThread.Post(() => PresentIosurface(frame), DispatcherPriority.Render);
         return true;
@@ -285,6 +334,12 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             var surface = _surface;
             if (_closed || interop is null || surface is null || Volatile.Read(ref _compositionGeneration) != generation)
                 return;
+            if (_hostControl is null || Avalonia.Controls.TopLevel.GetTopLevel(_hostControl) is null)
+            {
+                DisableComposition("composition host left the visual tree");
+                return;
+            }
+
             var import = ObtainImport(interop, frame.SharedHandle, frame.Width, frame.Height,
                 KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle);
             await surface.UpdateWithKeyedMutexAsync(import.Image, 1, 0).ConfigureAwait(true);
@@ -314,6 +369,12 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             var surface = _surface;
             if (_closed || interop is null || surface is null || Volatile.Read(ref _compositionGeneration) != generation)
                 return;
+            if (_hostControl is null || Avalonia.Controls.TopLevel.GetTopLevel(_hostControl) is null)
+            {
+                DisableComposition("composition host left the visual tree");
+                return;
+            }
+
             var image = interop.ImportImage(new PlatformHandle(frame.Iosurface, KnownPlatformGraphicsExternalImageHandleTypes.IOSurfaceRef),
                 new PlatformGraphicsExternalImageProperties
                 {
