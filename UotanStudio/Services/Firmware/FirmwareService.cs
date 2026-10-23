@@ -713,7 +713,7 @@ public sealed class FirmwareService
                         parser.ParseFile(bootPath);
                         WriteComponent(outputDirectory, "kernel", parser.Kernel);
                         WriteComponent(outputDirectory, "ramdisk", parser.Ramdisk);
-                        WriteComponent(outputDirectory, "ramdisk.cpio", DecompressRamdisk(parser.Ramdisk, parser.Header.RamdiskCompression));
+                        WriteRamdiskArchive(outputDirectory, "ramdisk", parser.Ramdisk, parser.Header.RamdiskCompression);
                         WriteComponent(outputDirectory, "second", parser.Second);
                         WriteComponent(outputDirectory, "dtb", parser.Dtb);
                         WriteComponent(outputDirectory, "dtbo", parser.RecoveryDtbo);
@@ -727,7 +727,7 @@ public sealed class FirmwareService
                     {
                         parser.ParseFile(bootPath);
                         WriteComponent(outputDirectory, "vendor_ramdisk", parser.VendorRamdisk);
-                        WriteComponent(outputDirectory, "vendor_ramdisk.cpio", DecompressRamdisk(parser.VendorRamdisk, parser.Header.VendorRamdiskCompression));
+                        WriteRamdiskArchive(outputDirectory, "vendor_ramdisk", parser.VendorRamdisk, parser.Header.VendorRamdiskCompression);
                         WriteComponent(outputDirectory, "dtb", parser.Dtb);
                         WriteComponent(outputDirectory, "bootconfig", parser.Bootconfig);
                     }
@@ -773,11 +773,22 @@ public sealed class FirmwareService
         return FirmwareOperationResult.From(result);
     }
 
-    private static byte[] DecompressRamdisk(byte[] raw, UotanStudio.Firmware.BootSecurity.BootImage.Models.CompressionType compression)
+    private static void WriteRamdiskArchive(string directory, string name, byte[] ramdisk,
+        UotanStudio.Firmware.BootSecurity.BootImage.Models.CompressionType compression)
     {
-        return compression == UotanStudio.Firmware.BootSecurity.BootImage.Models.CompressionType.None || raw.Length == 0
-            ? raw
-            : BootCompressor.TryDecompress(raw, compression) ?? raw;
+        if (ramdisk.Length == 0)
+        {
+            return;
+        }
+
+        if (RamdiskArchive.TryMaterialize(ramdisk, compression, out var archive))
+        {
+            WriteComponent(directory, name + ".cpio", archive);
+            return;
+        }
+
+        LogService.Instance.Write(LogLevel.Warn, "Firmware",
+            $"Ramdisk '{name}' does not decode to a CPIO/TAR archive (declared container: {compression}); the raw component is kept and no '{name}.cpio' is written.");
     }
 
     /// <summary>

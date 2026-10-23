@@ -674,11 +674,10 @@ public sealed class BootImageFormatHandler : IFormatHandler, IRepackMetadataProv
             return;
         }
 
-        var compression = BootCompressor.Detect(ramdisk);
-        var cpio = compression == CompressionType.None
-            ? ramdisk
-            : BootCompressor.TryDecompress(ramdisk, compression) ?? ramdisk;
-        WriteIfNonEmpty(directory, "ramdisk.cpio", cpio, entries);
+        if (RamdiskArchive.TryMaterialize(ramdisk, BootCompressor.Detect(ramdisk), out var cpio))
+        {
+            WriteIfNonEmpty(directory, "ramdisk.cpio", cpio, entries);
+        }
     }
 
     private static void WriteIfNonEmpty(string directory, string name, byte[] data, List<string> entries)
