@@ -13,10 +13,17 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Wayland" />
     <PackageReference Include="AvaloniaUI.DiagnosticsSupport">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <!-- Preserve the Win32 composition surface getter the settings page reads to report the live host; the
+         descriptor is scoped to Windows RIDs so Linux and macOS publishes keep trimming the Win32 platform. -->
+    <TrimmerRootDescriptor Include="WindowsCompositionRoots.xml" />
   </ItemGroup>
 
   <ItemGroup>

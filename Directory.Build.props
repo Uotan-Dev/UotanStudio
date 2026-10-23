@@ -1,5 +1,8 @@
 <Project>
 
+  <!-- Version.props is the single source of truth for the application version and channel. -->
+  <Import Project="$(MSBuildThisFileDirectory)Version.props" />
+
   <PropertyGroup>
     <TargetFramework Condition="'$(TargetFramework)' == ''">net10.0</TargetFramework>
     <CETCompat>false</CETCompat>
@@ -9,6 +12,17 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <DefaultItemExcludes>$(DefaultItemExcludes);**/artifacts/**</DefaultItemExcludes>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <!-- Derive the semantic version from Version.props unless CI supplied a complete Version. -->
+  <PropertyGroup>
+    <VersionChannel Condition="'$(VersionChannel)' == ''">experimental</VersionChannel>
+    <VersionChannel>$([System.String]::Copy('$(VersionChannel)').Trim().ToLowerInvariant())</VersionChannel>
+    <_UotanVersionSuffix Condition="'$(VersionChannel)' == 'beta'">-beta</_UotanVersionSuffix>
+    <_UotanVersionSuffix Condition="'$(VersionChannel)' == 'canary'">-canary</_UotanVersionSuffix>
+    <_UotanVersionSuffix Condition="'$(VersionChannel)' == 'experimental'">-experimental</_UotanVersionSuffix>
+    <VersionSuffix Condition="'$(VersionSuffix)' == ''">$(_UotanVersionSuffix)</VersionSuffix>
+    <Version Condition="'$(Version)' == ''">$(VersionPrefix)$(VersionSuffix)</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(MSBuildProjectName)' != 'UotanStudio.Tests' AND '$(MSBuildProjectName)' != 'UotanStudio.Benchmarks' AND '$(MSBuildProjectName)' != 'UotanStudio.ErofsBench' AND '$(MSBuildProjectName)' != 'erofs-producer'">

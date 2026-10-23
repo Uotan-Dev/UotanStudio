@@ -1,0 +1,14 @@
+<Project>
+
+  <!--
+    The single source of truth for the application version. Bump VersionPrefix before a
+    release and set VersionChannel to one of release, beta, canary or experimental.
+    CI may override either value with -p:VersionPrefix=... / -p:VersionChannel=...
+    (a tag build also passes -p:Version=... for the complete semantic version).
+  -->
+  <PropertyGroup>
+    <VersionPrefix>1.0.0</VersionPrefix>
+    <VersionChannel>canary</VersionChannel>
+  </PropertyGroup>
+
+</Project>

@@ -19,6 +19,31 @@
   </ItemGroup>
 
 
+  <!--
+    Emit the compiled version/channel/commit constants used by BuildInfo. Version.props feeds
+    $(Version) and $(VersionChannel); SourceRevisionId is populated by the SDK's source-control
+    targets (SourceLink) and stays empty in builds made from a tarball without Git metadata.
+  -->
+  <Target Name="GenerateUotanBuildInfo"
+          BeforeTargets="CoreCompile"
+          DependsOnTargets="InitializeSourceControlInformation">
+    <PropertyGroup>
+      <_UotanCommitShort Condition="'$(SourceRevisionId)' != '' and $([System.String]::Copy('$(SourceRevisionId)').Length) &gt;= 7">$(SourceRevisionId.Substring(0, 7))</_UotanCommitShort>
+      <_UotanCommitShort Condition="'$(_UotanCommitShort)' == ''">$(SourceRevisionId)</_UotanCommitShort>
+      <_UotanBuildInfoFile>$(IntermediateOutputPath)UotanBuildInfo.g.cs</_UotanBuildInfoFile>
+    </PropertyGroup>
+    <Error Condition="'$(VersionChannel)' != 'release' and '$(VersionChannel)' != 'beta' and '$(VersionChannel)' != 'canary' and '$(VersionChannel)' != 'experimental'"
+           Text="VersionChannel must be one of release, beta, canary or experimental (got '$(VersionChannel)')." />
+    <WriteLinesToFile File="$(_UotanBuildInfoFile)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true"
+                      Lines="// &lt;auto-generated/&gt;;namespace UotanStudio.Build%3B;;internal static class BuildInfoData;{;    internal const string Version = &quot;$(Version)&quot;%3B;    internal const string Channel = &quot;$(VersionChannel)&quot;%3B;    internal const string Commit = &quot;$(SourceRevisionId)&quot;%3B;    internal const string CommitShort = &quot;$(_UotanCommitShort)&quot;%3B;}" />
+    <ItemGroup>
+      <Compile Include="$(_UotanBuildInfoFile)" />
+      <FileWrites Include="$(_UotanBuildInfoFile)" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <ProjectReference Include="..\UotanStudio.Projects\UotanStudio.Projects.csproj" />
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
@@ -28,6 +53,7 @@
     <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
     <ProjectReference Include="..\UotanStudio.Media\UotanStudio.Media.csproj" />
     <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
+    <ProjectReference Include="..\UotanStudio.Net\UotanStudio.Net.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -62,6 +88,8 @@
     <PackageReference Include="Semi.Avalonia.DataGrid" />
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
+    <!-- Explicit-factory DI container; registrations are AOT/trimming safe. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <!-- QR code rendering for the wireless-debugging pairing popup. -->
     <PackageReference Include="QRCoder" />
     <PackageReference Include="DiffPlex" />

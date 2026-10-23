@@ -14,5 +14,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
+    <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
   </ItemGroup>
 </Project>

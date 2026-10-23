@@ -1,14 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <RootNamespace>UotanStudio.Projects</RootNamespace>
     <IsAotCompatible>true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
+    <ProjectReference Include="..\UotanStudio.Compress\UotanStudio.Compress.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="UotanStudio" />
     <InternalsVisibleTo Include="UotanStudio.Tests" />
     <InternalsVisibleTo Include="UotanStudio.Benchmarks" />
   </ItemGroup>

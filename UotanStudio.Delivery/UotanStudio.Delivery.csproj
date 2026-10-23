@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <RootNamespace>UotanStudio.Services.Delivery</RootNamespace>
+    <RootNamespace>UotanStudio.Delivery</RootNamespace>
     <AssemblyName>UotanStudio.Delivery</AssemblyName>
     <IsAotCompatible>true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -10,6 +10,7 @@
     <ProjectReference Include="..\UotanStudio.Compress\UotanStudio.Compress.csproj" />
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
     <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
+    <ProjectReference Include="..\UotanStudio.Net\UotanStudio.Net.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\update-binary-arm64" CopyToOutputDirectory="PreserveNewest" />

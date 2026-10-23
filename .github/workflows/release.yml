@@ -4,9 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Override release version (defaults to git tag or run number)"
+        description: "Override version prefix or full version (defaults to Version.props / git tag)"
         required: false
         default: ""
+      channel:
+        description: "Distribution channel (auto follows Version.props / tag suffix)"
+        required: false
+        type: choice
+        options:
+          - auto
+          - release
+          - beta
+          - canary
+          - experimental
+        default: auto
   push:
     tags:
       - "v*"
@@ -57,14 +68,52 @@ jobs:
         id: ver
         shell: bash
         run: |
-          raw="${{ github.event.inputs.version }}"
-          if [ -z "$raw" ]; then raw="${GITHUB_REF_NAME#v}"; fi
-          case "$raw" in
-            v*[0-9]*|"") raw="${GITHUB_RUN_NUMBER}" ;;
-          esac
-          raw="${raw#v}"
-          echo "version=$raw" >> "$GITHUB_OUTPUT"
-          echo "Resolved version: $raw"
+          file_prefix=$(sed -n 's:.*<VersionPrefix>\([^<]*\)</VersionPrefix>.*:\1:p' Version.props | head -1)
+          file_channel=$(sed -n 's:.*<VersionChannel>\([^<]*\)</VersionChannel>.*:\1:p' Version.props | head -1)
+          prefix="${file_prefix:-1.0.0}"
+          channel="${file_channel:-canary}"
+          version=""
+
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            tag="${GITHUB_REF_NAME#v}"
+            prefix="${tag%%-*}"
+            case "$tag" in
+              *-beta*) channel=beta ;;
+              *-canary*) channel=canary ;;
+              *-experimental*) channel=experimental ;;
+              *) channel=release ;;
+            esac
+            version="$tag"
+          fi
+
+          input_version="${{ github.event.inputs.version }}"
+          if [ -n "$input_version" ]; then
+            version="${input_version#v}"
+            prefix="${version%%-*}"
+            case "$version" in
+              *-beta*) channel=beta ;;
+              *-canary*) channel=canary ;;
+              *-experimental*) channel=experimental ;;
+            esac
+          fi
+
+          input_channel="${{ github.event.inputs.channel }}"
+          if [ -n "$input_channel" ] && [ "$input_channel" != "auto" ]; then
+            channel="$input_channel"
+          fi
+
+          if [ -z "$version" ]; then
+            if [ "$channel" = "release" ]; then
+              version="$prefix"
+            else
+              version="$prefix-$channel.$GITHUB_RUN_NUMBER"
+            fi
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $version ($channel)"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -95,6 +144,8 @@ jobs:
             -p:PublishAot=true \
             -p:DebugType=none \
             -p:DebugSymbols=false \
+            -p:Version="${{ steps.ver.outputs.version }}" \
+            -p:VersionChannel="${{ steps.ver.outputs.channel }}" \
             -o "$RUNNER_TEMP/publish"
 
       - name: "Package (Windows: zip)"
@@ -103,13 +154,11 @@ jobs:
         run: |
           $stage = Join-Path $env:RUNNER_TEMP "pkg"
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          $exclude = @('*.pdb', '*.dbg', '*.xml', 'COPYING')
-          $keep = @('libusb-LICENSE.txt')
+          $exclude = @('*.pdb', '*.dbg', '*.xml')
           Get-ChildItem "$env:RUNNER_TEMP/publish" -Recurse -File |
             Where-Object {
               $name = $_.Name; $p = $_.FullName
-              if ($keep -contains $name) { return $true }
-              -not (($exclude | Where-Object { $name -like $_ }) -or ($name -like '*LICENSE*') -or $p -like "*.dSYM*")
+              -not (($exclude | Where-Object { $name -like $_ }) -or ($p -like "*.dSYM*"))
             } |
             ForEach-Object {
               $rel = $_.FullName.Substring("$env:RUNNER_TEMP/publish".Length).TrimStart('\','/')
@@ -124,8 +173,7 @@ jobs:
         shell: bash
         run: |
           cd "$RUNNER_TEMP/publish"
-          find . -type f \( -name "*.pdb" -o -name "*.dbg" -o -name "*.xml" -o -name "COPYING" \) -delete
-          find . -type f -name "*LICENSE*" ! -name "libusb-LICENSE.txt" -delete
+          find . -type f \( -name "*.pdb" -o -name "*.dbg" -o -name "*.xml" \) -delete
           rm -rf *.dSYM
           chmod +x UotanStudio.Desktop 2>/dev/null || true
           find . -type d -empty -delete
