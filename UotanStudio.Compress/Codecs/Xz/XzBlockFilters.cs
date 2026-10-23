@@ -384,7 +384,7 @@ internal sealed class XzX86Filter : XzBlockFilter
                 mask = (mask << ((previousPosition - 1) & 31)) & 7;
                 if (mask != 0)
                 {
-                    var tested = unchecked((byte)(buffer[positionInBuffer + 4] - bitNumbers[(int)mask]));
+                    var tested = buffer[positionInBuffer + 4 - bitNumbers[(int)mask]];
                     if (allowed[(int)mask] == 0 || TestByte(tested))
                     {
                         previousPosition = positionInBuffer;
