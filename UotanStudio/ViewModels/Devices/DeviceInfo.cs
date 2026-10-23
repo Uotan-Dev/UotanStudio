@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Mtk;
+using UotanStudio.Comm.Protocols.SpacemiT;
 using UotanStudio.Models;
 using UotanStudio.Services.Devices;
 
@@ -268,6 +269,19 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
 
     /// <summary>是否为 Fastboot 设备。 Whether the device is in Fastboot mode.</summary>
     public bool IsFastboot => Device.Protocol == DeviceProtocolKind.Fastboot;
+
+    /// <summary>
+    /// Whether this fastboot device is the SpacemiT K1/K3 gadget (VID 0x361C, PID 0x1001).
+    /// <para>该 fastboot 设备是否为 SpacemiT K1/K3 gadget（VID 0x361C、PID 0x1001）。</para>
+    /// </summary>
+    public bool IsSpacemiTFastboot =>
+        IsFastboot && Device.VendorId == SpacemiTConstants.UsbVendorId && Device.ProductId == SpacemiTConstants.UsbProductId;
+
+    /// <summary>
+    /// Fastboot badge text: shows the SoC vendor "SpacemiT" for the K1/K3 gadget instead of the generic mode.
+    /// <para>Fastboot 徽章文本：K1/K3 gadget 显示 SoC 厂商 "SpacemiT"，其余显示通用模式名。</para>
+    /// </summary>
+    public string FastbootBadge => IsSpacemiTFastboot ? "SpacemiT" : "Fastboot";
 
     /// <summary>
     /// Whether rebooting into fastbootd is supported (ADB or Fastboot protocol).

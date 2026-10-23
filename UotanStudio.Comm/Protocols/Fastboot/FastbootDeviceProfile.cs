@@ -86,6 +86,7 @@ internal static class FastbootDeviceProfiles
     public static IReadOnlyList<FastbootDeviceProfile> Default { get; } =
     [
         new FastbootDeviceProfile(0x1949, 0x0006, "Amazon Kindle Fire (stock bootloader)"),
-        new FastbootDeviceProfile(0x18D1, 0x0100, "Amazon Kindle Fire (FFF bootloader)")
+        new FastbootDeviceProfile(0x18D1, 0x0100, "Amazon Kindle Fire (FFF bootloader)"),
+        new FastbootDeviceProfile(0x361C, 0x1001, "SpacemiT K1/K3 fastboot (BootROM FDL / U-Boot gadget)")
     ];
 }

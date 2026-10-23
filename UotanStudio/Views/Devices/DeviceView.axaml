@@ -306,7 +306,7 @@
                                                 </Border>
                                                 <Border Classes="ModeChip" Background="#0D47A1"
                                                         IsVisible="{Binding IsFastboot}">
-                                                    <TextBlock Text="Fastboot" FontSize="10" Foreground="White" />
+                                                    <TextBlock Text="{Binding FastbootBadge}" FontSize="10" Foreground="White" />
                                                 </Border>
                                                 <Border Classes="ModeChip" Background="#E65100"
                                                         IsVisible="{Binding IsEdl}">
@@ -381,7 +381,7 @@
                                     </Border>
                                     <Border Classes="ModeChip" Background="#0D47A1"
                                             IsVisible="{Binding IsFastboot}">
-                                        <TextBlock Text="Fastboot" FontSize="11" Foreground="White" />
+                                        <TextBlock Text="{Binding FastbootBadge}" FontSize="11" Foreground="White" />
                                     </Border>
                                     <Border Classes="ModeChip" Background="#E65100"
                                             IsVisible="{Binding IsEdl}">

@@ -27,6 +27,7 @@ public static class UsbVendorTable
         [0x2DE3] = "HMD Global",
         [0x0421] = "Nokia",
 
+        [0x361C] = "SpacemiT",
         [0x05C6] = "Qualcomm",
         [0x1782] = "MediaTek",
         [0x0E8D] = "MediaTek",
