@@ -1,7 +1,6 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using UotanStudio.Net.GitHub;
 
-namespace UotanStudio.Services.Scrcpy;
+namespace UotanStudio.Net.Components.Scrcpy;
 
 /// <summary>One published scrcpy server artifact, as described by the GitHub release API.
 /// <para>GitHub Release API 描述的一个 scrcpy 服务端产物。</para></summary>
@@ -25,8 +24,8 @@ public sealed record ScrcpyServerRelease(
     string Sha256);
 
 /// <summary>
-/// Fetches the published scrcpy server release from <c>api.github.com</c>.
-/// <para>从 <c>api.github.com</c> 获取已发布的 scrcpy 服务端版本信息。</para>
+/// Describes the published scrcpy server release read from <c>api.github.com</c>.
+/// <para>描述从 <c>api.github.com</c> 读取的已发布 scrcpy 服务端版本。</para>
 /// </summary>
 /// <remarks>
 /// <para>
@@ -49,51 +48,43 @@ public static class ScrcpyServerReleaseClient
     /// <para>独立服务端资产文件名的前缀。</para></summary>
     public const string ServerAssetPrefix = "scrcpy-server-v";
 
+    private const string Owner = "Genymobile";
+    private const string Repository = "scrcpy";
+
     /// <summary>Fetches and validates the newest release.<para>获取并校验最新的 Release。</para></summary>
     /// <param name="client">HTTP client used for the single origin request.
     /// <para>用于这次源站请求的 HTTP 客户端。</para></param>
-    /// <param name="url">Release API URL; tests inject a stand-in.
-    /// <para>Release API 地址；测试注入替身。</para></param>
     /// <param name="cancellationToken">Cancels the request and the parse.<para>取消请求与解析。</para></param>
     /// <returns>The described server artifact.<para>所描述的服务端产物。</para></returns>
     /// <exception cref="InvalidOperationException">The response carries no release, no standalone server asset, a tag without a dotted decimal version, or an asset without a published SHA-256 digest.
     /// <para>响应中没有 Release、没有独立服务端资产、标签不含点分十进制版本，或资产未公布 SHA-256 摘要。</para></exception>
-    /// <exception cref="HttpRequestException">The origin request failed.
-    /// <para>源站请求失败。</para></exception>
+    /// <exception cref="HttpRequestException">The origin request failed; the exception carries the status code.
+    /// <para>源站请求失败；异常携带状态码。</para></exception>
     public static async Task<ScrcpyServerRelease> GetLatestAsync(
         HttpClient client,
-        string url = LatestReleaseUrl,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(client);
-        using var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        await using var content = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var document = await JsonSerializer.DeserializeAsync(
-            content, ScrcpyReleaseJsonContext.Default.GitHubReleaseDocument, cancellationToken).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("The release API returned no document.");
-
-        return FromDocument(document);
+        var release = await GitHubReleaseClient.GetLatestAsync(client, Owner, Repository, cancellationToken)
+            .ConfigureAwait(false);
+        return FromRelease(release);
     }
 
-    /// <summary>Projects a parsed release document onto the server artifact it publishes.
-    /// <para>从已解析的 Release 文档中投影出它发布的服务端产物。</para></summary>
-    /// <param name="document">Parsed release document. <para>已解析的 Release 文档。</para></param>
+    /// <summary>Projects a parsed release onto the server artifact it publishes.
+    /// <para>从已解析的 Release 中投影出它发布的服务端产物。</para></summary>
+    /// <param name="release">Parsed release description. <para>已解析的 Release 描述。</para></param>
     /// <returns>The described server artifact. <para>所描述的服务端产物。</para></returns>
-    /// <exception cref="InvalidOperationException">
-    /// No standalone server asset, an unusable tag, or a missing digest.
-    /// <para>没有独立服务端资产、标签不可用，或缺少摘要。</para>
-    /// </exception>
-    public static ScrcpyServerRelease FromDocument(GitHubReleaseDocument document)
+    /// <exception cref="InvalidOperationException">No standalone server asset, an unusable tag, or a missing digest.
+    /// <para>没有独立服务端资产、标签不可用，或缺少摘要。</para></exception>
+    public static ScrcpyServerRelease FromRelease(GitHubRelease release)
     {
-        ArgumentNullException.ThrowIfNull(document);
-        var asset = document.Assets.FirstOrDefault(a => a.Name.StartsWith(ServerAssetPrefix, StringComparison.Ordinal))
-            ?? throw new InvalidOperationException($"Release '{document.TagName}' publishes no {ServerAssetPrefix} asset.");
-        var version = TrimVersion(document.TagName)
-            ?? throw new InvalidOperationException($"Release tag '{document.TagName}' has no dotted decimal version.");
-        var digest = ParseDigest(asset.Digest)
+        ArgumentNullException.ThrowIfNull(release);
+        var asset = release.Assets.FirstOrDefault(asset => asset.Name.StartsWith(ServerAssetPrefix, StringComparison.Ordinal))
+            ?? throw new InvalidOperationException($"Release '{release.Tag}' publishes no {ServerAssetPrefix} asset.");
+        var version = TrimVersion(release.Tag)
+            ?? throw new InvalidOperationException($"Release tag '{release.Tag}' has no dotted decimal version.");
+        var digest = asset.Sha256
             ?? throw new InvalidOperationException($"Asset '{asset.Name}' publishes no SHA-256 digest.");
-        return new ScrcpyServerRelease(version, document.TagName, asset.Name, asset.BrowserDownloadUrl, asset.Size, digest);
+        return new ScrcpyServerRelease(version, release.Tag, asset.Name, asset.DownloadUrl, asset.Size, digest);
     }
 
     /// <summary>Returns the version part of a release tag, or <see langword="null"/> when it is not dotted decimal.
@@ -102,6 +93,11 @@ public static class ScrcpyServerReleaseClient
     /// <returns>The version text, or <see langword="null"/>. <para>版本文本，或 <see langword="null"/>。</para></returns>
     public static string? TrimVersion(string tag)
     {
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            return null;
+        }
+
         var value = tag.StartsWith('v') ? tag[1..] : tag;
         return IsDottedDecimal(value) ? value : null;
     }
@@ -110,50 +106,23 @@ public static class ScrcpyServerReleaseClient
     /// <para>从 <c>sha256:&lt;hex&gt;</c> 摘要字段中提取小写十六进制。</para></summary>
     /// <param name="digest">Raw digest field, possibly null or empty. <para>原始摘要字段，允许为空。</para></param>
     /// <returns>64 lowercase hex characters, or <see langword="null"/>. <para>64 位小写十六进制，或 <see langword="null"/>。</para></returns>
-    public static string? ParseDigest(string? digest)
-    {
-        const string prefix = "sha256:";
-        if (digest is null) return null;
-        var value = digest.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? digest[prefix.Length..] : digest;
-        value = value.Trim().ToLowerInvariant();
-        return value.Length == 64 && value.All(Uri.IsHexDigit) ? value : null;
-    }
+    public static string? ParseDigest(string? digest) => GitHubReleaseClient.ParseDigest(digest);
 
     private static bool IsDottedDecimal(string value)
     {
-        if (value.Length is < 3 or > 16 || !value.Contains('.', StringComparison.Ordinal)) return false;
+        if (value.Length is < 3 or > 16 || !value.Contains('.', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         foreach (var part in value.Split('.'))
         {
-            if (part.Length == 0 || !part.All(char.IsAsciiDigit)) return false;
+            if (part.Length == 0 || !part.All(char.IsAsciiDigit))
+            {
+                return false;
+            }
         }
 
         return true;
     }
 }
-
-/// <summary>Subset of the GitHub release document that is read here.
-/// <para>此处读取的 GitHub Release 文档子集。</para></summary>
-/// <param name="TagName">Release tag, e.g. <c>v5.0.1</c>. <para>Release 标签，例如 <c>v5.0.1</c>。</para></param>
-/// <param name="Assets">Published assets. <para>已发布的资产。</para></param>
-public sealed record GitHubReleaseDocument(string TagName, List<GitHubAssetDocument> Assets);
-
-/// <summary>Subset of a GitHub release asset that is read here.
-/// <para>此处读取的 GitHub Release 资产子集。</para></summary>
-/// <param name="Name">Asset file name. <para>资产文件名。</para></param>
-/// <param name="Size">Byte length reported by the API. <para>API 上报的字节长度。</para></param>
-/// <param name="BrowserDownloadUrl">Origin download URL. <para>源站下载地址。</para></param>
-/// <param name="Digest">Published digest, formatted <c>sha256:&lt;hex&gt;</c>.
-/// <para>已公布的摘要，形式为 <c>sha256:&lt;hex&gt;</c>。</para></param>
-public sealed record GitHubAssetDocument(string Name, long Size, string BrowserDownloadUrl, string? Digest);
-
-/// <summary>
-/// Source-generated JSON metadata for the release API document, so the fetch keeps working under NativeAOT.
-/// <para>Release API 文档的源生成 JSON 元数据，使该获取在 NativeAOT 下仍然可用。</para>
-/// </summary>
-[JsonSourceGenerationOptions(
-    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
-[JsonSerializable(typeof(GitHubReleaseDocument))]
-[JsonSerializable(typeof(GitHubAssetDocument))]
-[JsonSerializable(typeof(List<GitHubAssetDocument>))]
-internal sealed partial class ScrcpyReleaseJsonContext : JsonSerializerContext;

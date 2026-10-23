@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
-using UotanStudio.Firmware.Infrastructure.Downloads;
 using UotanStudio.Hash.Digests;
+using UotanStudio.Net.Http;
 
 namespace UotanStudio.Services.Network;
 

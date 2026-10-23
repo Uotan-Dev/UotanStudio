@@ -1,7 +1,8 @@
-using UotanStudio.Firmware.Infrastructure.Downloads;
+using UotanStudio.Net.GitHub;
+using UotanStudio.Net.Http;
 using Xunit;
 
-namespace UotanStudio.Tests.Firmware;
+namespace UotanStudio.Tests.Net;
 
 public sealed class HttpDownloadMirrorUrlTests
 {
