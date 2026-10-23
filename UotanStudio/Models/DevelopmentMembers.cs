@@ -17,7 +17,7 @@ public static class DevelopmentMembers
         {
             Name = "暮间雾",
             EnglishName = "mujianwu",
-            Description = "项目负责人、UI与UX设计开发",
+            DescriptionKey = "Settings_Developer_LeadRole",
             AvatarUri = "avares://UotanStudio/Assets/mujianwu.jpg",
             GitHubUrl = "https://github.com/mujianwu",
             CoolapkUrl = "http://www.coolapk.com/u/3242606"
@@ -25,7 +25,7 @@ public static class DevelopmentMembers
         new DevelopmentMember
         {
             Name = "13584452567",
-            Description = "项目后端开发，最强后端支持！",
+            DescriptionKey = "Settings_Developer_BackendRole",
             AvatarUri = "avares://UotanStudio/Assets/zicai.jpeg",
             GitHubUrl = "https://github.com/13584452567",
             CoolapkUrl = "https://www.coolapk.com/u/13898619"

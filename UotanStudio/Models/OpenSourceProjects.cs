@@ -15,41 +15,8 @@ public static class OpenSourceProjects
     [
         new OpenSourceProject
         {
-            Name = "Iciclecreek.Avalonia.Terminal",
-            Description = "跨平台终端控件，提供终端绘制、文字选择与交互输入",
-            RepositoryUrl = "https://github.com/tomlm/Iciclecreek.Avalonia.Terminal",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/tomlm/Iciclecreek.Avalonia.Terminal/blob/main/LICENSE",
-            AuthorName = "Tom Laird-McConnell",
-            AuthorGitHubUrl = "https://github.com/tomlm",
-            AuthorAvatarUrl = "https://github.com/tomlm.png"
-        },
-        new OpenSourceProject
-        {
-            Name = "XTerm.NET",
-            Description = "终端 VT/ANSI 协议解析与屏幕缓冲区",
-            RepositoryUrl = "https://github.com/tomlm/XTerm.NET",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/tomlm/XTerm.NET/blob/main/LICENSE",
-            AuthorName = "Tom Laird-McConnell",
-            AuthorGitHubUrl = "https://github.com/tomlm",
-            AuthorAvatarUrl = "https://github.com/tomlm.png"
-        },
-        new OpenSourceProject
-        {
-            Name = "Porta.Pty",
-            Description = "Windows ConPTY 与 macOS/Linux PTY 进程通信",
-            RepositoryUrl = "https://github.com/tomlm/Porta.Pty",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/tomlm/Porta.Pty/blob/main/LICENSE",
-            AuthorName = "Tom Laird-McConnell",
-            AuthorGitHubUrl = "https://github.com/tomlm",
-            AuthorAvatarUrl = "https://github.com/tomlm.png"
-        },
-        new OpenSourceProject
-        {
             Name = "Avalonia",
-            Description = "跨平台 UI 框架，本项目桌面端 UI 基于 Avalonia 构建",
+            DescriptionKey = "About_Project_Avalonia",
             RepositoryUrl = "https://github.com/AvaloniaUI/Avalonia",
             LicenseName = "MIT",
             LicenseUrl = "https://github.com/AvaloniaUI/Avalonia/blob/master/licence.md",
@@ -60,7 +27,7 @@ public static class OpenSourceProjects
         new OpenSourceProject
         {
             Name = "AvaloniaEdit",
-            Description = "Avalonia 文本编辑器控件，用于代码/文本文件查看与编辑",
+            DescriptionKey = "About_Project_AvaloniaEdit",
             RepositoryUrl = "https://github.com/AvaloniaUI/AvaloniaEdit",
             LicenseName = "MIT",
             LicenseUrl = "https://github.com/AvaloniaUI/AvaloniaEdit/blob/master/license.txt",
@@ -70,30 +37,8 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
-            Name = "Semi.Avalonia",
-            Description = "Semantic UI 风格的 Avalonia 主题库（本项目的主题与样式层）",
-            RepositoryUrl = "https://github.com/irihitech/Semi.Avalonia",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/irihitech/Semi.Avalonia/blob/main/LICENSE",
-            AuthorName = "IRIHI Technology",
-            AuthorGitHubUrl = "https://github.com/irihitech",
-            AuthorAvatarUrl = "https://github.com/irihitech.png"
-        },
-        new OpenSourceProject
-        {
-            Name = "Irihi.Ursa",
-            Description = "Avalonia 交互控件库（对话框、Toast 等高级控件）",
-            RepositoryUrl = "https://github.com/irihitech/Ursa.Avalonia",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/irihitech/Ursa.Avalonia/blob/main/LICENSE",
-            AuthorName = "IRIHI Technology",
-            AuthorGitHubUrl = "https://github.com/irihitech",
-            AuthorAvatarUrl = "https://github.com/irihitech.png"
-        },
-        new OpenSourceProject
-        {
             Name = "Dock",
-            Description = "Avalonia 停靠布局系统（工作区面板 Dock 布局）",
+            DescriptionKey = "About_Project_Dock",
             RepositoryUrl = "https://github.com/wieslawsoltes/Dock",
             LicenseName = "MIT",
             LicenseUrl = "https://github.com/wieslawsoltes/Dock/blob/master/LICENSE.TXT",
@@ -103,30 +48,118 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
-            Name = "NodifyM.Avalonia",
-            Description = "节点编辑器控件库（可视化编程画布）",
-            RepositoryUrl = "https://github.com/Maklith/NodifyM.Avalonia",
+            Name = "Semi.Avalonia",
+            DescriptionKey = "About_Project_SemiAvalonia",
+            RepositoryUrl = "https://github.com/irihitech/Semi.Avalonia",
             LicenseName = "MIT",
-            LicenseUrl = "https://github.com/Maklith/NodifyM.Avalonia/blob/master/LICENSE",
-            AuthorName = "MakesYT",
-            AuthorGitHubUrl = "https://github.com/Maklith",
-            AuthorAvatarUrl = "https://github.com/Maklith.png"
-        },
-        new OpenSourceProject
-        {
-            Name = "Irihi.Iconica.TDesign",
-            Description = "Avalonia 原生图标控件库（TDesign 图标集，工具栏/菜单图标）",
-            RepositoryUrl = "https://github.com/irihitech/Irihi.Iconica",
-            LicenseName = "Apache-2.0",
-            LicenseUrl = "https://github.com/irihitech/Irihi.Iconica/blob/main/LICENSE",
+            LicenseUrl = "https://github.com/irihitech/Semi.Avalonia/blob/main/LICENSE",
             AuthorName = "IRIHI Technology Co., Ltd.",
             AuthorGitHubUrl = "https://github.com/irihitech",
             AuthorAvatarUrl = "https://github.com/irihitech.png"
         },
         new OpenSourceProject
         {
+            Name = "Semi.Avalonia.DataGrid",
+            DescriptionKey = "About_Project_SemiAvaloniaDataGrid",
+            RepositoryUrl = "https://github.com/irihitech/Semi.Avalonia",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/irihitech/Semi.Avalonia/blob/main/LICENSE",
+            AuthorName = "IRIHI Technology Co., Ltd.",
+            AuthorGitHubUrl = "https://github.com/irihitech",
+            AuthorAvatarUrl = "https://github.com/irihitech.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Semi.Avalonia.AvaloniaEdit",
+            DescriptionKey = "About_Project_SemiAvaloniaAvaloniaEdit",
+            RepositoryUrl = "https://www.nuget.org/packages/Semi.Avalonia.AvaloniaEdit/12.0.0",
+            LicenseName = "Proprietary (IRIHI EULA)",
+            LicenseUrl = "https://www.nuget.org/packages/Semi.Avalonia.AvaloniaEdit/12.0.0",
+            AuthorName = "IRIHI Technology Co., Ltd.",
+            AuthorGitHubUrl = "https://github.com/irihitech",
+            AuthorAvatarUrl = "https://github.com/irihitech.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Semi.Avalonia.Dock",
+            DescriptionKey = "About_Project_SemiAvaloniaDock",
+            RepositoryUrl = "https://www.nuget.org/packages/Semi.Avalonia.Dock/12.0.0.2",
+            LicenseName = "Proprietary (IRIHI EULA)",
+            LicenseUrl = "https://www.nuget.org/packages/Semi.Avalonia.Dock/12.0.0.2",
+            AuthorName = "IRIHI Technology Co., Ltd.",
+            AuthorGitHubUrl = "https://github.com/irihitech",
+            AuthorAvatarUrl = "https://github.com/irihitech.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Irihi.Ursa",
+            DescriptionKey = "About_Project_IrihiUrsa",
+            RepositoryUrl = "https://github.com/irihitech/Ursa.Avalonia",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/irihitech/Ursa.Avalonia/blob/main/LICENSE",
+            AuthorName = "IRIHI Technology Co., Ltd.",
+            AuthorGitHubUrl = "https://github.com/irihitech",
+            AuthorAvatarUrl = "https://github.com/irihitech.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Irihi.Iconica.TDesign",
+            DescriptionKey = "About_Project_IrihiIconicaTDesign",
+            RepositoryUrl = "https://www.nuget.org/packages/Irihi.Iconica.TDesign/1.0.0",
+            LicenseName = "Apache-2.0",
+            LicenseUrl = "https://licenses.nuget.org/Apache-2.0",
+            AuthorName = "IRIHI Technology Co., Ltd.",
+            AuthorGitHubUrl = "https://github.com/irihitech",
+            AuthorAvatarUrl = "https://github.com/irihitech.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "NodifyM.Avalonia",
+            DescriptionKey = "About_Project_NodifyMAvalonia",
+            RepositoryUrl = "https://github.com/MakesYT/NodifyM.Avalonia",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/MakesYT/NodifyM.Avalonia/blob/master/LICENSE",
+            AuthorName = "Maklith (MakesYT)",
+            AuthorGitHubUrl = "https://github.com/Maklith",
+            AuthorAvatarUrl = "https://github.com/Maklith.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Iciclecreek.Avalonia.Terminal",
+            DescriptionKey = "About_Project_IciclecreekTerminal",
+            RepositoryUrl = "https://github.com/tomlm/Iciclecreek.Avalonia.Terminal",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/tomlm/Iciclecreek.Avalonia.Terminal/blob/main/LICENSE",
+            AuthorName = "Tom Laird-McConnell",
+            AuthorGitHubUrl = "https://github.com/tomlm",
+            AuthorAvatarUrl = "https://github.com/tomlm.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "XTerm.NET",
+            DescriptionKey = "About_Project_XTermNet",
+            RepositoryUrl = "https://github.com/tomlm/XTerm.NET",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/tomlm/XTerm.NET/blob/main/LICENSE",
+            AuthorName = "Tom Laird-McConnell",
+            AuthorGitHubUrl = "https://github.com/tomlm",
+            AuthorAvatarUrl = "https://github.com/tomlm.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Porta.Pty",
+            DescriptionKey = "About_Project_PortaPty",
+            RepositoryUrl = "https://github.com/tomlm/Porta.Pty",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/tomlm/Porta.Pty/blob/main/LICENSE",
+            AuthorName = "Tom Laird-McConnell",
+            AuthorGitHubUrl = "https://github.com/tomlm",
+            AuthorAvatarUrl = "https://github.com/tomlm.png"
+        },
+        new OpenSourceProject
+        {
             Name = "CommunityToolkit.Mvvm",
-            Description = "MVVM 工具包（ObservableObject / RelayCommand / WeakReferenceMessenger）",
+            DescriptionKey = "About_Project_CommunityToolkitMvvm",
             RepositoryUrl = "https://github.com/CommunityToolkit/dotnet",
             LicenseName = "MIT",
             LicenseUrl = "https://github.com/CommunityToolkit/dotnet/blob/main/LICENSE",
@@ -136,85 +169,63 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
+            Name = "Irihi.Lingua",
+            DescriptionKey = "About_Project_IrihiLingua",
+            RepositoryUrl = "https://github.com/irihitech/Irihi.Lingua",
+            LicenseName = "MIT",
+            LicenseUrl = "https://licenses.nuget.org/MIT",
+            AuthorName = "IRIHI Technology Co., Ltd.",
+            AuthorGitHubUrl = "https://github.com/irihitech",
+            AuthorAvatarUrl = "https://github.com/irihitech.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "LuaCSharp",
+            DescriptionKey = "About_Project_LuaCSharp",
+            RepositoryUrl = "https://github.com/nuskey8/Lua-CSharp",
+            LicenseName = "MIT",
+            LicenseUrl = "https://licenses.nuget.org/MIT",
+            AuthorName = "Yusuke Nakada (nuskey8)",
+            AuthorGitHubUrl = "https://github.com/nuskey8",
+            AuthorAvatarUrl = "https://github.com/nuskey8.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "QRCoder",
+            DescriptionKey = "About_Project_QrCoder",
+            RepositoryUrl = "https://github.com/Shane32/QRCoder",
+            LicenseName = "MIT",
+            LicenseUrl = "https://licenses.nuget.org/MIT",
+            AuthorName = "Raffael Herrmann / Shane Krueger",
+            AuthorGitHubUrl = "https://github.com/Shane32",
+            AuthorAvatarUrl = "https://github.com/Shane32.png"
+        },
+        new OpenSourceProject
+        {
             Name = "LibUsbDotNet",
-            Description = ".NET USB 访问库（WinUSB/LibUsb 后端，USB 设备通信）",
+            DescriptionKey = "About_Project_LibUsbDotNet",
             RepositoryUrl = "https://github.com/LibUsbDotNet/LibUsbDotNet",
-            LicenseName = "LGPL-3.0",
-            LicenseUrl = "https://github.com/LibUsbDotNet/LibUsbDotNet/blob/master/LICENSE",
-            AuthorName = "LibUsbDotNet 团队",
+            LicenseName = "LGPL-3.0-or-later",
+            LicenseUrl = "https://licenses.nuget.org/LGPL-3.0-or-later",
+            AuthorName = "LibUsbDotNet contributors",
             AuthorGitHubUrl = "https://github.com/LibUsbDotNet",
             AuthorAvatarUrl = "https://github.com/LibUsbDotNet.png"
         },
         new OpenSourceProject
         {
-            Name = "SharpCompress",
-            Description = "压缩/归档库（zip 等格式读写）",
-            RepositoryUrl = "https://github.com/adamhathcock/sharpcompress",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/adamhathcock/sharpcompress/blob/master/LICENSE.txt",
-            AuthorName = "Adam Hathcock",
-            AuthorGitHubUrl = "https://github.com/adamhathcock",
-            AuthorAvatarUrl = "https://github.com/adamhathcock.png"
-        },
-        new OpenSourceProject
-        {
-            Name = "BouncyCastle.Cryptography",
-            Description = "加密算法库（AVB RSASSA-PSS / PKCS#1 v1.5 签名校验）",
-            RepositoryUrl = "https://github.com/bcgit/bc-csharp",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/bcgit/bc-csharp/blob/master/LICENSE.md",
-            AuthorName = "The Legion of the Bouncy Castle",
-            AuthorGitHubUrl = "https://github.com/bcgit",
-            AuthorAvatarUrl = "https://github.com/bcgit.png"
-        },
-        new OpenSourceProject
-        {
-            Name = "K4os.Compression.LZ4",
-            Description = "LZ4 压缩库（LZ4 数据解压）",
-            RepositoryUrl = "https://github.com/MiloszKrajewski/K4os.Compression.LZ4",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/MiloszKrajewski/K4os.Compression.LZ4/blob/master/LICENSE",
-            AuthorName = "Milosz Krajewski",
-            AuthorGitHubUrl = "https://github.com/MiloszKrajewski",
-            AuthorAvatarUrl = "https://github.com/MiloszKrajewski.png"
-        },
-        new OpenSourceProject
-        {
-            Name = "ZstdSharp.Port",
-            Description = "Zstandard 压缩库（zstd 数据解压）",
-            RepositoryUrl = "https://github.com/oleg-st/ZstdSharp",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/oleg-st/ZstdSharp/blob/master/LICENSE",
-            AuthorName = "Oleg Stepanov",
-            AuthorGitHubUrl = "https://github.com/oleg-st",
-            AuthorAvatarUrl = "https://github.com/oleg-st.png"
-        },
-        new OpenSourceProject
-        {
-            Name = "LZMA-SDK",
-            Description = "LZMA 压缩算法 SDK（LZMA/LZMA2 解压）",
-            RepositoryUrl = "https://www.7-zip.org/sdk.html",
-            LicenseName = "公有领域",
-            LicenseUrl = "https://www.7-zip.org/sdk.html",
-            AuthorName = "Igor Pavlov",
-            AuthorGitHubUrl = "https://github.com/ip7z",
-            AuthorAvatarUrl = "https://github.com/ip7z.png"
-        },
-        new OpenSourceProject
-        {
-            Name = "Google.Protobuf",
-            Description = "Protocol Buffers 序列化库（OTA payload 等 protobuf 解析）",
-            RepositoryUrl = "https://github.com/protocolbuffers/protobuf",
-            LicenseName = "BSD-3-Clause",
-            LicenseUrl = "https://github.com/protocolbuffers/protobuf/blob/main/LICENSE",
-            AuthorName = "Google",
-            AuthorGitHubUrl = "https://github.com/protocolbuffers",
-            AuthorAvatarUrl = "https://github.com/protocolbuffers.png"
+            Name = "libusb",
+            DescriptionKey = "About_Project_Libusb",
+            RepositoryUrl = "https://github.com/libusb/libusb",
+            LicenseName = "LGPL-2.1-or-later",
+            LicenseUrl = "https://github.com/libusb/libusb/blob/master/COPYING",
+            AuthorName = "libusb contributors",
+            AuthorGitHubUrl = "https://github.com/libusb",
+            AuthorAvatarUrl = "https://github.com/libusb.png"
         },
         new OpenSourceProject
         {
             Name = "Makaretu.Dns.Multicast",
-            Description = "mDNS/DNS-SD 库（本地网络设备发现）",
+            DescriptionKey = "About_Project_MakaretuDnsMulticast",
             RepositoryUrl = "https://github.com/richardschneider/net-mdns",
             LicenseName = "MIT",
             LicenseUrl = "https://github.com/richardschneider/net-mdns/blob/master/LICENSE",
@@ -224,30 +235,85 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
-            Name = "xunit",
-            Description = "单元测试框架（xunit.v3，项目测试套件）",
-            RepositoryUrl = "https://github.com/xunit/xunit",
-            LicenseName = "Apache-2.0",
-            LicenseUrl = "https://github.com/xunit/xunit/blob/main/LICENSE",
-            AuthorName = ".NET Foundation",
-            AuthorGitHubUrl = "https://github.com/xunit",
-            AuthorAvatarUrl = "https://github.com/xunit.png"
+            Name = "BouncyCastle.Cryptography",
+            DescriptionKey = "About_Project_BouncyCastleCryptography",
+            RepositoryUrl = "https://github.com/bcgit/bc-csharp",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/bcgit/bc-csharp/blob/master/LICENSE.md",
+            AuthorName = "The Legion of the Bouncy Castle",
+            AuthorGitHubUrl = "https://github.com/bcgit",
+            AuthorAvatarUrl = "https://github.com/bcgit.png"
         },
         new OpenSourceProject
         {
-            Name = ".NET Runtime",
-            Description = ".NET 基础类库与运行时（System.IO.Ports / System.IO.Hashing 等）",
-            RepositoryUrl = "https://github.com/dotnet/runtime",
+            Name = "SharpCompress",
+            DescriptionKey = "About_Project_SharpCompress",
+            RepositoryUrl = "https://github.com/adamhathcock/sharpcompress",
             LicenseName = "MIT",
-            LicenseUrl = "https://github.com/dotnet/runtime/blob/main/LICENSE.TXT",
-            AuthorName = ".NET Foundation",
-            AuthorGitHubUrl = "https://github.com/dotnet",
-            AuthorAvatarUrl = "https://github.com/dotnet.png"
+            LicenseUrl = "https://github.com/adamhathcock/sharpcompress/blob/master/LICENSE.txt",
+            AuthorName = "Adam Hathcock",
+            AuthorGitHubUrl = "https://github.com/adamhathcock",
+            AuthorAvatarUrl = "https://github.com/adamhathcock.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "K4os.Compression.LZ4",
+            DescriptionKey = "About_Project_K4osCompressionLz4",
+            RepositoryUrl = "https://github.com/MiloszKrajewski/K4os.Compression.LZ4",
+            LicenseName = "MIT / BSD-2-Clause (liblz4)",
+            LicenseUrl = "https://github.com/MiloszKrajewski/K4os.Compression.LZ4/blob/master/LICENSE",
+            AuthorName = "Milosz Krajewski / Yann Collet",
+            AuthorGitHubUrl = "https://github.com/MiloszKrajewski",
+            AuthorAvatarUrl = "https://github.com/MiloszKrajewski.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "ZstdSharp.Port",
+            DescriptionKey = "About_Project_ZstdSharpPort",
+            RepositoryUrl = "https://github.com/oleg-st/ZstdSharp",
+            LicenseName = "MIT / BSD-3-Clause (zstd)",
+            LicenseUrl = "https://github.com/oleg-st/ZstdSharp/blob/master/LICENSE",
+            AuthorName = "Oleg Stepanischev / Meta Platforms",
+            AuthorGitHubUrl = "https://github.com/oleg-st",
+            AuthorAvatarUrl = "https://github.com/oleg-st.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "LZMA-SDK (.NET)",
+            DescriptionKey = "About_Project_LzmaSdk",
+            RepositoryUrl = "https://github.com/monemihir/LZMA-SDK",
+            LicenseName = "MIT (wrapper) / Public Domain (7-Zip SDK)",
+            LicenseUrl = "https://licenses.nuget.org/MIT",
+            AuthorName = "Mihir Mone / Igor Pavlov",
+            AuthorGitHubUrl = "https://github.com/monemihir",
+            AuthorAvatarUrl = "https://github.com/monemihir.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Google.Protobuf",
+            DescriptionKey = "About_Project_GoogleProtobuf",
+            RepositoryUrl = "https://github.com/protocolbuffers/protobuf",
+            LicenseName = "BSD-3-Clause",
+            LicenseUrl = "https://github.com/protocolbuffers/protobuf/blob/main/LICENSE",
+            AuthorName = "Google",
+            AuthorGitHubUrl = "https://github.com/protocolbuffers",
+            AuthorAvatarUrl = "https://github.com/protocolbuffers.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "BsDiff (.NET port)",
+            DescriptionKey = "About_Project_BsDiff",
+            RepositoryUrl = "https://github.com/LogosBible/bsdiff.net",
+            LicenseName = "MIT / BSD-2-Clause (bsdiff)",
+            LicenseUrl = "https://licenses.nuget.org/MIT",
+            AuthorName = "Logos Bible Software / Colin Percival",
+            AuthorGitHubUrl = "https://github.com/LogosBible",
+            AuthorAvatarUrl = "https://github.com/LogosBible.png"
         },
         new OpenSourceProject
         {
             Name = "YamlDotNet",
-            Description = "YAML 读写库（设备树/配置 YAML 解析）",
+            DescriptionKey = "About_Project_YamlDotNet",
             RepositoryUrl = "https://github.com/aaubry/YamlDotNet",
             LicenseName = "MIT",
             LicenseUrl = "https://github.com/aaubry/YamlDotNet/blob/master/LICENSE.txt",
@@ -258,7 +324,7 @@ public static class OpenSourceProjects
         new OpenSourceProject
         {
             Name = "DiffPlex",
-            Description = "文本差异比较库（文件对比服务的行级 diff）",
+            DescriptionKey = "About_Project_DiffPlex",
             RepositoryUrl = "https://github.com/mmanela/diffplex",
             LicenseName = "Apache-2.0",
             LicenseUrl = "https://github.com/mmanela/diffplex/blob/master/License.txt",
@@ -269,7 +335,7 @@ public static class OpenSourceProjects
         new OpenSourceProject
         {
             Name = "DiscUtils (LTRData fork)",
-            Description = "纯托管 FAT12/16/32 与 exFAT 卷实现（FAT 分区读写）",
+            DescriptionKey = "About_Project_DiscUtils",
             RepositoryUrl = "https://github.com/LTRData/DiscUtils",
             LicenseName = "MIT",
             LicenseUrl = "https://github.com/LTRData/DiscUtils/blob/master/LICENSE",
@@ -279,19 +345,118 @@ public static class OpenSourceProjects
         },
         new OpenSourceProject
         {
-            Name = "Model Context Protocol C# SDK",
-            Description = "官方 MCP C# SDK（内嵌 MCP 服务器）",
+            Name = "ModelContextProtocol C# SDK",
+            DescriptionKey = "About_Project_ModelContextProtocolSdk",
             RepositoryUrl = "https://github.com/modelcontextprotocol/csharp-sdk",
-            LicenseName = "MIT",
-            LicenseUrl = "https://github.com/modelcontextprotocol/csharp-sdk/blob/main/LICENSE",
-            AuthorName = "Model Context Protocol",
+            LicenseName = "Apache-2.0",
+            LicenseUrl = "https://licenses.nuget.org/Apache-2.0",
+            AuthorName = "Model Context Protocol / LF Projects",
             AuthorGitHubUrl = "https://github.com/modelcontextprotocol",
             AuthorAvatarUrl = "https://github.com/modelcontextprotocol.png"
         },
         new OpenSourceProject
         {
+            Name = ".NET Runtime",
+            DescriptionKey = "About_Project_DotNetRuntime",
+            RepositoryUrl = "https://github.com/dotnet/runtime",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/dotnet/runtime/blob/main/LICENSE.TXT",
+            AuthorName = ".NET Foundation",
+            AuthorGitHubUrl = "https://github.com/dotnet",
+            AuthorAvatarUrl = "https://github.com/dotnet.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "SkiaSharp",
+            DescriptionKey = "About_Project_SkiaSharp",
+            RepositoryUrl = "https://github.com/mono/SkiaSharp",
+            LicenseName = "MIT / BSD-3-Clause (Skia)",
+            LicenseUrl = "https://github.com/mono/SkiaSharp/blob/main/LICENSE.md",
+            AuthorName = "Microsoft / Skia",
+            AuthorGitHubUrl = "https://github.com/mono",
+            AuthorAvatarUrl = "https://github.com/mono.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "HarfBuzzSharp",
+            DescriptionKey = "About_Project_HarfBuzzSharp",
+            RepositoryUrl = "https://github.com/mono/SkiaSharp",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/mono/SkiaSharp/blob/main/LICENSE.md",
+            AuthorName = "Microsoft / HarfBuzz contributors",
+            AuthorGitHubUrl = "https://github.com/mono",
+            AuthorAvatarUrl = "https://github.com/mono.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "ANGLE",
+            DescriptionKey = "About_Project_Angle",
+            RepositoryUrl = "https://github.com/google/angle",
+            LicenseName = "BSD-3-Clause",
+            LicenseUrl = "https://github.com/google/angle/blob/main/LICENSE",
+            AuthorName = "The ANGLE Project Authors",
+            AuthorGitHubUrl = "https://github.com/google",
+            AuthorAvatarUrl = "https://github.com/google.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Oniguruma (Onigwrap)",
+            DescriptionKey = "About_Project_Oniguruma",
+            RepositoryUrl = "https://github.com/kkos/oniguruma",
+            LicenseName = "BSD-2-Clause",
+            LicenseUrl = "https://github.com/kkos/oniguruma/blob/master/COPYING",
+            AuthorName = "K.Kosako",
+            AuthorGitHubUrl = "https://github.com/kkos",
+            AuthorAvatarUrl = "https://github.com/kkos.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Microsoft Terminal (ConPTY)",
+            DescriptionKey = "About_Project_MicrosoftTerminal",
+            RepositoryUrl = "https://github.com/microsoft/terminal",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/microsoft/terminal/blob/main/LICENSE",
+            AuthorName = "Microsoft",
+            AuthorGitHubUrl = "https://github.com/microsoft",
+            AuthorAvatarUrl = "https://github.com/microsoft.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "MiSans 字体",
+            DescriptionKey = "About_Project_MiSansFont",
+            RepositoryUrl = "https://hyperos.mi.com/font/",
+            LicenseName = "Proprietary (MiSans Fonts IP License)",
+            LicenseUrl = "https://hyperos.mi.com/font/zh/download/",
+            AuthorName = "Xiaomi Inc.",
+            AuthorGitHubUrl = "https://hyperos.mi.com/font/",
+            AuthorAvatarUrl = "https://github.com/Xiaomi.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Android update-binary (AOSP)",
+            DescriptionKey = "About_Project_AndroidUpdateBinary",
+            RepositoryUrl = "https://android.googlesource.com/platform/bootable/recovery",
+            LicenseName = "Apache-2.0",
+            LicenseUrl = "https://www.apache.org/licenses/LICENSE-2.0",
+            AuthorName = "The Android Open Source Project",
+            AuthorGitHubUrl = "https://source.android.com/",
+            AuthorAvatarUrl = "https://github.com/aosp-mirror.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "xunit",
+            DescriptionKey = "About_Project_Xunit",
+            RepositoryUrl = "https://github.com/xunit/xunit",
+            LicenseName = "Apache-2.0",
+            LicenseUrl = "https://github.com/xunit/xunit/blob/main/LICENSE",
+            AuthorName = ".NET Foundation",
+            AuthorGitHubUrl = "https://github.com/xunit",
+            AuthorAvatarUrl = "https://github.com/xunit.png"
+        },
+        new OpenSourceProject
+        {
             Name = "BenchmarkDotNet",
-            Description = "性能基准测试框架（基准测试项目）",
+            DescriptionKey = "About_Project_BenchmarkDotNet",
             RepositoryUrl = "https://github.com/dotnet/BenchmarkDotNet",
             LicenseName = "MIT",
             LicenseUrl = "https://github.com/dotnet/BenchmarkDotNet/blob/master/LICENSE.md",

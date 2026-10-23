@@ -27,10 +27,35 @@
             <Image Source="/Assets/UotanToolbox.png" Width="64" Height="64"
                    HorizontalAlignment="Center" Margin="0,0,0,8" />
             <TextBlock Text="UotanStudio" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" />
-            <TextBlock HorizontalAlignment="Center" FontSize="12" Opacity="0.7">
-                <Run Text="{DynamicResource About_Version}" />
-                <Run Text="1.0.0" />
-            </TextBlock>
+            <TextBlock x:Name="VersionText" FontSize="12" Opacity="0.7" HorizontalAlignment="Center" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4" Margin="0,2,0,0">
+                <TextBlock Text="{DynamicResource About_Channel}" FontSize="11" Opacity="0.7"
+                           VerticalAlignment="Center" Margin="0,0,2,0" />
+                <Border x:Name="ReleaseBadge" CornerRadius="4" Padding="6,1" BorderThickness="1"
+                        BorderBrush="Gray" VerticalAlignment="Center">
+                    <TextBlock x:Name="ReleaseText" FontSize="10" Foreground="Gray" />
+                </Border>
+                <Border x:Name="BetaBadge" CornerRadius="4" Padding="6,1" BorderThickness="1"
+                        BorderBrush="Gray" VerticalAlignment="Center">
+                    <TextBlock x:Name="BetaText" FontSize="10" Foreground="Gray" />
+                </Border>
+                <Border x:Name="CanaryBadge" CornerRadius="4" Padding="6,1" BorderThickness="1"
+                        BorderBrush="Gray" VerticalAlignment="Center">
+                    <TextBlock x:Name="CanaryText" FontSize="10" Foreground="Gray" />
+                </Border>
+                <Border x:Name="ExperimentalBadge" CornerRadius="4" Padding="6,1" BorderThickness="1"
+                        BorderBrush="Gray" VerticalAlignment="Center">
+                    <TextBlock x:Name="ExperimentalText" FontSize="10" Foreground="Gray" />
+                </Border>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4" Margin="0,2,0,0">
+                <TextBlock Text="{DynamicResource About_Commit}" FontSize="11" Opacity="0.7"
+                           VerticalAlignment="Center" />
+                <HyperlinkButton x:Name="CommitLink" FontSize="11" VerticalAlignment="Center"
+                                 Click="OnCommitClick" />
+                <TextBlock x:Name="CommitUnavailableText" Text="{DynamicResource About_CommitUnknown}"
+                           FontSize="11" Opacity="0.7" VerticalAlignment="Center" IsVisible="False" />
+            </StackPanel>
             <TextBlock Text="{DynamicResource About_Description}"
                        FontSize="12" Opacity="0.8"
                        HorizontalAlignment="Center"
@@ -46,7 +71,7 @@
         <StackPanel Grid.Row="1" x:Name="OpenSourcePanel" IsVisible="False" Spacing="8" Margin="0,4,0,0">
             <Border Height="1" Background="{DynamicResource BorderBrush}" />
 
-            <!-- 商业许可说明 -->
+            <!-- 许可与分发说明 -->
             <TextBlock Text="{DynamicResource About_OpenSourceNotice}"
                        FontSize="11" Opacity="0.75" TextWrapping="Wrap" />
 

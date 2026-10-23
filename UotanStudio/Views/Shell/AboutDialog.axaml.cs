@@ -1,13 +1,15 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using UotanStudio.Build;
 using UotanStudio.Services;
 
 namespace UotanStudio.Views.Shell;
 
 /// <summary>
-/// About dialog, showing the application version and description, and expanding the open-source
-/// credits section downwards on demand.
-/// <para>关于对话框，展示应用程序的版本与简介信息，并可按需向下展开开源项目区块。</para>
+/// About dialog, showing the application version, distribution channel and compiled commit, and
+/// expanding the open-source credits section downwards on demand.
+/// <para>关于对话框，展示应用程序版本、发行通道与编译提交，并可按需向下展开开源项目区块。</para>
 /// </summary>
 public partial class AboutDialog : Window
 {
@@ -18,7 +20,67 @@ public partial class AboutDialog : Window
     public AboutDialog()
     {
         InitializeComponent();
+        ApplyBuildInfo();
     }
+
+    /// <summary>
+    /// Fills the version, the four channel badges and the commit link from the compiled build
+    /// metadata.
+    /// <para>从编译期构建元数据填充版本、四个通道徽标与提交链接。</para>
+    /// </summary>
+    private void ApplyBuildInfo()
+    {
+        var language = LanguageService.Instance;
+        VersionText.Text = string.Concat(language.GetString("About_Version"), " ", BuildInfo.Version);
+
+        var badges = new (BuildChannel Channel, Border Badge, TextBlock Label)[]
+        {
+            (BuildChannel.Release, ReleaseBadge, ReleaseText),
+            (BuildChannel.Beta, BetaBadge, BetaText),
+            (BuildChannel.Canary, CanaryBadge, CanaryText),
+            (BuildChannel.Experimental, ExperimentalBadge, ExperimentalText),
+        };
+        foreach (var (channel, badge, label) in badges)
+        {
+            var isCurrent = channel == BuildInfo.Channel;
+            var color = ChannelColor(channel);
+            label.Text = language.GetString(BuildInfo.GetChannelKey(channel));
+            label.FontWeight = isCurrent ? FontWeight.SemiBold : FontWeight.Normal;
+            label.Foreground = isCurrent ? Brushes.White : Brushes.Gray;
+            badge.Background = isCurrent ? new SolidColorBrush(color) : Brushes.Transparent;
+            badge.BorderBrush = isCurrent ? new SolidColorBrush(color) : Brushes.Gray;
+            ToolTip.SetTip(badge, string.Concat(
+                channel.ToString().ToLowerInvariant(),
+                " — ",
+                language.GetString(BuildInfo.GetChannelDescriptionKey(channel))));
+        }
+
+        if (BuildInfo.HasCommit)
+        {
+            CommitLink.Content = BuildInfo.CommitShort;
+            CommitLink.Tag = BuildInfo.CommitUrl;
+            ToolTip.SetTip(CommitLink, language.GetString("About_OpenCommit"));
+        }
+        else
+        {
+            CommitLink.IsVisible = false;
+            CommitUnavailableText.IsVisible = true;
+        }
+    }
+
+    /// <summary>
+    /// Gets the accent color used for one distribution channel badge.
+    /// <para>获取指定发行通道徽标的强调色。</para>
+    /// </summary>
+    /// <param name="channel">The channel to color.<para>要着色的通道。</para></param>
+    /// <returns>The badge color.<para>徽标颜色。</para></returns>
+    private static Color ChannelColor(BuildChannel channel) => channel switch
+    {
+        BuildChannel.Release => Color.Parse("#2E7D32"),
+        BuildChannel.Beta => Color.Parse("#1565C0"),
+        BuildChannel.Canary => Color.Parse("#EF6C00"),
+        _ => Color.Parse("#6A1B9A"),
+    };
 
     /// <summary>
     /// Expands or collapses the open-source section; the window grows downwards with its content.
@@ -41,6 +103,20 @@ public partial class AboutDialog : Window
     /// <param name="sender">The event sender. <para>事件发送者。</para></param>
     /// <param name="e">The event arguments. <para>事件参数。</para></param>
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
+
+    /// <summary>
+    /// Opens the compiled commit page in the system default browser.
+    /// <para>在系统默认浏览器中打开编译提交页面。</para>
+    /// </summary>
+    /// <param name="sender">The event sender. <para>事件发送者。</para></param>
+    /// <param name="e">The event arguments. <para>事件参数。</para></param>
+    private void OnCommitClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string url })
+        {
+            ExternalLinkService.TryOpen(url);
+        }
+    }
 
     /// <summary>
     /// Opens a link in the system default browser (repository/author link buttons in the

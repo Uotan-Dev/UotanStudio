@@ -1,10 +1,14 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Services;
+
 namespace UotanStudio.Models;
 
 /// <summary>
-/// Represents one open-source project entry in the credits catalog.
-/// <para>表示致谢清单中的一个开源项目条目。</para>
+/// Represents one open-source project entry in the credits catalog. The description is resolved
+/// from the locale resources on every read, so the credits follow language switches immediately.
+/// <para>表示致谢清单中的一个开源项目条目。说明文本每次读取时都从语言资源解析，因此致谢清单会随语言切换立即更新。</para>
 /// </summary>
-public sealed class OpenSourceProject
+public sealed class OpenSourceProject : ObservableObject
 {
     /// <summary>
     /// Gets or sets the project name.
@@ -14,11 +18,18 @@ public sealed class OpenSourceProject
     public string Name { get; init; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets a short description of the project's purpose.
-    /// <para>获取或设置项目用途的简要说明。</para>
+    /// Gets or sets the locale resource key of the project description.
+    /// <para>获取或设置项目说明的语言资源键。</para>
     /// </summary>
-    /// <value>A short description of the project purpose.<para>项目用途的简要说明。</para></value>
-    public string Description { get; init; } = string.Empty;
+    /// <value>The description resource key.<para>说明资源键。</para></value>
+    public string DescriptionKey { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the localized description of the project's purpose.
+    /// <para>获取项目用途的本地化说明。</para>
+    /// </summary>
+    /// <value>The description in the active language.<para>当前语言下的说明。</para></value>
+    public string Description => LanguageService.Instance.GetString(DescriptionKey);
 
     /// <summary>
     /// Gets or sets the open-source repository URL.
@@ -61,4 +72,10 @@ public sealed class OpenSourceProject
     /// </summary>
     /// <value>The author avatar link.<para>作者头像链接。</para></value>
     public string AuthorAvatarUrl { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Raises a change notification for the localized description after a language switch.
+    /// <para>语言切换后为本地化说明触发变更通知。</para>
+    /// </summary>
+    internal void RefreshLocalizedText() => OnPropertyChanged(nameof(Description));
 }
