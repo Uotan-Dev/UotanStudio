@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Delivery.Build;
 
 namespace UotanStudio.Delivery;
 
@@ -36,23 +37,7 @@ internal static class DeliveryRecoveryUpdater
 
     /// <summary><para>解开随程序内嵌的 arm64 原生更新器到工具缓存；返回磁盘路径。</para>
     /// Extracts the embedded arm64 native updater into the tool cache; returns the disk path.</summary>
-    internal static string Embedded()
-    {
-        var path = MaterializeAsset("update-binary-arm64", "delivery-updater");
-        return Validate(path);
-    }
-
-    private static string MaterializeAsset(string name, string cacheDirectory)
-    {
-        var path = Path.Combine(Path.GetTempPath(), "UotanStudio", cacheDirectory, name);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var source = Path.Combine(AppContext.BaseDirectory, "Assets", name);
-        if (!File.Exists(source)) throw new FileNotFoundException("Missing embedded Recovery updater asset.", source);
-        if (!File.Exists(path) || new FileInfo(path).Length != new FileInfo(source).Length)
-            File.Copy(source, path, true);
-        DeliveryUnixPermissions.SetExecutable(path);
-        return path;
-    }
+    internal static string Embedded() => Validate(UpdaterAssets.Extract());
 
     /// <summary>
     /// Validates that the updater is a native ELF executable exposing the Edify functions needed for flashing; returns the absolute path on success.

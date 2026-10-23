@@ -13,6 +13,14 @@
     <ProjectReference Include="..\UotanStudio.Net\UotanStudio.Net.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Assets\update-binary-arm64" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Assets\update-binary-arm64.zst">
+      <LogicalName>UotanStudio.Delivery.Assets.update-binary-arm64</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
   </ItemGroup>
+
+  <Target Name="ValidateBundledUpdater" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)/Assets/update-binary-arm64.zst')"
+           Text="Missing Assets/update-binary-arm64.zst. Run 'dotnet run tools/compress-embedded-assets.cs' to regenerate it." />
+  </Target>
 </Project>

@@ -28,6 +28,7 @@
       "system.patch.dat"
   ) || abort("E2001: Failed to update system image.");
   ```
+- 内嵌的 arm64 原生更新器以 zstd 帧随程序集发布：运行时在内存中解压，按固定长度与 SHA-256 校验后原子落盘到 `%TEMP%/UotanStudio/delivery-updater/update-binary-arm64`，磁盘上仍是可执行文件；`.zst` 由资源压缩步骤从原始 `Assets/update-binary-arm64` 生成，原始文件只作生成输入，不再随程序复制或发布。
 - Bat、Linux/macOS shell 与卡刷脚本由 `Scripts/Generator.cs` 基于同一份文件编排结果生成；机型代号、作者信息与生成元数据一律取自 `DeliveryPlan`，不得在各模板里重复硬编码。脚本语言只在生成时确定，切换界面语言不得改写已生成内容。
 - ZIP 与目录内部路径统一使用 `/`（相对路径经 `Replace('\\', '/')`）。成员集合以 `Build/Output.cs` 末尾的枚举为准：`PackPayload` 时生成项归入 `ZipFileName(plan, "ota.zip")`，`PackSuper` 时走 `OrganizedImageRelativePath`，两者都不是时镜像落在 `images/`；脚本集合排除 `updater-script` 与 `update-binary`，最后统一附加 `README.txt` 与 `checksums.sha256`。`Build/Payload.cs` 在 payload 输出旁边写 `payload_properties.txt`，`Build/Output.cs` 负责把它从镜像目录里剔除，不要把它当可刷写镜像列出。
 - `TXT` 是清单格式：压缩镜像不得直接列为可刷写镜像，必须由脚本先解压到临时路径再交给 fastboot。
