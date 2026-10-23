@@ -4,7 +4,7 @@
 
 ## 边界
 
-- 本项目是独立的 BenchmarkDotNet 控制台程序，不在 `UotanStudio.slnx` 内，解决方案构建、format 与测试门都不会碰它；验证必须单独运行。
+- 本项目是独立的 BenchmarkDotNet 控制台程序，已在 `UotanStudio.slnx` 内，随解决方案构建、format 与测试门一起运行；基准运行仍需单独执行。
 - 它引用 `Firmware`、`Hash`、`Compress`、`Comm` 与宿主 `UotanStudio`，用于基准、启动测量与 headless UI 夹具；这些引用只服务测量，不得把测量专用类型或开关反向加到生产项目。
 - `Avalonia.Headless` 的 `PackageVersion` 必须留在 `Directory.Packages.props`；删掉后本项目的 `dotnet restore` 会以 `NU1010` 失败，而解决方案门仍然全绿。
 - `UotanStudio.Benchmarks.csproj` 的 `CS0618` 抑制只用于旧的整镜像内存型构建 API；生产调用方仍应使用流式重载。
@@ -33,3 +33,10 @@ dotnet run -c Release --project UotanStudio.Benchmarks -- --profile --workload e
 ```
 
 - 本项目没有自动化正确性门禁；基准通过不等于功能正确，性能数字也不能替代定向测试与真实设备/镜像验证。
+
+## EROFS 基准与语义门
+
+- `Firmware/ErofsBenchmarkCorpus.cs` 在 `%TEMP%` 生成确定性混合语料（文本/结构化/随机/单个大文件/符号链接/硬链接，约 44 MiB），基准结束或失败退出时删除。
+- `Firmware/ErofsFillPlannerBenchmarks.cs` 覆盖 LZ4 4K 全索引、LZ4HC 4K/64K 与 Zstd 构建；`Firmware/ErofsExtractionThroughputBenchmarks.cs` 覆盖 `ErofsParser.ExtractToDirectory`（1/8 worker）与 `ErofsFormatHandler.UnpackAsync`。
+- 运行：`dotnet run -c Release --project UotanStudio.Benchmarks -- --filter '*ErofsBuildFillBenchmarks*'`；提取与处理器类替换过滤器即可。
+- 44.51 MiB 实测基线、`fsck.erofs -p`/`--extract` 与 GKI 5.10/6.1/6.6 语义门见 [../tools/gki-fs-lab/EROFS-PERFORMANCE-GATE.md](../tools/gki-fs-lab/EROFS-PERFORMANCE-GATE.md)；基准数字不能替代该门。

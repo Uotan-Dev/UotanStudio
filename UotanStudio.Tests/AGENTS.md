@@ -4,13 +4,15 @@
 
 ## 宿主与命令
 
-- 本目录是唯一可执行的 xUnit v3 测试宿主，跑 Microsoft.Testing.Platform（由根 `global.json` 选定）。项目级与解决方案级入口分别是 `--project` 与 `--solution`；测试按目录分组，固件测试在 `Firmware/` 下。
+- 本目录是唯一可执行的 xUnit v3 测试宿主，跑 Microsoft.Testing.Platform（由根 `global.json` 选定）。项目级与解决方案级入口分别是 `--project` 与 `--solution`；测试按目录分组，固件测试在 `Firmware/` 下，架构门在 `Architecture/` 下（`UotanStudio.Tests.Architecture` 命名空间）。
+- 架构门覆盖宿主分层、ZIP 容器、格式探测、命名空间归属、项目引用图与解决方案成员；新增项目或移动目录后必须同步 `HostLayeringGuardTests`、`ProjectReferenceDirectionGuardTests`、`SolutionMembershipGuardTests` 的清单。
 - 定向跑优先用原生简单过滤器 `--filter-class`、`--filter-method`、`--filter-namespace`、`--filter-trait`，并且每条都带 `--minimum-expected-tests 1`，防止选择器失效时把"零测试"当成成功：
 
   ```text
   dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Shell.ChecksumServiceTests --minimum-expected-tests 1
   dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-method UotanStudio.Tests.Shell.ChecksumServiceTests.ComputeAsync_KnownVectors_ProducesStandardDigests --minimum-expected-tests 1
   dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter "FullyQualifiedName~ChecksumServiceTests" --minimum-expected-tests 1
+  dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug --filter-namespace UotanStudio.Tests.Architecture --minimum-expected-tests 1
   dotnet test --solution UotanStudio.slnx --no-restore
   ```
 

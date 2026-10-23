@@ -69,12 +69,13 @@ flowchart TD
  Tests -.-> Host
 ```
 
-- `UotanStudio.Hash` 是最底层的叶子库，`UotanStudio.Compress` 只依赖它并提供通用压缩与容器编解码，`UotanStudio.Firmware` 再依赖 `UotanStudio.Compress`；`UotanStudio.Media`、`UotanStudio.Projects` 同样不依赖其他业务项目。
+- `UotanStudio.Hash` 与 `UotanStudio.Net` 是最底层叶子；`UotanStudio.Compress` 只依赖 `Hash` 并提供通用压缩与 ZIP/容器编解码，`UotanStudio.Firmware` 再依赖 `UotanStudio.Compress`；`UotanStudio.Projects` 依赖 `Hash` 与 `Compress`，`UotanStudio.Media` 不依赖其他业务项目。
 - 测试宿主实际引用除 `UotanStudio.Desktop` 之外的全部项目，图中只画出一条代表性依赖。
 - 全部设备读写（USB 句柄、套接字、串口、adb/HDC server 协议）由 `UotanStudio.Comm` 持有，宿主只消费 `DeviceController`/`DeviceLease` 与协议客户端。
 - `UotanStudio.Delivery` 可引用固件层，但不得反向引用宿主 UI、项目服务或密钥库；签名能力通过 `IDeliverySigningKeyProvider` 注入。
 - `UotanStudio.Mirroring` 只引用 `UotanStudio.Comm`，`UotanStudio.Media` 保持零 Comm 依赖，经解码工厂消费帧数据。
-- `UotanStudio.Benchmarks` 是 BenchmarkDotNet 控制台程序，不在 `.slnx` 与 CI 中。
+- `UotanStudio.Net` 是下载、GitHub 镜像与 Release/版本查询的叶子库，不引用任何其他项目。
+- `UotanStudio.Benchmarks` 是 BenchmarkDotNet 控制台程序，已在 `.slnx` 与 CI 构建门内；基准运行仍需单独 Release 执行。
 
 ## 📦 固件格式
 

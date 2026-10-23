@@ -6,8 +6,8 @@
 
 - 本项目是全部设备读写的唯一持有者：USB 句柄、TCP/UDP、串口、adb/HDC server 协议都在这里。宿主不得自行打开 socket、串口或 USB 句柄，只能消费 `DeviceController`/`DeviceLease`、`Contracts` 门面与公开协议客户端。`Transports/Usb/Backend` 是内部互操作，不是宿主 API。
 - scrcpy 与其它呈现协议不在 Comm；`UotanStudio.Mirroring` 只引用 Comm，`UotanStudio.Media` 不引用 Comm。不要在 `Protocols/` 下新增呈现协议。
-- `Routing/DebugBridgeRoute` 只以普通 TCP 探测 adb/HDC server 是否存在；只有连接被拒绝表示 server 不存在，超时/协议失败保持上次状态。正值缓存 2 秒，拒绝不缓存。每个 adb/HDC 操作读取该参数，不在操作中途临时改走另一条路。
-- server 的 serial/connect key 是权威身份。目标存在、离线或未授权时仍属于 server 管理的目标；协议错误不得自动回退 USB。HDC 只服务其列表实际包含的 connect key，未注册键才允许直连。`DeviceEndpointId(Source,Transport,Address)` 区分发现来源。
+- `Routing/DebugBridgeRoute` 只以普通 TCP 探测 adb/HDC server 是否存在；只有连接被拒绝表示 server 不存在，超时/协议失败保持上次状态。正值缓存 2 秒，拒绝不缓存。控制器在首次探测前按 `DeviceCommunicationConfiguration.RouteMode` 固定 `Auto`/`ServerOnly`/`DirectOnly`/`StartupFrozen` 模式，并把启动探测结果写成一份不可变快照；发现、开启、宿主决策都读这一份快照，快照变化推进 epoch 并盖在端点上，打开时 epoch 不符即拒绝而不是静默改路。`StartupFrozen` 不刷新快照。
+- server 的 serial/connect key 是权威身份。目标存在、离线或未授权时仍属于 server 管理的目标；协议错误不得自动回退 USB。HDC 只服务其列表实际包含的 connect key，未注册键才允许直连。`ServerOnly` 一律拒绝直连，`DirectOnly`/`StartupFrozen` 在 server 监听时拒绝直写而不是切换；跨路由打开同一物理设备会被拒绝，旧 server 租约在 server 消失时由监视循环释放。`DeviceEndpointId(Source,Transport,Address)` 区分发现来源。
 - `UsbPhysicalIdentity.ServerPhysicalId` 只在精确序列号、实例 ID 尾部或仅大小写差异且唯一候选时返回物理标识；VID/PID、枚举顺序与列表位置绝不用于映射。
 
 ## USB 与生命周期
@@ -27,7 +27,7 @@
 
 ## 文档与验证
 
-- 本库设置 `GenerateDocumentationFile`、`TreatWarningsAsErrors` 与 `AllowUnsafeBlocks`；公共类型和成员必须有中英双语 XML 注释。`IsRidAgnostic=false` 与 `InternalsVisibleTo("UotanStudio")` 是宿主集成契约，不要随意改。
+- 本库设置 `GenerateDocumentationFile`、`TreatWarningsAsErrors` 与 `AllowUnsafeBlocks`；公共类型和成员必须有中英双语 XML 注释。`IsRidAgnostic=false` 保留宿主集成的 RID 传播；宿主只经公共契约消费本库，本库不再向宿主或任何生产项目开放 `InternalsVisibleTo`，只保留对 `UotanStudio.Tests` 与 `UotanStudio.Benchmarks` 的测试授权。
 - 真实设备测试优先只读；重启、刷写、提权、安装、卸载、清日志或清数据只在用户明确要求且已隔离时执行。缺少环境变量或设备时跳过并写明原因，跳过不等于通过。
 - 定向验证：
 

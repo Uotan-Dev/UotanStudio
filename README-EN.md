@@ -69,12 +69,13 @@ flowchart TD
  Tests -.-> Host
 ```
 
-- `UotanStudio.Hash` is the lowest leaf library; `UotanStudio.Compress` depends only on it and provides general-purpose compression and container codecs, and `UotanStudio.Firmware` depends on `UotanStudio.Compress` in turn. `UotanStudio.Media` and `UotanStudio.Projects` likewise depend on no other business project.
+- `UotanStudio.Hash` and `UotanStudio.Net` are the lowest leaves; `UotanStudio.Compress` depends only on `Hash` and provides general-purpose compression plus ZIP/container codecs, and `UotanStudio.Firmware` depends on `UotanStudio.Compress` in turn. `UotanStudio.Projects` depends on `Hash` and `Compress`; `UotanStudio.Media` depends on no other business project.
 - The test host really references every project except `UotanStudio.Desktop`; the diagram draws one representative dashed edge for it.
 - `UotanStudio.Comm` owns every device access path (USB handles, sockets, serial ports, adb/HDC server protocols); the host only consumes `DeviceController`/`DeviceLease` and the protocol clients.
 - `UotanStudio.Delivery` may use the firmware layer but never references host UI, project services or the key library; signing reaches it through `IDeliverySigningKeyProvider`.
 - `UotanStudio.Mirroring` references only `UotanStudio.Comm`, while `UotanStudio.Media` keeps zero Comm dependencies and consumes frames through the decoding factory.
-- `UotanStudio.Benchmarks` is a BenchmarkDotNet console app, excluded from the `.slnx` solution and from CI.
+- `UotanStudio.Net` is the leaf library for downloads, GitHub mirrors and release/version queries; it references no other project.
+- `UotanStudio.Benchmarks` is a BenchmarkDotNet console app now included in the `.slnx` build and CI gates; benchmarks still run separately in Release.
 
 ## 📦 Firmware formats
 

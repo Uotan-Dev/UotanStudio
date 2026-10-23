@@ -23,8 +23,13 @@ pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 `
 # 只编译/复用内核
 pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -Stage Kernel -Kernels 5.10,6.6,6.18
 
-# 用已有内核重建镜像并跑完整矩阵
-pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -Stage All -ReuseKernels
+# 分步执行，避免单次命令超时
+pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -Stage Fixtures -RunId matrix -SkipImageBuild
+pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -Stage Managed  -RunId matrix -SkipImageBuild
+pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -Stage Qemu     -RunId matrix -Kernels 5.10 -SkipImageBuild -Accel tcg
+pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -Stage Qemu     -RunId matrix -Kernels 6.6  -SkipImageBuild -Accel tcg
+pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -Stage Qemu     -RunId matrix -Kernels 6.18 -SkipImageBuild -Accel tcg
+pwsh -NoProfile -File tools/gki-fs-lab/aggregate.ps1 -RunId matrix
 
 # 失败诊断：保留运行时镜像与容器工作目录
 pwsh -NoProfile -File tools/gki-fs-lab/run.ps1 -KeepWork
@@ -45,7 +50,7 @@ artifacts/gki-fs-lab/<run-id>/
   kernels/<version>-meta.json
 ```
 
-成功运行只保留日志和报告；镜像、驱动临时目录和容器工作目录会删除。`-KeepWork` 会保留现场，便于排查失败。
+成功运行只保留日志和报告；镜像、驱动临时目录和容器工作目录会删除。`-KeepWork` 会保留现场，便于排查失败。QEMU 启动前会把 EXT4 副本扩到 128 MiB，给写入探针留出余量；EROFS 保持只读，重建镜像可能因布局元数据比源镜像略大。
 
 ## 常见问题
 
@@ -58,5 +63,5 @@ artifacts/gki-fs-lab/<run-id>/
 
 ## 相关文档
 
-- [../../docs/gki-fs-lab.md](../../docs/gki-fs-lab.md)
+- [DESIGN.md](DESIGN.md)
 - [../../skills/gki-filesystem-fixture/SKILL.md](../../skills/gki-filesystem-fixture/SKILL.md)

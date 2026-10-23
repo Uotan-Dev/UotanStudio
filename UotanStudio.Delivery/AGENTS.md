@@ -5,8 +5,9 @@
 ## 边界与可见性
 
 - 不得引用桌面宿主、界面、项目持久化服务或 `KeyLibraryService`；签名私钥只经 `Models/Signing.cs` 的 `IDeliverySigningKeyProvider` 注入。桌面侧适配在 `UotanStudio/Services/Delivery/`：`DeliveryKeyProvider`、`DeliveryPlanSerializer`、`DeliveryDynamicPartitions`。这条方向没有测试守护，只能靠评审维持。
-- 允许引用 `UotanStudio.Firmware` 与必要的第三方库（SharpCompress 等）。
-- 对外入口是 `Build/DeliveryService.cs`（公共门面，吃 `DeliveryPlan`）。`Build/Output.cs` 的 `DeliveryOutputService` 等实现细节保持 internal；外部工具（含命令行）要走公共门面，不得靠 `InternalsVisibleTo` 伸进内部。
+- 允许引用 `UotanStudio.Firmware`、`UotanStudio.Net` 与必要的第三方库（SharpCompress 等）。
+- 工具包下载、GitHub 镜像选择与 Release 元数据经 `UotanStudio.Net`（`HttpDownload`、`GitHubReleaseClient`）完成；本库不复制镜像枚举、测速或版本归一化逻辑。
+- 对外入口是 `Build/DeliveryService.cs`（公共门面，吃 `DeliveryPlan`）。宿主与 MCP 需要的构建/校验/容量/工具准备契约（`IDeliveryTools`、`DeliveryOutputService`、`DeliveryValidation`、`DeliverySuperBuilder`、`DeliveryPayloadBuilder`、`DeliverySuperCapacity`、`DeliveryPackageBuilder`、`DeliveryScriptGenerator`、`DiskSpaceEstimator`、`DeliveryPlanStore` 等）是公共契约；其余实现细节保持 internal。本库不再向宿主或 MCP 开放 `InternalsVisibleTo`，只保留 Tests/Benchmarks/DeliverySmoke 等脚手架的授权。
 - csproj 设置 `GenerateDocumentationFile`，公共类型与成员要写中英双语 XML 注释；本项目不启用 `TreatWarningsAsErrors`，但不得用 `NoWarn` 隐藏新的文档或空引用警告。
 
 ## 计划与校验

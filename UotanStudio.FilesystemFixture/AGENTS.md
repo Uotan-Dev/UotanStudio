@@ -4,8 +4,8 @@
 
 ## 边界
 
-- 本项目是手动验证宿主，不在 `UotanStudio.slnx` 内；解决方案构建、format 与测试门不会构建它。
-- 只引用 `UotanStudio.Firmware`。不要在这里改生产格式行为，也不要把夹具专用开关加到生产项目。
+- 本项目是手动验证宿主，已在 `UotanStudio.slnx` 内，随解决方案构建、format 与测试门一起运行；真实镜像往返仍需单独执行。
+- 只引用 `UotanStudio.Firmware` 与 `UotanStudio.Hash`。不要在这里改生产格式行为，也不要把夹具专用开关加到生产项目。
 - csproj 关闭 AOT/裁剪分析，因为这是带 `System.Text.Json` 反射序列化的手动工具；不要把这组设置复制到生产项目。
 
 ## 行为

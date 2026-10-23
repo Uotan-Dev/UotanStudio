@@ -14,8 +14,9 @@
 | `Internal` | `UotanStudio.Compress.Internal` | 等级映射、有界并行、XZ 容器与 LZMA2、非释放包装流，以及本库自有的叶子辅助类型 |
 | `Codecs/Lz4` | `UotanStudio.Compress.Codecs.Lz4` | 限定目标大小的 LZ4 编码器及其基本操作 |
 | `Codecs/Lzo` | `UotanStudio.Compress.Codecs.Lzo` | LZO1X 块编解码 |
+| `Zip` | `UotanStudio.Compress.Zip` | ZIP 容器构造/打开、条目路径规范化与可选条目/单条/总量上限 |
 
-项目根层承载公开契约：`CompressionFormat` 枚举、`CompressionFormatInfo`、`CompressionOptions`、`CompressionFormats`、`CompressionService` 与内部使用的 `CompressionException`。
+项目根层承载公开契约：`CompressionFormat` 枚举、`CompressionFormatInfo`、`CompressionOptions`、`CompressionFormats`、`CompressionService` 与内部使用的 `CompressionException`。ZIP 容器统一经 `Zip/ZipContainer` 构造或打开，其他项目不得直接使用 `ZipArchive`/`ZipFile`。
 
 ## 压缩能力入口
 
@@ -23,7 +24,7 @@
 
 `CompressionService.CreateCompressionStream` 与 `CreateDecompressionStream` 返回增量的编码/解码流，供调用方自己控制读取节奏：它们不施加输出上限，释放返回流会写出容器尾部但不关闭调用方流。需要一次性解压并限制展开大小的场景仍用 `Decompress(Stream, Stream, CompressionFormat, long, CancellationToken)`。构造侧支持 Gzip、Zlib、Deflate、Brotli、Lz4、Bzip2、Xz、Zstd 与 `None`；解压侧不覆盖 Lzma、Lz4Legacy 与 Lzop，压缩侧不覆盖 Xz、Lzma、Lz4Legacy 与 Lzop，这些格式只有整块入口，调用它们会得到 `NotSupportedException`。
 
-`Codecs/Lz4/Lz4BlockCodec` 与 `Codecs/Zstd/ZstdBlockCodec` 是给文件系统簇用的裸块原语，对 `UotanStudio.Firmware` 经 `InternalsVisibleTo` 可见、不进公共契约：前者保持 K4os 的负值返回约定（目标容量不足与数据损坏是两个不同的谓词，调用方分别处理），后者只提供压缩侧，因为 F2FS 的簇读取依赖 `Unwrap(source, expectedSize)` 的尺寸提示语义。
+`Codecs/Lz4/Lz4BlockCodec`、`Codecs/Zstd/ZstdBlockCodec`、`Codecs/Lz4/Lz4DestinationCodec`、`Codecs/Lzo/Lzo1x` 与 `Codecs/Deflate/PuffDeflateCodec` 是给文件系统/Payload/差分用的格式域裸原语，因 `UotanStudio.Firmware` 直接调用而保持 public；它们不属于宿主的通用压缩门面：`Lz4BlockCodec` 保持 K4os 的负值返回约定（目标容量不足与数据损坏是两个不同的谓词，调用方分别处理），`ZstdBlockCodec` 的簇读取依赖 `Unwrap(source, expectedSize)` 的尺寸提示语义。
 
 `Files/CompressionFile` 提供 `CompressFile`、`DecompressFile`、`DecompressFileAuto`、`DetectFile`，负责文件生命周期、取消、解压大小上限、进度上报和输出的原子发布。
 
@@ -74,7 +75,7 @@
 - `FileSystem/F2fs/F2fsCompression.cs` 的 zstd 解压分支：依赖 `Unwrap(source, expectedSize)` 的尺寸提示并原样返回数组，本库的 span 解压返回写入字节数，替换会静默改变数组长度。
 - `DeviceTree/Dt/DtboFiles.cs` 的 zlib 两个方向：本库 `ZlibCompressor` 由 SharpCompress 支撑，其等级映射到不了 `CompressionLevel.SmallestSize`，且截断载荷抛出的异常类型与 BCL 不同，重打包字节保真测试会失败。
 - `BootSecurity/BootImage/Components/BootCompressor.cs` 的 `Detect`：它的魔数表与 `Detection/CompressionDetector` 有意不等价（空输入返回 `None` 而非抛异常、4 字节短路、`5D 00 00` 的裸 LZMA 判据、9 字节 lzop 魔数、额外的 `0B 0A` brotli 规则），且 `DecompressOrReturn` 依赖“未识别即原样返回”。解压分支已全部走本库。
-- `OtaDelta/Diff/PuffDeflateCodec.cs`、`VendorFirmware/NTPi/Lzma2Compressor.cs`、`VendorFirmware/SonySin/SonySinFormatHandler.cs`、`OtaDelta/Diff/StrictBrotliReadStream.cs`、`OtaDelta/Payload/**` 的 zstd 字典与 `checksumFlag`/`windowLog` 设置：分别属于 puffin 局部解压、`NTDECOMP` 成帧、厂商私有 LZ、严格帧校验（拒绝尾字节与截断）与载荷字典语义，本库不提供也不应提供这些语义。
+- `VendorFirmware/NTPi/Lzma2Compressor.cs`、`VendorFirmware/SonySin/SonySinFormatHandler.cs`、`OtaDelta/Diff/StrictBrotliReadStream.cs`、`OtaDelta/Payload/**` 的 zstd 字典与 `checksumFlag`/`windowLog` 设置：分别属于 `NTDECOMP` 成帧、厂商私有 LZ、严格帧校验（拒绝尾字节与截断）与载荷字典语义，本库不提供也不应提供这些语义。puffin 局部解压已统一到本库的 `PuffDeflateCodec`。
 
 ## 许可证
 

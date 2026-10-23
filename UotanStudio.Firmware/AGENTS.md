@@ -5,6 +5,7 @@
 ## 上下文边界
 
 - 顶层目录是限界上下文；`Core` 是共享内核。`Core` 不得引用任何具体上下文，也不得引入第三方命名空间；具体上下文不得引用 `Application` 或 `Infrastructure`；`Application` 不得引用 `Infrastructure`。
+- 下载与 GitHub Release 能力由叶子库 `UotanStudio.Net` 提供；本库不保留 `Infrastructure/Downloads`，也不在 Firmware 内新增网络下载、镜像选择或 Release 元数据解析逻辑。
 - 跨上下文依赖是冻结基线，只允许 `UotanStudio.Tests/Firmware/Architecture/FirmwareArchitectureGuardTests.cs` 的 `AllowedCrossContextEdges` 中列出的边。新增边必须评审并同步更新基线；`FileSystem ↔ BlockImage`、`BootSecurity ↔ Patching` 是已撤销的环边，不得重新引入。
 - 每个源文件的命名空间必须由目录推导，`Properties/` 除外；`FirmwareNamespaceFolderTests.cs` 会扫描整个固件树。
 - 通用压缩经 `UotanStudio.Compress` 的公共入口完成；只有 `CompressionImplementationBoundaryTests.cs` 允许列表中的格式领域例外可以直接使用 BCL 压缩流，新增例外要写明理由。SquashFS/EROFS/F2FS 的块级压缩簇、启动镜像组件、Payload 压缩操作、`.cpio.gz`/`.tar.xz` 组合仍归本项目的格式上下文。

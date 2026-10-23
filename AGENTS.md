@@ -13,6 +13,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 | 项目 | 职责 | 项目指令 |
 | --- | --- | --- |
 | `UotanStudio.Hash` | 校验和与摘要的唯一公共入口，叶子库 | [AGENTS.md](UotanStudio.Hash/AGENTS.md) |
+| `UotanStudio.Net` | HTTP 下载、GitHub 镜像与 Release/版本查询，叶子库 | [AGENTS.md](UotanStudio.Net/AGENTS.md) |
 | `UotanStudio.Compress` | 通用压缩、解压与容器编解码 | [AGENTS.md](UotanStudio.Compress/AGENTS.md) |
 | `UotanStudio.Firmware` | 固件格式、文件系统、Payload、启动镜像与签名 | [AGENTS.md](UotanStudio.Firmware/AGENTS.md) |
 | `UotanStudio.Firmware.MagicGen` | 构建期 magic(5) 规则表生成器 | [AGENTS.md](UotanStudio.Firmware.MagicGen/AGENTS.md) |
@@ -26,7 +27,6 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 | `UotanStudio.Desktop` | 桌面入口、平台启动与 NativeAOT 发布 | [AGENTS.md](UotanStudio.Desktop/AGENTS.md) |
 | `UotanStudio.Tests` | 唯一可执行测试宿主 | [AGENTS.md](UotanStudio.Tests/AGENTS.md) |
 | `UotanStudio.Benchmarks` | BenchmarkDotNet 基准与性能剖析 | [AGENTS.md](UotanStudio.Benchmarks/AGENTS.md) |
-| `UotanStudio.IconVerification` | 手动运行的 headless 图标验证宿主 | [AGENTS.md](UotanStudio.IconVerification/AGENTS.md) |
 | `UotanStudio.FilesystemFixture` | 手动运行的文件系统往返验证宿主 | [AGENTS.md](UotanStudio.FilesystemFixture/AGENTS.md) |
 | `UotanStudio.RegexInfer` | 从输入/输出样例确定性推导正则 | [AGENTS.md](UotanStudio.RegexInfer/AGENTS.md) |
 
@@ -34,7 +34,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 
 ## 全局不变量
 
-- 依赖只向下：`Hash` 是最底层叶子；`Compress` 只引用 `Hash`；`Firmware` 引用 `Compress` 与 `Hash`；`Comm` 引用 `Firmware` 与 `Hash`；`Mirroring` 只引用 `Comm`；`Media` 不引用 `Comm`；`Delivery` 不引用宿主 UI、项目服务或 `KeyLibraryService`。新增 `ProjectReference` 前先确认方向，项目文件是最终事实。
+- 依赖只向下：`Hash` 与 `Net` 是最底层叶子（`Net` 不引用任何项目）；`Compress` 只引用 `Hash`；`Firmware` 引用 `Compress` 与 `Hash`；`Comm` 引用 `Firmware` 与 `Hash`；`Mirroring` 只引用 `Comm`；`Media` 不引用 `Comm`；`Projects` 只引用 `Hash` 与 `Compress`；`Delivery` 不引用宿主 UI、项目服务或 `KeyLibraryService`。新增 `ProjectReference` 前先确认方向，项目文件是最终事实。
 - 设备读写（USB 句柄、TCP/UDP、串口、adb/HDC server 协议）只能由 `UotanStudio.Comm` 持有；宿主只消费 `DeviceController`/`DeviceLease`、`Contracts` 门面与公开协议客户端。scrcpy 归 `UotanStudio.Mirroring`，不属于 Comm 协议层。
 - `DeliveryPlan` 是交付后端唯一输入契约；宿主负责采集与恢复界面状态，后端负责校验与生成输出，模式互斥只在现有校验路径维护。
 - 固件、ZIP、Payload、文件系统镜像和设备返回数据都按不可信输入处理：流式与有界缓冲、偏移/长度/条目/解压大小上限、整数溢出防护、贯穿 `CancellationToken`、临时文件校验后原子替换；修改镜像要分别报告字节、结构、内容与容量等价性。
@@ -82,7 +82,7 @@ dotnet format UotanStudio.slnx style --no-restore --verify-no-changes
 
 Debug 构建必须显式写 `-c Debug`，还原也要带 `-p:Configuration=Debug`：`UotanStudio.csproj` 中 `Dock.Avalonia.Diagnostics` 的 `IncludeAssets` 条件按 `$(Configuration)` 求值，还原阶段该属性为空会剔除编译资产，使 `#if DEBUG` 里的 `AttachDockDebugOverlay` 调用以 `CS1061` 失败。CI 的 Release 配置不受影响。
 
-测试命令、过滤器和跳过门控见 `UotanStudio.Tests/AGENTS.md`；性能基准见 `UotanStudio.Benchmarks/AGENTS.md`。修改完成后报告实际变更、构建命令、定向测试、跳过的测试和仍未验证的边界。
+测试命令、过滤器和跳过门控见 `UotanStudio.Tests/AGENTS.md`；性能基准见 `UotanStudio.Benchmarks/AGENTS.md`。项目硬性要求 NativeAOT：最终验证必须包含一次 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained -p:PublishAot=true`，且不得出现新的裁剪/AOT 警告；反射式 DI 注册、未标注的 JSON 反射序列化或动态程序集扫描都不被接受。修改完成后报告实际变更、构建命令、定向测试、跳过的测试和仍未验证的边界。
 
 ## Git 与工作区
 

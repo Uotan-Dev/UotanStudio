@@ -21,13 +21,12 @@
 | `Core/Repacking` | 通用重打包元数据、显式上下文、原子 JSON 保存和格式扩展契约 |
 | `Application/Formats` | 内置格式处理器的注册与组装 |
 | `Application/Containers` | 组合 ZIP、Payload、LP/Super 能力，分析容器结构并提取选定成员 |
-| `Infrastructure/Downloads` | HTTP 下载、GitHub 镜像选择与网络传输 |
 
 通用压缩是独立的支撑项目 `UotanStudio.Compress`，本项目通过项目引用调用其能力。本项目负责归档、文件系统、OTA、启动镜像与厂商容器中的领域封装，包括成员列表、块级压缩簇和专有容器头部；通用编码器不解释这些领域结构。
 
 `Application/Formats/FirmwareFormatRegistry` 是内置处理器的组装入口，集中注册上下文处理器。`Core/FormatDetector` 只面向已注册的 `IReadonlyFormatHandler`，不构造具体格式实现。
 
-依赖方向为：宿主、CLI、MCP 调用应用编排或上下文入口；应用编排调用上下文；上下文使用共享契约和基础能力。`Core` 不引用其他模块、`Application` 或 `Infrastructure`；各模块不引用 `Application`、`Infrastructure` 或宿主。下载基础设施由需要网络的调用方显式使用。
+依赖方向为：宿主、CLI、MCP 调用应用编排或上下文入口；应用编排调用上下文；上下文使用共享契约和基础能力。`Core` 不引用其他模块、`Application` 或 `Infrastructure`；各模块不引用 `Application`、`Infrastructure` 或宿主。下载、GitHub 镜像与 Release 元数据由叶子库 `UotanStudio.Net` 提供，Firmware 不再持有下载基础设施。
 
 这些边界位于同一个程序集内，按实际格式职责组织，不统一增加 `Entity`、`Repository`、事件总线或多层转发。现有上下文之间仍有明确的格式组合，例如 Sparse 的文件系统提取与文件系统重建的 Sparse 输出；这类跨上下文依赖保持在同一程序集内。
 

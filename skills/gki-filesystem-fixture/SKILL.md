@@ -32,8 +32,9 @@ tools/gki-fs-lab/lab/build-kernels.sh    内核源码拉取与编译
 tools/gki-fs-lab/lab/make-fixtures.sh    主线工具原始镜像
 tools/gki-fs-lab/lab/run-matrix.sh       QEMU 客户机矩阵
 tools/gki-fs-lab/lab/guest-init.sh       客户机验收脚本
+tools/gki-fs-lab/aggregate.ps1            9 用例报告聚合
 UotanStudio.FilesystemFixture             托管解包/缓存/重打包夹具
-docs/gki-fs-lab.md                        技术文档
+tools/gki-fs-lab/DESIGN.md                技术文档
 artifacts/gki-fs-lab/<run-id>/            仅日志与报告
 ```
 
@@ -175,7 +176,7 @@ sload.f2fs -f <tree> -P -t / <image>
 
 每个内核启动一个 QEMU，挂载三块重打包镜像。每个格式执行：
 
-- ext4：只读挂载 → 整树清单校验 → 卸载 → `e2fsck -fn` → 读写挂载 → 写入 4 KiB 文件 → `sync` → 卸载 → 再次 `e2fsck -fn` → 只读挂载校验写回文件与整树。
+- ext4：只读挂载 → 整树清单校验 → 卸载 → `e2fsck -fn` → 读写挂载 → 写入 512 B 文件 → `sync` → 卸载 → 再次 `e2fsck -fn` → 只读挂载校验写回文件与整树。重建镜像在启动前扩到 128 MiB，为写探针留出余量。
 - f2fs：同上，fsck 用 `--dry-run --no-kernel-check`。
 - EROFS：只读挂载 → 整树清单校验 → `fsck.erofs` → 写入必须被拒绝（只读文件系统），不得把 EROFS 当作可写格式。
 

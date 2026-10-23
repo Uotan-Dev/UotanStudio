@@ -18,11 +18,14 @@
 - `--mcp` 伴随在 GUI 启动前 `Task.Run`，设备经 `DesktopDeviceManagerGateway`、签名经 `DeliveryKeyProvider`、审计经 `McpToolCallLog`；不要在 Desktop 复制工具实现。`--mcp-root`/`--allow-flash` 由 `UotanStudio.Mcp` 的 `McpServerConfig.Parse` 读取。
 - `--open-screen-mirror <serial>` 写入 `App.StartupScreenMirrorSerial`（`Array.IndexOf`，区分大小写且必须有后继参数）；文件参数只取 `File.Exists` 的路径，由宿主决定打开解决方案还是导入。不要从 `args` 删除参数，也不要在 `Program` 里做项目打开。
 - `BuildAvaloniaApp` 保留 `[STAThread]`、`UsePlatformDetect`、默认字体 `avares://UotanStudio/Assets/Fonts#MiSans` 与 Dock 合并范围 `ActiveDocument`；这些会影响宿主资源路径与停靠行为。
+- Linux 在 `UsePlatformDetect` 之后调用 `UseWaylandWithFallback`（`Avalonia.Wayland` 包），有可用 compositor 时走原生 Wayland，否则回退 X11；该调用只有 `OperatingSystem.IsLinux()` 分支可达，NativeAOT 按 RID 折叠该判断并剔除其它 RID 的 Wayland/`NWayland` 程序集。
+- 持久化的 `renderingBackend`/`renderingCompositionMode` 在启动时转换成各平台的 `*PlatformOptions`；平台不接受的值回退到自动，设置页只负责持久化并提示重启。
 - `Logger.Sink` 只过滤 `LogArea.Binding` 的 Warning；不要依赖它掩盖新增绑定/裁剪警告。GUI 路径没有控制台，诊断写 `LogService`，不要写 `Console.WriteLine`。
 
 ## 发布与验证
 
 - 发布以 `.github/workflows/release.yml` 为准：六个 RID（`win-x64`、`win-arm64`、`linux-x64`、`linux-arm64`、`osx-x64`、`osx-arm64`），`dotnet publish ... -c Release -r <rid> --self-contained -p:PublishAot=true`。`Properties/PublishProfiles/FolderProfile.pubxml` 是本机 win-x64/单文件配置，不代表 CI。
+- `WindowsCompositionRoots.xml` 只在 win RID 发布时作为 `TrimmerRootDescriptor` 注入，保留 `Avalonia.Win32.WindowImpl.CompositionEffectsSurface` 供设置页报告实际合成宿主；不要改成无条件引用，否则 Linux/macOS 发布会保留 Win32 平台实现。
 - `UotanStudio.Tests` 不引用 Desktop，`Program.cs` 与命令行没有自动化测试。改动后必须 Release 构建 + 对应 RID 发布，并手工冒烟 GUI、`--managed-device-shell`、`--mcp-headless`、`--mcp` 四种模式；不能写成“已测试”。
 - 文件关联只能人工验证：Windows 首次启动后检查 `HKCU\Software\Classes\.uotan` 指向 `UotanStudio.uotan`，图标来自输出目录 `Assets/`。
 

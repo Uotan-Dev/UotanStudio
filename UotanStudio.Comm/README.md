@@ -104,20 +104,30 @@ Not surfaced from upstream, and deliberately not implemented here:
 ## Automatic server routing
 
 Server liveness is probed over plain TCP only — the library never starts, stops
-or shells out to `adb`/`hdc` executables. The default adb and HDC endpoints are
-probed once when the controller is created and the conclusive outcomes are
-written to the process-global `DebugBridgeRoute.AdbServerAvailable` and
-`DebugBridgeRoute.HdcServerAvailable`; the server-lifecycle watch refreshes
-both parameters on every pass and explicit server shutdown re-syncs them.
-Every adb and HDC operation route reads its parameter instead of probing:
-when it marks the server as present, the serial must additionally appear in
-the server's target list and targets are served through the server; when
-absent, targets route through direct USB/TCP. Only a refused connection marks
-a server absent and inconclusive probes keep the last state. Non-default
-endpoints keep per-operation probes: positive results are cached for a short
-TTL, a refused connection is never cached, and `BeginProbeScope` merges
-repeated probes within one scan pass. The USB access policy is registered
-when the `CommKit` facade is constructed; without it, debug interfaces fail closed.
+or shells out to `adb`/`hdc` executables. The controller fixes a route mode
+(`Auto`, `ServerOnly`, `DirectOnly`, `StartupFrozen`) from
+`DeviceCommunicationConfiguration.RouteMode` before its first probe, then probes
+the default adb and HDC endpoints once and applies both conclusive outcomes as
+one immutable `DebugBridgeRouteSnapshot`. The server-lifecycle watch refreshes
+that snapshot on every pass except in `StartupFrozen` mode, where the startup
+pair is retained; explicit server shutdown re-syncs the snapshot in the other
+modes. Every discovery source, opener and host decision reads that one snapshot
+instead of probing on its own, and each snapshot change advances an epoch that
+discovered endpoints carry, so an open rejects an endpoint whose epoch no longer
+matches. Only a refused connection marks a server absent and inconclusive probes
+keep the last state, so an inconclusive first watch pass cannot demote a
+conclusive startup probe. Non-default endpoints keep per-operation probes:
+positive results are cached for a short TTL, a refused connection is never
+cached, and `BeginProbeScope` merges repeated probes within one scan pass.
+
+`ServerOnly` refuses direct debug access entirely, `DirectOnly` never selects a
+server and refuses direct access while a server is listening, and
+`StartupFrozen` keeps the startup pair and refuses direct access when that pair
+marks the server present or a server appears later; none of them switch routes
+at runtime. `Auto` keeps serving server targets even when they are offline or
+unauthorized, and only an unlisted target falls back to direct USB. The USB
+access policy is registered when the `CommKit` facade is constructed; without
+it, debug interfaces fail closed.
 
 Direct HDC server shutdown uses the host-channel protocol (`HdcServerClient.KillAsync`);
 there is no in-library process execution.
@@ -147,9 +157,11 @@ opt-ins via `DeviceCommunicationConfiguration.UsbBackend`.
   properties are dropped and `DeviceRemoved` fires. A metadata change (mode switch)
   releases the old interface's leases, keeps the cache and fires `DeviceChanged`.
 - **Server watch** (`DeviceController.StartServerStateWatch`): periodic adb/HDC probes
-  flip `DebugBridgeAvailabilityChanged` and release adopted server-session leases whose
-  serial vanished from the server list or whose server stopped listening. Only a refused
-  connection means "server absent".
+  publish one availability snapshot, flip `DebugBridgeAvailabilityChanged` only on a
+  conclusive change, and release adopted server-session leases whose server is gone or
+  whose serial vanished from a still-live server list. Only a refused connection means
+  "server absent"; the retained state seeds each pass so an inconclusive probe cannot
+  demote a conclusive startup result.
 - **Command pool** (`DeviceLease.Commands` → `DeviceCommandDispatcher`): per-device FIFO,
   strictly serial; results and exceptions return through the submitted `Task`. Streaming
   work (logcat, shell streaming, mirroring) must not go through the pool.

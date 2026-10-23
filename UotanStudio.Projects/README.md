@@ -1,13 +1,13 @@
 # UotanStudio.Projects
 
-UotanStudio 工程／解决方案生命周期类库，面向 .NET 10，启用 NativeAOT 兼容分析。没有运行时 NuGet 包或其他项目引用，不依赖 Avalonia、Dock、Nodify、固件处理器及桌面全局状态。
+UotanStudio 工程／解决方案生命周期类库，面向 .NET 10，启用 NativeAOT 兼容分析。只引用 `UotanStudio.Hash` 与 `UotanStudio.Compress`，不依赖 Avalonia、Dock、Nodify、固件处理器及桌面全局状态。
 
-模型与服务使用 `UotanStudio.Services.Projects` 命名空间，程序集为 `UotanStudio.Projects`。JSON 字段、`.uotan`／`.uotanfw`／`.uotannode` 格式及目录约定构成当前持久化契约。`UotanStudio` 应用程序集为其中 16 个公共类型提供类型转发；该转发未做过第三方二进制调用方的兼容验证。新调用方直接引用本库。
+模型与服务使用 `UotanStudio.Projects` 命名空间，程序集为同名 `UotanStudio.Projects`。JSON 字段、`.uotan`／`.uotanfw`／`.uotannode` 格式及目录约定构成当前持久化契约。本项目不提供类型转发，调用方直接引用本库。
 
 ## 独立使用
 
 ```csharp
-using UotanStudio.Services.Projects;
+using UotanStudio.Projects;
 
 var session = new ProjectSession();
 await session.CreateNewSolutionAsync(solutionPath, cancellationToken);
