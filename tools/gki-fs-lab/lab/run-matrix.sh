@@ -56,10 +56,10 @@ stage="$WORK_ROOT/initramfs"
 root="$stage/root"
 mkdir -p "$root"/bin "$root"/lib "$root"/dev "$root"/proc "$root"/sys "$root"/mnt "$root"/manifests "$root"/tmp
 cp /bin/busybox.static "$root/bin/busybox"
-for applet in sh mount umount mkdir cat echo stat readlink sha256sum od tr cut wc find true false poweroff sync touch dd nproc zcat grep awk sed sleep test expr head tail ls rm; do
+for applet in sh mount umount mkdir cat echo stat readlink sha256sum od tr cut wc find true false poweroff sync touch dd nproc uname zcat grep awk sed sleep test expr head tail ls rm; do
   ln -sf busybox "$root/bin/$applet"
 done
-for tool in /usr/sbin/e2fsck /usr/sbin/fsck.f2fs /usr/sbin/fsck.erofs /usr/bin/getfattr; do
+for tool in e2fsck fsck.f2fs fsck.erofs getfattr; do
   binary=$(command -v "$tool" || true)
   [ -n "$binary" ] || { echo "missing tool: $tool" >&2; exit 2; }
   cp "$binary" "$root/bin/"
@@ -92,6 +92,13 @@ for version in "${requested_kernels[@]}"; do
   for format in "${requested_formats[@]}"; do
     lower=$(echo "$format" | tr '[:upper:]' '[:lower:]')
     cp "$CASES_ROOT/repacked/$lower.img" "$run_images/$lower.img"
+    if [ "$lower" = "ext4" ]; then
+      truncate -s 128M "$run_images/$lower.img"
+      resize2fs "$run_images/$lower.img" >/dev/null 2>&1 || {
+        echo "resize2fs failed on the rebuilt ext4 image" >&2
+        exit 2
+      }
+    fi
   done
 
   qemu_args=(

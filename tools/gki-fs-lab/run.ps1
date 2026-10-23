@@ -7,8 +7,10 @@ param(
     [string]$Accel = 'auto',
     [switch]$ReuseKernels,
     [switch]$KeepWork,
+    [switch]$KeepImages,
     [switch]$PruneCache,
     [switch]$SkipImageBuild,
+    [string]$RunId = '',
     [int]$Jobs = [Environment]::ProcessorCount
 )
 
@@ -17,7 +19,9 @@ $Image = 'uotan-gki-fs-lab:latest'
 $Volume = 'uotan-gki-fs-lab'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $RepoWsl = $RepoRoot -replace '\\', '/'
-$RunId = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
+if ([string]::IsNullOrWhiteSpace($RunId)) {
+    $RunId = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
+}
 $Artifacts = Join-Path $RepoRoot "artifacts/gki-fs-lab/$RunId"
 $ArtifactsWsl = "/repo/artifacts/gki-fs-lab/$RunId"
 $KernelList = $Kernels -join ','
@@ -204,7 +208,7 @@ foreach ($item in $managed) {
 }
 $lines | Set-Content (Join-Path $Artifacts 'report.md') -Encoding utf8
 
-if (-not $KeepWork -and $failed -eq 0) {
+if (-not $KeepWork -and -not $KeepImages -and $Stage -eq 'All' -and $failed -eq 0) {
     Invoke-Lab -Arguments @('-c', 'rm -rf /lab/work/fixtures/* /lab/work/managed/* /lab/work/matrix/* /lab/cases/*')
     Remove-Item -LiteralPath (Join-Path $Artifacts 'images') -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $Artifacts 'driver') -Recurse -Force -ErrorAction SilentlyContinue

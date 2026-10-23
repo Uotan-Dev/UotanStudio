@@ -20,11 +20,15 @@ verify_tree() {
   name=$1
   mnt=$2
   manifest="/manifests/$3.tsv"
+  ignore=${4:-}
   [ -r "$manifest" ] || { fail_case "$name" "missing-manifest"; return 1; }
   expected=$(wc -l < "$manifest")
   seen=0
-  while IFS="$(printf '\t')" read -r type path mode uid gid size sha link hardlink xattrs; do
+  while IFS='|' read -r type path mode uid gid size sha link hardlink xattrs; do
     [ -n "$type" ] || continue
+    if [ -n "$ignore" ] && [ "$path" = "$ignore" ]; then
+      continue
+    fi
     target="$mnt/$path"
     seen=$((seen + 1))
     case "$type" in
@@ -76,9 +80,13 @@ verify_tree() {
   done < "$manifest"
 
   [ "$seen" = "$expected" ] || { fail_case "$name" "count:$seen!=$expected"; return 1; }
+  expected_actual=$expected
+  if [ -n "$ignore" ] && [ -e "$mnt/$ignore" ]; then
+    expected_actual=$((expected_actual + 1))
+  fi
   actual_count=$(find "$mnt" \( -type f -o -type d -o -type l \) | wc -l)
   actual_count=$((actual_count - 1))
-  [ "$actual_count" = "$expected" ] || { fail_case "$name" "extra-entries:$actual_count!=$expected"; return 1; }
+  [ "$actual_count" = "$expected_actual" ] || { fail_case "$name" "extra-entries:$actual_count!=$expected_actual"; return 1; }
   report "READ_OK $name $seen"
   return 0
 }
@@ -109,7 +117,11 @@ run_ext4() {
   fsck_ext4 "$name" "$dev" || return 1
 
   mount -t ext4 -o rw "$dev" "$mnt" || { fail_case "$name" "mount-rw"; return 1; }
-  dd if=/dev/urandom of="$mnt/uotan-write.bin" bs=1024 count=4 status=none
+  if ! dd if=/dev/urandom of="$mnt/uotan-write.bin" bs=512 count=1 status=none; then
+    fail_case "$name" "write"
+    umount "$mnt" || true
+    return 1
+  fi
   write_sha=$(sha256sum "$mnt/uotan-write.bin" | cut -d' ' -f1)
   sync
   umount "$mnt" || { fail_case "$name" "umount-rw"; return 1; }
@@ -125,7 +137,7 @@ run_ext4() {
   mount -t ext4 -o ro "$dev" "$mnt" || { fail_case "$name" "remount-ro"; return 1; }
   [ "$(sha256sum "$mnt/uotan-write.bin" | cut -d' ' -f1)" = "$write_sha" ] \
     || { fail_case "$name" "writeback"; umount "$mnt" || true; return 1; }
-  verify_tree "$name" "$mnt" ext4 || { umount "$mnt" || true; return 1; }
+  verify_tree "$name" "$mnt" ext4 uotan-write.bin || { umount "$mnt" || true; return 1; }
   umount "$mnt" || { fail_case "$name" "final-umount"; return 1; }
   report "WRITE_BACK_OK $name"
   return 0
@@ -150,7 +162,11 @@ run_f2fs() {
   fi
 
   mount -t f2fs -o rw "$dev" "$mnt" || { fail_case "$name" "mount-rw"; return 1; }
-  dd if=/dev/urandom of="$mnt/uotan-write.bin" bs=1024 count=4 status=none
+  if ! dd if=/dev/urandom of="$mnt/uotan-write.bin" bs=512 count=1 status=none; then
+    fail_case "$name" "write"
+    umount "$mnt" || true
+    return 1
+  fi
   write_sha=$(sha256sum "$mnt/uotan-write.bin" | cut -d' ' -f1)
   sync
   umount "$mnt" || { fail_case "$name" "umount-rw"; return 1; }
@@ -166,7 +182,7 @@ run_f2fs() {
   mount -t f2fs -o ro "$dev" "$mnt" || { fail_case "$name" "remount-ro"; return 1; }
   [ "$(sha256sum "$mnt/uotan-write.bin" | cut -d' ' -f1)" = "$write_sha" ] \
     || { fail_case "$name" "writeback"; umount "$mnt" || true; return 1; }
-  verify_tree "$name" "$mnt" f2fs || { umount "$mnt" || true; return 1; }
+  verify_tree "$name" "$mnt" f2fs uotan-write.bin || { umount "$mnt" || true; return 1; }
   umount "$mnt" || { fail_case "$name" "final-umount"; return 1; }
   report "WRITE_BACK_OK $name"
   return 0

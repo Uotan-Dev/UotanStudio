@@ -41,6 +41,7 @@ FRAGMENT_HASH=$(sha256sum "$FRAGMENT" | cut -d' ' -f1)
 branch_for() {
   case "$1" in
     5.10) echo android13-5.10 ;;
+    6.1) echo android14-6.1 ;;
     6.6) echo android15-6.6 ;;
     6.18) echo android17-6.18 ;;
     *) echo "" ;;
