@@ -1,6 +1,6 @@
-using UotanStudio.Services.Execution;
+using UotanStudio.Projects;
 using UotanStudio.Services.Plugins;
-using UotanStudio.Services.Projects;
+using UotanStudio.Workflow.Execution;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

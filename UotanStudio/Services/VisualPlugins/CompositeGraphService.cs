@@ -1,6 +1,7 @@
 using Avalonia;
+using UotanStudio.Projects;
 using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Services.VisualPlugins;
 

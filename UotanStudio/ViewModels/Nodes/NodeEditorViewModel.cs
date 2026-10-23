@@ -4,13 +4,16 @@ using Avalonia;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
+using UotanStudio.Projects;
 using UotanStudio.Services;
-using UotanStudio.Services.Execution;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui.Projects;
 using UotanStudio.Services.VisualPlugins;
-using UotanStudio.ViewModels.NodeViewModels;
-using UotanStudio.ViewModels.NodeViewModels.EditorCommands;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Nodes.EditorCommands;
+using UotanStudio.Workflow.Registry;
 
 namespace UotanStudio.ViewModels.Nodes;
 
@@ -247,9 +250,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public ObservableCollection<NodeToolboxItem> ToolboxItems { get; } = [];
 
     /// <summary>
-    /// Gets the search-filtered toolbox view bound by the UI. It holds the favorites and recently used shortcut
-    /// headings followed by every operation.
-    /// <para>获取搜索过滤后的工具箱视图，UI 绑定此项。它包含收藏与最近使用两个快捷分组标题，其后是全部操作。</para>
+    /// Gets the search-filtered toolbox view bound by the UI. Favorite operations stay pinned at the top, followed by
+    /// every other operation in default order.
+    /// <para>获取搜索过滤后的工具箱视图，UI 绑定此项。收藏的操作固定在顶部，其后是其余操作，按默认顺序排列。</para>
     /// </summary>
     public ObservableCollection<NodeToolboxItem> VisibleToolboxItems
     {
@@ -1197,18 +1200,18 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
             ExecutionStatus = result.Status switch
             {
-                Services.Execution.ExecutionStatus.Succeeded => LanguageService.Instance.GetString(preview ? "Node_Patch_PreviewFinished" : "Node_Patch_RunFinished"),
-                Services.Execution.ExecutionStatus.PartiallySucceeded => LanguageService.Instance.GetString("Node_Patch_RunPartial", result.FailedNodes.Count),
-                Services.Execution.ExecutionStatus.Cancelled => LanguageService.Instance.GetString("Node_Patch_RunCancelled"),
-                Services.Execution.ExecutionStatus.Failed => UserError.WithDetails(result.ErrorMessage, "Node_Patch_RunFailed"),
+                Workflow.Execution.ExecutionStatus.Succeeded => LanguageService.Instance.GetString(preview ? "Node_Patch_PreviewFinished" : "Node_Patch_RunFinished"),
+                Workflow.Execution.ExecutionStatus.PartiallySucceeded => LanguageService.Instance.GetString("Node_Patch_RunPartial", result.FailedNodes.Count),
+                Workflow.Execution.ExecutionStatus.Cancelled => LanguageService.Instance.GetString("Node_Patch_RunCancelled"),
+                Workflow.Execution.ExecutionStatus.Failed => UserError.WithDetails(result.ErrorMessage, "Node_Patch_RunFailed"),
                 _ => LanguageService.Instance.GetString("Node_StatusReady")
             };
             AppendExecutionLog(ExecutionStatus);
-            if (result.Status == Services.Execution.ExecutionStatus.Succeeded)
+            if (result.Status == Workflow.Execution.ExecutionStatus.Succeeded)
             {
                 ExecutionProgress = 1;
             }
-            IsExecutionLogExpanded |= result.Status is Services.Execution.ExecutionStatus.Failed or Services.Execution.ExecutionStatus.PartiallySucceeded;
+            IsExecutionLogExpanded |= result.Status is Workflow.Execution.ExecutionStatus.Failed or Workflow.Execution.ExecutionStatus.PartiallySucceeded;
         }
         catch (OperationCanceledException)
         {
@@ -1399,11 +1402,11 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         var result = e.Result;
         var summary = result.Status switch
         {
-            Services.Execution.ExecutionStatus.Succeeded
+            Workflow.Execution.ExecutionStatus.Succeeded
                 => LanguageService.Instance.GetString(_executionPreview ? "Node_Patch_PreviewFinished" : "Node_Patch_RunFinished"),
-            Services.Execution.ExecutionStatus.PartiallySucceeded
+            Workflow.Execution.ExecutionStatus.PartiallySucceeded
                 => LanguageService.Instance.GetString("Node_Patch_RunPartial", result.FailedNodes.Count),
-            Services.Execution.ExecutionStatus.Cancelled
+            Workflow.Execution.ExecutionStatus.Cancelled
                 => LanguageService.Instance.GetString("Node_Patch_RunCancelled"),
             _ => UserError.WithDetails(result.ErrorMessage, "Node_Patch_RunFailed")
         };

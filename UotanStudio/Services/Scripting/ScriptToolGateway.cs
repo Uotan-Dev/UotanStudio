@@ -1,6 +1,6 @@
+using UotanStudio.Mirroring;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
-using UotanStudio.Services.Mirroring;
 
 namespace UotanStudio.Services.Scripting;
 
@@ -358,7 +358,7 @@ public sealed class DeviceScriptToolGateway : IScriptToolGateway
     /// </returns>
     public ManagedMirrorSession StartMirror(DetectedDevice device)
     {
-        var artifact = Scrcpy.ScrcpyServerService.Shared.Resolve();
+        var artifact = Scrcpy.ScrcpyServerService.Shared.ResolveOrProvision();
         var options = new ScrcpyServerOptions { ServerVersion = artifact.Version };
         var session = App.DeviceMonitor.StartMirror(device, artifact.Path, options);
         try

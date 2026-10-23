@@ -1,5 +1,5 @@
 using UotanStudio.Firmware.Patching;
-using UotanStudio.Services.Projects;
+using UotanStudio.Projects;
 
 namespace UotanStudio.Services.Patching;
 

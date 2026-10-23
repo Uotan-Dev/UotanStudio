@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using UotanStudio.Services;
-using UotanStudio.Services.Execution;
-using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Registry;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

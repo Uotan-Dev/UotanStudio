@@ -1,10 +1,10 @@
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.ViewModels.Nodes;
 
 public partial class NodeEditorViewModel
 {
-    public Services.Workspace.IWorkflowDocuments? Documents { get; set; }
+    public Services.Ui.Workspace.IWorkflowDocuments? Documents { get; set; }
     private IReadOnlyList<NodeConnectorViewModel> _selectedParameterInputs = [];
 
     /// <summary>Hides unconnected advanced and irrelevant inputs on canvas nodes.<para>在画布节点上隐藏未连接的高级输入与无关输入。</para></summary>

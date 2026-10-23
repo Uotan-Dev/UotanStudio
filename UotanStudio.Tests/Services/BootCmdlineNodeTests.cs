@@ -2,8 +2,8 @@ using UotanStudio.Firmware.BootSecurity.BootImage;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
 using UotanStudio.Services;
-using UotanStudio.Services.Execution;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

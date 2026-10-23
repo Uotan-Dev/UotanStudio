@@ -1,12 +1,12 @@
+using UotanStudio.Mirroring;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
-using UotanStudio.Services.Execution;
 using UotanStudio.Services.Flash;
-using UotanStudio.Services.Mirroring;
 using UotanStudio.Services.Scripting;
 using UotanStudio.Services.VisualPlugins;
-using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Registry;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

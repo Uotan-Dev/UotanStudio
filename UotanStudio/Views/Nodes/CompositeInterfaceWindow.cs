@@ -1,8 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using UotanStudio.Projects;
 using UotanStudio.Services;
-using UotanStudio.Services.Projects;
 using UotanStudio.Services.VisualPlugins;
 
 namespace UotanStudio.Views.Nodes;

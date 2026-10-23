@@ -1,5 +1,5 @@
 using System.Globalization;
-using UotanStudio.Services.Projects;
+using UotanStudio.Projects;
 using UotanStudio.Services.VisualPlugins;
 using Xunit;
 

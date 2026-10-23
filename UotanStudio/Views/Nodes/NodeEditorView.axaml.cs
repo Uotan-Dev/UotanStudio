@@ -6,12 +6,14 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using UotanStudio.Services.Projects;
+using UotanStudio.Projects;
+using UotanStudio.Services.Ui;
+using UotanStudio.Services.Ui.Projects;
 using UotanStudio.Services.VisualPlugins;
 using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
-using UotanStudio.ViewModels.NodeViewModels.EditorCommands;
 using UotanStudio.Views.Shell;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Nodes.EditorCommands;
 
 namespace UotanStudio.Views.Nodes;
 
@@ -69,7 +71,9 @@ public partial class NodeEditorView : UserControl
 
         Editor.SelectionChanged += OnEditorSelectionChanged;
         Editor.AddHandler(KeyDownEvent, OnEditorKeyDown, RoutingStrategies.Bubble);
+        PreservePendingConnectionVisual();
         AttachCanvasGestureHandlers();
+        AttachCanvasViewportTracking();
         Editor.AddHandler(PointerReleasedEvent, OnEditorPointerReleased,
             RoutingStrategies.Bubble, handledEventsToo: true);
 
@@ -378,7 +382,6 @@ public partial class NodeEditorView : UserControl
             {
                 var node = item.CreateNode();
                 vm.AddNode(node);
-                vm.RecordToolboxUse(item.TypeKey);
                 vm.SetSelection([node]);
             }
         }
@@ -670,7 +673,6 @@ public partial class NodeEditorView : UserControl
         var node = item.CreateNode();
         node.Location = ToNodeLocation(e.GetPosition(Editor), Editor.OffsetX, Editor.OffsetY);
         vm.AddNode(node, preserveLocation: true);
-        vm.RecordToolboxUse(item.TypeKey);
         e.DragEffects = DragDropEffects.Copy;
         e.Handled = true;
     }
@@ -891,7 +893,7 @@ public partial class NodeEditorView : UserControl
                 return;
             }
             var language = Services.LanguageService.Instance;
-            var confirmed = await Services.DialogService.ConfirmAsync(owner,
+            var confirmed = await DialogService.ConfirmAsync(owner,
                 language.GetString("Dialog_UnsavedTitle"),
                 string.Format(language.GetString("Dialog_UnsavedMessage"), name),
                 language.GetString("Dialog_DiscardChanges"));

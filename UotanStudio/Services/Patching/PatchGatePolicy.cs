@@ -1,7 +1,8 @@
-using UotanStudio.Services.Execution;
+using UotanStudio.Projects;
 using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Registry;
 
 namespace UotanStudio.Services.Patching;
 

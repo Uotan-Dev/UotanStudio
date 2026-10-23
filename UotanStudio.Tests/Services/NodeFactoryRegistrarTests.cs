@@ -1,12 +1,14 @@
 using System.Collections.Concurrent;
 using Avalonia;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Plugins;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Registry;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

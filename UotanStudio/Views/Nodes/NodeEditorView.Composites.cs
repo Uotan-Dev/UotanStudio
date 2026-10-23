@@ -2,8 +2,8 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
 using UotanStudio.Views.Shell;
+using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Views.Nodes;
 

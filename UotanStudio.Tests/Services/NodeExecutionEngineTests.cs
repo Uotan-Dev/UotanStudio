@@ -1,8 +1,8 @@
 using UotanStudio.Projects.Interactions;
 using UotanStudio.Services;
-using UotanStudio.Services.Execution;
 using UotanStudio.Services.Interactions;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

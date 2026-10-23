@@ -1,11 +1,10 @@
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
-using UotanStudio.ViewModels.NodeViewModels.EditorCommands;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Nodes.EditorCommands;
 
 namespace UotanStudio.Views.Nodes;
 

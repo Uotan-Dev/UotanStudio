@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
-using UotanStudio.ViewModels.NodeViewModels;
-using UotanStudio.ViewModels.NodeViewModels.EditorCommands;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Nodes.EditorCommands;
 
 namespace UotanStudio.ViewModels.Nodes;
 

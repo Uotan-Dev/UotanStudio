@@ -1,6 +1,6 @@
 using UotanStudio.Services;
-using UotanStudio.Services.Execution;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -76,7 +76,7 @@ public sealed class FlowRoleDispatchTests
     }
 
     private static FlowNodeViewModel BuiltIn(string typeKey)
-        => UotanStudio.ViewModels.Nodes.NodeFactoryRegistrar.Descriptors
+        => UotanStudio.Workflow.Registry.NodeFactoryRegistrar.Descriptors
             .Single(descriptor => descriptor.TypeKey == typeKey).Factory();
 
     private static NodeConnection Edge(FlowNodeViewModel source, string sourcePort, FlowNodeViewModel target)

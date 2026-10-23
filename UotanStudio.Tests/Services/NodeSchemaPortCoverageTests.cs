@@ -1,5 +1,5 @@
 using UotanStudio.Services;
-using UotanStudio.ViewModels.Nodes;
+using UotanStudio.Workflow.Registry;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

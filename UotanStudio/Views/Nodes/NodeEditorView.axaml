@@ -7,45 +7,40 @@
              xmlns:views="using:UotanStudio.Views.Nodes"
              xmlns:vm="using:UotanStudio.ViewModels.Nodes"
              xmlns:nodify="clr-namespace:NodifyM.Avalonia.Controls;assembly=NodifyM.Avalonia"
-             xmlns:nodeVm="using:UotanStudio.ViewModels.NodeViewModels"
+             xmlns:nodeVm="using:UotanStudio.Workflow.Nodes"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
              x:Class="UotanStudio.Views.Nodes.NodeEditorView"
              x:DataType="vm:NodeEditorViewModel">
     <UserControl.Resources>
         <DataTemplate x:Key="ToolboxOperationTemplate" DataType="{x:Type vm:NodeToolboxItem}">
-            <Panel Margin="0,1">
-                <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Margin="6,6,0,2"
-                           Foreground="{DynamicResource SecondaryTextBrush}"
-                           IsVisible="{Binding IsHeading}" />
-                <Grid ColumnDefinitions="*,Auto,28" IsVisible="{Binding IsOperation}">
-                    <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                            Padding="6,4" Click="OnToolboxItemClicked" ToolTip.Tip="{Binding TypeKey}">
-                        <StackPanel Spacing="1">
-                            <TextBlock Text="{Binding Name}" FontSize="12" TextWrapping="Wrap" />
-                            <TextBlock Text="{DynamicResource Node_Toolbox_Destructive}" FontSize="10"
-                                       Foreground="{DynamicResource LogErrorBrush}" IsVisible="{Binding RequiresConfirmation}" />
-                        </StackPanel>
-                    </Button>
-                    <Button Grid.Column="1" Content="⋯" Padding="4" IsVisible="{Binding HasPresets}"
-                            ToolTip.Tip="{DynamicResource Node_Toolbox_Presets}" Tag="toolbox-preset">
-                        <Button.Flyout>
-                            <Flyout>
-                                <ItemsControl ItemsSource="{Binding Presets}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type vm:NodeToolboxPreset}">
-                                            <Button Content="{Binding Name}" Command="{Binding CreateCommand}"
-                                                    HorizontalAlignment="Stretch" Margin="0,2" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </Flyout>
-                        </Button.Flyout>
-                    </Button>
-                    <Button Grid.Column="2" Content="{Binding FavoriteGlyph}" Command="{Binding ToggleFavoriteCommand}"
-                            Classes.favorite="{Binding IsFavorite}"
-                            ToolTip.Tip="{Binding FavoriteHint}" Padding="2" VerticalAlignment="Stretch" />
-                </Grid>
-            </Panel>
+            <Grid ColumnDefinitions="*,Auto,28" Margin="0,1">
+                <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="6,4" Click="OnToolboxItemClicked" ToolTip.Tip="{Binding TypeKey}">
+                    <StackPanel Spacing="1">
+                        <TextBlock Text="{Binding Name}" FontSize="12" TextWrapping="Wrap" />
+                        <TextBlock Text="{DynamicResource Node_Toolbox_Destructive}" FontSize="10"
+                                   Foreground="{DynamicResource LogErrorBrush}" IsVisible="{Binding RequiresConfirmation}" />
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="1" Content="⋯" Padding="4" IsVisible="{Binding HasPresets}"
+                        ToolTip.Tip="{DynamicResource Node_Toolbox_Presets}" Tag="toolbox-preset">
+                    <Button.Flyout>
+                        <Flyout>
+                            <ItemsControl ItemsSource="{Binding Presets}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:NodeToolboxPreset}">
+                                        <Button Content="{Binding Name}" Command="{Binding CreateCommand}"
+                                                HorizontalAlignment="Stretch" Margin="0,2" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <Button Grid.Column="2" Content="{Binding FavoriteGlyph}" Command="{Binding ToggleFavoriteCommand}"
+                        Classes.favorite="{Binding IsFavorite}"
+                        ToolTip.Tip="{Binding FavoriteHint}" Padding="2" VerticalAlignment="Stretch" />
+            </Grid>
         </DataTemplate>
     </UserControl.Resources>
     <UserControl.Styles>
@@ -80,6 +75,16 @@
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Stretch" />
         </Style>
+        <!-- 顶部工具栏的分组分隔线：1px 竖线，随组换行。 -->
+        <!-- Group divider in the top toolbar: a 1px vertical rule that wraps with its group. -->
+        <Style Selector="Border.toolbar-separator">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="Background" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
     </UserControl.Styles>
     <DockPanel>
         <!-- 节点项目标签条：解决方案登记的每个节点项目一个标签，点击切换活动画布，叉号关闭文档。 -->
@@ -112,28 +117,29 @@
             </ItemsControl>
         </Border>
 
-        <!-- 顶部工具栏：按功能分成左（图编辑）、中（执行控制）、右（视图与面板）三栏。 -->
+        <!-- 顶部工具栏：按功能分成左（图编辑）、中（执行控制）、右（视图、显示与删除）三栏；
+             组间用细分隔线分隔，分组在窄宽度下整组换行，不拆散组内按钮。 -->
         <!-- Top toolbar: three functional columns - graph editing (left), execution control (center),
-             view and pane controls (right). -->
+             view, display and delete (right). Groups are separated by thin dividers and wrap as a unit
+             instead of splitting their buttons across lines. -->
         <Border DockPanel.Dock="Top" Padding="8,4"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
             <Grid x:Name="EditorToolbar" ColumnDefinitions="*,Auto,*">
-                <!-- 左栏：保存、撤销重做、模板导入导出与复合节点操作。每个子组本身也可换行，
-                     否则窄列下子组会按单行宽度撑出窗口。 -->
-                <!-- Left column: save, undo/redo, template import/export and composite node operations.
-                     Each sub-group wraps too, otherwise it keeps its single-line width in a narrow column. -->
+                <!-- 左栏：文件与历史、模板、复合节点，以及选中节点的执行阶段。 -->
+                <!-- Left column: file and history, templates, composite nodes, and the execution stage of the selection. -->
                 <WrapPanel x:Name="ToolbarEditGroup" Grid.Column="0" Orientation="Horizontal"
-                           ItemSpacing="4" LineSpacing="4"
-                           VerticalAlignment="Center" Margin="0,2,8,2" IsEnabled="{Binding CanEditGraph}">
-                    <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2,8,2">
+                           ItemSpacing="8" LineSpacing="6"
+                           VerticalAlignment="Center" Margin="0,2" IsEnabled="{Binding CanEditGraph}">
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <Button Width="28" Height="28" Padding="0"
                                 Command="{Binding SaveCommand}"
                                 IsVisible="{Binding ResourcePackage, Converter={x:Static ObjectConverters.IsNull}}"
                                 ToolTip.Tip="{DynamicResource Menu_Save}">
                             <avalonia:Save Width="16" Height="16" />
                         </Button>
-                    </WrapPanel>
-                    <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2,8,2">
+                    </StackPanel>
+                    <Border Classes="toolbar-separator" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <Button Width="28" Height="28" Padding="0" Click="OnUndoClick" IsEnabled="{Binding CanUndo}"
                                 ToolTip.Tip="{DynamicResource Node_Undo}">
                             <avalonia:Rollback Width="16" Height="16" />
@@ -142,8 +148,9 @@
                                 ToolTip.Tip="{DynamicResource Node_Redo}">
                             <avalonia:Forward Width="16" Height="16" />
                         </Button>
-                    </WrapPanel>
-                    <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2,8,2">
+                    </StackPanel>
+                    <Border Classes="toolbar-separator" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <Button Width="28" Height="28" Padding="0" Click="OnImportTemplateClick"
                                 ToolTip.Tip="{DynamicResource Node_ImportTemplate}">
                             <avalonia:FileImport Width="16" Height="16" />
@@ -152,8 +159,9 @@
                                 ToolTip.Tip="{DynamicResource Node_ExportTemplate}">
                             <avalonia:FileExport Width="16" Height="16" />
                         </Button>
-                    </WrapPanel>
-                    <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2,8,2">
+                    </StackPanel>
+                    <Border Classes="toolbar-separator" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <Button Width="28" Height="28" Padding="0" Click="OnEncapsulateClick"
                                 ToolTip.Tip="{DynamicResource Node_Encapsulate}" IsEnabled="{Binding HasSelectedNodes}">
                             <avalonia:Layers Width="16" Height="16" />
@@ -176,10 +184,11 @@
                                 ToolTip.Tip="{DynamicResource Node_ExportComposite}">
                             <avalonia:App Width="16" Height="16" />
                         </Button>
-                    </WrapPanel>
+                    </StackPanel>
+                    <Border Classes="toolbar-separator" />
                     <!-- 设置选中节点的执行阶段；标签复用现有资源键。 -->
                     <!-- Assign the execution stage of the selected nodes; the label reuses an existing resource key. -->
-                    <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2,8,2">
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <TextBlock Text="{DynamicResource Node_Choice_Stage}" FontSize="11"
                                    VerticalAlignment="Center" Foreground="{DynamicResource SecondaryTextBrush}" />
                         <ComboBox x:Name="ToolbarExecutionStageSelector" MinWidth="64" Height="28" FontSize="12"
@@ -187,41 +196,46 @@
                                   SelectedItem="{Binding SelectedExecutionStageLabel, Mode=TwoWay}"
                                   IsEnabled="{Binding HasSelectedNodes}"
                                   ToolTip.Tip="{DynamicResource Node_Choice_Stage}" />
-                    </WrapPanel>
+                    </StackPanel>
                 </WrapPanel>
 
-                <!-- 中栏：图校验、补丁预览与运行/停止。 -->
-                <!-- Center column: graph validation, patch preview and run/stop. -->
+                <!-- 中栏：先校验与补丁预览，再运行与停止。 -->
+                <!-- Center column: validate and preview the patch first, then run and stop. -->
                 <WrapPanel x:Name="ToolbarRunGroup" Grid.Column="1" Orientation="Horizontal"
-                           ItemSpacing="4" LineSpacing="4"
+                           ItemSpacing="8" LineSpacing="6"
                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,2">
-                    <Button x:Name="ValidateGraphButton" Width="28" Height="28" Padding="0"
-                            Command="{Binding ValidateGraphCommand}" ToolTip.Tip="{DynamicResource Node_ValidateGraph}">
-                        <avalonia:CheckDouble Width="16" Height="16" />
-                    </Button>
-                    <Button x:Name="PreviewPatchButton" Height="28" Padding="8,0"
-                            Command="{Binding PreviewCommand}"
-                            Content="{DynamicResource Node_Patch_Preview}"
-                            ToolTip.Tip="{DynamicResource Node_Patch_PreviewHint}" />
-                    <Button Width="28" Height="28" Padding="0"
-                            Command="{Binding RunCommand}"
-                            ToolTip.Tip="{DynamicResource Node_Run}">
-                        <avalonia:PlayCircleStroke Width="16" Height="16" Stroke1="Green" />
-                    </Button>
-                    <Button Width="28" Height="28" Padding="0"
-                            Command="{Binding StopCommand}"
-                            ToolTip.Tip="{DynamicResource Node_Stop}">
-                        <avalonia:StopCircleStroke Width="16" Height="16" Stroke1="Red" />
-                    </Button>
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <Button x:Name="ValidateGraphButton" Width="28" Height="28" Padding="0"
+                                Command="{Binding ValidateGraphCommand}" ToolTip.Tip="{DynamicResource Node_ValidateGraph}">
+                            <avalonia:CheckDouble Width="16" Height="16" />
+                        </Button>
+                        <Button x:Name="PreviewPatchButton" Height="28" Padding="8,0"
+                                Command="{Binding PreviewCommand}"
+                                Content="{DynamicResource Node_Patch_Preview}"
+                                ToolTip.Tip="{DynamicResource Node_Patch_PreviewHint}" />
+                    </StackPanel>
+                    <Border Classes="toolbar-separator" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <Button Width="28" Height="28" Padding="0"
+                                Command="{Binding RunCommand}"
+                                ToolTip.Tip="{DynamicResource Node_Run}">
+                            <avalonia:PlayCircleStroke Width="16" Height="16" Stroke1="Green" />
+                        </Button>
+                        <Button Width="28" Height="28" Padding="0"
+                                Command="{Binding StopCommand}"
+                                ToolTip.Tip="{DynamicResource Node_Stop}">
+                            <avalonia:StopCircleStroke Width="16" Height="16" Stroke1="Red" />
+                        </Button>
+                    </StackPanel>
                 </WrapPanel>
 
-                <!-- 右栏：缩放、适配、小地图与紧凑显示，删除选中固定在最右侧；窄面板下追加左右两栏开关。 -->
-                <!-- Right column: zoom, fit, minimap and compact display, with delete pinned to the far right,
-                     plus the pane toggles when narrow. -->
+                <!-- 右栏：缩放与视图导航、显示开关、窄面板开关，删除选中固定在最右侧。 -->
+                <!-- Right column: zoom and view navigation, display toggles, pane toggles when narrow,
+                     with delete pinned to the far right. -->
                 <WrapPanel x:Name="ToolbarViewGroup" Grid.Column="2" Orientation="Horizontal"
-                           ItemSpacing="4" LineSpacing="4"
+                           ItemSpacing="8" LineSpacing="6"
                            HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,2">
-                    <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2">
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <Button Width="28" Height="28" Padding="0"
                                 Command="{Binding ZoomOutCommand}"
                                 ToolTip.Tip="{DynamicResource Node_ZoomOut}">
@@ -240,6 +254,9 @@
                                 ToolTip.Tip="{DynamicResource Node_ResetZoom}">
                             <avalonia:Search Width="16" Height="16" />
                         </Button>
+                    </StackPanel>
+                    <Border Classes="toolbar-separator" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <Button x:Name="FitAllButton" Width="28" Height="28" Padding="0"
                                 Command="{Binding FitAllCommand}" ToolTip.Tip="{DynamicResource Node_FitAll}">
                             <avalonia:Fullscreen Width="16" Height="16" />
@@ -249,8 +266,9 @@
                                 IsEnabled="{Binding HasSelectedNodes}" ToolTip.Tip="{DynamicResource Node_FocusSelection}">
                             <avalonia:Focus Width="16" Height="16" />
                         </Button>
-                        <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
-                                Margin="4,0" />
+                    </StackPanel>
+                    <Border Classes="toolbar-separator" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <ToggleButton Width="28" Height="28" Padding="0"
                                       IsChecked="{Binding ShowMinimap}"
                                       ToolTip.Tip="{DynamicResource Node_ToggleMinimap}">
@@ -260,8 +278,9 @@
                                       ToolTip.Tip="{DynamicResource Node_CompactNodes}">
                             <avalonia:ViewModule Width="16" Height="16" />
                         </ToggleButton>
-                    </WrapPanel>
-                    <StackPanel x:Name="NarrowPaneControls" IsVisible="False" Orientation="Horizontal" Spacing="4" Margin="0,2">
+                    </StackPanel>
+                    <StackPanel x:Name="NarrowPaneControls" IsVisible="False" Orientation="Horizontal"
+                                Spacing="4" VerticalAlignment="Center">
                         <ToggleButton x:Name="ToolboxPaneToggle" Width="28" Height="28" Padding="0"
                                       Click="OnToolboxPaneToggle" ToolTip.Tip="{DynamicResource Node_Toolbox}">
                             <avalonia:Tools Width="16" Height="16" />
@@ -271,7 +290,8 @@
                             <avalonia:Filter Width="16" Height="16" />
                         </ToggleButton>
                     </StackPanel>
-                    <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" Margin="0,2">
+                    <Border Classes="toolbar-separator" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                         <Button x:Name="DeleteSelectedButton"
                                 MinWidth="92" MaxWidth="220" Height="28" Padding="6,0"
                                 Command="{Binding DeleteSelectedCommand}"
@@ -285,7 +305,7 @@
                                            VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                    </WrapPanel>
+                    </StackPanel>
                 </WrapPanel>
             </Grid>
         </Border>

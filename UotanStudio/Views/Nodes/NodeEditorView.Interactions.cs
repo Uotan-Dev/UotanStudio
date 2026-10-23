@@ -14,6 +14,7 @@ public partial class NodeEditorView
         base.OnAttachedToVisualTree(e);
         _interactionAttached = true;
         BindInteractionHost();
+        ScheduleCanvasViewportSync();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)

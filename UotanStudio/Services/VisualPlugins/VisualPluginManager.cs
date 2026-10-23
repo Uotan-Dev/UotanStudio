@@ -1,10 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using UotanStudio.Services.Execution;
+using UotanStudio.Projects;
 using UotanStudio.Services.Plugins;
-using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.Nodes;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Registry;
 
 namespace UotanStudio.Services.VisualPlugins;
 

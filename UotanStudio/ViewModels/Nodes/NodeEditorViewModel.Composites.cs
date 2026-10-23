@@ -1,8 +1,9 @@
+using UotanStudio.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.VisualPlugins;
-using UotanStudio.ViewModels.NodeViewModels;
-using UotanStudio.ViewModels.NodeViewModels.EditorCommands;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Nodes.EditorCommands;
 
 namespace UotanStudio.ViewModels.Nodes;
 

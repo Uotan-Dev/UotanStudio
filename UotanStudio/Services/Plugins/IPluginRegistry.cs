@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
-using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.Nodes;
+using UotanStudio.Projects;
+using UotanStudio.Workflow.Registry;
 
 namespace UotanStudio.Services.Plugins;
 

@@ -4,14 +4,15 @@ using UotanStudio.Firmware.Archive;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Projects;
 using UotanStudio.Projects.Interactions;
 using UotanStudio.Services;
-using UotanStudio.Services.Execution;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Interactions;
 using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Registry;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -375,7 +376,7 @@ public sealed class NodeOperationFailureTests
 
             Assert.Equal(ExecutionStatus.Succeeded, result.Status);
             var data = node.Output.Single(port => port.Title == "Data").Data;
-            Assert.IsAssignableFrom<UotanStudio.Services.Projects.StreamArtifact>(data);
+            Assert.IsAssignableFrom<UotanStudio.Projects.StreamArtifact>(data);
         }
         finally
         {

@@ -1,7 +1,9 @@
 using UotanStudio.Locale;
+using UotanStudio.Projects;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Registry;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

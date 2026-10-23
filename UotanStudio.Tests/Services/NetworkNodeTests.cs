@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.Infrastructure.Downloads;
+using UotanStudio.Net.Http;
 using UotanStudio.Services;
-using UotanStudio.Services.Execution;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

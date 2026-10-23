@@ -1,5 +1,5 @@
 using UotanStudio.Firmware.Patching;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Services.Patching;
 

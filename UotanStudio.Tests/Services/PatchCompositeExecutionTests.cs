@@ -1,8 +1,8 @@
 using UotanStudio.Firmware.Patching;
+using UotanStudio.Projects;
 using UotanStudio.Services.Patching;
-using UotanStudio.Services.Projects;
 using UotanStudio.Tests.TestInfrastructure;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Nodes;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

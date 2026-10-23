@@ -4,15 +4,89 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using NodifyM.Avalonia.Controls;
 using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Views.Nodes;
 
 public partial class NodeEditorView
 {
     private bool _isNarrowLayout;
+    private bool _viewportSyncScheduled;
+
+    /// <summary>
+    /// Subscribes the canvas viewport to the surface size and the zoom so the editor keeps filling the canvas when
+    /// either changes.
+    /// <para>让画布视口跟随画布尺寸与缩放变化，使编辑器始终填满画布。</para>
+    /// </summary>
+    private void AttachCanvasViewportTracking()
+    {
+        EditorSurface.SizeChanged += OnEditorSurfaceSizeChanged;
+        Editor.PropertyChanged += OnEditorPropertyChanged;
+    }
+
+    private void OnEditorSurfaceSizeChanged(object? sender, SizeChangedEventArgs e) => SyncCanvasViewportSize();
+
+    private void OnEditorPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != NodifyEditor.ZoomProperty)
+        {
+            return;
+        }
+
+        SyncCanvasViewportSize();
+        ScheduleCanvasViewportSync();
+    }
+
+    /// <summary>
+    /// Writes the editor's explicit size as the surface size divided by the zoom, which is the viewport size NodifyM
+    /// expects for its pan and zoom transforms.
+    /// <para>把编辑器的显式尺寸写为画布尺寸除以缩放值，即 NodifyM 平移与缩放变换所期望的视口尺寸。</para>
+    /// </summary>
+    internal void SyncCanvasViewportSize()
+    {
+        var width = EditorSurface.Bounds.Width;
+        var height = EditorSurface.Bounds.Height;
+        if (width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        var zoom = Editor.Zoom > 0 ? Editor.Zoom : 1;
+        var targetWidth = width / zoom;
+        var targetHeight = height / zoom;
+        if (double.IsNaN(Editor.Width) || Math.Abs(Editor.Width - targetWidth) > 0.5)
+        {
+            Editor.Width = targetWidth;
+        }
+        if (double.IsNaN(Editor.Height) || Math.Abs(Editor.Height - targetHeight) > 0.5)
+        {
+            Editor.Height = targetHeight;
+        }
+    }
+
+    /// <summary>
+    /// Re-applies the viewport size after the current dispatcher turn. NodifyM recomputes the editor size from the
+    /// surface size it cached when its own handler last ran, and that cache can be stale after the page is re-hosted,
+    /// so the current size is written again once every other handler has finished.
+    /// <para>在当前调度回合结束后重新套用视口尺寸：编辑器按上次缓存的画布尺寸重算自身大小，页面重新挂载后该缓存可能过期，因此等其余处理器结束后再写回当前尺寸。</para>
+    /// </summary>
+    private void ScheduleCanvasViewportSync()
+    {
+        if (_viewportSyncScheduled)
+        {
+            return;
+        }
+
+        _viewportSyncScheduled = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _viewportSyncScheduled = false;
+            SyncCanvasViewportSize();
+        }, DispatcherPriority.Loaded);
+    }
 
     private void OnViewportRequested(NodeViewportAction action)
     {

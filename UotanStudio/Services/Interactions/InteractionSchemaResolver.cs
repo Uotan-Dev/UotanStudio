@@ -1,6 +1,7 @@
+using UotanStudio.Projects;
 using UotanStudio.Projects.Interactions;
 using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Services.Interactions;
 

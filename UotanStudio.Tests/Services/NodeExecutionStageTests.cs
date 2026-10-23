@@ -1,12 +1,13 @@
+using UotanStudio.Projects;
 using UotanStudio.Projects.Interactions;
 using UotanStudio.Services;
-using UotanStudio.Services.Execution;
 using UotanStudio.Services.Interactions;
 using UotanStudio.Services.Patching;
 using UotanStudio.Services.Projects;
 using UotanStudio.Tests.TestInfrastructure;
-using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
+using UotanStudio.Workflow.Registry;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

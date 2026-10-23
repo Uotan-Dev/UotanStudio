@@ -4,7 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Services;
 using UotanStudio.Services.Patching;
 using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.ViewModels.Nodes;
 

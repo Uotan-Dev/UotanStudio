@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Input;
-using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui.Projects;
 
 namespace UotanStudio.ViewModels.Nodes;
 

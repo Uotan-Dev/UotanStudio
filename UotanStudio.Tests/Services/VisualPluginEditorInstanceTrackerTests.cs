@@ -1,4 +1,4 @@
-using UotanStudio.Services.Projects;
+using UotanStudio.Projects;
 using UotanStudio.Services.VisualPlugins;
 using UotanStudio.Views.Shell;
 using Xunit;
