@@ -964,8 +964,7 @@ public sealed partial class Ext4Builder
 
         if (sharedPlan is not null)
         {
-            sharedPlan.ValidateSources(nodes);
-            sharedPlan.WriteUniqueBlocks(output, baseOffset);
+            sharedPlan.ValidateSourcesAndWriteUniqueBlocks(output, baseOffset, nodes);
         }
 
         foreach (var node in nodes)

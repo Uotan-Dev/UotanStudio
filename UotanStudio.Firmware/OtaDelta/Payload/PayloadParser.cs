@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.IO;
@@ -237,7 +238,7 @@ public static partial class PayloadParser
         {
             case PayloadType.ZipArchive:
                 {
-                    var archive = ZipFile.OpenRead(filePath);
+                    var archive = ZipContainer.OpenRead(filePath);
                     try
                     {
                         var payloadEntry = FindPayloadEntry(archive)
@@ -271,7 +272,7 @@ public static partial class PayloadParser
     {
         var tempPath = TempFileHelper.CreateTempFile();
         var buffer = new byte[1 << 20];
-        using (var archive = ZipFile.OpenRead(filePath))
+        using (var archive = ZipContainer.OpenRead(filePath))
         {
             var payloadEntry = FindPayloadEntry(archive)
                 ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
@@ -937,7 +938,7 @@ public static partial class PayloadParser
     /// </summary>
     private static long PayloadEntryUncompressedLength(string filePath)
     {
-        using var archive = ZipFile.OpenRead(filePath);
+        using var archive = ZipContainer.OpenRead(filePath);
         var payloadEntry = FindPayloadEntry(archive)
             ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
         return payloadEntry.Length;

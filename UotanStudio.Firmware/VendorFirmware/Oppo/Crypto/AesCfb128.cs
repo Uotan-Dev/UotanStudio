@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
@@ -56,47 +56,10 @@ internal static class AesCfb128
     }
 
     /// <summary>
-    /// Decrypts data in place using AES-128-CFB with 128-bit segment size.
-    /// <para>使用 AES-128-CFB（128 位段大小）就地解密数据。</para>
+    /// Decrypts data in place using AES-128-CFB with 128-bit segment size, batching the keystream through ECB.
+    /// <para>使用 AES-128-CFB（128 位段大小）就地解密数据，并通过 ECB 批量生成密钥流。</para>
     /// </summary>
-    internal static void DecryptInPlace(byte[] data, byte[] key, byte[] iv)
-    {
-        ValidateKeyIv(key, iv);
-        using var aes = Aes.Create();
-        aes.Key = key;
-        aes.Mode = CipherMode.ECB;
-        aes.Padding = PaddingMode.None;
-
-        using var encryptor = aes.CreateEncryptor();
-        var feedback = new byte[BlockSize];
-        iv.AsSpan().CopyTo(feedback);
-        var encrypted = new byte[BlockSize];
-
-        var offset = 0;
-        while (offset < data.Length)
-        {
-            var blockSize = Math.Min(BlockSize, data.Length - offset);
-
-
-            encryptor.TransformBlock(feedback, 0, BlockSize, encrypted, 0);
-
-            if (blockSize == BlockSize)
-            {
-
-                Array.Copy(data, offset, feedback, 0, BlockSize);
-
-
-                XorBlockInPlace(data.AsSpan(offset, BlockSize), encrypted);
-            }
-            else
-            {
-
-                XorBlockInPlace(data.AsSpan(offset, blockSize), encrypted);
-            }
-
-            offset += blockSize;
-        }
-    }
+    internal static void DecryptInPlace(byte[] data, byte[] key, byte[] iv) => DecryptCore(data.AsSpan(), key, iv);
 
     /// <summary>
     /// Encrypts data in place using AES-128-CFB with 128-bit segment size.
@@ -232,23 +195,20 @@ internal static class AesCfb128
     private static void ProcessStream(Stream input, Stream output, byte[] key, byte[] iv, bool encrypt, CancellationToken cancellationToken)
     {
         ValidateKeyIv(key, iv);
-        using var aes = Aes.Create();
-        aes.Key = key;
-        aes.Mode = CipherMode.ECB;
-        aes.Padding = PaddingMode.None;
-
-        using var encryptor = aes.CreateEncryptor();
+        using var aes = CreateEcbAes(key);
+        var encryptor = encrypt ? aes.CreateEncryptor() : null;
         var feedback = new byte[BlockSize];
         iv.AsSpan().CopyTo(feedback);
         var encryptedBlock = new byte[BlockSize];
         var buffer = ArrayPool<byte>.Shared.Rent(DefaultBufferSize);
+        var ecbInput = encrypt ? null : ArrayPool<byte>.Shared.Rent(DefaultBufferSize);
+        var keystream = encrypt ? null : ArrayPool<byte>.Shared.Rent(DefaultBufferSize);
 
         try
         {
             var leftoverCount = 0;
             while (true)
             {
-
                 var bytesRead = input.Read(buffer, leftoverCount, DefaultBufferSize - leftoverCount);
                 var totalBytes = leftoverCount + bytesRead;
 
@@ -260,21 +220,26 @@ internal static class AesCfb128
                 int bytesToProcess;
                 if (bytesRead == 0)
                 {
-
                     bytesToProcess = totalBytes;
                 }
                 else
                 {
-
                     bytesToProcess = totalBytes / BlockSize * BlockSize;
                 }
 
                 if (bytesToProcess > 0)
                 {
-                    ProcessBlock(buffer, 0, bytesToProcess, feedback, encryptedBlock, encryptor, encrypt);
+                    if (encrypt)
+                    {
+                        ProcessBlock(buffer, 0, bytesToProcess, feedback, encryptedBlock, encryptor!);
+                    }
+                    else
+                    {
+                        DecryptBatch(buffer.AsSpan(0, bytesToProcess), feedback, aes, ecbInput!, keystream!);
+                    }
+
                     output.Write(buffer, 0, bytesToProcess);
                 }
-
 
                 leftoverCount = totalBytes - bytesToProcess;
                 if (leftoverCount > 0)
@@ -287,8 +252,84 @@ internal static class AesCfb128
         }
         finally
         {
+            encryptor?.Dispose();
             Array.Clear(buffer, 0, buffer.Length);
             ArrayPool<byte>.Shared.Return(buffer);
+            if (ecbInput is not null)
+            {
+                ArrayPool<byte>.Shared.Return(ecbInput);
+            }
+            if (keystream is not null)
+            {
+                ArrayPool<byte>.Shared.Return(keystream);
+            }
+        }
+    }
+
+    private static void DecryptCore(Span<byte> data, byte[] key, byte[] iv)
+    {
+        ValidateKeyIv(key, iv);
+        if (data.IsEmpty)
+        {
+            return;
+        }
+
+        using var aes = CreateEcbAes(key);
+        var feedback = new byte[BlockSize];
+        iv.AsSpan().CopyTo(feedback);
+        var ecbInput = ArrayPool<byte>.Shared.Rent(DefaultBufferSize);
+        var keystream = ArrayPool<byte>.Shared.Rent(DefaultBufferSize);
+        try
+        {
+            var offset = 0;
+            while (offset < data.Length)
+            {
+                var length = Math.Min(DefaultBufferSize, data.Length - offset);
+                DecryptBatch(data.Slice(offset, length), feedback, aes, ecbInput, keystream);
+                offset += length;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(ecbInput);
+            ArrayPool<byte>.Shared.Return(keystream);
+        }
+    }
+
+    private static void DecryptBatch(Span<byte> data, byte[] feedback, Aes aes, byte[] ecbInput, byte[] keystream)
+    {
+        var keystreamLength = (data.Length + BlockSize - 1) / BlockSize * BlockSize;
+        var cipherLength = keystreamLength - BlockSize;
+        feedback.AsSpan().CopyTo(ecbInput.AsSpan(0, BlockSize));
+        data[..cipherLength].CopyTo(ecbInput.AsSpan(BlockSize));
+        if (aes.EncryptEcb(ecbInput.AsSpan(0, keystreamLength), keystream.AsSpan(0, keystreamLength), PaddingMode.None) != keystreamLength)
+        {
+            throw new CryptographicException("AES did not produce a complete CFB keystream block.");
+        }
+
+        var fullBlocks = data.Length / BlockSize;
+        if (fullBlocks > 0)
+        {
+            data.Slice((fullBlocks - 1) * BlockSize, BlockSize).CopyTo(feedback);
+        }
+
+        XorBlockInPlace(data, keystream.AsSpan(0, data.Length));
+    }
+
+    private static Aes CreateEcbAes(byte[] key)
+    {
+        var aes = Aes.Create();
+        try
+        {
+            aes.Key = key;
+            aes.Mode = CipherMode.ECB;
+            aes.Padding = PaddingMode.None;
+            return aes;
+        }
+        catch
+        {
+            aes.Dispose();
+            throw;
         }
     }
 
@@ -322,38 +363,21 @@ internal static class AesCfb128
         }
     }
 
-    private static void ProcessBlock(byte[] buffer, int offset, int length, byte[] feedback, byte[] encryptedBlock, ICryptoTransform encryptor, bool encrypt)
+    private static void ProcessBlock(byte[] buffer, int offset, int length, byte[] feedback, byte[] encryptedBlock, ICryptoTransform encryptor)
     {
         var end = offset + length;
         while (offset < end)
         {
             var blockSize = Math.Min(BlockSize, end - offset);
-
-
             encryptor.TransformBlock(feedback, 0, BlockSize, encryptedBlock, 0);
 
             if (blockSize == BlockSize)
             {
-                if (encrypt)
-                {
-
-                    XorBlockInPlace(buffer.AsSpan(offset, BlockSize), encryptedBlock);
-
-
-                    Array.Copy(buffer, offset, feedback, 0, BlockSize);
-                }
-                else
-                {
-
-                    Array.Copy(buffer, offset, feedback, 0, BlockSize);
-
-
-                    XorBlockInPlace(buffer.AsSpan(offset, BlockSize), encryptedBlock);
-                }
+                XorBlockInPlace(buffer.AsSpan(offset, BlockSize), encryptedBlock);
+                Array.Copy(buffer, offset, feedback, 0, BlockSize);
             }
             else
             {
-
                 for (var i = 0; i < blockSize; i++)
                 {
                     buffer[offset + i] ^= encryptedBlock[i];

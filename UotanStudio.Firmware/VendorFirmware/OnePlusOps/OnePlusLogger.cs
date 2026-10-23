@@ -13,12 +13,12 @@ public class OnePlusLogger : IOnePlusLogger
     /// <summary>Lowest severity that reaches the console.
     /// <para>会输出到控制台的最低严重级别。</para></summary>
     /// <value>Levels ordered below this value are dropped without being formatted; the default is
-    /// <see cref="LogLevel.Information"/>. Callers may raise or lower it at any time, and a
-    /// value of <see cref="LogLevel.Trace"/> emits every message.
+    /// <see cref="OnePlusLogLevel.Information"/>. Callers may raise or lower it at any time, and a
+    /// value of <see cref="OnePlusLogLevel.Trace"/> emits every message.
     /// <para>低于该级别的记录会被直接丢弃而不做格式化；默认值为
-    /// <see cref="LogLevel.Information"/>。调用方可随时调高或调低该值，取
-    /// <see cref="LogLevel.Trace"/> 时会输出全部消息。</para></value>
-    public LogLevel MinLogLevel { get; set; } = LogLevel.Information;
+    /// <see cref="OnePlusLogLevel.Information"/>。调用方可随时调高或调低该值，取
+    /// <see cref="OnePlusLogLevel.Trace"/> 时会输出全部消息。</para></value>
+    public OnePlusLogLevel MinLogLevel { get; set; } = OnePlusLogLevel.Information;
 
     /// <summary>Shared instance used when a caller has no logger of its own.
     /// <para>调用方未自带日志器时使用的共享实例。</para></summary>
@@ -36,56 +36,56 @@ public class OnePlusLogger : IOnePlusLogger
     /// Log a trace message
     /// <para>记录追踪消息</para>
     /// </summary>
-    /// <param name="message">Text written verbatim at <see cref="LogLevel.Trace"/> level,
+    /// <param name="message">Text written verbatim at <see cref="OnePlusLogLevel.Trace"/> level,
     /// which the default <see cref="MinLogLevel"/> suppresses.
-    /// <para>以 <see cref="LogLevel.Trace"/> 级别原样写入的文本；默认
+    /// <para>以 <see cref="OnePlusLogLevel.Trace"/> 级别原样写入的文本；默认
     /// <see cref="MinLogLevel"/> 会将其抑制。</para></param>
-    public void Trace(string message) => Log(LogLevel.Trace, message);
+    public void Trace(string message) => Log(OnePlusLogLevel.Trace, message);
 
     /// <summary>
     /// Log a debug message
     /// <para>记录调试消息</para>
     /// </summary>
-    /// <param name="message">Text written verbatim at <see cref="LogLevel.Debug"/> level,
+    /// <param name="message">Text written verbatim at <see cref="OnePlusLogLevel.Debug"/> level,
     /// which the default <see cref="MinLogLevel"/> suppresses.
-    /// <para>以 <see cref="LogLevel.Debug"/> 级别原样写入的文本；默认
+    /// <para>以 <see cref="OnePlusLogLevel.Debug"/> 级别原样写入的文本；默认
     /// <see cref="MinLogLevel"/> 会将其抑制。</para></param>
-    public void Debug(string message) => Log(LogLevel.Debug, message);
+    public void Debug(string message) => Log(OnePlusLogLevel.Debug, message);
 
     /// <summary>
     /// Log an information message
     /// <para>记录信息消息</para>
     /// </summary>
-    /// <param name="message">Text written verbatim at <see cref="LogLevel.Information"/> level, the
+    /// <param name="message">Text written verbatim at <see cref="OnePlusLogLevel.Information"/> level, the
     /// lowest level the default <see cref="MinLogLevel"/> accepts.
-    /// <para>以 <see cref="LogLevel.Information"/> 级别原样写入的文本，是默认
+    /// <para>以 <see cref="OnePlusLogLevel.Information"/> 级别原样写入的文本，是默认
     /// <see cref="MinLogLevel"/> 接受的最低级别。</para></param>
-    public void Information(string message) => Log(LogLevel.Information, message);
+    public void Information(string message) => Log(OnePlusLogLevel.Information, message);
 
     /// <summary>
     /// Log a warning message
     /// <para>记录警告消息</para>
     /// </summary>
-    /// <param name="message">Text written verbatim at <see cref="LogLevel.Warning"/> level.
-    /// <para>以 <see cref="LogLevel.Warning"/> 级别原样写入的文本。</para></param>
-    public void Warning(string message) => Log(LogLevel.Warning, message);
+    /// <param name="message">Text written verbatim at <see cref="OnePlusLogLevel.Warning"/> level.
+    /// <para>以 <see cref="OnePlusLogLevel.Warning"/> 级别原样写入的文本。</para></param>
+    public void Warning(string message) => Log(OnePlusLogLevel.Warning, message);
 
     /// <summary>
     /// Log an error message
     /// <para>记录错误消息</para>
     /// </summary>
-    /// <param name="message">Text written verbatim at <see cref="LogLevel.Error"/> level.
-    /// <para>以 <see cref="LogLevel.Error"/> 级别原样写入的文本。</para></param>
-    public void Error(string message) => Log(LogLevel.Error, message);
+    /// <param name="message">Text written verbatim at <see cref="OnePlusLogLevel.Error"/> level.
+    /// <para>以 <see cref="OnePlusLogLevel.Error"/> 级别原样写入的文本。</para></param>
+    public void Error(string message) => Log(OnePlusLogLevel.Error, message);
 
     /// <summary>
     /// Log a critical error message
     /// <para>记录严重错误消息</para>
     /// </summary>
-    /// <param name="message">Text written verbatim at <see cref="LogLevel.Critical"/> level, the
+    /// <param name="message">Text written verbatim at <see cref="OnePlusLogLevel.Critical"/> level, the
     /// highest severity offered.
-    /// <para>以 <see cref="LogLevel.Critical"/> 级别原样写入的文本，是提供的最高严重级别。</para></param>
-    public void Critical(string message) => Log(LogLevel.Critical, message);
+    /// <para>以 <see cref="OnePlusLogLevel.Critical"/> 级别原样写入的文本，是提供的最高严重级别。</para></param>
+    public void Critical(string message) => Log(OnePlusLogLevel.Critical, message);
 
     /// <summary>
     /// Log a message with specified log level
@@ -98,7 +98,7 @@ public class OnePlusLogger : IOnePlusLogger
     /// additional escaping; <see langword="null"/> appears as an empty column.
     /// <para>追加在时间戳与级别列之后的消息文本，不做额外转义；为 <see langword="null"/> 时该列为
     /// 空。</para></param>
-    public void Log(LogLevel level, string message)
+    public void Log(OnePlusLogLevel level, string message)
     {
         if (level < MinLogLevel)
         {

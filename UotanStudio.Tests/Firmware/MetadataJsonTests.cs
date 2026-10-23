@@ -178,7 +178,6 @@ public sealed class MetadataJsonTests : IDisposable
         new ErofsBuilder().Build(source, image, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
             Features = ErofsFeatureSet.FromWords(ErofsSuperblock.CompatSbChecksum,
                 ErofsSuperblock.IncompatLz4_0Padding),
         });

@@ -4,9 +4,9 @@ using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.DeviceTree.Dt;
 using UotanStudio.Services;
-using UotanStudio.Services.Execution;
-using UotanStudio.Services.Firmware;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Services.Ui.Firmware;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

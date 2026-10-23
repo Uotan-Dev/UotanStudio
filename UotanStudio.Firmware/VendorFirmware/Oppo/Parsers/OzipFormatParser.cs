@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
-using System.IO.Compression;
 using System.Text;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions;
@@ -121,8 +121,8 @@ internal sealed class OzipFormatParser : IOppFormatParser
     }
 
     /// <summary>
-    /// Reads all non-directory entries of the decrypted ZIP view via ZipArchive; when a corrupt central directory (e.g.
-    /// <para>用 ZipArchive 读取解密视图中的全部非目录条目；中央目录损坏 （EOCD 条目数与实际记录数不一致等）导致 InvalidDataException 时， 回退到手动解析中央目录，保证元数据条目数与条目列表来自同一来源。</para>
+    /// Reads all non-directory entries of the decrypted ZIP view through <see cref="ZipContainer"/>; when a corrupt central directory (e.g.
+    /// <para>用 <see cref="ZipContainer"/> 读取解密视图中的全部非目录条目；中央目录损坏 （EOCD 条目数与实际记录数不一致等）导致 InvalidDataException 时， 回退到手动解析中央目录，保证元数据条目数与条目列表来自同一来源。</para>
     /// </summary>
     private static IReadOnlyList<OppEntry> ReadZipEntriesWithFallback(Stream zipStream)
     {
@@ -141,12 +141,12 @@ internal sealed class OzipFormatParser : IOppFormatParser
     }
 
     /// <summary>
-    /// Reads all non-directory entries from the decrypted ZIP view via ZipArchive.
-    /// <para>用 ZipArchive 读取解密 ZIP 视图中的全部非目录条目。</para>
+    /// Reads all non-directory entries from the decrypted ZIP view through <see cref="ZipContainer"/>.
+    /// <para>用 <see cref="ZipContainer"/> 读取解密 ZIP 视图中的全部非目录条目。</para>
     /// </summary>
     private static IReadOnlyList<OppEntry> ReadZipEntries(Stream zipStream)
     {
-        using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: true);
+        using var archive = ZipContainer.OpenRead(zipStream, leaveOpen: true);
 
         var entries = new List<OppEntry>(archive.Entries.Count);
         foreach (var zipEntry in archive.Entries)

@@ -10,8 +10,11 @@ public sealed class UnpackOptions
     /// Gets or sets the per-file decompression budget for formats without a trusted output size.
     /// <para>获取或设置没有可信输出长度的格式所用的单文件解压预算，默认 64 GiB。</para>
     /// </summary>
-    /// <value>The ceiling in bytes for one decompressed entry; growth beyond it aborts that entry.
-    /// <para>单个解压条目的字节上限，超出后该条目的解压会中止。</para></value>
+    /// <value>The ceiling in bytes for one decompressed entry; growth beyond it aborts that entry. EROFS
+    /// packed-inode fragment reads are bounded by the smaller of this value and the image size, because the
+    /// bytes come out of an inode that must be addressable inside the image.
+    /// <para>单个解压条目的字节上限，超出后该条目的解压会中止。EROFS packed inode 的片段读取以本值与镜像大小
+    /// 中较小者为界，因为字节出自必须在镜像内可寻址的 inode。</para></value>
     public long MaximumOutputBytes { get; set; } = 64L * 1024 * 1024 * 1024;
 
     /// <summary>

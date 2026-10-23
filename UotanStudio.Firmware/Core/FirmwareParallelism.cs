@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 
@@ -71,6 +72,42 @@ public static partial class FirmwareParallelism
         try
         {
             Parallel.For(0, items.Count, new ParallelOptions { MaxDegreeOfParallelism = degree }, i => action(items[i], i));
+        }
+        catch (AggregateException ex)
+        {
+            ExceptionDispatchInfo.Capture(ex.Flatten().InnerExceptions[0]).Throw();
+            throw;
+        }
+    }
+
+    /// <summary>Runs one action per item with dynamic work stealing, bounded by <see cref="Workers"/>.
+    /// <para>以动态窃取工作项的方式为每个条目执行一次操作，并发度不超过 <see cref="Workers"/>。</para></summary>
+    /// <remarks>
+    /// Unlike <see cref="ForEach{T}(IReadOnlyList{T}, Action{T}, int?)"/>, this overload does not use the range
+    /// partitioner, so a handful of large items clustered at one end of the list cannot leave the other workers
+    /// idle. Items are still visited exactly once, and the first flattened exception preserves its type and stack.
+    /// <para>与按范围分区的重载不同，本重载不使用范围分区器，因此集中在一端的大条目不会让其余工作者空闲。
+    /// 每个条目仍只访问一次，首个扁平化异常保留类型与堆栈。</para>
+    /// </remarks>
+    /// <param name="items">Items visited exactly once. <para>只访问一次的条目集合。</para></param>
+    /// <param name="action">Action receiving one item. <para>接收单个条目的操作。</para></param>
+    /// <param name="workers">Optional worker count override. <para>可选的工作者数量覆盖值。</para></param>
+    internal static void ForEachBalanced<T>(IReadOnlyList<T> items, Action<T> action, int? workers = null)
+    {
+        var degree = Math.Min(items.Count, workers ?? Workers);
+        if (degree <= 1)
+        {
+            for (var i = 0; i < items.Count; i++)
+            {
+                action(items[i]);
+            }
+            return;
+        }
+
+        try
+        {
+            var partitions = Partitioner.Create(items, EnumerablePartitionerOptions.NoBuffering);
+            Parallel.ForEach(partitions, new ParallelOptions { MaxDegreeOfParallelism = degree }, action);
         }
         catch (AggregateException ex)
         {

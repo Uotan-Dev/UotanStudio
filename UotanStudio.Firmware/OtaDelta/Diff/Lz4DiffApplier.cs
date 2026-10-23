@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Google.Protobuf;
@@ -14,6 +15,13 @@ internal static class Lz4DiffApplier
 
     internal static byte[] Apply(ReadOnlySpan<byte> source, ReadOnlySpan<byte> patch, int expectedLength)
     {
+        var output = new byte[expectedLength];
+        Apply(source, patch, output);
+        return output;
+    }
+
+    internal static void Apply(ReadOnlySpan<byte> source, ReadOnlySpan<byte> patch, Span<byte> destination)
+    {
         if (patch.Length < 16 || !patch[0..7].SequenceEqual("LZ4DIFF"u8) || BinaryPrimitives.ReadUInt32BigEndian(patch[7..11]) != 1)
             throw new InvalidDataException("Invalid LZ4DIFF header.");
         var headerLength = BinaryPrimitives.ReadUInt32BigEndian(patch[11..15]);
@@ -28,73 +36,70 @@ internal static class Lz4DiffApplier
         }
         if (sourceInfo is null || targetInfo is null) throw new InvalidDataException("Missing LZ4DIFF compression info.");
         var sourceSize = ValidateBlocks(sourceInfo); var targetSize = ValidateBlocks(targetInfo);
-        var plainSource = new byte[sourceSize]; var sourcePosition = 0;
-        foreach (var block in sourceInfo.Blocks)
+        var expectedLength = destination.Length;
+        var plainSource = ArrayPool<byte>.Shared.Rent(Math.Max(sourceSize, 1));
+        var plainTarget = ArrayPool<byte>.Shared.Rent(Math.Max(targetSize, 1));
+        try
         {
-            if (sourcePosition > source.Length || block.StoredLength > source.Length - sourcePosition) throw new InvalidDataException("LZ4DIFF source block exceeds input.");
-            var stored = source.Slice(sourcePosition, block.StoredLength); var plain = plainSource.AsSpan(block.Offset, block.Length);
-            if (block.StoredLength >= block.Length) stored[..block.Length].CopyTo(plain);
-            else
+            var sourcePosition = 0;
+            foreach (var block in sourceInfo.Blocks)
             {
-                var padding = 0;
-                if (sourceInfo.ZeroPadding) while (padding < Math.Min(4096, stored.Length) && stored[padding] == 0) padding++;
-                if (Lz4BlockCodec.PartialDecode(stored[padding..], plain) != plain.Length) throw new InvalidDataException("LZ4DIFF source decompression length mismatch.");
+                if (sourcePosition > source.Length || block.StoredLength > source.Length - sourcePosition) throw new InvalidDataException("LZ4DIFF source block exceeds input.");
+                var stored = source.Slice(sourcePosition, block.StoredLength); var plain = plainSource.AsSpan(block.Offset, block.Length);
+                if (block.StoredLength >= block.Length) stored[..block.Length].CopyTo(plain);
+                else
+                {
+                    var padding = 0;
+                    if (sourceInfo.ZeroPadding) while (padding < Math.Min(4096, stored.Length) && stored[padding] == 0) padding++;
+                    if (Lz4BlockCodec.PartialDecode(stored[padding..], plain) != plain.Length) throw new InvalidDataException("LZ4DIFF source decompression length mismatch.");
+                }
+                sourcePosition += block.StoredLength;
             }
-            sourcePosition += block.StoredLength;
-        }
-        if (sourcePosition != source.Length) throw new InvalidDataException("Unexpected LZ4DIFF source tail.");
-        var innerPatch = patch[checked(16 + (int)headerLength)..]; byte[] plainTarget;
-        var plainTargetPooled = false;
-        if (innerType == 0)
-        {
-            var pooled = System.Buffers.ArrayPool<byte>.Shared.Rent(targetSize);
-            try
+            if (sourcePosition != source.Length) throw new InvalidDataException("Unexpected LZ4DIFF source tail.");
+            var innerPatch = patch[checked(16 + (int)headerLength)..];
+            if (innerType == 0)
             {
-                using var result = new MemoryStream(pooled, 0, targetSize, writable: true);
-                BinaryDeltaPatch.Apply(new MemoryStream(plainSource, false), new MemoryStream(innerPatch.ToArray(), false), result, targetSize);
+                using var result = new MemoryStream(plainTarget, 0, targetSize, writable: true);
+                BinaryDeltaPatch.Apply(new MemoryStream(plainSource, 0, sourceSize, writable: false), new MemoryStream(innerPatch.ToArray(), writable: false), result, targetSize);
                 if (result.Length != targetSize) throw new InvalidDataException("LZ4DIFF inner target length mismatch.");
-                plainTarget = pooled;
-                plainTargetPooled = true;
             }
-            catch
+            else if (innerType == 1)
             {
-                System.Buffers.ArrayPool<byte>.Shared.Return(pooled);
-                throw;
+                PuffDiffApplier.Apply(innerPatch, plainSource.AsSpan(0, sourceSize), plainTarget, targetSize);
+            }
+            else throw new InvalidDataException("Unknown LZ4DIFF inner patch type.");
+            var storedTotal = targetInfo.Blocks.Aggregate(0L, (length, block) => checked(length + block.StoredLength));
+            if (storedTotal != expectedLength) throw new InvalidDataException("LZ4DIFF stored output does not match destination extents.");
+            destination.Clear();
+            var output = destination; var position = 0;
+            foreach (var block in targetInfo.Blocks)
+            {
+                var stored = output.Slice(position, block.StoredLength);
+                if (block.StoredLength >= block.Length) plainTarget.AsSpan(block.Offset, block.Length).CopyTo(stored);
+                else
+                {
+                    var encoded = Lz4DestinationCodec.Encode(plainTarget.AsSpan(block.Offset), stored, targetInfo.Algorithm, targetInfo.Level, out _);
+                    if (targetInfo.ZeroPadding)
+                    { stored[..encoded].CopyTo(stored[(stored.Length - encoded)..]); stored[..(stored.Length - encoded)].Clear(); }
+                    else stored[encoded..].Clear();
+                }
+                if (block.Hash.Length > 0 && (block.Hash.Length != 32 || !CryptographicOperations.FixedTimeEquals(Sha256.ComputeHash(stored), block.Hash)))
+                    throw new InvalidDataException("LZ4DIFF recompression SHA-256 mismatch; the compressor version differs from the patch generator.");
+                if (block.Patch.Length > 0)
+                {
+                    using var result = new MemoryStream();
+                    BinaryDeltaPatch.Apply(new MemoryStream(stored.ToArray(), writable: false), new MemoryStream(block.Patch, writable: false), result, stored.Length);
+                    if (result.Length != stored.Length) throw new InvalidDataException("LZ4DIFF postfix length mismatch.");
+                    result.GetBuffer().AsSpan(0, stored.Length).CopyTo(stored);
+                }
+                position += block.StoredLength;
             }
         }
-        else if (innerType == 1) plainTarget = PuffDiffApplier.Apply(innerPatch, plainSource);
-        else throw new InvalidDataException("Unknown LZ4DIFF inner patch type.");
-        if (!plainTargetPooled && plainTarget.Length != targetSize) throw new InvalidDataException("LZ4DIFF target length mismatch.");
-        var storedTotal = targetInfo.Blocks.Aggregate(0L, (length, block) => checked(length + block.StoredLength));
-        if (storedTotal != expectedLength) throw new InvalidDataException("LZ4DIFF stored output does not match destination extents.");
-        var output = new byte[expectedLength]; var position = 0;
-        foreach (var block in targetInfo.Blocks)
+        finally
         {
-            var stored = output.AsSpan(position, block.StoredLength);
-            if (block.StoredLength >= block.Length) plainTarget.AsSpan(block.Offset, block.Length).CopyTo(stored);
-            else
-            {
-                var encoded = Lz4DestinationCodec.Encode(plainTarget.AsSpan(block.Offset), stored, targetInfo.Algorithm, targetInfo.Level, out _);
-                if (targetInfo.ZeroPadding)
-                { stored[..encoded].CopyTo(stored[(stored.Length - encoded)..]); stored[..(stored.Length - encoded)].Clear(); }
-                else stored[encoded..].Clear();
-            }
-            if (block.Hash.Length > 0 && (block.Hash.Length != 32 || !CryptographicOperations.FixedTimeEquals(Sha256.ComputeHash(stored), block.Hash)))
-                throw new InvalidDataException("LZ4DIFF recompression SHA-256 mismatch; the compressor version differs from the patch generator.");
-            if (block.Patch.Length > 0)
-            {
-                using var result = new MemoryStream();
-                BinaryDeltaPatch.Apply(new MemoryStream(stored.ToArray(), false), new MemoryStream(block.Patch, false), result, stored.Length);
-                if (result.Length != stored.Length) throw new InvalidDataException("LZ4DIFF postfix length mismatch.");
-                result.GetBuffer().AsSpan(0, stored.Length).CopyTo(stored);
-            }
-            position += block.StoredLength;
+            ArrayPool<byte>.Shared.Return(plainSource);
+            ArrayPool<byte>.Shared.Return(plainTarget);
         }
-        if (plainTargetPooled)
-        {
-            System.Buffers.ArrayPool<byte>.Shared.Return(plainTarget);
-        }
-        return output;
     }
 
     private static int ValidateBlocks(Info info)

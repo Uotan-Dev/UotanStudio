@@ -1,5 +1,7 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using Google.Protobuf;
+using UotanStudio.Compress.Codecs.Deflate;
 using UotanStudio.Firmware.OtaDelta.Payload;
 
 namespace UotanStudio.Firmware.OtaDelta.Diff;
@@ -56,18 +58,105 @@ internal static class PuffDiffApplier
     {
         try
         {
-            if (oldData.Length > MaximumBufferBytes || puffDiffPatch.Length > MaximumBufferBytes) throw new InvalidDataException("PUFFDIFF buffer limit exceeded.");
+            EnsureInputLimits(puffDiffPatch, oldData);
             var header = ParseHeader(puffDiffPatch);
-            var source = Puff(oldData.ToArray(), header.Source);
-            using var old = new MemoryStream(source, false);
-            using var patch = new MemoryStream(puffDiffPatch[header.PatchOffset..].ToArray(), false);
-            using var result = new MemoryStream();
-            BinaryDeltaPatch.Apply(old, patch, result, header.Target.PuffLength);
-            if (result.Length != header.Target.PuffLength) throw new InvalidDataException("PUFFDIFF puffed target size mismatch.");
-            return Huff(result.GetBuffer().AsSpan(0, checked((int)result.Length)), header.Target);
+            var destination = new byte[HuffedLength(header.Target)];
+            ApplyCore(puffDiffPatch, oldData, header, destination, destination.Length);
+            return destination;
         }
         catch (Exception ex) when (ex is not PayloadException and not OutOfMemoryException)
-        { throw new PayloadException($"Failed to apply standard PUFFDIFF: {ex.Message}", ex); }
+        {
+            throw new PayloadException($"Failed to apply standard PUFFDIFF: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>Applies a PUF1 patch into a caller-provided buffer of the huffed target length.
+    /// <para>把 PUF1 补丁应用到调用方提供的、长度为 huffed 目标长度的缓冲区。</para>
+    /// </summary>
+    /// <param name="puffDiffPatch">PUF1 container; its length must not exceed <c>256</c> MiB.
+    /// <para>PUF1 容器；其长度不得超过 <c>256</c> MiB。</para></param>
+    /// <param name="oldData">Source image bytes; must not exceed <c>256</c> MiB.
+    /// <para>源镜像字节；不得超过 <c>256</c> MiB。</para></param>
+    /// <param name="destination">Destination array receiving exactly <paramref name="destinationLength"/> huffed bytes.
+    /// <para>接收恰好 <paramref name="destinationLength"/> 个 huffed 字节的目标数组。</para></param>
+    /// <param name="destinationLength">Huffed target length; it must equal the length the container declares and must not exceed <paramref name="destination"/>'s length.
+    /// <para>huffed 目标长度；必须等于容器声明的长度，且不得超过 <paramref name="destination"/> 的长度。</para></param>
+    internal static void Apply(ReadOnlySpan<byte> puffDiffPatch, ReadOnlySpan<byte> oldData, byte[] destination, int destinationLength)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        try
+        {
+            EnsureInputLimits(puffDiffPatch, oldData);
+            if (destinationLength < 0 || destinationLength > destination.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(destinationLength));
+            }
+
+            var header = ParseHeader(puffDiffPatch);
+            if (destinationLength != HuffedLength(header.Target))
+            {
+                throw new InvalidDataException("PUFFDIFF target length mismatch.");
+            }
+
+            ApplyCore(puffDiffPatch, oldData, header, destination, destinationLength);
+        }
+        catch (Exception ex) when (ex is not PayloadException and not OutOfMemoryException and not ArgumentOutOfRangeException)
+        {
+            throw new PayloadException($"Failed to apply standard PUFFDIFF: {ex.Message}", ex);
+        }
+    }
+
+    private static void EnsureInputLimits(ReadOnlySpan<byte> puffDiffPatch, ReadOnlySpan<byte> oldData)
+    {
+        if (oldData.Length > MaximumBufferBytes || puffDiffPatch.Length > MaximumBufferBytes)
+        {
+            throw new InvalidDataException("PUFFDIFF buffer limit exceeded.");
+        }
+    }
+
+    private static void ApplyCore(ReadOnlySpan<byte> puffDiffPatch, ReadOnlySpan<byte> oldData, Header header, byte[] destination, int destinationLength)
+    {
+        var sourceInput = ArrayPool<byte>.Shared.Rent(Math.Max(oldData.Length, 1));
+        var puffedSource = ArrayPool<byte>.Shared.Rent(Math.Max(header.Source.PuffLength, 1));
+        var patchLength = puffDiffPatch.Length - header.PatchOffset;
+        var patchBytes = ArrayPool<byte>.Shared.Rent(Math.Max(patchLength, 1));
+        try
+        {
+            oldData.CopyTo(sourceInput);
+            Puff(sourceInput, oldData.Length, header.Source, puffedSource.AsSpan(0, header.Source.PuffLength));
+            puffDiffPatch[header.PatchOffset..].CopyTo(patchBytes);
+            using var old = new MemoryStream(puffedSource, 0, header.Source.PuffLength, writable: false);
+            using var patch = new MemoryStream(patchBytes, 0, patchLength, writable: false);
+            using var result = new PooledBufferStream(
+                Math.Min(Math.Max(header.Target.PuffLength, 1), 64 * 1024),
+                Math.Max(header.Target.PuffLength, 1));
+            BinaryDeltaPatch.Apply(old, patch, result, header.Target.PuffLength);
+            if (result.Length != header.Target.PuffLength)
+            {
+                throw new InvalidDataException("PUFFDIFF puffed target size mismatch.");
+            }
+
+            Huff(result.WrittenSpan, header.Target, destination, destinationLength);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(sourceInput);
+            ArrayPool<byte>.Shared.Return(puffedSource);
+            ArrayPool<byte>.Shared.Return(patchBytes);
+        }
+    }
+
+    private static int HuffedLength(StreamInfo info)
+    {
+        var rawSize = info.Deflates.Count == 0
+            ? info.PuffLength
+            : checked((info.Deflates[^1].Offset + info.Deflates[^1].Length) / 8 + info.PuffLength - (info.Puffs[^1].Offset + info.Puffs[^1].Length) / 8);
+        if (rawSize < 0 || rawSize > MaximumBufferBytes)
+        {
+            throw new InvalidDataException("PUF1 target exceeds the output limit.");
+        }
+
+        return (int)rawSize;
     }
 
     /// <summary>Creates an interoperable PUF1 patch using byte extents without DEFLATE transforms.
@@ -202,56 +291,142 @@ internal static class PuffDiffApplier
         }
         return new(deflates, puffs, checked((int)length));
     }
-    private static byte[] Puff(byte[] input, StreamInfo info)
+    private static void Puff(byte[] input, int inputLength, StreamInfo info, Span<byte> output)
     {
-        var output = new byte[info.PuffLength]; long previousBit = 0; var position = 0;
+        long previousBit = 0;
+        var position = 0;
         for (var i = 0; i <= info.Deflates.Count; i++)
         {
-            var nextBit = i == info.Deflates.Count ? (long)input.Length * 8 : info.Deflates[i].Offset;
-            if (nextBit > (long)input.Length * 8 || nextBit < previousBit) throw new InvalidDataException("PUF1 source extent exceeds input.");
-            CopyGap(input, output, ref position, previousBit, nextBit, huff: false);
-            if (i == info.Deflates.Count) break;
-            var puff = info.Puffs[i]; var deflate = info.Deflates[i];
-            if (position != puff.Offset / 8) throw new InvalidDataException("PUF1 source gap mapping mismatch.");
+            var nextBit = i == info.Deflates.Count ? (long)inputLength * 8 : info.Deflates[i].Offset;
+            if (nextBit > (long)inputLength * 8 || nextBit < previousBit)
+            {
+                throw new InvalidDataException("PUF1 source extent exceeds input.");
+            }
+
+            CopyGapToPuffed(input, output, ref position, previousBit, nextBit);
+            if (i == info.Deflates.Count)
+            {
+                break;
+            }
+
+            var puff = info.Puffs[i];
+            var deflate = info.Deflates[i];
+            if (position != puff.Offset / 8)
+            {
+                throw new InvalidDataException("PUF1 source gap mapping mismatch.");
+            }
+
+            if (checked(deflate.Offset + deflate.Length) > (long)inputLength * 8)
+            {
+                throw new InvalidDataException("PUF1 source extent exceeds input.");
+            }
+
             var tokens = PuffDeflateCodec.Puff(input, deflate.Offset, deflate.Length, checked((int)(puff.Length / 8)));
-            tokens.CopyTo(output, position); position += tokens.Length; previousBit = checked(deflate.Offset + deflate.Length);
+            tokens.AsSpan().CopyTo(output[position..]);
+            position += tokens.Length;
+            previousBit = checked(deflate.Offset + deflate.Length);
         }
-        if (position != output.Length) throw new InvalidDataException("PUF1 source size mismatch.");
-        return output;
+
+        if (position != output.Length)
+        {
+            throw new InvalidDataException("PUF1 source size mismatch.");
+        }
     }
-    private static byte[] Huff(ReadOnlySpan<byte> input, StreamInfo info)
+
+    private static void Huff(ReadOnlySpan<byte> input, StreamInfo info, byte[] output, int outputLength)
     {
-        var rawSize = info.Deflates.Count == 0 ? info.PuffLength : checked((info.Deflates[^1].Offset + info.Deflates[^1].Length) / 8 + info.PuffLength - (info.Puffs[^1].Offset + info.Puffs[^1].Length) / 8);
-        if (rawSize < 0 || rawSize > MaximumBufferBytes) throw new InvalidDataException("PUF1 target exceeds the output limit.");
-        var output = new byte[(int)rawSize]; var tokens = input.ToArray(); long previousBit = 0; var position = 0;
+        var rawSize = HuffedLength(info);
+        if (outputLength != rawSize || outputLength > output.Length)
+        {
+            throw new InvalidDataException("PUFFDIFF target length mismatch.");
+        }
+
+        var destination = output.AsSpan(0, rawSize);
+        destination.Clear();
+        long previousBit = 0;
+        var position = 0;
         for (var i = 0; i <= info.Deflates.Count; i++)
         {
-            var nextBit = i == info.Deflates.Count ? rawSize * 8 : info.Deflates[i].Offset;
-            if (nextBit < previousBit || nextBit > rawSize * 8) throw new InvalidDataException("Invalid PUF1 target extent.");
-            CopyGap(output, tokens, ref position, previousBit, nextBit, huff: true);
-            if (i == info.Deflates.Count) break;
-            var puff = info.Puffs[i]; var deflate = info.Deflates[i];
-            if (position != puff.Offset / 8) throw new InvalidDataException("PUF1 target gap mapping mismatch.");
+            var nextBit = i == info.Deflates.Count ? (long)rawSize * 8 : info.Deflates[i].Offset;
+            if (nextBit < previousBit || nextBit > (long)rawSize * 8)
+            {
+                throw new InvalidDataException("Invalid PUF1 target extent.");
+            }
+
+            CopyGapToHuffed(destination, input, ref position, previousBit, nextBit);
+            if (i == info.Deflates.Count)
+            {
+                break;
+            }
+
+            var puff = info.Puffs[i];
+            var deflate = info.Deflates[i];
+            if (position != puff.Offset / 8)
+            {
+                throw new InvalidDataException("PUF1 target gap mapping mismatch.");
+            }
+
+            if (checked(deflate.Offset + deflate.Length) > (long)rawSize * 8)
+            {
+                throw new InvalidDataException("Invalid PUF1 target extent.");
+            }
+
             PuffDeflateCodec.Huff(input.Slice(position, checked((int)(puff.Length / 8))), output, deflate.Offset, deflate.Length);
-            position += checked((int)(puff.Length / 8)); previousBit = checked(deflate.Offset + deflate.Length);
+            position += checked((int)(puff.Length / 8));
+            previousBit = checked(deflate.Offset + deflate.Length);
         }
-        if (position != input.Length) throw new InvalidDataException("PUF1 target size mismatch.");
-        return output;
+
+        if (position != input.Length)
+        {
+            throw new InvalidDataException("PUF1 target size mismatch.");
+        }
     }
-    private static void CopyGap(byte[] raw, byte[] puffed, ref int position, long begin, long end, bool huff)
+
+    private static void CopyGapToPuffed(ReadOnlySpan<byte> raw, Span<byte> puffed, ref int position, long begin, long end)
     {
-        if (begin == end) return;
+        if (begin == end)
+        {
+            return;
+        }
+
         for (var byteIndex = begin / 8; byteIndex < (end + 7) / 8; byteIndex++)
         {
-            if (position >= puffed.Length) throw new InvalidDataException("PUF1 gap exceeds puffed data.");
-            var low = (int)Math.Max(0, begin - byteIndex * 8); var high = (int)Math.Min(8, end - byteIndex * 8);
-            var mask = (1 << (high - low)) - 1;
-            if (huff)
+            if (position >= puffed.Length)
             {
-                if ((puffed[position] & ~mask) != 0) throw new InvalidDataException("PUF1 gap contains out-of-range bits.");
-                raw[byteIndex] |= (byte)(puffed[position] << low);
+                throw new InvalidDataException("PUF1 gap exceeds puffed data.");
             }
-            else puffed[position] = (byte)((raw[byteIndex] >> low) & mask);
+
+            var low = (int)Math.Max(0, begin - byteIndex * 8);
+            var high = (int)Math.Min(8, end - byteIndex * 8);
+            var mask = (1 << (high - low)) - 1;
+            puffed[position] = (byte)((raw[(int)byteIndex] >> low) & mask);
+            position++;
+        }
+    }
+
+    private static void CopyGapToHuffed(Span<byte> raw, ReadOnlySpan<byte> puffed, ref int position, long begin, long end)
+    {
+        if (begin == end)
+        {
+            return;
+        }
+
+        for (var byteIndex = begin / 8; byteIndex < (end + 7) / 8; byteIndex++)
+        {
+            if (position >= puffed.Length)
+            {
+                throw new InvalidDataException("PUF1 gap exceeds puffed data.");
+            }
+
+            var low = (int)Math.Max(0, begin - byteIndex * 8);
+            var high = (int)Math.Min(8, end - byteIndex * 8);
+            var mask = (1 << (high - low)) - 1;
+            if ((puffed[position] & ~mask) != 0)
+            {
+                throw new InvalidDataException("PUF1 gap contains out-of-range bits.");
+            }
+
+            raw[(int)byteIndex] |= (byte)(puffed[position] << low);
             position++;
         }
     }

@@ -1,7 +1,7 @@
 using System.IO.Compression;
+using UotanStudio.Delivery;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.OtaDelta.Payload.Builder;
-using UotanStudio.Services.Delivery;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

@@ -84,7 +84,11 @@ internal sealed class ErofsRebuildParameters
     /// <summary>Gets whether the final compressed cluster may be stored beside its indexes.<para>获取最后一个压缩簇是否可与其索引同块存储。</para></summary>
     public bool CompressedTailPacking { get; set; }
     /// <summary>Gets whether compact indexes are preferred.<para>获取是否优先使用紧凑索引。</para></summary>
-    public bool UseCompactedIndexes { get; set; } = true;
+    /// <value>Defaults to <see langword="false"/>, the full index form every EROFS implementation can read; a
+    /// preserved profile carries the source's own value.
+    /// <para>默认 <see langword="false"/>，即所有 EROFS 实现都能读取的完整索引形态；保留档案携带源镜像自身的
+    /// 取值。</para></value>
+    public bool UseCompactedIndexes { get; set; }
     /// <summary>Gets whether whole-file fragments are enabled.<para>获取是否启用整文件碎片。</para></summary>
     public bool Fragments { get; set; }
     /// <summary>
@@ -232,34 +236,30 @@ internal sealed class ErofsRebuildParameters
     /// <summary>Gets the primary maximum physical cluster size.<para>获取主最大物理簇大小。</para></summary>
     public int MaxPclusterSize { get; set; }
     /// <summary>
-    /// Gets whether the source image used the legacy (pre-5.13) layout, i.e. no big pclusters and
-    /// no compacted indexes, so older (5.4 / 5.10) kernels can still mount it.
-    /// <para>获取源镜像是否采用 legacy（pre-5.13）布局，即无 big pcluster 与紧凑索引，
-    /// 使较旧内核（5.4 / 5.10）仍可挂载。</para>
-    /// </summary>
-    public bool LegacyCompatibility { get; set; }
-    /// <summary>
     /// Gets the raw <c>s_feature_compat</c> word read from the verified source superblock, so a rebuild
     /// declares the source's compat bits instead of the writer's own derivation.
     /// <para>获取从已校验源超级块读出的原始 <c>s_feature_compat</c> 字，使重建声明源镜像的 compat 位而不是
     /// 写入方自行推导的位。</para>
     /// </summary>
-    /// <value>The on-disk compat mask, or <see langword="null"/> when the snapshot predates this field; a
-    /// null value leaves the compat word to the derived declaration.
-    /// <para>磁盘上的 compat 掩码；快照早于该字段时为 <see langword="null"/>，此时 compat 字回退到推导式
+    /// <value>The exact on-disk compat mask, or <see langword="null"/> when the snapshot predates this field;
+    /// a null value leaves the compat word to the derived declaration.
+    /// <para>磁盘上的 compat 掩码原值；快照早于该字段时为 <see langword="null"/>，此时 compat 字回退到推导式
     /// 声明。</para></value>
     public uint? FeatureCompat { get; set; }
     /// <summary>
     /// Gets the raw <c>s_feature_incompat</c> word read from the verified source superblock. Together with
-    /// <see cref="FeatureCompat"/> it is the authority the rebuilt image has to declare verbatim.
+    /// <see cref="FeatureCompat"/> it is the authority the rebuilt image declares verbatim: the writer never
+    /// adds a bit the source did not carry.
     /// <para>获取从已校验源超级块读出的原始 <c>s_feature_incompat</c> 字，与 <see cref="FeatureCompat"/>
-    /// 共同构成重建镜像必须逐字声明的权威。</para>
+    /// 共同构成重建镜像逐字声明的权威：写入方绝不添加源镜像未携带的位。</para>
     /// </summary>
-    /// <value>The on-disk incompat mask with the bits the extraction could not honour already removed, or
-    /// <see langword="null"/> when the snapshot predates this field; a null value leaves the incompat word
-    /// to the derived declaration.
-    /// <para>磁盘上的 incompat 掩码，其中解包阶段无法兑现的位已先行移除；快照早于该字段时为
-    /// <see langword="null"/>，此时 incompat 字回退到推导式声明。</para></value>
+    /// <value>The captured on-disk incompat mask, or <see langword="null"/> when the snapshot predates this
+    /// field; a null value leaves the incompat word to the derived declaration. A rebuild replays the word
+    /// without adding a bit, and a bit the extraction could not honour is recorded in
+    /// <see cref="DroppedIncompatBits"/>.
+    /// <para>捕获的磁盘 incompat 掩码；快照早于该字段时为 <see langword="null"/>，此时 incompat 字回退到
+    /// 推导式声明。重建逐字重放该字且不新增任何位，解包阶段无法兑现的位记录在
+    /// <see cref="DroppedIncompatBits"/> 中。</para></value>
     public uint? FeatureIncompat { get; set; }
     /// <summary>
     /// Gets the resolved <c>ErofsTriStateFeature</c> member name for the dot-omitted inode advise dimension
@@ -284,17 +284,16 @@ internal sealed class ErofsRebuildParameters
     /// <para>记录的目标陈述；快照早于该字段时为 <see langword="null"/>，此时还原为不支持。</para></value>
     public bool? NlinkOneAdviseSupported { get; set; }
     /// <summary>
-    /// Gets the incompat bits the extraction removed from the source declaration: either the layout policy
-    /// demanded a bit the source never declared, or the writer cannot re-emit the structures behind the
-    /// declared bit.
-    /// <para>获取解包阶段从源声明中移除的 incompat 位：或布局策略要求源镜像从未声明的位，或写入方无法重新
-    /// 输出该位背后的结构。</para>
+    /// Gets the incompat bits an extraction observed but could not honour: a layout policy demanded a bit the
+    /// source never declared, or the writer cannot re-emit the structures behind the declared bit. It is a
+    /// diagnostic; the authoritative declaration itself is <see cref="FeatureIncompat"/>.
+    /// <para>获取解包阶段观测到但无法兑现的 incompat 位：或布局策略要求源镜像从未声明的位，或写入方无法重新
+    /// 输出该位背后的结构。它只是诊断信息；权威声明本身是 <see cref="FeatureIncompat"/>。</para>
     /// </summary>
-    /// <value>Raw <c>s_feature_incompat</c> mask of the removed bits, or <see langword="null"/> when the
-    /// snapshot predates this field. The declaration in <see cref="FeatureIncompat"/> already excludes
-    /// these bits, so the value records why the inherited layout was narrowed.
-    /// <para>被移除位的原始 <c>s_feature_incompat</c> 掩码；快照早于该字段时为 <see langword="null"/>。
-    /// <see cref="FeatureIncompat"/> 中的声明已排除这些位，本值只记录继承布局被收窄的原因。</para></value>
+    /// <value>Raw <c>s_feature_incompat</c> mask of the unhonoured bits, or <see langword="null"/> when the
+    /// snapshot predates this field or replayed the source words exactly.
+    /// <para>未兑现位的原始 <c>s_feature_incompat</c> 掩码；快照早于该字段或已逐字重放源特性字时为
+    /// <see langword="null"/>。</para></value>
     public uint? DroppedIncompatBits { get; set; }
     /// <summary>Gets the declared compression configuration records.<para>获取已声明的压缩配置记录。</para></summary>
     public List<ErofsRebuildCodec> Codecs { get; set; } = [];

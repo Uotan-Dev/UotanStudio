@@ -22,6 +22,7 @@ namespace UotanStudio.Tests.Firmware;
 public class BuilderStreamingTests
 {
     private const int BlockSize = 4096;
+    private const ulong FixedErofsBuildTime = 1_700_000_000;
 
     [Fact]
     public void Ext4_StreamingOutput_MatchesByteArrayApi_ByteForByte()
@@ -230,7 +231,12 @@ public class BuilderStreamingTests
 
         foreach (var compress in new[] { false, true })
         {
-            var options = new ErofsOptions { Compress = compress, CompressionLevel = 5 };
+            var options = new ErofsOptions
+            {
+                Compress = compress,
+                CompressionLevel = 5,
+                BuildTime = FixedErofsBuildTime,
+            };
             var expected = new ErofsBuilder().Build(temp.Path, options);
             using var stream = new MemoryStream();
             new ErofsBuilder().Build(temp.Path, stream, options);

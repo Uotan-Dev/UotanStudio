@@ -7,7 +7,7 @@ public static partial class DatWriter
     /// <summary>Writes an incremental classic block OTA from a source and target image.
     /// <para>由源镜像与目标镜像写出增量经典块 OTA。</para></summary>
     /// <remarks>A dataset without source-dependent commands (<c>imgdiff</c>, <c>diff</c>, <c>move</c> or <c>stash</c>) cannot be seeded from the base image by the reader, so the writer ships the target as a plain full image instead.
-    /// <para>不含源依赖命令（<c>imgdiff</c>、<c>diff</c>、<c>move</c> 或 <c>stash</c>）的数据集无法由 读取器从基座镜像预置，因此此时把目标作为普通全量镜像发布。</para><para>Both images are read once: a differing non-zero run is encoded while the classification pass is still at its last block, so the patches are never derived from a second read of the same bytes. Runs are buffered in at most one 16 MiB piece per side, the same cap a single command may cover.</para><para>两侧镜像只读一遍：差异非零区段在分类趟走到其最后一块时即完成编码，补丁不会由同一批字节的第二次读取 推导。区段每侧最多缓冲一个 16 MiB 片段，与单条命令可覆盖的上限一致。</para></remarks>
+    /// <para>不含源依赖命令（<c>imgdiff</c>、<c>diff</c>、<c>move</c> 或 <c>stash</c>）的数据集无法由 读取器从基座镜像预置，因此此时把目标作为普通全量镜像发布。</para><para>Both images are read once: the encode pipeline overlaps piece encoding with classification, so the patches are never derived from a second read of the same bytes. At most two pending pieces plus the piece being filled are buffered per side, each capped at the 16 MiB a single command may cover.</para><para>两侧镜像只读一遍：编码流水线让片段编码与分类重叠，补丁不会由同一批字节的第二次读取 推导。每侧最多缓冲两个待编码片段加上正在填充的片段，每段上限为单条命令可覆盖的 16 MiB。</para></remarks>
     /// <param name="sourceImagePath">Base image the updater seeds the target from; the file must exist.
     /// <para>updater 用于预置目标的基座镜像；文件必须存在。</para></param>
     /// <param name="targetImagePath">Desired image compared block by block against the source; the file must exist.
@@ -233,11 +233,13 @@ public static partial class DatWriter
 
     /// <summary>
     /// Emits incremental commands while the classification pass runs: accumulates one piece of an <c>imgdiff</c>
-    /// run, encodes it as soon as the piece is full or the run ends, and keeps the <c>zero</c> commands in run
-    /// order. Output files are created lazily, and <see cref="OpenOutputs"/> publishes them empty for datasets
-    /// whose commands never write to them.
-    /// <para>在分类趟运行时发射增量命令：累积 <c>imgdiff</c> 区段的一个片段，在片段填满或区段结束时立即编码，
-    /// 并按区段顺序保留 <c>zero</c> 命令。输出文件按需创建，命令从不写入的文件由 <see cref="OpenOutputs"/> 以空文件发布。</para>
+    /// run, hands it to a bounded encode pipeline as soon as the piece is full or the run ends, and consumes the
+    /// encoded pieces in production order so commands and patch offsets stay identical to a serial pass. Output
+    /// files are created lazily, and <see cref="OpenOutputs"/> publishes them empty for datasets whose commands
+    /// never write to them.
+    /// <para>在分类趟运行时发射增量命令：累积 <c>imgdiff</c> 区段的一个片段，在片段填满或区段结束时交给有界编码
+    /// 流水线，并按产生顺序消费已编码片段，使命令与补丁偏移与串行趟完全一致。输出文件按需创建，命令从不写入的
+    /// 文件由 <see cref="OpenOutputs"/> 以空文件发布。</para>
     /// </summary>
     private sealed class IncrementalRunWriter : IDisposable
     {
@@ -246,9 +248,13 @@ public static partial class DatWriter
         private readonly DatWriteOptions _options;
         private readonly CancellationToken _ct;
         private readonly int _maximumPieceBlocks;
+        private const int PipelineDepth = 2;
         private readonly List<TransferListCommand> _commands = [];
+        private readonly Queue<PendingPiece> _pending = new();
         private byte[]? _sourcePiece;
         private byte[]? _targetPiece;
+        private byte[]? _spareSourcePiece;
+        private byte[]? _spareTargetPiece;
         private FileStream? _newData;
         private FileStream? _patch;
         private long _pieceStart;
@@ -285,9 +291,9 @@ public static partial class DatWriter
         public bool HasImgdiffRun { get; private set; }
 
         /// <summary>
-        /// Appends one block to the current piece, zero padding included, and encodes the piece once it reaches
-        /// <see cref="MaximumBlocksPerPatchCommand"/> blocks.
-        /// <para>把一块（含补零）追加到当前片段，片段达到 <see cref="MaximumBlocksPerPatchCommand"/> 块时立即编码。</para>
+        /// Appends one block to the current piece, zero padding included, and hands the piece to the encode pipeline
+        /// once it reaches <see cref="MaximumBlocksPerPatchCommand"/> blocks.
+        /// <para>把一块（含补零）追加到当前片段，片段达到 <see cref="MaximumBlocksPerPatchCommand"/> 块时交给编码流水线。</para>
         /// </summary>
         /// <param name="block">Block index the piece starts at. <para>该片段起始的块号。</para></param>
         /// <param name="sourceBlock">Classified source block, zero padded to <see cref="BlockSize"/> bytes.
@@ -299,8 +305,10 @@ public static partial class DatWriter
             if (_pieceBlocks == 0)
             {
                 _pieceStart = block;
-                _sourcePiece ??= new byte[checked(_maximumPieceBlocks * BlockSize)];
-                _targetPiece ??= new byte[checked(_maximumPieceBlocks * BlockSize)];
+                _sourcePiece = _spareSourcePiece ?? new byte[checked(_maximumPieceBlocks * BlockSize)];
+                _targetPiece = _spareTargetPiece ?? new byte[checked(_maximumPieceBlocks * BlockSize)];
+                _spareSourcePiece = null;
+                _spareTargetPiece = null;
             }
 
             var offset = _pieceBlocks * BlockSize;
@@ -313,19 +321,23 @@ public static partial class DatWriter
             }
         }
 
-        /// <summary>Marks the current <c>imgdiff</c> run as seen and encodes its partially filled piece.
-        /// <para>标记已出现 <c>imgdiff</c> 区段并编码其未填满的片段。</para></summary>
+        /// <summary>Marks the current <c>imgdiff</c> run as seen, flushes its partially filled piece and drains pending encodes.
+        /// <para>标记已出现 <c>imgdiff</c> 区段，冲刷其未填满的片段并排空在途编码。</para></summary>
         public void EndImgdiffRun()
         {
             HasImgdiffRun = true;
             FlushPiece();
+            DrainPending();
         }
 
         /// <summary>Appends one <c>zero</c> command for a finished run. <para>为一个结束的区段追加一条 <c>zero</c> 命令。</para></summary>
         /// <param name="start">First block of the run. <para>区段首块。</para></param>
         /// <param name="end">Block after the last block of the run. <para>区段末块之后的一块。</para></param>
         public void AddZeroRun(long start, long end)
-            => _commands.Add(new TransferListCommand(TransferListCommandKind.Zero, [new BlockRange(start, end)]));
+        {
+            DrainPending();
+            _commands.Add(new TransferListCommand(TransferListCommandKind.Zero, [new BlockRange(start, end)]));
+        }
 
         /// <summary>
         /// Opens both output files even when no command writes to them, so a successful pass always publishes the
@@ -335,13 +347,16 @@ public static partial class DatWriter
         /// </summary>
         public void OpenOutputs()
         {
+            DrainPending();
             _ = NewData;
             _ = Patch;
         }
 
-        /// <summary>Closes the output files opened for emitted commands. <para>关闭为已发射命令打开的输出文件。</para></summary>
+        /// <summary>Observes any abandoned encode and closes the output files opened for emitted commands.
+        /// <para>观察任何被放弃的在途编码，并关闭为已发射命令打开的输出文件。</para></summary>
         public void Dispose()
         {
+            ObservePending();
             _patch?.Dispose();
             _newData?.Dispose();
         }
@@ -359,13 +374,41 @@ public static partial class DatWriter
                 return;
             }
 
-            var length = checked(_pieceBlocks * BlockSize);
-            var range = new BlockRange(_pieceStart, _pieceStart + _pieceBlocks);
-            var (kind, patchBytes) = CreateRunPatch(_sourcePiece!, length, _targetPiece!, length, _options.IncrementalCommandStyle, _ct);
-            if (_options.AllowRawNewCommands && length <= patchBytes.Length)
+            if (_pending.Count >= PipelineDepth)
+            {
+                ConsumeOldest();
+            }
+
+            var source = _sourcePiece!;
+            var target = _targetPiece!;
+            _sourcePiece = null;
+            _targetPiece = null;
+            var start = _pieceStart;
+            var blocks = _pieceBlocks;
+            var length = checked(blocks * BlockSize);
+            _pieceBlocks = 0;
+            var style = _options.IncrementalCommandStyle;
+            var encoding = Task.Run(() => CreateRunPatch(source, length, target, length, style, _ct), _ct);
+            _pending.Enqueue(new PendingPiece(start, blocks, length, source, target, encoding));
+        }
+
+        private void DrainPending()
+        {
+            while (_pending.Count > 0)
+            {
+                ConsumeOldest();
+            }
+        }
+
+        private void ConsumeOldest()
+        {
+            var piece = _pending.Dequeue();
+            var (kind, patchBytes) = piece.Encoding.GetAwaiter().GetResult();
+            var range = new BlockRange(piece.Start, piece.Start + piece.Blocks);
+            if (_options.AllowRawNewCommands && piece.Length <= patchBytes.Length)
             {
                 _commands.Add(new TransferListCommand(TransferListCommandKind.New, [range]));
-                NewData.Write(_targetPiece!, 0, length);
+                NewData.Write(piece.Target, 0, piece.Length);
             }
             else
             {
@@ -373,16 +416,40 @@ public static partial class DatWriter
                 _patchOffset += patchBytes.Length;
                 _commands.Add(new TransferListCommand(kind, [range], sourceRanges: [range])
                 {
-                    SourceBlockCount = _pieceBlocks,
-                    SourceLocations = [new BlockRange(0, _pieceBlocks)],
+                    SourceBlockCount = piece.Blocks,
+                    SourceLocations = [new BlockRange(0, piece.Blocks)],
                     PatchOffset = _patchOffset - patchBytes.Length,
                     PatchLength = patchBytes.Length,
-                    SourceHash = Sha1(_sourcePiece!, length),
-                    TargetHash = Sha1(_targetPiece!, length),
+                    SourceHash = Sha1(piece.Source, piece.Length),
+                    TargetHash = Sha1(piece.Target, piece.Length),
                 });
             }
 
-            _pieceBlocks = 0;
+            _spareSourcePiece ??= piece.Source;
+            _spareTargetPiece ??= piece.Target;
         }
+
+        private void ObservePending()
+        {
+            while (_pending.Count > 0)
+            {
+                var piece = _pending.Dequeue();
+                try
+                {
+                    piece.Encoding.GetAwaiter().GetResult();
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+
+        private sealed record PendingPiece(
+            long Start,
+            int Blocks,
+            int Length,
+            byte[] Source,
+            byte[] Target,
+            Task<(TransferListCommandKind Kind, byte[] PatchBytes)> Encoding);
     }
 }

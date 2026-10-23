@@ -195,10 +195,36 @@ internal static class F2fsCompression
         finally { ArrayPool<byte>.Shared.Return(target); }
     }
 
+    /// <summary>
+    /// Decompresses one zstd frame into a single result array of exactly <paramref name="expectedSize"/> bytes.
+    /// <para>把一个 zstd 帧解压到长度恰为 <paramref name="expectedSize"/> 的单一结果数组。</para>
+    /// </summary>
+    /// <param name="compressed">Complete frame bytes following the cluster header.
+    /// <para>簇头部之后的完整帧字节。</para></param>
+    /// <param name="expectedSize">Array length and decode capacity; the pool-backed context decodes into that array in
+    /// place, and bytes the frame leaves unused stay zero exactly as a freshly allocated buffer would.
+    /// <para>数组长度与解码容量；池化上下文直接解码到该数组中，帧未覆盖的尾部保持为零，与新建缓冲区的结果相同。</para></param>
+    /// <returns>The decoded array, whose length is always <paramref name="expectedSize"/>.
+    /// <para>解码后的数组，长度始终为 <paramref name="expectedSize"/>。</para></returns>
+    /// <exception cref="ZstdSharp.ZstdException">The frame is malformed or expands beyond the capacity.
+    /// <para>帧无效或展开后超出容量。</para></exception>
     private static byte[] DecompressZstd(ReadOnlySpan<byte> compressed, int expectedSize)
     {
-        using var decompressor = new ZstdSharp.Decompressor();
-        var result = decompressor.Unwrap(compressed, expectedSize);
-        return result.ToArray();
+        var result = GC.AllocateUninitializedArray<byte>(expectedSize);
+        var decompressor = ZstdBlockCodec.DecompressorCache.Rent();
+        try
+        {
+            var written = decompressor.Unwrap(compressed, result);
+            if (written < expectedSize)
+            {
+                result.AsSpan(written).Clear();
+            }
+
+            return result;
+        }
+        finally
+        {
+            ZstdBlockCodec.DecompressorCache.Return(decompressor);
+        }
     }
 }

@@ -11,6 +11,7 @@ using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Services.Firmware;
+using UotanStudio.Services.Ui.Firmware;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

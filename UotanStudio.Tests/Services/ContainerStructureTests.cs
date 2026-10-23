@@ -72,7 +72,7 @@ public sealed class ContainerStructureTests
         var reports = new List<double>();
         var progress = new InlineProgress(value => { reports.Add(value); cancelled.Cancel(); });
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            UotanStudio.Services.Projects.ProjectFiles.CopyAsync(source, destination,
+            UotanStudio.Projects.ProjectFiles.CopyAsync(source, destination,
                 cancellationToken: cancelled.Token, progress: progress));
         Assert.Equal([0d], reports);
         Assert.False(File.Exists(destination));

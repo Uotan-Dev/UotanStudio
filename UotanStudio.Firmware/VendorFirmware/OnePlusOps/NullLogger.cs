@@ -67,5 +67,5 @@ public class NullLogger : IOnePlusLogger
     /// <para>本应决定是否输出的严重级别；此处不会读取。</para></param>
     /// <param name="message">Message text discarded without being inspected; <see langword="null"/>
     /// is accepted. <para>直接丢弃、不做检查的消息文本；允许为 <see langword="null"/>。</para></param>
-    public void Log(LogLevel level, string message) { }
+    public void Log(OnePlusLogLevel level, string message) { }
 }

@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using UotanStudio.Firmware.Core;
@@ -7,6 +6,7 @@ using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.Rebuilding;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.FilesystemFixture;
 
@@ -91,7 +91,7 @@ internal static class RoundTripRunner
         var repackedManifest = ImageManifest.Read(repacked, format, cancellationToken);
         var differences = ImageManifest.Compare(sourceManifest, repackedManifest);
         var equal = differences.Count == 0;
-        File.WriteAllText(manifestPath, sourceManifest.ToTsv(), new UTF8Encoding(false));
+        File.WriteAllText(manifestPath, sourceManifest.ToManifestText(), new UTF8Encoding(false));
 
         var report = new
         {
@@ -144,6 +144,6 @@ internal static class RoundTripRunner
     private static string HashFile(string path)
     {
         using var stream = File.OpenRead(path);
-        return Convert.ToHexStringLower(SHA256.HashData(stream));
+        return Convert.ToHexStringLower(Sha256.ComputeHash(stream));
     }
 }

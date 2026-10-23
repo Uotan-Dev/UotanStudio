@@ -4,7 +4,7 @@ namespace UotanStudio.Firmware.VendorFirmware.OnePlusOps;
 /// Severity levels used by the OnePlus OPS tooling, ordered from most verbose to most severe.
 /// <para>OnePlus OPS 工具使用的日志严重级别，按从最详细到最严重排序。</para>
 /// </summary>
-public enum LogLevel
+public enum OnePlusLogLevel
 {
     /// <summary>Finest-grained diagnostic output. <para>最细粒度的诊断输出。</para></summary>
     Trace,
@@ -36,48 +36,48 @@ public interface IOnePlusLogger
     /// Log a trace message
     /// <para>记录追踪消息</para>
     /// </summary>
-    /// <param name="message">Message text emitted at <see cref="LogLevel.Trace"/> level.
-    /// <para>以 <see cref="LogLevel.Trace"/> 级别输出的消息文本。</para></param>
+    /// <param name="message">Message text emitted at <see cref="OnePlusLogLevel.Trace"/> level.
+    /// <para>以 <see cref="OnePlusLogLevel.Trace"/> 级别输出的消息文本。</para></param>
     void Trace(string message);
 
     /// <summary>
     /// Log a debug message
     /// <para>记录调试消息</para>
     /// </summary>
-    /// <param name="message">Message text emitted at <see cref="LogLevel.Debug"/> level.
-    /// <para>以 <see cref="LogLevel.Debug"/> 级别输出的消息文本。</para></param>
+    /// <param name="message">Message text emitted at <see cref="OnePlusLogLevel.Debug"/> level.
+    /// <para>以 <see cref="OnePlusLogLevel.Debug"/> 级别输出的消息文本。</para></param>
     void Debug(string message);
 
     /// <summary>
     /// Log an information message
     /// <para>记录信息消息</para>
     /// </summary>
-    /// <param name="message">Message text emitted at <see cref="LogLevel.Information"/> level.
-    /// <para>以 <see cref="LogLevel.Information"/> 级别输出的消息文本。</para></param>
+    /// <param name="message">Message text emitted at <see cref="OnePlusLogLevel.Information"/> level.
+    /// <para>以 <see cref="OnePlusLogLevel.Information"/> 级别输出的消息文本。</para></param>
     void Information(string message);
 
     /// <summary>
     /// Log a warning message
     /// <para>记录警告消息</para>
     /// </summary>
-    /// <param name="message">Message text emitted at <see cref="LogLevel.Warning"/> level.
-    /// <para>以 <see cref="LogLevel.Warning"/> 级别输出的消息文本。</para></param>
+    /// <param name="message">Message text emitted at <see cref="OnePlusLogLevel.Warning"/> level.
+    /// <para>以 <see cref="OnePlusLogLevel.Warning"/> 级别输出的消息文本。</para></param>
     void Warning(string message);
 
     /// <summary>
     /// Log an error message
     /// <para>记录错误消息</para>
     /// </summary>
-    /// <param name="message">Message text emitted at <see cref="LogLevel.Error"/> level.
-    /// <para>以 <see cref="LogLevel.Error"/> 级别输出的消息文本。</para></param>
+    /// <param name="message">Message text emitted at <see cref="OnePlusLogLevel.Error"/> level.
+    /// <para>以 <see cref="OnePlusLogLevel.Error"/> 级别输出的消息文本。</para></param>
     void Error(string message);
 
     /// <summary>
     /// Log a critical error message
     /// <para>记录严重错误消息</para>
     /// </summary>
-    /// <param name="message">Message text emitted at <see cref="LogLevel.Critical"/> level.
-    /// <para>以 <see cref="LogLevel.Critical"/> 级别输出的消息文本。</para></param>
+    /// <param name="message">Message text emitted at <see cref="OnePlusLogLevel.Critical"/> level.
+    /// <para>以 <see cref="OnePlusLogLevel.Critical"/> 级别输出的消息文本。</para></param>
     void Critical(string message);
 
     /// <summary>
@@ -87,5 +87,5 @@ public interface IOnePlusLogger
     /// <param name="level">Severity to attach to <paramref name="message"/>.
     /// <para>附加到 <paramref name="message"/> 的严重级别。</para></param>
     /// <param name="message">Message text to emit. <para>要输出的消息文本。</para></param>
-    void Log(LogLevel level, string message);
+    void Log(OnePlusLogLevel level, string message);
 }

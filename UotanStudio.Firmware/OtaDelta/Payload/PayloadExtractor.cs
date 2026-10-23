@@ -37,19 +37,28 @@ internal class PayloadExtractor
     /// </summary>
     private const int UnbufferedOutputBufferSize = 1;
 
+    /// <summary>Worst-case working set one source-dependent delta operation may pin, matching the codec ceiling in
+    /// <see cref="OperationProcessor"/>.
+    /// <para>单个源依赖差分操作可能占用的最坏工作集，与 <see cref="OperationProcessor"/> 中的编解码上限一致。</para>
+    /// </summary>
+    private const long MaximumDeltaOperationBytes = 256L * 1024 * 1024;
+
     private readonly long maximumPartitionBytes;
     private readonly IReadOnlyDictionary<string, byte[]>? zstdDictionaries;
     private readonly long maximumZstdDictBytes;
+    private readonly bool enableZucchiniPreflight;
 
     internal PayloadExtractor(long maximumPartitionBytes = DefaultMaximumPartitionBytes,
         IReadOnlyDictionary<string, byte[]>? zstdDictionaries = null,
-        long maximumZstdDictBytes = DefaultMaximumZstdDictBytes)
+        long maximumZstdDictBytes = DefaultMaximumZstdDictBytes,
+        bool enableZucchiniPreflight = true)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumPartitionBytes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumZstdDictBytes);
         this.maximumPartitionBytes = maximumPartitionBytes;
         this.zstdDictionaries = zstdDictionaries;
         this.maximumZstdDictBytes = maximumZstdDictBytes;
+        this.enableZucchiniPreflight = enableZucchiniPreflight;
     }
 
     /// <summary>
@@ -273,7 +282,12 @@ internal class PayloadExtractor
                 partition.PartitionName);
         }
 
-        if (ZucchiniExecutableTypeScanner.HasZucchiniOperation(sequentialOps) && (ownPayload || stream!.CanSeek))
+        var sequentialWorkers = ResolveSequentialWorkers(sequentialOps, blockSize, workers);
+        var runSequentialOperationsInParallel = sequentialWorkers > 1
+            && baseImagePath is not null
+            && !HasOverlappingDestinationExtents(sequentialOps, blockSize);
+
+        if (enableZucchiniPreflight && ZucchiniExecutableTypeScanner.HasZucchiniOperation(sequentialOps) && (ownPayload || stream!.CanSeek))
         {
             using var preflightStream = ownPayload ? openPayloadStream!() : new IndependentReadStream(stream!, streamLock);
             ZucchiniExecutableTypeScanner.ScanOperations(preflightStream, sequentialOps, baseOffset, cancellationToken);
@@ -353,10 +367,28 @@ internal class PayloadExtractor
                         },
                         zstdContext => zstdContext?.Dispose());
 
-                    foreach (var op in sequentialOps)
+                    if (runSequentialOperationsInParallel)
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        OperationProcessor.ProcessDeltaOperation(op, baseStream!, outFile, opStream, baseOffset, blockSize, cancellationToken, sourceAlreadyVerified, progressTracker);
+                        RunSequentialOperationsConcurrently(
+                            sequentialOps,
+                            baseImagePath!,
+                            payloadStream,
+                            streamLock,
+                            outFile,
+                            baseOffset,
+                            blockSize,
+                            cancellationToken,
+                            sourceAlreadyVerified,
+                            progressTracker,
+                            sequentialWorkers);
+                    }
+                    else
+                    {
+                        foreach (var op in sequentialOps)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            OperationProcessor.ProcessDeltaOperation(op, baseStream!, outFile, opStream, baseOffset, blockSize, cancellationToken, sourceAlreadyVerified, progressTracker);
+                        }
                     }
                 }
                 else
@@ -376,11 +408,29 @@ internal class PayloadExtractor
                         },
                         zstdContext => zstdContext?.Dispose());
 
-                    using var deltaPayload = new IndependentReadStream(stream!, streamLock);
-                    foreach (var op in sequentialOps)
+                    if (runSequentialOperationsInParallel)
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        OperationProcessor.ProcessDeltaOperation(op, baseStream!, outFile, deltaPayload, baseOffset, blockSize, cancellationToken, sourceAlreadyVerified, progressTracker);
+                        RunSequentialOperationsConcurrently(
+                            sequentialOps,
+                            baseImagePath!,
+                            stream!,
+                            streamLock,
+                            outFile,
+                            baseOffset,
+                            blockSize,
+                            cancellationToken,
+                            sourceAlreadyVerified,
+                            progressTracker,
+                            sequentialWorkers);
+                    }
+                    else
+                    {
+                        using var deltaPayload = new IndependentReadStream(stream!, streamLock);
+                        foreach (var op in sequentialOps)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            OperationProcessor.ProcessDeltaOperation(op, baseStream!, outFile, deltaPayload, baseOffset, blockSize, cancellationToken, sourceAlreadyVerified, progressTracker);
+                        }
                     }
                 }
 
@@ -863,6 +913,166 @@ internal class PayloadExtractor
             while (Interlocked.CompareExchange(ref lastReported, sample.Processed, current) != current);
 
             sink.Add(delta);
+        }
+    }
+
+    /// <summary>
+    /// Caps the number of source-dependent operations that may run at once so their pooled working sets fit the
+    /// shared worker memory budget; one operation whose estimate reaches the cap reduces the count to one.
+    /// <para>限制同时运行的源依赖操作数量，使其池化工作集落在共享工作者内存预算内；单个操作的估算达到上限时数量降为一。</para>
+    /// </summary>
+    private static int ResolveSequentialWorkers(IReadOnlyList<InstallOperation> operations, uint blockSize, int requestedWorkers)
+    {
+        if (operations.Count <= 1 || requestedWorkers <= 1)
+        {
+            return 1;
+        }
+
+        var bytesPerWorker = 1L;
+        foreach (var operation in operations)
+        {
+            bytesPerWorker = Math.Max(bytesPerWorker, EstimateOperationBytes(operation, blockSize));
+        }
+
+        var affordable = Core.FirmwareParallelism.BudgetedWorkers(
+            bytesPerWorker,
+            Core.FirmwareParallelism.WorkerMemoryBudgetBytes,
+            requestedWorkers);
+        return Math.Min(affordable, operations.Count);
+    }
+
+    private static long EstimateOperationBytes(InstallOperation operation, uint blockSize)
+    {
+        try
+        {
+            var bytes = operation.DataLength > (ulong)long.MaxValue ? long.MaxValue : (long)operation.DataLength;
+            bytes = AddExtentBytes(bytes, operation.SrcExtents, blockSize);
+            bytes = AddExtentBytes(bytes, operation.DstExtents, blockSize);
+            return Math.Min(bytes, MaximumDeltaOperationBytes);
+        }
+        catch (OverflowException)
+        {
+            return MaximumDeltaOperationBytes;
+        }
+    }
+
+    private static long AddExtentBytes(long bytes, IEnumerable<Extent> extents, uint blockSize)
+    {
+        foreach (var extent in extents)
+        {
+            bytes = checked(bytes + checked((long)extent.NumBlocks * blockSize));
+        }
+
+        return bytes;
+    }
+
+    /// <summary>
+    /// Reports whether any two destination extents of the given operations share a byte, which makes concurrent
+    /// application unsafe; an extent address that overflows is treated as overlapping so the caller stays sequential.
+    /// <para>报告给定操作的任意两个目标 extent 是否共享字节，若有则并发应用不安全；extent 地址溢出时按重叠处理，
+    /// 使调用方保持串行。</para>
+    /// </summary>
+    private static bool HasOverlappingDestinationExtents(IReadOnlyList<InstallOperation> operations, uint blockSize)
+    {
+        var ranges = new List<(long Start, long End)>();
+        try
+        {
+            foreach (var operation in operations)
+            {
+                foreach (var extent in operation.DstExtents)
+                {
+                    if (extent.NumBlocks == 0)
+                    {
+                        continue;
+                    }
+
+                    var start = checked((long)extent.StartBlock * blockSize);
+                    var end = checked(start + checked((long)extent.NumBlocks * blockSize));
+                    ranges.Add((start, end));
+                }
+            }
+        }
+        catch (OverflowException)
+        {
+            return true;
+        }
+
+        if (ranges.Count <= 1)
+        {
+            return false;
+        }
+
+        ranges.Sort(static (left, right) => left.Start.CompareTo(right.Start));
+        var previousEnd = ranges[0].End;
+        for (var index = 1; index < ranges.Count; index++)
+        {
+            if (ranges[index].Start < previousEnd)
+            {
+                return true;
+            }
+
+            previousEnd = Math.Max(previousEnd, ranges[index].End);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Applies source-dependent delta operations concurrently, each over its own base-image handle and payload cursor,
+    /// and rethrows the failure of the lowest operation index so errors keep the sequential order.
+    /// <para>让各源依赖差分操作分别使用自己的基座镜像句柄与载荷游标并发应用，并按最低操作下标重抛失败，
+    /// 使错误保持串行顺序。</para>
+    /// </summary>
+    private static void RunSequentialOperationsConcurrently(
+        IReadOnlyList<InstallOperation> operations,
+        string baseImagePath,
+        Stream payload,
+        object streamLock,
+        FileStream output,
+        ulong baseOffset,
+        uint blockSize,
+        CancellationToken cancellationToken,
+        bool sourceAlreadyVerified,
+        PartitionByteProgress? byteProgress,
+        int workers)
+    {
+        var failures = new ExceptionDispatchInfo?[operations.Count];
+        Parallel.For(
+            0,
+            operations.Count,
+            new ParallelOptions
+            {
+                MaxDegreeOfParallelism = workers,
+                CancellationToken = cancellationToken
+            },
+            index =>
+            {
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    using var source = new FileStream(baseImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize, FileOptions.RandomAccess);
+                    using var cursor = new IndependentReadStream(payload, streamLock);
+                    OperationProcessor.ProcessDeltaOperation(
+                        operations[index],
+                        source,
+                        output,
+                        cursor,
+                        baseOffset,
+                        blockSize,
+                        cancellationToken,
+                        sourceAlreadyVerified,
+                        byteProgress);
+                }
+                catch (Exception ex)
+                {
+                    failures[index] = ExceptionDispatchInfo.Capture(ex);
+                }
+            });
+
+        cancellationToken.ThrowIfCancellationRequested();
+        foreach (var failure in failures)
+        {
+            failure?.Throw();
         }
     }
 

@@ -5,9 +5,9 @@ using UotanStudio.Hash.Digests;
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
 
 /// <summary>
-/// EXT4 builder part for content-identical data blocks: it indexes blocks in disk-backed staging storage, allocates one physical block per distinct content across group boundaries, and re-reads every source block to compare it against the staged copy before writing.
+/// EXT4 builder part for content-identical data blocks: it indexes blocks in disk-backed staging storage, allocates one physical block per distinct content across group boundaries, and then walks every source block once — re-reading it to compare against the staged copy and writing each distinct block on its first confirmed reference.
 /// <para>EXT4 构建器的组成部分，处理内容相同的数据块：用磁盘暂存存储为块建立索引，为每种不同内容只分配一个物理块并跨越组边界，
-/// 写出前重新读取每个源块并与暂存副本逐字节比较。</para>
+/// 随后单遍遍历每个源块——重新读取并与暂存副本比较，在某个引用首次校验通过时写出对应的唯一块。</para>
 /// </summary>
 public sealed partial class Ext4Builder
 {
@@ -248,10 +248,22 @@ public sealed partial class Ext4Builder
             }
         }
 
-        public void ValidateSources(List<Node> nodes)
+        /// <summary>
+        /// Validates every shared source block against its staged copy and writes each distinct block the first time one
+        /// of its references matches, fusing the pre-write read-back and the unique-block copy into one traversal.
+        /// <para>逐块校验共享源块与暂存副本，并在某个引用首次校验通过时写出对应的唯一块，把写前回读与唯一块复制
+        /// 合并为同一遍遍历。</para>
+        /// </summary>
+        /// <param name="output">Writable stream receiving the unique blocks. <para>接收唯一块的可写流。</para></param>
+        /// <param name="baseOffset">Stream offset the image starts at. <para>镜像起始的流偏移。</para></param>
+        /// <param name="nodes">Planned nodes whose shared blocks are validated. <para>需要校验其共享块的已规划节点。</para></param>
+        /// <exception cref="IOException">A source file changed size or content after the shared-block index was built.
+        /// <para>共享块索引建立后某个源文件的大小或内容发生变化。</para></exception>
+        public void ValidateSourcesAndWriteUniqueBlocks(Stream output, long baseOffset, List<Node> nodes)
         {
             var actual = new byte[_blockSize];
-            var expected = new byte[_blockSize];
+            var staged = new byte[_blockSize];
+            var written = new bool[PhysicalBlocks.Length];
             foreach (var node in nodes.Where(IsBlockSharingCandidate))
             {
                 _cancellationToken.ThrowIfCancellationRequested();
@@ -282,24 +294,19 @@ public sealed partial class Ext4Builder
                     }
 
                     var identity = node.SharedBlockIds![blockIndex++];
-                    ReadExactlyAt(_staging.SafeFileHandle, expected.AsSpan(0, length),
-                        checked(identity * _blockSize));
-                    if (!actual.AsSpan(0, length).SequenceEqual(expected.AsSpan(0, length)))
+                    ReadExactlyAt(_staging.SafeFileHandle, staged, checked(identity * _blockSize));
+                    if (!actual.AsSpan(0, length).SequenceEqual(staged.AsSpan(0, length)))
                     {
                         throw new IOException($"EXT4 source file changed while building shared blocks: '{node.RelativePath}'.");
                     }
-                }
-            }
-        }
 
-        public void WriteUniqueBlocks(Stream output, long baseOffset)
-        {
-            var content = new byte[_blockSize];
-            for (var identity = 0; identity < PhysicalBlocks.Length; identity++)
-            {
-                _cancellationToken.ThrowIfCancellationRequested();
-                ReadExactlyAt(_staging.SafeFileHandle, content, checked((long)identity * _blockSize));
-                WriteAt(output, baseOffset, checked(PhysicalBlocks[identity] * _blockSize), content, _blockSize);
+                    var slot = checked((int)identity);
+                    if (!written[slot])
+                    {
+                        WriteAt(output, baseOffset, checked(PhysicalBlocks[slot] * _blockSize), staged, _blockSize);
+                        written[slot] = true;
+                    }
+                }
             }
         }
 

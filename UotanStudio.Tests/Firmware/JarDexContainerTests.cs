@@ -4,7 +4,8 @@ using UotanStudio.Firmware.AndroidMeta.Dex;
 using UotanStudio.Firmware.AndroidMeta.Dex.Models;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Keys;
-using UotanStudio.Views.Controls;
+using UotanStudio.Services.Workspace.Documents;
+using UotanStudio.UiAbstractions;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -161,10 +162,10 @@ public class JarDexContainerTests : IDisposable
     [Fact]
     public void ResolveMode_RoutesJarToDexEditor()
     {
-        Assert.Equal(EditorOpenMode.Dex, FileOpenMode.ResolveMode("app.jar"));
-        Assert.Equal(EditorOpenMode.Dex, FileOpenMode.ResolveMode("C:/x/APP.JAR"));
-        Assert.True(FileOpenMode.IsJarExtension(".jar"));
-        Assert.False(FileOpenMode.IsJarExtension(".dex"));
+        Assert.Equal(EditorOpenMode.Dex, DocumentFormatPolicy.ResolveMode("app.jar"));
+        Assert.Equal(EditorOpenMode.Dex, DocumentFormatPolicy.ResolveMode("C:/x/APP.JAR"));
+        Assert.True(DocumentFormatPolicy.IsJarExtension(".jar"));
+        Assert.False(DocumentFormatPolicy.IsJarExtension(".dex"));
     }
 
     [Fact]

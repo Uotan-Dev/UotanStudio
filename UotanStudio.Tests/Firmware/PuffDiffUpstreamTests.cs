@@ -1,3 +1,4 @@
+using UotanStudio.Compress.Codecs.Deflate;
 using UotanStudio.Firmware.OtaDelta.Diff;
 using Xunit;
 

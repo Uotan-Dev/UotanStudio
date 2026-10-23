@@ -367,12 +367,14 @@ public sealed partial class F2fsBuilder
         var totalPlannedBytes = progress is null
             ? 0L
             : ordered.Where(node => !node.IsDirectory).Sum(node => (long)node.Size);
+        var planningFiles = Math.Max(1, Math.Min(FirmwareParallelism.Workers,
+            ordered.Count(static node => !node.IsDirectory)));
         FirmwareParallelism.ForEach(ordered, node =>
         {
             effective.CancellationToken.ThrowIfCancellationRequested();
             if (!node.IsDirectory)
             {
-                PlanFileData(node, effective, compressionStaging);
+                PlanFileData(node, effective, compressionStaging, planningFiles);
             }
             else
             {
@@ -598,7 +600,8 @@ public sealed partial class F2fsBuilder
         }
     }
 
-    private static void PlanFileData(BuildNode node, F2fsOptions options, CompressionPayloadStaging compressionStaging)
+    private static void PlanFileData(BuildNode node, F2fsOptions options,
+        CompressionPayloadStaging compressionStaging, int planningFiles)
     {
         var preservedCompression = node.SourceMetadata?.F2fsCompression;
         var compress = node.SourceMetadata is null ? options.EnableCompression : preservedCompression is not null;
@@ -643,7 +646,7 @@ public sealed partial class F2fsBuilder
         if (compress && !node.IsSymlink && (preservedCompression is not null || size > node.ClusterPages * options.BlockSize))
         {
 
-            if (TryPlanCompressedFileData(node, options, compressionStaging))
+            if (TryPlanCompressedFileData(node, options, compressionStaging, planningFiles))
             {
                 PlanDnodes(node, node.DataBlockCount);
                 return;
@@ -676,10 +679,17 @@ public sealed partial class F2fsBuilder
     }
 
     /// <summary>
-    /// Compressed layout planning (first pass): streams the source in 64 KB clusters and compresses full clusters.
-    /// <para>压缩布局规划（第一遍）：按 64 KB 簇流式读取源文件，对完整簇尝试压缩。</para>
+    /// Compressed layout planning (first pass): the source is still read cluster by cluster in file order on the
+    /// calling thread, while the CPU-bound compression of one bounded batch of clusters runs on the workers chosen by
+    /// <see cref="FirmwareParallelism"/>, with each call renting its own codec context. Accepted payloads are staged
+    /// and the block map is filled in cluster order afterwards, so a parallel run produces the same bytes as a
+    /// sequential one.
+    /// <para>压缩布局规划（第一遍）：源文件仍由调用线程按文件顺序逐簇读取，而一个受界批次内各簇的 CPU 密集压缩交给
+    /// <see cref="FirmwareParallelism"/> 选定的工作者执行，每次调用各自借出编解码上下文。被接受的负载随后按簇顺序暂存
+    /// 并回填块映射，因此并行执行产出的字节与串行执行一致。</para>
     /// </summary>
-    private static bool TryPlanCompressedFileData(BuildNode node, F2fsOptions options, CompressionPayloadStaging compressionStaging)
+    private static bool TryPlanCompressedFileData(BuildNode node, F2fsOptions options,
+        CompressionPayloadStaging compressionStaging, int planningFiles)
     {
         var blockSize = options.BlockSize;
         var clusterPages = node.ClusterPages;
@@ -698,57 +708,117 @@ public sealed partial class F2fsBuilder
         var stagedOffsets = new long[clusterCount];
         var allocated = 0;
         var anyCompressed = false;
-        var clusterBuffer = new byte[clusterBytes];
+
+        var workers = FirmwareParallelism.BudgetedWorkers(
+            bytesPerWorker: checked(clusterBytes * 3L),
+            budgetBytes: Math.Max(1L, FirmwareParallelism.WorkerMemoryBudgetBytes / planningFiles),
+            requestedWorkers: Math.Max(1, FirmwareParallelism.Workers / planningFiles));
+        workers = Math.Max(1, Math.Min(workers, clusterCount));
+
+        var clusterBuffers = new byte[workers][];
+        for (var slot = 0; slot < workers; slot++)
+        {
+            clusterBuffers[slot] = new byte[clusterBytes];
+        }
+
+        var payloads = new byte[]?[workers];
+        var readLengths = new int[workers];
+        var clusterBlockCounts = new int[workers];
+        var slots = new int[workers];
+        for (var slot = 0; slot < workers; slot++)
+        {
+            slots[slot] = slot;
+        }
 
         using var source = File.OpenRead(node.FullPath);
-        for (var c = 0; c < clusterCount; c++)
+        for (var batchStart = 0; batchStart < clusterCount; batchStart += workers)
         {
-            options.CancellationToken.ThrowIfCancellationRequested();
-            var logical = c * clusterPages;
-            var clusterBlocks = Math.Min(clusterPages, dataBlocks - logical);
-            var toRead = (int)Math.Min(clusterBytes, Math.Max(0, node.Size - (long)logical * blockSize));
-            ReadExactly(source, clusterBuffer, toRead);
-
-            if (toRead == clusterBytes)
+            var batch = Math.Min(workers, clusterCount - batchStart);
+            for (var slot = 0; slot < batch; slot++)
             {
+                options.CancellationToken.ThrowIfCancellationRequested();
+                var c = batchStart + slot;
+                var logical = c * clusterPages;
+                var toRead = (int)Math.Min(clusterBytes, Math.Max(0, node.Size - (long)logical * blockSize));
+                ReadExactly(source, clusterBuffers[slot], toRead);
+                readLengths[slot] = toRead;
+                clusterBlockCounts[slot] = Math.Min(clusterPages, dataBlocks - logical);
+                payloads[slot] = null;
+            }
 
-                var payload = F2fsCompression.CompressCluster(
-                    clusterBuffer.AsSpan(0, clusterBytes),
+            if (batch > 1)
+            {
+                var buffers = clusterBuffers;
+                var results = payloads;
+                var lengths = readLengths;
+                FirmwareParallelism.ForEach(new ArraySegment<int>(slots, 0, batch), slot =>
+                {
+                    if (lengths[slot] == clusterBytes)
+                    {
+                        results[slot] = F2fsCompression.CompressCluster(
+                            buffers[slot].AsSpan(0, clusterBytes),
+                            node.CompressedAlgorithm,
+                            node.CompressionLevel);
+                    }
+                }, workers);
+            }
+            else if (readLengths[0] == clusterBytes)
+            {
+                payloads[0] = F2fsCompression.CompressCluster(
+                    clusterBuffers[0].AsSpan(0, clusterBytes),
                     node.CompressedAlgorithm,
                     node.CompressionLevel);
-                var payloadBlocks = payload is null ? 0 : (payload.Length + blockSize - 1) / blockSize;
-                if (payload is not null && payloadBlocks < clusterPages)
-                {
-                    compressedSizes[c] = payload.Length;
-                    stagedOffsets[c] = compressionStaging.Append(payload);
-                    anyCompressed = true;
-                    node.DataBlockAddrs[logical] = uint.MaxValue - 1;
-                    for (var i = 0; i < payloadBlocks; i++)
-                    {
-                        node.DataBlockAddrs[logical + 1 + i] = uint.MaxValue;
-                    }
-                    for (var i = payloadBlocks + 1; i < clusterPages; i++) node.DataBlockAddrs[logical + i] = uint.MaxValue - 2;
-
-                    allocated += payloadBlocks;
-                    continue;
-                }
-
-                for (var i = 0; i < clusterPages; i++)
-                {
-                    node.DataBlockAddrs[logical + i] = uint.MaxValue;
-                }
-
-                allocated += clusterPages;
             }
-            else
+
+            for (var slot = 0; slot < batch; slot++)
             {
-
-                for (var i = 0; i < clusterBlocks; i++)
+                options.CancellationToken.ThrowIfCancellationRequested();
+                var c = batchStart + slot;
+                var logical = c * clusterPages;
+                var toRead = readLengths[slot];
+                var clusterBlocks = clusterBlockCounts[slot];
+                if (toRead == clusterBytes)
                 {
-                    node.DataBlockAddrs[logical + i] = uint.MaxValue;
-                }
 
-                allocated += clusterBlocks;
+                    var payload = payloads[slot];
+                    var payloadBlocks = payload is null ? 0 : (payload.Length + blockSize - 1) / blockSize;
+                    if (payload is not null && payloadBlocks < clusterPages)
+                    {
+                        compressedSizes[c] = payload.Length;
+                        stagedOffsets[c] = compressionStaging.Append(payload);
+                        anyCompressed = true;
+                        node.DataBlockAddrs[logical] = uint.MaxValue - 1;
+                        for (var i = 0; i < payloadBlocks; i++)
+                        {
+                            node.DataBlockAddrs[logical + 1 + i] = uint.MaxValue;
+                        }
+
+                        for (var i = payloadBlocks + 1; i < clusterPages; i++)
+                        {
+                            node.DataBlockAddrs[logical + i] = uint.MaxValue - 2;
+                        }
+
+                        allocated += payloadBlocks;
+                        continue;
+                    }
+
+                    for (var i = 0; i < clusterPages; i++)
+                    {
+                        node.DataBlockAddrs[logical + i] = uint.MaxValue;
+                    }
+
+                    allocated += clusterPages;
+                }
+                else
+                {
+
+                    for (var i = 0; i < clusterBlocks; i++)
+                    {
+                        node.DataBlockAddrs[logical + i] = uint.MaxValue;
+                    }
+
+                    allocated += clusterBlocks;
+                }
             }
         }
 

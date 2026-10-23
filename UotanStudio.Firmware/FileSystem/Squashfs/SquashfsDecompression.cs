@@ -1,3 +1,4 @@
+using System.Buffers;
 using UotanStudio.Compress;
 using UotanStudio.Compress.Codecs.Lz4;
 using UotanStudio.Compress.Codecs.Lzo;
@@ -33,16 +34,17 @@ internal static class SquashfsDecompression
 }
 
 /// <summary>
-/// Reusable per-worker decoder for one SquashFS compressor. The instance keeps the zstd context alive between
-/// blocks, which is the only codec here with reusable state, and writes decoded bytes into a pooled destination
-/// buffer bounded by the caller's capacity.
-/// <para>单个 SquashFS 压缩器的可复用逐工作者解码器。实例在块之间保留 zstd 上下文（此处唯一具有可复用状态的
-/// 编解码器），并把解码字节写入由调用方容量约束的池化目标缓冲。</para>
+/// Reusable per-worker decoder for one SquashFS compressor. The instance keeps the zstd context and the LZO1X
+/// scratch buffer alive between blocks and writes decoded bytes into a pooled destination buffer bounded by the
+/// caller's capacity; a single worker owns it at any time.
+/// <para>单个 SquashFS 压缩器的可复用逐工作者解码器。实例在块之间保留 zstd 上下文与 LZO1X 暂存缓冲区，并把
+/// 解码字节写入由调用方容量约束的池化目标缓冲；同一时间只由一个工作者持有。</para>
 /// </summary>
 internal sealed class SquashfsBlockDecoder : IDisposable
 {
     private readonly int _compression;
     private Decompressor? _zstd;
+    private byte[]? _lzoScratch;
 
     /// <summary>Creates a decoder for one superblock compressor id.
     /// <para>为单个超级块压缩器标识创建解码器。</para></summary>
@@ -97,6 +99,11 @@ internal sealed class SquashfsBlockDecoder : IDisposable
     {
         _zstd?.Dispose();
         _zstd = null;
+        if (_lzoScratch is not null)
+        {
+            ArrayPool<byte>.Shared.Return(_lzoScratch);
+            _lzoScratch = null;
+        }
     }
 
     private static int DecompressZlib(byte[] payload, int payloadLength, byte[] destination, int capacity)
@@ -119,15 +126,38 @@ internal sealed class SquashfsBlockDecoder : IDisposable
         return output.Written;
     }
 
-    private static int DecompressLzo(byte[] payload, int payloadLength, byte[] destination, int capacity)
+    private int DecompressLzo(byte[] payload, int payloadLength, byte[] destination, int capacity)
     {
-        var status = Lzo1x.TryDecompress(payload.AsSpan(0, payloadLength), destination.AsSpan(0, capacity), out var written);
+        var scratch = EnsureLzoScratch(capacity);
+        var status = Lzo1x.TryDecompress(
+            payload.AsSpan(0, payloadLength),
+            destination.AsSpan(0, capacity),
+            scratch.AsSpan(0, capacity),
+            out var written);
         if (status != LzoStatus.Ok)
         {
             throw new FileSystemCorruptedException($"The SquashFS LZO block failed to decode ({status}).");
         }
 
         return written;
+    }
+
+    private byte[] EnsureLzoScratch(int capacity)
+    {
+        if (_lzoScratch is { } current && current.Length >= capacity)
+        {
+            return current;
+        }
+
+        if (_lzoScratch is not null)
+        {
+            ArrayPool<byte>.Shared.Return(_lzoScratch);
+            _lzoScratch = null;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(capacity);
+        _lzoScratch = rented;
+        return rented;
     }
 
     private static int DecompressXz(byte[] payload, int payloadLength, byte[] destination, int capacity)

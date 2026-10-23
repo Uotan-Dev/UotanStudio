@@ -150,37 +150,47 @@ internal static class OperationProcessor
     /// </summary>
     private static void ApplyBufferedDelta(InstallOperation op, Stream oldData, byte[] patchBytes, int patchLength, ExtentWriteStream output, int maximumOperationBytes, CancellationToken ct)
     {
+        var oldLength = checked((int)oldData.Length);
+        var outputLength = checked((int)output.Length);
         if (op.Type == InstallOperation.Types.Type.Puffdiff)
         {
-            var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
+            var oldBytes = ArrayPool<byte>.Shared.Rent(oldLength);
+            var result = ArrayPool<byte>.Shared.Rent(outputLength);
             try
             {
-                oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
-                output.Write(PuffDiffApplier.Apply(
+                oldData.ReadExactly(oldBytes.AsSpan(0, oldLength));
+                PuffDiffApplier.Apply(
                     patchBytes.AsSpan(0, patchLength),
-                    oldBytes.AsSpan(0, (int)oldData.Length)));
+                    oldBytes.AsSpan(0, oldLength),
+                    result,
+                    outputLength);
+                output.Write(result.AsSpan(0, outputLength));
             }
             finally
             {
                 ArrayPool<byte>.Shared.Return(oldBytes);
+                ArrayPool<byte>.Shared.Return(result);
             }
         }
         else if (op.Type == InstallOperation.Types.Type.Zucchini)
         {
-            var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
-            var result = ArrayPool<byte>.Shared.Rent(checked((int)output.Length));
+            var oldBytes = ArrayPool<byte>.Shared.Rent(oldLength);
+            var result = ArrayPool<byte>.Shared.Rent(outputLength);
             try
             {
-                oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
-                using var decoded = new MemoryStream(checked((int)output.Length));
+                oldData.ReadExactly(oldBytes.AsSpan(0, oldLength));
+                using var decoded = new PooledBufferStream(64 * 1024, maximumOperationBytes);
                 using (var decoder = new StrictBrotliReadStream(new MemoryStream(patchBytes, 0, patchLength, writable: false)))
                 using (var bounded = new CountingWriteStream(decoded, maximumOperationBytes, leaveOpen: true, cancellationToken: ct))
+                {
                     decoder.CopyTo(bounded);
+                }
+
                 ZucchiniPatchApplier.Apply(
-                    oldBytes.AsSpan(0, (int)oldData.Length),
-                    decoded.GetBuffer().AsSpan(0, checked((int)decoded.Length)),
-                    result.AsSpan(0, (int)output.Length));
-                output.Write(result.AsSpan(0, (int)output.Length));
+                    oldBytes.AsSpan(0, oldLength),
+                    decoded.WrittenSpan,
+                    result.AsSpan(0, outputLength));
+                output.Write(result.AsSpan(0, outputLength));
             }
             finally
             {
@@ -190,18 +200,21 @@ internal static class OperationProcessor
         }
         else if (op.Type is InstallOperation.Types.Type.Lz4diffBsdiff or InstallOperation.Types.Type.Lz4diffPuffdiff)
         {
-            var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
+            var oldBytes = ArrayPool<byte>.Shared.Rent(oldLength);
+            var result = ArrayPool<byte>.Shared.Rent(outputLength);
             try
             {
-                oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
-                output.Write(Lz4DiffApplier.Apply(
-                    oldBytes.AsSpan(0, (int)oldData.Length),
+                oldData.ReadExactly(oldBytes.AsSpan(0, oldLength));
+                Lz4DiffApplier.Apply(
+                    oldBytes.AsSpan(0, oldLength),
                     patchBytes.AsSpan(0, patchLength),
-                    checked((int)output.Length)));
+                    result.AsSpan(0, outputLength));
+                output.Write(result.AsSpan(0, outputLength));
             }
             finally
             {
                 ArrayPool<byte>.Shared.Return(oldBytes);
+                ArrayPool<byte>.Shared.Return(result);
             }
         }
         else throw new PayloadUnsupportedOperationException("Unsupported delta operation.", op.Type.ToString());

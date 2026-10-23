@@ -1,9 +1,8 @@
-using System.Security.Cryptography;
-using System.Text;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.FilesystemFixture;
 
@@ -20,9 +19,9 @@ internal sealed record ManifestEntry(
     IReadOnlyDictionary<string, string> Xattrs,
     ulong Inode)
 {
-    public string ToTsv()
+    public string ToManifestText()
     {
-        return string.Join('\t',
+        return string.Join('|',
             Type,
             Escape(Path),
             Convert.ToString(Mode & 0xFFF, 8),
@@ -38,9 +37,9 @@ internal sealed record ManifestEntry(
 
     private static string Escape(string value)
     {
-        if (value.Contains('\t') || value.Contains('\n') || value.Contains('\r'))
+        if (value.Contains('|') || value.Contains('\n') || value.Contains('\r'))
         {
-            throw new InvalidDataException("Manifest paths and link targets must not contain tabs or newlines.");
+            throw new InvalidDataException("Manifest paths and link targets must not contain pipes or newlines.");
         }
 
         return value;
@@ -71,7 +70,7 @@ internal sealed class ImageManifest
         return new ImageManifest(format, AssignHardlinks(entries));
     }
 
-    public string ToTsv() => string.Join('\n', Entries.Select(entry => entry.ToTsv())) + "\n";
+    public string ToManifestText() => string.Join('\n', Entries.Select(entry => entry.ToManifestText())) + "\n";
 
     public static IReadOnlyList<string> Compare(ImageManifest expected, ImageManifest actual)
     {
@@ -146,7 +145,7 @@ internal sealed class ImageManifest
     {
         using var parser = new ErofsParser(imagePath);
         var result = new List<ManifestEntry>();
-        foreach (var entry in parser.EnumerateFiles())
+        foreach (var entry in parser.EnumerateEntries())
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (entry.Path is "." or "")
@@ -256,5 +255,5 @@ internal sealed class ImageManifest
             : entry).OrderBy(entry => entry.Path, StringComparer.Ordinal).ToArray();
     }
 
-    private static string Hash(byte[] content) => Convert.ToHexStringLower(SHA256.HashData(content));
+    private static string Hash(byte[] content) => Convert.ToHexStringLower(Sha256.ComputeHash(content));
 }

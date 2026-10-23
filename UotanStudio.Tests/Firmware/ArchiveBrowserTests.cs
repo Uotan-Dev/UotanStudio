@@ -4,8 +4,9 @@ using UotanStudio.Compress;
 using UotanStudio.Firmware.Archive;
 using UotanStudio.Firmware.Archive.Browsing;
 using UotanStudio.Firmware.Archive.Models;
+using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.Tests.TestInfrastructure;
-using UotanStudio.Views.Controls;
+using UotanStudio.UiAbstractions;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -24,7 +25,7 @@ public sealed class ArchiveBrowserTests
         using var temp = new TempDirectory();
         var path = Path.Combine(temp.Path, "archive" + extension);
         File.WriteAllBytes(path, []);
-        Assert.Equal(EditorOpenMode.FileSystem, FileOpenMode.ResolveMode(path));
+        Assert.Equal(EditorOpenMode.FileSystem, DocumentFormatPolicy.ResolveMode(path));
     }
 
     [Fact]
@@ -49,7 +50,7 @@ public sealed class ArchiveBrowserTests
         var path = Path.Combine(temp.Path, "archive" + extension);
         using var raw = CreateTar();
         using (var output = File.Create(path)) CompressionService.Compress(raw, output, compression);
-        Assert.Equal(EditorOpenMode.FileSystem, FileOpenMode.ResolveMode(path));
+        Assert.Equal(EditorOpenMode.FileSystem, DocumentFormatPolicy.ResolveMode(path));
         using var browser = ArchiveBrowser.Open(path, Cancellation);
         Assert.Contains(browser.Members, entry => entry.Path == "nested/hello.txt" && entry.Size == 5);
         Assert.Contains(browser.Members, entry => entry.Path == "other.txt");
@@ -119,7 +120,7 @@ public sealed class ArchiveBrowserTests
             using (var stream = image.Open()) stream.Write([1, 2, 3, 4]);
         }
 
-        Assert.Equal(EditorOpenMode.FileSystem, FileOpenMode.ResolveMode(path));
+        Assert.Equal(EditorOpenMode.FileSystem, DocumentFormatPolicy.ResolveMode(path));
         using var browser = ArchiveBrowser.Open(path, Cancellation);
         Assert.Contains(browser.Members, entry => entry.Path == "META-INF" && entry.Kind == CpioFileType.Directory);
         Assert.Contains(browser.Members, entry => entry.Path == "META-INF/com/google/android/updater-script" && entry.Size > 0);
