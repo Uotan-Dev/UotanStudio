@@ -34,14 +34,14 @@ public class PayloadStreamingTests
     [Fact]
     public async Task Replace_DecodeRunsOutsideOutputLock()
     {
-        var payload = Enumerable.Range(0, 128 * 1024).Select(i => (byte)i).ToArray();
+        var payload = Enumerable.Range(0, 512 * 1024).Select(i => (byte)i).ToArray();
         using var secondReadReached = new ManualResetEventSlim();
         using var allowSecondRead = new ManualResetEventSlim();
         using var lockAttempted = new ManualResetEventSlim();
         using var lockAcquired = new ManualResetEventSlim();
         using var payloadStream = new PausingReadStream(payload, secondReadReached, allowSecondRead);
         var operation = CreateOperation(InstallOperation.Types.Type.Replace, payload, 4096,
-            new Extent { StartBlock = 0, NumBlocks = 32 });
+            new Extent { StartBlock = 0, NumBlocks = 128 });
         var writeLock = new object();
         using var output = CreateTemporaryFile(payload.Length, out var path);
         var replaceTask = Task.CompletedTask;

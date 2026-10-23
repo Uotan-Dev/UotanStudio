@@ -300,7 +300,7 @@ internal static class OperationProcessor
         switch (op.Type)
         {
             case InstallOperation.Types.Type.Replace:
-                var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+                var buffer = ArrayPool<byte>.Shared.Rent(256 * 1024);
                 try
                 {
                     while (true)

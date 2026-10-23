@@ -179,8 +179,8 @@ internal class PayloadExtractor
     /// Optional factory opening a partition-exclusive read-only payload stream (disposed before return).
     /// <para>可选的工厂，用于打开分区专属只读载荷流（返回前释放）。</para>
     /// </param>
-    /// <param name="operationWorkers">Optional cap on concurrently processed operations within this partition; when absent, the shared worker count applies.
-    /// <para>可选的本分区内并发操作数上限；未提供时采用共享的工作者数量。</para></param>
+    /// <param name="operationWorkers">Optional cap on concurrently processed operations within this partition; when absent, the payload worker policy applies (logical processors unless the configured count is below the default).
+    /// <para>可选的本分区内并发操作数上限；未提供时采用载荷 worker 策略（逻辑处理器数量，除非配置值低于默认值）。</para></param>
     /// <remarks>
     /// The operation-type classification and the Zucchini executable-type preflight both run before the temporary
     /// output is created, so an operation this library cannot apply never leaves a partial image behind. The preflight
@@ -242,7 +242,7 @@ internal class PayloadExtractor
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        var workers = operationWorkers ?? Core.FirmwareParallelism.Workers;
+        var workers = ResolveOperationWorkers(operationWorkers);
         if (blockSize == 0) throw new PartitionExtractionException("Payload block size must be nonzero.", partition.PartitionName);
         var totalSize = GetValidatedPartitionSize(partition, blockSize);
         var fullOutputPath = Path.GetFullPath(outFilename);
@@ -342,6 +342,10 @@ internal class PayloadExtractor
 
                 object writeLock = new();
                 var parallelZstd = parallelOps.Any(op => op.Type == InstallOperation.Types.Type.ReplaceZstd);
+                if (parallelZstd && workers > Core.FirmwareParallelism.Workers)
+                {
+                    workers = Core.FirmwareParallelism.Workers;
+                }
 
                 ZstdReplaceDecoder.ZstdDecodeContext? CreateZstdContext() => parallelZstd
                     ? new ZstdReplaceDecoder.ZstdDecodeContext(ZstdDictionaryFor(partition.PartitionName))
@@ -661,8 +665,8 @@ internal class PayloadExtractor
 
         HashSet<string>? extractSet = extractFiles.Length > 0 ? [.. extractFiles] : null;
 
-        var selected = manifest.Partitions.Where(p => !string.IsNullOrEmpty(p.PartitionName)
-            && (extractSet is null || extractSet.Contains(p.PartitionName))).ToArray();
+        var selected = OrderPartitionsForScheduling(manifest.Partitions.Where(p => !string.IsNullOrEmpty(p.PartitionName)
+            && (extractSet is null || extractSet.Contains(p.PartitionName))).ToArray(), manifest.BlockSize);
 
         long totalBytes = 0;
         if (byteProgress is not null)
@@ -670,7 +674,7 @@ internal class PayloadExtractor
         var crossProgress = byteProgress is null ? null : new CrossPartitionProgress(byteProgress, totalBytes);
         byteProgress?.Report((0, totalBytes));
 
-        var workers = Core.FirmwareParallelism.Workers;
+        var workers = ResolveOperationWorkers(null);
         var (partitionConcurrency, operationWorkers) = AllocateOperationWorkers(selected, workers);
         try
         {
@@ -692,8 +696,8 @@ internal class PayloadExtractor
         byteProgress?.Report((totalBytes, totalBytes));
     }
 
-    /// <summary>Asynchronously extracts all matching partitions from the manifest to the output directory. Partitions are processed with bounded parallelism (<see cref="Core.FirmwareParallelism.Workers"/>); byte-level progress is aggregated across all partitions via a thread-safe accumulator.
-    /// <para>异步从清单中提取所有匹配的分区到输出目录。分区按有界并行度（<see cref="Core.FirmwareParallelism.Workers"/>） 处理；字节级进度通过线程安全累计器跨分区聚合。</para></summary>
+    /// <summary>Asynchronously extracts all matching partitions from the manifest to the output directory. Payload decode is CPU-bound, so an unmodified default worker setting is raised to the logical processor count and each partition then keeps that full budget; a configured count below the default stays an explicit cap. Byte-level progress is aggregated across all partitions via a thread-safe accumulator.
+    /// <para>异步从清单中提取所有匹配的分区到输出目录。载荷解码是 CPU 密集工作，因此未修改的默认 worker 设置会提升到逻辑处理器数量，每个分区随后使用完整预算；低于默认值的配置仍作为显式上限。字节级进度通过线程安全累计器跨分区聚合。</para></summary>
     /// <param name="manifest">Parsed payload manifest whose partition list is filtered and whose block size bounds every extraction; <see langword="null"/> is rejected.
     /// <para>已解析的载荷清单，其分区列表会被筛选，块大小约束每次提取；不接受 <see langword="null"/>。</para></param>
     /// <param name="stream">Shared payload data stream holding the operation blobs; <see langword="null"/> is rejected and ownership stays with the caller.
@@ -730,8 +734,8 @@ internal class PayloadExtractor
 
         HashSet<string>? extractSet = extractFiles.Length > 0 ? [.. extractFiles] : null;
 
-        var selected = manifest.Partitions.Where(p => !string.IsNullOrEmpty(p.PartitionName)
-            && (extractSet is null || extractSet.Contains(p.PartitionName))).ToArray();
+        var selected = OrderPartitionsForScheduling(manifest.Partitions.Where(p => !string.IsNullOrEmpty(p.PartitionName)
+            && (extractSet is null || extractSet.Contains(p.PartitionName))).ToArray(), manifest.BlockSize);
 
         long totalBytes = 0;
         if (byteProgress is not null)
@@ -740,7 +744,7 @@ internal class PayloadExtractor
         var crossProgress = byteProgress is null ? null : new CrossPartitionProgress(byteProgress, totalBytes);
         byteProgress?.Report((0, totalBytes));
 
-        var workers = Core.FirmwareParallelism.Workers;
+        var workers = ResolveOperationWorkers(null);
         var (partitionConcurrency, operationWorkers) = AllocateOperationWorkers(selected, workers);
         try
         {
@@ -771,10 +775,42 @@ internal class PayloadExtractor
             .Select(e => checked((long)checked(checked(e.StartBlock + e.NumBlocks) * blockSize))).DefaultIfEmpty(0).Max();
 
     /// <summary>
-    /// Distributes the worker budget across partitions proportionally to each partition's parallelizable
-    /// operation count, so REPLACE-heavy partitions get most decode workers while sequential-only ones keep one.
+    /// Orders partitions by descending output size so a schedule that must serialize partitions starts the largest
+    /// work first and never leaves operation workers idle behind a short partition.
+    /// <para>按输出大小降序排列分区，使必须串行处理分区的调度先开始最大工作量，不会让操作工作者空等在小分区之后。</para>
+    /// </summary>
+    /// <param name="selected">Partitions chosen for one extraction run.
+    /// <para>单次提取选中的分区。</para></param>
+    /// <param name="blockSize">Manifest block size used to derive each partition's output size.
+    /// <para>用于推导各分区输出大小的清单块大小。</para></param>
+    /// <returns>The same partitions ordered from largest to smallest computed output size.
+    /// <para>同一组分区，按计算出的输出大小从大到小排列。</para></returns>
+    private static PartitionUpdate[] OrderPartitionsForScheduling(PartitionUpdate[] selected, uint blockSize)
+    {
+        if (selected.Length <= 1)
+        {
+            return selected;
+        }
+
+        var sizes = new long[selected.Length];
+        for (var i = 0; i < selected.Length; i++)
+        {
+            sizes[i] = ProgressSize(selected[i], blockSize);
+        }
+
+        return [.. Enumerable.Range(0, selected.Length)
+            .OrderByDescending(i => sizes[i])
+            .Select(i => selected[i])];
+    }
+
+    /// <summary>
+    /// Distributes the worker budget across partitions proportionally to each partition's parallelizable operation
+    /// count, so REPLACE-heavy partitions get most decode workers while sequential-only ones keep one. When more
+    /// partitions are selected than workers, the run is serialized per partition and every partition keeps the full
+    /// worker budget: a fixed one-worker allocation would idle most cores behind the largest partition.
     /// <para>按各分区可并行操作数量成比例地分配 worker 预算，使 REPLACE 为主的大分区获得多数解码 worker，
-    /// 纯串行分区保留一个。</para>
+    /// 纯串行分区保留一个。当选中分区数超过 worker 数时，运行按分区串行化且每个分区保留完整 worker 预算：
+    /// 固定分配一个 worker 会让多数核心空等在大分区之后。</para>
     /// </summary>
     /// <returns>
     /// The partition-level concurrency (how many partitions may run at once) and the per-partition
@@ -788,7 +824,7 @@ internal class PayloadExtractor
         if (count == 0) return (0, []);
         if (count > workers)
         {
-            return (workers, Enumerable.Repeat(1, count).ToArray());
+            return (1, Enumerable.Repeat(workers, count).ToArray());
         }
 
         var weights = new long[count];
@@ -914,6 +950,33 @@ internal class PayloadExtractor
 
             sink.Add(delta);
         }
+    }
+
+    /// <summary>
+    /// Resolves the operation-worker budget for one payload run. Payload extraction is CPU-bound decode work, so an
+    /// unmodified default setting is raised to every logical processor, while a configured count below the default is
+    /// kept as an explicit cap and a higher configured count is honoured.
+    /// <para>解析单次载荷运行的 worker 预算。载荷提取是 CPU 密集的解码工作，因此未修改的默认设置会提升到全部逻辑
+    /// 处理器；低于默认值的显式配置被保留为上限，高于默认值的配置被沿用。</para>
+    /// </summary>
+    /// <param name="requested">Optional per-call worker count; when present it is returned unchanged.
+    /// <para>可选的单次调用 worker 数量；提供时原样返回。</para></param>
+    /// <returns>The worker count to use for the run, at most <see cref="Core.FirmwareParallelism.MaximumWorkers"/>.
+    /// <para>本次运行采用的 worker 数量，不超过 <see cref="Core.FirmwareParallelism.MaximumWorkers"/>。</para></returns>
+    private static int ResolveOperationWorkers(int? requested)
+    {
+        if (requested is { } value)
+        {
+            return value;
+        }
+
+        var configured = Core.FirmwareParallelism.Workers;
+        if (configured < Core.FirmwareParallelism.DefaultWorkers)
+        {
+            return configured;
+        }
+
+        return Math.Min(Core.FirmwareParallelism.MaximumWorkers, Math.Max(configured, Environment.ProcessorCount));
     }
 
     /// <summary>
