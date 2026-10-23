@@ -276,6 +276,15 @@ public partial class ImageView : UserControl
     private void OnSynthesizeDatMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuImage(sender, static vm => vm.SynthesizeDatCommand);
 
+    /// <summary>Refresh the image list from the context menu. <para>从右键菜单刷新镜像列表。</para></summary>
+    private void OnRefreshMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ImageViewModel vm && vm.RefreshCommand.CanExecute(null))
+        {
+            vm.RefreshCommand.Execute(null);
+        }
+    }
+
     /// <summary>Delete the output file or the entry's unpacked directory. <para>删除输出文件或右键条目对应的解包目录。</para></summary>
     private async void OnDeleteMenuClick(object? sender, RoutedEventArgs e)
     {

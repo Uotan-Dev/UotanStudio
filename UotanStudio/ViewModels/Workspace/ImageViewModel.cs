@@ -470,6 +470,26 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
+    /// Selects all visible image entries in the current list, or clears the selection when all visible entries are already selected.
+    /// <para>全选当前列表中的可见镜像条目；若全部可见条目已选中则取消全选。</para>
+    /// </summary>
+    [RelayCommand]
+    private void SelectAll()
+    {
+        var visible = Images.Where(image => image.IsVisible).ToList();
+        if (visible.Count == 0)
+        {
+            return;
+        }
+
+        var shouldSelect = !visible.All(image => image.IsSelected);
+        foreach (var image in visible)
+        {
+            image.IsSelected = shouldSelect;
+        }
+    }
+
+    /// <summary>
     /// Manually refreshes the image list: re-scans the project images/ directory and registers known-format images.
     /// <para>手动刷新镜像列表：重新扫描工程 images/ 目录并注册已知格式镜像。</para>
     /// </summary>
