@@ -100,7 +100,6 @@ public class ErofsParallelReadIsolationTests
         => new ErofsBuilder().Build(source, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
         });
 
     private static string CreateSource(TempDirectory temp)

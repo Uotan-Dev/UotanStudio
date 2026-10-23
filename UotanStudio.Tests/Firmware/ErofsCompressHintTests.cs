@@ -131,18 +131,21 @@ public sealed class ErofsCompressHintTests
     }
 
     [Fact]
-    public void Build_CompressHintAboveConfiguredMaximum_FailsLoudly()
+    public void Build_CompressHintAboveConfiguredMaximum_RaisesTheBuildMaximum()
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", Compressible(8 * BlockSize));
         var options = PinnedOptions();
         options.CompressHints = [@"8192 data\.bin"];
 
-        var exception = Assert.Throws<FileSystemUnsupportedFeatureException>(
-            () => new ErofsBuilder().Build(source.Path, options));
+        var image = new ErofsBuilder().Build(source.Path, options);
 
-        Assert.Contains("8192", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("configured maximum", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(8192, options.MaxPclusterSize);
+        var warning = Assert.Single(options.BuildWarnings);
+        Assert.Contains("8192", warning, StringComparison.Ordinal);
+        Assert.Contains("raised", warning, StringComparison.Ordinal);
+        using var parser = new ErofsParser(image);
+        Assert.Equal(8 * BlockSize, parser.ReadFileBytes("data.bin").Length);
     }
 
     [Fact]

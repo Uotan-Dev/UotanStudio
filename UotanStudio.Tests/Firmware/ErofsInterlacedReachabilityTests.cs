@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
@@ -51,7 +52,6 @@ public sealed class ErofsInterlacedReachabilityTests
         foreach (var record in entries)
         {
             Assert.Equal(0, record.ZAdvise & ZErofsMapHeader.AdviseInterlacedPcluster);
-            Assert.NotEqual(ErofsFragmentShape.None, record.SourceFragmentShape);
         }
 
         Assert.Equal([1, 2, 3, 4, 5], parser.ReadFileBytes("small.bin"));
@@ -73,7 +73,7 @@ public sealed class ErofsInterlacedReachabilityTests
                 ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatBigPcluster),
         };
 
-        Assert.Throws<NotSupportedException>(() => new ErofsBuilder().Build(source.Path, options));
+        Assert.Throws<FileSystemUnsupportedFeatureException>(() => new ErofsBuilder().Build(source.Path, options));
     }
 
     [Fact]

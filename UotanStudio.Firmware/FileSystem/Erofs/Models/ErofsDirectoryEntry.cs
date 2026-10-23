@@ -6,8 +6,6 @@ internal sealed class ErofsDirectoryEntry
 {
     public const int DirentSize = 12;
 
-    private const ushort NameOffLimit = 0x7FFF;
-
     public ulong Nid { get; set; }
 
     public ushort NameOff { get; set; }
@@ -43,14 +41,27 @@ internal sealed class ErofsDirectoryEntry
         };
     }
 
+    /// <summary>Parses one compact directory block whose size is the block length itself.
+    /// <para>解析一个 compact 目录块，块大小取该块自身的字节长度。</para></summary>
+    /// <param name="block">Directory block bytes; a span shorter than <see cref="DirentSize"/> bytes parses as an empty list.
+    /// <para>目录块字节；长度不足 <see cref="DirentSize"/> 字节时结果为空列表。</para></param>
+    /// <returns>The decoded entries in on-disk order.<para>按磁盘顺序解码出的条目。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The block is internally inconsistent, as described by
+    /// <see cref="ParseBlock(ReadOnlySpan{byte}, int)"/>.
+    /// <para>块内部不一致，具体条件见 <see cref="ParseBlock(ReadOnlySpan{byte}, int)"/>。</para></exception>
+    public static List<ErofsDirectoryEntry> ParseBlock(ReadOnlySpan<byte> block)
+        => ParseBlock(block, block.Length);
+
     /// <summary>Parses one compact directory block and reports on-disk ordering and corruption.
     /// <para>解析一个 compact 目录块，并按磁盘顺序返回条目、对损坏输入上报。</para></summary>
     /// <param name="block">Directory block bytes whose first dirent nameoff selects both the start of the name area and the byte size of the dirent array; a block shorter than <see cref="DirentSize"/> bytes parses as an empty list.
     /// <para>目录块字节；首条 dirent 的 nameoff 同时决定名称区起点与 dirent 数组的字节长度。块长不足 <see cref="DirentSize"/> 字节时结果为空列表。</para></param>
+    /// <param name="blockSize">Directory block size in bytes that bounds every nameoff; values at or above it are rejected, so a 64 KiB block accepts the ushort nameoff range the format allows.
+    /// <para>目录块字节大小，作为每条 nameoff 的上界；达到或超过它即被拒绝，因此 64 KiB 块可以使用格式允许的 ushort nameoff 范围。</para></param>
     /// <returns>The decoded entries in on-disk order.<para>按磁盘顺序解码出的条目。</para></returns>
-    /// <exception cref="FileSystemCorruptedException">The first nameoff has bit 15 set, is below <see cref="DirentSize"/>, is past the block end or is not a multiple of <see cref="DirentSize"/>; some later nameoff is not the running name end; or a name length is zero, above 255, or runs past the block.
-    /// <para>首条 nameoff 置有第 15 位、小于 <see cref="DirentSize"/>、超出块尾或不是 <see cref="DirentSize"/> 的整数倍；后续某条 nameoff 不等于运行中的名称结束位置；或名称长度为零、超过 255、或越出块外。</para></exception>
-    public static List<ErofsDirectoryEntry> ParseBlock(ReadOnlySpan<byte> block)
+    /// <exception cref="FileSystemCorruptedException">The first nameoff is below <see cref="DirentSize"/>, reaches the block size, is past the block end or is not a multiple of <see cref="DirentSize"/>; some later nameoff is not the running name end or reaches the block size; or a name length is zero, above 255, or runs past the block.
+    /// <para>首条 nameoff 小于 <see cref="DirentSize"/>、达到块大小、超出块尾或不是 <see cref="DirentSize"/> 的整数倍；后续某条 nameoff 不等于运行中的名称结束位置或达到块大小；或名称长度为零、超过 255、或越出块外。</para></exception>
+    public static List<ErofsDirectoryEntry> ParseBlock(ReadOnlySpan<byte> block, int blockSize)
     {
         var result = new List<ErofsDirectoryEntry>();
         if (block.Length < DirentSize)
@@ -58,17 +69,24 @@ internal sealed class ErofsDirectoryEntry
             return result;
         }
 
-        var nameOff0 = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(8, 2));
-        if (nameOff0 < DirentSize || nameOff0 > NameOffLimit || nameOff0 > block.Length || nameOff0 % DirentSize != 0)
+        if (blockSize < DirentSize)
         {
-            throw new FileSystemCorruptedException($"Invalid EROFS dirent array size {nameOff0}.");
+            throw new ArgumentOutOfRangeException(nameof(blockSize), blockSize,
+                "A directory block must hold at least one dirent.");
+        }
+
+        var nameOff0 = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(8, 2));
+        if (nameOff0 < DirentSize || nameOff0 >= blockSize || nameOff0 > block.Length || nameOff0 % DirentSize != 0)
+        {
+            throw new FileSystemCorruptedException(
+                $"Invalid EROFS dirent array size {nameOff0} for a {blockSize}-byte directory block.");
         }
 
         var expectedNameOff = (int)nameOff0;
         for (var position = 0; position < nameOff0; position += DirentSize)
         {
             var nameOff = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(position + 8, 2));
-            if (nameOff > NameOffLimit || nameOff != expectedNameOff)
+            if (nameOff >= blockSize || nameOff != expectedNameOff)
             {
                 throw new FileSystemCorruptedException(
                     $"Non-contiguous EROFS dirent nameoff {nameOff}, expected {expectedNameOff}.");
@@ -128,13 +146,16 @@ internal sealed class ErofsDirectoryEntry
     /// <para>目录块大小（字节），既是块间的步进也是每块的解析长度；最后一块按剩余字节解析。</para></param>
     /// <returns>The entries of every block concatenated in block order.
     /// <para>按块顺序拼接得到的全部条目。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="blockSize"/> is smaller than
+    /// <see cref="DirentSize"/>. <para><paramref name="blockSize"/> 小于 <see cref="DirentSize"/>。</para></exception>
     public static List<ErofsDirectoryEntry> ParseDirectory(ReadOnlySpan<byte> data, int blockSize)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(blockSize, DirentSize);
         var result = new List<ErofsDirectoryEntry>();
         for (var offset = 0; offset + DirentSize <= data.Length; offset += blockSize)
         {
             var length = Math.Min(blockSize, data.Length - offset);
-            result.AddRange(ParseBlock(data.Slice(offset, length)));
+            result.AddRange(ParseBlock(data.Slice(offset, length), blockSize));
         }
 
         return result;

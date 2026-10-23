@@ -191,6 +191,7 @@ public sealed class ErofsBuilderReplayTests
         options.ExtraDeviceCount = 1;
         options.ExtraDeviceImages = [Device("blob.img")];
         options.Features = ErofsFeatureSet.Auto
+            .With(ErofsFeature.Lz4ZeroPadding)
             .With(ErofsFeature.DeviceTable)
             .With(ErofsFeature.ChunkedFile)
             .With(ErofsFeature.FortyEightBit);

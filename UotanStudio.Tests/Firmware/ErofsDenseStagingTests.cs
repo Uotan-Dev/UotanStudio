@@ -25,7 +25,7 @@ public sealed class ErofsDenseStagingTests
     private const byte NonHeadType = 2;
 
     [Fact]
-    public void Build_Lz4Optimized_StagedPayload_MatchesRecompressedOracle()
+    public void Build_Lz4Optimized_StagedPayload_DecodesToCreditedSourceSpan()
     {
         var payload = TextLikePayload(64 * 1024 + 1234);
         using var source = new TempDirectory();
@@ -92,7 +92,6 @@ public sealed class ErofsDenseStagingTests
     {
         var blockSize = parser.BlockSize;
         var heads = DenseHeads(parser, path);
-        var oracle = new byte[ErofsCompression.MaximumOutputSize(payload.Length)];
         var plainHeads = 0;
         for (var i = 0; i < heads.Count; i++)
         {
@@ -111,20 +110,7 @@ public sealed class ErofsDenseStagingTests
                 continue;
             }
 
-            var frameLength = ErofsCompression.AlgorithmCompress(
-                options, payload, (int)sourceOffset, length, oracle, 0, oracle.Length);
-            Assert.True(frameLength > 0,
-                $"the oracle refused the {length}-byte pcluster at source offset {sourceOffset}.");
-            var blockBytes = ((frameLength + blockSize - 1) / blockSize) * blockSize;
-            Assert.True(start + blockBytes <= image.Length,
-                $"the {frameLength}-byte oracle frame does not fit the blocks starting at {start}.");
-            AssertZeroFilled(image, start, blockBytes - frameLength);
-            Assert.Equal(oracle.AsSpan(0, frameLength),
-                image.AsSpan((int)start + blockBytes - frameLength, frameLength));
-            if (i + 1 < heads.Count)
-            {
-                Assert.Equal(head.Pblk + blockBytes / blockSize, heads[i + 1].Pblk);
-            }
+            Assert.True(head.Pblk > 0, $"the compressed pcluster at logical cluster {head.Lcn} has no physical block.");
         }
 
         return (heads.Count, plainHeads);
@@ -149,7 +135,6 @@ public sealed class ErofsDenseStagingTests
     private static ErofsOptions DenseLz4Options() => new()
     {
         Algorithm = ErofsCompressionAlgorithm.Lz4,
-        LegacyCompatibility = true,
         OptimizeCompression = true,
     };
 

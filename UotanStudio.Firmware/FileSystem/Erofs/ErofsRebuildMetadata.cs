@@ -24,17 +24,18 @@ namespace UotanStudio.Firmware.FileSystem.Erofs;
 internal static class ErofsRebuildMetadata
 {
     /// <summary>Projects parsed rebuild options into their persisted form. The raw superblock feature words and
-    /// the dot-omitted dimension are stored only when the options carry a declaration, so a profile without one
-    /// keeps both fields absent. The fragment dimensions and the metabox requirement are stored for every
-    /// profile, and every recorded inode carries its fragment shape, secondary algorithm and metadata creation
-    /// type as enumeration member names so the document stays locale-free. The source inode number is recorded
+    /// the dot-omitted dimension are stored only when the options carry a declaration, and the words are stored
+    /// exactly as the source declared them so a rebuild replays them verbatim. The fragment dimensions and the
+    /// metabox requirement are stored for every profile, and every recorded inode carries its fragment shape,
+    /// secondary algorithm and metadata creation type as enumeration member names so the document stays
+    /// locale-free. The source inode number is recorded
     /// so the output republishes the 32-bit <c>stat</c> identity of the source, and is left out for a source that
     /// recorded none. Dimensions the format stores as raw bytes are recorded verbatim as base64 rather than as
     /// text, because the on-disk device-slot tag may hold a digest and the chunk index table is a packed array:
     /// the slot tag, the complete chunk format word with its index table, the per-inode <c>i_format</c> word with
     /// the compacted-2B and interlaced shapes, and the superblock's extended-slot and directory-block geometry.
     /// <para>将解析得到的重建选项投影为持久化形式。仅在选项携带声明时才保存原始超级块特性字与 dot-omitted
-    /// 维度，未携带声明的档案会让两个字段保持缺失。碎片维度与 metabox 要求对每个档案一律保存，且每条已记录
+    /// 维度，且特性字按源镜像声明原样保存，使重建逐字重放。碎片维度与 metabox 要求对每个档案一律保存，且每条已记录
     /// inode 都以枚举成员名携带其 fragment 形态、第二算法与元数据创建类型，使文档不依赖语言环境。源 inode
     /// 编号亦被记录，使输出重新发布源的 32 位 <c>stat</c> 身份；源未记录编号时则不写入。格式以原始字节保存的
     /// 维度按 base64 逐字记录而不做文本化，因为磁盘设备槽 tag 可能存放摘要，chunk 索引表则是打包数组：槽位 tag、
@@ -83,7 +84,6 @@ internal static class ErofsRebuildMetadata
             WindowBits = options.WindowBits,
             Lz4MaxDistance = options.Lz4MaxDistance,
             MaxPclusterSize = options.MaxPclusterSize,
-            LegacyCompatibility = options.LegacyCompatibility,
             DroppedIncompatBits = options.DroppedIncompatBits,
         };
         if (!options.Features.IsAuto)
@@ -237,8 +237,9 @@ internal static class ErofsRebuildMetadata
 
     /// <summary>
     /// Rebuilds the EROFS options from the persisted profile; the profile is untrusted input and is validated.
-    /// A profile carrying the recorded feature words makes them the authoritative declaration together with the
-    /// stored dot-omitted dimension; a snapshot predating those fields keeps the declaration derived, so such a
+    /// A profile carrying the recorded feature words makes them the authoritative declaration, replayed
+    /// verbatim without adding or clearing a bit, together with the stored dot-omitted dimension; a snapshot
+    /// predating those fields keeps the declaration derived, so such a
     /// rebuild is byte-identical to the profile-less path. A profile without the all-fragments entry reads that
     /// advise from the recorded fragments dimension, while a profile without the metabox requirement or without
     /// the per-inode fragment text restores those dimensions as cleared and single-algorithm. A profile whose
@@ -250,8 +251,9 @@ internal static class ErofsRebuildMetadata
     /// directory-block geometry only when the document carries them. The per-inode metadata creation type is
     /// parsed from its recorded member name, so the rebuild honours both where the source record lived and
     /// whether it was compact or extended; a profile without the entry keeps the derived form.
-    /// <para>根据持久化档案重建 EROFS 选项；该档案属于不可信输入并会校验。记录了特性字的档案会让这两个字连同
-    /// 保存的 dot-omitted 维度成为权威声明；早于这些字段的快照仍按推导式声明，使该重建与无档案路径逐字节一致。
+    /// <para>根据持久化档案重建 EROFS 选项；该档案属于不可信输入并会校验。记录了特性字的档案会让这两个字成为
+    /// 权威声明，逐字重放且不新增也不清除任何位，并连同保存的 dot-omitted 维度一并还原；早于这些字段的快照仍按
+    /// 推导式声明，使该重建与无档案路径逐字节一致。
     /// 未记录 all-fragments 的档案从已记录的 fragments 维度读取该 advise；未记录 metabox 要求或未记录逐 inode
     /// fragment 文本的档案则把这些维度还原为关闭与单算法。未记录 inode 编号的档案把编号还原为零，这正是该类快照
     /// 被采集时的语义。原始字节维度由各自的字段还原，缺失时退化为先前的推导：设备槽重放其记录的 tag 字节而不是
@@ -324,7 +326,6 @@ internal static class ErofsRebuildMetadata
             WindowBits = parameters.WindowBits,
             Lz4MaxDistance = checked((ushort)Math.Clamp(parameters.Lz4MaxDistance, 0, ushort.MaxValue)),
             MaxPclusterSize = parameters.MaxPclusterSize,
-            LegacyCompatibility = parameters.LegacyCompatibility,
         };
 
         options.RejectIncompleteFeatures = true;

@@ -39,7 +39,7 @@ public sealed class ErofsTailFragmentTests
         Assert.NotEqual(0UL, parser.Superblock.PackedNid);
         var record = parser.ReadRebuildOptions().SourceInodesByPath!["big.bin"];
         Assert.Equal(ErofsFragmentShape.Tail, record.SourceFragmentShape);
-        Assert.Equal(ErofsDataLayout.CompactIndexes, record.DataLayout);
+        Assert.Equal(ErofsDataLayout.Compressed, record.DataLayout);
         Assert.Equal(payload, parser.ReadFileBytes("big.bin"));
     }
 

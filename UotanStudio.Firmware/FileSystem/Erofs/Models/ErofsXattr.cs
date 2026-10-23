@@ -115,7 +115,7 @@ internal static class ErofsXattr
     /// <summary>
     /// Splits a whole prefix text into the table record that stores it: the built-in prefix the text
     /// starts with becomes the base index and everything after it the infix, or base index zero for the
-    /// hidden internal namespace when no built-in prefix matches. A caller that already knows the exact
+    /// empty namespace when no built-in prefix matches. A caller that already knows the exact
     /// prefix uses this to register it verbatim, because the automatic splitter only registers prefixes
     /// that leave a name behind and would otherwise shorten a configured prefix.
     /// <para>把完整前缀文本拆成存储它的表记录：文本开头命中的内置前缀成为 base index，其后全部成为
@@ -194,20 +194,23 @@ internal static class ErofsXattr
 
     /// <summary>
     /// Default short-prefix lookup: maps a name index to its default prefix string (e.g. 1 → "user.").
-    /// <para>默认短前缀查找：将名称索引映射到默认前缀字符串（如 1 → "user."）。</para>
+    /// Index 0 maps to the empty prefix, which upstream <c>xattr_types[0] = {""}</c> defines as a namespace
+    /// of its own, so a name carrying it is stored and resolved verbatim.
+    /// <para>默认短前缀查找：将名称索引映射到默认前缀字符串（如 1 → "user."）。索引 0 映射到空前缀，
+    /// 上游 <c>xattr_types[0] = {""}</c> 把它定义为一个自有命名空间，因此携带它的名称按原样存储与解析。</para>
     /// </summary>
     /// <param name="nameIndex">On-disk name index with no long-prefix flag applied; values below seven address the built-in table.
     /// <para>未置长前缀标志的磁盘名称索引；小于 7 时指向内置表。</para></param>
-    /// <param name="prefix">Matched prefix text, or <c>string.Empty</c> when the index is unknown or refers to the empty slot 0.
-    /// <para>匹配到的前缀文本；索引未知或指向空槽 0 时为 <c>string.Empty</c>。</para></param>
-    /// <returns><see langword="true"/> when a non-empty default prefix was found, which is index 1 through 6.
-    /// <para>找到非空默认前缀（索引 1 到 6）时返回 <see langword="true"/>。</para></returns>
+    /// <param name="prefix">Matched prefix text, which is <c>string.Empty</c> for index 0, or empty when the index names no table slot.
+    /// <para>匹配到的前缀文本；索引 0 为 <c>string.Empty</c>，索引不指名任何表槽时也为空。</para></param>
+    /// <returns><see langword="true"/> when the index addresses a defined table slot, including the empty namespace 0 and the non-empty prefixes 1 through 6.
+    /// <para>索引指向已定义表槽时返回 <see langword="true"/>，包含空命名空间 0 与非空的 1 到 6。</para></returns>
     public static bool TryGetDefaultPrefix(byte nameIndex, out string prefix)
     {
         if (nameIndex < DefaultPrefixes.Length)
         {
             prefix = DefaultPrefixes[nameIndex];
-            return prefix.Length > 0;
+            return nameIndex == 0 || prefix.Length > 0;
         }
 
         prefix = string.Empty;
@@ -630,10 +633,10 @@ internal static class ErofsXattr
     /// <para>用文件名编码解码的磁盘短名字节；空区间不会为结果增加内容。</para></param>
     /// <param name="prefixTable">Table from <see cref="ParsePrefixTable"/>, or <see langword="null"/> when the image defines none, in which case a long-prefixed name cannot be resolved.
     /// <para>由 <see cref="ParsePrefixTable"/> 得到的表；镜像未定义时为 <see langword="null"/>，此时带长前缀的名称无法解析。</para></param>
-    /// <returns>The default prefix of the resolved base index, then the long-prefix infix when present, then the decoded short name.
-    /// <para>解析出的基准索引对应的默认前缀，其次是长前缀 infix（存在时），最后是解码后的短名。</para></returns>
-    /// <exception cref="FileSystemCorruptedException">The name index is 5, above 6, names an unknown long prefix, or names no default prefix.
-    /// <para>名称索引为 5、大于 6、指名未知长前缀，或未指名任何默认前缀。</para></exception>
+    /// <returns>The default prefix of the resolved base index, then the long-prefix infix when present, then the decoded short name. Index 0 contributes no prefix.
+    /// <para>解析出的基准索引对应的默认前缀，其次是长前缀 infix（存在时），最后是解码后的短名；索引 0 不贡献前缀。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The name index is 5, above 6, names an unknown long prefix, or names a table slot the format does not define.
+    /// <para>名称索引为 5、大于 6、指名未知长前缀，或指名格式未定义的表槽。</para></exception>
     public static string ResolveName(
         byte nameIndex,
         ReadOnlySpan<byte> rawName,
@@ -661,13 +664,13 @@ internal static class ErofsXattr
     }
 
     /// <summary>
-    /// Rejects an <c>e_name_index</c> that names no default namespace: the format defines 1 through 6
-    /// (<c>include/erofs_fs.h</c>), upstream <c>xattr_types[]</c> leaves slot 5 empty, and index 0 is the
-    /// hidden namespace a long-prefix record extends. A long-prefix index is a table position, so only its
-    /// table bounds are checked, by the resolver that owns the table.
-    /// <para>拒绝不指名任何默认命名空间的 <c>e_name_index</c>：格式定义 1 到 6
-    /// （<c>include/erofs_fs.h</c>），上游 <c>xattr_types[]</c> 让槽位 5 留空，索引 0 是长前缀记录所扩展的
-    /// 内部隐藏命名空间。长前缀索引是表内位置，只由持有该表的解析方检查其表边界。</para>
+    /// Rejects an <c>e_name_index</c> that names no default namespace: the format defines 0 through 6
+    /// (<c>include/erofs_fs.h</c>), where 0 is the empty namespace upstream <c>xattr_types[]</c> declares for
+    /// names stored without a prefix, and 5 is the empty slot neither side may use. A long-prefix index is a
+    /// table position, so only its table bounds are checked, by the resolver that owns the table.
+    /// <para>拒绝不指名任何默认命名空间的 <c>e_name_index</c>：格式定义 0 到 6
+    /// （<c>include/erofs_fs.h</c>），其中 0 是上游 <c>xattr_types[]</c> 为无前缀名称声明的空命名空间，5 是
+    /// 双方都不得使用的空槽。长前缀索引是表内位置，只由持有该表的解析方检查其表边界。</para>
     /// </summary>
     /// <param name="nameIndex">On-disk <c>e_name_index</c>.<para>磁盘上的 <c>e_name_index</c>。</para></param>
     /// <exception cref="FileSystemCorruptedException">A plain index is 5 or above 7.

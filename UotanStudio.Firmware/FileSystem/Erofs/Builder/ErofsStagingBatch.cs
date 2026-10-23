@@ -5,12 +5,12 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
 
 /// <summary>
 /// Collects the frames a planning worker accepts into one local buffer and hands them to the shared staging
-/// file a whole block at a time, so the staging lock and the file write happen once per block instead of once
-/// per frame. Frames are laid out back to back in the order they were appended, and every plan receives its
-/// absolute offset when its block is committed, which keeps the staging layout a detail no index or payload
-/// byte depends on.
-/// <para>把规划工作者接受的帧先收进本地缓冲，再以整块为单位交给共享暂存文件，使暂存锁与文件写入每块各发生
-/// 一次而不是每帧一次。帧按追加顺序首尾相接，每个规划项在其所属块提交时取得绝对偏移，因此暂存布局始终是
+/// area a whole block at a time, so the staging lock and the copy or write behind it happen once per block
+/// instead of once per frame. Frames are laid out back to back in the order they were appended, and every
+/// plan receives its absolute offset when its block is committed, so the staging layout stays a detail
+/// no index or payload byte depends on.
+/// <para>把规划工作者接受的帧先收进本地缓冲，再以整块为单位交给共享暂存区，使暂存锁与随后的复制或写入每块
+/// 各发生一次而不是每帧一次。帧按追加顺序首尾相接，每个规划项在其所属块提交时取得绝对偏移，因此暂存布局始终是
 /// 不进入任何索引或负载字节的实现细节。</para>
 /// </summary>
 internal sealed class ErofsStagingBatch : IDisposable
@@ -23,11 +23,11 @@ internal sealed class ErofsStagingBatch : IDisposable
     private int _length;
 
     /// <summary>
-    /// Creates a batch over the build's shared staging file.
-    /// <para>在为本次构建共享的暂存文件之上创建批量写入器。</para>
+    /// Creates a batch over the build's shared staging area.
+    /// <para>在为本次构建共享的暂存区之上创建批量写入器。</para>
     /// </summary>
-    /// <param name="staging">Staging file receiving the buffered frames.
-    /// <para>接收已缓冲帧的暂存文件。</para></param>
+    /// <param name="staging">Staging area receiving the buffered frames.
+    /// <para>接收已缓冲帧的暂存区。</para></param>
     internal ErofsStagingBatch(Core.CompressionPayloadStaging staging) => _staging = staging;
 
     /// <summary>

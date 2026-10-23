@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.FileSystem.Rebuilding;
@@ -36,22 +37,66 @@ internal static class FileSystemRepackMetadata
 
     internal static Task CaptureAsync(RepackMetadata metadata, string sourcePath, string outputDirectory,
         string metadataDirectory, CancellationToken cancellationToken, bool sparse = false)
+        => CaptureAsyncCore(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken, sparse,
+            snapshot: null);
+
+    /// <summary>
+    /// Captures metadata from a frozen EROFS snapshot the extraction already produced, so the flat export and the
+    /// preservation payload reuse its entry list and rebuild parameters instead of parsing the image again.
+    /// <para>从解包已产出的 EROFS 冻结快照采集元数据，使扁平导出与保留负载复用其条目清单和重建参数，而不是再次解析镜像。</para>
+    /// </summary>
+    /// <param name="metadata">Metadata instance being assembled. <para>正在组装的元数据实例。</para></param>
+    /// <param name="sourcePath">Source image path recorded in the payload; only its length is read.
+    /// <para>记录进负载的源镜像路径；仅读取其长度。</para></param>
+    /// <param name="outputDirectory">Extraction directory whose files are verified afterwards.
+    /// <para>随后校验其文件的解包目录。</para></param>
+    /// <param name="metadataDirectory">Directory receiving the flat exports and the metadata JSON.
+    /// <para>接收扁平导出与元数据 JSON 的目录。</para></param>
+    /// <param name="cancellationToken">Cancels capture and verification.
+    /// <para>取消采集与校验。</para></param>
+    /// <param name="snapshot">Frozen EROFS snapshot, or <see langword="null"/> to read the source the usual way;
+    /// a snapshot is disposed when capture ends, including on failure.
+    /// <para>EROFS 冻结快照，或为 <see langword="null"/> 时按常规方式读取来源；快照在采集结束时释放，失败时同样释放。</para></param>
+    /// <returns>A completed task. <para>已完成的任务。</para></returns>
+    internal static Task CaptureAsync(RepackMetadata metadata, string sourcePath, string outputDirectory,
+        string metadataDirectory, CancellationToken cancellationToken, ErofsPreservationSnapshot? snapshot)
+        => CaptureAsyncCore(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken, sparse: false,
+            snapshot);
+
+    private static Task CaptureAsyncCore(RepackMetadata metadata, string sourcePath, string outputDirectory,
+        string metadataDirectory, CancellationToken cancellationToken, bool sparse,
+        ErofsPreservationSnapshot? snapshot)
     {
         if (sparse && metadata.Configuration["fileSystem"]?.GetValue<string>() is not ("EXT4" or "EROFS" or "F2FS"))
         {
+            snapshot?.Dispose();
             return Task.CompletedTask;
         }
-        Directory.CreateDirectory(metadataDirectory);
-        List<string> exportWarnings = GenerateFileSystemMetadata(metadataDirectory,
-            RepackMetadata.DetectPartitionName(Path.GetFileName(sourcePath)),
-            metadata.FormatName, sourcePath, metadata.Configuration, cancellationToken);
-        metadata.CanPackDirectory = true;
-        metadata.PackingNotes = "Retains structured inode metadata, not the original image or file contents. Rebuilding requires the extracted host tree; attributes and file content are verified before publication.";
-        if (exportWarnings.Count > 0)
+        try
         {
-            metadata.PackingNotes += $" Flat metadata export reported {exportWarnings.Count} issue(s): {string.Join("; ", exportWarnings)}";
+            Directory.CreateDirectory(metadataDirectory);
+            List<string> exportWarnings = GenerateFileSystemMetadata(metadataDirectory,
+                RepackMetadata.DetectPartitionName(Path.GetFileName(sourcePath)),
+                metadata.FormatName, sourcePath, metadata.Configuration, cancellationToken, snapshot);
+            metadata.CanPackDirectory = true;
+            metadata.PackingNotes = "Retains structured inode metadata, not the original image or file contents. Rebuilding requires the extracted host tree; attributes and file content are verified before publication.";
+            if (exportWarnings.Count > 0)
+            {
+                metadata.PackingNotes += $" Flat metadata export reported {exportWarnings.Count} issue(s): {string.Join("; ", exportWarnings)}";
+            }
+            if (snapshot is null)
+            {
+                FileSystemPreservation.CaptureAsync(sourcePath, metadata, cancellationToken, reportSourceVerification: !sparse);
+            }
+            else
+            {
+                FileSystemPreservation.CaptureAsync(sourcePath, metadata, snapshot, cancellationToken, reportSourceVerification: !sparse);
+            }
         }
-        FileSystemPreservation.CaptureAsync(sourcePath, metadata, cancellationToken, reportSourceVerification: !sparse);
+        finally
+        {
+            snapshot?.Dispose();
+        }
         FileSystemPreservation.VerifyExtractedFiles(outputDirectory, sourcePath, cancellationToken);
         return Task.CompletedTask;
     }
@@ -79,10 +124,14 @@ internal static class FileSystemRepackMetadata
     /// <para>提供超级块对象的来源配置。</para></param>
     /// <param name="cancellationToken">Cancels parsing and the sparse-container read.
     /// <para>取消解析与稀疏容器读取。</para></param>
+    /// <param name="snapshot">Frozen EROFS snapshot whose cached entry list feeds the export, or
+    /// <see langword="null"/> to parse the source. <para>其缓存条目清单用于喂给导出的 EROFS 冻结快照，或为
+    /// <see langword="null"/> 时解析来源。</para></param>
     /// <returns>One message per skipped row plus a message describing a failed export; empty when the export was
     /// complete. <para>每条被跳过的行对应一条说明，另有失败导出的一句话说明；导出完整时为空。</para></returns>
     private static List<string> GenerateFileSystemMetadata(string metadataDirectory, string partitionName,
-        string formatName, string sourcePath, JsonObject configuration, CancellationToken cancellationToken)
+        string formatName, string sourcePath, JsonObject configuration, CancellationToken cancellationToken,
+        ErofsPreservationSnapshot? snapshot)
     {
         List<string> warnings = [];
         try
@@ -113,6 +162,12 @@ internal static class FileSystemRepackMetadata
                         }
                         break;
                 }
+                return warnings;
+            }
+
+            if (formatName == "EROFS" && snapshot is not null)
+            {
+                warnings.AddRange(snapshot.GenerateFlatMetadata(metadataDirectory, partitionName, superblock));
                 return warnings;
             }
 

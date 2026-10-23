@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UnifiedErofsInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsInode;
 namespace UotanStudio.Firmware.FileSystem.Erofs;
@@ -21,9 +22,10 @@ public sealed class ErofsOptions
 
     /// <summary>Compression codec declared for the build. <para>本次打包声明的压缩编解码器。</para></summary>
     /// <value>Default <see cref="ErofsCompressionAlgorithm.Lz4"/>; validation rejects values outside the
-    /// enum, and <see cref="LegacyCompatibility"/> requires LZ4.
-    /// <para>默认 <see cref="ErofsCompressionAlgorithm.Lz4"/>；校验拒绝枚举之外的值，且
-    /// <see cref="LegacyCompatibility"/> 要求只能为 LZ4。</para></value>
+    /// enum. On a compressed build a codec other than LZ4 makes the build publish the shared incompat bit
+    /// that licenses the compression configuration records.
+    /// <para>默认 <see cref="ErofsCompressionAlgorithm.Lz4"/>；校验拒绝枚举之外的值。压缩构建中非 LZ4 的
+    /// 编解码器会让本次构建发布许可压缩配置记录的共用 incompat 位。</para></value>
     public ErofsCompressionAlgorithm Algorithm { get; set; } = ErofsCompressionAlgorithm.Lz4;
 
     /// <summary>Requested compression effort. <para>请求的压缩强度。</para></summary>
@@ -44,12 +46,13 @@ public sealed class ErofsOptions
     /// </summary>
     /// <value>0 selects the builder default, which is <see cref="BlockSize"/> (one logical block per
     /// pcluster); validation requires a block-aligned value
-    /// between <see cref="BlockSize"/> and <c>ErofsCompression.MaxPclusterSize</c>, and
-    /// <see cref="LegacyCompatibility"/> pins it to the block size.
+    /// between <see cref="BlockSize"/> and <c>ErofsCompression.MaxPclusterSize</c>. A value above
+    /// <see cref="BlockSize"/> makes the build publish the shared incompat bit that licenses multi-block
+    /// pclusters.
     /// <para>0 表示使用打包器默认值，即 <see cref="BlockSize"/>（每个 pcluster 一个逻辑块）；校验要求其为
     /// <see cref="BlockSize"/> 到
-    /// <c>ErofsCompression.MaxPclusterSize</c> 之间且按块对齐的数值，且
-    /// <see cref="LegacyCompatibility"/> 会将其钉死为块大小。</para></value>
+    /// <c>ErofsCompression.MaxPclusterSize</c> 之间且按块对齐的数值。压缩构建中大于 <see cref="BlockSize"/> 的
+    /// 取值会让本次构建发布许可跨多块 pcluster 的共用 incompat 位。</para></value>
     public int MaxPclusterSize { get; set; }
 
     /// <summary>Largest pcluster the EROFS compressed format can name, and the ceiling
@@ -344,13 +347,19 @@ public sealed class ErofsOptions
 
     internal bool OptimizeCompression { get; set; }
 
+    /// <summary>Compiled compress hints, cached so the superblock configuration records and the planner observe
+    /// the same raised pcluster maximum and the same warnings are not recorded twice.
+    /// <para>已编译的压缩提示缓存，使超级块配置记录与规划器看到同一个提升后的 pcluster 上限，且警告不会被记录两次。</para>
+    /// </summary>
+    internal ErofsCompressHints? CompiledCompressHints { get; set; }
+
     /// <summary>Whether compressed files use the compacted (bitfield) index format.
     /// <para>压缩文件是否使用紧凑（位域）索引格式。</para></summary>
-    /// <value>On by default; requires logical clusters of at most 16384 bytes when <see cref="Compress"/>,
-    /// and <see cref="LegacyCompatibility"/> forces it off.
-    /// <para>默认开启；<see cref="Compress"/> 时要求逻辑簇不超过 16384 字节，且
-    /// <see cref="LegacyCompatibility"/> 会强制关闭。</para></value>
-    public bool UseCompactedIndexes { get; set; } = true;
+    /// <value>Off by default, which keeps the full index form every EROFS implementation can read; enabling it
+    /// requires logical clusters of at most 16384 bytes when <see cref="Compress"/>.
+    /// <para>默认关闭，保持所有 EROFS 实现都能读取的完整索引形态；开启时在 <see cref="Compress"/> 下要求逻辑簇
+    /// 不超过 16384 字节。</para></value>
+    public bool UseCompactedIndexes { get; set; }
 
     /// <summary>Whether compacted indexes use the 2-byte middle section as well, the
     /// <c>4B+2B+4B</c> form that sets <c>Z_EROFS_ADVISE_COMPACTED_2B</c>.
@@ -422,43 +431,21 @@ public sealed class ErofsOptions
     public ErofsDedupeMode DedupeMode { get; set; }
 
     /// <summary>
-    /// Produces a legacy (pre-5.13) EROFS image without the big-pcluster / COMPR_CFGS incompatible
-    /// feature, so the output stays mountable by older implementations.
-    /// <para>生成 legacy（pre-5.13）erofs 镜像，不声明 big-pcluster / COMPR_CFGS 不兼容特性，
-    /// 使输出可被较旧实现挂载。</para>
-    /// Enabling it forces the legacy layout: LZ4 only, <see cref="MaxPclusterSize"/> equal to the block
-    /// size (so each pcluster's stream occupies one physical block), and full-size (non-compacted)
-    /// indexes, matching the pre-5.13 layout those features arrived with.
-    /// Pclusters may still start and end at byte-granular offsets: both index formats store
-    /// di_clusterofs, so an older implementation can address them.
-    /// <para>开启时强制 legacy 布局：仅 LZ4、<see cref="MaxPclusterSize"/> 等于块大小（每个 pcluster 的
-    /// 压缩流只占一个物理块）、使用完整（非紧凑）索引——与 5.13 之前的布局一致。
-    /// pcluster 仍可按字节粒度起讫：两种索引格式都保存 di_clusterofs，旧实现可以寻址。</para>
-    /// </summary>
-    /// <value>Off by default; when on, validation rejects any algorithm but LZ4 and pins
-    /// <see cref="MaxPclusterSize"/>, index format, tail packing, fragments, dedup and metabox to the
-    /// legacy layout. It also seeds the declaration: the legacy layout keeps <c>big_pcluster</c> out of
-    /// <see cref="Features"/> and turns <see cref="DotOmitted"/> off.
-    /// <para>默认关闭；开启后校验只接受 LZ4，并把 <see cref="MaxPclusterSize"/>、索引格式、尾部打包、
-    /// fragment、去重与 metabox 钉死为 legacy 布局。它同时为声明提供种子：legacy 布局不把
-    /// <c>big_pcluster</c> 写入 <see cref="Features"/>，并关闭 <see cref="DotOmitted"/>。</para></value>
-    public bool LegacyCompatibility { get; set; }
-
-    /// <summary>
     /// Per-bit declaration channel for the on-disk <c>s_feature_compat</c> and <c>s_feature_incompat</c>
-    /// words, so the builder never has to read <see cref="LegacyCompatibility"/> to decide feature bits.
-    /// <para>磁盘 <c>s_feature_compat</c> 与 <c>s_feature_incompat</c> 字的逐位声明通道，使打包器无需
-    /// 读取 <see cref="LegacyCompatibility"/> 即可判定特性位。</para>
+    /// words. A preserved rebuild restores the source words exactly, while a fresh build derives only the
+    /// bits its planned layout requires.
+    /// <para>磁盘 <c>s_feature_compat</c> 与 <c>s_feature_incompat</c> 字的逐位声明通道。保留式重建逐字
+    /// 还原源镜像的特性字，而全新构建只推导其规划布局确实需要的位。</para>
     /// A derived (<see cref="ErofsFeatureSet.Auto"/>) set keeps both words computed from the layout
-    /// options unless an inherited source profile is present; an explicit set is authoritative, and
-    /// validation resolves it into this property together with the layout-independent rules.
-    /// <para><see cref="ErofsFeatureSet.Auto"/> 的推导式集合会让两个字继续跟随布局选项，除非存在继承的
-    /// 源档案；显式集合具备权威，校验会把它连同与布局无关的规则一并解析后写回本属性。</para>
+    /// options; an explicit set is authoritative exactly as given, and validation resolves it into this
+    /// property without adding or removing bits.
+    /// <para><see cref="ErofsFeatureSet.Auto"/> 的推导式集合会让两个字继续跟随布局选项；显式集合按原样
+    /// 具备权威，校验只把它写回本属性，不添加也不移除任何位。</para>
     /// </summary>
     /// <value>Defaults to <see cref="ErofsFeatureSet.Auto"/>. After validation an authoritative
-    /// declaration carries the resolved words, while a purely derived one stays
+    /// declaration carries the declared words unchanged, while a purely derived one stays
     /// <see cref="ErofsFeatureSet.Auto"/>.
-    /// <para>默认 <see cref="ErofsFeatureSet.Auto"/>。校验后具备权威的声明携带解析完成的特性字，
+    /// <para>默认 <see cref="ErofsFeatureSet.Auto"/>。校验后具备权威的声明原样携带其特性字，
     /// 纯推导式声明则保持 <see cref="ErofsFeatureSet.Auto"/>。</para></value>
     public ErofsFeatureSet Features { get; set; } = ErofsFeatureSet.Auto;
 
@@ -479,12 +466,12 @@ public sealed class ErofsOptions
     /// <see cref="UnifiedErofsInode.AdviseBitNlinkOneOrDotOmitted"/> inode advise 位。该维度没有自有的超级块
     /// 特性位，因此与 <see cref="Features"/> 并列声明而非包含其中。</para>
     /// </summary>
-    /// <value>Defaults to <see cref="ErofsTriStateFeature.Auto"/>; validation resolves a modern
-    /// declaration to <see cref="ErofsTriStateFeature.Enabled"/> and a legacy one to
-    /// <see cref="ErofsTriStateFeature.Disabled"/>.
-    /// <para>默认 <see cref="ErofsTriStateFeature.Auto"/>；校验把现代声明解析为
-    /// <see cref="ErofsTriStateFeature.Enabled"/>，把 legacy 声明解析为
-    /// <see cref="ErofsTriStateFeature.Disabled"/>。</para></value>
+    /// <value>Defaults to <see cref="ErofsTriStateFeature.Auto"/>, which validation resolves to
+    /// <see cref="ErofsTriStateFeature.Enabled"/>; the advise bit is only emitted on a target that
+    /// <see cref="NlinkOneAdviseSupported"/> declares.
+    /// <para>默认 <see cref="ErofsTriStateFeature.Auto"/>，校验将其解析为
+    /// <see cref="ErofsTriStateFeature.Enabled"/>；该 advise 位只在 <see cref="NlinkOneAdviseSupported"/>
+    /// 声明的目标上写出。</para></value>
     public ErofsTriStateFeature DotOmitted { get; set; } = ErofsTriStateFeature.Auto;
 
     /// <summary>
@@ -497,10 +484,10 @@ public sealed class ErofsOptions
     /// 却枚举不出内容，因此除非调用方确定目标确实定义该位，本项保持关闭。</para>
     /// </summary>
     /// <value>Off by default. Turning it on is a statement about the target, not a request: the bit is
-    /// still suppressed when the layout is legacy, and still suppressed when
-    /// <see cref="DotOmitted"/> resolves to <see cref="ErofsTriStateFeature.Disabled"/>.
-    /// <para>默认关闭。开启它是对目标的陈述而非请求：legacy 布局下该位仍被抑制，
-    /// <see cref="DotOmitted"/> 解析为 <see cref="ErofsTriStateFeature.Disabled"/> 时也仍被抑制。</para></value>
+    /// still suppressed when <see cref="DotOmitted"/> resolves to
+    /// <see cref="ErofsTriStateFeature.Disabled"/>.
+    /// <para>默认关闭。开启它是对目标的陈述而非请求：<see cref="DotOmitted"/> 解析为
+    /// <see cref="ErofsTriStateFeature.Disabled"/> 时该位仍被抑制。</para></value>
     public bool NlinkOneAdviseSupported { get; set; }
 
     /// <summary>
@@ -532,22 +519,15 @@ public sealed class ErofsOptions
     internal uint AddedIncompatBits { get; set; }
 
     /// <summary>
-    /// Incompat bits the source profile dropped while it was read back: a layout policy demanded a bit the
-    /// source never declared, or the writer cannot re-emit the structures behind a declared bit, so the bit
-    /// is absent from <see cref="Features"/> as well.
-    /// <para>源档案在读回时移除的 incompat 位：布局策略要求源镜像从未声明的位，或写入方无法重新输出已声明位
-    /// 背后的结构，因此这些位在 <see cref="Features"/> 中同样不存在。</para>
+    /// Incompat bits a source profile could not honour while it was read back: the structures behind a declared
+    /// bit cannot be re-emitted, so the bit is absent from <see cref="Features"/> as well.
+    /// <para>源档案在读回时无法兑现的 incompat 位：已声明位背后的结构无法重新输出，因此这些位在
+    /// <see cref="Features"/> 中同样不存在。</para>
     /// </summary>
     /// <value>Raw <c>s_feature_incompat</c> mask of the dropped bits; empty unless a preserved source
     /// profile narrowed the inherited declaration.
     /// <para>被移除位的原始 <c>s_feature_incompat</c> 掩码；只有被保留的源档案收窄继承声明时才非空。</para></value>
     internal uint DroppedIncompatBits { get; set; }
-
-    /// <summary>Incompat bits the legacy (pre-5.13) preset cannot keep in the declared word.
-    /// <para>legacy（pre-5.13）预设无法保留在声明字中的 incompat 位。</para></summary>
-    private const uint LegacyClearedIncompatBits = ErofsSuperblock.IncompatBigPcluster
-        | ErofsSuperblock.IncompatZtailpacking | ErofsSuperblock.IncompatFragments
-        | ErofsSuperblock.IncompatMetabox;
 
     /// <summary>Optional filesystem UUID; extracted images retain their original identity.
     /// <para>可选的文件系统 UUID；解包镜像可保留其原始标识。</para></summary>
@@ -580,8 +560,8 @@ public sealed class ErofsOptions
 
     /// <summary>Stores the final compressed cluster beside its indexes when it fits in a metadata block.
     /// <para>当最后一个压缩簇能放入元数据块时，将其存放在索引旁。</para></summary>
-    /// <value>Off by default; <see cref="LegacyCompatibility"/> forces it off during validation.
-    /// <para>默认关闭；校验时 <see cref="LegacyCompatibility"/> 会强制关闭。</para></value>
+    /// <value>Off by default; enabling it publishes the <c>ztailpacking</c> incompat bit, which Linux 5.17
+    /// introduced. <para>默认关闭；开启它会发布 <c>ztailpacking</c> incompat 位，该位自 Linux 5.17 引入。</para></value>
     public bool CompressedTailPacking { get; set; }
 
     /// <summary>Stores file data that does not fill a whole logical cluster in the packed fragment inode
@@ -591,33 +571,29 @@ public sealed class ErofsOptions
     /// <para>把填不满一个逻辑簇的数据存放在 packed fragment inode 里而不是专用块：先是较大文件的尾部，
     /// 若在 <see cref="AllFilesAsFragments"/> 也置位时还包括整文件不足一块的小文件。这正是
     /// <c>EROFS_FEATURE_INCOMPAT_FRAGMENTS</c> 所许可的磁盘布局。</para></summary>
-    /// <value>Off by default; enabling it forces <see cref="TailPacking"/> off, and
-    /// <see cref="LegacyCompatibility"/> clears it during validation.
-    /// <para>默认关闭；开启会迫使 <see cref="TailPacking"/> 关闭，且校验时
-    /// <see cref="LegacyCompatibility"/> 会将其清零。</para></value>
+    /// <value>Off by default; enabling it publishes the <c>fragments</c> incompat bit, which Linux 6.1
+    /// introduced, and forces <see cref="TailPacking"/> off.
+    /// <para>默认关闭；开启会发布 <c>fragments</c> incompat 位（自 Linux 6.1 引入），并迫使
+    /// <see cref="TailPacking"/> 关闭。</para></value>
     public bool Fragments { get; set; }
 
     /// <summary>Allows a file shorter than one filesystem block to be stored whole in the packed fragment
     /// inode. Requires <see cref="Fragments"/>.
     /// <para>允许不足一个文件系统块的文件整份存放在 packed fragment inode 里。需要 <see cref="Fragments"/>
     /// 同时开启。</para></summary>
-    /// <value>Off by default; validation ignores it while <see cref="Fragments"/> is off, and
-    /// <see cref="LegacyCompatibility"/> clears it.
-    /// <para>默认关闭；<see cref="Fragments"/> 关闭时校验忽略它，且
-    /// <see cref="LegacyCompatibility"/> 会将其清零。</para></value>
+    /// <value>Off by default; validation ignores it while <see cref="Fragments"/> is off.
+    /// <para>默认关闭；<see cref="Fragments"/> 关闭时校验忽略它。</para></value>
     public bool AllFilesAsFragments { get; set; }
 
     /// <summary>Shares physical storage between files with identical content.
     /// <para>让内容相同的文件共享同一份物理数据。</para></summary>
     /// <value>Off by default; when on, data blocks and fragments are reused by content hash while
-    /// <see cref="DedupeMode"/> is <see cref="ErofsDedupeMode.WholeFile"/>, and
-    /// <see cref="LegacyCompatibility"/> clears it during validation. The whole-file pass is skipped when
-    /// <see cref="DedupeMode"/> selects the encoded-pcluster comparison, because the two modes compare
+    /// <see cref="DedupeMode"/> is <see cref="ErofsDedupeMode.WholeFile"/>. The whole-file pass is skipped
+    /// when <see cref="DedupeMode"/> selects the encoded-pcluster comparison, because the two modes compare
     /// different objects and running both would make the reused set depend on the pass order.
     /// <para>默认关闭；开启后当 <see cref="DedupeMode"/> 为 <see cref="ErofsDedupeMode.WholeFile"/> 时按内容
-    /// 哈希复用数据块与 fragment，且校验时 <see cref="LegacyCompatibility"/> 会将其清零。当
-    /// <see cref="DedupeMode"/> 选择编码后 pcluster 比较时跳过整文件处理，因为两种模式比较的对象不同，
-    /// 同时运行会让复用集合取决于处理顺序。</para></value>
+    /// 哈希复用数据块与 fragment。当 <see cref="DedupeMode"/> 选择编码后 pcluster 比较时跳过整文件处理，
+    /// 因为两种模式比较的对象不同，同时运行会让复用集合取决于处理顺序。</para></value>
     public bool Dedup { get; set; }
 
     /// <summary>Number of bytes the encoded-pcluster reuse kept out of the image.
@@ -679,28 +655,11 @@ public sealed class ErofsOptions
             UseCompacted2BIndexes = UseCompacted2BIndexes,
             CompressedTailPacking = CompressedTailPacking,
             OptimizeCompression = OptimizeCompression,
-            LegacyCompatibility = LegacyCompatibility,
             Features = Features,
             FeaturesAuthoritative = FeaturesAuthoritative,
             DotOmitted = DotOmitted,
             CancellationToken = CancellationToken,
         };
-
-        if (derived.LegacyCompatibility)
-        {
-            if (algorithm != ErofsCompressionAlgorithm.Lz4)
-            {
-                throw new FileSystemUnsupportedFeatureException(
-                    "EROFS compress hints cannot select a codec other than LZ4 for a legacy (pre-5.13) layout.");
-            }
-
-            if (maxPclusterSize != derived.BlockSize)
-            {
-                throw new FileSystemUnsupportedFeatureException(
-                    "EROFS compress hints cannot change the pcluster size for a legacy (pre-5.13) layout, which "
-                    + $"pins it to the {derived.BlockSize}-byte block size.");
-            }
-        }
 
         if (maxPclusterSize < derived.BlockSize || maxPclusterSize > MaximumPclusterSize
             || maxPclusterSize % derived.BlockSize != 0)
@@ -734,10 +693,10 @@ public sealed class ErofsOptions
 
     /// <summary>Places the compression configuration and part of the metadata in a metabox.
     /// <para>将压缩配置与部分元数据放入 metabox。</para></summary>
-    /// <value>Off by default; enabling it forces <see cref="TailPacking"/> off, and
-    /// <see cref="LegacyCompatibility"/> clears it during validation.
-    /// <para>默认关闭；开启会迫使 <see cref="TailPacking"/> 关闭，且校验时
-    /// <see cref="LegacyCompatibility"/> 会将其清零。</para></value>
+    /// <value>Off by default; enabling it publishes the <c>metabox</c> incompat bit, which Linux 6.17
+    /// introduced, and forces <see cref="TailPacking"/> off.
+    /// <para>默认关闭；开启会发布 <c>metabox</c> incompat 位（自 Linux 6.17 引入），并迫使
+    /// <see cref="TailPacking"/> 关闭。</para></value>
     public bool Metabox { get; set; }
 
     /// <summary>Requires the metabox container to exist even when the planned layout selects no resident
@@ -814,39 +773,6 @@ public sealed class ErofsOptions
         CompressionLevel = ErofsCompressionLevel.Validate(Algorithm, CompressionLevel);
 
         if (MaxPclusterSize == 0) MaxPclusterSize = BlockSize;
-        if (LegacyCompatibility)
-        {
-            if (Algorithm != ErofsCompressionAlgorithm.Lz4)
-                throw new NotSupportedException(
-                    $"EROFS legacy (pre-5.13) layout supports only LZ4; {Algorithm} requires the modern big-pcluster feature.");
-            MaxPclusterSize = BlockSize;
-            UseCompactedIndexes = false;
-            UseCompacted2BIndexes = false;
-            CompressedTailPacking = false;
-            Fragments = false;
-            AllFilesAsFragments = false;
-            Dedup = false;
-            Metabox = false;
-            MetaboxRequired = false;
-            InodeFormat = ErofsInodeFormat.Auto;
-            ChunkIndexKind = ErofsChunkIndexKind.Auto;
-            if (SourceCompressionOptions is { } codecOptions)
-            {
-                foreach (var codec in codecOptions.Values)
-                {
-                    codec.LegacyCompatibility = true;
-                    codec.MaxPclusterSize = codec.BlockSize > 0 ? codec.BlockSize : BlockSize;
-                    codec.UseCompactedIndexes = false;
-                    codec.UseCompacted2BIndexes = false;
-                    codec.CompressedTailPacking = false;
-                    codec.Fragments = false;
-                    codec.AllFilesAsFragments = false;
-                    codec.Dedup = false;
-                    codec.Metabox = false;
-                    codec.MetaboxRequired = false;
-                }
-            }
-        }
 
         if (MaxPclusterSize < BlockSize || MaxPclusterSize > ErofsCompression.MaxPclusterSize || MaxPclusterSize % BlockSize != 0)
             throw new ArgumentOutOfRangeException(nameof(MaxPclusterSize));
@@ -912,11 +838,6 @@ public sealed class ErofsOptions
                     throw new ArgumentOutOfRangeException(nameof(XattrNamePrefixes),
                         $"Xattr name prefix {i} exceeds 255 bytes, the longest a prefix table record holds.");
             }
-        }
-
-        if (Fragments && !Features.IsAuto && Features.Contains(ErofsFeature.Fragments))
-        {
-            AllFilesAsFragments = true;
         }
 
         if (Metabox)
@@ -1042,12 +963,12 @@ public sealed class ErofsOptions
 
     /// <summary>
     /// Resolves <see cref="Features"/> into authoritative superblock words when the caller declared them
-    /// or an inherited source profile makes the declaration authoritative, rejects declarations the
-    /// writer or the layout cannot honor, resolves <see cref="DotOmitted"/> and copies the outcome into
-    /// every codec record so a preserved rebuild honors it.
+    /// or an inherited source profile makes the declaration authoritative, resolves <see cref="DotOmitted"/>
+    /// and copies the outcome into every codec record so a preserved rebuild honors it. A declared word is
+    /// kept exactly as given; only a derived declaration is computed from the layout options.
     /// <para>当调用方显式声明特性字，或继承的源档案使声明具备权威时，把 <see cref="Features"/> 解析为权威的
-    /// 超级块字，拒绝写入方或布局无法兑现的声明，解析 <see cref="DotOmitted"/>，并把结果复制到每个编解码器
-    /// 记录，使保留式重建同样遵循该声明。</para>
+    /// 超级块字，解析 <see cref="DotOmitted"/>，并把结果复制到每个编解码器记录，使保留式重建同样遵循该声明。
+    /// 声明的字按原样保留，只有推导式声明才由布局选项计算。</para>
     /// Layout-implied bits (device table, fragments/dedupe, ztailpacking and metabox) stay out of the
     /// derived baseline because the builder reconciles them against the actual planned layout and records
     /// the outcome in <see cref="AddedIncompatBits"/> and <see cref="DroppedCompatBits"/>.
@@ -1064,12 +985,6 @@ public sealed class ErofsOptions
         var profileInherited = SourceInodes is { Count: > 0 } || SourceCompressionOptions is { Count: > 0 };
         var compatBits = declared ? Features.CompatBits : DerivedCompatBits();
         var incompatBits = declared ? Features.IncompatBits : DerivedIncompatBaseline();
-
-        RejectLegacyIncompatConflict(incompatBits);
-        if (LegacyCompatibility)
-        {
-            incompatBits &= ~LegacyClearedIncompatBits;
-        }
 
         ResolveDotOmitted();
         FeaturesAuthoritative = declared || profileInherited;
@@ -1090,22 +1005,23 @@ public sealed class ErofsOptions
     }
 
     /// <summary>
-    /// Derives the compat word from the options that own a compat bit today.
-    /// <para>由今天确实持有 compat 位的各选项推导出 compat 字。</para>
+    /// Derives the compat word for a fresh build. Only the superblock checksum is derived: the timestamp and
+    /// xattr-filter compat bits describe source structures a fresh build does not inherit, and adding them
+    /// unasked would raise the minimum kernel version.
+    /// <para>为全新构建推导 compat 字。只推导超级块校验和：时间戳与 xattr 过滤 compat 位描述的是全新构建
+    /// 并未继承的源结构，未经请求就添加会抬高最低内核版本。</para>
     /// </summary>
     /// <returns>The derived <c>s_feature_compat</c> mask.
     /// <para>推导出的 <c>s_feature_compat</c> 掩码。</para></returns>
     internal uint DerivedCompatBits()
-        => (SuperblockChecksum ? ErofsSuperblock.CompatSbChecksum : 0u)
-            | (SourceMtimeFeature ? ErofsSuperblock.CompatMtime : 0u)
-            | (SourceXattrFilterFeature ? ErofsSuperblock.CompatXattrFilter : 0u);
+        => SuperblockChecksum ? ErofsSuperblock.CompatSbChecksum : 0u;
 
     /// <summary>
-    /// Derives the incompat baseline a preset seeds: the compression padding bit plus, only when the
-    /// layout actually needs it, the shared bit that licenses both pclusters spanning several blocks and
-    /// the compression configuration records. A single-block pcluster limit with LZ4 needs neither.
-    /// <para>推导预设所种下的 incompat 基线：压缩零填充位，加上仅在布局确实需要时的共享位（该位同时
-    /// 许可跨多块的 pcluster 与压缩配置记录）。单块 pcluster 上限配 LZ4 两者都不需要。</para>
+    /// Derives the minimal incompat baseline for a fresh build: nothing when uncompressed, the zero-padding
+    /// bit for LZ4, and the shared configuration/big-pcluster bit only when the selected codec needs the
+    /// compression configuration records or the pcluster limit spans more than one block.
+    /// <para>为全新构建推导最小 incompat 基线：未压缩时为零；LZ4 取零填充位；仅当选定的编解码器需要压缩配置
+    /// 记录，或 pcluster 上限跨越多块时，才取配置记录与 big-pcluster 共用的那一位。</para>
     /// </summary>
     /// <returns>The derived <c>s_feature_incompat</c> baseline.
     /// <para>推导出的 <c>s_feature_incompat</c> 基线。</para></returns>
@@ -1116,27 +1032,15 @@ public sealed class ErofsOptions
             return 0u;
         }
 
-        return ErofsSuperblock.IncompatLz4_0Padding
-            | (ModernCompressionLayoutRequested ? ErofsSuperblock.IncompatBigPcluster : 0u);
-    }
+        var bits = Algorithm == ErofsCompressionAlgorithm.Lz4 ? ErofsSuperblock.IncompatLz4_0Padding : 0u;
+        if (Algorithm != ErofsCompressionAlgorithm.Lz4
+            || (MaxPclusterSize > 0 && MaxPclusterSize > BlockSize))
+        {
+            bits |= ErofsSuperblock.IncompatCompressCfgs;
+        }
 
-    /// <summary>
-    /// Reports whether this build needs incompat bit 0x00000002, the single bit that licenses both
-    /// multi-block pclusters and the compression configuration records. The bit is what turns
-    /// <c>s_available_compr_algs</c> into an algorithm bitmap with configuration records following the
-    /// superblock, so a build that declares it writes those records. Only the legacy preset and the
-    /// compression switch decide the answer: a non-legacy compressed build always publishes the bit,
-    /// because deriving it from the algorithm instead would make the superblock indistinguishable from a
-    /// genuine legacy image that leaves the bit clear, and the parser could not tell which layout to replay.
-    /// <para>判断本次构建是否需要 incompat 位 0x00000002——即同时许可多块 pcluster 与压缩配置记录的唯一位。
-    /// 该位让 <c>s_available_compr_algs</c> 成为算法位图并在超级块后紧跟配置记录，因此声明它的构建必须写出
-    /// 这些记录。结论只由 legacy 预设与压缩开关决定：非 legacy 的压缩构建一律发布该位，因为若改由算法推导，
-    /// 得到的超级块与真正清掉该位的 legacy 镜像无法区分，解析器也就无法判断该重放哪种布局。</para>
-    /// </summary>
-    /// <returns><see langword="true"/> when bit 0x00000002 must be published.
-    /// <para>必须发布 0x00000002 位时为 <see langword="true"/>。</para></returns>
-    internal bool ModernCompressionLayoutRequested
-        => Compress && !LegacyCompatibility;
+        return bits;
+    }
 
     /// <summary>
     /// Reports whether this build may lay an uncompressed pcluster out with the interlaced byte rotation
@@ -1188,46 +1092,15 @@ public sealed class ErofsOptions
            || (MaxPclusterSize > 0 && MaxPclusterSize % BlockSize != 0);
 
     /// <summary>
-    /// Rejects a declaration that keeps the bit shared by <c>big_pcluster</c> and <c>compr_cfgs</c> while
-    /// the legacy preset is on.
-    /// <para>在 legacy 预设开启时拒绝仍保留 <c>big_pcluster</c> 与 <c>compr_cfgs</c> 共用位的声明。</para>
-    /// </summary>
-    /// <param name="incompatBits">Resolved incompat word to inspect.
-    /// <para>待检查的已解析 incompat 字。</para></param>
-    /// <exception cref="NotSupportedException">The declaration and the legacy preset contradict each
-    /// other. <para>声明与 legacy 预设互相矛盾。</para></exception>
-    private void RejectLegacyIncompatConflict(uint incompatBits)
-    {
-        if (!LegacyCompatibility || (incompatBits & ErofsSuperblock.IncompatBigPcluster) == 0)
-        {
-            return;
-        }
-
-        throw new NotSupportedException(
-            "EROFS legacy (pre-5.13) compatibility cannot declare big_pcluster or compr_cfgs; the shared "
-            + $"incompat bit 0x{ErofsSuperblock.IncompatBigPcluster:x8} requires at least Linux "
-            + $"{ErofsFeatureTable.DescribeKernel(ErofsFeature.BigPcluster)}.");
-    }
-
-    /// <summary>
     /// Resolves the dot-omitted inode advise dimension, which has no superblock bit and therefore is kept
     /// outside <see cref="Features"/>.
     /// <para>解析 dot-omitted 的 inode advise 维度；它没有超级块位，因此保持在 <see cref="Features"/> 之外。</para>
     /// </summary>
-    /// <exception cref="NotSupportedException">The caller forced the dimension on while the legacy preset
-    /// forbids the post-5.13 advise bit. <para>调用方强制开启该维度，而 legacy 预设禁止这个 post-5.13 advise 位。</para></exception>
     private void ResolveDotOmitted()
     {
-        if (DotOmitted == ErofsTriStateFeature.Enabled && LegacyCompatibility)
-        {
-            throw new NotSupportedException(
-                "EROFS legacy (pre-5.13) compatibility cannot enable dot-omitted: pre-5.13 kernels read the "
-                + "inode advise bit as nlink-1.");
-        }
-
         if (DotOmitted == ErofsTriStateFeature.Auto)
         {
-            DotOmitted = LegacyCompatibility ? ErofsTriStateFeature.Disabled : ErofsTriStateFeature.Enabled;
+            DotOmitted = ErofsTriStateFeature.Enabled;
         }
     }
 }

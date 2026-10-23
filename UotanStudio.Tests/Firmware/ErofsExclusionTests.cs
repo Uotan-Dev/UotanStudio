@@ -28,7 +28,7 @@ public sealed class ErofsExclusionTests
         var exclusions = new ErofsExclusions(["system/bin/tool"], null);
 
         Assert.True(exclusions.IsExcluded("system/bin/tool"));
-        Assert.True(exclusions.IsExcluded("system/bin/tool/nested"));
+        Assert.False(exclusions.IsExcluded("system/bin/tool/nested"));
         Assert.False(exclusions.IsExcluded("system/bin/tool2"));
         Assert.False(exclusions.IsExcluded("system/bin/tool.d"));
         Assert.False(exclusions.IsExcluded("system/bin"));
@@ -36,13 +36,13 @@ public sealed class ErofsExclusionTests
     }
 
     [Fact]
-    public void IsExcluded_LiteralDirectoryEntry_ExcludesEveryDescendantPath()
+    public void IsExcluded_LiteralDirectoryEntry_DoesNotExpandToDescendants()
     {
         var exclusions = new ErofsExclusions(["system/etc"], null);
 
         Assert.True(exclusions.IsExcluded("system/etc"));
-        Assert.True(exclusions.IsExcluded("system/etc/hosts"));
-        Assert.True(exclusions.IsExcluded("system/etc/init/deep/file"));
+        Assert.False(exclusions.IsExcluded("system/etc/hosts"));
+        Assert.False(exclusions.IsExcluded("system/etc/init/deep/file"));
         Assert.False(exclusions.IsExcluded("system/etcetera"));
         Assert.False(exclusions.IsExcluded("system"));
     }

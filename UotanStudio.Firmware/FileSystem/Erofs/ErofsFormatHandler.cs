@@ -49,7 +49,8 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
 
     Task IRepackMetadataProvider.CaptureRepackMetadataAsync(RepackMetadata metadata, string sourcePath, string outputDirectory,
         string metadataDirectory, CancellationToken cancellationToken)
-        => FileSystemRepackMetadata.CaptureAsync(metadata, sourcePath, outputDirectory, metadataDirectory, cancellationToken);
+        => FileSystemRepackMetadata.CaptureAsync(metadata, sourcePath, outputDirectory, metadataDirectory,
+            cancellationToken, FileSystemPreservation.TakeErofsPreservationSnapshot());
 
     /// <summary>Name of the format this handler serves.
     /// <para>本处理器所服务格式的名称。</para></summary>
@@ -241,25 +242,53 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
     /// <para>返回列出已解出文件路径的 <c>Ok</c> 结果；镜像、快照或解包失败时返回 <c>Fail</c> 结果， 摘要中的路径指向原始镜像文件。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
-    public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
-            cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
+    public async Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        var capture = new ErofsPreservationCapture();
+        using var scope = FileSystemPreservation.BeginErofsCapture(capture);
+        try
+        {
+            return await FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
+                cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, capture, cancellationToken))
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            capture.Dispose();
+        }
+    }
 
-    private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+    private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options,
+        ErofsPreservationCapture capture, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                using var input = File.OpenRead(filePath);
-                using var parser = FileSystemPreservation
-                    .OpenErofsParser(input, cancellationToken);
-                parser.ExtractToDirectory(outputDirectory, overwrite: options?.Overwrite ?? true, byteProgress: FileSystemByteProgress.ForStage(options?.FileSystemProgress, FileSystemWorkStage.Extracting), cancellationToken: cancellationToken);
-                var files = parser.EnumerateFiles();
-                return FirmwareOpResult.Ok(
-                    $"Extracted {files.Count} files from '{filePath}' to '{outputDirectory}'.",
-                    [.. files.Select(file => file.Path)]);
+                SourceDigestComputation? digest = FileSystemPreservation.StartSourceDigest(filePath, cancellationToken);
+                FileStream? input = null;
+                ErofsParser? parser = null;
+                try
+                {
+                    input = File.OpenRead(filePath);
+                    parser = FileSystemPreservation.OpenErofsParser(input, cancellationToken, requireCompleteMetadata: true);
+                    parser.ExtractToDirectory(outputDirectory, overwrite: options?.Overwrite ?? true, byteProgress: FileSystemByteProgress.ForStage(options?.FileSystemProgress, FileSystemWorkStage.Extracting), cancellationToken: cancellationToken);
+                    var files = parser.EnumerateFiles();
+                    capture.Set(parser.CreatePreservationSnapshot(input.Length, digest, input, cancellationToken));
+                    digest = null;
+                    parser = null;
+                    input = null;
+                    return FirmwareOpResult.Ok(
+                        $"Extracted {files.Count} files from '{filePath}' to '{outputDirectory}'.",
+                        [.. files.Select(file => file.Path)]);
+                }
+                finally
+                {
+                    digest?.Dispose();
+                    parser?.Dispose();
+                    input?.Dispose();
+                }
             }
             catch (OperationCanceledException)
             {
@@ -273,8 +302,8 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
     }
 
     /// <summary>Packs a directory into an erofs image.<para>将目录打包为 erofs 镜像。</para></summary>
-    /// <param name="inputPath">Unpacked directory tree; when preserved rebuild parameters exist for it, the original-image reconstruction path is taken first.
-    /// <para>已解包的目录树；若存在为其保留的重建参数，会优先走原镜像重建路径。</para></param>
+    /// <param name="inputPath">Unpacked directory tree; when preserved rebuild parameters exist for it, the original-image reconstruction path is taken first and replays the source feature words verbatim. A fresh pack defaults to a 4096-byte block size, LZ4, compression level 9, full (non-compacted) indexes and a pcluster limit equal to one block, declaring only the feature bits that layout requires.
+    /// <para>已解包的目录树；若存在为其保留的重建参数，会优先走原镜像重建路径并逐字重放源特性字。全新打包默认使用 4096 字节块大小、LZ4、压缩级别 9、完整（非紧凑）索引与等于一个块的 pcluster 上限，只声明该布局确实需要的特性位。</para></param>
     /// <param name="outputPath">Destination image file, overwritten by a successful build.
     /// <para>目标镜像文件；构建成功后被覆盖。</para></param>
     /// <param name="cancellationToken">Token checked at task start, throughout preserved-image restoration and during the image build.
@@ -288,8 +317,8 @@ public sealed class ErofsFormatHandler : IFormatHandler, IRepackMetadataProvider
 
     /// <summary>Packs a directory into an erofs image with byte-level progress.
     /// <para>带字节级进度将目录打包为 erofs 镜像。</para></summary>
-    /// <param name="inputPath">Unpacked directory tree; when preserved rebuild parameters exist for it, the original-image reconstruction path is taken first.
-    /// <para>已解包的目录树；若存在为其保留的重建参数，会优先走原镜像重建路径。</para></param>
+    /// <param name="inputPath">Unpacked directory tree; when preserved rebuild parameters exist for it, the original-image reconstruction path is taken first and replays the source feature words verbatim. A fresh pack defaults to a 4096-byte block size, LZ4, compression level 9, full (non-compacted) indexes and a pcluster limit equal to one block, declaring only the feature bits that layout requires.
+    /// <para>已解包的目录树；若存在为其保留的重建参数，会优先走原镜像重建路径并逐字重放源特性字。全新打包默认使用 4096 字节块大小、LZ4、压缩级别 9、完整（非紧凑）索引与等于一个块的 pcluster 上限，只声明该布局确实需要的特性位。</para></param>
     /// <param name="outputPath">Destination image file, overwritten by a successful build.
     /// <para>目标镜像文件；构建成功后被覆盖。</para></param>
     /// <param name="progress">Reporter receiving byte progress for the building stage; <see langword="null"/> reports nothing.

@@ -15,13 +15,13 @@ public sealed class ErofsBuildGoldenHashTests
 
     [Theory]
     [InlineData("flat", "3ED9CE53589E15E5AE4B21D9CF06F9FD792FE5E5094D3ED218344CFC7A25D193")]
-    [InlineData("compacted", "059975E21DE2125A024DDC865ECF00150FBD3302100335AAB775BFDC82356D32")]
-    [InlineData("full-index", "B852351D7DAE0E2797E0937FA9A14D0BD041B9E13336B489E990D40D0894B3E9")]
-    [InlineData("big-pcluster", "11D9E80D174F409C61306E450E744234867FA3AF1EC05B6EE77AB5CE25FA2E5E")]
-    [InlineData("ztailpacked", "1C1A983144F85B7410DA7C044ACBDFBCE520E1410C65F6E4B2FBD3BE579AB285")]
-    [InlineData("fragments", "FC0DE8B7A055234B35923CBCF1F3A6DFEF090B258725B69C2032EB18452B2006")]
-    [InlineData("metabox", "F6C5D0A117DFB8EED537F37F7361BB929FD2426973BCD252AE234B3B690F38F4")]
-    [InlineData("links", "D27E7F6BF9DDBFFC3221459EC051E76CAA93934DAE46E3FD942DEC252511E50D")]
+    [InlineData("compacted", "FB71BB64245443D595622D940F9A06182293AB357AB3E6420A9EADB534609BF3")]
+    [InlineData("full-index", "FEE33E501B5F4AD01E6F6A6952549194C5FF9B77C473A103F15670BCF41FCCE3")]
+    [InlineData("big-pcluster", "955CD9D40684194B8B70694850DDA7419F28C5F7A3E4B688BA3C178A5DE8DCE0")]
+    [InlineData("ztailpacked", "F998D5E0EB1C8194EAD54692F9834D04C85068D7CDDC19B4D23BDDD7416FB4AF")]
+    [InlineData("fragments", "4610F77F6F5A82615B7341D7FE74376430CE86A6BE19D582420BE4F812830571")]
+    [InlineData("metabox", "6EF4F2BD801F8096440991553F9A375FD5B0D42CF13E503FA5796344AB839909")]
+    [InlineData("links", "D245C513ADAC5F4A982880E20B37E6C91AA3180908EA09F282A76274867D92C3")]
     [InlineData("wide-ownership", "5B09C3FCC95A1DF6ECDDBDCE77165F9EA9464FF695CB7F3D586069B2C2E204E7")]
     public void Build_FixtureImage_MatchesPinnedHashAndIsDeterministic(string fixture, string expected)
     {
@@ -96,19 +96,31 @@ public sealed class ErofsBuildGoldenHashTests
         source.Write("tiny/one.txt", "t\n");
         Directory.CreateDirectory(Path.Combine(source.Path, "emptydir"));
 
-        if (fixture != "links")
+        if (fixture == "links")
         {
-            return;
+            File.CreateSymbolicLink(
+                Path.Combine(source.Path, "link.txt"),
+                Path.Combine("text", "readme.txt"));
+            var linked = CreateHardLink(
+                Path.Combine(source.Path, "hard-block.bin"),
+                Path.Combine(source.Path, "data", "block.bin"),
+                IntPtr.Zero);
+            Assert.True(linked, $"CreateHardLink failed with error {Marshal.GetLastWin32Error()}.");
         }
 
-        File.CreateSymbolicLink(
-            Path.Combine(source.Path, "link.txt"),
-            Path.Combine("text", "readme.txt"));
-        var linked = CreateHardLink(
-            Path.Combine(source.Path, "hard-block.bin"),
-            Path.Combine(source.Path, "data", "block.bin"),
-            IntPtr.Zero);
-        Assert.True(linked, $"CreateHardLink failed with error {Marshal.GetLastWin32Error()}.");
+        var pinned = DateTimeOffset.FromUnixTimeSeconds((long)BuildTime).UtcDateTime;
+        foreach (var file in Directory.EnumerateFiles(source.Path, "*", SearchOption.AllDirectories))
+        {
+            File.SetLastWriteTimeUtc(file, pinned);
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(source.Path, "*", SearchOption.AllDirectories)
+                     .OrderByDescending(path => path.Length))
+        {
+            Directory.SetLastWriteTimeUtc(directory, pinned);
+        }
+
+        Directory.SetLastWriteTimeUtc(source.Path, pinned);
     }
 
     private static byte[] Deterministic(int length)

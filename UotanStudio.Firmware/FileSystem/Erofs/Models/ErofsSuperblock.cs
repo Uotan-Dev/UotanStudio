@@ -39,6 +39,13 @@ internal sealed class ErofsSuperblock
 
     public const uint AllIncompat = (IncompatMetabox << 1) - 1;
 
+    /// <summary>Bit that marks an inode nid as resident in the METABOX container. A superblock nid slot
+    /// carrying it would make the packed inode or the metabox container reference itself, so it is rejected
+    /// where those slots are declared. <para>标记 inode nid 常驻 METABOX 容器的位。超级块的 nid 槽位携带它
+    /// 会让 packed inode 或 metabox 容器自引用，因此在声明这些槽位处拒绝。</para>
+    /// </summary>
+    private const ulong MetaboxNidFlag = 1UL << 63;
+
     private const int OffsetMagic = 0;
     private const int OffsetChecksum = 4;
     private const int OffsetFeatureCompat = 8;
@@ -253,19 +260,20 @@ internal sealed class ErofsSuperblock
            && BinaryPrimitives.ReadUInt32LittleEndian(fourBytes) == Magic;
 
     /// <summary>
-    /// Validates the superblock's structural feature fields: the block-size shift must be within 9..16 and every incompatible feature bit must be one the reader understands. Both the parser and the builder route their superblock checks here so the rules live in one place.
-    /// <para>校验超级块的结构特性字段：块大小位移须处于 9..16，且每个不兼容特性位都必须是读取器可识别的位。解析器与构建器都将超级块校验汇聚到此处，使规则只有一处定义。</para>
+    /// Validates the superblock's structural feature fields: the block-size shift must be within 9..16, every incompatible feature bit must be one the reader understands, the compression-configuration bitmap must name only defined algorithms, and the metabox/packed nid slots must not carry the METABOX flag that would make them reference themselves. Both the parser and the builder route their superblock checks here so the rules live in one place.
+    /// <para>校验超级块的结构特性字段：块大小位移须处于 9..16，每个不兼容特性位都必须是读取器可识别的位，压缩配置位图只能指名已定义的算法，且 metabox/packed nid 槽位不得携带会让其自引用的 METABOX 标志。解析器与构建器都将超级块校验汇聚到此处，使规则只有一处定义。</para>
     /// </summary>
     /// <exception cref="FormatException">
-    /// <see cref="BlockSizeBits"/> is below 9 or above 16, or <see cref="FeatureIncompat"/> sets a bit outside <see cref="AllIncompat"/>.
-    /// <para><see cref="BlockSizeBits"/> 小于 9 或大于 16，或 <see cref="FeatureIncompat"/> 置位了 <see cref="AllIncompat"/> 之外的位。</para>
+    /// <see cref="BlockSizeBits"/> is below 9 or above 16, <see cref="FeatureIncompat"/> sets a bit outside <see cref="AllIncompat"/>, the compression-configuration bitmap raises a bit outside the four defined algorithms, or a declared packed/metabox nid carries bit 63.
+    /// <para><see cref="BlockSizeBits"/> 小于 9 或大于 16，<see cref="FeatureIncompat"/> 置位了 <see cref="AllIncompat"/> 之外的位，压缩配置位图置位了四个已定义算法之外的位，或已声明的 packed / metabox nid 携带第 63 位。</para>
     /// </exception>
     internal void Validate()
     {
         if (BlockSizeBits is < 9 or > 16)
         {
             throw new FormatException(
-                $"Unsupported EROFS block size shift {BlockSizeBits} (expected 9..16).");
+                $"Unsupported EROFS block size shift {BlockSizeBits} (expected 9..16, i.e. 512..65536 bytes); " +
+                "note that a block size above the host page size (typically 4096 bytes) may not mount.");
         }
 
         var unknownIncompat = FeatureIncompat & ~AllIncompat;
@@ -273,6 +281,27 @@ internal sealed class ErofsSuperblock
         {
             throw new FormatException(
                 $"EROFS image uses unknown incompatible feature bits 0x{unknownIncompat:X8}.");
+        }
+
+        if (HasCompressionConfigs && (AvailableComprAlgs & ~0x0Fu) != 0)
+        {
+            throw new FormatException(
+                $"EROFS compression configuration bitmap 0x{AvailableComprAlgs:X4} names algorithms outside the " +
+                "four defined by the on-disk format.");
+        }
+
+        if (HasFragments && (PackedNid & MetaboxNidFlag) != 0)
+        {
+            throw new FormatException(
+                $"EROFS s_packed_nid 0x{PackedNid:X16} carries the METABOX flag, so the packed inode would " +
+                "reference itself.");
+        }
+
+        if (HasMetabox && (MetaBoxNid & MetaboxNidFlag) != 0)
+        {
+            throw new FormatException(
+                $"EROFS s_metabox_nid 0x{MetaBoxNid:X16} carries the METABOX flag, so the metabox container " +
+                "would reference itself.");
         }
 
         if (HasCompatIshareXattrs && XattrPrefixCount != 0 && IshareXattrPrefixId >= XattrPrefixCount)

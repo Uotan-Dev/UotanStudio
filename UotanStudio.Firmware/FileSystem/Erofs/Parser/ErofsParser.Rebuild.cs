@@ -44,20 +44,14 @@ public sealed partial class ErofsParser
     /// <summary>
     /// Reads the source compression contracts, inode timestamps, declared superblock feature words,
     /// dot-omitted advise dimension, device table and extended-superblock geometry for an edited rebuild. The
-    /// legacy baseline follows
-    /// the upstream matrix (task 1.6a): mark legacy only when every observable modern signal is absent
-    /// AND none of the eight modern feature bits are set. Modern erofs-utils defaults advertise only the
-    /// lz4_0padding incompatibility and no layout-carrying feature bit, so treating "8 features all
-    /// missing" as sufficient would misclassify them as legacy and force-off Fragments, TailPacking,
-    /// Metabox, Dedup and DotOmitted downstream. Device slot tags are captured as raw bytes, without UTF-8
-    /// decoding or NUL truncation, because upstream stores digests in that field, and the extended-superblock
-    /// geometry <c>s_sb_extslots</c> together with <c>dirblkbits</c> is captured as well, so the compression
-    /// configuration offset and the directory blocking unit the source used survive a rebuild.
+    /// declared feature words are replayed exactly: the rebuild neither adds a bit the source did not declare
+    /// nor infers a legacy baseline from the absence of modern signals. Device slot tags are captured as raw
+    /// bytes, without UTF-8 decoding or NUL truncation, because upstream stores digests in that field, and the
+    /// extended-superblock geometry <c>s_sb_extslots</c> together with <c>dirblkbits</c> is captured as well, so
+    /// the compression configuration offset and the directory blocking unit the source used survive a rebuild.
     /// <para>读取编辑重建所需的源压缩契约、inode 时间戳、已声明的超级块特性字、目录省略 advise 维度、设备表
-    /// 与扩展超级块几何。legacy 判定按上游矩阵（任务 1.6a）：仅当所有可观察到的现代迹象均缺失且 8 个现代特性位
-    /// 全部未声明时才把源标记为 legacy。现代 erofs-utils 默认镜像通常只带 lz4_0padding incompatibility 而非
-    /// 承载布局的特性位，因此以「8 位全部未声明」作为充分条件会把它们误判为 legacy，进而在下游强制关闭
-    /// Fragments/TailPacking/Metabox/Dedup 与 DotOmitted。</para>
+    /// 与扩展超级块几何。已声明的特性字按原样重放：重建既不添加源未声明的位，也不因缺少现代迹象而推断 legacy
+    /// 基线。</para>
     /// <para>设备槽的 tag 按原始字节采集，不做 UTF-8 解码或 NUL 截断，因为上游会把摘要写进该字段；几何则采集
     /// <c>s_sb_extslots</c> 与 <c>dirblkbits</c>，使源所用的压缩配置区偏移与目录分块单位在重建后仍保持一致。</para>
     /// </summary>
@@ -76,8 +70,6 @@ public sealed partial class ErofsParser
         var inodes = new Dictionary<ulong, UnifiedInode>(entries.Count);
         var compressed = false;
         var adviseObserved = false;
-        var extendedObserved = false;
-        var compactedIndexObserved = false;
         for (var i = 0; i < entries.Count; i++)
         {
             var record = records[i];
@@ -85,14 +77,6 @@ public sealed partial class ErofsParser
             {
                 compressed = true;
                 defaultAlgorithm = record.SourceAlgorithm;
-            }
-            if (!extendedObserved && (record.IFormat & UnifiedInode.FlagExtended) != 0)
-            {
-                extendedObserved = true;
-            }
-            if (!compactedIndexObserved && record.DataLayout == UnifiedDataLayout.CompactIndexes)
-            {
-                compactedIndexObserved = true;
             }
             if (!adviseObserved && (record.IFormat & UnifiedInode.AdviseBitNlinkOneOrDotOmitted) != 0)
             {
@@ -147,33 +131,15 @@ public sealed partial class ErofsParser
         selected.Fragments = _superblock.PackedNid != 0;
         selected.CompressedTailPacking = _superblock.HasZtailpacking;
         selected.Metabox = _superblock.HasMetabox;
-        selected.Dedup = _superblock.HasFragments;
+        // The fragments and dedupe faces share one incompat bit. A packed inode proves the fragments face;
+        // without one the bit can only describe the dedupe face, so replay it as dedupe rather than dropping
+        // a declared feature bit the rebuild cannot reproduce.
+        selected.Dedup = _superblock.HasFragments && _superblock.PackedNid == 0;
         selected.TailPacking = inodes.Values.Any(i => i.DataLayout == UnifiedDataLayout.Inline);
         selected.SourceInodes = inodes;
         selected.SourceCompressionOptions = codecs;
         selected.Features = ErofsFeatureSet.FromWords(_superblock.FeatureCompat, _superblock.FeatureIncompat);
         selected.FeaturesAuthoritative = true;
-        var hasModernSignal = adviseObserved
-            || extendedObserved
-            || _superblock.BuildTimeNsec != 0
-            || _superblock.HasCompressionConfigs
-            || compactedIndexObserved;
-        selected.LegacyCompatibility = !selected.Features.Contains(ErofsFeature.BigPcluster)
-                    && !selected.Features.Contains(ErofsFeature.Ztailpacking)
-                    && !selected.Features.Contains(ErofsFeature.Metabox)
-                    && !selected.Features.Contains(ErofsFeature.Fragments)
-                    && !selected.Features.Contains(ErofsFeature.DeviceTable)
-                    && !selected.Features.Contains(ErofsFeature.ChunkedFile)
-                    && !selected.Features.Contains(ErofsFeature.XattrPrefixes)
-                    && !selected.Features.Contains(ErofsFeature.FortyEightBit)
-                    && !hasModernSignal;
-        if (selected.LegacyCompatibility)
-        {
-            selected.Fragments = false;
-            selected.CompressedTailPacking = false;
-            selected.Metabox = false;
-            selected.Dedup = false;
-        }
 
         var droppedIncompatBits = 0u;
         if (selected.CompressedTailPacking && !selected.Features.Contains(ErofsFeature.Ztailpacking))
@@ -195,7 +161,7 @@ public sealed partial class ErofsParser
             droppedIncompatBits |= ErofsSuperblock.IncompatMetabox;
         }
 
-        selected.DotOmitted = !selected.LegacyCompatibility && adviseObserved
+        selected.DotOmitted = adviseObserved
             ? ErofsTriStateFeature.Enabled
             : ErofsTriStateFeature.Disabled;
         selected.NlinkOneAdviseSupported = adviseObserved;
@@ -337,7 +303,7 @@ public sealed partial class ErofsParser
             inode.AttachMapHeader(ownHeaderBytes, _superblock.BlockSizeBits);
             if (header.IsFragmentInode)
             {
-                fragmentShape = ErofsFragmentShape.Tail;
+                fragmentShape = ErofsFragmentShape.WholeFile;
                 if (_superblock.PackedNid == 0) throw new FileSystemCorruptedException("Missing EROFS packed inode.");
                 var packed = ReadInode(_superblock.PackedNid);
                 isCompressed = packed.IsCompressed;
@@ -352,10 +318,6 @@ public sealed partial class ErofsParser
             {
                 if (_superblock.PackedNid == 0) throw new FileSystemCorruptedException("Missing EROFS packed inode.");
                 fragmentShape = ErofsFragmentShape.Tail;
-            }
-            if (!isCompressed && fragmentShape == ErofsFragmentShape.Tail)
-            {
-                fragmentShape = ErofsFragmentShape.WholeFile;
             }
             if (isCompressed)
             {

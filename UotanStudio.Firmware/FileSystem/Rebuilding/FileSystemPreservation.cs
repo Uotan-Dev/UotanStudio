@@ -20,6 +20,7 @@ public static partial class FileSystemPreservation
     private static readonly AsyncLocal<Dictionary<string, string>?> CapturedPaths = new();
     private static readonly AsyncLocal<IReadOnlyList<string>?> FrozenErofsDevices = new();
     private static readonly AsyncLocal<IProgress<FileSystemByteProgress>?> ActiveProgress = new();
+    private static readonly AsyncLocal<ErofsPreservationCapture?> ActiveErofsCapture = new();
 
     /// <summary>Opens the EROFS external device set for the current preservation operation.
     /// <para>为当前保留操作打开 EROFS 外部设备集。</para></summary>
@@ -53,6 +54,40 @@ public static partial class FileSystemPreservation
                 streams[i]?.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Makes <paramref name="capture"/> the EROFS snapshot slot of the current unpack flow, so one operation's
+    /// extraction and metadata capture share the parser that walked the image.
+    /// <para>把 <paramref name="capture"/> 设为当前解包流的 EROFS 快照槽，使一次操作的解包与元数据采集共享遍历镜像的
+    /// 解析器。</para>
+    /// </summary>
+    /// <param name="capture">Slot the extraction publishes its snapshot to and the capture consumes it from.
+    /// <para>解包发布快照、采集消费快照的槽。</para></param>
+    /// <returns>A scope restoring the previous slot when disposed.
+    /// <para>释放后恢复先前槽的作用域。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="capture"/> is <see langword="null"/>.
+    /// <para><paramref name="capture"/> 为 <see langword="null"/>。</para></exception>
+    internal static IDisposable BeginErofsCapture(ErofsPreservationCapture capture)
+    {
+        ArgumentNullException.ThrowIfNull(capture);
+        var previous = ActiveErofsCapture.Value;
+        ActiveErofsCapture.Value = capture;
+        return new ErofsCaptureScope(previous);
+    }
+
+    /// <summary>
+    /// Removes the snapshot the active extraction published, so the capture that consumes it becomes its only
+    /// owner. <para>取出活动解包发布的快照，使消费它的采集成为其唯一持有者。</para>
+    /// </summary>
+    /// <returns>The published snapshot, or <see langword="null"/> when this flow captured none.
+    /// <para>已发布的快照；本流程未采集任何快照时为 <see langword="null"/>。</para></returns>
+    internal static ErofsPreservationSnapshot? TakeErofsPreservationSnapshot()
+        => ActiveErofsCapture.Value?.Take();
+
+    private sealed class ErofsCaptureScope(ErofsPreservationCapture? previous) : IDisposable
+    {
+        public void Dispose() => ActiveErofsCapture.Value = previous;
     }
 
     internal static void RecordPaths(Dictionary<string, string> paths)
@@ -126,6 +161,40 @@ public static partial class FileSystemPreservation
     }
 
     /// <summary>
+    /// Captures the preservation payload of an EROFS extraction from the snapshot its extraction parser already
+    /// produced, so no entry and no rebuild parameter is read back from the image a second time. The snapshot's
+    /// background digest is inserted when the caller supplies none, and only a snapshot without one makes this
+    /// method hash the source itself.
+    /// <para>从解包解析器已产出的快照采集 EROFS 解包的保留负载，因此不会再次从镜像读回任何条目或重建参数。调用方
+    /// 未提供摘要时插入快照的后台摘要；只有不带摘要的快照才让本方法自行哈希来源。</para>
+    /// </summary>
+    /// <param name="source">Source image file the extraction was taken from; only its length and, without a digest,
+    /// its bytes are read. <para>解包所依据的源镜像文件；仅读取其长度，无摘要时还读取其字节。</para></param>
+    /// <param name="metadata">Metadata instance the payload is attached to.
+    /// <para>负载所附加到的元数据实例。</para></param>
+    /// <param name="snapshot">Frozen snapshot the extraction produced.
+    /// <para>解包产出的冻结快照。</para></param>
+    /// <param name="cancellationToken">Cancels fallback hashing and payload assembly.
+    /// <para>取消回退哈希与负载组装。</para></param>
+    /// <param name="reportSourceVerification">When <see langword="true"/>, source verification is reported as
+    /// <see cref="FileSystemWorkStage.VerifyingImage"/>.
+    /// <para>为 <see langword="true"/> 时，来源校验上报为 <see cref="FileSystemWorkStage.VerifyingImage"/>。</para></param>
+    /// <param name="sourceDigest">Precomputed uppercase hexadecimal source SHA-256, or <see langword="null"/> to use
+    /// the snapshot's background digest and hash the source only when it carries none.
+    /// <para>预计算的源 SHA-256 大写十六进制值；为 <see langword="null"/> 时使用快照的后台摘要，仅在快照不带摘要时
+    /// 哈希来源。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is <see langword="null"/>.
+    /// <para><paramref name="snapshot"/> 为 <see langword="null"/>。</para></exception>
+    internal static void CaptureAsync(string source, RepackMetadata metadata, ErofsPreservationSnapshot snapshot,
+        CancellationToken cancellationToken, bool reportSourceVerification = true, string? sourceDigest = null)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ValidateInodeFlags(snapshot.PreservedEntries, snapshot.Rebuild.InnerFormat ?? metadata.FormatName);
+        CapturePayload(source, metadata, snapshot.Rebuild, snapshot.PreservedEntries, cancellationToken,
+            reportSourceVerification, sourceDigest ?? snapshot.ResolveSourceDigest());
+    }
+
+    /// <summary>
     /// Captures the preservation payload of an extracted archive container, whose per-entry ownership, group and
     /// permission bits are supplied by the caller from the archive headers rather than from a filesystem parser.
     /// No rebuild parameters exist for a container: the recorded header table is the preserved record.
@@ -145,21 +214,29 @@ public static partial class FileSystemPreservation
 
     private static void CapturePayload(string source,
         RepackMetadata metadata, RebuildParameters? rebuild, IReadOnlyList<PreservedInodeEntry> parsedEntries,
-        CancellationToken cancellationToken, bool reportSourceVerification = true)
+        CancellationToken cancellationToken, bool reportSourceVerification = true, string? sourceDigest = null)
     {
         ExtractionByteCounter? sourceCounter = null;
+        var counterTotal = 0L;
         if (reportSourceVerification && ActiveProgress.Value is { } captureProgress)
         {
-            sourceCounter = new ExtractionByteCounter(new FileInfo(source).Length,
+            counterTotal = new FileInfo(source).Length;
+            sourceCounter = new ExtractionByteCounter(counterTotal,
                 FileSystemByteProgress.ForStage(captureProgress, FileSystemWorkStage.VerifyingImage), cancellationToken);
         }
+        if (sourceDigest is not null)
+        {
+            // The concurrent extraction-time read already covered the whole image, so the stage completes now.
+            sourceCounter?.Add(counterTotal);
+        }
+        var digest = sourceDigest ?? HashFile(source, cancellationToken, sourceCounter is null ? null : sourceCounter.Add);
         var data = new FileSystemPreservationData
         {
             Version = 1,
             Format = metadata.FormatName,
             Partition = RepackMetadata.DetectPartitionName(metadata.SourceFileName),
             SourceLength = new FileInfo(source).Length,
-            SourceDigest = HashFile(source, cancellationToken, sourceCounter is null ? null : sourceCounter.Add),
+            SourceDigest = digest,
             ConfigurationJson = JsonSerializer.Serialize(metadata, RepackJsonContext.Default.RepackMetadata),
             Rebuild = rebuild,
             PartitionInfo = metadata.Configuration["superblock"] is JsonObject superblock
@@ -244,6 +321,19 @@ public static partial class FileSystemPreservation
         return Convert.ToHexString(Sha256.ComputeHash(Encoding.UTF8.GetBytes(json.ToJsonString())));
     }
 
+    /// <summary>
+    /// Starts the SHA-256 of the source on a background thread so it is read while extraction decodes the same
+    /// image, instead of after the whole extraction has finished.
+    /// <para>在后台线程启动源 SHA-256，使它在解包解码同一镜像期间完成读取，而不是等整次解包结束后才开始。</para>
+    /// </summary>
+    /// <param name="source">Source image file the background work opens for reading.
+    /// <para>后台工作以只读方式打开的源镜像文件。</para></param>
+    /// <param name="cancellationToken">Cancels the background read. <para>取消后台读取。</para></param>
+    /// <returns>The pending computation; disposing it abandons the read and observes any fault.
+    /// <para>待完成的计算；释放它会放弃读取并观察可能出现的故障。</para></returns>
+    internal static SourceDigestComputation StartSourceDigest(string source, CancellationToken cancellationToken)
+        => new(token => HashFile(source, token), cancellationToken);
+
     private static string HashFile(string path, CancellationToken token, Action<int>? processed = null)
     {
         using var input = File.OpenRead(path);
@@ -308,5 +398,76 @@ public static partial class FileSystemPreservation
             bytes.Complete();
         }
         return result;
+    }
+}
+
+/// <summary>
+/// Slot that carries the EROFS snapshot from extraction to metadata capture on one unpack flow. The format handler
+/// creates it before the shared pipeline runs and the capture consumes it once; a snapshot nobody consumes is
+/// disposed with the slot, so its parser and source stream cannot outlive the operation.
+/// <para>在同一条解包流上把 EROFS 快照从解包传送到元数据采集的槽。格式处理器在共享流水线运行前创建它，采集消费一次；
+/// 未被消费的快照随槽一起释放，使其解析器与来源流不会活过该操作。</para>
+/// </summary>
+internal sealed class ErofsPreservationCapture : IDisposable
+{
+    private ErofsPreservationSnapshot? _snapshot;
+
+    /// <summary>
+    /// Publishes the snapshot the extraction produced, replacing and disposing an earlier one from a rejected
+    /// extraction pass. <para>发布解包产出的快照，替换并释放被否定的解包轮次留下的旧快照。</para>
+    /// </summary>
+    /// <param name="snapshot">Frozen snapshot owned by this slot from now on.
+    /// <para>自此刻起由本槽持有的冻结快照。</para></param>
+    internal void Set(ErofsPreservationSnapshot snapshot)
+        => Interlocked.Exchange(ref _snapshot, snapshot)?.Dispose();
+
+    /// <summary>Removes the published snapshot so the caller becomes its only owner.
+    /// <para>取出已发布的快照，使调用方成为其唯一持有者。</para>
+    /// </summary>
+    /// <returns>The snapshot, or <see langword="null"/> when none was published.
+    /// <para>快照；未发布任何快照时为 <see langword="null"/>。</para></returns>
+    internal ErofsPreservationSnapshot? Take() => Interlocked.Exchange(ref _snapshot, null);
+
+    public void Dispose() => Interlocked.Exchange(ref _snapshot, null)?.Dispose();
+}
+
+/// <summary>
+/// SHA-256 of one source image computed on a background thread before extraction and consumed by the preservation
+/// capture. Disposing it cancels a read the capture never consumed and observes its outcome.
+/// <para>在解包前由后台线程计算、由保留采集消费的单份源镜像 SHA-256。释放它会取消采集从未消费的读取并观察其结果。</para>
+/// </summary>
+internal sealed class SourceDigestComputation : IDisposable
+{
+    private readonly CancellationTokenSource _cancellation;
+    private readonly Task<string> _digest;
+
+    /// <summary>Starts the computation. <para>启动计算。</para></summary>
+    /// <param name="hash">Digest delegate receiving the cancellation token tied to this computation.
+    /// <para>接收与本计算绑定的取消令牌的摘要委托。</para></param>
+    /// <param name="cancellationToken">Token the background read is linked to.
+    /// <para>后台读取所关联的取消令牌。</para></param>
+    internal SourceDigestComputation(Func<CancellationToken, string> hash, CancellationToken cancellationToken)
+    {
+        _cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var token = _cancellation.Token;
+        _digest = Task.Run(() => hash(token), token);
+    }
+
+    /// <summary>Waits for the background read and returns its digest, rethrowing the read's own failure.
+    /// <para>等待后台读取并返回其摘要，重抛该读取自身的故障。</para>
+    /// </summary>
+    /// <returns>The uppercase hexadecimal digest. <para>大写十六进制摘要。</para></returns>
+    /// <exception cref="OperationCanceledException">The read was cancelled.
+    /// <para>读取已被取消。</para></exception>
+    internal string Resolve() => _digest.GetAwaiter().GetResult();
+
+    public void Dispose()
+    {
+        _cancellation.Cancel();
+        _ = _digest.ContinueWith(static (digest, state) =>
+        {
+            _ = digest.Exception;
+            ((CancellationTokenSource)state!).Dispose();
+        }, _cancellation, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 }

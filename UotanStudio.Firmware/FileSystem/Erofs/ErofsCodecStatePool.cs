@@ -7,23 +7,44 @@ namespace UotanStudio.Firmware.FileSystem.Erofs;
 
 /// <summary>
 /// The reusable encoder state one planning worker keeps for the duration of one payload: the LZ4 native
-/// context rented from <see cref="ErofsLz4StatePool"/>, one ZSTD compressor, and one MicroLZMA encoder.
-/// A planner probe asks for the backend its node's algorithm needs, and each backend is created at most once
-/// per payload instead of once per probe. Every backend receives its full parameter set before each encode,
-/// so a reused context emits exactly the bytes a freshly constructed one emits.
+/// context rented from <see cref="ErofsLz4StatePool"/>, the ZSTD compressors of the level and window pairs
+/// the node set uses, and one MicroLZMA encoder together with the buffer it encodes into. A planner probe
+/// asks for the backend its node's algorithm needs, and each backend is created at most once per payload
+/// instead of once per probe. LZ4 and ZSTD receive their full parameter set before each encode, and the
+/// MicroLZMA coder properties are applied whenever the level and frame-capped dictionary change, so a reused
+/// context emits exactly the bytes a freshly constructed one emits. Buffers and encoders whose retained
+/// working set grew past the configured limits are released instead of recycled.
 /// <para>规划工作者在一份负载期间保留的可复用编码器状态：从 <see cref="ErofsLz4StatePool"/> 借用的 LZ4 原生上下文、
-/// 一个 ZSTD 压缩器与一个 MicroLZMA 编码器。规划探测按节点算法取用对应后端，每个后端每份负载最多创建一次，
-/// 而不是每次探测创建一次。每个后端在每次编码前都会收到完整参数集，因此复用上下文输出的字节与新构造的上下文完全一致。</para>
+/// 节点所用（级别，窗口对数）组合对应的 ZSTD 压缩器，以及一个 MicroLZMA 编码器与其编码缓冲。规划探测按节点算法
+/// 取用对应后端，每个后端每份负载最多创建一次，而不是每次探测创建一次。LZ4 与 ZSTD 在每次编码前都会收到完整参数集，
+/// MicroLZMA 编码属性在等级与按帧长封顶的字典变化时应用，因此复用上下文输出的字节与新构造的上下文完全一致；
+/// 保留工作集超过既定上限的缓冲与编码器会被释放而不是回收。</para>
 /// </summary>
 internal sealed class ErofsEncoderContext : IDisposable
 {
+    private const int RetainedZstdConfigurations = 2;
+
+    /// <summary>Capacity above which the MicroLZMA intermediate buffer is released instead of carried into
+    /// the next payload, so a worker that encoded one large frame does not pin that allocation.
+    /// <para>MicroLZMA 中间缓冲的保留上限；超过该容量时不再带入下一份负载，避免编码过一个大帧的工作者长期占住该分配。</para></summary>
+    private const int LzmaOutputRetentionLimit = 256 * 1024;
+
+    /// <summary>Dictionary size above which the retained MicroLZMA encoder is dropped on return. The
+    /// LZMA-SDK match finder keeps structures proportional to the dictionary (roughly an order of magnitude
+    /// larger than the window), so a dictionary this large would pin tens of megabytes per pooled worker.
+    /// <para>归还时丢弃保留 MicroLZMA 编码器的字典大小阈值。LZMA-SDK 的匹配查找器持有与字典成正比的结构
+    /// （约为窗口的一个数量级），如此大的字典会让每个池化工作者占住数十兆字节。</para></summary>
+    private const int LargeLzmaDictionarySize = 256 * 1024;
+
     private readonly ErofsLz4StatePool _lz4States = new();
+    private readonly Dictionary<(int Level, int WindowLog), Compressor> _zstd = [];
+    private readonly Queue<(int Level, int WindowLog)> _zstdOrder = new();
     private ErofsLz4Context? _lz4Fast;
     private ErofsLz4Context? _lz4HighCompression;
-    private Compressor? _zstd;
-    private int _zstdLevel = int.MinValue;
-    private int _zstdWindowLog = int.MinValue;
     private Encoder? _lzma;
+    private int _lzmaLevel = int.MinValue;
+    private int _lzmaDictionarySize = int.MinValue;
+    private MemoryStream? _lzmaOutput;
 
     /// <summary>
     /// Borrows the LZ4 context of the requested identity, renting it from the LZ4 pool on first use.
@@ -39,12 +60,14 @@ internal sealed class ErofsEncoderContext : IDisposable
             : _lz4Fast ??= _lz4States.Rent(false);
 
     /// <summary>
-    /// Returns the ZSTD compressor configured for the requested level and window log, replacing the retained
-    /// compressor when either parameter changes. A replaced compressor is disposed rather than reconfigured,
-    /// because the level is fixed for a compressor's lifetime and a window log left over from another level
-    /// would silently change the emitted frame.
-    /// <para>返回按请求级别与窗口对数配置的 ZSTD 压缩器；任一参数变化时替换保留的压缩器。被替换的压缩器会被释放而不是
-    /// 重新配置，因为级别在压缩器生命周期内固定，且另一级别遗留的窗口对数会悄悄改变输出的帧。</para>
+    /// Returns the ZSTD compressor configured for the requested level and window log, keeping the compressors
+    /// of the last few distinct pairs so switching between the compression options of two nodes does not
+    /// rebuild them. A compressor is never reconfigured: the level is fixed for a compressor's lifetime and
+    /// a window log left over from another level would silently change the emitted frame, so each pair gets
+    /// its own instance and the least recently used one is disposed when the retained set is full.
+    /// <para>返回按请求级别与窗口对数配置的 ZSTD 压缩器，并保留最近若干个不同组合的压缩器，使两个节点的压缩选项
+    /// 交替时不致重建。压缩器从不被重新配置：级别在其生命周期内固定，且另一级别遗留的窗口对数会悄悄改变输出的帧，
+    /// 因此每个组合各持一个实例，保留集满时释放最久未用的那个。</para>
     /// </summary>
     /// <param name="level">Compression level already clamped to the range ZstdSharp accepts.
     /// <para>已截断到 ZstdSharp 接受区间的压缩级别。</para></param>
@@ -53,30 +76,126 @@ internal sealed class ErofsEncoderContext : IDisposable
     /// <returns>A compressor owned by this context. <para>由本上下文持有的压缩器。</para></returns>
     internal Compressor RentZstd(int level, int windowLog)
     {
-        if (_zstd is null || _zstdLevel != level || _zstdWindowLog != windowLog)
+        var key = (level, windowLog);
+        if (_zstd.TryGetValue(key, out var retained))
         {
-            _zstd?.Dispose();
-            _zstd = new Compressor(level);
-            if (windowLog > 0)
-            {
-                _zstd.SetParameter(ZSTD_cParameter.ZSTD_c_windowLog, windowLog);
-            }
-
-            _zstdLevel = level;
-            _zstdWindowLog = windowLog;
+            return retained;
         }
 
-        return _zstd;
+        var compressor = new Compressor(level);
+        try
+        {
+            if (windowLog > 0)
+            {
+                compressor.SetParameter(ZSTD_cParameter.ZSTD_c_windowLog, windowLog);
+            }
+        }
+        catch
+        {
+            compressor.Dispose();
+            throw;
+        }
+
+        _zstd[key] = compressor;
+        _zstdOrder.Enqueue(key);
+        if (_zstdOrder.Count > RetainedZstdConfigurations
+            && _zstd.Remove(_zstdOrder.Dequeue(), out var evicted))
+        {
+            evicted.Dispose();
+        }
+
+        return compressor;
     }
 
     /// <summary>
-    /// Returns the retained MicroLZMA encoder. Its coder properties are applied per encode, because the
-    /// planner resolves a dictionary size from each candidate span, so the retained object never assumes the
-    /// previous call's properties.
-    /// <para>返回保留的 MicroLZMA 编码器。规划器会按每个候选跨度推导字典大小，因此编码属性逐次在编码前应用，
-    /// 保留的对象从不沿用上一次调用的属性。</para>
+    /// Returns the retained MicroLZMA encoder configured for the requested level and frame-capped dictionary
+    /// size. The coder properties are re-applied only when that pair changes, because the planning loop
+    /// probes spans that often share a dictionary size; re-applying unchanged values is equivalent to
+    /// skipping the call, so this does not alter the emitted bytes. The LZMA-SDK match finder still rebuilds
+    /// its dictionary-sized structures when the pair does change (the planner caps the dictionary to each
+    /// frame, so alternating frame lengths do), which is the setup cost this reuse cannot remove without a
+    /// native encoder.
+    /// <para>返回按请求等级与按帧长封顶的字典大小配置的保留 MicroLZMA 编码器。仅当该组合变化时才重新应用编码属性，
+    /// 因为规划循环探测的跨度往往共享同一字典大小；应用相同取值等价于跳过调用，因此不会改变输出字节。组合确实变化时
+    /// LZMA-SDK 的匹配查找器仍会重建与字典等大的结构（规划器按每个帧封顶字典，因此帧长交替时就会发生），这是不留用
+    /// 原生编码器时无法消除的准备成本。</para>
     /// </summary>
-    internal Encoder LzmaEncoder => _lzma ??= new Encoder();
+    /// <param name="compressionLevel">Level selecting the LZMA algorithm and fast-byte count.
+    /// <para>选择 LZMA 算法与 fast-bytes 数量的等级。</para></param>
+    /// <param name="dictionarySize">Dictionary size in bytes already capped to the frame length.
+    /// <para>已按帧长封顶的字典字节数。</para></param>
+    /// <returns>The encoder this context owns until it is disposed.
+    /// <para>由本上下文持有至其被释放的编码器。</para></returns>
+    internal Encoder RentLzma(int compressionLevel, int dictionarySize)
+    {
+        var encoder = _lzma;
+        if (encoder is null)
+        {
+            encoder = new Encoder();
+            ErofsCompression.ConfigureLzmaEncoder(encoder, compressionLevel, dictionarySize);
+            _lzma = encoder;
+            _lzmaLevel = compressionLevel;
+            _lzmaDictionarySize = dictionarySize;
+            return encoder;
+        }
+
+        if (compressionLevel != _lzmaLevel || dictionarySize != _lzmaDictionarySize)
+        {
+            ErofsCompression.ConfigureLzmaEncoder(encoder, compressionLevel, dictionarySize);
+            _lzmaLevel = compressionLevel;
+            _lzmaDictionarySize = dictionarySize;
+        }
+
+        return encoder;
+    }
+
+    /// <summary>
+    /// Returns the retained buffer the MicroLZMA encoder writes its intermediate stream into, so the encoder
+    /// reuses one allocation instead of one growable buffer per encode. Its content is discarded and its
+    /// length reset before every encode, which is why a reused buffer emits the same bytes.
+    /// <para>返回 MicroLZMA 编码器写入中间流的保留缓冲，使编码器复用一个分配而不是每次编码一个新增长缓冲。
+    /// 每次编码前都会丢弃其内容并重置长度，因此复用缓冲输出同样的字节。</para>
+    /// </summary>
+    internal MemoryStream LzmaOutput => _lzmaOutput ??= new MemoryStream();
+
+    /// <summary>
+    /// Releases the MicroLZMA intermediate buffer once it grew past <see cref="LzmaOutputRetentionLimit"/>, so
+    /// a worker that encoded one large frame does not carry that allocation for the rest of its life. Smaller
+    /// buffers are kept for reuse.
+    /// <para>MicroLZMA 中间缓冲超过 <see cref="LzmaOutputRetentionLimit"/> 后将其释放，使编码过一次大帧的工作者
+    /// 不会在余生一直携带该分配；更小的缓冲保留复用。</para>
+    /// </summary>
+    internal void TrimLzmaOutput()
+    {
+        var output = _lzmaOutput;
+        if (output is null || output.Capacity <= LzmaOutputRetentionLimit)
+        {
+            return;
+        }
+
+        output.SetLength(0);
+        output.Capacity = 0;
+    }
+
+    /// <summary>
+    /// Drops the retained MicroLZMA encoder when its last dictionary was large enough to keep a multi-megabyte
+    /// match-finder working set. The next encode creates a fresh encoder and applies that frame's own level and
+    /// dictionary, so this changes only the retained working set, never the emitted bytes.
+    /// <para>当保留 MicroLZMA 编码器上一次使用的字典大到会留下数兆字节的匹配查找器工作集时将其丢弃。下一次编码会新建
+    /// 编码器并应用该帧自身的等级与字典，因此改变的只是保留的工作集，绝不会改变输出字节。</para>
+    /// </summary>
+    internal void TrimLargeLzmaState()
+    {
+        TrimLzmaOutput();
+        if (_lzmaDictionarySize < LargeLzmaDictionarySize)
+        {
+            return;
+        }
+
+        _lzma = null;
+        _lzmaLevel = int.MinValue;
+        _lzmaDictionarySize = int.MinValue;
+    }
 
     /// <inheritdoc />
     public void Dispose()
@@ -94,9 +213,18 @@ internal sealed class ErofsEncoderContext : IDisposable
         }
 
         _lz4States.Dispose();
-        _zstd?.Dispose();
-        _zstd = null;
+        foreach (var compressor in _zstd.Values)
+        {
+            compressor.Dispose();
+        }
+
+        _zstd.Clear();
+        _zstdOrder.Clear();
         _lzma = null;
+        _lzmaLevel = int.MinValue;
+        _lzmaDictionarySize = int.MinValue;
+        _lzmaOutput?.Dispose();
+        _lzmaOutput = null;
     }
 }
 
@@ -120,8 +248,11 @@ internal sealed class ErofsCodecStatePool : IDisposable
     internal ErofsEncoderContext Rent() => _idle.TryDequeue(out var context) ? context : new ErofsEncoderContext();
 
     /// <summary>
-    /// Returns a borrowed context, disposing it when the pool already holds one per worker.
-    /// <para>归还借出的上下文；池中已按工作者数量存满时直接释放。</para>
+    /// Returns a borrowed context, disposing it when the pool already holds one per worker. A context that
+    /// grew a large MicroLZMA working set is trimmed first, so a payload with big frames cannot pin that
+    /// allocation in the pool.
+    /// <para>归还借出的上下文；池中已按工作者数量存满时直接释放。曾增长出大 MicroLZMA 工作集的上下文会先被裁剪，
+    /// 因此含大帧的负载不会把该分配长期留在池中。</para>
     /// </summary>
     /// <param name="context">Context obtained from <see cref="Rent"/>.
     /// <para>由 <see cref="Rent"/> 取得的上下文。</para></param>
@@ -133,6 +264,7 @@ internal sealed class ErofsCodecStatePool : IDisposable
             return;
         }
 
+        context.TrimLargeLzmaState();
         _idle.Enqueue(context);
     }
 

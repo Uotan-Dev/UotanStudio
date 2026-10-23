@@ -274,8 +274,13 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Reads Unix metadata (uid/gid/mtime with nanoseconds/permissions/rdev): Linux uses lstat for all fields; other platforms fall back to defaults (uid/gid = 0, mtime = 0, no mode).
-    /// <para>读取 Unix 元数据（uid/gid/mtime 含纳秒/权限/设备号）：Linux 通过 lstat 获取全部字段；其他平台使用回退默认值（uid/gid = 0，mtime = 0，不带权限）。</para>
+    /// Reads Unix metadata (uid/gid/mtime with nanoseconds/permissions/rdev). Linux uses <c>lstat</c> for
+    /// every field; other platforms keep the ownership, permission and device defaults because the host has
+    /// no POSIX metadata, but still take the modification time from the file system entry so a non-Linux build
+    /// publishes real timestamps.
+    /// <para>读取 Unix 元数据（uid/gid/mtime 含纳秒/权限/设备号）。Linux 通过 <c>lstat</c> 获取全部字段；其他平台
+    /// 因宿主没有 POSIX 元数据而保留属主、权限与设备号的默认值，但仍从文件系统条目取得修改时间，使非 Linux 构建
+    /// 也能发布真实时间戳。</para>
     /// </summary>
     /// <returns><see langword="true"/> when <c>lstat</c> supplied a real mode for this entry, so a zero
     /// permission word means "no metadata" rather than mode 0000.
@@ -300,7 +305,22 @@ public sealed partial class ErofsBuilder
         deviceRdev = 0;
         deviceMode = 0;
 
-        if (!OperatingSystem.IsLinux()) return false;
+        if (!OperatingSystem.IsLinux())
+        {
+            try
+            {
+                var lastWrite = File.GetLastWriteTimeUtc(fullPath);
+                mtime = lastWrite > DateTime.UnixEpoch
+                    ? new DateTimeOffset(lastWrite).ToUnixTimeSeconds()
+                    : 0;
+            }
+            catch
+            {
+                mtime = 0;
+            }
+
+            return false;
+        }
 
         try
         {
@@ -631,64 +651,60 @@ public sealed partial class ErofsBuilder
         => timestamp < epoch || timestamp - epoch > uint.MaxValue || nanoseconds != 0;
 
     /// <summary>
-    /// Reports whether the feature declaration permits per-node big pclusters. An authoritative
-    /// declaration is the authority, so a rebuilt image cannot advertise a layout its source lacked; a
-    /// derived declaration asks the options whether the planned pcluster limit actually exceeds one block,
-    /// which is what keeps the default single-block layout free of the bit.
-    /// <para>判断特性声明是否允许逐节点 big pcluster。权威声明即为依据，因此重建镜像不会声明源镜像缺失的
-    /// 布局；推导式声明改问选项规划的 pcluster 上限是否真超过一块，这正是默认单块布局不带该位的原因。</para>
+    /// Reports whether the planned pcluster limit licenses frames spanning more than one filesystem block:
+    /// the declaration carries the shared big-pcluster bit, or the build selected a pcluster size above one
+    /// block.
+    /// <para>判断已规划的 pcluster 上限是否许可跨越多个文件系统块的帧：声明携带共享的 big-pcluster 位，或本次
+    /// 构建选定的 pcluster 大小超过一块。</para>
     /// </summary>
     /// <param name="options">Validated build options carrying the declaration.
     /// <para>携带声明的经校验构建选项。</para></param>
     /// <returns><see langword="true"/> when pclusters may span more than one filesystem block.
     /// <para>允许 pcluster 跨越多个文件系统块时为 <see langword="true"/>。</para></returns>
     private static bool DeclaredBigPcluster(ErofsOptions options)
-        => options.FeaturesAuthoritative
-            ? options.Features.Contains(ErofsFeature.BigPcluster)
-            : options.ModernCompressionLayoutRequested;
+        => options.Features.Contains(ErofsFeature.BigPcluster)
+            || options.MaxPclusterSize > options.BlockSize;
 
     /// <summary>
-    /// Reports whether the declaration advertises the compression configuration records that follow the
-    /// superblock. The records share incompat bit 0x00000002 with big pclusters, so an image without them
-    /// also carries no algorithm bitmap and keeps the legacy max-distance encoding in
-    /// <c>s_available_compr_algs</c>. A derived declaration resolves to the same single predicate as
-    /// <see cref="DeclaredBigPcluster"/>, because one bit licenses both layouts.
-    /// <para>判断声明是否写出紧随超级块的压缩配置记录。该记录与 big pcluster 共用 incompat 位 0x00000002，
-    /// 因此无该记录的镜像也不携带算法位图，<c>s_available_compr_algs</c> 沿用 legacy 的最大距离编码。
-    /// 推导式声明落到与 <see cref="DeclaredBigPcluster"/> 相同的单一判据，因为一位许可两种布局。</para>
+    /// Reports whether this build writes the compression configuration records that follow the superblock.
+    /// The records share incompat bit 0x00000002 with big pclusters, so an image without them also carries
+    /// no algorithm bitmap and keeps the LZ4 maximum-distance encoding in <c>s_available_compr_algs</c>.
+    /// A codec other than LZ4 always needs its own record, a pcluster limit above one block is carried by the
+    /// record's block count, and a declaration may ask for the records explicitly.
+    /// <para>判断本次构建是否写出紧随超级块的压缩配置记录。该记录与 big pcluster 共用 incompat 位
+    /// 0x00000002，因此无该记录的镜像也不携带算法位图，<c>s_available_compr_algs</c> 沿用 LZ4 最大距离编码。
+    /// 非 LZ4 编解码器总需要自己的记录，超过一块的 pcluster 上限由记录的块数承载，声明也可以显式要求写出记录。</para>
     /// </summary>
     /// <param name="options">Validated build options carrying the declaration.
     /// <para>携带声明的经校验构建选项。</para></param>
-    /// <returns><see langword="true"/> when configuration records may be written.
-    /// <para>允许写出压缩配置记录时为 <see langword="true"/>。</para></returns>
+    /// <returns><see langword="true"/> when configuration records are written.
+    /// <para>写出压缩配置记录时为 <see langword="true"/>。</para></returns>
     private static bool DeclaredCompressionConfigs(ErofsOptions options)
-        => options.FeaturesAuthoritative
-            ? options.Features.Contains(ErofsFeature.CompressionConfigs)
-            : options.ModernCompressionLayoutRequested;
+        => options.Features.Contains(ErofsFeature.CompressionConfigs)
+            || options.Algorithm != ErofsCompressionAlgorithm.Lz4
+            || options.MaxPclusterSize > options.BlockSize;
 
     /// <summary>
-    /// Reports whether the declaration advertises ztailpacking, the incompat bit licensing a final
-    /// compressed cluster stored inline beside its indexes.
-    /// <para>判断声明是否 advertise ztailpacking，即允许把最后一个压缩簇内联存放在其索引旁的 incompat
-    /// 位。</para>
+    /// Reports whether this build may store a final compressed cluster inline beside its indexes: the
+    /// declaration carries ztailpacking, or the build requested the inline tail explicitly.
+    /// <para>判断本次构建是否可以把最后一个压缩簇内联存放在其索引旁：声明携带 ztailpacking，或本次构建显式要求
+    /// 内联尾部。</para>
     /// </summary>
     /// <param name="options">Validated build options carrying the declaration.
     /// <para>携带声明的经校验构建选项。</para></param>
     /// <returns><see langword="true"/> when an inline compressed tail may be written.
     /// <para>允许写出内联压缩尾部时为 <see langword="true"/>。</para></returns>
     private static bool DeclaredZtailpacking(ErofsOptions options)
-        => options.FeaturesAuthoritative
-            ? options.Features.Contains(ErofsFeature.Ztailpacking)
-            : !options.LegacyCompatibility;
+        => options.Features.Contains(ErofsFeature.Ztailpacking) || options.CompressedTailPacking;
 
     /// <summary>
     /// Resolves the <c>48bit</c> incompat bit, which splits the superblock block count into
     /// <c>s_blocks</c> plus <c>s_blocks_hi</c> and moves the root inode number into the 64-bit
-    /// <c>s_rootnid_8b</c> field. A derived declaration answers from the image's own size, because a
-    /// superblock whose high half does not fit cannot publish the count any other way.
+    /// <c>s_rootnid_8b</c> field. The declaration may carry the bit, and an image whose block count does not
+    /// fit the 32-bit field cannot publish that count any other way.
     /// <para>解析 <c>48bit</c> incompat 位，它把超级块块数拆为 <c>s_blocks</c> 与 <c>s_blocks_hi</c>，
-    /// 并把根 inode 编号移入 64 位的 <c>s_rootnid_8b</c> 字段。推导式声明依据镜像自身大小作答，因为高半部分
-    /// 装不下的超级块无法以其他方式发布该计数。</para>
+    /// 并把根 inode 编号移入 64 位的 <c>s_rootnid_8b</c> 字段。声明可以携带该位，而块数装不进 32 位字段的镜像
+    /// 无法以其他方式发布该计数。</para>
     /// </summary>
     /// <param name="options">Validated build options carrying the declaration.
     /// <para>携带声明的经校验构建选项。</para></param>
@@ -697,30 +713,23 @@ public sealed partial class ErofsBuilder
     /// <returns><see langword="true"/> when the wide superblock fields are written.
     /// <para>写出宽超级块字段时为 <see langword="true"/>。</para></returns>
     internal static bool DeclaredFortyEightBit(ErofsOptions options, long totalBlocks)
-        => options.FeaturesAuthoritative
-            ? options.Features.Contains(ErofsFeature.FortyEightBit)
-            : totalBlocks > uint.MaxValue;
+        => options.Features.Contains(ErofsFeature.FortyEightBit) || totalBlocks > uint.MaxValue;
 
     /// <summary>
-    /// Resolves the inode advise bit shared by <c>EROFS_I_NLINK_1</c> and dot-omitted directories from
-    /// the tri-state declaration: an enabled declaration always allows it, a disabled one never does, and
-    /// <see cref="ErofsTriStateFeature.Auto"/> keeps the legacy-compatibility answer so derived builds are
-    /// byte-identical.
-    /// <para>由三态声明解析 inode advise 位（<c>EROFS_I_NLINK_1</c> 与省略点项目录共用）：启用声明一律允许，
-    /// 禁用声明一律不允许，<see cref="ErofsTriStateFeature.Auto"/> 沿用 legacy 兼容的结论，使推导式构建逐字节
-    /// 不变。</para>
+    /// Resolves the inode advise bit shared by <c>EROFS_I_NLINK_1</c> and dot-omitted directories from the
+    /// tri-state declaration: a disabled declaration never allows it and every other value allows it.
+    /// Whether the target actually defines the bit is a separate statement, checked by
+    /// <see cref="KernelDefinesNlinkOneAdvice"/>.
+    /// <para>由三态声明解析 inode advise 位（<c>EROFS_I_NLINK_1</c> 与省略点项目录共用）：禁用声明一律不允许，
+    /// 其余取值一律允许。目标是否真的定义该位是另一项陈述，由 <see cref="KernelDefinesNlinkOneAdvice"/>
+    /// 检查。</para>
     /// </summary>
     /// <param name="options">Validated build options whose <see cref="ErofsOptions.DotOmitted"/> is already
     /// resolved. <para>其 <see cref="ErofsOptions.DotOmitted"/> 已完成解析的经校验构建选项。</para></param>
     /// <returns><see langword="true"/> when the advise bit may be set on a compact inode.
     /// <para>允许在紧凑 inode 上置该 advise 位时为 <see langword="true"/>。</para></returns>
     private static bool DeclaredNlinkOneAdvice(ErofsOptions options)
-        => options.DotOmitted switch
-        {
-            ErofsTriStateFeature.Enabled => true,
-            ErofsTriStateFeature.Disabled => false,
-            _ => !options.LegacyCompatibility,
-        };
+        => options.DotOmitted != ErofsTriStateFeature.Disabled;
 
     /// <summary>
     /// Reports whether the nlink-one / dot-omitted advise bit may be written. Only newer kernels define the
@@ -798,6 +807,7 @@ public sealed partial class ErofsBuilder
         bool freshDestination, IProgress<(long Processed, long Total)>? progress = null)
     {
         using var output = new OffsetStream(destination, baseOffset);
+        options.CompiledCompressHints ??= ErofsCompressHints.Compile(options.CompressHints, options);
         var context = ImageBuildContext.Create(root, options, output);
         try
         {
@@ -812,6 +822,7 @@ public sealed partial class ErofsBuilder
             context.PlanSharedXattrs();
             context.PlanNodeLayouts();
             context.CreatePackedNode();
+            context.PlanPackedNodeCompression();
             context.PlanMetabox();
             var metaOff = context.AssignInodeOffsets();
             var totalBlocks = context.AssignDataAddresses(metaOff);
@@ -840,6 +851,7 @@ public sealed partial class ErofsBuilder
         finally
         {
             context.StagedCompression?.Dispose();
+            context.DeletePackedBodyFile();
             context.DeleteMetaboxBodyFile();
         }
     }

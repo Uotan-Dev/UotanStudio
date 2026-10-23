@@ -147,16 +147,18 @@ public sealed partial class ErofsBuilder
         public bool HasChunkBasedLayout { get; set; }
 
         /// <summary>
-        /// Staging file holding the compressed payloads accepted during <see cref="PlanNodePayloads"/>;
-        /// the write pass copies from it instead of re-compressing each pcluster. Null until the first
-        /// compressed plan stages bytes, and disposed with the build.
-        /// <para>承载 <see cref="PlanNodePayloads"/> 阶段接受的压缩负载的暂存文件；写出阶段从中复制而不再
-        /// 重新压缩。首次压缩规划写入前为 null，并随构建结束释放。</para>
+        /// Staging area holding the compressed payloads accepted during <see cref="PlanNodePayloads"/>; it keeps
+        /// them in memory within <see cref="Core.FirmwareParallelism.WorkerMemoryBudgetBytes"/> and spills to a
+        /// temporary file beyond that budget, and the write pass copies from it instead of re-compressing each
+        /// pcluster. Null until the first compressed plan stages bytes, and disposed with the build.
+        /// <para>承载 <see cref="PlanNodePayloads"/> 阶段接受的压缩负载的暂存区；在
+        /// <see cref="Core.FirmwareParallelism.WorkerMemoryBudgetBytes"/> 之内保留于内存，超出后落到临时文件，
+        /// 写出阶段从中复制而不再重新压缩。首次压缩规划写入前为 null，并随构建结束释放。</para>
         /// </summary>
         public Core.CompressionPayloadStaging? StagedCompression { get; private set; }
 
-        /// <summary>Creates the compression payload staging file on first use.
-        /// <para>首次使用时创建压缩负载暂存文件。</para></summary>
+        /// <summary>Creates the compression payload staging area on first use.
+        /// <para>首次使用时创建压缩负载暂存区。</para></summary>
         public Core.CompressionPayloadStaging EnsureStagedCompression() => StagedCompression ??= new();
 
         public List<(ErofsInode Alias, ErofsInode Canonical)> Hardlinks { get; } = [];
@@ -220,6 +222,52 @@ public sealed partial class ErofsBuilder
             }
 
             MetaboxBodyPath = null;
+            try
+            {
+                File.Delete(path);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        /// <summary>
+        /// Scratch file holding the packed fragment payload once <see cref="PlanPackedNodeCompression"/>
+        /// materializes it for the compressor. The packed inode is a synthetic node with no source file of its
+        /// own, while the compression planners read a node's payload from <see cref="ErofsInode.FullPath"/>, so
+        /// the assembled payload is written here and the packed node temporarily names this path. Null while the
+        /// packed payload stays verbatim.
+        /// <para>压缩规划把 packed fragment 负载落地后承载它的暂存文件。packed inode 是没有自身源文件的合成节点，
+        /// 而压缩规划器按 <see cref="ErofsInode.FullPath"/> 读取节点负载，因此装配出的负载写到此处，并让 packed
+        /// 节点临时指向该路径。packed 负载按明文存放时为 null。</para>
+        /// </summary>
+        public string? PackedBodyPath { get; private set; }
+
+        /// <summary>Records the scratch file an encoded packed fragment payload was materialized into.
+        /// <para>记录编码后的 packed fragment 负载所落入的暂存文件。</para>
+        /// </summary>
+        /// <param name="path">Path the payload was written to.
+        /// <para>负载写入的路径。</para></param>
+        public void SetPackedBodyPath(string path) => PackedBodyPath = path;
+
+        /// <summary>
+        /// Deletes the packed fragment payload scratch file, if one was created. It is a build-time handoff
+        /// between the planning pass and the write pass and carries no durable state, so it is removed on every
+        /// exit path including a failed build.
+        /// <para>删除 packed fragment 负载的暂存文件（若已创建）。它只是规划阶段与写出阶段之间的构建期交接物，
+        /// 不承载持久状态，因此在包括构建失败在内的所有退出路径上都会被删除。</para>
+        /// </summary>
+        public void DeletePackedBodyFile()
+        {
+            if (PackedBodyPath is not { } path)
+            {
+                return;
+            }
+
+            PackedBodyPath = null;
             try
             {
                 File.Delete(path);
@@ -455,19 +503,23 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
-        /// Gives a planned node the attribute set the source image recorded for it. The body is carried
-        /// verbatim because it is index-relative to the source long-prefix table and may reference a shared
-        /// attribute id rather than list entries; the prefix table and ishare prefix are themselves replayed,
-        /// so re-encoding would corrupt a body that is already valid. The entries are decoded from the body so
-        /// the shared-attribute pass still sees the set, and a shared body keeps its id instead of being
-        /// re-shared.
-        /// <para>把源镜像为该节点记录的属性集交给规划后的节点。该体按原样携带，因为它相对于源长前缀表索引，且可能
-        /// 引用共享属性 id 而非列出条目；前缀表与 ishare 前缀本身已被重放，因此重新编码会破坏本已有效的体。条目由该体
-        /// 解码得出，使共享属性遍历仍能看到该集合；共享体则保留其 id 而不再被重新共享。</para>
+        /// Gives a planned node the attribute set the source image recorded for it. A body that lists its
+        /// entries inline is carried verbatim because it is index-relative to the source long-prefix table and
+        /// the prefix table is itself replayed; its entries are decoded only so the fingerprint and edit passes
+        /// still see the set. A body that names a shared id is not carried verbatim: that id is an offset into
+        /// the source image's shared area, which the rebuilt image writes somewhere else, so the resolved set
+        /// is handed to <see cref="PlanSharedXattrs"/> to be re-encoded against the new area.
+        /// <para>把源镜像为该节点记录的属性集交给规划后的节点。内联列出条目的体按原样携带，因为它相对于源长前缀表
+        /// 索引且该表本身已被重放；解码其条目只是让指纹与编辑流程仍能看到集合。指名共享 id 的体则不作原样携带：
+        /// 该 id 是源镜像共享区内的偏移，而重建镜像会把共享区写到别处，因此把解析出的集合交给
+        /// <see cref="PlanSharedXattrs"/> 按新区重新编码。</para>
         /// </summary>
         /// <param name="node">Planned node to extend. <para>待扩充的规划节点。</para></param>
         /// <param name="sourceInode">Source inode carrying the recorded body.
         /// <para>携带已记录体的源 inode。</para></param>
+        /// <exception cref="FileSystemUnsupportedFeatureException">The source body names a shared id that was
+        /// not resolved, so the rebuilt shared area cannot be kept consistent with it.
+        /// <para>源体指名的共享 id 未被解析，重建的共享区无法与其保持一致。</para></exception>
         private void InheritSourceXattrIbody(ErofsInode node, ErofsInode sourceInode)
         {
             node.XattrIbody = [.. sourceInode.XattrIbody];
@@ -478,6 +530,22 @@ public sealed partial class ErofsBuilder
                 : sourceInode.SharedXattrId >= 0
                     ? null
                     : [.. ErofsXattr.ParseInline(node.XattrIbody, node.XattrICount, Options.SourceXattrPrefixes)];
+
+            if (sourceInode.SharedXattrId < 0)
+            {
+                return;
+            }
+
+            if (node.XattrEntries is not { Count: > 0 })
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"EROFS preserved rebuild: the shared xattr set of '{BuildImagePath(node)}' could not be "
+                    + "resolved, so the inherited shared id cannot be renumbered against the rebuilt area.");
+            }
+
+            node.XattrIbody = [];
+            node.XattrICount = 0;
+            node.SharedXattrId = -1;
         }
 
         /// <summary>
@@ -659,12 +727,18 @@ public sealed partial class ErofsBuilder
         internal void PlanNodePayloads(Core.ExtractionByteCounter? progress = null)
         {
             var staging = EnsureStagedCompression();
-            var hints = ErofsCompressHints.Compile(Options.CompressHints, Options);
+            var hints = Options.CompiledCompressHints ??= ErofsCompressHints.Compile(Options.CompressHints, Options);
             using var codecStates = new ErofsCodecStatePool();
-            Core.FirmwareParallelism.ForEach(Ordered, node =>
+            // Largest payloads first plus dynamic stealing: a filesystem whose few huge files sit together in
+            // path order otherwise lands them in one range partition and leaves the other workers idle.
+            var payloads = Ordered
+                .Where(node => !node.IsDirectory && !node.IsSymlink && !node.IsDevice && node.Size > 0)
+                .OrderByDescending(node => node.Size)
+                .ThenBy(BuildImagePath, StringComparer.Ordinal)
+                .ToArray();
+            Core.FirmwareParallelism.ForEachBalanced(payloads, node =>
             {
                 Options.CancellationToken.ThrowIfCancellationRequested();
-                if (node.IsDirectory || node.IsSymlink || node.IsDevice || node.Size <= 0) return;
                 if (!node.IsSymlink && !node.IsDevice && WholeFileDedupEnabled)
                     node.ContentHash = HashFile(node, Options.CancellationToken);
                 node.CompressionOptions = node.SourceInode is { SourceCompressed: true } original
@@ -1060,13 +1134,13 @@ public sealed partial class ErofsBuilder
         /// <summary>
         /// Decides whether one compressed inode stores its index as the variable-size extent array, and
         /// records the decided form on the node. Extents are only written for an image that declares
-        /// <c>48bit</c> and for an inode without inline data, and the legacy full index form is kept when the
+        /// <c>48bit</c> and for an inode without inline data, and the full lcluster-index form is kept when the
         /// extent metadata would occupy more bytes than that form without any benefit. A request that the
         /// declaration cannot back fails loudly instead of degrading, and a preserved source that recorded
         /// extents keeps them so the strategy check can prove the rebuild preserved them.
         /// <para>判断单个压缩 inode 是否把索引存成可变长度 extent 数组，并把决定的形态记录到节点上。只有声明
-        /// <c>48bit</c> 的镜像、且对没有 inline 数据的 inode 才写出 extent；当 extent 元数据比传统完整索引占用更多
-        /// 字节且没有收益时保持完整索引形态。声明无法支撑的请求会显式失败而不降级；记录了 extent 的保留式源会保持
+        /// <c>48bit</c> 的镜像、且对没有 inline 数据的 inode 才写出 extent；当 extent 元数据比完整 lcluster 索引
+        /// 占用更多字节且没有收益时保持完整索引形态。声明无法支撑的请求会显式失败而不降级；记录了 extent 的保留式源会保持
         /// 该形态，使策略检查能够证明重建保留了它。</para>
         /// </summary>
         /// <param name="node">Compressed node whose pclusters are already planned.
@@ -1432,6 +1506,150 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
+        /// Materializes the packed fragment payload into a scratch file and plans its pclusters, so the packed
+        /// inode travels the same compression pipeline as a regular file. The payload is the concatenation of
+        /// every planned fragment slot at its planned offset, which is exactly what
+        /// <c>WritePackedData</c> would copy into the image verbatim. A preserved source whose packed inode was
+        /// recorded as compressed keeps the codec, pcluster limit and logical cluster size it recorded and fails
+        /// loudly when that layout cannot be planned again; a fresh build, or a preserved source that recorded no
+        /// whole-file fragment, plans the payload with the build's own codec and falls back to the verbatim
+        /// layout when compression gains nothing.
+        /// <para>把 packed fragment 负载落到暂存文件并规划其 pcluster，使 packed inode 与常规文件走同一条压缩管线。
+        /// 负载是每个已规划 fragment 槽位在其规划偏移处的拼接，正是 <c>WritePackedData</c> 会逐字复制进镜像的内容。
+        /// 源镜像记录 packed inode 为压缩的保留式重建沿用其记录的编解码器、pcluster 上限与逻辑簇大小，无法再次规划该
+        /// 布局时显式失败；全新构建，或未记录整文件 fragment 的保留式源，按本次构建自己的编解码器规划，压缩没有收益时
+        /// 退回明文布局。</para>
+        /// </summary>
+        /// <remarks>
+        /// <para>The compressed form is only reachable for a payload that shrinks: a packed area smaller than one
+        /// logical cluster rounds to the same single physical block either way, so the planner returns no plan and
+        /// the verbatim layout is kept. A preserved source that recorded the packed inode as compressed treats
+        /// that outcome as a failure instead, because falling back would silently publish a different packed-inode
+        /// strategy than the source described.</para>
+        /// <para>压缩形态只对确实变小的负载可达：小于一个逻辑簇的 packed 区两种形态都会取整到同一个物理块，
+        /// 因此规划器不返回规划，保持明文布局。记录了 packed inode 为压缩的保留式源则把该结果视为失败，因为退回
+        /// 明文会静默发布与源描述不同的 packed inode 策略。</para>
+        /// </remarks>
+        /// <exception cref="FileSystemUnsupportedFeatureException">A source recorded the packed inode as
+        /// compressed, but this build cannot reproduce that codec or its payload no longer compresses.
+        /// <para>源镜像记录 packed inode 为压缩，而本次构建无法复现该编解码器或其负载不再可压缩。</para></exception>
+        internal void PlanPackedNodeCompression()
+        {
+            if (PackedNode is not { } node || PackedEnd <= 0)
+            {
+                return;
+            }
+
+            var recovered = Options.SourceInodes?.Values.FirstOrDefault(
+                candidate => candidate.SourceFragmentShape == ErofsFragmentShape.WholeFile);
+            if (recovered is { SourceCompressed: false })
+            {
+                return;
+            }
+
+            var mustReproduce = recovered is { SourceCompressed: true };
+            if (!Options.Compress)
+            {
+                if (mustReproduce)
+                {
+                    throw new FileSystemUnsupportedFeatureException(
+                        "EROFS preserved rebuild: the source packed inode is compressed, but this build disables "
+                        + "compression, so the rebuilt image cannot reproduce its payload form.");
+                }
+
+                return;
+            }
+
+            var algorithm = recovered?.SourceAlgorithm ?? Options.Algorithm;
+            ErofsOptions packedOptions;
+            if (Options.SourceCompressionOptions is { Count: > 0 } codecs)
+            {
+                if (!codecs.TryGetValue(algorithm, out var recorded))
+                {
+                    throw new FileSystemUnsupportedFeatureException(
+                        $"EROFS preserved rebuild: the source packed inode was compressed with {algorithm}, but no "
+                        + "compression configuration record backs that codec, so the payload cannot be re-encoded.");
+                }
+
+                packedOptions = recorded;
+            }
+            else if (algorithm == Options.Algorithm)
+            {
+                packedOptions = Options;
+            }
+            else
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"EROFS preserved rebuild: the source packed inode was compressed with {algorithm}, but this "
+                    + $"build only has codec {Options.Algorithm}, so the payload cannot be re-encoded.");
+            }
+
+            var logicalClusterSize = BlockSize;
+            if (recovered is { LogicalClusterSize: > 0 } clusterRecord
+                && clusterRecord.LogicalClusterSize >= BlockSize
+                && (clusterRecord.LogicalClusterSize & (clusterRecord.LogicalClusterSize - 1)) == 0
+                && BitOperations.Log2((uint)clusterRecord.LogicalClusterSize) - BitOperations.Log2((uint)BlockSize)
+                    <= ZErofsMapHeader.LclusterBitsMask)
+            {
+                logicalClusterSize = clusterRecord.LogicalClusterSize;
+            }
+
+            var path = Path.Combine(Path.GetTempPath(), $"uotan-packed-{Guid.NewGuid():N}.tmp");
+            SetPackedBodyPath(path);
+            try
+            {
+                using (var scratch = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+                {
+                    scratch.SetLength(PackedEnd);
+                    foreach (var slot in PackedFragments)
+                    {
+                        Options.CancellationToken.ThrowIfCancellationRequested();
+                        CopyFileRange(scratch, slot.Owner, slot.SourceOffset, slot.Length, slot.Offset,
+                            Options.CancellationToken);
+                    }
+                }
+
+                node.FullPath = path;
+                node.CompressionOptions = packedOptions;
+                node.LogicalClusterSize = logicalClusterSize;
+                using var codecStates = new ErofsCodecStatePool();
+                node.Pclusters = TryPlanCompressed(node, BlockSize, packedOptions,
+                    EnsureStagedCompression(), codecStates);
+            }
+            catch
+            {
+                DeletePackedBodyFile();
+                throw;
+            }
+
+            if (node.Pclusters is null)
+            {
+                DeletePackedBodyFile();
+                node.FullPath = string.Empty;
+                node.Idata = new ErofsFlatIdata();
+                node.DataLayout = ErofsDataLayout.Flat;
+                if (mustReproduce)
+                {
+                    throw new FileSystemUnsupportedFeatureException(
+                        $"EROFS preserved rebuild: the source packed inode was compressed with {algorithm}, but the "
+                        + $"planned payload of {PackedEnd} bytes does not compress on this build, so the packed "
+                        + "inode cannot be reproduced in its recorded form.");
+                }
+
+                return;
+            }
+
+            node.CompressedBlocks = (uint)node.Pclusters.Sum(p => CeilDiv(p.CompressedLength, BlockSize));
+            node.ClusterCount = (uint)CeilDiv(PackedEnd, node.LogicalClusterSize);
+            node.CompactedIndexes = Options.UseCompactedIndexes && node.LogicalClusterSize <= 16384;
+            node.BigPcluster = DeclaredBigPcluster(packedOptions)
+                && (packedOptions.Algorithm != ErofsCompressionAlgorithm.Lz4
+                    || node.Pclusters.Any(p => p.CompressedLength > BlockSize));
+            KeepTerminalPclusterResolvable(node, BlockSize);
+            node.FlatBlocks = 0;
+        }
+
+        /// <summary>
         /// Refuses a preserved rebuild that cannot reproduce where a source inode's metadata record lived.
         /// A metazone-typed record needs the metadata zone, and a metabox-typed record needs the metabox, so
         /// either dimension being absent would silently move the record to the plain metadata area.
@@ -1655,9 +1873,17 @@ public sealed partial class ErofsBuilder
         /// 内联携带条目。共享正是 <c>ishare_xattrs</c> compat 位所声明的内容，它所需的 ibody 形态是 12 字节
         /// 头加一个 4 字节 id，布局把它计为一条 inline 条目。</para>
         /// </summary>
+        /// <remarks>A preserved rebuild also replays a source image's shared attribute area even when the build
+        /// does not request sharing of its own: the inherited ibodies name ids that are offsets into the
+        /// source area, so they must be renumbered against the area this build writes. In that replay mode only
+        /// the nodes whose source carried a shared id are rewritten, and every other inherited ibody stays
+        /// verbatim. <para>保留式重建即使自身不请求共享，也必须重放源镜像的共享属性区：继承的 ibody 指名的是
+        /// 源区内的偏移，必须按本次构建写出的区重新编号。该重放模式只改写源携带共享 id 的节点，其余继承的
+        /// ibody 保持原样。</para></remarks>
         internal void PlanSharedXattrs()
         {
-            if (!SharingRequested)
+            var replayOnly = !SharingRequested;
+            if (replayOnly && !Ordered.Any(node => node.SourceInode is { SharedXattrId: >= 0 }))
             {
                 return;
             }
@@ -1666,8 +1892,20 @@ public sealed partial class ErofsBuilder
             var cursor = 0L;
             foreach (var node in Ordered)
             {
+                if (replayOnly && node.SourceInode is not { SharedXattrId: >= 0 })
+                {
+                    continue;
+                }
+
                 if (node.XattrEntries is not { Count: > 0 } entries)
                 {
+                    if (replayOnly)
+                    {
+                        throw new FileSystemUnsupportedFeatureException(
+                            $"EROFS preserved rebuild: the shared xattr set of '{BuildImagePath(node)}' could "
+                            + "not be resolved, so the inherited ibody cannot name the rebuilt shared area.");
+                    }
+
                     continue;
                 }
 
@@ -2032,7 +2270,8 @@ public sealed partial class ErofsBuilder
                         $"planned layout uses compacted indexes={node.CompactedIndexes}.");
                 }
 
-                var sourceInlineTail = source.DataLayout == ErofsDataLayout.Inline;
+                var sourceInlineTail = source.DataLayout == ErofsDataLayout.Inline
+                    || source.Idata is ErofsCompressedIdata { InlineCompressedTail: true };
                 var plannedTail = node.InlineData.Length > 0 || node.InlineCompressedTail;
                 if (plannedTail != sourceInlineTail)
                 {
@@ -2401,88 +2640,125 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
-        /// Computes the superblock's incompat feature word. The layout-implied bits are derived from the
-        /// planned layout, so a non-authoritative build publishes exactly the bits its pcluster limit,
-        /// extra devices, compressed tail packing, fragments and metabox require; an authoritative one takes
-        /// the compression baseline from the declaration instead, rejects any layout the declaration forbids,
-        /// and keeps every other declared bit so a rebuild neither gains nor loses a feature silently.
-        /// <para>计算超级块的 incompat 特性字。布局隐含位由已规划的布局推导，因此非权威构建只发布其 pcluster
-        /// 上限、额外设备、压缩尾打包、fragments 与 metabox 所要求的位；权威声明则改从声明读取压缩基线，
-        /// 拒绝声明所不允许的布局，并保留其余全部已声明位，使重建既不会静默获得也不会静默丢失特性。</para>
+        /// Computes the superblock's incompat feature word. Every bit is derived from the planned layout, so a
+        /// non-authoritative build publishes exactly the structure it emitted: the LZ4 zero-padding marker, the
+        /// compression configuration records, fragments or dedupe, compressed tail packing, the metabox, the
+        /// chunk-based layout, the device table, the wide 48-bit fields and the xattr prefix table. An
+        /// authoritative build keeps the declared word instead and rejects a layout the declaration cannot back,
+        /// so a rebuild neither gains nor loses a feature silently.
+        /// <para>计算超级块的 incompat 特性字。每一位都由已规划的布局推导，因此非权威构建只发布它真正写出的结构：
+        /// LZ4 零填充标记、压缩配置记录、fragments 或去重、压缩尾打包、metabox、chunk-based 布局、设备表、48 位宽
+        /// 字段与前缀表。权威构建则保留声明字，并拒绝声明无法支撑的布局，使重建既不会静默获得也不会静默丢失特性。</para>
         /// </summary>
         /// <returns>The incompat feature mask for the superblock.
         /// <para>超级块使用的 incompat 特性掩码。</para></returns>
-        /// <exception cref="NotSupportedException">The planned layout needs a feature the declaration
-        /// forbids, or the declaration names a feature the writer cannot re-emit.
+        /// <exception cref="FileSystemUnsupportedFeatureException">The planned layout needs a feature the
+        /// declaration forbids, or the declaration names a feature the writer cannot re-emit.
         /// <para>已规划布局需要声明不允许的特性，或声明列出了写入方无法重新输出的特性。</para></exception>
         internal uint ComputeFeatureIncompat()
         {
-            var featureIncompat = Options.DerivedIncompatBaseline()
-                | (DeclaredFortyEightBit(Options, TotalBlocks) || ChunkIndexRequires48Bit || HasExtentIndexes
-                    ? ErofsSuperblock.Incompat48Bit
-                    : 0u)
-                | (XattrPrefixTable is { Length: > 0 } ? ErofsSuperblock.IncompatXattrPrefixes : 0u)
-                | (HasChunkBasedLayout ? ErofsSuperblock.IncompatChunkedFile : 0u);
+            var featureIncompat = 0u;
+            if (Options.Compress && Options.Algorithm == ErofsCompressionAlgorithm.Lz4)
+            {
+                featureIncompat |= ErofsSuperblock.IncompatLz4_0Padding;
+            }
+
+            if (Options.Compress && DeclaredCompressionConfigs(Options))
+            {
+                featureIncompat |= ErofsSuperblock.IncompatCompressCfgs;
+            }
+
+            if (HasFragmentOrDedupeLayout)
+            {
+                featureIncompat |= ErofsSuperblock.IncompatFragments;
+            }
+
+            if (Options.CompressedTailPacking)
+            {
+                featureIncompat |= ErofsSuperblock.IncompatZtailpacking;
+            }
+
+            if (MetaboxNode is not null)
+            {
+                featureIncompat |= ErofsSuperblock.IncompatMetabox;
+            }
+
+            if (HasChunkBasedLayout)
+            {
+                featureIncompat |= ErofsSuperblock.IncompatChunkedFile;
+            }
 
             if (ExtraDevices > 0)
             {
                 featureIncompat |= ErofsSuperblock.IncompatDeviceTable;
             }
 
-            if (PackedNode is not null)
+            if (DeclaredFortyEightBit(Options, TotalBlocks) || ChunkIndexRequires48Bit || HasExtentIndexes)
             {
-                if (Options.LegacyCompatibility)
-                {
-                    throw new NotSupportedException(
-                        "LegacyCompatibility images cannot contain fragment or metabox packed nodes.");
-                }
-                featureIncompat |= ErofsSuperblock.IncompatFragments;
+                featureIncompat |= ErofsSuperblock.Incompat48Bit;
             }
-            if (Options.CompressedTailPacking) featureIncompat |= ErofsSuperblock.IncompatZtailpacking;
 
-            if (MetaboxNode is not null)
+            if (XattrPrefixTable is { Length: > 0 })
             {
-                if (Options.LegacyCompatibility)
-                {
-                    throw new NotSupportedException(
-                        "LegacyCompatibility images cannot contain fragment or metabox packed nodes.");
-                }
-                featureIncompat |= ErofsSuperblock.IncompatMetabox;
+                featureIncompat |= ErofsSuperblock.IncompatXattrPrefixes;
             }
 
             return Options.FeaturesAuthoritative ? ApplyDeclaredIncompat(featureIncompat) : featureIncompat;
         }
 
         /// <summary>
-        /// Replaces the derived algorithm baseline with the declared incompat word and validates the
-        /// layout-implied bits against it. The writer always right-aligns a compressed frame with leading
-        /// zero padding, so <c>lz4_0padding</c> is the single documented bit it may add and the addition is
-        /// recorded in <see cref="ErofsOptions.AddedIncompatBits"/> for the caller to report.
-        /// <para>用声明的 incompat 字替换推导出的算法基线，并据此校验布局隐含位。写入方总会用前导零填充把压缩帧
-        /// 右对齐，因此 <c>lz4_0padding</c> 是唯一允许新增的位，且该新增会记录到
-        /// <see cref="ErofsOptions.AddedIncompatBits"/> 供调用方上报。</para>
+        /// Reports whether the planned layout carries the incompat 0x00000020 structure, whose single bit the
+        /// format uses both for the packed fragment inode and for deduplicated payloads.
+        /// <para>判断已规划布局是否携带 incompat 0x00000020 所对应的结构；该位同时用于 packed fragment inode
+        /// 与去重共享的负载。</para>
+        /// </summary>
+        private bool HasFragmentOrDedupeLayout
+            => PackedNode is not null
+                || Options.Dedup
+                || Options.DedupeMode == ErofsDedupeMode.Pcluster;
+
+        /// <summary>
+        /// Replaces the derived layout word with the declared incompat word and validates the two directions:
+        /// every bit the planned layout needs must be declared, and every declared bit must have a structure
+        /// behind it. A missing bit is a hard error rather than an addition, because adding one can raise the
+        /// minimum mounting kernel above what the caller declared.
+        /// <para>用声明的 incompat 字替换推导出的布局字，并校验两个方向：已规划布局需要的每一位都必须在声明中，
+        /// 而每一位已声明的位都必须在镜像中有结构支撑。缺失的位按硬错误处理而不是自动添加，因为添加可能把可挂载的
+        /// 最低内核抬高到调用方声明之外。</para>
         /// </summary>
         /// <param name="layoutIncompat">Bits the planned layout requires.
         /// <para>已规划布局所需的位。</para></param>
-        /// <returns>The declared word, forced to carry <c>lz4_0padding</c> for compressed output.
-        /// <para>声明字，并在压缩输出时强制携带 <c>lz4_0padding</c>。</para></returns>
+        /// <returns>The declared word, unchanged.
+        /// <para>声明字本身，不做改动。</para></returns>
+        /// <exception cref="FileSystemUnsupportedFeatureException">The layout requires a bit the declaration
+        /// omits, or the declaration carries a bit the layout does not produce.
+        /// <para>布局需要声明缺失的位，或声明携带布局未产出的位。</para></exception>
         private uint ApplyDeclaredIncompat(uint layoutIncompat)
         {
             var declared = Options.Features.IncompatBits;
+            RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatLz4_0Padding,
+                ErofsFeature.Lz4ZeroPadding, nameof(ErofsOptions.Compress));
+            RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatCompressCfgs,
+                ErofsFeature.CompressionConfigs,
+                $"{nameof(ErofsOptions.Algorithm)}/{nameof(ErofsOptions.MaxPclusterSize)}");
             RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatDeviceTable, ErofsFeature.DeviceTable,
                 nameof(ErofsOptions.ExtraDeviceCount));
             RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatFragments, ErofsFeature.Fragments,
-                nameof(ErofsOptions.Fragments));
+                $"{nameof(ErofsOptions.Fragments)}/{nameof(ErofsOptions.Dedup)}");
             RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatZtailpacking, ErofsFeature.Ztailpacking,
                 nameof(ErofsOptions.CompressedTailPacking));
             RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatMetabox, ErofsFeature.Metabox,
                 nameof(ErofsOptions.Metabox));
             RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatChunkedFile, ErofsFeature.ChunkedFile,
                 nameof(ErofsOptions.ChunkSize));
+            RequireDeclaredBit(layoutIncompat, ErofsSuperblock.IncompatXattrPrefixes,
+                ErofsFeature.XattrPrefixes, nameof(ErofsOptions.XattrNamePrefixes));
+            RequireDeclaredBit(layoutIncompat, ErofsSuperblock.Incompat48Bit, ErofsFeature.FortyEightBit,
+                nameof(ErofsOptions.UseExtentIndexes));
 
             if (!DeclaredBigPcluster(Options) && RequiresBigPclusterLayout())
             {
-                throw new NotSupportedException(
+                throw new FileSystemUnsupportedFeatureException(
                     $"EROFS feature declaration [{ErofsSuperblock.DescribeIncompat(declared)}] omits " +
                     $"{ErofsFeatureTable.NameOf(ErofsFeature.BigPcluster)} while a planned pcluster spans more than " +
                     $"one block; declare the feature or pin {nameof(ErofsOptions.MaxPclusterSize)} to the block size.");
@@ -2492,7 +2768,8 @@ public sealed partial class ErofsBuilder
                 ExtraDevices > 0, $"{nameof(ErofsOptions.ExtraDeviceCount)} above zero",
                 "device_table/compr_head2");
             RequireBackedIncompat(declared, ErofsSuperblock.IncompatFragments, ErofsFeature.Fragments,
-                PackedNode is not null, "the fragment layout (Fragments with ErofsFragments=tails)",
+                HasFragmentOrDedupeLayout,
+                "the fragment layout (Fragments with ErofsFragments=tails) or the deduplicated layout",
                 ErofsFeatureTable.NameOf(ErofsFeature.Fragments));
             RequireBackedIncompat(declared, ErofsSuperblock.IncompatMetabox, ErofsFeature.Metabox,
                 MetaboxNode is not null, "the metabox layout (Metabox with ErofsMetabox=forced)",
@@ -2513,19 +2790,12 @@ public sealed partial class ErofsBuilder
                     + "past uint.MaxValue, or more than 4 GiB of blocks)",
                 ErofsFeatureTable.NameOf(ErofsFeature.FortyEightBit));
 
-            RequireBackedCompat(ErofsSuperblock.CompatIshareXattrs, SharedXattrs.Count > 0);
+            RequireBackedCompat(ErofsSuperblock.CompatIshareXattrs, SharedXattrs.Count > 0 && SharingRequested);
             RequireBackedCompat(ErofsSuperblock.CompatPlainXattrPfx, XattrPrefixTable is { Length: > 0 });
             RequireBackedCompat(ErofsSuperblock.CompatSharedEaInMetabox, SharedXattrMetaboxOffset >= 0);
             RequireBackedCompat(ErofsSuperblock.CompatXattrFilter, AnyNameFilter());
 
-            var incompat = declared;
-            if (Options.Compress && (incompat & ErofsSuperblock.IncompatLz4_0Padding) == 0)
-            {
-                incompat |= ErofsSuperblock.IncompatLz4_0Padding;
-                Options.AddedIncompatBits |= ErofsSuperblock.IncompatLz4_0Padding;
-            }
-
-            return incompat;
+            return declared;
         }
 
         /// <summary>
@@ -2555,8 +2825,10 @@ public sealed partial class ErofsBuilder
 
         /// <summary>
         /// Rejects a layout-implied incompat bit the declaration does not carry, naming the feature
-        /// and the layout option that would have to be cleared.
-        /// <para>拒绝声明未携带的布局隐含 incompat 位，并指名相关特性以及需要清除的布局选项。</para>
+        /// and the layout option that would have to be cleared. The bit is never added silently, because a
+        /// missing incompat bit can raise the minimum mounting kernel above the one the caller declared.
+        /// <para>拒绝声明未携带的布局隐含 incompat 位，并指名相关特性以及需要清除的布局选项。该位绝不会被静默
+        /// 添加，因为缺失的 incompat 位可能把可挂载的最低内核抬高到调用方声明之外。</para>
         /// </summary>
         /// <param name="layoutIncompat">Bits the planned layout requires.
         /// <para>已规划布局所需的位。</para></param>
@@ -2566,6 +2838,8 @@ public sealed partial class ErofsBuilder
         /// <para>消息中为该位命名的逻辑特性。</para></param>
         /// <param name="optionName">Layout option whose removal drops the bit.
         /// <para>清除后即可移除该位的布局选项名。</para></param>
+        /// <exception cref="FileSystemUnsupportedFeatureException">The layout needs the bit while the
+        /// declaration omits it. <para>布局需要该位而声明缺失它时抛出。</para></exception>
         private void RequireDeclaredBit(uint layoutIncompat, uint bit, ErofsFeature feature, string optionName)
         {
             if ((layoutIncompat & bit) == 0 || (Options.Features.IncompatBits & bit) != 0)
@@ -2573,7 +2847,7 @@ public sealed partial class ErofsBuilder
                 return;
             }
 
-            throw new NotSupportedException(
+            throw new FileSystemUnsupportedFeatureException(
                 $"EROFS layout requires {ErofsFeatureTable.NameOf(feature)} but the declared feature set " +
                 $"[{ErofsSuperblock.DescribeIncompat(Options.Features.IncompatBits)}] does not advertise it; " +
                 $"clear the {optionName} option or declare the feature.");
@@ -2601,7 +2875,7 @@ public sealed partial class ErofsBuilder
         /// <para>能够产出该结构的选项。</para></param>
         /// <param name="names">Display name text for the bit in this context.
         /// <para>该位在本上下文下的显示名称文本。</para></param>
-        /// <exception cref="NotSupportedException">The bit is declared while no structure backs it.
+        /// <exception cref="FileSystemUnsupportedFeatureException">The bit is declared while no structure backs it.
         /// <para>该位已声明但没有任何结构支撑时抛出。</para></exception>
         private void RequireBackedIncompat(uint declared, uint bit, ErofsFeature feature, bool produced,
             string layoutOption, string names)
@@ -2611,7 +2885,7 @@ public sealed partial class ErofsBuilder
                 return;
             }
 
-            throw new NotSupportedException(
+            throw new FileSystemUnsupportedFeatureException(
                 $"EROFS feature declaration [{ErofsSuperblock.DescribeIncompat(declared)}] carries {names} but the " +
                 $"planned layout produced no structure behind it; enable {layoutOption} or clear the bit with " +
                 $"ErofsFeatures=!{ErofsFeatureTable.NameOf(feature)}.");
@@ -2743,7 +3017,7 @@ public sealed partial class ErofsBuilder
                 featureCompat |= ErofsSuperblock.CompatPlainXattrPfx;
             }
 
-            if (SharedXattrs.Count > 0)
+            if (SharedXattrs.Count > 0 && SharingRequested)
             {
                 featureCompat |= ErofsSuperblock.CompatIshareXattrs;
             }
@@ -2961,10 +3235,11 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
-        /// Writes each node's data blocks: directory blocks, packed fragments, compressed data,
-        /// metabox containers, and flat copies, honouring dedup by skipping alias nodes.
-        /// <para>写出每个节点的数据块：目录块、打包 fragment、压缩数据、metabox 容器与平坦复制，
-        /// 并依据去重跳过别名节点。</para>
+        /// Writes each node's data blocks: directory blocks, packed fragments (compressed when the planning pass
+        /// accepted a compression plan and verbatim otherwise), compressed data, metabox containers, and flat
+        /// copies, honouring dedup by skipping alias nodes.
+        /// <para>写出每个节点的数据块：目录块、打包 fragment（规划阶段接受压缩计划时写压缩帧，否则原样写出）、
+        /// 压缩数据、metabox 容器与平坦复制，并依据去重跳过别名节点。</para>
         /// </summary>
         /// <param name="output">Destination stream in image coordinates.
         /// <para>镜像坐标下的目标流。</para></param>
@@ -2985,7 +3260,14 @@ public sealed partial class ErofsBuilder
                 }
                 else if (node.IsPacked)
                 {
-                    WritePackedData(output, node, BlockSize, Options.CancellationToken);
+                    if (node.Pclusters is not null)
+                    {
+                        WriteCompressedData(output, node, BlockSize, node.CompressionOptions!, StagedCompression!);
+                    }
+                    else
+                    {
+                        WritePackedData(output, node, BlockSize, Options.CancellationToken);
+                    }
                 }
                 else if (node.Pclusters is not null)
                 {

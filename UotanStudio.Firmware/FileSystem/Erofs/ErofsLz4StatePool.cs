@@ -117,15 +117,17 @@ internal sealed class ErofsLz4StatePool : IDisposable
 
 /// <summary>
 /// Entry point the EROFS planners use for their probe encodings: a probe runs through the worker's
-/// <see cref="ErofsEncoderContext"/>, which retains one LZ4 context, one ZSTD compressor and one MicroLZMA
-/// encoder for the whole payload instead of constructing a backend per probe. The destination capacity is
-/// always the full codec bound, because a destination capped at the frame limit makes liblz4's
-/// destination-filling encoder replace a match with a literal tail and still report the whole span as consumed,
-/// which changes frames the planner accepts.
+/// <see cref="ErofsEncoderContext"/>, which retains the LZ4 context, the ZSTD compressors of the payload's
+/// option pairs and one MicroLZMA encoder with its buffer for the whole payload instead of constructing a
+/// backend per probe. A search probe encodes into the full codec bound, because a destination capped at the
+/// frame limit makes liblz4's destination-filling encoder replace a match with a literal tail and still
+/// report the whole span as consumed, which would change the frames the search accepts; a planner that wants
+/// that filled shape asks <see cref="ErofsCompression.CompressLz4Fill"/> for it explicitly.
 /// <para>EROFS 规划器用于探测编码的入口：探测经该工作者的 <see cref="ErofsEncoderContext"/> 执行，它在整份负载期间
-/// 保留一个 LZ4 上下文、一个 ZSTD 压缩器与一个 MicroLZMA 编码器，而不是每次探测都构造后端。目标容量始终取
-/// 编解码器的完整上界，因为把目标限制到帧上限会让 liblz4 的填满目标编码器把匹配换成字面量尾巴却仍报告整段已被消费，
-/// 从而改变规划器接受的帧。</para>
+/// 保留 LZ4 上下文、该负载各选项组合对应的 ZSTD 压缩器，以及一个 MicroLZMA 编码器及其缓冲，而不是每次探测都构造
+/// 后端。搜索探测的目标容量取编解码器的完整上界，因为把目标限制到帧上限会让 liblz4 的填满目标编码器把匹配换成
+/// 字面量尾巴却仍报告整段已被消费，从而改变搜索接受的帧；需要这种「填满」形态的规划器显式向
+/// <see cref="ErofsCompression.CompressLz4Fill"/> 索取。</para>
 /// </summary>
 internal static class ErofsPlannerCompression
 {

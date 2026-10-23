@@ -190,20 +190,19 @@ public sealed class ErofsForcedInodeFormatTests
     }
 
     [Fact]
-    public void Build_LegacyCompatibility_ClearsForcedFormats()
+    public void Build_ExplicitFormats_AreNotClearedByValidation()
     {
         using var source = new TempDirectory();
         source.WriteBytes("data.bin", new byte[3 * BlockSize]);
         var options = PinnedOptions();
-        options.LegacyCompatibility = true;
         options.InodeFormat = ErofsInodeFormat.Extended;
         options.ChunkSize = BlockSize;
         options.ChunkIndexKind = ErofsChunkIndexKind.Indexes;
 
         options.Validate();
 
-        Assert.Equal(ErofsInodeFormat.Auto, options.InodeFormat);
-        Assert.Equal(ErofsChunkIndexKind.Auto, options.ChunkIndexKind);
+        Assert.Equal(ErofsInodeFormat.Extended, options.InodeFormat);
+        Assert.Equal(ErofsChunkIndexKind.Indexes, options.ChunkIndexKind);
     }
 
     [Fact]

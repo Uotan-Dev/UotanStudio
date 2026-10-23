@@ -399,11 +399,11 @@ public sealed partial class ErofsBuilder
     /// dimension that overflowed instead of failing with a generic message. A compact record whose width the
     /// source image recorded keeps the volume-wide fixed nanoseconds, so <paramref name="recordedCompact"/>
     /// does not let the presence of that volume-wide value demand the extended per-inode field; the delta
-    /// itself is validated when the record is serialized.
+    /// itself is clamped to the epoch when the record is serialized.
     /// <para>报告节点为何无法存入 32 字节紧凑记录，能装下时为 <see langword="null"/>。检查扩展记录加宽的每个
     /// 字段，使强制紧凑构建指名溢出的确切维度，而不是给出笼统信息。源镜像记录了宽度为紧凑的记录时，其纳秒取自
     /// 卷级固定值，因此 <paramref name="recordedCompact"/> 不会仅因该卷级值存在就要求扩展的逐 inode 字段；
-    /// 增量本身在序列化记录时校验。</para>
+    /// 增量本身在序列化记录时钳制到该纪元。</para>
     /// </summary>
     /// <param name="node">Node being tested. <para>待判定的节点。</para></param>
     /// <param name="recordedCompact">Whether the compact width comes from a recorded creation type rather than
@@ -457,13 +457,16 @@ public sealed partial class ErofsBuilder
     /// inode at a time instead of taking the image-level answer, so a source that raised the bit on only part of
     /// its inodes is not flattened back to a single whole-image decision. A recorded source inode number is
     /// replayed so the rebuilt inode publishes the same 32-bit <c>stat</c> identity as the source, while a node
-    /// the source recorded no number for keeps the number the writer assigned it.
+    /// the source recorded no number for keeps the number the writer assigned it. A compact record can only
+    /// store a non-negative delta from the superblock epoch, so a modification time older than that epoch is
+    /// clamped to it the way upstream does, while an extended record keeps the full time it was given.
     /// <para>在序列化之前填充单个节点的磁盘字段与寻址状态。<c>EROFS_I_NLINK_1</c> 与省略点项目录共用的
     /// advise 位跟随已解析的声明，并且只为定义该位的目标写出，因此紧凑 inode 不会携带声明特性集禁止的位，
     /// 也不会携带目标 advise 掩码会拒绝的位，超级块字与逐节点布局也始终一致。已知记录了源格式位的 inode 按
     /// 逐 inode 镜像，而不是套用镜像级结论，因此源只在部分 inode 上置起该位时不会被抹平为整幅镜像的单一决定。
     /// 已记录的源 inode 编号会被重放，使重建 inode 发布与源相同的 32 位 <c>stat</c> 身份；源未记录编号的
-    /// 节点保持写入方分配给它的编号。</para>
+    /// 节点保持写入方分配给它的编号。紧凑记录只能存放相对超级块纪元的非负增量，因此早于该纪元的修改时间按上游
+    /// 做法钳制到该纪元，而扩展记录保留它取得的完整时间。</para>
     /// </summary>
     private static void BuildInode(ErofsInode node, int blockSize, ulong now, ErofsOptions options)
     {
@@ -488,12 +491,17 @@ public sealed partial class ErofsBuilder
         }
         else
         {
-            if (effectiveTime < now || effectiveTime - now > uint.MaxValue)
+            if (effectiveTime < now)
+            {
+                effectiveTime = now;
+                node.CTime = effectiveTime;
+            }
+            else if (effectiveTime - now > uint.MaxValue)
             {
                 throw new FileSystemUnsupportedFeatureException(
                     $"EROFS inode '{node.FullPath}' must use the compact record, but its mtime {effectiveTime} "
-                    + $"is not a non-negative delta of at most {uint.MaxValue} seconds from the {now} epoch, "
-                    + "which is the only timestamp form the compact record can store.");
+                    + $"is more than {uint.MaxValue} seconds after the {now} epoch, which is the only timestamp "
+                    + "form the compact record can store.");
             }
 
             node.Generation = (uint)(effectiveTime - now);

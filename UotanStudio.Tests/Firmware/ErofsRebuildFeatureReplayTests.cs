@@ -83,7 +83,6 @@ public sealed class ErofsRebuildFeatureReplayTests
 
         var replay = Replay(image, source.Path);
 
-        Assert.False(replay.Restored.LegacyCompatibility);
         Assert.Equal(ErofsTriStateFeature.Disabled, replay.Restored.DotOmitted);
         Assert.Equal(
             ErofsSuperblock.IncompatLz4_0Padding, replay.Profile.FeatureIncompat);
@@ -105,7 +104,6 @@ public sealed class ErofsRebuildFeatureReplayTests
         var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
             Features = Declare(ErofsFeature.Lz4ZeroPadding),
         });
         var sourceSuperblock = ErofsSuperblock.FromImage(image);
@@ -122,7 +120,6 @@ public sealed class ErofsRebuildFeatureReplayTests
         Assert.Equal(ErofsCompression.Lz4DistanceMax, rebuiltSuperblock.AvailableComprAlgs);
         Assert.False(ReadConfigurationLength(rebuilt, rebuiltSuperblock) is 14 or 6,
             "a replayed legacy profile must not emit a compression configuration record.");
-        Assert.True(replay.Restored.LegacyCompatibility);
         Assert.Equal(5, replay.Restored.Features.MinimumKernelMajor);
         Assert.Equal(4, replay.Restored.Features.MinimumKernelMinor);
         Assert.False(replay.Restored.Features.Contains(ErofsFeature.BigPcluster));
@@ -272,7 +269,6 @@ public sealed class ErofsRebuildFeatureReplayTests
         replay.Restored.DotOmitted = ErofsTriStateFeature.Disabled;
 
         var rebuilt = new ErofsBuilder().Build(replay.Extracted, replay.Restored);
-        Assert.False(replay.Restored.LegacyCompatibility);
         Assert.Equal(0, AdviceBitCensus(rebuilt).WithAdviceBit);
         using var parser = new ErofsParser(rebuilt);
         Assert.Equal(64 * 1024, parser.ReadFileBytes("data.bin").Length);
@@ -325,7 +321,6 @@ public sealed class ErofsRebuildFeatureReplayTests
             Compress = true,
             Algorithm = "Lz4",
             SuperblockChecksum = true,
-            LegacyCompatibility = false,
             FeatureCompat = ErofsSuperblock.CompatSbChecksum,
             FeatureIncompat = incompat,
         };
@@ -344,7 +339,6 @@ public sealed class ErofsRebuildFeatureReplayTests
             BlockSize = BlockSize,
             Compress = true,
             Algorithm = "Lz4",
-            LegacyCompatibility = true,
         };
         parameters.Codecs.Add(new ErofsRebuildCodec
         {
@@ -377,7 +371,6 @@ public sealed class ErofsRebuildFeatureReplayTests
             BlockSize = BlockSize,
             Compress = true,
             Algorithm = "Lz4",
-            LegacyCompatibility = true,
         };
         parameters.Codecs.Add(new ErofsRebuildCodec
         {
@@ -412,7 +405,6 @@ public sealed class ErofsRebuildFeatureReplayTests
         var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
         });
         var extracted = Path.Combine(source.Path, "extracted");
         ErofsRebuildParameters captured;
@@ -561,7 +553,6 @@ public sealed class ErofsRebuildFeatureReplayTests
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
             MaxPclusterSize = legacy ? BlockSize : 4 * BlockSize,
-            LegacyCompatibility = legacy,
         });
         return source;
     }

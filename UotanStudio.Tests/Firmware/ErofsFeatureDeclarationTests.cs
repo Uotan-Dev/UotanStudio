@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
@@ -20,19 +21,19 @@ public sealed class ErofsFeatureDeclarationTests
     private const int BlockSize = 4096;
 
     [Theory]
-    [InlineData(ErofsFeature.Lz4ZeroPadding, 0x00000001u, true, false, false, false, 0)]
-    [InlineData(ErofsFeature.Lz4ZeroPadding | ErofsFeature.BigPcluster, 0x00000003u, false, false, false, false, 0)]
-    [InlineData(ErofsFeature.Lz4ZeroPadding | ErofsFeature.CompressionConfigs, 0x00000003u, false, false, false, false, 0)]
+    [InlineData(ErofsFeature.Lz4ZeroPadding, 0x00000001u, false, false, false, 0)]
+    [InlineData(ErofsFeature.Lz4ZeroPadding | ErofsFeature.BigPcluster, 0x00000003u, false, false, false, 0)]
+    [InlineData(ErofsFeature.Lz4ZeroPadding | ErofsFeature.CompressionConfigs, 0x00000003u, false, false, false, 0)]
     [InlineData(ErofsFeature.Lz4ZeroPadding | ErofsFeature.BigPcluster | ErofsFeature.Ztailpacking,
-        0x00000013u, false, true, false, false, 0)]
+        0x00000013u, true, false, false, 0)]
     [InlineData(ErofsFeature.Lz4ZeroPadding | ErofsFeature.BigPcluster | ErofsFeature.Fragments | ErofsFeature.Dedupe,
-        0x00000023u, false, false, true, false, 0)]
+        0x00000023u, false, true, false, 0)]
     [InlineData(ErofsFeature.Lz4ZeroPadding | ErofsFeature.BigPcluster | ErofsFeature.Metabox,
-        0x00000103u, false, false, false, true, 0)]
+        0x00000103u, false, false, true, 0)]
     [InlineData(ErofsFeature.Lz4ZeroPadding | ErofsFeature.BigPcluster | ErofsFeature.DeviceTable,
-        0x0000000Bu, false, false, false, false, 1)]
+        0x0000000Bu, false, false, false, 1)]
     public void Build_ExplicitDeclaration_WritesExactlyTheDeclaredIncompatWord(ErofsFeature declared,
-        uint expectedIncompat, bool legacy, bool compressedTailPacking, bool fragments, bool metabox, int extraDevices)
+        uint expectedIncompat, bool compressedTailPacking, bool fragments, bool metabox, int extraDevices)
     {
         using var source = new TempDirectory();
         var payload = Enumerable.Repeat((byte)0x53, 20 * 1024).ToArray();
@@ -42,7 +43,6 @@ public sealed class ErofsFeatureDeclarationTests
         var options = new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = legacy,
             CompressedTailPacking = compressedTailPacking,
             Fragments = fragments,
             Dedup = fragments,
@@ -103,7 +103,7 @@ public sealed class ErofsFeatureDeclarationTests
             Features = ErofsFeatureSet.FromWords(0, 0),
         };
 
-        var error = Assert.Throws<NotSupportedException>(() => new ErofsBuilder().Build(source.Path, options));
+        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => new ErofsBuilder().Build(source.Path, options));
 
         Assert.Contains("metabox", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(ErofsOptions.Metabox), error.Message, StringComparison.Ordinal);
@@ -122,7 +122,7 @@ public sealed class ErofsFeatureDeclarationTests
             Features = Declare(ErofsFeature.Lz4ZeroPadding | ErofsFeature.BigPcluster),
         };
 
-        var error = Assert.Throws<NotSupportedException>(() => new ErofsBuilder().Build(source.Path, options));
+        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => new ErofsBuilder().Build(source.Path, options));
 
         Assert.Contains("device_table", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(ErofsOptions.ExtraDeviceCount), error.Message, StringComparison.Ordinal);
@@ -158,7 +158,7 @@ public sealed class ErofsFeatureDeclarationTests
             Features = Declare(ErofsFeature.Lz4ZeroPadding).With(ErofsFeature.FortyEightBit),
         };
 
-        var error = Assert.Throws<NotSupportedException>(() => new ErofsBuilder().Build(source.Path, options));
+        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => new ErofsBuilder().Build(source.Path, options));
 
         Assert.Contains("48bit", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(ErofsOptions.UseExtentIndexes), error.Message, StringComparison.Ordinal);
@@ -175,7 +175,7 @@ public sealed class ErofsFeatureDeclarationTests
             Features = Declare(ErofsFeature.Lz4ZeroPadding).With(ErofsFeature.XattrPrefixes),
         };
 
-        var error = Assert.Throws<NotSupportedException>(() => new ErofsBuilder().Build(source.Path, options));
+        var error = Assert.Throws<FileSystemUnsupportedFeatureException>(() => new ErofsBuilder().Build(source.Path, options));
 
         Assert.Contains("xattr_prefixes", error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(ErofsOptions.SourceXattrPrefixes), error.Message, StringComparison.Ordinal);
@@ -360,7 +360,6 @@ public sealed class ErofsFeatureDeclarationTests
         var options = new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
             SourceMtimeFeature = true,
             Features = ErofsFeatureSet.Auto
                 .With(ErofsFeature.Lz4ZeroPadding)

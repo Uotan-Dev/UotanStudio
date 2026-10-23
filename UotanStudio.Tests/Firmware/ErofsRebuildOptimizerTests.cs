@@ -194,7 +194,6 @@ public sealed class ErofsRebuildOptimizerTests : IDisposable
         => new ErofsBuilder().Build(directory, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
         });
 
     private string WriteSourceTree(string name)

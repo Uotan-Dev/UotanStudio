@@ -112,7 +112,6 @@ public sealed class ErofsLclusterAdviseTests
             BlockSize = 32768,
             Compress = true,
             UseCompactedIndexes = false,
-            LegacyCompatibility = true,
             SuperblockChecksum = false,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
         });

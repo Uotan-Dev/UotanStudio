@@ -128,6 +128,7 @@ public sealed class ErofsChunkDeviceTests
         options.ExtraDeviceCount = 1;
         options.ExtraDeviceImages = [new ErofsDeviceSpec("blob.img", 4 * BlockSize)];
         options.Features = ErofsFeatureSet.Auto
+            .With(ErofsFeature.Lz4ZeroPadding)
             .With(ErofsFeature.DeviceTable)
             .With(ErofsFeature.ChunkedFile);
         var record = ExternalChunkRecord("data.bin", 1, [3UL, 5UL]);

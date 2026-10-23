@@ -157,12 +157,12 @@ public sealed partial class ErofsBuilder
 
     /// <summary>
     /// Reports whether every extent of a finished plan can be closed the way a reader needs at end of file.
-    /// The dense planner accepts byte-granular spans, so a file whose data ends inside its final logical
-    /// cluster can come back with a frame that is refused by <see cref="AcceptsClosingIndexRow"/>; such a plan
-    /// is dropped in favour of the cluster-restarting planner, which enforces that rule while it searches.
-    /// <para>判断一份已完成规划中的每个 extent 都能按读取方在文件末尾所需的方式收尾。dense 规划器接受字节粒度的
-    /// 跨度，因此数据结束于末尾逻辑簇内的文件可能返回被 <see cref="AcceptsClosingIndexRow"/> 拒绝的帧；此类规划会被
-    /// 舍弃，改用边搜索边执行该规则的逐簇重启规划器。</para>
+    /// Both planners enforce the closing-row rule while they search, so this is the last guard over a finished
+    /// plan: a frame refused by <see cref="AcceptsClosingIndexRow"/> would make the plan drop to the
+    /// cluster-restarting planner, which re-derives the same rows from its own spans.
+    /// <para>判断一份已完成规划中的每个 extent 都能按读取方在文件末尾所需的方式收尾。两个规划器都在搜索时执行
+    /// 收尾行规则，因此这里是已完成规划的最后一道校验：被 <see cref="AcceptsClosingIndexRow"/> 拒绝的帧会让该规划
+    /// 改交逐簇重启规划器，由它按自己的跨度重新推导同样的行。</para>
     /// </summary>
     /// <param name="node">Node the plan belongs to. <para>该规划所属的节点。</para></param>
     /// <param name="plans">Plans produced by the dense planner. <para>dense 规划器产出的规划。</para></param>
@@ -227,6 +227,28 @@ public sealed partial class ErofsBuilder
         return PlanEndCluster(node, pclusterIndex) - headCluster >= 2;
     }
 
+    /// <summary>
+    /// Plans one payload, letting the byte-granular planner run first whenever the cluster-restarting one
+    /// cannot reach the density this build asks for. A dense plan that no compressed layout saves a block on,
+    /// that the index cannot close at end of file, or that the node's preserved source shape forbids is not
+    /// forced: the cluster-restarting planner then plans the node with its own fallbacks.
+    /// <para>规划一份负载：只要逐簇重启规划器无法达到本次构建要求的密度，就优先运行按字节粒度的规划器。
+    /// 若 dense 规划没有省下任何块、其末尾 extent 无法被索引收尾，或节点所保留的源形态不允许，则不强塞该规划，
+    /// 改由逐簇重启规划器按其自身的回退方式规划该节点。</para>
+    /// </summary>
+    /// <param name="node">Node whose payload is planned; its path must name a readable payload.
+    /// <para>待规划负载的节点；其路径必须指向可读负载。</para></param>
+    /// <param name="blockSize">Filesystem block size in bytes.
+    /// <para>以字节计的文件系统块大小。</para></param>
+    /// <param name="options">Per-node compression options.
+    /// <para>逐节点的压缩选项。</para></param>
+    /// <param name="staging">Staging area receiving every accepted frame, so the write pass copies frames
+    /// instead of compressing them a second time.
+    /// <para>接收所有被接受帧的暂存区，使写出阶段复制帧而不再压缩第二次。</para></param>
+    /// <param name="codecStates">Worker encoder state reused by every probe of this node.
+    /// <para>该节点每次探测都复用的工作者编码器状态。</para></param>
+    /// <returns>The planned pclusters, or <see langword="null"/> when no compressed layout saves a block.
+    /// <para>规划出的 pcluster；没有任何压缩布局能省下一块时为 <see langword="null"/>。</para></returns>
     private static ErofsPclusterPlan[]? TryPlanCompressed(ErofsInode node, int blockSize, ErofsOptions options,
         Core.CompressionPayloadStaging staging, ErofsCodecStatePool codecStates)
     {
@@ -234,10 +256,10 @@ public sealed partial class ErofsBuilder
         var context = codecStates.Rent();
         try
         {
-            if (options.OptimizeCompression && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
+            if (RequiresDensePlanner(node, options))
             {
                 var dense = TryPlanDenseCompressed(node, blockSize, options, batch, context);
-                if (dense is null || ClosesSafely(node, dense, blockSize))
+                if (dense is not null && ClosesSafely(node, dense, blockSize))
                 {
                     return dense;
                 }
@@ -249,6 +271,84 @@ public sealed partial class ErofsBuilder
         {
             codecStates.Return(context);
         }
+    }
+
+    /// <summary>
+    /// Reports whether a payload must be offered to the byte-granular planner. That is the case for an LZ4
+    /// build the cluster-restarting planner cannot fill: an explicit optimization request, a pcluster budget
+    /// pinned to one block, where restarting on a cluster boundary cannot spend a block's leftover bytes, and
+    /// the interlaced plain layout, whose byte-granular windows only the dense planner lays out. A preserved
+    /// source that stored its payload as one whole-file fragment is not offered to it, because that node has
+    /// no pcluster shape to fill and the layout packs it whole.
+    /// <para>判断一份负载是否必须交给按字节粒度的规划器。适用于逐簇重启规划器填不满的 LZ4 构建：显式要求优化、
+    /// pcluster 预算被钉死为一个块（此时在逻辑簇边界重启无法用掉一个块的剩余字节），以及交错原样布局——其按字节
+    /// 窗口只有 dense 规划器才会产出。所保留源把负载存成整文件 fragment 时不交给它，因为该节点没有可供填充的
+    /// pcluster 形态，布局会把它整份打包。</para>
+    /// </summary>
+    /// <param name="node">Node the plan belongs to. <para>该规划所属的节点。</para></param>
+    /// <param name="options">Per-node compression options.
+    /// <para>逐节点的压缩选项。</para></param>
+    /// <returns><see langword="true"/> when the dense planner must be tried first.
+    /// <para>必须先尝试 dense 规划器时为 <see langword="true"/>。</para></returns>
+    internal static bool RequiresDensePlanner(ErofsInode node, ErofsOptions options)
+        => options.Algorithm == ErofsCompressionAlgorithm.Lz4
+           && (options.OptimizeCompression
+               || options.MaxPclusterSize <= options.BlockSize
+               || options.InterlacedPlainPclusters)
+           && node.SourceInode is not { SourceFragmentShape: ErofsFragmentShape.WholeFile };
+
+    /// <summary>
+    /// Plans one synthetic payload, such as an assembled packed-fragment body, through the same planner pair a
+    /// collected file uses. The node has no source record, so the caller supplies the path its bytes were
+    /// materialized to; this helper fills the compressed-state fields the planners read and returns the plan
+    /// without assigning it to the node.
+    /// <para>把一份合成负载（例如装配出的 packed fragment 本体）交由收集到的文件所用的同一组规划器规划。该节点
+    /// 没有源记录，因此调用方提供负载落地路径；本方法补上规划器读取的压缩状态字段，并返回规划结果而不把它写到
+    /// 节点上。</para>
+    /// </summary>
+    /// <param name="node">Synthetic node describing the materialized payload; a zero logical cluster size
+    /// defaults to <paramref name="blockSize"/>, and a missing compression options reference defaults to
+    /// <paramref name="options"/>. <para>描述已落地负载的合成节点；逻辑簇大小为零时取
+    /// <paramref name="blockSize"/>，压缩选项为空时取 <paramref name="options"/>。</para></param>
+    /// <param name="blockSize">Filesystem block size the plan is bounded by.
+    /// <para>规划所受约束的文件系统块大小。</para></param>
+    /// <param name="options">Compression options to plan with.
+    /// <para>规划所用的压缩选项。</para></param>
+    /// <param name="staging">Staging area receiving the accepted frames.
+    /// <para>接收已接受帧的暂存区。</para></param>
+    /// <returns>The planned pclusters, or <see langword="null"/> for an empty payload or when no compressed
+    /// layout saves a block, in which case the caller keeps the payload verbatim.
+    /// <para>规划出的 pcluster；负载为空、或没有任何压缩布局能省下一块时为 <see langword="null"/>，此时调用方按明文
+    /// 保留负载。</para></returns>
+    /// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.
+    /// <para>某个参数为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="node"/> carries no payload path.
+    /// <para><paramref name="node"/> 没有负载路径。</para></exception>
+    internal static ErofsPclusterPlan[]? PlanSyntheticCompressedPayload(ErofsInode node, int blockSize,
+        ErofsOptions options, Core.CompressionPayloadStaging staging)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(staging);
+        if (string.IsNullOrEmpty(node.FullPath))
+        {
+            throw new ArgumentException(
+                "A synthetic payload needs the path its bytes were materialized to.", nameof(node));
+        }
+
+        if (node.Size == 0)
+        {
+            return null;
+        }
+
+        node.CompressionOptions ??= options;
+        if (node.LogicalClusterSize == 0)
+        {
+            node.LogicalClusterSize = blockSize;
+        }
+
+        using var codecStates = new ErofsCodecStatePool();
+        return TryPlanCompressed(node, blockSize, options, staging, codecStates);
     }
 
     private static ErofsPclusterPlan[]? PlanClusterRestartCompressed(ErofsInode node, int blockSize,
@@ -276,9 +376,26 @@ public sealed partial class ErofsBuilder
             var clusterIndex = 0L;
             var windowBase = 0L;
             var windowFilled = 0;
+            var lastTerminalStart = bigPcluster && (long)node.Size % clusterSize == 0
+                ? (totalClusters - 1L) * clusterSize
+                : long.MaxValue;
             while (pos < (long)node.Size)
             {
                 options.CancellationToken.ThrowIfCancellationRequested();
+                if (bigPcluster && pos >= lastTerminalStart)
+                {
+                    var tail = (int)Math.Min((long)node.Size - pos, clusterSize);
+                    plans.Add(new ErofsPclusterPlan
+                    {
+                        SourceOffset = pos,
+                        SourceLength = tail,
+                        CompressedLength = tail,
+                        Plain = true,
+                    });
+                    pos += tail;
+                    clusterIndex = CeilDiv(pos, clusterSize);
+                    continue;
+                }
 
                 var acceptedLen = 0;
                 var acceptedOut = 0;
@@ -292,7 +409,8 @@ public sealed partial class ErofsBuilder
                 bool TrySpan(int candidateLen, out int outLen)
                 {
                     outLen = 0;
-                    if (candidateLen <= 0 || candidateLen > rawLength)
+                    if (candidateLen <= 0 || candidateLen > rawLength
+                        || (bigPcluster && pos + candidateLen > lastTerminalStart))
                     {
                         return false;
                     }
@@ -345,85 +463,156 @@ public sealed partial class ErofsBuilder
                     return TrySpan(candidateLen, out outLen);
                 }
 
-                var lo = 0;
-                var hi = maxTake + 1;
-                for (var probe = 1; probe < hi;)
+                // A big LZ4 pcluster receives the frame limit as its destination budget, so the encoder names
+                // the input it consumed: exactly the byte-granular span the cluster search below can only
+                // bracket. The window grows only while the encoder exhausts it, so a span far denser than one
+                // frame is still found without reading the whole window up front.
+                bool TryFill(out int spanLength, out int encodedLength)
                 {
-                    if (!TryTake(probe, out var probeLen, out var probeOut))
+                    spanLength = 0;
+                    encodedLength = 0;
+                    if (!fillDestination || inputCap <= 0)
                     {
-                        if (probe == 1 && bigPcluster && probeOut > blockSize)
+                        return false;
+                    }
+
+                    var window = (int)Math.Min((long)inputCap, Math.Max(frameLimit, clusterSize) * 3L);
+                    window = (int)Math.Min(window, Math.Max(0L, lastTerminalStart - pos));
+                    if (window <= 0)
+                    {
+                        return false;
+                    }
+
+                    FillReadWindow(fs, raw, rawLength, pos, window, ref windowBase, ref windowFilled);
+                    var outLen = ErofsCompression.CompressLz4Fill(options, codec, raw,
+                        (int)(pos - windowBase), window, accepted, Math.Min(frameLimit, accepted.Length),
+                        out var consumed);
+                    if (outLen <= 0 || consumed <= 0 || consumed > window)
+                    {
+                        return false;
+                    }
+
+                    if (outLen > blockSize && pos % clusterSize + consumed <= clusterSize)
+                    {
+                        return false;
+                    }
+
+                    if (pos % clusterSize != 0 && pos % clusterSize + consumed <= clusterSize)
+                    {
+                        return false;
+                    }
+
+                    if (pos + consumed > (CeilDiv((long)node.Size, clusterSize) - 1L) * clusterSize)
+                    {
+                        return false;
+                    }
+
+                    if (!AcceptsClosingIndexRow(pos, consumed, outLen, clusterSize, (long)node.Size, blockSize))
+                    {
+                        return false;
+                    }
+
+                    spanLength = consumed;
+                    encodedLength = outLen;
+                    return true;
+                }
+
+                if (!TryFill(out acceptedLen, out acceptedOut))
+                {
+                    acceptedLen = 0;
+                    acceptedOut = 0;
+                    var lo = 0;
+                    var hi = maxTake + 1;
+                    for (var probe = 1; probe < hi;)
+                    {
+                        if (!TryTake(probe, out var probeLen, out var probeOut))
                         {
-                            lo = probe;
-                            probe = 2;
-                            continue;
+                            if (probe == 1 && bigPcluster && probeOut > blockSize)
+                            {
+                                lo = probe;
+                                probe = 2;
+                                continue;
+                            }
+
+                            hi = probe;
+                            break;
                         }
 
-                        hi = probe;
-                        break;
+                        lo = probe;
+                        acceptedLen = probeLen;
+                        acceptedOut = probeOut;
+                        probe = probe == 1 ? 2 : probe * 2;
                     }
 
-                    lo = probe;
-                    acceptedLen = probeLen;
-                    acceptedOut = probeOut;
-                    probe = probe == 1 ? 2 : probe * 2;
-                }
-
-                while (lo + 1 < hi)
-                {
-                    var mid = lo + (hi - lo) / 2;
-                    if (TryTake(mid, out var midLen, out var midOut))
+                    while (lo + 1 < hi)
                     {
-                        lo = mid;
-                        acceptedLen = midLen;
-                        acceptedOut = midOut;
-                    }
-                    else
-                    {
-                        hi = mid;
-                    }
-                }
-
-                if (fillDestination)
-                {
-                    // lib/compress.c:602-614 hands the encoder a destination budget of one pcluster and takes
-                    // whatever input it consumed (`erofs_compress_destsize`, lib/compressor_lz4.c:15-26), so the span
-                    // a pcluster covers is neither a whole number of logical clusters nor bounded by the pcluster
-                    // size. The cluster search above can therefore only bracket the span: it stops at the first
-                    // whole-cluster multiple whose encoding no longer fits. Searching the bracket by byte recovers
-                    // the span the destination-filling encoder would have consumed, which is what lets a pcluster
-                    // whose compression ratio is below one but whose encoding rounds up to the same block count as
-                    // its input still hold more logical bytes than physical ones.
-                    // <para>lib/compress.c:602-614 把一整个 pcluster 的输出预算交给编码器，并采纳它消耗掉的输入
-                    // （<c>erofs_compress_destsize</c>，lib/compressor_lz4.c:15-26），因此 pcluster 覆盖的跨度既不是
-                    // 整数个逻辑簇，也不受 pcluster 大小约束。上面的逐簇搜索只能给出跨度的区间：它在第一个编码放不下的
-                    // 整簇倍数处停下。按字节在该区间内搜索即可还原「填满输出」的编码器会消耗掉的跨度，这正是压缩比
-                    // 小于一、但编码长度向上取整后与输入同块数的 pcluster 仍能装进比物理块数更多逻辑字节的原因。</para>
-                    var high = (int)Math.Min(inputCap, (long)hi * clusterSize);
-                    var low = acceptedLen;
-                    while (high - low > 1)
-                    {
-                        var mid = low + (high - low) / 2;
-                        if (TrySpan(mid, out var midOut))
+                        var mid = lo + (hi - lo) / 2;
+                        if (TryTake(mid, out var midLen, out var midOut))
                         {
-                            low = mid;
-                            acceptedLen = mid;
+                            lo = mid;
+                            acceptedLen = midLen;
                             acceptedOut = midOut;
                         }
                         else
                         {
-                            high = mid;
+                            hi = mid;
+                        }
+                    }
+
+                    if (fillDestination)
+                    {
+                        // lib/compress.c:602-614 hands the encoder a destination budget of one pcluster and
+                        // takes whatever input it consumed (`erofs_compress_destsize`, lib/compressor_lz4.c:15-26),
+                        // so the span a pcluster covers is neither a whole number of logical clusters nor bounded
+                        // by the pcluster size. The fill encode above applies that contract directly; this byte
+                        // search recovers the same span when the fill frame was refused, for example because the
+                        // index could not close it. The cluster search can therefore only bracket the span: it
+                        // stops at the first whole-cluster multiple whose encoding no longer fits.
+                        // <para>lib/compress.c:602-614 把一整个 pcluster 的输出预算交给编码器，并采纳它消耗掉的
+                        // 输入（<c>erofs_compress_destsize</c>，lib/compressor_lz4.c:15-26），因此 pcluster 覆盖的
+                        // 跨度既不是整数个逻辑簇，也不受 pcluster 大小约束。上面的填满编码直接执行这一契约；当它的
+                        // 帧被拒绝（例如索引无法收尾）时，由这段按字节搜索还原同一跨度。逐簇搜索因此只能给出跨度的
+                        // 区间：它在第一个编码放不下的整簇倍数处停下。</para>
+                        //
+                        // A bracket that ends inside the first block cannot yield a different decision, because the
+                        // block-rounding test after the search compares a block-rounded encoded length against the
+                        // candidate span: every candidate here is at most one block long, so its rounded length is
+                        // at least one block and therefore never shorter than the span itself, which makes the test
+                        // discard it. The same reasoning covers a cluster candidate accepted before the search, so
+                        // the byte search would only spend probes on an outcome that is dropped either way.
+                        // <para>止于首块之内的区间不可能给出不同判定，因为搜索之后的按块取整判定比较的是取整后的编码
+                        // 长度与候选跨度：此处每个候选都不长于一块，其取整长度至少一块，因而绝不短于跨度本身，判定必然
+                        // 丢弃它。搜索之前已被接受的簇候选同理，因此字节搜索只会把探测花在一个无论如何都被丢弃的结果上。</para>
+                        var high = (int)Math.Min(inputCap, (long)hi * clusterSize);
+                        if (high > blockSize)
+                        {
+                            var low = acceptedLen;
+                            while (high - low > 1)
+                            {
+                                var mid = low + (high - low) / 2;
+                                if (TrySpan(mid, out var midOut))
+                                {
+                                    low = mid;
+                                    acceptedLen = mid;
+                                    acceptedOut = midOut;
+                                }
+                                else
+                                {
+                                    high = mid;
+                                }
+                            }
                         }
                     }
                 }
 
                 // lib/compress.c:616-628 rounds an encoded length up to a whole block and keeps the compressed frame
                 // only when that rounded length is strictly smaller than the bytes the frame encodes; otherwise the
-                // span is stored raw one block at a time. The test has to run on the candidate the search settled on:
+                // span is stored raw one block at a time. The test has to run on the accepted span, not on a probe:
                 // moving it into the probe would make the very first whole-cluster probe fail on any span whose
                 // encoding rounds up to its own length, and the escalating probe leaves the search at that first
                 // failure, so the file would fall back to raw storage as a whole instead of one block at a time.
                 // <para>lib/compress.c:616-628 把编码长度向上取整到整块，且仅当取整后的长度严格小于该帧编码的
-                // 字节数时才保留压缩帧；否则该跨度按一块一段原样存放。该判定必须作用于搜索最终选定的候选：若把它
+                // 字节数时才保留压缩帧；否则该跨度按一块一段原样存放。该判定必须作用于最终接受的跨度而不是某次探测：若把它
                 // 移进探测内部，任何编码长度向上取整后等于自身长度的跨度都会让第一个整簇探测失败，而递增式探测正
                 // 停在这次失败处，于是整份文件会退回整文件原样存放，而不是一块一段地原样存放。</para>
                 if (acceptedLen > 0 && acceptedOut > 0

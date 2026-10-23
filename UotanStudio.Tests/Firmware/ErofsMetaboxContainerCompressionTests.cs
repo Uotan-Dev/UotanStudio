@@ -237,7 +237,7 @@ public sealed class ErofsMetaboxContainerCompressionTests
             Metabox = true,
             MetaboxRequired = true,
         };
-        options.Features = ErofsFeatureSet.FromWords(0, ErofsSuperblock.IncompatMetabox);
+        options.Features = ErofsFeatureSet.FromWords(0, ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatMetabox);
         return options;
     }
 

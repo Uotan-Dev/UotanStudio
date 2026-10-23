@@ -128,7 +128,6 @@ public sealed class ErofsExtentBufferReuseTests : IDisposable
             BlockSize = BlockSize,
             Compress = true,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
             CompressedTailPacking = false,
             SuperblockChecksum = false,
             CancellationToken = TestContext.Current.CancellationToken,

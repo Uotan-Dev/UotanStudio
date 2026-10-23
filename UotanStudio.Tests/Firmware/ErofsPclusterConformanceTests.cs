@@ -41,7 +41,6 @@ public sealed class ErofsPclusterConformanceTests
         {
             BlockSize = BlockSize,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
             OptimizeCompression = true,
             UseCompactedIndexes = compacted,
         }, out var image);

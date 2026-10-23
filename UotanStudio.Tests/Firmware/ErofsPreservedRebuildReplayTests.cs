@@ -35,9 +35,9 @@ public class ErofsPreservedRebuildReplayTests
         var rebuilt = await File.ReadAllBytesAsync(rebuiltPath, TestContext.Current.CancellationToken);
         var rebuiltLayout = LayoutOf(rebuilt);
 
-        Assert.Equal(3, sourceLayout.DataLayout);
+        Assert.Equal(1, sourceLayout.DataLayout);
         Assert.Equal(1u, sourceLayout.Blocks);
-        Assert.Equal(3, rebuiltLayout.DataLayout);
+        Assert.Equal(1, rebuiltLayout.DataLayout);
         Assert.True(rebuilt.Length <= source.Length,
             $"the preserved rebuild of a compressed source grew from {source.Length} to {rebuilt.Length} bytes " +
             $"(source layout {sourceLayout.DataLayout}/{sourceLayout.Blocks}, rebuilt {rebuiltLayout.DataLayout}/{rebuiltLayout.Blocks}).");
@@ -53,7 +53,6 @@ public class ErofsPreservedRebuildReplayTests
 
         var imagePath = Path.Combine(temp.Path, "source.img");
         var options = SourceOptions();
-        options.LegacyCompatibility = true;
         var source = new ErofsBuilder().Build(temp.Path, options);
         await File.WriteAllBytesAsync(imagePath, source, TestContext.Current.CancellationToken);
         var sourceLayout = LayoutOf(source);

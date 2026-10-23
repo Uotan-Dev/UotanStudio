@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
@@ -61,6 +62,15 @@ public sealed record ErofsFileEntry(
     /// <value>Read verbatim from the inode; combine with <see cref="MTime"/>.
     /// <para>逐字取自 inode；与 <see cref="MTime"/> 组合使用。</para></value>
     public uint MTimeNanoseconds { get; init; }
+
+    /// <summary>Whether <see cref="MTime"/> and <see cref="MTimeNanoseconds"/> are recorded by the source.
+    /// <para><see cref="MTime"/> 与 <see cref="MTimeNanoseconds"/> 是否由源镜像实际记录。</para></summary>
+    /// <value><see langword="true"/> for an extended inode, whose record always carries the timestamp, and for a
+    /// compact inode when the image declares the <c>mtime</c> compat feature; <see langword="false"/> otherwise,
+    /// where the compact record's field holds a reserved value instead of a time.
+    /// <para>扩展 inode 的记录总是携带时间戳，紧凑 inode 在镜像声明 <c>mtime</c> compat 特性时同样为
+    /// <see langword="true"/>；否则为 <see langword="false"/>，此时紧凑记录的该字段存放保留值而非时间。</para></value>
+    public bool HasModificationTime { get; init; }
 
     /// <summary>Mode type bits select symbolic link. <para>模式类型位选中符号链接。</para></summary>
     /// <value><see langword="true"/> when this entry is a symlink.
@@ -155,6 +165,15 @@ public sealed partial class ErofsParser : IDisposable
     private const int ExtractOverlappedChunkSize = 1 << 20;
 
     /// <summary>
+    /// Largest payload written through the plain buffered file stream. At or below this size the fixed cost of an
+    /// overlapped writer — two pooled one-megabyte chunks and one queued write — exceeds the transfer it can
+    /// overlap, so the payload goes through ordinary buffered writes instead.
+    /// <para>通过普通缓冲文件流写出的最大负载。不大于该值时，重叠写入器的固定开销（两块池化一兆字节分块与一次
+    /// 排队写入）超过其可重叠的传输量，因此改用普通缓冲写入。</para>
+    /// </summary>
+    private const int SmallExtractedFileBytes = 1 << 16;
+
+    /// <summary>
     /// Superblock CRC32c seed used by the EROFS checksum, mirroring the builder.
     /// <para>超级块 CRC32c 种子，与构建器侧使用相同值。</para>
     /// </summary>
@@ -199,6 +218,8 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>超级块魔数、几何信息、特性或校验和非法。</para></exception>
     /// <exception cref="FileSystemCorruptedException">A metadata read exceeds the image bounds or the device table mismatches.
     /// <para>元数据读取超出镜像边界，或设备表不一致。</para></exception>
+    /// <exception cref="FileSystemUnsupportedFeatureException">The image declares a directory stride other than the block size.
+    /// <para>镜像声明了与块大小不同的目录步长。</para></exception>
     public ErofsParser(byte[] image)
         : this(CreateMemorySource(image), ownsStream: false)
     {
@@ -214,6 +235,8 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>流的 position 超出其长度。</para></exception>
     /// <exception cref="FormatException">The superblock magic, geometry, features or checksum is invalid.
     /// <para>超级块魔数、几何信息、特性或校验和非法。</para></exception>
+    /// <exception cref="FileSystemUnsupportedFeatureException">The image declares a directory stride other than the block size.
+    /// <para>镜像声明了与块大小不同的目录步长。</para></exception>
     public ErofsParser(Stream stream)
         : this(stream, ownsStream: false)
     {
@@ -403,6 +426,12 @@ public sealed partial class ErofsParser : IDisposable
                 : preliminarySuperblock;
 
             _superblock.Validate();
+            if (_superblock.DirBlkBits != 0 && _superblock.DirBlkBits != _superblock.BlockSizeBits)
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"EROFS directory block shift {_superblock.DirBlkBits} differs from the filesystem block shift " +
+                    $"{_superblock.BlockSizeBits}; directories with a stride other than the block size are not supported.");
+            }
 
             if (_superblock.HasCompatChecksum)
             {
@@ -488,6 +517,35 @@ public sealed partial class ErofsParser : IDisposable
     /// copy) to the end of the source.
     /// <para>从构造时给定的基址（或转存临时副本的起点）到源末尾。</para></value>
     public long ImageSize => _imageSize;
+
+    /// <summary>Upper bound on bytes produced for one logical payload.
+    /// <para>单个逻辑负载可产出的字节上限。</para></summary>
+    /// <value>Defaults to the <see cref="Core.UnpackOptions.MaximumOutputBytes"/> the active preservation unpack
+    /// requested, or to that option's default when no unpack scope applies. It bounds a packed fragment read
+    /// together with the image size, so a crafted inode cannot drive an unbounded decode.
+    /// <para>默认取当前保留解包所请求的 <see cref="Core.UnpackOptions.MaximumOutputBytes"/>；没有解包作用域时取该选项的
+    /// 默认值。它与镜像大小共同限定一次 packed 片段读取，使构造的 inode 无法驱动无界解码。</para></value>
+    /// <exception cref="ArgumentOutOfRangeException">The assigned value is zero or negative.
+    /// <para>赋值为零或负数。</para></exception>
+    public long MaximumOutputBytes
+    {
+        get => _maximumOutputBytes;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            _maximumOutputBytes = value;
+        }
+    }
+
+    private long _maximumOutputBytes = Rebuilding.FileSystemPreservation.RequestedMaximumOutputBytes;
+
+    /// <summary>Number of symlink entries materialized as text files because the host refused a real link.
+    /// <para>因宿主拒绝真实链接而改用文本文件物化的符号链接条目数。</para></summary>
+    /// <value>The count accumulated by extraction calls on this parser; zero when every relative target became a link.
+    /// <para>本解析器各次解包累计的数量；当所有相对目标都建为链接时为零。</para></value>
+    public int SymlinkFallbacks => Volatile.Read(ref _symlinkFallbacks);
+
+    private int _symlinkFallbacks;
 
     /// <summary>Number of allocated inodes reported by the superblock.
     /// <para>超级块报告的已分配 inode 数量。</para></summary>
@@ -628,7 +686,9 @@ public sealed partial class ErofsParser : IDisposable
     private static bool IsSpecialFile(UnifiedInode inode)
         => inode.IsCharacterDevice || inode.IsBlockDevice || inode.IsFifo || inode.IsSocket;
 
-    /// <summary>Extracts all files to the output directory.<para>将镜像中全部文件解包到输出目录。</para></summary>
+    /// <summary>Extracts all files to the output directory, materializing relative symlinks as real links where
+    /// the host allows and restoring the recorded modification times.
+    /// <para>将镜像中全部文件解包到输出目录；宿主允许时把相对符号链接建为真实链接，并还原记录的修改时间。</para></summary>
     /// <param name="outputDirectory">Host directory receiving the tree; created when missing.
     /// <para>接收目录树的宿主目录；缺失时自动创建。</para></param>
     /// <param name="overwrite">When <see langword="false"/>, files already present on the host are skipped.
@@ -656,17 +716,39 @@ public sealed partial class ErofsParser : IDisposable
     /// <para><paramref name="outputDirectory"/> 为 null。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
+    /// <remarks>Relative symlink targets become real links when the host allows it, and fall back to the
+    /// text-file form otherwise, which <see cref="SymlinkFallbacks"/> counts. Every regular file and directory
+    /// keeps the modification time the source inode recorded, with directories written after their children.
+    /// <para>相对符号链接目标在宿主允许时建为真实链接，否则回退为文本文件形式并由
+    /// <see cref="SymlinkFallbacks"/> 计数。每个常规文件与目录都保留源 inode 记录的修改时间，目录在其子项之后写入。</para></remarks>
     public void ExtractToDirectory(string outputDirectory, IProgress<(long Processed, long Total)>? byteProgress,
         CancellationToken cancellationToken, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(outputDirectory);
+        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var outputExisted = Directory.Exists(outputDirectory);
         Directory.CreateDirectory(outputDirectory);
         var entries = EnumerateFiles();
         var firstNids = new Dictionary<string, ulong>(StringComparer.Ordinal);
         foreach (var entry in entries) firstNids.TryAdd(entry.Path, entry.Nid);
         var hostPaths = new Extraction.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path).Concat(_directoryPaths));
+        var preservedDirectories = new HashSet<string>(comparer);
+        if (!overwrite && outputExisted)
+        {
+            preservedDirectories.Add(Path.GetFullPath(outputDirectory));
+        }
+
         foreach (var directory in _directoryPaths)
-            Directory.CreateDirectory(hostPaths.Resolve(directory));
+        {
+            var resolved = hostPaths.Resolve(directory);
+            if (!overwrite && Directory.Exists(resolved))
+            {
+                preservedDirectories.Add(resolved);
+                continue;
+            }
+
+            Directory.CreateDirectory(resolved);
+        }
         var firstSizes = entries.GroupBy(e => e.Path, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Size, StringComparer.Ordinal);
         var targets = new string[entries.Count];
         for (var index = 0; index < entries.Count; index++)
@@ -687,46 +769,282 @@ public sealed partial class ErofsParser : IDisposable
                 ? System.Text.Encoding.UTF8.GetByteCount(candidate.SymlinkTarget ?? string.Empty)
                 : candidate.IsSpecialFile ? 0L : firstSizes[candidate.Path];
         }
+        var written = new bool[entries.Count];
         var bytes = new Core.ExtractionByteCounter(totalBytes, byteProgress, cancellationToken);
         var totalCount = entries.Count;
         var processedCount = 0;
         var progressGate = new object();
         IProgress<(long Processed, long Total)>? entrySink = progress is null ? null : new Core.EntryCountProgress(progress);
         var entryProgress = new Core.ProgressThrottle(totalCount, entrySink, cancellationToken);
-        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var groups = Enumerable.Range(0, entries.Count).GroupBy(index => targets[index], comparer).ToArray();
+        var createdParents = new ConcurrentDictionary<string, bool>(comparer);
         Core.FirmwareParallelism.ForEach(groups, group =>
         {
-            foreach (var index in group)
+            DecodeLaneBudget.EnterFile();
+            try
             {
-                var entry = entries[index];
-                cancellationToken.ThrowIfCancellationRequested();
-                var target = targets[index];
-                var parent = Path.GetDirectoryName(target);
-                if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
-                if (overwrite || !File.Exists(target))
+                foreach (var index in group)
                 {
-                    if (entry.IsSymlink)
+                    var entry = entries[index];
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var target = targets[index];
+                    var parent = Path.GetDirectoryName(target);
+                    if (!string.IsNullOrEmpty(parent) && createdParents.TryAdd(parent, true))
                     {
-                        File.WriteAllText(target, entry.SymlinkTarget ?? string.Empty);
-                        bytes.Add(System.Text.Encoding.UTF8.GetByteCount(entry.SymlinkTarget ?? string.Empty));
+                        Directory.CreateDirectory(parent);
                     }
-                    else if (entry.IsSpecialFile) Core.FileExtraction.WriteAtomic(target, _ => { }, overwrite);
-                    else ExtractFileAtomic(target, firstNids[entry.Path], overwrite, bytes);
-                }
-                int completed;
-                lock (progressGate)
-                {
-                    processedCount++;
-                    completed = processedCount;
-                }
+                    if (overwrite || !File.Exists(target))
+                    {
+                        if (entry.IsSymlink)
+                        {
+                            written[index] = MaterializeSymlink(target, entry.SymlinkTarget, overwrite);
+                            bytes.Add(System.Text.Encoding.UTF8.GetByteCount(entry.SymlinkTarget ?? string.Empty));
+                        }
+                        else if (entry.IsSpecialFile)
+                        {
+                            Core.FileExtraction.WriteAtomic(target, _ => { }, overwrite);
+                            written[index] = true;
+                        }
+                        else
+                        {
+                            ExtractFileAtomic(target, firstNids[entry.Path], overwrite, bytes);
+                            written[index] = true;
+                        }
+                    }
+                    int completed;
+                    lock (progressGate)
+                    {
+                        processedCount++;
+                        completed = processedCount;
+                    }
 
-                entryProgress.Report((completed, totalCount));
+                    entryProgress.Report((completed, totalCount));
+                }
+            }
+            finally
+            {
+                DecodeLaneBudget.ExitFile();
             }
         });
         bytes.Complete();
         entryProgress.Complete();
+        RestoreModificationTimes(entries, targets, written, preservedDirectories, hostPaths, outputDirectory,
+            cancellationToken);
     }
+
+    /// <summary>
+    /// Materializes one symlink entry: a relative target becomes a real file or directory link, and every
+    /// other case keeps the historical text-file form, which is counted and reported through
+    /// <see cref="SymlinkFallbacks"/>.
+    /// <para>物化单个符号链接条目：相对目标建为真实的文件或目录链接，其余情况保留既有的文本文件形式，
+    /// 并经 <see cref="SymlinkFallbacks"/> 计数与上报。</para>
+    /// </summary>
+    /// <param name="path">Host path of the link inside the output root. <para>输出根内该链接的宿主路径。</para></param>
+    /// <param name="target">Stored symlink target text; <see langword="null"/> writes an empty file.
+    /// <para>存储的符号链接目标文本；为 <see langword="null"/> 时写出空文件。</para></param>
+    /// <param name="overwrite">Whether an existing entry at <paramref name="path"/> may be replaced.
+    /// <para>是否允许替换 <paramref name="path"/> 处已存在的条目。</para></param>
+    /// <returns><see langword="true"/> when this call created the link or wrote the fallback file.
+    /// <para>本次调用创建了链接或写出了回退文件时为 <see langword="true"/>。</para></returns>
+    private bool MaterializeSymlink(string path, string? target, bool overwrite)
+    {
+        var text = target ?? string.Empty;
+        if (text.Length > 0 && TryCreateSymbolicLink(path, text, overwrite))
+        {
+            return true;
+        }
+
+        var existingLink = new FileInfo(path).LinkTarget is not null;
+        if (existingLink)
+        {
+            if (!overwrite)
+            {
+                return false;
+            }
+
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: false);
+            }
+            else
+            {
+                File.Delete(path);
+            }
+        }
+        else if (!overwrite && (File.Exists(path) || Directory.Exists(path)))
+        {
+            return false;
+        }
+
+        File.WriteAllText(path, text);
+        Interlocked.Increment(ref _symlinkFallbacks);
+        Rebuilding.FileSystemPreservation.RecordSymlinkFallback();
+        return true;
+    }
+
+    /// <summary>
+    /// Creates a real symbolic link for a relative target, preferring a directory link when the resolved
+    /// target is a directory. An absolute target is refused so extraction never manufactures a link that
+    /// points outside the output root; a host that denies link creation reports <see langword="false"/> and
+    /// the caller falls back to the text-file form.
+    /// <para>为相对目标创建真实符号链接，解析后的目标为目录时优先建目录链接。绝对目标会被拒绝，使解包绝不
+    /// 制造指向输出根之外的链接；宿主拒绝创建链接时返回 <see langword="false"/>，由调用方回退到文本文件形式。</para>
+    /// </summary>
+    /// <param name="path">Host path that receives the link. <para>接收链接的宿主路径。</para></param>
+    /// <param name="target">Stored relative target text. <para>存储的相对目标文本。</para></param>
+    /// <param name="overwrite">Whether an existing entry at <paramref name="path"/> may be replaced.
+    /// <para>是否允许替换 <paramref name="path"/> 处已存在的条目。</para></param>
+    /// <returns><see langword="true"/> when the link exists afterwards.
+    /// <para>链接随后存在时为 <see langword="true"/>。</para></returns>
+    private static bool TryCreateSymbolicLink(string path, string target, bool overwrite)
+    {
+        if (Path.IsPathRooted(target))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (overwrite)
+            {
+                if (new FileInfo(path).LinkTarget is not null)
+                {
+                    if (Directory.Exists(path))
+                    {
+                        Directory.Delete(path, recursive: false);
+                    }
+                    else
+                    {
+                        File.Delete(path);
+                    }
+                }
+                else if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+
+            var parent = Path.GetDirectoryName(path);
+            var resolved = string.IsNullOrEmpty(parent)
+                ? target
+                : Path.GetFullPath(Path.Combine(parent, target));
+            if (Directory.Exists(resolved))
+            {
+                Directory.CreateSymbolicLink(path, target);
+            }
+            else
+            {
+                File.CreateSymbolicLink(path, target);
+            }
+
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Restores the modification time of every extracted file and, afterwards, of every directory deepest
+    /// first so a parent keeps the time the image recorded instead of the time the last child was written.
+    /// Symlinks and special files are skipped because setting their times would either follow the link or
+    /// is meaningless, and entries whose source recorded no timestamp are left with the host's value.
+    /// <para>还原每个已解出文件的修改时间，随后按由深到浅的顺序还原目录，使父目录保留镜像记录的时间而不是
+    /// 最后一个子项写入的时间。符号链接与特殊文件被跳过，因为设置其时间会跟随链接或本身无意义；源未记录时间戳
+    /// 的条目保留宿主值。</para>
+    /// </summary>
+    /// <param name="entries">Extracted file, symlink and special entries, in listing order.
+    /// <para>已解出的文件、符号链接与特殊条目，按清单顺序。</para></param>
+    /// <param name="targets">Host path of each entry, parallel to <paramref name="entries"/>.
+    /// <para>各条目的宿主路径，与 <paramref name="entries"/> 一一对应。</para></param>
+    /// <param name="written">Marks the entries this call actually wrote, so an existing target kept by
+    /// <c>overwrite: false</c> is never touched. <para>标记本次调用实际写出的条目，使 <c>overwrite: false</c>
+    /// 保留的既有目标绝不被改动。</para></param>
+    /// <param name="preservedDirectories">Directories that pre-existed and must keep their host timestamp.
+    /// <para>预先存在、必须保留宿主时间戳的目录。</para></param>
+    /// <param name="hostPaths">Path resolver that produced <paramref name="targets"/>.
+    /// <para>生成 <paramref name="targets"/> 的路径解析器。</para></param>
+    /// <param name="outputDirectory">Host directory that represents the image root, which the resolver does not
+    /// carry as an entry. <para>表示镜像根目录的宿主目录；解析器不把它作为条目携带。</para></param>
+    /// <param name="cancellationToken">Stops the pass between entries. <para>在条目之间中止该过程。</para></param>
+    private void RestoreModificationTimes(IReadOnlyList<ErofsFileEntry> entries, IReadOnlyList<string> targets,
+        IReadOnlyList<bool> written, IReadOnlySet<string> preservedDirectories,
+        Extraction.PortableExtractionPaths hostPaths, string outputDirectory, CancellationToken cancellationToken)
+    {
+        for (var index = 0; index < entries.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var entry = entries[index];
+            if (!written[index] || entry.IsSymlink || entry.IsSpecialFile || !TryGetModificationTime(entry, out var time))
+            {
+                continue;
+            }
+
+            File.SetLastWriteTimeUtc(targets[index], time);
+        }
+
+        var directories = new List<(string Path, DateTime Time)>();
+        foreach (var entry in _directoryEntries)
+        {
+            if (TryGetModificationTime(entry, out var time))
+            {
+                var path = entry.Path == "."
+                    ? Path.GetFullPath(outputDirectory)
+                    : hostPaths.Resolve(entry.Path);
+                if (!preservedDirectories.Contains(path))
+                {
+                    directories.Add((path, time));
+                }
+            }
+        }
+
+        foreach (var (path, time) in directories.OrderByDescending(item => item.Path.Length))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Directory.SetLastWriteTimeUtc(path, time);
+        }
+    }
+
+    /// <summary>
+    /// Converts a decoded inode timestamp into a host time, refusing values the source never recorded and
+    /// values outside the <see cref="DateTime"/> range.
+    /// <para>把解码出的 inode 时间戳转换为宿主时间，拒绝源从未记录的值以及超出 <see cref="DateTime"/> 范围的值。</para>
+    /// </summary>
+    /// <param name="entry">Listing entry carrying the seconds and nanoseconds.
+    /// <para>携带秒与纳秒的清单条目。</para></param>
+    /// <param name="time">UTC time to apply when the method returns <see langword="true"/>.
+    /// <para>方法返回 <see langword="true"/> 时要应用的 UTC 时间。</para></param>
+    /// <returns><see langword="true"/> when the entry carries a representable modification time.
+    /// <para>条目携带可表示的修改时间时为 <see langword="true"/>。</para></returns>
+    private static bool TryGetModificationTime(ErofsFileEntry entry, out DateTime time)
+    {
+        time = default;
+        if (!entry.HasModificationTime || entry.MTimeNanoseconds >= 1_000_000_000u || entry.MTime > MaxUnixSeconds)
+        {
+            return false;
+        }
+
+        time = DateTime.UnixEpoch.AddSeconds(entry.MTime).AddTicks(entry.MTimeNanoseconds / 100u);
+        return true;
+    }
+
+    /// <summary>Largest Unix second value a <see cref="DateTime"/> can represent.
+    /// <para><see cref="DateTime"/> 可表示的最大 Unix 秒值。</para></summary>
+    private const ulong MaxUnixSeconds = 253_402_300_799UL;
+
     /// <summary>
     /// Disposes the source held by the parser (only when the parser opened the file itself).
     /// <para>释放解析器持有的源（仅当解析器自己打开的文件流）。</para>
@@ -734,7 +1052,8 @@ public sealed partial class ErofsParser : IDisposable
     public void Dispose()
     {
         _decoderStates.Dispose();
-        _packedData?.Dispose();
+        _packedRangeCache?.Clear();
+        _packedRangeCache = null;
         if (_deviceStreams is not null)
         {
             for (var i = 1; i < _deviceStreams.Length; i++)
@@ -904,7 +1223,7 @@ public sealed partial class ErofsParser : IDisposable
         if (offset > device.Length || length > device.Length - offset)
             throw new FileSystemCorruptedException($"{what} exceeds device {deviceId} stream bounds.");
 
-        var buffer = ArrayPool<byte>.Shared.Rent(CopyBufferSize);
+        var buffer = ArrayPool<byte>.Shared.Rent((int)Math.Min(CopyBufferSize, Math.Max(1L, length)));
         try
         {
             while (length > 0)
@@ -979,7 +1298,7 @@ public sealed partial class ErofsParser : IDisposable
     /// </summary>
     private void CopyFromSource(Stream output, long offset, long length)
     {
-        var buffer = ArrayPool<byte>.Shared.Rent(CopyBufferSize);
+        var buffer = ArrayPool<byte>.Shared.Rent((int)Math.Min(CopyBufferSize, Math.Max(1L, length)));
         try
         {
             while (length > 0)
@@ -998,11 +1317,14 @@ public sealed partial class ErofsParser : IDisposable
     }
 
     /// <summary>
-    /// Writes one payload into <paramref name="path"/> through the overlapped writer, so the next chunk is
-    /// decoded while the previous one is still being written. A failed direct write removes the partially
-    /// created file, which keeps a failed extraction from leaving a truncated target behind.
-    /// <para>经重叠写入器把一个负载写入 <paramref name="path"/>，使上一块仍在写入时下一块已经在解码。直写失败时会
-    /// 删除已部分创建的文件，因此失败的解包不会留下被截断的目标文件。</para>
+    /// Writes one payload into <paramref name="path"/>. A payload up to <see cref="SmallExtractedFileBytes"/>
+    /// goes through a plain buffered file stream, because an overlapped writer costs more than such a payload can
+    /// overlap; a larger payload keeps the overlapped writer, so the next chunk is decoded while the previous
+    /// one is still being written. A failed direct write removes the partially created file, which keeps a failed
+    /// extraction from leaving a truncated target behind.
+    /// <para>把一个负载写入 <paramref name="path"/>。不大于 <see cref="SmallExtractedFileBytes"/> 的负载经普通
+    /// 缓冲文件流写出，因为重叠写入器的开销超过这类负载可重叠的传输量；更大的负载仍用重叠写入器，使上一块仍在
+    /// 写入时下一块已经在解码。直写失败时会删除已部分创建的文件，因此失败的解包不会留下被截断的目标文件。</para>
     /// </summary>
     /// <param name="path">Destination file path. <para>目标文件路径。</para></param>
     /// <param name="nid">Inode whose data is written. <para>写出其数据的 inode。</para></param>
@@ -1016,14 +1338,23 @@ public sealed partial class ErofsParser : IDisposable
         var created = false;
         try
         {
-            using (var file = new FileStream(path, mode, FileAccess.Write, FileShare.None, 1,
-                       FileOptions.SequentialScan))
+            var inode = ReadInode(nid);
+            if (inode.Size <= SmallExtractedFileBytes)
             {
+                using var small = new FileStream(path, mode, FileAccess.Write, FileShare.None,
+                    ExtractWriteBufferSize, FileOptions.SequentialScan);
                 created = mode == FileMode.CreateNew;
-                using var overlapped = new Core.Streams.OverlappedWriteStream(file, ExtractOverlappedChunkSize);
-                using var counted = bytes.Wrap(overlapped);
-                WriteFileData(nid, ReadInode(nid), counted);
+                using var smallCounted = bytes.Wrap(small);
+                WriteFileData(nid, inode, smallCounted);
+                return;
             }
+
+            using var file = new FileStream(path, mode, FileAccess.Write, FileShare.None, 1,
+                FileOptions.SequentialScan);
+            created = mode == FileMode.CreateNew;
+            using var overlapped = new Core.Streams.OverlappedWriteStream(file, ExtractOverlappedChunkSize);
+            using var counted = bytes.Wrap(overlapped);
+            WriteFileData(nid, inode, counted);
         }
         catch when (created)
         {
@@ -1115,7 +1446,8 @@ public sealed partial class ErofsParser : IDisposable
             }
             _visitedEntries++;
             _pathCharacters += candidatePath.Length;
-            if (entry.FileType == UnifiedInode.FileTypeDirectory)
+            var fileType = ResolveEntryFileType(entry);
+            if (fileType == UnifiedInode.FileTypeDirectory)
             {
 
                 if (entry.Nid == nid)
@@ -1134,11 +1466,11 @@ public sealed partial class ErofsParser : IDisposable
                 continue;
             }
 
-            if (entry.FileType == UnifiedInode.FileTypeRegularFile ||
-                entry.FileType == UnifiedInode.FileTypeSymlink ||
-                entry.FileType is UnifiedInode.FileTypeCharacterDevice or
-                    UnifiedInode.FileTypeBlockDevice or UnifiedInode.FileTypeFifo or
-                    UnifiedInode.FileTypeSocket)
+            if (fileType is UnifiedInode.FileTypeRegularFile or
+                UnifiedInode.FileTypeSymlink or
+                UnifiedInode.FileTypeCharacterDevice or
+                UnifiedInode.FileTypeBlockDevice or UnifiedInode.FileTypeFifo or
+                UnifiedInode.FileTypeSocket)
             {
                 var fileInode = ReadInode(entry.Nid);
                 fileInode.Name = entry.Name;
@@ -1173,6 +1505,29 @@ public sealed partial class ErofsParser : IDisposable
     }
 
     /// <summary>
+    /// Resolves the kind of a directory entry the way the kernel does: a compact dirent may leave
+    /// <c>d_type</c> unset (or raise a value the format does not define), and the inode mode is then the only
+    /// authority, so such an entry is decoded instead of being dropped from the walk.
+    /// <para>按内核方式解析目录条目的类型：紧凑 dirent 的 <c>d_type</c> 可能未设置（或置有格式未定义的值），
+    /// 此时 inode 模式是唯一权威，因此这类条目会被解码而不是从遍历中丢弃。</para>
+    /// </summary>
+    /// <param name="entry">Directory entry carrying the optional <c>d_type</c> hint.
+    /// <para>携带可选 <c>d_type</c> 提示的目录条目。</para></param>
+    /// <returns>The dirent type when it is one of the defined values; otherwise the type derived from the
+    /// entry's inode mode, or <see cref="UnifiedInode.FileTypeUnknown"/> when that mode is unrecognized too.
+    /// <para><c>d_type</c> 为已定义取值时返回该值；否则返回由条目 inode 模式导出的类型，
+    /// 模式同样无法识别时返回 <see cref="UnifiedInode.FileTypeUnknown"/>。</para></returns>
+    private byte ResolveEntryFileType(ErofsDirectoryEntry entry)
+    {
+        if (entry.FileType != UnifiedInode.FileTypeUnknown && entry.FileType <= UnifiedInode.FileTypeSymlink)
+        {
+            return entry.FileType;
+        }
+
+        return ReadInode(entry.Nid).FileType;
+    }
+
+    /// <summary>
     /// Projects one tree node into the caller-visible listing record, so the walk's single decoded
     /// inode describes both the tree and the entry.
     /// <para>把一个树节点投影为调用方可见的清单记录，使遍历解码出的同一个 inode 同时描述树与条目。</para>
@@ -1184,7 +1539,7 @@ public sealed partial class ErofsParser : IDisposable
     /// 从不携带该字段。</para></param>
     /// <returns>The listing record built from <paramref name="inode"/>.
     /// <para>由 <paramref name="inode"/> 构建的清单记录。</para></returns>
-    private static ErofsFileEntry ProjectEntry(string path, UnifiedInode inode, uint deviceId)
+    private ErofsFileEntry ProjectEntry(string path, UnifiedInode inode, uint deviceId)
         => new(path, (long)inode.Size, inode.Nid)
         {
             Mode = inode.Mode,
@@ -1194,6 +1549,7 @@ public sealed partial class ErofsParser : IDisposable
             LinkCount = inode.Nlink,
             MTime = inode.CTime,
             MTimeNanoseconds = inode.CTimeNsec,
+            HasModificationTime = inode.IsExtended || _superblock.HasCompatMtime,
         };
 
     private static string LastPathComponent(string path)
@@ -1464,7 +1820,12 @@ public sealed partial class ErofsParser : IDisposable
         return _metaboxData.AsSpan((int)offset, length);
     }
 
-    private int DirectoryBlockSize => _superblock.DirBlkBits == 0 ? _blockSize : 1 << _superblock.DirBlkBits;
+    /// <summary>
+    /// Directory block size. It is the filesystem block size because the constructor rejects a
+    /// <c>dirblkbits</c> that differs from the block size shift.
+    /// <para>目录块大小。构造函数拒绝与块大小位移不同的 <c>dirblkbits</c>，因此它就是文件系统块大小。</para>
+    /// </summary>
+    private int DirectoryBlockSize => _blockSize;
 
     private List<ErofsDirectoryEntry> ReadDirectory(ulong nid, UnifiedInode inode)
     {
@@ -1521,21 +1882,20 @@ public sealed partial class ErofsParser : IDisposable
     /// </summary>
     /// <param name="block">Raw directory block bytes, at least one dirent header long.
     /// <para>目录块的原始字节，长度至少为一条 dirent 头部。</para></param>
-    /// <param name="blockSize">Directory block size in bytes, unused by the compact layout because the
-    /// payload length is derived from the dirent count.
-    /// <para>目录块字节大小；紧凑布局不使用该值，因为负载长度由 dirent 数量推导。</para></param>
-    /// <param name="totalLength">Length of the payload this block belongs to, unused for the same reason.
-    /// <para>该块所属负载的长度；同样不使用。</para></param>
+    /// <param name="blockSize">Directory block size in bytes, used as the upper bound every nameoff must stay below.
+    /// <para>目录块字节大小，作为每条 nameoff 必须低于的上界。</para></param>
+    /// <param name="totalLength">Length of the payload this block belongs to, unused because the compact layout
+    /// bounds names by the block itself.
+    /// <para>该块所属负载的长度；紧凑布局按块本身限定名称，因此不使用。</para></param>
     /// <returns>The entries decoded from <paramref name="block"/>, in on-disk order.
     /// <para>从 <paramref name="block"/> 解码出的条目，按磁盘顺序。</para></returns>
     /// <exception cref="FileSystemCorruptedException">The block is truncated, a nameoff is not contiguous
-    /// with the previous entry, a nameoff carries an undefined bit, or a name length exceeds the block.
-    /// <para>块被截断、nameoff 与前一条目不连续、nameoff 携带未定义的位，或名称长度超出该块。</para></exception>
+    /// with the previous entry, a nameoff reaches the block size, or a name length exceeds the block.
+    /// <para>块被截断、nameoff 与前一条目不连续、nameoff 达到块大小，或名称长度超出该块。</para></exception>
     private static List<ErofsDirectoryEntry> ParseDirectoryData(ReadOnlySpan<byte> block, int blockSize, long totalLength)
     {
-        _ = blockSize;
         _ = totalLength;
-        return ErofsDirectoryEntry.ParseBlock(block);
+        return ErofsDirectoryEntry.ParseBlock(block, blockSize);
     }
 
 }

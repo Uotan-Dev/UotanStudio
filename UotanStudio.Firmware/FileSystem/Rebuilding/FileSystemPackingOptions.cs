@@ -123,7 +123,7 @@ internal static class FileSystemPackingOptions
     /// <param name="erofsOptions">Builder options receiving the declaration.
     /// <para>接收该声明的构建选项。</para></param>
     /// <param name="inheritedWords">Inherited superblock feature words, or <see langword="null"/> to edit from the
-    /// implied baseline. <para>继承的超级块特性字；为 <see langword="null"/> 时以隐含基线为编辑起点。</para></param>
+    /// minimal derived baseline. <para>继承的超级块特性字；为 <see langword="null"/> 时以最小推导基线为编辑起点。</para></param>
     /// <exception cref="FileSystemUnsupportedFeatureException">The edit script names a token the upstream feature
     /// table does not carry, or the dot-omitted value is neither a tri-state name nor a boolean.
     /// <para>编辑脚本包含上游特性表未收录的记号，或 dot-omitted 值既不是三态名也不是布尔值。</para></exception>

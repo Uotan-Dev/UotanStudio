@@ -144,7 +144,7 @@ public sealed class ErofsMetazoneTests
         options.Compress = false;
         options.Metabox = true;
         options.SourceMetaboxCompressed = true;
-        options.Features = ErofsFeatureSet.FromWords(0, ErofsSuperblock.IncompatMetabox);
+        options.Features = ErofsFeatureSet.FromWords(0, ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatMetabox);
         AttachFlatSourceRecord(options, "data.bin", BlockSize);
 
         var error = Assert.Throws<FileSystemUnsupportedFeatureException>(
@@ -162,7 +162,7 @@ public sealed class ErofsMetazoneTests
         options.Compress = false;
         options.Metabox = true;
         options.SourceMetaboxCompressed = false;
-        options.Features = ErofsFeatureSet.FromWords(0, ErofsSuperblock.IncompatMetabox);
+        options.Features = ErofsFeatureSet.FromWords(0, ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatMetabox);
         AttachFlatSourceRecord(options, "data.bin", BlockSize);
 
         var image = new ErofsBuilder().Build(source.Path, options);
@@ -182,7 +182,7 @@ public sealed class ErofsMetazoneTests
         options.Compress = false;
         options.Metabox = true;
         options.SourceMetaBlkAddr = 4;
-        options.Features = ErofsFeatureSet.FromWords(0, ErofsSuperblock.IncompatMetabox);
+        options.Features = ErofsFeatureSet.FromWords(0, ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatMetabox);
         AttachFlatSourceRecord(options, "data.bin", BlockSize);
 
         var image = new ErofsBuilder().Build(source.Path, options);

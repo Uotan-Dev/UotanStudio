@@ -26,7 +26,6 @@ public class ErofsRebuildPreservationTests
         var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
         });
 
         ErofsOptions captured;
@@ -85,7 +84,6 @@ public class ErofsRebuildPreservationTests
         var original = new ErofsBuilder().Build(source.Path, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
         });
 
         var extracted = Path.Combine(source.Path, "extracted");

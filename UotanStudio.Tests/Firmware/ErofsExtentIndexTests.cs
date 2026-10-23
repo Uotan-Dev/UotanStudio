@@ -199,7 +199,11 @@ public sealed class ErofsExtentIndexTests
     {
         var payload = FallbackPayload();
 
-        var image = Build(payload, options => options.UseExtentIndexes = ErofsTriStateFeature.Enabled);
+        var image = Build(payload, options =>
+        {
+            options.UseCompactedIndexes = true;
+            options.UseExtentIndexes = ErofsTriStateFeature.Enabled;
+        });
 
         var (layout, header) = ReadMapHeader(image, "data.bin");
         Assert.Equal(3, layout);
@@ -410,7 +414,10 @@ public sealed class ErofsExtentIndexTests
     private static byte[] Build(byte[] payload, Action<ErofsOptions>? configure)
     {
         using var source = new TempDirectory();
-        source.WriteBytes("data.bin", payload);
+        var path = source.WriteBytes("data.bin", payload);
+        var pinned = DateTimeOffset.FromUnixTimeSeconds((long)PinnedBuildTime).UtcDateTime;
+        File.SetLastWriteTimeUtc(path, pinned);
+        Directory.SetLastWriteTimeUtc(source.Path, pinned);
         var options = PinnedOptions();
         configure?.Invoke(options);
         return new ErofsBuilder().Build(source.Path, options);

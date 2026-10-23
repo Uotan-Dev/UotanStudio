@@ -3,28 +3,39 @@ using System.Text.RegularExpressions;
 namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
 
 /// <summary>
-/// Compiled <c>--compress-hints</c> rules for the EROFS writer. Each accepted line names a physical cluster
-/// size in bytes, an optional compression configuration index, and a match pattern; the first rule whose
-/// pattern matches a node's image-relative path decides that node's codec and pcluster size, and a zero
-/// pcluster size means the node is not compressed. Paths are matched through the same normalization the
-/// exclusion matcher uses.
-/// <para>EROFS 写入方的 <c>--compress-hints</c> 规则。每条被接受的
+/// Compiled <c>--compress-hints</c> rules for the EROFS writer, matching upstream <c>lib/compress_hints.c</c>.
+/// Each accepted line names a physical cluster size in bytes, an optional compression configuration index, and
+/// a match pattern; the first rule whose pattern matches a node's image-relative path decides that node's codec
+/// and pcluster size, and a zero pcluster size means the node is not compressed. Paths are matched through the
+/// same normalization the exclusion matcher uses.
+/// <para>EROFS 写入方的 <c>--compress-hints</c> 规则，与上游 <c>lib/compress_hints.c</c> 一致。每条被接受的
 /// 行给出物理簇字节数、可选的压缩配置下标与匹配模式；首个模式命中节点镜像内相对路径的规则决定该节点的编解码器
 /// 与 pcluster 大小，pcluster 大小为 0 表示该节点不压缩。路径经与排除匹配器相同的规整后比较。</para>
 /// </summary>
 /// <remarks>
-/// Matching is an approximation of POSIX extended regular expressions: the .NET engine does not implement the
-/// POSIX character classes such as <c>[[:alpha:]]</c>, and constructs the POSIX grammar lacks (<c>\d</c>,
-/// back-references) are not translated because a partial translation would silently mis-match. A pattern the
-/// engine cannot represent is recorded as a build warning and the entry is skipped rather than failing the
-/// build, unlike <see cref="ErofsExclusions"/>, which fails on an invalid pattern: an exclusion that matches
-/// nothing silently ships files the caller asked to keep out, while a skipped hint only leaves one file on
-/// the global codec, so the two callers need different failure modes.
-/// <para>匹配是 POSIX 扩展正则的近似：.NET 引擎不实现
-/// <c>[[:alpha:]]</c> 这类 POSIX 字符类，而 POSIX 文法没有的构造（<c>\d</c>、反向引用）也不做翻译，因为部分
-/// 翻译会引入静默误匹配。引擎无法表达的模式记为构建期警告并跳过该条而不是让构建失败，这与
+/// Match patterns are compiled after the POSIX translation in
+/// <see cref="ErofsExclusions.TranslatePosixPattern"/>: POSIX character classes such as <c>[[:alpha:]]</c>
+/// become their ASCII ranges, and an escaped alphanumeric such as <c>\d</c> is the literal character the POSIX
+/// ERE grammar makes it rather than a .NET shorthand. A pattern the translation or the engine rejects is
+/// recorded as a build warning and the entry is skipped rather than failing the build, unlike
+/// <see cref="ErofsExclusions"/>, which fails on an invalid pattern: an exclusion that matches nothing
+/// silently ships files the caller asked to keep out, while a skipped hint only leaves one file on the global
+/// codec, so the two callers need different failure modes.
+/// <para>匹配模式在经 <see cref="ErofsExclusions.TranslatePosixPattern"/> 的 POSIX 翻译后编译：
+/// <c>[[:alpha:]]</c> 这类 POSIX 字符类变为其 ASCII 区间，而 <c>\d</c> 这类转义字母数字按 POSIX ERE 文法
+/// 就是该字面字符，而不是 .NET 简写。翻译或引擎拒绝的模式记为构建期警告并跳过该条而不让构建失败，这与
 /// <see cref="ErofsExclusions"/> 对非法模式让构建失败是有意不同：匹配不到任何东西的排除规则会静默放出调用方
 /// 要求排除的文件，而被跳过的提示只让一个文件落在全局编解码器上，因此两者需要不同的失败模式。</para>
+/// A hint whose pcluster size exceeds the current maximum raises <see cref="ErofsOptions.MaxPclusterSize"/>
+/// and every codec record below that size to the requested value and records a build warning instead of
+/// failing, mirroring upstream <c>lib/compress_hints.c</c>; the planner and the compression configuration
+/// read the raised limit from those options, so a caller must compile the hints before it materializes the
+/// configuration records that carry each codec's maximum. A raise past the 1 MiB format maximum fails the
+/// build because the declared layout cannot express it.
+/// <para>pcluster 大小超过当前上限的提示会把它以及所有低于该值的编解码器记录提升到请求值并记录一条构建期警告，
+/// 而不是失败，与上游 <c>lib/compress_hints.c</c> 一致；规划器与压缩配置都从这些选项读取提升后的上限，因此调用方
+/// 必须在生成携带各编解码器上限的配置记录之前编译提示。提升到 1 MiB 格式上限之上会让构建失败，因为声明的布局
+/// 无法表达它。</para>
 /// </remarks>
 internal sealed class ErofsCompressHints
 {
@@ -45,24 +56,28 @@ internal sealed class ErofsCompressHints
     internal bool IsEmpty => rules.Length == 0;
 
     /// <summary>
-    /// Parses and compiles the requested rules. A line that names no pattern or whose pattern the engine
-    /// rejects, and a line whose pcluster size is not a multiple of the block size, are recorded as build
-    /// warnings and skipped; an algorithm index outside the build's configured codecs, and a pcluster size
-    /// the build did not declare, fail the build because neither can be honored without misreporting the
-    /// image.
-    /// <para>解析并编译请求的规则。未给出模式、模式被引擎拒绝、或 pcluster 大小不是块大小整数倍的行记为构建期
-    /// 警告并跳过；算法下标超出本次构建已配置的编解码器，或 pcluster 大小超出本次构建已声明的能力，则让构建
-    /// 失败，因为两者都无法在不误报镜像的前提下被满足。</para>
+    /// Parses and compiles the requested rules. A line that names no pattern, whose pattern the POSIX
+    /// translation or the engine rejects, or whose pcluster size is not a multiple of the block size, is
+    /// recorded as a build warning and skipped; an algorithm index outside the build's configured codecs fails
+    /// because it cannot be honored without misreporting the image. A pcluster size above the current maximum
+    /// raises <see cref="ErofsOptions.MaxPclusterSize"/> and every codec record below it and records a warning,
+    /// while a raise past the 1 MiB format maximum fails the build.
+    /// <para>解析并编译请求的规则。未给出模式、模式被 POSIX 翻译或引擎拒绝、或 pcluster 大小不是块大小整数倍的
+    /// 行记为构建期警告并跳过；算法下标超出本次构建已配置的编解码器，则让构建失败，因为无法在不误报镜像的前提下
+    /// 满足它。pcluster 大小超过当前上限时会提升 <see cref="ErofsOptions.MaxPclusterSize"/> 与所有低于该值的
+    /// 编解码器记录并记录一条警告，而提升到 1 MiB 格式上限之上则让构建失败。</para>
     /// </summary>
     /// <param name="lines">Rule lines, or <see langword="null"/> for none.
     /// <para>规则行；无则为 <see langword="null"/>。</para></param>
-    /// <param name="options">Options whose warnings are recorded and whose codec table and block size apply.
-    /// <para>记录警告、提供编解码器表与块大小的选项。</para></param>
+    /// <param name="options">Options whose warnings are recorded, whose codec table and block size apply, and
+    /// whose maximum pcluster size a larger hint raises; the instance is mutated, so a caller must not reuse it
+    /// when it still needs the original limit. <para>记录警告、提供编解码器表与块大小、并由更大的提示提升其最大
+    /// pcluster 大小的选项；该实例会被就地修改，调用方若仍需原上限就不得复用。</para></param>
     /// <returns>The compiled rules, or <see cref="Empty"/> when none was accepted.
     /// <para>编译后的规则；无被接受时为 <see cref="Empty"/>。</para></returns>
     /// <exception cref="FileSystemUnsupportedFeatureException">A rule names an unknown compression
-    /// configuration or a pcluster size above the build's declared maximum.
-    /// <para>某条规则指名未知的压缩配置，或 pcluster 大小超出本次构建声明的上限。</para></exception>
+    /// configuration, or a raise cannot be honored because the requested size is above the 1 MiB format maximum.
+    /// <para>某条规则指名未知的压缩配置，或无法完成提升：请求的大小超过 1 MiB 格式上限。</para></exception>
     internal static ErofsCompressHints Compile(IReadOnlyList<string>? lines, ErofsOptions options)
     {
         if (lines is not { Count: > 0 })
@@ -135,7 +150,8 @@ internal sealed class ErofsCompressHints
             Regex compiled;
             try
             {
-                compiled = new Regex(pattern, RegexOptions.CultureInvariant);
+                compiled = new Regex(
+                    ErofsExclusions.TranslatePosixPattern(pattern), RegexOptions.CultureInvariant);
             }
             catch (ArgumentException error)
             {
@@ -145,14 +161,44 @@ internal sealed class ErofsCompressHints
                 continue;
             }
 
+            var codecOptions = codecs[algorithmIndex];
+            var codecMaximum = codecOptions.MaxPclusterSize > 0 ? codecOptions.MaxPclusterSize : options.BlockSize;
             if (pclusterSize > (uint)buildMaximum)
             {
-                throw new FileSystemUnsupportedFeatureException(
+                if (pclusterSize > (uint)ErofsOptions.MaximumPclusterSize)
+                {
+                    throw new FileSystemUnsupportedFeatureException(
+                        $"EROFS compress hint '{line}' requests a {pclusterSize}-byte pcluster size above the "
+                        + $"{ErofsOptions.MaximumPclusterSize}-byte (1 MiB) format maximum.");
+                }
+
+                var previousMaximum = buildMaximum;
+                buildMaximum = (int)pclusterSize;
+                options.MaxPclusterSize = buildMaximum;
+                foreach (var codec in codecs)
+                {
+                    if (codec.MaxPclusterSize < buildMaximum)
+                    {
+                        codec.MaxPclusterSize = buildMaximum;
+                    }
+                }
+
+                options.AddBuildWarning(
                     $"EROFS compress hint '{line}' requests a {pclusterSize}-byte pcluster size above the build's "
-                    + $"configured maximum of {buildMaximum} bytes.");
+                    + $"previous maximum of {previousMaximum} bytes; the build and codec maximum was raised to "
+                    + $"{pclusterSize} bytes.");
+            }
+            else if (pclusterSize > (uint)codecMaximum)
+            {
+                var previousMaximum = codecMaximum;
+                codecOptions.MaxPclusterSize = (int)pclusterSize;
+                options.AddBuildWarning(
+                    $"EROFS compress hint '{line}' requests a {pclusterSize}-byte pcluster size above compression "
+                    + $"configuration {algorithmIndex}'s maximum of {previousMaximum} bytes; the codec maximum was "
+                    + $"raised to {pclusterSize} bytes.");
             }
 
-            accepted.Add(new Rule(compiled, (int)pclusterSize, codecs[algorithmIndex].Algorithm));
+            accepted.Add(new Rule(compiled, (int)pclusterSize, codecOptions.Algorithm));
         }
 
         return accepted.Count == 0 ? Empty : new ErofsCompressHints([.. accepted]);

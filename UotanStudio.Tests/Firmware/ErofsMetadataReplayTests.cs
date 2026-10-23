@@ -123,7 +123,6 @@ public class ErofsMetadataReplayTests
             WindowBits = captured.WindowBits,
             Lz4MaxDistance = captured.Lz4MaxDistance,
             MaxPclusterSize = captured.MaxPclusterSize,
-            LegacyCompatibility = captured.LegacyCompatibility,
         };
         foreach (var codec in captured.SourceCompressionOptions!)
         {
@@ -257,6 +256,20 @@ public class ErofsMetadataReplayTests
         temp.WriteBytes("heavy.bin", [.. Enumerable.Repeat((byte)0x5A, 40 * 1024)]);
         temp.WriteBytes("meta/data.bin", [.. Enumerable.Repeat((byte)0x11, 2 * 1024)]);
         temp.WriteBytes("meta/tiny.cfg", "ro.secure=1\n"u8.ToArray());
+
+        var pinned = DateTimeOffset.FromUnixTimeSeconds((long)Timestamp).UtcDateTime;
+        foreach (var file in Directory.EnumerateFiles(temp.Path, "*", SearchOption.AllDirectories))
+        {
+            File.SetLastWriteTimeUtc(file, pinned);
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(temp.Path, "*", SearchOption.AllDirectories)
+                     .OrderByDescending(path => path.Length))
+        {
+            Directory.SetLastWriteTimeUtc(directory, pinned);
+        }
+
+        Directory.SetLastWriteTimeUtc(temp.Path, pinned);
     }
 
     private static Dictionary<string, FsConfigEntry> SourceAttributes() => new(StringComparer.Ordinal)

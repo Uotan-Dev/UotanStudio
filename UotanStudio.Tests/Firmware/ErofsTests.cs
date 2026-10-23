@@ -330,8 +330,8 @@ public class ErofsTests
         var inodeOffset = superblock.GetInodeOffset(entry.Nid);
         var iFormat = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan((int)inodeOffset, 2));
         Assert.Equal(0, iFormat & 0x1);
-        Assert.Equal(3, (iFormat >> 1) & 0x7);
-        Assert.Equal(ErofsInode.DataLayoutCompactIndexes, (ushort)(iFormat & ErofsInode.DataLayoutMask));
+        Assert.Equal(1, (iFormat >> 1) & 0x7);
+        Assert.Equal(ErofsInode.DataLayoutCompressed, (ushort)(iFormat & ErofsInode.DataLayoutMask));
     }
 
     [Fact]

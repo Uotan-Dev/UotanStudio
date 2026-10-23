@@ -27,10 +27,8 @@ public sealed class ErofsKernelAcceptanceTests
     private const ushort KernelInodeFormatAll = 0x1F;
     private const ushort NlinkOneOrDotOmitted = 1 << 4;
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Build_AnyLayout_LeavesEveryInodeFormatWithinTheKernelMask(bool legacy)
+    [Fact]
+    public void Build_AnyLayout_LeavesEveryInodeFormatWithinTheKernelMask()
     {
         using var source = new TempDirectory();
         source.WriteBytes("big.bin", LargeCompressiblePayload());
@@ -41,7 +39,6 @@ public sealed class ErofsKernelAcceptanceTests
             BlockSize = BlockSize,
             Compress = true,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = legacy,
         });
 
         Assert.Empty(InodesRejectedByKernel(image));
@@ -72,10 +69,8 @@ public sealed class ErofsKernelAcceptanceTests
         Assert.Contains(entries, entry => entry.Path == "plain.txt");
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Build_CompressedMultiClusterPayload_ReadsBackEveryDeclaredByte(bool legacy)
+    [Fact]
+    public void Build_CompressedMultiClusterPayload_ReadsBackEveryDeclaredByte()
     {
         var payload = LargeCompressiblePayload();
         using var source = new TempDirectory();
@@ -86,7 +81,6 @@ public sealed class ErofsKernelAcceptanceTests
             BlockSize = BlockSize,
             Compress = true,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = legacy,
         });
 
         using var parser = new ErofsParser(image);

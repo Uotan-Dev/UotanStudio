@@ -164,6 +164,7 @@ public sealed class ErofsCaptureFidelityTests
             BlockSize = 1024,
             Compress = true,
             Algorithm = ErofsCompressionAlgorithm.Lz4,
+            UseCompactedIndexes = true,
             UseCompacted2BIndexes = true,
         });
 
