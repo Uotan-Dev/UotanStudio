@@ -426,6 +426,9 @@
   <data name="Tab_ScreenMirror" xml:space="preserve">
     <value>投屏</value>
   </data>
+  <data name="Tab_ScreenMirrorDevice" xml:space="preserve">
+    <value>投屏 · {0}</value>
+  </data>
   <data name="ScreenMirror_Preparing" xml:space="preserve">
     <value>正在准备投屏...</value>
   </data>
@@ -434,6 +437,12 @@
   </data>
   <data name="ScreenMirror_Connecting" xml:space="preserve">
     <value>正在连接设备...</value>
+  </data>
+  <data name="ScreenMirror_HdcUnsupported" xml:space="preserve">
+    <value>HDC 设备不支持 scrcpy 投屏。</value>
+  </data>
+  <data name="ScreenMirror_ProtocolUnsupported" xml:space="preserve">
+    <value>当前设备不支持 scrcpy 投屏。</value>
   </data>
   <data name="ScreenMirror_Mirroring" xml:space="preserve">
     <value>投屏中</value>
@@ -448,13 +457,25 @@
     <value>返回</value>
   </data>
   <data name="ScreenMirror_Power" xml:space="preserve">
-    <value>电源</value>
+    <value>关闭屏幕</value>
   </data>
   <data name="ScreenMirror_PushClipboard" xml:space="preserve">
     <value>发送剪贴板</value>
   </data>
   <data name="ScreenMirror_PullClipboard" xml:space="preserve">
     <value>获取剪贴板</value>
+  </data>
+  <data name="ScreenMirror_Home" xml:space="preserve">
+    <value>主屏幕</value>
+  </data>
+  <data name="ScreenMirror_Recents" xml:space="preserve">
+    <value>多任务</value>
+  </data>
+  <data name="ScreenMirror_VolumeDown" xml:space="preserve">
+    <value>音量 -</value>
+  </data>
+  <data name="ScreenMirror_VolumeUp" xml:space="preserve">
+    <value>音量 +</value>
   </data>
   <data name="Flash_Package" xml:space="preserve">
     <value>刷机包</value>
@@ -1535,12 +1556,6 @@
   </data>
   <data name="Flash_MtkPreloaderSessionFaulted" xml:space="preserve">
     <value>preloader 会话在任何协议拒绝时进入 fault 状态，因此已重建；请在全新会话上重试该操作。</value>
-  </data>
-  <data name="Settings_FlashAutoBackup" xml:space="preserve">
-    <value>刷写前备份分区</value>
-  </data>
-  <data name="Settings_FlashAutoBackupDescription" xml:space="preserve">
-    <value>刷写分区前自动按当前协议备份该分区。</value>
   </data>
   <data name="ViewLocator_NotFound" xml:space="preserve">
     <value>未找到: </value>
@@ -3284,5 +3299,26 @@
   </data>
   <data name="Scheme_RunFailed" xml:space="preserve">
     <value>方案运行失败。</value>
+  </data>
+  <data name="Common_Cancelling" xml:space="preserve">
+    <value>正在取消…</value>
+  </data>
+  <data name="ImageView_Refreshing" xml:space="preserve">
+    <value>正在刷新镜像列表</value>
+  </data>
+  <data name="ImageView_Refreshed" xml:space="preserve">
+    <value>已刷新：{0} 个镜像</value>
+  </data>
+  <data name="ImageView_Deleting" xml:space="preserve">
+    <value>正在删除 {0}</value>
+  </data>
+  <data name="ImageView_SynthesizingSuper" xml:space="preserve">
+    <value>正在合成 super 镜像（{0} 个分区）</value>
+  </data>
+  <data name="ImageView_SynthesizedSuper" xml:space="preserve">
+    <value>已合成 super 镜像</value>
+  </data>
+  <data name="ImageView_FlashingImages" xml:space="preserve">
+    <value>正在刷入 {0} 个镜像</value>
   </data>
 </root>

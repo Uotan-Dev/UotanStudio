@@ -1962,4 +1962,13 @@
   <data name="Dock_Properties_Type_PartitionDocument" xml:space="preserve">
     <value>分区表</value>
   </data>
+  <data name="Dock_Properties_Unknown" xml:space="preserve">
+    <value>未知</value>
+  </data>
+  <data name="Dock_Properties_Unavailable" xml:space="preserve">
+    <value>不可用</value>
+  </data>
+  <data name="Terminal_DeviceShell" xml:space="preserve">
+    <value>设备 Shell</value>
+  </data>
 </root>

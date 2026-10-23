@@ -381,6 +381,42 @@ Continue creating the project?</value>
   <data name="About_Version" xml:space="preserve">
     <value>Version</value>
   </data>
+  <data name="About_Channel" xml:space="preserve">
+    <value>Channel</value>
+  </data>
+  <data name="About_Channel_Release" xml:space="preserve">
+    <value>Release</value>
+  </data>
+  <data name="About_Channel_Beta" xml:space="preserve">
+    <value>Beta</value>
+  </data>
+  <data name="About_Channel_Canary" xml:space="preserve">
+    <value>Canary</value>
+  </data>
+  <data name="About_Channel_Experimental" xml:space="preserve">
+    <value>Experimental</value>
+  </data>
+  <data name="About_Channel_Release_Description" xml:space="preserve">
+    <value>Stable build intended for general use.</value>
+  </data>
+  <data name="About_Channel_Beta_Description" xml:space="preserve">
+    <value>Preview build with feature-complete changes that may still contain defects.</value>
+  </data>
+  <data name="About_Channel_Canary_Description" xml:space="preserve">
+    <value>Build from the latest integration state, updated ahead of beta.</value>
+  </data>
+  <data name="About_Channel_Experimental_Description" xml:space="preserve">
+    <value>Unstable build for early testing; features may change or break.</value>
+  </data>
+  <data name="About_Commit" xml:space="preserve">
+    <value>Commit</value>
+  </data>
+  <data name="About_CommitUnknown" xml:space="preserve">
+    <value>Not available</value>
+  </data>
+  <data name="About_OpenCommit" xml:space="preserve">
+    <value>Open the compiled commit</value>
+  </data>
   <data name="About_Title" xml:space="preserve">
     <value>About UotanStudio</value>
   </data>
@@ -388,7 +424,7 @@ Continue creating the project?</value>
     <value>An integrated toolbox for firmware unpack/pack, board flashing and visual programming.</value>
   </data>
   <data name="About_FontNotice" xml:space="preserve">
-    <value>This interface uses MiSans fonts. Copyright Xiaomi Inc.</value>
+    <value>The interface uses MiSans fonts. Copyright Xiaomi Inc.; distributed under the MiSans Font License.</value>
   </data>
   <data name="About_Close" xml:space="preserve">
     <value>Close</value>
@@ -400,7 +436,7 @@ Continue creating the project?</value>
     <value>Repository</value>
   </data>
   <data name="About_OpenSourceNotice" xml:space="preserve">
-    <value>This software uses or references the following open-source projects, each governed by its own license. Most use permissive licenses (MIT / Apache-2.0, etc.) and may be used in commercial projects free of charge; LGPL-3.0 components (e.g., LibUsbDotNet) impose certain obligations on distribution (e.g., providing modified source or dynamic linking). Avalonia is licensed under the MIT License and requires no additional commercial license.</value>
+    <value>UotanStudio is distributed under GNU GPL-3.0. It uses or references the open-source projects listed below, each governed by its own license. MIT, BSD and Apache-2.0 components are compatible with GPL-3.0 and their notices are retained. The Semi.Avalonia.AvaloniaEdit and Semi.Avalonia.Dock themes are proprietary, closed-source packages under the IRIHI EULA and are not GPL-3.0-compatible. LibUsbDotNet (LGPL-3.0-or-later) is statically linked; the MiSans fonts are used unmodified under their own license.</value>
   </data>
   <data name="Menu_CompareFiles" xml:space="preserve">
     <value>Compare Files</value>
@@ -848,5 +884,128 @@ Continue creating the project?</value>
   </data>
   <data name="Plugin_Install" xml:space="preserve">
     <value>Install</value>
+  </data>
+  <data name="About_Project_Avalonia" xml:space="preserve">
+    <value>Cross-platform UI framework; the desktop shell, layout and rendering are built on Avalonia.</value>
+  </data>
+  <data name="About_Project_AvaloniaEdit" xml:space="preserve">
+    <value>Text editor control for Avalonia (code and text file viewing and editing).</value>
+  </data>
+  <data name="About_Project_Dock" xml:space="preserve">
+    <value>Docking layout system for Avalonia (workspace panel layout).</value>
+  </data>
+  <data name="About_Project_SemiAvalonia" xml:space="preserve">
+    <value>Semantic UI-styled Avalonia theme core and DataGrid styles; the AvaloniaEdit and Dock themes ship as separate proprietary packages.</value>
+  </data>
+  <data name="About_Project_SemiAvaloniaDataGrid" xml:space="preserve">
+    <value>Avalonia DataGrid styles for the Semi theme (MIT).</value>
+  </data>
+  <data name="About_Project_SemiAvaloniaAvaloniaEdit" xml:space="preserve">
+    <value>AvaloniaEdit styles for the Semi theme; proprietary and closed-source, distributed under the IRIHI EULA and incompatible with GPL-3.0.</value>
+  </data>
+  <data name="About_Project_SemiAvaloniaDock" xml:space="preserve">
+    <value>Dock.Avalonia styles for the Semi theme; proprietary and closed-source, distributed under the IRIHI EULA and incompatible with GPL-3.0.</value>
+  </data>
+  <data name="About_Project_IrihiUrsa" xml:space="preserve">
+    <value>Avalonia control library for dialogs, toasts and other advanced controls.</value>
+  </data>
+  <data name="About_Project_IrihiIconicaTDesign" xml:space="preserve">
+    <value>Native Avalonia icon control library (TDesign icon set, Apache-2.0; includes the TDesign MIT NOTICE).</value>
+  </data>
+  <data name="About_Project_NodifyMAvalonia" xml:space="preserve">
+    <value>Node editor control library (visual programming canvas).</value>
+  </data>
+  <data name="About_Project_IciclecreekTerminal" xml:space="preserve">
+    <value>Cross-platform terminal control offering terminal rendering, text selection and interactive input.</value>
+  </data>
+  <data name="About_Project_XTermNet" xml:space="preserve">
+    <value>Terminal VT/ANSI protocol parsing and screen buffer (pulled in transitively through Iciclecreek.Avalonia.Terminal).</value>
+  </data>
+  <data name="About_Project_PortaPty" xml:space="preserve">
+    <value>Process communication over Windows ConPTY and macOS/Linux PTYs.</value>
+  </data>
+  <data name="About_Project_CommunityToolkitMvvm" xml:space="preserve">
+    <value>MVVM toolkit (ObservableObject, RelayCommand and WeakReferenceMessenger; includes ThirdPartyNotices).</value>
+  </data>
+  <data name="About_Project_IrihiLingua" xml:space="preserve">
+    <value>Source generator turning resx files into strongly typed locale managers (build-time only, not shipped).</value>
+  </data>
+  <data name="About_Project_LuaCSharp" xml:space="preserve">
+    <value>Lua interpreter and C# interop (script runtime for visual plugins).</value>
+  </data>
+  <data name="About_Project_QrCoder" xml:space="preserve">
+    <value>QR code generation library (wireless debugging pairing codes, managed PNG output).</value>
+  </data>
+  <data name="About_Project_LibUsbDotNet" xml:space="preserve">
+    <value>.NET USB access library; LGPL-3.0-or-later, statically linked under NativeAOT, with the corresponding sources and relinking instructions provided.</value>
+  </data>
+  <data name="About_Project_Libusb" xml:space="preserve">
+    <value>Native USB runtime 1.0.30 (LGPL-2.1-or-later, shipped as a replaceable dynamic library).</value>
+  </data>
+  <data name="About_Project_MakaretuDnsMulticast" xml:space="preserve">
+    <value>mDNS/DNS-SD library (local network device discovery).</value>
+  </data>
+  <data name="About_Project_BouncyCastleCryptography" xml:space="preserve">
+    <value>Cryptography library (AVB RSASSA-PSS and PKCS#1 v1.5 signature verification).</value>
+  </data>
+  <data name="About_Project_SharpCompress" xml:space="preserve">
+    <value>Compression and archive library (zip and other formats; bundles third-party 7-Zip, xz, bzip2, zlib and unRAR code).</value>
+  </data>
+  <data name="About_Project_K4osCompressionLz4" xml:space="preserve">
+    <value>LZ4 compression library; the managed layer is MIT and the embedded liblz4 is BSD-2-Clause (Yann Collet).</value>
+  </data>
+  <data name="About_Project_ZstdSharpPort" xml:space="preserve">
+    <value>Zstandard compression library; the managed layer is MIT and the embedded zstd is BSD-3-Clause (Meta Platforms).</value>
+  </data>
+  <data name="About_Project_LzmaSdk" xml:space="preserve">
+    <value>LZMA/LZMA2 decompression; the NuGet wrapper is MIT and the bundled 7-Zip LZMA SDK is public domain.</value>
+  </data>
+  <data name="About_Project_GoogleProtobuf" xml:space="preserve">
+    <value>Protocol Buffers serialization library (protobuf parsing for OTA payloads and more).</value>
+  </data>
+  <data name="About_Project_BsDiff" xml:space="preserve">
+    <value>.NET port of bsdiff binary diffing and patching; the port is MIT and the original bsdiff is BSD-2-Clause.</value>
+  </data>
+  <data name="About_Project_YamlDotNet" xml:space="preserve">
+    <value>YAML reading and writing library (device tree and configuration YAML parsing).</value>
+  </data>
+  <data name="About_Project_DiffPlex" xml:space="preserve">
+    <value>Text diffing library (line-level diff for the file compare service).</value>
+  </data>
+  <data name="About_Project_DiscUtils" xml:space="preserve">
+    <value>Fully managed FAT12/16/32 and exFAT volume implementation (FAT partition reading and writing).</value>
+  </data>
+  <data name="About_Project_ModelContextProtocolSdk" xml:space="preserve">
+    <value>Official MCP C# SDK (embedded MCP server; Apache-2.0).</value>
+  </data>
+  <data name="About_Project_DotNetRuntime" xml:space="preserve">
+    <value>.NET 10 runtime and base class library (NativeAOT single-file publishing; includes Microsoft THIRD-PARTY-NOTICES).</value>
+  </data>
+  <data name="About_Project_SkiaSharp" xml:space="preserve">
+    <value>Skia rendering backend for Avalonia; the managed layer is MIT and native Skia is BSD-3-Clause.</value>
+  </data>
+  <data name="About_Project_HarfBuzzSharp" xml:space="preserve">
+    <value>Native text shaping (OpenType) bindings shipped with the Avalonia rendering stack.</value>
+  </data>
+  <data name="About_Project_Angle" xml:space="preserve">
+    <value>OpenGL ES to Direct3D translation layer (native Windows GPU presentation library).</value>
+  </data>
+  <data name="About_Project_Oniguruma" xml:space="preserve">
+    <value>Native regular-expression library (editor syntax highlighting and search).</value>
+  </data>
+  <data name="About_Project_MicrosoftTerminal" xml:space="preserve">
+    <value>Native Windows ConPTY components (conpty.dll and OpenConsole.exe).</value>
+  </data>
+  <data name="About_Project_MiSansFont" xml:space="preserve">
+    <value>Interface font used under the MiSans Fonts IP license; files are unmodified and may not be redistributed or adapted separately.</value>
+  </data>
+  <data name="About_Project_AndroidUpdateBinary" xml:space="preserve">
+    <value>Pinned update-binary fallback for Recovery DAT packages (AOSP bootable/recovery, arm64 ELF).</value>
+  </data>
+  <data name="About_Project_Xunit" xml:space="preserve">
+    <value>Unit test framework (xunit.v3, project test suites).</value>
+  </data>
+  <data name="About_Project_BenchmarkDotNet" xml:space="preserve">
+    <value>Performance benchmarking framework (benchmark project).</value>
   </data>
 </root>

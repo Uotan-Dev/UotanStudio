@@ -345,4 +345,109 @@
   <data name="Settings_ServerStopFailed" xml:space="preserve">
     <value>停止 server 失败：{0}</value>
   </data>
+  <data name="Settings_RouteMode" xml:space="preserve">
+    <value>路由模式</value>
+  </data>
+  <data name="Settings_RouteModeAuto" xml:space="preserve">
+    <value>自动（server 监听时经 server，否则直连 USB）</value>
+  </data>
+  <data name="Settings_RouteModeServerOnly" xml:space="preserve">
+    <value>仅 server</value>
+  </data>
+  <data name="Settings_RouteModeDirectOnly" xml:space="preserve">
+    <value>仅直连 USB</value>
+  </data>
+  <data name="Settings_RouteModeStartupFrozen" xml:space="preserve">
+    <value>启动时冻结</value>
+  </data>
+  <data name="Settings_RouteModeHint" xml:space="preserve">
+    <value>路由模式在下次启动时生效。仅直连与启动冻结模式在 server 监听时拒绝直写；仅 server 模式在 server 不存在时报错。</value>
+  </data>
+  <data name="Settings_RouteModeRestartTitle" xml:space="preserve">
+    <value>需要重启</value>
+  </data>
+  <data name="Settings_RouteModeRestartMessage" xml:space="preserve">
+    <value>路由模式已保存，将在 UotanStudio 重启后生效。</value>
+  </data>
+  <data name="Settings_Developer_LeadRole" xml:space="preserve">
+    <value>项目负责人、UI与UX设计开发</value>
+  </data>
+  <data name="Settings_Developer_BackendRole" xml:space="preserve">
+    <value>项目后端开发，最强后端支持！</value>
+  </data>
+  <data name="Settings_Rendering" xml:space="preserve">
+    <value>渲染</value>
+  </data>
+  <data name="Settings_RenderingBackend" xml:space="preserve">
+    <value>渲染后端</value>
+  </data>
+  <data name="Settings_RenderingBackendAuto" xml:space="preserve">
+    <value>自动（{0}）</value>
+  </data>
+  <data name="Settings_RenderingBackendSoftware" xml:space="preserve">
+    <value>软件渲染（CPU）</value>
+  </data>
+  <data name="Settings_RenderingBackendAngleEgl" xml:space="preserve">
+    <value>ANGLE / EGL（D3D11）</value>
+  </data>
+  <data name="Settings_RenderingBackendWgl" xml:space="preserve">
+    <value>OpenGL（WGL）</value>
+  </data>
+  <data name="Settings_RenderingBackendVulkan" xml:space="preserve">
+    <value>Vulkan</value>
+  </data>
+  <data name="Settings_RenderingBackendGlx" xml:space="preserve">
+    <value>OpenGL（GLX）</value>
+  </data>
+  <data name="Settings_RenderingBackendEgl" xml:space="preserve">
+    <value>EGL</value>
+  </data>
+  <data name="Settings_RenderingBackendMetal" xml:space="preserve">
+    <value>Metal</value>
+  </data>
+  <data name="Settings_RenderingBackendOpenGl" xml:space="preserve">
+    <value>OpenGL</value>
+  </data>
+  <data name="Settings_CompositionMode" xml:space="preserve">
+    <value>合成模式</value>
+  </data>
+  <data name="Settings_CompositionModeAuto" xml:space="preserve">
+    <value>自动（{0}）</value>
+  </data>
+  <data name="Settings_CompositionModeWinUI" xml:space="preserve">
+    <value>WinUI 合成</value>
+  </data>
+  <data name="Settings_CompositionModeDirect" xml:space="preserve">
+    <value>DirectComposition</value>
+  </data>
+  <data name="Settings_CompositionModeLowLatency" xml:space="preserve">
+    <value>低延迟 DXGI 交换链</value>
+  </data>
+  <data name="Settings_CompositionModeRedirection" xml:space="preserve">
+    <value>重定向表面</value>
+  </data>
+  <data name="Settings_RenderingHint" xml:space="preserve">
+    <value>渲染后端在下次启动时生效。自动 后括号内是当前进程实际使用的后端。</value>
+  </data>
+  <data name="Settings_CompositionModeHint" xml:space="preserve">
+    <value>合成模式仅 Windows 可用，且只有 ANGLE/EGL 取得 D3D11 时生效；其他后端会忽略该设置并使用重定向表面。自动 后括号内是当前进程实际使用的合成宿主。</value>
+  </data>
+  <data name="Settings_RenderingRestartTitle" xml:space="preserve">
+    <value>需要重启</value>
+  </data>
+  <data name="Settings_RenderingRestartMessage" xml:space="preserve">
+    <value>渲染设置已保存，将在 UotanStudio 重启后生效。</value>
+  </data>
+  <data name="Settings_RenderingAutoSingle" xml:space="preserve">
+    <value>自动</value>
+  </data>
+  <data name="Settings_RenderingWaylandHint" xml:space="preserve">
+    <value>原生 Wayland 后端固定使用 OpenGL / EGL 渲染，因此此处不能配置渲染后端与合成模式。</value>
+  </data>
+  <data name="Settings_RenderingUnsupportedHint" xml:space="preserve">
+    <value>当前平台不提供可选的渲染后端与合成模式。</value>
+  </data>
+  <data name="Settings_RenderingBackendAngleEglD3D9" xml:space="preserve">
+    <value>ANGLE / EGL（D3D9）</value>
+  </data>
 </root>

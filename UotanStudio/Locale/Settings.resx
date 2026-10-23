@@ -345,4 +345,109 @@
   <data name="Settings_ServerStopFailed" xml:space="preserve">
     <value>Could not stop server: {0}</value>
   </data>
+  <data name="Settings_RouteMode" xml:space="preserve">
+    <value>Route mode</value>
+  </data>
+  <data name="Settings_RouteModeAuto" xml:space="preserve">
+    <value>Automatic (server when listening, otherwise direct USB)</value>
+  </data>
+  <data name="Settings_RouteModeServerOnly" xml:space="preserve">
+    <value>Server only</value>
+  </data>
+  <data name="Settings_RouteModeDirectOnly" xml:space="preserve">
+    <value>Direct USB only</value>
+  </data>
+  <data name="Settings_RouteModeStartupFrozen" xml:space="preserve">
+    <value>Frozen at startup</value>
+  </data>
+  <data name="Settings_RouteModeHint" xml:space="preserve">
+    <value>The route mode is applied at the next start. Direct-only and frozen modes refuse direct access while a server is listening; server-only fails when the server is absent.</value>
+  </data>
+  <data name="Settings_RouteModeRestartTitle" xml:space="preserve">
+    <value>Restart required</value>
+  </data>
+  <data name="Settings_RouteModeRestartMessage" xml:space="preserve">
+    <value>The route mode was saved and takes effect after UotanStudio restarts.</value>
+  </data>
+  <data name="Settings_Developer_LeadRole" xml:space="preserve">
+    <value>Project lead; UI and UX design and development.</value>
+  </data>
+  <data name="Settings_Developer_BackendRole" xml:space="preserve">
+    <value>Backend development and support.</value>
+  </data>
+  <data name="Settings_Rendering" xml:space="preserve">
+    <value>Rendering</value>
+  </data>
+  <data name="Settings_RenderingBackend" xml:space="preserve">
+    <value>Rendering backend</value>
+  </data>
+  <data name="Settings_RenderingBackendAuto" xml:space="preserve">
+    <value>Automatic ({0})</value>
+  </data>
+  <data name="Settings_RenderingBackendSoftware" xml:space="preserve">
+    <value>Software (CPU)</value>
+  </data>
+  <data name="Settings_RenderingBackendAngleEgl" xml:space="preserve">
+    <value>ANGLE / EGL (D3D11)</value>
+  </data>
+  <data name="Settings_RenderingBackendWgl" xml:space="preserve">
+    <value>OpenGL (WGL)</value>
+  </data>
+  <data name="Settings_RenderingBackendVulkan" xml:space="preserve">
+    <value>Vulkan</value>
+  </data>
+  <data name="Settings_RenderingBackendGlx" xml:space="preserve">
+    <value>OpenGL (GLX)</value>
+  </data>
+  <data name="Settings_RenderingBackendEgl" xml:space="preserve">
+    <value>EGL</value>
+  </data>
+  <data name="Settings_RenderingBackendMetal" xml:space="preserve">
+    <value>Metal</value>
+  </data>
+  <data name="Settings_RenderingBackendOpenGl" xml:space="preserve">
+    <value>OpenGL</value>
+  </data>
+  <data name="Settings_CompositionMode" xml:space="preserve">
+    <value>Composition mode</value>
+  </data>
+  <data name="Settings_CompositionModeAuto" xml:space="preserve">
+    <value>Automatic ({0})</value>
+  </data>
+  <data name="Settings_CompositionModeWinUI" xml:space="preserve">
+    <value>WinUI composition</value>
+  </data>
+  <data name="Settings_CompositionModeDirect" xml:space="preserve">
+    <value>DirectComposition</value>
+  </data>
+  <data name="Settings_CompositionModeLowLatency" xml:space="preserve">
+    <value>Low-latency DXGI swap chain</value>
+  </data>
+  <data name="Settings_CompositionModeRedirection" xml:space="preserve">
+    <value>Redirection surface</value>
+  </data>
+  <data name="Settings_RenderingHint" xml:space="preserve">
+    <value>The rendering backend is applied at the next start. The parenthesized value after Automatic is the backend the running process actually uses.</value>
+  </data>
+  <data name="Settings_CompositionModeHint" xml:space="preserve">
+    <value>Composition mode is Windows-only and takes effect only when ANGLE/EGL obtains D3D11; other backends ignore it and use the redirection surface. The parenthesized value after Automatic is the composition host the running process actually uses.</value>
+  </data>
+  <data name="Settings_RenderingRestartTitle" xml:space="preserve">
+    <value>Restart required</value>
+  </data>
+  <data name="Settings_RenderingRestartMessage" xml:space="preserve">
+    <value>The rendering settings were saved and take effect after UotanStudio restarts.</value>
+  </data>
+  <data name="Settings_RenderingAutoSingle" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
+  <data name="Settings_RenderingWaylandHint" xml:space="preserve">
+    <value>The native Wayland backend always renders through OpenGL / EGL, so the rendering backend and composition mode cannot be configured here.</value>
+  </data>
+  <data name="Settings_RenderingUnsupportedHint" xml:space="preserve">
+    <value>This platform does not offer selectable rendering backends or composition modes.</value>
+  </data>
+  <data name="Settings_RenderingBackendAngleEglD3D9" xml:space="preserve">
+    <value>ANGLE / EGL (D3D9)</value>
+  </data>
 </root>

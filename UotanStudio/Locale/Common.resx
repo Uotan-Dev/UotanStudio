@@ -426,6 +426,9 @@ Author: 暮间雾
   <data name="Tab_ScreenMirror" xml:space="preserve">
     <value>Mirror</value>
   </data>
+  <data name="Tab_ScreenMirrorDevice" xml:space="preserve">
+    <value>Mirror · {0}</value>
+  </data>
   <data name="ScreenMirror_Preparing" xml:space="preserve">
     <value>Preparing mirroring...</value>
   </data>
@@ -434,6 +437,12 @@ Author: 暮间雾
   </data>
   <data name="ScreenMirror_Connecting" xml:space="preserve">
     <value>Connecting to device...</value>
+  </data>
+  <data name="ScreenMirror_HdcUnsupported" xml:space="preserve">
+    <value>HDC devices do not support scrcpy mirroring.</value>
+  </data>
+  <data name="ScreenMirror_ProtocolUnsupported" xml:space="preserve">
+    <value>The selected device does not support scrcpy mirroring.</value>
   </data>
   <data name="ScreenMirror_Mirroring" xml:space="preserve">
     <value>Mirroring</value>
@@ -448,13 +457,25 @@ Author: 暮间雾
     <value>Back</value>
   </data>
   <data name="ScreenMirror_Power" xml:space="preserve">
-    <value>Power</value>
+    <value>Turn off screen</value>
   </data>
   <data name="ScreenMirror_PushClipboard" xml:space="preserve">
     <value>Send Clipboard</value>
   </data>
   <data name="ScreenMirror_PullClipboard" xml:space="preserve">
     <value>Get Clipboard</value>
+  </data>
+  <data name="ScreenMirror_Home" xml:space="preserve">
+    <value>Home</value>
+  </data>
+  <data name="ScreenMirror_Recents" xml:space="preserve">
+    <value>Recents</value>
+  </data>
+  <data name="ScreenMirror_VolumeDown" xml:space="preserve">
+    <value>Volume -</value>
+  </data>
+  <data name="ScreenMirror_VolumeUp" xml:space="preserve">
+    <value>Volume +</value>
   </data>
   <data name="Flash_Package" xml:space="preserve">
     <value>Package</value>
@@ -1535,12 +1556,6 @@ Author: 暮间雾
   </data>
   <data name="Flash_MtkPreloaderSessionFaulted" xml:space="preserve">
     <value>The preloader session faults on any protocol refusal, so it was rebuilt; retry the operation on the fresh session.</value>
-  </data>
-  <data name="Settings_FlashAutoBackup" xml:space="preserve">
-    <value>Back up partitions before flashing</value>
-  </data>
-  <data name="Settings_FlashAutoBackupDescription" xml:space="preserve">
-    <value>Automatically back up a partition over the selected protocol before it is flashed.</value>
   </data>
   <data name="ViewLocator_NotFound" xml:space="preserve">
     <value>Not Found: </value>
@@ -3284,5 +3299,26 @@ Continue?</value>
   </data>
   <data name="Scheme_RunFailed" xml:space="preserve">
     <value>Scheme run failed.</value>
+  </data>
+  <data name="Common_Cancelling" xml:space="preserve">
+    <value>Cancelling…</value>
+  </data>
+  <data name="ImageView_Refreshing" xml:space="preserve">
+    <value>Refreshing images</value>
+  </data>
+  <data name="ImageView_Refreshed" xml:space="preserve">
+    <value>Refreshed: {0} image(s)</value>
+  </data>
+  <data name="ImageView_Deleting" xml:space="preserve">
+    <value>Deleting {0}</value>
+  </data>
+  <data name="ImageView_SynthesizingSuper" xml:space="preserve">
+    <value>Synthesizing super image ({0} partitions)</value>
+  </data>
+  <data name="ImageView_SynthesizedSuper" xml:space="preserve">
+    <value>Synthesized super image</value>
+  </data>
+  <data name="ImageView_FlashingImages" xml:space="preserve">
+    <value>Flashing {0} image(s)</value>
   </data>
 </root>

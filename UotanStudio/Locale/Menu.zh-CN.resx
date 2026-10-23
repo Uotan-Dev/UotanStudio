@@ -381,6 +381,42 @@
   <data name="About_Version" xml:space="preserve">
     <value>版本</value>
   </data>
+  <data name="About_Channel" xml:space="preserve">
+    <value>通道</value>
+  </data>
+  <data name="About_Channel_Release" xml:space="preserve">
+    <value>正式版</value>
+  </data>
+  <data name="About_Channel_Beta" xml:space="preserve">
+    <value>测试版</value>
+  </data>
+  <data name="About_Channel_Canary" xml:space="preserve">
+    <value>金丝雀版</value>
+  </data>
+  <data name="About_Channel_Experimental" xml:space="preserve">
+    <value>实验版</value>
+  </data>
+  <data name="About_Channel_Release_Description" xml:space="preserve">
+    <value>面向日常使用的稳定构建。</value>
+  </data>
+  <data name="About_Channel_Beta_Description" xml:space="preserve">
+    <value>功能已基本完成、仍可能包含缺陷的预览构建。</value>
+  </data>
+  <data name="About_Channel_Canary_Description" xml:space="preserve">
+    <value>取自最新集成状态、先于测试版发布的构建。</value>
+  </data>
+  <data name="About_Channel_Experimental_Description" xml:space="preserve">
+    <value>用于早期验证的不稳定构建，功能可能变更或失效。</value>
+  </data>
+  <data name="About_Commit" xml:space="preserve">
+    <value>提交</value>
+  </data>
+  <data name="About_CommitUnknown" xml:space="preserve">
+    <value>不可用</value>
+  </data>
+  <data name="About_OpenCommit" xml:space="preserve">
+    <value>在 GitHub 上查看编译提交</value>
+  </data>
   <data name="About_Title" xml:space="preserve">
     <value>关于 UotanStudio</value>
   </data>
@@ -388,7 +424,7 @@
     <value>集固件解打包、开发板烧录与可视化编程于一体的一站式工具箱。</value>
   </data>
   <data name="About_FontNotice" xml:space="preserve">
-    <value>界面使用 MiSans 字体，字体版权归 Xiaomi Inc. 所有。</value>
+    <value>界面使用 MiSans 字体，字体版权归 Xiaomi Inc. 所有，按 MiSans 字体许可协议分发。</value>
   </data>
   <data name="About_Close" xml:space="preserve">
     <value>关闭</value>
@@ -400,7 +436,7 @@
     <value>仓库</value>
   </data>
   <data name="About_OpenSourceNotice" xml:space="preserve">
-    <value>本软件使用或参考了以下开源项目，遵循其各自的开源协议。多数项目采用宽松许可证（MIT / Apache-2.0 等），可免费用于商业项目；LGPL-3.0 组件（如 LibUsbDotNet）在分发时需遵循相应义务（如提供修改后的源码或动态链接）。Avalonia 遵循 MIT 许可证，商业使用无需额外授权。</value>
+    <value>本软件以 GNU GPL-3.0 分发，使用或参考下列开源项目，并分别遵循其许可协议。MIT、BSD 与 Apache-2.0 组件与 GPL-3.0 兼容，其声明予以保留。Semi.Avalonia.AvaloniaEdit 与 Semi.Avalonia.Dock 主题为 IRIHI 专有、闭源包，受 IRIHI EULA 约束，与 GPL-3.0 不兼容。LibUsbDotNet（LGPL-3.0-or-later）为静态链接；MiSans 字体按自身许可未修改使用。</value>
   </data>
   <data name="Menu_CompareFiles" xml:space="preserve">
     <value>文件比较</value>
@@ -848,5 +884,128 @@
   </data>
   <data name="Plugin_Install" xml:space="preserve">
     <value>安装</value>
+  </data>
+  <data name="About_Project_Avalonia" xml:space="preserve">
+    <value>跨平台 UI 框架；桌面端界面、布局与渲染均基于 Avalonia</value>
+  </data>
+  <data name="About_Project_AvaloniaEdit" xml:space="preserve">
+    <value>Avalonia 文本编辑器控件（代码/文本文件查看与编辑）</value>
+  </data>
+  <data name="About_Project_Dock" xml:space="preserve">
+    <value>Avalonia 停靠布局系统（工作区面板布局）</value>
+  </data>
+  <data name="About_Project_SemiAvalonia" xml:space="preserve">
+    <value>Semantic UI 风格的 Avalonia 主题核心与 DataGrid 样式；AvaloniaEdit/Dock 主题为单独的专有包</value>
+  </data>
+  <data name="About_Project_SemiAvaloniaDataGrid" xml:space="preserve">
+    <value>Semi 主题的 Avalonia DataGrid 样式（MIT）</value>
+  </data>
+  <data name="About_Project_SemiAvaloniaAvaloniaEdit" xml:space="preserve">
+    <value>Semi 主题的 AvaloniaEdit 样式；专有、闭源，分发受 IRIHI EULA 约束，与 GPL-3.0 不兼容</value>
+  </data>
+  <data name="About_Project_SemiAvaloniaDock" xml:space="preserve">
+    <value>Semi 主题的 Dock.Avalonia 样式；专有、闭源，分发受 IRIHI EULA 约束，与 GPL-3.0 不兼容</value>
+  </data>
+  <data name="About_Project_IrihiUrsa" xml:space="preserve">
+    <value>Avalonia 交互控件库（对话框、Toast 等高级控件）</value>
+  </data>
+  <data name="About_Project_IrihiIconicaTDesign" xml:space="preserve">
+    <value>Avalonia 原生图标控件库（TDesign 图标集，Apache-2.0；含 TDesign MIT NOTICE）</value>
+  </data>
+  <data name="About_Project_NodifyMAvalonia" xml:space="preserve">
+    <value>节点编辑器控件库（可视化编程画布）</value>
+  </data>
+  <data name="About_Project_IciclecreekTerminal" xml:space="preserve">
+    <value>跨平台终端控件，提供终端绘制、文字选择与交互输入</value>
+  </data>
+  <data name="About_Project_XTermNet" xml:space="preserve">
+    <value>终端 VT/ANSI 协议解析与屏幕缓冲区（经 Iciclecreek.Avalonia.Terminal 传递引入）</value>
+  </data>
+  <data name="About_Project_PortaPty" xml:space="preserve">
+    <value>Windows ConPTY 与 macOS/Linux PTY 进程通信</value>
+  </data>
+  <data name="About_Project_CommunityToolkitMvvm" xml:space="preserve">
+    <value>MVVM 工具包（ObservableObject / RelayCommand / WeakReferenceMessenger；含 ThirdPartyNotices）</value>
+  </data>
+  <data name="About_Project_IrihiLingua" xml:space="preserve">
+    <value>resx 到强类型多语言管理器的源生成器（构建期使用，不进入发布产物）</value>
+  </data>
+  <data name="About_Project_LuaCSharp" xml:space="preserve">
+    <value>Lua 解释器与 C# 互操作（可视化插件的脚本运行时）</value>
+  </data>
+  <data name="About_Project_QrCoder" xml:space="preserve">
+    <value>二维码生成库（无线调试配对码，纯托管 PNG 输出）</value>
+  </data>
+  <data name="About_Project_LibUsbDotNet" xml:space="preserve">
+    <value>.NET USB 访问库；LGPL-3.0-or-later，NativeAOT 静态链接，需提供对应源码与重链接说明</value>
+  </data>
+  <data name="About_Project_Libusb" xml:space="preserve">
+    <value>USB 原生运行库 1.0.30（LGPL-2.1-or-later，随程序以可替换动态库分发）</value>
+  </data>
+  <data name="About_Project_MakaretuDnsMulticast" xml:space="preserve">
+    <value>mDNS/DNS-SD 库（本地网络设备发现）</value>
+  </data>
+  <data name="About_Project_BouncyCastleCryptography" xml:space="preserve">
+    <value>加密算法库（AVB RSASSA-PSS / PKCS#1 v1.5 签名校验）</value>
+  </data>
+  <data name="About_Project_SharpCompress" xml:space="preserve">
+    <value>压缩/归档库（zip 等格式读写；含 7-Zip/xz/bzip2/zlib/unRAR 等第三方代码）</value>
+  </data>
+  <data name="About_Project_K4osCompressionLz4" xml:space="preserve">
+    <value>LZ4 压缩库；托管层 MIT，内嵌 liblz4（BSD-2-Clause，Yann Collet）</value>
+  </data>
+  <data name="About_Project_ZstdSharpPort" xml:space="preserve">
+    <value>Zstandard 压缩库；托管层 MIT，内嵌 zstd（BSD-3-Clause，Meta Platforms）</value>
+  </data>
+  <data name="About_Project_LzmaSdk" xml:space="preserve">
+    <value>LZMA/LZMA2 解压；NuGet 包装层 MIT，内含 7-Zip LZMA SDK（公有领域）</value>
+  </data>
+  <data name="About_Project_GoogleProtobuf" xml:space="preserve">
+    <value>Protocol Buffers 序列化库（OTA payload 等 protobuf 解析）</value>
+  </data>
+  <data name="About_Project_BsDiff" xml:space="preserve">
+    <value>bsdiff 二进制差分/补丁的 .NET 移植；移植层 MIT，原始 bsdiff 为 BSD-2-Clause</value>
+  </data>
+  <data name="About_Project_YamlDotNet" xml:space="preserve">
+    <value>YAML 读写库（设备树/配置 YAML 解析）</value>
+  </data>
+  <data name="About_Project_DiffPlex" xml:space="preserve">
+    <value>文本差异比较库（文件对比服务的行级 diff）</value>
+  </data>
+  <data name="About_Project_DiscUtils" xml:space="preserve">
+    <value>纯托管 FAT12/16/32 与 exFAT 卷实现（FAT 分区读写）</value>
+  </data>
+  <data name="About_Project_ModelContextProtocolSdk" xml:space="preserve">
+    <value>官方 MCP C# SDK（内嵌 MCP 服务器；Apache-2.0）</value>
+  </data>
+  <data name="About_Project_DotNetRuntime" xml:space="preserve">
+    <value>.NET 10 运行时与基础类库（NativeAOT 单文件发布；含 Microsoft THIRD-PARTY-NOTICES）</value>
+  </data>
+  <data name="About_Project_SkiaSharp" xml:space="preserve">
+    <value>Avalonia Skia 渲染后端；托管层 MIT，Skia 原生为 BSD-3-Clause</value>
+  </data>
+  <data name="About_Project_HarfBuzzSharp" xml:space="preserve">
+    <value>文本整形（OpenType）原生绑定，随 Avalonia 渲染栈分发</value>
+  </data>
+  <data name="About_Project_Angle" xml:space="preserve">
+    <value>OpenGL ES 到 Direct3D 的转换层（Windows GPU 呈现原生库）</value>
+  </data>
+  <data name="About_Project_Oniguruma" xml:space="preserve">
+    <value>正则表达式原生库（编辑器语法高亮与搜索）</value>
+  </data>
+  <data name="About_Project_MicrosoftTerminal" xml:space="preserve">
+    <value>Windows ConPTY 原生组件（conpty.dll / OpenConsole.exe）</value>
+  </data>
+  <data name="About_Project_MiSansFont" xml:space="preserve">
+    <value>界面字体；按 MiSans Fonts 知识产权许可使用，文件未修改，不得单独再分发或改编</value>
+  </data>
+  <data name="About_Project_AndroidUpdateBinary" xml:space="preserve">
+    <value>Recovery DAT 包的 pinned update-binary 回退实现（AOSP bootable/recovery，arm64 ELF）</value>
+  </data>
+  <data name="About_Project_Xunit" xml:space="preserve">
+    <value>单元测试框架（xunit.v3，项目测试套件）</value>
+  </data>
+  <data name="About_Project_BenchmarkDotNet" xml:space="preserve">
+    <value>性能基准测试框架（基准测试项目）</value>
   </data>
 </root>

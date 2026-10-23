@@ -1935,12 +1935,6 @@
   <data name="Node_Category_Script" xml:space="preserve">
     <value>我的脚本节点</value>
   </data>
-  <data name="Node_Toolbox_Favorites" xml:space="preserve">
-    <value>收藏</value>
-  </data>
-  <data name="Node_Toolbox_Recent" xml:space="preserve">
-    <value>最近使用</value>
-  </data>
   <data name="Node_Toolbox_Favorite" xml:space="preserve">
     <value>添加到收藏</value>
   </data>
