@@ -27,20 +27,22 @@ public partial class ScreenMirrorView : UserControl
     {
         InitializeComponent();
         DataContextChanged += (_, _) => SubscribeToFrames();
-        AttachedToVisualTree += (_, _) => SubscribeToFrames();
+        AttachedToVisualTree += (_, _) =>
+        {
+            SubscribeToFrames();
+            InvalidateVisual();
+        };
         DetachedFromVisualTree += (_, _) => UnsubscribeFromFrames();
     }
 
     private void SubscribeToFrames()
     {
         UnsubscribeFromFrames();
-        if (VisualRoot is not null && ViewModel is { } viewModel)
-        {
-            _subscribed = viewModel;
-            viewModel.FramePresented += OnFramePresented;
-            viewModel.DeviceClipboardReceived += OnDeviceClipboardReceived;
-            OnFramePresented(viewModel, EventArgs.Empty);
-        }
+        if (VisualRoot is null || ViewModel is not { } viewModel) return;
+        _subscribed = viewModel;
+        viewModel.FramePresented += OnFramePresented;
+        viewModel.DeviceClipboardReceived += OnDeviceClipboardReceived;
+        OnFramePresented(viewModel, EventArgs.Empty);
     }
 
     private void UnsubscribeFromFrames()

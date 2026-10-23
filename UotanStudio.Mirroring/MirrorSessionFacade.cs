@@ -3,26 +3,28 @@ using UotanStudio.Comm.Devices;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Comm.Transports.Tcp;
 
 namespace UotanStudio.Mirroring;
 
 /// <summary>
-/// Presents one mirror session to the editor regardless of whether it runs the scrcpy server or the
-/// ohscrcpy HAP, so the view model keeps one connection type.
-/// <para>把一条投屏会话统一呈现给编辑器，无论它运行 scrcpy 服务端还是 ohscrcpy HAP，视图模型只需一种连接类型。</para>
+/// Presents one mirror session to the editor regardless of whether it runs the scrcpy server or the pushed
+/// ohscrcpy UI Test extension, so the view model keeps one connection type.
+/// <para>把一条投屏会话统一呈现给编辑器，无论它运行 scrcpy 服务端还是推送的 ohscrcpy UI Test 扩展，视图模型
+/// 只需一种连接类型。</para>
 /// </summary>
 /// <remarks>
 /// <para>
 /// Both paths deliver <see cref="ScrcpyVideoFrame"/> access units with the same flag bits, so the decode
 /// and GPU presentation loops are shared. Control messages stay in the scrcpy encoding at this boundary:
 /// the ohscrcpy path translates them with <see cref="ScrcpyToOhscrcpyControlAdapter"/>, and messages without
-/// an ohscrcpy equivalent (clipboard, UHID) are ignored, which is why clipboard features stay disabled for
+/// a UI Test equivalent (clipboard, UHID) are ignored, which is why clipboard features stay disabled for
 /// HDC targets.
 /// </para>
 /// <para>
 /// 两条路径都以相同标志位交付 <see cref="ScrcpyVideoFrame"/> 访问单元，因此解码与 GPU 呈现循环共用。控制消息在
-/// 本边界保持 scrcpy 编码：ohscrcpy 路径用 <see cref="ScrcpyToOhscrcpyControlAdapter"/> 翻译，没有对应物的
-/// 消息（剪贴板、UHID）会被忽略，因此 HDC 目标的剪贴板功能保持关闭。
+/// 本边界保持 scrcpy 编码：ohscrcpy 路径用 <see cref="ScrcpyToOhscrcpyControlAdapter"/> 翻译，没有 UI Test
+/// 对应物的消息（剪贴板、UHID）会被忽略，因此 HDC 目标的剪贴板功能保持关闭。
 /// </para>
 /// </remarks>
 public sealed class MirrorSessionFacade : IDisposable
@@ -167,128 +169,157 @@ public sealed class MirrorSessionFacade : IDisposable
     }
 
     /// <summary>
-    /// Launches the installed ohscrcpy HAP on an HDC target, registers a loopback forward and returns the session.
-    /// <para>在 HDC 目标上启动已安装的 ohscrcpy HAP，登记回环转发并返回会话。</para>
+    /// Prepares the pushed UI Test capture extension on an HDC target, registers the loopback forwards and
+    /// returns the session.
+    /// <para>在 HDC 目标上准备推送的 UI Test 采集扩展，登记回环转发并返回会话。</para>
     /// </summary>
-    /// <param name="session">Connected or connectable direct HDC session; opened when not connected and disposed
-    /// with the returned session. <para>已连接或可连接的直连 HDC 会话；未连接时会被打开，并随返回的会话一同释放。</para></param>
-    /// <param name="deviceSerial">Target connect key shown in logs and failure text.
-    /// <para>日志与失败信息中使用的目标连接键。</para></param>
-    /// <param name="launchService">Whether to start the installed <c>ScrcpyService</c> before connecting.
-    /// <para>连接前是否启动已安装的 <c>ScrcpyService</c>。</para></param>
-    /// <param name="localForwardPort">Preferred loopback port; zero picks a free port.
-    /// <para>首选回环端口；为零时自动选择空闲端口。</para></param>
-    /// <param name="connectTimeoutMs">Budget for the service start, the forward and the tunnel connect.
-    /// <para>服务启动、转发建立与通道连接的总预算。</para></param>
+    /// <remarks>
+    /// <para>
+    /// The device side is a capture library pushed to <c>/data/local/tmp</c> and loaded as a UI Test extension,
+    /// not an installed package. The step order is fixed: probe the UI Test version and architecture, ensure the
+    /// control daemon, start the video extension, map one loopback forward to the gRPC video endpoint and another
+    /// to the UI Test JSON control socket, then create the gRPC transport, the control channel and the client.
+    /// A direct session and a server-backed session follow the same order: file pushes use the session sync client
+    /// and the forwards use <see cref="HdcForwardTunnel"/>, which falls back to the server <c>fport</c> command
+    /// when the session exposes no native forward manager.
+    /// </para>
+    /// <para>
+    /// 设备端是推送到 <c>/data/local/tmp</c> 并作为 UI Test 扩展加载的采集库，而不是已安装包。步骤顺序固定：
+    /// 探测 UI Test 版本与架构、确保控制守护进程、启动视频扩展、把一个回环转发映射到 gRPC 视频端点、另一个
+    /// 映射到 UI Test JSON 控制 socket，然后创建 gRPC 传输、控制通道与客户端。直连会话与 server 会话遵循同一
+    /// 顺序：文件推送使用会话的 sync 客户端，转发使用 <see cref="HdcForwardTunnel"/>；会话没有原生转发管理器时
+    /// 由它回退到 server 的 <c>fport</c> 命令。
+    /// </para>
+    /// </remarks>
+    /// <param name="session">Connected or connectable HDC session, direct or server-backed; opened when not
+    /// connected and disposed with the returned session. <para>已连接或可连接的 HDC 会话，可以是直连或 server
+    /// 会话；未连接时会被打开，并随返回的会话一同释放。</para></param>
+    /// <param name="deviceSerial">Target connect key used for log text and the forward registrations.
+    /// <para>用于日志文本与转发登记的目标连接键。</para></param>
+    /// <param name="options">Capture parameters; <see langword="null"/> uses the
+    /// <see cref="OhscrcpyLaunchOptions"/> defaults. <para>采集参数；为 <see langword="null"/> 时使用
+    /// <see cref="OhscrcpyLaunchOptions"/> 的默认值。</para></param>
+    /// <param name="localForwardPort">Preferred loopback port for the video forward; zero picks a free port.
+    /// <para>视频转发的首选回环端口；为零时自动选择空闲端口。</para></param>
+    /// <param name="connectTimeoutMs">Budget for each forward registration and the loopback connect.
+    /// <para>每次转发登记与回环连接的总预算。</para></param>
     /// <param name="lease">Optional device lease released after the HDC session.
     /// <para>可选的设备租约，在 HDC 会话之后释放。</para></param>
-    /// <param name="logSink">Optional sink receiving the service-start confirmation; may be called from a background
-    /// thread. <para>可选的接收端，用于接收服务启动确认；可能由后台线程调用。</para></param>
+    /// <param name="logSink">Optional sink receiving probe, daemon and push diagnostics; may be called from a
+    /// background thread. <para>可选的接收端，用于接收探测、守护进程与推送诊断；可能由后台线程调用。</para></param>
     /// <returns>The unconnected session; call <see cref="ManagedOhscrcpySession.Connect"/> next.
     /// <para>尚未连接的会话；随后调用 <see cref="ManagedOhscrcpySession.Connect"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.
     /// <para><paramref name="session"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="deviceSerial"/> is empty, or the session is not direct.
-    /// <para><paramref name="deviceSerial"/> 为空，或会话不是直连。</para></exception>
-    /// <exception cref="InvalidOperationException">The ohscrcpy bundle is not installed on the target.
-    /// <para>目标上未安装 ohscrcpy 包。</para></exception>
-    /// <exception cref="IOException">The service start or the port forward failed.
-    /// <para>服务启动或端口转发失败。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="deviceSerial"/> is empty, or the session is not an
+    /// <see cref="HdcSession"/>. <para><paramref name="deviceSerial"/> 为空，或会话不是
+    /// <see cref="HdcSession"/>。</para></exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="localForwardPort"/> is outside 0..65535, or
+    /// <paramref name="options"/> carries an out-of-range capture parameter.
+    /// <para><paramref name="localForwardPort"/> 不在 0..65535 内，或 <paramref name="options"/> 携带越界的采集参数。</para></exception>
+    /// <exception cref="FileNotFoundException">No pushed capture library or control agent matching the probed
+    /// device exists in the bundled <c>ohos/device</c> directory.
+    /// <para>随包分发的 <c>ohos/device</c> 目录中没有与已探测设备匹配的采集库或控制代理。</para></exception>
+    /// <exception cref="IOException">The probe, the extension push, a daemon start or a forward registration
+    /// failed; daemons started so far are stopped again before the exception is rethrown.
+    /// <para>探测、扩展推送、守护进程启动或转发登记失败；抛出前会停止已经启动的守护进程。</para></exception>
+    /// <exception cref="NotSupportedException">UI Test is missing or too old, or the session exposes no file
+    /// transfer channel. <para>UI Test 缺失或版本过低，或会话没有可用的文件传输通道。</para></exception>
     public static ManagedOhscrcpySession StartOhscrcpyOverHdcSession(IHdcDeviceSession session,
-        string deviceSerial, bool launchService = true, int localForwardPort = 0,
+        string deviceSerial, OhscrcpyLaunchOptions? options = null, int localForwardPort = 0,
         int connectTimeoutMs = 20_000, DeviceLease? lease = null, Action<string>? logSink = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceSerial);
+        ArgumentOutOfRangeException.ThrowIfNegative(localForwardPort);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(localForwardPort, 65535);
+        var launchOptions = options ?? new OhscrcpyLaunchOptions();
+        launchOptions.Validate();
         if (!session.IsConnected)
         {
             session.Connect();
-        }
-
-        if (!OhscrcpyServerManager.IsInstalled(session))
-        {
-            throw new InvalidOperationException(
-                $"The target {deviceSerial} does not have {OhscrcpyConstants.BundleName} installed. "
-                + "Install the signed device package once; the package must be signed by a certificate the "
-                + "device trusts and listed in its application privilege whitelist. "
-                + $"目标 {deviceSerial} 未安装 {OhscrcpyConstants.BundleName}，请先安装已签名的设备包；"
-                + "该包须由设备信任的证书签名并列入应用权限白名单。");
-        }
-
-        if (launchService)
-        {
-            var launch = OhscrcpyServerManager.StartServer(session, deviceSerial);
-            logSink?.Invoke($"ohscrcpy service start requested for {deviceSerial}: {launch}");
         }
 
         if (session is not HdcSession hdcSession)
         {
-            throw new ArgumentException("A direct HDC session is required. 需要直连 HDC 会话。", nameof(session));
+            throw new ArgumentException(
+                "An HDC protocol session is required. 需要 HDC 协议会话。",
+                nameof(session));
         }
 
-        var tunnel = new OhscrcpyHdcTunnel(hdcSession, deviceSerial, localForwardPort, connectTimeoutMs);
+        var device = OhscrcpyServerManager.Probe(hdcSession);
+        var controlDaemon = OhscrcpyServerManager.EnsureControlDaemon(hdcSession, device, logSink);
+        VideoDaemonHandle? videoDaemon = null;
+        HdcForwardTunnel? videoTunnel = null;
+        HdcForwardTunnel? controlTunnel = null;
+        OhoscrcpyGrpcTransport? transport = null;
+        IOhscrcpyControlChannel? control = null;
+        OhscrcpyClient? client = null;
         try
         {
-            var client = new OhscrcpyClient(tunnel, new OhscrcpyClientOptions(deviceSerial));
-            return new ManagedOhscrcpySession(client, tunnel, session, lease);
+            videoDaemon = OhscrcpyServerManager.StartVideoDaemon(hdcSession, device, launchOptions, logSink);
+            videoTunnel = new HdcForwardTunnel(
+                hdcSession, deviceSerial, device.VideoEndpoint, localForwardPort, connectTimeoutMs);
+            var videoPort = videoTunnel.Map();
+            controlTunnel = new HdcForwardTunnel(
+                hdcSession, deviceSerial, device.ControlEndpoint, 0, connectTimeoutMs);
+            transport = new OhoscrcpyGrpcTransport(videoPort, videoTunnel);
+            control = new OhscrcpyControlChannel(hdcSession, deviceSerial, device, controlTunnel, logSink);
+            client = new OhscrcpyClient(transport, control, new OhscrcpyClientOptions(deviceSerial))
+            {
+                Log = logSink,
+            };
+            return new ManagedOhscrcpySession(client, hdcSession, videoDaemon, controlDaemon, lease, logSink);
         }
         catch
         {
-            tunnel.Dispose();
+            if (client is not null)
+            {
+                CleanupStep(client.Dispose);
+            }
+            else
+            {
+                if (control is not null)
+                {
+                    CleanupStep(control.Dispose);
+                }
+
+                if (transport is not null)
+                {
+                    CleanupStep(transport.Dispose);
+                }
+            }
+
+            if (control is null && controlTunnel is not null)
+            {
+                CleanupStep(controlTunnel.Dispose);
+            }
+
+            if (videoTunnel is not null)
+            {
+                CleanupStep(videoTunnel.Dispose);
+            }
+
+            if (videoDaemon is not null)
+            {
+                var daemon = videoDaemon;
+                CleanupStep(() => OhscrcpyServerManager.StopVideoDaemon(hdcSession, daemon, logSink));
+            }
+
+            CleanupStep(() => OhscrcpyServerManager.StopControlDaemon(hdcSession, controlDaemon, logSink));
             throw;
         }
     }
 
-    /// <summary>Checks whether the ohscrcpy device package is installed on an HDC target.
-    /// <para>检查 HDC 目标上是否已安装 ohscrcpy 设备包。</para>
-    /// </summary>
-    /// <param name="session">Connected or connectable HDC session; opened when not connected.
-    /// <para>已连接或可连接的 HDC 会话；未连接时会被打开。</para></param>
-    /// <returns><see langword="true"/> when the bundle manager reports the package.
-    /// <para>包管理器报告该包时为 <see langword="true"/>。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.
-    /// <para><paramref name="session"/> 为 <see langword="null"/>。</para></exception>
-    public static bool IsOhscrcpyInstalled(IHdcDeviceSession session)
+    private static void CleanupStep(Action cleanup)
     {
-        ArgumentNullException.ThrowIfNull(session);
-        if (!session.IsConnected)
+        try
         {
-            session.Connect();
+            cleanup();
         }
-
-        return OhscrcpyServerManager.IsInstalled(session);
-    }
-
-    /// <summary>Installs one signed ohscrcpy HAP over an HDC session.
-    /// <para>经 HDC 会话安装一个已签名的 ohscrcpy HAP。</para>
-    /// </summary>
-    /// <param name="session">Connected or connectable HDC session; opened when not connected.
-    /// <para>已连接或可连接的 HDC 会话；未连接时会被打开。</para></param>
-    /// <param name="hapPath">Absolute path of the signed HAP. <para>已签名 HAP 的绝对路径。</para></param>
-    /// <returns>The bundle-manager completion text. <para>包管理器的完成文本。</para></returns>
-    /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.
-    /// <para><paramref name="session"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="hapPath"/> is empty.
-    /// <para><paramref name="hapPath"/> 为空。</para></exception>
-    /// <exception cref="FileNotFoundException"><paramref name="hapPath"/> does not exist.
-    /// <para><paramref name="hapPath"/> 不存在。</para></exception>
-    /// <exception cref="NotSupportedException">The HDC route does not expose the package channel.
-    /// <para>HDC 路由没有开放包传输通道。</para></exception>
-    public static string InstallOhscrcpyHap(IHdcDeviceSession session, string hapPath)
-    {
-        ArgumentNullException.ThrowIfNull(session);
-        ArgumentException.ThrowIfNullOrWhiteSpace(hapPath);
-        if (!File.Exists(hapPath))
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            throw new FileNotFoundException("The ohscrcpy HAP does not exist.", hapPath);
         }
-
-        if (!session.IsConnected)
-        {
-            session.Connect();
-        }
-
-        return OhscrcpyServerManager.InstallHap(session, hapPath);
     }
 
     /// <summary>Whether the session runs the HDC ohscrcpy path.
@@ -404,56 +435,6 @@ public sealed class MirrorSessionFacade : IDisposable
     /// <param name="copyKey">Copy or cut key. <para>复制或剪切键。</para></param>
     public void RequestClipboard(byte copyKey = ScrcpyConstants.CopyKeyCopy)
         => _scrcpy?.RequestClipboard(copyKey);
-
-    /// <summary>
-    /// Changes capture resolution, bitrate and frame rate. The ohscrcpy path applies it in place; the scrcpy
-    /// path cannot and returns <see langword="false"/> so the caller restarts its session with new options.
-    /// <para>改变采集分辨率、码率与帧率。ohscrcpy 路径就地生效；scrcpy 路径无法就地生效并返回
-    /// <see langword="false"/>，由调用方以新选项重启会话。</para>
-    /// </summary>
-    /// <param name="maxShortEdge">Maximum length of the shorter capture edge, in pixels.
-    /// <para>采集短边上限（像素）。</para></param>
-    /// <param name="bitrate">Target bitrate in bits per second. <para>目标码率（比特/秒）。</para></param>
-    /// <param name="frameRate">Target frame rate. <para>目标帧率。</para></param>
-    /// <returns><see langword="true"/> when the active session applied the change.
-    /// <para>活动会话已应用变更时为 <see langword="true"/>。</para></returns>
-    public bool ChangeVideoParams(int maxShortEdge, int bitrate, int frameRate)
-    {
-        if (_ohscrcpy is null) return false;
-        _ohscrcpy.ChangeVideoParams(maxShortEdge, bitrate, frameRate);
-        return true;
-    }
-
-    /// <summary>
-    /// Asks the device for its application list. Only the ohscrcpy path supports this.
-    /// <para>向设备请求应用列表。仅 ohscrcpy 路径支持。</para>
-    /// </summary>
-    /// <returns><see langword="true"/> when the request was sent.
-    /// <para>请求已发送时为 <see langword="true"/>。</para></returns>
-    public bool RequestAppList()
-    {
-        if (_ohscrcpy is null) return false;
-        _ohscrcpy.RequestAppList();
-        return true;
-    }
-
-    /// <summary>Removes one application list received on the ohscrcpy path.
-    /// <para>取出一份在 ohscrcpy 路径上收到的应用列表。</para>
-    /// </summary>
-    /// <param name="entries">Parsed entries, or an empty list when none is pending.
-    /// <para>已解析的条目；没有待处理列表时为空列表。</para></param>
-    /// <returns><see langword="true"/> when a list was dequeued.
-    /// <para>取出了列表时为 <see langword="true"/>。</para></returns>
-    public bool TryDequeueAppList(out IReadOnlyList<OhscrcpyAppEntry> entries)
-    {
-        if (_ohscrcpy is null)
-        {
-            entries = [];
-            return false;
-        }
-
-        return _ohscrcpy.TryDequeueAppList(out entries);
-    }
 
     /// <summary>Releases the active session. <para>释放活动会话。</para></summary>
     public void Dispose()

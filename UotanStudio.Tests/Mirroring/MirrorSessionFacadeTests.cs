@@ -88,45 +88,34 @@ public sealed class MirrorSessionFacadeTests
     }
 
     [Fact]
-    public void StartOhscrcpyOverHdcSession_PackageMissing_ThrowsInvalidOperationException()
+    public void StartOhscrcpyOverHdcSession_NonHdcProtocolStub_ThrowsArgumentException()
     {
         using var session = new StubHdcSession();
 
-        var error = Assert.Throws<InvalidOperationException>(() =>
+        var error = Assert.Throws<ArgumentException>(() =>
             MirrorSessionFacade.StartOhscrcpyOverHdcSession(session, "5XM0225C18001159"));
 
-        Assert.Contains(OhscrcpyConstants.BundleName, error.Message, StringComparison.Ordinal);
+        Assert.Equal("session", error.ParamName);
     }
 
     [Fact]
-    public void IsOhscrcpyInstalled_PackageMissing_ReturnsFalse()
+    public void StartOhscrcpyOverHdcSession_PortOutOfRange_ThrowsArgumentOutOfRangeException()
     {
         using var session = new StubHdcSession();
 
-        Assert.False(MirrorSessionFacade.IsOhscrcpyInstalled(session));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            MirrorSessionFacade.StartOhscrcpyOverHdcSession(
+                session, "5XM0225C18001159", localForwardPort: 70000));
     }
 
     [Fact]
-    public void IsOhscrcpyInstalled_NullSession_ThrowsArgumentNullException()
-    {
-        Assert.Throws<ArgumentNullException>(() => MirrorSessionFacade.IsOhscrcpyInstalled(null!));
-    }
-
-    [Fact]
-    public void InstallOhscrcpyHap_BlankPath_ThrowsArgumentException()
+    public void StartOhscrcpyOverHdcSession_InvalidCaptureOptions_ThrowsArgumentOutOfRangeException()
     {
         using var session = new StubHdcSession();
 
-        Assert.Throws<ArgumentException>(() => MirrorSessionFacade.InstallOhscrcpyHap(session, " "));
-    }
-
-    [Fact]
-    public void InstallOhscrcpyHap_MissingFile_ThrowsFileNotFoundException()
-    {
-        using var session = new StubHdcSession();
-        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".hap");
-
-        Assert.Throws<FileNotFoundException>(() => MirrorSessionFacade.InstallOhscrcpyHap(session, path));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            MirrorSessionFacade.StartOhscrcpyOverHdcSession(
+                session, "5XM0225C18001159", new OhscrcpyLaunchOptions(FrameRate: 0)));
     }
 
     private sealed class StubHdcSession : IHdcDeviceSession

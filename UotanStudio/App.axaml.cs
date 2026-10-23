@@ -101,7 +101,6 @@ public partial class App : Application
 
         _ = Task.Run(FileAssociationService.Register);
         _ = UotanStudio.Services.Scrcpy.ScrcpyServerService.Shared.RunBackgroundCheckAsync(TimeSpan.FromSeconds(8));
-        _ = UotanStudio.Services.Scrcpy.OhscrcpyServerService.Shared.RunBackgroundCheckAsync(TimeSpan.FromSeconds(12));
 
         Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
 

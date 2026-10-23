@@ -11,6 +11,8 @@ namespace UotanStudio.Views.Editors;
 /// </summary>
 public sealed class ScreenMirrorVideoControl : Control
 {
+    private ScreenMirrorViewModel? _boundModel;
+
     /// <summary>
     /// Creates the video control and attaches the composition surface when its view-model arrives
     /// after the visual tree attachment, as happens when a document view is rebuilt for a language
@@ -20,19 +22,14 @@ public sealed class ScreenMirrorVideoControl : Control
     /// </summary>
     public ScreenMirrorVideoControl()
     {
-        DataContextChanged += (_, _) =>
-        {
-            if (VisualRoot is not null && DataContext is ScreenMirrorViewModel model)
-            {
-                _ = model.GpuPresenter.AttachCompositionVisualAsync(this);
-                InvalidateVisual();
-            }
-        };
+        DataContextChanged += (_, _) => BindPresentationHost();
     }
 
     /// <summary>
-    /// Attaches the hosted composition surface for the bound presenter when this control enters the visual tree.
-    /// <para>当该控件进入可视树时，为绑定的呈现器挂载托管的合成表面。</para>
+    /// Attaches the hosted composition surface for the bound presenter when this control enters the visual tree;
+    /// a reattach after a dock float or drag reuses the surface when the same control comes back quickly.
+    /// <para>当该控件进入可视树时，为绑定的呈现器挂载托管的合成表面；停靠浮动或拖拽后同一控件快速
+    /// 回到可视树时会复用原表面。</para>
     /// </summary>
     /// <param name="e">
     /// The visual-tree attachment event data.
@@ -41,13 +38,14 @@ public sealed class ScreenMirrorVideoControl : Control
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        if (DataContext is ScreenMirrorViewModel model) _ = model.GpuPresenter.AttachCompositionVisualAsync(this);
+        BindPresentationHost();
         InvalidateVisual();
     }
 
     /// <summary>
-    /// Detaches the hosted composition surface for the bound presenter when this control leaves the visual tree.
-    /// <para>当该控件离开可视树时，为绑定的呈现器分离托管的合成表面。</para>
+    /// Defers the hosted composition surface release when this control leaves the visual tree; a real close still
+    /// releases it after the presenter's short debounce.
+    /// <para>当该控件离开可视树时延迟释放托管的合成表面；真正关闭时呈现器仍会在短暂去抖后释放它。</para>
     /// </summary>
     /// <param name="e">
     /// The visual-tree detachment event data.
@@ -55,7 +53,7 @@ public sealed class ScreenMirrorVideoControl : Control
     /// </param>
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        if (DataContext is ScreenMirrorViewModel model) model.GpuPresenter.DetachCompositionVisual();
+        _boundModel?.GpuPresenter.ScheduleDetachCompositionVisual(this);
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -70,13 +68,15 @@ public sealed class ScreenMirrorVideoControl : Control
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == BoundsProperty && DataContext is ScreenMirrorViewModel model)
+        if (change.Property == BoundsProperty && _boundModel is { } model)
             model.GpuPresenter.UpdateCompositionLayout();
     }
 
     /// <summary>
-    /// Draws the latest bitmap frame when no GPU path is active and registers the custom video draw operation.
-    /// <para>无 GPU 路径激活时绘制最新位图帧，并注册自定义视频绘制操作。</para>
+    /// Draws the latest bitmap frame until composition frames cover the video area and registers the custom
+    /// video draw operation; a rebuilt surface stays transparent behind the bitmap until its first frame.
+    /// <para>在合成帧覆盖视频区域之前绘制最新位图帧，并注册自定义视频绘制操作；重建后的表面在首帧到达
+    /// 前保持透明，位图回退始终可见。</para>
     /// </summary>
     /// <param name="context">
     /// The drawing context receiving the frame.
@@ -87,7 +87,9 @@ public sealed class ScreenMirrorVideoControl : Control
         base.Render(context);
         if (DataContext is not ScreenMirrorViewModel model) return;
         var bounds = new Rect(Bounds.Size);
-        if (!model.GpuPresenter.UsesCompositionSurface && model.Frame is { } bitmap)
+        var presenter = model.GpuPresenter;
+        var compositionCovering = presenter.UsesCompositionSurface && presenter.CompositionFramePresented;
+        if (!compositionCovering && model.Frame is { } bitmap)
         {
             var size = bitmap.Size;
             var scale = Math.Min(bounds.Width / size.Width, bounds.Height / size.Height);
@@ -96,6 +98,21 @@ public sealed class ScreenMirrorVideoControl : Control
             return;
         }
 
-        context.Custom(model.GpuPresenter.CreateOperation(bounds));
+        context.Custom(presenter.CreateOperation(bounds));
+    }
+
+    private void BindPresentationHost()
+    {
+        var next = DataContext as ScreenMirrorViewModel;
+        if (!ReferenceEquals(next, _boundModel))
+        {
+            var previous = _boundModel;
+            _boundModel = next;
+            previous?.GpuPresenter.DetachCompositionVisual(this);
+        }
+
+        if (next is null || VisualRoot is null) return;
+        _ = next.GpuPresenter.AttachCompositionVisualAsync(this);
+        InvalidateVisual();
     }
 }

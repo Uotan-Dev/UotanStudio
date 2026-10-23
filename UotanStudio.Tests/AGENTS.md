@@ -39,5 +39,6 @@
 - `UOTAN_MAGISKBOOT_ORACLE` 指向 magiskboot 可执行文件。
 - `UOTAN_SELINUX_POLICY_SAMPLE`、`UOTAN_ELF_FIREHOSE_SAMPLE`、`UOTAN_HOS_UPDATE_APP_SAMPLE` 指向样例文件。
 - `UOTAN_SAMSUNG_DAT_MERGE_ORACLE`、`UOTAN_SAMSUNG_PAYLOAD_MERGE_ORACLE`、`UOTAN_EROFS_CORPUS` 指向预言或语料目录。
+- `UOTAN_HDC_MIRROR_DIRECT` 指向 HDC connect key（例如 `5XM0225C18001159`）或直连 HDC 守护进程 `host:port`（例如 `127.0.0.1:5555`），用于启用 `OhscrcpyHdcIntegrationTests`；直连 USB 在 HDC server 运行时会被 Comm 的 fail-closed 策略拒绝，跳过/失败都不算通过。
 
 跳过原因里必须写出对应变量名。原生工具互操作（mkfs、e2fsck、fsck.erofs、fsck.f2fs 与环回挂载）和 TB 级大数据构建不由测试工程驱动，其取证在仓库外工装完成。

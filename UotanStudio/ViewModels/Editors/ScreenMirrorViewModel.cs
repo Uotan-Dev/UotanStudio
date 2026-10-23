@@ -96,6 +96,7 @@ public partial class ScreenMirrorViewModel : Document
     public event EventHandler? FramePresented;
 
     private long _receivedFrames, _decodedFrames, _uploadedFrames, _receivedBytes;
+    private int _frameFailureLogged;
     private long _audioDecodedFrames;
     private int _audioSampleRate, _audioChannels;
     private string _decoderBackend = string.Empty;
@@ -169,19 +170,18 @@ public partial class ScreenMirrorViewModel : Document
                 var device = candidates.FirstOrDefault(candidate => candidate.Protocol == Services.Devices.DeviceProtocolKind.Adb)
                     ?? candidates.FirstOrDefault(candidate => candidate.Protocol == Services.Devices.DeviceProtocolKind.Hdc)
                     ?? throw new InvalidOperationException($"Device {serial} is not connected.");
-                StatusText = GetLocalizedString("ScreenMirror_Installing");
 
                 MirrorSessionFacade facade;
                 if (device.Protocol == Services.Devices.DeviceProtocolKind.Hdc)
                 {
-                    var hap = await Services.Scrcpy.OhscrcpyServerService.Shared
-                        .ResolveOrProvisionAsync().ConfigureAwait(false);
-                    Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
-                        $"ohscrcpy server {hap.Version} ({hap.Source}) at {hap.Path}.");
-                    facade = MirrorSessionFacade.FromOhscrcpy(App.DeviceMonitor.StartOhscrcpyMirror(device));
+                    _streamOptions = null;
+                    _activeSettings = PendingSettings.Copy();
+                    facade = MirrorSessionFacade.FromOhscrcpy(
+                        App.DeviceMonitor.StartOhscrcpyMirror(device, CreateHdcLaunchOptions(_activeSettings)));
                 }
                 else
                 {
+                    StatusText = GetLocalizedString("ScreenMirror_Installing");
                     var artifact = await Services.Scrcpy.ScrcpyServerService.Shared
                         .ResolveOrProvisionAsync().ConfigureAwait(false);
                     Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
@@ -228,6 +228,7 @@ public partial class ScreenMirrorViewModel : Document
         DeviceName = client.DeviceName;
         StatusText = GetLocalizedString("ScreenMirror_Mirroring");
 
+        GpuPresenter.CompositionRestored += OnCompositionRestored;
         _cts = new CancellationTokenSource();
         var decodeClient = client;
         var decodeToken = _cts.Token;
@@ -309,6 +310,7 @@ public partial class ScreenMirrorViewModel : Document
     /// </summary>
     private void StopSessionCore()
     {
+        GpuPresenter.CompositionRestored -= OnCompositionRestored;
         _cts?.Cancel();
         lock (_frameLock)
         {
@@ -466,6 +468,17 @@ public partial class ScreenMirrorViewModel : Document
     /// <para>请求设备回传剪贴板；结果经 <see cref="DeviceClipboardReceived"/> 送达。</para>
     /// </summary>
     public void RequestClipboard() => SendSession(client => client.RequestClipboard());
+
+    /// <summary>
+    /// Asks the device for an immediate key frame after a composition surface was rebuilt, so the first frame
+    /// after a dock float or drag does not wait for the next natural key frame; the ohscrcpy adapter maps the
+    /// scrcpy reset-video control message to a request-key-frame action.
+    /// <para>合成表面重建后请求设备立即发送关键帧，避免停靠浮动或拖拽后的首帧等待下一个自然关键帧；
+    /// ohscrcpy 适配器会把 scrcpy 的重置视频控制消息映射为请求关键帧动作。</para>
+    /// </summary>
+    internal void RequestKeyFrame() => SendControl(ScrcpyControlMessageWriter.ResetVideo());
+
+    private void OnCompositionRestored(object? sender, EventArgs e) => RequestKeyFrame();
 
     /// <summary>Sends one Android BACK press. <para>发送一次 Android「返回」按压。</para></summary>
     public void SendBack() => SendSession(client => client.SendBack());
@@ -641,7 +654,7 @@ public partial class ScreenMirrorViewModel : Document
         catch (Exception exception) when (!token.IsCancellationRequested)
         {
             Services.LogService.Instance.Write(
-                Services.LogLevel.Error, "ScreenMirror", $"Decode failed: {exception.Message}");
+                Services.LogLevel.Error, "ScreenMirror", $"Decode failed: {exception}");
             Dispatcher.UIThread.Post(() =>
             {
                 if (!_disposed) StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + Services.UserError.Describe(exception);
@@ -651,6 +664,18 @@ public partial class ScreenMirrorViewModel : Document
     }
 
     private void OnDecodedFrame(DecodedVideoFrame frame)
+    {
+        try
+        {
+            OnDecodedFrameCore(frame);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            ReportFrameFailure("decode callback", error);
+        }
+    }
+
+    private void OnDecodedFrameCore(DecodedVideoFrame frame)
     {
         Interlocked.Increment(ref _decodedFrames);
         if (_disposed) return;
@@ -672,6 +697,17 @@ public partial class ScreenMirrorViewModel : Document
         ScheduleRenderLocked(next);
     }
 
+    private void ReportFrameFailure(string stage, Exception error)
+    {
+        if (Interlocked.Exchange(ref _frameFailureLogged, 1) != 0)
+        {
+            return;
+        }
+
+        Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
+            $"Dropped a video frame after a {stage} failure; the session stays connected: {error}");
+    }
+
     /// <summary>Routes exported VA surfaces to the GPU presenter; the presenter clears the flag when it cannot present them.
     /// <para>把导出的 VA 表面路由到 GPU 呈现器；呈现器在无法呈现时会清除该标志。</para>
     /// </summary>
@@ -688,16 +724,24 @@ public partial class ScreenMirrorViewModel : Document
     [SupportedOSPlatform("linux")]
     private void PublishDmabufFrame(VaDmaBufVideoFrame frame, VaApiVideoDecoder decoder)
     {
-        Interlocked.Increment(ref _decodedFrames);
-        if (_disposed) { frame.Dispose(); return; }
-        if (!GpuPresenter.PublishDmabuf(frame))
+        try
         {
+            Interlocked.Increment(ref _decodedFrames);
+            if (_disposed) { frame.Dispose(); return; }
+            if (!GpuPresenter.PublishDmabuf(frame))
+            {
 
-            decoder.GpuExportEnabled = false;
-            frame.Dispose();
-            return;
+                decoder.GpuExportEnabled = false;
+                frame.Dispose();
+                return;
+            }
+            ScheduleRender();
         }
-        ScheduleRender();
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            frame.Dispose();
+            ReportFrameFailure("dma-buf presentation", error);
+        }
     }
 
     /// <summary>Routes Windows shared-texture frames to the composition presenter; export is disabled when it cannot be presented.
@@ -716,18 +760,26 @@ public partial class ScreenMirrorViewModel : Document
     [SupportedOSPlatform("windows")]
     private void PublishSharedTextureFrame(D3D11SharedVideoFrame frame, MediaFoundationGpuVideoDecoder decoder)
     {
-        Interlocked.Increment(ref _decodedFrames);
-        if (_disposed)
+        try
+        {
+            Interlocked.Increment(ref _decodedFrames);
+            if (_disposed)
+            {
+                frame.MarkPresented();
+                return;
+            }
+            if (!GpuPresenter.PublishSharedTexture(frame))
+            {
+                decoder.GpuExportEnabled = false;
+                return;
+            }
+            ScheduleRender();
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
         {
             frame.MarkPresented();
-            return;
+            ReportFrameFailure("shared-texture presentation", error);
         }
-        if (!GpuPresenter.PublishSharedTexture(frame))
-        {
-            decoder.GpuExportEnabled = false;
-            return;
-        }
-        ScheduleRender();
     }
 
     /// <summary>Routes macOS IOSurface frames to the composition presenter; export is disabled when it cannot be presented.
@@ -744,18 +796,26 @@ public partial class ScreenMirrorViewModel : Document
     [SupportedOSPlatform("macos")]
     private void PublishIosurfaceFrame(IosurfaceVideoFrame frame, VideoToolboxVideoDecoder decoder)
     {
-        Interlocked.Increment(ref _decodedFrames);
-        if (_disposed)
+        try
+        {
+            Interlocked.Increment(ref _decodedFrames);
+            if (_disposed)
+            {
+                frame.MarkPresented();
+                return;
+            }
+            if (!GpuPresenter.PublishIosurface(frame))
+            {
+                decoder.GpuExportEnabled = false;
+                return;
+            }
+            ScheduleRender();
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
         {
             frame.MarkPresented();
-            return;
+            ReportFrameFailure("IOSurface presentation", error);
         }
-        if (!GpuPresenter.PublishIosurface(frame))
-        {
-            decoder.GpuExportEnabled = false;
-            return;
-        }
-        ScheduleRender();
     }
 
     private void ScheduleRender()
@@ -792,7 +852,7 @@ public partial class ScreenMirrorViewModel : Document
             _renderScheduled = false;
             pending = _pendingFrame;
             _pendingFrame = null;
-            if (GpuPresenter.IsAvailable && GpuPresenter.PixelSize.Width > 0)
+            if (GpuPresenter.CanPresentFallback && GpuPresenter.PixelSize.Width > 0)
             {
                 pending = null;
                 _spareFrame = null;
@@ -800,7 +860,7 @@ public partial class ScreenMirrorViewModel : Document
         }
         if (pending is null)
         {
-            if (GpuPresenter.IsAvailable && GpuPresenter.PixelSize.Width > 0 && Frame is { } oldBitmap)
+            if (GpuPresenter.CanPresentFallback && GpuPresenter.PixelSize.Width > 0 && Frame is { } oldBitmap)
             {
                 Frame = null;
                 oldBitmap.Dispose();
@@ -888,6 +948,22 @@ public partial class ScreenMirrorViewModel : Document
             Control = settings.ScreenMirrorControl,
         };
     }
+
+    /// <summary>
+    /// Builds the HDC capture options from a settings snapshot: 0 fps means unlimited and becomes 60 fps, the
+    /// frame rate is clamped to 1..120, the bitrate to 1..50 Mbps, and a key frame is forced every 2000 ms.
+    /// <para>按设置快照构建 HDC 采集选项：0 fps 表示不限并取 60 fps，帧率收敛到 1..120，码率收敛到
+    /// 1..50 Mbps，并每 2000 毫秒强制一个关键帧。</para>
+    /// </summary>
+    /// <param name="settings">Settings snapshot the values are read from.
+    /// <para>读取这些值的设置快照。</para></param>
+    /// <returns>The launch options passed to the HDC facade.
+    /// <para>传给 HDC 门面的启动选项。</para></returns>
+    private static OhscrcpyLaunchOptions CreateHdcLaunchOptions(Services.AppSettings settings)
+        => new(
+            Math.Clamp(settings.ScreenMirrorMaxFps == 0 ? 60 : settings.ScreenMirrorMaxFps, 1, 120),
+            Math.Clamp(settings.ScreenMirrorBitRate, 1_000_000, 50_000_000),
+            2_000);
 
     private static bool SupportsScrcpyAudio(DetectedDevice device)
     {

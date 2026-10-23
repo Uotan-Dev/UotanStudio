@@ -3,9 +3,11 @@ using UotanStudio.Services.Devices;
 namespace UotanStudio.Messages;
 
 /// <summary>
-/// Reports that the device list selection changed, so mirror documents can retarget or show the
-/// protocol-specific unsupported notice. A null protocol means the selection was cleared.
-/// <para>报告设备列表的选中项变化，使投屏文档能够切换目标或显示协议特定的不支持提示。协议为 null 表示选择被清空。</para>
+/// Reports that the device list selection changed. Mirror documents do not retarget or focus on this
+/// message; they are opened per device by an explicit <see cref="OpenScreenMirrorRequestMessage"/>.
+/// A null protocol means the selection was cleared.
+/// <para>报告设备列表的选中项变化。投屏文档不会因此切换目标或聚焦，只由显式的
+/// <see cref="OpenScreenMirrorRequestMessage"/> 按设备打开。协议为 null 表示选择被清空。</para>
 /// </summary>
 public sealed class SelectedDeviceChangedMessage
 {

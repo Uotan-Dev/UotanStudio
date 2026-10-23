@@ -7,7 +7,6 @@ using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Messages;
 using UotanStudio.Services;
-using UotanStudio.Services.Devices;
 using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.UiAbstractions;
@@ -59,9 +58,6 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         {
             _factory.InitLayout(Layout);
         }
-
-        WeakReferenceMessenger.Default.Register<WorkspaceViewModel, SelectedDeviceChangedMessage>(this,
-            static (workspace, message) => workspace.FollowSelectedDevice(message));
     }
 
     /// <summary>
@@ -132,9 +128,11 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Opens or focuses the screen-mirror document for one device. Each device keeps its own document,
     /// so several mirrors can stay open side by side; reopening the same device focuses its existing
-    /// document instead of creating a duplicate.
+    /// document instead of creating a duplicate. Slots whose document is no longer shown in its dock
+    /// are dropped first, so reopening a closed device builds a fresh document.
     /// <para>为单个设备打开或聚焦投屏文档。每个设备各自保留一个文档，因此可以同时打开多个投屏；
-    /// 重新打开同一设备时聚焦已有文档而不是创建重复文档。</para>
+    /// 重新打开同一设备时聚焦已有文档而不是创建重复文档。已关闭、不再显示在停靠区的槽位会被先行
+    /// 丢弃，因此重新打开已关闭设备时会新建文档。</para>
     /// </summary>
     /// <param name="deviceKey">Stable device serial or connect key; null or blank selects the legacy
     /// untargeted document slot. <para>稳定的设备序列号或连接键；null 或空白选择旧的无目标文档槽位。</para></param>
@@ -142,7 +140,8 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     public ScreenMirrorViewModel? OpenScreenMirrorDocument(string? deviceKey = null)
     {
         var key = string.IsNullOrWhiteSpace(deviceKey) ? string.Empty : deviceKey.Trim();
-        if (!_screenMirrorDocuments.TryGetValue(key, out var document) || document.Owner is null)
+        PruneClosedScreenMirrorDocuments();
+        if (!_screenMirrorDocuments.TryGetValue(key, out var document))
         {
             var documentDock = _documentDock ??= FindDocumentsPane();
             if (documentDock is null)
@@ -159,58 +158,42 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                     : string.Format(LanguageService.Instance.GetString("Tab_ScreenMirrorDevice"), key),
                 CanClose = true
             };
-            _screenMirrorDocuments[key] = document;
             _factory.AddDockable(documentDock, document);
+            _screenMirrorDocuments[key] = document;
         }
 
-        _factory.SetActiveDockable(document);
-        if (_factory.FindRoot(document) is { } root)
-        {
-            _factory.SetFocusedDockable(root, document);
-        }
-        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
+        FocusDocument(document);
         return document;
     }
 
-    /// <summary>
-    /// Applies a device-selection change to the active mirror document: an ADB device retargets the
-    /// view (or focuses its existing document), while an HDC or unsupported protocol displays the
-    /// matching notice instead of attempting a scrcpy session.
-    /// <para>把设备选中项变化应用到当前活动投屏文档：ADB 设备切换投屏目标（或聚焦其已有文档），
-    /// HDC 或不支持的协议则显示对应提示，而不是尝试建立 scrcpy 会话。</para>
-    /// </summary>
-    /// <param name="message">The selection change to apply. <para>要应用的选中项变化。</para></param>
-    private void FollowSelectedDevice(SelectedDeviceChangedMessage message)
+    private static bool IsScreenMirrorDocumentLive(ScreenMirrorViewModel document)
+        => document.Owner is IDock owner && owner.VisibleDockables?.Contains(document) == true;
+
+    private void PruneClosedScreenMirrorDocuments()
     {
-        if (_documentDock?.ActiveDockable is not ScreenMirrorViewModel active)
+        if (_screenMirrorDocuments.Count == 0)
         {
             return;
         }
 
-        if (message.Protocol is not (DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc) ||
-            string.IsNullOrWhiteSpace(message.Serial))
+        List<string>? stale = null;
+        foreach (var pair in _screenMirrorDocuments)
         {
-            active.ShowUnsupported("ScreenMirror_ProtocolUnsupported");
+            if (!IsScreenMirrorDocumentLive(pair.Value))
+            {
+                (stale ??= []).Add(pair.Key);
+            }
+        }
+
+        if (stale is null)
+        {
             return;
         }
 
-        var serial = message.Serial;
-        if (_screenMirrorDocuments.TryGetValue(serial, out var existing) &&
-            !ReferenceEquals(existing, active) && existing.Owner is not null)
+        foreach (var key in stale)
         {
-            FocusDocument(existing);
-            return;
+            _screenMirrorDocuments.Remove(key);
         }
-
-        var previousKey = _screenMirrorDocuments.FirstOrDefault(pair => ReferenceEquals(pair.Value, active)).Key;
-        active.RetargetTo(serial);
-        if (previousKey is not null && !string.Equals(previousKey, serial, StringComparison.Ordinal))
-        {
-            _screenMirrorDocuments.Remove(previousKey);
-        }
-
-        _screenMirrorDocuments[serial] = active;
-        active.Title = string.Format(LanguageService.Instance.GetString("Tab_ScreenMirrorDevice"), serial);
     }
 
     private void FocusDocument(ScreenMirrorViewModel document)
@@ -757,12 +740,12 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Releases resources: unsubscribes from document-dock property-changed events.
-    /// <para>释放资源：取消订阅文档区属性变更事件。</para>
+    /// Releases resources: clears the mirror-document slots and detaches document-dock event handlers.
+    /// <para>释放资源：清空投屏文档槽位并解除文档区的事件订阅。</para>
     /// </summary>
     public void Dispose()
     {
-        WeakReferenceMessenger.Default.Unregister<SelectedDeviceChangedMessage>(this);
+        _screenMirrorDocuments.Clear();
         ProjectExplorer?.Dispose();
         if (_factory is IWorkspaceDockFactory workspaceFactory) workspaceFactory.DisposeTerminal();
         if (_documentDock is not null)
