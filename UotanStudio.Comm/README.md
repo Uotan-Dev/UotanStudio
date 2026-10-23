@@ -129,8 +129,10 @@ unauthorized, and only an unlisted target falls back to direct USB. The USB
 access policy is registered when the `CommKit` facade is constructed; without
 it, debug interfaces fail closed.
 
-Direct HDC server shutdown uses the host-channel protocol (`HdcServerClient.KillAsync`);
-there is no in-library process execution.
+Direct HDC server shutdown uses the host-channel `kill` command when the greeting advertises
+`CMD_SERVER_KILL` (`HdcServerClient.KillAsync`). A server that does not advertise it falls back
+to the pid file, where the process name and executable path are checked before terminating that
+single process; no adb/hdc executable is ever started.
 
 The USB OS adapters call `UsbAccessPolicy` before opening a debug interface;
 the communication composition root supplies the existing server-ownership

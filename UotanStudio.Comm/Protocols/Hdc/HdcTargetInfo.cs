@@ -15,9 +15,9 @@ public sealed record HdcTargetInfo(string ConnectKey, string Transport, string S
     /// <para>解析详细目标列表，保留 USB/TCP/UART 及授权状态。</para>
     /// </summary>
     /// <param name="output">Raw verbose list text produced by the HDC server.<para>由 HDC server 生成的原始详细列表文本。</para></param>
-    /// <returns>Distinct targets ordered by connect key using ordinal comparison.<para>去重后的目标列表，按 connect key 以序数比较排序。</para></returns>
+    /// <returns>Distinct targets ordered by connect key using ordinal comparison; lines with fewer than three fields are dropped.
+    /// <para>去重后的目标列表，按 connect key 以序数比较排序；字段少于三个的行被忽略。</para></returns>
     /// <exception cref="IOException">The output contains a <c>[Fail]</c> line. <para>输出包含 <c>[Fail]</c> 行。</para></exception>
-    /// <exception cref="InvalidDataException">A non-empty line has fewer than three whitespace-separated fields. <para>非空行的空白分隔字段少于三个。</para></exception>
     public static IReadOnlyList<HdcTargetInfo> Parse(string output)
     {
         HdcServerClient.ThrowOnFailure(output);
@@ -26,8 +26,9 @@ public sealed record HdcTargetInfo(string ConnectKey, string Transport, string S
         {
             if (line.StartsWith("[Empty]", StringComparison.Ordinal)) continue;
             var fields = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
-            if (fields.Length < 3) throw new InvalidDataException("Malformed HDC verbose target entry.");
-            targets[fields[0]] = new(fields[0], fields[1], fields[2], fields.Length > 3 ? fields[3] : string.Empty);
+            if (fields.Length < 3) continue;
+            var name = fields.Length > 3 ? string.Join(' ', fields[3..]) : string.Empty;
+            targets[fields[0]] = new(fields[0], fields[1], fields[2], name);
         }
         return [.. targets.Values.OrderBy(target => target.ConnectKey, StringComparer.Ordinal)];
     }

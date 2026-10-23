@@ -103,6 +103,19 @@ internal static class HdcDaemonCodec
         return output.ToArray();
     }
 
+    /// <summary>
+    /// Serializes the upstream <c>HeartbeatMsg</c> payload, whose only field is the varint counter.
+    /// <para>序列化上游 <c>HeartbeatMsg</c> 负载；该结构只有计数字段（varint）。</para>
+    /// </summary>
+    /// <param name="count">Heartbeat counter sent to the peer. <para>发送给对端的心跳计数。</para></param>
+    /// <returns>The encoded heartbeat payload. <para>编码后的心跳负载。</para></returns>
+    public static byte[] Heartbeat(ulong count)
+    {
+        Span<byte> buffer = stackalloc byte[16];
+        var length = WriteNumber(buffer, 0, 1, count);
+        return buffer[..length].ToArray();
+    }
+
     /// <summary>Parses bounded protobuf handshake fields. <para>解析有界的 protobuf 握手字段。</para></summary>
     public static (byte State, uint SessionId, byte[] Buffer, string Version) ReadHandshake(ReadOnlySpan<byte> payload)
     {

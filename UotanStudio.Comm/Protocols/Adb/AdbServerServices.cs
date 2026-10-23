@@ -220,8 +220,8 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// <para>取消连接与 <c>host:pair:</c> 交互。</para></param>
     /// <returns>The server's pairing result, which begins with <c>Successfully paired</c> once the device accepted the password.
     /// <para>server 返回的配对结果；设备接受密码后以 <c>Successfully paired</c> 开头。</para></returns>
-    /// <exception cref="ArgumentException">The device host or the password is blank.
-    /// <para>设备主机或密码为空。</para></exception>
+    /// <exception cref="ArgumentException">The device host or the password is blank, or the password contains
+    /// <c>':'</c>. <para>设备主机或密码为空，或密码包含 <c>':'</c>。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The pairing port is outside 1-65535.
     /// <para>配对端口不在 1-65535 之内。</para></exception>
     /// <exception cref="IOException">The server rejected the pairing request or reported no success.
@@ -240,9 +240,14 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
             throw new ArgumentOutOfRangeException(nameof(pairingPort));
         }
 
+        if (password.Contains(':'))
+        {
+            throw new ArgumentException("The pairing password must not contain ':'.", nameof(password));
+        }
+
         var response = await RunNetworkCommandAsync(
-                "host:pair:" + DebugBridgeNetworkAddress.FormatHost(host) + ":" +
-                pairingPort.ToString(CultureInfo.InvariantCulture) + " " + password,
+                "host:pair:" + password + ":" +
+                DebugBridgeNetworkAddress.FormatEndpoint(host, pairingPort),
                 serverHost, serverPort, null, cancellationToken).ConfigureAwait(false);
         if (!response.StartsWith("Successfully paired", StringComparison.OrdinalIgnoreCase))
         {
@@ -339,6 +344,20 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
             await RequestAsync(stream, command, linked.Token).ConfigureAwait(false);
             var header = new byte[4];
             await ReadExactlyAsync(stream, header, command, linked.Token).ConfigureAwait(false);
+            if (header.AsSpan().SequenceEqual("FAIL"u8))
+            {
+                await ReadExactlyAsync(stream, header, command, linked.Token).ConfigureAwait(false);
+                if (!int.TryParse(Encoding.ASCII.GetString(header), NumberStyles.HexNumber,
+                        CultureInfo.InvariantCulture, out var failLength) || failLength is < 0 or > 65535)
+                {
+                    throw new IOException("Invalid ADB server failure length.");
+                }
+
+                var failure = new byte[failLength];
+                await ReadExactlyAsync(stream, failure, command, linked.Token).ConfigureAwait(false);
+                throw new IOException("ADB server: " + Encoding.UTF8.GetString(failure));
+            }
+
             if (!int.TryParse(Encoding.ASCII.GetString(header), NumberStyles.HexNumber,
                     CultureInfo.InvariantCulture, out var length) || length is < 0 or > 65535)
             {
@@ -394,7 +413,12 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         if (status.AsSpan().SequenceEqual("OKAY"u8)) return;
         if (!status.AsSpan().SequenceEqual("FAIL"u8)) throw new IOException("Invalid ADB server status.");
         await ReadExactlyAsync(stream, status, request, cancellationToken).ConfigureAwait(false);
-        var length = int.Parse(Encoding.ASCII.GetString(status), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+        if (!int.TryParse(Encoding.ASCII.GetString(status), NumberStyles.HexNumber, CultureInfo.InvariantCulture,
+                out var length) || length is < 0 or > 65535)
+        {
+            throw new IOException("Invalid ADB server failure length.");
+        }
+
         var message = new byte[length];
         await ReadExactlyAsync(stream, message, request, cancellationToken).ConfigureAwait(false);
         throw new IOException("ADB server: " + Encoding.UTF8.GetString(message));
@@ -564,7 +588,12 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         if (status.SequenceEqual("OKAY"u8)) return;
         if (!status.SequenceEqual("FAIL"u8)) throw new IOException("Invalid ADB server status.");
         ReadExactly(stream, status, request);
-        var length = int.Parse(Encoding.ASCII.GetString(status), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+        if (!int.TryParse(Encoding.ASCII.GetString(status), NumberStyles.HexNumber, CultureInfo.InvariantCulture,
+                out var length) || length is < 0 or > 65535)
+        {
+            throw new IOException("Invalid ADB server failure length.");
+        }
+
         var message = new byte[length];
         ReadExactly(stream, message, request);
         throw new IOException("ADB server: " + Encoding.UTF8.GetString(message));

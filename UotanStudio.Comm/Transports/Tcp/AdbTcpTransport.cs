@@ -5,9 +5,9 @@ namespace UotanStudio.Comm.Transports.Tcp;
 
 /// <summary>
 /// ADB transport over a TCP connection (adb connect host:port), wrapping a direct
-/// <see cref="TcpClient"/> connection to adbd with exact reads and full writes.
+/// <see cref="TcpClient"/> connection to adbd with bounded reads that return the bytes already arrived and full writes.
 /// <para>基于 TCP 连接的 ADB 传输（adb connect host:port），封装与 adbd 的直接
-/// <see cref="TcpClient"/> 连接，支持精确读取与全量写入。</para>
+/// <see cref="TcpClient"/> 连接：读取返回已到达的字节，写入为全量写入。</para>
 /// </summary>
 internal sealed class AdbTcpTransport : ICommTransport
 {
@@ -148,14 +148,19 @@ internal sealed class AdbTcpTransport : ICommTransport
     }
 
     /// <summary>
-    /// Reads exactly <paramref name="length"/> bytes, blocking until available.
-    /// <para>精确读取 <paramref name="length"/> 个字节，阻塞至数据可用。</para>
+    /// Reads up to <paramref name="length"/> bytes that have already arrived, returning as soon as at least one byte
+    /// is available. Zero means the peer closed the connection; a timeout before any byte arrived raises
+    /// <see cref="TimeoutException"/> instead of losing a partial frame.
+    /// <para>读取已经到达的最多 <paramref name="length"/> 个字节，只要有至少一个字节可用就立即返回。
+    /// 返回 0 表示对端关闭连接；一个字节都未到达即超时会抛出 <see cref="TimeoutException"/>，不会丢失半帧。</para>
     /// </summary>
     /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
     /// <param name="offset">The destination offset. <para>目标偏移量。</para></param>
-    /// <param name="length">The number of bytes to read. <para>读取的字节数。</para></param>
+    /// <param name="length">The maximum number of bytes to read. <para>最多读取的字节数。</para></param>
     /// <param name="timeoutMs">Timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
-    /// <returns>The number of bytes read (always <paramref name="length"/> unless closed). 实际读取的字节数（除非连接关闭，否则恒为 <paramref name="length"/>）。</returns>
+    /// <returns>The number of bytes read, or zero at end of stream. <para>读取的字节数；流结束时为 0。</para></returns>
+    /// <exception cref="TimeoutException">No byte arrived within <paramref name="timeoutMs"/>.
+    /// <para>在 <paramref name="timeoutMs"/> 内没有字节到达。</para></exception>
     public int Read(byte[] buffer, int offset, int length, int timeoutMs)
     {
         ValidateBuffer(buffer, offset, length);
@@ -166,22 +171,14 @@ internal sealed class AdbTcpTransport : ICommTransport
 
         var stream = GetConnectedStream();
         var previousTimeout = stream.ReadTimeout;
-        stream.ReadTimeout = timeoutMs;
+        stream.ReadTimeout = timeoutMs > 0 ? timeoutMs : Timeout.Infinite;
         try
         {
-            var totalRead = 0;
-            while (totalRead < length)
-            {
-                var read = stream.Read(buffer, offset + totalRead, length - totalRead);
-                if (read == 0)
-                {
-                    throw new EndOfStreamException("ADB TCP connection closed by the peer.");
-                }
-
-                totalRead += read;
-            }
-
-            return totalRead;
+            return stream.Read(buffer, offset, length);
+        }
+        catch (IOException ex) when (IsSocketTimeout(ex))
+        {
+            throw new TimeoutException($"ADB TCP read timed out after {timeoutMs} ms.", ex);
         }
         finally
         {
@@ -190,15 +187,21 @@ internal sealed class AdbTcpTransport : ICommTransport
     }
 
     /// <summary>
-    /// Reads exactly <paramref name="length"/> bytes asynchronously.
-    /// <para>异步精确读取 <paramref name="length"/> 个字节。</para>
+    /// Reads up to <paramref name="length"/> bytes asynchronously, returning as soon as at least one byte is
+    /// available. Zero means the peer closed the connection; a timeout before any byte arrived raises
+    /// <see cref="TimeoutException"/> instead of losing a partial frame.
+    /// <para>异步读取已经到达的最多 <paramref name="length"/> 个字节，只要有至少一个字节可用就立即返回。
+    /// 返回 0 表示对端关闭连接；一个字节都未到达即超时会抛出 <see cref="TimeoutException"/>，不会丢失半帧。</para>
     /// </summary>
     /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
     /// <param name="offset">The destination offset. <para>目标偏移量。</para></param>
-    /// <param name="length">The number of bytes to read. <para>读取的字节数。</para></param>
+    /// <param name="length">The maximum number of bytes to read. <para>最多读取的字节数。</para></param>
     /// <param name="timeoutMs">Timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
     /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
-    /// <returns>A task that resolves to the number of bytes read. <para>返回实际读取字节数的任务。</para></returns>
+    /// <returns>A task that resolves to the number of bytes read, or zero at end of stream.
+    /// <para>返回读取字节数的任务；流结束时为 0。</para></returns>
+    /// <exception cref="TimeoutException">No byte arrived within <paramref name="timeoutMs"/>.
+    /// <para>在 <paramref name="timeoutMs"/> 内没有字节到达。</para></exception>
     public async Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
     {
         ValidateBuffer(buffer, offset, length);
@@ -216,23 +219,15 @@ internal sealed class AdbTcpTransport : ICommTransport
 
         try
         {
-            var totalRead = 0;
-            while (totalRead < length)
-            {
-                var read = await stream.ReadAsync(buffer.AsMemory(offset + totalRead, length - totalRead), timeoutCts.Token).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    throw new EndOfStreamException("ADB TCP connection closed by the peer.");
-                }
-
-                totalRead += read;
-            }
-
-            return totalRead;
+            return await stream.ReadAsync(buffer.AsMemory(offset, length), timeoutCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             throw new TimeoutException($"ADB TCP read timed out after {timeoutMs} ms.");
+        }
+        catch (IOException ex) when (IsSocketTimeout(ex))
+        {
+            throw new TimeoutException($"ADB TCP read timed out after {timeoutMs} ms.", ex);
         }
     }
 
@@ -330,6 +325,20 @@ internal sealed class AdbTcpTransport : ICommTransport
         {
             throw new ObjectDisposedException(nameof(AdbTcpTransport));
         }
+    }
+
+    private static bool IsSocketTimeout(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is SocketException socket &&
+                socket.SocketErrorCode is SocketError.TimedOut or SocketError.WouldBlock)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void ValidateBuffer(byte[] buffer, int offset, int length)

@@ -73,7 +73,7 @@
     <value>Connection protocol</value>
   </data>
   <data name="Device_RemoteAddress" xml:space="preserve">
-    <value>Device host (port optional, default 5555)</value>
+    <value>ADB host[:port] (default 5555) / HDC host:port</value>
   </data>
   <data name="Device_RemoteConnect" xml:space="preserve">
     <value>Connect remote device</value>
@@ -82,7 +82,7 @@
     <value>Cancel connection operation</value>
   </data>
   <data name="Device_RemoteInvalidAddress" xml:space="preserve">
-    <value>Use host:port, IPv4:port or [IPv6]:port with a port from 1 to 65535. HDC addresses must be shorter than 32 bytes.</value>
+    <value>ADB accepts a bare host (default port 5555) or host:port. HDC requires an explicit host:port because its daemon port is dynamic; HDC addresses must be shorter than 32 bytes.</value>
   </data>
   <data name="Device_RemoteConnecting" xml:space="preserve">
     <value>Connecting to {0}...</value>

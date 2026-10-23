@@ -1,6 +1,8 @@
+using System.Security.Cryptography.X509Certificates;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Tcp;
 using UotanStudio.Comm.Transports.Udp;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -80,20 +82,56 @@ public sealed partial class DeviceController
         => AdbSession.ForServer(serial, host, port);
 
     /// <summary>
-    /// Opens a direct TCP session to the daemon at <c>host:port</c> authenticated with the default ADB key,
-    /// bypassing any server. The caller must <c>Connect()</c> the session and dispose it on failure.
-    /// <para>打开到 <c>host:port</c> 上 adbd 的直接 TCP 会话，使用默认 ADB 密钥完成认证；不经过任何
-    /// server。调用方需自行 <c>Connect()</c> 并在失败时释放。</para>
+    /// Opens a direct TCP session to the daemon at <c>host:port</c> authenticated with the host identity
+    /// chain (the user key followed by <c>ADB_VENDOR_KEYS</c>), bypassing any server. The caller must
+    /// <c>Connect()</c> the session and dispose it on failure.
+    /// <para>打开到 <c>host:port</c> 上 adbd 的直接 TCP 会话，使用主机身份链（用户密钥后接
+    /// <c>ADB_VENDOR_KEYS</c>）完成认证；不经过任何 server。调用方需自行 <c>Connect()</c> 并在失败时释放。</para>
     /// </summary>
     /// <param name="host">Device hostname or IP literal. <para>设备主机名或 IP 字面量。</para></param>
     /// <param name="port">Daemon port, conventionally 5555. <para>adbd 监听端口，通常是 5555。</para></param>
     /// <param name="authentication">
-    /// Authentication identity used by the handshake; the default runtime ADB identity applies when null.
-    /// <para>握手使用的认证身份；为 null 时读取默认运行时 ADB 身份。</para>
+    /// Single authentication identity used by the handshake; when null the runtime host identity chain
+    /// (user key plus <c>ADB_VENDOR_KEYS</c>) is loaded and owned by the session.
+    /// <para>握手使用的单一认证身份；为 null 时加载运行时主机身份链（用户密钥加 <c>ADB_VENDOR_KEYS</c>），
+    /// 并由会话拥有。</para>
     /// </param>
     /// <returns>An unconnected direct session. <para>尚未连接的直接会话。</para></returns>
     public IAdbDeviceSession OpenNetworkAdbSession(string host, int port, AdbAuthentication? authentication = null)
-        => new AdbSession(new AdbTcpTransport(host, port), authentication ?? AdbAuthentication.LoadOrCreate());
+    {
+        if (authentication is not null)
+        {
+            ICommTransport? explicitTransport = null;
+            try
+            {
+                explicitTransport = new AdbTcpTransport(host, port);
+                return new AdbSession(explicitTransport, authentication);
+            }
+            catch
+            {
+                explicitTransport?.Dispose();
+                throw;
+            }
+        }
+
+        var identities = AdbAuthentication.LoadIdentityChain();
+        ICommTransport? transport = null;
+        try
+        {
+            transport = new AdbTcpTransport(host, port);
+            return new AdbSession(transport, identities);
+        }
+        catch
+        {
+            transport?.Dispose();
+            foreach (var identity in identities)
+            {
+                identity.Dispose();
+            }
+
+            throw;
+        }
+    }
 
     /// <summary>
     /// Opens a direct session to adbd's secure service (Android 11+ TLS) at host:port. The client presents the
@@ -107,16 +145,52 @@ public sealed partial class DeviceController
     /// <param name="host">Device hostname or IP literal. <para>设备主机名或 IP 字面量。</para></param>
     /// <param name="port">Secure daemon port. <para>adbd 安全服务监听端口。</para></param>
     /// <param name="authentication">
-    /// Authentication identity used by the handshake; the default runtime ADB identity applies when null.
-    /// <para>握手使用的认证身份；为 null 时读取默认运行时 ADB 身份。</para>
+    /// Single authentication identity used by the handshake and the TLS certificate; when null the runtime
+    /// host identity chain (user key plus <c>ADB_VENDOR_KEYS</c>) is loaded, the certificate is derived from
+    /// its user key, and the session owns every identity.
+    /// <para>握手与 TLS 证书使用的单一认证身份；为 null 时加载运行时主机身份链（用户密钥加
+    /// <c>ADB_VENDOR_KEYS</c>），证书由其用户密钥派生，并由会话拥有全部身份。</para>
     /// </param>
     /// <returns>An unconnected direct session. <para>尚未连接的直接会话。</para></returns>
     public IAdbDeviceSession OpenSecureNetworkAdbSession(string host, int port, AdbAuthentication? authentication = null)
     {
-        var identity = authentication ?? AdbAuthentication.LoadOrCreate();
-        return new AdbSession(
-            new AdbTlsTransport(host, port, AdbHostCertificate.Create(identity.RsaKey)),
-            identity);
+        if (authentication is not null)
+        {
+            var explicitCertificate = AdbHostCertificate.Create(authentication.RsaKey);
+            ICommTransport? explicitTransport = null;
+            try
+            {
+                explicitTransport = new AdbTlsTransport(host, port, explicitCertificate);
+                return new AdbSession(explicitTransport, authentication);
+            }
+            catch
+            {
+                explicitTransport?.Dispose();
+                explicitCertificate.Dispose();
+                throw;
+            }
+        }
+
+        var identities = AdbAuthentication.LoadIdentityChain();
+        X509Certificate2? certificate = null;
+        ICommTransport? transport = null;
+        try
+        {
+            certificate = AdbHostCertificate.Create(identities[0].RsaKey);
+            transport = new AdbTlsTransport(host, port, certificate);
+            return new AdbSession(transport, identities);
+        }
+        catch
+        {
+            transport?.Dispose();
+            certificate?.Dispose();
+            foreach (var identity in identities)
+            {
+                identity.Dispose();
+            }
+
+            throw;
+        }
     }
 
     /// <summary>

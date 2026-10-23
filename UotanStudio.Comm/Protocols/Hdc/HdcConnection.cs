@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Buffers.Text;
-using System.Globalization;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
@@ -17,6 +16,12 @@ public sealed class HdcConnection : IDisposable
     /// <para>默认 I/O 超时（毫秒）。</para>
     /// </summary>
     private const int DefaultTimeoutMs = 5000;
+
+    /// <summary>
+    /// Client version text sent in the handshake and advertised in <c>supportfeatures</c>.
+    /// <para>握手中发送、并在 <c>supportfeatures</c> 中宣告的客户端版本文本。</para>
+    /// </summary>
+    private const string ClientVersion = "Ver: 3.2.0f";
 
     /// <summary>
     /// Timeout for channel-open acknowledgment in milliseconds.
@@ -73,6 +78,9 @@ public sealed class HdcConnection : IDisposable
     private bool _disposed;
     private string _echoedHostVersion = "";
     private IReadOnlyDictionary<string, string> _peerCapabilities = new Dictionary<string, string>();
+    private string? _pendingAuthorizationMessage;
+    private Timer? _heartbeatTimer;
+    private ulong _heartbeatCount;
     private HdcForwardManager? _forwards;
 
     /// <summary>
@@ -169,6 +177,8 @@ public sealed class HdcConnection : IDisposable
     /// Connects to the HDC peer (sends session handshake and starts the message loop).
     /// <para>连接到 HDC 对端（发送会话握手并启动消息循环）。</para>
     /// </summary>
+    /// <exception cref="HdcAuthorizationException">The daemon denied host authorization, or a pending confirmation did not complete.
+    /// <para>守护进程拒绝了主机授权，或等待确认未完成。</para></exception>
     public void Connect() => Connect(CancellationToken.None);
 
     /// <summary>
@@ -208,14 +218,20 @@ public sealed class HdcConnection : IDisposable
 
         var connectKey = ResolveConnectKey();
         Send(new HdcMessage(HdcCommand.Handshake, 0, _sessionId,
-            HdcDaemonCodec.Handshake(0, _sessionId, connectKey, BuildHandshakeCapabilities(), "Ver: 3.2.0f")));
+            HdcDaemonCodec.Handshake(0, _sessionId, connectKey, BuildHandshakeCapabilities(), ClientVersion)));
         var authenticated = false;
         var verifyType = _authentication.VerifyType;
         var authDeadline = Environment.TickCount64 + 120000;
         for (var round = 0; round < 8;)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (Environment.TickCount64 >= authDeadline) throw new TimeoutException("HDC authentication deadline exceeded.");
+            if (Environment.TickCount64 >= authDeadline)
+            {
+                throw _pendingAuthorizationMessage is { } pending
+                    ? new HdcAuthorizationException("E000002", pending)
+                    : new TimeoutException("HDC authentication deadline exceeded.");
+            }
+
             HdcMessage response;
             try { response = ReadMessage(); }
             catch (TimeoutException) { continue; }
@@ -232,9 +248,8 @@ public sealed class HdcConnection : IDisposable
             _echoedHostVersion = handshake.Version;
             if (handshake.State == 3)
             {
-                var capabilities = handshake.Buffer.AsSpan().StartsWith("authtype        "u8)
-                    ? HdcCapabilities.Decode(handshake.Buffer) : new Dictionary<string, string>();
-                verifyType = capabilities.TryGetValue("authtype", out var algorithm) ? algorithm switch
+                TryDecodeCapabilities(handshake.Buffer, out var requestCapabilities);
+                verifyType = requestCapabilities.TryGetValue("authtype", out var algorithm) ? algorithm switch
                 {
                     "1" => HdcAuthVerifyType.Rsa3072Sha512,
                     "0" => HdcAuthVerifyType.RsaEncrypt,
@@ -244,27 +259,61 @@ public sealed class HdcConnection : IDisposable
             if (handshake.State == 4)
             {
                 var status = System.Text.Encoding.UTF8.GetString(handshake.Buffer);
-                var capabilities = handshake.Buffer.AsSpan().StartsWith("emgmsg          "u8) || handshake.Buffer.AsSpan().StartsWith("daemonauthstatus "u8)
-                    ? HdcCapabilities.Decode(handshake.Buffer) : new Dictionary<string, string>();
-                var diagnostic = capabilities.GetValueOrDefault("emgmsg", "");
-                if (diagnostic.StartsWith("[E000002]", StringComparison.Ordinal)) continue;
-                if (capabilities.GetValueOrDefault("daemonauthstatus") == "DAEMON_UNAUTH" || status == "DAEMON_UNAUTH")
-                    throw new UnauthorizedAccessException("HDC device did not authorize this host: " + diagnostic);
+                var decoded = TryDecodeCapabilities(handshake.Buffer, out var capabilities);
+                if (!decoded)
+                {
+                    if (status.StartsWith("[E000002]", StringComparison.Ordinal))
+                    {
+                        _pendingAuthorizationMessage = status;
+                        continue;
+                    }
+
+                    if (status.StartsWith("[E000003]", StringComparison.Ordinal))
+                    {
+                        throw new HdcAuthorizationException("E000003", status);
+                    }
+
+                    if (status == "DAEMON_UNAUTH")
+                    {
+                        throw new HdcAuthorizationException("AUTH_FAIL", "HDC device did not authorize this host.");
+                    }
+                }
+
+                var diagnostic = capabilities.TryGetValue("emgmsg", out var emgmsg) ? emgmsg : string.Empty;
+                var authorization = capabilities.TryGetValue("daemonauthstatus", out var authStatus) ? authStatus : string.Empty;
+                if (authorization == "DAEMON_UNAUTH")
+                {
+                    if (diagnostic.StartsWith("[E000002]", StringComparison.Ordinal))
+                    {
+                        _pendingAuthorizationMessage = diagnostic;
+                        continue;
+                    }
+
+                    throw new HdcAuthorizationException(AuthorizationCode(diagnostic),
+                        diagnostic.Length > 0 ? diagnostic : "HDC device did not authorize this host.");
+                }
+
+                _pendingAuthorizationMessage = null;
                 _peerCapabilities = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(capabilities);
-                _peerBanner = capabilities.GetValueOrDefault("devname", status);
+                _peerBanner = capabilities.TryGetValue("devname", out var devname) ? devname : status;
                 authenticated = true; break;
             }
             var buffer = handshake.State switch
             {
                 3 => _authentication.BuildDaemonPublicKeyPayload(),
                 2 => EncodeAuthenticationToken(_authentication.SignToken(handshake.Buffer, verifyType)),
-                5 => throw new UnauthorizedAccessException("HDC device rejected host authorization."),
+                5 => throw new HdcAuthorizationException("AUTH_FAIL", "HDC device rejected host authorization."),
                 _ => throw new NotSupportedException($"HDC authentication state {handshake.State} is not supported."),
             };
             Send(new HdcMessage(HdcCommand.Handshake, 0, _sessionId,
-                HdcDaemonCodec.Handshake(handshake.State, handshake.SessionId, connectKey, buffer, "Ver: 3.2.0f")));
+                HdcDaemonCodec.Handshake(handshake.State, handshake.SessionId, connectKey, buffer, ClientVersion)));
         }
-        if (!authenticated) throw new UnauthorizedAccessException("HDC authorization did not complete.");
+        if (!authenticated)
+        {
+            throw _pendingAuthorizationMessage is { } pending
+                ? new HdcAuthorizationException("E000002", pending)
+                : new HdcAuthorizationException("AUTH_FAIL", "HDC authorization did not complete.");
+        }
 
         var closeDeadline = Environment.TickCount64 + 10000;
         while (true)
@@ -297,6 +346,8 @@ public sealed class HdcConnection : IDisposable
             Name = "HDC message loop",
         };
         _messageThread.Start();
+        _heartbeatTimer = new Timer(static state => ((HdcConnection)state!).SendHeartbeat(), this,
+            HdcConstants.HeartbeatIntervalMs, HdcConstants.HeartbeatIntervalMs);
     }
 
     /// <summary>
@@ -306,6 +357,8 @@ public sealed class HdcConnection : IDisposable
     /// <param name="cancellationToken">On cancellation the underlying transport is disposed to break the blocking handshake. <para>取消时会释放底层传输以打断阻塞的握手。</para></param>
     /// <returns>A task that completes once authentication, channel closure and the message loop startup have finished. <para>认证、通道关闭与消息循环启动全部完成后完成的任务。</para></returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled during the handshake. <para><paramref name="cancellationToken"/> 在握手期间被取消。</para></exception>
+    /// <exception cref="HdcAuthorizationException">The daemon denied host authorization, or a pending confirmation did not complete.
+    /// <para>守护进程拒绝了主机授权，或等待确认未完成。</para></exception>
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -376,6 +429,35 @@ public sealed class HdcConnection : IDisposable
         var encoded = new byte[Base64.GetMaxEncodedToUtf8Length(token.Length)];
         _ = Base64.EncodeToUtf8(token, encoded, out _, out var written);
         return written == encoded.Length ? encoded : encoded[..written];
+    }
+
+    private static bool TryDecodeCapabilities(byte[] buffer, out Dictionary<string, string> capabilities)
+    {
+        try
+        {
+            capabilities = HdcCapabilities.Decode(buffer);
+            return capabilities.Count > 0;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or ArgumentException or FormatException)
+        {
+            capabilities = new Dictionary<string, string>(StringComparer.Ordinal);
+            return false;
+        }
+    }
+
+    private static string AuthorizationCode(string diagnostic)
+    {
+        var start = diagnostic.IndexOf('[');
+        if (start >= 0)
+        {
+            var end = diagnostic.IndexOf(']', start + 1);
+            if (end > start + 1)
+            {
+                return diagnostic[(start + 1)..end];
+            }
+        }
+
+        return "AUTH_FAIL";
     }
 
     /// <summary>
@@ -495,45 +577,59 @@ public sealed class HdcConnection : IDisposable
     }
 
     /// <summary>
-    /// Builds the capability TLV carried by the first handshake: the host auth-algorithm declaration plus a
-    /// <c>supportfeatures</c> entry naming the capabilities this host can report, each of which is then sent with its
-    /// value (<c>version</c>, <c>connection_type</c> and <c>os_type</c>), so the daemon can classify the session before
-    /// the first authentication round. <para>构建首个握手携带的能力 TLV：主机认证算法声明，加上列出本主机可上报能力名的
-    /// <c>supportfeatures</c> 条目，并随之为每个能力发送取值（<c>version</c>、<c>connection_type</c> 与
-    /// <c>os_type</c>），使守护进程在首轮认证之前即可识别会话。</para>
+    /// Builds the capability TLV carried by the first handshake: the host auth-algorithm declaration plus the
+    /// upstream <c>supportfeatures</c> value list (client version, connection type, host OS and heartbeat).
+    /// <para>构建首个握手携带的能力 TLV：主机认证算法声明，以及上游 <c>supportfeatures</c> 取值列表
+    /// （客户端版本、连接类型、主机操作系统与心跳能力）。</para>
     /// </summary>
     /// <returns>The encoded capability TLV. <para>编码后的能力 TLV。</para></returns>
     private byte[] BuildHandshakeCapabilities()
     {
+        var connectionType = _transport is UsbDeviceTransport ? "usb" : "tcp";
         Dictionary<string, string> capabilities = new(StringComparer.Ordinal)
         {
             ["authtype"] = "1",
-            ["supportfeatures"] = "version,connection_type,os_type",
-            ["version"] = HdcConstants.ProtocolVersion.ToString(CultureInfo.InvariantCulture),
-            ["connection_type"] = _transport is UsbDeviceTransport ? "usb" : "tcp",
-            ["os_type"] = ResolveHostOsType(),
+            ["supportfeatures"] = $"{ClientVersion},{connectionType},{ResolveHostOsType()},heartbeat",
         };
         return HdcCapabilities.Encode(capabilities);
     }
 
     /// <summary>
-    /// Returns the host operating-system name advertised as the <c>os_type</c> capability.
-    /// <para>返回作为 <c>os_type</c> 能力宣告的主机操作系统名。</para>
+    /// Returns the upstream host operating-system value advertised inside <c>supportfeatures</c>.
+    /// <para>返回在 <c>supportfeatures</c> 中宣告的上游主机操作系统值。</para>
     /// </summary>
-    /// <returns>The platform name, or <c>unknown</c> on an unrecognized platform. <para>平台名；无法识别时为 <c>unknown</c>。</para></returns>
+    /// <returns><c>win</c>, <c>mac</c>, <c>linux</c>, or an empty string on an unrecognized platform.
+    /// <para><c>win</c>、<c>mac</c>、<c>linux</c>；无法识别时为空串。</para></returns>
     private static string ResolveHostOsType()
     {
         if (OperatingSystem.IsWindows())
         {
-            return "windows";
+            return "win";
         }
 
         if (OperatingSystem.IsMacOS())
         {
-            return "macos";
+            return "mac";
         }
 
-        return OperatingSystem.IsLinux() ? "linux" : "unknown";
+        return OperatingSystem.IsLinux() ? "linux" : string.Empty;
+    }
+
+    private void SendHeartbeat()
+    {
+        if (_disposed || !IsConnected)
+        {
+            return;
+        }
+
+        try
+        {
+            Send(new HdcMessage(HdcCommand.HeartbeatMsg, 0, _sessionId, HdcDaemonCodec.Heartbeat(_heartbeatCount++)));
+        }
+        catch (Exception ex) when (ex is IOException or TimeoutException or ObjectDisposedException
+            or InvalidOperationException or System.Net.Sockets.SocketException)
+        {
+        }
     }
 
     private void Send(HdcMessage message)
@@ -663,7 +759,6 @@ public sealed class HdcConnection : IDisposable
                         break;
 
                     case HdcCommand.HeartbeatMsg:
-                        Send(message);
                         break;
 
                     default:
@@ -820,14 +915,28 @@ public sealed class HdcConnection : IDisposable
     private byte[] ReadExact(byte[] buffer, int timeoutMs)
     {
         var totalRead = 0;
-        var deadline = Environment.TickCount64 + timeoutMs;
         while (totalRead < buffer.Length)
         {
-            var remaining = deadline - Environment.TickCount64;
-            if (remaining <= 0) throw new IOException("HDC frame deadline exceeded.");
-            var n = _transport.Read(buffer, totalRead, buffer.Length - totalRead, (int)remaining);
+            var remaining = timeoutMs;
+            if (remaining <= 0) throw new TimeoutException("HDC idle read timeout.");
+            int n;
+            try
+            {
+                n = _transport.Read(buffer, totalRead, buffer.Length - totalRead, remaining);
+            }
+            catch (TimeoutException)
+            {
+                if (totalRead == 0) throw;
+                throw new IOException("HDC frame truncated by timeout.");
+            }
+
             if (n == 0)
             {
+                if (_transport is Transports.Tcp.HdcTcpTransport)
+                {
+                    throw new EndOfStreamException("HDC TCP connection closed by the peer.");
+                }
+
                 if (totalRead == 0) throw new TimeoutException("HDC idle read timeout.");
                 throw new IOException("HDC frame truncated by timeout.");
             }
@@ -875,6 +984,8 @@ public sealed class HdcConnection : IDisposable
             _streams.Clear();
         }
 
+        _heartbeatTimer?.Dispose();
+        _heartbeatTimer = null;
         _transport.Dispose();
         _authentication.Dispose();
         _messageThread?.Join(DefaultTimeoutMs + 100);

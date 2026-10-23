@@ -73,7 +73,7 @@
     <value>连接协议</value>
   </data>
   <data name="Device_RemoteAddress" xml:space="preserve">
-    <value>设备地址（端口可省略，默认 5555）</value>
+    <value>ADB 主机[:端口]（默认 5555）/ HDC 主机:端口</value>
   </data>
   <data name="Device_RemoteConnect" xml:space="preserve">
     <value>连接远程设备</value>
@@ -82,7 +82,7 @@
     <value>取消连接操作</value>
   </data>
   <data name="Device_RemoteInvalidAddress" xml:space="preserve">
-    <value>设备地址须为主机名:端口、IPv4:端口或 [IPv6]:端口，端口范围为 1–65535；HDC 地址须少于 32 字节。</value>
+    <value>ADB 可只写主机（默认端口 5555）或写主机:端口；HDC 守护进程端口是动态的，必须显式写主机:端口，且 HDC 地址须少于 32 字节。</value>
   </data>
   <data name="Device_RemoteConnecting" xml:space="preserve">
     <value>正在连接 {0}...</value>

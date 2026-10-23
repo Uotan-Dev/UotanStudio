@@ -63,24 +63,22 @@ public interface IHdcDeviceSession : IDisposable
     /// <para>在本会话路由上执行调试进程列表、重启与重新挂载的一次性客户端。</para></returns>
     IHdcDeviceServices CreateDeviceServices();
 
-    /// <summary>Creates a sync (file transfer) client over the direct connection.
-    /// <para>在直连通道上创建 sync（文件传输）客户端。</para></summary>
-    /// <returns>A sync client that opens short-lived transfer channels on the direct connection.
-    /// <para>在直连上打开短生命周期传输通道的 sync 客户端。</para></returns>
-    /// <exception cref="NotSupportedException">
-    /// The session runs over an HDC server channel, which exposes no daemon connection.
-    /// <para>会话经由 HDC server 通道运行，没有可用于文件传输的守护进程连接。</para>
-    /// </exception>
+    /// <summary>Creates a sync (file transfer) client for this session's route.
+    /// <para>为本会话路由创建 sync（文件传输）客户端。</para></summary>
+    /// <returns>A sync client that opens short-lived transfer channels on a direct connection, or runs the upstream
+    /// remote-client file task on the HDC server that owns the target.
+    /// <para>在直连上打开短生命周期传输通道的 sync 客户端，或在拥有该目标的 HDC server 上运行上游
+    /// remote-client 文件任务的 sync 客户端。</para></returns>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已释放。</para></exception>
     IHdcSyncClient CreateSyncClient();
 
-    /// <summary>Creates an app install/uninstall client over the direct connection.
-    /// <para>在直连通道上创建应用安装/卸载客户端。</para></summary>
-    /// <returns>An app client bound to the direct daemon connection.
-    /// <para>绑定直连守护进程连接的应用客户端。</para></returns>
-    /// <exception cref="NotSupportedException">
-    /// The session runs over an HDC server channel, which exposes no daemon connection.
-    /// <para>会话经由 HDC server 通道运行，没有可用于应用安装的守护进程连接。</para>
-    /// </exception>
+    /// <summary>Creates an app install/uninstall client for this session's route.
+    /// <para>为本会话路由创建应用安装/卸载客户端。</para></summary>
+    /// <returns>An app client bound to the direct daemon connection, or to the HDC server that owns the target.
+    /// <para>绑定直连守护进程连接或拥有该目标的 HDC server 的应用客户端。</para></returns>
+    /// <exception cref="ObjectDisposedException">The session is disposed.
+    /// <para>会话已释放。</para></exception>
     IHdcAppClient CreateAppClient();
 
     /// <summary>Gets the port-forwarding manager over the direct connection.
@@ -148,7 +146,7 @@ public interface IHdcShellClient
     int ExecuteStreaming(Action<byte[]>? onStdout, Action<byte[]>? onStderr, CancellationToken cancellationToken = default);
 }
 
-/// <summary>HDC sync (file transfer) client over a direct connection. <para>经由直连通道的 HDC sync（文件传输）客户端。</para></summary>
+/// <summary>HDC sync (file transfer) client for one session route. <para>面向单个会话路由的 HDC sync（文件传输）客户端。</para></summary>
 public interface IHdcSyncClient : IDisposable
 {
     /// <summary>Sends a local file to the device. <para>发送本地文件到设备。</para></summary>
@@ -165,8 +163,8 @@ public interface IHdcSyncClient : IDisposable
     /// <para>保留源时间戳；仅当源为本地文件时生效。</para>
     /// </param>
     /// <param name="cancellationToken">
-    /// Cancels between packets; a cancelled transfer may leave the daemon task incomplete.
-    /// <para>在数据包之间取消；取消后守护进程任务可能未完成。</para>
+    /// Cancels between packets; a cancelled transfer may leave the device task incomplete.
+    /// <para>在数据包之间取消；取消后设备侧任务可能未完成。</para>
     /// </param>
     void Send(string localPath, string remotePath, bool holdTimestamp = true, CancellationToken cancellationToken = default);
 
@@ -186,7 +184,7 @@ public interface IHdcSyncClient : IDisposable
     void Recv(string remotePath, string localPath, CancellationToken cancellationToken = default);
 }
 
-/// <summary>HDC app install/uninstall client over a direct connection. <para>经由直连通道的 HDC 应用安装/卸载客户端。</para></summary>
+/// <summary>HDC app install/uninstall client for one session route. <para>面向单个会话路由的 HDC 应用安装/卸载客户端。</para></summary>
 public interface IHdcAppClient
 {
     /// <summary>Installs an application package. <para>安装应用包。</para></summary>
@@ -244,6 +242,36 @@ public interface IHdcForwardManager
     /// <exception cref="IOException">The listen key already has a different open mapping.
     /// <para>该监听键已存在另一个不同的打开映射。</para></exception>
     void Add(int localPort, int remotePort, bool reverse = false, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds a forward rule whose upstream is a virtual socket or TCP endpoint.
+    /// <para>添加一条上游为虚拟套接字或 TCP 端点的转发规则。</para>
+    /// </summary>
+    /// <param name="localPort">
+    /// Host loopback listening port between 1 and 65535.
+    /// <para>主机回环监听端口，范围从 1 到 65535。</para>
+    /// </param>
+    /// <param name="remoteEndpoint">
+    /// Upstream endpoint in <c>schema:content</c> form, for example <c>tcp:5000</c> or
+    /// <c>localabstract:uitest_socket</c>.
+    /// <para>采用 <c>schema:content</c> 形式的上游端点，例如 <c>tcp:5000</c> 或
+    /// <c>localabstract:uitest_socket</c>。</para>
+    /// </param>
+    /// <param name="reverse">
+    /// <see langword="true"/> to set up a reverse (device-initiated) mapping, <see langword="false"/>
+    /// for host-initiated forwarding.
+    /// <para><see langword="true"/> 建立反向（设备发起）映射，<see langword="false"/> 为主机发起转发。</para>
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels the synchronous endpoint handshake before the mapping is registered.
+    /// <para>在映射登记前取消同步的端点握手。</para>
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="localPort"/> is outside the
+    /// 1 to 65535 range. <para><paramref name="localPort"/> 不在 1 至 65535 范围内。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="remoteEndpoint"/> is not a supported endpoint.
+    /// <para><paramref name="remoteEndpoint"/> 不是受支持的端点。</para></exception>
+    /// <exception cref="IOException">The listen key already has a different open mapping.
+    /// <para>该监听键已存在另一个不同的打开映射。</para></exception>
+    void Add(int localPort, string remoteEndpoint, bool reverse = false, CancellationToken cancellationToken = default);
 
     /// <summary>Lists active forwards. <para>列出当前转发。</para></summary>
     /// <returns>Newline-joined <c>fport</c>/<c>rport tcp:PORT endpoint</c> lines, empty when no

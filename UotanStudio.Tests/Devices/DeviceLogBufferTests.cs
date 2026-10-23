@@ -21,7 +21,7 @@ public sealed class DeviceLogBufferTests
         Assert.False(DeviceMonitorService.IsSupportedHdcTarget(new HdcTargetInfo("COM3", "UART", "Ready", "")));
         Assert.Empty(HdcTargetInfo.Parse("[Empty]\n"));
         Assert.Throws<IOException>(() => HdcTargetInfo.Parse("[Fail]server unavailable"));
-        Assert.Throws<InvalidDataException>(() => HdcTargetInfo.Parse("incomplete"));
+        Assert.Empty(HdcTargetInfo.Parse("incomplete"));
     }
 
     [Fact]

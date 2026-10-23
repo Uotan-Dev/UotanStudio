@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Hdc;
 
 namespace UotanStudio.Services.Devices;
@@ -131,42 +132,25 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         return text;
     }
 
-    private async Task<string> RunFileTaskAsync(DetectedDevice device, IEnumerable<string> arguments, CancellationToken ct)
-    {
-        ValidateDevice(device);
-        if (!DeviceMonitorService.UseHdcServerFor(device, host, _port))
-            throw new NotSupportedException("HDC server target is unavailable.");
-        var parts = arguments.ToArray();
-        if (parts.Length == 0 || parts[0] is not ("file" or "install"))
-            throw new ArgumentException("A host file or install task is required.", nameof(arguments));
-        if (parts.Any(part => string.IsNullOrWhiteSpace(part) ||
-            part.Any(c => c is '"' or '\0' || char.IsControl(c))))
-            throw new ArgumentException("Invalid HDC file task argument.", nameof(arguments));
-        var command = string.Join(' ', parts.Select(part =>
-            part.Any(char.IsWhiteSpace) ? $"\"{part}\"" : part));
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromMinutes(5));
-        using var server = new HdcServerClient(host, _port);
-        using var output = new MemoryStream();
-        try
+    private static Task<string> TransferTaskAsync(DetectedDevice device,
+        Func<HdcSession, CancellationToken, string> operation, CancellationToken ct)
+        => Task.Run(() =>
         {
-            await server.ExecuteStreamingAsync(device.Serial, command, bytes =>
-            {
-                if (output.Length + bytes.Length > HdcServerClient.MaximumOutputBytes)
-                    throw new InvalidDataException("HDC file task output limit exceeded.");
-                output.Write(bytes);
-            }, timeout.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            ValidateDevice(device);
+            ct.ThrowIfCancellationRequested();
+            var opened = App.DeviceMonitor.OpenHdcLease(device)
+                ?? throw new ArgumentException("An HDC target with a connect key is required.", nameof(device));
+            using var lease = opened.Lease;
+            return operation(opened.Session, ct);
+        }, ct);
+
+    private static string InstallApplicationBundle(IHdcAppClient client, string path, string deviceType,
+        CancellationToken ct) => client switch
         {
-            throw new TimeoutException("HDC file task exceeded 300000 ms.");
-        }
-        var result = Encoding.UTF8.GetString(output.GetBuffer().AsSpan(0, checked((int)output.Length))).TrimEnd('\0');
-        if (string.IsNullOrWhiteSpace(result))
-            throw new IOException("HDC file task ended without a completion response.");
-        HdcServerClient.ThrowOnFailure(result);
-        return result;
-    }
+            HdcAppClient direct => direct.InstallAppBundle(path, deviceType, cancellationToken: ct),
+            HdcServerAppClient server => server.InstallAppBundle(path, deviceType, cancellationToken: ct),
+            _ => throw new NotSupportedException("The HDC app client does not support APP bundle installation.")
+        };
 
     /// <summary>Sends a local file or directory through the selected HDC connection.<para>通过选定 HDC 连接发送本地文件或目录。</para></summary>
     /// <param name="device">Target device.<para>目标设备。</para></param>
@@ -179,13 +163,12 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
         var path = Path.GetFullPath(localPath);
         if (!File.Exists(path) && !Directory.Exists(path)) throw new FileNotFoundException("Local file or directory not found.", path);
-        if (IsDirect(device)) return DirectTaskAsync(device, session =>
+        return TransferTaskAsync(device, (session, token) =>
         {
-            using var transfer = new HdcSyncClient(session.Connection);
-            transfer.Send(path, remotePath, cancellationToken: ct);
+            using var transfer = session.CreateSyncClient();
+            transfer.Send(path, remotePath, cancellationToken: token);
             return "File sent successfully.";
         }, ct);
-        return RunFileTaskAsync(device, ["file", "send", path, remotePath], ct);
     }
 
     /// <summary>Receives to a temporary local file and atomically publishes on success.
@@ -205,14 +188,12 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
         var temporary = Path.Combine(staging, "payload");
         try
         {
-            var result = IsDirect(device)
-                ? await DirectTaskAsync(device, session =>
-                {
-                    using var transfer = new HdcSyncClient(session.Connection);
-                    transfer.Recv(remotePath, temporary, ct);
-                    return "File received successfully.";
-                }, ct).ConfigureAwait(false)
-                : await RunFileTaskAsync(device, ["file", "recv", remotePath, temporary], ct).ConfigureAwait(false);
+            var result = await TransferTaskAsync(device, (session, token) =>
+            {
+                using var transfer = session.CreateSyncClient();
+                transfer.Recv(remotePath, temporary, token);
+                return "File received successfully.";
+            }, ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
             if (!File.Exists(temporary)) throw new IOException("HDC did not produce a regular file.");
             File.Move(temporary, path, overwrite: true);
@@ -226,25 +207,20 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
     /// <param name="localPath">Local package path.<para>本地包路径。</para></param>
     /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The install response text.<para>安装响应文本。</para></returns>
-    public async Task<string> InstallAsync(DetectedDevice device, string localPath, CancellationToken ct = default)
+    public Task<string> InstallAsync(DetectedDevice device, string localPath, CancellationToken ct = default)
     {
         var path = Path.GetFullPath(localPath);
         if (!File.Exists(path) && !Directory.Exists(path)) throw new FileNotFoundException("Package not found.", path);
-        if (!Directory.Exists(path) && Path.GetExtension(path).ToLowerInvariant() is not (".hap" or ".hsp" or ".app"))
+        var isBundle = string.Equals(Path.GetExtension(path), ".app", StringComparison.OrdinalIgnoreCase);
+        if (!Directory.Exists(path) && !isBundle && Path.GetExtension(path).ToLowerInvariant() is not (".hap" or ".hsp"))
             throw new ArgumentException("HDC installation requires a HAP, HSP or APP package.", nameof(localPath));
-        if (IsDirect(device)) return await DirectTaskAsync(device, session =>
+        return TransferTaskAsync(device, (session, token) =>
         {
-            if (string.Equals(Path.GetExtension(path), ".app", StringComparison.OrdinalIgnoreCase))
-            {
-                var deviceType = ResolveDeviceType(session);
-                return new HdcAppClient(session.Connection).InstallAppBundle(path, deviceType, cancellationToken: ct);
-            }
-
-            return new HdcAppClient(session.Connection).Install(path, ct);
-        }, ct).ConfigureAwait(false);
-        var result = await RunFileTaskAsync(device, ["install", path], ct).ConfigureAwait(false);
-        RequireApplicationSuccess(result, uninstall: false);
-        return result;
+            var client = session.CreateAppClient();
+            return isBundle
+                ? InstallApplicationBundle(client, path, ResolveDeviceType(session), token)
+                : client.Install(path, token);
+        }, ct);
     }
 
     /// <summary>Uninstalls a bundle by name.<para>按包名卸载应用。</para></summary>
@@ -252,16 +228,13 @@ internal sealed class HdcDeviceService(string host = "127.0.0.1", int? port = nu
     /// <param name="bundle">Bundle name.<para>包名。</para></param>
     /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The uninstall response text.<para>卸载响应文本。</para></returns>
-    public async Task<string> UninstallAsync(DetectedDevice device, string bundle, CancellationToken ct = default)
+    public Task<string> UninstallAsync(DetectedDevice device, string bundle, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(bundle);
         if (bundle.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '_')))
             throw new ArgumentException("Invalid bundle name.", nameof(bundle));
-        if (IsDirect(device)) return await DirectTaskAsync(device,
-            session => new HdcAppClient(session.Connection).Uninstall(bundle, ct), ct).ConfigureAwait(false);
-        var result = await RunTaskAsync(device, ["uninstall", bundle], ct).ConfigureAwait(false);
-        RequireApplicationSuccess(result, uninstall: true);
-        return result;
+        return TransferTaskAsync(device, (session, token) =>
+            session.CreateAppClient().Uninstall(bundle, token), ct);
     }
 
     /// <summary>Checks the bundle-manager result carried in an HDC Info message.

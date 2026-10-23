@@ -145,16 +145,38 @@ internal sealed class AdbTlsTransport : ICommTransport
     }
 
     /// <summary>
-    /// Reads exactly <paramref name="length"/> bytes from the current (plaintext or TLS) stream.
-    /// <para>从当前（明文或 TLS）流精确读取 <paramref name="length"/> 个字节。</para>
+    /// Reads up to <paramref name="length"/> bytes that have already arrived from the current (plaintext or TLS)
+    /// stream. Zero means the peer closed the connection; a timeout before any byte arrived raises
+    /// <see cref="TimeoutException"/> instead of losing a partial frame.
+    /// <para>从当前（明文或 TLS）流读取已经到达的最多 <paramref name="length"/> 个字节。返回 0 表示对端关闭
+    /// 连接；一个字节都未到达即超时会抛出 <see cref="TimeoutException"/>，不会丢失半帧。</para>
     /// </summary>
+    /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
+    /// <param name="offset">The destination offset. <para>目标偏移量。</para></param>
+    /// <param name="length">The maximum number of bytes to read. <para>最多读取的字节数。</para></param>
+    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
+    /// <returns>The number of bytes read, or zero at end of stream. <para>读取的字节数；流结束时为 0。</para></returns>
+    /// <exception cref="TimeoutException">No byte arrived within <paramref name="timeoutMs"/>.
+    /// <para>在 <paramref name="timeoutMs"/> 内没有字节到达。</para></exception>
     public int Read(byte[] buffer, int offset, int length, int timeoutMs)
         => ReadAsync(buffer, offset, length, timeoutMs).GetAwaiter().GetResult();
 
     /// <summary>
-    /// Reads exactly <paramref name="length"/> bytes asynchronously from the current (plaintext or TLS) stream.
-    /// <para>异步从当前（明文或 TLS）流精确读取 <paramref name="length"/> 个字节。</para>
+    /// Reads up to <paramref name="length"/> bytes asynchronously from the current (plaintext or TLS) stream.
+    /// Zero means the peer closed the connection; a timeout before any byte arrived raises
+    /// <see cref="TimeoutException"/> instead of losing a partial frame.
+    /// <para>异步从当前（明文或 TLS）流读取已经到达的最多 <paramref name="length"/> 个字节。返回 0 表示对端
+    /// 关闭连接；一个字节都未到达即超时会抛出 <see cref="TimeoutException"/>，不会丢失半帧。</para>
     /// </summary>
+    /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
+    /// <param name="offset">The destination offset. <para>目标偏移量。</para></param>
+    /// <param name="length">The maximum number of bytes to read. <para>最多读取的字节数。</para></param>
+    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
+    /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
+    /// <returns>A task that resolves to the number of bytes read, or zero at end of stream.
+    /// <para>返回读取字节数的任务；流结束时为 0。</para></returns>
+    /// <exception cref="TimeoutException">No byte arrived within <paramref name="timeoutMs"/>.
+    /// <para>在 <paramref name="timeoutMs"/> 内没有字节到达。</para></exception>
     public async Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs,
         CancellationToken cancellationToken = default)
     {
@@ -164,23 +186,26 @@ internal sealed class AdbTlsTransport : ICommTransport
             return 0;
         }
 
-        var totalRead = 0;
-        while (totalRead < length)
+        var stream = GetStream();
+        ApplyIoTimeout(timeoutMs);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (timeoutMs > 0)
         {
-            var read = await ReadFromStreamAsync(buffer, offset + totalRead, length - totalRead, timeoutMs,
-                cancellationToken).ConfigureAwait(false);
-            if (read == 0)
-            {
-                if (totalRead > 0)
-                {
-                    return totalRead;
-                }
-                throw new EndOfStreamException("ADB TLS connection closed by the peer.");
-            }
-            totalRead += read;
+            timeoutCts.CancelAfter(timeoutMs);
         }
 
-        return totalRead;
+        try
+        {
+            return await stream.ReadAsync(buffer.AsMemory(offset, length), timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"ADB TLS read timed out after {timeoutMs} ms.");
+        }
+        catch (IOException ex) when (IsSocketTimeout(ex))
+        {
+            throw new TimeoutException($"ADB TLS read timed out after {timeoutMs} ms.", ex);
+        }
     }
 
     /// <summary>
@@ -251,6 +276,7 @@ internal sealed class AdbTlsTransport : ICommTransport
         _stream = null;
         _tlsActive = false;
         _client?.Dispose();
+        _clientCertificate.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -490,43 +516,6 @@ internal sealed class AdbTlsTransport : ICommTransport
                         [new CertificateEntry(crypto.CreateCertificate(certificate.RawDataMemory.ToArray()), null)]),
                     SignatureAndHashAlgorithm.rsa_pss_rsae_sha256);
             }
-        }
-    }
-
-    private async Task<int> ReadFromStreamAsync(byte[] buffer, int offset, int length, int timeoutMs,
-        CancellationToken cancellationToken)
-    {
-        var stream = GetStream();
-        ApplyIoTimeout(timeoutMs);
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        if (timeoutMs > 0)
-        {
-            timeoutCts.CancelAfter(timeoutMs);
-        }
-
-        try
-        {
-            var totalRead = 0;
-            while (totalRead < length)
-            {
-                var read = await stream.ReadAsync(buffer.AsMemory(offset + totalRead, length - totalRead),
-                    timeoutCts.Token).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    break;
-                }
-                totalRead += read;
-            }
-
-            return totalRead;
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new TimeoutException($"ADB TLS read timed out after {timeoutMs} ms.");
-        }
-        catch (IOException ex) when (IsSocketTimeout(ex))
-        {
-            throw new TimeoutException($"ADB TLS read timed out after {timeoutMs} ms.", ex);
         }
     }
 

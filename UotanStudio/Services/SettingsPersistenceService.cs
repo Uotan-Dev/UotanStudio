@@ -28,6 +28,7 @@ public class AppSettings : IJsonOnDeserialized
         FavoriteNodeTypes ??= [];
         ExpandedNodeCategories ??= [];
         PairedNetworkTargets ??= [];
+        PairedHdcNetworkTargets ??= [];
     }
 
     /// <summary>
@@ -60,6 +61,7 @@ public class AppSettings : IJsonOnDeserialized
         copy.FavoriteNodeTypes = [.. FavoriteNodeTypes];
         copy.ExpandedNodeCategories = [.. ExpandedNodeCategories];
         copy.PairedNetworkTargets = [.. PairedNetworkTargets];
+        copy.PairedHdcNetworkTargets = [.. PairedHdcNetworkTargets];
         copy.McpServers = [.. McpServers];
         copy.AdditionalSettings = AdditionalSettings is null ? null : new(AdditionalSettings);
         return copy;
@@ -210,6 +212,16 @@ public class AppSettings : IJsonOnDeserialized
     /// <value>The remembered pairing targets. <para>记住的配对目标。</para></value>
     [JsonPropertyName("pairedNetworkTargets")]
     public List<PairedNetworkTarget> PairedNetworkTargets { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the manually registered HDC network targets, stored as <c>host:port</c> strings because an
+    /// HDC daemon has no fixed port and its direct transport carries no TLS flag.
+    /// <para>获取或设置手动登记的 HDC 网络目标，以 <c>host:port</c> 字符串保存，因为 HDC 守护进程没有固定端口，
+    /// 且其直连传输没有 TLS 标记。</para>
+    /// </summary>
+    /// <value>The remembered HDC endpoints. <para>记住的 HDC 端点。</para></value>
+    [JsonPropertyName("pairedHdcNetworkTargets")]
+    public List<string> PairedHdcNetworkTargets { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the Id of the ADB key library entry set as the "current signature"; empty string means the runtime identity auto-generated at startup.
@@ -619,6 +631,20 @@ public class SettingsPersistenceService
     {
         var settings = LoadSettings();
         settings.PairedNetworkTargets = targets ?? [];
+        SaveSettings(settings);
+    }
+
+    /// <summary>
+    /// Replaces the remembered manual HDC network targets, merging on top of the latest settings on disk so
+    /// other settings are never overwritten.
+    /// <para>替换记住的手动 HDC 网络目标：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
+    /// </summary>
+    /// <param name="targets">The current remembered HDC endpoints; <c>null</c> clears them.
+    /// <para>当前应记住的 HDC 端点；为 <c>null</c> 时清空。</para></param>
+    public void UpdatePairedHdcNetworkTargets(List<string> targets)
+    {
+        var settings = LoadSettings();
+        settings.PairedHdcNetworkTargets = targets ?? [];
         SaveSettings(settings);
     }
 

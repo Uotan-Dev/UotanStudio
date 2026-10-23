@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -59,8 +59,8 @@ public sealed class HdcDeviceServices : Contracts.IHdcDeviceServices
     public static string RebootArgument(string? mode) => mode switch
     {
         null or "" or "system" => "",
-        "bootloader" => "-bootloader",
-        "recovery" => "-recovery",
+        "bootloader" => "bootloader",
+        "recovery" => "recovery",
         _ => throw new NotSupportedException($"Unsupported HDC reboot mode: {mode}")
     };
     /// <summary>Maps supported UI reboot modes to the device-shell reboot argument.

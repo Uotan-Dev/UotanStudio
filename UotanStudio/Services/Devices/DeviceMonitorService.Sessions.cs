@@ -241,6 +241,7 @@ public sealed partial class DeviceMonitorService
             }
         }
 
+        MarkManualNetworkTargetVerified(address);
         var endpoint = new DeviceEndpoint
         {
             Source = "adb-tcp",
@@ -294,34 +295,37 @@ public sealed partial class DeviceMonitorService
     {
         if (device.Protocol != DeviceProtocolKind.Hdc || string.IsNullOrWhiteSpace(device.Serial))
             throw new ArgumentException("An HDC target with a connect key is required.", nameof(device));
-        if (DebugBridgeRoute.Mode == Comm.Routing.DebugBridgeRouteMode.ServerOnly)
-        {
-            if (!DebugBridgeRoute.UseHdcServer(host, port))
-            {
-                throw new IOException("The ServerOnly route mode requires a listening HDC server.");
-            }
-
-            return true;
-        }
-
         if (device.Transport is not (DeviceTransportKind.Usb or DeviceTransportKind.Tcp))
             throw new IOException("An HDC target requires a USB or TCP transport.");
 
-        // A manually registered HDC TCP target is direct by definition, matching ADB's adb-tcp targets.
-        if (device.Key.StartsWith("hdc-tcp:", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        if (!DebugBridgeRoute.UseHdcServer(host, port))
-        {
-            return false;
-        }
-
-        // A live server owns only the connect keys it actually lists; an unlisted device falls back
-        // to direct USB or TCP exactly like ADB's per-serial ownership check.
-        return DebugBridgeSessionOpener.HdcServerOwns(device.Serial, host, port);
+        var serverAvailable = DebugBridgeRoute.UseHdcServer(host, port);
+        var serverListsKey = serverAvailable &&
+            DebugBridgeSessionOpener.HdcServerOwns(device.Serial, host, port);
+        return ResolveHdcServerUse(
+            DebugBridgeRoute.Mode == Comm.Routing.DebugBridgeRouteMode.ServerOnly,
+            serverAvailable,
+            serverListsKey);
     }
+
+    /// <summary>
+    /// Resolves whether an HDC target must use the local server from the already observed route state. A
+    /// manually registered TCP target follows the same ownership rule: the server wins only when it is
+    /// available and actually lists the connect key; otherwise the target stays direct.
+    /// <para>按已观测到的路由状态判定 HDC 目标是否必须经本机 server。手动登记的 TCP 目标遵循同一归属规则：
+    /// 只有 server 可用且确实列出该 connect key 时才走 server，否则保持直连。</para>
+    /// </summary>
+    /// <param name="serverOnly">Whether the fixed route mode is server-only.
+    /// <para>固定路由模式是否为仅 server。</para></param>
+    /// <param name="serverAvailable">Whether the HDC server endpoint is marked available.
+    /// <para>HDC server 端点是否被标记为可用。</para></param>
+    /// <param name="serverListsKey">Whether the live server lists the target connect key.
+    /// <para>活动 server 是否列出该目标 connect key。</para></param>
+    /// <returns><see langword="true"/> when the server must serve the target.
+    /// <para>必须由 server 服务该目标时为 <see langword="true"/>。</para></returns>
+    /// <exception cref="IOException">Server-only mode was selected but the server is unavailable.
+    /// <para>选择了仅 server 模式但 server 不可用。</para></exception>
+    internal static bool ResolveHdcServerUse(bool serverOnly, bool serverAvailable, bool serverListsKey)
+        => HdcSessionRouting.Resolve(serverOnly, serverAvailable, serverListsKey) == HdcSessionRoute.Server;
 
     /// <summary>
     /// Opens an HDC session lease for the device: through the server when it owns the target, otherwise
@@ -352,7 +356,13 @@ public sealed partial class DeviceMonitorService
             return (AdoptOwnedSession(endpoint, session), session);
         }
 
-        return HdcDirectConnection.Open(this, device);
+        var opened = HdcDirectConnection.Open(this, device);
+        if (device.Key.StartsWith("hdc-tcp:", StringComparison.Ordinal))
+        {
+            MarkManualHdcTargetVerified(device.Serial);
+        }
+
+        return opened;
     }
 
     /// <summary>Executes a shell command against the exact selected ADB server target; the caller must have verified the target with <see cref="RequireAdbServerDevice"/> so a property batch does not re-list targets per command.<para>针对精确选中的 ADB server 目标执行一条 shell 命令；调用方须先用 <see cref="RequireAdbServerDevice"/> 校验目标，使一次属性批量不必每条命令都重新列出目标。</para></summary>

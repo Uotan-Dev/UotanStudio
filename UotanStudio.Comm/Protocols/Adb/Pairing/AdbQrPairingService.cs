@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Sockets;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Udp;
@@ -105,14 +104,18 @@ public static class AdbQrPairingService
     /// <para>携带已连接地址的配对结果。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="credentials"/> is <c>null</c>.
     /// <para><paramref name="credentials"/> 为 <c>null</c>。</para></exception>
+    /// <exception cref="ArgumentException">A credential value is empty or contains a QR token delimiter,
+    /// a control character, or a dot in the service name.
+    /// <para>凭据值为空，或含二维码分隔符、控制字符，或服务名含点号。</para></exception>
     /// <exception cref="TimeoutException">The phone did not advertise the expected pairing
     /// service in time. <para>手机未在期限内广播期望的配对服务。</para></exception>
     /// <exception cref="AdbQrPairingConnectPortException">Pairing succeeded but the device never
     /// advertised its secure connect service; the caller can still complete the connection with
     /// the port shown on the phone. <para>配对成功但设备始终未广播安全连接服务；调用方仍可用手机上
     /// 显示的端口完成连接。</para></exception>
-    /// <exception cref="IOException">The pairing protocol or the server command failed.
-    /// <para>配对协议或 server 命令失败。</para></exception>
+    /// <exception cref="IOException">The pairing protocol or the server command failed, or
+    /// <see cref="DebugBridgeRouteMode.ServerOnly"/> is fixed and no server is listening.
+    /// <para>配对协议或 server 命令失败，或已固定 <see cref="DebugBridgeRouteMode.ServerOnly"/> 但没有 server 在监听。</para></exception>
     /// <exception cref="OperationCanceledException">The token was canceled.
     /// <para>令牌被取消。</para></exception>
     public static async Task<AdbQrPairingOutcome> PairAsync(AdbQrPairingCredentials credentials,
@@ -120,8 +123,14 @@ public static class AdbQrPairingService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(credentials);
+        _ = AdbQrPairing.BuildPayload(credentials);
         var timeout = discoveryTimeout ?? DefaultDiscoveryTimeout;
         var useServer = DebugBridgeRoute.UseAdbServer();
+        if (DebugBridgeRoute.Mode == DebugBridgeRouteMode.ServerOnly && !useServer)
+        {
+            throw new IOException("The ServerOnly route mode requires a listening ADB server.");
+        }
+
         var pairing = await DiscoverEndpointAsync(useServer,
                 entry => AdbServerMdns.IsType(entry, AdbMdnsDiscovery.AdbTlsPairingService) &&
                          AdbMdnsDiscovery.MatchesInstanceLabel(entry.Instance, credentials.ServiceName),
@@ -170,6 +179,9 @@ public static class AdbQrPairingService
     /// 与地址解析。谁先看到广播谁先返回，因此只在配对对话框打开期间广播的手机会被更快的来源抓到；而当 server
     /// 进程收不到组播流量（防火墙为它拦截 UDP 5353）时，同一窗口内本地浏览器仍能兜底。</para>
     /// </summary>
+    /// <remarks>Once one source resolves the expected instance, the other browse is cancelled and observed,
+    /// so a server hit returns without waiting for the local browser's full window.
+    /// <para>一旦某个来源解析出期望实例，另一个浏览会被取消并观察，使 server 命中无需等待本地浏览器跑满窗口。</para></remarks>
     /// <param name="useServer">Whether the server table should be polled alongside the local browser.
     /// <para>是否在本地浏览的同时轮询 server 的表。</para></param>
     /// <param name="serverMatch">Test against a row of the server table.
@@ -185,13 +197,13 @@ public static class AdbQrPairingService
         Func<AdbServerMdnsEntry, bool> serverMatch, string serviceType, Func<MdnsDevice, bool> browserMatch,
         TimeSpan timeout, CancellationToken cancellationToken)
     {
-        var browserTask = AdbMdnsDiscovery.WaitForServiceAsync(serviceType, browserMatch, timeout, cancellationToken);
+        using var raced = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var browserTask = AdbMdnsDiscovery.WaitForServiceAsync(serviceType, browserMatch, timeout, raced.Token);
         if (!useServer)
         {
             return await browserTask.ConfigureAwait(false);
         }
 
-        var raced = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var serverTask = WaitForServerEntryAsync(serverMatch, timeout, raced.Token);
         try
         {
@@ -199,6 +211,7 @@ public static class AdbQrPairingService
             var resolved = await finished.ConfigureAwait(false);
             if (resolved is not null)
             {
+                raced.Cancel();
                 return resolved;
             }
 
@@ -207,18 +220,25 @@ public static class AdbQrPairingService
         finally
         {
             raced.Cancel();
-            foreach (var pending in new[] { browserTask, serverTask })
-            {
-                try
-                {
-                    await pending.ConfigureAwait(false);
-                }
-                catch (Exception) when (raced.IsCancellationRequested || cancellationToken.IsCancellationRequested)
-                {
-                }
-            }
+            await IgnoreCompletionAsync(browserTask).ConfigureAwait(false);
+            await IgnoreCompletionAsync(serverTask).ConfigureAwait(false);
+        }
+    }
 
-            raced.Dispose();
+    /// <summary>
+    /// Observes a losing discovery task so its cancellation or fault cannot escape the race.
+    /// <para>观察竞速中落败的发现任务，避免其取消或故障逸出竞速。</para>
+    /// </summary>
+    /// <param name="task">The task to observe. <para>待观察的任务。</para></param>
+    /// <returns>A task that completes after the observed task settles. <para>被观察任务结束后完成的任务。</para></returns>
+    private static async Task IgnoreCompletionAsync(Task task)
+    {
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch
+        {
         }
     }
 
@@ -307,17 +327,8 @@ public static class AdbQrPairingService
     /// <para>把两个发现到的主机字符串按地址比较：文本相同视为一致，同一地址的 IPv4 与 IPv6
     /// 写法也视为一致，这样手机以与配对服务不同的地址族广播安全连接服务时仍能被识别。</para>
     /// </summary>
-    private static bool IsSameHost(string candidate, string host)
-    {
-        if (string.Equals(candidate, host, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return IPAddress.TryParse(candidate, out var candidateAddress) &&
-            IPAddress.TryParse(host, out var hostAddress) &&
-            candidateAddress.Equals(hostAddress.MapToIPv6());
-    }
+    private static bool IsSameHost(string candidate, string host) =>
+        AdbMdnsDiscovery.SameAddress(candidate, host);
 
     /// <summary>Completes the connection half of QR pairing with an explicit port, for the case where the device never advertised its secure connect service via mDNS. The ADB-server route connects through the server; the direct route validates the arguments and returns the endpoint.
     /// <para>以显式端口完成 QR 配对的连接后半段，用于设备未通过 mDNS 通告安全连接服务的场景。ADB server 路由经 server 连接；直连路由仅校验参数并返回端点。</para></summary>

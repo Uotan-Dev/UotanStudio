@@ -4,10 +4,10 @@ using UotanStudio.Comm.Transports.Abstractions;
 namespace UotanStudio.Comm.Transports.Tcp;
 
 /// <summary>
-/// HDC transport over a TCP connection (HDC server client mode), wrapping a direct
-/// <see cref="TcpClient"/> connection to the HDC server with exact reads and full writes.
-/// <para>基于 TCP 连接的 HDC 传输（HDC server 客户端模式），封装与 HDC server 的直接
-/// <see cref="TcpClient"/> 连接，支持精确读取与全量写入。</para>
+/// HDC transport over a TCP connection to the device daemon, wrapping a direct
+/// <see cref="TcpClient"/> and returning the bytes that have arrived instead of waiting for an exact length.
+/// <para>基于 TCP 连接直连设备守护进程的 HDC 传输，封装 <see cref="TcpClient"/> 并返回已到达的字节，
+/// 而不是等待凑满精确长度。</para>
 /// </summary>
 internal sealed class HdcTcpTransport : ICommTransport
 {
@@ -24,8 +24,8 @@ internal sealed class HdcTcpTransport : ICommTransport
     public string Host { get; }
 
     /// <summary>
-    /// Gets the remote TCP port of the HDC server.
-    /// <para>获取 HDC server 的远端 TCP 端口。</para>
+    /// Gets the remote TCP port of the HDC daemon.
+    /// <para>获取 HDC 守护进程的远端 TCP 端口。</para>
     /// </summary>
     public int Port { get; }
 
@@ -36,11 +36,11 @@ internal sealed class HdcTcpTransport : ICommTransport
     public bool IsConnected => !_disposed && _stream is not null;
 
     /// <summary>
-    /// Initializes a new TCP HDC transport and connects to the HDC server eagerly.
-    /// <para>初始化新的 TCP HDC 传输并立即连接 HDC server。</para>
+    /// Initializes a new TCP HDC transport and connects to the HDC daemon eagerly.
+    /// <para>初始化新的 TCP HDC 传输并立即连接 HDC 守护进程。</para>
     /// </summary>
-    /// <param name="host">Host name or IP address of the HDC server. HDC server 的主机名或 IP 地址。</param>
-    /// <param name="port">TCP port of the HDC server; defaults to 8710. HDC server 的 TCP 端口，默认 8710。</param>
+    /// <param name="host">Host name or IP address of the HDC daemon. HDC 守护进程的主机名或 IP 地址。</param>
+    /// <param name="port">TCP port of the HDC daemon. HDC 守护进程的 TCP 端口。</param>
     /// <param name="connectTimeoutMs">Connection timeout in milliseconds; defaults to 5000. 连接超时（毫秒），默认 5000。</param>
     public HdcTcpTransport(string host, int port = 8710, int connectTimeoutMs = 5000)
     {
@@ -72,7 +72,7 @@ internal sealed class HdcTcpTransport : ICommTransport
             var connectTask = client.ConnectAsync(Host, Port);
             if (!connectTask.Wait(connectTimeoutMs))
             {
-                throw new TimeoutException($"Timed out connecting to HDC server at {Host}:{Port}.");
+                throw new TimeoutException($"Timed out connecting to the HDC daemon at {Host}:{Port}.");
             }
 
             if (connectTask.IsFaulted)
@@ -137,14 +137,18 @@ internal sealed class HdcTcpTransport : ICommTransport
     }
 
     /// <summary>
-    /// Reads exactly <paramref name="length"/> bytes, blocking until available.
-    /// <para>精确读取 <paramref name="length"/> 个字节，阻塞至数据可用。</para>
+    /// Reads the bytes that have arrived, up to <paramref name="length"/>, blocking until at least one byte
+    /// arrives, the peer closes the connection, or the read timeout elapses.
+    /// <para>读取已到达的字节（最多 <paramref name="length"/> 个）；阻塞至至少一个字节到达、对端关闭连接或读超时。</para>
     /// </summary>
     /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
     /// <param name="offset">The destination offset. <para>目标偏移量。</para></param>
-    /// <param name="length">The number of bytes to read. <para>读取的字节数。</para></param>
-    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
-    /// <returns>The number of bytes read (always <paramref name="length"/> unless closed). 实际读取的字节数（除非连接关闭，否则恒为 <paramref name="length"/>）。</returns>
+    /// <param name="length">The maximum number of bytes to read. <para>最多读取的字节数。</para></param>
+    /// <param name="timeoutMs">Timeout in milliseconds for the single read. <para>单次读取的超时（毫秒）。</para></param>
+    /// <returns>The number of bytes read, or zero when the peer closed the connection.
+    /// <para>读取的字节数；对端关闭连接时为零。</para></returns>
+    /// <exception cref="TimeoutException">No byte arrived within <paramref name="timeoutMs"/>.
+    /// <para>在 <paramref name="timeoutMs"/> 内没有任何字节到达。</para></exception>
     public int Read(byte[] buffer, int offset, int length, int timeoutMs)
     {
         ValidateBuffer(buffer, offset, length);
@@ -155,22 +159,15 @@ internal sealed class HdcTcpTransport : ICommTransport
 
         var stream = GetConnectedStream();
         var previousTimeout = stream.ReadTimeout;
-        stream.ReadTimeout = timeoutMs;
+        var started = Environment.TickCount64;
+        stream.ReadTimeout = Math.Max(1, timeoutMs);
         try
         {
-            var totalRead = 0;
-            while (totalRead < length)
-            {
-                var read = stream.Read(buffer, offset + totalRead, length - totalRead);
-                if (read == 0)
-                {
-                    throw new EndOfStreamException("HDC TCP connection closed by the peer.");
-                }
-
-                totalRead += read;
-            }
-
-            return totalRead;
+            return stream.Read(buffer, offset, length);
+        }
+        catch (IOException ex) when (IsTimeout(ex) || Environment.TickCount64 - started >= timeoutMs)
+        {
+            throw new TimeoutException($"HDC daemon read timed out after {timeoutMs} ms.", ex);
         }
         finally
         {
@@ -179,15 +176,18 @@ internal sealed class HdcTcpTransport : ICommTransport
     }
 
     /// <summary>
-    /// Reads exactly <paramref name="length"/> bytes asynchronously.
-    /// <para>异步精确读取 <paramref name="length"/> 个字节。</para>
+    /// Reads the bytes that have arrived asynchronously, up to <paramref name="length"/>.
+    /// <para>异步读取已到达的字节（最多 <paramref name="length"/> 个）。</para>
     /// </summary>
     /// <param name="buffer">The destination buffer. <para>目标缓冲区。</para></param>
     /// <param name="offset">The destination offset. <para>目标偏移量。</para></param>
-    /// <param name="length">The number of bytes to read. <para>读取的字节数。</para></param>
-    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
+    /// <param name="length">The maximum number of bytes to read. <para>最多读取的字节数。</para></param>
+    /// <param name="timeoutMs">Timeout in milliseconds for the single read. <para>单次读取的超时（毫秒）。</para></param>
     /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
-    /// <returns>A task that resolves to the number of bytes read. <para>返回实际读取字节数的任务。</para></returns>
+    /// <returns>A task that resolves to the number of bytes read, or zero at end of stream.
+    /// <para>返回已读取字节数的任务；流结束时为零。</para></returns>
+    /// <exception cref="TimeoutException">No byte arrived within <paramref name="timeoutMs"/>.
+    /// <para>在 <paramref name="timeoutMs"/> 内没有任何字节到达。</para></exception>
     public async Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
     {
         ValidateBuffer(buffer, offset, length);
@@ -205,23 +205,16 @@ internal sealed class HdcTcpTransport : ICommTransport
 
         try
         {
-            var totalRead = 0;
-            while (totalRead < length)
-            {
-                var read = await stream.ReadAsync(buffer.AsMemory(offset + totalRead, length - totalRead), timeoutCts.Token).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    throw new EndOfStreamException("HDC TCP connection closed by the peer.");
-                }
-
-                totalRead += read;
-            }
-
-            return totalRead;
+            return await stream.ReadAsync(buffer.AsMemory(offset, length), timeoutCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException($"HDC TCP read timed out after {timeoutMs} ms.");
+            throw new TimeoutException($"HDC daemon read timed out after {timeoutMs} ms.");
+        }
+        catch (IOException ex) when (IsTimeout(ex) || timeoutCts.IsCancellationRequested)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException($"HDC daemon read timed out after {timeoutMs} ms.", ex);
         }
     }
 
@@ -328,5 +321,18 @@ internal sealed class HdcTcpTransport : ICommTransport
         {
             throw new ArgumentOutOfRangeException(nameof(offset), "Offset and length must be within the buffer bounds.");
         }
+    }
+
+    private static bool IsTimeout(IOException exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is SocketException { SocketErrorCode: SocketError.TimedOut or SocketError.WouldBlock })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

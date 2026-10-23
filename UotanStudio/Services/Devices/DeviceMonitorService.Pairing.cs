@@ -63,7 +63,7 @@ public sealed partial class DeviceMonitorService
             .ConfigureAwait(false);
         if (outcome.Route == AdbQrPairingRoute.Direct)
         {
-            AttachSecureDirectNetworkTarget(outcome.Address);
+            await AttachSecureDirectNetworkTargetAsync(outcome.Address, cancellationToken).ConfigureAwait(false);
         }
         await ForceRefreshAsync().ConfigureAwait(false);
         return outcome;
@@ -88,22 +88,29 @@ public sealed partial class DeviceMonitorService
             .ConfigureAwait(false);
         if (route == AdbQrPairingRoute.Direct)
         {
-            AttachSecureDirectNetworkTarget(address);
+            await AttachSecureDirectNetworkTargetAsync(address, cancellationToken).ConfigureAwait(false);
         }
         await ForceRefreshAsync().ConfigureAwait(false);
         return address;
     }
 
     /// <summary>
-    /// After a successful direct QR pairing, validates the secure network target with one
-    /// TLS handshake and registers it as a manual network endpoint requiring TLS; rethrows
-    /// the underlying reason on failure.
-    /// <para>扫码直连配对成功后，对安全网络目标完成一次 TLS 握手验证，成功后登记为需要
-    /// TLS 的手动网络端点；失败时向上抛出底层原因。</para>
+    /// After a successful direct QR pairing, validates the secure network target with one asynchronous TLS
+    /// handshake and registers it as a manual network endpoint requiring TLS; rethrows the underlying reason
+    /// on failure.
+    /// <para>扫码直连配对成功后，对安全网络目标完成一次异步 TLS 握手验证，成功后登记为需要 TLS 的手动网络端点；
+    /// 失败时向上抛出底层原因。</para>
     /// </summary>
     /// <param name="target">A secure <c>host:port</c> endpoint to validate and register.
     /// <para>要验证并登记的 <c>host:port</c> 安全端点。</para></param>
-    private void AttachSecureDirectNetworkTarget(string target)
+    /// <param name="cancellationToken">Cancels the connect and the peer handshake wait; registration is
+    /// skipped after cancellation.
+    /// <para>取消连接与对端握手等待；取消后跳过登记。</para></param>
+    /// <exception cref="IOException">The target is not a <c>host:port</c> endpoint or the handshake failed.
+    /// <para>目标不是 <c>host:port</c> 端点或握手失败。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
+    private async Task AttachSecureDirectNetworkTargetAsync(string target, CancellationToken cancellationToken)
     {
         if (!DebugBridgeNetworkAddress.TrySplitEndpoint(target, out var host, out var port))
         {
@@ -113,18 +120,21 @@ public sealed partial class DeviceMonitorService
         var session = _controller.OpenSecureNetworkAdbSession(host, port);
         try
         {
-            session.Connect();
+            await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (Exception)
         {
             session.Dispose();
             throw;
         }
+
         session.Dispose();
+        cancellationToken.ThrowIfCancellationRequested();
         lock (_networkTargetsLock)
         {
             _manualNetworkTargets[target] = true;
         }
+        MarkManualNetworkTargetVerified(target);
         SavePairedNetworkTargets();
     }
 }

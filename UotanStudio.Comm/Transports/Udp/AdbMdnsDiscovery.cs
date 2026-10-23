@@ -78,7 +78,7 @@ internal static class AdbMdnsDiscovery
     public static async Task<IReadOnlyList<MdnsDevice>> DiscoverAdbDevicesAsync(
         TimeSpan? timeout = null, CancellationToken ct = default)
         => await BrowseAsync([AdbTlsService, AdbLegacyService], timeout ?? DefaultTimeout,
-            static accumulator => accumulator.IsAdb, null, ct).ConfigureAwait(false);
+            static accumulator => accumulator.IsAdb, null, null, ct).ConfigureAwait(false);
 
     /// <summary>Polls the <c>_adb-tls-pairing._tcp</c> service until the instance with the expected name appears (the phone starts advertising after the QR code is scanned) and returns its pairing endpoint, or <c>null</c> when the deadline passes without a match.
     /// <para>轮询 <c>_adb-tls-pairing._tcp</c> 服务，直到出现期望名称的实例（手机 扫码后开始广播）并返回其配对端点；超过期限仍无匹配时返回 <c>null</c>。</para></summary>
@@ -113,8 +113,7 @@ internal static class AdbMdnsDiscovery
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(address);
         return await WaitForServiceAsync(AdbTlsService,
-            device => device.Addresses.Any(candidate =>
-                string.Equals(candidate, address, StringComparison.OrdinalIgnoreCase)), timeout, ct)
+            device => device.Addresses.Any(candidate => SameAddress(candidate, address)), timeout, ct)
             .ConfigureAwait(false);
     }
 
@@ -122,7 +121,7 @@ internal static class AdbMdnsDiscovery
         string serviceType, Func<MdnsDevice, bool> predicate, TimeSpan? timeout, CancellationToken ct)
     {
         var devices = await BrowseAsync([serviceType], timeout ?? DefaultTimeout,
-            static _ => true, predicate, ct).ConfigureAwait(false);
+            static _ => true, predicate, serviceType, ct).ConfigureAwait(false);
         return devices.FirstOrDefault(predicate);
     }
 
@@ -137,11 +136,13 @@ internal static class AdbMdnsDiscovery
     /// <param name="timeout">Browse window. <para>浏览窗口。</para></param>
     /// <param name="filter">Per-instance gate applied while building devices. <para>构建设备时的实例级筛选。</para></param>
     /// <param name="earlyExit">Optional match that ends the window early. <para>可选的提前匹配。</para></param>
+    /// <param name="requiredServiceType">When set, only instances advertised under this service type are built;
+    /// <c>null</c> keeps every accumulated type. <para>设置时只构建该服务类型广播的实例；<c>null</c> 保留所有已累积类型。</para></param>
     /// <param name="ct">Cancellation token; cancellation propagates. <para>取消令牌；取消会被传播。</para></param>
     /// <returns>The devices known at exit. <para>退出时已知的设备。</para></returns>
     private static async Task<IReadOnlyList<MdnsDevice>> BrowseAsync(
         IReadOnlyList<string> serviceTypes, TimeSpan timeout, Func<DeviceAccumulator, bool> filter,
-        Func<MdnsDevice, bool>? earlyExit, CancellationToken ct)
+        Func<MdnsDevice, bool>? earlyExit, string? requiredServiceType, CancellationToken ct)
     {
         if (timeout < TimeSpan.Zero)
         {
@@ -171,7 +172,7 @@ internal static class AdbMdnsDiscovery
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            var devices = BuildDevices(byInstance, addressesByHost, filter);
+            var devices = BuildDevices(byInstance, addressesByHost, filter, requiredServiceType);
             if (earlyExit is not null)
             {
                 var match = devices.FirstOrDefault(earlyExit);
@@ -289,19 +290,25 @@ internal static class AdbMdnsDiscovery
         ConcurrentDictionary<string, string> addressesByHost)
     {
         var name = record.Name.ToString();
+        var serviceType = NormalizeServiceType(name);
         switch (record)
         {
-            case PTRRecord ptr when IsPairingService(name):
+            case PTRRecord ptr when IsPairingService(serviceType):
                 if (Track(ptr.DomainName.ToString(), byInstance) is { } pairing)
                 {
                     pairing.IsPairing = true;
+                    pairing.AddServiceType(AdbTlsPairingService);
                 }
 
                 break;
-            case PTRRecord ptr when IsAdbService(name):
+            case PTRRecord ptr when IsAdbService(serviceType):
                 if (Track(ptr.DomainName.ToString(), byInstance) is { } adb)
                 {
                     adb.IsAdb = true;
+                    adb.AddServiceType(serviceType.EndsWith(NormalizeServiceType(AdbTlsService),
+                        StringComparison.OrdinalIgnoreCase)
+                        ? AdbTlsService
+                        : AdbLegacyService);
                 }
 
                 break;
@@ -391,17 +398,22 @@ internal static class AdbMdnsDiscovery
     /// <param name="byInstance">Accumulated per-instance state. <para>已累积的实例状态。</para></param>
     /// <param name="addressesByHost">Accumulated address book. <para>已累积的地址表。</para></param>
     /// <param name="filter">Per-instance gate. <para>实例级筛选。</para></param>
+    /// <param name="requiredServiceType">When set, only instances whose PTR record named this service type are
+    /// built; <c>null</c> keeps every accumulated type. <para>设置时只构建 PTR 记录名为该服务类型的实例；
+    /// <c>null</c> 保留所有已累积类型。</para></param>
     /// <returns>The resolved devices. <para>已解析的设备。</para></returns>
     internal static IReadOnlyList<MdnsDevice> BuildDevices(
         ConcurrentDictionary<string, DeviceAccumulator> byInstance,
         ConcurrentDictionary<string, string> addressesByHost,
-        Func<DeviceAccumulator, bool> filter)
+        Func<DeviceAccumulator, bool> filter,
+        string? requiredServiceType = null)
     {
         var devices = new List<MdnsDevice>();
         foreach (var pair in byInstance)
         {
             var acc = pair.Value;
-            if (!filter(acc) || acc.Port is < 1 or > 65535)
+            if (!filter(acc) || acc.Port is < 1 or > 65535 ||
+                (requiredServiceType is not null && !acc.HasServiceType(requiredServiceType)))
             {
                 continue;
             }
@@ -440,6 +452,24 @@ internal static class AdbMdnsDiscovery
         /// </summary>
         public bool IsPairing { get; set; }
 
+        private readonly ConcurrentDictionary<string, byte> _serviceTypes =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Reports whether a PTR record advertised this instance under the supplied service type.
+        /// <para>报告是否有 PTR 记录以给定服务类型广播了此实例。</para></summary>
+        /// <param name="serviceType">Service type name, with or without a trailing dot.
+        /// <para>服务类型名，可带或不带尾点。</para></param>
+        /// <returns><see langword="true"/> when this instance belongs to that type.
+        /// <para>该实例属于该类型时为 <see langword="true"/>。</para></returns>
+        internal bool HasServiceType(string serviceType) =>
+            _serviceTypes.ContainsKey(AdbMdnsDiscovery.NormalizeServiceType(serviceType));
+
+        /// <summary>Records the service type of a PTR record that referenced this instance.
+        /// <para>记录引用此实例的 PTR 记录的服务类型。</para></summary>
+        /// <param name="serviceType">The PTR record name. <para>PTR 记录名。</para></param>
+        internal void AddServiceType(string serviceType) =>
+            _serviceTypes.TryAdd(AdbMdnsDiscovery.NormalizeServiceType(serviceType), 0);
+
         /// <summary>The SRV port; zero until an SRV record resolves it. SRV 端口；解析到 SRV 记录前为 0。</summary>
         public int Port { get; set; }
 
@@ -457,6 +487,8 @@ internal static class AdbMdnsDiscovery
     private static bool IsPairingService(string name)
         => name.EndsWith(AdbTlsPairingService, StringComparison.OrdinalIgnoreCase);
 
+    private static string NormalizeServiceType(string serviceType) => serviceType.TrimEnd('.');
+
     /// <summary>
     /// Compares the first label of a fully qualified instance name with an expected label, so a
     /// browsed <c>name._adb-tls-pairing._tcp.local</c>, the bare <c>S</c> field of the QR payload and
@@ -464,19 +496,50 @@ internal static class AdbMdnsDiscovery
     /// <para>把完整实例名的首段标签与期望标签比较，使浏览到的 <c>name._adb-tls-pairing._tcp.local</c>、
     /// 二维码的裸 <c>S</c> 字段以及 adb server mDNS 表中的一行都以同一方式匹配。</para>
     /// </summary>
+    /// <remarks>An expected label containing a dot is rejected because this implementation does not decode
+    /// DNS-SD escaped dots; such a label never matches.
+    /// <para>包含点号的期望标签会被拒绝，因为本实现不解码 DNS-SD 转义点号；这种标签永远不会匹配。</para></remarks>
     /// <param name="instance">The instance text, with or without the service suffix.
     /// <para>实例文本，可带或不带服务后缀。</para></param>
     /// <param name="expectedLabel">The expected first label. <para>期望的首段标签。</para></param>
     /// <returns>Whether the labels are equal. <para>标签是否相等。</para></returns>
     internal static bool MatchesInstanceLabel(string instance, string expectedLabel)
     {
-        var label = instance;
-        var separator = label.IndexOf('.');
-        if (separator > 0)
+        if (string.IsNullOrEmpty(expectedLabel) || expectedLabel.Contains('.'))
         {
-            label = label[..separator];
+            return false;
         }
 
+        var separator = instance.IndexOf('.');
+        var label = separator > 0 ? instance[..separator] : instance;
         return string.Equals(label, expectedLabel, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Compares two host strings as network addresses, treating an IPv4 literal and its IPv4-mapped IPv6
+    /// form as the same address.
+    /// <para>把两个主机字符串按网络地址比较，IPv4 字面量与其 IPv4 映射的 IPv6 形式视为同一地址。</para>
+    /// </summary>
+    /// <param name="candidate">First host or address text. <para>第一个主机或地址文本。</para></param>
+    /// <param name="address">Second host or address text. <para>第二个主机或地址文本。</para></param>
+    /// <returns><see langword="true"/> when both texts name the same host or address.
+    /// <para>两个文本指向同一主机或地址时为 <see langword="true"/>。</para></returns>
+    internal static bool SameAddress(string candidate, string address)
+    {
+        if (string.Equals(candidate, address, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!IPAddress.TryParse(candidate, out var candidateAddress) ||
+            !IPAddress.TryParse(address, out var addressValue))
+        {
+            return false;
+        }
+
+        return Normalize(candidateAddress).Equals(Normalize(addressValue));
+
+        static IPAddress Normalize(IPAddress value) =>
+            value.IsIPv4MappedToIPv6 ? value.MapToIPv4() : value;
     }
 }

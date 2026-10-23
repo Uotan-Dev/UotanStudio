@@ -4,7 +4,7 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 /// A single HDC channel stream implementing the channel handshake / data / close state machine.
 /// <para>单条 HDC 通道流，实现通道握手 / 数据 / 关闭状态机。</para>
 /// </summary>
-public sealed class HdcStream : IDisposable
+public sealed class HdcStream : IDisposable, IHdcTaskChannel
 {
     private readonly HdcConnection _connection;
     private readonly Lock _lock = new();
@@ -210,14 +210,19 @@ public sealed class HdcStream : IDisposable
     /// </summary>
     /// <param name="timeoutMs">Maximum milliseconds to wait for the next envelope; <see cref="Timeout.Infinite"/> waits indefinitely.
     /// <para>等待下一个信封的最大毫秒数；<see cref="Timeout.Infinite"/> 表示无限等待。</para></param>
+    /// <param name="cancellationToken">Checked before each wait slice; an already cancelled token fails the call.
+    /// <para>在每个等待片段前检查；令牌已取消时调用失败。</para></param>
     /// <returns>The next queued envelope, or <see langword="null"/> when the wait times out or the stream is closed with an empty queue.
     /// <para>下一个入队的信封；等待超时或流已关闭且队列为空时返回 <see langword="null"/>。</para></returns>
     /// <exception cref="IOException">The stream is faulted; the stored fault is attached as the inner exception.
     /// <para>流处于故障状态；已存储的故障作为内部异常附加。</para></exception>
-    public HdcMessage? ReadMessage(int timeoutMs = Timeout.Infinite)
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    public HdcMessage? ReadMessage(int timeoutMs = Timeout.Infinite, CancellationToken cancellationToken = default)
     {
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             lock (_lock)
             {
                 if (IsFaulted) throw new IOException("HDC channel failed.", Fault);

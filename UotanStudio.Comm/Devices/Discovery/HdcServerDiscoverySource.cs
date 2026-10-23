@@ -50,7 +50,7 @@ public sealed class HdcServerDiscoverySource(string host = "127.0.0.1", int? por
                 cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested &&
-            ex is IOException or System.Net.Sockets.SocketException)
+            ex is IOException or System.Net.Sockets.SocketException or TimeoutException)
         {
             return [];
         }

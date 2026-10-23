@@ -69,7 +69,7 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
         var aliases = await ResolveMdnsAliasesAsync(targets, host, port, cancellationToken).ConfigureAwait(false);
         return [.. targets.Select(target =>
         {
-            var alias = aliases.TryGetValue(NormalizeInstance(target.Serial), out var address) ? address : null;
+            var alias = ResolveAlias(aliases, target.Serial);
             return new DeviceEndpoint
             {
                 Source = Name,
@@ -106,8 +106,9 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
     /// Cancels the mDNS query. <para>取消本次 mDNS 查询。</para>
     /// </param>
     /// <returns>
-    /// A map from normalized instance names to resolved endpoints, empty when nothing resolves.
-    /// <para>规范化实例名到已解析端点的映射；无可解析项时为空。</para>
+    /// A map keyed by both the bare normalized instance label and the full
+    /// <c>instance.serviceType</c> serial, empty when nothing resolves.
+    /// <para>同时以裸规范化实例标签与完整 <c>instance.serviceType</c> 串号为键的映射；无可解析项时为空。</para>
     /// </returns>
     private static async Task<IReadOnlyDictionary<string, string>> ResolveMdnsAliasesAsync(
         IReadOnlyList<AdbTargetInfo> targets, string serverHost, int serverPort, CancellationToken cancellationToken)
@@ -124,19 +125,87 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
             return NoAliases;
         }
 
+        return BuildAliasMap(query.Entries);
+    }
+
+    /// <summary>
+    /// Builds the lookup used to attach a dialable endpoint to a DNS-SD-keyed server target. Every
+    /// connect row is stored under both its bare instance label and its full
+    /// <c>instance.serviceType</c> form, so a target serial built by adb as <c>instance.serviceType</c>
+    /// matches the instance-only row the server's mDNS table reports.
+    /// <para>构建用于把可拨号端点附加到 DNS-SD 键 server 目标的查找表。每个 connect 行同时以裸实例标签
+    /// 与完整的 <c>instance.serviceType</c> 形式保存，使 adb 以 <c>instance.serviceType</c> 构成的
+    /// 目标串号能够匹配 server mDNS 表报告的仅含实例名的行。</para>
+    /// </summary>
+    /// <param name="entries">Rows reported by <c>host:mdns:services</c>.
+    /// <para><c>host:mdns:services</c> 报告的行。</para></param>
+    /// <returns>An instance-or-serial keyed endpoint map. <para>按实例或串号键控的端点映射。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="entries"/> is <c>null</c>.
+    /// <para><paramref name="entries"/> 为 <c>null</c>。</para></exception>
+    internal static IReadOnlyDictionary<string, string> BuildAliasMap(IEnumerable<AdbServerMdnsEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
         var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in query.Entries)
+        foreach (var entry in entries)
         {
             if (!IsConnectService(entry.ServiceType))
             {
                 continue;
             }
 
-            aliases[NormalizeInstance(entry.Instance)] =
-                DebugBridgeNetworkAddress.FormatEndpoint(entry.Host, entry.Port);
+            var instance = NormalizeInstance(entry.Instance);
+            var serviceType = NormalizeInstance(entry.ServiceType);
+            var suffix = "." + serviceType;
+            if (instance.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                instance = instance[..^suffix.Length];
+            }
+
+            var endpoint = DebugBridgeNetworkAddress.FormatEndpoint(entry.Host, entry.Port);
+            aliases[instance] = endpoint;
+            aliases[string.Concat(instance, ".", serviceType)] = endpoint;
         }
 
         return aliases;
+    }
+
+    /// <summary>
+    /// Resolves a server target serial against the alias map. The exact serial is tried first, then a
+    /// serial ending in <c>.serviceType</c> is retried with that suffix removed for tables that only
+    /// carry the bare instance label.
+    /// <para>用别名表解析 server 目标串号。先尝试完整串号；再对以 <c>.serviceType</c> 结尾的串号剥离
+    /// 该后缀后重试，以兼容只携带裸实例标签的表。</para>
+    /// </summary>
+    /// <param name="aliases">The alias map. <para>别名表。</para></param>
+    /// <param name="serial">The target serial reported by <c>host:devices-l</c>.
+    /// <para><c>host:devices-l</c> 报告的目标串号。</para></param>
+    /// <returns>The resolved <c>host:port</c>, or <c>null</c> when no row matches.
+    /// <para>解析出的 <c>host:port</c>；没有匹配行时为 <c>null</c>。</para></returns>
+    internal static string? ResolveAlias(IReadOnlyDictionary<string, string> aliases, string serial)
+    {
+        ArgumentNullException.ThrowIfNull(aliases);
+        if (string.IsNullOrWhiteSpace(serial))
+        {
+            return null;
+        }
+
+        var normalized = NormalizeInstance(serial);
+        if (aliases.TryGetValue(normalized, out var exact))
+        {
+            return exact;
+        }
+
+        foreach (var serviceType in ConnectServiceTypes)
+        {
+            var suffix = "." + serviceType;
+            if (normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+                aliases.TryGetValue(normalized[..^suffix.Length], out var stripped))
+            {
+                return stripped;
+            }
+        }
+
+        return null;
     }
 
     private static bool IsMdnsInstanceName(string serial) =>

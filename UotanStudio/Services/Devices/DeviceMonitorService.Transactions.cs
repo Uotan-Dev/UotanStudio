@@ -115,6 +115,21 @@ public sealed partial class DeviceMonitorService
         return [.. snapshot];
     }
 
+    /// <summary>Drops the cached USB inventory so a direct open can re-resolve a device whose key changed
+    /// after a server stop, driver rebind or re-enumeration.
+    /// <para>丢弃缓存的 USB 清单，使直连打开能在 server 停止、驱动重绑定或重枚举导致键变化后重新解析设备。</para>
+    /// </summary>
+    internal void InvalidateUsbInventoryCache()
+    {
+        lock (_usbInventoryLock)
+        {
+            _usbInventory = null;
+            _usbInventoryTimestamp = 0;
+            _routableUsbInventory = null;
+            _routableUsbInventoryTimestamp = 0;
+        }
+    }
+
     private bool IsUsbInventoryFresh(UsbDeviceInfo[]? cached, long timestamp, long version)
         => cached is not null
             && Environment.TickCount64 - timestamp < UsbInventoryCacheMilliseconds

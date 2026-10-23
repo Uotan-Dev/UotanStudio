@@ -11,9 +11,12 @@ namespace UotanStudio.Comm.Routing;
 /// </summary>
 public static class DebugBridgeNetworkAddress
 {
-    /// <summary>ADB <c>tcpip</c> and HDC <c>tconn</c> listen on this port by default.
-    /// <para>ADB 的 <c>tcpip</c> 与 HDC 的 <c>tconn</c> 默认监听端口。</para></summary>
-    /// <value>The constant <c>5555</c>. <para>常量 <c>5555</c>。</para></value>
+    /// <summary>Default ADB <c>tcpip</c> port. HDC daemons have no fixed port: they read
+    /// <c>persist.hdc.port</c> and bind an ephemeral port when it is zero, so HDC callers must require an explicit
+    /// port instead of applying this value.
+    /// <para>ADB <c>tcpip</c> 的默认端口。HDC 守护进程没有固定端口：它读取 <c>persist.hdc.port</c>，该值为零时
+    /// 绑定临时端口，因此 HDC 调用方必须要求显式端口，不能套用此值。</para></summary>
+    /// <value>The ADB constant <c>5555</c>. <para>ADB 常量 <c>5555</c>。</para></value>
     public const int DefaultDevicePort = 5555;
 
     /// <summary>

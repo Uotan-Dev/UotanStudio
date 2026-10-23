@@ -61,10 +61,47 @@ public static class AdbQrPairing
     /// <paramref name="credentials"/> is <c>null</c>.
     /// <para><paramref name="credentials"/> 为 <c>null</c>。</para>
     /// </exception>
+    /// <exception cref="ArgumentException">Either value is empty, the service name contains a dot, or either
+    /// value contains a QR token delimiter or control character.
+    /// <para>任一值为空、服务名含点号，或任一值含二维码分隔符或控制字符。</para></exception>
     public static string BuildPayload(AdbQrPairingCredentials credentials)
     {
         ArgumentNullException.ThrowIfNull(credentials);
+        ValidateToken(credentials.ServiceName, nameof(credentials), instanceName: true);
+        ValidateToken(credentials.Password, nameof(credentials), instanceName: false);
         return $"WIFI:T:ADB;S:{credentials.ServiceName};P:{credentials.Password};;";
+    }
+
+    /// <summary>
+    /// Rejects credential text that would break the <c>WIFI:T:ADB</c> token grammar or the DNS-SD instance
+    /// label used for matching.
+    /// <para>拒绝会破坏 <c>WIFI:T:ADB</c> 令牌语法或用于匹配的 DNS-SD 实例标签的凭据文本。</para>
+    /// </summary>
+    /// <param name="value">The credential value to check. <para>待检查的凭据值。</para></param>
+    /// <param name="parameterName">The argument name reported by the exception. <para>异常报告的参数名。</para></param>
+    /// <param name="instanceName">Whether a dot is also rejected because it ends the instance label.
+    /// <para>是否同时拒绝点号，因为点号会结束实例标签。</para></param>
+    /// <exception cref="ArgumentException">The value is empty or contains a forbidden character.
+    /// <para>值为空或包含禁用字符。</para></exception>
+    private static void ValidateToken(string value, string parameterName, bool instanceName)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            throw new ArgumentException("QR pairing credentials must not be empty.", parameterName);
+        }
+
+        foreach (var character in value)
+        {
+            if (character is ';' or ':' or '\\' or '"' || char.IsControl(character) ||
+                (instanceName && character == '.'))
+            {
+                throw new ArgumentException(
+                    instanceName
+                        ? "The QR service name cannot contain ';', ':', '\\', '\"', '.', or control characters."
+                        : "The QR pairing password cannot contain ';', ':', '\\', '\"', or control characters.",
+                    parameterName);
+            }
+        }
     }
 
     /// <summary>

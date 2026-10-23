@@ -10,17 +10,15 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// </summary>
 internal sealed class AdbConnection : IDisposable
 {
-    /// <summary>Deadline applied to one transport message, both when queueing for the send gate and when
-    /// writing. <para>单条传输消息的期限，涵盖排队等待发送闸门与实际写入。</para></summary>
+    /// <summary>Deadline applied to one transport step: queueing for the send gate, writing a frame, or waiting for
+    /// the next readable bytes. A read that keeps making progress resets this deadline per arrival.
+    /// <para>单个传输步骤的期限：排队等待发送闸门、写出一帧，或等待下一批可读字节。持续有进展的读取会按每次
+    /// 到达重置该期限。</para></summary>
     private const int TransportDeadlineMs = 5000;
 
     /// <summary>Largest frame read directly into its result array instead of through a pooled staging buffer.
     /// <para>直接读入结果数组、而不经池化暂存缓冲的最大帧长度。</para></summary>
     private const int DirectFrameReadThreshold = 64 * 1024;
-
-    /// <summary>STLS version this client replies with when the peer offers the secure transport.
-    /// <para>对端提供安全传输时本客户端回复的 STLS 版本。</para></summary>
-    private const uint StlsVersion = 1;
 
     /// <summary>How long <see cref="Dispose"/> waits for the dispatch loop to observe the shutdown.
     /// <para><see cref="Dispose"/> 等待分发循环观察到关停信号的时长。</para></summary>
@@ -361,29 +359,116 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
-    /// Waits for the peer CNXN banner to arrive (handshake complete).
-    /// <para>等待对端 CNXN 横幅到达（握手完成）。</para>
+    /// Waits for the peer CNXN banner to arrive (handshake complete). A failed message loop releases the wait and
+    /// its captured fault is rethrown here, so callers observe the real handshake failure instead of waiting for the
+    /// full timeout.
+    /// <para>等待对端 CNXN 横幅到达（握手完成）。消息循环失败时会释放等待，并在此重新抛出捕获到的故障，
+    /// 使调用方立即看到真实握手失败，而不是等满超时。</para>
     /// </summary>
     /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
     /// <param name="cancellationToken">Cancels the handshake wait. <para>取消握手等待。</para></param>
     /// <returns><c>true</c> if the peer responded; otherwise, <c>false</c>. <para>对端是否响应。</para></returns>
+    /// <exception cref="AdbTlsRequiredException">The peer requires TLS but the transport is plaintext.
+    /// <para>对端要求 TLS，但传输为明文。</para></exception>
+    /// <exception cref="IOException">The message loop captured an I/O failure before CNXN arrived.
+    /// <para>CNXN 到达前消息循环捕获到 I/O 故障。</para></exception>
+    /// <exception cref="TimeoutException">The message loop captured a non-I/O failure.
+    /// <para>消息循环捕获到非 I/O 故障。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
     public bool WaitForPeer(int timeoutMs = 10000, CancellationToken cancellationToken = default)
-        => Volatile.Read(ref _peerReadyObserved) != 0 ? DrainAndObservePeer() : _peerReady.Wait(timeoutMs, cancellationToken);
+    {
+        ThrowIfLoopFaulted();
+        if (Volatile.Read(ref _peerReadyObserved) != 0)
+        {
+            DrainAndObservePeer();
+            ThrowIfLoopFaulted();
+            return true;
+        }
+
+        if (!_peerReady.Wait(timeoutMs, cancellationToken))
+        {
+            ThrowIfLoopFaulted();
+            return false;
+        }
+
+        ThrowIfLoopFaulted();
+        return Volatile.Read(ref _peerReadyObserved) != 0;
+    }
 
     /// <summary>
-    /// Waits for the peer CNXN banner without holding a thread.
-    /// <para>异步等待对端 CNXN 横幅，等待期间不占用线程。</para>
+    /// Waits for the peer CNXN banner without holding a thread. A failed message loop releases the wait and its
+    /// captured fault is rethrown here, exactly as in <see cref="WaitForPeer"/>.
+    /// <para>异步等待对端 CNXN 横幅，等待期间不占用线程。消息循环失败时会释放等待，并像
+    /// <see cref="WaitForPeer"/> 一样在此重新抛出捕获到的故障。</para>
     /// </summary>
     /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
     /// <param name="cancellationToken">Cancels the handshake wait. <para>取消握手等待。</para></param>
     /// <returns>A task whose result reports whether the peer banner arrived before the deadline.
     /// <para>结果指示对端横幅是否在期限前到达。</para></returns>
+    /// <exception cref="AdbTlsRequiredException">The peer requires TLS but the transport is plaintext.
+    /// <para>对端要求 TLS，但传输为明文。</para></exception>
+    /// <exception cref="IOException">The message loop captured an I/O failure before CNXN arrived.
+    /// <para>CNXN 到达前消息循环捕获到 I/O 故障。</para></exception>
+    /// <exception cref="TimeoutException">The message loop captured a non-I/O failure.
+    /// <para>消息循环捕获到非 I/O 故障。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    public Task<bool> WaitForPeerAsync(int timeoutMs, CancellationToken cancellationToken) =>
-        Volatile.Read(ref _peerReadyObserved) != 0
-            ? Task.FromResult(DrainAndObservePeer())
-            : _peerReady.WaitAsync(TimeSpan.FromMilliseconds(timeoutMs), cancellationToken);
+    public async Task<bool> WaitForPeerAsync(int timeoutMs, CancellationToken cancellationToken)
+    {
+        ThrowIfLoopFaulted();
+        if (Volatile.Read(ref _peerReadyObserved) != 0)
+        {
+            DrainAndObservePeer();
+            ThrowIfLoopFaulted();
+            return true;
+        }
+
+        if (!await _peerReady.WaitAsync(TimeSpan.FromMilliseconds(timeoutMs), cancellationToken).ConfigureAwait(false))
+        {
+            ThrowIfLoopFaulted();
+            return false;
+        }
+
+        ThrowIfLoopFaulted();
+        return Volatile.Read(ref _peerReadyObserved) != 0;
+    }
+
+    /// <summary>
+    /// Rethrows the message loop's captured failure in the handshake shape callers can act on: a plaintext
+    /// transport that needs TLS keeps its dedicated exception, an I/O failure stays an <see cref="IOException"/>
+    /// carrying the authorization hint for secure transports, and any other failure becomes a
+    /// <see cref="TimeoutException"/>.
+    /// <para>按调用方可处理的形式重新抛出消息循环捕获的故障：需要 TLS 的明文传输保留专用异常；I/O 故障保持
+    /// <see cref="IOException"/> 并为安全传输附带授权提示；其余故障转为 <see cref="TimeoutException"/>。</para>
+    /// </summary>
+    /// <exception cref="AdbTlsRequiredException">The peer requires TLS but the transport is plaintext.
+    /// <para>对端要求 TLS，但传输为明文。</para></exception>
+    /// <exception cref="IOException">The captured failure is an I/O failure. <para>捕获的故障是 I/O 故障。</para></exception>
+    /// <exception cref="TimeoutException">The captured failure is not an I/O failure.
+    /// <para>捕获的故障不是 I/O 故障。</para></exception>
+    private void ThrowIfLoopFaulted()
+    {
+        if (LoopFault is not { } fault)
+        {
+            return;
+        }
+
+        if (fault is AdbTlsRequiredException tlsRequired)
+        {
+            throw tlsRequired;
+        }
+
+        if (fault is IOException ioFailure)
+        {
+            var hint = _transport is Transports.Tcp.AdbTlsTransport
+                ? " The device may not have authorized this host's key; re-run pairing or accept its debugging prompt."
+                : string.Empty;
+            throw new IOException("ADB handshake failed: " + ioFailure.Message + hint, ioFailure);
+        }
+
+        throw new TimeoutException("ADB handshake failed: " + fault.Message, fault);
+    }
 
     private bool DrainAndObservePeer()
     {
@@ -758,32 +843,36 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
-    /// Handles the peer's A_STLS offer: replies with the 24-byte STLS header (version 1, correct magic) and upgrades
-    /// the transport to TLS, after which the loop keeps reading ADB messages over the encrypted stream. Upstream
-    /// ordering makes this the answer to our CNXN, so a plaintext device simply never sends it.
-    /// <para>处理对端的 A_STLS 提议：回复 24 字节 STLS 头（版本 1，magic 正确）并把传输升级为 TLS，之后循环继续在
+    /// Handles the peer's A_STLS offer: replies with the 24-byte STLS header carrying our current STLS version and
+    /// upgrades the transport to TLS, after which the loop keeps reading ADB messages over the encrypted stream.
+    /// Upstream ordering makes this the answer to our CNXN, so a plaintext device simply never sends it.
+    /// <para>处理对端的 A_STLS 提议：回复携带本端当前 STLS 版本的 24 字节 STLS 头并把传输升级为 TLS，之后循环继续在
     /// 加密流上读取 ADB 消息。按上游顺序它是对主机 CNXN 的应答，因此明文设备根本不会发送它。</para>
     /// </summary>
     /// <param name="message">The A_STLS message. <para>A_STLS 消息。</para></param>
     /// <param name="cancellationToken">Cancels the reply write. <para>取消应答写出。</para></param>
-    /// <exception cref="InvalidDataException">The peer requested an unsupported STLS version, or the transport cannot
-    /// provide TLS. <para>对端请求不支持的 STLS 版本，或传输无法提供 TLS。</para></exception>
+    /// <exception cref="AdbTlsRequiredException">The transport is plaintext and cannot provide the requested
+    /// TLS upgrade. <para>传输为明文，无法提供所请求的 TLS 升级。</para></exception>
+    /// <exception cref="InvalidDataException">The peer requested an STLS version older than
+    /// <see cref="AdbConstants.StlsVersionMin"/>. <para>对端请求的 STLS 版本早于
+    /// <see cref="AdbConstants.StlsVersionMin"/>。</para></exception>
     /// <exception cref="IOException">The reply write or the TLS handshake failed.
     /// <para>应答写出或 TLS 握手失败。</para></exception>
     private async ValueTask HandleStlsAsync(AdbMessage message, CancellationToken cancellationToken)
     {
         if (_transport is not Transports.Tcp.AdbTlsTransport tls)
         {
-            throw new InvalidDataException(
-                "ADB peer requested a TLS upgrade on a transport that cannot provide TLS.");
+            throw new AdbTlsRequiredException(
+                "The ADB peer answered with A_STLS, but this transport is plaintext. Reconnect over the secure ADB service.");
         }
 
-        if (message.Arg0 != StlsVersion)
+        if (message.Arg0 < AdbConstants.StlsVersionMin)
         {
-            throw new InvalidDataException($"Unsupported ADB STLS version {message.Arg0}.");
+            throw new InvalidDataException($"Unsupported ADB STLS version 0x{message.Arg0:X8}.");
         }
 
-        await SendAsync(new AdbMessage(AdbCommand.Stls, StlsVersion, 0), cancellationToken).ConfigureAwait(false);
+        await SendAsync(new AdbMessage(AdbCommand.Stls, AdbConstants.StlsVersion, 0), cancellationToken)
+            .ConfigureAwait(false);
         tls.UpgradeToTls();
     }
 
@@ -913,8 +1002,9 @@ internal sealed class AdbConnection : IDisposable
             streams = [.. _streams.Values];
             _streams.Clear();
             _connected = false;
-            ResetPeerReady();
         }
+
+        Release(_peerReady);
 
         foreach (var stream in streams)
         {
@@ -1027,7 +1117,13 @@ internal sealed class AdbConnection : IDisposable
 
             if (n == 0)
             {
-                if (allowIdle && totalRead == 0 && !Volatile.Read(ref _disposed) && Transport.IsConnected)
+                if (Transport is Transports.Tcp.AdbTcpTransport or Transports.Tcp.AdbTlsTransport ||
+                    !Transport.IsConnected)
+                {
+                    throw new EndOfStreamException("ADB transport closed by the peer.");
+                }
+
+                if (allowIdle && totalRead == 0 && !Volatile.Read(ref _disposed))
                 {
                     continue;
                 }

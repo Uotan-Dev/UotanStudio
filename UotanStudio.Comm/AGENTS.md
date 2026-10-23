@@ -17,7 +17,7 @@
 - 每设备 `DeviceCommandDispatcher` 是 FIFO、严格串行；结果与异常通过提交的 `Task` 返回。流式工作（logcat、shell streaming、投屏）不得走命令池。`DeviceLease` 按命令池 → 会话 → 传输 → 端点占用的顺序释放且只释放一次。
 - 取消只影响该次提交；Dispose 取消队列并等待正在执行的命令真正结束。取消原生传输时不得提前复用缓冲区。
 - `Native/LibUsb` 按 RID 随包提供，`SHA256SUMS` 记录来源；`COPYING` 以 `libusb-LICENSE.txt` 复制。缺少当前 RID 的二进制只警告并禁用 libusb，除非通过 `CommKit.SetLibusbLibraryPath` / `LibUsbRuntime.SetLibraryPath` 显式注册绝对路径。插入 Comm 与宿主之间的引用项目必须保留 RID 传递。
-- Comm 不启动、停止或调用 adb/hdc 可执行文件；server 存活只做 TCP 探测，HDC 关闭走 `HdcServerClient.KillAsync`。不要为生命周期引入 `Process`。
+- Comm 不启动或调用 adb/hdc 可执行文件；server 存活只做 TCP 探测。HDC 关闭优先走 `HdcServerClient.KillAsync` 的 host-channel `kill`；仅当 greeting 未宣告 `CMD_SERVER_KILL` 时，允许读取 pid 文件并在校验进程名与可执行路径后终止该单个进程。
 
 ## 危险操作
 

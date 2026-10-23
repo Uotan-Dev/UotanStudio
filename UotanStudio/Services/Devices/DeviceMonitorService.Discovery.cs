@@ -136,7 +136,7 @@ public sealed partial class DeviceMonitorService
                 NetworkAlias = resolvedEndpoints.Contains(target) ? target : null,
                 Protocol = DeviceProtocolKind.Adb,
                 Transport = DeviceTransportKind.Tcp,
-                State = "device",
+                State = ManualNetworkTargetState(IsManualNetworkTargetVerified(target)),
             });
         }
 
@@ -154,7 +154,7 @@ public sealed partial class DeviceMonitorService
                 NetworkAlias = resolvedEndpoints.Contains(target) ? target : null,
                 Protocol = DeviceProtocolKind.Hdc,
                 Transport = DeviceTransportKind.Tcp,
-                State = "device",
+                State = ManualNetworkTargetState(IsManualHdcTargetVerified(target)),
             });
         }
 

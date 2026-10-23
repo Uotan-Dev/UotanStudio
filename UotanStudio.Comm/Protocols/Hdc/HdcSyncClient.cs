@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
@@ -123,24 +122,6 @@ public sealed class TransferConfig
 /// </param>
 public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contracts.IHdcSyncClient
 {
-    /// <summary>
-    /// Source bytes copied per transfer chunk. The stable daemon payload ceiling is 60 KiB and every
-    /// chunk reserves the 64-byte transfer metadata prefix, so one read fills a frame that stays within
-    /// that legacy limit; a smaller buffer would split the same file into more, shorter frames.
-    /// <para>每个传输块从源读取的字节数。守护进程稳定版负载上限为 60 KiB，而每个块都要预留 64 字节传输元数据前缀，
-    /// 因此一次读取填充的帧不会超过该较早协议上限；更小的缓冲区只会把同一个文件切成更多更短的帧。</para>
-    /// </summary>
-    internal const int ChunkSourceBufferSize = HdcConstants.MaxPayloadSizeStable - 64;
-
-    /// <summary>
-    /// Characters a daemon-reported path segment may never contain; the set is fixed for the process,
-    /// so the per-entry receive loop scans against one cached instance instead of rebuilding the
-    /// platform array per segment.
-    /// <para>守护进程上报的路径段绝不允许包含的字符；该集合在进程内固定不变，因此逐项接收循环只需针对
-    /// 一个缓存实例扫描，而不是每段重建平台数组。</para>
-    /// </summary>
-    private static readonly SearchValues<char> InvalidRemoteNameChars = SearchValues.Create(Path.GetInvalidFileNameChars());
-
     private bool _disposed;
 
     /// <summary>
@@ -221,47 +202,9 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
         ValidatePath(remotePath);
         ArgumentOutOfRangeException.ThrowIfNegative(maximumBytes);
         ArgumentOutOfRangeException.ThrowIfLessThan(maximumFiles, 1);
-        var root = new DirectoryInfo(localPath);
-        if (!root.Exists) throw new DirectoryNotFoundException(localPath);
-        var files = new List<FileInfo>();
-        var pending = new Stack<DirectoryInfo>();
-        pending.Push(root);
-        long total = 0;
-        var entries = 0;
-        while (pending.TryPop(out var directory))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if ((directory.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("HDC directory send does not follow links.");
-            foreach (var item in directory.EnumerateFileSystemInfos())
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (++entries > 100000) throw new IOException("HDC directory entry limit exceeded.");
-                if ((item.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("HDC directory send does not follow links.");
-                if (item is DirectoryInfo child) pending.Push(child);
-                else if (item is FileInfo file)
-                {
-                    total = checked(total + file.Length);
-                    if (total > maximumBytes || files.Count >= maximumFiles) throw new IOException("HDC directory transfer budget exceeded.");
-                    files.Add(file);
-                }
-            }
-        }
-        if (files.Count == 0) throw new IOException("HDC cannot send an empty directory.");
+        var (root, files) = HdcTransferEngine.CollectDirectoryFiles(localPath, maximumBytes, maximumFiles, cancellationToken);
         using var channel = connection.OpenChannel(HdcCommand.WakeupSlaveTask, []);
-        foreach (var file in files.OrderBy(f => f.FullName, StringComparer.Ordinal))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            using var input = file.OpenRead();
-            if (input.Length != file.Length) throw new IOException("HDC source file changed during directory preparation.");
-            var config = CreateSendConfig(input, remotePath, input.Length, holdTimestamp);
-            config.OptionalName = root.Name + "/" + Path.GetRelativePath(root.FullName, file.FullName).Replace('\\', '/');
-            channel.SendCommand(HdcCommand.FileCheck, SerializeTransferConfig(config));
-            Expect(channel, HdcCommand.FileBegin, cancellationToken);
-            SendData(channel, input, input.Length, HdcCommand.FileData, cancellationToken);
-            if (Expect(channel, HdcCommand.FileFinish, cancellationToken).Payload is not [1])
-                throw new InvalidDataException("Invalid HDC directory file completion.");
-        }
-        channel.SendCommand(HdcCommand.FileFinish, [0]);
+        HdcTransferEngine.SendDirectory(channel, root, files, remotePath, holdTimestamp, Compress, Progress, cancellationToken);
     }
 
     /// <summary>Sends the declared number of bytes without buffering the whole file.
@@ -295,31 +238,9 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentOutOfRangeException.ThrowIfNegative(fileSize);
         ValidatePath(remotePath);
-        var config = CreateSendConfig(source, remotePath, fileSize, holdTimestamp);
+        var config = HdcTransferEngine.CreateSendConfig(source, remotePath, fileSize, holdTimestamp, Compress);
         using var channel = connection.OpenChannel(HdcCommand.FileCheck, SerializeTransferConfig(config));
-        Expect(channel, HdcCommand.FileBegin, cancellationToken);
-        SendData(channel, source, fileSize, HdcCommand.FileData, cancellationToken);
-        var finish = Expect(channel, HdcCommand.FileFinish, cancellationToken);
-        if (finish.Payload is not [1]) throw new InvalidDataException("Invalid HDC file completion.");
-        channel.SendCommand(HdcCommand.FileFinish, [0]);
-    }
-
-    private TransferConfig CreateSendConfig(Stream source, string remotePath, long fileSize, bool holdTimestamp)
-    {
-        var config = new TransferConfig
-        {
-            FileSize = fileSize,
-            Path = remotePath,
-            OptionalName = source is FileStream named ? Path.GetFileName(named.Name) : remotePath.TrimEnd('/').Split('/')[^1],
-            CompressType = Compress ? 1 : 0,
-            HoldTimestamp = holdTimestamp && source is FileStream
-        };
-        if (config.HoldTimestamp && source is FileStream file)
-        {
-            config.Atime = checked((File.GetLastAccessTimeUtc(file.Name).Ticks - DateTime.UnixEpoch.Ticks) * 100);
-            config.Mtime = checked((File.GetLastWriteTimeUtc(file.Name).Ticks - DateTime.UnixEpoch.Ticks) * 100);
-        }
-        return config;
+        HdcTransferEngine.SendStreamBody(channel, source, fileSize, Compress, Progress, cancellationToken);
     }
 
     /// <summary>Receives to a unique sibling staging file, publishing only after full protocol completion.
@@ -381,11 +302,7 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
         cancellationToken.ThrowIfCancellationRequested();
         ValidatePath(remotePath);
         using var channel = connection.OpenChannel(HdcCommand.FileInit, Encoding.UTF8.GetBytes((Compress ? "-z " : "") + "\"" + remotePath + "\" ."));
-        var metadata = Expect(channel, HdcCommand.FileCheck, cancellationToken);
-        var config = DeserializeTransferConfig(metadata.Payload ?? []);
-        ReceiveContents(channel, config, destination, cancellationToken);
-        var finished = Expect(channel, HdcCommand.FileFinish, cancellationToken);
-        if (finished.Payload is not [0]) throw new InvalidDataException("Invalid HDC receive completion.");
+        HdcTransferEngine.ReceiveStream(channel, destination, Progress, cancellationToken);
     }
 
     /// <summary>Receives a directory into a new local directory with bounded entries and total size; publishes only on completion.
@@ -431,141 +348,11 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
         {
             using var channel = connection.OpenChannel(HdcCommand.FileInit,
                 Encoding.UTF8.GetBytes((Compress ? "-z " : "") + "\"" + remotePath + "\" ."));
-            long total = 0;
-            var count = 0;
-            while (true)
-            {
-                var message = Expect(channel, HdcCommand.FileCheck, cancellationToken, alternative: HdcCommand.FileFinish);
-                if (message.Command == HdcCommand.FileFinish)
-                {
-                    if (message.Payload is not [0] || count == 0) throw new InvalidDataException("Invalid directory completion.");
-                    break;
-                }
-                var config = DeserializeTransferConfig(message.Payload ?? []);
-                if (++count > maximumFiles || config.FileSize > maximumBytes - total)
-                    throw new InvalidDataException("HDC directory receive exceeds the requested limit.");
-                total += config.FileSize;
-                var segments = config.OptionalName.Replace('\\', '/').Split('/');
-                if (segments.Length == 0 || segments.Any(s => s.Length == 0 || s is "." or ".."
-                    || s.AsSpan().ContainsAny(InvalidRemoteNameChars) || s.Contains(':') || s.EndsWith('.') || s.EndsWith(' ')))
-                    throw new InvalidDataException("Unsafe HDC directory entry name.");
-                var outputPath = Path.Combine(staging, Path.Combine(segments));
-                Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-                using var output = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                ReceiveContents(channel, config, output, cancellationToken);
-            }
+            HdcTransferEngine.ReceiveDirectory(channel, staging, maximumBytes, maximumFiles, Progress, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             Directory.Move(staging, destination);
         }
         finally { if (Directory.Exists(staging)) Directory.Delete(staging, true); }
-    }
-
-    private void ReceiveContents(HdcStream channel, TransferConfig config, Stream destination, CancellationToken cancellationToken)
-    {
-        if (config.FileSize < 0) throw new InvalidDataException("Invalid HDC file size.");
-        channel.SendCommand(HdcCommand.FileBegin, []);
-        long received = 0;
-        while (received < config.FileSize || config.FileSize == 0)
-        {
-            var message = Expect(channel, HdcCommand.FileData, cancellationToken);
-            var payload = message.Payload ?? [];
-            var chunk = HdcTransferCodec.DecodeChunk(payload);
-            if (chunk.Offset != received || chunk.Data.Length > config.FileSize - received)
-                throw new InvalidDataException("HDC file chunk exceeds expected range.");
-            if (chunk.Data.Length == 0 && received != config.FileSize)
-                throw new EndOfStreamException("Premature HDC file EOF.");
-            destination.Write(chunk.Data);
-            received += chunk.Data.Length;
-            Progress?.Invoke(received, config.FileSize);
-            if (received == config.FileSize) break;
-        }
-        cancellationToken.ThrowIfCancellationRequested();
-        channel.SendCommand(HdcCommand.FileFinish, [1]);
-    }
-
-    internal void SendData(HdcStream channel, Stream source, long length, HdcCommand command, CancellationToken ct)
-    {
-        var buffer = ArrayPool<byte>.Shared.Rent(ChunkSourceBufferSize);
-        long offset = 0;
-        try
-        {
-            do
-            {
-                ct.ThrowIfCancellationRequested();
-                var count = (int)Math.Min(ChunkSourceBufferSize, length - offset);
-                source.ReadExactly(buffer.AsSpan(0, count));
-                channel.SendCommand(command, HdcTransferCodec.EncodeChunk(offset, buffer.AsSpan(0, count), Compress));
-                offset += count;
-                Progress?.Invoke(offset, length);
-            } while (offset < length);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
-    }
-
-    /// <summary>
-    /// Waits for one of the expected task commands, skipping echo traffic and the zero-length FILE_DATA that ends a
-    /// file. <para>等待预期任务命令之一，跳过回显流量与结束文件的零长度 FILE_DATA。</para>
-    /// </summary>
-    /// <param name="channel">The transfer channel. <para>传输通道。</para></param>
-    /// <param name="expected">The command being awaited. <para>正在等待的命令。</para></param>
-    /// <param name="ct">Cancels the wait. <para>取消等待。</para></param>
-    /// <param name="timeoutMs">Reply deadline in milliseconds. <para>应答期限（毫秒）。</para></param>
-    /// <param name="alternative">An optional second accepted command. <para>可选的第二个可接受命令。</para></param>
-    /// <returns>The received message. <para>收到的消息。</para></returns>
-    /// <exception cref="TimeoutException">The deadline passed without a matching command. <para>期限到达仍无匹配命令。</para></exception>
-    /// <exception cref="EndOfStreamException">The channel closed before the matching command. <para>通道在匹配命令之前关闭。</para></exception>
-    /// <exception cref="InvalidDataException">Another command arrived first. <para>先收到了其它命令。</para></exception>
-    internal static HdcMessage Expect(HdcStream channel, HdcCommand expected, CancellationToken ct, int timeoutMs = 30000, HdcCommand? alternative = null)
-    {
-        var deadline = Environment.TickCount64 + timeoutMs;
-        while (true)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (Environment.TickCount64 >= deadline) throw new TimeoutException("HDC task response timed out.");
-            var message = channel.ReadMessage(250);
-            if (message is null)
-            {
-                if (channel.IsClosed) throw new EndOfStreamException("HDC task closed before completion.");
-                continue;
-            }
-            if (message.Command == expected || message.Command == alternative) return message;
-            if (message.Command is HdcCommand.Echo or HdcCommand.EchoRaw) continue;
-            if (IsEndOfFileMarker(message, expected, alternative)) continue;
-            throw new InvalidDataException($"Unexpected HDC task command {message.Command}; expected {expected}.");
-        }
-    }
-
-    /// <summary>
-    /// Reports whether a message is the zero-length FILE_DATA the daemon sends together with FILE_FINISH to end a
-    /// file, while a FILE_FINISH is awaited. The marker is dropped instead of failing the transfer, because the
-    /// receive loops stop at the declared size and the completion frame may follow one more empty chunk.
-    /// <para>判断消息是否是在等待 FILE_FINISH 期间守护进程与 FILE_FINISH 一同发送的零长度 FILE_DATA。该标记被丢弃
-    /// 而不是令传输失败：接收循环在达到声明大小时停止，而完成帧之前可能还有一个空数据块。</para>
-    /// </summary>
-    /// <param name="message">The message read from the channel. <para>从通道读取的消息。</para></param>
-    /// <param name="expected">The command being awaited. <para>正在等待的命令。</para></param>
-    /// <param name="alternative">The optional second command being awaited. <para>可选的第二个正在等待的命令。</para></param>
-    /// <returns><see langword="true"/> when the message is an end-of-file marker. <para>消息是文件结束标记时为 <see langword="true"/>。</para></returns>
-    /// <exception cref="InvalidDataException">A non-empty FILE_DATA payload is not a valid transfer chunk.
-    /// <para>非空 FILE_DATA 负载不是合法的传输数据块。</para></exception>
-    private static bool IsEndOfFileMarker(HdcMessage message, HdcCommand expected, HdcCommand? alternative)
-    {
-        if (message.Command != HdcCommand.FileData
-            || (expected != HdcCommand.FileFinish && alternative != HdcCommand.FileFinish))
-        {
-            return false;
-        }
-
-        var payload = message.Payload;
-        if (payload is not { Length: > 0 })
-        {
-            return true;
-        }
-
-        return HdcTransferCodec.DecodeChunk(payload).Data.Length == 0;
     }
 
     internal static void ValidatePath(string path)

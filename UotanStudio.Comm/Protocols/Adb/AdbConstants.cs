@@ -13,6 +13,18 @@ internal static class AdbConstants
     public const uint ProtocolVersion = 0x01000001;
 
     /// <summary>
+    /// Oldest STLS protocol version accepted from the peer (A_STLS_VERSION_MIN).
+    /// <para>接受对端 STLS 协议版本的下限（A_STLS_VERSION_MIN）。</para>
+    /// </summary>
+    public const uint StlsVersionMin = 0x01000000;
+
+    /// <summary>
+    /// STLS protocol version this client replies with (A_STLS_VERSION).
+    /// <para>本客户端回复的 STLS 协议版本（A_STLS_VERSION）。</para>
+    /// </summary>
+    public const uint StlsVersion = 0x01000000;
+
+    /// <summary>
     /// Maximum data payload in a single Message (A_MAX_PAYLOAD, 1 MiB).
     /// <para>单条消息的最大数据负载（A_MAX_PAYLOAD，1 MiB）。</para>
     /// </summary>

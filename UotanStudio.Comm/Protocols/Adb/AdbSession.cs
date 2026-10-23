@@ -165,6 +165,10 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// <exception cref="TimeoutException">The peer did not answer the handshake; when the message
     /// loop already stopped, the loop's own failure is the inner cause.
     /// <para>对端未完成握手；消息循环已经停止时，循环自身的失败作为内部原因。</para></exception>
+    /// <exception cref="AdbTlsRequiredException">A plaintext transport received the peer's A_STLS offer and
+    /// the endpoint must be reopened over TLS. <para>明文传输收到对端 A_STLS 提议，必须改用 TLS 重新打开端点。</para></exception>
+    /// <exception cref="IOException">The peer closed the connection or another I/O failure occurred before the
+    /// CNXN banner arrived. <para>CNXN 横幅到达前对端关闭连接或发生其他 I/O 故障。</para></exception>
     public void Connect()
     {
         ThrowIfDisposed();

@@ -13,8 +13,10 @@ public static class HdcConstants
     public const byte ProtocolVersion = 0x01;
 
     /// <summary>
-    /// Default HDC server TCP port (DEFAULT_PORT).
-    /// <para>默认 HDC 服务端 TCP 端口（DEFAULT_PORT）。</para>
+    /// HDC server and UDP discovery port (DEFAULT_PORT). The device daemon's TCP port is dynamic and must be read
+    /// from <c>persist.hdc.port</c> or the UDP discovery reply, so this value must not be used as a device default.
+    /// <para>HDC server 与 UDP 发现端口（DEFAULT_PORT）。设备守护进程的 TCP 端口是动态的，必须从
+    /// <c>persist.hdc.port</c> 或 UDP 发现应答读取，因此该值不得用作设备默认端口。</para>
     /// </summary>
     public const int DefaultPort = 8710;
 

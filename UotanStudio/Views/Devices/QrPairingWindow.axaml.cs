@@ -133,12 +133,16 @@ public partial class QrPairingWindow : Window
         try
         {
             var address = await App.DeviceMonitor
-                .CompleteQrPairingWithPortAsync(pending.Route, pending.Host, port, CancellationToken.None)
+                .CompleteQrPairingWithPortAsync(pending.Route, pending.Host, port, _cancellation.Token)
                 .ConfigureAwait(true);
             _pendingConnect = null;
             SetStatus("Device_QrPairDone", address);
             await Task.Delay(1500, CancellationToken.None).ConfigureAwait(true);
             Close();
+        }
+        catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
+        {
+            return;
         }
         catch (Exception ex)
         {

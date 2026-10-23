@@ -16,6 +16,8 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
     private Action? _releaseLease;
     private readonly HdcServerClient? _server;
     private readonly string? _connectKey;
+    private readonly string? _serverHost;
+    private readonly int? _serverPort;
     private readonly HdcConnection? _connection;
     private bool _serverConnected;
 
@@ -23,6 +25,8 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
     {
         _server = server;
         _connectKey = connectKey;
+        _serverHost = server.ServerHost;
+        _serverPort = server.ServerPort;
     }
 
     private HdcSession(HdcConnection connection, Action? releaseLease)
@@ -31,6 +35,18 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
         _isLease = true;
         _releaseLease = releaseLease;
     }
+
+    /// <summary>
+    /// Gets the host of the backing HDC server, or <see langword="null"/> for a direct session.
+    /// <para>获取承载本会话的 HDC server 主机；直连会话为 <see langword="null"/>。</para>
+    /// </summary>
+    internal string? ServerHost => _serverHost;
+
+    /// <summary>
+    /// Gets the port of the backing HDC server, or <see langword="null"/> for a direct session.
+    /// <para>获取承载本会话的 HDC server 端口；直连会话为 <see langword="null"/>。</para>
+    /// </summary>
+    internal int? ServerPort => _serverPort;
 
     /// <summary>Creates a non-owning view of an authenticated direct connection. The owner must outlive its leases.
     /// <para>创建已认证直连的非拥有式视图。持有者必须比其租约存活更久。</para></summary>
@@ -144,6 +160,8 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
     /// Connects and authenticates with the HDC peer.
     /// <para>连接并认证 HDC 对端。</para>
     /// </summary>
+    /// <exception cref="HdcAuthorizationException">The daemon denied host authorization, or a pending confirmation did not complete.
+    /// <para>守护进程拒绝了主机授权，或等待确认未完成。</para></exception>
     public void Connect()
     {
         ThrowIfDisposed();
@@ -168,6 +186,8 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
     /// <para>在会话完成连接与认证后结束的任务。</para></returns>
     /// <exception cref="ObjectDisposedException">The session is disposed. <para>会话已释放。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled. <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    /// <exception cref="HdcAuthorizationException">The daemon denied host authorization, or a pending confirmation did not complete.
+    /// <para>守护进程拒绝了主机授权，或等待确认未完成。</para></exception>
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -219,25 +239,32 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
     }
 
     /// <summary>
-    /// Creates a sync (file transfer) client over the direct connection.
-    /// <para>在直连通道上创建 sync（文件传输）客户端。</para>
+    /// Creates a sync (file transfer) client for this session's route.
+    /// <para>为本会话路由创建 sync（文件传输）客户端。</para>
     /// </summary>
-    /// <returns>An HDC sync client.<para>HDC sync 客户端。</para></returns>
+    /// <returns>A sync client that either opens transfer channels on the authenticated direct connection, or runs the
+    /// upstream remote-client file task over the HDC server that owns the target.
+    /// <para>sync 客户端：在已认证直连上打开传输通道，或对拥有该目标的 HDC server 运行上游 remote-client 文件任务。</para></returns>
+    /// <exception cref="ObjectDisposedException">This session is disposed.
+    /// <para>本会话已释放。</para></exception>
     public IHdcSyncClient CreateSyncClient()
     {
         ThrowIfDisposed();
-        return new HdcSyncClient(Connection);
+        return _server is null ? new HdcSyncClient(Connection) : new HdcServerSyncClient(_server, _connectKey!);
     }
 
     /// <summary>
-    /// Creates an app install/uninstall client over the direct connection.
-    /// <para>在直连通道上创建应用安装/卸载客户端。</para>
+    /// Creates an app install/uninstall client for this session's route.
+    /// <para>为本会话路由创建应用安装/卸载客户端。</para>
     /// </summary>
-    /// <returns>An HDC app client.<para>HDC 应用客户端。</para></returns>
+    /// <returns>An app client bound to the direct daemon connection, or to the HDC server that owns the target.
+    /// <para>绑定直连守护进程连接或拥有该目标的 HDC server 的应用客户端。</para></returns>
+    /// <exception cref="ObjectDisposedException">This session is disposed.
+    /// <para>本会话已释放。</para></exception>
     public IHdcAppClient CreateAppClient()
     {
         ThrowIfDisposed();
-        return new HdcAppClient(Connection);
+        return _server is null ? new HdcAppClient(Connection) : new HdcServerAppClient(_server, _connectKey!);
     }
 
     /// <summary>
@@ -257,7 +284,16 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
     /// <param name="timeoutMs">Timeout in milliseconds.<para>超时（毫秒）。</para></param>
     /// <returns>The shell execution result.<para>Shell 执行结果。</para></returns>
     public ShellResult ExecuteCommand(string command, int timeoutMs = 30000)
-        => CreateShellClient(command).Execute(timeoutMs);
+    {
+        ThrowIfDisposed();
+        if (_server is null)
+        {
+            return new HdcShellClient(Connection, command).Execute(timeoutMs);
+        }
+
+        using var server = new HdcServerClient(_serverHost!, _serverPort!.Value);
+        return new HdcShellClient(server, _connectKey!, command).Execute(timeoutMs);
+    }
 
     /// <summary>
     /// Throws <see cref="ObjectDisposedException"/> if the session is disposed.

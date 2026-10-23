@@ -33,25 +33,36 @@ public static class DebugBridgeSessionOpener
             : targets.Any(target => string.Equals(target.Serial, serial, StringComparison.Ordinal));
     }
 
-    /// <summary>Checks HDC ownership by exact connect key: a live server owns only the targets its list actually contains, so an unregistered device falls back to direct USB. The route mode decides whether the server is consulted at all.
-    /// <para>按连接键检查 HDC 归属：活着的 server 只拥有其列表中实际存在的目标，未注册的设备回退直连 USB。是否咨询 server 由路由模式决定。</para></summary>
+    /// <summary>Checks HDC ownership by exact connect key against the verbose list, so an offline or unauthorized target remains server-owned instead of falling back to direct USB. The route mode decides whether the server is consulted at all.
+    /// <para>按详细目标列表中的精确连接键检查 HDC 归属，使离线或未授权的目标仍归 server 所有，而不是回退直连 USB。是否咨询 server 由路由模式决定。</para></summary>
     /// <param name="serial">Connect key to check; when null or blank, any nonempty target list counts as ownership.
     /// <para>待检查的连接键；为 null 或空白时，只要目标列表非空即视为归属。</para></param>
     /// <param name="host">HDC server host to probe.<para>待探测的 HDC server 主机。</para></param>
     /// <param name="port">HDC server port; null uses the standard default port.
     /// <para>HDC server 端口；null 使用标准默认端口。</para></param>
-    /// <returns><see langword="true"/> when the mode selects the server and it lists this connect key.
-    /// <para>模式选择 server 且其列出该连接键时为 <see langword="true"/>。</para></returns>
+    /// <returns><see langword="true"/> when the mode selects the server and its verbose list contains this connect key.
+    /// <para>模式选择 server 且其详细列表包含该连接键时为 <see langword="true"/>。</para></returns>
     public static bool HdcServerOwns(string? serial, string host = DebugBridgeEndpoints.ServerHost, int? port = null)
     {
         if (DebugBridgeRoute.Mode == DebugBridgeRouteMode.DirectOnly) return false;
         if (!DebugBridgeRoute.UseHdcServer(host, port)) return false;
         using var server = new HdcServerClient(host, port);
-        var targets = server.ListTargets();
-        return string.IsNullOrWhiteSpace(serial)
-            ? targets.Count != 0
-            : targets.Any(target => string.Equals(target, serial, StringComparison.Ordinal));
+        return HdcTargetListOwns(server.ListTargetDetails(), serial);
     }
+
+    /// <summary>
+    /// Decides ownership from a verbose HDC target snapshot; every listed state (connected, offline or unauthorized)
+    /// counts as server-owned.
+    /// <para>依据 HDC 详细目标快照判定归属；只要出现在列表中（已连接、离线或未授权）都视为 server 所有。</para>
+    /// </summary>
+    /// <param name="targets">Verbose target rows returned by <c>list targets -v</c>.<para><c>list targets -v</c> 返回的目标行。</para></param>
+    /// <param name="serial">Connect key to match, or null/blank for "any target".<para>待匹配的连接键；null/空白表示任意目标。</para></param>
+    /// <returns><see langword="true"/> when the list contains the requested key or any key for a blank request.
+    /// <para>列表包含指定键，或在请求为空时包含任意键，返回 <see langword="true"/>。</para></returns>
+    internal static bool HdcTargetListOwns(IReadOnlyList<HdcTargetInfo> targets, string? serial)
+        => string.IsNullOrWhiteSpace(serial)
+            ? targets.Count != 0
+            : targets.Any(target => string.Equals(target.ConnectKey, serial, StringComparison.Ordinal));
 
     /// <summary>Rejects raw debug USB access according to the fixed route mode: server-only always refuses, direct-only refuses while a server is listening instead of switching, startup-frozen refuses when a server is present at startup or appears later, and automatic mode refuses only when the selected server owns the target.
     /// <para>按固定路由模式拒绝裸 USB 调试访问：仅 server 模式一律拒绝；仅直连模式在 server 正在监听时拒绝而不是切换；
@@ -168,9 +179,8 @@ public static class DebugBridgeSessionOpener
         }
 
         using var server = new HdcServerClient(host, port);
-        var targets = server.ListTargets();
-        if (!string.IsNullOrWhiteSpace(serial) &&
-            !targets.Any(target => string.Equals(target, serial, StringComparison.Ordinal)))
+        var targets = server.ListTargetDetails();
+        if (!string.IsNullOrWhiteSpace(serial) && !HdcTargetListOwns(targets, serial))
         {
             if (serverOnly)
             {

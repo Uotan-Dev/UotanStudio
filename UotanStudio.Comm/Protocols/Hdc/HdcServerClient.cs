@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
@@ -34,6 +34,9 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     /// <c>Routing.DebugBridgeEndpoints</c>。</para></summary>
     /// <value>The default host-channel port used when no explicit port is supplied.<para>未显式提供端口时使用的默认宿主通道端口。</para></value>
     public static int DefaultServerPort => DebugBridgeEndpoints.HdcServerPort;
+    /// <summary>Gets whether this client has been disposed.
+    /// <para>获取此客户端是否已释放。</para></summary>
+    internal bool IsDisposed => _disposed;
     /// <summary>Maximum frame allocation.<para>单帧分配上限。</para></summary>
     public const int MaximumFrameBytes = 4 * 1024 * 1024;
     /// <summary>Maximum captured output.<para>捕获输出上限。</para></summary>
@@ -69,6 +72,23 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
         using var client = await OpenAsync(string.Empty, timeout.Token).ConfigureAwait(false);
     }
     private async Task<TcpClient> OpenAsync(string connectKey, CancellationToken ct)
+        => (await OpenWithGreetingAsync(connectKey, ct).ConfigureAwait(false)).Client;
+
+    /// <summary>Opens a dedicated host connection and completes the channel greeting for a duplex task.
+    /// <para>为双工任务打开专用宿主连接并完成通道握手。</para></summary>
+    /// <param name="connectKey">Target identifier placed in the greeting's connect-key field.
+    /// <para>写入问候报文连接键字段的目标标识。</para></param>
+    /// <param name="cancellationToken">Cancels the connect and greeting exchange.
+    /// <para>取消连接与握手交互。</para></param>
+    /// <returns>The connected client, owned by the caller. <para>由调用方持有的已连接客户端。</para></returns>
+    /// <exception cref="ObjectDisposedException">This client has been disposed.
+    /// <para>此客户端已被释放。</para></exception>
+    /// <exception cref="InvalidDataException">The host channel handshake is not a valid HDC greeting.
+    /// <para>宿主通道握手不是有效的 HDC 问候。</para></exception>
+    internal async Task<TcpClient> OpenConnectionAsync(string connectKey, CancellationToken cancellationToken)
+        => await OpenAsync(connectKey, cancellationToken).ConfigureAwait(false);
+
+    private async Task<(TcpClient Client, byte[] Greeting)> OpenWithGreetingAsync(string connectKey, CancellationToken ct)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(connectKey);
@@ -86,7 +106,7 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
             Array.Clear(reply, 12, 32);
             Encoding.UTF8.GetBytes(connectKey, reply.AsSpan(12));
             await WriteFrameAsync(stream, reply, ct).ConfigureAwait(false);
-            return client;
+            return (client, hello);
         }
         catch { client.Dispose(); throw; }
     }
@@ -284,19 +304,76 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     }
 
     /// <summary>
-    /// Stops the local hdc server by reading its pid file and terminating that process, because the server ignores any wire-level kill command. A missing pid file or an already-exited process means no server is running.
-    /// <para>读取本地 hdc server 的 pid 文件并终止该进程以停止 server，因为 server 忽略任何协议层的 kill 命令。pid 文件缺失或进程已退出即表示 server 未运行。</para>
+    /// Stops the local hdc server through its host-channel <c>kill</c> command when the greeting advertises
+    /// <c>CMD_SERVER_KILL</c>; only a server that does not advertise the command falls back to the pid file, where the
+    /// process name and executable path are checked before a single-process kill.
+    /// <para>当问候报文宣告 <c>CMD_SERVER_KILL</c> 时，通过 host channel 的 <c>kill</c> 命令停止本地 hdc server；
+    /// 只有未宣告该命令的 server 才回退到 pid 文件，并在终止前校验进程名与可执行文件路径。</para>
     /// </summary>
-    /// <returns><c>true</c> when a running server was terminated; <c>false</c> when none was found.
-    /// <para>成功终止运行中的 server 返回 <c>true</c>；未发现 server 返回 <c>false</c>。</para></returns>
-    /// <param name="timeoutMs">Milliseconds to wait for the terminated process to exit.<para>等待被终止进程退出的毫秒数。</para></param>
-    /// <param name="cancellationToken">Checked before any pid file is read.<para>在读取任何 pid 文件前进行检查。</para></param>
-    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was already signaled.<para><paramref name="cancellationToken"/> 已被触发。</para></exception>
-    public Task<bool> KillAsync(int timeoutMs = 10000, CancellationToken cancellationToken = default)
+    /// <returns><c>true</c> when a running server was terminated; <c>false</c> when none was found or the request failed.
+    /// <para>成功终止运行中的 server 返回 <c>true</c>；未发现 server 或请求失败时返回 <c>false</c>。</para></returns>
+    /// <param name="timeoutMs">Overall budget for the host-channel request or the terminated process exit.
+    /// <para>host channel 请求或等待进程退出的总预算。</para></param>
+    /// <param name="cancellationToken">Cancels the host-channel request and the pid fallback.
+    /// <para>取消 host channel 请求与 pid 回退。</para></param>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
+    public async Task<bool> KillAsync(int timeoutMs = 10000, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(Math.Max(1, timeoutMs));
+        TcpClient? client = null;
+        try
+        {
+            var opened = await OpenWithGreetingAsync(string.Empty, timeout.Token).ConfigureAwait(false);
+            client = opened.Client;
+            if (opened.Greeting.Length < 11 || opened.Greeting[10] != (byte)'K')
+            {
+                return IsLoopbackServer() && KillViaPidFile(timeoutMs, cancellationToken);
+            }
+
+            var stream = client.GetStream();
+            await WriteFrameAsync(stream, "kill\0"u8.ToArray(), timeout.Token).ConfigureAwait(false);
+            try
+            {
+                while (await ReadFrameAsync(stream, timeout.Token).ConfigureAwait(false) is not null)
+                {
+                }
+            }
+            catch (IOException)
+            {
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception ex) when (ex is IOException or SocketException)
+        {
+            return false;
+        }
+        finally
+        {
+            client?.Dispose();
+        }
+    }
+
+    private bool IsLoopbackServer()
+        => string.Equals(ServerHost, "localhost", StringComparison.OrdinalIgnoreCase)
+            || (System.Net.IPAddress.TryParse(ServerHost, out var address) && System.Net.IPAddress.IsLoopback(address));
+
+    private static bool KillViaPidFile(int timeoutMs, CancellationToken cancellationToken)
+    {
         foreach (var fileName in new[] { ".HDCServer.pid", ".hdc.pid" })
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var path = Path.Combine(Path.GetTempPath(), fileName);
             int pid;
             try
@@ -316,18 +393,54 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
 
             try
             {
-                var server = Process.GetProcessById(pid);
-                server.Kill(entireProcessTree: true);
-                server.WaitForExit(timeoutMs);
-                return Task.FromResult(true);
+                using var server = Process.GetProcessById(pid);
+                if (!IsHdcServerProcess(server))
+                {
+                    continue;
+                }
+
+                server.Kill();
+                return server.WaitForExit(timeoutMs);
             }
-            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or SystemException
-                && ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException
+                or System.ComponentModel.Win32Exception or NotSupportedException)
             {
             }
         }
 
-        return Task.FromResult(false);
+        return false;
+    }
+
+    private static bool IsHdcServerProcess(Process process)
+    {
+        try
+        {
+            if (!process.ProcessName.Contains("hdc", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            try
+            {
+                var executable = process.MainModule?.FileName;
+                if (!string.IsNullOrEmpty(executable) &&
+                    !Path.GetFileNameWithoutExtension(executable).Contains("hdc", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception
+                or NotSupportedException)
+            {
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception
+            or NotSupportedException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Rejects explicit server failures.<para>拒绝服务端明确失败响应。</para></summary>

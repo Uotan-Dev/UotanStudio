@@ -146,17 +146,17 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable, C
             {
                 _channel = connection.OpenChannel(HdcCommand.ForwardInit,
                     Encoding.UTF8.GetBytes($"{remoteEndpoint} tcp:{localPort}"));
-                var check = HdcSyncClient.Expect(_channel, HdcCommand.ForwardCheck, ct);
+                var check = HdcTransferEngine.Expect(_channel, HdcCommand.ForwardCheck, ct);
                 var id = ValidateEndpoint(check.Payload ?? []);
                 Send(HdcCommand.ForwardCheckResult, id, [1]);
-                HdcSyncClient.Expect(_channel, HdcCommand.Echo, ct);
+                HdcTransferEngine.Expect(_channel, HdcCommand.Echo, ct);
             }
             else
             {
                 _listener = new TcpListener(IPAddress.Loopback, localPort);
                 _listener.Start(32);
                 _channel = connection.OpenChannel(HdcCommand.ForwardCheck, Endpoint(1, remoteEndpoint));
-                var result = HdcSyncClient.Expect(_channel, HdcCommand.ForwardCheckResult, ct).Payload ?? [];
+                var result = HdcTransferEngine.Expect(_channel, HdcCommand.ForwardCheckResult, ct).Payload ?? [];
                 if (result.Length != 5 || BinaryPrimitives.ReadUInt32BigEndian(result) != 1)
                     throw new InvalidDataException("Invalid HDC forwarding check response.");
                 _ = AcceptLoop();
