@@ -4,7 +4,7 @@ namespace UotanStudio.Compress;
 /// Signals a failure raised by the compression or decompression pipelines.
 /// <para>表示压缩或解压流程中发生的失败。</para>
 /// </summary>
-internal class CompressionException : Exception
+public class CompressionException : Exception
 {
     /// <summary>
     /// Creates the exception with an error message.

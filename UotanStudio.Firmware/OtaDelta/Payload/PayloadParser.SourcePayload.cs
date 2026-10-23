@@ -1,4 +1,4 @@
-using System.IO.Compression;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.IO;
 using UotanStudio.Firmware.OtaDelta.Payload.Models;
@@ -159,7 +159,7 @@ public static partial class PayloadParser
 
     private static string ExtractPayloadFromZip(string filePath)
     {
-        using var archive = ZipFile.OpenRead(filePath);
+        using var archive = ZipContainer.OpenRead(filePath);
         var payloadEntry = FindPayloadEntry(archive)
             ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
         var tempPath = TempFileHelper.CreateTempFile();

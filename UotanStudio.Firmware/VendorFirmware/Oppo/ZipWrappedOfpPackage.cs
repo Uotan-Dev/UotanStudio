@@ -1,4 +1,4 @@
-using System.IO.Compression;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions;
@@ -186,7 +186,7 @@ internal sealed class ZipWrappedOfpPackage
     {
         stream.Position = 0;
 
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        using var archive = ZipContainer.OpenRead(stream, leaveOpen: true);
 
         foreach (var entry in archive.Entries)
         {

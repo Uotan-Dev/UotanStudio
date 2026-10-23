@@ -1,4 +1,4 @@
-using System.IO.Compression;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
@@ -48,7 +48,7 @@ public sealed partial class OppReader
 
         stream.Position = 0;
         using var decrypted = OzipDecryptor.OpenDecryptedStream(stream, out var detectedKey, leaveOpen: true);
-        using var zip = new ZipArchive(decrypted, ZipArchiveMode.Read, leaveOpen: true);
+        using var zip = ZipContainer.OpenRead(decrypted, leaveOpen: true);
 
         var entries = zip.Entries
             .Where(entry => !(entry.Length == 0 && entry.FullName.EndsWith('/')))

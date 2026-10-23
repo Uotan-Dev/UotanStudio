@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using UotanStudio.Compress;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Streams;
@@ -344,7 +345,7 @@ internal sealed class SamsungIncrementalMergeService
         }
         else if (IsZipContainer(otaSource))
         {
-            using var archive = ZipFile.OpenRead(otaSource);
+            using var archive = ZipContainer.OpenRead(otaSource);
             var count = 0;
             foreach (var entry in archive.Entries)
             {

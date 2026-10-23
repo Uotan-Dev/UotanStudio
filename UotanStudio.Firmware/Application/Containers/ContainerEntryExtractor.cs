@@ -1,4 +1,4 @@
-using System.IO.Compression;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core;
 
@@ -206,7 +206,7 @@ public static class ContainerEntryExtractor
         var outputPaths = new List<string>();
 
         await using var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+        using var archive = ZipContainer.OpenRead(stream);
         var selectedEntries = archive.Entries.Where(entry => names.Contains(entry.FullName) && !string.IsNullOrEmpty(entry.Name)).ToArray();
         if (selectedEntries.Length != names.Count) throw new InvalidDataException("A selected ZIP entry is missing or duplicated.");
         var totalBytes = selectedEntries.Sum(entry => entry.Length);

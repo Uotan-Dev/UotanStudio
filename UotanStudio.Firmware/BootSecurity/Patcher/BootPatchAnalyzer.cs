@@ -1,6 +1,6 @@
-using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.BootSecurity.BootImage.Components;
 using UotanStudio.Firmware.BootSecurity.BootImage.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage.Parser;
@@ -34,7 +34,7 @@ public static class BootPatchAnalyzer
         if (detection.Kind != BootPatchKind.KernelSu)
             return new([], [], []);
         stream.Position = 0;
-        using var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        using var zip = ZipContainer.OpenRead(stream, leaveOpen: true);
         var assets = new List<KernelSuKmiAsset>();
         foreach (var entry in zip.Entries.Where(e => e.Name.EndsWith("libksud.so", StringComparison.OrdinalIgnoreCase)
             || e.Name.EndsWith("libkernelsu.so", StringComparison.OrdinalIgnoreCase)
@@ -196,7 +196,7 @@ public static class BootPatchAnalyzer
             return new(BootPatchKind.KernelSuLkm, [DetectElfArchitecture(await ReadBoundedAsync(stream, cancellationToken))]);
 
         if (!stream.CanSeek) throw new NotSupportedException("Patch package inspection requires a seekable stream.");
-        using var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        using var zip = ZipContainer.OpenRead(stream, leaveOpen: true);
         var names = zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).Select(e => e.FullName.Replace('\\', '/')).ToArray();
         var abis = names.Select(TryGetAbi).Where(static a => a is not null).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var hasMagisk = names.Any(n => n.Contains("libmagiskinit", StringComparison.OrdinalIgnoreCase))

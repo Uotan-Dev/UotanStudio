@@ -5,12 +5,26 @@ using System.Runtime.InteropServices;
 
 namespace UotanStudio.Compress.Codecs.Lz4;
 
-internal static partial class Lz4DestinationCodec
+/// <summary>
+/// Managed liblz4 port that encodes into a caller-supplied destination with explicit size limits; EROFS consumes it for its cluster codec.
+/// <para>受管 liblz4 移植，按显式目标容量编码到调用方提供的缓冲区；EROFS 的簇编解码使用它。</para>
+/// </summary>
+public static partial class Lz4DestinationCodec
 {
     private const int MaximumBlockBytes = 256 * 1024 * 1024;
     private const int ALGORITHM_ARCH = 8;
 
-    internal static unsafe int Encode(ReadOnlySpan<byte> source, Span<byte> target, int algorithm, int level, out int consumed)
+    /// <summary>
+    /// Encodes one LZ4 block into a caller-bounded destination using the managed liblz4 port.
+    /// <para>使用受管 liblz4 移植把一个 LZ4 块编码到调用方限定容量的目标缓冲区。</para>
+    /// </summary>
+    /// <param name="source">Plain input block; not modified. <para>输入明文块；不会被修改。</para></param>
+    /// <param name="target">Destination buffer whose length bounds the encoded block. <para>目标缓冲区，其长度限制编码块大小。</para></param>
+    /// <param name="algorithm">Managed liblz4 algorithm selector. <para>受管 liblz4 算法选择值。</para></param>
+    /// <param name="level">Encoder level interpreted by the selected algorithm. <para>由所选算法解释的编码等级。</para></param>
+    /// <param name="consumed">Bytes consumed from <paramref name="source"/>. <para>从 <paramref name="source"/> 消耗的字节数。</para></param>
+    /// <returns>Encoded bytes written to <paramref name="target"/>; zero when the destination cannot hold the block. <para>写入 <paramref name="target"/> 的编码字节数；目标容量不足时为零。</para></returns>
+    public static unsafe int Encode(ReadOnlySpan<byte> source, Span<byte> target, int algorithm, int level, out int consumed)
         => Encode(source, target, algorithm, level, out consumed, state: null);
 
     /// <summary>
@@ -40,7 +54,7 @@ internal static partial class Lz4DestinationCodec
     /// 输出字节只取决于该块、其级别与算法，与上下文此前编码过什么无关。复用按上下文单线程；并发的两个调用方必须
     /// 各自借用自己的上下文。</para>
     /// </remarks>
-    internal static unsafe int Encode(ReadOnlySpan<byte> source, Span<byte> target, int algorithm, int level,
+    public static unsafe int Encode(ReadOnlySpan<byte> source, Span<byte> target, int algorithm, int level,
         out int consumed, void* state)
     {
         if (source.Length > MaximumBlockBytes || target.Length > MaximumBlockBytes || target.IsEmpty)
@@ -122,7 +136,7 @@ internal static partial class Lz4DestinationCodec
     /// <para>为 <see langword="true"/> 时分配较大的 HC 上下文。</para></param>
     /// <returns>A pointer to release with <see cref="ReturnState"/>.
     /// <para>需以 <see cref="ReturnState"/> 释放的指针。</para></returns>
-    internal static unsafe void* RentState(bool highCompression)
+    public static unsafe void* RentState(bool highCompression)
         => NativeMemory.AllocZeroed((nuint)(highCompression ? sizeof(LZ4_streamHC_t) : sizeof(LZ4_stream_t)));
 
     /// <summary>
@@ -131,7 +145,7 @@ internal static partial class Lz4DestinationCodec
     /// </summary>
     /// <param name="state">Context pointer, or <see langword="null"/> for no action.
     /// <para>上下文指针；为 <see langword="null"/> 时不做任何事。</para></param>
-    internal static unsafe void ReturnState(void* state)
+    public static unsafe void ReturnState(void* state)
     {
         if (state is not null)
         {

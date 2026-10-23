@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Hash.Crc32Ieee;
 using UotanStudio.Hash.XzCrc64;
@@ -59,37 +60,63 @@ internal static class XzContainer
     {
         ArgumentOutOfRangeException.ThrowIfNegative(compressedSize);
 
+        var streamFlags = WriteStreamHeader(output, checkType);
+        var blockHeader = BuildBlockHeader(compressedSize, uncompressedSize, DictionarySizeToIndex(dictionarySize));
+
+        output.Write(blockHeader, 0, blockHeader.Length);
+        ExactCopy.Exactly(lzma2Data, output, compressedSize);
+        WriteContainerTail(output, compressedSize, blockHeader.Length, uncompressedSize, check, streamFlags);
+    }
+
+    /// <summary>
+    /// Writes the 12-byte stream header and returns the two stream-flag bytes it advertises.
+    /// <para>写出 12 字节流头并返回其宣告的两个流标志字节。</para>
+    /// </summary>
+    /// <param name="output">Writable destination receiving the header; it is not flushed or closed.
+    /// <para>接收流头的可写目标；不会刷新或关闭。</para></param>
+    /// <param name="checkType">Check identifier stored in the stream flags and later repeated by the footer.
+    /// <para>写入流标志、随后由尾部重复的校验类型标识。</para></param>
+    /// <returns>The two stream-flag bytes, which the footer has to repeat verbatim.
+    /// <para>两个流标志字节，尾部必须原样重复。</para></returns>
+    internal static byte[] WriteStreamHeader(Stream output, byte checkType)
+    {
         output.Write(HeaderMagic, 0, HeaderMagic.Length);
         byte[] streamFlags = [0x00, checkType];
         output.Write(streamFlags, 0, streamFlags.Length);
         WriteCrc32(output, streamFlags);
+        return streamFlags;
+    }
 
-
-        var dictIndex = DictionarySizeToIndex(dictionarySize);
-        var blockHeader = BuildBlockHeader(compressedSize, uncompressedSize, dictIndex);
-
-
-        var blockPadding = (4 - ((blockHeader.Length + compressedSize % 4) % 4)) % 4;
-
-        output.Write(blockHeader, 0, blockHeader.Length);
-        ExactCopy.Exactly(lzma2Data, output, compressedSize);
+    /// <summary>
+    /// Writes the single-block tail: block padding, check, index, footer and footer magic.
+    /// <para>写出单块尾部：块填充、校验、索引、尾部与尾部魔数。</para>
+    /// </summary>
+    /// <param name="output">Writable destination positioned immediately after the LZMA2 payload; it is not flushed or closed.
+    /// <para>定位在 LZMA2 载荷之后的可写目标；不会刷新或关闭。</para></param>
+    /// <param name="compressedSize">Byte length of the LZMA2 payload already written.
+    /// <para>已写出的 LZMA2 载荷字节长度。</para></param>
+    /// <param name="blockHeaderLength">Byte length of the block header already written.
+    /// <para>已写出的块头字节长度。</para></param>
+    /// <param name="uncompressedSize">Decoded byte count recorded in the block header and index.
+    /// <para>记录在块头与索引中的解码字节数。</para></param>
+    /// <param name="check">Check bytes computed over the decoded data; four bytes for CRC-32 and eight for CRC-64.
+    /// <para>对解码数据计算的校验字节；CRC-32 为四字节，CRC-64 为八字节。</para></param>
+    /// <param name="streamFlags">The two stream-flag bytes returned by <see cref="WriteStreamHeader"/>.
+    /// <para>由 <see cref="WriteStreamHeader"/> 返回的两个流标志字节。</para></param>
+    internal static void WriteContainerTail(Stream output, long compressedSize, int blockHeaderLength,
+        ulong uncompressedSize, byte[] check, byte[] streamFlags)
+    {
+        var blockPadding = (4 - ((blockHeaderLength + compressedSize % 4) % 4)) % 4;
         for (var i = 0; i < blockPadding; i++)
         {
             output.WriteByte(0);
         }
 
-
         output.Write(check, 0, check.Length);
 
-
-        var unpaddedSize = checked((ulong)compressedSize + (ulong)blockHeader.Length + (ulong)check.Length);
-
-
+        var unpaddedSize = checked((ulong)compressedSize + (ulong)blockHeaderLength + (ulong)check.Length);
         var index = BuildIndex(unpaddedSize, uncompressedSize);
-
-
         output.Write(index, 0, index.Length);
-
 
         var backwardSize = (uint)((index.Length / 4) - 1);
         var footerPrefix = new byte[6];
@@ -100,11 +127,16 @@ internal static class XzContainer
         footerPrefix[4] = streamFlags[0];
         footerPrefix[5] = streamFlags[1];
 
-
         WriteCrc32(output, footerPrefix);
         output.Write(footerPrefix, 0, footerPrefix.Length);
         output.Write(FooterMagic, 0, FooterMagic.Length);
     }
+
+    /// <summary>
+    /// The largest block header this writer can build, reached when both recorded sizes take nine VLI bytes.
+    /// <para>本写出器可构建的最大块头，在压缩与未压缩大小都占九字节变长整数时达到。</para>
+    /// </summary>
+    internal const int MaximumBlockHeaderSize = 28;
 
     /// <summary>
     /// Builds the block header: size byte + flags + sizes + filter + padding + CRC32.
@@ -146,6 +178,85 @@ internal static class XzContainer
         WriteCrc32(header, headerBytes);
 
         return header.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the block header for the given sizes, mapping the dictionary size through <see cref="DictionarySizeToIndex"/>.
+    /// <para>按给定大小构建块头，并把字典大小经 <see cref="DictionarySizeToIndex"/> 映射。</para>
+    /// </summary>
+    /// <param name="compressedSize">LZMA2 payload byte length; must not be negative.
+    /// <para>LZMA2 载荷字节长度；不得为负。</para></param>
+    /// <param name="uncompressedSize">Decoded byte count recorded in the header.
+    /// <para>记录在块头中的解码字节数。</para></param>
+    /// <param name="dictionarySize">Dictionary size in bytes recorded in the LZMA2 filter properties.
+    /// <para>记录在 LZMA2 过滤器属性中的字典大小（字节）。</para></param>
+    /// <returns>The complete block header with its CRC-32, at most <see cref="MaximumBlockHeaderSize"/> bytes long.
+    /// <para>含 CRC-32 的完整块头，长度不超过 <see cref="MaximumBlockHeaderSize"/> 字节。</para></returns>
+    internal static byte[] BuildBlockHeader(long compressedSize, ulong uncompressedSize, uint dictionarySize)
+        => BuildBlockHeader(compressedSize, uncompressedSize, DictionarySizeToIndex(dictionarySize));
+
+    /// <summary>
+    /// Moves a written byte range toward lower offsets inside a seekable stream that also supports reading.
+    /// <para>在同时支持读取的可定位流内，把已写出的字节区间整体向较低偏移移动。</para>
+    /// </summary>
+    /// <param name="stream">Seekable, readable and writable stream holding the range; it is flushed once before a chunked move and left positioned at the moved end.
+    /// <para>保存该区间的可定位、可读可写流；分块移动前刷新一次，结束后定位在移动后的末尾。</para></param>
+    /// <param name="start">Byte offset of the range start; it must not be lower than <paramref name="delta"/>.
+    /// <para>区间起始字节偏移；不得小于 <paramref name="delta"/>。</para></param>
+    /// <param name="end">Byte offset just past the range end.
+    /// <para>区间末尾之后的字节偏移。</para></param>
+    /// <param name="delta">Distance to move toward lower offsets; zero or a range below one byte leaves the stream unchanged.
+    /// <para>向较低偏移移动的距离；为零或区间不足一字节时不做改动。</para></param>
+    /// <returns>The byte offset just past the moved range, which is also the new stream position.
+    /// <para>移动后区间末尾之后的字节偏移，同时也是流的新位置。</para></returns>
+    /// <exception cref="EndOfStreamException">A seekable stream returned no bytes while the range still had bytes to move.
+    /// <para>可定位流在区间仍有字节待移动时返回零字节。</para></exception>
+    internal static long MoveLeft(Stream stream, long start, long end, int delta)
+    {
+        var length = end - start;
+        if (delta <= 0 || length <= 0)
+        {
+            return end;
+        }
+
+        var movedEnd = end - delta;
+        if (stream is MemoryStream memory && memory.TryGetBuffer(out var segment))
+        {
+            var buffer = segment.Array!;
+            var source = checked(segment.Offset + (int)start);
+            buffer.AsSpan(source, checked((int)length)).CopyTo(buffer.AsSpan(source - delta));
+            stream.Position = movedEnd;
+            return movedEnd;
+        }
+
+        stream.Flush();
+        var moveBuffer = ArrayPool<byte>.Shared.Rent(81920);
+        try
+        {
+            var readPosition = start;
+            var writePosition = start - delta;
+            while (readPosition < end)
+            {
+                stream.Position = readPosition;
+                var read = stream.Read(moveBuffer, 0, (int)Math.Min(moveBuffer.Length, end - readPosition));
+                if (read <= 0)
+                {
+                    throw new EndOfStreamException("The seekable output ended before the LZMA2 payload could be moved.");
+                }
+
+                stream.Position = writePosition;
+                stream.Write(moveBuffer, 0, read);
+                readPosition += read;
+                writePosition += read;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(moveBuffer);
+        }
+
+        stream.Position = movedEnd;
+        return movedEnd;
     }
 
     /// <summary>

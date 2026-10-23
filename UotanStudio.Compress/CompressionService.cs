@@ -71,16 +71,16 @@ public static class CompressionService
     /// <para>定位在明文起始处的可读源流，读取到流末尾且不会被本调用关闭。</para></param>
     /// <param name="output">Writable destination for the encoded bytes; it is flushed and finalized by the codec but left open for the caller.
     /// <para>编码字节的写入目标；由编解码器刷新并写出结尾结构，但保持打开交由调用方处理。</para></param>
-    /// <param name="format">Target container. <see cref="CompressionFormat.None"/> copies the input verbatim; gzip, zlib, deflate, Brotli, bzip2 and LZ4 frame go through their streaming encoders, while XZ, LZMA, Zstandard, LZ4 legacy and LZOP use their dedicated block-frame writers, and the XZ writer spools its payload to a temporary file.
-    /// <para>目标容器格式。<see cref="CompressionFormat.None"/> 原样复制输入；gzip、zlib、deflate、Brotli、bzip2 与 LZ4 帧走各自的流式编码器，而 XZ、LZMA、Zstandard、LZ4 传统格式与 LZOP 使用专用的块帧写出路径，其中 XZ 会把载荷暂存到临时文件。</para></param>
+    /// <param name="format">Target container. <see cref="CompressionFormat.None"/> copies the input verbatim; gzip, zlib, deflate, Brotli, bzip2 and LZ4 frame go through their streaming encoders, while XZ, LZMA, Zstandard, LZ4 legacy and LZOP use their dedicated block-frame writers; the XZ writer writes in place when the destination is readable and positioned at its end, and spools its payload to a temporary file otherwise.
+    /// <para>目标容器格式。<see cref="CompressionFormat.None"/> 原样复制输入；gzip、zlib、deflate、Brotli、bzip2 与 LZ4 帧走各自的流式编码器，而 XZ、LZMA、Zstandard、LZ4 传统格式与 LZOP 使用专用的块帧写出路径；XZ 写出器在目标可读且定位在末尾时就地写出，否则把载荷暂存到临时文件。</para></param>
     /// <param name="options">Optional tuning; <see langword="null"/> keeps every codec default.
     /// <para>可选调优参数；为 <see langword="null"/> 时全部采用编解码器默认值。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="format"/> is unknown or cannot compress.
     /// <para><paramref name="format"/> 未知或不支持压缩。</para></exception>
-    /// <exception cref="CompressionException">The format has no streaming or dedicated encoder, or the codec failed; the XZ path also reports temporary-file and I/O failures this way.
-    /// <para>该格式没有流式或专用编码器，或编解码器失败；XZ 路径的临时文件与 I/O 故障也以此异常上报。</para></exception>
+    /// <exception cref="CompressionException">The format has no streaming or dedicated encoder, or the codec failed; the XZ path also reports temporary-file, in-place move and I/O failures this way.
+    /// <para>该格式没有流式或专用编码器，或编解码器失败；XZ 路径的临时文件、就地移动与 I/O 故障也以此异常上报。</para></exception>
     public static void Compress(Stream input, Stream output, CompressionFormat format, CompressionOptions? options = null)
     {
         if (input == null)
@@ -369,8 +369,8 @@ public static class CompressionService
     /// <para><paramref name="output"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="ArgumentException"><paramref name="format"/> is unknown or cannot compress, for example <see cref="CompressionFormat.Zopfli"/>.
     /// <para><paramref name="format"/> 未知或不支持压缩，例如 <see cref="CompressionFormat.Zopfli"/>。</para></exception>
-    /// <exception cref="NotSupportedException"><paramref name="format"/> has no incremental writer because its container needs sizes known only after the whole payload: XZ, LZMA, LZ4 legacy and LZOP. Those bytes are produced by <see cref="M:UotanStudio.Compress.CompressionService.Compress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,UotanStudio.Compress.CompressionOptions)"/>, which spools or blocks internally.
-    /// <para><paramref name="format"/> 没有增量写出器，因为其容器需要在整段载荷完成后才能确定的尺寸，即 XZ、LZMA、LZ4 传统格式与 LZOP。其字节请交由 <see cref="M:UotanStudio.Compress.CompressionService.Compress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,UotanStudio.Compress.CompressionOptions)"/> 产出，该入口内部已做暂存或分块。</para></exception>
+    /// <exception cref="NotSupportedException"><paramref name="format"/> has no incremental writer because its container needs sizes known only after the whole payload: XZ, LZMA, LZ4 legacy and LZOP. Those bytes are produced by <see cref="M:UotanStudio.Compress.CompressionService.Compress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,UotanStudio.Compress.CompressionOptions)"/>, which writes in place, spools or blocks internally.
+    /// <para><paramref name="format"/> 没有增量写出器，因为其容器需要在整段载荷完成后才能确定的尺寸，即 XZ、LZMA、LZ4 传统格式与 LZOP。其字节请交由 <see cref="M:UotanStudio.Compress.CompressionService.Compress(System.IO.Stream,System.IO.Stream,UotanStudio.Compress.CompressionFormat,UotanStudio.Compress.CompressionOptions)"/> 产出，该入口内部已做就地写出、暂存或分块。</para></exception>
     /// <exception cref="CompressionException">The codec writer could not be constructed for <paramref name="output"/>, for example because the stream rejects writes; the original error is kept as <see cref="Exception.InnerException"/>.
     /// <para>无法基于 <paramref name="output"/> 构造编码写出器，例如该流拒绝写入；原始异常保留在 <see cref="Exception.InnerException"/> 中。</para></exception>
     /// <example>

@@ -2,7 +2,7 @@ namespace UotanStudio.Compress.Detection;
 
 /// <summary>Detects compression framing from bytes or a stream header without selecting a codec by extension.
 /// <para>从字节或流头部检测压缩封装，不按扩展名选择编解码器。</para></summary>
-internal static class CompressionDetector
+public static class CompressionDetector
 {
     private static readonly byte[] MagicGzip = [0x1F, 0x8B];
     private static readonly byte[] MagicZstd = [0x28, 0xB5, 0x2F, 0xFD];

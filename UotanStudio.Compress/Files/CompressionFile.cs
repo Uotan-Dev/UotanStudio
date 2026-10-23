@@ -35,7 +35,7 @@ public static class CompressionFile
         WriteFileAtomically(outputPath, tempPath =>
         {
             using var input = File.OpenRead(inputPath);
-            using var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            using var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536);
             if (progress is null)
             {
                 CompressionService.Compress(input, output, format, options);

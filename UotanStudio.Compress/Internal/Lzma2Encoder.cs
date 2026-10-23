@@ -1,3 +1,4 @@
+using System.Buffers;
 using SevenZip;
 using SevenZip.Compression.LZMA;
 
@@ -39,69 +40,76 @@ internal static class Lzma2Encoder
         }
 
         var windowCount = windowStarts.Count;
-        var compressed = new byte[windowCount][];
+        var compressed = new PooledWriteStream?[windowCount];
         var dop = Parallelism.Resolve(maxDegreeOfParallelism, windowCount);
 
-        if (dop > 1)
+        try
         {
+            if (dop > 1)
+            {
 
-            Parallel.For(
-                0, windowCount,
-                new ParallelOptions { MaxDegreeOfParallelism = dop },
-                () => CreateEncoder(dictionarySize),
-                (i, _, encoder) =>
+                Parallel.For(
+                    0, windowCount,
+                    new ParallelOptions { MaxDegreeOfParallelism = dop },
+                    () => CreateEncoder(dictionarySize),
+                    (i, _, encoder) =>
+                    {
+                        var start = windowStarts[i];
+                        var chunkSize = Math.Min(UncompressedChunkMax, data.Length - start);
+                        compressed[i] = Lzma1Compress(encoder, data, start, chunkSize);
+                        return encoder;
+                    },
+                    _ => { });
+            }
+            else
+            {
+                Encoder? encoder = null;
+                for (var i = 0; i < windowCount; i++)
                 {
                     var start = windowStarts[i];
                     var chunkSize = Math.Min(UncompressedChunkMax, data.Length - start);
-                    compressed[i] = Lzma1Compress(encoder, data, start, chunkSize);
-                    return encoder;
-                },
-                _ => { });
-        }
-        else
-        {
-            Encoder? encoder = null;
+                    compressed[i] = Lzma1Compress(encoder ??= CreateEncoder(dictionarySize), data, start, chunkSize);
+                }
+            }
+
+            using var output = new MemoryStream();
+            var firstChunk = true;
+
             for (var i = 0; i < windowCount; i++)
             {
                 var start = windowStarts[i];
                 var chunkSize = Math.Min(UncompressedChunkMax, data.Length - start);
-                compressed[i] = Lzma1Compress(encoder ??= CreateEncoder(dictionarySize), data, start, chunkSize);
-            }
-        }
+                var result = compressed[i]!;
 
-        using var output = new MemoryStream();
-        var firstChunk = true;
-
-        for (var i = 0; i < windowCount; i++)
-        {
-            var start = windowStarts[i];
-            var chunkSize = Math.Min(UncompressedChunkMax, data.Length - start);
-            var result = compressed[i];
-
-            if (result.Length < chunkSize && result.Length <= 0xFFFF)
-            {
-                WriteLzmaChunkHeader(output, chunkSize, result.Length);
-                output.Write(result, 0, result.Length);
-                firstChunk = false;
-            }
-            else
-            {
-
-                var subStart = start;
-                var subEnd = start + chunkSize;
-                while (subStart < subEnd)
+                if (result.WrittenLength < chunkSize && result.WrittenLength <= 0xFFFF)
                 {
-                    var sub = Math.Min(0x10000, subEnd - subStart);
-                    WriteUncompressedChunkHeader(output, firstChunk, sub);
-                    output.Write(data, subStart, sub);
+                    WriteLzmaChunkHeader(output, chunkSize, result.WrittenLength);
+                    output.Write(result.Buffer, 0, result.WrittenLength);
                     firstChunk = false;
-                    subStart += sub;
+                }
+                else
+                {
+
+                    var subStart = start;
+                    var subEnd = start + chunkSize;
+                    while (subStart < subEnd)
+                    {
+                        var sub = Math.Min(0x10000, subEnd - subStart);
+                        WriteUncompressedChunkHeader(output, firstChunk, sub);
+                        output.Write(data, subStart, sub);
+                        firstChunk = false;
+                        subStart += sub;
+                    }
                 }
             }
-        }
 
-        output.WriteByte(0x00);
-        return output.ToArray();
+            output.WriteByte(0x00);
+            return output.ToArray();
+        }
+        finally
+        {
+            ReleaseCompressed(compressed);
+        }
     }
 
     /// <summary>Streaming encode: reads independent 64 KiB windows and writes a raw LZMA2 stream.
@@ -114,15 +122,15 @@ internal static class Lzma2Encoder
     /// <para>交给每个窗口编码器的字典大小（字节），默认为 <see cref="DefaultDictionarySize"/>（8 MiB）。</para></param>
     /// <param name="maxDegreeOfParallelism"><see langword="null"/> or 1 and below reads and encodes sequentially; above 1 that many windows are encoded concurrently, bounded by the window count, the detected physical core count and a 512 MiB budget for the dictionary-sized window encoders, while staying in input order.
     /// <para>为 <see langword="null"/> 或小于等于 1 时串行读取与编码；大于 1 时并发编码相应数量的窗口，上限由窗口数量、 探测到的物理核心数以及字典大小的窗口编码器所占 512 MiB 预算共同决定，窗口仍按输入顺序写出。</para></param>
-    /// <param name="onOriginalWindow">Optional callback invoked once per window with the freshly read uncompressed bytes; <see langword="null"/> reports nothing.
-    /// <para>可选回调，每个窗口以刚读取的未压缩字节调用一次；为 <see langword="null"/> 时不上报。</para></param>
+    /// <param name="onOriginalWindow">Optional callback invoked once per window with the pooled buffer, a zero offset and the valid byte count; the array can be longer than that count and is only valid until the callback returns. <see langword="null"/> reports nothing.
+    /// <para>可选回调，每个窗口以池化缓冲区、零偏移与有效字节数调用一次；数组可能长于该字节数，且仅在回调返回前有效。为 <see langword="null"/> 时不上报。</para></param>
     /// <returns>The total number of uncompressed bytes read from <paramref name="input"/>.
     /// <para>从 <paramref name="input"/> 读取的未压缩字节总数。</para></returns>
     public static long Encode(Stream input, Stream output, uint dictionarySize = DefaultDictionarySize,
         int? maxDegreeOfParallelism = null, Action<byte[], int, int>? onOriginalWindow = null)
     {
         var dop = ResolveStreamingDegree(maxDegreeOfParallelism, dictionarySize);
-        var windows = new List<byte[]>(dop);
+        var windows = new List<(byte[] Buffer, int Length)>(dop);
         var encoders = new Encoder?[dop];
         long total = 0;
         var firstChunk = true;
@@ -131,62 +139,81 @@ internal static class Lzma2Encoder
         {
 
             windows.Clear();
-            while (windows.Count < dop)
+            try
             {
-                var win = ReadWindow(input);
-                if (win == null)
+                while (windows.Count < dop)
+                {
+                    var (win, winLength) = ReadWindow(input);
+                    if (win == null)
+                    {
+                        break;
+                    }
+
+                    windows.Add((win, winLength));
+                    onOriginalWindow?.Invoke(win, 0, winLength);
+                    total += winLength;
+                }
+                if (windows.Count == 0)
                 {
                     break;
                 }
 
-                onOriginalWindow?.Invoke(win, 0, win.Length);
-                windows.Add(win);
-                total += win.Length;
-            }
-            if (windows.Count == 0)
-            {
-                break;
-            }
+                var compressed = new PooledWriteStream?[windows.Count];
+                try
+                {
+                    if (windows.Count > 1 && dop > 1)
+                    {
+                        Parallel.For(
+                            0, windows.Count,
+                            new ParallelOptions { MaxDegreeOfParallelism = dop },
+                            i => compressed[i] = Lzma1Compress(encoders[i] ??= CreateEncoder(dictionarySize), windows[i].Buffer, 0, windows[i].Length));
+                    }
+                    else
+                    {
+                        for (var i = 0; i < windows.Count; i++)
+                        {
+                            compressed[i] = Lzma1Compress(encoders[i] ??= CreateEncoder(dictionarySize), windows[i].Buffer, 0, windows[i].Length);
+                        }
+                    }
 
-            var compressed = new byte[windows.Count][];
-            if (windows.Count > 1 && dop > 1)
-            {
-                Parallel.For(
-                    0, windows.Count,
-                    new ParallelOptions { MaxDegreeOfParallelism = dop },
-                    i => compressed[i] = Lzma1Compress(encoders[i] ??= CreateEncoder(dictionarySize), windows[i], 0, windows[i].Length));
+                    for (var i = 0; i < windows.Count; i++)
+                    {
+                        var win = windows[i];
+                        var result = compressed[i]!;
+
+                        if (result.WrittenLength < win.Length && result.WrittenLength <= 0xFFFF)
+                        {
+                            WriteLzmaChunkHeader(output, win.Length, result.WrittenLength);
+                            output.Write(result.Buffer, 0, result.WrittenLength);
+                            firstChunk = false;
+                        }
+                        else
+                        {
+                            var subStart = 0;
+                            while (subStart < win.Length)
+                            {
+                                var sub = Math.Min(0x10000, win.Length - subStart);
+                                WriteUncompressedChunkHeader(output, firstChunk, sub);
+                                output.Write(win.Buffer, subStart, sub);
+                                firstChunk = false;
+                                subStart += sub;
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    ReleaseCompressed(compressed);
+                }
             }
-            else
+            finally
             {
                 for (var i = 0; i < windows.Count; i++)
                 {
-                    compressed[i] = Lzma1Compress(encoders[i] ??= CreateEncoder(dictionarySize), windows[i], 0, windows[i].Length);
+                    ArrayPool<byte>.Shared.Return(windows[i].Buffer);
                 }
-            }
 
-            for (var i = 0; i < windows.Count; i++)
-            {
-                var win = windows[i];
-                var result = compressed[i];
-
-                if (result.Length < win.Length && result.Length <= 0xFFFF)
-                {
-                    WriteLzmaChunkHeader(output, win.Length, result.Length);
-                    output.Write(result, 0, result.Length);
-                    firstChunk = false;
-                }
-                else
-                {
-                    var subStart = 0;
-                    while (subStart < win.Length)
-                    {
-                        var sub = Math.Min(0x10000, win.Length - subStart);
-                        WriteUncompressedChunkHeader(output, firstChunk, sub);
-                        output.Write(win, subStart, sub);
-                        firstChunk = false;
-                        subStart += sub;
-                    }
-                }
+                windows.Clear();
             }
         }
 
@@ -225,24 +252,39 @@ internal static class Lzma2Encoder
     }
 
     /// <summary>
-    /// Reads one window of up to 64 KiB from the stream; returns null at EOF.
-    /// <para>从流中读取至多 64 KiB 的一个窗口；EOF 时返回 null。</para>
+    /// Reads one window of up to 64 KiB into a pooled buffer; returns <see langword="null"/> at EOF.
+    /// <para>从流中读取至多 64 KiB 到池化缓冲区；EOF 时返回 <see langword="null"/>。</para>
     /// </summary>
-    private static byte[]? ReadWindow(Stream input)
+    private static (byte[]? Buffer, int Length) ReadWindow(Stream input)
     {
-        var win = new byte[UncompressedChunkMax];
-        var read = 0;
-        while (read < win.Length)
+        var win = ArrayPool<byte>.Shared.Rent(UncompressedChunkMax);
+        try
         {
-            var n = input.Read(win, read, win.Length - read);
-            if (n <= 0)
+            var read = 0;
+            while (read < UncompressedChunkMax)
             {
-                break;
+                var n = input.Read(win, read, UncompressedChunkMax - read);
+                if (n <= 0)
+                {
+                    break;
+                }
+
+                read += n;
             }
 
-            read += n;
+            if (read == 0)
+            {
+                ArrayPool<byte>.Shared.Return(win);
+                return (null, 0);
+            }
+
+            return (win, read);
         }
-        return read == 0 ? null : read == win.Length ? win : win.AsSpan(0, read).ToArray();
+        catch
+        {
+            ArrayPool<byte>.Shared.Return(win);
+            throw;
+        }
     }
 
     /// <summary>
@@ -259,12 +301,29 @@ internal static class Lzma2Encoder
         return encoder;
     }
 
-    private static byte[] Lzma1Compress(Encoder encoder, byte[] data, int start, int count)
+    private static PooledWriteStream Lzma1Compress(Encoder encoder, byte[] data, int start, int count)
     {
         using var input = new MemoryStream(data, start, count, writable: false);
-        using var output = new MemoryStream();
-        encoder.Code(input, output, count, -1, null);
-        return output.ToArray();
+        var output = new PooledWriteStream(count);
+        try
+        {
+            encoder.Code(input, output, count, -1, null);
+            return output;
+        }
+        catch
+        {
+            output.Dispose();
+            throw;
+        }
+    }
+
+    private static void ReleaseCompressed(PooledWriteStream?[] compressed)
+    {
+        for (var i = 0; i < compressed.Length; i++)
+        {
+            compressed[i]?.Dispose();
+            compressed[i] = null;
+        }
     }
 
     /// <summary>

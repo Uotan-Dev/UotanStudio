@@ -8,7 +8,7 @@ namespace UotanStudio.Compress.Compressors;
 /// BZip2 codec writing the standard <c>BZh9</c> stream layout at the largest 900 kB block setting; concatenation of independent streams is supported on read.
 /// <para>BZip2 编解码器，按标准 <c>BZh9</c> 流布局以最大 900 kB 块设置写出；读取时支持独立流的串接。</para>
 /// </summary>
-internal static class Bzip2Compressor
+public static class Bzip2Compressor
 {
     /// <summary>BZIP2 compression.<para>BZIP2 压缩。</para></summary>
     /// <param name="data">Plaintext to compress, taken in full from the array.

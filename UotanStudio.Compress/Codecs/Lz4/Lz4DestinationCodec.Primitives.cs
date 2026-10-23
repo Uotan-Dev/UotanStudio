@@ -4,7 +4,7 @@ using size_t = System.UInt32;
 
 namespace UotanStudio.Compress.Codecs.Lz4;
 
-internal static unsafe partial class Lz4DestinationCodec
+public static unsafe partial class Lz4DestinationCodec
 {
     private const int LZ4_MEMORY_USAGE = 14;
     private const int LZ4_MAX_INPUT_SIZE = 0x7E000000;

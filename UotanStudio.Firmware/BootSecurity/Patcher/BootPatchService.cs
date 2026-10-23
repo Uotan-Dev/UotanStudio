@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using UotanStudio.Compress;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Archive.Editing;
 using UotanStudio.Firmware.Archive.Models;
 using UotanStudio.Firmware.BootSecurity.BootImage;
@@ -246,7 +247,7 @@ public sealed class BootPatchService
             return;
         }
         using var fs = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        using var zip = new ZipArchive(fs, ZipArchiveMode.Read);
+        using var zip = ZipContainer.OpenRead(fs);
         var abiNames = AbiDirectories(architecture);
         foreach (var entry in zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)))
         {
@@ -459,7 +460,7 @@ public sealed class BootPatchService
     {
         using var fs = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read,
             65536, FileOptions.SequentialScan);
-        using var zip = new ZipArchive(fs, ZipArchiveMode.Read);
+        using var zip = ZipContainer.OpenRead(fs);
         var abiNames = AbiDirectories(architecture);
         var entry = zip.Entries.FirstOrDefault(e => e.Name.Equals(fileName, StringComparison.OrdinalIgnoreCase) &&
             abiNames.Any(a => e.FullName.Replace('\\', '/').Contains('/' + a + '/', StringComparison.OrdinalIgnoreCase)))

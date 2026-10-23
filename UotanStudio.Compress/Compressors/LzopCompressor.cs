@@ -9,7 +9,7 @@ namespace UotanStudio.Compress.Compressors;
 /// LZOP container codec: a nine-byte signature and big-endian header, then 256 KiB LZO1X-1 blocks, each capped at 64 MiB and closed by a zero-size block.
 /// <para>LZOP 容器编解码器：九字节签名与大端头部，其后是 256 KiB 的 LZO1X-1 块，单块上限 64 MiB，并以零长度块结束。</para>
 /// </summary>
-internal static class LzopCompressor
+public static class LzopCompressor
 {
     /// <summary>
     /// The nine-byte LZOP file signature, whose non-text trailing bytes reveal a payload that was altered in transit.

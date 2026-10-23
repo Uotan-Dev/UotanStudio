@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.AndroidMeta.Dex;
@@ -88,7 +89,7 @@ public static class JarDexContainer
     public static IReadOnlyList<JarEntryInfo> ListEntries(string path)
     {
         using var stream = OpenRead(path);
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+        using var archive = ZipContainer.OpenRead(stream);
         if (archive.Entries.Count > MaxEntryCount)
         {
             throw new InvalidDataException(
@@ -111,7 +112,7 @@ public static class JarDexContainer
     public static IReadOnlyList<string> ListDexEntries(string path)
     {
         using var stream = OpenRead(path);
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+        using var archive = ZipContainer.OpenRead(stream);
         if (archive.Entries.Count > MaxEntryCount)
         {
             throw new InvalidDataException(
@@ -194,7 +195,7 @@ public static class JarDexContainer
     public static byte[] LoadEntry(string path, string entryName, CancellationToken cancellationToken = default)
     {
         using var stream = OpenRead(path);
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+        using var archive = ZipContainer.OpenRead(stream);
         var entry = FindEntry(archive, entryName);
         return ReadBounded(entry, entryName, cancellationToken);
     }
@@ -225,7 +226,7 @@ public static class JarDexContainer
         }
 
         using var stream = OpenRead(path);
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+        using var archive = ZipContainer.OpenRead(stream);
         var entry = FindEntry(archive, entryName);
         var bytes = ReadBounded(entry, entryName, cancellationToken);
 
@@ -288,7 +289,7 @@ public static class JarDexContainer
         try
         {
             using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: false))
+            using (var archive = ZipContainer.Create(stream))
             {
                 foreach (var (name, content) in entries)
                 {
@@ -373,7 +374,7 @@ public static class JarDexContainer
         try
         {
             using (var sourceStream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan))
-            using (var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false))
+            using (var sourceArchive = ZipContainer.OpenRead(sourceStream))
             {
                 if (sourceArchive.Entries.Count > MaxEntryCount)
                 {
@@ -386,7 +387,7 @@ public static class JarDexContainer
                 }
 
                 using var targetStream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                using var targetArchive = new ZipArchive(targetStream, ZipArchiveMode.Create, leaveOpen: false);
+                using var targetArchive = ZipContainer.Create(targetStream);
                 foreach (var entry in sourceArchive.Entries)
                 {
                     cancellationToken.ThrowIfCancellationRequested();

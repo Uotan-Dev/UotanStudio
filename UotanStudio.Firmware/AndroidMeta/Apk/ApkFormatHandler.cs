@@ -1,4 +1,4 @@
-using System.IO.Compression;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
@@ -108,7 +108,7 @@ internal sealed class ApkFormatHandler : IFormatHandler
             var extractedFiles = new List<string>();
 
             using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920))
-            using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false))
+            using (var archive = ZipContainer.OpenRead(stream))
             {
                 foreach (var entry in archive.Entries)
                 {

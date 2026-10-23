@@ -1,4 +1,4 @@
-using SharpCompress.Compressors.Xz;
+using UotanStudio.Compress.Codecs.Xz;
 using UotanStudio.Compress.Internal;
 using UotanStudio.Hash.Crc32Ieee;
 using UotanStudio.Hash.XzCrc64;
@@ -9,7 +9,7 @@ namespace UotanStudio.Compress.Compressors;
 /// XZ container codec: LZMA2 payload wrapped in the standard stream header, block, padding, index and footer layout with a CRC-32 or CRC-64 check over the uncompressed data.
 /// <para>XZ 容器编解码器：将 LZMA2 负载包装为标准的流头、块、填充、索引与尾部布局，并对未压缩数据计算 CRC-32 或 CRC-64 校验。</para>
 /// </summary>
-internal static class XzCompressor
+public static class XzCompressor
 {
     private static readonly byte[] Lzma2EosMarker = [0x00];
 
@@ -51,12 +51,12 @@ internal static class XzCompressor
         }
     }
 
-    /// <summary>Compresses bounded 64 KiB input windows, spooling compressed data before writing the container.
-    /// <para>按有界 64 KiB 窗口压缩输入，将压缩数据暂存后写出容器。</para></summary>
+    /// <summary>Compresses bounded 64 KiB input windows and writes the container in place when the destination allows it, spooling the LZMA2 payload otherwise.
+    /// <para>按有界 64 KiB 窗口压缩输入；目标允许时就地写出容器，否则暂存 LZMA2 载荷。</para></summary>
     /// <param name="input">Readable source drained window by window from its current position; the uncompressed bytes are hashed as they are read and the plaintext is never held in memory as a whole. Ownership stays with the caller.
     /// <para>从当前位置逐窗口读取的可读源流；读取时即对未压缩字节计算校验值，明文不会整体驻留内存。所有权归调用方。</para></param>
-    /// <param name="output">Writable destination that receives the finished container; it is not closed. The LZMA2 payload is spooled to a temporary file in the system temp directory which is deleted when the encoding handle is released, whether the call succeeds or fails.
-    /// <para>接收完整容器的写入目标，不会被本调用关闭。LZMA2 负载暂存于系统临时目录中的临时文件，编码句柄释放时无论成功失败都会被删除。</para></param>
+    /// <param name="output">Writable destination that receives the finished container; it is not closed. When the stream is also readable and positioned at its end, the block header is reserved, the payload is written directly and the sizes and index are backfilled in place; otherwise the LZMA2 payload is spooled to a temporary file in the system temp directory which is deleted when the encoding handle is released, whether the call succeeds or fails.
+    /// <para>接收完整容器的写入目标，不会被本调用关闭。流同时可读且定位在末尾时，预留块头、直接写出载荷，并在原位回填大小与索引；否则 LZMA2 负载暂存于系统临时目录中的临时文件，编码句柄释放时无论成功失败都会被删除。</para></param>
     /// <param name="dictionarySize">LZMA2 dictionary window in bytes recorded in the block filter properties; the default is 8 MiB.
     /// <para>写入块过滤器属性的 LZMA2 字典窗口大小（字节），默认为 8 MiB。</para></param>
     /// <param name="checkType">Check identifier stored in the stream footer, <c>0x01</c> for CRC-32 (default) or <c>0x04</c> for CRC-64; any other value writes a four-byte CRC-32 check while advertising that value.
@@ -65,8 +65,8 @@ internal static class XzCompressor
     /// <para>为 <see langword="null"/> 或小于等于 1 时串行编码；大于 1 时并发读取并编码相应数量的窗口，窗口仍按输入顺序写出。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="CompressionException">Reading, encoding, creating or spooling the temporary file, or writing the container failed.
-    /// <para>读取、编码、临时文件的创建或暂存写入、容器写出失败。</para></exception>
+    /// <exception cref="CompressionException">Reading, encoding, creating or spooling the temporary file, moving the in-place payload, or writing the container failed. An in-place destination is truncated back to its starting length before the failure is reported when the stream supports it.
+    /// <para>读取、编码、临时文件的创建或暂存写入、就地移动载荷或容器写出失败。就地写出的目标在流支持时会于报告失败前截断回起始长度。</para></exception>
     public static void Compress(Stream input, Stream output, uint dictionarySize = Lzma2Encoder.DefaultDictionarySize,
         byte checkType = XzContainer.CheckTypeCrc32, int? maxDegreeOfParallelism = null)
     {
@@ -82,53 +82,158 @@ internal static class XzCompressor
 
         try
         {
-            using var lzma2 = new FileStream(ScratchFile.CreateScratchPath("uotan-xz"),
-                FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536,
-                FileOptions.DeleteOnClose | FileOptions.SequentialScan);
-
-            var crc64 = new XzCrc64();
-            var crc32 = new Crc32IeeeAccumulator();
-
-            var total = Lzma2Encoder.Encode(input, lzma2, dictionarySize, maxDegreeOfParallelism,
-                (win, offset, count) =>
-                {
-                    if (checkType == XzContainer.CheckTypeCrc64)
-                    {
-                        crc64.Append(new ReadOnlySpan<byte>(win, offset, count));
-                    }
-                    else
-                    {
-                        crc32.Append(new ReadOnlySpan<byte>(win, offset, count));
-                    }
-                });
-
-            byte[] check;
-            if (checkType == XzContainer.CheckTypeCrc64)
+            if (CanWriteInPlace(output))
             {
-                var crc = crc64.GetCurrentHashAsUInt64();
-                check = new byte[8];
-                for (var i = 0; i < 8; i++)
-                {
-                    check[i] = (byte)((crc >> (8 * i)) & 0xFF);
-                }
+                CompressInPlace(input, output, dictionarySize, checkType, maxDegreeOfParallelism);
             }
             else
             {
-                var crc = crc32.GetCurrentHash();
-                check = new byte[4];
-                for (var i = 0; i < 4; i++)
-                {
-                    check[i] = (byte)((crc >> (8 * i)) & 0xFF);
-                }
+                CompressSpooled(input, output, dictionarySize, checkType, maxDegreeOfParallelism);
             }
-
-            var compressedSize = lzma2.Length;
-            lzma2.Position = 0;
-            XzContainer.WriteContainer(output, lzma2, compressedSize, (ulong)total, check, dictionarySize, checkType);
         }
         catch (Exception ex)
         {
             throw new CompressionException("XZ 压缩失败", ex);
+        }
+    }
+
+    private static bool CanWriteInPlace(Stream output)
+    {
+        if (!output.CanRead || !output.CanSeek || !output.CanWrite)
+        {
+            return false;
+        }
+
+        try
+        {
+            return output.Position == output.Length;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    private static void CompressSpooled(Stream input, Stream output, uint dictionarySize, byte checkType,
+        int? maxDegreeOfParallelism)
+    {
+        using var lzma2 = new FileStream(ScratchFile.CreateScratchPath("uotan-xz"),
+            FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536,
+            FileOptions.DeleteOnClose | FileOptions.SequentialScan);
+
+        var crc64 = new XzCrc64();
+        var crc32 = new Crc32IeeeAccumulator();
+        void OnWindow(byte[] window, int offset, int count)
+        {
+            if (checkType == XzContainer.CheckTypeCrc64)
+            {
+                crc64.Append(new ReadOnlySpan<byte>(window, offset, count));
+            }
+            else
+            {
+                crc32.Append(new ReadOnlySpan<byte>(window, offset, count));
+            }
+        }
+
+        var total = Lzma2Encoder.Encode(input, lzma2, dictionarySize, maxDegreeOfParallelism, OnWindow);
+        var check = CreateCheck(checkType, crc64, crc32);
+        var compressedSize = lzma2.Length;
+        lzma2.Position = 0;
+        XzContainer.WriteContainer(output, lzma2, compressedSize, (ulong)total, check, dictionarySize, checkType);
+    }
+
+    private static void CompressInPlace(Stream input, Stream output, uint dictionarySize, byte checkType,
+        int? maxDegreeOfParallelism)
+    {
+        var start = output.Position;
+        try
+        {
+            var streamFlags = XzContainer.WriteStreamHeader(output, checkType);
+            Span<byte> reserved = stackalloc byte[XzContainer.MaximumBlockHeaderSize];
+            reserved.Clear();
+            output.Write(reserved);
+            var payloadStart = output.Position;
+
+            var crc64 = new XzCrc64();
+            var crc32 = new Crc32IeeeAccumulator();
+            void OnWindow(byte[] window, int offset, int count)
+            {
+                if (checkType == XzContainer.CheckTypeCrc64)
+                {
+                    crc64.Append(new ReadOnlySpan<byte>(window, offset, count));
+                }
+                else
+                {
+                    crc32.Append(new ReadOnlySpan<byte>(window, offset, count));
+                }
+            }
+
+            var total = Lzma2Encoder.Encode(input, output, dictionarySize, maxDegreeOfParallelism, OnWindow);
+            var payloadEnd = output.Position;
+            var compressedSize = payloadEnd - payloadStart;
+            var blockHeader = XzContainer.BuildBlockHeader(compressedSize, (ulong)total, dictionarySize);
+            if (blockHeader.Length > XzContainer.MaximumBlockHeaderSize)
+            {
+                throw new InvalidOperationException("The XZ block header exceeded its reserved size.");
+            }
+
+            if (blockHeader.Length < XzContainer.MaximumBlockHeaderSize)
+            {
+                payloadEnd = XzContainer.MoveLeft(output, payloadStart, payloadEnd,
+                    XzContainer.MaximumBlockHeaderSize - blockHeader.Length);
+            }
+
+            output.Position = payloadStart - XzContainer.MaximumBlockHeaderSize;
+            output.Write(blockHeader, 0, blockHeader.Length);
+            output.Position = payloadEnd;
+            XzContainer.WriteContainerTail(output, compressedSize, blockHeader.Length, (ulong)total,
+                CreateCheck(checkType, crc64, crc32), streamFlags);
+        }
+        catch
+        {
+            TryRewind(output, start);
+            throw;
+        }
+    }
+
+    private static byte[] CreateCheck(byte checkType, XzCrc64 crc64, Crc32IeeeAccumulator crc32)
+    {
+        if (checkType == XzContainer.CheckTypeCrc64)
+        {
+            var crc = crc64.GetCurrentHashAsUInt64();
+            var check = new byte[8];
+            for (var i = 0; i < 8; i++)
+            {
+                check[i] = (byte)((crc >> (8 * i)) & 0xFF);
+            }
+
+            return check;
+        }
+
+        var crc32Value = crc32.GetCurrentHash();
+        var check32 = new byte[4];
+        for (var i = 0; i < 4; i++)
+        {
+            check32[i] = (byte)((crc32Value >> (8 * i)) & 0xFF);
+        }
+
+        return check32;
+    }
+
+    private static void TryRewind(Stream output, long start)
+    {
+        try
+        {
+            output.SetLength(start);
+            output.Position = start;
+        }
+        catch (Exception)
+        {
+            // Restoring is best effort; the caller still receives the original encoding failure.
         }
     }
 
@@ -179,7 +284,7 @@ internal static class XzCompressor
 
         try
         {
-            using var xzStream = new XZStream(new NonDisposingStream(input));
+            using var xzStream = new XzDecoderStream(input, leaveOpen: true);
             xzStream.CopyTo(output);
         }
         catch (Exception ex)
@@ -197,7 +302,7 @@ internal static class XzCompressor
     /// <returns>A readable stream of decoded bytes that verifies the stored CRC as the container ends and leaves <paramref name="input"/> open when disposed.
     /// <para>解码字节的可读流，在容器末尾校验存储的 CRC，释放时不关闭 <paramref name="input"/>。</para></returns>
     internal static Stream CreateDecompressionStream(Stream input)
-        => new XZStream(new NonDisposingStream(input));
+        => new XzDecoderStream(input, leaveOpen: true);
 
     /// <summary>
     /// Detects whether the data is in XZ format (magic FD 37 7A 58 5A 00).

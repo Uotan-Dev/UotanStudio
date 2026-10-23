@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Runtime.ExceptionServices;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Hash.Digests;
 
@@ -192,7 +193,7 @@ public static class ApkSigner
         long totalUncompressed = 0;
         long manifestBudget = 0;
         using (var stream = new FileStream(apkPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferBytes, FileOptions.SequentialScan))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false))
+        using (var archive = ZipContainer.OpenRead(stream))
         {
             var archiveIndex = 0;
             foreach (var entry in archive.Entries)
@@ -247,7 +248,7 @@ public static class ApkSigner
         if (workers <= 1 || descriptors.Count == 1)
         {
             using var stream = new FileStream(apkPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferBytes, FileOptions.SequentialScan);
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+            using var archive = ZipContainer.OpenRead(stream);
             HashEntryRange(archive, descriptors, 0, descriptors.Count, digests, cancellationToken);
             return digests;
         }
@@ -268,7 +269,7 @@ public static class ApkSigner
                 }
 
                 using var stream = new FileStream(apkPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferBytes, FileOptions.SequentialScan);
-                using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+                using var archive = ZipContainer.OpenRead(stream);
                 HashEntryRange(archive, descriptors, start, end, digests, cancellationToken);
             });
         }

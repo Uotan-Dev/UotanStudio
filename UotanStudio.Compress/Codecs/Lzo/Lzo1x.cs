@@ -7,7 +7,7 @@ namespace UotanStudio.Compress.Codecs.Lzo;
 /// Outcome codes returned by the LZO1X codec.
 /// <para>LZO1X 编解码器返回的结果状态码。</para>
 /// </summary>
-internal enum LzoStatus : byte
+public enum LzoStatus : byte
 {
     /// <summary>The operation completed successfully. <para>操作成功完成。</para></summary>
     Ok,
@@ -28,7 +28,11 @@ internal enum LzoStatus : byte
     Error,
 }
 
-internal static class Lzo1x
+/// <summary>
+/// LZO1X block codec used by F2FS and SquashFS; the caller supplies the destination capacity.
+/// <para>供 F2FS 与 SquashFS 使用的 LZO1X 块编解码器；目标容量由调用方提供。</para>
+/// </summary>
+public static class Lzo1x
 {
     private const int M2MaxOffset = 0x0800;
     private const int MinZeroRunLength = 4;
@@ -56,16 +60,52 @@ internal static class Lzo1x
     /// The decode lands in a pooled scratch buffer and only the produced bytes are copied back on success, so a
     /// rejected bitstream cannot disturb <paramref name="output"/> without snapshotting it first, and the bytes past
     /// the produced count keep whatever the caller had there. This keeps the allocation per call independent of the
-    /// destination size, which matters because SquashFS and F2FS call this once per compressed block.
+    /// destination size, which matters because SquashFS and F2FS call this once per compressed block; a caller that
+    /// decodes repeatedly can pass its own buffer to the scratch overload instead of renting one per call.
     /// <para>解码落在池化暂存缓冲区中，仅在成功时回写产出的字节，因此被拒绝的位流不会扰动
     /// <paramref name="output"/>，无需先做快照，且产出字节数之后的内容保留调用方原值。这样每次调用的分配量与目标
-    /// 大小无关，这对 SquashFS 与 F2FS 逐压缩块调用本方法的场景很重要。</para>
+    /// 大小无关，这对 SquashFS 与 F2FS 逐压缩块调用本方法的场景很重要；反复解码的调用方可以改用暂存缓冲区重载，
+    /// 不必每次调用都租借。</para>
     /// </remarks>
     public static LzoStatus TryDecompress(ReadOnlySpan<byte> input, Span<byte> output, out int bytesWritten)
     {
+        if (output.IsEmpty)
+        {
+            return TryDecompress(input, output, Span<byte>.Empty, out bytesWritten);
+        }
+
+        var scratch = ArrayPool<byte>.Shared.Rent(output.Length);
+        try
+        {
+            return TryDecompress(input, output, scratch.AsSpan(0, output.Length), out bytesWritten);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(scratch);
+        }
+    }
+
+    /// <summary>Decompresses an LZO1X bitstream into output through a caller-supplied scratch buffer with full bounds checking.
+    /// <para>通过调用方提供的暂存缓冲区把 LZO1X 位流解压到 output，带完整边界检查。</para></summary>
+    /// <param name="input">LZO1X bitstream to decode, treated as untrusted; <paramref name="input"/> is not modified.
+    /// <para>待解码的 LZO1X 位流，按不可信输入处理；不会修改 <paramref name="input"/>。</para></param>
+    /// <param name="output">Destination buffer whose length is the decode capacity; it is written only when the returned status is <see cref="LzoStatus.Ok"/> and is left untouched otherwise.
+    /// <para>目标缓冲区，其长度即解码容量上限；仅当返回状态为 <see cref="LzoStatus.Ok"/> 时写入，否则保持不变。</para></param>
+    /// <param name="scratch">Buffer receiving the tentative decode; it must be at least as long as <paramref name="output"/> and its prior content is overwritten.
+    /// <para>接收试探解码的缓冲区；长度必须不小于 <paramref name="output"/>，原有内容会被覆写。</para></param>
+    /// <param name="bytesWritten">Bytes the decoder produced, reported under every status and <c>0</c> when it stopped before emitting anything.
+    /// <para>解码器产生的字节数，任何状态下都会给出，在尚未写出内容前停止时为 <c>0</c>。</para></param>
+    /// <returns>The status of the decode attempt.<para>本次解码尝试的状态。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="scratch"/> is shorter than <paramref name="output"/>.
+    /// <para><paramref name="scratch"/> 短于 <paramref name="output"/>。</para></exception>
+    public static LzoStatus TryDecompress(ReadOnlySpan<byte> input, Span<byte> output, Span<byte> scratch, out int bytesWritten)
+    {
+        if (scratch.Length < output.Length)
+        {
+            throw new ArgumentException("The scratch buffer must be at least as long as the output buffer. 暂存缓冲区不得短于输出缓冲区。", nameof(scratch));
+        }
+
         bytesWritten = 0;
-
-
         if (output.IsEmpty)
         {
             var (emptyStatus, emptyWritten) = TryDecompressCore(input, output);
@@ -73,23 +113,15 @@ internal static class Lzo1x
             return emptyStatus;
         }
 
-        var scratch = ArrayPool<byte>.Shared.Rent(output.Length);
-        try
+        var decoded = scratch[..output.Length];
+        var (status, written) = TryDecompressCore(input, decoded);
+        bytesWritten = written;
+        if (status == LzoStatus.Ok)
         {
-            var decoded = scratch.AsSpan(0, output.Length);
-            var (status, written) = TryDecompressCore(input, decoded);
-            bytesWritten = written;
-            if (status == LzoStatus.Ok)
-            {
-                decoded[..written].CopyTo(output);
-            }
+            decoded[..written].CopyTo(output);
+        }
 
-            return status;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(scratch);
-        }
+        return status;
     }
 
     /// <summary>
@@ -172,15 +204,35 @@ internal static class Lzo1x
                 return LzoStatus.OutputOverrun;
             }
 
-            var end = opCur + (int)t;
-            dst[opCur++] = dst[mPos];
-            dst[opCur++] = dst[mPos + 1];
-            mPos += 2;
-            while (opCur < end)
+            var count = (int)t;
+            var distance = opCur - mPos;
+            if (distance <= 0)
             {
-                dst[opCur++] = dst[mPos++];
+                return LzoStatus.LookbehindOverrun;
             }
 
+            var end = opCur + count;
+            if (distance >= count)
+            {
+                dst.Slice(mPos, count).CopyTo(dst.Slice(opCur, count));
+            }
+            else if (distance == 1)
+            {
+                dst.Slice(opCur, count).Fill(dst[mPos]);
+            }
+            else
+            {
+                dst.Slice(mPos, distance).CopyTo(dst.Slice(opCur, distance));
+                var copied = distance;
+                while (copied < count)
+                {
+                    var chunk = Math.Min(copied, count - copied);
+                    dst.Slice(opCur, chunk).CopyTo(dst.Slice(opCur + copied, chunk));
+                    copied += chunk;
+                }
+            }
+
+            opCur = end;
             return LzoStatus.Ok;
         }
 

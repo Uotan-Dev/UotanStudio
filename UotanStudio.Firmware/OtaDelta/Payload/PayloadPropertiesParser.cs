@@ -1,3 +1,5 @@
+using UotanStudio.Compress.Zip;
+
 namespace UotanStudio.Firmware.OtaDelta.Payload;
 
 internal static class PayloadPropertiesParser
@@ -81,7 +83,7 @@ internal static class PayloadPropertiesParser
         }
 
         const string propertiesEntryName = "payload_properties.txt";
-        using var archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
+        using var archive = ZipContainer.OpenRead(zipPath);
         var entry = archive.GetEntry(propertiesEntryName)
             ?? throw new FileNotFoundException($"{propertiesEntryName} not found in the zip file");
         using var stream = entry.Open();

@@ -19,7 +19,7 @@ namespace UotanStudio.Compress.Codecs.Lz4;
 /// <para>Lengths and capacities are assumed already bounded by the format reader that calls in — this class adds no
 /// ceiling of its own, it only forwards spans, so oversized or negative lengths are the caller's check.</para>
 /// </remarks>
-internal static class Lz4BlockCodec
+public static class Lz4BlockCodec
 {
     /// <summary>
     /// Worst-case size of the LZ4 block produced from a source of the given length, token and literal-run overhead included.
@@ -31,7 +31,7 @@ internal static class Lz4BlockCodec
     /// <returns>The upper bound on the bytes <see cref="Encode"/> can write, identical to the value the K4os codec
     /// reports, so a destination sized from it always holds a full block.
     /// <para><see cref="Encode"/> 可能写出的字节数上界，与 K4os 编解码器的返回值一致，因此按其长度分配的目标缓冲区必然容得下整块输出。</para></returns>
-    internal static int MaximumOutputSize(int sourceLength) => LZ4Codec.MaximumOutputSize(sourceLength);
+    public static int MaximumOutputSize(int sourceLength) => LZ4Codec.MaximumOutputSize(sourceLength);
 
     /// <summary>
     /// Compresses one frameless LZ4 block.
@@ -56,7 +56,7 @@ internal static class Lz4BlockCodec
     /// here: whether an empty result is a storable block is the caller's decision, and the cluster writers reject it.
     /// <para>写入 <paramref name="destination"/> 的字节数；目标缓冲区过小或块超出编解码器上限时返回 K4os 的负值错误码。
     /// 此处的 0 不被转换为错误：空结果能否作为块存储由调用方判定，而簇写入方会将其拒绝。</para></returns>
-    internal static int Encode(ReadOnlySpan<byte> source, Span<byte> destination, int level)
+    public static int Encode(ReadOnlySpan<byte> source, Span<byte> destination, int level)
         => LZ4Codec.Encode(source, destination, ToLevel(level));
 
     /// <summary>
@@ -76,7 +76,7 @@ internal static class Lz4BlockCodec
     /// <para>产生的字节数；当存储块的实际解压结果少于给定容量时会小于 <paramref name="destination"/> 的长度。负值 K4os
     /// 错误码表示位流损坏，或其所需空间超出 <paramref name="destination"/>。两种情形都通过返回值而非异常呈现，
     /// 因此调用方可自行选择判定条件，并在解压成功但长度不足时仍拿到实际字节数。</para></returns>
-    internal static int Decode(ReadOnlySpan<byte> source, Span<byte> destination)
+    public static int Decode(ReadOnlySpan<byte> source, Span<byte> destination)
         => LZ4Codec.Decode(source, destination);
 
     /// <summary>
@@ -99,7 +99,7 @@ internal static class Lz4BlockCodec
     /// 完整解码会把「块本身长于目标」报成错误，而它实际产出的前缀正是这类格式所存储的载荷。与 <see cref="Decode"/>
     /// 同样落在 K4os 上，使部分解码与严格解码读的是同一种位流方言。</para>
     /// </remarks>
-    internal static int PartialDecode(ReadOnlySpan<byte> source, Span<byte> destination)
+    public static int PartialDecode(ReadOnlySpan<byte> source, Span<byte> destination)
         => LZ4Codec.PartialDecode(source, destination);
 
     /// <summary>

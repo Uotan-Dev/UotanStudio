@@ -23,7 +23,7 @@ namespace UotanStudio.Compress.Codecs.Deflate;
 /// lands, so a stream that decodes past its declared size fails instead of growing without limit.</para>
 /// <para>输出在落地前就由 <see cref="BoundedWriteStream"/> 按声明长度设界，因此解码超出既定大小的流会失败，而不是无限增长。</para>
 /// </remarks>
-internal static class PuffDeflateCodec
+public static class PuffDeflateCodec
 {
     private static readonly int[] Order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
 
@@ -65,7 +65,7 @@ internal static class PuffDeflateCodec
     /// <para>解码输出超出 <paramref name="expectedLength"/>。</para></exception>
     /// <exception cref="OverflowException"><paramref name="offset"/> plus <paramref name="length"/> overflows.
     /// <para><paramref name="offset"/> 与 <paramref name="length"/> 相加溢出。</para></exception>
-    internal static byte[] Puff(byte[] input, long offset, long length, int expectedLength)
+    public static byte[] Puff(byte[] input, long offset, long length, int expectedLength)
     {
         var bits = new Bits(input, offset, checked(offset + length));
         if (expectedLength is < 0 or > 256 * 1024 * 1024) throw new InvalidDataException("Puff extent exceeds the buffer limit.");
@@ -104,27 +104,35 @@ internal static class PuffDeflateCodec
                 if (type == 1) (literalTree, distanceTree) = FixedTrees();
                 else if (type == 2) (literalTree, distanceTree) = ReadDynamic(bits, metadata);
                 else throw new InvalidDataException("Reserved DEFLATE block type.");
-                WriteBig16(output, metadata.Count - 1); foreach (var value in metadata) output.WriteByte(value);
-                while (true)
+                try
                 {
-                    var symbol = literalTree.Read(bits);
-                    if (symbol < 256)
+                    WriteBig16(output, metadata.Count - 1); foreach (var value in metadata) output.WriteByte(value);
+                    while (true)
                     {
-                        literals[literalCount++] = (byte)symbol; if (literalCount == MaximumLiteralRun) FlushLiterals();
+                        var symbol = literalTree.Read(bits);
+                        if (symbol < 256)
+                        {
+                            literals[literalCount++] = (byte)symbol; if (literalCount == MaximumLiteralRun) FlushLiterals();
+                        }
+                        else if (symbol == 256) { FlushLiterals(); output.Write([255, 129]); break; }
+                        else
+                        {
+                            if (symbol > 285) throw new InvalidDataException("Invalid DEFLATE length symbol.");
+                            FlushLiterals();
+                            var matchLength = LengthBases[symbol - 257] + bits.Read(LengthBits[symbol - 257]);
+                            var distanceSymbol = distanceTree.Read(bits);
+                            if (distanceSymbol >= 30) throw new InvalidDataException("Invalid DEFLATE distance symbol.");
+                            var distance = DistanceBases[distanceSymbol] + bits.Read(DistanceBits[distanceSymbol]);
+                            if (matchLength < 130) output.WriteByte((byte)(128 | (matchLength - 3)));
+                            else { output.WriteByte(255); output.WriteByte((byte)(matchLength - 130)); }
+                            WriteBig16(output, distance - 1);
+                        }
                     }
-                    else if (symbol == 256) { FlushLiterals(); output.Write([255, 129]); break; }
-                    else
-                    {
-                        if (symbol > 285) throw new InvalidDataException("Invalid DEFLATE length symbol.");
-                        FlushLiterals();
-                        var matchLength = LengthBases[symbol - 257] + bits.Read(LengthBits[symbol - 257]);
-                        var distanceSymbol = distanceTree.Read(bits);
-                        if (distanceSymbol >= 30) throw new InvalidDataException("Invalid DEFLATE distance symbol.");
-                        var distance = DistanceBases[distanceSymbol] + bits.Read(DistanceBits[distanceSymbol]);
-                        if (matchLength < 130) output.WriteByte((byte)(128 | (matchLength - 3)));
-                        else { output.WriteByte(255); output.WriteByte((byte)(matchLength - 130)); }
-                        WriteBig16(output, distance - 1);
-                    }
+                }
+                finally
+                {
+                    literalTree.ReleaseTable();
+                    distanceTree.ReleaseTable();
                 }
             }
             if (bits.Position != bits.End || output.BytesWritten != expectedLength) throw new InvalidDataException("Puff extent length mismatch.");
@@ -151,7 +159,7 @@ internal static class PuffDeflateCodec
     /// <para>标记、stored 块或 Huffman 树非法，或写入的比特位置没有恰好落在声明区间的末尾。</para></exception>
     /// <exception cref="OverflowException"><paramref name="offset"/> plus <paramref name="length"/> overflows.
     /// <para><paramref name="offset"/> 与 <paramref name="length"/> 相加溢出。</para></exception>
-    internal static void Huff(ReadOnlySpan<byte> puff, byte[] output, long offset, long length)
+    public static void Huff(ReadOnlySpan<byte> puff, byte[] output, long offset, long length)
     {
         var bits = new Bits(output, offset, checked(offset + length));
         var reader = new PuffReader(puff);
@@ -211,17 +219,25 @@ internal static class PuffDeflateCodec
             if ((i & 1) == 0) metadata.Add((byte)(codes[Order[i]] << 4)); else metadata[^1] |= codes[Order[i]];
         }
         var codeTree = new Huffman(codes); var lengths = new List<byte>(literalCount + distanceCount);
-        while (lengths.Count < literalCount + distanceCount)
+        try
         {
-            var code = codeTree.Read(bits);
-            if (code < 16) { lengths.Add((byte)code); metadata.Add((byte)code); }
-            else
+            while (lengths.Count < literalCount + distanceCount)
             {
-                var extra = bits.Read(code == 16 ? 2 : code == 17 ? 3 : code == 18 ? 7 : throw new InvalidDataException("Invalid DEFLATE code-length symbol."));
-                var packed = (byte)((code == 16 ? 16 : code == 17 ? 20 : 28) + extra);
-                metadata.Add(packed); ExpandLength(lengths, packed);
+                var code = codeTree.Read(bits);
+                if (code < 16) { lengths.Add((byte)code); metadata.Add((byte)code); }
+                else
+                {
+                    var extra = bits.Read(code == 16 ? 2 : code == 17 ? 3 : code == 18 ? 7 : throw new InvalidDataException("Invalid DEFLATE code-length symbol."));
+                    var packed = (byte)((code == 16 ? 16 : code == 17 ? 20 : 28) + extra);
+                    metadata.Add(packed); ExpandLength(lengths, packed);
+                }
             }
         }
+        finally
+        {
+            codeTree.ReleaseTable();
+        }
+
         if (lengths.Count != literalCount + distanceCount) throw new InvalidDataException("DEFLATE code lengths exceed declared counts.");
         var literalLengths = new byte[literalCount];
         var distanceLengths = new byte[distanceCount];
@@ -235,7 +251,16 @@ internal static class PuffDeflateCodec
             distanceLengths[i] = lengths[literalCount + i];
         }
 
-        return (new Huffman(literalLengths), new Huffman(distanceLengths));
+        var literalTree = new Huffman(literalLengths);
+        try
+        {
+            return (literalTree, new Huffman(distanceLengths));
+        }
+        catch
+        {
+            literalTree.ReleaseTable();
+            throw;
+        }
     }
 
     private static (Huffman, Huffman) WriteDynamic(Bits bits, ReadOnlySpan<byte> metadata)
@@ -248,7 +273,7 @@ internal static class PuffDeflateCodec
         var packed = reader.Take((codeCount + 1) / 2); var codes = new byte[19];
         for (var i = 0; i < codeCount; i++)
         { codes[Order[i]] = (byte)(((i & 1) == 0 ? packed[i / 2] >> 4 : packed[i / 2]) & 15); if (codes[Order[i]] > 7) throw new InvalidDataException("Invalid Puff code length."); bits.Write(3, codes[Order[i]]); }
-        var codeTree = new Huffman(codes); var lengths = new List<byte>();
+        var codeTree = new Huffman(codes, decoding: false); var lengths = new List<byte>();
         while (lengths.Count < literalCount + distanceCount)
         {
             var value = reader.Take(1)[0];
@@ -258,7 +283,7 @@ internal static class PuffDeflateCodec
             else { bits.Write(code == 16 ? 2 : code == 17 ? 3 : 7, value - (code == 16 ? 16 : code == 17 ? 20 : 28)); ExpandLength(lengths, value); }
         }
         if (lengths.Count != literalCount + distanceCount || reader.Remaining != 0) throw new InvalidDataException("Invalid Puff Huffman metadata length.");
-        return (new Huffman([.. lengths.Take(literalCount)]), new Huffman([.. lengths.Skip(literalCount)]));
+        return (new Huffman([.. lengths.Take(literalCount)], decoding: false), new Huffman([.. lengths.Skip(literalCount)], decoding: false));
     }
 
     private static void ExpandLength(List<byte> lengths, byte packed)
@@ -277,9 +302,9 @@ internal static class PuffDeflateCodec
     /// <summary>
     /// The RFC 1951 fixed literal/length code, built once. It is a compile-time constant of the format, and
     /// <see cref="Huffman"/> is immutable after construction, so every fixed-Huffman block reuses this instance
-    /// instead of rebuilding 288 lengths, a symbol table and a lookup dictionary per block.
+    /// instead of rebuilding 288 lengths, a code array and a single-level lookup table per block.
     /// <para>RFC 1951 的固定字面量/长度码，只构建一次。它是格式的编译期常量，且 <see cref="Huffman"/> 构造后不可变，
-    /// 因此每个固定 Huffman 块都复用该实例，不必逐块重建 288 项长度、符号表与查找字典。</para>
+    /// 因此每个固定 Huffman 块都复用该实例，不必逐块重建 288 项长度、码数组与单级查找表。</para>
     /// </summary>
     private static readonly Huffman FixedLiteralTree = BuildFixedLiteralTree();
 
@@ -297,22 +322,24 @@ internal static class PuffDeflateCodec
             literals[i] = (byte)(i < 144 ? 8 : i < 256 ? 9 : i < 280 ? 7 : 8);
         }
 
-        return new Huffman(literals);
+        return new Huffman(literals, decoding: true, rentedTable: false);
     }
 
     private static Huffman BuildFixedDistanceTree()
     {
         var distances = new byte[32];
         Array.Fill(distances, (byte)5);
-        return new Huffman(distances);
+        return new Huffman(distances, decoding: true, rentedTable: false);
     }
 
     private sealed class Huffman
     {
         private readonly byte[] _lengths;
         private readonly int[] _codes;
-        private readonly Dictionary<int, int> _symbols = [];
-        internal Huffman(byte[] lengths)
+        private ushort[]? _table;
+        private int _tableBits;
+        private bool _rentedTable;
+        internal Huffman(byte[] lengths, bool decoding = true, bool rentedTable = true)
         {
             _lengths = lengths; _codes = new int[lengths.Length]; var counts = new int[16]; var next = new int[16];
             foreach (var length in lengths) { if (length > 15) throw new InvalidDataException("Invalid Huffman length."); counts[length]++; }
@@ -324,55 +351,179 @@ internal static class PuffDeflateCodec
                 var length = lengths[symbol]; if (length == 0) continue;
                 var canonical = next[length]++; var reversed = 0;
                 for (var bit = 0; bit < length; bit++) { reversed = (reversed << 1) | (canonical & 1); canonical >>= 1; }
-                _codes[symbol] = reversed; _symbols.Add((length << 16) | reversed, symbol);
+                _codes[symbol] = reversed;
+            }
+
+            if (decoding)
+            {
+                BuildTable(rentedTable);
             }
         }
+
+        /// <summary>
+        /// Builds the single-level lookup table indexed by the next table-width bits, with each entry packing the symbol and its code length.
+        /// <para>构建按紧随其后的表宽比特索引的单级查找表，每项打包符号与其码长。</para>
+        /// </summary>
+        private void BuildTable(bool rentedTable)
+        {
+            var bits = 0;
+            foreach (var length in _lengths) { if (length > bits) bits = length; }
+            _tableBits = bits;
+            if (bits == 0)
+            {
+                return;
+            }
+
+            var size = 1 << bits;
+            var table = rentedTable ? ArrayPool<ushort>.Shared.Rent(size) : new ushort[size];
+            if (rentedTable)
+            {
+                Array.Clear(table, 0, size);
+            }
+
+            for (var symbol = 0; symbol < _lengths.Length; symbol++)
+            {
+                var length = _lengths[symbol];
+                if (length == 0)
+                {
+                    continue;
+                }
+
+                var entry = (ushort)((symbol << 4) | length);
+                for (var index = _codes[symbol]; index < size; index += 1 << length)
+                {
+                    table[index] = entry;
+                }
+            }
+
+            _table = table;
+            _rentedTable = rentedTable;
+        }
+
         internal int Read(Bits bits)
         {
-            var code = 0;
-            for (var length = 1; length <= 15; length++)
-            { code |= bits.Read(1) << (length - 1); if (_symbols.TryGetValue((length << 16) | code, out var symbol)) return symbol; }
-            throw new InvalidDataException("Invalid Huffman symbol.");
+            var table = _table;
+            if (table == null)
+            {
+                if (bits.End - bits.Position < 15)
+                {
+                    throw new InvalidDataException("Truncated DEFLATE bits.");
+                }
+
+                throw new InvalidDataException("Invalid Huffman symbol.");
+            }
+
+            var available = (int)Math.Min(_tableBits, bits.End - bits.Position);
+            if (available <= 0)
+            {
+                throw new InvalidDataException("Truncated DEFLATE bits.");
+            }
+
+            var entry = table[bits.Peek(available)];
+            var length = entry & 0xF;
+            if (length == 0)
+            {
+                if (bits.End - bits.Position < 15)
+                {
+                    throw new InvalidDataException("Truncated DEFLATE bits.");
+                }
+
+                throw new InvalidDataException("Invalid Huffman symbol.");
+            }
+
+            if (length > available)
+            {
+                throw new InvalidDataException("Truncated DEFLATE bits.");
+            }
+
+            bits.Advance(length);
+            return entry >> 4;
         }
+
+        /// <summary>
+        /// Returns the pooled lookup table to the shared pool; tables built over a private array are kept.
+        /// <para>把池化查找表归还共享池；基于私有数组构建的表保留。</para>
+        /// </summary>
+        internal void ReleaseTable()
+        {
+            if (!_rentedTable || _table == null)
+            {
+                return;
+            }
+
+            var table = _table;
+            _table = null;
+            _rentedTable = false;
+            ArrayPool<ushort>.Shared.Return(table);
+        }
+
         internal void Write(Bits bits, int symbol)
         { if (symbol < 0 || symbol >= _lengths.Length || _lengths[symbol] == 0) throw new InvalidDataException("Unavailable Huffman symbol."); bits.Write(_lengths[symbol], _codes[symbol]); }
     }
     private sealed class Bits(byte[] data, long offset, long end)
     {
-        internal long Position { get; private set; } = offset;
+        private long _position = offset;
+        private ulong _buffer;
+        private int _bufferedBits;
+
+        internal long Position => _position;
+
         internal long End => end;
+
         internal int Read(int count)
         {
-            if (count < 0 || count > 16 || Position < 0 || end > (long)data.Length * 8 || count > end - Position) throw new InvalidDataException("Truncated DEFLATE bits.");
+            if (count < 0 || count > 16 || _position < 0 || end > (long)data.Length * 8 || count > end - _position) throw new InvalidDataException("Truncated DEFLATE bits.");
             if (count == 0)
             {
                 return 0;
             }
 
-            var result = 0;
-            var bitOffset = (int)(Position & 7);
-            var byteIndex = (int)(Position >> 3);
-            var gathered = 0;
-            for (var have = 0; have < count; gathered++)
-            {
-                var window = data[byteIndex + gathered] >> bitOffset;
-                if (bitOffset != 0 && byteIndex + gathered + 1 < data.Length)
-                {
-                    window |= data[byteIndex + gathered + 1] << (8 - bitOffset);
-                }
-
-                var take = Math.Min(count - have, 8 - bitOffset);
-                result |= (window & ((1 << take) - 1)) << have;
-                have += take;
-                bitOffset = 0;
-            }
-
-            Position += count;
+            EnsureBuffered(count);
+            var result = (int)(_buffer & ((1UL << count) - 1));
+            _buffer >>= count;
+            _bufferedBits -= count;
+            _position += count;
             return result;
         }
+
+        internal int Peek(int count)
+        {
+            if (count <= 0)
+            {
+                return 0;
+            }
+
+            EnsureBuffered(count);
+            return (int)(_buffer & ((1UL << count) - 1));
+        }
+
+        internal void Advance(int count)
+        {
+            _buffer >>= count;
+            _bufferedBits -= count;
+            _position += count;
+        }
+
+        private void EnsureBuffered(int count)
+        {
+            while (_bufferedBits < count)
+            {
+                var next = _position + _bufferedBits;
+                var byteIndex = next >> 3;
+                if (byteIndex < 0 || byteIndex >= data.Length)
+                {
+                    throw new InvalidDataException("Truncated DEFLATE bits.");
+                }
+
+                var bitOffset = (int)(next & 7);
+                _buffer |= (ulong)(data[byteIndex] >> bitOffset) << _bufferedBits;
+                _bufferedBits += 8 - bitOffset;
+            }
+        }
+
         internal void Write(int count, int value)
         {
-            if (count < 0 || count > 16 || Position < 0 || end > (long)data.Length * 8 || count > end - Position) throw new InvalidDataException("Huffed DEFLATE exceeds its extent.");
+            if (count < 0 || count > 16 || _position < 0 || end > (long)data.Length * 8 || count > end - _position) throw new InvalidDataException("Huffed DEFLATE exceeds its extent.");
             if (count == 0)
             {
                 return;
@@ -380,14 +531,14 @@ internal static class PuffDeflateCodec
 
             for (var written = 0; written < count;)
             {
-                var bitOffset = (int)(Position & 7);
-                var byteIndex = (int)(Position >> 3);
+                var bitOffset = (int)(_position & 7);
+                var byteIndex = (int)(_position >> 3);
                 var take = Math.Min(count - written, 8 - bitOffset);
                 var field = (1 << take) - 1;
                 var mask = (byte)(field << bitOffset);
                 var bits = (byte)((value >> written) & field);
                 data[byteIndex] = (byte)((data[byteIndex] & ~mask) | (bits << bitOffset));
-                Position += take;
+                _position += take;
                 written += take;
             }
         }

@@ -27,7 +27,7 @@ namespace UotanStudio.Compress.Codecs.Zstd;
 /// <c>Wrap</c> 调用之间保留该参数，未清零的窗口会静默出现在下一个调用方写出的帧里。解码侧完全不碰它缓存的上下文：
 /// ZstdSharp 所执行的一次性帧解码并不查看 <c>ZSTD_d_windowLogMax</c>，因此上限改为在任何解码之前从帧头读取所声明的窗口来执行。</para>
 /// </remarks>
-internal static class ZstdBlockCodec
+public static class ZstdBlockCodec
 {
     private const int MinimumLevel = -5;
     private const int MaximumLevel = 22;
@@ -46,7 +46,7 @@ internal static class ZstdBlockCodec
     /// lifted to at least the 128 KiB frame overhead allowance so short sources still get a full block's room.
     /// <para><see cref="Compress"/> 可能写出的字节数上界：源长度加上其 1/256，并在长度不足时抬到 128 KiB 帧开销余量，
     /// 使短源也保留整块所需的容量。</para></returns>
-    internal static int MaximumCompressedSize(int sourceLength)
+    public static int MaximumCompressedSize(int sourceLength)
     {
         var bound = sourceLength + (sourceLength >> 8);
         if (sourceLength < SmallSourceThreshold)
@@ -79,7 +79,7 @@ internal static class ZstdBlockCodec
     /// <exception cref="CompressionException">The zstd context rejected the parameters or the frame did not fit
     /// <paramref name="destination"/>; the underlying ZstdSharp error is the inner exception.
     /// <para>zstd 上下文拒绝参数，或帧无法容纳于 <paramref name="destination"/>；ZstdSharp 的原始错误为内部异常。</para></exception>
-    internal static int Compress(ReadOnlySpan<byte> source, Span<byte> destination, int level = DefaultLevel, int windowLog = 0)
+    public static int Compress(ReadOnlySpan<byte> source, Span<byte> destination, int level = DefaultLevel, int windowLog = 0)
     {
         if (source.IsEmpty)
         {
@@ -130,7 +130,7 @@ internal static class ZstdBlockCodec
     /// <exception cref="CompressionException">The frame is malformed or the destination is too small; the
     /// underlying ZstdSharp error is the inner exception.
     /// <para>帧无效或目标容量不足；ZstdSharp 的原始错误为内部异常。</para></exception>
-    internal static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination)
+    public static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination)
         => Decompress(source, destination, maximumWindowLog: 0);
 
     /// <summary>
@@ -157,7 +157,7 @@ internal static class ZstdBlockCodec
     /// <paramref name="destination"/> holds, where the underlying ZstdSharp error is the inner exception.
     /// <para>帧声明的窗口超出 <paramref name="maximumWindowLog"/>（此情形无内部异常），或帧无效、目标容量不足；
     /// 后两种情形的 ZstdSharp 原始错误为内部异常。</para></exception>
-    internal static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, int maximumWindowLog)
+    public static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination, int maximumWindowLog)
     {
         if (source.IsEmpty)
         {
@@ -240,7 +240,7 @@ internal static class ZstdBlockCodec
     /// 或产出的字节少于声明数量。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="expectedSize"/> is negative.
     /// <para><paramref name="expectedSize"/> 为负数。</para></exception>
-    internal static byte[] Decompress(ReadOnlySpan<byte> source, int expectedSize)
+    public static byte[] Decompress(ReadOnlySpan<byte> source, int expectedSize)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(expectedSize);
         if (source.IsEmpty || expectedSize == 0)
@@ -316,12 +316,17 @@ internal static class ZstdBlockCodec
     /// <see cref="CompressorCache"/>.
     /// <para>跨调用复用同一个 zstd 解压上下文，独占借用契约与 <see cref="CompressorCache"/> 相同。</para>
     /// </summary>
-    internal static class DecompressorCache
+    public static class DecompressorCache
     {
         private static readonly Lock Gate = new();
         private static Decompressor? Idle;
 
-        internal static Decompressor Rent()
+        /// <summary>
+        /// Rents the idle decompression context, or creates one when none is parked.
+        /// <para>借用空闲解压上下文；没有停放实例时新建一个。</para>
+        /// </summary>
+        /// <returns>The exclusively rented decompressor. <para>被独占借用的解压器。</para></returns>
+        public static Decompressor Rent()
         {
             lock (Gate)
             {
@@ -336,7 +341,12 @@ internal static class ZstdBlockCodec
             return new Decompressor();
         }
 
-        internal static void Return(Decompressor decompressor)
+        /// <summary>
+        /// Parks one decompression context for later reuse; a previously parked context is disposed.
+        /// <para>停放一个解压上下文供后续复用；此前停放的上下文会被释放。</para>
+        /// </summary>
+        /// <param name="decompressor">Context being returned; null is ignored. <para>归还的上下文；null 会被忽略。</para></param>
+        public static void Return(Decompressor decompressor)
         {
             Decompressor? displaced;
             lock (Gate)

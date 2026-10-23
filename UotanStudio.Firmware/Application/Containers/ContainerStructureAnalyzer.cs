@@ -1,4 +1,4 @@
-using System.IO.Compression;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core;
 
@@ -104,7 +104,7 @@ public static class ContainerStructureAnalyzer
     /// </summary>
     private static ContainerStructure AnalyzeZip(string filePath)
     {
-        using var archive = new ZipArchive(File.OpenRead(filePath), ZipArchiveMode.Read, leaveOpen: false);
+        using var archive = ZipContainer.OpenRead(filePath);
         var entries = new List<ContainerEntry>();
         var hasPayload = false;
         string? payloadMemberPath = null;

@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 using UotanStudio.Firmware.AndroidMeta.Arsc;
 using UotanStudio.Firmware.AndroidMeta.AXml;
@@ -66,7 +67,7 @@ public static class ApkParser
         }
         info.FileSize = fileInfo.Length;
 
-        using var zip = ZipFile.OpenRead(apkPath);
+        using var zip = ZipContainer.OpenRead(apkPath);
         info.EntryCount = zip.Entries.Count;
 
         DetectSignatures(zip, apkPath, info);
