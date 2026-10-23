@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// A <see cref="StreamArtifact"/> over a staging file this process created for one run. Disposing it deletes the

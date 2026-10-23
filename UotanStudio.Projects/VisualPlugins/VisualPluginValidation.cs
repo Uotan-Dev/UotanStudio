@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Structural validation for untrusted visual-plugin JSON.

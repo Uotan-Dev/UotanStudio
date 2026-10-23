@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Controls how an EXT4 output capacity is selected.

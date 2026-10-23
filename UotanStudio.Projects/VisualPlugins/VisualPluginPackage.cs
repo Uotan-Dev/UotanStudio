@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Portable JSON package containing either a workflow template or a composite node graph.
@@ -87,11 +87,11 @@ public sealed class VisualPluginPackage
     /// <para>加载时赋值的 bundle 绝对路径；纯 JSON 或内存构建的包为 <see langword="null"/>。</para>
     /// </value>
     [JsonIgnore]
-    public string? BundlePath { get; internal set; }
+    public string? BundlePath { get; set; }
 
     /// <summary>Validated root manifest owning the shared archive of an embedded package.</summary>
     [JsonIgnore]
-    internal VisualPluginPackage? BundleRoot { get; set; }
+    public VisualPluginPackage? BundleRoot { get; set; }
 
     /// <summary>Stable node type registered by a composite-node package. <para>复合节点包注册的可复用稳定节点类型键。</para></summary>
     /// <value>

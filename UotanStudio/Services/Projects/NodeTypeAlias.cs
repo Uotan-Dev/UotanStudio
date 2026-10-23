@@ -1,4 +1,4 @@
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Services.Projects;
 

@@ -1,5 +1,6 @@
 using System.Text.Json;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Projects;
+using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Services.Projects;
 

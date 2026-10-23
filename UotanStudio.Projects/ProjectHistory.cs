@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Kinds of workspace operations that can be reconstructed across sessions.

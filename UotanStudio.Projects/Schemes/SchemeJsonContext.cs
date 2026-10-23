@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace UotanStudio.Services.Projects.Schemes;
+namespace UotanStudio.Projects.Schemes;
 
 /// <summary>
 /// Scheme package JSON serialization context (AOT source-generated).

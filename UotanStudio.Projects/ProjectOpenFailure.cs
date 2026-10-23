@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Why the most recent <see cref="ProjectSession.OpenProjectFromPathAsync"/> attempt failed.

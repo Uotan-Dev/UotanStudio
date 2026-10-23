@@ -2,13 +2,21 @@ using System.Buffers;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
-internal static class AtomicJsonFile
+/// <summary>
+/// Writes JSON files atomically: serialize to a sibling temporary file, compare against the current content, then publish by replacement.
+/// <para>以原子方式写入 JSON 文件：序列化到同目录临时文件，与现有内容比较，再通过替换发布。</para>
+/// </summary>
+public static class AtomicJsonFile
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
 
-    internal static async Task<bool> WriteIfChangedAsync<T>(string path, T value, JsonTypeInfo<T> type,
+    /// <summary>
+    /// Runs member.
+    /// <para>执行 member。</para>
+    /// </summary>
+    public static async Task<bool> WriteIfChangedAsync<T>(string path, T value, JsonTypeInfo<T> type,
         CancellationToken cancellationToken = default)
     {
         await Gate.WaitAsync(cancellationToken);

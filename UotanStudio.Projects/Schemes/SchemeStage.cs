@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects.Schemes;
+namespace UotanStudio.Projects.Schemes;
 
 /// <summary>
 /// Execution kind declared by a scheme stage; the runner reports it and never rolls a device stage back.

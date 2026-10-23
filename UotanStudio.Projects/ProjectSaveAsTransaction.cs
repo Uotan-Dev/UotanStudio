@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>Prepares a project copy beside its destination and rolls back caught publication failures.</summary>
 internal sealed class ProjectSaveAsTransaction : IDisposable

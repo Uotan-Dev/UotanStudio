@@ -1,7 +1,7 @@
 using System.Buffers;
-using System.IO.Compression;
+using UotanStudio.Compress.Zip;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Imports complete project packages with bounded extraction and directory publication.
@@ -50,7 +50,7 @@ public static class ProjectPackage
         {
             using var archiveStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             ProjectPackageIndex.Validate(archiveStream);
-            using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read))
+            using (var archive = ZipContainer.OpenRead(archiveStream))
             {
                 if (archive.Entries.Count > 100000) throw new InvalidDataException("Package has too many entries.");
                 var remaining = 64L * 1024 * 1024 * 1024;

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Identity of one portable patch resource carried by two complementary path forms: an absolute local
@@ -73,7 +73,11 @@ public sealed class VisualPluginAsset
     /// </value>
     public string? RelativePath { get; set; }
 
-    internal VisualPluginAsset Snapshot() => new()
+    /// <summary>
+    /// Runs Snapshot.
+    /// <para>执行 Snapshot。</para>
+    /// </summary>
+    public VisualPluginAsset Snapshot() => new()
     {
         Id = Id,
         Name = Name,

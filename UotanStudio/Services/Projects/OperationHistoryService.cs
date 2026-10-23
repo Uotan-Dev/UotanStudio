@@ -1,3 +1,5 @@
+using UotanStudio.Projects;
+
 namespace UotanStudio.Services.Projects;
 
 /// <summary>Desktop history compatibility facade; execution delegates are provided through the reconstruction hook.

@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 using System.Text.Json;
 
@@ -222,7 +222,7 @@ public sealed partial class ProjectSession
     /// The full path of the open solution file, or <see langword="null"/> when no solution is open.
     /// <para>已打开解决方案文件的完整路径；未打开解决方案时为 <see langword="null"/>。</para>
     /// </value>
-    public string? CurrentProjectPath { get => Context.CurrentSolutionPath; internal set => Context.SetCompatibilitySolutionPath(value); }
+    public string? CurrentProjectPath { get => Context.CurrentSolutionPath; set => Context.SetCompatibilitySolutionPath(value); }
 
     /// <summary>Creates and persists an empty solution (firmware project + state directory) at the specified path. No node project is created; register one with <see cref="CreateNodeProjectAsync"/> when needed.
     /// <para>在指定路径创建并持久化一个空解决方案（固件项目 + 状态目录）。节点项目不会被自动创建， 需要时经 <see cref="CreateNodeProjectAsync"/> 显式登记。</para></summary>

@@ -1,7 +1,7 @@
 using System.Buffers;
 using System.Collections.Frozen;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Shared validation for persisted solution references, without restricting editor document paths.

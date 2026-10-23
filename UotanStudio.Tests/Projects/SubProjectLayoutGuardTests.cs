@@ -1,5 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using UotanStudio.Services.Projects;
+using UotanStudio.Projects;
 using Xunit;
 
 namespace UotanStudio.Tests.Projects;

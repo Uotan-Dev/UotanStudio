@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// A <see cref="StreamArtifact"/> whose payload already lives in memory. It adapts an existing byte buffer to the same

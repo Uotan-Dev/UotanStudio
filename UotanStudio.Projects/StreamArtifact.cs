@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// A stream-backed workflow value carrying an arbitrarily large payload without materializing it. Unlike a bare

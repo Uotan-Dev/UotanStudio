@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// A <see cref="StreamArtifact"/> whose payload is a file the producing node already wrote. Opening the artifact never

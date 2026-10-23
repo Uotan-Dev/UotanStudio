@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Copies portable patch resources into the open project and anchors them to a project-relative path.

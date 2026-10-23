@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 
-namespace UotanStudio.Services.Projects.Schemes;
+namespace UotanStudio.Projects.Schemes;
 
 /// <summary>
 /// Persists scheme packages through a bounded read, an atomic temporary file and an optional detached signature.

@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace UotanStudio.Services.Projects.Schemes;
+namespace UotanStudio.Projects.Schemes;
 
 /// <summary>
 /// Signs and verifies scheme packages with the publisher identity and fingerprint rules shared by visual plugins.

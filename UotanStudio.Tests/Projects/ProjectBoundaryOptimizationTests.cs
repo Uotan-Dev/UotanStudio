@@ -1,5 +1,5 @@
 using System.IO.Compression;
-using UotanStudio.Services.Projects;
+using UotanStudio.Projects;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization.Metadata;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>Stages metadata files and restores earlier files when publication throws. Not crash recovery.</summary>
 internal sealed class ProjectFileTransaction : IDisposable

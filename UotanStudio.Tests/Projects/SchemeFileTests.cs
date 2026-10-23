@@ -1,5 +1,5 @@
-using UotanStudio.Services.Projects;
-using UotanStudio.Services.Projects.Schemes;
+using UotanStudio.Projects;
+using UotanStudio.Projects.Schemes;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

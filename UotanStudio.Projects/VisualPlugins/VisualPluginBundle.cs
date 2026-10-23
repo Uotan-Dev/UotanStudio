@@ -1,8 +1,9 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text.Json;
+using UotanStudio.Compress.Zip;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Bounded ZIP transport for portable patch graphs and lazily read resources.
@@ -44,7 +45,7 @@ public static class VisualPluginBundle
     public static VisualPluginPackage Load(string path)
     {
         using var file = OpenBundle(path);
-        using var archive = new ZipArchive(file, ZipArchiveMode.Read);
+        using var archive = ZipContainer.OpenRead(file);
         var manifest = archive.GetEntry(ManifestName)
             ?? throw new InvalidDataException("Patch bundle has no manifest.");
         if (manifest.Length > VisualPluginValidation.MaximumFileSize)
@@ -139,7 +140,7 @@ public static class VisualPluginBundle
             await using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite,
                              FileShare.None, 131072, FileOptions.Asynchronous))
             {
-                using (var archive = new ZipArchive(file, ZipArchiveMode.Create, leaveOpen: true))
+                using (var archive = ZipContainer.Create(file, leaveOpen: true))
                 {
                     await using (var output = archive.CreateEntry(ManifestName, CompressionLevel.NoCompression).Open())
                     {
@@ -242,7 +243,7 @@ public static class VisualPluginBundle
             throw new InvalidDataException($"Patch resource '{id}' has no source.");
         }
         await using var file = OpenBundle(package.BundlePath);
-        using var archive = new ZipArchive(file, ZipArchiveMode.Read);
+        using var archive = ZipContainer.OpenRead(file);
         EnsureValid(package.BundleRoot ?? package);
         ValidateEntries(archive, package.BundleRoot ?? package);
         await using var entry = archive.GetEntry(GetEntryName(asset))!.Open();
@@ -344,7 +345,7 @@ public static class VisualPluginBundle
     private static string GetEntryName(VisualPluginAsset asset) => "assets/" + asset.Sha256.ToLowerInvariant();
 
     /// <summary>Enumerates a structurally validated embedded graph without using registry or global state.</summary>
-    internal static IEnumerable<VisualPluginPackage> EnumerateScopes(VisualPluginPackage package)
+    public static IEnumerable<VisualPluginPackage> EnumerateScopes(VisualPluginPackage package)
     {
         yield return package;
         foreach (var child in package.Graph.Nodes.Select(node => node.CompositePackage).OfType<VisualPluginPackage>())

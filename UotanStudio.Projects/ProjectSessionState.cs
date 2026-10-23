@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>Immutable view of a session's committed directory context. The sub-project list is a snapshot copy, so later context mutations do not change an already-captured view.
 /// <para>会话已提交目录上下文的不可变视图。子项目列表是快照副本，因此上下文的后续修改不会影响已捕获的 视图。</para></summary>

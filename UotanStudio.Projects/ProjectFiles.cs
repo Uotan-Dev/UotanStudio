@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Filesystem operations shared by project hosts; format detection and UI/history updates remain with the caller.

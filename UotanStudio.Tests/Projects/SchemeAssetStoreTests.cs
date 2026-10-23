@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using UotanStudio.Services.Projects.Schemes;
+using UotanStudio.Projects.Schemes;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 

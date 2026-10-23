@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Text;
 using UotanStudio.Hash.Digests;
 
-namespace UotanStudio.Services.Projects.Schemes;
+namespace UotanStudio.Projects.Schemes;
 
 /// <summary>
 /// Availability of one declared scheme asset.

@@ -1,6 +1,6 @@
 using System.IO.Compression;
+using UotanStudio.Delivery;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
-using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
 using Xunit;
 

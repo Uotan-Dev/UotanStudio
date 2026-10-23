@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// A file-backed workflow value. The path is explicit and never inferred from ordinary text.

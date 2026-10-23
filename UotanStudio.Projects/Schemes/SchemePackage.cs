@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects.Schemes;
+namespace UotanStudio.Projects.Schemes;
 
 /// <summary>
 /// Portable scheme package that embeds ordered execution stages and optional project-workflow references.

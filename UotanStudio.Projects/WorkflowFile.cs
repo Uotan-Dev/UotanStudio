@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Persists workflow data without a node editor or node factory.

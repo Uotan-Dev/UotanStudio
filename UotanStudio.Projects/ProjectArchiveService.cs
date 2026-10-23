@@ -1,6 +1,7 @@
 using System.IO.Compression;
+using UotanStudio.Compress.Zip;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Exports a solution directory through a temporary ZIP.
@@ -87,7 +88,7 @@ public static class ProjectArchiveService
         {
             await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true))
             {
-                using var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
+                using var archive = ZipContainer.Create(output, leaveOpen: true);
                 if (solutionPath is not null)
                 {
                     if ((File.GetAttributes(solutionPath) & FileAttributes.ReparsePoint) != 0) throw new IOException("Cannot archive a linked solution.");

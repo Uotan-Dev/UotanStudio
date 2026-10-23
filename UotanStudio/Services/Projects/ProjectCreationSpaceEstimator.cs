@@ -1,7 +1,7 @@
-using System.IO.Compression;
+using UotanStudio.Compress.Zip;
+using UotanStudio.Delivery;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
-using UotanStudio.Services.Delivery;
 
 namespace UotanStudio.Services.Projects;
 
@@ -57,7 +57,7 @@ internal static class ProjectCreationSpaceEstimator
         {
             try
             {
-                using var zip = ZipFile.OpenRead(payloadZipPath);
+                using var zip = ZipContainer.OpenRead(payloadZipPath);
                 var member = zip.Entries.FirstOrDefault(e =>
                     Path.GetFileName(e.FullName).Equals("payload.bin", StringComparison.OrdinalIgnoreCase));
                 if (member is not null) temporary = member.Length;

@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects.Schemes;
+namespace UotanStudio.Projects.Schemes;
 
 /// <summary>
 /// Declared scheme asset addressed relative to the scheme file.

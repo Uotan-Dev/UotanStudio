@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects.Schemes;
+namespace UotanStudio.Projects.Schemes;
 
 /// <summary>
 /// Value type of a declared scheme input.

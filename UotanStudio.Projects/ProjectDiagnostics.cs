@@ -1,4 +1,4 @@
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Severity of a project diagnostic, independent of any application logging framework.
@@ -28,7 +28,11 @@ public static class ProjectDiagnostics
     /// </summary>
     public static event Action<ProjectLogLevel, string, string>? Message;
 
-    internal static void Write(ProjectLogLevel level, string source, string message)
+    /// <summary>
+    /// Runs Write.
+    /// <para>执行 Write。</para>
+    /// </summary>
+    public static void Write(ProjectLogLevel level, string source, string message)
     {
         System.Diagnostics.Trace.WriteLine($"{source}: {message}");
         if (Message is not { } subscribers) return;

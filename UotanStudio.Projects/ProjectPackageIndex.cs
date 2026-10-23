@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>Bounds ZIP directory allocation before ZipArchive materializes its entry list.</summary>
 internal static class ProjectPackageIndex

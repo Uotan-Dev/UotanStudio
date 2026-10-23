@@ -1,3 +1,5 @@
+using UotanStudio.Projects;
+
 namespace UotanStudio.Services.Projects;
 
 /// <summary>Desktop compatibility context wrapping the shared project context.

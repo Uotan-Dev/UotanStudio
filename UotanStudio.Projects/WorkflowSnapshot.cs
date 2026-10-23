@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Workflow snapshot JSON serialization context (AOT source-generated).
@@ -13,7 +13,7 @@ namespace UotanStudio.Services.Projects;
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
-internal partial class WorkflowJsonContext : JsonSerializerContext;
+public partial class WorkflowJsonContext : JsonSerializerContext;
 
 /// <summary>
 /// Workflow snapshot, carrying the complete structure of the project file.

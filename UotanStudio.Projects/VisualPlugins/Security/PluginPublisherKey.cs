@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Projects;
 
 /// <summary>
 /// Key generation and exchange primitives for plugin publishers; the private key stays outside a package.
