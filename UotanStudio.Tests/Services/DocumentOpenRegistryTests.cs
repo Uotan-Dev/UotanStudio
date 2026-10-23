@@ -1,8 +1,9 @@
 using UotanStudio.Messages;
+using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.Services.Workspace.Documents;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.Views.Controls;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -163,10 +164,10 @@ public class DocumentOpenRegistryTests
     [InlineData("console.log", EditorOpenMode.Log)]
     [InlineData("blob.dat", EditorOpenMode.Firmware)]
     [InlineData("archive.xyz", EditorOpenMode.Auto)]
-    public void ResolveMode_PathOnlyRoutes_MatchesDelegatedFileOpenMode(string path, EditorOpenMode expected)
+    public void ResolveMode_PathOnlyRoutes_MatchesDelegatedDocumentFormatPolicy(string path, EditorOpenMode expected)
     {
         Assert.Equal(expected, DocumentOpenRegistry.ResolveMode(path));
-        Assert.Equal(DocumentOpenRegistry.ResolveMode(path), FileOpenMode.ResolveMode(path));
+        Assert.Equal(DocumentOpenRegistry.ResolveMode(path), DocumentFormatPolicy.ResolveMode(path));
     }
 
     [Fact]

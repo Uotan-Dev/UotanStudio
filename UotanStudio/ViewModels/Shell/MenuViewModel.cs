@@ -1,24 +1,26 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Build;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.VendorFirmware.Workflow;
 using UotanStudio.Messages;
+using UotanStudio.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui;
+using UotanStudio.Services.Ui.Projects;
+using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.Services.Workspace;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Controls;
-using UotanStudio.Views.Shell;
 
 namespace UotanStudio.ViewModels.Shell;
 
@@ -41,6 +43,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private ActiveTab _currentTab = ActiveTab.Workspace;
 
     private readonly ProjectOperationsService _projectOps;
+    private readonly IWindowService _windows;
 
     /// <summary>
     /// Cached collection-changed handler so it can be unsubscribed in <see cref="Dispose"/>.
@@ -55,9 +58,10 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// </summary>
     public MenuViewModel() : this(ProjectOperationsService.Instance) { }
 
-    internal MenuViewModel(ProjectOperationsService projectOperations)
+    internal MenuViewModel(ProjectOperationsService projectOperations, IWindowService? windows = null)
     {
         _projectOps = projectOperations;
+        _windows = windows ?? NullWindowService.Instance;
         WeakReferenceMessenger.Default.Register<ActiveTabChangedMessage>(this, OnActiveTabChanged);
         _recentProjectsChangedHandler = (_, _) => OnPropertyChanged(nameof(HasRecentProjects));
         RecentProjects.CollectionChanged += _recentProjectsChangedHandler;
@@ -199,9 +203,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task NewProjectAsync()
     {
-        var owner = DialogService.GetOwnerWindow();
-        if (owner is null) return;
-        var window = new NewProjectWindow(NewProjectWindowMode.Solution, null, null);
+        if (!_windows.HasOwnerWindow) return;
+        var window = _windows.CreateNewProjectDialog(NewProjectWindowMode.Solution, null, null);
         window.CreateWithCancellationAsync = async (form, cancellationToken) =>
         {
 
@@ -244,11 +247,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             if (!await _projectOps.SaveAsync(saveActiveDocument: false))
                 throw new IOException("Could not save the imported project.");
         };
-        await window.ShowDialog(owner);
+        await window.ShowDialogAsync();
     }
 
     private async Task ImportRemoteRomAsync(NewProjectFormResult form, ImageViewModel images,
-        NewProjectWindow window, CancellationToken cancellationToken)
+        INewProjectDialog window, CancellationToken cancellationToken)
     {
         var uri = new Uri(form.RemoteUrl!, UriKind.Absolute);
         using var client = new HttpClient { Timeout = TimeSpan.FromHours(2) };
@@ -316,7 +319,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// <para>普通多选镜像的解包（新建解决方案与新增子项目共用）：只解包导入成功的镜像条目，
     /// 勾选完全解压时递归解包嵌套镜像。</para>
     /// </summary>
-    private async Task UnpackSelectedPlainImagesAsync(NewProjectFormResult form, ImageViewModel images, NewProjectWindow window, CancellationToken cancellationToken = default)
+    private async Task UnpackSelectedPlainImagesAsync(NewProjectFormResult form, ImageViewModel images, INewProjectDialog window, CancellationToken cancellationToken = default)
     {
         if (!form.UnpackImages || form.SelectedImagePaths.Length == 0) return;
 
@@ -338,7 +341,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// 原地提取；勾选完全解压时对提取产物执行递归解包。提取在后台线程执行并写入日志。</para>
     /// </summary>
     private static async Task UnpackWithCreationProgressAsync(ImageViewModel images,
-        IReadOnlyList<ImageEntryViewModel> entries, bool fully, NewProjectWindow window, CancellationToken cancellationToken = default)
+        IReadOnlyList<ImageEntryViewModel> entries, bool fully, INewProjectDialog window, CancellationToken cancellationToken = default)
     {
         void Update(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
         {
@@ -351,7 +354,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         finally { images.PropertyChanged -= Update; }
     }
 
-    private async Task ImportContainerWithSelectionAsync(NewProjectFormResult form, ImageViewModel images, NewProjectWindow window, CancellationToken cancellationToken = default)
+    private async Task ImportContainerWithSelectionAsync(NewProjectFormResult form, ImageViewModel images, INewProjectDialog window, CancellationToken cancellationToken = default)
     {
         var source = form.ContainerPath;
         if (source is null) return;
@@ -439,7 +442,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// <param name="window">The new-project window showing progress. <para>显示进度的新建项目窗口。</para></param>
     /// <param name="cancellationToken">Cancels the merge; no files are removed on cancellation. <para>取消合并；取消时不会删除任何文件。</para></param>
     /// <exception cref="IOException">The sub-project root is missing or a partition merge failed. <para>子项目根目录缺失或某个分区合并失败。</para></exception>
-    private async Task MergeMyPartitionsIntoSystemAsync(NewProjectWindow window, CancellationToken cancellationToken)
+    private async Task MergeMyPartitionsIntoSystemAsync(INewProjectDialog window, CancellationToken cancellationToken)
     {
         var project = ProjectContextService.Instance.ActiveSubProject;
         var root = project?.RootPath;
@@ -605,7 +608,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            await ShowSchemeEditorAsync(path);
+            await _windows.ShowSchemeEditorAsync(path);
         }
         catch (Exception ex)
         {
@@ -628,7 +631,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     {
         try
         {
-            await ShowSchemeEditorAsync(null);
+            await _windows.ShowSchemeEditorAsync(null);
         }
         catch (Exception ex)
         {
@@ -651,7 +654,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            await ShowSchemeOperatorAsync(path);
+            await _windows.ShowSchemeOperatorAsync(path);
         }
         catch (Exception ex)
         {
@@ -684,68 +687,6 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             ]
         });
         return files.FirstOrDefault()?.TryGetLocalPath();
-    }
-
-    private static async Task ShowSchemeEditorAsync(string? path)
-    {
-        SchemeEditorWindow window;
-        if (_schemeEditorWindow is { IsVisible: true } existing)
-        {
-            window = existing;
-            window.WindowState = WindowState.Normal;
-            window.Activate();
-            if (path is null)
-            {
-                window.ViewModel.NewScheme();
-            }
-        }
-        else
-        {
-            window = new SchemeEditorWindow();
-            _schemeEditorWindow = window;
-            window.Closed += (_, _) =>
-            {
-                if (ReferenceEquals(_schemeEditorWindow, window))
-                {
-                    _schemeEditorWindow = null;
-                }
-            };
-            window.Show();
-        }
-
-        if (path is not null)
-        {
-            await window.LoadAsync(path);
-        }
-    }
-
-    private static async Task ShowSchemeOperatorAsync(string? path)
-    {
-        SchemeOperatorWindow window;
-        if (_schemeOperatorWindow is { IsVisible: true } existing)
-        {
-            window = existing;
-            window.WindowState = WindowState.Normal;
-            window.Activate();
-        }
-        else
-        {
-            window = new SchemeOperatorWindow();
-            _schemeOperatorWindow = window;
-            window.Closed += (_, _) =>
-            {
-                if (ReferenceEquals(_schemeOperatorWindow, window))
-                {
-                    _schemeOperatorWindow = null;
-                }
-            };
-            window.Show();
-        }
-
-        if (path is not null)
-        {
-            await window.LoadAsync(path);
-        }
     }
 
     private static async Task<string?> PickFolderAsync(Window owner, string titleKey)
@@ -936,9 +877,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var owner = DialogService.GetOwnerWindow();
-        if (owner is null) return;
-        var window = new NewProjectWindow(
+        if (!_windows.HasOwnerWindow) return;
+        var window = _windows.CreateNewProjectDialog(
             NewProjectWindowMode.SubProject,
             context.RootDirectory,
             context.SubProjects.Select(sp => sp.Name));
@@ -972,7 +912,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             if (!await _projectOps.SaveAsync(saveActiveDocument: false))
                 throw new IOException("Could not save the imported project.");
         };
-        await window.ShowDialog(owner);
+        await window.ShowDialogAsync();
     }
 
     /// <summary>
@@ -1466,7 +1406,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void OpenDevice()
     {
-        ShowWindow(ref _deviceWindow, () => new DeviceWindow());
+        _windows.ShowHostWindow(HostWindowKind.Device);
     }
 
     /// <summary>
@@ -1476,7 +1416,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void OpenLogWindow()
     {
-        ShowWindow(ref _logWindow, () => new LogWindow());
+        _windows.ShowHostWindow(HostWindowKind.Log);
     }
 
     /// <summary>
@@ -1486,109 +1426,27 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void OpenUsbTree()
     {
-        ShowWindow(ref _usbTreeWindow, () => new UsbTreeWindow());
+        _windows.ShowHostWindow(HostWindowKind.UsbTree);
     }
-
-    /// <summary>
-    /// Reference to the currently open device manager window, used for singleton focusing and lifecycle release.
-    /// <para>当前已打开的设备管理器窗口引用，用于单例前置与生命周期释放。</para>
-    /// </summary>
-    private static Window? _deviceWindow;
-
-    /// <summary>
-    /// Reference to the currently open global log window, used for singleton focusing and lifecycle release.
-    /// <para>当前已打开的全局日志窗口引用，用于单例前置与生命周期释放。</para>
-    /// </summary>
-    private static Window? _logWindow;
-
-    /// <summary>
-    /// Reference to the currently open USB tree-view window, used for singleton focusing and lifecycle
-    /// release.
-    /// <para>当前已打开的 USB 树视图窗口引用，用于单例前置与生命周期释放。</para>
-    /// </summary>
-    private static Window? _usbTreeWindow;
-
-    private static Window? _keyManagerWindow;
-    private static Window? _visualPluginManagerWindow;
-    private static Window? _apkSigningWindow;
-    private static Window? _bootPatchWindow;
-    private static ChecksumWindow? _checksumWindow;
-    private static SchemeEditorWindow? _schemeEditorWindow;
-    private static SchemeOperatorWindow? _schemeOperatorWindow;
 
     /// <summary>Opens or activates the independent key library.</summary>
     [RelayCommand]
-    private void OpenKeyManager() => ShowKeyManagerWindow();
-
-    internal static void ShowKeyManagerWindow() => ShowWindow(ref _keyManagerWindow, () => new KeyManagerWindow());
+    private void OpenKeyManager() => _windows.ShowHostWindow(HostWindowKind.KeyManager);
 
     /// <summary>Opens or activates the independent visual-plugin manager.</summary>
     [RelayCommand]
-    private void OpenVisualPluginManager() => ShowWindow(ref _visualPluginManagerWindow,
-        () => new VisualPluginManagerWindow());
+    private void OpenVisualPluginManager() => _windows.ShowHostWindow(HostWindowKind.VisualPluginManager);
 
     [RelayCommand]
-    private void OpenApkSigner() => ShowApkSigningWindow();
-
-    internal static void ShowApkSigningWindow() => ShowWindow(ref _apkSigningWindow, () => new ApkSigningWindow());
+    private void OpenApkSigner() => _windows.ShowHostWindow(HostWindowKind.ApkSigning);
 
     /// <summary>打开 Boot 修补窗口；窗口已打开时前置聚焦。</summary>
     [RelayCommand]
-    private void OpenBootPatch() => ShowBootPatchWindow();
-
-    internal static void ShowBootPatchWindow() => ShowWindow(ref _bootPatchWindow, () => new BootPatchWindow());
+    private void OpenBootPatch() => _windows.ShowHostWindow(HostWindowKind.BootPatch);
 
     /// <summary>打开文件校验器窗口；窗口已打开时前置聚焦。</summary>
     [RelayCommand]
-    private void OpenFileChecksum() => ShowFileChecksumWindow();
-
-    /// <summary>
-    /// Opens or activates the checksum tool window: a given path switches its target file (the explorer
-    /// context menu reuses one window); without a path (the Tools menu entry) its current state is kept.
-    /// <para>打开或前置文件校验器窗口：传入路径时切换其目标文件（资源管理器右键复用同一窗口），
-    /// 不传路径（工具菜单入口）时保留窗口当前状态。</para>
-    /// </summary>
-    /// <param name="filePath">An optional pre-selected file path. <para>可选的预选文件路径。</para></param>
-    internal static void ShowFileChecksumWindow(string? filePath = null)
-    {
-        if (_checksumWindow is { IsVisible: true } existing)
-        {
-            if (!string.IsNullOrEmpty(filePath))
-            {
-                existing.SetFile(filePath);
-            }
-
-            existing.WindowState = WindowState.Normal;
-            existing.Activate();
-            return;
-        }
-
-        var window = new ChecksumWindow(filePath);
-        _checksumWindow = window;
-        window.Show();
-    }
-
-    /// <summary>
-    /// Shows a helper tool window: creates and shows it if not open, otherwise brings it to the foreground and restores the normal window state.
-    /// <para>显示辅助工具窗口：若尚未打开则创建并显示，否则前置并恢复正常窗口状态。</para>
-    /// </summary>
-    /// <param name="holder">The window reference field. <para>窗口引用字段。</para></param>
-    /// <param name="factory">The factory creating a new window instance. <para>窗口工厂，用于创建新窗口实例。</para></param>
-    private static void ShowWindow(ref Window? holder, Func<Window> factory)
-    {
-        if (holder == null || !holder.IsVisible)
-        {
-
-            holder = null;
-            holder = factory();
-            holder.Show();
-        }
-        else
-        {
-            holder.WindowState = WindowState.Normal;
-            holder.Activate();
-        }
-    }
+    private void OpenFileChecksum() => _windows.ShowChecksumWindow();
 
     /// <summary>
     /// Toggles the minimap display state of the node editor. Only available when the Node Editor panel is active.
@@ -1639,14 +1497,14 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void Documentation()
     {
-        ExternalLinkService.TryOpen("https://github.com/UotanStudio/UotanStudio/wiki");
+        ExternalLinkService.TryOpen(string.Concat(BuildInfo.RepositoryUrl, "/wiki"));
     }
 
     /// <summary>Open the issue reporting page. <para>打开问题反馈页面。</para></summary>
     [RelayCommand]
     private void ReportIssue()
     {
-        ExternalLinkService.TryOpen("https://github.com/UotanStudio/UotanStudio/issues");
+        ExternalLinkService.TryOpen(string.Concat(BuildInfo.RepositoryUrl, "/issues"));
     }
 
     /// <summary>
@@ -1654,15 +1512,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// <para>显示关于对话框，包含版本与简介信息。</para>
     /// </summary>
     [RelayCommand]
-    private void About()
-    {
-        var dialog = new AboutDialog();
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-            && desktop.MainWindow is { } window)
-        {
-            dialog.ShowDialog(window);
-        }
-    }
+    private void About() => _windows.ShowAboutDialog();
 
     /// <summary>
     /// Shows a file open/save dialog to pick a project file path, returning the chosen path or <c>null</c>.

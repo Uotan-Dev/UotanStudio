@@ -5,7 +5,7 @@ using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Editors;
 using Ursa.Controls;
 
-namespace UotanStudio.Services.Workspace;
+namespace UotanStudio.Services.Ui.Workspace;
 
 /// <summary>
 /// Shares explicit document saving and close confirmation.

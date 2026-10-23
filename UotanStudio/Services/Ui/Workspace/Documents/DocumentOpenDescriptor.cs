@@ -1,8 +1,8 @@
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Controls;
 
-namespace UotanStudio.Services.Workspace.Documents;
+namespace UotanStudio.Services.Ui.Workspace.Documents;
 
 /// <summary>
 /// Registration for one document kind: the session Kind string, the explicit open mode, menu

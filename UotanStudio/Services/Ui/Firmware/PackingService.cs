@@ -6,10 +6,12 @@ using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.FileSystem.F2fs;
+using UotanStudio.Projects;
+using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;
 
-namespace UotanStudio.Services.Firmware;
+namespace UotanStudio.Services.Ui.Firmware;
 
 /// <summary>
 /// Packing service that builds an image from a source directory according to recorded directory metadata
@@ -28,7 +30,7 @@ internal static class PackingService
     /// <param name="settings">Packing settings, null to fall back to the shared instance. <para>打包设置，为 null 时回退到共享实例。</para></param>
     /// <param name="progress">Optional byte-progress reporter, null when progress is not tracked. <para>可选的字节进度回调，不跟踪进度时为 null。</para></param>
     /// <returns>The build result, carrying a failure summary when packing is refused. <para>构建结果，打包被拒绝时携带失败摘要。</para></returns>
-    public static FirmwareOpResult BuildImage(
+    public static FirmwareOperationResult BuildImage(
         string sourceDirectory,
         string outputPath,
         ProjectSettingViewModel? settings = null,
@@ -45,7 +47,7 @@ internal static class PackingService
             var imageProgress = FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
             if (metadata is not null)
             {
-                if (!metadata.CanPackDirectory) return FirmwareOpResult.Fail(metadata.PackingNotes);
+                if (!metadata.CanPackDirectory) return FirmwareOperationResult.Fail(metadata.PackingNotes);
                 var estimated = EstimateSourceBytes(sourceDirectory);
                 imageProgress.Report((0, estimated));
                 var reportsOwnBytes = metadata.FormatName is "EXT4" or "EROFS" or "F2FS";
@@ -82,7 +84,7 @@ internal static class PackingService
             settings ??= ProjectSettingViewModel.Instance;
             if (settings is null)
             {
-                return FirmwareOpResult.Fail("Packing settings not available  打包设置不可用");
+                return FirmwareOperationResult.Fail("Packing settings not available  打包设置不可用");
             }
 
             if (settings.TypeEXT4)
@@ -99,7 +101,7 @@ internal static class PackingService
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail($"Build failed: {ex.Message}  构建失败：{ex.Message}");
+            return FirmwareOperationResult.Fail($"Build failed: {ex.Message}  构建失败：{ex.Message}");
         }
     }
 
@@ -167,7 +169,7 @@ internal static class PackingService
         return options;
     }
 
-    private static FirmwareOpResult BuildExt4(
+    private static FirmwareOperationResult BuildExt4(
         string sourceDirectory,
         string outputPath,
         ProjectSettingViewModel settings,
@@ -204,10 +206,10 @@ internal static class PackingService
         var summary = $"EXT4 image built: {outputPath} ({size:N0} bytes, {sw.Elapsed.TotalSeconds:F1}s)  " +
                       $"EXT4 镜像已构建：{outputPath}（{size:N0} 字节，{sw.Elapsed.TotalSeconds:F1} 秒）";
         LogService.Instance.Write(LogLevel.Info, "Packing", summary);
-        return new FirmwareOpResult { Success = true, Summary = summary };
+        return new FirmwareOperationResult { Success = true, Summary = summary };
     }
 
-    private static FirmwareOpResult BuildErofs(
+    private static FirmwareOperationResult BuildErofs(
         string sourceDirectory,
         string outputPath,
         ProjectSettingViewModel settings,
@@ -244,10 +246,10 @@ internal static class PackingService
         var summary = $"EROFS image built: {outputPath} ({size:N0} bytes, {sw.Elapsed.TotalSeconds:F1}s)  " +
                       $"EROFS 镜像已构建：{outputPath}（{size:N0} 字节，{sw.Elapsed.TotalSeconds:F1} 秒）";
         LogService.Instance.Write(LogLevel.Info, "Packing", summary);
-        return new FirmwareOpResult { Success = true, Summary = summary };
+        return new FirmwareOperationResult { Success = true, Summary = summary };
     }
 
-    private static FirmwareOpResult BuildF2fs(
+    private static FirmwareOperationResult BuildF2fs(
         string sourceDirectory,
         string outputPath,
         ProjectSettingViewModel settings,
@@ -289,7 +291,7 @@ internal static class PackingService
 
         var summary = $"F2FS image built: {outputPath} ({size:N0} bytes, {sw.Elapsed.TotalSeconds:F1}s)";
         LogService.Instance.Write(LogLevel.Info, "Packing", summary);
-        return new FirmwareOpResult { Success = true, Summary = summary };
+        return new FirmwareOperationResult { Success = true, Summary = summary };
     }
 
     private static CompressionAlgorithm ParseF2fsCompressionAlgorithm(string value)

@@ -1,4 +1,4 @@
-namespace UotanStudio.Views.Controls;
+namespace UotanStudio.UiAbstractions;
 
 /// <summary>
 /// Syntax language registry, resolving TextMate syntax language ids by file extension for the document

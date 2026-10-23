@@ -6,10 +6,12 @@ using Avalonia.Controls;
 using Avalonia.Markup.Xaml.Styling;
 using CommunityToolkit.Mvvm.Messaging;
 using Irihi.Lingua;
+using UotanStudio.Composition;
 using UotanStudio.Locale;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Themes;
+using UotanStudio.UiAbstractions;
 
 namespace UotanStudio.Services;
 
@@ -20,17 +22,46 @@ namespace UotanStudio.Services;
 /// language change without swapping merged dictionaries. Theme application stays here as well.
 /// <para>基于 Irihi.Lingua 源生成语言管理器的单例门面：解析内置资源键、在所有模块管理器间切换区域性，并把当前值镜像进一个 Avalonia <see cref="ResourceDictionary"/>，使 XAML 的 <c>DynamicResource</c> 随语言切换刷新而无需替换合并字典。主题应用仍由本服务负责。</para>
 /// </summary>
-public sealed class LanguageService
+public sealed class LanguageService : ILocalizer
 {
     private static readonly Lazy<LanguageService> _instance =
         new(() => new LanguageService());
 
+    private static int _containerLookup;
+
     /// <summary>
-    /// Gets the singleton instance of <see cref="LanguageService"/>.
-    /// <para>获取 <see cref="LanguageService"/> 的单例实例。</para>
+    /// Gets the singleton instance of <see cref="LanguageService"/>: the container instance when
+    /// <see cref="ServiceHub"/> is initialized, otherwise the lazy default used by tests and by code
+    /// that runs before the composition root exists.
+    /// <para>获取 <see cref="LanguageService"/> 的单例实例：<see cref="ServiceHub"/> 已初始化时返回容器实例，
+    /// 否则返回测试与组合根建立前代码使用的惰性默认实例。</para>
     /// </summary>
     /// <value>The shared language service instance. <para>共享的语言服务实例。</para></value>
-    public static LanguageService Instance => _instance.Value;
+    public static LanguageService Instance
+    {
+        get
+        {
+            // While the container builds this very registration its factory calls Instance again;
+            // the reentrancy guard returns the lazy default so registration can never recurse.
+            // 容器构建本注册时其工厂会再次调用 Instance；重入保护返回惰性默认实例，注册不会递归。
+            if (Interlocked.CompareExchange(ref _containerLookup, 1, 0) == 0)
+            {
+                try
+                {
+                    if (ServiceHub.TryGet<LanguageService>() is { } registered)
+                    {
+                        return registered;
+                    }
+                }
+                finally
+                {
+                    Volatile.Write(ref _containerLookup, 0);
+                }
+            }
+
+            return _instance.Value;
+        }
+    }
 
     private static readonly (ILinguaManager Manager, string[] Keys)[] ModuleKeys =
     [

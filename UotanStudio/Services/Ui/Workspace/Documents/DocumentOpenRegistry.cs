@@ -2,13 +2,14 @@ using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Firmware.Executable.Elf;
+using UotanStudio.Services.Workspace.Documents;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Shell;
-using UotanStudio.Views.Controls;
 
-namespace UotanStudio.Services.Workspace.Documents;
+namespace UotanStudio.Services.Ui.Workspace.Documents;
 
 /// <summary>
 /// Registry of document-open descriptors: the single source of truth for open dispatch, session
@@ -66,7 +67,7 @@ internal static class DocumentOpenRegistry
             LocaleKey = "Explorer_OpenAsQcn",
             MenuOrder = 3,
             IconKind = AppIconKind.RadioTower,
-            Probe = static r => FileOpenMode.IsQcnExtension(Path.GetExtension(r.Path ?? string.Empty)),
+            Probe = static r => DocumentFormatPolicy.IsQcnExtension(Path.GetExtension(r.Path ?? string.Empty)),
             Open = static (w, r) => w.OpenQcnAsync(r.Path!),
             GetPath = vm => ((QcnEditorViewModel)vm).FilePath,
             IsDocument = false,
@@ -105,7 +106,7 @@ internal static class DocumentOpenRegistry
             LocaleKey = "Explorer_OpenAsHex",
             MenuOrder = 7,
             IconKind = AppIconKind.CodeBraces,
-            Probe = static r => FileOpenMode.IsKnownBinaryExtension(Path.GetExtension(r.Path ?? string.Empty)),
+            Probe = static r => DocumentFormatPolicy.IsKnownBinaryExtension(Path.GetExtension(r.Path ?? string.Empty)),
             Open = static (w, r) => w.OpenHexAsync(r.Path!),
             GetPath = vm => ((HexEditorViewModel)vm).FilePath,
             Cleanup = vm => { try { ((HexEditorViewModel)vm).Cleanup(); } catch { } },
@@ -121,7 +122,7 @@ internal static class DocumentOpenRegistry
             Probe = static r =>
             {
                 var ext = Path.GetExtension(r.Path ?? string.Empty);
-                return FileOpenMode.IsDtbExtension(ext) || FileOpenMode.IsDtbMagic(ProbeHeader(r));
+                return DocumentFormatPolicy.IsDtbExtension(ext) || DocumentFormatPolicy.IsDtbMagic(ProbeHeader(r));
             },
             Open = static (w, r) => w.OpenDtbAsync(r.Path!),
             GetPath = vm => ((DtbEditorViewModel)vm).FilePath,
@@ -138,8 +139,8 @@ internal static class DocumentOpenRegistry
             Probe = static r =>
             {
                 var ext = Path.GetExtension(r.Path ?? string.Empty);
-                return FileOpenMode.IsDexExtension(ext) || FileOpenMode.IsJarExtension(ext)
-                    || FileOpenMode.IsDexMagic(ProbeHeader(r));
+                return DocumentFormatPolicy.IsDexExtension(ext) || DocumentFormatPolicy.IsJarExtension(ext)
+                    || DocumentFormatPolicy.IsDexMagic(ProbeHeader(r));
             },
             Open = static (w, r) => w.OpenDexAsync(r.Path!),
             GetPath = vm => ((DexEditorViewModel)vm).FilePath,
@@ -166,7 +167,7 @@ internal static class DocumentOpenRegistry
             LocaleKey = "Explorer_OpenAsArsc",
             MenuOrder = 11,
             IconKind = AppIconKind.Database,
-            Probe = static r => FileOpenMode.IsArscExtension(Path.GetExtension(r.Path ?? string.Empty)),
+            Probe = static r => DocumentFormatPolicy.IsArscExtension(Path.GetExtension(r.Path ?? string.Empty)),
             Open = static (w, r) => w.OpenArscAsync(r.Path!),
             GetPath = vm => ((ArscEditorViewModel)vm).FilePath,
             Cleanup = vm => { try { ((ArscEditorViewModel)vm).Cleanup(); } catch { } },
@@ -179,7 +180,7 @@ internal static class DocumentOpenRegistry
             LocaleKey = "Explorer_OpenAsApk",
             MenuOrder = 12,
             IconKind = AppIconKind.Android,
-            Probe = static r => FileOpenMode.IsApkExtension(Path.GetExtension(r.Path ?? string.Empty)),
+            Probe = static r => DocumentFormatPolicy.IsApkExtension(Path.GetExtension(r.Path ?? string.Empty)),
             Open = static (w, r) => w.OpenApkAsync(r.Path!),
             GetPath = vm => ((ApkEditorViewModel)vm).FilePath,
         },
@@ -194,7 +195,7 @@ internal static class DocumentOpenRegistry
             Probe = static r =>
             {
                 var ext = Path.GetExtension(r.Path ?? string.Empty);
-                return FileOpenMode.IsFirmwareExtension(ext) || FileOpenMode.IsFirmwareMagic(ProbeHeader(r));
+                return DocumentFormatPolicy.IsFirmwareExtension(ext) || DocumentFormatPolicy.IsFirmwareMagic(ProbeHeader(r));
             },
             Open = static (w, r) => w.OpenFirmwareAsync(r.Path!, r.Detection),
             GetPath = vm => ((FirmwareInfoViewModel)vm).FilePath,
@@ -211,7 +212,7 @@ internal static class DocumentOpenRegistry
             Probe = static r =>
             {
                 var ext = Path.GetExtension(r.Path ?? string.Empty);
-                return FileOpenMode.IsFilesystemImageExtension(ext) || FileOpenMode.IsCpioArchiveExtension(ext)
+                return DocumentFormatPolicy.IsFilesystemImageExtension(ext) || DocumentFormatPolicy.IsCpioArchiveExtension(ext)
                     || UotanStudio.Firmware.Archive.Browsing.ArchiveBrowser.SupportsPath(r.Path ?? string.Empty);
             },
             Open = static (w, r) => w.OpenFileSystemAsync(r.Path!),
@@ -401,30 +402,30 @@ internal static class DocumentOpenRegistry
             header is not null && UotanStudio.Firmware.AndroidMeta.AXml.AXmlParser.IsAxml(header)),
 
         new(EditorOpenMode.Dtb, static (_, header, _, _) =>
-            header is not null && FileOpenMode.IsDtbMagic(header)),
+            header is not null && DocumentFormatPolicy.IsDtbMagic(header)),
 
         new(EditorOpenMode.Dex, static (_, header, _, _) =>
-            header is not null && FileOpenMode.IsDexMagic(header)),
+            header is not null && DocumentFormatPolicy.IsDexMagic(header)),
 
         new(EditorOpenMode.Firmware, static (_, header, _, _) =>
-            header is not null && FileOpenMode.IsFirmwareMagic(header)),
+            header is not null && DocumentFormatPolicy.IsFirmwareMagic(header)),
 
         new(EditorOpenMode.FileSystem, static (path, header, _, _) =>
-            header is not null && FileOpenMode.IsZipMagic(header)
-            && !FileOpenMode.IsApkExtension(Path.GetExtension(path))
-            && !FileOpenMode.IsJarExtension(Path.GetExtension(path))),
+            header is not null && DocumentFormatPolicy.IsZipMagic(header)
+            && !DocumentFormatPolicy.IsApkExtension(Path.GetExtension(path))
+            && !DocumentFormatPolicy.IsJarExtension(Path.GetExtension(path))),
 
         new(EditorOpenMode.FileSystem, static (_, header, _, _) =>
-            header is not null && FileOpenMode.IsFilesystemMagic(header)),
+            header is not null && DocumentFormatPolicy.IsFilesystemMagic(header)),
 
         new(EditorOpenMode.Partition, static (_, header, _, _) =>
-            header is not null && FileOpenMode.IsLpMetadataMagic(header)),
+            header is not null && DocumentFormatPolicy.IsLpMetadataMagic(header)),
 
         new(EditorOpenMode.Partition, static (_, header, _, _) =>
-            header is not null && (FileOpenMode.IsGptMagic(header) || FileOpenMode.IsMbrMagic(header))),
+            header is not null && (DocumentFormatPolicy.IsGptMagic(header) || DocumentFormatPolicy.IsMbrMagic(header))),
 
         new(EditorOpenMode.Partition, static (_, header, _, _) =>
-            header is not null && FileOpenMode.IsRockchipParameterText(header)),
+            header is not null && DocumentFormatPolicy.IsRockchipParameterText(header)),
 
         new(EditorOpenMode.Arsc, static (_, _, detection, _) =>
             detection is { Confidence: not DetectionConfidence.ExtensionOnly }
@@ -438,7 +439,7 @@ internal static class DocumentOpenRegistry
 
         new(EditorOpenMode.Hex, static (_, header, _, extension) =>
             header is not null && extension.Value is EditorOpenMode.Text or EditorOpenMode.Log
-            && FileOpenMode.IsBinaryContent(header)),
+            && DocumentFormatPolicy.IsBinaryContent(header)),
 
         new(EditorOpenMode.Log, static (path, header, _, extension) =>
             header is not null && extension.Value is EditorOpenMode.Auto or EditorOpenMode.Text
@@ -468,7 +469,7 @@ internal static class DocumentOpenRegistry
         new(EditorOpenMode.Hex, static (_, header, _, _) =>
             header is not null && FileMagic.Describe(header) is not null),
         new(EditorOpenMode.Hex, static (_, header, _, _) =>
-            header is not null && FileOpenMode.IsBinaryContent(header)),
+            header is not null && DocumentFormatPolicy.IsBinaryContent(header)),
     ];
 
     private static FormatDetectionResult? DetectDetailedWithRegistry(string path)
@@ -503,37 +504,37 @@ internal static class DocumentOpenRegistry
             return EditorOpenMode.Log;
         }
 
-        if (FileOpenMode.IsDtbExtension(ext))
+        if (DocumentFormatPolicy.IsDtbExtension(ext))
         {
             return EditorOpenMode.Dtb;
         }
 
-        if (FileOpenMode.IsDexExtension(ext) || FileOpenMode.IsJarExtension(ext))
+        if (DocumentFormatPolicy.IsDexExtension(ext) || DocumentFormatPolicy.IsJarExtension(ext))
         {
             return EditorOpenMode.Dex;
         }
 
-        if (FileOpenMode.IsArscExtension(ext))
+        if (DocumentFormatPolicy.IsArscExtension(ext))
         {
             return EditorOpenMode.Arsc;
         }
 
-        if (FileOpenMode.IsApkExtension(ext))
+        if (DocumentFormatPolicy.IsApkExtension(ext))
         {
             return EditorOpenMode.Apk;
         }
 
-        if (FileOpenMode.IsQcnExtension(ext))
+        if (DocumentFormatPolicy.IsQcnExtension(ext))
         {
             return EditorOpenMode.Qcn;
         }
 
-        if (FileOpenMode.IsDtsExtension(ext))
+        if (DocumentFormatPolicy.IsDtsExtension(ext))
         {
             return EditorOpenMode.Text;
         }
 
-        if (FileOpenMode.IsFilesystemImageExtension(ext) && FileOpenMode.IsFilesystemImage(path))
+        if (DocumentFormatPolicy.IsFilesystemImageExtension(ext) && DocumentFormatPolicy.IsFilesystemImage(path))
         {
             return EditorOpenMode.FileSystem;
         }
@@ -543,32 +544,32 @@ internal static class DocumentOpenRegistry
             return EditorOpenMode.FileSystem;
         }
 
-        if (IsLpCandidatePath(path) && FileOpenMode.IsLpSuperImage(path))
+        if (IsLpCandidatePath(path) && DocumentFormatPolicy.IsLpSuperImage(path))
         {
             return EditorOpenMode.Partition;
         }
 
-        if (IsPartitionTableCandidatePath(path) && (FileOpenMode.IsGptImage(path) || FileOpenMode.IsMbrImage(path)))
+        if (IsPartitionTableCandidatePath(path) && (DocumentFormatPolicy.IsGptImage(path) || DocumentFormatPolicy.IsMbrImage(path)))
         {
             return EditorOpenMode.Partition;
         }
 
-        if (FileOpenMode.IsFirmwareExtension(ext))
+        if (DocumentFormatPolicy.IsFirmwareExtension(ext))
         {
             return EditorOpenMode.Firmware;
         }
 
-        if (FileOpenMode.IsKnownBinaryExtension(ext))
+        if (DocumentFormatPolicy.IsKnownBinaryExtension(ext))
         {
             return EditorOpenMode.Hex;
         }
 
-        if (FileOpenMode.IsTextExtension(ext))
+        if (DocumentFormatPolicy.IsTextExtension(ext))
         {
             return EditorOpenMode.Text;
         }
 
-        if (FileOpenMode.IsRockchipParameter(path))
+        if (DocumentFormatPolicy.IsRockchipParameter(path))
         {
             return EditorOpenMode.Partition;
         }
@@ -589,8 +590,8 @@ internal static class DocumentOpenRegistry
             return false;
         }
 
-        return FileOpenMode.IsLpSuperImage(path) || FileOpenMode.IsGptImage(path)
-            || FileOpenMode.IsMbrImage(path) || FileOpenMode.IsRockchipParameter(path);
+        return DocumentFormatPolicy.IsLpSuperImage(path) || DocumentFormatPolicy.IsGptImage(path)
+            || DocumentFormatPolicy.IsMbrImage(path) || DocumentFormatPolicy.IsRockchipParameter(path);
     }
 
     private static bool IsElfHeader(byte[]? header) =>
@@ -650,7 +651,7 @@ internal static class DocumentOpenRegistry
 
         try
         {
-            return FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+            return FormatDetector.ReadHeader(path, DocumentFormatPolicy.ContentProbeLength);
         }
         catch
         {

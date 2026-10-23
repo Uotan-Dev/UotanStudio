@@ -1,12 +1,14 @@
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Projects;
+using UotanStudio.Projects.Schemes;
 using UotanStudio.Services;
 using UotanStudio.Services.Keys;
 using UotanStudio.Services.Projects;
-using UotanStudio.Services.Projects.Schemes;
+using UotanStudio.Services.Ui.Projects;
 using UotanStudio.ViewModels.Nodes;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.ViewModels.Shell;
 

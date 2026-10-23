@@ -4,7 +4,7 @@ using Avalonia.Threading;
 using UotanStudio.Views.Dialogs;
 using Ursa.Controls;
 
-namespace UotanStudio.Services;
+namespace UotanStudio.Services.Ui;
 
 /// <summary>
 /// Input for the dangerous-operation confirmation dialog.

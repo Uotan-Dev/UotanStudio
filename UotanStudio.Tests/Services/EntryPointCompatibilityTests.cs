@@ -4,12 +4,10 @@ using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using UotanStudio.Messages;
-using UotanStudio.Services.Projects;
 using UotanStudio.Tests.TestInfrastructure;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Controls;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

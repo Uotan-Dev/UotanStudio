@@ -3,9 +3,9 @@ using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Projects;
-using UotanStudio.Services.Workspace;
+using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Nodes;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

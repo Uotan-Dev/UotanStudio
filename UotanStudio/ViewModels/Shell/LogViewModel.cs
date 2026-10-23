@@ -31,10 +31,24 @@ public partial class LogViewModel : ViewModelBase, IDisposable
         [ObservableProperty] private string _message = string.Empty;
 
         /// <summary>
+        /// Cached displayed text, invalidated when the timestamp, level, source or message changes.
+        /// <para>缓存的展示文本；时间戳、级别、来源或消息变化时失效。</para>
+        /// </summary>
+        private string? _text;
+
+        /// <summary>
         /// Complete displayed and searchable text.
         /// <para>用于显示和搜索的完整日志行。</para>
         /// </summary>
-        public string Text => $"{Timestamp} [{Level,-5}] {Source} - {Message}".ReplaceLineEndings("\n");
+        public string Text => _text ??= $"{Timestamp} [{Level,-5}] {Source} - {Message}".ReplaceLineEndings("\n");
+
+        partial void OnTimestampChanged(string value) => _text = null;
+
+        partial void OnLevelChanged(LogLevel value) => _text = null;
+
+        partial void OnSourceChanged(string value) => _text = null;
+
+        partial void OnMessageChanged(string value) => _text = null;
 
         /// <summary>
         /// Creates a log entry view model.
@@ -291,8 +305,17 @@ public partial class LogViewModel : ViewModelBase, IDisposable
             return;
         }
         var removed = _allEntries.Take(overflow).ToArray();
-        Entries.Apply(removed.Length, []);
         _allEntries.RemoveRange(0, overflow);
+
+        var displayed = 0;
+        foreach (var entry in removed)
+        {
+            if (displayed < Entries.Count && ReferenceEquals(Entries[displayed], entry))
+            {
+                displayed++;
+            }
+        }
+        Entries.Apply(displayed, []);
     }
 
     /// <summary>

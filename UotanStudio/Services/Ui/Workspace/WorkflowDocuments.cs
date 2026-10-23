@@ -1,8 +1,9 @@
 using Avalonia.Threading;
 using Dock.Model.Core;
+using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Workspace;
 
-namespace UotanStudio.Services.Workspace;
+namespace UotanStudio.Services.Ui.Workspace;
 
 public sealed record WorkflowDocumentSnapshot(object Handle, string Id, string Path, string Kind,
     string? Text, bool CanEdit);

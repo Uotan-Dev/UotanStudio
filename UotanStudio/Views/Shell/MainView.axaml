@@ -26,43 +26,43 @@
 			<!-- First entry of the bottom workspace bar: flash. -->
 			<ContentPage Name="FlashTab">
 				<ContentPage.Icon>
-					<avalonia:Thunder Width="18" Margin="0 -10 0 0" />
+					<avalonia:Thunder Width="18" Height="18" Margin="0 -7 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Flash}" FontSize="13" FontWeight="SemiBold" />
+					<TextBlock Margin="0 0 0 -7" Text="{DynamicResource Tab_Flash}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>
-					<avalonia:Dashboard1 Width="18" Margin="0 -10 0 0" />
+					<avalonia:Dashboard1 Width="18" Height="18" Margin="0 -7 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Workspace}" FontSize="13" FontWeight="SemiBold" />
+					<TextBlock Margin="0 0 0 -7" Text="{DynamicResource Tab_Workspace}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 				<workspaceviews:WorkspaceView Name="WorkspaceDocuments" DataContext="{Binding WorkspaceVM}" />
 			</ContentPage>
 			<ContentPage Name="DeliveryTab">
 				<ContentPage.Icon>
-					<avalonia:Gift Width="18" Margin="0 -10 0 0" />
+					<avalonia:Gift Width="18" Height="18" Margin="0 -7 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Delivery}" FontSize="13" FontWeight="SemiBold" />
+					<TextBlock Margin="0 0 0 -7" Text="{DynamicResource Tab_Delivery}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 			</ContentPage>
 			<ContentPage Name="NodeEditorTab" DataContext="{Binding NodeEditorVM}">
 				<ContentPage.Icon>
-					<avalonia:PlayCircleStroke Width="18" Margin="0 -10 0 0" />
+					<avalonia:PlayCircleStroke Width="18" Height="18" Margin="0 -7 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Node}" FontSize="13" FontWeight="SemiBold" />
+					<TextBlock Margin="0 0 0 -7" Text="{DynamicResource Tab_Node}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 			</ContentPage>
 			<ContentPage Name="SettingsTab" DataContext="{Binding SettingsVM}">
 				<ContentPage.Icon>
-					<avalonia:Setting Width="18" Margin="0 -10 0 0" />
+					<avalonia:Setting Width="18" Height="18" Margin="0 -7 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Settings}" FontSize="13" FontWeight="SemiBold" />
+					<TextBlock Margin="0 0 0 -7" Text="{DynamicResource Tab_Settings}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 			</ContentPage>
 			<ContentPage TabbedPage.IsTabEnabled="False">

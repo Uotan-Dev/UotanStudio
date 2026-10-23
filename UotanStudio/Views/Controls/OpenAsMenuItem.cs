@@ -4,7 +4,9 @@ using Avalonia.Markup.Xaml.MarkupExtensions;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Messages;
+using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.Services.Workspace.Documents;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Workspace;
 
@@ -107,7 +109,7 @@ public sealed class OpenAsMenuItem : MenuItem
     {
         try
         {
-            return FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+            return FormatDetector.ReadHeader(path, DocumentFormatPolicy.ContentProbeLength);
         }
         catch
         {

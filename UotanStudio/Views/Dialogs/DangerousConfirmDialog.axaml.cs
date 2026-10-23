@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using UotanStudio.Services;
+using UotanStudio.Services.Ui;
 
 namespace UotanStudio.Views.Dialogs;
 

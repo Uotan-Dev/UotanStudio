@@ -1,7 +1,7 @@
 using UotanStudio.Firmware.Core;
-using UotanStudio.Views.Controls;
+using UotanStudio.UiAbstractions;
 
-namespace UotanStudio.Services.Workspace.Documents;
+namespace UotanStudio.Services.Ui.Workspace.Documents;
 
 /// <summary>
 /// Unified document-open request covering the parameter shapes used across open paths: a single

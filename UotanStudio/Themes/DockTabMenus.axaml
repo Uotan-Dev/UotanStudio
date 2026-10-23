@@ -16,55 +16,55 @@
                 <MenuItem Header="{DynamicResource DockMenu_Float}" IsVisible="{Binding CanFloat}"
                           Command="{Binding Factory.FloatDockable}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
-                        <icons:ArrowRightUp />
+                        <icons:ArrowRightUp Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{DynamicResource DockMenu_FloatAll}"
                           Command="{Binding Factory.FloatAllDockables}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
-                        <icons:Window1 />
+                        <icons:Window1 Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <Separator />
                 <MenuItem Header="{DynamicResource DockMenu_Close}" IsVisible="{Binding CanClose}"
                           Command="{Binding Factory.CloseDockable}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
-                        <icons:Close />
+                        <icons:Close Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{DynamicResource DockMenu_CloseOthers}"
                           Command="{Binding Factory.CloseOtherDockables}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
-                        <icons:CloseCircle />
+                        <icons:CloseCircle Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{DynamicResource DockMenu_CloseAll}"
                           Command="{Binding Factory.CloseAllDockables}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
-                        <icons:CloseRectangle />
+                        <icons:CloseRectangle Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <Separator />
                 <MenuItem Header="{DynamicResource DockMenu_TabLayout}">
                     <MenuItem.Icon>
-                        <icons:PageTab />
+                        <icons:PageTab Width="16" Height="16" />
                     </MenuItem.Icon>
                     <MenuItem Header="{DynamicResource DockMenu_TabsLeft}"
                               Command="{Binding Factory.SetDocumentDockTabsLayoutLeft}" CommandParameter="{Binding}">
                         <MenuItem.Icon>
-                            <icons:ArrowLeft />
+                            <icons:ArrowLeft Width="16" Height="16" />
                         </MenuItem.Icon>
                     </MenuItem>
                     <MenuItem Header="{DynamicResource DockMenu_TabsTop}"
                               Command="{Binding Factory.SetDocumentDockTabsLayoutTop}" CommandParameter="{Binding}">
                         <MenuItem.Icon>
-                            <icons:ArrowUp />
+                            <icons:ArrowUp Width="16" Height="16" />
                         </MenuItem.Icon>
                     </MenuItem>
                     <MenuItem Header="{DynamicResource DockMenu_TabsRight}"
                               Command="{Binding Factory.SetDocumentDockTabsLayoutRight}" CommandParameter="{Binding}">
                         <MenuItem.Icon>
-                            <icons:ArrowRight />
+                            <icons:ArrowRight Width="16" Height="16" />
                         </MenuItem.Icon>
                     </MenuItem>
                 </MenuItem>
@@ -77,39 +77,39 @@
                 <MenuItem Header="{DynamicResource DockMenu_Float}" IsVisible="{Binding CanFloat}"
                           Command="{Binding Factory.FloatDockable}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
-                        <icons:ArrowRightUp />
+                        <icons:ArrowRightUp Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{DynamicResource DockMenu_FloatAll}"
                           Command="{Binding Factory.FloatAllDockables}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
-                        <icons:Window1 />
+                        <icons:Window1 Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <Separator />
                 <MenuItem Header="{DynamicResource DockMenu_Dock}" IsVisible="{Binding CanPin}"
                           Command="{Binding Factory.PinDockable}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
-                        <icons:Pin />
+                        <icons:Pin Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{DynamicResource DockMenu_DockAsDocument}" IsVisible="{Binding CanDockAsDocument}"
                           Command="{Binding Factory.DockAsDocument}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
-                        <icons:PageTab />
+                        <icons:PageTab Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{DynamicResource DockMenu_AutoHide}" IsVisible="{Binding CanPin}"
                           Command="{Binding Factory.PinDockable}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
-                        <icons:LockOff />
+                        <icons:LockOff Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <Separator />
                 <MenuItem Header="{DynamicResource DockMenu_Close}" IsVisible="{Binding CanClose}"
                           Command="{Binding Factory.CloseDockable}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
-                        <icons:Close />
+                        <icons:Close Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
             </ContextMenu></Template>
@@ -124,25 +124,25 @@
                     <MenuItem Header="{DynamicResource DockMenu_Float}"
                               Command="{Binding Factory.FloatDockable}" CommandParameter="{Binding}">
                         <MenuItem.Icon>
-                            <icons:ArrowRightUp />
+                            <icons:ArrowRightUp Width="16" Height="16" />
                         </MenuItem.Icon>
                     </MenuItem>
                     <MenuItem Header="{DynamicResource DockMenu_Show}"
                               Command="{Binding Factory.PreviewPinnedDockable}" CommandParameter="{Binding}">
                         <MenuItem.Icon>
-                            <icons:Browse />
+                            <icons:Browse Width="16" Height="16" />
                         </MenuItem.Icon>
                     </MenuItem>
                     <MenuItem Header="{DynamicResource DockMenu_DockAsDocument}"
                               Command="{Binding Factory.DockAsDocument}" CommandParameter="{Binding}">
                         <MenuItem.Icon>
-                            <icons:PageTab />
+                            <icons:PageTab Width="16" Height="16" />
                         </MenuItem.Icon>
                     </MenuItem>
                     <MenuItem Header="{DynamicResource DockMenu_Close}"
                               Command="{Binding Factory.CloseDockable}" CommandParameter="{Binding}">
                         <MenuItem.Icon>
-                            <icons:Close />
+                            <icons:Close Width="16" Height="16" />
                         </MenuItem.Icon>
                     </MenuItem>
                 </ContextMenu>

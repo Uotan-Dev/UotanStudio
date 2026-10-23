@@ -3,7 +3,7 @@
         xmlns:nodes="using:UotanStudio.Views.Nodes"
         xmlns:vm="using:UotanStudio.ViewModels.Nodes"
         xmlns:icons="https://irihi.tech/iconica/tdesign"
-        xmlns:project="clr-namespace:UotanStudio.Services.Projects;assembly=UotanStudio.Projects"
+        xmlns:project="clr-namespace:UotanStudio.Projects;assembly=UotanStudio.Projects"
         x:Class="UotanStudio.Views.Shell.VisualPluginEditorWindow"
         x:DataType="vm:NodeEditorViewModel"
         Width="1180" Height="760" MinWidth="820" MinHeight="560"

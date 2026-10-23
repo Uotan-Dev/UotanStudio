@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Projects;
+using UotanStudio.Projects.Schemes;
 using UotanStudio.Services;
-using UotanStudio.Services.Projects;
-using UotanStudio.Services.Projects.Schemes;
 
 namespace UotanStudio.ViewModels.Shell;
 

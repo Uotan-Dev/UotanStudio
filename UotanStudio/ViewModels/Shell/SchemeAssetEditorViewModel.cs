@@ -1,6 +1,6 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
-using UotanStudio.Services.Projects.Schemes;
+using UotanStudio.Projects.Schemes;
 
 namespace UotanStudio.ViewModels.Shell;
 

@@ -2,8 +2,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using UotanStudio.Projects;
 using UotanStudio.Services;
-using UotanStudio.Services.Projects;
 using UotanStudio.Services.VisualPlugins;
 using Ursa.Controls;
 

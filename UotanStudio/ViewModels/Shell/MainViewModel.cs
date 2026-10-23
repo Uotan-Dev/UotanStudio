@@ -14,7 +14,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 {
     private readonly ShellComponents _components;
     private bool _disposed;
-    private readonly Services.Workspace.WorkspaceAutoSaveService _autoSave;
+    private readonly Services.Ui.Workspace.WorkspaceAutoSaveService _autoSave;
     private readonly Services.Workspace.WorkspaceModificationTracker _modifications;
     internal Task InitializeAutoSaveAsync() => _autoSave.InitializeAsync();
     internal void AttachMainWindow(Window window) => _autoSave.AttachMainWindow(window);

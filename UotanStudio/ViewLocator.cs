@@ -47,7 +47,7 @@ public class ViewLocator : IDataTemplate
                     editor.Background = Avalonia.Media.Brushes.Transparent;
                 }
                 view.AddHandler(Avalonia.Input.InputElement.PointerPressedEvent,
-                    (_, _) => Services.Workspace.DocumentNotifications.Publish((Dock.Model.Mvvm.Controls.Document)param),
+                    (_, _) => Services.Ui.Workspace.DocumentNotifications.Publish((Dock.Model.Mvvm.Controls.Document)param),
                     Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
             }
             _viewCache.Add(param, view);

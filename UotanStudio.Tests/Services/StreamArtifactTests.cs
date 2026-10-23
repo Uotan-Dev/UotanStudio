@@ -1,8 +1,8 @@
 using System.Text;
-using UotanStudio.Services.Execution;
+using UotanStudio.Projects;
 using UotanStudio.Services.Patching;
-using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Workflow.Execution;
+using UotanStudio.Workflow.Nodes;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

@@ -3,7 +3,7 @@ using Dock.Model.Core;
 using UotanStudio.Messages;
 using UotanStudio.ViewModels.Editors;
 
-namespace UotanStudio.Services.Workspace;
+namespace UotanStudio.Services.Ui.Workspace;
 
 /// <summary>
 /// Single adapter for document selection and refresh notifications, including typed payloads.

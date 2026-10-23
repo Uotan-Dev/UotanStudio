@@ -6,11 +6,14 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Core;
 using UotanStudio.Messages;
+using UotanStudio.Projects;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui.Projects;
+using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
 
-namespace UotanStudio.Services.Workspace;
+namespace UotanStudio.Services.Ui.Workspace;
 
 internal sealed class WorkspaceAutoSaveService : IDisposable
 {

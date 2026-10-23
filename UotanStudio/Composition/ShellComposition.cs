@@ -1,17 +1,23 @@
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Extensions.DependencyInjection;
 using UotanStudio.Services;
-using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui.Projects;
+using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.Services.Workspace;
+using UotanStudio.UiAbstractions;
+using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
+using UotanStudio.Views;
 using UotanStudio.Views.Workspace;
 
 namespace UotanStudio.Composition;
 
 /// <summary>
-/// Assembles one shell explicitly around a supplied project operations service.
-/// <para>围绕给定的工程操作服务显式装配一个 Shell。</para>
+/// Assembles one shell explicitly around a supplied project operations service, preferring the
+/// composition-root singletons when the container is initialized.
+/// <para>围绕给定的工程操作服务显式装配一个 Shell；容器已初始化时优先使用组合根单例。</para>
 /// </summary>
 internal static class ShellComposition
 {
@@ -24,8 +30,11 @@ internal static class ShellComposition
 
     /// <summary>
     /// Builds the shell components in stages, yielding through the supplied progress callback between
-    /// them and disposing every partially built component when construction fails.
-    /// <para>分阶段构建 Shell 组件，阶段之间经给定的进度回调让出，构建失败时释放已部分构建的全部组件。</para>
+    /// them. View models come from the composition root when <see cref="App.Services"/> is initialized,
+    /// otherwise they are constructed explicitly; every locally built component is disposed when
+    /// construction fails, while container-owned singletons stay with the container.
+    /// <para>分阶段构建 Shell 组件，阶段之间经给定的进度回调让出。容器（<see cref="App.Services"/>）已初始化时
+    /// 视图模型取自组合根，否则显式构造；构建失败时只释放本地构建的组件，容器持有的单例仍归容器所有。</para>
     /// </summary>
     /// <param name="report">Publishes each construction stage. <para>上报每个构建阶段。</para></param>
     /// <param name="appliedCultureName">The language preference already applied at startup, or null for independent construction. <para>启动时已应用的语言偏好；独立构建时为 null。</para></param>
@@ -34,7 +43,8 @@ internal static class ShellComposition
     internal static async Task<ShellComponents> CreateAsync(Func<SplashPhase, Task> report,
         string? appliedCultureName = null)
     {
-        var projects = ProjectOperationsService.Instance;
+        var services = App.Services;
+        var projects = services?.GetService<ProjectOperationsService>() ?? ProjectOperationsService.Instance;
         if (projects.IsWorkspaceAttached)
         {
             throw new InvalidOperationException("Only one desktop project shell may be active.");
@@ -43,26 +53,64 @@ internal static class ShellComposition
         SettingsViewModel? settings = null;
         NodeEditorViewModel? nodes = null;
         WorkspaceViewModel? workspace = null;
+        var ownsMenu = false;
+        var ownsNodes = false;
+        var ownsSettings = false;
+        var ownsWorkspace = false;
         try
         {
             await report(SplashPhase.Services);
-            menu = new MenuViewModel(projects);
+            var windows = services?.GetService<IWindowService>() ?? UiWindowService.Shared;
+            DeviceViewModel.Windows = windows;
+            menu = services?.GetService<MenuViewModel>();
+            if (menu is null)
+            {
+                menu = new MenuViewModel(projects, windows);
+                ownsMenu = true;
+            }
             await report(SplashPhase.Nodes);
-            nodes = new NodeEditorViewModel();
+            nodes = services?.GetService<NodeEditorViewModel>();
+            if (nodes is null)
+            {
+                nodes = new NodeEditorViewModel();
+                ownsNodes = true;
+            }
             await report(SplashPhase.Workspace);
-            var appSettings = await Task.Run(SettingsPersistenceService.Instance.LoadSettings);
-            settings = new SettingsViewModel(appSettings,
-                applyLanguage: appliedCultureName is null
-                    || !string.Equals(appSettings.CultureName, appliedCultureName, StringComparison.Ordinal));
-            workspace = new WorkspaceViewModel(new WorkspaceDockFactory(settings.Ai));
+            settings = services?.GetService<SettingsViewModel>();
+            if (settings is null)
+            {
+                var appSettings = await Task.Run(SettingsPersistenceService.Instance.LoadSettings);
+                settings = new SettingsViewModel(appSettings,
+                    applyLanguage: appliedCultureName is null
+                        || !string.Equals(appSettings.CultureName, appliedCultureName, StringComparison.Ordinal));
+                ownsSettings = true;
+            }
+            workspace = services?.GetService<WorkspaceViewModel>();
+            if (workspace is null)
+            {
+                workspace = new WorkspaceViewModel(new WorkspaceDockFactory(settings.Ai));
+                ownsWorkspace = true;
+            }
             return new ShellComponents(projects, menu, nodes, settings, workspace);
         }
         catch
         {
-            menu?.Dispose();
-            nodes?.Dispose();
-            settings?.Dispose();
-            workspace?.Dispose();
+            if (ownsMenu)
+            {
+                menu?.Dispose();
+            }
+            if (ownsNodes)
+            {
+                nodes?.Dispose();
+            }
+            if (ownsSettings)
+            {
+                settings?.Dispose();
+            }
+            if (ownsWorkspace)
+            {
+                workspace?.Dispose();
+            }
             throw;
         }
     }
@@ -79,7 +127,9 @@ internal static class ShellComposition
     {
         if (projects is null) throw new ArgumentNullException(nameof(projects));
         if (projects.IsWorkspaceAttached) throw new InvalidOperationException("Only one desktop project shell may be active.");
-        var menu = new MenuViewModel(projects);
+        var windows = UiWindowService.Shared;
+        DeviceViewModel.Windows = windows;
+        var menu = new MenuViewModel(projects, windows);
         var nodes = new NodeEditorViewModel();
         var settings = new SettingsViewModel();
         var workspace = new WorkspaceViewModel(new WorkspaceDockFactory(settings.Ai));

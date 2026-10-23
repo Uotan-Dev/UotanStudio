@@ -1,8 +1,9 @@
 using Dock.Model.Core;
 using UotanStudio.Services.Terminal;
+using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Workspace;
 
-namespace UotanStudio.Services.Workspace;
+namespace UotanStudio.Services.Ui.Workspace;
 
 internal sealed class TerminalDockService(IFactory factory, IDock defaultHost) : IDisposable
 {

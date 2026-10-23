@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using UotanStudio.Composition;
 
 namespace UotanStudio.Services;
 
@@ -45,6 +46,7 @@ public enum LogChannel
 public sealed class LogService : IUnifiedLog
 {
     private static readonly Lazy<LogService> LazyInstance = new(() => new LogService());
+    private static int _containerLookup;
     private readonly ConcurrentQueue<LogEntry> _entries = new();
     private readonly Lock _subscribersLock = new();
     private readonly List<EventHandler<LogEntry>> _subscribers = [];
@@ -53,11 +55,38 @@ public sealed class LogService : IUnifiedLog
     private int _maxQueueSize = 5000;
 
     /// <summary>
-    /// Singleton instance.
-    /// <para>单例实例。</para>
+    /// Gets the singleton instance: the container instance when <see cref="ServiceHub"/> is
+    /// initialized, otherwise the lazy default used by tests and by code that runs before the
+    /// composition root exists.
+    /// <para>获取单例实例：<see cref="ServiceHub"/> 已初始化时返回容器实例，否则返回测试与组合根建立前
+    /// 代码使用的惰性默认实例。</para>
     /// </summary>
     /// <value>The shared log service instance. <para>共享的日志服务实例。</para></value>
-    public static LogService Instance => LazyInstance.Value;
+    public static LogService Instance
+    {
+        get
+        {
+            // The registration factory calls Instance again while the container builds it; the
+            // guard returns the lazy default instead of recursing into the same registration.
+            // 容器构建注册时其工厂会再次调用 Instance；该保护返回惰性默认实例，而不是递归进入同一注册。
+            if (Interlocked.CompareExchange(ref _containerLookup, 1, 0) == 0)
+            {
+                try
+                {
+                    if (ServiceHub.TryGet<LogService>() is { } registered)
+                    {
+                        return registered;
+                    }
+                }
+                finally
+                {
+                    Volatile.Write(ref _containerLookup, 0);
+                }
+            }
+
+            return LazyInstance.Value;
+        }
+    }
 
     private LogService() { }
 

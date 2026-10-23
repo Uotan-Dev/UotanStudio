@@ -1,10 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Composition;
 using UotanStudio.Firmware.Core.IO;
+using UotanStudio.Mcp;
 using UotanStudio.Messages;
 using UotanStudio.Models;
-using UotanStudio.Services.Mcp;
 
 namespace UotanStudio.Services;
 
@@ -14,15 +15,17 @@ namespace UotanStudio.Services;
 /// </summary>
 public class AppSettings : IJsonOnDeserialized
 {
-    /// <summary>Discards the HDC path keys and the retired EROFS legacy layout switch kept in extension data, and initializes missing collections.<para>移除扩展数据里残留的 HDC 路径键与已退役的 EROFS legacy 布局开关，并初始化缺失的集合。</para></summary>
+    /// <summary>Discards the HDC path keys, the retired EROFS legacy layout switch, the retired recent-node list and the retired auto-backup switch kept in extension data, and initializes missing collections.<para>移除扩展数据里残留的 HDC 路径键、已退役的 EROFS legacy 布局开关、最近使用节点列表与自动备份开关，并初始化缺失的集合。</para></summary>
     void IJsonOnDeserialized.OnDeserialized()
     {
         AdditionalSettings?.Remove("hdcPath");
         AdditionalSettings?.Remove("HdcPath");
         AdditionalSettings?.Remove("erofsLegacyCompatibility");
+        AdditionalSettings?.Remove("recentNodeTypes");
+        AdditionalSettings?.Remove("RecentNodeTypes");
+        AdditionalSettings?.Remove("autoBackupBeforeFlash");
         DeviceCommunication ??= new();
         FavoriteNodeTypes ??= [];
-        RecentNodeTypes ??= [];
         ExpandedNodeCategories ??= [];
         PairedNetworkTargets ??= [];
     }
@@ -55,7 +58,6 @@ public class AppSettings : IJsonOnDeserialized
         var copy = (AppSettings)MemberwiseClone();
         copy.RecentProjects = [.. RecentProjects];
         copy.FavoriteNodeTypes = [.. FavoriteNodeTypes];
-        copy.RecentNodeTypes = [.. RecentNodeTypes];
         copy.ExpandedNodeCategories = [.. ExpandedNodeCategories];
         copy.PairedNetworkTargets = [.. PairedNetworkTargets];
         copy.McpServers = [.. McpServers];
@@ -146,14 +148,6 @@ public class AppSettings : IJsonOnDeserialized
     public int DeviceTimeoutSeconds { get; set; } = 30;
 
     /// <summary>
-    /// Gets or sets whether to auto-backup before flashing.
-    /// <para>获取或设置烧录前是否自动备份。</para>
-    /// </summary>
-    /// <value>True when flashing is preceded by a backup. <para>为真时烧录前先备份。</para></value>
-    [JsonPropertyName("autoBackupBeforeFlash")]
-    public bool AutoBackupBeforeFlash { get; set; }
-
-    /// <summary>
     /// Gets or sets whether expert flashing controls are enabled: raw-address reads and writes, secure-boot
     /// configuration writes, OEM key programming, BootROM bypass and diagnostic crash.
     /// <para>获取或设置是否启用专家级烧录控制：原始地址读写、安全配置写入、OEM 密钥烧录、BootROM 绕过与诊断崩溃。</para>
@@ -200,13 +194,6 @@ public class AppSettings : IJsonOnDeserialized
     /// </summary>
     /// <value>The pinned node keys. <para>被固定的节点键。</para></value>
     public List<string> FavoriteNodeTypes { get; set; } = [];
-
-    /// <summary>
-    /// Recently inserted node keys, newest first.
-    /// <para>最近插入的节点键，最新在前。</para>
-    /// </summary>
-    /// <value>The remembered node keys. <para>记住的节点键。</para></value>
-    public List<string> RecentNodeTypes { get; set; } = [];
 
     /// <summary>
     /// Expanded toolbox category and family identities.
@@ -287,12 +274,15 @@ public class AppSettings : IJsonOnDeserialized
     public string ScreenMirrorVideoCodec { get; set; } = "h264";
 
     /// <summary>
-    /// Gets or sets whether screen mirroring forwards audio.
-    /// <para>获取或设置投屏是否转发音频。</para>
+    /// Gets or sets whether screen mirroring forwards device audio to the application. Enabled by
+    /// default; devices older than Android 11 ignore it because scrcpy cannot capture audio there.
+    /// <para>获取或设置投屏是否把设备音频转发到应用内播放。默认启用；Android 11 之前的设备会忽略该项，
+    /// 因为 scrcpy 无法在这些设备上采集音频。</para>
     /// </summary>
-    /// <value>True when audio is forwarded. <para>为真时转发音频。</para></value>
+    /// <value>True when audio is forwarded; the default is <see langword="true"/>.
+    /// <para>为真时转发音频；默认为 <see langword="true"/>。</para></value>
     [JsonPropertyName("screenMirrorAudioEnabled")]
-    public bool ScreenMirrorAudioEnabled { get; set; }
+    public bool ScreenMirrorAudioEnabled { get; set; } = true;
     /// <summary>
     /// Gets or sets the video decoder backend.
     /// <para>获取或设置视频解码后端。</para>
@@ -349,7 +339,7 @@ public class AppSettings : IJsonOnDeserialized
     /// </summary>
     /// <value>The configured server entries. <para>已配置的服务器条目。</para></value>
     [JsonPropertyName("mcpServers")]
-    public List<McpServerConfig> McpServers { get; set; } = [];
+    public List<McpClientServerConfig> McpServers { get; set; } = [];
 
     /// <summary>
     /// Gets or sets whether to expose this application's firmware capabilities as an MCP server
@@ -388,6 +378,26 @@ public class AppSettings : IJsonOnDeserialized
     /// <value>True when destructive tools are registered. <para>为真时注册破坏性工具。</para></value>
     [JsonPropertyName("mcpExposeAllowFlash")]
     public bool McpExposeAllowFlash { get; set; }
+
+    /// <summary>
+    /// Gets or sets the rendering backend requested at the next application start;
+    /// <see cref="RenderingBackend.Auto"/> keeps the platform default fallback order.
+    /// <para>获取或设置下次应用启动时请求的渲染后端；<see cref="RenderingBackend.Auto"/> 保持平台默认回退顺序。</para>
+    /// </summary>
+    /// <value>The persisted rendering backend.<para>持久化的渲染后端。</para></value>
+    [JsonPropertyName("renderingBackend")]
+    [JsonConverter(typeof(JsonStringEnumConverter<RenderingBackend>))]
+    public RenderingBackend RenderingBackend { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Win32 composition mode requested at the next application start;
+    /// <see cref="RenderingCompositionMode.Auto"/> keeps the platform default fallback order.
+    /// <para>获取或设置下次应用启动时请求的 Win32 合成模式；<see cref="RenderingCompositionMode.Auto"/> 保持平台默认回退顺序。</para>
+    /// </summary>
+    /// <value>The persisted composition mode; only Windows applies it.<para>持久化的合成模式；仅 Windows 生效。</para></value>
+    [JsonPropertyName("renderingCompositionMode")]
+    [JsonConverter(typeof(JsonStringEnumConverter<RenderingCompositionMode>))]
+    public RenderingCompositionMode RenderingCompositionMode { get; set; }
 }
 
 /// <summary>
@@ -420,9 +430,11 @@ public sealed record PairedNetworkTarget(string Address, bool RequiresTls);
 /// <para><see cref="AppSettings"/> 的 JSON 序列化上下文，为 AOT 兼容提供源生成支持。</para>
 /// </summary>
 [JsonSerializable(typeof(AppSettings))]
-[JsonSerializable(typeof(Workspace.WorkspaceSessionSnapshot))]
+[JsonSerializable(typeof(Ui.Workspace.WorkspaceSessionSnapshot))]
 [JsonSerializable(typeof(ThemeMode))]
-[JsonSerializable(typeof(McpServerConfig))]
+[JsonSerializable(typeof(RenderingBackend))]
+[JsonSerializable(typeof(RenderingCompositionMode))]
+[JsonSerializable(typeof(McpClientServerConfig))]
 [JsonSerializable(typeof(McpTransportKind))]
 [JsonSerializable(typeof(Logging.LogFileRecord))]
 [JsonSerializable(typeof(Dictionary<string, bool>))]
@@ -440,16 +452,44 @@ internal partial class AppSettingsJsonContext : JsonSerializerContext;
 public class SettingsPersistenceService
 {
     private static readonly Lazy<SettingsPersistenceService> LazyInstance = new(() => new SettingsPersistenceService());
+    private static int _containerLookup;
 
     private readonly string _settingsDirectory;
     private readonly string _settingsFilePath;
 
     /// <summary>
-    /// Gets the singleton instance of the settings persistence service.
-    /// <para>获取设置持久化服务的单例实例。</para>
+    /// Gets the singleton instance: the container instance when <see cref="ServiceHub"/> is
+    /// initialized, otherwise the lazy default used by tests and by code that runs before the
+    /// composition root exists.
+    /// <para>获取单例实例：<see cref="ServiceHub"/> 已初始化时返回容器实例，否则返回测试与组合根建立前
+    /// 代码使用的惰性默认实例。</para>
     /// </summary>
     /// <value>The lazily created singleton. <para>惰性创建的单例实例。</para></value>
-    public static SettingsPersistenceService Instance => LazyInstance.Value;
+    public static SettingsPersistenceService Instance
+    {
+        get
+        {
+            // The registration factory calls Instance again while the container builds it; the
+            // guard returns the lazy default instead of recursing into the same registration.
+            // 容器构建注册时其工厂会再次调用 Instance；该保护返回惰性默认实例，而不是递归进入同一注册。
+            if (Interlocked.CompareExchange(ref _containerLookup, 1, 0) == 0)
+            {
+                try
+                {
+                    if (ServiceHub.TryGet<SettingsPersistenceService>() is { } registered)
+                    {
+                        return registered;
+                    }
+                }
+                finally
+                {
+                    Volatile.Write(ref _containerLookup, 0);
+                }
+            }
+
+            return LazyInstance.Value;
+        }
+    }
 
     /// <summary>
     /// Gets the full path of the settings file.

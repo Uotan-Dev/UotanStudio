@@ -1,20 +1,58 @@
 using System.Text.Json;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Composition;
+using UotanStudio.Delivery;
 using UotanStudio.Messages;
-using UotanStudio.Services.Delivery;
+using UotanStudio.Projects;
+using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
 
-namespace UotanStudio.Services.Projects;
+namespace UotanStudio.Services.Ui.Projects;
 
 /// <summary>Desktop compatibility facade over the independent project lifecycle library.
 /// <para>包装独立项目生命周期库的桌面兼容门面。</para></summary>
 public sealed class ProjectOperationsService
 {
     private static readonly Lazy<ProjectOperationsService> LazyInstance = new(() => new());
-    public static ProjectOperationsService Instance => LazyInstance.Value;
+    private static int _containerLookup;
     private readonly IProjectWorkspace _workspace;
+
+    /// <summary>
+    /// Gets the singleton project-operations facade: the container instance when <see cref="ServiceHub"/>
+    /// is initialized, otherwise the lazy default used by tests and by code that runs before the
+    /// composition root exists.
+    /// <para>获取工程操作单例门面：<see cref="ServiceHub"/> 已初始化时返回容器实例，否则返回测试与组合根
+    /// 建立前代码使用的惰性默认实例。</para>
+    /// </summary>
+    /// <value>The shared project-operations facade. <para>共享的工程操作门面。</para></value>
+    public static ProjectOperationsService Instance
+    {
+        get
+        {
+            // The registration factory calls Instance again while the container builds it; the
+            // guard returns the lazy default instead of recursing into the same registration.
+            // 容器构建注册时其工厂会再次调用 Instance；该保护返回惰性默认实例，而不是递归进入同一注册。
+            if (Interlocked.CompareExchange(ref _containerLookup, 1, 0) == 0)
+            {
+                try
+                {
+                    if (ServiceHub.TryGet<ProjectOperationsService>() is { } registered)
+                    {
+                        return registered;
+                    }
+                }
+                finally
+                {
+                    Volatile.Write(ref _containerLookup, 0);
+                }
+            }
+
+            return LazyInstance.Value;
+        }
+    }
     private readonly ProjectSession _session;
     private object? _workspaceOwner;
     internal bool IsWorkspaceAttached => _workspaceOwner is not null;

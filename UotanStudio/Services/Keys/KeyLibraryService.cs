@@ -9,7 +9,7 @@ using UotanStudio.Firmware.AndroidMeta.Apk;
 using UotanStudio.Firmware.BootSecurity.Avb.Signing;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Hash.Digests;
-using UotanStudio.Services.Projects;
+using UotanStudio.Projects;
 
 namespace UotanStudio.Services.Keys;
 

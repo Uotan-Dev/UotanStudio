@@ -1,10 +1,11 @@
 using System.Diagnostics.CodeAnalysis;
+using UotanStudio.Projects;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
 
-namespace UotanStudio.Services.Workspace;
+namespace UotanStudio.Services.Ui.Workspace;
 
 /// <summary>
 /// Adapts the current desktop workspace to project data and document operations.

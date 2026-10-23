@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Messaging;
 #if DEBUG
 using Dock.Avalonia.Diagnostics;
 #endif
+using Microsoft.Extensions.DependencyInjection;
 using UotanStudio.Composition;
 using UotanStudio.Messages;
 using UotanStudio.Models;
@@ -25,6 +26,8 @@ namespace UotanStudio;
 
 public partial class App : Application
 {
+    private static readonly Lazy<DeviceMonitorService> _defaultDeviceMonitor =
+        new(() => DeviceMonitorService.Create());
     private DesktopApplicationServices? _desktopServices;
     private MacOSApplicationMenu? _macApplicationMenu;
     /// <summary>Existing files passed by desktop file associations, opened after window creation.<para>桌面文件关联传入的已存在文件，在窗口创建后打开。</para></summary>
@@ -39,17 +42,34 @@ public partial class App : Application
     public static string? StartupScreenMirrorSerial { get; set; }
 
     /// <summary>
+    /// The application service provider built by <see cref="Initialize"/>; null until the container
+    /// exists, so callers can keep their pre-container fallback paths.
+    /// <para>由 <see cref="Initialize"/> 构建的应用服务提供程序；容器尚未建立时为 null，使调用方可以保留
+    /// 容器建立前的回退路径。</para>
+    /// </summary>
+    /// <value>The composed provider, or null before initialization. <para>组合后的提供程序；初始化之前为 null。</para></value>
+    internal static IServiceProvider? Services => ServiceHub.Services;
+
+    /// <summary>
     /// The single device monitor instance owned by the composition root and released on desktop exit;
-    /// <c>DeviceMonitorService</c> provides no type-level global singleton.
-    /// <para>组合根拥有、在桌面退出时释放的唯一设备监视实例；<c>DeviceMonitorService</c> 不提供类型级全局单例。</para>
+    /// <c>DeviceMonitorService</c> provides no type-level global singleton. The container registration
+    /// wins once it exists; before that, the lazily created composition-root fallback is used.
+    /// <para>组合根拥有、在桌面退出时释放的唯一设备监视实例；<c>DeviceMonitorService</c> 不提供类型级全局单例。
+    /// 容器注册存在时优先取容器实例；此前使用惰性创建的组合根回退实例。</para>
     /// </summary>
     /// <value>The shared desktop device monitor.<para>共享的桌面设备监视实例。</para></value>
-    internal static DeviceMonitorService DeviceMonitor { get; } =
-        DeviceMonitorService.Create();
+    internal static DeviceMonitorService DeviceMonitor =>
+        ServiceHub.TryGet<DeviceMonitorService>() ?? _defaultDeviceMonitor.Value;
 
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        // Compose the container as early as possible so every later service lookup sees the same
+        // explicit-factory singletons. Nothing is activated here: registrations are factory delegates.
+        // 尽早组合容器，使后续服务查找共享同一批显式工厂单例。此处不做激活：注册全部是工厂委托。
+        var services = ServiceRegistration.BuildProvider(
+            ServiceRegistration.Register(new ServiceCollection(), DeviceMonitor, Views.UiWindowService.Shared));
+        ServiceHub.Initialize(services);
         AccentPalette.Install(this);
         WeakReferenceMessenger.Default.Register<App, LanguageStateChangedMessage>(this,
             static (app, message) => app.UpdateSemiThemeLocale(message.CultureName));
@@ -78,7 +98,8 @@ public partial class App : Application
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 
         _ = Task.Run(FileAssociationService.Register);
-        _ = Services.Scrcpy.ScrcpyServerService.Shared.RunBackgroundCheckAsync(TimeSpan.FromSeconds(8));
+        _ = UotanStudio.Services.Scrcpy.ScrcpyServerService.Shared.RunBackgroundCheckAsync(TimeSpan.FromSeconds(8));
+        _ = UotanStudio.Services.Scrcpy.OhscrcpyServerService.Shared.RunBackgroundCheckAsync(TimeSpan.FromSeconds(12));
 
         Firmware.Application.Formats.FirmwareFormatRegistry.RegisterAll();
 
@@ -92,7 +113,6 @@ public partial class App : Application
             if (OperatingSystem.IsMacOS())
                 _macApplicationMenu = new MacOSApplicationMenu(this,
                     () => GetDesktopMainViewModel()?.MenuVM.AboutCommand.Execute(null));
-            _desktopServices = new DesktopApplicationServices();
             desktop.Exit += OnDesktopExit;
             var splash = new MainSplashWindow
             {
@@ -142,6 +162,10 @@ public partial class App : Application
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
         Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
         Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
+        // Compose the device monitor only after the persisted route mode is applied, so the first
+        // probe captures the configured mode instead of the default.
+        // 仅在持久化路由模式应用之后再组装设备监视器，使首次探测捕获已配置的模式而不是默认模式。
+        _desktopServices = new DesktopApplicationServices();
 
         await ReportAsync(SplashPhase.ApplyingSettings);
         ApplyTheme(settings.ThemeMode);
@@ -255,7 +279,7 @@ public partial class App : Application
         try
         {
             if (splashWindow.PreparedMainWindow?.DataContext is MainViewModel mainVm &&
-                mainVm.WorkspaceVM.OpenScreenMirrorDocument() is { } mirror)
+                mainVm.WorkspaceVM.OpenScreenMirrorDocument(serial) is { } mirror)
             {
                 mirror.StartForDevice(serial);
                 LogService.Instance.Write(LogLevel.Info, "App", $"Startup screen mirror requested for {serial}.");
@@ -313,7 +337,7 @@ public partial class App : Application
     {
         try
         {
-            if (GetDesktopMainViewModel()?.WorkspaceVM.OpenScreenMirrorDocument() is { } mirror)
+            if (GetDesktopMainViewModel()?.WorkspaceVM.OpenScreenMirrorDocument(message.Serial) is { } mirror)
             {
                 mirror.StartForDevice(message.Serial);
             }

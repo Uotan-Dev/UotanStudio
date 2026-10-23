@@ -3,12 +3,15 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using UotanStudio.Firmware.BootSecurity.Patcher;
 using UotanStudio.Services;
+using UotanStudio.ViewModels;
 
 namespace UotanStudio.Views.Shell;
 
 /// <summary>Native boot patch window.</summary>
 public partial class BootPatchWindow : Window
 {
+    private readonly LocalizedOptionSet _fileSourceOptions =
+        new("BootPatch_CustomFile", "BootPatch_NoFile");
     private readonly BootPatchService _patchService = new();
     private BootPatchDetection? _detection;
     private string? _bootArchitecture;
@@ -19,6 +22,8 @@ public partial class BootPatchWindow : Window
     public BootPatchWindow(string? imagePath)
     {
         InitializeComponent();
+        FileSourceBox.ItemsSource = _fileSourceOptions.Options;
+        FileSourceBox.SelectedIndex = 0;
         FileSourceBox.SelectionChanged += OnFileSourceChanged;
 
         FilePathBox.TextChanging += (_, _) => UpdateStartEnabled();

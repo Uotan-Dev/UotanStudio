@@ -1,5 +1,5 @@
-using UotanStudio.Services.Workspace.Documents;
-using UotanStudio.Views.Controls;
+using UotanStudio.Services.Ui.Workspace.Documents;
+using UotanStudio.UiAbstractions;
 
 namespace UotanStudio.Messages;
 

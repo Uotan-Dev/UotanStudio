@@ -1,7 +1,7 @@
 using UotanStudio.Firmware.Application.Equivalence;
 using Xunit;
-using HostFirmwareOpResult = UotanStudio.Services.Firmware.FirmwareOpResult;
-using LibraryFirmwareOpResult = UotanStudio.Firmware.Core.FirmwareOpResult;
+using HostFirmwareOperationResult = UotanStudio.Services.Firmware.FirmwareOperationResult;
+using LibraryFirmwareOperationResult = UotanStudio.Firmware.Core.FirmwareOpResult;
 
 namespace UotanStudio.Tests.Services;
 
@@ -11,12 +11,12 @@ namespace UotanStudio.Tests.Services;
 /// <para>守护唯一的库结果到宿主结果映射：等价元数据必须跨越这一跳；缺失或无法解析的标记必须保持不评估，
 /// 绝不能变成库从未计算过的等价声明。</para>
 /// </summary>
-public sealed class FirmwareOpResultMappingTests
+public sealed class FirmwareOperationResultMappingTests
 {
     [Fact]
     public void From_LibraryResultWithEquivalenceFlags_PreservesEveryDimensionAndDetail()
     {
-        var library = LibraryFirmwareOpResult.Ok("EXT4 rebuilt", ["data"], new Dictionary<string, string>
+        var library = LibraryFirmwareOperationResult.Ok("EXT4 rebuilt", ["data"], new Dictionary<string, string>
         {
             [FilesystemEquivalenceReport.ByteEquivalenceKey] = "False",
             [FilesystemEquivalenceReport.StructureEquivalenceKey] = "True",
@@ -25,7 +25,7 @@ public sealed class FirmwareOpResultMappingTests
             ["RebuiltSize"] = "4096",
         });
 
-        var host = HostFirmwareOpResult.From(library);
+        var host = HostFirmwareOperationResult.From(library);
 
         Assert.True(host.Success);
         Assert.Equal("EXT4 rebuilt", host.Summary);
@@ -40,12 +40,12 @@ public sealed class FirmwareOpResultMappingTests
     [Fact]
     public void From_LibraryResultWithoutEquivalenceFlags_ReportsEveryDimensionAsNotEvaluated()
     {
-        var library = LibraryFirmwareOpResult.Ok("built", null, new Dictionary<string, string>
+        var library = LibraryFirmwareOperationResult.Ok("built", null, new Dictionary<string, string>
         {
             ["CompressionProfile"] = "Lz4:9",
         });
 
-        AssertDimensionsUnevaluated(HostFirmwareOpResult.From(library));
+        AssertDimensionsUnevaluated(HostFirmwareOperationResult.From(library));
     }
 
     [Theory]
@@ -55,13 +55,13 @@ public sealed class FirmwareOpResultMappingTests
     [InlineData("yes")]
     public void From_UnparsableEquivalenceFlag_ReportsNotEvaluatedInsteadOfEquivalent(string value)
     {
-        var library = LibraryFirmwareOpResult.Ok("built", null, new Dictionary<string, string>
+        var library = LibraryFirmwareOperationResult.Ok("built", null, new Dictionary<string, string>
         {
             [FilesystemEquivalenceReport.ByteEquivalenceKey] = value,
             [FilesystemEquivalenceReport.ContentEquivalenceKey] = value,
         });
 
-        var host = HostFirmwareOpResult.From(library);
+        var host = HostFirmwareOperationResult.From(library);
 
         Assert.Equal(FirmwareEquivalenceState.NotEvaluated, host.Equivalence.ByteEquivalence);
         Assert.Equal(FirmwareEquivalenceState.NotEvaluated, host.Equivalence.ContentEquivalence);
@@ -70,7 +70,7 @@ public sealed class FirmwareOpResultMappingTests
     [Fact]
     public void From_FailedLibraryResult_PreservesFailureWithoutInventingEquivalence()
     {
-        var host = HostFirmwareOpResult.From(LibraryFirmwareOpResult.Fail("unsupported directory"));
+        var host = HostFirmwareOperationResult.From(LibraryFirmwareOperationResult.Fail("unsupported directory"));
 
         Assert.False(host.Success);
         Assert.Equal("unsupported directory", host.Summary);
@@ -82,7 +82,7 @@ public sealed class FirmwareOpResultMappingTests
     [Fact]
     public void From_FailedLibraryResultWithCapacityVerdict_PreservesTheNegativeVerdict()
     {
-        var library = new LibraryFirmwareOpResult
+        var library = new LibraryFirmwareOperationResult
         {
             Success = false,
             Summary = "does not fit",
@@ -92,7 +92,7 @@ public sealed class FirmwareOpResultMappingTests
             },
         };
 
-        var host = HostFirmwareOpResult.From(library);
+        var host = HostFirmwareOperationResult.From(library);
 
         Assert.False(host.Success);
         Assert.Equal(FirmwareEquivalenceState.NotEquivalent, host.Equivalence.CapacityEquivalence);
@@ -102,14 +102,14 @@ public sealed class FirmwareOpResultMappingTests
     [Fact]
     public void HostResultBuiltDirectly_ReportsAllDimensionsAsNotEvaluated()
     {
-        AssertDimensionsUnevaluated(new HostFirmwareOpResult { Success = true, Summary = "fresh build" });
-        AssertDimensionsUnevaluated(HostFirmwareOpResult.Fail("rejected"));
+        AssertDimensionsUnevaluated(new HostFirmwareOperationResult { Success = true, Summary = "fresh build" });
+        AssertDimensionsUnevaluated(HostFirmwareOperationResult.Fail("rejected"));
     }
 
     [Fact]
     public void Equivalence_EvaluatesEveryDimensionIndependently()
     {
-        var host = HostFirmwareOpResult.From(LibraryFirmwareOpResult.Ok("packed", null, new Dictionary<string, string>
+        var host = HostFirmwareOperationResult.From(LibraryFirmwareOperationResult.Ok("packed", null, new Dictionary<string, string>
         {
             [FilesystemEquivalenceReport.ByteEquivalenceKey] = "True",
             [FilesystemEquivalenceReport.StructureEquivalenceKey] = "False",
@@ -121,7 +121,7 @@ public sealed class FirmwareOpResultMappingTests
         Assert.Equal(FirmwareEquivalenceState.NotEvaluated, host.Equivalence.CapacityEquivalence);
     }
 
-    private static void AssertDimensionsUnevaluated(HostFirmwareOpResult result)
+    private static void AssertDimensionsUnevaluated(HostFirmwareOperationResult result)
         => Assert.Equal(
         [
             FirmwareEquivalenceState.NotEvaluated,

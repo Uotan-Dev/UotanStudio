@@ -2,7 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using UotanStudio.Services;
-using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui;
+using UotanStudio.Services.Ui.Projects;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Editors;
 

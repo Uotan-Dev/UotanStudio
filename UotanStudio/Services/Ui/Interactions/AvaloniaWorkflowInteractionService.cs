@@ -3,9 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using UotanStudio.Projects.Interactions;
+using UotanStudio.Services.Interactions;
 using UotanStudio.Views.Interactions;
 
-namespace UotanStudio.Services.Interactions;
+namespace UotanStudio.Services.Ui.Interactions;
 
 /// <summary>Presents a form and closes it before completing cancellation.
 /// <para>呈现表单，并在取消完成之前将其关闭。</para></summary>

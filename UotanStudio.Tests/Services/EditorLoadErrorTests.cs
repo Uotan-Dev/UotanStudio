@@ -1,6 +1,6 @@
 using UotanStudio.Tests.TestInfrastructure;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.Views.Controls;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
