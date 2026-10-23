@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Comm.Text;
+using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Hash.RockchipCrc32;
 
 namespace UotanStudio.Comm.Protocols.Bootrom;

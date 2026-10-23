@@ -1,7 +1,7 @@
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Comm.Text;
+using UotanStudio.Firmware.Core.Text;
 using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Adb;

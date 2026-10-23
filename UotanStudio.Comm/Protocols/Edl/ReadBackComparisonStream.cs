@@ -39,15 +39,16 @@ internal sealed class ReadBackComparisonStream(Stream source, string filename) :
         {
             var count = Math.Min(_buffer.Length, buffer.Length - offset);
             var read = await ReadSourceAsync(count, cancellationToken).ConfigureAwait(false);
-            if (_mismatchOffset < 0)
+            if (_mismatchOffset < 0 && read > 0)
             {
-                for (var i = 0; i < read; i++)
+                var expected = _buffer.AsSpan(0, read);
+                var actual = buffer.Span.Slice(offset, read);
+                if (!expected.SequenceEqual(actual))
                 {
-                    if (_buffer[i] == buffer.Span[offset + i]) continue;
-                    _mismatchOffset = checked(_received + offset + i);
-                    _expected = _buffer[i];
-                    _actual = buffer.Span[offset + i];
-                    break;
+                    var mismatch = expected.CommonPrefixLength(actual);
+                    _mismatchOffset = checked(_received + offset + mismatch);
+                    _expected = expected[mismatch];
+                    _actual = actual[mismatch];
                 }
             }
             offset += count;

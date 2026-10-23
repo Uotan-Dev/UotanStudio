@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using UotanStudio.Comm.Diagnostics;
-using UotanStudio.Comm.Text;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Firmware.Core.Text;
 using static UotanStudio.Comm.Transports.Usb.Backend.HarmonyOS.HarmonyOSUsbDDK;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.HarmonyOS;

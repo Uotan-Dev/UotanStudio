@@ -38,21 +38,33 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
     /// <value>The stable name of this discovery source. <para>该发现源的稳定名称。</para></value>
     public string Name => $"adb-server@{host}:{port}";
 
-    /// <summary>Lists the adb server's targets and projects each into a <c>server</c>-routed endpoint; DNS-SD-keyed targets carry the endpoint resolved from the server's mDNS table.
-    /// <para>列出 adb server 的目标，并把每个目标投影为 <c>server</c> 路由端点；以 DNS-SD 实例名为键的 目标附带 server mDNS 表解析出的端点。</para></summary>
+    /// <summary>Lists the adb server's targets when the fixed route snapshot marks the default endpoint available, and projects each into a <c>server</c>-routed endpoint stamped with the snapshot epoch; DNS-SD-keyed targets carry the endpoint resolved from the server's mDNS table. A target query that fails while the snapshot still marks the server available yields an empty list instead of stale endpoints.
+    /// <para>当固定路由快照把默认端点标记为可用时列出 adb server 的目标，并把每个目标投影为盖上快照 epoch 的
+    /// <c>server</c> 路由端点；以 DNS-SD 实例名为键的目标附带 server mDNS 表解析出的端点。快照仍标记 server
+    /// 可用但目标查询失败时返回空列表，而不是保留过期端点。</para></summary>
     /// <param name="cancellationToken">Cancels the liveness probe and the target query.
     /// <para>取消存活探测与目标查询。</para></param>
-    /// <returns>One endpoint per server target, or an empty list when the server is absent.
-    /// <para>每个 server 目标对应一个端点；server 不存在时为空列表。</para></returns>
+    /// <returns>One endpoint per server target, or an empty list when the server is absent or its list cannot be read.
+    /// <para>每个 server 目标对应一个端点；server 不存在或列表无法读取时为空列表。</para></returns>
     public async Task<IReadOnlyList<DeviceEndpoint>> DiscoverAsync(CancellationToken cancellationToken)
     {
-        if (!await DebugBridgeRoute.IsListeningAsync(host, port, cancellationToken).ConfigureAwait(false))
+        if (!DebugBridgeRoute.UseAdbServer(host, port))
         {
             return [];
         }
 
-        var targets = await Task.Run(() => new AdbServerServices(string.Empty, host, port).ListTargets(),
-            cancellationToken).ConfigureAwait(false);
+        var routeEpoch = DebugBridgeRoute.Current.Epoch;
+        IReadOnlyList<AdbTargetInfo> targets;
+        try
+        {
+            targets = await Task.Run(() => new AdbServerServices(string.Empty, host, port).ListTargets(),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested &&
+            ex is IOException or System.Net.Sockets.SocketException)
+        {
+            return [];
+        }
         cancellationToken.ThrowIfCancellationRequested();
         var aliases = await ResolveMdnsAliasesAsync(targets, host, port, cancellationToken).ConfigureAwait(false);
         return [.. targets.Select(target =>
@@ -67,6 +79,7 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
                 DisplayName = target.Serial,
                 Protocol = "adb",
                 Route = "server",
+                RouteEpoch = routeEpoch,
                 State = target.State,
                 TargetTransport = target.Transport.Length == 0 && alias is not null ? "TCP"
                     : target.Transport.Length == 0 ? null : target.Transport,

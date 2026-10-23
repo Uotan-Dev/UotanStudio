@@ -3,6 +3,7 @@ using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Devices.Services.Sessions;
 using UotanStudio.Comm.Diagnostics;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Services;
@@ -287,6 +288,7 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
+            ValidateRouteForOpen(endpoint);
             if (!_leased.Add(endpoint.Id))
             {
                 throw new InvalidOperationException("Endpoint is already leased.");
@@ -333,6 +335,7 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
 
             endpoint = snapshot.Endpoints.FirstOrDefault(candidate => candidate.Id == id)
                 ?? throw new KeyNotFoundException("Endpoint is not present in the snapshot.");
+            ValidateRouteForOpen(endpoint);
             if (!_leased.Add(id))
             {
                 throw new InvalidOperationException("Endpoint is already leased.");
@@ -658,6 +661,90 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
 
         digest = (sum, xor, count);
         return joined;
+    }
+
+    /// <summary>
+    /// Validates that an endpoint may still be opened under the fixed route: its stamped epoch must
+    /// match the current snapshot, the mode must allow its route, and no open lease on the same
+    /// physical device may already hold the other route. Callers hold <c>_gate</c>.
+    /// <para>校验端点仍可在固定路由下打开：其盖章 epoch 必须与当前快照一致，模式必须允许该路由，
+    /// 且同一物理设备上不能已有租约持有另一条路由。调用方持有 <c>_gate</c>。</para>
+    /// </summary>
+    /// <param name="endpoint">The endpoint about to be leased. <para>即将被租用的端点。</para></param>
+    /// <exception cref="IOException">The route snapshot changed after discovery.
+    /// <para>发现之后路由快照已改变。</para></exception>
+    /// <exception cref="InvalidOperationException">The route mode forbids the endpoint's route, or the device is held by the other route.
+    /// <para>路由模式禁止该端点的路由，或设备已被另一条路由持有。</para></exception>
+    private void ValidateRouteForOpen(DeviceEndpoint endpoint)
+    {
+        if (endpoint.RouteEpoch != 0 && endpoint.RouteEpoch != DebugBridgeRoute.Current.Epoch)
+        {
+            throw new IOException(
+                "The debug bridge route changed after discovery; refresh the device list and retry.");
+        }
+
+        if (string.Equals(endpoint.Route, "server", StringComparison.Ordinal) &&
+            DebugBridgeRoute.Mode == DebugBridgeRouteMode.DirectOnly)
+        {
+            throw new InvalidOperationException(
+                "The DirectOnly route mode forbids debug-bridge server sessions.");
+        }
+
+        if (HasConflictingRouteLeaseLocked(endpoint))
+        {
+            throw new InvalidOperationException(
+                "The device is already held by another route; release that lease before opening this endpoint.");
+        }
+    }
+
+    /// <summary>
+    /// Decides whether an open lease already holds the same physical device through a different
+    /// route, which would let two writers touch one debug interface. Correlation uses container or
+    /// physical-port evidence first, then the exact OS device path, and finally the exact protocol
+    /// serial for server-backed leases that carry no USB metadata. Callers hold <c>_gate</c>.
+    /// <para>判定是否已有活动租约通过另一条路由持有同一物理设备——那会让两个写入方操作同一调试接口。
+    /// 关联优先使用容器或物理端口证据，其次精确操作系统设备路径，最后对没有 USB 元数据的 server 租约
+    /// 使用精确协议序列号。调用方持有 <c>_gate</c>。</para>
+    /// </summary>
+    /// <param name="candidate">The endpoint about to be leased. <para>即将被租用的端点。</para></param>
+    /// <returns><see langword="true"/> when another route already holds the device.
+    /// <para>另一条路由已持有该设备时为 <see langword="true"/>。</para></returns>
+    private bool HasConflictingRouteLeaseLocked(DeviceEndpoint candidate)
+    {
+        foreach (var lease in _openLeases.Values)
+        {
+            var existing = lease.Endpoint;
+            if (existing.Id == candidate.Id ||
+                string.Equals(existing.Route, candidate.Route, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (RoutesConflict(existing, candidate))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool RoutesConflict(DeviceEndpoint existing, DeviceEndpoint candidate)
+    {
+        if (CorrelatePhysicalObservation(existing.UsbInfo, candidate.UsbInfo) is { } correlated)
+        {
+            return correlated;
+        }
+
+        if (existing.Usb is { Path.Length: > 0 } first && candidate.Usb is { Path.Length: > 0 } second &&
+            string.Equals(first.Path, second.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(existing.Serial) &&
+            string.Equals(existing.Serial, candidate.Serial, StringComparison.Ordinal) &&
+            string.Equals(existing.Protocol, candidate.Protocol, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -119,6 +119,21 @@ public sealed partial class DeviceController
             identity);
     }
 
+    /// <summary>
+    /// Opens a direct HDC TCP session to the daemon at <c>host:port</c>, bypassing any hdc server.
+    /// The caller must <c>Connect()</c> the session and dispose it on failure.
+    /// <para>打开到 <c>host:port</c> 上 HDC 守护进程的直连 TCP 会话，不经过任何 hdc server。
+    /// 调用方需自行 <c>Connect()</c> 并在失败时释放。</para>
+    /// </summary>
+    /// <param name="host">Daemon hostname or IP literal. <para>守护进程主机名或 IP 字面量。</para></param>
+    /// <param name="port">Daemon TCP port, for example the OpenHarmony emulator's <c>5557</c>.
+    /// <para>守护进程 TCP 端口，例如 OpenHarmony 模拟器的 <c>5557</c>。</para></param>
+    /// <returns>An unconnected direct session. <para>尚未连接的直接会话。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="port"/> is outside 1..65535.
+    /// <para><paramref name="port"/> 不在 1..65535 范围内。</para></exception>
+    public HdcSession OpenNetworkHdcSession(string host, int port)
+        => new(new HdcTcpTransport(host, port));
+
     /// <summary>Browses <c>_adb-tls-connect._tcp</c> until an instance resolves to <paramref name="host"/> and returns its port, so a remembered secure endpoint can be re-discovered after the device restarted wireless debugging on a different port. Returns <c>null</c> when the deadline passes with no advertisement.
     /// <para>浏览 <c>_adb-tls-connect._tcp</c> 直到某个实例解析到 <paramref name="host"/> 并返回其端口， 使记住的安全端点能在设备重启无线调试、端口变化后被重新发现；期限内无广播时返回 <c>null</c>。</para></summary>
     /// <param name="host">Device IP address literal of the remembered endpoint.

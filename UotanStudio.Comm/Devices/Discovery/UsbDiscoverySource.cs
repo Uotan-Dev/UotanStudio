@@ -6,10 +6,11 @@ using UotanStudio.Comm.Transports.Usb.Abstractions;
 namespace UotanStudio.Comm.Devices.Discovery;
 
 /// <summary>
-/// Projects exact CommKit USB keys without merging backends or serials; while a debug-bridge
-/// server is listening, that protocol's direct-USB endpoints are suppressed entirely.
-/// <para>按精确 CommKit USB 键投影端点，不合并后端或序列号；调试桥 server 处于监听状态时，
-/// 该协议的 direct-usb 端点被完全抑制。</para>
+/// Projects exact CommKit USB keys without merging backends or serials; while the fixed route mode
+/// suppresses a protocol's direct USB access (server-only always, or a listening server in the other
+/// modes), that protocol's direct-USB endpoints are suppressed entirely.
+/// <para>按精确 CommKit USB 键投影端点，不合并后端或序列号；当固定路由模式抑制某协议的直连 USB 访问时
+/// （仅 server 模式始终抑制，其他模式在 server 监听时抑制），该协议的 direct-usb 端点被完全抑制。</para>
 /// </summary>
 public sealed class UsbDiscoverySource : IDeviceDiscoverySource
 {
@@ -52,8 +53,8 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
     /// <value>The stable name of this discovery source. <para>该发现源的稳定名称。</para></value>
     public string Name => SourceName;
 
-    /// <summary>Enumerates backend USB devices and projects each into a <c>direct-usb</c> endpoint; while a debug-bridge server is listening, that protocol's endpoints are suppressed.
-    /// <para>枚举后端的 USB 设备并把每个设备投影为 <c>direct-usb</c> 端点；调试桥 server 监听时 抑制该协议的端点。</para></summary>
+    /// <summary>Enumerates backend USB devices and projects each into a <c>direct-usb</c> endpoint stamped with the current route epoch; endpoints of a protocol the fixed route mode suppresses are dropped.
+    /// <para>枚举后端的 USB 设备并把每个设备投影为盖上当前路由 epoch 的 <c>direct-usb</c> 端点；固定路由模式所抑制协议的端点会被丢弃。</para></summary>
     /// <param name="cancellationToken">Cancels USB enumeration; it is re-checked once enumeration completes.
     /// <para>取消 USB 枚举；枚举完成后会再次检查取消。</para></param>
     /// <returns>The surviving direct-USB endpoints in enumeration order.
@@ -63,8 +64,9 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
     public async Task<IReadOnlyList<DeviceEndpoint>> DiscoverAsync(CancellationToken cancellationToken)
     {
         using var probeScope = DebugBridgeRoute.BeginProbeScope();
-        var adbServerLive = ProbeQuietly(() => _serverProbeOverride?.Invoke("adb") ?? DebugBridgeRoute.UseAdbServer());
-        var hdcServerLive = ProbeQuietly(() => _serverProbeOverride?.Invoke("hdc") ?? DebugBridgeRoute.UseHdcServer());
+        var adbSuppressed = ProbeQuietly(() => _serverProbeOverride?.Invoke("adb") ?? DebugBridgeRoute.SuppressDirectUsb("adb"));
+        var hdcSuppressed = ProbeQuietly(() => _serverProbeOverride?.Invoke("hdc") ?? DebugBridgeRoute.SuppressDirectUsb("hdc"));
+        var routeEpoch = DebugBridgeRoute.Current.Epoch;
 
         var devices = await _kit.EnumerateUsbDevicesAsync(_backend, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
@@ -78,7 +80,7 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
         }
 
         var probedSerials = await ProbeMissingFastbootSerialsAsync(devices, cancellationToken).ConfigureAwait(false);
-        return [.. devices.Select(device => Project(device, probedSerials.GetValueOrDefault(device.DevicePath))).Where(endpoint => !IsServerOwned(endpoint.Protocol, adbServerLive, hdcServerLive))];
+        return [.. devices.Select(device => Project(device, probedSerials.GetValueOrDefault(device.DevicePath), routeEpoch)).Where(endpoint => !IsSuppressed(endpoint.Protocol, adbSuppressed, hdcSuppressed))];
     }
 
     /// <summary>
@@ -94,8 +96,12 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
     /// The serial from the probe pass, or <see langword="null"/> to keep the descriptor serial.
     /// <para>来自探测阶段的序列号；为 <see langword="null"/> 时沿用描述符序列号。</para>
     /// </param>
+    /// <param name="routeEpoch">
+    /// The route snapshot epoch stamped onto the endpoint so an open can detect a later route change.
+    /// <para>盖在端点上的路由快照 epoch，使打开操作能发现之后的路由变化。</para>
+    /// </param>
     /// <returns>The <c>direct-usb</c> endpoint for this device. <para>该设备的 <c>direct-usb</c> 端点。</para></returns>
-    private DeviceEndpoint Project(UsbDeviceInfo device, string? probedSerial)
+    private DeviceEndpoint Project(UsbDeviceInfo device, string? probedSerial, long routeEpoch)
     {
         var serial = device.SerialNumber;
         var protocol = UsbProtocolClassifier.Classify(device);
@@ -113,6 +119,7 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
             Serial = serial,
             Route = "direct-usb",
             Protocol = protocol,
+            RouteEpoch = routeEpoch,
             UsbInfo = device,
             Usb = new(device.SourceApiKind, device.DevicePath, device.VendorId, device.ProductId,
                 device.InterfaceClass, device.InterfaceSubClass, device.InterfaceProtocol)
@@ -164,10 +171,10 @@ public sealed class UsbDiscoverySource : IDeviceDiscoverySource
         return probed;
     }
 
-    private static bool IsServerOwned(string? protocol, bool adbLive, bool hdcLive) => protocol switch
+    private static bool IsSuppressed(string? protocol, bool adbSuppressed, bool hdcSuppressed) => protocol switch
     {
-        "adb" => adbLive,
-        "hdc" => hdcLive,
+        "adb" => adbSuppressed,
+        "hdc" => hdcSuppressed,
         _ => false
     };
 

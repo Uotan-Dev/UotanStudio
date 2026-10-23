@@ -121,7 +121,7 @@ public static class AdbQrPairingService
     {
         ArgumentNullException.ThrowIfNull(credentials);
         var timeout = discoveryTimeout ?? DefaultDiscoveryTimeout;
-        var useServer = DebugBridgeRoute.AdbServerAvailable;
+        var useServer = DebugBridgeRoute.UseAdbServer();
         var pairing = await DiscoverEndpointAsync(useServer,
                 entry => AdbServerMdns.IsType(entry, AdbMdnsDiscovery.AdbTlsPairingService) &&
                          AdbMdnsDiscovery.MatchesInstanceLabel(entry.Instance, credentials.ServiceName),
@@ -357,7 +357,7 @@ public static class AdbQrPairingService
                 "page and enter the port it currently shows.");
         }
 
-        if (!DebugBridgeRoute.AdbServerAvailable)
+        if (!DebugBridgeRoute.UseAdbServer())
         {
             throw new IOException("The ADB server that holds the pairing credentials is no longer listening.");
         }

@@ -179,8 +179,9 @@ public sealed class HdcConnection : IDisposable
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled during setup. <para><paramref name="cancellationToken"/> 在建立期间被触发。</para></exception>
     private void Connect(CancellationToken cancellationToken)
     {
-        if (_transport is UsbDeviceTransport)
-            Transports.Usb.Core.UsbAccessPolicy.RequireDirect(0xff, 0x50, 1);
+        if (_transport is UsbDeviceTransport directUsb)
+            Transports.Usb.Core.UsbAccessPolicy.RequireDirect(0xff, 0x50, 1,
+                directUsb.Session.DeviceInfo.SerialNumber);
         lock (_streamsLock)
         {
             if (_disposed)

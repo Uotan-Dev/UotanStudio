@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
-using UotanStudio.Comm.Text;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Firmware.Core.Text;
 using static UotanStudio.Comm.Transports.Usb.Backend.Windows.Win32API;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;

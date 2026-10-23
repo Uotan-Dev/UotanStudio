@@ -14,6 +14,10 @@ internal sealed class AdbConnection : IDisposable
     /// writing. <para>单条传输消息的期限，涵盖排队等待发送闸门与实际写入。</para></summary>
     private const int TransportDeadlineMs = 5000;
 
+    /// <summary>Largest frame read directly into its result array instead of through a pooled staging buffer.
+    /// <para>直接读入结果数组、而不经池化暂存缓冲的最大帧长度。</para></summary>
+    private const int DirectFrameReadThreshold = 64 * 1024;
+
     /// <summary>STLS version this client replies with when the peer offers the secure transport.
     /// <para>对端提供安全传输时本客户端回复的 STLS 版本。</para></summary>
     private const uint StlsVersion = 1;
@@ -31,6 +35,7 @@ internal sealed class AdbConnection : IDisposable
     private readonly SemaphoreSlim _peerReady = new(0, 1);
     private readonly CancellationTokenSource _loopCancellation = new();
     private uint _nextLocalId = 1;
+    private int _peerReadyObserved;
     private bool _connected;
     private bool _disposed;
     private Exception? _loopFault;
@@ -210,13 +215,14 @@ internal sealed class AdbConnection : IDisposable
         if (_server is not null)
         {
             try { _server.ValidateTarget(); }
-            catch { lock (_lock) _connected = false; throw; }
+            catch { lock (_lock) { _connected = false; ResetPeerReady(); } throw; }
             lock (_lock)
             {
                 ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
                 _connected = true;
             }
 
+            Volatile.Write(ref _peerReadyObserved, 1);
             Release(_peerReady);
             return false;
         }
@@ -271,7 +277,11 @@ internal sealed class AdbConnection : IDisposable
     internal AdbStream OpenStream(string service, int receiveBudgetBytes, int writePermitWaitMs)
     {
         var stream = RegisterStream(service, receiveBudgetBytes, writePermitWaitMs);
-        Send(AdbMessaging.BuildOpen(stream.LocalId, service));
+        if (_server is null)
+        {
+            Send(AdbMessaging.BuildOpen(stream.LocalId, service));
+        }
+
         return stream;
     }
 
@@ -296,7 +306,11 @@ internal sealed class AdbConnection : IDisposable
     internal async ValueTask<AdbStream> OpenProtocolStreamAsync(string service, CancellationToken cancellationToken)
     {
         var stream = RegisterStream(service, AdbStream.ProtocolReceiveBudgetBytes, AdbStream.DefaultWritePermitWaitMs);
-        await SendAsync(AdbMessaging.BuildOpen(stream.LocalId, service), cancellationToken).ConfigureAwait(false);
+        if (_server is null)
+        {
+            await SendAsync(AdbMessaging.BuildOpen(stream.LocalId, service), cancellationToken).ConfigureAwait(false);
+        }
+
         return stream;
     }
 
@@ -354,7 +368,7 @@ internal sealed class AdbConnection : IDisposable
     /// <param name="cancellationToken">Cancels the handshake wait. <para>取消握手等待。</para></param>
     /// <returns><c>true</c> if the peer responded; otherwise, <c>false</c>. <para>对端是否响应。</para></returns>
     public bool WaitForPeer(int timeoutMs = 10000, CancellationToken cancellationToken = default)
-        => _peerReady.Wait(timeoutMs, cancellationToken);
+        => Volatile.Read(ref _peerReadyObserved) != 0 ? DrainAndObservePeer() : _peerReady.Wait(timeoutMs, cancellationToken);
 
     /// <summary>
     /// Waits for the peer CNXN banner without holding a thread.
@@ -367,7 +381,23 @@ internal sealed class AdbConnection : IDisposable
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
     public Task<bool> WaitForPeerAsync(int timeoutMs, CancellationToken cancellationToken) =>
-        _peerReady.WaitAsync(TimeSpan.FromMilliseconds(timeoutMs), cancellationToken);
+        Volatile.Read(ref _peerReadyObserved) != 0
+            ? Task.FromResult(DrainAndObservePeer())
+            : _peerReady.WaitAsync(TimeSpan.FromMilliseconds(timeoutMs), cancellationToken);
+
+    private bool DrainAndObservePeer()
+    {
+        _peerReady.Wait(0);
+        return true;
+    }
+
+    private void ResetPeerReady()
+    {
+        Volatile.Write(ref _peerReadyObserved, 0);
+        while (_peerReady.Wait(0))
+        {
+        }
+    }
 
     /// <summary>
     /// Writes data to the specified stream on a caller thread that already owns it.
@@ -554,6 +584,7 @@ internal sealed class AdbConnection : IDisposable
         lock (_lock)
         {
             _connected = false;
+            ResetPeerReady();
         }
 
         try
@@ -722,6 +753,7 @@ internal sealed class AdbConnection : IDisposable
         PeerMaxPayload = message.Arg1;
         PeerBanner = message.PayloadAsString();
         PeerFeatures = ParseFeatures(PeerBanner);
+        Volatile.Write(ref _peerReadyObserved, 1);
         Release(_peerReady);
     }
 
@@ -881,6 +913,7 @@ internal sealed class AdbConnection : IDisposable
             streams = [.. _streams.Values];
             _streams.Clear();
             _connected = false;
+            ResetPeerReady();
         }
 
         foreach (var stream in streams)
@@ -918,9 +951,10 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
-    /// Reads an exact number of bytes from the transport into a pooled frame buffer and copies the frame out at
-    /// its true length.
-    /// <para>从传输精确读取指定字节数到池化帧缓冲区，再按真实长度拷出该帧。</para>
+    /// Reads an exact number of bytes from the transport. Frames within <see cref="DirectFrameReadThreshold"/> are
+    /// filled in place, so a small frame is never copied through a second buffer.
+    /// <para>从传输精确读取指定字节数。不超过 <see cref="DirectFrameReadThreshold"/> 的帧原地填充，因此小帧不会
+    /// 经过第二个缓冲区复制。</para>
     /// </summary>
     /// <param name="length">The number of bytes to read. <para>要读取的字节数。</para></param>
     /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
@@ -935,38 +969,17 @@ internal sealed class AdbConnection : IDisposable
     private async ValueTask<byte[]> ReadExactAsync(int length, int timeoutMs, bool allowIdle = false,
         CancellationToken cancellationToken = default)
     {
+        if (length <= DirectFrameReadThreshold)
+        {
+            var frame = new byte[length];
+            await ReadExactIntoAsync(frame, length, timeoutMs, allowIdle, cancellationToken).ConfigureAwait(false);
+            return frame;
+        }
+
         var buffer = ArrayPool<byte>.Shared.Rent(length);
         try
         {
-            var totalRead = 0;
-            while (totalRead < length)
-            {
-                ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
-                int n;
-                try
-                {
-                    n = await Transport.ReadAsync(buffer, totalRead, length - totalRead, timeoutMs, cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                catch (TimeoutException) when (allowIdle && totalRead == 0 && !Volatile.Read(ref _disposed)
-                    && Transport.IsConnected)
-                {
-                    continue;
-                }
-
-                if (n == 0)
-                {
-                    if (allowIdle && totalRead == 0 && !Volatile.Read(ref _disposed) && Transport.IsConnected)
-                    {
-                        continue;
-                    }
-
-                    throw new TimeoutException("ADB read timeout");
-                }
-
-                totalRead += n;
-            }
-
+            await ReadExactIntoAsync(buffer, length, timeoutMs, allowIdle, cancellationToken).ConfigureAwait(false);
             var frame = new byte[length];
             Buffer.BlockCopy(buffer, 0, frame, 0, length);
             return frame;
@@ -974,6 +987,55 @@ internal sealed class AdbConnection : IDisposable
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Fills the leading <paramref name="length"/> bytes of a buffer from the transport, keeping the idle-wait rules
+    /// of <see cref="ReadExactAsync"/>.
+    /// <para>从传输填充缓冲区的前 <paramref name="length"/> 字节，并保持 <see cref="ReadExactAsync"/> 的空闲等待规则。</para>
+    /// </summary>
+    /// <param name="buffer">Destination buffer; only its first <paramref name="length"/> bytes are written.
+    /// <para>目标缓冲区；只写入前 <paramref name="length"/> 字节。</para></param>
+    /// <param name="length">Number of bytes to read. <para>要读取的字节数。</para></param>
+    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
+    /// <param name="allowIdle">Keep waiting between packets; incomplete packets still time out.
+    /// <para>在包之间持续等待；未完成的包仍会超时。</para></param>
+    /// <param name="cancellationToken">Stops the read when the connection shuts down. <para>连接关停时停止读取。</para></param>
+    /// <exception cref="TimeoutException">A partially received frame made no progress within
+    /// <paramref name="timeoutMs"/>. <para>已部分接收的帧在 <paramref name="timeoutMs"/> 内没有进展。</para></exception>
+    /// <exception cref="ObjectDisposedException">The connection was disposed mid-read.
+    /// <para>读取过程中连接被释放。</para></exception>
+    private async ValueTask ReadExactIntoAsync(byte[] buffer, int length, int timeoutMs, bool allowIdle,
+        CancellationToken cancellationToken)
+    {
+        var totalRead = 0;
+        while (totalRead < length)
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
+            int n;
+            try
+            {
+                n = await Transport.ReadAsync(buffer, totalRead, length - totalRead, timeoutMs, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (TimeoutException) when (allowIdle && totalRead == 0 && !Volatile.Read(ref _disposed)
+                && Transport.IsConnected)
+            {
+                continue;
+            }
+
+            if (n == 0)
+            {
+                if (allowIdle && totalRead == 0 && !Volatile.Read(ref _disposed) && Transport.IsConnected)
+                {
+                    continue;
+                }
+
+                throw new TimeoutException("ADB read timeout");
+            }
+
+            totalRead += n;
         }
     }
 
@@ -1025,6 +1087,7 @@ internal sealed class AdbConnection : IDisposable
         lock (_lock)
         {
             _connected = false;
+            ResetPeerReady();
             foreach (var stream in _streams.Values)
             {
                 stream.MarkClosed();

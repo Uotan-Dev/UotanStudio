@@ -6,23 +6,24 @@ using System.Net.Sockets;
 namespace UotanStudio.Comm.Routing;
 
 /// <summary>Probes debug bridge server liveness over plain TCP and holds the process-global adb and
-/// HDC server availability parameters. Only a refused connection means absent.
-/// <para>以普通 TCP 探测调试桥 server 存活，并持有进程全局的 adb 与 HDC server 存在性参数。仅连接被拒绝表示不存在。</para></summary>
+/// HDC server availability snapshot together with the fixed route mode.
+/// <para>以普通 TCP 探测调试桥 server 存活，并持有进程全局的 adb 与 HDC server 可用性快照以及固定路由模式。</para></summary>
 /// <remarks>
 /// <para>正值结果（server 存在）按短 TTL 缓存，避免一次扫描内对同一端点重复建连；
 /// 「连接被拒绝」结果不缓存（保持既有约定：仅连接被拒绝视为不存在，不缓存负结果），
 /// 但同一调用方在同一次扫描流程内可通过 <see cref="BeginProbeScope"/> 复用一次探测结论。
 /// server 归属判定与路由开启由上层 <c>Devices.Services.DebugBridgeSessionOpener</c> 提供，
-/// 本类型只回答「端口上是否有 server 在监听」。需要区分「拒绝」与「无法得出结论」的调用方
-/// 使用 <see cref="TryProbeAsync"/>，未知结果必须保持上次状态。</para>
+/// 本类型只回答「端口上是否有 server 在监听」，并保存所有决策共同读取的不可变快照。
+/// 快照每次变化都会推进 epoch；已发现的端点盖上该 epoch，打开时可据此发现路由在发现之后已改变。</para>
 /// <para>Positive results (server present) are cached for a short TTL so a single scan does not
 /// repeatedly connect to the same endpoint; a refused connection is never cached (existing
 /// contract: only a refused connection means absent, negative results are not cached). Callers
 /// running one scan pass can share a single probe via <see cref="BeginProbeScope"/>. Server
 /// ownership decisions and routed session opening live in the upper
 /// <c>Devices.Services.DebugBridgeSessionOpener</c>; this type only answers whether a server
-/// is listening on an endpoint. Callers that must distinguish a refusal from an inconclusive
-/// probe use <see cref="TryProbeAsync"/>, where an unknown outcome keeps the last known state.</para>
+/// is listening on an endpoint and stores the immutable snapshot every decision reads. Each
+/// snapshot change advances the epoch; discovered endpoints are stamped with it so an open can
+/// detect a route change that happened after discovery.</para>
 /// </remarks>
 public static class DebugBridgeRoute
 {
@@ -30,87 +31,228 @@ public static class DebugBridgeRoute
     private static readonly Lock StateLock = new();
     private static readonly Dictionary<string, bool> ReportedStates = new(StringComparer.Ordinal);
 
-    private static bool _adbServerAvailable;
+    private static int _mode;
+    private static int _modeConfigured;
+    private static DebugBridgeRouteSnapshot _snapshot = DebugBridgeRouteSnapshot.Empty;
 
     /// <summary>
-    /// Process-global adb server availability, written at startup and refreshed each pass by the conclusive probe of the default endpoint; inconclusive probes keep the previous value. Every adb route reads it to choose between server forwarding and direct connection.
-    /// <para>进程级的 adb server 可用性，启动时写入，并由对默认端点的确证探测每轮刷新；未确证的探测保持原值。所有 adb 路由据此在“经 server 转发”与“直连”之间选择。</para>
+    /// Gets the route mode fixed for this process. It is captured once by
+    /// <see cref="ConfigureMode(DebugBridgeRouteMode)"/> before the first probe; changing the
+    /// persisted setting requires an application restart.
+    /// <para>获取本进程固定使用的路由模式。它由 <see cref="ConfigureMode(DebugBridgeRouteMode)"/> 在首次探测之前
+    /// 捕获一次；修改持久化设置需要重启应用。</para>
+    /// </summary>
+    /// <value>The configured mode, or <see cref="DebugBridgeRouteMode.Auto"/> before configuration.
+    /// <para>已配置的模式；配置之前为 <see cref="DebugBridgeRouteMode.Auto"/>。</para></value>
+    public static DebugBridgeRouteMode Mode => (DebugBridgeRouteMode)Volatile.Read(ref _mode);
+
+    /// <summary>
+    /// Gets the current immutable availability snapshot. Every discovery source, opener and host
+    /// decision reads this one value instead of querying separate mutable flags.
+    /// <para>获取当前不可变的可用性快照。每个发现源、开启器与宿主决策都读取这一个值，而不是查询各自的可变标志。</para>
+    /// </summary>
+    /// <value>The retained snapshot; <see cref="DebugBridgeRouteSnapshot.Empty"/> before initialization.
+    /// <para>保留的快照；初始化之前为 <see cref="DebugBridgeRouteSnapshot.Empty"/>。</para></value>
+    public static DebugBridgeRouteSnapshot Current
+    {
+        get
+        {
+            lock (StateLock)
+            {
+                return _snapshot;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fixes the route mode before the first probe. Repeated calls with the same mode are no-ops;
+    /// a different mode after configuration is rejected because the running route cannot be switched
+    /// safely and the persisted setting applies on the next start.
+    /// <para>在首次探测之前固定路由模式。以相同模式重复调用无操作；配置之后再以不同模式调用会被拒绝，
+    /// 因为运行中的路由无法安全切换，持久化设置将在下次启动时生效。</para>
+    /// </summary>
+    /// <param name="mode">The mode to fix for this process.<para>本进程要固定的模式。</para></param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="mode"/> is not a defined value.
+    /// <para><paramref name="mode"/> 不是已定义的值。</para></exception>
+    /// <exception cref="InvalidOperationException">A different mode was already fixed; restart the application.
+    /// <para>已固定了不同的模式；请重启应用。</para></exception>
+    public static void ConfigureMode(DebugBridgeRouteMode mode)
+    {
+        if (!Enum.IsDefined(mode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode));
+        }
+
+        lock (StateLock)
+        {
+            if (Volatile.Read(ref _modeConfigured) != 0)
+            {
+                if ((DebugBridgeRouteMode)_mode != mode)
+                {
+                    throw new InvalidOperationException(
+                        "The debug bridge route mode is fixed for this process; restart the application to apply the saved mode.");
+                }
+
+                return;
+            }
+
+            _mode = (int)mode;
+            Volatile.Write(ref _modeConfigured, 1);
+        }
+    }
+
+    /// <summary>
+    /// Process-global adb server availability from <see cref="Current"/>; written at startup and
+    /// refreshed each pass by the conclusive probe of the default endpoint; inconclusive probes keep
+    /// the previous value. Every adb route reads it to choose between server forwarding and direct connection.
+    /// <para>来自 <see cref="Current"/> 的进程级 adb server 可用性，启动时写入，并由对默认端点的确证探测每轮刷新；
+    /// 未确证的探测保持原值。所有 adb 路由据此在“经 server 转发”与“直连”之间选择。</para>
     /// </summary>
     /// <value>
     /// <see langword="true"/> when the last conclusive probe of <see cref="DebugBridgeEndpoints.ServerHost"/>
     /// at <see cref="DebugBridgeEndpoints.AdbServerPort"/> found a listening server.
     /// <para>当对默认端点的最后一次确定性探测发现 server 正在监听时为 <see langword="true"/>。</para></value>
-    public static bool AdbServerAvailable => Volatile.Read(ref _adbServerAvailable);
-
-    internal static void SetAdbServerAvailable(bool available) => Volatile.Write(ref _adbServerAvailable, available);
-
-    private static bool _hdcServerAvailable;
+    public static bool AdbServerAvailable => Current.AdbServerAvailable;
 
     /// <summary>
-    /// Process-global HDC server availability, mirroring <see cref="AdbServerAvailable"/>: written
-    /// by <see cref="InitializeHdcServerProbe"/> at startup and refreshed each pass by the
+    /// Process-global HDC server availability from <see cref="Current"/>, mirroring
+    /// <see cref="AdbServerAvailable"/>: written at startup and refreshed each pass by the
     /// server-lifecycle watch's conclusive probe of the default HDC endpoint; inconclusive probes
-    /// keep the previous value. Every HDC operation route (shell, hilog, file transfer) reads this
-    /// <para>进程全局的 HDC server 存在性参数，语义与 <see cref="AdbServerAvailable"/> 对称：启动时由
-    /// <see cref="InitializeHdcServerProbe"/> 探测写入，之后由 server 监视循环每轮的确定性结论刷新；
-    /// 未知结果保持上次状态。所有 HDC 操作路由（shell、hilog、文件传输等）读取本参数决定经
-    /// HDC server 转发还是直连 USB。</para>
-    /// value to choose server forwarding versus direct USB access.</summary>
+    /// keep the previous value.
+    /// <para>来自 <see cref="Current"/> 的进程全局 HDC server 可用性，语义与 <see cref="AdbServerAvailable"/>
+    /// 对称：启动时探测写入，之后由 server 监视循环每轮的确定性结论刷新；未知结果保持上次状态。</para>
+    /// </summary>
     /// <value>
     /// <see langword="true"/> when the last conclusive probe of <see cref="DebugBridgeEndpoints.ServerHost"/>
     /// at <see cref="DebugBridgeEndpoints.HdcServerPort"/> found a listening server.
     /// <para>当对默认 HDC 端点的最后一次确定性探测发现 server 正在监听时为 <see langword="true"/>。</para></value>
-    public static bool HdcServerAvailable => Volatile.Read(ref _hdcServerAvailable);
+    public static bool HdcServerAvailable => Current.HdcServerAvailable;
 
-    internal static void SetHdcServerAvailable(bool available) => Volatile.Write(ref _hdcServerAvailable, available);
+    /// <summary>
+    /// Startup boundary: probes both default endpoints once and applies the conclusive outcomes as
+    /// one snapshot (one epoch), so discovery cannot observe a half-updated route.
+    /// <para>启动边界：对两个默认端点各探测一次，并把确定性结论作为同一份快照（同一 epoch）应用，
+    /// 使发现层不会观察到只更新了一半的路由。</para>
+    /// </summary>
+    internal static void InitializeDefaultEndpoints()
+    {
+        var adb = ProbeDefaultEndpoint(DebugBridgeEndpoints.AdbServerPort);
+        var hdc = ProbeDefaultEndpoint(DebugBridgeEndpoints.HdcServerPort);
+        ApplySnapshot(adb, hdc);
+    }
 
     /// <summary>
     /// Startup and post-lifecycle resync boundary: probes the default HDC endpoint once for real
-    /// and writes the conclusive outcome (listening or refused) into
-    /// <see cref="HdcServerAvailable"/>; an inconclusive probe keeps the current value. The method
+    /// and applies the conclusive outcome (listening or refused) to
+    /// <see cref="HdcServerAvailable"/>; an inconclusive probe keeps the current value. In
+    /// <see cref="DebugBridgeRouteMode.StartupFrozen"/> mode the snapshot captured by
+    /// <see cref="InitializeDefaultEndpoints"/> is retained and the outcome is discarded.
     /// <para>程序启动与显式 server 生命周期操作后的重同步边界：对默认 HDC 端点做一次真实探测，
-    /// 把确定性结论（监听或拒绝）写入 <see cref="HdcServerAvailable"/>；未知结论保持当前值。
-    /// 本方法不抛出 socket 异常。</para>
-    /// never throws socket exceptions.</summary>
-    public static void InitializeHdcServerProbe()
+    /// 把确定性结论（监听或拒绝）应用到 <see cref="HdcServerAvailable"/>；未知结论保持当前值。
+    /// 在 <see cref="DebugBridgeRouteMode.StartupFrozen"/> 模式下保留
+    /// <see cref="InitializeDefaultEndpoints"/> 采集的快照并丢弃本次结论。</para>
+    /// </summary>
+    public static void InitializeHdcServerProbe() => ApplySnapshot(null, ProbeDefaultEndpoint(DebugBridgeEndpoints.HdcServerPort));
+
+    /// <summary>
+    /// Startup and post-lifecycle resync boundary: probes the default adb endpoint once for real
+    /// and applies the conclusive outcome (listening or refused) to
+    /// <see cref="AdbServerAvailable"/>; an inconclusive probe keeps the current value. In
+    /// <see cref="DebugBridgeRouteMode.StartupFrozen"/> mode the snapshot captured by
+    /// <see cref="InitializeDefaultEndpoints"/> is retained and the outcome is discarded.
+    /// <para>程序启动与显式 server 生命周期操作后的重同步边界：对默认 adb 端点做一次真实探测，
+    /// 把确定性结论（监听或拒绝）应用到 <see cref="AdbServerAvailable"/>；未知结论保持当前值。
+    /// 在 <see cref="DebugBridgeRouteMode.StartupFrozen"/> 模式下保留
+    /// <see cref="InitializeDefaultEndpoints"/> 采集的快照并丢弃本次结论。</para>
+    /// </summary>
+    public static void InitializeAdbServerProbe() => ApplySnapshot(ProbeDefaultEndpoint(DebugBridgeEndpoints.AdbServerPort), null);
+
+    private static bool? ProbeDefaultEndpoint(int port)
     {
         try
         {
-            var outcome = TryProbeAsync(DebugBridgeEndpoints.ServerHost, DebugBridgeEndpoints.HdcServerPort)
-                .GetAwaiter().GetResult();
-            if (outcome != DebugBridgeProbeOutcome.Unknown)
+            var outcome = TryProbeAsync(DebugBridgeEndpoints.ServerHost, port).GetAwaiter().GetResult();
+            return outcome switch
             {
-                SetHdcServerAvailable(outcome == DebugBridgeProbeOutcome.Listening);
-            }
+                DebugBridgeProbeOutcome.Listening => true,
+                DebugBridgeProbeOutcome.Refused => false,
+                _ => null,
+            };
         }
         catch (OperationCanceledException)
         {
+            return null;
         }
     }
 
     /// <summary>
-    /// Startup and post-lifecycle resync boundary: probes the default adb endpoint once for real
-    /// and writes the conclusive outcome (listening or refused) into
-    /// <see cref="AdbServerAvailable"/>; an inconclusive probe keeps the current value. The method
-    /// <para>程序启动与显式 server 生命周期操作后的重同步边界：对默认 adb 端点做一次真实探测，
-    /// 把确定性结论（监听或拒绝）写入 <see cref="AdbServerAvailable"/>；未知结论保持当前值。
-    /// 本方法不抛出 socket 异常。</para>
-    /// never throws socket exceptions.</summary>
-    public static void InitializeAdbServerProbe()
+    /// Applies one server-watch pass to the process-global snapshot. In
+    /// <see cref="DebugBridgeRouteMode.StartupFrozen"/> mode the startup snapshot is never refreshed;
+    /// the mode's contract is that routes do not change until the application restarts.
+    /// <para>把一轮 server 监视结果应用到进程级快照。在
+    /// <see cref="DebugBridgeRouteMode.StartupFrozen"/> 模式下启动快照永不刷新；该模式的契约是
+    /// 路由在应用重启之前保持不变。</para>
+    /// </summary>
+    /// <param name="adbAvailable">Retained adb liveness for this pass.
+    /// <para>本轮保留的 adb 存活状态。</para></param>
+    /// <param name="hdcAvailable">Retained HDC liveness for this pass.
+    /// <para>本轮保留的 HDC 存活状态。</para></param>
+    internal static void ApplyServerWatch(bool adbAvailable, bool hdcAvailable)
+        => ApplySnapshot(adbAvailable, hdcAvailable);
+
+    private static void ApplySnapshot(bool? adbAvailable, bool? hdcAvailable)
     {
-        try
+        lock (StateLock)
         {
-            var outcome = TryProbeAsync(DebugBridgeEndpoints.ServerHost, DebugBridgeEndpoints.AdbServerPort)
-                .GetAwaiter().GetResult();
-            if (outcome != DebugBridgeProbeOutcome.Unknown)
+            if ((DebugBridgeRouteMode)_mode == DebugBridgeRouteMode.StartupFrozen && _snapshot.Epoch != 0)
             {
-                SetAdbServerAvailable(outcome == DebugBridgeProbeOutcome.Listening);
+                return;
             }
-        }
-        catch (OperationCanceledException)
-        {
+
+            var adb = adbAvailable ?? _snapshot.AdbServerAvailable;
+            var hdc = hdcAvailable ?? _snapshot.HdcServerAvailable;
+            if (_snapshot.Epoch != 0 && adb == _snapshot.AdbServerAvailable && hdc == _snapshot.HdcServerAvailable)
+            {
+                return;
+            }
+
+            _snapshot = new DebugBridgeRouteSnapshot(adb, hdc, _snapshot.Epoch + 1);
         }
     }
+
+    /// <summary>
+    /// Clears the process-global mode and snapshot so an isolated test can configure a different
+    /// route. Production code never calls this.
+    /// <para>清除进程级模式与快照，使隔离测试能够配置不同的路由。生产代码不会调用。</para>
+    /// </summary>
+    internal static void ResetForTests()
+    {
+        lock (StateLock)
+        {
+            _mode = 0;
+            Volatile.Write(ref _modeConfigured, 0);
+            _snapshot = DebugBridgeRouteSnapshot.Empty;
+            PositiveCache.Clear();
+            ReportedStates.Clear();
+        }
+
+        _scopeCache = null;
+        _scopeDepth = 0;
+    }
+
+    /// <summary>
+    /// Writes one availability pair without probing so an isolated test can drive the mode and epoch
+    /// deterministically. The same <see cref="DebugBridgeRouteMode.StartupFrozen"/> retention rule as
+    /// production applies. Production code never calls this.
+    /// <para>不探测地写入一对可用性值，使隔离测试能确定性地驱动模式与 epoch。与生产相同的
+    /// <see cref="DebugBridgeRouteMode.StartupFrozen"/> 保留规则仍然生效。生产代码不会调用。</para>
+    /// </summary>
+    /// <param name="adbAvailable">ADB server availability to record.
+    /// <para>要记录的 ADB server 可用性。</para></param>
+    /// <param name="hdcAvailable">HDC server availability to record.
+    /// <para>要记录的 HDC server 可用性。</para></param>
+    internal static void SetAvailabilityForTests(bool adbAvailable, bool hdcAvailable)
+        => ApplySnapshot(adbAvailable, hdcAvailable);
 
     /// <summary>
     /// Reports initial endpoint state and subsequent transitions for host logging; never writes to the console.
@@ -374,50 +516,92 @@ public static class DebugBridgeRoute
     }
 
     /// <summary>
-    /// Reads the process-global adb server availability parameter without probing. The value is
-    /// written by <see cref="InitializeAdbServerProbe"/> at startup and kept fresh by the
-    /// server-watch loop's periodic <see cref="TryProbeAsync"/> passes over the default
-    /// <para>读取全局 adb server 存在性参数；本方法不发起探测。参数由启动时的
-    /// <see cref="InitializeAdbServerProbe"/> 写入，并由 server 监视循环对默认端点的周期性
-    /// <see cref="TryProbeAsync"/> 保持更新。</para>
-    /// endpoint.</summary>
+    /// Reads the process-global adb server availability without probing, honoring the fixed mode:
+    /// <see cref="DebugBridgeRouteMode.DirectOnly"/> never selects the server, while the other modes
+    /// read the snapshot.
+    /// <para>读取全局 adb server 存在性参数；本方法不发起探测，并遵循固定模式：
+    /// <see cref="DebugBridgeRouteMode.DirectOnly"/> 永不选择 server，其他模式读取快照。</para>
+    /// </summary>
     /// <returns>
-    /// <see langword="true"/> when the global parameter currently marks the adb server as present.
-    /// <para>当全局参数当前标记 adb server 存在时返回 <see langword="true"/>。</para></returns>
-    public static bool UseAdbServer() => AdbServerAvailable;
+    /// <see langword="true"/> when the adb server route is selected for the default endpoint.
+    /// <para>默认端点选择了 adb server 路由时为 <see langword="true"/>。</para></returns>
+    public static bool UseAdbServer()
+        => Mode == DebugBridgeRouteMode.DirectOnly ? false : Current.AdbServerAvailable;
 
     /// <summary>
-    /// Selects the availability source per endpoint: the default endpoint reads the global
-    /// <see cref="AdbServerAvailable"/> parameter; any other endpoint (test doubles or a second
-    /// <para>按端点选择存在性来源：默认端点读取全局参数 <see cref="AdbServerAvailable"/>；
-    /// 其他端点（测试替身或第二台 server）保持实时 <see cref="ProbeEndpoint"/> 探测。</para>
-    /// server) keeps live <see cref="ProbeEndpoint"/> probing.</summary>
+    /// Selects the availability source per endpoint: the default endpoint reads the snapshot
+    /// (and honors <see cref="DebugBridgeRouteMode.DirectOnly"/>); any other endpoint (test doubles
+    /// or a second server) keeps live <see cref="ProbeEndpoint"/> probing.
+    /// <para>按端点选择存在性来源：默认端点读取快照（并遵循
+    /// <see cref="DebugBridgeRouteMode.DirectOnly"/>）；其他端点（测试替身或第二台 server）保持实时
+    /// <see cref="ProbeEndpoint"/> 探测。</para>
+    /// </summary>
     /// <param name="host">adb server host to decide for. <para>待判定的 adb server 主机。</para></param>
     /// <param name="port">adb server port to decide for. <para>待判定的 adb server 端口。</para></param>
     /// <returns>
-    /// <see langword="true"/> when the endpoint is marked available, from the global parameter for
-    /// the default endpoint or from a probe for any other endpoint.
-    /// <para>端点被标记为可用时为 <see langword="true"/>；默认端点取全局参数，其他端点取探测结果。</para></returns>
+    /// <see langword="true"/> when the endpoint is marked available.
+    /// <para>端点被标记为可用时为 <see langword="true"/>。</para></returns>
     public static bool UseAdbServer(string host, int port)
         => host == DebugBridgeEndpoints.ServerHost && port == DebugBridgeEndpoints.AdbServerPort
-            ? AdbServerAvailable
-            : ProbeEndpoint(host, port);
+            ? UseAdbServer()
+            : Mode == DebugBridgeRouteMode.DirectOnly ? false : ProbeEndpoint(host, port);
 
-    /// <summary>Selects the HDC availability source per endpoint: the default endpoint (including the port resolved from OHOS_HDC_SERVER_PORT) reads the global <see cref="HdcServerAvailable"/> parameter; any other endpoint (test doubles or a custom server) keeps live
-    /// <para>按端点选择 HDC 存在性来源：默认端点（含 OHOS_HDC_SERVER_PORT 解析出的端口）读取全局参数 <see cref="HdcServerAvailable"/>；其他端点（测试替身或自定义 server）保持实时 <see cref="ProbeEndpoint"/> 探测。</para><see cref="ProbeEndpoint"/> probing.</summary>
+    /// <summary>
+    /// Selects the HDC availability source per endpoint: the default endpoint (including the port
+    /// resolved from OHOS_HDC_SERVER_PORT) reads the snapshot and honors
+    /// <see cref="DebugBridgeRouteMode.DirectOnly"/>; any other endpoint (test doubles or a custom
+    /// server) keeps live <see cref="ProbeEndpoint"/> probing.
+    /// <para>按端点选择 HDC 存在性来源：默认端点（含 OHOS_HDC_SERVER_PORT 解析出的端口）读取快照并遵循
+    /// <see cref="DebugBridgeRouteMode.DirectOnly"/>；其他端点（测试替身或自定义 server）保持实时
+    /// <see cref="ProbeEndpoint"/> 探测。</para>
+    /// </summary>
     /// <param name="host">Server host, defaulting to <see cref="DebugBridgeEndpoints.ServerHost"/>.
     /// <para>server 主机，默认为 <see cref="DebugBridgeEndpoints.ServerHost"/>。</para></param>
     /// <param name="port">Explicit port number; when null the value of <see cref="DebugBridgeEndpoints.HdcServerPort"/> is used.
     /// <para>显式端口号；为 null 时使用 <see cref="DebugBridgeEndpoints.HdcServerPort"/> 的值。</para></param>
-    /// <returns><see langword="true"/> when the endpoint is marked available, from the global parameter for the default endpoint or from a probe for any other endpoint.
-    /// <para>端点被标记为可用时为 <see langword="true"/>；默认端点取全局参数，其他端点取探测结果。</para></returns>
+    /// <returns><see langword="true"/> when the endpoint is marked available.
+    /// <para>端点被标记为可用时为 <see langword="true"/>。</para></returns>
     public static bool UseHdcServer(string host = DebugBridgeEndpoints.ServerHost, int? port = null)
     {
         var defaultPort = DebugBridgeEndpoints.HdcServerPort;
         var effectivePort = port ?? defaultPort;
-        return host == DebugBridgeEndpoints.ServerHost && effectivePort == defaultPort
-            ? HdcServerAvailable
-            : ProbeEndpoint(host, effectivePort);
+        if (host != DebugBridgeEndpoints.ServerHost || effectivePort != defaultPort)
+        {
+            return Mode == DebugBridgeRouteMode.DirectOnly ? false : ProbeEndpoint(host, effectivePort);
+        }
+
+        return Mode == DebugBridgeRouteMode.DirectOnly ? false : Current.HdcServerAvailable;
+    }
+
+    /// <summary>
+    /// Decides whether direct USB debug endpoints of one protocol are hidden from discovery under the
+    /// fixed mode. Server-only hides them always; direct-only hides none; the other modes hide them
+    /// while the snapshot marks that protocol's server as present.
+    /// <para>按固定模式判定某协议的直连 USB 调试端点是否应从发现清单中隐藏。仅 server 模式始终隐藏；
+    /// 仅直连模式不隐藏；其他模式在快照把该协议标记为 server 存在时隐藏。</para>
+    /// </summary>
+    /// <param name="protocol">Observed protocol tag, <c>adb</c> or <c>hdc</c>.
+    /// <para>已观测的协议标记，<c>adb</c> 或 <c>hdc</c>。</para></param>
+    /// <returns><see langword="true"/> when a discovered direct endpoint with this protocol must be suppressed.
+    /// <para>该协议的已发现直连端点必须被抑制时为 <see langword="true"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="protocol"/> is <see langword="null"/>.
+    /// <para><paramref name="protocol"/> 为 <see langword="null"/>。</para></exception>
+    public static bool SuppressDirectUsb(string protocol)
+    {
+        ArgumentNullException.ThrowIfNull(protocol);
+        var mode = Mode;
+        var serverAvailable = protocol switch
+        {
+            "adb" => Current.AdbServerAvailable,
+            "hdc" => Current.HdcServerAvailable,
+            _ => false,
+        };
+        return mode switch
+        {
+            DebugBridgeRouteMode.ServerOnly => protocol is "adb" or "hdc",
+            DebugBridgeRouteMode.DirectOnly => false,
+            _ => serverAvailable && protocol is "adb" or "hdc",
+        };
     }
 
     private sealed class ProbeScope : IDisposable

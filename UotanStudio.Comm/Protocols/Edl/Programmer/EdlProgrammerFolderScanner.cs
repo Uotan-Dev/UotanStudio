@@ -33,7 +33,7 @@ namespace UotanStudio.Comm.Protocols.Edl.Programmer;
 /// <para>因此，硬件标识符相同而哈希前缀不同的两个扫描结果都会正匹配，选择器上报
 /// <see cref="EdlProgrammerMatchDecision.Ambiguous"/> 而不再自行挑选；前缀仍保留在解析身份中供调用方展示。</para>
 /// </remarks>
-internal static class EdlProgrammerFolderScanner
+public static class EdlProgrammerFolderScanner
 {
     /// <summary>
     /// Gets the default ceiling on the number of extension-matching candidate files a single scan admits.
@@ -87,7 +87,7 @@ internal static class EdlProgrammerFolderScanner
     /// <para><paramref name="directoryPath"/> 不存在；该异常在任何文件被打开之前抛出。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.
     /// <para><paramref name="cancellationToken"/> 已被取消。</para></exception>
-    internal static EdlProgrammerFolderScanResult Scan(string directoryPath, CancellationToken cancellationToken = default) =>
+    public static EdlProgrammerFolderScanResult Scan(string directoryPath, CancellationToken cancellationToken = default) =>
         Scan(directoryPath, DefaultMaximumCandidateFiles, DefaultMaximumProgrammerFileBytes, cancellationToken);
 
     /// <summary>
@@ -129,7 +129,7 @@ internal static class EdlProgrammerFolderScanner
     /// <para><paramref name="cancellationToken"/> 已被取消。</para></exception>
     /// <exception cref="OverflowException">The admitted byte sum exceeded <see cref="long"/>.
     /// <para>入账字节总和超出 <see cref="long"/> 范围。</para></exception>
-    internal static EdlProgrammerFolderScanResult Scan(string directoryPath, int maximumCandidateFiles,
+    public static EdlProgrammerFolderScanResult Scan(string directoryPath, int maximumCandidateFiles,
         long maximumProgrammerFileBytes, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
@@ -587,7 +587,7 @@ internal static class EdlProgrammerFolderScanner
 /// <param name="TotalScannedBytes">
 /// The checked sum of the hashed image sizes. <para>已哈希镜像大小的 <c>checked</c> 累加值。</para>
 /// </param>
-internal sealed record EdlProgrammerFolderScanResult(
+public sealed record EdlProgrammerFolderScanResult(
     IReadOnlyList<EdlProgrammerDescriptor> Descriptors,
     IReadOnlyList<EdlProgrammerFolderSkip> Skipped,
     long TotalScannedBytes);
@@ -605,7 +605,7 @@ internal sealed record EdlProgrammerFolderScanResult(
 /// <param name="Reason">
 /// The English refusal explanation. <para>英文拒绝原因。</para>
 /// </param>
-internal sealed record EdlProgrammerFolderSkip(string FileName, string Path, string Reason);
+public sealed record EdlProgrammerFolderSkip(string FileName, string Path, string Reason);
 
 /// <summary>
 /// The identity pieces a convention-shaped loader file name asserts, before any byte was read.

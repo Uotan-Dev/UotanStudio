@@ -16,11 +16,12 @@ public static class DeviceControllerFactory
 {
     /// <summary>
     /// Creates the default controller over the shared communication kit, so callers need not name <c>CommKit</c>.
-    /// Creation first probes the default adb and HDC endpoints once and writes the outcomes into the
+    /// Creation fixes the persisted route mode, probes the default adb and HDC endpoints once and applies
     /// <para>用共享通信套件与标准本机调试桥端点创建默认控制器，使调用方无需直接命名 CommKit。
-    /// 创建时先对默认 adb 与 HDC 端点各做一次启动探测，把结论写入各自的全局存在性参数，
-    /// 再由 server 监视循环保持更新。</para>
-    /// respective global availability parameters; the server-state watch then keeps them fresh.</summary>
+    /// 创建时先固定持久化路由模式，再对默认 adb 与 HDC 端点各做一次启动探测，把结论作为同一份快照应用，
+    /// 然后由 server 监视循环保持更新（启动冻结模式除外）。</para>
+    /// both outcomes as one snapshot; the server-state watch then keeps them fresh except in
+    /// <see cref="DebugBridgeRouteMode.StartupFrozen"/> mode.</summary>
     /// <returns>A controller with removal and server-state watches already running.
     /// <para>已启动移除监视与 server 状态监视的控制器。</para></returns>
     public static DeviceController CreateDefault() => CreateDefault(CommKit.Default);
@@ -29,8 +30,8 @@ public static class DeviceControllerFactory
     internal static DeviceController CreateDefault(ICommKit kit)
     {
         ArgumentNullException.ThrowIfNull(kit);
-        DebugBridgeRoute.InitializeAdbServerProbe();
-        DebugBridgeRoute.InitializeHdcServerProbe();
+        DebugBridgeRoute.ConfigureMode(DeviceCommunicationConfiguration.Current.RouteMode);
+        DebugBridgeRoute.InitializeDefaultEndpoints();
         var controller = new DeviceController(
             [
                 new UsbDiscoverySource(kit, UsbApiKind.Auto),

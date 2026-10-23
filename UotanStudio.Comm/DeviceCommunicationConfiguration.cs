@@ -46,6 +46,22 @@ public sealed record DeviceCommunicationConfiguration
     }
 
     /// <summary>
+    /// Debug-bridge route policy fixed for the process lifetime. The controller configures
+    /// <see cref="Routing.DebugBridgeRoute"/> from this value before its first probe, so a changed
+    /// setting takes effect only after the application restarts; undefined persisted values fall back
+    /// to <see cref="DebugBridgeRouteMode.Auto"/>.
+    /// <para>进程生命周期内固定的调试桥路由策略。控制器在首次探测之前用该值配置
+    /// <see cref="Routing.DebugBridgeRoute"/>，因此修改设置只在应用重启后生效；未定义的持久化值回退到
+    /// <see cref="DebugBridgeRouteMode.Auto"/>。</para>
+    /// </summary>
+    /// <value>The selected route mode. <para>选定的路由模式。</para></value>
+    public DebugBridgeRouteMode RouteMode
+    {
+        get;
+        init => field = Enum.IsDefined(value) ? value : DebugBridgeRouteMode.Auto;
+    }
+
+    /// <summary>
     /// Local ADB server host; the single definition lives in <see cref="DebugBridgeEndpoints"/>.
     /// <para>本机 ADB server 主机；唯一定义位于 <see cref="DebugBridgeEndpoints"/>。</para>
     /// </summary>

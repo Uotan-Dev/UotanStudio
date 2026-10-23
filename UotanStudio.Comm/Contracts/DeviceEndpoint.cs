@@ -71,6 +71,16 @@ public sealed record DeviceEndpoint
     /// </value>
     public string? Route { get; init; }
     /// <summary>
+    /// Route snapshot epoch captured when the source projected this endpoint; zero when the route is
+    /// not gated by a debug-bridge server snapshot. An open rejects an endpoint whose epoch no longer
+    /// matches the current snapshot instead of silently opening across a changed route.
+    /// <para>发现源投影该端点时捕获的路由快照 epoch；路由不受调试桥 server 快照门控时为零。
+    /// 打开操作会拒绝 epoch 与当前快照不一致的端点，而不是跨已改变的路由静默打开。</para>
+    /// </summary>
+    /// <value>The snapshot epoch, or zero for an unstamped endpoint.
+    /// <para>快照 epoch；未盖章的端点为 0。</para></value>
+    public long RouteEpoch { get; init; }
+    /// <summary>
     /// Target state text reported by the source.
     /// <para>发现源上报的目标状态文本。</para>
     /// </summary>

@@ -316,7 +316,7 @@ public sealed class HdcAuthentication : IDisposable
     /// <param name="rsa">The key whose public half is written. <para>写出其公钥部分的密钥。</para></param>
     /// <returns>The file text, ending with the PEM closing line and its newline.
     /// <para>文件文本，以 PEM 结束行及其换行结尾。</para></returns>
-    internal static string BuildPublicKeyFileText(RSA rsa) => rsa.ExportSubjectPublicKeyInfoPem() + "\n";
+    public static string BuildPublicKeyFileText(RSA rsa) => rsa.ExportSubjectPublicKeyInfoPem() + "\n";
 
     /// <summary>
     /// Signs the token using the configured verification algorithm.

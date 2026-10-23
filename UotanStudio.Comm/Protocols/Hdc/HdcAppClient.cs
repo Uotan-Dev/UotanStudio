@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using UotanStudio.Compress.Zip;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -173,7 +174,7 @@ public sealed class HdcAppClient(HdcConnection connection) : Contracts.IHdcAppCl
     {
         ValidateOptions(options);
         cancellationToken.ThrowIfCancellationRequested();
-        using var archive = ZipFile.OpenRead(path);
+        using var archive = ZipContainer.OpenRead(path);
         var selected = SelectAppModules(archive, deviceType);
         var staging = Path.Combine(Path.GetTempPath(), "uotan-hdc-install-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(staging);

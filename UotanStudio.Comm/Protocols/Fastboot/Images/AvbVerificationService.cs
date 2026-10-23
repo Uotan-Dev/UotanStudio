@@ -1,87 +1,11 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Comm.Text;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Hash.Digests;
 using FirmwareAvbVerifier = UotanStudio.Firmware.BootSecurity.Avb.Verification.AvbSignatureVerifier;
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Images;
-
-/// <summary>Comm-side AVB hash descriptor model, parsed from descriptors embedded in a vbmeta auxiliary data block. It is distinct from Firmware's signing model <see cref="Firmware.BootSecurity.Avb.AvbHashDescriptor"/>.
-/// <para>Comm 侧 AVB 哈希描述符模型，从 vbmeta 辅助数据块中内嵌的描述符解析得到。 与 Firmware 的签名模型 <see cref="Firmware.BootSecurity.Avb.AvbHashDescriptor"/>不同。</para></summary>
-/// <param name="tag">Descriptor tag identifying the descriptor kind; hash descriptors use 0.
-/// <para>描述符标签，用于标识描述符类型；哈希描述符为 0。</para></param>
-/// <param name="dmVerityVersion">dm-verity format version declared by the descriptor.
-/// <para>描述符声明的 dm-verity 格式版本。</para></param>
-/// <param name="imageSize">Size in bytes of the hashed image region covered by the hash tree.
-/// <para>哈希树覆盖的被哈希镜像区域大小（字节）。</para></param>
-/// <param name="hashBlockSize">Hash tree block size in bytes.<para>哈希树块大小（字节）。</para></param>
-/// <param name="hashAlgorithm">Digest algorithm name stored in the descriptor, e.g. "sha256".
-/// <para>描述符中存储的摘要算法名称，如 "sha256"。</para></param>
-/// <param name="partitionName">Name of the partition this digest applies to.
-/// <para>该摘要对应的分区名称。</para></param>
-/// <param name="salt">Salt bytes folded into the root-hash computation.
-/// <para>参与根哈希计算的盐值字节。</para></param>
-/// <param name="digest">Expected root digest bytes for the partition image.
-/// <para>分区镜像的期望根摘要字节。</para></param>
-public sealed class AvbHashDescriptor(
-    ulong tag,
-    uint dmVerityVersion,
-    ulong imageSize,
-    ulong hashBlockSize,
-    string hashAlgorithm,
-    string partitionName,
-    byte[] salt,
-    byte[] digest)
-{
-    /// <summary>Descriptor tag identifying the descriptor kind; 0 denotes a hash descriptor.
-    /// <para>描述符标签，用于标识描述符类型；0 表示哈希描述符。</para></summary>
-    /// <value>The tag carried by this descriptor as produced by the parser or the caller.
-    /// <para>由解析器或调用方产生的该描述符所携带的标签值。</para></value>
-    public ulong Tag { get; } = tag;
-
-    /// <summary>dm-verity format version declared by the descriptor.
-    /// <para>描述符声明的 dm-verity 格式版本。</para></summary>
-    /// <value>The version DWORD read from the descriptor body.
-    /// <para>从描述符主体读取的版本 DWORD。</para></value>
-    public uint DmVerityVersion { get; } = dmVerityVersion;
-
-    /// <summary>Size in bytes of the hashed image region covered by this descriptor's hash tree.
-    /// <para>该描述符哈希树覆盖的被哈希镜像区域大小（字节）。</para></summary>
-    /// <value>The image extent a verifier must hash before comparing against <see cref="Digest"/>.
-    /// <para>校验方在可与 <see cref="Digest"/> 比对之前必须哈希的范围。</para></value>
-    public ulong ImageSize { get; } = imageSize;
-
-    /// <summary>Hash tree block size in bytes. <para>哈希树块大小（字节）。</para></summary>
-    /// <value>The block granularity the on-image hash tree is built from.
-    /// <para>镜像内哈希树所使用的块粒度。</para></value>
-    public ulong HashBlockSize { get; } = hashBlockSize;
-
-    /// <summary>Name of the digest algorithm the hash tree uses, e.g. "sha256".
-    /// <para>哈希树使用的摘要算法名称，如 "sha256"。</para></summary>
-    /// <value>The NUL-trimmed ASCII algorithm name decoded from the fixed 32-byte descriptor field.
-    /// <para>从描述符固定 32 字节字段解码并按 NUL 截断的 ASCII 算法名。</para></value>
-    public string HashAlgorithm { get; } = hashAlgorithm;
-
-    /// <summary>Name of the partition this digest applies to.
-    /// <para>该摘要对应的分区名称。</para></summary>
-    /// <value>The UTF-8 partition name, trimmed of trailing NUL characters.
-    /// <para>按尾部 NUL 字符裁剪后的 UTF-8 分区名。</para></value>
-    public string PartitionName { get; } = partitionName;
-
-    /// <summary>Salt bytes folded into the root-hash computation.
-    /// <para>参与根哈希计算的盐值字节。</para></summary>
-    /// <value>An exact-length copy of the descriptor's salt field; empty when the descriptor carries no salt.
-    /// <para>描述符盐值字段的等长拷贝；描述符不含盐时为空。</para></value>
-    public byte[] Salt { get; } = salt;
-
-    /// <summary>Expected root digest of the partition image.
-    /// <para>分区镜像的期望根摘要。</para></summary>
-    /// <value>An exact-length copy of the descriptor's digest field to compare recomputed hashes against.
-    /// <para>描述符摘要字段的等长拷贝，用于与重新计算的哈希比对。</para></value>
-    public byte[] Digest { get; } = digest;
-}
 
 /// <summary>
 /// AVB 验证结果，包含详细的哈希/签名诊断信息。
@@ -137,8 +61,8 @@ internal sealed class AvbVerificationResult
     public AvbVBMetaImageHeader? Header { get; set; }
 
     /// <summary>
-    /// Gets or sets the hash descriptors found in the vbmeta.
-    /// <para>在 vbmeta 中找到的哈希描述符。</para>
+    /// Gets or sets the tag-2 hash descriptors parsed by <see cref="AvbDescriptorReader"/>.
+    /// <para>由 <see cref="AvbDescriptorReader"/> 解析出的 tag-2 哈希描述符。</para>
     /// </summary>
     public IReadOnlyList<AvbHashDescriptor> Descriptors { get; set; } = [];
 
@@ -241,7 +165,7 @@ internal sealed class AvbVerificationService
                 result.Signature = CopyRegion(data, AvbVBMetaImageHeader.Size + (long)header.SignatureOffset, (long)header.SignatureSize);
             }
 
-            result.Descriptors = ExtractHashDescriptors(data, header);
+            result.Descriptors = AvbDescriptorReader.ExtractHashDescriptors(data);
 
             if (result.StoredHash is { Length: > 0 })
             {
@@ -345,14 +269,11 @@ internal sealed class AvbVerificationService
     }
 
     /// <summary>
-    /// Extracts all hash descriptors (tag 0) from the vbmeta auxiliary data block.
-    /// <para>从 vbmeta 辅助数据块中提取所有哈希描述符（tag 0）。</para>
+    /// Extracts all tag-2 hash descriptors through the Firmware reader, preserving the lenient empty-list contract.
+    /// <para>经 Firmware 读取器提取所有 tag-2 哈希描述符，保持空列表的容错约定。</para>
     /// </summary>
     public IReadOnlyList<AvbHashDescriptor> ExtractHashDescriptors(byte[] data)
-    {
-        if (data == null) return [];
-        return !TryParseHeader(data, out var header) ? [] : ExtractHashDescriptors(data, header);
-    }
+        => data is null ? [] : AvbDescriptorReader.ExtractHashDescriptors(data);
 
     /// <summary>
     /// Attempts to parse a vbmeta header, supporting both the 256-byte and the shorter 196-204-byte layouts.
@@ -414,7 +335,7 @@ internal sealed class AvbVerificationService
         if (string.IsNullOrEmpty(algorithmName)) return null;
 
         var hashInput = BuildHashInput(data, header, headerSize);
-        var salt = ExtractSalt(data, header) ?? [];
+        var salt = ExtractSalt(data) ?? [];
 
         if (salt.Length == 0)
             return algorithmName == "SHA512" ? Sha512.ComputeHash(hashInput) : Sha256.ComputeHash(hashInput);
@@ -446,62 +367,13 @@ internal sealed class AvbVerificationService
         return input;
     }
 
-    private static byte[]? ExtractSalt(byte[] data, AvbVBMetaImageHeader header)
+    private static byte[]? ExtractSalt(byte[] data)
     {
-        foreach (var descriptor in ExtractHashDescriptors(data, header))
+        foreach (var descriptor in AvbDescriptorReader.ExtractHashDescriptors(data))
         {
             if (descriptor.Salt.Length > 0) return descriptor.Salt;
         }
         return null;
-    }
-
-    private static IReadOnlyList<AvbHashDescriptor> ExtractHashDescriptors(byte[] data, AvbVBMetaImageHeader header)
-    {
-        const ulong hashDescriptorTag = 0;
-        var result = new List<AvbHashDescriptor>();
-        var headerSize = data.Length >= AvbVBMetaImageHeader.Size ? AvbVBMetaImageHeader.Size : 80;
-        var auxStart = headerSize + (long)header.AuthenticationDataBlockSize;
-        var auxSize = (long)header.AuxiliaryDataBlockSize;
-        if (auxStart < 0 || auxSize < 0 || auxStart + auxSize > data.Length) return result;
-
-        var cursor = auxStart;
-        var auxEnd = auxStart + auxSize;
-        while (cursor + 16 <= auxEnd)
-        {
-            ReadOnlySpan<byte> s = data;
-            var tag = BinaryPrimitives.ReadUInt64BigEndian(s.Slice((int)cursor, 8));
-            var numBytesFollowing = BinaryPrimitives.ReadUInt64BigEndian(s.Slice((int)cursor + 8, 8));
-            if (numBytesFollowing > (ulong)(auxEnd - cursor - 16)) break;
-
-            if (tag == hashDescriptorTag && numBytesFollowing >= 56)
-                ParseHashDescriptor(data, (int)cursor + 16, result);
-
-            cursor += 16 + (int)numBytesFollowing;
-        }
-        return result;
-    }
-
-    private static void ParseHashDescriptor(byte[] data, int bodyStart, List<AvbHashDescriptor> output)
-    {
-        ReadOnlySpan<byte> s = data.AsSpan(bodyStart);
-        var dmVerityVersion = BinaryPrimitives.ReadUInt32BigEndian(s[..4]);
-        var imageSize = BinaryPrimitives.ReadUInt64BigEndian(s.Slice(4, 8));
-        var hashBlockSize = BinaryPrimitives.ReadUInt64BigEndian(s.Slice(12, 8));
-        var hashAlgorithm = DecodeAscii(s.Slice(20, 32));
-        var partitionNameLen = s[52];
-        var saltLen = s[53];
-        var digestLen = s[54];
-
-        var partitionNameStart = 56;
-        if (partitionNameStart + partitionNameLen + saltLen + digestLen > s.Length) return;
-
-        var partitionName = Encoding.UTF8.GetStringTrimNul(s.Slice(partitionNameStart, partitionNameLen));
-        var saltStart = partitionNameStart + partitionNameLen;
-        var salt = s.Slice(saltStart, saltLen).ToArray();
-        var digestStart = saltStart + saltLen;
-        var digest = s.Slice(digestStart, digestLen).ToArray();
-
-        output.Add(new AvbHashDescriptor(0, dmVerityVersion, imageSize, hashBlockSize, hashAlgorithm, partitionName, salt, digest));
     }
 
     private static byte[]? CopyRegion(byte[] data, long start, long length)

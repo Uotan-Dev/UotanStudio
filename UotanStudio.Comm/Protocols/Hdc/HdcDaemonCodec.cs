@@ -34,7 +34,7 @@ internal static class HdcDaemonCodec
         return WriteNumber(destination, offset, 4, 9);
     }
 
-    private static int WriteNumber(Span<byte> destination, int offset, uint field, ulong value)
+    internal static int WriteNumber(Span<byte> destination, int offset, uint field, ulong value)
     {
         offset = WriteVarint(destination, offset, (ulong)field << 3);
         return WriteVarint(destination, offset, value);

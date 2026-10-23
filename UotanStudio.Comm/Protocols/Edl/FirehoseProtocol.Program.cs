@@ -1,6 +1,7 @@
 using System.Buffers;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -53,6 +54,7 @@ public sealed partial class FirehoseProtocol
         long numSectors, string filename, int physicalPartition, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
+        _programPayloadDigest = null;
         RequireCapability(EdlFirehoseCommand.Program);
         if (dataStream == null)
         {
@@ -86,6 +88,8 @@ public sealed partial class FirehoseProtocol
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        var payloadStartPosition = dataStream.CanSeek ? dataStream.Position : -1;
+        using var payloadDigest = dataStream.CanSeek ? Sha256.CreateAccumulator() : null;
         var transferStarted = false;
         var payloadSent = false;
         var responseReceived = false;
@@ -99,9 +103,16 @@ public sealed partial class FirehoseProtocol
             responseReceived = true;
             RequireRawMode(ready, EdlErrorCode.ProgramFailed);
             transferStarted = true;
-            await SendProgramPayloadAsync(dataStream, totalBytes, tailPaddingBytes, payloadSize, cancellationToken);
+            await SendProgramPayloadAsync(dataStream, totalBytes, tailPaddingBytes, payloadSize, payloadDigest,
+                cancellationToken);
             payloadSent = true;
             var completion = await ReceiveTransferCompletionAsync(EdlErrorCode.ProgramFailed, cancellationToken);
+            if (payloadDigest is not null)
+            {
+                RecordProgramPayloadDigest(dataStream, startSector, numSectors, physicalPartition,
+                    payloadStartPosition, payloadDigest.GetHashAndReset());
+            }
+
             return completion;
         }
         catch (Exception ex)
@@ -417,9 +428,13 @@ public sealed partial class FirehoseProtocol
     /// <param name="tailPaddingBytes">The trailing byte count supplied as zeros, always below one sector.
     /// 以零补齐的尾部字节数，恒小于一个扇区。</param>
     /// <param name="maxPayload">The validated, sector-aligned transfer size.</param>
+    /// <param name="digest">Optional accumulator receiving every byte accepted by the transport, including the
+    /// trailing zero padding, so the target digest can be compared without reading the source again.
+    /// 可选的累加器；接收传输层接受的每个字节（含尾部补零），使目标摘要无需再次读取源即可比对。</param>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
     /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
-    private async Task SendProgramPayloadAsync(Stream dataStream, long totalBytes, long tailPaddingBytes, int maxPayload, CancellationToken cancellationToken)
+    private async Task SendProgramPayloadAsync(Stream dataStream, long totalBytes, long tailPaddingBytes, int maxPayload,
+        DigestAccumulator? digest, CancellationToken cancellationToken)
     {
         var zlpTimeout = GetZlpTimeoutMs();
         var buffer = ArrayPool<byte>.Shared.Rent(maxPayload);
@@ -462,6 +477,7 @@ public sealed partial class FirehoseProtocol
                         $"The transport accepted {written} of {toRead} raw payload bytes; the block is not replayed because its accepted length is unknown.");
                 }
 
+                digest?.Append(buffer.AsSpan(0, toRead));
                 bytesWritten += toRead;
             }
         }

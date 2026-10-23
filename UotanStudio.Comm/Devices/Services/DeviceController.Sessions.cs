@@ -1,5 +1,6 @@
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Devices.Services;
@@ -106,12 +107,23 @@ public sealed partial class DeviceController
             Serial = info.SerialNumber,
             Route = "direct-usb",
             Protocol = UsbProtocolClassifier.Classify(info),
+            RouteEpoch = DebugBridgeRoute.Current.Epoch,
             UsbInfo = info,
             Usb = new(info.SourceApiKind, info.DevicePath, info.VendorId, info.ProductId,
                 info.InterfaceClass, info.InterfaceSubClass, info.InterfaceProtocol)
         };
         lock (_gate)
         {
+            try
+            {
+                ValidateRouteForOpen(endpoint);
+            }
+            catch
+            {
+                usb.Dispose();
+                throw;
+            }
+
             if (!_leased.Add(endpoint.Id))
             {
                 usb.Dispose();

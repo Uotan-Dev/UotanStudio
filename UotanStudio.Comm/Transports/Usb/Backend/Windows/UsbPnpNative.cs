@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text;
-using UotanStudio.Comm.Text;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 

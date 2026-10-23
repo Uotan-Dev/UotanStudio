@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using K4os.Compression.LZ4;
 
@@ -49,26 +50,51 @@ internal static class HdcTransferCodec
     }
 
     /// <summary>Encodes a raw chunk after the upstream 64-byte reserved metadata prefix. <para>在上游 64 字节保留元数据前缀之后编码原始分块。</para></summary>
+    /// <remarks>The metadata varints are written directly into the returned buffer and a compressed payload is staged
+    /// through a pooled scratch buffer, so one chunk never allocates a second full-size copy of its data.
+    /// <para>元数据 varint 直接写入返回的缓冲区，压缩载荷经池化暂存缓冲中转，因此单个分块不会再分配第二份等大的数据副本。</para>
+    /// </remarks>
     public static byte[] EncodeChunk(long offset, ReadOnlySpan<byte> data, bool compress = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(offset);
         if (data.Length > HdcConstants.MaxPayloadSize - 64) throw new InvalidDataException("HDC transfer chunk exceeds limit.");
         var expanded = data.Length;
-        byte[]? compressed = null;
-        if (compress && !data.IsEmpty)
+        byte[]? rented = null;
+        try
         {
-            compressed = new byte[LZ4Codec.MaximumOutputSize(data.Length)];
-            var count = LZ4Codec.Encode(data, compressed);
-            if (count > 0 && count < data.Length) data = compressed.AsSpan(0, count);
-            else compressed = null;
+            var compressed = false;
+            if (compress && !data.IsEmpty)
+            {
+                var maximum = LZ4Codec.MaximumOutputSize(data.Length);
+                rented = ArrayPool<byte>.Shared.Rent(maximum);
+                var count = LZ4Codec.Encode(data, rented.AsSpan(0, maximum));
+                if (count > 0 && count < data.Length)
+                {
+                    data = rented.AsSpan(0, count);
+                    compressed = true;
+                }
+                else
+                {
+                    ArrayPool<byte>.Shared.Return(rented);
+                    rented = null;
+                }
+            }
+
+            var result = new byte[64 + data.Length];
+            var metadataLength = HdcDaemonCodec.WriteNumber(result, 0, 1, (ulong)offset);
+            metadataLength = HdcDaemonCodec.WriteNumber(result, metadataLength, 2, compressed ? 1u : 0u);
+            metadataLength = HdcDaemonCodec.WriteNumber(result, metadataLength, 3, (uint)data.Length);
+            _ = HdcDaemonCodec.WriteNumber(result, metadataLength, 4, (uint)expanded);
+            data.CopyTo(result.AsSpan(64));
+            return result;
         }
-        using var metadata = new MemoryStream();
-        HdcDaemonCodec.Number(metadata, 1, (ulong)offset); HdcDaemonCodec.Number(metadata, 2, compressed is null ? 0u : 1u);
-        HdcDaemonCodec.Number(metadata, 3, (uint)data.Length); HdcDaemonCodec.Number(metadata, 4, (uint)expanded);
-        var result = new byte[64 + data.Length];
-        metadata.GetBuffer().AsSpan(0, (int)metadata.Length).CopyTo(result);
-        data.CopyTo(result.AsSpan(64));
-        return result;
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
     }
 
     /// <summary>Decodes bounded raw transfer data; unsupported compression is rejected. <para>解码有界的原始传输数据；不支持的压缩方式被拒绝。</para></summary>

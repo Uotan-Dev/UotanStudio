@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
 using UotanStudio.Comm.Routing;
-using UotanStudio.Comm.Text;
+using UotanStudio.Firmware.Core.Text;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 

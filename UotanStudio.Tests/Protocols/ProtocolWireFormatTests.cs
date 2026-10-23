@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Edl;
 using Xunit;
 
