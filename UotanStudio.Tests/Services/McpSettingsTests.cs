@@ -1,6 +1,6 @@
 using System.Text.Json;
+using UotanStudio.Mcp;
 using UotanStudio.Services;
-using UotanStudio.Services.Mcp;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

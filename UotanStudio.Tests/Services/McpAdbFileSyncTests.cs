@@ -2,7 +2,7 @@ using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Mcp;
 using UotanStudio.Mcp.Tools;
-using UotanStudio.Services.Mirroring;
+using UotanStudio.Mirroring;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

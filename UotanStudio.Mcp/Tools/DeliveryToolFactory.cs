@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
-using UotanStudio.Services.Delivery;
+using UotanStudio.Delivery;
 
 namespace UotanStudio.Mcp.Tools;
 

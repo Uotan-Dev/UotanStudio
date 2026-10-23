@@ -39,37 +39,21 @@ internal sealed class McpClientConnectionService
     }
 
     /// <summary>
-    /// Applies the given client configs: each entry is converted into the client DTO and pushed to
-    /// <see cref="McpClientService"/>, which drops cached connections. Runs off the current thread and logs failures.
-    /// <para>应用给定的客户端配置：逐条转换为客户端 DTO 并推送给 <see cref="McpClientService"/>，由其释放
-    /// 缓存连接。操作在当前线程之外执行，失败只记录日志。</para>
+    /// Applies the given client configs by pushing them to <see cref="McpClientService"/>, which drops cached
+    /// connections. Runs off the current thread and logs failures.
+    /// <para>把给定的客户端配置推送给 <see cref="McpClientService"/>，由其释放缓存连接。操作在当前线程之外执行，
+    /// 失败只记录日志。</para>
     /// </summary>
     /// <param name="servers">The server configs to activate. <para>要生效的服务器配置列表。</para></param>
-    internal void Apply(IReadOnlyList<McpServerConfig> servers)
+    internal void Apply(IReadOnlyList<McpClientServerConfig> servers)
         => _ = ApplyAsync(servers);
 
-    private async Task ApplyAsync(IReadOnlyList<McpServerConfig> servers)
+    private async Task ApplyAsync(IReadOnlyList<McpClientServerConfig> servers)
     {
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var configs = new List<McpClientServerConfig>(servers.Count);
-            foreach (var server in servers)
-            {
-                configs.Add(new McpClientServerConfig
-                {
-                    Name = server.Name,
-                    Transport = server.Transport switch
-                    {
-                        McpTransportKind.Stdio => UotanStudio.Mcp.McpTransportKind.Stdio,
-                        _ => UotanStudio.Mcp.McpTransportKind.Http
-                    },
-                    Command = server.Command,
-                    Arguments = server.Arguments,
-                    Url = server.Url,
-                    Enabled = server.Enabled
-                });
-            }
+            List<McpClientServerConfig> configs = [.. servers];
 
             await McpClientService.Instance.SetServersAsync(configs).ConfigureAwait(false);
             LogService.Instance.Write(LogLevel.Info, "McpClient",

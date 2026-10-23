@@ -29,11 +29,9 @@ public sealed class McpServerHost
     }
 
     /// <summary>
-    /// Assembles a host with a delivery tool-preparation provider; that provider's type is a
-    /// delivery-project internal contract, so this overload stays visible only to this assembly and the
-    /// desktop host granted through <c>InternalsVisibleTo</c>.
-    /// <para>组装带交付工具准备提供器的宿主；该提供器类型是交付子项目的内部契约，因此此重载只对本程序集与
-    /// 经 <c>InternalsVisibleTo</c> 授权的桌面宿主可见。</para>
+    /// Assembles a host with a delivery tool-preparation provider; the provider is the public
+    /// <see cref="UotanStudio.Delivery.IDeliveryTools"/> contract.
+    /// <para>组装带交付工具准备提供器的宿主；提供器使用公共的 <see cref="UotanStudio.Delivery.IDeliveryTools"/> 契约。</para>
     /// </summary>
     /// <param name="config">Sandbox root and flash gate for this run. <para>本次运行的沙箱根目录与刷写门控。</para></param>
     /// <param name="deviceManager">Device gateway used by device tools. <para>设备工具使用的设备网关。</para></param>
@@ -41,9 +39,9 @@ public sealed class McpServerHost
     /// <para>仅对本宿主启用 <c>delivery_build</c> 的工具准备提供器。</para></param>
     /// <param name="signingKeys">Signing key provider used by <c>delivery_build</c>; <see langword="null"/> keeps signed plans failing honestly.
     /// <para><c>delivery_build</c> 使用的签名密钥供应器；为 <see langword="null"/> 时签名计划如实失败。</para></param>
-    internal McpServerHost(McpServerConfig config, IDeviceManagerGateway? deviceManager,
-        Func<Services.Delivery.IDeliveryTools?>? deliveryTools,
-        Func<Services.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null)
+    public McpServerHost(McpServerConfig config, IDeviceManagerGateway? deviceManager,
+        Func<UotanStudio.Delivery.IDeliveryTools?>? deliveryTools,
+        Func<UotanStudio.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null)
         : this(new PathSandbox(config.RootDirectory), config.AllowFlash, deviceManager)
     {
         DeliveryTools = deliveryTools;
@@ -72,10 +70,9 @@ public sealed class McpServerHost
 
     /// <summary>
     /// Assembles a host from an existing sandbox, gate, device gateway and delivery tool-preparation
-    /// provider; the provider's type is a delivery-project internal contract, so this overload stays
-    /// visible only to this assembly and the desktop host granted through <c>InternalsVisibleTo</c>.
-    /// <para>用现成沙箱、门控、设备网关与交付工具准备提供器组装宿主；提供器类型是交付子项目的内部契约，
-    /// 因此此重载只对本程序集与经 <c>InternalsVisibleTo</c> 授权的桌面宿主可见。</para>
+    /// provider; the provider is the public <see cref="UotanStudio.Delivery.IDeliveryTools"/> contract.
+    /// <para>用现成沙箱、门控、设备网关与交付工具准备提供器组装宿主；提供器使用公共的
+    /// <see cref="UotanStudio.Delivery.IDeliveryTools"/> 契约。</para>
     /// </summary>
     /// <param name="sandbox">Path confine shared by every file-touching tool. <para>所有文件类工具共用的路径限制。</para></param>
     /// <param name="allowFlash">Registers the flashing/wiping/reboot tools when <see langword="true"/>. <para>为 <see langword="true"/> 时注册刷写、擦除、重启类工具。</para></param>
@@ -84,9 +81,9 @@ public sealed class McpServerHost
     /// <para>仅对本宿主启用 <c>delivery_build</c> 的工具准备提供器。</para></param>
     /// <param name="signingKeys">Signing key provider used by <c>delivery_build</c>; <see langword="null"/> keeps signed plans failing honestly.
     /// <para><c>delivery_build</c> 使用的签名密钥供应器；为 <see langword="null"/> 时签名计划如实失败。</para></param>
-    internal McpServerHost(PathSandbox sandbox, bool allowFlash, IDeviceManagerGateway? deviceManager,
-        Func<Services.Delivery.IDeliveryTools?>? deliveryTools,
-        Func<Services.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null)
+    public McpServerHost(PathSandbox sandbox, bool allowFlash, IDeviceManagerGateway? deviceManager,
+        Func<UotanStudio.Delivery.IDeliveryTools?>? deliveryTools,
+        Func<UotanStudio.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null)
         : this(sandbox, allowFlash, deviceManager)
     {
         DeliveryTools = deliveryTools;
@@ -99,13 +96,13 @@ public sealed class McpServerHost
     /// <para>本宿主的交付工具准备提供器；只对本程序集与经授权的桌面宿主可见。</para>
     /// </summary>
     /// <value>The provider supplied at construction, or <see langword="null"/>. <para>构造时给出的提供器，或 <see langword="null"/>。</para></value>
-    internal Func<Services.Delivery.IDeliveryTools?>? DeliveryTools { get; private set; }
+    internal Func<UotanStudio.Delivery.IDeliveryTools?>? DeliveryTools { get; private set; }
 
     /// <summary>
     /// <para>本宿主的交付签名密钥供应器，决定 <c>delivery_build</c> 能否产出签名输出。</para>
     /// This host's delivery signing key provider, deciding whether <c>delivery_build</c> can produce signed output.</summary>
     /// <value>The provider supplied at construction, or <see langword="null"/>. <para>构造时给出的供应器，或 <see langword="null"/>。</para></value>
-    internal Func<Services.Delivery.IDeliverySigningKeyProvider?>? SigningKeys { get; private set; }
+    internal Func<UotanStudio.Delivery.IDeliverySigningKeyProvider?>? SigningKeys { get; private set; }
 
     /// <summary>Gets the sandbox all file-touching tools share. <para>所有文件工具共享的沙箱。</para></summary>
     /// <value>The instance built for this run, used to resolve and confine every client-supplied path.

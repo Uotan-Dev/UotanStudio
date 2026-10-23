@@ -3,8 +3,8 @@ using System.Globalization;
 using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
+using UotanStudio.Delivery;
 using UotanStudio.Firmware.OtaDelta.Payload.Builder;
-using UotanStudio.Services.Delivery;
 
 namespace UotanStudio.Mcp.Tools;
 

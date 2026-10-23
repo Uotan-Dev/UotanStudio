@@ -1,10 +1,10 @@
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Text.Json;
+using UotanStudio.Delivery;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Mcp;
 using UotanStudio.Mcp.Tools;
-using UotanStudio.Services.Delivery;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

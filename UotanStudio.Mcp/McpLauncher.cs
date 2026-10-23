@@ -63,7 +63,7 @@ public static class McpLauncher
     /// <returns>A task that completes when the transport closes or cancellation is observed.
     /// <para>在传输关闭或观察到取消时完成的任务。</para></returns>
     public static async Task RunCompanionAsync(string[] args, Tools.IDeviceManagerGateway deviceManager,
-        Func<Services.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null,
+        Func<UotanStudio.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null,
         CancellationToken cancellationToken = default,
         Tools.IMcpToolCallAudit? audit = null)
     {
@@ -82,9 +82,9 @@ public static class McpLauncher
     /// <see cref="McpServerHost"/>，不再写入进程级状态，因此能力可用性取决于所构建的宿主而非启动顺序。</para>
     /// </summary>
     /// <returns>A provider creating a tool service over the shared cache directory on each call. <para>每次调用创建缓存目录与 HTTP 客户端组合的工具准备服务。</para></returns>
-    internal static Func<Services.Delivery.IDeliveryTools?> CreateDesktopDeliveryTools() =>
+    public static Func<UotanStudio.Delivery.IDeliveryTools?> CreateDesktopDeliveryTools() =>
         static () =>
-            new Services.Delivery.DeliveryToolService(
+            new UotanStudio.Delivery.DeliveryToolService(
                 new HttpClient { Timeout = Timeout.InfiniteTimeSpan },
                 Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
