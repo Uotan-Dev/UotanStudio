@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui;
 using UotanStudio.ViewModels.Compare;
 
 namespace UotanStudio.Views.Compare;

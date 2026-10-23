@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
-using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui.Projects;
 using UotanStudio.Services.VisualPlugins;
 
 namespace UotanStudio.ViewModels.Workspace;

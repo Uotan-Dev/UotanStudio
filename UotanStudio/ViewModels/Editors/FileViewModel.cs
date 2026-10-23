@@ -8,7 +8,8 @@ using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Workspace;
-using UotanStudio.Views.Controls;
+using UotanStudio.Services.Workspace.Documents;
+using UotanStudio.UiAbstractions;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -29,7 +30,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
     private System.Text.Encoding _textEncoding = new System.Text.UTF8Encoding(false);
     private readonly SemaphoreSlim _saveGate = new(1, 1);
     private DateTime _loadedWriteTime;
-    private long _fileSize;
+    private long? _fileSize;
 
     /// <summary>
     /// Reusable magic-sniff buffer (libmagic-style fallback, avoids per-file allocation).
@@ -80,9 +81,25 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
     /// <para>本地化后的文件大小显示文本（状态栏）。</para>
     /// </summary>
     public string SizeDisplay =>
-        _fileSize <= 0
-            ? string.Empty
-            : string.Format(LanguageService.Instance.GetString("Dock_File_SizeFormat"), _fileSize);
+        _fileSize is { } size
+            ? string.Format(LanguageService.Instance.GetString("Dock_File_SizeFormat"), size)
+            : string.Empty;
+
+    /// <summary>
+    /// Updates the tracked file size and notifies the status-bar binding; <c>null</c> means unknown,
+    /// while zero is a real empty file.
+    /// <para>更新跟踪的文件大小并通知状态栏绑定；<c>null</c> 表示未知，零表示真实的空文件。</para>
+    /// </summary>
+    private void SetFileSize(long? size)
+    {
+        if (_fileSize == size)
+        {
+            return;
+        }
+
+        _fileSize = size;
+        OnPropertyChanged(nameof(SizeDisplay));
+    }
 
     /// <summary>
     /// Whether the document has been modified (diverged from the disk content).
@@ -153,9 +170,10 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
         FilePath = path;
         CompileError = string.Empty;
         _isLoading = true;
+        SetFileSize(null);
         try
         {
-            _fileSize = new FileInfo(path).Length;
+            SetFileSize(new FileInfo(path).Length);
 
             var probe = await ReadProbeBytesAsync(path).ConfigureAwait(true);
             IsBinary = ResolveBinary(mode, path, probe);
@@ -212,6 +230,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
                 throw new IOException($"The file changed outside the editor: {path}");
             File.Move(temporary, path, overwrite: true);
             _loadedWriteTime = File.GetLastWriteTimeUtc(path);
+            SetFileSize(new FileInfo(path).Length);
             if (FilePath == path && Text == text) IsDirty = false;
         }
         finally
@@ -237,6 +256,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
             FilePath = path;
             Title = Path.GetFileName(path);
             _loadedWriteTime = File.GetLastWriteTimeUtc(path);
+            SetFileSize(new FileInfo(path).Length);
             if (Text == text) IsDirty = false;
         }
         finally
@@ -415,8 +435,8 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
         {
             EditorOpenMode.Hex => true,
             EditorOpenMode.Text or EditorOpenMode.Dtb or EditorOpenMode.Dex => false,
-            _ => FileOpenMode.IsKnownBinaryExtension(Path.GetExtension(path))
-                || FileOpenMode.IsBinaryContent(data)
+            _ => DocumentFormatPolicy.IsKnownBinaryExtension(Path.GetExtension(path))
+                || DocumentFormatPolicy.IsBinaryContent(data)
         };
     }
 
@@ -446,7 +466,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
                 {
                 }
 
-                var format = magic ?? "Unknown / 未知格式";
+                var format = magic ?? LanguageService.Instance.GetString("Dock_Properties_Unknown");
                 AddAnalysis("Format", format);
                 AddAnalysis("Size", $"{new FileInfo(path).Length:N0} bytes");
                 NotifyAnalysisComplete(path);
@@ -605,7 +625,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
         Editor = null;
         IsDirty = false;
         IsBinary = false;
-        _fileSize = 0;
+        SetFileSize(null);
         DetectedFormat = string.Empty;
         DetectedEncoding = string.Empty;
         CompileError = string.Empty;

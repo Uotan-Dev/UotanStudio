@@ -1,7 +1,7 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Services.Workspace;
+using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.ViewModels.Editors;
 
 namespace UotanStudio.ViewModels.Workspace;

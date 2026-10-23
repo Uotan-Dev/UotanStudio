@@ -8,9 +8,12 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
+using UotanStudio.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.Shell;
+using UotanStudio.Services.Ui;
+using UotanStudio.Services.Ui.Projects;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
 using Ursa.Controls;
@@ -223,7 +226,7 @@ public partial class ProjectExplorerView : UserControl
             return;
         }
 
-        MenuViewModel.ShowFileChecksumWindow(node.Path);
+        UiWindowService.Shared.ShowChecksumWindow(node.Path);
     }
 
     private void OnNewEmptySubProject(object? sender, RoutedEventArgs e)

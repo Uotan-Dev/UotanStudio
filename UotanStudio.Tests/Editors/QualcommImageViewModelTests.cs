@@ -4,12 +4,13 @@ using System.Text.Json;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Services.Workspace;
+using UotanStudio.Services.Ui.Workspace;
+using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.Tests.Firmware;
 using UotanStudio.Tests.TestInfrastructure;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Controls;
 using Xunit;
 
 namespace UotanStudio.Tests.Editors;
@@ -27,8 +28,8 @@ public sealed class QualcommImageViewModelTests
         var data = QualcommMetadataFixture.CreateElf(new byte[16], QualcommMetadataFixture.CreateMbn(6, 0, 120));
         var path = temp.WriteBytes(name, data);
 
-        Assert.Equal(EditorOpenMode.Elf, FileOpenMode.ResolveMode(path, data[..64]));
-        Assert.Equal(EditorOpenMode.Elf, FileOpenMode.ResolveMode("missing.elf", data));
+        Assert.Equal(EditorOpenMode.Elf, DocumentFormatPolicy.ResolveMode(path, data[..64]));
+        Assert.Equal(EditorOpenMode.Elf, DocumentFormatPolicy.ResolveMode("missing.elf", data));
     }
 
     [Fact]
@@ -38,7 +39,7 @@ public sealed class QualcommImageViewModelTests
         var data = QualcommMetadataFixture.CreateElf(new byte[16], new byte[64]);
         var path = temp.WriteBytes("fake.elf", data);
 
-        Assert.Equal(EditorOpenMode.Elf, FileOpenMode.ResolveMode(path, data));
+        Assert.Equal(EditorOpenMode.Elf, DocumentFormatPolicy.ResolveMode(path, data));
     }
 
     [Theory]
@@ -51,7 +52,7 @@ public sealed class QualcommImageViewModelTests
             QualcommMetadataFixture.CreateMbn(6, 0, 120), withDynamicSegment: true);
         var path = temp.WriteBytes(name, data);
 
-        Assert.Equal(EditorOpenMode.Elf, FileOpenMode.ResolveMode(path, data[..64]));
+        Assert.Equal(EditorOpenMode.Elf, DocumentFormatPolicy.ResolveMode(path, data[..64]));
     }
 
     [Theory]
@@ -192,7 +193,7 @@ public sealed class QualcommImageViewModelTests
         QualcommImageViewModel? document = null;
         try
         {
-            Assert.NotEqual(EditorOpenMode.Qualcomm, FileOpenMode.ResolveMode(path, new byte[] { 0, 1, 2, 3 }));
+            Assert.NotEqual(EditorOpenMode.Qualcomm, DocumentFormatPolicy.ResolveMode(path, new byte[] { 0, 1, 2, 3 }));
 
             await workspace.OpenDocumentAsync(path, EditorOpenMode.Qualcomm);
             var dock = workspace.FindDocumentsPanePublic()!;

@@ -9,6 +9,7 @@ using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Shell;

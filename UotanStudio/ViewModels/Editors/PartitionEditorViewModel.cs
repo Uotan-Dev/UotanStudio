@@ -6,12 +6,17 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BlockImage;
+using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.BlockImage.Mbr;
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.VendorFirmware.Amlogic;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Flash;
-using UotanStudio.Views.Controls;
+using UotanStudio.Services.Workspace.Documents;
+using UotanStudio.UiAbstractions;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -29,9 +34,9 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
 {
     private PartitionTableSource _source;
     private LpMetadata? _lpMetadata;
-    private GptTableInfo? _gpt;
+    private GptTable? _gpt;
     private MbrTableInfo? _mbr;
-    private AmlogicTableInfo? _amlogic;
+    private AmlogicPartitionTableInfo? _amlogic;
     private string _rockchipOriginal = string.Empty;
     private string _rockchipDevice = string.Empty;
     private string _rockchipSuffix = string.Empty;
@@ -282,7 +287,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 }
                 else
                 {
-                    if (!FileOpenMode.IsRockchipParameter(path))
+                    if (!DocumentFormatPolicy.IsRockchipParameter(path))
                     {
                         CompileError = LanguageService.Instance.GetString("UserError_PartitionUnrecognized");
                         return;
@@ -374,10 +379,10 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                     await SaveGptAsync(items).ConfigureAwait(true);
                     break;
                 case PartitionTableSource.Mbr:
-                    SaveMbr(items);
+                    await SaveMbrAsync(items).ConfigureAwait(true);
                     break;
                 case PartitionTableSource.Amlogic:
-                    SaveAmlogic(items);
+                    await SaveAmlogicAsync(items).ConfigureAwait(true);
                     break;
                 default:
                     throw new InvalidOperationException("No partition table loaded.");
@@ -496,18 +501,33 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
 
         try
         {
-            if (GptTable.HasSignature(bytes))
+            if (GptImageEditor.TryRead(bytes, out var gpt))
             {
-                var info = GptTable.Parse(bytes);
                 _source = PartitionTableSource.Gpt;
-                _gpt = info;
-                _capacitySectors = info.DiskSizeBytes / (ulong)GptTable.SectorSize;
-                BuildGptItems(info);
-                SourceDescription = $"GPT: {info.Entries.Count} partition(s), disk {info.DiskSizeBytes} bytes";
+                _gpt = gpt;
+                _capacitySectors = gpt.BlockCount;
+                BuildGptItems(gpt);
+                SourceDescription = $"GPT: {gpt.Partitions.Count} partition(s), disk {gpt.BlockCount * (ulong)gpt.BlockSize} bytes";
                 return true;
             }
 
-            if (MbrTable.HasPartitionTable(bytes) && !AmlogicTable.HasMagic(bytes))
+            if (GptImageEditor.HasSignature(bytes))
+            {
+                return false;
+            }
+
+            if (AmlogicPartitionTable.HasMagic(bytes))
+            {
+                var info = AmlogicPartitionTable.Parse(bytes);
+                _source = PartitionTableSource.Amlogic;
+                _amlogic = info;
+                _capacitySectors = 0;
+                BuildAmlogicItems(info);
+                SourceDescription = $"Amlogic: {info.Partitions.Count} partition(s)";
+                return true;
+            }
+
+            if (MbrTable.HasPartitionTable(bytes))
             {
                 var info = MbrTable.Parse(bytes);
                 _source = PartitionTableSource.Mbr;
@@ -515,17 +535,6 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
                 _capacitySectors = 0;
                 BuildMbrItems(info);
                 SourceDescription = $"MBR: {info.Partitions.Count} partition(s)";
-                return true;
-            }
-
-            if (AmlogicTable.HasMagic(bytes))
-            {
-                var info = AmlogicTable.Parse(bytes);
-                _source = PartitionTableSource.Amlogic;
-                _amlogic = info;
-                _capacitySectors = 0;
-                BuildAmlogicItems(info);
-                SourceDescription = $"Amlogic: {info.Partitions.Count} partition(s)";
                 return true;
             }
         }
@@ -578,19 +587,19 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             value.TryFormat(span[2..], out _, "X2", CultureInfo.InvariantCulture);
         });
 
-    private void BuildGptItems(GptTableInfo info)
+    private void BuildGptItems(GptTable table)
     {
         Partitions.Clear();
-        for (var i = 0; i < info.Entries.Count; i++)
+        for (var i = 0; i < table.Partitions.Count; i++)
         {
-            var entry = info.Entries[i];
+            var entry = table.Partitions[i];
             Partitions.Add(new PartitionItemViewModel(
                 new PartitionEntry
                 {
                     Name = entry.Name,
                     StartSector = entry.FirstLba,
-                    SizeSectors = entry.LastLba >= entry.FirstLba ? entry.LastLba - entry.FirstLba + 1 : 0,
-                    Type = entry.TypeGuid.ToString("D")
+                    SizeSectors = entry.LastLba >= entry.FirstLba ? (entry.LastLba - entry.FirstLba) + 1 : 0,
+                    Type = entry.TypeId.ToString("D")
                 },
                 i,
                 group: null,
@@ -618,7 +627,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         }
     }
 
-    private void BuildAmlogicItems(AmlogicTableInfo info)
+    private void BuildAmlogicItems(AmlogicPartitionTableInfo info)
     {
         Partitions.Clear();
         for (var i = 0; i < info.Partitions.Count; i++)
@@ -648,27 +657,29 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         var image = await ReadBoundedTableAsync(FilePath!).ConfigureAwait(true)
             ?? throw new InvalidDataException("The GPT source file is no longer readable as a bounded table image.");
 
-        var entries = new List<GptEntry>(items.Count);
-        foreach (var item in items)
+        var partitions = new List<GptPartition>(items.Count);
+        for (var i = 0; i < items.Count; i++)
         {
-            var original = item.OriginalIndex >= 0 && item.OriginalIndex < _gpt.Entries.Count
-                ? _gpt.Entries[item.OriginalIndex]
+            var item = items[i];
+            var original = item.OriginalIndex >= 0 && item.OriginalIndex < _gpt.Partitions.Count
+                ? _gpt.Partitions[item.OriginalIndex]
                 : null;
-            entries.Add(new GptEntry
-            {
-                TypeGuid = Guid.TryParse(item.Type, out var parsed) ? parsed : original?.TypeGuid ?? GptTable.DefaultTypeGuid,
-                UniqueGuid = original?.UniqueGuid ?? Guid.NewGuid(),
-                FirstLba = item.StartSector,
-                LastLba = checked(item.StartSector + item.SizeSectors - 1),
-                Attributes = original?.Attributes ?? 0,
-                Name = item.Name
-            });
+            partitions.Add(new GptPartition(
+                i,
+                Guid.TryParse(item.Type, out var parsed) ? parsed : original?.TypeId ?? GptLayout.DefaultTypeGuid,
+                original?.Id ?? Guid.NewGuid(),
+                item.StartSector,
+                checked(item.StartSector + item.SizeSectors - 1),
+                original?.Attributes ?? 0,
+                item.Name,
+                ByteOffsetOf(item.StartSector),
+                ByteLengthOf(item.SizeSectors)));
         }
 
-        await File.WriteAllBytesAsync(FilePath!, GptTable.Patch(image, entries)).ConfigureAwait(true);
+        await WriteTableAsync(FilePath!, GptImageEditor.Patch(image, partitions)).ConfigureAwait(true);
     }
 
-    private void SaveMbr(IReadOnlyList<PartitionItemViewModel> items)
+    private async Task SaveMbrAsync(IReadOnlyList<PartitionItemViewModel> items)
     {
         if (_mbr is null)
         {
@@ -693,10 +704,10 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             bootable.Add(original?.Bootable ?? false);
         }
 
-        File.WriteAllBytes(FilePath!, MbrTable.Build(_mbr.DiskSignature, entries, bootable));
+        await WriteTableAsync(FilePath!, MbrTable.Build(_mbr.DiskSignature, entries, bootable)).ConfigureAwait(true);
     }
 
-    private void SaveAmlogic(IReadOnlyList<PartitionItemViewModel> items)
+    private async Task SaveAmlogicAsync(IReadOnlyList<PartitionItemViewModel> items)
     {
         if (_amlogic is null)
         {
@@ -710,7 +721,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             var original = item.OriginalIndex >= 0 && item.OriginalIndex < _amlogic.Partitions.Count
                 ? _amlogic.Partitions[item.OriginalIndex]
                 : null;
-            var type = MbrTable.TryParseType(item.Type, out var parsed) ? parsed : original?.Type ?? AmlogicTable.DefaultType;
+            var type = MbrTable.TryParseType(item.Type, out var parsed) ? parsed : original?.Type ?? AmlogicPartitionTable.DefaultType;
             entries.Add(new PartitionEntry
             {
                 Name = item.Name,
@@ -721,7 +732,37 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             bootable.Add(original?.Bootable ?? false);
         }
 
-        File.WriteAllBytes(FilePath!, AmlogicTable.Build(_amlogic.DiskSignature, entries, bootable));
+        await WriteTableAsync(FilePath!, AmlogicPartitionTable.Build(_amlogic.DiskSignature, entries, bootable)).ConfigureAwait(true);
+    }
+
+    private static long ByteOffsetOf(ulong firstSector) =>
+        firstSector > ((ulong)long.MaxValue / (ulong)PartitionTableFormat.SectorSize)
+            ? long.MaxValue
+            : (long)(firstSector * (ulong)PartitionTableFormat.SectorSize);
+
+    private static long ByteLengthOf(ulong sizeSectors) =>
+        sizeSectors > ((ulong)long.MaxValue / (ulong)PartitionTableFormat.SectorSize)
+            ? long.MaxValue
+            : (long)(sizeSectors * (ulong)PartitionTableFormat.SectorSize);
+
+    private static async Task WriteTableAsync(string path, byte[] bytes)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(fullPath)
+            ?? throw new InvalidOperationException("The partition-table target has no parent directory.");
+        var temporary = Path.Combine(directory, $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            await File.WriteAllBytesAsync(temporary, bytes).ConfigureAwait(true);
+            File.Move(temporary, fullPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporary))
+            {
+                File.Delete(temporary);
+            }
+        }
     }
 
     private void SaveLp(IReadOnlyList<PartitionItemViewModel> items)
@@ -917,7 +958,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
             : _source switch
             {
                 PartitionTableSource.Lp => 4096UL,
-                PartitionTableSource.Gpt => GptTable.FirstUsableLba,
+                PartitionTableSource.Gpt => GptLayout.FirstUsableLba,
                 _ => 2048UL
             };
         var size = _capacitySectors > start && _capacitySectors - start >= 2048 ? _capacitySectors - start : 2048UL;
@@ -925,7 +966,7 @@ public partial class PartitionEditorViewModel : Document, ICommandSaveableDocume
         {
             PartitionTableSource.Lp => "linear",
             PartitionTableSource.Rockchip => "mtd",
-            PartitionTableSource.Gpt => GptTable.DefaultTypeGuid.ToString("D"),
+            PartitionTableSource.Gpt => GptLayout.DefaultTypeGuid.ToString("D"),
             _ => "0x83"
         };
         var group = _lpMetadata is { Groups.Count: > 0 } ? _lpMetadata.Groups[0].NameString : null;

@@ -4,12 +4,17 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using UotanStudio.Services.Workspace;
+using UotanStudio.ViewModels;
 
 namespace UotanStudio.Views.Controls;
 
 /// <summary>Find/replace controls connected to workspace search.<para>接入工作区搜索的查找替换控件。</para></summary>
 public partial class FindReplacePanel : UserControl
 {
+    private readonly LocalizedOptionSet _scopeOptions = new(
+        "FindReplace_CurrentDocument", "FindReplace_Selection",
+        "FindReplace_OpenDocuments", "FindReplace_Project");
+
     public event EventHandler? CloseRequested;
     internal event EventHandler? OptionsChanged;
     internal event Action<SearchAction>? ActionRequested;
@@ -33,6 +38,8 @@ public partial class FindReplacePanel : UserControl
     public FindReplacePanel()
     {
         InitializeComponent();
+        ScopeBox.ItemsSource = _scopeOptions.Options;
+        ScopeBox.SelectedIndex = 0;
         FindBox.TextChanged += (_, _) => OptionsChanged?.Invoke(this, EventArgs.Empty);
         ReplaceBox.TextChanged += (_, _) => OptionsChanged?.Invoke(this, EventArgs.Empty);
         ScopeBox.SelectionChanged += (_, _) => OptionsChanged?.Invoke(this, EventArgs.Empty);

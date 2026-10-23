@@ -55,7 +55,12 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.Small avalonia|TDesignIconBase, ToggleButton.Small avalonia|TDesignIconBase">
+    <!-- 图标控件各自是 TDesignIconBase 的派生类型，选择器必须用 :is() 才匹配基类；
+         裸类型选择器只匹配具体类型，会让图标退回 24 单位并溢出 18×18 按钮。 -->
+    <!-- Each icon control derives from TDesignIconBase, so the selector needs :is() to match the base
+         type; a bare type selector only matches the exact type and leaves the icon at its 24-unit
+         default, overflowing the 18×18 button. -->
+    <Style Selector="Button.Small :is(avalonia|TDesignIconBase), ToggleButton.Small :is(avalonia|TDesignIconBase)">
       <Setter Property="Width" Value="12" />
       <Setter Property="Height" Value="12" />
     </Style>

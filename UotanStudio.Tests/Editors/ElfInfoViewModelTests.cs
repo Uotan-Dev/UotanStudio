@@ -1,12 +1,13 @@
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Services.Workspace;
+using UotanStudio.Services.Ui.Workspace;
+using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.Tests.Firmware;
 using UotanStudio.Tests.TestInfrastructure;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Controls;
 using Xunit;
 
 namespace UotanStudio.Tests.Editors;
@@ -21,7 +22,7 @@ public sealed class ElfInfoViewModelTests
     [InlineData("executable")]
     public void ResolveMode_ValidHeader_RoutesByContent(string path)
     {
-        Assert.Equal(EditorOpenMode.Elf, FileOpenMode.ResolveMode(path, ElfFixture.Create()));
+        Assert.Equal(EditorOpenMode.Elf, DocumentFormatPolicy.ResolveMode(path, ElfFixture.Create()));
     }
 
     [Theory]
@@ -30,8 +31,8 @@ public sealed class ElfInfoViewModelTests
     [InlineData("fake.txt")]
     public void ResolveMode_MagicOnly_DoesNotOpenElfPanel(string path)
     {
-        Assert.Equal(EditorOpenMode.Hex, FileOpenMode.ResolveMode(path, "\u007fELF"u8.ToArray()));
-        Assert.NotEqual(EditorOpenMode.Elf, FileOpenMode.ResolveMode(path, "ordinary text"u8.ToArray()));
+        Assert.Equal(EditorOpenMode.Hex, DocumentFormatPolicy.ResolveMode(path, "\u007fELF"u8.ToArray()));
+        Assert.NotEqual(EditorOpenMode.Elf, DocumentFormatPolicy.ResolveMode(path, "ordinary text"u8.ToArray()));
     }
 
     [Fact]

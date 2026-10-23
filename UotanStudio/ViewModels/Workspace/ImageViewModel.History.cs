@@ -1,3 +1,4 @@
+using UotanStudio.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;

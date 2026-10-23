@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
@@ -7,8 +8,8 @@ using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.Views.Controls;
 
 namespace UotanStudio.ViewModels.Workspace;
 
@@ -140,7 +141,41 @@ internal partial class PropertiesViewModel : Tool
     /// Collection of property rows currently displayed, bound by the UI.
     /// <para>当前显示的属性行集合，UI 绑定此项。</para>
     /// </summary>
-    public ObservableCollection<PropertyRow> Properties { get; } = [];
+    public ObservableCollection<PropertyRow> Properties { get; } = new CoalescingPropertyRows();
+
+    /// <summary>
+    /// Property-row collection that coalesces one burst of row changes into a single reset notification
+    /// delivered on the UI dispatcher before the next render, so the bound grid rebuilds its rows once.
+    /// <para>属性行集合：把一轮密集的行变更合并为一次重置通知，在下次渲染前由 UI 调度器投递，
+    /// 使绑定的表格只重建一轮行。</para>
+    /// </summary>
+    private sealed class CoalescingPropertyRows : ObservableCollection<PropertyRow>
+    {
+        private bool _resetScheduled;
+
+        protected override void OnCollectionChanged(NotifyCollectionChangedEventArgs e)
+        {
+            if (Avalonia.Application.Current is null)
+            {
+                base.OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+                return;
+            }
+
+            if (_resetScheduled)
+            {
+                return;
+            }
+
+            _resetScheduled = true;
+            Avalonia.Threading.Dispatcher.UIThread.Post(FlushReset);
+        }
+
+        private void FlushReset()
+        {
+            _resetScheduled = false;
+            base.OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        }
+    }
 
     /// <summary>
     /// Title of the currently selected node, for display.
@@ -475,7 +510,8 @@ internal partial class PropertiesViewModel : Tool
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_FileName", fileName));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_FilePath", doc.FilePath ?? string.Empty));
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_FileSize", $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_FileSize",
+            FormatFileSize(doc.FilePath, doc.RawBytes?.Length)));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_LineCount", doc.LineCount.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_CharCount", doc.CharCount.ToString("N0")));
 
@@ -633,7 +669,10 @@ internal partial class PropertiesViewModel : Tool
         Interlocked.Increment(ref _imageDetailsGeneration);
         StopMirrorUpdates();
         ClearLanguageSelector();
-        Properties.Clear();
+        if (Properties.Count > 0)
+        {
+            Properties.Clear();
+        }
     }
 
     /// <summary>
@@ -669,7 +708,8 @@ internal partial class PropertiesViewModel : Tool
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_FileName", fileName));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_FilePath", doc.FilePath ?? string.Empty));
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_FileSize", $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_FileSize",
+            FormatFileSize(doc.FilePath, doc.RawBytes?.Length)));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_NodeCount", doc.NodeCount.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_RootCompatible", doc.RootCompatible));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_RootAddressCells", doc.RootAddressCells));
@@ -700,7 +740,8 @@ internal partial class PropertiesViewModel : Tool
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
         Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_FileName", fileName));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_FilePath", doc.FilePath ?? string.Empty));
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_FileSize", $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_FileSize",
+            FormatFileSize(doc.FilePath, doc.RawBytes?.Length)));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_ElementCount", doc.ElementCount.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_AttributeCount", doc.AttributeCount.ToString("N0")));
 
@@ -830,7 +871,8 @@ internal partial class PropertiesViewModel : Tool
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
         Properties.Add(CreateLocalizedRow("Dock_Properties_Hex_FileName", fileName));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Hex_FilePath", doc.FilePath ?? string.Empty));
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Hex_FileSize", $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Hex_FileSize",
+            FormatFileSize(doc.FilePath, doc.RawBytes?.Length)));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Hex_ByteCount", doc.SizeDisplay));
 
         _currentHexDocument = doc;
@@ -1018,7 +1060,8 @@ internal partial class PropertiesViewModel : Tool
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_FileName", fileName));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_FilePath", doc.FilePath ?? string.Empty));
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_FileSize", $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_FileSize",
+            FormatFileSize(doc.FilePath, doc.RawBytes?.Length)));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_Version", doc.Version));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_ClassCount", doc.ClassCount.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_MethodCount", doc.MethodCount.ToString("N0")));
@@ -1135,7 +1178,8 @@ internal partial class PropertiesViewModel : Tool
         }
 
         ShowProperties(PropertiesContentType.FileAnalysis);
-        SelectedNodeTitle = analysis.FilePath ?? analysis.DetectedFormat ?? "Analysis";
+        SelectedNodeTitle = analysis.FilePath ?? analysis.DetectedFormat
+            ?? LanguageService.Instance.GetString("Dock_Properties_Type_FileAnalysis");
         AddMagicRow(analysis.FilePath);
 
         foreach (var row in analysis.Analysis)
@@ -1148,24 +1192,54 @@ internal partial class PropertiesViewModel : Tool
 
     private void AddMagicRow(string? path)
     {
-        var description = "Unknown";
+        var unknown = LanguageService.Instance.GetString("Dock_Properties_Unknown");
+        var description = unknown;
         if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
         {
             try
             {
-                description = FileMagic.IdentifyFile(path)?.Description ?? "Unknown";
+                description = FileMagic.IdentifyFile(path)?.Description ?? unknown;
             }
             catch (IOException)
             {
-                description = "Unavailable";
+                description = LanguageService.Instance.GetString("Dock_Properties_Unavailable");
             }
             catch (UnauthorizedAccessException)
             {
-                description = "Unavailable";
+                description = LanguageService.Instance.GetString("Dock_Properties_Unavailable");
             }
         }
 
         Properties.Add(CreateLocalizedRow("Dock_Properties_Magic", description));
+    }
+
+    /// <summary>
+    /// Resolves the file-size row text from the on-disk length, falling back to the optional
+    /// in-memory byte count only when the path cannot be read.
+    /// <para>按磁盘长度解析文件大小行文本；仅在路径不可读时退回可选的内存字节数。</para>
+    /// </summary>
+    /// <param name="path">Document path; empty for in-memory documents.<para>文档路径；内存文档为空。</para></param>
+    /// <param name="inMemoryLength">Raw-byte count held by the editor, when any.<para>编辑器持有的原始字节数（如有）。</para></param>
+    /// <returns>The formatted byte count, or an em dash when the size is unknown.<para>格式化后的字节数；大小未知时为破折号。</para></returns>
+    private static string FormatFileSize(string? path, long? inMemoryLength)
+    {
+        long? size = null;
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            try
+            {
+                var info = new FileInfo(path);
+                if (info.Exists)
+                {
+                    size = info.Length;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+            }
+        }
+
+        return (size ?? inMemoryLength) is { } value ? $"{value:N0} bytes" : "—";
     }
 
     /// <summary>

@@ -3,6 +3,7 @@ using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.OtaDelta.Dat;
+using UotanStudio.Services.Ui.Firmware;
 
 namespace UotanStudio.Services.Firmware;
 
@@ -33,7 +34,7 @@ internal static class ImageOutputService
     /// <param name="brotliLevel">Brotli compression level applied to the br output. <para>施加于 br 产物的 Brotli 压缩级别。</para></param>
     /// <param name="progress">Optional byte-progress reporter, null when progress is not tracked. <para>可选的字节进度回调，不跟踪进度时为 null。</para></param>
     /// <returns>The build outcome; the img path carries the packing result. <para>构建结果；img 路径附带打包服务的结果。</para></returns>
-    internal static FirmwareOpResult Build(ImageOperationPaths paths, string operation, int brotliLevel, IProgress<FileSystemByteProgress>? progress = null)
+    internal static FirmwareOperationResult Build(ImageOperationPaths paths, string operation, int brotliLevel, IProgress<FileSystemByteProgress>? progress = null)
     {
         if (operation is not ("img" or "dat" or "br")) throw new ArgumentOutOfRangeException(nameof(operation));
         Directory.CreateDirectory(paths.OutputRoot);
@@ -77,7 +78,7 @@ internal static class ImageOutputService
                 dat = compressed;
             }
             PublishOutputs(paths.OutputRoot, staging, dat, transfer);
-            return new FirmwareOpResult { Success = true, Summary = $"Built {operation}: {paths.Name}" };
+            return new FirmwareOperationResult { Success = true, Summary = $"Built {operation}: {paths.Name}" };
         }
         finally
         {

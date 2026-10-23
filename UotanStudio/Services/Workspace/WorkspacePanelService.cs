@@ -1,7 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Core;
+using UotanStudio.Messages;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Terminal;
+using UotanStudio.Services.Ui.Workspace;
 
 namespace UotanStudio.Services.Workspace;
 
@@ -42,6 +45,23 @@ public sealed partial class WorkspacePanelService : ObservableObject
     public const string Terminal = "Terminal";
 
     /// <summary>
+    /// Locale resource key per panel key: the single source for every workspace dock title. Titles
+    /// are applied on registration and re-applied whenever the application language changes.
+    /// <para>每个停靠项键对应的语言资源键：所有工作区停靠项标题的唯一来源。注册时应用标题，应用语言切换时重新应用。</para>
+    /// </summary>
+    private static readonly Dictionary<string, string> PanelTitleKeys = new(StringComparer.Ordinal)
+    {
+        [ProjectExplorer] = "Dock_ProjectExplorer",
+        [ProjectSetting] = "Dock_ProjectSetting",
+        [PluginTool] = "Dock_Plugins",
+        [ImagesView] = "Dock_ImagesView",
+        [AiAssistant] = "Dock_AiAssistant",
+        [Properties] = "Dock_Properties",
+        [WorkspaceLog] = "Dock_Output",
+        [AdbLog] = "Dock_AdbLog"
+    };
+
+    /// <summary>
     /// Singleton instance.
     /// <para>单例实例。</para>
     /// </summary>
@@ -49,6 +69,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
     public static WorkspacePanelService Instance { get; } = new();
 
     private readonly Dictionary<string, PanelEntry> _panels = new(StringComparer.Ordinal);
+    private readonly Dictionary<IDockable, string> _titledDockables = new(ReferenceEqualityComparer.Instance);
     private TerminalDockService? _terminals;
 
     private sealed class PanelEntry
@@ -56,9 +77,12 @@ public sealed partial class WorkspacePanelService : ObservableObject
         public required string Key { get; init; }
         public required IDockable Dockable { get; init; }
         public IDock? Host { get; set; }
+        public string? TitleKey { get; set; }
     }
 
-    internal WorkspacePanelService() { }
+    internal WorkspacePanelService() =>
+        WeakReferenceMessenger.Default.Register<WorkspacePanelService, LanguageStateChangedMessage>(
+            this, static (service, _) => service.RefreshLocalizedTitles());
 
     internal Dictionary<string, bool> CaptureVisibility()
     {
@@ -98,7 +122,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
         string[] arguments = useDotnet
             ? [assembly, "--managed-device-shell", device.Protocol.ToString(), device.Serial]
             : ["--managed-device-shell", device.Protocol.ToString(), device.Serial];
-        return new TerminalProfile("Device shell", executable, arguments);
+        return new TerminalProfile("Device shell", executable, arguments, "Terminal_DeviceShell");
     }
 
     internal void RestoreVisibility(IReadOnlyDictionary<string, bool> panels)
@@ -107,6 +131,47 @@ public sealed partial class WorkspacePanelService : ObservableObject
         {
             if (visible) Show(key, activate: false);
             else Hide(key);
+        }
+    }
+
+    /// <summary>
+    /// Registers a localized title for a dockable that is not a toggleable panel, such as the
+    /// document pane; the title is applied immediately and again after every language change.
+    /// <para>为非可切换停靠项（如文档区）登记本地化标题；标题立即应用，并在每次语言切换后重新应用。</para>
+    /// </summary>
+    /// <param name="dockable">The dockable whose title is localized. <para>标题需要本地化的停靠项。</para></param>
+    /// <param name="titleKey">The locale resource key. <para>语言资源键。</para></param>
+    public void RegisterLocalizedTitle(IDockable dockable, string titleKey)
+    {
+        ArgumentNullException.ThrowIfNull(dockable);
+        ArgumentException.ThrowIfNullOrEmpty(titleKey);
+        _titledDockables[dockable] = titleKey;
+        dockable.Title = LanguageService.Instance.GetString(titleKey);
+    }
+
+    /// <summary>
+    /// Re-applies every registered workspace dock title in the active language. Called after a
+    /// language change so titles update immediately instead of only when the layout is rebuilt.
+    /// <para>用当前语言重新应用所有已登记的工作区停靠项标题。语言切换后调用，使标题立即更新，而不是等到重建布局才更新。</para>
+    /// </summary>
+    internal void RefreshLocalizedTitles()
+    {
+        foreach (var entry in _panels.Values)
+        {
+            ApplyPanelTitle(entry);
+        }
+
+        foreach (var (dockable, titleKey) in _titledDockables)
+        {
+            dockable.Title = LanguageService.Instance.GetString(titleKey);
+        }
+    }
+
+    private static void ApplyPanelTitle(PanelEntry entry)
+    {
+        if (entry.TitleKey is { Length: > 0 } titleKey)
+        {
+            entry.Dockable.Title = LanguageService.Instance.GetString(titleKey);
         }
     }
 
@@ -179,7 +244,15 @@ public sealed partial class WorkspacePanelService : ObservableObject
         if (key == AdbLog && GetEntry(key)?.Dockable is IDisposable previous &&
             !ReferenceEquals(previous, dockable))
             previous.Dispose();
-        _panels[key] = new PanelEntry { Key = key, Dockable = dockable, Host = host };
+        var entry = new PanelEntry
+        {
+            Key = key,
+            Dockable = dockable,
+            Host = host,
+            TitleKey = PanelTitleKeys.GetValueOrDefault(key)
+        };
+        _panels[key] = entry;
+        ApplyPanelTitle(entry);
         SetVisibleState(key, visible);
     }
 

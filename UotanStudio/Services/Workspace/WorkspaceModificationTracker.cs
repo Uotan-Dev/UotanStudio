@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using Dock.Model.Controls;
 using Dock.Model.Core;
+using UotanStudio.Services.Ui.Workspace;
 
 namespace UotanStudio.Services.Workspace;
 

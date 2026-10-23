@@ -10,6 +10,8 @@ using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui;
+using UotanStudio.Services.Ui.Projects;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.Workspace;
@@ -474,10 +476,10 @@ internal partial class ImageViewModel : Tool
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        StatusText = "Refreshing images  正在刷新镜像列表";
+        StatusText = LanguageService.Instance.GetString("ImageView_Refreshing");
         ProgressPercent = -1;
         await RefreshProjectImagesAsync();
-        StatusText = $"Refreshed: {Images.Count} image(s)  已刷新：{Images.Count} 个镜像";
+        StatusText = string.Format(LanguageService.Instance.GetString("ImageView_Refreshed"), Images.Count);
         ProgressPercent = 0;
     }
 

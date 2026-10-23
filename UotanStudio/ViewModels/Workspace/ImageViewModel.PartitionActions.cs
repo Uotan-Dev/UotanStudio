@@ -1,9 +1,11 @@
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.Workspace;
@@ -46,7 +48,8 @@ internal partial class ImageViewModel
         for (var i = 0; i < selectedImages.Count; i++)
         {
             var image = selectedImages[i];
-            StatusText = $"[{i + 1}/{selectedImages.Count}] Deleting {image.DisplayName}  正在删除 {image.DisplayName}";
+            StatusText = $"[{i + 1}/{selectedImages.Count}] " +
+                string.Format(LanguageService.Instance.GetString("ImageView_Deleting"), image.DisplayName);
             await DeleteImageAsync(image);
             ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
             ReportItemStatistics(i + 1, selectedImages.Count);
@@ -203,7 +206,8 @@ internal partial class ImageViewModel
             return;
         }
 
-        StatusText = $"Synthesizing super image ({partitions.Count} partitions)  正在合成 super 镜像（{partitions.Count} 个分区）";
+        StatusText = string.Format(
+            LanguageService.Instance.GetString("ImageView_SynthesizingSuper"), partitions.Count);
         ProgressPercent = -1;
         try
         {
@@ -223,7 +227,7 @@ internal partial class ImageViewModel
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
-            StatusText = $"Synthesized super image  已合成 super 镜像";
+            StatusText = LanguageService.Instance.GetString("ImageView_SynthesizedSuper");
             ProgressPercent = 100;
             if (!hadExistingOutput && File.Exists(outputPath)
                 && CreateOutputOperation(HistoryOperationKind.SynthesizeSuper,
@@ -310,7 +314,7 @@ internal partial class ImageViewModel
             return;
         }
 
-        StatusText = $"Flashing {entries.Count} image(s)  正在刷入 {entries.Count} 个镜像";
+        StatusText = string.Format(LanguageService.Instance.GetString("ImageView_FlashingImages"), entries.Count);
         try
         {
             var progress = new Progress<FlashProgress>(fp =>

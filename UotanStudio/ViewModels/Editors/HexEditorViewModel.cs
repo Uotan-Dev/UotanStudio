@@ -16,6 +16,12 @@ namespace UotanStudio.ViewModels.Editors;
 public partial class HexEditorViewModel : Document, ICommandSaveableDocument
 {
     /// <summary>
+    /// Upper bound for a file kept in the in-memory byte array; larger files are reported as load failures.
+    /// <para>内存字节数组保存的文件大小上限；更大的文件按加载失败上报。</para>
+    /// </summary>
+    private const long MaximumFileBytes = 256L * 1024 * 1024;
+
+    /// <summary>
     /// The localized title of the save button.
     /// <para>保存按钮的本地化标题。</para>
     /// </summary>
@@ -109,8 +115,9 @@ public partial class HexEditorViewModel : Document, ICommandSaveableDocument
     }
 
     /// <summary>
-    /// Asynchronously loads a binary file: reads the byte array and records size statistics.
-    /// <para>异步加载二进制文件：读取字节数组并记录大小统计。</para>
+    /// Asynchronously loads a binary file: reads the byte array and records size statistics; files above the
+    /// in-memory limit report a load failure instead of being read.
+    /// <para>异步加载二进制文件：读取字节数组并记录大小统计；超过内存上限的文件按加载失败上报而不读取。</para>
     /// </summary>
     /// <param name="path">二进制文件路径。<para>Binary file path.</para></param>
     public async Task LoadAsync(string path)
@@ -133,7 +140,26 @@ public partial class HexEditorViewModel : Document, ICommandSaveableDocument
                 return;
             }
 
-            RawBytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
+            await using var stream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 64 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            if (stream.Length > MaximumFileBytes)
+            {
+                RawBytes = null;
+                CompileError = UserError.Describe(
+                    new InvalidDataException(
+                        $"Hex editor limit exceeded: {stream.Length} bytes > {MaximumFileBytes} bytes."),
+                    "UserError_LoadFailed");
+                return;
+            }
+
+            var bytes = new byte[stream.Length];
+            await stream.ReadExactlyAsync(bytes).ConfigureAwait(true);
+            RawBytes = bytes;
             SizeDisplay = string.Format(
                 LanguageService.Instance.GetString("Dock_File_SizeFormat"), info.Length);
             CompileError = string.Empty;

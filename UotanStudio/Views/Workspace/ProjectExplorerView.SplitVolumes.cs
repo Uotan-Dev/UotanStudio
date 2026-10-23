@@ -6,6 +6,7 @@ using Avalonia.Platform.Storage;
 using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
+using UotanStudio.Services.Ui;
 using UotanStudio.ViewModels.Workspace;
 using Ursa.Controls;
 
@@ -116,7 +117,7 @@ public partial class ProjectExplorerView
             });
 
             progressWindow.Show(owner);
-            FirmwareOpResult result;
+            FirmwareOperationResult result;
             try
             {
                 result = await ExecuteSplitOperationAsync(set, node.Path, outputPath, reconstruct,
@@ -180,7 +181,7 @@ public partial class ProjectExplorerView
         };
     }
 
-    internal static Task<FirmwareOpResult> ExecuteSplitOperationAsync(
+    internal static Task<FirmwareOperationResult> ExecuteSplitOperationAsync(
         DatSplitSet set, string selectedPath, string outputPath, bool reconstruct,
         IProgress<(long Processed, long Total)>? byteProgress = null,
         IProgress<double>? fractionProgress = null,

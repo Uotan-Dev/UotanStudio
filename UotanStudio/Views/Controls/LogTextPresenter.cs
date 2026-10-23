@@ -34,12 +34,20 @@ internal sealed class LogTextBuffer(TextDocument document)
         var content = new StringBuilder();
         foreach (var entry in entries)
         {
-            var line = text(entry) + "\n";
-            var lineCount = line.Count(character => character == '\n');
-            _entries.Insert(index++, (line.Length, lineCount));
+            var body = text(entry);
+            var lineCount = 1;
+            foreach (var character in body)
+            {
+                if (character == '\n')
+                {
+                    lineCount++;
+                }
+            }
+
+            _entries.Insert(index++, (body.Length + 1, lineCount));
             Levels.InsertRange(lineIndex, Enumerable.Repeat(level(entry), lineCount));
             lineIndex += lineCount;
-            content.Append(line);
+            content.Append(body).Append('\n');
         }
         if (content.Length > 0) document.Insert(offset, content.ToString());
     }

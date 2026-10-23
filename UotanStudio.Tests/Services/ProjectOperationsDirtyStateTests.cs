@@ -1,5 +1,6 @@
 using UotanStudio.Services.Projects;
-using UotanStudio.Services.Workspace;
+using UotanStudio.Services.Ui.Projects;
+using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;

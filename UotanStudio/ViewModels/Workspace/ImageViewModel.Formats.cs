@@ -1,4 +1,5 @@
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
+using UotanStudio.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
@@ -25,7 +26,7 @@ internal partial class ImageViewModel
     private string? GetSelectedSourcePath(ImageEntryViewModel image, string operation)
         => _imageInput.ResolveSourcePath(image.RelativePath, image.IsDirectory, operation);
 
-    private static async Task<FirmwareOpResult> ConvertToRawAsync(string sourcePath, string outputDir, string name)
+    private static async Task<FirmwareOperationResult> ConvertToRawAsync(string sourcePath, string outputDir, string name)
     {
         return await Task.Run(() =>
         {
@@ -33,7 +34,7 @@ internal partial class ImageViewModel
             using var sparseFile = SparseReader.ImportAuto(sourcePath);
             using var output = File.Create(outputPath);
             sparseFile.WriteRawToStream(output);
-            return new FirmwareOpResult { Success = true, Summary = $"Converted {sourcePath} to raw at {outputPath}  已转为 raw：{outputPath}" };
+            return new FirmwareOperationResult { Success = true, Summary = $"Converted {sourcePath} to raw at {outputPath}  已转为 raw：{outputPath}" };
         });
     }
 
@@ -46,7 +47,7 @@ internal partial class ImageViewModel
     /// 级联解出内部文件系统内容；未命中则回退为原 raw 字节流复制。头部探测与解包目录规则
     /// （<see cref="ImageOperationPaths"/>）语义不变。</para>
     /// </summary>
-    private static async Task<FirmwareOpResult> ExtractRawAsync(string sourcePath, string outputDir, string name, IProgress<(int processed, int total)>? progress = null, IProgress<Firmware.Core.FileSystemByteProgress>? byteProgress = null, IReadOnlyList<string>? erofsExtraDevicePaths = null, CancellationToken cancellationToken = default)
+    private static async Task<FirmwareOperationResult> ExtractRawAsync(string sourcePath, string outputDir, string name, IProgress<(int processed, int total)>? progress = null, IProgress<Firmware.Core.FileSystemByteProgress>? byteProgress = null, IReadOnlyList<string>? erofsExtraDevicePaths = null, CancellationToken cancellationToken = default)
     {
         var layout = ImageInputService.ProbeFilesystemHeader(sourcePath);
         if (layout is RawImageLayout.Ext4 or RawImageLayout.Erofs or RawImageLayout.F2fs)

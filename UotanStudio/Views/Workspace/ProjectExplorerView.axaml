@@ -24,14 +24,14 @@
                         <controls:OpenAsMenuItem Header="{DynamicResource Explorer_OpenAsMenu}"
                                   IsVisible="{Binding !IsDirectory}">
                             <MenuItem.Icon>
-                                <icons:ArrowRightUp />
+                                <icons:ArrowRightUp Width="16" Height="16" />
                             </MenuItem.Icon>
                         </controls:OpenAsMenuItem>
                         <!-- 可转换的镜像类文件：格式转换（确认后输出到子项目 output/，进度显示在镜像管理面板） -->
                         <MenuItem Header="{DynamicResource Explorer_ConvertFormat}"
                                   IsVisible="{Binding SupportsFormatConversion}">
                             <MenuItem.Icon>
-                                <icons:Swap />
+                                <icons:Swap Width="16" Height="16" />
                             </MenuItem.Icon>
                             <MenuItem Header="{DynamicResource Explorer_ConvertSparse}" Click="OnConvertSparse" />
                             <MenuItem Header="{DynamicResource Explorer_ConvertImgToDat}" Click="OnConvertImgToDat" />
@@ -41,31 +41,31 @@
                         <MenuItem Header="{DynamicResource Explorer_Checksum}"
                                   IsVisible="{Binding !IsDirectory}" Click="OnChecksum">
                             <MenuItem.Icon>
-                                <icons:FileSafety />
+                                <icons:FileSafety Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_Add}" IsVisible="{Binding IsDirectory}">
                             <MenuItem.Icon>
-                                <icons:Add />
+                                <icons:Add Width="16" Height="16" />
                             </MenuItem.Icon>
                             <MenuItem Header="{DynamicResource Explorer_NewEmptySubProject}" Click="OnNewEmptySubProject">
                                 <MenuItem.Icon>
-                                    <icons:FolderAdd />
+                                    <icons:FolderAdd Width="16" Height="16" />
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem Header="{DynamicResource Explorer_ImportExistingSubProject}" Click="OnImportExistingSubProject">
                                 <MenuItem.Icon>
-                                    <icons:FolderMove />
+                                    <icons:FolderMove Width="16" Height="16" />
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem Header="{DynamicResource Explorer_NewFile}" Click="OnNewFile">
                                 <MenuItem.Icon>
-                                    <icons:FileAdd />
+                                    <icons:FileAdd Width="16" Height="16" />
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem Header="{DynamicResource Explorer_NewFolder}" Click="OnNewFolder">
                                 <MenuItem.Icon>
-                                    <icons:FolderAdd />
+                                    <icons:FolderAdd Width="16" Height="16" />
                                 </MenuItem.Icon>
                             </MenuItem>
                         </MenuItem>
@@ -74,12 +74,12 @@
                         <Separator IsVisible="{Binding !IsDirectory}" />
                         <MenuItem Header="{DynamicResource Explorer_Unpack}" IsVisible="{Binding !IsDirectory}" Click="OnUnpack">
                             <MenuItem.Icon>
-                                <icons:FileDownload />
+                                <icons:FileDownload Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_SplitVolumes}" IsVisible="{Binding !IsDirectory}">
                             <MenuItem.Icon>
-                                <icons:FileCopy />
+                                <icons:FileCopy Width="16" Height="16" />
                             </MenuItem.Icon>
                             <MenuItem Header="{DynamicResource Explorer_SplitImport}" Click="OnImportSplitVolumes" />
                             <MenuItem Header="{DynamicResource Explorer_SplitReconstruct}" Click="OnReconstructSplitDat" />
@@ -87,47 +87,47 @@
                         <Separator />
                         <MenuItem Header="{DynamicResource Menu_Cut}" Click="OnCut">
                             <MenuItem.Icon>
-                                <icons:Cut />
+                                <icons:Cut Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Menu_Copy}" Click="OnCopy">
                             <MenuItem.Icon>
-                                <icons:Copy />
+                                <icons:Copy Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Menu_Paste}" Click="OnPaste">
                             <MenuItem.Icon>
-                                <icons:Paste />
+                                <icons:Paste Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Menu_Delete}" Click="OnDelete">
                             <MenuItem.Icon>
-                                <icons:Delete />
+                                <icons:Delete Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_Rename}" Click="OnRename">
                             <MenuItem.Icon>
-                                <icons:Rename />
+                                <icons:Rename Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_CopyFullPath}" Click="OnCopyFullPath">
                             <MenuItem.Icon>
-                                <icons:Paste />
+                                <icons:Paste Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_OpenInFileExplorer}" Click="OnOpenInFileExplorer">
                             <MenuItem.Icon>
-                                <icons:FolderOpen />
+                                <icons:FolderOpen Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_OpenInMultiColumnBrowser}" Click="OnOpenInCompareView">
                             <MenuItem.Icon>
-                                <icons:ViewColumn />
+                                <icons:ViewColumn Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_OpenInTerminal}" IsVisible="{Binding IsDirectory}" Click="OnOpenInTerminal">
                             <MenuItem.Icon>
-                                <icons:Terminal />
+                                <icons:Terminal Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
                     </ContextMenu></Template>

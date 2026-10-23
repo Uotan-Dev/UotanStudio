@@ -3,7 +3,7 @@ namespace UotanStudio.Services.Firmware;
 /// <summary>Restores existing extraction contents on failure.<para>解包失败时恢复既有目录内容。</para></summary>
 internal static class ExtractionDirectory
 {
-    internal static async Task<FirmwareOpResult> ReplaceAsync(string target, Func<Task<FirmwareOpResult>> extract)
+    internal static async Task<FirmwareOperationResult> ReplaceAsync(string target, Func<Task<FirmwareOperationResult>> extract)
     {
         var backupRoot = Path.Combine(Path.GetDirectoryName(target)!, ".deleted");
         var backup = Path.Combine(backupRoot, "extract-" + Guid.NewGuid().ToString("N"));

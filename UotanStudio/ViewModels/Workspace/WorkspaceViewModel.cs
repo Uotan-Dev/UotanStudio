@@ -7,11 +7,13 @@ using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Devices;
+using UotanStudio.Services.Ui.Workspace.Documents;
+using UotanStudio.Services.Workspace.Documents;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Shell;
-using UotanStudio.Views.Controls;
-using UotanStudio.Views.Workspace;
 
 namespace UotanStudio.ViewModels.Workspace;
 
@@ -23,16 +25,16 @@ namespace UotanStudio.ViewModels.Workspace;
 public class WorkspaceViewModel : ViewModelBase, IDisposable
 {
     private readonly IFactory _factory;
+    private readonly Dictionary<string, ScreenMirrorViewModel> _screenMirrorDocuments = new(StringComparer.Ordinal);
     private DocumentDock? _documentDock;
     private bool _subscribedDocumentDock;
     private CompareViewModel? _compareDocument;
-    private ScreenMirrorViewModel? _screenMirrorDocument;
-    internal ProjectExplorerViewModel? ProjectExplorer => (_factory as WorkspaceDockFactory)?.ProjectExplorer;
+    internal ProjectExplorerViewModel? ProjectExplorer => (_factory as IWorkspaceDockFactory)?.ProjectExplorer as ProjectExplorerViewModel;
     /// <summary>
     /// Exposes the concrete workspace factory for project-lifecycle document cleanup.
     /// <para>供工程生命周期清理文档使用。</para>
     /// </summary>
-    internal WorkspaceDockFactory? DockFactory => _factory as WorkspaceDockFactory;
+    internal IWorkspaceDockFactory? DockFactory => _factory as IWorkspaceDockFactory;
 
     /// <summary>
     /// Gets or sets the dock root layout.
@@ -45,12 +47,11 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Constructs the workspace view model: creates the dock factory and layout, then initializes the layout.
-    /// <para>构造工作区视图模型：创建 Dock 工厂与布局，并完成布局初始化。</para>
+    /// Constructs the workspace view model around the supplied dock factory: creates the layout and
+    /// initializes it.
+    /// <para>围绕给定的 Dock 工厂构造工作区视图模型：创建布局并完成初始化。</para>
     /// </summary>
-    public WorkspaceViewModel() : this(new WorkspaceDockFactory()) { }
-
-    internal WorkspaceViewModel(IFactory factory)
+    public WorkspaceViewModel(IFactory factory)
     {
         _factory = factory;
         Layout = _factory.CreateLayout();
@@ -58,6 +59,9 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         {
             _factory.InitLayout(Layout);
         }
+
+        WeakReferenceMessenger.Default.Register<WorkspaceViewModel, SelectedDeviceChangedMessage>(this,
+            static (workspace, message) => workspace.FollowSelectedDevice(message));
     }
 
     /// <summary>
@@ -126,14 +130,19 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Opens or focuses the screen-mirror document, reusing its instance until closed,
-    /// and navigates to the workspace.
-    /// <para>在工作区文档区打开或聚焦投屏文档，复用尚未关闭的实例并切换到工作区。</para>
+    /// Opens or focuses the screen-mirror document for one device. Each device keeps its own document,
+    /// so several mirrors can stay open side by side; reopening the same device focuses its existing
+    /// document instead of creating a duplicate.
+    /// <para>为单个设备打开或聚焦投屏文档。每个设备各自保留一个文档，因此可以同时打开多个投屏；
+    /// 重新打开同一设备时聚焦已有文档而不是创建重复文档。</para>
     /// </summary>
+    /// <param name="deviceKey">Stable device serial or connect key; null or blank selects the legacy
+    /// untargeted document slot. <para>稳定的设备序列号或连接键；null 或空白选择旧的无目标文档槽位。</para></param>
     /// <returns>The screen-mirror document, or null if the layout is unavailable. <para>投屏文档；布局未就绪时为 null。</para></returns>
-    public ScreenMirrorViewModel? OpenScreenMirrorDocument()
+    public ScreenMirrorViewModel? OpenScreenMirrorDocument(string? deviceKey = null)
     {
-        if (_screenMirrorDocument?.Owner is not IDock owner || owner.VisibleDockables?.Contains(_screenMirrorDocument) != true)
+        var key = string.IsNullOrWhiteSpace(deviceKey) ? string.Empty : deviceKey.Trim();
+        if (!_screenMirrorDocuments.TryGetValue(key, out var document) || document.Owner is null)
         {
             var documentDock = _documentDock ??= FindDocumentsPane();
             if (documentDock is null)
@@ -142,22 +151,76 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             }
 
             EnsureDocumentDockSubscribed(documentDock);
-            _screenMirrorDocument = new ScreenMirrorViewModel
+            document = new ScreenMirrorViewModel
             {
-                Id = "ScreenMirrorDocument",
-                Title = LanguageService.Instance.GetString("Tab_ScreenMirror"),
+                Id = key.Length == 0 ? "ScreenMirrorDocument" : $"ScreenMirrorDocument:{key}",
+                Title = key.Length == 0
+                    ? LanguageService.Instance.GetString("Tab_ScreenMirror")
+                    : string.Format(LanguageService.Instance.GetString("Tab_ScreenMirrorDevice"), key),
                 CanClose = true
             };
-            _factory.AddDockable(documentDock, _screenMirrorDocument);
+            _screenMirrorDocuments[key] = document;
+            _factory.AddDockable(documentDock, document);
         }
 
-        _factory.SetActiveDockable(_screenMirrorDocument);
-        if (_factory.FindRoot(_screenMirrorDocument) is { } root)
+        _factory.SetActiveDockable(document);
+        if (_factory.FindRoot(document) is { } root)
         {
-            _factory.SetFocusedDockable(root, _screenMirrorDocument);
+            _factory.SetFocusedDockable(root, document);
         }
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
-        return _screenMirrorDocument;
+        return document;
+    }
+
+    /// <summary>
+    /// Applies a device-selection change to the active mirror document: an ADB device retargets the
+    /// view (or focuses its existing document), while an HDC or unsupported protocol displays the
+    /// matching notice instead of attempting a scrcpy session.
+    /// <para>把设备选中项变化应用到当前活动投屏文档：ADB 设备切换投屏目标（或聚焦其已有文档），
+    /// HDC 或不支持的协议则显示对应提示，而不是尝试建立 scrcpy 会话。</para>
+    /// </summary>
+    /// <param name="message">The selection change to apply. <para>要应用的选中项变化。</para></param>
+    private void FollowSelectedDevice(SelectedDeviceChangedMessage message)
+    {
+        if (_documentDock?.ActiveDockable is not ScreenMirrorViewModel active)
+        {
+            return;
+        }
+
+        if (message.Protocol is not (DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc) ||
+            string.IsNullOrWhiteSpace(message.Serial))
+        {
+            active.ShowUnsupported("ScreenMirror_ProtocolUnsupported");
+            return;
+        }
+
+        var serial = message.Serial;
+        if (_screenMirrorDocuments.TryGetValue(serial, out var existing) &&
+            !ReferenceEquals(existing, active) && existing.Owner is not null)
+        {
+            FocusDocument(existing);
+            return;
+        }
+
+        var previousKey = _screenMirrorDocuments.FirstOrDefault(pair => ReferenceEquals(pair.Value, active)).Key;
+        active.RetargetTo(serial);
+        if (previousKey is not null && !string.Equals(previousKey, serial, StringComparison.Ordinal))
+        {
+            _screenMirrorDocuments.Remove(previousKey);
+        }
+
+        _screenMirrorDocuments[serial] = active;
+        active.Title = string.Format(LanguageService.Instance.GetString("Tab_ScreenMirrorDevice"), serial);
+    }
+
+    private void FocusDocument(ScreenMirrorViewModel document)
+    {
+        _factory.SetActiveDockable(document);
+        if (_factory.FindRoot(document) is { } root)
+        {
+            _factory.SetFocusedDockable(root, document);
+        }
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
     }
 
     /// <summary>
@@ -165,7 +228,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>按统一文档打开请求打开文档，转调路径+模式重载。</para>
     /// </summary>
     /// <param name="request">The unified open request. <para>统一打开请求。</para></param>
-    internal Task OpenDocumentAsync(Services.Workspace.Documents.DocumentOpenRequest request)
+    internal Task OpenDocumentAsync(DocumentOpenRequest request)
         => OpenDocumentAsync(request.Path ?? string.Empty, request.Mode);
 
     /// <summary>Asynchronously opens the document at the given path: focuses it if the path is already open in the document area; otherwise creates a <see cref="FileViewModel"/>, resolves the syntax language by extension, adds it to the document area and activates it.
@@ -187,7 +250,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             byte[]? header = null;
             try
             {
-                header = FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+                header = FormatDetector.ReadHeader(path, DocumentFormatPolicy.ContentProbeLength);
             }
             catch
             {
@@ -199,13 +262,13 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             {
                 detection = await Task.Run(() => FormatDetector.DetectDetailed(path)).ConfigureAwait(true);
             }
-            mode = Services.Workspace.Documents.DocumentOpenRegistry.ResolveMode(path, header, detection);
+            mode = DocumentOpenRegistry.ResolveMode(path, header, detection);
         }
 
-        var descriptor = Services.Workspace.Documents.DocumentOpenRegistry.ByMode(mode);
+        var descriptor = DocumentOpenRegistry.ByMode(mode);
         if (descriptor?.Open is { } open)
         {
-            await open(this, new Services.Workspace.Documents.DocumentOpenRequest
+            await open(this, new DocumentOpenRequest
             {
                 Path = path,
                 Mode = mode,
@@ -269,7 +332,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
-            Services.Workspace.DocumentNotifications.Publish(document);
+            Services.Ui.Workspace.DocumentNotifications.Publish(document);
         }
     }
 
@@ -487,7 +550,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
-            Services.Workspace.DocumentNotifications.Publish(document);
+            Services.Ui.Workspace.DocumentNotifications.Publish(document);
         }
     }
 
@@ -547,7 +610,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                 $"Failed to open filesystem image '{fullPath}': {ex.Message}");
         }
 
-        Services.Workspace.DocumentNotifications.Publish(document);
+        Services.Ui.Workspace.DocumentNotifications.Publish(document);
     }
 
     /// <summary>Opens a typed document and refreshes its properties after loading only while it remains active.</summary>
@@ -572,7 +635,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         documentDock.ActiveDockable = document;
         await load(document, fullPath);
         if (ReferenceEquals(documentDock.ActiveDockable, document))
-            Services.Workspace.DocumentNotifications.Publish(document);
+            Services.Ui.Workspace.DocumentNotifications.Publish(document);
     }
 
     /// <summary>
@@ -600,7 +663,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        Services.Workspace.DocumentNotifications.Publish(dock.ActiveDockable);
+        Services.Ui.Workspace.DocumentNotifications.Publish(dock.ActiveDockable);
     }
 
     /// <summary>
@@ -627,7 +690,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     /// <param name="dto">The document descriptor. <para>文档描述符。</para></param>
     /// <param name="rootDir">The project root directory. <para>工程根目录（用于拼接绝对路径）。</para></param>
-    public async Task RestoreOpenDocumentAsync(Services.Projects.OpenDocumentDto dto, string rootDir)
+    public async Task RestoreOpenDocumentAsync(UotanStudio.Projects.OpenDocumentDto dto, string rootDir)
     {
         if (dto.Kind == "Compare")
         {
@@ -645,7 +708,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var descriptor = Services.Workspace.Documents.DocumentOpenRegistry.ByKind(dto.Kind);
+        var descriptor = DocumentOpenRegistry.ByKind(dto.Kind);
         if (descriptor?.Open is not { } open)
         {
             return;
@@ -657,7 +720,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
         try
         {
-            await open(this, new Services.Workspace.Documents.DocumentOpenRequest
+            await open(this, new DocumentOpenRequest
             {
                 Path = fullPath,
                 Mode = mode
@@ -670,7 +733,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         }
     }
 
-    internal async Task RestoreDocumentsAsync(IEnumerable<Services.Projects.OpenDocumentDto> documents, string rootDir)
+    internal async Task RestoreDocumentsAsync(IEnumerable<UotanStudio.Projects.OpenDocumentDto> documents, string rootDir)
     {
         var snapshot = documents.ToList();
         foreach (var document in snapshot) await RestoreOpenDocumentAsync(document, rootDir);
@@ -699,8 +762,9 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void Dispose()
     {
+        WeakReferenceMessenger.Default.Unregister<SelectedDeviceChangedMessage>(this);
         ProjectExplorer?.Dispose();
-        if (_factory is WorkspaceDockFactory workspaceFactory) workspaceFactory.DisposeTerminal();
+        if (_factory is IWorkspaceDockFactory workspaceFactory) workspaceFactory.DisposeTerminal();
         if (_documentDock is not null)
         {
             _documentDock.PropertyChanged -= OnDocumentDockPropertyChanged;

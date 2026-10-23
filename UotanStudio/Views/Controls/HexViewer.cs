@@ -179,8 +179,19 @@ public class HexViewer : Grid
         private const int BufferLines = 4;
         private const double FontSize = 13;
         private static readonly Typeface MonospaceTypeface = new("Consolas");
+        private static readonly IBrush DefaultSelectionBrush =
+            new SolidColorBrush(Color.FromArgb(0x66, 0x59, 0xC2, 0xFF));
+        private static readonly string[] AsciiCharText = CreateAsciiCharText();
+        private static readonly string[] AsciiDefaultText = CreateAsciiByteText(System.Text.Encoding.ASCII);
+        private static readonly string[] HexByteText = CreateHexByteText();
 
         private readonly ScrollViewer _scroll;
+        private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.Ordinal);
+        private readonly CellGlyph[] _hexCells = new CellGlyph[256];
+        private readonly CellGlyph[] _hexEditedCells = new CellGlyph[256];
+        private readonly CellGlyph[] _asciiCells = new CellGlyph[256];
+        private readonly CellGlyph[] _headerCells = new CellGlyph[HexMetrics.MaximumBytesPerLine];
+        private string[] _asciiByteText = AsciiDefaultText;
         private byte[]? _data = [];
         private System.Text.Encoding _textEncoding = System.Text.Encoding.ASCII;
 
@@ -232,6 +243,7 @@ public class HexViewer : Grid
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            InvalidateCachedGlyphs();
             LanguageService.ThemeChanged += OnThemeChanged;
         }
 
@@ -248,6 +260,7 @@ public class HexViewer : Grid
 
         private void OnThemeChanged(object? sender, EventArgs e)
         {
+            InvalidateCachedGlyphs();
             InvalidateVisual();
         }
 
@@ -278,6 +291,8 @@ public class HexViewer : Grid
 
             _textEncoding = encoding;
             _encodingLabel = label;
+            _asciiByteText = CreateAsciiByteText(encoding);
+            Array.Clear(_asciiCells);
             InvalidateVisual();
         }
 
@@ -365,14 +380,14 @@ public class HexViewer : Grid
                     new Rect(0, scrollY, layout.ContentWidth, hitTestHeight));
             }
 
-            var foreground = ResolveBrush("HexForeground") ?? Brushes.Black;
-            var offsetBrush = ResolveBrush("HexOffsetForeground") ?? Brushes.Gray;
-            var asciiBrush = ResolveBrush("HexAsciiForeground") ?? Brushes.Gray;
-            var headerBrush = ResolveBrush("HexHeaderForeground") ?? Brushes.Gray;
-            var headerBackground = ResolveBrush("HexHeaderBackground") ?? Brushes.Transparent;
-            var editedBrush = ResolveBrush("HexEditedBrush") ?? Brushes.OrangeRed;
-            var selectionBrush = ResolveBrush("HexSelectionBrush") ?? new SolidColorBrush(Color.FromArgb(0x66, 0x59, 0xC2, 0xFF));
-            var caretBrush = ResolveBrush("HexCaretBrush") ?? Brushes.DeepSkyBlue;
+            var foreground = ResolveCachedBrush("HexForeground", Brushes.Black);
+            var offsetBrush = ResolveCachedBrush("HexOffsetForeground", Brushes.Gray);
+            var asciiBrush = ResolveCachedBrush("HexAsciiForeground", Brushes.Gray);
+            var headerBrush = ResolveCachedBrush("HexHeaderForeground", Brushes.Gray);
+            var headerBackground = ResolveCachedBrush("HexHeaderBackground", Brushes.Transparent);
+            var editedBrush = ResolveCachedBrush("HexEditedBrush", Brushes.OrangeRed);
+            var selectionBrush = ResolveCachedBrush("HexSelectionBrush", DefaultSelectionBrush);
+            var caretBrush = ResolveCachedBrush("HexCaretBrush", Brushes.DeepSkyBlue);
 
             DrawHeader(context, headerBrush, headerBackground, layout, _encodingLabel);
             if (_data is null || _data.Length == 0)
@@ -404,24 +419,23 @@ public class HexViewer : Grid
 
                 for (var b = 0; b < available; b++)
                 {
-                    var x = layout.XFromByteIndex(b, hexZone: true);
+                    var value = _data[start + b];
                     var isEdited = _editedOffsets.Contains(start + b);
-                    DrawCenteredText(
+                    DrawHexCell(
                         context,
-                        HexByteText[_data[start + b]],
-                        x,
+                        value,
+                        isEdited,
+                        isEdited ? editedBrush : foreground,
+                        layout.XFromByteIndex(b, hexZone: true),
                         layout.HexCellWidth,
-                        y,
-                        isEdited ? editedBrush : foreground);
-
-                    var ch = _data[start + b];
-                    DrawCenteredText(
+                        y);
+                    DrawAsciiCell(
                         context,
-                        DecodeByte(ch),
+                        value,
+                        asciiBrush,
                         layout.XFromByteIndex(b, hexZone: false),
                         layout.AsciiCellWidth,
-                        y,
-                        asciiBrush);
+                        y);
                 }
             }
 
@@ -432,8 +446,6 @@ public class HexViewer : Grid
 
             DrawCaret(context, caretBrush, layout);
         }
-
-        private static readonly string[] HexByteText = CreateHexByteText();
 
         private static string[] CreateHexByteText()
         {
@@ -446,7 +458,29 @@ public class HexViewer : Grid
             return text;
         }
 
-        private static void DrawHeader(
+        private static string[] CreateAsciiCharText()
+        {
+            var text = new string[256];
+            for (var value = 0; value < text.Length; value++)
+            {
+                text[value] = string.Create(1, value, static (span, code) => span[0] = (char)code);
+            }
+
+            return text;
+        }
+
+        private static string[] CreateAsciiByteText(System.Text.Encoding encoding)
+        {
+            var text = new string[256];
+            for (var value = 0; value < text.Length; value++)
+            {
+                text[value] = DecodeByte(encoding, (byte)value);
+            }
+
+            return text;
+        }
+
+        private void DrawHeader(
             DrawingContext context,
             IBrush headerBrush,
             IBrush background,
@@ -458,13 +492,18 @@ public class HexViewer : Grid
 
             for (var i = 0; i < layout.BytesPerLine; i++)
             {
-                DrawCenteredText(
+                ref var glyph = ref _headerCells[i];
+                if (glyph.Text is null)
+                {
+                    glyph.SetText(CreateFormattedText(HexByteText[i], headerBrush));
+                }
+
+                DrawMeasuredCell(
                     context,
-                    HexByteText[i],
+                    ref glyph,
                     layout.XFromByteIndex(i, hexZone: true),
                     layout.HexCellWidth,
-                    0,
-                    headerBrush);
+                    0);
             }
 
             DrawCenteredText(context, textColumnLabel, layout.AsciiZoneStart, layout.AsciiWidth, 0, headerBrush);
@@ -531,6 +570,59 @@ public class HexViewer : Grid
             context.FillRectangle(brush, new Rect(x, y + 2, 2, HexMetrics.LineHeight - 4));
         }
 
+        private void DrawHexCell(
+            DrawingContext context,
+            byte value,
+            bool edited,
+            IBrush brush,
+            double cellX,
+            double cellWidth,
+            double y)
+        {
+            ref var glyph = ref (edited ? ref _hexEditedCells[value] : ref _hexCells[value]);
+            if (glyph.Text is null)
+            {
+                glyph.SetText(CreateFormattedText(HexByteText[value], brush));
+            }
+
+            DrawMeasuredCell(context, ref glyph, cellX, cellWidth, y);
+        }
+
+        private void DrawAsciiCell(
+            DrawingContext context,
+            byte value,
+            IBrush brush,
+            double cellX,
+            double cellWidth,
+            double y)
+        {
+            ref var glyph = ref _asciiCells[value];
+            if (glyph.Text is null)
+            {
+                glyph.SetText(CreateFormattedText(_asciiByteText[value], brush));
+            }
+
+            DrawMeasuredCell(context, ref glyph, cellX, cellWidth, y);
+        }
+
+        private static void DrawMeasuredCell(
+            DrawingContext context,
+            ref CellGlyph glyph,
+            double cellX,
+            double cellWidth,
+            double y)
+        {
+            if (glyph.Text is not { } text)
+            {
+                return;
+            }
+
+            context.DrawText(text, new Point(cellX + glyph.GetHorizontalOffset(cellWidth), y + glyph.VerticalOffset));
+        }
+
+        private static FormattedText CreateFormattedText(string text, IBrush brush) =>
+            new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, MonospaceTypeface, FontSize, brush);
+
         private static void DrawCenteredText(
             DrawingContext context,
             string text,
@@ -539,16 +631,67 @@ public class HexViewer : Grid
             double y,
             IBrush brush)
         {
-            var formatted = new FormattedText(
-                text,
-                CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight,
-                MonospaceTypeface,
-                FontSize,
-                brush);
+            var formatted = CreateFormattedText(text, brush);
             var x = cellX + Math.Max(0, (cellWidth - formatted.Width) / 2);
             var textY = y + Math.Max(0, (HexMetrics.LineHeight - formatted.Height) / 2);
             context.DrawText(formatted, new Point(x, textY));
+        }
+
+        /// <summary>
+        /// Cached layout of one fixed cell glyph with its centered offsets for the current cell width.
+        /// <para>单个固定单元字形的排版缓存，含当前单元宽度下的居中偏移。</para>
+        /// </summary>
+        private struct CellGlyph
+        {
+            internal FormattedText? Text;
+            internal double VerticalOffset;
+            private double _horizontalOffset;
+            private double _cellWidth;
+
+            internal void SetText(FormattedText text)
+            {
+                Text = text;
+                VerticalOffset = Math.Max(0, (HexMetrics.LineHeight - text.Height) / 2);
+                _cellWidth = double.NaN;
+                _horizontalOffset = 0;
+            }
+
+            internal double GetHorizontalOffset(double cellWidth)
+            {
+                if (_cellWidth != cellWidth && Text is { } text)
+                {
+                    _cellWidth = cellWidth;
+                    _horizontalOffset = Math.Max(0, (cellWidth - text.Width) / 2);
+                }
+
+                return _horizontalOffset;
+            }
+        }
+
+        private IBrush ResolveCachedBrush(string key, IBrush fallback)
+        {
+            if (_brushCache.TryGetValue(key, out var brush))
+            {
+                return brush;
+            }
+
+            brush = ResolveBrush(key) ?? fallback;
+            _brushCache[key] = brush;
+            return brush;
+        }
+
+        /// <summary>
+        /// Drops the cached brushes and glyph layouts after a theme or encoding change; the monospace typeface and
+        /// the font size are fixed for this control.
+        /// <para>主题或编码变化后丢弃缓存的画刷与字形排版；该控件使用固定的等宽字体与字号。</para>
+        /// </summary>
+        private void InvalidateCachedGlyphs()
+        {
+            _brushCache.Clear();
+            Array.Clear(_hexCells);
+            Array.Clear(_hexEditedCells);
+            Array.Clear(_asciiCells);
+            Array.Clear(_headerCells);
         }
 
         private static IBrush? ResolveBrush(string key)
@@ -906,23 +1049,23 @@ public class HexViewer : Grid
         }
 
         /// <summary>
-        /// Decodes one byte to a text-column character using the current encoding; non-printable or
+        /// Decodes one byte to a text-column character using the given encoding; non-printable or
         /// undecodable bytes render as ".".
-        /// <para>按当前编码把单字节解码为文本列显示字符；不可打印/无法解码时显示 "."。</para>
+        /// <para>按指定编码把单字节解码为文本列显示字符；不可打印/无法解码时显示 "."。</para>
         /// </summary>
-        private string DecodeByte(byte value)
+        private static string DecodeByte(System.Text.Encoding encoding, byte value)
         {
             if (value is >= 0x20 and < 0x7F)
             {
-                return ((char)value).ToString();
+                return AsciiCharText[value];
             }
 
-            if (!_textEncoding.IsSingleByte && _textEncoding != System.Text.Encoding.ASCII)
+            if (!encoding.IsSingleByte && encoding != System.Text.Encoding.ASCII)
             {
                 return ".";
             }
 
-            var decoded = _textEncoding.GetString([value]);
+            var decoded = encoding.GetString([value]);
             return decoded.Length == 1 && decoded[0] is >= ' ' and <= '~' ? decoded : ".";
         }
 

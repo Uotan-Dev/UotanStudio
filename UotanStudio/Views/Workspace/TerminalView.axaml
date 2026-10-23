@@ -14,7 +14,7 @@
                     AutomationProperties.Name="{DynamicResource Terminal_Shell}">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="shell:TerminalProfile">
-                <TextBlock Text="{Binding Name}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding DisplayName}" FontSize="11" TextTrimming="CharacterEllipsis" />
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>

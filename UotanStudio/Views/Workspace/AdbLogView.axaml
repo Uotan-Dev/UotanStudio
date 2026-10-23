@@ -66,8 +66,8 @@
         <ToggleButton Name="PauseLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
                       VerticalAlignment="Center" IsChecked="{Binding IsPaused, Mode=TwoWay}">
           <Grid Width="12" Height="12">
-            <icons:PauseCircleStroke IsVisible="{Binding !IsPaused}" />
-            <icons:PlayCircleStroke IsVisible="{Binding IsPaused}" />
+            <icons:PauseCircleStroke Width="12" Height="12" IsVisible="{Binding !IsPaused}" />
+            <icons:PlayCircleStroke Width="12" Height="12" IsVisible="{Binding IsPaused}" />
           </Grid>
         </ToggleButton>
         <Button Name="ResetLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"

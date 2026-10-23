@@ -60,6 +60,10 @@ internal partial class TerminalViewModel : Tool, IDisposable
     {
         var title = LanguageService.Instance.GetString("Dock_Terminal");
         Title = _number == 1 ? title : $"{title} {_number}";
+        foreach (var profile in Profiles)
+        {
+            profile.RefreshDisplayName();
+        }
         Session?.RefreshStatus();
     }
 

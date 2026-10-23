@@ -21,7 +21,7 @@ internal static class RegisteredFirmwareFormats
     /// <param name="throwIfUnsupported">Whether to throw for an unsupported format.<para>格式不受支持时是否抛出异常。</para></param>
     /// <param name="progress">Optional byte progress reporter.<para>可选的字节进度报告器。</para></param>
     /// <returns>The packing operation result.<para>打包操作结果。</para></returns>
-    internal static async Task<FirmwareOpResult> PackDirectoryAsync(
+    internal static async Task<FirmwareOperationResult> PackDirectoryAsync(
         string format, string source, string output, CancellationToken cancellationToken = default,
         bool throwIfUnsupported = false, IProgress<FileSystemByteProgress>? progress = null)
     {
@@ -30,9 +30,9 @@ internal static class RegisteredFirmwareFormats
         {
             var error = $"No directory packer is registered for {format}.";
             if (throwIfUnsupported) throw new InvalidDataException(error);
-            return FirmwareOpResult.Fail(error);
+            return FirmwareOperationResult.Fail(error);
         }
         var result = await writer.PackAsync(source, output, progress, cancellationToken).ConfigureAwait(false);
-        return FirmwareOpResult.From(result);
+        return FirmwareOperationResult.From(result);
     }
 }

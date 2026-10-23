@@ -8,6 +8,7 @@ using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Workspace.Documents;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
@@ -17,12 +18,12 @@ namespace UotanStudio.Views.Workspace;
 /// <summary>
 /// Workspace view: hosts the dock layout and wires OS file drag-and-drop on the root
 /// UserControl — dropped files are opened one by one through the workspace open chain (Auto mode
-/// routes via <see cref="FileOpenMode.ResolveMode"/> to text/hex/firmware/partition editors);
+/// routes via <see cref="DocumentFormatPolicy.ResolveMode"/> to text/hex/firmware/partition editors);
 /// dropped folders are scanned for known firmware extensions and imported into the project image
 /// list; mixed drags take only the file part. OS drag compatibility follows the compare page's
 /// existing implementation (double-insurance detection).
 /// <para>工作区视图：承载 Dock 布局，并在根 UserControl 接线系统文件拖拽——
-/// 拖入文件逐个经工作区打开链路（Auto 模式按 <see cref="FileOpenMode.ResolveMode"/> 自动路由
+/// 拖入文件逐个经工作区打开链路（Auto 模式按 <see cref="DocumentFormatPolicy.ResolveMode"/> 自动路由
 /// 文本/十六进制/固件/分区等）；拖入目录则枚举其中已知固件扩展名文件导入工程镜像清单；
 /// 混合拖拽只取文件部分。与 OS 拖拽的兼容性参照对比页的既有实现（双保险判定）。</para>
 /// </summary>
@@ -170,7 +171,7 @@ public partial class WorkspaceView : UserControl
     {
         foreach (var file in Directory.EnumerateFiles(directory))
         {
-            if (FileOpenMode.IsFirmwareExtension(Path.GetExtension(file)))
+            if (DocumentFormatPolicy.IsFirmwareExtension(Path.GetExtension(file)))
             {
                 yield return file;
             }

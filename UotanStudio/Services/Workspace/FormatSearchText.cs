@@ -1,10 +1,9 @@
-using System.Buffers.Binary;
 using UotanStudio.Firmware.AndroidMeta.Arsc;
 using UotanStudio.Firmware.AndroidMeta.AXml;
 using UotanStudio.Firmware.AndroidMeta.Dex;
 using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
 using UotanStudio.Firmware.DeviceTree.Dt;
-using UotanStudio.Views.Controls;
+using UotanStudio.Services.Workspace.Documents;
 
 namespace UotanStudio.Services.Workspace;
 
@@ -22,18 +21,6 @@ internal static class FormatSearchText
     /// AXML（8）与 DEX（8）判定复用同一头部。</para>
     /// </summary>
     private const int ArscHeaderLength = 12;
-
-    /// <summary>
-    /// Header length needed for DEX magic detection ("dex\\n" + version + NUL).
-    /// <para>DEX 魔数判定所需的头部长度（"dex\\n" + 版本 + NUL）。</para>
-    /// </summary>
-    private const int DexHeaderLength = 8;
-
-    /// <summary>
-    /// Header length needed for DTB magic detection (big-endian FDT magic).
-    /// <para>DTB 魔数判定所需的头部长度（大端 FDT 魔数）。</para>
-    /// </summary>
-    private const int DtbHeaderLength = 4;
 
     /// <summary>
     /// Identifies and text-ifies a project file by extension/magic; <c>null</c> when unrecognized or
@@ -78,22 +65,22 @@ internal static class FormatSearchText
 
         try
         {
-            if (FileOpenMode.IsDtbExtension(extension) || IsDtbMagic(header))
+            if (DocumentFormatPolicy.IsDtbExtension(extension) || DocumentFormatPolicy.IsDtbMagic(header))
             {
                 return Bound(ReadDtb(path));
             }
 
-            if (FileOpenMode.IsArscExtension(extension) || ArscParser.IsArsc(header))
+            if (DocumentFormatPolicy.IsArscExtension(extension) || ArscParser.IsArsc(header))
             {
                 return Bound(ReadArsc(path, cancellationToken));
             }
 
-            if (FileOpenMode.IsDexExtension(extension) || IsDexMagic(header))
+            if (DocumentFormatPolicy.IsDexExtension(extension) || DocumentFormatPolicy.IsDexMagic(header))
             {
                 return Bound(ReadDex(path, cancellationToken));
             }
 
-            if (FileOpenMode.IsJarExtension(extension))
+            if (DocumentFormatPolicy.IsJarExtension(extension))
             {
                 return Bound(ReadContainer(path, cancellationToken));
             }
@@ -251,28 +238,4 @@ internal static class FormatSearchText
     /// </returns>
     private static bool IsManifestPath(string path) =>
         Path.GetFileName(path).Equals("AndroidManifest.xml", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// DTB magic check (big-endian FDT magic) on the bounded file header.
-    /// <para>有界文件头的 DTB 魔数判定（大端 FDT 魔数）。</para>
-    /// </summary>
-    /// <param name="header">
-    /// The bounded header bytes read from the file.
-    /// <para>从文件读取的有界头部字节。</para>
-    /// </param>
-    /// <returns>
-    /// True when the header starts with the FDT magic.
-    /// <para>头部以 FDT 魔数开头时为真。</para>
-    /// </returns>
-    private static bool IsDtbMagic(byte[] header) =>
-        header.Length >= DtbHeaderLength && BinaryPrimitives.ReadUInt32BigEndian(header) == FdtConstants.FdtMagic;
-
-    private static bool IsDexMagic(byte[] header) =>
-        header.Length >= DexHeaderLength
-        && header[0] == (byte)'d' && header[1] == (byte)'e' && header[2] == (byte)'x'
-        && header[3] == (byte)'\n'
-        && header[4] >= (byte)'0' && header[4] <= (byte)'9'
-        && header[5] >= (byte)'0' && header[5] <= (byte)'9'
-        && header[6] >= (byte)'0' && header[6] <= (byte)'9'
-        && header[7] == 0;
 }

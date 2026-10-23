@@ -1,14 +1,14 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Google.Protobuf;
+using UotanStudio.Compress.Zip;
+using UotanStudio.Delivery;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.OtaDelta.Payload;
-using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Services.Firmware;
@@ -129,7 +129,7 @@ internal static class SourceContainerMetadataService
             stream.ReadExactly(magic);
             stream.Position = 0;
             if (magic[0] != 0x50 || magic[1] != 0x4B) return [];
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            using var archive = ZipContainer.OpenRead(stream, leaveOpen: true);
             var entry = archive.Entries.FirstOrDefault(e => string.Equals(
                 e.FullName.Replace('\\', '/'), "META-INF/com/android/metadata", StringComparison.OrdinalIgnoreCase));
             if (entry is null || entry.Length > 1024 * 1024) return [];

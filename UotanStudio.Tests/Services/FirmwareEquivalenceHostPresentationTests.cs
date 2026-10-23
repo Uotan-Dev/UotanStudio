@@ -4,6 +4,7 @@ using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Services.Firmware;
+using UotanStudio.Services.Ui.Firmware;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -81,7 +82,7 @@ public sealed class FirmwareEquivalenceHostPresentationTests : IDisposable
             "Inode structure: Not evaluated by the library | File content: Not evaluated by the library | " +
             "Capacity: Not evaluated by the library",
             FirmwareEquivalencePresenter.FormatLogLine("system.img",
-                new FirmwareOpResult { Success = true }.Equivalence));
+                new FirmwareOperationResult { Success = true }.Equivalence));
 
     private async Task<string> ExtractEditedExt4Async(string name)
     {

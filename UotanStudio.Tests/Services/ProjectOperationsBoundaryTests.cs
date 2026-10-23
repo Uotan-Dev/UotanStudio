@@ -1,6 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Projects;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui.Projects;
 using UotanStudio.Tests.Projects;
 using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Workspace;

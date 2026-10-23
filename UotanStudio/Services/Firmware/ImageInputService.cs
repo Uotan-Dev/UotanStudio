@@ -1,13 +1,15 @@
 using System.Buffers.Binary;
 using System.Collections.Frozen;
-using System.Text;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BlockImage.Lp;
 using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BootSecurity.BootImage;
 using UotanStudio.Firmware.BootSecurity.BootImage.Formats;
+using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Firmware.OtaDelta.Dat;
+using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Services.Workspace.Documents;
 using FormatDetector = UotanStudio.Firmware.Core.FormatDetector;
 
 namespace UotanStudio.Services.Firmware;
@@ -15,13 +17,13 @@ namespace UotanStudio.Services.Firmware;
 /// <summary>Filesystem layout probed from a raw image header.<para>从 raw 镜像头部探测出的文件系统布局。</para></summary>
 internal enum RawImageLayout
 {
-    /// <summary>ext4 filesystem image, magic 0xEF53 at offset 1080.<para>ext4 文件系统镜像，魔数 0xEF53 位于偏移 1080。</para></summary>
+    /// <summary>ext4 filesystem image.<para>ext4 文件系统镜像。</para></summary>
     Ext4,
 
-    /// <summary>EROFS filesystem image, magic 0xE0F5E1E2 at offset 1024.<para>EROFS 文件系统镜像，魔数 0xE0F5E1E2 位于偏移 1024。</para></summary>
+    /// <summary>EROFS filesystem image.<para>EROFS 文件系统镜像。</para></summary>
     Erofs,
 
-    /// <summary>F2FS filesystem image, magic 0xF2F52010 at offset 1024.<para>F2FS 文件系统镜像，魔数 0xF2F52010 位于偏移 1024。</para></summary>
+    /// <summary>F2FS filesystem image.<para>F2FS 文件系统镜像。</para></summary>
     F2fs,
 }
 
@@ -227,14 +229,12 @@ internal sealed class ImageInputService
                 return ImageFormatKind.Ext4;
             }
 
-            if (header.Length >= 1028
-                && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == ErofsMagic)
+            if (DocumentFormatPolicy.IsErofsMagic(header))
             {
                 return ImageFormatKind.Erofs;
             }
 
-            if (header.Length >= 1028
-                && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == F2fsMagic)
+            if (DocumentFormatPolicy.IsF2fsMagic(header))
             {
                 return ImageFormatKind.F2fs;
             }
@@ -443,14 +443,12 @@ internal sealed class ImageInputService
             return RawImageLayout.Ext4;
         }
 
-        if (header.Length >= 1028
-            && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == ErofsMagic)
+        if (DocumentFormatPolicy.IsErofsMagic(header))
         {
             return RawImageLayout.Erofs;
         }
 
-        if (header.Length >= 1028
-            && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == F2fsMagic)
+        if (DocumentFormatPolicy.IsF2fsMagic(header))
         {
             return RawImageLayout.F2fs;
         }
@@ -508,37 +506,24 @@ internal sealed class ImageInputService
     /// <returns><see langword="true"/> when a volume boot record matches. <para>命中卷引导记录时为 <see langword="true"/>。</para></returns>
     private static bool IsFilesystemBootRecord(ReadOnlySpan<byte> header) =>
         IsExt4Superblock(header)
-        || header.Length >= 1028
-        && (BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(1024, 4)) == ErofsMagic
-            || BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(1024, 4)) == F2fsMagic)
+        || DocumentFormatPolicy.IsErofsMagic(header)
+        || DocumentFormatPolicy.IsF2fsMagic(header)
         || MatchFatFamilyFormat(header) is not null;
 
     /// <summary>
-    /// Matches a FAT12/FAT16/FAT32 or exFAT volume boot record by the 0x55AA signature and the
-    /// filesystem name bytes.
-    /// <para>按 0x55AA 签名与文件系统名字节匹配 FAT12/FAT16/FAT32 或 exFAT 卷引导记录。</para>
+    /// Matches a FAT12/FAT16/FAT32 or exFAT volume boot record through the document format policy.
+    /// <para>经文档格式策略匹配 FAT12/FAT16/FAT32 或 exFAT 卷引导记录。</para>
     /// </summary>
     /// <param name="header">Header bytes already read from the image. <para>已从镜像读取的头部字节。</para></param>
     /// <returns>The matched family, or null when the record does not match. <para>命中的系列，未匹配时为 null。</para></returns>
     private static ImageFormatKind? MatchFatFamilyFormat(ReadOnlySpan<byte> header)
     {
-        if (header.Length < 512 || header[510] != 0x55 || header[511] != 0xAA)
-        {
-            return null;
-        }
-
-        var oem12 = Encoding.ASCII.GetString(header.Slice(54, 8)).Trim();
-        if (oem12 is "FAT12" or "FAT16")
+        if (DocumentFormatPolicy.IsFatMagic(header))
         {
             return ImageFormatKind.Fat;
         }
 
-        if (header.Length >= 90 && Encoding.ASCII.GetString(header.Slice(82, 8)).Trim() == "FAT32")
-        {
-            return ImageFormatKind.Fat;
-        }
-
-        return header.Length >= 11 && header.Slice(3, 8).SequenceEqual("EXFAT   "u8) ? ImageFormatKind.ExFat : null;
+        return DocumentFormatPolicy.IsExFatMagic(header) ? ImageFormatKind.ExFat : null;
     }
 
     /// <summary>
@@ -548,13 +533,11 @@ internal sealed class ImageInputService
     /// </summary>
     /// <param name="header">Header bytes already read from the image. <para>已从镜像读取的头部字节。</para></param>
     /// <returns><see langword="true"/> when the first four bytes are the ELF magic. <para>头四字节为 ELF 魔数时为 <see langword="true"/>。</para></returns>
-    private static bool IsElfExecutable(ReadOnlySpan<byte> header) =>
-        header.Length >= 4 && header[0] == 0x7F && header[1] == (byte)'E'
-        && header[2] == (byte)'L' && header[3] == (byte)'F';
+    private static bool IsElfExecutable(ReadOnlySpan<byte> header) => FileMagic.IsElf(header);
 
     /// <summary>
-    /// Determines whether the header carries the Android sparse image magic, little-endian 0xED26FF3A.
-    /// <para>判定头部是否为 Android sparse 镜像魔数（小端 0xED26FF3A）。</para>
+    /// Determines whether the header carries the Android sparse image magic.
+    /// <para>判定头部是否为 Android sparse 镜像魔数。</para>
     /// </summary>
     /// <param name="header">Header bytes already read from the image. <para>已从镜像读取的头部字节。</para></param>
     /// <returns><see langword="true"/> when the sparse magic is present. <para>存在 sparse 魔数时为 <see langword="true"/>。</para></returns>
@@ -568,25 +551,31 @@ internal sealed class ImageInputService
     /// <param name="header">Header bytes already read from the image. <para>已从镜像读取的头部字节。</para></param>
     /// <returns><see langword="true"/> when the payload magic is present. <para>存在 payload 魔数时为 <see langword="true"/>。</para></returns>
     private static bool IsPayloadHeader(ReadOnlySpan<byte> header) =>
-        header.Length >= 4 && header.Slice(0, 4).SequenceEqual("CrAU"u8);
+        PayloadTool.IsPayload(header.ToArray());
 
-    /// <summary>EROFS superblock magic at offset 1024.<para>EROFS 超级块魔数，位于偏移 1024。</para></summary>
-    private const uint ErofsMagic = 0xE0F5E1E2;
+    /// <summary>Offset of the ext4 superblock inside the image.<para>ext4 超级块在镜像内的偏移。</para></summary>
+    private const int Ext4SuperblockOffset = 1024;
 
-    /// <summary>F2FS superblock magic at offset 1024.<para>F2FS 超级块魔数，位于偏移 1024。</para></summary>
-    private const uint F2fsMagic = 0xF2F52010;
+    /// <summary>Offset of the ext4 inode count.<para>ext4 inode 计数的偏移。</para></summary>
+    private const int Ext4InodeCountOffset = Ext4SuperblockOffset;
+
+    /// <summary>Offset of the ext4 block count.<para>ext4 块计数的偏移。</para></summary>
+    private const int Ext4BlockCountOffset = Ext4SuperblockOffset + 4;
+
+    /// <summary>Offset of the ext4 log block size.<para>ext4 对数块大小的偏移。</para></summary>
+    private const int Ext4LogBlockSizeOffset = Ext4SuperblockOffset + 24;
 
     /// <summary>
-    /// Validates an ext4 superblock structurally, requiring the 0xEF53 magic together with nonzero inode
-    /// and block counts and a block size within 64 KiB.
-    /// <para>对 ext4 超级块做结构校验：除魔数 0xEF53 外还要求 inode 数与块数非零，且推导块大小不超过 64 KiB。</para>
+    /// Validates an ext4 superblock structurally: the ext4 format handler owns the magic, while this check
+    /// keeps the nonzero inode/block counts and the 64 KiB block-size ceiling required by image probing.
+    /// <para>对 ext4 超级块做结构校验：魔数由 ext4 格式处理器判定，本检查保留镜像探测所需的非零
+    /// inode/块计数与 64 KiB 块大小上限。</para>
     /// </summary>
     /// <param name="header">Header bytes already read from the image. <para>已从镜像读取的头部字节。</para></param>
     /// <returns><see langword="true"/> when every superblock field check passes. <para>全部超级块字段校验通过时为 <see langword="true"/>。</para></returns>
     private static bool IsExt4Superblock(ReadOnlySpan<byte> header) =>
-        header.Length >= 1082
-        && BinaryPrimitives.ReadUInt16LittleEndian(header.Slice(1080, 2)) == 0xEF53
-        && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(1024, 4)) != 0
-        && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(1028, 4)) != 0
-        && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(1048, 4)) <= 6;
+        DocumentFormatPolicy.IsExt4Magic(header)
+        && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(Ext4InodeCountOffset, 4)) != 0
+        && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(Ext4BlockCountOffset, 4)) != 0
+        && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(Ext4LogBlockSizeOffset, 4)) <= 6;
 }

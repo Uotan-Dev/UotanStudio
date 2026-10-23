@@ -9,8 +9,8 @@ using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
 using UotanStudio.Firmware.FileSystem.F2fs;
-using UotanStudio.Services.Firmware;
-using UotanStudio.Services.Projects;
+using UotanStudio.Projects;
+using UotanStudio.Services.Ui.Firmware;
 using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.ViewModels.Workspace;
 using Xunit;
@@ -243,10 +243,9 @@ public sealed class PackingOptionPropagationTests
         File.WriteAllText(Path.Combine(source, "payload.txt"), new string('a', 96 * 1024));
         new ErofsBuilder().Build(source, image, new ErofsOptions
         {
-            LegacyCompatibility = false,
             CancellationToken = TestContext.Current.CancellationToken
         });
-        Assert.Equal(0x3U, ReadErofsIncompat(image));
+        Assert.Equal(0x1U, ReadErofsIncompat(image));
         Assert.True((await new ErofsFormatHandler().UnpackAsync(image, extracted,
             cancellationToken: TestContext.Current.CancellationToken)).Success);
         var settings = new ProjectSettingViewModel();
@@ -266,7 +265,7 @@ public sealed class PackingOptionPropagationTests
         var inheritedPath = Path.Combine(temp.Path, "inherited.img");
         var inherited = PackingService.BuildImage(extracted, inheritedPath, inheritedSettings);
         Assert.True(inherited.Success, inherited.Summary);
-        Assert.Equal(0x3U, ReadErofsIncompat(inheritedPath));
+        Assert.Equal(0x1U, ReadErofsIncompat(inheritedPath));
     }
 
     [Fact]
@@ -281,7 +280,6 @@ public sealed class PackingOptionPropagationTests
         File.WriteAllText(Path.Combine(source, "payload.txt"), new string('c', 48 * 1024));
         new ErofsBuilder().Build(source, image, new ErofsOptions
         {
-            LegacyCompatibility = false,
             CancellationToken = TestContext.Current.CancellationToken
         });
         Assert.True((await new ErofsFormatHandler().UnpackAsync(image, extracted,
@@ -302,13 +300,12 @@ public sealed class PackingOptionPropagationTests
 
         using var inheritedParser = new ErofsParser(inheritedPath);
         var inheritedOptions = inheritedParser.ReadRebuildOptions();
-        Assert.False(inheritedOptions.LegacyCompatibility);
         Assert.Equal(ErofsTriStateFeature.Disabled, inheritedOptions.DotOmitted);
-        Assert.Equal(0x3U, ReadErofsIncompat(inheritedPath));
+        Assert.Equal(0x1U, ReadErofsIncompat(inheritedPath));
     }
 
     [Fact]
-    public async Task Pack_PreservedLegacyErofsWithDotOmittedEnabledKey_FailsAndKeepsExistingOutput()
+    public async Task Pack_PreservedErofsWithDotOmittedEnabledKey_Succeeds()
     {
         FirmwareFormatRegistry.RegisterAll();
         using var temp = new TempDirectory();
@@ -319,23 +316,23 @@ public sealed class PackingOptionPropagationTests
         File.WriteAllText(Path.Combine(source, "payload.txt"), new string('d', 48 * 1024));
         new ErofsBuilder().Build(source, image, new ErofsOptions
         {
-            LegacyCompatibility = true,
+            NlinkOneAdviseSupported = true,
             CancellationToken = TestContext.Current.CancellationToken
         });
         Assert.True((await new ErofsFormatHandler().UnpackAsync(image, extracted,
             cancellationToken: TestContext.Current.CancellationToken)).Success);
-        var existing = "existing"u8.ToArray();
-        var output = temp.WriteBytes("out.img", existing);
+        var output = Path.Combine(temp.Path, "out.img");
 
         using (RepackMetadata.UsePackingOverrides(new Dictionary<string, string> { ["ErofsDotOmitted"] = "Enabled" }))
         {
             var result = await new ErofsFormatHandler().PackAsync(extracted, output,
                 TestContext.Current.CancellationToken);
-            Assert.False(result.Success);
-            Assert.Contains("dot-omitted", result.Summary, StringComparison.Ordinal);
+            Assert.True(result.Success, result.Summary);
         }
 
-        Assert.Equal(existing, File.ReadAllBytes(output));
+        using var outputParser = new ErofsParser(output);
+        Assert.Equal(ErofsTriStateFeature.Enabled, outputParser.ReadRebuildOptions().DotOmitted);
+        Assert.Equal(0x1U, ReadErofsIncompat(output));
     }
 
     [Fact]
@@ -350,7 +347,6 @@ public sealed class PackingOptionPropagationTests
         File.WriteAllText(Path.Combine(source, "payload.txt"), new string('b', 64 * 1024));
         new ErofsBuilder().Build(source, image, new ErofsOptions
         {
-            LegacyCompatibility = false,
             CancellationToken = TestContext.Current.CancellationToken
         });
         Assert.True((await new ErofsFormatHandler().UnpackAsync(image, extracted,

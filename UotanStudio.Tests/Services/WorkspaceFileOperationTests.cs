@@ -51,7 +51,7 @@ public class WorkspaceFileOperationTests
         var result = await ExtractionDirectory.ReplaceAsync(target, () =>
         {
             File.WriteAllText(Path.Combine(target, "new"), "new");
-            return Task.FromResult(new FirmwareOpResult { Success = true });
+            return Task.FromResult(new FirmwareOperationResult { Success = true });
         });
         Assert.True(result.Success);
         Assert.False(File.Exists(Path.Combine(target, "old")));
@@ -131,12 +131,12 @@ public class WorkspaceFileOperationTests
         var target = Path.Combine(temp.Path, "boot");
         Directory.CreateDirectory(target);
         File.WriteAllText(Path.Combine(target, "original"), "keep");
-        async Task<FirmwareOpResult> Extract()
+        async Task<FirmwareOperationResult> Extract()
         {
             await Task.CompletedTask;
             File.WriteAllText(Path.Combine(target, "partial"), "incomplete");
             if (throws) throw new IOException("Truncated input");
-            return FirmwareOpResult.Fail("Invalid input");
+            return FirmwareOperationResult.Fail("Invalid input");
         }
         if (throws) await Assert.ThrowsAsync<IOException>(() => ExtractionDirectory.ReplaceAsync(target, Extract));
         else Assert.False((await ExtractionDirectory.ReplaceAsync(target, Extract)).Success);

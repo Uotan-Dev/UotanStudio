@@ -5,7 +5,10 @@ using AvaloniaEdit.Document;
 using Dock.Model.Core;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui;
+using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.Services.Workspace;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
 

@@ -5,8 +5,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using UotanStudio.Compress;
 using UotanStudio.Firmware.Application.Containers;
-using UotanStudio.Firmware.Infrastructure.Downloads;
 using UotanStudio.Firmware.OtaDelta.Payload;
+using UotanStudio.Net.Http;
 
 namespace UotanStudio.Services.Firmware;
 

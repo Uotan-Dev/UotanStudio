@@ -1,11 +1,15 @@
 using Avalonia.Controls;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
+using UotanStudio.Services.Ui.Workspace;
+using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.Services.Workspace;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Shell;
@@ -14,11 +18,13 @@ using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Workspace;
 
-public class WorkspaceDockFactory : Factory
+public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory
 {
     private readonly AiSettingsViewModel _aiSettings;
     private ProjectExplorerViewModel? _projectExplorer;
     internal ProjectExplorerViewModel? ProjectExplorer => _projectExplorer;
+
+    object? IWorkspaceDockFactory.ProjectExplorer => _projectExplorer;
     private PropertiesViewModel? _properties;
     private TerminalDockService? _terminals;
     private readonly HashSet<IDockable> _closingDocuments = [];
@@ -29,17 +35,13 @@ public class WorkspaceDockFactory : Factory
 
     public override IRootDock CreateLayout()
     {
-        var svc = LanguageService.Instance;
-
         var projectSetting = ProjectSettingViewModel.EnsureInstance();
         projectSetting.Id = "ProjectSetting";
-        projectSetting.Title = LanguageService.Instance.GetString("Dock_ProjectSetting");
         projectSetting.CanClose = true;
 
         var pluginTool = new PluginToolViewModel
         {
             Id = WorkspacePanelService.PluginTool,
-            Title = LanguageService.Instance.GetString("Dock_Plugins"),
             CanClose = true
         };
 
@@ -47,13 +49,11 @@ public class WorkspaceDockFactory : Factory
         var projectExplorer = _projectExplorer = new ProjectExplorerViewModel
         {
             Id = "ProjectExplorer",
-            Title = LanguageService.Instance.GetString("Dock_ProjectExplorer"),
             CanClose = true
         };
 
         var imagesView = ImageViewModel.EnsureInstance();
         imagesView.Id = "ImagesView";
-        imagesView.Title = LanguageService.Instance.GetString("Dock_ImagesView");
         imagesView.CanClose = true;
 
         var aiAssistant = AppFeatures.AiAssistantEnabled ? new AiAssistantViewModel(_aiSettings) : null;
@@ -61,54 +61,26 @@ public class WorkspaceDockFactory : Factory
         var properties = _properties = new PropertiesViewModel
         {
             Id = "Properties",
-            Title = LanguageService.Instance.GetString("Dock_Properties"),
             CanClose = true
         };
         var output = new WorkspaceLogViewModel
         {
             Id = "Output",
-            Title = svc.GetString("Dock_Output"),
             CanClose = true
         };
         var adbLog = new AdbLogViewModel
         {
             Id = "AdbLog",
-            Title = svc.GetString("Dock_AdbLog"),
             CanClose = true
         };
         var documentDock = new DocumentDock
         {
             Id = "DocumentsPane",
-            Title = LanguageService.Instance.GetString("Dock_Documents"),
             IsCollapsable = false,
             Proportion = double.NaN,
             ActiveDockable = null,
             VisibleDockables = CreateList<IDockable>(),
-            EmptyContent = new StackPanel
-            {
-                Orientation = Avalonia.Layout.Orientation.Vertical,
-                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                Spacing = 8,
-                Children =
-                {
-                    new AppIcon { Kind = AppIconKind.File, Width = 48, Height = 48, Opacity = 0.4 },
-                    new TextBlock
-                    {
-                        Text = svc.GetString("Dock_NoDocumentOpen"),
-                        FontSize = 16,
-                        Opacity = 0.6,
-                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center
-                    },
-                    new TextBlock
-                    {
-                        Text = svc.GetString("Dock_NoDocumentOpenHint"),
-                        FontSize = 12,
-                        Opacity = 0.4,
-                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center
-                    }
-                }
-            }
+            EmptyContent = CreateEmptyDocumentContent()
         };
 
         var rightToolsTop = new ToolDock
@@ -200,11 +172,46 @@ public class WorkspaceDockFactory : Factory
         panels.Register(WorkspacePanelService.Properties, properties, rightTools, visible: true);
         panels.Register(WorkspacePanelService.WorkspaceLog, output, bottomTools, visible: true);
         panels.Register(WorkspacePanelService.AdbLog, adbLog, bottomTools, visible: true);
+        panels.RegisterLocalizedTitle(documentDock, "Dock_Documents");
         panels.RegisterTerminals(_terminals = new TerminalDockService(this, bottomTools));
         _terminals.CreateTerminal(activate: false);
         adbLog.Initialize();
 
         return rootDock;
+    }
+
+    /// <summary>
+    /// Builds the document pane placeholder shown while no document is open; the text lines bind
+    /// their captions through <c>DynamicResource</c> so an application language switch refreshes
+    /// them in place instead of keeping the text captured when the layout was created.
+    /// <para>构建未打开文档时显示的文档区占位内容；文本行通过 <c>DynamicResource</c> 绑定标题，
+    /// 使应用语言切换时就地刷新，而不是保留布局创建时捕获的文本。</para>
+    /// </summary>
+    private static Control CreateEmptyDocumentContent()
+    {
+        var content = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Vertical,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            Spacing = 8
+        };
+        content.Children.Add(new AppIcon { Kind = AppIconKind.File, Width = 48, Height = 48, Opacity = 0.4 });
+        content.Children.Add(CreateLocalizedText("Dock_NoDocumentOpen", 16, 0.6));
+        content.Children.Add(CreateLocalizedText("Dock_NoDocumentOpenHint", 12, 0.4));
+        return content;
+    }
+
+    private static TextBlock CreateLocalizedText(string localeKey, double fontSize, double opacity)
+    {
+        var text = new TextBlock
+        {
+            FontSize = fontSize,
+            Opacity = opacity,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center
+        };
+        text.Bind(TextBlock.TextProperty, new DynamicResourceExtension(localeKey));
+        return text;
     }
 
     /// <summary>
@@ -338,7 +345,7 @@ public class WorkspaceDockFactory : Factory
             _terminals?.Remove(terminal);
         }
 
-        Services.Workspace.Documents.DocumentOpenRegistry
+        DocumentOpenRegistry
             .ByInstance(dockable)?.Cleanup?.Invoke(dockable);
     }
 }

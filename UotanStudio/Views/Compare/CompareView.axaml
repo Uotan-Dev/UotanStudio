@@ -329,7 +329,9 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.Small avalonia|TDesignIconBase">
+    <!-- 图标控件是 TDesignIconBase 的派生类型，必须用 :is() 匹配基类；裸类型只匹配具体类型。 -->
+    <!-- Icon controls derive from TDesignIconBase, so :is() is required; a bare type matches the exact type only. -->
+    <Style Selector="Button.Small :is(avalonia|TDesignIconBase)">
       <Setter Property="Width" Value="12" />
       <Setter Property="Height" Value="12" />
     </Style>
@@ -348,7 +350,7 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.tree-expander avalonia|TDesignIconBase">
+    <Style Selector="Button.tree-expander :is(avalonia|TDesignIconBase)">
       <Setter Property="Width" Value="12" />
       <Setter Property="Height" Value="12" />
       <Setter Property="Opacity" Value="0.7" />

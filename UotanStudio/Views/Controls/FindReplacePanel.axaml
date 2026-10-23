@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:icons="https://irihi.tech/iconica/tdesign"
+             xmlns:vms="using:UotanStudio.ViewModels"
              x:Class="UotanStudio.Views.Controls.FindReplacePanel"
              AutomationProperties.Name="{DynamicResource FindReplace_Title}">
   <UserControl.Styles>
@@ -20,7 +21,9 @@
       <Setter Property="Background" Value="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource AccentColor}" />
     </Style>
-    <Style Selector="Button.find-tool icons|TDesignIconBase, ToggleButton.find-tool icons|TDesignIconBase">
+    <!-- 图标控件是 TDesignIconBase 的派生类型，必须用 :is() 匹配基类；裸类型只匹配具体类型。 -->
+    <!-- Icon controls derive from TDesignIconBase, so :is() is required; a bare type matches the exact type only. -->
+    <Style Selector="Button.find-tool :is(icons|TDesignIconBase), ToggleButton.find-tool :is(icons|TDesignIconBase)">
       <Setter Property="Width" Value="16" />
       <Setter Property="Height" Value="16" />
     </Style>
@@ -112,12 +115,13 @@
         </StackPanel>
         <ComboBox Name="ScopeBox" Grid.Column="1" Margin="4,0,0,0" HorizontalAlignment="Stretch"
                   Height="22" MinHeight="0" FontSize="12" Padding="6,0"
-                  VerticalContentAlignment="Center" SelectedIndex="0"
+                  VerticalContentAlignment="Center"
                   ToolTip.Tip="{DynamicResource FindReplace_Scope}" AutomationProperties.Name="{DynamicResource FindReplace_Scope}">
-          <ComboBoxItem Content="{DynamicResource FindReplace_CurrentDocument}" />
-          <ComboBoxItem Content="{DynamicResource FindReplace_Selection}" />
-          <ComboBoxItem Content="{DynamicResource FindReplace_OpenDocuments}" />
-          <ComboBoxItem Content="{DynamicResource FindReplace_Project}" />
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vms:LocalizedOption">
+              <TextBlock Text="{Binding DisplayName}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
         </ComboBox>
       </Grid>
       <TextBlock Name="ResultStatus" Grid.Row="3" Grid.ColumnSpan="2" FontSize="11"

@@ -31,7 +31,7 @@ namespace UotanStudio.Services.Firmware;
 /// Firmware operation result, carrying success flag and output summary.
 /// <para>固件操作结果，承载成功标志与输出摘要。</para>
 /// </summary>
-public sealed class FirmwareOpResult
+public sealed class FirmwareOperationResult
 {
     /// <summary>
     /// Gets whether the operation succeeded.
@@ -75,7 +75,7 @@ public sealed class FirmwareOpResult
     /// </summary>
     /// <param name="summary">Failure summary. <para>失败摘要。</para></param>
     /// <returns>A failed result carrying that summary. <para>携带该摘要的失败结果。</para></returns>
-    public static FirmwareOpResult Fail(string summary) => new() { Success = false, Summary = summary };
+    public static FirmwareOperationResult Fail(string summary) => new() { Success = false, Summary = summary };
 
     /// <summary>
     /// Converts a library operation result into this result type so metadata survives the mapping.
@@ -84,7 +84,7 @@ public sealed class FirmwareOpResult
     /// <param name="result">Library result to mirror. <para>待映射的库结果。</para></param>
     /// <returns>The converted result carrying the same success flag, summary, entries and metadata.
     /// <para>携带相同成功标志、摘要、明细行与元数据的转换结果。</para></returns>
-    public static FirmwareOpResult From(UotanStudio.Firmware.Core.FirmwareOpResult result)
+    public static FirmwareOperationResult From(UotanStudio.Firmware.Core.FirmwareOpResult result)
         => new()
         {
             Success = result.Success,
@@ -139,8 +139,8 @@ public sealed class FirmwareService
         => RepackMetadata.HasContext ? RepackMetadataContext.Unspecified.Capture()
             : Projects.ProjectContextService.Instance.CaptureMetadataContext(path);
 
-    private static async Task<FirmwareOpResult> CompleteUnpackAsync(string sourcePath, string outputDirectory,
-        Func<Task<FirmwareOpResult>> unpack, CancellationToken cancellationToken, IReadonlyFormatHandler? expectedHandler = null,
+    private static async Task<FirmwareOperationResult> CompleteUnpackAsync(string sourcePath, string outputDirectory,
+        Func<Task<FirmwareOperationResult>> unpack, CancellationToken cancellationToken, IReadonlyFormatHandler? expectedHandler = null,
         bool overwrite = true, RepackMetadataContext context = default)
     {
         context = context.IsUnspecified ? CaptureOperationContext(outputDirectory) : context.Capture();
@@ -162,7 +162,7 @@ public sealed class FirmwareService
             return result;
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception ex) { return FirmwareOpResult.Fail(ex.Message); }
+        catch (Exception ex) { return FirmwareOperationResult.Fail(ex.Message); }
     }
 
     /// <summary>
@@ -171,7 +171,7 @@ public sealed class FirmwareService
     /// </summary>
     /// <param name="archivePath">The archive file path. <para>归档文件路径。</para></param>
     /// <returns>Operation result whose entries are the archive member names. <para>操作结果，Entries 为归档成员名。</para></returns>
-    public async Task<FirmwareOpResult> ListCpioEntriesAsync(string archivePath)
+    public async Task<FirmwareOperationResult> ListCpioEntriesAsync(string archivePath)
     {
         try
         {
@@ -179,11 +179,11 @@ public sealed class FirmwareService
             var archive = new CpioArchive();
             var entries = archive.ListEntries(fs);
             var names = entries.Select(e => e.Name).Where(n => n.Length > 0).ToList();
-            return new FirmwareOpResult { Success = true, Summary = $"{names.Count} entries", Entries = names };
+            return new FirmwareOperationResult { Success = true, Summary = $"{names.Count} entries", Entries = names };
         }
         catch (Exception ex)
         {
-            return new FirmwareOpResult { Success = false, Summary = ex.Message };
+            return new FirmwareOperationResult { Success = false, Summary = ex.Message };
         }
     }
 
@@ -196,7 +196,7 @@ public sealed class FirmwareService
     /// <param name="overwrite">Whether to replace a nonempty output directory. <para>是否替换非空输出目录。</para></param>
     /// <param name="cancellationToken">Cancels extraction before metadata publication. <para>在元数据发布前取消提取。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> UnpackCpioAsync(string archivePath, string outputDirectory,
+    public async Task<FirmwareOperationResult> UnpackCpioAsync(string archivePath, string outputDirectory,
         bool overwrite = true, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -212,11 +212,11 @@ public sealed class FirmwareService
             var metadataPath = Path.Combine(metadataDirectory, RepackMetadata.FileName);
             if (File.Exists(metadataPath) && (!overwrite || !RepackMetadata.IsMetadataFile(metadataPath)))
             {
-                return FirmwareOpResult.Fail($"Repack metadata output already exists: {metadataPath}");
+                return FirmwareOperationResult.Fail($"Repack metadata output already exists: {metadataPath}");
             }
             if (!overwrite && Directory.Exists(target) && Directory.EnumerateFileSystemEntries(target).Any())
             {
-                return FirmwareOpResult.Fail($"Extraction output already exists: {target}");
+                return FirmwareOperationResult.Fail($"Extraction output already exists: {target}");
             }
             var extracted = await UnpackCpioCoreAsync(archivePath, staging, true, cancellationToken).ConfigureAwait(false);
             if (!extracted.Success)
@@ -230,7 +230,7 @@ public sealed class FirmwareService
                     cancellationToken.ThrowIfCancellationRequested();
                     Directory.Delete(target);
                     Directory.Move(staging, target);
-                    return Task.FromResult(new FirmwareOpResult
+                    return Task.FromResult(new FirmwareOperationResult
                     {
                         Success = true,
                         Summary = $"Extracted archive to {target}",
@@ -244,7 +244,7 @@ public sealed class FirmwareService
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOperationResult.Fail(ex.Message);
         }
         finally
         {
@@ -255,7 +255,7 @@ public sealed class FirmwareService
         }
     }
 
-    private async Task<FirmwareOpResult> UnpackCpioCoreAsync(string archivePath, string outputDirectory,
+    private async Task<FirmwareOperationResult> UnpackCpioCoreAsync(string archivePath, string outputDirectory,
         bool overwrite, CancellationToken cancellationToken)
     {
         using var scope = RepackMetadata.UseContext(RepackMetadataContext.LocalDirectory);
@@ -265,7 +265,7 @@ public sealed class FirmwareService
         {
             File.Delete(Path.Combine(outputDirectory, RepackMetadata.FileName));
         }
-        return FirmwareOpResult.From(result);
+        return FirmwareOperationResult.From(result);
     }
 
     /// <summary>
@@ -276,12 +276,12 @@ public sealed class FirmwareService
     /// <param name="outputArchivePath">The output archive path. <para>输出归档路径。</para></param>
     /// <param name="cancellationToken">Cancels enumeration, payload copying and validation before publication. <para>在发布前取消枚举、数据复制与校验。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> PackCpioAsync(string inputDirectory, string outputArchivePath, CancellationToken cancellationToken = default)
+    public async Task<FirmwareOperationResult> PackCpioAsync(string inputDirectory, string outputArchivePath, CancellationToken cancellationToken = default)
     {
         using var scope = RepackMetadata.UseContext(CaptureOperationContext(inputDirectory));
         var result = await new CpioFormatHandler().PackAsync(inputDirectory, outputArchivePath, cancellationToken)
             .ConfigureAwait(false);
-        return FirmwareOpResult.From(result);
+        return FirmwareOperationResult.From(result);
     }
 
     /// <summary>
@@ -293,13 +293,13 @@ public sealed class FirmwareService
     /// <param name="partitionName">Target partition name; empty means all partitions. <para>目标分区名；为空表示全部分区。</para></param>
     /// <param name="cancellationToken">Cancels metadata reads, extraction and metadata publication. <para>取消元数据读取、提取与元数据发布。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public Task<FirmwareOpResult> ExtractPayloadAsync(string payloadPath, string outputDirectory,
+    public Task<FirmwareOperationResult> ExtractPayloadAsync(string payloadPath, string outputDirectory,
         string? partitionName = null, CancellationToken cancellationToken = default)
         => CompleteUnpackAsync(payloadPath, outputDirectory,
             () => ExtractPayloadCoreAsync(payloadPath, outputDirectory, partitionName, cancellationToken),
             cancellationToken, new PayloadFormatHandler(), context: CaptureOperationContext(outputDirectory));
 
-    private async Task<FirmwareOpResult> ExtractPayloadCoreAsync(string payloadPath, string outputDirectory,
+    private async Task<FirmwareOperationResult> ExtractPayloadCoreAsync(string payloadPath, string outputDirectory,
         string? partitionName, CancellationToken cancellationToken)
     {
         try
@@ -321,7 +321,7 @@ public sealed class FirmwareService
             {
                 throw new InvalidDataException("Payload extraction did not produce every requested partition image.");
             }
-            return new FirmwareOpResult { Success = true, Summary = $"Extracted {targets.Length} partitions", Entries = [.. targets] };
+            return new FirmwareOperationResult { Success = true, Summary = $"Extracted {targets.Length} partitions", Entries = [.. targets] };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -329,7 +329,7 @@ public sealed class FirmwareService
         }
         catch (Exception ex)
         {
-            return new FirmwareOpResult { Success = false, Summary = ex.Message };
+            return new FirmwareOperationResult { Success = false, Summary = ex.Message };
         }
     }
 
@@ -342,7 +342,7 @@ public sealed class FirmwareService
     /// <para>可选的受信任公钥文件（AVB、PEM 或 DER 形式），省略时使用内嵌公钥。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result whose summary reports signature validity and descriptors. <para>操作结果，摘要报告签名有效性与描述符。</para></returns>
-    public async Task<FirmwareOpResult> VerifyAvbAsync(string vbmetaPath, string? publicKeyPath = null, CancellationToken cancellationToken = default)
+    public async Task<FirmwareOperationResult> VerifyAvbAsync(string vbmetaPath, string? publicKeyPath = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -357,7 +357,7 @@ public sealed class FirmwareService
                                  ?? AvbSignatureVerifier.ImportPublicKeyPem(keyBytes);
                     if (trustedKey == null)
                     {
-                        return FirmwareOpResult.Fail($"Failed to import AVB public key from '{publicKeyPath}'. 无法从 '{publicKeyPath}' 导入 AVB 公钥。");
+                        return FirmwareOperationResult.Fail($"Failed to import AVB public key from '{publicKeyPath}'. 无法从 '{publicKeyPath}' 导入 AVB 公钥。");
                     }
                 }
 
@@ -384,7 +384,7 @@ public sealed class FirmwareService
                     sb.AppendLine($"  - tag={d.Tag} type={d.TypeName} size={d.Size} partition={d.PartitionName ?? "-"} hashAlg={d.HashAlgorithm ?? "-"}");
                 }
 
-                return new FirmwareOpResult
+                return new FirmwareOperationResult
                 {
                     Success = result.IsSigned && result.HashIsValid && result.SignatureIsValid,
                     Summary = sb.ToString().TrimEnd()
@@ -397,7 +397,7 @@ public sealed class FirmwareService
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOperationResult.Fail(ex.Message);
         }
     }
 
@@ -412,7 +412,7 @@ public sealed class FirmwareService
     /// <param name="descriptors">The hash descriptors to embed. <para>要嵌入的哈希描述符。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> SignVbmetaAsync(
+    public async Task<FirmwareOperationResult> SignVbmetaAsync(
         string vbmetaPath,
         string privateKeyPath,
         string outputPath,
@@ -426,7 +426,7 @@ public sealed class FirmwareService
             using var key = AvbSigner.LoadRsaPrivateKey(privateKeyPath);
             if (key == null)
             {
-                return FirmwareOpResult.Fail($"Failed to load RSA private key from '{privateKeyPath}'. 无法从 '{privateKeyPath}' 加载 RSA 私钥。");
+                return FirmwareOperationResult.Fail($"Failed to load RSA private key from '{privateKeyPath}'. 无法从 '{privateKeyPath}' 加载 RSA 私钥。");
             }
 
             var result = await AvbSigner.SignVbmetaAsync(vbmetaPath, key, outputPath, descriptors, cancellationToken);
@@ -436,20 +436,20 @@ public sealed class FirmwareService
                     : $"VBMeta signing failed: {result.ErrorMessage}");
 
             return result.Success
-                ? new FirmwareOpResult
+                ? new FirmwareOperationResult
                 {
                     Success = true,
                     Summary = $"Signed VBMeta ({result.AlgorithmName}, {result.DescriptorCount} descriptor(s)) -> {outputPath}  已签名 VBMeta（{result.AlgorithmName}，{result.DescriptorCount} 个描述符）。"
                 }
-                : FirmwareOpResult.Fail(result.ErrorMessage ?? "VBMeta signing failed. VBMeta 签名失败。");
+                : FirmwareOperationResult.Fail(result.ErrorMessage ?? "VBMeta signing failed. VBMeta 签名失败。");
         }
         catch (OperationCanceledException)
         {
-            return FirmwareOpResult.Fail("VBMeta signing cancelled. VBMeta 签名已取消。");
+            return FirmwareOperationResult.Fail("VBMeta signing cancelled. VBMeta 签名已取消。");
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOperationResult.Fail(ex.Message);
         }
     }
 
@@ -467,7 +467,7 @@ public sealed class FirmwareService
     /// <param name="enableV3">Enable scheme v3.<para>启用 v3 方案。</para></param>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>Operation result.<para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> SignApkAsync(
+    public async Task<FirmwareOperationResult> SignApkAsync(
         string inputApk,
         string outputApk,
         string keyPath,
@@ -498,7 +498,7 @@ public sealed class FirmwareService
                 if (enableV1) { schemes.Add("v1"); }
                 if (enableV2) { schemes.Add("v2"); }
                 if (enableV3) { schemes.Add("v3"); }
-                return new FirmwareOpResult
+                return new FirmwareOperationResult
                 {
                     Success = true,
                     Summary = $"APK signed ({string.Join(", ", schemes)})  APK 已签名（{string.Join(", ", schemes)}）",
@@ -512,7 +512,7 @@ public sealed class FirmwareService
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail($"APK sign failed: {ex.Message}  APK 签名失败：{ex.Message}");
+            return FirmwareOperationResult.Fail($"APK sign failed: {ex.Message}  APK 签名失败：{ex.Message}");
         }
     }
 
@@ -549,7 +549,7 @@ public sealed class FirmwareService
     /// <para>补丁输出路径（必须与源不同）。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> DisableVbmetaVerificationAsync(
+    public async Task<FirmwareOperationResult> DisableVbmetaVerificationAsync(
         string vbmetaPath,
         string outputPath,
         CancellationToken cancellationToken = default)
@@ -565,20 +565,20 @@ public sealed class FirmwareService
                     : $"Disable AVB verification failed: {result.ErrorMessage}");
 
             return result.Success
-                ? new FirmwareOpResult
+                ? new FirmwareOperationResult
                 {
                     Success = true,
                     Summary = $"AVB verification disabled -> {outputPath}  已禁用 AVB 校验。"
                 }
-                : FirmwareOpResult.Fail(result.ErrorMessage ?? "Disable AVB verification failed. 禁用 AVB 校验失败。");
+                : FirmwareOperationResult.Fail(result.ErrorMessage ?? "Disable AVB verification failed. 禁用 AVB 校验失败。");
         }
         catch (OperationCanceledException)
         {
-            return FirmwareOpResult.Fail("Disable AVB verification cancelled. 禁用 AVB 校验已取消。");
+            return FirmwareOperationResult.Fail("Disable AVB verification cancelled. 禁用 AVB 校验已取消。");
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOperationResult.Fail(ex.Message);
         }
     }
 
@@ -592,7 +592,7 @@ public sealed class FirmwareService
     /// <param name="outputPath">The output signed image path. <para>输出的已签名镜像路径。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> AddHashFooterAsync(
+    public async Task<FirmwareOperationResult> AddHashFooterAsync(
         string imagePath,
         string partitionName,
         string privateKeyPath,
@@ -606,7 +606,7 @@ public sealed class FirmwareService
             using var key = AvbSigner.LoadRsaPrivateKey(privateKeyPath);
             if (key == null)
             {
-                return FirmwareOpResult.Fail($"Failed to load RSA private key from '{privateKeyPath}'. 无法从 '{privateKeyPath}' 加载 RSA 私钥。");
+                return FirmwareOperationResult.Fail($"Failed to load RSA private key from '{privateKeyPath}'. 无法从 '{privateKeyPath}' 加载 RSA 私钥。");
             }
 
             var result = await AvbSigner.AddHashFooterAsync(imagePath, partitionName, key, outputPath, cancellationToken);
@@ -616,20 +616,20 @@ public sealed class FirmwareService
                     : $"Adding AVB hash footer failed: {result.ErrorMessage}");
 
             return result.Success
-                ? new FirmwareOpResult
+                ? new FirmwareOperationResult
                 {
                     Success = true,
                     Summary = $"Added AVB hash footer ({result.AlgorithmName}) -> {outputPath}  已添加 AVB 哈希尾部（{result.AlgorithmName}）。"
                 }
-                : FirmwareOpResult.Fail(result.ErrorMessage ?? "Adding AVB hash footer failed. 添加 AVB 哈希尾部失败。");
+                : FirmwareOperationResult.Fail(result.ErrorMessage ?? "Adding AVB hash footer failed. 添加 AVB 哈希尾部失败。");
         }
         catch (OperationCanceledException)
         {
-            return FirmwareOpResult.Fail("Adding AVB hash footer cancelled. 添加 AVB 哈希尾部已取消。");
+            return FirmwareOperationResult.Fail("Adding AVB hash footer cancelled. 添加 AVB 哈希尾部已取消。");
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOperationResult.Fail(ex.Message);
         }
     }
 
@@ -683,7 +683,7 @@ public sealed class FirmwareService
     /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public Task<FirmwareOpResult> UnpackBootAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
+    public Task<FirmwareOperationResult> UnpackBootAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
         => CompleteUnpackAsync(bootPath, outputDirectory, () => UnpackBootCoreAsync(bootPath, outputDirectory, cancellationToken), cancellationToken, new BootImageFormatHandler(), context: CaptureOperationContext(outputDirectory));
 
     /// <summary>Extracts Boot components and metadata using one explicit context.
@@ -693,12 +693,12 @@ public sealed class FirmwareService
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <param name="context">The repack metadata context to apply. <para>要应用的重打包元数据上下文。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public Task<FirmwareOpResult> UnpackBootAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken,
+    public Task<FirmwareOperationResult> UnpackBootAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken,
         RepackMetadataContext context)
         => CompleteUnpackAsync(bootPath, outputDirectory, () => UnpackBootCoreAsync(bootPath, outputDirectory, cancellationToken),
             cancellationToken, new BootImageFormatHandler(), context: context.Capture());
 
-    private async Task<FirmwareOpResult> UnpackBootCoreAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
+    private async Task<FirmwareOperationResult> UnpackBootCoreAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -720,7 +720,7 @@ public sealed class FirmwareService
                         WriteComponent(outputDirectory, "signature", parser.Signature);
                     }
 
-                    return new FirmwareOpResult { Success = true, Summary = $"Unpacked boot image to {outputDirectory}  已解包 boot 镜像。" };
+                    return new FirmwareOperationResult { Success = true, Summary = $"Unpacked boot image to {outputDirectory}  已解包 boot 镜像。" };
 
                 case "VNDRBOOT":
                     using (var parser = new VendorBootParser())
@@ -732,15 +732,15 @@ public sealed class FirmwareService
                         WriteComponent(outputDirectory, "bootconfig", parser.Bootconfig);
                     }
 
-                    return new FirmwareOpResult { Success = true, Summary = $"Unpacked vendor_boot image to {outputDirectory}  已解包 vendor_boot 镜像。" };
+                    return new FirmwareOperationResult { Success = true, Summary = $"Unpacked vendor_boot image to {outputDirectory}  已解包 vendor_boot 镜像。" };
 
                 default:
-                    return FirmwareOpResult.Fail($"Unsupported boot image magic: {magic}  不支持的 boot 镜像魔数。");
+                    return FirmwareOperationResult.Fail($"Unsupported boot image magic: {magic}  不支持的 boot 镜像魔数。");
             }
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOperationResult.Fail(ex.Message);
         }
     }
 
@@ -756,7 +756,7 @@ public sealed class FirmwareService
     /// <param name="outputPath">The output boot image path. <para>输出 boot 镜像路径。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public Task<FirmwareOpResult> PackBootAsync(string inputDirectory, string outputPath, CancellationToken cancellationToken = default)
+    public Task<FirmwareOperationResult> PackBootAsync(string inputDirectory, string outputPath, CancellationToken cancellationToken = default)
         => PackBootAsync(inputDirectory, outputPath, cancellationToken, CaptureOperationContext(inputDirectory));
 
     /// <summary>Reads Boot configuration and packs with a fixed metadata context.
@@ -766,11 +766,11 @@ public sealed class FirmwareService
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <param name="context">The repack metadata context to apply. <para>要应用的重打包元数据上下文。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> PackBootAsync(string inputDirectory, string outputPath, CancellationToken cancellationToken,
+    public async Task<FirmwareOperationResult> PackBootAsync(string inputDirectory, string outputPath, CancellationToken cancellationToken,
         RepackMetadataContext context)
     {
         var result = await new BootImageFormatHandler().PackAsync(inputDirectory, outputPath, cancellationToken, context.Capture()).ConfigureAwait(false);
-        return FirmwareOpResult.From(result);
+        return FirmwareOperationResult.From(result);
     }
 
     private static byte[] DecompressRamdisk(byte[] raw, UotanStudio.Firmware.BootSecurity.BootImage.Models.CompressionType compression)
@@ -865,18 +865,18 @@ public sealed class FirmwareService
     /// <param name="firmwarePath">The firmware package path. <para>固件包路径。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result whose summary reports the format and entry count. <para>操作结果，摘要报告格式与条目数。</para></returns>
-    public async Task<FirmwareOpResult> ReadOppoMetadataAsync(string firmwarePath, CancellationToken cancellationToken = default)
+    public async Task<FirmwareOperationResult> ReadOppoMetadataAsync(string firmwarePath, CancellationToken cancellationToken = default)
     {
         try
         {
             var reader = new OppReader();
             var metadata = await reader.ReadMetadataAsync(firmwarePath, cancellationToken);
             var summary = $"Format: {metadata.FormatName}\nEntries: {metadata.EntryCount}";
-            return new FirmwareOpResult { Success = true, Summary = summary };
+            return new FirmwareOperationResult { Success = true, Summary = summary };
         }
         catch (Exception ex)
         {
-            return new FirmwareOpResult { Success = false, Summary = ex.Message };
+            return new FirmwareOperationResult { Success = false, Summary = ex.Message };
         }
     }
 
@@ -889,10 +889,10 @@ public sealed class FirmwareService
     /// <param name="overwrite">Whether to overwrite existing files. <para>是否覆盖已存在的文件。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public Task<FirmwareOpResult> ExtractOppoAsync(string firmwarePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
+    public Task<FirmwareOperationResult> ExtractOppoAsync(string firmwarePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
         => CompleteUnpackAsync(firmwarePath, outputDirectory, () => ExtractOppoCoreAsync(firmwarePath, outputDirectory, overwrite, cancellationToken), cancellationToken, new OppoFormatHandler(), overwrite, context: CaptureOperationContext(outputDirectory));
 
-    private async Task<FirmwareOpResult> ExtractOppoCoreAsync(string firmwarePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
+    private async Task<FirmwareOperationResult> ExtractOppoCoreAsync(string firmwarePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -903,11 +903,11 @@ public sealed class FirmwareService
                 Overwrite = overwrite
             }, progress: null, cancellationToken);
             var ok = result.ExtractedFileCount;
-            return new FirmwareOpResult { Success = ok >= 0, Summary = $"Extracted {ok} files" };
+            return new FirmwareOperationResult { Success = ok >= 0, Summary = $"Extracted {ok} files" };
         }
         catch (Exception ex)
         {
-            return new FirmwareOpResult { Success = false, Summary = ex.Message };
+            return new FirmwareOperationResult { Success = false, Summary = ex.Message };
         }
     }
 
@@ -919,7 +919,7 @@ public sealed class FirmwareService
     /// <param name="expectedHash">Expected SHA256 hex string; empty reports only the computed value. <para>预期的 SHA256 十六进制串，为空时仅报告计算值。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result whose summary is the computed value or the comparison outcome. <para>操作结果，摘要为计算值或比对结论。</para></returns>
-    public async Task<FirmwareOpResult> VerifyChecksumAsync(string filePath, string? expectedHash = null, CancellationToken cancellationToken = default)
+    public async Task<FirmwareOperationResult> VerifyChecksumAsync(string filePath, string? expectedHash = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -927,7 +927,7 @@ public sealed class FirmwareService
             var hash = await Sha256.ComputeHashAsync(fs, cancellationToken);
             var hex = Convert.ToHexStringLower(hash);
             var ok = string.IsNullOrEmpty(expectedHash) || string.Equals(hex, expectedHash, StringComparison.OrdinalIgnoreCase);
-            return new FirmwareOpResult
+            return new FirmwareOperationResult
             {
                 Success = ok,
                 Summary = string.IsNullOrEmpty(expectedHash) ? $"SHA256: {hex}" : (ok ? "Checksum match." : $"Mismatch: expected={expectedHash}, actual={hex}")
@@ -935,7 +935,7 @@ public sealed class FirmwareService
         }
         catch (Exception ex)
         {
-            return new FirmwareOpResult { Success = false, Summary = ex.Message };
+            return new FirmwareOperationResult { Success = false, Summary = ex.Message };
         }
     }
 
@@ -947,14 +947,14 @@ public sealed class FirmwareService
     /// <param name="outputDirectory">The output directory for the extracted partition images. <para>分区镜像输出目录。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result, Entries is the extracted partition name list. <para>操作结果，Entries 为已提取的分区名称列表。</para></returns>
-    public Task<FirmwareOpResult> UnpackSuperAsync(string superPath, string outputDirectory, CancellationToken cancellationToken = default)
+    public Task<FirmwareOperationResult> UnpackSuperAsync(string superPath, string outputDirectory, CancellationToken cancellationToken = default)
         => CompleteUnpackAsync(superPath, outputDirectory, () => UnpackSuperCoreAsync(superPath, outputDirectory, cancellationToken), cancellationToken, context: CaptureOperationContext(outputDirectory));
 
-    private async Task<FirmwareOpResult> UnpackSuperCoreAsync(string superPath, string outputDirectory, CancellationToken cancellationToken = default)
+    private async Task<FirmwareOperationResult> UnpackSuperCoreAsync(string superPath, string outputDirectory, CancellationToken cancellationToken = default)
     {
         var result = await Task.Run(() => new LpFormatHandler().UnpackAsync(superPath, outputDirectory,
             cancellationToken: cancellationToken), cancellationToken).ConfigureAwait(false);
-        return FirmwareOpResult.From(result);
+        return FirmwareOperationResult.From(result);
     }
 
     /// <summary>Converts an image between raw and Android sparse formats (a thin wrapper over <see cref="SparseImageConverter"/>): <c>toSparse = true</c> calls <see cref="SparseImageConverter.ConvertRawToSparse(string, string, uint)"/>, <c>false</c> calls <see cref="SparseImageConverter.ConvertSparseToRaw(IEnumerable{string}, string)"/>.
@@ -965,7 +965,7 @@ public sealed class FirmwareService
     /// <para>是否转换为稀疏格式（<c>true</c> 为 raw→sparse，<c>false</c> 为 sparse→raw）。</para></param>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>Operation result.<para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> ConvertSparseAsync(string inputPath, string outputPath, bool toSparse, CancellationToken cancellationToken = default)
+    public async Task<FirmwareOperationResult> ConvertSparseAsync(string inputPath, string outputPath, bool toSparse, CancellationToken cancellationToken = default)
     {
         return await Task.Run(() =>
         {
@@ -973,7 +973,7 @@ public sealed class FirmwareService
             {
                 if (string.IsNullOrWhiteSpace(inputPath) || !File.Exists(inputPath))
                 {
-                    return FirmwareOpResult.Fail($"Input image not found: {inputPath ?? "<empty>"}  找不到输入镜像。");
+                    return FirmwareOperationResult.Fail($"Input image not found: {inputPath ?? "<empty>"}  找不到输入镜像。");
                 }
 
                 if (toSparse)
@@ -986,11 +986,11 @@ public sealed class FirmwareService
                 }
 
                 var direction = toSparse ? "raw -> sparse" : "sparse -> raw";
-                return new FirmwareOpResult { Success = true, Summary = $"Converted image ({direction}): {outputPath}  已转换镜像（{direction}）。" };
+                return new FirmwareOperationResult { Success = true, Summary = $"Converted image ({direction}): {outputPath}  已转换镜像（{direction}）。" };
             }
             catch (Exception ex)
             {
-                return FirmwareOpResult.Fail(ex.Message);
+                return FirmwareOperationResult.Fail(ex.Message);
             }
         }, cancellationToken);
     }
@@ -1004,7 +1004,7 @@ public sealed class FirmwareService
     /// <param name="deleteSources">When set, source chunks are deleted after publication. <para>置位时源分块在发布后删除。</para></param>
     /// <param name="cancellationToken">Cancels the merge before publication. <para>在发布前取消合并。</para></param>
     /// <returns>Operation result whose entries list the merged chunk names. <para>操作结果，Entries 列出已合并的分块名。</para></returns>
-    public async Task<FirmwareOpResult> MergeSparseChunksAsync(
+    public async Task<FirmwareOperationResult> MergeSparseChunksAsync(
         IReadOnlyList<string> chunkPaths,
         string outputPath,
         bool deleteSources = false,
@@ -1015,14 +1015,14 @@ public sealed class FirmwareService
         {
             if (chunkPaths.Count == 0)
             {
-                return FirmwareOpResult.Fail("At least one sparse chunk is required.");
+                return FirmwareOperationResult.Fail("At least one sparse chunk is required.");
             }
 
             var chunks = chunkPaths.Select(Path.GetFullPath).ToArray();
             if (chunks.Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal).Count()
                 != chunks.Length)
             {
-                return FirmwareOpResult.Fail("Sparse chunk paths must be unique.");
+                return FirmwareOperationResult.Fail("Sparse chunk paths must be unique.");
             }
 
             await Task.Run(() => SparseImageConverter.ConvertSparseToRawCancellable(chunks, outputPath, cancellationToken),
@@ -1037,7 +1037,7 @@ public sealed class FirmwareService
                 }
             }
 
-            return new FirmwareOpResult
+            return new FirmwareOperationResult
             {
                 Success = true,
                 Summary = $"Merged {chunks.Length} sparse chunk(s) into '{outputPath}'.",
@@ -1050,7 +1050,7 @@ public sealed class FirmwareService
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOperationResult.Fail(ex.Message);
         }
     }
 
@@ -1063,7 +1063,7 @@ public sealed class FirmwareService
     /// <param name="deleteSources">When set, input pieces are removed after a successful merge. <para>置位时，输入分块在合并成功后删除。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result whose entries list the merged piece names in merge order. <para>操作结果，Entries 按合并顺序列出已合并分块名。</para></returns>
-    public async Task<FirmwareOpResult> RestoreSparseChunksAsync(string selectedChunkPath, string outputPath,
+    public async Task<FirmwareOperationResult> RestoreSparseChunksAsync(string selectedChunkPath, string outputPath,
         bool deleteSources = false, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(selectedChunkPath);
@@ -1082,7 +1082,7 @@ public sealed class FirmwareService
                 }
             }
 
-            return new FirmwareOpResult
+            return new FirmwareOperationResult
             {
                 Success = true,
                 Summary = $"Merged {set.Parts.Count} sparsechunk piece(s) into '{destination}'.",
@@ -1096,7 +1096,7 @@ public sealed class FirmwareService
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOperationResult.Fail(ex.Message);
         }
     }
 
@@ -1109,14 +1109,14 @@ public sealed class FirmwareService
     /// <param name="chunkSizeBytes">Physical bytes per piece except the final remainder; at least 1. <para>除末尾余量外每块的物理字节数，至少为 1。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result whose entries list the produced piece names in merge order. <para>操作结果，Entries 按合并顺序列出生成的分块名。</para></returns>
-    public async Task<FirmwareOpResult> SplitSparseChunksAsync(string inputPath, string basePath,
+    public async Task<FirmwareOperationResult> SplitSparseChunksAsync(string inputPath, string basePath,
         long chunkSizeBytes, CancellationToken cancellationToken = default)
     {
         try
         {
             var pieces = await SparseChunkSplitter.SplitRawAsync(inputPath, basePath, chunkSizeBytes,
                 cancellationToken).ConfigureAwait(false);
-            return new FirmwareOpResult
+            return new FirmwareOperationResult
             {
                 Success = true,
                 Summary = $"Split '{inputPath}' into {pieces.Count} sparsechunk piece(s).",
@@ -1129,7 +1129,7 @@ public sealed class FirmwareService
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOperationResult.Fail(ex.Message);
         }
     }
 
@@ -1142,11 +1142,11 @@ public sealed class FirmwareService
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <param name="byteProgress">Optional filesystem byte-progress reporter. <para>可选的文件系统字节进度上报器。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> UnpackSparseImageAsync(string sparsePath, string outputDirectory, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null)
+    public async Task<FirmwareOperationResult> UnpackSparseImageAsync(string sparsePath, string outputDirectory, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null)
     {
         using var metadataScope = RepackMetadata.UseContext(CaptureOperationContext(outputDirectory));
         var result = await new SparseFormatHandler().UnpackAsync(sparsePath, outputDirectory, new UnpackOptions { FileSystemProgress = byteProgress }, cancellationToken: cancellationToken).ConfigureAwait(false);
-        return FirmwareOpResult.From(result);
+        return FirmwareOperationResult.From(result);
     }
 
     /// <summary>
@@ -1158,17 +1158,17 @@ public sealed class FirmwareService
     /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result, failing when no registered handler can read the input. <para>操作结果；无任何注册处理器可读时失败。</para></returns>
-    public Task<FirmwareOpResult> UnpackDetectedAsync(string containerPath, string outputDirectory, CancellationToken cancellationToken = default)
+    public Task<FirmwareOperationResult> UnpackDetectedAsync(string containerPath, string outputDirectory, CancellationToken cancellationToken = default)
         => CompleteUnpackAsync(containerPath, outputDirectory,
             () => UnpackDetectedCoreAsync(containerPath, outputDirectory, cancellationToken), cancellationToken,
             context: CaptureOperationContext(outputDirectory));
 
-    private static async Task<FirmwareOpResult> UnpackDetectedCoreAsync(string containerPath, string outputDirectory, CancellationToken cancellationToken)
+    private static async Task<FirmwareOperationResult> UnpackDetectedCoreAsync(string containerPath, string outputDirectory, CancellationToken cancellationToken)
     {
         FirmwareFormatRegistry.RegisterAll();
         var handler = FormatDetector.Detect(containerPath)
             ?? throw new InvalidDataException("No registered format handler can read this container.");
-        return FirmwareOpResult.From(await handler.UnpackAsync(containerPath, outputDirectory, cancellationToken: cancellationToken).ConfigureAwait(false));
+        return FirmwareOperationResult.From(await handler.UnpackAsync(containerPath, outputDirectory, cancellationToken: cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -1182,13 +1182,13 @@ public sealed class FirmwareService
     /// <param name="byteProgress">Optional filesystem byte-progress reporter. <para>可选的文件系统字节进度上报器。</para></param>
     /// <param name="erofsExtraDevicePaths">EROFS device images in device-table order, when required. <para>需要时按设备表顺序给出的 EROFS 设备镜像。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> UnpackFileSystemImageAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null, IReadOnlyList<string>? erofsExtraDevicePaths = null)
+    public async Task<FirmwareOperationResult> UnpackFileSystemImageAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null, IReadOnlyList<string>? erofsExtraDevicePaths = null)
     {
         using var scope = RepackMetadata.UseContext(CaptureOperationContext(outputDirectory));
         FirmwareFormatRegistry.RegisterAll();
         var handler = FormatDetector.Detect(imagePath);
         if (handler is not (Ext4FormatHandler or ErofsFormatHandler or F2fsFormatHandler))
-            return FirmwareOpResult.Fail("Unrecognized filesystem image.");
+            return FirmwareOperationResult.Fail("Unrecognized filesystem image.");
         var result = await FileSystemPreservation.UnpackAsync(handler, imagePath, outputDirectory,
             new UnpackOptions { FileSystemProgress = byteProgress, ErofsExtraDevicePaths = erofsExtraDevicePaths }, cancellationToken,
             async frozen =>
@@ -1197,10 +1197,10 @@ public sealed class FirmwareService
                 return extracted.Success ? UotanStudio.Firmware.Core.FirmwareOpResult.Ok(extracted.Summary)
                     : UotanStudio.Firmware.Core.FirmwareOpResult.Fail(extracted.Summary);
             }).ConfigureAwait(false);
-        return FirmwareOpResult.From(result);
+        return FirmwareOperationResult.From(result);
     }
 
-    private async Task<FirmwareOpResult> UnpackFileSystemImageCoreAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null)
+    private async Task<FirmwareOperationResult> UnpackFileSystemImageCoreAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default, IProgress<FileSystemByteProgress>? byteProgress = null)
     {
         return await Task.Run(() =>
         {
@@ -1208,57 +1208,54 @@ public sealed class FirmwareService
             {
                 if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
                 {
-                    return FirmwareOpResult.Fail($"Input image not found: {imagePath ?? "<empty>"}  找不到输入镜像。");
+                    return FirmwareOperationResult.Fail($"Input image not found: {imagePath ?? "<empty>"}  找不到输入镜像。");
                 }
 
                 Directory.CreateDirectory(outputDirectory);
-                var header = FormatDetector.ReadHeader(imagePath, 1082);
+                var layout = ImageInputService.ProbeFilesystemHeader(imagePath);
 
-                if (header.Length >= 1082
-                    && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
+                if (layout == RawImageLayout.Ext4)
                 {
                     using var parser = new Ext4Parser(imagePath);
                     parser.ExtractToDirectory(outputDirectory, progress: progress, byteProgress: FileSystemByteProgress.ForStage(byteProgress, FileSystemWorkStage.Extracting), cancellationToken: cancellationToken);
                     var entries = parser.ListFiles();
-                    return new FirmwareOpResult
+                    return new FirmwareOperationResult
                     {
                         Success = true,
                         Summary = $"Extracted {entries.Count} entries from '{imagePath}' to '{outputDirectory}'  已从 '{imagePath}' 解出 {entries.Count} 个条目到 '{outputDirectory}'",
                     };
                 }
 
-                if (header.Length >= 1028
-                    && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xE0F5E1E2)
+                if (layout == RawImageLayout.Erofs)
                 {
                     using var input = File.OpenRead(imagePath);
                     using var parser = FileSystemPreservation.OpenErofsParser(input, cancellationToken);
                     parser.ExtractToDirectory(outputDirectory, progress: progress, byteProgress: FileSystemByteProgress.ForStage(byteProgress, FileSystemWorkStage.Extracting), cancellationToken: cancellationToken);
                     var files = parser.EnumerateFiles();
-                    return new FirmwareOpResult
+                    return new FirmwareOperationResult
                     {
                         Success = true,
                         Summary = $"Extracted {files.Count} files from '{imagePath}' to '{outputDirectory}'  已从 '{imagePath}' 解出 {files.Count} 个文件到 '{outputDirectory}'",
                     };
                 }
 
-                if (header.Length >= 1028
-                    && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xF2F52010)
+                if (layout == RawImageLayout.F2fs)
                 {
                     using var parser = new F2fsParser(imagePath);
                     parser.ExtractToDirectory(outputDirectory, progress: progress, byteProgress: FileSystemByteProgress.ForStage(byteProgress, FileSystemWorkStage.Extracting), cancellationToken: cancellationToken);
                     var entries = parser.ListFiles();
-                    return new FirmwareOpResult
+                    return new FirmwareOperationResult
                     {
                         Success = true,
                         Summary = $"Extracted {entries.Count} entries from '{imagePath}' to '{outputDirectory}'  已从 '{imagePath}' 解出 {entries.Count} 个条目到 '{outputDirectory}'",
                     };
                 }
 
-                return FirmwareOpResult.Fail($"Unrecognized filesystem image (no ext4/erofs/f2fs magic): {imagePath}  未识别的文件系统镜像（无 ext4/erofs/f2fs 魔数）：{imagePath}");
+                return FirmwareOperationResult.Fail($"Unrecognized filesystem image (no ext4/erofs/f2fs magic): {imagePath}  未识别的文件系统镜像（无 ext4/erofs/f2fs 魔数）：{imagePath}");
             }
             catch (Exception ex)
             {
-                return FirmwareOpResult.Fail(ex.Message);
+                return FirmwareOperationResult.Fail(ex.Message);
             }
         }, cancellationToken);
     }
@@ -1271,7 +1268,7 @@ public sealed class FirmwareService
     /// <param name="outputPath">The output DAT data file path; the transfer list path derives from it. <para>输出 DAT 数据文件路径，传输清单路径由它推导。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> WriteDatAsync(string transferListPath, string outputPath, CancellationToken cancellationToken = default)
+    public async Task<FirmwareOperationResult> WriteDatAsync(string transferListPath, string outputPath, CancellationToken cancellationToken = default)
     {
         return await Task.Run(() =>
         {
@@ -1279,7 +1276,7 @@ public sealed class FirmwareService
             {
                 if (string.IsNullOrWhiteSpace(transferListPath) || !File.Exists(transferListPath))
                 {
-                    return FirmwareOpResult.Fail($"Input image not found: {transferListPath ?? "<empty>"}  找不到输入镜像。");
+                    return FirmwareOperationResult.Fail($"Input image not found: {transferListPath ?? "<empty>"}  找不到输入镜像。");
                 }
 
                 var transferListOut = Path.GetFileName(outputPath).EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
@@ -1288,7 +1285,7 @@ public sealed class FirmwareService
 
                 DatWriter.Write(transferListPath, outputPath, transferListOut);
 
-                return new FirmwareOpResult
+                return new FirmwareOperationResult
                 {
                     Success = true,
                     Summary = $"Wrote DAT image pair: {outputPath} / {transferListOut}  已写出 DAT 镜像对。"
@@ -1296,7 +1293,7 @@ public sealed class FirmwareService
             }
             catch (Exception ex)
             {
-                return FirmwareOpResult.Fail(ex.Message);
+                return FirmwareOperationResult.Fail(ex.Message);
             }
         }, cancellationToken);
     }
@@ -1323,7 +1320,7 @@ public sealed class FirmwareService
     /// <param name="progress">Optional processed and total input bytes. <para>可选的已处理与总输入字节数。</para></param>
     /// <param name="cancellationToken">Cancels import before publication. <para>在发布前取消导入。</para></param>
     /// <returns>Operation result with the imported source volume names. <para>含已导入源卷名称的操作结果。</para></returns>
-    public async Task<FirmwareOpResult> ImportSplitDatOrTwrpAsync(
+    public async Task<FirmwareOperationResult> ImportSplitDatOrTwrpAsync(
         string selectedPath, string outputPath,
         IProgress<(long Processed, long Total)>? progress = null,
         CancellationToken cancellationToken = default)
@@ -1333,7 +1330,7 @@ public sealed class FirmwareService
         {
             var set = await DatSplitImporter.ImportAsync(selectedPath, outputPath, progress, cancellationToken)
                 .ConfigureAwait(false);
-            return new FirmwareOpResult
+            return new FirmwareOperationResult
             {
                 Success = true,
                 Summary = $"Imported {set.Kind} artifact to {outputPath}. 已导入 {set.Kind} 工件。",
@@ -1346,7 +1343,7 @@ public sealed class FirmwareService
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOperationResult.Fail(ex.Message);
         }
     }
 
@@ -1360,7 +1357,7 @@ public sealed class FirmwareService
     /// <param name="cancellationToken">Cancels reconstruction before publication. <para>在发布前取消重建。</para></param>
     /// <returns>Operation result; patch-data volumes cannot be reconstructed without a source image.
     /// <para>操作结果；补丁数据卷缺少源镜像时无法重建。</para></returns>
-    public async Task<FirmwareOpResult> ReconstructSplitDatImageAsync(
+    public async Task<FirmwareOperationResult> ReconstructSplitDatImageAsync(
         string selectedPath, string outputImagePath,
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
@@ -1370,7 +1367,7 @@ public sealed class FirmwareService
         {
             var set = await DatSplitImporter.ReconstructDatImageAsync(
                 selectedPath, outputImagePath, progress, cancellationToken).ConfigureAwait(false);
-            return new FirmwareOpResult
+            return new FirmwareOperationResult
             {
                 Success = true,
                 Summary = $"Reconstructed {set.Kind} image to {outputImagePath}. 已重建 {set.Kind} 镜像。",
@@ -1383,7 +1380,7 @@ public sealed class FirmwareService
         }
         catch (Exception ex)
         {
-            return FirmwareOpResult.Fail(ex.Message);
+            return FirmwareOperationResult.Fail(ex.Message);
         }
     }
 
@@ -1404,7 +1401,7 @@ public sealed class FirmwareService
     /// <param name="virtualAb">Whether to mark the image as virtual A/B.
     /// <para>是否将镜像标记为虚拟 A/B。</para></param>
     /// <returns>Operation result.<para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> SynthesizeSuperAsync(
+    public async Task<FirmwareOperationResult> SynthesizeSuperAsync(
         IReadOnlyList<SuperPartitionInput> partitions,
         string outputPath,
         ulong deviceSize,
@@ -1420,10 +1417,10 @@ public sealed class FirmwareService
         try
         {
             if (partitions is null || partitions.Count == 0)
-                return FirmwareOpResult.Fail("No partitions supplied. 未提供任何分区。");
-            var files = partitions.Select(p => new Delivery.DeliveryFile
+                return FirmwareOperationResult.Fail("No partitions supplied. 未提供任何分区。");
+            var files = partitions.Select(p => new UotanStudio.Delivery.DeliveryFile
             { Partition = p.Name, SourcePath = p.Path }).ToArray();
-            await Delivery.DeliverySuperBuilder.BuildAsync(files, new()
+            await UotanStudio.Delivery.DeliverySuperBuilder.BuildAsync(files, new()
             {
                 DeviceSize = deviceSize,
                 Group = string.IsNullOrWhiteSpace(groupName) ? "default" : groupName,
@@ -1433,10 +1430,10 @@ public sealed class FirmwareService
                 Sparse = sparse,
                 VirtualAb = virtualAb
             }, outputPath, token: cancellationToken).ConfigureAwait(false);
-            return new FirmwareOpResult { Success = true, Summary = $"Synthesized super image with {partitions.Count} partition(s) -> {outputPath}" };
+            return new FirmwareOperationResult { Success = true, Summary = $"Synthesized super image with {partitions.Count} partition(s) -> {outputPath}" };
         }
-        catch (OperationCanceledException) { return FirmwareOpResult.Fail("Super synthesis cancelled. 合成 super 已取消。"); }
-        catch (Exception ex) { return FirmwareOpResult.Fail(ex.Message); }
+        catch (OperationCanceledException) { return FirmwareOperationResult.Fail("Super synthesis cancelled. 合成 super 已取消。"); }
+        catch (Exception ex) { return FirmwareOperationResult.Fail(ex.Message); }
     }
 }
 

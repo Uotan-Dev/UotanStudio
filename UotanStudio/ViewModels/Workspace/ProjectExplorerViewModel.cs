@@ -263,6 +263,12 @@ public sealed partial class ExplorerNode : ObservableObject
     private bool _childrenLoaded;
 
     /// <summary>
+    /// Cancels the previous child scan when a newer scan for the same directory starts.
+    /// <para>同一目录开始新一轮扫描时取消上一轮扫描。</para>
+    /// </summary>
+    private CancellationTokenSource? _childrenRefresh;
+
+    /// <summary>
     /// Set of project folder paths (populated by ProjectExplorerViewModel on refresh), used to auto-mark lazily-loaded children.
     /// <para>项目文件夹路径集合（由 ProjectExplorerViewModel 在刷新时填充），用于懒加载子节点时自动标记。</para>
     /// </summary>
@@ -359,8 +365,9 @@ public sealed partial class ExplorerNode : ObservableObject
     }
 
     /// <summary>
-    /// Scans and populates child nodes on the directory's first expansion; runs only once.
-    /// <para>首次展开目录时扫描并填充子节点；仅在首次调用时执行一次。</para>
+    /// Starts the one-time child scan on the directory's first expansion; the scan runs on a worker thread and
+    /// applies the discovered children in one batch.
+    /// <para>首次展开目录时启动唯一一次子节点扫描；扫描在工作线程执行，发现的子节点一次性批量应用。</para>
     /// </summary>
     public void EnsureChildrenLoaded()
     {
@@ -374,41 +381,128 @@ public sealed partial class ExplorerNode : ObservableObject
 
     internal void RefreshChildren()
     {
+        if (!IsDirectory)
+        {
+            return;
+        }
+
+        if (Avalonia.Application.Current is not null)
+        {
+            _ = RefreshChildrenAsync(marshalToUi: true);
+            return;
+        }
+
+        RefreshChildrenAsync(marshalToUi: false).GetAwaiter().GetResult();
+    }
+
+    private async Task RefreshChildrenAsync(bool marshalToUi)
+    {
+        _childrenRefresh?.Cancel();
+        _childrenRefresh?.Dispose();
+        var cancellation = new CancellationTokenSource();
+        _childrenRefresh = cancellation;
+        var token = cancellation.Token;
+        var projectFolders = ProjectFolderPaths.ToArray();
+
         try
         {
-            List<ExplorerNode> discovered = [];
-            foreach (var dir in Directory.EnumerateDirectories(Path))
+            var discovered = await Task.Run(() => EnumerateChildren(projectFolders, token), token)
+                .ConfigureAwait(false);
+            if (token.IsCancellationRequested)
             {
-                discovered.Add(new ExplorerNode(dir, isDirectory: true, isProjectFolder: ProjectFolderPaths.Contains(dir)));
+                return;
             }
 
-            foreach (var file in Directory.EnumerateFiles(Path))
+            if (marshalToUi)
             {
+                await Avalonia.Threading.Dispatcher.UIThread
+                    .InvokeAsync(() => ApplyChildren(discovered, token));
+                return;
+            }
 
-                var ext = System.IO.Path.GetExtension(file);
-                if (string.Equals(ext, ".uotan", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(ext, ".uotanfw", StringComparison.OrdinalIgnoreCase))
+            ApplyChildren(discovered, token);
+        }
+        catch (Exception)
+        {
+
+        }
+    }
+
+    private List<DiscoveredChild> EnumerateChildren(string[] projectFolders, CancellationToken cancellationToken)
+    {
+        var projectFolderSet = new HashSet<string>(projectFolders, StringComparer.OrdinalIgnoreCase);
+        List<DiscoveredChild> discovered = [];
+        foreach (var directory in Directory.EnumerateDirectories(Path))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            discovered.Add(new DiscoveredChild(directory, IsDirectory: true,
+                IsProjectFolder: projectFolderSet.Contains(directory)));
+        }
+
+        foreach (var file in Directory.EnumerateFiles(Path))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var extension = System.IO.Path.GetExtension(file);
+            if (string.Equals(extension, ".uotan", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(extension, ".uotanfw", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            discovered.Add(new DiscoveredChild(file, IsDirectory: false, IsProjectFolder: false));
+        }
+
+        return discovered;
+    }
+
+    private void ApplyChildren(List<DiscoveredChild> discovered, CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            var previous = Children.Where(child => !child.IsPlaceholder).ToDictionary(child => child.Path, comparer);
+            var desired = new List<ExplorerNode>(discovered.Count);
+            foreach (var child in discovered)
+            {
+                desired.Add(previous.TryGetValue(child.Path, out var existing)
+                    && existing.IsDirectory == child.IsDirectory
+                    && existing.IsProjectFolder == child.IsProjectFolder
+                    ? existing
+                    : new ExplorerNode(child.Path, child.IsDirectory, isProjectFolder: child.IsProjectFolder));
+            }
+
+            var retained = desired.ToHashSet();
+            for (var i = Children.Count - 1; i >= 0; i--)
+            {
+                if (!retained.Contains(Children[i]))
+                {
+                    Children.RemoveAt(i);
+                }
+            }
+
+            for (var i = 0; i < desired.Count; i++)
+            {
+                if (i < Children.Count && ReferenceEquals(Children[i], desired[i]))
                 {
                     continue;
                 }
 
-                discovered.Add(new ExplorerNode(file, isDirectory: false));
+                var index = Children.IndexOf(desired[i]);
+                if (index >= 0)
+                {
+                    Children.Move(index, i);
+                }
+                else
+                {
+                    Children.Insert(i, desired[i]);
+                }
             }
 
-            var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-            var previous = Children.Where(c => !c.IsPlaceholder).ToDictionary(c => c.Path, comparer);
-            var desired = discovered.Select(c => previous.TryGetValue(c.Path, out var old)
-                && old.IsDirectory == c.IsDirectory && old.IsProjectFolder == c.IsProjectFolder ? old : c).ToList();
-            var retained = desired.ToHashSet();
-            for (var i = Children.Count - 1; i >= 0; i--)
-                if (!retained.Contains(Children[i])) Children.RemoveAt(i);
-            for (var i = 0; i < desired.Count; i++)
-            {
-                if (i < Children.Count && ReferenceEquals(Children[i], desired[i])) continue;
-                var index = Children.IndexOf(desired[i]);
-                if (index >= 0) Children.Move(index, i);
-                else Children.Insert(i, desired[i]);
-            }
             _childrenLoaded = true;
         }
         catch (Exception)
@@ -416,6 +510,8 @@ public sealed partial class ExplorerNode : ObservableObject
 
         }
     }
+
+    private readonly record struct DiscoveredChild(string Path, bool IsDirectory, bool IsProjectFolder);
 
     /// <summary>
     /// Re-scans children of directories that have already been loaded (syncing after external file
@@ -433,7 +529,7 @@ public sealed partial class ExplorerNode : ObservableObject
 
         RefreshChildren();
 
-        foreach (var child in Children)
+        foreach (var child in Children.ToArray())
         {
             child.RefreshDescendants();
         }

@@ -2,9 +2,11 @@ using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Firmware.FileSystem.Erofs;
+using UotanStudio.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Ui;
 using FormatDetector = UotanStudio.Firmware.Core.FormatDetector;
 
 namespace UotanStudio.ViewModels.Workspace;
@@ -254,7 +256,7 @@ internal partial class ImageViewModel
                 var options = new Firmware.Core.UnpackOptions { FileSystemProgress = byteProgress };
                 if (itemProgress is not null) options.Progress = new FirmwareItemProgress(itemProgress);
                 var unpacked = await handler.UnpackAsync(paths.Source, targetDirectory, options, cancellationToken);
-                return FirmwareOpResult.From(unpacked);
+                return FirmwareOperationResult.From(unpacked);
             })
         });
         LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
