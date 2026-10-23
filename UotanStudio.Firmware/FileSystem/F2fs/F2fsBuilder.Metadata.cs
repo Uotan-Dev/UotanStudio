@@ -33,6 +33,24 @@ public sealed partial class F2fsBuilder
     /// </remarks>
     private static F2fsSuperblock CreateSuperblock(Layout layout, F2fsOptions options, bool hasCompressedFiles, uint metadataFeatures)
     {
+        var features = metadataFeatures | (hasCompressedFiles ? FeatureCompression : 0u);
+        var quotaInodeNumbers = new uint[3];
+        if (options.SourceFeature is { } sourceFeature)
+        {
+            if ((sourceFeature & FeatureCasefold) != 0 && options.SourceEncoding is null or 0)
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    "F2FS casefold feature cannot be replayed without the source superblock filename encoding.");
+            }
+
+            options.DroppedFeatureBits = sourceFeature & ~RebuildFeatureMask;
+            features |= sourceFeature & RebuildFeatureMask;
+            foreach (var quota in options.QuotaInodes)
+            {
+                quotaInodeNumbers[quota.Type] = quota.Ino;
+            }
+        }
+
         return new F2fsSuperblock
         {
             MagicValue = F2fsSuperblock.Magic,
@@ -68,9 +86,13 @@ public sealed partial class F2fsBuilder
             VolumeName = string.IsNullOrEmpty(options.VolumeName) && Rebuilding.FileSystemEditPlan.Current is null ? "f2fs" : options.VolumeName,
             CpPayload = 0,
             Version = new byte[256],
-
-
-            Feature = metadataFeatures | (hasCompressedFiles ? FeatureCompression : 0u),
+            Feature = features,
+            EncryptionLevel = options.SourceEncryptionLevel,
+            EncryptPasswordSalt = options.SourceEncryptPasswordSalt is { Length: 16 } salt ? salt : new byte[16],
+            QuotaInodeNumbers = quotaInodeNumbers,
+            HotExtensionCount = options.SourceHotExtensionCount,
+            Encoding = options.SourceEncoding ?? 0,
+            EncodingFlags = options.SourceEncoding is null ? (ushort)0 : options.SourceEncodingFlags,
         };
     }
 
@@ -93,7 +115,7 @@ public sealed partial class F2fsBuilder
         var usedMainBlocks = layout.NodeBlocks + layout.DataBlocks + layout.ReservedCompressionBlocks;
 
 
-        var overprovSegments = (layout.MainSegments - RsvdSegments) * 5 / 100 + RsvdSegments;
+        var overprovSegments = (layout.MainSegments - RsvdSegments) * OverprovPercent / 100 + RsvdSegments;
 
         var sitBitmapBytes = (uint)((layout.SitSegments / 2) * BlocksPerSeg / 8);
         var natBitmapBytes = (uint)((layout.NatSegments / 2) * BlocksPerSeg / 8);
@@ -505,7 +527,7 @@ public sealed partial class F2fsBuilder
 
         using var source = node.IsSymlink
             ? (Stream)new MemoryStream(Encoding.UTF8.GetBytes(node.SymlinkTarget ?? string.Empty), writable: false)
-            : File.OpenRead(node.FullPath);
+            : OpenNodeContent(node);
         var buffer = new byte[1 << 16];
         for (var logical = 0; logical < node.DataBlockCount; logical++)
         {
@@ -553,7 +575,7 @@ public sealed partial class F2fsBuilder
         var clusterBytes = clusterPages * blockSize;
         var clusterBuffer = new byte[clusterBytes];
 
-        using var source = File.OpenRead(node.FullPath);
+        using var source = OpenNodeContent(node);
         for (var c = 0; c < node.CompressedClusterSizes!.Length; c++)
         {
             cancellationToken.ThrowIfCancellationRequested();

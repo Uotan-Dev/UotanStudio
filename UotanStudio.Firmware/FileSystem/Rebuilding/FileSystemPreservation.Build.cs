@@ -1,3 +1,4 @@
+using System.Globalization;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.FileSystem.Erofs;
@@ -235,9 +236,37 @@ public static partial class FileSystemPreservation
                     };
                     f2fsOptions.FsConfig = fsConfig;
                     f2fsOptions.FileContexts = fileContexts;
+                    if (rebuild is not null)
+                    {
+                        f2fsOptions.SourceFeature = rebuild.F2fsFeature;
+                        f2fsOptions.SourceEncoding = rebuild.F2fsEncoding;
+                        f2fsOptions.SourceEncodingFlags = rebuild.F2fsEncodingFlags;
+                        f2fsOptions.SourceEncryptionLevel = rebuild.F2fsEncryptionLevel ?? 0;
+                        f2fsOptions.SourceEncryptPasswordSalt = rebuild.F2fsEncryptSalt;
+                        f2fsOptions.SourceHotExtensionCount = rebuild.F2fsHotExtensionCount;
+                        f2fsOptions.CasefoldDirectoriesPresent = rebuild.F2fsCasefoldDirectoriesPresent;
+                        f2fsOptions.VerityContentPresent = rebuild.F2fsVerityFilesPresent;
+                        f2fsOptions.QuotaInodes =
+                        [
+                            .. rebuild.F2fsQuotaInodes.Select(static quota => new F2fsQuotaInode(
+                                quota.Type, quota.Ino, quota.Mode, quota.Uid, quota.Gid, quota.Flags,
+                                quota.Metadata, quota.Content))
+                        ];
+                    }
+
                     var f2fsSink = MeterWrites(inputDirectory, output, buildingImage, token, out var f2fsMeter);
                     F2fsBuilder.Build(inputDirectory, f2fsSink, f2fsOptions);
                     f2fsMeter?.Complete();
+                    if (rebuild?.F2fsFeature is { } sourceFeature)
+                    {
+                        return new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["F2fsFeature"] = $"0x{sourceFeature:X8}",
+                            ["F2fsDroppedFeatures"] = $"0x{f2fsOptions.DroppedFeatureBits:X8}",
+                            ["F2fsQuotaInodes"] = rebuild.F2fsQuotaInodes.Count.ToString(CultureInfo.InvariantCulture)
+                        };
+                    }
+
                     break;
                 }
             default: throw new FileSystemUnsupportedFeatureException("Editing this filesystem container is not supported.");

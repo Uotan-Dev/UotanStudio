@@ -49,6 +49,11 @@ internal sealed class F2fsSuperblock
     private const int OffsetInitVersion = 1924;
     private const int OffsetFeature = 2180;
     private const int OffsetEncryptionLevel = 2184;
+    private const int OffsetEncryptPasswordSalt = 2185;
+    private const int OffsetQuotaInodeNumbers = 2745;
+    private const int OffsetHotExtensionCount = 2757;
+    private const int OffsetEncoding = 2758;
+    private const int OffsetEncodingFlags = 2760;
     private const int OffsetCrc = 3068;
 
     public uint MagicValue { get; init; }
@@ -116,6 +121,18 @@ internal sealed class F2fsSuperblock
     public byte[] Version { get; init; } = [];
 
     public uint Feature { get; init; }
+
+    public byte EncryptionLevel { get; init; }
+
+    public byte[] EncryptPasswordSalt { get; init; } = new byte[16];
+
+    public uint[] QuotaInodeNumbers { get; init; } = new uint[3];
+
+    public byte HotExtensionCount { get; init; }
+
+    public ushort Encoding { get; init; }
+
+    public ushort EncodingFlags { get; init; }
 
     public bool IsValid => MagicValue == Magic;
 
@@ -207,6 +224,17 @@ internal sealed class F2fsSuperblock
             CpPayload = BinaryPrimitives.ReadUInt32LittleEndian(data[OffsetCpPayload..]),
             Version = data.Slice(OffsetVersion, 256).ToArray(),
             Feature = BinaryPrimitives.ReadUInt32LittleEndian(data[OffsetFeature..]),
+            EncryptionLevel = data[OffsetEncryptionLevel],
+            EncryptPasswordSalt = data.Slice(OffsetEncryptPasswordSalt, 16).ToArray(),
+            QuotaInodeNumbers =
+            [
+                BinaryPrimitives.ReadUInt32LittleEndian(data[OffsetQuotaInodeNumbers..]),
+                BinaryPrimitives.ReadUInt32LittleEndian(data[(OffsetQuotaInodeNumbers + 4)..]),
+                BinaryPrimitives.ReadUInt32LittleEndian(data[(OffsetQuotaInodeNumbers + 8)..]),
+            ],
+            HotExtensionCount = data[OffsetHotExtensionCount],
+            Encoding = BinaryPrimitives.ReadUInt16LittleEndian(data[OffsetEncoding..]),
+            EncodingFlags = BinaryPrimitives.ReadUInt16LittleEndian(data[OffsetEncodingFlags..]),
         };
     }
 
@@ -276,6 +304,18 @@ internal sealed class F2fsSuperblock
         BinaryPrimitives.WriteUInt32LittleEndian(destination[OffsetCpPayload..], CpPayload);
         Version.AsSpan(0, Math.Min(256, Version.Length)).CopyTo(destination[OffsetVersion..]);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[OffsetFeature..], Feature);
+        destination[OffsetEncryptionLevel] = EncryptionLevel;
+        EncryptPasswordSalt.AsSpan(0, Math.Min(16, EncryptPasswordSalt.Length))
+            .CopyTo(destination[OffsetEncryptPasswordSalt..]);
+        for (var i = 0; i < 3; i++)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(destination[(OffsetQuotaInodeNumbers + i * 4)..],
+                i < QuotaInodeNumbers.Length ? QuotaInodeNumbers[i] : 0);
+        }
+
+        destination[OffsetHotExtensionCount] = HotExtensionCount;
+        BinaryPrimitives.WriteUInt16LittleEndian(destination[OffsetEncoding..], Encoding);
+        BinaryPrimitives.WriteUInt16LittleEndian(destination[OffsetEncodingFlags..], EncodingFlags);
     }
 
     private static string ReadVolumeName(ReadOnlySpan<byte> data)

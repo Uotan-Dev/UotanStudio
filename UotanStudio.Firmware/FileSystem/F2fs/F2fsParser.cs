@@ -172,6 +172,42 @@ public sealed class F2fsParser : IDisposable
 
     internal byte[] SourceUuid => _superblock.Uuid;
     internal string SourceVolumeName => _superblock.VolumeName;
+    internal uint SourceFeature => _superblock.Feature;
+    internal byte SourceEncryptionLevel => _superblock.EncryptionLevel;
+    internal byte[] SourceEncryptPasswordSalt => _superblock.EncryptPasswordSalt;
+    internal uint[] SourceQuotaInodeNumbers => _superblock.QuotaInodeNumbers;
+    internal byte SourceHotExtensionCount => _superblock.HotExtensionCount;
+    internal ushort SourceEncoding => _superblock.Encoding;
+    internal ushort SourceEncodingFlags => _superblock.EncodingFlags;
+
+    /// <summary>
+    /// Reads an inode that is not referenced by any directory entry, such as a superblock quota inode.
+    /// <para>读取未被任何目录条目引用的 inode，例如超级块 quota inode。</para>
+    /// </summary>
+    /// <param name="ino">Inode number validated against the reserved node range and the NAT area.
+    /// <para>inode 号；会按保留节点区间与 NAT 区域校验。</para></param>
+    /// <returns>The decoded inode and its metadata.<para>解码后的 inode 及其元数据。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The inode is missing, not an inode node, or its node chain is corrupt.
+    /// <para>inode 缺失、不是 inode 节点或其节点链损坏。</para></exception>
+    internal F2fsInode ReadInodeByNumber(uint ino) => ReadInode(ino);
+
+    /// <summary>
+    /// Reads the complete data bytes of an inode that is not referenced by any directory entry.
+    /// <para>读取未被任何目录条目引用的 inode 的完整数据字节。</para>
+    /// </summary>
+    /// <param name="ino">Inode number whose data is read through the normal node mapping.
+    /// <para>要经普通节点映射读取数据的 inode 号。</para></param>
+    /// <returns>The logical file content, zero-filling sparse holes.
+    /// <para>逻辑文件内容，稀疏洞补零。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">The inode or its node chain is corrupt.
+    /// <para>inode 或其节点链损坏。</para></exception>
+    internal byte[] ReadInodeData(uint ino)
+    {
+        var inode = ReadInode(ino);
+        using var output = new MemoryStream();
+        WriteFileData(ino, inode, output);
+        return output.ToArray();
+    }
 
     /// <summary>The parsed superblock used for metadata inspection.</summary>
     internal F2fsSuperblock Superblock => _superblock;
@@ -545,7 +581,12 @@ public sealed class F2fsParser : IDisposable
             var childPath = prefix.Length == 0 ? entry.Name : prefix + "/" + entry.Name;
             var kind = ClassifyKind(entry.FileType, childInode);
             var symlinkTarget = kind == F2fsEntryKind.Symlink ? ReadSymlinkTarget(entry.Ino, childInode) : null;
-            _entries[childPath] = new F2fsFileEntry(childPath, (long)childInode.Size, entry.Ino, kind, symlinkTarget, childInode.Uid, childInode.Gid, childInode.Mode, ReadXattrs(entry.Ino, childInode), childInode.Addr[childInode.ExtraIsizeWords] != 0 ? childInode.Addr[childInode.ExtraIsizeWords] : childInode.Addr[childInode.ExtraIsizeWords + 1], childInode.Flags) { Metadata = childInode.Metadata };
+            var deviceId = (childInode.Mode & InodeTypeBits.FormatMask) is InodeTypeBits.CharDevice or InodeTypeBits.BlockDevice
+                ? childInode.Addr[childInode.ExtraIsizeWords] != 0
+                    ? childInode.Addr[childInode.ExtraIsizeWords]
+                    : childInode.Addr[childInode.ExtraIsizeWords + 1]
+                : 0;
+            _entries[childPath] = new F2fsFileEntry(childPath, (long)childInode.Size, entry.Ino, kind, symlinkTarget, childInode.Uid, childInode.Gid, childInode.Mode, ReadXattrs(entry.Ino, childInode), deviceId, childInode.Flags) { Metadata = childInode.Metadata };
             if (kind == F2fsEntryKind.Directory)
             {
                 WalkDirectory(entry.Ino, childPath, visited);

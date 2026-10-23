@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.FileSystem.Metadata;
+
 namespace UotanStudio.Firmware.FileSystem.F2fs;
 
 /// <summary>
@@ -143,6 +145,48 @@ public sealed class F2fsOptions
     internal IReadOnlyDictionary<string, Metadata.FsConfigEntry>? FsConfig { get; set; }
     internal IReadOnlyDictionary<string, string>? FileContexts { get; set; }
 
+    /// <summary>Gets or sets the raw superblock feature word captured from the source image.
+    /// <para>获取或设置从源镜像采集的超级块特性字。</para></summary>
+    /// <value>A raw feature mask replayed by the rebuild, or <see langword="null"/> for a fresh build.
+    /// <para>重建时重放的原始特性掩码；全新构建时为 <see langword="null"/>。</para></value>
+    internal uint? SourceFeature { get; set; }
+
+    /// <summary>Gets or sets the captured superblock filename encoding id for casefold.
+    /// <para>获取或设置采集的超级块文件名编码 id（用于大小写折叠）。</para></summary>
+    internal ushort? SourceEncoding { get; set; }
+
+    /// <summary>Gets or sets the captured superblock filename encoding flags.
+    /// <para>获取或设置采集的超级块文件名编码标志。</para></summary>
+    internal ushort SourceEncodingFlags { get; set; }
+
+    /// <summary>Gets or sets the captured superblock encryption level.
+    /// <para>获取或设置采集的超级块加密级别。</para></summary>
+    internal byte SourceEncryptionLevel { get; set; }
+
+    /// <summary>Gets or sets the captured superblock password salt for string2key.
+    /// <para>获取或设置采集的超级块 string2key 口令盐。</para></summary>
+    internal byte[]? SourceEncryptPasswordSalt { get; set; }
+
+    /// <summary>Gets or sets the captured count of hot file extensions.
+    /// <para>获取或设置采集的热文件扩展名计数。</para></summary>
+    internal byte SourceHotExtensionCount { get; set; }
+
+    /// <summary>Gets or sets the superblock quota inodes replayed as hidden regular files.
+    /// <para>获取或设置以隐藏常规文件重放的超级块 quota inode。</para></summary>
+    internal IReadOnlyList<F2fsQuotaInode> QuotaInodes { get; set; } = [];
+
+    /// <summary>Gets the source feature bits this rebuild could not reproduce, for reporting.
+    /// <para>获取本次重建无法复现的源特性位，用于报告。</para></summary>
+    internal uint DroppedFeatureBits { get; set; }
+
+    /// <summary>Gets or sets whether the source contained casefold directories whose lookup hashes cannot be replayed.
+    /// <para>获取或设置源是否包含无法重放查找哈希的大小写折叠目录。</para></summary>
+    internal bool CasefoldDirectoriesPresent { get; set; }
+
+    /// <summary>Gets or sets whether the source contained verity files whose Merkle metadata is not extracted.
+    /// <para>获取或设置源是否包含未解包 Merkle 元数据的 verity 文件。</para></summary>
+    internal bool VerityContentPresent { get; set; }
+
     /// <summary>
     /// Validates and normalizes the options.
     /// <para>校验并规整选项。</para>
@@ -185,3 +229,27 @@ public sealed class F2fsOptions
         }
     }
 }
+
+/// <summary>
+/// One superblock quota inode replayed as a hidden regular file: the kernel reaches it through the
+/// superblock <c>qf_ino</c> table rather than through a directory entry.
+/// <para>以隐藏常规文件重放的一个超级块 quota inode：内核经超级块 <c>qf_ino</c> 表而不是目录条目访问它。</para>
+/// </summary>
+/// <param name="Type">Quota type: 0 user, 1 group, 2 project.<para>配额类型：0 用户、1 用户组、2 项目。</para></param>
+/// <param name="Ino">Inode number the superblock records for this quota type.<para>超级块为该配额类型记录的 inode 号。</para></param>
+/// <param name="Mode">POSIX mode captured from the quota inode.<para>从 quota inode 捕获的 POSIX 模式。</para></param>
+/// <param name="Uid">Owner user id.<para>所有者用户 id。</para></param>
+/// <param name="Gid">Owner group id.<para>所有者用户组 id。</para></param>
+/// <param name="Flags">Raw F2FS inode flags, including immutable and no-atime.<para>原始 F2FS inode 标志，含 immutable 与 no-atime。</para></param>
+/// <param name="Metadata">Timestamps and generation captured from the inode; may be <see langword="null"/>.
+/// <para>从 inode 捕获的时间戳与代数；可为 <see langword="null"/>。</para></param>
+/// <param name="Content">Complete quota data bytes.<para>完整的配额数据字节。</para></param>
+internal sealed record F2fsQuotaInode(
+    int Type,
+    uint Ino,
+    ushort Mode,
+    uint Uid,
+    uint Gid,
+    uint Flags,
+    FileSystemInodeMetadata? Metadata,
+    byte[] Content);

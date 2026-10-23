@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Text;
 using UotanStudio.Firmware.FileSystem;
 using UotanStudio.Firmware.FileSystem.F2fs;
@@ -58,6 +59,7 @@ public class F2fsTests
             Assert.Equal(expected, actual);
 
             var entries = parser.ListFiles().ToDictionary(static e => e.Path, StringComparer.Ordinal);
+            Assert.All(entries.Values, static entry => Assert.Equal(0u, entry.DeviceId));
             Assert.Equal(Encoding.UTF8.GetBytes("hello f2fs\n"), ReadFile(parser, "hello.txt"));
             Assert.Equal(BinaryBlob, ReadFile(parser, "blob.bin"));
             Assert.Equal(Encoding.UTF8.GetBytes("inner content\n"), ReadFile(parser, "subdir/inner.txt"));
@@ -106,6 +108,49 @@ public class F2fsTests
         }
         finally
         {
+            DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public async Task Build_LargeData_CheckpointCapacityCoversEveryValidBlock()
+    {
+        var root = CreateTempDirectory();
+        var imagePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".img");
+        try
+        {
+            var block = new byte[BlockSize];
+            for (var i = 0; i < block.Length; i++)
+            {
+                block[i] = (byte)(i * 31 + 7);
+            }
+
+            using (var file = File.Create(Path.Combine(root, "payload.bin")))
+            {
+                for (var i = 0; i < 80_000; i++)
+                {
+                    file.Write(block);
+                }
+            }
+
+            F2fsBuilder.Build(root, imagePath);
+            var metadata = await new F2fsFormatHandler().ReadMetadataAsync(imagePath, TestContext.Current.CancellationToken);
+            Assert.True(metadata.Success);
+            var valid = long.Parse(metadata.Metadata["ValidBlockCount"], CultureInfo.InvariantCulture);
+            var user = long.Parse(metadata.Metadata["UserBlockCount"], CultureInfo.InvariantCulture);
+            var free = long.Parse(metadata.Metadata["FreeSegmentCount"], CultureInfo.InvariantCulture);
+            var reserved = long.Parse(metadata.Metadata["RsvdSegmentCount"], CultureInfo.InvariantCulture);
+            Assert.True(valid > 0);
+            Assert.True(valid <= user, $"valid_block_count {valid} exceeds user_block_count {user}.");
+            Assert.True(free >= reserved, $"free_segment_count {free} is below rsvd_segment_count {reserved}.");
+        }
+        finally
+        {
+            if (File.Exists(imagePath))
+            {
+                File.Delete(imagePath);
+            }
+
             DeleteRecursive(root);
         }
     }

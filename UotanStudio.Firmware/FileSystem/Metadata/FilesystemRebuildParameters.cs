@@ -38,6 +38,38 @@ internal sealed class RebuildParameters
     public bool? F2fsCompressionEnabled { get; set; }
 
     public string? F2fsCompressionAlgorithm { get; set; }
+    /// <summary>Gets the raw F2FS superblock feature word captured from the source image.
+    /// <para>获取从源镜像采集的 F2FS 超级块特性字。</para></summary>
+    /// <value>The exact on-disk feature mask, or <see langword="null"/> when the source predates this
+    /// capture; a null value leaves the feature word to the builder's own derivation.
+    /// <para>磁盘上的特性掩码原值；源早于该采集字段时为 <see langword="null"/>，此时特性字由构建器推导。</para></value>
+    public uint? F2fsFeature { get; set; }
+    /// <summary>Gets the superblock filename encoding id used by casefold.
+    /// <para>获取大小写折叠使用的超级块文件名编码 id。</para></summary>
+    public ushort? F2fsEncoding { get; set; }
+    /// <summary>Gets the superblock filename encoding flags used by casefold.
+    /// <para>获取大小写折叠使用的超级块文件名编码标志。</para></summary>
+    public ushort F2fsEncodingFlags { get; set; }
+    /// <summary>Gets the superblock encryption level.<para>获取超级块加密级别。</para></summary>
+    public byte? F2fsEncryptionLevel { get; set; }
+    /// <summary>Gets the 16-byte superblock password salt for string2key.
+    /// <para>获取超级块 string2key 的 16 字节口令盐。</para></summary>
+    public byte[]? F2fsEncryptSalt { get; set; }
+    /// <summary>Gets the count of hot file extensions recorded by the superblock.
+    /// <para>获取超级块记录的热文件扩展名计数。</para></summary>
+    public byte F2fsHotExtensionCount { get; set; }
+    /// <summary>Gets the source feature bits the rebuild cannot reproduce, recorded for reporting.
+    /// <para>获取重建无法复现的源特性位，记录用于报告。</para></summary>
+    public uint? F2fsDroppedFeatures { get; set; }
+    /// <summary>Gets the quota inodes referenced by the source superblock, with their data bytes.
+    /// <para>获取源超级块引用的 quota inode 及其数据字节。</para></summary>
+    public List<F2fsQuotaInodeParameters> F2fsQuotaInodes { get; set; } = [];
+    /// <summary>Gets whether the source carried casefold directories whose lookup hashes cannot be replayed.
+    /// <para>获取源是否携带无法重放查找哈希的大小写折叠目录。</para></summary>
+    public bool F2fsCasefoldDirectoriesPresent { get; set; }
+    /// <summary>Gets whether the source carried verity files whose Merkle metadata is not extracted.
+    /// <para>获取源是否携带未解包 Merkle 元数据的 verity 文件。</para></summary>
+    public bool F2fsVerityFilesPresent { get; set; }
     /// <summary>Gets the original image length in bytes, when known.<para>获取原始镜像字节长度（已知时）。</para></summary>
     public long? SourceLength { get; set; }
     /// <summary>Gets the source filesystem's own byte size (block count times block size), when known.
@@ -48,6 +80,41 @@ internal sealed class RebuildParameters
     public long? SourceFilesystemBytes { get; set; }
     /// <summary>Gets the verified EROFS rebuild profile.<para>获取经校验的 EROFS 重建档案。</para></summary>
     public ErofsRebuildParameters? Erofs { get; set; }
+}
+
+/// <summary>
+/// One superblock quota inode of the source F2FS image. The kernel reaches it through the superblock
+/// <c>qf_ino</c> table, not through a directory entry, so the inode and its data are carried separately
+/// from the directory tree.
+/// <para>源 F2FS 镜像的一个超级块 quota inode。内核经超级块 <c>qf_ino</c> 表而不是目录条目访问它，
+/// 因此该 inode 及其数据与目录树分开携带。</para>
+/// </summary>
+internal sealed class F2fsQuotaInodeParameters
+{
+    /// <summary>Gets or sets the quota type: 0 user, 1 group, 2 project.
+    /// <para>获取或设置配额类型：0 用户、1 用户组、2 项目。</para></summary>
+    public int Type { get; set; }
+    /// <summary>Gets or sets the inode number recorded in the superblock quota table.
+    /// <para>获取或设置超级块配额表记录的 inode 号。</para></summary>
+    public uint Ino { get; set; }
+    /// <summary>Gets or sets the POSIX mode of the quota inode.
+    /// <para>获取或设置 quota inode 的 POSIX 模式。</para></summary>
+    public ushort Mode { get; set; }
+    /// <summary>Gets or sets the owner user id.<para>获取或设置所有者用户 id。</para></summary>
+    public uint Uid { get; set; }
+    /// <summary>Gets or sets the owner group id.<para>获取或设置所有者用户组 id。</para></summary>
+    public uint Gid { get; set; }
+    /// <summary>Gets or sets the raw F2FS inode flags, including immutable and no-atime.
+    /// <para>获取或设置原始 F2FS inode 标志，含 immutable 与 no-atime。</para></summary>
+    public uint Flags { get; set; }
+    /// <summary>Gets or sets the logical size in bytes.<para>获取或设置逻辑大小（字节）。</para></summary>
+    public long Size { get; set; }
+    /// <summary>Gets or sets the timestamps and generation captured from the inode.
+    /// <para>获取或设置从 inode 捕获的时间戳与代数。</para></summary>
+    public FileSystemInodeMetadata? Metadata { get; set; }
+    /// <summary>Gets or sets the complete quota data bytes, serialized as base64.
+    /// <para>获取或设置完整的配额数据字节，以 base64 序列化。</para></summary>
+    public byte[] Content { get; set; } = [];
 }
 
 /// <summary>

@@ -14,6 +14,8 @@ namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 /// </summary>
 public static partial class FileSystemPreservation
 {
+    private const long MaximumQuotaInodeBytes = 1024 * 1024;
+
     private static RebuildParameters? BuildRebuildParameters(string source, string format, CancellationToken token)
     {
         if (format == "Android Sparse Image (simg)")
@@ -80,6 +82,54 @@ public static partial class FileSystemPreservation
     {
         using var parser = new F2fsParser(source);
         var algorithms = parser.ReadCompressionAlgorithms();
+        var quotaInodes = new List<F2fsQuotaInodeParameters>();
+        var casefoldDirectoriesPresent = false;
+        var verityFilesPresent = false;
+        foreach (var entry in parser.ListEntriesWithRoot())
+        {
+            casefoldDirectoriesPresent |= (entry.Flags & 0x4000_0000) != 0;
+            verityFilesPresent |= entry.Xattrs?.Keys.Any(static name =>
+                name.StartsWith("f2fs.index11.", StringComparison.Ordinal)) == true;
+        }
+
+        var quotaNumbers = parser.SourceQuotaInodeNumbers;
+        for (var type = 0; type < quotaNumbers.Length; type++)
+        {
+            var ino = quotaNumbers[type];
+            if (ino == 0)
+            {
+                continue;
+            }
+
+            var inode = parser.ReadInodeByNumber(ino);
+            var size = checked((long)inode.Size);
+            if (size < 0 || size > MaximumQuotaInodeBytes)
+            {
+                throw new FileSystemUnsupportedFeatureException(
+                    $"F2FS quota inode {ino} is {size} bytes, above the {MaximumQuotaInodeBytes}-byte preservation limit.");
+            }
+
+            var content = parser.ReadInodeData(ino);
+            if (content.Length != size)
+            {
+                throw new FileSystemCorruptedException(
+                    $"F2FS quota inode {ino} declares {size} bytes but yielded {content.Length}.");
+            }
+
+            quotaInodes.Add(new F2fsQuotaInodeParameters
+            {
+                Type = type,
+                Ino = ino,
+                Mode = inode.Mode,
+                Uid = inode.Uid,
+                Gid = inode.Gid,
+                Flags = inode.Flags,
+                Size = size,
+                Metadata = inode.Metadata,
+                Content = content
+            });
+        }
+
         return new RebuildParameters
         {
             Format = "F2FS",
@@ -90,7 +140,16 @@ public static partial class FileSystemPreservation
             SourceLength = source.Length,
             SourceFilesystemBytes = checked((long)parser.Superblock.BlockCount * parser.BlockSize),
             F2fsCompressionEnabled = algorithms.Count > 0,
-            F2fsCompressionAlgorithm = algorithms.Count == 1 ? algorithms.Single().ToString() : null
+            F2fsCompressionAlgorithm = algorithms.Count == 1 ? algorithms.Single().ToString() : null,
+            F2fsFeature = parser.SourceFeature,
+            F2fsEncoding = parser.SourceEncoding,
+            F2fsEncodingFlags = parser.SourceEncodingFlags,
+            F2fsEncryptionLevel = parser.SourceEncryptionLevel,
+            F2fsEncryptSalt = parser.SourceEncryptPasswordSalt,
+            F2fsHotExtensionCount = parser.SourceHotExtensionCount,
+            F2fsQuotaInodes = quotaInodes,
+            F2fsCasefoldDirectoriesPresent = casefoldDirectoriesPresent,
+            F2fsVerityFilesPresent = verityFilesPresent
         };
     }
 

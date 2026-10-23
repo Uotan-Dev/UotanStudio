@@ -25,6 +25,8 @@ public sealed partial class F2fsBuilder
 
     private const uint RsvdSegments = 6;
 
+    private const uint OverprovPercent = 5;
+
     private const int CpPackTotalBlocks = 6;
 
     private const int CompactDataEntryCap = (F2fsNode.NodeSize - SumFooterSize - 2 * SumJournalSize) / SummarySize;
@@ -44,13 +46,31 @@ public sealed partial class F2fsBuilder
 
     private const uint FeatureCompression = 0x0000_2000;
 
+    private const uint FeatureEncryption = 0x0000_0001;
+
     private const uint FeatureExtraAttr = 0x0000_0008;
 
     private const uint FeatureProjectQuota = 0x0000_0010;
 
     private const uint FeatureFlexibleInlineXattr = 0x0000_0040;
 
+    private const uint FeatureQuotaInode = 0x0000_0080;
+
     private const uint FeatureInodeCrtime = 0x0001_0000;
+
+    private const uint FeatureLostFound = 0x0000_0200;
+
+    private const uint FeatureVerity = 0x0000_0400;
+
+    private const uint FeatureSuperblockChecksum = 0x0000_0800;
+
+    private const uint FeatureCasefold = 0x0000_1000;
+
+    private const uint RebuildFeatureMask = FeatureEncryption | FeatureExtraAttr | FeatureProjectQuota
+        | FeatureFlexibleInlineXattr | FeatureQuotaInode | FeatureInodeCrtime | FeatureLostFound
+        | FeatureVerity | FeatureSuperblockChecksum | FeatureCasefold | FeatureCompression;
+
+    private const uint CasefoldInodeFlag = 0x4000_0000;
 
     private const int TotalExtraAttrWords = F2fsInode.TotalExtraAttrWords;
 
@@ -323,6 +343,7 @@ public sealed partial class F2fsBuilder
         ArgumentNullException.ThrowIfNull(output);
         var effective = options ?? new F2fsOptions();
         effective.Validate();
+        ValidatePreservedFeatures(effective);
         effective.CancellationToken.ThrowIfCancellationRequested();
         var blockSize = effective.BlockSize;
         using var compressionStaging = new CompressionPayloadStaging();
@@ -360,8 +381,12 @@ public sealed partial class F2fsBuilder
             hardlinks.Add((node, canonical));
             return true;
         });
-        AssignInodeNumbers(ordered);
+        AssignInodeNumbers(ordered, new HashSet<uint>(effective.QuotaInodes.Select(static quota => quota.Ino)));
         foreach (var (alias, canonical) in hardlinks) alias.Ino = canonical.Ino;
+        if (effective.QuotaInodes.Count > 0)
+        {
+            ordered.AddRange(CreateQuotaInodeNodes(effective));
+        }
         var plannedBytes = 0L;
         var progressGate = new Lock();
         var totalPlannedBytes = progress is null
@@ -404,7 +429,6 @@ public sealed partial class F2fsBuilder
         var nat = new Dictionary<uint, (uint Ino, uint Block)>();
         CollectNatEntries(ordered, nat);
 
-        layout.ReservedCompressionBlocks = ordered.Where(static n => n.IsCompressedFile).Sum(static n => (long)n.DataBlockCount - n.AllocatedDataBlockCount);
         var metadataFeatures = FeatureExtraAttr | FeatureFlexibleInlineXattr
                 | (ordered.Exists(static n => n.SourceMetadata?.ProjectId is not null) ? FeatureProjectQuota : 0u)
                 | (ordered.Exists(static n => n.SourceMetadata?.BirthTime is not null) ? FeatureInodeCrtime : 0u);
@@ -587,17 +611,107 @@ public sealed partial class F2fsBuilder
         }
     }
 
-    private static void AssignInodeNumbers(List<BuildNode> ordered)
+    private static void AssignInodeNumbers(List<BuildNode> ordered, IReadOnlySet<uint> reservedInodes)
     {
         var nextIno = RootIno;
         foreach (var node in ordered)
         {
+            while (reservedInodes.Contains(nextIno))
+            {
+                nextIno++;
+            }
+
             node.Ino = nextIno++;
             if (nextIno == 0)
             {
                 throw new InvalidOperationException("F2FS inode number space exhausted.");
             }
         }
+    }
+
+    /// <summary>
+    /// Rejects preserved features whose backing structures this writer cannot reproduce, instead of
+    /// advertising a bit whose content would be silently lost.
+    /// <para>拒绝本写入器无法复现其支撑结构的保留特性，而不是声明一个内容会被静默丢失的特性位。</para>
+    /// </summary>
+    /// <param name="options">Effective build options carrying the captured source feature word.
+    /// <para>携带已采集源特性字的生效构建选项。</para></param>
+    /// <exception cref="FileSystemUnsupportedFeatureException">The source declared casefold directories or verity
+    /// files, whose lookup hashes or Merkle metadata are not extracted.
+    /// <para>源声明了大小写折叠目录或 verity 文件，而其查找哈希或 Merkle 元数据未解包。</para></exception>
+    private static void ValidatePreservedFeatures(F2fsOptions options)
+    {
+        if (options.SourceFeature is not { } sourceFeature)
+        {
+            return;
+        }
+
+        if ((sourceFeature & FeatureCasefold) != 0 && options.CasefoldDirectoriesPresent)
+        {
+            throw new FileSystemUnsupportedFeatureException(
+                "F2FS casefold directories cannot be rebuilt: their on-disk lookup hashes depend on the " +
+                "casefolding operation and are not replayed by this writer.");
+        }
+
+        if ((sourceFeature & FeatureVerity) != 0 && options.VerityContentPresent)
+        {
+            throw new FileSystemUnsupportedFeatureException(
+                "F2FS verity files cannot be rebuilt: their Merkle tree blocks live outside the file size and " +
+                "are not extracted by this writer.");
+        }
+    }
+
+    /// <summary>
+    /// Creates the hidden quota inodes the superblock references: regular files with no directory entry,
+    /// no parent and the captured quota data as content.
+    /// <para>创建超级块引用的隐藏 quota inode：无目录条目、无父目录、以采集的配额数据为内容的常规文件。</para>
+    /// </summary>
+    /// <param name="options">Build options carrying quota inode records captured from the source.
+    /// <para>携带从源采集的 quota inode 记录的构建选项。</para></param>
+    /// <returns>One build node per recorded quota inode, in type order.
+    /// <para>按类型顺序为每个已记录的 quota inode 返回一个构建节点。</para></returns>
+    /// <exception cref="FileSystemCorruptedException">A quota type or inode number is duplicated or collides
+    /// with the reserved superblock inodes.
+    /// <para>配额类型或 inode 号重复，或与保留的超级块 inode 冲突。</para></exception>
+    private static List<BuildNode> CreateQuotaInodeNodes(F2fsOptions options)
+    {
+        var nodes = new List<BuildNode>(options.QuotaInodes.Count);
+        var seenTypes = new HashSet<int>();
+        var seenNumbers = new HashSet<uint>();
+        foreach (var quota in options.QuotaInodes)
+        {
+            if (quota.Type is < 0 or > 2 || !seenTypes.Add(quota.Type))
+            {
+                throw new FileSystemCorruptedException($"Invalid F2FS quota type {quota.Type}.");
+            }
+
+            if (quota.Ino <= RootIno || !seenNumbers.Add(quota.Ino))
+            {
+                throw new FileSystemCorruptedException($"Invalid F2FS quota inode number {quota.Ino}.");
+            }
+
+            var metadata = quota.Metadata;
+            nodes.Add(new BuildNode
+            {
+                Name = string.Empty,
+                FullPath = string.Empty,
+                Ino = quota.Ino,
+                Size = quota.Content.LongLength,
+                EmbeddedContent = quota.Content,
+                Mode = quota.Mode,
+                Uid = quota.Uid,
+                Gid = quota.Gid,
+                SemanticFlags = quota.Flags & FileSystemEditPlan.F2fsSemanticFlagMask,
+                LinkCount = 1,
+                SourceMetadata = metadata,
+                Mtime = metadata?.ModificationTime?.Seconds ?? 0,
+                MtimeNsec = metadata?.ModificationTime?.Nanoseconds ?? 0,
+                Ctime = metadata?.ChangeTime?.Seconds ?? 0,
+                CtimeNsec = metadata?.ChangeTime?.Nanoseconds ?? 0
+            });
+        }
+
+        return nodes;
     }
 
     private static void PlanFileData(BuildNode node, F2fsOptions options,
@@ -639,7 +753,7 @@ public sealed partial class F2fsBuilder
         if (size <= maxInlineData && preservedCompression is null)
         {
             node.InlineData = true;
-            node.InlineBytes = node.IsSymlink ? content! : ReadFileBytes(node.FullPath, size);
+            node.InlineBytes = node.IsSymlink ? content! : ReadNodeContentBytes(node, size);
             return;
         }
 
@@ -730,7 +844,7 @@ public sealed partial class F2fsBuilder
             slots[slot] = slot;
         }
 
-        using var source = File.OpenRead(node.FullPath);
+        using var source = OpenNodeContent(node);
         for (var batchStart = 0; batchStart < clusterCount; batchStart += workers)
         {
             var batch = Math.Min(workers, clusterCount - batchStart);
@@ -897,6 +1011,30 @@ public sealed partial class F2fsBuilder
         }
     }
 
+    /// <summary>
+    /// Opens the logical content of a build node: an in-memory payload for hidden superblock inodes and
+    /// the host file for extracted tree entries.
+    /// <para>打开构建节点的逻辑内容：隐藏超级块 inode 使用内存负载，解包目录树条目使用宿主文件。</para>
+    /// </summary>
+    private static Stream OpenNodeContent(BuildNode node)
+        => node.EmbeddedContent is { } embedded
+            ? new MemoryStream(embedded, writable: false)
+            : File.OpenRead(node.FullPath);
+
+    /// <summary>
+    /// Reads up to <paramref name="size"/> bytes from a build node's logical content.
+    /// <para>从构建节点的逻辑内容读取至多 <paramref name="size"/> 字节。</para>
+    /// </summary>
+    private static byte[] ReadNodeContentBytes(BuildNode node, long size)
+    {
+        if (node.EmbeddedContent is not { } embedded)
+        {
+            return ReadFileBytes(node.FullPath, size);
+        }
+
+        return embedded.AsSpan(0, (int)Math.Min(size, embedded.LongLength)).ToArray();
+    }
+
     private static bool[]? DetectHoles(BuildNode node, int dataBlocks, int blockSize)
     {
         if (node.IsSymlink)
@@ -905,7 +1043,7 @@ public sealed partial class F2fsBuilder
         }
 
         var holes = new bool[dataBlocks];
-        using var stream = File.OpenRead(node.FullPath);
+        using var stream = OpenNodeContent(node);
         const int segmentBlocks = 16;
         var segment = new byte[segmentBlocks * blockSize];
         for (var baseBlock = 0; baseBlock < dataBlocks; baseBlock += segmentBlocks)
@@ -1117,7 +1255,7 @@ public sealed partial class F2fsBuilder
     private static Layout ComputeLayout(List<BuildNode> ordered, F2fsOptions options)
     {
         uint maxNid = 0;
-        var nextDnodeNid = RootIno + (uint)ordered.Count;
+        var nextDnodeNid = checked(ordered.Max(static node => node.Ino) + 1);
         foreach (var node in ordered)
         {
             maxNid = Math.Max(maxNid, node.Ino);
@@ -1155,13 +1293,22 @@ public sealed partial class F2fsBuilder
         var nodeSegments = (uint)((nodeBlocks + BlocksPerSeg - 1) / BlocksPerSeg);
 
         var dataSegments = 3u + (uint)((Math.Max(0, dataBlocks - CompactDataEntryCap) + BlocksPerSeg - 1) / BlocksPerSeg);
-        var mainSegments = nodeSegments + dataSegments + OverprovSlackSegments;
+        var reservedCompressionBlocks = ordered.Where(static n => n.IsCompressedFile)
+            .Sum(static n => (long)n.DataBlockCount - n.AllocatedDataBlockCount);
+        var capacitySegments = CapacityAwareMainSegments(nodeBlocks + dataBlocks + reservedCompressionBlocks);
+        var mainSegments = Math.Max(nodeSegments + dataSegments + OverprovSlackSegments, capacitySegments);
         if (mainSegments == 0)
         {
             mainSegments = 1;
         }
 
-        var layout = new Layout { MaxNid = maxNid, NodeBlocks = nodeBlocks, DataBlocks = dataBlocks };
+        var layout = new Layout
+        {
+            MaxNid = maxNid,
+            NodeBlocks = nodeBlocks,
+            DataBlocks = dataBlocks,
+            ReservedCompressionBlocks = reservedCompressionBlocks
+        };
 
         uint sitSegments;
         uint natSegments;
@@ -1223,6 +1370,32 @@ public sealed partial class F2fsBuilder
         layout.DataBlkaddr = layout.NodeBlkaddr + nodeSegments * BlocksPerSeg;
         layout.ImageBlocks = Segment0Blkaddr + (long)totalSegments * BlocksPerSeg;
         return layout;
+    }
+
+    /// <summary>
+    /// Computes a main-area segment count whose declared user capacity covers every valid block after the
+    /// checkpoint's overprovision reservation is subtracted.
+    /// <para>计算主区段数，使扣除 checkpoint 预留的过量配置段后声明的用户容量仍覆盖全部有效块。</para>
+    /// </summary>
+    /// <param name="usedBlocks">Valid blocks the image will declare (node, data and reserved compression).
+    /// <para>镜像将声明的有效块数（节点、数据与保留的压缩块）。</para></param>
+    /// <returns>A main-area segment count that leaves the fixed reserved segments outside the user capacity.
+    /// <para>主区段数，固定保留段不计入用户容量。</para></returns>
+    private static uint CapacityAwareMainSegments(long usedBlocks)
+    {
+        if (usedBlocks <= 0)
+        {
+            return 0;
+        }
+
+        var usedSegments = (usedBlocks + BlocksPerSeg - 1) / BlocksPerSeg;
+        var capacitySegments = (usedSegments * 100 + (100 - OverprovPercent) - 1) / (100 - OverprovPercent);
+        while (capacitySegments - capacitySegments * OverprovPercent / 100 < usedSegments)
+        {
+            capacitySegments++;
+        }
+
+        return checked((uint)(RsvdSegments + capacitySegments));
     }
 
     /// <summary>
@@ -1550,6 +1723,7 @@ public sealed partial class F2fsBuilder
         public List<DnodePlan> Dnodes = [];
         public DnodePlan?[] RootDnodes = new DnodePlan?[5];
         public ulong OriginalInode;
+        public byte[]? EmbeddedContent;
         public uint LinkCount = 1;
         public uint SemanticFlags;
         public uint DeviceId;
