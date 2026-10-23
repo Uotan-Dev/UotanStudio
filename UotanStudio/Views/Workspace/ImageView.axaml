@@ -30,9 +30,9 @@
                             Classes="Small"
                             HorizontalAlignment="Left"
                             VerticalAlignment="Center"
-                            Command="{Binding DeleteSelectedCommand}"
-                            ToolTip.Tip="{DynamicResource ImageView_DeleteSelected}">
-                        <avalonia:Delete Width="14" Height="14" />
+                            Command="{Binding SelectAllCommand}"
+                            ToolTip.Tip="{DynamicResource Menu_SelectAll}">
+                        <avalonia:CheckDouble Width="14" Height="14" />
                     </Button>
 
                     <Border Grid.Column="1"
@@ -69,9 +69,9 @@
                             Classes="Small"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center"
-                            Command="{Binding RefreshCommand}"
-                            ToolTip.Tip="{DynamicResource ImageView_Refresh}">
-                        <avalonia:Refresh Width="14" Height="14" />
+                            Command="{Binding DeleteSelectedCommand}"
+                            ToolTip.Tip="{DynamicResource ImageView_DeleteSelected}">
+                        <avalonia:Delete Width="14" Height="14" />
                     </Button>
                 </Grid>
 
@@ -97,6 +97,15 @@
                           FontSize="12"
                           Background="Transparent"
                           BorderThickness="0">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="{DynamicResource ImageView_Refresh}" Click="OnRefreshMenuClick">
+                                <MenuItem.Icon>
+                                    <avalonia:Refresh Width="16" Height="16" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
                     <DataGrid.RowTheme>
                         <ControlTheme TargetType="DataGridRow"
                                       BasedOn="{StaticResource {x:Type DataGridRow}}">
@@ -151,6 +160,11 @@
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <Separator />
+                                    <MenuItem Header="{DynamicResource ImageView_Refresh}" Click="OnRefreshMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:Refresh Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
                                     <MenuItem Header="{DynamicResource Menu_Delete}" Click="OnDeleteMenuClick">
                                         <MenuItem.Icon>
                                             <avalonia:Delete Width="16" Height="16" />
