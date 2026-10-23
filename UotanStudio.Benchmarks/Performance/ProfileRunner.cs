@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using UotanStudio.Benchmarks.Infrastructure;
@@ -9,6 +8,7 @@ using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Benchmarks.Performance;
 
@@ -77,7 +77,7 @@ internal static class ProfileRunner
 
         var image = Path.Combine(root, "image.ext4");
         Ext4Builder.Build(source, image, options);
-        Console.WriteLine($"image sha256    {Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(image)))}");
+        Console.WriteLine($"image sha256    {Convert.ToHexString(Sha256.ComputeHash(File.ReadAllBytes(image)))}");
 
         var runCount = 0;
         Action run = () =>
@@ -120,7 +120,7 @@ internal static class ProfileRunner
 
         var image = Path.Combine(root, "image.erofs");
         new ErofsBuilder().Build(source, image, options);
-        Console.WriteLine($"image sha256    {Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(image)))}");
+        Console.WriteLine($"image sha256    {Convert.ToHexString(Sha256.ComputeHash(File.ReadAllBytes(image)))}");
 
         Action run = workload switch
         {
@@ -134,7 +134,8 @@ internal static class ProfileRunner
                     {
                         parser.ReadFileBytes(entry.Path);
                     }
-                },
+                }
+            ,
         };
 
         return Measure(run, repeats);

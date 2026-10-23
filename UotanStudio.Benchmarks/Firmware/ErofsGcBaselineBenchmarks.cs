@@ -1,10 +1,6 @@
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Diagnosers;
-using BenchmarkDotNet.Exporters;
 using BenchmarkDotNet.Jobs;
-using BenchmarkDotNet.Loggers;
 using UotanStudio.Benchmarks.Infrastructure;
 using UotanStudio.Benchmarks.Inputs;
 using UotanStudio.Firmware.FileSystem.Erofs;
@@ -238,7 +234,6 @@ public class ErofsGcBaselineBenchmarks : IDisposable
     private static ErofsOptions CreateOptions() => new()
     {
         Algorithm = ErofsCompressionAlgorithm.Lz4,
-        LegacyCompatibility = true,
         Uuid = new byte[16],
         BuildTime = 1700000000,
     };

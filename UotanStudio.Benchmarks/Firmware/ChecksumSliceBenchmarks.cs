@@ -1,6 +1,6 @@
 using BenchmarkDotNet.Attributes;
-using UotanStudio.Hash.Crc32Register;
 using UotanStudio.Hash.Crc32c;
+using UotanStudio.Hash.Crc32Register;
 
 namespace UotanStudio.Benchmarks.Firmware;
 

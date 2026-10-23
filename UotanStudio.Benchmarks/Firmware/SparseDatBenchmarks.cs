@@ -1,4 +1,3 @@
-using System.Threading;
 using BenchmarkDotNet.Attributes;
 using UotanStudio.Benchmarks.Inputs;
 using UotanStudio.Compress;

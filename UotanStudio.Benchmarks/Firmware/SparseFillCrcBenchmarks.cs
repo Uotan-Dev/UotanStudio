@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
-using System.IO.Hashing;
 using BenchmarkDotNet.Attributes;
+using UotanStudio.Hash.Crc32Ieee;
 
 namespace UotanStudio.Benchmarks.Firmware;
 
@@ -38,7 +38,7 @@ public class SparseFillCrcBenchmarks
     [Benchmark(Description = "AppendFillCrc")]
     public uint Append()
     {
-        var crc = new Crc32();
+        var crc = new Crc32IeeeAccumulator();
         var remaining = _totalBytes;
         while (remaining > 0)
         {
@@ -47,6 +47,6 @@ public class SparseFillCrcBenchmarks
             remaining -= size;
         }
 
-        return BinaryPrimitives.ReadUInt32LittleEndian(crc.GetCurrentHash());
+        return crc.GetCurrentHash();
     }
 }

@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Jobs;
 using UotanStudio.Benchmarks.Infrastructure;
 
 [assembly: ConfigSource(typeof(GcHarnessConfigSource))]

@@ -48,7 +48,6 @@ public class ErofsExtractParallelReadBenchmarks : IDisposable
         var image = new ErofsBuilder().Build(source, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
         });
         _imagePath = Path.Combine(_root, "image.erofs");
         File.WriteAllBytes(_imagePath, image);

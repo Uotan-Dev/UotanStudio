@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using BenchmarkDotNet.Attributes;
 using UotanStudio.Firmware.Application.Equivalence;
@@ -7,6 +6,7 @@ using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
 using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.Ext4.Builder;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Benchmarks.Performance;
 
@@ -78,7 +78,7 @@ public class HotPathBenchmarks
         _stagedFiles = [.. names.Select(n => Path.Combine(stage, n))];
 
         _equivalenceImage = CompressiblePayload(16 * 1024 * 1024, new Random(7));
-        _equivalenceDigest = Convert.ToHexStringLower(SHA256.HashData(_equivalenceImage));
+        _equivalenceDigest = Convert.ToHexStringLower(Sha256.ComputeHash(_equivalenceImage));
         _equivalenceLength = _equivalenceImage.Length;
     }
 
@@ -135,16 +135,15 @@ public class HotPathBenchmarks
             await using var input = new FileStream(stagedFiles[i], FileMode.Open, FileAccess.Read, FileShare.Read,
                 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
             var fileLength = input.Length;
-            var hashAlgorithm = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            using var hashAlgorithm = Sha256.CreateAccumulator();
             int read;
             while ((read = await input.ReadAsync(buffer.AsMemory(), CancellationToken.None).ConfigureAwait(false)) != 0)
             {
-                hashAlgorithm.AppendData(buffer, 0, read);
+                hashAlgorithm.Append(buffer.AsSpan(0, read));
                 processedBytes = checked(processedBytes + read);
             }
 
             var hash = hashAlgorithm.GetHashAndReset();
-            hashAlgorithm.Dispose();
             if (input.Length != fileLength)
             {
                 throw new IOException("Output changed while verifying.");

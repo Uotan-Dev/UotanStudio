@@ -1,12 +1,12 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
 using BenchmarkDotNet.Attributes;
+using UotanStudio.Benchmarks.Infrastructure;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Projects;
 using UotanStudio.Services;
-using UotanStudio.Services.Projects;
 using UotanStudio.Services.Workspace;
-using UotanStudio.Benchmarks.Infrastructure;
 using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Benchmarks.Performance;

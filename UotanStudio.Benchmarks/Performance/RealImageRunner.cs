@@ -1,12 +1,12 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Security.Cryptography;
 using UotanStudio.Benchmarks.Infrastructure;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.FileSystem.Erofs;
 using UotanStudio.Firmware.FileSystem.Erofs.Builder;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
 using UotanStudio.Firmware.FileSystem.Erofs.Parser;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Benchmarks.Performance;
 
@@ -383,7 +383,7 @@ internal static class RealImageRunner
     {
         using var stream = File.OpenRead(image);
         using var parser = new ErofsParser(stream);
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = Sha256.CreateAccumulator();
         var sampled = 0;
         foreach (var entry in parser.EnumerateFiles().OrderBy(entry => entry.Path, StringComparer.Ordinal).Take(64))
         {
@@ -393,8 +393,8 @@ internal static class RealImageRunner
             }
 
             var bytes = parser.ReadFileBytes(entry.Path);
-            hash.AppendData(System.Text.Encoding.UTF8.GetBytes(entry.Path));
-            hash.AppendData(bytes);
+            hash.Append(System.Text.Encoding.UTF8.GetBytes(entry.Path));
+            hash.Append(bytes);
             sampled++;
         }
 

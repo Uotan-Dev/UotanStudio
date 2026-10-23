@@ -51,7 +51,6 @@ public class ErofsDensePlanningBenchmarks : IDisposable
         var image = new ErofsBuilder().Build(_source, new ErofsOptions
         {
             Algorithm = ErofsCompressionAlgorithm.Lz4,
-            LegacyCompatibility = true,
             OptimizeCompression = OptimizeCompression,
             Uuid = new byte[16],
             BuildTime = 1700000000,

@@ -1,9 +1,9 @@
-using System.Security.Cryptography;
 using BenchmarkDotNet.Attributes;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Builder;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Benchmarks.Firmware;
 
@@ -49,7 +49,7 @@ public class PayloadBuildBenchmarks
             await builder.BuildAsync(path, CancellationToken.None);
             paths[index] = path;
         }));
-        return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(paths[0])));
+        return Convert.ToHexString(Sha256.ComputeHash(File.ReadAllBytes(paths[0])));
     }
 
     private void TryDeleteRoot()

@@ -1,7 +1,7 @@
-using System.Security.Cryptography;
 using BenchmarkDotNet.Attributes;
 using UotanStudio.Firmware.BootSecurity.Avb;
 using UotanStudio.Firmware.BootSecurity.Avb.Verification;
+using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Benchmarks.Firmware;
 
@@ -82,7 +82,7 @@ public class AvbVerifyPathBenchmarks
     public async Task<byte> SequentialSha256()
     {
         await using var stream = OpenImage();
-        var digest = await SHA256.HashDataAsync(stream);
+        var digest = await Sha256.ComputeHashAsync(stream);
         return digest[0];
     }
 
