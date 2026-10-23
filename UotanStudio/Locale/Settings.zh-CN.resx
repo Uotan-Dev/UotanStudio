@@ -427,10 +427,10 @@
     <value>重定向表面</value>
   </data>
   <data name="Settings_RenderingHint" xml:space="preserve">
-    <value>渲染后端在下次启动时生效。自动 后括号内是当前进程实际使用的后端。</value>
+    <value>渲染后端在下次启动时生效。</value>
   </data>
   <data name="Settings_CompositionModeHint" xml:space="preserve">
-    <value>合成模式仅 Windows 可用，且只有 ANGLE/EGL 取得 D3D11 时生效；其他后端会忽略该设置并使用重定向表面。自动 后括号内是当前进程实际使用的合成宿主。</value>
+    <value>合成模式仅 Windows 可用，且只有 ANGLE/EGL 取得 D3D11 时生效；其他后端会忽略该设置并使用重定向表面。</value>
   </data>
   <data name="Settings_RenderingRestartTitle" xml:space="preserve">
     <value>需要重启</value>

@@ -427,10 +427,10 @@
     <value>Redirection surface</value>
   </data>
   <data name="Settings_RenderingHint" xml:space="preserve">
-    <value>The rendering backend is applied at the next start. The parenthesized value after Automatic is the backend the running process actually uses.</value>
+    <value>The rendering backend is applied at the next start.</value>
   </data>
   <data name="Settings_CompositionModeHint" xml:space="preserve">
-    <value>Composition mode is Windows-only and takes effect only when ANGLE/EGL obtains D3D11; other backends ignore it and use the redirection surface. The parenthesized value after Automatic is the composition host the running process actually uses.</value>
+    <value>Composition mode is Windows-only and takes effect only when ANGLE/EGL obtains D3D11; other backends ignore it and use the redirection surface.</value>
   </data>
   <data name="Settings_RenderingRestartTitle" xml:space="preserve">
     <value>Restart required</value>
