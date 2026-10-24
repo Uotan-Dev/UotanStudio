@@ -91,7 +91,6 @@ public static class RenderingPreferenceCatalog
         RenderingPlatform.LinuxX11 =>
             [RenderingBackend.Auto, RenderingBackend.Glx, RenderingBackend.Egl,
                 RenderingBackend.Software, RenderingBackend.Vulkan],
-        // The Wayland backend always renders through EGL and exposes no rendering mode of its own.
         RenderingPlatform.LinuxWayland => [RenderingBackend.Auto],
         RenderingPlatform.MacOS =>
             [RenderingBackend.Auto, RenderingBackend.Metal, RenderingBackend.OpenGl,

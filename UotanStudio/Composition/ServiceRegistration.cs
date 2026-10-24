@@ -40,14 +40,6 @@ internal static class ServiceRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(windowService);
 
-        // Every Add* call below passes an explicit factory. Do not replace them with the parameterless
-        // AddSingleton<T>() overload, ActivatorUtilities or assembly scanning: those paths need
-        // constructor metadata that trimming and NativeAOT remove.
-        // 下面每次 Add* 都传入显式工厂。不要改成无工厂的 AddSingleton<T>()、ActivatorUtilities 或程序集扫描：
-        // 那些路径依赖构造函数元数据，裁剪与 NativeAOT 会把它移除。
-        // The facade registrations delegate to the static Instance getters so the container singleton
-        // and the pre-container test default resolve to the same lazy instance.
-        // 门面注册转发到静态 Instance，使容器单例与容器建立前的测试默认实例解析到同一个惰性实例。
         services.AddSingleton<ILocalizer>(_ => LanguageService.Instance);
         services.AddSingleton<LanguageService>(_ => LanguageService.Instance);
         services.AddSingleton<IUnifiedLog>(_ => LogService.Instance);

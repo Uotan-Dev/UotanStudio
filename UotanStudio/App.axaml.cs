@@ -66,9 +66,6 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
-        // Compose the container as early as possible so every later service lookup sees the same
-        // explicit-factory singletons. Nothing is activated here: registrations are factory delegates.
-        // 尽早组合容器，使后续服务查找共享同一批显式工厂单例。此处不做激活：注册全部是工厂委托。
         var services = ServiceRegistration.BuildProvider(
             ServiceRegistration.Register(new ServiceCollection(), DeviceMonitor, Views.UiWindowService.Shared));
         ServiceHub.Initialize(services);
@@ -97,8 +94,6 @@ public partial class App : Application
     {
         UsbLogBridge.Install();
         FirstChanceExceptionLogger.Install();
-        // Last-chance device release for exit paths that never raise the desktop exit event.
-        // 为不触发桌面退出事件的退出路径安装最后一道设备释放。
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 
@@ -169,8 +164,6 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            // A damaged bundle must not trap the user on the splash window; the platform font keeps the UI usable.
-            // 损坏的内嵌资源不应把用户困在启动窗上；回退到平台字体以保证界面可用。
             LogService.Instance.Write(LogLevel.Error, "Startup", $"Bundled font registration failed: {ex.Message}");
         }
 
@@ -178,9 +171,6 @@ public partial class App : Application
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
         Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
         Firmware.Core.FirmwareParallelism.Workers = settings.FirmwareParallelism;
-        // Compose the device monitor only after the persisted route mode is applied, so the first
-        // probe captures the configured mode instead of the default.
-        // 仅在持久化路由模式应用之后再组装设备监视器，使首次探测捕获已配置的模式而不是默认模式。
         _desktopServices = new DesktopApplicationServices();
 
         await ReportAsync(SplashPhase.ApplyingSettings);
@@ -261,8 +251,6 @@ public partial class App : Application
     {
         if (sender is IClassicDesktopStyleApplicationLifetime desktop) desktop.Exit -= OnDesktopExit;
         McpExposureService.Instance.Stop();
-        // Close every open view first, so mirror links and their device leases are released before the process ends.
-        // 先关闭每个已打开视图，使投屏链路与其设备租约在进程结束前释放。
         try { GetDesktopMainViewModel()?.Dispose(); }
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Lifecycle", $"Closing views during shutdown failed: {ex.GetType().Name}: {ex.Message}"); }
         try { _desktopServices?.Dispose(); }

@@ -135,8 +135,6 @@ public partial class DeviceViewModel
         {
             (info, hasSu) = await Task.Run(async () =>
             {
-                // The property batch is a sequence of blocking shell reads, so it owns a dedicated thread
-                // instead of a shared pool worker; the UI thread only receives the applied model values below.
                 var queried = await Task.Factory.StartNew(
                     () => QueryViaAdbServer(device) ?? QueryViaAdbSession(device, token),
                     token, TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);

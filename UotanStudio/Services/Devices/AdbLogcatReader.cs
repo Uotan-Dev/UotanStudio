@@ -127,8 +127,6 @@ internal sealed class AdbLogcatReader(Func<string, Action<string>, CancellationT
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested && ex is not OutOfMemoryException)
         {
-            // The process-name table is cosmetic enrichment; a failed lookup keeps the stream running and only
-            // means that entries are shown without a process name.
             LogService.Instance.Write(LogLevel.Debug, "AdbLog",
                 $"Reading the logcat process-name table failed: {ex.GetType().Name}: {ex.Message}");
             return;

@@ -69,8 +69,6 @@ internal static class HdcDirectConnection
         var lease = monitor.OpenLeaseByKey(direct.Key, DeviceSessionKind.Hdc);
         if (lease is null)
         {
-            // Stopping the HDC server can rebind or re-enumerate the USB interface; the cached device key
-            // is then stale. Re-resolve once before reporting that another host owns the interface.
             monitor.InvalidateUsbInventoryCache();
             direct = monitor.ResolveDirectUsbDevice(device);
             lease = monitor.OpenLeaseByKey(direct.Key, DeviceSessionKind.Hdc);
@@ -110,7 +108,6 @@ internal static class HdcDirectConnection
         }
         catch (IOException)
         {
-            // The cached inventory may still contain a pre-rebind key; retry once below.
         }
 
         monitor.InvalidateUsbInventoryCache();

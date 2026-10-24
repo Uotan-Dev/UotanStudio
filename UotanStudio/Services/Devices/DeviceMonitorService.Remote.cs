@@ -16,10 +16,6 @@ public sealed partial class DeviceMonitorService
             return false;
         }
 
-        // ADB tcpip has a conventional default port; an HDC daemon binds persist.hdc.port or an ephemeral
-        // port, so a bare HDC host would dial an unrelated service. HDC therefore keeps the port mandatory.
-        // ADB tcpip 有约定默认端口；HDC 守护进程绑定 persist.hdc.port 或临时端口，裸 HDC 主机可能拨到无关服务，
-        // 因此 HDC 保持端口必填。
         var defaultPort = protocol == DeviceProtocolKind.Adb ? DebugBridgeNetworkAddress.DefaultDevicePort : 0;
         return DebugBridgeNetworkAddress.TryNormalize(input, defaultPort, out address) &&
                (protocol != DeviceProtocolKind.Hdc || Encoding.UTF8.GetByteCount(address) < 32);

@@ -457,7 +457,6 @@ public sealed class WorkspaceDockTitleTests
             Assert.True(dockManager.ValidateDockable(doc2, firstDock, DragAction.Move, operation, bExecute: true));
             var secondDock = Assert.IsAssignableFrom<IDocumentDock>(doc2.Owner);
 
-            // Move the only document of the split dock into another split of the first dock.
             Assert.True(dockManager.ValidateDockable(doc2, firstDock, DragAction.Move, operation, bExecute: true));
 
             var rightDock = Assert.IsAssignableFrom<IToolDock>(

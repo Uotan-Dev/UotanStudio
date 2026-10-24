@@ -237,24 +237,24 @@ public sealed class OhscrcpyProtocolTests
     private static byte[] BuildSps(int widthInMacroblocks, int heightInMapUnits, int cropBottom)
     {
         var writer = new BitWriter();
-        writer.WriteBits(66, 8); // profile_idc: baseline
+        writer.WriteBits(66, 8);
         writer.WriteBits(0, 8);
-        writer.WriteBits(31, 8); // level_idc
-        writer.WriteUnsignedExpGolomb(0); // seq_parameter_set_id
-        writer.WriteUnsignedExpGolomb(0); // log2_max_frame_num_minus4
-        writer.WriteUnsignedExpGolomb(2); // pic_order_cnt_type
-        writer.WriteUnsignedExpGolomb(1); // max_num_ref_frames
-        writer.WriteBit(false); // gaps_in_frame_num_value_allowed_flag
+        writer.WriteBits(31, 8);
+        writer.WriteUnsignedExpGolomb(0);
+        writer.WriteUnsignedExpGolomb(0);
+        writer.WriteUnsignedExpGolomb(2);
+        writer.WriteUnsignedExpGolomb(1);
+        writer.WriteBit(false);
         writer.WriteUnsignedExpGolomb(widthInMacroblocks - 1);
         writer.WriteUnsignedExpGolomb(heightInMapUnits - 1);
-        writer.WriteBit(true); // frame_mbs_only_flag
-        writer.WriteBit(true); // direct_8x8_inference_flag
+        writer.WriteBit(true);
+        writer.WriteBit(true);
         if (cropBottom > 0)
         {
             writer.WriteBit(true);
-            writer.WriteUnsignedExpGolomb(0); // crop_left
-            writer.WriteUnsignedExpGolomb(0); // crop_right
-            writer.WriteUnsignedExpGolomb(0); // crop_top
+            writer.WriteUnsignedExpGolomb(0);
+            writer.WriteUnsignedExpGolomb(0);
+            writer.WriteUnsignedExpGolomb(0);
             writer.WriteUnsignedExpGolomb(cropBottom);
         }
         else
@@ -262,8 +262,8 @@ public sealed class OhscrcpyProtocolTests
             writer.WriteBit(false);
         }
 
-        writer.WriteBit(false); // vui_parameters_present_flag
-        writer.WriteBit(true); // rbsp_stop_one_bit
+        writer.WriteBit(false);
+        writer.WriteBit(true);
         while (writer.BitCount % 8 != 0) writer.WriteBit(false);
         return [0x67, .. writer.ToArray()];
     }

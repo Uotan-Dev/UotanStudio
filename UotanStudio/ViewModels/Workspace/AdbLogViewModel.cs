@@ -283,13 +283,9 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
         else if (_captureTask is { IsCompleted: false } || _captureRecoveryStopped ||
             Environment.TickCount64 < _nextCaptureAttemptTick)
         {
-            // The capture is running, automatic recovery already gave up, or the backoff window is still
-            // open; the timer tick owns the next attempt instead of this selection notification.
             return;
         }
 
-        // A different device starts with an empty view; a state change on the same device keeps the lines the
-        // user is already reading.
         RestartCapture(device, clearLines: !sameDevice);
     }
 
@@ -309,8 +305,6 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
         _deviceState = device.State;
         ConnectedSerial = device.Serial;
         IsRunning = true;
-        // A running capture owns the retry window; the value also keeps a capture that ends without posting its
-        // completion from turning the timer into a hot restart loop.
         _nextCaptureAttemptTick = Environment.TickCount64 + (long)CaptureRestartBackoff.TotalMilliseconds;
         var capture = new CancellationTokenSource();
         lock (_sync) _capture = capture;
@@ -326,8 +320,6 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
                 {
                     if (Interlocked.Exchange(ref received, 1) == 0)
                     {
-                        // The first line of a (re)started capture proves the stream works, so the previous
-                        // failure text and its backoff no longer describe the current state.
                         Dispatcher.UIThread.Post(() =>
                         {
                             if (_disposed || !ReferenceEquals(_capture, capture)) return;

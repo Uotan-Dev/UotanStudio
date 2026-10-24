@@ -140,11 +140,6 @@ internal static class AdbMessaging
 
         if ((command ^ 0xFFFFFFFF) != magic)
         {
-            // The decoded words identify the desync class without another round trip: a plausible command with a
-            // wrong magic means the frame started mid-stream, while arbitrary bytes mean another reader (an adb
-            // server or a second host handle) is splitting the same inbound stream.
-            // 解码字段可在不追加往返的情况下区分失步类型：命令合理而 magic 不符说明帧从中途开始读取，完全随机的
-            // 字节说明另一个读取方（adb server 或第二个主机句柄）正在分割同一条入站流。
             throw new InvalidDataException(
                 $"Invalid ADB message magic! command=0x{command:X8}, magic=0x{magic:X8}, " +
                 $"expected=0x{command ^ 0xFFFFFFFF:X8}, first8={Convert.ToHexString(fields[..8])}");

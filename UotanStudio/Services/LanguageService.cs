@@ -41,9 +41,6 @@ public sealed class LanguageService : ILocalizer
     {
         get
         {
-            // While the container builds this very registration its factory calls Instance again;
-            // the reentrancy guard returns the lazy default so registration can never recurse.
-            // 容器构建本注册时其工厂会再次调用 Instance；重入保护返回惰性默认实例，注册不会递归。
             if (Interlocked.CompareExchange(ref _containerLookup, 1, 0) == 0)
             {
                 try

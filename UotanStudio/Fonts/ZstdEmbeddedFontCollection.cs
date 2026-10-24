@@ -71,8 +71,6 @@ internal sealed class ZstdEmbeddedFontCollection : FontCollectionBase
         }
         finally
         {
-            // Avalonia copies the face into unmanaged memory, so the decoded 8 MB buffer can be cleared.
-            // Avalonia 已把字形复制到非托管内存，因此解码得到的 8 MB 缓冲区可以清除。
             Array.Clear(decompressed);
         }
     }

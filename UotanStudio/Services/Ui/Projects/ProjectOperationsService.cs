@@ -32,9 +32,6 @@ public sealed class ProjectOperationsService
     {
         get
         {
-            // The registration factory calls Instance again while the container builds it; the
-            // guard returns the lazy default instead of recursing into the same registration.
-            // 容器构建注册时其工厂会再次调用 Instance；该保护返回惰性默认实例，而不是递归进入同一注册。
             if (Interlocked.CompareExchange(ref _containerLookup, 1, 0) == 0)
             {
                 try

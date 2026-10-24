@@ -178,8 +178,6 @@ internal static class OhscrcpyDeviceAssets
         }
         finally
         {
-            // The decoded bytes are on disk, so the buffer does not stay resident.
-            // 解码字节已写入磁盘，缓冲区不再驻留。
             Array.Clear(bytes);
             if (File.Exists(temporaryPath))
             {
@@ -190,8 +188,6 @@ internal static class OhscrcpyDeviceAssets
 
     private static byte[] ReadPayload(Assembly assembly, string fileName)
     {
-        // The logical name contract is ohos/device/<fileName>; the build item is globbed as *.so.zst, so the
-        // compressed suffix is accepted as well.
         return TryReadResource(assembly, ResourcePrefix + fileName)
             ?? TryReadResource(assembly, ResourcePrefix + fileName + ".zst")
             ?? throw new InvalidDataException(

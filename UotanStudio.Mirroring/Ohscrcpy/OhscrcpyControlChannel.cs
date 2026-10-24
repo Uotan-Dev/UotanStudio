@@ -787,7 +787,6 @@ internal sealed class OhscrcpyControlChannel : IOhscrcpyControlChannel
                 }
                 catch (Exception ex) when (ex is not OhscrcpyControlApiException)
                 {
-                    // The request/response boundary is uncertain; this stream is never reused.
                     _stream?.Dispose();
                     _stream = null;
                     throw;

@@ -97,8 +97,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         WorkspaceVM.PropertyChanged -= OnWorkspacePropertyChanged;
         _modifications.Changed -= OnModificationsChanged;
         _components.Dispose();
-        // Each open view runs its own close logic (mirror links stop, editors release files) before the process ends.
-        // 每个已打开视图在进程结束前运行自身的关闭逻辑（投屏链路停止、编辑器释放文件）。
         WorkspaceVM.Dispose();
         WeakReferenceMessenger.Default.UnregisterAll(this);
     }

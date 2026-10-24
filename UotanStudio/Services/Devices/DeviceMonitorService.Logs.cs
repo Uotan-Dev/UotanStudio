@@ -123,9 +123,6 @@ public sealed partial class DeviceMonitorService
             {
                 if (!sharedSession.IsConnected)
                 {
-                    // A borrowed session that already lost its connection cannot serve this capture; the
-                    // failure below takes it out of the pool, so the consumer's next attempt opens a fresh
-                    // transport instead of reusing the same dead connection forever.
                     throw new IOException("The shared ADB session is not connected.");
                 }
 
@@ -235,8 +232,6 @@ public sealed partial class DeviceMonitorService
                 var session = scope.Session;
                 try
                 {
-                    // The clear runs on its own shell stream of the shared connection, so a capture that
-                    // already streams on that connection keeps its stream and is not interrupted.
                     if (!session.IsConnected)
                     {
                         throw new IOException("The shared ADB session is not connected.");
