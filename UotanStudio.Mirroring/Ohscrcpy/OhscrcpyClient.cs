@@ -45,6 +45,14 @@ public sealed record OhscrcpyClientOptions(
 /// </remarks>
 internal sealed class OhscrcpyClient : IDisposable
 {
+    /// <summary>Budget for reopening the video stream after the device closed it while idle.
+    /// <para>设备待机关闭视频流后重新打开该流的预算。</para></summary>
+    private const int ReopenVideoBudgetMs = 3_000;
+
+    /// <summary>Delay between reopen attempts while the device stays in standby.
+    /// <para>设备持续待机时两次重开尝试之间的间隔。</para></summary>
+    private const int ReopenRetryDelayMs = 2_000;
+
     private const int PayloadCapacity = 8;
 
     private static readonly uint _h264FourCc = BinaryPrimitives.ReadUInt32BigEndian("H264"u8);
@@ -52,7 +60,9 @@ internal sealed class OhscrcpyClient : IDisposable
     private readonly IOhoscrcpyVideoTransport _video;
     private readonly IOhscrcpyControlChannel? _control;
     private readonly OhscrcpyClientOptions _options;
-    private readonly Channel<byte[]> _payloads = Channel.CreateBounded<byte[]>(
+    private Channel<byte[]> _payloads = CreatePayloadChannel();
+
+    private static Channel<byte[]> CreatePayloadChannel() => Channel.CreateBounded<byte[]>(
         new BoundedChannelOptions(PayloadCapacity)
         {
             SingleReader = true,
@@ -64,6 +74,8 @@ internal sealed class OhscrcpyClient : IDisposable
 
     private Stream? _stream;
     private Task? _reader;
+    private int _reopening;
+    private long _nextReopenTicks;
     private Exception? _readerFailure;
     private byte[]? _pendingPayload;
     private long _lastTimestamp;
@@ -169,7 +181,7 @@ internal sealed class OhscrcpyClient : IDisposable
             ConnectControl();
             var stream = OpenVideoStream(deadline, budget);
             _stream = stream;
-            _reader = Task.Run(() => ReadLoopAsync(stream, _lifetime.Token), CancellationToken.None);
+            _reader = Task.Run(() => ReadLoopAsync(stream, _payloads, _lifetime.Token), CancellationToken.None);
             var first = WaitForFirstPayload(deadline, budget);
             ApplyStreamConfiguration(first);
             _pendingPayload = first;
@@ -430,6 +442,16 @@ internal sealed class OhscrcpyClient : IDisposable
 
             if (closed)
             {
+                if (IsStandbyStreamEnd())
+                {
+                    TryReopenVideoStream();
+                    return _pendingPayload ?? throw new IOException(
+                        OhscrcpyFailure.VideoPrefix
+                        + $"the device closed the video stream while idling and it did not reopen within {budgetMs} ms. "
+                        + OhscrcpyFailure.VideoPrefix
+                        + $"设备待机期间关闭了视频流，未能在 {budgetMs} ms 内重新打开。");
+                }
+
                 ThrowStreamEnded();
             }
 
@@ -528,7 +550,7 @@ internal sealed class OhscrcpyClient : IDisposable
         return _payloads.Reader.TryRead(out payload) ? payload : null;
     }
 
-    private async Task ReadLoopAsync(Stream stream, CancellationToken cancellationToken)
+    private async Task ReadLoopAsync(Stream stream, Channel<byte[]> payloads, CancellationToken cancellationToken)
     {
         try
         {
@@ -553,7 +575,7 @@ internal sealed class OhscrcpyClient : IDisposable
                     continue;
                 }
 
-                await _payloads.Writer.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
+                await payloads.Writer.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -565,7 +587,63 @@ internal sealed class OhscrcpyClient : IDisposable
         }
         finally
         {
+            payloads.Writer.TryComplete();
+        }
+    }
+
+    /// <summary>
+    /// Whether a closed video stream is a device idling (standby/lock) rather than a protocol fault: a normal
+    /// end or a transport close is recoverable, while a malformed message is not.
+    /// <para>判断已关闭的视频流是否只是设备待机（或锁屏）而不是协议故障：正常结束或传输关闭可恢复，消息格式错误
+    /// 不可恢复。</para>
+    /// </summary>
+    /// <returns><see langword="true"/> when the caller should keep the session and wait for a reopen.
+    /// <para>调用方应保留会话并等待重开时为 <see langword="true"/>。</para></returns>
+    private bool IsStandbyStreamEnd() => Volatile.Read(ref _readerFailure) is not InvalidDataException;
+
+    /// <summary>
+    /// Reopens the gRPC video stream after the device closed it while idle, so a standby screen does not end the
+    /// mirror session. Rate limited; failures are logged and retried after <see cref="ReopenRetryDelayMs"/>.
+    /// <para>设备待机关闭 gRPC 视频流后重新打开它，使待机不会结束投屏会话。带限速；失败只记日志并在
+    /// <see cref="ReopenRetryDelayMs"/> 后重试。</para>
+    /// </summary>
+    private void TryReopenVideoStream()
+    {
+        if (Environment.TickCount64 < Volatile.Read(ref _nextReopenTicks))
+        {
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref _reopening, 1, 0) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Volatile.Write(ref _readerFailure, null);
+            var payloads = CreatePayloadChannel();
+            _payloads = payloads;
+            var deadline = Environment.TickCount64 + ReopenVideoBudgetMs;
+            var stream = OpenVideoStream(deadline, ReopenVideoBudgetMs);
+            Interlocked.Exchange(ref _stream, stream)?.Dispose();
+            _reader = Task.Run(() => ReadLoopAsync(stream, payloads, _lifetime.Token), CancellationToken.None);
+            var first = WaitForFirstPayload(deadline, ReopenVideoBudgetMs);
+            ApplyStreamConfiguration(first);
+            _pendingPayload = first;
+            Log?.Invoke("The device gRPC video stream was closed while the device idled and has been reopened. "
+                + "设备待机关闭了 gRPC 视频流，已重新打开。");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Volatile.Write(ref _nextReopenTicks, Environment.TickCount64 + ReopenRetryDelayMs);
             _payloads.Writer.TryComplete();
+            Log?.Invoke($"The device gRPC video stream is closed and could not be reopened yet: {ex.Message} "
+                + $"设备 gRPC 视频流已关闭，暂未能重新打开：{ex.Message}");
+        }
+        finally
+        {
+            Volatile.Write(ref _reopening, 0);
         }
     }
 

@@ -17,6 +17,7 @@ internal static partial class OhscrcpyServerManager
     private const int ControlDaemonReadyBudgetMs = 10_000;
     private const int ControlDaemonPollDelayMs = 150;
     private const int ExtensionReadyBudgetMs = 6_000;
+    private const int LeftoverStopBudgetMs = 2_000;
     private const int ExtensionPollDelayMs = 200;
     private const int ExtensionSettleMilliseconds = 400;
     private const int ProbeAttempts = 3;
@@ -235,6 +236,58 @@ internal static partial class OhscrcpyServerManager
     }
 
     /// <summary>
+    /// Stops capture extensions this product left running from an earlier attempt. A leftover extension keeps
+    /// the device-side gRPC abstract socket name, which is fixed, so a new attempt would forward to the stale
+    /// handler whose <c>onStart</c> never answers while unary calls still succeed. Only processes whose command
+    /// line carries this product's extension-name prefix are touched.
+    /// <para>停止本产品上一次尝试遗留的采集扩展。遗留扩展会占用设备侧固定的 gRPC 抽象 socket 名，使新的尝试转发到
+    /// 旧的处理器——它的 <c>onStart</c> 永不应答而一元调用仍会成功。只处理命令行带有本产品扩展名前缀的进程。</para>
+    /// </summary>
+    /// <param name="session">Connected HDC session. <para>已连接的 HDC 会话。</para></param>
+    /// <param name="logSink">Optional sink receiving the bilingual summary.
+    /// <para>可选的接收端，用于接收中英双语摘要。</para></param>
+    /// <param name="cancellationToken">Cancels the bounded wait for the processes to disappear.
+    /// <para>取消对进程消失的有界等待。</para></param>
+    private static void StopLeftoverExtensions(
+        IHdcDeviceSession session, Action<string>? logSink, CancellationToken cancellationToken)
+    {
+        var leftover = FindExtensionProcessIds(session, OhscrcpyConstants.ExtensionNamePrefix);
+        if (leftover.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var pid in leftover)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                OhscrcpyShell.Run(session, $"kill -9 {pid}");
+            }
+            catch (Exception error) when (error is not OutOfMemoryException)
+            {
+                logSink?.Invoke($"Stopping leftover capture extension {pid} failed: {error.Message}. "
+                    + $"停止遗留采集扩展 {pid} 失败：{error.Message}。");
+            }
+        }
+
+        var deadline = Environment.TickCount64 + LeftoverStopBudgetMs;
+        while (Environment.TickCount64 < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Thread.Sleep(ExtensionPollDelayMs);
+            if (FindExtensionProcessIds(session, OhscrcpyConstants.ExtensionNamePrefix).Count == 0)
+            {
+                break;
+            }
+        }
+
+        logSink?.Invoke(
+            $"Stopped {leftover.Count} leftover capture extension(s) from an earlier attempt (pid {JoinProcessIds(leftover)}). "
+            + $"已停止上一次尝试遗留的 {leftover.Count} 个采集扩展（进程号 {JoinProcessIds(leftover)}）。");
+    }
+
+    /// <summary>
     /// Pushes the first capture library that starts and returns its owned daemon state.
     /// <para>推送第一个能够成功启动的采集库，并返回本会话持有的守护进程状态。</para>
     /// </summary>
@@ -263,6 +316,7 @@ internal static partial class OhscrcpyServerManager
     /// build, which retrying cannot fix.
     /// <para>会话没有可用的 sync（文件传输）通道，或设备因动态依赖与该系统版本不匹配而无法加载任何推送的采集库；
     /// 后者重试无济于事。</para></exception>
+
     internal static VideoDaemonHandle StartVideoDaemon(
         IHdcDeviceSession session, UiTestDeviceInfo device, OhscrcpyLaunchOptions options,
         Action<string>? logSink, CancellationToken cancellationToken = default)
@@ -272,6 +326,7 @@ internal static partial class OhscrcpyServerManager
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
         cancellationToken.ThrowIfCancellationRequested();
+        StopLeftoverExtensions(session, logSink, cancellationToken);
         var candidates = SelectVideoLibraries(RuntimeDirectory, device);
         if (candidates.Count == 0)
         {

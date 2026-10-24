@@ -45,6 +45,15 @@ internal interface IOhoscrcpyVideoTransport : IDisposable
 internal sealed class OhoscrcpyGrpcTransport : IOhoscrcpyVideoTransport
 {
     private const int DefaultVideoReadyBudgetMs = 15_000;
+    /// <summary>Per-attempt bound for one video <c>onStart</c> request, so a tunnel that accepts the
+    /// connection but never answers cannot hang the start. <para>单次视频 <c>onStart</c> 请求的时限，使接受连接
+    /// 却永不应答的隧道不会把启动挂死。</para></summary>
+    private const int VideoAttemptTimeoutMs = 4000;
+
+    /// <summary>Per-attempt bound for one unary <c>onRequestIDRFrame</c> call.
+    /// <para>单次一元 <c>onRequestIDRFrame</c> 调用的时限。</para></summary>
+    private const int KeyFrameAttemptTimeoutMs = 3000;
+
     private const int FirstRetryDelayMs = 250;
     private const int MaximumRetryDelayMs = 1_000;
 
@@ -100,8 +109,20 @@ internal sealed class OhoscrcpyGrpcTransport : IOhoscrcpyVideoTransport
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var response = SendAsync(OhscrcpyConstants.VideoCallPath, cancellationToken)
-                    .GetAwaiter().GetResult();
+                using var attempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                var remaining = (int)Math.Clamp(deadline - Environment.TickCount64, 1, VideoAttemptTimeoutMs);
+                attempt.CancelAfter(remaining);
+                HttpResponseMessage response;
+                try
+                {
+                    response = SendAsync(OhscrcpyConstants.VideoCallPath, attempt.Token).GetAwaiter().GetResult();
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        $"the video gRPC endpoint did not answer within {remaining} ms.");
+                }
+
                 try
                 {
                     var stream = response.Content.ReadAsStream(cancellationToken);
@@ -146,9 +167,22 @@ internal sealed class OhoscrcpyGrpcTransport : IOhoscrcpyVideoTransport
     public void RequestKeyFrame(CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        using var response = SendAsync(OhscrcpyConstants.KeyFrameCallPath, cancellationToken)
-            .GetAwaiter().GetResult();
-        _ = response.Content.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult();
+        using var attempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        attempt.CancelAfter(KeyFrameAttemptTimeoutMs);
+        try
+        {
+            using var response = SendAsync(OhscrcpyConstants.KeyFrameCallPath, attempt.Token)
+                .GetAwaiter().GetResult();
+            _ = response.Content.ReadAsByteArrayAsync(attempt.Token).GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new IOException(
+                OhscrcpyFailure.VideoPrefix
+                + $"the key-frame request did not answer within {KeyFrameAttemptTimeoutMs} ms."
+                + OhscrcpyFailure.VideoPrefix
+                + $"关键帧请求未在 {KeyFrameAttemptTimeoutMs} ms 内响应。");
+        }
     }
 
     private async Task<HttpResponseMessage> SendAsync(string path, CancellationToken cancellationToken)
