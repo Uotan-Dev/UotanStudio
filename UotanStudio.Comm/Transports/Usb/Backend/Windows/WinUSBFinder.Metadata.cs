@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Core;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
@@ -441,6 +442,79 @@ internal static partial class WinUSBFinder
         return $"path:{device.DevicePath}|vid:{device.VendorId:X4}|pid:{device.ProductId:X4}|type:{device.GetType().Name}";
     }
 
+    /// <summary>Serializes descriptor probes so one scan never opens the same interface twice at once.
+    /// <para>串行化描述符探测，使一次扫描不会同时打开同一个接口两次。</para></summary>
+    private static readonly FifoGate SerialProbeGate = new();
+
+    /// <summary>
+    /// Resolves the serial of one enumerated interface in the order Windows itself prefers: an instance-id suffix
+    /// that carries the serial, then a serial remembered for this instance, then a single gated descriptor probe.
+    /// A failed probe is remembered briefly and keeps the previously read serial, so an interface that another
+    /// process or this application currently owns does not degrade the device to a <c>VID:PID</c> label.
+    /// <para>按 Windows 自身的优先级解析一个枚举接口的序列号：先看携带序列号的实例 ID 后缀，其次看为该实例记下的
+    /// 序列号，最后做一次受控闸门的描述符探测。探测失败会被短暂记住并保留此前读到的序列号，因此被其它进程或本
+    /// 程序占用的接口不会让设备降级成 <c>VID:PID</c> 标签。</para>
+    /// </summary>
+    /// <param name="path">Device interface path. <para>设备接口路径。</para></param>
+    /// <param name="instanceId">Device instance id observed now. <para>本次观测到的设备实例 ID。</para></param>
+    /// <param name="instanceCandidate">Last segment of the instance id, which is the serial when Windows cached it.
+    /// <para>实例 ID 的最后一段；Windows 缓存过序列号时它就是序列号。</para></param>
+    /// <param name="probe">Metadata-only probe device carrying the interface class of the same path.
+    /// <para>携带同一路径接口类的仅元数据探测设备。</para></param>
+    /// <returns>The resolved serial, or <see langword="null"/> when no evidence is available.
+    /// <para>解析出的序列号；没有任何证据时为 <see langword="null"/>。</para></returns>
+    internal static string? ResolveEnumeratedSerial(string path, string? instanceId, string? instanceCandidate,
+        UsbDevice probe)
+    {
+        if (IsInstanceSerial(instanceCandidate))
+        {
+            UsbSerialCache.Remember(path, instanceId, instanceCandidate!, Environment.TickCount64);
+            return instanceCandidate;
+        }
+
+        if (UsbSerialCache.TryGet(path, instanceId, Environment.TickCount64, out var cached))
+        {
+            return cached;
+        }
+
+        return PeekSerialNumberFor(probe, path, instanceId);
+    }
+
+    /// <summary>Whether an instance-id suffix is a real serial rather than a location string such as <c>6&amp;1a2b&amp;0&amp;2</c>.
+    /// <para>判断实例 ID 后缀是真正的序列号而不是 <c>6&amp;1a2b&amp;0&amp;2</c> 之类的定位字符串。</para>
+    /// </summary>
+    /// <param name="candidate">Last segment of the instance id. <para>实例 ID 的最后一段。</para></param>
+    /// <returns><see langword="true"/> when the suffix can be used as the serial.
+    /// <para>后缀可作为序列号使用时为 <see langword="true"/>。</para></returns>
+    internal static bool IsInstanceSerial(string? candidate)
+        => !string.IsNullOrWhiteSpace(candidate) && !candidate.Contains('&');
+
+    private static string? PeekSerialNumberFor(UsbDevice probe, string path, string? instanceId)
+    {
+        if (!probe.InterfaceMetadataObserved || probe.InterfaceClass != 0xff)
+        {
+            return null;
+        }
+
+        if (UsbSerialCache.IsRecentlyUnavailable(path, instanceId, Environment.TickCount64))
+        {
+            return null;
+        }
+
+        using (SerialProbeGate.Enter())
+        {
+            var peeked = PeekSerialNumber(path);
+            if (string.IsNullOrWhiteSpace(peeked))
+            {
+                UsbSerialCache.RememberUnavailable(path, instanceId, Environment.TickCount64);
+                return null;
+            }
+
+            UsbSerialCache.Remember(path, instanceId, peeked, Environment.TickCount64);
+            return peeked;
+        }
+    }
+
     /// <summary>
     /// Fills the enumerated serial for a metadata-only device, aligned with Google adb's Windows
     /// implementation (AdbWinApi's <c>GetSerialNumber</c> takes the last segment of the device
@@ -462,13 +536,15 @@ internal static partial class WinUSBFinder
         if (!string.IsNullOrWhiteSpace(instanceSerial))
         {
             device.SerialNumber = instanceSerial;
+            UsbSerialCache.Remember(device.DevicePath, device.DeviceInstanceId, instanceSerial,
+                Environment.TickCount64);
             return device;
         }
 
         if (device.InterfaceMetadataObserved && device.InterfaceClass == 0xff &&
             string.IsNullOrWhiteSpace(device.SerialNumber))
         {
-            device.SerialNumber = PeekSerialNumber(device.DevicePath);
+            device.SerialNumber = PeekSerialNumberFor(device, device.DevicePath, device.DeviceInstanceId);
         }
 
         return device;

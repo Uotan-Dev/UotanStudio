@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Text;
 using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -265,30 +267,51 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         }
 
         var sendTarget = $"{remotePath},0{Convert.ToString(mode, 8)}";
-        await stream.WriteAsync(BuildV1Packet(SyncIds.Send, Encoding.UTF8.GetBytes(sendTarget)), cancellationToken)
-            .ConfigureAwait(false);
-
-        var packet = _packet ??= new byte[V1HeaderSize + _outChunk];
-        while (true)
+        var stopwatch = Stopwatch.StartNew();
+        long totalBytes = 0;
+        var chunks = 0;
+        CommTrace.State("adb-sync",
+            $"push start remote='{remotePath}' mode=0{Convert.ToString(mode, 8)} mtime={mtime}.");
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var read = await source.ReadAsync(packet.AsMemory(V1HeaderSize, _outChunk), cancellationToken)
+            await stream.WriteAsync(BuildV1Packet(SyncIds.Send, Encoding.UTF8.GetBytes(sendTarget)), cancellationToken)
                 .ConfigureAwait(false);
-            if (read <= 0)
+
+            var packet = _packet ??= new byte[V1HeaderSize + _outChunk];
+            while (true)
             {
-                break;
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = await source.ReadAsync(packet.AsMemory(V1HeaderSize, _outChunk), cancellationToken)
+                    .ConfigureAwait(false);
+                if (read <= 0)
+                {
+                    break;
+                }
+
+                WritePacketHeader(packet, SyncIds.Data, read);
+                await stream.WriteAsync(packet.AsMemory(0, V1HeaderSize + read), cancellationToken).ConfigureAwait(false);
+                totalBytes += read;
+                chunks++;
+                CommTrace.Write(CommLogLevel.Trace, "adb-sync",
+                    $"push chunk {chunks}: {read} B written (total {totalBytes} B).");
+                CommTrace.Payload("adb-sync", "push chunk", packet.AsSpan(V1HeaderSize, read));
             }
 
-            WritePacketHeader(packet, SyncIds.Data, read);
-            await stream.WriteAsync(packet.AsMemory(0, V1HeaderSize + read), cancellationToken).ConfigureAwait(false);
+            var donePacket = new byte[V1HeaderSize];
+            Encoding.ASCII.GetBytes(SyncIds.Done, donePacket.AsSpan(0, 4));
+            BinaryPrimitives.WriteUInt32LittleEndian(donePacket.AsSpan(4), mtime);
+            await stream.WriteAsync(donePacket, cancellationToken).ConfigureAwait(false);
+
+            await ExpectResponseAsync(stream, "push", cancellationToken).ConfigureAwait(false);
+            CommTrace.State("adb-sync",
+                $"push done remote='{remotePath}': {totalBytes} B in {chunks} chunk(s), {stopwatch.ElapsedMilliseconds} ms.");
         }
-
-        var donePacket = new byte[V1HeaderSize];
-        Encoding.ASCII.GetBytes(SyncIds.Done, donePacket.AsSpan(0, 4));
-        BinaryPrimitives.WriteUInt32LittleEndian(donePacket.AsSpan(4), mtime);
-        await stream.WriteAsync(donePacket, cancellationToken).ConfigureAwait(false);
-
-        await ExpectResponseAsync(stream, "push", cancellationToken).ConfigureAwait(false);
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            CommTrace.Error("adb-sync",
+                $"push failed remote='{remotePath}' after {totalBytes} B / {chunks} chunk(s), {stopwatch.ElapsedMilliseconds} ms: {ex.GetType().Name}: {ex.Message}");
+            throw;
+        }
     }
 
     /// <summary>Pulls a remote file into a local file.<para>异步将设备上的远端文件拉取到本地文件。</para></summary>
@@ -332,6 +355,10 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
         cancellationToken.ThrowIfCancellationRequested();
 
         var stream = await EnsureStreamAsync(cancellationToken).ConfigureAwait(false);
+        var stopwatch = Stopwatch.StartNew();
+        long totalBytes = 0;
+        var chunks = 0;
+        CommTrace.State("adb-sync", $"pull start remote='{remotePath}'.");
         await stream.WriteAsync(BuildV1Packet(SyncIds.Recv, Encoding.UTF8.GetBytes(remotePath)), cancellationToken)
             .ConfigureAwait(false);
 
@@ -344,6 +371,8 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
 
             if (id == SyncIds.Done)
             {
+                CommTrace.State("adb-sync",
+                    $"pull done remote='{remotePath}': {totalBytes} B in {chunks} chunk(s), {stopwatch.ElapsedMilliseconds} ms.");
                 break;
             }
 
@@ -351,6 +380,8 @@ internal sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = Ad
             {
                 var err = await ReadExactAsync(stream, CheckedChunkLength(length, "RECV fail message"), cancellationToken)
                     .ConfigureAwait(false);
+                CommTrace.Error("adb-sync",
+                    $"pull failed remote='{remotePath}' after {totalBytes} B / {chunks} chunk(s), {stopwatch.ElapsedMilliseconds} ms: device rejected the transfer.");
                 throw new InvalidDataException($"sync pull failed for '{remotePath}': {Encoding.UTF8.GetString(err)}");
             }
 

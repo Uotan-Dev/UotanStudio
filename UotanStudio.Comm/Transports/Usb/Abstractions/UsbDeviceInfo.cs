@@ -137,4 +137,12 @@ public sealed class UsbDeviceInfo
     /// <value>The observed interfaces; empty when the backend reports no interface metadata.
     /// <para>观测到的接口列表；后端未报告接口元数据时为空。</para></value>
     public IReadOnlyList<UsbInterfaceInfo> Interfaces { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets every interface in the device's configuration descriptor, including ones this session did not bind.
+    /// <para>获取或设置设备配置描述符中的全部接口，包括本会话未绑定的接口。</para>
+    /// </summary>
+    /// <value>All enumerated interfaces; empty when the backend reports no configuration descriptor.
+    /// <para>全部已枚举接口；后端未报告配置描述符时为空。</para></value>
+    public IReadOnlyList<UsbInterfaceInfo> EnumeratedInterfaces { get; set; } = [];
 }

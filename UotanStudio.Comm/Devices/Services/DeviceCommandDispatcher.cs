@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Threading.Channels;
+using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Comm.Devices.Services;
 
@@ -21,6 +23,7 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Task _worker;
     private int _disposed;
+    private int _pending;
 
     /// <summary>
     /// Starts the background worker that drains the queue in FIFO order.
@@ -63,6 +66,7 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
         }
 
         var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopwatch = Stopwatch.StartNew();
 
         async Task Run(CancellationToken token)
         {
@@ -70,19 +74,27 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
             {
                 if (token.IsCancellationRequested)
                 {
+                    CommTrace.Debug("command-pool",
+                        $"'{name}' cancelled while queued after {stopwatch.ElapsedMilliseconds} ms.");
                     completion.TrySetCanceled(token);
                     return;
                 }
 
+                CommTrace.Debug("command-pool", $"'{name}' started after {stopwatch.ElapsedMilliseconds} ms in the queue.");
                 var result = await work(token).ConfigureAwait(false);
+                CommTrace.Debug("command-pool",
+                    $"'{name}' completed in {stopwatch.ElapsedMilliseconds} ms (result: {DescribeResult(result)}).");
                 completion.TrySetResult(result);
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == token || token.IsCancellationRequested)
             {
+                CommTrace.Debug("command-pool", $"'{name}' cancelled after {stopwatch.ElapsedMilliseconds} ms.");
                 completion.TrySetCanceled(token);
             }
             catch (Exception ex)
             {
+                CommTrace.Error("command-pool",
+                    $"'{name}' failed after {stopwatch.ElapsedMilliseconds} ms: {ex.GetType().Name}: {ex.Message}");
                 completion.TrySetException(ex);
             }
         }
@@ -93,6 +105,8 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
             throw new ObjectDisposedException(nameof(DeviceCommandDispatcher));
         }
 
+        var pending = Interlocked.Increment(ref _pending);
+        CommTrace.Debug("command-pool", $"queued '{name}' (depth {pending} waiting).");
         return completion.Task;
     }
 
@@ -116,6 +130,8 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
             return;
         }
 
+        CommTrace.Debug("command-pool",
+            $"Disposing; {Volatile.Read(ref _pending)} queued command(s) are cancelled and the running command is awaited.");
         _lifetime.Cancel();
         _channel.Writer.TryComplete();
         try
@@ -135,6 +151,7 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
     {
         await foreach (var invocation in _channel.Reader.ReadAllAsync().ConfigureAwait(false))
         {
+            Interlocked.Decrement(ref _pending);
             try
             {
                 await invocation.Run(invocation.Linked.Token).ConfigureAwait(false);
@@ -148,4 +165,18 @@ public sealed class DeviceCommandDispatcher : IAsyncDisposable
             }
         }
     }
+
+    /// <summary>Renders one command result for the debug log without dumping arbitrary content.
+    /// <para>为调试日志渲染指令结果，且不倾倒任意内容。</para>
+    /// </summary>
+    /// <param name="value">The value the command completed with. <para>指令完成时的值。</para></param>
+    /// <returns>A short descriptor: payload lengths for text and arrays, otherwise the type name.
+    /// <para>简短描述：文本与数组给出长度，其它给出类型名。</para></returns>
+    private static string DescribeResult(object? value) => value switch
+    {
+        null => "null",
+        string text => $"string({text.Length} chars)",
+        Array array => $"{value.GetType().Name}({array.Length} items)",
+        _ => value.GetType().Name,
+    };
 }

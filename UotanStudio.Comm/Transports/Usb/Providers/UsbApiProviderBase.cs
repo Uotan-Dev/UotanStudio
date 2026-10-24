@@ -112,9 +112,9 @@ internal abstract class UsbApiProviderBase : IUsbApiProvider
             UsbTrace.Log($"{backendTag} initialization failed: {ex.Message}");
             return [];
         }
-        catch
+        catch (Exception ex)
         {
-            UsbTrace.Log($"{backendTag} enumeration failed with unknown exception.");
+            UsbTrace.Log($"{backendTag} enumeration failed: {ex.GetType().Name}: {ex.Message}");
             return [];
         }
     }

@@ -1,4 +1,5 @@
 using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -9,7 +10,7 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// Represents an ADB protocol session over a device transport.
 /// <para>表示基于设备传输的 ADB 协议会话。</para>
 /// </summary>
-internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
+internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession, IGracefulProtocolShutdown
 {
     private bool _disposed;
 
@@ -314,6 +315,17 @@ internal sealed class AdbSession : IProtocolSession, IAdbDeviceSession
     /// Releases the resources held by the session.
     /// <para>释放会话持有的资源。</para>
     /// </summary>
+    /// <summary>
+    /// Sends one CLSE frame per open stream, the ADB wire format's own close, before the transport is released.
+    /// <para>在释放传输之前，为每条已打开的流发送一帧 CLSE，即 ADB 线协议自身的关闭帧。</para>
+    /// </summary>
+    /// <param name="timeout">Upper bound on the farewell. <para>告别的上限。</para></param>
+    /// <param name="cancellationToken">Cancels the farewell. <para>取消告别。</para></param>
+    /// <returns>A task completing when the close frames were written or the budget expired.
+    /// <para>关闭帧写出或预算耗尽时完成的任务。</para></returns>
+    public ValueTask SendShutdownAsync(TimeSpan timeout, CancellationToken cancellationToken)
+        => Connection.CloseAllStreamsAsync(timeout, cancellationToken);
+
     public void Dispose()
     {
         if (_disposed)

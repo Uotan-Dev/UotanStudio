@@ -280,7 +280,7 @@ internal static partial class WinUSBFinder
             var instanceId = GetDeviceInstanceId(devInfo, ref node);
             var separator = instanceId.LastIndexOf('\\');
             var candidate = separator >= 0 ? instanceId[(separator + 1)..] : null;
-            var serial = candidate is not null && !candidate.Contains('&') ? candidate : null;
+            var serial = ResolveEnumeratedSerial(path, instanceId, candidate, identity);
 
             UsbDevice? device = null;
             if (isGoogleWinUsb)
@@ -295,6 +295,11 @@ internal static partial class WinUSBFinder
             {
                 device.DeviceInstanceId = instanceId;
                 device.ContainerId = ReadContainerId(device.DeviceInstanceId);
+                if (!string.IsNullOrWhiteSpace(device.SerialNumber))
+                {
+                    UsbSerialCache.Remember(path, instanceId, device.SerialNumber, Environment.TickCount64);
+                }
+
                 var key = BuildDeviceKey(device);
                 if (uniqueKeys.Add(key))
                 {

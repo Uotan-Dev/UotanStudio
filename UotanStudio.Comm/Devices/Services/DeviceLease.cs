@@ -119,6 +119,17 @@ public sealed class DeviceLease : IAsyncDisposable, IDisposable
     /// <para>仅执行一次清理：关闭流、排空指令池、释放会话与传输，再归还端点占用；并发与后续
     /// 调用等待同一次清理。</para>
     /// </summary>
+    /// <summary>Budget for the protocol farewell that precedes session disposal.
+    /// <para>会话释放之前那段协议告别所用的预算。</para></summary>
+    private static readonly TimeSpan GracefulShutdownBudget = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    /// Tears the lease down once: closes streams, drains the command pool, sends the protocol's own farewell, disposes the session
+    /// and transport, then returns the endpoint reservation; concurrent and later calls await the
+    /// same teardown.
+    /// <para>仅执行一次清理：关闭流、排空指令池、发送协议自身的告别、释放会话与传输，再归还端点占用；并发与后续
+    /// 调用等待同一次清理。</para>
+    /// </summary>
     public ValueTask DisposeAsync()
     {
         Task teardown;
@@ -157,6 +168,20 @@ public sealed class DeviceLease : IAsyncDisposable, IDisposable
                 }
 
                 await Commands.DisposeAsync().ConfigureAwait(false);
+                if (Session is IGracefulProtocolShutdown graceful)
+                {
+                    try
+                    {
+                        await graceful.SendShutdownAsync(GracefulShutdownBudget, CancellationToken.None)
+                            .ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        UsbTrace.LogError(
+                            $"Protocol farewell before lease teardown failed: {ex.GetType().Name}: {ex.Message}");
+                    }
+                }
+
                 switch (Session)
                 {
                     case IAsyncDisposable asyncSession:

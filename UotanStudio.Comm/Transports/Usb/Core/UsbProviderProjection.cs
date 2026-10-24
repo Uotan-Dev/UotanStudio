@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Backend;
 
@@ -40,10 +41,18 @@ internal static class UsbProviderProjection
                     continue;
                 }
                 ensureDirect(info);
-                if (!device.IsHandleOpen && device.CreateHandle() != 0)
+                if (!device.IsHandleOpen)
                 {
-                    device.Dispose();
-                    continue;
+                    var openError = device.CreateHandle();
+                    if (openError != 0)
+                    {
+                        UsbTrace.Log(
+                            $"Open {info.DeviceKey} failed with backend error {openError}; "
+                            + $"interface {info.InterfaceClass:X2}/{info.InterfaceSubClass:X2}/{info.InterfaceProtocol:X2}, "
+                            + $"path {info.DevicePath}.");
+                        device.Dispose();
+                        continue;
+                    }
                 }
                 var session = new UsbDeviceSession(apiName, apiKind, device);
                 if (filter is null || filter.Matches(session.DeviceInfo)) sessions.Add(session);

@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
@@ -26,7 +27,11 @@ public static class DebugBridgeSessionOpener
     public static bool AdbServerOwns(string? serial, string host = DebugBridgeEndpoints.ServerHost, int port = DebugBridgeEndpoints.AdbServerPort)
     {
         if (DebugBridgeRoute.Mode == DebugBridgeRouteMode.DirectOnly) return false;
-        if (!DebugBridgeRoute.UseAdbServer(host, port)) return false;
+        if (!DebugBridgeRoute.UseAdbServer(host, port) && !AnyServerListening("adb"))
+        {
+            return false;
+        }
+
         var targets = new AdbServerServices(string.Empty, host, port).ListTargets();
         return string.IsNullOrWhiteSpace(serial)
             ? targets.Count != 0
@@ -206,7 +211,11 @@ public static class DebugBridgeSessionOpener
         }
         catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException)
         {
-            return false;
+            CommTrace.State("route",
+                $"{bridge} server liveness probe was inconclusive ({ex.GetType().Name}: {ex.Message}); treating the server as " +
+                "present so direct USB access stays refused. Windows allows several handles on one WinUSB interface, so a " +
+                "server that is already attached would split every frame with us.");
+            return true;
         }
     }
 }

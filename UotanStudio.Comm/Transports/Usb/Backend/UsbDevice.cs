@@ -86,6 +86,13 @@ internal abstract partial class UsbDevice : IDisposable
     public IReadOnlyList<UsbInterfaceInfo> Interfaces { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets every interface found in the device's configuration descriptor, including the ones this session did
+    /// not bind. Diagnostics use it to show which interface actually owns the bound pipes.
+    /// <para>获取或设置设备配置描述符中的全部接口，包括本会话未绑定的接口。诊断用它显示被绑定的管道究竟属于哪个接口。</para>
+    /// </summary>
+    public IReadOnlyList<UsbInterfaceInfo> EnumeratedInterfaces { get; set; } = [];
+
+    /// <summary>
     /// Gets the bulk IN endpoint address bound to this session (bit 7 set), or 0 when
     /// the backend does not expose endpoint-level binding (e.g. a legacy driver).
     /// <para>获取绑定到本会话的批量 IN 端点地址（bit 7 置位），后端不暴露端点绑定时为 0
@@ -347,6 +354,11 @@ internal abstract partial class UsbDevice : IDisposable
     /// </summary>
     private void EmitTransfer(UsbTransferOperation operation, int requestedBytes, int transferredBytes, int timeoutMs, int retryCount, int? nativeErrorCode, long elapsedMs, UsbTransferOutcome outcome, byte[]? payload = null)
     {
+        if (payload is not null)
+        {
+            CommTrace.Payload("usb", $"{BackendName} {DevicePath} {operation} {transferredBytes} B", payload);
+        }
+
         if (!UsbTrace.HasTransferSubscribers)
         {
             return;

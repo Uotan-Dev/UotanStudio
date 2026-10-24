@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Backend;
 using static UotanStudio.Comm.Transports.Usb.Backend.Windows.Win32API;
 using static UotanStudio.Comm.Transports.Usb.Backend.Windows.WinUSBAPI;
 
@@ -77,6 +78,7 @@ internal partial class WinUSBDevice
             uint descriptorSize = 64;
             const uint maxDescriptorSize = 4096;
             var ptr = Marshal.AllocHGlobal((int)descriptorSize);
+            Marshal.Copy(new byte[descriptorSize], 0, ptr, (int)descriptorSize);
             while (!WinUsb_GetDescriptor(usb, USB_STRING_DESCRIPTOR_TYPE,
                 _usbDeviceDescriptor.ISerialNumber, 0x0409,
                 ptr, descriptorSize, out bytes_get))
@@ -96,6 +98,7 @@ internal partial class WinUSBDevice
 
                 Marshal.FreeHGlobal(ptr);
                 ptr = Marshal.AllocHGlobal((int)descriptorSize);
+                Marshal.Copy(new byte[descriptorSize], 0, ptr, (int)descriptorSize);
             }
 
             if (bytes_get <= 2)
@@ -104,7 +107,9 @@ internal partial class WinUSBDevice
                 return -1;
             }
 
-            SerialNumber = Marshal.PtrToStringUni(ptr + 2, (int)(bytes_get - 2) / 2)?.TrimEnd('\0');
+            var descriptor = new byte[bytes_get];
+            Marshal.Copy(ptr, descriptor, 0, descriptor.Length);
+            SerialNumber = UsbStringDescriptor.Decode(descriptor, descriptor.Length);
             Marshal.FreeHGlobal(ptr);
             return 0;
         }

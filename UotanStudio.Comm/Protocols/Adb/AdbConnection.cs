@@ -1,5 +1,8 @@
 using System.Buffers;
+using UotanStudio.Comm.Diagnostics;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -19,6 +22,17 @@ internal sealed class AdbConnection : IDisposable
     /// <summary>Largest frame read directly into its result array instead of through a pooled staging buffer.
     /// <para>直接读入结果数组、而不经池化暂存缓冲的最大帧长度。</para></summary>
     private const int DirectFrameReadThreshold = 64 * 1024;
+
+    /// <summary>Number of inbound frames decoded on this connection, used to keep the first frame's raw header at
+    /// debug level and the rest at trace level.
+    /// <para>本连接已解码的入站帧数量；用于让首帧的原始头部落在 debug 级别、其余落在 trace 级别。</para>
+    /// </summary>
+    private int _inboundMessageCount;
+
+    /// <summary>Set once a rejected first inbound frame triggered the one bounded handshake resynchronization.
+    /// <para>首个入站帧被拒并触发唯一一次有界握手重同步后置位。</para>
+    /// </summary>
+    private int _handshakeResyncUsed;
 
     /// <summary>How long <see cref="Dispose"/> waits for the dispatch loop to observe the shutdown.
     /// <para><see cref="Dispose"/> 等待分发循环观察到关停信号的时长。</para></summary>
@@ -447,12 +461,16 @@ internal sealed class AdbConnection : IDisposable
     /// <exception cref="IOException">The captured failure is an I/O failure. <para>捕获的故障是 I/O 故障。</para></exception>
     /// <exception cref="TimeoutException">The captured failure is not an I/O failure.
     /// <para>捕获的故障不是 I/O 故障。</para></exception>
+    private string TransportTag => _transport?.GetType().Name ?? "transport";
+
     private void ThrowIfLoopFaulted()
     {
         if (LoopFault is not { } fault)
         {
             return;
         }
+
+        CommTrace.Error("adb-link", $"handshake fault ({TransportTag}): {fault.GetType().Name}: {fault.Message}");
 
         if (fault is AdbTlsRequiredException tlsRequired)
         {
@@ -695,12 +713,57 @@ internal sealed class AdbConnection : IDisposable
     /// deadline. <para>已部分接收的帧在传输期限内没有进展。</para></exception>
     private async ValueTask<AdbMessage> ReadMessageAsync(CancellationToken cancellationToken)
     {
+        while (true)
+        {
+            if (await TryReadFrameAsync(cancellationToken).ConfigureAwait(false) is { } message)
+            {
+                return message;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads one inbound frame, or returns <c>null</c> when the bounded handshake resynchronization cleared the pipe
+    /// and re-sent CNXN, in which case the caller reads again.
+    /// <para>读取一条入站帧；有界握手重同步已清零管道并重发 CNXN 时返回 <c>null</c>，由调用方重新读取。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Stops the read when the connection shuts down. <para>连接关停时停止读取。</para></param>
+    /// <returns>The next frame, or <c>null</c> after a resynchronization. <para>下一条帧；重同步后为 <c>null</c>。</para></returns>
+    private async ValueTask<AdbMessage?> TryReadFrameAsync(CancellationToken cancellationToken)
+    {
         var header = await ReadExactAsync(AdbConstants.HeaderSize, TransportDeadlineMs, allowIdle: true,
             cancellationToken).ConfigureAwait(false);
-        (var command, var arg0, var arg1, var payloadLength, var payloadCrc) = AdbMessaging.ParseHeader(header);
+        var sequence = Interlocked.Increment(ref _inboundMessageCount);
+        var headerPreview = PayloadPreview.Format(header, AdbConstants.HeaderSize);
+        CommTrace.Write(sequence == 1 ? CommLogLevel.Debug : CommLogLevel.Trace, "adb-link",
+            $"rx #{sequence} header ({TransportTag}): {headerPreview}");
 
+        (AdbCommand Command, uint Arg0, uint Arg1, uint PayloadLength, uint PayloadCrc) decoded;
+        try
+        {
+            decoded = AdbMessaging.ParseHeader(header);
+        }
+        catch (InvalidDataException ex)
+        {
+            CommTrace.Error("adb-link",
+                $"rx #{sequence} header rejected ({TransportTag}): {headerPreview} — {ex.Message} " +
+                "A plausible command with a wrong magic means the frame started mid-stream; fully foreign bytes mean " +
+                "another reader (adb server, a second host handle, or the wrong USB interface) is splitting the stream.");
+
+            if (await TryResynchronizeHandshakeAsync(headerPreview, cancellationToken).ConfigureAwait(false))
+            {
+                return null;
+            }
+
+            await ProbeForeignStreamAsync(sequence, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+
+        var (command, arg0, arg1, payloadLength, payloadCrc) = decoded;
         if (payloadLength > InboundPayloadLimit())
         {
+            CommTrace.Error("adb-link",
+                $"rx #{sequence} header ({TransportTag}): {headerPreview} — payload length {payloadLength} exceeds the limit {InboundPayloadLimit()}.");
             throw new InvalidDataException(
                 $"ADB payload length {payloadLength} exceeds the peer's negotiated payload limit.");
         }
@@ -710,10 +773,238 @@ internal sealed class AdbConnection : IDisposable
         {
             payload = await ReadExactAsync((int)payloadLength, TransportDeadlineMs, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
+            CommTrace.Write(CommLogLevel.Trace, "adb-link",
+                $"rx #{sequence} {command} payload {payload.Length} B ({TransportTag}).");
+            CommTrace.Payload("adb-link", $"rx #{sequence} {command}", payload);
             AdbMessaging.VerifyCrc(payload, payloadCrc);
         }
 
         return new AdbMessage(command, arg0, arg1, payload);
+    }
+
+    /// <summary>
+    /// Sends one CLSE frame for every open stream, the ADB wire format's own close, and waits at most
+    /// <paramref name="timeout"/> for those writes so the device ends the sessions it still believes are open.
+    /// <para>为每条已打开的流发送一帧 CLSE（ADB 线协议自身的关闭帧），并最多等待 <paramref name="timeout"/> 让这些
+    /// 写入完成，使设备结束它仍认为打开的会话。</para>
+    /// </summary>
+    /// <param name="timeout">Upper bound on the whole farewell. <para>整段告别的上限。</para></param>
+    /// <param name="cancellationToken">Cancels the farewell. <para>取消告别。</para></param>
+    /// <returns>A task completing when every close frame was written or the budget expired.
+    /// <para>所有关闭帧写出或预算耗尽时完成的任务。</para></returns>
+    internal async ValueTask CloseAllStreamsAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        AdbStream[] streams;
+        lock (_lock)
+        {
+            streams = [.. _streams.Values];
+        }
+
+        if (streams.Length == 0)
+        {
+            return;
+        }
+
+        var budget = timeout > TimeSpan.Zero ? timeout : TimeSpan.FromMilliseconds(500);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cancellation.CancelAfter(budget);
+        var sent = 0;
+        foreach (var stream in streams)
+        {
+            var remoteId = stream.RemoteId;
+            if (remoteId == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                await SendAsync(AdbMessaging.BuildClose(stream.LocalId, remoteId), cancellation.Token)
+                    .ConfigureAwait(false);
+                sent++;
+            }
+            catch (Exception ex) when (ex is IOException or TimeoutException or OperationCanceledException
+                or ObjectDisposedException or InvalidOperationException)
+            {
+                break;
+            }
+        }
+
+        CommTrace.Write(CommLogLevel.Info, "adb-link",
+            $"shutdown farewell ({TransportTag}): closed {sent} of {streams.Length} stream(s).");
+    }
+
+    /// <summary>
+    /// Clears the inbound pipe and re-sends CNXN once when the very first frame of a direct device link is rejected.
+    /// A stale remainder (a previous host session that stopped mid-frame, or bytes still queued in the endpoint when
+    /// the interface was claimed) desynchronizes the stream before the banner, and without this the whole session —
+    /// every later detail query and operation — fails on a link that only needed its pipe cleared.
+    /// <para>直连设备链路的首个帧被拒时清空入站管道并重发一次 CNXN。上一主机会话停在帧中途、或申请接口时端点里仍
+    /// 排着字节，都会在横幅到达前把流弄错位；没有这一步，整条会话（之后每一次详情查询与操作）都会在一个只需清零
+    /// 管道即可恢复的链路上持续失败。</para>
+    /// </summary>
+    /// <param name="rejectedHeader">Preview of the rejected frame header for the trace. <para>被拒帧头部的预览文本。</para></param>
+    /// <param name="cancellationToken">Stops the resynchronization when the connection shuts down.
+    /// <para>连接关停时停止重同步。</para></param>
+    /// <returns><see langword="true"/> when the pipe was cleared and CNXN re-sent, so the caller reads again.
+    /// <para>已清零管道并重发 CNXN、调用方应重新读取时为 <see langword="true"/>。</para></returns>
+    private async ValueTask<bool> TryResynchronizeHandshakeAsync(string rejectedHeader, CancellationToken cancellationToken)
+    {
+        if (Volatile.Read(ref _peerReadyObserved) != 0 || _server is not null || _transport is null ||
+            _transport is Transports.Tcp.AdbTlsTransport)
+        {
+            return false;
+        }
+
+        if (Interlocked.CompareExchange(ref _handshakeResyncUsed, 1, 0) != 0)
+        {
+            return false;
+        }
+
+        CommTrace.Error("adb-link",
+            $"{DescribeLink()} first inbound frame {rejectedHeader} is not an ADB frame; clearing the inbound pipe and re-sending CNXN once.");
+
+        Transport.Reset();
+        await SendAsync(AdbMessaging.BuildConnect(), cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>
+    /// Decides whether the endpoint keeps streaming foreign bytes or was only holding one stale remainder. Once the
+    /// single resynchronization has been spent, up to three short follow-up reads measure whether data keeps arriving on
+    /// its own: continuous arrivals mean the bound endpoint carries another service (diagnostics composition, a stopped
+    /// adbd, or a second owner), while silence means the first frame was residual data and the link itself is fine.
+    /// <para>判定端点是在持续流出陌生字节，还是只残留了一段旧数据。一次性重同步用掉之后，最多再做三次短读，看数据是否
+    /// 自行继续到达：持续到达说明绑定的端点承载的是别的服务（诊断复合、adbd 未运行，或另一占用方），静默则说明首帧只是
+    /// 残留数据、链路本身没问题。</para>
+    /// </summary>
+    /// <param name="sequence">The rejected frame's sequence number for the trace.
+    /// <para>被拒帧的序号，用于日志。</para></param>
+    /// <param name="cancellationToken">Stops the probe when the connection shuts down.
+    /// <para>连接关停时停止探测。</para></param>
+    private async ValueTask ProbeForeignStreamAsync(int sequence, CancellationToken cancellationToken)
+    {
+        const int ProbeCount = 3;
+        const int ProbeTimeoutMs = 300;
+        for (var probe = 1; probe <= ProbeCount; probe++)
+        {
+            var started = Environment.TickCount64;
+            byte[] next;
+            try
+            {
+                next = await ReadExactAsync(AdbConstants.HeaderSize, ProbeTimeoutMs, allowIdle: true,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                CommTrace.Error("adb-link",
+                    $"{DescribeLink()} probe {probe}/{ProbeCount} after rejected frame #{sequence}: no further bytes within " +
+                    $"{ProbeTimeoutMs} ms, so the endpoint is idle and the rejected frame was a stale remainder rather than a live service.");
+                return;
+            }
+
+            var elapsed = Environment.TickCount64 - started;
+            if (IsAdbHeader(next))
+            {
+                CommTrace.Error("adb-link",
+                    $"{DescribeLink()} probe {probe}/{ProbeCount} got a valid ADB header after {elapsed} ms " +
+                    $"({PayloadPreview.Format(next, AdbConstants.HeaderSize)}); the peer started speaking ADB, but this probe consumed " +
+                    "that frame, so the session has to be recreated.");
+                return;
+            }
+
+            CommTrace.Error("adb-link",
+                $"{DescribeLink()} probe {probe}/{ProbeCount}: still foreign after {elapsed} ms — " +
+                PayloadPreview.Format(next, AdbConstants.HeaderSize));
+        }
+
+        var serverListening = await IsAdbServerListeningAsync().ConfigureAwait(false);
+        CommTrace.Error("adb-link",
+            $"{DescribeLink()} kept streaming foreign frames at full rate; the bound endpoint is not carrying ADB and the device " +
+            "never answered CNXN. " + (serverListening
+                ? "An ADB server is listening on 127.0.0.1:5037; Windows allows several handles on one WinUSB interface, so a server " +
+                  "that already attached this device splits every frame with this session. Stop it (adb kill-server) or use the server route."
+                : "No ADB server is listening, so the endpoint itself is streaming non-ADB data (diagnostics/fastboot composition, or " +
+                  "the phone's USB adb function is not active)."));
+    }
+
+    /// <summary>
+    /// Reports whether an ADB server currently accepts connections on its default endpoint; an inconclusive probe is
+    /// treated as "listening" because a shared WinUSB interface is worse than a refused open.
+    /// <para>报告 ADB server 是否正在默认端点上接受连接；探测无结论时按"正在监听"处理，因为共用 WinUSB 接口的代价高于
+    /// 拒绝一次打开。</para>
+    /// </summary>
+    /// <returns><see langword="true"/> when the server accepts a connection or the probe was inconclusive.
+    /// <para>server 接受连接或探测无结论时为 <see langword="true"/>。</para></returns>
+    private static async ValueTask<bool> IsAdbServerListeningAsync()
+    {
+        try
+        {
+            return await DebugBridgeRoute.IsListeningAsync(DebugBridgeEndpoints.ServerHost,
+                DebugBridgeEndpoints.AdbServerPort).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or OperationCanceledException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Renders one interface from the configuration descriptor with its class triple and endpoints.
+    /// <para>渲染配置描述符中的一个接口及其类别三元组与端点。</para>
+    /// </summary>
+    /// <param name="iface">Interface metadata from the configuration descriptor. <para>来自配置描述符的接口元数据。</para></param>
+    /// <returns>Text such as <c>#02 FF/42/01 eps [0x86/02/512B, 0x03/02/512B]</c>.
+    /// <para>形如 <c>#02 FF/42/01 eps [0x86/02/512B, 0x03/02/512B]</c> 的文本。</para></returns>
+    private static string DescribeInterface(UsbInterfaceInfo iface) =>
+        $"#{iface.InterfaceNumber:X2} {iface.Class:X2}/{iface.SubClass:X2}/{iface.Protocol:X2} eps [" +
+        string.Join(", ", iface.Endpoints.Select(endpoint =>
+            $"0x{endpoint.EndpointAddress:X2}/{endpoint.Attributes:X2}/{endpoint.MaxPacketSize}B")) + "]";
+
+    /// <summary>
+    /// Reports whether a raw 24-byte header starts a well-formed ADB message.
+    /// <para>判断原始 24 字节头部是否构成一条格式正确的 ADB 消息。</para>
+    /// </summary>
+    /// <param name="header">Candidate header bytes. <para>候选头部字节。</para></param>
+    /// <returns><see langword="true"/> when the magic inverts the command word.
+    /// <para>magic 与命令字按位取反匹配时为 <see langword="true"/>。</para></returns>
+    private static bool IsAdbHeader(ReadOnlySpan<byte> header)
+    {
+        if (header.Length < AdbConstants.HeaderSize)
+        {
+            return false;
+        }
+
+        var command = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header);
+        var magic = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header[20..]);
+        return (command ^ 0xFFFFFFFF) == magic;
+    }
+
+    /// <summary>
+    /// Describes the link for the trace: the transport type plus, for a direct USB link, the claimed interface and the
+    /// bulk endpoints actually in use, which is what distinguishes a desynchronized stream from the wrong endpoints.
+    /// <para>为追踪描述链路：传输类型，以及直连 USB 链路上实际使用的接口与批量端点——它正是「流错位」与「端点选错」
+    /// 的区别所在。</para>
+    /// </summary>
+    /// <returns>One-line link description. <para>单行链路描述。</para></returns>
+    private string DescribeLink()
+    {
+        if (_transport is not UsbDeviceTransport usb)
+        {
+            return TransportTag;
+        }
+
+        var info = usb.Session.DeviceInfo;
+        var description = $"{TransportTag}[{info.VendorId:X4}:{info.ProductId:X4} " +
+            $"iface {info.InterfaceClass:X2}/{info.InterfaceSubClass:X2}/{info.InterfaceProtocol:X2} " +
+            $"ep in {usb.Session.EndpointIn:X2} out {usb.Session.EndpointOut:X2} " +
+            $"serial {info.SerialNumber ?? "-"}]";
+        if (info.EnumeratedInterfaces.Count > 0)
+        {
+            description += " descriptor interfaces: " + string.Join("; ", info.EnumeratedInterfaces.Select(DescribeInterface));
+        }
+
+        return description;
     }
 
     /// <summary>

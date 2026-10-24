@@ -28,6 +28,7 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     private long _requestedGeneration;
     private int _lifecycle;
     private readonly HashSet<DeviceEndpointId> _leased = [];
+    private readonly Dictionary<DeviceEndpointId, long> _placeholderSince = [];
     private readonly Dictionary<DeviceEndpointId, DeviceLease> _openLeases = [];
     private readonly Dictionary<string, ulong> _transportGenerations = [];
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
@@ -241,7 +242,19 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     public async Task<DeviceLease> OpenAsync(DeviceSnapshot snapshot, DeviceEndpointId id,
         CancellationToken cancellationToken = default)
     {
-        var (endpoint, transport, generation) = await OpenTransportAsync(snapshot, id, cancellationToken).ConfigureAwait(false);
+        (DeviceEndpoint Endpoint, IAsyncDisposable Transport, TransportGeneration? Generation) opened;
+        try
+        {
+            opened = await OpenTransportAsync(snapshot, id, cancellationToken).ConfigureAwait(false);
+        }
+        catch (DeviceEndpointBusyException busy)
+        {
+            CommTrace.State("lease",
+                $"busy: {id.Source}/{id.Transport} {id.Address} is held by another lease (snapshot generation {snapshot.Generation}); {busy.Message} Reservations: {string.Join(", ", DescribeReservations(id.Address))}.");
+            throw;
+        }
+
+        var (endpoint, transport, generation) = opened;
         DeviceLease? lease = null;
         try
         {
@@ -252,6 +265,8 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
                 _openLeases[id] = lease;
             }
 
+            CommTrace.Debug("lease",
+                $"leased {endpoint.Protocol}/{endpoint.Route} {endpoint.Address} (generation {(generation.HasValue ? generation.Value.ToString() : "none")}).");
             return lease;
         }
         catch
@@ -289,9 +304,9 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         {
             ThrowIfDisposed();
             ValidateRouteForOpen(endpoint);
-            if (!_leased.Add(endpoint.Id))
+            if (!_leased.Add(endpoint.Id) && !ReclaimStalePlaceholderLocked(endpoint.Id, endpoint))
             {
-                throw new InvalidOperationException("Endpoint is already leased.");
+                throw new DeviceEndpointBusyException(endpoint);
             }
         }
 
@@ -336,9 +351,9 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
             endpoint = snapshot.Endpoints.FirstOrDefault(candidate => candidate.Id == id)
                 ?? throw new KeyNotFoundException("Endpoint is not present in the snapshot.");
             ValidateRouteForOpen(endpoint);
-            if (!_leased.Add(id))
+            if (!_leased.Add(id) && !ReclaimStalePlaceholderLocked(id, endpoint))
             {
-                throw new InvalidOperationException("Endpoint is already leased.");
+                throw new DeviceEndpointBusyException(endpoint);
             }
         }
 
@@ -762,18 +777,35 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     /// </summary>
     private void Release(DeviceEndpointId id, DeviceLease? lease)
     {
+        var returned = false;
+        var detached = false;
         lock (_gate)
         {
             var current = _openLeases.GetValueOrDefault(id);
             if (current is null || ReferenceEquals(current, lease))
             {
-                _leased.Remove(id);
+                returned = _leased.Remove(id);
+                _placeholderSince.Remove(id);
             }
 
             if (lease is null || ReferenceEquals(current, lease))
             {
-                _openLeases.Remove(id);
+                detached = _openLeases.Remove(id);
+                if (!returned && detached)
+                {
+                    _placeholderSince[id] = Environment.TickCount64;
+                }
             }
+        }
+
+        if (returned)
+        {
+            CommTrace.Debug("lease", $"released reservation for {id.Source}/{id.Transport} {id.Address}.");
+        }
+        else if (detached)
+        {
+            CommTrace.Debug("lease",
+                $"reservation for {id.Source}/{id.Transport} {id.Address} stays as a releasing placeholder until its teardown finishes.");
         }
     }
 
@@ -799,6 +831,116 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         return endpoint.UsbInfo is { } info && PhysicalDeviceIdentity.From(info) is { } identity
             ? identity.Key
             : $"{endpoint.Id.Source}|{endpoint.Id.Transport}|{endpoint.Id.Address}";
+    }
+
+    private const long PlaceholderReclaimMilliseconds = 1000;
+
+    /// <summary>
+    /// Reclaims a reservation that has been stuck as a releasing placeholder longer than
+    /// <see cref="PlaceholderReclaimMilliseconds"/>, so a teardown that never completes cannot make one endpoint
+    /// permanently unopenable. Runs under <c>_gate</c>; a live lease is never preempted.
+    /// <para>回收停留为“释放中”占位超过 <see cref="PlaceholderReclaimMilliseconds"/> 的占用，使永不完成的清理不会让
+    /// 某个端点永久无法打开。在 <c>_gate</c> 下运行；绝不抢占仍存活的租约。</para>
+    /// </summary>
+    /// <param name="id">Endpoint whose reservation is tested. <para>被测占用登记的端点。</para></param>
+    /// <param name="endpoint">Endpoint used for the diagnostic line. <para>用于诊断行的端点。</para></param>
+    /// <returns><see langword="true"/> when the reservation was reclaimed and may be taken again.
+    /// <para>占用已回收、可以重新取得时为 <see langword="true"/>。</para></returns>
+    private bool ReclaimStalePlaceholderLocked(DeviceEndpointId id, DeviceEndpoint endpoint)
+    {
+        if (_openLeases.ContainsKey(id) || !_placeholderSince.TryGetValue(id, out var since))
+        {
+            return false;
+        }
+
+        var age = Environment.TickCount64 - since;
+        if (age < PlaceholderReclaimMilliseconds)
+        {
+            return false;
+        }
+
+        CommTrace.Error("lease",
+            $"reclaiming {id.Source}/{id.Transport} {id.Address} from a releasing placeholder stuck for {age} ms; " +
+            $"its teardown never finished, so {endpoint.Protocol}/{endpoint.Route} could not be opened again.");
+        _placeholderSince.Remove(id);
+        return _leased.Remove(id) && _leased.Add(id);
+    }
+
+    /// <summary>Describes the leases currently bound to one endpoint address, so a caller that cannot acquire the
+    /// endpoint can name what still holds it.
+    /// <para>列出当前绑定到某个端点地址的租约，使无法取得端点的调用方能说出占用者是谁。</para>
+    /// </summary>
+    /// <param name="address">Endpoint address to inspect. <para>要检查的端点地址。</para></param>
+    /// <returns>One <c>protocol/route</c> label per matching lease, in endpoint order; empty when nothing holds it.
+    /// <para>每个匹配租约一个 <c>protocol/route</c> 标签，按端点顺序排列；没有占用时为空。</para></returns>
+    public IReadOnlyList<string> DescribeReservations(string address)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(address);
+        lock (_gate)
+        {
+            var live = _openLeases.Values
+                .Where(lease => string.Equals(lease.Endpoint.Address, address, StringComparison.OrdinalIgnoreCase))
+                .Select(lease => $"{lease.Endpoint.Protocol}/{lease.Endpoint.Route}")
+                .ToList();
+            foreach (var id in _leased)
+            {
+                if (string.Equals(id.Address, address, StringComparison.OrdinalIgnoreCase) && !_openLeases.ContainsKey(id))
+                {
+                    live.Add($"{id.Source}/{id.Transport} releasing placeholder");
+                }
+            }
+
+            return [.. live];
+        }
+    }
+
+    /// <summary>Force-detaches every lease still bound to one endpoint address, so a stuck host operation cannot
+    /// block a user action forever. Detached leases keep their reservation as a releasing placeholder until their
+    /// teardown finishes, exactly like a device removal.
+    /// <para>强制摘除仍绑定到某个端点地址的全部租约，使卡住的宿主操作无法永久阻塞用户操作。被摘除的租约与其他
+    /// 设备移除路径一样，在清理完成前保留"释放中"占位。</para>
+    /// </summary>
+    /// <param name="address">Endpoint address whose leases are detached. <para>要摘除租约的端点地址。</para></param>
+    /// <returns>The number of detached leases. <para>被摘除的租约数量。</para></returns>
+    public int ForceDetachReservations(string address)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(address);
+        DeviceLease[] leases;
+        lock (_gate)
+        {
+            var matches = _openLeases
+                .Where(pair => string.Equals(pair.Value.Endpoint.Address, address, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            foreach (var (id, _) in matches)
+            {
+                _openLeases.Remove(id);
+            }
+
+            leases = [.. matches.Select(pair => pair.Value)];
+        }
+
+        if (leases.Length > 0)
+        {
+            CommTrace.State("lease",
+                $"force-detached {leases.Length} reservation(s) for {address}: {string.Join(", ", leases.Select(lease => $"{lease.Endpoint.Protocol}/{lease.Endpoint.Route}"))}.");
+        }
+
+        foreach (var lease in leases)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await lease.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    UsbTrace.Log($"Forced lease detach failed: {ex.GetType().Name}: {ex.Message}");
+                }
+            });
+        }
+
+        return leases.Length;
     }
 
     /// <summary>
@@ -961,6 +1103,51 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
         var (leases, serverWatch, removalWatch) = DetachOwnedResourcesLocked();
         StopWatches(serverWatch, removalWatch);
         _ = Task.Run(() => DisposeLeasesAsync(leases));
+    }
+
+    /// <summary>Budget the host uses when it releases USB occupancy during application shutdown.
+    /// <para>宿主在应用关闭期间解除 USB 占用时使用的预算。</para></summary>
+    public static readonly TimeSpan ShutdownReleaseBudget = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// Detaches and disposes every open lease — the direct USB interfaces included — and waits up to
+    /// <paramref name="timeout"/> for that teardown to finish, so a closing application returns the device to the
+    /// operating system instead of leaving it claimed until the process dies. Repeating the call is a no-op.
+    /// <para>摘除并释放全部未完成租约（含直连 USB 接口），最多等待 <paramref name="timeout"/> 让清理完成，
+    /// 使正在关闭的应用把设备交还给操作系统，而不是一直占用到进程结束。重复调用为空操作。</para>
+    /// </summary>
+    /// <param name="timeout">Upper bound on the wait; zero or negative is clamped to one second.
+    /// <para>等待上限；零或负值按一秒处理。</para></param>
+    /// <returns><see langword="true"/> when every lease was disposed within the budget, <see langword="false"/> when
+    /// the wait expired and the remainder finishes in the background.
+    /// <para>全部租约在预算内释放完成时为 <see langword="true"/>；等待超时、剩余部分转后台完成时为 <see langword="false"/>。</para></returns>
+    public bool ReleaseAllLeases(TimeSpan timeout)
+    {
+        if (Interlocked.Exchange(ref _lifecycle, 1) != 0)
+        {
+            return true;
+        }
+
+        var (leases, serverWatch, removalWatch) = DetachOwnedResourcesLocked();
+        StopWatches(serverWatch, removalWatch);
+        if (leases.Count == 0)
+        {
+            return true;
+        }
+
+        var budget = timeout > TimeSpan.Zero ? timeout : TimeSpan.FromSeconds(1);
+        var teardown = DisposeLeasesAsync(leases);
+        try
+        {
+            teardown.WaitAsync(budget).GetAwaiter().GetResult();
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            UsbTrace.LogError(
+                $"Releasing {leases.Count} device lease(s) did not finish within {budget.TotalMilliseconds:0} ms; the remainder continues in the background.");
+            return false;
+        }
     }
 
     private (List<DeviceLease> Leases, CancellationTokenSource? ServerWatch, IDisposable? RemovalWatch) DetachOwnedResourcesLocked()

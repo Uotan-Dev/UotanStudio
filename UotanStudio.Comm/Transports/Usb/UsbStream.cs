@@ -112,6 +112,9 @@ internal sealed class UsbStream : Stream
     }
 
     /// <inheritdoc />
+    /// <exception cref="IOException">The endpoint accepted fewer than <paramref name="count"/> bytes, which a stream
+    /// write cannot report as a partial success.
+    /// <para>端点接受的字节少于 <paramref name="count"/>，而流写入无法把它表达为部分成功。</para></exception>
     public override void Write(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
@@ -126,7 +129,12 @@ internal sealed class UsbStream : Stream
             return;
         }
 
-        _ = Session.Write(buffer, offset, count, WriteTimeout);
+        var written = Session.Write(buffer, offset, count, WriteTimeout);
+        if (written != count)
+        {
+            throw new IOException(
+                $"The USB bulk write accepted {written} of {count} bytes; the transfer timed out or the endpoint reported an error.");
+        }
     }
 
     /// <inheritdoc />

@@ -19,7 +19,8 @@ internal partial class WinUSBDevice : UsbDevice
     private const int ERROR_DEVICE_NOT_CONNECTED = 1167;
     private const int ERROR_NO_SUCH_DEVICE = 433;
     private const int ERROR_DEVICE_REMOVED = 1617;
-    private const int ERROR_NOT_FOUND = 122;
+    private const int ERROR_NOT_FOUND = 1168;
+    private const int ERROR_OPERATION_ABORTED = 995;
 
     /// <summary>
     /// Session tuning options applied when the handle is created; assigned by the finder
@@ -176,10 +177,19 @@ internal partial class WinUSBDevice : UsbDevice
                 Endpoints = endpoints
             }
         ];
+        EnumeratedInterfaces = parsedInterfaces;
 
         if (_readBulkID == 0 || _writeBulkID == 0)
         {
             return Fail(-1);
+        }
+
+        if (CommTrace.IsEnabled(CommLogLevel.Debug))
+        {
+            CommTrace.Debug("usb",
+                $"opened {DevicePath}: bound alt setting {_interfaceNum:X2} ({InterfaceClass:X2}/{InterfaceSubClass:X2}/{InterfaceProtocol:X2}), " +
+                $"pipes in 0x{_readBulkID:X2}/out 0x{_writeBulkID:X2}; the device exposes {parsedInterfaces.Count} interface(s): " +
+                DescribeInterfaces(parsedInterfaces));
         }
 
         uint speedLength = sizeof(uint);
@@ -347,6 +357,39 @@ internal partial class WinUSBDevice : UsbDevice
     {
         _winUsbHandle.Dispose();
         _fileHandle.Dispose();
+    }
+
+    /// <summary>
+    /// Renders every interface in the device's configuration descriptor with its class triple and endpoints, so a log
+    /// shows which interface actually owns the pipes that were bound.
+    /// <para>渲染设备配置描述符中的每个接口、其类别三元组与端点，使日志能看出被绑定的管道究竟属于哪个接口。</para>
+    /// </summary>
+    /// <param name="interfaces">Interfaces parsed from the configuration descriptor; may be empty.
+    /// <para>从配置描述符解析出的接口；可能为空。</para></param>
+    /// <returns>One-line inventory such as <c>#00 FF/42/01 eps [0x86/02/512B, 0x03/02/512B]</c>.
+    /// <para>单行清单，例如 <c>#00 FF/42/01 eps [0x86/02/512B, 0x03/02/512B]</c>。</para></returns>
+    private static string DescribeInterfaces(List<UsbInterfaceInfo> interfaces)
+    {
+        if (interfaces.Count == 0)
+        {
+            return "none parsed";
+        }
+
+        var builder = new System.Text.StringBuilder();
+        foreach (var iface in interfaces)
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append("; ");
+            }
+
+            builder.Append($"#{iface.InterfaceNumber:X2} {iface.Class:X2}/{iface.SubClass:X2}/{iface.Protocol:X2} eps [");
+            builder.Append(string.Join(", ", iface.Endpoints.Select(endpoint =>
+                $"0x{endpoint.EndpointAddress:X2}/{endpoint.Attributes:X2}/{endpoint.MaxPacketSize}B")));
+            builder.Append(']');
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>

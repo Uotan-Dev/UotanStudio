@@ -501,13 +501,30 @@ internal sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null, Dev
         var providers = ResolveProviders(apiKind);
         if (apiKind == UsbApiKind.Auto)
         {
+            // Keep the backend that produced the key first, then fall back to the other registered
+            // providers. A WinUSB binding that refuses the native handle can still be reachable through
+            // libusb; trying only the key backend turns that recoverable case into "another host owns it".
+            var ordered = new List<IUsbApiProvider>();
             var keyBackend = deviceKey.Split('|')[0];
             if (!string.IsNullOrEmpty(keyBackend) &&
                 _registry.TryCreate(keyBackend, out var keyProvider) &&
                 keyProvider is { IsSupportedOnCurrentPlatform: true })
             {
-                providers = [keyProvider];
+                ordered.Add(keyProvider);
             }
+
+            foreach (var candidate in _registry.CreateAll())
+            {
+                if (!candidate.IsSupportedOnCurrentPlatform ||
+                    ordered.Any(existing => string.Equals(existing.ApiName, candidate.ApiName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                ordered.Add(candidate);
+            }
+
+            providers = ordered;
         }
 
         foreach (var provider in providers)

@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Text;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
@@ -545,11 +546,41 @@ public sealed class HdcConnection : IDisposable
     }
 
     /// <summary>
+    /// Closes every open channel and notifies the peer, used for the farewell that precedes transport release.
+    /// <para>关闭所有已打开的通道并通知对端，用于释放传输之前的告别。</para>
+    /// </summary>
+    /// <returns>The number of channels that were closed. <para>已关闭的通道数量。</para></returns>
+    internal int CloseAllChannels()
+    {
+        HdcStream[] streams;
+        lock (_streamsLock)
+        {
+            streams = [.. _streams.Values];
+        }
+
+        foreach (var stream in streams)
+        {
+            try
+            {
+                CloseChannel(stream, notify: true);
+            }
+            catch (Exception ex) when (ex is IOException or TimeoutException or ObjectDisposedException
+                or InvalidOperationException)
+            {
+                break;
+            }
+        }
+
+        CommTrace.Write(CommLogLevel.Info, "hdc-link", $"shutdown farewell: closed {streams.Length} channel(s).");
+        return streams.Length;
+    }
+
+    /// <summary>
     /// Closes the specified channel and notifies the peer.
     /// <para>关闭指定通道并通知对端。</para>
     /// </summary>
-    /// <param name="stream">The stream to close. 要关闭的流。</param>
-    /// <param name="notify">Whether the peer still needs a close request.</param>
+    /// <param name="stream">The stream to close. <para>要关闭的流。</para></param>
+    /// <param name="notify">Whether the peer still needs a close request. <para>对端是否仍需要收到关闭请求。</para></param>
     internal void CloseChannel(HdcStream stream, bool notify = true)
     {
         lock (_streamsLock) { _streams.Remove(stream.ChannelId); }

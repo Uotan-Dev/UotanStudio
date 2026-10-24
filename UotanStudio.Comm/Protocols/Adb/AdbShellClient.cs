@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Text;
 using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
@@ -209,6 +211,8 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
         var stderr = new MemoryStream();
         var parser = new FrameParser();
         int? exitCode = null;
+        var stopwatch = Stopwatch.StartNew();
+        CommTrace.State("adb-shell", $"shell start: {DescribeCommand()}.");
 
         while (exitCode is null)
         {
@@ -248,7 +252,24 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
             parser.Complete();
         }
 
-        return new ShellResult(stdout.ToArray(), stderr.ToArray(), exitCode ?? 0);
+        var stdoutBytes = stdout.ToArray();
+        var stderrBytes = stderr.ToArray();
+        CommTrace.State("adb-shell",
+            $"shell done: exit={exitCode ?? 0}, stdout={stdoutBytes.Length} B, stderr={stderrBytes.Length} B, {stopwatch.ElapsedMilliseconds} ms.");
+        CommTrace.Payload("adb-shell", "stdout", stdoutBytes);
+        CommTrace.Payload("adb-shell", "stderr", stderrBytes);
+        return new ShellResult(stdoutBytes, stderrBytes, exitCode ?? 0);
+    }
+
+    /// <summary>Renders the command line for the debug log, bounded so a long command cannot flood it.
+    /// <para>为调试日志渲染命令行，并做长度限制，避免超长命令刷屏。</para>
+    /// </summary>
+    /// <returns>The service command text, truncated to 120 characters.
+    /// <para>服务命令文本，超过 120 字符时截断。</para></returns>
+    private string DescribeCommand()
+    {
+        var text = BuildServiceString();
+        return text.Length <= 120 ? text : text[..120] + "…";
     }
 
     /// <summary>

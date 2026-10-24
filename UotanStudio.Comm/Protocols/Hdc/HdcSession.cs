@@ -1,4 +1,5 @@
 using UotanStudio.Comm.Contracts;
+using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -9,7 +10,7 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 /// Represents an HDC protocol session over a device transport or server channel.
 /// <para>表示基于设备传输或 server 通道的 HDC 协议会话。</para>
 /// </summary>
-public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
+public sealed class HdcSession : IProtocolSession, IHdcDeviceSession, IGracefulProtocolShutdown
 {
     private bool _disposed;
     private bool _isLease;
@@ -305,6 +306,19 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession
         {
             throw new ObjectDisposedException(nameof(HdcSession));
         }
+    }
+
+    /// <summary>
+    /// Sends a channel-close packet for every open HDC channel before the transport is released.
+    /// <para>在释放传输之前，为每个已打开的 HDC 通道发送关闭包。</para>
+    /// </summary>
+    /// <param name="timeout">Upper bound on the farewell. <para>告别的上限。</para></param>
+    /// <param name="cancellationToken">Cancels the farewell. <para>取消告别。</para></param>
+    /// <returns>A completed task once the close packets were queued. <para>关闭包入队后即完成的任务。</para></returns>
+    public ValueTask SendShutdownAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        Connection.CloseAllChannels();
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>

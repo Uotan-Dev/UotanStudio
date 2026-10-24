@@ -127,7 +127,7 @@ public sealed partial class DeviceController
             if (!_leased.Add(endpoint.Id))
             {
                 usb.Dispose();
-                throw new InvalidOperationException("Endpoint is already leased.");
+                throw new DeviceEndpointBusyException(endpoint);
             }
         }
 

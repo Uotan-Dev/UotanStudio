@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
@@ -63,7 +64,17 @@ internal sealed class UsbDeviceTransport(IUsbDeviceSession session) : ICommTrans
     /// <param name="timeoutMs">Timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
     /// <returns>The number of bytes read. <para>实际读取的字节数。</para></returns>
     public int Read(byte[] buffer, int offset, int length, int timeoutMs)
-        => Session.ReadInto(buffer, offset, length, timeoutMs);
+    {
+        BeginRead();
+        try
+        {
+            return Session.ReadInto(buffer, offset, length, timeoutMs);
+        }
+        finally
+        {
+            EndRead();
+        }
+    }
 
     /// <summary>
     /// Reads up to <paramref name="length"/> bytes into a caller-provided buffer asynchronously.
@@ -75,8 +86,18 @@ internal sealed class UsbDeviceTransport(IUsbDeviceSession session) : ICommTrans
     /// <param name="timeoutMs">Timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
     /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
     /// <returns>A task that resolves to the number of bytes read. <para>返回实际读取字节数的任务。</para></returns>
-    public Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
-        => Session.ReadIntoAsync(buffer, offset, length, timeoutMs, cancellationToken);
+    public async Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
+    {
+        BeginRead();
+        try
+        {
+            return await Session.ReadIntoAsync(buffer, offset, length, timeoutMs, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            EndRead();
+        }
+    }
 
     /// <summary>
     /// Writes up to <paramref name="length"/> bytes from a caller-provided buffer.
@@ -115,4 +136,27 @@ internal sealed class UsbDeviceTransport(IUsbDeviceSession session) : ICommTrans
     /// <para>释放底层 USB 会话。</para>
     /// </summary>
     public void Dispose() => Session.Dispose();
+
+    private static int _nextTransportId;
+
+    private readonly int _transportId = Interlocked.Increment(ref _nextTransportId);
+
+    private int _activeReads;
+
+    private void BeginRead()
+    {
+        var active = Interlocked.Increment(ref _activeReads);
+        if (active <= 1)
+        {
+            return;
+        }
+
+        var info = Session.DeviceInfo;
+        CommTrace.Debug("usb",
+            $"transport #{_transportId} ({info.VendorId:X4}:{info.ProductId:X4} serial {info.SerialNumber ?? "-"}) now has " +
+            $"{active} concurrent inbound reads on the same bulk pipe; one ADB stream is being split between readers, " +
+            "so each reader sees the other's mid-frame bytes.");
+    }
+
+    private void EndRead() => Interlocked.Decrement(ref _activeReads);
 }
