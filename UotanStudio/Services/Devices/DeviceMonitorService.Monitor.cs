@@ -230,6 +230,33 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
+    /// Releases every device lease this monitor holds — direct USB interfaces included — and waits up to
+    /// <paramref name="timeout"/> for that teardown, so a closing application hands the device back to the operating
+    /// system instead of keeping it claimed until the process exits. Idempotent; the regular <see cref="Dispose"/>
+    /// path reuses the same controller teardown.
+    /// <para>释放本监视实例持有的全部设备租约（含直连 USB 接口），最多等待 <paramref name="timeout"/>，使正在关闭的
+    /// 应用把设备交还操作系统，而不是占用到进程退出。幂等；随后的 <see cref="Dispose"/> 复用同一条控制器清理路径。</para>
+    /// </summary>
+    /// <param name="timeout">Upper bound on the wait. <para>等待上限。</para></param>
+    /// <returns><see langword="true"/> when every lease was released within the budget.
+    /// <para>全部租约在预算内释放完成时为 <see langword="true"/>。</para></returns>
+    public bool ReleaseUsbOccupancy(TimeSpan timeout)
+    {
+        try
+        {
+            _edlConnections.Dispose();
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "DeviceMonitor",
+                $"EDL connection cache release failed: {ex.Message}");
+        }
+
+        DisposeSharedAdbSessions();
+        return _controller.ReleaseAllLeases(timeout);
+    }
+
+    /// <summary>
     /// Stops monitoring and releases resources, including the device controller's own removal watch,
     /// server-lifecycle watch and outstanding leases.
     /// <para>停止监视并释放资源，包括设备控制器自身的移除监视、server 监视与未完成的租约。</para>
@@ -288,6 +315,7 @@ public sealed partial class DeviceMonitorService
 
         monitorLifetime?.Dispose();
         _edlConnections.Dispose();
+        DisposeSharedAdbSessions();
         _controller.Dispose();
     }
 }

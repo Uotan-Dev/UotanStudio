@@ -13,6 +13,19 @@ public partial class DeviceViewModel
     private const int MtkIdentityTimeoutMs = 5000;
 
     /// <summary>
+    /// Cooperative bound for the whole ADB detail query, so a slow device cannot hold the exclusive direct-USB
+    /// endpoint long enough to block a mirror start.
+    /// <para>整段 ADB 详情查询的协作式时限，使响应慢的设备无法长时间占住独占直连 USB 端点而阻塞投屏启动。</para>
+    /// </summary>
+    private const int AdbDetailTimeoutMs = 45_000;
+
+    /// <summary>
+    /// Per-command bound for one detail shell command; the query runs several of them inside the budget above.
+    /// <para>单条详情 shell 命令的时限；整段查询在上面的预算内执行多条命令。</para>
+    /// </summary>
+    private const int AdbDetailCommandTimeoutMs = 30_000;
+
+    /// <summary>
     /// Dispatches to the mode-specific enrichment method based on the device protocol.
     /// <para>按设备协议分发到对应的信息丰富方法。</para>
     /// </summary>
@@ -48,8 +61,8 @@ public partial class DeviceViewModel
         try
         {
             using var timeout = new CancellationTokenSource(MtkIdentityTimeoutMs);
-            var info = await App.DeviceMonitor.RunMtkAsync(endpoint,
-                session => session.InitializeAsync(timeout.Token), timeout.Token).ConfigureAwait(true);
+            var info = await Task.Run(() => App.DeviceMonitor.RunMtkAsync(endpoint,
+                session => session.InitializeAsync(timeout.Token), timeout.Token), timeout.Token).ConfigureAwait(true);
             if (ReferenceEquals(device.Device, endpoint))
             {
                 device.SetMtkInfo(info);
@@ -81,7 +94,8 @@ public partial class DeviceViewModel
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var state = await App.DeviceMonitor.ProbeEdlProtocolAsync(endpoint, timeout.Token);
+            var state = await Task.Run(
+                () => App.DeviceMonitor.ProbeEdlProtocolAsync(endpoint, timeout.Token), timeout.Token).ConfigureAwait(true);
             if (ReferenceEquals(device.Device, endpoint))
             {
                 device.EdlProtocol = state;
@@ -99,27 +113,56 @@ public partial class DeviceViewModel
         }
     }
     /// <summary>
-    /// Retrieves extended ADB device info (getprop / system-level / battery / memory / storage).
+    /// Retrieves extended ADB device info (getprop / system-level / battery / memory / storage) and the root
+    /// probe, both on a worker thread so the UI thread never waits for an endpoint open.
     /// The official adb server enumerates both USB and network devices, so regardless of transport
     /// the shell runs via Comm's adb server service first; only when the server
     /// connection is refused does the shared session route resolve direct USB.
-    /// <para>拉取 ADB 设备扩展信息（getprop / 系统级 / 电池 / 内存 / 存储）。官方 adb server 会枚举
-    /// USB 与网络设备，因此无论传输类型都优先经 Comm 的 adb server 服务执行 shell；
-    /// 仅在 server 连接被拒绝时使用统一会话入口解析 USB 直连。</para>
+    /// <para>在工作线程上拉取 ADB 设备扩展信息（getprop / 系统级 / 电池 / 内存 / 存储）与 root 探测，使界面线程
+    /// 绝不等待端点打开。官方 adb server 会枚举 USB 与网络设备，因此无论传输类型都优先经 Comm 的 adb server
+    /// 服务执行 shell；仅在 server 连接被拒绝时使用共享会话入口解析 USB 直连。</para>
     /// </summary>
     private async Task EnrichAdbInfoAsync(DeviceInfo device)
     {
         var endpoint = device.Device;
         Dictionary<string, string>? info = null;
+        var hasSu = false;
+        using var background = App.DeviceMonitor.BeginBackgroundEndpointWork(endpoint);
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(background.Token);
+        budget.CancelAfter(AdbDetailTimeoutMs);
+        var token = budget.Token;
         try
         {
-            info = await Task.Run(() =>
-                QueryViaAdbServer(device)
-                ?? QueryViaAdbSession(device)
-            ).ConfigureAwait(true);
+            (info, hasSu) = await Task.Run(async () =>
+            {
+                // The property batch is a sequence of blocking shell reads, so it owns a dedicated thread
+                // instead of a shared pool worker; the UI thread only receives the applied model values below.
+                var queried = await Task.Factory.StartNew(
+                    () => QueryViaAdbServer(device) ?? QueryViaAdbSession(device, token),
+                    token, TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
+                if (queried is null)
+                {
+                    return ((Dictionary<string, string>?)null, false);
+                }
+
+                var rootAvailable = false;
+                try
+                {
+                    rootAvailable = await FlashSuService.HasSuAsync(device.Device, token).ConfigureAwait(false);
+                }
+                catch (Exception error) when (error is not OutOfMemoryException)
+                {
+                    LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                        $"Root probe for {endpoint.Key} stopped: {error.GetType().Name}: {error.Message}");
+                }
+
+                return (queried, rootAvailable);
+            }, token).ConfigureAwait(true);
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                $"ADB detail query for {endpoint.Key} stopped: {ex.GetType().Name}: {ex.Message}");
         }
 
         if (info is null || !ReferenceEquals(device.Device, endpoint))
@@ -128,7 +171,7 @@ public partial class DeviceViewModel
         }
 
         ApplyAdbProperties(device, info);
-        device.HasSu = await FlashSuService.HasSuAsync(device.Device, CancellationToken.None);
+        device.HasSu = hasSu;
         if (SelectedDevice == device)
         {
             OnPropertyChanged(nameof(DeviceDetail));
@@ -158,8 +201,10 @@ public partial class DeviceViewModel
             {
                 return monitor.ExecuteAdbServerShell(device.Device, cmd);
             }
-            catch
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
+                LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                    $"ADB server shell for {device.Device.Key} failed on '{cmd}': {ex.GetType().Name}: {ex.Message}");
                 return string.Empty;
             }
         }, LanguageService.Instance.GetString);
@@ -174,16 +219,18 @@ public partial class DeviceViewModel
     /// 端点被 logcat 捕获租用（already leased）、设备正处于重枚举窗口（端点暂不可用）或
     /// 会话超时都按"暂无信息"处理并返回 null，不向调用方抛错。</para>
     /// </summary>
-    private static Dictionary<string, string>? QueryViaAdbSession(DeviceInfo device)
+    private static Dictionary<string, string>? QueryViaAdbSession(DeviceInfo device, CancellationToken token)
     {
         try
         {
             return App.DeviceMonitor.RunAdb(device.Device,
                 session => DevicePropertyReader.ReadAdbProperties(
-                    cmd => RunShell(session, cmd), LanguageService.Instance.GetString));
+                    cmd => RunShell(session, cmd, token), LanguageService.Instance.GetString), token);
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException)
         {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                $"Direct ADB property query for {device.Device.Key} is unavailable: {ex.GetType().Name}: {ex.Message}");
             return null;
         }
     }
@@ -214,14 +261,18 @@ public partial class DeviceViewModel
                                 ["variant"] = session.GetVariable("variant", useCache: false),
                             };
                     }
-                    catch
+                    catch (Exception ex) when (ex is not OutOfMemoryException)
                     {
+                        LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                            $"Fastboot getvar for {endpoint.Key} stopped: {ex.GetType().Name}: {ex.Message}");
                         return null;
                     }
                 }, CancellationToken.None)).ConfigureAwait(true);
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                $"Fastboot details for {endpoint.Key} are unavailable: {ex.GetType().Name}: {ex.Message}");
         }
 
         if (info is null || !ReferenceEquals(device.Device, endpoint))
@@ -240,8 +291,9 @@ public partial class DeviceViewModel
     /// Runs an ADB shell command and returns the whitespace-collapsed trimmed output.
     /// <para>执行一条 ADB shell 命令并返回去除空白行与首尾裁剪后的文本。</para>
     /// </summary>
-    private static string RunShell(Comm.Contracts.IAdbDeviceSession session, string command)
-        => System.Text.Encoding.UTF8.GetString(session.ExecuteCommand(command).Stdout);
+    private static string RunShell(Comm.Contracts.IAdbDeviceSession session, string command, CancellationToken token)
+        => System.Text.Encoding.UTF8.GetString(session.CreateShellClient(command)
+            .ExecuteAsync(AdbDetailCommandTimeoutMs, token).GetAwaiter().GetResult().Stdout);
 
     /// <summary>
     /// Applies the queried ADB properties onto the device info model.

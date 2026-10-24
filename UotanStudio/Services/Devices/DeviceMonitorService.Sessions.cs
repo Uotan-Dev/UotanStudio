@@ -94,11 +94,15 @@ public sealed partial class DeviceMonitorService
 
     /// <summary>
     /// Opens an ADB session lease for the device: server-managed targets route through the server, direct
-    /// targets through their exact USB key. Returns <c>null</c> when no lease can be opened.
-    /// <para>为设备打开 ADB 会话租约：server 管理的目标经 server 路由，直连目标按其精确 USB 键；无法打开租约时返回 <c>null</c>。</para>
+    /// targets through their exact USB key. Returns <c>null</c> when no lease can be opened. A holder that is
+    /// still alive is never detached here; direct-USB consumers share one session instead of competing for it.
+    /// <para>为设备打开 ADB 会话租约：server 管理的目标经 server 路由，直连目标按其精确 USB 键；无法打开租约时返回
+    /// <c>null</c>。此处绝不摘除仍存活的持有者；直连 USB 消费方共享同一会话，而不是互相竞争。</para>
     /// </summary>
     /// <param name="device">The device whose ADB lease is opened.<para>要打开 ADB 租约的设备。</para></param>
     /// <returns>The lease and ADB session to dispose, or <c>null</c> when none is available.<para>需释放的租约与 ADB 会话，不可用时为 <c>null</c>。</para></returns>
+    /// <exception cref="DeviceEndpointBusyException">Another live holder owns the direct USB endpoint; the
+    /// exception message names the holders. <para>另一存活的持有者占用直连 USB 端点；异常消息会列出占用者。</para></exception>
     public (DeviceLease Lease, IAdbDeviceSession Session)? OpenAdbLease(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Adb) return null;
@@ -128,9 +132,37 @@ public sealed partial class DeviceMonitorService
         }
 
         var key = ResolveDirectUsbOpenKey(device);
-        if (key is null) return null;
-        var lease = _controller.OpenLeaseByKeyAsync(key, DeviceSessionKind.Adb).GetAwaiter().GetResult();
-        if (lease is null) return null;
+        if (key is null)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "DeviceManager",
+                $"No direct USB ADB endpoint matches {device.Serial} ({device.Key}); another owner or a route policy " +
+                "refusal prevents opening it, so no session is available.");
+            return null;
+        }
+
+        DeviceLease? lease;
+        try
+        {
+            lease = _controller.OpenLeaseByKeyAsync(key, DeviceSessionKind.Adb).GetAwaiter().GetResult();
+        }
+        catch (DeviceEndpointBusyException busy)
+        {
+            var holderText = DescribeHolders(_controller.DescribeReservations(key));
+            LogService.Instance.Write(LogLevel.Warn, "DeviceManager",
+                $"Unable to open the ADB lease for {key}: {holderText} currently holds the endpoint. "
+                + $"端点 {key} 的 ADB 租约仍被 {holderText} 占用。");
+            _ = busy;
+            throw;
+        }
+
+        if (lease is null)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "DeviceManager",
+                $"Opening the ADB lease for {key} returned no lease; the endpoint is not enumerated, the interface is "
+                + $"held by another process, or the route policy refused it. "
+                + $"打开 {key} 的 ADB 租约未返回租约：端点未枚举、接口被其它进程占用，或路由策略拒绝。");
+            return null;
+        }
         if (!lease.TryGetSession<IAdbDeviceSession>(out var session))
         {
             CloseLease(lease);
@@ -138,6 +170,16 @@ public sealed partial class DeviceMonitorService
         }
         return (lease, session);
     }
+
+    /// <summary>
+    /// Renders the reservation list of one endpoint for a diagnostic line, never as an empty string.
+    /// <para>把某个端点的占用登记列表渲染成诊断文本，绝不为空字符串。</para>
+    /// </summary>
+    /// <param name="holders">Reservation labels reported by the controller. <para>控制器报告的占用登记标签。</para></param>
+    /// <returns>The joined holders, or a phrase describing a reservation that is still releasing.
+    /// <para>拼接后的占用者，或描述“仍在释放中的占用”的短句。</para></returns>
+    private static string DescribeHolders(IReadOnlyList<string> holders)
+        => holders.Count == 0 ? "a reservation that is still being released" : string.Join(", ", holders);
 
     private (DeviceLease Lease, IAdbDeviceSession Session) OpenServerAdbLease(string serial)
     {
@@ -334,7 +376,7 @@ public sealed partial class DeviceMonitorService
     /// </summary>
     /// <param name="device">The device whose HDC lease is opened.<para>要打开 HDC 租约的设备。</para></param>
     /// <returns>The lease and HDC session to dispose, or <c>null</c> for non-HDC devices.<para>需释放的租约与 HDC 会话，非 HDC 设备时为 <c>null</c>。</para></returns>
-    public (DeviceLease Lease, HdcSession Session)? OpenHdcLease(DetectedDevice device)
+    public (HdcSessionHandle Lease, HdcSession Session)? OpenHdcLease(DetectedDevice device)
     {
         if (device.Protocol != DeviceProtocolKind.Hdc) return null;
         if (UseHdcServerFor(device))
@@ -353,7 +395,7 @@ public sealed partial class DeviceMonitorService
                 RouteEpoch = DebugBridgeRoute.Current.Epoch,
                 Protocol = "hdc"
             };
-            return (AdoptOwnedSession(endpoint, session), session);
+            return (HdcSessionHandle.ForLease(AdoptOwnedSession(endpoint, session)), session);
         }
 
         var opened = HdcDirectConnection.Open(this, device);

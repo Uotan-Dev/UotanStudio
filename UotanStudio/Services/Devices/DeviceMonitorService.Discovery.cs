@@ -10,7 +10,10 @@ namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
 {
+    private const int SlowScanMilliseconds = 400;
+    private static readonly TimeSpan ScanLockWait = TimeSpan.FromMilliseconds(250);
     private readonly Lock _scanLock = new();
+    private volatile IReadOnlyList<DetectedDevice>? _lastScan;
     /// <summary>
     /// Full scan of the direct-USB endpoints plus the adb and HDC server targets, cached until the
     /// next device change.
@@ -25,7 +28,16 @@ public sealed partial class DeviceMonitorService
             return cached;
         }
 
-        lock (_scanLock)
+        if (!_scanLock.TryEnter(ScanLockWait))
+        {
+            var previous = _lastScan;
+            LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
+                $"Scan skipped after waiting {ScanLockWait.TotalMilliseconds:F0} ms: another scan is still running; " +
+                $"returning the previous {previous?.Count ?? 0} device(s) instead of blocking the caller.");
+            return previous ?? [];
+        }
+
+        try
         {
             cached = _cachedScan;
             if (cached is not null)
@@ -34,13 +46,26 @@ public sealed partial class DeviceMonitorService
             }
 
             var version = Interlocked.Read(ref _scanVersion);
+            var scanWatch = System.Diagnostics.Stopwatch.StartNew();
             var devices = ScanCore();
+            scanWatch.Stop();
+            _lastScan = devices;
+            if (scanWatch.ElapsedMilliseconds >= SlowScanMilliseconds)
+            {
+                LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+                    $"Full scan took {scanWatch.ElapsedMilliseconds} ms for {devices.Count} device(s); callers waiting on the " +
+                    "scan lock stall for that long.");
+            }
             if (version == Interlocked.Read(ref _scanVersion))
             {
                 _cachedScan = devices;
             }
 
             return devices;
+        }
+        finally
+        {
+            _scanLock.Exit();
         }
     }
 
@@ -52,7 +77,14 @@ public sealed partial class DeviceMonitorService
     private IReadOnlyList<DetectedDevice> ScanCore()
     {
         List<DetectedDevice> devices = [];
+        var refreshWatch = System.Diagnostics.Stopwatch.StartNew();
         var endpoints = _controller.RefreshAsync().GetAwaiter().GetResult().Endpoints;
+        refreshWatch.Stop();
+        if (refreshWatch.ElapsedMilliseconds >= SlowScanMilliseconds)
+        {
+            LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+                $"Controller refresh took {refreshWatch.ElapsedMilliseconds} ms for {endpoints.Length} endpoint(s).");
+        }
         var usbInfos = endpoints.Where(endpoint => endpoint.UsbInfo is not null)
             .Select(endpoint => endpoint.UsbInfo!).ToArray();
         var adbDevices = endpoints.Where(endpoint => endpoint.Protocol == "adb" &&

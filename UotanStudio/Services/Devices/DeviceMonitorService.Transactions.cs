@@ -276,6 +276,11 @@ public sealed partial class DeviceMonitorService
     {
         ArgumentNullException.ThrowIfNull(operation);
         cancellationToken.ThrowIfCancellationRequested();
+        if (UsesSharedAdbSession(device))
+        {
+            return RunSharedAdbSession(device, operation, cancellationToken);
+        }
+
         var (lease, session) = LeaseAdb(device, cancellationToken);
         try
         {
@@ -299,6 +304,11 @@ public sealed partial class DeviceMonitorService
     {
         ArgumentNullException.ThrowIfNull(operation);
         cancellationToken.ThrowIfCancellationRequested();
+        if (UsesSharedAdbSession(device))
+        {
+            return await RunSharedAdbSessionAsync(device, operation, cancellationToken).ConfigureAwait(false);
+        }
+
         var (lease, session) = LeaseAdb(device, cancellationToken);
         try
         {
@@ -316,6 +326,60 @@ public sealed partial class DeviceMonitorService
             CloseLease(lease);
         }
     }
+
+    /// <summary>
+    /// Runs one operation on the shared direct-USB ADB session, keeping the connection open for every other host
+    /// consumer. A transport failure takes the session out of the pool so the next caller reopens instead of
+    /// reusing a dead connection.
+    /// <para>在共享的直连 USB ADB 会话上执行一次操作，并为其它宿主消费方保留该连接。传输失败会把会话移出池，
+    /// 使下一个调用方重新打开，而不是复用已失效的连接。</para>
+    /// </summary>
+    private TResult RunSharedAdbSession<TResult>(DetectedDevice device,
+        Func<IAdbDeviceSession, TResult> operation, CancellationToken cancellationToken)
+    {
+        using var scope = AcquireSharedAdbSession(device, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return operation(scope.Session);
+        }
+        catch (Exception exception) when (IndicatesLostConnection(exception))
+        {
+            if (!scope.Session.IsConnected)
+            {
+                DiscardSharedAdbSession(device, scope.Session);
+            }
+
+            throw;
+        }
+    }
+
+    private async Task<TResult> RunSharedAdbSessionAsync<TResult>(DetectedDevice device,
+        Func<IAdbDeviceSession, Task<TResult>> operation, CancellationToken cancellationToken)
+    {
+        using var scope = AcquireSharedAdbSession(device, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return await operation(scope.Session).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (IndicatesLostConnection(exception))
+        {
+            if (!scope.Session.IsConnected)
+            {
+                DiscardSharedAdbSession(device, scope.Session);
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Whether a failure invalidates the underlying ADB connection instead of only the one command.
+    /// <para>判断一次失败是否让底层 ADB 连接失效，而不只是这一条命令失败。</para>
+    /// </summary>
+    private static bool IndicatesLostConnection(Exception exception)
+        => exception is IOException or TimeoutException or ObjectDisposedException;
 
     internal async Task<TResult> RunRkdlAsync<TResult>(DetectedDevice device,
         Func<RkdlSession, Task<TResult>> operation, CancellationToken cancellationToken = default)

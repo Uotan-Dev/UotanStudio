@@ -169,12 +169,22 @@ public sealed partial class DeviceMonitorService
     /// <param name="jarPath">Path of the server jar to deploy.<para>要部署的服务 jar 路径。</para></param>
     /// <param name="options">The server launch options.<para>服务启动选项。</para></param>
     /// <returns>The managed mirror session.<para>受管理的投屏会话。</para></returns>
+    /// <exception cref="IOException">A server or network target stayed leased by another host operation beyond the
+    /// mirror wait budget. <para>server 或网络目标在投屏等待预算内始终被其它宿主操作占用。</para></exception>
+    /// <exception cref="InvalidOperationException">The direct-USB ADB session could not be opened or is held by
+    /// another owner. <para>直连 USB ADB 会话无法打开或被其它持有者占用。</para></exception>
     public ManagedMirrorSession StartMirror(DetectedDevice device,
         string jarPath, ScrcpyServerOptions options)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(options);
-        var (lease, session) = LeaseAdb(device, CancellationToken.None);
+        if (UsesSharedAdbSession(device))
+        {
+            return StartMirrorOverSharedSession(device, jarPath, options);
+        }
+
+        var (lease, session) = AcquireForMirror(() => LeaseAdb(device, CancellationToken.None),
+            () => ReleaseMirrorEndpointHolders(device));
         if (session.UsesServer)
         {
             try
@@ -184,7 +194,9 @@ public sealed partial class DeviceMonitorService
                     RequireAdbServerDevice(device);
                     var server = new AdbServerServices(device.Serial, DeviceCommunicationConfiguration.ServerHost,
                         DeviceCommunicationConfiguration.AdbServerPort);
-                    return MirrorSessionFacade.StartScrcpyOverAdbServer(server, jarPath, options);
+                    var started = MirrorSessionFacade.StartScrcpyOverAdbServer(server, jarPath, options);
+                    TrackMirrorSession(device, started);
+                    return started;
                 }
             }
             finally
@@ -195,12 +207,49 @@ public sealed partial class DeviceMonitorService
 
         try
         {
-            return MirrorSessionFacade.StartScrcpyOverUsbSession(session, jarPath, options, lease);
+            var mirrored = MirrorSessionFacade.StartScrcpyOverUsbSession(session, jarPath, options, lease);
+            TrackMirrorSession(device, mirrored);
+            return mirrored;
         }
         catch
         {
             session.Dispose();
             CloseLease(lease);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Starts the scrcpy server on the shared direct-USB ADB session, so the log capture, property queries and
+    /// shell commands keep running over the same connection instead of losing the endpoint to the mirror.
+    /// <para>在共享的直连 USB ADB 会话上启动 scrcpy 服务端，使日志抓取、属性查询与 shell 命令继续复用同一连接，
+    /// 而不是被投屏抢走端点。</para>
+    /// </summary>
+    /// <param name="device">The direct-USB ADB target to mirror. <para>要投屏的直连 USB ADB 目标。</para></param>
+    /// <param name="jarPath">Local path of the scrcpy server jar. <para>scrcpy 服务端 jar 的本地路径。</para></param>
+    /// <param name="options">Server launch options. <para>服务端启动选项。</para></param>
+    /// <returns>The session owning the scrcpy streams and one borrow of the shared ADB session.
+    /// <para>持有 scrcpy 流与共享 ADB 会话一次借用的会话。</para></returns>
+    private ManagedMirrorSession StartMirrorOverSharedSession(DetectedDevice device, string jarPath,
+        ScrcpyServerOptions options)
+    {
+        ReleaseTrackedMirrorSession(device);
+        var scope = AcquireSharedAdbSession(device, CancellationToken.None);
+        try
+        {
+            var mirrored = MirrorSessionFacade.StartScrcpyOverUsbSession(scope.Session, jarPath, options, scope,
+                ownsAdbSession: false);
+            TrackMirrorSession(device, mirrored);
+            return mirrored;
+        }
+        catch
+        {
+            if (!scope.Session.IsConnected)
+            {
+                DiscardSharedAdbSession(device, scope.Session);
+            }
+
+            scope.Dispose();
             throw;
         }
     }

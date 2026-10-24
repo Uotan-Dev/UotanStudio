@@ -5,13 +5,23 @@ using UotanStudio.Comm.Routing;
 
 namespace UotanStudio.Services.Devices;
 
-/// <summary>Opens a fresh authenticated direct HDC session with its controller lease; server-owned targets and
-/// ServerOnly mode are rejected instead of bypassing the server.
-/// <para>打开一条由控制器租约持有的全新已认证 HDC 直连会话；server 拥有目标或仅 server 模式时直接拒绝，不会
-/// 绕过 server。</para></summary>
+/// <summary>Leases the shared authenticated direct HDC session for one target; server-owned targets and
+/// ServerOnly mode are rejected instead of bypassing the server. A WinUSB-bound HDC interface accepts a single
+/// open handle, so concurrent consumers share one connection and open their own channels instead of reopening it.
+/// <para>为单个目标租用共享的已认证 HDC 直连会话；server 拥有目标或仅 server 模式时直接拒绝，不会绕过 server。
+/// 绑定 WinUSB 的 HDC 接口只接受一个句柄，因此并发消费方共享一条连接并各自打开通道，而不是重新打开接口。</para></summary>
 internal static class HdcDirectConnection
 {
-    internal static (DeviceLease Lease, HdcSession Session) Open(
+    internal static (HdcSessionHandle Lease, HdcSession Session) Open(
+        DeviceMonitorService monitor, DetectedDevice device)
+        => HdcDirectSessionPool.Acquire(monitor, device);
+
+    /// <summary>Opens one new authenticated direct HDC session with its own controller lease, without sharing.
+    /// <para>打开一条由独立控制器租约持有、不参与共享的全新已认证 HDC 直连会话。</para></summary>
+    /// <param name="monitor">The monitor owning the controller lease.<para>持有控制器租约的监视器。</para></param>
+    /// <param name="device">The target to open.<para>要打开的目标。</para></param>
+    /// <returns>The owned lease and its connected session.<para>所持有的租约与其已连接会话。</para></returns>
+    internal static (DeviceLease Lease, HdcSession Session) OpenFresh(
         DeviceMonitorService monitor, DetectedDevice device)
     {
         if (DebugBridgeRoute.Mode == DebugBridgeRouteMode.ServerOnly)
@@ -68,7 +78,11 @@ internal static class HdcDirectConnection
 
         if (lease is null)
             throw new IOException(
-                $"HDC USB interface for {device.Serial} ({direct.Key}) could not be opened; another host may own it.");
+                $"HDC USB interface for {device.Serial} ({direct.Key}) could not be opened. "
+                + "Stop any other adb/hdc/DevEco process that may hold the interface, confirm the device is bound "
+                + "to WinUSB, or switch the USB backend to libusb in Settings. "
+                + $"无法打开 HDC USB 接口；请停止占用该接口的其它 adb/hdc/DevEco 进程，确认设备绑定 WinUSB，"
+                + "或在设置中切换为 libusb USB 后端。");
         if (!lease.TryGetSession<HdcSession>(out var session))
         {
             lease.DisposeAsync().AsTask().GetAwaiter().GetResult();

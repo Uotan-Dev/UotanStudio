@@ -49,7 +49,7 @@ public sealed partial class DeviceMonitorService
             throw new ArgumentException("An HDC target is required. 需要 HDC 目标。", nameof(device));
         }
 
-        var opened = OpenHdcLease(device);
+        var opened = AcquireForMirror(() => OpenHdcLease(device), () => ReleaseMirrorEndpointHolders(device));
         if (opened is null)
         {
             throw new ArgumentException("An HDC target is required. 需要 HDC 目标。", nameof(device));
@@ -58,14 +58,16 @@ public sealed partial class DeviceMonitorService
         var (lease, session) = opened.Value;
         try
         {
-            return MirrorSessionFacade.StartOhscrcpyOverHdcSession(session, device.Serial, options ?? new(),
-                connectTimeoutMs: 20_000, lease: lease,
+            var mirrorSession = lease.SharesConnection ? session.CreateLease() : session;
+            var started = MirrorSessionFacade.StartOhscrcpyOverHdcSession(mirrorSession, device.Serial,
+                options ?? new(), connectTimeoutMs: 20_000, lease: lease,
                 logSink: text => LogService.Instance.Write(LogLevel.Info, "ScreenMirror", text));
+            TrackMirrorSession(device, started);
+            return started;
         }
         catch
         {
-            session.Dispose();
-            CloseLease(lease);
+            lease.Dispose();
             throw;
         }
     }
