@@ -11,7 +11,25 @@
         ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
         WindowDecorations="Full" WindowStartupLocation="CenterScreen"
         Icon="/Assets/UotanToolbox.png">
+    <Window.Resources>
+        <CornerRadius x:Key="PluginCardCornerRadius">6</CornerRadius>
+        <SolidColorBrush x:Key="PluginCardBackgroundBrush" Color="{DynamicResource CardBackground}" />
+        <SolidColorBrush x:Key="PluginCardBorderBrush" Color="{DynamicResource BorderForegroundColor}" />
+    </Window.Resources>
     <Window.Styles>
+        <Style Selector="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="SelectableTextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="Button">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="TextBox">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="CornerRadius" Value="{StaticResource PluginCardCornerRadius}" />
+        </Style>
         <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
             <Setter Property="Background">
                 <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
@@ -24,16 +42,29 @@
         <Style Selector="Button.plugin-action">
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="12,0" />
+            <Setter Property="CornerRadius" Value="{StaticResource PluginCardCornerRadius}" />
+        </Style>
+        <Style Selector="Border.ModeChip">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.PluginEntryCard">
+            <Setter Property="CornerRadius" Value="{StaticResource PluginCardCornerRadius}" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{StaticResource PluginCardBorderBrush}" />
         </Style>
         <Style Selector="ListBox.plugin-list > ListBoxItem">
-            <Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="CornerRadius" Value="{StaticResource PluginCardCornerRadius}" />
+            <Setter Property="Margin" Value="0,0,0,8" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         </Style>
     </Window.Styles>
     <Grid Margin="20,52,20,20" ColumnDefinitions="300,*" ColumnSpacing="20">
         <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
-            <TextBox x:Name="PluginSearchBox" Height="32"
+            <TextBox x:Name="PluginSearchBox" Height="32" VerticalContentAlignment="Center"
                      Text="{Binding Search, Mode=TwoWay}"
                      PlaceholderText="{DynamicResource Plugin_Search}" />
             <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
@@ -45,37 +76,65 @@
                         <TextBlock Text="{DynamicResource Plugin_Import}" />
                     </StackPanel>
                 </Button>
-                <Button Grid.Column="2" Width="32" Height="32" Padding="0" Click="RefreshClick"
+                <Button Grid.Column="2" Classes="plugin-action" Width="32" MinWidth="0" Padding="0" Click="RefreshClick"
                         ToolTip.Tip="{DynamicResource Plugin_Refresh}">
                     <icons:Refresh Width="16" Height="16" />
                 </Button>
             </Grid>
             <Grid Grid.Row="2">
-                <TextBlock Text="{DynamicResource Plugin_Empty}" Opacity="0.7"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           IsVisible="{Binding !Plugins.Count}" />
+                <StackPanel IsVisible="{Binding !Plugins.Count}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Spacing="6">
+                    <icons:App Width="40" Height="40" Opacity="0.25"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="{DynamicResource Plugin_Empty}"
+                               Opacity="0.7" HorizontalAlignment="Center"
+                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220" />
+                </StackPanel>
                 <ListBox x:Name="VisualPluginList" Classes="plugin-list"
                          ItemsSource="{Binding Plugins}"
                          SelectedItem="{Binding SelectedPlugin, Mode=TwoWay}"
-                         Background="Transparent" BorderThickness="0" Padding="0,0,10,0"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                         IsVisible="{Binding !!Plugins.Count}"
+                         Background="Transparent" BorderThickness="0" Padding="0,0,12,0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="plugins:VisualPluginRegistration">
-                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                    CornerRadius="6" Padding="10,8">
-                                <StackPanel Spacing="4">
-                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
-                                                   TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Version}" FontSize="11" Opacity="0.65" />
+                            <Border Classes="PluginEntryCard">
+                                <StackPanel Spacing="4" VerticalAlignment="Center">
+                                    <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
+                                        <TextBlock Text="{Binding Name}" FontWeight="Medium"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip.Tip="{Binding Name}" />
+                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4">
+                                            <Border Classes="ModeChip"
+                                                    Background="{DynamicResource SemiColorPrimary}">
+                                                <TextBlock Text="{Binding KindText}" FontSize="10"
+                                                           Foreground="{DynamicResource AccentHoverForeground}" />
+                                            </Border>
+                                            <Border Classes="ModeChip"
+                                                    Background="{DynamicResource SemiColorPrimaryLight}"
+                                                    BorderBrush="{DynamicResource SemiColorPrimaryPointerover}"
+                                                    BorderThickness="1"
+                                                    IsVisible="{Binding IsEnabled}">
+                                                <TextBlock Text="{DynamicResource Plugin_Enabled}" FontSize="10"
+                                                           Foreground="{DynamicResource SemiColorPrimaryPointerover}" />
+                                            </Border>
+                                            <Border Classes="ModeChip"
+                                                    Background="{StaticResource PluginCardBackgroundBrush}"
+                                                    BorderBrush="{StaticResource PluginCardBorderBrush}"
+                                                    BorderThickness="1"
+                                                    IsVisible="{Binding !!Version}">
+                                                <TextBlock Text="{Binding Version}" FontSize="10" />
+                                            </Border>
+                                        </StackPanel>
                                     </Grid>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{Binding KindText}" FontSize="11"
-                                                   Foreground="{DynamicResource AccentColor}" />
-                                        <TextBlock Text="{DynamicResource Plugin_Enabled}" FontSize="11"
-                                                   IsVisible="{Binding IsEnabled}" />
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding DisplayErrorText}" FontSize="11" TextWrapping="Wrap"
+                                    <TextBlock Text="{Binding Description}" FontSize="12" Opacity="0.65"
+                                               TextTrimming="CharacterEllipsis"
+                                               IsVisible="{Binding !!Description}"
+                                               ToolTip.Tip="{Binding Description}" />
+                                    <TextBlock Text="{Binding DisplayErrorText}" FontSize="12" TextWrapping="Wrap"
                                                Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
                                                IsVisible="{Binding !!ErrorText}" />
                                 </StackPanel>
