@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
@@ -19,7 +20,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <para>文档视图模型，承载文档编辑器的文本内容、语法语言、文件路径与脏状态，
 /// 并支持二进制文件的 16 进制查看与固件结构分析。</para>
 /// </summary>
-public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISearchableDocument
+public partial class FileViewModel : Document, ITool, IEditable, ISaveableDocument, ISearchableDocument
 {
     static FileViewModel()
     {

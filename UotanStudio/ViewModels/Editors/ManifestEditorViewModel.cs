@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.AndroidMeta.AXml;
 using UotanStudio.Firmware.AndroidMeta.Resources;
@@ -15,7 +16,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <para>Manifest（AndroidManifest.xml / AXML）编辑器视图模型：左栏元素结构树 +
 /// 右栏选中元素的属性编辑与 XML 文本预览，支持解析、可视化编辑与重建写出。</para>
 /// </summary>
-public partial class ManifestEditorViewModel : Document, ICommandSaveableDocument, ISearchableDocument
+public partial class ManifestEditorViewModel : Document, ITool, ICommandSaveableDocument, ISearchableDocument
 {
     /// <summary>
     /// The localized title of the save button.

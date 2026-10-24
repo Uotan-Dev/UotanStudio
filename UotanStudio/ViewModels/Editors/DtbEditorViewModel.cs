@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.DeviceTree.Dt;
 using UotanStudio.Messages;
@@ -15,7 +16,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <para>DTB 设备树双栏编辑器视图模型：左侧设备节点树 + 右侧可编辑 DTS 源码，
 /// 支持双向联动与回编译保存（DTS→DTB）。</para>
 /// </summary>
-public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableDocument, ISearchableDocument
+public partial class DtbEditorViewModel : Document, ITool, IEditable, ICommandSaveableDocument, ISearchableDocument
 {
     private Dictionary<string, int> _lineMap = [];
 

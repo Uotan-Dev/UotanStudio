@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.AndroidMeta.Dex;
 using UotanStudio.Firmware.AndroidMeta.Dex.Smali;
@@ -25,7 +26,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <para>JAR/APK 容器：枚举 classes*.dex 条目并支持多 DEX 合并视图（跨条目聚合 Smali 与统计）、
 /// 单条目重建写回、资源条目导出/替换，以及接入密钥库 JAR 用途密钥的 v1/v2/v3 签名。</para>
 /// </summary>
-public partial class DexEditorViewModel : Document, ISearchableDocument
+public partial class DexEditorViewModel : Document, ITool, ISearchableDocument
 {
     /// <summary>
     /// The localized title of the save button.

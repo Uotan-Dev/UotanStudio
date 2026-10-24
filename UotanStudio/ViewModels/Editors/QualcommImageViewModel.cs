@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.Executable.Qualcomm;
@@ -11,7 +12,7 @@ namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>Read-only Qualcomm image workspace with explicit trust input and cancellable analysis.
 /// <para>带显式信任输入及可取消分析的只读 Qualcomm 镜像工作区。</para></summary>
-public partial class QualcommImageViewModel : Document
+public partial class QualcommImageViewModel : Document, ITool
 {
     private readonly IQualcommWorkspaceAnalyzer _analyzer;
     private CancellationTokenSource? _analysisCancellation;

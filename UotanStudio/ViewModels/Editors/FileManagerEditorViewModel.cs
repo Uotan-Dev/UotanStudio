@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
 using UotanStudio.Services;
@@ -15,7 +16,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <para>文件管理器文档，展示 raw 镜像（ext4/EROFS/F2FS）内部的目录树，
 /// 提供目录导航、文件列表与选中条目提取。</para>
 /// </summary>
-public partial class FileManagerEditorViewModel : Document
+public partial class FileManagerEditorViewModel : Document, ITool
 {
     /// <summary>
     /// Cancellation source of the current load; cancelled when a new load starts or the document closes.

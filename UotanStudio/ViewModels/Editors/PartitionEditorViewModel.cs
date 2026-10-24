@@ -4,6 +4,7 @@ using System.Text;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.BlockImage;
@@ -30,7 +31,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// 支持 Android LP super 元数据、GPT、MBR、Amlogic 与 Rockchip parameter 多种数据源，
 /// 可解析、可视化编辑、增删分区并回写保存。</para>
 /// </summary>
-public partial class PartitionEditorViewModel : Document, ICommandSaveableDocument
+public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveableDocument
 {
     private PartitionTableSource _source;
     private LpMetadata? _lpMetadata;

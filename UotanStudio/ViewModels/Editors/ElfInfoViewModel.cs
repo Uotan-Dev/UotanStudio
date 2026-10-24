@@ -2,6 +2,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Executable.Elf;
 using UotanStudio.Messages;
@@ -11,7 +12,7 @@ using UotanStudio.UiAbstractions;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>Read-only ELF document, with cancellable metadata loading and localized presentation.<para>只读 ELF 文档，支持可取消的元数据加载与本地化呈现。</para></summary>
-public partial class ElfInfoViewModel : Document
+public partial class ElfInfoViewModel : Document, ITool
 {
     private CancellationTokenSource? _loadCancellation;
     private ElfInfo? _info;

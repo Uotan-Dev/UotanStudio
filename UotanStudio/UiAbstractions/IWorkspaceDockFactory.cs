@@ -27,4 +27,18 @@ public interface IWorkspaceDockFactory : IFactory
     /// <para>停止工作区拥有的全部终端进程。</para>
     /// </summary>
     void DisposeTerminal();
+
+    /// <summary>
+    /// Docks the specified dockable into a tool dock in the active layout.
+    /// <para>将指定停靠项停靠到当前布局的工具停靠区。</para>
+    /// </summary>
+    /// <param name="dockable">The dockable to dock as a tool window. <para>要停靠为工具窗口的停靠项。</para></param>
+    void DockAsTool(IDockable? dockable);
+
+    /// <summary>
+    /// Docks the dockable supplied as a command parameter into a tool dock in the active layout.
+    /// <para>将作为命令参数传入的停靠项停靠到当前布局的工具停靠区。</para>
+    /// </summary>
+    /// <param name="parameter">The command parameter carrying the dockable. <para>携带停靠项的命令参数。</para></param>
+    void DockAsTool(object? parameter);
 }

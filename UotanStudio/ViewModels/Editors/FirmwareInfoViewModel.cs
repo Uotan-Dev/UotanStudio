@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
@@ -14,7 +15,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <para>固件元数据面板视图模型：以只读 Dock 文档展示固件文件的格式名、摘要、
 /// 元数据键值对与条目列表，数据来自 <see cref="FormatDetector"/> + <see cref="IFormatHandler.ReadMetadataAsync"/>。</para>
 /// </summary>
-public partial class FirmwareInfoViewModel : Document
+public partial class FirmwareInfoViewModel : Document, ITool
 {
     /// <summary>
     /// The localized panel title.

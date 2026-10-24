@@ -7,6 +7,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Media.Acceleration.Linux;
 using UotanStudio.Media.Decoding;
@@ -36,7 +37,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// (the frame is disposed right after it returns).
 /// </para>
 /// </remarks>
-public partial class ScreenMirrorViewModel : Document
+public partial class ScreenMirrorViewModel : Document, ITool
 {
     private MirrorSessionFacade? _client;
     private int _starting;

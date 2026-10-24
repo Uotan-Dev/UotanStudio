@@ -2,7 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:dock="using:Dock.Avalonia.Controls"
         xmlns:icons="https://irihi.tech/iconica/tdesign"
-        xmlns:core="using:Dock.Model.Core">
+        xmlns:core="using:Dock.Model.Core"
+        xmlns:ui="using:UotanStudio.UiAbstractions">
     <!-- 文档/工具标签页右键菜单：覆盖 Semi Dock 主题的默认菜单——
          去掉方向性关闭（关闭左侧/右侧/上方/下方）、新建水平/垂直文档停靠区、布局模式，
          并为保留项加上图标。命令仍走 Dock 工厂方法（Factory.Xxx + CommandParameter=当前停靠项）。 -->
@@ -23,6 +24,13 @@
                           Command="{Binding Factory.FloatAllDockables}" CommandParameter="{Binding}">
                     <MenuItem.Icon>
                         <icons:Window1 Width="16" Height="16" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="{DynamicResource DockMenu_DockAsTool}"
+                          Command="{Binding ((ui:IWorkspaceDockFactory)Factory).DockAsTool}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:Pin Width="16" Height="16" />
                     </MenuItem.Icon>
                 </MenuItem>
                 <Separator />

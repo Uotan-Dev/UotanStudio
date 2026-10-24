@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
+using Dock.Model.Controls;
 using Dock.Model.Core;
 using UotanStudio.Messages;
 using UotanStudio.Services.Devices;
@@ -388,6 +389,19 @@ public sealed partial class WorkspacePanelService : ObservableObject
     }
 
     private PanelEntry? GetEntry(string key) => _panels.TryGetValue(key, out var entry) ? entry : null;
+
+    internal IToolDock? FindRegisteredToolHost(IDockable dockable)
+    {
+        foreach (var entry in _panels.Values)
+        {
+            if (ReferenceEquals(entry.Dockable, dockable) && entry.Host is IToolDock toolDock)
+            {
+                return toolDock;
+            }
+        }
+
+        return null;
+    }
 
     private static void UpdateHost(PanelEntry? entry)
     {

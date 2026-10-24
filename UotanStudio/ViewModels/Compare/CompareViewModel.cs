@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
 using UotanStudio.Services;
@@ -23,7 +24,7 @@ namespace UotanStudio.ViewModels.Compare;
 /// 单侧条目在另一侧自动留空、差异行整行变色、两侧共用一套展开状态（一侧展开即两侧同步展开），两栏并排
 /// 滚动；双击文件不占用当前视图，而是在新标签打开文件对比。</para>
 /// </summary>
-public sealed partial class CompareViewModel : Document
+public sealed partial class CompareViewModel : Document, ITool
 {
     /// <summary>
     /// Columns created when the document opens: two columns is both the common browsing layout and the number

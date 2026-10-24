@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Radio.Qcn;
 
@@ -18,7 +19,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// 已知项结构化编辑（IMEI/SPC/MEID/ESN/MAC）与 128 字节数据的十六进制编辑；保存时仅对发生变化的
 /// 128 字节数据区做原位补丁，文件其余字节保持不变。</para>
 /// </summary>
-public partial class QcnEditorViewModel : Document, ICommandSaveableDocument
+public partial class QcnEditorViewModel : Document, ITool, ICommandSaveableDocument
 {
     private QcnDocument? _document;
     private readonly List<QcnNvItemViewModel> _allItems = [];

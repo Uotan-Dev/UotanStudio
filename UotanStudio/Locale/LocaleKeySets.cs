@@ -1516,6 +1516,7 @@ internal static class LocaleKeySets
         "DockMenu_Show",
         "DockMenu_Dock",
         "DockMenu_DockAsDocument",
+        "DockMenu_DockAsTool",
         "DockMenu_AutoHide",
         "Terminal_Shell",
         "Terminal_New",

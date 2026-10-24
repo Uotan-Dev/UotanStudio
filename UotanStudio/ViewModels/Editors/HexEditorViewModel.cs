@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
 
@@ -13,7 +14,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <c>HexViewer</c> 控件），维护原始字节数组（编辑就地写回）、大小统计与脏状态，
 /// 保存时把字节数组写回原文件。</para>
 /// </summary>
-public partial class HexEditorViewModel : Document, ICommandSaveableDocument
+public partial class HexEditorViewModel : Document, ITool, ICommandSaveableDocument
 {
     /// <summary>
     /// Upper bound for a file kept in the in-memory byte array; larger files are reported as load failures.

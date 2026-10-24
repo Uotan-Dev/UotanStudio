@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.AndroidMeta.Apk;
 using UotanStudio.Firmware.Archive.Browsing;
@@ -19,7 +20,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <para>APK 元数据编辑器视图模型：承载 <see cref="ApkParser"/> 提取的应用信息
 /// （包名/版本/SDK/权限/ABI/图标），主视图展示图标与全部详细信息。</para>
 /// </summary>
-public partial class ApkEditorViewModel : Document
+public partial class ApkEditorViewModel : Document, ITool
 {
     /// <summary>
     /// The localized title of the busy/loading label.

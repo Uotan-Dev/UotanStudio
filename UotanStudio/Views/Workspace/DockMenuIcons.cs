@@ -110,7 +110,8 @@ internal static class DockMenuIcons
             return AppIconKind.Show;
         }
 
-        if (text == lang.GetString("DockMenu_Dock"))
+        if (text == lang.GetString("DockMenu_Dock")
+            || text == lang.GetString("DockMenu_DockAsTool"))
         {
             return AppIconKind.Pin;
         }

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.AndroidMeta.Arsc;
 using UotanStudio.Services;
@@ -16,7 +17,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <para>ARSC（resources.arsc）资源表编辑器视图模型：左栏包→类型→配置→条目四级资源树 +
 /// 右栏选中条目的可视化详情（键名、类型、格式化值与原始数据），支持解析、值级编辑与重建保存。</para>
 /// </summary>
-public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearchMatchLocator
+public partial class ArscEditorViewModel : Document, ITool, ISearchableDocument, ISearchMatchLocator
 {
     /// <summary>
     /// The localized title of the save button.

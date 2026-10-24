@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
 using UotanStudio.Services.Logging;
@@ -10,7 +11,7 @@ using UotanStudio.Services.Logging;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>Read-only offline log document with full-line filtering.<para>支持整行筛选的只读离线日志文档。</para></summary>
-public partial class LogEditorViewModel : Document, ILogViewModel
+public partial class LogEditorViewModel : Document, ITool, ILogViewModel
 {
     private IReadOnlyList<ILogLine> _allEntries = [];
     private CancellationTokenSource? _load;

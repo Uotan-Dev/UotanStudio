@@ -69,7 +69,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     {
         if (_compareDocument?.Owner is not IDock owner || owner.VisibleDockables?.Contains(_compareDocument) != true)
         {
-            var documentDock = _documentDock ??= FindDocumentsPane();
+            var documentDock = FindDocumentsPane();
             if (documentDock is null)
             {
                 return null;
@@ -101,7 +101,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <returns>The new compare document, or null if the layout is unavailable. <para>新建的对比文档；布局未就绪时为 null。</para></returns>
     public CompareViewModel? OpenNewCompareDocument()
     {
-        var documentDock = _documentDock ??= FindDocumentsPane();
+        var documentDock = FindDocumentsPane();
         if (documentDock is null)
         {
             return null;
@@ -143,7 +143,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         PruneClosedScreenMirrorDocuments();
         if (!_screenMirrorDocuments.TryGetValue(key, out var document))
         {
-            var documentDock = _documentDock ??= FindDocumentsPane();
+            var documentDock = FindDocumentsPane();
             if (documentDock is null)
             {
                 return null;
@@ -274,7 +274,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <param name="mode">The resolved open mode. <para>解析后的打开方式。</para></param>
     internal async Task OpenTextAsync(string path, EditorOpenMode mode)
     {
-        var documentDock = _documentDock ??= FindDocumentsPane();
+        var documentDock = FindDocumentsPane();
         if (documentDock is null)
         {
             return;
@@ -283,9 +283,8 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         EnsureDocumentDockSubscribed(documentDock);
 
         var fullPath = Path.GetFullPath(path);
-        var existing = documentDock.VisibleDockables?
-            .OfType<FileViewModel>()
-            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+        var existing = FindOpenDocument<FileViewModel>(doc =>
+            string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
 
         if (existing is not null)
         {
@@ -296,7 +295,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                 await existing.LoadContentAsync(fullPath, mode);
             }
 
-            documentDock.ActiveDockable = existing;
+            ActivateDockable(existing, documentDock);
             return;
         }
 
@@ -325,15 +324,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public async Task OpenLogAsync(string path)
     {
-        var documentDock = _documentDock ??= FindDocumentsPane();
+        var documentDock = FindDocumentsPane();
         if (documentDock is null || string.IsNullOrWhiteSpace(path)) return;
         EnsureDocumentDockSubscribed(documentDock);
         var fullPath = Path.GetFullPath(path);
-        var existing = documentDock.VisibleDockables?.OfType<LogEditorViewModel>()
-            .FirstOrDefault(document => string.Equals(document.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+        var existing = FindOpenDocument<LogEditorViewModel>(document =>
+            string.Equals(document.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
         {
-            documentDock.ActiveDockable = existing;
+            ActivateDockable(existing, documentDock);
             return;
         }
         var document = new LogEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath };
@@ -479,7 +478,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var documentDock = _documentDock ??= FindDocumentsPane();
+        var documentDock = FindDocumentsPane();
         if (documentDock is null)
         {
             return;
@@ -488,13 +487,12 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         EnsureDocumentDockSubscribed(documentDock);
 
         var fullPath = Path.GetFullPath(path);
-        var existing = documentDock.VisibleDockables?
-            .OfType<FirmwareInfoViewModel>()
-            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+        var existing = FindOpenDocument<FirmwareInfoViewModel>(doc =>
+            string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
 
         if (existing is not null)
         {
-            documentDock.ActiveDockable = existing;
+            ActivateDockable(existing, documentDock);
             return;
         }
 
@@ -555,7 +553,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var documentDock = _documentDock ??= FindDocumentsPane();
+        var documentDock = FindDocumentsPane();
         if (documentDock is null)
         {
             return;
@@ -564,13 +562,12 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         EnsureDocumentDockSubscribed(documentDock);
 
         var fullPath = Path.GetFullPath(path);
-        var existing = documentDock.VisibleDockables?
-            .OfType<FileManagerEditorViewModel>()
-            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+        var existing = FindOpenDocument<FileManagerEditorViewModel>(doc =>
+            string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
 
         if (existing is not null)
         {
-            documentDock.ActiveDockable = existing;
+            ActivateDockable(existing, documentDock);
             return;
         }
 
@@ -602,15 +599,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         Func<TDocument, string, Task> load) where TDocument : class, IDockable
     {
         if (string.IsNullOrWhiteSpace(path)) return;
-        var documentDock = _documentDock ??= FindDocumentsPane();
+        var documentDock = FindDocumentsPane();
         if (documentDock is null) return;
         EnsureDocumentDockSubscribed(documentDock);
         var fullPath = Path.GetFullPath(path);
-        var existing = documentDock.VisibleDockables?.OfType<TDocument>()
-            .FirstOrDefault(document => string.Equals(getPath(document), fullPath, StringComparison.OrdinalIgnoreCase));
+        var existing = FindOpenDocument<TDocument>(document =>
+            string.Equals(getPath(document), fullPath, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
         {
-            documentDock.ActiveDockable = existing;
+            ActivateDockable(existing, documentDock);
             return;
         }
         var document = create(fullPath);
@@ -630,11 +627,17 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void EnsureDocumentDockSubscribed(DocumentDock documentDock)
     {
-        if (_subscribedDocumentDock)
+        if (_subscribedDocumentDock && ReferenceEquals(_documentDock, documentDock))
         {
             return;
         }
 
+        if (_documentDock is not null)
+        {
+            _documentDock.PropertyChanged -= OnDocumentDockPropertyChanged;
+        }
+
+        _documentDock = documentDock;
         documentDock.PropertyChanged += OnDocumentDockPropertyChanged;
         _subscribedDocumentDock = true;
     }
@@ -654,13 +657,26 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// the layout is not ready.
     /// <para>在布局中按 Id 查找文档区（DocumentsPane）并缓存其引用；布局未就绪时返回 <c>null</c>。</para>
     /// </summary>
-    public DocumentDock? FindDocumentsPanePublic() => _documentDock ??= FindDocumentsPane();
+    public DocumentDock? FindDocumentsPanePublic() => FindDocumentsPane();
 
     private DocumentDock? FindDocumentsPane()
     {
-        if (Layout is not null && _factory.FindDockable(Layout, dockable => dockable.Id == "DocumentsPane") is DocumentDock documentDock)
+        if (Layout is not null)
         {
-            return documentDock;
+            if (_documentDock is not null
+                && ReferenceEquals(
+                    _factory.FindDockable(Layout, dockable => ReferenceEquals(dockable, _documentDock)),
+                    _documentDock))
+            {
+                return _documentDock;
+            }
+
+            if ((_factory.FindDockable(Layout, static dockable => dockable is DocumentDock && dockable.Id == "DocumentsPane")
+                ?? _factory.FindDockable(Layout, static dockable => dockable is DocumentDock)) is DocumentDock documentDock)
+            {
+                EnsureDocumentDockSubscribed(documentDock);
+                return documentDock;
+            }
         }
 
         return null;
@@ -729,14 +745,34 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         var dock = FindDocumentsPanePublic();
         if (dock is null) return;
         EnsureDocumentDockSubscribed(dock);
-        var document = dock.VisibleDockables?.OfType<PartitionEditorViewModel>().FirstOrDefault(d => d.FilePath == path);
+        var document = FindOpenDocument<PartitionEditorViewModel>(d => d.FilePath == path);
         if (document is null)
         {
             document = new PartitionEditorViewModel { Title = Path.GetFileName(path) };
             _factory.AddDockable(dock, document);
             await document.LoadAsync(path);
         }
-        dock.ActiveDockable = document;
+        ActivateDockable(document, dock);
+    }
+
+    private TDocument? FindOpenDocument<TDocument>(Func<TDocument, bool> predicate)
+        where TDocument : class, IDockable
+        => Services.Ui.Workspace.WorkspaceSessionCapture.Enumerate(Layout)
+            .OfType<TDocument>()
+            .FirstOrDefault(predicate);
+
+    private void ActivateDockable(IDockable dockable, IDock fallbackDock)
+    {
+        if (dockable.Owner is IDock ownerDock)
+        {
+            ownerDock.ActiveDockable = dockable;
+        }
+        else
+        {
+            fallbackDock.ActiveDockable = dockable;
+        }
+
+        _factory.SetActiveDockable(dockable);
     }
 
     /// <summary>
