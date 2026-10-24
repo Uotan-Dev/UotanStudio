@@ -76,8 +76,10 @@ internal sealed class AdbLogcatReader(Func<string, Action<string>, CancellationT
         catch (ObjectDisposedException)
         {
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            LogService.Instance.Write(LogLevel.Debug, "AdbLog",
+                $"Refreshing the logcat process-name table failed: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
@@ -123,8 +125,12 @@ internal sealed class AdbLogcatReader(Func<string, Action<string>, CancellationT
             }, timeout.Token).ConfigureAwait(false);
             timeout.Token.ThrowIfCancellationRequested();
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested && ex is not OutOfMemoryException)
         {
+            // The process-name table is cosmetic enrichment; a failed lookup keeps the stream running and only
+            // means that entries are shown without a process name.
+            LogService.Instance.Write(LogLevel.Debug, "AdbLog",
+                $"Reading the logcat process-name table failed: {ex.GetType().Name}: {ex.Message}");
             return;
         }
         Volatile.Write(ref _processNames, names);

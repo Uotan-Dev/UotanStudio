@@ -12,6 +12,7 @@ public sealed partial class DeviceMonitorService
         public Task? Task { get; set; }
     }
 
+    private static readonly TimeSpan LogcatClearBudget = TimeSpan.FromSeconds(10);
     private readonly Lock _logStreamLock = new();
     private readonly Dictionary<string, LogStreamRegistration> _activeLogStreams = new(StringComparer.Ordinal);
 
@@ -58,8 +59,15 @@ public sealed partial class DeviceMonitorService
         catch (ObjectDisposedException) { return; }
         if (registration.Task is { } run)
         {
-            try { await run.ConfigureAwait(false); }
-            catch { }
+            try
+            {
+                await run.ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                LogService.Instance.Write(LogLevel.Debug, "AdbLog",
+                    $"Stopping logcat capture for {device.Key} reported {exception.GetType().Name}: {exception.Message}");
+            }
         }
     }
 
@@ -109,33 +117,55 @@ public sealed partial class DeviceMonitorService
                 return;
             }
 
-            var opened = OpenAdbLease(device)
-                ?? throw new InvalidOperationException("Unable to open an ADB session for the device.");
-            using var adbLease = opened.Lease;
-            var session = opened.Session;
-            await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
-            var directReader = new AdbLogcatReader(async (command, onLine, token) =>
+            var scope = AcquireSharedAdbSession(device, cancellationToken);
+            var sharedSession = scope.Session;
+            try
             {
-                var stdout = new AdbLogcatLineDecoder(onLine);
-                var stderr = new AdbLogcatLineDecoder(onLine);
-                try
+                if (!sharedSession.IsConnected)
                 {
-                    var shell = session.CreateShellClient(command);
-                    var exitCode = await shell.ExecuteStreamingAsync(
-                        buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), token).ConfigureAwait(false);
-                    token.ThrowIfCancellationRequested();
-                    if (exitCode != 0) throw new InvalidOperationException($"ADB shell exited with code {exitCode}.");
+                    // A borrowed session that already lost its connection cannot serve this capture; the
+                    // failure below takes it out of the pool, so the consumer's next attempt opens a fresh
+                    // transport instead of reusing the same dead connection forever.
+                    throw new IOException("The shared ADB session is not connected.");
                 }
-                finally
+
+                var directReader = new AdbLogcatReader(async (command, onLine, token) =>
                 {
-                    if (!token.IsCancellationRequested)
+                    var stdout = new AdbLogcatLineDecoder(onLine);
+                    var stderr = new AdbLogcatLineDecoder(onLine);
+                    try
                     {
-                        stdout.Feed([], flush: true);
-                        stderr.Feed([], flush: true);
+                        var shell = sharedSession.CreateShellClient(command);
+                        var exitCode = await shell.ExecuteStreamingAsync(
+                            buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), token).ConfigureAwait(false);
+                        token.ThrowIfCancellationRequested();
+                        if (exitCode != 0) throw new InvalidOperationException($"ADB shell exited with code {exitCode}.");
                     }
+                    finally
+                    {
+                        if (!token.IsCancellationRequested)
+                        {
+                            stdout.Feed([], flush: true);
+                            stderr.Feed([], flush: true);
+                        }
+                    }
+                });
+                await directReader.RunAsync(onEntry, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException &&
+                IndicatesLostConnection(exception))
+            {
+                if (!sharedSession.IsConnected)
+                {
+                    DiscardSharedAdbSession(device, sharedSession);
                 }
-            });
-            await directReader.RunAsync(onEntry, cancellationToken).ConfigureAwait(false);
+
+                throw;
+            }
+            finally
+            {
+                scope.Dispose();
+            }
         }
         catch (OperationCanceledException) when (!callerToken.IsCancellationRequested)
         {
@@ -170,8 +200,9 @@ public sealed partial class DeviceMonitorService
         if (device.Protocol != DeviceProtocolKind.Adb)
             throw new ArgumentException("Logcat requires an ADB device.", nameof(device));
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        timeout.CancelAfter(LogcatClearBudget);
         var token = timeout.Token;
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
         const string successMarker = "__UOTAN_LOGCAT_CLEARED__";
         const string command = "logcat -b all -c && echo " + successMarker;
         var confirmed = false;
@@ -200,27 +231,52 @@ public sealed partial class DeviceMonitorService
             }
             else
             {
-                var opened = OpenAdbLease(device)
-                    ?? throw new InvalidOperationException("Unable to open an ADB session for the device.");
-                using var adbLease = opened.Lease;
-                var session = opened.Session;
-                await session.ConnectAsync(token).ConfigureAwait(false);
-                var stdout = new AdbLogcatLineDecoder(OnLine);
-                var stderr = new AdbLogcatLineDecoder(OnLine);
-                var shell = session.CreateShellClient(command);
-                exitCode = await shell.ExecuteStreamingAsync(
-                    buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), token).ConfigureAwait(false);
-                stdout.Feed([], flush: true);
-                stderr.Feed([], flush: true);
+                var scope = AcquireSharedAdbSession(device, token);
+                var session = scope.Session;
+                try
+                {
+                    // The clear runs on its own shell stream of the shared connection, so a capture that
+                    // already streams on that connection keeps its stream and is not interrupted.
+                    if (!session.IsConnected)
+                    {
+                        throw new IOException("The shared ADB session is not connected.");
+                    }
+
+                    var stdout = new AdbLogcatLineDecoder(OnLine);
+                    var stderr = new AdbLogcatLineDecoder(OnLine);
+                    var shell = session.CreateShellClient(command);
+                    exitCode = await shell.ExecuteStreamingAsync(
+                        buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), token).ConfigureAwait(false);
+                    stdout.Feed([], flush: true);
+                    stderr.Feed([], flush: true);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException &&
+                    IndicatesLostConnection(exception))
+                {
+                    if (!session.IsConnected)
+                    {
+                        DiscardSharedAdbSession(device, session);
+                    }
+
+                    throw;
+                }
+                finally
+                {
+                    scope.Dispose();
+                }
             }
             token.ThrowIfCancellationRequested();
             if (!confirmed || exitCode != 0)
                 throw new InvalidOperationException(diagnostic.Length > 0 ? diagnostic.ToString().Trim()
                     : $"Logcat buffer clear was not confirmed (exit code {exitCode}).");
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException("Clearing logcat buffers timed out.");
+            throw new TimeoutException(
+                $"Clearing logcat buffers timed out after {elapsed.ElapsedMilliseconds} ms " +
+                $"(budget {LogcatClearBudget.TotalSeconds:F0} s, route {(AdbServerManages(device) ? "server" : "direct")}, " +
+                $"success marker {(confirmed ? "seen" : "not seen")}, diagnostic {(diagnostic.Length == 0 ? "empty" : diagnostic.ToString().Trim())}).",
+                ex);
         }
     }
 
