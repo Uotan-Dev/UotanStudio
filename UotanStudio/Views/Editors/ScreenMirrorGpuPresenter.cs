@@ -22,7 +22,6 @@ namespace UotanStudio.Views.Editors;
 /// </summary>
 internal sealed class ScreenMirrorGpuPresenter : IDisposable
 {
-    private static readonly TimeSpan DetachDebounce = TimeSpan.FromMilliseconds(250);
     private readonly Lock _gate = new();
     private readonly ConcurrentQueue<Action> _recycle = new();
     private readonly ScreenMirrorCompositionRecovery _recovery = new();
@@ -35,12 +34,14 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     private CompositionDrawingSurface? _surface;
     private CompositionSurfaceVisual? _visual;
     private Visual? _hostControl;
+    private object? _hostTopLevel;
     private Visual? _attachHost;
-    private DispatcherTimer? _detachTimer;
     private volatile bool _hostDetached;
     private int _compositionProbeCompleted;
     private int _compositionWidth, _compositionHeight;
     private long _compositedFrames;
+    private int _compositionStalls;
+    private int _compositionCovering;
     private long _detachedSinceTicks;
     private int _attaching;
     private bool _hadSurface;
@@ -119,7 +120,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     /// The name of the active presentation path.
     /// <para>当前呈现路径的名称。</para>
     /// </value>
-    internal string PresentationPath => UsesCompositionSurface && _compositionHasFrame ? "Composition (GPU zero-copy)"
+    internal string PresentationPath => CompositionCoversVideo ? "Composition (GPU zero-copy)"
         : _available ? Backend : "Bitmap";
 
     /// <summary>
@@ -135,17 +136,59 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         get { lock (_gate) return _surface is not null && !_closed && !_recovery.Failed; }
     }
 
-    /// <summary>
-    /// Whether the current composition surface has received a frame since it was installed. The view keeps the
-    /// bitmap fallback visible until then, so a rebuilt but still empty surface cannot blank the video.
-    /// <para>当前合成表面自安装以来是否已收到帧。在此之前视图继续显示位图回退，避免重建后尚未有内容的
-    /// 表面让画面变黑。</para>
-    /// </summary>
-    /// <value>
-    /// False immediately after a new surface is installed and true after the first successful presentation.
-    /// <para>新表面刚安装时为 false，首次成功呈现后为 true。</para>
-    /// </value>
-    internal bool CompositionFramePresented => _compositionHasFrame;
+    internal bool CompositionCoversVideo => Volatile.Read(ref _compositionCovering) != 0;
+
+    private bool EvaluateCompositionCoverage()
+    {
+        bool installed, presented, detached, visualVisible, failed;
+        Visual? host;
+        lock (_gate)
+        {
+            installed = _surface is not null;
+            presented = _compositionHasFrame;
+            detached = _hostDetached;
+            visualVisible = _visual?.Visible == true;
+            host = _hostControl;
+            failed = _closed || _failed || _recovery.Failed;
+        }
+        var attached = !_closed && host is not null
+            && Avalonia.Controls.TopLevel.GetTopLevel(host) is not null
+            && host.IsEffectivelyVisible;
+        var covering = CoversVideo(new CompositionCoverage(
+            installed, presented, detached, visualVisible, attached, _closed, failed));
+        Volatile.Write(ref _compositionCovering, covering ? 1 : 0);
+        return covering;
+    }
+
+    internal readonly record struct CompositionCoverage(
+        bool SurfaceInstalled,
+        bool FramePresented,
+        bool HostDetached,
+        bool VisualVisible,
+        bool HostAttached,
+        bool Closed,
+        bool Failed);
+
+    internal static bool CoversVideo(in CompositionCoverage coverage)
+        => coverage.SurfaceInstalled && coverage.FramePresented && !coverage.HostDetached
+            && coverage.VisualVisible && coverage.HostAttached && !coverage.Closed && !coverage.Failed;
+
+    private void RevokeCompositionCoverage()
+    {
+        bool revoked;
+        lock (_gate)
+        {
+            revoked = _compositionHasFrame;
+            if (revoked) _compositionHasFrame = false;
+        }
+        if (!revoked) return;
+        Volatile.Write(ref _compositionCovering, 0);
+        if (Interlocked.Increment(ref _compositionStalls) == 1)
+            Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
+                "Composition presentation stopped delivering frames; drawing the Skia/bitmap fallback again.");
+        if (Dispatcher.UIThread.CheckAccess()) UpdateCompositionLayout();
+        else Dispatcher.UIThread.Post(UpdateCompositionLayout, DispatcherPriority.Render);
+    }
 
     /// <summary>
     /// Probes the compositor's GPU interop and hosts a composition drawing surface inside
@@ -163,21 +206,26 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         Dispatcher.UIThread.VerifyAccess();
         var wasDetached = _hostDetached;
         CancelScheduledDetach();
+        var hostTopLevel = Avalonia.Controls.TopLevel.GetTopLevel(host);
         bool reuse;
         bool closed;
         lock (_gate)
         {
             closed = _closed || _failed;
-            reuse = ReferenceEquals(_hostControl, host) && _surface is not null && !_recovery.Failed;
+            reuse = ReferenceEquals(_hostControl, host) && _surface is not null && !_recovery.Failed
+                && ReferenceEquals(_hostTopLevel, hostTopLevel);
         }
         Volatile.Write(ref _detachedSinceTicks, Environment.TickCount64);
         if (closed)
         {
             Volatile.Write(ref _compositionProbeCompleted, 1);
+            EvaluateCompositionCoverage();
             return;
         }
         if (reuse)
         {
+            if (_visual is not null)
+                ElementComposition.SetElementChildVisual(host, _visual);
             UpdateCompositionLayout();
             if (wasDetached) RaiseCompositionRestored();
             return;
@@ -235,6 +283,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                 _surface = surface;
                 _visual = visual;
                 _hostControl = host;
+                _hostTopLevel = hostTopLevel;
                 Composition = new CompositionInterop(keyedMutex, iosurface, interop.DeviceLuid);
             }
             _recovery.RecordAttached();
@@ -264,11 +313,15 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     }
 
     /// <summary>
-    /// Defers the surface teardown for a floating-window or drag detach; UI thread only. Reattaching the
-    /// same visual within <see cref="DetachDebounce"/> cancels the teardown and keeps the surface alive,
-    /// while a real close still releases it when the delay expires.
-    /// <para>为浮窗或拖拽分离延迟释放表面；仅限 UI 线程。同一可视对象在 <see cref="DetachDebounce"/>
-    /// 内重新挂载会取消释放并保留表面；真正关闭时延迟到期后仍会完整释放。</para>
+    /// Pauses presentation for a visual that left the tree (a dock float, a tab switch or a rebuilt view) and keeps
+    /// the hosted surface, its imports and the surface visual owned by this presenter; UI thread only. The surface
+    /// is released by <see cref="DetachCompositionVisual"/> or <see cref="Dispose"/> when the session really ends,
+    /// because tearing it down here strands the decoder's export ring: every later frame finds no consumer and the
+    /// stream silently stops producing pictures.
+    /// <para>为离开可视树的视觉对象（停靠浮动、标签切换或视图重建）暂停呈现，并继续由本呈现器持有托管表面、其导入
+    /// 与表面视觉对象；仅限 UI 线程。会话真正结束时由 <see cref="DetachCompositionVisual"/> 或
+    /// <see cref="Dispose"/> 释放表面——在此处拆除会让解码器的导出环失去消费者，后续每一帧都找不到呈现方，
+    /// 视频流随之静默停止出画。</para>
     /// </summary>
     /// <param name="host">
     /// The visual that is leaving the tree; ignored when another visual already owns the surface.
@@ -284,24 +337,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         Volatile.Write(ref _detachedSinceTicks, Environment.TickCount64);
         CancelScheduledDetach();
         _hostDetached = true;
-        var token = _recovery.ScheduleDetach();
-        var timer = new DispatcherTimer { Interval = DetachDebounce };
-        timer.Tick += (sender, _) =>
-        {
-            if (sender is DispatcherTimer running) running.Stop();
-            if (!_recovery.IsDetachCurrent(token)) return;
-            if (!ReferenceEquals(_detachTimer, timer)) return;
-            _detachTimer = null;
-            lock (_gate)
-            {
-                if (!ReferenceEquals(_hostControl, host) && !ReferenceEquals(_attachHost, host)) return;
-            }
-            DetachCompositionCore();
-            _hostDetached = false;
-            Volatile.Write(ref _detachedSinceTicks, Environment.TickCount64);
-        };
-        _detachTimer = timer;
-        timer.Start();
+        EvaluateCompositionCoverage();
     }
 
     /// <summary>
@@ -310,10 +346,6 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     /// </summary>
     internal void CancelScheduledDetach()
     {
-        _recovery.CancelDetach();
-        var timer = _detachTimer;
-        _detachTimer = null;
-        timer?.Stop();
         _hostDetached = false;
     }
 
@@ -351,12 +383,17 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             _visual = null;
             host = _hostControl;
             _hostControl = null;
+            _hostTopLevel = null;
             _interop = null;
+            _compositionWidth = 0;
+            _compositionHeight = 0;
+            _compositionStalls = 0;
         }
         if (host is not null) ElementComposition.SetElementChildVisual(host, null);
         if (visual is not null) visual.Visible = false;
         surface?.Dispose();
         ReleaseImports();
+        if (Dispatcher.UIThread.CheckAccess()) EvaluateCompositionCoverage();
     }
 
     private void ReleaseImports()
@@ -384,28 +421,62 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     internal void UpdateCompositionLayout()
     {
         Dispatcher.UIThread.VerifyAccess();
-        CompositionSurfaceVisual? visual;
+        try
+        {
+            CompositionSurfaceVisual? visual;
+            Visual? host;
+            int width, height;
+            lock (_gate)
+            {
+                visual = _visual;
+                host = _hostControl;
+                width = _compositionWidth;
+                height = _compositionHeight;
+            }
+            if (visual is null || host is null) return;
+            var bounds = host.Bounds.Size;
+            if (width <= 0 || height <= 0 || bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                visual.Visible = false;
+                return;
+            }
+            var scale = Math.Min(bounds.Width / width, bounds.Height / height);
+            if (double.IsInfinity(scale) || scale <= 0) return;
+            visual.Size = new Vector(width * scale, height * scale);
+            visual.Offset = new Vector3D((bounds.Width - width * scale) / 2, (bounds.Height - height * scale) / 2, 0);
+            visual.Visible = UsesCompositionSurface && _compositionHasFrame;
+        }
+        finally
+        {
+            EvaluateCompositionCoverage();
+        }
+    }
+
+    /// <summary>
+    /// Re-establishes the hosted composition visual after the window was covered, minimized or the document view
+    /// was reattached: re-asserts the child visual when the host dropped it and re-runs the letterbox layout; UI
+    /// thread only.
+    /// <para>窗口被遮盖、最小化或文档视图重新挂载后重建托管的合成可视对象：宿主丢弃子可视对象时重新挂上，并
+    /// 重新按信箱模式布局；仅限 UI 线程。</para>
+    /// </summary>
+    internal void RecoverCompositionHost()
+    {
+        Dispatcher.UIThread.VerifyAccess();
         Visual? host;
-        int width, height;
+        CompositionSurfaceVisual? visual;
         lock (_gate)
         {
-            visual = _visual;
             host = _hostControl;
-            width = _compositionWidth;
-            height = _compositionHeight;
+            visual = _visual;
         }
-        if (visual is null || host is null) return;
-        var bounds = host.Bounds.Size;
-        if (width <= 0 || height <= 0 || bounds.Width <= 0 || bounds.Height <= 0)
+
+        if (host is not null && visual is not null && UsesCompositionSurface
+            && !ReferenceEquals(ElementComposition.GetElementChildVisual(host), visual))
         {
-            visual.Visible = false;
-            return;
+            ElementComposition.SetElementChildVisual(host, visual);
         }
-        var scale = Math.Min(bounds.Width / width, bounds.Height / height);
-        if (double.IsInfinity(scale) || scale <= 0) return;
-        visual.Size = new Vector(width * scale, height * scale);
-        visual.Offset = new Vector3D((bounds.Width - width * scale) / 2, (bounds.Height - height * scale) / 2, 0);
-        visual.Visible = UsesCompositionSurface && _compositionHasFrame;
+
+        UpdateCompositionLayout();
     }
 
     /// <summary>
@@ -609,6 +680,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         {
             if (_visual is not null) _visual.Visible = false;
         }
+        if (Dispatcher.UIThread.CheckAccess()) EvaluateCompositionCoverage();
         if (!first) return;
         Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
             $"Composition presentation failed; using NV12 readback: {reason}");
@@ -625,6 +697,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
 
     internal bool Publish(DecodedVideoFrame frame, VideoColorMatrix matrix, VideoColorRange range)
     {
+        RevokeCompositionCoverage();
         lock (_gate)
         {
             if (_closed) return false;
@@ -657,6 +730,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     [SupportedOSPlatform("linux")]
     internal bool PublishDmabuf(VaDmaBufVideoFrame frame)
     {
+        RevokeCompositionCoverage();
         lock (_gate)
         {
             if (_closed || _failed) return false;
@@ -756,7 +830,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
 
             while (owner._recycle.TryDequeue(out Action? recycle)) recycle();
             if (owner._closed || owner._failed) return;
-            if (owner.UsesCompositionSurface && owner._compositionHasFrame) return;
+            if (owner.CompositionCoversVideo) return;
             try
             {
                 var feature = context.TryGetFeature<ISkiaSharpApiLeaseFeature>();

@@ -22,7 +22,7 @@ public sealed class OhscrcpyHdcIntegrationTests
 
         var requested = target!;
         HdcSession? session = null;
-        DeviceLease? lease = null;
+        HdcSessionHandle? lease = null;
         DeviceMonitorService? monitor = null;
         try
         {

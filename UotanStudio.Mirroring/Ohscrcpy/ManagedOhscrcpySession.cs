@@ -28,7 +28,7 @@ public sealed class ManagedOhscrcpySession : IDisposable
     private readonly IHdcDeviceSession _hdcSession;
     private readonly VideoDaemonHandle _videoDaemon;
     private readonly ControlDaemonHandle _controlDaemon;
-    private readonly DeviceLease? _lease;
+    private readonly IAsyncDisposable? _lease;
     private readonly Action<string>? _logSink;
     private int _disposed;
 
@@ -50,7 +50,7 @@ public sealed class ManagedOhscrcpySession : IDisposable
     /// <exception cref="ArgumentNullException"><paramref name="client"/> is <see langword="null"/>.
     /// <para><paramref name="client"/> 为 <see langword="null"/>。</para></exception>
     internal ManagedOhscrcpySession(OhscrcpyClient client, IHdcDeviceSession hdcSession,
-        VideoDaemonHandle videoDaemon, ControlDaemonHandle controlDaemon, DeviceLease? lease,
+        VideoDaemonHandle videoDaemon, ControlDaemonHandle controlDaemon, IAsyncDisposable? lease,
         Action<string>? logSink)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));

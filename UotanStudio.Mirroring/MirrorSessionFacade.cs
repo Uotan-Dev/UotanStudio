@@ -121,6 +121,10 @@ public sealed class MirrorSessionFacade : IDisposable
     /// <para>可选的设备租约，在 ADB 会话之后释放。</para></param>
     /// <param name="logSink">Optional sink receiving decoded server log text; may be called from a background thread.
     /// <para>可选的接收端，用于接收解码后的服务端日志文本；可能由后台线程调用。</para></param>
+    /// <param name="ownsAdbSession">Whether the returned session disposes the ADB session itself. A session shared
+    /// with the rest of the host passes <see langword="false"/> and is released through <paramref name="lease"/>.
+    /// <para>返回的会话是否自行释放该 ADB 会话。与宿主其余部分共享的会话传入 <see langword="false"/>，并通过
+    /// <paramref name="lease"/> 释放。</para></param>
     /// <returns>The unconnected session holding the client, the shell stream, the ADB session and the lease; call
     /// <see cref="ManagedMirrorSession.Connect"/> next.
     /// <para>持有客户端、shell 流、ADB 会话与租约的未连接会话；随后调用
@@ -136,7 +140,8 @@ public sealed class MirrorSessionFacade : IDisposable
     /// <exception cref="IOException">The push, the shell open or the server launch failed.
     /// <para>推送、shell 打开或服务端启动失败。</para></exception>
     public static ManagedMirrorSession StartScrcpyOverUsbSession(IAdbDeviceSession session, string jarPath,
-        ScrcpyServerOptions options, DeviceLease? lease = null, Action<string>? logSink = null)
+        ScrcpyServerOptions options, IAsyncDisposable? lease = null, Action<string>? logSink = null,
+        bool ownsAdbSession = true)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentException.ThrowIfNullOrWhiteSpace(jarPath);
@@ -158,7 +163,7 @@ public sealed class MirrorSessionFacade : IDisposable
         try
         {
             client = new ScrcpyClient(session, options);
-            return new ManagedMirrorSession(client, shell, session, lease, logSink);
+            return new ManagedMirrorSession(client, shell, session, lease, logSink, ownsAdbSession);
         }
         catch
         {
@@ -207,6 +212,8 @@ public sealed class MirrorSessionFacade : IDisposable
     /// <para>可选的设备租约，在 HDC 会话之后释放。</para></param>
     /// <param name="logSink">Optional sink receiving probe, daemon and push diagnostics; may be called from a
     /// background thread. <para>可选的接收端，用于接收探测、守护进程与推送诊断；可能由后台线程调用。</para></param>
+    /// <param name="cancellationToken">Cancels the probe retries and the daemon/extension readiness waits.
+    /// <para>取消探测重试与守护进程/扩展的就绪等待。</para></param>
     /// <returns>The unconnected session; call <see cref="ManagedOhscrcpySession.Connect"/> next.
     /// <para>尚未连接的会话；随后调用 <see cref="ManagedOhscrcpySession.Connect"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.
@@ -227,12 +234,14 @@ public sealed class MirrorSessionFacade : IDisposable
     /// transfer channel. <para>UI Test 缺失或版本过低，或会话没有可用的文件传输通道。</para></exception>
     public static ManagedOhscrcpySession StartOhscrcpyOverHdcSession(IHdcDeviceSession session,
         string deviceSerial, OhscrcpyLaunchOptions? options = null, int localForwardPort = 0,
-        int connectTimeoutMs = 20_000, DeviceLease? lease = null, Action<string>? logSink = null)
+        int connectTimeoutMs = 20_000, IAsyncDisposable? lease = null, Action<string>? logSink = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceSerial);
         ArgumentOutOfRangeException.ThrowIfNegative(localForwardPort);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(localForwardPort, 65535);
+        cancellationToken.ThrowIfCancellationRequested();
         var launchOptions = options ?? new OhscrcpyLaunchOptions();
         launchOptions.Validate();
         if (!session.IsConnected)
@@ -247,8 +256,9 @@ public sealed class MirrorSessionFacade : IDisposable
                 nameof(session));
         }
 
-        var device = OhscrcpyServerManager.Probe(hdcSession);
-        var controlDaemon = OhscrcpyServerManager.EnsureControlDaemon(hdcSession, device, logSink);
+        var device = OhscrcpyServerManager.Probe(hdcSession, cancellationToken);
+        var controlDaemon = OhscrcpyServerManager.EnsureControlDaemon(
+            hdcSession, device, logSink, cancellationToken);
         VideoDaemonHandle? videoDaemon = null;
         HdcForwardTunnel? videoTunnel = null;
         HdcForwardTunnel? controlTunnel = null;
@@ -257,7 +267,8 @@ public sealed class MirrorSessionFacade : IDisposable
         OhscrcpyClient? client = null;
         try
         {
-            videoDaemon = OhscrcpyServerManager.StartVideoDaemon(hdcSession, device, launchOptions, logSink);
+            videoDaemon = OhscrcpyServerManager.StartVideoDaemon(
+                hdcSession, device, launchOptions, logSink, cancellationToken);
             videoTunnel = new HdcForwardTunnel(
                 hdcSession, deviceSerial, device.VideoEndpoint, localForwardPort, connectTimeoutMs);
             var videoPort = videoTunnel.Map();
@@ -265,9 +276,11 @@ public sealed class MirrorSessionFacade : IDisposable
                 hdcSession, deviceSerial, device.ControlEndpoint, 0, connectTimeoutMs);
             transport = new OhoscrcpyGrpcTransport(videoPort, videoTunnel);
             control = new OhscrcpyControlChannel(hdcSession, deviceSerial, device, controlTunnel, logSink);
+            var daemonLogPath = videoDaemon.RemoteLogPath;
             client = new OhscrcpyClient(transport, control, new OhscrcpyClientOptions(deviceSerial))
             {
                 Log = logSink,
+                DeviceLog = () => OhscrcpyServerManager.ReadExtensionLog(hdcSession, daemonLogPath),
             };
             return new ManagedOhscrcpySession(client, hdcSession, videoDaemon, controlDaemon, lease, logSink);
         }
@@ -372,7 +385,10 @@ public sealed class MirrorSessionFacade : IDisposable
     /// <returns>The frame the caller must dispose, or <see langword="null"/> on timeout.
     /// <para>由调用方释放的帧；超时时为 <see langword="null"/>。</para></returns>
     public ScrcpyVideoFrame? ReadFrame(int timeoutMs)
-        => _scrcpy?.ReadFrame(timeoutMs) ?? _ohscrcpy!.ReadFrame(timeoutMs);
+    {
+        if (_scrcpy is not null) return _scrcpy.ReadFrame(timeoutMs);
+        return _ohscrcpy!.ReadFrame(timeoutMs);
+    }
 
     /// <summary>Reads one audio packet; always <see langword="null"/> on the ohscrcpy path.
     /// <para>读取一个音频包；ohscrcpy 路径始终为 <see langword="null"/>。</para></summary>

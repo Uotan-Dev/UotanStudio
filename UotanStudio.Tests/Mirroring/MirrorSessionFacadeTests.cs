@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
@@ -10,6 +11,40 @@ namespace UotanStudio.Tests.Mirroring;
 
 public sealed class MirrorSessionFacadeTests
 {
+    private sealed class StalledVideoStream(byte[] handshake) : MemoryStream(handshake)
+    {
+        public override int Read(byte[] buffer, int offset, int count)
+            => Position < Length ? base.Read(buffer, offset, count) : throw new TimeoutException();
+    }
+
+    private static byte[] HandshakeBytes()
+    {
+        using var stream = new MemoryStream();
+        stream.WriteByte(0);
+        var deviceName = new byte[ScrcpyConstants.DeviceNameLength];
+        Encoding.UTF8.GetBytes("facade-timeout", deviceName);
+        stream.Write(deviceName);
+        stream.Write("h264"u8);
+        var session = new byte[12];
+        BinaryPrimitives.WriteUInt64BigEndian(session, ScrcpyConstants.PacketFlagSession | 1080u);
+        BinaryPrimitives.WriteInt32BigEndian(session.AsSpan(8), 2400);
+        stream.Write(session);
+        return stream.ToArray();
+    }
+
+    [Fact]
+    public void ReadFrame_AdbSessionTimesOut_ReturnsNullWithoutThrowing()
+    {
+        var options = new ScrcpyServerOptions { Control = false };
+        using var stream = new StalledVideoStream(HandshakeBytes());
+        using var client = new ScrcpyClient(_ => stream, options);
+        client.Connect(timeoutMs: 1000);
+        using var session = new ManagedMirrorSession(client, Stream.Null, null);
+        using var facade = MirrorSessionFacade.FromScrcpy(session);
+
+        Assert.Null(facade.ReadFrame(50));
+    }
+
     [Fact]
     public void StartScrcpyOverAdbServer_NullServer_ThrowsArgumentNullException()
     {

@@ -14,10 +14,13 @@ internal static partial class OhscrcpyServerManager
     private const string ShellWrapperMarker = "sh -c";
     private const string RemoteControlAgentPath =
         OhscrcpyConstants.DeviceRuntimeDirectory + "/" + OhscrcpyConstants.ControlAgentFileName;
-    private const int ControlDaemonPollAttempts = 15;
+    private const int ControlDaemonReadyBudgetMs = 10_000;
     private const int ControlDaemonPollDelayMs = 150;
-    private const int VideoDaemonPollAttempts = 10;
-    private const int VideoDaemonPollDelayMs = 200;
+    private const int ExtensionReadyBudgetMs = 6_000;
+    private const int ExtensionPollDelayMs = 200;
+    private const int ExtensionSettleMilliseconds = 400;
+    private const int ProbeAttempts = 3;
+    private const int ProbeRetryDelayMs = 250;
     private const int DaemonLogTailBytes = 3000;
     private const int MaximumDiagnosticLength = 3000;
     private const int MaximumProbeOutputLength = 8192;
@@ -39,34 +42,32 @@ internal static partial class OhscrcpyServerManager
     /// </summary>
     /// <param name="session">Connected HDC session; every command runs through it.
     /// <para>已连接的 HDC 会话；所有命令都经它执行。</para></param>
+    /// <param name="cancellationToken">Cancels the remaining probes between attempts.
+    /// <para>在两次尝试之间取消剩余探测。</para></param>
     /// <returns>The probed capabilities. <para>探测到的能力。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.
     /// <para><paramref name="session"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="NotSupportedException">UI Test is missing, reports no four-component version, or is
-    /// older than <see cref="OhscrcpyConstants.MinimumUiTestVersion"/>.
-    /// <para>UI Test 缺失、没有报告四段式版本，或低于
+    /// <exception cref="IOException">The device did not answer the probe shell commands after retrying, for example
+    /// because the target was still enumerating or the UI Test service was not up yet; the start may be retried.
+    /// <para>设备在重试之后仍未响应探测命令（例如目标仍在枚举，或 UI Test 服务尚未就绪）；可以重试启动。</para></exception>
+    /// <exception cref="NotSupportedException">UI Test reports no four-component version, or is older than
+    /// <see cref="OhscrcpyConstants.MinimumUiTestVersion"/>. <para>UI Test 没有报告四段式版本，或低于
     /// <see cref="OhscrcpyConstants.MinimumUiTestVersion"/>。</para></exception>
-    internal static UiTestDeviceInfo Probe(IHdcDeviceSession session)
+    internal static UiTestDeviceInfo Probe(IHdcDeviceSession session, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
-        string versionOutput;
-        try
-        {
-            versionOutput = OhscrcpyShell.Run(session, OhscrcpyConstants.UiTestExecutable + " --version");
-        }
-        catch (IOException error)
-        {
-            throw new NotSupportedException(
-                $"UI Test is not usable on this device: {error.Message}. "
-                + $"该设备的 UI Test 不可用：{error.Message}。", error);
-        }
+        cancellationToken.ThrowIfCancellationRequested();
+        var versionOutput = RunProbeCommand(
+            session, OhscrcpyConstants.UiTestExecutable + " --version", cancellationToken);
 
         var version = ParseUiTestVersion(versionOutput);
         if (version is null)
         {
             throw new NotSupportedException(
-                $"The device did not report a usable UI Test version from {OhscrcpyConstants.UiTestExecutable} --version; "
-                + $"the output was: {Snippet(versionOutput)}. "
+                OhscrcpyFailure.CapabilityPrefix
+                + $"the device did not report a usable UI Test version from "
+                + $"{OhscrcpyConstants.UiTestExecutable} --version; the output was: {Snippet(versionOutput)}. "
+                + OhscrcpyFailure.CapabilityPrefix
                 + $"设备未从 {OhscrcpyConstants.UiTestExecutable} --version 报告可用的 UI Test 版本；输出为："
                 + $"{Snippet(versionOutput)}。");
         }
@@ -74,13 +75,15 @@ internal static partial class OhscrcpyServerManager
         if (version < OhscrcpyConstants.MinimumUiTestVersion)
         {
             throw new NotSupportedException(
-                $"UI Test {version} is too old for the pushed capture library; "
+                OhscrcpyFailure.CapabilityPrefix
+                + $"UI Test {version} is too old for the pushed capture library; "
                 + $"{OhscrcpyConstants.MinimumUiTestVersion} or newer is required. "
+                + OhscrcpyFailure.CapabilityPrefix
                 + $"UI Test {version} 版本过低，推送的采集库至少需要 {OhscrcpyConstants.MinimumUiTestVersion}。");
         }
 
-        var architecture = OhscrcpyShell.Run(session, "uname -m").Trim();
-        var model = OhscrcpyShell.Run(session, "param get const.product.model").Trim();
+        var architecture = RunProbeCommand(session, "uname -m", cancellationToken).Trim();
+        var model = RunProbeCommand(session, "param get const.product.model", cancellationToken).Trim();
         return new UiTestDeviceInfo(version, architecture, model);
     }
 
@@ -94,6 +97,8 @@ internal static partial class OhscrcpyServerManager
     /// <para>选择代理版本的已探测设备能力。</para></param>
     /// <param name="logSink">Optional progress sink; may be called from the calling thread.
     /// <para>可选进度接收端；可能由调用线程调用。</para></param>
+    /// <param name="cancellationToken">Cancels the daemon readiness wait between polls.
+    /// <para>在轮询之间取消守护进程就绪等待。</para></param>
     /// <returns>The owned daemon state; <see cref="ControlDaemonHandle.OwnedProcessIds"/> is empty when an
     /// existing daemon was reused. <para>本会话持有的守护进程状态；复用已有守护进程时
     /// <see cref="ControlDaemonHandle.OwnedProcessIds"/> 为空。</para></returns>
@@ -107,16 +112,19 @@ internal static partial class OhscrcpyServerManager
     /// <exception cref="NotSupportedException">The session exposes no sync (file transfer) channel.
     /// <para>会话没有可用的 sync（文件传输）通道。</para></exception>
     internal static ControlDaemonHandle EnsureControlDaemon(
-        IHdcDeviceSession session, UiTestDeviceInfo device, Action<string>? logSink)
+        IHdcDeviceSession session, UiTestDeviceInfo device, Action<string>? logSink,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(device);
+        cancellationToken.ThrowIfCancellationRequested();
         var existing = FindControlDaemonProcessIds(session);
         if (existing.Count > 0)
         {
             logSink?.Invoke(
-                $"Reusing the UI Test control daemon already running on the device (pid {JoinProcessIds(existing)}). "
-                + $"复用设备上已有的 UI Test 控制守护进程（进程号 {JoinProcessIds(existing)}）。");
+                $"Reusing the UI Test control daemon already running on the device "
+                + $"(pid {JoinProcessIds(existing)}); its agent is left untouched. "
+                + $"复用设备上已有的 UI Test 控制守护进程（进程号 {JoinProcessIds(existing)}），不替换其代理。");
             return new ControlDaemonHandle([], false, RemoteControlAgentPath, "");
         }
 
@@ -172,7 +180,7 @@ internal static partial class OhscrcpyServerManager
             OhscrcpyShell.Run(session,
                 $"{OhscrcpyConstants.UiTestExecutable} {OhscrcpyConstants.UiTestDaemonCommand} "
                 + ">/dev/null 2>&1 </dev/null & echo started");
-            owned = WaitForControlDaemon(session);
+            owned = WaitForControlDaemon(session, cancellationToken);
         }
         catch (Exception)
         {
@@ -192,12 +200,16 @@ internal static partial class OhscrcpyServerManager
             }
 
             throw new IOException(
-                $"The device did not keep the UI Test control daemon running "
+                OhscrcpyFailure.NotReadyPrefix
+                + "the device did not keep the UI Test control daemon running within "
+                + $"{ControlDaemonReadyBudgetMs} ms "
                 + $"({OhscrcpyConstants.UiTestExecutable} {OhscrcpyConstants.UiTestDaemonCommand}). "
-                + "Unlock the device, stop other UI Test sessions and retry the mirror. "
-                + "设备未能保持 UI Test 控制守护进程运行"
+                + "Unlock the device, close other UI Test sessions (DevEco Studio screen mirroring counts as one), "
+                + "then start mirroring again. "
+                + OhscrcpyFailure.NotReadyPrefix
+                + $"设备未在 {ControlDaemonReadyBudgetMs} ms 内保持 UI Test 控制守护进程运行"
                 + $"（{OhscrcpyConstants.UiTestExecutable} {OhscrcpyConstants.UiTestDaemonCommand}）。"
-                + "请解锁设备、停止其它 UI Test 会话后重试投屏。");
+                + "请解锁设备、关闭其它 UI Test 会话（DevEco Studio 的投屏也算一个）后重新开始投屏。");
         }
 
         logSink?.Invoke(
@@ -218,6 +230,8 @@ internal static partial class OhscrcpyServerManager
     /// <para>采集参数；在发送任何设备命令前逐项校验。</para></param>
     /// <param name="logSink">Optional progress sink; may be called from the calling thread.
     /// <para>可选进度接收端；可能由调用线程调用。</para></param>
+    /// <param name="cancellationToken">Cancels the extension readiness wait and the settle check.
+    /// <para>取消扩展就绪等待与稳定检查。</para></param>
     /// <returns>The owned extension state. <para>本会话持有的扩展状态。</para></returns>
     /// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.
     /// <para>某个参数为 <see langword="null"/>。</para></exception>
@@ -231,12 +245,13 @@ internal static partial class OhscrcpyServerManager
     /// <para>会话没有可用的 sync（文件传输）通道。</para></exception>
     internal static VideoDaemonHandle StartVideoDaemon(
         IHdcDeviceSession session, UiTestDeviceInfo device, OhscrcpyLaunchOptions options,
-        Action<string>? logSink)
+        Action<string>? logSink, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
+        cancellationToken.ThrowIfCancellationRequested();
         var candidates = SelectVideoLibraries(RuntimeDirectory, device);
         if (candidates.Count == 0)
         {
@@ -252,18 +267,20 @@ internal static partial class OhscrcpyServerManager
         var remoteLogPath = remotePath + ".log";
         var extensionMarker = ExtensionProcessMarker + extensionName;
         Exception? lastError = null;
+        NotSupportedException? capabilityFailure = null;
         var lastLog = "";
         using var sync = session.CreateSyncClient();
         foreach (var library in candidates)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var libraryName = Path.GetFileName(library);
             try
             {
                 logSink?.Invoke($"Deploying {libraryName}. 正在部署 {libraryName}。");
                 sync.Send(library, remotePath);
                 OhscrcpyShell.Run(session, BuildVideoStartCommand(extensionName, options, remoteLogPath));
-                var owned = WaitForExtension(session, extensionMarker);
-                if (owned.Count > 0)
+                var owned = WaitForExtension(session, extensionMarker, cancellationToken);
+                if (owned.Count > 0 && ExtensionSurvivesSettle(session, extensionMarker, owned, cancellationToken))
                 {
                     logSink?.Invoke(
                         $"Capture extension {extensionName} is running (pid {JoinProcessIds(owned)}). "
@@ -277,16 +294,26 @@ internal static partial class OhscrcpyServerManager
                     lastLog = deviceLog;
                 }
 
+                if (OhscrcpyFailure.LooksLikeAbiIncompatibility(deviceLog))
+                {
+                    capabilityFailure = BuildCapabilityFailure(libraryName, device, deviceLog, lastError);
+                    logSink?.Invoke(capabilityFailure.Message);
+                    break;
+                }
+
                 logSink?.Invoke(
-                    $"Capture extension {libraryName} exited: {Snippet(deviceLog)}. "
-                    + $"采集扩展 {libraryName} 已退出：{Snippet(deviceLog)}。");
+                    $"Capture extension {libraryName} exited or never became visible within "
+                    + $"{ExtensionReadyBudgetMs} ms: {Snippet(deviceLog)}. "
+                    + $"采集扩展 {libraryName} 已退出，或在 {ExtensionReadyBudgetMs} ms 内没有出现：{Snippet(deviceLog)}。");
             }
             catch (Exception error) when (IsTransportLost(error))
             {
                 throw new IOException(
-                    $"The HDC server or session was lost while deploying {libraryName}; stop retrying the "
-                    + $"remaining capture libraries and reconnect the target. "
-                    + $"部署 {libraryName} 时 HDC server 或会话已丢失；停止重试剩余采集库并重新连接目标。",
+                    OhscrcpyFailure.NotReadyPrefix
+                    + $"the HDC session was lost while deploying {libraryName}; reconnect the target and start "
+                    + "mirroring again. "
+                    + OhscrcpyFailure.NotReadyPrefix
+                    + $"部署 {libraryName} 时 HDC 会话丢失；请重新连接目标后再开始投屏。",
                     error);
             }
             catch (Exception error)
@@ -300,12 +327,22 @@ internal static partial class OhscrcpyServerManager
             RemoveRemoteFiles(session, remotePath, remoteLogPath, logSink);
         }
 
+        if (capabilityFailure is not null)
+        {
+            RemoveRemoteFiles(session, remotePath, remoteLogPath, logSink);
+            throw capabilityFailure;
+        }
+
         throw new IOException(
-            $"Every pushed capture library failed to start on the device "
-            + $"(UI Test {device.UiTestVersion}, {candidates.Count} candidate(s) tried). "
-            + $"Last device log: {Snippet(lastLog)}. "
-            + $"所有推送的采集库都未能在设备上启动（UI Test {device.UiTestVersion}，已尝试 "
-            + $"{candidates.Count} 个候选）。最后的设备日志：{Snippet(lastLog)}。", lastError);
+            OhscrcpyFailure.NotReadyPrefix
+            + "no pushed capture library stayed running on the device "
+            + $"(UI Test {device.UiTestVersion}, {candidates.Count} candidate(s) tried). Unlock the device and start "
+            + "mirroring again; a library that keeps exiting with a loader error is a capability gap, which the log "
+            + $"above shows. Last device log: {Snippet(lastLog)}. "
+            + OhscrcpyFailure.NotReadyPrefix
+            + $"没有任何推送的采集库在设备上保持运行（UI Test {device.UiTestVersion}，已尝试 {candidates.Count} 个候选）。"
+            + "请解锁设备后重新开始投屏；如果某个库持续以加载错误退出，则属于能力缺口，上面的日志会给出证据。"
+            + $"最后的设备日志：{Snippet(lastLog)}。", lastError);
     }
 
     /// <summary>
@@ -577,34 +614,154 @@ internal static partial class OhscrcpyServerManager
         return filtered.ToString();
     }
 
-    private static IReadOnlyList<int> WaitForControlDaemon(IHdcDeviceSession session)
+    private static IReadOnlyList<int> WaitForControlDaemon(
+        IHdcDeviceSession session, CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < ControlDaemonPollAttempts; attempt++)
+        var deadline = Environment.TickCount64 + ControlDaemonReadyBudgetMs;
+        while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Thread.Sleep(ControlDaemonPollDelayMs);
             var owned = FindControlDaemonProcessIds(session);
             if (owned.Count > 0)
             {
                 return owned;
             }
-        }
 
-        return [];
+            if (Environment.TickCount64 >= deadline)
+            {
+                return [];
+            }
+        }
     }
 
-    private static IReadOnlyList<int> WaitForExtension(IHdcDeviceSession session, string extensionMarker)
+    private static IReadOnlyList<int> WaitForExtension(
+        IHdcDeviceSession session, string extensionMarker, CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < VideoDaemonPollAttempts; attempt++)
+        var deadline = Environment.TickCount64 + ExtensionReadyBudgetMs;
+        while (true)
         {
-            Thread.Sleep(VideoDaemonPollDelayMs);
+            cancellationToken.ThrowIfCancellationRequested();
+            Thread.Sleep(ExtensionPollDelayMs);
             var owned = FindExtensionProcessIds(session, extensionMarker);
             if (owned.Count > 0)
             {
                 return owned;
             }
+
+            if (Environment.TickCount64 >= deadline)
+            {
+                return [];
+            }
+        }
+    }
+
+    /// <summary>
+    /// Confirms that at least one process of a just-started extension is still alive after a short settle window, so
+    /// a library that the device loads and then aborts on is reported as a failed candidate instead of a running
+    /// extension. <para>在短暂的稳定窗口后确认刚启动的扩展至少还有一个进程存活，使设备加载后立即退出的库被报告为
+    /// 失败候选，而不是"正在运行"的扩展。</para>
+    /// </summary>
+    /// <param name="session">Connected HDC session. <para>已连接的 HDC 会话。</para></param>
+    /// <param name="extensionMarker">Unique extension marker of this session.
+    /// <para>本会话唯一的扩展标记。</para></param>
+    /// <param name="owned">Process ids observed right after the start command.
+    /// <para>启动命令之后立即观测到的进程号。</para></param>
+    /// <param name="cancellationToken">Cancels the settle wait. <para>取消稳定等待。</para></param>
+    /// <returns><see langword="true"/> when one owned process is still alive.
+    /// <para>仍有一个所属进程存活时为 <see langword="true"/>。</para></returns>
+    private static bool ExtensionSurvivesSettle(IHdcDeviceSession session, string extensionMarker,
+        IReadOnlyList<int> owned, CancellationToken cancellationToken)
+    {
+        Thread.Sleep(ExtensionSettleMilliseconds);
+        cancellationToken.ThrowIfCancellationRequested();
+        var live = new HashSet<int>(FindExtensionProcessIds(session, extensionMarker));
+        return owned.Any(live.Contains);
+    }
+
+    /// <summary>
+    /// Builds the capability failure for a capture library the device cannot load, quoting its log so the next step
+    /// is actionable. <para>为设备无法加载的采集库构造能力失败，并引用其日志，使下一步可操作。</para>
+    /// </summary>
+    /// <param name="libraryName">Pushed library file name. <para>推送的库文件名。</para></param>
+    /// <param name="device">Probed device capabilities. <para>已探测的设备能力。</para></param>
+    /// <param name="deviceLog">Capture-extension log excerpt. <para>采集扩展日志片段。</para></param>
+    /// <param name="inner">Last transport error, when one exists. <para>最后的传输错误（如果有）。</para></param>
+    /// <returns>The classified capability failure. <para>分类后的能力失败。</para></returns>
+    private static NotSupportedException BuildCapabilityFailure(
+        string libraryName, UiTestDeviceInfo device, string deviceLog, Exception? inner)
+        => new(
+            OhscrcpyFailure.CapabilityPrefix
+            + $"{libraryName} could not run under UI Test {device.UiTestVersion} on {device.Architecture}; its "
+            + "dynamic dependencies do not match this system build. Replace the ohos/device capture library with a "
+            + $"build for this system version, or mirror from a supported device. Capture log: {Snippet(deviceLog)} "
+            + OhscrcpyFailure.CapabilityPrefix
+            + $"{libraryName} 无法在 UI Test {device.UiTestVersion}（{device.Architecture}）下运行，其动态依赖与该系统"
+            + "版本不匹配。请把 ohos/device 下的采集库替换为该系统版本的构建，或改用受支持的设备投屏。采集日志："
+            + Snippet(deviceLog),
+            inner);
+
+    /// <summary>
+    /// Runs one probe shell command, retrying only transport failures so a target that is still enumerating is not
+    /// reported as missing UI Test. <para>执行一条探测 shell 命令，只对传输失败重试，使仍在枚举的目标不会被报告为
+    /// 缺少 UI Test。</para>
+    /// </summary>
+    /// <param name="session">Connected HDC session. <para>已连接的 HDC 会话。</para></param>
+    /// <param name="command">Command text. <para>命令文本。</para></param>
+    /// <param name="cancellationToken">Cancels the retries between attempts.
+    /// <para>在两次尝试之间取消重试。</para></param>
+    /// <returns>The trimmed command output. <para>去除首尾空白的命令输出。</para></returns>
+    /// <exception cref="IOException">The device kept failing the command; the start may be retried.
+    /// <para>设备持续拒绝该命令；可以重试启动。</para></exception>
+    private static string RunProbeCommand(
+        IHdcDeviceSession session, string command, CancellationToken cancellationToken)
+    {
+        Exception? last = null;
+        for (var attempt = 0; attempt < ProbeAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                return OhscrcpyShell.Run(session, command);
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                last = error;
+                if (!OhscrcpyFailure.IsConnectionFailure(error) || attempt + 1 >= ProbeAttempts)
+                {
+                    break;
+                }
+
+                Thread.Sleep(ProbeRetryDelayMs * (attempt + 1));
+            }
         }
 
-        return [];
+        throw new IOException(
+            OhscrcpyFailure.NotReadyPrefix
+            + $"the device did not answer `{command}`: {last?.Message}. Unlock the device, confirm the UI Test "
+            + "service is running, then start mirroring again. "
+            + OhscrcpyFailure.NotReadyPrefix
+            + $"设备没有响应 `{command}`：{last?.Message}。请解锁设备、确认 UI Test 服务正在运行后重新开始投屏。",
+            last);
+    }
+
+    /// <summary>
+    /// Reads a bounded tail of one pushed capture extension's device log for failure classification.
+    /// <para>读取一条推送采集扩展的设备日志尾部（有界），用于失败分类。</para>
+    /// </summary>
+    /// <param name="session">Connected HDC session. <para>已连接的 HDC 会话。</para></param>
+    /// <param name="remoteLogPath">Device path of the extension log.
+    /// <para>扩展日志的设备路径。</para></param>
+    /// <returns>The log tail, or an empty string when it cannot be read.
+    /// <para>日志尾部；无法读取时为空串。</para></returns>
+    internal static string ReadExtensionLog(IHdcDeviceSession session, string remoteLogPath)
+    {
+        if (session is null || string.IsNullOrWhiteSpace(remoteLogPath))
+        {
+            return "";
+        }
+
+        return ReadDaemonLog(session, remoteLogPath);
     }
 
     private static void KillLiveProcesses(

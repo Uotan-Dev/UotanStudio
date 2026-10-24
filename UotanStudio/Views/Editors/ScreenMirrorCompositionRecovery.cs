@@ -2,28 +2,26 @@ namespace UotanStudio.Views.Editors;
 
 /// <summary>
 /// Tracks the composition surface lifecycle: generation tokens that invalidate in-flight probes and
-/// presentations, deferred-detach tokens, and whether a failed surface may be built again.
-/// <para>跟踪合成表面生命周期：使在途探测与呈现失效的代际令牌、延迟分离令牌，以及失败的表面是否
-/// 允许重新构建。</para>
+/// presentations, and whether a failed surface may be built again.
+/// <para>跟踪合成表面生命周期：使在途探测与呈现失效的代际令牌，以及失败的表面是否允许重新构建。</para>
 /// </summary>
 /// <remarks>
 /// <para>
-/// A dock float or drag detaches the visual and attaches it again. The detach is deferred by the
-/// presenter, so every probe and every queued presentation must prove that it still owns the current
-/// generation before it touches the surface. A presentation failure caused by a transient host change
-/// clears on the next attach; only a compositor capability failure is terminal for the session.
+/// A dock float, a tab switch or a rebuilt view detaches the visual while the session keeps its surface, so
+/// every probe and every queued presentation must prove that it still owns the current generation before it
+/// touches the surface. A presentation failure caused by a transient host change clears on the next attach;
+/// only a compositor capability failure is terminal for the session.
 /// </para>
 /// <para>
-/// 停靠浮动或拖拽会先分离再重新挂载可视对象。分离由呈现器延迟执行，因此每次探测与每次排队呈现都必须在
-/// 操作表面前证明自己仍持有当前代际。宿主瞬态变化引起的呈现失败会在下次挂载时清除；只有合成器能力失败
-/// 才对本会话终止。
+/// 停靠浮动、标签切换或视图重建会分离可视对象，而会话保留其表面，因此每次探测与每次排队呈现都必须在操作
+/// 表面前证明自己仍持有当前代际。宿主瞬态变化引起的呈现失败会在下次挂载时清除；只有合成器能力失败才对
+/// 本会话终止。
 /// </para>
 /// </remarks>
 internal sealed class ScreenMirrorCompositionRecovery
 {
     private readonly Lock _gate = new();
     private int _generation;
-    private int _detachToken;
     private bool _failed;
     private bool _terminal;
 
@@ -89,7 +87,6 @@ internal sealed class ScreenMirrorCompositionRecovery
         {
             if (_terminal) return 0;
             _failed = false;
-            _detachToken++;
             return ++_generation;
         }
     }
@@ -121,7 +118,6 @@ internal sealed class ScreenMirrorCompositionRecovery
     {
         lock (_gate)
         {
-            _detachToken++;
             return ++_generation;
         }
     }
@@ -155,42 +151,5 @@ internal sealed class ScreenMirrorCompositionRecovery
             if (terminal) _terminal = true;
             return first;
         }
-    }
-
-    /// <summary>
-    /// Registers a deferred detach and returns the token the timer must still own when it fires.
-    /// <para>登记一次延迟分离，并返回定时器触发时必须仍持有的令牌。</para>
-    /// </summary>
-    /// <returns>
-    /// The newest deferred-detach token.
-    /// <para>最新的延迟分离令牌。</para>
-    /// </returns>
-    internal int ScheduleDetach()
-    {
-        lock (_gate) return ++_detachToken;
-    }
-
-    /// <summary>
-    /// Returns whether a deferred detach is still the newest one; otherwise a reattach already won.
-    /// <para>返回延迟分离是否仍是最新一次；否则说明重新挂载已经胜出。</para>
-    /// </summary>
-    /// <param name="token">Token returned by <see cref="ScheduleDetach"/>.
-    /// <para><see cref="ScheduleDetach"/> 返回的令牌。</para></param>
-    /// <returns>
-    /// True while no attach, detach or newer schedule advanced the token.
-    /// <para>没有挂载、分离或更新的登记推进令牌时为真。</para>
-    /// </returns>
-    internal bool IsDetachCurrent(int token)
-    {
-        lock (_gate) return token == _detachToken;
-    }
-
-    /// <summary>
-    /// Cancels every deferred detach by advancing the token.
-    /// <para>推进令牌以取消所有延迟分离。</para>
-    /// </summary>
-    internal void CancelDetach()
-    {
-        lock (_gate) _detachToken++;
     }
 }

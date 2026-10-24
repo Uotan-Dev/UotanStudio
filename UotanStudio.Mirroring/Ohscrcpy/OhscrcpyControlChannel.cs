@@ -147,8 +147,12 @@ internal sealed class OhscrcpyControlChannel : IOhscrcpyControlChannel
     /// </summary>
     /// <exception cref="InvalidOperationException">The channel is disposed or already connected.
     /// <para>通道已释放或已连接。</para></exception>
-    /// <exception cref="IOException">The forward, the handshake or the daemon reply failed.
-    /// <para>转发、握手或守护进程回复失败。</para></exception>
+    /// <exception cref="IOException">The forward, the handshake or the daemon reply failed. A control socket that
+    /// never accepted a connection within <see cref="OhscrcpyConstants.ControlConnectTimeoutMs"/> is reported as a
+    /// not-ready target, because a daemon that was just started or a leftover UI Test session can hold the socket.
+    /// <para>转发、握手或守护进程回复失败。控制 socket 在
+    /// <see cref="OhscrcpyConstants.ControlConnectTimeoutMs"/> 内始终没有接受连接时按"目标未就绪"上报，因为刚启动的
+    /// 守护进程或残留的 UI Test 会话都可能占着该 socket。</para></exception>
     public void Connect()
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
@@ -158,7 +162,7 @@ internal sealed class OhscrcpyControlChannel : IOhscrcpyControlChannel
                 "The UI Test control channel is already connected. UI Test 控制通道已连接。");
         }
 
-        var stream = _tunnel.Open();
+        var stream = OpenControlStream();
         _stream = stream;
         TrySetReadTimeout(stream);
         var rpc = new Utf8JsonRpcPipe(stream);
@@ -184,6 +188,52 @@ internal sealed class OhscrcpyControlChannel : IOhscrcpyControlChannel
         _connected = true;
         _gesturePump = Task.Run(RunGesturePumpAsync);
         _shellPump = Task.Run(RunShellPumpAsync);
+    }
+
+    /// <summary>
+    /// Opens the forwarded control socket, retrying connection-class failures until the control daemon is serving it.
+    /// <para>打开已转发的控制 socket，对连接类失败重试，直到控制守护进程开始服务它。</para>
+    /// </summary>
+    /// <returns>The connected control stream. <para>已连接的控制流。</para></returns>
+    /// <exception cref="IOException">The socket did not accept a connection within the control budget.
+    /// <para>socket 在控制预算内没有接受连接。</para></exception>
+    private Stream OpenControlStream()
+    {
+        var deadline = Environment.TickCount64 + OhscrcpyConstants.ControlConnectTimeoutMs;
+        var delay = 200;
+        Exception? last = null;
+        while (true)
+        {
+            _lifetime.Token.ThrowIfCancellationRequested();
+            try
+            {
+                return _tunnel.Open();
+            }
+            catch (Exception error) when (error is not ObjectDisposedException
+                && error is not InvalidOperationException
+                && OhscrcpyFailure.IsConnectionFailure(error))
+            {
+                last = error;
+                if (Environment.TickCount64 >= deadline)
+                {
+                    break;
+                }
+
+                Thread.Sleep(delay);
+                delay = Math.Min(delay * 2, 1_000);
+            }
+        }
+
+        throw new IOException(
+            OhscrcpyFailure.NotReadyPrefix
+            + $"the UI Test control socket {_device.ControlEndpoint} for {_connectKey} did not accept a connection "
+            + $"within {OhscrcpyConstants.ControlConnectTimeoutMs} ms: {last?.Message}. If DevEco Studio screen "
+            + "mirroring or another mirror tab is open on this device, close it and start mirroring again. "
+            + OhscrcpyFailure.NotReadyPrefix
+            + $"设备 {_connectKey} 的 UI Test 控制 socket {_device.ControlEndpoint} 在 "
+            + $"{OhscrcpyConstants.ControlConnectTimeoutMs} ms 内没有接受连接：{last?.Message}。如果该设备上还开着 DevEco "
+            + "Studio 投屏或其它投屏标签，请先关闭，再重新开始投屏。",
+            last);
     }
 
     /// <summary>Queues one gesture API call with raw display coordinates.

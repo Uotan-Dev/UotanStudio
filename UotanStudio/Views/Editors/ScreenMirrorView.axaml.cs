@@ -30,6 +30,7 @@ public partial class ScreenMirrorView : UserControl
         AttachedToVisualTree += (_, _) =>
         {
             SubscribeToFrames();
+            ViewModel?.RecoverPresentation();
             InvalidateVisual();
         };
         DetachedFromVisualTree += (_, _) => UnsubscribeFromFrames();
@@ -190,6 +191,7 @@ public partial class ScreenMirrorView : UserControl
     private void OnFramePresented(object? sender, EventArgs e)
     {
         WaitingLabel.IsVisible = ViewModel?.HasPresentedVideo != true;
+        FrameImage.EnsurePresentationHost();
         FrameImage.InvalidateVisual();
     }
 

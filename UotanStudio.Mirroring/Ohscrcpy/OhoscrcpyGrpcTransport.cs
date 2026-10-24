@@ -15,9 +15,11 @@ internal interface IOhoscrcpyVideoTransport : IDisposable
     /// <para>启动服务端流式视频调用并返回响应正文。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancels the HTTP/2 request. <para>取消 HTTP/2 请求。</para></param>
+    /// <param name="budgetMs">Optional readiness budget for the first call; zero uses the transport default.
+    /// <para>首次调用的可选就绪预算；为零时使用传输层默认值。</para></param>
     /// <returns>The gRPC response body carrying length-prefixed messages.
     /// <para>承载带长度前缀消息的 gRPC 响应正文。</para></returns>
-    Stream OpenVideoStream(CancellationToken cancellationToken);
+    Stream OpenVideoStream(CancellationToken cancellationToken, int budgetMs = 0);
 
     /// <summary>Sends the unary key-frame request. <para>发送一元关键帧请求。</para></summary>
     /// <param name="cancellationToken">Cancels the HTTP/2 request. <para>取消 HTTP/2 请求。</para></param>
@@ -42,6 +44,10 @@ internal interface IOhoscrcpyVideoTransport : IDisposable
 /// </remarks>
 internal sealed class OhoscrcpyGrpcTransport : IOhoscrcpyVideoTransport
 {
+    private const int DefaultVideoReadyBudgetMs = 15_000;
+    private const int FirstRetryDelayMs = 250;
+    private const int MaximumRetryDelayMs = 1_000;
+
     private readonly HttpClient _client;
     private readonly IDisposable? _forward;
     private HttpResponseMessage? _videoResponse;
@@ -72,25 +78,64 @@ internal sealed class OhoscrcpyGrpcTransport : IOhoscrcpyVideoTransport
     /// <para>启动服务端流式 <c>onStart</c> 调用。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancels the request. <para>取消请求。</para></param>
+    /// <param name="budgetMs">Readiness budget for the first call, in milliseconds; zero uses
+    /// <see cref="DefaultVideoReadyBudgetMs"/>. <para>首次调用的就绪预算（毫秒）；为零时使用
+    /// <see cref="DefaultVideoReadyBudgetMs"/>。</para></param>
     /// <returns>The gRPC response body. <para>gRPC 响应正文。</para></returns>
-    /// <exception cref="IOException">The device refused the call or returned a non-success status.
-    /// <para>设备拒绝调用或返回非成功状态。</para></exception>
-    public Stream OpenVideoStream(CancellationToken cancellationToken)
+    /// <exception cref="IOException">The device never accepted the call: the capture extension was not serving its
+    /// gRPC socket yet, or the forwarded connection was closed. The caller may retry mirroring.
+    /// <para>设备始终没有接受该调用：采集扩展尚未开始服务其 gRPC socket，或转发连接被关闭。调用方可以重新开始投屏。</para></exception>
+    /// <exception cref="NotSupportedException">The device answered with an unimplemented call, which means the running
+    /// capture library does not expose this gRPC contract.
+    /// <para>设备以"调用未实现"应答，说明正在运行的采集库没有提供该 gRPC 契约。</para></exception>
+    public Stream OpenVideoStream(CancellationToken cancellationToken, int budgetMs = 0)
     {
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        var response = SendAsync(OhscrcpyConstants.VideoCallPath, cancellationToken)
-            .GetAwaiter().GetResult();
-        try
+        var budget = budgetMs > 0 ? budgetMs : DefaultVideoReadyBudgetMs;
+        var deadline = Environment.TickCount64 + budget;
+        var delay = FirstRetryDelayMs;
+        Exception? last = null;
+        while (true)
         {
-            var stream = response.Content.ReadAsStream(cancellationToken);
-            Interlocked.Exchange(ref _videoResponse, response)?.Dispose();
-            return stream;
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var response = SendAsync(OhscrcpyConstants.VideoCallPath, cancellationToken)
+                    .GetAwaiter().GetResult();
+                try
+                {
+                    var stream = response.Content.ReadAsStream(cancellationToken);
+                    Interlocked.Exchange(ref _videoResponse, response)?.Dispose();
+                    return stream;
+                }
+                catch
+                {
+                    response.Dispose();
+                    throw;
+                }
+            }
+            catch (Exception error) when (error is not OperationCanceledException
+                && error is not ObjectDisposedException
+                && !OhscrcpyFailure.IsCapabilityFailure(error))
+            {
+                last = error;
+                if (Environment.TickCount64 >= deadline)
+                {
+                    break;
+                }
+
+                Thread.Sleep(delay);
+                delay = Math.Min(delay * 2, MaximumRetryDelayMs);
+            }
         }
-        catch
-        {
-            response.Dispose();
-            throw;
-        }
+
+        throw new IOException(
+            OhscrcpyFailure.VideoPrefix
+            + $"the video gRPC endpoint did not answer within {budget} ms: {last?.Message}. Start mirroring again; "
+            + "if it keeps failing, check the capture-extension log on the device. "
+            + OhscrcpyFailure.VideoPrefix
+            + $"视频 gRPC 端点未在 {budget} ms 内响应：{last?.Message}。请重新开始投屏；若持续失败，请检查设备上的采集扩展日志。",
+            last);
     }
 
     /// <summary>Sends the unary <c>onRequestIDRFrame</c> call and waits for its reply.
@@ -120,9 +165,24 @@ internal sealed class OhoscrcpyGrpcTransport : IOhoscrcpyVideoTransport
             request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            var status = response.StatusCode;
+            var status = (int)response.StatusCode;
             response.Dispose();
-            throw new IOException($"The device gRPC call {path} failed with HTTP {(int)status}.");
+            if (OhscrcpyFailure.IsUnimplementedStatus(status))
+            {
+                throw new NotSupportedException(
+                    OhscrcpyFailure.CapabilityPrefix
+                    + $"the running capture library does not implement {path} (HTTP {status}); it does not match this "
+                    + "UI Test version. Replace the ohos/device capture library or use a supported device. "
+                    + OhscrcpyFailure.CapabilityPrefix
+                    + $"正在运行的采集库没有实现 {path}（HTTP {status}），与当前 UI Test 版本不匹配。请替换 ohos/device "
+                    + "下的采集库，或改用受支持的设备。");
+            }
+
+            throw new IOException(
+                OhscrcpyFailure.VideoPrefix
+                + $"the device gRPC call {path} failed with HTTP {status}. "
+                + OhscrcpyFailure.VideoPrefix
+                + $"设备 gRPC 调用 {path} 以 HTTP {status} 失败。");
         }
 
         return response;

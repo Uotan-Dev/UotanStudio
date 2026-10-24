@@ -19,32 +19,6 @@ public sealed class ScreenMirrorCompositionRecoveryTests
     }
 
     [Fact]
-    public void Reattach_AfterScheduledDetach_CancelsTheDeferredDetach()
-    {
-        var recovery = new ScreenMirrorCompositionRecovery();
-        var token = recovery.ScheduleDetach();
-        Assert.True(recovery.IsDetachCurrent(token));
-
-        _ = recovery.BeginAttach();
-
-        Assert.False(recovery.IsDetachCurrent(token));
-    }
-
-    [Fact]
-    public void ScheduleDetach_NewerSchedule_SupersedesOlderToken()
-    {
-        var recovery = new ScreenMirrorCompositionRecovery();
-        var first = recovery.ScheduleDetach();
-        var second = recovery.ScheduleDetach();
-
-        Assert.False(recovery.IsDetachCurrent(first));
-        Assert.True(recovery.IsDetachCurrent(second));
-
-        recovery.CancelDetach();
-        Assert.False(recovery.IsDetachCurrent(second));
-    }
-
-    [Fact]
     public void RecordFailure_Recoverable_RebuildsSurfaceOnNextAttach()
     {
         var recovery = new ScreenMirrorCompositionRecovery();

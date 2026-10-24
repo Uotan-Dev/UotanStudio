@@ -11,7 +11,7 @@ public sealed class ManagedMirrorSession : IDisposable
     private readonly ScrcpyClient _client;
     private readonly Stream _shell;
     private readonly IAdbDeviceSession? _adbSession;
-    private readonly DeviceLease? _lease;
+    private readonly IAsyncDisposable? _lease;
     private readonly Action<string>? _logSink;
     private readonly StringBuilder _output = new();
     private readonly Lock _outputLock = new();
@@ -25,18 +25,24 @@ public sealed class ManagedMirrorSession : IDisposable
     /// <para>本会话转发帧与控制消息的目标、已连接的 scrcpy 客户端。</para></param>
     /// <param name="shell">Shell stream used to pump server log output; disposed with the session.
     /// <para>用于抽取服务端日志输出的 shell 流；随会话一同释放。</para></param>
-    /// <param name="adbSession">Optional ADB device session owning the streams; disposed with the session.
-    /// <para>可选的、持有这些流的 ADB 设备会话；随会话一同释放。</para></param>
-    /// <param name="lease">Optional device lease released when the session is disposed.
-    /// <para>可选的设备租约，在会话释放时一并释放。</para></param>
+    /// <param name="adbSession">Optional ADB device session owning the streams; disposed with the session unless
+    /// <paramref name="ownsAdbSession"/> is <see langword="false"/>.
+    /// <para>可选的、持有这些流的 ADB 设备会话；<paramref name="ownsAdbSession"/> 为 <see langword="false"/> 时
+    /// 不随会话释放。</para></param>
+    /// <param name="lease">Optional device lease released when the session is disposed; a lease that owns a
+    /// borrowed session releases it here instead of disposing the session directly.
+    /// <para>可选的设备租约，在会话释放时一并释放；持有借用会话的租约在此归还借用，而不是直接释放会话。</para></param>
     /// <param name="logSink">Optional sink receiving decoded server log text; may be called from a background thread.
     /// <para>可选的接收端，用于接收解码后的服务端日志文本；可能由后台线程调用。</para></param>
+    /// <param name="ownsAdbSession">Whether this session disposes <paramref name="adbSession"/>; a session shared
+    /// with the rest of the host is owned by the lease that borrows it.
+    /// <para>本会话是否释放 <paramref name="adbSession"/>；与宿主其余部分共享的会话由借用它的租约负责释放。</para></param>
     internal ManagedMirrorSession(ScrcpyClient client, Stream shell, IAdbDeviceSession? adbSession,
-        DeviceLease? lease = null, Action<string>? logSink = null)
+        IAsyncDisposable? lease = null, Action<string>? logSink = null, bool ownsAdbSession = true)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _shell = shell ?? throw new ArgumentNullException(nameof(shell));
-        _adbSession = adbSession;
+        _adbSession = ownsAdbSession ? adbSession : null;
         _lease = lease;
         _logSink = logSink;
     }

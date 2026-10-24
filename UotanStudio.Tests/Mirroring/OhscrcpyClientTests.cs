@@ -184,7 +184,7 @@ public sealed class OhscrcpyClientTests
 
         internal bool Disposed { get; private set; }
 
-        public Stream OpenVideoStream(CancellationToken cancellationToken) => _stream;
+        public Stream OpenVideoStream(CancellationToken cancellationToken, int budgetMs = 0) => _stream;
 
         public void RequestKeyFrame(CancellationToken cancellationToken) => KeyFrameRequests++;
 

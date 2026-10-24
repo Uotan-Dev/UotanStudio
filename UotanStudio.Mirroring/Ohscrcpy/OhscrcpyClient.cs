@@ -96,6 +96,16 @@ internal sealed class OhscrcpyClient : IDisposable
     /// <para>当前接收端；为 <see langword="null"/> 时丢弃诊断。</para></value>
     public Action<string>? Log { get; set; }
 
+    /// <summary>
+    /// Reads the pushed capture extension's device log when the video stream fails, so a loader/ABI failure is
+    /// reported as an unsupported target instead of a generic connection error; may be called from a background
+    /// thread. <para>视频流失败时读取推送采集扩展的设备日志，使加载器/ABI 失败被报告为不支持的目标，而不是笼统的连接
+    /// 错误；可能由后台线程调用。</para>
+    /// </summary>
+    /// <value>The log provider, or <see langword="null"/> when the caller cannot read the device log.
+    /// <para>日志提供者；调用方无法读取设备日志时为 <see langword="null"/>。</para></value>
+    public Func<string>? DeviceLog { get; set; }
+
     /// <summary>Name shown by the mirror UI. <para>投屏界面显示的名称。</para></summary>
     /// <value>The configured device name. <para>配置的设备名。</para></value>
     public string DeviceName => _options.DeviceName;
@@ -157,7 +167,7 @@ internal sealed class OhscrcpyClient : IDisposable
         try
         {
             ConnectControl();
-            var stream = _video.OpenVideoStream(_lifetime.Token);
+            var stream = OpenVideoStream(deadline, budget);
             _stream = stream;
             _reader = Task.Run(() => ReadLoopAsync(stream, _lifetime.Token), CancellationToken.None);
             var first = WaitForFirstPayload(deadline, budget);
@@ -332,6 +342,54 @@ internal sealed class OhscrcpyClient : IDisposable
         WaitForReader();
         DisposeQuietly(_control);
         DisposeQuietly(_lifetime);
+    }
+
+    /// <summary>
+    /// Opens the video stream within the remaining connect budget, converting a transport failure into the
+    /// classified user-facing message that quotes the capture-extension log.
+    /// <para>在剩余连接预算内打开视频流，并把传输失败转换成引用采集扩展日志的分类用户消息。</para>
+    /// </summary>
+    /// <param name="deadline">Absolute connect deadline from <see cref="Environment.TickCount64"/>.
+    /// <para>以 <see cref="Environment.TickCount64"/> 计的绝对连接截止时刻。</para></param>
+    /// <param name="budgetMs">Total connect budget in milliseconds.
+    /// <para>连接总预算（毫秒）。</para></param>
+    /// <returns>The video stream. <para>视频流。</para></returns>
+    /// <exception cref="IOException">The endpoint stayed unreachable; the caller may retry mirroring.
+    /// <para>端点始终不可达；调用方可以重新开始投屏。</para></exception>
+    /// <exception cref="NotSupportedException">The capture library cannot run on this device; retrying cannot help.
+    /// <para>采集库无法在该设备上运行；重试无济于事。</para></exception>
+    private Stream OpenVideoStream(long deadline, int budgetMs)
+    {
+        var remaining = (int)Math.Clamp(deadline - Environment.TickCount64, 1, budgetMs);
+        try
+        {
+            return _video.OpenVideoStream(_lifetime.Token, remaining);
+        }
+        catch (Exception error) when (error is not OperationCanceledException
+            && error is not ObjectDisposedException
+            && error is not InvalidOperationException
+            && !OhscrcpyFailure.IsCapabilityFailure(error))
+        {
+            throw OhscrcpyFailure.WrapVideoFailure(error, ReadDeviceLog());
+        }
+    }
+
+    private string? ReadDeviceLog()
+    {
+        var provider = DeviceLog;
+        if (provider is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return provider();
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            return "(" + error.Message + ")";
+        }
     }
 
     private void ConnectControl()

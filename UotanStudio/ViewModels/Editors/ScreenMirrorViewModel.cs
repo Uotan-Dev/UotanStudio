@@ -39,8 +39,13 @@ namespace UotanStudio.ViewModels.Editors;
 /// </remarks>
 public partial class ScreenMirrorViewModel : Document, ITool
 {
+    private const int KeyFrameMinimumIntervalMilliseconds = 750;
+    private const int KeyFrameRequestRepeatMilliseconds = 2000;
+    private const int SessionThreadJoinMilliseconds = 2000;
+
     private MirrorSessionFacade? _client;
     private int _starting;
+    private long _lastKeyFrameRequestTicks;
     private readonly Lock _frameLock = new();
     private Views.Editors.ScreenMirrorPixelBuffer? _pendingFrame;
     private Views.Editors.ScreenMirrorPixelBuffer? _spareFrame;
@@ -62,6 +67,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
     private Thread? _audioThread;
     private Thread? _controlThread;
     private volatile bool _disposed;
+    private int _sessionGeneration;
 
     /// <summary>Raised on the audio thread after the output sink opened successfully.</summary>
     public event EventHandler? AudioSinkOpened;
@@ -172,6 +178,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
                     ?? candidates.FirstOrDefault(candidate => candidate.Protocol == Services.Devices.DeviceProtocolKind.Hdc)
                     ?? throw new InvalidOperationException($"Device {serial} is not connected.");
 
+                UsesScrcpyServer = device.Protocol != Services.Devices.DeviceProtocolKind.Hdc;
                 MirrorSessionFacade facade;
                 if (device.Protocol == Services.Devices.DeviceProtocolKind.Hdc)
                 {
@@ -230,10 +237,18 @@ public partial class ScreenMirrorViewModel : Document, ITool
         StatusText = GetLocalizedString("ScreenMirror_Mirroring");
 
         GpuPresenter.CompositionRestored += OnCompositionRestored;
+        if (_disposed)
+        {
+            GpuPresenter.CompositionRestored -= OnCompositionRestored;
+            client.Dispose();
+            return;
+        }
+
         _cts = new CancellationTokenSource();
         var decodeClient = client;
         var decodeToken = _cts.Token;
-        _decodeThread = new Thread(() => DecodeLoop(decodeClient, decodeToken))
+        var generation = Interlocked.Increment(ref _sessionGeneration);
+        _decodeThread = new Thread(() => DecodeLoop(decodeClient, decodeToken, generation))
         {
             IsBackground = true,
             Name = "UotanStudio.ScreenMirror",
@@ -305,61 +320,181 @@ public partial class ScreenMirrorViewModel : Document, ITool
     }
 
     /// <summary>
-    /// Stops the current server session while keeping this document reusable: cancels the loops,
-    /// disposes the client and clears the presented frame, without marking the view model disposed.
-    /// <para>停止当前服务端会话但保留文档可复用：取消循环、释放客户端并清除已呈现帧，不把视图模型标记为已释放。</para>
+    /// Stops the current server session while keeping this document reusable: cancels the loops, reports the stop in
+    /// <see cref="StatusText"/>, clears the presented frame and hands the blocking teardown to the thread pool,
+    /// without marking the view model disposed.
+    /// <para>停止当前服务端会话但保留文档可复用：取消循环、在 <see cref="StatusText"/> 中报告已停止、清除已呈现帧，
+    /// 并把阻塞式拆除交给线程池，不把视图模型标记为已释放。</para>
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only the state reset and the frame release run on the calling thread. Waiting for the video, audio and control
+    /// pumps and closing the client, the borrowed ADB session and the device lease wait on socket timeouts and native
+    /// teardown, so they run in <see cref="TearDownSession"/> in the order a synchronous teardown used: stop the
+    /// pumps, release the client, then the token source.
+    /// </para>
+    /// <para>
+    /// 只有状态复位与帧释放在调用线程执行。等待视频、音频与控制泵结束，以及关闭客户端、归还借用的 ADB 会话与设备
+    /// 租约，都要等 socket 超时和原生拆除，因此由 <see cref="TearDownSession"/> 按同步拆除的顺序在后台执行：
+    /// 先停泵、再释放客户端、最后释放令牌源。
+    /// </para>
+    /// </remarks>
     private void StopSessionCore()
     {
+        MarkSessionStopped();
         GpuPresenter.CompositionRestored -= OnCompositionRestored;
-        _cts?.Cancel();
+        Interlocked.Increment(ref _sessionGeneration);
+
+        var cts = _cts;
+        var client = _client;
+        var decodeThread = _decodeThread;
+        var audioThread = _audioThread;
+        var controlThread = _controlThread;
+        _cts = null;
+        _client = null;
+        _decodeThread = null;
+        _audioThread = null;
+        _controlThread = null;
+        _startTask = null;
+
+        cts?.Cancel();
         lock (_frameLock)
         {
             _pendingFrame = null;
             _spareFrame = null;
         }
-        try
-        {
-            _decodeThread?.Join(2000);
-        }
-        catch
-        {
 
-        }
-        try
-        {
-            _audioThread?.Join(2000);
-        }
-        catch
-        {
+        ReleasePresentedFrame();
 
-        }
-        _audioThread = null;
-        try
+        if (client is null && cts is null && decodeThread is null && audioThread is null && controlThread is null)
         {
-            _controlThread?.Join(2000);
+            return;
         }
-        catch
-        {
 
-        }
-        _controlThread = null;
+        _ = Task.Factory.StartNew(
+            () => TearDownSession(client, cts, decodeThread, audioThread, controlThread),
+            CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
 
-        _client?.Dispose();
-        _client = null;
-        _cts?.Dispose();
-        _cts = null;
-        _startTask = null;
+    /// <summary>
+    /// Whether a decoder callback still belongs to the session this document is running now.
+    /// <para>判断一次解码回调是否仍属于本文档当前运行的会话。</para>
+    /// </summary>
+    /// <param name="generation">Generation captured when the session started.
+    /// <para>会话启动时捕获的代际。</para></param>
+    /// <returns><see langword="true"/> while no stop or newer session advanced the generation.
+    /// <para>没有停止或更新的会话推进代际时为 <see langword="true"/>。</para></returns>
+    private bool IsCurrentSession(int generation) => generation == Volatile.Read(ref _sessionGeneration);
 
+    /// <summary>
+    /// Clears the presented bitmap on the UI thread and raises <see cref="FramePresented"/> once.
+    /// <para>在 UI 线程清除已呈现位图并触发一次 <see cref="FramePresented"/>。</para>
+    /// </summary>
+    private void ReleasePresentedFrame()
+    {
         var oldFrame = Frame;
-        void ReleaseBitmap()
+        void Release()
         {
-            if (ReferenceEquals(Frame, oldFrame)) Frame = null;
+            if (ReferenceEquals(Frame, oldFrame))
+            {
+                Frame = null;
+            }
+
             oldFrame?.Dispose();
             FramePresented?.Invoke(this, EventArgs.Empty);
         }
-        if (Dispatcher.UIThread.CheckAccess()) ReleaseBitmap();
-        else Dispatcher.UIThread.Post(ReleaseBitmap);
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            Release();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(Release);
+        }
+    }
+
+    /// <summary>
+    /// Completes one stopped session on a background thread: waits for its pumps to finish, then releases the client
+    /// and the token source in that order. The borrowed shared ADB session is returned through the client's lease, so
+    /// a session that another borrower still uses stays open.
+    /// <para>在后台线程完成一次已停止会话的拆除：先等其泵线程结束，再按该顺序释放客户端与令牌源。借用的共享 ADB
+    /// 会话由客户端的租约归还，因此仍有其它借用方使用的会话不会被关闭。</para>
+    /// </summary>
+    /// <param name="client">The stopped session facade to release, or <see langword="null"/>.
+    /// <para>要释放的已停止会话门面；可为 <see langword="null"/>。</para></param>
+    /// <param name="cts">The stopped session's token source, disposed last.
+    /// <para>已停止会话的令牌源，最后释放。</para></param>
+    /// <param name="decodeThread">The video pump, or <see langword="null"/> before it started.
+    /// <para>视频泵线程；未启动时为 <see langword="null"/>。</para></param>
+    /// <param name="audioThread">The audio pump, or <see langword="null"/> when audio is off.
+    /// <para>音频泵线程；音频关闭时为 <see langword="null"/>。</para></param>
+    /// <param name="controlThread">The control pump, or <see langword="null"/> when the control channel is closed.
+    /// <para>控制泵线程；控制通道关闭时为 <see langword="null"/>。</para></param>
+    private static void TearDownSession(MirrorSessionFacade? client, CancellationTokenSource? cts,
+        Thread? decodeThread, Thread? audioThread, Thread? controlThread)
+    {
+        JoinSessionThread(decodeThread, "video");
+        JoinSessionThread(audioThread, "audio");
+        JoinSessionThread(controlThread, "control");
+        try
+        {
+            client?.Dispose();
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
+                $"Releasing a stopped mirror session failed: {error.GetType().Name}: {error.Message}");
+        }
+        finally
+        {
+            cts?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Waits a bounded time for one stopped pump thread and reports a thread that is still running.
+    /// <para>在有限时间内等待一个已停止的泵线程，并报告仍未结束的线程。</para>
+    /// </summary>
+    /// <param name="thread">The pump thread to join, or <see langword="null"/>.
+    /// <para>要等待的泵线程；可为 <see langword="null"/>。</para></param>
+    /// <param name="name">Pump name used in the diagnostic line. <para>诊断行里使用的泵名称。</para></param>
+    private static void JoinSessionThread(Thread? thread, string name)
+    {
+        if (thread is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!thread.Join(SessionThreadJoinMilliseconds))
+            {
+                Services.LogService.Instance.Write(Services.LogLevel.Debug, "ScreenMirror",
+                    $"The {name} loop did not finish within {SessionThreadJoinMilliseconds} ms after the session stopped.");
+            }
+        }
+        catch (ThreadStateException error)
+        {
+            Services.LogService.Instance.Write(Services.LogLevel.Debug, "ScreenMirror",
+                $"The {name} loop could not be joined: {error.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Leaves the mirroring status behind once no session is running, so the header never claims to mirror a
+    /// device that has already stopped.
+    /// <para>会话不再运行时离开「投屏中」状态，使标题栏不会对已经停止的设备继续声称正在投屏。</para>
+    /// </summary>
+    private void MarkSessionStopped()
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            StatusText = GetLocalizedString("ScreenMirror_Stopped");
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => StatusText = GetLocalizedString("ScreenMirror_Stopped"));
     }
 
     /// <summary>
@@ -471,15 +606,69 @@ public partial class ScreenMirrorViewModel : Document, ITool
     public void RequestClipboard() => SendSession(client => client.RequestClipboard());
 
     /// <summary>
-    /// Asks the device for an immediate key frame after a composition surface was rebuilt, so the first frame
-    /// after a dock float or drag does not wait for the next natural key frame; the ohscrcpy adapter maps the
-    /// scrcpy reset-video control message to a request-key-frame action.
-    /// <para>合成表面重建后请求设备立即发送关键帧，避免停靠浮动或拖拽后的首帧等待下一个自然关键帧；
+    /// Asks the device for an immediate key frame after a composition surface was rebuilt, the host became visible
+    /// again or the video stream stayed silent, so presentation does not wait for the next natural key frame; the
+    /// ohscrcpy adapter maps the scrcpy reset-video control message to a request-key-frame action.
+    /// <para>合成表面重建、宿主重新可见或视频流静默后请求设备立即发送关键帧，使呈现不必等待下一个自然关键帧；
     /// ohscrcpy 适配器会把 scrcpy 的重置视频控制消息映射为请求关键帧动作。</para>
     /// </summary>
-    internal void RequestKeyFrame() => SendControl(ScrcpyControlMessageWriter.ResetVideo());
+    /// <returns>
+    /// <see langword="true"/> when the request was written to the control channel; <see langword="false"/> when the
+    /// session has no control channel or the previous request is still inside the minimum interval.
+    /// <para>请求已写入控制通道时为 <see langword="true"/>；会话没有控制通道，或距上次请求不足最小间隔时为
+    /// <see langword="false"/>。</para>
+    /// </returns>
+    internal bool RequestKeyFrame()
+    {
+        if (_client is not { IsControlConnected: true } || !TryReserveKeyFrameRequest())
+        {
+            return false;
+        }
+
+        SendControl(ScrcpyControlMessageWriter.ResetVideo());
+        return true;
+    }
+
+    /// <summary>
+    /// Re-establishes the picture after the host window or the dock document became visible again: re-asserts the
+    /// hosted composition visual, re-letterboxes it and asks the device for a key frame; UI thread only.
+    /// <para>宿主窗口或停靠文档重新可见后重建画面：重新挂上托管的合成可视对象、按信箱模式布局并向设备请求关键帧；
+    /// 仅限 UI 线程。</para>
+    /// </summary>
+    internal void RecoverPresentation()
+    {
+        Dispatcher.UIThread.VerifyAccess();
+        if (_disposed)
+        {
+            return;
+        }
+
+        GpuPresenter.RecoverCompositionHost();
+        RequestKeyFrame();
+    }
 
     private void OnCompositionRestored(object? sender, EventArgs e) => RequestKeyFrame();
+
+    /// <summary>
+    /// Claims the single key-frame slot of the current interval, so repeated activations and reattachments cannot
+    /// flood the control channel with reset-video messages.
+    /// <para>占用当前时隙的唯一关键帧请求名额，使反复激活与重新挂载不会用重置视频消息刷满控制通道。</para>
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/> when the caller may send the request now.
+    /// <para>调用方现在可以发送请求时为 <see langword="true"/>。</para>
+    /// </returns>
+    private bool TryReserveKeyFrameRequest()
+    {
+        var now = Environment.TickCount64;
+        var previous = Interlocked.Read(ref _lastKeyFrameRequestTicks);
+        if (previous != 0 && now - previous < KeyFrameMinimumIntervalMilliseconds)
+        {
+            return false;
+        }
+
+        return Interlocked.CompareExchange(ref _lastKeyFrameRequestTicks, now, previous) == previous;
+    }
 
     /// <summary>Sends one Android BACK press. <para>发送一次 Android「返回」按压。</para></summary>
     public void SendBack() => SendSession(client => client.SendBack());
@@ -539,7 +728,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
         }
     }
 
-    private void DecodeLoop(MirrorSessionFacade client, CancellationToken token)
+    private void DecodeLoop(MirrorSessionFacade client, CancellationToken token, int generation)
     {
         try
         {
@@ -558,11 +747,11 @@ public partial class ScreenMirrorViewModel : Document, ITool
             while (!token.IsCancellationRequested)
             {
                 using var decoder = VideoDecoderFactory.Create(codec, options);
-                decoder.Initialize(codec, metadata.Width, metadata.Height, OnDecodedFrame);
+                decoder.Initialize(codec, metadata.Width, metadata.Height, frame => OnDecodedFrame(frame, generation));
                 var active = VideoDecoderFactory.GetActiveDecoder(decoder);
-                if (active is VaApiVideoDecoder vaApi && OperatingSystem.IsLinux()) EnableVaApiZeroCopy(vaApi);
-                else if (active is MediaFoundationGpuVideoDecoder mediaFoundation && OperatingSystem.IsWindows()) EnableSharedTextureExport(mediaFoundation);
-                else if (active is VideoToolboxVideoDecoder videoToolbox && OperatingSystem.IsMacOS()) EnableIosurfaceExport(videoToolbox);
+                if (active is VaApiVideoDecoder vaApi && OperatingSystem.IsLinux()) EnableVaApiZeroCopy(vaApi, generation);
+                else if (active is MediaFoundationGpuVideoDecoder mediaFoundation && OperatingSystem.IsWindows()) EnableSharedTextureExport(mediaFoundation, generation);
+                else if (active is VideoToolboxVideoDecoder videoToolbox && OperatingSystem.IsMacOS()) EnableIosurfaceExport(videoToolbox, generation);
                 _decoderBackend = VideoDecoderFactory.GetBackendName(decoder);
                 _pixelFormatDecoder = decoder;
                 if (VideoDecoderFactory.GetFallbackReason(decoder) is { } reason)
@@ -572,7 +761,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 var failures = 0;
                 var skipped = 0;
                 var awaitBoundary = rebuilds > 0;
-                var boundaryDeadline = Environment.TickCount64 + MirrorDecoderRecovery.KeyFrameWaitMilliseconds;
+                var boundaryKeyFrameRequestTicks = Environment.TickCount64;
                 try
                 {
                     while (!token.IsCancellationRequested)
@@ -586,16 +775,23 @@ public partial class ScreenMirrorViewModel : Document, ITool
                                 if (++failures < MirrorDecoderRecovery.ConsecutiveFailuresBeforeRebuild) continue;
                                 throw;
                             }
+
                             continue;
                         }
+
                         try
                         {
                             Interlocked.Add(ref _receivedBytes, packet.PayloadLength);
                             if (awaitBoundary && !packet.IsCodecConfig)
                             {
-                                if (Environment.TickCount64 >= boundaryDeadline)
-                                    throw new InvalidDataException("The server produced no key frame after the decoder rebuild.");
                                 skipped++;
+                                var now = Environment.TickCount64;
+                                if (now - boundaryKeyFrameRequestTicks >= KeyFrameRequestRepeatMilliseconds)
+                                {
+                                    boundaryKeyFrameRequestTicks = now;
+                                    RequestKeyFrame();
+                                }
+
                                 continue;
                             }
                             awaitBoundary = false;
@@ -664,8 +860,13 @@ public partial class ScreenMirrorViewModel : Document, ITool
         catch (Exception) when (token.IsCancellationRequested) { }
     }
 
-    private void OnDecodedFrame(DecodedVideoFrame frame)
+    private void OnDecodedFrame(DecodedVideoFrame frame, int generation)
     {
+        if (!IsCurrentSession(generation))
+        {
+            return;
+        }
+
         try
         {
             OnDecodedFrameCore(frame);
@@ -713,9 +914,9 @@ public partial class ScreenMirrorViewModel : Document, ITool
     /// <para>把导出的 VA 表面路由到 GPU 呈现器；呈现器在无法呈现时会清除该标志。</para>
     /// </summary>
     [SupportedOSPlatform("linux")]
-    private void EnableVaApiZeroCopy(VaApiVideoDecoder decoder)
+    private void EnableVaApiZeroCopy(VaApiVideoDecoder decoder, int generation)
     {
-        decoder.DmabufFrameCallback = frame => PublishDmabufFrame(frame, decoder);
+        decoder.DmabufFrameCallback = frame => PublishDmabufFrame(frame, decoder, generation);
         decoder.GpuExportEnabled = true;
     }
 
@@ -723,10 +924,16 @@ public partial class ScreenMirrorViewModel : Document, ITool
     /// <para>把零拷贝导出表面交给 GPU 呈现器；无法呈现时禁用导出路径。</para>
     /// </summary>
     [SupportedOSPlatform("linux")]
-    private void PublishDmabufFrame(VaDmaBufVideoFrame frame, VaApiVideoDecoder decoder)
+    private void PublishDmabufFrame(VaDmaBufVideoFrame frame, VaApiVideoDecoder decoder, int generation)
     {
         try
         {
+            if (!IsCurrentSession(generation))
+            {
+                frame.Dispose();
+                return;
+            }
+
             Interlocked.Increment(ref _decodedFrames);
             if (_disposed) { frame.Dispose(); return; }
             if (!GpuPresenter.PublishDmabuf(frame))
@@ -749,20 +956,27 @@ public partial class ScreenMirrorViewModel : Document, ITool
     /// <para>把 Windows 共享纹理帧交给合成呈现器；无法呈现时禁用导出。</para>
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private void EnableSharedTextureExport(MediaFoundationGpuVideoDecoder decoder)
+    private void EnableSharedTextureExport(MediaFoundationGpuVideoDecoder decoder, int generation)
     {
         GpuPresenter.CompositionFailed += (_, _) => decoder.GpuExportEnabled = false;
-        decoder.GpuExportFrameCallback = frame => PublishSharedTextureFrame(frame, decoder);
+        decoder.GpuExportFrameCallback = frame => PublishSharedTextureFrame(frame, decoder, generation);
         decoder.GpuExportEnabled = true;
         Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
             "GPU zero-copy export enabled: D3D11 shared texture.");
     }
 
     [SupportedOSPlatform("windows")]
-    private void PublishSharedTextureFrame(D3D11SharedVideoFrame frame, MediaFoundationGpuVideoDecoder decoder)
+    private void PublishSharedTextureFrame(D3D11SharedVideoFrame frame, MediaFoundationGpuVideoDecoder decoder,
+        int generation)
     {
         try
         {
+            if (!IsCurrentSession(generation))
+            {
+                frame.MarkPresented();
+                return;
+            }
+
             Interlocked.Increment(ref _decodedFrames);
             if (_disposed)
             {
@@ -787,18 +1001,24 @@ public partial class ScreenMirrorViewModel : Document, ITool
     /// <para>把 macOS IOSurface 帧交给合成呈现器；无法呈现时禁用导出。</para>
     /// </summary>
     [SupportedOSPlatform("macos")]
-    private void EnableIosurfaceExport(VideoToolboxVideoDecoder decoder)
+    private void EnableIosurfaceExport(VideoToolboxVideoDecoder decoder, int generation)
     {
         GpuPresenter.CompositionFailed += (_, _) => decoder.GpuExportEnabled = false;
-        decoder.IosurfaceFrameCallback = frame => PublishIosurfaceFrame(frame, decoder);
+        decoder.IosurfaceFrameCallback = frame => PublishIosurfaceFrame(frame, decoder, generation);
         decoder.GpuExportEnabled = true;
     }
 
     [SupportedOSPlatform("macos")]
-    private void PublishIosurfaceFrame(IosurfaceVideoFrame frame, VideoToolboxVideoDecoder decoder)
+    private void PublishIosurfaceFrame(IosurfaceVideoFrame frame, VideoToolboxVideoDecoder decoder, int generation)
     {
         try
         {
+            if (!IsCurrentSession(generation))
+            {
+                frame.MarkPresented();
+                return;
+            }
+
             Interlocked.Increment(ref _decodedFrames);
             if (_disposed)
             {
@@ -847,13 +1067,14 @@ public partial class ScreenMirrorViewModel : Document, ITool
 
     private void RenderPendingFrame()
     {
+        var compositionCovering = GpuPresenter.CompositionCoversVideo;
         Views.Editors.ScreenMirrorPixelBuffer? pending;
         lock (_frameLock)
         {
             _renderScheduled = false;
             pending = _pendingFrame;
             _pendingFrame = null;
-            if (GpuPresenter.CanPresentFallback && GpuPresenter.PixelSize.Width > 0)
+            if (compositionCovering && GpuPresenter.PixelSize.Width > 0)
             {
                 pending = null;
                 _spareFrame = null;
@@ -861,7 +1082,8 @@ public partial class ScreenMirrorViewModel : Document, ITool
         }
         if (pending is null)
         {
-            if (GpuPresenter.CanPresentFallback && GpuPresenter.PixelSize.Width > 0 && Frame is { } oldBitmap)
+            var gpuDraws = compositionCovering || GpuPresenter.CanPresentFallback;
+            if (gpuDraws && GpuPresenter.PixelSize.Width > 0 && Frame is { } oldBitmap)
             {
                 Frame = null;
                 oldBitmap.Dispose();

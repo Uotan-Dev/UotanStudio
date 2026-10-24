@@ -39,4 +39,38 @@ public sealed class ScreenMirrorCompositionFallbackTests
         Assert.Equal(1, released);
         Assert.Equal(0, presenter.CompositedFrames);
     }
+
+    [Theory]
+    [InlineData(true, true, false, true, true, false, false, true)]
+    [InlineData(false, true, false, true, true, false, false, false)]
+    [InlineData(true, false, false, true, true, false, false, false)]
+    [InlineData(true, true, true, true, true, false, false, false)]
+    [InlineData(true, true, false, false, true, false, false, false)]
+    [InlineData(true, true, false, true, false, false, false, false)]
+    [InlineData(true, true, false, true, true, true, false, false)]
+    [InlineData(true, true, false, true, true, false, true, false)]
+    public void CoversVideo_RequiresEveryCoverageFact(
+        bool surfaceInstalled,
+        bool framePresented,
+        bool hostDetached,
+        bool visualVisible,
+        bool hostAttached,
+        bool closed,
+        bool failed,
+        bool expected)
+    {
+        var coverage = new ScreenMirrorGpuPresenter.CompositionCoverage(
+            surfaceInstalled, framePresented, hostDetached, visualVisible, hostAttached, closed, failed);
+
+        Assert.Equal(expected, ScreenMirrorGpuPresenter.CoversVideo(coverage));
+    }
+
+    [Fact]
+    public void CompositionCoversVideo_FreshAndClosedPresenter_ReportsNoCoverage()
+    {
+        var presenter = new ScreenMirrorGpuPresenter();
+        Assert.False(presenter.CompositionCoversVideo);
+        presenter.Dispose();
+        Assert.False(presenter.CompositionCoversVideo);
+    }
 }

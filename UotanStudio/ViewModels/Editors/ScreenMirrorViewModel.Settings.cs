@@ -43,6 +43,14 @@ public partial class ScreenMirrorViewModel
     private bool _isUpdatingMirrorServer;
     [ObservableProperty]
     private bool _hasPendingMirrorSettings;
+
+    /// <summary>
+    /// Whether the active session deploys the downloadable scrcpy server, so the property panel offers
+    /// server updates only where they apply.
+    /// <para>当前会话是否部署可下载的 scrcpy 服务端；属性面板据此只在实际适用时提供更新。</para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _usesScrcpyServer = true;
     internal void MarkMirrorSettingsChanged() => HasPendingMirrorSettings = true;
     private bool CanApplyMirrorSettings() => !IsApplyingMirrorSettings && !_disposed && _serial is not null;
     private bool CanUpdateMirrorServer() => !IsUpdatingMirrorServer && !_disposed;

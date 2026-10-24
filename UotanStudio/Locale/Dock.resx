@@ -1357,10 +1357,10 @@
     <value>Device name</value>
   </data>
   <data name="MirrorProperty_Version" xml:space="preserve">
-    <value>scrcpy version</value>
+    <value>Mirroring service version</value>
   </data>
   <data name="MirrorProperty_Unknown" xml:space="preserve">
-    <value>Not reported / not parsed</value>
+    <value>Not reported</value>
   </data>
   <data name="MirrorProperty_Unlimited" xml:space="preserve">
     <value>Unlimited</value>
@@ -1369,19 +1369,19 @@
     <value>BT.601 limited range → BGRA (CPU)</value>
   </data>
   <data name="MirrorProperty_EncoderValue" xml:space="preserve">
-    <value>Selected by Android; name not reported</value>
+    <value>Chosen on the device; name not reported</value>
   </data>
   <data name="MirrorSetting_Apply" xml:space="preserve">
     <value>Apply and reconnect</value>
   </data>
   <data name="MirrorSetting_ApplyHint" xml:space="preserve">
-    <value>Reconnect to apply changes. Backend availability depends on the system, drivers and installed plugins. The device must support the selected encoding format.</value>
+    <value>Reconnect to apply these settings. Available decoders depend on the operating system, drivers and installed plugins; the device must support the selected format.</value>
   </data>
   <data name="MirrorSetting_UpdateServer" xml:space="preserve">
-    <value>Check for a newer scrcpy server</value>
+    <value>Check for scrcpy server updates</value>
   </data>
   <data name="MirrorSetting_UpdateServerHint" xml:space="preserve">
-    <value>Downloads the newest published server jar into the local cache. A running session keeps the jar it already deployed; the new one is used on the next connect.</value>
+    <value>Downloads the newest published server into the local cache. A running session keeps its current server; the next connection uses the new one.</value>
   </data>
   <data name="MirrorSetting_AudioBackend" xml:space="preserve">
     <value>Audio decoder</value>
