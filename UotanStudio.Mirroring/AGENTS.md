@@ -9,7 +9,7 @@
 - ADB server 复用由宿主决定：`DeviceMonitorService.StartMirror` 在目标由 server 管理时复用已运行的 server，不新起 server；否则使用原生 USB 会话。两种来源分别对应 `MirrorSessionFacade.StartScrcpyOverAdbServer` 与 `StartScrcpyOverUsbSession`，`ScrcpyClient` 只是内部实现。
 - server jar 的获取、长度与 SHA-256 校验、暂存后原子发布、缓存摘要复验与随包回退都在宿主 `ScrcpyServerService`；本层只接收本地路径并把 jar 推到 `/data/local/tmp/scrcpy-server.jar`。
 - HDC 目标的设备端产物不是安装包：采集库与 UI Test 代理以 `Assets/ohos/device/*.so.zst` 的 zstd 帧加同目录 `manifest.txt` 文本清单内嵌随包分发，首次使用时由 `OhscrcpyDeviceAssets` 物化到 `%TEMP%/UotanStudio/ohos-device/<清单哈希前 16 位>/` 并校验长度与 SHA-256；`OhscrcpyServerManager.RuntimeDirectory` 返回该目录，选择与推送仍操作真实文件。改原始 `.so` 后运行 `dotnet run tools/compress-embedded-assets.cs` 重新生成帧与清单；不要在运行时下载或查询 Release 来补设备库。
-- `Assets/ohos/device/` 的 15 个文件提取自本机 DevEco Studio 26.0.0.821 的 `plugins/screen-mirroring/lib/hosScrcpy-1.0.20-beta.jar`（JAR SHA-256 `62cba3701b635a9d9c906a70f18cbc43efd60b7bfd61e2bb18fb88b2c7dfb187`）。来源、逐文件摘要与再分发边界见 `Assets/ohos/README.md`；升级 DevEco 后用 `tools/deveco-mirroring/extract.ps1` 重新提取，不要手工改二进制。`libscrcpy_server0.z.so` 作为最后的旧版回退候选保留。
+- `Assets/ohos/device/` 的 15 个文件提取自本机 DevEco Studio 26.0.0.821 的 `plugins/screen-mirroring/lib/hosScrcpy-1.0.20-beta.jar`（JAR SHA-256 `62cba3701b635a9d9c906a70f18cbc43efd60b7bfd61e2bb18fb88b2c7dfb187`）。来源、逐文件摘要与再分发边界见 `Assets/ohos/README.md`；升级 DevEco 后用 `tools/deveco-mirroring/extract.ps1` 重新提取，不要手工改二进制。`libscrcpy_server0.z.so` 是旧版回退候选。
 - 呈现不在本层：本层只交付压缩视频/音频包与控制消息；GPU 呈现与 CPU 位图回退在宿主 `ScreenMirrorGpuPresenter` / `ScreenMirrorViewModel`。
 - csproj 设置 `GenerateDocumentationFile`，公共类型与成员要写中英双语 XML 注释；本项目不启用 `TreatWarningsAsErrors`，但不要用 `NoWarn` 压掉新增警告。
 
@@ -55,4 +55,4 @@ dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --fi
 - 直连控制/转发全链路（`fport` → gRPC/UI Test JSON）只由受 `UOTAN_HDC_MIRROR_DIRECT` 门控的 `OhscrcpyHdcIntegrationTests` 覆盖（接受 connect key 或 `host:port`）。DevEco HDC server 占用目标时直连会被 Comm 的 fail-closed USB 策略拒绝；跳过或失败都不算通过。
 - server 会话的投屏链路（server 路由的 shell 探测、sync 文件推送与 `fport` 回退）不在 `OhscrcpyHdcIntegrationTests` 的覆盖范围内（该测试只覆盖直连端点）；推送、转发与控制没有硬件通过记录，不能写成已验证。
 - scrcpy 的真实投屏结论目前来自模拟器回环端口；设备→客户端剪贴板推送未在硬件上观察到，不能写成已验证。缺少 `Desktop/Assets/scrcpy-server.jar` 时，出厂摘要测试按 `VERIFICATION.md` 的说明跳过而非通过。
-- HDC 视频路径未在本机硬件验证：连接中的 5XM0225C18001159（HarmonyOS 7.0.0.109）加载 `ohos/device` 下 2026 年的采集库时，`dlopen` 因需要更新的 protobuf/gRPC ABI 而失败；模拟器缺 `libgrpc.z.so`。设备库随包分发只代表文件存在，不代表可加载；视频解码/播放与 UI 渲染均未验证，不能写成已验证。
+- HDC 视频路径未在本机硬件验证：采集库需要设备侧匹配的 protobuf/gRPC ABI（模拟器还缺 `libgrpc.z.so`），`dlopen` 失败时视频解码/播放与 UI 渲染都不可用；设备库随包分发只代表文件存在，不代表可加载，不能写成已验证。
