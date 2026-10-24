@@ -388,25 +388,13 @@
     <value>正式版</value>
   </data>
   <data name="About_Channel_Beta" xml:space="preserve">
-    <value>测试版</value>
-  </data>
-  <data name="About_Channel_Canary" xml:space="preserve">
-    <value>金丝雀版</value>
-  </data>
-  <data name="About_Channel_Experimental" xml:space="preserve">
-    <value>实验版</value>
+    <value>Beta 版</value>
   </data>
   <data name="About_Channel_Release_Description" xml:space="preserve">
     <value>面向日常使用的稳定构建。</value>
   </data>
   <data name="About_Channel_Beta_Description" xml:space="preserve">
-    <value>功能已基本完成、仍可能包含缺陷的预览构建。</value>
-  </data>
-  <data name="About_Channel_Canary_Description" xml:space="preserve">
-    <value>取自最新集成状态、先于测试版发布的构建。</value>
-  </data>
-  <data name="About_Channel_Experimental_Description" xml:space="preserve">
-    <value>用于早期验证的不稳定构建，功能可能变更或失效。</value>
+    <value>正式版发布前提供的预览构建。</value>
   </data>
   <data name="About_Commit" xml:space="preserve">
     <value>提交</value>

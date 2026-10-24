@@ -13,22 +13,10 @@ public enum BuildChannel
     Release = 0,
 
     /// <summary>
-    /// A beta preview build.
-    /// <para>测试预览版构建。</para>
+    /// A beta build produced from the latest integration state.
+    /// <para>基于最新集成分支状态的 Beta 构建。</para>
     /// </summary>
     Beta = 1,
-
-    /// <summary>
-    /// A canary build produced from the latest integration state.
-    /// <para>基于最新集成分支状态的金丝雀构建。</para>
-    /// </summary>
-    Canary = 2,
-
-    /// <summary>
-    /// An experimental build that may change or break without notice.
-    /// <para>可能随时变更或失效且不另行通知的实验性构建。</para>
-    /// </summary>
-    Experimental = 3,
 }
 
 /// <summary>
@@ -55,7 +43,7 @@ public static class BuildInfo
     /// Gets the distribution channel of the running build.
     /// <para>获取当前构建的发行通道。</para>
     /// </summary>
-    /// <value>The parsed distribution channel; unknown values resolve to <see cref="BuildChannel.Experimental"/>.<para>解析后的发行通道；未知值回退到 <see cref="BuildChannel.Experimental"/>。</para></value>
+    /// <value>The parsed distribution channel; unknown values resolve to <see cref="BuildChannel.Beta"/>.<para>解析后的发行通道；未知值回退到 <see cref="BuildChannel.Beta"/>。</para></value>
     public static BuildChannel Channel => ParseChannel(BuildInfoData.Channel);
 
     /// <summary>
@@ -81,9 +69,7 @@ public static class BuildInfo
     public static string GetChannelKey(BuildChannel channel) => channel switch
     {
         BuildChannel.Release => "About_Channel_Release",
-        BuildChannel.Beta => "About_Channel_Beta",
-        BuildChannel.Canary => "About_Channel_Canary",
-        _ => "About_Channel_Experimental",
+        _ => "About_Channel_Beta",
     };
 
     /// <summary>
@@ -95,9 +81,7 @@ public static class BuildInfo
     public static string GetChannelDescriptionKey(BuildChannel channel) => channel switch
     {
         BuildChannel.Release => "About_Channel_Release_Description",
-        BuildChannel.Beta => "About_Channel_Beta_Description",
-        BuildChannel.Canary => "About_Channel_Canary_Description",
-        _ => "About_Channel_Experimental_Description",
+        _ => "About_Channel_Beta_Description",
     };
 
     /// <summary>
@@ -135,8 +119,6 @@ public static class BuildInfo
     private static BuildChannel ParseChannel(string channel) => channel switch
     {
         _ when string.Equals(channel, "release", System.StringComparison.OrdinalIgnoreCase) => BuildChannel.Release,
-        _ when string.Equals(channel, "beta", System.StringComparison.OrdinalIgnoreCase) => BuildChannel.Beta,
-        _ when string.Equals(channel, "canary", System.StringComparison.OrdinalIgnoreCase) => BuildChannel.Canary,
-        _ => BuildChannel.Experimental,
+        _ => BuildChannel.Beta,
     };
 }

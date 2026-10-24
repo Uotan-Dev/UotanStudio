@@ -14,33 +14,29 @@ public sealed class BuildInfoTests
     }
 
     [Fact]
-    public void Channel_CompiledBuild_IsOneOfTheFourChannels()
+    public void Channel_CompiledBuild_IsOneOfTheTwoChannels()
     {
         Assert.True(Enum.IsDefined(BuildInfo.Channel));
         Assert.Contains(BuildInfo.ChannelKey, new[]
         {
             "About_Channel_Release",
             "About_Channel_Beta",
-            "About_Channel_Canary",
-            "About_Channel_Experimental",
         });
         Assert.Contains(BuildInfo.ChannelDescriptionKey, new[]
         {
             "About_Channel_Release_Description",
             "About_Channel_Beta_Description",
-            "About_Channel_Canary_Description",
-            "About_Channel_Experimental_Description",
         });
     }
 
     [Fact]
-    public void ChannelKeys_AllFourChannels_AreDistinctAndDescribed()
+    public void ChannelKeys_AllChannels_AreDistinctAndDescribed()
     {
         var channels = Enum.GetValues<BuildChannel>();
 
-        Assert.Equal(4, channels.Length);
-        Assert.Equal(4, channels.Select(BuildInfo.GetChannelKey).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(4, channels.Select(BuildInfo.GetChannelDescriptionKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(2, channels.Length);
+        Assert.Equal(2, channels.Select(BuildInfo.GetChannelKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(2, channels.Select(BuildInfo.GetChannelDescriptionKey).Distinct(StringComparer.Ordinal).Count());
         Assert.All(channels, channel =>
         {
             Assert.StartsWith("About_Channel_", BuildInfo.GetChannelKey(channel), StringComparison.Ordinal);
@@ -79,6 +75,6 @@ public sealed class BuildInfoTests
             StringComparer.Ordinal);
 
         Assert.Matches(new Regex(@"^\d+\.\d+\.\d+$"), properties["VersionPrefix"]);
-        Assert.Contains(properties["VersionChannel"], new[] { "release", "beta", "canary", "experimental" });
+        Assert.Contains(properties["VersionChannel"], new[] { "release", "beta" });
     }
 }

@@ -24,9 +24,9 @@ public partial class AboutDialog : Window
     }
 
     /// <summary>
-    /// Fills the version, the four channel badges and the commit link from the compiled build
+    /// Fills the version, the two channel badges and the commit link from the compiled build
     /// metadata.
-    /// <para>从编译期构建元数据填充版本、四个通道徽标与提交链接。</para>
+    /// <para>从编译期构建元数据填充版本、两个通道徽标与提交链接。</para>
     /// </summary>
     private void ApplyBuildInfo()
     {
@@ -37,8 +37,6 @@ public partial class AboutDialog : Window
         {
             (BuildChannel.Release, ReleaseBadge, ReleaseText),
             (BuildChannel.Beta, BetaBadge, BetaText),
-            (BuildChannel.Canary, CanaryBadge, CanaryText),
-            (BuildChannel.Experimental, ExperimentalBadge, ExperimentalText),
         };
         foreach (var (channel, badge, label) in badges)
         {
@@ -77,9 +75,7 @@ public partial class AboutDialog : Window
     private static Color ChannelColor(BuildChannel channel) => channel switch
     {
         BuildChannel.Release => Color.Parse("#2E7D32"),
-        BuildChannel.Beta => Color.Parse("#1565C0"),
-        BuildChannel.Canary => Color.Parse("#EF6C00"),
-        _ => Color.Parse("#6A1B9A"),
+        _ => Color.Parse("#EF6C00"),
     };
 
     /// <summary>

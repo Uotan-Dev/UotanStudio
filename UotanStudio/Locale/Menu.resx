@@ -390,23 +390,11 @@ Continue creating the project?</value>
   <data name="About_Channel_Beta" xml:space="preserve">
     <value>Beta</value>
   </data>
-  <data name="About_Channel_Canary" xml:space="preserve">
-    <value>Canary</value>
-  </data>
-  <data name="About_Channel_Experimental" xml:space="preserve">
-    <value>Experimental</value>
-  </data>
   <data name="About_Channel_Release_Description" xml:space="preserve">
     <value>Stable build intended for general use.</value>
   </data>
   <data name="About_Channel_Beta_Description" xml:space="preserve">
-    <value>Preview build with feature-complete changes that may still contain defects.</value>
-  </data>
-  <data name="About_Channel_Canary_Description" xml:space="preserve">
-    <value>Build from the latest integration state, updated ahead of beta.</value>
-  </data>
-  <data name="About_Channel_Experimental_Description" xml:space="preserve">
-    <value>Unstable build for early testing; features may change or break.</value>
+    <value>Preview build of the next release, published ahead of the stable release.</value>
   </data>
   <data name="About_Commit" xml:space="preserve">
     <value>Commit</value>

@@ -16,11 +16,9 @@
 
   <!-- Derive the semantic version from Version.props unless CI supplied a complete Version. -->
   <PropertyGroup>
-    <VersionChannel Condition="'$(VersionChannel)' == ''">experimental</VersionChannel>
+    <VersionChannel Condition="'$(VersionChannel)' == ''">beta</VersionChannel>
     <VersionChannel>$([System.String]::Copy('$(VersionChannel)').Trim().ToLowerInvariant())</VersionChannel>
     <_UotanVersionSuffix Condition="'$(VersionChannel)' == 'beta'">-beta</_UotanVersionSuffix>
-    <_UotanVersionSuffix Condition="'$(VersionChannel)' == 'canary'">-canary</_UotanVersionSuffix>
-    <_UotanVersionSuffix Condition="'$(VersionChannel)' == 'experimental'">-experimental</_UotanVersionSuffix>
     <VersionSuffix Condition="'$(VersionSuffix)' == ''">$(_UotanVersionSuffix)</VersionSuffix>
     <Version Condition="'$(Version)' == ''">$(VersionPrefix)$(VersionSuffix)</Version>
   </PropertyGroup>

@@ -46,8 +46,8 @@
       <_UotanCommitShort Condition="'$(_UotanCommitShort)' == ''">$(SourceRevisionId)</_UotanCommitShort>
       <_UotanBuildInfoFile>$(IntermediateOutputPath)UotanBuildInfo.g.cs</_UotanBuildInfoFile>
     </PropertyGroup>
-    <Error Condition="'$(VersionChannel)' != 'release' and '$(VersionChannel)' != 'beta' and '$(VersionChannel)' != 'canary' and '$(VersionChannel)' != 'experimental'"
-           Text="VersionChannel must be one of release, beta, canary or experimental (got '$(VersionChannel)')." />
+    <Error Condition="'$(VersionChannel)' != 'release' and '$(VersionChannel)' != 'beta'"
+           Text="VersionChannel must be release or beta (got '$(VersionChannel)')." />
     <WriteLinesToFile File="$(_UotanBuildInfoFile)"
                       Overwrite="true"
                       WriteOnlyWhenDifferent="true"

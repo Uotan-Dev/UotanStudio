@@ -15,8 +15,6 @@ on:
           - auto
           - release
           - beta
-          - canary
-          - experimental
         default: auto
   push:
     tags:
@@ -71,7 +69,7 @@ jobs:
           file_prefix=$(sed -n 's:.*<VersionPrefix>\([^<]*\)</VersionPrefix>.*:\1:p' Version.props | head -1)
           file_channel=$(sed -n 's:.*<VersionChannel>\([^<]*\)</VersionChannel>.*:\1:p' Version.props | head -1)
           prefix="${file_prefix:-1.0.0}"
-          channel="${file_channel:-canary}"
+          channel="${file_channel:-beta}"
           version=""
 
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
@@ -79,8 +77,6 @@ jobs:
             prefix="${tag%%-*}"
             case "$tag" in
               *-beta*) channel=beta ;;
-              *-canary*) channel=canary ;;
-              *-experimental*) channel=experimental ;;
               *) channel=release ;;
             esac
             version="$tag"
@@ -90,11 +86,11 @@ jobs:
           if [ -n "$input_version" ]; then
             version="${input_version#v}"
             prefix="${version%%-*}"
-            case "$version" in
-              *-beta*) channel=beta ;;
-              *-canary*) channel=canary ;;
-              *-experimental*) channel=experimental ;;
-            esac
+            if [[ "$version" == *-beta* ]]; then
+              channel=beta
+            else
+              channel=release
+            fi
           fi
 
           input_channel="${{ github.event.inputs.channel }}"
