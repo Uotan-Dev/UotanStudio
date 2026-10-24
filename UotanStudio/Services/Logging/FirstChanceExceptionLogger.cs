@@ -4,20 +4,24 @@ using System.Runtime.ExceptionServices;
 namespace UotanStudio.Services.Logging;
 
 /// <summary>
-/// First-chance exception logger: hooks <see cref="AppDomain.FirstChanceException"/> and captures
-/// the debugger-output "exception thrown" notices as global log entries, including the call
-/// path where the exception was thrown.
-/// <para>首次机会异常记录器：挂接 <see cref="AppDomain.FirstChanceException"/>，把调试器输出窗中
-/// 「引发的异常」提示捕获为全局日志条目，包含异常抛出点的调用路径。</para>
+/// First-chance exception logger: hooks <see cref="AppDomain.FirstChanceException"/> and, only when
+/// <c>UOTAN_FIRST_CHANCE_LOG=1</c> is set, records the normally-caught socket, cancellation and timeout
+/// exceptions as throttled Debug-level global log entries that carry the throw-site call path. The hook is
+/// installed by default and stays silent until the switch is set.
+/// <para>首次机会异常记录器：挂接 <see cref="AppDomain.FirstChanceException"/>；仅当设置了
+/// <c>UOTAN_FIRST_CHANCE_LOG=1</c> 时，才把被正常捕获的套接字、取消与超时异常记录为带抛出点调用路径的
+/// Debug 级别全局日志条目，并做节流。钩子默认安装，在设置该开关前保持静默。</para>
 /// </summary>
 public static class FirstChanceExceptionLogger
 {
+    private const string EnableVariable = "UOTAN_FIRST_CHANCE_LOG";
     private const string Source = "Exception";
     private const int ThrottleWindowMs = 5000;
     private const int MaxStackFrames = 10;
     private const int MaxThrottledKeys = 256;
 
     private static volatile bool _installed;
+    private static volatile bool _logging;
     private static readonly Lock InstallLock = new();
     private static readonly Lock ThrottleLock = new();
     private static readonly Dictionary<string, (DateTime WindowStart, int Count)> Throttle = new(StringComparer.Ordinal);
@@ -26,39 +30,68 @@ public static class FirstChanceExceptionLogger
     private static bool _reentrant;
 
     /// <summary>
-    /// Installs the first-chance exception hook. Idempotent; repeated calls do not re-hook.
-    /// <para>安装首次机会异常钩子。幂等；重复调用不会重复挂接。</para>
+    /// Installs the first-chance exception hook and reads the <c>UOTAN_FIRST_CHANCE_LOG</c> switch once.
+    /// Idempotent; repeated calls while installed neither re-hook nor re-read the switch.
+    /// <para>安装首次机会异常钩子并读取一次 <c>UOTAN_FIRST_CHANCE_LOG</c> 开关。幂等；已安装时重复调用既不
+    /// 重复挂接，也不重新读取开关。</para>
     /// </summary>
     public static void Install()
     {
         lock (InstallLock)
         {
-            if (_installed) return;
+            if (_installed)
+            {
+                return;
+            }
+
+            _logging = IsLoggingRequested();
             AppDomain.CurrentDomain.FirstChanceException += OnFirstChanceException;
             _installed = true;
         }
     }
 
     /// <summary>
-    /// Uninstalls the first-chance exception hook.
-    /// <para>卸载首次机会异常钩子。</para>
+    /// Uninstalls the first-chance exception hook and clears the switch cached by <see cref="Install"/>.
+    /// <para>卸载首次机会异常钩子，并清除 <see cref="Install"/> 缓存的开关值。</para>
     /// </summary>
     public static void Uninstall()
     {
         lock (InstallLock)
         {
-            if (!_installed) return;
+            if (!_installed)
+            {
+                return;
+            }
+
             AppDomain.CurrentDomain.FirstChanceException -= OnFirstChanceException;
             _installed = false;
+            _logging = false;
         }
+    }
+
+    /// <summary>
+    /// Reads the opt-in switch: only the literal <c>1</c> enables first-chance logging.
+    /// <para>读取显式开关：只有字面量 <c>1</c> 才启用首次机会异常日志。</para>
+    /// </summary>
+    /// <returns><see langword="true"/> when the switch requests logging.
+    /// <para>开关要求写日志时为 <see langword="true"/>。</para></returns>
+    private static bool IsLoggingRequested()
+    {
+        return string.Equals(Environment.GetEnvironmentVariable(EnableVariable), "1", StringComparison.Ordinal);
     }
 
     private static void OnFirstChanceException(object? sender, FirstChanceExceptionEventArgs e)
     {
-        if (_reentrant) return;
+        if (_reentrant || !_logging)
+        {
+            return;
+        }
 
         var exception = e.Exception;
-        if (exception is not (SocketException or OperationCanceledException or TimeoutException)) return;
+        if (exception is not (SocketException or OperationCanceledException or TimeoutException))
+        {
+            return;
+        }
 
         _reentrant = true;
         try
