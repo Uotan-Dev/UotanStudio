@@ -192,7 +192,20 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
         foreach (var key in stale)
         {
-            _screenMirrorDocuments.Remove(key);
+            if (!_screenMirrorDocuments.Remove(key, out var closed))
+            {
+                continue;
+            }
+
+            try
+            {
+                closed.Cleanup();
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Write(LogLevel.Warn, "Workspace",
+                    $"Stopping closed mirror document '{closed.Id}' failed: {ex.GetType().Name}: {ex.Message}");
+            }
         }
     }
 
@@ -781,7 +794,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void Dispose()
     {
-        _screenMirrorDocuments.Clear();
+        CloseDocumentsForShutdown();
         ProjectExplorer?.Dispose();
         if (_factory is IWorkspaceDockFactory workspaceFactory) workspaceFactory.DisposeTerminal();
         if (_documentDock is not null)
@@ -791,5 +804,79 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
         _subscribedDocumentDock = false;
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Runs every open view's own close logic before the layout goes away: mirror documents stop their mirror link,
+    /// editors release their files and terminals, and every dockable the document registry knows is cleaned once.
+    /// <para>在布局消失之前运行每个已打开视图自身的关闭逻辑：投屏文档停止投屏链路、编辑器释放文件与终端，
+    /// 文档登记表中已知的每个停靠面板都只清理一次。</para>
+    /// </summary>
+    private void CloseDocumentsForShutdown()
+    {
+        var closed = new HashSet<IDockable>();
+        foreach (var document in _screenMirrorDocuments.Values)
+        {
+            if (!closed.Add(document))
+            {
+                continue;
+            }
+
+            try
+            {
+                document.Cleanup();
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Write(LogLevel.Warn, "Workspace",
+                    $"Stopping mirror document '{document.Id}' during shutdown failed: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        _screenMirrorDocuments.Clear();
+
+        foreach (var dockable in EnumerateDockables(Layout))
+        {
+            if (!closed.Add(dockable))
+            {
+                continue;
+            }
+
+            try
+            {
+                DocumentOpenRegistry.ByInstance(dockable)?.Cleanup?.Invoke(dockable);
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Write(LogLevel.Warn, "Workspace",
+                    $"Closing dockable '{dockable.Id}' during shutdown failed: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Walks the dock layout depth first, yielding every dockable below <paramref name="root"/>.
+    /// <para>深度优先遍历停靠布局，产出 <paramref name="root"/> 下的每个停靠面板。</para>
+    /// </summary>
+    /// <param name="root">Layout root to walk. <para>要遍历的布局根。</para></param>
+    /// <returns>Every dockable in the tree, root included. <para>树中的每个停靠面板（含根）。</para></returns>
+    private static IEnumerable<IDockable> EnumerateDockables(IDockable? root)
+    {
+        if (root is null)
+        {
+            yield break;
+        }
+
+        yield return root;
+        if (root is IDock dock && dock.VisibleDockables is { } children)
+        {
+            foreach (var child in children)
+            {
+                foreach (var descendant in EnumerateDockables(child))
+                {
+                    yield return descendant;
+                }
+            }
+        }
     }
 }

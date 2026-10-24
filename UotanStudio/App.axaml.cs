@@ -97,6 +97,9 @@ public partial class App : Application
     {
         UsbLogBridge.Install();
         FirstChanceExceptionLogger.Install();
+        // Last-chance device release for exit paths that never raise the desktop exit event.
+        // 为不触发桌面退出事件的退出路径安装最后一道设备释放。
+        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 
         _ = Task.Run(FileAssociationService.Register);
@@ -230,6 +233,27 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Last-chance device release when the process exits without raising the desktop exit event (unhandled exception,
+    /// crash reporting, console close). Bounded, best effort and a no-op once the normal exit path already released.
+    /// <para>进程未经桌面退出事件而退出（未处理异常、崩溃上报、关闭控制台）时的最后一道设备释放。有界、尽力而为，
+    /// 正常退出路径已释放时为空操作。</para>
+    /// </summary>
+    /// <param name="sender">Event source. <para>事件源。</para></param>
+    /// <param name="e">Event arguments. <para>事件参数。</para></param>
+    private void OnProcessExit(object? sender, EventArgs e)
+    {
+        try
+        {
+            _desktopServices?.ReleaseUsbOccupancy(TimeSpan.FromSeconds(2));
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Lifecycle",
+                $"Device occupancy release during process exit failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
     /// <summary>Releases application-wide monitoring only after desktop shutdown has been accepted.<para>仅在桌面关闭已被接受后释放应用级监视资源。</para></summary>
     /// <param name="sender">The desktop lifetime raising the exit event.<para>引发退出事件的桌面生命周期实例。</para></param>
     /// <param name="e">The exit arguments describing the accepted shutdown.<para>描述已接受关闭操作的退出参数。</para></param>
@@ -237,6 +261,10 @@ public partial class App : Application
     {
         if (sender is IClassicDesktopStyleApplicationLifetime desktop) desktop.Exit -= OnDesktopExit;
         McpExposureService.Instance.Stop();
+        // Close every open view first, so mirror links and their device leases are released before the process ends.
+        // 先关闭每个已打开视图，使投屏链路与其设备租约在进程结束前释放。
+        try { GetDesktopMainViewModel()?.Dispose(); }
+        catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Lifecycle", $"Closing views during shutdown failed: {ex.GetType().Name}: {ex.Message}"); }
         try { _desktopServices?.Dispose(); }
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Lifecycle", ex.Message); }
         finally
