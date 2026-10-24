@@ -228,10 +228,13 @@ public sealed class MirrorSessionFacade : IDisposable
     /// device exists in the bundled <c>ohos/device</c> directory.
     /// <para>随包分发的 <c>ohos/device</c> 目录中没有与已探测设备匹配的采集库或控制代理。</para></exception>
     /// <exception cref="IOException">The probe, the extension push, a daemon start or a forward registration
-    /// failed; daemons started so far are stopped again before the exception is rethrown.
-    /// <para>探测、扩展推送、守护进程启动或转发登记失败；抛出前会停止已经启动的守护进程。</para></exception>
-    /// <exception cref="NotSupportedException">UI Test is missing or too old, or the session exposes no file
-    /// transfer channel. <para>UI Test 缺失或版本过低，或会话没有可用的文件传输通道。</para></exception>
+    /// failed because the target was not ready yet; daemons started so far are stopped again before the exception
+    /// is rethrown, and the message names the group and the next step.
+    /// <para>探测、扩展推送、守护进程启动或转发登记因目标尚未就绪而失败；抛出前会停止已经启动的守护进程，消息中给出
+    /// 失败分组与下一步。</para></exception>
+    /// <exception cref="NotSupportedException">UI Test is missing or too old, the device cannot load the pushed
+    /// capture library, or the session exposes no file transfer channel. Retrying cannot fix these.
+    /// <para>UI Test 缺失或版本过低、设备无法加载推送的采集库，或会话没有可用的文件传输通道；重试无法修复。</para></exception>
     public static ManagedOhscrcpySession StartOhscrcpyOverHdcSession(IHdcDeviceSession session,
         string deviceSerial, OhscrcpyLaunchOptions? options = null, int localForwardPort = 0,
         int connectTimeoutMs = 20_000, IAsyncDisposable? lease = null, Action<string>? logSink = null,

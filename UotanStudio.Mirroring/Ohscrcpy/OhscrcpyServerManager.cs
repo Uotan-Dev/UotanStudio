@@ -21,6 +21,8 @@ internal static partial class OhscrcpyServerManager
     private const int ExtensionSettleMilliseconds = 400;
     private const int ProbeAttempts = 3;
     private const int ProbeRetryDelayMs = 250;
+    private const int RemoteFileVisibleBudgetMs = 2_000;
+    private const int RemoteFileVisiblePollMs = 100;
     private const int DaemonLogTailBytes = 3000;
     private const int MaximumDiagnosticLength = 3000;
     private const int MaximumProbeOutputLength = 8192;
@@ -164,10 +166,24 @@ internal static partial class OhscrcpyServerManager
         {
             RestoreControlAgent(session, backupPath, logSink);
             throw new IOException(
-                $"Pushing the UI Test control agent {agentFileName} to {RemoteControlAgentPath} failed: "
+                OhscrcpyFailure.NotReadyPrefix
+                + $"the UI Test control agent {agentFileName} did not reach {RemoteControlAgentPath}: "
                 + $"{error.Message}. "
-                + $"推送 UI Test 控制代理 {agentFileName} 到 {RemoteControlAgentPath} 失败：{error.Message}。",
+                + OhscrcpyFailure.NotReadyPrefix
+                + $"UI Test 控制代理 {agentFileName} 没有传到 {RemoteControlAgentPath}：{error.Message}。",
                 error);
+        }
+
+        if (!WaitForRemoteFile(session, RemoteControlAgentPath, cancellationToken))
+        {
+            RestoreControlAgent(session, backupPath, logSink);
+            throw new IOException(
+                OhscrcpyFailure.NotReadyPrefix
+                + $"the UI Test control agent reached {RemoteControlAgentPath} but the device never listed it "
+                + $"within {RemoteFileVisibleBudgetMs} ms; the upload was not committed. Retry mirroring. "
+                + OhscrcpyFailure.NotReadyPrefix
+                + $"UI Test 控制代理已传到 {RemoteControlAgentPath}，但设备在 {RemoteFileVisibleBudgetMs} ms 内始终看不到"
+                + "该文件，上传未落盘。请重新开始投屏。");
         }
 
         logSink?.Invoke(
@@ -239,10 +255,14 @@ internal static partial class OhscrcpyServerManager
     /// accepted capture ranges. <para><paramref name="options"/> 的取值超出接受的采集范围。</para></exception>
     /// <exception cref="FileNotFoundException">No matching capture library exists in
     /// <see cref="RuntimeDirectory"/>. <para><see cref="RuntimeDirectory"/> 中没有匹配的采集库。</para></exception>
-    /// <exception cref="IOException">Every candidate failed to start; the message carries the last device log.
-    /// <para>所有候选都未能启动；消息中包含最后的设备日志。</para></exception>
-    /// <exception cref="NotSupportedException">The session exposes no sync (file transfer) channel.
-    /// <para>会话没有可用的 sync（文件传输）通道。</para></exception>
+    /// <exception cref="IOException">No candidate stayed running, for example because the device was still
+    /// starting up; the message carries the last device log and the start may be retried.
+    /// <para>没有任何候选保持运行（例如设备仍在启动）；消息中包含最后的设备日志，可以重试启动。</para></exception>
+    /// <exception cref="NotSupportedException">The session exposes no sync (file transfer) channel, or the
+    /// device could not load any pushed capture library because its dynamic dependencies do not match this system
+    /// build, which retrying cannot fix.
+    /// <para>会话没有可用的 sync（文件传输）通道，或设备因动态依赖与该系统版本不匹配而无法加载任何推送的采集库；
+    /// 后者重试无济于事。</para></exception>
     internal static VideoDaemonHandle StartVideoDaemon(
         IHdcDeviceSession session, UiTestDeviceInfo device, OhscrcpyLaunchOptions options,
         Action<string>? logSink, CancellationToken cancellationToken = default)
@@ -278,6 +298,17 @@ internal static partial class OhscrcpyServerManager
             {
                 logSink?.Invoke($"Deploying {libraryName}. 正在部署 {libraryName}。");
                 sync.Send(library, remotePath);
+                if (!WaitForRemoteFile(session, remotePath, cancellationToken))
+                {
+                    throw new IOException(
+                        OhscrcpyFailure.NotReadyPrefix
+                        + $"{libraryName} reached {remotePath} but the device never listed it within "
+                        + $"{RemoteFileVisibleBudgetMs} ms; the upload was not committed. Retry mirroring. "
+                        + OhscrcpyFailure.NotReadyPrefix
+                        + $"{libraryName} 已传到 {remotePath}，但设备在 {RemoteFileVisibleBudgetMs} ms 内始终看不到该文件，"
+                        + "上传未落盘。请重新开始投屏。");
+                }
+
                 OhscrcpyShell.Run(session, BuildVideoStartCommand(extensionName, options, remoteLogPath));
                 var owned = WaitForExtension(session, extensionMarker, cancellationToken);
                 if (owned.Count > 0 && ExtensionSurvivesSettle(session, extensionMarker, owned, cancellationToken))
@@ -653,6 +684,39 @@ internal static partial class OhscrcpyServerManager
             {
                 return [];
             }
+        }
+    }
+
+    /// <summary>
+    /// Waits until a just-pushed file is visible to the device shell, so a start command never runs before the upload
+    /// is committed on a slow target. <para>等待刚推送的文件对设备 shell 可见，使启动命令不会在慢速目标尚未提交上传时执行。</para>
+    /// </summary>
+    /// <param name="session">Connected HDC session. <para>已连接的 HDC 会话。</para></param>
+    /// <param name="remotePath">Absolute device path of the pushed file.
+    /// <para>已推送文件的设备绝对路径。</para></param>
+    /// <param name="cancellationToken">Cancels the poll between attempts.
+    /// <para>在两次轮询之间取消。</para></param>
+    /// <returns><see langword="true"/> when the file became visible within the budget.
+    /// <para>文件在预算内变得可见时为 <see langword="true"/>。</para></returns>
+    private static bool WaitForRemoteFile(
+        IHdcDeviceSession session, string remotePath, CancellationToken cancellationToken)
+    {
+        var deadline = Environment.TickCount64 + RemoteFileVisibleBudgetMs;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var output = OhscrcpyShell.Run(session, $"if [ -f {remotePath} ]; then echo visible; fi");
+            if (output.Contains("visible", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (Environment.TickCount64 >= deadline)
+            {
+                return false;
+            }
+
+            Thread.Sleep(RemoteFileVisiblePollMs);
         }
     }
 
