@@ -52,7 +52,7 @@ dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --fi
 ```
 
 - 单元验证范围：gRPC 帧与 `ReplyMessage` 解析、SPS 几何（`UotanStudio.Tests.Media.OhscrcpyProtocolTests`）；控制代理/采集库选择与设备启动命令构造（`OhscrcpyServerManagerTests`）；客户端 gRPC 解复用、视频元数据与控制分发（`OhscrcpyClientTests`）；scrcpy 控制消息到 UI Test JSON/uinput 的映射（`ScrcpyToOhscrcpyControlAdapterTests`）；facade 参数、端口与采集参数校验（`MirrorSessionFacadeTests`）；HDC 会话路由决策（`UotanStudio.Tests.Devices.HdcSessionRoutingTests`，覆盖 server 拥有目标、无 server 与 ServerOnly 拒绝直连）。
-- 直连控制/转发全链路（`fport` → gRPC/UI Test JSON）没有本轮实测：只能靠受 `UOTAN_HDC_MIRROR_DIRECT` 门控的 `OhscrcpyHdcIntegrationTests` 覆盖（接受 connect key 或 `host:port`）。本轮对 `5XM0225C18001159` 的尝试因 DevEco HDC server 占用并被 Comm fail-closed USB 策略拒绝直连而未通过；停止 HDC server 或在无 server 主机上重跑前，跳过/失败都不算通过。
-- server 会话的投屏链路（server 路由的 shell 探测、sync 文件推送与 `fport` 回退）同样没有实测：`OhscrcpyHdcIntegrationTests` 只覆盖直连端点，本机有 hdc server 时的推送、转发与控制尚未在硬件上跑通，不能写成已验证。
+- 直连控制/转发全链路（`fport` → gRPC/UI Test JSON）只由受 `UOTAN_HDC_MIRROR_DIRECT` 门控的 `OhscrcpyHdcIntegrationTests` 覆盖（接受 connect key 或 `host:port`）。DevEco HDC server 占用目标时直连会被 Comm 的 fail-closed USB 策略拒绝；跳过或失败都不算通过。
+- server 会话的投屏链路（server 路由的 shell 探测、sync 文件推送与 `fport` 回退）不在 `OhscrcpyHdcIntegrationTests` 的覆盖范围内（该测试只覆盖直连端点）；推送、转发与控制没有硬件通过记录，不能写成已验证。
 - scrcpy 的真实投屏结论目前来自模拟器回环端口；设备→客户端剪贴板推送未在硬件上观察到，不能写成已验证。缺少 `Desktop/Assets/scrcpy-server.jar` 时，出厂摘要测试按 `VERIFICATION.md` 的说明跳过而非通过。
 - HDC 视频路径未在本机硬件验证：连接中的 5XM0225C18001159（HarmonyOS 7.0.0.109）加载 `ohos/device` 下 2026 年的采集库时，`dlopen` 因需要更新的 protobuf/gRPC ABI 而失败；模拟器缺 `libgrpc.z.so`。设备库随包分发只代表文件存在，不代表可加载；视频解码/播放与 UI 渲染均未验证，不能写成已验证。

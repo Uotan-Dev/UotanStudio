@@ -15,7 +15,7 @@
 - 公共契约以 `CompressionService`、`Files/CompressionFile`、`CompressionFormats`、`Detection/CompressionDetector` 为准。不要在调用方复制格式名称、别名、扩展名、能力判断或魔数探测；`CompressionFormats` 是唯一来源。
 - `CreateCompressionStream` / `CreateDecompressionStream` 返回增量流，不施加输出上限，释放时只写容器尾部、不关闭调用方流。需要一次性解压并限制展开大小时使用带 `long` 上限的 `Decompress` 重载。
 - 文件级操作必须保留取消、进度、解压大小上限与临时文件原子发布；不要为了简化而把整文件读入内存。失败时保留原目标内容。
-- `Codecs/Lz4/Lz4BlockCodec`、`Codecs/Zstd/ZstdBlockCodec`、`Codecs/Lz4/Lz4DestinationCodec`、`Codecs/Lzo/Lzo1x` 与 `Codecs/Deflate/PuffDeflateCodec` 是给固件文件系统/Payload/差分使用的格式域原语，因 `UotanStudio.Firmware` 需要直接调用而保持 public；它们不是宿主可用的通用压缩门面，宿主仍应走 `CompressionService`/`CompressionFile`。本库不再对任何生产项目开放 `InternalsVisibleTo`。
+- `Codecs/Lz4/Lz4BlockCodec`、`Codecs/Zstd/ZstdBlockCodec`、`Codecs/Lz4/Lz4DestinationCodec`、`Codecs/Lzo/Lzo1x` 与 `Codecs/Deflate/PuffDeflateCodec` 是给固件文件系统/Payload/差分使用的格式域原语，因 `UotanStudio.Firmware` 需要直接调用而保持 public；它们不是宿主可用的通用压缩门面，宿主仍应走 `CompressionService`/`CompressionFile`。本库不对任何生产项目开放 `InternalsVisibleTo`。
 - 现有格式入口的能力差异（哪些格式只有整块入口、哪些返回 `NotSupportedException`）是当前契约；改动前先读 README 的“压缩能力入口”，不要用“补一个重载”掩盖。
 
 ## 文档与验证

@@ -10,8 +10,8 @@
 - 新增 XAML 使用当前 Avalonia API 与编译绑定（`AvaloniaUseCompiledBindingsByDefault=true`），避免已标记 obsolete 的属性，不要退回反射绑定。`IsRidAgnostic=false` 用于保留 Comm 原生资产的 RID，`AllowUnsafeBlocks` 用于 `FileAssociationService` 的源生成 `LibraryImport`，都不要顺手删。
 - 跨 VM/View 通知走 `WeakReferenceMessenger` + `Messages/` 记录；App 注册，退出时 `UnregisterAll`。`async void` 只用于消息处理，并经 `RunMainRequestAsync` 记录异常。`AppFeatures.AiAssistantEnabled` 恒为 `false`，不要启用或删除占位。
 - 容器入口：`App.Initialize` 用 `ServiceRegistration.Register` + `ServiceRegistration.BuildProvider` 建立 `Microsoft.Extensions.DependencyInjection` 容器，并交给 `ServiceHub` 保存；`App.Services` 暴露该容器，容器未建立时为 null。所有注册必须使用显式工厂，禁止反射式 DI、程序集扫描、`ActivatorUtilities` 与无工厂的 `AddSingleton<T>()`；这是裁剪与 NativeAOT 的注册契约，发布验证仍按根 `AGENTS.md` 的命令执行。
-- 静态门面统一“容器优先、测试回退”：`LanguageService.Instance`、`LogService.Instance`、`ProjectOperationsService.Instance`、`SettingsPersistenceService.Instance` 先查 `ServiceHub`，容器未初始化或正在构建该注册时返回原惰性默认实例；因此不启动容器的测试仍可直接运行，注册工厂也不会递归。
-- `ShellComposition.CreateAsync` 在 `App.Services` 可用时从容器解析 `MenuViewModel`/`NodeEditorViewModel`/`SettingsViewModel`/`WorkspaceViewModel`，容器不可用时保持原来的手工构造；`ShellComposition.Create(ProjectOperationsService)` 仍按传入服务显式装配，供测试与基准使用。
+- 静态门面统一“容器优先、测试回退”：`LanguageService.Instance`、`LogService.Instance`、`ProjectOperationsService.Instance`、`SettingsPersistenceService.Instance` 先查 `ServiceHub`，容器未初始化或正在构建该注册时返回惰性默认实例；不启动容器的测试可直接运行，注册工厂不会递归。
+- `ShellComposition.CreateAsync` 在 `App.Services` 可用时从容器解析 `MenuViewModel`/`NodeEditorViewModel`/`SettingsViewModel`/`WorkspaceViewModel`，容器不可用时按手工构造装配；`ShellComposition.Create(ProjectOperationsService)` 仍按传入服务显式装配，供测试与基准使用。
 
 ## 分层与依赖
 

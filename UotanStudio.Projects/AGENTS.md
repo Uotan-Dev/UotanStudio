@@ -7,7 +7,7 @@
 - 本项目只引用 `UotanStudio.Hash` 与 `UotanStudio.Compress`（ZIP 容器经 `Compress.Zip.ZipContainer`），不依赖 Avalonia、Dock、Nodify、固件处理器、Comm 或桌面全局状态；启用 NativeAOT 兼容分析。新增依赖前先确认它不会把宿主 UI 或固件格式拉进来。
 - `VisualPlugins/` 的清单、节点/连接/资源上限与资源 SHA-256 也属于持久化契约；README 未覆盖这部分，改动前读该目录与相关测试。
 - 模型与服务使用 `UotanStudio.Projects` 命名空间，程序集为同名 `UotanStudio.Projects`。本项目不提供类型转发；调用方直接引用本库并按 `UotanStudio.Projects` 解析类型，`UotanStudio.Services.Projects` 只是宿主的应用服务命名空间。
-- 桌面兼容门面是宿主 `ProjectOperationsService`。不要在本库新增菜单项或改变编辑菜单的撤销目标；桌面流程、Dock 与文档关闭归宿主。宿主需要直接使用的 `VisualPluginPackage.BundleRoot`/`BundlePath`、`VisualPluginAsset.Snapshot`、`VisualPluginBundle.EnumerateScopes`、`ProjectDiagnostics.Write`、`WorkflowJsonContext`、`AtomicJsonFile`、`ProjectSession.CurrentProjectPath` 等成员保持 public；本库不再向宿主开放 `InternalsVisibleTo`。
+- 桌面兼容门面是宿主 `ProjectOperationsService`。不要在本库新增菜单项或改变编辑菜单的撤销目标；桌面流程、Dock 与文档关闭归宿主。宿主需要直接使用的 `VisualPluginPackage.BundleRoot`/`BundlePath`、`VisualPluginAsset.Snapshot`、`VisualPluginBundle.EnumerateScopes`、`ProjectDiagnostics.Write`、`WorkflowJsonContext`、`AtomicJsonFile`、`ProjectSession.CurrentProjectPath` 等成员保持 public；本库不向宿主开放 `InternalsVisibleTo`。
 - csproj 设置 `GenerateDocumentationFile`，公共类型与成员要写中英双语 XML 注释；本项目不启用 `TreatWarningsAsErrors`，但不得用 `NoWarn` 隐藏新的文档或空引用警告。
 
 ## 持久化契约

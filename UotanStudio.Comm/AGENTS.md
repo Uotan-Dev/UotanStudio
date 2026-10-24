@@ -27,7 +27,7 @@
 
 ## 文档与验证
 
-- 本库设置 `GenerateDocumentationFile`、`TreatWarningsAsErrors` 与 `AllowUnsafeBlocks`；公共类型和成员必须有中英双语 XML 注释。`IsRidAgnostic=false` 保留宿主集成的 RID 传播；宿主只经公共契约消费本库，本库不再向宿主或任何生产项目开放 `InternalsVisibleTo`，只保留对 `UotanStudio.Tests` 与 `UotanStudio.Benchmarks` 的测试授权。
+- 本库设置 `GenerateDocumentationFile`、`TreatWarningsAsErrors` 与 `AllowUnsafeBlocks`；公共类型和成员必须有中英双语 XML 注释。`IsRidAgnostic=false` 保留宿主集成的 RID 传播；宿主只经公共契约消费本库，本库不向宿主或任何生产项目开放 `InternalsVisibleTo`，只保留对 `UotanStudio.Tests` 与 `UotanStudio.Benchmarks` 的测试授权。
 - 真实设备测试优先只读；重启、刷写、提权、安装、卸载、清日志或清数据只在用户明确要求且已隔离时执行。缺少环境变量或设备时跳过并写明原因，跳过不等于通过。
 - 定向验证：
 
