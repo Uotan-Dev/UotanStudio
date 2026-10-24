@@ -52,7 +52,10 @@ public sealed class HdcMirrorStartGateTests
     [Fact]
     public void TryEnterHdcStartGate_BlankKey_IsRejected()
     {
-        Assert.Throws<ArgumentException>(() => DeviceMonitorService.TryEnterHdcStartGate(" ", 0));
+        Assert.Throws<ArgumentException>(() =>
+        {
+            _ = DeviceMonitorService.TryEnterHdcStartGate(" ", 0);
+        });
         Assert.Throws<ArgumentException>(() => DeviceMonitorService.ExitHdcStartGate(" "));
     }
 }
