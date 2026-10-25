@@ -1,0 +1,96 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dock="using:Dock.Avalonia.Controls"
+        xmlns:themes="using:UotanStudio.Themes">
+    <!-- Document tab strip styles: default single row (32px), mouse wheel down expands to multiple rows,
+         mouse wheel up collapses to a single row, and indicator bar aligns flush with document top divider. -->
+    <!-- 文档标签栏样式：默认单行显示（32px），鼠标滚轮向下滚动展开为多行，
+         滚轮向上滚动收起为单行，并消除指示条与文档顶部水平分割线之间的空隙。 -->
+    <Style Selector="dock|DocumentTabStrip">
+        <Setter Property="themes:DocumentTabStripWheelHandler.EnableWheelExpand" Value="True" />
+        <Setter Property="MouseWheelScrollOrientation" Value="Vertical" />
+        <Setter Property="Template">
+            <ControlTemplate TargetType="dock:DocumentTabStrip">
+                <Grid Background="{TemplateBinding Background}" ClipToBounds="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <ContentPresenter Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
+                                      Content="{TemplateBinding TopContent}"
+                                      ContentTemplate="{TemplateBinding TopContentTemplate}" />
+                    <ContentPresenter Grid.Row="1" Grid.Column="0"
+                                      Content="{TemplateBinding LeftContent}"
+                                      ContentTemplate="{TemplateBinding LeftContentTemplate}" />
+                    <ContentPresenter Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                      Content="{TemplateBinding BottomContent}"
+                                      ContentTemplate="{TemplateBinding BottomContentTemplate}" />
+                    <ContentPresenter Grid.Row="1" Grid.Column="2"
+                                      Content="{TemplateBinding RightContent}"
+                                      ContentTemplate="{TemplateBinding RightContentTemplate}" />
+                    <DockPanel Grid.Row="1" Grid.Column="1">
+                        <Panel Name="PART_Panel" VerticalAlignment="Stretch">
+                            <ScrollViewer Name="PART_ScrollViewer"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Hidden"
+                                          Padding="0"
+                                          Margin="0"
+                                          VerticalAlignment="Bottom"
+                                          VerticalContentAlignment="Bottom">
+                                <ItemsPresenter Name="PART_ItemsPresenter"
+                                                VerticalAlignment="Bottom"
+                                                HorizontalAlignment="Left"
+                                                ItemsPanel="{TemplateBinding ItemsPanel}" />
+                            </ScrollViewer>
+                            <Border Name="PART_BorderFill" IsHitTestVisible="False" />
+                            <ContentControl Name="PART_CreateButtonHost" IsHitTestVisible="False" />
+                            <Panel Name="PART_TrailingFill" IsHitTestVisible="False" />
+                        </Panel>
+                    </DockPanel>
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip[Orientation=Horizontal]">
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="dock|DocumentTabStrip[Orientation=Vertical]">
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Orientation="Vertical" />
+            </ItemsPanelTemplate>
+        </Setter>
+    </Style>
+
+    <!-- 默认单行状态：最大高度限制为单行（32px），必须指定 [Orientation=Horizontal] 以精确覆盖 Semi 默认样式 -->
+    <!-- Default single-row state: max height capped at 1 row (32px), with [Orientation=Horizontal] to override Semi theme. -->
+    <Style Selector="dock|DocumentTabStrip[Orientation=Horizontal] /template/ ScrollViewer#PART_ScrollViewer">
+        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
+        <Setter Property="MaxHeight" Value="{DynamicResource DocumentTabStripMinHeight}" />
+    </Style>
+
+    <!-- 滚轮向下滚动展开的多行状态：解除单行高度限制（最大 500px），展示所有折行标签 -->
+    <!-- Expanded multi-row state on wheel down: unconstrained max height (500px) displaying all wrapped rows. -->
+    <Style Selector="dock|DocumentTabStrip[Orientation=Horizontal].expanded /template/ ScrollViewer#PART_ScrollViewer">
+        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="MaxHeight" Value="500" />
+    </Style>
+
+    <Style Selector="dock|DocumentTabStripItem">
+        <Setter Property="MinHeight" Value="{DynamicResource DocumentTabStripMinHeight}" />
+    </Style>
+</Styles>
