@@ -49,7 +49,7 @@ public sealed class OhscrcpyHdcIntegrationTests
                 connectKey = devices[0].Serial;
             }
 
-            var info = OhscrcpyServerManager.Probe(session);
+            var info = OhscrcpyServerManager.Probe(session, TestContext.Current.CancellationToken);
             Assert.True(
                 info.UiTestVersion >= OhscrcpyConstants.MinimumUiTestVersion,
                 $"UI Test {info.UiTestVersion} is older than the required {OhscrcpyConstants.MinimumUiTestVersion}.");
@@ -57,7 +57,8 @@ public sealed class OhscrcpyHdcIntegrationTests
                 string.IsNullOrWhiteSpace(info.Architecture),
                 "The device did not report a CPU architecture.");
 
-            var daemon = OhscrcpyServerManager.EnsureControlDaemon(session, info, _ => { });
+            var daemon = OhscrcpyServerManager.EnsureControlDaemon(
+                session, info, _ => { }, TestContext.Current.CancellationToken);
             try
             {
                 using var tunnel = new HdcForwardTunnel(

@@ -110,7 +110,8 @@ public sealed class MirrorSessionFacadeTests
     public void StartOhscrcpyOverHdcSession_NullSession_ThrowsArgumentNullException()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            MirrorSessionFacade.StartOhscrcpyOverHdcSession(null!, "5XM0225C18001159"));
+            MirrorSessionFacade.StartOhscrcpyOverHdcSession(
+                null!, "5XM0225C18001159", cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -119,7 +120,8 @@ public sealed class MirrorSessionFacadeTests
         using var session = new StubHdcSession();
 
         Assert.Throws<ArgumentException>(() =>
-            MirrorSessionFacade.StartOhscrcpyOverHdcSession(session, " "));
+            MirrorSessionFacade.StartOhscrcpyOverHdcSession(
+                session, " ", cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -128,7 +130,8 @@ public sealed class MirrorSessionFacadeTests
         using var session = new StubHdcSession();
 
         var error = Assert.Throws<ArgumentException>(() =>
-            MirrorSessionFacade.StartOhscrcpyOverHdcSession(session, "5XM0225C18001159"));
+            MirrorSessionFacade.StartOhscrcpyOverHdcSession(
+                session, "5XM0225C18001159", cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("session", error.ParamName);
     }
@@ -140,7 +143,8 @@ public sealed class MirrorSessionFacadeTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             MirrorSessionFacade.StartOhscrcpyOverHdcSession(
-                session, "5XM0225C18001159", localForwardPort: 70000));
+                session, "5XM0225C18001159", localForwardPort: 70000,
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -150,7 +154,8 @@ public sealed class MirrorSessionFacadeTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             MirrorSessionFacade.StartOhscrcpyOverHdcSession(
-                session, "5XM0225C18001159", new OhscrcpyLaunchOptions(FrameRate: 0)));
+                session, "5XM0225C18001159", new OhscrcpyLaunchOptions(FrameRate: 0),
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private sealed class StubHdcSession : IHdcDeviceSession

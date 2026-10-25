@@ -67,7 +67,7 @@ public sealed class FirstChanceExceptionLoggerTests : IDisposable
 
             Assert.Empty(FindEntries("default-switch-probe"));
             Assert.Empty(FindEntries("SocketException"));
-            Assert.Empty(_entries.Where(e => e.Source == "Exception"));
+            Assert.DoesNotContain(_entries, e => e.Source == "Exception");
         }
         finally
         {
@@ -145,7 +145,7 @@ public sealed class FirstChanceExceptionLoggerTests : IDisposable
             try { throw new TimeoutException("idempotent-install-probe"); }
             catch (TimeoutException) { }
 
-            Assert.Equal(1, FindEntries("idempotent-install-probe").Count);
+            Assert.Single(FindEntries("idempotent-install-probe"));
         }
         finally
         {
@@ -200,8 +200,8 @@ public sealed class FirstChanceExceptionLoggerTests : IDisposable
             }
 
             var throttledEntries = FindEntries("throttle-summary-probe");
-            Assert.Equal(1, throttledEntries.Count);
-            Assert.Empty(throttledEntries.Where(e => e.Message.Contains("repeated", StringComparison.Ordinal)));
+            Assert.Single(throttledEntries);
+            Assert.DoesNotContain(throttledEntries, e => e.Message.Contains("repeated", StringComparison.Ordinal));
 
             await Task.Delay(ThrottleSettleMilliseconds, TestContext.Current.CancellationToken);
 
@@ -212,7 +212,7 @@ public sealed class FirstChanceExceptionLoggerTests : IDisposable
             var fullEntries = probeEntries.Where(e => !e.Message.Contains("repeated", StringComparison.Ordinal)).ToList();
             var summaryEntries = probeEntries.Where(e => e.Message.Contains("repeated", StringComparison.Ordinal)).ToList();
             Assert.Equal(2, fullEntries.Count);
-            Assert.Equal(1, summaryEntries.Count);
+            Assert.Single(summaryEntries);
             Assert.Contains("repeated 4 more times", summaryEntries[0].Message, StringComparison.Ordinal);
             Assert.Equal(LogLevel.Debug, summaryEntries[0].Level);
         }

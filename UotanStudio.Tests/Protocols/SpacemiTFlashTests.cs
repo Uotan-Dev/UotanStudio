@@ -213,7 +213,10 @@ public sealed class SpacemiTFlashTests : IDisposable
         var flasher = new SpacemiTFlasher(package, new SpacemiTFlashOptions());
 
         Assert.Throws<InvalidOperationException>(() =>
-            flasher.Execute(new FastbootSession(new ThrowingTransport()), _ => new FastbootSession(new ThrowingTransport())));
+            flasher.Execute(
+                new FastbootSession(new ThrowingTransport()),
+                _ => new FastbootSession(new ThrowingTransport()),
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private sealed class ThrowingTransport : ICommTransport

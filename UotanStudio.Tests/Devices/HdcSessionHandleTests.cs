@@ -31,12 +31,12 @@ public sealed class HdcSessionHandleTests
     }
 
     [Fact]
-    public void Dispose_AfterDisposeAsync_DoesNotReleaseTwice()
+    public async Task Dispose_AfterDisposeAsync_DoesNotReleaseTwice()
     {
         var releases = 0;
         var handle = HdcSessionHandle.ForDirect(() => releases++);
 
-        handle.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        await handle.DisposeAsync();
         handle.Dispose();
 
         Assert.Equal(1, releases);
