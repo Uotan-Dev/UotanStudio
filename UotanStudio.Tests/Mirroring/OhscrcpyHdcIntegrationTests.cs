@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
-using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Transports.Tcp;
 using UotanStudio.Mirroring;

@@ -1,6 +1,5 @@
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices;
-using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Transports.Tcp;

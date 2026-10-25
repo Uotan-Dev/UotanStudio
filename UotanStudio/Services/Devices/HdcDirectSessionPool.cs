@@ -1,4 +1,3 @@
-using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;

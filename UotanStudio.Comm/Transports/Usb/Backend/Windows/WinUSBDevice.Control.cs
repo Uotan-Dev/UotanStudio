@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Comm.Transports.Usb.Backend;
 using static UotanStudio.Comm.Transports.Usb.Backend.Windows.Win32API;
 using static UotanStudio.Comm.Transports.Usb.Backend.Windows.WinUSBAPI;
 
