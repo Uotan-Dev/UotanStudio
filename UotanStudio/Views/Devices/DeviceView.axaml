@@ -99,7 +99,7 @@
                           HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                 <Grid x:Name="DeviceToolbarGrid" ColumnDefinitions="*,Auto"
                       RowDefinitions="Auto,Auto" ColumnSpacing="16" RowSpacing="6">
-                    <StackPanel x:Name="DeviceActionsPanel" Orientation="Horizontal" VerticalAlignment="Top">
+                    <StackPanel x:Name="DeviceActionsPanel" Orientation="Horizontal" VerticalAlignment="Top" Spacing="6">
                         <Button x:Name="DisconnectDeviceButton" Classes="DeviceIconButton"
                                 Command="{Binding DisconnectCommand}"
                                 ToolTip.Tip="{DynamicResource Device_Disconnect}">
@@ -155,19 +155,6 @@
                                 Command="{Binding ScreenMirrorCommand}"
                                 ToolTip.Tip="{DynamicResource Device_ScreenMirror}">
                             <avalonia:Cast Width="16" Height="16" />
-                        </Button>
-                        <Button Classes="DeviceActionButton" Content="HDC"
-                                IsVisible="{Binding SelectedDevice.IsHdc, FallbackValue=False}">
-                            <Button.Flyout>
-                                <MenuFlyout>
-                                    <MenuItem Header="{DynamicResource Device_HdcSend}" Command="{Binding HdcOperationCommand}" CommandParameter="Send" />
-                                    <MenuItem Header="{DynamicResource Device_HdcReceive}" Command="{Binding HdcOperationCommand}" CommandParameter="Receive" />
-                                    <MenuItem Header="{DynamicResource Device_HdcInstall}" Command="{Binding HdcOperationCommand}" CommandParameter="Install" />
-                                    <MenuItem Header="{DynamicResource Device_HdcUninstall}" Command="{Binding HdcOperationCommand}" CommandParameter="Uninstall" />
-                                    <Separator />
-                                    <MenuItem Header="{DynamicResource Device_HdcCancel}" Command="{Binding HdcOperationCancelCommand}" />
-                                </MenuFlyout>
-                            </Button.Flyout>
                         </Button>
                     </StackPanel>
                     <TextBlock x:Name="DeviceStatusText" Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding StatusText}"
@@ -300,28 +287,29 @@
                                                        VerticalAlignment="Center"
                                                        ToolTip.Tip="{Binding ListTitle}" />
                                             <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4">
-                                                <Border Classes="ModeChip" Background="#1B5E20"
+                                                <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
                                                         IsVisible="{Binding HasSystemInfo}">
-                                                    <TextBlock Text="{Binding Mode}" FontSize="10" Foreground="White" />
+                                                    <TextBlock Text="{Binding Mode}" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
                                                 </Border>
-                                                <Border Classes="ModeChip" Background="#0D47A1"
+                                                <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
                                                         IsVisible="{Binding IsFastboot}">
-                                                    <TextBlock Text="{Binding FastbootBadge}" FontSize="10" Foreground="White" />
+                                                    <TextBlock Text="{Binding FastbootBadge}" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
                                                 </Border>
-                                                <Border Classes="ModeChip" Background="#E65100"
+                                                <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
                                                         IsVisible="{Binding IsEdl}">
-                                                    <TextBlock Text="{Binding EdlBadge}" FontSize="10" Foreground="White" />
+                                                    <TextBlock Text="{Binding EdlBadge}" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
                                                 </Border>
-                                                <Border Classes="ModeChip" Background="#4A148C"
+                                                <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
                                                         IsVisible="{Binding IsRkdl}">
-                                                    <TextBlock Text="RKDL" FontSize="10" Foreground="White" />
+                                                    <TextBlock Text="RKDL" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
                                                 </Border>
                                                 <!-- 链接端口/传输类型 -->
                                                 <Border Classes="ModeChip"
-                                                        Background="{StaticResource DeviceCardBackgroundBrush}"
-                                                        BorderBrush="{StaticResource DeviceCardBorderBrush}"
+                                                        Background="{DynamicResource SemiColorPrimaryLight}"
+                                                        BorderBrush="{DynamicResource SemiColorPrimaryPointerover}"
                                                         BorderThickness="1">
-                                                    <TextBlock Text="{Binding Transport}" FontSize="10" />
+                                                    <TextBlock Text="{Binding Transport}" FontSize="10"
+                                                               Foreground="{DynamicResource SemiColorPrimaryPointerover}" />
                                                 </Border>
                                             </StackPanel>
                                         </Grid>
@@ -371,36 +359,44 @@
 
                         <!-- 头部：名称 + 徽标 -->
                         <Border Classes="InfoCard">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayName}" />
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Border Classes="ModeChip" Background="#1B5E20"
-                                            IsVisible="{Binding HasSystemInfo}">
-                                        <TextBlock Text="{Binding Mode}" FontSize="11" Foreground="White" />
-                                    </Border>
-                                    <Border Classes="ModeChip" Background="#0D47A1"
-                                            IsVisible="{Binding IsFastboot}">
-                                        <TextBlock Text="{Binding FastbootBadge}" FontSize="11" Foreground="White" />
-                                    </Border>
-                                    <Border Classes="ModeChip" Background="#E65100"
-                                            IsVisible="{Binding IsEdl}">
-                                        <TextBlock Text="{Binding EdlBadge}" FontSize="11" Foreground="White" />
-                                    </Border>
-                                    <Border Classes="ModeChip" Background="#4A148C"
-                                            IsVisible="{Binding IsRkdl}">
-                                        <TextBlock Text="RKDL" FontSize="11" Foreground="White" />
-                                    </Border>
-                                    <Border Classes="ModeChip"
-                                            Background="{StaticResource DeviceCardBackgroundBrush}"
-                                            BorderBrush="{StaticResource DeviceCardBorderBrush}"
-                                            BorderThickness="1">
-                                        <TextBlock Text="{Binding Transport}" FontSize="11" />
-                                    </Border>
-                                    <TextBlock Text="{Binding State}" FontSize="11" Opacity="0.7"
-                                               VerticalAlignment="Center" />
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="8">
+                                    <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayName}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                IsVisible="{Binding HasSystemInfo}">
+                                            <TextBlock Text="{Binding Mode}" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
+                                        </Border>
+                                        <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                IsVisible="{Binding IsFastboot}">
+                                            <TextBlock Text="{Binding FastbootBadge}" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
+                                        </Border>
+                                        <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                IsVisible="{Binding IsEdl}">
+                                            <TextBlock Text="{Binding EdlBadge}" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
+                                        </Border>
+                                        <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
+                                                IsVisible="{Binding IsRkdl}">
+                                            <TextBlock Text="RKDL" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
+                                        </Border>
+                                        <Border Classes="ModeChip"
+                                                Background="{DynamicResource SemiColorPrimaryLight}"
+                                                BorderBrush="{DynamicResource SemiColorPrimaryPointerover}"
+                                                BorderThickness="1">
+                                            <TextBlock Text="{Binding Transport}" FontSize="11"
+                                                       Foreground="{DynamicResource SemiColorPrimaryPointerover}" />
+                                        </Border>
+                                        <TextBlock Text="{Binding State}" FontSize="11" Opacity="0.7"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
                                 </StackPanel>
-                            </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center" IsVisible="{Binding IsAdb}">
+                                    <TextBlock Classes="CardLabel" Text="{DynamicResource Device_SuAccess}" VerticalAlignment="Center" />
+                                    <CheckBox IsChecked="{Binding HasSu}" IsEnabled="False" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Grid>
                         </Border>
 
                         <!-- 通用信息 -->
@@ -460,11 +456,6 @@
                                                Text="{DynamicResource Device_Codename}" />
                                     <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
                                                Text="{Binding CodeName}" />
-                                    <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal"
-                                                HorizontalAlignment="Right" IsVisible="{Binding IsAdb}">
-                                        <TextBlock Classes="CardLabel" Text="{DynamicResource Device_SuAccess}" />
-                                        <CheckBox IsChecked="{Binding HasSu}" IsEnabled="False" />
-                                    </StackPanel>
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
                                                Text="{DynamicResource Device_AndroidVersion}" />

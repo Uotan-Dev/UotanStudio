@@ -10,7 +10,34 @@
         CanMinimize="False" CanMaximize="False" CanResize="False"
         ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
         WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+    <Window.Resources>
+        <SolidColorBrush x:Key="AboutBadgeBorderBrush" Color="{DynamicResource BorderForegroundColor}" />
+        <SolidColorBrush x:Key="AboutBadgeTextBrush" Color="{DynamicResource SecondaryTextForeground}" />
+    </Window.Resources>
     <Window.Styles>
+        <Style Selector="Border.ReleaseCurrent">
+            <Setter Property="Background" Value="{DynamicResource SemiColorPrimary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+        </Style>
+        <Style Selector="Border.ReleaseCurrent > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentHoverForeground}" />
+        </Style>
+
+        <Style Selector="Border.BetaCurrent">
+            <Setter Property="Background" Value="{DynamicResource SemiColorPrimaryLight}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimaryPointerover}" />
+        </Style>
+        <Style Selector="Border.BetaCurrent > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource SemiColorPrimaryPointerover}" />
+        </Style>
+
+        <Style Selector="Border.ChannelInactive">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{StaticResource AboutBadgeBorderBrush}" />
+        </Style>
+        <Style Selector="Border.ChannelInactive > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource AboutBadgeTextBrush}" />
+        </Style>
         <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
@@ -32,12 +59,12 @@
                 <TextBlock Text="{DynamicResource About_Channel}" FontSize="11" Opacity="0.7"
                            VerticalAlignment="Center" Margin="0,0,2,0" />
                 <Border x:Name="ReleaseBadge" CornerRadius="4" Padding="6,1" BorderThickness="1"
-                        BorderBrush="Gray" VerticalAlignment="Center">
-                    <TextBlock x:Name="ReleaseText" FontSize="10" Foreground="Gray" />
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="ReleaseText" FontSize="10" />
                 </Border>
                 <Border x:Name="BetaBadge" CornerRadius="4" Padding="6,1" BorderThickness="1"
-                        BorderBrush="Gray" VerticalAlignment="Center">
-                    <TextBlock x:Name="BetaText" FontSize="10" Foreground="Gray" />
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="BetaText" FontSize="10" />
                 </Border>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4" Margin="0,2,0,0">

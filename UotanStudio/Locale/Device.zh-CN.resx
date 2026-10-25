@@ -73,7 +73,7 @@
     <value>连接协议</value>
   </data>
   <data name="Device_RemoteAddress" xml:space="preserve">
-    <value>ADB 主机[:端口]（默认 5555）/ HDC 主机:端口</value>
+    <value>IP:端口(默认5555)</value>
   </data>
   <data name="Device_RemoteConnect" xml:space="preserve">
     <value>连接远程设备</value>
@@ -336,8 +336,8 @@
   <data name="Device_SuAccess" xml:space="preserve">
     <value>SU 权限</value>
   </data>
-  <data name="Device_SdkVersion" xml:space="preserve">
-    <value>Android SDK</value>
+    <data name="Device_SdkVersion" xml:space="preserve">
+    <value>SDK 版本</value>
   </data>
   <data name="Device_CpuAbi" xml:space="preserve">
     <value>CPU ABI</value>

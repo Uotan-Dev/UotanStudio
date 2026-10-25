@@ -73,7 +73,7 @@
     <value>Connection protocol</value>
   </data>
   <data name="Device_RemoteAddress" xml:space="preserve">
-    <value>ADB host[:port] (default 5555) / HDC host:port</value>
+    <value>IP:port (default 5555)</value>
   </data>
   <data name="Device_RemoteConnect" xml:space="preserve">
     <value>Connect remote device</value>
@@ -337,7 +337,7 @@
     <value>SU access</value>
   </data>
   <data name="Device_SdkVersion" xml:space="preserve">
-    <value>Android SDK</value>
+    <value>SDK version</value>
   </data>
   <data name="Device_CpuAbi" xml:space="preserve">
     <value>CPU ABI</value>

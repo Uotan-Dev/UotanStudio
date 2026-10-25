@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -41,12 +42,19 @@ public partial class AboutDialog : Window
         foreach (var (channel, badge, label) in badges)
         {
             var isCurrent = channel == BuildInfo.Channel;
-            var color = ChannelColor(channel);
             label.Text = language.GetString(BuildInfo.GetChannelKey(channel));
             label.FontWeight = isCurrent ? FontWeight.SemiBold : FontWeight.Normal;
-            label.Foreground = isCurrent ? Brushes.White : Brushes.Gray;
-            badge.Background = isCurrent ? new SolidColorBrush(color) : Brushes.Transparent;
-            badge.BorderBrush = isCurrent ? new SolidColorBrush(color) : Brushes.Gray;
+            badge.Classes.Clear();
+            if (isCurrent)
+            {
+                badge.Classes.Add(channel == BuildChannel.Release ? "ReleaseCurrent" : "BetaCurrent");
+            }
+            else
+            {
+                badge.Classes.Add("ChannelInactive");
+            }
+
+            badge.BorderThickness = new Thickness(1);
             ToolTip.SetTip(badge, string.Concat(
                 channel.ToString().ToLowerInvariant(),
                 " — ",
@@ -65,18 +73,6 @@ public partial class AboutDialog : Window
             CommitUnavailableText.IsVisible = true;
         }
     }
-
-    /// <summary>
-    /// Gets the accent color used for one distribution channel badge.
-    /// <para>获取指定发行通道徽标的强调色。</para>
-    /// </summary>
-    /// <param name="channel">The channel to color.<para>要着色的通道。</para></param>
-    /// <returns>The badge color.<para>徽标颜色。</para></returns>
-    private static Color ChannelColor(BuildChannel channel) => channel switch
-    {
-        BuildChannel.Release => Color.Parse("#2E7D32"),
-        _ => Color.Parse("#EF6C00"),
-    };
 
     /// <summary>
     /// Expands or collapses the open-source section; the window grows downwards with its content.
