@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using UotanStudio.Comm.Diagnostics;
@@ -28,7 +29,6 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     private readonly Action<IReadOnlyList<UsbDeviceChange>> _onChanged;
     private readonly Action<Exception>? _onError;
     private readonly Lock _gate = new();
-    private readonly Win32API.WndProcDelegate _wndProc;
     private readonly Thread? _thread;
     private readonly ManualResetEventSlim _ready = new(initialState: false);
     private Exception? _startupError;
@@ -38,6 +38,10 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     private int _polling, _pending;
 
     private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(2);
+
+    private static readonly Win32API.WndProcDelegate WindowProcedure = DispatchWindowMessage;
+
+    private static readonly ConcurrentDictionary<IntPtr, UsbWindowsHotplugMonitor> Windows = new();
 
     private static readonly Guid[] InterfaceGuids =
     [
@@ -55,7 +59,6 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
         _enumerator = enumerator ?? throw new ArgumentNullException(nameof(enumerator));
         _onChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
         _onError = onError;
-        _wndProc = WndProc;
 
         _lastSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
 
@@ -88,7 +91,7 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
         var classNamePtr = Marshal.StringToHGlobalUni(className);
         var wc = new Win32API.WNDCLASSW
         {
-            LpfnWndProc = Marshal.GetFunctionPointerForDelegate(_wndProc),
+            LpfnWndProc = Marshal.GetFunctionPointerForDelegate(WindowProcedure),
             LpszClassName = classNamePtr,
             HInstance = Win32API.GetModuleHandleW(null)
         };
@@ -106,6 +109,8 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
             {
                 throw new InvalidOperationException($"CreateWindowExW failed: {Marshal.GetLastWin32Error()}");
             }
+
+            Windows[hwnd] = this;
 
             bool disposed;
             lock (_gate)
@@ -182,6 +187,8 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
                 _hwnd = IntPtr.Zero;
             }
 
+            _ = Windows.TryRemove(hwnd, out _);
+
             if (hwnd != IntPtr.Zero)
             {
                 _ = Win32API.DestroyWindow(hwnd);
@@ -189,12 +196,13 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
         }
     }
 
-    private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    private static IntPtr DispatchWindowMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
         if (msg == Win32API.WM_DEVICECHANGE &&
-            (wParam == (IntPtr)Win32API.DBT_DEVICEARRIVAL || wParam == (IntPtr)Win32API.DBT_DEVICEREMOVECOMPLETE))
+            (wParam == (IntPtr)Win32API.DBT_DEVICEARRIVAL || wParam == (IntPtr)Win32API.DBT_DEVICEREMOVECOMPLETE) &&
+            Windows.TryGetValue(hWnd, out var monitor))
         {
-            TriggerPoll();
+            monitor.TriggerPoll();
         }
 
         return Win32API.DefWindowProcW(hWnd, msg, wParam, lParam);
