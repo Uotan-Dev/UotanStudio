@@ -61,6 +61,7 @@ public static class FirmwareFormatRegistry
             Register(new VendorFirmware.OnePlusOps.OnePlusOpsFormatHandler());
             Register(new VendorFirmware.Pac.PacFormatHandler());
             Register(new VendorFirmware.Dz.DzFormatHandler());
+            Register(new VendorFirmware.HarmonyOS.HarmonyUpdateBinFormatHandler());
             Register(new VendorFirmware.UpdateApp.UpdateAppFormatHandler());
             Register(new VendorFirmware.Rockchip.RockchipFormatHandler());
             Register(new VendorFirmware.Amlogic.AmlogicFormatHandler());
