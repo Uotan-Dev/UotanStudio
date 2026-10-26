@@ -13,7 +13,7 @@
              x:DataType="vm:NodeEditorViewModel">
     <UserControl.Resources>
         <DataTemplate x:Key="ToolboxOperationTemplate" DataType="{x:Type vm:NodeToolboxItem}">
-            <Grid ColumnDefinitions="*,Auto,28" Margin="0,1">
+            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,1">
                 <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="6,4" Click="OnToolboxItemClicked" ToolTip.Tip="{Binding TypeKey}">
                     <StackPanel Spacing="1">
@@ -22,7 +22,11 @@
                                    Foreground="{DynamicResource LogErrorBrush}" IsVisible="{Binding RequiresConfirmation}" />
                     </StackPanel>
                 </Button>
-                <Button Grid.Column="1" Content="⋯" Padding="4" IsVisible="{Binding HasPresets}"
+                <Button Grid.Column="1" Content="⋯" Width="28" Padding="0"
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Stretch"
+                        VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                        IsVisible="{Binding HasPresets}"
                         ToolTip.Tip="{DynamicResource Node_Toolbox_Presets}" Tag="toolbox-preset">
                     <Button.Flyout>
                         <Flyout>
@@ -37,9 +41,12 @@
                         </Flyout>
                     </Button.Flyout>
                 </Button>
-                <Button Grid.Column="2" Content="{Binding FavoriteGlyph}" Command="{Binding ToggleFavoriteCommand}"
+                <Button Grid.Column="2" Content="{Binding FavoriteGlyph}" Command="{Binding ToggleFavoriteCommand}" Width="28"
                         Classes.favorite="{Binding IsFavorite}"
-                        ToolTip.Tip="{Binding FavoriteHint}" Padding="2" VerticalAlignment="Stretch" />
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Stretch"
+                        VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                        ToolTip.Tip="{Binding FavoriteHint}" Padding="0" />
             </Grid>
         </DataTemplate>
     </UserControl.Resources>
@@ -47,9 +54,44 @@
         <Style Selector="Button.favorite">
             <Setter Property="Foreground" Value="{DynamicResource AccentColor}" />
         </Style>
+        <!-- 连线与待处理连线主题色 -->
+        <Style Selector="nodify|Connection">
+            <Setter Property="Stroke" Value="{DynamicResource SemiColorPrimary}" />
+        </Style>
         <Style Selector="nodify|Connection.selected">
             <Setter Property="Stroke" Value="{DynamicResource SemiColorPrimary}" />
             <Setter Property="StrokeThickness" Value="4" />
+        </Style>
+        <Style Selector="nodify|PendingConnection">
+            <Setter Property="Stroke" Value="{DynamicResource SemiColorPrimary}" />
+        </Style>
+        <!-- 节点端口连接小圆圈主题色（未连接时空心，连接后实心） -->
+        <Style Selector="nodify|Connector">
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+        </Style>
+        <Style Selector="nodify|Connector:connected">
+            <Setter Property="Background" Value="{DynamicResource SemiColorPrimary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+        </Style>
+        <Style Selector="nodify|NodeInput">
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+        </Style>
+        <Style Selector="nodify|NodeInput:connected">
+            <Setter Property="Background" Value="{DynamicResource SemiColorPrimary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+        </Style>
+        <Style Selector="nodify|NodeOutput">
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+        </Style>
+        <Style Selector="nodify|NodeOutput:connected">
+            <Setter Property="Background" Value="{DynamicResource SemiColorPrimary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+        </Style>
+        <!-- 全局预览小地图主题色 -->
+        <Style Selector="nodify|NodifyEditorMinimap">
+            <Setter Property="ViewportBorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+            <Setter Property="ViewportBrush" Value="{DynamicResource SemiColorPrimaryLight}" />
+            <Setter Property="MapBorderBrush" Value="{DynamicResource BorderBrush}" />
         </Style>
         <!-- 三栏之间的分隔线（圆角边缘 + 单侧投影）与拖动条，样式与交付页保持一致。 -->
         <!-- Divider (rounded edge plus one-sided shadow) and drag handle between the three panes,
@@ -449,8 +491,20 @@
                            FontWeight="SemiBold" FontSize="13"
                            Margin="8,8,8,4" />
                 <ScrollViewer>
-                    <ItemsControl ItemsSource="{Binding VisibleToolboxItems}" Margin="4" IsEnabled="{Binding CanEditGraph}"
-                                  ItemTemplate="{StaticResource ToolboxOperationTemplate}" />
+                    <ItemsControl ItemsSource="{Binding ToolboxGroups}" Margin="4,2" IsEnabled="{Binding CanEditGraph}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:NodeToolboxGroupViewModel}">
+                                <Expander Header="{Binding Title}"
+                                          IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                          IsVisible="{Binding IsVisible}"
+                                          Margin="0,0,0,4"
+                                          Padding="4,2">
+                                    <ItemsControl ItemsSource="{Binding Items}" Margin="0,2,0,0"
+                                                  ItemTemplate="{StaticResource ToolboxOperationTemplate}" />
+                                </Expander>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </ScrollViewer>
             </DockPanel>
         </Border>
@@ -995,6 +1049,9 @@
                                         VerticalAlignment="Bottom"
                                         Width="180" Height="120"
                                         Margin="8"
+                                        ViewportBorderBrush="{DynamicResource SemiColorPrimary}"
+                                        ViewportBrush="{DynamicResource SemiColorPrimaryLight}"
+                                        MapBorderBrush="{DynamicResource BorderBrush}"
                                         IsVisible="{Binding ShowMinimap}" />
         </Grid>
         </Grid>

@@ -14,6 +14,16 @@ public partial class NodeEditorViewModel
     private static readonly string[] ToolboxCategoryOrder =
         ["Inputs", "Workspace", "Data", "Validation", "Configuration", "Firmware", "Device", "Flow", "Interaction", "Composite", "Script"];
 
+    /// <summary>Coarse-grained toolbox group definitions combining fine-grained categories into a few concise expander categories.<para>粗粒度工具箱分组定义，将细分分类归并为少量精炼的折叠大类。</para></summary>
+    private static readonly (string GroupKey, string ResourceKey, string[] Categories)[] ToolboxGroupDefinitions =
+    [
+        ("FirmwareConfig", "Node_Group_FirmwareConfig", ["Firmware", "Workspace", "Configuration"]),
+        ("Device", "Node_Group_Device", ["Device"]),
+        ("DataFiles", "Node_Group_DataFiles", ["Data", "Inputs", "Validation"]),
+        ("FlowInteraction", "Node_Group_FlowInteraction", ["Flow", "Interaction"]),
+        ("Extensions", "Node_Group_Extensions", ["Composite", "Script"])
+    ];
+
     private void InitializeToolbox()
     {
         if (!_toolboxPreferencesLoaded)
@@ -23,8 +33,22 @@ public partial class NodeEditorViewModel
             _toolboxPreferencesLoaded = true;
         }
         ToolboxItems.Clear();
+        ToolboxGroups.Clear();
         NodeFactoryRegistrar.RegisterAll();
         var language = LanguageService.Instance;
+
+        // Add Favorites group first
+        ToolboxGroups.Add(new NodeToolboxGroupViewModel("Favorites", language.GetString("Node_Group_Favorites")) { IsExpanded = false });
+
+        // Add categorized groups
+        foreach (var (groupKey, resourceKey, _) in ToolboxGroupDefinitions)
+        {
+            ToolboxGroups.Add(new NodeToolboxGroupViewModel(groupKey, language.GetString(resourceKey))
+            {
+                IsExpanded = groupKey == "FirmwareConfig"
+            });
+        }
+
         var items = NodeFactoryRegistrar.Descriptors
             .Where(descriptor => descriptor.IsToolboxVisible && ToolboxCategoryOrder.Contains(descriptor.CategoryPath))
             .OrderBy(descriptor => Array.IndexOf(ToolboxCategoryOrder, descriptor.CategoryPath))
@@ -47,12 +71,14 @@ public partial class NodeEditorViewModel
         return name == key ? family : name;
     }
 
-    private void RefreshVisibleToolbox()
+    internal void RefreshVisibleToolbox()
     {
         var keyword = (SearchText ?? string.Empty).Trim();
         VisibleToolboxItems.Clear();
         var byKey = ToolboxItems.ToDictionary(item => item.TypeKey, StringComparer.Ordinal);
         var favorites = _favoriteNodeTypes.ToHashSet(StringComparer.Ordinal);
+
+        // Update flat VisibleToolboxItems (for legacy bindings and tests)
         foreach (var key in _favoriteNodeTypes.Distinct(StringComparer.Ordinal))
         {
             if (byKey.TryGetValue(key, out var item) && (keyword.Length == 0 || item.Matches(keyword)))
@@ -67,6 +93,59 @@ public partial class NodeEditorViewModel
                 continue;
             }
             VisibleToolboxItems.Add(item);
+        }
+
+        // Update categorized groups
+        if (ToolboxGroups.Count == 0)
+        {
+            return;
+        }
+
+        // Group 0: Favorites
+        var favoritesGroup = ToolboxGroups[0];
+        favoritesGroup.Items.Clear();
+        foreach (var key in _favoriteNodeTypes.Distinct(StringComparer.Ordinal))
+        {
+            if (byKey.TryGetValue(key, out var item) && (keyword.Length == 0 || item.Matches(keyword)))
+            {
+                favoritesGroup.Items.Add(item);
+            }
+        }
+        favoritesGroup.IsVisible = favoritesGroup.Items.Count > 0;
+        if (keyword.Length > 0)
+        {
+            favoritesGroup.IsExpanded = favoritesGroup.Items.Count > 0;
+        }
+        else
+        {
+            favoritesGroup.IsExpanded = false;
+        }
+
+        // Groups 1..N: Coarse-grained categories
+        for (var i = 0; i < ToolboxGroupDefinitions.Length; i++)
+        {
+            var (_, _, categories) = ToolboxGroupDefinitions[i];
+            var group = ToolboxGroups[i + 1];
+            group.Items.Clear();
+
+            var matchingItems = ToolboxItems
+                .Where(item => categories.Contains(item.CategoryPath, StringComparer.OrdinalIgnoreCase))
+                .Where(item => keyword.Length == 0 || item.Matches(keyword));
+
+            foreach (var item in matchingItems)
+            {
+                group.Items.Add(item);
+            }
+
+            group.IsVisible = group.Items.Count > 0;
+            if (keyword.Length > 0)
+            {
+                group.IsExpanded = group.Items.Count > 0;
+            }
+            else
+            {
+                group.IsExpanded = group.Key == "FirmwareConfig";
+            }
         }
     }
 
@@ -108,6 +187,7 @@ public sealed class NodeToolboxItem : ViewModelBase
     public string Name { get; }
     public Func<FlowNodeViewModel> CreateNode { get; }
     public string TypeKey { get; }
+    public string CategoryPath { get; }
     public string FamilyId { get; } = string.Empty;
     public string FamilyName { get; } = string.Empty;
     public bool RequiresConfirmation { get; }
@@ -137,6 +217,7 @@ public sealed class NodeToolboxItem : ViewModelBase
         Name = descriptor.DisplayName ?? language.GetString(descriptor.NameResourceKey);
         CreateNode = descriptor.Factory;
         TypeKey = descriptor.TypeKey;
+        CategoryPath = descriptor.CategoryPath;
         FamilyId = descriptor.Family;
         var familyKey = "Node_Family_" + FamilyId;
         var family = language.GetString(familyKey);

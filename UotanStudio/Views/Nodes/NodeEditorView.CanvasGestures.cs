@@ -19,6 +19,12 @@ partial class NodeEditorView
     private const double CanvasGestureThreshold = 4;
 
     /// <summary>
+    /// Screen-space distance in pixels scrolled per notch of the mouse wheel.
+    /// <para>鼠标滚轮每格在屏幕空间中滚动的像素距离。</para>
+    /// </summary>
+    private const double CanvasWheelScrollDistance = 60;
+
+    /// <summary>
     /// Height of the grip strip along the bottom edge of the editor where a press is left for the alignment guide's
     /// split drag instead of the canvas.
     /// <para>Height of the grip strip along the bottom edge of the editor where a press is left for the alignment guide's
@@ -63,6 +69,8 @@ partial class NodeEditorView
         Editor.AddHandler(PointerReleasedEvent, OnCanvasGestureReleased,
             RoutingStrategies.Tunnel, handledEventsToo: true);
         Editor.AddHandler(PointerCaptureLostEvent, OnCanvasGestureCaptureLost,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        Editor.AddHandler(PointerWheelChangedEvent, OnCanvasPointerWheelChanged,
             RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
@@ -164,6 +172,112 @@ partial class NodeEditorView
         Editor.OffsetY = offsetY;
         Editor.ViewTranslateTransform.X = offsetX;
         Editor.ViewTranslateTransform.Y = offsetY;
+    }
+
+    /// <summary>
+    /// Scrolls the canvas by screen-space units along the horizontal and vertical axes, taking zoom into account.
+    /// <para>按屏幕空间单位沿水平和垂直轴滚动画布，已考虑缩放比例。</para>
+    /// </summary>
+    /// <param name="horizontalUnits">Horizontal wheel units (positive scrolls left, negative scrolls right).<para>水平滚轮单位（正值向左滚，负值向右滚）。</para></param>
+    /// <param name="verticalUnits">Vertical wheel units (positive scrolls up, negative scrolls down).<para>垂直滚轮单位（正值向上滚，负值向下滚）。</para></param>
+    internal void ScrollCanvas(double horizontalUnits, double verticalUnits)
+    {
+        var zoom = Editor.Zoom > 0 ? Editor.Zoom : 1;
+        var deltaX = (horizontalUnits * CanvasWheelScrollDistance) / zoom;
+        var deltaY = (verticalUnits * CanvasWheelScrollDistance) / zoom;
+        SetCanvasOffset(Editor.OffsetX + deltaX, Editor.OffsetY + deltaY);
+    }
+
+    /// <summary>
+    /// Handles mouse wheel scrolling and zooming on the node editor canvas: standard wheel scrolls vertically,
+    /// holding Shift (or horizontal wheel) scrolls horizontally, and holding Ctrl (or Meta on macOS) zooms in/out.
+    /// <para>处理节点编辑器画布上的滚轮滚动与缩放：普通滚轮上下滚动，按住 Shift（或横向滚轮）左右滚动，按住 Ctrl（macOS 为 Command）放大缩小。</para>
+    /// </summary>
+    /// <param name="sender">The editor that routed the event.<para>路由该事件的编辑器。</para></param>
+    /// <param name="e">The wheel arguments.<para>滚轮事件参数。</para></param>
+    internal void OnCanvasPointerWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        if (!IsPointerOnSurface(e) || DataContext is not NodeEditorViewModel || !Editor.IsEnabled)
+        {
+            return;
+        }
+
+        var zoom = Editor.Zoom > 0 ? Editor.Zoom : 1;
+        if (!CalculateWheelAction(e.Delta, e.KeyModifiers, zoom, out var isZoom, out var deltaX, out var deltaY))
+        {
+            return;
+        }
+
+        if (isZoom)
+        {
+            // Leave event unhandled so NodifyEditor executes its built-in pointer-centered zoom.
+            return;
+        }
+
+        SetCanvasOffset(Editor.OffsetX + deltaX, Editor.OffsetY + deltaY);
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Calculates the canvas offset delta and zoom decision for a mouse wheel event based on modifiers and wheel delta.
+    /// <para>根据修饰键和滚轮增量计算画布偏移增量和缩放决策。</para>
+    /// </summary>
+    /// <param name="delta">The pointer wheel delta vector.<para>滚轮增量向量。</para></param>
+    /// <param name="keyModifiers">The active keyboard modifiers.<para>当前生效的键盘修饰键。</para></param>
+    /// <param name="zoom">Current canvas zoom level.<para>当前画布缩放比例。</para></param>
+    /// <param name="isZoom">Whether this wheel event should be treated as a zoom operation.<para>该滚轮事件是否应视为缩放操作。</para></param>
+    /// <param name="deltaOffsetX">The computed delta to apply to the X offset.<para>计算出的 X 偏移增量。</para></param>
+    /// <param name="deltaOffsetY">The computed delta to apply to the Y offset.<para>计算出的 Y 偏移增量。</para></param>
+    /// <returns>True if the event represents an active scroll or zoom; false if no movement occurred.<para>若该事件表示有效滚动或缩放则为 true；无位移则为 false。</para></returns>
+    internal static bool CalculateWheelAction(
+        Vector delta,
+        KeyModifiers keyModifiers,
+        double zoom,
+        out bool isZoom,
+        out double deltaOffsetX,
+        out double deltaOffsetY)
+    {
+        isZoom = false;
+        deltaOffsetX = 0;
+        deltaOffsetY = 0;
+
+        var isZoomModifier = keyModifiers.HasFlag(KeyModifiers.Control)
+            || (OperatingSystem.IsMacOS() && keyModifiers.HasFlag(KeyModifiers.Meta));
+
+        if (isZoomModifier)
+        {
+            if (Math.Abs(delta.Y) > double.Epsilon)
+            {
+                isZoom = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        double horizontalUnits;
+        double verticalUnits;
+
+        if (keyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            horizontalUnits = Math.Abs(delta.X) > double.Epsilon ? delta.X : delta.Y;
+            verticalUnits = 0;
+        }
+        else
+        {
+            horizontalUnits = delta.X;
+            verticalUnits = delta.Y;
+        }
+
+        if (Math.Abs(horizontalUnits) < double.Epsilon && Math.Abs(verticalUnits) < double.Epsilon)
+        {
+            return false;
+        }
+
+        var effectiveZoom = zoom > 0 ? zoom : 1;
+        deltaOffsetX = (horizontalUnits * CanvasWheelScrollDistance) / effectiveZoom;
+        deltaOffsetY = (verticalUnits * CanvasWheelScrollDistance) / effectiveZoom;
+        return true;
     }
 
     private void OnCanvasGestureMoved(object? sender, PointerEventArgs e)
@@ -341,7 +455,7 @@ partial class NodeEditorView
     /// <para>Tells whether the pointer landed inside the editor surface.</para>
     /// </summary>
     /// <param name="e">The press arguments.</param>
-    private bool IsPointerOnSurface(PointerPressedEventArgs e)
+    private bool IsPointerOnSurface(PointerEventArgs e)
     {
         if (!EditorSurface.IsVisible)
         {
@@ -359,7 +473,7 @@ partial class NodeEditorView
     /// <para>Tells whether the pointer landed inside the zoomable canvas.</para>
     /// </summary>
     /// <param name="e">The press arguments.</param>
-    private bool IsPointerOnCanvas(PointerPressedEventArgs e)
+    private bool IsPointerOnCanvas(PointerEventArgs e)
     {
         if (!Editor.IsVisible || Editor.Bounds.Width <= 0 || Editor.Bounds.Height <= 0)
         {

@@ -261,6 +261,12 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     } = [];
 
     /// <summary>
+    /// Gets the categorized toolbox groups presented inside expander controls.
+    /// <para>获取呈现在 Expander 折叠控件中的分类工具箱分组。</para>
+    /// </summary>
+    public ObservableCollection<NodeToolboxGroupViewModel> ToolboxGroups { get; } = [];
+
+    /// <summary>
     /// Gets or sets the currently selected node, bound to the properties panel.
     /// <para>获取或设置当前选中的节点，绑定到属性面板。</para>
     /// </summary>

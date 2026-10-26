@@ -139,7 +139,7 @@
     <value>切换小地图</value>
   </data>
   <data name="Node_CanvasHint" xml:space="preserve">
-    <value>左键框选 | 右键拖拽画布（保持已选框选目标）</value>
+    <value>左键框选 | 右键平移 | 滚轮上下/横向(Shift)滚动 | Ctrl+滚轮缩放</value>
   </data>
   <data name="Node_DeleteSelected" xml:space="preserve">
     <value>删除节点</value>
@@ -1934,6 +1934,24 @@
   </data>
   <data name="Node_Category_Script" xml:space="preserve">
     <value>我的脚本节点</value>
+  </data>
+  <data name="Node_Group_Favorites" xml:space="preserve">
+    <value>我的收藏</value>
+  </data>
+  <data name="Node_Group_FirmwareConfig" xml:space="preserve">
+    <value>固件与配置</value>
+  </data>
+  <data name="Node_Group_Device" xml:space="preserve">
+    <value>设备操作</value>
+  </data>
+  <data name="Node_Group_DataFiles" xml:space="preserve">
+    <value>数据与文件</value>
+  </data>
+  <data name="Node_Group_FlowInteraction" xml:space="preserve">
+    <value>流程与交互</value>
+  </data>
+  <data name="Node_Group_Extensions" xml:space="preserve">
+    <value>扩展与脚本</value>
   </data>
   <data name="Node_Toolbox_Favorite" xml:space="preserve">
     <value>添加到收藏</value>

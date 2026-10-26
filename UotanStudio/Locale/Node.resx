@@ -139,7 +139,7 @@
     <value>Toggle Minimap</value>
   </data>
   <data name="Node_CanvasHint" xml:space="preserve">
-    <value>Left drag: box select | Right drag: pan canvas (keeps selection)</value>
+    <value>Left drag: box select | Right drag: pan | Wheel: scroll (Shift for horizontal) | Ctrl+wheel: zoom</value>
   </data>
   <data name="Node_DeleteSelected" xml:space="preserve">
     <value>Delete nodes</value>
@@ -1934,6 +1934,24 @@
   </data>
   <data name="Node_Category_Script" xml:space="preserve">
     <value>My script nodes</value>
+  </data>
+  <data name="Node_Group_Favorites" xml:space="preserve">
+    <value>Favorites</value>
+  </data>
+  <data name="Node_Group_FirmwareConfig" xml:space="preserve">
+    <value>Firmware &amp; Configuration</value>
+  </data>
+  <data name="Node_Group_Device" xml:space="preserve">
+    <value>Device Operations</value>
+  </data>
+  <data name="Node_Group_DataFiles" xml:space="preserve">
+    <value>Data &amp; Files</value>
+  </data>
+  <data name="Node_Group_FlowInteraction" xml:space="preserve">
+    <value>Flow &amp; Interaction</value>
+  </data>
+  <data name="Node_Group_Extensions" xml:space="preserve">
+    <value>Extensions &amp; Scripts</value>
   </data>
   <data name="Node_Toolbox_Favorite" xml:space="preserve">
     <value>Add to favorites</value>
