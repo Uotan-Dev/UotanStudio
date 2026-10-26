@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace UotanStudio.Hash.HalfMd4Hash;
@@ -8,15 +9,23 @@ namespace UotanStudio.Hash.HalfMd4Hash;
 /// <para>计算 ext4 half-MD4 目录哈希（返回最低位清零的状态字 1），与 e2fsprogs ext2fs_dirhash 的 EXT2_HASH_HALF_MD4
 /// 分支一致：全零种子改用默认 MD4 初始向量。</para>
 /// </summary>
+/// <remarks>
+/// <para>The UTF-8 encoding of the name and the transform buffers live on the stack for names up to 256 bytes — the
+/// ext4 directory-entry bound — and in the shared array pool above it, so hashing every entry of a large directory
+/// tree allocates nothing per call.</para>
+/// <para>名称的 UTF-8 编码与变换缓冲对 256 字节以内的名称（ext4 目录项上限）驻留栈上，超出部分落共享数组池，
+/// 因此遍历大型目录树时每次调用零分配。</para>
+/// </remarks>
 public static class HalfMd4Hash
 {
     private static readonly uint[] DefaultHashInit = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476];
 
     private const uint Md4K2 = 0x5A82_7999;
     private const uint Md4K3 = 0x6ED9_EBA1;
+    private const int StackNameBytes = 256;
 
     /// <summary>
-    /// Computes the ext4 Half-MD4 hash of a directory name (buf[1] &amp; ~1), matching the EXT2_HASH_HALF_MD4 branch of e2fsprogs ext2fs_dirhash: an all-zero seed selects the default MD4 init vector and the name is transformed in 32-byte chunks.
+    /// Computes the ext4 Half-MD4 hash of a directory name (buf[1] &amp; ~1), matching the EXT2_HASH_HALF_MD4 branch of e2fsprogs ext2fs_dirhash: an all-zero seed selects the default MD4 initial vector and the name is transformed in 32-byte chunks.
     /// <para>计算目录名的 ext4 Half-MD4 哈希（返回 buf[1] &amp; ~1）。</para>
     /// </summary>
     /// <param name="name">Directory entry name; it is UTF-8 encoded and consumed in 32-byte chunks.
@@ -35,7 +44,7 @@ public static class HalfMd4Hash
             throw new ArgumentException("Hash seed must have at least 4 elements.", nameof(seed));
         }
 
-        var buf = new uint[4];
+        Span<uint> buf = stackalloc uint[4];
         var seedIsZero = true;
         for (var i = 0; i < 4; i++)
         {
@@ -45,37 +54,50 @@ public static class HalfMd4Hash
 
         if (seedIsZero)
         {
-            Array.Copy(DefaultHashInit, buf, 4);
+            DefaultHashInit.AsSpan(0, 4).CopyTo(buf);
         }
 
-        var nameBytes = Encoding.UTF8.GetBytes(name);
-        var offset = 0;
-        var remaining = nameBytes.Length;
-        while (remaining > 0)
+        var byteCount = Encoding.UTF8.GetByteCount(name);
+        byte[]? rented = null;
+        var nameBytes = byteCount <= StackNameBytes ? stackalloc byte[StackNameBytes] : (rented = ArrayPool<byte>.Shared.Rent(byteCount));
+        try
         {
-            var words = Str2HashBuf(nameBytes, offset, remaining);
-            HalfMd4Transform(buf, words);
-            offset += 32;
-            remaining -= 32;
-        }
+            Encoding.UTF8.GetBytes(name, nameBytes);
+            var offset = 0;
+            var remaining = byteCount;
+            Span<uint> words = stackalloc uint[8];
+            while (remaining > 0)
+            {
+                Str2HashBuf(nameBytes[offset..], remaining, words);
+                HalfMd4Transform(buf, words);
+                offset += 32;
+                remaining -= 32;
+            }
 
-        return buf[1] & 0xFFFF_FFFE;
+            return buf[1] & 0xFFFF_FFFE;
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
     }
 
     /// <summary>
     /// Converts name bytes into up to 8 uint32 words (little-endian accumulation + length padding), matching e2fsprogs str2hashbuf(num=8).
     /// <para>将名字字节转为最多 8 个 uint32 词（小端累积 + 长度填充），与 e2fsprogs str2hashbuf(num=8) 一致。</para>
     /// </summary>
-    private static uint[] Str2HashBuf(byte[] name, int offset, int len)
+    private static void Str2HashBuf(ReadOnlySpan<byte> name, int remaining, Span<uint> words)
     {
-        var pad = (uint)(len | (len << 8) | (len << 16) | (len << 24));
-        var words = new uint[8];
+        var pad = (uint)(remaining | (remaining << 8) | (remaining << 16) | (remaining << 24));
         var val = pad;
         var count = 0;
-        var limit = Math.Min(len, 32);
+        var limit = Math.Min(remaining, 32);
         for (var i = 0; i < limit; i++)
         {
-            val = name[offset + i] + (val << 8);
+            val = name[i] + (val << 8);
             if ((i & 3) == 3)
             {
                 words[count++] = val;
@@ -92,15 +114,13 @@ public static class HalfMd4Hash
         {
             words[count++] = pad;
         }
-
-        return words;
     }
 
     /// <summary>
     /// Truncated MD4 transform, line-for-line equivalent to e2fsprogs halfMD4Transform.
     /// <para>截断 MD4 变换，与 e2fsprogs halfMD4Transform 逐行一致。</para>
     /// </summary>
-    private static void HalfMd4Transform(uint[] buf, uint[] input)
+    private static void HalfMd4Transform(Span<uint> buf, ReadOnlySpan<uint> input)
     {
         var a = buf[0];
         var b = buf[1];

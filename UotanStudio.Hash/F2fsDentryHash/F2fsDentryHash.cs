@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace UotanStudio.Hash.F2fsDentryHash;
@@ -7,8 +8,17 @@ namespace UotanStudio.Hash.F2fsDentryHash;
 /// returning 0 for the <c>.</c> and <c>..</c> names as the kernel does.
 /// <para>计算 F2FS 目录项哈希：从 MD4 风格初始向量出发对 16 字节分块做 TEA 变换，并为 <c>.</c> 与 <c>..</c> 返回 0，与内核行为一致。</para>
 /// </summary>
+/// <remarks>
+/// <para>The UTF-8 encoding of the name and the transform buffers live on the stack for names up to 256 bytes — above
+/// the F2FS name-length bound — and in the shared array pool above it, so hashing every entry of a large directory
+/// tree allocates nothing per call.</para>
+/// <para>名称的 UTF-8 编码与变换缓冲对 256 字节以内的名称（高于 F2FS 名称长度上限）驻留栈上，超出部分落共享数组池，
+/// 因此遍历大型目录树时每次调用零分配。</para>
+/// </remarks>
 public static class F2fsDentryHash
 {
+    private const int StackNameBytes = 256;
+
     /// <summary>
     /// Computes the hash of one directory entry name; empty, <c>.</c> and <c>..</c> map to 0.
     /// <para>计算单个目录项名称的哈希；空名称、<c>.</c> 与 <c>..</c> 均映射为 0。</para>
@@ -18,35 +28,49 @@ public static class F2fsDentryHash
     /// <returns>The 32-bit dentry hash.<para>32 位目录项哈希。</para></returns>
     public static uint Compute(string name)
     {
-        var nameBytes = Encoding.UTF8.GetBytes(name);
-        if (nameBytes.Length <= 2 && nameBytes.Length > 0 && nameBytes[0] == (byte)'.'
-            && (nameBytes.Length == 1 || nameBytes[1] == (byte)'.'))
+        var byteCount = Encoding.UTF8.GetByteCount(name);
+        byte[]? rented = null;
+        var nameBytes = byteCount <= StackNameBytes ? stackalloc byte[StackNameBytes] : (rented = ArrayPool<byte>.Shared.Rent(byteCount));
+        try
         {
-            return 0;
-        }
-
-        var buf = new uint[4] { 0x67452301u, 0xEFCDAB89u, 0x98BADCFEu, 0x10325476u };
-        var offset = 0;
-        var length = nameBytes.Length;
-        while (true)
-        {
-            var input = Str2HashBuf(nameBytes.AsSpan(offset, Math.Min(length, 16)), Math.Min(length, 16));
-            TeaTransform(buf, input);
-            offset += 16;
-            if (length <= 16)
+            Encoding.UTF8.GetBytes(name, nameBytes);
+            if (byteCount <= 2 && byteCount > 0 && nameBytes[0] == (byte)'.'
+                && (byteCount == 1 || nameBytes[1] == (byte)'.'))
             {
-                break;
+                return 0;
             }
 
-            length -= 16;
-        }
+            Span<uint> buf = [0x67452301u, 0xEFCDAB89u, 0x98BADCFEu, 0x10325476u];
+            var offset = 0;
+            var length = byteCount;
+            Span<uint> input = stackalloc uint[4];
+            while (true)
+            {
+                var chunk = Math.Min(length, 16);
+                Str2HashBuf(nameBytes.Slice(offset, chunk), chunk, input);
+                TeaTransform(buf, input);
+                offset += 16;
+                if (length <= 16)
+                {
+                    break;
+                }
 
-        return buf[0];
+                length -= 16;
+            }
+
+            return buf[0];
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
     }
 
-    private static uint[] Str2HashBuf(ReadOnlySpan<byte> message, int length)
+    private static void Str2HashBuf(ReadOnlySpan<byte> message, int length, Span<uint> result)
     {
-        var result = new uint[4];
         var pad = (uint)(length | (length << 8));
         pad |= pad << 16;
         var val = pad;
@@ -78,11 +102,9 @@ public static class F2fsDentryHash
         {
             result[bufIndex++] = pad;
         }
-
-        return result;
     }
 
-    private static void TeaTransform(uint[] buf, uint[] input)
+    private static void TeaTransform(Span<uint> buf, ReadOnlySpan<uint> input)
     {
         const uint delta = 0x9E3779B9u;
         var sum = 0u;

@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace UotanStudio.Hash.Sums;
 
@@ -26,6 +28,11 @@ namespace UotanStudio.Hash.Sums;
 /// <para>续算要求后续分块按字对齐：只有 <c>first.Length</c> 为偶数时，先算 <c>Compute(first)</c> 再算
 /// <c>Compute(second, firstResult)</c> 才等于对拼接区间一次性调用，因为奇数长度的前缀会自行补齐尾部。上传分帧保证
 /// 每块长度为偶数，因此该值可以跨数据包携带续算。</para>
+/// Spans on little-endian processors fold whole words per lane through a vector XOR accumulator before the lane
+/// reduction; other byte orders keep the portable path because a native word read there would not be a
+/// little-endian read.
+/// <para>小端处理器上的区间先在向量通道内按整字异或累加，再做通道归约；其他字节序保留可移植路径，因为在那些
+/// 平台上按本机字节序读字不等于按小端读。</para>
 /// </remarks>
 public static class WordXor16LittleEndian
 {
@@ -50,6 +57,19 @@ public static class WordXor16LittleEndian
     /// <returns>The reduction of the preceding bytes together with this chunk.
     /// <para>先前字节与本块合并后的归约值。</para></returns>
     public static ushort Compute(ReadOnlySpan<byte> data, ushort previousResult)
+        => BitConverter.IsLittleEndian
+            ? ComputeLittleEndian(data, previousResult)
+            : ComputePortable(data, previousResult);
+
+    /// <summary>
+    /// The portable form, which reads every word explicitly as little-endian and is therefore correct on any
+    /// processor byte order.
+    /// <para>可移植形态：显式按小端读取每个字，因此在任意处理器字节序上都正确。</para>
+    /// </summary>
+    /// <param name="data">Bytes to reduce. <para>待归约的字节。</para></param>
+    /// <param name="previousResult">Running value. <para>当前累加值。</para></param>
+    /// <returns>The updated reduction. <para>更新后的归约值。</para></returns>
+    internal static ushort ComputePortable(ReadOnlySpan<byte> data, ushort previousResult)
     {
         var checksum = previousResult;
         var offset = 0;
@@ -64,5 +84,51 @@ public static class WordXor16LittleEndian
         }
 
         return checksum;
+    }
+
+    /// <summary>
+    /// The little-endian form, which reinterprets the bytes as native words and XOR-folds whole
+    /// <see cref="Vector{T}"/> lanes before finishing the remaining words scalarly.
+    /// <para>小端形态：把字节重组为本机字，先按整条 <see cref="Vector{T}"/> 通道异或折叠，再以标量收尾剩余字。</para>
+    /// </summary>
+    /// <param name="data">Bytes to reduce. <para>待归约的字节。</para></param>
+    /// <param name="previousResult">Running value. <para>当前累加值。</para></param>
+    /// <returns>The updated reduction. <para>更新后的归约值。</para></returns>
+    internal static ushort ComputeLittleEndian(ReadOnlySpan<byte> data, ushort previousResult)
+    {
+        uint checksum = previousResult;
+        var words = MemoryMarshal.Cast<byte, ushort>(data);
+        var index = 0;
+        if (Vector.IsHardwareAccelerated)
+        {
+            var lanes = Vector<ushort>.Count;
+            var limit = words.Length - lanes;
+            if (limit >= 0)
+            {
+                var accumulator = Vector<ushort>.Zero;
+                while (index <= limit)
+                {
+                    accumulator ^= new Vector<ushort>(words[index..]);
+                    index += lanes;
+                }
+
+                for (var lane = 0; lane < lanes; lane++)
+                {
+                    checksum ^= accumulator[lane];
+                }
+            }
+        }
+
+        for (; index < words.Length; index++)
+        {
+            checksum ^= words[index];
+        }
+
+        if ((data.Length & 1) != 0)
+        {
+            checksum ^= data[^1];
+        }
+
+        return (ushort)checksum;
     }
 }
