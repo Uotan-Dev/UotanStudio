@@ -33,6 +33,10 @@
           <Setter Property="HorizontalContentAlignment" Value="Stretch" />
           <Setter Property="VerticalContentAlignment" Value="Stretch" />
         </Style>
+        <Style Selector="DataGridCell ComboBox">
+          <Setter Property="VerticalAlignment" Value="Stretch" />
+          <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
       </DataGrid.Styles>
       <DataGrid.Columns>
         <!-- DataGrid requires a finite initial maximum before it can be resized. -->
@@ -56,11 +60,12 @@
                 <ComboBox IsVisible="{Binding IsChoiceSelector}" ItemsSource="{Binding Choices}"
                           AutomationProperties.AutomationId="{Binding SettingKey}"
                           SelectedItem="{Binding SelectedChoice, Mode=TwoWay}" Classes="Small"
-                          FontSize="12" HorizontalAlignment="Stretch" MinWidth="0" MinHeight="0"
+                          FontSize="12" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          VerticalContentAlignment="Center" MinWidth="0" MinHeight="0"
                           Padding="6,0" BorderThickness="0" CornerRadius="0" Background="Transparent">
                   <ComboBox.ItemTemplate>
                     <DataTemplate x:DataType="viewmodels:PropertiesViewModel+PropertyChoice">
-                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                     </DataTemplate>
                   </ComboBox.ItemTemplate>
                 </ComboBox>
@@ -85,11 +90,12 @@
                           ToolTip.Tip="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).SelectedEncoding}"
                           Classes="Small" FontSize="13"
                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          VerticalContentAlignment="Center"
                           MinWidth="0" MinHeight="0" Padding="6,0"
                           BorderThickness="0" CornerRadius="0" Background="Transparent">
                   <ComboBox.ItemTemplate>
                     <DataTemplate x:DataType="x:String">
-                      <TextBlock Text="{Binding}" FontSize="13"
+                      <TextBlock Text="{Binding}" FontSize="13" VerticalAlignment="Center"
                                  TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" />
                     </DataTemplate>
                   </ComboBox.ItemTemplate>
@@ -100,11 +106,12 @@
                           ToolTip.Tip="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).SelectedLanguage}"
                           Classes="Small" FontSize="13"
                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          VerticalContentAlignment="Center"
                           MinWidth="0" MinHeight="0" Padding="6,0"
                           BorderThickness="0" CornerRadius="0" Background="Transparent">
                   <ComboBox.ItemTemplate>
                     <DataTemplate x:DataType="x:String">
-                      <TextBlock Text="{Binding}" FontSize="13"
+                      <TextBlock Text="{Binding}" FontSize="13" VerticalAlignment="Center"
                                  TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" />
                     </DataTemplate>
                   </ComboBox.ItemTemplate>

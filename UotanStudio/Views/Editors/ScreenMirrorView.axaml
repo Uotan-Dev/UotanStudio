@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:UotanStudio.ViewModels.Editors"
              xmlns:local="using:UotanStudio.Views.Editors"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:avalonia="https://irihi.tech/iconica/tdesign"
              mc:Ignorable="d"
              d:DesignWidth="800"
              d:DesignHeight="600"
@@ -33,42 +35,108 @@
     </Panel>
 
     <Border Grid.Row="2"
-            Padding="8,4"
-            Background="{DynamicResource PageBackground}">
-      <WrapPanel Orientation="Horizontal">
-        <Button Content="{DynamicResource ScreenMirror_Back}"
-                Margin="0,0,6,0"
+            Padding="6"
+            Background="{DynamicResource ControlFillColorDefaultBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0">
+      <controls:JustifiedWrapPanel MinItemWidth="80" ItemSpacing="6" LineSpacing="6">
+        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnBackClick"
-                AutomationProperties.Name="{DynamicResource ScreenMirror_Back}" />
-        <Button Content="{DynamicResource ScreenMirror_Home}"
-                Margin="0,0,6,0"
+                ToolTip.Tip="{DynamicResource ScreenMirror_Back}"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_Back}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+            <avalonia:ChevronLeft Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{DynamicResource ScreenMirror_Back}"
+                       FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                       VerticalAlignment="Center" MaxLines="2" />
+          </Grid>
+        </Button>
+        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnHomeClick"
-                AutomationProperties.Name="{DynamicResource ScreenMirror_Home}" />
-        <Button Content="{DynamicResource ScreenMirror_Recents}"
-                Margin="0,0,6,0"
+                ToolTip.Tip="{DynamicResource ScreenMirror_Home}"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_Home}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+            <avalonia:Home Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{DynamicResource ScreenMirror_Home}"
+                       FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                       VerticalAlignment="Center" MaxLines="2" />
+          </Grid>
+        </Button>
+        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnRecentsClick"
-                AutomationProperties.Name="{DynamicResource ScreenMirror_Recents}" />
-        <Button Content="{DynamicResource ScreenMirror_Power}"
-                Margin="0,0,6,0"
+                ToolTip.Tip="{DynamicResource ScreenMirror_Recents}"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_Recents}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+            <avalonia:Layers Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{DynamicResource ScreenMirror_Recents}"
+                       FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                       VerticalAlignment="Center" MaxLines="2" />
+          </Grid>
+        </Button>
+        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnPowerClick"
-                AutomationProperties.Name="{DynamicResource ScreenMirror_Power}" />
-        <Button Content="{DynamicResource ScreenMirror_VolumeDown}"
-                Margin="0,0,6,0"
+                ToolTip.Tip="{DynamicResource ScreenMirror_Power}"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_Power}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+            <avalonia:Poweroff Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{DynamicResource ScreenMirror_Power}"
+                       FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                       VerticalAlignment="Center" MaxLines="2" />
+          </Grid>
+        </Button>
+        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnVolumeDownClick"
-                AutomationProperties.Name="{DynamicResource ScreenMirror_VolumeDown}" />
-        <Button Content="{DynamicResource ScreenMirror_VolumeUp}"
-                Margin="0,0,6,0"
+                ToolTip.Tip="{DynamicResource ScreenMirror_VolumeDown}"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_VolumeDown}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+            <avalonia:SoundDown Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{DynamicResource ScreenMirror_VolumeDown}"
+                       FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                       VerticalAlignment="Center" MaxLines="2" />
+          </Grid>
+        </Button>
+        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnVolumeUpClick"
-                AutomationProperties.Name="{DynamicResource ScreenMirror_VolumeUp}" />
-        <Button Content="{DynamicResource ScreenMirror_PushClipboard}"
-                Margin="0,0,6,0"
+                ToolTip.Tip="{DynamicResource ScreenMirror_VolumeUp}"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_VolumeUp}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+            <avalonia:SoundUp Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{DynamicResource ScreenMirror_VolumeUp}"
+                       FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                       VerticalAlignment="Center" MaxLines="2" />
+          </Grid>
+        </Button>
+        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnPushClipboardClick"
-                AutomationProperties.Name="{DynamicResource ScreenMirror_PushClipboard}" />
-        <Button Content="{DynamicResource ScreenMirror_PullClipboard}"
-                Margin="0,0,6,0"
+                ToolTip.Tip="{DynamicResource ScreenMirror_PushClipboard}"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_PushClipboard}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+            <avalonia:Upload Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{DynamicResource ScreenMirror_PushClipboard}"
+                       FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                       VerticalAlignment="Center" MaxLines="2" />
+          </Grid>
+        </Button>
+        <Button MinWidth="80" Padding="6,4" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                 Click="OnPullClipboardClick"
-                AutomationProperties.Name="{DynamicResource ScreenMirror_PullClipboard}" />
-      </WrapPanel>
+                ToolTip.Tip="{DynamicResource ScreenMirror_PullClipboard}"
+                AutomationProperties.Name="{DynamicResource ScreenMirror_PullClipboard}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+            <avalonia:Download Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{DynamicResource ScreenMirror_PullClipboard}"
+                       FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                       VerticalAlignment="Center" MaxLines="2" />
+          </Grid>
+        </Button>
+      </controls:JustifiedWrapPanel>
     </Border>
   </Grid>
 </UserControl>
