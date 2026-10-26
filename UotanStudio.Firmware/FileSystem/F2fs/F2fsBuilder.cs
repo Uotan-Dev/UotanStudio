@@ -56,7 +56,7 @@ public sealed partial class F2fsBuilder
 
     private const uint FeatureQuotaInode = 0x0000_0080;
 
-    private const uint FeatureInodeCrtime = 0x0001_0000;
+    private const uint FeatureInodeCrtime = 0x0000_0100;
 
     private const uint FeatureLostFound = 0x0000_0200;
 
@@ -1598,9 +1598,6 @@ public sealed partial class F2fsBuilder
             return node.Ino;
         }
 
-        // Callers walk the logical indexes in ascending order, so the covering direct node only moves
-        // forward and a rescan from the head would repeat work for every block. A descending call resets
-        // the cursor and rescans, which reproduces the full linear search result.
         if (logical < lastLogical)
         {
             cursor = 0;
@@ -1625,7 +1622,6 @@ public sealed partial class F2fsBuilder
                 return dnode.Nid;
             }
 
-            // Direct nodes are laid out in ascending logical order, so nothing later can cover the block.
             break;
         }
 

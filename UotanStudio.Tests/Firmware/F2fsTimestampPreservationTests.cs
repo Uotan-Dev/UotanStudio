@@ -1,5 +1,7 @@
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.FileSystem.F2fs.Models;
+using UotanStudio.Firmware.FileSystem.Metadata;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -13,6 +15,9 @@ namespace UotanStudio.Tests.Firmware;
 /// </summary>
 public class F2fsTimestampPreservationTests
 {
+    private const uint UpstreamInodeCrtimeFeatureBit = 0x100;
+    private const uint UpstreamPackedSsaFeatureBit = 0x1_0000;
+    private const uint PreservedSourceFeatureWord = 0x919;
 
     [Fact]
     public void Build_WithSubSecondTimestamps_DoesNotCrash()
@@ -140,6 +145,65 @@ public class F2fsTimestampPreservationTests
 
         var image = F2fsBuilder.Build(tempDir.Path);
         Assert.NotEmpty(image);
+    }
+
+    [Fact]
+    public void Build_PreservedSourceFeature_ReplaysInodeCrtimeBit()
+    {
+        using var tempDir = new TempDir();
+        File.WriteAllBytes(Path.Combine(tempDir.Path, "a.txt"), "aaa"u8.ToArray());
+
+        var options = new F2fsOptions { SourceFeature = PreservedSourceFeatureWord };
+        var image = F2fsBuilder.Build(tempDir.Path, options);
+        using var ms = new MemoryStream(image, writable: false);
+        using var parser = new F2fsParser(ms);
+
+        var features = parser.Superblock.Feature;
+        Assert.Equal(PreservedSourceFeatureWord, features & PreservedSourceFeatureWord);
+        Assert.NotEqual(0u, features & UpstreamInodeCrtimeFeatureBit);
+        Assert.Equal(0u, features & UpstreamPackedSsaFeatureBit);
+    }
+
+    [Fact]
+    public void Build_PreservedBirthTime_SetsInodeCrtimeFeatureBitAndRestoresCrtime()
+    {
+        using var tempDir = new TempDir();
+        var content = "btime"u8.ToArray();
+        File.WriteAllBytes(Path.Combine(tempDir.Path, "btime.txt"), content);
+        using var outputDir = new TempDir();
+
+        var birthTime = new FileSystemTimestamp(1700000000, 123456789);
+        var manifest = new FileSystemPreservationData
+        {
+            Format = "F2FS",
+            ImagePaths = new Dictionary<string, string>(StringComparer.Ordinal) { ["btime.txt"] = "btime.txt" },
+            ParsedEntries =
+            [
+                new PreservedInodeEntry { Path = "", Size = 4096, Inode = 3, Mode = 0x41ED },
+                new PreservedInodeEntry
+                {
+                    Path = "btime.txt",
+                    Size = content.Length,
+                    Inode = 4,
+                    Mode = 0x81A4,
+                    Metadata = new FileSystemInodeMetadata { BirthTime = birthTime },
+                },
+            ],
+        };
+        var projection = new Dictionary<string, string>(StringComparer.Ordinal) { ["btime.txt"] = "file" };
+        var plan = new FileSystemEditPlan(tempDir.Path, manifest, projection);
+
+        var imagePath = Path.Combine(outputDir.Path, "out.img");
+        using (plan.Enter())
+        {
+            F2fsBuilder.Build(tempDir.Path, imagePath);
+        }
+
+        using var parser = new F2fsParser(imagePath);
+        Assert.NotEqual(0u, parser.Superblock.Feature & UpstreamInodeCrtimeFeatureBit);
+        Assert.Equal(0u, parser.Superblock.Feature & UpstreamPackedSsaFeatureBit);
+        var entry = Assert.Single(parser.ListEntriesWithRoot(), e => e.Path == "btime.txt");
+        Assert.Equal(birthTime, entry.Metadata!.BirthTime);
     }
 
     private sealed class TempDir : IDisposable
