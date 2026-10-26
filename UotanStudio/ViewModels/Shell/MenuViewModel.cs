@@ -1170,7 +1170,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             AllowMultiple = true,
             FileTypeFilter =
             [
-                new FilePickerFileType("Images") { Patterns = ["*.img", "*.bin", "*.cpio", "*.ofp", "*.ops", "*.ozip", "*.simg", "*.sparse"] },
+                new FilePickerFileType("Images") { Patterns = ["*.img", "*.bin", "*.cpio", "*.ofp", "*.ops", "*.ozip", "*.cpb", "*.simg", "*.sparse"] },
                 new FilePickerFileType("All files") { Patterns = ["*.*"] }
             ]
         });

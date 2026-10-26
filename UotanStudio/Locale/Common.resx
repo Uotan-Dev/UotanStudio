@@ -3138,6 +3138,24 @@ Continue?</value>
   <data name="FirmwareField_PartitionHash" xml:space="preserve">
     <value>Partition hash</value>
   </data>
+  <data name="FirmwareInfo_CpbSummary" xml:space="preserve">
+    <value>Coolpad CPB container header and image directory. Each image offset, size and CRC16 is declared by the container, and offsets are stored obfuscated with a key derived from the header. A matching checksum shows the container is intact; it does not establish authenticity.</value>
+  </data>
+  <data name="FirmwareField_CpbVersion" xml:space="preserve">
+    <value>CPB version</value>
+  </data>
+  <data name="FirmwareField_Model" xml:space="preserve">
+    <value>Device model</value>
+  </data>
+  <data name="FirmwareField_HardwareVersion" xml:space="preserve">
+    <value>Hardware version</value>
+  </data>
+  <data name="FirmwareField_RomFrom" xml:space="preserve">
+    <value>ROM source</value>
+  </data>
+  <data name="FirmwareField_Mismatch" xml:space="preserve">
+    <value>Mismatch</value>
+  </data>
   <data name="Explorer_OpenAsAuto" xml:space="preserve">
     <value>Automatic detection</value>
   </data>

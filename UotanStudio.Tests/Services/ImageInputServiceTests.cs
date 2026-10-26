@@ -86,6 +86,25 @@ public sealed class ImageInputServiceTests
     }
 
     [Fact]
+    public void DetectFormat_CoolpadCpbMagic_ReturnsCpb()
+    {
+        using var temp = new TempDirectory();
+        var package = CpbContainerBuilder.Build([("system.img", [1, 2, 3])]);
+        var file = temp.WriteBytes("firmware.cpb", package);
+
+        Assert.Equal("cpb", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void GetFormatLabel_Cpb_RoundTripsThroughParseFormatLabel()
+    {
+        var label = ImageInputService.GetFormatLabel(ImageFormatKind.Cpb);
+
+        Assert.Equal("cpb", label);
+        Assert.Equal(ImageFormatKind.Cpb, ImageInputService.ParseFormatLabel(label));
+    }
+
+    [Fact]
     public void GetFormatLabel_UpdateBin_RoundTripsThroughParseFormatLabel()
     {
         var label = ImageInputService.GetFormatLabel(ImageFormatKind.UpdateBin);

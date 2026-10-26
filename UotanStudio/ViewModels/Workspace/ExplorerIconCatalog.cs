@@ -106,7 +106,7 @@ public static class ExplorerIconCatalog
             ".tar" or ".tgz" or ".gz" or ".xz" or ".bz2" or ".zst" or ".lz4" or ".lzma" or ".lz" or ".br" or ".cpio" =>
                 new(AppIconKind.Archive, ExplorerIconPalette.Archive),
 
-            ".pac" or ".ops" or ".nb0" or ".ofp" or ".ozip" or ".kdz" or ".ftf" =>
+            ".pac" or ".ops" or ".nb0" or ".ofp" or ".ozip" or ".kdz" or ".ftf" or ".cpb" =>
                 new(AppIconKind.Package, ExplorerIconPalette.Firmware),
 
             ".pem" or ".der" or ".crt" or ".cer" or ".cert" or ".x509" =>

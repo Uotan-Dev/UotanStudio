@@ -3138,6 +3138,24 @@
   <data name="FirmwareField_PartitionHash" xml:space="preserve">
     <value>分区哈希</value>
   </data>
+  <data name="FirmwareInfo_CpbSummary" xml:space="preserve">
+    <value>酷派 CPB 容器头与镜像目录信息。每个镜像的偏移、长度与 CRC16 由容器声明，其中偏移以由头部推导出的密钥混淆存储。校验和一致说明容器完整，不代表其来源可信。</value>
+  </data>
+  <data name="FirmwareField_CpbVersion" xml:space="preserve">
+    <value>CPB 版本</value>
+  </data>
+  <data name="FirmwareField_Model" xml:space="preserve">
+    <value>适用机型</value>
+  </data>
+  <data name="FirmwareField_HardwareVersion" xml:space="preserve">
+    <value>硬件版本</value>
+  </data>
+  <data name="FirmwareField_RomFrom" xml:space="preserve">
+    <value>ROM 来源</value>
+  </data>
+  <data name="FirmwareField_Mismatch" xml:space="preserve">
+    <value>不一致</value>
+  </data>
   <data name="Explorer_OpenAsAuto" xml:space="preserve">
     <value>自动识别</value>
   </data>

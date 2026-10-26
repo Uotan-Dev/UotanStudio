@@ -229,7 +229,7 @@ public partial class NewProjectWindow : Window, INewProjectDialog
                 [
                     new FilePickerFileType(LanguageService.Instance.GetString("NewProject_ImageFiles"))
                     {
-                        Patterns = ["*.img", "*.zip", "*.bin", "*.raw", "*.ext4", "*.erofs", "*.f2fs", "*.dat", "*.br", "*.ozip", "*.ofp", "*.ops", "*.pac", "*.super", "*.app", "*.simg", "*.sparse"]
+                        Patterns = ["*.img", "*.zip", "*.bin", "*.raw", "*.ext4", "*.erofs", "*.f2fs", "*.dat", "*.br", "*.ozip", "*.ofp", "*.ops", "*.pac", "*.cpb", "*.super", "*.app", "*.simg", "*.sparse"]
                     },
                     FilePickerFileTypes.All
                 ]

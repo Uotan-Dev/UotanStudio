@@ -66,6 +66,9 @@ internal enum ImageFormatKind
     /// <summary>Oppo OFP, OPS or OZIP package.<para>Oppo OFP、OPS 或 OZIP 包。</para></summary>
     Oppo,
 
+    /// <summary>Coolpad CPB firmware package.<para>酷派 CPB 固件包。</para></summary>
+    Cpb,
+
     /// <summary>ext4 filesystem image.<para>ext4 文件系统镜像。</para></summary>
     Ext4,
 
@@ -193,9 +196,13 @@ internal sealed class ImageInputService
         if (registered is LpFormatHandler) return ImageFormatKind.Super;
         if (registered is not null && registered.FormatName == HarmonyUpdateBinFormatName)
             return ImageFormatKind.UpdateBin;
+        if (registered is not null && registered.FormatName == CoolpadCpbFormatName)
+            return ImageFormatKind.Cpb;
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         switch (extension)
         {
+            case ".cpb":
+                return ImageFormatKind.Cpb;
             case ".cpio":
                 return ImageFormatKind.Cpio;
             case ".ofp":
@@ -306,6 +313,7 @@ internal sealed class ImageInputService
         ImageFormatKind.Payload => "payload",
         ImageFormatKind.Cpio => "cpio",
         ImageFormatKind.Oppo => "oppo",
+        ImageFormatKind.Cpb => "cpb",
         ImageFormatKind.Ext4 => "ext4",
         ImageFormatKind.Erofs => "erofs",
         ImageFormatKind.F2fs => "f2fs",
@@ -344,6 +352,7 @@ internal sealed class ImageInputService
         "payload" => ImageFormatKind.Payload,
         "cpio" => ImageFormatKind.Cpio,
         "oppo" => ImageFormatKind.Oppo,
+        "cpb" => ImageFormatKind.Cpb,
         "ext4" => ImageFormatKind.Ext4,
         "erofs" => ImageFormatKind.Erofs,
         "f2fs" => ImageFormatKind.F2fs,
@@ -370,6 +379,11 @@ internal sealed class ImageInputService
     /// <para>HarmonyOS update.bin 处理器发布的格式名。</para>
     /// </summary>
     private const string HarmonyUpdateBinFormatName = "HarmonyOS update.bin";
+
+    /// <summary>Format name published by the Coolpad CPB handler.
+    /// <para>酷派 CPB 处理器发布的格式名。</para>
+    /// </summary>
+    private const string CoolpadCpbFormatName = "Coolpad CPB Package";
 
     /// <summary>
     /// Runs the registered format detector once, registering the built-in handlers first.

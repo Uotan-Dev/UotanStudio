@@ -83,6 +83,7 @@ public partial class FirmwareInfoViewModel
             "Android Boot / Vendor Boot Image" => LanguageService.Instance.GetString("FirmwareInfo_BootSummary"),
             "Android OTA Payload (payload.bin)" => LanguageService.Instance.GetString("FirmwareInfo_PayloadSummary"),
             "Android Sparse Image (simg)" => LanguageService.Instance.GetString("FirmwareInfo_SparseSummary"),
+            "Coolpad CPB Package" => LanguageService.Instance.GetString("FirmwareInfo_CpbSummary"),
             _ => _rawSummary
         };
         HasMetadata = Metadata.Count > 0;
