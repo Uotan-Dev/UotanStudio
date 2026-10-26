@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+
 namespace UotanStudio.Comm.Protocols.Bootrom;
 
 /// <summary>
@@ -87,6 +89,51 @@ public static class RkdlConstants
     public const int MaxEraseBlocksPerCommand = 16;
 
     /// <summary>
+    /// Physical sector size on the wire for WRITE_SECTOR: 512 data bytes plus 16 spare bytes, as
+    /// <c>RKU_WriteSector</c> uses.
+    /// <para>WRITE_SECTOR 的线上物理扇区大小：512 数据字节加 16 备用字节，与 <c>RKU_WriteSector</c> 一致。</para>
+    /// </summary>
+    public const int SectorWithSpareSize = 528;
+
+    /// <summary>
+    /// Maximum number of 528-byte sectors one WRITE_SECTOR command may carry, the
+    /// <c>RKU_WriteSector</c> cross-border limit.
+    /// <para>一条 WRITE_SECTOR 命令最多携带的 528 字节扇区数，即 <c>RKU_WriteSector</c> 的越界上限。</para>
+    /// </summary>
+    public const int MaxWriteSectorsPerCommand = 32;
+
+    /// <summary>
+    /// Sector count one ERASE_LBA command is asked to erase by the whole-media erase loop, matching
+    /// the <c>1024 * 32</c> chunk of <c>CRKDevice::EraseEmmc</c>.
+    /// <para>整介质擦除循环每条 ERASE_LBA 命令擦除的扇区数，与 <c>CRKDevice::EraseEmmc</c> 的
+    /// <c>1024 * 32</c> 分块一致。</para>
+    /// </summary>
+    public const int EraseSectorChunk = 1024 * 32;
+
+    /// <summary>
+    /// Length of the leading <c>STRUCT_FLASHINFO_CMD</c> bytes READ_FLASH_INFO transfers: flash size,
+    /// block size, page size, ECC bits, access time, manufacturer code and flash chip select.
+    /// <para>READ_FLASH_INFO 传输的 <c>STRUCT_FLASHINFO_CMD</c> 首部长度：flash 容量、块大小、
+    /// 页大小、ECC 位数、访问时间、厂商代码与 flash 片选。</para>
+    /// </summary>
+    public const int FlashInfoStructureLength = 11;
+
+    /// <summary>
+    /// Upper bound of the READ_FLASH_INFO data phase; the device may answer with a longer
+    /// structure, which is read up to this size.
+    /// <para>READ_FLASH_INFO 数据阶段的上界；设备可能返回更长的结构，最多读取该长度。</para>
+    /// </summary>
+    public const int MaxFlashInfoLength = 512;
+
+    /// <summary>
+    /// READ_FLASH_ID value that marks an eMMC medium. Read as little-endian bytes the constant
+    /// spells "EMMC", which is how <c>CRKDevice::GetFlashInfo</c> recognizes an eMMC.
+    /// <para>标识 eMMC 介质的 READ_FLASH_ID 取值。按小端字节读取时该常量拼作 "EMMC"，
+    /// 这正是 <c>CRKDevice::GetFlashInfo</c> 识别 eMMC 的方式。</para>
+    /// </summary>
+    public const uint EmmcFlashId = 0x434D4D45;
+
+    /// <summary>
     /// Upper bound, in milliseconds, accepted for the <c>dwDataDelay</c> field of an
     /// RKBOOT loader entry, so a crafted file cannot stall the download or wrap negative
     /// as a signed wait.
@@ -170,6 +217,9 @@ internal static class RkdlTestUnitSubCode
 
     /// <summary>Erase user data. <para>擦除用户数据。</para></summary>
     public const byte EraseUserData = 0xFB;
+
+    /// <summary>Query the user-data sector map. <para>查询用户数据扇区映射。</para></summary>
+    public const byte GetUserSector = 0xF9;
 }
 
 /// <summary>
@@ -220,6 +270,12 @@ internal enum RkdlCommand : byte
     /// <para>正常擦除：6。</para>
     /// </summary>
     EraseNormal = 0x06,
+
+    /// <summary>
+    /// Erase Force: 0x0B, which ignores bad-block markers.
+    /// <para>强制擦除：0x0B，忽略坏块标记。</para>
+    /// </summary>
+    EraseForce = 0x0B,
 
     /// <summary>
     /// Read LBA: 0x14.
@@ -396,11 +452,9 @@ internal class RkChipInfo
 }
 
 /// <summary>
-/// RKDL flash info as reported by READ_FLASH_INFO. Only the leading DWORD of the
-/// response is parsed, and the remaining bytes stay verbatim in
-/// <see cref="RawResponse"/>.
-/// <para>READ_FLASH_INFO 报告的 RKDL 闪存信息。只解析响应的首个 DWORD，其余字节原样
-/// 保留在 <see cref="RawResponse"/> 中。</para>
+/// RKDL flash info as reported by READ_FLASH_INFO, decoded from the packed
+/// <c>STRUCT_FLASHINFO_CMD</c> the device returns.
+/// <para>READ_FLASH_INFO 报告的 RKDL 闪存信息，由设备返回的紧凑 <c>STRUCT_FLASHINFO_CMD</c> 解码而来。</para>
 /// </summary>
 internal sealed class RkFlashInfo
 {
@@ -418,9 +472,7 @@ internal sealed class RkFlashInfo
     /// Gets the complete READ_FLASH_INFO data phase exactly as the device returned it.
     /// <para>获取设备原样返回的完整 READ_FLASH_INFO 数据阶段。</para>
     /// </summary>
-    /// <value>The verbatim response bytes, at least four long; unparsed fields beyond the leading
-    /// DWORD are present but undecoded. <para>逐字节的响应，至少 4 字节；首个 DWORD 之后的未解析字段
-    /// 存在但未解码。</para></value>
+    /// <value>The verbatim response bytes, at least 11 long. <para>逐字节的响应，至少 11 字节。</para></value>
     public required byte[] RawResponse { get; init; }
 
     /// <summary>
@@ -440,6 +492,199 @@ internal sealed class RkFlashInfo
     /// <see cref="SectorSize"/>. <para><see cref="SectorCount"/> 按协议 LBA 粒度
     /// <see cref="SectorSize"/> 缩放的结果。</para></value>
     public long Size => SectorCount * SectorSize;
+
+    /// <summary>
+    /// Gets the erase block size in 512-byte sectors (<c>usBlockSize</c>).
+    /// <para>获取以 512 字节扇区计的擦除块大小（<c>usBlockSize</c>）。</para>
+    /// </summary>
+    /// <value>The device-reported block size in sectors; <c>0</c> means the device did not report
+    /// usable block geometry. <para>设备报告的块大小（扇区）；<c>0</c> 表示设备未报告可用的块几何。</para></value>
+    public ushort BlockSizeSectors { get; init; }
+
+    /// <summary>
+    /// Gets the NAND page size in 512-byte sectors (<c>bPageSize</c>).
+    /// <para>获取以 512 字节扇区计的 NAND 页大小（<c>bPageSize</c>）。</para>
+    /// </summary>
+    /// <value>The device-reported page size in sectors; <c>0</c> for media that has no NAND page.
+    /// <para>设备报告的页大小（扇区）；没有 NAND 页的介质为 <c>0</c>。</para></value>
+    public byte PageSizeSectors { get; init; }
+
+    /// <summary>
+    /// Gets the ECC bit count per sector (<c>bECCBits</c>).
+    /// <para>获取每扇区的 ECC 位数（<c>bECCBits</c>）。</para>
+    /// </summary>
+    /// <value>The device-reported ECC strength. <para>设备报告的 ECC 强度。</para></value>
+    public byte EccBits { get; init; }
+
+    /// <summary>
+    /// Gets the access time reported by the device (<c>bAccessTime</c>).
+    /// <para>获取设备报告的访问时间（<c>bAccessTime</c>）。</para>
+    /// </summary>
+    /// <value>The device-reported access time. <para>设备报告的访问时间。</para></value>
+    public byte AccessTime { get; init; }
+
+    /// <summary>
+    /// Gets the flash manufacturer code (<c>bManufCode</c>).
+    /// <para>获取 flash 厂商代码（<c>bManufCode</c>）。</para>
+    /// </summary>
+    /// <value>The manufacturer index decoded by <see cref="ManufacturerName"/>.
+    /// <para>由 <see cref="ManufacturerName"/> 解码的厂商下标。</para></value>
+    public byte ManufacturerCode { get; init; }
+
+    /// <summary>
+    /// Gets the flash chip-select bitmask (<c>bFlashCS</c>); bit <c>n</c> set means chip <c>n</c>
+    /// is populated.
+    /// <para>获取 flash 片选位掩码（<c>bFlashCS</c>）；第 <c>n</c> 位置位表示芯片 <c>n</c> 在位。</para>
+    /// </summary>
+    /// <value>The chip-select bitmask. <para>片选位掩码。</para></value>
+    public byte FlashCs { get; init; }
+
+    /// <summary>
+    /// Gets the manufacturer name for <see cref="ManufacturerCode"/>, or <c>UNKNOWN</c> above the
+    /// eight indices the protocol names.
+    /// <para>获取 <see cref="ManufacturerCode"/> 对应的厂商名称；超过协议命名的八个下标时为 <c>UNKNOWN</c>。</para>
+    /// </summary>
+    /// <value>The manufacturer name. <para>厂商名称。</para></value>
+    public string ManufacturerName => ManufacturerCode switch
+    {
+        0 => "SAMSUNG",
+        1 => "TOSHIBA",
+        2 => "HYNIX",
+        3 => "INFINEON",
+        4 => "MICRON",
+        5 => "RENESAS",
+        6 => "ST",
+        7 => "INTEL",
+        _ => "UNKNOWN",
+    };
+
+    /// <summary>
+    /// Gets the erase block size in bytes, or <c>0</c> when the device reported no block geometry.
+    /// <para>获取以字节计的擦除块大小；设备未报告块几何时为 <c>0</c>。</para>
+    /// </summary>
+    /// <value><see cref="BlockSizeSectors"/> scaled by <see cref="SectorSize"/>.
+    /// <para><see cref="BlockSizeSectors"/> 按 <see cref="SectorSize"/> 缩放的结果。</para></value>
+    public long BlockSizeBytes => BlockSizeSectors * (long)SectorSize;
+
+    /// <summary>
+    /// Gets the number of erase blocks the media holds, or <c>0</c> when the block size is unusable.
+    /// <para>获取介质包含的擦除块数；块大小不可用时为 <c>0</c>。</para>
+    /// </summary>
+    /// <value><see cref="SectorCount"/> divided by <see cref="BlockSizeSectors"/>.
+    /// <para><see cref="SectorCount"/> 除以 <see cref="BlockSizeSectors"/> 的结果。</para></value>
+    public long BlockCount => BlockSizeSectors == 0 ? 0 : SectorCount / BlockSizeSectors;
+
+    /// <summary>
+    /// Gets the zero-based indices of the populated flash chips decoded from <see cref="FlashCs"/>.
+    /// <para>获取由 <see cref="FlashCs"/> 解码出的在位 flash 芯片从零开始的下标。</para>
+    /// </summary>
+    /// <value>One entry per set bit, lowest index first; empty when the device reported no chip.
+    /// <para>每个置位一位的条目，下标由低到高；设备未报告芯片时为空。</para></value>
+    public IReadOnlyList<int> FlashChips
+    {
+        get
+        {
+            var chips = new List<int>(8);
+            for (var bit = 0; bit < 8; bit++)
+            {
+                if ((FlashCs & (1 << bit)) != 0)
+                {
+                    chips.Add(bit);
+                }
+            }
+
+            return chips;
+        }
+    }
+
+    /// <summary>
+    /// Decodes a READ_FLASH_INFO data phase into the packed <c>STRUCT_FLASHINFO_CMD</c> fields.
+    /// <para>将 READ_FLASH_INFO 数据阶段解码为紧凑 <c>STRUCT_FLASHINFO_CMD</c> 字段。</para>
+    /// </summary>
+    /// <param name="response">The flashed info bytes; at least <see cref="RkdlConstants.FlashInfoStructureLength"/> long.
+    /// <para>flash 信息字节；至少 <see cref="RkdlConstants.FlashInfoStructureLength"/> 长。</para></param>
+    /// <returns>The decoded flash info, with the verbatim response preserved.
+    /// <para>解码出的 flash 信息，并保留逐字节原始响应。</para></returns>
+    /// <exception cref="RkdlException">The response is shorter than the 11-byte structure prefix.
+    /// <para>响应短于 11 字节结构前缀。</para></exception>
+    public static RkFlashInfo Decode(ReadOnlySpan<byte> response)
+    {
+        if (response.Length < RkdlConstants.FlashInfoStructureLength)
+        {
+            throw new RkdlException(RkdlError.FlashInfoFailed,
+                $"READ_FLASH_INFO answered {response.Length} bytes, fewer than the {RkdlConstants.FlashInfoStructureLength}-byte structure prefix.");
+        }
+
+        return new RkFlashInfo
+        {
+            SectorCount = BinaryPrimitives.ReadUInt32LittleEndian(response),
+            BlockSizeSectors = BinaryPrimitives.ReadUInt16LittleEndian(response.Slice(4, 2)),
+            PageSizeSectors = response[6],
+            EccBits = response[7],
+            AccessTime = response[8],
+            ManufacturerCode = response[9],
+            FlashCs = response[10],
+            RawResponse = response.ToArray(),
+        };
+    }
+}
+
+/// <summary>
+/// Device capability word returned by READ_CAPABILITY.
+/// <para>READ_CAPABILITY 返回的设备能力字。</para>
+/// </summary>
+/// <remarks>
+/// <para>Only the two bits <c>CRKDevice::ReadCapability</c> consumes are decoded: bit 0 selects
+/// direct-LBA addressing and bit 2 marks first-4M access. The remaining bits stay verbatim in
+/// <see cref="Raw"/> and are not interpreted.</para>
+/// <para>只解码 <c>CRKDevice::ReadCapability</c> 使用的两个位：位 0 表示直接 LBA 寻址，位 2 表示
+/// 前 4M 访问。其余位原样保留在 <see cref="Raw"/> 中且不作解释。</para>
+/// </remarks>
+public sealed class RkCapability
+{
+    private RkCapability(byte[] raw) => Raw = raw;
+
+    /// <summary>
+    /// Gets the capability bytes exactly as the device returned them.
+    /// <para>获取设备原样返回的能力字节。</para>
+    /// </summary>
+    /// <value>The verbatim response, at least eight bytes. <para>逐字节响应，至少 8 字节。</para></value>
+    public byte[] Raw { get; }
+
+    /// <summary>
+    /// Gets whether the device accepts direct-LBA addressing (bit 0 of the first capability byte),
+    /// which lets the whole media be erased through ERASE_LBA instead of per-block erase commands.
+    /// <para>获取设备是否接受直接 LBA 寻址（首字节位 0），从而可以通过 ERASE_LBA 而非逐块擦除命令擦除整个介质。</para>
+    /// </summary>
+    /// <value><c>true</c> when direct LBA is supported. <para>支持直接 LBA 时为 <c>true</c>。</para></value>
+    public bool DirectLba => (Raw[0] & 0x01) != 0;
+
+    /// <summary>
+    /// Gets whether the device exposes first-4M access (bit 2 of the first capability byte).
+    /// <para>获取设备是否提供前 4M 访问（首字节位 2）。</para>
+    /// </summary>
+    /// <value><c>true</c> when first-4M access is supported. <para>支持前 4M 访问时为 <c>true</c>。</para></value>
+    public bool First4MAccess => (Raw[0] & 0x04) != 0;
+
+    /// <summary>
+    /// Decodes the eight-byte READ_CAPABILITY data phase.
+    /// <para>解码 8 字节 READ_CAPABILITY 数据阶段。</para>
+    /// </summary>
+    /// <param name="response">The capability bytes; at least eight long. <para>能力字节；至少 8 字节。</para></param>
+    /// <returns>The decoded capability word with the verbatim bytes preserved.
+    /// <para>解码后的能力字，并保留逐字节原始内容。</para></returns>
+    /// <exception cref="RkdlException">The response is shorter than eight bytes.
+    /// <para>响应短于 8 字节。</para></exception>
+    public static RkCapability Decode(ReadOnlySpan<byte> response)
+    {
+        if (response.Length < 8)
+        {
+            throw new RkdlException(RkdlError.ReadFailed,
+                $"READ_CAPABILITY answered {response.Length} bytes, fewer than the 8 bytes the protocol transfers.");
+        }
+
+        return new RkCapability(response.ToArray());
+    }
 }
 
 /// <summary>

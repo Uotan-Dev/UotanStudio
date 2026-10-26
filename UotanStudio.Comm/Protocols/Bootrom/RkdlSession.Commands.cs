@@ -31,16 +31,18 @@ public sealed partial class RkdlSession
     /// the leading DWORD is the total sector count.
     /// <para>通过 READ_FLASH_INFO CBW/CSW 事务从设备读取闪存信息。设备以紧凑的
     /// <c>STRUCT_FLASHINFO_CMD</c>（最多 512 字节）响应；首 DWORD 为总扇区数。</para>
-    /// Only that leading DWORD is decoded. The offsets of the remaining fields of the upstream
-    /// structure (media block size, page size, ...) cannot be verified against a local copy of
-    /// <c>RKComm.h</c>, so the whole response is preserved verbatim in
-    /// <see cref="RkFlashInfo.RawResponse"/> rather than being decoded from guessed offsets.
-    /// <see cref="RkFlashInfo.SectorSize"/> is therefore the protocol LBA granularity
-    /// <see cref="RkdlConstants.SectorSize"/>, never a device-reported value.
-    /// <para>只解码首个 DWORD。上游结构其余字段（介质块大小、页大小等）的偏移无法用本地
-    /// <c>RKComm.h</c> 副本核对，因此整个响应原样保留在 <see cref="RkFlashInfo.RawResponse"/> 中，
-    /// 而不按猜测的偏移解码。所以 <see cref="RkFlashInfo.SectorSize"/> 是协议 LBA 粒度
-    /// <see cref="RkdlConstants.SectorSize"/>，绝不是设备报告值。</para>
+    /// The leading DWORD is the total sector count and the following seven bytes are the packed
+    /// <c>STRUCT_FLASHINFO_CMD</c> prefix (block size, page size, ECC bits, access time, manufacturer
+    /// code, flash chip select), decoded by <see cref="RkFlashInfo.Decode"/> from the layout in
+    /// <c>RKDevice.h</c>.
+    /// <para>首个 DWORD 是总扇区数，其后 7 字节是紧凑 <c>STRUCT_FLASHINFO_CMD</c> 前缀（块大小、页大小、
+    /// ECC 位数、访问时间、厂商代码、flash 片选），由 <see cref="RkFlashInfo.Decode"/> 按
+    /// <c>RKDevice.h</c> 中的布局解码。</para>
+    /// <see cref="RkFlashInfo.SectorSize"/> stays the protocol LBA granularity
+    /// <see cref="RkdlConstants.SectorSize"/> rather than a device-reported value, because the
+    /// structure reports media geometry in those protocol sectors.
+    /// <para><see cref="RkFlashInfo.SectorSize"/> 仍是协议 LBA 粒度
+    /// <see cref="RkdlConstants.SectorSize"/>，不是设备报告值，因为该结构本身就以这些协议扇区表示介质几何。</para>
     /// </summary>
     /// <returns>The decoded sector count together with the verbatim response bytes.
     /// <para>解码出的扇区数与逐字节的原始响应。</para></returns>
@@ -49,12 +51,9 @@ public sealed partial class RkdlSession
     /// <para>数据阶段短于请求的 11 字节，或 CSW 报告失败。</para></exception>
     internal RkFlashInfo ReadFlashInfo()
     {
-        var data = ReadDataCommand(RkdlCommand.ReadFlashInfo, 11, RkdlFrame.CbwcbLengthShort, 512, 11);
-        return new RkFlashInfo
-        {
-            SectorCount = BinaryPrimitives.ReadUInt32LittleEndian(data),
-            RawResponse = data
-        };
+        var data = ReadDataCommand(RkdlCommand.ReadFlashInfo, RkdlConstants.FlashInfoStructureLength,
+            RkdlFrame.CbwcbLengthShort, RkdlConstants.MaxFlashInfoLength, RkdlConstants.FlashInfoStructureLength);
+        return RkFlashInfo.Decode(data);
     }
 
     /// <summary>
@@ -175,22 +174,19 @@ public sealed partial class RkdlSession
     /// <para>通过一次 READ_CAPABILITY CBW/CSW 事务读取设备能力位，传输 8 字节。</para>
     /// </summary>
     /// <remarks>
-    /// <para>The result is undecoded. Each capability bit is defined by a capability structure whose
-    /// layout this repository does not carry a verifiable copy of, so no typed decoder is offered and
-    /// callers must not interpret individual bits from the prose above alone.
-    /// <see cref="ReadChipInfo"/> does return a typed result only because the layout of its 16-byte
-    /// response is already exercised by an existing code path.</para>
-    /// <para>返回结果未解码。每个能力位由一份 capability 结构定义，本仓库没有该结构可核对的副本，
-    /// 因此不提供类型化解码器，调用方也不得仅凭上面的散文描述去解释单个位。
-    /// <see cref="ReadChipInfo"/> 之所以返回类型化结果，是因为其 16 字节响应的布局已被现有代码路径
-    /// 实际使用。</para>
+    /// <para>Bit 0 of the first byte selects direct-LBA addressing and bit 2 marks first-4M access;
+    /// those are the only bits <c>CRKDevice::ReadCapability</c> consumes, so they are the only ones
+    /// decoded. The whole response stays verbatim in <see cref="RkCapability.Raw"/>.</para>
+    /// <para>首字节的位 0 表示直接 LBA 寻址，位 2 表示前 4M 访问；它们是
+    /// <c>CRKDevice::ReadCapability</c> 唯一使用的位，因此也只解码这两位。整个响应原样保留在
+    /// <see cref="RkCapability.Raw"/> 中。</para>
     /// </remarks>
-    /// <returns>The raw capability bytes returned by the device (at least 8).
-    /// <para>设备返回的原始能力位字节（至少 8 个）。</para></returns>
+    /// <returns>The decoded capability word, at least 8 raw bytes preserved.
+    /// <para>解码后的能力字，并保留至少 8 字节原始内容。</para></returns>
     /// <exception cref="RkdlException">The data phase was shorter than the 8 bytes requested, or the
     /// CSW reported failure. <para>数据阶段短于请求的 8 字节，或 CSW 报告失败。</para></exception>
-    public byte[] ReadCapability()
-        => ReadDataCommand(RkdlCommand.ReadCapability, 8, RkdlFrame.CbwcbLengthShort, 8, 8);
+    public RkCapability ReadCapability()
+        => RkCapability.Decode(ReadDataCommand(RkdlCommand.ReadCapability, 8, RkdlFrame.CbwcbLengthShort, 8, 8));
 
     /// <summary>
     /// Resets the device via a DEVICE_RESET (0xFF) CBW/CSW transaction. The cached flash geometry is
@@ -408,20 +404,79 @@ public sealed partial class RkdlSession
     }
 
     /// <summary>
+    /// Writes 528-byte physical sectors (512 data bytes plus 16 spare bytes each) through a
+    /// WRITE_SECTOR (0x05) CBW/CSW transaction.
+    /// <para>通过 WRITE_SECTOR（0x05）CBW/CSW 事务写入 528 字节物理扇区（每个 512 数据字节加 16 备用字节）。</para>
+    /// </summary>
+    /// <remarks>
+    /// <para>WRITE_SECTOR addresses raw NAND sectors rather than LBAs, so the spare area is part of
+    /// the payload and <paramref name="sectorPosition"/> counts 528-byte sectors. One command carries
+    /// at most <see cref="RkdlConstants.MaxWriteSectorsPerCommand"/> sectors, the upstream
+    /// <c>ERR_CROSS_BORDER</c> bound.</para>
+    /// <para>WRITE_SECTOR 寻址的是原始 NAND 扇区而非 LBA，因此备用区属于负载，
+    /// <paramref name="sectorPosition"/> 以 528 字节扇区计数。一条命令最多携带
+    /// <see cref="RkdlConstants.MaxWriteSectorsPerCommand"/> 个扇区，即上游的 <c>ERR_CROSS_BORDER</c> 上限。</para>
+    /// </remarks>
+    /// <param name="sectorPosition">The first 528-byte sector to write. <para>要写入的首个 528 字节扇区。</para></param>
+    /// <param name="data">A whole number of 528-byte sectors, at most 32 of them.
+    /// <para>整数个 528 字节扇区，最多 32 个。</para></param>
+    /// <exception cref="RkdlException">The payload is empty, not a whole number of 528-byte sectors,
+    /// longer than 32 sectors, the sector span leaves the device geometry, or the CSW reported failure.
+    /// <para>负载为空、不是整数个 528 字节扇区、超过 32 个扇区、扇区跨度超出设备几何，或 CSW 报告失败。</para></exception>
+    public void WriteSector(uint sectorPosition, ReadOnlySpan<byte> data)
+    {
+        ThrowIfDisposed();
+        if (data.Length == 0 || data.Length % RkdlConstants.SectorWithSpareSize != 0)
+        {
+            throw new RkdlException(RkdlError.InvalidParameter,
+                $"WRITE_SECTOR payload must be a non-empty whole number of {RkdlConstants.SectorWithSpareSize}-byte sectors, but is {data.Length} bytes.");
+        }
+
+        var sectorCount = data.Length / RkdlConstants.SectorWithSpareSize;
+        if (sectorCount > RkdlConstants.MaxWriteSectorsPerCommand)
+        {
+            throw new RkdlException(RkdlError.InvalidParameter,
+                $"WRITE_SECTOR payload carries {sectorCount} sectors, more than the {RkdlConstants.MaxWriteSectorsPerCommand} one command accepts.");
+        }
+
+        ValidateLbaRange(sectorPosition, sectorCount);
+        var cbw = new RkdlCbw(RkdlCommand.WriteSector, RkdlFrame.DirectionOut, (uint)data.Length,
+            RkdlFrame.CbwcbLengthLong, address: sectorPosition, sectorLength: (ushort)sectorCount);
+        WriteCbw(cbw);
+        var payload = data.ToArray();
+        var written = Transport.Write(payload, 0, payload.Length, _timeoutMs);
+        if (written != payload.Length)
+        {
+            throw new RkdlException(RkdlError.TransferFailed,
+                $"WRITE_SECTOR payload short write: {written}/{payload.Length}.");
+        }
+
+        var csw = ReadCsw(cbw.Tag);
+        if (!csw.IsSuccess)
+        {
+            throw new RkdlException(RkdlError.WriteFailed,
+                $"WRITE_SECTOR failed at sector {sectorPosition}, CSW status = {csw.Status}.");
+        }
+    }
+
+    /// <summary>
     /// Tests whether the device is ready via a TEST_UNIT_READY (0x00) CBW/CSW transaction,
     /// decoding the loader-boot progress from the CSW data residue (total in the low 16 bits,
     /// current in the high 16 bits, both big-endian).
     /// <para>通过 TEST_UNIT_READY（0x00）CBW/CSW 事务检测设备是否就绪，并从 CSW 数据余量解码
     /// loader 启动进度（总进度在低 16 位、当前进度在高 16 位，均按大端序）。</para>
     /// </summary>
+    /// <param name="subCode">A <see cref="RkdlTestUnitSubCode"/> value placed in the command
+    /// block's reserved byte; zero is the plain readiness query.
+    /// <para>放入命令块保留字节的 <see cref="RkdlTestUnitSubCode"/> 子码；零表示普通就绪查询。</para></param>
     /// <param name="progressCurrent">Receives the current progress value. <para>接收当前进度值。</para></param>
     /// <param name="progressTotal">Receives the total progress value. <para>接收总进度值。</para></param>
     /// <returns><c>true</c> when the device is ready. <para>设备就绪时返回 <c>true</c>。</para></returns>
-    public bool TestDeviceReady(out ushort progressCurrent, out ushort progressTotal)
+    public bool TestDeviceReady(byte subCode, out ushort progressCurrent, out ushort progressTotal)
     {
         ThrowIfDisposed();
         var cbw = new RkdlCbw(RkdlCommand.TestUnitReady, RkdlFrame.DirectionIn, 0,
-            RkdlFrame.CbwcbLengthShort);
+            RkdlFrame.CbwcbLengthShort, subCode: subCode);
         WriteCbw(cbw);
         var csw = ReadCsw(cbw.Tag, recovery: true);
         var residue = csw.DataResidue;
@@ -435,7 +490,24 @@ public sealed partial class RkdlSession
     /// <para>通过 TEST_UNIT_READY（0x00）CBW/CSW 事务检测设备是否就绪。</para>
     /// </summary>
     /// <returns><c>true</c> when the device is ready. <para>设备就绪时返回 <c>true</c>。</para></returns>
-    public bool TestDeviceReady() => TestDeviceReady(out _, out _);
+    public bool TestDeviceReady(out ushort progressCurrent, out ushort progressTotal)
+        => TestDeviceReady(0, out progressCurrent, out progressTotal);
+
+    /// <summary>
+    /// Tests whether the device is ready, asking a specific TEST_UNIT_READY sub code.
+    /// <para>检测设备是否就绪，并指定 TEST_UNIT_READY 子码。</para>
+    /// </summary>
+    /// <param name="subCode">A <see cref="RkdlTestUnitSubCode"/> value; zero keeps the plain
+    /// readiness query. <para><see cref="RkdlTestUnitSubCode"/> 子码；零表示普通就绪查询。</para></param>
+    /// <returns><c>true</c> when the device is ready. <para>设备就绪时返回 <c>true</c>。</para></returns>
+    public bool TestDeviceReady(byte subCode) => TestDeviceReady(subCode, out _, out _);
+
+    /// <summary>
+    /// Tests whether the device is ready via a plain TEST_UNIT_READY (0x00) transaction.
+    /// <para>通过普通 TEST_UNIT_READY（0x00）事务检测设备是否就绪。</para>
+    /// </summary>
+    /// <returns><c>true</c> when the device is ready. <para>设备就绪时返回 <c>true</c>。</para></returns>
+    public bool TestDeviceReady() => TestDeviceReady(0, out _, out _);
 
     /// <summary>
     /// Polls TEST_UNIT_READY until the loader reports ready or the timeout elapses, reporting
