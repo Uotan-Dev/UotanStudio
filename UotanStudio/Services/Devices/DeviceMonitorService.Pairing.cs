@@ -59,12 +59,25 @@ public sealed partial class DeviceMonitorService
                 progress.Report(new QrPairingProgress(mapped, p.Detail));
             });
 
-        var outcome = await AdbQrPairingService.PairAsync(credentials, reporter, discoveryTimeout, cancellationToken)
-            .ConfigureAwait(false);
+        AdbQrPairingOutcome outcome;
+        try
+        {
+            outcome = await AdbQrPairingService.PairAsync(credentials, reporter, discoveryTimeout, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "DevicePairing",
+                $"QR pairing failed: {ex.GetType().Name}: {ex.Message}");
+            throw;
+        }
+
         if (outcome.Route == AdbQrPairingRoute.Direct)
         {
             await AttachSecureDirectNetworkTargetAsync(outcome.Address, cancellationToken).ConfigureAwait(false);
         }
+        LogService.Instance.Write(LogLevel.Info, "DevicePairing",
+            $"QR pairing connected {outcome.Address} through the {outcome.Route} route.");
         await ForceRefreshAsync().ConfigureAwait(false);
         return outcome;
     }
@@ -96,10 +109,12 @@ public sealed partial class DeviceMonitorService
 
     /// <summary>
     /// After a successful direct QR pairing, validates the secure network target with one asynchronous TLS
-    /// handshake and registers it as a manual network endpoint requiring TLS; rethrows the underlying reason
-    /// on failure.
-    /// <para>扫码直连配对成功后，对安全网络目标完成一次异步 TLS 握手验证，成功后登记为需要 TLS 的手动网络端点；
-    /// 失败时向上抛出底层原因。</para>
+    /// handshake and registers it as a manual network endpoint requiring TLS. When the handshake fails on an
+    /// advertised port that the device has already replaced, the current port is browsed once and the target is
+    /// registered under that address instead; the original failure is rethrown when no replacement answers.
+    /// <para>扫码直连配对成功后，对安全网络目标完成一次异步 TLS 握手验证，成功后登记为需要 TLS 的手动网络端点。
+    /// 广播端口已被设备替换导致握手失败时，按 IP 重新浏览一次当前端口并以该地址登记；没有可用的替代端口时重新抛出
+    /// 原始失败。</para>
     /// </summary>
     /// <param name="target">A secure <c>host:port</c> endpoint to validate and register.
     /// <para>要验证并登记的 <c>host:port</c> 安全端点。</para></param>
@@ -111,6 +126,86 @@ public sealed partial class DeviceMonitorService
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
     /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     private async Task AttachSecureDirectNetworkTargetAsync(string target, CancellationToken cancellationToken)
+    {
+        var verified = await VerifySecureNetworkTargetAsync(target, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_networkTargetsLock)
+        {
+            _manualNetworkTargets[verified] = true;
+        }
+        MarkManualNetworkTargetVerified(verified);
+        if (DebugBridgeNetworkAddress.TrySplitEndpoint(verified, out var host, out _))
+        {
+            DropOtherManualNetworkTargetsForHost(host, verified);
+        }
+
+        SavePairedNetworkTargets();
+    }
+
+    /// <summary>
+    /// Completes one TLS handshake with a secure network target and returns the address that answered, which
+    /// differs from <paramref name="target"/> when the advertised port was stale and a fresh browse resolved the
+    /// current one.
+    /// <para>与安全网络目标完成一次 TLS 握手并返回实际应答的地址；广播端口过期、重新浏览解析出当前端口时，
+    /// 该地址与 <paramref name="target"/> 不同。</para>
+    /// </summary>
+    /// <param name="target">The advertised <c>host:port</c> endpoint.
+    /// <para>广播出的 <c>host:port</c> 端点。</para></param>
+    /// <param name="cancellationToken">Cancels the handshake and the port browse.
+    /// <para>取消握手与端口浏览。</para></param>
+    /// <returns>The address that completed the handshake. <para>完成握手的地址。</para></returns>
+    /// <exception cref="IOException">Neither the advertised nor the browsed port completed a handshake.
+    /// <para>广播端口与重新浏览到的端口都未完成握手。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    private async Task<string> VerifySecureNetworkTargetAsync(string target, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await ConnectSecureNetworkSessionAsync(target, cancellationToken).ConfigureAwait(false);
+            return target;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (!DebugBridgeNetworkAddress.TrySplitEndpoint(target, out var host, out var port))
+            {
+                throw new IOException("A paired secure target needs a host:port address.", ex);
+            }
+
+            var resolved = await ResolveCurrentSecurePortAsync(host, cancellationToken).ConfigureAwait(false);
+            if (resolved is not { } candidate || candidate == port)
+            {
+                throw;
+            }
+
+            var retried = DebugBridgeNetworkAddress.FormatEndpoint(host, candidate);
+            await ConnectSecureNetworkSessionAsync(retried, cancellationToken).ConfigureAwait(false);
+            return retried;
+        }
+    }
+
+    /// <summary>
+    /// Browses the current secure connect port for a device address and reports no replacement when the browse
+    /// itself fails, so the caller keeps the original handshake failure.
+    /// <para>为设备地址浏览当前安全连接端口；浏览本身失败时报告没有替代端口，使调用方保留原始握手失败。</para>
+    /// </summary>
+    /// <param name="host">The device address literal. <para>设备地址字面量。</para></param>
+    /// <param name="cancellationToken">Cancels the browse. <para>取消浏览。</para></param>
+    /// <returns>The browsed port, or <c>null</c> when the device did not answer.
+    /// <para>浏览到的端口；设备未应答时为 <c>null</c>。</para></returns>
+    private async Task<int?> ResolveCurrentSecurePortAsync(string host, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _controller.ResolveSecureNetworkPortAsync(host, RediscoverSecurePortTimeout,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    private async Task ConnectSecureNetworkSessionAsync(string target, CancellationToken cancellationToken)
     {
         if (!DebugBridgeNetworkAddress.TrySplitEndpoint(target, out var host, out var port))
         {
@@ -129,12 +224,5 @@ public sealed partial class DeviceMonitorService
         }
 
         session.Dispose();
-        cancellationToken.ThrowIfCancellationRequested();
-        lock (_networkTargetsLock)
-        {
-            _manualNetworkTargets[target] = true;
-        }
-        MarkManualNetworkTargetVerified(target);
-        SavePairedNetworkTargets();
     }
 }
