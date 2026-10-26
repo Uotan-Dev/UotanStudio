@@ -15,6 +15,7 @@ public sealed class ScreenMirrorVideoControl : Control
     private ScreenMirrorGpuPresenter? _boundPresenter;
     private WindowBase? _hookedTopLevel;
     private Window? _hookedWindow;
+    private int _renderLogged;
 
     /// <summary>
     /// Creates the video control and attaches the composition surface when its view-model arrives
@@ -41,6 +42,7 @@ public sealed class ScreenMirrorVideoControl : Control
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        MirrorTrace.Write($"control attach bound={Describe(_boundModel)} same={ReferenceEquals(DataContext, _boundModel)} presenter={Describe(_boundPresenter)} root={VisualRoot is not null}");
         BindPresentationHost();
     }
 
@@ -55,10 +57,17 @@ public sealed class ScreenMirrorVideoControl : Control
     /// </param>
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        MirrorTrace.Write($"control detach bound={Describe(_boundModel)} presenter={Describe(_boundPresenter)}");
         UnhookTopLevel();
-        _boundPresenter?.DetachCompositionVisual(this);
+        _boundPresenter?.ScheduleDetachCompositionVisual(this);
         base.OnDetachedFromVisualTree(e);
     }
+
+    private static string Describe(ScreenMirrorViewModel? model)
+        => model is null ? "null" : model.GetHashCode().ToString("x8");
+
+    private static string Describe(ScreenMirrorGpuPresenter? presenter)
+        => presenter is null ? "null" : presenter.GetHashCode().ToString("x8");
 
     /// <summary>
     /// Re-letterboxes the composition surface when the bounds of this control change and re-establishes presentation
@@ -80,6 +89,7 @@ public sealed class ScreenMirrorVideoControl : Control
 
         if (change.Property == IsVisibleProperty && change.GetNewValue<bool>())
         {
+            MirrorTrace.Write("control visible");
             RecoverPresentation();
         }
     }
@@ -101,6 +111,8 @@ public sealed class ScreenMirrorVideoControl : Control
         var bounds = new Rect(Bounds.Size);
         var presenter = model.GpuPresenter;
         var compositionCovering = presenter.CompositionCoversVideo;
+        if (_renderLogged++ % 120 == 0)
+            MirrorTrace.Write($"render covering={compositionCovering} frame={model.Frame is not null} bounds={bounds.Width:F0}x{bounds.Height:F0}");
         if (!compositionCovering && model.Frame is { } bitmap)
         {
             var size = bitmap.Size;
@@ -132,6 +144,7 @@ public sealed class ScreenMirrorVideoControl : Control
     {
         var next = DataContext as ScreenMirrorViewModel;
         var nextPresenter = next?.GpuPresenter;
+        MirrorTrace.Write($"bind next={Describe(next)} presenter={Describe(nextPresenter)} bound={Describe(_boundModel)} boundPresenter={Describe(_boundPresenter)} root={VisualRoot is not null}");
         if (!ReferenceEquals(next, _boundModel))
         {
             var previous = _boundModel;
@@ -164,9 +177,11 @@ public sealed class ScreenMirrorVideoControl : Control
     {
         if (_boundModel is not { } model || VisualRoot is null)
         {
+            MirrorTrace.Write($"recover skipped model={Describe(_boundModel)} root={VisualRoot is not null}");
             return;
         }
 
+        MirrorTrace.Write($"recover model={Describe(model)} covering={model.GpuPresenter.CompositionCoversVideo}");
         model.RecoverPresentation();
         InvalidateVisual();
     }

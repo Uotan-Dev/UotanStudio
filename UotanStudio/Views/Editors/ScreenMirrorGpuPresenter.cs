@@ -156,7 +156,10 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             && host.IsEffectivelyVisible;
         var covering = CoversVideo(new CompositionCoverage(
             installed, presented, detached, visualVisible, attached, _closed, failed));
+        var previous = Volatile.Read(ref _compositionCovering);
         Volatile.Write(ref _compositionCovering, covering ? 1 : 0);
+        if (previous != (covering ? 1 : 0))
+            MirrorTrace.Write($"coverage {previous}->{(covering ? 1 : 0)} installed={installed} presented={presented} detached={detached} visualVisible={visualVisible} attached={attached} hostVisible={host?.IsEffectivelyVisible}");
         return covering;
     }
 
@@ -215,6 +218,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             reuse = ReferenceEquals(_hostControl, host) && _surface is not null && !_recovery.Failed
                 && ReferenceEquals(_hostTopLevel, hostTopLevel);
         }
+        MirrorTrace.Write($"attach start host={host.GetHashCode():x8} reuse={reuse} closed={closed} surface={_surface is not null} gen={_recovery.Generation} failed={_recovery.Failed} terminal={_recovery.IsTerminal} attached={Avalonia.Controls.TopLevel.GetTopLevel(host) is not null}");
         Volatile.Write(ref _detachedSinceTicks, Environment.TickCount64);
         if (closed)
         {
@@ -228,11 +232,17 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
                 ElementComposition.SetElementChildVisual(host, _visual);
             UpdateCompositionLayout();
             if (wasDetached) RaiseCompositionRestored();
+            MirrorTrace.Write("attach reuse done");
             return;
         }
-        if (Volatile.Read(ref _attaching) != 0 && ReferenceEquals(_attachHost, host)) return;
+        if (Volatile.Read(ref _attaching) != 0 && ReferenceEquals(_attachHost, host))
+        {
+            MirrorTrace.Write("attach skipped (already attaching)");
+            return;
+        }
         DetachCompositionCore();
         var generation = _recovery.BeginAttach();
+        MirrorTrace.Write($"attach probing gen={generation}");
         if (generation == 0)
         {
             Volatile.Write(ref _compositionProbeCompleted, 1);
@@ -290,6 +300,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             var restored = _hadSurface;
             _hadSurface = true;
             UpdateCompositionLayout();
+            MirrorTrace.Write($"attach ok gen={generation} visual={visual.GetHashCode():x8} restored={restored}");
             if (restored) RaiseCompositionRestored();
         }
         catch (Exception error)
@@ -374,6 +385,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         CompositionDrawingSurface? surface;
         CompositionSurfaceVisual? visual;
         Visual? host;
+        int width, height;
         lock (_gate)
         {
             Composition = null;
@@ -385,10 +397,13 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             _hostControl = null;
             _hostTopLevel = null;
             _interop = null;
+            width = _compositionWidth;
+            height = _compositionHeight;
             _compositionWidth = 0;
             _compositionHeight = 0;
             _compositionStalls = 0;
         }
+        MirrorTrace.Write($"detach core host={host?.GetHashCode():x8} surface={surface is not null} size={width}x{height} gen={_recovery.Generation}");
         if (host is not null) ElementComposition.SetElementChildVisual(host, null);
         if (visual is not null) visual.Visible = false;
         surface?.Dispose();
@@ -444,7 +459,10 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             if (double.IsInfinity(scale) || scale <= 0) return;
             visual.Size = new Vector(width * scale, height * scale);
             visual.Offset = new Vector3D((bounds.Width - width * scale) / 2, (bounds.Height - height * scale) / 2, 0);
-            visual.Visible = UsesCompositionSurface && _compositionHasFrame;
+            var nextVisible = UsesCompositionSurface && _compositionHasFrame;
+            if (visual.Visible != nextVisible)
+                MirrorTrace.Write($"visual visible {visual.Visible}->{nextVisible} size={width}x{height} bounds={bounds.Width:F0}x{bounds.Height:F0} hasFrame={_compositionHasFrame}");
+            visual.Visible = nextVisible;
         }
         finally
         {
@@ -495,11 +513,16 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
         if (!UsesCompositionSurface)
         {
             frame.MarkPresented();
-            return RetainGpuExportWhileSurfaceMissing();
+            var retain = RetainGpuExportWhileSurfaceMissing();
+            if (_publishSharedLogged++ % 30 == 0)
+                MirrorTrace.Write($"publish shared without surface retain={retain} attached={Volatile.Read(ref _attaching)} sinceDetach={Environment.TickCount64 - Volatile.Read(ref _detachedSinceTicks)}");
+            return retain;
         }
         Dispatcher.UIThread.Post(() => PresentSharedTexture(frame), DispatcherPriority.Render);
         return true;
     }
+
+    private int _publishSharedLogged;
 
     /// <summary>
     /// Decides whether to keep GPU export enabled while the composition surface is temporarily
@@ -557,9 +580,14 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             var interop = _interop;
             var surface = _surface;
             if (_closed || interop is null || surface is null || !_recovery.IsCurrent(generation))
+            {
+                if (_presentSkipLogged++ % 20 == 0)
+                    MirrorTrace.Write($"present skip closed={_closed} interop={interop is not null} surface={surface is not null} current={_recovery.IsCurrent(generation)} gen={generation}/{_recovery.Generation}");
                 return;
+            }
             if (_hostDetached || _hostControl is null || Avalonia.Controls.TopLevel.GetTopLevel(_hostControl) is null)
             {
+                MirrorTrace.Write($"present host gone detached={_hostDetached} host={_hostControl is not null} topLevel={(_hostControl is null ? false : Avalonia.Controls.TopLevel.GetTopLevel(_hostControl) is not null)}");
                 if (!_hostDetached) FailComposition("composition host left the visual tree", terminal: false);
                 return;
             }
@@ -575,9 +603,12 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             if (Interlocked.Increment(ref _compositedFrames) == 1)
                 Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
                     "Composition presentation active: D3D11 shared texture.");
+            if (_presentOkLogged++ % 60 == 0)
+                MirrorTrace.Write($"present ok size={frame.Width}x{frame.Height} total={Interlocked.Read(ref _compositedFrames)}");
         }
         catch (Exception error)
         {
+            MirrorTrace.Write($"present failed gen={generation}/{_recovery.Generation} current={_recovery.IsCurrent(generation)}: {error.GetType().Name}: {error.Message}");
             if (_recovery.IsCurrent(generation)) FailComposition(error.Message, terminal: false);
         }
         finally
@@ -585,6 +616,10 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
             frame.MarkPresented();
         }
     }
+
+    private int _presentSkipLogged;
+    private int _presentOkLogged;
+    private int _drawSkipLogged;
 
     [SupportedOSPlatform("macos")]
     private async void PresentIosurface(IosurfaceVideoFrame frame)
@@ -676,6 +711,7 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
     private void FailComposition(string reason, bool terminal)
     {
         var first = _recovery.RecordFailure(terminal);
+        MirrorTrace.Write($"composition failed terminal={terminal} first={first}: {reason}");
         lock (_gate)
         {
             if (_visual is not null) _visual.Visible = false;
@@ -830,7 +866,12 @@ internal sealed class ScreenMirrorGpuPresenter : IDisposable
 
             while (owner._recycle.TryDequeue(out Action? recycle)) recycle();
             if (owner._closed || owner._failed) return;
-            if (owner.CompositionCoversVideo) return;
+            if (owner.CompositionCoversVideo)
+            {
+                if (owner._drawSkipLogged++ % 60 == 0)
+                    MirrorTrace.Write($"draw skipped: composition covers video hasFrame={owner._compositionHasFrame} visualVisible={owner._visual?.Visible}");
+                return;
+            }
             try
             {
                 var feature = context.TryGetFeature<ISkiaSharpApiLeaseFeature>();

@@ -47,6 +47,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
     private int _starting;
     private long _lastKeyFrameRequestTicks;
     private readonly Lock _frameLock = new();
+    private int _renderLoggedThrottle;
     private Views.Editors.ScreenMirrorPixelBuffer? _pendingFrame;
     private Views.Editors.ScreenMirrorPixelBuffer? _spareFrame;
     private bool _renderScheduled;
@@ -105,6 +106,11 @@ public partial class ScreenMirrorViewModel : Document, ITool
     private long _receivedFrames, _decodedFrames, _uploadedFrames, _receivedBytes;
     private int _frameFailureLogged;
     private long _audioDecodedFrames;
+    private int _decodeLoggedThrottle;
+    private long _lastIdleTrace;
+    private int _exportFrameLogged;
+    private int _packetLogged;
+    private int _decodeErrorLogged;
     private int _audioSampleRate, _audioChannels;
     private string _decoderBackend = string.Empty;
     private ScrcpyServerOptions? _streamOptions;
@@ -643,11 +649,19 @@ public partial class ScreenMirrorViewModel : Document, ITool
             return;
         }
 
+        Views.Editors.MirrorTrace.Write($"vm recover covering={GpuPresenter.CompositionCoversVideo} presentation={GpuPresenter.PresentationPath} keyframe={RequestKeyFrameInternal()}");
         GpuPresenter.RecoverCompositionHost();
         RequestKeyFrame();
     }
 
-    private void OnCompositionRestored(object? sender, EventArgs e) => RequestKeyFrame();
+    private bool RequestKeyFrameInternal()
+        => _client is { IsControlConnected: true };
+
+    private void OnCompositionRestored(object? sender, EventArgs e)
+    {
+        Views.Editors.MirrorTrace.Write("composition restored event");
+        RequestKeyFrame();
+    }
 
     /// <summary>
     /// Claims the single key-frame slot of the current interval, so repeated activations and reattachments cannot
@@ -730,6 +744,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
 
     private void DecodeLoop(MirrorSessionFacade client, CancellationToken token, int generation)
     {
+        Views.Editors.MirrorTrace.Write($"decode loop start gen={generation}");
         try
         {
             var metadata = client.VideoMetadata ?? throw new InvalidDataException("Missing scrcpy video metadata.");
@@ -754,6 +769,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 else if (active is VideoToolboxVideoDecoder videoToolbox && OperatingSystem.IsMacOS()) EnableIosurfaceExport(videoToolbox, generation);
                 _decoderBackend = VideoDecoderFactory.GetBackendName(decoder);
                 _pixelFormatDecoder = decoder;
+                Views.Editors.MirrorTrace.Write($"decoder ready backend={_decoderBackend} format={MirrorFrameFormat} gpuExport={options.MediaFoundationPreferGpuExport} presentation={GpuPresenter.PresentationPath}");
                 if (VideoDecoderFactory.GetFallbackReason(decoder) is { } reason)
                     Services.LogService.Instance.Write(Services.LogLevel.Warn,
                         "ScreenMirror", $"GPU initialization failed; using CPU: {reason}");
@@ -769,6 +785,11 @@ public partial class ScreenMirrorViewModel : Document, ITool
                         ScrcpyVideoFrame? packet = client.ReadFrame(1000);
                         if (packet is null)
                         {
+                            if (Environment.TickCount64 - _lastIdleTrace >= 1000)
+                            {
+                                _lastIdleTrace = Environment.TickCount64;
+                                Views.Editors.MirrorTrace.Write($"decode idle: no packet (decoded={Interlocked.Read(ref _decodedFrames)} received={Interlocked.Read(ref _receivedFrames)})");
+                            }
                             try { decoder.Poll(); failures = 0; }
                             catch (Exception error) when (MirrorDecoderRecovery.IsRecoverable(error))
                             {
@@ -803,8 +824,11 @@ public partial class ScreenMirrorViewModel : Document, ITool
                             }
                             var timestampTicks = checked(packet.PresentationTimestampMicroseconds * 10);
                             Interlocked.Increment(ref _receivedFrames);
+                            if (_packetLogged++ % 60 == 0)
+                                Views.Editors.MirrorTrace.Write($"decode packet #{_packetLogged} skipped={skipped} failures={failures} decoded={Interlocked.Read(ref _decodedFrames)} extra={configuration?.Length}");
                             try
                             {
+                                var decodeStarted = Environment.TickCount64;
                                 if (configuration is null) decoder.Decode(packet.Data.AsSpan(0, packet.PayloadLength), timestampTicks);
                                 else
                                 {
@@ -820,10 +844,15 @@ public partial class ScreenMirrorViewModel : Document, ITool
                                     }
                                     finally { ArrayPool<byte>.Shared.Return(combined); }
                                 }
+                                var decodeElapsed = Environment.TickCount64 - decodeStarted;
+                                if (decodeElapsed > 200)
+                                    Views.Editors.MirrorTrace.Write($"decode slow {decodeElapsed} ms failures={failures} decoded={Interlocked.Read(ref _decodedFrames)}");
                                 if (failures != 0) failures = 0;
                             }
                             catch (Exception error) when (MirrorDecoderRecovery.IsRecoverable(error))
                             {
+                                if (_decodeErrorLogged++ < 10)
+                                    Views.Editors.MirrorTrace.Write($"decode recoverable failures={failures + 1}: {error.GetType().Name}: {error.Message}");
                                 if (++failures < MirrorDecoderRecovery.ConsecutiveFailuresBeforeRebuild) continue;
                                 throw;
                             }
@@ -842,6 +871,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 {
                     options = degraded;
                     rebuilds++;
+                    Views.Editors.MirrorTrace.Write($"decode rebuild #{rebuilds}: {error.GetType().Name}: {error.Message}");
                     Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
                         $"Video decoding failed after {failures} frames ({error.Message}); rebuilding the decoder without hardware acceleration, {skipped} packets skipped while waiting for a key frame.");
                     SendControl(ScrcpyControlMessageWriter.ResetVideo());
@@ -850,6 +880,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
         }
         catch (Exception exception) when (!token.IsCancellationRequested)
         {
+            Views.Editors.MirrorTrace.Write($"decode loop failed: {exception.GetType().Name}: {exception.Message}");
             Services.LogService.Instance.Write(
                 Services.LogLevel.Error, "ScreenMirror", $"Decode failed: {exception}");
             Dispatcher.UIThread.Post(() =>
@@ -857,7 +888,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 if (!_disposed) StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + Services.UserError.Describe(exception);
             });
         }
-        catch (Exception) when (token.IsCancellationRequested) { }
+        catch (Exception) when (token.IsCancellationRequested) { Views.Editors.MirrorTrace.Write("decode loop cancelled"); }
     }
 
     private void OnDecodedFrame(DecodedVideoFrame frame, int generation)
@@ -881,6 +912,8 @@ public partial class ScreenMirrorViewModel : Document, ITool
     {
         Interlocked.Increment(ref _decodedFrames);
         if (_disposed) return;
+        if (_decodeLoggedThrottle++ % 60 == 0)
+            Views.Editors.MirrorTrace.Write($"decoded frame {frame.Width}x{frame.Height} {frame.PixelFormat} available={GpuPresenter.IsAvailable} format={MirrorFrameFormat}");
         if (GpuPresenter.IsAvailable && GpuPresenter.Publish(frame, _activeSettings.ScreenMirrorColorMatrix, _activeSettings.ScreenMirrorColorRange))
         {
             ScheduleRender();
@@ -958,7 +991,11 @@ public partial class ScreenMirrorViewModel : Document, ITool
     [SupportedOSPlatform("windows")]
     private void EnableSharedTextureExport(MediaFoundationGpuVideoDecoder decoder, int generation)
     {
-        GpuPresenter.CompositionFailed += (_, _) => decoder.GpuExportEnabled = false;
+        GpuPresenter.CompositionFailed += (_, _) =>
+        {
+            Views.Editors.MirrorTrace.Write("composition failed event: disabling shared texture export");
+            decoder.GpuExportEnabled = false;
+        };
         decoder.GpuExportFrameCallback = frame => PublishSharedTextureFrame(frame, decoder, generation);
         decoder.GpuExportEnabled = true;
         Services.LogService.Instance.Write(Services.LogLevel.Info, "ScreenMirror",
@@ -983,6 +1020,8 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 frame.MarkPresented();
                 return;
             }
+            if (_exportFrameLogged++ % 60 == 0)
+                Views.Editors.MirrorTrace.Write($"export frame {frame.Width}x{frame.Height} exportEnabled={decoder.GpuExportEnabled}");
             if (!GpuPresenter.PublishSharedTexture(frame))
             {
                 decoder.GpuExportEnabled = false;
@@ -1080,6 +1119,8 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 _spareFrame = null;
             }
         }
+        if (_renderLoggedThrottle++ % 30 == 0)
+            Views.Editors.MirrorTrace.Write($"vm render covering={compositionCovering} pending={(pending is not null)} frame={Frame is not null} available={GpuPresenter.IsAvailable} pixel={GpuPresenter.PixelSize.Width}x{GpuPresenter.PixelSize.Height}");
         if (pending is null)
         {
             var gpuDraws = compositionCovering || GpuPresenter.CanPresentFallback;

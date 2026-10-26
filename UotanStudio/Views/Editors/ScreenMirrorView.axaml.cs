@@ -29,17 +29,26 @@ public partial class ScreenMirrorView : UserControl
         DataContextChanged += (_, _) => SubscribeToFrames();
         AttachedToVisualTree += (_, _) =>
         {
+            MirrorTrace.Write($"view attach vm={Describe(ViewModel)} root={VisualRoot is not null}");
             SubscribeToFrames();
             ViewModel?.RecoverPresentation();
             InvalidateVisual();
         };
-        DetachedFromVisualTree += (_, _) => UnsubscribeFromFrames();
+        DetachedFromVisualTree += (_, _) =>
+        {
+            MirrorTrace.Write($"view detach vm={Describe(ViewModel)}");
+            UnsubscribeFromFrames();
+        };
     }
+
+    private static string Describe(ScreenMirrorViewModel? viewModel)
+        => viewModel is null ? "null" : viewModel.GetHashCode().ToString("x8");
 
     private void SubscribeToFrames()
     {
         UnsubscribeFromFrames();
         if (VisualRoot is null || ViewModel is not { } viewModel) return;
+        MirrorTrace.Write($"view subscribe vm={Describe(viewModel)}");
         _subscribed = viewModel;
         viewModel.FramePresented += OnFramePresented;
         viewModel.DeviceClipboardReceived += OnDeviceClipboardReceived;
@@ -188,8 +197,12 @@ public partial class ScreenMirrorView : UserControl
         return meta;
     }
 
+    private int _framePresentedLogged;
+
     private void OnFramePresented(object? sender, EventArgs e)
     {
+        if (Interlocked.Increment(ref _framePresentedLogged) <= 3)
+            MirrorTrace.Write($"view frame presented hasVideo={ViewModel?.HasPresentedVideo} frame={ViewModel?.Frame is not null}");
         WaitingLabel.IsVisible = ViewModel?.HasPresentedVideo != true;
         FrameImage.EnsurePresentationHost();
         FrameImage.InvalidateVisual();
