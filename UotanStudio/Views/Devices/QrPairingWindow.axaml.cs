@@ -56,6 +56,11 @@ public partial class QrPairingWindow : Window
         {
             _pendingConnect = ex;
             SetStatus("Device_QrPairManualNeeded", ex.Host);
+            if (ex.SuggestedPort != 0)
+            {
+                PortBox.Text = ex.SuggestedPort.ToString(CultureInfo.InvariantCulture);
+                PortBox.SelectAll();
+            }
             ManualPortPanel.IsVisible = true;
             PortBox.Focus();
         }

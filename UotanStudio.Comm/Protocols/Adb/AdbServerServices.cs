@@ -224,8 +224,11 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// <c>':'</c>. <para>设备主机或密码为空，或密码包含 <c>':'</c>。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException">The pairing port is outside 1-65535.
     /// <para>配对端口不在 1-65535 之内。</para></exception>
-    /// <exception cref="IOException">The server rejected the pairing request or reported no success.
-    /// <para>server 拒绝了配对请求或未报告成功。</para></exception>
+    /// <exception cref="IOException">The server rejected the pairing request, reported no success, or reported
+    /// that its pairing client could not be created or started; the last case uses
+    /// <see cref="AdbServerPairingClientException"/>.
+    /// <para>server 拒绝了配对请求、未报告成功，或报告其配对客户端无法创建或启动；最后一种情况使用
+    /// <see cref="AdbServerPairingClientException"/>。</para></exception>
     /// <exception cref="TimeoutException">The exchange exceeded the 30 second network default.
     /// <para>交互超过 30 秒网络默认期限。</para></exception>
     /// <exception cref="OperationCanceledException">The token was canceled before completion.
@@ -245,13 +248,13 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
             throw new ArgumentException("The pairing password must not contain ':'.", nameof(password));
         }
 
-        var response = await RunNetworkCommandAsync(
+        var response = await RunPairCommandAsync(
                 "host:pair:" + password + ":" +
                 DebugBridgeNetworkAddress.FormatEndpoint(host, pairingPort),
-                serverHost, serverPort, null, cancellationToken).ConfigureAwait(false);
+                serverHost, serverPort, cancellationToken).ConfigureAwait(false);
         if (!response.StartsWith("Successfully paired", StringComparison.OrdinalIgnoreCase))
         {
-            throw new IOException("ADB server: " + response);
+            throw PairingFailure(response);
         }
 
         return response;
@@ -331,6 +334,88 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     internal static Task<string> RunHostCommandAsync(string command, string host, int port, TimeSpan? timeout,
         CancellationToken cancellationToken = default) =>
         RunNetworkCommandAsync(command, host, port, timeout, cancellationToken);
+
+    /// <summary>
+    /// Runs one <c>host:pair:</c> request and returns its pairing result text, covering the extra frame the
+    /// server may add after the request acknowledgement: an explicit <c>OKAY</c>/<c>FAIL</c> status is followed
+    /// by a length and its payload, while a bare four-digit length is read as the payload length directly.
+    /// <para>执行一条 <c>host:pair:</c> 请求并返回其配对结果文本，覆盖 server 在请求确认之后可能追加的帧：
+    /// 显式 <c>OKAY</c>/<c>FAIL</c> 状态后跟长度与负载，而裸四位长度则直接作为负载长度读取。</para>
+    /// </summary>
+    /// <param name="command">The complete <c>host:pair:</c> command text. <para>完整的 <c>host:pair:</c> 命令文本。</para></param>
+    /// <param name="host">The adb server host. <para>adb server 主机。</para></param>
+    /// <param name="port">The adb server TCP port. <para>adb server 的 TCP 端口。</para></param>
+    /// <param name="cancellationToken">Cancels connecting and the exchange. <para>取消连接与交互。</para></param>
+    /// <returns>The decoded result text, trimmed. <para>解码并去除首尾空白后的结果文本。</para></returns>
+    /// <exception cref="IOException">The reply framing is invalid or the server reported a pairing failure.
+    /// <para>应答帧结构非法，或 server 报告配对失败。</para></exception>
+    /// <exception cref="TimeoutException">The exchange exceeded the 30 second network default.
+    /// <para>交互超过 30 秒网络默认期限。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    private static async Task<string> RunPairCommandAsync(string command, string host, int port,
+        CancellationToken cancellationToken)
+    {
+        var deadline = TimeSpan.FromSeconds(30);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        linked.CancelAfter(deadline);
+        try
+        {
+            using var stream = await OpenHostStreamAsync(host, port, linked.Token).ConfigureAwait(false);
+            await RequestAsync(stream, command, linked.Token).ConfigureAwait(false);
+            var header = new byte[4];
+            await ReadExactlyAsync(stream, header, command, linked.Token).ConfigureAwait(false);
+            if (header.AsSpan().SequenceEqual("FAIL"u8))
+            {
+                var failure = await ReadLengthPrefixedTextAsync(stream, command, linked.Token).ConfigureAwait(false);
+                throw PairingFailure(failure);
+            }
+
+            return header.AsSpan().SequenceEqual("OKAY"u8)
+                ? await ReadLengthPrefixedTextAsync(stream, command, linked.Token).ConfigureAwait(false)
+                : await ReadPrefixedTextAsync(stream, header, command, linked.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("ADB network operation exceeded " +
+                deadline.TotalSeconds.ToString("0.##", CultureInfo.InvariantCulture) + " seconds.");
+        }
+    }
+
+    /// <summary>
+    /// Classifies a pairing failure reported by the server. Only a client that never started leaves the device
+    /// untouched, so that case is distinguishable for a caller that can pair in-process instead.
+    /// <para>对 server 报告的配对失败分类。只有从未启动的客户端没有接触设备，因此该情况可被「能在进程内配对」
+    /// 的调用方区分出来。</para>
+    /// </summary>
+    /// <param name="response">The server's failure text. <para>server 的失败文本。</para></param>
+    /// <returns>The exception to throw. <para>待抛出的异常。</para></returns>
+    private static Exception PairingFailure(string response) =>
+        response.Contains("unable to start pairing client", StringComparison.OrdinalIgnoreCase) ||
+        response.Contains("unable to create pairing client", StringComparison.OrdinalIgnoreCase)
+            ? new AdbServerPairingClientException("ADB server: " + response)
+            : new IOException("ADB server: " + response);
+
+    private static async Task<string> ReadLengthPrefixedTextAsync(Stream stream, string request,
+        CancellationToken cancellationToken)
+    {
+        var header = new byte[4];
+        await ReadExactlyAsync(stream, header, request, cancellationToken).ConfigureAwait(false);
+        return await ReadPrefixedTextAsync(stream, header, request, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<string> ReadPrefixedTextAsync(Stream stream, byte[] lengthBytes, string request,
+        CancellationToken cancellationToken)
+    {
+        if (!int.TryParse(Encoding.ASCII.GetString(lengthBytes), NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture, out var length) || length is < 0 or > 65535)
+        {
+            throw new IOException("Invalid ADB server response length.");
+        }
+
+        var bytes = new byte[length];
+        await ReadExactlyAsync(stream, bytes, request, cancellationToken).ConfigureAwait(false);
+        return Encoding.UTF8.GetString(bytes).Trim();
+    }
 
     private static async Task<string> RunNetworkCommandAsync(string command, string host, int port,
         TimeSpan? timeout, CancellationToken cancellationToken)
@@ -599,6 +684,14 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
         throw new IOException("ADB server: " + Encoding.UTF8.GetString(message));
     }
 }
+
+/// <summary>
+/// Raised when the adb server reports that it could not create or start its pairing client, so its pairing
+/// attempt never reached the device. The caller may complete the same pairing in-process with this host's key.
+/// <para>adb server 报告无法创建或启动其配对客户端，因此它的配对尝试从未到达设备。调用方可用本主机的密钥在
+/// 进程内完成同一次配对。</para>
+/// </summary>
+internal sealed class AdbServerPairingClientException(string message) : IOException(message);
 
 /// <summary>
 /// Preserves unread bytes when adapting ADB packet chunks to a byte-oriented stream.

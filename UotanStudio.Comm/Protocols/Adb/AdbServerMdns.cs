@@ -182,6 +182,102 @@ internal static class AdbServerMdns
     }
 
     /// <summary>
+    /// Builds the lookup that maps a DNS-SD connect instance, in bare or full <c>instance.serviceType</c>
+    /// form, to the dialable <c>host:port</c> the server reported for it. This is the identity an
+    /// auto-connected transport carries as its serial.
+    /// <para>构建查找表，把 DNS-SD 连接实例（裸名或完整的 <c>实例.服务类型</c> 形式）映射到 server 为该实例
+    /// 报告的可拨号 <c>host:port</c>。自动连接产生的传输正是以该身份作为串号。</para>
+    /// </summary>
+    /// <param name="entries">Rows reported by <c>host:mdns:services</c>.
+    /// <para><c>host:mdns:services</c> 报告的行。</para></param>
+    /// <param name="connectServiceTypes">Service types whose rows describe a secure connect service, with or
+    /// without a trailing dot. <para>其行描述安全连接服务的服务类型，可带或不带尾点。</para></param>
+    /// <returns>An instance-or-serial keyed endpoint map, empty when no row describes a connect service.
+    /// <para>按实例或串号键控的端点映射；没有行描述连接服务时为空。</para></returns>
+    /// <exception cref="ArgumentNullException">An argument is <c>null</c>.
+    /// <para>某个参数为 <c>null</c>。</para></exception>
+    internal static IReadOnlyDictionary<string, string> BuildConnectAliases(
+        IEnumerable<AdbServerMdnsEntry> entries, IReadOnlyList<string> connectServiceTypes)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(connectServiceTypes);
+        var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries)
+        {
+            var serviceType = NormalizeAliasText(entry.ServiceType);
+            if (!connectServiceTypes.Any(candidate => string.Equals(
+                    serviceType, NormalizeAliasText(candidate), StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var instance = NormalizeAliasText(entry.Instance);
+            var suffix = "." + serviceType;
+            if (instance.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                instance = instance[..^suffix.Length];
+            }
+
+            var endpoint = DebugBridgeNetworkAddress.FormatEndpoint(entry.Host, entry.Port);
+            aliases[instance] = endpoint;
+            aliases[string.Concat(instance, ".", serviceType)] = endpoint;
+        }
+
+        return aliases;
+    }
+
+    /// <summary>
+    /// Resolves a server target serial against a connect alias map. The exact serial is tried first, then a
+    /// serial ending in <c>.serviceType</c> is retried without that suffix for tables that only carry the
+    /// bare instance label.
+    /// <para>用连接别名表解析 server 目标串号：先尝试完整串号，再对以 <c>.服务类型</c> 结尾的串号剥离该后缀
+    /// 重试，以兼容只携带裸实例标签的表。</para>
+    /// </summary>
+    /// <param name="aliases">The alias map. <para>别名表。</para></param>
+    /// <param name="serial">The target serial reported by <c>host:devices-l</c>.
+    /// <para><c>host:devices-l</c> 报告的目标串号。</para></param>
+    /// <param name="connectServiceTypes">Service types the map was built from.
+    /// <para>构建别名表时使用的服务类型。</para></param>
+    /// <returns>The resolved <c>host:port</c>, or <c>null</c> when no row matches.
+    /// <para>解析出的 <c>host:port</c>；没有匹配行时为 <c>null</c>。</para></returns>
+    internal static string? ResolveConnectAlias(IReadOnlyDictionary<string, string> aliases, string serial,
+        IReadOnlyList<string> connectServiceTypes)
+    {
+        ArgumentNullException.ThrowIfNull(aliases);
+        ArgumentNullException.ThrowIfNull(connectServiceTypes);
+        if (string.IsNullOrWhiteSpace(serial))
+        {
+            return null;
+        }
+
+        var normalized = NormalizeAliasText(serial);
+        if (aliases.TryGetValue(normalized, out var exact))
+        {
+            return exact;
+        }
+
+        foreach (var serviceType in connectServiceTypes)
+        {
+            var suffix = "." + NormalizeAliasText(serviceType);
+            if (normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+                aliases.TryGetValue(normalized[..^suffix.Length], out var stripped))
+            {
+                return stripped;
+            }
+        }
+
+        return null;
+    }
+
+    private static string NormalizeAliasText(string value)
+    {
+        var trimmed = value.TrimEnd('.');
+        return trimmed.EndsWith(LocalSuffix, StringComparison.OrdinalIgnoreCase)
+            ? trimmed[..^LocalSuffix.Length]
+            : trimmed;
+    }
+
+    /// <summary>
     /// Reports whether a row advertises a browsed service type, comparing names after the trailing
     /// <c>.local</c> suffix is dropped.
     /// <para>判断某行是否广播了所浏览的服务类型，比较前会去掉结尾的 <c>.local</c> 后缀。</para>
@@ -190,7 +286,8 @@ internal static class AdbServerMdns
     /// <param name="browseType">The locally browsed type name. <para>本地浏览的类型名。</para></param>
     /// <returns>Whether the row carries that type. <para>该行是否属于该类型。</para></returns>
     internal static bool IsType(AdbServerMdnsEntry entry, string browseType) =>
-        string.Equals(entry.ServiceType, StripLocalSuffix(browseType), StringComparison.OrdinalIgnoreCase);
+        string.Equals(StripLocalSuffix(entry.ServiceType), StripLocalSuffix(browseType),
+            StringComparison.OrdinalIgnoreCase);
 
     private static string StripLocalSuffix(string browseType) =>
         browseType.EndsWith(LocalSuffix, StringComparison.OrdinalIgnoreCase)
@@ -204,7 +301,7 @@ internal static class AdbServerMdns
     /// <param name="entry">The server row. <para>server 行。</para></param>
     /// <returns>An equivalent locally browsed device. <para>等价的本地浏览设备。</para></returns>
     internal static MdnsDevice ToDevice(AdbServerMdnsEntry entry) =>
-        new(entry.Instance, null, entry.Port, [entry.Host], EmptyProperties);
+        new(entry.Instance, null, entry.Port, [entry.Host], EmptyProperties, entry.ServiceType);
 }
 
 /// <summary>

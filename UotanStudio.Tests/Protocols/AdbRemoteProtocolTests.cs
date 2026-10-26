@@ -79,6 +79,28 @@ public sealed class AdbRemoteProtocolTests
         Assert.Contains("features=", session.PeerBanner!, StringComparison.Ordinal);
     }
 
+    [Fact(Timeout = 15000)]
+    public void Connect_PeerCnxnWithZeroLegacyChecksum_CompletesHandshake()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        Assert.False(cancellationToken.IsCancellationRequested);
+        var payload = Encoding.UTF8.GetBytes("device::features=shell_v2,stat_v2");
+        var cnxn = AdbMessaging.Serialize(
+            new AdbMessage(AdbCommand.Cnxn, AdbConstants.ProtocolVersion, AdbConstants.MaxPayload, payload),
+            AdbConstants.ProtocolVersion);
+        Assert.Equal(0u, System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(cnxn.AsSpan(16)));
+        var transport = new QueueTransport();
+        transport.Enqueue(cnxn);
+
+        using var authentication = AdbAuthentication.CreateNew();
+        using var session = new AdbSession(transport, authentication);
+
+        session.Connect();
+
+        Assert.Equal(AdbConstants.ProtocolVersion, session.PeerVersion);
+        Assert.Contains("features=", session.PeerBanner!, StringComparison.Ordinal);
+    }
+
     [Fact(Timeout = 20000)]
     public void Connect_LargeFrameSplitAcrossReads_CompletesHandshake()
     {
@@ -135,6 +157,32 @@ public sealed class AdbRemoteProtocolTests
         Assert.DoesNotContain("Invalid ADB server response length", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact(Timeout = 15000)]
+    public async Task PairAsync_StatusFramedResult_IsAccepted()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var server = new SingleReplyAdbServer(
+            _ => StatusOkayAfterAck("Successfully paired to 192.0.2.7:45678 [guid=abcdef]"));
+
+        var response = await AdbServerServices.PairAsync("192.0.2.7", 45678, "abc123", "127.0.0.1",
+            server.Port, cancellationToken);
+
+        Assert.Contains("Successfully paired", response, StringComparison.Ordinal);
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task PairAsync_ServerPairingClientStartFailure_ThrowsDistinguishedFailure()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var server = new SingleReplyAdbServer(
+            _ => FailAfterOkay("Failed: Unable to start pairing client."));
+
+        var exception = await Assert.ThrowsAsync<AdbServerPairingClientException>(() =>
+            AdbServerServices.PairAsync("192.0.2.7", 45678, "abc123", "127.0.0.1", server.Port, cancellationToken));
+
+        Assert.Contains("Unable to start pairing client", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task PairAsync_PasswordWithColon_IsRejectedBeforeConnecting()
     {
@@ -180,8 +228,41 @@ public sealed class AdbRemoteProtocolTests
         Assert.Throws<TimeoutException>(() => transport.Read(buffer, 0, buffer.Length, 200));
     }
 
+    [Fact(Timeout = 15000)]
+    public async Task MessageLoop_WaitingForTheNextFrame_UsesNoReadDeadline()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var transport = new QueueTransport();
+        transport.Enqueue(AdbMessaging.Serialize(new AdbMessage(AdbCommand.Cnxn, AdbConstants.ProtocolVersion,
+            AdbConstants.MaxPayload, Encoding.UTF8.GetBytes("device::features=shell_v2"))));
+        using var authentication = AdbAuthentication.CreateNew();
+        using var session = new AdbSession(transport, authentication);
+
+        session.Connect();
+        var deadline = Stopwatch.StartNew();
+        while (deadline.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            var observed = transport.ReadTimeouts;
+            if (observed.Count >= 3 && observed[^1] <= 0)
+            {
+                break;
+            }
+
+            await Task.Delay(25, cancellationToken);
+        }
+
+        Assert.True(session.IsConnected);
+        var timeouts = transport.ReadTimeouts;
+        Assert.True(timeouts.Count >= 3, $"Expected the banner and the idle header read, saw {timeouts.Count} read(s).");
+        Assert.Contains(timeouts, timeout => timeout > 0);
+        Assert.Equal(Timeout.Infinite, timeouts[^1]);
+    }
+
     private static string Okay(string payload) =>
         "OKAY" + Encoding.UTF8.GetByteCount(payload).ToString("X4", CultureInfo.InvariantCulture) + payload;
+
+    private static string StatusOkayAfterAck(string payload) =>
+        "OKAY" + "OKAY" + Encoding.UTF8.GetByteCount(payload).ToString("X4", CultureInfo.InvariantCulture) + payload;
 
     private static string FailAfterOkay(string message) =>
         "OKAY" + "FAIL" + Encoding.UTF8.GetByteCount(message).ToString("X4", CultureInfo.InvariantCulture) + message;
@@ -190,12 +271,24 @@ public sealed class AdbRemoteProtocolTests
     {
         private readonly Lock _gate = new();
         private readonly Queue<byte[]> _chunks = new();
+        private readonly List<int> _readTimeouts = [];
         private readonly SemaphoreSlim _available = new(0);
         private byte[]? _pending;
         private int _pendingOffset;
         private bool _eof;
 
         public bool IsConnected { get; private set; } = true;
+
+        public IReadOnlyList<int> ReadTimeouts
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _readTimeouts];
+                }
+            }
+        }
 
         public void Enqueue(byte[] chunk)
         {
@@ -230,6 +323,11 @@ public sealed class AdbRemoteProtocolTests
 
         public int Read(byte[] buffer, int offset, int length, int timeoutMs)
         {
+            lock (_gate)
+            {
+                _readTimeouts.Add(timeoutMs);
+            }
+
             while (true)
             {
                 lock (_gate)
@@ -255,6 +353,11 @@ public sealed class AdbRemoteProtocolTests
         public async Task<int> ReadAsync(byte[] buffer, int offset, int length, int timeoutMs,
             CancellationToken cancellationToken = default)
         {
+            lock (_gate)
+            {
+                _readTimeouts.Add(timeoutMs);
+            }
+
             while (true)
             {
                 lock (_gate)

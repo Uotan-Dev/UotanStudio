@@ -110,4 +110,25 @@ public sealed class AdbServerMdnsTests
         Assert.Equal(["192.168.1.190"], device.Addresses);
         Assert.Empty(device.Properties);
     }
+
+    [Theory]
+    [InlineData("_adb-tls-connect._tcp")]
+    [InlineData("_adb-tls-connect._tcp.local")]
+    public void BuildConnectAliases_ConnectRow_ResolvesBareAndFullInstanceKeys(string serviceType)
+    {
+        var entries = new[]
+        {
+            new AdbServerMdnsEntry("adb-ABC", serviceType, "192.0.2.31", 37177),
+            new AdbServerMdnsEntry("adb-ABC-pair", "_adb-tls-pairing._tcp", "192.0.2.31", 45678)
+        };
+
+        var aliases = AdbServerMdns.BuildConnectAliases(entries, ["_adb-tls-connect._tcp"]);
+        var serviceName = serviceType.TrimEnd('.').Replace(".local", string.Empty, StringComparison.Ordinal);
+
+        Assert.Equal("192.0.2.31:37177", aliases["adb-ABC"]);
+        Assert.Equal("192.0.2.31:37177",
+            AdbServerMdns.ResolveConnectAlias(aliases, "adb-ABC." + serviceName,
+                ["_adb-tls-connect._tcp"]));
+        Assert.DoesNotContain(aliases.Keys, key => key.Contains("adb-ABC-pair", StringComparison.Ordinal));
+    }
 }

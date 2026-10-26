@@ -88,6 +88,9 @@ public sealed class AdbPairingDiscoveryTests
         var legacyDevice = Assert.Single(AdbMdnsDiscovery.BuildDevices(byInstance, addresses,
             static _ => true, AdbMdnsDiscovery.AdbLegacyService));
         Assert.Equal(legacy.ToString(), legacyDevice.Instance);
+        Assert.True(AdbMdnsDiscovery.IsType(connectDevice, AdbMdnsDiscovery.AdbTlsService));
+        Assert.False(AdbMdnsDiscovery.IsType(connectDevice, AdbMdnsDiscovery.AdbTlsPairingService));
+        Assert.True(AdbMdnsDiscovery.IsType(legacyDevice, AdbMdnsDiscovery.AdbLegacyService));
     }
 
     [Theory]
@@ -137,6 +140,198 @@ public sealed class AdbPairingDiscoveryTests
     public void MatchesInstanceLabel_DottedExpectedLabel_NeverMatches()
         => Assert.False(AdbMdnsDiscovery.MatchesInstanceLabel(
             "ADB_WIFI_abc._adb-tls-pairing._tcp.local", "ADB_WIFI_abc.extra"));
+
+    [Fact]
+    public void SelectConnectPorts_SameHostNameOverDifferentAddressFamilies_PrefersHostNameMatch()
+    {
+        IReadOnlyDictionary<string, string> properties = new Dictionary<string, string>();
+        var candidates = new[]
+        {
+            new MdnsDevice("adb-other._adb-tls-connect._tcp.local", "other.local", 40404, ["192.0.2.99"],
+                properties, AdbMdnsDiscovery.AdbTlsService),
+            new MdnsDevice("adb-phone._adb-tls-connect._tcp.local", "phone.local", 37177, ["fe80::1"],
+                properties, AdbMdnsDiscovery.AdbTlsService),
+            new MdnsDevice("adb-phone._adb-tls-connect._tcp.local", "phone.local", 37177, ["192.0.2.40"],
+                properties, AdbMdnsDiscovery.AdbTlsService)
+        };
+
+        var ports = AdbQrPairingService.SelectConnectPorts(candidates, "192.0.2.40", "phone.local");
+
+        Assert.Equal([37177], ports);
+        Assert.Equal(37177, AdbQrPairingService.SelectConnectPort(candidates, "192.0.2.40", "phone.local"));
+    }
+
+    [Fact]
+    public void SelectConnectPorts_PairingInstanceOnSameAddress_IsIgnored()
+    {
+        IReadOnlyDictionary<string, string> properties = new Dictionary<string, string>();
+        var candidates = new[]
+        {
+            new MdnsDevice("ADB_WIFI_x._adb-tls-pairing._tcp.local", "phone.local", 45678, ["192.0.2.40"],
+                properties, AdbMdnsDiscovery.AdbTlsPairingService),
+            new MdnsDevice("adb-x._adb-tls-connect._tcp.local", "phone.local", 37177, ["192.0.2.40"],
+                properties, AdbMdnsDiscovery.AdbTlsService)
+        };
+
+        Assert.Equal([37177], AdbQrPairingService.SelectConnectPorts(candidates, "192.0.2.40", "phone.local"));
+    }
+
+    [Fact]
+    public async Task BuildDevices_ReAdvertisedInstance_CarriesTheLatestObservationTime()
+    {
+        var connect = new DomainName("adb-phone._adb-tls-connect._tcp.local");
+        var host = new DomainName("phone.local");
+        var message = new Message();
+        message.Answers.Add(new PTRRecord
+        {
+            Name = new DomainName("_adb-tls-connect._tcp.local"),
+            DomainName = connect
+        });
+        message.AdditionalRecords.Add(new SRVRecord { Name = connect, Target = host, Port = 37177 });
+        message.AdditionalRecords.Add(new ARecord { Name = host, Address = IPAddress.Parse("192.0.2.40") });
+        var byInstance = new ConcurrentDictionary<string, AdbMdnsDiscovery.DeviceAccumulator>(
+            StringComparer.OrdinalIgnoreCase);
+        var addresses = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        AdbMdnsDiscovery.Accumulate(message, byInstance, addresses);
+        var first = Assert.Single(AdbMdnsDiscovery.BuildDevices(byInstance, addresses, static _ => true,
+            AdbMdnsDiscovery.AdbTlsService));
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        AdbMdnsDiscovery.Accumulate(message, byInstance, addresses);
+        var second = Assert.Single(AdbMdnsDiscovery.BuildDevices(byInstance, addresses, static _ => true,
+            AdbMdnsDiscovery.AdbTlsService));
+
+        Assert.True(second.LastSeenUtc > first.LastSeenUtc);
+    }
+
+    [Fact]
+    public void SelectConnectPorts_StaleAndFreshInstances_PrefersTheNewestAdvertisement()
+    {
+        IReadOnlyDictionary<string, string> properties = new Dictionary<string, string>();
+        var stale = new MdnsDevice("adb-phone-old._adb-tls-connect._tcp.local", "phone.local", 37177,
+            ["192.0.2.40"], properties, AdbMdnsDiscovery.AdbTlsService,
+            new DateTime(2026, 10, 25, 10, 0, 0, DateTimeKind.Utc));
+        var fresh = new MdnsDevice("adb-phone-new._adb-tls-connect._tcp.local", "phone.local", 41111,
+            ["192.0.2.40"], properties, AdbMdnsDiscovery.AdbTlsService,
+            new DateTime(2026, 10, 25, 10, 0, 5, DateTimeKind.Utc));
+
+        var ports = AdbQrPairingService.SelectConnectPorts([stale, fresh], "192.0.2.40", "phone.local");
+
+        Assert.Equal([41111, 37177], ports);
+        Assert.Equal(41111, AdbQrPairingService.SelectConnectPort([stale, fresh], "192.0.2.40", "phone.local"));
+    }
+
+    [Fact]
+    public void SelectConnectPorts_SameHostNameOnAnotherAddress_TriesTheAddressMatchFirst()
+    {
+        IReadOnlyDictionary<string, string> properties = new Dictionary<string, string>();
+        var sameHostNameElsewhere = new MdnsDevice("adb-other._adb-tls-connect._tcp.local", "phone.local", 40404,
+            ["192.0.2.99"], properties, AdbMdnsDiscovery.AdbTlsService);
+        var addressMatch = new MdnsDevice("adb-phone._adb-tls-connect._tcp.local", "phone.local", 37177,
+            ["192.0.2.40"], properties, AdbMdnsDiscovery.AdbTlsService);
+
+        var ports = AdbQrPairingService.SelectConnectPorts([sameHostNameElsewhere, addressMatch],
+            "192.0.2.40", "phone.local");
+
+        Assert.Equal([37177, 40404], ports);
+    }
+
+    [Fact]
+    public void SelectConnectPort_UnrelatedDevice_ReturnsZero()
+    {
+        IReadOnlyDictionary<string, string> properties = new Dictionary<string, string>();
+        var candidates = new[]
+        {
+            new MdnsDevice("adb-phone._adb-tls-connect._tcp.local", "phone.local", 37177, ["192.0.2.40"],
+                properties, AdbMdnsDiscovery.AdbTlsService)
+        };
+
+        Assert.Equal(0, AdbQrPairingService.SelectConnectPort(candidates, "198.51.100.7", "tablet.local"));
+        Assert.False(AdbQrPairingService.IsSameDevice(candidates[0], "198.51.100.7", "tablet.local"));
+        Assert.True(AdbQrPairingService.IsSameDevice(candidates[0], "198.51.100.7", "PHONE.local."));
+    }
+
+    [Fact]
+    public void MatchServerConnection_AutoConnectedInstanceKeyedTarget_ResolvesTheDialableAddress()
+    {
+        var targets = new[] { new AdbTargetInfo("adb-ABC._adb-tls-connect._tcp", "device", "TCP") };
+        var table = new[]
+        {
+            new AdbServerMdnsEntry("adb-ABC", "_adb-tls-connect._tcp", "192.0.2.31", 37177)
+        };
+
+        var match = AdbQrPairingService.MatchServerConnection(targets, table, "192.0.2.31");
+
+        Assert.NotNull(match);
+        Assert.Equal("adb-ABC._adb-tls-connect._tcp", match.Serial);
+        Assert.Equal("192.0.2.31:37177", match.Address);
+    }
+
+    [Fact]
+    public void MatchServerConnection_ExplicitEndpointTarget_IsRecognizedWithoutTheTable()
+    {
+        var targets = new[] { new AdbTargetInfo("192.0.2.31:37177", "device", "TCP") };
+
+        var match = AdbQrPairingService.MatchServerConnection(targets, [], "192.0.2.31");
+
+        Assert.Equal("192.0.2.31:37177", match?.Address);
+        Assert.Equal("192.0.2.31:37177", match?.Serial);
+    }
+
+    [Fact]
+    public void MatchServerConnection_DualStackTableRow_MatchesThePairingIpv4Address()
+    {
+        var targets = new[] { new AdbTargetInfo("adb-ABC._adb-tls-connect._tcp", "device", "TCP") };
+        var table = new[]
+        {
+            new AdbServerMdnsEntry("adb-ABC", "_adb-tls-connect._tcp", "::ffff:192.0.2.31", 37177)
+        };
+
+        var match = AdbQrPairingService.MatchServerConnection(targets, table, "192.0.2.31");
+
+        Assert.Equal("[::ffff:192.0.2.31]:37177", match?.Address);
+    }
+
+    [Fact]
+    public void MatchServerConnection_OtherDevice_IsIgnored()
+    {
+        var targets = new[] { new AdbTargetInfo("adb-XYZ._adb-tls-connect._tcp", "device", "TCP") };
+        var table = new[]
+        {
+            new AdbServerMdnsEntry("adb-XYZ", "_adb-tls-connect._tcp", "192.0.2.77", 40222)
+        };
+
+        Assert.Null(AdbQrPairingService.MatchServerConnection(targets, table, "192.0.2.31"));
+    }
+
+    [Theory]
+    [InlineData("offline")]
+    [InlineData("")]
+    public void MatchServerConnection_UnusableState_IsIgnored(string state)
+    {
+        var targets = new[] { new AdbTargetInfo("192.0.2.31:37177", state, "TCP") };
+
+        Assert.Null(AdbQrPairingService.MatchServerConnection(targets, [], "192.0.2.31"));
+    }
+
+    [Fact]
+    public void MatchServerConnection_DeviceState_IsPreferredOverUnauthorized()
+    {
+        var targets = new[]
+        {
+            new AdbTargetInfo("192.0.2.31:37177", "unauthorized", "TCP"),
+            new AdbTargetInfo("adb-ABC._adb-tls-connect._tcp", "device", "TCP")
+        };
+        var table = new[]
+        {
+            new AdbServerMdnsEntry("adb-ABC", "_adb-tls-connect._tcp", "192.0.2.31", 37177)
+        };
+
+        var match = AdbQrPairingService.MatchServerConnection(targets, table, "192.0.2.31");
+
+        Assert.Equal("adb-ABC._adb-tls-connect._tcp", match?.Serial);
+        Assert.Equal("192.0.2.31:37177", match?.Address);
+    }
 }
 
 /// <summary>
@@ -163,4 +358,12 @@ public sealed class AdbQrPairingRouteTests : IDisposable
             discoveryTimeout: TimeSpan.FromMilliseconds(1),
             cancellationToken: TestContext.Current.CancellationToken));
     }
+
+    [Theory]
+    [InlineData(DebugBridgeRouteMode.Auto, true)]
+    [InlineData(DebugBridgeRouteMode.ServerOnly, false)]
+    [InlineData(DebugBridgeRouteMode.DirectOnly, true)]
+    [InlineData(DebugBridgeRouteMode.StartupFrozen, true)]
+    public void AllowsInProcessPairing_FollowsRouteMode(DebugBridgeRouteMode mode, bool expected)
+        => Assert.Equal(expected, AdbQrPairingService.AllowsInProcessPairing(mode));
 }

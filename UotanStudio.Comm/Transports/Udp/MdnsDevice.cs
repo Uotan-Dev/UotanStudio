@@ -13,12 +13,19 @@ namespace UotanStudio.Comm.Transports.Udp;
 /// <param name="port">The service TCP port. 服务 TCP 端口。</param>
 /// <param name="addresses">The resolved IP addresses. 解析出的 IP 地址。</param>
 /// <param name="properties">The TXT-record properties. TXT 记录属性。</param>
+/// <param name="serviceType">The service type the instance was advertised under, when known.
+/// 广播该实例的服务类型（已知时）。</param>
+/// <param name="lastSeenUtc">When the instance's SRV record was last received, so a re-advertised service
+/// outranks a stale one the responder still lists.
+/// 该实例的 SRV 记录最后被收到的时刻，使重新广播的服务优先于应答方仍列出的旧服务。</param>
 internal sealed class MdnsDevice(
     string instance,
     string? hostName,
     int port,
     IReadOnlyList<string> addresses,
-    IReadOnlyDictionary<string, string> properties)
+    IReadOnlyDictionary<string, string> properties,
+    string? serviceType = null,
+    DateTime lastSeenUtc = default)
 {
     /// <summary>
     /// Gets the full service instance name, e.g. "ALN-AL00._adb-tls-connect._tcp.local".
@@ -50,6 +57,21 @@ internal sealed class MdnsDevice(
     /// <para>获取 TXT 记录属性（如 "model"、"device"、"serial"）。</para>
     /// </summary>
     public IReadOnlyDictionary<string, string> Properties { get; } = properties ?? throw new ArgumentNullException(nameof(properties));
+
+    /// <summary>
+    /// Gets the service type the instance was advertised under, or <c>null</c> when the source does not
+    /// report one.
+    /// <para>获取广播该实例的服务类型；来源未报告时为 <c>null</c>。</para>
+    /// </summary>
+    public string? ServiceType { get; } = serviceType;
+
+    /// <summary>
+    /// Gets when this instance's SRV record was last received, or <see cref="DateTime.MinValue"/> when the
+    /// source cannot report it (a server mDNS row).
+    /// <para>获取该实例 SRV 记录最后被收到的时刻；来源无法报告时（server 的 mDNS 行）为
+    /// <see cref="DateTime.MinValue"/>。</para>
+    /// </summary>
+    public DateTime LastSeenUtc { get; } = lastSeenUtc;
 
     /// <inheritdoc />
     public override string ToString() =>

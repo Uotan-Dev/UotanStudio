@@ -143,31 +143,7 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
     /// <exception cref="ArgumentNullException"><paramref name="entries"/> is <c>null</c>.
     /// <para><paramref name="entries"/> 为 <c>null</c>。</para></exception>
     internal static IReadOnlyDictionary<string, string> BuildAliasMap(IEnumerable<AdbServerMdnsEntry> entries)
-    {
-        ArgumentNullException.ThrowIfNull(entries);
-        var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in entries)
-        {
-            if (!IsConnectService(entry.ServiceType))
-            {
-                continue;
-            }
-
-            var instance = NormalizeInstance(entry.Instance);
-            var serviceType = NormalizeInstance(entry.ServiceType);
-            var suffix = "." + serviceType;
-            if (instance.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            {
-                instance = instance[..^suffix.Length];
-            }
-
-            var endpoint = DebugBridgeNetworkAddress.FormatEndpoint(entry.Host, entry.Port);
-            aliases[instance] = endpoint;
-            aliases[string.Concat(instance, ".", serviceType)] = endpoint;
-        }
-
-        return aliases;
-    }
+        => AdbServerMdns.BuildConnectAliases(entries, ConnectServiceTypes);
 
     /// <summary>
     /// Resolves a server target serial against the alias map. The exact serial is tried first, then a
@@ -182,39 +158,11 @@ public sealed class AdbServerDiscoverySource(string host = "127.0.0.1", int port
     /// <returns>The resolved <c>host:port</c>, or <c>null</c> when no row matches.
     /// <para>解析出的 <c>host:port</c>；没有匹配行时为 <c>null</c>。</para></returns>
     internal static string? ResolveAlias(IReadOnlyDictionary<string, string> aliases, string serial)
-    {
-        ArgumentNullException.ThrowIfNull(aliases);
-        if (string.IsNullOrWhiteSpace(serial))
-        {
-            return null;
-        }
-
-        var normalized = NormalizeInstance(serial);
-        if (aliases.TryGetValue(normalized, out var exact))
-        {
-            return exact;
-        }
-
-        foreach (var serviceType in ConnectServiceTypes)
-        {
-            var suffix = "." + serviceType;
-            if (normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
-                aliases.TryGetValue(normalized[..^suffix.Length], out var stripped))
-            {
-                return stripped;
-            }
-        }
-
-        return null;
-    }
+        => AdbServerMdns.ResolveConnectAlias(aliases, serial, ConnectServiceTypes);
 
     private static bool IsMdnsInstanceName(string serial) =>
         ConnectServiceTypes.Any(serviceType => NormalizeInstance(serial)
             .EndsWith("." + serviceType, StringComparison.OrdinalIgnoreCase));
-
-    private static bool IsConnectService(string serviceType) =>
-        ConnectServiceTypes.Any(candidate => string.Equals(
-            NormalizeInstance(serviceType), candidate, StringComparison.OrdinalIgnoreCase));
 
     private static string NormalizeInstance(string instance) => instance.TrimEnd('.');
 }

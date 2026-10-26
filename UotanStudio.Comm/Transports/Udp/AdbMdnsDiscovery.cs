@@ -64,8 +64,51 @@ internal static class AdbMdnsDiscovery
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan MatchInterval = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan RequeryInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Extra window kept open after the pairing instance resolves, so the connect instance advertised
+    /// alongside it is collected in the same session.
+    /// <para>配对实例解析后继续保留的额外窗口，使同时广播的连接实例在同一会话中被收集。</para>
+    /// </summary>
+    private static readonly TimeSpan PairingMatchGrace = TimeSpan.FromMilliseconds(1500);
+
+    /// <summary>
+    /// Extra window kept open after a secure connect instance resolves, so the records of the same burst
+    /// are collected before the browse returns them.
+    /// <para>安全连接实例解析后继续保留的额外窗口，使同一批广播中的记录在浏览返回前被收集。</para>
+    /// </summary>
+    private static readonly TimeSpan ConnectMatchGrace = TimeSpan.FromMilliseconds(800);
+
+    /// <summary>
+    /// Service type of the Android 11+ secure connect service without the <c>.local</c> suffix, i.e. the
+    /// text the adb server uses when it keys an auto-connected transport by DNS-SD instance name.
+    /// <para>Android 11+ 安全连接服务的类型名（不含 <c>.local</c>），即 adb server 以 DNS-SD 实例名
+    /// 作为自动连接传输键时使用的文本。</para>
+    /// </summary>
+    internal const string AdbTlsConnectTypeName = "_adb-tls-connect._tcp";
+
     private const int MaxInstances = 64;
     private const int MaxAddresses = 128;
+
+    /// <summary>Upper bound of DNS questions sent in one unicast round.
+    /// <para>单轮单播问询发送的 DNS 问题数上限。</para></summary>
+    private const int MaxUnicastQueries = 24;
+
+    /// <summary>Largest datagram accepted from a unicast mDNS answer.
+    /// <para>可接受的单播 mDNS 应答数据报上限。</para></summary>
+    private const int MaxDatagramBytes = 9000;
+
+    /// <summary>Spacing between unicast query rounds while the device has not answered.
+    /// <para>设备未应答时两轮单播问询之间的间隔。</para></summary>
+    private static readonly TimeSpan UnicastQueryInterval = TimeSpan.FromMilliseconds(600);
+
+    /// <summary>Per-receive wait before the unicast loop feeds the next query round.
+    /// <para>单播循环在进入下一轮问询前对每次接收的等待时长。</para></summary>
+    private static readonly TimeSpan UnicastReceivePoll = TimeSpan.FromMilliseconds(150);
+
+    /// <summary>Unicast window used when a multicast browse produced no matching connect instance.
+    /// <para>组播浏览未产生匹配的连接实例时使用的单播窗口。</para></summary>
+    private static readonly TimeSpan UnicastFallbackWindow = TimeSpan.FromSeconds(1.5);
 
     /// <summary>
     /// Sends mDNS PTR queries for the adb service types, collects the multicast
@@ -98,8 +141,15 @@ internal static class AdbMdnsDiscovery
             device => MatchesInstanceLabel(device.Instance, instanceName), timeout, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Polls the <c>_adb-tls-connect._tcp</c> service until an instance resolves to the supplied device IP address and returns it (the secure connect port), or <c>null</c> when the deadline passes without a match.
-    /// <para>轮询 <c>_adb-tls-connect._tcp</c> 服务，直到某个实例解析到给定设备 IP 并返回该实例（安全连接端口）；超过期限仍无匹配时返回 <c>null</c>。</para></summary>
+    /// <summary>Polls the <c>_adb-tls-connect._tcp</c> service for the supplied window and returns the most recently advertised instance that resolves to the given device IP address (the secure connect port), or <c>null</c> when none resolves.
+    /// <para>在给定窗口内浏览 <c>_adb-tls-connect._tcp</c> 服务，返回解析到给定设备 IP 的最近广播实例（安全连接端口）；没有实例解析时为 <c>null</c>。</para></summary>
+    /// <remarks>
+    /// <para>The browse keeps its window open for a short grace after the first match and then returns the newest
+    /// instance: after the daemon replaces its TLS service, a responder can still answer with the previous
+    /// instance, and the newest one is the port that accepts the connection.</para>
+    /// <para>首次命中后浏览会再保留一小段宽限窗口，然后返回最新的实例：守护进程替换 TLS 服务后，应答方仍可能返回
+    /// 上一个实例，而最新实例才是接受连接的端口。</para>
+    /// </remarks>
     /// <param name="address">The device IP address discovered during pairing.
     /// <para>配对阶段发现的设备 IP 地址。</para></param>
     /// <param name="timeout">Overall wait deadline.<para>整体等待期限。</para></param>
@@ -112,9 +162,252 @@ internal static class AdbMdnsDiscovery
         string address, TimeSpan? timeout = null, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(address);
-        return await WaitForServiceAsync(AdbTlsService,
-            device => device.Addresses.Any(candidate => SameAddress(candidate, address)), timeout, ct)
-            .ConfigureAwait(false);
+        var devices = await BrowseAsync([AdbTlsService], timeout ?? DefaultTimeout,
+            static _ => true,
+            device => device.Addresses.Any(candidate => SameAddress(candidate, address)),
+            AdbTlsService, ct, ConnectMatchGrace).ConfigureAwait(false);
+        var match = devices
+            .Where(device => device.Addresses.Any(candidate => SameAddress(candidate, address)))
+            .MaxBy(static device => device.LastSeenUtc);
+        if (match is not null)
+        {
+            return match;
+        }
+
+        // Multicast can be filtered on some Wi-Fi links (power save, AP isolation); the device's own responder
+        // still answers a unicast DNS-SD query.
+        var direct = await QueryUnicastAsync(address, UnicastFallbackWindow, ct).ConfigureAwait(false);
+        return direct
+            .Where(device => device.Addresses.Count == 0 ||
+                             device.Addresses.Any(candidate => SameAddress(candidate, address)))
+            .MaxBy(static device => device.LastSeenUtc);
+    }
+
+    /// <summary>
+    /// Browses the pairing and connect services in one session until the expected pairing instance
+    /// resolves, then returns it together with every secure connect instance seen in the same window.
+    /// <para>在一次会话中同时浏览配对与连接服务，直到期望的配对实例解析出来，并返回该实例与同一窗口内看到的全部
+    /// 安全连接实例。</para>
+    /// </summary>
+    /// <remarks>
+    /// <para>The connect advertisement is normally already on the link before pairing finishes, so
+    /// collecting it here removes the post-pairing window in which the phone may have withdrawn it.</para>
+    /// <para>连接广播通常在配对结束前就已在链路上，因此在此收集可以避开配对结束后的窗口期——那时手机可能已撤回
+    /// 该广播。</para>
+    /// </remarks>
+    /// <param name="instanceName">The expected pairing instance label, i.e. the QR "S" field.
+    /// <para>期望的配对实例标签，即二维码的 “S” 字段。</para></param>
+    /// <param name="timeout">Overall wait deadline. <para>整体等待期限。</para></param>
+    /// <param name="ct">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The pairing instance and the connect candidates seen alongside it.
+    /// <para>配对实例及其同时看到的连接候选。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="instanceName"/> is blank.
+    /// <para><paramref name="instanceName"/> 为空。</para></exception>
+    internal static async Task<AdbPairingSnapshot> WaitForPairingSnapshotAsync(string instanceName,
+        TimeSpan? timeout = null, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(instanceName);
+        var devices = await BrowseAsync([AdbTlsPairingService, AdbTlsService], timeout ?? DefaultTimeout,
+                static _ => true, device => MatchesInstanceLabel(device.Instance, instanceName),
+                null, ct, PairingMatchGrace).ConfigureAwait(false);
+        var pairing = devices.FirstOrDefault(device => IsType(device, AdbTlsPairingService) &&
+                                                      MatchesInstanceLabel(device.Instance, instanceName));
+        var connect = devices.Where(device => IsType(device, AdbTlsService)).ToArray();
+        return new AdbPairingSnapshot(pairing, connect);
+    }
+
+    /// <summary>
+    /// Browses <c>_adb-tls-connect._tcp</c> for the supplied window and returns every secure connect
+    /// instance that resolved during it, ending the window early once <paramref name="earlyExit"/> matches.
+    /// <para>在给定窗口内浏览 <c>_adb-tls-connect._tcp</c>，返回窗口内解析出的全部安全连接实例；一旦
+    /// <paramref name="earlyExit"/> 命中就提前结束窗口。</para>
+    /// </summary>
+    /// <param name="timeout">Browse window; a non-positive value performs one query pass.
+    /// <para>浏览窗口；非正值只执行一次查询。</para></param>
+    /// <param name="earlyExit">Optional match that ends the browse early.
+    /// <para>可选的提前结束匹配。</para></param>
+    /// <param name="ct">Cancellation token; cancellation propagates.
+    /// <para>取消令牌；取消会被传播。</para></param>
+    /// <param name="requireAddress">When <see langword="false"/>, an instance whose A/AAAA answer never arrived is
+    /// still returned with its SRV port and an empty address list, so the caller can dial that port on the device
+    /// address it already knows.
+    /// <para>为 <see langword="false"/> 时，A/AAAA 应答始终未到的实例仍会带着 SRV 端口和空地址列表返回，使调用方
+    /// 能在已知设备地址上拨该端口。</para></param>
+    /// <returns>The resolved secure connect instances seen in the window.
+    /// <para>窗口内解析出的安全连接实例。</para></returns>
+    internal static async Task<IReadOnlyList<MdnsDevice>> CollectConnectServicesAsync(TimeSpan timeout,
+        Func<MdnsDevice, bool>? earlyExit, CancellationToken ct, bool requireAddress = true)
+        => await BrowseAsync([AdbTlsService], timeout, static _ => true, earlyExit, AdbTlsService, ct,
+            earlyExit is null ? null : ConnectMatchGrace, requireAddress).ConfigureAwait(false);
+
+    /// <summary>
+    /// Asks the device's own mDNS responder over unicast when multicast is filtered (Wi-Fi power save, AP
+    /// isolation or a saturated multicast group): sends DNS-SD questions for the secure connect service directly
+    /// to <c>host:5353</c> from an ephemeral port and folds the answers into the same accumulator the multicast
+    /// browse uses. An instance whose address never resolves is still returned with its SRV port, so the caller
+    /// can dial it on the address it already knows.
+    /// <para>组播被过滤时（Wi-Fi 省电、AP 隔离或组播组拥塞）直接以单播询问设备自身的 mDNS 应答方：从临时端口向
+    /// <c>host:5353</c> 发送安全连接服务的 DNS-SD 问询，并把应答并入与组播浏览相同的累积器。地址始终未解析出的实例
+    /// 仍会带着 SRV 端口返回，使调用方能在已知地址上拨号。</para>
+    /// </summary>
+    /// <param name="host">The device IPv4 address literal. <para>设备 IPv4 地址字面量。</para></param>
+    /// <param name="timeout">Overall query window. <para>整体问询窗口。</para></param>
+    /// <param name="ct">Cancels the query. <para>取消问询。</para></param>
+    /// <returns>The secure connect instances the device itself reported, possibly without an address.
+    /// <para>设备自身应答的安全连接实例，可能不含地址。</para></returns>
+    internal static async Task<IReadOnlyList<MdnsDevice>> QueryUnicastAsync(string host, TimeSpan timeout,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(host);
+        if (!IPAddress.TryParse(host, out var address) || address.AddressFamily != AddressFamily.InterNetwork ||
+            timeout <= TimeSpan.Zero)
+        {
+            return [];
+        }
+
+        var byInstance = new ConcurrentDictionary<string, DeviceAccumulator>(StringComparer.OrdinalIgnoreCase);
+        var addressesByHost = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var token = lifetime.Token;
+        var deadline = DateTime.UtcNow + timeout;
+        var nextQuery = DateTime.UtcNow;
+        Task<UdpReceiveResult>? pending = null;
+        try
+        {
+            using var client = new UdpClient(AddressFamily.InterNetwork);
+            var remote = new IPEndPoint(address, MdnsPort);
+            while (DateTime.UtcNow < deadline)
+            {
+                token.ThrowIfCancellationRequested();
+                if (DateTime.UtcNow >= nextQuery)
+                {
+                    foreach (var query in BuildUnicastQueries(byInstance))
+                    {
+                        await client.SendAsync(query, remote, token).ConfigureAwait(false);
+                    }
+
+                    nextQuery = DateTime.UtcNow + UnicastQueryInterval;
+                }
+
+                pending ??= client.ReceiveAsync(token).AsTask();
+                if (await Task.WhenAny(pending, Task.Delay(UnicastReceivePoll, token)).ConfigureAwait(false)
+                    != pending)
+                {
+                    continue;
+                }
+
+                var datagram = await pending.ConfigureAwait(false);
+                pending = null;
+                AccumulateDatagram(datagram.Buffer, byInstance, addressesByHost);
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+        }
+        catch (SocketException)
+        {
+            return [];
+        }
+        finally
+        {
+            await lifetime.CancelAsync().ConfigureAwait(false);
+            if (pending is not null)
+            {
+                try { await pending.ConfigureAwait(false); }
+                catch (Exception)
+                {
+                }
+            }
+        }
+
+        return BuildDevices(byInstance, addressesByHost, static _ => true, AdbTlsService, requireAddress: false);
+    }
+
+    private static IReadOnlyList<byte[]> BuildUnicastQueries(
+        ConcurrentDictionary<string, DeviceAccumulator> byInstance)
+    {
+        var queries = new List<byte[]> { SerializeQuery(AdbTlsService, DnsType.PTR) };
+        foreach (var (instance, accumulator) in byInstance)
+        {
+            if (queries.Count >= MaxUnicastQueries)
+            {
+                break;
+            }
+
+            if (accumulator.Port == 0)
+            {
+                queries.Add(SerializeQuery(instance, DnsType.SRV));
+            }
+
+            if (accumulator.HostName is { } hostName)
+            {
+                queries.Add(SerializeQuery(hostName, DnsType.A));
+                queries.Add(SerializeQuery(hostName, DnsType.AAAA));
+            }
+
+            queries.Add(SerializeQuery(instance, DnsType.A));
+            queries.Add(SerializeQuery(instance, DnsType.AAAA));
+        }
+
+        return queries;
+    }
+
+    private static byte[] SerializeQuery(string name, DnsType type)
+    {
+        var message = new Message { Id = 0, QR = false };
+        message.Questions.Add(new Question
+        {
+            Name = new DomainName(name),
+            Type = type,
+            Class = DnsClass.IN,
+        });
+        using var stream = new MemoryStream();
+        message.Write(new WireWriter(stream));
+        return stream.ToArray();
+    }
+
+    private static void AccumulateDatagram(byte[] datagram,
+        ConcurrentDictionary<string, DeviceAccumulator> byInstance,
+        ConcurrentDictionary<string, string> addressesByHost)
+    {
+        if (datagram.Length is 0 or > MaxDatagramBytes)
+        {
+            return;
+        }
+
+        try
+        {
+            using var stream = new MemoryStream(datagram, writable: false);
+            var message = new Message();
+            message.Read(new WireReader(stream));
+            Accumulate(message, byInstance, addressesByHost);
+        }
+        catch (Exception ex) when (ex is IOException or EndOfStreamException or ArgumentException
+            or IndexOutOfRangeException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Compares the service type a device was advertised under with a browse type name, ignoring a
+    /// trailing dot and the <c>.local</c> domain suffix.
+    /// <para>把设备广播的服务类型与浏览类型名比较，忽略结尾点号与 <c>.local</c> 域后缀。</para>
+    /// </summary>
+    /// <param name="device">The discovered device. <para>已发现的设备。</para></param>
+    /// <param name="serviceType">The browse type name. <para>浏览用的类型名。</para></param>
+    /// <returns>Whether the device was advertised under that service type.
+    /// <para>设备以该服务类型广播时为 <see langword="true"/>。</para></returns>
+    internal static bool IsType(MdnsDevice device, string serviceType) =>
+        device.ServiceType is not null &&
+        string.Equals(StripLocalSuffix(device.ServiceType), StripLocalSuffix(serviceType),
+            StringComparison.OrdinalIgnoreCase);
+
+    private static string StripLocalSuffix(string serviceType)
+    {
+        var trimmed = NormalizeServiceType(serviceType);
+        return trimmed.EndsWith(LocalSuffix, StringComparison.OrdinalIgnoreCase)
+            ? trimmed[..^LocalSuffix.Length]
+            : trimmed;
     }
 
     internal static async Task<MdnsDevice?> WaitForServiceAsync(
@@ -122,7 +415,7 @@ internal static class AdbMdnsDiscovery
     {
         var devices = await BrowseAsync([serviceType], timeout ?? DefaultTimeout,
             static _ => true, predicate, serviceType, ct).ConfigureAwait(false);
-        return devices.FirstOrDefault(predicate);
+        return devices.Where(predicate).MaxBy(static device => device.LastSeenUtc);
     }
 
     /// <summary>
@@ -139,10 +432,16 @@ internal static class AdbMdnsDiscovery
     /// <param name="requiredServiceType">When set, only instances advertised under this service type are built;
     /// <c>null</c> keeps every accumulated type. <para>设置时只构建该服务类型广播的实例；<c>null</c> 保留所有已累积类型。</para></param>
     /// <param name="ct">Cancellation token; cancellation propagates. <para>取消令牌；取消会被传播。</para></param>
+    /// <param name="matchGrace">Extra window kept open after <paramref name="earlyExit"/> first matches, so
+    /// records announced in the same burst are still collected. <para>提前匹配后继续保留的额外窗口，使同一批广播中的
+    /// 记录仍被收集。</para></param>
+    /// <param name="requireAddress">Whether an instance without a resolved A/AAAA answer is dropped.
+    /// <para>是否丢弃未解析出 A/AAAA 应答的实例。</para></param>
     /// <returns>The devices known at exit. <para>退出时已知的设备。</para></returns>
     private static async Task<IReadOnlyList<MdnsDevice>> BrowseAsync(
         IReadOnlyList<string> serviceTypes, TimeSpan timeout, Func<DeviceAccumulator, bool> filter,
-        Func<MdnsDevice, bool>? earlyExit, string? requiredServiceType, CancellationToken ct)
+        Func<MdnsDevice, bool>? earlyExit, string? requiredServiceType, CancellationToken ct,
+        TimeSpan? matchGrace = null, bool requireAddress = true)
     {
         if (timeout < TimeSpan.Zero)
         {
@@ -169,16 +468,17 @@ internal static class AdbMdnsDiscovery
 
         var deadline = DateTime.UtcNow + timeout;
         var nextQuery = DateTime.UtcNow;
+        DateTime? matchedAt = null;
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            var devices = BuildDevices(byInstance, addressesByHost, filter, requiredServiceType);
-            if (earlyExit is not null)
+            var devices = BuildDevices(byInstance, addressesByHost, filter, requiredServiceType, requireAddress);
+            if (earlyExit is not null && devices.Any(earlyExit))
             {
-                var match = devices.FirstOrDefault(earlyExit);
-                if (match is not null)
+                matchedAt ??= DateTime.UtcNow;
+                if (matchGrace is null || DateTime.UtcNow - matchedAt >= matchGrace.Value)
                 {
-                    return [match];
+                    return devices;
                 }
             }
 
@@ -317,6 +617,7 @@ internal static class AdbMdnsDiscovery
                 {
                     srvAcc.Port = srv.Port;
                     srvAcc.HostName = srv.Target.ToString();
+                    srvAcc.LastSeenUtc = DateTime.UtcNow;
                 }
 
                 break;
@@ -388,12 +689,13 @@ internal static class AdbMdnsDiscovery
     /// （通过 SRV 主机或实例名匹配）。</para>
     /// </summary>
     /// <remarks>
-    /// <para>An instance is reported only once both its SRV port and its address are known, and a
-    /// missing port is never defaulted to 5555: wireless debugging listens on an ephemeral port, so
-    /// a guessed port turns a discovery miss into a connection attempt against an unrelated
-    /// service.</para>
-    /// <para>只有在 SRV 端口和地址都已解析时才会上报实例，且缺失的端口绝不会被补成 5555：无线调试监听临时
-    /// 端口，猜测的端口会把一次发现失败变成对无关服务的连接尝试。</para>
+    /// <para>An instance is reported only once its SRV port is known; a missing port is never defaulted to 5555,
+    /// because wireless debugging listens on an ephemeral port and a guessed port turns a discovery miss into a
+    /// connection attempt against an unrelated service. An instance whose A/AAAA answer never arrived is dropped
+    /// unless <paramref name="requireAddress"/> is false.</para>
+    /// <para>只有解析出 SRV 端口后才会上报实例，且缺失的端口绝不会被补成 5555：无线调试监听临时端口，
+    /// 猜测端口会把一次发现失败变成对无关服务的连接尝试。A/AAAA 应答始终未到的实例会被丢弃，除非
+    /// <paramref name="requireAddress"/> 为 false。</para>
     /// </remarks>
     /// <param name="byInstance">Accumulated per-instance state. <para>已累积的实例状态。</para></param>
     /// <param name="addressesByHost">Accumulated address book. <para>已累积的地址表。</para></param>
@@ -401,12 +703,15 @@ internal static class AdbMdnsDiscovery
     /// <param name="requiredServiceType">When set, only instances whose PTR record named this service type are
     /// built; <c>null</c> keeps every accumulated type. <para>设置时只构建 PTR 记录名为该服务类型的实例；
     /// <c>null</c> 保留所有已累积类型。</para></param>
+    /// <param name="requireAddress">Whether an instance without a resolved address is dropped.
+    /// <para>是否丢弃未解析出地址的实例。</para></param>
     /// <returns>The resolved devices. <para>已解析的设备。</para></returns>
     internal static IReadOnlyList<MdnsDevice> BuildDevices(
         ConcurrentDictionary<string, DeviceAccumulator> byInstance,
         ConcurrentDictionary<string, string> addressesByHost,
         Func<DeviceAccumulator, bool> filter,
-        string? requiredServiceType = null)
+        string? requiredServiceType = null,
+        bool requireAddress = true)
     {
         var devices = new List<MdnsDevice>();
         foreach (var pair in byInstance)
@@ -423,12 +728,13 @@ internal static class AdbMdnsDiscovery
                 : addressesByHost.TryGetValue(pair.Key, out var byInstanceName)
                     ? byInstanceName
                     : null;
-            if (address is null)
+            if (address is null && requireAddress)
             {
                 continue;
             }
 
-            devices.Add(new MdnsDevice(pair.Key, acc.HostName, acc.Port, [address], acc.Properties));
+            devices.Add(new MdnsDevice(pair.Key, acc.HostName, acc.Port,
+                address is null ? [] : [address], acc.Properties, ResolveServiceType(acc), acc.LastSeenUtc));
         }
 
         return devices;
@@ -438,6 +744,12 @@ internal static class AdbMdnsDiscovery
     /// Per-instance state accumulated from mDNS records.
     /// <para>从 mDNS 记录累积的每个实例的状态。</para>
     /// </summary>
+    private static string? ResolveServiceType(DeviceAccumulator accumulator) =>
+        accumulator.HasServiceType(AdbTlsService) ? AdbTlsService
+        : accumulator.HasServiceType(AdbTlsPairingService) ? AdbTlsPairingService
+        : accumulator.HasServiceType(AdbLegacyService) ? AdbLegacyService
+        : null;
+
     internal sealed class DeviceAccumulator
     {
         /// <summary>
@@ -473,6 +785,13 @@ internal static class AdbMdnsDiscovery
         /// <summary>The SRV port; zero until an SRV record resolves it. SRV 端口；解析到 SRV 记录前为 0。</summary>
         public int Port { get; set; }
 
+        /// <summary>When the SRV record was last received; <see cref="DateTime.MinValue"/> before the first
+        /// one. A phone that restarts wireless debugging re-advertises on a new port, so the newest record is
+        /// the one that answers.
+        /// <para>SRV 记录最后被收到的时刻；首条记录之前为 <see cref="DateTime.MinValue"/>。重启无线调试的手机会以
+        /// 新端口重新广播，因此最新记录才对应正在应答的服务。</para></summary>
+        public DateTime LastSeenUtc { get; set; }
+
         /// <summary>The SRV target host name. SRV 目标主机名。</summary>
         public string? HostName { get; set; }
 
@@ -486,6 +805,8 @@ internal static class AdbMdnsDiscovery
 
     private static bool IsPairingService(string name)
         => name.EndsWith(AdbTlsPairingService, StringComparison.OrdinalIgnoreCase);
+
+    private const string LocalSuffix = ".local";
 
     private static string NormalizeServiceType(string serviceType) => serviceType.TrimEnd('.');
 
@@ -543,3 +864,14 @@ internal static class AdbMdnsDiscovery
             value.IsIPv4MappedToIPv6 ? value.MapToIPv4() : value;
     }
 }
+
+/// <summary>
+/// One browse session's pairing result: the resolved pairing instance plus the secure connect
+/// instances collected before it resolved.
+/// <para>一次浏览会话的配对结果：解析出的配对实例，以及在解析前后收集到的安全连接实例。</para>
+/// </summary>
+/// <param name="Pairing">The pairing instance, or <c>null</c> when it never appeared.
+/// <para>配对实例；始终未出现时为 <c>null</c>。</para></param>
+/// <param name="ConnectCandidates">Every secure connect instance seen in the same window.
+/// <para>同一窗口内看到的全部安全连接实例。</para></param>
+internal sealed record AdbPairingSnapshot(MdnsDevice? Pairing, IReadOnlyList<MdnsDevice> ConnectCandidates);
