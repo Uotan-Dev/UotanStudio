@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Routing;
+using UotanStudio.Comm.Transports.Tcp;
 using UotanStudio.Comm.Transports.Udp;
 
 namespace UotanStudio.Comm.Protocols.Adb.Pairing;
@@ -93,7 +94,7 @@ public sealed record AdbQrPairingOutcome(AdbQrPairingRoute Route, string Address
 public static class AdbQrPairingService
 {
     private static readonly TimeSpan DefaultDiscoveryTimeout = TimeSpan.FromMinutes(3);
-    private static readonly TimeSpan ConnectDiscoveryTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ConnectDiscoveryTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan ServerConnectTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan ServerPollInterval = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan ServerTableRefreshInterval = TimeSpan.FromSeconds(2);
@@ -106,7 +107,7 @@ public static class AdbQrPairingService
     /// <para>配对后先只试能标识出已配对设备的实例，超过该宽限期后连其余广播实例也一并尝试，使以另一地址族或主机名
     /// 发布该服务的双栈应答方仍能给出可拨号端口。</para>
     /// </summary>
-    private static readonly TimeSpan ForeignPortFallbackDelay = TimeSpan.FromSeconds(8);
+    private static readonly TimeSpan ForeignPortFallbackDelay = TimeSpan.FromSeconds(4);
 
     /// <summary>
     /// Window of one post-pairing connect browse. The daemon re-advertises its TLS service on a new port after
@@ -150,6 +151,52 @@ public static class AdbQrPairingService
     /// <para>广播出的安全连接端口尚未应答时，两次 TCP 探测之间的间隔；此时守护进程可能仍在重启其 TLS 服务。</para>
     /// </summary>
     private static readonly TimeSpan DirectPortRetryInterval = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    /// First port of the range probed when the device advertises no secure connect service: adbd allocates its TLS
+    /// listener from the Linux ephemeral range, whose Android default starts here.
+    /// <para>设备没有广播安全连接服务时探测范围的起始端口：adbd 从 Linux 临时端口范围分配其 TLS 监听端口，Android 的
+    /// 默认范围从此处开始。</para>
+    /// </summary>
+    private const int SecurePortScanFirst = 32768;
+
+    /// <summary>
+    /// Last port of the probed range, i.e. the Android default upper bound of the ephemeral range.
+    /// <para>探测范围的末个端口，即 Android 临时端口范围的默认上界。</para>
+    /// </summary>
+    private const int SecurePortScanLast = 60999;
+
+    /// <summary>
+    /// Probes in flight while the range is scanned; the daemon's own listener answers in one round trip, so the
+    /// remaining budget is what the parallelism is spent on.
+    /// <para>扫描范围时在途的探测数；守护进程自身的监听器在一个往返内应答，并发度实际上花在剩余预算上。</para>
+    /// </summary>
+    private const int SecurePortScanConcurrency = 768;
+
+    /// <summary>
+    /// Deadline of one plaintext probe; a port that neither accepts nor refuses by then counts as closed.
+    /// <para>单次明文探测的期限；届时既未接受也未拒绝的端口按关闭处理。</para>
+    /// </summary>
+    private static readonly TimeSpan SecurePortProbeTimeout = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// Deadline of the whole range scan, so a device that answers nothing cannot stall the pairing flow.
+    /// <para>整个范围扫描的期限，使完全不应答的设备无法拖住配对流程。</para>
+    /// </summary>
+    private static readonly TimeSpan SecurePortScanBudget = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Deadline of the ADB handshake that confirms a scanned port really is the daemon's TLS service.
+    /// <para>确认被扫描端口确实是守护进程 TLS 服务的 ADB 握手期限。</para>
+    /// </summary>
+    private static readonly TimeSpan SecurePortHandshakeTimeout = TimeSpan.FromSeconds(4);
+
+    /// <summary>
+    /// Plaintext connect deadline of one scanned port, shorter than the handshake deadline because the range scan
+    /// already proved the port accepts a connection.
+    /// <para>单个被扫描端口的明文连接期限；范围扫描已证明该端口接受连接，因此该期限短于握手期限。</para>
+    /// </summary>
+    private const int SecurePortConnectTimeoutMs = 1500;
 
     /// <summary>
     /// Runs the pairing flow for the supplied one-time credentials. The phone must scan
@@ -241,9 +288,10 @@ public static class AdbQrPairingService
             }
         }
 
+        string deviceGuid;
         try
         {
-            _ = await AdbPairingConnection.PairAsync(
+            deviceGuid = await AdbPairingConnection.PairAsync(
                     host, pairing.Port, credentials.Password, cancellationToken).ConfigureAwait(false);
         }
         catch (IOException ex) when (IsConnectFailure(ex) && !cancellationToken.IsCancellationRequested)
@@ -260,14 +308,15 @@ public static class AdbQrPairingService
             pairing = refreshed;
             progress?.Report(new AdbQrPairingProgress(AdbQrPairingStage.Pairing,
                 DebugBridgeNetworkAddress.FormatEndpoint(host, pairing.Port)));
-            _ = await AdbPairingConnection.PairAsync(
+            deviceGuid = await AdbPairingConnection.PairAsync(
                     host, pairing.Port, credentials.Password, cancellationToken).ConfigureAwait(false);
         }
 
         progress?.Report(new AdbQrPairingProgress(AdbQrPairingStage.Connecting,
             DebugBridgeNetworkAddress.FormatHost(host)));
-        var connectPort = await ResolveDirectConnectPortAsync(new AdbPairingEndpoint(host, pairing.HostName),
-            snapshot.ConnectCandidates, cancellationToken).ConfigureAwait(false);
+        var connectPort = await ResolveDirectConnectPortAsync(
+            new AdbPairingEndpoint(host, pairing.HostName, deviceGuid), snapshot.ConnectCandidates,
+            cancellationToken).ConfigureAwait(false);
         return new AdbQrPairingOutcome(AdbQrPairingRoute.Direct,
             DebugBridgeNetworkAddress.FormatEndpoint(host, connectPort));
     }
@@ -855,106 +904,266 @@ public static class AdbQrPairingService
     }
 
     /// <summary>
-    /// Resolves the secure connect port for a device paired without an adb server, where the tool must dial
-    /// the daemon itself. The live browse runs first on every pass so a port the daemon advertises after pairing
-    /// is seen before the pre-pairing candidates are probed; a connect instance whose address or SRV host name
-    /// does not identify the paired device is still tried against the paired host after a short grace, because a
-    /// dual-stack responder can publish the service under the other address family or host name.
-    /// <para>为无 adb server 时配对的设备解析安全连接端口，此时由工具箱自己拨号。每轮先做实时浏览，使守护进程
-    /// 在配对后广播的端口先于配对前的候选被看到；地址或 SRV 主机名未能标识出已配对设备的连接实例，会在短暂宽限后
-    /// 仍按配对主机试探，因为双栈应答方可能用另一地址族或主机名发布该服务。组播没有交出任何实例时还会向设备自身
-    /// 发送单播 DNS-SD 问询，覆盖手机会被过滤组播应答的网络；未解析出地址的实例按其 SRV 端口参与试探。</para>
+    /// Resolves the secure connect port for a device paired without an adb server, where the tool must dial the daemon
+    /// itself. The device identity is the instance name adbd registered (<c>persist.adb.wifi.guid</c>, returned by the
+    /// pairing exchange), so that instance's exact SRV record is queried on every pass instead of waiting for a PTR
+    /// announcement; a port advertised by an instance that does not carry the label is still tried against the paired
+    /// address after a short grace, because a dual-stack responder can answer under its own name.
+    /// <para>为无 adb server 时配对的设备解析安全连接端口，此时由工具箱自己拨号。设备身份是 adbd 注册的实例名
+    /// （<c>persist.adb.wifi.guid</c>，由配对交换返回），因此每轮直接查询该实例的精确 SRV 记录，而不是等待 PTR 广播；
+    /// 未携带该标签的实例所广播的端口会在短暂宽限后仍按配对地址试探，因为双栈应答方可能以自身名称作答。</para>
+    /// <para>The advertised lookup and a bounded scan of the device's ephemeral range run at the same time, so a daemon
+    /// whose mDNS registration never happened still yields a port within the same wait instead of after it; the scan
+    /// accepts a port only once it completes an ADB handshake.</para>
+    /// <para>广播查找与设备临时端口范围的有界扫描同时进行，使 mDNS 注册从未成功的守护进程也在同一段等待内给出端口，
+    /// 而不是在其之后；扫描只在端口完成 ADB 握手后才接受它。</para>
     /// </summary>
     /// <param name="endpoint">The paired device identity. <para>已配对设备的身份。</para></param>
     /// <param name="connectCandidates">Connect instances collected while waiting for the pairing instance.
     /// <para>等待配对实例期间收集到的连接实例。</para></param>
-    /// <param name="cancellationToken">Cancels probing and browsing. <para>取消探测与浏览。</para></param>
+    /// <param name="cancellationToken">Cancels probing, browsing and scanning.
+    /// <para>取消探测、浏览与扫描。</para></param>
     /// <returns>The listening secure connect port. <para>正在监听的安全连接端口。</para></returns>
-    /// <exception cref="AdbQrPairingConnectPortException">No advertised port accepted a TCP connection; the
-    /// message names the advertisements and ports that were tried.
-    /// <para>没有广播端口接受 TCP 连接；消息会列出尝试过的广播与端口。</para></exception>
+    /// <exception cref="AdbQrPairingConnectPortException">Neither the advertisements nor the scan produced a port; the
+    /// message names the instances, ports and scan result that were tried.
+    /// <para>广播与扫描都没有给出端口；消息会列出尝试过的实例、端口与扫描结果。</para></exception>
     /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
     private static async Task<int> ResolveDirectConnectPortAsync(AdbPairingEndpoint endpoint,
         IReadOnlyList<MdnsDevice> connectCandidates, CancellationToken cancellationToken)
     {
-        var known = new List<int>(SelectConnectPorts(connectCandidates, endpoint.Host, endpoint.HostName));
+        var known = new List<int>(SelectConnectPorts(connectCandidates, endpoint.Guid, endpoint.Host,
+            endpoint.HostName));
         var observed = new List<string>();
-        var startedAt = DateTime.UtcNow;
-        var deadline = startedAt + ConnectDiscoveryTimeout;
-        while (true)
+        foreach (var port in known)
         {
-            var remaining = deadline - DateTime.UtcNow;
-            if (remaining <= TimeSpan.Zero)
+            if (await IsListeningAsync(endpoint.Host, port, cancellationToken).ConfigureAwait(false))
             {
-                break;
+                return port;
             }
-
-            var discovered = await AdbMdnsDiscovery.CollectConnectServicesAsync(
-                remaining > ConnectBrowseWindow ? ConnectBrowseWindow : remaining,
-                device => IsSameDevice(device, endpoint.Host, endpoint.HostName), cancellationToken,
-                requireAddress: false).ConfigureAwait(false);
-            if (!discovered.Any(static device => AdbMdnsDiscovery.IsType(device, AdbMdnsDiscovery.AdbTlsService)))
-            {
-                // Multicast delivered no instance at all: ask the device itself over unicast, which still works
-                // when Wi-Fi power save or AP isolation filters the phone's multicast answers.
-                var direct = await AdbMdnsDiscovery.QueryUnicastAsync(
-                        endpoint.Host, UnicastQueryTimeout, cancellationToken).ConfigureAwait(false);
-                if (direct.Count > 0)
-                {
-                    discovered = [.. discovered, .. direct];
-                }
-            }
-
-            foreach (var device in discovered)
-            {
-                var description = device.ToString();
-                if (!observed.Contains(description))
-                {
-                    observed.Add(description);
-                }
-            }
-
-            var ports = SelectConnectPorts(discovered, endpoint.Host, endpoint.HostName);
-            if (DateTime.UtcNow - startedAt >= ForeignPortFallbackDelay)
-            {
-                ports = [.. ports, .. SelectAdvertisedConnectPorts(discovered)];
-            }
-
-            foreach (var port in ports)
-            {
-                if (!known.Contains(port))
-                {
-                    known.Insert(0, port);
-                }
-            }
-
-            foreach (var port in known)
-            {
-                if (await IsListeningAsync(endpoint.Host, port, cancellationToken).ConfigureAwait(false))
-                {
-                    return port;
-                }
-            }
-
-            remaining = deadline - DateTime.UtcNow;
-            if (remaining <= TimeSpan.Zero)
-            {
-                break;
-            }
-
-            await Task.Delay(remaining > DirectPortRetryInterval ? DirectPortRetryInterval : remaining,
-                cancellationToken).ConfigureAwait(false);
         }
 
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var advertised = ResolveAdvertisedPortAsync(endpoint, known, observed, stop.Token);
+        var scanned = ScanSecurePortsAsync(endpoint.Host, stop.Token);
+        var pending = new List<Task> { advertised, scanned };
+        var scan = default(SecurePortScan);
+        while (pending.Count > 0)
+        {
+            var finished = await Task.WhenAny(pending).ConfigureAwait(false);
+            pending.Remove(finished);
+            if (finished == advertised)
+            {
+                var port = await advertised.ConfigureAwait(false);
+                if (port == 0)
+                {
+                    continue;
+                }
+
+                await stop.CancelAsync().ConfigureAwait(false);
+                await scanned.ConfigureAwait(false);
+                return port;
+            }
+
+            scan = await scanned.ConfigureAwait(false);
+            if (scan.Port == 0)
+            {
+                continue;
+            }
+
+            await stop.CancelAsync().ConfigureAwait(false);
+            await advertised.ConfigureAwait(false);
+            return scan.Port;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
         CommTrace.Debug("adb-qr-pairing",
             $"no secure connect port answered for {endpoint.Host}; known ports [{string.Join(",", known)}], " +
-            $"advertised [{string.Join("; ", observed)}].");
+            $"advertised [{string.Join("; ", observed)}], scanned listening [{scan.Listening}].");
         throw new AdbQrPairingConnectPortException(AdbQrPairingRoute.Direct, endpoint.Host,
             $"The device did not answer on any advertised secure connect port for {endpoint.Host} " +
-            $"(tried ports [{string.Join(",", known)}]; observed '{AdbMdnsDiscovery.AdbTlsService}' instances " +
-            $"[{(observed.Count == 0 ? "none" : string.Join("; ", observed))}]).",
-            known.Count > 0 ? known[0] : 0);
+            $"(tried ports [{string.Join(",", known)}]; connect instances " +
+            $"[{(observed.Count == 0 ? "none" : string.Join("; ", observed))}]; scanned ports " +
+            $"{SecurePortScanFirst}-{SecurePortScanLast}: {scan.Listening} accepted a connection and none " +
+            "completed the ADB handshake).",
+            known.Count > 0 ? known[0] : scan.FirstListening);
     }
+
+    /// <summary>
+    /// Polls the device's advertisements until the secure connect service answers: the exact instance name adbd
+    /// registered is queried on every pass, the local multicast browser and a unicast DNS-SD question to the device are
+    /// both used, and every candidate port is probed before it is handed back.
+    /// <para>轮询设备广播直到安全连接服务应答：每轮都查询 adbd 注册的精确实例名，同时使用本机组播浏览器与向设备发送的
+    /// 单播 DNS-SD 问询，并在交回前探测每个候选端口。</para>
+    /// </summary>
+    /// <param name="endpoint">The paired device identity. <para>已配对设备的身份。</para></param>
+    /// <param name="known">Candidate ports, extended with every newly advertised port.
+    /// <para>候选端口，会随新广播的端口扩充。</para></param>
+    /// <param name="observed">Descriptions of the instances seen, for the failure message.
+    /// <para>见到的实例描述，用于失败消息。</para></param>
+    /// <param name="cancellationToken">Cancels browsing and probing. <para>取消浏览与探测。</para></param>
+    /// <returns>The answering port, or zero when the deadline passes or the caller cancels.
+    /// <para>应答的端口；超过期限或调用方取消时为 0。</para></returns>
+    private static async Task<int> ResolveAdvertisedPortAsync(AdbPairingEndpoint endpoint, List<int> known,
+        List<string> observed, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var startedAt = DateTime.UtcNow;
+            var deadline = startedAt + ConnectDiscoveryTimeout;
+            while (true)
+            {
+                var remaining = deadline - DateTime.UtcNow;
+                if (remaining <= TimeSpan.Zero)
+                {
+                    break;
+                }
+
+                var discovered = await AdbMdnsDiscovery.CollectConnectServicesAsync(
+                        remaining > ConnectBrowseWindow ? ConnectBrowseWindow : remaining,
+                        device => AdbMdnsDiscovery.DescribesDevice(device, endpoint.Guid, endpoint.Host),
+                        cancellationToken, requireAddress: false, endpoint.Guid).ConfigureAwait(false);
+                if (!discovered.Any(static device => AdbMdnsDiscovery.IsType(device, AdbMdnsDiscovery.AdbTlsService)))
+                {
+                    // Multicast delivered no instance at all: ask the device itself over unicast, which still works
+                    // when Wi-Fi power save or AP isolation filters the phone's multicast answers.
+                    var direct = await AdbMdnsDiscovery.QueryUnicastAsync(endpoint.Host, UnicastQueryTimeout,
+                        cancellationToken, endpoint.Guid).ConfigureAwait(false);
+                    if (direct.Count > 0)
+                    {
+                        discovered = [.. discovered, .. direct];
+                    }
+                }
+
+                foreach (var device in discovered)
+                {
+                    var description = device.ToString();
+                    if (!observed.Contains(description))
+                    {
+                        observed.Add(description);
+                    }
+                }
+
+                var ports = SelectConnectPorts(discovered, endpoint.Guid, endpoint.Host, endpoint.HostName);
+                if (DateTime.UtcNow - startedAt >= ForeignPortFallbackDelay)
+                {
+                    ports = [.. ports, .. SelectAdvertisedConnectPorts(discovered)];
+                }
+
+                foreach (var port in ports)
+                {
+                    if (!known.Contains(port))
+                    {
+                        known.Insert(0, port);
+                    }
+                }
+
+                foreach (var port in known)
+                {
+                    if (await IsListeningAsync(endpoint.Host, port, cancellationToken).ConfigureAwait(false))
+                    {
+                        return port;
+                    }
+                }
+
+                remaining = deadline - DateTime.UtcNow;
+                if (remaining <= TimeSpan.Zero)
+                {
+                    break;
+                }
+
+                await Task.Delay(remaining > DirectPortRetryInterval ? DirectPortRetryInterval : remaining,
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return 0;
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Finds the secure connect port by probing the device's ephemeral range, for a daemon that never advertised its
+    /// TLS service. A port is accepted only after it completes an ADB handshake, so an unrelated listener on the same
+    /// device is never mistaken for the daemon; the range scan stops at the first accepted port.
+    /// <para>为始终未广播 TLS 服务的守护进程探测设备的临时端口范围以找出安全连接端口。只有完成 ADB 握手的端口才会
+    /// 被接受，因此同一设备上的无关监听器不会被误认为守护进程；范围扫描在第一个被接受的端口处结束。</para>
+    /// </summary>
+    /// <param name="host">The paired device address. <para>已配对设备的地址。</para></param>
+    /// <param name="cancellationToken">Cancels the scan and the handshakes. <para>取消扫描与握手。</para></param>
+    /// <returns>The accepted port, how many ports accepted a connection, and the lowest of those; a default result
+    /// when the budget expired or the caller canceled. <para>被接受的端口、接受过连接的端口数，以及其中最小的端口；预算
+    /// 到期或调用方取消时返回默认结果。</para></returns>
+    private static async Task<SecurePortScan> ScanSecurePortsAsync(string host,
+        CancellationToken cancellationToken)
+    {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(SecurePortScanBudget);
+        TcpPortScanResult result;
+        try
+        {
+            result = await TcpPortScanner.ScanAsync(host, SecurePortScanFirst, SecurePortScanLast,
+                    SecurePortScanConcurrency, SecurePortProbeTimeout,
+                    (port, token) => IsSecureAdbServiceAsync(host, port, token), budget.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Either the scan budget expired or the caller stopped waiting for it; the advertised lookup reports the
+            // outcome, and the caller re-checks its own token.
+            CommTrace.Debug("adb-qr-pairing", $"secure connect port scan for {host} stopped early.");
+            return default;
+        }
+
+        return new SecurePortScan(result.AcceptedPort, result.OpenPorts.Count,
+            result.OpenPorts.Count > 0 ? result.OpenPorts[0] : 0);
+    }
+
+    /// <summary>
+    /// Reports whether a port is adbd's secure service by completing one ADB connection handshake over it: the
+    /// daemon answers the client's CNXN with A_STLS, upgrades to TLS and then accepts this host's key, which pairing
+    /// registered. Any other listener fails the handshake.
+    /// <para>在该端口上完成一次 ADB 连接握手以判断它是否为 adbd 的安全服务：守护进程以 A_STLS 应答客户端的 CNXN，
+    /// 升级到 TLS 后接受本主机的密钥——即配对阶段登记的那一个。其他监听器都会握手失败。</para>
+    /// </summary>
+    /// <param name="host">The paired device address. <para>已配对设备的地址。</para></param>
+    /// <param name="port">The port to identify. <para>待识别的端口。</para></param>
+    /// <param name="cancellationToken">Cancels the handshake. <para>取消握手。</para></param>
+    /// <returns><see langword="true"/> when the port completed the handshake.
+    /// <para>该端口完成握手时为 <see langword="true"/>。</para></returns>
+    /// <exception cref="OperationCanceledException">The token was canceled. <para>令牌被取消。</para></exception>
+    private static async Task<bool> IsSecureAdbServiceAsync(string host, int port,
+        CancellationToken cancellationToken)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(SecurePortHandshakeTimeout);
+        try
+        {
+            using var session = AdbSecureSessionFactory.Open(host, port, SecurePortConnectTimeoutMs);
+            await session.ConnectAsync(deadline.Token).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// What one range scan found: the port that completed an ADB handshake, how many ports accepted a connection,
+    /// and the lowest of them for pre-filling a manual port.
+    /// <para>一次范围扫描的结果：完成 ADB 握手的端口、接受过连接的端口数，以及其中最小的端口（用于预填手动端口）。</para>
+    /// </summary>
+    /// <param name="Port">The accepted port, or zero when no port completed a handshake.
+    /// <para>被接受的端口；没有端口完成握手时为 0。</para></param>
+    /// <param name="Listening">How many ports accepted a connection. <para>接受过连接的端口数。</para></param>
+    /// <param name="FirstListening">The lowest listening port, or zero. <para>最小的监听端口；没有时为 0。</para></param>
+    private readonly record struct SecurePortScan(int Port, int Listening, int FirstListening);
 
     /// <summary>
     /// Returns every secure connect port any instance advertised, newest first, regardless of which device it
@@ -1003,7 +1212,27 @@ public static class AdbQrPairingService
     /// <returns>Candidate ports in preference order; empty when nothing refers to that device.
     /// <para>按优先级排序的候选端口；没有条目指向该设备时为空。</para></returns>
     internal static IReadOnlyList<int> SelectConnectPorts(IReadOnlyList<MdnsDevice> candidates, string host,
-        string? pairingHostName)
+        string? pairingHostName) => SelectConnectPorts(candidates, null, host, pairingHostName);
+
+    /// <summary>
+    /// Orders the secure connect ports known for one device, preferring instances that carry the instance name adbd
+    /// registered (its GUID) over ones identified only by the paired address or SRV host name, then the most recently
+    /// advertised instance.
+    /// <para>按顺序给出某台设备已知的安全连接端口：先取携带 adbd 注册实例名（其 GUID）的条目，其次才是只靠配对地址或
+    /// SRV 主机名识别的条目，同一档内最近广播的实例优先。</para>
+    /// </summary>
+    /// <param name="candidates">Connect instances collected while waiting for the pairing instance.
+    /// <para>等待配对实例期间收集到的连接实例。</para></param>
+    /// <param name="instanceName">The instance label adbd registered, when known.
+    /// <para>已知时 adbd 注册的实例标签。</para></param>
+    /// <param name="host">The device address the pairing advertisement resolved to.
+    /// <para>配对广播解析出的设备地址。</para></param>
+    /// <param name="pairingHostName">The pairing service's SRV host name, when known.
+    /// <para>配对服务的 SRV 主机名（已知时）。</para></param>
+    /// <returns>Candidate ports in preference order; empty when nothing refers to that device.
+    /// <para>按优先级排序的候选端口；没有条目指向该设备时为空。</para></returns>
+    internal static IReadOnlyList<int> SelectConnectPorts(IReadOnlyList<MdnsDevice> candidates,
+        string? instanceName, string host, string? pairingHostName)
     {
         ArgumentNullException.ThrowIfNull(candidates);
         var ports = new List<int>();
@@ -1011,12 +1240,13 @@ public static class AdbQrPairingService
                      .Where(static candidate => candidate.Port is >= 1 and <= 65535 &&
                                                 AdbMdnsDiscovery.IsType(candidate,
                                                     AdbMdnsDiscovery.AdbTlsService))
-                     .OrderByDescending(static candidate => candidate.LastSeenUtc)
+                     .OrderByDescending(candidate => InstanceMatches(candidate, instanceName))
+                     .ThenByDescending(static candidate => candidate.LastSeenUtc)
                      .ThenByDescending(candidate => AddressMatches(candidate, host))
                      .ThenByDescending(candidate => HostNameMatches(candidate.HostName, pairingHostName)))
         {
-            if ((AddressMatches(device, host) || HostNameMatches(device.HostName, pairingHostName)) &&
-                !ports.Contains(device.Port))
+            if ((InstanceMatches(device, instanceName) || AddressMatches(device, host) ||
+                 HostNameMatches(device.HostName, pairingHostName)) && !ports.Contains(device.Port))
             {
                 ports.Add(device.Port);
             }
@@ -1054,6 +1284,9 @@ public static class AdbQrPairingService
     /// <returns>Whether both describe the same device. <para>两者描述同一设备时为 <see langword="true"/>。</para></returns>
     internal static bool IsSameDevice(MdnsDevice device, string host, string? pairingHostName) =>
         HostNameMatches(device.HostName, pairingHostName) || AddressMatches(device, host);
+
+    private static bool InstanceMatches(MdnsDevice device, string? instanceName) =>
+        instanceName is not null && AdbMdnsDiscovery.MatchesInstanceLabel(device.Instance, instanceName);
 
     private static bool HostNameMatches(string? candidateHostName, string? pairingHostName) =>
         candidateHostName is not null && pairingHostName is not null &&
@@ -1129,7 +1362,10 @@ public static class AdbQrPairingService
 /// <param name="Host">The resolved device address. <para>解析出的设备地址。</para></param>
 /// <param name="HostName">The SRV target host name, when the source reported one.
 /// <para>来源报告时的 SRV 目标主机名。</para></param>
-internal sealed record AdbPairingEndpoint(string Host, string? HostName);
+/// <param name="Guid">The instance name adbd registered for its TLS service, i.e. <c>persist.adb.wifi.guid</c>,
+/// which the pairing exchange returns as the device GUID. <para>adbd 为其 TLS 服务注册的实例名，即
+/// <c>persist.adb.wifi.guid</c>；配对交换以设备 GUID 返回该值。</para></param>
+internal sealed record AdbPairingEndpoint(string Host, string? HostName, string? Guid = null);
 
 /// <summary>
 /// One device row of the adb server's listing together with the dialable address that row resolves to.

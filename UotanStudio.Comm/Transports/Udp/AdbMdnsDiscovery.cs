@@ -154,20 +154,24 @@ internal static class AdbMdnsDiscovery
     /// <para>配对阶段发现的设备 IP 地址。</para></param>
     /// <param name="timeout">Overall wait deadline.<para>整体等待期限。</para></param>
     /// <param name="ct">Cancellation token. 取消令牌。</param>
+    /// <param name="instanceName">The instance label adbd registered, i.e. its <c>persist.adb.wifi.guid</c>; when
+    /// given, that exact SRV name is queried and an instance carrying the label counts without an address match.
+    /// <para>adbd 注册的实例标签，即其 <c>persist.adb.wifi.guid</c>；给出时会直接查询该 SRV 名称，携带该标签的实例
+    /// 无需地址匹配也算命中。</para></param>
     /// <returns>The TLS connect service instance, or <c>null</c> on timeout.
     /// <para>TLS 连接服务实例；超时返回 <c>null</c>。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="address"/> is blank.
     /// <para><paramref name="address"/> 为空。</para></exception>
     public static async Task<MdnsDevice?> WaitForConnectServiceAsync(
-        string address, TimeSpan? timeout = null, CancellationToken ct = default)
+        string address, TimeSpan? timeout = null, CancellationToken ct = default, string? instanceName = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(address);
         var devices = await BrowseAsync([AdbTlsService], timeout ?? DefaultTimeout,
             static _ => true,
-            device => device.Addresses.Any(candidate => SameAddress(candidate, address)),
-            AdbTlsService, ct, ConnectMatchGrace).ConfigureAwait(false);
+            device => DescribesDevice(device, instanceName, address),
+            AdbTlsService, ct, ConnectMatchGrace, true, instanceName).ConfigureAwait(false);
         var match = devices
-            .Where(device => device.Addresses.Any(candidate => SameAddress(candidate, address)))
+            .Where(device => DescribesDevice(device, instanceName, address))
             .MaxBy(static device => device.LastSeenUtc);
         if (match is not null)
         {
@@ -176,10 +180,10 @@ internal static class AdbMdnsDiscovery
 
         // Multicast can be filtered on some Wi-Fi links (power save, AP isolation); the device's own responder
         // still answers a unicast DNS-SD query.
-        var direct = await QueryUnicastAsync(address, UnicastFallbackWindow, ct).ConfigureAwait(false);
+        var direct = await QueryUnicastAsync(address, UnicastFallbackWindow, ct, instanceName)
+            .ConfigureAwait(false);
         return direct
-            .Where(device => device.Addresses.Count == 0 ||
-                             device.Addresses.Any(candidate => SameAddress(candidate, address)))
+            .Where(device => device.Addresses.Count == 0 || DescribesDevice(device, instanceName, address))
             .MaxBy(static device => device.LastSeenUtc);
     }
 
@@ -233,12 +237,15 @@ internal static class AdbMdnsDiscovery
     /// address it already knows.
     /// <para>为 <see langword="false"/> 时，A/AAAA 应答始终未到的实例仍会带着 SRV 端口和空地址列表返回，使调用方
     /// 能在已知设备地址上拨该端口。</para></param>
+    /// <param name="instanceName">Optional instance label whose exact SRV record is queried alongside the browse,
+    /// i.e. the adbd GUID. <para>可选实例标签：除浏览外还会查询其精确 SRV 记录，即 adbd GUID。</para></param>
     /// <returns>The resolved secure connect instances seen in the window.
     /// <para>窗口内解析出的安全连接实例。</para></returns>
     internal static async Task<IReadOnlyList<MdnsDevice>> CollectConnectServicesAsync(TimeSpan timeout,
-        Func<MdnsDevice, bool>? earlyExit, CancellationToken ct, bool requireAddress = true)
+        Func<MdnsDevice, bool>? earlyExit, CancellationToken ct, bool requireAddress = true,
+        string? instanceName = null)
         => await BrowseAsync([AdbTlsService], timeout, static _ => true, earlyExit, AdbTlsService, ct,
-            earlyExit is null ? null : ConnectMatchGrace, requireAddress).ConfigureAwait(false);
+            earlyExit is null ? null : ConnectMatchGrace, requireAddress, instanceName).ConfigureAwait(false);
 
     /// <summary>
     /// Asks the device's own mDNS responder over unicast when multicast is filtered (Wi-Fi power save, AP
@@ -253,10 +260,13 @@ internal static class AdbMdnsDiscovery
     /// <param name="host">The device IPv4 address literal. <para>设备 IPv4 地址字面量。</para></param>
     /// <param name="timeout">Overall query window. <para>整体问询窗口。</para></param>
     /// <param name="ct">Cancels the query. <para>取消问询。</para></param>
+    /// <param name="instanceName">The instance label adbd registered, queried as an exact SRV/TXT name so a
+    /// responder that lost the PTR announcement still answers. <para>adbd 注册的实例标签，以精确的 SRV/TXT 名称问询，
+    /// 使丢失 PTR 广播的应答方仍能作答。</para></param>
     /// <returns>The secure connect instances the device itself reported, possibly without an address.
     /// <para>设备自身应答的安全连接实例，可能不含地址。</para></returns>
     internal static async Task<IReadOnlyList<MdnsDevice>> QueryUnicastAsync(string host, TimeSpan timeout,
-        CancellationToken ct = default)
+        CancellationToken ct = default, string? instanceName = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(host);
         if (!IPAddress.TryParse(host, out var address) || address.AddressFamily != AddressFamily.InterNetwork ||
@@ -281,7 +291,7 @@ internal static class AdbMdnsDiscovery
                 token.ThrowIfCancellationRequested();
                 if (DateTime.UtcNow >= nextQuery)
                 {
-                    foreach (var query in BuildUnicastQueries(byInstance))
+                    foreach (var query in BuildUnicastQueries(byInstance, instanceName))
                     {
                         await client.SendAsync(query, remote, token).ConfigureAwait(false);
                     }
@@ -324,9 +334,18 @@ internal static class AdbMdnsDiscovery
     }
 
     private static IReadOnlyList<byte[]> BuildUnicastQueries(
-        ConcurrentDictionary<string, DeviceAccumulator> byInstance)
+        ConcurrentDictionary<string, DeviceAccumulator> byInstance, string? instanceName)
     {
         var queries = new List<byte[]> { SerializeQuery(AdbTlsService, DnsType.PTR) };
+        if (instanceName is not null)
+        {
+            // The daemon registers its TLS service under a known instance name, so asking for that exact SRV
+            // record reaches the port even when the responder's PTR announcements were missed.
+            var instance = $"{instanceName}.{AdbTlsService}";
+            queries.Add(SerializeQuery(instance, DnsType.SRV));
+            queries.Add(SerializeQuery(instance, DnsType.TXT));
+        }
+
         foreach (var (instance, accumulator) in byInstance)
         {
             if (queries.Count >= MaxUnicastQueries)
@@ -437,11 +456,14 @@ internal static class AdbMdnsDiscovery
     /// 记录仍被收集。</para></param>
     /// <param name="requireAddress">Whether an instance without a resolved A/AAAA answer is dropped.
     /// <para>是否丢弃未解析出 A/AAAA 应答的实例。</para></param>
+    /// <param name="expectedInstance">Optional instance label whose exact SRV/TXT records are queried in every
+    /// round, so the daemon's own registration is reached without waiting for a PTR announcement.
+    /// <para>可选实例标签：每轮都查询其精确 SRV/TXT 记录，使守护进程自身的注册不必等待 PTR 广播即可被问到。</para></param>
     /// <returns>The devices known at exit. <para>退出时已知的设备。</para></returns>
     private static async Task<IReadOnlyList<MdnsDevice>> BrowseAsync(
         IReadOnlyList<string> serviceTypes, TimeSpan timeout, Func<DeviceAccumulator, bool> filter,
         Func<MdnsDevice, bool>? earlyExit, string? requiredServiceType, CancellationToken ct,
-        TimeSpan? matchGrace = null, bool requireAddress = true)
+        TimeSpan? matchGrace = null, bool requireAddress = true, string? expectedInstance = null)
     {
         if (timeout < TimeSpan.Zero)
         {
@@ -458,6 +480,15 @@ internal static class AdbMdnsDiscovery
             foreach (var serviceType in serviceTypes)
             {
                 discovery.QueryServiceInstances(new DomainName(serviceType));
+            }
+
+            if (expectedInstance is not null)
+            {
+                // Ask for the exact instance the daemon registered: a responder answers SRV and TXT for a name it
+                // owns even when a listener missed the PTR announcement that introduced it.
+                var name = new DomainName($"{expectedInstance}.{AdbTlsService}");
+                mdns.SendQuery(name, DnsClass.IN, DnsType.SRV);
+                mdns.SendQuery(name, DnsClass.IN, DnsType.TXT);
             }
         }
 
@@ -863,6 +894,21 @@ internal static class AdbMdnsDiscovery
         static IPAddress Normalize(IPAddress value) =>
             value.IsIPv4MappedToIPv6 ? value.MapToIPv4() : value;
     }
+
+    /// <summary>
+    /// Reports whether a connect instance describes the device identified by the instance name adbd registered (its
+    /// GUID) or by the paired address, so a responder that answers under either identity is recognized.
+    /// <para>判断连接实例是否描述了 adbd 注册的实例名（其 GUID）或配对地址所标识的设备，使以任一身份应答的应答方都能
+    /// 被识别。</para>
+    /// </summary>
+    /// <param name="device">The connect instance. <para>连接实例。</para></param>
+    /// <param name="instanceName">The registered instance label, when known.
+    /// <para>已知时已注册的实例标签。</para></param>
+    /// <param name="address">The paired device address. <para>已配对设备的地址。</para></param>
+    /// <returns>Whether the instance describes that device. <para>该实例是否描述该设备。</para></returns>
+    internal static bool DescribesDevice(MdnsDevice device, string? instanceName, string address) =>
+        (instanceName is not null && MatchesInstanceLabel(device.Instance, instanceName)) ||
+        device.Addresses.Any(candidate => SameAddress(candidate, address));
 }
 
 /// <summary>
