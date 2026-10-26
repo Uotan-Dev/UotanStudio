@@ -136,11 +136,12 @@ public sealed partial class DeviceController
     /// <summary>
     /// Opens a direct session to adbd's secure service (Android 11+ TLS) at host:port. The client presents the
     /// certificate derived from its host identity key for this handshake, exactly as upstream adb regenerates it
-    /// from <c>~/.android/adbkey</c>, and the server certificate is accepted as any self-signed certificate,
-    /// matching trust-on-first-use semantics. The caller must connect and dispose on failure.
+    /// from <c>~/.android/adbkey</c>, and the device's self-signed server certificate is accepted without
+    /// validation because adbd rebuilds it on every handshake; adbd authenticates this host's key instead. The
+    /// caller must connect and dispose on failure.
     /// <para>在 host:port 上直接打开到 adbd 安全服务（Android 11+ TLS）的会话。客户端出示本次握手由主机身份
-    /// 密钥派生的证书，与上游 adb 每次用 <c>~/.android/adbkey</c> 重新生成一致；服务器证书按首次使用即信任的方式
-    /// 接受任意自签证书。调用方须自行连接，并在失败时释放。</para>
+    /// 密钥派生的证书，与上游 adb 每次用 <c>~/.android/adbkey</c> 重新生成一致；设备的自签服务端证书因 adbd
+    /// 每次握手都会重建而直接接受不校验，改由 adbd 校验本机密钥。调用方须自行连接，并在失败时释放。</para>
     /// </summary>
     /// <param name="host">Device hostname or IP literal. <para>设备主机名或 IP 字面量。</para></param>
     /// <param name="port">Secure daemon port. <para>adbd 安全服务监听端口。</para></param>
@@ -207,6 +208,47 @@ public sealed partial class DeviceController
     /// <para><paramref name="port"/> 不在 1..65535 范围内。</para></exception>
     public HdcSession OpenNetworkHdcSession(string host, int port)
         => new(new HdcTcpTransport(host, port));
+
+    /// <summary>
+    /// Opens a direct fastboot session to a fastboot-over-TCP target at <c>host:port</c>. Unlike the ADB and
+    /// HDC variants the returned session is already connected: the AOSP TCP fastboot <c>FB01</c> handshake runs
+    /// while the transport is created, and a refused or silent peer throws before a session exists. The caller
+    /// must dispose the session on failure of any later step.
+    /// <para>打开到 <c>host:port</c> 上 fastboot-over-TCP 目标的直连会话。与 ADB 与 HDC 变体不同，返回的
+    /// 会话已完成连接：AOSP TCP fastboot 的 <c>FB01</c> 握手在创建传输时执行，对端拒绝或无应答会在会话
+    /// 存在前抛出。调用方需在后续步骤失败时释放该会话。</para>
+    /// </summary>
+    /// <param name="host">Target hostname or IP literal. <para>目标主机名或 IP 字面量。</para></param>
+    /// <param name="port">Fastboot TCP port, conventionally <c>5554</c>. <para>fastboot TCP 端口，通常是 <c>5554</c>。</para></param>
+    /// <returns>A connected direct fastboot session. <para>已连接的直接 fastboot 会话。</para></returns>
+    public Protocols.Fastboot.FastbootSession OpenNetworkFastbootSession(string host, int port)
+        => new(new Protocols.Fastboot.Transport.FastbootTcpTransport(host, port));
+
+    /// <summary>
+    /// Opens a direct fastboot session to a fastboot-over-UDP target at <c>host:port</c>. As with the TCP
+    /// variant the returned session is already connected: the AOSP Fastboot-over-Network handshake
+    /// (device query plus initialization) runs while the transport is created, retrying each packet before
+    /// it throws. The transport dials a literal IP address only, so <paramref name="host"/> must not be a
+    /// name the resolver would have to expand.
+    /// <para>打开到 <c>host:port</c> 上 fastboot-over-UDP 目标的直连会话。与 TCP 变体相同，返回的会话
+    /// 已完成连接：AOSP Fastboot-over-Network 握手（设备查询加初始化）在创建传输时执行，每包重试后才
+    /// 抛出。该传输只拨叫 IP 字面量，因此 <paramref name="host"/> 不能是仍需解析器展开的名称。</para>
+    /// </summary>
+    /// <param name="host">Target IP literal (IPv4 or IPv6). <para>目标 IP 字面量（IPv4 或 IPv6）。</para></param>
+    /// <param name="port">Fastboot UDP port, conventionally <c>5554</c>. <para>fastboot UDP 端口，通常是 <c>5554</c>。</para></param>
+    /// <returns>A connected direct fastboot session. <para>已连接的直接 fastboot 会话。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="host"/> is not an IP literal.
+    /// <para><paramref name="host"/> 不是 IP 字面量。</para></exception>
+    public Protocols.Fastboot.FastbootSession OpenNetworkFastbootUdpSession(string host, int port)
+    {
+        if (!System.Net.IPAddress.TryParse(host, out _))
+        {
+            throw new ArgumentException("A fastboot-over-UDP target requires an IP literal host.", nameof(host));
+        }
+
+        return new Protocols.Fastboot.FastbootSession(
+            new Protocols.Fastboot.Transport.FastbootUdpTransport(host, port));
+    }
 
     /// <summary>Browses <c>_adb-tls-connect._tcp</c> until an instance resolves to <paramref name="host"/> and returns its port, so a remembered secure endpoint can be re-discovered after the device restarted wireless debugging on a different port. Returns <c>null</c> when the deadline passes with no advertisement.
     /// <para>浏览 <c>_adb-tls-connect._tcp</c> 直到某个实例解析到 <paramref name="host"/> 并返回其端口， 使记住的安全端点能在设备重启无线调试、端口变化后被重新发现；期限内无广播时返回 <c>null</c>。</para></summary>

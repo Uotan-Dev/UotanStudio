@@ -94,6 +94,7 @@ internal sealed class AdbTcpTransport : ICommTransport
             var stream = client.GetStream();
             stream.ReadTimeout = DefaultReadTimeoutMs;
             _stream = stream;
+            TcpKeepAlive.Enable(client.Client);
             return client;
         }
         catch
