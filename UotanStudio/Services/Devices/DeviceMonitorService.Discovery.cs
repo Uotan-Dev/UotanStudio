@@ -4,6 +4,7 @@ using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Protocols.Mtk.Discovery;
+using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Services.Devices;
@@ -91,6 +92,7 @@ public sealed partial class DeviceMonitorService
             endpoint.Route == "server").ToArray();
         var hdcTargets = endpoints.Where(endpoint => endpoint.Protocol == "hdc" &&
             endpoint.Route == "server").ToArray();
+        ReconcileManualNetworkTargets(adbDevices);
         foreach (var info in usbInfos)
         {
             var protocol = Classify(info);
@@ -176,9 +178,10 @@ public sealed partial class DeviceMonitorService
                 target.AliasAddress ?? (resolvedEndpoints.Contains(target.Address) ? target.Address : null)));
         }
 
-        foreach (var target in ManualNetworkTargets)
+        foreach (var target in ManualNetworkTargets.OrderByDescending(IsManualNetworkTargetVerified))
         {
-            if (devices.Any(entry => string.Equals(entry.Serial, target, StringComparison.Ordinal)))
+            if (devices.Any(entry => string.Equals(entry.Serial, target, StringComparison.Ordinal)) ||
+                HasAdbNetworkHost(devices, target))
             {
                 continue;
             }
@@ -209,6 +212,44 @@ public sealed partial class DeviceMonitorService
                 Protocol = DeviceProtocolKind.Hdc,
                 Transport = DeviceTransportKind.Tcp,
                 State = ManualNetworkTargetState(IsManualHdcTargetVerified(target)),
+            });
+        }
+
+        foreach (var target in ManualFastbootTargets)
+        {
+            if (devices.Any(entry => string.Equals(entry.Serial, target, StringComparison.Ordinal) &&
+                    entry.Protocol == DeviceProtocolKind.Fastboot &&
+                    entry.Transport == DeviceTransportKind.Tcp))
+            {
+                continue;
+            }
+
+            devices.Add(new DetectedDevice
+            {
+                Key = "fastboot-tcp:" + target,
+                Serial = target,
+                Protocol = DeviceProtocolKind.Fastboot,
+                Transport = DeviceTransportKind.Tcp,
+                State = ManualNetworkTargetState(IsManualFastbootTargetVerified(target)),
+            });
+        }
+
+        foreach (var target in ManualFastbootUdpTargets)
+        {
+            if (devices.Any(entry => string.Equals(entry.Serial, target, StringComparison.Ordinal) &&
+                    entry.Protocol == DeviceProtocolKind.Fastboot &&
+                    entry.Transport == DeviceTransportKind.Udp))
+            {
+                continue;
+            }
+
+            devices.Add(new DetectedDevice
+            {
+                Key = "fastboot-udp:" + target,
+                Serial = target,
+                Protocol = DeviceProtocolKind.Fastboot,
+                Transport = DeviceTransportKind.Udp,
+                State = ManualNetworkTargetState(IsManualFastbootUdpTargetVerified(target)),
             });
         }
 
@@ -314,6 +355,50 @@ public sealed partial class DeviceMonitorService
             }
         }
         return [.. byKey.Values];
+    }
+
+    /// <summary>
+    /// Reports whether a live ADB network endpoint already uses the same device host as
+    /// <paramref name="target"/>, so a remembered direct endpoint never becomes a second row for a phone the
+    /// server (or another transport) already lists at its current port. Offline rows do not count: when the
+    /// server gave up on the device, the remembered endpoint is the one worth showing.
+    /// <para>判断已有可用的 ADB 网络端点是否与 <paramref name="target"/> 属于同一设备主机，使已记住的直连端点不会为
+    /// server（或另一条传输）已按当前端口列出的手机再生成一行。离线行不计入：server 已放弃该设备时，真正值得显示的是
+    /// 已记住的端点。</para>
+    /// </summary>
+    /// <param name="devices">The rows enumerated so far. <para>目前已枚举出的行。</para></param>
+    /// <param name="target">The remembered <c>host:port</c> value. <para>已记住的 <c>host:port</c> 值。</para></param>
+    /// <returns><see langword="true"/> when another ADB TCP row uses that host.
+    /// <para>已有另一条 ADB TCP 行使用该主机时为 <see langword="true"/>。</para></returns>
+    internal static bool HasAdbNetworkHost(IReadOnlyList<DetectedDevice> devices, string target)
+    {
+        if (!DebugBridgeNetworkAddress.TrySplitEndpoint(target, out var host, out _))
+        {
+            return false;
+        }
+
+        foreach (var device in devices)
+        {
+            if (device.Protocol != DeviceProtocolKind.Adb || device.Transport != DeviceTransportKind.Tcp ||
+                string.Equals(device.State, "offline", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (DebugBridgeNetworkAddress.TrySplitEndpoint(device.Serial, out var serialHost, out _) &&
+                string.Equals(serialHost, host, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (DebugBridgeNetworkAddress.TrySplitEndpoint(device.NetworkAlias, out var aliasHost, out _) &&
+                string.Equals(aliasHost, host, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static int EndpointStateRank(string state) => state switch

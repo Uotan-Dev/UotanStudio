@@ -133,11 +133,12 @@ public sealed partial class DeviceMonitorService
 
                 var directReader = new AdbLogcatReader(async (command, onLine, token) =>
                 {
+                    using var commandScope = AcquireSharedAdbSession(device, token);
                     var stdout = new AdbLogcatLineDecoder(onLine);
                     var stderr = new AdbLogcatLineDecoder(onLine);
                     try
                     {
-                        var shell = sharedSession.CreateShellClient(command);
+                        var shell = commandScope.Session.CreateShellClient(command);
                         var exitCode = await shell.ExecuteStreamingAsync(
                             buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), token).ConfigureAwait(false);
                         token.ThrowIfCancellationRequested();
@@ -157,11 +158,7 @@ public sealed partial class DeviceMonitorService
             catch (Exception exception) when (exception is not OperationCanceledException &&
                 IndicatesLostConnection(exception))
             {
-                if (!sharedSession.IsConnected)
-                {
-                    DiscardSharedAdbSession(device, sharedSession);
-                }
-
+                DiscardSharedAdbSession(device, sharedSession);
                 throw;
             }
             finally

@@ -45,11 +45,18 @@ public partial class DeviceViewModel
     {
         0 => DeviceProtocolKind.Adb,
         1 => DeviceProtocolKind.Hdc,
+        2 => DeviceProtocolKind.Fastboot,
+        3 => DeviceProtocolKind.Fastboot,
         _ => (DeviceProtocolKind)(-1)
     };
 
+    private DeviceTransportKind RemoteProtocolTransport => RemoteProtocolIndex == 3
+        ? DeviceTransportKind.Udp
+        : DeviceTransportKind.Tcp;
+
     public bool HasInvalidRemoteAddress => !string.IsNullOrEmpty(RemoteAddress) &&
-        !DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out _);
+        !DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out _,
+            RemoteProtocolTransport);
 
     public bool IsConnectionBusy
     {
@@ -81,7 +88,8 @@ public partial class DeviceViewModel
     public bool CanManageSelectedConnection => !IsConnectionBusy && SelectedDevice?.CanManageConnection == true;
 
     private bool CanConnectRemote() => !IsConnectionBusy &&
-        DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out _);
+        DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out _,
+            RemoteProtocolTransport);
 
     private void NotifyRemoteAddressChanged()
     {
@@ -93,11 +101,12 @@ public partial class DeviceViewModel
     private async Task ConnectRemoteAsync()
     {
         if (!CanConnectRemote() ||
-            !DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out var address))
+            !DeviceMonitorService.TryNormalizeNetworkAddress(RemoteProtocol, RemoteAddress, out var address,
+                RemoteProtocolTransport))
         {
             return;
         }
-        await ChangeNetworkConnectionAsync(RemoteProtocol, address, null);
+        await ChangeNetworkConnectionAsync(RemoteProtocol, address, null, RemoteProtocolTransport);
     }
 
     /// <summary>
@@ -136,7 +145,7 @@ public partial class DeviceViewModel
         {
             return;
         }
-        await ChangeNetworkConnectionAsync(device.Protocol, device.Serial, null);
+        await ChangeNetworkConnectionAsync(device.Protocol, device.Serial, null, device.Device.Transport);
     }
 
     [RelayCommand(CanExecute = nameof(CanManageSelectedConnection))]
@@ -146,22 +155,26 @@ public partial class DeviceViewModel
         {
             return;
         }
-        await ChangeNetworkConnectionAsync(device.Protocol, device.Serial, device.Device);
+        await ChangeNetworkConnectionAsync(device.Protocol, device.Serial, device.Device, device.Device.Transport);
     }
 
     [RelayCommand(CanExecute = nameof(IsConnectionBusy))]
     private void CancelConnection() => _connectionCancellation?.Cancel();
 
     private static async Task ExecuteNetworkConnectionAsync(DeviceProtocolKind protocol, string address,
-        DetectedDevice? disconnect, CancellationToken cancellationToken)
+        DetectedDevice? disconnect, DeviceTransportKind transport, CancellationToken cancellationToken)
     {
         if (disconnect is null)
         {
-            await App.DeviceMonitor.ConnectNetworkDeviceAsync(protocol, address, cancellationToken);
+            await App.DeviceMonitor.ConnectNetworkDeviceAsync(protocol, address, cancellationToken, transport);
         }
         else if (protocol == DeviceProtocolKind.Hdc)
         {
             await App.DeviceMonitor.HdcDisconnectAsync(disconnect, cancellationToken);
+        }
+        else if (protocol == DeviceProtocolKind.Fastboot)
+        {
+            await App.DeviceMonitor.DisconnectFastbootAsync(disconnect, cancellationToken);
         }
         else
         {
@@ -169,7 +182,8 @@ public partial class DeviceViewModel
         }
     }
 
-    private async Task ChangeNetworkConnectionAsync(DeviceProtocolKind protocol, string address, DetectedDevice? disconnect)
+    private async Task ChangeNetworkConnectionAsync(DeviceProtocolKind protocol, string address,
+        DetectedDevice? disconnect, DeviceTransportKind transport = DeviceTransportKind.Tcp)
     {
         using var cancellation = new CancellationTokenSource();
         _connectionCancellation = cancellation;
@@ -179,7 +193,7 @@ public partial class DeviceViewModel
             disconnect is null ? "Device_RemoteConnecting" : "Device_RemoteDisconnecting"), address);
         try
         {
-            await _changeNetworkConnection(protocol, address, disconnect, cancellation.Token);
+            await _changeNetworkConnection(protocol, address, disconnect, transport, cancellation.Token);
             if (_monitorDevices)
             {
                 if (_refreshTask is { IsCompleted: false })
@@ -192,11 +206,13 @@ public partial class DeviceViewModel
             if (disconnect is null)
             {
                 var connected = Devices.FirstOrDefault(entry => entry.Connections.Any(
-                    endpoint => endpoint.Protocol == protocol && endpoint.Serial == address));
+                    endpoint => endpoint.Protocol == protocol && endpoint.Serial == address &&
+                        endpoint.Transport == transport));
                 if (connected is not null)
                 {
                     connected.SelectedConnection = connected.Connections.First(
-                        endpoint => endpoint.Protocol == protocol && endpoint.Serial == address);
+                        endpoint => endpoint.Protocol == protocol && endpoint.Serial == address &&
+                            endpoint.Transport == transport);
                     SelectedDevice = connected;
                 }
             }

@@ -190,7 +190,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <summary>传输类型（USB/Network/Serial）。 Transport kind (USB/Network/Serial).</summary>
     public string Transport => Device.Transport switch
     {
-        DeviceTransportKind.Tcp => "Network",
+        DeviceTransportKind.Tcp or DeviceTransportKind.Udp => "Network",
         DeviceTransportKind.Serial => "Serial",
         DeviceTransportKind.Usb when EdlSerialPort.Length > 0 =>
             $"{Services.LanguageService.Instance.GetString("Device_TransportSerial")} ({EdlSerialPort})",
@@ -238,7 +238,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <summary>链接端口/地址信息（USB 标识、TCP host:port、串口路径）。 Link/port info.</summary>
     public string LinkPort => Device.Transport switch
     {
-        DeviceTransportKind.Tcp => Device.Serial,
+        DeviceTransportKind.Tcp or DeviceTransportKind.Udp => Device.Serial,
         DeviceTransportKind.Serial => Device.Key,
         DeviceTransportKind.Usb when EdlSerialPort.Length > 0 => EdlSerialPort,
         DeviceTransportKind.Usb => "USB",
@@ -590,11 +590,12 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <summary>是否为 USB 直连设备。 Whether the device is connected over USB.</summary>
     public bool IsUsb => Device.Transport == DeviceTransportKind.Usb;
 
-    /// <summary>是否为网络（TCP/adb server）设备。 Whether the device is connected over network.</summary>
-    public bool IsNetwork => Device.Transport == DeviceTransportKind.Tcp;
+    /// <summary>是否为网络（TCP/UDP/adb server）设备。 Whether the device is connected over network.</summary>
+    public bool IsNetwork => Device.Transport is DeviceTransportKind.Tcp or DeviceTransportKind.Udp;
 
     /// <summary>Whether this endpoint supports explicit network connection management.</summary>
-    public bool CanManageConnection => IsNetwork && Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc &&
+    public bool CanManageConnection => IsNetwork &&
+        Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc or DeviceProtocolKind.Fastboot &&
         owner?.IsConnectionBusy != true;
 
     internal void NotifyConnectionAvailabilityChanged() => OnPropertyChanged(nameof(CanManageConnection));

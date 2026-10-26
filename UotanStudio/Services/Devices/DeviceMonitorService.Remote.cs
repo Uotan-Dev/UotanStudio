@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
@@ -8,15 +9,35 @@ namespace UotanStudio.Services.Devices;
 
 public sealed partial class DeviceMonitorService
 {
-    internal static bool TryNormalizeNetworkAddress(DeviceProtocolKind protocol, string? input, out string address)
+    /// <summary>
+    /// Conventional AOSP fastboot-over-TCP port, used when a fastboot address omits the port.
+    /// <para>AOSP fastboot-over-TCP 的约定端口；fastboot 地址省略端口时补用。</para>
+    /// </summary>
+    private const int FastbootTcpDefaultPort = 5554;
+
+    internal static bool TryNormalizeNetworkAddress(DeviceProtocolKind protocol, string? input, out string address,
+        DeviceTransportKind transport = DeviceTransportKind.Tcp)
     {
         address = string.Empty;
-        if (protocol is not (DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc))
+        if (transport == DeviceTransportKind.Udp)
+        {
+            return protocol == DeviceProtocolKind.Fastboot &&
+                DebugBridgeNetworkAddress.TryNormalize(input, FastbootTcpDefaultPort, out address) &&
+                DebugBridgeNetworkAddress.TrySplitEndpoint(address, out var host, out _) &&
+                IPAddress.TryParse(host, out _);
+        }
+
+        if (protocol is not (DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc or DeviceProtocolKind.Fastboot))
         {
             return false;
         }
 
-        var defaultPort = protocol == DeviceProtocolKind.Adb ? DebugBridgeNetworkAddress.DefaultDevicePort : 0;
+        var defaultPort = protocol switch
+        {
+            DeviceProtocolKind.Adb => DebugBridgeNetworkAddress.DefaultDevicePort,
+            DeviceProtocolKind.Fastboot => FastbootTcpDefaultPort,
+            _ => 0,
+        };
         return DebugBridgeNetworkAddress.TryNormalize(input, defaultPort, out address) &&
                (protocol != DeviceProtocolKind.Hdc || Encoding.UTF8.GetByteCount(address) < 32);
     }
@@ -29,22 +50,59 @@ public sealed partial class DeviceMonitorService
     /// ADB 裸主机使用约定的 <c>5555</c> 端口；HDC 因守护进程端口是动态的，始终要求显式端口。</para>
     /// </summary>
     /// <param name="protocol">The network protocol of the target.<para>目标所属的网络协议。</para></param>
-    /// <param name="address">An ADB host or host:port, or an HDC host:port.<para>ADB 的主机或主机:端口，或 HDC 的主机:端口。</para></param>
+    /// <param name="address">An ADB host or host:port, an HDC host:port, or a fastboot host or host:port.
+    /// <para>ADB 的主机或主机:端口、HDC 的主机:端口，或 fastboot 的主机或主机:端口。</para></param>
     /// <param name="cancellationToken">Cancels the connection attempt.<para>取消连接尝试。</para></param>
+    /// <param name="transport">The fastboot network transport; fastboot over UDP requires an IP-literal host
+    /// and is ignored for ADB and HDC.<para>fastboot 的网络传输；fastboot over UDP 要求 IP 字面量主机，
+    /// 对 ADB 与 HDC 无效。</para></param>
     public async Task ConnectNetworkDeviceAsync(DeviceProtocolKind protocol, string address,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, DeviceTransportKind transport = DeviceTransportKind.Tcp)
     {
-        if (!TryNormalizeNetworkAddress(protocol, address, out var target))
+        if (!TryNormalizeNetworkAddress(protocol, address, out var target, transport))
         {
             throw new ArgumentException(
                 protocol switch
                 {
                     DeviceProtocolKind.Hdc =>
                         "An HDC network address requires an explicit host:port because the daemon port is dynamic.",
+                    DeviceProtocolKind.Fastboot =>
+                        "A valid fastboot device host or host:port address is required.",
                     DeviceProtocolKind.Adb => "A valid ADB device host or host:port address is required.",
-                    _ => "A valid ADB or HDC network address is required.",
+                    _ => "A valid ADB, HDC or Fastboot network address is required.",
                 },
                 nameof(address));
+        }
+
+        if (protocol == DeviceProtocolKind.Fastboot)
+        {
+            if (!DebugBridgeNetworkAddress.TrySplitEndpoint(target, out var fastbootHost, out var fastbootPort))
+            {
+                throw new IOException("A direct fastboot network target needs a host:port address.");
+            }
+
+            if (transport == DeviceTransportKind.Udp)
+            {
+                using var udpSession = _controller.OpenNetworkFastbootUdpSession(fastbootHost, fastbootPort);
+                lock (_networkTargetsLock)
+                {
+                    _manualFastbootUdpTargets.Add(target);
+                    _verifiedManualFastbootUdpTargets.Add(target);
+                }
+            }
+            else
+            {
+                using var fastbootSession = _controller.OpenNetworkFastbootSession(fastbootHost, fastbootPort);
+                lock (_networkTargetsLock)
+                {
+                    _manualFastbootTargets.Add(target);
+                    _verifiedManualFastbootTargets.Add(target);
+                }
+            }
+
+            SavePairedNetworkTargets();
+            await ForceRefreshAsync().ConfigureAwait(false);
+            return;
         }
 
         if (protocol == DeviceProtocolKind.Hdc)
@@ -214,15 +272,18 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// Persists the remembered ADB and HDC network targets after every change so a restart can re-discover
-    /// each endpoint. The HDC list is stored separately because its transport carries no TLS flag.
-    /// <para>每次变更后持久化记住的 ADB 与 HDC 网络目标，使重启后能重新发现各端点。HDC 列表单独保存，
-    /// 因为其传输没有 TLS 标记。</para>
+    /// Persists the remembered ADB, HDC and fastboot network targets after every change so a restart can
+    /// re-discover each endpoint. The HDC and fastboot lists are stored separately because their transports
+    /// carry no TLS flag.
+    /// <para>每次变更后持久化记住的 ADB、HDC 与 fastboot 网络目标，使重启后能重新发现各端点。HDC 与
+    /// fastboot 列表单独保存，因为其传输没有 TLS 标记。</para>
     /// </summary>
     private void SavePairedNetworkTargets()
     {
         List<PairedNetworkTarget> adbSnapshot;
         List<string> hdcSnapshot;
+        List<string> fastbootSnapshot;
+        List<string> fastbootUdpSnapshot;
         lock (_networkTargetsLock)
         {
             adbSnapshot = [.. _manualNetworkTargets
@@ -232,15 +293,23 @@ public sealed partial class DeviceMonitorService
             hdcSnapshot = [.. _manualHdcTargets
                 .Order(StringComparer.Ordinal)
                 .Take(64)];
+            fastbootSnapshot = [.. _manualFastbootTargets
+                .Order(StringComparer.Ordinal)
+                .Take(64)];
+            fastbootUdpSnapshot = [.. _manualFastbootUdpTargets
+                .Order(StringComparer.Ordinal)
+                .Take(64)];
         }
 
         SettingsPersistenceService.Instance.UpdatePairedNetworkTargets(adbSnapshot);
         SettingsPersistenceService.Instance.UpdatePairedHdcNetworkTargets(hdcSnapshot);
+        SettingsPersistenceService.Instance.UpdatePairedFastbootNetworkTargets(fastbootSnapshot);
+        SettingsPersistenceService.Instance.UpdatePairedFastbootUdpNetworkTargets(fastbootUdpSnapshot);
     }
 
     /// <summary>
-    /// Restores the remembered ADB and HDC network targets from settings, with a bound on each list.
-    /// <para>从设置恢复上次记住的 ADB 与 HDC 网络目标；每个列表都设上限。</para>
+    /// Restores the remembered ADB, HDC and fastboot network targets from settings, with a bound on each list.
+    /// <para>从设置恢复上次记住的 ADB、HDC 与 fastboot 网络目标；每个列表都设上限。</para>
     /// </summary>
     private void RestorePairedNetworkTargets()
     {
@@ -270,6 +339,32 @@ public sealed partial class DeviceMonitorService
                 _manualHdcTargets.Add(target);
             }
         }
+
+        foreach (var target in settings.PairedFastbootNetworkTargets.Take(64))
+        {
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                continue;
+            }
+
+            lock (_networkTargetsLock)
+            {
+                _manualFastbootTargets.Add(target);
+            }
+        }
+
+        foreach (var target in settings.PairedFastbootUdpNetworkTargets.Take(64))
+        {
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                continue;
+            }
+
+            lock (_networkTargetsLock)
+            {
+                _manualFastbootUdpTargets.Add(target);
+            }
+        }
     }
 
     /// <summary>
@@ -293,8 +388,12 @@ public sealed partial class DeviceMonitorService
     private readonly Lock _networkTargetsLock = new();
     private readonly Dictionary<string, bool> _manualNetworkTargets = new(StringComparer.Ordinal);
     private readonly HashSet<string> _manualHdcTargets = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _manualFastbootTargets = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _manualFastbootUdpTargets = new(StringComparer.Ordinal);
     private readonly HashSet<string> _verifiedManualNetworkTargets = new(StringComparer.Ordinal);
     private readonly HashSet<string> _verifiedManualHdcTargets = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _verifiedManualFastbootTargets = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _verifiedManualFastbootUdpTargets = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Manually registered HDC network targets, restored from settings or added in this session.
@@ -327,6 +426,140 @@ public sealed partial class DeviceMonitorService
         }
 
         return removed;
+    }
+
+    /// <summary>
+    /// Manually registered fastboot network targets, restored from settings or added in this session.
+    /// <para>手动登记的 fastboot 网络目标，来自设置恢复或本会话新增。</para>
+    /// </summary>
+    /// <value>The registered fastboot <c>host:port</c> values. <para>已登记的 fastboot <c>host:port</c> 集合。</para></value>
+    public IReadOnlyList<string> ManualFastbootTargets
+    {
+        get
+        {
+            lock (_networkTargetsLock)
+            {
+                return [.. _manualFastbootTargets];
+            }
+        }
+    }
+
+    /// <summary>
+    /// Removes a manually registered fastboot network target and reports whether it was registered.
+    /// <para>移除手动登记的 fastboot 网络目标，返回该目标是否已登记。</para>
+    /// </summary>
+    /// <param name="target">A manually registered <c>host:port</c> value.<para>手动登记的 <c>host:port</c> 值。</para></param>
+    /// <returns><see langword="true"/> when the target was registered.<para>该目标已登记时为 <see langword="true"/>。</para></returns>
+    internal bool TryDetachManualFastbootTarget(string target)
+    {
+        bool removed;
+        lock (_networkTargetsLock)
+        {
+            removed = _manualFastbootTargets.Remove(target);
+            _verifiedManualFastbootTargets.Remove(target);
+        }
+
+        if (removed)
+        {
+            SavePairedNetworkTargets();
+        }
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Reports whether a remembered manual fastboot target was reached successfully in this session.
+    /// <para>报告记住的手动 fastboot 目标是否在本会话成功连接过。</para>
+    /// </summary>
+    /// <param name="target">The remembered <c>host:port</c> value.<para>已记住的 <c>host:port</c> 值。</para></param>
+    /// <returns><see langword="true"/> when this session opened the target successfully.
+    /// <para>本会话成功打开过该目标时为 <see langword="true"/>。</para></returns>
+    internal bool IsManualFastbootTargetVerified(string target)
+    {
+        lock (_networkTargetsLock)
+        {
+            return _verifiedManualFastbootTargets.Contains(target);
+        }
+    }
+
+    /// <summary>
+    /// Marks a manual fastboot target as verified after a successful direct open.
+    /// <para>直连打开成功后把手动 fastboot 目标标记为已验证。</para>
+    /// </summary>
+    /// <param name="target">The <c>host:port</c> value to mark.<para>要标记的 <c>host:port</c> 值。</para></param>
+    internal void MarkManualFastbootTargetVerified(string target)
+    {
+        lock (_networkTargetsLock)
+        {
+            _verifiedManualFastbootTargets.Add(target);
+        }
+    }
+
+    /// <summary>
+    /// Manually registered fastboot-over-UDP network targets, restored from settings or added in this session.
+    /// <para>手动登记的 fastboot-over-UDP 网络目标，来自设置恢复或本会话新增。</para>
+    /// </summary>
+    /// <value>The registered fastboot UDP <c>host:port</c> values. <para>已登记的 fastboot UDP <c>host:port</c> 集合。</para></value>
+    public IReadOnlyList<string> ManualFastbootUdpTargets
+    {
+        get
+        {
+            lock (_networkTargetsLock)
+            {
+                return [.. _manualFastbootUdpTargets];
+            }
+        }
+    }
+
+    /// <summary>
+    /// Removes a manually registered fastboot-over-UDP network target and reports whether it was registered.
+    /// <para>移除手动登记的 fastboot-over-UDP 网络目标，返回该目标是否已登记。</para>
+    /// </summary>
+    /// <param name="target">A manually registered <c>host:port</c> value.<para>手动登记的 <c>host:port</c> 值。</para></param>
+    /// <returns><see langword="true"/> when the target was registered.<para>该目标已登记时为 <see langword="true"/>。</para></returns>
+    internal bool TryDetachManualFastbootUdpTarget(string target)
+    {
+        bool removed;
+        lock (_networkTargetsLock)
+        {
+            removed = _manualFastbootUdpTargets.Remove(target);
+            _verifiedManualFastbootUdpTargets.Remove(target);
+        }
+
+        if (removed)
+        {
+            SavePairedNetworkTargets();
+        }
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Reports whether a remembered fastboot-over-UDP target was reached successfully in this session.
+    /// <para>报告记住的 fastboot-over-UDP 目标是否在本会话成功连接过。</para>
+    /// </summary>
+    /// <param name="target">The remembered <c>host:port</c> value.<para>已记住的 <c>host:port</c> 值。</para></param>
+    /// <returns><see langword="true"/> when this session opened the target successfully.
+    /// <para>本会话成功打开过该目标时为 <see langword="true"/>。</para></returns>
+    internal bool IsManualFastbootUdpTargetVerified(string target)
+    {
+        lock (_networkTargetsLock)
+        {
+            return _verifiedManualFastbootUdpTargets.Contains(target);
+        }
+    }
+
+    /// <summary>
+    /// Marks a fastboot-over-UDP target as verified after a successful direct open.
+    /// <para>直连打开成功后把 fastboot-over-UDP 目标标记为已验证。</para>
+    /// </summary>
+    /// <param name="target">The <c>host:port</c> value to mark.<para>要标记的 <c>host:port</c> 值。</para></param>
+    internal void MarkManualFastbootUdpTargetVerified(string target)
+    {
+        lock (_networkTargetsLock)
+        {
+            _verifiedManualFastbootUdpTargets.Add(target);
+        }
     }
 
     /// <summary>
@@ -402,4 +635,133 @@ public sealed partial class DeviceMonitorService
     /// <para>握手失败后按 IP 重新浏览安全连接端口的等待上限。</para>
     /// </summary>
     private static readonly TimeSpan RediscoverSecurePortTimeout = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// Reconciles every remembered secure network target with the endpoints a scan just enumerated: a target
+    /// whose host the adb server now lists adopts the server's current port. A phone that restarted wireless
+    /// debugging therefore stops being dialled at its previous port, which is what produces a wrong-port
+    /// connection and the authorization prompt a stale endpoint repeats on the device. Without a server the
+    /// port is refreshed when the endpoint is opened, so no mDNS browse runs on the scan path.
+    /// <para>把每个已记住的安全网络目标与本次扫描枚举出的端点对齐：server 已列出同一主机的目标改用 server 的
+    /// 当前端口。这样重启无线调试的手机不会再被拨到旧端口——旧端口正是错误端口连接与设备反复弹出授权提示的来源。
+    /// 没有 server 时端口在打开端点时刷新，因此扫描路径上不执行 mDNS 浏览。</para>
+    /// </summary>
+    /// <param name="adbServerEndpoints">The adb server endpoints enumerated by this scan.
+    /// <para>本次扫描枚举出的 adb server 端点。</para></param>
+    private void ReconcileManualNetworkTargets(IReadOnlyList<DeviceEndpoint> adbServerEndpoints)
+    {
+        var serverPorts = BuildServerPorts(adbServerEndpoints);
+        foreach (var (target, host, port) in SnapshotSecureManualTargets())
+        {
+            if (serverPorts.TryGetValue(host, out var serverPort) && serverPort != port)
+            {
+                ReplaceManualNetworkTarget(target, host, serverPort);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Copies the remembered secure targets with their parsed host and port so reconciliation never holds the
+    /// target lock while it browses.
+    /// <para>取出已记住的安全目标及其解析出的主机与端口，使对齐过程在浏览时无需持有目标锁。</para>
+    /// </summary>
+    /// <returns>The remembered secure targets. <para>已记住的安全目标。</para></returns>
+    private List<(string Target, string Host, int Port)> SnapshotSecureManualTargets()
+    {
+        lock (_networkTargetsLock)
+        {
+            return [.. _manualNetworkTargets
+                .Where(static entry => entry.Value)
+                .Select(static entry =>
+                    DebugBridgeNetworkAddress.TrySplitEndpoint(entry.Key, out var host, out var port)
+                        ? (Target: entry.Key, Host: host, Port: port)
+                        : default)
+                .Where(static entry => !string.IsNullOrEmpty(entry.Host))];
+        }
+    }
+
+    /// <summary>
+    /// Maps every usable <c>host:port</c> identity the adb server listed, under either the transport key or the
+    /// DNS-SD instance alias, to the device host it belongs to. Offline rows are ignored so a remembered target
+    /// does not adopt the port of a target the server already gave up on.
+    /// <para>把 adb server 以传输键或 DNS-SD 实例别名列出的每个可用 <c>host:port</c> 身份映射到其设备主机。
+    /// 离线行会被忽略，使已记住的目标不会采用 server 已放弃的目标端口。</para>
+    /// </summary>
+    /// <param name="endpoints">The scan's adb server endpoints. <para>本次扫描的 adb server 端点。</para></param>
+    /// <returns>The current port per host. <para>每台主机的当前端口。</para></returns>
+    private static Dictionary<string, int> BuildServerPorts(IReadOnlyList<DeviceEndpoint> endpoints)
+    {
+        var ports = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var endpoint in endpoints)
+        {
+            if (string.Equals(endpoint.State, "offline", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            Add(endpoint.Address);
+            Add(endpoint.AliasAddress);
+        }
+
+        return ports;
+
+        void Add(string? address)
+        {
+            if (DebugBridgeNetworkAddress.TrySplitEndpoint(address, out var host, out var port))
+            {
+                ports[host] = port;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Drops every other remembered secure target for one device host after a fresh pairing registered
+    /// <paramref name="keep"/>, so an endpoint saved by an earlier pairing on a port the device has since replaced
+    /// cannot shadow the verified one in the device list.
+    /// <para>新一轮配对登记 <paramref name="keep"/> 后，删除同一设备主机上其余已记住的安全目标，使早先配对保存、
+    /// 服务器已弃用端口的条目不会在设备列表中遮蔽已验证的条目。</para>
+    /// </summary>
+    /// <param name="host">The device host whose targets are pruned. <para>要清理目标的设备主机。</para></param>
+    /// <param name="keep">The endpoint that must stay. <para>必须保留的端点。</para></param>
+    private void DropOtherManualNetworkTargetsForHost(string host, string keep)
+    {
+        foreach (var target in ManualNetworkTargets)
+        {
+            if (DebugBridgeNetworkAddress.TrySplitEndpoint(target, out var targetHost, out _) &&
+                string.Equals(targetHost, host, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(target, keep, StringComparison.Ordinal))
+            {
+                TryDetachManualNetworkTarget(target);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Replaces a remembered secure target with the host's current port and keeps it unverified, so the next open
+    /// proves the new endpoint before it is shown as usable.
+    /// <para>把已记住的安全目标替换为主机的当前端口并保持未验证，使下一次打开先证明新端点可用再显示为可用。</para>
+    /// </summary>
+    /// <param name="target">The remembered <c>host:port</c> value. <para>已记住的 <c>host:port</c> 值。</para></param>
+    /// <param name="host">The device host. <para>设备主机。</para></param>
+    /// <param name="port">The current port. <para>当前端口。</para></param>
+    private void ReplaceManualNetworkTarget(string target, string host, int port)
+    {
+        var replacement = DebugBridgeNetworkAddress.FormatEndpoint(host, port);
+        lock (_networkTargetsLock)
+        {
+            if (!_manualNetworkTargets.Remove(target))
+            {
+                return;
+            }
+
+            _verifiedManualNetworkTargets.Remove(target);
+            _manualNetworkTargets[replacement] = true;
+        }
+
+        LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+            $"Remembered network target {target} now uses {replacement} as reported by the adb server.");
+        DropSharedAdbSession("adb-tcp:" + target);
+        SavePairedNetworkTargets();
+        ScheduleChange();
+    }
 }

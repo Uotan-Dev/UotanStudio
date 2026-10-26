@@ -224,6 +224,26 @@ public class AppSettings : IJsonOnDeserialized
     public List<string> PairedHdcNetworkTargets { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets the manually registered fastboot network targets, stored as <c>host:port</c> strings because
+    /// fastboot-over-TCP has no server and its direct transport carries no TLS flag.
+    /// <para>获取或设置手动登记的 fastboot 网络目标，以 <c>host:port</c> 字符串保存，因为 fastboot-over-TCP
+    /// 没有 server，且其直连传输没有 TLS 标记。</para>
+    /// </summary>
+    /// <value>The remembered fastboot endpoints. <para>记住的 fastboot 端点。</para></value>
+    [JsonPropertyName("pairedFastbootNetworkTargets")]
+    public List<string> PairedFastbootNetworkTargets { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the manually registered fastboot-over-UDP network targets, stored as <c>host:port</c> strings;
+    /// the UDP transport dials IP literals only and carries no TLS flag.
+    /// <para>获取或设置手动登记的 fastboot-over-UDP 网络目标，以 <c>host:port</c> 字符串保存；
+    /// UDP 传输只拨叫 IP 字面量，且没有 TLS 标记。</para>
+    /// </summary>
+    /// <value>The remembered fastboot UDP endpoints. <para>记住的 fastboot UDP 端点。</para></value>
+    [JsonPropertyName("pairedFastbootUdpNetworkTargets")]
+    public List<string> PairedFastbootUdpNetworkTargets { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the Id of the ADB key library entry set as the "current signature"; empty string means the runtime identity auto-generated at startup.
     /// <para>获取或设置设为"当前签名"的 ADB 密钥库条目 Id；空字符串表示使用启动自动生成的运行时身份。</para>
     /// </summary>
@@ -642,6 +662,34 @@ public class SettingsPersistenceService
     {
         var settings = LoadSettings();
         settings.PairedHdcNetworkTargets = targets ?? [];
+        SaveSettings(settings);
+    }
+
+    /// <summary>
+    /// Replaces the remembered manual fastboot network targets, merging on top of the latest settings on disk
+    /// so other settings are never overwritten.
+    /// <para>替换记住的手动 fastboot 网络目标：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
+    /// </summary>
+    /// <param name="targets">The current remembered fastboot endpoints; <c>null</c> clears them.
+    /// <para>当前应记住的 fastboot 端点；为 <c>null</c> 时清空。</para></param>
+    public void UpdatePairedFastbootNetworkTargets(List<string> targets)
+    {
+        var settings = LoadSettings();
+        settings.PairedFastbootNetworkTargets = targets ?? [];
+        SaveSettings(settings);
+    }
+
+    /// <summary>
+    /// Replaces the remembered manual fastboot-over-UDP network targets, merging on top of the latest settings
+    /// on disk so other settings are never overwritten.
+    /// <para>替换记住的手动 fastboot-over-UDP 网络目标：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
+    /// </summary>
+    /// <param name="targets">The current remembered fastboot UDP endpoints; <c>null</c> clears them.
+    /// <para>当前应记住的 fastboot UDP 端点；为 <c>null</c> 时清空。</para></param>
+    public void UpdatePairedFastbootUdpNetworkTargets(List<string> targets)
+    {
+        var settings = LoadSettings();
+        settings.PairedFastbootUdpNetworkTargets = targets ?? [];
         SaveSettings(settings);
     }
 

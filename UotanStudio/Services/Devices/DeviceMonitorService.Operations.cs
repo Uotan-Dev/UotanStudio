@@ -408,6 +408,34 @@ public sealed partial class DeviceMonitorService
                 .ConfigureAwait(false);
         }
     }
+
+    /// <summary>Disconnects only the selected manually registered fastboot network target.<para>仅断开所选手动登记的 fastboot 网络目标。</para></summary>
+    /// <param name="device">The fastboot network target to disconnect.<para>要断开的 fastboot 网络目标。</para></param>
+    /// <param name="cancellationToken">Cancels the disconnect.<para>取消断开操作。</para></param>
+    public Task DisconnectFastbootAsync(DetectedDevice device, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (device.Protocol != DeviceProtocolKind.Fastboot || device.Transport is not (DeviceTransportKind.Tcp or DeviceTransportKind.Udp))
+        {
+            throw new ArgumentException("A fastboot network target is required.", nameof(device));
+        }
+
+        if (device.Key.StartsWith("fastboot-udp:", StringComparison.Ordinal))
+        {
+            TryDetachManualFastbootUdpTarget(device.Serial);
+        }
+        else if (device.Key.StartsWith("fastboot-tcp:", StringComparison.Ordinal))
+        {
+            TryDetachManualFastbootTarget(device.Serial);
+        }
+        else
+        {
+            throw new ArgumentException("A manually registered fastboot network target is required.", nameof(device));
+        }
+
+        return ForceRefreshAsync();
+    }
     /// <summary>Reboots through the routed debug bridge session or the Fastboot transport.<para>经路由的调试桥会话或 Fastboot 传输执行重启。</para></summary>
     /// <param name="device">The device to reboot.<para>要重启的设备。</para></param>
     /// <param name="mode">The requested boot destination, such as recovery or bootloader.<para>请求的启动目的地，例如 recovery 或 bootloader。</para></param>

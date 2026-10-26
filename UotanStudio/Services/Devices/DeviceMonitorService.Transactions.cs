@@ -239,7 +239,10 @@ public sealed partial class DeviceMonitorService
         cancellationToken.ThrowIfCancellationRequested();
         if (device.Protocol != DeviceProtocolKind.Fastboot)
             throw new ArgumentException("A Fastboot target is required.", nameof(device));
-        var lease = LeaseEndpoint(device, sessionKind: DeviceSessionKind.Fastboot, cancellationToken: cancellationToken);
+        var lease = device.Key.StartsWith("fastboot-tcp:", StringComparison.Ordinal) ||
+            device.Key.StartsWith("fastboot-udp:", StringComparison.Ordinal)
+                ? OpenDirectNetworkFastbootLease(device)
+                : LeaseEndpoint(device, sessionKind: DeviceSessionKind.Fastboot, cancellationToken: cancellationToken);
         try
         {
             if (!lease.TryGetSession<FastbootSession>(out var session))
@@ -345,11 +348,7 @@ public sealed partial class DeviceMonitorService
         }
         catch (Exception exception) when (IndicatesLostConnection(exception))
         {
-            if (!scope.Session.IsConnected)
-            {
-                DiscardSharedAdbSession(device, scope.Session);
-            }
-
+            DiscardSharedAdbSession(device, scope.Session);
             throw;
         }
     }
@@ -365,11 +364,7 @@ public sealed partial class DeviceMonitorService
         }
         catch (Exception exception) when (IndicatesLostConnection(exception))
         {
-            if (!scope.Session.IsConnected)
-            {
-                DiscardSharedAdbSession(device, scope.Session);
-            }
-
+            DiscardSharedAdbSession(device, scope.Session);
             throw;
         }
     }

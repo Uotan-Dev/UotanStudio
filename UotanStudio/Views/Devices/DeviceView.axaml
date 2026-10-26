@@ -177,6 +177,8 @@
                                           ToolTip.Tip="{DynamicResource Device_RemoteProtocol}">
                                     <ComboBoxItem Content="ADB" />
                                     <ComboBoxItem Content="HDC" />
+                                    <ComboBoxItem Content="Fastboot" />
+                                    <ComboBoxItem Content="Fastboot (UDP)" />
                                 </ComboBox>
                                 <TextBox x:Name="RemoteAddressBox" Grid.Column="1" Height="32"
                                          Text="{Binding RemoteAddress, Mode=TwoWay}"

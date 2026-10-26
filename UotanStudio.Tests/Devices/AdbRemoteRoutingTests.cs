@@ -77,6 +77,68 @@ public sealed class AdbRemoteRoutingTests
     }
 
     [Fact]
+    public void HasAdbNetworkHost_ServerTargetOnSameHost_HidesRememberedDirectEndpoint()
+    {
+        var server = new DetectedDevice
+        {
+            Key = "adb:192.168.1.144:36695",
+            Serial = "192.168.1.144:36695",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Tcp,
+            State = "device"
+        };
+
+        Assert.True(DeviceMonitorService.HasAdbNetworkHost([server], "192.168.1.144:43407"));
+        Assert.False(DeviceMonitorService.HasAdbNetworkHost([server], "192.168.1.150:43407"));
+    }
+
+    [Fact]
+    public void HasAdbNetworkHost_InstanceKeyedTarget_MatchesThroughItsNetworkAlias()
+    {
+        var server = new DetectedDevice
+        {
+            Key = "adb:adb-phone._adb-tls-connect._tcp",
+            Serial = "adb-phone._adb-tls-connect._tcp",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Tcp,
+            NetworkAlias = "192.168.1.144:36695",
+            State = "device"
+        };
+
+        Assert.True(DeviceMonitorService.HasAdbNetworkHost([server], "192.168.1.144:43407"));
+    }
+
+    [Fact]
+    public void HasAdbNetworkHost_OfflineServerTarget_LeavesTheRememberedEndpointVisible()
+    {
+        var offline = new DetectedDevice
+        {
+            Key = "adb:192.168.1.144:36695",
+            Serial = "192.168.1.144:36695",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Tcp,
+            State = "offline"
+        };
+
+        Assert.False(DeviceMonitorService.HasAdbNetworkHost([offline], "192.168.1.144:43407"));
+    }
+
+    [Fact]
+    public void HasAdbNetworkHost_UsbRowWithHostShapedSerial_IsIgnored()
+    {
+        var usb = new DetectedDevice
+        {
+            Key = "usb:1-3",
+            Serial = "192.168.1.144:43407",
+            Protocol = DeviceProtocolKind.Adb,
+            Transport = DeviceTransportKind.Usb,
+            State = "device"
+        };
+
+        Assert.False(DeviceMonitorService.HasAdbNetworkHost([usb], "192.168.1.144:43407"));
+    }
+
+    [Fact]
     public void AppSettings_OldAdbOnlyPayload_PreservesAdbTargetAndLeavesHdcTargetsEmpty()
     {
         const string json = """

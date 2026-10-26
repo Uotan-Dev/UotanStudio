@@ -2,6 +2,7 @@ using UotanStudio.Comm;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Services;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -271,7 +272,9 @@ public sealed partial class DeviceMonitorService
                 _manualNetworkTargets.Remove(serial);
                 _manualNetworkTargets[address] = true;
             }
+            DropSharedAdbSession("adb-tcp:" + serial);
             SavePairedNetworkTargets();
+            ScheduleChange();
             try
             {
                 session = OpenConnectedNetworkSession(host, resolved.Value, isSecure: true);
@@ -296,6 +299,71 @@ public sealed partial class DeviceMonitorService
             Protocol = "adb"
         };
         return (AdoptOwnedSession(endpoint, session), session);
+    }
+
+    /// <summary>
+    /// Opens a direct network fastboot lease for a manually registered target, choosing the transport from
+    /// the key prefix (<c>fastboot-tcp:</c> or <c>fastboot-udp:</c>). The AOSP handshake runs while the
+    /// session opens, so an unreachable target detaches itself instead of staying in the list as an
+    /// offline row.
+    /// <para>为手动登记的网络目标打开直连 fastboot 租约，按键前缀（<c>fastboot-tcp:</c> 或
+    /// <c>fastboot-udp:</c>）选择传输。AOSP 握手在打开会话时执行，不可达的目标会自行注销，
+    /// 而不是以离线行的形式留在列表中。</para>
+    /// </summary>
+    /// <param name="device">The manually registered fastboot network target.<para>手动登记的 fastboot 网络目标。</para></param>
+    /// <returns>The lease and the connected fastboot session.<para>租约与已连接的 fastboot 会话。</para></returns>
+    private DeviceLease OpenDirectNetworkFastbootLease(DetectedDevice device)
+    {
+        var serial = device.Serial;
+        if (!DebugBridgeNetworkAddress.TrySplitEndpoint(serial, out var host, out var port))
+        {
+            throw new IOException("A manually registered fastboot target needs a host:port address.");
+        }
+
+        var isUdp = device.Transport == DeviceTransportKind.Udp;
+        FastbootSession session;
+        try
+        {
+            session = isUdp
+                ? _controller.OpenNetworkFastbootUdpSession(host, port)
+                : _controller.OpenNetworkFastbootSession(host, port);
+        }
+        catch
+        {
+            if (isUdp)
+            {
+                TryDetachManualFastbootUdpTarget(serial);
+            }
+            else
+            {
+                TryDetachManualFastbootTarget(serial);
+            }
+
+            throw;
+        }
+
+        if (isUdp)
+        {
+            MarkManualFastbootUdpTargetVerified(serial);
+        }
+        else
+        {
+            MarkManualFastbootTargetVerified(serial);
+        }
+
+        var transportName = isUdp ? "fastboot-udp" : "fastboot-tcp";
+        var endpoint = new DeviceEndpoint
+        {
+            Source = transportName,
+            Transport = transportName,
+            Address = serial,
+            DisplayName = serial,
+            Serial = serial,
+            Route = "direct",
+            RouteEpoch = DebugBridgeRoute.Current.Epoch,
+            Protocol = "fastboot"
+        };
+        return AdoptOwnedSession(endpoint, session);
     }
 
     /// <summary>

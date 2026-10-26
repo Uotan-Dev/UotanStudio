@@ -15,6 +15,8 @@ public enum DeviceTransportKind
     Usb,
     /// <summary>Network transport through an adb server or TCP.<para>经 adb server 或 TCP 的网络传输。</para></summary>
     Tcp,
+    /// <summary>Network transport over UDP, used by fastboot-over-UDP targets.<para>基于 UDP 的网络传输，用于 fastboot-over-UDP 目标。</para></summary>
+    Udp,
     /// <summary>Serial port connection.<para>串口连接。</para></summary>
     Serial,
 }
@@ -96,7 +98,7 @@ public sealed class DetectedDevice
     public ushort ProductId { get; init; }
     /// <summary>Display name of this endpoint.<para>该端点的显示名称。</para></summary>
     /// <value>The display text of this endpoint.<para>该端点的显示文本。</para></value>
-    public string DisplayName => Transport == DeviceTransportKind.Tcp
+    public string DisplayName => Transport is DeviceTransportKind.Tcp or DeviceTransportKind.Udp
         ? $"{Serial} (network)"
         : $"{Serial} ({State})";
 

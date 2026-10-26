@@ -82,7 +82,7 @@
     <value>Cancel connection operation</value>
   </data>
   <data name="Device_RemoteInvalidAddress" xml:space="preserve">
-    <value>ADB accepts a bare host (default port 5555) or host:port. HDC requires an explicit host:port because its daemon port is dynamic; HDC addresses must be shorter than 32 bytes.</value>
+    <value>ADB accepts a bare host (default port 5555) or host:port. HDC requires an explicit host:port because its daemon port is dynamic; HDC addresses must be shorter than 32 bytes. Fastboot accepts a bare host (default port 5554) or host:port; fastboot over UDP requires an IP-literal host.</value>
   </data>
   <data name="Device_RemoteConnecting" xml:space="preserve">
     <value>Connecting to {0}...</value>

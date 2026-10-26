@@ -39,11 +39,11 @@ internal sealed class FastbootUdpPackets(IPEndPoint endpoint, int maxAttempts)
             throw new IOException("Invalid query response from fastboot target.");
         }
 
-        _sequence = 1;
+        _sequence = BinaryPrimitives.ReadUInt16BigEndian(response.AsSpan(0, 2));
         var init = new byte[4];
         BinaryPrimitives.WriteUInt16BigEndian(init.AsSpan(0, 2), 1);
         BinaryPrimitives.WriteUInt16BigEndian(init.AsSpan(2, 2), HostMaxPacketSize);
-        response = Exchange(client, PacketId.Initialization, PacketFlag.None, (ushort)_sequence, init, 0, 4, attempts, false, null, 0, 0, out _, out _);
+        response = Exchange(client, PacketId.Initialization, PacketFlag.None, (ushort)_sequence, init, 0, 4, attempts, false, null, 0, 0, out var nextSequence, out _);
         if (response.Length < 4)
         {
             throw new IOException("Invalid initialization response from fastboot target.");
@@ -62,7 +62,7 @@ internal sealed class FastbootUdpPackets(IPEndPoint endpoint, int maxAttempts)
         }
 
         _maxDataLength = Math.Min(HostMaxPacketSize, size) - HeaderSize;
-        _sequence = (_sequence + 1) & 0xFFFF;
+        _sequence = nextSequence;
     }
 
     internal int Read(UdpClient client, byte[] output, int offset, int length)
@@ -86,6 +86,22 @@ internal sealed class FastbootUdpPackets(IPEndPoint endpoint, int maxAttempts)
             sent += chunk;
         }
         while (sent < length);
+    }
+
+    private static string BuildErrorMessage(byte[] response)
+    {
+        const int MaxErrorPayload = 256;
+        var payloadLength = Math.Min(response.Length - HeaderSize, MaxErrorPayload);
+        if (payloadLength <= 0)
+        {
+            return "Fastboot target returned an error response.";
+        }
+
+        var message = System.Text.Encoding.ASCII.GetString(response, HeaderSize, payloadLength)
+            .TrimEnd('\0', '\r', '\n', ' ');
+        return string.IsNullOrEmpty(message)
+            ? "Fastboot target returned an error response."
+            : $"Fastboot target reported an error: {message}";
     }
 
     private byte[] Exchange(
@@ -131,7 +147,7 @@ internal sealed class FastbootUdpPackets(IPEndPoint endpoint, int maxAttempts)
 
                         if (response[0] == (byte)PacketId.Error)
                         {
-                            throw new IOException("Fastboot target returned an error response.");
+                            throw new IOException(BuildErrorMessage(response));
                         }
 
                         var payloadLength = response.Length - HeaderSize;

@@ -82,7 +82,7 @@
     <value>取消连接操作</value>
   </data>
   <data name="Device_RemoteInvalidAddress" xml:space="preserve">
-    <value>ADB 可只写主机（默认端口 5555）或写主机:端口；HDC 守护进程端口是动态的，必须显式写主机:端口，且 HDC 地址须少于 32 字节。</value>
+    <value>ADB 可只写主机（默认端口 5555）或写主机:端口；HDC 守护进程端口是动态的，必须显式写主机:端口，且 HDC 地址须少于 32 字节；Fastboot 可只写主机（默认端口 5554）或写主机:端口，fastboot over UDP 的主机必须是 IP 字面量。</value>
   </data>
   <data name="Device_RemoteConnecting" xml:space="preserve">
     <value>正在连接 {0}...</value>

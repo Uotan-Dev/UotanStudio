@@ -17,7 +17,7 @@ namespace UotanStudio.ViewModels.Devices;
 public partial class DeviceViewModel : ViewModelBase, IDisposable
 {
     private readonly bool _monitorDevices;
-    private readonly Func<DeviceProtocolKind, string, DetectedDevice?, CancellationToken, Task> _changeNetworkConnection;
+    private readonly Func<DeviceProtocolKind, string, DetectedDevice?, DeviceTransportKind, CancellationToken, Task> _changeNetworkConnection;
     private Task? _refreshTask;
     private readonly Dictionary<string, (string Signature, long Ticks)> _enrichedDevices = new(StringComparer.Ordinal);
     private const long EnrichmentRefreshMilliseconds = 30_000;
@@ -200,7 +200,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     internal DeviceViewModel(bool monitorDevices,
-        Func<DeviceProtocolKind, string, DetectedDevice?, CancellationToken, Task>? changeNetworkConnection = null)
+        Func<DeviceProtocolKind, string, DetectedDevice?, DeviceTransportKind, CancellationToken, Task>? changeNetworkConnection = null)
     {
         _monitorDevices = monitorDevices;
         _changeNetworkConnection = changeNetworkConnection ?? ExecuteNetworkConnectionAsync;
