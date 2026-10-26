@@ -80,9 +80,11 @@ dotnet format UotanStudio.slnx whitespace --no-restore --verify-no-changes
 dotnet format UotanStudio.slnx style --no-restore --verify-no-changes
 ```
 
+日常改宿主或固件时用项目级构建，不必每次编全量 slnx：`dotnet build UotanStudio.Desktop/UotanStudio.Desktop.csproj --no-restore --nologo -c Debug` 覆盖宿主与全部库（约 12 个项目），`dotnet build UotanStudio.Firmware/UotanStudio.Firmware.csproj --no-restore --nologo -c Debug` 只到固件层；全量 slnx 构建多出的尾段是 `UotanStudio.Tests`（650 个源文件）与 `UotanStudio.Benchmarks`。提交前与最终验证仍以全量 slnx 构建、`dotnet format` 与测试为准。
+
 Debug 构建必须显式写 `-c Debug`，还原也要带 `-p:Configuration=Debug`：`UotanStudio.csproj` 中 `Dock.Avalonia.Diagnostics` 的 `IncludeAssets` 条件按 `$(Configuration)` 求值，还原阶段该属性为空会剔除编译资产，使 `#if DEBUG` 里的 `AttachDockDebugOverlay` 调用以 `CS1061` 失败。CI 的 Release 配置不受影响。
 
-测试命令、过滤器和跳过门控见 `UotanStudio.Tests/AGENTS.md`；性能基准见 `UotanStudio.Benchmarks/AGENTS.md`。项目硬性要求 NativeAOT：最终验证必须包含一次 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained -p:PublishAot=true`，且不得出现新的裁剪/AOT 警告；反射式 DI 注册、未标注的 JSON 反射序列化或动态程序集扫描都不被接受。修改完成后报告实际变更、构建命令、定向测试、跳过的测试和仍未验证的边界。
+测试命令、过滤器和跳过门控见 `UotanStudio.Tests/AGENTS.md`；性能基准见 `UotanStudio.Benchmarks/AGENTS.md`。项目硬性要求 NativeAOT：最终验证必须包含一次 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained`，且不得出现新的裁剪/AOT 警告；`PublishAot` 由 `UotanStudio.Desktop.csproj` 声明，Release 默认 `DebugType=none`，发布的原生镜像不产 PDB；反射式 DI 注册、未标注的 JSON 反射序列化或动态程序集扫描都不被接受。修改完成后报告实际变更、构建命令、定向测试、跳过的测试和仍未验证的边界。
 
 内嵌资源以 zstd 帧入库：MiSans 字体（`UotanStudio/Fonts/*.ttf.zst`）、鸿蒙采集库（`UotanStudio.Mirroring/Assets/ohos/device/*.so.zst` 与同目录 `manifest.txt`）和 `update-binary-arm64`（`UotanStudio.Delivery/Assets/update-binary-arm64.zst`）。改对应源文件后运行 `dotnet run tools/compress-embedded-assets.cs` 重新生成压缩帧与清单，并把生成物与代码一起提交；压缩帧或清单缺失会使项目构建失败。
 

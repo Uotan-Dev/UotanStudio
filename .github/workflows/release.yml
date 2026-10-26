@@ -137,7 +137,6 @@ jobs:
             -c Release \
             -r "${{ matrix.rid }}" \
             --self-contained true \
-            -p:PublishAot=true \
             -p:DebugType=none \
             -p:DebugSymbols=false \
             -p:Version="${{ steps.ver.outputs.version }}" \
