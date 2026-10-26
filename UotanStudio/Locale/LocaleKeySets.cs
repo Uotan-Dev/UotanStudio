@@ -3121,7 +3121,20 @@ internal static class LocaleKeySets
         "UsbTree_Detail_Location",
         "UsbTree_Detail_HardwareIds",
         "UsbTree_Detail_CompatibleIds",
-        "UsbTree_Detail_InterfaceGuids"];
+        "UsbTree_Detail_InterfaceGuids",
+        "UsbTree_ConfigureDriver",
+        "UsbTree_UninstallDriver",
+        "UsbTree_DriverInstallTitle",
+        "UsbTree_DriverInstallDetail",
+        "UsbTree_DriverUninstallTitle",
+        "UsbTree_DriverUninstallDetail",
+        "UsbTree_DriverInstalling",
+        "UsbTree_DriverUninstalling",
+        "UsbTree_DriverInstallSucceeded",
+        "UsbTree_DriverUninstallSucceeded",
+        "UsbTree_DriverElevationRequired",
+        "UsbTree_DriverOperationFailed",
+        "UsbTree_DriverStateRefreshFailed"];
 
     internal static readonly string[] Interaction =
     [

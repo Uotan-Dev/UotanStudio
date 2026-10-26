@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Drivers;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 
@@ -70,6 +71,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     private readonly Func<UsbTopologyBackendKind?, UsbTopologyResult?> _readTopology;
     private readonly Func<UsbTopologyBackendKind, UsbTopologyCapabilities> _capabilitiesOf;
     private readonly IReadOnlyList<UsbTopologyBackendKind> _backendKinds;
+    private readonly IUsbDriverConfigService _driverConfig;
     private readonly Dictionary<string, bool> _expandedById = new(StringComparer.Ordinal);
     private readonly bool _monitorsDevices;
     private readonly Lock _sync = new();
@@ -112,9 +114,16 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// <c>App.DeviceMonitor</c>.
     /// <para>可注入的拓扑来源；为 <see langword="null"/> 时经 <c>App.DeviceMonitor</c> 读取真实系统拓扑。</para>
     /// </param>
+    /// <param name="driverConfig">
+    /// The WinUSB driver configuration service; <see langword="null"/> uses
+    /// <see cref="UsbDriverConfigService.Default"/>.
+    /// <para>WinUSB 驱动配置服务；为 <see langword="null"/> 时使用
+    /// <see cref="UsbDriverConfigService.Default"/>。</para>
+    /// </param>
     public UsbTreeViewModel(
-        Func<UsbTopologyBackendKind?, UsbTopologyResult?>? topologySource = null)
-        : this(monitorDeviceChanges: true, topologySource)
+        Func<UsbTopologyBackendKind?, UsbTopologyResult?>? topologySource = null,
+        IUsbDriverConfigService? driverConfig = null)
+        : this(monitorDeviceChanges: true, topologySource, driverConfig: driverConfig)
     {
     }
 
@@ -143,10 +152,17 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// The backend capability source.
     /// <para>后端能力来源。</para>
     /// </param>
+    /// <param name="driverConfig">
+    /// The WinUSB driver configuration service; <see langword="null"/> uses
+    /// <see cref="UsbDriverConfigService.Default"/>.
+    /// <para>WinUSB 驱动配置服务；为 <see langword="null"/> 时使用
+    /// <see cref="UsbDriverConfigService.Default"/>。</para>
+    /// </param>
     internal UsbTreeViewModel(bool monitorDeviceChanges,
         Func<UsbTopologyBackendKind?, UsbTopologyResult?>? topologySource = null,
         IReadOnlyList<UsbTopologyBackendKind>? backends = null,
-        Func<UsbTopologyBackendKind, UsbTopologyCapabilities>? capabilitiesSource = null)
+        Func<UsbTopologyBackendKind, UsbTopologyCapabilities>? capabilitiesSource = null,
+        IUsbDriverConfigService? driverConfig = null)
     {
         _monitorsDevices = monitorDeviceChanges;
         _backendKinds = backends ?? DeviceMonitorService.TopologyBackends;
@@ -154,6 +170,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             ? App.DeviceMonitor.ReadUsbTopology(backend)
             : null);
         _capabilitiesOf = capabilitiesSource ?? DeviceMonitorService.TopologyCapabilities;
+        _driverConfig = driverConfig ?? UsbDriverConfigService.Default;
 
         BuildBackendOptions();
         StatusText = Localized(IsTopologySupported ? "UsbTree_Ready" : "UsbTree_NoBackend");
@@ -223,6 +240,110 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             result.Capabilities.Backend.ToString(), BuildSummary()));
         AppendExportNodes(builder, Roots, 0);
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Installs the self-signed WinUSB driver package on the node's device. The node must offer driver
+    /// actions and no operation may be running on it; the install itself runs in the background and the
+    /// status bar reports the outcome, refreshing the tree on success.
+    /// <para>为该节点的设备安装自签名 WinUSB 驱动包。节点必须提供驱动操作且当前无进行中的操作；安装
+    /// 在后台执行，状态栏报告结果，成功后刷新树。</para>
+    /// </summary>
+    /// <param name="node">The tree node to install the driver for.<para>要安装驱动的树节点。</para></param>
+    public async Task ConfigureDriverAsync(UsbTreeNodeViewModel node)
+    {
+        if (node is null || !node.ShowDriverAction || node.IsDriverBusy || _disposed ||
+            !OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        node.IsDriverBusy = true;
+        StatusText = Localized("UsbTree_DriverInstalling", node.DisplayText);
+        try
+        {
+            var request = new WinUsbDriverInstallRequest
+            {
+                InstanceId = node.Node.InstanceId,
+                HardwareId = node.Node.HardwareIds[0],
+                DeviceName = node.DisplayText
+            };
+            var result = await Task.Run(() => _driverConfig.Install(request)).ConfigureAwait(true);
+            switch (result.Status)
+            {
+                case WinUsbDriverOperationStatus.Succeeded:
+                    StatusText = Localized("UsbTree_DriverInstallSucceeded", node.DisplayText);
+                    _ = RefreshAsync();
+                    break;
+                case WinUsbDriverOperationStatus.ElevationRequired:
+                    StatusText = Localized("UsbTree_DriverElevationRequired");
+                    break;
+                default:
+                    StatusText = Localized("UsbTree_DriverOperationFailed",
+                        result.Message is { Length: > 0 } message ? message : result.Status.ToString());
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = Localized("UsbTree_DriverOperationFailed", ex.Message);
+            LogService.Instance.Write(LogLevel.Error, "UsbTree",
+                $"WinUSB driver install failed: {ex.Message}");
+        }
+        finally
+        {
+            node.IsDriverBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Removes the WinUSB driver package this app installed from the node's device, letting the device
+    /// fall back to the system default driver. The node must offer driver actions and no operation may
+    /// be running on it; the uninstall runs in the background and the status bar reports the outcome,
+    /// refreshing the tree on success.
+    /// <para>卸载本应用为该节点设备安装的 WinUSB 驱动包，让设备回退系统默认驱动。节点必须提供驱动
+    /// 操作且当前无进行中的操作；卸载在后台执行，状态栏报告结果，成功后刷新树。</para>
+    /// </summary>
+    /// <param name="node">The tree node to uninstall the driver from.<para>要卸载驱动的树节点。</para></param>
+    public async Task UninstallDriverAsync(UsbTreeNodeViewModel node)
+    {
+        if (node is null || !node.ShowDriverAction || node.IsDriverBusy || _disposed ||
+            !OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        node.IsDriverBusy = true;
+        StatusText = Localized("UsbTree_DriverUninstalling", node.DisplayText);
+        try
+        {
+            var result = await Task.Run(() => _driverConfig.Uninstall(node.Node.InstanceId))
+                .ConfigureAwait(true);
+            switch (result.Status)
+            {
+                case WinUsbDriverOperationStatus.Succeeded:
+                    StatusText = Localized("UsbTree_DriverUninstallSucceeded", node.DisplayText);
+                    _ = RefreshAsync();
+                    break;
+                case WinUsbDriverOperationStatus.ElevationRequired:
+                    StatusText = Localized("UsbTree_DriverElevationRequired");
+                    break;
+                default:
+                    StatusText = Localized("UsbTree_DriverOperationFailed",
+                        result.Message is { Length: > 0 } message ? message : result.Status.ToString());
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = Localized("UsbTree_DriverOperationFailed", ex.Message);
+            LogService.Instance.Write(LogLevel.Error, "UsbTree",
+                $"WinUSB driver uninstall failed: {ex.Message}");
+        }
+        finally
+        {
+            node.IsDriverBusy = false;
+        }
     }
 
     /// <summary>
@@ -447,6 +568,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         }
 
         SelectedNode = FindById(Roots, selectedId);
+        RefreshDriverStates();
     }
 
     private UsbTreeNodeViewModel BuildNode(UsbTopologyBranch branch,
@@ -458,13 +580,92 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             children[index] = BuildNode(branch.Children[index], capabilities, depth + 1);
         }
 
-        var node = new UsbTreeNodeViewModel(branch.Node, capabilities, children, depth);
+        var node = new UsbTreeNodeViewModel(branch.Node, capabilities, children, depth,
+            ConfigureDriverAsync, UninstallDriverAsync);
+        node.ShowDriverAction = _driverConfig.IsSupported &&
+            capabilities.Backend == UsbTopologyBackendKind.WindowsPnp &&
+            branch.Node.Kind is UsbTopologyNodeKind.Device or UsbTopologyNodeKind.Function &&
+            branch.Node.HardwareIds.Count > 0 &&
+            branch.Node.Protocol is { Length: > 0 };
         if (_expandedById.TryGetValue(branch.Node.InstanceId, out var expanded))
         {
             node.IsExpanded = expanded;
         }
 
         return node;
+    }
+
+    private void RefreshDriverStates()
+    {
+        if (!_driverConfig.IsSupported || _disposed)
+        {
+            return;
+        }
+
+        List<UsbTreeNodeViewModel> driverNodes = [];
+        CollectDriverActionNodes(Roots, driverNodes);
+        if (driverNodes.Count == 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return;
+            }
+
+            foreach (var driverNode in driverNodes)
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                var managedByHost = false;
+                try
+                {
+                    managedByHost = _driverConfig.QueryState(driverNode.Node.InstanceId).IsManagedByHost;
+                }
+                catch (Exception ex)
+                {
+                    LogService.Instance.Write(LogLevel.Error, "UsbTree",
+                        $"USB driver state query failed: {ex.Message}");
+                    var failure = ex.Message;
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (!_disposed)
+                        {
+                            StatusText = Localized("UsbTree_DriverStateRefreshFailed", failure);
+                        }
+                    });
+                    continue;
+                }
+
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_disposed && !driverNode.IsDriverBusy)
+                    {
+                        driverNode.IsDriverManaged = managedByHost;
+                    }
+                });
+            }
+        });
+    }
+
+    private static void CollectDriverActionNodes(IReadOnlyList<UsbTreeNodeViewModel> nodes,
+        List<UsbTreeNodeViewModel> collected)
+    {
+        foreach (var candidate in nodes)
+        {
+            if (candidate.ShowDriverAction)
+            {
+                collected.Add(candidate);
+            }
+
+            CollectDriverActionNodes(candidate.Children, collected);
+        }
     }
 
     private void RememberExpansion(IReadOnlyList<UsbTreeNodeViewModel> nodes)

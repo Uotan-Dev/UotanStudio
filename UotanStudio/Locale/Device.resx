@@ -699,4 +699,43 @@
   <data name="UsbTree_Detail_InterfaceGuids" xml:space="preserve">
     <value>Device-interface GUIDs</value>
   </data>
+  <data name="UsbTree_ConfigureDriver" xml:space="preserve">
+    <value>Install WinUSB Driver</value>
+  </data>
+  <data name="UsbTree_UninstallDriver" xml:space="preserve">
+    <value>Uninstall Driver</value>
+  </data>
+  <data name="UsbTree_DriverInstallTitle" xml:space="preserve">
+    <value>Install WinUSB driver</value>
+  </data>
+  <data name="UsbTree_DriverInstallDetail" xml:space="preserve">
+    <value>This replaces the current driver of {0} with a self-signed WinUSB driver package. The app's certificate will be added to the local machine trusted stores. Administrator rights are required.</value>
+  </data>
+  <data name="UsbTree_DriverUninstallTitle" xml:space="preserve">
+    <value>Uninstall WinUSB driver</value>
+  </data>
+  <data name="UsbTree_DriverUninstallDetail" xml:space="preserve">
+    <value>This removes the WinUSB driver installed by this app from {0} and restores the system default driver. Administrator rights are required.</value>
+  </data>
+  <data name="UsbTree_DriverInstalling" xml:space="preserve">
+    <value>Installing WinUSB driver for {0}...</value>
+  </data>
+  <data name="UsbTree_DriverUninstalling" xml:space="preserve">
+    <value>Uninstalling WinUSB driver from {0}...</value>
+  </data>
+  <data name="UsbTree_DriverInstallSucceeded" xml:space="preserve">
+    <value>WinUSB driver installed for {0}</value>
+  </data>
+  <data name="UsbTree_DriverUninstallSucceeded" xml:space="preserve">
+    <value>WinUSB driver uninstalled from {0}; the system default driver is restored</value>
+  </data>
+  <data name="UsbTree_DriverElevationRequired" xml:space="preserve">
+    <value>Administrator rights are required to configure drivers</value>
+  </data>
+  <data name="UsbTree_DriverOperationFailed" xml:space="preserve">
+    <value>Driver operation failed: {0}</value>
+  </data>
+  <data name="UsbTree_DriverStateRefreshFailed" xml:space="preserve">
+    <value>Driver state query failed: {0}</value>
+  </data>
 </root>

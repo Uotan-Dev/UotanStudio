@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using UotanStudio.Services;
+using UotanStudio.Services.Ui;
 using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Shell;
@@ -88,5 +89,61 @@ public partial class UsbTreeWindow : Window
             LogService.Instance.Write(LogLevel.Error, "UsbTreeWindow",
                 $"USB topology copy failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Asks for the dangerous-operation confirmation and, when confirmed, installs the self-signed
+    /// WinUSB driver package on the clicked row's device.
+    /// <para>弹出危险操作确认,确认后为点击行对应的设备安装自签名 WinUSB 驱动包。</para>
+    /// </summary>
+    private async void OnConfigureDriverClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not UsbTreeNodeViewModel node)
+        {
+            return;
+        }
+
+        var language = LanguageService.Instance;
+        var confirmed = await DialogService.ConfirmDangerousAsync(this, new DangerousConfirmRequest
+        {
+            TabTitle = language.GetString("Menu_UsbTreeWindow"),
+            Title = language.GetString("UsbTree_DriverInstallTitle"),
+            Detail = language.GetString("UsbTree_DriverInstallDetail", node.DisplayText),
+            DeviceIdentifier = node.Node.InstanceId
+        });
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _ = _model.ConfigureDriverAsync(node);
+    }
+
+    /// <summary>
+    /// Asks for the dangerous-operation confirmation and, when confirmed, removes the WinUSB driver
+    /// package installed by this app from the clicked row's device.
+    /// <para>弹出危险操作确认,确认后卸载本应用为点击行对应设备安装的 WinUSB 驱动包。</para>
+    /// </summary>
+    private async void OnUninstallDriverClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not UsbTreeNodeViewModel node)
+        {
+            return;
+        }
+
+        var language = LanguageService.Instance;
+        var confirmed = await DialogService.ConfirmDangerousAsync(this, new DangerousConfirmRequest
+        {
+            TabTitle = language.GetString("Menu_UsbTreeWindow"),
+            Title = language.GetString("UsbTree_DriverUninstallTitle"),
+            Detail = language.GetString("UsbTree_DriverUninstallDetail", node.DisplayText),
+            DeviceIdentifier = node.Node.InstanceId
+        });
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _ = _model.UninstallDriverAsync(node);
     }
 }

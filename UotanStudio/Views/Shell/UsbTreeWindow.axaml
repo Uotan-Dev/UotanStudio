@@ -32,6 +32,14 @@
       <Setter Property="Padding" Value="10,0" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <Style Selector="Button.node-action">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="MinHeight" Value="22" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="4,0,0,0" />
+    </Style>
     <Style Selector="CheckBox.toolbar-action">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="VerticalAlignment" Value="Center" />
@@ -121,13 +129,19 @@
           <TreeView.ItemTemplate>
             <TreeDataTemplate x:DataType="vm:UsbTreeNodeViewModel" ItemsSource="{Binding Children}">
               <StackPanel Orientation="Vertical" Spacing="1">
-                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
                   <TextBlock Classes="node-title" Text="{Binding DisplayText}" />
                   <TextBlock Grid.Column="1" Classes="node-meta" Text="{Binding MetaText}"
                              IsVisible="{Binding HasMeta}" />
                   <Border Grid.Column="2" Classes="protocol-badge" IsVisible="{Binding HasProtocol}">
                     <TextBlock Classes="protocol-badge" Text="{Binding ProtocolText}" />
                   </Border>
+                  <Button Grid.Column="3" Classes="node-action" Click="OnConfigureDriverClick"
+                          Content="{DynamicResource UsbTree_ConfigureDriver}"
+                          IsVisible="{Binding CanInstallDriver}" IsEnabled="{Binding !IsDriverBusy}" />
+                  <Button Grid.Column="3" Classes="node-action" Click="OnUninstallDriverClick"
+                          Content="{DynamicResource UsbTree_UninstallDriver}"
+                          IsVisible="{Binding CanUninstallDriver}" IsEnabled="{Binding !IsDriverBusy}" />
                 </Grid>
                 <TextBlock Classes="node-meta" Text="{Binding DiagnosticsText}"
                            IsVisible="{Binding HasDiagnostics}" />

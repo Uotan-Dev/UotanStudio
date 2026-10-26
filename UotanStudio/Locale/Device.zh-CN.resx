@@ -699,4 +699,43 @@
   <data name="UsbTree_Detail_InterfaceGuids" xml:space="preserve">
     <value>设备接口 GUID</value>
   </data>
+  <data name="UsbTree_ConfigureDriver" xml:space="preserve">
+    <value>安装驱动</value>
+  </data>
+  <data name="UsbTree_UninstallDriver" xml:space="preserve">
+    <value>卸载驱动</value>
+  </data>
+  <data name="UsbTree_DriverInstallTitle" xml:space="preserve">
+    <value>安装 WinUSB 驱动</value>
+  </data>
+  <data name="UsbTree_DriverInstallDetail" xml:space="preserve">
+    <value>将把 {0} 当前的驱动替换为本应用自签名的 WinUSB 驱动包，并向本机受信任存储添加应用证书。需要管理员权限。</value>
+  </data>
+  <data name="UsbTree_DriverUninstallTitle" xml:space="preserve">
+    <value>卸载 WinUSB 驱动</value>
+  </data>
+  <data name="UsbTree_DriverUninstallDetail" xml:space="preserve">
+    <value>将把本应用为 {0} 安装的 WinUSB 驱动卸载，并恢复系统默认驱动。需要管理员权限。</value>
+  </data>
+  <data name="UsbTree_DriverInstalling" xml:space="preserve">
+    <value>正在为 {0} 安装 WinUSB 驱动...</value>
+  </data>
+  <data name="UsbTree_DriverUninstalling" xml:space="preserve">
+    <value>正在卸载 {0} 的 WinUSB 驱动...</value>
+  </data>
+  <data name="UsbTree_DriverInstallSucceeded" xml:space="preserve">
+    <value>已为 {0} 安装 WinUSB 驱动</value>
+  </data>
+  <data name="UsbTree_DriverUninstallSucceeded" xml:space="preserve">
+    <value>已卸载 {0} 的 WinUSB 驱动，系统默认驱动已恢复</value>
+  </data>
+  <data name="UsbTree_DriverElevationRequired" xml:space="preserve">
+    <value>配置驱动需要管理员权限</value>
+  </data>
+  <data name="UsbTree_DriverOperationFailed" xml:space="preserve">
+    <value>驱动操作失败：{0}</value>
+  </data>
+  <data name="UsbTree_DriverStateRefreshFailed" xml:space="preserve">
+    <value>驱动状态查询失败：{0}</value>
+  </data>
 </root>
