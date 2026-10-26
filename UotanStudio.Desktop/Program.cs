@@ -36,23 +36,39 @@ sealed class Program
                 e.Cancel = true;
                 cts.Cancel();
             };
+            var output = Console.OpenStandardOutput();
+            void Report(string text)
+            {
+                try
+                {
+                    var line = System.Text.Encoding.UTF8.GetBytes(text + "\r\n");
+                    output.Write(line, 0, line.Length);
+                    output.Flush();
+                }
+                catch (IOException) { }
+            }
+
             try
             {
+                Report($"[UotanStudio] Opening the {protocolName} shell for {serial}.");
                 if (!Enum.TryParse<Services.Devices.DeviceProtocolKind>(protocolName, out var protocol) ||
                     protocol is not (Services.Devices.DeviceProtocolKind.Adb or
                         Services.Devices.DeviceProtocolKind.Hdc))
                     throw new ArgumentException("An ADB or HDC protocol is required.");
                 using var manager = Services.Devices.DeviceMonitorService.Create();
+                Report("[UotanStudio] Resolving the target; a full device scan runs in this process.");
                 var target = manager.Scan().SingleOrDefault(candidate => candidate.Protocol == protocol &&
                     string.Equals(candidate.Serial, serial, StringComparison.Ordinal))
                     ?? throw new IOException("The selected server target is no longer available.");
-                manager.RunInteractiveShellAsync(target, Console.OpenStandardInput(),
-                    Console.OpenStandardOutput(), cts.Token).GetAwaiter().GetResult();
+                Report("[UotanStudio] Target resolved; opening the interactive shell.");
+                manager.RunInteractiveShellAsync(target, Console.OpenStandardInput(), output, cts.Token)
+                    .GetAwaiter().GetResult();
                 return 0;
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested) { return 0; }
             catch (Exception error)
             {
+                Report("[UotanStudio] The device shell could not be opened: " + error.Message);
                 Console.Error.WriteLine(error.Message);
                 return 1;
             }
