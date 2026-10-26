@@ -121,6 +121,34 @@ public class PayloadBuilderTests
     }
 
     [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Build_FewerWorkerSlotsThanChunks_ReportsWholePartitionSizeAndOperations(int workers)
+    {
+        using var temp = new TempDirectory(); var source = new byte[2 * 1024 * 1024 + 4096]; new Random(42).NextBytes(source);
+        var image = temp.WriteBytes("source.img", source); var payload = Path.Combine(temp.Path, "payload.bin");
+        using (var builder = new PayloadBuilder().WithCompressionWorkers(workers))
+            await builder.AddPartitionCompressed("system", image, CompressionType.None).BuildAsync(payload, TestContext.Current.CancellationToken);
+
+        using (var stream = File.OpenRead(payload))
+        {
+            var header = new byte[24]; stream.ReadExactly(header);
+            var manifestData = new byte[checked((int)BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(12)))]; stream.ReadExactly(manifestData);
+            var partition = Assert.Single(DeltaArchiveManifest.Parser.ParseFrom(manifestData).Partitions);
+            Assert.NotNull(partition.NewPartitionInfo);
+            Assert.Equal((ulong)source.Length, partition.NewPartitionInfo.Size);
+            Assert.Equal(SHA256.HashData(source), partition.NewPartitionInfo.Hash.ToByteArray());
+            Assert.Equal(3, partition.Operations.Count);
+            var covered = 0UL; foreach (var operation in partition.Operations) covered += operation.DstLength;
+            Assert.Equal((ulong)source.Length, covered);
+            Assert.All(partition.Operations, operation => Assert.InRange(operation.DstLength, 1UL, 1024UL * 1024));
+        }
+
+        PayloadParser.Extract(payload, ["system"], temp.Path);
+        Assert.Equal(source, File.ReadAllBytes(Path.Combine(temp.Path, "system.img")));
+    }
+
+    [Theory]
     [InlineData(CompressionType.Brotli)]
     [InlineData(CompressionType.Zstd)]
     public void Build_RejectsUndefinedReplaceCompression(CompressionType compression)

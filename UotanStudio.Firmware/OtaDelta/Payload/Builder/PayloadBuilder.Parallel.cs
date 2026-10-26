@@ -175,11 +175,16 @@ public sealed partial class PayloadBuilder
         /// <para>单批读取的结果：到达的位置以及流是否在该批内结束。</para></summary>
         private readonly record struct ReadOutcome(ulong Position, int Count, bool Exhausted);
 
+        /// <summary>
+        /// Waits for the in-flight read, or reports the position reached so far with no slots when none is in flight,
+        /// so the caller's partition size survives every drained batch.
+        /// <para>等待在途读取；没有在途读取时报告已到达的位置且不带任何槽位，使调用方的分区大小在每个已排空的批次之后仍然正确。</para>
+        /// </summary>
         private ReadOutcome RetirePending(CancellationToken cancellationToken)
         {
             if (_pending is null)
             {
-                return new ReadOutcome(0, 0, false);
+                return new ReadOutcome(_position, 0, true);
             }
 
             var pending = _pending;
