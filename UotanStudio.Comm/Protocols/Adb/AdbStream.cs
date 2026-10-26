@@ -50,6 +50,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
     private readonly SemaphoreSlim _dataAvailable = new(0, SignalCapacity);
     private readonly SemaphoreSlim _ready = new(0, 1);
     private readonly SemaphoreSlim _writePermit = new(0, 1);
+    private readonly SemaphoreSlim _responseSignal = new(0, 1);
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly int _receiveBudgetBytes = receiveBudgetBytes;
     private readonly int _writePermitWaitMs = writePermitWaitMs;
@@ -145,6 +146,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
         }
 
         Release(_ready);
+        Release(_responseSignal);
     }
 
     /// <summary>
@@ -210,6 +212,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
                 Fault = new IOException(
                     $"ADB stream receive buffer limit exceeded ({_receiveBudgetBytes} bytes, {MaxQueuedChunks} chunks).");
                 _closed = true;
+                Release(_dataAvailable);
                 return;
             }
 
@@ -235,6 +238,7 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
 
         Release(_ready);
         Release(_dataAvailable);
+        Release(_responseSignal);
     }
 
     /// <summary>
@@ -253,9 +257,63 @@ internal sealed class AdbStream(AdbConnection connection, uint localId,
 
         Release(_ready);
         Release(_dataAvailable);
+        Release(_responseSignal);
         lock (_lock)
         {
             if (!_disposed) ReleaseWritePermit();
+        }
+    }
+
+    /// <summary>
+    /// Drops any buffered response signal so the next wait observes only acknowledgements that
+    /// arrive after the caller's final protocol message.
+    /// <para>丢弃已缓冲的应答信号，使下一次等待只观察调用方最后一条协议消息之后到达的确认。</para>
+    /// </summary>
+    internal void ResetResponseSignal()
+    {
+        while (_responseSignal.Wait(0))
+        {
+        }
+    }
+
+    /// <summary>
+    /// Waits for the peer's acknowledgement of the final protocol message: each OKAY carrying a
+    /// remote stream id releases the signal once, and a close or fault ends the wait with the stored
+    /// failure so direct-connection transfers can observe the daemon's verdict.
+    /// <para>等待对端对最后一条协议消息的确认：每条携带远端流标识的 OKAY 触发一次信号，关闭或故障会以
+    /// 已存故障结束等待，使直连传输能观察到 daemon 的结论。</para>
+    /// </summary>
+    /// <param name="timeoutMs">Wait deadline in milliseconds. <para>等待截止时间（毫秒）。</para></param>
+    /// <param name="cancellationToken">Cancels the wait. <para>取消等待。</para></param>
+    /// <exception cref="TimeoutException">The peer did not acknowledge within the deadline.
+    /// <para>对端未在期限内确认。</para></exception>
+    /// <exception cref="IOException">The stream faulted or closed before the acknowledgement.
+    /// <para>流在确认前故障或关闭。</para></exception>
+    internal async ValueTask WaitForResponseSignalAsync(int timeoutMs, CancellationToken cancellationToken)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (true)
+        {
+            if (IsFaulted)
+            {
+                throw new IOException("ADB stream failed.", Fault);
+            }
+
+            if (IsClosed)
+            {
+                throw new IOException("ADB stream closed before the peer acknowledged the transfer.");
+            }
+
+            var remaining = deadline - Environment.TickCount64;
+            if (remaining <= 0)
+            {
+                throw new TimeoutException("ADB peer did not acknowledge the transfer.");
+            }
+
+            if (await _responseSignal.WaitAsync((int)Math.Min(remaining, 50), cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
         }
     }
 

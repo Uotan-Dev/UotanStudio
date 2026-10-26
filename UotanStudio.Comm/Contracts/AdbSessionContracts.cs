@@ -1,6 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
+using AdbSyncCompression = UotanStudio.Comm.Protocols.Adb.AdbSyncCompression;
 using ShellResult = UotanStudio.Comm.Protocols.Adb.ShellResult;
 using SyncEntry = UotanStudio.Comm.Protocols.Adb.SyncEntry;
+using SyncEntry64 = UotanStudio.Comm.Protocols.Adb.SyncEntry64;
 
 namespace UotanStudio.Comm.Contracts;
 
@@ -258,6 +260,40 @@ public interface IAdbSyncClient : IAsyncDisposable
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
     ValueTask<IReadOnlyList<SyncEntry>> ListAsync(string remotePath, CancellationToken cancellationToken = default);
 
+    /// <summary>Stats a remote path with the sync v2 64-bit record. <para>以 sync v2 的 64 位记录查询远程路径。</para></summary>
+    /// <param name="remotePath">Device-side path to stat. <para>待查询的设备侧路径。</para></param>
+    /// <param name="cancellationToken">Cancels the request or the reply wait.
+    /// <para>取消请求或应答等待。</para></param>
+    /// <returns>The full v2 record, or <see langword="null"/> when the peer reports the path as absent or the
+    /// stat failed. Devices without <c>stat_v2</c> fall back to the v1 record with the extended fields zeroed.
+    /// <para>完整 v2 记录；对端报告路径不存在或 stat 失败时返回 <see langword="null"/>。无 <c>stat_v2</c> 的设备
+    /// 回退 v1 记录，扩展字段为零。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
+    /// <para><paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id,
+    /// or reported a payload longer than the sync chunk limit. <para>对端拒绝请求、返回非预期标识，或上报超过 sync
+    /// 分块上限的负载。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    ValueTask<SyncEntry64?> Stat64Async(string remotePath, CancellationToken cancellationToken = default);
+
+    /// <summary>Lists a remote directory with sync v2 64-bit records. <para>以 sync v2 的 64 位记录列出远程目录。</para></summary>
+    /// <param name="remotePath">Device-side directory path. <para>设备侧目录路径。</para></param>
+    /// <param name="cancellationToken">Checked between records and during each read.
+    /// <para>在记录之间与每次读取期间检查。</para></param>
+    /// <returns>Every v2 entry received before the done marker; entries whose stat failed on the device are
+    /// skipped. Devices without <c>ls_v2</c> fall back to the v1 records with the extended fields zeroed.
+    /// <para>结束标记之前收到的全部 v2 条目；设备上 stat 失败的条目被跳过。无 <c>ls_v2</c> 的设备回退 v1 记录，
+    /// 扩展字段为零。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> is <see langword="null"/>.
+    /// <para><paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException">The peer rejected the request, answered with an unexpected id,
+    /// or reported a record longer than the sync chunk limit. <para>对端拒绝请求、返回非预期标识，或上报超过 sync
+    /// 分块上限的记录。</para></exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
+    /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
+    ValueTask<IReadOnlyList<SyncEntry64>> List64Async(string remotePath, CancellationToken cancellationToken = default);
+
     /// <summary>Pushes a local file to the device. <para>异步推送本地文件到设备。</para></summary>
     /// <param name="localPath">Existing local file opened for reading. <para>以只读方式打开的已存在本地文件。</para></param>
     /// <param name="remotePath">Destination path on the device. <para>设备上的目标路径。</para></param>
@@ -267,6 +303,12 @@ public interface IAdbSyncClient : IAsyncDisposable
     /// current UTC time at transfer. <para>设备侧修改时间（秒）；<c>0</c> 表示传输时的当前 UTC 时间。</para></param>
     /// <param name="cancellationToken">Checked before each client chunk is read and sent; cancellation
     /// stops the push between packets. <para>在读取并发送每个客户端数据块前检查；取消会在数据包之间停止推送。</para></param>
+    /// <param name="compression">Sync v2 data-stream codec; <see cref="AdbSyncCompression.Auto"/> picks the
+    /// strongest codec the device advertises and falls back to raw blocks. <para>sync v2 数据流编解码器；
+    /// <see cref="AdbSyncCompression.Auto"/> 选择设备通告的最强编解码器，无则回退原始块。</para></param>
+    /// <param name="dryRun">Validate the push without writing the file; requires the device
+    /// <c>sendrecv_v2_dry_run_send</c> feature. <para>只校验不写文件的推送试运行；需要设备
+    /// <c>sendrecv_v2_dry_run_send</c> 特性。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="localPath"/> or
     /// <paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="localPath"/> 或 <paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
@@ -277,7 +319,8 @@ public interface IAdbSyncClient : IAsyncDisposable
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
     ValueTask PushAsync(string localPath, string remotePath, uint mode = 0x81A4, uint mtime = 0,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default, AdbSyncCompression compression = AdbSyncCompression.Auto,
+        bool dryRun = false);
 
     /// <summary>Pushes a stream to the device. <para>异步推送流到设备。</para></summary>
     /// <param name="source">Read to end-of-stream in client chunk sizes; ownership stays
@@ -289,6 +332,12 @@ public interface IAdbSyncClient : IAsyncDisposable
     /// current UTC time at transfer. <para>设备侧修改时间（秒）；<c>0</c> 表示传输时的当前 UTC 时间。</para></param>
     /// <param name="cancellationToken">Checked before each client chunk is read and sent; cancellation
     /// stops the push between packets. <para>在读取并发送每个客户端数据块前检查；取消会在数据包之间停止推送。</para></param>
+    /// <param name="compression">Sync v2 data-stream codec; <see cref="AdbSyncCompression.Auto"/> picks the
+    /// strongest codec the device advertises and falls back to raw blocks. <para>sync v2 数据流编解码器；
+    /// <see cref="AdbSyncCompression.Auto"/> 选择设备通告的最强编解码器，无则回退原始块。</para></param>
+    /// <param name="dryRun">Validate the push without writing the file; requires the device
+    /// <c>sendrecv_v2_dry_run_send</c> feature. <para>只校验不写文件的推送试运行；需要设备
+    /// <c>sendrecv_v2_dry_run_send</c> 特性。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> or
     /// <paramref name="remotePath"/> is <see langword="null"/>.
     /// <para><paramref name="source"/> 或 <paramref name="remotePath"/> 为 <see langword="null"/>。</para></exception>
@@ -297,13 +346,17 @@ public interface IAdbSyncClient : IAsyncDisposable
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
     ValueTask PushStreamAsync(Stream source, string remotePath, uint mode = 0x81A4, uint mtime = 0,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default, AdbSyncCompression compression = AdbSyncCompression.Auto,
+        bool dryRun = false);
 
     /// <summary>Pulls a remote file to a local path. <para>异步拉取远程文件到本地路径。</para></summary>
     /// <param name="remotePath">Device-side source file. <para>设备侧源文件。</para></param>
     /// <param name="localPath">Local destination; created or truncated. <para>本地目标；不存在则创建，存在则截断。</para></param>
     /// <param name="cancellationToken">Checked before each device chunk is written; cancellation stops
     /// the pull between packets. <para>在写入每个设备数据块前检查；取消会在数据包之间停止拉取。</para></param>
+    /// <param name="compression">Sync v2 data-stream codec; <see cref="AdbSyncCompression.Auto"/> picks the
+    /// strongest codec the device advertises and falls back to raw blocks. <para>sync v2 数据流编解码器；
+    /// <see cref="AdbSyncCompression.Auto"/> 选择设备通告的最强编解码器，无则回退原始块。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> or
     /// <paramref name="localPath"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 或 <paramref name="localPath"/> 为 <see langword="null"/>。</para></exception>
@@ -311,7 +364,8 @@ public interface IAdbSyncClient : IAsyncDisposable
     /// unexpected id. <para>设备拒绝传输或返回了非预期标识。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    ValueTask PullAsync(string remotePath, string localPath, CancellationToken cancellationToken = default);
+    ValueTask PullAsync(string remotePath, string localPath, CancellationToken cancellationToken = default,
+        AdbSyncCompression compression = AdbSyncCompression.Auto);
 
     /// <summary>Pulls a remote file into a stream. <para>异步拉取远程文件到流。</para></summary>
     /// <param name="remotePath">Device-side source file. <para>设备侧源文件。</para></param>
@@ -319,6 +373,9 @@ public interface IAdbSyncClient : IAsyncDisposable
     /// external. <para>从当前位置顺序写入；所有权保持归属外部。</para></param>
     /// <param name="cancellationToken">Checked before each device chunk is written; cancellation stops
     /// the pull between packets. <para>在写入每个设备数据块前检查；取消会在数据包之间停止拉取。</para></param>
+    /// <param name="compression">Sync v2 data-stream codec; <see cref="AdbSyncCompression.Auto"/> picks the
+    /// strongest codec the device advertises and falls back to raw blocks. <para>sync v2 数据流编解码器；
+    /// <see cref="AdbSyncCompression.Auto"/> 选择设备通告的最强编解码器，无则回退原始块。</para></param>
     /// <exception cref="ArgumentNullException"><paramref name="remotePath"/> or
     /// <paramref name="destination"/> is <see langword="null"/>.
     /// <para><paramref name="remotePath"/> 或 <paramref name="destination"/> 为 <see langword="null"/>。</para></exception>
@@ -326,7 +383,8 @@ public interface IAdbSyncClient : IAsyncDisposable
     /// unexpected id. <para>设备拒绝传输或返回了非预期标识。</para></exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signalled.
     /// <para><paramref name="cancellationToken"/> 已触发。</para></exception>
-    ValueTask PullStreamAsync(string remotePath, Stream destination, CancellationToken cancellationToken = default);
+    ValueTask PullStreamAsync(string remotePath, Stream destination, CancellationToken cancellationToken = default,
+        AdbSyncCompression compression = AdbSyncCompression.Auto);
 
 }
 

@@ -199,4 +199,33 @@ internal static class SyncIds
     public const string Okay = "OKAY";
     /// <summary>Failure response. <para>失败响应。</para></summary>
     public const string Fail = "FAIL";
+
+    /// <summary>Stat a remote file via sync v2 (<c>ID_STAT_V2</c>). <para>以 sync v2 查询远端文件状态。</para></summary>
+    public const string StatV2 = "STA2";
+    /// <summary>Lstat a remote path via sync v2 (<c>ID_LSTAT_V2</c>). <para>以 sync v2 查询远端路径状态（不跟随符号链接）。</para></summary>
+    public const string LstatV2 = "LST2";
+    /// <summary>List a remote directory via sync v2 (<c>ID_LIST_V2</c>). <para>以 sync v2 列出远端目录。</para></summary>
+    public const string ListV2 = "LIS2";
+    /// <summary>Sync v2 directory entry (<c>ID_DENT_V2</c>). <para>sync v2 目录条目。</para></summary>
+    public const string DentV2 = "DNT2";
+    /// <summary>Send (push) a file via sync v2 (<c>ID_SEND_V2</c>). <para>以 sync v2 推送文件。</para></summary>
+    public const string SendV2 = "SND2";
+    /// <summary>Receive (pull) a file via sync v2 (<c>ID_RECV_V2</c>). <para>以 sync v2 拉取文件。</para></summary>
+    public const string RecvV2 = "RCV2";
+}
+
+/// <summary>
+/// Sync v2 setup flag bits carried in the <c>sync_send_v2</c>/<c>sync_recv_v2</c> message.
+/// <para>sync v2 的 setup 旗标位，承载于 <c>sync_send_v2</c>/<c>sync_recv_v2</c> 消息。</para>
+/// </summary>
+internal static class SyncFlags
+{
+    /// <summary>Brotli-compressed data stream. <para>Brotli 压缩数据流。</para></summary>
+    public const uint Brotli = 1;
+    /// <summary>LZ4-frame-compressed data stream. <para>LZ4 帧压缩数据流。</para></summary>
+    public const uint Lz4 = 2;
+    /// <summary>Zstd-compressed data stream. <para>Zstd 压缩数据流。</para></summary>
+    public const uint Zstd = 4;
+    /// <summary>Push dry run: validate without writing the file. <para>推送试运行：只校验不写文件。</para></summary>
+    public const uint DryRun = 0x8000_0000;
 }
