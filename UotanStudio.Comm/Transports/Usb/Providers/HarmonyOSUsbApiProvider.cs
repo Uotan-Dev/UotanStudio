@@ -19,10 +19,10 @@ internal sealed class HarmonyOSUsbApiProvider : UsbApiProviderBase
 
             try
             {
-                var ret = OH_Usb_Init();
+                var ret = HarmonyOsDdkLifetime.Acquire();
                 if (ret == USB_DDK_NO_ERROR)
                 {
-                    OH_Usb_Release();
+                    HarmonyOsDdkLifetime.Release();
                     return true;
                 }
 
