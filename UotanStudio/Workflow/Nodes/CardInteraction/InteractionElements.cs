@@ -235,8 +235,6 @@ internal static class InteractionElements
             node.In(new NodeInputDeclaration("Required When", NodePortType.Record) { Advanced = true });
             node.Out(new NodeOutputDeclaration("Component", NodePortType.UiComponent));
 
-            // The Default port carries the field value, so its type follows the declared kind exactly as the
-            // per-kind nodes used to require, and a sensitive field keeps masking its default in the panel.
             var kindPort = node.Input.Single(port => port.Title == "Kind");
             var defaultPort = node.Input.Single(port => port.Title == "Default");
             var sensitivePort = node.Input.Single(port => port.Title == "Sensitive");

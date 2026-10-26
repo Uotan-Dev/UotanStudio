@@ -129,11 +129,6 @@ public sealed partial class ErofsBuilder
                     return true;
                 }
 
-                // The destination-filling encoder names the widest input that fits frameLimit, which is the
-                // span the probe search below can only approximate, so one such encode replaces the search
-                // whenever its frame passes the same rules. The window grows only while the encoder exhausts
-                // it, so a span far denser than one frame is still found without reading the whole input
-                // limit up front.
                 bool FillEncoded(int length, out int filled, out int encodedLength)
                 {
                     filled = 0;
@@ -162,9 +157,6 @@ public sealed partial class ErofsBuilder
                         return false;
                     }
 
-                    // A big-pcluster head row on the file's last logical cluster makes the kernel read the
-                    // block-count row past the index. Leave the whole terminal cluster to the search, which
-                    // stores it plain.
                     if (bigPcluster && fileSize % clusterSize == 0
                         && position + consumed > (CeilDiv(fileSize, clusterSize) - 1L) * clusterSize)
                     {
@@ -190,10 +182,6 @@ public sealed partial class ErofsBuilder
                         return false;
                     }
 
-                    // One bounded encode per pcluster. Reading a small multiple of the frame limit lets a
-                    // compressible run spend its destination budget on a wider span without re-encoding the
-                    // same bytes; exhausting the window is itself a valid destination-fill result, because
-                    // the frame still decodes to exactly the consumed input.
                     var window = fileSize <= 256 * 1024
                         ? available
                         : Math.Min(available, Math.Max(frameLimit, clusterSize) * 4);

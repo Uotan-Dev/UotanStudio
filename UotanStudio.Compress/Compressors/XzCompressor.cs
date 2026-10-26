@@ -233,7 +233,6 @@ public static class XzCompressor
         }
         catch (Exception)
         {
-            // Restoring is best effort; the caller still receives the original encoding failure.
         }
     }
 

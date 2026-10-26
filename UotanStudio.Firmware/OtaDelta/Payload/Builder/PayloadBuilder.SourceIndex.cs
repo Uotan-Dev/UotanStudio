@@ -136,17 +136,12 @@ public sealed partial class PayloadBuilder
                 var preferred = i > 0 && matches[i - 1] >= 0
                     ? matches[i - 1] + 1
                     : checked((long)chunkStartBlock + i);
-                // The hint is accepted on a byte comparison alone, so a shortcut hit never enters the digest chains.
-                // Reproducing the shortcut before any digest work is what keeps duplicate-heavy images on the cheap
-                // path, exactly as the original probe did.
                 if (Confirm(preferred, chunk.AsSpan(i * blockSize, blockSize), token))
                 {
                     matches[i] = preferred;
                     continue;
                 }
 
-                // The hint failed, so the digest chains must answer. Both this step and the loop stay serial because
-                // the next block's hint is derived from this block's resolved match.
                 matches[i] = FindHashed(chunk.AsSpan(i * blockSize, blockSize), token);
             }
         }

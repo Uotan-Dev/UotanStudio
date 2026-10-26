@@ -729,8 +729,6 @@ public sealed partial class ErofsBuilder
             var staging = EnsureStagedCompression();
             var hints = Options.CompiledCompressHints ??= ErofsCompressHints.Compile(Options.CompressHints, Options);
             using var codecStates = new ErofsCodecStatePool();
-            // Largest payloads first plus dynamic stealing: a filesystem whose few huge files sit together in
-            // path order otherwise lands them in one range partition and leaves the other workers idle.
             var payloads = Ordered
                 .Where(node => !node.IsDirectory && !node.IsSymlink && !node.IsDevice && node.Size > 0)
                 .OrderByDescending(node => node.Size)

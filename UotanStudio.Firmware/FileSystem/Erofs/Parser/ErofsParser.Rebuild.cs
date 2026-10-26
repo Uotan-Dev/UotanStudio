@@ -131,9 +131,6 @@ public sealed partial class ErofsParser
         selected.Fragments = _superblock.PackedNid != 0;
         selected.CompressedTailPacking = _superblock.HasZtailpacking;
         selected.Metabox = _superblock.HasMetabox;
-        // The fragments and dedupe faces share one incompat bit. A packed inode proves the fragments face;
-        // without one the bit can only describe the dedupe face, so replay it as dedupe rather than dropping
-        // a declared feature bit the rebuild cannot reproduce.
         selected.Dedup = _superblock.HasFragments && _superblock.PackedNid == 0;
         selected.TailPacking = inodes.Values.Any(i => i.DataLayout == UnifiedDataLayout.Inline);
         selected.SourceInodes = inodes;
@@ -448,8 +445,6 @@ public sealed partial class ErofsParser
         }
         catch (FileSystemCorruptedException)
         {
-            // A source whose inline attributes cannot be re-read still yields an inode; the attribute set is
-            // simply not inherited, and the caller reports the image as read with fewer preserved dimensions.
         }
         catch (FormatException)
         {

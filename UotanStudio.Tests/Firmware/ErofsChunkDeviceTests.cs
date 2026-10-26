@@ -189,8 +189,6 @@ public sealed class ErofsChunkDeviceTests
             var nid = parser.EnumerateFiles().Single(file => file.Path == "data.bin").Nid;
             tableOffset = checked((long)parser.Superblock.MetaBlkAddr * BlockSize
                 + (long)nid * ErofsInode.CompactSize + ErofsInode.CompactSize);
-            // s_blocks spans the whole logical filesystem, so the extra device's unified window opens at
-            // the first block after the primary image: total blocks minus the blocks that device declares.
             var deviceSlotOffset = checked((long)parser.Superblock.DevtSlotoff * ErofsDeviceSlot.Size);
             var slot = ErofsDeviceSlot.FromBytes(
                 image.AsSpan(checked((int)deviceSlotOffset), ErofsDeviceSlot.Size),

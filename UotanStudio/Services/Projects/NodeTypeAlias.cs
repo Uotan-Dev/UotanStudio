@@ -73,39 +73,29 @@ internal static class NodeTypeAlias
             ["Network.GitHub.Download"] = new("Network.File.Download",
                 new Dictionary<string, string> { ["Source"] = "GitHub Mirror" }),
 
-            // Image filesystem text editing, formerly one type key per direction.
             ["Image.Text.Read"] = new("Image.Text.Edit", Operation("Read")),
             ["Image.Text.Stage"] = new("Image.Text.Edit", Operation("Write")),
 
-            // Image file attributes, formerly split into a read node and a set node.
             ["Image.File.ReadAttributes"] = new("Image.File.Attributes", Operation("Read")),
             ["Image.File.SetAttributes"] = new("Image.File.Attributes", Operation("Set")),
 
-            // Extended attributes: the retired Set/Delete defaulted the attribute name to user.patch,
-            // the merged node defaults to security.selinux, so the retired value is restored from the project.
             ["Image.Xattr.Read"] = new("Image.Xattr.Edit", Operation("Read")),
             ["Image.Xattr.Set"] = new("Image.Xattr.Edit", Operation("Set")),
             ["Image.Xattr.Delete"] = new("Image.Xattr.Edit", Operation("Delete")),
 
-            // Package resources.
             ["Resource.Asset.Open"] = new("Resource.Asset.Read", Operation("Select")),
             ["Resource.Asset.ReadText"] = new("Resource.Asset.Read", Operation("ReadText")),
 
-            // Hashing.
 
-            // Binary pattern patching.
             ["Binary.Pattern.Find"] = new("Binary.Search", Operation("Find")),
             ["Binary.Pattern.Replace"] = new("Binary.Search", Operation("Replace")),
 
-            // Workspace files: the retired per-operation node carried its own file-mode port titled
-            // "Operation", which renames onto the merged node's "File Mode" port.
             ["Workspace.File.Find"] = new("Workspace.File", Operation("Find")),
             ["Workspace.File.Exists"] = new("Workspace.File", Operation("Exists")),
             ["Workspace.File.Import"] = new("Workspace.File", Operation("Import"), FileModeRename),
             ["Workspace.File.Delete"] = new("Workspace.File", Operation("Delete")),
             ["Workspace.Text.Stage"] = new("Workspace.File", Operation("Stage"), FileModeRename),
 
-            // Configuration syntaxes: one node with Format + Operation discriminators.
             ["Config.Text.Edit"] = new("Config.Edit", Format("Text"), null,
                 new Dictionary<string, string> { ["Operation=Replace"] = "Set" }),
             ["Config.Json.Edit"] = new("Config.Edit", Format("Json"), JsonRename),
@@ -140,7 +130,6 @@ internal static class NodeTypeAlias
             ["Config.InitRc.EditCommand"] = new("Config.Edit", Format("InitRc"), InitRcRename,
                 new Dictionary<string, string> { ["Operation=Replace"] = "Set" }),
 
-            // Interaction element builders: one node per element family with a Kind discriminator.
             ["UI.Field.Text"] = FieldKind("TextField"),
             ["UI.Field.Number"] = FieldKind("NumberField"),
             ["UI.Field.Boolean"] = FieldKind("BooleanField"),

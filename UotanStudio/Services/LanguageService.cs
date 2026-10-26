@@ -138,7 +138,6 @@ public sealed class LanguageService : ILocalizer
         {
             foreach (var key in keys)
             {
-                // Keys are globally unique across modules; the module that owns the key answers.
                 if (manager.GetObservable(key) is LinguaObservableString observable)
                 {
                     _observables[key] = observable;

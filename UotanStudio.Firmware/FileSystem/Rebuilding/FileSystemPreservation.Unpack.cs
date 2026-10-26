@@ -124,9 +124,6 @@ public static partial class FileSystemPreservation
                 }
             }
 
-            // The in-place pass is discarded when the source could not be pinned (non-regular file) or changed
-            // under the shared reader; the frozen snapshot below is the byte-identical fallback that keeps
-            // extraction, inspection and metadata capture on one immutable version.
             if (rejectedInPlace)
             {
                 preparation.Add(-sourceLength);
@@ -141,8 +138,6 @@ public static partial class FileSystemPreservation
             var previousOverwrite = options?.Overwrite;
             if (rejectedInPlace && options is { Overwrite: false })
             {
-                // The rejected pass may have written files and metadata from the source version that changed
-                // mid-extraction, so the retry must replace them instead of skipping them as already present.
                 options.Overwrite = true;
             }
 

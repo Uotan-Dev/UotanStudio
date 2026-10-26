@@ -81,11 +81,7 @@ public partial class App : Application
             }
         };
 #if DEBUG
-        // Debug-only bridge to Avalonia Developer Tools; F12 opens the attached tool window.
-        // 仅 Debug 生效：连接 Avalonia 开发者工具的桥接，按 F12 打开工具窗口。
         this.AttachDeveloperTools();
-        // The Dock overlay is attached application-wide so every window (dialogs included) toggles it.
-        // Dock 调试叠加层按应用级挂载，使所有窗口（含对话框）都能切换。
         this.AttachDockDebugOverlay(new KeyGesture(Key.F9));
 #endif
     }

@@ -247,7 +247,6 @@ public static class DocumentTabStripWheelHandler
             }
             catch
             {
-                // Fallback gracefully if collection modification is not supported.
             }
         }
     }

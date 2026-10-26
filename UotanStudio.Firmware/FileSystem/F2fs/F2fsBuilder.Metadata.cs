@@ -225,9 +225,6 @@ public sealed partial class F2fsBuilder
     {
         var sitBlocks = (long)(layout.SitSegments / 2) * BlocksPerSeg;
         var block = new byte[blockSize];
-        // Each copy is emitted as one ascending pass. Alternating copies per block would move the
-        // stream position backwards by half the SIT area every block, and a buffered stream flushes
-        // on every such move.
         for (var copy = 0; copy < 2; copy++)
         {
             var currentBlockIndex = -1L;
@@ -290,8 +287,6 @@ public sealed partial class F2fsBuilder
             entries[nid % F2fsNode.NatEntryPerBlock] = entry;
         }
 
-        // Both copies are emitted as one ascending pass each, so the stream position never jumps back
-        // between two writes of the same block.
         var natBlock = new byte[F2fsNode.NodeSize];
         for (var copy = 0; copy < 2; copy++)
         {
@@ -324,8 +319,6 @@ public sealed partial class F2fsBuilder
         CompressionPayloadStaging compressionStaging,
         CancellationToken cancellationToken)
     {
-        // One block-sized scratch buffer serves every node write: each writer clears the bytes it does
-        // not fill and copies the result into the stream before returning, so no caller keeps a reference.
         var scratch = new byte[blockSize];
         foreach (var node in ordered)
         {
@@ -374,8 +367,6 @@ public sealed partial class F2fsBuilder
 
         var mainBase = 0u;
         var block = new byte[blockSize];
-        // Segments are visited in ascending order so each summary block lands at the next SSA address;
-        // the sorted order changes only the write sequence, not any block's content or address.
         foreach (var (segno, entries) in plan.SegmentEntries.OrderBy(static kvp => kvp.Key))
         {
             block.AsSpan(0, blockSize).Clear();

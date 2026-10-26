@@ -204,8 +204,6 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
         await using var stream = await _connection
             .OpenProtocolStreamAsync(BuildServiceString(), cancellationToken)
             .ConfigureAwait(false);
-        // This client never forwards stdin, and shell,v2 keeps the command's stdin open until it is told otherwise,
-        // so commands that read stdin would otherwise block until the read deadline.
         await stream.WriteAsync(CloseStdinFrame, cancellationToken).ConfigureAwait(false);
         var stdout = new MemoryStream();
         var stderr = new MemoryStream();
@@ -288,8 +286,6 @@ internal sealed class AdbShellClient(AdbConnection connection, string command, s
         await using var stream = await _connection
             .OpenProtocolStreamAsync(BuildServiceString(), cancellationToken)
             .ConfigureAwait(false);
-        // This client never forwards stdin, and shell,v2 keeps the command's stdin open until it is told otherwise,
-        // so commands that read stdin would otherwise block until the read deadline.
         await stream.WriteAsync(CloseStdinFrame, cancellationToken).ConfigureAwait(false);
         var parser = new FrameParser();
         int? exitCode = null;

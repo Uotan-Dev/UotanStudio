@@ -79,10 +79,6 @@ public sealed class CpioExtractor
 
             var targetPath = BuildSafePath(destinationRoot, transformedEntry.Name, opts);
 
-            // A payload reached through DataStream or DataStreamFactory is a view over the reader's own
-            // source stream, which the reader advances as it enumerates, so it has to be consumed right
-            // here while the stream still sits on this entry. Only entries whose bytes are already in
-            // memory can be deferred to the parallel pass.
             ancestors.EnsureAncestors(targetPath, checkLeaf: false);
             EnsureParentDirectory(targetPath, opts.MakeDirectories);
             ancestors.EnsureAncestors(targetPath, checkLeaf: true);
@@ -118,8 +114,6 @@ public sealed class CpioExtractor
             return;
         }
 
-        // Deferred entries may live beneath a directory entry that is itself deferred, so every
-        // deferred entry makes sure its own parent exists before the parallel pass writes anything.
         foreach (var item in inMemory)
         {
             opts.CancellationToken.ThrowIfCancellationRequested();

@@ -76,16 +76,10 @@ public static partial class Lz4DestinationCodec
             stateSize = algorithm == 1 ? sizeof(LZ4_stream_t) : sizeof(LZ4_streamHC_t);
         }
 
-        // A caller-supplied context is owned by the caller and only borrowed here; the cached one is rented for the
-        // call, so the single-call path keeps the old byte behaviour without paying a native allocation per block.
         var borrowedFromCache = state is null;
         var ownedState = borrowedFromCache ? ContextCache.Rent(algorithm == 2) : state;
         try
         {
-            // A reused context still carries the previous block's currentOffset and dictionary pointers, and the
-            // fast path derives its match base from currentOffset, so those stale values would aim the encoder at
-            // memory it no longer owns. Clearing the whole context before every use starts each call from exactly
-            // the state a freshly allocated one has, which is what keeps reuse byte-identical and memory-safe.
             new Span<byte>(ownedState, stateSize).Clear();
 
             var sourceLength = source.Length;

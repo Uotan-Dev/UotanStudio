@@ -600,11 +600,6 @@ internal static class ErofsCompression
             return 0;
         }
 
-        // LZ4HC levels 10-12 select liblz4's optimal parser. Under the destination-filling encoder the EROFS
-        // planner uses, that parser is not monotonic on the small pcluster spans this format encodes: it is
-        // far slower than the level-9 hash chain and can emit a larger frame, which would shrink the accepted
-        // span and grow the image. The format path therefore caps the reachable HC level at the strongest
-        // hash-chain level; the fast path keeps its 10 - level mapping unchanged.
         ResolveLz4Encoder(highCompression, compressionLevel, out var algorithm, out var level);
         var sourceSpan = source.AsSpan(sourceIndex, sourceLength);
         var targetSpan = target.AsSpan(targetIndex, targetLength);

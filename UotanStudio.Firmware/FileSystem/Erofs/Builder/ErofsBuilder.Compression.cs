@@ -463,10 +463,6 @@ public sealed partial class ErofsBuilder
                     return TrySpan(candidateLen, out outLen);
                 }
 
-                // A big LZ4 pcluster receives the frame limit as its destination budget, so the encoder names
-                // the input it consumed: exactly the byte-granular span the cluster search below can only
-                // bracket. The window grows only while the encoder exhausts it, so a span far denser than one
-                // frame is still found without reading the whole window up front.
                 bool TryFill(out int spanLength, out int encodedLength)
                 {
                     spanLength = 0;
@@ -561,28 +557,6 @@ public sealed partial class ErofsBuilder
 
                     if (fillDestination)
                     {
-                        // lib/compress.c:602-614 hands the encoder a destination budget of one pcluster and
-                        // takes whatever input it consumed (`erofs_compress_destsize`, lib/compressor_lz4.c:15-26),
-                        // so the span a pcluster covers is neither a whole number of logical clusters nor bounded
-                        // by the pcluster size. The fill encode above applies that contract directly; this byte
-                        // search recovers the same span when the fill frame was refused, for example because the
-                        // index could not close it. The cluster search can therefore only bracket the span: it
-                        // stops at the first whole-cluster multiple whose encoding no longer fits.
-                        // <para>lib/compress.c:602-614 把一整个 pcluster 的输出预算交给编码器，并采纳它消耗掉的
-                        // 输入（<c>erofs_compress_destsize</c>，lib/compressor_lz4.c:15-26），因此 pcluster 覆盖的
-                        // 跨度既不是整数个逻辑簇，也不受 pcluster 大小约束。上面的填满编码直接执行这一契约；当它的
-                        // 帧被拒绝（例如索引无法收尾）时，由这段按字节搜索还原同一跨度。逐簇搜索因此只能给出跨度的
-                        // 区间：它在第一个编码放不下的整簇倍数处停下。</para>
-                        //
-                        // A bracket that ends inside the first block cannot yield a different decision, because the
-                        // block-rounding test after the search compares a block-rounded encoded length against the
-                        // candidate span: every candidate here is at most one block long, so its rounded length is
-                        // at least one block and therefore never shorter than the span itself, which makes the test
-                        // discard it. The same reasoning covers a cluster candidate accepted before the search, so
-                        // the byte search would only spend probes on an outcome that is dropped either way.
-                        // <para>止于首块之内的区间不可能给出不同判定，因为搜索之后的按块取整判定比较的是取整后的编码
-                        // 长度与候选跨度：此处每个候选都不长于一块，其取整长度至少一块，因而绝不短于跨度本身，判定必然
-                        // 丢弃它。搜索之前已被接受的簇候选同理，因此字节搜索只会把探测花在一个无论如何都被丢弃的结果上。</para>
                         var high = (int)Math.Min(inputCap, (long)hi * clusterSize);
                         if (high > blockSize)
                         {
@@ -605,16 +579,6 @@ public sealed partial class ErofsBuilder
                     }
                 }
 
-                // lib/compress.c:616-628 rounds an encoded length up to a whole block and keeps the compressed frame
-                // only when that rounded length is strictly smaller than the bytes the frame encodes; otherwise the
-                // span is stored raw one block at a time. The test has to run on the accepted span, not on a probe:
-                // moving it into the probe would make the very first whole-cluster probe fail on any span whose
-                // encoding rounds up to its own length, and the escalating probe leaves the search at that first
-                // failure, so the file would fall back to raw storage as a whole instead of one block at a time.
-                // <para>lib/compress.c:616-628 把编码长度向上取整到整块，且仅当取整后的长度严格小于该帧编码的
-                // 字节数时才保留压缩帧；否则该跨度按一块一段原样存放。该判定必须作用于最终接受的跨度而不是某次探测：若把它
-                // 移进探测内部，任何编码长度向上取整后等于自身长度的跨度都会让第一个整簇探测失败，而递增式探测正
-                // 停在这次失败处，于是整份文件会退回整文件原样存放，而不是一块一段地原样存放。</para>
                 if (acceptedLen > 0 && acceptedOut > 0
                     && CeilDiv(acceptedOut, blockSize) * blockSize >= acceptedLen)
                 {
@@ -1594,9 +1558,6 @@ public sealed partial class ErofsBuilder
 
     private static void WriteZeroes(Stream output, long offset, long count)
     {
-        // Mirrors WriteAt: a plain cluster writes its padding immediately after its payload, so the
-        // cursor already sits at the padding start and re-seeking is a wasted syscall.
-        // <para>与 WriteAt 一致：原样簇在负载之后紧接着写补齐，因此游标已停在补齐起点，重复定位是浪费的系统调用。</para>
         if (output.Position != offset)
         {
             output.Position = offset;
@@ -1916,13 +1877,6 @@ public sealed partial class ErofsBuilder
 
     private static void WriteAt(Stream output, long offset, byte[] data, int count)
     {
-        // Pcluster writes are right-aligned inside a block-rounded region, so a padded frame performs a
-        // padding write immediately followed by a frame write at the offset that write just reached.
-        // Re-issuing the seek in that case costs a syscall per pcluster for a position the stream already
-        // reports, so the seek is skipped when the cursor is already where the write belongs.
-        // <para>pcluster 写在按块取整的区间内右对齐，因此带填充的帧会在补齐写之后紧接着把帧写到该写刚到达的
-        // 偏移上。此时重复发定位会为每个 pcluster 白付一次系统调用，而流自身已经报告了该位置，因此在游标
-        // 已就位时跳过定位。</para>
         if (output.Position != offset)
         {
             output.Position = offset;

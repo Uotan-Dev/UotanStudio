@@ -327,9 +327,6 @@ public sealed partial class FastbootSession
             position++;
         }
 
-        // A DATA response is followed by its payload, whose first byte is arbitrary and may itself be
-        // NUL/CR/LF. Only consume the run when it ends at the next response prefix (or at the buffer
-        // end); otherwise those bytes are payload, not padding.
         if (position < pending.Length && !IsKnownPrefixAt(pending, position))
         {
             return start;

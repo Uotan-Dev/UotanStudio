@@ -69,8 +69,6 @@ public partial class FirmwareNodeViewModel
             var oppo = await service.ExtractOppoAsync(path, outputDir, true, context.CancellationToken).ConfigureAwait(false);
             if (!oppo.Success)
             {
-                // Neither boot nor OPPO layout matched, so the registered format handlers decide: this is how
-                // cpio/tar, super, sparse, payload and filesystem images reach the generic unpack node.
                 var detected = await service.UnpackDetectedAsync(path, outputDir, context.CancellationToken).ConfigureAwait(false);
                 if (!detected.Success)
                 {

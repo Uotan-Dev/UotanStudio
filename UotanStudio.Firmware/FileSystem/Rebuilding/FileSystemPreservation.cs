@@ -226,7 +226,6 @@ public static partial class FileSystemPreservation
         }
         if (sourceDigest is not null)
         {
-            // The concurrent extraction-time read already covered the whole image, so the stage completes now.
             sourceCounter?.Add(counterTotal);
         }
         var digest = sourceDigest ?? HashFile(source, cancellationToken, sourceCounter is null ? null : sourceCounter.Add);

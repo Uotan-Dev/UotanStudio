@@ -28,7 +28,6 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 /// （调用者注册优先，其次程序目录），并在任何 LibUsbDotNet 类型被 JIT 前按绝对路径预加载库。
 /// 平台加载器随后以已加载映像解析后续的裸 SONAME <c>dlopen("libusb-1.0")</c>，
 /// 使 LibUsbDotNet 自身解析器无需重启进程即可成功。</para>
-///
 /// <b>Usage.</b> The backend reports itself available only when
 /// <see cref="TryEnsureLoaded"/> can load the caller-registered path or the platform file
 /// copied next to the application (<c>libusb-1.0.dll</c>, <c>libusb-1.0.dylib</c>,
@@ -46,7 +45,6 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 /// <c>UsbCommunicationLayer.SetLibusbLibraryPath(path)</c>（或 <c>CommKit</c> 透传）
 /// 注册显式路径；路径会立即校验存在并预加载，探测失败之后再注册会重新启用后端。
 /// 已经成功调用原生接口之后再切换运行库不受支持，因为已解析的导入仍指向原映像。</para>
-///
 /// <b>netstandard2.0.</b> <c>NativeLibrary</c> is net5+-only; on
 /// netstandard2.0 the loader pre-loads via <c>dlopen</c> / <c>LoadLibraryW</c>
 /// P/Invokes. <c>NativeLibrary.SetDllImportResolver</c> (which needs the

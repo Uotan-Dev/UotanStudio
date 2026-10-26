@@ -486,7 +486,6 @@ internal sealed class ScrcpyClient : IDisposable
             var codecId = ReadStreamCodecId(_audioStream, timeoutMs, "audio");
             if (codecId == ScrcpyConstants.StreamDisabledByServer)
             {
-                // The server could not capture audio and expects video-only mirroring to continue.
                 AudioDisabledByServer = true;
                 _audioStream.Dispose();
                 _audioStream = null;

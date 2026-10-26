@@ -182,8 +182,6 @@ public class ErofsInodeModelEquivalenceTests
 
         var compact2BRecord = BuildCompactRecord(ErofsInode.DataLayoutCompactIndexes, address: 0x46, size: 4096, mode: ErofsInode.ModeRegularFile);
         var compact2B = ErofsInode.FromBytes(compact2BRecord, 12, BlockSizeBits);
-        // A compact-index inode must agree on both big-pcluster head bits, which is what gives the compact
-        // slot width; a header raising only one of them is corrupt and is covered by its own case.
         compact2B.AttachMapHeader(
             BuildPlainMapHeader(ZErofsMapHeader.AdviseCompacted2B
                 | ZErofsMapHeader.AdviseBigPcluster1
@@ -519,8 +517,6 @@ public class ErofsInodeModelEquivalenceTests
         BinaryPrimitives.WriteUInt16LittleEndian(record, format);
         BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(2), 0);
         BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(4), mode);
-        // The nlink-one bit aliases the address high half: raising it means the field carries the
-        // 48-bit address extension and the link count reads as one, so nothing but zero may live here.
         BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(6), nlinkIsOne ? (ushort)0 : (ushort)Math.Min(nlink, ushort.MaxValue));
         BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(8), (uint)size);
         BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(12), 0);

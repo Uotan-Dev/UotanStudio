@@ -173,10 +173,6 @@ public class ContainerBenchmarks
 
         _plannedPayloadBytes = (long)Entries * corpus.Length;
 
-        // The guard has to be able to fail. The objective bound is the payload the source tree holds, which
-        // never depends on the code under test; the record count additionally pins each family's convention
-        // (CPIO reports one record per file and per directory, TAR additionally reports an explicit root) so
-        // a later pack that silently drops records is still caught rather than measuring less work.
         ArchivePath = Path.Combine(_root, "archive" + SuffixFor(Format));
         if (IsArchiveApiFormat(Format))
         {
@@ -221,8 +217,6 @@ public class ContainerBenchmarks
     [Benchmark]
     public int Pack()
     {
-        // A fixed output path per case, deleted first, so the measured work is exactly one whole-file pack
-        // and the run does not accumulate archives. The fixture archive of the Unpack row is never touched.
         var written = IsArchiveApiFormat(Format)
             ? PackTar(_sourceTree, _packOutputPath, Format.EndsWith(".xz", StringComparison.Ordinal))
             : PackCpio(_sourceTree, _packOutputPath);
@@ -239,9 +233,6 @@ public class ContainerBenchmarks
             throw new InvalidOperationException(FormattableString.Invariant($"Pack wrote an empty archive for '{Format}'."));
         }
 
-        // A compressed wrapper must differ from the fixture; a raw dialect must reproduce it exactly. Either
-        // way the check is on bytes, not on the handler's own self-report, so a pack that silently skipped
-        // compression or dropped the payload cannot pass as a fast measurement.
         if (_fixtureBytes != produced
             && !Format.EndsWith(".gz", StringComparison.Ordinal)
             && !Format.EndsWith(".xz", StringComparison.Ordinal))
@@ -266,8 +257,6 @@ public class ContainerBenchmarks
     [Benchmark]
     public int Unpack()
     {
-        // A single reused destination, wiped first: the measured work is one whole-file unpack rather than
-        // an ever-growing pile of directories, and repeated overwrite is what the product does in place.
         if (Directory.Exists(_unpackRoot))
         {
             Directory.Delete(_unpackRoot, recursive: true);

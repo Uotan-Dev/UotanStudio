@@ -15,11 +15,6 @@ public class ErofsExtentIntraFileDedupeTests
     [Fact]
     public void Build_TwoIdenticalFilesWithExtents_SecondFileNamesTheReusedAbsoluteAddress()
     {
-        // Two identical compressible files, each a single multi-block frame, in a build
-        // that selects the extent array. The second file's frame is reused, so its
-        // extent record must name the FIRST file's absolute start block. An incremental
-        // cursor seeded from the second file's own first extent still works here, so
-        // this case pins the absolute-address contract at the file level.
         var payload = new byte[40 * 1024];
         var pattern = "lorem ipsum dolor sit amet consectetur adipiscing elit 0123456789\n"u8;
         for (var offset = 0; offset + pattern.Length <= payload.Length; offset += pattern.Length)
@@ -45,10 +40,6 @@ public class ErofsExtentIntraFileDedupeTests
     [Fact]
     public void Build_RepeatedFrameInOneFileWithExtents_ReadsBackEachSegment()
     {
-        // One file whose contents repeat an identical compressible frame after a gap.
-        // When the second frame reuses the first frame's blocks, the extent array must
-        // carry that reused absolute address; an incremental cursor walked from the
-        // in-between extents would name unrelated blocks and the read-back would fail.
         var repeated = RepeatedFramePayload();
         using var source = new TempDirectory();
         source.WriteBytes("r.bin", repeated);
@@ -67,9 +58,6 @@ public class ErofsExtentIntraFileDedupeTests
 
     private static byte[] RepeatedFramePayload()
     {
-        // 16 KiB compressible block, then 8 KiB incompressible gap, repeated three times.
-        // Each compressible block survives as its own frame because the incompressible
-        // gap cannot join a window with it.
         var block = new byte[16 * 1024];
         var pattern = "the quick brown fox jumps over the lazy dog 0123456789\n"u8;
         for (var offset = 0; offset + pattern.Length <= block.Length; offset += pattern.Length)
