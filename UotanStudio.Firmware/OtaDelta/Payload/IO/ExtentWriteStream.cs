@@ -37,21 +37,27 @@ internal sealed class ExtentWriteStream : Stream
         try
         {
             _extents = [.. extents.Select(extent =>
-                (checked((long)extent.StartBlock * blockSize),
-                 checked((long)extent.NumBlocks * blockSize)))];
+                (Offset: checked((long)extent.StartBlock * blockSize),
+                 Length: checked((long)extent.NumBlocks * blockSize)))];
             _length = _extents.Aggregate(0L, (total, extent) => checked(total + extent.Length));
-            for (var i = 0; i < _extents.Length; i++)
+            var ordered = _extents.ToArray();
+            Array.Sort(ordered, static (left, right) => left.Offset != right.Offset
+                ? left.Offset.CompareTo(right.Offset)
+                : (left.Offset + left.Length).CompareTo(right.Offset + right.Length));
+            var previousEnd = long.MinValue;
+            foreach (var extent in ordered)
             {
-                var end = checked(_extents[i].Offset + _extents[i].Length);
-                for (var j = i + 1; j < _extents.Length; j++)
+                if (extent.Length <= 0)
                 {
-                    var otherEnd = checked(_extents[j].Offset + _extents[j].Length);
-                    if (_extents[i].Length > 0 && _extents[j].Length > 0 &&
-                        _extents[i].Offset < otherEnd && _extents[j].Offset < end)
-                    {
-                        throw new PartitionExtractionException("Destination extents overlap.", string.Empty);
-                    }
+                    continue;
                 }
+
+                if (extent.Offset < previousEnd)
+                {
+                    throw new PartitionExtractionException("Destination extents overlap.", string.Empty);
+                }
+
+                previousEnd = Math.Max(previousEnd, checked(extent.Offset + extent.Length));
             }
         }
         catch (OverflowException ex)

@@ -45,6 +45,8 @@ internal sealed class SquashfsBlockDecoder : IDisposable
     private readonly int _compression;
     private Decompressor? _zstd;
     private byte[]? _lzoScratch;
+    private BufferReadStream? _input;
+    private BoundedBufferStream? _output;
 
     /// <summary>Creates a decoder for one superblock compressor id.
     /// <para>为单个超级块压缩器标识创建解码器。</para></summary>
@@ -106,13 +108,12 @@ internal sealed class SquashfsBlockDecoder : IDisposable
         }
     }
 
-    private static int DecompressZlib(byte[] payload, int payloadLength, byte[] destination, int capacity)
+    private int DecompressZlib(byte[] payload, int payloadLength, byte[] destination, int capacity)
     {
-        using var input = new MemoryStream(payload, 0, payloadLength, writable: false);
-        var output = new BoundedBufferStream(destination, capacity);
+        var output = PrepareStreams(payload, payloadLength, destination, capacity);
         try
         {
-            ZlibCompressor.Decompress(input, output);
+            ZlibCompressor.Decompress(_input!, output);
         }
         catch (CompressionException ex)
         {
@@ -160,7 +161,7 @@ internal sealed class SquashfsBlockDecoder : IDisposable
         return rented;
     }
 
-    private static int DecompressXz(byte[] payload, int payloadLength, byte[] destination, int capacity)
+    private int DecompressXz(byte[] payload, int payloadLength, byte[] destination, int capacity)
     {
         if (payloadLength < 6 || !XzCompressor.IsXzFormat(payload))
         {
@@ -168,11 +169,10 @@ internal sealed class SquashfsBlockDecoder : IDisposable
                 "SquashFS xz blocks are only supported in full .xz container framing; raw LZMA2 framing is not decoded.");
         }
 
-        using var input = new MemoryStream(payload, 0, payloadLength, writable: false);
-        var output = new BoundedBufferStream(destination, capacity);
+        var output = PrepareStreams(payload, payloadLength, destination, capacity);
         try
         {
-            XzCompressor.Decompress(input, output);
+            XzCompressor.Decompress(_input!, output);
         }
         catch (CompressionException ex)
         {
@@ -184,6 +184,26 @@ internal sealed class SquashfsBlockDecoder : IDisposable
         }
 
         return output.Written;
+    }
+
+    /// <summary>
+    /// Rebinds the retained input/output stream wrappers to this block, so the gzip and xz paths allocate no stream
+    /// objects per block; a single worker owns the decoder at any time, which keeps the reuse safe.
+    /// <para>把保留的输入/输出流包装重新绑定到本块，使 gzip 与 xz 路径逐块不再分配流对象；同一时间单个工作者持有
+    /// 解码器，复用因此是安全的。</para>
+    /// </summary>
+    /// <param name="payload">Block bytes. <para>块字节。</para></param>
+    /// <param name="payloadLength">Valid byte count. <para>有效字节数。</para></param>
+    /// <param name="destination">Destination array. <para>目标数组。</para></param>
+    /// <param name="capacity">Destination capacity. <para>目标容量。</para></param>
+    /// <returns>The reset bounded output stream. <para>重置后的有界输出流。</para></returns>
+    private BoundedBufferStream PrepareStreams(byte[] payload, int payloadLength, byte[] destination, int capacity)
+    {
+        _input ??= new BufferReadStream();
+        _input.Reset(payload, payloadLength);
+        _output ??= new BoundedBufferStream(destination);
+        _output.Reset(destination, capacity);
+        return _output;
     }
 
     private static int DecompressLz4(byte[] payload, int payloadLength, byte[] destination, int capacity)
@@ -221,11 +241,15 @@ internal sealed class SquashfsBlockDecoder : IDisposable
 
     /// <summary>
     /// Forward-only write sink over a pooled array that rejects any write beyond its capacity, so a decoder
-    /// cannot grow the destination.
-    /// <para>基于池化数组的仅向前写接收端，拒绝超出容量的写入，使解码器无法扩张目标。</para>
+    /// cannot grow the destination; <see cref="Reset"/> rebinds it to the next block's destination.
+    /// <para>基于池化数组的仅向前写接收端，拒绝超出容量的写入，使解码器无法扩张目标；<see cref="Reset"/>
+    /// 把它重新绑定到下一块的目标。</para>
     /// </summary>
-    private sealed class BoundedBufferStream(byte[] buffer, int capacity) : Stream
+    private sealed class BoundedBufferStream(byte[] buffer) : Stream
     {
+        private byte[] _buffer = buffer;
+        private int _capacity;
+
         internal int Written { get; private set; }
 
         public override bool CanRead => false;
@@ -238,14 +262,21 @@ internal sealed class SquashfsBlockDecoder : IDisposable
             set => throw new NotSupportedException();
         }
 
+        internal void Reset(byte[] destination, int capacity)
+        {
+            _buffer = destination;
+            _capacity = capacity;
+            Written = 0;
+        }
+
         public override void Write(ReadOnlySpan<byte> source)
         {
-            if (source.Length > capacity - Written)
+            if (source.Length > _capacity - Written)
             {
-                throw new IOException($"The SquashFS block expands beyond the {capacity}-byte destination.");
+                throw new IOException($"The SquashFS block expands beyond the {_capacity}-byte destination.");
             }
 
-            source.CopyTo(buffer.AsSpan(Written));
+            source.CopyTo(_buffer.AsSpan(Written));
             Written += source.Length;
         }
 
@@ -260,5 +291,72 @@ internal sealed class SquashfsBlockDecoder : IDisposable
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
 
         public override void SetLength(long value) => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Forward-only read source over the caller's block array; <see cref="Reset"/> rebinds it to the next block,
+    /// so no per-block <c>MemoryStream</c> wrapper is created.
+    /// <para>基于调用方块数组的仅向前读取源；<see cref="Reset"/> 把它重新绑定到下一块，因此不再逐块创建
+    /// <c>MemoryStream</c> 包装。</para>
+    /// </summary>
+    private sealed class BufferReadStream : Stream
+    {
+        private byte[] _buffer = [];
+        private int _length;
+        private int _position;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => _length;
+        public override long Position
+        {
+            get => _position;
+            set
+            {
+                ArgumentOutOfRangeException.ThrowIfNegative(value);
+                _position = (int)Math.Min(value, _length);
+            }
+        }
+
+        internal void Reset(byte[] payload, int length)
+        {
+            _buffer = payload;
+            _length = length;
+            _position = 0;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var available = Math.Min(count, _length - _position);
+            if (available <= 0)
+            {
+                return 0;
+            }
+
+            Buffer.BlockCopy(_buffer, _position, buffer, offset, available);
+            _position += available;
+            return available;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            Position = origin switch
+            {
+                SeekOrigin.Begin => offset,
+                SeekOrigin.Current => _position + offset,
+                SeekOrigin.End => _length + offset,
+                _ => throw new ArgumentOutOfRangeException(nameof(origin)),
+            };
+            return _position;
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

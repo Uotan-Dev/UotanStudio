@@ -33,6 +33,8 @@ internal sealed class SquashfsParser
     private readonly Lock _fragmentGate = new();
     private readonly Dictionary<int, (byte[] Data, LinkedListNode<int> Node)> _fragmentCache = [];
     private readonly LinkedList<int> _fragmentOrder = [];
+    private SquashfsBlockDecoder? _fragmentDecoder;
+    private IndependentReadStream? _fragmentReader;
     private int _entryBudget = MaximumEntryCount;
 
     /// <summary>
@@ -629,14 +631,12 @@ internal sealed class SquashfsParser
         var length = (int)(fragment.Size & (NonCompressionBit - 1));
         var payload = ArrayPool<byte>.Shared.Rent(length);
         var output = ArrayPool<byte>.Shared.Rent(_superblock.BlockSize);
-        using var decoder = new SquashfsBlockDecoder(_superblock.Compression);
+        var decoder = _fragmentDecoder ??= new SquashfsBlockDecoder(_superblock.Compression);
+        var reader = _fragmentReader ??= CreateReader();
         try
         {
-            using (var reader = CreateReader())
-            {
-                reader.Position = (long)fragment.Start;
-                reader.ReadExactly(payload.AsSpan(0, length));
-            }
+            reader.Position = (long)fragment.Start;
+            reader.ReadExactly(payload.AsSpan(0, length));
 
             if (stored)
             {

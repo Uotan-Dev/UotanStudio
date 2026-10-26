@@ -867,21 +867,28 @@ public sealed class Ext4Parser : IDisposable
         }
 
         var blockCount = (uint)((size + _blockSize - 1) / _blockSize);
-        var buffer = new byte[_blockSize];
-        var remaining = size;
-        for (var logical = 0u; logical < blockCount; logical++)
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(_blockSize);
+        try
         {
-            _readCancellation.ThrowIfCancellationRequested();
-            var physical = MapBlock(inode, logical);
-            buffer.AsSpan().Clear();
-            if (physical is not null)
+            var remaining = size;
+            for (var logical = 0u; logical < blockCount; logical++)
             {
-                ReadBlockTo((ulong)physical, buffer);
-            }
+                _readCancellation.ThrowIfCancellationRequested();
+                var physical = MapBlock(inode, logical);
+                buffer.AsSpan(0, _blockSize).Clear();
+                if (physical is not null)
+                {
+                    ReadBlockTo((ulong)physical, buffer, _blockSize);
+                }
 
-            var writeLength = (int)Math.Min(remaining, _blockSize);
-            output.Write(buffer, 0, writeLength);
-            remaining -= writeLength;
+                var writeLength = (int)Math.Min(remaining, _blockSize);
+                output.Write(buffer, 0, writeLength);
+                remaining -= writeLength;
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 
@@ -907,7 +914,7 @@ public sealed class Ext4Parser : IDisposable
         }
 
         var buffer = new byte[_blockSize];
-        ReadBlockTo(physicalBlock, buffer);
+        ReadBlockTo(physicalBlock, buffer, buffer.Length);
         if (_metadataBlockCache.Count >= MaxCachedMetadataBlocks)
         {
             EvictLeastRecentlyUsedMetadataBlock();
@@ -931,16 +938,25 @@ public sealed class Ext4Parser : IDisposable
         _metadataBlockCache.Remove(oldestKey);
     }
 
-    private void ReadBlockTo(ulong physicalBlock, byte[] buffer)
+    private void ReadBlockTo(ulong physicalBlock, byte[] buffer, int length)
     {
 
         if (_journalOverlay.TryGetBlock((long)physicalBlock, out var overlayData))
         {
-            overlayData.AsSpan(0, Math.Min(overlayData.Length, buffer.Length)).CopyTo(buffer);
+            overlayData.AsSpan(0, Math.Min(overlayData.Length, length)).CopyTo(buffer.AsSpan(0, length));
             return;
         }
 
-        ReadExactlyAt(checked((long)physicalBlock * _blockSize), buffer);
+        var offset = checked((long)physicalBlock * _blockSize);
+        _readCancellation.ThrowIfCancellationRequested();
+        if (offset < 0 || offset > _stream.Length || length > _stream.Length - offset)
+        {
+            throw new FileSystemCorruptedException(
+                $"ext4 read range at {offset} of {length} bytes lies outside the image (length {_stream.Length}).");
+        }
+
+        _stream.Position = offset;
+        _stream.ReadExactly(buffer.AsSpan(0, length));
     }
 
     private void ReadExactlyAt(long offset, byte[] buffer)

@@ -131,6 +131,36 @@ internal static class BinaryDeltaPatch
         }
     }
 
+    /// <summary>
+    /// Subtracts the addend span from the target with wraparound semantics, vectorized via <see cref="System.Numerics.Vector{T}"/>.
+    /// <para>按字节回绕语义从 Span 减去另一个 Span，经 <see cref="System.Numerics.Vector{T}"/> 向量化。</para>
+    /// </summary>
+    private static void SubBytesUnchecked(Span<byte> target, ReadOnlySpan<byte> subtrahend)
+    {
+        if (System.Numerics.Vector.IsHardwareAccelerated && target.Length >= System.Numerics.Vector<byte>.Count)
+        {
+            var width = System.Numerics.Vector<byte>.Count;
+            var i = 0;
+            for (; i <= target.Length - width; i += width)
+            {
+                System.Numerics.Vector.Subtract(
+                    new System.Numerics.Vector<byte>(target.Slice(i, width)),
+                    new System.Numerics.Vector<byte>(subtrahend.Slice(i, width)))
+                    .CopyTo(target.Slice(i, width));
+            }
+            for (; i < target.Length; i++)
+            {
+                target[i] = unchecked((byte)(target[i] - subtrahend[i]));
+            }
+            return;
+        }
+
+        for (var i = 0; i < target.Length; i++)
+        {
+            target[i] = unchecked((byte)(target[i] - subtrahend[i]));
+        }
+    }
+
     internal static void Create(Stream source, Stream target, Stream output, CancellationToken ct = default)
     {
         using var control = CreateTemporaryStream();
@@ -147,34 +177,42 @@ internal static class BinaryDeltaPatch
         }
         source.Position = 0;
         target.Position = 0;
-        var oldBuffer = new byte[64 * 1024];
-        var newBuffer = new byte[oldBuffer.Length];
-        using (var encoder = BZip2Stream.Create(diff, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
+        var oldBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(64 * 1024);
+        var newBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(oldBuffer.Length);
+        try
         {
-            var remaining = commonLength;
-            while (remaining > 0)
+            using (var encoder = BZip2Stream.Create(diff, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
             {
-                ct.ThrowIfCancellationRequested();
-                var count = (int)Math.Min(remaining, newBuffer.Length);
-                source.ReadExactly(oldBuffer.AsSpan(0, count));
-                target.ReadExactly(newBuffer.AsSpan(0, count));
-                for (var i = 0; i < count; i++) newBuffer[i] = unchecked((byte)(newBuffer[i] - oldBuffer[i]));
-                encoder.Write(newBuffer, 0, count);
-                remaining -= count;
+                var remaining = commonLength;
+                while (remaining > 0)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var count = (int)Math.Min(remaining, newBuffer.Length);
+                    source.ReadExactly(oldBuffer.AsSpan(0, count));
+                    target.ReadExactly(newBuffer.AsSpan(0, count));
+                    SubBytesUnchecked(newBuffer.AsSpan(0, count), oldBuffer.AsSpan(0, count));
+                    encoder.Write(newBuffer, 0, count);
+                    remaining -= count;
+                }
+            }
+            using (var encoder = BZip2Stream.Create(extra, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
+                CopyExactly(target, encoder, target.Length - commonLength, ct);
+            Span<byte> header = stackalloc byte[32];
+            "BSDIFF40"u8.CopyTo(header);
+            WriteNumber(header[8..16], control.Length);
+            WriteNumber(header[16..24], diff.Length);
+            WriteNumber(header[24..32], target.Length);
+            output.Write(header);
+            foreach (var stream in new[] { control, diff, extra })
+            {
+                stream.Position = 0;
+                CopyExactly(stream, output, stream.Length, ct);
             }
         }
-        using (var encoder = BZip2Stream.Create(extra, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true))
-            CopyExactly(target, encoder, target.Length - commonLength, ct);
-        Span<byte> header = stackalloc byte[32];
-        "BSDIFF40"u8.CopyTo(header);
-        WriteNumber(header[8..16], control.Length);
-        WriteNumber(header[16..24], diff.Length);
-        WriteNumber(header[24..32], target.Length);
-        output.Write(header);
-        foreach (var stream in new[] { control, diff, extra })
+        finally
         {
-            stream.Position = 0;
-            CopyExactly(stream, output, stream.Length, ct);
+            System.Buffers.ArrayPool<byte>.Shared.Return(newBuffer);
+            System.Buffers.ArrayPool<byte>.Shared.Return(oldBuffer);
         }
     }
 

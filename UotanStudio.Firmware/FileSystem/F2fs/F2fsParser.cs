@@ -479,8 +479,6 @@ public sealed class F2fsParser : IDisposable
             .Sum(e => e.Kind == F2fsEntryKind.Symlink ? Encoding.UTF8.GetByteCount(e.SymlinkTarget ?? string.Empty)
                 : (e.Mode & 0xF000) == 0x8000 ? e.Size : 0L);
         var bytes = new Core.ExtractionByteCounter(totalBytes, byteProgress, cancellationToken);
-        // The host publishes entry progress on the UI thread, so per-entry reports are coalesced to one
-        // notification per window; the terminal report still carries the full entry count.
         var entrySink = progress is null ? null : new Core.EntryCountProgress(progress);
         var entryProgress = entrySink is null ? null : new Core.ProgressThrottle(totalCount, entrySink, cancellationToken);
         var processedCount = 0;
@@ -650,20 +648,27 @@ public sealed class F2fsParser : IDisposable
         var blockCount = (uint)((dataLength + _blockSize - 1) / _blockSize);
 
         var result = new List<F2fsDirectoryEntry>();
-        var blockBuffer = new byte[_blockSize];
-        var remaining = dataLength;
-        for (var logical = 0u; logical < blockCount && remaining > 0; logical++)
+        var blockBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(_blockSize);
+        try
         {
-            var physical = MapBlock(inode, logical);
-            blockBuffer.AsSpan().Clear();
-            if (physical is not null)
+            var remaining = dataLength;
+            for (var logical = 0u; logical < blockCount && remaining > 0; logical++)
             {
-                ReadBlockTo((ulong)physical, blockBuffer);
-            }
+                var physical = MapBlock(inode, logical);
+                blockBuffer.AsSpan(0, _blockSize).Clear();
+                if (physical is not null)
+                {
+                    ReadBlockTo((ulong)physical, blockBuffer, _blockSize);
+                }
 
-            var blockLength = (int)Math.Min(_blockSize, remaining);
-            result.AddRange(F2fsDirectoryEntry.ParseArea(blockBuffer.AsSpan(0, blockLength), F2fsDirectoryEntry.BitmapSize, F2fsDirectoryEntry.ReservedSize, F2fsDirectoryEntry.SlotsPerBlock, F2fsNode.NodeSize));
-            remaining -= blockLength;
+                var blockLength = (int)Math.Min(_blockSize, remaining);
+                result.AddRange(F2fsDirectoryEntry.ParseArea(blockBuffer.AsSpan(0, blockLength), F2fsDirectoryEntry.BitmapSize, F2fsDirectoryEntry.ReservedSize, F2fsDirectoryEntry.SlotsPerBlock, F2fsNode.NodeSize));
+                remaining -= blockLength;
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(blockBuffer);
         }
 
         return result;
@@ -1130,8 +1135,6 @@ public sealed class F2fsParser : IDisposable
                     continue;
                 }
 
-                // Cluster pages are usually allocated contiguously, so one positioned read serves the
-                // whole run instead of one seek/read/allocation per page.
                 var first = (uint)blkAddr;
                 var run = 1;
                 while (page + run < clusterBlocks
@@ -1302,13 +1305,13 @@ public sealed class F2fsParser : IDisposable
         return ReadBytes(offset, _blockSize, what);
     }
 
-    private void ReadBlockTo(ulong blockAddress, byte[] buffer)
+    private void ReadBlockTo(ulong blockAddress, byte[] buffer, int length)
     {
         var offset = checked((long)blockAddress * _blockSize);
         lock (_streamLock)
         {
             _stream.Position = offset;
-            _stream.ReadExactly(buffer);
+            _stream.ReadExactly(buffer.AsSpan(0, length));
         }
     }
 
