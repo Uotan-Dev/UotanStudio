@@ -90,7 +90,7 @@ Detection follows the handler list published by `FirmwareFormatRegistry.Register
 | Boot and security | boot / recovery / vendor_boot / dtbo parsing and repacking, AVB descriptor verification and signing, hashtree and FEC construction, SELinux policy parsing, boot patch footprint analysis |
 | Android metadata | `resources.arsc`, binary XML, DEX decompilation and Smali, OAT/VDEX, APK parsing and repacking, v1/v2/v3 signing with JKS key stores, QCN modem configuration |
 | Device tree and executables | DTB/DTS editing, ELF inspection, Qualcomm images and PBT |
-| Vendor packages | OPPO/OnePlus (`.ops`), Meizu MPK, Lenovo QSB, Huawei UpdateApp, Rockchip PAC/IMG, Amlogic DZ/KDZ, Allwinner, MediaTek, Sony SIN, NTPi, NB0 |
+| Vendor packages | OPPO/OnePlus (`.ops`), Meizu MPK, Lenovo QSB, Coolpad CPB, Huawei UpdateApp, Rockchip PAC/IMG, Amlogic DZ/KDZ, Allwinner, MediaTek, Sony SIN, NTPi, NB0 |
 
 Firmware images, ZIP files, payloads, file system images and device responses are all treated as untrusted input: offsets, lengths, entry counts, decompressed sizes and block counts are bounded and overflow-checked, and every publish goes through a temporary directory plus verification and atomic replacement.
 

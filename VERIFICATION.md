@@ -38,6 +38,18 @@
 - NativeAOT：同轮 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained -p:PublishAot=true` 成功，产物 `UotanStudio.Desktop.exe` 155,762,176 B；只报告第三方既有的 IL2026/IL2104/IL3053 警告，没有指向新增固件代码的裁剪/AOT 警告。
 - 全量（2026-10-27）：7599 总数 / 7593 通过 / 6 跳过 / 0 失败，单轮 2m41s（`dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug --minimum-expected-tests 6000`，共享工作树）。
 
+## 酷派 CPB 解包实测（2026-10-27，Windows x64，Debug）
+
+- `UotanStudio.Firmware/VendorFirmware/Coolpad/Cpb/` 新增只读格式处理器 `Coolpad CPB Package`（`.cpb`）：按 552 字节头（`CP` + 版本 1.7、6 个校正字、机型/硬件/版本/来源文本、镜像头结束位置、CRC16）与 76 字节镜像头（64 字节名称、偏移、长度、CRC16）解包；偏移与长度按头部校正字推导的密钥异或混淆，容器校验和按**解码后**的镜像头累加。参考实现为 `reference/MIO-KITCHEN-SOURCE/src/c_extension/cpb_file/cpbtool.c`。
+- 密钥与校验和的两处非直觉行为按参考实现逐位复刻，并在用例里钉住：校正字之和的"除以 6"实际是 `0x66666667` 高半乘再右移一位（等价于除以 5），厂商默认校正字因此得到密钥 `0x00310000`（`DeriveKey_VendorCorrectionWords_ProducesTheDocumentedSeed`）；CRC-16 累加器不截断到 16 位，故头部与镜像头都用完整 32 位比较，同时接受低 16 位一致（对应 16 位寄存器产出方），`BitwiseCrc16` 用逐位移位独立复算这条低 16 位等价关系。
+- 定向测试：`UotanStudio.Tests.Firmware.CpbTests` 18/18（头字段与镜像目录、掩码校验和、位级 CRC 等价、密钥常量、解包字节、负载损坏仍写出但报校验失败、头部校验和不一致拒解、截断范围拒解且不留暂存文件、条目筛选、不安全/重复/空名称净化、取消、版本字节判定、魔数拒绝、过短文件、`DetectDetailed` 强魔数、混淆变换自逆）。
+- 魔数：`UotanStudio.Firmware.MagicGen/corpus/Magdir/uotan-firmware` 新增 `CP\x01\x07` 规则并重新生成 `CompiledMagicData.{g.cs,zst}`（24764 条规则 / 4206 条顶层 / blob 3,045,111 B → zstd 317,709 B）；`FileMagicTests` 34/34、`CompiledMagicCoverageTests` 5/5。
+- 镜像文件管理与界面接线：`ImageInputService` 新增 `ImageFormatKind.Cpb`（标签 `cpb`，`ParseFormatLabel` 可回读，`ProbeFormat` 经已注册处理器与 `.cpb` 后缀双重识别）；`ImageInputServiceTests` 77/77（含 `DetectFormat_CoolpadCpbMagic_ReturnsCpb` 与标签往返）。固件信息视图经 `FirmwareInfo_CpbSummary` 与 `FirmwareField_{CpbVersion,Model,HardwareVersion,RomFrom,Mismatch}` 本地化（中英双份 resx + `LocaleKeySets`，`LocaleDictionaryTests` 6/6）；资源管理器把 `.cpb` 归入固件包图标，导入与新建工程的选取器加入 `*.cpb`。
+- 架构门：`FirmwareArchitectureGuardTests` 12/12、`FirmwareNamespaceFolderTests` 2/2；全 Firmware 命名空间 4378 总数 / 4376 通过 / 2 跳过（未设 `UOTAN_EROFS_CORPUS`）/ 0 失败，单轮 41s；`UotanStudio.Tests.Services` 1799 总数 / 1798 通过 / 1 跳过 / 0 失败，单轮 2m11s；`UotanStudio.Tests.Architecture` 16/16。
+- 门禁：`dotnet restore UotanStudio.slnx -p:Configuration=Debug` + `dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 的 `whitespace` 与 `style` 两项 `--verify-no-changes` 均零报告。
+- NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained -p:PublishAot=true --artifacts-path %TEMP%\uotan-aot-cpb` 成功，产物 `UotanStudio.Desktop.exe` 155,977,728 B；只报第三方既有警告（8×IL2104、4×IL3053，来源 Avalonia.Controls.DataGrid、Common.Logging、Dock.Avalonia、Iciclecreek.Avalonia.Terminal、LTRData.Extensions、Semi.Avalonia.Dock、Ursa、Ursa.Themes.Semi、YamlDotNet），没有任何指向 `UotanStudio.*` 的裁剪/AOT 警告；临时产物已删除。共享工作树里其他会话同时构建 Release 时，默认输出目录会以 `CS2012`（用户映射区域占用）失败在 `UotanStudio.Hash`/`Net`/`Media`/`Desktop` 等无关项目上，因此本轮用 `--artifacts-path` 隔离输出。
+- 未验证边界：仓库内没有真实酷派 CPB 固件样本，上述解包正确性只由测试自建的容器覆盖（写入方按参考 C 的布局独立构造，不是生产代码的往返）；未与厂商工具产物做逐字节对照；固件信息视图与属性面板未启动 GUI 目视验证；未实现重打包，CPB 保持只读。
+
 ## iOS 支持实测（2026-10-26，Windows x64，Debug）
 
 - 定向测试：`UotanStudio.Tests.Protocols` 107/107、`UotanStudio.Tests.Mirroring` 165 通过 + 1 跳过（`OhscrcpyHdcIntegrationTests` 需要 `UOTAN_HDC_MIRROR_DIRECT`）、`UotanStudio.Tests.Devices` 292/292、`UotanStudio.Tests.Services.LocaleDictionaryTests` 6/6。

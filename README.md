@@ -90,7 +90,7 @@ flowchart TD
 | 启动与安全 | boot / recovery / vendor_boot / dtbo 解析与重打包、AVB 描述符校验与签名、hashtree 与 FEC 构建、SELinux 策略解析、boot 补丁痕迹分析 |
 | Android 元数据 | `resources.arsc`、二进制 XML、DEX 反编译与 Smali、OAT/VDEX、APK 解析与重打包、v1/v2/v3 签名与 JKS 密钥库、QCN 调制解调器配置 |
 | 设备树与可执行 | DTB/DTS 编辑、ELF 信息、Qualcomm 镜像与 PBT |
-| 厂商包 | OPPO/OnePlus（`.ops`）、Meizu MPK、Lenovo QSB、华为 UpdateApp、Rockchip PAC/IMG、Amlogic DZ/KDZ、Allwinner、MediaTek、Sony SIN、NTPi、NB0 |
+| 厂商包 | OPPO/OnePlus（`.ops`）、Meizu MPK、Lenovo QSB、酷派 CPB、华为 UpdateApp、Rockchip PAC/IMG、Amlogic DZ/KDZ、Allwinner、MediaTek、Sony SIN、NTPi、NB0 |
 
 固件、ZIP、Payload、文件系统镜像和设备返回数据一律视为不可信输入：偏移、长度、条目数量、解压大小和块数量都有上限检查与溢出防护，写入统一走临时目录 + 校验 + 原子替换。
 
