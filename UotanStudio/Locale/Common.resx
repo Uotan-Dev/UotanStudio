@@ -2215,6 +2215,12 @@ Author: 暮间雾
   <data name="Dock_Partition_UsedFormat" xml:space="preserve">
     <value>Used through: {0} sectors ({1})</value>
   </data>
+  <data name="Dock_Partition_CopyFormat" xml:space="preserve">
+    <value>Table {0}: LBA {1}, {2} partition(s)</value>
+  </data>
+  <data name="Dock_Partition_CopyDirty" xml:space="preserve">
+    <value>Save or discard the current edits before switching tables.</value>
+  </data>
   <data name="Dock_Qcn_Save" xml:space="preserve">
     <value>Save</value>
   </data>

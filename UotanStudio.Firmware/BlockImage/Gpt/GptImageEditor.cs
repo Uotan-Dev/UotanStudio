@@ -60,30 +60,46 @@ public static class GptImageEditor
     /// <para>解析 GPT 镜像：定位每个扇区对齐的头部，校验头 CRC，解析每个条目数组，并以分区最多的副本作为分区表来源。</para>
     /// </summary>
     /// <param name="image">The image bytes to parse. <para>待解析的镜像字节。</para></param>
-    /// <param name="table">The parsed table on success; <see langword="null"/> on failure. Its fingerprint hashes each discovered header block followed by the first entry array. <para>成功时的解析结果；失败时为 <see langword="null"/>。其指纹对每个已发现的头块与首个条目数组依次求哈希。</para></param>
+    /// <param name="table">The parsed table on success; <see langword="null"/> on failure. Its fingerprint hashes each discovered header block followed by the selected entry array. <para>成功时的解析结果；失败时为 <see langword="null"/>。其指纹对每个已发现的头块与选中的条目数组依次求哈希。</para></param>
     /// <returns><see langword="true"/> when at least one CRC-verified header and entry array were found. <para>找到至少一个 CRC 校验通过的头部与条目数组时为 <see langword="true"/>。</para></returns>
-    public static bool TryRead(byte[] image, out GptTable table)
+    public static bool TryRead(byte[] image, out GptTable table) => TryRead(image, null, out table, out _);
+
+    /// <summary>
+    /// Parses one selected GPT table copy: <see langword="null"/> <paramref name="headerLba"/> takes the copy
+    /// holding the most partitions, while a logical block address selects that exact copy so a container with
+    /// several tables can switch between them.
+    /// <para>解析选定的单份 GPT 表副本：<paramref name="headerLba"/> 为 <see langword="null"/> 时取分区最多的副本，
+    /// 给出逻辑块地址时精确选择该副本，便于在打包了多张表的容器间切换。</para>
+    /// </summary>
+    /// <param name="image">The image bytes to parse. <para>待解析的镜像字节。</para></param>
+    /// <param name="headerLba">Header block to read, or <see langword="null"/> for the richest copy. <para>要读取的头部块；<see langword="null"/> 表示分区最多的副本。</para></param>
+    /// <param name="table">The parsed table on success; <see langword="null"/> on failure. <para>成功时的解析结果；失败时为 <see langword="null"/>。</para></param>
+    /// <param name="source">The copy the table was read from, as reported by <see cref="DescribeCopies"/>; meaningful only on success. <para>表来自的副本，与 <see cref="DescribeCopies"/> 的条目一致；仅在成功时有意义。</para></param>
+    /// <returns><see langword="true"/> when the requested copy validated; <see langword="false"/> for an unknown block or an invalid image. <para>请求的副本通过校验时为 <see langword="true"/>；未知块或无效镜像为 <see langword="false"/>。</para></returns>
+    public static bool TryRead(byte[] image, ulong? headerLba, out GptTable table, out GptTableCopy source)
     {
         ArgumentNullException.ThrowIfNull(image);
         table = null!;
-        if (!TryLocate(image, out var copies, out var source, out var partitions, out var diskSizeBytes, out var diskGuid))
+        source = default;
+        if (!TryLocate(image, headerLba, out var copies, out var selected, out var partitions, out var diskSizeBytes, out var diskGuid))
         {
             return false;
         }
 
-        var header = image.AsSpan((int)source.HeaderOffset, GptLayout.HeaderSize);
+        var header = image.AsSpan((int)selected.HeaderOffset, GptLayout.HeaderSize);
+        source = new GptTableCopy((ulong)(selected.HeaderOffset / GptLayout.SectorSize), selected.EntryCount, partitions.Count);
         table = new GptTable(
             diskGuid,
             GptLayout.SectorSize,
             diskSizeBytes / (ulong)GptLayout.SectorSize,
             partitions,
-            ComputeFingerprint(image, copies, source),
-            (uint)source.HeaderSize,
+            ComputeFingerprint(image, copies, selected),
+            (uint)selected.HeaderSize,
             BinaryPrimitives.ReadUInt64LittleEndian(header[40..]),
             BinaryPrimitives.ReadUInt64LittleEndian(header[48..]),
-            source.EntryCount,
+            selected.EntryCount,
             (uint)GptLayout.EntrySize,
-            (ulong)(source.EntriesOffset / GptLayout.SectorSize),
+            (ulong)(selected.EntriesOffset / GptLayout.SectorSize),
             (ulong)(copies[^1].EntriesOffset / GptLayout.SectorSize));
         return true;
     }
@@ -127,7 +143,7 @@ public static class GptImageEditor
     {
         ArgumentNullException.ThrowIfNull(image);
         ArgumentNullException.ThrowIfNull(partitions);
-        if (!TryLocate(image, out var copies, out var source, out _, out _, out _))
+        if (!TryLocate(image, null, out var copies, out var source, out _, out _, out _))
         {
             throw new ArgumentException(
                 "No GPT header with a CRC-verified entry array was found. 未找到 CRC 校验通过的 GPT 头与条目数组。",
@@ -179,19 +195,20 @@ public static class GptImageEditor
     }
 
     /// <summary>
-    /// Locates every CRC-verified header, keeps the one whose entry array holds the most partitions as the
-    /// table source, and derives the capacity from that header.
-    /// <para>定位全部 CRC 校验通过的头部，取条目数组中分区最多的一份作为表来源，并由该头部推导容量。</para>
+    /// Locates every CRC-verified header, selects the requested copy or the one whose entry array holds the
+    /// most partitions, and derives the capacity from that header.
+    /// <para>定位全部 CRC 校验通过的头部，选择请求的副本或条目数组中分区最多的一份，并由该头部推导容量。</para>
     /// </summary>
     /// <param name="image">The image bytes to parse. <para>待解析的镜像字节。</para></param>
+    /// <param name="preferredHeaderLba">Header block to select, or <see langword="null"/> for the richest copy. <para>要选择的头部块；<see langword="null"/> 表示分区最多的副本。</para></param>
     /// <param name="copies">Every located header with its resolved entry array. <para>每个已定位头部及其解析出的条目数组。</para></param>
     /// <param name="source">The copy whose partitions and capacity are reported. <para>其分区与容量被上报的副本。</para></param>
     /// <param name="partitions">Partitions of <paramref name="source"/>. <para><paramref name="source"/> 的分区。</para></param>
     /// <param name="diskSizeBytes">Capacity covering both the declared alternate block and the last partition. <para>覆盖声明备用块与最后一个分区的容量。</para></param>
     /// <param name="diskGuid">Disk identifier of <paramref name="source"/>. <para><paramref name="source"/> 的磁盘标识。</para></param>
-    /// <returns><see langword="true"/> when at least one header and its entry array were found. <para>找到至少一个头部及其条目数组时为 <see langword="true"/>。</para></returns>
-    private static bool TryLocate(byte[] image, out List<GptCopy> copies, out GptCopy source,
-        out List<GptPartition> partitions, out ulong diskSizeBytes, out Guid diskGuid)
+    /// <returns><see langword="true"/> when the requested or richest copy was found. <para>找到请求的副本或分区最多的副本时为 <see langword="true"/>。</para></returns>
+    private static bool TryLocate(byte[] image, ulong? preferredHeaderLba, out List<GptCopy> copies,
+        out GptCopy source, out List<GptPartition> partitions, out ulong diskSizeBytes, out Guid diskGuid)
     {
         copies = [];
         source = default;
@@ -199,6 +216,7 @@ public static class GptImageEditor
         diskSizeBytes = 0;
         diskGuid = Guid.Empty;
 
+        List<(GptCopy Copy, List<GptPartition> Partitions)> found = [];
         for (var headerOffset = 0L; (headerOffset + GptLayout.HeaderSize) <= image.Length; headerOffset += GptLayout.SectorSize)
         {
             if (!image.AsSpan((int)headerOffset, GptLayout.Signature.Length).SequenceEqual(GptLayout.Signature)
@@ -208,23 +226,50 @@ public static class GptImageEditor
             }
 
             copies.Add(copy);
-            if (copies.Count == 1 || candidate.Count > partitions.Count)
+            found.Add((copy, candidate));
+        }
+
+        var selected = -1;
+        if (preferredHeaderLba is { } requested)
+        {
+            for (var index = 0; index < found.Count && selected < 0; index++)
             {
-                source = copy;
-                partitions = candidate;
+                if (HeaderLbaOf(found[index].Copy) == requested)
+                {
+                    selected = index;
+                }
+            }
+
+            if (selected < 0)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            for (var index = 0; index < found.Count; index++)
+            {
+                if (selected < 0 || found[index].Partitions.Count > found[selected].Partitions.Count)
+                {
+                    selected = index;
+                }
+            }
+
+            if (selected < 0)
+            {
+                return false;
             }
         }
 
-        if (copies.Count == 0)
-        {
-            return false;
-        }
-
+        source = found[selected].Copy;
+        partitions = found[selected].Partitions;
         var header = image.AsSpan((int)source.HeaderOffset, GptLayout.HeaderSize);
         diskGuid = ReadGuidBigEndian(header[56..]);
         diskSizeBytes = DiskSizeBytes(BinaryPrimitives.ReadUInt64LittleEndian(header[32..]), partitions);
         return true;
     }
+
+    private static ulong HeaderLbaOf(GptCopy copy) => (ulong)(copy.HeaderOffset / GptLayout.SectorSize);
 
     private static bool TryReadCopy(byte[] image, long headerOffset, out GptCopy copy, out List<GptPartition> partitions)
     {

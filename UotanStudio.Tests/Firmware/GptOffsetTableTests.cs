@@ -35,6 +35,27 @@ public sealed class GptOffsetTableTests
     }
 
     [Fact]
+    public void TryRead_SeveralTables_ReadsRequestedCopyAndReportsSource()
+    {
+        var image = GptFixtureImage.BuildAtOffset(ImageLength, TableOffset, DiskId, Entries, 128, 0);
+        GptFixtureImage.WriteAtOffset(image, SecondaryOffset, DiskId, [Entries[0]], 128, 0);
+        GptFixtureImage.WriteAtOffset(image, 0, DiskId, [], 128, 0);
+
+        Assert.True(GptImageEditor.TryRead(image, 257, out var richest, out var richestSource));
+        Assert.Equal(3, richest.Partitions.Count);
+        Assert.Equal(new GptTableCopy(257, 128, 3), richestSource);
+
+        Assert.True(GptImageEditor.TryRead(image, 291, out var single, out var singleSource));
+        Assert.Equal(["bl2_a"], single.Partitions.Select(partition => partition.Name));
+        Assert.Equal(291UL, singleSource.HeaderLba);
+
+        Assert.True(GptImageEditor.TryRead(image, 1, out var empty, out _));
+        Assert.Empty(empty.Partitions);
+
+        Assert.False(GptImageEditor.TryRead(image, 700, out _, out _));
+    }
+
+    [Fact]
     public void TryRead_ContainerWithSeveralTables_SelectsRichestTableAndReportsEveryCopy()
     {
         var image = GptFixtureImage.BuildAtOffset(ImageLength, TableOffset, DiskId, Entries, 128, 0);

@@ -24,6 +24,17 @@
     <!-- 顶部工具栏：数据源描述 -->
     <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <DockPanel>
+        <!-- 镜像携带多份分区表时提供切换选择器。 -->
+        <ComboBox DockPanel.Dock="Right" MinWidth="180" Margin="8,0,0,0" FontSize="11"
+                  IsVisible="{Binding HasTableCopies}"
+                  ItemsSource="{Binding TableCopies}"
+                  SelectedItem="{Binding SelectedTableCopy, Mode=TwoWay}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="viewmodels:PartitionTableCopyItemViewModel">
+              <TextBlock Text="{Binding Display}" FontFamily="Consolas" FontSize="11" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
         <TextBlock Text="{Binding SourceDescription}"
                    VerticalAlignment="Center"
                    FontSize="11" Opacity="0.7"

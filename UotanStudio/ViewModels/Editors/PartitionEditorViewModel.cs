@@ -43,6 +43,9 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
     private string _rockchipSuffix = string.Empty;
     private ulong _capacitySectors;
     private bool _isLoaded;
+    private byte[]? _gptImage;
+    private PartitionTableCopyItemViewModel? _activeTableCopy;
+    private bool _suppressTableCopySelection;
 
     /// <summary>
     /// The localized title of the save button.
@@ -121,6 +124,24 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
     /// <para>文档对应的文件路径。</para>
     /// </summary>
     [ObservableProperty] private string? _filePath;
+
+    /// <summary>
+    /// The table copy currently shown and edited; drives the table selector and the save target.
+    /// <para>当前显示与编辑的表副本；驱动分区表选择器与保存目标。</para>
+    /// </summary>
+    [ObservableProperty] private PartitionTableCopyItemViewModel? _selectedTableCopy;
+
+    /// <summary>
+    /// Table copies carried by the loaded image; empty for single-table sources, which hides the selector.
+    /// <para>已加载镜像携带的表副本；单表来源为空，此时选择器隐藏。</para>
+    /// </summary>
+    public ObservableCollection<PartitionTableCopyItemViewModel> TableCopies { get; } = [];
+
+    /// <summary>
+    /// Whether the selector is offered, i.e. the image carries more than one table copy.
+    /// <para>是否显示选择器，即镜像携带多于一份表副本。</para>
+    /// </summary>
+    public bool HasTableCopies => TableCopies.Count > 1;
 
     /// <summary>
     /// Whether a background parse is running (drives the busy indicator animation).
@@ -253,6 +274,7 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
         {
             _capacitySectors = 0;
             _isLoaded = false;
+            ResetTableCopies();
 
             LpMetadata? lp = null;
             try
@@ -412,6 +434,7 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
         Segments.Clear();
         _lpMetadata = null;
         _gpt = null;
+        ResetTableCopies();
         _mbr = null;
         _amlogic = null;
         _rockchipOriginal = string.Empty;
@@ -502,13 +525,14 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
 
         try
         {
-            if (GptImageEditor.TryRead(bytes, out var gpt))
+            if (GptImageEditor.TryRead(bytes, null, out var gpt, out var source))
             {
                 _source = PartitionTableSource.Gpt;
+                LoadTableCopies(bytes, source);
                 _gpt = gpt;
                 _capacitySectors = gpt.BlockCount;
                 BuildGptItems(gpt);
-                SourceDescription = $"GPT: {gpt.Partitions.Count} partition(s), disk {gpt.BlockCount * (ulong)gpt.BlockSize} bytes{DescribeGptCopies(bytes)}";
+                SourceDescription = DescribeGptTable(gpt, bytes);
                 return true;
             }
 
@@ -544,6 +568,107 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Table-copy selection changed: reloads the partition list from the selected copy of the loaded image.
+    /// Edits in flight block the switch so no table is silently replaced.
+    /// <para>表副本选择变化：从已加载镜像的选中副本重新载入分区列表。存在未保存修改时拒绝切换，
+    /// 避免静默替换任何一张表。</para>
+    /// </summary>
+    /// <param name="value">The newly selected copy, or <c>null</c> while the list is rebuilt. <para>新选中的副本；列表重建期间为 <c>null</c>。</para></param>
+    partial void OnSelectedTableCopyChanged(PartitionTableCopyItemViewModel? value)
+    {
+        if (_suppressTableCopySelection || value is null || _source != PartitionTableSource.Gpt)
+        {
+            return;
+        }
+
+        if (IsDirty)
+        {
+            CompileError = LanguageService.Instance.GetString("Dock_Partition_CopyDirty");
+            RestoreTableCopySelection();
+            return;
+        }
+
+        if (_gptImage is null || !GptImageEditor.TryRead(_gptImage, value.HeaderLba, out var table, out var source))
+        {
+            CompileError = LanguageService.Instance.GetString("UserError_PartitionUnrecognized");
+            RestoreTableCopySelection();
+            return;
+        }
+
+        _activeTableCopy = TableCopies.FirstOrDefault(item => item.HeaderLba == source.HeaderLba) ?? value;
+        _gpt = table;
+        _capacitySectors = table.BlockCount;
+        BuildGptItems(table);
+        SelectedPartition = null;
+        IsDirty = false;
+        CompileError = string.Empty;
+        PartitionCount = Partitions.Count;
+        SourceDescription = DescribeGptTable(table, _gptImage);
+        RebuildBand();
+    }
+
+    private void ResetTableCopies()
+    {
+        _suppressTableCopySelection = true;
+        try
+        {
+            TableCopies.Clear();
+            SelectedTableCopy = null;
+            _activeTableCopy = null;
+        }
+        finally
+        {
+            _suppressTableCopySelection = false;
+        }
+
+        _gptImage = null;
+        OnPropertyChanged(nameof(HasTableCopies));
+    }
+
+    private void LoadTableCopies(byte[] bytes, GptTableCopy source)
+    {
+        _suppressTableCopySelection = true;
+        try
+        {
+            TableCopies.Clear();
+            var copies = GptImageEditor.DescribeCopies(bytes);
+            _gptImage = copies.Count > 1 ? bytes : null;
+            for (var index = 0; index < copies.Count; index++)
+            {
+                TableCopies.Add(new PartitionTableCopyItemViewModel(index + 1, copies[index]));
+            }
+
+            _activeTableCopy = TableCopies.FirstOrDefault(item => item.HeaderLba == source.HeaderLba);
+            SelectedTableCopy = _activeTableCopy;
+        }
+        finally
+        {
+            _suppressTableCopySelection = false;
+        }
+
+        OnPropertyChanged(nameof(HasTableCopies));
+    }
+
+    private void RestoreTableCopySelection()
+    {
+        _suppressTableCopySelection = true;
+        try
+        {
+            SelectedTableCopy = _activeTableCopy;
+        }
+        finally
+        {
+            _suppressTableCopySelection = false;
+        }
+    }
+
+    private static string DescribeGptTable(GptTable table, byte[]? bytes)
+    {
+        var description = $"GPT: {table.Partitions.Count} partition(s), disk {table.BlockCount * (ulong)table.BlockSize} bytes";
+        return bytes is null ? description : description + DescribeGptCopies(bytes);
     }
 
     private static string DescribeGptCopies(byte[] bytes)
@@ -1379,4 +1504,42 @@ public partial class PartitionItemViewModel : ObservableObject
         _entry.Type = Type;
         return true;
     }
+}
+
+/// <summary>
+/// One selectable GPT table copy inside a container image, shown by the partition-table selector.
+/// <para>容器镜像中一份可选中的 GPT 表副本，供分区表选择器显示。</para>
+/// </summary>
+public sealed class PartitionTableCopyItemViewModel
+{
+    /// <summary>
+    /// Creates a selector item from a copy reported by the firmware reader.
+    /// <para>根据固件读取器上报的副本创建选择器条目。</para>
+    /// </summary>
+    /// <param name="ordinal">One-based position of the copy inside the container. <para>副本在容器中的序号（从 1 开始）。</para></param>
+    /// <param name="copy">The located copy and its partition count. <para>已定位的副本及其分区数。</para></param>
+    public PartitionTableCopyItemViewModel(int ordinal, GptTableCopy copy)
+    {
+        HeaderLba = copy.HeaderLba;
+        PartitionCount = copy.PartitionCount;
+        Display = LanguageService.Instance.GetString("Dock_Partition_CopyFormat", ordinal, copy.HeaderLba, copy.PartitionCount);
+    }
+
+    /// <summary>
+    /// The logical block address holding this copy's header.
+    /// <para>持有该副本头部的逻辑块地址。</para>
+    /// </summary>
+    public ulong HeaderLba { get; }
+
+    /// <summary>
+    /// The populated partitions found in this copy.
+    /// <para>该副本中已使用的分区数。</para>
+    /// </summary>
+    public int PartitionCount { get; }
+
+    /// <summary>
+    /// The localized text shown in the selector.
+    /// <para>选择器显示的本地化文本。</para>
+    /// </summary>
+    public string Display { get; }
 }

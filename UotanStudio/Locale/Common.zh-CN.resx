@@ -2215,6 +2215,12 @@
   <data name="Dock_Partition_UsedFormat" xml:space="preserve">
     <value>已用至：{0} 扇区（{1}）</value>
   </data>
+  <data name="Dock_Partition_CopyFormat" xml:space="preserve">
+    <value>分区表 {0}：LBA {1}，{2} 个分区</value>
+  </data>
+  <data name="Dock_Partition_CopyDirty" xml:space="preserve">
+    <value>切换分区表前请先保存或放弃当前修改。</value>
+  </data>
   <data name="Dock_Qcn_Save" xml:space="preserve">
     <value>保存</value>
   </data>

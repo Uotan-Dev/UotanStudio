@@ -357,6 +357,86 @@ public sealed class PartitionEditorBandTests
         }
     }
 
+    [Fact]
+    public async Task LoadAsync_ImageWithSeveralTables_SwitchesBetweenCopies()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var path = Path.Combine(directory, "ptable.img");
+            var diskId = Guid.NewGuid();
+            var image = GptFixtureImage.BuildAtOffset(0x2_8800, 0x2_0000, diskId,
+            [
+                new GptFixtureEntry(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 1024, 13311, "persist"),
+                new GptFixtureEntry(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 13312, 15359, "conn_calidata"),
+                new GptFixtureEntry(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 15360, 79_286_271, "userdata")
+            ], 128, 0);
+            GptFixtureImage.WriteAtOffset(image, 0x2_4400, diskId,
+                [new GptFixtureEntry(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 34, 259, "bl2_a")], 128, 0);
+            GptFixtureImage.WriteAtOffset(image, 0, diskId, [], 128, 0);
+            File.WriteAllBytes(path, image);
+
+            var editor = new PartitionEditorViewModel();
+            await editor.LoadAsync(path);
+
+            Assert.True(editor.HasTableCopies);
+            Assert.Equal(3, editor.TableCopies.Count);
+            Assert.Equal([1UL, 257UL, 291UL], editor.TableCopies.Select(copy => copy.HeaderLba));
+            Assert.Equal(257UL, editor.SelectedTableCopy!.HeaderLba);
+            Assert.Equal(3, editor.Partitions.Count);
+
+            editor.SelectedTableCopy = editor.TableCopies.Single(copy => copy.PartitionCount == 1);
+
+            Assert.Empty(editor.CompileError);
+            Assert.Equal(291UL, editor.SelectedTableCopy.HeaderLba);
+            Assert.Equal(["bl2_a"], editor.Partitions.Select(partition => partition.Name));
+            Assert.False(editor.IsDirty);
+            Assert.Contains("3 table copies", editor.SourceDescription, StringComparison.Ordinal);
+            editor.Cleanup();
+            Assert.Empty(editor.TableCopies);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_ImageWithSeveralTables_BlocksSwitchWhileDirty()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var path = Path.Combine(directory, "ptable.img");
+            var diskId = Guid.NewGuid();
+            var image = GptFixtureImage.BuildAtOffset(0x2_8800, 0x2_0000, diskId,
+            [
+                new GptFixtureEntry(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 1024, 13311, "persist"),
+                new GptFixtureEntry(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 15360, 79_286_271, "userdata")
+            ], 128, 0);
+            GptFixtureImage.WriteAtOffset(image, 0x2_4400, diskId,
+                [new GptFixtureEntry(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 34, 259, "bl2_a")], 128, 0);
+            File.WriteAllBytes(path, image);
+
+            var editor = new PartitionEditorViewModel();
+            await editor.LoadAsync(path);
+            var active = editor.SelectedTableCopy;
+            editor.Partitions[0].Name = "renamed";
+            Assert.True(editor.IsDirty);
+
+            editor.SelectedTableCopy = editor.TableCopies.Single(copy => copy.PartitionCount == 1);
+
+            Assert.Same(active, editor.SelectedTableCopy);
+            Assert.False(string.IsNullOrEmpty(editor.CompileError));
+            Assert.Equal(["renamed", "userdata"], editor.Partitions.Select(partition => partition.Name));
+            editor.Cleanup();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static void WriteGptImage(string path, ulong diskSizeBytes, IReadOnlyList<PartitionEntry> entries)
     {
         var fixture = new List<GptFixtureEntry>(entries.Count);

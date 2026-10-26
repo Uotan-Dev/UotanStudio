@@ -727,6 +727,8 @@ internal static class LocaleKeySets
         "Dock_Partition_Unallocated",
         "Dock_Partition_CapacityFormat",
         "Dock_Partition_UsedFormat",
+        "Dock_Partition_CopyFormat",
+        "Dock_Partition_CopyDirty",
         "Dock_Qcn_Save",
         "Dock_Qcn_Items",
         "Dock_Qcn_Search",
