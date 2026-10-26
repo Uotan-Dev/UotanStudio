@@ -273,6 +273,10 @@
                                             <MenuItem Header="{DynamicResource Device_HdcReceive}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Receive" />
                                             <MenuItem Header="{DynamicResource Device_HdcInstall}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Install" />
                                             <MenuItem Header="{DynamicResource Device_HdcUninstall}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Uninstall" />
+                                            <MenuItem Header="{DynamicResource Device_IosSshTunnelOpen}" IsVisible="{Binding IsIos}" Click="OnIosSshTunnelOpenMenuClick" />
+                                            <MenuItem Header="{DynamicResource Device_IosSshTunnelClose}" IsVisible="{Binding IsIos}" Click="OnIosSshTunnelCloseMenuClick" />
+                                            <MenuItem Header="{DynamicResource Device_IosExportCrashLogs}" IsVisible="{Binding IsIos}" Click="OnIosExportCrashLogsMenuClick" />
+                                            <MenuItem Header="{DynamicResource Device_IosAirPlayReceive}" IsVisible="{Binding IsIos}" Click="OnIosAirPlayMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_FastbootReadInfo}" Click="OnFastbootReadInfoMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_QuickFlash}" Click="OnQuickFlashMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_BackupPartition}" Click="OnBackupMenuClick" />
@@ -302,6 +306,10 @@
                                                 <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
                                                         IsVisible="{Binding IsRkdl}">
                                                     <TextBlock Text="RKDL" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
+                                                </Border>
+                                                <Border Classes="ModeChip" Background="#37474F"
+                                                        IsVisible="{Binding IsIos}">
+                                                    <TextBlock Text="iOS" FontSize="10" Foreground="White" />
                                                 </Border>
                                                 <!-- 链接端口/传输类型 -->
                                                 <Border Classes="ModeChip"
@@ -693,6 +701,39 @@
                         </Border>
 
                         <!-- RKDL 模式信息 -->
+                        <Border Classes="InfoCard" IsVisible="{Binding IsIos}">
+                            <StackPanel>
+                                <TextBlock Classes="CardCaption" Text="{DynamicResource Device_IosInfo}" />
+                                <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                                      RowSpacing="8" IsVisible="{Binding HasIosInfo}">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_IosName}" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding IosName}" />
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_IosVersion}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding IosVersion}" />
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_IosModel}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding IosProductType}" />
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_IosBattery}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding IosBattery}" />
+
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_IosTrust}" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding IosTrust}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
                         <Border Classes="InfoCard" IsVisible="{Binding IsRkdl}">
                             <StackPanel>
                                 <TextBlock Classes="CardCaption" Text="{DynamicResource Device_RkdlInfo}" />

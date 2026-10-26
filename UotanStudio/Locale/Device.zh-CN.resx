@@ -438,6 +438,36 @@
   <data name="Flash_Canceled" xml:space="preserve">
     <value>刷写已取消</value>
   </data>
+  <data name="Device_IosInfo" xml:space="preserve">
+    <value>iOS 设备信息</value>
+  </data>
+  <data name="Device_IosName" xml:space="preserve">
+    <value>设备名称</value>
+  </data>
+  <data name="Device_IosVersion" xml:space="preserve">
+    <value>系统版本</value>
+  </data>
+  <data name="Device_IosModel" xml:space="preserve">
+    <value>机型标识</value>
+  </data>
+  <data name="Device_IosBattery" xml:space="preserve">
+    <value>电量</value>
+  </data>
+  <data name="Device_IosTrust" xml:space="preserve">
+    <value>信任状态</value>
+  </data>
+  <data name="Device_IosSshTunnelOpen" xml:space="preserve">
+    <value>打开 SSH 通道</value>
+  </data>
+  <data name="Device_IosSshTunnelClose" xml:space="preserve">
+    <value>关闭 SSH 通道</value>
+  </data>
+  <data name="Device_IosExportCrashLogs" xml:space="preserve">
+    <value>导出崩溃日志</value>
+  </data>
+  <data name="Device_IosAirPlayReceive" xml:space="preserve">
+    <value>接收 AirPlay 投屏</value>
+  </data>
   <data name="Device_BackupPartition" xml:space="preserve">
     <value>备份分区</value>
   </data>

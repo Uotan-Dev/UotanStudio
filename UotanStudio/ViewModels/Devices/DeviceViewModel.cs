@@ -370,7 +370,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
 
             var enrichable = Devices
                 .Where(x => x.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot
-                        or DeviceProtocolKind.Hdc or DeviceProtocolKind.Edl
+                        or DeviceProtocolKind.Hdc or DeviceProtocolKind.Edl or DeviceProtocolKind.Ios
                     || (x.Protocol is DeviceProtocolKind.Mtk && x.State is "brom" or "preloader"))
                 .Where(ShouldEnrich)
                 .ToList();

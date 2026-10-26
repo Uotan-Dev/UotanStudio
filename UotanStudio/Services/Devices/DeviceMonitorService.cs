@@ -37,6 +37,8 @@ public enum DeviceProtocolKind
     Mtk,
     /// <summary>OpenHarmony HDC, over direct USB or the local hdc server.<para>OpenHarmony HDC，USB 直连或经本机 hdc server。</para></summary>
     Hdc,
+    /// <summary>Apple iPhone/iPad over usbmuxd or the direct USB multiplexer.<para>经 usbmuxd 或直连 USB 复用接口的 Apple iPhone/iPad。</para></summary>
+    Ios,
 }
 
 /// <summary>
@@ -121,6 +123,7 @@ public sealed class DetectedDevice
         DeviceProtocolKind.Edl => "EDL",
         DeviceProtocolKind.Rkdl => "RKDL",
         DeviceProtocolKind.Mtk => "MTK",
+        DeviceProtocolKind.Ios => "iOS",
         _ => throw new ArgumentOutOfRangeException(nameof(Protocol), Protocol, "Unexpected protocol kind.")
     };
 }

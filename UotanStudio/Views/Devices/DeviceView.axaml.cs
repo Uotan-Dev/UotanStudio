@@ -114,6 +114,26 @@ public partial class DeviceView : UserControl
     private void OnOpenAdbShellMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuDevice(sender, static vm => vm.OpenAdbShellCommand, null);
 
+    /// <summary>Open the SSH channel of the context-menu iOS device.
+    /// <para>打开右键菜单 iOS 设备的 SSH 通道。</para></summary>
+    private void OnIosSshTunnelOpenMenuClick(object? sender, RoutedEventArgs e)
+        => ExecuteForMenuDevice(sender, static vm => vm.OpenIosSshTunnelCommand, null);
+
+    /// <summary>Close the SSH channel of the context-menu iOS device.
+    /// <para>关闭右键菜单 iOS 设备的 SSH 通道。</para></summary>
+    private void OnIosSshTunnelCloseMenuClick(object? sender, RoutedEventArgs e)
+        => ExecuteForMenuDevice(sender, static vm => vm.CloseIosSshTunnelCommand, null);
+
+    /// <summary>Export crash reports for the context-menu iOS device.
+    /// <para>导出右键菜单 iOS 设备的崩溃报告。</para></summary>
+    private void OnIosExportCrashLogsMenuClick(object? sender, RoutedEventArgs e)
+        => ExecuteForMenuDevice(sender, static vm => vm.ExportIosCrashLogsCommand, null);
+
+    /// <summary>Start the AirPlay receiving endpoint for the context-menu iOS device.
+    /// <para>为右键菜单 iOS 设备启动 AirPlay 接收端点。</para></summary>
+    private void OnIosAirPlayMenuClick(object? sender, RoutedEventArgs e)
+        => ExecuteForMenuDevice(sender, static vm => vm.StartIosAirPlayReceiverCommand, null);
+
     /// <summary>Read Fastboot info for the context-menu device. <para>读取右键菜单 Fastboot 设备信息。</para></summary>
     private void OnFastbootReadInfoMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuDevice(sender, static vm => vm.FastbootReadInfoCommand, null);

@@ -25,6 +25,9 @@ public partial class DeviceViewModel
     /// </summary>
     private const int AdbDetailCommandTimeoutMs = 30_000;
 
+    private static readonly CancellationTokenSource AppleQueryCts =
+        new(TimeSpan.FromSeconds(45));
+
     /// <summary>
     /// Dispatches to the mode-specific enrichment method based on the device protocol.
     /// <para>按设备协议分发到对应的信息丰富方法。</para>
@@ -36,9 +39,38 @@ public partial class DeviceViewModel
         DeviceProtocolKind.Fastboot => EnrichFastbootInfoAsync(device),
         DeviceProtocolKind.Edl => EnrichEdlInfoAsync(device),
         DeviceProtocolKind.Mtk => EnrichMtkInfoAsync(device),
+        DeviceProtocolKind.Ios => EnrichIosInfoAsync(device),
         DeviceProtocolKind.Rkdl => Task.CompletedTask,
         _ => Task.CompletedTask,
     };
+
+    /// <summary>
+    /// Queries one Apple device over a bounded background session and records the lockdown values.
+    /// <para>在受限的后台会话上查询一台 Apple 设备并记录 lockdown 取值。</para>
+    /// </summary>
+    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</para></param>
+    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
+    private async Task EnrichIosInfoAsync(DeviceInfo device)
+    {
+        if (device.HasIosInfo)
+        {
+            return;
+        }
+
+        try
+        {
+            var info = await Task.Run(() => App.DeviceMonitor.RunApple(device.Device,
+                session => session.ReadDeviceInfoAsync(AppleQueryCts.Token).GetAwaiter().GetResult(),
+                AppleQueryCts.Token), AppleQueryCts.Token).ConfigureAwait(true);
+            device.SetIosInfo(info);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException
+            or TimeoutException or OperationCanceledException)
+        {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                $"iOS info query for {device.Serial} reported {exception.GetType().Name}: {exception.Message}");
+        }
+    }
 
     /// <summary>
     /// <para>仅对 Boot ROM/Preloader 描述符状态的 MTK 目标做一次只读握手，取得硬件代码与安全位。

@@ -96,7 +96,9 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 nameof(EdlSectorSize), nameof(EdlCapacity), nameof(EdlMaxPayload),
                 nameof(IsMtk), nameof(HasMtkInfo), nameof(MtkHardware), nameof(MtkFirmware),
                 nameof(MtkSecurityBits), nameof(MtkBootLoaderVersion), nameof(MtkBootRomVersion),
-                nameof(MtkMeidHex), nameof(MtkSocidHex)
+                nameof(MtkMeidHex), nameof(MtkSocidHex),
+                nameof(IsIos), nameof(HasIosInfo), nameof(IosName), nameof(IosVersion),
+                nameof(IosProductType), nameof(IosBattery), nameof(IosTrust)
             })
                 OnPropertyChanged(property);
             owner?.NotifyConnectionChanged(this);
@@ -452,6 +454,9 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <summary>是否为 MTK 设备。 Whether the device is a MediaTek target.</summary>
     public bool IsMtk => Device.Protocol == DeviceProtocolKind.Mtk;
 
+    /// <summary>是否为 iOS 设备。 Whether the device is an Apple (usbmuxd) target.</summary>
+    public bool IsIos => Device.Protocol == DeviceProtocolKind.Ios;
+
     /// <summary>
     /// The MediaTek hardware code and subcode (<c>0x8A00 / 0x0001</c>); empty until queried.
     /// <para>MTK 硬件代码与子代码（<c>0x8A00 / 0x0001</c>），未查询时为空。</para>
@@ -498,6 +503,62 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
 
     /// <summary>是否已查询到 MTK 身份信息。 Whether MediaTek identity info has been queried.</summary>
     public bool HasMtkInfo => MtkHardware.Length > 0;
+
+    /// <summary>
+    /// The iOS device name reported by lockdownd; empty until queried.
+    /// <para>lockdownd 上报的 iOS 设备名称，未查询时为空。</para>
+    /// </summary>
+    public string IosName { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// The iOS version reported by lockdownd; empty until queried.
+    /// <para>lockdownd 上报的 iOS 版本，未查询时为空。</para>
+    /// </summary>
+    public string IosVersion { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// The hardware identifier (for example <c>iPhone15,3</c>); empty until queried.
+    /// <para>硬件标识（例如 <c>iPhone15,3</c>），未查询时为空。</para>
+    /// </summary>
+    public string IosProductType { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// The battery percentage as a short text like <c>86%</c>; empty until queried.
+    /// <para>电量百分比短文本（如 <c>86%</c>），未查询时为空。</para>
+    /// </summary>
+    public string IosBattery { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// The trust state text; empty until queried.
+    /// <para>信任状态文本，未查询时为空。</para>
+    /// </summary>
+    public string IosTrust { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>是否已查询到 iOS 设备信息。 Whether iOS device info has been queried.</summary>
+    public bool HasIosInfo => IosName.Length > 0;
+
+    /// <summary>
+    /// Records the Apple device info obtained from lockdownd; labels come from the view.
+    /// <para>记录 lockdownd 得到的 Apple 设备信息；标签由视图本地化。</para>
+    /// </summary>
+    /// <param name="info">The device info. <para>设备信息。</para></param>
+    internal void SetIosInfo(UotanStudio.Comm.Contracts.AppleDeviceInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        IosName = info.Name ?? string.Empty;
+        IosVersion = info.ProductVersion ?? string.Empty;
+        IosProductType = info.ProductType ?? string.Empty;
+        IosBattery = info.BatteryPercent is { } percent
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{percent}%")
+            : string.Empty;
+        IosTrust = info.TrustState switch
+        {
+            UotanStudio.Comm.Contracts.AppleTrustState.Trusted => "trusted",
+            UotanStudio.Comm.Contracts.AppleTrustState.Untrusted => "untrusted",
+            _ => "unpaired",
+        };
+        OnPropertyChanged(nameof(HasIosInfo));
+    }
 
     /// <summary>
     /// <para>写入一次只读 Boot ROM 握手得到的 MTK 身份与安全位；值本身是技术串，标签由视图本地化。</para>

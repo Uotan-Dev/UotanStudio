@@ -329,6 +329,12 @@ public sealed partial class DeviceMonitorService
             selected = snapshot.Endpoints.SingleOrDefault(endpoint => endpoint.Protocol == "adb" &&
                 endpoint.Route == "server" && string.Equals(endpoint.Address, device.Serial, StringComparison.Ordinal));
         }
+        else if (device.Key.StartsWith("apple:", StringComparison.Ordinal))
+        {
+            selected = snapshot.Endpoints.SingleOrDefault(endpoint =>
+                endpoint.Source == "usbmuxd" &&
+                string.Equals(endpoint.Address, device.Key["apple:".Length..], StringComparison.Ordinal));
+        }
         else if (device.Key.StartsWith("adb:", StringComparison.Ordinal) ||
             device.Key.StartsWith("hdc:", StringComparison.Ordinal))
         {
@@ -374,6 +380,7 @@ public sealed partial class DeviceMonitorService
         DeviceProtocolKind.Rkdl => "rkdl",
         DeviceProtocolKind.Hdc => "hdc",
         DeviceProtocolKind.Mtk => "mtk",
+        DeviceProtocolKind.Ios => "apple",
         _ => throw new ArgumentOutOfRangeException(nameof(protocol), protocol, "Unexpected protocol kind.")
     };
 

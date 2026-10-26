@@ -18,6 +18,11 @@ public sealed partial class DeviceMonitorService
 
     public Task StartLogcatStreamingAsync(DetectedDevice device, Action<AdbLogcatEntry> onEntry, CancellationToken cancellationToken)
     {
+        if (device.Protocol == DeviceProtocolKind.Ios)
+        {
+            return StartIosLogStreamingAsync(device, onEntry, cancellationToken);
+        }
+
         ArgumentNullException.ThrowIfNull(device);
         var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var registration = new LogStreamRegistration(linked);
