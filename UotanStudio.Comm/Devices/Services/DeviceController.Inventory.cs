@@ -1,4 +1,3 @@
-using System.Security.Cryptography.X509Certificates;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
@@ -172,26 +171,7 @@ public sealed partial class DeviceController
             }
         }
 
-        var identities = AdbAuthentication.LoadIdentityChain();
-        X509Certificate2? certificate = null;
-        ICommTransport? transport = null;
-        try
-        {
-            certificate = AdbHostCertificate.Create(identities[0].RsaKey);
-            transport = new AdbTlsTransport(host, port, certificate);
-            return new AdbSession(transport, identities);
-        }
-        catch
-        {
-            transport?.Dispose();
-            certificate?.Dispose();
-            foreach (var identity in identities)
-            {
-                identity.Dispose();
-            }
-
-            throw;
-        }
+        return AdbSecureSessionFactory.Open(host, port);
     }
 
     /// <summary>
