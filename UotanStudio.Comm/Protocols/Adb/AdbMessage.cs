@@ -76,12 +76,18 @@ internal static class AdbMessaging
     /// <para>将头部与负载拼接为单个缓冲区。</para>
     /// </summary>
     /// <param name="message">The message to serialize. <para>要序列化的消息。</para></param>
+    /// <param name="protocolVersion">The CNXN protocol version negotiated with the peer; zero before the peer's
+    /// CNXN. The legacy payload checksum is written only for peers older than
+    /// <see cref="AdbConstants.ProtocolVersionSkipChecksum"/>, matching upstream <c>send_packet</c>.
+    /// <para>与对端协商的 CNXN 协议版本；收到对端 CNXN 之前为零。仅对早于
+    /// <see cref="AdbConstants.ProtocolVersionSkipChecksum"/> 的对端写入旧式负载校验和，与上游
+    /// <c>send_packet</c> 一致。</para></param>
     /// <returns>The header followed by the payload bytes. <para>头部及其后的负载字节。</para></returns>
-    public static byte[] Serialize(AdbMessage message)
+    public static byte[] Serialize(AdbMessage message, uint protocolVersion = 0)
     {
         var command = (uint)message.Command;
         var payloadLength = message.Payload is null ? 0u : (uint)message.Payload.Length;
-        var payloadCrc = ComputeCrc(message.Payload);
+        var payloadCrc = PayloadChecksum(message.Payload, protocolVersion);
 
         var packet = new byte[AdbConstants.HeaderSize + (message.Payload?.Length ?? 0)];
         WriteHeader(packet, command, message.Arg0, message.Arg1, payloadLength, payloadCrc);
@@ -98,14 +104,31 @@ internal static class AdbMessaging
     /// <para>仅序列化 24 字节头部。</para>
     /// </summary>
     /// <param name="message">The message whose header is written. <para>要写出头部的消息。</para></param>
+    /// <param name="protocolVersion">The CNXN protocol version negotiated with the peer; zero before the peer's
+    /// CNXN. <para>与对端协商的 CNXN 协议版本；收到对端 CNXN 之前为零。</para></param>
     /// <returns>The 24-byte header buffer. <para>24 字节头部缓冲区。</para></returns>
-    public static byte[] SerializeHeader(AdbMessage message)
+    public static byte[] SerializeHeader(AdbMessage message, uint protocolVersion = 0)
     {
         var header = new byte[AdbConstants.HeaderSize];
         WriteHeader(header, (uint)message.Command, message.Arg0, message.Arg1,
-            message.Payload is null ? 0u : (uint)message.Payload.Length, ComputeCrc(message.Payload));
+            message.Payload is null ? 0u : (uint)message.Payload.Length,
+            PayloadChecksum(message.Payload, protocolVersion));
         return header;
     }
+
+    /// <summary>
+    /// Returns the <c>data_check</c> value upstream writes for one frame: the additive payload sum for peers older
+    /// than <see cref="AdbConstants.ProtocolVersionSkipChecksum"/> (including the pre-CNXN transport state), and
+    /// zero once the peer reported that version or newer.
+    /// <para>返回上游为单帧写出的 <c>data_check</c>：早于 <see cref="AdbConstants.ProtocolVersionSkipChecksum"/>
+    /// 的对端（含尚未收到 CNXN 的传输状态）为负载累加和，对端报告该版本或更新后为零。</para>
+    /// </summary>
+    /// <param name="payload">The frame payload, if any. <para>帧负载，可能为空。</para></param>
+    /// <param name="protocolVersion">The negotiated CNXN protocol version, zero before the peer's CNXN.
+    /// <para>协商的 CNXN 协议版本；收到对端 CNXN 之前为零。</para></param>
+    /// <returns>The header checksum field value. <para>头部校验和字段的值。</para></returns>
+    internal static uint PayloadChecksum(byte[]? payload, uint protocolVersion) =>
+        protocolVersion >= AdbConstants.ProtocolVersionSkipChecksum ? 0 : ComputeCrc(payload);
 
     private static void WriteHeader(Span<byte> destination, uint command, uint arg0, uint arg1, uint payloadLength, uint payloadCrc)
     {
@@ -147,29 +170,6 @@ internal static class AdbMessaging
 
         return ((AdbCommand Command, uint Arg0, uint Arg1, uint PayloadLength, uint PayloadCrc))(
             (AdbCommand)command, arg0, arg1, payloadLength, payloadCrc);
-    }
-
-    /// <summary>
-    /// Validates the header CRC field of an inbound message. Peers send either the reserved
-    /// zero value or the legacy additive byte sum, and only those two values are accepted.
-    /// <para>校验入站消息头部的 CRC 字段。对端只会发送保留的零值或旧式字节累加和，仅这两种取值被接受。</para>
-    /// </summary>
-    /// <param name="payload">The payload bytes to checksum. <para>待校验的负载字节。</para></param>
-    /// <param name="expectedCrc">The CRC field as received. <para>收到的 CRC 字段值。</para></param>
-    /// <exception cref="InvalidDataException">The header CRC matches neither the reserved zero value nor the legacy additive checksum.
-    /// <para>头部 CRC 既不是保留的零值也不是旧式累加校验和。</para></exception>
-    public static void VerifyCrc(byte[]? payload, uint expectedCrc)
-    {
-        if (expectedCrc == 0)
-        {
-            return;
-        }
-
-        var actual = ComputeCrc(payload);
-        if (actual != expectedCrc)
-        {
-            throw new InvalidDataException($"ADB payload CRC mismatch: expected 0x{expectedCrc:X8}, got 0x{actual:X8}.");
-        }
     }
 
     /// <summary>

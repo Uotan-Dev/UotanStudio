@@ -13,6 +13,21 @@ internal static class AdbConstants
     public const uint ProtocolVersion = 0x01000001;
 
     /// <summary>
+    /// Oldest CNXN protocol version (A_VERSION_MIN).
+    /// <para>最旧的 CNXN 协议版本（A_VERSION_MIN）。</para>
+    /// </summary>
+    public const uint ProtocolVersionMin = 0x01000000;
+
+    /// <summary>
+    /// First CNXN protocol version whose sender stops filling the legacy <c>data_check</c> field
+    /// (A_VERSION_SKIP_CHECKSUM). Upstream computes the additive payload sum only for peers older than this and
+    /// never validates the field on receive.
+    /// <para>发送方不再填写旧式 <c>data_check</c> 字段的首个 CNXN 协议版本（A_VERSION_SKIP_CHECKSUM）。上游只为
+    /// 早于该版本的对端计算负载累加和，且接收时从不校验该字段。</para>
+    /// </summary>
+    public const uint ProtocolVersionSkipChecksum = 0x01000001;
+
+    /// <summary>
     /// Oldest STLS protocol version accepted from the peer (A_STLS_VERSION_MIN).
     /// <para>接受对端 STLS 协议版本的下限（A_STLS_VERSION_MIN）。</para>
     /// </summary>
@@ -90,6 +105,11 @@ internal enum AdbCommand : uint
     /// <para>确认 / 就绪。</para>
     /// </summary>
     Okay = 0x59414B4F,
+    /// <summary>
+    /// Failure report carrying a textual reason as payload.
+    /// <para>失败报告，负载为文本原因。</para>
+    /// </summary>
+    Fail = 0x4C494146,
     /// <summary>
     /// Open a stream to a service.
     /// <para>打开到服务的流。</para>

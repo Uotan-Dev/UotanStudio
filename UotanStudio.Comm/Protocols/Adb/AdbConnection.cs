@@ -73,11 +73,21 @@ internal sealed class AdbConnection : IDisposable
     internal Exception? LoopFault => Volatile.Read(ref _loopFault);
 
     /// <summary>
-    /// Gets whether the connection is established.
-    /// <para>获取连接是否已建立。</para>
+    /// Gets whether the connection is established and its transport still reports a usable link.
+    /// <para>获取连接是否已建立且其传输仍报告可用链路。</para>
     /// </summary>
-    /// <value>True when the connection is established. <para>连接已建立时为真。</para></value>
-    public bool IsConnected { get { lock (_lock) { return _connected; } } }
+    /// <value>True when the connection is established and the transport has not faulted.
+    /// <para>连接已建立且传输未失效时为真。</para></value>
+    public bool IsConnected
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _connected && (_transport is null || _transport.IsConnected);
+            }
+        }
+    }
 
     /// <summary>
     /// Gets the peer protocol version.
@@ -602,11 +612,19 @@ internal sealed class AdbConnection : IDisposable
         try
         {
             var header = AdbMessaging.SerializeHeader(message);
-            VerifyWrite(Transport.Write(header, 0, header.Length, TransportDeadlineMs), header.Length);
-
-            if (message.Payload is { Length: > 0 } payload)
+            try
             {
-                VerifyWrite(Transport.Write(payload, 0, payload.Length, TransportDeadlineMs), payload.Length);
+                VerifyWrite(Transport.Write(header, 0, header.Length, TransportDeadlineMs), header.Length);
+
+                if (message.Payload is { Length: > 0 } payload)
+                {
+                    VerifyWrite(Transport.Write(payload, 0, payload.Length, TransportDeadlineMs), payload.Length);
+                }
+            }
+            catch (Exception ex) when (IsTransportFailure(ex))
+            {
+                InvalidateFailedTransport(ex);
+                throw;
             }
         }
         finally
@@ -646,21 +664,31 @@ internal sealed class AdbConnection : IDisposable
         try
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
-            var header = AdbMessaging.SerializeHeader(message);
-            VerifyWrite(
-                await Transport.WriteAsync(header, 0, header.Length, Timeout.Infinite, token).ConfigureAwait(false),
-                header.Length);
-
-            if (message.Payload is { Length: > 0 } payload)
+            var header = AdbMessaging.SerializeHeader(message, PeerVersion);
+            try
             {
                 VerifyWrite(
-                    await Transport.WriteAsync(payload, 0, payload.Length, Timeout.Infinite, token).ConfigureAwait(false),
-                    payload.Length);
+                    await Transport.WriteAsync(header, 0, header.Length, TransportDeadlineMs, token).ConfigureAwait(false),
+                    header.Length);
+
+                if (message.Payload is { Length: > 0 } payload)
+                {
+                    VerifyWrite(
+                        await Transport.WriteAsync(payload, 0, payload.Length, TransportDeadlineMs, token).ConfigureAwait(false),
+                        payload.Length);
+                }
+            }
+            catch (Exception ex) when (IsTransportFailure(ex))
+            {
+                InvalidateFailedTransport(ex);
+                throw;
             }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException($"ADB transport write timed out after {TransportDeadlineMs} ms.");
+            var stalled = new TimeoutException($"ADB transport write timed out after {TransportDeadlineMs} ms.");
+            InvalidateFailedTransport(stalled);
+            throw stalled;
         }
         finally
         {
@@ -699,6 +727,52 @@ internal sealed class AdbConnection : IDisposable
         }
 
         throw new IOException($"ADB transport accepted {written} of {length} bytes; the connection was closed.");
+    }
+
+    /// <summary>
+    /// Decides whether a failure means the transport pipe itself is unusable, instead of only the one command.
+    /// <para>判定一次失败是否表示传输管道本身不可用，而不只是这一条命令失败。</para>
+    /// </summary>
+    /// <param name="exception">The failure raised by the transport.<para>传输抛出的故障。</para></param>
+    /// <returns><see langword="true"/> for I/O, timeout, socket-layer and disposal failures.
+    /// <para>I/O、超时、套接字层与释放类故障返回 <see langword="true"/>。</para></returns>
+    private static bool IsTransportFailure(Exception exception)
+        => exception is IOException or TimeoutException or ObjectDisposedException
+            or System.ComponentModel.Win32Exception;
+
+    /// <summary>
+    /// Takes the connection out of service after a failed transport read or write: the pipe may already hold a partial
+    /// frame, so no later command may reuse it. The transport is closed, which faults the dispatch loop and every open
+    /// stream, and <see cref="IsConnected"/> reports <see langword="false"/> so a shared or pooled session is rebuilt
+    /// instead of writing into a dead connection again. A failure before the handshake completes is left to the connect
+    /// path, which owns its own transport reset and retry.
+    /// <para>传输读取或写入失败之后让连接停止服务：管道中可能已残留半帧，后续命令不得再复用它。关闭传输会使分发循环
+    /// 与所有已打开的流进入故障状态，<see cref="IsConnected"/> 随之为 <see langword="false"/>，共享或池化的会话因此
+    /// 重建，而不是继续往已失效的连接里写。握手完成之前的失败留给连接路径处理，它自己负责传输重置与重试。</para>
+    /// </summary>
+    /// <param name="failure">The failure that ended the transport. <para>终止传输的故障。</para></param>
+    private void InvalidateFailedTransport(Exception failure)
+    {
+        lock (_lock)
+        {
+            if (!_connected)
+            {
+                return;
+            }
+
+            _connected = false;
+            ResetPeerReady();
+        }
+
+        CommTrace.Debug("adb-link",
+            $"closing the {TransportTag} connection after a transport failure: {failure.GetType().Name}: {failure.Message}");
+        try
+        {
+            _transport?.Dispose();
+        }
+        catch (Exception)
+        {
+        }
     }
 
     /// <summary>
@@ -776,7 +850,15 @@ internal sealed class AdbConnection : IDisposable
             CommTrace.Write(CommLogLevel.Trace, "adb-link",
                 $"rx #{sequence} {command} payload {payload.Length} B ({TransportTag}).");
             CommTrace.Payload("adb-link", $"rx #{sequence} {command}", payload);
-            AdbMessaging.VerifyCrc(payload, payloadCrc);
+            if (payloadCrc != 0 && payloadCrc != AdbMessaging.ComputeCrc(payload))
+            {
+                // The legacy additive checksum is not an integrity gate upstream: `check_header` validates the
+                // magic and the payload length only, and modern peers always send zero here. A non-zero mismatch
+                // is therefore worth a diagnostic but never a rejected frame.
+                CommTrace.Write(CommLogLevel.Debug, "adb-link",
+                    $"rx #{sequence} {command} carries legacy checksum 0x{payloadCrc:X8} that does not match the " +
+                    $"payload; upstream does not validate this field, accepting the frame.");
+            }
         }
 
         return new AdbMessage(command, arg0, arg1, payload);
@@ -873,10 +955,13 @@ internal sealed class AdbConnection : IDisposable
     /// Decides whether the endpoint keeps streaming foreign bytes or was only holding one stale remainder. Once the
     /// single resynchronization has been spent, up to three short follow-up reads measure whether data keeps arriving on
     /// its own: continuous arrivals mean the bound endpoint carries another service (diagnostics composition, a stopped
-    /// adbd, or a second owner), while silence means the first frame was residual data and the link itself is fine.
+    /// adbd, or a second owner), while silence means the first frame was residual data and the link itself is fine. A TLS
+    /// transport is not probed: a foreign first frame there cannot be explained by a shared endpoint, and the bounded
+    /// probe read would break the record layer of a connection that is already being discarded.
     /// <para>判定端点是在持续流出陌生字节，还是只残留了一段旧数据。一次性重同步用掉之后，最多再做三次短读，看数据是否
     /// 自行继续到达：持续到达说明绑定的端点承载的是别的服务（诊断复合、adbd 未运行，或另一占用方），静默则说明首帧只是
-    /// 残留数据、链路本身没问题。</para>
+    /// 残留数据、链路本身没问题。TLS 传输不做该探测：其中的陌生首帧无法用端点共用解释，而带期限的探测读取会破坏本就要
+    /// 丢弃的连接上的记录层。</para>
     /// </summary>
     /// <param name="sequence">The rejected frame's sequence number for the trace.
     /// <para>被拒帧的序号，用于日志。</para></param>
@@ -884,6 +969,11 @@ internal sealed class AdbConnection : IDisposable
     /// <para>连接关停时停止探测。</para></param>
     private async ValueTask ProbeForeignStreamAsync(int sequence, CancellationToken cancellationToken)
     {
+        if (_transport is Transports.Tcp.AdbTlsTransport)
+        {
+            return;
+        }
+
         const int ProbeCount = 3;
         const int ProbeTimeoutMs = 300;
         for (var probe = 1; probe <= ProbeCount; probe++)
@@ -892,8 +982,8 @@ internal sealed class AdbConnection : IDisposable
             byte[] next;
             try
             {
-                next = await ReadExactAsync(AdbConstants.HeaderSize, ProbeTimeoutMs, allowIdle: true,
-                    cancellationToken).ConfigureAwait(false);
+                next = await ReadExactAsync(AdbConstants.HeaderSize, ProbeTimeoutMs,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
             }
             catch (TimeoutException)
             {
@@ -1049,6 +1139,9 @@ internal sealed class AdbConnection : IDisposable
                     case AdbCommand.Clse:
                         HandleClose(message);
                         break;
+                    case AdbCommand.Fail:
+                        await HandleFailAsync(message, cancellationToken).ConfigureAwait(false);
+                        break;
                     case AdbCommand.Stls:
                         await HandleStlsAsync(message, cancellationToken).ConfigureAwait(false);
                         break;
@@ -1085,6 +1178,12 @@ internal sealed class AdbConnection : IDisposable
     /// <param name="cancellationToken">Cancels the reply write. <para>取消应答写出。</para></param>
     private async ValueTask HandleAuthAsync(AdbMessage message, CancellationToken cancellationToken)
     {
+        if (_transport is Transports.Tcp.AdbTlsTransport { IsEncrypted: true })
+        {
+            // Upstream ignores every AUTH message once the transport runs inside TLS.
+            return;
+        }
+
         switch ((AdbAuthType)message.Arg0)
         {
             case AdbAuthType.Token:
@@ -1125,8 +1224,8 @@ internal sealed class AdbConnection : IDisposable
     /// <param name="message">The CNXN message. <para>CNXN 消息。</para></param>
     private void HandleConnect(AdbMessage message)
     {
-        PeerVersion = message.Arg0;
-        PeerMaxPayload = message.Arg1;
+        PeerVersion = Math.Min(message.Arg0, AdbConstants.ProtocolVersion);
+        PeerMaxPayload = Math.Min(message.Arg1, AdbConstants.MaxPayload);
         PeerBanner = message.PayloadAsString();
         PeerFeatures = ParseFeatures(PeerBanner);
         Volatile.Write(ref _peerReadyObserved, 1);
@@ -1187,6 +1286,30 @@ internal sealed class AdbConnection : IDisposable
     }
 
     /// <summary>
+    /// Handles the FAIL message from the peer: a sync or shell service reports a failed request with an ADB FAIL
+    /// frame carrying the textual reason, which faults the addressed stream so awaiting callers observe the
+    /// device's message instead of a silent close.
+    /// <para>处理来自对端的 FAIL 消息：sync 或 shell 服务以携带文本原因的 ADB FAIL 帧报告请求失败，使被寻址的流
+    /// 转入故障，等待方观察到设备消息而不是无提示的关闭。</para>
+    /// </summary>
+    /// <param name="message">The FAIL message.<para>FAIL 消息。</para></param>
+    /// <param name="cancellationToken">Cancels the close reply.<para>取消关闭应答。</para></param>
+    private async ValueTask HandleFailAsync(AdbMessage message, CancellationToken cancellationToken)
+    {
+        AdbStream? stream;
+        lock (_lock)
+        {
+            _streams.TryGetValue(message.Arg1, out stream);
+        }
+
+        var reason = message.Payload is { Length: > 0 } payload
+            ? System.Text.Encoding.UTF8.GetString(payload)
+            : "unknown peer failure";
+        stream?.MarkFaulted(new IOException($"The device reported a failure: {reason}"));
+        await SendAsync(AdbMessaging.BuildClose(message.Arg1, message.Arg0), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Handles the OKAY message from the peer. A zero arg0 carries no remote stream id, so it is treated as the
     /// flow-control acknowledgement of a WRTE, which releases the stream's outstanding write permit and never closes
     /// an unknown stream; only a non-zero arg0 names the peer's remote id for our OPEN.
@@ -1206,8 +1329,6 @@ internal sealed class AdbConnection : IDisposable
 
         if (message.Arg0 == 0)
         {
-            // A zero arg0 carries no remote stream id; it is the flow-control acknowledgement of a WRTE, so the
-            // write pipeline advances without adopting an id or closing an unknown stream.
             stream?.AcknowledgeWrite();
             return;
         }
@@ -1244,6 +1365,12 @@ internal sealed class AdbConnection : IDisposable
             return;
         }
 
+        if (stream.IsClosed)
+        {
+            await CloseStreamAsync(stream).ConfigureAwait(false);
+            return;
+        }
+
         stream.EnqueueData(message.Payload ?? []);
         await SendAsync(AdbMessaging.BuildOkay(message.Arg1, message.Arg0), cancellationToken).ConfigureAwait(false);
     }
@@ -1263,7 +1390,6 @@ internal sealed class AdbConnection : IDisposable
         {
             if (message.Arg1 != 0 && _streams.TryGetValue(message.Arg1, out stream))
             {
-                // A CLSE whose peer id belongs to another stream is stale: closing on it would end a live stream.
                 if (message.Arg0 != 0 && stream.RemoteId != 0 && message.Arg0 != stream.RemoteId)
                 {
                     return;
@@ -1338,9 +1464,9 @@ internal sealed class AdbConnection : IDisposable
     /// 经过第二个缓冲区复制。</para>
     /// </summary>
     /// <param name="length">The number of bytes to read. <para>要读取的字节数。</para></param>
-    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
-    /// <param name="allowIdle">Keep waiting between packets; incomplete packets still time out.
-    /// <para>在包之间持续等待；未完成的包仍会超时。</para></param>
+    /// <param name="timeoutMs">Deadline applied once the frame has started arriving. <para>帧开始到达后适用的期限。</para></param>
+    /// <param name="allowIdle">Wait for the next frame without a deadline; a frame that stopped mid-way still times out.
+    /// <para>等待下一帧时不设期限；中途停止的帧仍会超时。</para></param>
     /// <param name="cancellationToken">Stops the read when the connection shuts down. <para>连接关停时停止读取。</para></param>
     /// <returns>A task resolving to the frame bytes. <para>结果为帧字节的任务。</para></returns>
     /// <exception cref="TimeoutException">A partially received frame made no progress within
@@ -1379,9 +1505,12 @@ internal sealed class AdbConnection : IDisposable
     /// <param name="buffer">Destination buffer; only its first <paramref name="length"/> bytes are written.
     /// <para>目标缓冲区；只写入前 <paramref name="length"/> 字节。</para></param>
     /// <param name="length">Number of bytes to read. <para>要读取的字节数。</para></param>
-    /// <param name="timeoutMs">Timeout in milliseconds. <para>超时（毫秒）。</para></param>
-    /// <param name="allowIdle">Keep waiting between packets; incomplete packets still time out.
-    /// <para>在包之间持续等待；未完成的包仍会超时。</para></param>
+    /// <param name="timeoutMs">Deadline applied once a frame has started arriving. <para>帧已开始到达后适用的期限。</para></param>
+    /// <param name="allowIdle">Wait for the next frame without a deadline. The first byte of a frame must wait
+    /// indefinitely because an idle link is healthy and a TLS record layer cannot survive an interrupted read; a frame
+    /// that stopped mid-way keeps the deadline, and its expiry faults the transport instead of being retried.
+    /// <para>等待下一帧时不设期限。一帧的首字节必须无限等待，因为空闲链路本身健康、而 TLS 记录层无法承受被打断的读取；
+    /// 中途停止的帧保留期限，期限到达时让传输失效而不是重试。</para></param>
     /// <param name="cancellationToken">Stops the read when the connection shuts down. <para>连接关停时停止读取。</para></param>
     /// <exception cref="TimeoutException">A partially received frame made no progress within
     /// <paramref name="timeoutMs"/>. <para>已部分接收的帧在 <paramref name="timeoutMs"/> 内没有进展。</para></exception>
@@ -1394,16 +1523,21 @@ internal sealed class AdbConnection : IDisposable
         while (totalRead < length)
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed), this);
+            var deadlineMs = allowIdle && totalRead == 0 ? Timeout.Infinite : timeoutMs;
             int n;
             try
             {
-                n = await Transport.ReadAsync(buffer, totalRead, length - totalRead, timeoutMs, cancellationToken)
+                n = await Transport.ReadAsync(buffer, totalRead, length - totalRead, deadlineMs, cancellationToken)
                     .ConfigureAwait(false);
             }
-            catch (TimeoutException) when (allowIdle && totalRead == 0 && !Volatile.Read(ref _disposed)
-                && Transport.IsConnected)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                continue;
+                throw;
+            }
+            catch (Exception ex) when (IsTransportFailure(ex))
+            {
+                InvalidateFailedTransport(ex);
+                throw;
             }
 
             if (n == 0)
