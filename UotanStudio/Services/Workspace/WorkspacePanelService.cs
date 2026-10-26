@@ -103,27 +103,23 @@ public sealed partial class WorkspacePanelService : ObservableObject
 
     internal void OpenDeviceShell(DetectedDevice device)
     {
-        var profile = CreateDeviceShellProfile(device);
         (_terminals ?? throw new InvalidOperationException("The terminal dock is unavailable."))
-            .CreateTerminal(profile);
+            .CreateDeviceShell(device);
     }
 
+    /// <summary>
+    /// Builds the toolbar profile that labels an in-process device shell; the shell runs on the
+    /// host's device session, so the profile carries no executable to spawn.
+    /// <para>构造用于标识进程内设备 shell 的工具栏配置；shell 运行在宿主的设备会话上，因此配置不带要
+    /// 启动的可执行文件。</para>
+    /// </summary>
+    /// <param name="device">The device whose shell is labelled.<para>要标注 shell 的设备。</para></param>
+    /// <returns>The label-only profile for the device shell.<para>设备 shell 的纯标签配置。</para></returns>
     internal static TerminalProfile CreateDeviceShellProfile(DetectedDevice device)
     {
         ArgumentNullException.ThrowIfNull(device);
-        var app = Environment.ProcessPath
-            ?? throw new InvalidOperationException("The current application executable is unavailable.");
-        var assembly = Path.Combine(AppContext.BaseDirectory, "UotanStudio.Desktop.dll");
-        var runtimeRoot = Directory.GetParent(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory())
-            ?.Parent?.Parent?.FullName;
-        var dotnet = runtimeRoot is null ? null : Path.Combine(runtimeRoot,
-            OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
-        var useDotnet = File.Exists(assembly) && dotnet is not null && File.Exists(dotnet);
-        var executable = useDotnet ? dotnet! : app;
-        string[] arguments = useDotnet
-            ? [assembly, "--managed-device-shell", device.Protocol.ToString(), device.Serial]
-            : ["--managed-device-shell", device.Protocol.ToString(), device.Serial];
-        return new TerminalProfile("Device shell", executable, arguments, "Terminal_DeviceShell");
+        return new TerminalProfile("Device shell", Environment.ProcessPath ?? string.Empty, [],
+            "Terminal_DeviceShell");
     }
 
     internal void RestoreVisibility(IReadOnlyDictionary<string, bool> panels)

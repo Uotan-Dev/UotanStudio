@@ -50,14 +50,10 @@ public sealed class DeviceShellServiceTests
     [Theory]
     [InlineData(DeviceProtocolKind.Adb)]
     [InlineData(DeviceProtocolKind.Hdc)]
-    public void CreateDeviceShellProfile_SelectedTarget_UsesExistingHostExecutable(DeviceProtocolKind protocol)
+    public void CreateDeviceShellProfile_SelectedTarget_LabelsInProcessShell(DeviceProtocolKind protocol)
     {
         var profile = WorkspacePanelService.CreateDeviceShellProfile(Target(protocol));
-        Assert.True(File.Exists(profile.Executable));
-        Assert.Contains("--managed-device-shell", profile.Arguments);
-        Assert.Equal(protocol.ToString(), profile.Arguments[^2]);
-        Assert.Equal("target", profile.Arguments[^1]);
-        if (profile.Arguments[0].EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-            Assert.True(File.Exists(profile.Arguments[0]));
+        Assert.Equal("Device shell", profile.Name);
+        Assert.Empty(profile.Arguments);
     }
 }

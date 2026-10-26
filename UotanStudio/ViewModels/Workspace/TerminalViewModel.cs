@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using Porta.Pty;
 using UotanStudio.Services;
+using UotanStudio.Services.Devices;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Terminal;
 
@@ -16,17 +17,20 @@ internal partial class TerminalViewModel : Tool, IDisposable
     private readonly int _number;
     private readonly Action<TerminalViewModel> _newTerminal;
     private readonly Action<TerminalViewModel> _closeTerminal;
+    private readonly DetectedDevice? _deviceShell;
     public IReadOnlyList<TerminalProfile> Profiles { get; }
     [ObservableProperty] private TerminalProfile? _selectedProfile;
     [ObservableProperty] private TerminalSessionViewModel? _session;
     [ObservableProperty] private string? _errorMessage;
 
     internal TerminalViewModel(int number, TerminalProfile? profile,
-        Action<TerminalViewModel> newTerminal, Action<TerminalViewModel> closeTerminal)
+        Action<TerminalViewModel> newTerminal, Action<TerminalViewModel> closeTerminal,
+        DetectedDevice? deviceShell = null)
     {
         _number = number;
         _newTerminal = newTerminal;
         _closeTerminal = closeTerminal;
+        _deviceShell = deviceShell;
         var standard = TerminalShellService.GetProfiles();
         Profiles = profile is { Name: "Device shell" } ? [profile, .. standard] : standard;
         SelectedProfile = profile is { Name: "Device shell" } ? profile
@@ -53,7 +57,9 @@ internal partial class TerminalViewModel : Tool, IDisposable
         var directory = Directory.Exists(projectDirectory) ? projectDirectory!
             : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (!Directory.Exists(directory)) directory = Environment.CurrentDirectory;
-        Session = new TerminalSessionViewModel(profile, directory);
+        Session = _deviceShell is { } device
+            ? new TerminalSessionViewModel(profile, directory, device)
+            : new TerminalSessionViewModel(profile, directory);
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)
@@ -66,6 +72,15 @@ internal partial class TerminalViewModel : Tool, IDisposable
         }
         Session?.RefreshStatus();
     }
+
+    /// <summary>
+    /// Gets the profile a new terminal is opened with: a device shell terminal, or a toolbar profile
+    /// that carries no arguments, falls back to the default shell instead of spawning the host again.
+    /// <para>获取新终端使用的配置：设备 shell 终端、或工具栏中不带参数的那个配置，都回退到默认 shell，
+    /// 而不会再次启动宿主本身。</para>
+    /// </summary>
+    internal TerminalProfile? CloneProfile =>
+        _deviceShell is null && SelectedProfile is { Arguments.Length: > 0 } selected ? selected : null;
 
     [RelayCommand]
     private void NewTerminal()
@@ -90,7 +105,8 @@ internal partial class TerminalViewModel : Tool, IDisposable
     }
 }
 
-internal partial class TerminalSessionViewModel(TerminalProfile profile, string directory) : ViewModelBase, IDisposable
+internal partial class TerminalSessionViewModel(
+    TerminalProfile profile, string directory, DetectedDevice? deviceShell = null) : ViewModelBase, IDisposable
 {
     private readonly CancellationTokenSource _lifetime = new();
     private bool _started;
@@ -114,28 +130,38 @@ internal partial class TerminalSessionViewModel(TerminalProfile profile, string 
         var token = _lifetime.Token;
         try
         {
-            var connection = await Task.Run(() => PtyProvider.SpawnAsync(new PtyOptions
-            {
-                Name = "UotanStudio",
-                App = Profile.Executable,
-                CommandLine = Profile.Arguments,
-                Cwd = StartingDirectory,
-                Cols = Math.Max(2, columns),
-                Rows = Math.Max(1, rows),
-                Environment = new Dictionary<string, string>
+            IPtyConnection? connection = deviceShell is { } shell
+                ? DeviceShellService.CreateConnection(App.DeviceMonitor, shell)
+                : await Task.Run(() => PtyProvider.SpawnAsync(new PtyOptions
                 {
-                    ["TERM"] = "xterm-256color",
-                    ["COLORTERM"] = "truecolor",
-                    ["TERM_PROGRAM"] = "UotanStudio"
-                }
-            }, token), token);
+                    Name = "UotanStudio",
+                    App = Profile.Executable,
+                    CommandLine = Profile.Arguments,
+                    Cwd = StartingDirectory,
+                    Cols = Math.Max(2, columns),
+                    Rows = Math.Max(1, rows),
+                    Environment = new Dictionary<string, string>
+                    {
+                        ["TERM"] = "xterm-256color",
+                        ["COLORTERM"] = "truecolor",
+                        ["TERM_PROGRAM"] = "UotanStudio"
+                    }
+                }, token), token);
             if (_disposed)
             {
                 connection.Dispose();
                 return;
             }
             Connection = connection;
-            connection.ProcessExited += OnProcessExited;
+            if (connection is DeviceShellConnection shellConnection)
+            {
+                shellConnection.Exited += OnShellExited;
+            }
+            else
+            {
+                connection.ProcessExited += OnProcessExited;
+            }
+
             IsRunning = true;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -166,6 +192,9 @@ internal partial class TerminalSessionViewModel(TerminalProfile profile, string 
     private void OnProcessExited(object? sender, PtyExitedEventArgs e) =>
         Dispatcher.UIThread.Post(() => ReportExit(e.ExitCode));
 
+    private void OnShellExited(object? sender, int exitCode) =>
+        Dispatcher.UIThread.Post(() => ReportExit(exitCode));
+
     internal void RefreshStatus()
     {
         var language = LanguageService.Instance;
@@ -181,7 +210,15 @@ internal partial class TerminalSessionViewModel(TerminalProfile profile, string 
         _lifetime.Cancel();
         if (Connection is { } connection)
         {
-            connection.ProcessExited -= OnProcessExited;
+            if (connection is DeviceShellConnection shellConnection)
+            {
+                shellConnection.Exited -= OnShellExited;
+            }
+            else
+            {
+                connection.ProcessExited -= OnProcessExited;
+            }
+
             connection.Dispose();
             Connection = null;
         }
