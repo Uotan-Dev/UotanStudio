@@ -58,6 +58,62 @@ internal static class GptFixtureImage
         return image;
     }
 
+    internal static byte[] BuildAtOffset(long imageLength, long tableOffset, Guid diskGuid,
+        IReadOnlyList<GptFixtureEntry> entries, uint slotCount, ulong alternateLba)
+    {
+        var image = new byte[imageLength];
+        WriteAtOffset(image, tableOffset, diskGuid, entries, slotCount, alternateLba);
+        return image;
+    }
+
+    internal static void WriteAtOffset(byte[] image, long tableOffset, Guid diskGuid,
+        IReadOnlyList<GptFixtureEntry> entries, uint slotCount, ulong alternateLba)
+    {
+        var baseOffset = checked((int)tableOffset);
+        var mbrSlot = image.AsSpan(baseOffset + 446, 16);
+        mbrSlot[4] = GptLayout.ProtectiveMbrType;
+        BinaryPrimitives.WriteUInt32LittleEndian(mbrSlot[8..], 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(mbrSlot[12..], uint.MaxValue);
+        image[baseOffset + 510] = 0x55;
+        image[baseOffset + 511] = 0xAA;
+
+        var headerOffset = checked(baseOffset + GptLayout.HeaderOffset);
+        var arrayOffset = checked(baseOffset + (int)(GptLayout.EntriesStartLba * GptLayout.SectorSize));
+        var arrayBytes = checked((int)(slotCount * GptLayout.EntrySize));
+        var header = image.AsSpan(headerOffset, GptLayout.HeaderSize);
+        GptLayout.Signature.CopyTo(header);
+        BinaryPrimitives.WriteUInt32LittleEndian(header[8..], GptLayout.Revision);
+        BinaryPrimitives.WriteUInt32LittleEndian(header[12..], GptLayout.HeaderSize);
+        BinaryPrimitives.WriteUInt64LittleEndian(header[24..], GptLayout.PrimaryHeaderLba);
+        BinaryPrimitives.WriteUInt64LittleEndian(header[32..], alternateLba);
+        BinaryPrimitives.WriteUInt64LittleEndian(header[40..], GptLayout.FirstUsableLba);
+        BinaryPrimitives.WriteUInt64LittleEndian(header[48..],
+            alternateLba > GptLayout.FirstUsableLba ? alternateLba - GptLayout.FirstUsableLba : 0);
+        WriteGuidBigEndian(header[56..], diskGuid);
+        BinaryPrimitives.WriteUInt64LittleEndian(header[72..], GptLayout.EntriesStartLba);
+        BinaryPrimitives.WriteUInt32LittleEndian(header[80..], slotCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(header[84..], GptLayout.EntrySize);
+
+        var array = image.AsSpan(arrayOffset, arrayBytes);
+        array.Clear();
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            var slot = array.Slice(i * GptLayout.EntrySize, GptLayout.EntrySize);
+            WriteGuidBigEndian(slot, entry.TypeId);
+            WriteGuidBigEndian(slot[16..], entry.Id);
+            BinaryPrimitives.WriteUInt64LittleEndian(slot[32..], entry.FirstLba);
+            BinaryPrimitives.WriteUInt64LittleEndian(slot[40..], entry.LastLba);
+            var nameUnits = Math.Min(entry.Name.Length, GptLayout.MaxNameUnits);
+            Encoding.Unicode.GetBytes(entry.Name.AsSpan(0, nameUnits), slot.Slice(56, nameUnits * 2));
+        }
+
+        BinaryPrimitives.WriteUInt32LittleEndian(header[GptLayout.EntriesCrcOffset..],
+            System.IO.Hashing.Crc32.HashToUInt32(array));
+        BinaryPrimitives.WriteUInt32LittleEndian(header[GptLayout.HeaderCrcOffset..],
+            System.IO.Hashing.Crc32.HashToUInt32(header));
+    }
+
     private static void WriteGuidBigEndian(Span<byte> target, Guid guid)
     {
         var bytes = guid.ToByteArray();

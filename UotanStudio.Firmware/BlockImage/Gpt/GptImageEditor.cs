@@ -56,8 +56,8 @@ public static class GptImageEditor
 
     /// <summary>
     /// Parses a GPT image: locates every sector-aligned header, validates the header CRC, resolves each
-    /// entry array, and takes the first valid copy as the partition-table source.
-    /// <para>解析 GPT 镜像：定位每个扇区对齐的头部，校验头 CRC，解析每个条目数组，并以首个有效副本作为分区表来源。</para>
+    /// entry array, and takes the copy carrying the most partitions as the partition-table source.
+    /// <para>解析 GPT 镜像：定位每个扇区对齐的头部，校验头 CRC，解析每个条目数组，并以分区最多的副本作为分区表来源。</para>
     /// </summary>
     /// <param name="image">The image bytes to parse. <para>待解析的镜像字节。</para></param>
     /// <param name="table">The parsed table on success; <see langword="null"/> on failure. Its fingerprint hashes each discovered header block followed by the first entry array. <para>成功时的解析结果；失败时为 <see langword="null"/>。其指纹对每个已发现的头块与首个条目数组依次求哈希。</para></param>
@@ -66,33 +66,58 @@ public static class GptImageEditor
     {
         ArgumentNullException.ThrowIfNull(image);
         table = null!;
-        if (!TryLocate(image, out var copies, out var partitions, out var diskSizeBytes, out var diskGuid))
+        if (!TryLocate(image, out var copies, out var source, out var partitions, out var diskSizeBytes, out var diskGuid))
         {
             return false;
         }
 
-        var primary = copies[0];
-        var header = image.AsSpan((int)primary.HeaderOffset, GptLayout.HeaderSize);
+        var header = image.AsSpan((int)source.HeaderOffset, GptLayout.HeaderSize);
         table = new GptTable(
             diskGuid,
             GptLayout.SectorSize,
             diskSizeBytes / (ulong)GptLayout.SectorSize,
             partitions,
-            ComputeFingerprint(image, copies, primary),
-            (uint)primary.HeaderSize,
+            ComputeFingerprint(image, copies, source),
+            (uint)source.HeaderSize,
             BinaryPrimitives.ReadUInt64LittleEndian(header[40..]),
             BinaryPrimitives.ReadUInt64LittleEndian(header[48..]),
-            primary.EntryCount,
+            source.EntryCount,
             (uint)GptLayout.EntrySize,
-            (ulong)(primary.EntriesOffset / GptLayout.SectorSize),
+            (ulong)(source.EntriesOffset / GptLayout.SectorSize),
             (ulong)(copies[^1].EntriesOffset / GptLayout.SectorSize));
         return true;
     }
 
     /// <summary>
-    /// Writes partition entries back in place: every located entry array is rewritten compactly,
-    /// geometry fields and surrounding bytes are preserved, and the count and CRC-32 values update.
-    /// <para>原位回写分区表项：紧凑重写每个已定位的条目数组，保留几何字段与周边字节，并更新条目数量与 CRC-32。</para>
+    /// Lists every CRC-verified table copy with its header block, declared slot count and populated partitions.
+    /// Several entries mean the image packs distinct tables rather than one primary/backup pair.
+    /// <para>列出每份 CRC 校验通过的表副本及其头部块、声明槽位数与已用分区数。返回多条说明镜像打包了多张
+    /// 互相独立的表，而不是一份主备对。</para>
+    /// </summary>
+    /// <param name="image">The image bytes to inspect. <para>待检查的镜像字节。</para></param>
+    /// <returns>Copies in ascending header order; empty when no header validates. <para>按头部升序排列的副本；没有有效头部时为空。</para></returns>
+    public static IReadOnlyList<GptTableCopy> DescribeCopies(byte[] image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        List<GptTableCopy> copies = [];
+        for (var headerOffset = 0L; (headerOffset + GptLayout.HeaderSize) <= image.Length; headerOffset += GptLayout.SectorSize)
+        {
+            if (image.AsSpan((int)headerOffset, GptLayout.Signature.Length).SequenceEqual(GptLayout.Signature)
+                && TryReadCopy(image, headerOffset, out var copy, out var partitions))
+            {
+                copies.Add(new GptTableCopy((ulong)(headerOffset / GptLayout.SectorSize), copy.EntryCount, partitions.Count));
+            }
+        }
+
+        return copies;
+    }
+
+    /// <summary>
+    /// Writes partition entries back in place for every copy that mirrors the reported table or is still
+    /// empty; a copy carrying a different populated table is an independent table in the same container and is
+    /// preserved. Geometry fields and surrounding bytes are kept and only counts and CRC-32 values change.
+    /// <para>对镜像中与上报表一致或仍为空的每个副本原位回写分区表项；携带另一张有效表的副本属于同一容器内的
+    /// 独立表，保持原样。几何字段与周边字节保持不变，只更新条目数量与 CRC-32。</para>
     /// </summary>
     /// <param name="image">The source image providing the headers and entry arrays. <para>提供头部与条目数组的源镜像。</para></param>
     /// <param name="partitions">The partition entries to write in array order. <para>按数组顺序写入的分区表项。</para></param>
@@ -102,12 +127,14 @@ public static class GptImageEditor
     {
         ArgumentNullException.ThrowIfNull(image);
         ArgumentNullException.ThrowIfNull(partitions);
-        if (!TryLocate(image, out var copies, out _, out _, out _))
+        if (!TryLocate(image, out var copies, out var source, out _, out _, out _))
         {
             throw new ArgumentException(
                 "No GPT header with a CRC-verified entry array was found. 未找到 CRC 校验通过的 GPT 头与条目数组。",
                 nameof(image));
         }
+
+        var targets = PatchTargets(image, copies, source);
 
         if (partitions.Count == 0)
         {
@@ -121,7 +148,7 @@ public static class GptImageEditor
         }
 
         var arrayBytes = slotCount * GptLayout.EntrySize;
-        foreach (var copy in copies)
+        foreach (var copy in targets)
         {
             if (arrayBytes > FreeBytesAfter(image, copies, copy))
             {
@@ -132,7 +159,7 @@ public static class GptImageEditor
         }
 
         var result = (byte[])image.Clone();
-        foreach (var copy in copies)
+        foreach (var copy in targets)
         {
             var array = result.AsSpan((int)copy.EntriesOffset, arrayBytes);
             array.Clear();
@@ -151,10 +178,23 @@ public static class GptImageEditor
         return result;
     }
 
-    private static bool TryLocate(byte[] image, out List<GptCopy> copies, out List<GptPartition> partitions,
-        out ulong diskSizeBytes, out Guid diskGuid)
+    /// <summary>
+    /// Locates every CRC-verified header, keeps the one whose entry array holds the most partitions as the
+    /// table source, and derives the capacity from that header.
+    /// <para>定位全部 CRC 校验通过的头部，取条目数组中分区最多的一份作为表来源，并由该头部推导容量。</para>
+    /// </summary>
+    /// <param name="image">The image bytes to parse. <para>待解析的镜像字节。</para></param>
+    /// <param name="copies">Every located header with its resolved entry array. <para>每个已定位头部及其解析出的条目数组。</para></param>
+    /// <param name="source">The copy whose partitions and capacity are reported. <para>其分区与容量被上报的副本。</para></param>
+    /// <param name="partitions">Partitions of <paramref name="source"/>. <para><paramref name="source"/> 的分区。</para></param>
+    /// <param name="diskSizeBytes">Capacity covering both the declared alternate block and the last partition. <para>覆盖声明备用块与最后一个分区的容量。</para></param>
+    /// <param name="diskGuid">Disk identifier of <paramref name="source"/>. <para><paramref name="source"/> 的磁盘标识。</para></param>
+    /// <returns><see langword="true"/> when at least one header and its entry array were found. <para>找到至少一个头部及其条目数组时为 <see langword="true"/>。</para></returns>
+    private static bool TryLocate(byte[] image, out List<GptCopy> copies, out GptCopy source,
+        out List<GptPartition> partitions, out ulong diskSizeBytes, out Guid diskGuid)
     {
         copies = [];
+        source = default;
         partitions = [];
         diskSizeBytes = 0;
         diskGuid = Guid.Empty;
@@ -162,29 +202,34 @@ public static class GptImageEditor
         for (var headerOffset = 0L; (headerOffset + GptLayout.HeaderSize) <= image.Length; headerOffset += GptLayout.SectorSize)
         {
             if (!image.AsSpan((int)headerOffset, GptLayout.Signature.Length).SequenceEqual(GptLayout.Signature)
-                || !TryReadCopy(image, headerOffset, out var copy))
+                || !TryReadCopy(image, headerOffset, out var copy, out var candidate))
             {
                 continue;
             }
 
             copies.Add(copy);
-            if (copies.Count > 1)
+            if (copies.Count == 1 || candidate.Count > partitions.Count)
             {
-                continue;
+                source = copy;
+                partitions = candidate;
             }
-
-            var header = image.AsSpan((int)copy.HeaderOffset, GptLayout.HeaderSize);
-            partitions = ReadPartitions(image.AsSpan((int)copy.EntriesOffset, (int)copy.EntryCount * GptLayout.EntrySize), copy.EntryCount);
-            diskGuid = ReadGuidBigEndian(header[56..]);
-            diskSizeBytes = DiskSizeBytes(BinaryPrimitives.ReadUInt64LittleEndian(header[32..]));
         }
 
-        return copies.Count > 0;
+        if (copies.Count == 0)
+        {
+            return false;
+        }
+
+        var header = image.AsSpan((int)source.HeaderOffset, GptLayout.HeaderSize);
+        diskGuid = ReadGuidBigEndian(header[56..]);
+        diskSizeBytes = DiskSizeBytes(BinaryPrimitives.ReadUInt64LittleEndian(header[32..]), partitions);
+        return true;
     }
 
-    private static bool TryReadCopy(byte[] image, long headerOffset, out GptCopy copy)
+    private static bool TryReadCopy(byte[] image, long headerOffset, out GptCopy copy, out List<GptPartition> partitions)
     {
         copy = default;
+        partitions = [];
         var header = image.AsSpan((int)headerOffset, GptLayout.HeaderSize);
         var headerSize = BinaryPrimitives.ReadUInt32LittleEndian(header[12..]);
         var entrySize = BinaryPrimitives.ReadUInt32LittleEndian(header[84..]);
@@ -197,15 +242,67 @@ public static class GptImageEditor
 
         var arrayBytes = (int)(entryCount * entrySize);
         var declared = SectorOffset(BinaryPrimitives.ReadUInt64LittleEndian(header[72..]));
-        var entriesOffset = FindEntryArray(image, headerOffset, declared, arrayBytes,
-            BinaryPrimitives.ReadUInt32LittleEndian(header[GptLayout.EntriesCrcOffset..]));
-        if (entriesOffset < 0)
+        if (!TryResolveEntryArray(image, headerOffset, declared, arrayBytes, entryCount,
+                BinaryPrimitives.ReadUInt32LittleEndian(header[GptLayout.EntriesCrcOffset..]),
+                out var entriesOffset, out partitions))
         {
             return false;
         }
 
         copy = new GptCopy(headerOffset, (int)headerSize, entriesOffset, entryCount);
         return true;
+    }
+
+    /// <summary>
+    /// Resolves the entry array of one header: the declared LBA offset, the offset immediately following the
+    /// header block and a bounded CRC search are verified, and the candidate holding the most partitions wins so
+    /// a CRC-valid but empty array cannot mask the populated copy written next to the header.
+    /// <para>解析单个头部的条目数组：校验声明 LBA 换算的偏移、紧接头部块之后的偏移与有界 CRC 搜索结果，
+    /// 取分区最多的候选项，避免 CRC 合法但为空的数组掩盖写在头部旁边的有效副本。</para>
+    /// </summary>
+    /// <param name="image">The image bytes to parse. <para>待解析的镜像字节。</para></param>
+    /// <param name="headerOffset">Byte offset of the header being paired. <para>待配对头部的字节偏移。</para></param>
+    /// <param name="declared">Entry offset derived from the declared entry-array LBA, or <c>-1</c> when it does not fit. <para>由声明的条目数组 LBA 换算的偏移；超出范围时为 <c>-1</c>。</para></param>
+    /// <param name="arrayBytes">Size in bytes of the whole entry array. <para>整个条目数组的字节大小。</para></param>
+    /// <param name="entryCount">Declared entry slot count. <para>声明的条目槽位数量。</para></param>
+    /// <param name="expectedCrc">Stored CRC-32 of the entry array. <para>条目数组已存储的 CRC-32。</para></param>
+    /// <param name="entriesOffset">Byte offset of the winning array, or <c>-1</c> on failure. <para>胜出数组的字节偏移，失败时为 <c>-1</c>。</para></param>
+    /// <param name="partitions">Partitions read from the winning array. <para>从胜出数组读到的分区。</para></param>
+    /// <returns><see langword="true"/> when a CRC-matching array was found. <para>找到 CRC 匹配的数组时为 <see langword="true"/>。</para></returns>
+    private static bool TryResolveEntryArray(byte[] image, long headerOffset, long declared, int arrayBytes,
+        uint entryCount, uint expectedCrc, out long entriesOffset, out List<GptPartition> partitions)
+    {
+        entriesOffset = -1;
+        partitions = [];
+        List<long> candidates = [];
+        if (ChecksumMatches(image, declared, arrayBytes, expectedCrc))
+        {
+            candidates.Add(declared);
+        }
+
+        var adjacent = headerOffset + GptLayout.SectorSize;
+        if (adjacent != declared && ChecksumMatches(image, adjacent, arrayBytes, expectedCrc))
+        {
+            candidates.Add(adjacent);
+        }
+
+        var scanned = FindEntryArray(image, headerOffset, declared, arrayBytes, expectedCrc);
+        if (scanned >= 0 && scanned != declared && scanned != adjacent)
+        {
+            candidates.Add(scanned);
+        }
+
+        foreach (var candidate in candidates)
+        {
+            var parsed = ReadPartitions(image.AsSpan((int)candidate, arrayBytes), entryCount);
+            if (entriesOffset < 0 || parsed.Count > partitions.Count)
+            {
+                entriesOffset = candidate;
+                partitions = parsed;
+            }
+        }
+
+        return entriesOffset >= 0;
     }
 
     private static bool HeaderChecksumValid(byte[] image, long headerOffset, int headerSize)
@@ -285,6 +382,40 @@ public static class GptImageEditor
         return boundary - copy.EntriesOffset;
     }
 
+    /// <summary>
+    /// Selects the copies a patch may rewrite: the reported table itself, its byte-identical mirrors and
+    /// copies whose entry array is still empty. Distinct populated tables are excluded.
+    /// <para>挑选补丁可重写的副本：上报表本身、与其逐字节一致的镜像副本，以及条目数组仍为空的副本；
+    /// 内容不同的有效表被排除。</para>
+    /// </summary>
+    /// <param name="image">The image bytes to inspect. <para>待检查的镜像字节。</para></param>
+    /// <param name="copies">Every located table copy. <para>每个已定位的表副本。</para></param>
+    /// <param name="source">The copy currently reported as the table. <para>当前作为表上报的副本。</para></param>
+    /// <returns>The copies to rewrite, always including <paramref name="source"/>. <para>待重写的副本，始终包含 <paramref name="source"/>。</para></returns>
+    private static List<GptCopy> PatchTargets(byte[] image, IReadOnlyList<GptCopy> copies, GptCopy source)
+    {
+        List<GptCopy> targets = [];
+        foreach (var copy in copies)
+        {
+            if (copy.EntriesOffset == source.EntriesOffset
+                || IsEmptyEntryArray(image, copy)
+                || MirrorsEntryArray(image, copy, source))
+            {
+                targets.Add(copy);
+            }
+        }
+
+        return targets;
+    }
+
+    private static bool IsEmptyEntryArray(byte[] image, GptCopy copy) =>
+        !image.AsSpan((int)copy.EntriesOffset, (int)copy.EntryCount * GptLayout.EntrySize).ContainsAnyExcept((byte)0);
+
+    private static bool MirrorsEntryArray(byte[] image, GptCopy copy, GptCopy source) =>
+        copy.EntryCount == source.EntryCount
+        && image.AsSpan((int)copy.EntriesOffset, (int)copy.EntryCount * GptLayout.EntrySize)
+            .SequenceEqual(image.AsSpan((int)source.EntriesOffset, (int)source.EntryCount * GptLayout.EntrySize));
+
     private static List<GptPartition> ReadPartitions(ReadOnlySpan<byte> array, uint entryCount)
     {
         var list = new List<GptPartition>((int)entryCount);
@@ -326,10 +457,32 @@ public static class GptImageEditor
         WriteName(slot[56..], partition.Name);
     }
 
-    private static ulong DiskSizeBytes(ulong alternateLba) =>
-        alternateLba >= ((ulong)long.MaxValue / (ulong)GptLayout.SectorSize)
+    /// <summary>
+    /// Computes the capacity reported for a table: the declared alternate block wins unless the last partition
+    /// extends past it, which happens for table-only images that leave the alternate block at zero.
+    /// <para>计算表上报的容量：声明备用块优先，但最后一个分区越过它时以分区结束位置为准；仅含分区表的镜像
+    /// 常把备用块留为零。</para>
+    /// </summary>
+    /// <param name="alternateLba">Alternate header block recorded by the source header; zero means unknown. <para>源头部记录的备用头块；零表示未知。</para></param>
+    /// <param name="partitions">Partitions of the reported table. <para>被上报表的分区。</para></param>
+    /// <returns>Capacity in bytes, saturating instead of overflowing. <para>以字节计的容量，溢出时饱和。</para></returns>
+    private static ulong DiskSizeBytes(ulong alternateLba, IReadOnlyList<GptPartition> partitions)
+    {
+        const ulong Limit = (ulong)long.MaxValue / (ulong)GptLayout.SectorSize;
+        var declared = alternateLba >= Limit
             ? (ulong)long.MaxValue
             : (alternateLba + 1) * (ulong)GptLayout.SectorSize;
+        if (partitions.Count == 0)
+        {
+            return declared;
+        }
+
+        var last = partitions.Max(partition => partition.LastLba);
+        var occupied = last >= Limit
+            ? (ulong)long.MaxValue
+            : (last + 1) * (ulong)GptLayout.SectorSize;
+        return Math.Max(declared, occupied);
+    }
 
     private static long ByteOffsetOf(ulong firstLba) =>
         firstLba > ((ulong)long.MaxValue / (ulong)GptLayout.SectorSize)

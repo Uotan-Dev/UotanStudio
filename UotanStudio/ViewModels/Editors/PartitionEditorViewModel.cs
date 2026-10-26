@@ -508,7 +508,7 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
                 _gpt = gpt;
                 _capacitySectors = gpt.BlockCount;
                 BuildGptItems(gpt);
-                SourceDescription = $"GPT: {gpt.Partitions.Count} partition(s), disk {gpt.BlockCount * (ulong)gpt.BlockSize} bytes";
+                SourceDescription = $"GPT: {gpt.Partitions.Count} partition(s), disk {gpt.BlockCount * (ulong)gpt.BlockSize} bytes{DescribeGptCopies(bytes)}";
                 return true;
             }
 
@@ -544,6 +544,16 @@ public partial class PartitionEditorViewModel : Document, ITool, ICommandSaveabl
         }
 
         return false;
+    }
+
+    private static string DescribeGptCopies(byte[] bytes)
+    {
+        var copies = GptImageEditor.DescribeCopies(bytes);
+        return copies.Count <= 1
+            ? string.Empty
+            : $", {copies.Count} table copies: "
+                + string.Join(", ", copies.Select(copy => string.Create(
+                    CultureInfo.InvariantCulture, $"LBA {copy.HeaderLba} ({copy.PartitionCount})")));
     }
 
     private static async Task<byte[]?> ReadBoundedTableAsync(string path)

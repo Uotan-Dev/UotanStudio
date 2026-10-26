@@ -565,11 +565,13 @@ public static class DocumentFormatPolicy
     }
 
     /// <summary>
-    /// Header length read for partition-table content detection (covers GPT headers that EDL combined
-    /// images place away from LBA 1, and the MBR signature).
-    /// <para>分区表内容探测所需的头部读取长度（覆盖 EDL 合并 GPT 镜像里不在 LBA 1 的头部，以及 MBR 签名）。</para>
+    /// Header length read for partition-table content detection: one mebibyte, which covers GPT headers that
+    /// EDL combined images, storage-head dumps and table-only images place away from LBA 1, plus the MBR
+    /// signature.
+    /// <para>分区表内容探测所需的头部读取长度：1 MiB，覆盖 EDL 合并镜像、storage head 转储与仅含分区表
+    /// 的镜像里远离 LBA 1 的 GPT 头部，以及 MBR 签名。</para>
     /// </summary>
-    private const int PartitionHeaderLength = 64 * 1024;
+    private const int PartitionHeaderLength = 1024 * 1024;
 
     /// <summary>
     /// Whether the header bytes carry a sector-aligned GPT signature, as detected by the firmware

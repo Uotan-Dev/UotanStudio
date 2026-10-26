@@ -323,6 +323,40 @@ public sealed class PartitionEditorBandTests
         }
     }
 
+    [Fact]
+    public async Task LoadAsync_GptImageWithSeveralTables_ShowsRichestTableAndReportsCopies()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var path = Path.Combine(directory, "ptable.img");
+            var diskId = Guid.NewGuid();
+            var image = GptFixtureImage.BuildAtOffset(0x2_8800, 0x2_0000, diskId,
+            [
+                new GptFixtureEntry(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 1024, 13311, "persist"),
+                new GptFixtureEntry(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 13312, 15359, "conn_calidata"),
+                new GptFixtureEntry(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 15360, 79_286_271, "userdata")
+            ], 128, 0);
+            GptFixtureImage.WriteAtOffset(image, 0x2_4400, diskId, [], 128, 0);
+            GptFixtureImage.WriteAtOffset(image, 0, diskId, [], 128, 0);
+            File.WriteAllBytes(path, image);
+
+            var editor = new PartitionEditorViewModel();
+            await editor.LoadAsync(path);
+
+            Assert.Empty(editor.CompileError);
+            Assert.Equal(["persist", "conn_calidata", "userdata"], editor.Partitions.Select(partition => partition.Name));
+            Assert.Contains("3 table copies", editor.SourceDescription, StringComparison.Ordinal);
+            Assert.NotEmpty(editor.CapacityText);
+            Assert.NotEmpty(editor.Segments);
+            editor.Cleanup();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static void WriteGptImage(string path, ulong diskSizeBytes, IReadOnlyList<PartitionEntry> entries)
     {
         var fixture = new List<GptFixtureEntry>(entries.Count);

@@ -1,7 +1,9 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware.Application.Formats;
+using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Services.Workspace.Documents;
+using UotanStudio.Tests.TestInfrastructure;
 using UotanStudio.UiAbstractions;
 using Xunit;
 
@@ -315,6 +317,30 @@ public sealed class DocumentFormatPolicyTests
         Assert.True(DocumentFormatPolicy.IsLpMetadataMagic(lp));
         Assert.Equal(EditorOpenMode.Partition, DocumentFormatPolicy.ResolveMode("disk.img", gpt));
         Assert.Equal(EditorOpenMode.Partition, DocumentFormatPolicy.ResolveMode("super.img", lp));
+    }
+
+    [Fact]
+    public void IsGptImage_TableOnlyImageWithHeaderPastSixtyFourKiB_RoutesToPartitionEditor()
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        var entries = new List<GptFixtureEntry>
+        {
+            new(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 34, 259, "bl2_a"),
+            new(GptLayout.DefaultTypeGuid, Guid.NewGuid(), 260, 835, "teeos_a")
+        };
+        var image = GptFixtureImage.BuildAtOffset(0x2_8800, 0x2_0000, Guid.NewGuid(), entries, 128, 0);
+        var path = WriteTempFile("ptable.img", image);
+        try
+        {
+            Assert.True(DocumentFormatPolicy.IsGptImage(path));
+            Assert.Equal(EditorOpenMode.Partition,
+                DocumentFormatPolicy.ResolveMode(path,
+                    FormatDetector.ReadHeader(path, DocumentFormatPolicy.ContentProbeLength)));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     private static byte[] Fat12BootSector()
