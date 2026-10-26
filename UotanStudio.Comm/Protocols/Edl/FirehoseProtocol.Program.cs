@@ -1,4 +1,5 @@
 using System.Buffers;
+using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using UotanStudio.Hash.Digests;
@@ -477,6 +478,12 @@ public sealed partial class FirehoseProtocol
                         $"The transport accepted {written} of {toRead} raw payload bytes; the block is not replayed because its accepted length is unknown.");
                 }
 
+                if (ShouldTerminateBlockWithZlp(Configuration.ZlpAwareHost, toRead, (int)Configuration.SectorSize)
+                    && _transport is UsbDeviceTransport usbTransport)
+                {
+                    await usbTransport.Session.WriteZlpAsync(zlpTimeout, cancellationToken).ConfigureAwait(false);
+                }
+
                 digest?.Append(buffer.AsSpan(0, toRead));
                 bytesWritten += toRead;
             }
@@ -486,6 +493,22 @@ public sealed partial class FirehoseProtocol
             ArrayPool<byte>.Shared.Return(buffer);
         }
     }
+
+    /// <summary>
+    /// Determines whether a program payload block needs a trailing zero-length packet: a
+    /// ZLP-aware host terminates every block whose byte count covers whole sectors, because the
+    /// transfer then ends on a full USB packet with no short-packet boundary.
+    /// <para>判断 program 载荷块是否需要跟随零长度包：ZLP 感知的主机必须为覆盖整数个扇区的块补 ZLP，
+    /// 因为该传输会以满尺寸 USB 包结尾，没有短包边界。</para>
+    /// </summary>
+    /// <param name="zlpAwareHost">Whether the host declared <c>ZLPAwareHost=1</c> in the configure request.
+    /// <para>主机是否已在 configure 请求中声明 <c>ZLPAwareHost=1</c>。</para></param>
+    /// <param name="blockBytes">The block byte count accepted by the transport. <para>传输已接受的块字节数。</para></param>
+    /// <param name="sectorSizeBytes">The storage sector size in bytes; non-positive values disable the ZLP.
+    /// <para>存储扇区大小（字节）；非正值禁用 ZLP。</para></param>
+    /// <returns><c>true</c> when the block must be terminated with a ZLP. <para>需要以 ZLP 终止该块时为 <c>true</c>。</para></returns>
+    internal static bool ShouldTerminateBlockWithZlp(bool zlpAwareHost, int blockBytes, int sectorSizeBytes)
+        => zlpAwareHost && blockBytes > 0 && sectorSizeBytes > 0 && blockBytes % sectorSizeBytes == 0;
 
     /// <summary>
     /// Receives and validates the final response after a raw transfer.

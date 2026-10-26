@@ -29,8 +29,6 @@ public static partial class FirehoseXmlBuilder
         sb.Append($" AlwaysValidate=\"{config.AlwaysValidate}\"");
         sb.Append($" MaxDigestTableSizeInBytes=\"{config.MaxDigestTableSizeInBytes}\"");
         sb.Append($" MaxPayloadSizeToTargetInBytes=\"{config.MaxPayloadSizeToTarget}\"");
-        sb.Append($" MaxPayloadSizeToTargetInBytesSupported=\"{config.MaxPayloadSizeToTargetSupported}\"");
-        sb.Append($" MaxPayloadSizeFromTargetInBytes=\"{config.MaxPayloadSizeFromTarget}\"");
         sb.Append($" ZlpAwareHost=\"{(config.ZlpAwareHost ? 1 : 0)}\"");
         if (config.SkipStorageInit != 0)
         {

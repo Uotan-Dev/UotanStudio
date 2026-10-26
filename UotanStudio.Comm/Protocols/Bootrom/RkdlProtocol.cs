@@ -101,8 +101,9 @@ internal static class RkdlResetSubCode
 /// 命令的子码，或擦除命令的 LUN。</para></param>
 /// <param name="address">The LBA address, stored big-endian in the command block. <para>LBA 地址，在命令块中按大端序存储。</para></param>
 /// <param name="sectorLength">The sector count, stored big-endian in the command block. <para>扇区数，在命令块中按大端序存储。</para></param>
-/// <param name="flashCs">The value of the <c>ucFlashCS</c> command-block byte (erase target chip
-/// select); zero keeps the previous wire value. <para><c>ucFlashCS</c> 命令块字节（擦除目标片选）的取值；
+/// <param name="flashCs">The value of the <c>ucFlashCS</c> command byte, carried in the CBW LUN
+/// byte (byte 13) as <c>RKU_EraseBlock</c> does; zero keeps the previous wire value.
+/// <para><c>ucFlashCS</c> 命令字节，按 <c>RKU_EraseBlock</c> 的方式放入 CBW 的 LUN 字节（第 13 字节）；
 /// 零保持原有的线上取值。</para></param>
 internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transferLength, byte cbwcbLength,
     byte subCode = 0, uint address = 0, ushort sectorLength = 0, byte flashCs = 0)
@@ -165,9 +166,9 @@ internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transf
     public ushort SectorLength { get; } = sectorLength;
 
     /// <summary>
-    /// Gets the <c>ucFlashCS</c> command-block byte, which selects the flash chip for erase
-    /// commands.
-    /// <para>获取 <c>ucFlashCS</c> 命令块字节，用于为擦除命令选择 flash 芯片。</para>
+    /// Gets the <c>ucFlashCS</c> command byte, serialized into the CBW LUN byte (byte 13), which
+    /// selects the flash chip for erase commands.
+    /// <para>获取 <c>ucFlashCS</c> 命令字节，序列化到 CBW 的 LUN 字节（第 13 字节），用于为擦除命令选择 flash 芯片。</para>
     /// </summary>
     /// <value>The flash chip select; zero unless the caller overrides it. <para>flash 片选；
     /// 除调用方显式指定外为零。</para></value>
@@ -200,7 +201,7 @@ internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transf
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), Tag);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), TransferLength);
         bytes[12] = Flags;
-        bytes[13] = 0;
+        bytes[13] = FlashCs;
         bytes[14] = CbwcbLength;
         bytes[15] = OperationCode;
         bytes[16] = SubCode;
@@ -208,7 +209,6 @@ internal sealed class RkdlCbw(RkdlCommand operationCode, byte flags, uint transf
         bytes[18] = (byte)(Address >> 16);
         bytes[19] = (byte)(Address >> 8);
         bytes[20] = (byte)Address;
-        bytes[21] = FlashCs;
         bytes[22] = (byte)(SectorLength >> 8);
         bytes[23] = (byte)SectorLength;
         return bytes;

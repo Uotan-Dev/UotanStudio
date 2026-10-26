@@ -353,9 +353,6 @@ public sealed partial class EdlSession : IProtocolSession
     {
         ArgumentNullException.ThrowIfNull(selection);
         ArgumentNullException.ThrowIfNull(programmerImage);
-        if (options is not null)
-        {
-        }
 
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
