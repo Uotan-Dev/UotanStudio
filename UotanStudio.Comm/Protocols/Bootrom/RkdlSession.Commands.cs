@@ -305,10 +305,13 @@ public sealed partial class RkdlSession
     /// <param name="blockPos">The first block to erase. <para>起始块号。</para></param>
     /// <param name="blockCount">The number of blocks to erase. <para>要擦除的块数。</para></param>
     /// <param name="force"><c>true</c> to use ERASE_FORCE (ignores bad-block markers). <para>是否使用 ERASE_FORCE（忽略坏块标记）。</para></param>
+    /// <returns>The number of blocks inside chunks the device answered with CSW status 1, the
+    /// <c>ERR_FOUND_BAD_BLOCK</c> code upstream tolerates during erase.
+    /// <para>设备以 CSW 状态 1 应答的分块所含块数，即上游在擦除时容忍的 <c>ERR_FOUND_BAD_BLOCK</c>。</para></returns>
     /// <exception cref="RkdlException">The session is disposed, the range exceeds the device geometry
-    /// or cannot be read because READ_FLASH_INFO failed, or a CSW reported failure.
-    /// <para>会话已释放、范围超出设备几何或因 READ_FLASH_INFO 失败而无法读取几何，或 CSW 报告失败。</para></exception>
-    public void EraseBlocks(uint blockPos, uint blockCount, bool force = false)
+    /// or cannot be read because READ_FLASH_INFO failed, or a CSW reported a status other than 0 or 1.
+    /// <para>会话已释放、范围超出设备几何或因 READ_FLASH_INFO 失败而无法读取几何，或 CSW 报告的状态既不是 0 也不是 1。</para></exception>
+    public int EraseBlocks(uint blockPos, uint blockCount, bool force = false)
         => EraseBlocks(blockPos, blockCount, force, lun: 0, ucFlashCs: 0);
 
     /// <summary>
@@ -326,16 +329,20 @@ public sealed partial class RkdlSession
     /// 字节的 LUN。</para></param>
     /// <param name="ucFlashCs">The flash chip select written to the command block's
     /// <c>ucFlashCS</c> byte. <para>写入命令块 <c>ucFlashCS</c> 字节的 flash 片选。</para></param>
+    /// <returns>The number of blocks inside chunks the device answered with CSW status 1, the
+    /// <c>ERR_FOUND_BAD_BLOCK</c> code upstream tolerates during erase.
+    /// <para>设备以 CSW 状态 1 应答的分块所含块数，即上游在擦除时容忍的 <c>ERR_FOUND_BAD_BLOCK</c>。</para></returns>
     /// <exception cref="RkdlException">The session is disposed, the range exceeds the device geometry
-    /// or cannot be read because READ_FLASH_INFO failed, or a CSW reported failure.
-    /// <para>会话已释放、范围超出设备几何或因 READ_FLASH_INFO 失败而无法读取几何，或 CSW 报告失败。</para></exception>
-    public void EraseBlocks(uint blockPos, uint blockCount, bool force, byte lun, byte ucFlashCs)
+    /// or cannot be read because READ_FLASH_INFO failed, or a CSW reported a status other than 0 or 1.
+    /// <para>会话已释放、范围超出设备几何或因 READ_FLASH_INFO 失败而无法读取几何，或 CSW 报告的状态既不是 0 也不是 1。</para></exception>
+    public int EraseBlocks(uint blockPos, uint blockCount, bool force, byte lun, byte ucFlashCs)
     {
         ThrowIfDisposed();
         ValidateLbaRange(blockPos, blockCount);
-        var opcode = force ? (RkdlCommand)0x0B : RkdlCommand.EraseNormal;
+        var opcode = force ? RkdlCommand.EraseForce : RkdlCommand.EraseNormal;
         long position = blockPos;
         long remaining = blockCount;
+        var badBlocks = 0;
         while (remaining > 0)
         {
             var chunk = (ushort)Math.Min(remaining, RkdlConstants.MaxEraseBlocksPerCommand);
@@ -344,7 +351,11 @@ public sealed partial class RkdlSession
                 flashCs: ucFlashCs);
             WriteCbw(cbw);
             var csw = ReadCsw(cbw.Tag);
-            if (!csw.IsSuccess)
+            if (csw.Status == 1)
+            {
+                badBlocks += chunk;
+            }
+            else if (!csw.IsSuccess)
             {
                 throw new RkdlException(RkdlError.EraseFailed, $"Erase failed at block {position}, CSW status = {csw.Status}.");
             }
@@ -352,6 +363,8 @@ public sealed partial class RkdlSession
             position = checked(position + chunk);
             remaining -= chunk;
         }
+
+        return badBlocks;
     }
 
     /// <summary>
