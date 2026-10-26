@@ -212,24 +212,26 @@ public static class PuffDeflateCodec
         var literalCount = bits.Read(5) + 257; var distanceCount = bits.Read(5) + 1; var codeCount = bits.Read(4) + 4;
         if (literalCount > 286 || distanceCount > 30) throw new InvalidDataException("Invalid dynamic DEFLATE counts.");
         metadata.Add((byte)(literalCount - 257)); metadata.Add((byte)(distanceCount - 1)); metadata.Add((byte)(codeCount - 4));
-        var codes = new byte[19];
+        Span<byte> codes = stackalloc byte[19];
         for (var i = 0; i < codeCount; i++)
         {
             codes[Order[i]] = (byte)bits.Read(3);
             if ((i & 1) == 0) metadata.Add((byte)(codes[Order[i]] << 4)); else metadata[^1] |= codes[Order[i]];
         }
-        var codeTree = new Huffman(codes); var lengths = new List<byte>(literalCount + distanceCount);
+        var codeTree = new Huffman(codes);
+        Span<byte> lengths = stackalloc byte[286 + 30];
+        var lengthCount = 0;
         try
         {
-            while (lengths.Count < literalCount + distanceCount)
+            while (lengthCount < literalCount + distanceCount)
             {
                 var code = codeTree.Read(bits);
-                if (code < 16) { lengths.Add((byte)code); metadata.Add((byte)code); }
+                if (code < 16) { lengths[lengthCount++] = (byte)code; metadata.Add((byte)code); }
                 else
                 {
                     var extra = bits.Read(code == 16 ? 2 : code == 17 ? 3 : code == 18 ? 7 : throw new InvalidDataException("Invalid DEFLATE code-length symbol."));
                     var packed = (byte)((code == 16 ? 16 : code == 17 ? 20 : 28) + extra);
-                    metadata.Add(packed); ExpandLength(lengths, packed);
+                    metadata.Add(packed); ExpandLength(lengths, ref lengthCount, packed);
                 }
             }
         }
@@ -238,23 +240,11 @@ public static class PuffDeflateCodec
             codeTree.ReleaseTable();
         }
 
-        if (lengths.Count != literalCount + distanceCount) throw new InvalidDataException("DEFLATE code lengths exceed declared counts.");
-        var literalLengths = new byte[literalCount];
-        var distanceLengths = new byte[distanceCount];
-        for (var i = 0; i < literalCount; i++)
-        {
-            literalLengths[i] = lengths[i];
-        }
-
-        for (var i = 0; i < distanceCount; i++)
-        {
-            distanceLengths[i] = lengths[literalCount + i];
-        }
-
-        var literalTree = new Huffman(literalLengths);
+        if (lengthCount != literalCount + distanceCount) throw new InvalidDataException("DEFLATE code lengths exceed declared counts.");
+        var literalTree = new Huffman(lengths[..literalCount]);
         try
         {
-            return (literalTree, new Huffman(distanceLengths));
+            return (literalTree, new Huffman(lengths[literalCount..]));
         }
         catch
         {
@@ -270,28 +260,29 @@ public static class PuffDeflateCodec
         var literalCount = counts[0] + 257; var distanceCount = counts[1] + 1; var codeCount = counts[2] + 4;
         if (literalCount > 286 || distanceCount > 30 || codeCount > 19) throw new InvalidDataException("Invalid Puff Huffman counts.");
         bits.Write(5, counts[0]); bits.Write(5, counts[1]); bits.Write(4, counts[2]);
-        var packed = reader.Take((codeCount + 1) / 2); var codes = new byte[19];
+        var packed = reader.Take((codeCount + 1) / 2); Span<byte> codes = stackalloc byte[19];
         for (var i = 0; i < codeCount; i++)
         { codes[Order[i]] = (byte)(((i & 1) == 0 ? packed[i / 2] >> 4 : packed[i / 2]) & 15); if (codes[Order[i]] > 7) throw new InvalidDataException("Invalid Puff code length."); bits.Write(3, codes[Order[i]]); }
-        var codeTree = new Huffman(codes, decoding: false); var lengths = new List<byte>();
-        while (lengths.Count < literalCount + distanceCount)
+        var codeTree = new Huffman(codes, decoding: false, retainCodes: true); Span<byte> lengths = stackalloc byte[286 + 30];
+        var lengthCount = 0;
+        while (lengthCount < literalCount + distanceCount)
         {
             var value = reader.Take(1)[0];
             var code = value < 16 ? value : value < 20 ? 16 : value < 28 ? 17 : 18;
             codeTree.Write(bits, code);
-            if (code < 16) lengths.Add(value);
-            else { bits.Write(code == 16 ? 2 : code == 17 ? 3 : 7, value - (code == 16 ? 16 : code == 17 ? 20 : 28)); ExpandLength(lengths, value); }
+            if (code < 16) lengths[lengthCount++] = value;
+            else { bits.Write(code == 16 ? 2 : code == 17 ? 3 : 7, value - (code == 16 ? 16 : code == 17 ? 20 : 28)); ExpandLength(lengths, ref lengthCount, value); }
         }
-        if (lengths.Count != literalCount + distanceCount || reader.Remaining != 0) throw new InvalidDataException("Invalid Puff Huffman metadata length.");
-        return (new Huffman([.. lengths.Take(literalCount)], decoding: false), new Huffman([.. lengths.Skip(literalCount)], decoding: false));
+        if (lengthCount != literalCount + distanceCount || reader.Remaining != 0) throw new InvalidDataException("Invalid Puff Huffman metadata length.");
+        return (new Huffman(lengths[..literalCount], decoding: false, retainCodes: true), new Huffman(lengths[literalCount..], decoding: false, retainCodes: true));
     }
 
-    private static void ExpandLength(List<byte> lengths, byte packed)
+    private static void ExpandLength(Span<byte> lengths, ref int lengthCount, byte packed)
     {
-        if (packed > 155 || (packed < 20 && lengths.Count == 0)) throw new InvalidDataException("Invalid Puff code repeat.");
+        if (packed > 155 || (packed < 20 && lengthCount == 0)) throw new InvalidDataException("Invalid Puff code repeat.");
         var count = packed < 20 ? packed - 16 + 3 : packed < 28 ? packed - 20 + 3 : packed - 28 + 11;
-        var value = packed < 20 ? lengths[^1] : (byte)0;
-        for (var i = 0; i < count; i++) lengths.Add(value);
+        var value = packed < 20 ? lengths[lengthCount - 1] : (byte)0;
+        for (var i = 0; i < count; i++) lengths[lengthCount++] = value;
     }
     private static int FindBase(int[] values, int value)
     { var i = 0; while (i + 1 < values.Length && values[i + 1] <= value) i++; return i; }
@@ -322,26 +313,37 @@ public static class PuffDeflateCodec
             literals[i] = (byte)(i < 144 ? 8 : i < 256 ? 9 : i < 280 ? 7 : 8);
         }
 
-        return new Huffman(literals, decoding: true, rentedTable: false);
+        return new Huffman(literals, decoding: true, rentedTable: false, retainCodes: true);
     }
 
     private static Huffman BuildFixedDistanceTree()
     {
         var distances = new byte[32];
         Array.Fill(distances, (byte)5);
-        return new Huffman(distances, decoding: true, rentedTable: false);
+        return new Huffman(distances, decoding: true, rentedTable: false, retainCodes: true);
     }
 
     private sealed class Huffman
     {
-        private readonly byte[] _lengths;
-        private readonly int[] _codes;
+        private readonly byte[]? _lengths;
+        private readonly int[]? _codes;
         private ushort[]? _table;
         private int _tableBits;
         private bool _rentedTable;
-        internal Huffman(byte[] lengths, bool decoding = true, bool rentedTable = true)
+
+        /// <summary>
+        /// Builds the canonical code over the given lengths. Decoding trees only materialize the pooled lookup table —
+        /// the code and length arrays stay on the stack — so per-block dynamic trees allocate nothing beyond the
+        /// instance; trees used through <see cref="Write"/> pass <paramref name="retainCodes"/> so the arrays live as
+        /// long as the tree does.
+        /// <para>按给定码长构建规范码。解码树只物化池化查找表——码字与码长数组都留在栈上——因此逐块的动态树除实例本身
+        /// 外零分配；需要经 <see cref="Write"/> 使用的树传入 <paramref name="retainCodes"/>，让数组与树同生命周期。</para>
+        /// </summary>
+        internal Huffman(ReadOnlySpan<byte> lengths, bool decoding = true, bool rentedTable = true, bool retainCodes = false)
         {
-            _lengths = lengths; _codes = new int[lengths.Length]; var counts = new int[16]; var next = new int[16];
+            Span<int> codes = stackalloc int[lengths.Length];
+            Span<int> counts = stackalloc int[16];
+            Span<int> next = stackalloc int[16];
             foreach (var length in lengths) { if (length > 15) throw new InvalidDataException("Invalid Huffman length."); counts[length]++; }
             counts[0] = 0; var code = 0;
             for (var length = 1; length <= 15; length++)
@@ -351,12 +353,18 @@ public static class PuffDeflateCodec
                 var length = lengths[symbol]; if (length == 0) continue;
                 var canonical = next[length]++; var reversed = 0;
                 for (var bit = 0; bit < length; bit++) { reversed = (reversed << 1) | (canonical & 1); canonical >>= 1; }
-                _codes[symbol] = reversed;
+                codes[symbol] = reversed;
+            }
+
+            if (retainCodes)
+            {
+                _lengths = lengths.ToArray();
+                _codes = [.. codes];
             }
 
             if (decoding)
             {
-                BuildTable(rentedTable);
+                BuildTable(lengths, codes, rentedTable);
             }
         }
 
@@ -364,10 +372,10 @@ public static class PuffDeflateCodec
         /// Builds the single-level lookup table indexed by the next table-width bits, with each entry packing the symbol and its code length.
         /// <para>构建按紧随其后的表宽比特索引的单级查找表，每项打包符号与其码长。</para>
         /// </summary>
-        private void BuildTable(bool rentedTable)
+        private void BuildTable(ReadOnlySpan<byte> lengths, ReadOnlySpan<int> codes, bool rentedTable)
         {
             var bits = 0;
-            foreach (var length in _lengths) { if (length > bits) bits = length; }
+            foreach (var length in lengths) { if (length > bits) bits = length; }
             _tableBits = bits;
             if (bits == 0)
             {
@@ -381,16 +389,16 @@ public static class PuffDeflateCodec
                 Array.Clear(table, 0, size);
             }
 
-            for (var symbol = 0; symbol < _lengths.Length; symbol++)
+            for (var symbol = 0; symbol < lengths.Length; symbol++)
             {
-                var length = _lengths[symbol];
+                var length = lengths[symbol];
                 if (length == 0)
                 {
                     continue;
                 }
 
                 var entry = (ushort)((symbol << 4) | length);
-                for (var index = _codes[symbol]; index < size; index += 1 << length)
+                for (var index = codes[symbol]; index < size; index += 1 << length)
                 {
                     table[index] = entry;
                 }
@@ -458,7 +466,11 @@ public static class PuffDeflateCodec
         }
 
         internal void Write(Bits bits, int symbol)
-        { if (symbol < 0 || symbol >= _lengths.Length || _lengths[symbol] == 0) throw new InvalidDataException("Unavailable Huffman symbol."); bits.Write(_lengths[symbol], _codes[symbol]); }
+        {
+            if (_lengths is null || _codes is null) throw new InvalidOperationException("This Huffman tree was built for decoding only.");
+            if (symbol < 0 || symbol >= _lengths.Length || _lengths[symbol] == 0) throw new InvalidDataException("Unavailable Huffman symbol.");
+            bits.Write(_lengths[symbol], _codes[symbol]);
+        }
     }
     private sealed class Bits(byte[] data, long offset, long end)
     {

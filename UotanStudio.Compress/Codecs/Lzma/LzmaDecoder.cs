@@ -37,18 +37,18 @@ public sealed class LzmaDecoder
         _coder.SetDecoderProperties(coderProperties);
     }
 
-    ///     /// <summary>Decodes the input stream into the output stream.
-    ///     /// <para>把输入流解码写入输出流。</para> </summary>
-    ///     /// <param name="input">Stream supplying the encoded bytes from its current position; it is left open.
-    ///     /// <para>从其当前位置提供编码字节的流，调用后保持打开。</para> </param>
-    ///     /// <param name="output">Stream receiving the plaintext at its current position and left open; a stream that bounds its own capacity reports the overflow itself.
-    ///     /// <para>在其当前位置接收明文且本调用不会关闭的流；自带容量限制的流会自行报告越界。</para> </param>
-    ///     /// <param name="inSize">Number of encoded bytes the SDK may read, or <c>-1</c> for "unknown", which is the SDK convention for draining the whole stream.
-    ///     /// <para>SDK 可以读取的编码字节数；<c>-1</c> 表示未知，这是 SDK 用于读完整个流的约定。</para> </param>
-    ///     /// <param name="outSize">Number of plaintext bytes the SDK may produce, or <c>-1</c> for "unknown"; a format that stores the decompressed size passes it here so a short decode is observable on the destination stream.
-    ///     /// <para>SDK 可以产出的明文字节数；<c>-1</c> 表示未知；存储解压后大小的格式把该值传到这里， 从而可在目标流上观察到解码长度不足。</para> </param>
-    ///     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
-    ///     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para> </exception>
+    /// <summary>Decodes the input stream into the output stream.
+    /// <para>把输入流解码写入输出流。</para> </summary>
+    /// <param name="input">Stream supplying the encoded bytes from its current position; it is left open.
+    /// <para>从其当前位置提供编码字节的流，调用后保持打开。</para> </param>
+    /// <param name="output">Stream receiving the plaintext at its current position and left open; a stream that bounds its own capacity reports the overflow itself.
+    /// <para>在其当前位置接收明文且本调用不会关闭的流；自带容量限制的流会自行报告越界。</para> </param>
+    /// <param name="inSize">Number of encoded bytes the SDK may read, or <c>-1</c> for "unknown", which is the SDK convention for draining the whole stream.
+    /// <para>SDK 可以读取的编码字节数；<c>-1</c> 表示未知，这是 SDK 用于读完整个流的约定。</para> </param>
+    /// <param name="outSize">Number of plaintext bytes the SDK may produce, or <c>-1</c> for "unknown"; a format that stores the decompressed size passes it here so a short decode is observable on the destination stream.
+    /// <para>SDK 可以产出的明文字节数；<c>-1</c> 表示未知；存储解压后大小的格式把该值传到这里， 从而可在目标流上观察到解码长度不足。</para> </param>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para> </exception>
     public void Code(Stream input, Stream output, long inSize, long outSize)
     {
         ArgumentNullException.ThrowIfNull(input);

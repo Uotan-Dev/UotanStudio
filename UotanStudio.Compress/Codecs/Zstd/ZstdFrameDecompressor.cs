@@ -109,29 +109,21 @@ public sealed class ZstdFrameDecompressor : IDisposable
         _decompressor.ResetStream();
     }
 
-    /// ///
-    /// <summary>Feeds part of a frame to the decoder and takes back whatever plaintext the decoder produced. ///
+    /// <summary>Feeds part of a frame to the decoder and takes back whatever plaintext the decoder produced.
     /// <para>把帧的一部分喂给解码器，并取回解码器产出的明文。</para></summary>
-    /// ///
-    /// <param name="source">Untrusted frame bytes that have not been handed over yet; a complete frame usually needs several calls. ///
+    /// <param name="source">Untrusted frame bytes that have not been handed over yet; a complete frame usually needs several calls.
     /// <para>尚未交付的、按不可信输入处理的帧字节；一个完整的帧通常需要多次调用才能喂完。</para></param>
-    /// ///
-    /// <param name="destination">Span written from its start with the plaintext produced by this call. ///
+    /// <param name="destination">Span written from its start with the plaintext produced by this call.
     /// <para>从起始处写入本次调用产出明文的目标 span。</para></param>
-    /// ///
-    /// <param name="consumed">Bytes taken from the front of <paramref name="source"/>. ///
+    /// <param name="consumed">Bytes taken from the front of <paramref name="source"/>.
     /// <para>从 <paramref name="source"/> 头部取走的字节数。</para></param>
-    /// ///
-    /// <param name="written">Bytes produced into the front of <paramref name="destination"/>. ///
+    /// <param name="written">Bytes produced into the front of <paramref name="destination"/>.
     /// <para>写入 <paramref name="destination"/> 起始处的产出字节数。</para></param>
-    /// ///
-    /// <returns>The engine's own status for this call: <see cref="OperationStatus.Done"/> ends a frame, <see cref="OperationStatus.NeedMoreData"/> and <see cref="OperationStatus.DestinationTooSmall"/> mean the caller should continue feeding or drain what was produced, and <see cref="OperationStatus.InvalidData"/> means the bytes are not decodable as given. Every one of them reaches the caller unchanged, because a decoding loop has to tell "not yet" from "not valid". ///
+    /// <returns>The engine's own status for this call: <see cref="OperationStatus.Done"/> ends a frame, <see cref="OperationStatus.NeedMoreData"/> and <see cref="OperationStatus.DestinationTooSmall"/> mean the caller should continue feeding or drain what was produced, and <see cref="OperationStatus.InvalidData"/> means the bytes are not decodable as given. Every one of them reaches the caller unchanged, because a decoding loop has to tell "not yet" from "not valid".
     /// <para>引擎针对本次调用给出的状态：<see cref="OperationStatus.Done"/> 表示一帧结束，<see cref="OperationStatus.NeedMoreData"/> 与 <see cref="OperationStatus.DestinationTooSmall"/> 表示调用方应当继续投喂或把已产出的内容取走，<see cref="OperationStatus.InvalidData"/> 表示给定字节无法按其解码；四态全部原样交给调用方，因为解码循环必须能分辨「还没完」与「根本不合法」。</para></returns>
-    /// ///
-    /// <exception cref="ObjectDisposedException">This context has been released. ///
+    /// <exception cref="ObjectDisposedException">This context has been released.
     /// <para>本上下文已被释放。</para></exception>
-    /// ///
-    /// <exception cref="CompressionException">Zstandard reported a hard error rather than a status, which is how an over-large window in untrusted input surfaces; the engine message is preserved as the inner exception. The context is deliberately kept alive, because only its owner can decide whether to reset and continue or release it. ///
+    /// <exception cref="CompressionException">Zstandard reported a hard error rather than a status, which is how an over-large window in untrusted input surfaces; the engine message is preserved as the inner exception. The context is deliberately kept alive, because only its owner can decide whether to reset and continue or release it.
     /// <para>Zstandard 给出的是硬错误而不是状态，不可信输入里过大的窗口就是这样浮现的；引擎消息作为内部异常保留。 上下文刻意保持存活，因为只有它的属主能决定重置后继续还是将其释放。</para></exception>
     public OperationStatus Decompress(
         ReadOnlySpan<byte> source,

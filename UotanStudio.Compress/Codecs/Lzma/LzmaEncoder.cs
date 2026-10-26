@@ -28,29 +28,21 @@ public sealed class LzmaEncoder
 {
     private readonly Encoder _coder = new();
 
-    /// ///
-    /// <summary>Creates an LZMA-SDK encoder and hands it only the property axes that were supplied. ///
+    /// <summary>Creates an LZMA-SDK encoder and hands it only the property axes that were supplied.
     /// <para>创建 LZMA-SDK 编码器，并只把实际提供的属性轴交给它。</para></summary>
-    /// ///
-    /// <param name="dictionarySize">Match-finder dictionary window in bytes, handed to the SDK as a 32-bit integer. ///
+    /// <param name="dictionarySize">Match-finder dictionary window in bytes, handed to the SDK as a 32-bit integer.
     /// <para>匹配查找器的字典窗口大小（字节），以 32 位整数交给 SDK。</para></param>
-    /// ///
-    /// <param name="posStateBits">Position state bits (pb) of the probability model. ///
+    /// <param name="posStateBits">Position state bits (pb) of the probability model.
     /// <para>概率模型的位置状态位数（pb）。</para></param>
-    /// ///
-    /// <param name="litContextBits">Literal context bits (lc) of the probability model. ///
+    /// <param name="litContextBits">Literal context bits (lc) of the probability model.
     /// <para>概率模型的字面量上下文位数（lc）。</para></param>
-    /// ///
-    /// <param name="litPosBits">Literal position bits (lp) of the probability model. ///
+    /// <param name="litPosBits">Literal position bits (lp) of the probability model.
     /// <para>概率模型的字面量位置位数（lp）。</para></param>
-    /// ///
-    /// <param name="algorithm">SDK algorithm selector, whose accepted range and meaning the SDK owns. ///
+    /// <param name="algorithm">SDK algorithm selector, whose accepted range and meaning the SDK owns.
     /// <para>SDK 的算法选择器，其取值范围与含义由 SDK 决定。</para></param>
-    /// ///
-    /// <param name="numFastBytes">Number of bytes the match finder tries to extend, whose accepted range the SDK owns. ///
+    /// <param name="numFastBytes">Number of bytes the match finder tries to extend, whose accepted range the SDK owns.
     /// <para>匹配查找器尝试延伸的字节数，其取值范围由 SDK 决定。</para></param>
-    /// ///
-    /// <param name="endMarker">Whether the encoded stream terminates with an end marker instead of a size declared outside this coder. ///
+    /// <param name="endMarker">Whether the encoded stream terminates with an end marker instead of a size declared outside this coder.
     /// <para>编码流是否以结束标记收尾，而不是依赖本 coder 之外声明的大小。</para></param>
     public LzmaEncoder(
         int? dictionarySize = null,
@@ -100,18 +92,18 @@ public sealed class LzmaEncoder
         _coder.WriteCoderProperties(output);
     }
 
-    ///     /// <summary>Encodes the input stream into the output stream with the configured axes.
-    ///     /// <para>按已配置的属性轴把输入流编码写入输出流。</para> </summary>
-    ///     /// <param name="input">Stream supplying the plaintext; it is consumed from its current position and left open.
-    ///     /// <para>提供明文的流；从其当前位置开始消费，调用后保持打开。</para> </param>
-    ///     /// <param name="output">Stream receiving the encoded bytes at its current position and left open.
-    ///     /// <para>在其当前位置接收编码字节、且本调用不会关闭的流。</para> </param>
-    ///     /// <param name="inSize">Number of plaintext bytes the SDK may read, or <c>-1</c> for "unknown", which is the SDK convention for draining the whole stream and is what an end-marked stream needs.
-    ///     /// <para>SDK 可以读取的明文字节数；<c>-1</c> 表示未知，这是 SDK 用于读完整个流的约定，也是带结束标记的流所要求的。</para> </param>
-    ///     /// <param name="outSize">Number of plaintext bytes the SDK is allowed to encode, or <c>-1</c> for "unknown"; a fixed-size stream without an end marker passes the exact input length here.
-    ///     /// <para>允许 SDK 编码的明文字节数；<c>-1</c> 表示未知；不带结束标记的定长流在此传入精确的输入长度。</para> </param>
-    ///     /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
-    ///     /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para> </exception>
+    /// <summary>Encodes the input stream into the output stream with the configured axes.
+    /// <para>按已配置的属性轴把输入流编码写入输出流。</para> </summary>
+    /// <param name="input">Stream supplying the plaintext; it is consumed from its current position and left open.
+    /// <para>提供明文的流；从其当前位置开始消费，调用后保持打开。</para> </param>
+    /// <param name="output">Stream receiving the encoded bytes at its current position and left open.
+    /// <para>在其当前位置接收编码字节、且本调用不会关闭的流。</para> </param>
+    /// <param name="inSize">Number of plaintext bytes the SDK may read, or <c>-1</c> for "unknown", which is the SDK convention for draining the whole stream and is what an end-marked stream needs.
+    /// <para>SDK 可以读取的明文字节数；<c>-1</c> 表示未知，这是 SDK 用于读完整个流的约定，也是带结束标记的流所要求的。</para> </param>
+    /// <param name="outSize">Number of plaintext bytes the SDK is allowed to encode, or <c>-1</c> for "unknown"; a fixed-size stream without an end marker passes the exact input length here.
+    /// <para>允许 SDK 编码的明文字节数；<c>-1</c> 表示未知；不带结束标记的定长流在此传入精确的输入长度。</para> </param>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="output"/> is <see langword="null"/>.
+    /// <para><paramref name="input"/> 或 <paramref name="output"/> 为 <see langword="null"/>。</para> </exception>
     public void Code(Stream input, Stream output, long inSize, long outSize)
     {
         ArgumentNullException.ThrowIfNull(input);

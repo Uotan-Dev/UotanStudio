@@ -29,33 +29,19 @@ public static class RawDeflateCodec
     private const int MinimumLevel = 0;
     private const int MaximumLevel = 9;
 
-    /// /// ///
-    ///
-    /// <summary>Compresses a whole source stream into a raw DEFLATE stream written to the destination. /// ///
+    /// <summary>Compresses a whole source stream into a raw DEFLATE stream written to the destination.
     /// <para>把整个源流压缩为写入目标的原始 DEFLATE 流。</para></summary>
-    /// /// ///
-    ///
-    /// <param name="source">Source positioned at the bytes to encode; read fully and left open. /// ///
+    /// <param name="source">Source positioned at the bytes to encode; read fully and left open.
     /// <para>定位在待编码字节处的可读源；读取到末尾且不会被本调用关闭。</para></param>
-    /// /// ///
-    ///
-    /// <param name="destination">Writable sink, left open; it receives a finished DEFLATE stream. /// ///
+    /// <param name="destination">Writable sink, left open; it receives a finished DEFLATE stream.
     /// <para>写入目标，本调用返回后保持打开；收到的是完整流而非半成品。</para></param>
-    /// /// ///
-    ///
-    /// <param name="compressionLevel">zlib-style level, clamped to the encoder range <c>0</c> to <c>9</c> before use. /// ///
+    /// <param name="compressionLevel">zlib-style level, clamped to the encoder range <c>0</c> to <c>9</c> before use.
     /// <para>zlib 风格级别，创建流之前夹取到内置编码器接受的 <c>0</c> 至 <c>9</c> 区间。</para></param>
-    /// /// ///
-    ///
-    /// <param name="strategy">Encoder strategy selected by the calling format. /// ///
+    /// <param name="strategy">Encoder strategy selected by the calling format.
     /// <para>由调用格式选定的编码策略。</para></param>
-    /// /// ///
-    ///
-    /// <exception cref="InvalidDataException">The in-box encoder rejected the stream state during the write. /// ///
+    /// <exception cref="InvalidDataException">The in-box encoder rejected the stream state during the write.
     /// <para>内置编码器在写出完整流的过程中拒绝了流状态。</para></exception>
-    /// /// ///
-    ///
-    /// <exception cref="IOException">Source or destination stream failed, including refusal over budget. /// ///
+    /// <exception cref="IOException">Source or destination stream failed, including refusal over budget.
     /// <para>源或目标流出错，含目标拒绝超出其既定预算的字节。</para></exception>
     public static void Compress(
         Stream source,

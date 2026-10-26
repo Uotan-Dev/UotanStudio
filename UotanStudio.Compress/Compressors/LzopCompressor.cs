@@ -334,60 +334,25 @@ public static class LzopCompressor
             WriteHeader(output);
             var degree = Parallelism.Resolve(maxDegreeOfParallelism, int.MaxValue);
             var buffers = new byte[degree][];
-            for (var slot = 0; slot < degree; slot++)
+            try
             {
-                buffers[slot] = new byte[CompressBlockSize];
+                for (var slot = 0; slot < degree; slot++)
+                {
+                    buffers[slot] = System.Buffers.ArrayPool<byte>.Shared.Rent(CompressBlockSize);
+                }
+
+                EncodeBlocks(input, output, degree, buffers);
             }
-
-            var encoded = degree == 1 ? null : new EncodedBlock[degree];
-            while (true)
+            finally
             {
-                var pending = 0;
-                while (pending < degree)
+                for (var slot = 0; slot < degree; slot++)
                 {
-                    var blockLength = ReadChunk(input, buffers[pending]);
-                    if (blockLength == 0)
+                    if (buffers[slot] is { } buffer)
                     {
-                        break;
+                        System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
                     }
-
-                    if (degree == 1)
-                    {
-                        WriteBlock(output, buffers[0], blockLength);
-                    }
-                    else
-                    {
-                        encoded![pending] = new EncodedBlock(buffers[pending], blockLength);
-                    }
-
-                    pending++;
-                }
-
-                if (degree > 1 && pending > 0)
-                {
-                    var blocks = encoded!;
-                    var count = pending;
-                    Parallel.For(
-                        0, count,
-                        new ParallelOptions { MaxDegreeOfParallelism = Math.Min(degree, count) },
-                        i => blocks[i].Encode());
-
-                    for (var i = 0; i < count; i++)
-                    {
-                        var block = blocks[i];
-                        block.ThrowIfFailed();
-                        WriteBlock(output, block.Payload, block.PayloadLength, block.UncompressedLength, block.UncompressedAdler32);
-                        blocks[i] = null!;
-                    }
-                }
-
-                if (pending < degree)
-                {
-                    break;
                 }
             }
-
-            WriteUInt32BigEndian(output, 0);
         }
         catch (CompressionException) { throw; }
         catch (Exception ex) when (ex is IOException or OverflowException)
@@ -437,6 +402,68 @@ public static class LzopCompressor
         }
 
         WriteBlock(output, block, blockLength, uncompressedLength, Adler32(uncompressed, 0, uncompressedLength));
+    }
+
+    /// <summary>
+    /// Encodes and writes every block over the pooled staging buffers; blocks leave strictly in input order, so the
+    /// container bytes stay identical to the sequential result under any parallel degree.
+    /// <para>在池化暂存缓冲上编码并写出全部块；各块严格按输入顺序写出，任何并行度下容器字节都与串行结果一致。</para>
+    /// </summary>
+    /// <param name="input">Source read in chunks of <see cref="CompressBlockSize"/>.<para>按 <see cref="CompressBlockSize"/> 分块读取的源。</para></param>
+    /// <param name="output">Destination appended in place; it is not closed.<para>就地追加的写入目标；不关闭。</para></param>
+    /// <param name="degree">Staging buffer count resolved from the caller's parallelism.<para>由调用方并行度解析出的暂存缓冲数。</para></param>
+    /// <param name="buffers">Pooled staging buffers, each at least <see cref="CompressBlockSize"/> bytes.<para>池化暂存缓冲，每块至少 <see cref="CompressBlockSize"/> 字节。</para></param>
+    private static void EncodeBlocks(Stream input, Stream output, int degree, byte[][] buffers)
+    {
+        var encoded = degree == 1 ? null : new EncodedBlock[degree];
+        while (true)
+        {
+            var pending = 0;
+            while (pending < degree)
+            {
+                var blockLength = ReadChunk(input, buffers[pending]);
+                if (blockLength == 0)
+                {
+                    break;
+                }
+
+                if (degree == 1)
+                {
+                    WriteBlock(output, buffers[0], blockLength);
+                }
+                else
+                {
+                    encoded![pending] = new EncodedBlock(buffers[pending], blockLength);
+                }
+
+                pending++;
+            }
+
+            if (degree > 1 && pending > 0)
+            {
+                var blocks = encoded!;
+                var count = pending;
+                Parallel.For(
+                    0, count,
+                    new ParallelOptions { MaxDegreeOfParallelism = Math.Min(degree, count) },
+                    i => blocks[i].Encode());
+
+                for (var i = 0; i < count; i++)
+                {
+                    var block = blocks[i];
+                    block.ThrowIfFailed();
+                    WriteBlock(output, block.Payload, block.PayloadLength, block.UncompressedLength, block.UncompressedAdler32);
+                    blocks[i] = null!;
+                }
+            }
+
+            if (pending < degree)
+            {
+                break;
+            }
+        }
+
+        WriteUInt32BigEndian(output, 0);
     }
 
     /// <summary>
@@ -497,7 +524,13 @@ public static class LzopCompressor
         return bytes;
     }
 
-    private static uint ReadUInt32(Stream input, string field) => BinaryPrimitives.ReadUInt32BigEndian(ReadBytes(input, 4, field));
+    private static uint ReadUInt32(Stream input, string field)
+    {
+        Span<byte> bytes = stackalloc byte[4];
+        try { input.ReadExactly(bytes); }
+        catch (EndOfStreamException ex) { throw new CompressionException($"Invalid LZOP data: truncated {field}.", ex); }
+        return BinaryPrimitives.ReadUInt32BigEndian(bytes);
+    }
 
     /// <summary>
     /// Reads one block body into a pooled buffer, returning it to the pool if the read fails so a truncated stream

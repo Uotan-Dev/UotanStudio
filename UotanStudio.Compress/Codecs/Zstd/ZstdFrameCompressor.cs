@@ -31,33 +31,33 @@ public sealed class ZstdFrameCompressor : IDisposable
     private readonly Compressor _compressor;
     private bool _disposed;
 
-    ///     /// <summary>Prepares a context at the requested level, optionally stamps every frame with a content checksum and copies the supplied raw dictionary into the context before the constructor returns.
-    ///     /// <para>按请求的级别准备上下文，可选地为每帧盖上内容校验和，并在构造函数返回前把给定的原始字典复制进上下文。</para> </summary>
-    ///     /// <param name="level">Zstandard compression level handed to the engine; <c>3</c> is the engine default and its strategy is <c>dfast</c>.
-    ///     /// <para>交给引擎的 Zstandard 压缩级别；<c>3</c> 为引擎默认级别，其策略是 <c>dfast</c>。</para> </param>
-    ///     /// <param name="contentChecksum">Whether each frame carries a content checksum. A caller that must fail loudly on a wrong or missing dictionary passes <see langword="true"/>, because the checksum is what turns silently wrong plaintext into a reported decode error.
-    ///     /// <para>每帧是否附带内容校验和。字典用错或缺失时必须明确失败的调用方传入 <see langword="true"/>， 因为正是校验和把静默错误的明文变成可见的解压错误。</para> </param>
-    ///     /// <param name="dictionary">Exact raw dictionary bytes, copied into the context here; an empty span leaves the context dictionary-free and no dictionary call is made.
-    ///     /// <para>完全一致的原始字典字节，在此即复制进上下文；空区间使上下文保持无字典， 也不发起任何字典加载调用。</para> </param>
-    ///     /// <exception cref="CompressionException">Zstandard refused a context setting or the dictionary, which the engine reports as its own error and this library re-reports as a compression failure with the engine message as the inner exception. The half-prepared engine context is released before this exception leaves the constructor, so a failed construction leaks nothing.
-    ///     /// <para>Zstandard 拒绝某项上下文设置或字典；引擎会报告自己的错误，本库把它重新报为压缩失败，并以引擎消息作为 内部异常。抛出该异常前，已部分准备的引擎上下文会被释放，因此构造失败不会泄漏。</para> </exception>
+    /// <summary>Prepares a context at the requested level, optionally stamps every frame with a content checksum and copies the supplied raw dictionary into the context before the constructor returns.
+    /// <para>按请求的级别准备上下文，可选地为每帧盖上内容校验和，并在构造函数返回前把给定的原始字典复制进上下文。</para> </summary>
+    /// <param name="level">Zstandard compression level handed to the engine; <c>3</c> is the engine default and its strategy is <c>dfast</c>.
+    /// <para>交给引擎的 Zstandard 压缩级别；<c>3</c> 为引擎默认级别，其策略是 <c>dfast</c>。</para> </param>
+    /// <param name="contentChecksum">Whether each frame carries a content checksum. A caller that must fail loudly on a wrong or missing dictionary passes <see langword="true"/>, because the checksum is what turns silently wrong plaintext into a reported decode error.
+    /// <para>每帧是否附带内容校验和。字典用错或缺失时必须明确失败的调用方传入 <see langword="true"/>， 因为正是校验和把静默错误的明文变成可见的解压错误。</para> </param>
+    /// <param name="dictionary">Exact raw dictionary bytes, copied into the context here; an empty span leaves the context dictionary-free and no dictionary call is made.
+    /// <para>完全一致的原始字典字节，在此即复制进上下文；空区间使上下文保持无字典， 也不发起任何字典加载调用。</para> </param>
+    /// <exception cref="CompressionException">Zstandard refused a context setting or the dictionary, which the engine reports as its own error and this library re-reports as a compression failure with the engine message as the inner exception. The half-prepared engine context is released before this exception leaves the constructor, so a failed construction leaks nothing.
+    /// <para>Zstandard 拒绝某项上下文设置或字典；引擎会报告自己的错误，本库把它重新报为压缩失败，并以引擎消息作为 内部异常。抛出该异常前，已部分准备的引擎上下文会被释放，因此构造失败不会泄漏。</para> </exception>
     public ZstdFrameCompressor(int level, bool contentChecksum, ReadOnlySpan<byte> dictionary)
     {
         _compressor = Prepare(level, contentChecksum, dictionary);
     }
 
-    ///     /// <summary>Encodes the source into exactly one complete frame written from the start of the destination.
-    ///     /// <para>把源数据编码为一个完整的帧，并写入目标区间的起始处。</para> </summary>
-    ///     /// <param name="source">Frame plaintext. An empty source still produces a valid empty frame rather than a zero-length result.
-    ///     /// <para>帧的明文。空源仍然产出合法的空调帧，而不是零长度结果。</para> </param>
-    ///     /// <param name="destination">Destination span, which must already offer at least <see cref="MaximumCompressedSize(int)"/> bytes for <paramref name="source"/>; no byte is written past its length.
-    ///     /// <para>目标 span，</para><para>其容量必须已经不小于按 <paramref name="source"/> 算出的 <see cref="MaximumCompressedSize(int)"/> 字节数；</para><para>不会有任何字节越过其长度边界。</para> </param>
-    ///     /// <returns>The number of frame bytes written at the start of <paramref name="destination"/>.
-    ///     /// <para>写入 <paramref name="destination"/> 起始处的帧字节数。</para> </returns>
-    ///     /// <exception cref="ObjectDisposedException">This context has been released.
-    ///     /// <para>本上下文已被释放。</para> </exception>
-    ///     /// <exception cref="CompressionException">The frame did not fit <paramref name="destination"/> or Zstandard refused the session; the engine message is preserved as the inner exception. The context is deliberately kept alive, because only its owner can decide whether to keep encoding with it or release it.
-    ///     /// <para>帧无法容纳于 <paramref name="destination"/>，或 Zstandard 拒绝该会话；引擎消息作为内部异常保留。 上下文刻意保持存活，因为只有它的属主能决定继续用它编码还是将其释放。</para> </exception>
+    /// <summary>Encodes the source into exactly one complete frame written from the start of the destination.
+    /// <para>把源数据编码为一个完整的帧，并写入目标区间的起始处。</para> </summary>
+    /// <param name="source">Frame plaintext. An empty source still produces a valid empty frame rather than a zero-length result.
+    /// <para>帧的明文。空源仍然产出合法的空调帧，而不是零长度结果。</para> </param>
+    /// <param name="destination">Destination span, which must already offer at least <see cref="MaximumCompressedSize(int)"/> bytes for <paramref name="source"/>; no byte is written past its length.
+    /// <para>目标 span，</para><para>其容量必须已经不小于按 <paramref name="source"/> 算出的 <see cref="MaximumCompressedSize(int)"/> 字节数；</para><para>不会有任何字节越过其长度边界。</para> </param>
+    /// <returns>The number of frame bytes written at the start of <paramref name="destination"/>.
+    /// <para>写入 <paramref name="destination"/> 起始处的帧字节数。</para> </returns>
+    /// <exception cref="ObjectDisposedException">This context has been released.
+    /// <para>本上下文已被释放。</para> </exception>
+    /// <exception cref="CompressionException">The frame did not fit <paramref name="destination"/> or Zstandard refused the session; the engine message is preserved as the inner exception. The context is deliberately kept alive, because only its owner can decide whether to keep encoding with it or release it.
+    /// <para>帧无法容纳于 <paramref name="destination"/>，或 Zstandard 拒绝该会话；引擎消息作为内部异常保留。 上下文刻意保持存活，因为只有它的属主能决定继续用它编码还是将其释放。</para> </exception>
     public int Compress(ReadOnlySpan<byte> source, Span<byte> destination)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

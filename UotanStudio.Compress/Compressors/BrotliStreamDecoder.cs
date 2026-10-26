@@ -3,12 +3,12 @@ using System.IO.Compression;
 
 namespace UotanStudio.Compress.Compressors;
 
-///     /// <summary>Buffered incremental Brotli decoder that pulls its compressed bytes from a caller-owned stream and hands the built-in decoder's status back to the caller without applying any framing policy of its own.
-///     /// <para>带缓冲的增量 Brotli 解码器，从调用方持有的流拉取压缩字节，并把内置解码器的状态原样交回调用方，自身不施加任何帧策略。</para> </summary>
-///     /// <remarks>The engine is the built-in <see cref="BrotliDecoder"/>, kept here so that no layer above the library constructs a generic codec; the 64 KiB pull buffer and the read-ahead offset bookkeeping travel with it. Deliberately absent is the single-frame rule: this type does not decide whether a trailing byte or a missing final block is an error, it only reports the status and the consumed byte count so that a container can enforce its own framing contract. Output is unbounded, so callers handling untrusted input must bound their own destination spans.
-///     /// <para>引擎是内置 <see cref="BrotliDecoder"/>，放在这里是为了让库之上的层不再自行构造通用编解码器；64 KiB 拉取缓冲与预读的偏移记账随之一起收纳。刻意不包含的是单帧规则：本类型不判定尾随字节或缺少结束块是否算错误， 只回报状态与消耗字节数，由容器自己执行其帧契约。输出不设上限，处理不可信输入的调用方需自行限定目标区间。</para> </remarks>
-///     /// <param name="input">Readable Brotli stream positioned at its first byte; ownership stays with the caller and disposing this decoder leaves it open.
-///     /// <para>定位在首字节处的可读 Brotli 流；所有权归调用方，释放本解码器不会关闭它。</para> </param>
+/// <summary>Buffered incremental Brotli decoder that pulls its compressed bytes from a caller-owned stream and hands the built-in decoder's status back to the caller without applying any framing policy of its own.
+/// <para>带缓冲的增量 Brotli 解码器，从调用方持有的流拉取压缩字节，并把内置解码器的状态原样交回调用方，自身不施加任何帧策略。</para> </summary>
+/// <remarks>The engine is the built-in <see cref="BrotliDecoder"/>, kept here so that no layer above the library constructs a generic codec; the 64 KiB pull buffer and the read-ahead offset bookkeeping travel with it. Deliberately absent is the single-frame rule: this type does not decide whether a trailing byte or a missing final block is an error, it only reports the status and the consumed byte count so that a container can enforce its own framing contract. Output is unbounded, so callers handling untrusted input must bound their own destination spans.
+/// <para>引擎是内置 <see cref="BrotliDecoder"/>，放在这里是为了让库之上的层不再自行构造通用编解码器；64 KiB 拉取缓冲与预读的偏移记账随之一起收纳。刻意不包含的是单帧规则：本类型不判定尾随字节或缺少结束块是否算错误， 只回报状态与消耗字节数，由容器自己执行其帧契约。输出不设上限，处理不可信输入的调用方需自行限定目标区间。</para> </remarks>
+/// <param name="input">Readable Brotli stream positioned at its first byte; ownership stays with the caller and disposing this decoder leaves it open.
+/// <para>定位在首字节处的可读 Brotli 流；所有权归调用方，释放本解码器不会关闭它。</para> </param>
 public sealed class BrotliStreamDecoder(Stream input) : IDisposable
 {
     private BrotliDecoder _decoder;

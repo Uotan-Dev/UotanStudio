@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Numerics;
 
 namespace UotanStudio.Compress.Codecs.Xz;
 
@@ -106,6 +107,17 @@ internal abstract class XzBlockFilter
 /// Inverse delta filter: each byte is added to the byte one distance earlier.
 /// <para>逆差分过滤器：每个字节加上距离一个步长之前的字节。</para>
 /// </summary>
+/// <remarks>
+/// <para>The first <c>distance</c> bytes of every chunk run scalarly against the history ring. Beyond that, in-place
+/// decoding satisfies <c>v[i] = buffer[i] + v[i - distance]</c>, so when hardware vectors exist and the distance
+/// covers a full vector, whole vectors are added at once — the load of the earlier <c>v</c> never overlaps the store
+/// being produced. The ring is then refreshed from the last <c>distance</c> outputs, which reproduces the per-byte
+/// history state across chunks exactly. Distances below the vector width keep the byte-at-a-time path.</para>
+/// <para>每个块的前 <c>distance</c> 字节按标量对齐 history 环处理。此后就地解码满足
+/// <c>v[i] = buffer[i] + v[i - distance]</c>，因此在存在硬件向量且步长覆盖整条向量时按整向量相加——对较早
+/// <c>v</c> 的加载与正在产出的存储永不错位重叠。随后用最后 <c>distance</c> 个输出回填环形缓冲，跨块的逐字节
+/// history 状态完全一致。小于向量宽度的步长保留逐字节路径。</para>
+/// </remarks>
 internal sealed class XzDeltaFilter : XzBlockFilter
 {
     private readonly byte[] _history;
@@ -120,6 +132,70 @@ internal sealed class XzDeltaFilter : XzBlockFilter
 
     internal override int Transform(Span<byte> buffer, int length, long position)
     {
+        var distance = _history.Length;
+        var startIndex = _index;
+        var prefix = Math.Min(distance, length);
+        var index = _index;
+        for (var j = 0; j < prefix; j++)
+        {
+            var value = unchecked((byte)(buffer[j] + _history[index]));
+            buffer[j] = value;
+            _history[index] = value;
+            index++;
+            if (index == distance)
+            {
+                index = 0;
+            }
+        }
+
+        _index = (int)((startIndex + (long)length) % distance);
+        if (length <= distance)
+        {
+            return length;
+        }
+
+        var i = prefix;
+        if (Vector.IsHardwareAccelerated && distance >= Vector<byte>.Count)
+        {
+            var width = Vector<byte>.Count;
+            var limit = length - width;
+            for (; i <= limit; i += width)
+            {
+                var current = new Vector<byte>(buffer.Slice(i, width));
+                var previous = new Vector<byte>(buffer.Slice(i - distance, width));
+                Vector.Add(current, previous).CopyTo(buffer.Slice(i, width));
+            }
+        }
+
+        for (; i < length; i++)
+        {
+            buffer[i] = unchecked((byte)(buffer[i] + buffer[i - distance]));
+        }
+
+        var slot = _index;
+        for (var j = length - distance; j < length; j++)
+        {
+            _history[slot] = buffer[j];
+            slot++;
+            if (slot == distance)
+            {
+                slot = 0;
+            }
+        }
+
+        return length;
+    }
+
+    /// <summary>
+    /// The byte-at-a-time reference form; it produces the same bytes and history state as <see cref="Transform"/> for
+    /// every distance, length and chunk split, which the equivalence tests pin down.
+    /// <para>逐字节参考形态；对任意步长、长度与分块切分，其输出字节与 history 状态都与 <see cref="Transform"/> 一致，
+    /// 由等价测试固定。</para>
+    /// </summary>
+    /// <param name="buffer">Decoded bytes rewritten in place. <para>就地改写的已解码字节。</para></param>
+    /// <param name="length">Valid byte count. <para>有效字节数。</para></param>
+    internal void TransformScalar(Span<byte> buffer, int length)
+    {
         for (var i = 0; i < length; i++)
         {
             var value = unchecked((byte)(buffer[i] + _history[_index]));
@@ -131,8 +207,6 @@ internal sealed class XzDeltaFilter : XzBlockFilter
                 _index = 0;
             }
         }
-
-        return length;
     }
 }
 
