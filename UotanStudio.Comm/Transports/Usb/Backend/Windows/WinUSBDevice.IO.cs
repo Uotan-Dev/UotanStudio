@@ -44,11 +44,12 @@ internal partial class WinUSBDevice
 
     protected override UsbChunkResult ReadChunk(IntPtr buffer, int length, int timeoutMs)
     {
+        var clampedLength = ClampRawIoReadLength(length);
         var usb = AcquireWinUsbHandle();
         try
         {
             SetReadPipeTimeout(timeoutMs);
-            if (WinUsb_ReadPipe(usb, _readBulkID, buffer, (uint)length, out var bytesRead, IntPtr.Zero))
+            if (WinUsb_ReadPipe(usb, _readBulkID, buffer, (uint)clampedLength, out var bytesRead, IntPtr.Zero))
             {
                 return UsbChunkResult.Success((int)bytesRead);
             }

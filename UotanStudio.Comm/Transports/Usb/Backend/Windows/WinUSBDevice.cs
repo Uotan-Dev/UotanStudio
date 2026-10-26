@@ -45,6 +45,28 @@ internal partial class WinUSBDevice : UsbDevice
     private bool RawIoEnabled =>
         SessionOptions?.EnableRawIo == true || SessionOptions?.AllowPartialReads == true;
 
+    /// <summary>
+    /// Maximum packet size of the bulk IN pipe captured at handle creation; the RAW_IO read clamp
+    /// uses it because RAW_IO requires every read to be at most <c>wMaxPacketSize</c> bytes.
+    /// <para>创建句柄时记录的批量 IN 管道最大包长；RAW_IO 读长钳制使用它，因为 RAW_IO 要求单次读取
+    /// 不超过 <c>wMaxPacketSize</c> 字节。</para>
+    /// <c>0</c> means the value was not captured and no clamp is applied.
+    /// <para><c>0</c> 表示未记录到该值，此时不应用钳制。</para>
+    /// </summary>
+    private ushort ReadPipeMaxPacketSize;
+
+    /// <summary>
+    /// Clamps a bulk IN read length to the RAW_IO limit: with RAW_IO enabled a single read may
+    /// request at most one <c>wMaxPacketSize</c>, so the length is capped while a short packet
+    /// keeps its message-boundary semantics.
+    /// <para>把批量 IN 读长钳制到 RAW_IO 上限：启用 RAW_IO 时单次读取最多请求一个
+    /// <c>wMaxPacketSize</c>，因此对读长设置上限，同时短包保持其消息边界语义。</para>
+    /// </summary>
+    /// <param name="length">The requested read length. <para>请求的读长。</para></param>
+    /// <returns>The length to pass to the native read. <para>传给原生读取的长度。</para></returns>
+    private int ClampRawIoReadLength(int length)
+        => RawIoEnabled && ReadPipeMaxPacketSize > 0 ? Math.Min(length, ReadPipeMaxPacketSize) : length;
+
     private byte _interfaceNum;
     private byte _readBulkID, _writeBulkID;
 
@@ -154,6 +176,7 @@ internal partial class WinUSBDevice : UsbDevice
                     if (_readBulkID == 0)
                     {
                         _readBulkID = pipeInfo.PipeID;
+                        ReadPipeMaxPacketSize = pipeInfo.MaximumPacketSize;
                     }
                 }
                 else

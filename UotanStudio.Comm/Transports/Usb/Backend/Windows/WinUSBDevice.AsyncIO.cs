@@ -26,7 +26,8 @@ internal partial class WinUSBDevice
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, DefaultTimeoutMs);
         try
         {
-            var transferred = await OverlappedTransferAsync(buffer, length, _readBulkID, effectiveTimeoutMs, cancellationToken).ConfigureAwait(false);
+            var clampedLength = ClampRawIoReadLength(length);
+            var transferred = await OverlappedTransferAsync(buffer, clampedLength, _readBulkID, effectiveTimeoutMs, cancellationToken).ConfigureAwait(false);
             if (transferred > 0)
             {
                 Interlocked.Exchange(ref _consecutiveAbortedTransfers, 0);

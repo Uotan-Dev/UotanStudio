@@ -20,6 +20,25 @@ internal partial class LibUsbDevice : UsbDevice
     [LibraryImport("libusb-1.0")]
     private static partial int libusb_clear_halt(IntPtr devHandle, byte endpoint);
 
+    /// <summary>
+    /// Enables or disables libusb's automatic kernel-driver detach/reattach around interface claims
+    /// (<c>libusb_set_auto_detach_kernel_driver</c>).
+    /// <para>启用或禁用 libusb 在接口声明前后的内核驱动自动分离/重新附着
+    /// （<c>libusb_set_auto_detach_kernel_driver</c>）。</para>
+    /// When enabled, libusb detaches the kernel driver before every claim and reattaches it
+    /// automatically on release, which removes the need for a manual detach fallback.
+    /// <para>启用后，libusb 在每次声明前分离内核驱动，并在释放时自动重新附着，从而无需手动分离回退。</para>
+    /// </summary>
+    /// <param name="deviceHandle">The libusb device handle. <para>libusb 设备句柄。</para></param>
+    /// <param name="enable">Non-zero to enable automatic detach, zero to disable.
+    /// <para>非零启用自动分离，零禁用。</para></param>
+    /// <returns><c>0</c> (LIBUSB_SUCCESS) on success, otherwise a LIBUSB_ERROR code such as
+    /// <c>-12</c> (LIBUSB_ERROR_NOT_SUPPORTED) on backends without kernel drivers.
+    /// <para>成功返回 <c>0</c>（LIBUSB_SUCCESS）；否则返回 LIBUSB_ERROR 码，例如在不支持内核驱动
+    /// 的后端上返回 <c>-12</c>（LIBUSB_ERROR_NOT_SUPPORTED）。</para></returns>
+    [LibraryImport("libusb-1.0")]
+    private static partial int libusb_set_auto_detach_kernel_driver(IntPtr deviceHandle, int enable);
+
     private UsbContext? _context;
     private IUsbDevice? _usbDevice;
     private bool _interfaceClaimed;
@@ -88,6 +107,8 @@ internal partial class LibUsbDevice : UsbDevice
             return -1;
         }
 
+        var autoDetachKernelDriver = false;
+
         try
         {
             _usbDevice.Open();
@@ -102,6 +123,7 @@ internal partial class LibUsbDevice : UsbDevice
                 throw new IOException("The opened libusb handle no longer matches the selected location.");
             }
             PhysicalPortPath = physicalPortPath;
+            autoDetachKernelDriver = TryEnableAutoKernelDetach();
         }
         catch (Exception ex)
         {
@@ -193,11 +215,14 @@ internal partial class LibUsbDevice : UsbDevice
 
         InterfaceId = targetInterfaceId;
 
+        Action? detachFallback = autoDetachKernelDriver
+            ? null
+            : _usbDevice is LibUsbDotNet.LibUsb.UsbDevice libusbDevice
+                ? () => libusbDevice.DetachKernelDriver(targetInterfaceId)
+                : null;
         var claimed = LibUsbInterfaceClaim.TryClaim(
             () => _usbDevice.ClaimInterface(targetInterfaceId),
-            _usbDevice is LibUsbDotNet.LibUsb.UsbDevice libusbDevice
-                ? () => libusbDevice.DetachKernelDriver(targetInterfaceId)
-                : null,
+            detachFallback,
             out var claimError);
         if (!claimed)
         {
@@ -231,6 +256,39 @@ internal partial class LibUsbDevice : UsbDevice
 
         GetSerialNumber();
         return 0;
+    }
+
+    /// <summary>
+    /// Enables libusb's automatic kernel-driver detach so the driver is reattached automatically when the interface is released.
+    /// <para>启用 libusb 的内核驱动自动分离，使接口释放时驱动被自动重新附着。</para>
+    /// A failed call (including <c>LIBUSB_ERROR_NOT_SUPPORTED</c>) keeps the manual detach fallback
+    /// at the claim site, so this is safe to treat as best-effort.
+    /// <para>调用失败（包括 <c>LIBUSB_ERROR_NOT_SUPPORTED</c>）时，声明处保留手动分离回退，因此可以按尽力而为处理。</para>
+    /// </summary>
+    /// <returns><c>true</c> when automatic detach was enabled on the open device handle; otherwise <c>false</c>.
+    /// <para>在已打开的设备句柄上启用成功返回 <c>true</c>；否则返回 <c>false</c>。</para></returns>
+    private bool TryEnableAutoKernelDetach()
+    {
+        try
+        {
+            if (_usbDevice is LibUsbDotNet.LibUsb.UsbDevice libusbDevice &&
+                libusbDevice.DeviceHandle is { IsInvalid: false } deviceHandle)
+            {
+                var result = libusb_set_auto_detach_kernel_driver(deviceHandle.DangerousGetHandle(), 1);
+                if (result == 0)
+                {
+                    return true;
+                }
+
+                UsbTrace.Log($"LibUsbDevice.libusb_set_auto_detach_kernel_driver returned 0x{result:X}; keeping the manual detach fallback.");
+            }
+        }
+        catch (Exception ex)
+        {
+            UsbTrace.Log($"LibUsbDevice.libusb_set_auto_detach_kernel_driver ignored: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -36,6 +36,16 @@ internal static partial class LinuxUsbAPI
     public static uint USBDEVFS_DISCONNECT = 0x5516;
     public static uint USBDEVFS_RESET = 0x5514;
 
+    /// <summary>
+    /// Ioctl request code for USBDEVFS_CLEAR_HALT, encoded as <c>_IOR('U', 21, unsigned int)</c> per
+    /// <c>linux/usbdevice_fs.h</c>; the argument is the endpoint address passed as an unsigned int,
+    /// which reuses the existing <c>ioctl(int, UIntPtr, ref int)</c> declaration.
+    /// <para>USBDEVFS_CLEAR_HALT 的 ioctl 请求码，按 <c>linux/usbdevice_fs.h</c> 编码为
+    /// <c>_IOR('U', 21, unsigned int)</c>；参数为以无符号整数传递的端点地址，可复用现有的
+    /// <c>ioctl(int, UIntPtr, ref int)</c> 声明。</para>
+    /// </summary>
+    public const uint USBDEVFS_CLEAR_HALT = 0x80045515;
+
     public static uint USBDEVFS_CONTROL_X86_64 = 0xC0185500;
     public static uint USBDEVFS_CONTROL_X86 = 0xC0105500;
     public const uint USBDEVFS_CONTROL = 0xC0105500;
