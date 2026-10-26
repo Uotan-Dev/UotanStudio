@@ -99,7 +99,8 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
         {
             await client.ConnectAsync(ServerHost, ServerPort, ct).ConfigureAwait(false);
             var stream = client.GetStream();
-            var hello = await ReadFrameAsync(stream, ct).ConfigureAwait(false);
+            var handshakeHeader = new byte[4];
+            var hello = await ReadFrameAsync(stream, handshakeHeader, ct).ConfigureAwait(false);
             if (hello is null || hello.Length is not (44 or 108) || !hello.AsSpan(0, 8).SequenceEqual("OHOS HDC"u8))
                 throw new InvalidDataException("Invalid HDC host channel handshake.");
             var reply = hello[..44];
@@ -112,17 +113,16 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     }
     private static async Task WriteFrameAsync(NetworkStream stream, byte[] payload, CancellationToken ct)
     {
-        var header = new byte[4];
+        byte[] header = new byte[4];
         BinaryPrimitives.WriteInt32BigEndian(header, payload.Length);
         await stream.WriteAsync(header, ct).ConfigureAwait(false);
         await stream.WriteAsync(payload, ct).ConfigureAwait(false);
     }
-    private static async Task<byte[]?> ReadFrameAsync(NetworkStream stream, CancellationToken ct)
+    private static async Task<byte[]?> ReadFrameAsync(NetworkStream stream, byte[] headerScratch, CancellationToken ct)
     {
-        var header = new byte[4];
-        if (await stream.ReadAsync(header.AsMemory(0, 1), ct).ConfigureAwait(false) == 0) return null;
-        await stream.ReadExactlyAsync(header.AsMemory(1), ct).ConfigureAwait(false);
-        var length = BinaryPrimitives.ReadInt32BigEndian(header);
+        if (await stream.ReadAsync(headerScratch.AsMemory(0, 1), ct).ConfigureAwait(false) == 0) return null;
+        await stream.ReadExactlyAsync(headerScratch.AsMemory(1, 3), ct).ConfigureAwait(false);
+        var length = BinaryPrimitives.ReadInt32BigEndian(headerScratch);
         if (length <= 0 || length > MaximumFrameBytes) throw new InvalidDataException("Invalid HDC channel frame length.");
         var payload = new byte[length];
         await stream.ReadExactlyAsync(payload, ct).ConfigureAwait(false);
@@ -146,7 +146,8 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
         using var client = await OpenAsync(connectKey, cancellationToken).ConfigureAwait(false);
         var stream = client.GetStream();
         await WriteFrameAsync(stream, Encoding.UTF8.GetBytes(command + '\0'), cancellationToken).ConfigureAwait(false);
-        while (await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false) is { } payload)
+        var headerScratch = new byte[4];
+        while (await ReadFrameAsync(stream, headerScratch, cancellationToken).ConfigureAwait(false) is { } payload)
             onOutput(payload);
     }
 
@@ -179,7 +180,8 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
         }, lifetime.Token);
         try
         {
-            while (await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false) is { } payload)
+            var headerScratch = new byte[4];
+            while (await ReadFrameAsync(stream, headerScratch, cancellationToken).ConfigureAwait(false) is { } payload)
             {
                 await output.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
                 await output.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -337,7 +339,8 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
             await WriteFrameAsync(stream, "kill\0"u8.ToArray(), timeout.Token).ConfigureAwait(false);
             try
             {
-                while (await ReadFrameAsync(stream, timeout.Token).ConfigureAwait(false) is not null)
+                var drainHeader = new byte[4];
+                while (await ReadFrameAsync(stream, drainHeader, timeout.Token).ConfigureAwait(false) is not null)
                 {
                 }
             }

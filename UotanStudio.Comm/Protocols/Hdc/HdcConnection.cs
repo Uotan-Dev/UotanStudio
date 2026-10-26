@@ -66,6 +66,12 @@ public sealed class HdcConnection : IDisposable
 
     private readonly ICommTransport _transport;
     private readonly byte[] _usbHeadScratch = new byte[11];
+    /// <summary>
+    /// Reused 11-byte USB send header buffer; every write happens inside <c>_sendLock</c>, so concurrent sends
+    /// cannot interleave over it.
+    /// <para>复用的 11 字节 USB 发送头缓冲；所有写入都发生在 <c>_sendLock</c> 内，并发发送不会在它上面交错。</para>
+    /// </summary>
+    private readonly byte[] _sendHeaderScratch = new byte[HdcConstants.HeaderSize];
     private readonly HdcAuthentication _authentication;
     private readonly Lock _sendLock = new();
     private readonly Lock _streamsLock = new();
@@ -672,8 +678,6 @@ public sealed class HdcConnection : IDisposable
             {
                 WriteUsbHeader(1, (uint)packet.Length);
                 WriteExact(packet);
-                // A zero-length packet terminates only a short packet of known endpoint size; when the size is
-                // unknown, inventing a ZLP header would put an unframed block of zeros on the wire.
                 var packetSize = _usbOutPacketSize;
                 if (packetSize > 0 && packet.Length % packetSize == 0) WriteUsbHeader(0, 0);
             }
@@ -683,7 +687,7 @@ public sealed class HdcConnection : IDisposable
 
     private void WriteUsbHeader(byte option, uint size)
     {
-        var header = new byte[11];
+        var header = _sendHeaderScratch;
         new HdcUsbHead
         {
             Flag0 = (byte)'U',
@@ -739,7 +743,7 @@ public sealed class HdcConnection : IDisposable
                 return HdcDaemonCodec.Decode(ReadBody((int)usb.DataSize));
             }
         }
-        var header = ReadExact(11, DefaultTimeoutMs);
+        var header = ReadExact(_usbHeadScratch, DefaultTimeoutMs);
         var (metadata, payload) = HdcDaemonCodec.ReadHeader(header);
         var body = ReadBody(metadata + payload);
         return HdcDaemonCodec.Decode(header, body);

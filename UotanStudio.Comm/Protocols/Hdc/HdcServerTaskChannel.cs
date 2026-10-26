@@ -186,14 +186,14 @@ internal sealed class HdcServerTaskChannel : IHdcTaskChannel, IDisposable
         if (!WaitForData(timeoutMs, cancellationToken)) return null;
         try
         {
-            var header = new byte[4];
-            if (_stream.Read(header, 0, 1) == 0)
+            Span<byte> header = stackalloc byte[4];
+            if (_stream.Read(header[..1]) == 0)
             {
                 MarkClosed();
                 return null;
             }
 
-            ReadExactly(header, 1, 3, cancellationToken);
+            _stream.ReadExactly(header[1..]);
             var length = BinaryPrimitives.ReadInt32BigEndian(header);
             if (length <= 0 || length > HdcServerClient.MaximumFrameBytes)
                 throw new InvalidDataException("Invalid HDC channel frame length.");
@@ -263,7 +263,7 @@ internal sealed class HdcServerTaskChannel : IHdcTaskChannel, IDisposable
     {
         if (payload.IsEmpty || payload.Length > HdcServerClient.MaximumFrameBytes)
             throw new InvalidDataException("Invalid HDC channel frame length.");
-        var header = new byte[4];
+        Span<byte> header = stackalloc byte[4];
         BinaryPrimitives.WriteInt32BigEndian(header, payload.Length);
         lock (_writeLock)
         {
