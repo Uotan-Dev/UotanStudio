@@ -59,16 +59,17 @@ public sealed partial class MtkSession
             try
             {
                 await WriteAsync(header, _timeoutMs, token).ConfigureAwait(false);
-                await RequireLegacyNandWriteAckOwnedAsync(0x5A, "header", token).ConfigureAwait(false);
+                var ack = new byte[1];
+                await RequireLegacyNandWriteAckOwnedAsync(0x5A, "header", ack, token).ConfigureAwait(false);
                 var checksum = new byte[2];
                 for (long transferred = 0; transferred < length;)
                 {
                     await source.ReadExactlyAsync(buffer, token).ConfigureAwait(false);
                     BinaryPrimitives.WriteUInt16BigEndian(checksum, LegacySum(buffer));
-                    await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
+                    await WriteAsync(Acknowledge, Acknowledge.Length, _timeoutMs, token).ConfigureAwait(false);
                     await WriteAsync(buffer, _timeoutMs, token).ConfigureAwait(false);
                     await WriteAsync(checksum, _timeoutMs, token).ConfigureAwait(false);
-                    await RequireLegacyNandWriteAckOwnedAsync(0x69, "page", token).ConfigureAwait(false);
+                    await RequireLegacyNandWriteAckOwnedAsync(0x69, "page", ack, token).ConfigureAwait(false);
                     token.ThrowIfCancellationRequested();
                     ThrowIfDisposed();
                     transferred += buffer.Length;
@@ -94,9 +95,10 @@ public sealed partial class MtkSession
         }
     }
 
-    private async Task RequireLegacyNandWriteAckOwnedAsync(byte expected, string stage, CancellationToken token)
+    private async Task RequireLegacyNandWriteAckOwnedAsync(byte expected, string stage, byte[] scratch, CancellationToken token)
     {
-        var response = (await ReadAsync(1, _timeoutMs, token).ConfigureAwait(false))[0];
+        await ReadIntoAsync(scratch, 1, _timeoutMs, token).ConfigureAwait(false);
+        var response = scratch[0];
         if (response == expected)
         {
             return;

@@ -240,7 +240,7 @@ public sealed partial class MtkSession
         {
             throw new MtkProtocolException("Legacy RAM configuration failed.", sramStatus != 0 ? sramStatus : dramStatus);
         }
-        if (DeviceInfo!.HardwareCode is 0x8127 or 0x8163)
+        if (DeviceInfo!.HardwareCode is 0x8127 or 0x8163 or 0x8590)
         {
             var status = await ReadLegacyWordAsync(token).ConfigureAwait(false);
             if (status != 0)

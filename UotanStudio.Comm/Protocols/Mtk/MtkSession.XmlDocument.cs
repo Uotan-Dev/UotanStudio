@@ -5,6 +5,14 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 public sealed partial class MtkSession
 {
+    /// <summary>
+    /// Strict UTF-8 decoder shared by every XML document read; throwing on invalid sequences is part of the wire
+    /// contract, so the instance is cached instead of being rebuilt per document.
+    /// <para>所有 XML 文档读取共享的严格 UTF-8 解码器；对无效序列抛错属于线上契约的一部分，因此缓存该实例而
+    /// 不逐文档重建。</para>
+    /// </summary>
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+
     private async Task<string> ReceiveXmlDocumentOwnedAsync(MtkXmlChannel channel, string destination,
         int maximumLength, CancellationToken token)
     {
@@ -35,6 +43,6 @@ public sealed partial class MtkSession
             received += payload.Length;
         }
         await channel.AcknowledgeAsync(token).ConfigureAwait(false);
-        return new UTF8Encoding(false, true).GetStringTrimNul(bytes);
+        return StrictUtf8.GetStringTrimNul(bytes);
     }
 }

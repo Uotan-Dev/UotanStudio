@@ -621,6 +621,13 @@ public sealed partial class MtkSession : IProtocolSession
     private Task WriteAsync(byte[] bytes, int timeoutMs, CancellationToken cancellationToken)
         => WriteAsync(bytes, bytes.Length, timeoutMs, cancellationToken);
 
+    /// <summary>
+    /// The single-byte <c>0x5A</c> acknowledgement the Legacy protocol expects between packets; a shared constant
+    /// so per-packet loops stop allocating a fresh one-byte array for every exchange.
+    /// <para>Legacy 协议在包间期望的单字节 <c>0x5A</c> 确认；共享常量使逐包循环不再为每次交换分配新的一字节数组。</para>
+    /// </summary>
+    private static readonly byte[] Acknowledge = [0x5A];
+
     /// <summary>Writes one buffer slice with the shared incomplete-write guard.
     /// <para>使用共用的不完整写入守卫写出一个缓冲区切片。</para></summary>
     /// <param name="bytes">The source buffer. 源缓冲区。</param>
@@ -675,6 +682,25 @@ public sealed partial class MtkSession : IProtocolSession
     {
         ValidateBootReadLength(count);
         var bytes = new byte[count];
+        await ReadIntoAsync(bytes, count, timeoutMs, cancellationToken).ConfigureAwait(false);
+        return bytes;
+    }
+
+    /// <summary>
+    /// Reads exactly <paramref name="count"/> bytes into the caller's buffer under the same deadline, truncation and
+    /// disposal guards as the allocating reader, so per-packet loops reuse one buffer instead of allocating per
+    /// exchange.
+    /// <para>在与分配式读取器相同的期限、截断与释放守卫下，向调用方缓冲精确读取 <paramref name="count"/> 字节，
+    /// 使逐包循环复用同一缓冲而不必每次交换都分配。</para>
+    /// </summary>
+    /// <param name="buffer">Buffer receiving the bytes.<para>接收字节的缓冲。</para></param>
+    /// <param name="count">Byte count to read; at most the buffer length.<para>读取的字节数；不超过缓冲长度。</para></param>
+    /// <param name="timeoutMs">The time budget.<para>时间预算。</para></param>
+    /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
+    private async Task ReadIntoAsync(byte[] buffer, int count, int timeoutMs, CancellationToken cancellationToken)
+    {
+        ValidateBootReadLength(count);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(count, buffer.Length);
         var position = 0;
         var started = Environment.TickCount64;
         while (position < count)
@@ -687,7 +713,7 @@ public sealed partial class MtkSession : IProtocolSession
                 throw new TimeoutException("The boot protocol receive deadline expired.");
             }
 
-            var received = await Transport.ReadAsync(bytes, position, count - position,
+            var received = await Transport.ReadAsync(buffer, position, count - position,
                 (int)remainingMs, cancellationToken).ConfigureAwait(false);
             if (received <= 0 || received > count - position)
             {
@@ -696,8 +722,6 @@ public sealed partial class MtkSession : IProtocolSession
 
             position += received;
         }
-
-        return bytes;
     }
 
     private void RequireState(MtkSessionState expected)

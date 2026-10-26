@@ -67,17 +67,20 @@ public sealed partial class MtkSession
                 {
                     throw new MtkProtocolException("The Legacy NAND total readback length does not match the requested page span.");
                 }
+                var packet = new byte[packetLength];
+                var checksumBytes = new byte[2];
                 for (long transferred = 0; transferred < length;)
                 {
                     var count = (int)Math.Min(length - transferred, packetLength);
-                    var data = await ReadAsync(count, _timeoutMs, token).ConfigureAwait(false);
-                    var checksum = BinaryPrimitives.ReadUInt16BigEndian(await ReadAsync(2, _timeoutMs, token).ConfigureAwait(false));
-                    if (checksum != LegacySum(data))
+                    await ReadIntoAsync(packet, count, _timeoutMs, token).ConfigureAwait(false);
+                    await ReadIntoAsync(checksumBytes, checksumBytes.Length, _timeoutMs, token).ConfigureAwait(false);
+                    var checksum = BinaryPrimitives.ReadUInt16BigEndian(checksumBytes);
+                    if (checksum != LegacySum(packet.AsSpan(0, count)))
                     {
                         throw new MtkProtocolException("The Legacy NAND packet checksum does not match.");
                     }
-                    await destination.WriteAsync(data, token).ConfigureAwait(false);
-                    await WriteAsync([0x5A], _timeoutMs, token).ConfigureAwait(false);
+                    await destination.WriteAsync(packet.AsMemory(0, count), token).ConfigureAwait(false);
+                    await WriteAsync(Acknowledge, Acknowledge.Length, _timeoutMs, token).ConfigureAwait(false);
                     token.ThrowIfCancellationRequested();
                     ThrowIfDisposed();
                     transferred += count;
