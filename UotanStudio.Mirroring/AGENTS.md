@@ -11,11 +11,13 @@
 - HDC 目标的设备端产物不是安装包：采集库与 UI Test 代理以 `Assets/ohos/device/*.so.zst` 的 zstd 帧加同目录 `manifest.txt` 文本清单内嵌随包分发，首次使用时由 `OhscrcpyDeviceAssets` 物化到 `%TEMP%/UotanStudio/ohos-device/<清单哈希前 16 位>/` 并校验长度与 SHA-256；`OhscrcpyServerManager.RuntimeDirectory` 返回该目录，选择与推送仍操作真实文件。改原始 `.so` 后运行 `dotnet run tools/compress-embedded-assets.cs` 重新生成帧与清单；不要在运行时下载或查询 Release 来补设备库。
 - `Assets/ohos/device/` 的 15 个文件提取自本机 DevEco Studio 26.0.0.821 的 `plugins/screen-mirroring/lib/hosScrcpy-1.0.20-beta.jar`（JAR SHA-256 `62cba3701b635a9d9c906a70f18cbc43efd60b7bfd61e2bb18fb88b2c7dfb187`）。来源、逐文件摘要与再分发边界见 `Assets/ohos/README.md`；升级 DevEco 后用 `tools/deveco-mirroring/extract.ps1` 重新提取，不要手工改二进制。`libscrcpy_server0.z.so` 是旧版回退候选。
 - 呈现不在本层：本层只交付压缩视频/音频包与控制消息；GPU 呈现与 CPU 位图回退在宿主 `ScreenMirrorGpuPresenter` / `ScreenMirrorViewModel`。
+- AirPlay 接收端（`AirPlay/`）是设备**入站**的呈现连接：设备浏览 mDNS 并连到本机监听端口，因此“本层不得自建 socket”针对设备方向的 I/O，不适用于该监听器；它仍不得接触 USB 句柄、adb/HDC server 或设备端口。接收端只读，没有反向控制通道；帧形状与 scrcpy 一致（`ScrcpyVideoFrame` 的 config/key 标志），音频按 AAC-ELD 44100/2ch/480 交付。
+- AirPlay 的 mDNS 广播不依赖 Bonjour，也不解析对端地址；`AirPlayOptions.FairPlayKeyPath` 是外部密钥材料入口，仓库不携带 FairPlay 密钥表，未配置时加密流必须被明确拒绝而不是解成乱码。
 - csproj 设置 `GenerateDocumentationFile`，公共类型与成员要写中英双语 XML 注释；本项目不启用 `TreatWarningsAsErrors`，但不要用 `NoWarn` 压掉新增警告。
 
 ## 公共门面与内部实现
 
-- 宿主只经 `MirrorSessionFacade` 启动和管理投屏会话：`StartScrcpyOverAdbServer`、`StartScrcpyOverUsbSession`、`StartOhscrcpyOverHdcSession`。HDC 目标走 UI Test 扩展路径，没有 HAP 安装/更新 API；不要再加 `IsOhscrcpyInstalled`、`InstallOhscrcpyHap` 一类入口。工厂负责设备探测、推送、守护进程、fport 转发与客户端构造，并保持 `ManagedMirrorSession` / `ManagedOhscrcpySession` 的释放顺序。
+- 宿主只经 `MirrorSessionFacade` 启动和管理投屏会话：`StartScrcpyOverAdbServer`、`StartScrcpyOverUsbSession`、`StartOhscrcpyOverHdcSession`、`StartAirPlayReceiver`（返回 `ManagedAirPlaySession`，宿主用 `FromAirPlay` 包装）。HDC 目标走 UI Test 扩展路径，没有 HAP 安装/更新 API；不要再加 `IsOhscrcpyInstalled`、`InstallOhscrcpyHap` 一类入口。工厂负责设备探测、推送、守护进程、fport 转发与客户端构造，并保持 `ManagedMirrorSession` / `ManagedOhscrcpySession` 的释放顺序。
 - `ScrcpyClient`、`OhscrcpyClient`、`ScrcpyServerManager`、`OhscrcpyServerManager`、`OhoscrcpyGrpcTransport` 是 internal 实现，不属于公共 API；测试经 `InternalsVisibleTo("UotanStudio.Tests")` 访问。`ManagedMirrorSession` 与 `ManagedOhscrcpySession` 类型保持 public 供宿主持有，但构造函数 internal，只能由 facade 创建。
 - `ScrcpyConstants`、`ScrcpyControlMessageWriter`、`ScrcpyServerOptions`、`OhscrcpyConstants`、`OhscrcpyProtocol`、`OhscrcpyLaunchOptions`、`OhscrcpyControlAction` 的帧与消息记录保持 public：宿主 ViewModel/View 仍直接使用控制常量与编码器，帧类型跨层传递。控制写入器暴露的是线协议编码而非会话管理入口，因此不随客户端类型收窄。
 - 采集参数用 public 记录 `OhscrcpyLaunchOptions`（帧率、码率、关键帧间隔）在 facade 边界校验；Mirroring 不引用宿主类型，新增启动参数时同步该记录、`OhscrcpyConstants` 的上下界与设备命令。
@@ -49,6 +51,7 @@ dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --fi
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Mirroring.ScrcpyClientConnectTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Mirroring.ScrcpyServerProtocolOptionsTests --minimum-expected-tests 1
 dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-class UotanStudio.Tests.Devices.HdcSessionRoutingTests --minimum-expected-tests 1
+dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build --filter-namespace UotanStudio.Tests.Mirroring --minimum-expected-tests 1
 ```
 
 - 单元验证范围：gRPC 帧与 `ReplyMessage` 解析、SPS 几何（`UotanStudio.Tests.Media.OhscrcpyProtocolTests`）；控制代理/采集库选择与设备启动命令构造（`OhscrcpyServerManagerTests`）；客户端 gRPC 解复用、视频元数据与控制分发（`OhscrcpyClientTests`）；scrcpy 控制消息到 UI Test JSON/uinput 的映射（`ScrcpyToOhscrcpyControlAdapterTests`）；facade 参数、端口与采集参数校验（`MirrorSessionFacadeTests`）；HDC 会话路由决策（`UotanStudio.Tests.Devices.HdcSessionRoutingTests`，覆盖 server 拥有目标、无 server 与 ServerOnly 拒绝直连）。

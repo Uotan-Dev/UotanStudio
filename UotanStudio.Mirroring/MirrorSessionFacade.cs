@@ -3,6 +3,7 @@ using UotanStudio.Comm.Devices;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Transports.Tcp;
+using UotanStudio.Mirroring.AirPlay;
 
 namespace UotanStudio.Mirroring;
 
@@ -30,6 +31,7 @@ public sealed class MirrorSessionFacade : IDisposable
 {
     private readonly ManagedMirrorSession? _scrcpy;
     private readonly ManagedOhscrcpySession? _ohscrcpy;
+    private readonly ManagedAirPlaySession? _airPlay;
     private int _disposed;
 
     private MirrorSessionFacade(ManagedMirrorSession session)
@@ -40,6 +42,45 @@ public sealed class MirrorSessionFacade : IDisposable
     private MirrorSessionFacade(ManagedOhscrcpySession session)
     {
         _ohscrcpy = session;
+    }
+
+    private MirrorSessionFacade(ManagedAirPlaySession session)
+    {
+        _airPlay = session;
+    }
+
+    /// <summary>Wraps an AirPlay receiving session. <para>包装 AirPlay 接收会话。</para></summary>
+    /// <param name="session">Configured receiving session. <para>已配置的接收会话。</para></param>
+    /// <returns>The facade delegating to <paramref name="session"/>.
+    /// <para>委托给 <paramref name="session"/> 的门面。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.
+    /// <para><paramref name="session"/> 为 <see langword="null"/>。</para></exception>
+    public static MirrorSessionFacade FromAirPlay(ManagedAirPlaySession session)
+        => new(session ?? throw new ArgumentNullException(nameof(session)));
+
+    /// <summary>
+    /// Creates the AirPlay receiving endpoint the device will connect to. Nothing is bound until
+    /// <see cref="Connect"/> runs, and the endpoint is read-only: no reverse control channel exists.
+    /// <para>创建设备将要连接的 AirPlay 接收端点。在 <see cref="Connect"/> 运行之前不绑定任何端口，且该端点
+    /// 是只读的：不存在反向控制通道。</para>
+    /// </summary>
+    /// <param name="options">Advertised name, RTSP port, announcement switch and FairPlay key path.
+    /// <para>广播名称、RTSP 端口、广播开关与 FairPlay 密钥路径。</para></param>
+    /// <param name="logSink">Optional sink receiving handshake diagnostics; may be called from a background thread.
+    /// <para>可选的接收端，用于接收握手诊断；可能由后台线程调用。</para></param>
+    /// <returns>The unconnected receiving session; call <see cref="Connect"/> next, then
+    /// <see cref="ReadFrame(int)"/>.
+    /// <para>尚未连接的接收会话；随后调用 <see cref="Connect"/>，再调用 <see cref="ReadFrame(int)"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null"/>.
+    /// <para><paramref name="options"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="options"/> carries an out-of-range value.
+    /// <para><paramref name="options"/> 携带越界的取值。</para></exception>
+    public static ManagedAirPlaySession StartAirPlayReceiver(AirPlayOptions options,
+        Action<string>? logSink = null)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
+        return new ManagedAirPlaySession(new AirPlayReceiverClient(options, logSink));
     }
 
     /// <summary>Wraps an ADB scrcpy session. <para>包装 ADB scrcpy 会话。</para></summary>
@@ -343,20 +384,32 @@ public sealed class MirrorSessionFacade : IDisposable
     /// <para>ohscrcpy 为 <see langword="true"/>，scrcpy 为 <see langword="false"/>。</para></value>
     public bool IsHdc => _ohscrcpy is not null;
 
+    /// <summary>Whether the session is the AirPlay receiving endpoint.
+    /// <para>会话是否为 AirPlay 接收端点。</para></summary>
+    /// <value><see langword="true"/> for a receiving endpoint, <see langword="false"/> otherwise.
+    /// <para>接收端点为 <see langword="true"/>，否则为 <see langword="false"/>。</para></value>
+    public bool IsAirPlay => _airPlay is not null;
+
+    /// <summary>Port the AirPlay receiving endpoint bound; zero for the scrcpy and ohscrcpy paths.
+    /// <para>AirPlay 接收端点绑定的端口；scrcpy 与 ohscrcpy 路径为零。</para></summary>
+    /// <value>The bound RTSP port, or zero. <para>绑定的 RTSP 端口，或零。</para></value>
+    public int RtspPort => _airPlay?.RtspPort ?? 0;
+
     /// <summary>Device name reported to the editor. <para>报告给编辑器的设备名。</para></summary>
     /// <value>The name from the active session. <para>活动会话给出的名称。</para></value>
-    public string DeviceName => _scrcpy?.DeviceName ?? _ohscrcpy!.DeviceName;
+    public string DeviceName => _scrcpy?.DeviceName ?? _ohscrcpy?.DeviceName ?? _airPlay!.DeviceName;
 
     /// <summary>Video stream metadata. <para>视频流元数据。</para></summary>
     /// <value>The codec and size, or <see langword="null"/> before the first configuration.
     /// <para>编码与尺寸；首个配置之前为 <see langword="null"/>。</para></value>
-    public ScrcpyVideoMetadata? VideoMetadata => _scrcpy?.VideoMetadata ?? _ohscrcpy?.VideoMetadata;
+    public ScrcpyVideoMetadata? VideoMetadata => _scrcpy?.VideoMetadata ?? _ohscrcpy?.VideoMetadata
+        ?? _airPlay?.VideoMetadata;
 
     /// <summary>Audio codec metadata; always <see langword="null"/> on the ohscrcpy path.
     /// <para>音频编码元数据；ohscrcpy 路径始终为 <see langword="null"/>。</para></summary>
     /// <value>The scrcpy audio header, or <see langword="null"/>.
     /// <para>scrcpy 音频头部，或 <see langword="null"/>。</para></value>
-    public ScrcpyAudioMetadata? AudioMetadata => _scrcpy?.AudioMetadata;
+    public ScrcpyAudioMetadata? AudioMetadata => _scrcpy?.AudioMetadata ?? _airPlay?.AudioMetadata;
 
     /// <summary>Whether scrcpy refused the audio stream during the handshake.
     /// <para>scrcpy 是否在握手期间拒绝了音频流。</para></summary>
@@ -367,7 +420,7 @@ public sealed class MirrorSessionFacade : IDisposable
     /// <summary>Whether control messages can be written. <para>是否可以写入控制消息。</para></summary>
     /// <value><see langword="true"/> while the active session holds its control channel.
     /// <para>活动会话持有控制通道时为 <see langword="true"/>。</para></value>
-    public bool IsControlConnected => _scrcpy?.IsControlConnected ?? _ohscrcpy!.IsControlConnected;
+    public bool IsControlConnected => _scrcpy?.IsControlConnected ?? _ohscrcpy?.IsControlConnected ?? false;
 
     /// <summary>Opens the transport and completes the handshake. <para>打开传输并完成握手。</para></summary>
     /// <exception cref="InvalidDataException">The handshake failed. <para>握手失败。</para></exception>
@@ -379,7 +432,13 @@ public sealed class MirrorSessionFacade : IDisposable
             return;
         }
 
-        _ohscrcpy!.Connect();
+        if (_ohscrcpy is not null)
+        {
+            _ohscrcpy.Connect();
+            return;
+        }
+
+        _airPlay!.Connect();
     }
 
     /// <summary>Reads one framed video packet. <para>读取一个分帧视频包。</para></summary>
@@ -389,14 +448,16 @@ public sealed class MirrorSessionFacade : IDisposable
     public ScrcpyVideoFrame? ReadFrame(int timeoutMs)
     {
         if (_scrcpy is not null) return _scrcpy.ReadFrame(timeoutMs);
-        return _ohscrcpy!.ReadFrame(timeoutMs);
+        if (_ohscrcpy is not null) return _ohscrcpy.ReadFrame(timeoutMs);
+        return _airPlay!.ReadFrame(timeoutMs);
     }
 
     /// <summary>Reads one audio packet; always <see langword="null"/> on the ohscrcpy path.
     /// <para>读取一个音频包；ohscrcpy 路径始终为 <see langword="null"/>。</para></summary>
     /// <param name="timeoutMs">Per-read timeout in milliseconds. <para>单次读取超时（毫秒）。</para></param>
     /// <returns>The audio packet, or <see langword="null"/>. <para>音频包，或 <see langword="null"/>。</para></returns>
-    public ScrcpyAudioFrame? ReadAudioFrame(int timeoutMs) => _scrcpy?.ReadAudioFrame(timeoutMs);
+    public ScrcpyAudioFrame? ReadAudioFrame(int timeoutMs)
+        => _scrcpy?.ReadAudioFrame(timeoutMs) ?? _airPlay?.ReadAudioFrame(timeoutMs);
 
     /// <summary>Reads one device → client message. <para>读取一条设备到客户端消息。</para></summary>
     /// <param name="timeoutMs">Per-read timeout in milliseconds. <para>单次读取超时（毫秒）。</para></param>
@@ -419,21 +480,21 @@ public sealed class MirrorSessionFacade : IDisposable
             return;
         }
 
-        _ = _ohscrcpy!.SendControl(message);
+        _ = _ohscrcpy?.SendControl(message);
     }
 
     /// <summary>Sends one BACK press. <para>发送一次返回键按压。</para></summary>
     public void SendBack()
     {
         if (_scrcpy is not null) _scrcpy.SendBack();
-        else _ohscrcpy!.SendBack();
+        else _ohscrcpy?.SendBack();
     }
 
     /// <summary>Toggles the device screen power. <para>切换设备屏幕电源状态。</para></summary>
     public void ToggleDisplayPower()
     {
         if (_scrcpy is not null) _scrcpy.ToggleDisplayPower();
-        else _ohscrcpy!.ToggleDisplayPower();
+        else _ohscrcpy?.ToggleDisplayPower();
     }
 
     /// <summary>
@@ -460,5 +521,6 @@ public sealed class MirrorSessionFacade : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _scrcpy?.Dispose();
         _ohscrcpy?.Dispose();
+        _airPlay?.Dispose();
     }
 }
