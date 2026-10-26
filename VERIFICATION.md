@@ -7,8 +7,8 @@
 - `dotnet restore UotanStudio.slnx -p:Configuration=Debug` 与 `dotnet build UotanStudio.slnx --no-restore --nologo -c Debug`：0 错误、0 警告（2026-10-27，共享工作树）。
 - `dotnet format` 的 `whitespace` 与 `style`：全解零报告（2026-10-27，Release，`--no-restore --verify-no-changes`）。此前的两处 `UotanStudio` 报告已修：`ViewModels/Editors/ScreenMirrorViewModel.cs` 中 `}` 与下一个 `<summary>` 挤在同一行，`Views/Editors/MirrorTrace.cs` 结尾多出一个换行符。
 - CI 等价门禁（2026-10-27，Release，共享工作树）：`dotnet build UotanStudio.slnx --no-restore --nologo -c Release` 0 错误 0 警告；两道 `dotnet format` 零报告；`dotnet test --solution UotanStudio.slnx --no-build -c Release --minimum-expected-tests 6000` 7572 总数 / 7565 通过 / 7 跳过 / 0 失败，单轮 1m31s。构建只剩两处需要修的产物：`Protocols/Adb/AdbSyncClient.V2.cs` 原先直接构造 `BrotliStream`，被 `CompressionImplementationBoundaryTests` 判为通用压缩越界，现改走 `CompressionService.Create{,De}compressionStream(..., CompressionFormat.Brotli)`，并用工装证明 `CompressionOptions { Level = 1 }` 与 `CompressionLevel.Fastest` 在同一 1 MiB 输入上产出逐字节相同的 493 B 帧；`Protocols/Apple/Lockdown/LockdownPairingRecord.cs` 原来对每张证书各读两次 `DateTimeOffset.UtcNow`，DER 的 `NotAfter` 只有秒级精度，子证书晚一秒铸造即超过签发者有效期而抛 `ArgumentException`，现由 `CreatePending` 计算一次有效期窗口并传给三份证书。
-- 定向测试：`UotanStudio.Tests.Mirroring` 127/127（1 硬件跳过）、`UotanStudio.Tests.Media` 202/202（1 Linux 跳过）、`UotanStudio.Tests.Devices` 298/298、`UotanStudio.Tests.Protocols` 112/112、`UotanStudio.Tests.Architecture` 16/16。架构门覆盖宿主分层、ZIP 容器、格式探测、命名空间归属、项目引用图与解决方案成员。
-- 全量（2026-10-27）：7572 总数 / 7565 通过 / 7 跳过 / 0 失败，单轮 2m05s（`dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug`，共享工作树）。
+- 定向测试：`UotanStudio.Tests.Mirroring` 127/127（1 硬件跳过）、`UotanStudio.Tests.Media` 202/202（1 Linux 跳过）、`UotanStudio.Tests.Devices` 305/305、`UotanStudio.Tests.Protocols` 112/112、`UotanStudio.Tests.Architecture` 16/16。架构门覆盖宿主分层、ZIP 容器、格式探测、命名空间归属、项目引用图与解决方案成员。
+- 全量（2026-10-27，Release）：7603 总数 / 7596 通过 / 7 跳过 / 0 失败，单轮 2m10s（`dotnet test --solution UotanStudio.slnx --no-build -c Release --minimum-expected-tests 6000`，共享工作树）。同一字节的前两轮分别报出 1 项与 2 项失败：`ErofsTests.Builder_WritesStandardCompressedIFormat`、`ErofsRebuildFeatureReplayTests.Build_TargetDeclaredToDefineTheAdviseBit_WritesItOnEverySingleLinkedFile` 与 `AdbRemoteProtocolTests.PairAsync_StatusFramedResult_IsAccepted`（15 秒 `Timeout` 取消）；三个用例单独复跑分别是 23/23、20/20、14/14 通过，失败轮次本机有并行构建在跑，故记为负载相关的既有抖动，未定位到具体成因，也不写成已通过稳定性验证。
 - NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained -p:PublishAot=true` 成功，`UotanStudio.Desktop.exe` 154,245,120 B（147.1 MiB）；只有 Avalonia/Dock/Ursa/Lingua/YamlDotNet/Common.Logging 等第三方既有的 IL2026/IL2104/IL3053 警告，没有本项目新增的裁剪/AOT 警告，内嵌资源名都能在产物中检索到。
 - `TreatWarningsAsErrors=true` 生效于 7 个项目：`UotanStudio.Comm`、`UotanStudio.Compress`、`UotanStudio.Firmware`、`UotanStudio.Hash`、`UotanStudio.Media`、`UotanStudio.Net`、`UotanStudio.RegexInfer`；全解 0 警告同时意味着受管库的 `CS1591` 为 0。
 - 生产项目之间没有 `InternalsVisibleTo` 授权；宿主与 MCP 需要的契约是公共 API，只保留 `UotanStudio.Tests`、`UotanStudio.Benchmarks`、`UotanStudio.DeliverySmoke`、`GpuMirrorSmoke`、`UotanStudio.ProjectLifecycleSmoke` 等脚手架授权。
@@ -31,9 +31,11 @@
 
 - `UotanStudio.Firmware/VendorFirmware/HarmonyOS/` 新增只读格式处理器 `HarmonyOS update.bin`，按 L1/L2 组件表（71/87 字节记录、16/32 字节名称字段）、16 字节保留区与 `0x06`/`0x08` 元数据 TLV 解析；`FirmwareFormatRegistry` 在 `UpdateApp` 之前注册，`.bin` 必须先通过布局字（`0x01`/`0x11`）与组件表边界探测。
 - 定向测试：`UotanStudio.Tests.Firmware.HarmonyUpdateBinTests` 23/23（L2/L1、`board_list→BOARD.list`、type 0/1 输出名、SHA-256 校验与失败回滚、筛选、预算、覆盖、取消、截断、非法名称、重复名、未知 TLV、metadata-only）。
+- 镜像文件管理：`ImageInputService` 新增 `ImageFormatKind.UpdateBin`，标签为 `update.bin`（`ParseFormatLabel` 可回读）；`ProbeFormat` 经已注册的 `HarmonyOS update.bin` 处理器识别，`ImageViewModel` 的解包模式扫描也登记该类型，导入/刷新/工程恢复后不再显示 `unknown`。`ImageInputServiceTests` 75/75（含 `DetectFormat_HarmonyUpdateBin_ReturnsUpdateBin` 与标签往返）；DataGrid 直接绑定该字符串，本轮未启动 GUI 目视渲染。
 - 全 Firmware 命名空间：4357 总数 / 4355 通过 / 2 跳过（未设 `UOTAN_EROFS_CORPUS`）/ 0 失败，单轮 32s。
 - 真实样例：`D:\Download\update_full_cust_HAD-W24_all_cn.zip`（SHA-256 `e1f28c16e77cfb05d73ab9c91dc0395f3f532b2e6daa2e071dcbc791ee197aed`）中的 `update.bin`（35,778 B，SHA-256 `264d8bf27b82f8f6bfabf7d3341a2c050644d1e8e30f4e741d554a23264ba14a`）经临时控制台工装解析：布局 L2、4 个组件、数据偏移 2,851、载荷 32,927 B、元数据 TLV `0x08`；`VerifyChecksums=true` 解出 `package_info.img`（121 B）、`BOARD.list`（20 B）、`ptable.img`（18 B）、`version.img`（32,768 B），四个输出 SHA-256 与组件表记录逐一相同；同时发布 `metadata.json`，`canPackDirectory=false`。样例未加入测试集、`TestData/` 或仓库。
 - NativeAOT：同轮 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained -p:PublishAot=true` 成功，产物 `UotanStudio.Desktop.exe` 155,762,176 B；只报告第三方既有的 IL2026/IL2104/IL3053 警告，没有指向新增固件代码的裁剪/AOT 警告。
+- 全量（2026-10-27）：7599 总数 / 7593 通过 / 6 跳过 / 0 失败，单轮 2m41s（`dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug --minimum-expected-tests 6000`，共享工作树）。
 
 ## iOS 支持实测（2026-10-26，Windows x64，Debug）
 
@@ -68,6 +70,24 @@
 - 变更：`AdbTlsTransport` 删除服务端证书指纹参数、观察者与 `RemoteServerCertificateSha256`，平台与 BouncyCastle 两条路径都接受任意（仍必须出示）服务端证书；`DeviceController.OpenSecureNetworkAdbSession` 去掉钉扎参数；宿主 `PairedNetworkTarget` 只保留 `Address`/`RequiresTls` 并删除指纹持久化。设备以 `bad_certificate`/`certificate_unknown`/`unknown_ca`/`access_denied` 拒绝本机密钥时，握手与已建立连接的读写都返回“重新扫码配对或接受设备调试授权”的失败文案。
 - 定向测试：`UotanStudio.Tests.Devices.AdbTlsTransportTests` 6/6——回环 TLS 1.3 服务端每次连接重建自签证书，连续两次 `UpgradeToTls` 均成功、服务端确实收到客户端证书，另有告警映射用例；`Services.PairedNetworkTargetSettingsTests` 3/3；`Devices` 298/298、`Protocols` 112/112。
 - 未验证边界：真实手机没有复跑扫码直连与投屏；本轮检测时 `192.168.1.144:40443` 不可达（设备侧无线调试已关闭或端口已换），旧钉扎指纹与该地址的对应关系只由代码路径与设置文件推断。测试里的 TLS 1.3 服务端用 Schannel（临时密钥不受支持，故服务端证书先导出 PFX 再导入），BouncyCastle 服务端与真机 adbd 的对端行为未覆盖。
+
+## 投屏输入注入预检（2026-10-27，Windows x64，Debug；真机 ColorOS）
+
+- 设备侧事实：一加 ColorOS（设备 `24129PN74C`）没有把 `android.permission.INJECT_EVENTS` 授予 `com.android.shell` 时，scrcpy 服务端（`app_process`，uid 2000）的每次触摸注入都被 `system_server` 的 `InputManagerService` 拒绝（`Permission Denial: injectInputEvent() ... requires android.permission.INJECT_EVENTS`）。视频流不经过该权限，因此表现为“有画面、触摸全灭”，与投屏链路和 TLS 会话无关。
+- 只读预检：投屏会话建立后执行 `dumpsys package com.android.shell | grep -E 'Package \[|INJECT_EVENTS'`，`InputInjectionProbe.Parse` 以 `Package [com.android.shell]` 标题确认探测有效、以 `granted=true` 作为唯一肯定信号；`granted=false`、只有 requested 行或权限行完全缺失都判为被拦，缺少包标题则返回未知（不误报）。探测复用投屏共享的直连 ADB 会话（server 路由时用 server 会话），不另开传输。
+- 界面：判为被拦时在投屏标题栏显示 `ScreenMirror_InputInjectionBlocked`（中英各一条，含开发者选项 → USB 调试（安全设置）指引）；每次触摸在 3 秒节流下重跑一次预检，用户打开该开关后下一次点击即清除提示，无需重启会话。
+- 定向测试：`UotanStudio.Tests.Devices.InputInjectionProbeTests` 7/7（granted/denied/仅 requested/其它权限/缺包标题/空输出）；`LocaleDictionaryTests` 6/6（新增 key 的中英一致与生成索引一致）；`MirrorSessionFacadeTests` 13/13。
+- 未验证边界：标题栏提示条没有在受该 ROM 限制的真机上做人工确认（需要重新连接该设备并复跑投屏）；预检在放行设备上会多执行一条 `dumpsys`，极慢设备上的耗时未测量；ROM 若以 `dumpsys package` 之外的形式隐藏该授权，预检返回未知而不显示提示。
+
+## 扫码配对连接端口获取：对齐 AOSP 与 ADB_Pair_Go（2026-10-27，Windows x64，Debug；无 server 的扫码直连）
+
+- 参考源码：`reference/adb-android16/`（AOSP `packages/modules/adb`）与 `reference/ADB_Pair_Go/`（`github.com/lx200916/ADB_Pair_Go`，`git clone --depth 1` 拉到本地后逐文件核对 `adbPair.go`/`README.md`）。
+- 官方链路（AOSP）：`daemon/mdns.cpp` 的 `register_adb_secure_connect_service(tls_port)` 以 `persist.adb.wifi.guid`（格式 `adb-<serialno>-<6 位随机字母数字>`）作为**实例名**注册 `_adb-tls-connect._tcp`，端口取自 `TlsServer::port()`；`daemon/adb_wifi.cpp` 的 `enable_wifi_debugging()` 在启用无线调试时启动 TLS 服务并注册该实例、`disable_wifi_debugging()` 注销，且启用前先 `start_mdnsd()`（`init.svc.mdnsd` 未运行就启动它，5 秒未就绪只写日志）。主机侧 `client/adb_wifi.cpp` 在配对成功后把配对交换里的 `ADB_DEVICE_GUID` 交给 `adb_secure_connect_by_service_name()`；`client/transport_mdns.cpp` 用它作为实例名在 `_adb-tls-connect` 的结果里按名字查找，`client/mdnsresponder_client.cpp` 再用 `adb_wifi_is_known_host(instance_name)` 与配对时写入 `adb_known_hosts.pb` 的 GUID 比对，命中才 `connect_device("<guid>._adb-tls-connect._tcp")`。ADB_Pair_Go 只覆盖前半段：zeroconf 浏览 `_adb-tls-pairing._tcp` 匹配二维码 `S` 字段后调用外部 `adb pair`，端口发现整个交给 adb 的 GUID 链路，没有独立实现。
+- 结论：官方没有“轮询端口”这一步，端口只存在于 mDNS 的 `_adb-tls-connect` 实例里，而实例名就是配对返回的 GUID；本库此前按地址做泛化浏览并丢掉 GUID，随后又用全范围扫描串行兜底，两处偏差都在本轮对齐。
+- 变更：配对交换返回的 GUID 带入 `AdbPairingEndpoint.Guid`；每轮除 PTR 浏览外，直接查询 `<guid>._adb-tls-connect._tcp.local` 的 SRV/TXT（组播与单播各一次），`AdbMdnsDiscovery.DescribesDevice` 让“实例名等于 GUID”与“地址等于配对地址”等价，`SelectConnectPorts` 优先选 GUID 命中的实例；`ConnectDiscoveryTimeout` 30 秒降到 10 秒，`ForeignPortFallbackDelay` 8 秒降到 4 秒。范围扫描不再是串行兜底，而是与广播查找**同时**进行（10 秒预算、768 并发、250 毫秒单次期限、命中即停），先给出端口的一方胜出并取消另一方，最坏等待从“30 秒浏览 + 25 秒扫描”降到约 8 秒。
+- 实机测量（`192.168.1.144`，无线调试开启、该设备完全不广播 mDNS）：扫描加 ADB 握手确认在 **7.3 秒**内命中 `44065`；同一轮还发现另一个开放端口 `42568`，它没有完成 ADB 握手，说明“只接受完成握手的端口”是必需的判据。该地址 32768–60999 内只有这两个端口接受连接，其余 SYN 被静默丢弃，因此扫描耗时由超时而非 RTT 决定。
+- 定向测试：`TcpPortScannerTests` 7/7；新增 `AdbConnectIdentityTests` 5/5（GUID 实例跨地址命中、仅地址命中、不同设备不命中、GUID 实例优先于更新的非 GUID 实例、无 GUID 时保持地址排序）；`Devices` 命名空间整批仍有 2 项既有的并发超时（`AdbTlsTransportTests.UpgradeToTls_DeviceRebuildsItsCertificateEachHandshake_CompletesBothHandshakes`、`HdcServerTransferTests.Recv_RegularFile_PublishesOnlyAfterCompletion`），单独复跑分别 6/6 与 10/10 通过。`UotanStudio.Comm` 与 `UotanStudio.Tests` 定向构建 0 警告 0 错误（此时整解决方案构建在 `UotanStudio.Desktop` 复制输出 DLL 处被正在运行的宿主进程锁定，与本次改动无关），whitespace 与 style `--verify-no-changes` 通过。
+- 未验证边界：GUID 直查没有在“设备确实广播但 PTR 被过滤、SRV 仍可答”的网络上复测（本轮这台手机根本不广播，只验到扫描路径）；没有真机重跑完整扫码流程；IPv6-only 与改过 `ip_local_port_range` 的设备不在扫描覆盖内；`start_mdnsd` 失败（该 ROM 可能没有 mdnsd 或注册失败）时设备永远不会广播，除扫描外没有官方替代路径。
 
 ## 设备链路实测（2026-10-24，Windows 主机，ADB server 5037、HDC server 17035）
 

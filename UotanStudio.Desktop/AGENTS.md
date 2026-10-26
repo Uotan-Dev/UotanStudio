@@ -14,7 +14,7 @@
 ## 启动行为
 
 - `Main` 的分发顺序固定：`--managed-device-shell` → `--mcp-headless` → `--mcp` 伴随 → GUI。managed shell 失败写 stderr 并返回 1，其余模式返回 0。
-- `--managed-device-shell` 只匹配恰好三个参数 `["--managed-device-shell", "Adb|Hdc", serial]`；`WorkspacePanelService.CreateDeviceShellProfile` 用当前可执行文件或 `dotnet UotanStudio.Desktop.dll` 传同样三参数。不要插入额外开关。
+- `--managed-device-shell` 只匹配恰好三个参数 `["--managed-device-shell", "Adb|Hdc", serial]`，不要插入额外开关；该入口只服务命令行用户，`WorkspacePanelService.CreateDeviceShellProfile` 不再启动本程序，而是返回不带可执行文件的标签配置，设备 shell 终端由宿主进程内的 `DeviceShellConnection` 复用自己的 ADB/HDC 会话。各启动阶段经标准输出报告，失败仍写标准错误并返回 1。
 - `--mcp` 伴随在 GUI 启动前 `Task.Run`，设备经 `DesktopDeviceManagerGateway`、签名经 `DeliveryKeyProvider`、审计经 `McpToolCallLog`；不要在 Desktop 复制工具实现。`--mcp-root`/`--allow-flash` 由 `UotanStudio.Mcp` 的 `McpServerConfig.Parse` 读取。
 - `--open-screen-mirror <serial>` 写入 `App.StartupScreenMirrorSerial`（`Array.IndexOf`，区分大小写且必须有后继参数）；文件参数只取 `File.Exists` 的路径，由宿主决定打开解决方案还是导入。不要从 `args` 删除参数，也不要在 `Program` 里做项目打开。
 - `BuildAvaloniaApp` 保留 `[STAThread]`、`UsePlatformDetect`、默认字体 `fonts:UotanStudio/MiSans#MiSans` 与 Dock 合并范围 `ActiveDocument`；默认字体指向宿主在 `App.Initialize` 注册的 zstd 字体集合（`UotanStudio/Fonts/ZstdEmbeddedFontCollection`），这些会影响宿主资源路径与停靠行为。
