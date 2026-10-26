@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Comm.Protocols.Apple;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
@@ -23,7 +24,8 @@ internal static class DefaultDeviceSessionFactories
         new FastbootDeviceSessionFactory(),
         new EdlDeviceSessionFactory(),
         new BootromDeviceSessionFactory(),
-        new MtkDeviceSessionFactory()
+        new MtkDeviceSessionFactory(),
+        new AppleDeviceSessionFactory()
     ];
 }
 
@@ -148,6 +150,29 @@ internal sealed class BootromDeviceSessionFactory : IDeviceSessionFactory
         LeasedTransport.RequireProtocol(endpoint, "rkdl");
         var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
         return Task.FromResult<object>(new RkdlSession(new UsbDeviceTransport(usb)));
+    }
+}
+
+internal sealed class AppleDeviceSessionFactory : IDeviceSessionFactory
+{
+    public DeviceSessionKind Kind => DeviceSessionKind.Apple;
+
+    public Task<object> CreateAsync(DeviceEndpoint endpoint, IAsyncDisposable transport, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        LeasedTransport.RequireProtocol(endpoint, "apple");
+        if (LeasedTransport.TryUnwrap<AppleSession>(transport, out var session))
+        {
+            return Task.FromResult<object>(session);
+        }
+
+        var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
+        if (string.IsNullOrWhiteSpace(endpoint.Serial))
+        {
+            throw new IOException("The endpoint does not carry an Apple device serial.");
+        }
+
+        return Task.FromResult<object>(AppleSession.ForDirectUsb(usb, endpoint.Serial));
     }
 }
 

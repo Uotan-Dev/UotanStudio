@@ -67,8 +67,8 @@ public static class UsbProtocolClassifier
     /// <param name="interfaceClass">bInterfaceClass.<para>bInterfaceClass。</para></param>
     /// <param name="interfaceSubClass">bInterfaceSubClass.<para>bInterfaceSubClass。</para></param>
     /// <param name="interfaceProtocol">bInterfaceProtocol.<para>bInterfaceProtocol。</para></param>
-    /// <returns><c>hdc</c>, <c>adb</c> or <c>fastboot</c>, or <see langword="null"/> for any other triple.
-    /// <para><c>hdc</c>、<c>adb</c> 或 <c>fastboot</c>；其它三元组返回 <see langword="null"/>。</para></returns>
+    /// <returns><c>hdc</c>, <c>adb</c>, <c>fastboot</c> or <c>apple</c>, or <see langword="null"/> for any other triple.
+    /// <para><c>hdc</c>、<c>adb</c>、<c>fastboot</c> 或 <c>apple</c>；其它三元组返回 <see langword="null"/>。</para></returns>
     public static string? ClassifyInterface(byte? interfaceClass, byte? interfaceSubClass,
         byte? interfaceProtocol) =>
         (interfaceClass, interfaceSubClass, interfaceProtocol) switch
@@ -76,6 +76,7 @@ public static class UsbProtocolClassifier
             (0xff, 0x50, 1) => "hdc",
             (0xff, 0x42, 1) => "adb",
             (0xff, 0x42, 3) => "fastboot",
+            (0xff, 0xfe, 2) => "apple",
             _ => null
         };
 

@@ -38,5 +38,10 @@ public enum DeviceSessionKind
     /// Rockchip bootrom (RKDL) session on a direct USB transport.
     /// <para>运行在直连 USB 传输上的 Rockchip bootrom（RKDL）会话。</para>
     /// </summary>
-    Bootrom
+    Bootrom,
+    /// <summary>
+    /// Apple (usbmuxd/lockdown) session over the usbmuxd daemon or a direct USB multiplexer interface.
+    /// <para>经 usbmuxd 守护进程或直连 USB 复用接口的 Apple（usbmuxd/lockdown）会话。</para>
+    /// </summary>
+    Apple
 }

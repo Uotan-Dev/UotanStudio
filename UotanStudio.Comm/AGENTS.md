@@ -25,6 +25,13 @@
 - MTK preloader 内存写/跳转、EDL streaming 写与 flash mode 等危险入口必须有显式确认参数；未确认时在任何字节上线前失败。
 - 已被移除的厂商漏洞利用入口不得以“方便”为由恢复；重新暴露需要真实设备证据与专用危险确认，而不是只加一个按钮。
 
+## Apple 协议族
+
+- `Protocols/Apple/` 是 Apple 设备（iPhone/iPad）的唯一实现处：usbmuxd 管道客户端（Windows TCP 27015 / Unix 套接字，可用 `USBMUXD_SOCKET_ADDRESS` 覆盖）、lockdownd 与配对、AFC、syslog 中继、iOS 17.4+ 受信隧道（`Protocols/Apple/Tunnel/`）与直连 USB 复用（`AppleUsbMuxDirect`，接口 class 0xFF/subclass 0xFE/protocol 2）。
+- 直连 USB 复用与 Apple Mobile Device Service 驱动互斥：本库不做任何驱动替换；直连仅在 WinUSB 可打开接口时可用，属于显式 opt-in 路径。
+- 配对记录保存在 `%LOCALAPPDATA%/UotanStudio/apple-lockdown`，可只读导入 `C:\ProgramData\Apple\Lockdown` 的 Apple 记录；配对私钥是该目录的敏感数据，不得写入日志或诊断输出。
+- 所有 plist/TTLV/隧道帧的解码都有界（见 `ApplePlistLimits` 与各编解码器的上限常量），设备返回数据按不可信输入处理；流式工作（syslog、投屏）不进命令池。
+
 ## 文档与验证
 
 - 本库设置 `GenerateDocumentationFile`、`TreatWarningsAsErrors` 与 `AllowUnsafeBlocks`；公共类型和成员必须有中英双语 XML 注释。`IsRidAgnostic=false` 保留宿主集成的 RID 传播；宿主只经公共契约消费本库，本库不向宿主或任何生产项目开放 `InternalsVisibleTo`，只保留对 `UotanStudio.Tests` 与 `UotanStudio.Benchmarks` 的测试授权。

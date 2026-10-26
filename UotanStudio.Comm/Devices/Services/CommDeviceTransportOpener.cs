@@ -2,6 +2,7 @@ using System.Text;
 using UotanStudio.Comm.Contracts;
 using UotanStudio.Comm.Devices.Discovery;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Comm.Protocols.Apple;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Serial;
@@ -124,6 +125,14 @@ internal sealed class CommDeviceTransportOpener(
                 throw new IOException("Exact HDC server target is unavailable.");
             cancellationToken.ThrowIfCancellationRequested();
             return new OwnedDeviceTransport<HdcSession>(client.CreateSession(endpoint.Address));
+        }
+
+        if (endpoint.Source == Discovery.UsbmuxdDiscoverySource.SourceName &&
+            endpoint.Transport == Discovery.UsbmuxdDiscoverySource.SourceName &&
+            endpoint.Route == Discovery.UsbmuxdDiscoverySource.SourceName &&
+            !string.IsNullOrWhiteSpace(endpoint.Address) && endpoint.Serial == endpoint.Address)
+        {
+            return new OwnedDeviceTransport<AppleSession>(AppleSession.ForUsbmuxd(endpoint.Address));
         }
 
         throw new NotSupportedException("Endpoint route is not configured for this opener.");
