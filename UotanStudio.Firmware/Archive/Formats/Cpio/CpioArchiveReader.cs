@@ -125,10 +125,10 @@ internal sealed class CpioArchiveReader
         }
 
         var hardlinkState = new Dictionary<(ulong Inode, uint DevMaj, uint DevMin), HardlinkGroupState>();
+        var detected = formatHint ?? DetectFormat(stream);
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var detected = formatHint ?? DetectFormat(stream);
             var entry = detected switch
             {
                 ArchiveFormat.NewAscii or ArchiveFormat.CrcAscii => ReadNewAsciiLike(stream, detected),
@@ -194,18 +194,17 @@ internal sealed class CpioArchiveReader
             throw new EndOfStreamException("Unexpected end of stream while detecting archive format.");
         }
 
-        var text = Encoding.ASCII.GetString(probe);
-        if (text == CpioConstants.NewAsciiMagic)
+        if (probe.SequenceEqual("070701"u8))
         {
             return ArchiveFormat.NewAscii;
         }
 
-        if (text == CpioConstants.CrcAsciiMagic)
+        if (probe.SequenceEqual("070702"u8))
         {
             return ArchiveFormat.CrcAscii;
         }
 
-        if (text == CpioConstants.OldAsciiMagic)
+        if (probe.SequenceEqual("070707"u8))
         {
             return ArchiveFormat.OldAscii;
         }
