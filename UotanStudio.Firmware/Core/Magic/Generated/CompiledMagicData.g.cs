@@ -13,21 +13,21 @@ internal static partial class CompiledMagicData
 {
     /// <summary>Generation timestamp in ISO-8601 UTC.</summary>
     /// <para>生成时间戳（ISO-8601 UTC）。</para>
-    internal const string GeneratedAt = "2026-10-23 18:30:36Z";
+    internal const string GeneratedAt = "2026-10-26 21:16:19Z";
 
     /// <summary>Number of top-level rules in the table.</summary>
     /// <para>规则表的顶层规则数。</para>
-    internal const int RuleCount = 4205;
+    internal const int RuleCount = 4206;
 
     /// <summary>Decoded byte length of the serialized rule table.</summary>
     /// <para>序列化规则表解码后的字节长度。</para>
-    internal const int RulesByteLength = 3044942;
+    internal const int RulesByteLength = 3045111;
 
     /// <summary>Byte length of the embedded zstd frame.</summary>
     /// <para>内嵌 zstd 帧的字节长度。</para>
-    internal const int CompressedByteLength = 317678;
+    internal const int CompressedByteLength = 317709;
 
     /// <summary>Lower-case SHA-256 of the decoded rule table.</summary>
     /// <para>解码后规则表的小写 SHA-256。</para>
-    internal const string RulesSha256 = "fe2e629bfea17370ef2f85625e00d3d198cfa3d9ae95d2bb9bb01d8ef2bbf6b1";
+    internal const string RulesSha256 = "9bc9461d536c0709696e76d570432ee32ebd661e5a76e3e734b448edd10c8755";
 }

@@ -45,6 +45,12 @@
 !:mime		application/octet-stream
 !:strength +80
 
+# Coolpad CPB firmware package: ASCII "CP" followed by the 1.7 version bytes. The version bytes are part of
+# the magic because the container layout below 1.7 is not decoded.
+0	string		CP\x01\x07	Coolpad CPB firmware package
+!:mime		application/octet-stream
+!:strength +60
+
 # Flattened Device Tree blob (big-endian magic 0xd00dfeed). Upstream 5.48 leaves these as `data`.
 0	belong		0xd00dfeed	Flattened device tree blob
 !:mime		application/octet-stream

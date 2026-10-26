@@ -68,6 +68,7 @@ public static class FirmwareFormatRegistry
             Register(new VendorFirmware.SonySin.SonySinFormatHandler());
             Register(new VendorFirmware.Meizu.Mpk.MpkFormatHandler());
             Register(new VendorFirmware.Lenovo.Qsb.QsbFormatHandler());
+            Register(new VendorFirmware.Coolpad.Cpb.CpbFormatHandler());
             Register(new VendorFirmware.Allwinner.ImageWty.AllwinnerImageWtyFormatHandler());
             Register(new VendorFirmware.MediaTek.MtkFormatHandler());
             Register(new VendorFirmware.Oppo.OppoSplashFormatHandler());
