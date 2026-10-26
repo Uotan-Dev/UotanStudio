@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Projects;
+using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Nodes;
@@ -49,8 +50,38 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
                 DisplayName = Path.GetFileName(dto.RelativePath),
                 RelativePath = dto.RelativePath,
                 SizeBytes = dto.SizeBytes,
-                Format = dto.Format
+                Format = RecoverUnknownFormat(dto)
             });
+    }
+
+    /// <summary>
+    /// Re-probes an entry whose persisted label is <c>unknown</c>, so projects saved before a format gained a
+    /// detector show the current label instead of the stale placeholder. Missing or unreadable files keep the
+    /// persisted label.
+    /// <para>对持久化标签为 <c>unknown</c> 的条目重新探测，使在某个格式获得探测器之前保存的工程显示当前标签
+    /// 而不是过期占位符；文件缺失或不可读时保留持久化标签。</para>
+    /// </summary>
+    /// <param name="dto">Persisted image entry. <para>持久化的镜像条目。</para></param>
+    /// <returns>The persisted label, or the freshly probed label when re-probing succeeds.
+    /// <para>持久化标签；重新探测成功时为最新探测出的标签。</para></returns>
+    private static string RecoverUnknownFormat(ImageEntryDto dto)
+    {
+        if (!string.Equals(dto.Format, "unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return dto.Format;
+        }
+
+        try
+        {
+            var absolute = ProjectContextService.Instance.ResolvePath(dto.RelativePath);
+            return absolute is not null && File.Exists(absolute)
+                ? ImageInputService.DetectFormat(absolute)
+                : dto.Format;
+        }
+        catch
+        {
+            return dto.Format;
+        }
     }
 
     public Task RestoreDocumentsAsync(List<OpenDocumentDto> documents, string rootDirectory)

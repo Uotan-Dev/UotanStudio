@@ -6,6 +6,7 @@ using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BootSecurity.BootImage;
 using UotanStudio.Firmware.BootSecurity.BootImage.Formats;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Firmware.OtaDelta.Dat;
 using UotanStudio.Firmware.OtaDelta.Payload;
@@ -79,6 +80,9 @@ internal enum ImageFormatKind
 
     /// <summary>exFAT volume.<para>exFAT 卷。</para></summary>
     ExFat,
+
+    /// <summary>HarmonyOS update.bin package.<para>HarmonyOS update.bin 升级包。</para></summary>
+    UpdateBin,
 
     /// <summary>Android boot image.<para>Android boot 镜像。</para></summary>
     Boot,
@@ -185,7 +189,10 @@ internal sealed class ImageInputService
         if (DatFileSet.IsTransferList(filePath)) return ImageFormatKind.Dat;
         if (filePath.EndsWith(".dat", StringComparison.OrdinalIgnoreCase)) return ImageFormatKind.Dat;
         if (DatFileSet.IsBrotli(filePath)) return ImageFormatKind.Brotli;
-        if (IsLpSuper(filePath)) return ImageFormatKind.Super;
+        var registered = DetectRegisteredFormat(filePath);
+        if (registered is LpFormatHandler) return ImageFormatKind.Super;
+        if (registered is not null && registered.FormatName == HarmonyUpdateBinFormatName)
+            return ImageFormatKind.UpdateBin;
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         switch (extension)
         {
@@ -304,6 +311,7 @@ internal sealed class ImageInputService
         ImageFormatKind.F2fs => "f2fs",
         ImageFormatKind.Fat => "fat",
         ImageFormatKind.ExFat => "exfat",
+        ImageFormatKind.UpdateBin => "update.bin",
         ImageFormatKind.Boot => "boot",
         ImageFormatKind.InitBoot => "init_boot",
         ImageFormatKind.Recovery => "recovery",
@@ -341,6 +349,7 @@ internal sealed class ImageInputService
         "f2fs" => ImageFormatKind.F2fs,
         "fat" => ImageFormatKind.Fat,
         "exfat" => ImageFormatKind.ExFat,
+        "update.bin" => ImageFormatKind.UpdateBin,
         "boot" => ImageFormatKind.Boot,
         "init_boot" => ImageFormatKind.InitBoot,
         "recovery" => ImageFormatKind.Recovery,
@@ -357,17 +366,31 @@ internal sealed class ImageInputService
         _ => ImageFormatKind.Unknown,
     };
 
+    /// <summary>Format name published by the HarmonyOS update.bin handler.
+    /// <para>HarmonyOS update.bin 处理器发布的格式名。</para>
+    /// </summary>
+    private const string HarmonyUpdateBinFormatName = "HarmonyOS update.bin";
+
+    /// <summary>
+    /// Runs the registered format detector once, registering the built-in handlers first.
+    /// <para>先注册内置处理器，再运行已注册的格式探测器一次。</para>
+    /// </summary>
+    /// <param name="filePath">Path of the file to probe. <para>待探测的文件路径。</para></param>
+    /// <returns>The detected handler, or <see langword="null"/> when no handler accepts the file.
+    /// <para>命中的处理器；没有处理器接受该文件时为 <see langword="null"/>。</para></returns>
+    private static IReadonlyFormatHandler? DetectRegisteredFormat(string filePath)
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        return FormatDetector.Detect(filePath);
+    }
+
     /// <summary>
     /// Decides whether a file is an LP super container through the firmware format registry.
     /// <para>经由固件格式注册表判定文件是否为 LP super 容器。</para>
     /// </summary>
     /// <param name="filePath">Path of the file to probe. <para>待探测的文件路径。</para></param>
     /// <returns><see langword="true"/> when the registered handler is the LP handler. <para>注册表命中的处理器为 LP 处理器时为 <see langword="true"/>。</para></returns>
-    private static bool IsLpSuper(string filePath)
-    {
-        FirmwareFormatRegistry.RegisterAll();
-        return FormatDetector.Detect(filePath) is LpFormatHandler;
-    }
+    private static bool IsLpSuper(string filePath) => DetectRegisteredFormat(filePath) is LpFormatHandler;
 
     /// <summary>
     /// Decides whether a format identity belongs to the boot family.

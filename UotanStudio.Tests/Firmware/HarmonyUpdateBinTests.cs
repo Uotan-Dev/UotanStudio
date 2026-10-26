@@ -4,7 +4,6 @@ using UotanStudio.Firmware.Application.Formats;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.VendorFirmware.HarmonyOS;
-using UotanStudio.Hash.Digests;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
 
@@ -20,7 +19,7 @@ public sealed class HarmonyUpdateBinTests
     public void Detect_BinExtensionPackage_RoutesToHandler()
     {
         using var temp = new TempDirectory();
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("system", 0, [1, 2, 3])]));
 
         var handler = FormatDetector.Detect(path);
@@ -35,7 +34,7 @@ public sealed class HarmonyUpdateBinTests
     public void Detect_ExtensionlessPackage_ValidatesStructure()
     {
         using var temp = new TempDirectory();
-        var path = temp.WriteBytes("update", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("system", 0, [1, 2, 3])]));
 
         var detailed = FormatDetector.DetectDetailed(path);
@@ -62,7 +61,7 @@ public sealed class HarmonyUpdateBinTests
     public void CanHandle_UnknownLayoutHint_ReturnsFalse()
     {
         using var temp = new TempDirectory();
-        var bytes = BuildPackage(HarmonyUpdateBinLayout.L2, [("system", 0, [1, 2, 3])]);
+        var bytes = HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2, [("system", 0, [1, 2, 3])]);
         BinaryPrimitives.WriteUInt16LittleEndian(bytes, 0x7F7F);
         var path = temp.WriteBytes("update.bin", bytes);
 
@@ -78,7 +77,7 @@ public sealed class HarmonyUpdateBinTests
         byte[] systemPayload = [1, 2, 3, 4];
         byte[] boardPayload = Encoding.ASCII.GetBytes("HI3516");
         byte[] configPayload = [0x50, 0x4B];
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
         [
             ("system", 0, systemPayload),
             ("board_list", 0, boardPayload),
@@ -107,7 +106,7 @@ public sealed class HarmonyUpdateBinTests
     {
         using var temp = new TempDirectory();
         var version = "OpenHarmony 3.2.6.1\nall/cn\u0000"u8.ToArray();
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("version_list", 0, version)]));
 
         var result = await new HarmonyUpdateBinFormatHandler().ReadMetadataAsync(path,
@@ -122,7 +121,7 @@ public sealed class HarmonyUpdateBinTests
     public async Task ReadMetadata_HashInfoChain_ReportsHashAndSignature()
     {
         using var temp = new TempDirectory();
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("system", 0, [1, 2, 3])], HarmonyUpdateBinSignatureKind.HashAndSignature));
 
         var result = await new HarmonyUpdateBinFormatHandler().ReadMetadataAsync(path,
@@ -136,7 +135,7 @@ public sealed class HarmonyUpdateBinTests
     public async Task ReadMetadata_L1Package_ReportsL1Layout()
     {
         using var temp = new TempDirectory();
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L1,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L1,
             [("system", 0, [7, 8, 9])]));
 
         var result = await new HarmonyUpdateBinFormatHandler().ReadMetadataAsync(path,
@@ -156,7 +155,7 @@ public sealed class HarmonyUpdateBinTests
         byte[] systemPayload = [1, 2, 3, 4, 5];
         byte[] boardPayload = Encoding.ASCII.GetBytes("HI3516\nHI3518");
         byte[] zipPayload = [0x50, 0x4B, 0x03, 0x04];
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
         [
             ("system", 0, systemPayload),
             ("board_list", 0, boardPayload),
@@ -184,7 +183,7 @@ public sealed class HarmonyUpdateBinTests
     {
         using var temp = new TempDirectory();
         var output = Path.Combine(temp.Path, "out");
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L1,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L1,
             [("system", 0, [9, 8, 7])]));
 
         var result = await new HarmonyUpdateBinFormatHandler().UnpackAsync(path, output, null,
@@ -200,7 +199,7 @@ public sealed class HarmonyUpdateBinTests
     {
         using var temp = new TempDirectory();
         var output = Path.Combine(temp.Path, "out");
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("system", 0, [1, 2, 3])]));
         using var scope = RepackMetadata.UseContext(RepackMetadataContext.LocalDirectory);
 
@@ -220,7 +219,7 @@ public sealed class HarmonyUpdateBinTests
     {
         using var temp = new TempDirectory();
         var output = Path.Combine(temp.Path, "out");
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
         [
             ("system", 0, [1]),
             ("vendor", 0, [2]),
@@ -242,7 +241,7 @@ public sealed class HarmonyUpdateBinTests
     public async Task Unpack_UnknownSelection_Fails()
     {
         using var temp = new TempDirectory();
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("system", 0, [1])]));
 
         var result = await new HarmonyUpdateBinFormatHandler().UnpackAsync(path,
@@ -259,7 +258,7 @@ public sealed class HarmonyUpdateBinTests
         using var temp = new TempDirectory();
         var output = Path.Combine(temp.Path, "out");
         var digests = new Dictionary<string, byte[]> { ["system"] = Enumerable.Repeat((byte)0xFF, 32).ToArray() };
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("system", 0, [1, 2, 3])], digests: digests));
 
         var result = await new HarmonyUpdateBinFormatHandler().UnpackAsync(path, output,
@@ -276,7 +275,7 @@ public sealed class HarmonyUpdateBinTests
         using var temp = new TempDirectory();
         var output = Path.Combine(temp.Path, "out");
         var digests = new Dictionary<string, byte[]> { ["system"] = new byte[32] };
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("system", 0, [1, 2, 3])], digests: digests));
 
         var result = await new HarmonyUpdateBinFormatHandler().UnpackAsync(path, output,
@@ -294,7 +293,7 @@ public sealed class HarmonyUpdateBinTests
         var output = Directory.CreateDirectory(Path.Combine(temp.Path, "out")).FullName;
         await File.WriteAllTextAsync(Path.Combine(output, "system.img"), "keep",
             TestContext.Current.CancellationToken);
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
         [
             ("system", 0, [1]),
             ("vendor", 0, [2])
@@ -314,7 +313,7 @@ public sealed class HarmonyUpdateBinTests
     {
         using var temp = new TempDirectory();
         var output = Path.Combine(temp.Path, "out");
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("system", 0, new byte[32])]));
 
         var result = await new HarmonyUpdateBinFormatHandler().UnpackAsync(path, output,
@@ -330,7 +329,7 @@ public sealed class HarmonyUpdateBinTests
     {
         using var temp = new TempDirectory();
         var output = Path.Combine(temp.Path, "out");
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("system", 0, [1])]));
         using var source = new CancellationTokenSource();
         source.Cancel();
@@ -344,7 +343,7 @@ public sealed class HarmonyUpdateBinTests
     public async Task ReadMetadata_TruncatedPayload_Fails()
     {
         using var temp = new TempDirectory();
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("system", 0, [1, 2, 3, 4])], truncateBytes: 2));
 
         var result = await new HarmonyUpdateBinFormatHandler().ReadMetadataAsync(path,
@@ -358,7 +357,7 @@ public sealed class HarmonyUpdateBinTests
     public async Task ReadMetadata_UnsafeComponentName_Fails()
     {
         using var temp = new TempDirectory();
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
             [("../system", 0, [1])]));
 
         var result = await new HarmonyUpdateBinFormatHandler().ReadMetadataAsync(path,
@@ -372,7 +371,7 @@ public sealed class HarmonyUpdateBinTests
     public async Task ReadMetadata_DuplicateOutputName_Fails()
     {
         using var temp = new TempDirectory();
-        var path = temp.WriteBytes("update.bin", BuildPackage(HarmonyUpdateBinLayout.L2,
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
         [
             ("system", 0, [1]),
             ("SYSTEM", 0, [2])
@@ -389,7 +388,7 @@ public sealed class HarmonyUpdateBinTests
     public async Task ReadMetadata_UnknownMetadataTlv_Fails()
     {
         using var temp = new TempDirectory();
-        var bytes = BuildPackage(HarmonyUpdateBinLayout.L2, [("system", 0, [1])]);
+        var bytes = HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2, [("system", 0, [1])]);
         var tableLength = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(178));
         bytes[180 + tableLength + 16] = 0x09;
         var path = temp.WriteBytes("update.bin", bytes);
@@ -405,7 +404,7 @@ public sealed class HarmonyUpdateBinTests
     public async Task ReadMetadata_InvalidTableLength_Fails()
     {
         using var temp = new TempDirectory();
-        var bytes = BuildPackage(HarmonyUpdateBinLayout.L2, [("system", 0, [1])]);
+        var bytes = HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2, [("system", 0, [1])]);
         BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(178), 3);
         var path = temp.WriteBytes("update.bin", bytes);
 
@@ -413,76 +412,5 @@ public sealed class HarmonyUpdateBinTests
             TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
-    }
-
-    private static byte[] BuildPackage(
-        HarmonyUpdateBinLayout layout,
-        (string Name, byte Type, byte[] Payload)[] components,
-        HarmonyUpdateBinSignatureKind signature = HarmonyUpdateBinSignatureKind.Signature,
-        IReadOnlyDictionary<string, byte[]>? digests = null,
-        int truncateBytes = 0)
-    {
-        var nameLength = layout == HarmonyUpdateBinLayout.L1 ? 16 : 32;
-        var recordLength = layout == HarmonyUpdateBinLayout.L1 ? 71 : 87;
-        var table = new byte[components.Length * recordLength];
-        var payload = new MemoryStream();
-        for (var index = 0; index < components.Length; index++)
-        {
-            var record = table.AsSpan(index * recordLength, recordLength);
-            var name = Encoding.ASCII.GetBytes(components[index].Name);
-            Assert.True(name.Length < nameLength, "Fixture component names must leave a NUL terminator.");
-            name.CopyTo(record);
-            record[nameLength + 4] = components[index].Type;
-            BinaryPrimitives.WriteUInt64LittleEndian(record.Slice(nameLength + 15, sizeof(ulong)),
-                (ulong)components[index].Payload.Length);
-            var digest = digests is not null && digests.TryGetValue(components[index].Name, out var overridden)
-                ? overridden
-                : Sha256.ComputeHash(components[index].Payload);
-            Assert.Equal(32, digest.Length);
-            digest.CopyTo(record.Slice(nameLength + 23, 32));
-            payload.Write(components[index].Payload);
-        }
-
-        Assert.InRange(table.Length, 1, ushort.MaxValue);
-        var header = new byte[180];
-        BinaryPrimitives.WriteUInt16LittleEndian(header,
-            layout == HarmonyUpdateBinLayout.L2 ? (ushort)0x01 : (ushort)0x11);
-        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(2), 136);
-        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(176), 5);
-        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(178), (ushort)table.Length);
-
-        var reserve = new byte[16];
-        Encoding.ASCII.GetBytes("update/info.bin").CopyTo(reserve, 0);
-        using var metadata = new MemoryStream();
-        if (signature == HarmonyUpdateBinSignatureKind.HashAndSignature)
-        {
-            WriteTlv(metadata, 0x06, []);
-            WriteTlv(metadata, 0x07, []);
-            WriteTlv(metadata, 0x08, []);
-        }
-        else
-        {
-            WriteTlv(metadata, 0x08, new byte[32]);
-        }
-
-        using var result = new MemoryStream();
-        result.Write(header);
-        result.Write(table);
-        result.Write(reserve);
-        metadata.Position = 0;
-        metadata.CopyTo(result);
-        payload.Position = 0;
-        payload.CopyTo(result);
-        var bytes = result.ToArray();
-        return truncateBytes == 0 ? bytes : bytes[..^truncateBytes];
-    }
-
-    private static void WriteTlv(Stream output, ushort kind, byte[] payload)
-    {
-        Span<byte> header = stackalloc byte[6];
-        BinaryPrimitives.WriteUInt16LittleEndian(header, kind);
-        BinaryPrimitives.WriteUInt32LittleEndian(header[2..], (uint)payload.Length);
-        output.Write(header);
-        output.Write(payload);
     }
 }

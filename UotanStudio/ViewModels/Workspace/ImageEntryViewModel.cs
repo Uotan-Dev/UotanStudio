@@ -38,8 +38,8 @@ public sealed partial class ImageEntryViewModel : ObservableObject
     partial void OnSizeBytesChanged(long value) => OnPropertyChanged(nameof(DisplaySize));
 
     /// <summary>
-    /// Gets or sets the image format identifier (boot/payload/cpio/oppo/sparse/raw/unknown).
-    /// <para>获取或设置镜像格式标识（boot/payload/cpio/oppo/sparse/raw/unknown）。</para>
+    /// Gets or sets the image format identifier (boot/payload/cpio/oppo/sparse/raw/update.bin/unknown).
+    /// <para>获取或设置镜像格式标识（boot/payload/cpio/oppo/sparse/raw/update.bin/unknown）。</para>
     /// </summary>
     [ObservableProperty]
     private string _format = "unknown";

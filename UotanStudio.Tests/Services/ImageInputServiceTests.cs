@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.VendorFirmware.HarmonyOS;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
@@ -71,6 +72,26 @@ public sealed class ImageInputServiceTests
         var file = temp.WriteBytes("payload.bin", "CrAU"u8.ToArray());
 
         Assert.Equal("payload", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void DetectFormat_HarmonyUpdateBin_ReturnsUpdateBin()
+    {
+        using var temp = new TempDirectory();
+        var package = HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
+            [("system", 0, [1, 2, 3])]);
+        var file = temp.WriteBytes("update.bin", package);
+
+        Assert.Equal("update.bin", ImageInputService.DetectFormat(file));
+    }
+
+    [Fact]
+    public void GetFormatLabel_UpdateBin_RoundTripsThroughParseFormatLabel()
+    {
+        var label = ImageInputService.GetFormatLabel(ImageFormatKind.UpdateBin);
+
+        Assert.Equal("update.bin", label);
+        Assert.Equal(ImageFormatKind.UpdateBin, ImageInputService.ParseFormatLabel(label));
     }
 
     [Theory]
@@ -179,6 +200,7 @@ public sealed class ImageInputServiceTests
     [InlineData("ext4", false)]
     [InlineData("raw", false)]
     [InlineData("super", false)]
+    [InlineData("update.bin", false)]
     [InlineData("unknown", false)]
     public void IsBootFamilyFormat_KnownLabels_MatchesMembership(string format, bool expected)
         => Assert.Equal(expected, ImageInputService.IsBootFamilyFormat(format));

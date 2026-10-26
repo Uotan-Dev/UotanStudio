@@ -301,11 +301,11 @@ internal partial class ImageViewModel : Tool
 
     /// <summary>
     /// Scans <c>images/</c> or <c>output/</c>; output mode also includes raw images, while unpack mode
-    /// registers images that carry a filesystem internally plus boot-family images (content probing
-    /// independent of the extension, see <see cref="ImageInputService.ContainsFileSystem"/> and
-    /// <see cref="ImageInputService.IsBootFamilyFormat"/>).
+    /// registers images that carry a filesystem internally, boot-family images and HarmonyOS
+    /// <c>update.bin</c> containers (content probing independent of the extension, see
+    /// <see cref="ImageInputService.ContainsFileSystem"/> and <see cref="ImageInputService.IsBootFamilyFormat"/>).
     /// <para>扫描 <c>images/</c> 或 <c>output/</c> 目录；输出模式同时包含 raw 镜像，解包模式登记
-    /// 内部包含文件系统的镜像与 boot 系列镜像（与后缀无关的内容探测，见
+    /// 内部包含文件系统的镜像、boot 系列镜像与 HarmonyOS <c>update.bin</c> 容器（与后缀无关的内容探测，见
     /// <see cref="ImageInputService.ContainsFileSystem"/> 与 <see cref="ImageInputService.IsBootFamilyFormat"/>）。</para>
     /// </summary>
     private async Task RefreshFileEntriesAsync(ProjectContextService context, int version, bool outputMode)
@@ -329,7 +329,9 @@ internal partial class ImageViewModel : Tool
                     continue;
                 }
 
-                if (!outputMode && !(ImageInputService.ContainsFileSystem(file) || ImageInputService.IsBootFamilyFormat(kind)))
+                if (!outputMode && !(ImageInputService.ContainsFileSystem(file)
+                    || ImageInputService.IsBootFamilyFormat(kind)
+                    || kind == ImageFormatKind.UpdateBin))
                 {
                     continue;
                 }
