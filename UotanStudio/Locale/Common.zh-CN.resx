@@ -453,6 +453,9 @@
   <data name="ScreenMirror_Failed" xml:space="preserve">
     <value>投屏失败：</value>
   </data>
+  <data name="ScreenMirror_InputInjectionBlocked" xml:space="preserve">
+    <value>设备未授予注入权限：请在开发者选项开启“USB 调试（安全设置）”，然后重新点击画面。</value>
+  </data>
   <data name="ScreenMirror_Back" xml:space="preserve">
     <value>返回</value>
   </data>

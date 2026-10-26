@@ -453,6 +453,9 @@ Author: 暮间雾
   <data name="ScreenMirror_Failed" xml:space="preserve">
     <value>Mirroring failed: </value>
   </data>
+  <data name="ScreenMirror_InputInjectionBlocked" xml:space="preserve">
+    <value>Touch and key control are blocked by the device: enable “USB debugging (Security settings)” in Developer options, then tap the picture again.</value>
+  </data>
   <data name="ScreenMirror_Back" xml:space="preserve">
     <value>Back</value>
   </data>

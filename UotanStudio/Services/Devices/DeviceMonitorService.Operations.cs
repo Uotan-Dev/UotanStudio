@@ -220,6 +220,42 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
+    /// Probes whether the device lets its shell identity inject input, which scrcpy's touch and key control needs.
+    /// The device dump is read through the routed ADB session (the shared direct session while a mirror owns it, or
+    /// a server session otherwise), so the probe adds no second transport.
+    /// <para>探测设备是否允许其 shell 身份注入输入——scrcpy 的触摸与按键控制依赖它。转储经已路由的 ADB 会话读取
+    /// （投屏占用时复用共享直连会话，否则用 server 会话），因此探测不会另开传输。</para>
+    /// </summary>
+    /// <param name="device">The ADB target to probe. <para>要探测的 ADB 目标。</para></param>
+    /// <param name="cancellationToken">Cancels the probe. <para>取消探测。</para></param>
+    /// <returns><see langword="true"/> when <c>com.android.shell</c> holds
+    /// <c>android.permission.INJECT_EVENTS</c>, <see langword="false"/> when the package dump ran but the grant is
+    /// absent, and <see langword="null"/> when the dump itself could not be read.
+    /// <para>com.android.shell 持有 <c>android.permission.INJECT_EVENTS</c> 时为 <see langword="true"/>；转储成功但
+    /// 没有该授权时为 <see langword="false"/>；连转储都读不到时为 <see langword="null"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="device"/> is <see langword="null"/>.
+    /// <para><paramref name="device"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="IOException">The routed ADB session could not be opened or the command failed.
+    /// <para>已路由的 ADB 会话无法打开或命令失败。</para></exception>
+    /// <exception cref="TimeoutException">The command exceeded <see cref="InputInjectionProbe.TimeoutMs"/>.
+    /// <para>命令超过 <see cref="InputInjectionProbe.TimeoutMs"/>。</para></exception>
+    public bool? ProbeInputInjection(DetectedDevice device, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        return RunAdb(device, session =>
+        {
+            if (!session.IsConnected)
+            {
+                return (bool?)null;
+            }
+
+            var result = session.CreateShellClient(InputInjectionProbe.Command)
+                .ExecuteAsync(InputInjectionProbe.TimeoutMs, cancellationToken).GetAwaiter().GetResult();
+            return InputInjectionProbe.Parse(System.Text.Encoding.UTF8.GetString(result.Stdout));
+        }, cancellationToken);
+    }
+
+    /// <summary>
     /// Starts the scrcpy server on the shared direct-USB ADB session, so the log capture, property queries and
     /// shell commands keep running over the same connection instead of losing the endpoint to the mirror.
     /// <para>在共享的直连 USB ADB 会话上启动 scrcpy 服务端，使日志抓取、属性查询与 shell 命令继续复用同一连接，

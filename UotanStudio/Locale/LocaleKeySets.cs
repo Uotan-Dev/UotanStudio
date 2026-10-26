@@ -140,6 +140,7 @@ internal static class LocaleKeySets
         "ScreenMirror_Mirroring",
         "ScreenMirror_Stopped",
         "ScreenMirror_Failed",
+        "ScreenMirror_InputInjectionBlocked",
         "ScreenMirror_Back",
         "ScreenMirror_Power",
         "ScreenMirror_PushClipboard",

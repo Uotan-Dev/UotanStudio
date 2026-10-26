@@ -42,8 +42,12 @@ public partial class ScreenMirrorViewModel : Document, ITool
     private const int KeyFrameMinimumIntervalMilliseconds = 750;
     private const int KeyFrameRequestRepeatMilliseconds = 2000;
     private const int SessionThreadJoinMilliseconds = 2000;
+    private const int InputInjectionRecheckMilliseconds = 3000;
 
     private MirrorSessionFacade? _client;
+    private DetectedDevice? _mirrorDevice;
+    private long _lastInputInjectionProbeTicks;
+    private int _inputInjectionRecheckPending;
     private int _starting;
     private long _lastKeyFrameRequestTicks;
     private readonly Lock _frameLock = new();
@@ -161,6 +165,16 @@ public partial class ScreenMirrorViewModel : Document, ITool
     private string _deviceName = string.Empty;
 
     /// <summary>
+    /// Gets whether the device refused input injection, so touch and key control cannot reach it until the user
+    /// enables the ROM's debug injection permission. The mirror keeps showing video while the header explains why
+    /// the device does not react to clicks.
+    /// <para>获取设备是否拒绝输入注入：在用户打开 ROM 的调试注入权限之前，触摸与按键都无法送达设备。投屏继续显示
+    /// 画面，标题栏则说明点击没有反应的原因。</para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _inputInjectionBlocked;
+
+    /// <summary>
     /// Resolves the device by serial and starts mirroring (deploy/connect runs on a background thread).
     /// <para>按序列号解析设备并启动投屏（部署/连接在后台线程执行）。</para>
     /// </summary>
@@ -170,6 +184,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
         if (_disposed || _client is not null || Interlocked.CompareExchange(ref _starting, 1, 0) != 0) return;
 
         _serial = serial;
+        InputInjectionBlocked = false;
         ApplyMirrorSettingsCommand.NotifyCanExecuteChanged();
         StatusText = GetLocalizedString("ScreenMirror_Preparing");
         _startTask = Task.Run(async () =>
@@ -184,6 +199,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
                     ?? candidates.FirstOrDefault(candidate => candidate.Protocol == Services.Devices.DeviceProtocolKind.Hdc)
                     ?? throw new InvalidOperationException($"Device {serial} is not connected.");
 
+                _mirrorDevice = device;
                 UsesScrcpyServer = device.Protocol != Services.Devices.DeviceProtocolKind.Hdc;
                 MirrorSessionFacade facade;
                 if (device.Protocol == Services.Devices.DeviceProtocolKind.Hdc)
@@ -220,6 +236,7 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 }
                 StatusText = GetLocalizedString("ScreenMirror_Connecting");
                 BeginStreaming();
+                ReportInputInjection(device);
             }
             catch (Exception ex)
             {
@@ -229,6 +246,97 @@ public partial class ScreenMirrorViewModel : Document, ITool
                 _client?.Dispose(); _client = null;
             }
             finally { Interlocked.Exchange(ref _starting, 0); }
+        });
+    }
+
+    /// <summary>
+    /// Reads the device's input-injection grant once per session and raises <see cref="InputInjectionBlocked"/> when
+    /// the ROM withholds it, so the header names the developer option instead of leaving a silent, untappable picture.
+    /// A probe that cannot read the package dump leaves the state untouched.
+    /// <para>每个会话读取一次设备的输入注入授权；ROM 未授权时置位 <see cref="InputInjectionBlocked"/>，让标题栏直接
+    /// 指出应开启的开发者选项，而不是留下一个无法点击也没有提示的画面。读不到包转储时保持原状态。</para>
+    /// </summary>
+    /// <param name="device">The device this session mirrors. <para>本会话投屏的设备。</para></param>
+    private void ReportInputInjection(DetectedDevice device)
+    {
+        if (_streamOptions?.Control != true)
+        {
+            return;
+        }
+
+        bool? allowed;
+        try
+        {
+            allowed = App.DeviceMonitor.ProbeInputInjection(device, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Services.LogService.Instance.Write(Services.LogLevel.Debug, "ScreenMirror",
+                $"Input-injection probe for {device.Serial} is unavailable: {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _lastInputInjectionProbeTicks, Environment.TickCount64);
+        }
+
+        if (allowed != false)
+        {
+            return;
+        }
+
+        InputInjectionBlocked = true;
+        Services.LogService.Instance.Write(Services.LogLevel.Warn, "ScreenMirror",
+            $"Device {device.Serial} does not grant android.permission.INJECT_EVENTS to the shell identity; " +
+            "enable USB debugging (Security settings) in Developer options to restore touch and key control.");
+    }
+
+    /// <summary>
+    /// Re-runs the input-injection probe at most once per <see cref="InputInjectionRecheckMilliseconds"/> while the
+    /// warning is visible, so enabling the ROM's debug permission clears the header on the next tap instead of
+    /// requiring a session restart. The probe runs on the pool and never blocks the input path.
+    /// <para>警告可见期间每 <see cref="InputInjectionRecheckMilliseconds"/> 最多重跑一次注入探测，使打开 ROM 的调试
+    /// 注入权限后下一次点击即可清除提示，而不必重启会话。探测在线程池上执行，从不阻塞输入路径。</para>
+    /// </summary>
+    private void RecheckInputInjection()
+    {
+        if (!InputInjectionBlocked || _mirrorDevice is not { } device || _client is null)
+        {
+            return;
+        }
+
+        var now = Environment.TickCount64;
+        if (now - Interlocked.Read(ref _lastInputInjectionProbeTicks) < InputInjectionRecheckMilliseconds ||
+            Interlocked.Exchange(ref _inputInjectionRecheckPending, 1) != 0)
+        {
+            return;
+        }
+
+        Interlocked.Exchange(ref _lastInputInjectionProbeTicks, now);
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                if (App.DeviceMonitor.ProbeInputInjection(device, CancellationToken.None) == true)
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (!_disposed)
+                        {
+                            InputInjectionBlocked = false;
+                        }
+                    });
+                }
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                Services.LogService.Instance.Write(Services.LogLevel.Debug, "ScreenMirror",
+                    $"Input-injection recheck for {device.Serial} is unavailable: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _inputInjectionRecheckPending, 0);
+            }
         });
     }
 
@@ -322,6 +430,8 @@ public partial class ScreenMirrorViewModel : Document, ITool
         _disposed = true;
         GpuPresenter.Dispose();
         StopSessionCore();
+        _mirrorDevice = null;
+        InputInjectionBlocked = false;
         StatusText = GetLocalizedString("ScreenMirror_Stopped");
     }
 
@@ -496,11 +606,18 @@ public partial class ScreenMirrorViewModel : Document, ITool
     {
         if (Dispatcher.UIThread.CheckAccess())
         {
+            _mirrorDevice = null;
+            InputInjectionBlocked = false;
             StatusText = GetLocalizedString("ScreenMirror_Stopped");
             return;
         }
 
-        Dispatcher.UIThread.Post(() => StatusText = GetLocalizedString("ScreenMirror_Stopped"));
+        Dispatcher.UIThread.Post(() =>
+        {
+            _mirrorDevice = null;
+            InputInjectionBlocked = false;
+            StatusText = GetLocalizedString("ScreenMirror_Stopped");
+        });
     }
 
     /// <summary>
@@ -542,6 +659,8 @@ public partial class ScreenMirrorViewModel : Document, ITool
 
         StopSessionCore();
         _serial = null;
+        _mirrorDevice = null;
+        InputInjectionBlocked = false;
         StatusText = GetLocalizedString(resourceKey);
     }
 
@@ -558,9 +677,12 @@ public partial class ScreenMirrorViewModel : Document, ITool
     /// <param name="buttons">Current button state mask. <para>当前按键状态掩码。</para></param>
     /// <param name="actionButton">Button that changed on press/release; zero for movement or cancellation.</param>
     public void InjectTouch(byte action, long pointerId, int x, int y, int width, int height, uint buttons, uint actionButton = 0)
-        => SendControl(ScrcpyControlMessageWriter.InjectTouchEvent(action, pointerId, x, y, width, height,
+    {
+        RecheckInputInjection();
+        SendControl(ScrcpyControlMessageWriter.InjectTouchEvent(action, pointerId, x, y, width, height,
             pressure: action is ScrcpyConstants.ActionUp or 3 ? (ushort)0 : ushort.MaxValue,
             actionButton: actionButton, buttons: buttons));
+    }
 
     /// <summary>
     /// Injects a scroll event (video pixel coordinates).
