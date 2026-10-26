@@ -273,26 +273,32 @@ public sealed class LuaScriptEngine
         {
             var text = pending.ToString();
             pending.Clear();
-            while (true)
+            var remaining = text.AsSpan();
+            while (!remaining.IsEmpty)
             {
-                var index = text.IndexOf('\n');
+                var index = remaining.IndexOf('\n');
                 if (index < 0)
                 {
                     break;
                 }
-                Commit(text[..index]);
-                text = text[(index + 1)..];
+
+                Commit(remaining[..index]);
+                remaining = remaining[(index + 1)..];
             }
-            pending.Append(text);
+
+            if (!remaining.IsEmpty)
+            {
+                pending.Append(remaining);
+            }
         }
 
-        private void Commit(string line)
+        private void Commit(ReadOnlySpan<char> line)
         {
-            if (line.Length == 0)
+            if (line.IsEmpty)
             {
                 return;
             }
-            log.Write(level, "LuaScript", line.TrimEnd('\r'));
+            log.Write(level, "LuaScript", line.TrimEnd('\r').ToString());
         }
     }
 }

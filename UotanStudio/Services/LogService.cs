@@ -47,6 +47,7 @@ public sealed class LogService : IUnifiedLog
 {
     private static readonly Lazy<LogService> LazyInstance = new(() => new LogService());
     private static int _containerLookup;
+    private static readonly ConcurrentDictionary<string, LogChannel> ChannelCache = new();
     private readonly ConcurrentQueue<LogEntry> _entries = new();
     private readonly Lock _subscribersLock = new();
     private readonly List<EventHandler<LogEntry>> _subscribers = [];
@@ -227,7 +228,10 @@ public sealed class LogService : IUnifiedLog
 
     /// <summary>
     /// Classifies a log source into a <see cref="LogChannel"/> by case-insensitive keyword match, first hit wins.
-    /// <para>按不区分大小写的关键字将日志来源归入某个 <see cref="LogChannel"/>，首个命中生效。</para>
+    /// Sources repeat from a small closed set, so every classified string is memoized and later lookups skip the
+    /// keyword scans entirely.
+    /// <para>按不区分大小写的关键字将日志来源归入某个 <see cref="LogChannel"/>，首个命中生效。来源来自一个很小的
+    /// 封闭集合，因此每个已分类的字符串都会被记忆，后续查找完全跳过关键字扫描。</para>
     /// </summary>
     /// <param name="source">Log source string. <para>日志来源字符串。</para></param>
     /// <returns>The corresponding log channel. <para>对应的日志通道。</para></returns>
@@ -238,6 +242,11 @@ public sealed class LogService : IUnifiedLog
             return LogChannel.General;
         }
 
+        return ChannelCache.GetOrAdd(source, static value => Classify(value));
+    }
+
+    private static LogChannel Classify(string source)
+    {
         if (ContainsAny(source, "Flash", "Fastboot", "EDL", "Firehose", "Sideload"))
         {
             return LogChannel.Flash;

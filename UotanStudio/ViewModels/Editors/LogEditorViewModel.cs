@@ -66,9 +66,15 @@ public partial class LogEditorViewModel : Document, ITool, ILogViewModel
     ICommand ILogViewModel.ClearSearchCommand => ClearSearchCommand;
 
     partial void OnLevelFilterChanged(LogLevel? value) => ReapplyFilter();
-    partial void OnSearchTextChanged(string value) => UpdateSearchFilter();
-    partial void OnUseRegexChanged(bool value) => UpdateSearchFilter();
-    partial void OnMatchCaseChanged(bool value) => UpdateSearchFilter();
+    partial void OnSearchTextChanged(string value) => QueueSearchUpdate();
+    partial void OnUseRegexChanged(bool value) => QueueSearchUpdate();
+    partial void OnMatchCaseChanged(bool value) => QueueSearchUpdate();
+
+    /// <summary>Debounces search-option changes so each keystroke does not recompile the pattern and re-scan the loaded file.
+    /// <para>对搜索选项变化做防抖，避免每次按键都重编译正则并全量重扫已加载文件。</para></summary>
+    private void QueueSearchUpdate() => (_searchDebounce ??= new UiDebounce(UpdateSearchFilter)).Restart();
+
+    private UiDebounce? _searchDebounce;
 
     [RelayCommand]
     private void ClearSearch() => SearchText = string.Empty;

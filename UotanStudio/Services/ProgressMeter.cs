@@ -184,15 +184,16 @@ public sealed class ProgressMeter
     public static string FormatSize(double bytes)
     {
         if (!double.IsFinite(bytes) || bytes < 0) return "—";
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
         var index = 0;
-        while (bytes >= 1024 && index < units.Length - 1)
+        while (bytes >= 1024 && index < Units.Length - 1)
         {
             bytes /= 1024;
             index++;
         }
         return index == 0
-            ? string.Create(CultureInfo.CurrentCulture, $"{(long)bytes} {units[index]}")
-            : string.Create(CultureInfo.CurrentCulture, $"{bytes:0.#} {units[index]}");
+            ? string.Create(CultureInfo.CurrentCulture, $"{(long)bytes} {Units[index]}")
+            : string.Create(CultureInfo.CurrentCulture, $"{bytes:0.#} {Units[index]}");
     }
+
+    private static readonly string[] Units = ["B", "KB", "MB", "GB", "TB"];
 }

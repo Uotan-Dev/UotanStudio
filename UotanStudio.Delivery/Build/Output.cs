@@ -342,13 +342,18 @@ public sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigning
                             1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
                         var fileLength = input.Length;
                         var hashAlgorithm = Sha256.CreateAccumulator();
+                        long lastReport = 0;
                         int read;
                         while ((read = await input.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false)) != 0)
                         {
                             hashAlgorithm.Append(buffer.AsSpan(0, read));
                             var done = Interlocked.Add(ref processedBytes, read);
-                            progress?.Report(new(90 + done * 9.0 / Math.Max(1, totalBytes), "Verifying output",
-                                Stage: "Delivery_ProgressVerify", Bytes: (done, totalBytes), Detail: Path.GetFileName(stagedFiles[i])));
+                            if (Environment.TickCount64 - lastReport >= 100)
+                            {
+                                progress?.Report(new(90 + done * 9.0 / Math.Max(1, totalBytes), "Verifying output",
+                                    Stage: "Delivery_ProgressVerify", Bytes: (done, totalBytes), Detail: Path.GetFileName(stagedFiles[i])));
+                                lastReport = Environment.TickCount64;
+                            }
                         }
                         var hash = hashAlgorithm.GetHashAndReset();
                         hashAlgorithm.Dispose();

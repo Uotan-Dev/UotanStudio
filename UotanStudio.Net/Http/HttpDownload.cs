@@ -327,14 +327,21 @@ public static class HttpDownload
         total = total > 0 ? total : response.Content.Headers.ContentLength ?? 0;
         await using var input = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         await using var output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None, TransferBufferBytes, FileOptions.SequentialScan);
-        var buffer = new byte[TransferBufferBytes];
-        long processed = 0;
-        int read;
-        while ((read = await input.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false)) > 0)
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(TransferBufferBytes);
+        try
         {
-            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-            processed += read;
-            progress?.Report((processed, total));
+            long processed = 0;
+            int read;
+            while ((read = await input.ReadAsync(buffer.AsMemory(0, TransferBufferBytes), cancellationToken).ConfigureAwait(false)) > 0)
+            {
+                await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                processed += read;
+                progress?.Report((processed, total));
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 
@@ -370,17 +377,24 @@ public static class HttpDownload
             await using var input = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
             await using var output = new FileStream(destination, FileMode.Open, FileAccess.Write, FileShare.ReadWrite, TransferBufferBytes, FileOptions.RandomAccess);
             output.Position = range.Start;
-            var buffer = new byte[TransferBufferBytes];
-            long rangeProcessed = 0;
-            while (rangeProcessed < range.End - range.Start + 1)
+            var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(TransferBufferBytes);
+            try
             {
-                var requested = (int)Math.Min(buffer.Length, range.End - range.Start + 1 - rangeProcessed);
-                var read = await input.ReadAsync(buffer.AsMemory(0, requested), token).ConfigureAwait(false);
-                if (read == 0) throw new EndOfStreamException("The remote server closed a range response early.");
-                await output.WriteAsync(buffer.AsMemory(0, read), token).ConfigureAwait(false);
-                rangeProcessed += read;
-                var current = Interlocked.Add(ref processed, read);
-                progress?.Report((current, total));
+                long rangeProcessed = 0;
+                while (rangeProcessed < range.End - range.Start + 1)
+                {
+                    var requested = (int)Math.Min(TransferBufferBytes, range.End - range.Start + 1 - rangeProcessed);
+                    var read = await input.ReadAsync(buffer.AsMemory(0, requested), token).ConfigureAwait(false);
+                    if (read == 0) throw new EndOfStreamException("The remote server closed a range response early.");
+                    await output.WriteAsync(buffer.AsMemory(0, read), token).ConfigureAwait(false);
+                    rangeProcessed += read;
+                    var current = Interlocked.Add(ref processed, read);
+                    progress?.Report((current, total));
+                }
+            }
+            finally
+            {
+                System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
             }
         }).ConfigureAwait(false);
     }
