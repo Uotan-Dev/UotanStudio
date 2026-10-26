@@ -4,26 +4,70 @@
 
 ## 当前实测（2026-10-25，Windows x64，Debug）
 
-- `dotnet restore UotanStudio.slnx -p:Configuration=Debug` 与 `dotnet build UotanStudio.slnx --no-restore --nologo -c Debug`：0 错误；全解只剩 `SpacemiTFlashTests`、`HdcServerTransferTests` 的 2 条既有 `xUnit1051` 警告。
-- `dotnet format UotanStudio.slnx whitespace --no-restore --verify-no-changes` 与同上的 `style`：全解两道门零报告。
-- 定向测试：`UotanStudio.Tests.Mirroring` 127/127（1 硬件跳过）、`UotanStudio.Tests.Media` 202/202（1 Linux 跳过）、`UotanStudio.Tests.Devices` 249/249、`UotanStudio.Tests.Architecture` 16/16。架构门覆盖宿主分层、ZIP 容器、格式探测、命名空间归属、项目引用图与解决方案成员。
-- 全量（2026-10-24）：7250 总数 / 7244 通过 / 6 跳过 / 0 失败，单轮 2m41s（`dotnet test --solution UotanStudio.slnx --no-build -c Debug --minimum-expected-tests 6000`，共享工作树）。
+- `dotnet restore UotanStudio.slnx -p:Configuration=Debug` 与 `dotnet build UotanStudio.slnx --no-restore --nologo -c Debug`：0 错误、0 警告（2026-10-27，共享工作树）。
+- `dotnet format` 的 `whitespace` 与 `style`：全解零报告（2026-10-27，Release，`--no-restore --verify-no-changes`）。此前的两处 `UotanStudio` 报告已修：`ViewModels/Editors/ScreenMirrorViewModel.cs` 中 `}` 与下一个 `<summary>` 挤在同一行，`Views/Editors/MirrorTrace.cs` 结尾多出一个换行符。
+- CI 等价门禁（2026-10-27，Release，共享工作树）：`dotnet build UotanStudio.slnx --no-restore --nologo -c Release` 0 错误 0 警告；两道 `dotnet format` 零报告；`dotnet test --solution UotanStudio.slnx --no-build -c Release --minimum-expected-tests 6000` 7572 总数 / 7565 通过 / 7 跳过 / 0 失败，单轮 1m31s。构建只剩两处需要修的产物：`Protocols/Adb/AdbSyncClient.V2.cs` 原先直接构造 `BrotliStream`，被 `CompressionImplementationBoundaryTests` 判为通用压缩越界，现改走 `CompressionService.Create{,De}compressionStream(..., CompressionFormat.Brotli)`，并用工装证明 `CompressionOptions { Level = 1 }` 与 `CompressionLevel.Fastest` 在同一 1 MiB 输入上产出逐字节相同的 493 B 帧；`Protocols/Apple/Lockdown/LockdownPairingRecord.cs` 原来对每张证书各读两次 `DateTimeOffset.UtcNow`，DER 的 `NotAfter` 只有秒级精度，子证书晚一秒铸造即超过签发者有效期而抛 `ArgumentException`，现由 `CreatePending` 计算一次有效期窗口并传给三份证书。
+- 定向测试：`UotanStudio.Tests.Mirroring` 127/127（1 硬件跳过）、`UotanStudio.Tests.Media` 202/202（1 Linux 跳过）、`UotanStudio.Tests.Devices` 298/298、`UotanStudio.Tests.Protocols` 112/112、`UotanStudio.Tests.Architecture` 16/16。架构门覆盖宿主分层、ZIP 容器、格式探测、命名空间归属、项目引用图与解决方案成员。
+- 全量（2026-10-27）：7572 总数 / 7565 通过 / 7 跳过 / 0 失败，单轮 2m05s（`dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug`，共享工作树）。
 - NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained -p:PublishAot=true` 成功，`UotanStudio.Desktop.exe` 154,245,120 B（147.1 MiB）；只有 Avalonia/Dock/Ursa/Lingua/YamlDotNet/Common.Logging 等第三方既有的 IL2026/IL2104/IL3053 警告，没有本项目新增的裁剪/AOT 警告，内嵌资源名都能在产物中检索到。
 - `TreatWarningsAsErrors=true` 生效于 7 个项目：`UotanStudio.Comm`、`UotanStudio.Compress`、`UotanStudio.Firmware`、`UotanStudio.Hash`、`UotanStudio.Media`、`UotanStudio.Net`、`UotanStudio.RegexInfer`；全解 0 警告同时意味着受管库的 `CS1591` 为 0。
 - 生产项目之间没有 `InternalsVisibleTo` 授权；宿主与 MCP 需要的契约是公共 API，只保留 `UotanStudio.Tests`、`UotanStudio.Benchmarks`、`UotanStudio.DeliverySmoke`、`GpuMirrorSmoke`、`UotanStudio.ProjectLifecycleSmoke` 等脚手架授权。
 - MCP 工具目录 `UotanStudio.Mcp/Tools/PluginToolCatalog.cs` 共 48 条描述符，其中 6 条 `FlashGated`，只在 `--allow-flash` 下注册。
 - 公共属性的 `<value>` 注释仍有约 257 处缺口（2026-10-18 度量），不影响构建门。
 
-6 条跳过全部是环境或已知实现边界：
+本机每轮出现的跳过项（数量随环境变化，通常 6–7 条）：
 
 | 用例 | 原因 |
 | --- | --- |
 | `Media.VideoDecoderFactoryTests.Linux_CreatesDeferredBackendWithoutClaimingGpuSupport` | Linux 专属能力边界 |
 | `Media.ScreenMirrorTransportTests.OpenAdbLease_NetworkTargetWithoutServer_DoesNotOpenUsb` | 本机有 ADB server 在运行，"server 不存在"分支不可测 |
+| `Mirroring.OhscrcpyHdcIntegrationTests.ControlForward_RealDevice_ConnectsAndInjectsTouch` | 未设 `UOTAN_HDC_MIRROR_DIRECT` |
 | `Firmware.ErofsCorpusCompactIndexRebuildTests.PreservedRebuild_OfCorpusCompactIndexImage_ReExtractsEveryFileByteIdentical` | 未设 `UOTAN_EROFS_CORPUS` |
 | `Firmware.ErofsInodeModelEquivalenceTests.Decode_CorpusImageInode_MatchesIndependentDecodeForEveryField` | 未设 `UOTAN_EROFS_CORPUS` |
 | `Services.ScrcpyServerReleaseTests.BundledCatalog_DigestMatchesTheJarShippedWithTheApplication` | 测试宿主输出与检出仓库中都没有 `UotanStudio.Desktop/Assets/scrcpy-server.jar`，没有可哈希的出厂工件 |
 | `Projects.ProjectBoundaryOptimizationTests.Package_RoundTripIncludesSolutionUnknownWorkflowAndImages` | `ProjectArchiveService.ExportPackageAsync` 拿到 solution 路径时只打包子项目目录，包内缺 solution 级 `nodes/`，`ProjectPackage.ImportAsync` 因而拒绝每个已注册节点工程 |
+
+## HarmonyOS update.bin 实测（2026-10-26，Windows x64，Debug）
+
+- `UotanStudio.Firmware/VendorFirmware/HarmonyOS/` 新增只读格式处理器 `HarmonyOS update.bin`，按 L1/L2 组件表（71/87 字节记录、16/32 字节名称字段）、16 字节保留区与 `0x06`/`0x08` 元数据 TLV 解析；`FirmwareFormatRegistry` 在 `UpdateApp` 之前注册，`.bin` 必须先通过布局字（`0x01`/`0x11`）与组件表边界探测。
+- 定向测试：`UotanStudio.Tests.Firmware.HarmonyUpdateBinTests` 23/23（L2/L1、`board_list→BOARD.list`、type 0/1 输出名、SHA-256 校验与失败回滚、筛选、预算、覆盖、取消、截断、非法名称、重复名、未知 TLV、metadata-only）。
+- 全 Firmware 命名空间：4357 总数 / 4355 通过 / 2 跳过（未设 `UOTAN_EROFS_CORPUS`）/ 0 失败，单轮 32s。
+- 真实样例：`D:\Download\update_full_cust_HAD-W24_all_cn.zip`（SHA-256 `e1f28c16e77cfb05d73ab9c91dc0395f3f532b2e6daa2e071dcbc791ee197aed`）中的 `update.bin`（35,778 B，SHA-256 `264d8bf27b82f8f6bfabf7d3341a2c050644d1e8e30f4e741d554a23264ba14a`）经临时控制台工装解析：布局 L2、4 个组件、数据偏移 2,851、载荷 32,927 B、元数据 TLV `0x08`；`VerifyChecksums=true` 解出 `package_info.img`（121 B）、`BOARD.list`（20 B）、`ptable.img`（18 B）、`version.img`（32,768 B），四个输出 SHA-256 与组件表记录逐一相同；同时发布 `metadata.json`，`canPackDirectory=false`。样例未加入测试集、`TestData/` 或仓库。
+- NativeAOT：同轮 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained -p:PublishAot=true` 成功，产物 `UotanStudio.Desktop.exe` 155,762,176 B；只报告第三方既有的 IL2026/IL2104/IL3053 警告，没有指向新增固件代码的裁剪/AOT 警告。
+
+## iOS 支持实测（2026-10-26，Windows x64，Debug）
+
+- 定向测试：`UotanStudio.Tests.Protocols` 107/107、`UotanStudio.Tests.Mirroring` 165 通过 + 1 跳过（`OhscrcpyHdcIntegrationTests` 需要 `UOTAN_HDC_MIRROR_DIRECT`）、`UotanStudio.Tests.Devices` 292/292、`UotanStudio.Tests.Services.LocaleDictionaryTests` 6/6。
+- `dotnet build UotanStudio.slnx --no-restore --nologo -c Debug`：0 错误；Fastboot 测试文件原有的两条 `xUnit1051`/`xUnit1069` 已消除，`FastbootUdpHandshakeTests` 与 `FastbootRemoteProtocolTests` 把 `TestContext.Current.CancellationToken` 交给 `Task.Run`。
+- Apple 协议族当前契约（均有对应用例覆盖）：
+  - `BinaryPlist` 写入器的偏移表按表长度定位，读回不报 "offset table is inconsistent"；对象按 Apple 的子项在前、容器在后展平，根对象索引位于尾部。
+  - `ApplePlist` 的 XML 路径先剥离普通 `<!DOCTYPE` 声明再解析，带内部子集的 DTD 仍然拒绝；字典/数组读取器按键值对消费，不重复读取取值元素。
+  - 配对记录的 `ToPlist` 写入 `HostPrivateKey` 为 PEM 字符串，读取同时接受 DER 数据块与 PEM 字节形态的记录。
+  - 配对证书链的可分辨名称使用 DER 空序列 `30 00`，`CertificateRequest` 可正常编码 TbsCertificate。
+- AirPlay 接收端（`UotanStudio.Mirroring/AirPlay/`）：RTSP 握手（OPTIONS/ANNOUNCE/SETUP/RECORD/FLUSH/TEARDOWN/GET_PARAMETER/SET_PARAMETER）、mDNS 报文编解码、128 字节镜像头解复用、AES-128-CTR 与 FairPlay 解包骨架、交织与 UDP 媒体通道都有用例覆盖（`AirPlayReceiverSessionTests` 用回环 TCP 假客户端走完整握手并推帧）。
+- AirPlay 未验证边界（不得写成已验证）：
+  - 没有 iPhone 真机：mDNS 广播没有被 iOS 实际浏览过，UDP 数据端口没有被真实客户端推过流，帧率/延迟/音画同步没有任何测量。
+  - 不随包提供 FairPlay 密钥表，`AirPlayOptions.FairPlayKeyPath` 未配置时加密流被明确拒绝（403）；配置后也只验证了 CBC 解包结构，没有设备 ekey 向量。
+  - HAP `/pair-setup` 与 `/pair-verify` 未实现，返回 501；现代 iOS 依赖它完成配对，因此当前实现不能与真实设备完成投屏握手。
+  - 宿主 AirPlay 入口只启动接收端并报告监听端口，没有接预览呈现；GPU/CPU 呈现路径未接入 AirPlay。
+- iOS 隧道与直连 USB 未在任何硬件上验证。
+
+## ADB 协议对照上游与实机验证（2026-10-26，Windows x64，Debug；真机 Wi-Fi）
+
+- 对照对象：`reference/adb-aosp/`（AOSP `platform/packages/modules/adb`）的 `adb.h`、`adb.cpp`、`transport.cpp`、`client/auth.cpp`、`docs/dev/protocol.md`。
+- 校验和：上游 `transport.cpp:send_packet` 只在 `protocol_version < A_VERSION_SKIP_CHECKSUM (0x01000001)` 时写负载累加和，否则写 0；接收侧 `check_header` 只校验 magic 与 data_length，**从不校验 data_check**。原实现按“协商版本 ≤ A_VERSION_MIN 才校验”在收到对端 CNXN 之前以 0 作为版本，把现代设备 CNXN 的 0 校验和判成 `ADB payload CRC mismatch`（USB 直连与 TLS 直连都复现）。已移除入站校验（保留不匹配时的 Debug 诊断，不再拒绝帧），并按协商版本决定出站 `data_check`（收到对端 CNXN 之前按上游写累加和）。
+- 其它对齐：CNXN 的版本/最大负载按上游 `update_version` 取 min（≤`A_VERSION`、≤`MAX_PAYLOAD`）；TLS 模式下忽略 AUTH（上游 `if (t->use_tls) break`）；STLS 应答保持 24 字节头 + `A_STLS_VERSION`；OPEN 目标与 AUTH 公钥负载的结尾 NUL 与上游一致。
+- 托管 TLS 全双工：Windows 回退的 BouncyCastle `TlsStream` 用一个信号量串行化 **await 式** 读写；ADB 消息循环常驻 read 会让所有写（OPEN/WRTE/OKAY）永久阻塞（实测 `OpenServiceStream` 挂起超过 120 s）。现改为托管路径阻塞 I/O：read 在线程池线程上执行、write 在调用线程上执行（BC 的 `m_recordWriteLock` 与 ADB 发送锁仍串行化写），期限由套接字 Receive/SendTimeout 承担；空闲帧首字节仍按连接层的“无限等待”规则执行。
+- 实机（无 server，Wi-Fi，`192.168.1.144:40443`，设备 `24129PN74C`）：本机组播浏览 0 条广告、adb server 的 mDNS 表也为空，而**单播 DNS-SD 查询**拿到 `adb-6a082bda-lZgxIP._adb-tls-connect._tcp.local 192.168.1.144:40443`（该网络过滤组播应答）。用修复后的 `AdbSession` + `AdbTlsTransport` 直连：握手成功 `peer=0x01000001`，`exec:echo uotan-crc-ok` 返回 `uotan-crc-ok`，7 秒空闲后再次 `exec` 返回 `uotan-after-idle`，释放正常。
+- 未验证边界：USB 直连的同一修复没有可用的 USB ADB 设备复测；配对阶段的广播仍只走组播（该网络实测可发现），组播全部被过滤且无法手动输入端口时仍无法配对；IPv6-only 链路与多网卡未实测。
+
+## ADB TLS 服务端证书验证（2026-10-27，Windows x64，Debug；无 server 的扫码直连）
+
+- 根因：adbd 的 TLS 服务端证书没有可钉扎身份。对照 `reference/adb-android16`：`daemon/auth.cpp` 的 `adbd_auth_tls_handshake` 每个进程懒生成随机 RSA 密钥（`rsa_pkey`），`transport.cpp` 的 `FdConnection::DoTlsHandshake` 每次握手都调用 `crypto/x509_generator.cpp` 的 `GenerateX509Certificate()`，把 `notBefore` 设为当前时间、序列号固定为 1，因此证书 DER 每次连接都变化；主机侧只用 `SetCertVerifyCallback([](X509_STORE_CTX*) { return 1; })` 接受任意服务端证书，设备侧在 `adbd_tls_verify_cert` 里校验本机公钥。
+- 症状：按端点钉扎服务端证书 SHA-256 的旧实现第一次连接成功并记下指纹，第二次连接（新证书）在客户端 `NotifyServerCertificate` 处以 `bad_certificate(42)` 中止，设备侧尚未收到客户端证书；设备行随即失效，投屏报 `Device <host:port> is not connected`。
+- 变更：`AdbTlsTransport` 删除服务端证书指纹参数、观察者与 `RemoteServerCertificateSha256`，平台与 BouncyCastle 两条路径都接受任意（仍必须出示）服务端证书；`DeviceController.OpenSecureNetworkAdbSession` 去掉钉扎参数；宿主 `PairedNetworkTarget` 只保留 `Address`/`RequiresTls` 并删除指纹持久化。设备以 `bad_certificate`/`certificate_unknown`/`unknown_ca`/`access_denied` 拒绝本机密钥时，握手与已建立连接的读写都返回“重新扫码配对或接受设备调试授权”的失败文案。
+- 定向测试：`UotanStudio.Tests.Devices.AdbTlsTransportTests` 6/6——回环 TLS 1.3 服务端每次连接重建自签证书，连续两次 `UpgradeToTls` 均成功、服务端确实收到客户端证书，另有告警映射用例；`Services.PairedNetworkTargetSettingsTests` 3/3；`Devices` 298/298、`Protocols` 112/112。
+- 未验证边界：真实手机没有复跑扫码直连与投屏；本轮检测时 `192.168.1.144:40443` 不可达（设备侧无线调试已关闭或端口已换），旧钉扎指纹与该地址的对应关系只由代码路径与设置文件推断。测试里的 TLS 1.3 服务端用 Schannel（临时密钥不受支持，故服务端证书先导出 PFX 再导入），BouncyCastle 服务端与真机 adbd 的对端行为未覆盖。
 
 ## 设备链路实测（2026-10-24，Windows 主机，ADB server 5037、HDC server 17035）
 
@@ -32,8 +76,9 @@
 - HDC 有 server：TCP 目标 `127.0.0.1:5555` 与 USB 目标 `5XM0225C18001159` 均完成 shell 与 7 秒空闲后的再次命令。
 - HDC 无 server：停止 HDC server（17035 无监听）后直连 TCP `127.0.0.1:5555`，完成 shell 与 7 秒空闲后的再次命令，并完成过 sync send/recv。
 - HDC USB 直连：设备 `12D1:5000`（0xff/0x50/1，序列号 `5XM0225C18001159`）绑定 WINUSB；停止 HDC server 使直连策略放行后，WinUSB 与 libusb 两个后端均完成 HDC 握手、shell 与 7 秒空闲后的再次命令。本机不把 COM 串口当作 HDC 目标。
-- ADB Android 11+ 无线调试 TLS：本机仅有 Android 9 设备，没有 Android 11+ 无线调试端点，未做硬件 TLS 连接；STLS 常量、明文收到 A_STLS 快速失败、分部读取由 `AdbRemoteProtocolTests` 覆盖。
-- 扫码配对：没有可控的手机扫码 UI，未做真实扫码；对运行中的 adb server 执行 `host:pair` 探针返回 server 的配对客户端错误，确认命令格式；精确命令/OKAY 后 FAIL 由单元测试覆盖。
+- ADB Android 11+ 无线调试 TLS：STLS 常量、明文收到 A_STLS 快速失败、分部读取与“等待下一帧不设读取期限”由 `AdbRemoteProtocolTests` 覆盖；无 server 的扫码直连真机（2026-10-26，`192.168.1.144` 的 `_adb-tls-connect` 端口）完成配对与首次连接。托管 TLS（Windows 回退到 BouncyCastle）的读取期限只对已经开始到达的帧生效：等待下一帧无限等待，期限到达即把传输标记失效而不是继续复用损坏的记录层；空闲期间消失的对端由 TCP keepalive 兜底。`AdbTlsTransport.IsConnected` 反映真实链路状态（托管 TLS 已关闭/失败，或读写已失败即视为断开），共享池把失效会话立即移出池并连同其独占端点租约一起拆除，下一次借用重新打开并按 IP 重新解析端口；端口改写后触发一次设备列表刷新。真机上的 shell、logcat、属性查询与断线重连未复测。
+- 扫码配对：没有可控的手机扫码 UI，未做真实扫码；对运行中的 adb server（platform-tools 36.0.0）执行 `host:pair` 确认命令格式与结果帧：请求确认后 server 追加 `OKAY`/`FAIL` 状态帧，连接被拒时返回 `Failed: Unable to start pairing client.`（实测分类为 `AdbServerPairingClientException`），非 `ServerOnly` 模式据此改用进程内 SPAKE2 配对后再经 server 连接；有 server 的配对/连接顺序对齐上游命令行的两步（`adb pair` 之后重新读取 `adb mdns services` 再 `adb connect`）：`host:pair` 成功后先重读 `host:mdns:services` 并 `host:connect:` 设备的 `_adb-tls-connect` 行，本地组播浏览保留现有实现并在表无行时兜底，配对前候选最后使用。结果帧的两种形状、失败分类与连接来源顺序由单元测试覆盖，真实扫码与回退后的真机连接仍未验证。
+- 扫码后的连接端口自动获取：server 侧按 `host:devices-l` 的两种身份识别已连接设备（`ip:port`，以及经 `host:mdns:services` 表解析的 `adb-…._adb-tls-connect._tcp` 实例名）；显式连接先取重读的 server mDNS 表行，其次实时本地浏览，配对前候选最后，且 `host:connect:` 的应答要在目标列表中复核为非 `offline` 才被接受。配对后每 3 秒重读一次、直到 30 秒期限，候选按“最近广播的 SRV 优先、地址匹配先于仅主机名匹配”排序；无 server 时每轮先做实时浏览再探测，8 秒宽限后把其余广播实例的端口也按配对主机试探（覆盖双栈应答方用另一地址族/主机名发布的情况），组播没有交出任何实例时再向设备自身发送**单播 DNS-SD 问询**（该网络的组播应答会被过滤，实测单播仍能取到端口），未解析出地址的实例按其 SRV 端口参与试探，握手失败按 IP 重新浏览一次（宽限窗口后取最新实例），手动端口预填同样优先使用最新广播值。另外，已记住的安全目标在扫描时与 server 目标对齐：server 已列出同一主机时改用其当前端口，且同一主机已有其它 ADB TCP 行时不再单独生成 `adb-tcp:` 行（消除 43407/36695 这类同机双端口）。匹配、排序、时间戳与同主机去重由 `AdbPairingDiscoveryTests`、`AdbServerMdnsTests` 与 `AdbRemoteRoutingTests` 覆盖；单播兜底与真实手机的换端口时序仍以实机日志为准，IPv6-only 链路未实测。
 
 ## F2FS 真实镜像与 GKI 往返（2026-10-24，Windows x64 + WSL2 Alpine，Debug）
 
@@ -42,7 +87,7 @@
 - `F2fsBuilder` 按 checkpoint 5% overprovision 预留主区段容量，`valid_block_count` 不超过 `user_block_count`；回归测试 `F2fsTests.Build_LargeData_CheckpointCapacityCoversEveryValidBlock` 用 320 MB 载荷断言容量账目与保留段。
 - GKI 5.10.269 / 6.6.143 / 6.18.32（TCG）完成 fsck → 只读挂载 → 整树元数据与内容校验 → 读写写回 → fsck → 只读回读，三版均 PASS；`cust.img` SHA-256 与源一致，btime 两侧均为 `0.000000000`。
 - `UotanStudio.Tests.Firmware` 全命名空间 4301 项 / 4299 通过 / 0 失败 / 2 跳过（缺 `UOTAN_EROFS_CORPUS`）；F2FS 相关 7 个类 70/70 通过。
-- 边界：重建不保留超级块特性位（`0x1499` → `0x58`）与 quota inode；该镜像无硬链接、符号链接、设备节点、压缩、大小写折叠、加密或 verity 内容；QEMU 为 TCG，不代表真实设备或厂商内核。证据在 `artifacts/gki-fs-lab/f2fs-real-20261024/`。
+- 边界：重建重放可复现的超级块特性位并重建 quota inode，crtime 位按上游 `0x0100` 重放；源含 casefold 目录或 verity 文件内容时显式拒绝，无法复现的特性位计入丢弃报告。该镜像无硬链接、符号链接、设备节点、压缩、大小写折叠、加密或 verity 内容；QEMU 为 TCG，不代表真实设备或厂商内核。证据在 `artifacts/gki-fs-lab/f2fs-real-20261024/`。
 
 ## 内嵌资源 zstd 帧（2026-10-24，Windows x64，Debug/Release）
 
@@ -106,4 +151,5 @@
 - 无 server 的 TCP ADB 与 scrcpy 投屏结论来自同一模拟器实例的 5555 与 16384 回环端口实测；该 ROM 不回应 `GET_CLIPBOARD`，设备→客户端的主动剪贴板推送未在硬件上观察到，运行时切换也未在模拟器或设备上复跑。
 - HDC 直连 forward/控制链路只由受 `UOTAN_HDC_MIRROR_DIRECT` 门控的 `OhscrcpyHdcIntegrationTests` 覆盖；本机因 DevEco 的 HDC server 占用目标，直连 USB 被 Comm 的 fail-closed 策略拒绝，该链路未验证。采集库需要设备侧匹配的 protobuf/gRPC ABI，不匹配时视频路径按能力不足快速失败；设备库随包分发只代表文件存在，不代表可加载。
 - 有意不接入宿主的 Comm 能力以 `UotanStudio.Comm/README.md` 的 "Implemented but deliberately not surfaced in the host" 一节为准：目前记录的是要求 preloader 命令阶段且交换被拒即让会话 fault 的 `MtkSession.GetBootLoaderVersionAsync` 与 `GetBromVersionAsync`（同一对字节已由非致命的 `QueryBootIdentityOwnedAsync` 在初始化时收集）。该节同时声明厂商 exploit 实现类入口已整体移出代码库，不要按旧记录去找它们。
+- HarmonyOS `update.bin` 只解析组件表与元数据 TLV 形态：`0x08` 签名载荷只跳过、不验签；ZIP 外壳、组件镜像内部的 `HARMONY!`/HVB 封装与文件系统二次解包不在该处理器内。除该小样例外的真实整包（多 GB、L1 布局）未实测，打包未实现。
 - 投屏与设备之外的 GUI 交互（真实 FolderPicker、拖拽、缩放手势）没有自动化覆盖，Avalonia 编译绑定只在构建期校验绑定名，不等于渲染正确。

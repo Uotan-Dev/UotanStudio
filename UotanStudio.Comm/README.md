@@ -85,6 +85,13 @@ SHA-256 self-signature. adbd authenticates the SHA-256 fingerprint of the public
 inside that certificate (`adbd_tls_verify_cert`), never its subject, serial or
 storage location, so nothing certificate-shaped is persisted.
 
+The device side of that handshake has no pinnable identity: adbd creates a random
+RSA key per process (`adbd_auth_tls_handshake`) and calls `GenerateX509Certificate()`
+for every handshake with the current time as `notBefore`, so its self-signed server
+certificate changes on each connection. The host therefore accepts any server
+certificate, matching upstream's `SetCertVerifyCallback([](X509_STORE_CTX*) { return 1; })`,
+and never records a fingerprint.
+
 Legacy HDC `RsaEncrypt` and the MTK Boot ROM SLA responder share
 `RsaTypeOneSignature` (PKCS#1 v1.5 type-1 over an unframed payload). That helper
 is deliberately not a digesting signer: both peers recover `00 01 FF..FF 00 ||
@@ -248,10 +255,9 @@ remains the explicit non-leased server path. Callers dispose the lease; the
 lease disposes the session and transport and releases the endpoint reservation.
 
 Headless MCP uses the same discovery sources and exact opener. Direct HDC
-session pooling and platform-specific runtime behavior still require separate
-migration or validation; do not describe the controller as exclusive ownership
-of every communication operation yet. In-process leases do not prevent another
-process from owning a USB interface.
+session pooling and platform-specific runtime behavior sit outside the in-process
+lease contract, which covers only the operations routed through the controller
+and cannot prevent another process from owning a USB interface.
 
 ## Resource registration and provenance
 
@@ -283,12 +289,12 @@ implemented and covered by tests, but the host deliberately exposes no control f
   fault the session on a refused exchange. The non-fatal `QueryBootIdentityOwnedAsync` path already collects the
   same two bytes during initialization, so no separate control surfaces them.
 
-Vendor exploit implementations (VIP table operations, OnePlus/Xiaomi/Nothing auth bypass, EDL memory debug,
+Vendor exploit operations (VIP table operations, OnePlus/Xiaomi/Nothing auth bypass, EDL memory debug,
 DA patching, DA crash, DA memory write, preloader public write, SECCFG write, XML security resource upload,
-download-agent memory peek/poke and target-memory poke/memcpy) have been removed from the codebase entirely;
-they are not retained as unsurfaced methods.
+download-agent memory peek/poke and target-memory poke/memcpy) are absent from this library, including as
+unsurfaced methods.
 
-Re-exposing any of these requires device evidence for the specific operation plus a dedicated dangerous-operation
+Exposing any of them requires device evidence for the specific operation plus a dedicated dangerous-operation
 confirmation, not just a button.
 
 ## Native runtime registration
