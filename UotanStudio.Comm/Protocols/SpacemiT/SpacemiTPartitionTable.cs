@@ -12,7 +12,7 @@ namespace UotanStudio.Comm.Protocols.SpacemiT;
 /// <param name="Offset">Byte offset of the partition on storage; -1 when absent. <para>分区在存储上的字节偏移；缺失时为 -1。</para></param>
 /// <param name="Size">Partition size in bytes; -1 means "until end of storage". <para>分区大小（字节）；-1 表示“直到存储末尾”。</para></param>
 /// <param name="Images">Image file paths to flash, in order; empty when the entry has no image reference. <para>按顺序刷写的镜像文件路径；条目未引用镜像时为空。</para></param>
-/// <param name="Compress">Vendor compression hint (e.g. "gzip-5"); retained for fidelity, the transfer itself is currently uncompressed. <para>厂商压缩提示（如 "gzip-5"）；仅为保真保留，当前传输本身不压缩。</para></param>
+/// <param name="Compress">Vendor compression hint (e.g. "gzip-5"); a <c>gzip-N</c> hint overrides the per-run gzip level for this partition's chunked transfer. <para>厂商压缩提示（如 "gzip-5"）；<c>gzip-N</c> 提示会覆盖该分区分块传输所用的全局 gzip 级别。</para></param>
 /// <param name="Hidden">Whether the partition is marked hidden in the table. <para>分区在表中是否标记为隐藏。</para></param>
 public sealed record SpacemiTPartitionEntry(
     string Name,
@@ -95,10 +95,16 @@ public sealed class SpacemiTPartitionTable
             throw new InvalidDataException("Partition table root must be an object.");
         }
 
-        var format = obj["format"]?.GetValue<string>()?.Trim() ?? string.Empty;
-        if (format.Length == 0 || format.Length > 16)
+        var format = TryGetString(obj, "format")?.Trim() ?? string.Empty;
+        if (format.Length == 0)
         {
             throw new InvalidDataException("Partition table is missing a usable 'format' value.");
+        }
+
+        if (!format.Equals(SpacemiTConstants.PartitionFormatGpt, StringComparison.Ordinal) &&
+            !format.Equals(SpacemiTConstants.PartitionFormatMtd, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"Partition table 'format' must be '{SpacemiTConstants.PartitionFormatGpt}' or '{SpacemiTConstants.PartitionFormatMtd}', not '{format}'.");
         }
 
         if (obj["partitions"] is not JsonArray array || array.Count == 0)
@@ -119,7 +125,7 @@ public sealed class SpacemiTPartitionTable
                 throw new InvalidDataException("Partition entries must be objects.");
             }
 
-            var name = entry["name"]?.GetValue<string>()?.Trim() ?? string.Empty;
+            var name = TryGetString(entry, "name")?.Trim() ?? string.Empty;
             if (name.Length == 0 || name.Length > 64)
             {
                 throw new InvalidDataException("Partition name is missing or too long.");
@@ -131,12 +137,42 @@ public sealed class SpacemiTPartitionTable
                 TryParseSize(entry["offset"]),
                 TryParseSize(entry["size"]),
                 images,
-                entry["compress"]?.GetValue<string>()?.Trim(),
-                entry["hidden"]?.GetValue<bool>() ?? false);
+                TryGetString(entry, "compress")?.Trim(),
+                GetHiddenFlag(entry));
             partitions.Add(partition);
         }
 
         return new SpacemiTPartitionTable(format, partitions);
+    }
+
+    /// <summary>
+    /// Reads a string property without throwing on non-string JSON values; the device parser
+    /// silently ignores wrong-typed fields, so a non-string value reads as absent.
+    /// <para>读取字符串属性，且在 JSON 值类型不符时不抛异常；设备端解析器会静默忽略类型错误的
+    /// 字段，因此类型不符的值按缺失处理。</para>
+    /// </summary>
+    private static string? TryGetString(JsonObject entry, string key) =>
+        entry[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+
+    /// <summary>
+    /// Reads the <c>hidden</c> flag the way the device parser does: a JSON boolean, or the exact
+    /// string <c>"true"</c>; anything else (including other strings) means not hidden.
+    /// <para>按设备端解析器的方式读取 <c>hidden</c> 标志：JSON 布尔值，或精确的字符串
+    /// <c>"true"</c>；其余任何值（包括其它字符串）均表示非隐藏。</para>
+    /// </summary>
+    private static bool GetHiddenFlag(JsonObject entry)
+    {
+        if (entry["hidden"] is not JsonValue value)
+        {
+            return false;
+        }
+
+        if (value.TryGetValue<bool>(out var flag))
+        {
+            return flag;
+        }
+
+        return value.TryGetValue<string>(out var text) && text.Equals("true", StringComparison.Ordinal);
     }
 
     private static IReadOnlyList<string> ParseImages(JsonNode? node) => node switch

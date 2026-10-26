@@ -102,6 +102,7 @@ public sealed record SpacemiTRebootAction(string? Target, string? SkipWhen, bool
 public sealed class SpacemiTFlashScript
 {
     private const int MaxActions = 256;
+    private const int MaxScriptBytes = 1024 * 1024;
 
     /// <summary>Gets the script version string. <para>获取脚本版本字符串。</para></summary>
     public string Version { get; }
@@ -137,7 +138,7 @@ public sealed class SpacemiTFlashScript
     /// Parses a flash script from untrusted YAML.
     /// <para>从不可信 YAML 解析刷机脚本。</para>
     /// </summary>
-    /// <param name="stream">YAML source, read to EOF and rejected beyond the 1 MiB script-size bound. <para>YAML 来源，读到末尾；超过 1 MiB 脚本大小上限时拒绝。</para></param>
+    /// <param name="stream">YAML source, read bounded to the 1 MiB script-size limit. <para>YAML 来源；读取以 1 MiB 脚本大小上限为界。</para></param>
     /// <returns>The parsed script. <para>解析后的脚本。</para></returns>
     /// <exception cref="InvalidDataException">The YAML is not a valid SpacemiT flash script. <para>YAML 不是有效的 SpacemiT 刷机脚本。</para></exception>
     public static SpacemiTFlashScript Parse(Stream stream)
@@ -146,17 +147,23 @@ public sealed class SpacemiTFlashScript
         try
         {
             using var buffered = new MemoryStream();
-            stream.CopyTo(buffered, 64 * 1024);
-            if (buffered.Length > 1024 * 1024)
+            var chunk = new byte[64 * 1024];
+            int read;
+            while ((read = stream.Read(chunk, 0, chunk.Length)) > 0)
             {
-                throw new InvalidDataException("fastboot.yaml exceeds the 1 MiB size limit.");
+                if (buffered.Length + read > MaxScriptBytes)
+                {
+                    throw new InvalidDataException("fastboot.yaml exceeds the 1 MiB size limit.");
+                }
+
+                buffered.Write(chunk, 0, read);
             }
 
             buffered.Position = 0;
             yaml = [];
             yaml.Load(new StreamReader(buffered, Encoding.UTF8));
         }
-        catch (Exception e) when (e is YamlDotNet.Core.YamlException or InvalidDataException && e is not InvalidDataException)
+        catch (YamlDotNet.Core.YamlException e)
         {
             throw new InvalidDataException("Malformed fastboot.yaml.", e);
         }
@@ -203,9 +210,20 @@ public sealed class SpacemiTFlashScript
             throw new InvalidDataException("fastboot.yaml: each action must be a mapping with one action key.");
         }
 
-        var keyNode = (YamlScalarNode)mapping.Children.Keys.First();
+        if (mapping.Children.Keys.First() is not YamlScalarNode keyNode)
+        {
+            throw new InvalidDataException("fastboot.yaml: the action name key must be a scalar.");
+        }
+
         var name = keyNode.Value?.Trim() ?? string.Empty;
-        var body = mapping.Children[nameNode(name)] as YamlMappingNode ?? new YamlMappingNode();
+        if (name.Length == 0)
+        {
+            throw new InvalidDataException("fastboot.yaml: the action name is empty.");
+        }
+
+        var body = mapping.Children.TryGetValue(keyNode, out var bodyNode) && bodyNode is YamlMappingNode inner
+            ? inner
+            : new YamlMappingNode();
         var skipWhen = GetString(body, "skip_when");
         var skipFail = GetBool(body, "skip_fail") ?? false;
         var retry = Math.Max(1, GetInt(body, "retry") ?? 1);
@@ -214,7 +232,7 @@ public sealed class SpacemiTFlashScript
         return name switch
         {
             "getvar" => new SpacemiTGetVarAction(
-                Require(GetString(body, "args"), name), GetString(body, "set") ?? GetString(body, "set_var"),
+                Require(GetString(body, "args"), name), NonEmpty(GetString(body, "set")) ?? NonEmpty(GetString(body, "set_var")),
                 skipWhen, skipFail, retry, timeout),
             "stage" => new SpacemiTStageAction(Require(GetString(body, "file"), name), skipWhen, skipFail, retry, timeout),
             "continue" => new SpacemiTContinueAction(skipWhen, skipFail, retry, timeout),
@@ -224,12 +242,16 @@ public sealed class SpacemiTFlashScript
                 Require(GetString(body, "partition"), name), Require(GetString(body, "file"), name),
                 skipWhen, skipFail, retry, timeout),
             "erase" => new SpacemiTEraseAction(Require(GetString(body, "partition"), name), skipWhen, skipFail, retry, timeout),
-            "reboot" => new SpacemiTRebootAction(GetString(body, "target"), skipWhen, skipFail, retry, timeout),
+            "reboot" => new SpacemiTRebootAction(NonEmpty(GetString(body, "target")), skipWhen, skipFail, retry, timeout),
             _ => throw new InvalidDataException($"fastboot.yaml: unknown action '{name}'."),
         };
     }
 
-    private static YamlScalarNode nameNode(string name) => new(name);
+    private static string? NonEmpty(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
 
     private static TimeSpan? GetTimeout(YamlMappingNode body)
     {

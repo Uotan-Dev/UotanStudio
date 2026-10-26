@@ -49,6 +49,8 @@ public sealed class SpacemiTFlasher
     private readonly SpacemiTFlashOptions _options;
     private readonly Dictionary<string, string> _variables = new(StringComparer.Ordinal);
 
+    private const string VariableBagTempPrefix = "temp.";
+
     /// <summary>
     /// Creates a flasher for the given package and options.
     /// <para>为给定烧录包与选项创建烧录器。</para>
@@ -165,6 +167,14 @@ public sealed class SpacemiTFlasher
         if (ok && action.BagKey is { } key && value is not null)
         {
             _variables[key] = value;
+            var alias = key.StartsWith(VariableBagTempPrefix, StringComparison.Ordinal)
+                ? key[VariableBagTempPrefix.Length..]
+                : VariableBagTempPrefix + key;
+            if (alias.Length > 0)
+            {
+                _variables[alias] = value;
+            }
+
             Report(progress, "action", action.Variable, $"getvar {action.Variable} = '{value}'");
         }
     }
@@ -267,6 +277,12 @@ public sealed class SpacemiTFlasher
                 continue;
             }
 
+            if (SpacemiTFlashPackage.IsAbsentStorageAnswer(rawSize))
+            {
+                Report(progress, "skip", null, $"storage answer '{rawSize}' marks this storage kind absent");
+                continue;
+            }
+
             var tablePath = _package.ResolvePartitionTable(rawSize);
             if (tablePath is null)
             {
@@ -295,7 +311,7 @@ public sealed class SpacemiTFlasher
         IProgress<SpacemiTFlashProgress>? progress,
         CancellationToken cancellationToken)
     {
-        var targets = CollectTargets(table);
+        var targets = CollectTargets(table, progress);
         if (targets.Count == 0)
         {
             Report(progress, "skip", null, "no target partitions in this table");
@@ -317,7 +333,9 @@ public sealed class SpacemiTFlasher
         }
     }
 
-    private List<(SpacemiTPartitionEntry Entry, string ImagePath, long Length)> CollectTargets(SpacemiTPartitionTable table)
+    private List<(SpacemiTPartitionEntry Entry, string ImagePath, long Length)> CollectTargets(
+        SpacemiTPartitionTable table,
+        IProgress<SpacemiTFlashProgress>? progress)
     {
         var targets = new List<(SpacemiTPartitionEntry, string, long)>();
         foreach (var entry in table.Partitions)
@@ -339,12 +357,15 @@ public sealed class SpacemiTFlasher
 
             foreach (var image in entry.Images)
             {
-                var resolved = _package.ResolveFile(image);
-                if (resolved is null)
+                if (SpacemiTFlashPackage.IsRegexReference(image))
                 {
+                    Report(progress, "skip", entry.Name, $"partition '{entry.Name}' image '{image}' is a regex reference, skipped");
                     continue;
                 }
 
+                var resolved = _package.ResolveFile(image)
+                    ?? throw new FastbootException(FastbootResponseState.Fail,
+                        $"partition '{entry.Name}' references image '{image}' which is missing from the package");
                 var fileSize = new FileInfo(resolved).Length;
                 var length = entry.Size > 0 ? Math.Min(fileSize, entry.Size) : fileSize;
                 if (length > 0)
@@ -392,9 +413,23 @@ public sealed class SpacemiTFlasher
                 return true;
             }
 
-            FlashGzipChunks(session, entry.Name, stream, length, maxDownload, progress, cancellationToken);
+            FlashGzipChunks(session, entry.Name, stream, length, maxDownload,
+                TryParseGzipLevel(entry.Compress) ?? _options.GzipLevel, progress, cancellationToken);
             return true;
         });
+    }
+
+    private static int? TryParseGzipLevel(string? compress)
+    {
+        if (compress is null)
+        {
+            return null;
+        }
+
+        var match = Regex.Match(compress, "^gzip-([1-9])$");
+        return match.Success
+            ? int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture)
+            : null;
     }
 
     private void FlashGzipChunks(
@@ -403,6 +438,7 @@ public sealed class SpacemiTFlasher
         FileStream stream,
         long length,
         long maxDownload,
+        int gzipLevel,
         IProgress<SpacemiTFlashProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -417,7 +453,7 @@ public sealed class SpacemiTFlasher
         }
 
         var buffer = new byte[chunkBytes];
-        var compressionLevel = _options.GzipLevel switch
+        var compressionLevel = gzipLevel switch
         {
             <= 2 => 1,
             <= 6 => 6,

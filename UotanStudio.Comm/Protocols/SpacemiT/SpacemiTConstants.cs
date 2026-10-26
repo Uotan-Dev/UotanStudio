@@ -71,10 +71,10 @@ public static class SpacemiTConstants
     public const int ReEnumerateSettleMs = 10_000;
 
     /// <summary>
-    /// Minimum payload a partition entry must reference for a flash attempt; entries
-    /// without an <c>image</c> field (offset/size-only placeholders) are skipped.
-    /// <para>分区条目发起刷写所需的最小引用；没有 <c>image</c> 字段的条目
-    /// （仅偏移/大小的占位项）会被跳过。</para>
+    /// Partition table format value selecting the GPT writer on the device; the loader
+    /// rejects any <c>format</c> other than this and <see cref="PartitionFormatMtd"/>.
+    /// <para>选择设备端 GPT 写入器的分区表 format 值；加载器拒绝此值与
+    /// <see cref="PartitionFormatMtd"/> 之外的任何 <c>format</c>。</para>
     /// </summary>
     public const string PartitionFormatGpt = "gpt";
 

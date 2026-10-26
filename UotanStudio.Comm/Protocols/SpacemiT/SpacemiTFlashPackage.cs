@@ -86,13 +86,12 @@ public sealed class SpacemiTFlashPackage
     /// <returns>The resolved table file path, or <see langword="null"/> when the storage kind is absent or no table matches. <para>解析出的分区表路径；存储类型不存在或无匹配表时为 <see langword="null"/>。</para></returns>
     public string? ResolvePartitionTable(string? sizeValue)
     {
-        var trimmed = sizeValue?.Trim() ?? string.Empty;
-        if (trimmed.Length == 0 ||
-            trimmed.Equals("NULL", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("null", StringComparison.Ordinal))
+        if (IsAbsentStorageAnswer(sizeValue))
         {
             return null;
         }
+
+        var trimmed = sizeValue!.Trim();
 
         if (trimmed.Contains('/', StringComparison.Ordinal) ||
             trimmed.Contains('\\', StringComparison.Ordinal) ||
@@ -113,6 +112,25 @@ public sealed class SpacemiTFlashPackage
         return null;
     }
 
+    /// <summary>
+    /// Reports whether a <c>mtd-size</c>/<c>blk-size</c> answer means the storage kind is absent:
+    /// the device answers <c>OKAY NULL</c> (or an empty value) instead of a size when the
+    /// corresponding storage is not fitted, and the vendor flow silently skips that stage.
+    /// <para>判断 <c>mtd-size</c>/<c>blk-size</c> 应答是否表示该存储类型不存在：未装配对应存储时
+    /// 设备应答 <c>OKAY NULL</c>（或空值）而非尺寸，厂商流程会静默跳过该阶段。</para>
+    /// </summary>
+    /// <param name="sizeValue">Raw getvar answer. <para>getvar 原始应答。</para></param>
+    /// <returns><see langword="true"/> when the storage kind is absent. <para>存储类型不存在时为 <see langword="true"/>。</para></returns>
+    public static bool IsAbsentStorageAnswer(string? sizeValue)
+    {
+        var trimmed = sizeValue?.Trim() ?? string.Empty;
+        return trimmed.Length == 0 || trimmed.Equals("NULL", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Reports whether a package file reference is a vendor regex image marker (<c>/…/</c>) that names no concrete file. <para>判断包内文件引用是否为不指向具体文件的厂商正则镜像标记（<c>/…/</c>）。</para></summary>
+    internal static bool IsRegexReference(string reference) =>
+        reference.Length > 1 && reference[0] == '/' && reference[^1] == '/';
+
     private static IEnumerable<string> PartitionFileNames(string sizeValue)
     {
         var exact = SpacemiTConstants.PartitionFileTemplate.Replace("{0}", sizeValue, StringComparison.Ordinal);
@@ -132,9 +150,6 @@ public sealed class SpacemiTFlashPackage
             sizeMb /= 2;
         }
     }
-
-    private static bool IsRegexReference(string reference) =>
-        reference.Length > 1 && reference[0] == '/' && reference[^1] == '/';
 
     private IEnumerable<string> EnumerateCandidates(string reference)
     {
