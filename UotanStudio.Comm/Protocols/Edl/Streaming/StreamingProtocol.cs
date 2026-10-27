@@ -7,8 +7,8 @@ namespace UotanStudio.Comm.Protocols.Edl.Streaming;
 
 /// <summary>Implements the Qualcomm Streaming DLOAD protocol, the pre-Firehose command-mode flash transport over DIAG packets. The session enters it after Sahara exec 0x05, negotiates with a hello exchange, optionally programs flash in 1024-byte chunks and finalizes sections with qclose.
 /// <para>实现 Qualcomm Streaming DLOAD 协议，即 Firehose 之前经 DIAG 数据包承载的命令模式刷写传输。Sahara exec 0x05 后进入该协议，经 hello 交换协商，可选按 1024 字节分块编程闪存，并以 qclose 收尾。</para></summary>
-/// <remarks>Transcribed from the reference <c>edlclient/Library/streaming.py</c> (class <c>Streaming</c>) and <c>edlclient/Library/hdlc.py</c>; operations on one instance are serialized through the operation gate. Do not share the transport with another protocol instance while an operation is in progress.
-/// <para>转写自参考实现 <c>edlclient/Library/streaming.py</c>（<c>Streaming</c> 类）与 <c>edlclient/Library/hdlc.py</c>；同一实例上的操作经操作门串行化。操作进行中不得与其他协议 实例共享传输层。</para>Initializes a new instance of the <see cref="StreamingProtocol"/> class over the supplied transport.<para>基于给定传输层初始化 <see cref="StreamingProtocol"/> 类的新实例。</para></remarks>
+/// <remarks>Operations on one instance are serialized through the operation gate; the transport must not be shared with another protocol instance while an operation is in progress.
+/// <para>同一实例上的操作经操作门串行化；操作进行中不得与其他协议实例共享传输层。</para></remarks>
 /// <param name="transport">The device transport handed over by the Sahara command-mode switch.
 /// <para>由 Sahara 命令模式切换交接的设备传输层。</para></param>
 /// <param name="timeoutMs">Optional timeout in milliseconds; <see langword="null"/> selects <see cref="EdlConstants.DefaultCommandTimeoutMs"/>.
@@ -18,10 +18,9 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
     private const int DisposalGateTimeoutMs = 250;
 
     /// <summary>
-    /// The ASCII marker the reference host writes in front of every section name, mirroring
-    /// <c>bytes("0:" + name)</c>.
-    /// <para>参考主机在每个段名前写入的 ASCII 标记，对应 <c>bytes("0:" + name)</c>
-    /// 。</para>
+    /// The ASCII marker this host writes in front of every section name: <c>0:</c> followed by the
+    /// name.
+    /// <para>本主机在每个段名前写入的 ASCII 标记：<c>0:</c> 加段名。</para>
     /// </summary>
     private const string SectionNamePrefix = "0:";
 
@@ -58,8 +57,8 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
     /// </summary>
     public event EventHandler<string>? LogMessage;
 
-    /// <summary>Sends the host hello with <see cref="StreamingConstants.HostMagic"/> and parses the target's device description. Like the reference <c>hello</c>, one mismatched response triggers a single resend before the exchange is declared failed.
-    /// <para>随 <see cref="StreamingConstants.HostMagic"/> 发送主机 hello 并解析目标的设备描述。 与参考 <c>hello</c> 相同，首个不匹配的响应会触发一次重发，之后才判定交换失败。</para></summary>
+    /// <summary>Sends the host hello with <see cref="StreamingConstants.HostMagic"/> and parses the target's device description. One mismatched response triggers a single resend before the exchange is declared failed.
+    /// <para>随 <see cref="StreamingConstants.HostMagic"/> 发送主机 hello 并解析目标的设备描述。首个不匹配的响应会触发一次重发，之后才判定交换失败。</para></summary>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The parsed device description, also cached in <see cref="Device"/>.
     /// <para>解析出的设备描述，同时缓存到 <see cref="Device"/>。</para></returns>
@@ -207,10 +206,10 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
     }
 
     /// <summary>
-    /// Frames one DIAG command with the reference CRC-on-send behaviour (hdlc.py:216-226 always
-    /// appends the CRC; the no-CRC variants only skip verification of the reply), writes it, and
-    /// reads one framed reply.
-    /// <para>按参考的“发送必带校验”行为封装一条 DIAG 命令，写出后读取一个封装回包。</para>
+    /// Frames one DIAG command with the CRC appended on send (the no-CRC variants only skip
+    /// verification of the reply), writes it, and reads one framed reply.
+    /// <para>封装一条 DIAG 命令时总在发送侧附加 CRC（no-CRC 变体只跳过对回包的校验），写出后读取
+    /// 一个封装回包。</para>
     /// </summary>
     private async Task<byte[]> SendDiagOwnedAsync(byte[] command, bool verifyResponseCrc,
         bool tolerateNoResponse, CancellationToken cancellationToken)
@@ -235,13 +234,11 @@ public sealed partial class StreamingProtocol(ICommTransport transport, int? tim
     }
 
     /// <summary>
-    /// Accumulates transport reads until the trailing HDLC flag arrives, mirroring the reference
-    /// reply loop that keeps reading while the last byte is not 0x7E, then
-    /// decodes exactly one framed payload. A whole-packet budget of <c>_timeoutMs</c> replaces the
-    /// reference's five retry reads.
-    /// <para>持续累积传输读取直到尾部的 HDLC 标志到达，对应参考中“末字节不是 0x7E 就继续读”的
-    /// 回包循环，随后解码恰好一个封装负载。以 <c>_timeoutMs</c> 为整包预算
-    /// 替代参考的 5 次重试读取。</para>
+    /// Accumulates transport reads until the trailing HDLC flag arrives: reading continues while the
+    /// last byte is not <c>0x7E</c>, then exactly one framed payload is decoded. A whole-packet
+    /// budget of <c>_timeoutMs</c> bounds the accumulation.
+    /// <para>持续累积传输读取直到尾部的 HDLC 标志到达：末字节不是 <c>0x7E</c> 就继续读，随后解码恰好
+    /// 一个封装负载。以 <c>_timeoutMs</c> 为整包预算约束累积过程。</para>
     /// </summary>
     private async Task<byte[]> ReceiveDiagFrameOwnedAsync(bool verifyCrc, CancellationToken cancellationToken)
     {
@@ -419,10 +416,10 @@ public sealed record StreamingDeviceInfo(
 {
     /// <summary>
     /// Parses the fixed hello layout, then the variable flash-id and sector tables, bounding
-    /// every device-supplied length before reading it. Offsets follow the reference parser with
-    /// the leading HDLC flag normalized away.
+    /// every device-supplied length before reading it. Offsets assume the leading HDLC flag has been
+    /// normalized away.
     /// <para>先解析固定 hello 布局，再解析变长的闪存 ID 与扇区表，并在读取任何由设备提供的长度
-    /// 之前先做边界检查。偏移在剥掉前导 HDLC 标志后对应参考解析器。</para>
+    /// 之前先做边界检查。偏移以剥掉前导 HDLC 标志为前提。</para>
     /// </summary>
     internal static bool TryParse(ReadOnlySpan<byte> reply, out StreamingDeviceInfo? info)
     {
@@ -486,12 +483,12 @@ public sealed record StreamingDeviceInfo(
     /// <para>解析目标在 hello 响应中自己通告的扇区尺寸，使调用方无需假设固定值。</para>
     /// </summary>
     /// <remarks>
-    /// <para>This session carries no chipset table, so the advertised table is the single geometry the
+    /// This session carries no chipset table, so the advertised table is the single geometry the
     /// loader reports. The table must name one size that is a power of two within
     /// <see cref="StreamingConstants.MinReportedSectorBytes"/> to
     /// <see cref="StreamingConstants.MaxReportedSectorBytes"/>: an empty table, several distinct sizes,
     /// or an implausible value is refused instead of guessed, because every derived byte offset, length
-    /// and block count scales with it.</para>
+    /// and block count scales with it.
     /// <para>本会话没有芯片表，因此该通告表就是 loader 上报的唯一几何信息。表内必须只有一种尺寸，
     /// 且该尺寸为 2 的幂并落在 <see cref="StreamingConstants.MinReportedSectorBytes"/> 到
     /// <see cref="StreamingConstants.MaxReportedSectorBytes"/> 之间：空表、多种不同尺寸或不成理的值

@@ -5,13 +5,13 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <para>来自一次已完成 GPT 写回的证据：编程了多少内容，以及观察到哪些等价性。</para>
 /// </summary>
 /// <remarks>
-/// <para>The three equivalences are reported separately because they answer different questions and none of
+/// The three equivalences are reported separately because they answer different questions and none of
 /// them implies the others. <see cref="BytesEquivalent"/> says every programmed byte was read back identical;
 /// <see cref="StructureEquivalent"/> says the table re-parsed from the device after the write carries the same
 /// metadata fingerprint, block size and block count as the snapshot that was written;
 /// <see cref="CapacityEquivalent"/> says the table's declared capacity still equals the region's reported
 /// bytes. The programmed extents are re-serialized metadata, so unmodeled reserved bytes are emitted as
-/// canonical zeros and this record never claims byte identity with the pre-write sectors.</para>
+/// canonical zeros and this record never claims byte identity with the pre-write sectors.
 /// <para>这三项等价性分别上报，因为它们回答的是不同问题，且任一项都不能推出其他项。<see cref="BytesEquivalent"/>
 /// 表示每个已编程字节回读都完全一致；<see cref="StructureEquivalent"/> 表示写入后从设备重新解析的分区表，其元数据
 /// 摘要、块大小与块数都与所写入的快照一致；<see cref="CapacityEquivalent"/> 表示表声明的容量仍等于该区域上报的

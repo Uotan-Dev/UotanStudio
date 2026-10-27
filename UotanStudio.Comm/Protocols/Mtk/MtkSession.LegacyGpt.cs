@@ -11,8 +11,9 @@ public sealed partial class MtkSession
     /// <summary>Reads both GPT copies of one Legacy region under a single operation lease, without repair or primary-only fallback.
     /// <para>在单个操作租约下读取 Legacy 区域的两份 GPT 副本，不进行修复，也不会只回退到主副本。</para></summary>
     /// <remarks>
-    /// <para>The Legacy agent addresses a region with a byte offset that is already region-relative, and the agent itself fixes the block size at 512 bytes, so the table is parsed with that geometry regardless of what a scatter file declares. Older MediaTek targets may answer with a legacy PMT layout instead of a GPT; that case is reported as a validation failure rather than guessed.</para>
-    /// <para>Legacy 代理使用已经相对于区域的字节偏移寻址，且代理把块大小固定为 512 字节，因此无论 scatter 声明为何，分区表都按该几何信息解析。较老的联发科目标可能返回旧式 PMT 布局而不是 GPT；这种情况按校验失败 上报，不做猜测。</para></remarks>
+    /// The Legacy agent addresses a region with a byte offset that is already region-relative, and the agent itself fixes the block size at 512 bytes, so the table is parsed with that geometry regardless of what a scatter file declares. Older MediaTek targets may answer with a legacy PMT layout instead of a GPT; that case is reported as a validation failure rather than guessed.
+    /// <para>Legacy 代理使用已经相对于区域的字节偏移寻址，且代理把块大小固定为 512 字节，因此无论 scatter 声明为何，分区表都按该几何信息解析。较老的联发科目标可能返回旧式 PMT 布局而不是 GPT；这种情况按校验失败 上报，不做猜测。</para>
+    /// </remarks>
     /// <param name="partitionId">Explicit discovered Legacy physical region, not a GPT entry index.
     /// <para>显式指定的已发现 Legacy 物理区域，不是 GPT 条目索引。</para></param>
     /// <param name="cancellationToken">Cancellation propagated to every storage exchange.

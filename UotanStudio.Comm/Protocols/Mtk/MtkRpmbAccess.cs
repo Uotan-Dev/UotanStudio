@@ -3,15 +3,15 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <summary>
 /// Selects which device interface carries the replay-protected block area.
 /// <para>选择承载重放保护块区域的设备接口。</para>
-/// The reference client uses one distinct command code per interface, so the value is never inferred
+/// This client uses one distinct command code per interface, so the value is never inferred
 /// from a partition name or from another interface's reply.
-/// <para>参考客户端为每个接口使用独立的命令码，因此该值绝不通过分区名或其他接口的应答推断。</para>
+/// <para>本客户端为每个接口使用独立的命令码，因此该值绝不通过分区名或其他接口的应答推断。</para>
 /// </summary>
 /// <remarks>
 /// The eMMC value matches the dedicated RPMB partition identifier and the UFS value matches logical unit 4.
 /// <para>eMMC 取值对应专用 RPMB 分区标识符，UFS 取值对应逻辑单元 4。
-/// 参见 <c>mtkclient/Library/DA/daconfig.py:39</c>（<c>MTK_DA_EMMC_PART_RPMB = 3</c>）与
-/// <c>mtkclient/Library/DA/daconfig.py:54</c>（<c>UFS_LU4 = 4</c>）。</para>
+/// 参见 （<c>MTK_DA_EMMC_PART_RPMB = 3</c>）与
+/// （<c>UFS_LU4 = 4</c>）。</para>
 /// </remarks>
 public enum MtkRpmbTarget
 {
@@ -38,15 +38,15 @@ public static class MtkRpmbWire
     /// <para>获取单个 RPMB 访问帧的固定宽度。</para>
     /// </summary>
     /// <value>
-    /// Two hundred fifty-six bytes. The reference client refuses any write buffer whose length differs
+    /// Two hundred fifty-six bytes. This client refuses any write buffer whose length differs
     /// from this value and walks a whole RPMB area in steps of this size.
-    /// <para>256 字节。参考客户端会拒绝长度与此值不同的写入缓冲区，并按此步长遍历整个 RPMB 区域。</para>
+    /// <para>256 字节。本客户端会拒绝长度与此值不同的写入缓冲区，并按此步长遍历整个 RPMB 区域。</para>
     /// </value>
     /// <remarks>
-    /// See <c>mtkclient/Library/DA/xflash/extension/xflash.py:412-415</c> for the rejected write length and
-    /// <c>mtkclient/Library/DA/xflash/extension/xflash.py:476-498</c> for the read stride.
-    /// <para>参见 <c>mtkclient/Library/DA/xflash/extension/xflash.py:412-415</c>（写入长度校验）与
-    /// <c>mtkclient/Library/DA/xflash/extension/xflash.py:476-498</c>（读取步长）。</para>
+    /// See for the rejected write length and
+    /// for the read stride.
+    /// <para>参见 （写入长度校验）与
+    /// （读取步长）。</para>
     /// </remarks>
     public const int FrameLength = 0x100;
 
@@ -60,9 +60,9 @@ public static class MtkRpmbWire
     /// <para>512 字节；Legacy 读写头携带的是字节偏移与字节数而非帧序号，也不暴露逐帧认证状态。</para>
     /// </value>
     /// <remarks>
-    /// See <c>mtkclient/Library/DA/legacy/dalegacy_lib.py:1027-1055</c>, where the partition-selected read
+    /// See, where the partition-selected read
     /// command sends big-endian byte address and length fields.
-    /// <para>参见 <c>mtkclient/Library/DA/legacy/dalegacy_lib.py:1027-1055</c>，其按分区选择的读命令
+    /// <para>参见，其按分区选择的读命令
     /// 发送大端字节地址与长度字段。</para>
     /// </remarks>
     public const int LegacyBlockSize = 0x200;
@@ -146,10 +146,10 @@ public sealed record MtkRpmbOptions
     /// <para>获取是否允许 RPMB 帧写入。</para>
     /// </summary>
     /// <value>
-    /// <see langword="false"/> by default. The reference client exposes writes and a zero-fill erase, so
+    /// <see langword="false"/> by default. This client exposes writes and a zero-fill erase, so
     /// the capability is real; this session refuses every write while the flag is <see langword="false"/>
     /// and never performs an erase on the caller's behalf.
-    /// <para>默认为 <see langword="false"/>。参考客户端确实提供写入与清零擦除，因此该能力存在；
+    /// <para>默认为 <see langword="false"/>。本客户端确实提供写入与清零擦除，因此该能力存在；
     /// 标志为 <see langword="false"/> 时本会话拒绝所有写入，且绝不会代表调用方执行擦除。</para>
     /// </value>
     public bool AllowAuthenticatedWrites { get; init; }

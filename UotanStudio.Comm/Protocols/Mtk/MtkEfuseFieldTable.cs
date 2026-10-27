@@ -8,8 +8,8 @@ namespace UotanStudio.Comm.Protocols.Mtk.Security;
 /// 0x100000000 标记位的绝对地址保存；解析后小于 0x1000 的值按数据上报，不当作可读地址。</para>
 /// </summary>
 /// <remarks>
-/// <para>Groups are keyed by hardware code and keep their internal cell order; repeated cells within a
-/// group are preserved verbatim.</para>
+/// Groups are keyed by hardware code and keep their internal cell order; repeated cells within a
+/// group are preserved verbatim.
 /// <para>分组按硬件代码组织并保持内部单元顺序；同组内重复的单元按原样保留。</para>
 /// </remarks>
 public static class MtkEfuseFieldTable
@@ -191,8 +191,8 @@ public static class MtkEfuseFieldTable
     /// <summary>Gets every group of hardware codes and encoded cells.
     /// <para>获取每个分组的硬件代码与编码单元。</para></summary>
     /// <remarks>
-    /// <para>The view is built once at type initialisation from the same arrays the lookup walks, so it
-    /// adds no per-call allocation.</para>
+    /// The view is built once at type initialisation from the same arrays the lookup walks, so it
+    /// adds no per-call allocation.
     /// <para>该视图在类型初始化时依据查找实际遍历的同一批数组一次性构造，不增加每次调用的分配。</para>
     /// </remarks>
     /// <value>

@@ -8,8 +8,9 @@ public sealed partial class MtkSession
     /// <summary>Reads both GPT copies of one named XML region under a single operation lease, without repair or primary-only fallback.
     /// <para>在单个操作租约下读取 XML 命名区域的两份 GPT 副本，不进行修复，也不会只回退到主副本。</para></summary>
     /// <remarks>
-    /// <para>The XML agent addresses a region by its reported token and a block-aligned byte offset that is already region-relative, and the table is parsed with the block size the agent itself reported. Regions reserved for a separate authenticated protocol are rejected by range validation, and a target that answers with a legacy PMT layout instead of a GPT is reported as a validation failure rather than guessed.</para>
-    /// <para>XML 代理按上报的区域标记与已经相对于区域的块对齐字节偏移寻址，分区表按代理自报的块大小解析。 为单独已认证协议保留的区域会被范围校验拒绝；返回旧式 PMT 布局而不是 GPT 的目标按校验失败上报，不做猜测。</para></remarks>
+    /// The XML agent addresses a region by its reported token and a block-aligned byte offset that is already region-relative, and the table is parsed with the block size the agent itself reported. Regions reserved for a separate authenticated protocol are rejected by range validation, and a target that answers with a legacy PMT layout instead of a GPT is reported as a validation failure rather than guessed.
+    /// <para>XML 代理按上报的区域标记与已经相对于区域的块对齐字节偏移寻址，分区表按代理自报的块大小解析。 为单独已认证协议保留的区域会被范围校验拒绝；返回旧式 PMT 布局而不是 GPT 的目标按校验失败上报，不做猜测。</para>
+    /// </remarks>
     /// <param name="regionName">Exact XML physical-region token from the discovered geometry, excluding RPMB.
     /// <para>来自已发现几何信息的精确 XML 物理区域标记，不含 RPMB。</para></param>
     /// <param name="timeoutMs">Cooperative deadline for each metadata read, from one millisecond through 24 hours.

@@ -134,7 +134,7 @@ public sealed partial class DeviceController
 
     /// <summary>
     /// Opens a direct session to adbd's secure service (Android 11+ TLS) at host:port. The client presents the
-    /// certificate derived from its host identity key for this handshake, exactly as upstream adb regenerates it
+    /// certificate derived from its host identity key for this handshake, the same identity an adb host derives
     /// from <c>~/.android/adbkey</c>, and the device's self-signed server certificate is accepted without
     /// validation because adbd rebuilds it on every handshake; adbd authenticates this host's key instead. The
     /// caller must connect and dispose on failure.
@@ -191,11 +191,11 @@ public sealed partial class DeviceController
 
     /// <summary>
     /// Opens a direct fastboot session to a fastboot-over-TCP target at <c>host:port</c>. Unlike the ADB and
-    /// HDC variants the returned session is already connected: the AOSP TCP fastboot <c>FB01</c> handshake runs
+    /// HDC variants the returned session is already connected: the TCP Fastboot <c>FB01</c> handshake runs
     /// while the transport is created, and a refused or silent peer throws before a session exists. The caller
     /// must dispose the session on failure of any later step.
     /// <para>打开到 <c>host:port</c> 上 fastboot-over-TCP 目标的直连会话。与 ADB 与 HDC 变体不同，返回的
-    /// 会话已完成连接：AOSP TCP fastboot 的 <c>FB01</c> 握手在创建传输时执行，对端拒绝或无应答会在会话
+    /// 会话已完成连接：TCP Fastboot 的 <c>FB01</c> 握手在创建传输时执行，对端拒绝或无应答会在会话
     /// 存在前抛出。调用方需在后续步骤失败时释放该会话。</para>
     /// </summary>
     /// <param name="host">Target hostname or IP literal. <para>目标主机名或 IP 字面量。</para></param>
@@ -206,12 +206,12 @@ public sealed partial class DeviceController
 
     /// <summary>
     /// Opens a direct fastboot session to a fastboot-over-UDP target at <c>host:port</c>. As with the TCP
-    /// variant the returned session is already connected: the AOSP Fastboot-over-Network handshake
+    /// variant the returned session is already connected: the Fastboot-over-Network handshake
     /// (device query plus initialization) runs while the transport is created, retrying each packet before
     /// it throws. The transport dials a literal IP address only, so <paramref name="host"/> must not be a
     /// name the resolver would have to expand.
     /// <para>打开到 <c>host:port</c> 上 fastboot-over-UDP 目标的直连会话。与 TCP 变体相同，返回的会话
-    /// 已完成连接：AOSP Fastboot-over-Network 握手（设备查询加初始化）在创建传输时执行，每包重试后才
+    /// 已完成连接：Fastboot-over-Network 握手（设备查询加初始化）在创建传输时执行，每包重试后才
     /// 抛出。该传输只拨叫 IP 字面量，因此 <paramref name="host"/> 不能是仍需解析器展开的名称。</para>
     /// </summary>
     /// <param name="host">Target IP literal (IPv4 or IPv6). <para>目标 IP 字面量（IPv4 或 IPv6）。</para></param>

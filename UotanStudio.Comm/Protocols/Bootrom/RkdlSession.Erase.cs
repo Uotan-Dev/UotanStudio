@@ -24,10 +24,8 @@ public sealed partial class RkdlSession
 
     /// <summary>
     /// Erases a sector range through ERASE_LBA transactions chunked at
-    /// <see cref="RkdlConstants.EraseSectorChunk"/> sectors, the chunk the upstream whole-media erase
-    /// loop uses.
-    /// <para>通过按 <see cref="RkdlConstants.EraseSectorChunk"/> 扇区分块的 ERASE_LBA 事务擦除扇区范围；
-    /// 该分块正是上游整介质擦除循环使用的值。</para>
+    /// <see cref="RkdlConstants.EraseSectorChunk"/> sectors.
+    /// <para>通过按 <see cref="RkdlConstants.EraseSectorChunk"/> 扇区分块的 ERASE_LBA 事务擦除扇区范围。</para>
     /// </summary>
     /// <param name="address">The first sector to erase. <para>要擦除的首个扇区。</para></param>
     /// <param name="sectorCount">The number of 512-byte sectors to erase. <para>要擦除的 512 字节扇区数。</para></param>

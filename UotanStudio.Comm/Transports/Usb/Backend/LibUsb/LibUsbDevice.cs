@@ -373,13 +373,13 @@ internal partial class LibUsbDevice : UsbDevice
     /// A concurrent second disposal can observe the gate as acquired and then find it disposed
     /// by the first one, so the release is guarded and <see cref="SemaphoreSlim.Dispose()"/> is
     /// idempotent.
-    /// <para>归还并处置释放流程此前取得的分块闸。并发的第二次释放可能在闸已被第一次释放
+    /// <para>归还并处置释放流程已取得的分块闸。并发的第二次释放可能在闸已被第一次释放
     /// 处置后才发现自己曾取得该闸，因此归还带防护，且 <see cref="SemaphoreSlim.Dispose()"/>
     /// 本身是幂等的。</para>
     /// </summary>
     /// <param name="gate">The chunk gate handed back. <para>要归还的分块闸。</para></param>
     /// <param name="acquired">Whether disposal had taken this gate.
-    /// <para>释放流程此前是否取得了该闸。</para></param>
+    /// <para>释放流程是否取得了该闸。</para></param>
     private static void ExitChunkGate(SemaphoreSlim gate, bool acquired)
     {
         if (!acquired)

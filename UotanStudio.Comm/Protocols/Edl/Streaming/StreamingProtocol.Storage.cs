@@ -42,10 +42,10 @@ public sealed partial class StreamingProtocol
     /// <para>用 DIAG 命令 0x19 发送原始设备分区表。</para>
     /// </summary>
     /// <remarks>
-    /// <para>The table length is bound to <see cref="StreamingConstants.PartitionTableBytes"/> before any
+    /// The table length is bound to <see cref="StreamingConstants.PartitionTableBytes"/> before any
     /// byte is written, and the response status byte is interpreted as 0 accepted, 1 differs but override
     /// accepted, 2 format unrecognized, 3 erase failed. This decoder requires the response identifier and
-    /// reports acceptance for status 0 or 1.</para>
+    /// reports acceptance for status 0 or 1.
     /// <para>表长在任一字节的写出之前已按 <see cref="StreamingConstants.PartitionTableBytes"/> 限制，
     /// 并按含义解析响应状态字节：0 接受、1 不同但允许覆盖、2 格式无法识别、3 擦除失败。这里要求响应号
     /// 匹配，并在状态为 0 或 1 时报告接受。</para>
@@ -117,12 +117,12 @@ public sealed partial class StreamingProtocol
     /// <para>编程一个分区段。</para>
     /// </summary>
     /// <remarks>
-    /// <para>The DIAG 0x1B/0x0E section header names the partition, then
+    /// The DIAG 0x1B/0x0E section header names the partition, then
     /// ceil(<paramref name="length"/>, 1024) program frames follow, each 0x07 with a little-endian byte
     /// address and a 1024-byte chunk whose tail is padded with 0xFF, every chunk requiring the 0x08
     /// acknowledgement, and a final qclose. The address window is validated with checked 64-bit
     /// arithmetic against the 32-bit DIAG wire address space before the operation lease or any transport
-    /// write, and the source is consumed chunk by chunk with no whole-image buffering.</para>
+    /// write, and the source is consumed chunk by chunk with no whole-image buffering.
     /// <para>先以 DIAG 0x1B/0x0E 段头指明分区，随后发送 ceil(<paramref name="length"/>, 1024) 个编程帧，
     /// 每帧为 0x07 加小端字节地址与 1024 字节块，块尾以 0xFF 补齐，每块都要求 0x08 确认，最后 qclose。
     /// 地址窗口在取得操作租约与任何传输写出之前，用 checked 64 位运算对照 32 位 DIAG 线路地址空间校验；
@@ -253,10 +253,8 @@ public sealed partial class StreamingProtocol
     }
 
     /// <summary>
-    /// Finalizes the current stream section with qclose, mirroring the closing call the reference
-    /// <c>write_flash</c> performs after the last chunk.
-    /// <para>用 qclose 结束当前流式段，对应参考 <c>write_flash</c> 在最后一块之后的收尾调用
-    /// 。</para>
+    /// Finalizes the current stream section with qclose after the last chunk.
+    /// <para>在最后一块之后用 qclose 结束当前流式段。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns><see langword="true"/> when the target answered with the close response

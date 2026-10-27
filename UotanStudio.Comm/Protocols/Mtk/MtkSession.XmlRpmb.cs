@@ -9,8 +9,8 @@ public sealed partial class MtkSession
 
     /// <summary>Reads a bounded run of RPMB frames through the XML DA's custom RPMB command.
     /// <para>通过 XML DA 的自定义 RPMB 命令读取有界的连续帧。</para></summary>
-    /// <remarks>One exchange sends <c>CMD:CUSTOMRPMBR</c> once, waits for <c>OK</c>, sends the first sector and the sector count as two little-endian words, then reads one frame per sector: exactly 0x100 bytes is data and a short frame carries the error code. <c>CMD:END</c> and the following <c>CMD:START</c> close the command (<c>mtkclient/Library/DA/xml/extension/v6.py:626-649</c>, command text built by <c>mtkclient/Library/DA/xml/xml_cmd.py:18-27</c>). The XML DA reports no RPMB status control code, so <see cref="QueryXFlashRpmbStatusAsync"/> has no counterpart here. The first frame the device refuses stops the frame loop and is never replayed.
-    /// <para>一次交换只发送一次 <c>CMD:CUSTOMRPMBR</c> 并等待 <c>OK</c>，随后以小端四字节发送首帧与帧数量， 再为每个 sector 读取一帧：恰好 0x100 字节为数据，短帧携带错误码。最后以 <c>CMD:END</c> 与紧随的 <c>CMD:START</c> 收尾 （<c>mtkclient/Library/DA/xml/extension/v6.py:626-649</c>，命令文本由 <c>mtkclient/Library/DA/xml/xml_cmd.py:18-27</c> 构造）。XML DA 没有上报 RPMB 状态控制码， 因此 <see cref="QueryXFlashRpmbStatusAsync"/> 在此没有对应方法。设备拒绝的首帧会终止帧循环且绝不重放。</para></remarks>
+    /// <remarks>One exchange sends <c>CMD:CUSTOMRPMBR</c> once, waits for <c>OK</c>, sends the first sector and the sector count as two little-endian words, then reads one frame per sector: exactly 0x100 bytes is data and a short frame carries the error code. <c>CMD:END</c> and the following <c>CMD:START</c> close the command. The XML DA reports no RPMB status control code, so <see cref="QueryXFlashRpmbStatusAsync"/> has no counterpart here. The first frame the device refuses stops the frame loop and is never replayed.
+    /// <para>一次交换只发送一次 <c>CMD:CUSTOMRPMBR</c> 并等待 <c>OK</c>，随后以小端四字节发送首帧与帧数量， 再为每个 sector 读取一帧：恰好 0x100 字节为数据，短帧携带错误码。最后以 <c>CMD:END</c> 与紧随的 <c>CMD:START</c> 收尾。XML DA 没有上报 RPMB 状态控制码， 因此 <see cref="QueryXFlashRpmbStatusAsync"/> 在此没有对应方法。设备拒绝的首帧会终止帧循环且绝不重放。</para></remarks>
     /// <param name="range">The validated frame-aligned range to read.
     /// <para>要读取的、已校验的帧对齐范围。</para></param>
     /// <param name="options">Optional bounds and deadline; <see langword="null"/> uses the read-only defaults.
@@ -55,16 +55,12 @@ public sealed partial class MtkSession
     /// <para>转储 XML 几何信息上报的完整 RPMB 区域。</para>
     /// </summary>
     /// <remarks>
-    /// The reference client divides the reported RPMB size by the fixed frame width and reads that many frames
-    /// into <c>rpmb.bin</c> (<c>mtkclient/Library/DA/xml/extension/v6.py:424-449</c>). Unlike the XFlash UFS
+    /// This client divides the reported RPMB size by the fixed frame width and reads that many frames
+    /// into <c>rpmb.bin</c>. Unlike the XFlash UFS
     /// reply, the XML geometry carries an RPMB size for both interfaces: the <c>rpmb_size</c> field for eMMC and
-    /// the authenticated last LUA field for UFS (<c>mtkclient/Library/DA/xml/xml_lib.py:730-741</c> and
-    /// <c>mtkclient/Library/DA/xml/xml_lib.py:859-862</c>).
-    /// <para>参考客户端用上报的 RPMB 大小除以固定帧宽度，读取相应数量的帧写入 <c>rpmb.bin</c>
-    /// （<c>mtkclient/Library/DA/xml/extension/v6.py:424-449</c>）。与 XFlash 的 UFS 应答不同，XML 几何信息
-    /// 为两种接口都上报了 RPMB 大小：eMMC 的 <c>rpmb_size</c> 字段与 UFS 需认证的最后一个 LUA 字段
-    /// （<c>mtkclient/Library/DA/xml/xml_lib.py:730-741</c> 与
-    /// <c>mtkclient/Library/DA/xml/xml_lib.py:859-862</c>）。</para>
+    /// the authenticated last LUA field for UFS.
+    /// <para>本客户端用上报的 RPMB 大小除以固定帧宽度，读取相应数量的帧写入 <c>rpmb.bin</c>。与 XFlash 的 UFS 应答不同，XML 几何信息
+    /// 为两种接口都上报了 RPMB 大小：eMMC 的 <c>rpmb_size</c> 字段与 UFS 需认证的最后一个 LUA 字段。</para>
     /// </remarks>
     /// <param name="options">Optional bounds and deadline; <see langword="null"/> uses the read-only defaults.
     /// <para>可选的边界与截止时间；<see langword="null"/> 使用只读默认值。</para></param>

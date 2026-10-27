@@ -5,11 +5,11 @@ namespace UotanStudio.Comm.Protocols.Apple.Usbmuxd;
 
 /// <summary>
 /// Client for the host usbmuxd daemon: lists devices, manages pair records and opens raw TCP-like
-/// streams to device ports. Uses the plist protocol (version 1) and falls back to the legacy binary
+/// streams to device ports. Uses the plist protocol (version 1) and falls back to the binary
 /// protocol (version 0) when the daemon rejects it. Every operation opens its own daemon connection
 /// and a successful CONNECT turns that connection into the device stream.
 /// <para>主机 usbmuxd 守护进程客户端：列出设备、管理配对记录并打开到设备端口的原始 TCP 流。
-/// 使用 plist 协议（version 1），守护进程拒绝时回退旧版二进制协议（version 0）。每个操作各自
+/// 使用 plist 协议（version 1），守护进程拒绝时回退二进制协议（version 0）。每个操作各自
 /// 打开一条守护进程连接，CONNECT 成功后该连接即成为设备流。</para>
 /// </summary>
 public sealed class UsbmuxdClient : IDisposable

@@ -104,7 +104,7 @@ internal static class HdcDaemonCodec
     }
 
     /// <summary>
-    /// Serializes the upstream <c>HeartbeatMsg</c> payload, whose only field is the varint counter.
+    /// Serializes the <c>HeartbeatMsg</c> payload, whose only field is the varint counter.
     /// <para>序列化上游 <c>HeartbeatMsg</c> 负载；该结构只有计数字段（varint）。</para>
     /// </summary>
     /// <param name="count">Heartbeat counter sent to the peer. <para>发送给对端的心跳计数。</para></param>

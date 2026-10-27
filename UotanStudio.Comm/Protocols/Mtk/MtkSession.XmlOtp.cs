@@ -8,32 +8,21 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <summary>Per-chip eFuse cell reads of the XML family through its documented custom memory read.
 /// <para>XML 家族经其已记载的自定义内存读取执行逐芯片 eFuse 单元读取。</para></summary>
 /// <remarks>
-/// <para>The reference XML extension reads a fuse table by resolving each cell and peeking four bytes at
-/// it through the dispatcher's <c>peek</c>, which is the <c>CMD:CUSTOMMEMR</c> exchange of
-/// Library/DA/xml/extension/v6.py:706-718 with :498-516. A resolved value below <c>0x1000</c> is reported
-/// as its own little-endian doubleword instead of being read, which is the same rule the XFlash reader
-/// applies (Library/DA/xflash/extension/xflash.py:618-650).</para>
-/// <para>参考的 XML 扩展会先解析每个单元，再通过分发器的 <c>peek</c> 在其地址上窥探四个字节来读取 fuse 表，
-/// 而该 <c>peek</c> 就是 Library/DA/xml/extension/v6.py:706-718 与 :498-516 的 <c>CMD:CUSTOMMEMR</c> 交互。
-/// 解析后小于 <c>0x1000</c> 的取值按其自身的小端双字上报而不发起读取，与 XFlash 读取器所用规则相同
-/// （Library/DA/xflash/extension/xflash.py:618-650）。</para>
-/// <para>The reference leaves that loop at its first non-address cell, because its branch uses
-/// <c>return data.append(...)</c> and so abandons the remaining cells (Library/DA/xml/extension/v6.py:714-715).
-/// This path reports the value and keeps walking, matching the XFlash and Legacy readers of this session, so
-/// a reading is complete or a failure is raised instead of a silently truncated table.</para>
-/// <para>参考实现在遇到首个非地址单元时就会离开该循环，因为其分支使用了
-/// <c>return data.append(...)</c>，从而放弃剩余单元（Library/DA/xml/extension/v6.py:714-715）。本路径会上报该
-/// 取值并继续遍历，与本会话的 XFlash、Legacy 读取器一致，因此一次读取要么完整，要么抛出失败，而不会静默截断表。</para>
-/// <para>These reads are the only eFuse access this family offers. The reference never sends an OTP program
-/// command for any family (Library/DA/legacy/dalegacy_param.py:105-110 declares the bytes and no client in
-/// the reference sends them), so no XML write path exists here and the boot public-key window is not read
-/// through XML either: the reference fetches that key only in the XFlash and Legacy clients
-/// (Library/DA/xflash/extension/xflash.py:630-636 with Library/DA/legacy/extension/legacy.py:216-222).</para>
-/// <para>这些读取是该家族提供的唯一 eFuse 访问。参考从未为任何家族发送 OTP 编程命令
-/// （Library/DA/legacy/dalegacy_param.py:105-110 仅声明命令字节，参考中没有任何客户端会发送它们），因此这里
-/// 不存在 XML 写入路径；引导公钥窗口也不经 XML 读取：参考只在 XFlash 与 Legacy 客户端中取回该公钥
-/// （Library/DA/xflash/extension/xflash.py:630-636，配合
-/// Library/DA/legacy/extension/legacy.py:216-222）。</para>
+/// The XML family reads a fuse table by resolving each cell and peeking four bytes at it, which is
+/// the <c>CMD:CUSTOMMEMR</c> exchange. A resolved value below <c>0x1000</c> is reported as its own
+/// little-endian doubleword instead of being read, which is the same rule the XFlash reader applies.
+/// This path reports the value of a non-address cell and keeps walking, matching the XFlash and
+/// Legacy readers of this session, so a reading is complete or a failure is raised instead of a silently
+/// truncated table.
+/// These reads are the only eFuse access this family offers. No OTP program command is sent for any
+/// family, so no XML write path exists here and the boot public-key window is not read through XML
+/// either: that key is fetched only in the XFlash and Legacy clients.
+/// <para>XML 家族先解析每个单元，再在其地址上窥探四个字节，即 <c>CMD:CUSTOMMEMR</c> 交互。
+/// 解析后小于 <c>0x1000</c> 的取值按其自身的小端双字上报而不发起读取，与 XFlash 读取器所用规则相同。
+/// 本路径遇到非地址单元时上报该取值并继续遍历，与本会话的 XFlash、Legacy 读取器一致，
+/// 因此一次读取要么完整，要么抛出失败，而不会静默截断表。
+/// 这些读取是该家族提供的唯一 eFuse 访问。任何家族都不发送 OTP 编程命令，因此这里
+/// 不存在 XML 写入路径；引导公钥窗口也不经 XML 读取：该公钥只在 XFlash 与 Legacy 客户端中取回。</para>
 /// </remarks>
 public sealed partial class MtkSession
 {

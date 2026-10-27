@@ -156,10 +156,10 @@ public sealed partial class FlashBundleOrchestrator(EdlSession session)
     /// <para>根据指定选项运行刷写包。</para>
     /// </summary>
     /// <remarks>
-    /// <para>Options and selection collections are captured before progress callbacks or awaits.
+    /// Options and selection collections are captured before progress callbacks or awaits.
     /// Callers must not mutate collections during that initial synchronous capture. Device phases hold
     /// one Firehose operation lease. Progress and log callbacks must not synchronously wait for another
-    /// operation on the same session.</para>
+    /// operation on the same session.
     /// <para>选项与选择集合在进度回调或等待之前捕获，调用方不得在那段初始同步捕获期间改动集合。
     /// 设备阶段持有一个 Firehose 操作租约；进度与日志回调不得同步等待同一会话上的另一个操作。</para>
     /// </remarks>

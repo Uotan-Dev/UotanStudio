@@ -17,12 +17,12 @@ namespace UotanStudio.Comm.Protocols.SpacemiT;
 /// 与逐分区镜像刷写（超大镜像按 gzip 分块传输）。</para>
 /// </summary>
 /// <remarks>
-/// <para>Device contract (verified against SpacemiT U-Boot <c>fb_spacemit.c</c>/<c>fb_blk.c</c>):
+/// Device contract (verified against SpacemiT U-Boot <c>fb_spacemit.c</c>/<c>fb_blk.c</c>):
 /// a download payload starting with the gzip magic is transparently decompressed, and
 /// consecutive <c>flash:&lt;same partition&gt;</c> calls with gzip payloads append at the
 /// running decompressed offset until the partition name changes or a non-gzip payload
 /// arrives; non-gzip sparse payloads are written by the on-device sparse writer; raw
-/// payloads always write at the partition start.</para>
+/// payloads always write at the partition start.
 /// <para>设备端契约（已对照 SpacemiT U-Boot <c>fb_spacemit.c</c>/<c>fb_blk.c</c> 验证）：
 /// 以 gzip 魔数开头的下载负载会被透明解压；对同一分区连续多次携带 gzip 负载的
 /// <c>flash:&lt;分区&gt;</c> 调用会在设备端按解压后的运行偏移追加写入，直到分区名变化或

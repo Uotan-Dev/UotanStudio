@@ -4,11 +4,9 @@ namespace UotanStudio.Comm.Protocols.Edl.Programmer;
 
 /// <summary>
 /// Builds programmer catalog rows by scanning a user-selected folder of Sahara programmer blobs whose file
-/// names follow the bkerler/edl loader convention, which is exactly how upstream turns a loader folder into
-/// its runtime loader database (<c>edlclient/Library/loader_db.py:39-73</c>).
-/// <para>通过扫描用户选择的 Sahara programmer 目录构建目录条目，目录中的文件名遵循 bkerler/edl 的
-/// loader 命名约定；上游自身也是按该约定把 loader 目录转换成运行时 loader 数据库的
-/// （<c>edlclient/Library/loader_db.py:39-73</c>）。</para>
+/// names follow the loader naming convention that turns a loader folder into a runtime loader database.
+/// <para>通过扫描用户选择的 Sahara programmer 目录构建目录条目，目录中的文件名遵循把 loader 目录转换成
+/// 运行时 loader 数据库的命名约定。</para>
 /// </summary>
 /// <remarks>
 /// The scan is the producer that <see cref="EdlProgrammerCatalog"/> was missing: name parsing supplies only the
@@ -39,8 +37,8 @@ public static class EdlProgrammerFolderScanner
     /// Gets the default ceiling on the number of extension-matching candidate files a single scan admits.
     /// <para>获取单次扫描默认接纳的“扩展名匹配候选文件”数量上限。</para>
     /// </summary>
-    /// <value>A bounded candidate count; the read-only bkerler loader corpus holds 751 blobs.
-    /// <para>有界的候选数量；bkerler 只读 loader 语料共 751 个二进制。</para></value>
+    /// <value>A bounded candidate count, large enough for a vendor loader folder while keeping one scan
+    /// bounded. <para>有界的候选数量，足以覆盖厂商 loader 目录，同时让单次扫描保持有界。</para></value>
     internal const int DefaultMaximumCandidateFiles = 4096;
 
     /// <summary>
@@ -56,9 +54,9 @@ public static class EdlProgrammerFolderScanner
     /// Gets the largest underscore-separated segment count a convention-shaped name may carry.
     /// <para>获取符合约定的文件名允许的下划线分段最大数量。</para>
     /// </summary>
-    /// <value>Eight segments: the hardware id, the hash prefix and at most six free-form vendor tags, the
-    /// widest shape observed in the read-only bkerler loader corpus.
-    /// <para>八段：硬件标识符、哈希前缀，以及至多六个厂商自由标记——即只读 bkerler loader 语料中最宽的形状。</para></value>
+    /// <value>Eight segments: the 16-hex-digit hardware id, the 16-hex-digit hash prefix and at most six
+    /// free-form vendor tags. <para>八段：16 个十六进制字符的硬件标识符、16 个十六进制字符的哈希前缀，
+    /// 以及至多六个厂商自由标记。</para></value>
     internal const int MaximumNameSegments = 8;
 
     private const int HardwareIdentifierHexLength = 16;
@@ -96,8 +94,8 @@ public static class EdlProgrammerFolderScanner
     /// <para>扫描目录，把每个符合约定的 programmer 二进制转换为目录条目，并逐一上报被拒绝的文件而不是中断遍历。</para>
     /// </summary>
     /// <param name="directoryPath">
-    /// The user-selected folder holding programmer blobs; vendor subfolders are walked as upstream does.
-    /// <para>用户选定的 programmer 目录；与上游一致地遍历厂商子目录。</para>
+    /// The user-selected folder holding programmer blobs; vendor subfolders are walked as well.
+    /// <para>用户选定的 programmer 目录；厂商子目录同样会被遍历。</para>
     /// </param>
     /// <param name="maximumCandidateFiles">
     /// The ceiling on extension-matching candidates; the first candidates up to the ceiling are hashed and the
@@ -226,10 +224,15 @@ public static class EdlProgrammerFolderScanner
     }
 
     /// <summary>
-    /// Parses one bare file name against the loader naming convention without touching the disk, mirroring the
-    /// field extraction of <c>loader_db.py:51-62</c> while refusing rather than silently repairing a name.
-    /// <para>在不访问磁盘的前提下按 loader 命名约定解析单个纯文件名；字段抽取与
-    /// <c>loader_db.py:51-62</c> 一致，但对不符合约定的名称直接拒绝而不做静默修复。</para>
+    /// Parses one bare file name against the loader naming convention without touching the disk. The
+    /// extension must be <c>.bin</c>, <c>.mbn</c> or <c>.elf</c>; the name without its extension splits
+    /// on <c>_</c> into two to eight non-empty segments, the first being the 16-hex-digit hardware id,
+    /// the second the 16-hex-digit OEM public-key-hash prefix, and the rest free-form vendor tags. A
+    /// name that does not fit is refused rather than silently repaired.
+    /// <para>在不访问磁盘的前提下按 loader 命名约定解析单个纯文件名。扩展名必须为 <c>.bin</c>、
+    /// <c>.mbn</c> 或 <c>.elf</c>；去掉扩展名后按 <c>_</c> 切分为 2 至 8 个非空段，第一段是 16 个
+    /// 十六进制字符的硬件标识符，第二段是 16 个十六进制字符的 OEM 公钥哈希前缀，其余为自由的厂商标记。
+    /// 不符合约定的名称直接拒绝，不做静默修复。</para>
     /// </summary>
     /// <param name="fileName">
     /// The bare candidate file name, without any directory part. <para>不含目录部分的纯候选文件名。</para>
@@ -501,8 +504,8 @@ public static class EdlProgrammerFolderScanner
     }
 
     /// <summary>
-    /// Reports whether a name ends with one of the programmer extensions recognised by upstream's loader scan.
-    /// <para>判断文件名是否以上游 loader 扫描认可的 programmer 扩展名结尾。</para>
+    /// Reports whether a name ends with one of the extensions this scan admits.
+    /// <para>判断文件名是否以本扫描接纳的 programmer 扩展名结尾。</para>
     /// </summary>
     /// <param name="fileName">
     /// The bare candidate file name. <para>纯候选文件名。</para>
@@ -619,18 +622,18 @@ public sealed record EdlProgrammerFolderSkip(string FileName, string Path, strin
 /// against. <para>完整的 64 位硬件标识符，与 <see cref="SaharaDeviceIdentity.HardwareId"/> 比较所用的值一致。</para>
 /// </param>
 /// <param name="ChipIdentifierHex">
-/// The lower-case first eight hexadecimal characters, the MSM chip id slot of <c>loader_db.py:52</c>.
-/// <para>小写的前八个十六进制字符，即 <c>loader_db.py:52</c> 的 MSM 芯片标识槽。</para>
+/// The lower-case first eight hexadecimal characters: the MSM chip id segment.
+/// <para>小写的前八个十六进制字符，即 MSM 芯片标识段。</para>
 /// </param>
 /// <param name="DeviceIdentifierHex">
-/// The trailing eight hexadecimal characters, the device id slot of <c>loader_db.py:57</c>.
-/// <para>末尾的八个十六进制字符，即 <c>loader_db.py:57</c> 的设备标识槽。</para>
+/// The trailing eight hexadecimal characters: the device id segment.
+/// <para>末尾的八个十六进制字符，即设备标识段。</para>
 /// </param>
 /// <param name="OemPublicKeyHashPrefixHex">
-/// The lower-case sixteen-character OEM public-key-hash prefix of <c>loader_db.py:62</c>. It is never declared
+/// The lower-case sixteen-character OEM public-key-hash prefix. It is never declared
 /// as <see cref="EdlProgrammerDescriptor.OemPublicKeyHashes"/>, because that contract needs at least 32
 /// hexadecimal characters and the selector compares the complete Sahara reply.
-/// <para>小写的十六字符 OEM 公钥哈希前缀，见 <c>loader_db.py:62</c>。它从不写入
+/// <para>小写的十六字符 OEM 公钥哈希前缀。它从不写入
 /// <see cref="EdlProgrammerDescriptor.OemPublicKeyHashes"/>：该契约要求至少 32 个十六进制字符，而选择器比较的是
 /// 完整的 Sahara 回复。</para>
 /// </param>

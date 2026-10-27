@@ -97,10 +97,10 @@ public sealed class MtkXmlStorageInfo
     /// <summary>Gets the canonical region token that carries the file-system partition table for this family.
     /// <para>获取该家族中承载文件系统分区表的规范区域标记。</para></summary>
     /// <value>
-    /// <c>EMMC-USER</c> for eMMC and <c>UFS-LUA2</c> for UFS, mirroring the tokens the reference tool sends for
+    /// <c>EMMC-USER</c> for eMMC and <c>UFS-LUA2</c> for UFS, mirroring the tokens the flashing tool sends for
     /// the "user" partition of each family. The region is present in <see cref="Regions"/> only when the device
     /// reported it, so callers still select a region through range validation.
-    /// <para>eMMC 为 <c>EMMC-USER</c>，UFS 为 <c>UFS-LUA2</c>，与参考工具为各家族 “user” 分区发送的标记一致。
+    /// <para>eMMC 为 <c>EMMC-USER</c>，UFS 为 <c>UFS-LUA2</c>，与该工具为各家族 “user” 分区发送的标记一致。
     /// 仅当设备上报该区域时它才出现在 <see cref="Regions"/> 中，因此调用方仍需通过范围校验选择区域。</para>
     /// </value>
     public string UserDataRegionName => GetUserDataRegionName(Kind);

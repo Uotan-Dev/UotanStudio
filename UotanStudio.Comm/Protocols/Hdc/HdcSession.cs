@@ -130,9 +130,9 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession, IGracefulP
 
     /// <summary>
     /// Creates a new HDC session over the specified device transport, using the
-    /// persistent default key (the upstream host identity at ~/.harmony/hdckey, generated when absent).
+    /// persistent default key (the host identity at ~/.harmony/hdckey, generated when absent).
     /// <para>在指定设备传输上创建新的 HDC 会话，使用持久化的默认密钥
-    /// （上游主机身份 ~/.harmony/hdckey，不存在时生成）。</para>
+    /// （主机身份 ~/.harmony/hdckey，不存在时生成）。</para>
     /// </summary>
     /// <param name="transport">The device transport.<para>设备传输。</para></param>
     public HdcSession(ICommTransport transport)
@@ -244,8 +244,8 @@ public sealed class HdcSession : IProtocolSession, IHdcDeviceSession, IGracefulP
     /// <para>为本会话路由创建 sync（文件传输）客户端。</para>
     /// </summary>
     /// <returns>A sync client that either opens transfer channels on the authenticated direct connection, or runs the
-    /// upstream remote-client file task over the HDC server that owns the target.
-    /// <para>sync 客户端：在已认证直连上打开传输通道，或对拥有该目标的 HDC server 运行上游 remote-client 文件任务。</para></returns>
+    /// remote-client file task over the HDC server that owns the target.
+    /// <para>sync 客户端：在已认证直连上打开传输通道，或对拥有该目标的 HDC server 运行 remote-client 文件任务。</para></returns>
     /// <exception cref="ObjectDisposedException">This session is disposed.
     /// <para>本会话已释放。</para></exception>
     public IHdcSyncClient CreateSyncClient()

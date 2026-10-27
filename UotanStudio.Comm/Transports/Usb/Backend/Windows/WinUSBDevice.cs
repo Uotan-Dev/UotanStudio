@@ -314,9 +314,9 @@ internal partial class WinUSBDevice : UsbDevice
             : throw new UsbDeviceHandleClosedException("Device handle is closed.");
 
     /// <summary>
-    /// Releases one reference previously taken by <see cref="TryAcquireWinUsbHandle"/> or
+    /// Releases one reference taken by <see cref="TryAcquireWinUsbHandle"/> or
     /// <see cref="AcquireWinUsbHandle"/>.
-    /// <para>释放此前由 <see cref="TryAcquireWinUsbHandle"/> 或 <see cref="AcquireWinUsbHandle"/>
+    /// <para>释放由 <see cref="TryAcquireWinUsbHandle"/> 或 <see cref="AcquireWinUsbHandle"/>
     /// 取得的一个引用。</para>
     /// </summary>
     private void ReleaseWinUsbHandle() => _winUsbHandle.DangerousRelease();

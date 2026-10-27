@@ -9,9 +9,9 @@ public sealed partial class MtkSession
     /// <para>读取 XFlash 存储中与区域无关的绝对区间，按需跨越上报的区域边界，复用分区与 GPT 路径同样的分块读交互。</para>
     /// </summary>
     /// <remarks>
-    /// <para>The destination may hold partial bytes when a chunk fails; publishers must stage to a temporary
+    /// The destination may hold partial bytes when a chunk fails; publishers must stage to a temporary
     /// file. Regions the agent reserved for authenticated access are absent from the map, so they are never
-    /// read here. Progress counts only bytes the agent already delivered into <paramref name="destination"/>.</para>
+    /// read here. Progress counts only bytes the agent already delivered into <paramref name="destination"/>.
     /// <para>某个分块失败时目标可能已包含部分字节；发布方必须写入临时文件。代理为认证访问保留的区域不会出现在
     /// 映射中，因此这里绝不会读取它们。进度只统计代理已经写入 <paramref name="destination"/> 的字节。</para>
     /// </remarks>
@@ -85,8 +85,8 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Reads a region-agnostic absolute range of Legacy eMMC storage across the regions the agent initialized, matching the reference handler's whole-flash and raw-sector reads (Library/DA/mtk_da_handler.py:285-312) on the same chunked exchange the partition paths use.
-    /// <para>在与区域无关的绝对范围上读取 Legacy eMMC 存储，跨越代理已初始化的各区域，对应参考处理程序的 整片与原始扇区读取（Library/DA/mtk_da_handler.py:285-312），并复用分区路径使用的同一套分块交换。</para></summary>
+    /// <summary>Reads a region-agnostic absolute range of Legacy eMMC storage across the regions the agent initialized, matching the handler's whole-flash and raw-sector reads on the same chunked exchange the partition paths use.
+    /// <para>在与区域无关的绝对范围上读取 Legacy eMMC 存储，跨越代理已初始化的各区域，对应处理程序的 整片与原始扇区读取，并复用分区路径使用的同一套分块交换。</para></summary>
     /// <param name="area">An address space built from this session's current Legacy inventory.
     /// <para>基于本会话当前 Legacy 清单构建的地址空间。</para></param>
     /// <param name="offset">The nonnegative, 512-aligned absolute offset.
@@ -162,8 +162,8 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Reads a region-agnostic absolute range of XML storage across the named regions the agent reported, matching the reference handler's whole-flash and raw-sector reads (Library/DA/mtk_da_handler.py:285-312) on the same chunked exchange the partition paths use.
-    /// <para>在与区域无关的绝对范围上读取 XML 存储，跨越代理上报的各命名区域，对应参考处理程序的整片与原始 扇区读取（Library/DA/mtk_da_handler.py:285-312），并复用分区路径使用的同一套分块交换。</para></summary>
+    /// <summary>Reads a region-agnostic absolute range of XML storage across the named regions the agent reported, matching the handler's whole-flash and raw-sector reads on the same chunked exchange the partition paths use.
+    /// <para>在与区域无关的绝对范围上读取 XML 存储，跨越代理上报的各命名区域，对应处理程序的整片与原始 扇区读取，并复用分区路径使用的同一套分块交换。</para></summary>
     /// <param name="area">An address space built from this session's current XML geometry.
     /// <para>基于本会话当前 XML 几何信息构建的地址空间。</para></param>
     /// <param name="offset">The nonnegative, block-aligned absolute offset.

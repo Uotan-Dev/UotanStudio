@@ -1,7 +1,9 @@
 namespace UotanStudio.Comm.Protocols.Edl;
 
 /// <summary>One device-independent physical storage range bound to the geometry vocabulary used across the whole flash-plan lifecycle.
-/// <para>跨刷写计划生命周期使用统一几何词汇描述的一个与设备无关的物理存储范围。</para>Preflight produces these ranges from manifests and every consuming command path validates them against the geometry the target actually reports, so a plan built on one storage snapshot is rejected when the geometry changed (sector size, capacity, or partition identity).<para>预检从清单产出这些范围，各消费命令路径再用目标实际上报的几何信息校验它们，因此基于 某一份存储快照的计划会在几何信息变化后（扇区大小、容量或分区身份）被拒绝。</para></summary>
+/// Preflight produces these ranges from manifests and every consuming command path validates them against the geometry the target actually reports, so a plan built on one storage snapshot is rejected when the geometry changed (sector size, capacity, or partition identity).
+/// <para>跨刷写计划生命周期使用统一几何词汇描述的一个与设备无关的物理存储范围。</para>
+/// <para>预检从清单产出这些范围，各消费命令路径再用目标实际上报的几何信息校验它们，因此基于 某一份存储快照的计划会在几何信息变化后（扇区大小、容量或分区身份）被拒绝。</para></summary>
 /// <remarks>Creates a validated range.<para>创建经校验的范围。</para></remarks>
 /// <param name="StartLba">The start block value. When <paramref name="RelativeToEnd"/> is set this is the positive offset subtracted from the reported disk size, mirroring the <c>NUM_DISK_SECTORS-</c> grammar.
 /// <para>起始块值。当 <paramref name="RelativeToEnd"/> 置位时，它是从上报磁盘大小中减去的正偏移， 对应 <c>NUM_DISK_SECTORS-</c> 文法。</para></param>

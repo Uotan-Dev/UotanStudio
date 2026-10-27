@@ -47,8 +47,8 @@ internal static class HarmonyOsDdkLifetime
     }
 
     /// <summary>
-    /// Releases one reference previously taken by <see cref="Acquire"/>, calling <c>OH_Usb_Release</c> when the count drops to zero.
-    /// <para>释放一个此前由 <see cref="Acquire"/> 取得的引用；计数降为零时调用 <c>OH_Usb_Release</c>。</para>
+    /// Releases one reference taken by <see cref="Acquire"/>, calling <c>OH_Usb_Release</c> when the count drops to zero.
+    /// <para>释放一个由 <see cref="Acquire"/> 取得的引用；计数降为零时调用 <c>OH_Usb_Release</c>。</para>
     /// An unbalanced release is clamped so the count never goes negative and the DDK is never
     /// released twice.
     /// <para>不配对的释放会被钳制，计数不会变为负数，DDK 也不会被重复释放。</para>

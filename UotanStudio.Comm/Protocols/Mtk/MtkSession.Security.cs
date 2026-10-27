@@ -21,10 +21,10 @@ public sealed partial class MtkSession
     /// <summary>Accepts the stages at which a device-control query is available to the caller.
     /// <para>接受调用方可用器件控制查询的阶段。</para></summary>
     /// <remarks>
-    /// The reference client issues get-style device-control queries right after DA1 setup, so the
+    /// This client issues get-style device-control queries right after DA1 setup, so the
     /// stage-one family plus every later XFlash stage are admissible; a storage-only stage does not
     /// imply the agent is still responsive after a fault.
-    /// 参考客户端在 DA1 设置后立即发起获取类器件控制查询，因此阶段一并及所有后续 XFlash 阶段均可接受；
+    /// 本客户端在 DA1 设置后立即发起获取类器件控制查询，因此阶段一并及所有后续 XFlash 阶段均可接受；
     /// 进入 fault 后，仅有存储就绪阶段并不意味着代理仍可响应。
     /// </remarks>
     /// <exception cref="InvalidOperationException">The transport is disconnected or the session is in
@@ -45,11 +45,10 @@ public sealed partial class MtkSession
     /// <summary>Accepts only the stages where the patched stage-two agent answers custom control codes.
     /// <para>仅接受已打补丁的二阶段代理会应答自定义控制码的阶段。</para></summary>
     /// <remarks>
-    /// Every custom code reproduced here is dispatched from the stage-two extension of the reference
-    /// client (Library/DA/xflash/extension/xflash.py:302-352 and :395-464), which is only reachable
+    /// Every custom code reproduced here is dispatched from the stage-two extension of this
+    /// client, which is only reachable
     /// after DA2 has started, so stage one is refused rather than attempted.
-    /// 此处复现的每个自定义码都由参考客户端的二阶段扩展发出
-    /// （Library/DA/xflash/extension/xflash.py:302-352 与 :395-464），而该扩展仅在 DA2 启动后可达，
+    /// 此处复现的每个自定义码都由本客户端的二阶段扩展发出，而该扩展仅在 DA2 启动后可达，
     /// 因此阶段一会被拒绝而不是被尝试。
     /// </remarks>
     /// <returns>The live XFlash channel. 当前存活的 XFlash 通道。</returns>
@@ -71,12 +70,9 @@ public sealed partial class MtkSession
     /// <summary>Sends the device-control selector and one control code, checking both status replies.
     /// <para>发送器件控制选择器与一个控制码，并检查两次状态回复。</para></summary>
     /// <remarks>
-    /// This mirrors the reference dispatcher, which writes the device-control command, waits for a
-    /// status, writes the control code and waits for a second status before any payload exchange
-    /// (Library/DA/xflash/extension/xflash.py:302-313 with Library/DA/xflash/xflash_param.py:14).
-    /// 这里与参考分发器一致：先写器件控制命令并等待状态，再写控制码并等待第二个状态，之后才交换载荷
-    /// （Library/DA/xflash/extension/xflash.py:302-313，命令取值见
-    /// Library/DA/xflash/xflash_param.py:14）。
+    /// This mirrors the dispatcher, which writes the device-control command, waits for a
+    /// status, writes the control code and waits for a second status before any payload exchange.
+    /// 这里与分发器一致：先写器件控制命令并等待状态，再写控制码并等待第二个状态，之后才交换载荷。
     /// </remarks>
     /// <param name="channel">The live XFlash channel. 当前存活的 XFlash 通道。</param>
     /// <param name="controlCode">The control code to select. 要选择的控制码。</param>
@@ -118,10 +114,8 @@ public sealed partial class MtkSession
     /// <para>通过二阶段自定义寄存器码读取一个 32 位寄存器。</para></summary>
     /// <remarks>
     /// The framing is the documented register read: device-control selector, control code, one
-    /// little-endian address frame, one payload frame and a completion status
-    /// (Library/DA/xflash/extension/xflash.py:325-332 with :302-313).
-    /// 帧结构即已记载的寄存器读取：器件控制选择器、控制码、一个小端地址帧、一个载荷帧与完成状态
-    /// （Library/DA/xflash/extension/xflash.py:325-332，配合 :302-313）。
+    /// little-endian address frame, one payload frame and a completion status.
+    /// 帧结构即已记载的寄存器读取：器件控制选择器、控制码、一个小端地址帧、一个载荷帧与完成状态。
     /// </remarks>
     /// <param name="channel">The live XFlash channel. 当前存活的 XFlash 通道。</param>
     /// <param name="address">The register address. 寄存器地址。</param>
@@ -151,11 +145,8 @@ public sealed partial class MtkSession
     /// <para>通过 Legacy 寄存器命令读取 32 位设备寄存器。</para></summary>
     /// <remarks>
     /// The documented exchange writes the register-read command byte, a big-endian address, then
-    /// reads four big-endian value bytes followed by a single acknowledge byte
-    /// (Library/DA/legacy/dalegacy_lib.py:92-99 with Library/DA/legacy/dalegacy_param.py:31-32).
-    /// 已记载的交互写入寄存器读命令字节与大端地址，然后读取 4 个大端值字节与 1 个确认字节
-    /// （Library/DA/legacy/dalegacy_lib.py:92-99，命令取值见
-    /// Library/DA/legacy/dalegacy_param.py:31-32）。
+    /// reads four big-endian value bytes followed by a single acknowledge byte.
+    /// 已记载的交互写入寄存器读命令字节与大端地址，然后读取 4 个大端值字节与 1 个确认字节。
     /// </remarks>
     /// <param name="address">The register address. 寄存器地址。</param>
     /// <param name="cancellationToken">The operation cancellation token.
@@ -188,13 +179,10 @@ public sealed partial class MtkSession
     /// <summary>Locates the secure-boot configuration partition in a validated GPT snapshot.
     /// <para>在已校验的 GPT 快照中定位安全启动配置分区。</para></summary>
     /// <remarks>
-    /// The reference client selects the entry whose name is exactly <c>seccfg</c> and aborts when no
-    /// such entry exists (Library/DA/xflash/extension/xflash.py:572-581 and
-    /// Library/DA/legacy/extension/legacy.py:172-181); the shared resolver adds its own
+    /// This client selects the entry whose name is exactly <c>seccfg</c> and aborts when no
+    /// such entry exists; the shared resolver adds its own
     /// ambiguity check, so a duplicated name is refused instead of reading the first match.
-    /// 参考客户端精确选择名为 <c>seccfg</c> 的条目，不存在时中止
-    /// （Library/DA/xflash/extension/xflash.py:572-581 与
-    /// Library/DA/legacy/extension/legacy.py:172-181）；共用的解析器另有歧义检查，因此重名会被拒绝，
+    /// 本客户端精确选择名为 <c>seccfg</c> 的条目，不存在时中止；共用的解析器另有歧义检查，因此重名会被拒绝，
     /// 而不是读取首个匹配项。
     /// </remarks>
     /// <param name="table">The validated partition table. 已校验的分区表。</param>

@@ -78,13 +78,13 @@ public sealed record AdbQrPairingOutcome(AdbQrPairingRoute Route, string Address
 /// 连接服务并建立连接。</para>
 /// </summary>
 /// <remarks>
-/// <para>While an adb server listens, the pairing endpoint is read from that server's own mDNS table —
+/// While an adb server listens, the pairing endpoint is read from that server's own mDNS table —
 /// the same source the <c>adb pair</c> command line uses — and from the local multicast browser at the
 /// same time; whichever resolves the expected instance first is used. The post-pairing connection then
 /// combines every source instead of trusting one: the server's target list under either its
 /// <c>ip:port</c> or DNS-SD instance identity, the server's mDNS table, the connect instances collected
 /// during pairing and a live local browse, each candidate port being dialled explicitly. Without a server
-/// only the local browser runs and its port is probed before it is handed back.</para>
+/// only the local browser runs and its port is probed before it is handed back.
 /// <para>只要 adb server 在监听，配对端点就同时来自该 server 自身的 mDNS 表（也就是 <c>adb pair</c>
 /// 命令行使用的同一来源）和本地组播浏览器，先解析出期望实例的一方被采用。配对后的连接随后综合所有来源，
 /// 而不是只信任一个：server 目标列表中的 <c>ip:port</c> 身份与 DNS-SD 实例身份、server 的 mDNS 表、
@@ -228,11 +228,11 @@ public static class AdbQrPairingService
     /// <exception cref="OperationCanceledException">The token was canceled.
     /// <para>令牌被取消。</para></exception>
     /// <remarks>
-    /// <para>When the server reports that it could not even start its pairing client, the endpoint is
+    /// When the server reports that it could not even start its pairing client, the endpoint is
     /// resolved once more from the live browser and the pairing is completed in-process with this host's
     /// key, which is the same user identity the server offers; the server then makes the connection.
     /// <see cref="DebugBridgeRouteMode.ServerOnly"/> keeps the server's failure instead, because that mode
-    /// forbids pairing outside the server.</para>
+    /// forbids pairing outside the server.
     /// <para>server 报告它甚至无法启动配对客户端时，会再从实时浏览重新解析端点，并用本主机的密钥在进程内完成
     /// 配对——这正是 server 提供的同一用户身份——随后仍由 server 建立连接。固定
     /// <see cref="DebugBridgeRouteMode.ServerOnly"/> 时保留 server 的失败，因为该模式禁止绕过 server 配对。</para>
@@ -467,18 +467,17 @@ public static class AdbQrPairingService
     /// 自身的自动连接与显式连接竞速，后者的首选来源是重新读取的 server mDNS 表。</para>
     /// </summary>
     /// <remarks>
-    /// <para>A server that auto-connects an mDNS device keys its transport by the DNS-SD instance name
+    /// A server that auto-connects an mDNS device keys its transport by the DNS-SD instance name
     /// (<c>adb-…._adb-tls-connect._tcp</c>), not by <c>ip:port</c>, so a target is recognized through the
     /// server's mDNS table instead of a serial prefix. The table is also what supplies the explicit connect
-    /// port, which keeps working when the server did not auto-connect.</para>
+    /// port, which keeps working when the server did not auto-connect.
+    /// After pairing the flow re-reads <c>host:mdns:services</c> and connects the device's
+    /// <c>_adb-tls-connect</c> row, instead of reusing a port collected before pairing.
     /// <para>自动连接 mDNS 设备的 server 以 DNS-SD 实例名（<c>adb-…._adb-tls-connect._tcp</c>）而不是
     /// <c>ip:port</c> 作为传输键，因此目标通过 server 的 mDNS 表识别，而不是按串号前缀。该表同时提供显式连接
-    /// 所需的端口，server 未自动连接时仍可完成连接。</para>
-    /// <para>The post-pairing steps follow the upstream command line: read <c>host:mdns:services</c> again after
-    /// pairing and connect the device's <c>_adb-tls-connect</c> row, instead of reusing a port collected before
-    /// pairing.</para>
-    /// <para>配对后的步骤与上游命令行一致：配对后重新读取 <c>host:mdns:services</c> 并连接设备的
-    /// <c>_adb-tls-connect</c> 行，而不是复用配对前收集到的端口。</para>
+    /// 所需的端口，server 未自动连接时仍可完成连接。
+    /// 配对后重新读取 <c>host:mdns:services</c> 并连接设备的 <c>_adb-tls-connect</c> 行，
+    /// 而不是复用配对前收集到的端口。</para>
     /// </remarks>
     /// <param name="endpoint">The paired device identity resolved during pairing.
     /// <para>配对阶段解析出的设备身份。</para></param>
@@ -539,10 +538,10 @@ public static class AdbQrPairingService
     }
 
     /// <summary>
-    /// Re-reads the server's mDNS table and connects the device's current <c>_adb-tls-connect</c> rows, the two
-    /// steps upstream performs with <c>adb mdns services</c> followed by <c>adb connect</c>.
-    /// <para>重新读取 server 的 mDNS 表并连接设备当前的 <c>_adb-tls-connect</c> 行，即上游使用
-    /// <c>adb mdns services</c> 再加 <c>adb connect</c> 的两步。</para>
+    /// Re-reads the server's mDNS table and connects the device's current <c>_adb-tls-connect</c> rows, that is
+    /// one <c>host:mdns:services</c> query followed by one server connect.
+    /// <para>重新读取 server 的 mDNS 表并连接设备当前的 <c>_adb-tls-connect</c> 行，即一次
+    /// <c>host:mdns:services</c> 查询加一次 server 连接。</para>
     /// </summary>
     /// <param name="endpoint">The paired device identity. <para>已配对设备的身份。</para></param>
     /// <param name="attempted">Ports already dialled in this flow. <para>本流程中已经拨过的端口。</para></param>
@@ -689,12 +688,12 @@ public static class AdbQrPairingService
     }
 
     /// <summary>
-    /// Connects the secure port the device currently advertises, combining the sources in the order upstream
-    /// uses them: the server's freshly re-read mDNS table first, then repeated local browses, and only then the
-    /// connect instances collected before pairing. The table and the live browse are re-read every pass because
-    /// the daemon re-advertises its TLS service on a new port after pairing.
-    /// <para>连接设备当前广播的安全端口，来源顺序与上游一致：先重新读取 server 的 mDNS 表，其次反复进行本地浏览，
-    /// 最后才用配对前收集到的连接实例。表与实时浏览每一轮都会重读，因为守护进程会在配对后以新端口重新广播 TLS 服务。</para>
+    /// Connects the secure port the device currently advertises, trying the sources in this order: the server's
+    /// freshly re-read mDNS table first, then repeated local browses, and only then the connect instances
+    /// collected before pairing. The table and the live browse are re-read every pass because the daemon
+    /// re-advertises its TLS service on a new port after pairing.
+    /// <para>连接设备当前广播的安全端口，来源顺序为：先重新读取 server 的 mDNS 表，其次反复进行本地浏览，最后才用
+    /// 配对前收集到的连接实例。表与实时浏览每一轮都会重读，因为守护进程会在配对后以新端口重新广播 TLS 服务。</para>
     /// </summary>
     /// <param name="endpoint">The paired device identity. <para>已配对设备的身份。</para></param>
     /// <param name="connectCandidates">Connect instances collected while waiting for the pairing instance.
@@ -1024,8 +1023,6 @@ public static class AdbQrPairingService
                         cancellationToken, requireAddress: false, endpoint.Guid).ConfigureAwait(false);
                 if (!discovered.Any(static device => AdbMdnsDiscovery.IsType(device, AdbMdnsDiscovery.AdbTlsService)))
                 {
-                    // Multicast delivered no instance at all: ask the device itself over unicast, which still works
-                    // when Wi-Fi power save or AP isolation filters the phone's multicast answers.
                     var direct = await AdbMdnsDiscovery.QueryUnicastAsync(endpoint.Host, UnicastQueryTimeout,
                         cancellationToken, endpoint.Guid).ConfigureAwait(false);
                     if (direct.Count > 0)
@@ -1110,8 +1107,6 @@ public static class AdbQrPairingService
         }
         catch (OperationCanceledException)
         {
-            // Either the scan budget expired or the caller stopped waiting for it; the advertised lookup reports the
-            // outcome, and the caller re-checks its own token.
             CommTrace.Debug("adb-qr-pairing", $"secure connect port scan for {host} stopped early.");
             return default;
         }

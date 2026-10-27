@@ -4,7 +4,7 @@ using UotanStudio.Compress.Codecs.Lz4;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
-/// <summary>Upstream transfer.h / serial_struct.h file and app metadata codecs.</summary>
+/// <summary>File and app metadata codecs of the HDC transfer protocol.</summary>
 internal static class HdcTransferCodec
 {
     /// <summary>Encodes a transfer configuration without reflection. <para>不借助反射编码传输配置。</para></summary>
@@ -49,7 +49,7 @@ internal static class HdcTransferCodec
         };
     }
 
-    /// <summary>Encodes a raw chunk after the upstream 64-byte reserved metadata prefix. <para>在上游 64 字节保留元数据前缀之后编码原始分块。</para></summary>
+    /// <summary>Encodes a raw chunk after the 64-byte reserved metadata prefix. <para>在 64 字节保留元数据前缀之后编码原始分块。</para></summary>
     /// <remarks>The metadata varints are written directly into the returned buffer and a compressed payload is staged
     /// through a pooled scratch buffer, so one chunk never allocates a second full-size copy of its data.
     /// <para>元数据 varint 直接写入返回的缓冲区，压缩载荷经池化暂存缓冲中转，因此单个分块不会再分配第二份等大的数据副本。</para>

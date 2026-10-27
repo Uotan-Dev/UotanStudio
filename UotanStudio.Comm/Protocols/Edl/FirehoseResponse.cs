@@ -204,8 +204,9 @@ internal static class FirehoseResponseParser
     /// <summary>Parses a complete <c>&lt;data&gt;</c> block, extracting <c>&lt;log&gt;</c> nodes and the <c>&lt;response&gt;</c> node.
     /// <para>解析一个完整的 <c>&lt;data&gt;</c> 块，逐节点提取 <c>&lt;log&gt;</c> 与 <c>&lt;response&gt;</c>。</para></summary>
     /// <remarks>
-    /// <para>Some targets send log and response within the same block; node-level parsing prevents a block containing a response from being discarded wholesale as a log.</para>
-    /// <para>某些设备会在同一块内同时发送 log 与 response；节点级解析可避免把含 response 的块整体当作 log 丢弃。</para></remarks>
+    /// Some targets send log and response within the same block; node-level parsing prevents a block containing a response from being discarded wholesale as a log.
+    /// <para>某些设备会在同一块内同时发送 log 与 response；节点级解析可避免把含 response 的块整体当作 log 丢弃。</para>
+    /// </remarks>
     /// <param name="xml">The complete <c>&lt;data&gt;</c>XML block. 完整的 <c>&lt;data&gt;</c>XML 块。</param>
     /// <param name="capturePayloads">Whether to retain and validate scalar vendor payload attributes.</param>
     /// <returns>A <see cref="FirehoseDataBlock"/>with any logs and/or the response found. 包含所提取 log 及/或

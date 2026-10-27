@@ -7,8 +7,9 @@ public sealed partial class MtkSession
     /// <summary>Executes a preflighted one-shot Legacy plan under a single session operation lease. Failure stops the remaining operations without replay or rollback.
     /// <para>在单个会话操作租约下执行已预检的一次性 Legacy 计划。失败会中止剩余操作， 且不会重放或回滚。</para></summary>
     /// <remarks>
-    /// <para>The plan must reference this session's exact storage inventory. A plan derived from a GPT observation re-reads that table before the first device write and refuses to start when the metadata changed. Progress callbacks must not wait synchronously for another operation on this session.</para>
-    /// <para>计划必须引用本会话确切的存储清单。由 GPT 观测结果构建的计划会在首次设备写入前重新读取该表， 元数据变化时拒绝开始。进度回调不得同步等待本会话的另一个操作。</para></remarks>
+    /// The plan must reference this session's exact storage inventory. A plan derived from a GPT observation re-reads that table before the first device write and refuses to start when the metadata changed. Progress callbacks must not wait synchronously for another operation on this session.
+    /// <para>计划必须引用本会话确切的存储清单。由 GPT 观测结果构建的计划会在首次设备写入前重新读取该表， 元数据变化时拒绝开始。进度回调不得同步等待本会话的另一个操作。</para>
+    /// </remarks>
     /// <param name="plan">A retained plan prepared against this session's Legacy inventory.
     /// <para>基于本会话 Legacy 清单准备的、已被持有的计划。</para></param>
     /// <param name="progress">Optional phase-local progress; success is indicated by the returned result.

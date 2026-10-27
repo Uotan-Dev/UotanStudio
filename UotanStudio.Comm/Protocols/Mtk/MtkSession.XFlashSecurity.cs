@@ -54,16 +54,15 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Reads eFuse cells through the stage-two register window documented by the reference client.
-    /// <para>通过参考客户端记载的二阶段寄存器窗口读取 eFuse 单元。</para></summary>
+    /// <summary>Reads eFuse cells through the stage-two register window documented by this client.
+    /// <para>通过本客户端记载的二阶段寄存器窗口读取 eFuse 单元。</para></summary>
     /// <remarks>Every cell is resolved with <see cref="MtkEfuseFieldTable"/>and
     /// <see cref="MtkEfuseAccess.ResolveCell"/>; cells the documented reader treats as non-addresses
-    /// are reported without a device read, exactly as the reference does
-    /// (Library/DA/xflash/extension/xflash.py:638-650). Reads use the documented register-read code
-    /// (Library/DA/xflash/extension/xflash.py:325-332) and write nothing. 每个单元都由
+    /// are reported without a device read, exactly as this client does
+    /// . Reads use the documented register-read code
+    /// and write nothing. 每个单元都由
     /// <see cref="MtkEfuseFieldTable"/>与 <see cref="MtkEfuseAccess.ResolveCell"/>解析；
-    /// 已记载读取器视为非地址的单元在不读取设备的情况下上报，与参考实现一致 （Library/DA/xflash/extension/xflash.py:638-650）。读取使用已记载的寄存器读码
-    /// （Library/DA/xflash/extension/xflash.py:325-332），不执行任何写入。</remarks>
+    /// 已记载读取器视为非地址的单元在不读取设备的情况下上报，与本客户端一致。读取使用已记载的寄存器读码，不执行任何写入。</remarks>
     /// <param name="hardwareCode">The hardware code selecting the cell table.
     /// <para>用于选择单元表的硬件代码。</para></param>
     /// <param name="efuseBase">The eFuse base address supplied by the device profile.
@@ -133,12 +132,11 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the boot public key window at the documented eFuse offset.
     /// <para>在已记载的 eFuse 偏移处读取引导公钥窗口。</para></summary>
-    /// <remarks>The reference client peeks the 0x30 bytes starting at the eFuse base plus 0x90
-    /// (Library/DA/xflash/extension/xflash.py:861-867). The window is fetched as twelve little-endian
+    /// <remarks>This client peeks the 0x30 bytes starting at the eFuse base plus 0x90
+    /// . The window is fetched as twelve little-endian
     /// register doublewords, which is how the documented memory read assembles any longer request
-    /// (Library/DA/xflash/extension/xflash.py:353-370). 参考客户端窥探从 eFuse 基址加 0x90 开始的 0x30 字节
-    /// （Library/DA/xflash/extension/xflash.py:861-867）。该窗口按 12 个小端寄存器双字取回，这正是已记载
-    /// 内存读取拼装较长请求的方式（Library/DA/xflash/extension/xflash.py:353-370）。</remarks>
+    /// . 本客户端窥探从 eFuse 基址加 0x90 开始的 0x30 字节。该窗口按 12 个小端寄存器双字取回，这正是已记载
+    /// 内存读取拼装较长请求的方式。</remarks>
     /// <param name="efuseBase">The eFuse base address supplied by the device profile.
     /// <para>由设备配置提供的 eFuse 基址。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
@@ -190,10 +188,9 @@ public sealed partial class MtkSession
     /// <summary>Reads and decodes the secure-boot configuration from the named GPT partition.
     /// <para>从指定 GPT 分区读取并解码安全启动配置。</para></summary>
     /// <remarks>The partition is located by the documented exact name and read in full, then decoded by
-    /// <see cref="MtkSecCfg"/>(Library/DA/xflash/extension/xflash.py:564-594). The exchange writes
+    /// <see cref="MtkSecCfg"/>. The exchange writes
     /// nothing to the device, and an unrecognized header faults the family instead of being
-    /// reinterpreted. 按已记载的精确名称定位分区并整体读取，随后由 <see cref="MtkSecCfg"/>解码
-    /// （Library/DA/xflash/extension/xflash.py:564-594）。本交互不向设备写入任何内容；无法识别的头部会使 家族进入 fault，而不会被重新解释。</remarks>
+    /// reinterpreted. 按已记载的精确名称定位分区并整体读取，随后由 <see cref="MtkSecCfg"/>解码。本交互不向设备写入任何内容；无法识别的头部会使 家族进入 fault，而不会被重新解释。</remarks>
     /// <param name="partitionId">The discovered physical region holding the configuration GPT.
     /// <para>承载配置 GPT 的已发现物理区域。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>

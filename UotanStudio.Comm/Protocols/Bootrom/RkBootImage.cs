@@ -103,11 +103,10 @@ internal sealed class RkBootImage
 
     /// <summary>
     /// Gets whether the image declares RC4 encryption as disabled (ucRc4Flag, loader header
-    /// byte 44). Upstream RKBoot.cpp interprets a non-zero flag as "RC4 disabled", and
-    /// boot_merger writes 1 by default, so a normally built loader reports <c>true</c> here.
-    /// <para>获取镜像是否声明已禁用 RC4 加密（ucRc4Flag，loader 头第 44 字节）。上游
-    /// RKBoot.cpp 把非 0 解释为“禁用 RC4”，且 boot_merger 默认写入 1，因此通常构建出的
-    /// loader 在此为 <c>true</c>。</para>
+    /// byte 44). A non-zero flag means RC4 is disabled, and a normally built loader writes 1,
+    /// so it reports <c>true</c> here.
+    /// <para>获取镜像是否声明已禁用 RC4 加密（ucRc4Flag，loader 头第 44 字节）。非 0 表示已禁用 RC4，
+    /// 通常构建的 loader 在此写入 1，因此为 <c>true</c>。</para>
     /// </summary>
     /// <value><c>true</c> when ucRc4Flag is non-zero, which means RC4 is disabled.
     /// <para>ucRc4Flag 非 0（表示已禁用 RC4）时为 <c>true</c>。</para></value>

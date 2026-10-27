@@ -3,7 +3,7 @@ using UotanStudio.Compress.Zip;
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>
-/// HDC app install and uninstall over a host-server channel using the upstream remote-client mode. Install opens a
+/// HDC app install and uninstall over a host-server channel using the remote-client mode. Install opens a
 /// dedicated host connection, waits for the server's <c>CMD_APP_INIT</c> echo and then streams the package itself as
 /// the task master; uninstall sends the command text and reads the server-relayed result text.
 /// <para>经宿主 server 通道的 HDC 应用安装与卸载，采用上游 remote-client 模式。安装打开专用宿主连接，等待 server 回送
@@ -118,7 +118,7 @@ public sealed class HdcServerAppClient : Contracts.IHdcAppClient
     }
 
     /// <summary>
-    /// Installs a bounded package directory as one upstream TAR task so related modules are submitted together.
+    /// Installs a bounded package directory as one TAR task so related modules are submitted together.
     /// <para>将有界的包目录作为单个上游 TAR 任务安装，使相关模块一起提交。</para>
     /// </summary>
     /// <param name="path">Directory scanned recursively for <c>.hap</c>, <c>.hsp</c> and <c>.app</c> files; links are never followed.

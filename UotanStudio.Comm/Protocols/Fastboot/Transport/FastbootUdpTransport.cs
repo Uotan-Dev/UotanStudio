@@ -5,10 +5,10 @@ using UotanStudio.Comm.Transports.Abstractions;
 namespace UotanStudio.Comm.Protocols.Fastboot.Transport;
 
 /// <summary>
-/// Fastboot over UDP transport, fully implementing the AOSP Fastboot over Network
-/// protocol (packet headers, sequence numbers, handshake, timeout-based
+/// Fastboot over UDP transport, fully implementing the Fastboot over Network
+/// wire protocol (packet headers, sequence numbers, handshake, timeout-based
 /// retransmission).
-/// <para>基于 UDP 的 Fastboot 传输，完整实现 AOSP Fastboot 网络协议
+/// <para>基于 UDP 的 Fastboot 传输，完整实现 Fastboot over Network 线协议
 /// （包头、序号、握手、基于超时的重传）。</para>
 /// </summary>
 internal sealed class FastbootUdpTransport : ICommTransport

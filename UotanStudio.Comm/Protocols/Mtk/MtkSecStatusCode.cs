@@ -3,16 +3,16 @@ namespace UotanStudio.Comm.Protocols.Mtk.Security;
 /// <summary>Names for the download-agent status codes that a security operation can receive.
 /// <para>安全操作可能收到的下载代理状态码名称。</para></summary>
 /// <remarks>
-/// Only codes catalogued by the reference implementation are named here, and each name cites the
-/// table entry it comes from (Library/error.py:549-655). An unnamed code is reported as a raw value;
+/// Only codes catalogued by this implementation are named here, and each name cites the
+/// table entry it comes from. An unnamed code is reported as a raw value;
 /// the client never infers a meaning for a status it cannot point at.
-/// <para>此处只命名参考实现已编目的状态码，每个名称都注明其来源表项（Library/error.py:549-655）。
+/// <para>此处只命名本实现已编目的状态码，每个名称都注明其来源表项。
 /// 未命名的状态码按原始值上报，客户端绝不为无法指认的状态码推断含义。</para>
 /// </remarks>
 public static class MtkSecStatusCode
 {
-    /// <summary>The success value the reference table names as <c>OK</c> (Library/error.py:550).
-    /// <para>参考表命名为 <c>OK</c> 的成功值（Library/error.py:550）。</para></summary>
+    /// <summary>The success value the port table names as <c>OK</c>.
+    /// <para>端口表命名为 <c>OK</c> 的成功值。</para></summary>
     public const uint Ok = 0;
 
     /// <summary>Names a download-agent status code, or null when the evidence has no entry for it.
@@ -58,17 +58,16 @@ public static class MtkSecStatusCode
 /// <summary>Names for the reply codes of a replay-protected block transfer.
 /// <para>重放保护块传输回复码的名称。</para></summary>
 /// <remarks>
-/// The reference client unpacks the first reply of a replay-protected read or write as one
+/// This client unpacks the first reply of a replay-protected read or write as one
 /// little-endian 16-bit word and indexes a fixed table with it, where zero means success
-/// (Library/DA/xflash/extension/xflash.py:29-38, :395-430). Codes beyond that table are reported
+/// . Codes beyond that table are reported
 /// unchanged.
-/// <para>参考客户端把重放保护读或写的首个回复按一个小端 16 位字解包，并用它索引固定表，其中零表示成功
-/// （Library/DA/xflash/extension/xflash.py:29-38、:395-430）。超出该表的取值原样上报。</para>
+/// <para>本客户端把重放保护读或写的首个回复按一个小端 16 位字解包，并用它索引固定表，其中零表示成功。超出该表的取值原样上报。</para>
 /// </remarks>
 public static class MtkSecRpmbStatusCode
 {
-    /// <summary>The value that means the transfer completed (Library/DA/xflash/extension/xflash.py:30).
-    /// <para>表示传输完成取值（Library/DA/xflash/extension/xflash.py:30）。</para></summary>
+    /// <summary>The value that means the transfer completed.
+    /// <para>表示传输完成取值。</para></summary>
     public const ushort Ok = 0;
 
     /// <summary>Names a replay-protected block reply code, or null when the table has no entry.

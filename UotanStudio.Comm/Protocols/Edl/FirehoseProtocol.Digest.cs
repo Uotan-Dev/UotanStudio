@@ -183,10 +183,10 @@ public sealed partial class FirehoseProtocol
     /// <param name="physicalPartition">The physical storage region or LUN. <para>物理存储区域或 LUN。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <param name="slot">
-    /// Optional slot number for the <c>slot</c> attribute; <see langword="null"/> or zero omits it so
-    /// existing callers keep the exact wire form they used before.
-    /// <para>可选的 <c>slot</c> 属性槽位编号；<see langword="null"/> 或零时省略，使既有调用方保持
-    /// 与此前完全一致的线上形式。</para>
+    /// Optional slot number for the <c>slot</c> attribute; <see langword="null"/> or zero omits it, so a
+    /// command without a slot keeps the wire form that omits the attribute.
+    /// <para>可选的 <c>slot</c> 属性槽位编号；<see langword="null"/> 或零时省略，使不带槽位的命令保持
+    /// 省略该属性的线上形式。</para>
     /// </param>
     internal async Task<byte[]?> GetSha256DigestCoreAsync(long startSector, long numSectors,
         int physicalPartition, CancellationToken cancellationToken, int? slot = null)

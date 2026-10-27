@@ -5,40 +5,33 @@ namespace UotanStudio.Comm.Protocols.Mtk.Security;
 /// <summary>Resolves eFuse cells and describes what a resolved cell means on the wire.
 /// <para>解析 eFuse 单元，并说明解析结果在线路上的含义。</para></summary>
 /// <remarks>
-/// The reference client resolves a cell index through its per-chip table and then either reports
+/// This client resolves a cell index through its per-chip table and then either reports
 /// the value or peeks four bytes at it: an address below 0x1000 is returned as the four
 /// little-endian bytes of the value itself, and any other address is read from the target
-/// (Library/DA/xflash/extension/xflash.py:618-650). The same source reads the boot public key as
-/// the 0x30 bytes beginning at the eFuse base plus 0x90 (Library/DA/xflash/extension/xflash.py:861-867,
-/// repeated at Library/DA/xmlflash/extension/v6.py:1229-1237 and
-/// Library/DA/legacy/extension/legacy.py:216-222). No other eFuse semantics are claimed.
-/// <para>参考客户端先按逐芯片表解析单元索引，然后要么上报取值、要么在该地址窥探 4 字节：小于 0x1000
-/// 的地址按该值本身的 4 个小端字节上报，其余地址则从目标读取
-/// （Library/DA/xflash/extension/xflash.py:618-650）。同一份源码把引导公钥读作从 eFuse 基址加 0x90
-/// 开始的 0x30 字节（Library/DA/xflash/extension/xflash.py:861-867，
-/// Library/DA/xmlflash/extension/v6.py:1229-1237 与 Library/DA/legacy/extension/legacy.py:216-222 同样如此）。
+/// . The same source reads the boot public key as
+/// the 0x30 bytes beginning at the eFuse base plus 0x90. No other eFuse semantics are claimed.
+/// <para>本客户端先按逐芯片表解析单元索引，然后要么上报取值、要么在该地址窥探 4 字节：小于 0x1000
+/// 的地址按该值本身的 4 个小端字节上报，其余地址则从目标读取。同一份源码把引导公钥读作从 eFuse 基址加 0x90
+/// 开始的 0x30 字节。
 /// 除此之外不声称任何 eFuse 语义。</para>
 /// </remarks>
 public static class MtkEfuseAccess
 {
-    /// <summary>The resolved value below which the reference reader reports the value instead of
-    /// reading an address (Library/DA/xflash/extension/xflash.py:624).
-    /// <para>参考读取器在该解析值之下上报取值本身而不按地址读取（Library/DA/xflash/extension/xflash.py:624）。</para></summary>
+    /// <summary>The resolved value below which the reader reports the value instead of
+    /// reading an address.
+    /// <para>读取器在该解析值之下上报取值本身而不按地址读取。</para></summary>
     public const uint NonAddressThreshold = 0x1000;
 
-    /// <summary>The byte width the reference reader asks for at every readable cell
-    /// (Library/DA/xflash/extension/xflash.py:626 and :649).
-    /// <para>参考读取器在每个可读单元请求的字节宽度（Library/DA/xflash/extension/xflash.py:626 与 :649）。</para></summary>
+    /// <summary>The byte width the reader asks for at every readable cell.
+    /// <para>读取器在每个可读单元请求的字节宽度。</para></summary>
     public const int CellLength = 4;
 
-    /// <summary>The offset of the boot public key from the eFuse base
-    /// (Library/DA/xflash/extension/xflash.py:633).
-    /// <para>引导公钥相对 eFuse 基址的偏移（Library/DA/xflash/extension/xflash.py:633）。</para></summary>
+    /// <summary>The offset of the boot public key from the eFuse base.
+    /// <para>引导公钥相对 eFuse 基址的偏移。</para></summary>
     public const uint PublicKeyOffset = 0x90;
 
-    /// <summary>The byte length of the boot public key window
-    /// (Library/DA/xflash/extension/xflash.py:865).
-    /// <para>引导公钥窗口的字节长度（Library/DA/xflash/extension/xflash.py:865）。</para></summary>
+    /// <summary>The byte length of the boot public key window.
+    /// <para>引导公钥窗口的字节长度。</para></summary>
     public const int PublicKeyLength = 0x30;
 
     /// <summary>The largest cell range a single request may cover.
@@ -94,8 +87,8 @@ public static class MtkEfuseAccess
         }
     }
 
-    /// <summary>Formats the four bytes the reference reader would report for a non-address cell.
-    /// <para>格式化参考读取器为非地址单元上报的 4 个字节。</para></summary>
+    /// <summary>Formats the four bytes the reader would report for a non-address cell.
+    /// <para>格式化读取器为非地址单元上报的 4 个字节。</para></summary>
     /// <param name="address">The resolved value below <see cref="NonAddressThreshold"/>.
     /// <para>解析后小于 <see cref="NonAddressThreshold"/> 的取值。</para></param>
     /// <returns>Four little-endian bytes. 4 个小端字节。</returns>

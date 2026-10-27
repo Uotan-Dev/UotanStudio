@@ -7,26 +7,22 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// 以及一条携带扩容目标与提交决定的结语。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Every bound is enforced before any Firehose command reaches a device, so a descriptor set that
 /// could never be sent is never constructed. The count, size and description bounds sit inside what
-/// the protocol layer accepts, and the logical-unit window follows the reference provisioning table,
-/// which indexes logical units 0 through 7. Descriptors are copied on construction, so mutating the
-/// caller's objects afterwards cannot change what will be sent.
-/// </para>
-/// <para>
-/// 所有上限都在任何 Firehose 命令到达设备之前生效，因此永远发不出去的描述符集合不会被构造出来。数量、
-/// 大小与描述上限都落在协议层可接受范围之内，逻辑单元窗口参考原始 provisioning 配置表对 0 至 7 号
-/// 逻辑单元的索引方式。构造时会复制描述符，因此调用方对象之后的修改无法改变将要发送的内容。
-/// </para>
+/// the protocol layer accepts, and the logical-unit window spans logical units 0 through 7.
+/// Descriptors are copied on construction, so mutating the caller's objects afterwards cannot
+/// change what will be sent.
+/// <para>所有上限都在任何 Firehose 命令到达设备之前生效，因此永远发不出去的描述符集合不会被构造出来。数量、
+/// 大小与描述上限都落在协议层可接受范围之内，逻辑单元窗口覆盖 0 至 7 号逻辑单元。
+/// 构造时会复制描述符，因此调用方对象之后的修改无法改变将要发送的内容。</para>
 /// </remarks>
 public sealed class UfsProvisionProfile
 {
     /// <summary>
-    /// The largest number of per-LUN bodies one profile may describe. The reference provisioning
-    /// table indexes logical units 0 through 7 and the protocol ceiling is 256, so this bound keeps a
-    /// hand-written or downloaded profile well below both.
-    /// <para>单个配置文件可描述的最大每 LUN 主体数量。参考配置表索引逻辑单元 0 至 7，协议上限为
+    /// The largest number of per-LUN bodies one profile may describe. The provisioning format indexes
+    /// logical units 0 through 7 and the protocol ceiling is 256, so this bound keeps a hand-written
+    /// or downloaded profile well below both.
+    /// <para>单个配置文件可描述的最大每 LUN 主体数量。provisioning 格式索引逻辑单元 0 至 7，协议上限为
     /// 256，因此该上限让手工编写或下载的配置文件远低于两者。</para>
     /// </summary>
     /// <value>Sixty-four logical units. <para>六十四个逻辑单元。</para></value>

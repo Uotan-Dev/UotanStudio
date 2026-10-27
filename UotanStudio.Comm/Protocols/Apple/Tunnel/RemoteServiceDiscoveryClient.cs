@@ -14,8 +14,8 @@ namespace UotanStudio.Comm.Protocols.Apple.Tunnel;
 /// </summary>
 public sealed class RemoteServiceDiscoveryClient : IDisposable
 {
-    /// <summary>Gets the RSD TCP port remoted exposes on the device (see the upstream RSDPort).
-    /// <para>获取设备上 remoted 暴露的 RSD TCP 端口（见上游 RSDPort）。</para></summary>
+    /// <summary>Gets the RSD TCP port remoted exposes on the device.
+    /// <para>获取设备上 remoted 暴露的 RSD TCP 端口。</para></summary>
     public const int DefaultPort = 58783;
 
     private const int RootChannel = 1;

@@ -22,10 +22,10 @@ internal static class DiagHdlcCodec
 
     /// <summary>
     /// Computes the reflected CRC16-CCITT the DIAG HDLC frames carry. The polynomial, the
-    /// <c>0xFFFF</c> seed and the final inversion come from <c>Crc16CcittReversed.Compute</c> in
-    /// <c>UotanStudio.Hash</c>, so this codec no longer keeps its own table.
-    /// <para>计算 DIAG HDLC 帧携带的反射 CRC16-CCITT。多项式、<c>0xFFFF</c> 初值与最终取反都取自
-    /// <c>UotanStudio.Hash</c> 的 <c>Crc16CcittReversed.Compute</c>，本编码器不再自持查找表。</para>
+    /// <c>0xFFFF</c> seed and the final inversion are the ones the <c>UotanStudio.Hash</c>
+    /// <c>Crc16CcittReversed.Compute</c> helper applies, so this codec keeps no table of its own.
+    /// <para>计算 DIAG HDLC 帧携带的反射 CRC16-CCITT。多项式、<c>0xFFFF</c> 初值与最终取反沿用
+    /// <c>UotanStudio.Hash</c> 的 <c>Crc16CcittReversed.Compute</c>，因此本编码器不自持查找表。</para>
     /// </summary>
     /// <param name="data">The bytes to checksum. <para>待校验的字节。</para></param>
     /// <returns>The CRC16 value. <para>CRC16 校验值。</para></returns>

@@ -181,12 +181,11 @@ public sealed class MtkFlashAreaMap
     /// <summary>Converts a sector number and count into the absolute walk range the raw-sector read uses.
     /// <para>把扇区号与扇区数转换为原始扇区读取所用的绝对遍历范围。</para></summary>
     /// <remarks>
-    /// <para>The reference handler multiplies both operands by the transfer size it calls
-    /// <c>config.pagesize</c> (Library/DA/mtk_da_handler.py:304-307). This map substitutes the block size
+    /// The handler multiplies both operands by the transfer size it calls
+    /// <c>config.pagesize</c>. This map substitutes the block size
     /// the agent itself reported, because the scatter's declared page size is not a device fact and the
-    /// family's read path enforces that reported alignment on every transfer.</para>
-    /// <para>参考处理程序把两个操作数都乘以它称为 <c>config.pagesize</c> 的传输大小
-    /// （Library/DA/mtk_da_handler.py:304-307）。本映射改用代理自报的块大小，因为 scatter 声明的页大小并非
+    /// family's read path enforces that reported alignment on every transfer.
+    /// <para>处理程序把两个操作数都乘以它称为 <c>config.pagesize</c> 的传输大小。本映射改用代理自报的块大小，因为 scatter 声明的页大小并非
     /// 设备事实，而该家族的读取路径在每次传输上强制的就是这个自报对齐。</para>
     /// </remarks>
     /// <param name="startSector">The zero-based first sector of the walk. <para>遍历的零基起始扇区。</para></param>
@@ -208,8 +207,9 @@ public sealed class MtkFlashAreaMap
     /// <summary>Splits an absolute walk range into per-region segments without touching the device.
     /// <para>把绝对遍历范围按区域切分，不接触设备。</para></summary>
     /// <remarks>
-    /// <para>Every bound is checked before any segment is allocated, so a fabricated offset or length can never produce a large list or an overflowed sum. Segments follow the reported region order and never span a region the map does not list.</para>
-    /// <para>在分配任何片段之前先完成全部边界检查，因此伪造的偏移或长度既不会产生庞大的列表，也不会造成累加 溢出。片段按上报区域顺序排列，绝不跨越映射未列出的区域。</para></remarks>
+    /// Every bound is checked before any segment is allocated, so a fabricated offset or length can never produce a large list or an overflowed sum. Segments follow the reported region order and never span a region the map does not list.
+    /// <para>在分配任何片段之前先完成全部边界检查，因此伪造的偏移或长度既不会产生庞大的列表，也不会造成累加 溢出。片段按上报区域顺序排列，绝不跨越映射未列出的区域。</para>
+    /// </remarks>
     /// <param name="offset">The nonnegative absolute byte offset, aligned to <see cref="AlignmentBytes"/>.
     /// <para>非负且按 <see cref="AlignmentBytes"/> 对齐的绝对字节偏移。</para></param>
     /// <param name="length">The positive absolute byte count, aligned to <see cref="AlignmentBytes"/>.

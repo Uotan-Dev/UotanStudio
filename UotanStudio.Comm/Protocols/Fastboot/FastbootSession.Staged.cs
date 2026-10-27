@@ -90,11 +90,11 @@ public sealed partial class FastbootSession
     /// <para>如果正在进行快照更新则将其取消。</para>
     /// </summary>
     /// <remarks>
-    /// <para>Only the status query is treated as best-effort; when the device confirms a pending merge, a
+    /// Only the status query is treated as best-effort; when the device confirms a pending merge, a
     /// failing <c>snapshot-update:cancel</c> propagates instead of being swallowed, because an uncancelled
     /// merge rewrites partitions at the next boot. This never reboots the device: some bootloaders can only
     /// cancel a merge from fastbootd and say so in free-form text, and rebooting would invalidate the
-    /// caller's session, so that request is reported back for the caller to honor explicitly.</para>
+    /// caller's session, so that request is reported back for the caller to honor explicitly.
     /// <para>仅状态查询按尽力而为处理；当设备确认存在挂起合并时，<c>snapshot-update:cancel</c> 失败会向
     /// 上传播而非被吞掉，因为未取消的合并会在下次重启时改写分区。本方法绝不重启设备：某些 bootloader 只能
     /// 在 fastbootd 中取消合并并以自由文本如此说明，而重启会使调用方的会话失效，因此该请求被回报给调用方
@@ -132,11 +132,10 @@ public sealed partial class FastbootSession
     }
 
     /// <summary>
-    /// Wipes user data by erasing the userdata, cache, and metadata partitions, matching the upstream
-    /// <c>fastboot -w</c> wire behavior. Only <c>erase:</c> is sent; the non-AOSP <c>format:</c> command
-    /// is never used.
-    /// <para>通过擦除 userdata、cache 和 metadata 分区来清除用户数据，与上游 <c>fastboot -w</c> 的线协议
-    /// 行为一致。只发送 <c>erase:</c>，绝不使用不属于 AOSP 的 <c>format:</c> 命令。</para>
+    /// Wipes user data by erasing the userdata, cache, and metadata partitions. Only <c>erase:</c> is
+    /// sent; the <c>format:</c> command is not part of the wire protocol and is never used.
+    /// <para>通过擦除 userdata、cache 和 metadata 分区来清除用户数据。只发送 <c>erase:</c>，
+    /// 绝不在线协议中发送不属于该协议的 <c>format:</c> 命令。</para>
     /// Every erase response is checked: this is the destructive factory-wipe equivalent, so a failed
     /// partition surfaces as an exception instead of a silent partial wipe.
     /// <para>每个擦除响应都会被检查：这是破坏性的恢复出厂等价操作，失败的分区会以异常呈现而非静默的部分清除。</para>

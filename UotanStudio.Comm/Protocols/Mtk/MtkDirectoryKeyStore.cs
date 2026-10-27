@@ -29,8 +29,8 @@ public interface IMtkDaaResourceProvider
 }
 
 /// <summary>
-/// File-directory key store following the mtkclient keys-directory convention: RSA private keys named <c>sla_ hwcode .pem</c> (optionally <c>sla_ hwcode _ subcode .pem</c>, the more specific file wins) and DAA resources named <c>daa_cert_ hwcode .bin</c> and <c>daa_auth_ hwcode .bin</c>. Identifiers match case-insensitively; nothing is downloaded, generated or inferred.
-/// <para>遵循 mtkclient 密钥目录约定的文件目录密钥库：RSA 私钥命名为 <c>sla_ hwcode .pem</c>（可选 <c>sla_ hwcode _ subcode .pem</c>，更具体的文件优先），DAA 资源命名为 <c>daa_cert_ hwcode .bin</c> 与 <c>daa_auth_ hwcode .bin</c>。标识符大小写不敏感；不下载、不生成、不推断。</para>
+/// File-directory key store with a flat layout: RSA private keys named <c>sla_ hwcode .pem</c> (optionally <c>sla_ hwcode _ subcode .pem</c>, the more specific file wins) and DAA resources named <c>daa_cert_ hwcode .bin</c> and <c>daa_auth_ hwcode .bin</c>. Identifiers match case-insensitively; nothing is downloaded, generated or inferred.
+/// <para>采用平面布局的文件目录密钥库：RSA 私钥命名为 <c>sla_ hwcode .pem</c>（可选 <c>sla_ hwcode _ subcode .pem</c>，更具体的文件优先），DAA 资源命名为 <c>daa_cert_ hwcode .bin</c> 与 <c>daa_auth_ hwcode .bin</c>。标识符大小写不敏感；不下载、不生成、不推断。</para>
 /// </summary>
 public sealed class MtkDirectoryKeyStore : IMtkDaaResourceProvider, IMtkBootResourceProvider
 {

@@ -9,13 +9,13 @@ using UotanStudio.Compress;
 namespace UotanStudio.Comm.Protocols.Adb;
 
 /// <summary>
-/// Sync v2 wire paths (stat_v2, ls_v2, sendrecv_v2), following the AOSP file sync protocol: the
-/// stat/list responses use the 72/76-byte little-endian v2 records, push streams a single
-/// continuous compressed or raw byte stream as DATA blocks of at most 64 KiB terminated by DONE,
-/// and pull feeds received DATA blocks into one continuous decompression stream until DONE.
-/// <para>sync v2 线上路径（stat_v2、ls_v2、sendrecv_v2），遵循 AOSP file sync 协议：stat/list 应答采用
-/// 72/76 字节小端 v2 记录；push 以不超过 64 KiB 的 DATA 块发送单一连续压缩或原始字节流并以 DONE 结束；
-/// pull 把收到的 DATA 块喂入单一连续解压流直至 DONE。</para>
+/// Sync v2 wire paths (stat_v2, ls_v2, sendrecv_v2): the stat/list responses use the 72/76-byte
+/// little-endian v2 records, push streams a single continuous compressed or raw byte stream as DATA
+/// blocks of at most 64 KiB terminated by DONE, and pull feeds received DATA blocks into one
+/// continuous decompression stream until DONE.
+/// <para>sync v2 线上路径（stat_v2、ls_v2、sendrecv_v2）：stat/list 应答采用 72/76 字节小端 v2 记录；
+/// push 以不超过 64 KiB 的 DATA 块发送单一连续压缩或原始字节流并以 DONE 结束；pull 把收到的
+/// DATA 块喂入单一连续解压流直至 DONE。</para>
 /// </summary>
 internal sealed partial class AdbSyncClient
 {
@@ -32,7 +32,7 @@ internal sealed partial class AdbSyncClient
     /// <summary>Byte width of the sync_recv_v2 setup message. <para>sync_recv_v2 setup 消息的字节宽度。</para></summary>
     private const int V2RecvSetupSize = 8;
 
-    /// <summary>Longest path upstream accepts in a sync request. <para>上游 sync 请求接受的最长路径。</para></summary>
+    /// <summary>Longest path accepted in a sync request. <para>sync 请求接受的最长路径。</para></summary>
     private const uint MaxSyncRequestPathLength = 1024;
 
     /// <summary>Bounded count of in-flight compressed blocks between the wire loop and the codec task.

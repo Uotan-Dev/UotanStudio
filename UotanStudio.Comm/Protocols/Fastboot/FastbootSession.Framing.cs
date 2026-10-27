@@ -53,8 +53,9 @@ public sealed partial class FastbootSession
     /// <summary>Receives and parses a fastboot protocol response.
     /// <para>接收并解析 fastboot 协议响应。</para></summary>
     /// <remarks>
-    /// <para>Incoming bytes are accumulated at byte level (never re-decoded per packet, so a multi-byte UTF-8 sequence split across packets survives) into a session-held buffer. Frames are consumed from that buffer one at a time, and whatever the transport delivered past a terminal frame is retained for the next call instead of being silently dropped, so a trailing INFO after OKAY desynchronizes neither the stream nor the next command's reply. INFO lines and TEXT content are accumulated onto the returned response; the call returns only at a terminal OKAY/FAIL/DATA frame (or an unrecoverable unknown prefix), with the timeout deadline extended by every consumed INFO/TEXT frame (the AOSP keep-alive) and otherwise fixed from the command start.</para>
-    /// <para>入站字节按字节级累积到会话持有的缓冲区（绝不按包重复解码，跨包拆分的 UTF-8 多字节序列得以 保留），帧从该缓冲区逐个消费；传输在终止帧之后送达的字节会保留给下一次调用而非被静默丢弃，因此 OKAY 之后的尾随 INFO 既不会破坏流，也不会错误归因到下一条命令的应答。INFO 行与 TEXT 内容累积到 返回的响应对象上；仅在到达终止 OKAY/FAIL/DATA 帧（或出现不可恢复的未知前缀）时返回。超时截止 时间会因每消费到一帧 INFO/TEXT 而顺延（AOSP 的保活语义），其余情况自命令开始固定不变。</para></remarks>
+    /// Incoming bytes are accumulated at byte level (never re-decoded per packet, so a multi-byte UTF-8 sequence split across packets survives) into a session-held buffer. Frames are consumed from that buffer one at a time, and whatever the transport delivered past a terminal frame is retained for the next call instead of being silently dropped, so a trailing INFO after OKAY desynchronizes neither the stream nor the next command's reply. INFO lines and TEXT content are accumulated onto the returned response; the call returns only at a terminal OKAY/FAIL/DATA frame (or an unrecoverable unknown prefix), with the timeout deadline extended by every consumed INFO/TEXT frame (the fastboot keep-alive) and otherwise fixed from the command start.
+    /// <para>入站字节按字节级累积到会话持有的缓冲区（绝不按包重复解码，跨包拆分的 UTF-8 多字节序列得以 保留），帧从该缓冲区逐个消费；传输在终止帧之后送达的字节会保留给下一次调用而非被静默丢弃，因此 OKAY 之后的尾随 INFO 既不会破坏流，也不会错误归因到下一条命令的应答。INFO 行与 TEXT 内容累积到 返回的响应对象上；仅在到达终止 OKAY/FAIL/DATA 帧（或出现不可恢复的未知前缀）时返回。超时截止 时间会因每消费到一帧 INFO/TEXT 而顺延（fastboot 的保活语义），其余情况自命令开始固定不变。</para>
+    /// </remarks>
     /// <param name="timeoutMs">Overall receive deadline in milliseconds; when <see langword="null"/> the session timeout is used. Every consumed INFO/TEXT frame restarts the deadline.
     /// <para>整体接收截止时间（毫秒）；为 <see langword="null"/> 时使用会话超时。每消费到一帧 INFO/TEXT 都会重新开始计时。</para></param>
     /// <param name="cancellationToken">Cancels the wait for a terminal frame; the token bounds the total duration even when INFO/TEXT frames keep extending the deadline.
@@ -336,11 +337,11 @@ public sealed partial class FastbootSession
     }
 
     /// <summary>
-    /// Finds the end of the DATA size field. AOSP writes exactly 8 hex digits after the DATA
-    /// prefix (optionally NUL-padded to the packet), so the field ends at the first NUL/CR/LF
-    /// within the next 8 bytes, or exactly 8 digits once that many bytes are buffered; anything
-    /// shorter means more bytes are still required.
-    /// <para>查找 DATA 尺寸字段结尾。AOSP 在 DATA 前缀后固定写 8 个十六进制数字（可按包补 NUL），
+    /// Finds the end of the DATA size field. The DATA prefix is followed by exactly 8 hex digits
+    /// (optionally NUL-padded to the packet), so the field ends at the first NUL/CR/LF within the
+    /// next 8 bytes, or exactly 8 digits once that many bytes are buffered; anything shorter means
+    /// more bytes are still required.
+    /// <para>查找 DATA 尺寸字段结尾。DATA 前缀后固定写 8 个十六进制数字（可按包补 NUL），
     /// 因此字段结束于随后 8 字节内的首个 NUL/CR/LF，或凑满 8 个数字时恰为 8 字节处；
     /// 更短则说明还需要更多字节。</para>
     /// </summary>

@@ -17,12 +17,12 @@ namespace UotanStudio.Comm.Transports.Udp;
 /// Android 11+ 的 TLS 配对/连接服务与较早的 adb 服务。</para>
 /// </summary>
 /// <remarks>
-/// <para>A browse keeps one <see cref="MulticastService"/> alive for its whole deadline and
+/// A browse keeps one <see cref="MulticastService"/> alive for its whole deadline and
 /// re-queries on a fixed interval. A responder answers a PTR query with the instance record in the
 /// answer section and the records needed to dial the service in the additional section, so the
 /// missing pieces are fetched with follow-up SRV and address queries rather than by restarting the
 /// socket; recreating that socket per poll would re-join the multicast group on every attempt and
-/// drop the announcements received in between.</para>
+/// drop the announcements received in between.
 /// <para>一次浏览在整个期限内保留同一个 <see cref="MulticastService"/>，并按固定间隔重新查询。应答方
 /// 响应 PTR 查询时把实例记录放在应答段，把真正拨号所需的记录放在附加段，因此缺失部分靠后续的 SRV 与地址
 /// 查询补齐，而不是重启套接字；每次轮询都重建套接字会在每轮重新加入组播组，并丢掉期间收到的广播。</para>
@@ -144,9 +144,9 @@ internal static class AdbMdnsDiscovery
     /// <summary>Polls the <c>_adb-tls-connect._tcp</c> service for the supplied window and returns the most recently advertised instance that resolves to the given device IP address (the secure connect port), or <c>null</c> when none resolves.
     /// <para>在给定窗口内浏览 <c>_adb-tls-connect._tcp</c> 服务，返回解析到给定设备 IP 的最近广播实例（安全连接端口）；没有实例解析时为 <c>null</c>。</para></summary>
     /// <remarks>
-    /// <para>The browse keeps its window open for a short grace after the first match and then returns the newest
+    /// The browse keeps its window open for a short grace after the first match and then returns the newest
     /// instance: after the daemon replaces its TLS service, a responder can still answer with the previous
-    /// instance, and the newest one is the port that accepts the connection.</para>
+    /// instance, and the newest one is the port that accepts the connection.
     /// <para>首次命中后浏览会再保留一小段宽限窗口，然后返回最新的实例：守护进程替换 TLS 服务后，应答方仍可能返回
     /// 上一个实例，而最新实例才是接受连接的端口。</para>
     /// </remarks>
@@ -178,8 +178,6 @@ internal static class AdbMdnsDiscovery
             return match;
         }
 
-        // Multicast can be filtered on some Wi-Fi links (power save, AP isolation); the device's own responder
-        // still answers a unicast DNS-SD query.
         var direct = await QueryUnicastAsync(address, UnicastFallbackWindow, ct, instanceName)
             .ConfigureAwait(false);
         return direct
@@ -194,8 +192,8 @@ internal static class AdbMdnsDiscovery
     /// 安全连接实例。</para>
     /// </summary>
     /// <remarks>
-    /// <para>The connect advertisement is normally already on the link before pairing finishes, so
-    /// collecting it here removes the post-pairing window in which the phone may have withdrawn it.</para>
+    /// The connect advertisement is normally already on the link before pairing finishes, so
+    /// collecting it here removes the post-pairing window in which the phone may have withdrawn it.
     /// <para>连接广播通常在配对结束前就已在链路上，因此在此收集可以避开配对结束后的窗口期——那时手机可能已撤回
     /// 该广播。</para>
     /// </remarks>
@@ -339,8 +337,6 @@ internal static class AdbMdnsDiscovery
         var queries = new List<byte[]> { SerializeQuery(AdbTlsService, DnsType.PTR) };
         if (instanceName is not null)
         {
-            // The daemon registers its TLS service under a known instance name, so asking for that exact SRV
-            // record reaches the port even when the responder's PTR announcements were missed.
             var instance = $"{instanceName}.{AdbTlsService}";
             queries.Add(SerializeQuery(instance, DnsType.SRV));
             queries.Add(SerializeQuery(instance, DnsType.TXT));
@@ -484,8 +480,6 @@ internal static class AdbMdnsDiscovery
 
             if (expectedInstance is not null)
             {
-                // Ask for the exact instance the daemon registered: a responder answers SRV and TXT for a name it
-                // owns even when a listener missed the PTR announcement that introduced it.
                 var name = new DomainName($"{expectedInstance}.{AdbTlsService}");
                 mdns.SendQuery(name, DnsClass.IN, DnsType.SRV);
                 mdns.SendQuery(name, DnsClass.IN, DnsType.TXT);
@@ -584,10 +578,10 @@ internal static class AdbMdnsDiscovery
     /// <para>累积发现的记录：PTR 标记 adb 实例，SRV 携带端口/主机，TXT 携带属性，A/AAAA 携带地址。</para>
     /// </summary>
     /// <remarks>
-    /// <para>All three record sections are read. A standards-compliant responder puts the record it
+    /// All three record sections are read. A standards-compliant responder puts the record it
     /// was asked about in the answer section and the rest of the resolution chain in the additional
     /// section, so reading only the answer section yields instance names with no port and no
-    /// address.</para>
+    /// address.
     /// <para>三个记录段都会被读取。合规的应答方把被查询的记录放在应答段，把解析链的其余部分放在附加段，
     /// 因此只读应答段只会得到没有端口、没有地址的实例名。</para>
     /// </remarks>
@@ -720,10 +714,10 @@ internal static class AdbMdnsDiscovery
     /// （通过 SRV 主机或实例名匹配）。</para>
     /// </summary>
     /// <remarks>
-    /// <para>An instance is reported only once its SRV port is known; a missing port is never defaulted to 5555,
+    /// An instance is reported only once its SRV port is known; a missing port is never defaulted to 5555,
     /// because wireless debugging listens on an ephemeral port and a guessed port turns a discovery miss into a
     /// connection attempt against an unrelated service. An instance whose A/AAAA answer never arrived is dropped
-    /// unless <paramref name="requireAddress"/> is false.</para>
+    /// unless <paramref name="requireAddress"/> is false.
     /// <para>只有解析出 SRV 端口后才会上报实例，且缺失的端口绝不会被补成 5555：无线调试监听临时端口，
     /// 猜测端口会把一次发现失败变成对无关服务的连接尝试。A/AAAA 应答始终未到的实例会被丢弃，除非
     /// <paramref name="requireAddress"/> 为 false。</para>

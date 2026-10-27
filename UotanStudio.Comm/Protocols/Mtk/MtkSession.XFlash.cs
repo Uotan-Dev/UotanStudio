@@ -7,15 +7,14 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <para>XFlash 下载代理可能上报的 USB 链路速度。</para></summary>
 public enum MtkXFlashUsbSpeedKind
 {
-    /// <summary>Full-speed operation; the reference reconnects after raising it
-    /// (Library/DA/xflash/xflash_lib.py:1024-1026).
-    /// <para>全速运行；参考在该状态下会提速后重连（Library/DA/xflash/xflash_lib.py:1024-1026）。</para></summary>
+    /// <summary>Full-speed operation; the client reconnects after raising it.
+    /// <para>全速运行；本客户端会在提速后重连。</para></summary>
     FullSpeed,
-    /// <summary>High-speed operation (Library/DA/xflash/xflash_lib.py:652).
-    /// <para>高速运行（Library/DA/xflash/xflash_lib.py:652）。</para></summary>
+    /// <summary>High-speed operation.
+    /// <para>高速运行。</para></summary>
     HighSpeed,
-    /// <summary>Super-speed operation (Library/DA/xflash/xflash_lib.py:652).
-    /// <para>超高速运行（Library/DA/xflash/xflash_lib.py:652）。</para></summary>
+    /// <summary>Super-speed operation.
+    /// <para>超高速运行。</para></summary>
     SuperSpeed
 }
 
@@ -166,20 +165,14 @@ public sealed partial class MtkSession
     /// <summary>Switches the XFlash agent to a higher USB speed and reports the speed it applies.
     /// <para>将 XFlash 代理切换到更高的 USB 速度，并报告其实际生效的速度。</para></summary>
     /// <remarks>
-    /// The switch mirrors <c>set_usb_speed</c> of Library/DA/xflash/xflash_lib.py:657-667: the
-    /// <c>SWITCH_USB_SPEED</c> code is sent as a bare protocol word (Library/DA/xflash/xflash_param
-    /// .py:16), each send is followed by a status, and the second frame carries the
-    /// <c>0x0E8D2001</c> vendor magic. Unlike the reference, which returns a bare <c>True</c>, this
-    /// path then issues the documented <c>GET_USB_SPEED</c> device-control query
-    /// (Library/DA/xflash/xflash_lib.py:647-655) so the caller receives the speed token the agent
-    /// actually applies. The exchange belongs to the stage-two connection flow
-    /// (Library/DA/xflash/xflash_lib.py:1024-1035), so it is refused before stage two.
-    /// <para>切换过程与 Library/DA/xflash/xflash_lib.py:657-667 的 <c>set_usb_speed</c> 一致：<c>
-    /// SWITCH_USB_SPEED</c> 码作为裸协议字发送（Library/DA/xflash/xflash_param.py:16），每次发送后读取
-    /// 状态，第二帧携带 <c>0x0E8D2001</c> 厂商魔数。与只返回 <c>True</c> 的参考不同，本路径随后发起已记载
-    /// 的 <c>GET_USB_SPEED</c> 器件控制查询（Library/DA/xflash/xflash_lib.py:647-655），让调用方拿到代理
-    /// 实际生效的速度标记。该交换属于二阶段连接流程（Library/DA/xflash/xflash_lib.py:1024-1035），因此
-    /// 阶段一之前会被拒绝。</para>
+    /// The switch sends the <c>SWITCH_USB_SPEED</c> code as a bare protocol word, each send is followed by
+    /// a status, and the second frame carries the <c>0x0E8D2001</c> vendor magic. This path then issues
+    /// the documented <c>GET_USB_SPEED</c> device-control query so the caller receives the speed token the
+    /// agent actually applies. The exchange belongs to the stage-two connection flow, so it is refused
+    /// before stage two.
+    /// <para>切换过程把 <c>SWITCH_USB_SPEED</c> 码作为裸协议字发送，每次发送后读取状态，第二帧携带
+    /// <c>0x0E8D2001</c> 厂商魔数。本路径随后发起已记载的 <c>GET_USB_SPEED</c> 器件控制查询，让调用方拿到
+    /// 代理实际应用的速度标记。该交换属于二阶段连接流程，因此在阶段一之前会被拒绝。</para>
     /// </remarks>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>

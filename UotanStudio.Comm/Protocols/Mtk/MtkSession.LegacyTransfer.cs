@@ -10,14 +10,10 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <param name="Baudrate">The baudrate that was negotiated with the agent.
 /// <para>与代理协商的波特率。</para></param>
 /// <param name="UsbSpeed">The speed code reported by the existing USB status query afterwards:
-/// 0 full, 1 high, 2 ultra-high. The reference reads that single byte after the status command
-/// (Library/DA/legacy/dalegacy_lib.py:807-813, whose selector byte 0x72 is
-/// Library/DA/legacy/dalegacy_param.py:27) and names the codes in its own reconnect test
-/// (Library/DA/legacy/dalegacy_lib.py:625).
-/// <para>随后由既有 USB 状态查询上报的速度码：0 全速、1 高速、2 超高速。参考在发送状态命令后读取该
-/// 单字节（Library/DA/legacy/dalegacy_lib.py:807-813，其选择符 0x72 见
-/// Library/DA/legacy/dalegacy_param.py:27），并在自身的重连判断中注明各取值的含义
-/// （Library/DA/legacy/dalegacy_lib.py:625）。</para></param>
+/// 0 full, 1 high, 2 ultra-high. The client reads that single byte after the status command
+/// and names the codes in its own reconnect test.
+/// <para>随后由既有 USB 状态查询上报的速度码：0 全速、1 高速、2 超高速。本客户端在发送状态命令后读取该
+/// 单字节，并在自身的重连判断中注明各取值的含义。</para></param>
 public sealed record MtkLegacyTransferSpeedResult(int Baudrate, byte UsbSpeed);
 
 public sealed partial class MtkSession
@@ -199,24 +195,21 @@ public sealed partial class MtkSession
     /// speed the agent confirms afterwards.
     /// <para>通过 Legacy 速度命令协商新的串行波特率，并报告随后代理确认的速度。</para></summary>
     /// <remarks>
-    /// The exchange mirrors <c>set_speed</c> of Library/DA/legacy/dalegacy_lib.py:446-469: the
-    /// SPEED_CMD selector (0xD2, Library/DA/legacy/dalegacy_param.py:82), the four-byte big-endian
-    /// baudrate, a 0x5A acknowledgement, the 0xC0 resynchronisation loop the reference repeats ten
-    /// times at the new rate, a 0x5A marker pair and the 256-value byte loopback that proves the
-    /// link survived the switch. The reference hard-codes 921600; the baudrate is a parameter here
-    /// with the same default. After the loopback the existing USB status query (0x72, unchanged by
+    /// The exchange sends the SPEED_CMD selector, the four-byte big-endian baudrate, a 0x5A
+    /// acknowledgement, the 0xC0 resynchronisation loop repeated ten times at the new rate, a 0x5A
+    /// marker pair and the 256-value byte loopback that proves the link survived the switch. The
+    /// baudrate defaults to 921600. After the loopback the existing USB status query (0x72, unchanged by
     /// this call) reports the USB speed the agent actually applies, so the caller sees the effective
-    /// link state instead of only the request. Any failure faults the Legacy family because the
-    /// channel may be running at a rate the host no longer matches.
-    /// <para>本交换与 Library/DA/legacy/dalegacy_lib.py:446-469 的 <c>set_speed</c> 一致：SPEED_CMD
-    /// 选择器（0xD2，Library/DA/legacy/dalegacy_param.py:82）、四字节大端波特率、0x5A 确认、参考在新速率下
-    /// 重复十次的 0xC0 重同步循环、一对 0x5A 标记，以及证明链路在切换后仍存活的 256 值字节回环。参考把
-    /// 921600 硬编码；这里把它作为参数并沿用同一默认值。回环之后，既有的 USB 状态查询（0x72，本次调用不
-    /// 修改）上报代理实际应用的 USB 速度，因此调用方看到的是生效的链路状态而不仅是请求。任何失败都会使
-    /// Legacy 家族进入 fault，因为链路可能运行在主机已不再匹配的速率上。</para>
+    /// link state instead of only the request. Any failure faults the Legacy family because the channel
+    /// may be running at a rate the host does not expect.
+    /// <para>本交换发送 SPEED_CMD 选择器、四字节大端波特率，接收 0x5A 确认，随后在新速率下重复十次 0xC0
+    /// 重同步循环，接收一对 0x5A 标记，最后以证明链路在切换后仍存活的 256 值字节回环结束。波特率默认
+    /// 921600。回环之后，既有的 USB 状态查询（0x72，本次调用不修改）上报代理实际应用的 USB 速度，因此
+    /// 调用方看到的是生效的链路状态而不仅是请求。任何失败都会使 Legacy 家族进入 fault，因为链路可能运行在
+    /// 主机无法预期的速率上。</para>
     /// </remarks>
-    /// <param name="baudrate">The positive serial baudrate to request; the reference default is
-    /// 921600. <para>要请求的正数串行波特率；参考默认值为 921600。</para></param>
+    /// <param name="baudrate">The positive serial baudrate to request; the default is
+    /// 921600. <para>要请求的正数串行波特率；默认值为 921600。</para></param>
     /// <param name="cancellationToken">Cancellation for the operation.
     /// <para>操作取消令牌。</para></param>
     /// <returns>The negotiated baudrate and the USB speed code the agent reports afterwards.

@@ -3,14 +3,14 @@ using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Edl.Streaming;
 
-/// <summary>One entry of the streaming on-device partition table: the decoded section name, the start LBA, the sector count, the three attribute bytes, and the flash selector (get_partitions, streaming.py:649-682).
-/// <para>流式设备分区表中的一条记录：解码后的段名、起始 LBA、扇区数、三个属性字节与闪存选择器 （get_partitions，streaming.py:649-682）。</para></summary>
+/// <summary>One entry of the streaming on-device partition table: the decoded section name, the start LBA, the sector count, the three attribute bytes, and the flash selector.
+/// <para>流式设备分区表中的一条记录：解码后的段名、起始 LBA、扇区数、三个属性字节与闪存选择器。</para></summary>
 /// <param name="Name">The partition name with the leading storage-class prefix removed.
 /// <para>去除存储类别前导后的分区名。</para></param>
-/// <param name="StartLba">The start LBA recorded by the table or computed for the legacy layout.
-/// <para>表内记录、或旧版布局下推算出的起始 LBA。</para></param>
-/// <param name="Sectors">The masked sector count, length plus spare truncated to 16 bits like the reference.
-/// <para>按参考做法掩码为 16 位的长度加备用扇区数。</para></param>
+/// <param name="StartLba">The start LBA recorded by the table, or derived from the record length and spare for the layout without explicit offsets.
+/// <para>表内记录的起始 LBA；无显式偏移的布局下由记录长度与备用扇区推算。</para></param>
+/// <param name="Sectors">The masked sector count: the length plus the spare, truncated to 16 bits.
+/// <para>掩码后的扇区数：长度加备用扇区，截断为 16 位。</para></param>
 /// <param name="Attribute1">The first raw attribute byte.<para>第一个原始属性字节。</para></param>
 /// <param name="Attribute2">The second raw attribute byte.<para>第二个原始属性字节。</para></param>
 /// <param name="Attribute3">The third raw attribute byte.<para>第三个原始属性字节。</para></param>
@@ -31,33 +31,33 @@ public sealed record StreamingPartitionEntry(
 public sealed class StreamingPartitionTable
 {
     /// <summary>
-    /// Header magic of the legacy table whose records store length and spare instead of an
+    /// Header magic of the table layout whose records store length and spare instead of an
     /// explicit offset.
-    /// <para>旧版表头魔数；其记录存长度与备用扇区而非显式偏移。</para>
+    /// <para>该表布局的表头魔数；其记录存长度与备用扇区而非显式偏移。</para>
     /// </summary>
     public const uint LegacyMagic1 = 0xAA7D1B9A;
 
     /// <summary>
-    /// Second legacy header magic word.
-    /// <para>旧版表头第二个魔数字。</para>
+    /// Second header magic word of the layout whose records store length and spare.
+    /// <para>该布局的第二个表头魔数字。</para>
     /// </summary>
     public const uint LegacyMagic2 = 0x1F7D48BC;
 
     /// <summary>
-    /// First recognized table magic accepted by the reference read path.
-    /// <para>参考读取路径认可的首个表魔数。</para>
+    /// First table magic the read path accepts.
+    /// <para>读取路径接受的首个表魔数。</para>
     /// </summary>
     public const uint Partition9kMagic1 = 0x55EE73AA;
 
     /// <summary>
-    /// Second recognized table magic accepted by the reference read path.
-    /// <para>参考读取路径认可的第二个表魔数。</para>
+    /// Second table magic the read path accepts.
+    /// <para>读取路径接受的第二个表魔数。</para>
     /// </summary>
     public const uint Partition9kMagic2 = 0xE35EBDDB;
 
     /// <summary>
-    /// Byte size of one partition record (the reference <c>0x1C</c> stride, streaming.py:666-670).
-    /// <para>每条分区记录的字节数。</para>
+    /// Byte size of one partition record: the fixed <c>0x1C</c> stride.
+    /// <para>每条分区记录的字节数：固定的 <c>0x1C</c> 步长。</para>
     /// </summary>
     public const int RecordBytes = 0x1C;
 
@@ -83,9 +83,9 @@ public sealed class StreamingPartitionTable
     public uint Version { get; }
 
     /// <summary>
-    /// Gets the parsed partition records, stopping where the reference stops at a record whose
-    /// second name byte is not the storage-class colon.
-    /// <para>获取已解析的分区记录，并在参考的停止条件处停止：记录名第二个字节不是存储类别冒号。</para>
+    /// Gets the parsed partition records, stopping at the first record whose second name byte is
+    /// not the storage-class colon.
+    /// <para>获取已解析的分区记录，在名字节第二位不是存储类别冒号的首条记录处停止。</para>
     /// </summary>
     /// <value>The decoded entries in table order. <para>按表顺序排列的解码条目。</para></value>
     public IReadOnlyList<StreamingPartitionEntry> Entries { get; }
@@ -99,15 +99,15 @@ public sealed class StreamingPartitionTable
         Entries = entries;
     }
 
-    /// <summary>Parses a raw streaming partition table image (the reference reads it with the 512-byte on-device table size, streaming.py:15, 243-246).
-    /// <para>解析原始流式分区表映像。</para></summary>
+    /// <summary>Parses a raw 512-byte on-device streaming partition table image.
+    /// <para>解析 512 字节的原始流式设备分区表映像。</para></summary>
     /// <param name="table">The raw table bytes; at most <see cref="StreamingConstants.PartitionTableBytes"/> long.
     /// <para>原始表字节，至多 <see cref="StreamingConstants.PartitionTableBytes"/> 字节。</para></param>
     /// <returns>The parsed table.<para>解析后的表。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the image is shorter than the 16-byte header or longer than <see cref="StreamingConstants.PartitionTableBytes"/>.
     /// <para>映像短于 16 字节头或长于 <see cref="StreamingConstants.PartitionTableBytes"/> 时抛出。</para></exception>
-    /// <exception cref="StreamingException">Thrown when the header record count exceeds the space the image can hold, or a record name leaves the reference storage-class prefix format.
-    /// <para>头部记录数超出映像可容纳的空间，或记录名不符合参考的存储类别前缀格式时抛出。</para></exception>
+    /// <exception cref="StreamingException">Thrown when the header record count exceeds the space the image can hold, or a record name leaves the storage-class prefix format.
+    /// <para>头部记录数超出映像可容纳的空间，或记录名不符合存储类别前缀格式时抛出。</para></exception>
     public static StreamingPartitionTable Parse(ReadOnlySpan<byte> table)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(table.Length, 16);
@@ -173,10 +173,8 @@ public sealed class StreamingPartitionTable
     }
 
     /// <summary>
-    /// Decodes a record name up to its first NUL, mirroring the reference
-    /// <c>rstrip(b"\x00")</c>.
-    /// <para>将记录名解码到首个 NUL 为止，对应参考的 <c>rstrip(b"\x00")</c>
-    /// 。</para>
+    /// Decodes a record name up to its first NUL byte and drops the trailing NUL pad.
+    /// <para>把记录名解码到首个 NUL 字节为止，并去掉尾部的 NUL 填充。</para>
     /// </summary>
     private static string DecodeName(ReadOnlySpan<byte> field)
     {

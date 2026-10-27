@@ -8,10 +8,10 @@ internal enum FastbootMatchMode
 {
     /// <summary>
     /// Only match devices exposing the standard fastboot interface
-    /// (class 0xFF, subclass 0x42, protocol 0x03). This is the default and matches AOSP
-    /// behavior; it never claims devices whose interface metadata is unavailable.
+    /// (class 0xFF, subclass 0x42, protocol 0x03). This is the default; it never claims devices whose
+    /// interface metadata is unavailable.
     /// <para>仅匹配暴露标准 fastboot 接口（class 0xFF、subclass 0x42、protocol 0x03）的设备。
-    /// 这是默认行为，与 AOSP 一致；接口元数据不可用时绝不匹配。</para>
+    /// 这是默认行为；接口元数据不可用时绝不匹配。</para>
     /// </summary>
     InterfaceOnly = 0,
 

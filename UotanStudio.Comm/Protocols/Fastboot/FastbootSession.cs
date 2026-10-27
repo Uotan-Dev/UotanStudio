@@ -52,10 +52,10 @@ public sealed partial class FastbootSession : IProtocolSession
 
     /// <summary>
     /// Growable byte accumulator for wire framing. Appends copy a whole transport read at once and
-    /// decoders slice the buffer directly, replacing per-byte list appends and the whole-buffer copy
-    /// every UTF-8 decode previously paid.
+    /// decoders slice the buffer directly, so no per-byte list append or whole-buffer copy per UTF-8
+    /// decode occurs.
     /// <para>线上组帧用的可增长字节累积器。追加按整次传输读取一次性拷贝，解码直接对缓冲区分片，
-    /// 取代此前逐字节的列表追加以及每次 UTF-8 解码付出的整缓冲拷贝。</para>
+    /// 因此不存在逐字节的列表追加或每次 UTF-8 解码的整缓冲拷贝。</para>
     /// </summary>
     private sealed class PendingBuffer
     {
@@ -161,9 +161,8 @@ public sealed partial class FastbootSession : IProtocolSession
 
     /// <summary>
     /// Sends a getvar query and returns the variable value, or empty unless the device answers
-    /// OKAY (matching AOSP behavior where an unknown variable yields no value).
-    /// <para>发送 getvar 查询并返回变量值；除设备应答 OKAY 外一律返回空（与 AOSP 未知变量无值的
-    /// 行为一致）。</para>
+    /// OKAY: an unknown variable yields no value.
+    /// <para>发送 getvar 查询并返回变量值；除设备应答 OKAY 外一律返回空：未知变量没有值。</para>
     /// </summary>
     /// <param name="key">Variable name without the <c>getvar:</c> prefix, matched case-sensitively in the cache. <para>不含 <c>getvar:</c> 前缀的变量名，在缓存中按大小写敏感匹配。</para></param>
     /// <param name="useCache">When <see langword="true"/>, consults and updates the session getvar cache; a non-OKAY reply is never cached. Pass <see langword="false"/> to force a fresh query.

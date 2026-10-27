@@ -78,10 +78,9 @@ internal static class AdbMessaging
     /// <param name="message">The message to serialize. <para>要序列化的消息。</para></param>
     /// <param name="protocolVersion">The CNXN protocol version negotiated with the peer; zero before the peer's
     /// CNXN. The legacy payload checksum is written only for peers older than
-    /// <see cref="AdbConstants.ProtocolVersionSkipChecksum"/>, matching upstream <c>send_packet</c>.
+    /// <see cref="AdbConstants.ProtocolVersionSkipChecksum"/>.
     /// <para>与对端协商的 CNXN 协议版本；收到对端 CNXN 之前为零。仅对早于
-    /// <see cref="AdbConstants.ProtocolVersionSkipChecksum"/> 的对端写入旧式负载校验和，与上游
-    /// <c>send_packet</c> 一致。</para></param>
+    /// <see cref="AdbConstants.ProtocolVersionSkipChecksum"/> 的对端写入旧式负载校验和。</para></param>
     /// <returns>The header followed by the payload bytes. <para>头部及其后的负载字节。</para></returns>
     public static byte[] Serialize(AdbMessage message, uint protocolVersion = 0)
     {
@@ -117,10 +116,10 @@ internal static class AdbMessaging
     }
 
     /// <summary>
-    /// Returns the <c>data_check</c> value upstream writes for one frame: the additive payload sum for peers older
+    /// Returns the <c>data_check</c> value written for one frame: the additive payload sum for peers older
     /// than <see cref="AdbConstants.ProtocolVersionSkipChecksum"/> (including the pre-CNXN transport state), and
     /// zero once the peer reported that version or newer.
-    /// <para>返回上游为单帧写出的 <c>data_check</c>：早于 <see cref="AdbConstants.ProtocolVersionSkipChecksum"/>
+    /// <para>返回为单帧写出的 <c>data_check</c> 值：早于 <see cref="AdbConstants.ProtocolVersionSkipChecksum"/>
     /// 的对端（含尚未收到 CNXN 的传输状态）为负载累加和，对端报告该版本或更新后为零。</para>
     /// </summary>
     /// <param name="payload">The frame payload, if any. <para>帧负载，可能为空。</para></param>

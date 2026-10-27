@@ -6,26 +6,23 @@ using UotanStudio.Hash.Digests;
 namespace UotanStudio.Comm.Protocols.Adb;
 
 /// <summary>
-/// Derives the TLS client certificate an ADB host presents to a secure adbd service, in the shape
-/// upstream <c>GenerateX509Certificate()</c> builds from the host identity key: version 3, subject and
-/// issuer <c>C=US, O=Android, CN=Adb</c>, a ten-year validity, critical <c>basicConstraints CA:TRUE</c>,
+/// Derives the TLS client certificate an ADB host presents to a secure adbd service: version 3, subject
+/// and issuer <c>C=US, O=Android, CN=Adb</c>, a ten-year validity, critical <c>basicConstraints CA:TRUE</c>,
 /// critical key usage <c>keyCertSign, cRLSign, digitalSignature</c>, a subject key identifier over the
 /// public key, and a SHA-256 self-signature made by that key.
-/// <para>派生 ADB 主机向安全 adbd 服务出示的 TLS 客户端证书，形状与上游
-/// <c>GenerateX509Certificate()</c> 按主机身份密钥构建的一致：版本 3，主题与颁发者为
+/// <para>派生 ADB 主机向安全 adbd 服务出示的 TLS 客户端证书：版本 3，主题与颁发者为
 /// <c>C=US, O=Android, CN=Adb</c>，有效期十年，关键的 <c>basicConstraints CA:TRUE</c>，关键用法
 /// <c>keyCertSign, cRLSign, digitalSignature</c>，基于公钥的主题密钥标识符，以及由该密钥做出的
 /// SHA-256 自签。</para>
 /// </summary>
 /// <remarks>
-/// The certificate is not an identity of its own. adbd extracts the public key from it
-/// (<c>adbd_tls_verify_cert</c> in <c>daemon/auth.cpp</c>) and matches the SHA-256 fingerprint of that key
-/// against the authorized host keys, so upstream regenerates it on every handshake from
-/// <c>~/.android/adbkey</c> and never stores it; nothing here persists a certificate either. Upstream also
-/// fixes the serial number to 1, which a peer never reads, and .NET's certificate request assigns its own.
-/// <para>该证书并非独立身份。adbd 会从中取出公钥（<c>daemon/auth.cpp</c> 的
-/// <c>adbd_tls_verify_cert</c>），并按该公钥的 SHA-256 指纹比对已授权主机密钥，因此上游每次握手都用
-/// <c>~/.android/adbkey</c> 重新生成且从不保存；此处同样不持久化任何证书。上游还把序列号固定为 1，
+/// The certificate is not an identity of its own. adbd extracts the public key from it and matches the
+/// SHA-256 fingerprint of that key against the authorized host keys, so the certificate is regenerated on
+/// every handshake from <c>~/.android/adbkey</c> and never stored; nothing here persists a certificate
+/// either. The serial number is fixed to 1, which a peer never reads, and .NET's certificate request
+/// assigns its own.
+/// <para>该证书并非独立身份。adbd 会从中取出公钥，并按该公钥的 SHA-256 指纹比对已授权主机密钥，因此每次
+/// 握手都用 <c>~/.android/adbkey</c> 重新生成且从不保存；此处同样不持久化任何证书。序列号固定为 1，
 /// 而对端从不读取该字段，.NET 的证书请求会自行分配序列号。</para>
 /// </remarks>
 internal static class AdbHostCertificate

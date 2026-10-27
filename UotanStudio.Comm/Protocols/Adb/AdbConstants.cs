@@ -19,11 +19,11 @@ internal static class AdbConstants
     public const uint ProtocolVersionMin = 0x01000000;
 
     /// <summary>
-    /// First CNXN protocol version whose sender stops filling the legacy <c>data_check</c> field
-    /// (A_VERSION_SKIP_CHECKSUM). Upstream computes the additive payload sum only for peers older than this and
-    /// never validates the field on receive.
-    /// <para>发送方不再填写旧式 <c>data_check</c> 字段的首个 CNXN 协议版本（A_VERSION_SKIP_CHECKSUM）。上游只为
-    /// 早于该版本的对端计算负载累加和，且接收时从不校验该字段。</para>
+    /// First CNXN protocol version whose sender stops filling the <c>data_check</c> field
+    /// (A_VERSION_SKIP_CHECKSUM). The additive payload sum is written only for peers older than this
+    /// version, and the field is never validated on receive.
+    /// <para>首个发送方不再填写 <c>data_check</c> 字段的 CNXN 协议版本（A_VERSION_SKIP_CHECKSUM）。负载累加和只为
+    /// 早于该版本的对端计算，且接收时从不校验该字段。</para>
     /// </summary>
     public const uint ProtocolVersionSkipChecksum = 0x01000001;
 

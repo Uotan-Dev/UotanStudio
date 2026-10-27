@@ -41,7 +41,7 @@ public sealed partial class MtkSession
     /// <para>物理分区内按块对齐的字节偏移。</para></param>
     /// <param name="length">The positive block-aligned byte count.<para>正数、按块对齐的字节数。</para></param>
     /// <param name="expected">A readable caller-owned reference stream which remains open.
-    /// <para>调用方拥有、保持打开的可读参考流。</para></param>
+    /// <para>调用方拥有、保持打开的可读数据流。</para></param>
     /// <param name="progress">Optional cumulative compared and acknowledged bytes.
     /// <para>可选的累计已比较并已确认字节数。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
@@ -55,8 +55,8 @@ public sealed partial class MtkSession
     /// <para><paramref name="expected"/> 不可读或短于请求的范围。</para></exception>
     /// <exception cref="InvalidOperationException">Storage is not ready or has not been discovered.
     /// <para>存储未就绪或尚未发现。</para></exception>
-    /// <exception cref="MtkProtocolException">The read failed, or the reference stream ended before the exchange did.
-    /// <para>读取失败，或参考流在交换结束前提前结束。</para></exception>
+    /// <exception cref="MtkProtocolException">The read failed, or this stream ended before the exchange did.
+    /// <para>读取失败，或数据流在交换结束前提前结束。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled the read or comparison.
     /// <para>调用方取消了读取或比较。</para></exception>
     public async Task<MtkStorageVerificationResult> VerifyXFlashStorageAsync(uint partitionId, long offset, long length,

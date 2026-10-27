@@ -15,12 +15,12 @@ public sealed partial class MtkSession
     /// <para>获取或设置设备侧 XML DA 消息对未知顶层字段的分级方式。</para>
     /// </summary>
     /// <value>
-    /// <see cref="MtkXmlFieldPolicy.Strict"/> (default) preserves the historical reject-everything
-    /// behavior; <see cref="MtkXmlFieldPolicy.TolerantUnknown"/> downgrades bounded, scalar,
+    /// <see cref="MtkXmlFieldPolicy.Strict"/> (default) rejects every field outside the profile
+    /// whitelist; <see cref="MtkXmlFieldPolicy.TolerantUnknown"/> downgrades bounded, scalar,
     /// unqualified, non-duplicate unknown fields to warning evidence. Must be configured before the
     /// XML agent is attached; structural violations, <c>CMD:</c> prefix violations, duplicates of
     /// known fields and unknown profile versions are rejected under both policies.
-    /// <para>默认的 <see cref="MtkXmlFieldPolicy.Strict"/> 保持历史的全量拒绝行为；
+    /// <para>默认的 <see cref="MtkXmlFieldPolicy.Strict"/> 拒绝白名单之外的全部字段；
     /// <see cref="MtkXmlFieldPolicy.TolerantUnknown"/> 将有界、标量、无命名空间、不重复的未知字段降级为
     /// warning 证据。必须在附加 XML agent 之前配置；两种策略下，结构违规、<c>CMD:</c> 前缀违规、
     /// 已知字段重名与未知配置版本一律拒绝。</para>
@@ -261,7 +261,7 @@ public sealed partial class MtkSession
 
     /// <summary>Receives the next non-progress command, servicing device-initiated file requests
     /// when the host file store is attached (bounded, like the progress-report budget).
-    /// 接收下一条非进度命令；在附加主机文件存储时服务设备发起的文件请求（与进度报告一样有界）。</summary>
+    /// <para>接收下一条非进度命令；在附加主机文件存储时服务设备发起的文件请求（与进度报告一样有界）。</para></summary>
     private async Task<MtkXmlMessage> ReceiveServicedXmlCommandOwnedAsync(MtkXmlChannel channel, CancellationToken token,
         bool expectFileRequests = true)
     {

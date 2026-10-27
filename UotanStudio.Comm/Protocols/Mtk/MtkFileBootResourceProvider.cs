@@ -1,10 +1,10 @@
 namespace UotanStudio.Comm.Protocols.Mtk;
 
 /// <summary>
-/// Boot resource provider over explicitly selected files, following the upstream
-/// <c>--auth</c> convention: the authentication file is sent verbatim with boot command E2
+/// Boot resource provider over explicitly selected files, following the
+/// <c>--auth</c> selection: the authentication file is sent verbatim with boot command E2
 /// (and, when selected, the root certificate with E0) without any parsing, padding or derivation.
-/// <para>基于显式选定文件的启动资源提供方，遵循上游 <c>--auth</c> 约定：认证文件按原样随启动命令
+/// <para>基于显式选定文件的启动资源提供方，遵循 <c>--auth</c> 选择：认证文件按原样随启动命令
 /// E2 发送（如选定根证书则随 E0 发送），不做任何解析、填充或派生。</para>
 /// </summary>
 public sealed class MtkFileBootResourceProvider : IMtkBootResourceProvider

@@ -159,23 +159,21 @@ public static class RkdlConstants
     public const int LoaderRelinkTimeoutMs = 30000;
 
     /// <summary>
-    /// Product IDs of devices already in rockusb (loader) mode, taken from the Rockchip
-    /// device table of rkdeveloptool <c>RKScan.cpp</c> and the RKDL chip-ID mapping. Other
-    /// PIDs under the Rockchip VID that satisfy the generic bootrom rule are treated as
-    /// maskrom or bootrom devices.
-    /// <para>已处于 rockusb（loader）模式的设备产品 ID，取自 rkdeveloptool <c>RKScan.cpp</c>
-    /// 的 Rockchip 设备表与 RKDL 芯片 ID 映射。Rockchip VID 下满足通用 bootrom 规则的其他
-    /// PID 按 maskrom 或 bootrom 设备处理。</para>
+    /// Product IDs of devices already in rockusb (loader) mode, paired with the RKDL chip-ID
+    /// mapping. Other PIDs under the Rockchip VID that satisfy the generic bootrom rule are treated
+    /// as maskrom or bootrom devices.
+    /// <para>已处于 rockusb（loader）模式的设备产品 ID，并与 RKDL 芯片 ID 映射成对使用。Rockchip VID 下
+    /// 满足通用 bootrom 规则的其他 PID 按 maskrom 或 bootrom 设备处理。</para>
     /// </summary>
     /// <remarks>
-    /// <para>Boundary: upstream distinguishes maskrom from loader with bit 0 of <c>bcdUSB</c>, but
+    /// Boundary: maskrom and loader differ in bit 0 of the USB <c>bcdUSB</c> field, but
     /// <c>UsbDeviceInfo</c> carries no <c>bcdUSB</c> field and this repository does not widen the USB
     /// abstraction for it. Classification is therefore PID-only: a loader PID listed here is opened in
     /// loader mode, an unlisted loader PID is treated as maskrom (so its loader download is refused),
     /// and a maskrom device sharing a listed PID is treated as loader (so its first CBW transaction
     /// fails instead of receiving a loader). Real-hardware confirmation is required for any PID not
-    /// listed here.</para>
-    /// <para>边界：上游用 <c>bcdUSB</c> 的 bit 0 区分 maskrom 与 loader，但 <c>UsbDeviceInfo</c>
+    /// listed here.
+    /// <para>边界：maskrom 与 loader 可由 <c>bcdUSB</c> 的 bit 0 区分，但 <c>UsbDeviceInfo</c>
     /// 没有 <c>bcdUSB</c> 字段，本仓库也不为此扩展 USB 抽象层，因此这里只按 PID 判定：列入本表的
     /// loader PID 按 loader 模式打开；未列出的 loader PID 会被当作 maskrom，其 loader 下载请求会被
     /// 拒绝；与表内 PID 相同的 maskrom 设备会被当作 loader，其首个 CBW 事务会失败而不会收到 loader。
@@ -634,9 +632,9 @@ internal sealed class RkFlashInfo
 /// <para>READ_CAPABILITY 返回的设备能力字。</para>
 /// </summary>
 /// <remarks>
-/// <para>Only the two bits <c>CRKDevice::ReadCapability</c> consumes are decoded: bit 0 selects
+/// Only the two bits <c>CRKDevice::ReadCapability</c> consumes are decoded: bit 0 selects
 /// direct-LBA addressing and bit 2 marks first-4M access. The remaining bits stay verbatim in
-/// <see cref="Raw"/> and are not interpreted.</para>
+/// <see cref="Raw"/> and are not interpreted.
 /// <para>只解码 <c>CRKDevice::ReadCapability</c> 使用的两个位：位 0 表示直接 LBA 寻址，位 2 表示
 /// 前 4M 访问。其余位原样保留在 <see cref="Raw"/> 中且不作解释。</para>
 /// </remarks>

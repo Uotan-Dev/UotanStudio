@@ -10,35 +10,31 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// <para>把不可信存储中的 UFS provisioning 配置文件读入经过校验的 <see cref="UfsProvisionProfile"/>。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The document is a flat list, one <c>&lt;ufs&gt;</c> element per command of the provisioning
 /// sequence, which is the shape the bundle-side provisioning parser already accepts. Attribute names
-/// follow the provisioning attribute table the reference loader parses, where each name binds one
-/// descriptor field and logical units are indexed from 0 to 7. Names match case-insensitively, and
-/// the legacy property spellings <c>WContextCapacities</c> and <c>LUNumToGrow</c> are aliases of the
-/// wire names. An unknown attribute, a duplicated field, or a value outside the documented range
-/// rejects the whole document before any command is framed, so a typo cannot silently provision a
+/// follow the provisioning attribute table, where each name binds one descriptor field and logical
+/// units are indexed from 0 to 7. Names match case-insensitively, and <c>WContextCapacities</c> and
+/// <c>LUNumToGrow</c> are accepted aliases of the wire names. An unknown attribute, a duplicated
+/// field, or a value outside the documented range rejects the whole document before any command is
+/// framed, so a typo cannot silently provision a zeroed descriptor.
 /// zeroed descriptor.
-/// </para>
-/// <para>
-/// 文件是一份扁平列表，provisioning 序列的每条命令对应一个 <c>&lt;ufs&gt;</c> 元素，这正是 bundle
-/// 侧 provisioning 解析器已接受的形状。属性名沿用参考下载器解析的 provisioning 属性表：每个名称绑定
-/// 一个描述符字段，逻辑单元索引为 0 至 7。名称按大小写不敏感匹配，旧式属性写法 <c>WContextCapacities</c>
-/// 与 <c>LUNumToGrow</c> 是线上名称的别名。未知属性、重复字段或超出所述范围的值都会在任何命令成帧之前
-/// 拒绝整份文件，因此拼写错误不会悄悄地把描述符配成 0。
-/// </para>
+/// <para>文件是一份扁平列表，provisioning 序列的每条命令对应一个 <c>&lt;ufs&gt;</c> 元素，这正是 bundle
+/// 侧 provisioning 解析器已接受的形状。属性名沿用 provisioning 属性表：每个名称绑定
+/// 一个描述符字段，逻辑单元索引为 0 至 7。名称按大小写不敏感匹配，<c>WContextCapacities</c> 与
+/// <c>LUNumToGrow</c> 是线上名称的受支持别名。未知属性、重复字段或超出所述范围的值都会在任何命令成帧之前
+/// 拒绝整份文件，因此拼写错误不会悄悄地把描述符配成 0。</para>
 /// </remarks>
 /// <example>
 /// A profile for an eight-LUN device that stages the configuration without committing it:
 /// <code lang="xml">
 /// &lt;data&gt;
-///   &lt;ufs type="common" bNumberLU="8" bBootEnable="1" bDescrAccessEn="1"
-///        bInitPowerMode="0" bHighPriorityLUN="1" bSecureRemovalType="0"
-///        bInitActiveICCLevel="0" wPeriodicRTCUpdate="0" bConfigDescrLock="0" /&gt;
-///   &lt;ufs type="body" LUNum="0" bLUEnable="1" bBootLunID="1" size_in_kb="4096"
-///        bDataReliability="0" bLUWriteProtect="0" bMemoryType="1"
-///        bLogicalBlockSize="0" bProvisioningType="1" wContextCapabilities="0" /&gt;
-///   &lt;ufs type="epilogue" LUNtoGrow="0" commit="0" /&gt;
+/// &lt;ufs type="common" bNumberLU="8" bBootEnable="1" bDescrAccessEn="1"
+/// bInitPowerMode="0" bHighPriorityLUN="1" bSecureRemovalType="0"
+/// bInitActiveICCLevel="0" wPeriodicRTCUpdate="0" bConfigDescrLock="0" /&gt;
+/// &lt;ufs type="body" LUNum="0" bLUEnable="1" bBootLunID="1" size_in_kb="4096"
+/// bDataReliability="0" bLUWriteProtect="0" bMemoryType="1"
+/// bLogicalBlockSize="0" bProvisioningType="1" wContextCapabilities="0" /&gt;
+/// &lt;ufs type="epilogue" LUNtoGrow="0" commit="0" /&gt;
 /// &lt;/data&gt;
 /// </code>
 /// </example>

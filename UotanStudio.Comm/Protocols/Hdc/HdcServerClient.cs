@@ -8,8 +8,8 @@ using UotanStudio.Firmware.Core.Text;
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>
-/// Host channel client following upstream channel.h/channel.cpp and host/client.cpp.
-/// <para>上游 HDC 主机通道客户端；每条命令独占连接，不混用设备端会话协议。</para>
+/// Host channel client for the HDC server protocol.
+/// <para>HDC server 协议的主机通道客户端；每条命令独占连接，不混用设备端会话协议。</para>
 /// </summary>
 /// <param name="host">
 /// Hostname or address each command's connection targets; defaults to loopback.
@@ -228,7 +228,7 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
     /// <returns>The captured output frames, capped at <see cref="MaximumOutputBytes"/>.<para>捕获到的输出帧，上限为 <see cref="MaximumOutputBytes"/>。</para></returns>
     public byte[] ExecuteOnDevice(string connectKey, string command, int timeoutMs = 30000)
         => ExecuteAsync(connectKey, command, timeoutMs).GetAwaiter().GetResult();
-    /// <summary>Lists targets, excluding the upstream empty marker.<para>列出目标并排除上游空列表标记。</para></summary>
+    /// <summary>Lists targets, excluding the empty-list marker.<para>列出目标并排除空列表标记。</para></summary>
     /// <param name="timeoutMs">Overall command deadline in milliseconds.<para>命令总体时限（毫秒）。</para></param>
     /// <returns>Distinct connect keys parsed from <c>list targets</c>.<para>由 <c>list targets</c> 解析出的去重连接键。</para></returns>
     /// <exception cref="IOException">The server returned an explicit <c>[Fail]</c> response.<para>服务端返回明确的 <c>[Fail]</c> 响应。</para></exception>

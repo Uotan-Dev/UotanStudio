@@ -58,12 +58,12 @@ public sealed record MtkXmlFlashOperation(int StepIndex, string RegionName, long
 /// <para>面向联发科 XML 下载代理的有界、已预检的一次性计划。</para>
 /// </summary>
 /// <remarks>
-/// <para>Like the Legacy plan and unlike the XFlash plan, this type has no sparse extents: the XML agent
+/// Like the Legacy plan and unlike the XFlash plan, this type has no sparse extents: the XML agent
 /// transfers only raw block-aligned byte ranges, so an image that requires sparse expansion is rejected
 /// rather than silently written as raw data. Preparation validates every range against the discovered
 /// geometry, opens and retains each source, and never erases or pads on its own. When the plan was built
 /// from a GPT observation, execution re-reads that table under the same session lease and refuses to start
-/// if the metadata changed.</para>
+/// if the metadata changed.
 /// <para>与 Legacy 计划相同、与 XFlash 计划不同，本类型没有稀疏范围：XML 代理只传输按块对齐的原始字节范围，
 /// 因此需要稀疏展开的镜像会被拒绝，而不是被当作原始数据静默写入。准备阶段依据已发现的几何信息校验每个范围、
 /// 打开并持有每个源，且从不自行擦除或填充。若计划由 GPT 观测结果构建，执行时会在同一会话租约下重新读取该表，

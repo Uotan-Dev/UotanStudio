@@ -11,20 +11,20 @@ public sealed partial class MtkSession
     /// <para>依据一份已校验的 XFlash 快照，把设备自身的主、备 GPT 副本写回。</para>
     /// </summary>
     /// <remarks>
-    /// <para>The table travels on the storage-write verb the family already speaks: <c>WRITE_DATA</c>
+    /// The table travels on the storage-write verb the family already speaks: <c>WRITE_DATA</c>
     /// followed by its 56-byte parameter block, which packs the storage family, the physical partition,
     /// the byte offset and the byte length as one little-endian group. That is the identical exchange an
     /// ordinary partition image travels on, so a GPT program carries no frame the flash path does not
-    /// already define.</para>
-    /// <para>分区表走的是该家族已有的存储写入命令：<c>WRITE_DATA</c> 及其 56 字节参数块，以一个小端序组
-    /// 打包存储家族、物理分区、字节偏移与字节长度。这与普通分区镜像使用的交换完全相同，因此写回分区表
-    /// 不会引入刷写路径之外的帧。</para>
-    /// <para>Scope limit by design: only the table this session just read is re-programmed. No foreign GPT is
+    /// already define.
+    /// Scope limit by design: only the table this session just read is re-programmed. No foreign GPT is
     /// accepted, no geometry is rewritten, no partition payload is touched and no resize is attempted. The live
     /// table is re-read under the same operation lease before the first byte is submitted, exactly like the plan
     /// executors, and every programmed extent is read back and compared afterwards, followed by a fresh table
-    /// parse; a mismatch throws and the remaining extents are not retried or rolled back.</para>
-    /// <para>刻意的范围限制：只重新编程本会话刚刚读到的分区表。不接受外部 GPT、不改写几何信息、不触碰任何分区
+    /// parse; a mismatch throws and the remaining extents are not retried or rolled back.
+    /// <para>分区表走的是该家族已有的存储写入命令：<c>WRITE_DATA</c> 及其 56 字节参数块，以一个小端序组
+    /// 打包存储家族、物理分区、字节偏移与字节长度。这与普通分区镜像使用的交换完全相同，因此写回分区表
+    /// 不会引入刷写路径之外的帧。
+    /// 刻意的范围限制：只重新编程本会话刚刚读到的分区表。不接受外部 GPT、不改写几何信息、不触碰任何分区
     /// 数据，也不尝试调整容量。与计划执行器完全一致，在提交首个字节之前会在同一操作租约下重新读取实时表；每个
     /// 已编程范围随后都会回读比对，并再重新解析一次分区表。比对不符即抛出，剩余范围不重试也不回滚。</para>
     /// </remarks>
@@ -92,8 +92,9 @@ public sealed partial class MtkSession
     /// <summary>Programs the device's own primary and backup GPT copies from one validated Legacy snapshot using the <c>sdmmc_write_data</c> exchange; the partition identity travels inside the command header, so a write needs no preceding region switch.
     /// <para>依据一份已校验的 Legacy 快照写回设备自身的主、备 GPT 副本，使用 <c>sdmmc_write_data</c> 交互；分区标识随命令头携带，因此写入前无需切换区域。</para></summary>
     /// <remarks>
-    /// <para>Same scope limit as the XFlash path: only the table this session just read is re-programmed, with no foreign GPT, no geometry rewrite, no partition payload and no resize. The live table is re-read under this lease before the first byte, every extent is compared after the write and a fresh parse follows.</para>
-    /// <para>与 XFlash 路径相同的范围限制：只重新编程本会话刚刚读到的分区表，不接受外部 GPT、不改写几何信息、 不触碰分区数据、不调整容量。在提交首个字节之前于本租约下重新读取实时表，写入后逐范围比对并重新解析。</para></remarks>
+    /// Same scope limit as the XFlash path: only the table this session just read is re-programmed, with no foreign GPT, no geometry rewrite, no partition payload and no resize. The live table is re-read under this lease before the first byte, every extent is compared after the write and a fresh parse follows.
+    /// <para>与 XFlash 路径相同的范围限制：只重新编程本会话刚刚读到的分区表，不接受外部 GPT、不改写几何信息、 不触碰分区数据、不调整容量。在提交首个字节之前于本租约下重新读取实时表，写入后逐范围比对并重新解析。</para>
+    /// </remarks>
     /// <param name="snapshot">A validated Legacy GPT observation from this session's current inventory.
     /// <para>来自本会话当前清单、已校验的 Legacy GPT 观测结果。</para></param>
     /// <param name="progress">Optional phase-local progress per programmed extent.
@@ -159,8 +160,9 @@ public sealed partial class MtkSession
     /// <summary>Programs the device's own primary and backup GPT copies from one validated XML snapshot through <c>CMD:WRITE-FLASH</c>, then reads them back with <c>CMD:READ-FLASH</c> using the same region token, offset and length.
     /// <para>依据一份已校验的 XML 快照，经 <c>CMD:WRITE-FLASH</c> 写回设备自身的主、备 GPT 副本，随后用 <c>CMD:READ-FLASH</c> 以相同区域令牌、偏移与长度回读。</para></summary>
     /// <remarks>
-    /// <para>Same scope limit as the other families: only the table this session just read is re-programmed, with no foreign GPT, no geometry rewrite, no partition payload and no resize. The live table is re-read under this lease before the first byte, every extent is compared after the write and a fresh parse follows.</para>
-    /// <para>与其他家族相同的范围限制：只重新编程本会话刚刚读到的分区表，不接受外部 GPT、不改写几何信息、不触碰 分区数据、不调整容量。在提交首个字节之前于本租约下重新读取实时表，写入后逐范围比对并重新解析。</para></remarks>
+    /// Same scope limit as the other families: only the table this session just read is re-programmed, with no foreign GPT, no geometry rewrite, no partition payload and no resize. The live table is re-read under this lease before the first byte, every extent is compared after the write and a fresh parse follows.
+    /// <para>与其他家族相同的范围限制：只重新编程本会话刚刚读到的分区表，不接受外部 GPT、不改写几何信息、不触碰 分区数据、不调整容量。在提交首个字节之前于本租约下重新读取实时表，写入后逐范围比对并重新解析。</para>
+    /// </remarks>
     /// <param name="snapshot">A validated XML GPT observation from this session's current geometry.
     /// <para>来自本会话当前几何信息、已校验的 XML GPT 观测结果。</para></param>
     /// <param name="progress">Optional phase-local progress per programmed extent.

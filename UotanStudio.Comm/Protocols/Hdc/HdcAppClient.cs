@@ -67,7 +67,7 @@ public sealed class HdcAppClient(HdcConnection connection) : Contracts.IHdcAppCl
     }
 
     /// <summary>
-    /// Installs a bounded package directory as one upstream TAR task so related modules are submitted together.
+    /// Installs a bounded package directory as one TAR task so related modules are submitted together.
     /// <para>将有界的包目录作为单个上游 TAR 任务安装，使相关模块一起提交。</para>
     /// </summary>
     /// <param name="path">Directory scanned recursively for <c>.hap</c>, <c>.hsp</c> and <c>.app</c> files; links are never followed. <para>递归扫描 <c>.hap</c>、<c>.hsp</c>、<c>.app</c> 文件的目录；绝不跟随链接。</para></param>
@@ -271,7 +271,7 @@ public sealed class HdcAppClient(HdcConnection connection) : Contracts.IHdcAppCl
     }
 
     /// <summary>
-    /// Writes one upstream Ustar archive containing every package, keyed by its root-relative path.
+    /// Writes one Ustar archive containing every package, keyed by its root-relative path.
     /// <para>写入一个包含全部包的上游 Ustar 归档，条目名为相对根目录的路径。</para>
     /// </summary>
     /// <param name="root">Root the relative entry names are computed from. <para>计算条目相对路径的根目录。</para></param>

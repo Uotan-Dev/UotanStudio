@@ -65,9 +65,9 @@ public interface IHdcDeviceSession : IDisposable
 
     /// <summary>Creates a sync (file transfer) client for this session's route.
     /// <para>为本会话路由创建 sync（文件传输）客户端。</para></summary>
-    /// <returns>A sync client that opens short-lived transfer channels on a direct connection, or runs the upstream
+    /// <returns>A sync client that opens short-lived transfer channels on a direct connection, or runs the
     /// remote-client file task on the HDC server that owns the target.
-    /// <para>在直连上打开短生命周期传输通道的 sync 客户端，或在拥有该目标的 HDC server 上运行上游
+    /// <para>在直连上打开短生命周期传输通道的 sync 客户端，或在拥有该目标的 HDC server 上运行
     /// remote-client 文件任务的 sync 客户端。</para></returns>
     /// <exception cref="ObjectDisposedException">The session is disposed.
     /// <para>会话已释放。</para></exception>

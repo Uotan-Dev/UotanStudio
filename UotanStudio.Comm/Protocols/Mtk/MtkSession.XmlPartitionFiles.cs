@@ -7,8 +7,9 @@ public sealed partial class MtkSession
     /// <summary>Backs up an exactly named XML-region GPT partition after revalidating the snapshot under the same operation lease as the data read. No repair, slot inference or retry is performed.
     /// <para>在与数据读取同一操作租约下重新校验快照后，备份名称完全匹配的 XML 区域 GPT 分区。 不执行修复、槽位推断或重试。</para></summary>
     /// <remarks>
-    /// <para>The destination is replaced only after a successful transfer and staging-file flush. This does not freeze device contents or promise a point-in-time storage snapshot. Progress excludes the metadata reads of the revalidation, and callbacks must not wait on this session.</para>
-    /// <para>目标文件只在传输成功且暂存文件刷写完成后替换。这不会冻结设备内容，也不承诺时间点存储快照。 进度不含重新校验所用的元数据读取，且回调不得等待本会话。</para></remarks>
+    /// The destination is replaced only after a successful transfer and staging-file flush. This does not freeze device contents or promise a point-in-time storage snapshot. Progress excludes the metadata reads of the revalidation, and callbacks must not wait on this session.
+    /// <para>目标文件只在传输成功且暂存文件刷写完成后替换。这不会冻结设备内容，也不承诺时间点存储快照。 进度不含重新校验所用的元数据读取，且回调不得等待本会话。</para>
+    /// </remarks>
     /// <param name="snapshot">An XML GPT observation from this session's current geometry.
     /// <para>来自本会话当前 XML 几何信息的 GPT 观测结果。</para></param>
     /// <param name="partitionName">Exact case-sensitive name, rejecting absent or ambiguous entries.

@@ -6,9 +6,9 @@ namespace UotanStudio.Comm.Protocols.Apple.Usbmuxd;
 
 /// <summary>
 /// One usbmuxd message exchanged over a daemon connection; the payload is either a serialized plist
-/// or a legacy binary struct depending on <see cref="MessageType"/>.
-/// <para>经由守护进程连接交换的单条 usbmuxd 消息；依据 <see cref="MessageType"/>，负载为序列化
-/// 属性列表或旧版二进制结构。</para>
+/// or a binary struct depending on <see cref="MessageType"/>.
+/// <para>经由守护进程连接交换的单条 usbmuxd 消息；依据 <see cref="MessageType"/>，负载为序列化的
+/// 属性列表或二进制结构。</para>
 /// </summary>
 /// <param name="Version">The protocol version carried in the header. <para>头部携带的协议版本。</para></param>
 /// <param name="MessageType">The message type code. <para>消息类型码。</para></param>
@@ -135,8 +135,8 @@ internal sealed class UsbmuxdConnection : IDisposable
     }
 
     /// <summary>
-    /// Writes one framed legacy message.
-    /// <para>写入一条旧版组帧消息。</para>
+    /// Writes one framed binary-protocol message.
+    /// <para>写入一条二进制协议的组帧消息。</para>
     /// </summary>
     /// <param name="tag">The request tag. <para>请求标签。</para></param>
     /// <param name="messageType">The message type code. <para>消息类型码。</para></param>

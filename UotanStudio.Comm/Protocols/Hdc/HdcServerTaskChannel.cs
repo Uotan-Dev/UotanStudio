@@ -5,8 +5,8 @@ using System.Text;
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>
-/// Duplex task channel over one HDC host-server connection, following upstream <c>channel.cpp</c> framing.
-/// <para>基于单条 HDC 宿主 server 连接的双工任务通道，采用上游 <c>channel.cpp</c> 的帧格式。</para>
+/// Duplex task channel over one HDC host-server connection, using the HDC server frame format.
+/// <para>基于单条 HDC 宿主 server 连接的双工任务通道，采用 HDC server 的帧格式。</para>
 /// </summary>
 /// <remarks>
 /// Every frame is a big-endian 32-bit length followed by its payload. Task frames prefix the payload with the

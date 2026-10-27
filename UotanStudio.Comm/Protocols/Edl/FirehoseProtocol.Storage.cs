@@ -34,8 +34,9 @@ public sealed partial class FirehoseProtocol
 
     /// <summary>Resets the device (reboot into the system).<para>复位设备（重启进入系统）。</para></summary>
     /// <remarks>
-    /// <para>A best-effort &lt;setbootablestoragedrive&gt; (UFS→1, eMMC→0) is sent before the reset, and only for the storage types that own a bootable logical unit: NAND, SPI NOR and undetected storage skip the preparation entirely. A NAK of that preparation is tolerated, but an uncertain response stops the sequence.</para>
-    /// <para>复位前会尽力发送 &lt;setbootablestoragedrive&gt;（UFS→1，eMMC→0），且仅针对拥有可引导逻辑 单元的存储类型：NAND、SPI NOR 与未探测到的存储完全跳过该准备命令。该准备命令返回 NAK 可以容忍， 但结果不确定的响应会中止整个序列。</para></remarks>
+    /// A best-effort &lt;setbootablestoragedrive&gt; (UFS→1, eMMC→0) is sent before the reset, and only for the storage types that own a bootable logical unit: NAND, SPI NOR and undetected storage skip the preparation entirely. A NAK of that preparation is tolerated, but an uncertain response stops the sequence.
+    /// <para>复位前会尽力发送 &lt;setbootablestoragedrive&gt;（UFS→1，eMMC→0），且仅针对拥有可引导逻辑 单元的存储类型：NAND、SPI NOR 与未探测到的存储完全跳过该准备命令。该准备命令返回 NAK 可以容忍， 但结果不确定的响应会中止整个序列。</para>
+    /// </remarks>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The Firehose response.<para>Firehose 响应。</para></returns>
     public Task<FirehoseResponse> ResetAsync(CancellationToken cancellationToken = default)
@@ -62,8 +63,9 @@ public sealed partial class FirehoseProtocol
     /// <summary>Sends a &lt;power&gt; command and returns only its actual ACK or NAK.
     /// <para>发送 &lt;power&gt; 命令，且只返回其真实的 ACK 或 NAK。</para></summary>
     /// <remarks>
-    /// <para>An ACK retires the session even if transport disconnection cannot be observed. Missing, malformed or raw-mode responses fail with an uncertain outcome; they are never converted to a successful acknowledgement.</para>
-    /// <para>即使无法观测到传输层断开，ACK 也会使本会话退役。缺失、格式错误或处于原始模式的响应会以 不确定结果失败，绝不被转换成成功确认。</para></remarks>
+    /// An ACK retires the session even if transport disconnection cannot be observed. Missing, malformed or raw-mode responses fail with an uncertain outcome; they are never converted to a successful acknowledgement.
+    /// <para>即使无法观测到传输层断开，ACK 也会使本会话退役。缺失、格式错误或处于原始模式的响应会以 不确定结果失败，绝不被转换成成功确认。</para>
+    /// </remarks>
     /// <param name="option">The reboot option.<para>复位选项。</para></param>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
     /// <returns>The Firehose response.<para>Firehose 响应。</para></returns>

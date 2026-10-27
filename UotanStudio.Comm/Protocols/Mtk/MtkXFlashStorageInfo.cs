@@ -43,10 +43,10 @@ public sealed class MtkXFlashStorageRegion
     /// <value>
     /// eMMC/UFS regions start at <c>1</c>; NOR uses the whole-device identifier <c>8</c>. UFS uses
     /// <c>1</c> = BOOT1, <c>2</c> = BOOT2, <c>3</c> = USER and <c>4</c> = RPMB, the identifiers
-    /// <c>mtkclient/Library/DA/storage.py:44-49</c> defines.
+    /// defines.
     /// <para>eMMC/UFS 区域从 <c>1</c> 开始编号；NOR 使用整片标识符 <c>8</c>。UFS 使用
     /// <c>1</c> = BOOT1、<c>2</c> = BOOT2、<c>3</c> = USER、<c>4</c> = RPMB，即
-    /// <c>mtkclient/Library/DA/storage.py:44-49</c> 定义的标识符。</para>
+    /// 定义的标识符。</para>
     /// </value>
     public uint PartitionId { get; }
     /// <summary>
@@ -131,11 +131,11 @@ public sealed class MtkXFlashStorageInfo
     /// </summary>
     /// <value>
     /// Eight regions for eMMC, four for UFS, one whole-device region for NOR, or NAND's logical available area.
-    /// The UFS RPMB region is modeled as authenticated with the <c>lu3</c> size the reference leaves at zero
+    /// The UFS RPMB region is modeled as authenticated with the <c>lu3</c> size left at zero
     /// because the XFlash UFS reply carries only lu2/lu1/lu0. NAND physical capacity is available through
     /// <see cref="Nand"/> and requires dedicated access methods.
     /// <para>eMMC 为八个区域，UFS 为四个，NOR 为一个整片区域，NAND 为逻辑可用区域。UFS RPMB 区域以需认证标记建模，
-    /// 其 <c>lu3</c> 大小沿用参考实现因 XFlash UFS 应答只携带 lu2/lu1/lu0 而保留的零值。
+    /// 其 <c>lu3</c> 大小因 XFlash UFS 应答只携带 lu2/lu1/lu0 而保留零值。
     /// NAND 物理容量通过 <see cref="Nand"/> 提供，必须使用专用访问方法。</para>
     /// </value>
     public IReadOnlyList<MtkXFlashStorageRegion> Regions { get; }

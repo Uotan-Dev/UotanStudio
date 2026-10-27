@@ -4,13 +4,13 @@ namespace UotanStudio.Comm.Protocols.Mtk.Security;
 
 /// <summary>The chip identity reported by the download agent device-control query.
 /// <para>下载代理设备控制查询上报的芯片身份。</para></summary>
-/// <remarks>The reference client sends the get-chip-id control code and decodes the reply as five little-endian 16-bit words in this order (Library/DA/xflash/xflash_lib.py:448-471 with Library/DA/xflash/xflash_param.py:53). The raw reply bytes are preserved so a later revision of the agent can be compared byte for byte instead of re-derived from the decoded fields.
-/// <para>参考客户端发送取得芯片标识的控制码，并把回复按五个小端 16 位字依此顺序解码 （Library/DA/xflash/xflash_lib.py:448-471，控制码见 Library/DA/xflash/xflash_param.py:53）。 保留原始回复字节，便于在代理版本变更时逐字节比较，而不是仅从解码字段反推。</para></remarks>
+/// <remarks>This client sends the get-chip-id control code and decodes the reply as five little-endian 16-bit words in this order. The raw reply bytes are preserved so a later revision of the agent can be compared byte for byte instead of re-derived from the decoded fields.
+/// <para>本客户端发送取得芯片标识的控制码，并把回复按五个小端 16 位字依此顺序解码。 保留原始回复字节，便于在代理版本变更时逐字节比较，而不是仅从解码字段反推。</para></remarks>
 /// <param name="HardwareCode">The raw hardware code word.<para>原始硬件代码字。</para></param>
 /// <param name="HardwareSubCode">The raw hardware subcode word.<para>原始硬件子代码字。</para></param>
 /// <param name="HardwareVersion">The raw hardware revision word.<para>原始硬件修订字。</para></param>
 /// <param name="SoftwareVersion">The raw software revision word.<para>原始软件修订字。</para></param>
-/// <param name="ChipEvolution">The raw chip evolution word.<para>原始芯片演进字。</para></param>
+/// <param name="ChipEvolution">The raw chip identification word.<para>原始芯片标识字。</para></param>
 /// <param name="ReplyHex">The exact reply bytes as uppercase hex.
 /// <para>回复字节的大写十六进制表示。</para></param>
 public sealed record MtkXFlashChipId(
@@ -47,29 +47,27 @@ public sealed record MtkXFlashChipId(
     }
 }
 
-/// <summary>A device-control query whose reply the reference client consumes as opaque bytes.
-/// <para>参考客户端把回复当作不透明字节消费的器件控制查询。</para></summary>
+/// <summary>A device-control query whose reply is consumed as opaque bytes.
+/// <para>回复被当作不透明字节消费的器件控制查询。</para></summary>
 /// <remarks>
-/// Both codes are exercised by the reference client and neither reply is decoded there
-/// (Library/DA/xflash/xflash_lib.py:590-596 and :687-695), so the bytes are returned unchanged and
-/// no claim is made about their meaning.
-/// <para>参考客户端会实际使用这两个控制码，且都不解码其回复
-/// （Library/DA/xflash/xflash_lib.py:590-596 与 :687-695），因此原样返回字节并不对其含义作出结论。</para>
+/// Neither reply is decoded, so the bytes are returned unchanged and no claim is made about their
+/// meaning.
+/// <para>这两个控制码的回复都不解码，因此原样返回字节，并不对其含义作出结论。</para>
 /// </remarks>
 public enum MtkXFlashRawControlCode
 {
-    /// <summary>The replay-protected-memory-block state query (Library/DA/xflash/xflash_param.py:56).
-    /// <para>重放保护块状态查询（Library/DA/xflash/xflash_param.py:56）。</para></summary>
+    /// <summary>The replay-protected-memory-block state query.
+    /// <para>重放保护块状态查询。</para></summary>
     ReplayProtectedAreaStatus = 0x040010,
-    /// <summary>The hardware identifier query (Library/DA/xflash/xflash_param.py:60).
-    /// <para>硬件标识符查询（Library/DA/xflash/xflash_param.py:60）。</para></summary>
+    /// <summary>The hardware identifier query.
+    /// <para>硬件标识符查询。</para></summary>
     HardwareIdentifier = 0x040014
 }
 
 /// <summary>One RAM region reported by the device-control RAM-info query.
 /// <para>器件控制内存信息查询上报的一个 RAM 区域。</para></summary>
-/// <param name="Type">The region type as reported; zero means the reference treats the region as
-/// absent. <para>按上报原样保留的区域类型；0 表示参考将该区域视为不存在。</para></param>
+/// <param name="Type">The region type as reported; zero means the region is treated as
+/// absent. <para>按上报原样保留的区域类型；0 表示该区域被视为不存在。</para></param>
 /// <param name="BaseAddress">The region base address. 区域基地址。</param>
 /// <param name="Size">The region size in bytes. 区域字节大小。</param>
 public sealed record MtkXFlashRamRegion(ulong Type, ulong BaseAddress, ulong Size);
@@ -77,13 +75,11 @@ public sealed record MtkXFlashRamRegion(ulong Type, ulong BaseAddress, ulong Siz
 /// <summary>The SRAM and DRAM regions reported by the device-control RAM-info query.
 /// <para>器件控制内存信息查询上报的 SRAM 与 DRAM 区域。</para></summary>
 /// <remarks>
-/// The reference accepts either six little-endian doublewords or six little-endian quadwords and
-/// decodes them as SRAM type, SRAM base, SRAM size, DRAM type, DRAM base and DRAM size
-/// (Library/DA/xflash/xflash_lib.py:487-505 with Library/DA/xflash/xflash_param.py:52). Any other
-/// reply width is rejected here instead of being silently truncated.
-/// <para>参考接受六个小端双字或六个小端四字，并按 SRAM 类型、SRAM 基址、SRAM 大小、DRAM 类型、DRAM 基址、
-/// DRAM 大小解码（Library/DA/xflash/xflash_lib.py:487-505，控制码见
-/// Library/DA/xflash/xflash_param.py:52）。其他回复宽度在这里都会被拒绝，而不是被静默截断。</para>
+/// The reply is either six little-endian doublewords or six little-endian quadwords, decoded as SRAM
+/// type, SRAM base, SRAM size, DRAM type, DRAM base and DRAM size. Any other reply width is rejected
+/// here instead of being silently truncated.
+/// <para>回复为六个小端双字或六个小端四字，按 SRAM 类型、SRAM 基址、SRAM 大小、DRAM 类型、DRAM 基址、
+/// DRAM 大小解码。其他回复宽度在这里都会被拒绝，而不是被静默截断。</para>
 /// </remarks>
 /// <param name="Sram">The SRAM region. SRAM 区域。</param>
 /// <param name="Dram">The DRAM region. DRAM 区域。</param>
@@ -138,11 +134,10 @@ public sealed record MtkXFlashRamInfo(MtkXFlashRamRegion Sram, MtkXFlashRamRegio
 /// <summary>The partition-table families the device-control category query distinguishes.
 /// <para>器件控制类别查询可区分的分区表家族。</para></summary>
 /// <remarks>
-/// The reference decodes one little-endian doubleword and recognizes exactly these two values
-/// (Library/DA/xflash/xflash_lib.py:613-622 with Library/DA/xflash/xflash_param.py:49); any other
-/// value is rejected here instead of being reported as the bare zero the reference returns.
-/// <para>参考解码一个小端双字且只识别这两个取值（Library/DA/xflash/xflash_lib.py:613-622，控制码见
-/// Library/DA/xflash/xflash_param.py:49）；其他取值在这里被拒绝，而不是像参考那样仅返回一个 0。</para>
+/// This implementation decodes one little-endian doubleword and recognizes exactly these two values;
+/// any other
+/// value is rejected here instead of being reported as a bare zero.
+/// <para>本实现解码一个小端双字且只识别这两个取值；其他取值在这里被拒绝，而不是仅返回一个 0。</para>
 /// </remarks>
 public enum MtkPartitionTableCategory
 {

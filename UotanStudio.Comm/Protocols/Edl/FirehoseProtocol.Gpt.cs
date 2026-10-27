@@ -88,8 +88,8 @@ public sealed partial class FirehoseProtocol
     /// <para>从已读取的 GPT 快照检测活动 A/B 槽位：测试 <c>boot_a</c> 与 <c>boot_b</c> 分区的
     /// 槽位活动属性位（第 6 位）。</para>
     /// </summary>
-    /// <param name="snapshot">A snapshot previously read from this protocol.
-    /// <para>先前从本协议读取的快照。</para></param>
+    /// <param name="snapshot">A snapshot already read from this protocol.
+    /// <para>已从本协议读取的快照。</para></param>
     /// <returns><c>"a"</c> or <c>"b"</c>, or <see langword="null"/> when neither partition carries the
     /// active bit. <para><c>"a"</c> 或 <c>"b"</c>；两个分区都不带活动位时为 <see langword="null"/>。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is null.

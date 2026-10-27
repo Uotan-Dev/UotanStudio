@@ -168,9 +168,9 @@ public record MtkBootstrapOptions
     /// <para>获取是否在身份查询之后、任何下载代理上传之前禁用 preloader 看门狗。</para>
     /// </summary>
     /// <value>
-    /// <see langword="true"/> by default, matching the upstream initialization for non-64-bit chips whose
-    /// reference table records a sequence; <see langword="false"/> skips every watchdog register write.
-    /// <para>默认 <see langword="true"/>，与上游对参考表记录了序列的非 64 位芯片的初始化一致；
+    /// <see langword="true"/> by default, which disables the watchdog for non-64-bit chips whose
+    /// chip table records a sequence; <see langword="false"/> skips every watchdog register write.
+    /// <para>默认 <see langword="true"/>，对芯片表记录了序列的非 64 位芯片禁用看门狗；
     /// <see langword="false"/> 会跳过所有看门狗寄存器写入。</para>
     /// </value>
     public bool DisablePreloaderWatchdog { get; init; } = true;

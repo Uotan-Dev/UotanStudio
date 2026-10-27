@@ -119,8 +119,8 @@ internal sealed partial class AdbSyncClient(AdbConnection connection, uint maxCh
     private const int IdSize = 4;
     private const uint DefaultMaxChunk = 64 * 1024;
 
-    /// <summary>Longest directory entry name upstream reports in a DENT record.
-    /// <para>上游在 DENT 记录中报告的最长目录条目名。</para></summary>
+    /// <summary>Longest directory entry name reported in a DENT record.
+    /// <para>DENT 记录中报告的最长目录条目名。</para></summary>
     private const uint MaxDentNameLength = 255;
 
     /// <summary>Bytes of the fixed sync_dent_v1 body that follows a LIST DONE id.

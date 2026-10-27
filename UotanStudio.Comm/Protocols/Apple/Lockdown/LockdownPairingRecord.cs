@@ -91,8 +91,6 @@ public sealed class LockdownPairingRecord
 
     private static readonly byte[] EmptyDistinguishedName = [0x30, 0x00];
 
-    // One validity window is shared by the root and its children: DER encodes NotAfter with second precision, so a
-    // child minted a moment later would report a NotAfter one second past its issuer and be rejected outright.
     private static X509Certificate2 CreateCertificate(RSA subjectKey, X509Certificate2? issuer, int serialNumber,
         bool ca, DateTimeOffset notBefore, DateTimeOffset notAfter)
     {

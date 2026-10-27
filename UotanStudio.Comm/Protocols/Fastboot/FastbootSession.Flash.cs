@@ -109,10 +109,10 @@ public sealed partial class FastbootSession
     }
 
     /// <summary>
-    /// Wipes the super partition the way upstream <c>fastboot wipe-super</c> does: sends
-    /// <c>update-super:&lt;partition&gt;:wipe</c>. There is no <c>wipe-super:</c> wire command.
-    /// <para>按上游 <c>fastboot wipe-super</c> 的方式清除 super 分区：发送
-    /// <c>update-super:&lt;分区&gt;:wipe</c>。线协议中不存在 <c>wipe-super:</c> 命令。</para>
+    /// Wipes the super partition by sending <c>update-super:&lt;partition&gt;:wipe</c>. There is no
+    /// <c>wipe-super:</c> wire command.
+    /// <para>通过发送 <c>update-super:&lt;分区&gt;:wipe</c> 清除 super 分区。线协议中不存在
+    /// <c>wipe-super:</c> 命令。</para>
     /// </summary>
     /// <param name="partition">Super partition name to wipe. <para>要清除的 super 分区名。</para></param>
     /// <returns>The parsed update-super response. <para>解析后的 update-super 响应。</para></returns>
@@ -220,10 +220,10 @@ public sealed partial class FastbootSession
     /// <para>在设备上执行快照更新操作；"cancel" 用于中止正在进行的更新。</para>
     /// </summary>
     /// <remarks>
-    /// <para>A bootloader that can only complete the action from fastbootd says so in free-form reply
+    /// A bootloader that can only complete the action from fastbootd says so in free-form reply
     /// text; that request is reported on <see cref="FastbootResponse.RequestsFastbootReboot"/> and
     /// deliberately not acted on here, because a reboot invalidates the caller's session and the hint comes
-    /// from untrusted text.</para>
+    /// from untrusted text.
     /// <para>只能在 fastbootd 中完成该操作的 bootloader 会以自由文本应答说明这一点；该请求通过
     /// <see cref="FastbootResponse.RequestsFastbootReboot"/> 上报，并且刻意不在此处执行，因为重启会使
     /// 调用方的会话失效，而该提示来自不可信文本。</para>

@@ -271,11 +271,10 @@ public sealed partial class SaharaProtocol
     /// <para>为主机刻意不实现的命令构造失败信息，使协议 3.0 目标报告具体原因而不是未知命令错误。</para>
     /// </summary>
     /// <remarks>
-    /// No public implementation performs the version
-    /// 3.0 WRITE_DATA image push, so the transfer layout is not transcribed from evidence and
-    /// is refused rather than approximated.
-    /// <para>没有公开实现执行版本 3.0 的 WRITE_DATA 镜像推送，
-    /// 其传输布局缺乏可转录的证据，因此拒绝而不是近似实现。</para>
+    /// This host does not implement the version 3.0 WRITE_DATA image push: the transfer layout has no
+    /// wire description this host can follow, so the command is refused rather than approximated.
+    /// <para>本主机不实现版本 3.0 的 WRITE_DATA 镜像推送：该传输布局没有本主机可遵循的线协议描述，
+    /// 因此直接拒绝而不是近似实现。</para>
     /// </remarks>
     /// <param name="command">The command code reported by the device.
     /// <para>设备报告的命令码。</para></param>

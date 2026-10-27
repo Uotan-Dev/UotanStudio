@@ -17,20 +17,20 @@ public sealed record MtkXmlBootstrapOptions
     /// <para>获取 SLA 查询期间断言的属性信封外层元素名。</para></summary>
     /// <value>
     /// A nonempty unqualified XML name of at most 128 characters, or <see langword="null"/> to accept the
-    /// envelope the agent reports. The reference implementation reads the reply without naming its
+    /// envelope the agent reports. The reply is read without naming its
     /// envelope, so a loader package that publishes no envelope profile can still start; when a value is
     /// supplied it is an additional assertion and a mismatch is a protocol failure. The reported name
     /// stays visible on the returned property either way.
     /// <para>非空、不带命名空间前缀且最长 128 字符的 XML 名称；为 <see langword="null"/> 时接受代理上报的信封。
-    /// 参考实现读取回复时不指定信封名称，因此未公开信封配置的加载器包同样可以启动；提供数值时它作为额外断言，
+    /// 读取回复时不指定信封名称，因此未公开信封配置的加载器包同样可以启动；提供数值时它作为额外断言，
     /// 不匹配即为协议失败。无论哪种情况，上报的名称仍保留在返回的属性中。</para>
     /// </value>
     public string? SlaEnvelopeName { get; init; }
 
     /// <summary>Gets the explicit host metadata sent before DA2 upload.
     /// <para>获取在 DA2 上传之前发送的显式主机元数据。</para></summary>
-    /// <value>At most 256 XML-compatible characters; the reference tool sends an empty string, which is
-    /// the default here too. <para>最多 256 个 XML 兼容字符；参考工具发送空字符串，此处默认值同样为空。</para></value>
+    /// <value>At most 256 XML-compatible characters; the flashing tool sends an empty string, which is
+    /// the default here too. <para>最多 256 个 XML 兼容字符；该工具发送空字符串，此处默认值同样为空。</para></value>
     public string HostInfo { get; init; } = string.Empty;
 
     /// <summary>Gets the caller-owned policy for device-requested files, including DRAM resources.
@@ -53,10 +53,10 @@ public sealed record MtkXmlBootstrapOptions
 
     /// <summary>Gets the grading policy for unknown fields in device-authored XML DA messages.
     /// <para>获取设备侧 XML DA 消息中未知字段的分级策略。</para></summary>
-    /// <value>Defaults to <see cref="MtkXmlFieldPolicy.Strict"/>, preserving the historical
-    /// reject-everything parsing; the tolerant policy only downgrades bounded ignorable fields to
+    /// <value>Defaults to <see cref="MtkXmlFieldPolicy.Strict"/>, which rejects every field outside the
+    /// whitelist; the tolerant policy only downgrades bounded ignorable fields to
     /// warning evidence.
-    /// <para>默认 <see cref="MtkXmlFieldPolicy.Strict"/>，保持历史的全量拒绝解析；容忍策略仅将有界的可忽略
+    /// <para>默认 <see cref="MtkXmlFieldPolicy.Strict"/>，拒绝白名单之外的全部字段；容忍策略仅将有界的可忽略
     /// 字段降级为 warning 证据。</para></value>
     public MtkXmlFieldPolicy XmlFieldPolicy { get; init; } = MtkXmlFieldPolicy.Strict;
 

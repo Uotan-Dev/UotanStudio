@@ -1,8 +1,8 @@
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>
-/// A host target from upstream server.cpp BuildDaemonVisableLine.
-/// <para>来自上游 server.cpp BuildDaemonVisableLine 的宿主目标条目。</para>
+/// A host target reported by the HDC server listing.
+/// <para>HDC server 列表上报的宿主目标条目。</para>
 /// </summary>
 /// <param name="ConnectKey">Server connect key that authoritatively identifies the target.<para>唯一标识该目标的 server connect key。</para></param>
 /// <param name="Transport">Transport class reported by the listing, such as USB, TCP or UART.<para>列表报告的传输类型，例如 USB、TCP 或 UART。</para></param>

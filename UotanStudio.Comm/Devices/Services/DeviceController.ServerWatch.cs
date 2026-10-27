@@ -159,7 +159,7 @@ public sealed partial class DeviceController
     }
 
     /// <summary>
-    /// Releases server leases that can no longer be served: an absent server (its endpoint was
+    /// Releases server leases that cannot be served: an absent server (its endpoint was
     /// conclusively refused) releases every lease from that source, and a live server releases the
     /// leases whose target vanished from its own list. This is the drain that lets the next route open
     /// only after the old one has been given up.

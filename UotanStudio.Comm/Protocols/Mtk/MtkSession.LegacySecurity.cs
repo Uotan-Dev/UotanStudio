@@ -10,13 +10,13 @@ public sealed partial class MtkSession
     /// <summary>Reads eFuse cells through the Legacy agent register command.
     /// <para>通过 Legacy 代理寄存器命令读取 eFuse 单元。</para></summary>
     /// <remarks>The Legacy extension reads memory one doubleword at a time with the register-read
-    /// command (Library/DA/legacy/extension/legacy.py:96-115) and the documented cell reader peeks four
-    /// bytes per cell (Library/DA/xflash/extension/xflash.py:638-650), so every cell becomes one
+    /// command and the documented cell reader peeks four
+    /// bytes per cell, so every cell becomes one
     /// register read and is reported back as the little-endian bytes of that value
-    /// (Library/DA/legacy/extension/legacy.py:111). Nothing is written. Legacy
-    /// 扩展用寄存器读命令逐双字读取内存（Library/DA/legacy/extension/legacy.py:96-115），而已记载 的单元读取器每个单元窥探 4
-    /// 字节（Library/DA/xflash/extension/xflash.py:638-650），因此每个单元对应
-    /// 一次寄存器读取，并按该值的小端字节上报（Library/DA/legacy/extension/legacy.py:111）。不执行写入。</remarks>
+    /// . Nothing is written. Legacy
+    /// 扩展用寄存器读命令逐双字读取内存，而已记载 的单元读取器每个单元窥探 4
+    /// 字节，因此每个单元对应
+    /// 一次寄存器读取，并按该值的小端字节上报。不执行写入。</remarks>
     /// <param name="hardwareCode">The hardware code selecting the cell table.
     /// <para>用于选择单元表的硬件代码。</para></param>
     /// <param name="efuseBase">The eFuse base address supplied by the device profile.
@@ -87,12 +87,11 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the boot public key window through the Legacy agent register command.
     /// <para>通过 Legacy 代理寄存器命令读取引导公钥窗口。</para></summary>
-    /// <remarks>The Legacy extension peeks the 0x30 bytes starting at the eFuse base plus 0x90
-    /// (Library/DA/legacy/extension/legacy.py:296-302); the documented Legacy memory reader assembles
+    /// <remarks>The Legacy extension peeks the 0x30 bytes starting at the eFuse base plus 0x90;
+    /// the documented Legacy memory reader assembles
     /// such a window from single big-endian register reads and re-emits each value in little-endian
-    /// order (Library/DA/legacy/extension/legacy.py:96-115). Legacy 扩展窥探从 eFuse 基址加 0x90 开始的 0x30 字节
-    /// （Library/DA/legacy/extension/legacy.py:296-302）；已记载的 Legacy 内存读取器由单次大端寄存器读取
-    /// 拼装该窗口，并把每个取值按小端重新输出（Library/DA/legacy/extension/legacy.py:96-115）。</remarks>
+    /// order. Legacy 扩展窥探从 eFuse 基址加 0x90 开始的 0x30 字节；已记载的 Legacy 内存读取器由单次大端寄存器读取
+    /// 拼装该窗口，并把每个取值按小端重新输出。</remarks>
     /// <param name="efuseBase">The eFuse base address supplied by the device profile.
     /// <para>由设备配置提供的 eFuse 基址。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
@@ -145,9 +144,8 @@ public sealed partial class MtkSession
     /// <summary>Reads and decodes the secure-boot configuration through the Legacy agent.
     /// <para>通过 Legacy 代理读取并解码安全启动配置。</para></summary>
     /// <remarks>The Legacy extension locates the <c>seccfg</c>GPT entry, reads the whole entry and
-    /// decodes it with the same two layouts (Library/DA/legacy/extension/legacy.py:165-193). Nothing is
-    /// written. Legacy 扩展定位 <c>seccfg</c>GPT 条目、读取整个条目并按同样的两种布局解码
-    /// （Library/DA/legacy/extension/legacy.py:165-193）。不执行写入。</remarks>
+    /// decodes it with the same two layouts. Nothing is
+    /// written. Legacy 扩展定位 <c>seccfg</c>GPT 条目、读取整个条目并按同样的两种布局解码。不执行写入。</remarks>
     /// <param name="partitionId">The discovered Legacy physical region holding the configuration GPT.
     /// <para>承载配置 GPT 的已发现 Legacy 物理区域。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>

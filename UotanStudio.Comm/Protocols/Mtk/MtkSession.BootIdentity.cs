@@ -5,31 +5,31 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 /// <summary>
 /// Boot ROM identity queries over the boot byte protocol: the bootloader version, Boot ROM version,
-/// media device identifier and secure on-chip identifier exchanges the reference client issues right
+/// media device identifier and secure on-chip identifier exchanges this client issues right
 /// after the target configuration word.
-/// <para>boot 字节协议之上的 Boot ROM 身份查询：参考客户端在目标配置字之后立即发起的 bootloader 版本、
+/// <para>boot 字节协议之上的 Boot ROM 身份查询：本客户端在目标配置字之后立即发起的 bootloader 版本、
 /// Boot ROM 版本、媒体设备标识与安全片上标识交互。</para>
 /// </summary>
 /// <remarks>
-/// <para>Every framing is a transcription of <c>mtkclient/Library/mtk_preloader.py</c>:
+/// Every framing is a transcription of :
 /// <c>get_blver</c> (lines 664-673) writes command 0xFE and reads one version byte where the value
 /// 0xFE itself marks Boot ROM mode, <c>get_bromver</c> (lines 657-663) writes command 0xFF and reads
 /// one version byte, and <c>get_meid</c> (lines 932-958) / <c>get_socid</c> (lines 960-987) probe
 /// command 0xFE first, then write command 0xE1 or 0xE7, require the one-byte command echo, read the
 /// big-endian payload length, the payload itself and a little-endian two-byte completion status. The
 /// initialization path reuses the bootloader version it already read instead of probing 0xFE once more
-/// for each identifier.</para>
-/// <para>此处每个帧结构都转录自 <c>mtkclient/Library/mtk_preloader.py</c>：<c>get_blver</c>（第 664-673 行）
+/// for each identifier.
+/// During <c>InitializeAsync</c> every query is best-effort and keeps initializing when a target
+/// stays silent: a failed or refused query degrades the matching
+/// identity field to null, records evidence and never faults the session. The explicit public
+/// queries keep the session-wide discipline instead: a refused echo, an oversized declaration or a
+/// rejected status faults the session so no further command byte is exchanged.
+/// <para>此处每个帧结构都转录自 ：<c>get_blver</c>（第 664-673 行）
 /// 写入命令 0xFE 并读取一个版本字节，取值 0xFE 本身即标记 Boot ROM 模式；<c>get_bromver</c>（第 657-663 行）
 /// 写入命令 0xFF 并读取一个版本字节；<c>get_meid</c>（第 932-958 行）与 <c>get_socid</c>（第 960-987 行）
 /// 先用命令 0xFE 探测，再写入命令 0xE1 或 0xE7，要求单字节命令回显，随后读取大端载荷长度、载荷本体与
-/// 小端两字节完成状态。初始化路径复用已读取的 bootloader 版本，不再为每个标识重复探测 0xFE。</para>
-/// <para>During <c>InitializeAsync</c> every query is best-effort exactly like the reference, which
-/// keeps initializing when a target stays silent: a failed or refused query degrades the matching
-/// identity field to null, records evidence and never faults the session. The explicit public
-/// queries keep the session-wide discipline instead: a refused echo, an oversized declaration or a
-/// rejected status faults the session so no further command byte is exchanged.</para>
-/// <para>在 <c>InitializeAsync</c> 中每个查询都是尽力而为，与参考实现在目标沉默时仍继续初始化的行为一致：
+/// 小端两字节完成状态。初始化路径复用已读取的 bootloader 版本，不再为每个标识重复探测 0xFE。
+/// 在 <c>InitializeAsync</c> 中每个查询都是尽力而为，目标沉默时仍继续初始化：
 /// 失败或被拒绝的查询只把对应的身份字段降级为 null、记录证据，绝不让会话进入 fault。显式公开查询则保持
 /// 会话级纪律：被拒绝的回显、超限的长度声明或被拒绝的状态会使会话进入 fault，不再交换任何命令字节。</para>
 /// </remarks>
@@ -44,11 +44,10 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the bootloader version byte through command FE.
     /// <para>通过命令 FE 读取 bootloader 版本字节。</para></summary>
-    /// <remarks>Mirrors <c>get_blver</c>( <c>mtkclient/Library/mtk_preloader.py:664-673</c>): the
+    /// <remarks>Mirrors <c>get_blver</c>: the
     /// single reply byte is the version, and the value 0xFE is the documented Boot ROM mode marker
     /// rather than an error. A refused or truncated exchange faults the session, unlike the non-fatal
-    /// behaviour of the same query inside <c>InitializeAsync</c>. 对应 <c>get_blver</c>（
-    /// <c>mtkclient/Library/mtk_preloader.py:664-673</c>）：单个回复字节即版本， 取值 0xFE 是已记载的 Boot ROM 模式标记而非错误。与
+    /// behaviour of the same query inside <c>InitializeAsync</c>. 对应 <c>get_blver</c>：单个回复字节即版本， 取值 0xFE 是已记载的 Boot ROM 模式标记而非错误。与
     /// <c>InitializeAsync</c>中同一查询的非致命行为 不同，被拒绝或截断的交互会使会话进入 fault 状态。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The bootloader version byte exactly as delivered.
@@ -89,10 +88,9 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the Boot ROM version byte through command FF.
     /// <para>通过命令 FF 读取 Boot ROM 版本字节。</para></summary>
-    /// <remarks>Mirrors <c>get_bromver</c>( <c>mtkclient/Library/mtk_preloader.py:657-663</c>). A
+    /// <remarks>Mirrors <c>get_bromver</c>. A
     /// refused or truncated exchange faults the session, unlike the non-fatal behaviour of the same
-    /// query inside <c>InitializeAsync</c>. 对应 <c>get_bromver</c>（
-    /// <c>mtkclient/Library/mtk_preloader.py:657-663</c>）。与 <c>InitializeAsync</c>
+    /// query inside <c>InitializeAsync</c>. 对应 <c>get_bromver</c>。与 <c>InitializeAsync</c>
     /// 中同一查询的非致命行为不同，被拒绝或截断的交互会使会话进入 fault 状态。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The Boot ROM version byte exactly as delivered.
@@ -133,15 +131,15 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the media device identifier through the E1 command exchange.
     /// <para>通过 E1 命令交互读取媒体设备标识。</para></summary>
-    /// <remarks>Mirrors <c>get_meid</c>( <c>mtkclient/Library/mtk_preloader.py:932-958</c>): the 0xFE
-    /// probe reply decides whether the identifier exchange is attempted at all — the reference skips it
+    /// <remarks>Mirrors <c>get_meid</c>: the 0xFE
+    /// probe reply decides whether the identifier exchange is attempted at all — the exchange is skipped
     /// when the probe reports a bootloader version of two or below — and the payload length declared by
     /// the target is bounded before any buffer is allocated. The completion status is the one
-    /// little-endian word of the reference framing. A null result means the target does not report the
-    /// identifier; a refused echo, an oversized declaration or a rejected status faults the session. 对应
-    /// <c>get_meid</c>（ <c>mtkclient/Library/mtk_preloader.py:932-958</c>）：0xFE 探测回复决定是否 发起标识交互——探测报告的
-    /// bootloader 版本不大于 2 时参考实现会直接跳过——目标声明的载荷长度在分配 任何缓冲之前先做上限校验。完成状态采用参考帧结构中的唯一一个小端字。null 表示目标不上报该标识；
-    /// 被拒绝的回显、超限的长度声明或被拒绝的状态会使会话进入 fault 状态。</remarks>
+    /// little-endian word of the framing. A null result means the target does not report the identifier;
+    /// a refused echo, an oversized declaration or a rejected status faults the session.
+    /// <para>对应 <c>get_meid</c>：0xFE 探测回复决定是否发起标识交互——探测报告的 bootloader 版本不大于 2 时
+    /// 直接跳过——目标声明的载荷长度在分配任何缓冲之前先做上限校验，完成状态采用该帧结构中的唯一一个小端字。
+    /// null 表示目标不上报该标识；被拒绝的回显、超限的长度声明或被拒绝的状态会使会话进入 fault 状态。</para></remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The identifier bytes, or null when the probe reports no identifier support.
     /// <para>标识字节；探测报告不支持该标识时为 null。</para></returns>
@@ -185,11 +183,10 @@ public sealed partial class MtkSession
 
     /// <summary>Reads the secure on-chip identifier through the E7 command exchange.
     /// <para>通过 E7 命令交互读取安全片上标识。</para></summary>
-    /// <remarks>Mirrors <c>get_socid</c>( <c>mtkclient/Library/mtk_preloader.py:960-987</c>) with the
+    /// <remarks>Mirrors <c>get_socid</c> with the
     /// same probe, echo, bounded big-endian length and little-endian status framing as the MEID
     /// exchange. A null result means the target does not report the identifier; a refused echo, an
-    /// oversized declaration or a rejected status faults the session. 对应 <c>get_socid</c>（
-    /// <c>mtkclient/Library/mtk_preloader.py:960-987</c>），探测、回显、有界大端 长度与小端状态帧结构与 MEID 交互一致。null
+    /// oversized declaration or a rejected status faults the session. 对应 <c>get_socid</c>，探测、回显、有界大端 长度与小端状态帧结构与 MEID 交互一致。null
     /// 表示目标不上报该标识；被拒绝的回显、超限的长度声明或 被拒绝的状态会使会话进入 fault 状态。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The identifier bytes, or null when the probe reports no identifier support.
@@ -236,10 +233,10 @@ public sealed partial class MtkSession
     /// <para>一次性运行四个身份查询，并报告目标的应答情况。</para></summary>
     /// <remarks>
     /// Every query is individually best-effort: a refused or silent target only leaves the matching
-    /// field null and records evidence, matching the reference initialization that keeps going when
-    /// an identity getter fails. Only a caller cancellation propagates.
-    /// 每个查询都单独尽力而为：目标拒绝或沉默只会让对应字段保持 null 并记录证据，与参考实现在身份查询
-    /// 失败时仍继续初始化的行为一致。只有调用方取消会向外传播。
+    /// field null and records evidence, so an identity getter failure never aborts the walk. Only a caller
+    /// cancellation propagates.
+    /// <para>每个查询都单独尽力而为：目标拒绝或沉默只会让对应字段保持 null 并记录证据，身份查询失败不会中止
+    /// 遍历。只有调用方取消会向外传播。</para>
     /// </remarks>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>

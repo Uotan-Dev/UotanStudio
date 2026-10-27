@@ -51,10 +51,10 @@ public sealed class HdcDeviceServices : Contracts.IHdcDeviceServices
             throw new IOException(response);
         return response;
     }
-    /// <summary>Maps supported UI reboot modes to upstream target boot arguments.
-    /// <para>将界面支持的重启模式映射为上游 target boot 参数。</para></summary>
+    /// <summary>Maps supported UI reboot modes to target boot arguments.
+    /// <para>将界面支持的重启模式映射为目标 boot 参数。</para></summary>
     /// <param name="mode">UI reboot mode: <see langword="null"/>, empty, <c>"system"</c>, <c>"bootloader"</c> or <c>"recovery"</c>.<para>界面重启模式：<see langword="null"/>、空串、<c>"system"</c>、<c>"bootloader"</c> 或 <c>"recovery"</c>。</para></param>
-    /// <returns>The upstream target boot argument; empty for a normal system reboot.<para>上游 target boot 参数；普通系统重启时为空串。</para></returns>
+    /// <returns>The target boot argument; empty for a normal system reboot.<para>目标 boot 参数；普通系统重启时为空串。</para></returns>
     /// <exception cref="NotSupportedException"><paramref name="mode"/> is not a supported reboot mode.<para><paramref name="mode"/> 不是受支持的重启模式。</para></exception>
     public static string RebootArgument(string? mode) => mode switch
     {
@@ -116,7 +116,7 @@ public sealed class HdcDeviceServices : Contracts.IHdcDeviceServices
     public HdcStream OpenInteractiveShell() => (_connection ?? throw new NotSupportedException("Interactive byte streams require a direct connection."))
         .OpenChannel(HdcCommand.ShellInit, []);
 
-    /// <summary>Opens a native debug-process tracker with the upstream default, package or all-process mode.<para>按上游默认、按包或全部进程模式打开原生调试进程跟踪通道。</para></summary>
+    /// <summary>Opens a native debug-process tracker with the default, package or all-process mode.<para>按默认、按包或全部进程模式打开原生调试进程跟踪通道。</para></summary>
     /// <param name="mode">Tracking mode: empty (default), <c>"p"</c> (package) or <c>"a"</c> (all processes).<para>跟踪模式：空串（默认）、<c>"p"</c>（按包）或 <c>"a"</c>（全部进程）。</para></param>
     /// <returns>An open tracker channel delivering process-list updates.<para>已打开的跟踪通道，持续投递进程列表更新。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="mode"/> is not one of the supported values.<para><paramref name="mode"/> 不属于受支持的取值。</para></exception>
@@ -160,7 +160,7 @@ public sealed class HdcDeviceServices : Contracts.IHdcDeviceServices
     /// <param name="enabled"><see langword="true"/> to restart the daemon in root mode; <see langword="false"/> for normal mode.<para><see langword="true"/> 以 root 模式重启守护进程；<see langword="false"/> 为普通模式。</para></param>
     public void SetRootMode(bool enabled) => ExecuteService(enabled ? "smode" : "smode -r", HdcCommand.UnityRootRun, enabled ? "" : "r", 10000);
 
-    /// <summary>Switches the daemon to USB or TCP mode using upstream tmode arguments.<para>使用上游 tmode 参数将守护进程切换为 USB 或 TCP 模式。</para></summary>
+    /// <summary>Switches the daemon to USB or TCP mode using <c>tmode</c> arguments.<para>使用 <c>tmode</c> 参数将守护进程切换为 USB 或 TCP 模式。</para></summary>
     /// <param name="tcpPort">TCP listen port (1..65535) for network mode, or <see langword="null"/> to switch back to USB.<para>网络模式的 TCP 监听端口（1..65535），为 <see langword="null"/> 时切回 USB。</para></param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="tcpPort"/> is set but outside 1..65535.<para><paramref name="tcpPort"/> 已设置且不在 1..65535 范围内。</para></exception>
     public void SetRunMode(int? tcpPort)

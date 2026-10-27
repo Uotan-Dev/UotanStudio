@@ -15,8 +15,8 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <param name="SourceOffset">Raw source offset; zero for erase.<para>原始源偏移；擦除时为零。</para></param>
 /// <param name="Verify">Whether the written extent requires readback comparison.
 /// <para>写出的范围是否需要回读比对。</para></param>
-/// <param name="PadSourceTail">Whether a source shorter than the extent is explicitly zero-filled to that extent, mirroring the reference tools' round-up-to-block rule; without it a short source is refused.
-/// <para>是否在源短于该范围时显式补零至该范围，对应参考工具“向上取整到块”的规则；不开启时短源会被拒绝。</para></param>
+/// <param name="PadSourceTail">Whether a source shorter than the extent is explicitly zero-filled to that extent, mirroring the round-up-to-block rule; without it a short source is refused.
+/// <para>是否在源短于该范围时显式补零至该范围，对应该工具“向上取整到块”的规则；不开启时短源会被拒绝。</para></param>
 public sealed record MtkLegacyFlashStep(byte PartitionId, MtkFlashStepKind Kind, long Offset, long Length,
     string? SourcePath = null, long SourceOffset = 0, bool Verify = false, bool PadSourceTail = false);
 
@@ -59,11 +59,11 @@ public sealed record MtkLegacyFlashOperation(int StepIndex, byte PartitionId, lo
 /// <para>面向联发科 Legacy 下载代理的有界、已预检的一次性计划。</para>
 /// </summary>
 /// <remarks>
-/// <para>Unlike the XFlash plan this type has no sparse extents: the Legacy agent transfers only raw byte
+/// Unlike the XFlash plan this type has no sparse extents: the Legacy agent transfers only raw byte
 /// ranges, so a scatter or image that requires sparse expansion is rejected rather than silently written as
 /// raw data. Preparation validates every range against the discovered region, opens and retains each source,
 /// and never erases or pads on its own. When the plan was built from a GPT observation, execution re-reads that
-/// table under the same session lease and refuses to start if the metadata changed.</para>
+/// table under the same session lease and refuses to start if the metadata changed.
 /// <para>与 XFlash 计划不同，本类型没有稀疏范围：Legacy 代理只传输原始字节范围，因此需要稀疏展开的 scatter
 /// 或镜像会被拒绝，而不是被当作原始数据静默写入。准备阶段会依据已发现的区域校验每个范围、打开并持有每个源，
 /// 且从不自行擦除或填充。若计划由 GPT 观测结果构建，执行时会在同一会话租约下重新读取该表，元数据变化则拒绝开始。</para>

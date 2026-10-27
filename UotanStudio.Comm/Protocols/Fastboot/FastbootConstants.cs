@@ -1,20 +1,20 @@
 namespace UotanStudio.Comm.Protocols.Fastboot;
 
 /// <summary>
-/// Fastboot wire protocol constants (AOSP fastboot.h).
-/// <para>Fastboot 线上协议常量（AOSP fastboot.h）。</para>
+/// Fastboot wire protocol constants.
+/// <para>Fastboot 线上协议常量。</para>
 /// </summary>
 public static class FastbootConstants
 {
     /// <summary>
-    /// Maximum fastboot command length (AOSP FB_COMMAND_SZ = 4096).
-    /// <para>Fastboot 命令最大长度（AOSP FB_COMMAND_SZ = 4096）。</para>
+    /// Maximum fastboot command length, fixed at 4096 bytes.
+    /// <para>Fastboot 命令最大长度，固定 4096 字节。</para>
     /// </summary>
     public const int MaxCommandLength = 4096;
 
     /// <summary>
-    /// Response buffer size (AOSP FB_RESPONSE_SZ = 256).
-    /// <para>响应缓冲区大小（AOSP FB_RESPONSE_SZ = 256）。</para>
+    /// Response buffer size, fixed at 256 bytes.
+    /// <para>响应缓冲区大小，固定 256 字节。</para>
     /// </summary>
     public const int ResponseBufferSize = 256;
 
@@ -33,10 +33,10 @@ public static class FastbootConstants
     public const int TransferChunkSize = 512 * 1024;
 
     /// <summary>
-    /// Ceiling for download/sparse transfers, matching the wire-level DATA size field width
-    /// (8 hex digits, 32-bit) and AOSP MAX_DOWNLOAD_SIZE = UINT32_MAX.
-    /// <para>下载/稀疏传输上限，与线协议 DATA 尺寸字段宽度（16 进制 8 位、32 位）及
-    /// AOSP MAX_DOWNLOAD_SIZE = UINT32_MAX 一致。</para>
+    /// Ceiling for download/sparse transfers: the wire-level DATA size field is 8 hex digits wide,
+    /// so the largest representable transfer is <see cref="uint.MaxValue"/>.
+    /// <para>下载/稀疏传输上限：线协议 DATA 的尺寸字段为 16 进制 8 位，因此可表示的最大传输量是
+    /// <see cref="uint.MaxValue"/>。</para>
     /// </summary>
     public const long SparseMaxDownloadSize = uint.MaxValue;
 
@@ -125,18 +125,18 @@ public static class FastbootConstants
     public const string CommandFetch = "fetch:";
 
     /// <summary>
-    /// upload command: retrieves the data staged by a previous download (e.g. a boot image). AOSP
-    /// defines it as the bare word <c>upload</c>, with no colon and no filename.
-    /// <para>upload 命令：取回先前 download 暂存的数据（如启动镜像）。AOSP 将其定义为裸词
+    /// upload command: retrieves the data staged by a previous download (e.g. a boot image). The wire
+    /// form is the bare word <c>upload</c>, with no colon and no filename.
+    /// <para>upload 命令：取回先前 download 暂存的数据（如启动镜像）。线协议形式即裸词
     /// <c>upload</c>，不带冒号也不带文件名。</para>
     /// </summary>
     public const string CommandUpload = "upload";
 
     /// <summary>
-    /// Legacy get_staged command name. Retained for source compatibility only; it is never sent on
-    /// the wire because AOSP retrieves staged data with <see cref="CommandUpload"/>.
-    /// <para>遗留的 get_staged 命令名。仅为源码兼容保留；AOSP 用 <see cref="CommandUpload"/> 取回
-    /// 暂存数据，因此本常量绝不在线协议中发送。</para>
+    /// get_staged command name. Retained for source compatibility only; it is never sent on
+    /// the wire because staged data is retrieved with <see cref="CommandUpload"/>.
+    /// <para>get_staged 命令名。仅为源码兼容保留；暂存数据用 <see cref="CommandUpload"/> 取回，
+    /// 因此本常量绝不在线协议中发送。</para>
     /// </summary>
     public const string CommandGetStaged = "get_staged";
 
@@ -153,9 +153,9 @@ public static class FastbootConstants
     public const string CommandErase = "erase:";
 
     /// <summary>
-    /// Legacy format command prefix. Not part of the AOSP fastboot protocol and never sent on the
+    /// format command prefix. Not part of the fastboot wire protocol and never sent on the
     /// wire; retained for source compatibility only.
-    /// <para>遗留的 format 命令前缀。不属于 AOSP fastboot 协议，也绝不在线协议中发送；
+    /// <para>format 命令前缀。不属于 fastboot 线协议，也绝不在线协议中发送；
     /// 仅为源码兼容保留。</para>
     /// </summary>
     [Obsolete("format: is not an AOSP fastboot command and is never sent on the wire; erase the partition instead.")]
@@ -186,11 +186,10 @@ public static class FastbootConstants
     public const string CommandResizeLogicalPartition = "resize-logical-partition:";
 
     /// <summary>
-    /// Host-side <c>wipe-super</c> command name. It is not a fastboot wire command: upstream
-    /// <c>fastboot wipe-super</c> sends <see cref="CommandUpdateSuper"/> followed by the partition
-    /// name and <c>:wipe</c>.
-    /// <para>宿主侧 <c>wipe-super</c> 命令名。它不是 fastboot 线协议命令：上游
-    /// <c>fastboot wipe-super</c> 发送 <see cref="CommandUpdateSuper"/>，后接分区名与 <c>:wipe</c>。</para>
+    /// Host-side <c>wipe-super</c> command name. It is not a fastboot wire command: wiping the super
+    /// partition sends <see cref="CommandUpdateSuper"/> followed by the partition name and <c>:wipe</c>.
+    /// <para>宿主侧 <c>wipe-super</c> 命令名。它不是 fastboot 线协议命令：清除 super 分区时发送
+    /// <see cref="CommandUpdateSuper"/>，后接分区名与 <c>:wipe</c>。</para>
     /// </summary>
     public const string CommandWipeSuper = "wipe-super:";
 

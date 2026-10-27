@@ -7,8 +7,9 @@ public sealed partial class MtkSession
     /// <summary>Backs up an exactly named Legacy-region GPT partition after revalidating the snapshot under the same operation lease as the data read. No repair, slot inference or retry is performed.
     /// <para>在与数据读取同一操作租约下重新校验快照后，备份名称完全匹配的 Legacy 区域 GPT 分区。 不执行修复、槽位推断或重试。</para></summary>
     /// <remarks>
-    /// <para>The destination is replaced only after a successful transfer and staging-file flush. This does not freeze device contents or promise a point-in-time storage snapshot. Progress excludes the metadata reads of the revalidation, and callbacks must not wait on this session.</para>
-    /// <para>目标文件只在传输成功且暂存文件刷写完成后替换。这不会冻结设备内容，也不承诺时间点存储快照。 进度不含重新校验所用的元数据读取，且回调不得等待本会话。</para></remarks>
+    /// The destination is replaced only after a successful transfer and staging-file flush. This does not freeze device contents or promise a point-in-time storage snapshot. Progress excludes the metadata reads of the revalidation, and callbacks must not wait on this session.
+    /// <para>目标文件只在传输成功且暂存文件刷写完成后替换。这不会冻结设备内容，也不承诺时间点存储快照。 进度不含重新校验所用的元数据读取，且回调不得等待本会话。</para>
+    /// </remarks>
     /// <param name="snapshot">A Legacy GPT observation from this session's current storage inventory.
     /// <para>来自本会话当前 Legacy 存储清单的 GPT 观测结果。</para></param>
     /// <param name="partitionName">Exact case-sensitive name, rejecting absent or ambiguous entries.
@@ -69,8 +70,8 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Reads an aligned Legacy eMMC range through a unique staging file and replaces the destination only after a complete exchange, which is how the reference handler publishes a raw-sector or whole-flash dump (Library/DA/mtk_da_handler.py:285-312) instead of returning bytes to the caller.
-    /// <para>将对齐的 Legacy eMMC 范围经唯一暂存文件读取，仅在交换完整结束后替换目标文件。这正是参考处理程序 发布原始扇区或整片读取结果的方式（Library/DA/mtk_da_handler.py:285-312），而不是把字节返回给调用方。</para></summary>
+    /// <summary>Reads an aligned Legacy eMMC range through a unique staging file and replaces the destination only after a complete exchange, which is how the handler publishes a raw-sector or whole-flash dump instead of returning bytes to the caller.
+    /// <para>将对齐的 Legacy eMMC 范围经唯一暂存文件读取，仅在交换完整结束后替换目标文件。这正是处理程序 发布原始扇区或整片读取结果的方式，而不是把字节返回给调用方。</para></summary>
     /// <param name="partitionId">The discovered physical region from 1 through 8, excluding RPMB.
     /// <para>已发现的 1 至 8 物理区域，不含 RPMB。</para></param>
     /// <param name="offset">The byte offset aligned to 512.<para>按 512 对齐的字节偏移。</para></param>

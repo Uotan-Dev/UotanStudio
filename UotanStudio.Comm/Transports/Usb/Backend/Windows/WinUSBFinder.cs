@@ -192,10 +192,10 @@ internal static partial class WinUSBFinder
 
     /// <summary>
     /// Returns whether an instance id can belong to a USB node: USB enumerator instance ids start with
-    /// <c>USB\</c>, and the historical <c>VID_</c> containment branch stays for vendor-specific or
-    /// renamed instances the previous filter accepted.
+    /// <c>USB\</c>, and a <c>VID_</c> substring also qualifies for vendor-specific or renamed
+    /// instances.
     /// <para>判断实例 ID 是否可能属于 USB 节点：USB 枚举器实例 ID 以 <c>USB\</c> 开头；
-    /// 历史上的 <c>VID_</c> 包含分支保留给旧过滤器接受的厂商自定义或重命名实例。</para>
+    /// 含 <c>VID_</c> 子串的厂商自定义或重命名实例同样成立。</para>
     /// </summary>
     private static bool IsPotentialUsbInstanceId(string instanceId)
     {

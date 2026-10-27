@@ -10,43 +10,43 @@ internal static partial class HarmonyOSUsbDDK
 
     /// <summary>
     /// Legacy DDK generic failure (before API 16).
-    /// <para>旧版（API 16 之前）DDK 通用失败。</para>
+    /// <para>API 16 之前的 DDK 布局没有对应的通用失败码。</para>
     /// </summary>
     public const int USB_DDK_FAILED = -1;
 
     /// <summary>
     /// Legacy DDK invalid-parameter error (before API 16).
-    /// <para>旧版（API 16 之前）DDK 参数错误。</para>
+    /// <para>API 16 之前的 DDK 布局中的参数错误。</para>
     /// </summary>
     public const int USB_DDK_INVALID_PARAMETER = -2;
 
     /// <summary>
     /// Legacy DDK memory-allocation error (before API 16).
-    /// <para>旧版（API 16 之前）DDK 内存分配错误。</para>
+    /// <para>API 16 之前的 DDK 布局中的内存分配错误。</para>
     /// </summary>
     public const int USB_DDK_MEMORY_ERROR = -3;
 
     /// <summary>
     /// Legacy DDK invalid-operation error (before API 16).
-    /// <para>旧版（API 16 之前）DDK 非法操作错误。</para>
+    /// <para>API 16 之前的 DDK 布局中的非法操作错误。</para>
     /// </summary>
     public const int USB_DDK_INVALID_OPERATION = -4;
 
     /// <summary>
     /// Legacy DDK null-pointer error (before API 16).
-    /// <para>旧版（API 16 之前）DDK 空指针错误。</para>
+    /// <para>API 16 之前的 DDK 布局中的空指针错误。</para>
     /// </summary>
     public const int USB_DDK_NULL_PTR = -5;
 
     /// <summary>
     /// Legacy DDK device-busy error (before API 16).
-    /// <para>旧版（API 16 之前）DDK 设备忙错误。</para>
+    /// <para>API 16 之前的 DDK 布局中的设备忙错误。</para>
     /// </summary>
     public const int USB_DDK_DEVICE_BUSY = -6;
 
     /// <summary>
-    /// Legacy DDK timeout code (before API 16), kept under the historical name for existing callers.
-    /// <para>旧版（API 16 之前）DDK 超时码，保留历史名称以兼容现有调用方。</para>
+    /// Legacy DDK timeout code (before API 16), named after the constant it mirrors.
+    /// <para>API 16 之前的 DDK 布局中的超时码，沿用该常量对应的名称。</para>
     /// Newer DDKs (API 16+) report no dedicated timeout code, so <see cref="IsTimeout"/> matches
     /// exactly this value; a new DDK never returns it, so the match stays unambiguous.
     /// <para>新版 DDK（API 16+）没有独立超时码，因此 <see cref="IsTimeout"/> 只匹配该值；
@@ -334,7 +334,7 @@ internal static partial class HarmonyOSUsbDDK
     /// <para>将 DDK 返回码分类为传输超时。</para>
     /// Only the legacy (before API 16) code <see cref="USB_DDK_TIMEOUT"/> (-7) is a timeout; newer
     /// DDKs report no dedicated timeout code, so unknown codes keep the existing fatal handling.
-    /// <para>只有旧版（API 16 之前）的 <see cref="USB_DDK_TIMEOUT"/>（-7）表示超时；新版 DDK 没有独立
+    /// <para>只有 API 16 之前布局的 <see cref="USB_DDK_TIMEOUT"/>（-7）表示超时；新版 DDK 没有独立
     /// 超时码，未知错误码保持现有致命错误处理。</para>
     /// </summary>
     /// <param name="ret">The DDK return code. <para>DDK 返回码。</para></param>
@@ -348,7 +348,7 @@ internal static partial class HarmonyOSUsbDDK
     /// <para>判断 <c>OH_Usb_CreateDeviceMemMap</c>/<c>OH_Usb_SendPipeRequest</c> 的内存映射是否采用
     /// API 16 引入的新版布局。</para>
     /// A <c>null</c> version (query failed or unsupported) keeps the legacy layout.
-    /// <para>版本为 <c>null</c>（查询失败或不支持）时保持旧版布局。</para>
+    /// <para>版本为 <c>null</c>（查询失败或不支持）时保持 API 16 之前的布局。</para>
     /// </summary>
     /// <param name="sdkVersion">The SDK version reported by the DDK, or <c>null</c> when unknown.
     /// <para>DDK 报告的 SDK 版本；未知时为 <c>null</c>。</para></param>
@@ -361,7 +361,7 @@ internal static partial class HarmonyOSUsbDDK
     /// <para>尽力查询已加载 USB DDK 的 SDK 版本，用于选择内存映射布局。</para>
     /// Returns <c>null</c> when the DDK is too old to export <c>OH_Usb_GetSdkVersion</c> or the
     /// query fails; callers then fall back to the legacy layout.
-    /// <para>DDK 过旧未导出 <c>OH_Usb_GetSdkVersion</c> 或查询失败时返回 <c>null</c>；调用方随后回退到旧版布局。</para>
+    /// <para>DDK 过旧未导出 <c>OH_Usb_GetSdkVersion</c> 或查询失败时返回 <c>null</c>；调用方随后回退到 API 16 之前的布局。</para>
     /// </summary>
     /// <returns>The SDK version, or <c>null</c> when unknown. <para>SDK 版本；未知时为 <c>null</c>。</para></returns>
     internal static uint? TryGetSdkVersion()

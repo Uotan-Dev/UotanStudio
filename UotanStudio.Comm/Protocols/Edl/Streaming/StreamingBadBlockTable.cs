@@ -7,21 +7,18 @@
 public enum StreamingBadBlockPolicy
 {
     /// <summary>
-    /// Turn hardware bad-block detection off and stream the raw array (BAD_DISABLE branch,
-    /// streaming.py:498-499). <para>关闭硬件坏块检测并直接传输原始阵列（BAD_DISABLE 分支，
-    /// streaming.py:498-499）。</para></summary>
+    /// Turn hardware bad-block detection off and stream the raw array, the <c>BAD_DISABLE</c>
+    /// strategy. <para>关闭硬件坏块检测并直接传输原始阵列，即 <c>BAD_DISABLE</c> 策略。</para></summary>
     Disable,
 
     /// <summary>
-    /// Never consult the marker table; blocks are read as-is (BAD_IGNORE branch,
-    /// streaming.py:500). <para>从不查询标记表；块按原样读取（BAD_IGNORE 分支，
-    /// streaming.py:500）。</para></summary>
+    /// Never consult the marker table; blocks are read as-is, the <c>BAD_IGNORE</c> strategy.
+    /// <para>从不查询标记表；块按原样读取，即 <c>BAD_IGNORE</c> 策略。</para></summary>
     Ignore,
 
     /// <summary>
-    /// Test each fresh block, cache the verdict, and treat bad blocks as fill bytes
-    /// (default branch, streaming.py:501-512). <para>检测每个新块并缓存结论，坏块以填充字节
-    /// 处理（默认分支，streaming.py:501-512）。</para></summary>
+    /// Test each fresh block, cache the verdict, and treat bad blocks as fill bytes; this is the
+    /// default strategy. <para>检测每个新块并缓存结论，坏块以填充字节处理；这是默认策略。</para></summary>
     Mark
 }
 
@@ -57,8 +54,8 @@ public sealed class StreamingBadBlockTable(
     StreamingBadBlockPolicy policy)
 {
     /// <summary>
-    /// Controller register offsets transcribed from nand_config.py:418-446.
-    /// <para>转写自 nand_config.py:418-446 的控制器寄存器偏移。</para>
+    /// The NAND controller register offsets this driver programs.
+    /// <para>本驱动访问的 NAND 控制器寄存器偏移。</para>
     /// </summary>
     private const int FlashCmdOffset = 0x00;
     private const int Addr0Offset = 0x04;
@@ -72,8 +69,8 @@ public sealed class StreamingBadBlockTable(
     private const int FlashBufferOffset = 0x100;
 
     /// <summary>
-    /// Controller command codes transcribed from nand_config.py:404-412.
-    /// <para>转写自 nand_config.py:404-412 的控制器命令码。</para>
+    /// The NAND controller command codes this driver issues.
+    /// <para>本驱动下发的 NAND 控制器命令码。</para>
     /// </summary>
     private const uint CmdSoftReset = 0x01;
     private const uint CmdPageReadAll = 0x34;
@@ -274,8 +271,8 @@ public sealed class StreamingBadBlockTable(
     }
 
     /// <summary>
-    /// Runs the soft-reset controller command (nand_reset via exec_nand, streaming.py:383-389).
-    /// <para>执行软复位控制器命令（经 exec_nand 的 nand_reset，streaming.py:383-389）。</para>
+    /// Issues the controller soft-reset command.
+    /// <para>下发控制器软复位命令。</para>
     /// </summary>
     private async Task NandResetAsync(CancellationToken cancellationToken)
     {
@@ -285,8 +282,8 @@ public sealed class StreamingBadBlockTable(
     }
 
     /// <summary>
-    /// Programs the page address registers (set_address, streaming.py:377-380).
-    /// <para>写入页地址寄存器（set_address，streaming.py:377-380）。</para>
+    /// Programs the controller page address registers for the next access.
+    /// <para>为下一次访问写入控制器的页地址寄存器。</para>
     /// </summary>
     private async Task SetAddressAsync(uint block, uint page, CancellationToken cancellationToken)
     {
@@ -298,9 +295,8 @@ public sealed class StreamingBadBlockTable(
 
     /// <summary>
     /// Polls NAND_FLASH_STATUS until the busy nibble clears, bounded by
-    /// <see cref="MaxStatusPolls"/> (nandwait, streaming.py:372-374).
-    /// <para>轮询 NAND_FLASH_STATUS 直到忙碌半字节清零，上限为
-    /// <see cref="MaxStatusPolls"/>（nandwait，streaming.py:372-374）。</para>
+    /// <see cref="MaxStatusPolls"/>.
+    /// <para>轮询 NAND_FLASH_STATUS 直到忙碌半字节清零，上限为 <see cref="MaxStatusPolls"/>。</para>
     /// </summary>
     private async Task WaitForControllerAsync(CancellationToken cancellationToken)
     {

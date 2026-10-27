@@ -49,15 +49,14 @@ public static class MtkModeClassifier
     /// <para>阶段以及指明关键证据的原因。</para>
     /// </returns>
     /// <remarks>
-    /// <para>Product id <c>0x0003</c> is the only MediaTek port the reference table labels as a bootrom port
-    /// (<c>mtkclient/config/usb_ids.py</c>, line 2), so it alone resolves to <see cref="MtkUsbMode.BootRom"/>
+    /// Product id <c>0x0003</c> is the only MediaTek port the port table labels as a bootrom port,
+    /// so it alone resolves to <see cref="MtkUsbMode.BootRom"/>
     /// without endpoint evidence. <c>0x6000</c> (line 3), <c>0x2000</c> (line 4), <c>0x2001</c> (line 5),
     /// <c>0x201D</c> (line 6), <c>0x20FF</c> (line 7) and <c>0x3000</c> (line 8) are all labelled as
     /// preloader ports and share one product-id space with the running-DA stage, so they are disambiguated
     /// by bulk endpoint shape rather than by the product id alone. No <see cref="MtkUsbMode"/> member was
-    /// added for them.</para>
-    /// <para>产品 ID <c>0x0003</c> 是参考表中唯一标注为 bootrom 端口的联发科端口
-    /// （<c>mtkclient/config/usb_ids.py</c> 第 2 行），因此只有它无需端点证据即可判定为
+    /// added for them.
+    /// <para>产品 ID <c>0x0003</c> 是端口表中唯一标注为 bootrom 端口的联发科端口，因此只有它无需端点证据即可判定为
     /// <see cref="MtkUsbMode.BootRom"/>。<c>0x6000</c>（第 3 行）、<c>0x2000</c>（第 4 行）、
     /// <c>0x2001</c>（第 5 行）、<c>0x201D</c>（第 6 行）、<c>0x20FF</c>（第 7 行）与 <c>0x3000</c>
     /// （第 8 行）都标注为 preloader 端口，并与运行中的 DA 阶段共用同一产品 ID 空间，因此按 bulk 端点形状
@@ -162,31 +161,29 @@ public static class MtkModeClassifier
     internal static bool IsBulk(UsbEndpointInfo endpoint) => (endpoint.Attributes & 0x03) == 0x02;
 
     /// <summary>
-    /// Resolves an OEM rebranded MediaTek download endpoint into a concrete boot stage. The reference client
-    /// filters enumeration to vendor ids <c>0x0E8D</c>, <c>0x1004</c>, <c>0x22d9</c> and <c>0x0FCE</c>
-    /// (<c>mtkclient/Library/Connection/usblib.py</c>, line 307), and the product table
-    /// (<c>mtkclient/config/usb_ids.py</c>, lines 8-14) names each OEM product's stage: LG
+    /// Resolves an OEM rebranded MediaTek download endpoint into a concrete boot stage. This client
+    /// filters enumeration to vendor ids <c>0x0E8D</c>, <c>0x1004</c>, <c>0x22d9</c> and <c>0x0FCE</c>,
+    /// and the product table
+    /// names each OEM product's stage: LG
     /// <c>0x1004:0x6000</c> and OPPO <c>0x22d9:0x0006</c> are labelled preloader ports, while Sony
     /// <c>0x0FCE:0xF200</c> (line 10), <c>0xD1E9</c> (line 11), <c>0xD1E2</c> (line 12) and <c>0xD1EC</c>
     /// (line 13) are labelled bootrom ports.
-    /// <para>将 OEM 换牌的联发科下载端点解析为具体启动阶段。参考客户端把枚举过滤限定在厂商
-    /// <c>0x0E8D</c>、<c>0x1004</c>、<c>0x22d9</c> 与 <c>0x0FCE</c>
-    /// （<c>mtkclient/Library/Connection/usblib.py</c> 第 307 行），而产品表
-    /// （<c>mtkclient/config/usb_ids.py</c> 第 8-14 行）指明了每个 OEM 产品的阶段：LG
+    /// <para>将 OEM 换牌的联发科下载端点解析为具体启动阶段。本客户端把枚举过滤限定在厂商
+    /// <c>0x0E8D</c>、<c>0x1004</c>、<c>0x22d9</c> 与 <c>0x0FCE</c>，而产品表指明了每个 OEM 产品的阶段：LG
     /// <c>0x1004:0x6000</c> 与 OPPO <c>0x22d9:0x0006</c> 标注为 preloader 端口，而 Sony
     /// <c>0x0FCE:0xF200</c>（第 10 行）、<c>0xD1E9</c>（第 11 行）、<c>0xD1E2</c>（第 12 行）与
     /// <c>0xD1EC</c>（第 13 行）标注为 bootrom 端口。</para>
     /// </summary>
     /// <remarks>
-    /// <para>Sony <c>0x0FCE:0xD1DD</c> (line 14) is the one OEM product whose reference comment names only a device
+    /// Sony <c>0x0FCE:0xD1DD</c> (line 14) is the one OEM product whose table comment names only a device
     /// model (<c>Sony F3111</c>) rather than a boot stage; it shares the same sentinel value and the same Sony
     /// bootrom group as the four explicitly labelled Brom ports, so it is classified as Boot ROM on that grouping
     /// while the model-only comment is preserved here as the weaker evidence. Every other product id under these
-    /// OEM vendors is outside the reference port table and stays <see cref="MtkUsbMode.Unknown"/>; no mapping is
-    /// invented for it.</para>
-    /// <para>Sony <c>0x0FCE:0xD1DD</c>（第 14 行）是唯一参考注释只写设备型号（<c>Sony F3111</c>）而非启动阶段的
+    /// OEM vendors is outside the port table and stays <see cref="MtkUsbMode.Unknown"/>; no mapping is
+    /// invented for it.
+    /// <para>Sony <c>0x0FCE:0xD1DD</c>（第 14 行）是唯一只写设备型号（<c>Sony F3111</c>）而非启动阶段的
     /// OEM 产品；它与四个明确标注为 Brom 的端口共享同一哨兵值与同一 Sony bootrom 分组，因此按该分组分类为 Boot ROM，
-    /// 同时在此保留型号注释作为较弱证据。这些 OEM 厂商下的其它产品 ID 都不在参考端口表内，保持
+    /// 同时在此保留型号注释作为较弱证据。这些 OEM 厂商下的其它产品 ID 都不在端口表内，保持
     /// <see cref="MtkUsbMode.Unknown"/>，不为其臆造映射。</para>
     /// </remarks>
     /// <param name="device">The enumerated OEM USB device. <para>已枚举的 OEM USB 设备。</para></param>

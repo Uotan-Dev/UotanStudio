@@ -119,12 +119,11 @@ public sealed class AdbSyncCapabilities
     }
 
     /// <summary>
-    /// Resolves a requested codec against the negotiated capabilities, mirroring upstream
-    /// <c>ResolveCompressionType</c>: <see cref="AdbSyncCompression.Auto"/> prefers zstd, then lz4,
-    /// then brotli, else none; an explicit codec the device did not announce is rejected.
-    /// <para>按协商能力解析请求的编解码器，对齐上游 <c>ResolveCompressionType</c>：
-    /// <see cref="AdbSyncCompression.Auto"/> 优先 zstd，其次 lz4、brotli，无则不压缩；
-    /// 设备未通告的显式编解码器会被拒绝。</para>
+    /// Resolves a requested codec against the negotiated capabilities:
+    /// <see cref="AdbSyncCompression.Auto"/> prefers zstd, then lz4, then brotli, else none; an explicit
+    /// codec the device did not announce is rejected.
+    /// <para>按协商能力解析请求的编解码器：<see cref="AdbSyncCompression.Auto"/> 优先 zstd，其次 lz4、brotli，
+    /// 无则不压缩；设备未通告的显式编解码器会被拒绝。</para>
     /// </summary>
     /// <param name="requested">The requested codec. <para>请求的编解码器。</para></param>
     /// <returns>The codec to use on the wire. <para>线上使用的编解码器。</para></returns>

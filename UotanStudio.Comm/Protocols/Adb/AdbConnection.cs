@@ -852,12 +852,9 @@ internal sealed class AdbConnection : IDisposable
             CommTrace.Payload("adb-link", $"rx #{sequence} {command}", payload);
             if (payloadCrc != 0 && payloadCrc != AdbMessaging.ComputeCrc(payload))
             {
-                // The legacy additive checksum is not an integrity gate upstream: `check_header` validates the
-                // magic and the payload length only, and modern peers always send zero here. A non-zero mismatch
-                // is therefore worth a diagnostic but never a rejected frame.
                 CommTrace.Write(CommLogLevel.Debug, "adb-link",
                     $"rx #{sequence} {command} carries legacy checksum 0x{payloadCrc:X8} that does not match the " +
-                    $"payload; upstream does not validate this field, accepting the frame.");
+                    $"payload; the field is not an integrity gate, so the frame is accepted.");
             }
         }
 
@@ -1166,13 +1163,11 @@ internal sealed class AdbConnection : IDisposable
     /// <para>处理来自对端的 AUTH 握手（TOKEN / SIGNATURE / RSAPUBLICKEY）。</para>
     /// </summary>
     /// <remarks>
-    /// Mirrors upstream <c>send_auth_response()</c>: each token is answered with the next identity of the
-    /// chain and, once the chain is exhausted, the <c>RSAPUBLICKEY</c> announcement carries the public half
-    /// of the user identity at index 0 (<c>adb_auth_get_userkey()</c> reads only the user key file), which is
+    /// Each token is answered with the next identity of the chain and, once the chain is exhausted, the
+    /// <c>RSAPUBLICKEY</c> announcement carries the public half of the user identity at index 0, which is
     /// what makes the device show the authorization prompt for this host.
-    /// <para>与上游 <c>send_auth_response()</c> 一致：每个令牌用身份链的下一个身份应答，链耗尽后的
-    /// <c>RSAPUBLICKEY</c> 通告携带索引 0 处用户身份的公钥半部（<c>adb_auth_get_userkey()</c> 只读用户密钥
-    /// 文件），正是这条通告让设备为本网段主机弹出授权提示。</para>
+    /// <para>每个令牌用身份链的下一个身份应答；链耗尽后的 <c>RSAPUBLICKEY</c> 通告携带索引 0 处用户身份的
+    /// 公钥半部，正是这条通告让设备为本机弹出授权提示。</para>
     /// </remarks>
     /// <param name="message">The AUTH message. <para>AUTH 消息。</para></param>
     /// <param name="cancellationToken">Cancels the reply write. <para>取消应答写出。</para></param>
@@ -1180,7 +1175,6 @@ internal sealed class AdbConnection : IDisposable
     {
         if (_transport is Transports.Tcp.AdbTlsTransport { IsEncrypted: true })
         {
-            // Upstream ignores every AUTH message once the transport runs inside TLS.
             return;
         }
 
@@ -1235,9 +1229,9 @@ internal sealed class AdbConnection : IDisposable
     /// <summary>
     /// Handles the peer's A_STLS offer: replies with the 24-byte STLS header carrying our current STLS version and
     /// upgrades the transport to TLS, after which the loop keeps reading ADB messages over the encrypted stream.
-    /// Upstream ordering makes this the answer to our CNXN, so a plaintext device simply never sends it.
+    /// The A_STLS offer follows our CNXN on the wire, so a plaintext device simply never sends it.
     /// <para>处理对端的 A_STLS 提议：回复携带本端当前 STLS 版本的 24 字节 STLS 头并把传输升级为 TLS，之后循环继续在
-    /// 加密流上读取 ADB 消息。按上游顺序它是对主机 CNXN 的应答，因此明文设备根本不会发送它。</para>
+    /// 加密流上读取 ADB 消息。A_STLS 提议在线上跟随本端 CNXN，因此明文设备根本不会发送它。</para>
     /// </summary>
     /// <param name="message">The A_STLS message. <para>A_STLS 消息。</para></param>
     /// <param name="cancellationToken">Cancels the reply write. <para>取消应答写出。</para></param>

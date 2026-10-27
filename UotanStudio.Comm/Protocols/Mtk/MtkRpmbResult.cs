@@ -5,13 +5,9 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <para>代理针对单次 RPMB 访问上报的逐帧结果。</para>
 /// </summary>
 /// <remarks>
-/// Only the codes the reference client names are represented. The table it prints for them lives at
-/// <c>mtkclient/Library/DA/xflash/extension/xflash.py:29-38</c> and
-/// <c>mtkclient/Library/DA/xml/extension/v6.py:16-25</c>, which list exactly these eight entries; any other
+/// Only these eight codes are represented, one per documented RPMB frame outcome; any other
 /// reported number stays uninterpreted and is preserved as a raw code in <see cref="MtkRpmbFrameOutcome"/>.
-/// <para>仅表示参考客户端明确命名的状态码。其打印的对照表位于
-/// <c>mtkclient/Library/DA/xflash/extension/xflash.py:29-38</c> 与
-/// <c>mtkclient/Library/DA/xml/extension/v6.py:16-25</c>，其中恰好只有这八项；其他数值一律不做解释，
+/// <para>仅表示这八个状态码，每个对应一种已记载的 RPMB 帧结果；其他数值一律不做解释，
 /// 只以 <see cref="MtkRpmbFrameOutcome"/> 的原始码保留。
 /// </para>
 /// </remarks>
@@ -84,8 +80,8 @@ public readonly record struct MtkRpmbFrameOutcome(ushort ReportedCode, MtkRpmbFr
     /// <para>获取该上报数值是否具有证据提供的含义。</para>
     /// </summary>
     /// <value>
-    /// <see langword="false"/> for codes above seven, which the reference table does not name.
-    /// <para>大于 7 的数值返回 <see langword="false"/>，参考对照表未命名这些值。</para>
+    /// <see langword="false"/> for codes above seven, which the port table does not name.
+    /// <para>大于 7 的数值返回 <see langword="false"/>，对照表未命名这些值。</para>
     /// </value>
     public bool IsKnown => Status is not null;
 }
@@ -238,11 +234,9 @@ public sealed record MtkRpmbWriteResult
 /// <para>RPMB 状态查询结果，按接收原样保留设备应答。</para>
 /// </summary>
 /// <remarks>
-/// The reference client requests this control code, checks that the exchange completed and returns the
-/// reply without decoding it, so this record exposes no interpretation either:
-/// <c>mtkclient/Library/DA/xflash/xflash_lib.py:590-598</c>.
-/// <para>参考客户端请求此控制码、仅确认交换完成后就返回应答，从不解码，因此本记录同样不提供解释：
-/// <c>mtkclient/Library/DA/xflash/xflash_lib.py:590-598</c>。</para>
+/// This control code is requested, the exchange completion is checked and the reply is returned without
+/// decoding it, so this record exposes no interpretation either.
+/// <para>本路径请求此控制码、仅确认交换完成后就返回应答，从不解码，因此本记录同样不提供解释。</para>
 /// </remarks>
 public sealed record MtkRpmbStatusResult
 {
@@ -264,14 +258,10 @@ public sealed record MtkRpmbStatusResult
     /// <see langword="null"/>，即 XFlash 族 UFS 的 <c>lu3</c> 保持零值情形。</para>
     /// </value>
     /// <remarks>
-    /// For eMMC this is the RPMB capacity field of the storage reply
-    /// (<c>mtkclient/Library/DA/xflash/xflash_lib.py:440-478</c>). For UFS it is the <c>lu3</c> size, which the
-    /// XFlash storage reply does not carry and the reference therefore leaves zero
-    /// (<c>mtkclient/Library/DA/storage.py:101-110</c>).
-    /// <para>对 eMMC 而言这是存储应答中的 RPMB 容量字段
-    /// （<c>mtkclient/Library/DA/xflash/xflash_lib.py:440-478</c>）。对 UFS 而言这是 <c>lu3</c> 大小，
-    /// XFlash 存储应答不携带该字段，因此参考实现保持为零
-    /// （<c>mtkclient/Library/DA/storage.py:101-110</c>）。</para>
+    /// For eMMC this is the RPMB capacity field of the storage reply. For UFS it is the <c>lu3</c> size,
+    /// which the XFlash storage reply does not carry and which therefore stays zero.
+    /// <para>对 eMMC 而言这是存储应答中的 RPMB 容量字段。对 UFS 而言这是 <c>lu3</c> 大小，
+    /// XFlash 存储应答不携带该字段，因此保持为零。</para>
     /// </remarks>
     public long? ReportedRpmbCapacityBytes { get; init; }
     /// <summary>

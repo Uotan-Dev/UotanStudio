@@ -40,7 +40,7 @@ public sealed partial class MtkSession
             output => ReadXmlStorageAsync(regionName, offset, length, output, timeoutMs, progress, cancellationToken), cancellationToken);
 
     /// <summary>Compares a complete XML read with a caller-owned reference stream without stopping at the first mismatch.
-    /// <para>将一次完整的 XML 读取与调用方拥有的参考流逐字节比较，遇到首个不匹配后不停止。</para></summary>
+    /// <para>将一次完整的 XML 读取与调用方拥有的数据流逐字节比较，遇到首个不匹配后不停止。</para></summary>
     /// <remarks>A result requires final protocol success. This is a separate read, not an atomic
     /// write-and-verify transaction.</remarks>
     /// <param name="regionName">The exact discovered XML physical-region token.
@@ -49,7 +49,7 @@ public sealed partial class MtkSession
     /// <para>非负、块对齐的设备字节偏移。</para></param>
     /// <param name="length">The positive block-aligned byte count.<para>正数、块对齐的字节数。</para></param>
     /// <param name="expected">Readable reference positioned at the first expected byte.
-    /// <para>定位在首个期望字节处的可读参考流。</para></param>
+    /// <para>定位在首个期望字节处的可读数据流。</para></param>
     /// <param name="timeoutMs">Cooperative protocol deadline, from one millisecond through 24 hours.
     /// <para>协议协作式截止时间，范围从 1 毫秒到 24 小时。</para></param>
     /// <param name="progress">Optional cumulative compared and acknowledged bytes.
@@ -66,8 +66,8 @@ public sealed partial class MtkSession
     /// <para><paramref name="expected"/> 不可读或短于选定范围。</para></exception>
     /// <exception cref="InvalidOperationException">XML storage geometry is unknown or the session stage is wrong.
     /// <para>XML 存储几何信息未知或会话阶段不符。</para></exception>
-    /// <exception cref="MtkProtocolException">The XML read exchange failed, or the reference ended early.
-    /// <para>XML 读取交换失败，或参考流提前结束。</para></exception>
+    /// <exception cref="MtkProtocolException">The XML read exchange failed, or the stream ended early.
+    /// <para>XML 读取交换失败，或数据流提前结束。</para></exception>
     /// <exception cref="TimeoutException">The protocol deadline expired; the session faults.
     /// <para>协议截止时间到期；会话进入 fault 状态。</para></exception>
     /// <exception cref="OperationCanceledException">The caller cancelled the read or comparison.

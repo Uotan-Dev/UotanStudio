@@ -99,14 +99,14 @@ public sealed class TransferConfig
     /// Reserved field 1.
     /// <para>保留字段 1。</para>
     /// </summary>
-    /// <value>Unused upstream slot, serialized as an empty string. <para>未使用的上游保留位，序列化为空字符串。</para></value>
+    /// <value>Unused reserved slot, serialized as an empty string. <para>未使用的保留位，序列化为空字符串。</para></value>
     public string Reserve1 { get; set; } = "";
 
     /// <summary>
     /// Reserved field 2.
     /// <para>保留字段 2。</para>
     /// </summary>
-    /// <value>Unused upstream slot, serialized as an empty string. <para>未使用的上游保留位，序列化为空字符串。</para></value>
+    /// <value>Unused reserved slot, serialized as an empty string. <para>未使用的保留位，序列化为空字符串。</para></value>
     public string Reserve2 { get; set; } = "";
 }
 
@@ -131,8 +131,8 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
     public event Action<long, long>? Progress;
 
     /// <summary>
-    /// Enables upstream LZ4 block compression for this client's transfers.
-    /// <para>为本客户端的传输启用上游 LZ4 块压缩。</para>
+    /// Enables LZ4 block compression for this client's transfers.
+    /// <para>为本客户端的传输启用 LZ4 块压缩。</para>
     /// </summary>
     /// <value>When <see langword="true"/>, outgoing chunks are LZ4-compressed behind the 64-byte prefix and receives request compressed data; each chunk falls back to raw bytes when compression does not shrink it.
     /// <para>为 <see langword="true"/> 时，出站数据块在 64 字节前缀后进行 LZ4 压缩，接收也请求压缩数据；压缩未能缩小的数据块保持原始字节。</para></value>
@@ -363,7 +363,7 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
     }
 
     /// <summary>
-    /// Serializes the upstream TransferConfig protobuf schema.
+    /// Serializes the <c>TransferConfig</c> protobuf schema.
     /// <para>按上游 TransferConfig 的 protobuf 模式序列化。</para>
     /// </summary>
     /// <param name="config">Configuration to encode; fields become tagged protobuf numbers and UTF-8 strings.<para>待编码的配置；各字段编码为带标签的 protobuf 数值与 UTF-8 字符串。</para></param>
@@ -373,7 +373,7 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable, Contr
     public static byte[] SerializeTransferConfig(TransferConfig config) => HdcTransferCodec.EncodeConfig(config);
 
     /// <summary>
-    /// Parses the upstream TransferConfig protobuf schema.
+    /// Parses the <c>TransferConfig</c> protobuf schema.
     /// <para>解析上游 TransferConfig 的 protobuf 模式。</para>
     /// </summary>
     /// <param name="data">Raw envelope payload produced by the daemon.<para>由守护进程产生的原始信封负载。</para></param>

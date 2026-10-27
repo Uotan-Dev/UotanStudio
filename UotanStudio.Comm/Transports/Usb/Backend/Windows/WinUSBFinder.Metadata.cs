@@ -449,10 +449,10 @@ internal static partial class WinUSBFinder
     /// <summary>
     /// Resolves the serial of one enumerated interface in the order Windows itself prefers: an instance-id suffix
     /// that carries the serial, then a serial remembered for this instance, then a single gated descriptor probe.
-    /// A failed probe is remembered briefly and keeps the previously read serial, so an interface that another
+    /// A failed probe is remembered briefly and keeps the last read serial, so an interface that another
     /// process or this application currently owns does not degrade the device to a <c>VID:PID</c> label.
     /// <para>按 Windows 自身的优先级解析一个枚举接口的序列号：先看携带序列号的实例 ID 后缀，其次看为该实例记下的
-    /// 序列号，最后做一次受控闸门的描述符探测。探测失败会被短暂记住并保留此前读到的序列号，因此被其它进程或本
+    /// 序列号，最后做一次受控闸门的描述符探测。探测失败会被短暂记住并保留上次读到的序列号，因此被其它进程或本
     /// 程序占用的接口不会让设备降级成 <c>VID:PID</c> 标签。</para>
     /// </summary>
     /// <param name="path">Device interface path. <para>设备接口路径。</para></param>

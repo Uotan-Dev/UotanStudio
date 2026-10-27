@@ -5,9 +5,9 @@ using UotanStudio.Comm.Transports.Abstractions;
 namespace UotanStudio.Comm.Protocols.Fastboot.Transport;
 
 /// <summary>
-/// Fastboot over TCP transport, implementing the AOSP TCP fastboot protocol
+/// Fastboot over TCP transport, implementing the fastboot-over-TCP wire protocol
 /// ("FB01" handshake and 8-byte big-endian length-prefixed frames).
-/// <para>基于 TCP 的 Fastboot 传输，实现 AOSP TCP fastboot 协议
+/// <para>基于 TCP 的 Fastboot 传输，实现 fastboot-over-TCP 线协议
 /// （"FB01" 握手与 8 字节大端长度前缀帧）。</para>
 /// </summary>
 internal sealed class FastbootTcpTransport : ICommTransport

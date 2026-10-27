@@ -13,17 +13,16 @@ namespace UotanStudio.Comm.Transports.Tcp;
 /// <summary>
 /// ADB transport to adbd's Android 11+ secure service (<c>_adb-tls-connect</c>). Constructing or
 /// reconnecting it only establishes the plaintext TCP connection and never writes on the wire, because the
-/// upgrade is driven by the ADB protocol layer in upstream order: the host sends its A_CNXN first, and only a
+/// upgrade is driven by the ADB protocol layer in protocol order: the host sends its A_CNXN first, and only a
 /// device that answers with A_STLS gets the 24-byte STLS reply followed by the TLS 1.3 client handshake
 /// presenting the certificate registered during pairing. Plaintext devices therefore keep speaking CNXN/AUTH
-/// on an untouched wire. The device's self-signed server certificate is accepted without validation, as AOSP
-/// does: adbd generates a random RSA key per process and rebuilds its certificate with the current time as
+/// on an untouched wire. The device's self-signed server certificate is accepted without validation: adbd generates a random RSA key per process and rebuilds its certificate with the current time as
 /// <c>notBefore</c> on every handshake, so the certificate differs on each connection and the device, not the
 /// host, is the side that authenticates a key.
 /// <para>直连 adbd Android 11+ 安全服务（<c>_adb-tls-connect</c>）的 ADB 传输。构造或重连只建立明文 TCP
-/// 连接、不在线路上写任何字节，因为升级由 ADB 协议层按上游顺序驱动：主机先发 A_CNXN，只有以 A_STLS
+/// 连接、不在线路上写任何字节，因为升级由 ADB 协议层按协议顺序驱动：主机先发 A_CNXN，只有以 A_STLS
 /// 应答的设备才会收到 24 字节 STLS 回复，随后出示配对阶段登记的证书完成 TLS 1.3 客户端握手。明文设备
-/// 因此在未被触碰的线路上继续使用 CNXN/AUTH。设备自签的服务端证书按 AOSP 语义接受且不校验：adbd 每个进程
+/// 因此在未被触碰的线路上继续使用 CNXN/AUTH。设备自签的服务端证书接受且不校验：adbd 每个进程
 /// 生成随机 RSA 密钥，并在每次握手时以当前时间作为 <c>notBefore</c> 重新生成证书，因此证书每次连接都会变化，
 /// 认证方向是设备校验主机密钥而不是主机校验设备。</para>
 /// <para>On Windows the platform stack (Schannel) rejects the in-memory host identity certificate because its
@@ -227,11 +226,6 @@ internal sealed class AdbTlsTransport : ICommTransport
         {
             if (_managedProtocol is not null)
             {
-                // BouncyCastle's TlsStream serializes *asynchronous* reads and writes through one semaphore, so the
-                // permanently pending read of the ADB message loop would block every write and deadlock the
-                // full-duplex protocol. Its synchronous read and write share only the record write lock, so the
-                // managed stack performs a blocking read on the pool and honours the deadline through the socket
-                // receive timeout set above.
                 var read = await Task.Run(() => stream.Read(buffer, offset, length), CancellationToken.None)
                     .ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -284,9 +278,6 @@ internal sealed class AdbTlsTransport : ICommTransport
         {
             if (_managedProtocol is not null)
             {
-                // See ReadAsync: the managed stack must never enter an awaited read and an awaited write at the
-                // same time. The blocking write is bounded by the socket send timeout set above and serialized by
-                // BouncyCastle's record write lock.
                 cancellationToken.ThrowIfCancellationRequested();
                 stream.Write(data, offset, length);
                 return length;
@@ -638,9 +629,9 @@ internal sealed class AdbTlsTransport : ICommTransport
 
     /// <summary>
     /// BouncyCastle TLS 1.3 client used when the platform stack cannot present the ephemeral pairing certificate.
-    /// It offers only that certificate, accepts the device's self-signed server certificate as AOSP does and signs
+    /// It offers only that certificate, accepts the device's self-signed server certificate and signs
     /// the CertificateVerify message with RSA-PSS.
-    /// <para>当平台栈无法出示临时配对证书时使用的 BouncyCastle TLS 1.3 客户端。它只出示该证书，按 AOSP 语义接受
+    /// <para>当平台栈无法出示临时配对证书时使用的 BouncyCastle TLS 1.3 客户端。它只出示该证书，接受
     /// 设备的自签服务端证书，并用 RSA-PSS 签署 CertificateVerify。</para>
     /// </summary>
     private sealed class AdbManagedTlsClient(BcTlsCrypto crypto, X509Certificate2 certificate)

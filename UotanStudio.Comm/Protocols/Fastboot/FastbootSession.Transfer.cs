@@ -10,13 +10,13 @@ public sealed partial class FastbootSession
     /// <para>协商并缓存设备支持的最大下载大小。</para>
     /// </summary>
     /// <remarks>
-    /// <para>Queries <c>max-download-size</c> via getvar and clamps against the wire-level ceiling
+    /// Queries <c>max-download-size</c> via getvar and clamps against the wire-level ceiling
     /// (<see cref="FastbootConstants.SparseMaxDownloadSize"/>). Only a usable, device-confirmed number is
     /// cached: a FAIL reply, a timeout, a transport error or an unparsable/zero answer yields
     /// <see cref="FastbootConstants.FallbackMaxDownloadSize"/> without caching it, and any such answer is
     /// evicted from the session getvar cache, so the next call re-negotiates instead of pinning a device
     /// whose real limit is far smaller to the fallback for the rest of the session. A value already
-    /// collected by <see cref="GetAllVariables"/> is reused from that cache.</para>
+    /// collected by <see cref="GetAllVariables"/> is reused from that cache.
     /// <para>通过 getvar 查询 <c>max-download-size</c>，并按线协议上限
     /// （<see cref="FastbootConstants.SparseMaxDownloadSize"/>）钳制。只有设备确认且可用的数值才会缓存：
     /// FAIL 应答、超时、传输错误或无法解析/为零的应答会返回
@@ -93,7 +93,7 @@ public sealed partial class FastbootSession
     /// <para>每个分块发送后接收累计字节数；可为 <see langword="null"/>。</para></param>
     /// <param name="cancellationToken">Checked before every chunk read; cancelling aborts the download mid-payload.
     /// <para>每次读取分块前检查；取消会在传输中途终止下载。</para></param>
-    /// <returns>The terminal device response after the payload. A DATA reply announcing fewer bytes than requested is zero-filled up to the announced size, drained, and returned with its text rewritten; a DATA reply announcing more, or a terminal reply that never arrives, resets the transport before returning, because the bootloader's download state machine can no longer be satisfied from this side.
+    /// <returns>The terminal device response after the payload. A DATA reply announcing fewer bytes than requested is zero-filled up to the announced size, drained, and returned with its text rewritten; a DATA reply announcing more, or a terminal reply that never arrives, resets the transport before returning, because the bootloader's download state machine cannot be satisfied from this side.
     /// <para>负载传输后的设备终态响应。DATA 应答声明的字节数少于请求时，先按声明尺寸补零并排空，再返回 改写文本后的响应；DATA 应答声明得更多，或终态应答始终未到达时，先重置传输再返回，因为 bootloader 的下载状态机已无法从本端满足。</para></returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="length"/> is not in 1..<see cref="uint.MaxValue"/>.
     /// <para><paramref name="length"/> 不在 1 到 <see cref="uint.MaxValue"/> 范围内。</para></exception>
@@ -188,7 +188,7 @@ public sealed partial class FastbootSession
     }
 
     /// <summary>
-    /// Completes an abandoned download the way AOSP <c>AbortDownload</c> does: zero-fills the bytes
+    /// Completes an abandoned download: zero-fills the bytes
     /// the device still expects, then consumes the trailing terminal frame so the bootloader's
     /// download state machine returns to idle and the next command does not read a stale reply. A
     /// bootloader that never acknowledges (or a transport that cannot write the padding) leaves the
@@ -196,7 +196,7 @@ public sealed partial class FastbootSession
     /// caches describing the device's identity are dropped. A session already being disposed skips the
     /// recovery entirely: this runs on the failure path, and its own disposal error must not mask the
     /// exception being reported to the caller.
-    /// <para>按 AOSP <c>AbortDownload</c> 的语义完成一次被弃单的下载：把设备仍在等待的字节补零发完，
+    /// <para>完成一次被弃单的下载：把设备仍在等待的字节补零发完，
     /// 随后消费尾部的终止帧，使 bootloader 的下载状态机回到空闲，下一条命令不会读到过期应答。
     /// 若 bootloader 始终不确认（或传输无法写入填充），仅靠协议已无法恢复会话，因此重置传输并丢弃
     /// 描述设备身份的会话缓存。已在释放中的会话会完全跳过恢复：本方法运行在失败路径上，它自己的释放
@@ -415,10 +415,10 @@ public sealed partial class FastbootSession
     }
 
     /// <summary>
-    /// Consumes up to <paramref name="count"/> bytes previously retained by the response parser
+    /// Consumes up to <paramref name="count"/> bytes retained by the response parser
     /// (bytes the transport delivered past a terminal frame) into <paramref name="target"/>, so
     /// coalesced payload bytes are never stranded in the pending buffer.
-    /// <para>把响应解析器此前保留的超额字节（传输在终止帧之后送达的部分）最多
+    /// <para>把响应解析器保留的超额字节（传输在终止帧之后送达的部分）最多
     /// <paramref name="count"/> 个移入 <paramref name="target"/>，合并送达的负载字节因此
     /// 不会滞留在待解析缓冲区中。</para>
     /// </summary>
@@ -435,12 +435,12 @@ public sealed partial class FastbootSession
         return take;
     }
 
-    /// <summary>Uploads the data staged on the device with the AOSP <c>upload</c> command and writes it to the specified stream.
-    /// <para>执行 AOSP 的 <c>upload</c> 命令把设备上暂存的数据上传并写入指定流。</para>
+    /// <summary>Uploads the data staged on the device with the <c>upload</c> command and writes it to the specified stream.
+    /// <para>执行 <c>upload</c> 命令把设备上暂存的数据上传并写入指定流。</para>
     /// The wire command is the bare word <c>upload</c>: the device returns whatever a previous <c>download</c> staged, so no filename travels with it.
     /// <para>线命令是裸词 <c>upload</c>：设备返回先前 <c>download</c> 暂存的内容，因此命令不携带文件名。</para></summary>
-    /// <param name="filename">Retained for source compatibility only; the AOSP <c>upload</c> command carries no filename, so this value is not sent.
-    /// <para>仅为源码兼容保留；AOSP 的 <c>upload</c> 命令不携带文件名，因此该值不会发送。</para></param>
+    /// <param name="filename">Retained for source compatibility only; the <c>upload</c> command carries no filename, so this value is not sent.
+    /// <para>仅为源码兼容保留；<c>upload</c> 命令不携带文件名，因此该值不会发送。</para></param>
     /// <param name="output">Stream the uploaded content is appended to at its current position; the caller keeps ownership.
     /// <para>在当前位置追加已上传内容的流；所有权由调用方保留。</para></param>
     /// <param name="progress">Receives the cumulative received byte count after each chunk; may be <see langword="null"/>.
@@ -462,8 +462,8 @@ public sealed partial class FastbootSession
     /// Uploads the data staged on the device and saves it to the specified output path.
     /// <para>从设备上传暂存数据并保存到指定输出路径。</para>
     /// </summary>
-    /// <param name="filename">Retained for source compatibility only; the AOSP <c>upload</c> command carries no filename, so this value is not sent.
-    /// <para>仅为源码兼容保留；AOSP 的 <c>upload</c> 命令不携带文件名，因此该值不会发送。</para></param>
+    /// <param name="filename">Retained for source compatibility only; the <c>upload</c> command carries no filename, so this value is not sent.
+    /// <para>仅为源码兼容保留；<c>upload</c> 命令不携带文件名，因此该值不会发送。</para></param>
     /// <param name="outputPath">Local destination file, created or truncated before the transfer starts. <para>本地目标文件，在传输开始前创建或截断。</para></param>
     /// <returns>The trailing OKAY/FAIL response after the payload. <para>负载之后的 OKAY/FAIL 终态响应。</para></returns>
     /// <exception cref="IOException">The destination path cannot be created or written. <para>目标路径无法创建或写入。</para></exception>
@@ -478,8 +478,8 @@ public sealed partial class FastbootSession
     /// Uploads the data staged on the device and returns its contents as a byte array.
     /// <para>从设备上传暂存数据并以字节数组形式返回其内容。</para>
     /// </summary>
-    /// <param name="filename">Retained for source compatibility only; the AOSP <c>upload</c> command carries no filename, so this value is not sent.
-    /// <para>仅为源码兼容保留；AOSP 的 <c>upload</c> 命令不携带文件名，因此该值不会发送。</para></param>
+    /// <param name="filename">Retained for source compatibility only; the <c>upload</c> command carries no filename, so this value is not sent.
+    /// <para>仅为源码兼容保留；<c>upload</c> 命令不携带文件名，因此该值不会发送。</para></param>
     /// <returns>The complete uploaded content buffered in memory. <para>缓冲在内存中的完整上传内容。</para></returns>
     /// <exception cref="FastbootException">The command did not answer with DATA, or the transfer did not end in OKAY. <para>命令未返回 DATA，或传输未以 OKAY 结束。</para></exception>
     /// <exception cref="EndOfStreamException">The device stopped sending before the announced payload size. <para>设备在声明的负载大小传完前停止发送。</para></exception>

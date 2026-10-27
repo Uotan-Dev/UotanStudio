@@ -120,8 +120,8 @@ public sealed class FlashBundleOptions
 
     /// <summary>
     /// Gets or sets whether program entries whose source image is absent are dropped instead of
-    /// failing the bundle, mirroring the per-partition selection of a package GUI.
-    /// <para>获取或设置源镜像缺失的 program 条目是被丢弃还是使整包失败，对应包图形界面的逐项选择行为。</para>
+    /// failing the bundle, so a bundle with partly missing sources can still be flashed.
+    /// <para>获取或设置源镜像缺失的 program 条目是被丢弃还是使整包失败，使源文件部分缺失的整包仍可刷写。</para>
     /// </summary>
     /// <value>True to skip entries whose resolved source file does not exist and record each as a warning;
     /// false makes a missing image abort preparation.

@@ -3,8 +3,8 @@ using System.Text;
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>
-/// Builds the command text of an upstream remote-client task: <c>&lt;command&gt; remote -cwd "&lt;host cwd&gt;" &lt;arguments&gt;</c>.
-/// <para>构建上游 remote-client 任务的命令文本：<c>&lt;command&gt; remote -cwd "&lt;宿主工作目录&gt;" &lt;参数&gt;</c>。</para>
+/// Builds the command text of a remote-client task: <c>&lt;command&gt; remote -cwd "&lt;host cwd&gt;" &lt;arguments&gt;</c>.
+/// <para>构建 remote-client 任务的命令文本：<c>&lt;command&gt; remote -cwd "&lt;宿主工作目录&gt;" &lt;参数&gt;</c>。</para>
 /// </summary>
 internal static class HdcServerRemoteCommand
 {
@@ -15,8 +15,8 @@ internal static class HdcServerRemoteCommand
     private const string RemoteMarker = "remote";
 
     /// <summary>
-    /// Builds one remote-client command line with the host working directory appended as the upstream <c>-cwd</c>
-    /// option. <para>构建一条 remote-client 命令行，并按上游约定追加宿主工作目录作为 <c>-cwd</c> 选项。</para>
+    /// Builds one remote-client command line with the host working directory appended as the <c>-cwd</c>
+    /// option. <para>构建一条 remote-client 命令行，并追加宿主工作目录作为 <c>-cwd</c> 选项。</para>
     /// </summary>
     /// <param name="command">Command words such as <c>file send</c>. <para>命令词，例如 <c>file send</c>。</para></param>
     /// <param name="arguments">Path or option arguments appended in order; empty strings are skipped.
@@ -39,8 +39,8 @@ internal static class HdcServerRemoteCommand
     }
 
     /// <summary>
-    /// Quotes one command argument the way the upstream client does, only when it contains whitespace.
-    /// <para>按上游客户端的方式引用单个命令参数，仅在包含空白时加引号。</para>
+    /// Quotes one command argument the way the remote client expects, only when it contains whitespace.
+    /// <para>按 remote 客户端约定的方式引用单个命令参数，仅在包含空白时加引号。</para>
     /// </summary>
     /// <param name="value">Argument text that must not contain a quote or NUL character.
     /// <para>参数文本；不得包含引号或 NUL 字符。</para></param>

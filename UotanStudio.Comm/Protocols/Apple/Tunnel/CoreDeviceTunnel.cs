@@ -16,12 +16,12 @@ namespace UotanStudio.Comm.Protocols.Apple.Tunnel;
 /// </summary>
 internal sealed class CoreDeviceTunnel : IDisposable
 {
-    /// <summary>Gets the MTU requested from the device, mirroring the upstream TCP tunnel.
-    /// <para>获取向设备请求的 MTU，与上游 TCP 隧道一致。</para></summary>
+    /// <summary>Gets the MTU requested from the device in the CDTunnel handshake.
+    /// <para>获取在 CDTunnel 握手中向设备请求的 MTU。</para></summary>
     public const int RequestedMtu = 16000;
 
-    /// <summary>Gets the on-link prefix length applied to the negotiated client address, matching
-    /// the upstream tunnel convention. <para>获取本端地址使用的链路前缀长度，与上游隧道约定一致。</para></summary>
+    /// <summary>Gets the on-link prefix length applied to the negotiated client address.
+    /// <para>获取应用于协商所得本端地址的链路前缀长度。</para></summary>
     public const int DefaultPrefixLength = 64;
 
     private const int Ipv6HeaderSize = 40;
@@ -179,9 +179,9 @@ internal sealed class CoreDeviceTunnel : IDisposable
     /// <summary>
     /// Starts the two pump threads moving raw IPv6 packets between the service stream and the TUN
     /// device; the stream→TUN pump forwards only IPv6 packets, the TUN→stream pump forwards packets
-    /// whose IP version nibble is 6, matching the upstream tunnel.
+    /// whose IP version nibble is 6.
     /// <para>启动两个泵线程，在服务流与 TUN 设备之间搬运原始 IPv6 报文；stream→TUN 泵只转发 IPv6
-    /// 报文，TUN→stream 泵只转发 IP 版本号为 6 的报文，与上游隧道一致。</para>
+    /// 报文，TUN→stream 泵只转发 IP 版本号为 6 的报文。</para>
     /// </summary>
     /// <param name="device">The TUN device; ownership transfers to this tunnel.
     /// <para>TUN 设备；所有权转移给本隧道。</para></param>

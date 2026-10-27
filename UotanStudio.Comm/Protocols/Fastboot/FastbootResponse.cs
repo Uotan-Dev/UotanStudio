@@ -174,10 +174,10 @@ public class FastbootResponse
     /// <para>除确认的 OKAY 外一律抛出 <see cref="FastbootException"/>。</para>
     /// </summary>
     /// <remarks>
-    /// <para>Only <c>OKAY</c> is a trustworthy terminal frame: <c>FAIL</c>, a timeout, or an unrecognized
+    /// Only <c>OKAY</c> is a trustworthy terminal frame: <c>FAIL</c>, a timeout, or an unrecognized
     /// status must all fail the operation, because every destructive call site (download, flash, boot,
     /// update-super) gates the next command on this check, and a silently-passed garbage reply would let a
-    /// flash proceed on a device that never acknowledged the payload.</para>
+    /// flash proceed on a device that never acknowledged the payload.
     /// <para>只有 <c>OKAY</c> 是可信的终态帧：<c>FAIL</c>、超时或无法识别的状态都必须使操作失败，因为
     /// 每个破坏性调用点（download、flash、boot、update-super）都以本检查作为下一条命令的闸门；被静默
     /// 放行的垃圾应答会让刷写从未确认负载的设备上继续。</para>

@@ -39,13 +39,13 @@ public sealed partial class MtkSession
     /// packet-size-dependent writes or explicit zero-length packets. No resource is fetched,
     /// padded, patched or retried. A device-reported checksum of zero, or one that differs from the
     /// computed value, is kept as warning evidence and does not fail the exchange, matching the
-    /// reference upload. A status of <c>0x1D0C</c> on the authentication command means the target
+    /// this upload. A status of <c>0x1D0C</c> on the authentication command means the target
     /// needs no authentication; the exchange completes without uploading when that is the initial status,
     /// or after the upload when the completion frame reports it.
     /// Default bootstrap and agent upload do not invoke this method. Bootstrap invokes it
     /// only for explicitly selected kinds with a configured byte-stream resource provider.
     /// <para>调用方必须选择字节流配置，而不是需要按包长写入或显式零长度包的 USB 实现。不会抓取、填充、修补或重试任何资源。
-    /// 设备上报的校验和为零或与计算值不同时，仅作为 warning 证据保留，不会使交换失败，与参考上传一致。
+    /// 设备上报的校验和为零或与计算值不同时，仅作为 warning 证据保留，不会使交换失败，与本次上传一致。
     /// 认证命令返回 <c>0x1D0C</c> 表示目标无需认证：若该状态出现在初始应答则不上传资源即完成，
     /// 若出现在上传后的完成帧也同样按完成处理。默认引导与代理上传不会调用本方法；
     /// 仅当显式选定资源种类并配置了字节流资源提供程序时，引导流程才会调用。</para>

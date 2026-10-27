@@ -192,12 +192,11 @@ public sealed partial class MtkSession : IProtocolSession
 
     /// <summary>
     /// Opens a session over an already-opened USB bulk session (BROM PID 0E8D:0003 or
-    /// preloader/DA 0E8D:2000|2001). The BROM/XFlash command set is identical over USB
-    /// (mtkclient uses the same byte protocol on the bulk endpoints); the command interface
-    /// selection is now verified against the observed descriptors before the first protocol byte.
+    /// preloader/DA 0E8D:2000|2001). The BROM/XFlash command set is identical over USB; the command
+    /// interface selection is verified against the observed descriptors before the first protocol byte.
     /// <para>在已打开的 USB 批量端点会话上打开会话（BROM PID 0E8D:0003 或
-    /// preloader/DA 0E8D:2000|2001）。BROM/XFlash 命令集在 USB 上与串口一致（mtkclient
-    /// 在 bulk 端点使用同一字节协议）；命令接口选择现在会在第一个协议字节前依据已观测描述符进行校验。</para>
+    /// preloader/DA 0E8D:2000|2001）。BROM/XFlash 命令集在 USB 上与串口一致；命令接口选择会在第一个
+    /// 协议字节前依据已观测描述符进行校验。</para>
     /// </summary>
     /// <param name="session">An opened USB device session bound to the command interface.
     /// 已打开并绑定命令接口的 USB 设备会话。</param>
@@ -339,13 +338,13 @@ public sealed partial class MtkSession : IProtocolSession
         }
     }
 
-    /// <summary>Runs the complemented-byte boot handshake, using the reference's relaxed resynchronization only when descriptor evidence proves a non-Boot-ROM USB product id.
-    /// <para>执行反码字节 boot 握手；仅当描述符证据证明是非 Boot ROM 的 USB 产品 ID 时，才使用参考实现的宽松重同步。</para></summary>
+    /// <summary>Runs the complemented-byte boot handshake, using the relaxed resynchronization only when descriptor evidence proves a non-Boot-ROM USB product id.
+    /// <para>执行反码字节 boot 握手；仅当描述符证据证明是非 Boot ROM 的 USB 产品 ID 时，才使用宽松重同步。</para></summary>
     /// <remarks>The Boot ROM product id keeps the strict single pass. Every other known USB product id first writes
     /// 0xA0 without reading an echo, then retries the full four-byte sequence up to five times, draining stale input
-    /// and restarting from the first byte after each mismatch, as <c>mtkclient/Library/Port.py:147-192</c> does.
+    /// and restarting from the first byte after each mismatch, as does.
     /// <para>Boot ROM 产品 ID 保持严格单趟语义。其他已知 USB 产品 ID 先单独写入 0xA0 且不读取回显，随后最多重试完整
-    /// 四字节序列五次；每次不匹配后清空陈旧输入并从首字节重同步，与 <c>mtkclient/Library/Port.py:147-192</c> 一致。</para></remarks>
+    /// 四字节序列五次；每次不匹配后清空陈旧输入并从首字节重同步，与 一致。</para></remarks>
     /// <param name="cancellationToken">The operation cancellation token. 操作取消令牌。</param>
     private async Task RunBootHandshakeOwnedAsync(CancellationToken cancellationToken)
     {
@@ -820,9 +819,9 @@ public sealed partial class MtkSession : IProtocolSession
         });
     }
 
-    /// <summary>Records the observed USB descriptor identity so the boot handshake can follow the upstream
+    /// <summary>Records the observed USB descriptor identity so the boot handshake can follow the
     /// Boot ROM versus preloader distinction without probing the device.
-    /// <para>记录已观测的 USB 描述符身份，使 boot 握手无需探测设备即可遵循上游的 Boot ROM 与 preloader 区分。</para>
+    /// <para>记录已观测的 USB 描述符身份，使 boot 握手无需探测设备即可遵循 Boot ROM 与 preloader 的区分。</para>
     /// </summary>
     /// <param name="device">The observed descriptors of the device behind the transport.
     /// <para>传输之后设备的已观测描述符。</para></param>

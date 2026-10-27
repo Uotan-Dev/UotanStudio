@@ -12,21 +12,18 @@ public sealed partial class MtkSession
     /// <param name="reply">The reply payload the agent delivered for the addressed frame.
     /// <para>代理针对已寻址帧交付的应答载荷。</para></param>
     /// <returns>
-    /// The raw code plus its named meaning when the reference table supplies one.
-    /// <para>原始数值，以及参考对照表提供含义时的已命名结果。</para>
+    /// The raw code plus its named meaning when the port table supplies one.
+    /// <para>原始数值，以及对照表提供含义时的已命名结果。</para>
     /// </returns>
     /// <exception cref="MtkProtocolException">
     /// The reply is empty or wider than eight bytes; the exchange faults and is never replayed.
     /// <para>应答为空或超过八字节；交换进入 fault 状态且绝不重放。</para>
     /// </exception>
     /// <remarks>
-    /// The reference client treats any frame whose length is not <c>0x100</c> as the little-endian error code
-    /// (<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-497</c> and
-    /// <c>mtkclient/Library/DA/xml/extension/v6.py:626-649</c>). The named error codes are small, so the low
+    /// This client treats any frame whose length is not <c>0x100</c> as the little-endian error code
+    /// . The named error codes are small, so the low
     /// sixteen bits are reported while wider codes stay visibly uninterpreted.
-    /// <para>参考客户端把任何长度不是 <c>0x100</c> 的帧视为小端错误码
-    /// （<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-497</c> 与
-    /// <c>mtkclient/Library/DA/xml/extension/v6.py:626-649</c>）。已命名的错误码都很小，因此上报低十六位，
+    /// <para>本客户端把任何长度不是 <c>0x100</c> 的帧视为小端错误码。已命名的错误码都很小，因此上报低十六位，
     /// 更宽的错误码保持未解释状态。</para>
     /// </remarks>
     private static MtkRpmbFrameOutcome ReadRpmbFrameOutcome(ReadOnlySpan<byte> reply)
@@ -44,8 +41,8 @@ public sealed partial class MtkSession
     }
 
     /// <summary>
-    /// Builds the single frame the reference client sends for an addressed RPMB frame index.
-    /// <para>构造参考客户端针对已寻址 RPMB 帧序号发送的单个数据帧。</para>
+    /// Builds the single frame this client sends for an addressed RPMB frame index.
+    /// <para>构造本客户端针对已寻址 RPMB 帧序号发送的单个数据帧。</para>
     /// </summary>
     /// <param name="frame">The already validated zero-based frame index.
     /// <para>已经校验过的从零开始的帧序号。</para></param>
@@ -56,11 +53,9 @@ public sealed partial class MtkSession
     /// </exception>
     /// <remarks>
     /// An integer argument is packed as <c>&lt;I</c> by the transport helper the RPMB commands reuse:
-    /// <c>mtkclient/Library/DA/xflash/xflash_lib.py:93-101</c> and
-    /// <c>mtkclient/Library/DA/xml/xml_lib.py:135-154</c>.
+    /// and.
     /// <para>RPMB 命令复用的传输辅助函数会以 <c>&lt;I</c> 打包整数参数：
-    /// <c>mtkclient/Library/DA/xflash/xflash_lib.py:93-101</c> 与
-    /// <c>mtkclient/Library/DA/xml/xml_lib.py:135-154</c>。</para>
+    /// 与。</para>
     /// </remarks>
     private static byte[] CreateRpmbFrameWord(long frame)
     {

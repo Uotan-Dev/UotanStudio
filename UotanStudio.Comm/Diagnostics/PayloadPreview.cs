@@ -8,9 +8,9 @@ namespace UotanStudio.Comm.Diagnostics;
 /// 预览绝不会超过给定上限，因此文件传输或设备应答不会把全部内容倒进日志。</para>
 /// </summary>
 /// <remarks>
-/// <para>The line is rendered into a stack buffer (or one pooled character array for oversized bounds) and published
+/// The line is rendered into a stack buffer (or one pooled character array for oversized bounds) and published
 /// with a single string allocation — per-frame trace paths format a preview for every inbound message, so no
-/// intermediate hexadecimal strings or builders are produced.</para>
+/// intermediate hexadecimal strings or builders are produced.
 /// <para>整行渲染进栈缓冲（超上限的预览用一次池化的字符数组），并以单次字符串分配发布——逐帧跟踪路径为每条入站
 /// 消息格式化一次预览，因此不再产生中间的十六进制字符串或构造器。</para>
 /// </remarks>

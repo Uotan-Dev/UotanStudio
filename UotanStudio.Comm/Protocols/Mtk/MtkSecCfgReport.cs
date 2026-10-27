@@ -3,55 +3,51 @@ namespace UotanStudio.Comm.Protocols.Mtk.Security;
 /// <summary>The secure-boot configuration layout found on the <c>seccfg</c> partition.
 /// <para>在 <c>seccfg</c> 分区上发现的安全启动配置布局。</para></summary>
 /// <remarks>
-/// The reference client selects a layout by header bytes only: the <c>AND_SECCFG_v</c> prefix
-/// (first 0xC bytes) means version 3 and the little-endian dword <c>0x4D4D4D4D</c> means version 4,
-/// see mtkclient Library/DA/xflash/extension/xflash.py:582-592 and
-/// Library/DA/legacy/extension/legacy.py:183-190. An unknown header is rejected rather than guessed.
-/// <para>参考客户端仅按头部字节选择布局：前 0xC 字节为 <c>AND_SECCFG_v</c> 表示版本 3，
-/// 小端双字 <c>0x4D4D4D4D</c> 表示版本 4，参见 mtkclient Library/DA/xflash/extension/xflash.py:582-592
-/// 与 Library/DA/legacy/extension/legacy.py:183-190。未知头部会被拒绝而不会被猜测。</para>
+/// The layout is selected by header bytes only: the <c>AND_SECCFG_v</c> prefix
+/// (first 0xC bytes) means version 3 and the little-endian dword <c>0x4D4D4D4D</c> means version 4.
+/// An unknown header is rejected rather than guessed.
+/// <para>布局仅按头部字节选择：前 0xC 字节为 <c>AND_SECCFG_v</c> 表示版本 3，
+/// 小端双字 <c>0x4D4D4D4D</c> 表示版本 4。未知头部会被拒绝而不会被猜测。</para>
 /// </remarks>
 public enum MtkSecCfgFormat
 {
-    /// <summary>The version 3 layout with the <c>AND_SECCFG_v</c> banner (seccfg.py:138-228).
-    /// <para>带 <c>AND_SECCFG_v</c> 标头的版本 3 布局（seccfg.py:138-228）。</para></summary>
+    /// <summary>The version 3 layout with the <c>AND_SECCFG_v</c> banner.
+    /// <para>带 <c>AND_SECCFG_v</c> 标头的版本 3 布局。</para></summary>
     Version3,
-    /// <summary>The compact version 4 layout of seven dwords plus a trailing hash (seccfg.py:11-102).
-    /// <para>由 7 个双字加尾部摘要组成的紧凑版本 4 布局（seccfg.py:11-102）。</para></summary>
+    /// <summary>The compact version 4 layout of seven dwords plus a trailing hash.
+    /// <para>由 7 个双字加尾部摘要组成的紧凑版本 4 布局。</para></summary>
     Version4
 }
 
 /// <summary>The caller's requested change to the secure-boot lock state.
 /// <para>调用方请求的安全启动锁定状态变更。</para></summary>
 /// <remarks>
-/// The reference client accepts exactly the two flags <c>lock</c> and <c>unlock</c> for the whole
-/// seccfg operation and rejects anything else (xflash.py:564-566, legacy.py:165-167). Closing the
+/// This client accepts exactly the two flags <c>lock</c> and <c>unlock</c> for the whole
+/// seccfg operation and rejects anything else. Closing the
 /// configuration is the <see cref="Lock"/> flag and opening it is the <see cref="Unlock"/> flag;
 /// no other state transition is documented by the evidence and none is offered.
-/// <para>参考客户端对整个 seccfg 操作只接受 <c>lock</c> 与 <c>unlock</c> 两个标志，其他值一律拒绝
-/// （xflash.py:564-566、legacy.py:165-167）。关闭配置对应 <see cref="Lock"/>，打开对应
+/// <para>本客户端对整个 seccfg 操作只接受 <c>lock</c> 与 <c>unlock</c> 两个标志，其他值一律拒绝。关闭配置对应 <see cref="Lock"/>，打开对应
 /// <see cref="Unlock"/>；证据未记载其他状态转换，因此也不提供。</para>
 /// </remarks>
 public enum MtkSecCfgLockIntent
 {
-    /// <summary>Close the configuration: the reference client writes lock state 1 with critical lock state 0.
-    /// <para>关闭配置：参考客户端写入锁定状态 1 与关键锁定状态 0。</para></summary>
+    /// <summary>Close the configuration: this client writes lock state 1 with critical lock state 0.
+    /// <para>关闭配置：本客户端写入锁定状态 1 与关键锁定状态 0。</para></summary>
     Lock,
-    /// <summary>Open the configuration: the reference client writes lock state 3 with critical lock state 1.
-    /// <para>打开配置：参考客户端写入锁定状态 3 与关键锁定状态 1。</para></summary>
+    /// <summary>Open the configuration: this client writes lock state 3 with critical lock state 1.
+    /// <para>打开配置：本客户端写入锁定状态 3 与关键锁定状态 1。</para></summary>
     Unlock
 }
 
-/// <summary>The lock-state values documented by the reference implementation.
-/// <para>参考实现所记载的锁定状态取值。</para></summary>
+/// <summary>The lock-state values stored by the configuration.
+/// <para>配置中存储的锁定状态取值。</para></summary>
 /// <remarks>
-/// These are the values listed at seccfg.py:65-70. Note that the writer documented at
-/// seccfg.py:83-88 closes the configuration with <see cref="Default"/> (1) rather than
-/// <see cref="Lock"/> (4) and opens it with <see cref="Unlock"/> (3); the writer's choice is what
-/// <see cref="MtkSecCfg"/> reproduces, and any other stored value is reported unchanged.
-/// <para>这些取值来自 seccfg.py:65-70。注意 seccfg.py:83-88 的写入器用 <see cref="Default"/> (1)
-/// 而非 <see cref="Lock"/> (4) 关闭配置，用 <see cref="Unlock"/> (3) 打开配置；
-/// <see cref="MtkSecCfg"/> 复现的是写入器的选择，其余存储值原样上报。</para>
+/// These are the defined values. The writer closes the configuration with <see cref="Default"/> (1)
+/// rather than <see cref="Lock"/> (4) and opens it with <see cref="Unlock"/> (3);
+/// <see cref="MtkSecCfg"/> writes exactly those values, and any other stored value is reported
+/// unchanged.
+/// <para>这些是已定义的取值。写入器用 <see cref="Default"/> (1) 而非 <see cref="Lock"/> (4) 关闭配置，
+/// 用 <see cref="Unlock"/> (3) 打开配置；<see cref="MtkSecCfg"/> 写入的正是这两个值，其余存储值原样上报。</para>
 /// </remarks>
 public enum MtkSecCfgLockState
 {
@@ -75,12 +71,11 @@ public enum MtkSecCfgLockState
     Custom = 6
 }
 
-/// <summary>The critical lock-state values documented by the reference implementation.
-/// <para>参考实现所记载的关键锁定状态取值。</para></summary>
+/// <summary>The critical lock-state values documented by this implementation.
+/// <para>配置中存储的关键锁定状态取值。</para></summary>
 /// <remarks>
-/// Documented at seccfg.py:71-72 and written at seccfg.py:85 and :88, where closing the
-/// configuration stores 0, a value the table itself does not name.
-/// <para>记载于 seccfg.py:71-72，并在 seccfg.py:85 与 :88 写入；关闭配置时存入 0，而该取值本身未在表中命名。</para>
+/// Closing the configuration stores 0, a value the enumeration itself does not name.
+/// <para>关闭配置时存入 0，而该取值本身未在枚举中命名。</para>
 /// </remarks>
 public enum MtkSecCfgCriticalLockState
 {
@@ -92,9 +87,9 @@ public enum MtkSecCfgCriticalLockState
     Lock = 2
 }
 
-/// <summary>The secure-boot runtime values documented by the reference implementation.
-/// <para>参考实现所记载的安全启动运行时取值。</para></summary>
-/// <remarks>Documented at seccfg.py:73-74. <para>记载于 seccfg.py:73-74。</para></remarks>
+/// <summary>The secure-boot runtime values stored by the configuration.
+/// <para>配置中存储的安全启动运行时取值。</para></summary>
+/// <remarks>Values stored by the runtime field. <para>运行时字段中存储的取值。</para></remarks>
 public enum MtkSecCfgRuntimeState
 {
     /// <summary>Secure-boot runtime disabled (0).
@@ -108,11 +103,11 @@ public enum MtkSecCfgRuntimeState
 /// <summary>Which transformation protected the version 4 configuration hash.
 /// <para>用于保护版本 4 配置摘要的变换方式。</para></summary>
 /// <remarks>
-/// The reference client probes the stored hash against several transforms in order, software first, then
-/// the hardware engine variants (seccfg.py:51-63 and :100-115). Only the software variant is reproducible
+/// This client probes the stored hash against several transforms in order, software first, then
+/// the hardware engine variants. Only the software variant is reproducible
 /// off-device, so the hardware variants are reported as <see cref="Unresolved"/> unless a caller supplies a
 /// target-driven <c>IMtkSecCfgHashEngine</c>.
-/// <para>参考客户端按顺序对存储的摘要试探多种变换：先软件，再硬件引擎变体（seccfg.py:51-63 与 :100-115）。
+/// <para>本客户端按顺序对存储的摘要试探多种变换：先软件，再硬件引擎变体。
 /// 只有软件变体可在设备外复现，因此调用方未提供目标驱动的 <c>IMtkSecCfgHashEngine</c> 时，硬件变体上报为
 /// <see cref="Unresolved"/>。</para>
 /// </remarks>
@@ -121,19 +116,14 @@ public enum MtkSecCfgHashKind
     /// <summary>The software transform reproduced by <see cref="MtkSecCfg"/> matched the stored hash.
     /// <para><see cref="MtkSecCfg"/> 复现的软件变换与存储摘要匹配。</para></summary>
     Software,
-    /// <summary>The version 3 hardware engine variant without the legacy bring-up matched the stored hash
-    /// (seccfg.py:106, <c>hwcrypto_sej.py</c> <c>sej_sec_cfg_hw_V3</c> with <c>legacy=False</c>).
-    /// <para>不带遗留启动序列的版本 3 硬件引擎变体与存储摘要匹配（seccfg.py:106，<c>hwcrypto_sej.py</c> 的
-    /// <c>sej_sec_cfg_hw_V3</c> 且 <c>legacy=False</c>）。</para></summary>
+    /// <summary>The version 3 hardware engine variant without the legacy bring-up matched the stored hash.
+    /// <para>不带遗留启动序列的版本 3 硬件引擎变体与存储摘要匹配。</para></summary>
     HardwareV3,
-    /// <summary>The version 3 hardware engine variant with the legacy bring-up matched the stored hash
-    /// (seccfg.py:110, <c>hwcrypto_sej.py</c> <c>sej_sec_cfg_hw_V3</c> with <c>legacy=True</c>).
-    /// <para>带遗留启动序列的版本 3 硬件引擎变体与存储摘要匹配（seccfg.py:110，<c>hwcrypto_sej.py</c> 的
-    /// <c>sej_sec_cfg_hw_V3</c> 且 <c>legacy=True</c>）。</para></summary>
+    /// <summary>The version 3 hardware engine variant with the legacy bring-up matched the stored hash.
+    /// <para>带遗留启动序列的版本 3 硬件引擎变体与存储摘要匹配。</para></summary>
     HardwareV3Legacy,
-    /// <summary>The first-generation hardware engine variant matched the stored hash
-    /// (seccfg.py:114, <c>hwcrypto_sej.py</c> <c>sej_sec_cfg_hw</c>).
-    /// <para>第一代硬件引擎变体与存储摘要匹配（seccfg.py:114，<c>hwcrypto_sej.py</c> 的 <c>sej_sec_cfg_hw</c>）。</para></summary>
+    /// <summary>The first-generation hardware engine variant matched the stored hash.
+    /// <para>第一代硬件引擎变体与存储摘要匹配。</para></summary>
     Hardware,
     /// <summary>No reproducible transform matched; the target may use a hardware engine.
     /// <para>没有可复现的变换匹配；目标可能使用硬件引擎。</para></summary>
@@ -227,8 +217,8 @@ public sealed record MtkSecCfgV4Report(
     /// <para>获取已记载的写入器是否会把该配置判定为已关闭。</para></summary>
     /// <value>
     /// <see langword="true"/> when the raw lock state is 1, the value the writer uses for a closed
-    /// configuration (seccfg.py:79 and :87).
-    /// <para>当原始锁定状态为 1（写入器表示已关闭配置的值，seccfg.py:79 与 :87）时为 <see langword="true"/>。</para>
+    /// configuration.
+    /// <para>当原始锁定状态为 1时为 <see langword="true"/>。</para>
     /// </value>
     public bool IsClosed => LockStateRaw == 1;
 
@@ -236,24 +226,24 @@ public sealed record MtkSecCfgV4Report(
     /// <para>获取已记载的写入器是否会把该配置判定为已打开。</para></summary>
     /// <value>
     /// <see langword="true"/> when the raw lock state is 3, the value the writer uses for an open
-    /// configuration (seccfg.py:81 and :84).
-    /// <para>当原始锁定状态为 3（写入器表示已打开配置的值，seccfg.py:81 与 :84）时为 <see langword="true"/>。</para>
+    /// configuration.
+    /// <para>当原始锁定状态为 3时为 <see langword="true"/>。</para>
     /// </value>
     public bool IsOpen => LockStateRaw == 3;
 }
 
 /// <summary>The decoded version 3 secure-boot configuration header.
 /// <para>已解码的版本 3 安全启动配置头部。</para></summary>
-/// <remarks>Only the plaintext banner and header dwords documented at seccfg.py:183-199 are decoded. The body behind the header is opaque without the target's SEJ engine, so its length and digest are preserved instead of its bytes; see <see cref="MtkSecCfg"/> for the refusal rationale.
-/// <para>仅解码 seccfg.py:183-199 记载的明文标头与头部双字。头部之后的内容在没有目标 SEJ 引擎时不可读， 因此保留其长度与摘要而非字节；拒绝理由见 <see cref="MtkSecCfg"/>。</para></remarks>
+/// <remarks>Only the plaintext banner and header dwords are decoded. The body behind the header is opaque without the target's SEJ engine, so its length and digest are preserved instead of its bytes; see <see cref="MtkSecCfg"/> for the refusal rationale.
+/// <para>仅解码明文标头与头部双字。头部之后的内容在没有目标 SEJ 引擎时不可读， 因此保留其长度与摘要而非字节；拒绝理由见 <see cref="MtkSecCfg"/>。</para></remarks>
 /// <param name="BannerHex">The exact 16 banner bytes as uppercase hex.
 /// <para>16 个标头字节的精确大写十六进制表示。</para></param>
 /// <param name="Magic">The raw structure magic dword.<para>原始结构魔数双字。</para></param>
 /// <param name="Version">The raw configuration version dword.<para>原始配置版本双字。</para></param>
 /// <param name="Size">The raw declared structure size dword.<para>原始声明结构大小双字。</para></param>
 /// <param name="EncryptionOffset">The raw encryption offset dword.<para>原始加密偏移双字。</para></param>
-/// <param name="EncryptionLength">The raw encryption length dword used by the documented writer to mark the state (seccfg.py:192, :233 and :236).
-/// <para>原始加密长度双字，已记载的写入器用它标识状态（seccfg.py:192、:233 与 :236）。</para></param>
+/// <param name="EncryptionLength">The raw encryption length dword used by the documented writer to mark the state.
+/// <para>原始加密长度双字，已记载的写入器用它标识状态。</para></param>
 /// <param name="SoftwareLockTry">The raw single-byte software lock attempt counter.
 /// <para>原始单字节软件锁定尝试计数。</para></param>
 /// <param name="SoftwareLockDone">The raw single-byte software lock completion counter.
@@ -285,10 +275,10 @@ public sealed record MtkSecCfgV3Report(
     /// <para>获取已记载的写入器通过加密长度双字表达的锁定分类；其他取值为 null。</para></summary>
     /// <value>
     /// <see cref="MtkSecCfgLockIntent.Lock"/> for 0x01000000 and
-    /// <see cref="MtkSecCfgLockIntent.Unlock"/> for 0x07F20000 (seccfg.py:233 and :236), otherwise
+    /// <see cref="MtkSecCfgLockIntent.Unlock"/> for 0x07F20000, otherwise
     /// <see langword="null"/>.
     /// <para>0x01000000 对应 <see cref="MtkSecCfgLockIntent.Lock"/>，0x07F20000 对应
-    /// <see cref="MtkSecCfgLockIntent.Unlock"/>（seccfg.py:233 与 :236），其余为 <see langword="null"/>。</para>
+    /// <see cref="MtkSecCfgLockIntent.Unlock"/>，其余为 <see langword="null"/>。</para>
     /// </value>
     public MtkSecCfgLockIntent? DocumentedState => EncryptionLength switch
     {
@@ -330,8 +320,8 @@ public sealed record MtkSecCfgView(
 
 /// <summary>The receipt for a secure-boot configuration image written to a partition.
 /// <para>安全启动配置镜像写入某分区后的回执。</para></summary>
-/// <remarks>The receipt records what the host submitted and where. It does not claim the target accepted the new lock state semantically: the reference client treats a successful write as an acknowledgement only (Library/DA/xflash/extension/xflash.py:598-601), so verifying the result requires a separate read.
-/// <para>回执只记录主机提交了什么以及写到哪里，并不声称目标在语义上接受了新的锁定状态：参考客户端把成功 写入仅当作一次确认（Library/DA/xflash/extension/xflash.py:598-601），因此验证结果需要另行读取。</para></remarks>
+/// <remarks>The receipt records what the host submitted and where. It does not claim the target accepted the new lock state semantically: this client treats a successful write as an acknowledgement only, so verifying the result requires a separate read.
+/// <para>回执只记录主机提交了什么以及写到哪里，并不声称目标在语义上接受了新的锁定状态：本客户端把成功 写入仅当作一次确认，因此验证结果需要另行读取。</para></remarks>
 /// <param name="PartitionName">The exact GPT partition name written. 被写入的精确 GPT 分区名。</param>
 /// <param name="PartitionIndex">The zero-based GPT entry index written.
 /// <para>被写入条目的从零开始 GPT 索引。</para></param>

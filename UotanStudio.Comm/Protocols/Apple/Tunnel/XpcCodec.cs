@@ -87,10 +87,9 @@ public static class XpcCodec
 
     /// <summary>
     /// Builds one complete wrapper frame carrying <paramref name="dictionary"/>. The
-    /// <see cref="XpcFlags.DataPresent"/> flag follows the upstream rule and is set only for
-    /// non-empty dictionaries.
+    /// <see cref="XpcFlags.DataPresent"/> flag is set only for non-empty dictionaries.
     /// <para>构建一条携带 <paramref name="dictionary"/> 的完整包装帧。<see cref="XpcFlags.DataPresent"/>
-    /// 标志遵循上游规则，仅在字典非空时置位。</para>
+    /// 标志仅在字典非空时置位。</para>
     /// </summary>
     /// <param name="dictionary">The message dictionary. <para>消息字典。</para></param>
     /// <param name="messageId">The frame message id. <para>帧消息 ID。</para></param>

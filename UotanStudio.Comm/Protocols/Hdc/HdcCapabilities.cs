@@ -3,11 +3,11 @@ using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
-/// <summary>Upstream base.h capability TLV: 16-byte tag, 16-byte decimal byte length, UTF-8 value.</summary>
+/// <summary>HDC capability TLV: 16-byte tag, 16-byte decimal byte length, UTF-8 value.</summary>
 internal static class HdcCapabilities
 {
     /// <summary>
-    /// Encodes a capability map into the upstream TLV layout: every entry is a space-padded 16-byte tag, a space-padded
+    /// Encodes a capability map into the HDC capability TLV layout: every entry is a space-padded 16-byte tag, a space-padded
     /// 16-byte decimal UTF-8 byte length and the value itself, concatenated without separators in enumeration order.
     /// <para>把能力映射编码为上游 TLV 布局：每个条目由空格填充的 16 字节标签、空格填充的 16 字节十进制 UTF-8 字节
     /// 长度与值本身组成，按枚举顺序无分隔符拼接。</para>

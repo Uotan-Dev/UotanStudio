@@ -11,8 +11,8 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <para>启动资源与策略选择；其加载器条目由设备在 Boot ROM 握手期间上报的身份决定，而不是由调用方手数索引决定。</para>
 /// </summary>
 /// <remarks>
-/// <para>The handshake is the only device exchange performed before the entry is selected, so an
-/// ambiguous or unmatched container stops the startup before any download agent byte is uploaded.</para>
+/// The handshake is the only device exchange performed before the entry is selected, so an
+/// ambiguous or unmatched container stops the startup before any download agent byte is uploaded.
 /// <para>握手是条目选定前唯一的设备交互，因此容器匹配存在歧义或无匹配时，会在上传任何下载代理字节之前停止启动。</para>
 /// </remarks>
 public sealed record MtkAutoStartup
@@ -65,10 +65,10 @@ public sealed record MtkAutoStartup
     /// <para>在初始反码字节握手中使用的正数逐字节预算。</para></value>
     public int HandshakeTimeoutMs { get; init; } = 100;
 
-    /// <summary>Gets whether the preloader watchdog is disabled after the identity query when the reference chip table records a sequence and the chip is not 64-bit.
-    /// <para>获取是否在身份查询之后、参考芯片表记录了序列且芯片不是 64 位时禁用 preloader 看门狗。</para></summary>
-    /// <value><see langword="true"/> by default, matching the upstream initialization; <see langword="false"/> skips every watchdog register write.
-    /// <para>默认 <see langword="true"/>，与上游初始化一致；<see langword="false"/> 会跳过所有看门狗寄存器写入。</para></value>
+    /// <summary>Gets whether the preloader watchdog is disabled after the identity query when the chip table records a sequence and the chip is not 64-bit.
+    /// <para>获取是否在身份查询之后、芯片表记录了序列且芯片不是 64 位时禁用 preloader 看门狗。</para></summary>
+    /// <value><see langword="true"/> by default, which disables the watchdog for the chips the chip table records; <see langword="false"/> skips every watchdog register write.
+    /// <para>默认 <see langword="true"/>，对芯片表记录了序列的芯片禁用看门狗；<see langword="false"/> 会跳过所有看门狗寄存器写入。</para></value>
     public bool DisablePreloaderWatchdog { get; init; } = true;
 
     /// <summary>Gets the UART log level sent to XFlash DA1.
@@ -193,8 +193,9 @@ public static partial class MtkBootstrap
     /// <summary>Handshakes a caller-owned session, selects the loader entry from the identity the device reports and starts the selected stock DA protocol on that same session.
     /// <para>在调用方持有的会话上握手，由设备上报的身份选定加载器条目，并在同一会话上启动所选标准 DA 协议。</para></summary>
     /// <remarks>
-    /// <para>The session keeps the transport and timeout choices made when its lease was created, so the startup timeouts are validated here but never re-applied. A failure disposes the borrowed session because the protocol state after a partial startup is unknown.</para>
-    /// <para>会话保留其租约创建时确定的传输与超时选择，因此这里的启动超时只做校验而不重新套用。 失败会释放所借用的会话，因为部分启动完成后的协议状态未知。</para></remarks>
+    /// The session keeps the transport and timeout choices made when its lease was created, so the startup timeouts are validated here but never re-applied. A failure disposes the borrowed session because the protocol state after a partial startup is unknown.
+    /// <para>会话保留其租约创建时确定的传输与超时选择，因此这里的启动超时只做校验而不重新套用。 失败会释放所借用的会话，因为部分启动完成后的协议状态未知。</para>
+    /// </remarks>
     /// <param name="session">A session in the created state which the caller owns.
     /// <para>处于已创建状态、由调用方持有的会话。</para></param>
     /// <param name="protocol">The explicitly selected protocol; no detection or fallback is performed.

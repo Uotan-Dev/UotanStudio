@@ -1,11 +1,11 @@
 namespace UotanStudio.Comm.Protocols.Hdc;
 
 /// <summary>
-/// HDC file transfer over a host-server channel using the upstream remote-client mode. Each operation opens a
+/// HDC file transfer over a host-server channel using the remote-client mode. Each operation opens a
 /// dedicated host connection, sends the command with the <c>remote -cwd</c> marker, waits for the server's
 /// <c>CMD_FILE_INIT</c> echo and then performs the local file I/O itself as the task master (send) or slave (recv)
 /// through little-endian task frames.
-/// <para>经宿主 server 通道的 HDC 文件传输，采用上游 remote-client 模式。每次操作打开专用宿主连接，发送附带
+/// <para>经宿主 server 通道的 HDC 文件传输，采用 remote-client 模式。每次操作打开专用宿主连接，发送附带
 /// <c>remote -cwd</c> 标记的命令，等待 server 回送 <c>CMD_FILE_INIT</c>，随后以小端任务帧自行作为任务 master（发送）
 /// 或 slave（接收）执行本地文件 IO。</para>
 /// </summary>
@@ -48,8 +48,8 @@ public sealed class HdcServerSyncClient : Contracts.IHdcSyncClient
     public event Action<long, long>? Progress;
 
     /// <summary>
-    /// Enables upstream LZ4 block compression for this client's transfers.
-    /// <para>为本客户端的传输启用上游 LZ4 块压缩。</para>
+    /// Enables LZ4 block compression for this client's transfers.
+    /// <para>为本客户端的传输启用 LZ4 块压缩。</para>
     /// </summary>
     /// <value>When <see langword="true"/>, the check frame advertises compression and outgoing chunks are compressed
     /// behind the 64-byte prefix, falling back to raw bytes when compression does not shrink a chunk.
@@ -91,8 +91,8 @@ public sealed class HdcServerSyncClient : Contracts.IHdcSyncClient
     }
 
     /// <summary>
-    /// Sends a bounded regular-file tree as one upstream directory task; empty trees are rejected and empty
-    /// directories are omitted. <para>作为单个上游目录任务发送有界的常规文件树；拒绝空树并省略空目录。</para>
+    /// Sends a bounded regular-file tree as one directory task; empty trees are rejected and empty
+    /// directories are omitted. <para>作为单个目录任务发送有界的常规文件树；拒绝空树并省略空目录。</para>
     /// </summary>
     /// <param name="localPath">Root directory to enumerate; reparse points under it abort the walk.
     /// <para>要枚举的根目录；其下的重新解析点会中止遍历。</para></param>

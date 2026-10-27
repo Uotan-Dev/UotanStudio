@@ -81,7 +81,7 @@ public static class AppleConstants
     /// <summary>Gets the lockdown jail-free file relay service name. <para>获取 lockdown 无越狱文件中继服务名。</para></summary>
     public const string ServiceAfc2 = "com.apple.afc2";
 
-    /// <summary>Gets the legacy syslog relay service name. <para>获取旧版 syslog 中继服务名。</para></summary>
+    /// <summary>Gets the syslog relay service name. <para>获取 syslog 中继服务名。</para></summary>
     public const string ServiceSyslogRelay = "com.apple.syslog_relay";
 
     /// <summary>Gets the os_trace (tracev3) relay service name. <para>获取 os_trace（tracev3）中继服务名。</para></summary>

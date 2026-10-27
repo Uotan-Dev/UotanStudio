@@ -18,10 +18,10 @@ public sealed record MtkXmlRuntimeOptions
     /// </value>
     public required MtkXmlChecksumLevel Checksum { get; init; }
     /// <summary>
-    /// Gets the explicit host OS identifier. The reference always asks the target for the Linux runtime,
-    /// so this value is validated but no longer changes the serialized <c>system_os</c> token.
-    /// <para>获取显式的主机操作系统标识。参考实现始终向目标请求 Linux 运行时，因此该值只做校验，
-    /// 不再改变序列化的 <c>system_os</c> 标记。</para>
+    /// Gets the explicit host OS identifier. The runtime command always asks the target for the Linux
+    /// runtime, so this value is validated only and does not affect the serialized <c>system_os</c> token.
+    /// <para>获取显式的主机操作系统标识。运行时命令始终向目标请求 Linux 运行时，因此该值只做校验，
+    /// 不改变序列化的 <c>system_os</c> 标记。</para>
     /// </summary>
     /// <value>
     /// The caller's host identifier; the runtime command always serializes <c>LINUX</c> as

@@ -7,61 +7,56 @@ namespace UotanStudio.Comm.Protocols.Mtk.Security;
 /// <summary>Byte-exact reader and writer for the on-flash secure-boot configuration.
 /// <para>片上安全启动配置的字节级读取与写入器。</para></summary>
 /// <remarks>
-/// Every layout rule, constant and state transition reproduced here comes from
-/// mtkclient Library/Hardware/seccfg.py:11-116 with the partition-level selection rules at
-/// Library/DA/xflash/extension/xflash.py:564-602 and Library/DA/legacy/extension/legacy.py:165-200.
+/// Every layout rule, constant and state transition here describes the on-disk secure-boot
+/// configuration format and the partition-level selection rules of the XFlash and Legacy families.
 /// Reading is pure and allocates nothing on the device. Writing is limited to the two states the
 /// evidence names. The software transform is reproduced off-device; the hardware SEJ variants
-/// (seccfg.py:55-62 and :269-274) stay refused unless a caller supplies an
+/// stay refused unless a caller supplies an
 /// <see cref="IMtkSecCfgHashEngine"/> bound to the running target.
-/// <para>此处复现的每条布局规则、常量与状态转换均来自 mtkclient Library/Hardware/seccfg.py:11-116，
-/// 分区级选择规则见 Library/DA/xflash/extension/xflash.py:564-602 与
-/// Library/DA/legacy/extension/legacy.py:165-200。读取是纯函数且不在设备上分配。写入只限于证据命名的
-/// 两个状态。软件变换在设备外复现；硬件 SEJ 变体（seccfg.py:55-62 与 :269-274）在调用方未提供绑定到
+/// <para>此处的每条布局规则、常量与状态转换都对应安全启动配置在磁盘上的格式，
+/// 分区级选择规则属于 XFlash 与 Legacy 家族。读取是纯函数且不在设备上分配。写入只限于证据命名的
+/// 两个状态。软件变换在设备外复现；硬件 SEJ 变体在调用方未提供绑定到
 /// 运行中目标的 <see cref="IMtkSecCfgHashEngine"/> 时仍被拒绝。</para>
 /// </remarks>
 public static class MtkSecCfg
 {
-    /// <summary>The structure magic dword shared by both layouts (seccfg.py:18, :45, :148 and :199).
-    /// <para>两种布局共用的结构魔数双字（seccfg.py:18、:45、:148 与 :199）。</para></summary>
+    /// <summary>The structure magic dword shared by both layouts.
+    /// <para>两种布局共用的结构魔数双字。</para></summary>
     public const uint Magic = 0x4D4D4D4D;
 
-    /// <summary>The end marker dword shared by both layouts (seccfg.py:24, :45, :153 and :198).
-    /// <para>两种布局共用的结束标志双字（seccfg.py:24、:45、:153 与 :198）。</para></summary>
+    /// <summary>The end marker dword shared by both layouts.
+    /// <para>两种布局共用的结束标志双字。</para></summary>
     public const uint EndFlag = 0x45454545;
 
-    /// <summary>The byte length of the version 4 header block (seccfg.py:48-49).
-    /// <para>版本 4 头部的字节长度（seccfg.py:48-49）。</para></summary>
+    /// <summary>The byte length of the version 4 header block.
+    /// <para>版本 4 头部的字节长度。</para></summary>
     public const int Version4HeaderLength = 7 * 4;
 
     /// <summary>The declared size a version 4 structure must carry for the documented reader and
-    /// writer layouts to agree (seccfg.py:43 reads the hash at size minus 0x20, seccfg.py:99 writes
-    /// it directly behind the 28-byte header).
-    /// <para>版本 4 结构的声明大小，只有该值才能让已记载的读取与写入布局一致
-    /// （seccfg.py:43 在“大小减 0x20”处读取摘要，seccfg.py:99 则把摘要直接写在 28 字节头部之后）。</para></summary>
+    /// writer layouts to agree.
+    /// <para>版本 4 结构的声明大小，只有该值才能让已记载的读取与写入布局一致。</para></summary>
     public const uint Version4AgreedSize = Version4HeaderLength + 0x20;
 
-    /// <summary>The byte length of the version 3 plaintext banner (seccfg.py:147 and :187).
-    /// <para>版本 3 明文标头的字节长度（seccfg.py:147 与 :187）。</para></summary>
+    /// <summary>The byte length of the version 3 plaintext banner.
+    /// <para>版本 3 明文标头的字节长度。</para></summary>
     public const int Version3BannerLength = 0x10;
 
-    /// <summary>The byte length of the version 3 plaintext header (seccfg.py:187-197).
-    /// <para>版本 3 明文头部的字节长度（seccfg.py:187-197）。</para></summary>
+    /// <summary>The byte length of the version 3 plaintext header.
+    /// <para>版本 3 明文头部的字节长度。</para></summary>
     public const int Version3HeaderLength = 0x2C;
 
-    /// <summary>The block size to which the documented writer zero-pads a created image
-    /// (seccfg.py:100-101 and :281-282).
-    /// <para>已记载的写入器对生成镜像补零对齐的块大小（seccfg.py:100-101 与 :281-282）。</para></summary>
+    /// <summary>The block size to which the documented writer zero-pads a created image.
+    /// <para>已记载的写入器对生成镜像补零对齐的块大小。</para></summary>
     public const int ImageAlignment = 0x200;
 
     /// <summary>The encryption-length dword the documented writer stores for a closed
-    /// configuration (seccfg.py:236).
-    /// <para>已记载的写入器在关闭配置时存储的加密长度双字（seccfg.py:236）。</para></summary>
+    /// configuration.
+    /// <para>已记载的写入器在关闭配置时存储的加密长度双字。</para></summary>
     public const uint Version3ClosedEncryptionLength = 0x01000000;
 
     /// <summary>The encryption-length dword the documented writer stores for an open
-    /// configuration (seccfg.py:233).
-    /// <para>已记载的写入器在打开配置时存储的加密长度双字（seccfg.py:233）。</para></summary>
+    /// configuration.
+    /// <para>已记载的写入器在打开配置时存储的加密长度双字。</para></summary>
     public const uint Version3OpenEncryptionLength = 0x07F20000;
 
     private const uint LockStateWrittenWhenClosed = 1;
@@ -156,10 +151,10 @@ public static class MtkSecCfg
     /// <para>从设备读取的分区原始字节。</para></param>
     /// <param name="report">Receives the decoded header when the call returns <see langword="true"/>.
     /// <para>调用返回 <see langword="true"/> 时接收头部解码结果。</para></param>
-    /// <remarks>The header fields sit at the offsets the documented reader consumes in order: the 0x10-byte banner at 0x00, the magic dword at 0x10, the version at 0x14, the declared structure size at 0x18, the encryption offset at 0x1C, the encryption length at 0x20, the two single-byte software lock counters at 0x24 and 0x25, the 16-bit page size at 0x26 and the page count at 0x28, with the body following at 0x2C and the end marker dword closing the declared size (seccfg.py:183-199).
-    /// <para>头部字段按已记载读取器依次消费的偏移排列：0x10 字节的标头位于 0x00，魔数双字位于 0x10， 版本位于 0x14，声明的结构大小位于 0x18，加密偏移位于 0x1C，加密长度位于 0x20，两个单字节软件锁定 计数位于 0x24 与 0x25，16 位页大小位于 0x26，页数位于 0x28；主体从 0x2C 开始，结束标志双字位于 声明大小的末尾（seccfg.py:183-199）。</para></remarks>
-    /// <returns><see langword="true"/> when the banner, magic, declared size and end marker all satisfy the documented header layout. The opaque body is measured and digested, never interpreted, because its documented transforms require the target's SEJ engine (seccfg.py:202-215).
-    /// <para>当标头、魔数、声明大小与结束标志都满足已记载的头部布局时返回 <see langword="true"/>。 不透明主体只做测量与摘要、不做解释，因为其记载的变换需要目标的 SEJ 引擎（seccfg.py:202-215）。</para></returns>
+    /// <remarks>The header fields sit at the offsets the documented reader consumes in order: the 0x10-byte banner at 0x00, the magic dword at 0x10, the version at 0x14, the declared structure size at 0x18, the encryption offset at 0x1C, the encryption length at 0x20, the two single-byte software lock counters at 0x24 and 0x25, the 16-bit page size at 0x26 and the page count at 0x28, with the body following at 0x2C and the end marker dword closing the declared size.
+    /// <para>头部字段按已记载读取器依次消费的偏移排列：0x10 字节的标头位于 0x00，魔数双字位于 0x10， 版本位于 0x14，声明的结构大小位于 0x18，加密偏移位于 0x1C，加密长度位于 0x20，两个单字节软件锁定 计数位于 0x24 与 0x25，16 位页大小位于 0x26，页数位于 0x28；主体从 0x2C 开始，结束标志双字位于 声明大小的末尾。</para></remarks>
+    /// <returns><see langword="true"/> when the banner, magic, declared size and end marker all satisfy the documented header layout. The opaque body is measured and digested, never interpreted, because its documented transforms require the target's SEJ engine.
+    /// <para>当标头、魔数、声明大小与结束标志都满足已记载的头部布局时返回 <see langword="true"/>。 不透明主体只做测量与摘要、不做解释，因为其记载的变换需要目标的 SEJ 引擎。</para></returns>
     public static bool TryReadVersion3(ReadOnlySpan<byte> image, out MtkSecCfgV3Report? report)
     {
         report = null;
@@ -202,8 +197,8 @@ public static class MtkSecCfg
 
     /// <summary>Builds the image bytes that close or open a version 4 configuration.
     /// <para>构造用于关闭或打开版本 4 配置的镜像字节。</para></summary>
-    /// <remarks>The dword values, their order, the hash placement and the zero padding all follow seccfg.py:89-102 exactly. Only a report whose stored hash was shown to use the software transform can be rewritten, because seccfg.py:55-62 delegate the other variants to the target's SEJ engine.
-    /// <para>双字取值及其顺序、摘要位置与补零完全遵循 seccfg.py:89-102。只有存储摘要已被证实使用软件 变换的报告才能被重写，因为 seccfg.py:55-62 把其他变体交给目标的 SEJ 引擎处理。</para></remarks>
+    /// <remarks>The dword values, their order, the hash placement and the zero padding are fixed by the version 4 layout. Only a report whose stored hash was shown to use the software transform can be rewritten, because the other variants belong to the target's SEJ engine.
+    /// <para>双字取值及其顺序、摘要位置与补零由版本 4 布局固定。只有存储摘要已被证实使用软件变换的报告才能被重写，因为其他变体由目标的 SEJ 引擎处理。</para></remarks>
     /// <param name="report">A report decoded by <see cref="TryReadVersion4"/>.
     /// <para>由 <see cref="TryReadVersion4"/> 解码得到的报告。</para></param>
     /// <param name="intent">The requested state transition. 请求的状态转换。</param>
@@ -213,8 +208,8 @@ public static class MtkSecCfg
     /// <para><paramref name="report"/> 为 null。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="intent"/> is undefined.
     /// <para><paramref name="intent"/> 未定义。</para></exception>
-    /// <exception cref="InvalidOperationException">The configuration already carries the requested state, which the documented writer refuses (seccfg.py:79-82).
-    /// <para>配置已处于请求状态，已记载的写入器会拒绝该请求（seccfg.py:79-82）。</para></exception>
+    /// <exception cref="InvalidOperationException">The configuration already carries the requested state, which the documented writer refuses.
+    /// <para>配置已处于请求状态，已记载的写入器会拒绝该请求。</para></exception>
     /// <exception cref="NotSupportedException">The stored hash is not protected by the reproducible software transform, or the declared size contradicts the documented reader and writer layout.
     /// <para>存储摘要并非由可复现的软件变换保护，或声明大小与已记载的读写布局矛盾。</para></exception>
     public static byte[] CreateVersion4(MtkSecCfgV4Report report, MtkSecCfgLockIntent intent)
@@ -283,8 +278,8 @@ public static class MtkSecCfg
 
     /// <summary>Decodes a version 4 secure-boot configuration image, resolving hardware-protected hash variants through a target-driven engine when the software transform does not match.
     /// <para>解码版本 4 安全启动配置镜像；软件变换不匹配时，通过目标驱动的引擎解析硬件保护的摘要变体。</para></summary>
-    /// <remarks>The probe order follows seccfg.py:100-115: software first, then the version 3 engine variant without the legacy bring-up, the same variant with it, and finally the first-generation engine variant.
-    /// <para>试探顺序遵循 seccfg.py:100-115：先软件，再不带遗留启动序列的版本 3 引擎变体、带遗留启动序列的 同一变体，最后是第一代引擎变体。</para></remarks>
+    /// <remarks>The probe order is: software first, then the version 3 engine variant without the legacy bring-up, the same variant with it, and finally the first-generation engine variant.
+    /// <para>试探顺序为：先软件，再不带遗留启动序列的版本 3 引擎变体、带遗留启动序列的同一变体，最后是第一代引擎变体。</para></remarks>
     /// <param name="image">The exact partition bytes read from the device.
     /// <para>从设备读取的分区原始字节。</para></param>
     /// <param name="engine">The optional target-driven engine. 可选的目标驱动引擎。</param>
@@ -352,10 +347,8 @@ public static class MtkSecCfg
     }
 
     /// <summary>Applies the software integrity transform documented for the version 4 hash and the
-    /// version 3 software body (seccfg.py:51, :94, :202 and :270, whose parameters are given at
-    /// Library/Hardware/hwcrypto_sej.py:671-685).
-    /// <para>对版本 4 摘要与版本 3 软件主体应用已记载的软件完整性变换（seccfg.py:51、:94、:202 与 :270，
-    /// 其参数见 Library/Hardware/hwcrypto_sej.py:671-685）。</para></summary>
+    /// version 3 software body.
+    /// <para>对版本 4 摘要与版本 3 软件主体应用已记载的软件完整性变换。</para></summary>
     /// <param name="data">The block-aligned input bytes. 按块对齐的输入字节。</param>
     /// <param name="encrypt"><see langword="true"/> to apply the forward transform, <see langword="false"/>
     /// to apply the inverse used by the documented reader.

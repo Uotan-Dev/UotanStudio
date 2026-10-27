@@ -7,7 +7,7 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 /// <summary>
 /// Factory for creating <see cref="HdcSession"/> instances from USB device sessions.
 /// <para>从 USB 设备会话创建 <see cref="HdcSession"/> 实例的工厂。</para>
-/// Matches the upstream FF/50/01 interface and its bound bulk endpoint pair.
+/// Matches the FF/50/01 interface and its bound bulk endpoint pair.
 /// </summary>
 internal sealed class HdcFactory : IProtocolFactory
 {

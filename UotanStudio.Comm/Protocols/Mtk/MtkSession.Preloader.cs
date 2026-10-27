@@ -8,30 +8,28 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 
 /// <summary>
 /// Preloader command-stage register and memory access over the boot byte protocol: the read, write,
-/// extended-command, jump, watchdog-disable and return-to-BROM sequences the reference client exposes
+/// extended-command, jump, watchdog-disable and return-to-BROM sequences this client exposes
 /// while the device presents its preloader command interface.
 /// <para>boot 字节协议之上的 preloader 命令阶段寄存器与内存访问：设备呈现 preloader 命令接口期间，
-/// 参考客户端所提供的读取、写入、扩展命令、跳转、看门狗禁用与回到 BROM 序列。</para>
+/// 本客户端所提供的读取、写入、扩展命令、跳转、看门狗禁用与回到 BROM 序列。</para>
 /// </summary>
 /// <remarks>
-/// <para>Every framing here is a transcription of <c>mtkclient/Library/mtk_preloader.py</c>: the read
+/// Every framing here is a transcription of : the read
 /// paths mirror <c>read</c> (lines 388-405), the write paths mirror <c>write</c> (lines 416-442),
 /// <c>writemem</c> mirrors lines 450-455, <c>run_ext_cmd</c> mirrors lines 484-490, <c>jump_bl</c>
 /// mirrors lines 492-499, <c>jump_to_partition</c> mirrors lines 501-509,
 /// <c>setreg_disablewatchdogtimer</c> mirrors lines 532-655 through
-/// <see cref="MtkPreloaderWatchdogTable"/>, and <c>reset_to_brom</c> mirrors lines 457-482.</para>
-/// <para>此处的每个帧结构都转录自 <c>mtkclient/Library/mtk_preloader.py</c>：读取路径对应 <c>read</c>
+/// <see cref="MtkPreloaderWatchdogTable"/>, and <c>reset_to_brom</c> mirrors lines 457-482.
+/// Every path here raises a protocol fault on the first refusal, truncation, or echo mismatch
+/// and faults the session so no further command bytes are exchanged. Commands are only accepted while
+/// the session sits in the bootloader stage with no download-agent upload begun, so these paths can
+/// never interleave with XFlash, XML or Legacy bring-up on the same transport.
+/// <para>此处的每个帧结构都转录自 ：读取路径对应 <c>read</c>
 /// （第 388-405 行），写入路径对应 <c>write</c>（第 416-442 行），<c>writemem</c> 对应第 450-455 行，
 /// <c>run_ext_cmd</c> 对应第 484-490 行，<c>jump_bl</c> 对应第 492-499 行，<c>jump_to_partition</c>
 /// 对应第 501-509 行，<c>setreg_disablewatchdogtimer</c> 经由 <see cref="MtkPreloaderWatchdogTable"/>
-/// 对应第 532-655 行，<c>reset_to_brom</c> 对应第 457-482 行。</para>
-/// <para>Unlike the reference, which returns empty results and <see langword="false"/> after a refused
-/// status, every path here raises a protocol fault on the first refusal, truncation, or echo mismatch
-/// and faults the session so no further command bytes are exchanged. Commands are only accepted while
-/// the session sits in the bootloader stage with no download-agent upload begun, so these paths can
-/// never interleave with XFlash, XML or Legacy bring-up on the same transport.</para>
-/// <para>与参考实现不同：参考在被拒绝的状态后返回空结果与 <see langword="false"/>，
-/// 而此处每条路径在首次拒绝、截断或回显不匹配时都抛出协议错误并使会话进入 fault 状态，
+/// 对应第 532-655 行，<c>reset_to_brom</c> 对应第 457-482 行。
+/// 此处每条路径在首次拒绝、截断或回显不匹配时都抛出协议错误并使会话进入 fault 状态，
 /// 不再交换任何命令字节。命令仅在会话处于 bootloader 阶段且尚未开始任何下载代理上传时被接受，
 /// 因此这些路径绝不可能在同一传输上与 XFlash、XML 或 Legacy 启动交错。</para>
 /// </remarks>
@@ -62,12 +60,10 @@ public sealed partial class MtkSession
 
     /// <summary>Reads consecutive sixteen-bit register words through the preloader read command.
     /// <para>通过 preloader 读取命令读取连续的十六位寄存器字。</para></summary>
-    /// <remarks>The framing mirrors <c>read</c>with <c>length == 16</c>(
-    /// <c>mtkclient/Library/mtk_preloader.py:388-405</c>): the command byte, the big-endian address and
+    /// <remarks>The framing mirrors <c>read</c>with <c>length == 16</c>: the command byte, the big-endian address and
     /// the big-endian word count are each echoed, then one status word, the big-endian payload, and a
-    /// closing status word arrive. Where the reference returns an empty list after a refusal, this path
-    /// raises a protocol fault and faults the session. 帧结构对应 <c>length == 16</c>的 <c>read</c>（
-    /// <c>mtkclient/Library/mtk_preloader.py:388-405</c>）： 命令字节、大端地址与大端字数逐一回显，随后到达一个状态字、大端载荷与收尾状态字。</remarks>
+    /// closing status word arrive. Where that exchange returns an empty list after a refusal, this path
+    /// raises a protocol fault and faults the session. 帧结构对应 <c>length == 16</c>的 <c>read</c>： 命令字节、大端地址与大端字数逐一回显，随后到达一个状态字、大端载荷与收尾状态字。</remarks>
     /// <param name="address">The first register address; words walk upward by two bytes.
     /// <para>起始寄存器地址；字按两字节向上递增。</para></param>
     /// <param name="wordCount">The positive word count, limited so one exchange stays within
@@ -125,11 +121,8 @@ public sealed partial class MtkSession
 
     /// <summary>Reads consecutive thirty-two-bit register words through the preloader read command.
     /// <para>通过 preloader 读取命令读取连续的三十二位寄存器字。</para></summary>
-    /// <remarks>The framing mirrors <c>read</c>with <c>length == 32</c>(
-    /// <c>mtkclient/Library/mtk_preloader.py:388-405</c>) and is the same exchange the reference
-    /// exploit drivers use. Where the reference returns an empty list after a refusal, this path raises
-    /// a protocol fault and faults the session. 帧结构对应 <c>length == 32</c>的 <c>read</c>（
-    /// <c>mtkclient/Library/mtk_preloader.py:388-405</c>）， 与参考漏洞驱动使用的交换相同。</remarks>
+    /// <remarks>The framing mirrors <c>read</c>with <c>length == 32</c> and is the same exchange exploit drivers use. Where that exchange returns an empty list after a refusal, this path raises
+    /// a protocol fault and faults the session. 帧结构对应 <c>length == 32</c>的 <c>read</c>， 与漏洞驱动使用的交换相同。</remarks>
     /// <param name="address">The first doubleword address; words walk upward by four bytes.
     /// <para>起始双字地址；字按四字节向上递增。</para></param>
     /// <param name="dwordCount">The positive doubleword count, limited so one exchange stays within
@@ -189,16 +182,16 @@ public sealed partial class MtkSession
     /// <summary>Runs one extended preloader command through the 0xC8 cache-control exchange.
     /// <para>通过 0xC8 缓存控制交换执行一条扩展 preloader 命令。</para></summary>
     /// <remarks>
-    /// <c>run_ext_cmd</c> (<c>mtkclient/Library/mtk_preloader.py:484-490</c>) echoes the opcode and the
+    /// <c>run_ext_cmd</c> echoes the opcode and the
     /// operand, then consumes one byte and a two-byte status without interpreting either; the
-    /// reference default operand <c>0xB1</c> refreshes the caches. Because the operand can program
+    /// default operand <c>0xB1</c> refreshes the caches. Because the operand can program
     /// device state, the exchange is only attempted when the caller confirms it.
-    /// <c>run_ext_cmd</c>（<c>mtkclient/Library/mtk_preloader.py:484-490</c>）回显操作码与操作数，然后读取
-    /// 并丢弃一个字节与一个两字节状态，不做解释；参考默认操作数 <c>0xB1</c> 用于刷新缓存。由于操作数可能
+    /// <c>run_ext_cmd</c>回显操作码与操作数，然后读取
+    /// 并丢弃一个字节与一个两字节状态，不做解释；默认操作数 <c>0xB1</c> 用于刷新缓存。由于操作数可能
     /// 编程设备状态，仅在调用方确认后才发起交换。
     /// </remarks>
-    /// <param name="operand">The single operand byte; the reference cache-refresh value is
-    /// <c>0xB1</c>. <para>单字节操作数；参考的缓存刷新值为 <c>0xB1</c>。</para></param>
+    /// <param name="operand">The single operand byte; the cache-refresh default is
+    /// <c>0xB1</c>. <para>单字节操作数；缓存刷新默认值为 <c>0xB1</c>。</para></param>
     /// <param name="confirm">The explicit caller opt-in that authorizes the command.
     /// <para>授权本命令的显式调用方选择。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
@@ -248,13 +241,13 @@ public sealed partial class MtkSession
     /// <summary>Asks the preloader to jump to its boot loader through command 0xD6.
     /// <para>通过命令 0xD6 请求 preloader 跳转到其 boot loader。</para></summary>
     /// <remarks>
-    /// <c>jump_bl</c> (<c>mtkclient/Library/mtk_preloader.py:492-499</c>) echoes the opcode and then
-    /// requires two status words at or below <c>0x00FF</c>; the reference returns
+    /// <c>jump_bl</c> echoes the opcode and then
+    /// requires two status words at or below <c>0x00FF</c>; that exchange returns
     /// <see langword="false"/> on refusal while this path faults. The boot transition after the
     /// acknowledgement drops the link, so the host must treat the transport as one-shot; the session
     /// stage is deliberately left unchanged.
-    /// <c>jump_bl</c>（<c>mtkclient/Library/mtk_preloader.py:492-499</c>）回显操作码，然后要求两个不超过
-    /// <c>0x00FF</c> 的状态字；参考在拒绝时返回 <see langword="false"/>，而本路径进入 fault。确认后的启动
+    /// <c>jump_bl</c>回显操作码，然后要求两个不超过
+    /// <c>0x00FF</c> 的状态字；该交互在拒绝时返回 <see langword="false"/>，而本路径进入 fault。确认后的启动
     /// 转换会断开链路，因此宿主必须把该传输视为一次性；会话阶段有意保持不变。
     /// </remarks>
     /// <param name="confirm">The explicit caller opt-in that authorizes the jump.
@@ -305,11 +298,11 @@ public sealed partial class MtkSession
 
     /// <summary>Asks a preloader running as DA to boot the named partition through command 0x71.
     /// <para>通过命令 0x71 请求作为 DA 运行的 preloader 引导指定分区。</para></summary>
-    /// <remarks><c>jump_to_partition</c>( <c>mtkclient/Library/mtk_preloader.py:501-509</c>) truncates
+    /// <remarks><c>jump_to_partition</c> truncates
     /// the UTF-8 name to 64 bytes, pads it with nulls to exactly 64, echoes the opcode, then writes the
     /// name field without an echo check and accepts a single status word. The partition boot changes
     /// device state, so the exchange is only attempted when the caller confirms it.
-    /// <c>jump_to_partition</c>（ <c>mtkclient/Library/mtk_preloader.py:501-509</c>）把 UTF-8 名称截断到 64
+    /// <c>jump_to_partition</c>把 UTF-8 名称截断到 64
     /// 字节并用 NUL 补齐到恰好 64 字节，回显操作码后写入名称字段（不校验回显），并接受单个状态字。 分区引导会改变设备状态，因此仅在调用方确认后才发起交换。</remarks>
     /// <param name="partitionName">The partition name; its UTF-8 encoding is truncated or padded to exactly 64 bytes.
     /// <para>分区名称；其 UTF-8 编码被截断或补齐到恰好 64 字节。</para></param>
@@ -360,21 +353,19 @@ public sealed partial class MtkSession
         }
     }
 
-    /// <summary>Reads one register word through the A2 command the reference uses for IoT identity.
-    /// <para>通过参考实现用于 IoT 身份的 A2 命令读取一个寄存器字。</para></summary>
+    /// <summary>Reads one register word through the A2 command used for IoT identity.
+    /// <para>通过用于 IoT 身份的 A2 命令读取一个寄存器字。</para></summary>
     /// <remarks>
-    /// The framing mirrors <c>read_a2</c> (<c>mtkclient/Library/mtk_preloader.py:378-386</c>): the
-    /// command byte, the big-endian address and the big-endian word count (always one, exactly like
-    /// the reference default) are each echoed, then one big-endian reply word arrives. The exchange
-    /// carries no status words, and the reference reads only one word regardless of the count it
-    /// echoes, so no count parameter is exposed here.
-    /// 帧结构对应 <c>read_a2</c>（<c>mtkclient/Library/mtk_preloader.py:378-386</c>）：命令字节、大端地址与
-    /// 大端字数（恒为 1，与参考默认一致）逐一回显，随后到达一个大端回复字。该交互不含任何状态字，且参考
-    /// 无论回显的字数是多少都只读取一个字，因此此处不暴露字数参数。
+    /// The framing is the A2 command: the command byte, the big-endian address and the big-endian word
+    /// count (always one) are each echoed, then one big-endian reply word arrives. The exchange carries
+    /// no status words, and only one word is read regardless of the echoed count, so no count parameter
+    /// is exposed here.
+    /// <para>帧结构为 A2 命令：命令字节、大端地址与大端字数（恒为 1）逐一回显，随后到达一个大端回复字。
+    /// 该交互不含任何状态字，且无论回显的字数是多少都只读取一个字，因此此处不暴露字数参数。</para>
     /// </remarks>
-    /// <param name="address">The register address; the reference IoT identity registers live at
+    /// <param name="address">The register address; the IoT identity registers live at
     /// <c>0x80000000</c>, <c>0x80000008</c> and <c>0x8000000C</c>.
-    /// <para>寄存器地址；参考的 IoT 身份寄存器位于 <c>0x80000000</c>、<c>0x80000008</c> 与 <c>0x8000000C</c>。</para></param>
+    /// <para>寄存器地址；IoT 身份寄存器位于 <c>0x80000000</c>、<c>0x80000008</c> 与 <c>0x8000000C</c>。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
     /// <para>操作取消令牌。</para></param>
     /// <returns>The reply word exactly as the big-endian wire delivered it.
@@ -418,14 +409,10 @@ public sealed partial class MtkSession
 
     /// <summary>Reads consecutive thirty-two-bit register words and keeps the raw big-endian wire bytes.
     /// <para>读取连续的三十二位寄存器字，并保留原始大端线路字节。</para></summary>
-    /// <remarks>The framing mirrors <c>read</c>with <c>length == 32</c>and <c>direct=True</c>(
-    /// <c>mtkclient/Library/mtk_preloader.py:388-410</c>with
-    /// <c>Library/Connection/devicehandler.py:104-115</c>): the exchange is identical to
+    /// <remarks>The framing mirrors <c>read</c>with <c>length == 32</c>and <c>direct=True</c>: the exchange is identical to
     /// <see cref="ReadPreloader32Async"/>, but the reply bytes are returned in wire order without
     /// re-packing each doubleword, so callers that need byte identity keep it exactly. 帧结构对应
-    /// <c>length == 32</c>且 <c>direct=True</c>的 <c>read</c>（
-    /// <c>mtkclient/Library/mtk_preloader.py:388-410</c>，配合
-    /// <c>Library/Connection/devicehandler.py:104-115</c>）：交互与 <see cref="ReadPreloader32Async"/>
+    /// <c>length == 32</c>且 <c>direct=True</c>的 <c>read</c>：交互与 <see cref="ReadPreloader32Async"/>
     /// 相同，但回复字节按线路顺序原样返回、不重排双字，需要字节恒等的调用方可以精确保留。</remarks>
     /// <param name="address">The first doubleword address; words walk upward by four bytes.
     /// <para>起始双字地址；字按四字节向上递增。</para></param>
@@ -479,24 +466,24 @@ public sealed partial class MtkSession
     /// <summary>Pushes one partition data blob to a preloader running as DA through command 0x70.
     /// <para>通过命令 0x70 把一个分区数据块推送到作为 DA 运行的 preloader。</para></summary>
     /// <remarks>
-    /// <para>The framing mirrors <c>send_partition_data</c>
-    /// (<c>mtkclient/Library/mtk_preloader.py:511-530</c>): the opcode is echoed, the UTF-8 partition
+    /// The framing mirrors <c>send_partition_data</c>:
+    /// the opcode is echoed, the UTF-8 partition
     /// name is truncated or null-padded to exactly 64 bytes and written without an echo check, the
     /// big-endian payload length is written, one status word must arrive at or below <c>0x00FF</c>
     /// before any payload byte, the payload streams in 0x200-byte chunks, and the exchange closes
     /// with the big-endian xflash checksum — the little-endian doubleword sum with any trailing bytes
-    /// added individually.</para>
-    /// <para>帧结构对应 <c>send_partition_data</c>（<c>mtkclient/Library/mtk_preloader.py:511-530</c>）：
+    /// added individually.
+    /// This path adds the trailing bytes with a loop bound of <c>4 - (len % 4)</c>, which
+    /// over- or under-adds for lengths that are not two-mod-four; this path adds each remaining byte
+    /// once, which agrees exactly with the required framing for every four-aligned payload. This path
+    /// writes the checksum and returns without a completion status, so this path does not read one
+    /// either; the documented caller follows with the 0x71 jump-to-partition exchange.
+    /// <para>帧结构对应 <c>send_partition_data</c>：
     /// 回显操作码后，把 UTF-8 分区名截断或用 NUL 补齐到恰好 64 字节并直接写出（不校验回显），写出大端载荷
     /// 长度，在发送任何载荷字节之前必须收到不超过 <c>0x00FF</c> 的状态字，载荷按 0x200 字节分块流出，最后
-    /// 以大端 xflash 校验和收尾——即小端双字之和，剩余字节逐个相加。</para>
-    /// <para>The reference adds the trailing bytes with a loop bound of <c>4 - (len % 4)</c>, which
-    /// over- or under-adds for lengths that are not two-mod-four; this path adds each remaining byte
-    /// once, which agrees exactly with the reference for every four-aligned payload. The reference
-    /// writes the checksum and returns without a completion status, so this path does not read one
-    /// either; the documented caller follows with the 0x71 jump-to-partition exchange.</para>
-    /// <para>参考用 <c>4 - (len % 4)</c> 的循环上限追加剩余字节，对非模 4 余 2 的长度会多加或漏加；本路径
-    /// 对每个剩余字节只加一次，对所有按四对齐的载荷与参考完全一致。参考写出校验和后直接返回、不读完成状态，
+    /// 以大端 xflash 校验和收尾——即小端双字之和，剩余字节逐个相加。
+    /// 本路径用 <c>4 - (len % 4)</c> 的循环上限追加剩余字节，对非模 4 余 2 的长度会多加或漏加；本路径
+    /// 对每个剩余字节只加一次，对所有按四对齐的载荷与要求的帧结构完全一致。本路径写出校验和后直接返回、不读完成状态，
     /// 因此本路径同样不读；已记载的调用方随后执行 0x71 跳转分区交互。</para>
     /// </remarks>
     /// <param name="partitionName">The partition name; its UTF-8 encoding is truncated or padded to
@@ -591,15 +578,14 @@ public sealed partial class MtkSession
         await WriteAsync(checksumField, _timeoutMs, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Applies the upstream initialization watchdog policy: disable the watchdog only for a chip the
-    /// reference does not mark as 64-bit and for which the reference table records a sequence.
-    /// <para>应用上游初始化看门狗策略：仅对参考实现未标记为 64 位、且参考表记录了序列的芯片禁用看门狗。</para>
+    /// <summary>Applies the preloader watchdog policy: disable the watchdog only for a chip the
+    /// port table does not mark as 64-bit and for which it records a sequence.
+    /// <para>应用 preloader 初始化看门狗策略：仅对端口表未标记为 64 位、且记录了序列的芯片禁用看门狗。</para>
     /// </summary>
-    /// <remarks>The upstream preloader initialization performs this write after the hardware code is known and before
-    /// the download-agent upload (<c>mtkclient/Library/mtk_preloader.py:208-211</c>). Calling it from the bootstrap keeps
+    /// <remarks>The preloader initialization performs this write after the hardware code is known and before
+    /// the download-agent upload. Calling it from the bootstrap keeps
     /// the single <c>InitializeAsync</c> state machine intact instead of initializing the session twice.
-    /// <para>上游 preloader 初始化在硬件码已知之后、下载代理上传之前执行该写入
-    /// （<c>mtkclient/Library/mtk_preloader.py:208-211</c>）。由引导流程调用它可以保持唯一的
+    /// <para>preloader 初始化在硬件码已知之后、下载代理上传之前执行该写入。由引导流程调用它可以保持唯一的
     /// <c>InitializeAsync</c> 状态机，而不需要二次初始化会话。</para></remarks>
     /// <param name="device">The identity already queried from the target. 已从目标查询到的身份信息。</param>
     /// <param name="cancellationToken">The operation cancellation token. 操作取消令牌。</param>
@@ -616,13 +602,14 @@ public sealed partial class MtkSession
         await DisablePreloaderWatchdogAsync(confirmWrite: true, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Disables the target watchdog with the chip-specific write sequence the reference defines.
-    /// <para>使用参考实现定义的、按芯片区分的写序列禁用目标看门狗。</para></summary>
-    /// <remarks>The steps come from <see cref="MtkPreloaderWatchdogTable.Resolve"/>; chips upstream
-    /// leaves without a sequence are refused with <see cref="NotSupportedException"/>naming the
+    /// <summary>Disables the target watchdog with the chip-specific write sequence defined for that chip.
+    /// <para>使用按芯片区分的已定义写序列禁用目标看门狗。</para></summary>
+    /// <remarks>The steps come from <see cref="MtkPreloaderWatchdogTable.Resolve"/>; chips the table
+    /// leaves without a sequence are refused with <see cref="NotSupportedException"/> naming the
     /// hardware code rather than being driven with invented registers. See the class remarks for the
-    /// upstream branch sources. 步骤来自 <see cref="MtkPreloaderWatchdogTable.Resolve"/>
-    /// ；上游未记录序列的芯片会以指名硬件码的 <see cref="NotSupportedException"/>被拒绝，而不是用凭空编造的寄存器去驱动。上游分支来源见类备注。</remarks>
+    /// branch sources.
+    /// <para>步骤来自 <see cref="MtkPreloaderWatchdogTable.Resolve"/>；芯片表未记录序列的芯片会以指名硬件码的
+    /// <see cref="NotSupportedException"/> 被拒绝，而不是用凭空编造的寄存器去驱动。分支来源见类备注。</para></remarks>
     /// <param name="confirmWrite">The explicit caller opt-in that authorizes the writes.
     /// <para>授权这些写入的显式调用方选择。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
@@ -630,8 +617,8 @@ public sealed partial class MtkSession
     /// <para>在每个已记载步骤均被确认后完成的任务。</para></returns>
     /// <exception cref="UnauthorizedAccessException"><paramref name="confirmWrite"/> is <see langword="false"/>; no byte was sent and the session keeps its stage.
     /// <para><paramref name="confirmWrite"/> 为 <see langword="false"/>；未发送任何字节，会话保持原阶段。</para></exception>
-    /// <exception cref="NotSupportedException">The reference table records no disable sequence for the queried hardware code; no byte was sent.
-    /// <para>参考表没有为查询到的硬件码记录禁用序列；未发送任何字节。</para></exception>
+    /// <exception cref="NotSupportedException">The port table records no disable sequence for the queried hardware code; no byte was sent.
+    /// <para>端口表没有为查询到的硬件码记录禁用序列；未发送任何字节。</para></exception>
     /// <exception cref="InvalidOperationException">The session is not in the preloader command stage or the identity was never queried.
     /// <para>会话不处于 preloader 命令阶段，或从未查询身份。</para></exception>
     /// <exception cref="MtkProtocolException">A step was refused; the session faults.
@@ -699,26 +686,26 @@ public sealed partial class MtkSession
     /// <summary>Arms the watchdog reset register so the next timeout reboots straight into the BROM.
     /// <para>武装看门狗复位寄存器，使下一次超时直接重启进入 BROM。</para></summary>
     /// <remarks>
-    /// <c>reset_to_brom</c> (<c>mtkclient/Library/mtk_preloader.py:457-482</c>) composes the USBDL
+    /// <c>reset_to_brom</c> composes the USBDL
     /// value from the timeout (scaled to seconds, shifted into the <c>0x0000FFFC</c> field, with the
     /// enable bit <c>0x1</c> optional, the bootloader bit <c>0x2</c> cleared so the BROM owns the
     /// download flag, and the magic <c>0x444C0000</c> applied) and then unlocks the
     /// <c>misc_lock</c> register with <c>0xAD98</c>, marks the watchdog-resettable control at
     /// <c>misc_lock + 8</c>, relocks with <c>0</c>, and finally writes the USBDL value to
-    /// <c>misc_lock - 0x20</c>. A zero timeout keeps the reference "no timeout" maximum. The unlock
+    /// <c>misc_lock - 0x20</c>. A zero timeout selects the no-timeout maximum. The unlock
     /// sequence writes device state, so it is only attempted when the caller confirms it.
-    /// <c>reset_to_brom</c>（<c>mtkclient/Library/mtk_preloader.py:457-482</c>）组合 USBDL 值：超时按秒缩放、
+    /// <c>reset_to_brom</c>组合 USBDL 值：超时按秒缩放、
     /// 移入 <c>0x0000FFFC</c> 字段、可选置位使能位 <c>0x1</c>、清除 bootloader 位 <c>0x2</c> 以让 BROM
     /// 持有下载标志、并加上魔数 <c>0x444C0000</c>；随后用 <c>0xAD98</c> 解锁 <c>misc_lock</c> 寄存器、把
     /// 看门狗可复位控制写入 <c>misc_lock + 8</c>、以 <c>0</c> 重新加锁，最后把 USBDL 值写入
-    /// <c>misc_lock - 0x20</c>。超时为 0 时保留参考的"无超时"最大值。解锁序列会写入设备状态，因此仅在
+    /// <c>misc_lock - 0x20</c>。超时为 0 时选择无超时最大值。解锁序列会写入设备状态，因此仅在
     /// 调用方确认后才发起。
     /// </remarks>
-    /// <param name="enable">Whether the download-enable bit is set; the reference default is
-    /// <see langword="true"/>. <para>是否置位下载使能位；参考默认为 <see langword="true"/>。</para></param>
+    /// <param name="enable">Whether the download-enable bit is set; the default is
+    /// <see langword="true"/>. <para>是否置位下载使能位；默认为 <see langword="true"/>。</para></param>
     /// <param name="timeoutMs">The watchdog timeout budget in milliseconds before the reset reboots
-    /// into the BROM; <c>0</c> selects the reference no-timeout maximum.
-    /// <para>超时重启回到 BROM 前的看门狗毫秒预算；<c>0</c> 选择参考的无超时最大值。</para></param>
+    /// into the BROM; <c>0</c> selects the no-timeout maximum.
+    /// <para>超时重启回到 BROM 前的看门狗毫秒预算；<c>0</c> 选择无超时最大值。</para></param>
     /// <param name="confirm">The explicit caller opt-in that authorizes the reset arming.
     /// <para>授权武装复位的显式调用方选择。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.
@@ -730,9 +717,9 @@ public sealed partial class MtkSession
     /// <para><paramref name="confirm"/> 为 <see langword="false"/>；未发送任何字节，会话保持原阶段。</para></exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="timeoutMs"/> is negative.
     /// <para><paramref name="timeoutMs"/> 为负。</para></exception>
-    /// <exception cref="NotSupportedException">The reference table records no <c>misc_lock</c>
+    /// <exception cref="NotSupportedException">The port table records no <c>misc_lock</c>
     /// register for the queried hardware code; no byte was sent.
-    /// <para>参考表没有为查询到的硬件码记录 <c>misc_lock</c> 寄存器；未发送任何字节。</para></exception>
+    /// <para>端口表没有为查询到的硬件码记录 <c>misc_lock</c> 寄存器；未发送任何字节。</para></exception>
     /// <exception cref="InvalidOperationException">The session is not in the preloader command stage or
     /// the identity was never queried. <para>会话不处于 preloader 命令阶段，或从未查询身份。</para></exception>
     /// <exception cref="MtkProtocolException">A step was refused; the session faults.
@@ -784,12 +771,11 @@ public sealed partial class MtkSession
 
     /// <summary>Reads a bounded memory window through chunked big-endian thirty-two-bit reads and re-emits it little-endian.
     /// <para>通过分块的大端三十二位读取读取有界内存窗口，并按小端重新输出。</para></summary>
-    /// <remarks>The reference <c>peek</c>handler for the preloader (
-    /// <c>mtkclient/Library/mtk_main.py:323-345</c>) requests at most 512 bytes per READ32 command,
+    /// <remarks>The preloader <c>peek</c> handler requests at most 512 bytes per READ32 command,
     /// decodes the big-endian reply, and re-packs each doubleword little-endian; the tail is rounded up
     /// to a whole word on the wire and trimmed afterwards, exactly like the Legacy DA reader. A refused
-    /// or short chunk is a protocol fault here rather than an empty or short result. preloader 的参考
-    /// <c>peek</c>处理程序（ <c>mtkclient/Library/mtk_main.py:323-345</c>）每条 READ32 命令最多请求 512
+    /// or short chunk is a protocol fault here rather than an empty or short result. preloader 的
+    /// <c>peek</c> 处理程序每条 READ32 命令最多请求 512
     /// 字节，解码大端回复后把每个双字按小端重新打包；线路上的尾部向上取整到完整双字并在 之后裁剪，与 Legacy DA 读取器一致。被拒绝或过短的分块在这里是协议错误，而不是空或短结果。</remarks>
     /// <param name="address">The start address of the window. 窗口起始地址。</param>
     /// <param name="length">The positive byte count, limited to
@@ -986,11 +972,11 @@ public sealed partial class MtkSession
         await ReadStatusAsync("preloader 32-bit write completion", cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Applies the reference write gate: values may only follow an opening status at or below
-    /// <c>0x0003</c>. <para>应用参考的写入门：只有在首个状态不超过 <c>0x0003</c> 之后才允许发送值。</para></summary>
+    /// <summary>Applies the write gate: values may only follow an opening status at or below
+    /// <c>0x0003</c>. <para>应用写入门：只有在首个状态不超过 <c>0x0003</c> 之后才允许发送值。</para></summary>
     /// <param name="status">The opening status word. 首个状态字。</param>
-    /// <exception cref="MtkProtocolException">The status is a hard error or the reference value-window
-    /// status, which sends no value bytes. <para>状态为硬错误，或是参考的值窗口状态，此时不发送任何值字节。</para></exception>
+    /// <exception cref="MtkProtocolException">The status is a hard error or the value-window
+    /// status, which sends no value bytes. <para>状态为硬错误，或是值窗口状态，此时不发送任何值字节。</para></exception>
     private static void RequirePreloaderWriteAccepted(ushort status)
     {
         if (status > PreloaderWriteAcceptedStatus)
@@ -1013,8 +999,8 @@ public sealed partial class MtkSession
         return field;
     }
 
-    /// <summary>Composes the USBDL flag word of the reference reset-to-BROM sequence.
-    /// <para>组合参考 reset-to-BROM 序列的 USBDL 标志字。</para></summary>
+    /// <summary>Composes the USBDL flag word of the reset-to-BROM sequence.
+    /// <para>组合 reset-to-BROM 序列的 USBDL 标志字。</para></summary>
     /// <param name="enable">Whether the download-enable bit is set. 是否置位下载使能位。</param>
     /// <param name="timeoutMs">The timeout in milliseconds; <c>0</c> selects the no-timeout maximum.
     /// <para>毫秒超时；<c>0</c> 选择无超时最大值。</para></param>

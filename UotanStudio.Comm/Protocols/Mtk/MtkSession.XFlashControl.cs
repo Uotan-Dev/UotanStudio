@@ -3,48 +3,46 @@ using UotanStudio.Comm.Protocols.Common.Evidence;
 
 namespace UotanStudio.Comm.Protocols.Mtk;
 
-/// <summary>Boot mode flag triple the reference sends with the meta command.
-/// <para>参考随 meta 命令发送的启动模式标志三元组。</para></summary>
+/// <summary>Boot mode flag triple sent with the meta command.
+/// <para>随 meta 命令发送的启动模式标志三元组。</para></summary>
 /// <remarks>
-/// The values reproduce <c>MtkBootModeFlag</c> of Library/DA/xflash/xflash_lib.py:208-232: the boot
-/// mode byte (0 normal, 1 meta), the connection type byte (0 unknown, 1 UART, 2 USB) and the
-/// always-zero interface byte.
-/// 取值复现 Library/DA/xflash/xflash_lib.py:208-232 的 <c>MtkBootModeFlag</c>：启动模式字节
-/// （0 正常，1 meta）、连接类型字节（0 未知，1 UART，2 USB）与恒为零的接口字节。
+/// The triple is the boot mode byte (0 normal, 1 meta), the connection type byte (0 unknown, 1 UART,
+/// 2 USB) and the always-zero interface byte.
+/// <para>该三元组为启动模式字节（0 正常，1 meta）、连接类型字节（0 未知，1 UART，2 USB）
+/// 与恒为零的接口字节。</para>
 /// </remarks>
 public enum MtkXFlashMetaBootMode
 {
-    /// <summary>Normal boot, unknown connection type (reference <c>off</c>).
+    /// <summary>Normal boot, unknown connection type (<c>off</c>).
     /// <para>正常启动，未知连接类型。</para></summary>
     Off,
-    /// <summary>Meta boot over UART (reference <c>uart</c>).
+    /// <summary>Meta boot over UART (<c>uart</c>).
     /// <para>经 UART 的 meta 启动。</para></summary>
     Uart,
-    /// <summary>Meta boot over USB (reference <c>usb</c>).
+    /// <summary>Meta boot over USB (<c>usb</c>).
     /// <para>经 USB 的 meta 启动。</para></summary>
     Usb
 }
 
 /// <summary>
 /// Device-control write commands of the XFlash download agent: the meta boot mode and eMMC
-/// hardware-reset-pin selectors the reference documents, plus the parameterless download-info and
+/// hardware-reset-pin selectors documented here, plus the parameterless download-info and
 /// hardware-reset-pin disable markers.
-/// <para>XFlash 下载代理的器件控制写入命令：参考记载的 meta 启动模式与 eMMC 硬件复位引脚选择器，
+/// <para>XFlash 下载代理的器件控制写入命令：已记载的 meta 启动模式与 eMMC 硬件复位引脚选择器，
 /// 以及无参数的下载信息与硬件复位引脚禁用标记。</para>
 /// </summary>
 /// <remarks>
-/// <para>Every SET exchange mirrors <c>send_devctrl</c> with a parameter
-/// (Library/DA/xflash/xflash_lib.py:190-206) and <c>send_param</c> (:163-182): device-control
+/// Every SET exchange is a <c>send_devctrl</c> call with a parameter followed by
+/// <c>send_param</c>: device-control
 /// selector, one status, the control code, one status, the parameter packet with the shared frame
 /// magic, and one completion status. The parameterless 0x0800xx markers follow the established
-/// parameterless device-control exchange of this session — the reference defines their codes
-/// (Library/DA/xflash/xflash_param.py:60-62) but keeps every call commented out
-/// (Library/DA/xflash/xflash_lib.py:856), so no reply layout is invented beyond the shared framing.</para>
-/// <para>每个 SET 交互对应带参数的 <c>send_devctrl</c>（Library/DA/xflash/xflash_lib.py:190-206）与
-/// <c>send_param</c>（:163-182）：器件控制选择器、一个状态、控制码、一个状态、携带共享帧魔数的参数包，
-/// 以及一个完成状态。无参数的 0x0800xx 标记遵循本会话已确立的无参数器件控制交互——参考只定义了它们的
-/// 控制码（Library/DA/xflash/xflash_param.py:60-62），所有调用都处于注释状态
-/// （Library/DA/xflash/xflash_lib.py:856），因此除共享帧结构外不发明任何回复布局。</para>
+/// parameterless device-control exchange of this session — their codes are defined
+/// but every call is commented out,
+/// so no reply layout is invented beyond the shared framing.
+/// <para>每个 SET 交互对应带参数的 <c>send_devctrl</c>与
+/// <c>send_param</c>：器件控制选择器、一个状态、控制码、一个状态、携带共享帧魔数的参数包，
+/// 以及一个完成状态。无参数的 0x0800xx 标记遵循本会话已确立的无参数器件控制交互——只定义了它们的
+/// 控制码，所有调用都处于注释状态，因此除共享帧结构外不发明任何回复布局。</para>
 /// </remarks>
 public sealed partial class MtkSession
 {
@@ -56,10 +54,9 @@ public sealed partial class MtkSession
 
     /// <summary>Sets the meta boot mode flag triple through the documented control code.
     /// <para>通过已记载的控制码设置 meta 启动模式标志三元组。</para></summary>
-    /// <remarks>The payload reproduces <c>set_meta</c>(Library/DA/xflash/xflash_lib.py:206-239): three
+    /// <remarks>The payload reproduces <c>set_meta</c>: three
     /// bytes of boot mode, connection type and interface id, where UART and USB select meta boot and
-    /// <see cref="MtkXFlashMetaBootMode.Off"/>restores the normal boot flags. 载荷复现 <c>set_meta</c>
-    /// （Library/DA/xflash/xflash_lib.py:206-239）：启动模式、连接类型与接口 id 三个字节，UART 与 USB 选择 meta 启动，
+    /// <see cref="MtkXFlashMetaBootMode.Off"/>restores the normal boot flags. 载荷复现 <c>set_meta</c>：启动模式、连接类型与接口 id 三个字节，UART 与 USB 选择 meta 启动，
     /// <see cref="MtkXFlashMetaBootMode.Off"/>恢复正常启动标志。</remarks>
     /// <param name="mode">The boot mode to request. 要请求的启动模式。</param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
@@ -96,9 +93,9 @@ public sealed partial class MtkSession
 
     /// <summary>Enables or disables the eMMC hardware reset pin through the documented control code.
     /// <para>通过已记载的控制码启用或禁用 eMMC 硬件复位引脚。</para></summary>
-    /// <remarks>The reference defines the control code (Library/DA/xflash/xflash_param.py:31) without
+    /// <remarks>This implementation defines the control code without
     /// any call site, so the payload follows the SET-family little-endian word convention with no
-    /// further layout invented. 参考只定义了该控制码（Library/DA/xflash/xflash_param.py:31），没有任何调用点，因此载荷遵循 SET 家族
+    /// further layout invented. 本实现只定义了该控制码，没有任何调用点，因此载荷遵循 SET 家族
     /// 的小端字约定，不再发明其他布局。</remarks>
     /// <param name="enable"><see langword="true"/> enables the hardware reset pin.
     /// <para><see langword="true"/> 启用硬件复位引脚。</para></param>
@@ -119,10 +116,10 @@ public sealed partial class MtkSession
 
     /// <summary>Marks the start of one download through the documented 0x080001 marker.
     /// <para>通过已记载的 0x080001 标记声明一次下载开始。</para></summary>
-    /// <remarks>The reference keeps its only call commented out (Library/DA/xflash/xflash_lib.py:856),
+    /// <remarks>This implementation keeps its only call commented out,
     /// so this path follows the established parameterless device-control exchange and keeps the reply
     /// bytes opaque; the marker changes no storage content by itself.
-    /// 参考唯一的调用处于注释状态（Library/DA/xflash/xflash_lib.py:856），因此本路径遵循已确立的无参数器件
+    /// 本实现唯一的调用处于注释状态，因此本路径遵循已确立的无参数器件
     /// 控制交互并把回复字节保持为不透明内容；该标记本身不改变任何存储内容。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The exact reply bytes. 精确的回复字节。</returns>
@@ -140,9 +137,9 @@ public sealed partial class MtkSession
 
     /// <summary>Marks the end of one download through the documented 0x080002 marker.
     /// <para>通过已记载的 0x080002 标记声明一次下载结束。</para></summary>
-    /// <remarks>The reference defines the code without a call site, so this path follows the
+    /// <remarks>This implementation defines the code without a call site, so this path follows the
     /// established parameterless device-control exchange and keeps the reply bytes opaque.
-    /// 参考只定义了该控制码而没有调用点，因此本路径遵循已确立的无参数器件控制交互，并把回复字节保持为 不透明内容。</remarks>
+    /// 本实现只定义了该控制码而没有调用点，因此本路径遵循已确立的无参数器件控制交互，并把回复字节保持为 不透明内容。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The exact reply bytes. 精确的回复字节。</returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.
@@ -159,10 +156,10 @@ public sealed partial class MtkSession
 
     /// <summary>Disables the eMMC hardware reset pin through the documented 0x080004 marker.
     /// <para>通过已记载的 0x080004 标记禁用 eMMC 硬件复位引脚。</para></summary>
-    /// <remarks>The reference defines the code without a call site
-    /// (Library/DA/xflash/xflash_param.py:62), so this path follows the established parameterless
+    /// <remarks>This implementation defines the code without a call site,
+    /// so this path follows the established parameterless
     /// device-control exchange and keeps the reply bytes opaque.
-    /// 参考只定义了该控制码而没有调用点（Library/DA/xflash/xflash_param.py:62），因此本路径遵循已确立的 无参数器件控制交互，并把回复字节保持为不透明内容。</remarks>
+    /// 本实现只定义了该控制码而没有调用点，因此本路径遵循已确立的 无参数器件控制交互，并把回复字节保持为不透明内容。</remarks>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
     /// <returns>The exact reply bytes. 精确的回复字节。</returns>
     /// <exception cref="InvalidOperationException">No XFlash stage-one agent is attached.

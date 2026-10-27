@@ -37,35 +37,24 @@ public sealed record MtkGptWriteExtent(MtkGptCopy Copy, string RegionName, uint?
 /// <para>规划依据一份已校验快照写回设备自身的主、备 GPT 副本，并经各协议族的客户端回读。</para>
 /// </summary>
 /// <remarks>
-/// <para>Deliberate scope limit: this planner only re-programs the table the device itself reported. It
+/// Deliberate scope limit: this planner only re-programs the table the device itself reported. It
 /// accepts no foreign GPT, rewrites no geometry, changes no partition payload and never resizes a region;
 /// a table whose declared block count exceeds the region it was read from is refused before any byte is
 /// produced. The extent bytes are re-serialized from the validated table, so header and array layout fields,
 /// entry contents and the disk identifier round-trip, while reserved bytes the model does not carry are
-/// emitted as the canonical zeros the reader also enforces.</para>
+/// emitted as the canonical zeros the reader also enforces.
+/// Per-extent layout: the primary copy travels from block zero and is written back as the <c>gpt</c>
+/// partition, both through <c>writeflash(addr=0, length=&lt;file size&gt;)</c>. The write stops there: no
+/// backup copy is programmed through the download agent, and the only backup addressing is a read at the
+/// header-declared location, so the backup extent is programmed at the block the table itself declares and
+/// never at a slot measured from the reported region end.
 /// <para>刻意的范围限制：本规划器只重新编程设备自己上报的分区表。它不接受外部 GPT、不改写几何信息、不改变任何
 /// 分区数据，也不会调整区域大小；声明块数超出其来源区域的表会在生成任何字节之前被拒绝。范围字节由已校验的表
 /// 重新序列化得到，因此头部与数组布局字段、条目内容与磁盘标识符会原样往返，而模型未携带的保留字节则按读取器
-/// 同样强制的规范零值输出。</para>
-/// <para>Reference correspondence, per extent: the primary copy travels from block zero, which is what the
-/// reference does when a table is flashed back as the <c>gpt</c> partition
-/// (<c>Library/DA/mtk_da_handler.py:352-357</c> for <c>w</c> and <c>Library/DA/mtk_da_handler.py:404-413</c>
-/// for <c>wl</c>, both calling <c>writeflash(addr=0, length=&lt;file size&gt;)</c>). The reference's own table
-/// write stops there: it never programs a backup copy through the download agent, and the only backup addressing
-/// it defines is a read at the header-declared location
-/// (<c>Library/partition.py:131-133</c>, <c>addr = header.backup_lba * pagesize</c>), so the backup extent here
-/// is programmed at the block the table itself declares, never at a slot measured from the reported region end.
-/// The region-end form only appears in the reference's <c>generate_rawprogram</c> template
-/// (<c>Library/gpt.py:312-324</c>, <c>start_sector = NUM_DISK_SECTORS - sectors</c>), which has no caller.</para>
-/// <para>逐范围的参考对应关系：主副本从块零开始传输，这正是参考把分区表作为 <c>gpt</c> 分区写回时的做法
-/// （<c>Library/DA/mtk_da_handler.py:352-357</c> 的 <c>w</c> 与
-/// <c>Library/DA/mtk_da_handler.py:404-413</c> 的 <c>wl</c>，两者都调用
-/// <c>writeflash(addr=0, length=&lt;文件大小&gt;)</c>）。参考自身的分区表写入到此为止：它从不通过下载代理编程
-/// 备份副本，且它唯一定义的备份寻址是按头部声明位置进行的读取
-/// （<c>Library/partition.py:131-133</c>，<c>addr = header.backup_lba * pagesize</c>），因此这里的备份范围编程在
-/// 分区表自己声明的块上，绝不取自从上报区域末端量出的槽位。按区域末端定位的写法只出现在参考的
-/// <c>generate_rawprogram</c> 模板里（<c>Library/gpt.py:312-324</c>，
-/// <c>start_sector = NUM_DISK_SECTORS - sectors</c>），而该模板没有任何调用者。</para>
+/// 同样强制的规范零值输出。
+/// 逐范围的对应关系：主副本从块零开始传输，这正是把分区表作为 <c>gpt</c> 分区写回时的做法。分区表写入到此为止：它从不通过下载代理编程
+/// 备份副本，且唯一的备份寻址是按头部声明位置进行的读取，因此备份范围编程在分区表自己声明的块上，
+/// 绝不取自从上报区域末端量出的槽位。</para>
 /// </remarks>
 public static class MtkGptWritePlanner
 {

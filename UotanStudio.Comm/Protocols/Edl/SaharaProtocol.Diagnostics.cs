@@ -43,8 +43,8 @@ public sealed partial class SaharaProtocol
     /// <para>丢弃本实例已协商命令模式的记录，让下一次诊断必须重新读取目标的 HELLO。</para>
     /// </summary>
     /// <remarks>
-    /// <para>A refused or half-finished exec exchange already consumed the buffered HELLO, and keeping the
-    /// ready flag would send commands over a link that was never negotiated.</para>
+    /// A refused or half-finished exec exchange already consumed the buffered HELLO, and keeping the
+    /// ready flag would send commands over a link that was never negotiated.
     /// <para>一次被拒绝或半途失败的 exec 交换已经消费掉缓冲的 HELLO，若继续沿用就绪标志就会在没有协商的
     /// 链路上直接发命令。</para>
     /// </remarks>

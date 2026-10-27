@@ -10,19 +10,14 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// Converts between managed RSA keys and the ADB wire format, and performs
 /// ADB RSA-SHA1 token signing.
 /// <para>在托管 RSA 密钥与 ADB 线上格式之间转换，并执行 ADB RSA-SHA1 令牌签名。</para>
-/// <para>The host identity is exactly the RSA-2048 key pair that upstream adb keeps at
-/// <c>&lt;home&gt;/.android/adbkey</c> plus its <c>.pub</c> sidecar
-/// (<c>client/auth.cpp</c> and <c>adb_utils.cpp</c> in
-/// <c>platform/packages/modules/adb</c>): the private half is PKCS#8 PEM written by
-/// <c>PEM_write_PrivateKey</c>, the sidecar is the base64 <c>RSAPublicKey</c> record followed by a
-/// space and the <c>loginname@hostname</c> label with no trailing newline, and the extra identities
-/// a server may offer come from <c>ADB_VENDOR_KEYS</c>. Nothing else is persisted as a host
-/// identity.</para>
-/// <para>主机身份就是上游 adb 保存在 <c>&lt;主目录&gt;/.android/adbkey</c> 及其 <c>.pub</c>
-/// 同名文件中的 RSA-2048 密钥对（来自 <c>platform/packages/modules/adb</c> 的
-/// <c>client/auth.cpp</c> 与 <c>adb_utils.cpp</c>）：私钥是 <c>PEM_write_PrivateKey</c> 写出的
-/// PKCS#8 PEM，同名公钥文件是 base64 的 <c>RSAPublicKey</c> 记录加一个空格再加
-/// <c>loginname@hostname</c> 标注且结尾无换行，服务器可额外提供的身份来自
+/// <para>The host identity is exactly the RSA-2048 key pair persisted at
+/// <c>&lt;home&gt;/.android/adbkey</c> plus its <c>.pub</c> sidecar: the private half is
+/// PKCS#8 PEM, the sidecar is the base64 <c>RSAPublicKey</c> record followed by a space and the
+/// <c>loginname@hostname</c> label with no trailing newline, and the extra identities a server may
+/// offer come from <c>ADB_VENDOR_KEYS</c>. Nothing else is persisted as a host identity.</para>
+/// <para>主机身份就是持久化在 <c>&lt;主目录&gt;/.android/adbkey</c> 及其 <c>.pub</c> 同名文件中的
+/// RSA-2048 密钥对：私钥是 PKCS#8 PEM，同名公钥文件是 base64 的 <c>RSAPublicKey</c> 记录加一个空格
+/// 再加 <c>loginname@hostname</c> 标注且结尾无换行，服务器可额外提供的身份来自
 /// <c>ADB_VENDOR_KEYS</c>。除这些之外不存在被持久化的主机身份。</para>
 /// </summary>
 public sealed class AdbAuthentication : IDisposable
@@ -30,16 +25,16 @@ public sealed class AdbAuthentication : IDisposable
     private const int KeyLengthInDwords = 64;
 
     /// <summary>
-    /// Gets the size, in bytes, of the AUTH token adbd issues, matching upstream <c>TOKEN_SIZE</c>.
-    /// <para>获取 adbd 下发的 AUTH 令牌字节数，与上游 <c>TOKEN_SIZE</c> 一致。</para>
+    /// Gets the size, in bytes, of the AUTH token adbd issues.
+    /// <para>获取 adbd 下发的 AUTH 令牌字节数。</para>
     /// </summary>
     /// <value>20 bytes, the SHA-1 sized challenge. <para>20 字节，即 SHA-1 宽度的挑战值。</para></value>
     public const int TokenSize = 20;
 
     /// <summary>
-    /// Gets the environment variable upstream adb reads for extra host identities, holding
+    /// Gets the environment variable name that lists extra host identities, holding
     /// key files or directories separated by <c>;</c> on Windows and <c>:</c> elsewhere.
-    /// <para>获取上游 adb 读取额外主机身份的环境变量名，其中密钥文件或目录在 Windows 上以
+    /// <para>获取列出额外主机身份的环境变量名，其中密钥文件或目录在 Windows 上以
     /// <c>;</c> 分隔、在其他平台上以 <c>:</c> 分隔。</para>
     /// </summary>
     /// <value>The name <c>ADB_VENDOR_KEYS</c>. <para>名称 <c>ADB_VENDOR_KEYS</c>。</para></value>
@@ -52,10 +47,9 @@ public sealed class AdbAuthentication : IDisposable
     private readonly RSA _rsa;
 
     /// <summary>
-    /// Gets the default key directory under the user home directory, created with the upstream
-    /// <c>0750</c> mode on Unix platforms (<c>adb_get_android_dir_path</c>).
-    /// <para>获取用户主目录下的默认密钥目录，在 Unix 平台上按上游
-    /// <c>adb_get_android_dir_path</c> 的 <c>0750</c> 权限创建。</para>
+    /// Gets the default key directory under the user home directory, created with the
+    /// <c>0750</c> mode on Unix platforms.
+    /// <para>获取用户主目录下的默认密钥目录，在 Unix 平台上以 <c>0750</c> 权限创建。</para>
     /// </summary>
     /// <value>The composed directory path; the directory itself may not exist yet.
     /// <para>组合得到的目录路径；该目录本身可能尚不存在。</para></value>
@@ -106,12 +100,10 @@ public sealed class AdbAuthentication : IDisposable
 
     /// <summary>
     /// Gets the private key file this identity was loaded from, or <see langword="null"/> for an
-    /// identity built from an in-memory key. Upstream distinguishes the same way: the key at
-    /// <c>get_user_key_path()</c> is the user identity whose public half is announced after the chain is
-    /// exhausted, while the rest of the chain only signs challenges.
+    /// identity built from an in-memory key. The user identity is the one whose public half is
+    /// announced after the chain is exhausted, while the rest of the chain only signs challenges.
     /// <para>获取该身份加载来源的私钥文件路径；由内存密钥构建的身份为
-    /// <see langword="null"/>。上游同样区分：来自 <c>get_user_key_path()</c> 的密钥是用户身份，身份链
-    /// 耗尽后通告其公钥半部，其余身份只负责签名挑战。</para>
+    /// <see langword="null"/>。用户身份是身份链耗尽后通告其公钥半部的那个身份，其余身份只负责签名挑战。</para>
     /// </summary>
     /// <value>The originating key file path, or <see langword="null"/>.
     /// <para>来源密钥文件路径，或 <see langword="null"/>。</para></value>
@@ -120,11 +112,11 @@ public sealed class AdbAuthentication : IDisposable
     /// <summary>
     /// Loads the authentication key from <paramref name="keyPath"/>, or generates
     /// and persists a new 2048-bit key when the file is absent. A generated key is written as
-    /// unencrypted PKCS#8 PEM (<c>BEGIN PRIVATE KEY</c>), the format upstream <c>generate_key()</c>
-    /// writes with <c>PEM_write_PrivateKey</c>; a stored key is accepted in either PKCS#1 or PKCS#8.
+    /// unencrypted PKCS#8 PEM (<c>BEGIN PRIVATE KEY</c>); a stored key is accepted in either
+    /// PKCS#1 or PKCS#8.
     /// <para>从 <paramref name="keyPath"/> 加载认证密钥；文件不存在时生成并持久化新的 2048 位密钥。
-    /// 生成的密钥以未加密的 PKCS#8 PEM（<c>BEGIN PRIVATE KEY</c>）写出，即上游 <c>generate_key()</c>
-    /// 用 <c>PEM_write_PrivateKey</c> 写出的格式；已存在的密钥接受 PKCS#1 或 PKCS#8。</para>
+    /// 生成的密钥以未加密的 PKCS#8 PEM（<c>BEGIN PRIVATE KEY</c>）写出；已存在的密钥接受
+    /// PKCS#1 或 PKCS#8。</para>
     /// </summary>
     /// <param name="keyPath">
     /// The private key path; defaults to <see cref="DefaultKeyFilePath"/>.
@@ -162,8 +154,8 @@ public sealed class AdbAuthentication : IDisposable
         finally { File.Delete(temporary); }
     }
 
-    /// <summary>Loads an existing identity from <paramref name="keyPath"/> without creating or repairing anything on disk. Upstream keeps this split too: <c>load_key()</c> reads an <c>ADB_VENDOR_KEYS</c> entry and a file it cannot parse is simply skipped, while only <c>load_userkey()</c> generates a key, and only at the user key path.
-    /// <para>从 <paramref name="keyPath"/> 加载已存在的身份，不创建也不修复磁盘上的任何内容。上游同样区分： <c>load_key()</c> 读取 <c>ADB_VENDOR_KEYS</c> 条目，无法解析的文件直接跳过；只有 <c>load_userkey()</c> 会生成密钥，且只在用户密钥路径上。</para></summary>
+    /// <summary>Loads an existing identity from <paramref name="keyPath"/> without creating or repairing anything on disk; a file that cannot be parsed is skipped.
+    /// <para>从 <paramref name="keyPath"/> 加载已存在的身份，不创建也不修复磁盘上的任何内容；无法解析的文件直接跳过。</para></summary>
     /// <param name="keyPath">The private key path to read.<para>待读取的私钥路径。</para></param>
     /// <returns>The loaded identity.<para>加载的身份。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="keyPath"/> is empty.
@@ -195,10 +187,10 @@ public sealed class AdbAuthentication : IDisposable
         }
     }
 
-    /// <summary>Loads the host identity chain an ADB server offers to a device: the user identity from <paramref name="keyPath"/> first, then every identity named by <see cref="VendorKeysEnvironmentVariable"/>, ordered by the ascending SHA-256 fingerprint of its public key and deduplicated by that fingerprint. Unreadable or wrong-width entries are skipped, as upstream adb skips a key file it cannot parse.
-    /// <para>加载 ADB 服务器向设备提供的主机身份链：先是 <paramref name="keyPath"/> 中的用户身份， 再是 <see cref="VendorKeysEnvironmentVariable"/> 指名的所有身份，其余身份按其公钥 SHA-256 指纹升序排列并按该指纹去重。无法读取或位数不匹配的条目会被跳过，正如上游 adb 跳过无法解析的密钥文件。</para></summary>
-    /// <remarks>Upstream keeps every private key in one fingerprint-keyed map (<c>g_keys</c> in <c>client/auth.cpp</c>), so its attempt order is the fingerprint order; the order has no protocol meaning because adbd accepts any authorized key. The user identity is hoisted to the front here so the default key is offered first, and the public-key payload announced after the chain is exhausted always comes from that user identity, matching <c>adb_auth_get_userkey()</c>.
-    /// <para>上游把所有私钥存放在以指纹为键的同一个映射表（<c>client/auth.cpp</c> 的 <c>g_keys</c>）里， 因此其尝试顺序就是指纹顺序；该顺序没有协议含义，因为 adbd 接受任何已授权的密钥。此处把用户身份 提到最前以保证默认密钥优先被提供，且身份链耗尽后通告的公钥负载始终来自该用户身份，与 <c>adb_auth_get_userkey()</c> 一致。</para></remarks>
+    /// <summary>Loads the host identity chain an ADB server offers to a device: the user identity from <paramref name="keyPath"/> first, then every identity named by <see cref="VendorKeysEnvironmentVariable"/>, ordered by the ascending SHA-256 fingerprint of its public key and deduplicated by that fingerprint. Unreadable or wrong-width entries are skipped.
+    /// <para>加载 ADB 服务器向设备提供的主机身份链：先是 <paramref name="keyPath"/> 中的用户身份， 再是 <see cref="VendorKeysEnvironmentVariable"/> 指名的所有身份，其余身份按其公钥 SHA-256 指纹升序排列并按该指纹去重。无法读取或位数不匹配的条目会被跳过。</para></summary>
+    /// <remarks>The attempt order carries no protocol meaning because the device accepts any authorized key. The user identity is offered first so the default key is announced before vendor keys, and the public-key payload announced after the chain is exhausted always comes from that user identity.
+    /// <para>尝试顺序没有协议含义，因为设备接受任何已授权的密钥。用户身份优先提供，使默认密钥先于厂商密钥被通告；身份链耗尽后通告的公钥负载始终来自该用户身份。</para></remarks>
     /// <param name="keyPath">The user private key path; defaults to <see cref="DefaultKeyFilePath"/>.
     /// <para>用户私钥路径；默认为 <see cref="DefaultKeyFilePath"/>。</para></param>
     /// <returns>The ordered identities, containing at least the user identity. The caller disposes them.
@@ -300,16 +292,14 @@ public sealed class AdbAuthentication : IDisposable
 
     /// <summary>
     /// Gets the SHA-256 fingerprint of the DER SubjectPublicKeyInfo encoding of this identity, the
-    /// value upstream adb calls a key fingerprint (<c>hash_key</c> in <c>client/auth.cpp</c>) and the
-    /// identity a device stores when the user accepts the connection prompt.
-    /// <para>获取该身份 DER SubjectPublicKeyInfo 编码的 SHA-256 指纹，即上游 adb
-    /// （<c>client/auth.cpp</c> 的 <c>hash_key</c>）所称的密钥指纹，也是用户接受连接授权时设备保存的身份。</para>
+    /// value a device stores when the user accepts the connection prompt.
+    /// <para>获取该身份 DER SubjectPublicKeyInfo 编码的 SHA-256 指纹，即用户接受连接授权时设备保存的指纹。</para>
     /// </summary>
     /// <value>The 32-byte digest. <para>32 字节摘要。</para></value>
     public byte[] PublicKeyFingerprint => Sha256.ComputeHash(_rsa.ExportSubjectPublicKeyInfo());
 
-    /// <summary>Signs the token with RSA-PKCS1 + SHA1 (ADB signature), the same construction as upstream <c>RSA_sign(NID_sha1, token, TOKEN_SIZE, ...)</c> in <c>adb_auth_sign</c>.
-    /// <para>用私钥以 RSA-PKCS1 + SHA1 对令牌签名，与上游 <c>adb_auth_sign</c> 中 <c>RSA_sign(NID_sha1, token, TOKEN_SIZE, ...)</c> 的构造一致。</para></summary>
+    /// <summary>Signs the token with RSA-PKCS1 + SHA1, the signature construction the ADB wire protocol requires.
+    /// <para>用私钥以 RSA-PKCS1 + SHA1 对令牌签名，即 ADB 线协议要求的签名构造。</para></summary>
     /// <param name="token">The token to sign; must be exactly <see cref="TokenSize"/> bytes.
     /// <para>待签名的令牌；必须恰为 <see cref="TokenSize"/> 字节。</para></param>
     /// <returns>The RSA-SHA1 signature.<para>RSA-SHA1 签名。</para></returns>
@@ -411,9 +401,8 @@ public sealed class AdbAuthentication : IDisposable
 
     /// <summary>
     /// Converts .NET RSA parameters into ADB RSAPublicKey fields with an explicit word count, so a
-    /// 4096-bit identity can be encoded as the 128 words upstream HDC expects.
-    /// <para>以显式字长把 .NET RSA 参数转换为 ADB RSAPublicKey 字段，使 4096 位身份能按上游 HDC
-    /// 期望的 128 字编码。</para>
+    /// 4096-bit identity is encoded as 128 words.
+    /// <para>以显式字长把 .NET RSA 参数转换为 ADB RSAPublicKey 字段，使 4096 位身份以 128 字编码。</para>
     /// </summary>
     /// <param name="parameters">The RSA parameters to convert. <para>待转换的 RSA 参数。</para></param>
     /// <param name="keyLengthInDwords">Word count of the modulus table. <para>模数表的字数。</para></param>
@@ -502,18 +491,18 @@ public sealed class AdbAuthentication : IDisposable
     }
 
     /// <summary>
-    /// Resolves the user home directory the way upstream <c>adb_get_homedir_path()</c> does: the
-    /// Windows profile folder (<c>SHGetFolderPathW(CSIDL_PROFILE)</c>) or, on Linux and macOS,
-    /// <c>$HOME</c> with the passwd entry as fallback.
-    /// <para>按上游 <c>adb_get_homedir_path()</c> 的方式解析用户主目录：Windows 上取配置文件目录
-    /// （<c>SHGetFolderPathW(CSIDL_PROFILE)</c>），Linux 与 macOS 上取 <c>$HOME</c> 并以 passwd 条目兜底。</para>
+    /// Resolves the user home directory: the Windows profile folder
+    /// (<c>SHGetFolderPathW(CSIDL_PROFILE)</c>) or, on Linux and macOS, <c>$HOME</c> with the
+    /// passwd entry as fallback.
+    /// <para>解析用户主目录：Windows 上取配置文件目录（<c>SHGetFolderPathW(CSIDL_PROFILE)</c>），
+    /// Linux 与 macOS 上取 <c>$HOME</c> 并以 passwd 条目兜底。</para>
     /// </summary>
     /// <remarks>
     /// The managed profile lookup can fail for a service account without a profile or in a stripped
-    /// container; upstream then reads the environment, so the fallback is platform-correct:
-    /// <c>USERPROFILE</c> is the Windows profile variable and <c>HOME</c> the POSIX one.
-    /// <para>托管的配置文件查询在无配置文件的服务账户或精简容器里可能失败；上游随后读取环境变量，因此兜底顺序
-    /// 按平台区分：<c>USERPROFILE</c> 是 Windows 的配置文件变量，<c>HOME</c> 是 POSIX 的。</para>
+    /// container, so the fallback reads the environment: <c>USERPROFILE</c> is the Windows profile
+    /// variable and <c>HOME</c> the POSIX one.
+    /// <para>托管的配置文件查询在无配置文件的服务账户或精简容器里可能失败，因此兜底读取环境变量：
+    /// <c>USERPROFILE</c> 是 Windows 的配置文件变量，<c>HOME</c> 是 POSIX 的。</para>
     /// </remarks>
     /// <returns>The user home directory path. <para>用户主目录路径。</para></returns>
     private static string GetHomeDirectory()
@@ -529,19 +518,19 @@ public sealed class AdbAuthentication : IDisposable
     }
 
     /// <summary>
-    /// Builds the <c>loginname@hostname</c> label upstream adb appends to the public key, reading the
-    /// same environment first: <c>USERNAME</c> and <c>COMPUTERNAME</c> on Windows, <c>LOGNAME</c> and
+    /// Builds the <c>loginname@hostname</c> label appended to the public key, reading the
+    /// environment first: <c>USERNAME</c> and <c>COMPUTERNAME</c> on Windows, <c>LOGNAME</c> and
     /// <c>HOSTNAME</c> on Linux and macOS, then the OS identity calls.
-    /// <para>构建上游 adb 追加到公钥后的 <c>loginname@hostname</c> 标注，并按相同顺序先读环境变量：
+    /// <para>构建追加到公钥后的 <c>loginname@hostname</c> 标注，先读环境变量：
     /// Windows 上用 <c>USERNAME</c> 与 <c>COMPUTERNAME</c>，Linux 与 macOS 上用 <c>LOGNAME</c> 与
     /// <c>HOSTNAME</c>，随后退回操作系统身份调用。</para>
     /// </summary>
     /// <remarks>
-    /// On POSIX upstream falls back to <c>getlogin()</c>, which reports the session leader recorded in
-    /// utmp; the managed runtime instead reports the account name of the current uid
+    /// On POSIX the label falls back to the session user recorded in utmp, which
+    /// <c>getlogin()</c> reports; the managed runtime reports the account name of the current uid
     /// (<c>getpwuid_r(getuid())-&gt;pw_name</c>). The label is informational: adbd compares only the base64
     /// key material before the first space, never the label.
-    /// <para>在 POSIX 上上游回退到 <c>getlogin()</c>，该调用返回 utmp 中记录的会话用户；托管运行时则报告当前
+    /// <para>在 POSIX 上标注退回 utmp 中记录的会话用户，即 <c>getlogin()</c> 报告的值；托管运行时报告当前
     /// uid 的账户名（<c>getpwuid_r(getuid())-&gt;pw_name</c>）。该标注仅供参考：adbd 只比对第一个空格之前的
     /// base64 密钥材料，从不比对标注。</para>
     /// </remarks>

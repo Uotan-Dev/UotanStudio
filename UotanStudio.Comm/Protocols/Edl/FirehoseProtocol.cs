@@ -302,7 +302,7 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
 
     /// <summary>
     /// Per-round bound for the capability-discovery <c>&lt;nop&gt;</c>; expiry abandons discovery and
-    /// keeps the gating exactly as strict as before, so one probe never stalls a flash for minutes.
+    /// keeps the gating equally strict, so one probe never stalls a flash for minutes.
     /// <para>能力发现用的单次 <c>&lt;nop&gt;</c> 往返时限；到点即放弃并保持原有严格门控，
     /// 绝不让一次发现把刷写拖成分钟级等待。</para>
     /// </summary>
@@ -717,11 +717,11 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <summary>
     /// Sends one <c>&lt;nop&gt;</c> and collects the target's supported-functions report. Every
     /// failure — a NAK, a timeout, or an unexpected raw-mode entry — is logged and yields null so
-    /// capability gating simply stays as strict as it was; the report only ever upgrades a
-    /// capability the acknowledgement already left undeclared.
+    /// capability gating stays exactly as strict as the acknowledgement alone makes it; the report
+    /// only ever upgrades a capability the acknowledgement already left undeclared.
     /// <para>发送一次 <c>&lt;nop&gt;</c> 并收集目标上报的支持功能列表。任何失败——NAK、超时或意外进入
-    /// 原始模式——都记录日志并返回 null，使能力门控保持与此前同样严格；该报告只会提升应答本就
-    /// 未声明的能力。</para>
+    /// 原始模式——都记录日志并返回 null，使能力门控只保留应答本身给出的严格程度；该报告只会提升应答
+    /// 本就未声明的能力。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation for the round trip. <para>该次往返的取消令牌。</para></param>
     /// <returns>The reported function names, or null when none could be collected.
@@ -1189,13 +1189,13 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
     /// <para>释放协议并归还操作门的等待句柄。</para>
     /// </summary>
     /// <remarks>
-    /// <para>The gate is taken with a bounded wait rather than by peeking its free-permit count: a holder
+    /// The gate is taken with a bounded wait rather than by peeking its free-permit count: a holder
     /// blocked inside a long native transfer cannot be outwaited here, and retiring a gate an in-flight
     /// operation still owns would make that operation throw <see cref="ObjectDisposedException"/> while it
     /// returns its permit. When the wait expires the gate is deliberately left alive, trading one wait handle
     /// the garbage collector eventually reclaims against a corrupted transfer. Every later call tries again
     /// until the gate really is retired, so a lease that finishes after this call still lets a repeated
-    /// <see cref="Dispose()"/> reclaim the handle.</para>
+    /// <see cref="Dispose()"/> reclaim the handle.
     /// <para>取闸使用有限等待，而不是查看空闲许可数：阻塞在长原生传输里的持有者不可能在这里等到，而
     /// 处置一个仍被在途操作占用的门会让该操作在归还许可时抛出 <see cref="ObjectDisposedException"/>。
     /// 等待到期时门被刻意保持存活，用一个终会被垃圾回收器收回的等待句柄换取一次不被破坏的传输。

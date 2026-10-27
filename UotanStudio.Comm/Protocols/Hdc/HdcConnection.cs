@@ -615,8 +615,8 @@ public sealed class HdcConnection : IDisposable
 
     /// <summary>
     /// Builds the capability TLV carried by the first handshake: the host auth-algorithm declaration plus the
-    /// upstream <c>supportfeatures</c> value list (client version, connection type, host OS and heartbeat).
-    /// <para>构建首个握手携带的能力 TLV：主机认证算法声明，以及上游 <c>supportfeatures</c> 取值列表
+    /// <c>supportfeatures</c> value list (client version, connection type, host OS and heartbeat).
+    /// <para>构建首个握手携带的能力 TLV：主机认证算法声明，以及 <c>supportfeatures</c> 取值列表
     /// （客户端版本、连接类型、主机操作系统与心跳能力）。</para>
     /// </summary>
     /// <returns>The encoded capability TLV. <para>编码后的能力 TLV。</para></returns>
@@ -632,8 +632,8 @@ public sealed class HdcConnection : IDisposable
     }
 
     /// <summary>
-    /// Returns the upstream host operating-system value advertised inside <c>supportfeatures</c>.
-    /// <para>返回在 <c>supportfeatures</c> 中宣告的上游主机操作系统值。</para>
+    /// Returns the host operating-system value advertised inside <c>supportfeatures</c>.
+    /// <para>返回在 <c>supportfeatures</c> 中宣告的主机操作系统值。</para>
     /// </summary>
     /// <returns><c>win</c>, <c>mac</c>, <c>linux</c>, or an empty string on an unrecognized platform.
     /// <para><c>win</c>、<c>mac</c>、<c>linux</c>；无法识别时为空串。</para></returns>

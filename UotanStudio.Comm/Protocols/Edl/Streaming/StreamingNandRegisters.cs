@@ -8,9 +8,8 @@ public static class StreamingNandRegisters
 {
     /// <summary>
     /// Applies the user-data size field of NAND_DEV0_CFG0: bits 9..18 are replaced with the new
-    /// size while every other bit is preserved (set_udsize, streaming.py:567-570).
-    /// <para>应用 NAND_DEV0_CFG0 的用户数据域：替换 9..18 位为新值，其余位保持不变
-    /// （set_udsize，streaming.py:567-570）。</para>
+    /// size while every other bit is preserved.
+    /// <para>应用 NAND_DEV0_CFG0 的用户数据域：把 9..18 位替换为新值，其余位保持不变。</para>
     /// </summary>
     /// <param name="cfg0">The current NAND_DEV0_CFG0 value. <para>当前 NAND_DEV0_CFG0 值。</para></param>
     /// <param name="size">The user-data size in bytes. <para>用户数据大小（字节）。</para></param>
@@ -34,17 +33,16 @@ public static class StreamingNandRegisters
         => UsesBchEcc(cfg1) ? (eccCfg & ~(0x3FFu << 16)) | (size << 16) : eccCfg;
 
     /// <summary>
-    /// Reads the user-data size field back out of NAND_DEV0_CFG0 (get_udsize, streaming.py:606-607).
-    /// <para>从 NAND_DEV0_CFG0 读回用户数据域（get_udsize，streaming.py:606-607）。</para>
+    /// Reads the user-data size field back out of NAND_DEV0_CFG0.
+    /// <para>从 NAND_DEV0_CFG0 读回用户数据域。</para>
     /// </summary>
     /// <param name="cfg0">The NAND_DEV0_CFG0 value. <para>NAND_DEV0_CFG0 值。</para></param>
     /// <returns>The user-data size in bytes. <para>用户数据大小（字节）。</para></returns>
     public static uint GetUdSize(uint cfg0) => (cfg0 & (0x3FFu << 9)) >> 9;
 
     /// <summary>
-    /// Applies the spare-size field of NAND_DEV0_CFG0: bits 23..26 (set_sparesize,
-    /// streaming.py:576-579).
-    /// <para>应用 NAND_DEV0_CFG0 的 spare 域：23..26 位（set_sparesize，streaming.py:576-579）。</para>
+    /// Applies the spare-size field of NAND_DEV0_CFG0: bits 23..26 carry the size code.
+    /// <para>应用 NAND_DEV0_CFG0 的 spare 域：23..26 位承载大小编码。</para>
     /// </summary>
     /// <param name="cfg0">The current NAND_DEV0_CFG0 value. <para>当前 NAND_DEV0_CFG0 值。</para></param>
     /// <param name="size">The spare size code. <para>spare 大小编码。</para></param>
@@ -109,10 +107,8 @@ public static class StreamingNandRegisters
         => (register & 0xFFFFFFFEu) | disable;
 
     /// <summary>
-    /// Applies the hardware bad-block disable mask to NAND_DEV0_CFG1: bits 6..15 are cleared
-    /// (hardware_bad_off, streaming.py:550-553).
-    /// <para>对 NAND_DEV0_CFG1 应用硬件坏块禁用掩码：清除 6..15 位（hardware_bad_off，
-    /// streaming.py:550-553）。</para>
+    /// Applies the hardware bad-block disable mask to NAND_DEV0_CFG1: bits 6..15 are cleared.
+    /// <para>对 NAND_DEV0_CFG1 应用硬件坏块禁用掩码：清除 6..15 位。</para>
     /// </summary>
     /// <param name="cfg1">The current NAND_DEV0_CFG1 value. <para>当前 NAND_DEV0_CFG1 值。</para></param>
     /// <returns>The masked CFG1 value. <para>掩码后的 CFG1 值。</para></returns>
@@ -134,9 +130,8 @@ public static class StreamingNandRegisters
         => (cfg1 & ~(0x7FFu << 6)) | ((badBlockByteNum & 0x3FFu) << 6) | (badBlockInSpareArea << 16);
 
     /// <summary>
-    /// Flattens a block and page pair into the controller's linear page address
-    /// (set_address, streaming.py:377-378).
-    /// <para>把块与页折叠为控制器的线性页地址（set_address，streaming.py:377-378）。</para>
+    /// Flattens a block and page pair into the controller's linear page address.
+    /// <para>把块与页折叠为控制器的线性页地址。</para>
     /// </summary>
     /// <param name="block">The block number. <para>块号。</para></param>
     /// <param name="page">The page number inside the block. <para>块内页号。</para></param>

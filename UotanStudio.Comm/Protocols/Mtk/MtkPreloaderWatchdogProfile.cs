@@ -35,28 +35,22 @@ public sealed record MtkPreloaderWatchdogRule(
     uint Value);
 
 /// <summary>
-/// Pure transcription of the preloader-stage watchdog-disable branches and the watchdog-reset
-/// (<c>misc_lock</c>) registers the reference client defines; the class performs no I/O.
-/// <para>对参考客户端中 preloader 阶段看门狗禁用分支与看门狗复位（<c>misc_lock</c>）寄存器的纯转录；
+/// Watchdog-disable branches and watchdog-reset (<c>misc_lock</c>) registers for the preloader stage;
+/// the class performs no I/O.
+/// <para>preloader 阶段的看门狗禁用分支与看门狗复位（<c>misc_lock</c>）寄存器表；
 /// 本类不执行任何 I/O。</para>
 /// </summary>
 /// <remarks>
-/// <para><c>setreg_disablewatchdogtimer</c> in
-/// <c>mtkclient/Library/mtk_preloader.py:532-655</c> hard-codes the sequences for hardware codes
+/// The sequences are fixed for hardware codes
 /// 0x2625/0x2523/0x7682/0x7686/0x5932 and for the MT6261 branch (with the hardware-version-dependent
-/// MT2503 sub-branch); every other chip falls through to
-/// <c>MtkConfig.get_watchdog_addr</c> (<c>mtkclient/config/mtk_config.py:202-232</c>) combined with
-/// the per-chip <c>watchdog=</c> base in <c>mtkclient/config/brom_config.py</c>. Steps that upstream
-/// leaves commented out (the MT6261 RTC/PMU long path, the MT6575/MT6577 GPIO extras) are not
-/// modelled here, and chips without a recorded base return an empty rule list so the session can
-/// refuse instead of inventing a register sequence.</para>
-/// <para><c>mtkclient/Library/mtk_preloader.py:532-655</c> 中的 <c>setreg_disablewatchdogtimer</c>
-/// 为硬件码 0x2625/0x2523/0x7682/0x7686/0x5932 以及 MT6261 分支（含按硬件版本区分的 MT2503 子分支）
-/// 硬编码了序列；其它芯片走 <c>MtkConfig.get_watchdog_addr</c>
-/// （<c>mtkclient/config/mtk_config.py:202-232</c>）与 <c>mtkclient/config/brom_config.py</c>
-/// 中每芯片的 <c>watchdog=</c> 基址组合。上游以注释形式保留的步骤（MT6261 RTC/PMU 长路径、
-/// MT6575/MT6577 GPIO 额外步骤）不在此建模，没有记录基址的芯片返回空规则列表，让会话可以拒绝而不是
-/// 凭空编造寄存器序列。</para>
+/// MT2503 sub-branch); every other chip combines the global watchdog address with its per-chip
+/// <c>watchdog=</c> base. The MT6261 RTC/PMU long path and the MT6575/MT6577 GPIO extras are not
+/// modelled, and chips without a recorded base return an empty rule list so the session can
+/// refuse instead of inventing a register sequence.
+/// <para>硬件码 0x2625/0x2523/0x7682/0x7686/0x5932 以及 MT6261 分支（含按硬件版本区分的 MT2503 子分支）
+/// 使用固定序列；其它芯片由全局看门狗地址与每芯片的 <c>watchdog=</c> 基址组合而成。
+/// MT6261 RTC/PMU 长路径与 MT6575/MT6577 GPIO 额外步骤不在此建模，没有记录基址的芯片返回空规则列表，
+/// 让会话可以拒绝而不是凭空编造寄存器序列。</para>
 /// </remarks>
 public static class MtkPreloaderWatchdogTable
 {
@@ -173,46 +167,39 @@ public static class MtkPreloaderWatchdogTable
         [0x8176] = 0x01202050
     }.ToFrozenDictionary();
 
-    /// <summary>Reports whether the reference chip table marks a hardware code as 64-bit.
-    /// <para>报告参考芯片表是否将某个硬件码标记为 64 位。</para></summary>
-    /// <remarks>The upstream preloader initialization skips the watchdog entirely for chips whose
-    /// <c>Chipconfig.has64bit</c> is true (<c>mtkclient/config/brom_config.py</c>), so this set transcribes
-    /// those hardware codes rather than inferring 64-bit support from the storage family.
-    /// <para>上游 preloader 初始化对 <c>Chipconfig.has64bit</c> 为 true 的芯片完全跳过看门狗
-    /// （<c>mtkclient/config/brom_config.py</c>），因此本集合转录这些硬件码，而不是根据存储家族推断 64 位支持。</para>
+    /// <summary>Reports whether the chip table marks a hardware code as 64-bit.
+    /// <para>报告芯片表是否将某个硬件码标记为 64 位。</para></summary>
+    /// <remarks>The preloader initialization skips the watchdog entirely for chips whose
+    /// <c>Chipconfig.has64bit</c> is true, so this set lists those hardware codes rather than inferring
+    /// 64-bit support from the storage family.
+    /// <para>preloader 初始化对 <c>Chipconfig.has64bit</c> 为 true 的芯片完全跳过看门狗，因此本集合列出
+    /// 这些硬件码，而不是根据存储家族推断 64 位支持。</para>
     /// </remarks>
     /// <param name="hardwareCode">The hardware code reported by command FD. 命令 FD 报告的硬件码。</param>
-    /// <returns><see langword="true"/> for a hardware code the reference marks as 64-bit.
-    /// <para>参考实现标记为 64 位的硬件码返回 <see langword="true"/>。</para></returns>
+    /// <returns><see langword="true"/> for a hardware code the table marks as 64-bit.
+    /// <para>芯片表标记为 64 位的硬件码返回 <see langword="true"/>。</para></returns>
     public static bool Is64BitHardware(ushort hardwareCode) => SixtyFourBitHardwareCodes.Contains(hardwareCode);
 
-    /// <summary>Resolves the ordered watchdog-disable steps the reference defines for one chip.
-    /// <para>为单芯片解析参考实现所定义的有序看门狗禁用步骤。</para></summary>
+    /// <summary>Resolves the ordered watchdog-disable steps defined for one chip.
+    /// <para>为单芯片解析已定义的有序看门狗禁用步骤。</para></summary>
     /// <remarks>Hardware codes 0x2625, 0x2523, 0x7682, 0x7686 and 0x5932 issue the single
-    /// <c>write16(0xA2050000, 0x2200)</c>of <c>mtkclient/Library/mtk_preloader.py:538-540</c>; MT6261
-    /// with hardware version 0xCA02 or 0xCB01 walks the MT2503 sub-branch at
-    /// <c>mtkclient/Library/mtk_preloader.py:544-632</c>(RGU clear, the two uncommented CTIRQ1/2
-    /// avoids, and the <c>EMI_REMAP |= 2</c>read-modify-write), while other MT6261 revisions keep only
-    /// the RGU clear ( <c>mtkclient/Library/mtk_preloader.py:634</c>); MT6575/MT6577 use sixteen-bit
-    /// I/O per <c>mtkclient/Library/mtk_preloader.py:637-642</c>; MT6592 gains the additional
-    /// <c>0x10000500</c>register per <c>mtkclient/Library/mtk_preloader.py:645-650</c>. Every other
-    /// recorded chip falls through to the thirty-two-bit default (
-    /// <c>mtkclient/Library/mtk_preloader.py:643-644</c>) using the per-chip base and the value table
-    /// of <c>MtkConfig.get_watchdog_addr</c>( <c>mtkclient/config/mtk_config.py:202-232</c>). 硬件码
-    /// 0x2625、0x2523、0x7682、0x7686 与 0x5932 发出 <c>mtkclient/Library/mtk_preloader.py:538-540</c>中单一的
-    /// <c>write16(0xA2050000, 0x2200)</c>；硬件版本为 0xCA02 或 0xCB01 的 MT6261 走
-    /// <c>mtkclient/Library/mtk_preloader.py:544-632</c>的 MT2503 子分支（RGU 清零、两条未注释的 CTIRQ1/2 规避，以及
-    /// <c>EMI_REMAP |= 2</c>的读-改-写），其它 MT6261 修订只保留 RGU 清零 （
-    /// <c>mtkclient/Library/mtk_preloader.py:634</c>）；MT6575/MT6577 按
-    /// <c>mtkclient/Library/mtk_preloader.py:637-642</c>使用十六位 I/O；MT6592 按
-    /// <c>mtkclient/Library/mtk_preloader.py:645-650</c>追加 <c>0x10000500</c>寄存器。其余已记录 芯片走三十二位默认分支（
-    /// <c>mtkclient/Library/mtk_preloader.py:643-644</c>），使用每芯片基址与 <c>MtkConfig.get_watchdog_addr</c>（
-    /// <c>mtkclient/config/mtk_config.py:202-232</c>）的取值表。</remarks>
+    /// <c>write16(0xA2050000, 0x2200)</c>; MT6261 with hardware version 0xCA02 or 0xCB01 walks the
+    /// MT2503 sub-branch (RGU clear, the two CTIRQ1/2 avoids, and the <c>EMI_REMAP |= 2</c>
+    /// read-modify-write), while other MT6261 revisions keep only the RGU clear; MT6575/MT6577 use
+    /// sixteen-bit I/O; MT6592 gains the additional <c>0x10000500</c> register. Every other recorded chip
+    /// falls through to the thirty-two-bit default using the per-chip base and the value table of
+    /// <c>MtkConfig.get_watchdog_addr</c>.
+    /// <para>硬件码 0x2625、0x2523、0x7682、0x7686 与 0x5932 发出单一的
+    /// <c>write16(0xA2050000, 0x2200)</c>；硬件版本为 0xCA02 或 0xCB01 的 MT6261 走 MT2503 子分支
+    /// （RGU 清零、两条 CTIRQ1/2 规避，以及 <c>EMI_REMAP |= 2</c> 的读-改-写），其它 MT6261 修订只保留
+    /// RGU 清零；MT6575/MT6577 使用十六位 I/O；MT6592 追加 <c>0x10000500</c> 寄存器。
+    /// 其余已记录芯片走三十二位默认分支，使用每芯片基址与 <c>MtkConfig.get_watchdog_addr</c> 的取值表。</para>
+    /// </remarks>
     /// <param name="hardwareCode">The hardware code reported by command FD. 命令 FD 报告的硬件码。</param>
     /// <param name="hardwareVersion">The hardware revision reported by the boot identity query.
     /// <para>boot 身份查询报告的硬件修订。</para></param>
-    /// <returns>The steps in send order, or an empty list when upstream records no sequence for the chip.
-    /// <para>按发送顺序排列的步骤；上游没有记录该芯片序列时为空列表。</para></returns>
+    /// <returns>The steps in send order, or an empty list when the table records no sequence for the chip.
+    /// <para>按发送顺序排列的步骤；芯片表没有记录该芯片序列时为空列表。</para></returns>
     public static IReadOnlyList<MtkPreloaderWatchdogRule> Resolve(ushort hardwareCode, uint hardwareVersion)
     {
         if (FixedAddressCodes.Contains(hardwareCode))
@@ -260,20 +247,18 @@ public static class MtkPreloaderWatchdogTable
         return rules;
     }
 
-    /// <summary>Resolves the watchdog-reset <c>misc_lock</c> register upstream records for one chip.
-    /// <para>解析上游为单芯片记录的看门狗复位 <c>misc_lock</c> 寄存器。</para></summary>
-    /// <remarks><c>reset_to_brom</c>( <c>mtkclient/Library/mtk_preloader.py:457-482</c>) derives every
-    /// other address of the unlock sequence from <c>chipconfig.misc_lock</c>; the values here are the
-    /// <c>misc_lock=</c>entries of <c>mtkclient/config/brom_config.py</c>. Chips upstream leaves
-    /// without the field return <see langword="false"/>so the caller can refuse rather than guess an
-    /// address. <c>reset_to_brom</c>（ <c>mtkclient/Library/mtk_preloader.py:457-482</c>）从
-    /// <c>chipconfig.misc_lock</c>推导出解锁序列的其它地址；这里的取值来自 <c>mtkclient/config/brom_config.py</c>中的
-    /// <c>misc_lock=</c>条目。上游未提供该字段的芯片返回 <see langword="false"/>，让调用方可以拒绝而不是猜测地址。</remarks>
+    /// <summary>Resolves the watchdog-reset <c>misc_lock</c> register for one chip.
+    /// <para>解析单芯片的看门狗复位 <c>misc_lock</c> 寄存器。</para></summary>
+    /// <remarks>Every other address of the unlock sequence derives from <c>chipconfig.misc_lock</c>; the
+    /// values here are the <c>misc_lock=</c> entries of the chip table. A chip without the field returns
+    /// <see langword="false"/> so the caller can refuse rather than guess an address.
+    /// <para>解锁序列的其它地址均由 <c>chipconfig.misc_lock</c> 推导；这里的取值来自芯片表中的
+    /// <c>misc_lock=</c> 条目。未提供该字段的芯片返回 <see langword="false"/>，让调用方可以拒绝而不是猜测地址。</para></remarks>
     /// <param name="hardwareCode">The hardware code reported by command FD. 命令 FD 报告的硬件码。</param>
     /// <param name="miscLockAddress">The recorded register base, or <c>0</c> when unknown.
     /// <para>记录的寄存器基址，未知时为 <c>0</c>。</para></param>
-    /// <returns><see langword="true"/> when upstream records the register for the chip.
-    /// <para>上游记录了该芯片寄存器时返回 <see langword="true"/>。</para></returns>
+    /// <returns><see langword="true"/> when the chip table records the register.
+    /// <para>芯片表记录了该寄存器时返回 <see langword="true"/>。</para></returns>
     public static bool TryResolveResetRegisters(ushort hardwareCode, out uint miscLockAddress) =>
         MiscLockRegisters.TryGetValue(hardwareCode, out miscLockAddress);
 

@@ -7,7 +7,7 @@ public sealed partial class MtkSession
     /// <summary>Requests XML device-side erase of an explicitly selected, aligned physical range.
     /// <para>请求 XML 设备端擦除显式选定的、对齐的物理范围。</para></summary>
     /// <remarks>The caller must authorize this destructive operation. This profile requires initial OK,
-    /// bounded progress handling, END/OK, START and the trailing OK consumed by the reference erase
+    /// bounded progress handling, END/OK, START and the trailing OK consumed by the erase
     /// wrapper. No timeout probing, retry, rollback, zero-fill or secure-erasure guarantee is provided.
     /// Cancellation cannot stop an erase already accepted by the agent.</remarks>
     /// <param name="regionName">An exact XML physical-region token from the discovered geometry, excluding RPMB.

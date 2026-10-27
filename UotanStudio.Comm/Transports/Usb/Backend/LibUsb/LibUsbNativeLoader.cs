@@ -149,7 +149,7 @@ internal static partial class LibUsbNativeLoader
     /// </summary>
     /// <param name="libraryPath">The loaded absolute path on success. <para>成功时为已加载的绝对路径。</para></param>
     /// <returns><c>true</c> when a runtime is loaded or was already loaded.
-    /// <para>运行时已加载或此前已加载时为 <c>true</c>。</para></returns>
+    /// <para>运行时已加载时为 <c>true</c>。</para></returns>
     public static bool TryEnsureLoaded(out string? libraryPath)
     {
         lock (Gate)

@@ -73,12 +73,11 @@ public sealed partial class FastbootSession
 
     /// <summary>
     /// Resolves the target partition name against A/B slots: a name that already carries an explicit
-    /// slot suffix (e.g. <c>system_ext_a</c>) is flashed verbatim, matching upstream fastboot, so the
-    /// compound base name is never re-split or re-suffixed; other slot-capable partitions get the
-    /// current active slot appended. Non-slot partitions are returned unchanged.
+    /// slot suffix (e.g. <c>system_ext_a</c>) is flashed verbatim, so the compound base name is never
+    /// re-split or re-suffixed; other slot-capable partitions get the current active slot appended.
+    /// Non-slot partitions are returned unchanged.
     /// <para>按 A/B 槽位解析目标分区名：已带显式槽位后缀的名（如 <c>system_ext_a</c>）按原样刷写，
-    /// 与上游 fastboot 一致，绝不拆分或追加第二个后缀；其余支持槽位的分区追加当前活跃槽位；
-    /// 非槽位分区原样返回。</para>
+    /// 绝不拆分或追加第二个后缀；其余支持槽位的分区追加当前活跃槽位；非槽位分区原样返回。</para>
     /// </summary>
     private string ResolvePartitionWithSlot(string partition)
     {
@@ -284,12 +283,12 @@ public sealed partial class FastbootSession
     /// <para>检查分区是否为逻辑分区：预加载元数据含有证据时使用它，否则查询设备。</para>
     /// </summary>
     /// <remarks>
-    /// <para>A preloaded set that is null <em>or empty</em> is treated as "no evidence": super metadata
+    /// A preloaded set that is null <em>or empty</em> is treated as "no evidence": super metadata
     /// parsing swallows every recognized failure into an empty result (see
     /// <see cref="SuperImageBuilder.GetLogicalPartitions(string, int)"/>), so an empty set cannot
     /// distinguish "this super has no logical partitions" from "the image could not be parsed". Trusting it
     /// would classify every logical partition as physical and suppress the <c>is-logical</c> query
-    /// permanently.</para>
+    /// permanently.
     /// <para>预加载集合为 null <em>或空</em> 时都按“无证据”处理：super 元数据解析会把所有可识别的
     /// 失败吞成空结果（见 <see cref="SuperImageBuilder.GetLogicalPartitions(string, int)"/>），因此空
     /// 集合无法区分“该 super 没有逻辑分区”与“镜像无法解析”。信任它会把所有逻辑分区判为物理分区，

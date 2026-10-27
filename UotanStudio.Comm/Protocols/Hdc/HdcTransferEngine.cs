@@ -69,7 +69,7 @@ internal static class HdcTransferEngine
     /// <param name="fileSize">Exact byte count to transfer. <para>要传输的精确字节数。</para></param>
     /// <param name="holdTimestamp">Preserve timestamps; effective only for a <see cref="FileStream"/>.
     /// <para>保留时间戳；仅对 <see cref="FileStream"/> 生效。</para></param>
-    /// <param name="compress">Advertise upstream LZ4 block compression. <para>声明上游 LZ4 块压缩。</para></param>
+    /// <param name="compress">Advertise LZ4 block compression. <para>声明 LZ4 块压缩。</para></param>
     /// <returns>The configuration carried by the file check frame. <para>文件检查帧携带的配置。</para></returns>
     internal static TransferConfig CreateSendConfig(Stream source, string remotePath, long fileSize,
         bool holdTimestamp, bool compress)

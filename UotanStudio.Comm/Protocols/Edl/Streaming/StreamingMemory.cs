@@ -33,37 +33,33 @@ public sealed partial class StreamingProtocol
 {
     /// <summary>
     /// The marker byte the chipset search blob stores at the front of its reply before the
-    /// chipset identifier (MOV R0, #0xAA / STRB R0, [R1] at streaming.py:1020-1021).
-    /// <para>芯片搜索机器码写入应答最前面、位于芯片标识之前的标记字节
-    /// （MOV R0, #0xAA / STRB R0, [R1]，见 streaming.py:1020-1021）。</para>
+    /// chipset identifier; the blob writes it with <c>MOV R0, #0xAA</c> and <c>STRB R0, [R1]</c>.
+    /// <para>芯片搜索机器码写入应答最前面、位于芯片标识之前的标记字节；该机器码以
+    /// <c>MOV R0, #0xAA</c> 与 <c>STRB R0, [R1]</c> 写入它。</para>
     /// </summary>
     private const byte ChipsetSearchMarker = 0xAA;
 
     /// <summary>
     /// The little-endian ARM blob the patched loader executes to dump memory: it stores the
-    /// 0x12 status word and then copies words from the requested address onward
-    /// (disassembly at streaming.py:279-291, machine code at streaming.py:292).
-    /// <para>打补丁 loader 用于转储内存的小端 ARM 机器码：先存 0x12 状态字，再从请求地址开始逐字
-    /// 复制（反汇编见 streaming.py:279-291，机器码见 streaming.py:292）。</para>
+    /// <c>0x12</c> status word and then copies words from the requested address onward.
+    /// <para>打补丁 loader 用于转储内存的小端 ARM 机器码：先存 <c>0x12</c> 状态字，再从请求地址开始
+    /// 逐字复制。</para>
     /// </summary>
     internal static readonly byte[] ReadBlob = Convert.FromHexString(
         "24309FE524409FE51200A0E3040081E4040083E0042093E4042081E4000053E1FBFFFF3A044084E21EFF2FE1");
 
     /// <summary>
     /// The little-endian ARM blob the patched loader executes to copy host-supplied words into
-    /// memory (disassembly at streaming.py:333-345, machine code at streaming.py:347-348).
-    /// <para>打补丁 loader 用于把主机提供的字复制进内存的小端 ARM 机器码
-    /// （反汇编见 streaming.py:333-345，机器码见 streaming.py:347-348）。</para>
+    /// memory.
+    /// <para>打补丁 loader 用于把主机提供的字复制进内存的小端 ARM 机器码。</para>
     /// </summary>
     internal static readonly byte[] WriteBlob = Convert.FromHexString(
         "380080E224309FE524409FE5044083E0042090E4042083E4040053E1FBFFFF3A1200A0E30000C1E50140A0E31EFF2FE1");
 
     /// <summary>
-    /// The little-endian ARM blob that scans memory for the 0xDEADBEEF marker to reveal the
-    /// chipset identifier (disassembly at streaming.py:1004-1024, machine code at
-    /// streaming.py:1025-1026).
-    /// <para>在内存中搜索 0xDEADBEEF 标记以揭示芯片标识的小端 ARM 机器码
-    /// （反汇编见 streaming.py:1004-1024，机器码见 streaming.py:1025-1026）。</para>
+    /// The little-endian ARM blob that scans memory for the <c>0xDEADBEEF</c> marker to reveal the
+    /// chipset identifier.
+    /// <para>在内存中搜索 <c>0xDEADBEEF</c> 标记以揭示芯片标识的小端 ARM 机器码。</para>
     /// </summary>
     internal static readonly byte[] SearchBlob = Convert.FromHexString(
         "04102DE50E00A0E10300C0E3FF3080E234109FE5042090E4010052E10300000A030050E1FAFFFF3A0000A0E3" +

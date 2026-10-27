@@ -11,8 +11,8 @@ public sealed partial class MtkSession
 
     /// <summary>Queries the agent's opaque RPMB status reply and reports the RPMB capacity from the discovered geometry.
     /// <para>查询代理不透明的 RPMB 状态应答，并报告已发现几何信息中的 RPMB 容量。</para></summary>
-    /// <remarks>The reference client sends the device-control code, checks that the exchange completed and returns the payload undecoded (<c>mtkclient/Library/DA/xflash/xflash_lib.py:590-598</c>), so the reply bytes are recorded as evidence instead of interpreted. The device-control envelope itself is <c>mtkclient/Library/DA/xflash/xflash_lib.py:176-191</c> with <c>DEVICE_CTRL = 0x010009</c> and <c>GET_RPMB_STATUS = 0x040010</c> from <c>mtkclient/Library/DA/xflash/xflash_param.py:14</c> and <c>mtkclient/Library/DA/xflash/xflash_param.py:56</c>.
-    /// <para>参考客户端发送设备控制码、只确认交换完成后即原样返回载荷 （<c>mtkclient/Library/DA/xflash/xflash_lib.py:590-598</c>），因此应答字节只作为证据记录而不作解释。 设备控制封装本身见 <c>mtkclient/Library/DA/xflash/xflash_lib.py:176-191</c>，控制码取自 <c>mtkclient/Library/DA/xflash/xflash_param.py:14</c>（<c>DEVICE_CTRL = 0x010009</c>）与 <c>mtkclient/Library/DA/xflash/xflash_param.py:56</c>（<c>GET_RPMB_STATUS = 0x040010</c>）。</para></remarks>
+    /// <remarks>This client sends the device-control code, checks that the exchange completed and returns the payload undecoded, so the reply bytes are recorded as evidence instead of interpreted. The device-control envelope itself is with <c>DEVICE_CTRL = 0x010009</c> and <c>GET_RPMB_STATUS = 0x040010</c> from and.
+    /// <para>本客户端发送设备控制码、只确认交换完成后即原样返回载荷，因此应答字节只作为证据记录而不作解释。 设备控制封装本身见，控制码取自 （<c>DEVICE_CTRL = 0x010009</c>）与 （<c>GET_RPMB_STATUS = 0x040010</c>）。</para></remarks>
     /// <param name="options">Optional bounds and deadline; <see langword="null"/> uses the read-only defaults.
     /// <para>可选的边界与截止时间；<see langword="null"/> 使用只读默认值。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>
@@ -64,8 +64,8 @@ public sealed partial class MtkSession
 
     /// <summary>Reads a bounded run of RPMB frames through the XFlash DA-extension read command.
     /// <para>通过 XFlash DA 扩展读取命令读取有界的连续 RPMB 帧。</para></summary>
-    /// <remarks>One exchange starts with the device-control envelope and <c>CUSTOM_RPMB_READ</c> (<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-497</c>, codes at <c>mtkclient/Library/DA/xflash/extension/xflash.py:21-32</c>), sends the first sector and the sector count as two little-endian words, reads one frame per sector (exactly 0x100 bytes is data, a short frame carries the error code) and finally reads one total status. The first frame the device refuses stops the frame loop and the run is never replayed.
-    /// <para>一次交换以设备控制封装与 <c>CUSTOM_RPMB_READ</c> 开始（<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-497</c>， 控制码见 <c>mtkclient/Library/DA/xflash/extension/xflash.py:21-32</c>），随后以小端四字节发送首帧与帧数量， 每个 sector 读取一帧（恰好 0x100 字节为数据，短帧携带错误码），最后读取一次总状态。设备拒绝的首帧会终止帧循环； 会话绝不会重试被拒绝的帧。</para></remarks>
+    /// <remarks>One exchange starts with the device-control envelope and <c>CUSTOM_RPMB_READ</c>, sends the first sector and the sector count as two little-endian words, reads one frame per sector (exactly 0x100 bytes is data, a short frame carries the error code) and finally reads one total status. The first frame the device refuses stops the frame loop and the run is never replayed.
+    /// <para>一次交换以设备控制封装与 <c>CUSTOM_RPMB_READ</c> 开始，随后以小端四字节发送首帧与帧数量， 每个 sector 读取一帧（恰好 0x100 字节为数据，短帧携带错误码），最后读取一次总状态。设备拒绝的首帧会终止帧循环； 会话绝不会重试被拒绝的帧。</para></remarks>
     /// <param name="range">The validated frame-aligned range to read.
     /// <para>要读取的、已校验的帧对齐范围。</para></param>
     /// <param name="options">Optional bounds and deadline; <see langword="null"/> uses the read-only defaults.
@@ -109,8 +109,8 @@ public sealed partial class MtkSession
 
     /// <summary>Dumps the whole reported RPMB area of the active block-storage family.
     /// <para>转储当前块存储族完整上报的 RPMB 区域。</para></summary>
-    /// <remarks>The reference client derives the frame count by dividing the reported eMMC RPMB size by the fixed frame width (<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-498</c>). The UFS storage reply carries only lu2/lu1/lu0, so the <c>lu3</c> RPMB size defined by <c>mtkclient/Library/DA/storage.py:101-110</c> stays zero for this family and a UFS dump needs an explicit frame range.
-    /// <para>参考客户端用上报的 eMMC RPMB 大小除以固定帧宽度推导出帧数量 （<c>mtkclient/Library/DA/xflash/extension/xflash.py:478-498</c>）。UFS 存储应答只携带 lu2/lu1/lu0， 因此 <c>mtkclient/Library/DA/storage.py:101-110</c> 定义的 <c>lu3</c> RPMB 大小在该家族保持为零， UFS 转储必须显式给出帧范围。</para></remarks>
+    /// <remarks>This client derives the frame count by dividing the reported eMMC RPMB size by the fixed frame width. The UFS storage reply carries only lu2/lu1/lu0, so the <c>lu3</c> RPMB size defined by stays zero for this family and a UFS dump needs an explicit frame range.
+    /// <para>本客户端用上报的 eMMC RPMB 大小除以固定帧宽度推导出帧数量。UFS 存储应答只携带 lu2/lu1/lu0， 因此 定义的 <c>lu3</c> RPMB 大小在该家族保持为零， UFS 转储必须显式给出帧范围。</para></remarks>
     /// <param name="options">Optional bounds and deadline; <see langword="null"/> uses the read-only defaults.
     /// <para>可选的边界与截止时间；<see langword="null"/> 使用只读默认值。</para></param>
     /// <param name="cancellationToken">The operation cancellation token.<para>操作取消令牌。</para></param>

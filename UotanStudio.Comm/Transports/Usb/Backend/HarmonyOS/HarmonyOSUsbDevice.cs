@@ -34,7 +34,7 @@ internal class HarmonyOSUsbDevice : UsbDevice
     /// <summary>
     /// SDK version reported by the DDK at handle creation, used to select the memmap layout;
     /// <c>null</c> means the query failed and the legacy layout is assumed.
-    /// <para>创建句柄时 DDK 报告的 SDK 版本，用于选择内存映射布局；<c>null</c> 表示查询失败，按旧版布局处理。</para>
+    /// <para>创建句柄时 DDK 报告的 SDK 版本，用于选择内存映射布局；<c>null</c> 表示查询失败，按 API 16 之前的布局处理。</para>
     /// </summary>
     private uint? _sdkVersion;
 
@@ -141,7 +141,7 @@ internal class HarmonyOSUsbDevice : UsbDevice
     /// <para>按当前生效的内存映射布局设置请求长度并发送管道请求，并报告传输长度。</para>
     /// The new layout carries the request length in <c>BufferLength</c> and returns the transferred
     /// length in <c>TransferedLength</c>; the legacy layout uses <c>Length</c> for both.
-    /// <para>新版布局的请求长度在 <c>BufferLength</c>，传输长度在 <c>TransferedLength</c> 回读；旧版布局两者都用 <c>Length</c>。</para>
+    /// <para>新版布局的请求长度在 <c>BufferLength</c>，传输长度在 <c>TransferedLength</c> 回读；API 16 之前的布局两者都用 <c>Length</c>。</para>
     /// </summary>
     /// <param name="pipe">The request pipe to send. <para>要发送的请求管道。</para></param>
     /// <param name="length">The requested transfer length in bytes. <para>请求的传输长度（字节）。</para></param>

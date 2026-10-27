@@ -25,11 +25,11 @@ public static partial class MtkBootstrap
 
     /// <summary>
     /// Selects the resources to upload when the caller supplied a provider without an explicit
-    /// order: the target's own security bits decide, in the upstream order (authentication before
+    /// order: the target's own security bits decide, in a fixed order (authentication before
     /// root certificate). An explicit selection always wins, and a provider without a matching
     /// requirement uploads nothing.
     /// <para>当调用方提供了提供方但未给出显式顺序时选定要上传的资源：由目标自身的安全位决定，
-    /// 顺序沿用上游约定（先认证资源后根证书）。显式选择始终优先；提供方存在但目标无相应要求时
+    /// 顺序固定（先认证资源后根证书）。显式选择始终优先；提供方存在但目标无相应要求时
     /// 不上传任何资源。</para>
     /// </summary>
     /// <param name="captured">The explicit order captured before device I/O. <para>设备 I/O 前捕获的显式顺序。</para></param>

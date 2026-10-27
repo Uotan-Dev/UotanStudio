@@ -5,15 +5,15 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <para>以单个不透明数据块交付的可读 RPMB 区域。</para>
 /// </summary>
 /// <remarks>
-/// The reference client names its RPMB dump <c>rpmb.bin</c> and builds it by concatenating fixed-width
-/// frames: <c>mtkclient/Library/DA/xflash/extension/xflash.py:476-501</c> and
-/// <c>mtkclient/Library/DA/xml/extension/v6.py:424-449</c>. Neither source defines a certificate, a
+/// This client names its RPMB dump <c>rpmb.bin</c> and builds it by concatenating fixed-width
+/// frames: and
+/// . Neither source defines a certificate, a
 /// PKCS structure or any field layout inside those bytes, so this record asserts no internal meaning:
 /// it preserves the delivered bytes, the frame count and the capacity the device reported. Callers that
 /// expect a device certificate must parse the frames themselves and state their own interpretation.
-/// <para>参考客户端将其 RPMB 转储命名为 <c>rpmb.bin</c>，由定宽帧拼接而成：
-/// <c>mtkclient/Library/DA/xflash/extension/xflash.py:476-501</c> 与
-/// <c>mtkclient/Library/DA/xml/extension/v6.py:424-449</c>。两处源码都没有定义证书、PKCS 结构或任何
+/// <para>本客户端将其 RPMB 转储命名为 <c>rpmb.bin</c>，由定宽帧拼接而成：
+/// 与
+/// 。两处源码都没有定义证书、PKCS 结构或任何
 /// 内部字段布局，因此本记录不断言任何内部含义：它只保留交付的字节、帧数量与设备上报的容量。
 /// 期望设备证书的调用方必须自行解析帧并声明自己的解释。</para>
 /// </remarks>

@@ -9,6 +9,8 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// must serialize complete command exchanges, not just individual frames. Stream payloads are
 /// chunked at a fixed width and staged through a pooled buffer that is returned once every
 /// awaited write has completed, so no frame byte outlives the call.
+/// <para>独占传输上的有界 XFlash 帧编解码：外层 DA 会话必须串行化完整的命令交互，而不只是单帧。流载荷按固定
+/// 宽度分块，并经由池化缓冲区暂存，在所有等待中的写入完成后归还，因此没有帧字节存活到调用之后。</para>
 /// </summary>
 internal sealed class MtkXFlashChannel
 {

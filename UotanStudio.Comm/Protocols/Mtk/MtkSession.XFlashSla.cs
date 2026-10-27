@@ -20,10 +20,10 @@ public sealed partial class MtkSession
     /// <exception cref="TimeoutException">The cooperative deadline expired.
     /// <para>协作式截止时间已到。</para></exception>
     /// <remarks>
-    /// <para>DA2 SLA has no response-provider type in Comm and Comm carries no SLA key material, so an enabled status
+    /// DA2 SLA has no response-provider type in Comm and Comm carries no SLA key material, so an enabled status
     /// is terminal for the session: the challenge is never read and no response byte is written. Re-opening this
     /// exchange is a deliberate re-entry decision that needs device evidence for the specific chip and a
-    /// caller-supplied authorized key source, not a missing adapter in the host.</para>
+    /// caller-supplied authorized key source, not a missing adapter in the host.
     /// <para>Comm 内没有 DA2 SLA 的响应提供方类型，也不携带 SLA 密钥，因此启用状态对该会话即终局：从不读取挑战，也不写出任何响应字节。
     /// 重新打开这一交换是有意的重新立项决定，需要针对具体机型的设备证据与调用方提供的授权密钥来源，而不是宿主缺少一个适配器。</para>
     /// </remarks>

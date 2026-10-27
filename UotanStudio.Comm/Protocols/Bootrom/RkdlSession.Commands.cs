@@ -33,11 +33,11 @@ public sealed partial class RkdlSession
     /// <c>STRUCT_FLASHINFO_CMD</c>（最多 512 字节）响应；首 DWORD 为总扇区数。</para>
     /// The leading DWORD is the total sector count and the following seven bytes are the packed
     /// <c>STRUCT_FLASHINFO_CMD</c> prefix (block size, page size, ECC bits, access time, manufacturer
-    /// code, flash chip select), decoded by <see cref="RkFlashInfo.Decode"/> from the layout in
-    /// <c>RKDevice.h</c>.
+    /// code, flash chip select), decoded by <see cref="RkFlashInfo.Decode"/> from the packed
+    /// structure layout.
     /// <para>首个 DWORD 是总扇区数，其后 7 字节是紧凑 <c>STRUCT_FLASHINFO_CMD</c> 前缀（块大小、页大小、
-    /// ECC 位数、访问时间、厂商代码、flash 片选），由 <see cref="RkFlashInfo.Decode"/> 按
-    /// <c>RKDevice.h</c> 中的布局解码。</para>
+    /// ECC 位数、访问时间、厂商代码、flash 片选），由 <see cref="RkFlashInfo.Decode"/> 按紧凑结构
+    /// 布局解码。</para>
     /// <see cref="RkFlashInfo.SectorSize"/> stays the protocol LBA granularity
     /// <see cref="RkdlConstants.SectorSize"/> rather than a device-reported value, because the
     /// structure reports media geometry in those protocol sectors.
@@ -174,9 +174,9 @@ public sealed partial class RkdlSession
     /// <para>通过一次 READ_CAPABILITY CBW/CSW 事务读取设备能力位，传输 8 字节。</para>
     /// </summary>
     /// <remarks>
-    /// <para>Bit 0 of the first byte selects direct-LBA addressing and bit 2 marks first-4M access;
+    /// Bit 0 of the first byte selects direct-LBA addressing and bit 2 marks first-4M access;
     /// those are the only bits <c>CRKDevice::ReadCapability</c> consumes, so they are the only ones
-    /// decoded. The whole response stays verbatim in <see cref="RkCapability.Raw"/>.</para>
+    /// decoded. The whole response stays verbatim in <see cref="RkCapability.Raw"/>.
     /// <para>首字节的位 0 表示直接 LBA 寻址，位 2 表示前 4M 访问；它们是
     /// <c>CRKDevice::ReadCapability</c> 唯一使用的位，因此也只解码这两位。整个响应原样保留在
     /// <see cref="RkCapability.Raw"/> 中。</para>
@@ -234,8 +234,8 @@ public sealed partial class RkdlSession
     /// <paramref name="storage"/> 写入命令块的保留字节。</para>
     /// </summary>
     /// <remarks>
-    /// <para>A storage change normally makes the device re-enumerate, so the cached flash geometry is
-    /// dropped once the command was acknowledged.</para>
+    /// A storage change normally makes the device re-enumerate, so the cached flash geometry is
+    /// dropped once the command was acknowledged.
     /// <para>切换存储介质通常会让设备重新枚举，因此命令得到应答后即丢弃缓存的闪存几何。</para>
     /// </remarks>
     /// <param name="storage">The storage identifier sent as <c>ucReserved</c>.
@@ -288,17 +288,17 @@ public sealed partial class RkdlSession
     /// <see cref="RkdlConstants.MaxEraseBlocksPerCommand"/> 个块。</para>
     /// </summary>
     /// <remarks>
-    /// <para>The range is validated against the device geometry before the first command is written, and
+    /// The range is validated against the device geometry before the first command is written, and
     /// the running position is accumulated in 64 bits with a checked add, so a range that would pass
-    /// the 32-bit wire address cannot wrap back to the start of the media and erase it again.</para>
-    /// <para>在写出第一条命令前，范围会对照设备几何校验；运行位置以 64 位累加并做 checked 加法，因此一个
-    /// 能通过 32 位线上地址的范围不可能回绕到介质起点再擦一遍。</para>
-    /// <para>Unverified boundary: this repository carries no verified erase-block-to-sector ratio, so the
+    /// the 32-bit wire address cannot wrap back to the start of the media and erase it again.
+    /// Unverified boundary: this repository carries no verified erase-block-to-sector ratio, so the
     /// block arguments are passed to <c>cbwcb.dwAddress</c> verbatim and are validated in those same wire
     /// units. Whether a given device counts ERASE_NORMAL addresses in erase blocks rather than 512-byte
     /// sectors can only be settled on real hardware; a device that counts in erase blocks therefore
-    /// accepts a narrower range here than it physically has.</para>
-    /// <para>未验证边界：本仓库没有可核对的擦除块与扇区比例，因此块参数原样填入 <c>cbwcb.dwAddress</c>，
+    /// accepts a narrower range here than it physically has.
+    /// <para>在写出第一条命令前，范围会对照设备几何校验；运行位置以 64 位累加并做 checked 加法，因此一个
+    /// 能通过 32 位线上地址的范围不可能回绕到介质起点再擦一遍。
+    /// 未验证边界：本仓库没有可核对的擦除块与扇区比例，因此块参数原样填入 <c>cbwcb.dwAddress</c>，
     /// 并按同样的线上单位校验。某台设备究竟按擦除块还是按 512 字节扇区计 ERASE_NORMAL 地址，只能在
     /// 真机上确认；按擦除块计数的设备在此会接受比其物理容量更窄的范围。</para>
     /// </remarks>
@@ -306,8 +306,8 @@ public sealed partial class RkdlSession
     /// <param name="blockCount">The number of blocks to erase. <para>要擦除的块数。</para></param>
     /// <param name="force"><c>true</c> to use ERASE_FORCE (ignores bad-block markers). <para>是否使用 ERASE_FORCE（忽略坏块标记）。</para></param>
     /// <returns>The number of blocks inside chunks the device answered with CSW status 1, the
-    /// <c>ERR_FOUND_BAD_BLOCK</c> code upstream tolerates during erase.
-    /// <para>设备以 CSW 状态 1 应答的分块所含块数，即上游在擦除时容忍的 <c>ERR_FOUND_BAD_BLOCK</c>。</para></returns>
+    /// <c>ERR_FOUND_BAD_BLOCK</c> code the erase path tolerates.
+    /// <para>设备以 CSW 状态 1 应答的分块所含块数，即擦除路径容忍的 <c>ERR_FOUND_BAD_BLOCK</c>。</para></returns>
     /// <exception cref="RkdlException">The session is disposed, the range exceeds the device geometry
     /// or cannot be read because READ_FLASH_INFO failed, or a CSW reported a status other than 0 or 1.
     /// <para>会话已释放、范围超出设备几何或因 READ_FLASH_INFO 失败而无法读取几何，或 CSW 报告的状态既不是 0 也不是 1。</para></exception>
@@ -330,8 +330,8 @@ public sealed partial class RkdlSession
     /// <param name="ucFlashCs">The flash chip select written to the command block's
     /// <c>ucFlashCS</c> byte. <para>写入命令块 <c>ucFlashCS</c> 字节的 flash 片选。</para></param>
     /// <returns>The number of blocks inside chunks the device answered with CSW status 1, the
-    /// <c>ERR_FOUND_BAD_BLOCK</c> code upstream tolerates during erase.
-    /// <para>设备以 CSW 状态 1 应答的分块所含块数，即上游在擦除时容忍的 <c>ERR_FOUND_BAD_BLOCK</c>。</para></returns>
+    /// <c>ERR_FOUND_BAD_BLOCK</c> code the erase path tolerates.
+    /// <para>设备以 CSW 状态 1 应答的分块所含块数，即擦除路径容忍的 <c>ERR_FOUND_BAD_BLOCK</c>。</para></returns>
     /// <exception cref="RkdlException">The session is disposed, the range exceeds the device geometry
     /// or cannot be read because READ_FLASH_INFO failed, or a CSW reported a status other than 0 or 1.
     /// <para>会话已释放、范围超出设备几何或因 READ_FLASH_INFO 失败而无法读取几何，或 CSW 报告的状态既不是 0 也不是 1。</para></exception>
@@ -422,13 +422,13 @@ public sealed partial class RkdlSession
     /// <para>通过 WRITE_SECTOR（0x05）CBW/CSW 事务写入 528 字节物理扇区（每个 512 数据字节加 16 备用字节）。</para>
     /// </summary>
     /// <remarks>
-    /// <para>WRITE_SECTOR addresses raw NAND sectors rather than LBAs, so the spare area is part of
+    /// WRITE_SECTOR addresses raw NAND sectors rather than LBAs, so the spare area is part of
     /// the payload and <paramref name="sectorPosition"/> counts 528-byte sectors. One command carries
-    /// at most <see cref="RkdlConstants.MaxWriteSectorsPerCommand"/> sectors, the upstream
-    /// <c>ERR_CROSS_BORDER</c> bound.</para>
+    /// at most <see cref="RkdlConstants.MaxWriteSectorsPerCommand"/> sectors, the
+    /// <c>ERR_CROSS_BORDER</c> bound the device enforces.
     /// <para>WRITE_SECTOR 寻址的是原始 NAND 扇区而非 LBA，因此备用区属于负载，
     /// <paramref name="sectorPosition"/> 以 528 字节扇区计数。一条命令最多携带
-    /// <see cref="RkdlConstants.MaxWriteSectorsPerCommand"/> 个扇区，即上游的 <c>ERR_CROSS_BORDER</c> 上限。</para>
+    /// <see cref="RkdlConstants.MaxWriteSectorsPerCommand"/> 个扇区，即设备强制的 <c>ERR_CROSS_BORDER</c> 上限。</para>
     /// </remarks>
     /// <param name="sectorPosition">The first 528-byte sector to write. <para>要写入的首个 528 字节扇区。</para></param>
     /// <param name="data">A whole number of 528-byte sectors, at most 32 of them.

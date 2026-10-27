@@ -5,11 +5,11 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// <para>解析原始 <c>program</c> 命令实际写入的扇区数。</para>
 /// </summary>
 /// <remarks>
-/// <para>Semantics: the manifest's <c>num_partition_sectors</c>
+/// Semantics: the manifest's <c>num_partition_sectors</c>
 /// is the partition capacity, not the payload length, so the written count is the source-derived
 /// whole-plus-partial sector count capped by the declared value. A source shorter than the declared
 /// capacity is programmed without implicit zero-padding of the untouched sectors, and a source longer
-/// than the declared capacity is truncated.</para>
+/// than the declared capacity is truncated.
 /// <para>语义：清单中的 <c>num_partition_sectors</c> 是分区容量而非载荷长度，因此写入数量
 /// 为由源文件推导的扇区数（含末尾不完整扇区）并以声明值为上限。源文件短于声明容量时按实际数据写入，
 /// 不会对未覆盖的扇区做隐式零填充；源文件长于声明容量时按声明值截断。</para>

@@ -5,10 +5,10 @@ namespace UotanStudio.Comm.Protocols.Mtk;
 /// <summary>A validated GPT observation taken through the XML download agent.
 /// <para>经 XML 下载代理取得的已校验 GPT 观测结果。</para></summary>
 /// <remarks>
-/// <para>It binds the table to the XML geometry and the named physical region it was read from, so a later
+/// It binds the table to the XML geometry and the named physical region it was read from, so a later
 /// plan cannot silently address a different storage observation; XML regions are named tokens rather than the
 /// numeric identifiers used by XFlash. Like the other snapshots, it does not authorize later writes and does
-/// not prove the table is still current.</para>
+/// not prove the table is still current.
 /// <para>它把分区表绑定到读取时所用的 XML 几何信息与命名物理区域，后续计划因此不能悄悄指向另一份存储观测；
 /// XML 区域使用名称标记而非 XFlash 的数值标识符。与其他快照一样，它不授权后续写入，也不能证明该表仍然最新。</para>
 /// </remarks>

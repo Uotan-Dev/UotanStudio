@@ -23,10 +23,10 @@ public sealed partial class MtkSession
     /// <exception cref="TimeoutException">The cooperative deadline expired.
     /// <para>协作式截止时间已到。</para></exception>
     /// <remarks>
-    /// <para>Only the SLA indication is read here. The device-information fetch, the bounded <c>sla</c> envelope, the
+    /// Only the SLA indication is read here. The device-information fetch, the bounded <c>sla</c> envelope, the
     /// flash-policy upload and an accepted-response outcome all require an authorized key source, and Comm carries no
     /// DA2 SLA key material and exposes no type to receive one, so an enabled indication ends the session instead.
-    /// The property read itself is shared with the other XML property flows.</para>
+    /// The property read itself is shared with the other XML property flows.
     /// <para>这里只读取 SLA 指示。设备信息读取、有界 <c>sla</c> 信封、刷写策略上传与"响应被接受"结果都要求一个授权密钥来源，
     /// 而 Comm 不携带 DA2 SLA 密钥、也不暴露可接收它的类型，因此启用状态改为结束会话。属性读取本身与其他 XML 属性流程共用。</para>
     /// </remarks>
