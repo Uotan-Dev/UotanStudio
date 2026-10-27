@@ -1620,6 +1620,12 @@
   <data name="ImageView_SynthesizeImg" xml:space="preserve">
     <value>合成IMG</value>
   </data>
+  <data name="ImageView_SynthesizeFat" xml:space="preserve">
+    <value>合成 FAT 镜像</value>
+  </data>
+  <data name="ImageView_SynthesizeFatHint" xml:space="preserve">
+    <value>把目录打包为 FAT12、FAT16 或 FAT32 镜像；变体沿用记录的卷几何或按内容大小选择。</value>
+  </data>
   <data name="ImageView_Ext4Minimize" xml:space="preserve">
     <value>缩容 EXT4 副本</value>
   </data>
@@ -3353,5 +3359,299 @@
   </data>
   <data name="ImageView_FlashingImages" xml:space="preserve">
     <value>正在刷入 {0} 个镜像</value>
+  </data>
+  <data name="Avb_Title" xml:space="preserve">
+    <value>AVB 工具</value>
+  </data>
+  <data name="Avb_TabKeys" xml:space="preserve">
+    <value>密钥</value>
+  </data>
+  <data name="Avb_TabFooter" xml:space="preserve">
+    <value>尾部</value>
+  </data>
+  <data name="Avb_TabOta" xml:space="preserve">
+    <value>A/B OTA</value>
+  </data>
+  <data name="Avb_KeysSubtitle" xml:space="preserve">
+    <value>AVB 签名密钥来自共享密钥库，私钥只保存在本机。</value>
+  </data>
+  <data name="Avb_KeyList" xml:space="preserve">
+    <value>AVB 密钥</value>
+  </data>
+  <data name="Avb_KeyRefresh" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="Avb_KeyForm" xml:space="preserve">
+    <value>创建或导入</value>
+  </data>
+  <data name="Avb_KeyName" xml:space="preserve">
+    <value>密钥名称</value>
+  </data>
+  <data name="Avb_KeyBits" xml:space="preserve">
+    <value>密钥位数</value>
+  </data>
+  <data name="Avb_KeyPassword" xml:space="preserve">
+    <value>导入密码（如有）</value>
+  </data>
+  <data name="Avb_KeyGenerate" xml:space="preserve">
+    <value>生成 AVB 密钥</value>
+  </data>
+  <data name="Avb_KeyImport" xml:space="preserve">
+    <value>导入私钥…</value>
+  </data>
+  <data name="Avb_KeyExportPublic" xml:space="preserve">
+    <value>导出公钥…</value>
+  </data>
+  <data name="Avb_KeyDelete" xml:space="preserve">
+    <value>删除密钥</value>
+  </data>
+  <data name="Avb_KeyDeleteTitle" xml:space="preserve">
+    <value>删除 AVB 密钥</value>
+  </data>
+  <data name="Avb_KeyDeleteConfirm" xml:space="preserve">
+    <value>确定永久删除 AVB 密钥“{0}”吗？已导出的副本不受影响。</value>
+  </data>
+  <data name="Avb_KeyPublicBlob" xml:space="preserve">
+    <value>公钥数据块</value>
+  </data>
+  <data name="Avb_KeyPublicBlobHint" xml:space="preserve">
+    <value>avb_pkmd.bin 是引导程序与校验工具使用的 libavb 公钥。</value>
+  </data>
+  <data name="Avb_KeyEmpty" xml:space="preserve">
+    <value>请先创建或选择 AVB 密钥。</value>
+  </data>
+  <data name="Avb_KeyNameRequired" xml:space="preserve">
+    <value>请输入密钥名称。</value>
+  </data>
+  <data name="Avb_KeyUnreadable" xml:space="preserve">
+    <value>无法读取所选 AVB 私钥。</value>
+  </data>
+  <data name="Avb_KeyExported" xml:space="preserve">
+    <value>AVB 公钥已写入 {0}。</value>
+  </data>
+  <data name="Avb_Browse" xml:space="preserve">
+    <value>浏览</value>
+  </data>
+  <data name="Avb_FooterImage" xml:space="preserve">
+    <value>分区镜像</value>
+  </data>
+  <data name="Avb_FooterAddImage" xml:space="preserve">
+    <value>添加镜像…</value>
+  </data>
+  <data name="Avb_FooterRemoveImage" xml:space="preserve">
+    <value>移除</value>
+  </data>
+  <data name="Avb_FooterSelectImageTitle" xml:space="preserve">
+    <value>选择分区镜像</value>
+  </data>
+  <data name="Avb_FooterPartition" xml:space="preserve">
+    <value>分区名称</value>
+  </data>
+  <data name="Avb_FooterPartitionPlaceholder" xml:space="preserve">
+    <value>boot</value>
+  </data>
+  <data name="Avb_FooterMode" xml:space="preserve">
+    <value>保护方案</value>
+  </data>
+  <data name="Avb_FooterModeHash" xml:space="preserve">
+    <value>哈希（boot、dtbo）</value>
+  </data>
+  <data name="Avb_FooterModeHashtree" xml:space="preserve">
+    <value>哈希树（system、vendor）</value>
+  </data>
+  <data name="Avb_FooterRollbackIndex" xml:space="preserve">
+    <value>回滚索引</value>
+  </data>
+  <data name="Avb_FooterRollbackLocation" xml:space="preserve">
+    <value>回滚索引槽位</value>
+  </data>
+  <data name="Avb_FooterPartitionSize" xml:space="preserve">
+    <value>分区容量（字节）</value>
+  </data>
+  <data name="Avb_FooterPartitionSizeHint" xml:space="preserve">
+    <value>留空时输出最小的块对齐镜像。</value>
+  </data>
+  <data name="Avb_FooterOutput" xml:space="preserve">
+    <value>输出镜像</value>
+  </data>
+  <data name="Avb_FooterOutputPlaceholder" xml:space="preserve">
+    <value>留空则输出 &lt;image&gt;.avb.img</value>
+  </data>
+  <data name="Avb_FooterSelectOutputTitle" xml:space="preserve">
+    <value>选择输出镜像</value>
+  </data>
+  <data name="Avb_FooterTrustedKey" xml:space="preserve">
+    <value>可信公钥（可选）</value>
+  </data>
+  <data name="Avb_FooterTrustedKeyPlaceholder" xml:space="preserve">
+    <value>用于固定签名者的 avb_pkmd.bin</value>
+  </data>
+  <data name="Avb_FooterSelectTrustedKeyTitle" xml:space="preserve">
+    <value>选择可信公钥</value>
+  </data>
+  <data name="Avb_FooterSign" xml:space="preserve">
+    <value>添加尾部</value>
+  </data>
+  <data name="Avb_FooterVerify" xml:space="preserve">
+    <value>校验</value>
+  </data>
+  <data name="Avb_FooterInspect" xml:space="preserve">
+    <value>查看</value>
+  </data>
+  <data name="Avb_FooterUnsign" xml:space="preserve">
+    <value>移除尾部</value>
+  </data>
+  <data name="Avb_FooterUnsignedHint" xml:space="preserve">
+    <value>移除尾部时在输入文件旁写入 &lt;image&gt;.unsigned.img。</value>
+  </data>
+  <data name="Avb_FooterKeyHint" xml:space="preserve">
+    <value>签名使用「密钥」标签页中选中的 AVB 密钥。</value>
+  </data>
+  <data name="Avb_FooterNoImage" xml:space="preserve">
+    <value>请先选择分区镜像。</value>
+  </data>
+  <data name="Avb_FooterPartitionRequired" xml:space="preserve">
+    <value>请输入分区名称。</value>
+  </data>
+  <data name="Avb_FooterNumberInvalid" xml:space="preserve">
+    <value>{0} 必须是非负整数。</value>
+  </data>
+  <data name="Avb_FooterSizeInvalid" xml:space="preserve">
+    <value>分区容量必须是 4096 的正整数倍。</value>
+  </data>
+  <data name="Avb_FooterSigned" xml:space="preserve">
+    <value>已签名镜像已写入 {0}。</value>
+  </data>
+  <data name="Avb_FooterSignFailed" xml:space="preserve">
+    <value>AVB 签名失败。</value>
+  </data>
+  <data name="Avb_FooterUnsigned" xml:space="preserve">
+    <value>已移除尾部；输出写入 {0}。</value>
+  </data>
+  <data name="Avb_FooterUnsignedFailed" xml:space="preserve">
+    <value>移除 AVB 尾部失败。</value>
+  </data>
+  <data name="Avb_FooterVerified" xml:space="preserve">
+    <value>签名与内容校验通过。</value>
+  </data>
+  <data name="Avb_FooterVerifyFailed" xml:space="preserve">
+    <value>AVB 校验未通过。</value>
+  </data>
+  <data name="Avb_DetailSigned" xml:space="preserve">
+    <value>已签名</value>
+  </data>
+  <data name="Avb_DetailSignature" xml:space="preserve">
+    <value>VBMeta 签名</value>
+  </data>
+  <data name="Avb_DetailContent" xml:space="preserve">
+    <value>分区内容</value>
+  </data>
+  <data name="Avb_DetailFec" xml:space="preserve">
+    <value>FEC 校验</value>
+  </data>
+  <data name="Avb_DetailDescriptors" xml:space="preserve">
+    <value>描述符</value>
+  </data>
+  <data name="Avb_Yes" xml:space="preserve">
+    <value>是</value>
+  </data>
+  <data name="Avb_No" xml:space="preserve">
+    <value>否</value>
+  </data>
+  <data name="Avb_NotChecked" xml:space="preserve">
+    <value>未检查</value>
+  </data>
+  <data name="Avb_Result" xml:space="preserve">
+    <value>结果</value>
+  </data>
+  <data name="Avb_OtaInput" xml:space="preserve">
+    <value>OTA 包</value>
+  </data>
+  <data name="Avb_OtaOutput" xml:space="preserve">
+    <value>修补后的包</value>
+  </data>
+  <data name="Avb_OtaSelectInputTitle" xml:space="preserve">
+    <value>选择 OTA 包</value>
+  </data>
+  <data name="Avb_OtaSelectOutputTitle" xml:space="preserve">
+    <value>选择修补后的包</value>
+  </data>
+  <data name="Avb_OtaPartitions" xml:space="preserve">
+    <value>要修补的分区</value>
+  </data>
+  <data name="Avb_OtaLoadPartitions" xml:space="preserve">
+    <value>载入分区</value>
+  </data>
+  <data name="Avb_OtaPartitionsEmpty" xml:space="preserve">
+    <value>载入 OTA 包以列出其分区。</value>
+  </data>
+  <data name="Avb_OtaPartitionsLoaded" xml:space="preserve">
+    <value>已载入 {0} 个分区。</value>
+  </data>
+  <data name="Avb_OtaFooterMode" xml:space="preserve">
+    <value>尾部模式</value>
+  </data>
+  <data name="Avb_OtaOptions" xml:space="preserve">
+    <value>选项</value>
+  </data>
+  <data name="Avb_OtaDisableAvb" xml:space="preserve">
+    <value>禁用 AVB 校验</value>
+  </data>
+  <data name="Avb_OtaPayloadKey" xml:space="preserve">
+    <value>Payload 密钥</value>
+  </data>
+  <data name="Avb_OtaZipKey" xml:space="preserve">
+    <value>OTA 签名密钥</value>
+  </data>
+  <data name="Avb_OtaCertificate" xml:space="preserve">
+    <value>OTA 证书</value>
+  </data>
+  <data name="Avb_OtaSelectCertificateTitle" xml:space="preserve">
+    <value>选择 OTA 证书</value>
+  </data>
+  <data name="Avb_OtaPrivateKey" xml:space="preserve">
+    <value>AVB 私钥</value>
+  </data>
+  <data name="Avb_OtaPatch" xml:space="preserve">
+    <value>修补 OTA</value>
+  </data>
+  <data name="Avb_OtaPatched" xml:space="preserve">
+    <value>已修补 {0} 个分区。</value>
+  </data>
+  <data name="Avb_OtaPatchFailed" xml:space="preserve">
+    <value>OTA 修补失败。</value>
+  </data>
+  <data name="Avb_OtaVerify" xml:space="preserve">
+    <value>校验 OTA</value>
+  </data>
+  <data name="Avb_OtaVerified" xml:space="preserve">
+    <value>OTA 校验通过。</value>
+  </data>
+  <data name="Avb_OtaVerificationFailed" xml:space="preserve">
+    <value>OTA 校验失败。</value>
+  </data>
+  <data name="Avb_OtaRootTrusted" xml:space="preserve">
+    <value>信任根</value>
+  </data>
+  <data name="Avb_OtaChain" xml:space="preserve">
+    <value>AVB 链</value>
+  </data>
+  <data name="Avb_OtaPayloadSignature" xml:space="preserve">
+    <value>Payload 签名</value>
+  </data>
+  <data name="Avb_OtaWarnings" xml:space="preserve">
+    <value>警告</value>
+  </data>
+  <data name="Avb_OtaErrors" xml:space="preserve">
+    <value>错误</value>
+  </data>
+  <data name="Avb_OtaNoInput" xml:space="preserve">
+    <value>请先选择 OTA 包。</value>
+  </data>
+  <data name="Avb_OtaOutputRequired" xml:space="preserve">
+    <value>请选择输出包。</value>
+  </data>
+  <data name="Avb_OtaPartitionRequired" xml:space="preserve">
+    <value>请至少选择一个分区。</value>
   </data>
 </root>

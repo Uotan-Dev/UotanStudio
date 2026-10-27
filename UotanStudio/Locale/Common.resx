@@ -1620,6 +1620,12 @@ Author: 暮间雾
   <data name="ImageView_SynthesizeImg" xml:space="preserve">
     <value>Build IMG</value>
   </data>
+  <data name="ImageView_SynthesizeFat" xml:space="preserve">
+    <value>Build FAT image</value>
+  </data>
+  <data name="ImageView_SynthesizeFatHint" xml:space="preserve">
+    <value>Pack the directory into a FAT12, FAT16 or FAT32 image; the variant follows the recorded volume geometry or the content size.</value>
+  </data>
   <data name="ImageView_Ext4Minimize" xml:space="preserve">
     <value>Minimize EXT4 copy</value>
   </data>
@@ -3353,5 +3359,299 @@ Continue?</value>
   </data>
   <data name="ImageView_FlashingImages" xml:space="preserve">
     <value>Flashing {0} image(s)</value>
+  </data>
+  <data name="Avb_Title" xml:space="preserve">
+    <value>AVB tool</value>
+  </data>
+  <data name="Avb_TabKeys" xml:space="preserve">
+    <value>Keys</value>
+  </data>
+  <data name="Avb_TabFooter" xml:space="preserve">
+    <value>Footer</value>
+  </data>
+  <data name="Avb_TabOta" xml:space="preserve">
+    <value>A/B OTA</value>
+  </data>
+  <data name="Avb_KeysSubtitle" xml:space="preserve">
+    <value>AVB signing keys come from the shared key library; private keys stay on this machine.</value>
+  </data>
+  <data name="Avb_KeyList" xml:space="preserve">
+    <value>AVB keys</value>
+  </data>
+  <data name="Avb_KeyRefresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Avb_KeyForm" xml:space="preserve">
+    <value>Create or import</value>
+  </data>
+  <data name="Avb_KeyName" xml:space="preserve">
+    <value>Key name</value>
+  </data>
+  <data name="Avb_KeyBits" xml:space="preserve">
+    <value>Key size</value>
+  </data>
+  <data name="Avb_KeyPassword" xml:space="preserve">
+    <value>Import password (optional)</value>
+  </data>
+  <data name="Avb_KeyGenerate" xml:space="preserve">
+    <value>Generate AVB key</value>
+  </data>
+  <data name="Avb_KeyImport" xml:space="preserve">
+    <value>Import private key…</value>
+  </data>
+  <data name="Avb_KeyExportPublic" xml:space="preserve">
+    <value>Export public key…</value>
+  </data>
+  <data name="Avb_KeyDelete" xml:space="preserve">
+    <value>Delete key</value>
+  </data>
+  <data name="Avb_KeyDeleteTitle" xml:space="preserve">
+    <value>Delete AVB key</value>
+  </data>
+  <data name="Avb_KeyDeleteConfirm" xml:space="preserve">
+    <value>Permanently delete the AVB key “{0}”? Exported copies are unaffected.</value>
+  </data>
+  <data name="Avb_KeyPublicBlob" xml:space="preserve">
+    <value>Public key blob</value>
+  </data>
+  <data name="Avb_KeyPublicBlobHint" xml:space="preserve">
+    <value>avb_pkmd.bin is the libavb public key used by bootloaders and verification tools.</value>
+  </data>
+  <data name="Avb_KeyEmpty" xml:space="preserve">
+    <value>Create or select an AVB key first.</value>
+  </data>
+  <data name="Avb_KeyNameRequired" xml:space="preserve">
+    <value>Enter a key name.</value>
+  </data>
+  <data name="Avb_KeyUnreadable" xml:space="preserve">
+    <value>The selected AVB private key could not be read.</value>
+  </data>
+  <data name="Avb_KeyExported" xml:space="preserve">
+    <value>AVB public key written to {0}.</value>
+  </data>
+  <data name="Avb_Browse" xml:space="preserve">
+    <value>Browse</value>
+  </data>
+  <data name="Avb_FooterImage" xml:space="preserve">
+    <value>Partition image</value>
+  </data>
+  <data name="Avb_FooterAddImage" xml:space="preserve">
+    <value>Add image…</value>
+  </data>
+  <data name="Avb_FooterRemoveImage" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Avb_FooterSelectImageTitle" xml:space="preserve">
+    <value>Select partition images</value>
+  </data>
+  <data name="Avb_FooterPartition" xml:space="preserve">
+    <value>Partition name</value>
+  </data>
+  <data name="Avb_FooterPartitionPlaceholder" xml:space="preserve">
+    <value>boot</value>
+  </data>
+  <data name="Avb_FooterMode" xml:space="preserve">
+    <value>Protection</value>
+  </data>
+  <data name="Avb_FooterModeHash" xml:space="preserve">
+    <value>Hash (boot, dtbo)</value>
+  </data>
+  <data name="Avb_FooterModeHashtree" xml:space="preserve">
+    <value>Hashtree (system, vendor)</value>
+  </data>
+  <data name="Avb_FooterRollbackIndex" xml:space="preserve">
+    <value>Rollback index</value>
+  </data>
+  <data name="Avb_FooterRollbackLocation" xml:space="preserve">
+    <value>Rollback index location</value>
+  </data>
+  <data name="Avb_FooterPartitionSize" xml:space="preserve">
+    <value>Partition size (bytes)</value>
+  </data>
+  <data name="Avb_FooterPartitionSizeHint" xml:space="preserve">
+    <value>Leave blank to emit the smallest block-aligned image.</value>
+  </data>
+  <data name="Avb_FooterOutput" xml:space="preserve">
+    <value>Output image</value>
+  </data>
+  <data name="Avb_FooterOutputPlaceholder" xml:space="preserve">
+    <value>Leave blank for &lt;image&gt;.avb.img</value>
+  </data>
+  <data name="Avb_FooterSelectOutputTitle" xml:space="preserve">
+    <value>Select output image</value>
+  </data>
+  <data name="Avb_FooterTrustedKey" xml:space="preserve">
+    <value>Trusted public key (optional)</value>
+  </data>
+  <data name="Avb_FooterTrustedKeyPlaceholder" xml:space="preserve">
+    <value>avb_pkmd.bin used to pin the signer</value>
+  </data>
+  <data name="Avb_FooterSelectTrustedKeyTitle" xml:space="preserve">
+    <value>Select trusted public key</value>
+  </data>
+  <data name="Avb_FooterSign" xml:space="preserve">
+    <value>Add footer</value>
+  </data>
+  <data name="Avb_FooterVerify" xml:space="preserve">
+    <value>Verify</value>
+  </data>
+  <data name="Avb_FooterInspect" xml:space="preserve">
+    <value>Inspect</value>
+  </data>
+  <data name="Avb_FooterUnsign" xml:space="preserve">
+    <value>Remove footer</value>
+  </data>
+  <data name="Avb_FooterUnsignedHint" xml:space="preserve">
+    <value>Removing a footer writes &lt;image&gt;.unsigned.img next to the input.</value>
+  </data>
+  <data name="Avb_FooterKeyHint" xml:space="preserve">
+    <value>Signing uses the AVB key selected on the Keys tab.</value>
+  </data>
+  <data name="Avb_FooterNoImage" xml:space="preserve">
+    <value>Select a partition image first.</value>
+  </data>
+  <data name="Avb_FooterPartitionRequired" xml:space="preserve">
+    <value>Enter a partition name.</value>
+  </data>
+  <data name="Avb_FooterNumberInvalid" xml:space="preserve">
+    <value>{0} must be a non-negative integer.</value>
+  </data>
+  <data name="Avb_FooterSizeInvalid" xml:space="preserve">
+    <value>Partition size must be a positive multiple of 4096.</value>
+  </data>
+  <data name="Avb_FooterSigned" xml:space="preserve">
+    <value>Signed image written to {0}.</value>
+  </data>
+  <data name="Avb_FooterSignFailed" xml:space="preserve">
+    <value>AVB signing failed.</value>
+  </data>
+  <data name="Avb_FooterUnsigned" xml:space="preserve">
+    <value>Footer removed; output written to {0}.</value>
+  </data>
+  <data name="Avb_FooterUnsignedFailed" xml:space="preserve">
+    <value>Removing the AVB footer failed.</value>
+  </data>
+  <data name="Avb_FooterVerified" xml:space="preserve">
+    <value>Signature and content verified.</value>
+  </data>
+  <data name="Avb_FooterVerifyFailed" xml:space="preserve">
+    <value>AVB verification failed.</value>
+  </data>
+  <data name="Avb_DetailSigned" xml:space="preserve">
+    <value>Signed</value>
+  </data>
+  <data name="Avb_DetailSignature" xml:space="preserve">
+    <value>VBMeta signature</value>
+  </data>
+  <data name="Avb_DetailContent" xml:space="preserve">
+    <value>Partition content</value>
+  </data>
+  <data name="Avb_DetailFec" xml:space="preserve">
+    <value>FEC parity</value>
+  </data>
+  <data name="Avb_DetailDescriptors" xml:space="preserve">
+    <value>Descriptors</value>
+  </data>
+  <data name="Avb_Yes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="Avb_No" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="Avb_NotChecked" xml:space="preserve">
+    <value>Not checked</value>
+  </data>
+  <data name="Avb_Result" xml:space="preserve">
+    <value>Result</value>
+  </data>
+  <data name="Avb_OtaInput" xml:space="preserve">
+    <value>OTA package</value>
+  </data>
+  <data name="Avb_OtaOutput" xml:space="preserve">
+    <value>Patched package</value>
+  </data>
+  <data name="Avb_OtaSelectInputTitle" xml:space="preserve">
+    <value>Select OTA package</value>
+  </data>
+  <data name="Avb_OtaSelectOutputTitle" xml:space="preserve">
+    <value>Select patched package</value>
+  </data>
+  <data name="Avb_OtaPartitions" xml:space="preserve">
+    <value>Partitions to patch</value>
+  </data>
+  <data name="Avb_OtaLoadPartitions" xml:space="preserve">
+    <value>Load partitions</value>
+  </data>
+  <data name="Avb_OtaPartitionsEmpty" xml:space="preserve">
+    <value>Load the OTA package to list its partitions.</value>
+  </data>
+  <data name="Avb_OtaPartitionsLoaded" xml:space="preserve">
+    <value>Loaded {0} partition(s).</value>
+  </data>
+  <data name="Avb_OtaFooterMode" xml:space="preserve">
+    <value>Footer mode</value>
+  </data>
+  <data name="Avb_OtaOptions" xml:space="preserve">
+    <value>Options</value>
+  </data>
+  <data name="Avb_OtaDisableAvb" xml:space="preserve">
+    <value>Disable AVB verification</value>
+  </data>
+  <data name="Avb_OtaPayloadKey" xml:space="preserve">
+    <value>Payload key</value>
+  </data>
+  <data name="Avb_OtaZipKey" xml:space="preserve">
+    <value>OTA signing key</value>
+  </data>
+  <data name="Avb_OtaCertificate" xml:space="preserve">
+    <value>OTA certificate</value>
+  </data>
+  <data name="Avb_OtaSelectCertificateTitle" xml:space="preserve">
+    <value>Select OTA certificate</value>
+  </data>
+  <data name="Avb_OtaPrivateKey" xml:space="preserve">
+    <value>AVB private key</value>
+  </data>
+  <data name="Avb_OtaPatch" xml:space="preserve">
+    <value>Patch OTA</value>
+  </data>
+  <data name="Avb_OtaPatched" xml:space="preserve">
+    <value>Patched {0} partition(s).</value>
+  </data>
+  <data name="Avb_OtaPatchFailed" xml:space="preserve">
+    <value>OTA patching failed.</value>
+  </data>
+  <data name="Avb_OtaVerify" xml:space="preserve">
+    <value>Verify OTA</value>
+  </data>
+  <data name="Avb_OtaVerified" xml:space="preserve">
+    <value>OTA verification passed.</value>
+  </data>
+  <data name="Avb_OtaVerificationFailed" xml:space="preserve">
+    <value>OTA verification failed.</value>
+  </data>
+  <data name="Avb_OtaRootTrusted" xml:space="preserve">
+    <value>Root of trust</value>
+  </data>
+  <data name="Avb_OtaChain" xml:space="preserve">
+    <value>AVB chain</value>
+  </data>
+  <data name="Avb_OtaPayloadSignature" xml:space="preserve">
+    <value>Payload signature</value>
+  </data>
+  <data name="Avb_OtaWarnings" xml:space="preserve">
+    <value>Warnings</value>
+  </data>
+  <data name="Avb_OtaErrors" xml:space="preserve">
+    <value>Errors</value>
+  </data>
+  <data name="Avb_OtaNoInput" xml:space="preserve">
+    <value>Select an OTA package first.</value>
+  </data>
+  <data name="Avb_OtaOutputRequired" xml:space="preserve">
+    <value>Choose an output package.</value>
+  </data>
+  <data name="Avb_OtaPartitionRequired" xml:space="preserve">
+    <value>Select at least one partition.</value>
   </data>
 </root>

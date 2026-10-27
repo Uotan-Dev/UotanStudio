@@ -996,4 +996,7 @@
   <data name="About_Project_BenchmarkDotNet" xml:space="preserve">
     <value>性能基准测试框架（基准测试项目）</value>
   </data>
+  <data name="Menu_AvbTool" xml:space="preserve">
+    <value>AVB 工具</value>
+  </data>
 </root>
