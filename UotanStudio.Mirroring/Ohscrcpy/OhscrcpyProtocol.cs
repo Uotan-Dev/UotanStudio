@@ -6,15 +6,11 @@ namespace UotanStudio.Mirroring;
 /// <para>推送的设备采集库所使用的 H.264 访问单元辅助方法：参数集发现、关键帧检测与 SPS 几何解析。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The gRPC video stream carries Annex-B access units without a separate codec-configuration message, so the
 /// client derives the H.264 parameter sets and frame geometry from the first access unit that contains them.
 /// All parsers operate on bounded spans and reject truncated or oversized input instead of guessing.
-/// </para>
-/// <para>
-/// gRPC 视频流承载 Annex-B 访问单元，没有独立的编码配置消息，因此客户端从首个包含参数集的访问单元推导
-/// H.264 参数集与帧几何。所有解析器都在有界区间上工作，遇到截断或超长输入直接拒绝而不是猜测。
-/// </para>
+/// <para>gRPC 视频流承载 Annex-B 访问单元，没有独立的编码配置消息，因此客户端从首个包含参数集的访问单元推导
+/// H.264 参数集与帧几何。所有解析器都在有界区间上工作，遇到截断或超长输入直接拒绝而不是猜测。</para>
 /// </remarks>
 public static class OhscrcpyProtocol
 {

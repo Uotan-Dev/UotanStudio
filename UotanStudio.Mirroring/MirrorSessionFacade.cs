@@ -14,18 +14,14 @@ namespace UotanStudio.Mirroring;
 /// 只需一种连接类型。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Both paths deliver <see cref="ScrcpyVideoFrame"/> access units with the same flag bits, so the decode
 /// and GPU presentation loops are shared. Control messages stay in the scrcpy encoding at this boundary:
 /// the ohscrcpy path translates them with <see cref="ScrcpyToOhscrcpyControlAdapter"/>, and messages without
 /// a UI Test equivalent (clipboard, UHID) are ignored, which is why clipboard features stay disabled for
 /// HDC targets.
-/// </para>
-/// <para>
-/// 两条路径都以相同标志位交付 <see cref="ScrcpyVideoFrame"/> 访问单元，因此解码与 GPU 呈现循环共用。控制消息在
+/// <para>两条路径都以相同标志位交付 <see cref="ScrcpyVideoFrame"/> 访问单元，因此解码与 GPU 呈现循环共用。控制消息在
 /// 本边界保持 scrcpy 编码：ohscrcpy 路径用 <see cref="ScrcpyToOhscrcpyControlAdapter"/> 翻译，没有 UI Test
-/// 对应物的消息（剪贴板、UHID）会被忽略，因此 HDC 目标的剪贴板功能保持关闭。
-/// </para>
+/// 对应物的消息（剪贴板、UHID）会被忽略，因此 HDC 目标的剪贴板功能保持关闭。</para>
 /// </remarks>
 public sealed class MirrorSessionFacade : IDisposable
 {
@@ -219,7 +215,6 @@ public sealed class MirrorSessionFacade : IDisposable
     /// <para>在 HDC 目标上准备推送的 UI Test 采集扩展，登记回环转发并返回会话。</para>
     /// </summary>
     /// <remarks>
-    /// <para>
     /// The device side is a capture library pushed to <c>/data/local/tmp</c> and loaded as a UI Test extension,
     /// not an installed package. The step order is fixed: probe the UI Test version and architecture, ensure the
     /// control daemon, start the video extension, map one loopback forward to the gRPC video endpoint and another
@@ -227,14 +222,11 @@ public sealed class MirrorSessionFacade : IDisposable
     /// A direct session and a server-backed session follow the same order: file pushes use the session sync client
     /// and the forwards use <see cref="HdcForwardTunnel"/>, which falls back to the server <c>fport</c> command
     /// when the session exposes no native forward manager.
-    /// </para>
-    /// <para>
-    /// 设备端是推送到 <c>/data/local/tmp</c> 并作为 UI Test 扩展加载的采集库，而不是已安装包。步骤顺序固定：
+    /// <para>设备端是推送到 <c>/data/local/tmp</c> 并作为 UI Test 扩展加载的采集库，而不是已安装包。步骤顺序固定：
     /// 探测 UI Test 版本与架构、确保控制守护进程、启动视频扩展、把一个回环转发映射到 gRPC 视频端点、另一个
     /// 映射到 UI Test JSON 控制 socket，然后创建 gRPC 传输、控制通道与客户端。直连会话与 server 会话遵循同一
     /// 顺序：文件推送使用会话的 sync 客户端，转发使用 <see cref="HdcForwardTunnel"/>；会话没有原生转发管理器时
-    /// 由它回退到 server 的 <c>fport</c> 命令。
-    /// </para>
+    /// 由它回退到 server 的 <c>fport</c> 命令。</para>
     /// </remarks>
     /// <param name="session">Connected or connectable HDC session, direct or server-backed; opened when not
     /// connected and disposed with the returned session. <para>已连接或可连接的 HDC 会话，可以是直连或 server

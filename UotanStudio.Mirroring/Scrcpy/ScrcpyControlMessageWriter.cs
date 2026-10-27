@@ -8,19 +8,15 @@ namespace UotanStudio.Mirroring;
 /// <para>scrcpy 控制消息编码器（客户端 → 设备方向）。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Message layout follows the server's <c>ControlMessageReader</c>: a single type byte
 /// followed by fixed-width big-endian fields. Touch/scroll positions are
 /// expressed in <em>video pixel coordinates</em> of the decoded frame together
 /// with the frame size (the server maps them onto the physical display); the
 /// server rejects events whose frame size differs from its current video
 /// size (e.g. after a rotation).
-/// </para>
-/// <para>
-/// 消息布局遵循服务端 <c>ControlMessageReader</c>：单字节类型 + 定宽大端字段。
+/// <para>消息布局遵循服务端 <c>ControlMessageReader</c>：单字节类型 + 定宽大端字段。
 /// 触摸/滚轮位置使用解码帧的<em>视频像素坐标</em>并携带帧尺寸（服务端将其映射到
-/// 物理屏幕）；帧尺寸与服务端当前视频尺寸不一致（如旋转后）时服务端会拒绝该事件。
-/// </para>
+/// 物理屏幕）；帧尺寸与服务端当前视频尺寸不一致（如旋转后）时服务端会拒绝该事件。</para>
 /// </remarks>
 public static class ScrcpyControlMessageWriter
 {

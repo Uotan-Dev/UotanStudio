@@ -32,15 +32,11 @@ internal interface IOhoscrcpyVideoTransport : IDisposable
 /// connection. <para>面向设备扩展的标准 gRPC-over-HTTP/2 客户端，使用明文 HTTP/2 的先验知识连接。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The contract is small enough that a full gRPC stack would add reflection and trimming surface for two
 /// unary calls and one server stream; this class frames the empty request and reads the response messages
 /// directly. It never sends or accepts compressed messages and bounds every payload.
-/// </para>
-/// <para>
-/// 契约足够小，引入完整 gRPC 栈只会为两个一元调用和一个服务端流增加反射与裁剪面；本类直接为空的请求分帧并读取
-/// 响应消息。它不发送也不接受压缩消息，并对每个负载设界。
-/// </para>
+/// <para>契约足够小，引入完整 gRPC 栈只会为两个一元调用和一个服务端流增加反射与裁剪面；本类直接为空的请求分帧并读取
+/// 响应消息。它不发送也不接受压缩消息，并对每个负载设界。</para>
 /// </remarks>
 internal sealed class OhoscrcpyGrpcTransport : IOhoscrcpyVideoTransport
 {

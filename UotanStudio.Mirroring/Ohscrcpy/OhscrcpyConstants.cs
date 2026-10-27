@@ -7,19 +7,15 @@ namespace UotanStudio.Mirroring;
 /// socket，以及它注入的输入键码。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The device side is not an installed HAP. A capture library is pushed to <c>/data/local/tmp</c> and loaded
 /// as a UI Test extension by <c>/system/bin/uitest start-daemon singleness --extension-name ...</c>; the
 /// extension serves H.264 access units over a standard gRPC server, while touch and mouse input travel over
 /// the UI Test JSON socket owned by the same daemon. These constants are tied to the libscrcpy server
 /// libraries shipped under <c>ohos/device</c> and to the UI Test version they target.
-/// </para>
-/// <para>
-/// 设备端不是已安装的 HAP。采集库被推送到 <c>/data/local/tmp</c>，并由
+/// <para>设备端不是已安装的 HAP。采集库被推送到 <c>/data/local/tmp</c>，并由
 /// <c>/system/bin/uitest start-daemon singleness --extension-name ...</c> 作为 UI Test 扩展加载；扩展通过标准
 /// gRPC 服务提供 H.264 访问单元，触摸与鼠标输入则经由同一守护进程的 UI Test JSON socket。以下常量与
-/// <c>ohos/device</c> 下随包提供的 libscrcpy 服务库及其目标 UI Test 版本绑定。
-/// </para>
+/// <c>ohos/device</c> 下随包提供的 libscrcpy 服务库及其目标 UI Test 版本绑定。</para>
 /// </remarks>
 public static class OhscrcpyConstants
 {

@@ -18,15 +18,11 @@ internal sealed record OhscrcpyReply(string? Data, int ReplyType, byte[]? VideoP
 /// capture library. <para>编码与解码推送采集库使用的 <c>scrcpy.proto</c> 消息及 gRPC 消息分帧。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The device serves a standard gRPC HTTP/2 endpoint. The contract is deliberately limited to what the
 /// extension publishes: an empty request, a server-streaming <c>ReplyMessage</c> whose <c>payload</c> map
 /// carries <c>data</c> bytes, and two unary <c>ReplyEndMessage</c> calls.
-/// </para>
-/// <para>
-/// 设备提供标准 gRPC HTTP/2 端点。契约仅覆盖扩展实际发布的内容：空请求、其 <c>payload</c> 映射携带
-/// <c>data</c> 字节的服务端流 <c>ReplyMessage</c>，以及两个一元 <c>ReplyEndMessage</c> 调用。
-/// </para>
+/// <para>设备提供标准 gRPC HTTP/2 端点。契约仅覆盖扩展实际发布的内容：空请求、其 <c>payload</c> 映射携带
+/// <c>data</c> 字节的服务端流 <c>ReplyMessage</c>，以及两个一元 <c>ReplyEndMessage</c> 调用。</para>
 /// </remarks>
 internal static class OhscrcpyGrpcProtocol
 {

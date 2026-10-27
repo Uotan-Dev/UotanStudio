@@ -9,19 +9,15 @@ namespace UotanStudio.Mirroring.AirPlay.FairPlay;
 /// AES-128-CTR。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// This is a clean-room implementation driven by the published AirPlay handshake behaviour; no GPL playfair,
 /// UxPlay, RPiPlay or shairplay source was translated. It ships no key table: the unwrap key and IV are operator
 /// supplied through <see cref="AirPlayOptions.FairPlayKeyPath"/> (32 raw bytes: 16-byte AES key followed by
 /// 16-byte IV), because publishing the reverse-engineered table would need a redistribution review first. Until
 /// material is configured, an encrypted stream is rejected instead of being decoded into garbage.
-/// </para>
-/// <para>
-/// 本实现依据公开的 AirPlay 握手行为做清理室实现，未逐行翻译任何 GPL 的 playfair、UxPlay、RPiPlay 或
+/// <para>本实现依据公开的 AirPlay 握手行为做清理室实现，未逐行翻译任何 GPL 的 playfair、UxPlay、RPiPlay 或
 /// shairplay 源码。它不随包提供密钥表：解包密钥与 IV 由操作者经
 /// <see cref="AirPlayOptions.FairPlayKeyPath"/> 提供（32 原始字节：16 字节 AES 密钥后接 16 字节 IV），
-/// 因为发布逆向得到的密钥表需要先完成再分发评审。在配置密钥材料之前，加密流会被拒绝，而不是被解成乱码。
-/// </para>
+/// 因为发布逆向得到的密钥表需要先完成再分发评审。在配置密钥材料之前，加密流会被拒绝，而不是被解成乱码。</para>
 /// </remarks>
 internal sealed class FairPlayPlayCipher
 {

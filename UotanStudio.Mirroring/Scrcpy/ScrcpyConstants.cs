@@ -5,30 +5,22 @@ namespace UotanStudio.Mirroring;
 /// <para>面向 5.x 服务端协议的 scrcpy 线协议常量。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The client protocol is tightly coupled to the deployed server jar; these constants target the
 /// 5.x stream layout and must move together with the <c>scrcpy-server</c> binary they are paired
 /// with. The version string sent as the first server argument is not a constant here: the server
 /// rejects any launch whose first argument is not its own build version, so the value travels with
 /// the resolved artifact.
-/// </para>
-/// <para>
-/// 客户端协议与实际部署的服务端 jar 强绑定；以下常量面向 5.x 码流布局，与配对的
-/// <c>scrcpy-server</c> 二进制必须同步更新。作为服务端首个参数的版本串不在这里定义：
-/// 服务端会拒绝任何首个参数与其自身构建版本不一致的启动，因此该值随已解析的产物一起传递。
-/// </para>
-/// <para>
 /// The server puts the session marker on bit 63, the codec-config marker on bit 62 and the key-frame
 /// marker on bit 61, and precedes each stream session with a payload-less session packet. Reading the
 /// stream with any other bit table turns that session packet into a flagged frame whose payload length
 /// is the video height, so these markers and <see cref="PacketTimestampMask"/> move as one unit with the
 /// deployed jar.
-/// </para>
-/// <para>
+/// <para>客户端协议与实际部署的服务端 jar 强绑定；以下常量面向 5.x 码流布局，与配对的
+/// <c>scrcpy-server</c> 二进制必须同步更新。作为服务端首个参数的版本串不在这里定义：
+/// 服务端会拒绝任何首个参数与其自身构建版本不一致的启动，因此该值随已解析的产物一起传递。
 /// 服务端把会话标志放在第 63 位、编码配置标志放在第 62 位、关键帧标志放在第 61 位，并在每段会话前发送一个
 /// 无负载的会话包。用其他位表读取该码流时，会话包会被当成带标志的帧，其负载长度就是视频高度；因此这些标志位
-/// 与 <see cref="PacketTimestampMask"/> 必须随实际部署的 jar 作为一个整体一起变更。
-/// </para>
+/// 与 <see cref="PacketTimestampMask"/> 必须随实际部署的 jar 作为一个整体一起变更。</para>
 /// </remarks>
 public static class ScrcpyConstants
 {
@@ -41,8 +33,8 @@ public static class ScrcpyConstants
     /// <summary>Stream packet flag identifying a session metadata packet (bit 63, <c>Streamer.PACKET_FLAG_SESSION</c>).
     /// <para>标识会话元数据包的流数据包标志（第 63 位，<c>Streamer.PACKET_FLAG_SESSION</c>）。</para></summary>
     /// <remarks>
-    /// <para>The packet carries no payload: its 12-byte header is the three big-endian integers
-    /// flags, width and height, so the flags occupy the high 32 bits of the timestamp word.</para>
+    /// The packet carries no payload: its 12-byte header is the three big-endian integers
+    /// flags, width and height, so the flags occupy the high 32 bits of the timestamp word.
     /// <para>该包没有负载：其 12 字节头就是 flags、宽、高三个大端序整数，因此标志位落在时间戳字的高 32 位。</para>
     /// </remarks>
     public const ulong PacketFlagSession = 1UL << 63;

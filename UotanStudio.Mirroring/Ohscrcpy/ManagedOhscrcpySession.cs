@@ -9,17 +9,13 @@ namespace UotanStudio.Mirroring;
 /// 以及设备租约，并按该顺序释放。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The device side is a pushed UI Test extension rather than an installed package: the video daemon serves H.264
 /// over gRPC and the control daemon owns the UI Test JSON socket. Frames are delivered as
 /// <see cref="ScrcpyVideoFrame"/> with the same flag bits the scrcpy client uses, which lets the host decode both
 /// device families with one GPU pipeline. Disposal stops only the processes this session started.
-/// </para>
-/// <para>
-/// 设备端是推送的 UI Test 扩展而不是已安装包：视频守护进程经 gRPC 提供 H.264，控制守护进程持有 UI Test JSON
+/// <para>设备端是推送的 UI Test 扩展而不是已安装包：视频守护进程经 gRPC 提供 H.264，控制守护进程持有 UI Test JSON
 /// socket。帧以 <see cref="ScrcpyVideoFrame"/> 交付，标志位与 scrcpy 客户端一致，使宿主用同一套 GPU 管线解码
-/// 两类设备。释放时只停止本会话启动的进程。
-/// </para>
+/// 两类设备。释放时只停止本会话启动的进程。</para>
 /// </remarks>
 public sealed class ManagedOhscrcpySession : IDisposable
 {

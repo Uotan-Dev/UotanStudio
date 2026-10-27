@@ -6,17 +6,13 @@ namespace UotanStudio.Mirroring.AirPlay;
 /// <para>描述一个 AirPlay 接收端：广播的实例名、监听的 RTSP 端口、mDNS 广播开关与可选的 FairPlay 密钥材料。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The receiver is passive: it opens a listening socket and waits for the device to connect, so nothing here
 /// identifies a device. Mirrored audio and video are delivered as <see cref="ScrcpyVideoFrame"/> and
 /// <see cref="ScrcpyAudioFrame"/> packets for the existing decode and presentation pipelines; the receiver
 /// offers no reverse control channel.
-/// </para>
-/// <para>
-/// 接收端是被动的：它打开监听 socket 并等待设备连接，因此这里的任何字段都不标识某台设备。镜像音频与视频以
+/// <para>接收端是被动的：它打开监听 socket 并等待设备连接，因此这里的任何字段都不标识某台设备。镜像音频与视频以
 /// <see cref="ScrcpyVideoFrame"/> 与 <see cref="ScrcpyAudioFrame"/> 包交给现有的解码与呈现管线；
-/// 接收端不提供反向控制通道。
-/// </para>
+/// 接收端不提供反向控制通道。</para>
 /// </remarks>
 public sealed record AirPlayOptions
 {

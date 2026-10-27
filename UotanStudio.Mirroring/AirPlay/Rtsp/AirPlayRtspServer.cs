@@ -10,17 +10,13 @@ namespace UotanStudio.Mirroring.AirPlay.Rtsp;
 /// <c>$</c> 前缀交织媒体分帧。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The server never initiates a connection and holds no device identity: it binds the configured port, hands
 /// each parsed request to <see cref="Handler"/> and forwards interleaved payloads to <see cref="MediaPacket"/>.
 /// The receiver is therefore the passive side, which is why this listener lives in the mirroring layer instead
 /// of the device I/O layer.
-/// </para>
-/// <para>
-/// 服务器从不主动连接、也不持有任何设备标识：它绑定配置的端口，把解析后的请求交给 <see cref="Handler"/>，
+/// <para>服务器从不主动连接、也不持有任何设备标识：它绑定配置的端口，把解析后的请求交给 <see cref="Handler"/>，
 /// 并把交织载荷转给 <see cref="MediaPacket"/>。接收端因此是被动方，这也是该监听器位于投屏层而不是设备 I/O 层
-/// 的原因。
-/// </para>
+/// 的原因。</para>
 /// </remarks>
 internal sealed class AirPlayRtspServer : IDisposable
 {

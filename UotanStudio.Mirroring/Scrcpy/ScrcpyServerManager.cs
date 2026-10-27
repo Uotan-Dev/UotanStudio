@@ -9,17 +9,13 @@ namespace UotanStudio.Mirroring;
 /// <para>基于自研 ADB wire 栈（sync push + 长驻 shell 流）在设备上部署并启动 scrcpy 服务端。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The server is pushed once to <see cref="ScrcpyConstants.ServerDevicePath"/>
 /// and started via <c>CLASSPATH=... app_process</c>. The returned shell stream
 /// must stay open for the lifetime of the session — the server exits when the
 /// shell stream closes (its stdout is the server log).
-/// </para>
-/// <para>
-/// 服务端一次性推送到 <see cref="ScrcpyConstants.ServerDevicePath"/>，经
+/// <para>服务端一次性推送到 <see cref="ScrcpyConstants.ServerDevicePath"/>，经
 /// <c>CLASSPATH=... app_process</c> 启动。返回的 shell 流须在会话生命周期内保持
-/// 打开——shell 流关闭时服务端随之退出（其 stdout 即服务端日志）。
-/// </para>
+/// 打开——shell 流关闭时服务端随之退出（其 stdout 即服务端日志）。</para>
 /// </remarks>
 internal static class ScrcpyServerManager
 {

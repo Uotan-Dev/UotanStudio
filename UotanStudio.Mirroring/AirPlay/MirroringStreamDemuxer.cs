@@ -10,15 +10,11 @@ namespace UotanStudio.Mirroring.AirPlay;
 /// 把 SPS/PPS 重新发布为 scrcpy 配置包，并根据 NAL 类型报告关键帧标志。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The output is identical in shape to the scrcpy and ohscrcpy paths, so the host keeps one decoder and one
 /// presentation loop. The mirror header carries a 32.32 fixed-point timestamp that this demuxer converts to
 /// microseconds; the flag bits are the scrcpy packet flags taken from <see cref="ScrcpyConstants"/>.
-/// </para>
-/// <para>
-/// 输出形状与 scrcpy、ohscrcpy 路径一致，因此宿主只需一套解码与呈现循环。镜像头携带 32.32 定点时间戳，
-/// 本解复用器把它换算为微秒；标志位使用 <see cref="ScrcpyConstants"/> 中的 scrcpy 包标志。
-/// </para>
+/// <para>输出形状与 scrcpy、ohscrcpy 路径一致，因此宿主只需一套解码与呈现循环。镜像头携带 32.32 定点时间戳，
+/// 本解复用器把它换算为微秒；标志位使用 <see cref="ScrcpyConstants"/> 中的 scrcpy 包标志。</para>
 /// </remarks>
 internal sealed class AirPlayMirrorDemuxer
 {

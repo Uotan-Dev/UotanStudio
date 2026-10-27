@@ -15,15 +15,11 @@ namespace UotanStudio.Mirroring.AirPlay;
 /// 镜像帧与音频队列。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The device drives the session: it browses mDNS, connects to the RTSP port, announces its encryption material
 /// and then pushes RTP packets. Nothing here identifies a device up front and no reverse control channel exists,
 /// so the first RECORD is what makes the session usable.
-/// </para>
-/// <para>
-/// 会话由设备驱动：设备浏览 mDNS、连接 RTSP 端口、宣告其加密材料，然后推送 RTP 包。此处不会事先标识任何设备，
-/// 也没有反向控制通道，因此第一次 RECORD 才是会话可用的标志。
-/// </para>
+/// <para>会话由设备驱动：设备浏览 mDNS、连接 RTSP 端口、宣告其加密材料，然后推送 RTP 包。此处不会事先标识任何设备，
+/// 也没有反向控制通道，因此第一次 RECORD 才是会话可用的标志。</para>
 /// </remarks>
 internal sealed class AirPlayReceiverClient : IDisposable
 {

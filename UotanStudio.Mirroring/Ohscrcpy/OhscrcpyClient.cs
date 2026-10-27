@@ -20,28 +20,20 @@ public sealed record OhscrcpyClientOptions(
 /// 翻译为 UI Test 输入调用。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The device side is not a scrcpy-compatible stream. A capture library runs as a UI Test extension and publishes
 /// a standard gRPC server stream whose <c>payload["data"]</c> carries Annex-B H.264; there is no separate
 /// codec-configuration message, so the parameter sets and geometry are derived from the first access unit.
 /// Frames are handed to <see cref="ReadFrame"/> as <see cref="ScrcpyVideoFrame"/> values with the same flag bits
 /// the scrcpy client uses, so the GPU decode pipeline needs no second implementation.
-/// </para>
-/// <para>
-/// 设备端不是 scrcpy 兼容流。采集库作为 UI Test 扩展运行并发布标准 gRPC 服务端流，其 <c>payload["data"]</c>
-/// 承载 Annex-B H.264；没有独立的编码配置消息，因此参数集与几何从首个访问单元推导。帧以
-/// <see cref="ScrcpyVideoFrame"/> 交给 <see cref="ReadFrame"/>，标志位与 scrcpy 客户端一致，使 GPU 解码管线
-/// 无需第二套实现。
-/// </para>
-/// <para>
 /// One background reader pumps the gRPC response into a bounded channel, so exactly one thread may call
 /// <see cref="ReadFrame"/>, which stays synchronous for the host decode loop. The control channel is optional and
 /// its connect failure only disables input, never video.
-/// </para>
-/// <para>
+/// <para>设备端不是 scrcpy 兼容流。采集库作为 UI Test 扩展运行并发布标准 gRPC 服务端流，其 <c>payload["data"]</c>
+/// 承载 Annex-B H.264；没有独立的编码配置消息，因此参数集与几何从首个访问单元推导。帧以
+/// <see cref="ScrcpyVideoFrame"/> 交给 <see cref="ReadFrame"/>，标志位与 scrcpy 客户端一致，使 GPU 解码管线
+/// 无需第二套实现。
 /// 一个后台读取任务把 gRPC 响应泵入有界通道，因此只能有一个线程调用 <see cref="ReadFrame"/>；该方法保持同步以
-/// 适配宿主解码循环。控制通道是可选的，其连接失败只会禁用输入，不影响视频。
-/// </para>
+/// 适配宿主解码循环。控制通道是可选的，其连接失败只会禁用输入，不影响视频。</para>
 /// </remarks>
 internal sealed class OhscrcpyClient : IDisposable
 {

@@ -11,32 +11,24 @@ namespace UotanStudio.Mirroring;
 /// 值，供 DevEco 风格的 OpenHarmony 投屏路径使用，使现有投屏界面在两类设备上继续使用同一套输入编码。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Only the message families the mirror view emits are translated: touch, scroll, key code, text,
 /// back / screen-on, display power and the decoder reset. Clipboard and UHID messages have no OpenHarmony
 /// equivalent and map to <see cref="OhscrcpyControlActionKind.None"/>, which is why the mirror view keeps
 /// clipboard features disabled for HDC targets.
-/// </para>
-/// <para>
-/// 只翻译投屏界面实际发出的消息族：触摸、滚轮、键码、文本、返回/点亮、屏幕电源与解码器重置。剪贴板与 UHID
-/// 消息在 OpenHarmony 中没有对应物，映射为 <see cref="OhscrcpyControlActionKind.None"/>，因此投屏界面对 HDC
-/// 目标应保持剪贴板功能关闭。
-/// </para>
-/// <para>
 /// OpenHarmony key codes differ from Android key codes, so generic key codes are remapped through
 /// <see cref="TryMapKeyCode"/>. Back, home, power and volume are the dedicated OpenHarmony codes; the device
 /// injects its own down/up pair for them, so only the scrcpy down edge becomes one
 /// <see cref="OhscrcpyControlActionKind.KeyPress"/> and the up edge produces nothing. The Android task switcher
 /// (<c>KEYCODE_APP_SWITCH</c>) is the OpenHarmony recent-tasks chord <c>META_LEFT</c> + <c>TAB</c>, which is one
 /// <see cref="OhscrcpyControlActionKind.KeyChord"/> on its down edge only.
-/// </para>
-/// <para>
+/// <para>只翻译投屏界面实际发出的消息族：触摸、滚轮、键码、文本、返回/点亮、屏幕电源与解码器重置。剪贴板与 UHID
+/// 消息在 OpenHarmony 中没有对应物，映射为 <see cref="OhscrcpyControlActionKind.None"/>，因此投屏界面对 HDC
+/// 目标应保持剪贴板功能关闭。
 /// OpenHarmony 键码与 Android 键码不同，通用键码经 <see cref="TryMapKeyCode"/> 重映射。返回、主页、电源与音量
 /// 使用 OpenHarmony 专用键码；设备侧会为它们自行注入按下与抬起，因此只有 scrcpy 的按下沿会变成一次
 /// <see cref="OhscrcpyControlActionKind.KeyPress"/>，抬起沿不产生动作。Android 多任务键
 /// （<c>KEYCODE_APP_SWITCH</c>）对应 OpenHarmony 的 <c>META_LEFT</c> + <c>TAB</c> 最近任务组合键，只在按下沿
-/// 产生一次 <see cref="OhscrcpyControlActionKind.KeyChord"/>。
-/// </para>
+/// 产生一次 <see cref="OhscrcpyControlActionKind.KeyChord"/>。</para>
 /// </remarks>
 public static class ScrcpyToOhscrcpyControlAdapter
 {

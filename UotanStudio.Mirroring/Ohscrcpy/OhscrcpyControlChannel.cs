@@ -14,26 +14,18 @@ namespace UotanStudio.Mirroring;
 /// 文本注入。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The forwarded stream carries unseparated JSON documents in both directions: one request is written, one
 /// response is read, and the parser keeps the unconsumed tail for the next call. A partially written request or
 /// a partially read response leaves the request/response boundary unknown, so the channel never reuses a stream
 /// after a transport failure; it disposes the stream and reports itself disconnected instead.
-/// </para>
-/// <para>
-/// 转发的流在两个方向上都承载无分隔的 JSON 文档：写一条请求、读一条响应，解析器保留未消费的尾部供下一次调用。
-/// 请求只写入一部分或响应只读取一部分都会让请求/响应边界变得未知，因此通道在传输失败后绝不复用该流，而是释放
-/// 该流并把自身标记为已断开。
-/// </para>
-/// <para>
 /// Gestures are serialized through one queue and one pump, so the daemon sees one call at a time; only
 /// consecutive moves of the same API are coalesced and down/up boundaries are never dropped. Keys and text use a
 /// separate bounded queue because they travel over the HDC shell rather than over the socket.
-/// </para>
-/// <para>
+/// <para>转发的流在两个方向上都承载无分隔的 JSON 文档：写一条请求、读一条响应，解析器保留未消费的尾部供下一次调用。
+/// 请求只写入一部分或响应只读取一部分都会让请求/响应边界变得未知，因此通道在传输失败后绝不复用该流，而是释放
+/// 该流并把自身标记为已断开。
 /// 手势经单个队列与单个泵串行化，使守护进程一次只看到一条调用；只合并同一 API 的连续 move，down/up 边界永不
-/// 丢弃。按键与文本使用独立的有界队列，因为它们经 HDC shell 而非 socket 传输。
-/// </para>
+/// 丢弃。按键与文本使用独立的有界队列，因为它们经 HDC shell 而非 socket 传输。</para>
 /// </remarks>
 internal sealed class OhscrcpyControlChannel : IOhscrcpyControlChannel
 {

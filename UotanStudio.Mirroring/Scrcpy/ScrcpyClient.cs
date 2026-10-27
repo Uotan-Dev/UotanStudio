@@ -48,9 +48,9 @@ public sealed record ScrcpyVideoMetadata(uint CodecFourCc, int Width, int Height
 /// </param>
 /// <remarks>
 /// Media payloads are rented from <see cref="ArrayPool{T}.Shared"/> and must be returned by calling
-/// <see cref="Dispose"/> once the decoder no longer reads them. Codec configuration packets are exact
+/// <see cref="Dispose"/> once the decoder is done with them. Codec configuration packets are exact
 /// allocations because consumers retain them across frames.
-/// <para>媒体负载从 <see cref="ArrayPool{T}.Shared"/> 租用，解码器不再读取后必须调用 <see cref="Dispose"/> 归还。
+/// <para>媒体负载从 <see cref="ArrayPool{T}.Shared"/> 租用，解码器用完这些字节后必须调用 <see cref="Dispose"/> 归还。
 /// 编码配置包使用精确分配，因为消费方会在帧之间保留它们。</para>
 /// </remarks>
 public sealed record ScrcpyVideoFrame(long Pts, byte[] Data) : IDisposable
@@ -184,9 +184,9 @@ public sealed record ScrcpyAudioMetadata(uint CodecFourCc)
 /// </param>
 /// <remarks>
 /// Media payloads are rented from <see cref="ArrayPool{T}.Shared"/> and must be returned by calling
-/// <see cref="Dispose"/> once the decoder no longer reads them. Codec configuration packets are exact
+/// <see cref="Dispose"/> once the decoder is done with them. Codec configuration packets are exact
 /// allocations and are never returned to the pool.
-/// <para>媒体负载从 <see cref="ArrayPool{T}.Shared"/> 租用，解码器不再读取后必须调用 <see cref="Dispose"/> 归还。
+/// <para>媒体负载从 <see cref="ArrayPool{T}.Shared"/> 租用，解码器用完这些字节后必须调用 <see cref="Dispose"/> 归还。
 /// 编码配置包使用精确分配，永远不会归还到池中。</para>
 /// </remarks>
 public sealed record ScrcpyAudioFrame(long Pts, byte[] Data) : IDisposable
@@ -263,37 +263,25 @@ public sealed record ScrcpyAudioFrame(long Pts, byte[] Data) : IDisposable
 /// 解出分帧视频并交换控制消息。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Sockets are opened in the server's expected order: video, (optional)
 /// audio, control. The first socket carries the dummy byte, the 64-byte
 /// device name, the 4-byte video codec id and the first 12-byte session
 /// packet before the framed stream.
-/// </para>
-/// <para>
-/// socket 按服务端预期的顺序打开：视频、（可选）音频、控制。首个 socket 在分帧码流之前
-/// 承载哑字节、64 字节设备名、4 字节视频编码标识与首个 12 字节会话包。
-/// </para>
-/// <para>
 /// Every subsequent session packet on the video socket is consumed by
 /// <see cref="ReadFrame"/> before the next media packet, so
 /// <see cref="VideoMetadata"/> always describes the size the encoder is
 /// actually producing; <see cref="SessionEpoch"/> counts those replacements
 /// for consumers that must reconfigure a decoder.
-/// </para>
-/// <para>
-/// 视频 socket 上后续到达的会话包都由 <see cref="ReadFrame"/> 在下一个媒体包之前消费掉，
-/// 因此 <see cref="VideoMetadata"/> 始终描述编码器实际产出的尺寸；<see cref="SessionEpoch"/>
-/// 记录这些替换的次数，供需要重建解码器的使用方判断。
-/// </para>
-/// <para>
 /// All lengths read from the device are bounded: frame payloads are capped
 /// at <see cref="MaxFrameLength"/>, clipboard text at 1 MiB; violations throw
 /// rather than allocate unbounded buffers.
-/// </para>
-/// <para>
+/// <para>socket 按服务端预期的顺序打开：视频、（可选）音频、控制。首个 socket 在分帧码流之前
+/// 承载哑字节、64 字节设备名、4 字节视频编码标识与首个 12 字节会话包。
+/// 视频 socket 上后续到达的会话包都由 <see cref="ReadFrame"/> 在下一个媒体包之前消费掉，
+/// 因此 <see cref="VideoMetadata"/> 始终描述编码器实际产出的尺寸；<see cref="SessionEpoch"/>
+/// 记录这些替换的次数，供需要重建解码器的使用方判断。
 /// 从设备读取的所有长度均有界：帧负载上限 <see cref="MaxFrameLength"/>、剪贴板
-/// 文本上限 1 MiB；越界即抛出异常，不进行无界分配。
-/// </para>
+/// 文本上限 1 MiB；越界即抛出异常，不进行无界分配。</para>
 /// </remarks>
 internal sealed class ScrcpyClient : IDisposable
 {
@@ -540,9 +528,9 @@ internal sealed class ScrcpyClient : IDisposable
     /// <para>该头部未携带会话标志，或宣告的尺寸超出支持范围。</para>
     /// </exception>
     /// <remarks>
-    /// <para>The server sets only bit 31 of the flags integer (the session marker itself) and bit 0
+    /// The server sets only bit 31 of the flags integer (the session marker itself) and bit 0
     /// (<c>isClientResize</c>). Any other bit in that integer means the stream is being read out of step,
-    /// so the packet is refused instead of silently re-annotating the video size.</para>
+    /// so the packet is refused instead of silently re-annotating the video size.
     /// <para>服务端只会置上 flags 整数的第 31 位（会话标志本身）与第 0 位（<c>isClientResize</c>）。
     /// 该整数出现其他位就说明码流已经读错位，因此宁可拒绝该包，也不悄悄改写视频尺寸。</para>
     /// </remarks>
@@ -785,10 +773,10 @@ internal sealed class ScrcpyClient : IDisposable
     /// is not a known device message type.
     /// <para>宣告的剪贴板长度超出上限，或类型字节不属于已知的设备消息类型。</para></exception>
     /// <remarks>
-    /// <para>5.x adds <c>TYPE_UHID_OUTPUT</c> (<see cref="ScrcpyConstants.DeviceTypeUhidOutput"/>), which the
+    /// 5.x adds <c>TYPE_UHID_OUTPUT</c> (<see cref="ScrcpyConstants.DeviceTypeUhidOutput"/>), which the
     /// server only emits for a UHID device created by a prior <c>TYPE_UHID_CREATE</c>. This client never creates
     /// one, so that type is intentionally left unhandled and arriving at it is reported rather than skipped
-    /// without knowing the payload length.</para>
+    /// without knowing the payload length.
     /// <para>5.x 新增了 <c>TYPE_UHID_OUTPUT</c>（<see cref="ScrcpyConstants.DeviceTypeUhidOutput"/>），服务端只会
     /// 为先前由 <c>TYPE_UHID_CREATE</c> 创建的 UHID 设备发出它。本客户端从不创建 UHID 设备，因此该类型被有意保留为
     /// 不消费：真的收到时按异常上报，而不是在不知道负载长度的情况下跳过。</para>

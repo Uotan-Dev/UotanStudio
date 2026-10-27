@@ -12,17 +12,13 @@ namespace UotanStudio.Mirroring;
 /// shell 通道不携带进程退出码。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The command text is extended with an <c>echo</c> of a private marker followed by <c>$?</c>, so the device
 /// shell itself serializes the exit status into stdout; this works on direct and server-backed HDC routes
 /// alike, including routes that merge streams and report <c>-1</c> as the transport exit code. The last marker
 /// occurrence wins, so a command whose own output contains the marker text cannot confuse the parse.
-/// </para>
-/// <para>
-/// 命令文本会被追加一条 <c>echo</c>：私有标记加 <c>$?</c>，由设备 shell 自己把退出状态写进 stdout；直连与
+/// <para>命令文本会被追加一条 <c>echo</c>：私有标记加 <c>$?</c>，由设备 shell 自己把退出状态写进 stdout；直连与
 /// server 路由（包括合并两路输出并把传输退出码报为 <c>-1</c> 的路由）都适用。解析取最后一次出现的标记，
-/// 命令自身输出中包含标记文本也不会干扰解析。
-/// </para>
+/// 命令自身输出中包含标记文本也不会干扰解析。</para>
 /// </remarks>
 internal static class OhscrcpyShell
 {

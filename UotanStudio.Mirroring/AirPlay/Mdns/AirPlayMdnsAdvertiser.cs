@@ -12,15 +12,11 @@ namespace UotanStudio.Mirroring.AirPlay.Mdns;
 /// 监听、周期性主动广播，以及匹配问题到达时的有界应答。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The receiver is the passive side of the connection, so this advertiser only describes local endpoints; it
 /// never resolves peer addresses. Replies are multicast to the standard group because iOS clients accept them
 /// either way, and duplicate announcements are suppressed so a burst of queries cannot be amplified.
-/// </para>
-/// <para>
-/// 接收端是连接的被动方，因此本广播器只描述本机端点，从不解析对端地址。应答组播到标准组，因为 iOS 客户端两种
-/// 形式都接受；重复广播会被抑制，避免查询突增被放大。
-/// </para>
+/// <para>接收端是连接的被动方，因此本广播器只描述本机端点，从不解析对端地址。应答组播到标准组，因为 iOS 客户端两种
+/// 形式都接受；重复广播会被抑制，避免查询突增被放大。</para>
 /// </remarks>
 internal sealed class AirPlayMdnsAdvertiser : IDisposable
 {
