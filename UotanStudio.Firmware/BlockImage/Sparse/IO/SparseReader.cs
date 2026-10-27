@@ -523,6 +523,7 @@ public static class SparseReader
         var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
         try
         {
+            var accumulator = new Crc32IeeeAccumulator();
             var remaining = count;
             while (remaining > 0)
             {
@@ -535,13 +536,13 @@ public static class SparseReader
                 destination.Write(buffer, 0, read);
                 if (hashCrc)
                 {
-                    crc = Crc32Combine.CombineIeee(crc, Crc32Ieee.Compute(buffer.AsSpan(0, read)), read);
+                    accumulator.Append(buffer.AsSpan(0, read));
                 }
 
                 remaining -= read;
             }
 
-            return crc;
+            return hashCrc ? Crc32Combine.CombineIeee(crc, accumulator.GetCurrentHash(), count) : crc;
         }
         finally
         {
@@ -566,6 +567,7 @@ public static class SparseReader
         var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
         try
         {
+            var accumulator = new Crc32IeeeAccumulator();
             var remaining = count;
             while (remaining > 0)
             {
@@ -576,11 +578,11 @@ public static class SparseReader
                 {
                     throw new EndOfStreamException("Unexpected end of stream while computing CRC over a RAW chunk.");
                 }
-                crc = Crc32Combine.CombineIeee(crc, Crc32Ieee.Compute(buffer.AsSpan(0, read)), read);
+                accumulator.Append(buffer.AsSpan(0, read));
                 remaining -= read;
             }
 
-            return crc;
+            return Crc32Combine.CombineIeee(crc, accumulator.GetCurrentHash(), count);
         }
         finally
         {

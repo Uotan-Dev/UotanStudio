@@ -144,6 +144,7 @@ internal static class SparseWriter
 
 
                             var expectedDataSize = (long)chunk.Header.ChunkSize * outHeader.BlockSize;
+                            var chunkCrc = new Crc32IeeeAccumulator();
                             long written = 0;
                             while (written < expectedDataSize)
                             {
@@ -159,10 +160,15 @@ internal static class SparseWriter
                                 stream.Write(buffer, 0, n);
                                 if (includeCrc)
                                 {
-                                    crc = Crc32Combine.CombineIeee(crc, Crc32Ieee.Compute(buffer.AsSpan(0, n)), n);
+                                    chunkCrc.Append(buffer.AsSpan(0, n));
                                 }
 
                                 written += n;
+                            }
+
+                            if (includeCrc)
+                            {
+                                crc = Crc32Combine.CombineIeee(crc, chunkCrc.GetCurrentHash(), expectedDataSize);
                             }
                             break;
                         }
