@@ -47,8 +47,8 @@ public sealed class GStreamerAudioSink(bool alsa = false) : IAudioSink
         get => field;
         set { if (!float.IsFinite(value)) throw new ArgumentOutOfRangeException(nameof(value)); field = Math.Clamp(value, 0, 1); }
     } = 1;
-    /// <summary>Builds a live appsrc playback pipeline for the given format, disposing any previous pipeline; 16-bit input maps to S16LE and 32-bit input to F32LE.
-    /// <para>为指定格式构建实时 appsrc 播放流水线，并释放此前的流水线；16 位输入映射为 S16LE，32 位输入映射为 F32LE。</para></summary>
+    /// <summary>Builds a live appsrc playback pipeline for the given format, disposing any existing pipeline; 16-bit input maps to S16LE and 32-bit input to F32LE.
+    /// <para>为指定格式构建实时 appsrc 播放流水线，并释放已存在的流水线；16 位输入映射为 S16LE，32 位输入映射为 F32LE。</para></summary>
     /// <param name="channels">Input channel count; must be 1 to 8.<para>输入通道数；必须为 1 至 8。</para></param>
     /// <param name="sampleRate">Input sample rate in hertz; must be within 7350 to 192000.
     /// <para>以赫兹计的输入采样率；必须处于 7350 至 192000 之间。</para></param>

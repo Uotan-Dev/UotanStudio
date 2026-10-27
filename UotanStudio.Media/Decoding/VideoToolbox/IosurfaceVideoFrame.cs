@@ -12,16 +12,12 @@ namespace UotanStudio.Media.Decoding.VideoToolbox;
 /// VideoToolbox 的解码缓冲池无法回收它。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Delivered through <see cref="VideoToolboxVideoDecoder.IosurfaceFrameCallback"/> instead of the generic
 /// NV12 frame callback. There is no dispose step: the presenter calls <see cref="MarkPresented"/> in a
 /// finally clause whether the update succeeded or not, which releases the retained pixel buffer.
-/// </para>
-/// <para>
-/// 经 <see cref="VideoToolboxVideoDecoder.IosurfaceFrameCallback"/> 而非通用 NV12 帧回调交付。
+/// <para>经 <see cref="VideoToolboxVideoDecoder.IosurfaceFrameCallback"/> 而非通用 NV12 帧回调交付。
 /// 本类型没有释放步骤：无论更新成败，呈现器都在 finally 中调用 <see cref="MarkPresented"/>，
-/// 由其释放被保留的像素缓冲。
-/// </para>
+/// 由其释放被保留的像素缓冲。</para>
 /// </remarks>
 [SupportedOSPlatform("macos")]
 public sealed class IosurfaceVideoFrame

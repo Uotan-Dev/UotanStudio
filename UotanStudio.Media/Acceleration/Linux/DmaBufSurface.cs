@@ -278,8 +278,8 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     /// <para>把本图像重新绑定到调用方已有的纹理 ID，渲染器因此可以跨帧复用纹理对象而不必逐帧创建/删除。
     /// 纹理保留自身存储，只替换其 EGLImage 来源。必须在渲染器线程且所属 GL 上下文当前时调用。</para>
     /// </summary>
-    /// <param name="textureId">Texture object previously returned by <see cref="CreateBoundTexture"/>.
-    /// <para>先前由 <see cref="CreateBoundTexture"/> 返回的纹理对象。</para></param>
+    /// <param name="textureId">Texture object returned by an earlier <see cref="CreateBoundTexture"/> call.
+    /// <para>由先前的 <see cref="CreateBoundTexture"/> 调用返回的纹理对象。</para></param>
     /// <param name="externalOes"><see langword="true"/> to bind through <c>GL_TEXTURE_EXTERNAL_OES</c>,
     /// <see langword="false"/> for <c>GL_TEXTURE_2D</c>.
     /// <para>为 <see langword="true"/> 时经 <c>GL_TEXTURE_EXTERNAL_OES</c> 绑定，否则经 <c>GL_TEXTURE_2D</c>。</para></param>
@@ -318,9 +318,9 @@ public sealed unsafe partial class EglDmaBufImage : IDisposable
     }
 
     /// <summary>
-    /// Deletes a texture previously created by <see cref="CreateBoundTexture"/>; must run with the
+    /// Deletes a texture created by <see cref="CreateBoundTexture"/>; must run with the
     /// creating context current.
-    /// <para>删除先前由 <see cref="CreateBoundTexture"/> 创建的纹理；必须在创建它的上下文当前时执行。</para>
+    /// <para>删除由 <see cref="CreateBoundTexture"/> 创建的纹理；必须在创建它的上下文当前时执行。</para>
     /// </summary>
     /// <param name="textureId">The texture object id returned by <see cref="CreateBoundTexture"/>.
     /// <para><see cref="CreateBoundTexture"/> 返回的纹理对象 ID。</para></param>

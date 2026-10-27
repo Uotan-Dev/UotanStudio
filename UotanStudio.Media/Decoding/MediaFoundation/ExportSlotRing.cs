@@ -26,17 +26,13 @@ internal sealed class MediaFoundationExportSlot
 /// 成功时，生产方才能租用槽位。全部槽位被关闭时生产方丢帧而不阻塞，符合实时投屏的最新帧语义。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The gate only schedules; the keyed mutex itself serializes actual GPU access. Renting, closing and
 /// opening the gate are safe from any thread. After <see cref="Dispose"/> the gate opens become no-ops,
 /// so a presentation completing during teardown cannot resurrect a slot. Opening a gate is idempotent:
 /// only the first report after a handoff reopens it.
-/// </para>
-/// <para>
-/// 闸门只负责调度；实际的 GPU 访问由键互锁串行化。租用、关闭与打开闸门均可在任意线程调用。
+/// <para>闸门只负责调度；实际的 GPU 访问由键互锁串行化。租用、关闭与打开闸门均可在任意线程调用。
 /// <see cref="Dispose"/> 之后打开闸门变为空操作，销毁期间完成的呈现无法复活槽位。
-/// 打开闸门是幂等的：一次移交之后只有第一次报告会重新打开它。
-/// </para>
+/// 打开闸门是幂等的：一次移交之后只有第一次报告会重新打开它。</para>
 /// </remarks>
 /// <typeparam name="TSlot">Caller-owned slot state. <para>调用方持有的槽位状态。</para></typeparam>
 internal sealed class ExportSlotRing<TSlot> : IDisposable where TSlot : class

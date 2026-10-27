@@ -9,17 +9,13 @@ namespace UotanStudio.Media.Audio;
 /// <para>Windows Media Foundation AAC 解码 MFT，输出 16 位交错 PCM。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Follows the same synchronous-MFT push model as the video decoder: feed one
 /// AAC packet per <see cref="Decode"/> call and drain PCM output. The AAC
 /// AudioSpecificConfig may arrive with the first packet (scrcpy sends it as a
 /// codec-config packet); it is forwarded through MF_MT_USER_DATA when known.
-/// </para>
-/// <para>
-/// 与视频解码器相同的同步 MFT 推送模型：每次 <see cref="Decode"/> 输入一个 AAC
+/// <para>与视频解码器相同的同步 MFT 推送模型：每次 <see cref="Decode"/> 输入一个 AAC
 /// 包并排空 PCM 输出。AAC AudioSpecificConfig 可随首个压缩包到达（scrcpy 以
-/// 配置包发送）；已知时经 MF_MT_USER_DATA 转发。
-/// </para>
+/// 配置包发送）；已知时经 MF_MT_USER_DATA 转发。</para>
 /// </remarks>
 [SupportedOSPlatform("windows")]
 public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
@@ -50,8 +46,8 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
     /// <para>获取已协商的 PCM 输出采样率。</para>
     /// </summary>
     /// <value>
-    /// Sample rate in hertz once the MFT output type is selected during the first decode, 0 before that.
-    /// <para>首次解码选定 MFT 输出类型后的采样率（赫兹）；此前为 0。</para>
+    /// Sample rate in hertz once the MFT output type is selected during the first decode, 0 until then.
+    /// <para>首次解码选定 MFT 输出类型后的采样率（赫兹）；未选定前为 0。</para>
     /// </value>
     public int SampleRate => _sampleRate;
 
@@ -60,8 +56,8 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
     /// <para>获取已协商的 PCM 输出通道数。</para>
     /// </summary>
     /// <value>
-    /// Channel count once the MFT output type is selected during the first decode, 0 before that.
-    /// <para>首次解码选定 MFT 输出类型后的通道数；此前为 0。</para>
+    /// Channel count once the MFT output type is selected during the first decode, 0 until then.
+    /// <para>首次解码选定 MFT 输出类型后的通道数；未选定前为 0。</para>
     /// </value>
     public int Channels => _channels;
 
@@ -70,9 +66,9 @@ public sealed unsafe class MediaFoundationAacDecoder : IAudioDecoder
     /// <para>获取已协商的 PCM 输出位深。</para>
     /// </summary>
     /// <value>
-    /// Bits per sample once the MFT output type is selected during the first decode, 0 before that;
+    /// Bits per sample once the MFT output type is selected during the first decode, 0 until then;
     /// type selection only accepts 16-bit PCM.
-    /// <para>首次解码选定 MFT 输出类型后的每样本位数；此前为 0。类型选择仅接受 16 位 PCM。</para>
+    /// <para>首次解码选定 MFT 输出类型后的每样本位数；未选定前为 0。类型选择仅接受 16 位 PCM。</para>
     /// </value>
     public int BitsPerSample => _bitsPerSample;
 

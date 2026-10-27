@@ -1142,16 +1142,12 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 /// NV12→BGRA 转换。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// <see cref="DecodedVideoFrame.Buffer"/> holds premultiplied-opaque BGRA pixels
 /// (4 bytes per pixel, row-major, <see cref="DecodedVideoFrame.Stride"/> ≥ width × 4)
 /// instead of NV12 planes; the class-name "Nv12" comments of the base type do not apply.
-/// </para>
-/// <para>
-/// <see cref="DecodedVideoFrame.Buffer"/> 持有 BGRA 像素（每像素 4 字节，行主序，
+/// <para><see cref="DecodedVideoFrame.Buffer"/> 持有 BGRA 像素（每像素 4 字节，行主序，
 /// <see cref="DecodedVideoFrame.Stride"/> ≥ 宽度 × 4），而非 NV12 平面；基类型中
-/// "Nv12" 相关注释不适用。
-/// </para>
+/// "Nv12" 相关注释不适用。</para>
 /// </remarks>
 public sealed class GpuDecodedVideoFrame : DecodedVideoFrame
 {

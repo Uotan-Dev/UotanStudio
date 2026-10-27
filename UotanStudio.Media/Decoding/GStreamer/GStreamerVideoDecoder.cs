@@ -232,10 +232,10 @@ public sealed unsafe class GStreamerVideoDecoder : IVideoDecoder
     /// <returns>
     /// The full <c>gst_parse_launch</c> description. <see cref="GStreamerPlanePath.DirectNv12"/> places
     /// the caps filter on the decoder's source pad with no conversion stage;
-    /// <see cref="GStreamerPlanePath.CpuConverter"/> keeps the historical bare <c>video/x-raw</c> plus
+    /// <see cref="GStreamerPlanePath.CpuConverter"/> emits a bare <c>video/x-raw</c> caps plus a
     /// <c>videoconvert</c> chain.
     /// <para>完整的 <c>gst_parse_launch</c> 描述。<see cref="GStreamerPlanePath.DirectNv12"/> 把 caps 过滤直接压在
-    /// 解码器源 pad 上且不含转换阶段；<see cref="GStreamerPlanePath.CpuConverter"/> 保留历史形态的裸
+    /// 解码器源 pad 上且不含转换阶段；<see cref="GStreamerPlanePath.CpuConverter"/> 输出裸
     /// <c>video/x-raw</c> 加 <c>videoconvert</c> 链。</para>
     /// </returns>
     internal static string BuildPipeline(string parser, string element, string inputCaps, string outputCaps, GStreamerPlanePath path)

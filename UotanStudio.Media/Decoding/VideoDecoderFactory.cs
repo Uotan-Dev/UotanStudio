@@ -40,8 +40,9 @@ public static class VideoDecoderFactory
     /// <returns>A decoder for the platform default backend, ready for <c>Initialize</c>.
     /// <para>面向平台默认后端的解码器，可直接调用 <c>Initialize</c>。</para></returns>
     /// <remarks>
-    /// <para> On Windows the GPU path (D3D11-aware MFT + D3D11 video processor) is tried first; the synchronous CPU decoder is the fallback when no suitable hardware MFT exists. </para>
-    /// <para> Windows 上优先尝试 GPU 路径（D3D11 感知 MFT + D3D11 视频处理器）；无合适硬件 MFT 时 回退到同步 CPU 解码器。 </para></remarks>
+    /// On Windows the GPU path (D3D11-aware MFT + D3D11 video processor) is tried first; the synchronous CPU decoder is the fallback when no suitable hardware MFT exists.
+    /// <para>Windows 上优先尝试 GPU 路径（D3D11 感知 MFT + D3D11 视频处理器）；无合适硬件 MFT 时 回退到同步 CPU 解码器。</para>
+    /// </remarks>
     public static IVideoDecoder Create() => Create(new VideoDecoderOptions());
 
     /// <summary>Creates the requested backend; explicit choices never silently switch.

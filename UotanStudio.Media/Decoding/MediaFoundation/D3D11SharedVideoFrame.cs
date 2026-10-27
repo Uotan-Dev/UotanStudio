@@ -7,19 +7,15 @@ namespace UotanStudio.Media.Decoding.MediaFoundation;
 /// <para>保留在 GPU 上的解码后 BGRA 帧：视频处理器把它写入由 keyed mutex 保护的可共享 D3D11 纹理，呈现侧直接导入该纹理而不经 CPU 下载。生产者须等到呈现完成后再触碰该纹理。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Delivered through <see cref="MediaFoundationGpuVideoDecoder.GpuExportFrameCallback"/> instead of the
 /// generic NV12 frame callback. Unlike <see cref="Acceleration.Linux.VaDmaBufVideoFrame"/> there is no
 /// dispose step: the presenter calls <see cref="MarkPresented"/> in a finally clause whether the update
 /// succeeded or not. A failed update cannot wedge the producer — if the compositor died holding the mutex,
 /// the next acquire reports WAIT_ABANDONED, which the decoder normalizes back to key 0.
-/// </para>
-/// <para>
-/// 经 <see cref="MediaFoundationGpuVideoDecoder.GpuExportFrameCallback"/> 而非通用 NV12 帧回调交付。
+/// <para>经 <see cref="MediaFoundationGpuVideoDecoder.GpuExportFrameCallback"/> 而非通用 NV12 帧回调交付。
 /// 与 <see cref="Acceleration.Linux.VaDmaBufVideoFrame"/> 不同，本类型没有释放步骤：无论更新成败，
 /// 呈现器都在 finally 中调用 <see cref="MarkPresented"/>。失败的更新不会卡死生产方——若合成器持有互锁时
-/// 设备死亡，下一次获取会返回 WAIT_ABANDONED，解码器会将其归一化回键 0。
-/// </para>
+/// 设备死亡，下一次获取会返回 WAIT_ABANDONED，解码器会将其归一化回键 0。</para>
 /// </remarks>
 [SupportedOSPlatform("windows")]
 public sealed class D3D11SharedVideoFrame

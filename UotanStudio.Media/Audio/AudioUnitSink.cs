@@ -8,15 +8,11 @@ namespace UotanStudio.Media.Audio;
 /// <para>macOS AudioUnit 输出端（kAudioUnitType_Output / kAudioUnitSubType_DefaultOutputUnit）。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Accepts 16-bit interleaved PCM; converts to the device's float32 stereo mix
 /// format in <see cref="Write"/> and pushes through the AudioUnit render callback.
 /// All calls use the creating thread; the callback only reads pre-staged PCM.
-/// </para>
-/// <para>
-/// 接受 16 位交错 PCM；在 <see cref="Write"/> 中转换为设备 float32 立体声混音格式，
-/// 经 AudioUnit 渲染回调推送。所有调用使用创建线程；回调仅读取预存的 PCM。
-/// </para>
+/// <para>接受 16 位交错 PCM；在 <see cref="Write"/> 中转换为设备 float32 立体声混音格式，
+/// 经 AudioUnit 渲染回调推送。所有调用使用创建线程；回调仅读取预存的 PCM。</para>
 /// </remarks>
 [SupportedOSPlatform("macos")]
 public sealed unsafe partial class AudioUnitSink : IAudioSink
@@ -80,7 +76,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     } = 1f;
 
     /// <summary>Opens the default output AudioUnit, closes any previous instance, and starts rendering; the unit is converted to the device float32 format internally.
-    /// <para>打开默认输出 AudioUnit，关闭此前的实例并开始渲染；单元在内部转换为设备 float32 格式。</para></summary>
+    /// <para>打开默认输出 AudioUnit，关闭已存在的实例并开始渲染；单元在内部转换为设备 float32 格式。</para></summary>
     /// <param name="channels">Input channel count; must be 1 or 2.<para>输入通道数；必须为 1 或 2。</para></param>
     /// <param name="sampleRate">Input sample rate in hertz; must be within 8000 to 192000.
     /// <para>以赫兹计的输入采样率；必须处于 8000 至 192000 之间。</para></param>

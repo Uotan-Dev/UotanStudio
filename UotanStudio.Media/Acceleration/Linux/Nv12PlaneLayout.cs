@@ -24,19 +24,14 @@ public enum DmabufChromaOrder
 /// <para>判定 VA-API 导出 NV12 必须给出的两个 DRM 层。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The bridge requests separate layers, so an NV12 surface is a single-plane <c>R8</c> luma layer plus a
 /// single-plane interleaved chroma layer in <c>RG88</c> or <c>GR88</c>. Anything else — a composed
 /// single-layer descriptor, three planar planes, or an unfamiliar chroma fourcc — cannot be sampled by the
-/// shader and must fall back to a downloaded frame instead of being presented. This mirrors upstream
-/// scrcpy's <c>sc_interop_vaapi_check_nv12_layout</c>, which likewise accepts both chroma fourcc spellings.
-/// </para>
-/// <para>
-/// 桥接层请求分离平面，因此 NV12 表面应当是一个单平面的 <c>R8</c> 亮度层加一个单平面的交错色度层，色度四字符码为
+/// shader and must fall back to a downloaded frame instead of being presented. Both chroma fourcc spellings are
+/// accepted.
+/// <para>桥接层请求分离平面，因此 NV12 表面应当是一个单平面的 <c>R8</c> 亮度层加一个单平面的交错色度层，色度四字符码为
 /// <c>RG88</c> 或 <c>GR88</c>。其他情形——合成后的单层描述符、三个平面或不认识的色度四字符码——着色器无法采样，
-/// 必须回退为下载帧而不是呈现。这与上游 scrcpy 的 <c>sc_interop_vaapi_check_nv12_layout</c> 一致，
-/// 后者同样接受两种色度四字符码写法。
-/// </para>
+/// 必须回退为下载帧而不是呈现。两种色度四字符码写法都被接受。</para>
 /// </remarks>
 internal static class Nv12PlaneLayout
 {

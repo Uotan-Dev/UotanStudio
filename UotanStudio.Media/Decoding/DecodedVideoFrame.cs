@@ -8,31 +8,19 @@ namespace UotanStudio.Media.Decoding;
 /// <para>NV12 像素格式的解码帧：亮度与色度平面连续存放于单个池化或解码器借用缓冲区中。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// NV12 layout: <c>Y plane (width × height)</c> followed by
 /// <c>interleaved UV plane (width × height / 2)</c>. Both planes share the same
 /// stride; the UV plane covers the full stride width even for odd widths.
-/// </para>
-/// <para>
-/// NV12 布局：<c>Y 平面（width × height）</c>后跟<c>交错 UV 平面（width × height / 2）</c>。
-/// 两个平面共用同一 stride；即使宽度为奇数，UV 平面也按完整 stride 宽度存储。
-/// </para>
-/// <para>
 /// Public constructors take ownership of pooled buffers. Decoder callbacks may
 /// borrow session storage; the decoder disposes each frame when the callback
 /// returns. Copy or convert pixels within that callback. Dispose is idempotent.
-/// </para>
-/// <para>
-/// 公共构造函数接管池化缓冲区。解码回调可借用会话存储；解码器在回调返回后
-/// 释放帧，消费方须在回调内复制或转换像素。Dispose 可重复调用。
-/// </para>
-/// <para>
 /// Derived frames may carry a packed layout instead; <see cref="PixelFormat"/> is the value to
 /// branch on, because the runtime type does not describe the bytes.
-/// </para>
-/// <para>
-/// 派生帧可携带打包布局；分支依据是 <see cref="PixelFormat"/>，运行时类型并不描述字节含义。
-/// </para>
+/// <para>NV12 布局：<c>Y 平面（width × height）</c>后跟<c>交错 UV 平面（width × height / 2）</c>。
+/// 两个平面共用同一 stride；即使宽度为奇数，UV 平面也按完整 stride 宽度存储。
+/// 公共构造函数接管池化缓冲区。解码回调可借用会话存储；解码器在回调返回后
+/// 释放帧，消费方须在回调内复制或转换像素。Dispose 可重复调用。
+/// 派生帧可携带打包布局；分支依据是 <see cref="PixelFormat"/>，运行时类型并不描述字节含义。</para>
 /// </remarks>
 public class DecodedVideoFrame : IDisposable
 {

@@ -6,20 +6,16 @@ namespace UotanStudio.Media.Decoding;
 /// <para>某一矩阵与范围组合下的 NV12 转 BGRA 定点常量，供 CPU 转换器与 GPU 着色器共用，避免两者漂移。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Chroma terms are signed and scaled by 256, derived from the ITU recommendation luma coefficients as
 /// <c>2 * (1 - Kr)</c> for red, <c>2 * (1 - Kb)</c> for blue, and
 /// <c>-2 * Kb * (1 - Kb) / (1 - Kt)</c> and <c>-2 * Kr * (1 - Kr) / (1 - Kt)</c> for the two green terms.
 /// Limited range applies the <c>255 / 219</c> luma expansion and the <c>255 / 224</c> chroma expansion, so
 /// the stored luma scale of 298 and the chroma terms are rounded independently. BT.601 uses Kr = 0.299 and
 /// Kb = 0.114, BT.709 uses 0.2126 and 0.0722, and BT.2020 uses 0.2627 and 0.0593.
-/// </para>
-/// <para>
-/// 色度项为带符号值并已乘 256：红色取 <c>2 * (1 - Kr)</c>，蓝色取 <c>2 * (1 - Kb)</c>，两个绿色项分别取
+/// <para>色度项为带符号值并已乘 256：红色取 <c>2 * (1 - Kr)</c>，蓝色取 <c>2 * (1 - Kb)</c>，两个绿色项分别取
 /// <c>-2 * Kb * (1 - Kb) / (1 - Kt)</c> 与 <c>-2 * Kr * (1 - Kr) / (1 - Kt)</c>。有限范围对亮度施加
 /// <c>255 / 219</c> 扩展、对色度施加 <c>255 / 224</c> 扩展，因此存储的亮度比例 298 与色度项是各自独立取整的。
-/// BT.601 使用 Kr = 0.299、Kb = 0.114，BT.709 使用 0.2126 与 0.0722，BT.2020 使用 0.2627 与 0.0593。
-/// </para>
+/// BT.601 使用 Kr = 0.299、Kb = 0.114，BT.709 使用 0.2126 与 0.0722，BT.2020 使用 0.2627 与 0.0593。</para>
 /// </remarks>
 /// <param name="LumaOffset">
 /// Value subtracted from luma before scaling: <c>0</c> for full range, <c>16</c> for limited range.

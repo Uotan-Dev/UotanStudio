@@ -8,15 +8,11 @@ namespace UotanStudio.Media.Audio;
 /// <para>macOS AudioToolbox AAC 解码器：经 AudioConverter 输出 16 位交错 PCM。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The AAC AudioSpecificConfig from scrcpy's codec-config packet becomes the
 /// converter magic cookie; packets are fed one at a time through
 /// AudioConverterFillComplexBuffer. All calls use the creating thread.
-/// </para>
-/// <para>
-/// scrcpy 配置包中的 AAC AudioSpecificConfig 作为转换器 magic cookie；压缩包
-/// 逐个经 AudioConverterFillComplexBuffer 输入。所有调用使用创建线程。
-/// </para>
+/// <para>scrcpy 配置包中的 AAC AudioSpecificConfig 作为转换器 magic cookie；压缩包
+/// 逐个经 AudioConverterFillComplexBuffer 输入。所有调用使用创建线程。</para>
 /// </remarks>
 [SupportedOSPlatform("macos")]
 public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder

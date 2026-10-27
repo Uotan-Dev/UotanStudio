@@ -5,7 +5,7 @@ namespace UotanStudio.Media.Audio;
 /// <para>PCM 音频输出端：以解码格式打开一次，然后持续写入。</para>
 /// </summary>
 /// <remarks>
-/// <para>Instances are not thread-safe; a single audio loop should own the instance.</para>
+/// Instances are not thread-safe; a single audio loop should own the instance.
 /// <para>实例非线程安全，应由单一音频循环持有。</para>
 /// </remarks>
 public interface IAudioSink : IDisposable

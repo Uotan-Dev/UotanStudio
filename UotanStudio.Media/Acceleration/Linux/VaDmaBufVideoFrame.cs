@@ -13,15 +13,11 @@ namespace UotanStudio.Media.Acceleration.Linux;
 /// 释放该帧会关闭导出的描述符并把表面归还解码器池；呈现器必须持有它直到合成器完成采样。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Delivered through <see cref="VaApiVideoDecoder.DmabufFrameCallback"/> instead of the generic
 /// NV12 frame callback. Disposal is thread-safe and no-ops after the owning decoder reset or
 /// closed; the color metadata reflects the stream unless overridden by options.
-/// </para>
-/// <para>
-/// 经 <see cref="VaApiVideoDecoder.DmabufFrameCallback"/> 而非通用 NV12 帧回调交付。释放是线程安全的，
-/// 在所属解码器重置或关闭后自动变为空操作；色彩元数据反映码流值，除非被选项覆盖。
-/// </para>
+/// <para>经 <see cref="VaApiVideoDecoder.DmabufFrameCallback"/> 而非通用 NV12 帧回调交付。释放是线程安全的，
+/// 在所属解码器重置或关闭后自动变为空操作；色彩元数据反映码流值，除非被选项覆盖。</para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
 public sealed class VaDmaBufVideoFrame : IDisposable

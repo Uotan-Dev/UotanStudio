@@ -9,22 +9,18 @@ namespace UotanStudio.Media.Decoding.MediaFoundation;
 /// <para>面向键互锁共享纹理的 DXGI 互操作：按 LUID 查找适配器、遗留共享句柄与跨设备互锁访问。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Struct layouts and vtable slots follow dxgi.h (Windows SDK 10.0.26100). The keyed-mutex slots assume
 /// the interface chain IDXGIKeyedMutex → IDXGIDeviceSubObject → IDXGIObject → IUnknown: IUnknown occupies
 /// slots 0–2, IDXGIObject occupies SetPrivateData (3), SetPrivateDataInterface (4), GetPrivateData (5) and
 /// GetParent (6), IDXGIDeviceSubObject occupies GetDevice (7), so AcquireSync is slot 8 and ReleaseSync is
 /// slot 9. IDXGIResource::GetSharedHandle is also slot 8 because it derives from IDXGIDeviceSubObject.
 /// IDXGIAdapter adds EnumOutputs (7), GetDesc (8) and CheckInterfaceSupport (9) after IDXGIObject.
-/// </para>
-/// <para>
-/// 结构体布局与 vtable 槽位遵循 dxgi.h（Windows SDK 10.0.26100）。键互锁的槽位按接口链
+/// <para>结构体布局与 vtable 槽位遵循 dxgi.h（Windows SDK 10.0.26100）。键互锁的槽位按接口链
 /// IDXGIKeyedMutex → IDXGIDeviceSubObject → IDXGIObject → IUnknown 计算：IUnknown 占槽位 0–2，
 /// IDXGIObject 占 SetPrivateData（3）、SetPrivateDataInterface（4）、GetPrivateData（5）与 GetParent（6），
 /// IDXGIDeviceSubObject 占 GetDevice（7），因此 AcquireSync 为槽位 8、ReleaseSync 为槽位 9。
 /// IDXGIResource::GetSharedHandle 同样为槽位 8（继承自 IDXGIDeviceSubObject）。
-/// IDXGIAdapter 在 IDXGIObject 之后依次是 EnumOutputs（7）、GetDesc（8）与 CheckInterfaceSupport（9）。
-/// </para>
+/// IDXGIAdapter 在 IDXGIObject 之后依次是 EnumOutputs（7）、GetDesc（8）与 CheckInterfaceSupport（9）。</para>
 /// </remarks>
 [SupportedOSPlatform("windows")]
 internal static unsafe partial class DxgiInterop

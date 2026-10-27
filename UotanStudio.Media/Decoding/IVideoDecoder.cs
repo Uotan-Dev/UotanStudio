@@ -5,26 +5,18 @@ namespace UotanStudio.Media.Decoding;
 /// <para>将压缩的 H.264/H.265 NAL 单元数据解码为 NV12 帧的抽象解码器。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Implementations are push-style: the caller feeds access units through
 /// <see cref="Decode(ReadOnlySpan{byte})"/> and receives decoded frames via the callback supplied to
 /// <see cref="Initialize"/>. This mirrors how a screen-mirroring client consumes
 /// a continuous bitstream from a socket.
-/// </para>
-/// <para>
-/// 实现为推送式：调用方通过 <see cref="Decode(ReadOnlySpan{byte})"/> 输入访问单元，解码帧经
-/// <see cref="Initialize"/> 提供的回调返回。这与投屏客户端从 socket 消费
-/// 连续码流的方式一致。
-/// </para>
-/// <para>
 /// Instances are not thread-safe; a single decode loop should own the instance.
 /// The callback may be invoked on an arbitrary thread chosen by the native
 /// decoder; consumers must synchronize if they touch shared state.
-/// </para>
-/// <para>
+/// <para>实现为推送式：调用方通过 <see cref="Decode(ReadOnlySpan{byte})"/> 输入访问单元，解码帧经
+/// <see cref="Initialize"/> 提供的回调返回。这与投屏客户端从 socket 消费
+/// 连续码流的方式一致。
 /// 实例非线程安全，应由单一解码循环持有。回调可能在原生解码器选择的任意线程
-/// 上触发；访问共享状态时消费方须自行同步。
-/// </para>
+/// 上触发；访问共享状态时消费方须自行同步。</para>
 /// </remarks>
 public interface IVideoDecoder : IDisposable
 {

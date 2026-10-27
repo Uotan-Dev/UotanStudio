@@ -9,15 +9,11 @@ namespace UotanStudio.Media.Audio;
 /// <para>Windows 共享模式 PCM 播放，由系统进行声道与采样率转换。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The instance binds to the thread that constructed it; every public member must
 /// be called from that thread and throws <see cref="InvalidOperationException"/>
 /// otherwise. The sink owns its WASAPI COM interfaces until <see cref="Dispose"/>.
-/// </para>
-/// <para>
-/// 实例绑定到构造它的线程；所有公共成员必须在该楼层调用，否则抛出
-/// <see cref="InvalidOperationException"/>。在 <see cref="Dispose"/> 之前，sink 持有其 WASAPI COM 接口。
-/// </para>
+/// <para>实例绑定到构造它的线程；所有公共成员必须在该楼层调用，否则抛出
+/// <see cref="InvalidOperationException"/>。在 <see cref="Dispose"/> 之前，sink 持有其 WASAPI COM 接口。</para>
 /// </remarks>
 [SupportedOSPlatform("windows")]
 public sealed unsafe partial class WasapiAudioSink : IAudioSink
@@ -85,8 +81,8 @@ public sealed unsafe partial class WasapiAudioSink : IAudioSink
     }
     /// <summary>
     /// Opens the default WASAPI render endpoint in shared mode, starts playback, and applies the
-    /// stored volume; any previous session is closed first.
-    /// <para>以共享模式打开默认 WASAPI 渲染端点，启动播放并应用已存储的音量；先关闭此前的会话。</para>
+    /// stored volume; any existing session is closed first.
+    /// <para>以共享模式打开默认 WASAPI 渲染端点，启动播放并应用已存储的音量；先关闭已存在的会话。</para>
     /// </summary>
     /// <param name="channels">Channel count, 1 to 8. <para>通道数，1 到 8。</para></param>
     /// <param name="sampleRate">Sample rate in hertz, 7350 to 192000. <para>采样率（赫兹），7350 到 192000。</para></param>

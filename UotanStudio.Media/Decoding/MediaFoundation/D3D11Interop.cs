@@ -8,14 +8,10 @@ namespace UotanStudio.Media.Decoding.MediaFoundation;
 /// <para>硬件解码路径使用的 Direct3D 11 / DXGI 原生互操作。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Struct layouts and vtable slots follow d3d11.h / dxgi.h (Windows SDK 10.0.26100).
 /// All native calls run in NativeAOT without COM marshalling.
-/// </para>
-/// <para>
-/// 结构体布局与 vtable 槽位遵循 d3d11.h / dxgi.h（Windows SDK 10.0.26100）。
-/// 全部原生调用在 NativeAOT 下运行，不使用 COM 编组。
-/// </para>
+/// <para>结构体布局与 vtable 槽位遵循 d3d11.h / dxgi.h（Windows SDK 10.0.26100）。
+/// 全部原生调用在 NativeAOT 下运行，不使用 COM 编组。</para>
 /// </remarks>
 [SupportedOSPlatform("windows")]
 internal static unsafe partial class D3D11Interop
