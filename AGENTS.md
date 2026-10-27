@@ -36,6 +36,7 @@ UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信�
 
 - 依赖只向下：`Hash` 与 `Net` 是最底层叶子（`Net` 不引用任何项目）；`Compress` 只引用 `Hash`；`Firmware` 引用 `Compress` 与 `Hash`；`Comm` 引用 `Firmware` 与 `Hash`；`Mirroring` 只引用 `Comm`；`Media` 不引用 `Comm`；`Projects` 只引用 `Hash` 与 `Compress`；`Delivery` 不引用宿主 UI、项目服务或 `KeyLibraryService`。新增 `ProjectReference` 前先确认方向，项目文件是最终事实。
 - 设备读写（USB 句柄、TCP/UDP、串口、adb/HDC server 协议）只能由 `UotanStudio.Comm` 持有；宿主只消费 `DeviceController`/`DeviceLease`、`Contracts` 门面与公开协议客户端。scrcpy 归 `UotanStudio.Mirroring`，不属于 Comm 协议层。
+- Apple 相关协议（usbmuxd、lockdownd、AFC、syslog 中继与受信隧道）不接设备扫描：`DeviceControllerFactory` 只注册 USB/adb/HDC 发现源，扫描不探 usbmuxd 守护进程、不生成 usbmuxd 端点，`CommDeviceTransportOpener` 也不识别 usbmuxd 路由。不要为扫描恢复 usbmuxd 探针、端点映射或新增 Apple 发现源。
 - `DeliveryPlan` 是交付后端唯一输入契约；宿主负责采集与恢复界面状态，后端负责校验与生成输出，模式互斥只在现有校验路径维护。
 - 固件、ZIP、Payload、文件系统镜像和设备返回数据都按不可信输入处理：流式与有界缓冲、偏移/长度/条目/解压大小上限、整数溢出防护、贯穿 `CancellationToken`、临时文件校验后原子替换；修改镜像要分别报告字节、结构、内容与容量等价性。
 - 测试夹具、诊断产物和一次性生成物必须创建在主机 `%TEMP%` 下并在使用后删除；不要把大镜像、语料或临时目录留在仓库、盘符根目录或用户目录。生产写入为原子替换而创建的临时文件仍放在目标同目录/同卷，完成或失败后删除。

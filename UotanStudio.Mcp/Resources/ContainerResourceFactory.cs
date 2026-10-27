@@ -23,9 +23,9 @@ namespace UotanStudio.Mcp.Resources;
 /// <list type="bullet">
 ///   <item><description><c>uotan://resources/overview</c> — static document describing the sandbox and
 ///   the readable templates. <para>描述沙箱与可读模板的静态文档。</para></description></item>
-///   <item><description><c>uotan://container/{+path}/entries</c> — inner partition or ZIP member names
-///   of a super image, OTA payload or ZIP container. <para>super 镜像、OTA payload 或 ZIP 容器的内部分区
-///   或包内成员名。</para></description></item>
+///   <item><description><c>uotan://container/{+path}/entries</c> — inner partition, component or ZIP member names
+///   of a super image, OTA payload, HarmonyOS update.bin package or ZIP container. <para>super 镜像、OTA payload、
+///   HarmonyOS update.bin 包或 ZIP 容器的内部分区、组件或包内成员名。</para></description></item>
 ///   <item><description><c>uotan://image/{+path}/metadata</c> — format metadata from the registered
 ///   handler that claims the file. <para>来自认领该文件的已注册处理器的格式元数据。</para></description></item>
 ///   <item><description><c>uotan://filesystem/{+path}/entries</c> — entry listing of an EXT4, EROFS or
@@ -257,7 +257,7 @@ internal static class ContainerResourceFactory
             () => ContainerStructureAnalyzer.Analyze(resolved), cancellationToken).ConfigureAwait(false);
         if (structure.Kind == ContainerKind.None)
         {
-            throw InvalidParams($"'{displayPath}' is not a super image, OTA payload or ZIP container.");
+            throw InvalidParams($"'{displayPath}' is not a super image, OTA payload, HarmonyOS update.bin package or ZIP container.");
         }
 
         var total = structure.Entries.Count;

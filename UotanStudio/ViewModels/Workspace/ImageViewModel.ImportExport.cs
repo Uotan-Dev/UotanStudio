@@ -172,7 +172,7 @@ internal partial class ImageViewModel
     /// <para>把单个容器文件导入工程并登记对应的镜像条目。</para>
     /// </summary>
     /// <param name="sourcePath">Source container path. <para>容器源文件路径。</para></param>
-    /// <param name="formatLabel">Format column text (super / payload / zip). <para>格式列显示文本（super / payload / zip）。</para></param>
+    /// <param name="formatLabel">Format column text (super / payload / zip / update.bin). <para>格式列显示文本（super / payload / zip / update.bin）。</para></param>
     /// <returns>The registered entry; null when no project is open or the source is missing. <para>登记的镜像条目；未打开工程或源不存在时为 null。</para></returns>
     public async Task<ImageEntryViewModel?> ImportContainerAsync(string sourcePath, string formatLabel, IProgress<double>? progress = null,
         IProgress<(long Processed, long Total)>? byteProgress = null, CancellationToken cancellationToken = default)

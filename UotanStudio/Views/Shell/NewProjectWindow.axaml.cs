@@ -17,11 +17,11 @@ namespace UotanStudio.Views.Shell;
 /// <summary>
 /// New project form; holds local selections, outputs <see cref="Result"/> on create so the caller
 /// creates the project and runs unpacking. The location shows the combined full directory
-/// (<c>base/name</c>) synced with the name; a single super / payload.bin / zip selection triggers a
+/// (<c>base/name</c>) synced with the name; a single super / payload.bin / update.bin / zip selection triggers a
 /// background structure analysis whose partitions/images join the selectable list.
 /// <para>新建项目配置窗口；维护表单与文件选择，通过 <see cref="CreateAsync"/> 等待调用方完成创建和解包后关闭。
 /// 操作期间保留模态窗口并显示进度。位置显示组合后的完整目录（<c>基础目录/名称</c>）并随名称联动；
-/// 单个 super / payload.bin / zip 选中时在后台分析内部结构并把分区/镜像条目加入勾选列表。</para>
+/// 单个 super / payload.bin / update.bin / zip 选中时在后台分析内部结构并把分区/镜像条目加入勾选列表。</para>
 /// </summary>
 public partial class NewProjectWindow : Window, INewProjectDialog
 {
@@ -392,7 +392,7 @@ public partial class NewProjectWindow : Window, INewProjectDialog
                 .Where(group => group.Count() > 1)
                 .Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase)
             : [];
-        List<NewProjectImageEntry> entries = [new(containerPath, structure.Kind.ToString().ToLowerInvariant())];
+        List<NewProjectImageEntry> entries = [new(containerPath, ContainerFormatLabel(structure.Kind))];
         entries.AddRange(structure.Entries.Select(entry =>
         {
             var fileName = Path.GetFileName(entry.Name.Replace('\\', '/'));
@@ -405,6 +405,33 @@ public partial class NewProjectWindow : Window, INewProjectDialog
         _imageColumnCount = 0;
         UpdateImageColumns();
         UpdateSelectAll();
+    }
+
+    /// <summary>Format text shown on the container row; update.bin keeps its dotted package name.
+    /// <para>容器行显示的格式文本；update.bin 保留带点的包名。</para></summary>
+    private static string ContainerFormatLabel(ContainerKind kind) => kind switch
+    {
+        ContainerKind.UpdateBin => "update.bin",
+        _ => kind.ToString().ToLowerInvariant()
+    };
+
+    /// <summary>
+    /// Splits selected container entries into ZIP members (only for ZIP containers) and partition-style names
+    /// (super/payload/update.bin, or payload partitions inside a ZIP). Plain file rows travel through
+    /// <see cref="NewProjectFormResult.SelectedImagePaths"/> and are ignored here.
+    /// <para>把选中的容器条目拆成 ZIP 成员（仅 ZIP 容器）与分区式名称（super/payload/update.bin，或 ZIP 内 payload 分区）。
+    /// 普通文件行由 <see cref="NewProjectFormResult.SelectedImagePaths"/> 承载，不在此处理。</para>
+    /// </summary>
+    /// <param name="selected">Selected rows from the form list. <para>表单列表中选中的行。</para></param>
+    /// <param name="kind">Analyzed container kind. <para>已分析的容器类型。</para></param>
+    /// <returns>ZIP member paths and partition/component names. <para>ZIP 成员路径与分区/组件名。</para></returns>
+    internal static (string[] ZipMembers, string[] Partitions) SplitSelectedEntries(
+        IEnumerable<NewProjectImageEntry> selected, ContainerKind kind)
+    {
+        var inner = selected.Where(image => image.FilePath is null).ToArray();
+        return (
+            [.. inner.Where(image => !image.FromPayload && kind == ContainerKind.Zip).Select(image => image.Name)],
+            [.. inner.Where(image => kind != ContainerKind.Zip || image.FromPayload).Select(image => image.Name)]);
     }
 
     /// <summary>Localized group-header label. <para>分组头的本地化标题。</para></summary>
@@ -555,14 +582,15 @@ public partial class NewProjectWindow : Window, INewProjectDialog
         var selected = _images.Where(image => image.IsSelectable && image.IsSelected).ToArray();
         var containerPath = _containerPath;
         var kind = _containerKind;
+        var (zipMembers, partitions) = SplitSelectedEntries(selected, kind);
         Result = new NewProjectFormResult(
             ProjectNameBox.Text?.Trim() ?? string.Empty,
             ProjectLocationBox.Text?.Trim() ?? string.Empty,
             kind,
             containerPath,
             [.. selected.Where(image => image.FilePath is not null).Select(image => image.FilePath!)],
-            [.. selected.Where(image => image.FilePath is null && !image.FromPayload).Select(image => image.Name)],
-            [.. selected.Where(image => image.FilePath is null && (kind != ContainerKind.Zip || image.FromPayload)).Select(image => image.Name)],
+            zipMembers,
+            partitions,
             UnpackImagesBox.IsChecked == true,
             UnpackFullyBox.IsChecked == true,
             selected.Any(image => image.FilePath == containerPath || image.IsRemoteSource),

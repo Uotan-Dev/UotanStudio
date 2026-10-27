@@ -131,40 +131,19 @@ public sealed partial class DeviceMonitorService
 
         foreach (var target in hdcTargets)
         {
-            if (target.TargetTransport is not ("USB" or "TCP")) continue;
+            var hdcTransport = MapServerTransport(target.TargetTransport);
+            if (hdcTransport == DeviceTransportKind.Unknown) continue;
             devices.Add(new DetectedDevice
             {
                 Key = "hdc:" + target.Address,
                 Serial = target.Address,
-                PhysicalId = target.TargetTransport == "USB"
+                PhysicalId = hdcTransport == DeviceTransportKind.Usb
                     ? FindServerUsbIdentity(usbInfos, target.Address, DeviceProtocolKind.Hdc) : null,
                 Protocol = DeviceProtocolKind.Hdc,
-                Transport = MapServerTransport(target.TargetTransport),
+                Transport = hdcTransport,
                 State = target.State?.Equals("Connected", StringComparison.OrdinalIgnoreCase) == true ? "device"
                     : target.State?.Equals("Unauthorized", StringComparison.OrdinalIgnoreCase) == true
                         ? "unauthorized" : "offline",
-            });
-        }
-
-        foreach (var endpoint in endpoints)
-        {
-            if (endpoint.Source != "usbmuxd" || string.IsNullOrWhiteSpace(endpoint.Address))
-            {
-                continue;
-            }
-
-            devices.Add(new DetectedDevice
-            {
-                Key = "apple:" + endpoint.Address,
-                Serial = endpoint.Address,
-                PhysicalId = null,
-                Protocol = DeviceProtocolKind.Ios,
-                Transport = string.Equals(endpoint.State, "Network", StringComparison.OrdinalIgnoreCase)
-                    ? DeviceTransportKind.Tcp : DeviceTransportKind.Usb,
-                State = "device",
-                VendorId = 0x05AC,
-                ProductId = 0,
-                EdlProtocol = EdlProtocolState.Unknown,
             });
         }
 
@@ -259,7 +238,7 @@ public sealed partial class DeviceMonitorService
     }
 
     internal static bool IsSupportedHdcTarget(HdcTargetInfo target)
-        => target.Transport is "USB" or "TCP";
+        => MapServerTransport(target.Transport) is not DeviceTransportKind.Unknown;
 
     /// <summary>
     /// Projects one adb server target into a device row keyed by the target address.
@@ -289,18 +268,19 @@ public sealed partial class DeviceMonitorService
     }
 
     /// <summary>
-    /// Maps server-reported link text to a transport kind, returning Unknown when there is no link
-    /// evidence rather than guessing USB from the serial shape.
-    /// <para>把 server 上报的链路文本映射为传输类型；没有链路证据时返回 Unknown，而不按序列号形状猜测 USB。</para>
+    /// Maps server-reported link text to a transport kind, matching the label case-insensitively and
+    /// returning Unknown only for a link class this host does not serve.
+    /// <para>把 server 上报的链路文本映射为传输类型；标签按不区分大小写匹配，只有本宿主不支持的链路类别才返回 Unknown。</para>
     /// </summary>
     /// <param name="targetTransport">The server-reported link text. <para>server 上报的链路文本。</para></param>
     /// <returns>The transport kind for the link text. <para>该链路文本对应的传输类型。</para></returns>
-    internal static DeviceTransportKind MapServerTransport(string? targetTransport) => targetTransport switch
-    {
-        "USB" => DeviceTransportKind.Usb,
-        "TCP" => DeviceTransportKind.Tcp,
-        _ => DeviceTransportKind.Unknown,
-    };
+    internal static DeviceTransportKind MapServerTransport(string? targetTransport) =>
+        targetTransport?.Trim().ToUpperInvariant() switch
+        {
+            "USB" => DeviceTransportKind.Usb,
+            "TCP" => DeviceTransportKind.Tcp,
+            _ => DeviceTransportKind.Unknown,
+        };
 
     private static string ProtocolToken(DeviceProtocolKind protocol) => protocol switch
     {

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -54,6 +55,11 @@ public partial class MainWindow : Window
             TopMenu.SizeChanged -= OnTitleBarSizeChanged;
             if (_selectorDevices is not null)
                 _selectorDevices.CollectionChanged -= OnSelectorDevicesChanged;
+            foreach (var item in _selectorDeviceItems)
+            {
+                ((DeviceInfo)item.DataContext!).PropertyChanged -= OnSelectorDevicePropertyChanged;
+            }
+            _selectorDeviceItems.Clear();
             try { _ownedViewModel.Dispose(); }
             catch (Exception ex) { Services.LogService.Instance.Write(Services.LogLevel.Error, "Lifecycle", ex.Message); }
         };
@@ -107,7 +113,9 @@ public partial class MainWindow : Window
         for (var i = _selectorDeviceItems.Count - 1; i >= 0; i--)
         {
             var item = _selectorDeviceItems[i];
-            if (_selectorDevices?.Contains((DeviceInfo)item.DataContext!) == true) continue;
+            var device = (DeviceInfo)item.DataContext!;
+            if (_selectorDevices?.Contains(device) == true) continue;
+            device.PropertyChanged -= OnSelectorDevicePropertyChanged;
             DeviceSelector.Items.Remove(item);
             _selectorDeviceItems.RemoveAt(i);
         }
@@ -121,12 +129,38 @@ public partial class MainWindow : Window
             if (item is null)
             {
                 item = new MenuItem { DataContext = device, Theme = theme };
+                device.PropertyChanged += OnSelectorDevicePropertyChanged;
                 _selectorDeviceItems.Add(item);
             }
 
+            item.Header = device.DisplayName;
             if (DeviceSelector.Items.IndexOf(item) == i + 1) continue;
             DeviceSelector.Items.Remove(item);
             DeviceSelector.Items.Insert(i + 1, item);
+        }
+    }
+
+    /// <summary>
+    /// Keeps one selector entry's header in step with the device entry, including slot enrichment that
+    /// arrives after the item was created.
+    /// <para>让某个选择器条目的标题跟随设备条目变化，包括条目创建之后才到达的槽位补充信息。</para>
+    /// </summary>
+    private void OnSelectorDevicePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (null or nameof(DeviceInfo.DisplayName)) || sender is not DeviceInfo device)
+        {
+            return;
+        }
+
+        foreach (var item in _selectorDeviceItems)
+        {
+            if (!ReferenceEquals(item.DataContext, device))
+            {
+                continue;
+            }
+
+            item.Header = device.DisplayName;
+            return;
         }
     }
 

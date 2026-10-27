@@ -31,10 +31,10 @@ internal sealed record SandboxOverviewDocument(
     IReadOnlyList<ResourceSchemeDescriptor> Resources);
 
 /// <summary>
-/// One inner entry of a super image, OTA payload or ZIP container.
-/// <para>super 镜像、OTA payload 或 ZIP 容器中的一个内部条目。</para>
+/// One inner entry of a super image, OTA payload, HarmonyOS update.bin package or ZIP container.
+/// <para>super 镜像、OTA payload、HarmonyOS update.bin 包或 ZIP 容器中的一个内部条目。</para>
 /// </summary>
-/// <param name="Name">Partition name or full ZIP member path. <para>分区名或 ZIP 内条目的完整路径。</para></param>
+/// <param name="Name">Partition name, update.bin component name or full ZIP member path. <para>分区名、update.bin 组件名或 ZIP 内条目的完整路径。</para></param>
 /// <param name="Format">Format text reported for the entry. <para>条目的格式列文本。</para></param>
 /// <param name="SizeBytes">Entry size in bytes; 0 when unknown. <para>条目大小；未知时为 0。</para></param>
 /// <param name="FromPayload">Whether the entry is an embedded payload partition. <para>该条目是否来自内嵌 payload 分区。</para></param>

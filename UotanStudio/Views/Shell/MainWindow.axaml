@@ -23,7 +23,6 @@
 	</Window.Styles>
 	<Window.Resources>
 		<ControlTheme x:Key="DeviceSelectorItemTheme" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
-			<Setter Property="Header" Value="{Binding DisplayName, x:DataType=devices:DeviceInfo}" />
 			<Setter Property="ToggleType" Value="CheckBox" />
 			<Setter Property="IsChecked" Value="{Binding IsSelected, x:DataType=devices:DeviceInfo, Mode=OneWay}" />
 			<Setter Property="Command" Value="{Binding SelectCommand, x:DataType=devices:DeviceInfo}" />

@@ -2,6 +2,8 @@ using System.IO.Compression;
 using UotanStudio.Comm.Protocols.Fastboot.Images;
 using UotanStudio.Firmware.Application.Containers;
 using UotanStudio.Firmware.BlockImage.Lp;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.VendorFirmware.HarmonyOS;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Tests.TestInfrastructure;
 using Xunit;
@@ -10,10 +12,10 @@ namespace UotanStudio.Tests.Services;
 
 /// <summary>
 /// Container structure analysis and targeted entry extraction tests for the new-project flow:
-/// empty-directory validation, default-name probing, super/payload/zip structure enumeration, and
-/// per-selection extraction round-trips.
+/// empty-directory validation, default-name probing, super/payload/update.bin/zip structure enumeration,
+/// and per-selection extraction round-trips.
 /// <para>新建项目流程的容器结构分析与定向提取测试：空目录校验、默认名探测、
-/// super/payload/zip 结构枚举以及按勾选提取的回环验证。</para>
+/// super/payload/update.bin/zip 结构枚举以及按勾选提取的回环验证。</para>
 /// </summary>
 public sealed class ContainerStructureTests
 {
@@ -296,6 +298,57 @@ public sealed class ContainerStructureTests
         var structure = ContainerStructureAnalyzer.Analyze(zip);
         Assert.Equal(ContainerKind.Zip, structure.Kind);
         Assert.Equal("images/boot.img", Assert.Single(structure.Entries).Name);
+    }
+
+    [Fact]
+    public void Analyze_UpdateBin_ListsComponentsWithOutputExtensions()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
+        [
+            ("system", 0, [1, 2, 3, 4]),
+            ("board_list", 0, "HI3516"u8.ToArray()),
+            ("config", 1, [0x50, 0x4B])
+        ]));
+
+        var structure = ContainerStructureAnalyzer.Analyze(path);
+
+        Assert.Equal(ContainerKind.UpdateBin, structure.Kind);
+        Assert.Equal(3, structure.Entries.Count);
+        Assert.Equal("system", structure.Entries[0].Name);
+        Assert.Equal("img", structure.Entries[0].Format);
+        Assert.Equal(4, structure.Entries[0].SizeBytes);
+        Assert.False(structure.Entries[0].FromPayload);
+        Assert.Equal("board_list", structure.Entries[1].Name);
+        Assert.Equal("list", structure.Entries[1].Format);
+        Assert.Equal("config", structure.Entries[2].Name);
+        Assert.Equal("zip", structure.Entries[2].Format);
+    }
+
+    [Fact]
+    public async Task Extract_UpdateBinSelection_WritesSelectedComponentsWithoutMetadataFile()
+    {
+        using var temp = new TempDirectory();
+        byte[] system = [1, 2, 3, 4, 5];
+        byte[] board = "HI3516"u8.ToArray();
+        var path = temp.WriteBytes("update.bin", HarmonyUpdateBinFixture.Build(HarmonyUpdateBinLayout.L2,
+        [
+            ("system", 0, system),
+            ("vendor", 0, [6, 7]),
+            ("board_list", 0, board)
+        ]));
+        var output = Path.Combine(temp.Path, "project", "images");
+
+        var result = await ContainerEntryExtractor.ExtractAsync(path, ["system", "board_list"],
+            cancellationToken: TestContext.Current.CancellationToken, outputDirectory: output);
+
+        Assert.Equal(["system.img", "BOARD.list"], result.Entries);
+        Assert.Equal(system, await File.ReadAllBytesAsync(Path.Combine(output, "system.img"),
+            TestContext.Current.CancellationToken));
+        Assert.Equal(board, await File.ReadAllBytesAsync(Path.Combine(output, "BOARD.list"),
+            TestContext.Current.CancellationToken));
+        Assert.False(File.Exists(Path.Combine(output, "vendor.img")));
+        Assert.False(File.Exists(Path.Combine(output, RepackMetadata.FileName)));
     }
 
     [Fact]

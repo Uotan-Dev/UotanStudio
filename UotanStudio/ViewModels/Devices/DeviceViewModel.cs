@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
@@ -60,8 +61,17 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         get;
         set
         {
+            var previous = field;
             if (SetProperty(ref field, value))
             {
+                if (previous is not null)
+                {
+                    previous.PropertyChanged -= OnSelectedDevicePropertyChanged;
+                }
+                if (field is not null)
+                {
+                    field.PropertyChanged += OnSelectedDevicePropertyChanged;
+                }
                 OnPropertyChanged(nameof(HasSelectedDevice));
                 NotifySelectedDeviceProperties();
                 foreach (var device in Devices)
@@ -76,6 +86,17 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 });
             }
         }
+    }
+
+    /// <summary>
+    /// Forwards a change of the selected device entry to the computed name and detail text, so the top
+    /// selector and the detail panel follow later enrichment such as the detected slot.
+    /// <para>把选中设备条目的变更转发到计算出的名称与详情文本，使顶部选择器与详情面板跟随槽位等后续补充信息。</para>
+    /// </summary>
+    private void OnSelectedDevicePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(SelectedDeviceName));
+        OnPropertyChanged(nameof(DeviceDetail));
     }
 
     internal void NotifyConnectionChanged(DeviceInfo device)
@@ -414,6 +435,10 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _connectionCancellation?.Cancel();
+        if (SelectedDevice is { } selected)
+        {
+            selected.PropertyChanged -= OnSelectedDevicePropertyChanged;
+        }
         if (_monitorDevices)
         {
             App.DeviceMonitor.DevicesChanged -= OnDevicesChanged;

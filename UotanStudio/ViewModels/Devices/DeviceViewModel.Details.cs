@@ -341,7 +341,7 @@ public partial class DeviceViewModel
         device.Density = info["density"];
         device.BoardId = info["boardid"];
         device.BlStatus = info["bl"];
-        device.Slot = info["slot"];
+        device.Slot = DevicePropertyReader.ParseSlot(info["slot"]);
         device.CompileVersion = info["compile"];
         device.VndkVersion = info["vndk"];
         device.PowerOnTime = info["uptime"];

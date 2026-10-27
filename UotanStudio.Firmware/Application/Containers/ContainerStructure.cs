@@ -1,8 +1,8 @@
 namespace UotanStudio.Firmware.Application.Containers;
 
 /// <summary>
-/// Container kind: none / super / payload.bin / ZIP archive.
-/// <para>容器类型：无 / super / payload.bin / ZIP 归档。</para>
+/// Container kind: none / super / payload.bin / ZIP archive / HarmonyOS update.bin.
+/// <para>容器类型：无 / super / payload.bin / ZIP 归档 / HarmonyOS update.bin。</para>
 /// </summary>
 public enum ContainerKind
 {
@@ -16,20 +16,24 @@ public enum ContainerKind
     Payload,
 
     /// <summary>ZIP archive, optionally containing Payload partitions. <para>ZIP 归档，可包含 Payload 分区。</para></summary>
-    Zip
+    Zip,
+
+    /// <summary>HarmonyOS update.bin package (L1/L2 component table). <para>HarmonyOS update.bin 升级包（L1/L2 组件表）。</para></summary>
+    UpdateBin
 }
 
 /// <summary>
-/// A container inner entry: a partition name or a ZIP member, selectable in the new-project list.
-/// <para>容器内部条目：分区名或 ZIP 内文件，供新建项目列表勾选。</para>
+/// A container inner entry: a partition name, a HarmonyOS <c>update.bin</c> component or a ZIP member,
+/// selectable in the new-project list.
+/// <para>容器内部条目：分区名、HarmonyOS <c>update.bin</c> 组件或 ZIP 内文件，供新建项目列表勾选。</para>
 /// </summary>
 /// <param name="Name">
-/// Display name: the super/payload partition name or the full ZIP entry path.
-/// <para>显示名称：super/payload 分区名或 ZIP 条目完整路径。</para>
+/// Display name: the super/payload partition name, the update.bin component name or the full ZIP entry path.
+/// <para>显示名称：super/payload 分区名、update.bin 组件名或 ZIP 条目完整路径。</para>
 /// </param>
 /// <param name="Format">
-/// Format column text (e.g. payload / super / image extension).
-/// <para>格式列显示文本（如 payload / super / 镜像扩展名）。</para>
+/// Format column text (e.g. payload / super / image extension / update.bin component extension).
+/// <para>格式列显示文本（如 payload / super / 镜像扩展名 / update.bin 组件扩展名）。</para>
 /// </param>
 /// <param name="SizeBytes">
 /// Entry size in bytes; 0 when unknown.
