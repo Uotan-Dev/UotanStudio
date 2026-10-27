@@ -141,7 +141,9 @@ public sealed class MoveNodeCommand : IEditorCommand
         _targets.Add((node, node.Location, newLocation));
     }
 
-    /// <summary>Adds a target with an explicitly captured original position.</summary>
+    /// <summary>Adds a target with an explicitly captured original position.
+    /// <para>添加一个显式记录原始位置的目标。</para>
+    /// </summary>
     public void AddTarget(FlowNodeViewModel node, Point originalLocation, Point newLocation)
     {
         if (node == null || originalLocation == newLocation)

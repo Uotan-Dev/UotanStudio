@@ -37,10 +37,8 @@ public partial class NodeEditorViewModel
         NodeFactoryRegistrar.RegisterAll();
         var language = LanguageService.Instance;
 
-        // Add Favorites group first
         ToolboxGroups.Add(new NodeToolboxGroupViewModel("Favorites", language.GetString("Node_Group_Favorites")) { IsExpanded = false });
 
-        // Add categorized groups
         foreach (var (groupKey, resourceKey, _) in ToolboxGroupDefinitions)
         {
             ToolboxGroups.Add(new NodeToolboxGroupViewModel(groupKey, language.GetString(resourceKey))
@@ -78,7 +76,6 @@ public partial class NodeEditorViewModel
         var byKey = ToolboxItems.ToDictionary(item => item.TypeKey, StringComparer.Ordinal);
         var favorites = _favoriteNodeTypes.ToHashSet(StringComparer.Ordinal);
 
-        // Update flat VisibleToolboxItems (for legacy bindings and tests)
         foreach (var key in _favoriteNodeTypes.Distinct(StringComparer.Ordinal))
         {
             if (byKey.TryGetValue(key, out var item) && (keyword.Length == 0 || item.Matches(keyword)))
@@ -95,13 +92,11 @@ public partial class NodeEditorViewModel
             VisibleToolboxItems.Add(item);
         }
 
-        // Update categorized groups
         if (ToolboxGroups.Count == 0)
         {
             return;
         }
 
-        // Group 0: Favorites
         var favoritesGroup = ToolboxGroups[0];
         favoritesGroup.Items.Clear();
         foreach (var key in _favoriteNodeTypes.Distinct(StringComparer.Ordinal))
@@ -121,7 +116,6 @@ public partial class NodeEditorViewModel
             favoritesGroup.IsExpanded = false;
         }
 
-        // Groups 1..N: Coarse-grained categories
         for (var i = 0; i < ToolboxGroupDefinitions.Length; i++)
         {
             var (_, _, categories) = ToolboxGroupDefinitions[i];

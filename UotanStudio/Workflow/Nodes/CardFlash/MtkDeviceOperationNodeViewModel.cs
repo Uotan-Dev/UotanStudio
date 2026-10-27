@@ -15,9 +15,9 @@ namespace UotanStudio.Workflow.Nodes;
 /// 分区表修复或整片转储操作。</para>
 /// </summary>
 /// <remarks>
-/// <para>Write, erase, GPT repair and return-to-Boot-ROM actions require the Confirm input before any device byte
+/// Write, erase, GPT repair and return-to-Boot-ROM actions require the Confirm input before any device byte
 /// is sent. The node refuses a USB session handle because a lease cannot outlive the transaction that opened it;
-/// USB targets are connected inside this node through the shared device monitor.</para>
+/// USB targets are connected inside this node through the shared device monitor.
 /// <para>写入、擦除、分区表修复与返回 Boot ROM 在任何设备字节下发之前都要求 Confirm 输入。节点拒绝 USB 会话句柄，
 /// 因为租约无法存活到打开它的事务之外；USB 目标在本节点内部经共享设备监视器连接。</para>
 /// </remarks>

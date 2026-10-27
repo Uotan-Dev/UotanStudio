@@ -6,7 +6,9 @@ using UotanStudio.Workflow.Registry;
 
 namespace UotanStudio.Workflow.Nodes;
 
-/// <summary>Composable UI definitions and an explicit interaction effect boundary.</summary>
+/// <summary>Composable UI definitions and an explicit interaction effect boundary.
+/// <para>可组合的 UI 定义，以及显式的交互副作用边界。</para>
+/// </summary>
 public sealed class InteractionNodeViewModel : FlowNodeViewModel
 {
     private readonly Dictionary<string, InteractionFieldSchema> _fieldSchema = new(StringComparer.Ordinal);
@@ -165,7 +167,9 @@ public sealed class InteractionNodeViewModel : FlowNodeViewModel
     }
 }
 
-/// <summary>Invocation-scoped typed values; a summary never reveals potentially sensitive field contents.</summary>
+/// <summary>Invocation-scoped typed values; a summary never reveals potentially sensitive field contents.
+/// <para>调用范围内的类型化取值；摘要不会暴露可能敏感的字段内容。</para>
+/// </summary>
 public sealed class InteractionRecord(IReadOnlyDictionary<string, InteractionValue> values, InteractionForm schema)
 {
     public IReadOnlyDictionary<string, InteractionValue> Values { get; } = values;

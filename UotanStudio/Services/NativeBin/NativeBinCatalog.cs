@@ -11,7 +11,7 @@ namespace UotanStudio.Services.NativeBin;
 /// </summary>
 /// <param name="Url">Absolute HTTP(S) URL to fetch.
 /// <para>用于下载的完整 HTTP(S) 地址。</para></param>
-/// <param name="IsMirror"><c>true</c> for a non-official mirror of the upstream file.
+/// <param name="IsMirror"><c>true</c> for a non-official mirror of the official release file.
 /// <para>为 <c>true</c> 时表示非官方镜像。</para></param>
 public sealed record NativeBinUrl(string Url, bool IsMirror);
 
@@ -22,8 +22,8 @@ public sealed record NativeBinUrl(string Url, bool IsMirror);
 /// <param name="FileName">File name of the shared library to fetch.<para>要获取的共享库文件名。</para></param>
 /// <param name="ExpectedSha256">Lowercase 64-char SHA-256 hex digest of the artifact.
 /// <para>产物小写 64 字符 SHA-256 十六进制摘要。</para></param>
-/// <param name="Urls">Ordered URLs to try; first entry is the canonical upstream release.
-/// <para>按顺序尝试的 URL 列表；首项为官方上游 Release。</para></param>
+/// <param name="Urls">Ordered URLs to try; first entry is the canonical official release.
+/// <para>按顺序尝试的 URL 列表；首项为官方 Release。</para></param>
 public sealed record NativeBinEntry(string Rid, string FileName, string ExpectedSha256, IReadOnlyList<NativeBinUrl> Urls);
 
 /// <summary>

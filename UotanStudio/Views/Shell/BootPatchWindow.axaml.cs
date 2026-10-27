@@ -7,7 +7,9 @@ using UotanStudio.ViewModels;
 
 namespace UotanStudio.Views.Shell;
 
-/// <summary>Native boot patch window.</summary>
+/// <summary>Native boot patch window.
+/// <para>原生 boot 补丁窗口。</para>
+/// </summary>
 public partial class BootPatchWindow : Window
 {
     private readonly LocalizedOptionSet _fileSourceOptions =

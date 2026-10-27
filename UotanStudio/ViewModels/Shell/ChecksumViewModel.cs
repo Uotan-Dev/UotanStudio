@@ -93,16 +93,28 @@ public sealed partial class ChecksumViewModel : ObservableObject
     /// </summary>
     public bool CanVerify => HasFile && !IsBusy;
 
-    /// <summary>MD5 复制是否可用。 Whether the MD5 copy button is enabled.</summary>
+    /// <summary>
+    /// Whether the MD5 copy button is enabled.
+    /// <para>MD5 复制是否可用。</para>
+    /// </summary>
     public bool CanCopyMd5 => HasFile && Md5Value.Length > 0;
 
-    /// <summary>SHA1 复制是否可用。 Whether the SHA1 copy button is enabled.</summary>
+    /// <summary>
+    /// Whether the SHA1 copy button is enabled.
+    /// <para>SHA1 复制是否可用。</para>
+    /// </summary>
     public bool CanCopySha1 => HasFile && Sha1Value.Length > 0;
 
-    /// <summary>SHA256 复制是否可用。 Whether the SHA256 copy button is enabled.</summary>
+    /// <summary>
+    /// Whether the SHA256 copy button is enabled.
+    /// <para>SHA256 复制是否可用。</para>
+    /// </summary>
     public bool CanCopySha256 => HasFile && Sha256Value.Length > 0;
 
-    /// <summary>CRC 复制是否可用。 Whether the CRC copy button is enabled.</summary>
+    /// <summary>
+    /// Whether the CRC copy button is enabled.
+    /// <para>CRC 复制是否可用。</para>
+    /// </summary>
     public bool CanCopyCrc => HasFile && CrcValue.Length > 0;
 
     /// <summary>
@@ -119,10 +131,16 @@ public sealed partial class ChecksumViewModel : ObservableObject
     /// </summary>
     public bool CanPaste => HasFile && HasAnyValue;
 
-    /// <summary>是否已有比对结论（驱动勾/叉显示）。 Whether a comparison verdict exists.</summary>
+    /// <summary>
+    /// Whether a comparison verdict exists.
+    /// <para>是否已有比对结论（驱动勾/叉显示）。</para>
+    /// </summary>
     public bool HasMatchResult => MatchResult != ChecksumMatchResult.None;
 
-    /// <summary>比对是否一致（绿勾），否则显示红叉。 Whether the pasted text matched (green tick otherwise red cross).</summary>
+    /// <summary>
+    /// Whether the pasted text matched (green tick otherwise red cross).
+    /// <para>比对是否一致（绿勾），否则显示红叉。</para>
+    /// </summary>
     public bool PasteIsCorrect => MatchResult == ChecksumMatchResult.Correct;
 
     /// <summary>

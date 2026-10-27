@@ -39,7 +39,9 @@ public enum FlashRowState
 /// </summary>
 public sealed partial class FlashPartitionEntry : ObservableObject
 {
-    /// <summary>The explicit operation represented by an imported script row, if any.</summary>
+    /// <summary>The explicit operation represented by an imported script row, if any.
+    /// <para>导入脚本行所表示的显式操作；没有则为空。</para>
+    /// </summary>
     public FlashStep? Step { get; init; }
     /// <summary>Whether the row is selected. <para>是否勾选该分区。</para></summary>
     [ObservableProperty]
@@ -158,9 +160,9 @@ public sealed partial class FlashViewModel : ObservableObject
 
     /// <summary>
     /// Entries currently subscribed to <see cref="FlashPartitionEntry.PropertyChanged"/>; a Reset notification
-    /// no longer exposes the old items, so this record is what lets them be unsubscribed.
-    /// <para>已订阅 <see cref="FlashPartitionEntry.PropertyChanged"/> 的条目；集合发出 Reset 通知时旧条目已经
-    /// 不可见，必须靠这份记录退订，避免残留订阅。</para>
+    /// replaces the item collection, so this record keeps the entries that still need unsubscribing.
+    /// <para>已订阅 <see cref="FlashPartitionEntry.PropertyChanged"/> 的条目；集合发出 Reset 通知时会替换条目集合，
+    /// 必须靠这份记录退订，避免残留订阅。</para>
     /// </summary>
     private readonly HashSet<FlashPartitionEntry> _subscribedEntries = [];
 

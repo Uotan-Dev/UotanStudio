@@ -8,7 +8,9 @@ namespace UotanStudio.Workflow.Nodes;
 /// </summary>
 public partial class NodeConnectionViewModel : ViewModelBase
 {
-    /// <summary>Whether this connection is selected on the canvas.</summary>
+    /// <summary>Whether this connection is selected on the canvas.
+    /// <para>该连接在画布上是否被选中。</para>
+    /// </summary>
     public bool IsSelected
     {
         get;

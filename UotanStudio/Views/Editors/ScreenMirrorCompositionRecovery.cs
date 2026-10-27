@@ -6,17 +6,13 @@ namespace UotanStudio.Views.Editors;
 /// <para>跟踪合成表面生命周期：使在途探测与呈现失效的代际令牌，以及失败的表面是否允许重新构建。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// A dock float, a tab switch or a rebuilt view detaches the visual while the session keeps its surface, so
 /// every probe and every queued presentation must prove that it still owns the current generation before it
 /// touches the surface. A presentation failure caused by a transient host change clears on the next attach;
 /// only a compositor capability failure is terminal for the session.
-/// </para>
-/// <para>
-/// 停靠浮动、标签切换或视图重建会分离可视对象，而会话保留其表面，因此每次探测与每次排队呈现都必须在操作
+/// <para>停靠浮动、标签切换或视图重建会分离可视对象，而会话保留其表面，因此每次探测与每次排队呈现都必须在操作
 /// 表面前证明自己仍持有当前代际。宿主瞬态变化引起的呈现失败会在下次挂载时清除；只有合成器能力失败才对
-/// 本会话终止。
-/// </para>
+/// 本会话终止。</para>
 /// </remarks>
 internal sealed class ScreenMirrorCompositionRecovery
 {
@@ -42,7 +38,7 @@ internal sealed class ScreenMirrorCompositionRecovery
     }
 
     /// <summary>
-    /// Gets whether the current surface can no longer present; consumers fall back to bitmap output.
+    /// Gets whether the current surface cannot present; consumers fall back to bitmap output.
     /// <para>获取当前表面是否已无法呈现；消费方会回退到位图输出。</para>
     /// </summary>
     /// <value>
@@ -74,8 +70,8 @@ internal sealed class ScreenMirrorCompositionRecovery
     }
 
     /// <summary>
-    /// Starts a probe and returns its generation, or 0 when probing is no longer allowed.
-    /// <para>开始一次探测并返回其代际；不再允许探测时返回 0。</para>
+    /// Starts a probe and returns its generation, or 0 when probing is not allowed.
+    /// <para>开始一次探测并返回其代际；不允许探测时返回 0。</para>
     /// </summary>
     /// <returns>
     /// The generation the probe must match, or 0 for a terminal compositor.
@@ -136,8 +132,8 @@ internal sealed class ScreenMirrorCompositionRecovery
     /// successful attach.
     /// <para>记录一次失败的挂载或呈现，并报告它是否是自上次成功挂载以来的首次失败。</para>
     /// </summary>
-    /// <param name="terminal">Whether the compositor can no longer provide a surface this session.
-    /// <para>合成器本会话是否不再可能提供表面。</para></param>
+    /// <param name="terminal">Whether the compositor cannot provide a surface this session.
+    /// <para>合成器本会话是否已不可能提供表面。</para></param>
     /// <returns>
     /// True for the first failure of the current episode; callers log and notify only once.
     /// <para>当前失败过程的首次失败为真；调用方只记录与通知一次。</para>

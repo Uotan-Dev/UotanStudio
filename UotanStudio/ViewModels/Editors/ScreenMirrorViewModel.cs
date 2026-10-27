@@ -74,7 +74,9 @@ public partial class ScreenMirrorViewModel : Document, ITool
     private volatile bool _disposed;
     private int _sessionGeneration;
 
-    /// <summary>Raised on the audio thread after the output sink opened successfully.</summary>
+    /// <summary>Raised on the audio thread after the output sink opened successfully.
+    /// <para>输出接收端成功打开后在音频线程触发。</para>
+    /// </summary>
     public event EventHandler? AudioSinkOpened;
 
     /// <summary>
@@ -104,7 +106,9 @@ public partial class ScreenMirrorViewModel : Document, ITool
     /// </summary>
     public bool AudioEnabled => StreamOptions?.Audio ?? false;
 
-    /// <summary>Raised on the UI thread when a GPU frame is available or the fallback bitmap is updated; not a display-present timestamp.</summary>
+    /// <summary>Raised on the UI thread when a GPU frame is available or the fallback bitmap is updated; not a display-present timestamp.
+    /// <para>GPU 帧可用或回退位图更新时在 UI 线程触发；不是显示呈现时间戳。</para>
+    /// </summary>
     public event EventHandler? FramePresented;
 
     private long _receivedFrames, _decodedFrames, _uploadedFrames, _receivedBytes;
@@ -443,17 +447,13 @@ public partial class ScreenMirrorViewModel : Document, ITool
     /// 并把阻塞式拆除交给线程池，不把视图模型标记为已释放。</para>
     /// </summary>
     /// <remarks>
-    /// <para>
     /// Only the state reset and the frame release run on the calling thread. Waiting for the video, audio and control
     /// pumps and closing the client, the borrowed ADB session and the device lease wait on socket timeouts and native
     /// teardown, so they run in <see cref="TearDownSession"/> in the order a synchronous teardown used: stop the
     /// pumps, release the client, then the token source.
-    /// </para>
-    /// <para>
-    /// 只有状态复位与帧释放在调用线程执行。等待视频、音频与控制泵结束，以及关闭客户端、归还借用的 ADB 会话与设备
+    /// <para>只有状态复位与帧释放在调用线程执行。等待视频、音频与控制泵结束，以及关闭客户端、归还借用的 ADB 会话与设备
     /// 租约，都要等 socket 超时和原生拆除，因此由 <see cref="TearDownSession"/> 按同步拆除的顺序在后台执行：
-    /// 先停泵、再释放客户端、最后释放令牌源。
-    /// </para>
+    /// 先停泵、再释放客户端、最后释放令牌源。</para>
     /// </remarks>
     private void StopSessionCore()
     {

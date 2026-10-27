@@ -60,13 +60,9 @@ public partial class ScreenMirrorViewModel
     /// <para>获取最新发布的 scrcpy 服务端，并安装供下一次会话使用。</para>
     /// </summary>
     /// <remarks>
-    /// <para>
     /// A running session keeps the jar it already deployed: the version is fixed when the arguments are
     /// built, so the new artifact takes effect on the next connect.
-    /// </para>
-    /// <para>
-    /// 已开始的会话仍使用它已经部署的 jar：版本在构建参数时即已确定，因此新产物从下一次连接生效。
-    /// </para>
+    /// <para>已开始的会话仍使用它已经部署的 jar：版本在构建参数时即已确定，因此新产物从下一次连接生效。</para>
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanUpdateMirrorServer))]
     private async Task UpdateMirrorServerAsync()

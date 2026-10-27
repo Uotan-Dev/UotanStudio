@@ -523,7 +523,7 @@ internal static class DevicePropertyReader
     /// </summary>
     /// <param name="dump">Base-cluster dump containing a <c>/proc/cmdline</c> block.<para>包含 <c>/proc/cmdline</c> 段的基础信息转储。</para></param>
     /// <param name="getString">Resolves a localized resource key into display text.<para>将本地化资源键解析为显示文本。</para></param>
-    /// <returns>SoC, board id, lock state and slot; absent values resolve to "--".<para>SoC、主板 ID、锁状态与槽位；缺失值解析为 "--"。</returns>
+    /// <returns>SoC, board id, lock state and slot; absent values resolve to "--".<para>SoC、主板 ID、锁状态与槽位；缺失值解析为 "--"。</para></returns>
     internal static HarmonyBootDetails ParseHarmonyBootDetails(string dump, Func<string, string> getString)
     {
         var parameters = ParseCommandLine(ExtractHarmonyCommandLine(dump));
@@ -554,7 +554,7 @@ internal static class DevicePropertyReader
     /// <para>从 DisplayManagerService 转储读取主显示屏分辨率。</para>
     /// </summary>
     /// <param name="dump">DisplayManagerService dump text.<para>DisplayManagerService 转储文本。</para></param>
-    /// <returns>Width x height, or "--" when the display block is absent.<para>宽 x 高；缺少显示屏段时返回 "--"。</returns>
+    /// <returns>Width x height, or "--" when the display block is absent.<para>宽 x 高；缺少显示屏段时返回 "--"。</para></returns>
     internal static string ParseHarmonyResolution(string dump)
     {
         int? width = null;
@@ -590,7 +590,7 @@ internal static class DevicePropertyReader
     /// <para>将 HarmonyOS 显示密度比例换算为 DPI 数值。</para>
     /// </summary>
     /// <param name="dump">DisplayManagerService dump text.<para>DisplayManagerService 转储文本。</para></param>
-    /// <returns>Density in dots per inch, or "--" when no density is reported.<para>以 DPI 表示的密度；未报告密度时返回 "--"。</returns>
+    /// <returns>Density in dots per inch, or "--" when no density is reported.<para>以 DPI 表示的密度；未报告密度时返回 "--"。</para></returns>
     internal static string ParseHarmonyDensity(string dump)
     {
         foreach (var line in dump.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))

@@ -20,7 +20,9 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// <summary>Prevents authoring changes while this node belongs to an executing editor.</summary>
     internal bool IsEditingLocked { get; set; }
 
-    /// <summary>Last execution or validation error, without changing the execution result.</summary>
+    /// <summary>Last execution or validation error, without changing the execution result.
+    /// <para>最近一次执行或校验错误，不改变执行结果本身。</para>
+    /// </summary>
     public string ExecutionError
     {
         get;
@@ -57,7 +59,9 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// <para><see cref="ValidationMessage"/> 非 <see langword="null"/> 时为 <see langword="true"/>。</para></value>
     public bool HasValidationError => _validationMessage.Length > 0;
 
-    /// <summary>Inputs currently exposed on the canvas; persisted inputs remain unchanged.</summary>
+    /// <summary>Inputs currently exposed on the canvas; persisted inputs remain unchanged.
+    /// <para>画布当前暴露的输入；已持久化的输入保持不变。</para>
+    /// </summary>
     public ObservableCollection<NodeConnectorViewModel> CanvasInputs { get; } = [];
 
     internal void RefreshCanvasInputs(bool compact)
@@ -97,7 +101,9 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
         }
     } = string.Empty;
 
-    /// <summary>Gets the localized title used by the node editor.</summary>
+    /// <summary>Gets the localized title used by the node editor.
+    /// <para>获取节点编辑器使用的本地化标题。</para>
+    /// </summary>
     public string LocalizedTitle => LanguageService.Instance.GetString(GetTitleResourceKey());
 
     /// <summary>
@@ -116,7 +122,9 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
         }
     }
 
-    /// <summary>Canvas and properties header: the custom name when set, otherwise the localized title.</summary>
+    /// <summary>Canvas and properties header: the custom name when set, otherwise the localized title.
+    /// <para>画布与属性面板标题：设置了自定义名称时用它，否则用本地化标题。</para>
+    /// </summary>
     public string DisplayHeader => string.IsNullOrWhiteSpace(CustomName) ? LocalizedTitle : CustomName;
 
     private string GetTitleResourceKey()
@@ -255,7 +263,9 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
                 ? AccentBorderBrush
                 : IdleBorderBrush;
 
-    /// <summary>Gets the stronger border thickness used for selected nodes.</summary>
+    /// <summary>Gets the stronger border thickness used for selected nodes.
+    /// <para>获取选中节点使用的加粗边框粗细。</para>
+    /// </summary>
     public Thickness NodeBorderThickness => IsSelected ? new Thickness(3) : new Thickness(2);
 
     /// <summary>
@@ -319,7 +329,9 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     /// </summary>
     public virtual bool IsProjectImageNode => false;
 
-    /// <summary>Whether the original node implementation is unavailable and execution must be blocked.</summary>
+    /// <summary>Whether the original node implementation is unavailable and execution must be blocked.
+    /// <para>原始节点实现是否不可用、因而必须阻止执行。</para>
+    /// </summary>
     public virtual bool IsUnavailable => false;
 
     /// <summary>

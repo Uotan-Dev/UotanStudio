@@ -140,6 +140,7 @@ public partial class ApkEditorViewModel : Document, ITool
     /// <summary>
     /// Gets whether the install action has a valid APK and an online selected ADB device.
     /// Fastboot, recovery and bootrom devices cannot receive an APK install command.
+    /// <para>获取安装操作是否具备有效 APK 与在线的已选 ADB 设备；Fastboot、recovery 与 bootrom 设备无法接收 APK 安装命令。</para>
     /// </summary>
     public bool CanInstall => !IsInstalling
         && !string.IsNullOrWhiteSpace(FilePath)
@@ -147,13 +148,16 @@ public partial class ApkEditorViewModel : Document, ITool
         && DeviceViewModel.Instance?.SelectedDevice is { Protocol: DeviceProtocolKind.Adb, State: var state }
         && string.Equals(state, "device", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Refreshes the install button state after device selection or connection changes.</summary>
+    /// <summary>Refreshes the install button state after device selection or connection changes.
+    /// <para>设备选择或连接变化后刷新安装按钮状态。</para>
+    /// </summary>
     public void RefreshInstallAvailability() => OnPropertyChanged(nameof(CanInstall));
 
     partial void OnIsInstallingChanged(bool value) => OnPropertyChanged(nameof(CanInstall));
 
     /// <summary>
     /// Extracts every APK entry into the directory containing the APK.
+    /// <para>把 APK 内每个条目解压到 APK 所在目录。</para>
     /// </summary>
     public async Task ExtractToContainingDirectoryAsync(CancellationToken cancellationToken = default)
     {
@@ -177,7 +181,9 @@ public partial class ApkEditorViewModel : Document, ITool
         }, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Installs this APK on the currently selected online ADB device.</summary>
+    /// <summary>Installs this APK on the currently selected online ADB device.
+    /// <para>把该 APK 安装到当前选中的在线 ADB 设备。</para>
+    /// </summary>
     public async Task<FlashResult> InstallToSelectedDeviceAsync(CancellationToken cancellationToken = default)
     {
         var device = DeviceViewModel.Instance?.SelectedDevice;

@@ -368,8 +368,8 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
     /// <param name="path">The scheme file to read. <para>要读取的 Scheme 文件。</para></param>
     /// <param name="cancellationToken">Cancels the bounded read. <para>取消有界读取。</para></param>
     /// <returns><see langword="true"/> when an unsigned or validly signed package was loaded; <see langword="false"/>
-    /// when the file is unreadable or its signature no longer matches its content.
-    /// <para>成功加载未签名或签名有效的软件包时返回 <see langword="true"/>；文件不可读或其签名与内容不再匹配时返回 <see langword="false"/>。</para></returns>
+    /// when the file is unreadable or its signature does not match its content.
+    /// <para>成功加载未签名或签名有效的软件包时返回 <see langword="true"/>；文件不可读或其签名与内容不匹配时返回 <see langword="false"/>。</para></returns>
     public async Task<bool> LoadAsync(string path, CancellationToken cancellationToken = default)
     {
         var package = await SchemeFile.LoadAsync(path, cancellationToken).ConfigureAwait(true);

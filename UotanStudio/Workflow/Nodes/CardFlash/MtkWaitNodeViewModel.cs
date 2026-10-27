@@ -11,8 +11,8 @@ namespace UotanStudio.Workflow.Nodes;
 /// <para>联发科等待节点：轮询共享设备监视器，直到出现一个 MTK 端点（可选按序列号匹配），并把该目标发布给操作节点。</para>
 /// </summary>
 /// <remarks>
-/// <para>USB Boot ROM discovery and re-enumeration remain the device monitor's responsibility; this node only
-/// observes its scan results and never opens a USB handle.</para>
+/// USB Boot ROM discovery and re-enumeration remain the device monitor's responsibility; this node only
+/// observes its scan results and never opens a USB handle.
 /// <para>USB Boot ROM 的发现与重新枚举仍由设备监视器负责；本节点只观察其扫描结果，绝不打开 USB 句柄。</para>
 /// </remarks>
 public sealed class MtkWaitNodeViewModel : FlowNodeViewModel

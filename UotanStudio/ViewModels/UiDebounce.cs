@@ -28,8 +28,8 @@ internal sealed class UiDebounce(Action callback, int intervalMs = 250)
     }
 
     /// <summary>
-    /// Stops the countdown; a queued callback no longer fires.
-    /// <para>停止计时，已排队的回调不再触发。</para>
+    /// Stops the countdown; a queued callback does not fire.
+    /// <para>停止计时，已排队的回调不会触发。</para>
     /// </summary>
     public void Stop() => _timer?.Stop();
 

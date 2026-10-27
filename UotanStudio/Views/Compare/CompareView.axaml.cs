@@ -90,28 +90,52 @@ public partial class CompareView : UserControl
     /// </summary>
     private sealed class ColumnVisuals(CompareColumnViewModel column, ContentControl container)
     {
-        /// <summary>本列视图模型。 The column view model.</summary>
+        /// <summary>
+        /// The column view model.
+        /// <para>本列视图模型。</para>
+        /// </summary>
         public CompareColumnViewModel Column { get; } = column;
 
-        /// <summary>承载列模板的容器。 The container hosting the column template.</summary>
+        /// <summary>
+        /// The container hosting the column template.
+        /// <para>承载列模板的容器。</para>
+        /// </summary>
         public ContentControl Container { get; } = container;
 
-        /// <summary>本列当前显示的行列表；目录树列没有行列表。 The row list shown by this column; tree columns have none.</summary>
+        /// <summary>
+        /// The row list shown by this column; tree columns have none.
+        /// <para>本列当前显示的行列表；目录树列没有行列表。</para>
+        /// </summary>
         public ListBox? List { get; set; }
 
-        /// <summary>行列表内部滚动容器。 The row list's inner scroll container.</summary>
+        /// <summary>
+        /// The row list's inner scroll container.
+        /// <para>行列表内部滚动容器。</para>
+        /// </summary>
         public ScrollViewer? Scroll { get; set; }
 
-        /// <summary>浏览文本编辑器（文本文件）。 The browsing text editor (text files).</summary>
+        /// <summary>
+        /// The browsing text editor (text files).
+        /// <para>浏览文本编辑器（文本文件）。</para>
+        /// </summary>
         public TextEditor? BrowseEditor { get; set; }
 
-        /// <summary>文本对比编辑器。 The text-comparison editor.</summary>
+        /// <summary>
+        /// The text-comparison editor.
+        /// <para>文本对比编辑器。</para>
+        /// </summary>
         public TextEditor? CompareEditor { get; set; }
 
-        /// <summary>浏览编辑器是否已接线（含列属性监听）。 Whether the browsing editor is wired up (including the column listener).</summary>
+        /// <summary>
+        /// Whether the browsing editor is wired up (including the column listener).
+        /// <para>浏览编辑器是否已接线（含列属性监听）。</para>
+        /// </summary>
         public bool BrowseWired { get; set; }
 
-        /// <summary>列属性变化处理器（用于退订）。 The column property-change handler (kept for unsubscribing).</summary>
+        /// <summary>
+        /// The column property-change handler (kept for unsubscribing).
+        /// <para>列属性变化处理器（用于退订）。</para>
+        /// </summary>
         public PropertyChangedEventHandler? ColumnHandler { get; set; }
     }
 

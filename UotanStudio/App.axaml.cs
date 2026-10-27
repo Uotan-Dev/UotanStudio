@@ -57,7 +57,7 @@ public partial class App : Application
     /// <c>DeviceMonitorService</c> provides no type-level global singleton. The container registration
     /// wins once it exists; before that, the lazily created composition-root fallback is used.
     /// <para>组合根拥有、在桌面退出时释放的唯一设备监视实例；<c>DeviceMonitorService</c> 不提供类型级全局单例。
-    /// 容器注册存在时优先取容器实例；此前使用惰性创建的组合根回退实例。</para>
+    /// 容器注册存在时优先取容器实例，否则使用惰性创建的组合根回退实例。</para>
     /// </summary>
     /// <value>The shared desktop device monitor.<para>共享的桌面设备监视实例。</para></value>
     internal static DeviceMonitorService DeviceMonitor =>

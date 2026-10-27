@@ -12,8 +12,8 @@ namespace UotanStudio.Workflow.Nodes;
 /// 并登记无条件释放。</para>
 /// </summary>
 /// <remarks>
-/// <para>The node never discovers USB Boot ROM ports by itself; a USB lease belongs to one device transaction and
-/// cannot outlive it, so the node reports that path as unsupported instead of holding a stale handle.</para>
+/// The node never discovers USB Boot ROM ports by itself; a USB lease belongs to one device transaction and
+/// cannot outlive it, so the node reports that path as unsupported instead of holding a stale handle.
 /// <para>本节点不自行发现 USB Boot ROM 端口；USB 租约属于单次设备事务，无法跨节点存活，因此该路径会被明确报告为不支持，
 /// 而不是持有一个过期句柄。</para>
 /// </remarks>

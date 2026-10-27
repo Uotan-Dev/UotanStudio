@@ -66,7 +66,9 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
         }
     }
 
-    /// <summary>Bounded display of an execution result; binary buffers are never formatted as text.</summary>
+    /// <summary>Bounded display of an execution result; binary buffers are never formatted as text.
+    /// <para>执行结果的有界显示；二进制缓冲区从不按文本格式化。</para>
+    /// </summary>
     public string DataPreview
     {
         get
@@ -146,7 +148,9 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// <para>新发布的候选。</para></param>
     internal void ApplyTrackedChoices(IReadOnlyList<NodePortChoice> choices) => Choices = choices;
 
-    /// <summary>Whether execution requires a bound value or a configured default.</summary>
+    /// <summary>Whether execution requires a bound value or a configured default.
+    /// <para>执行时是否必须有绑定值或已配置默认值。</para>
+    /// </summary>
     public bool IsRequired { get; set; }
 
     /// <summary>
@@ -159,25 +163,39 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// <para>声明的角色；非流端口或无角色端口为 <see cref="NodeFlowRole.None"/>。</para></value>
     public NodeFlowRole FlowRole { get; set; }
 
-    /// <summary>Whether encapsulation should publish this parameter on the composite interface.</summary>
+    /// <summary>Whether encapsulation should publish this parameter on the composite interface.
+    /// <para>封装时是否把该参数发布到组合节点接口。</para>
+    /// </summary>
     public bool ExposeOnComposite { get; set; }
 
-    /// <summary>Whether this input uses a selection editor.</summary>
+    /// <summary>Whether this input uses a selection editor.
+    /// <para>该输入是否使用选择编辑器。</para>
+    /// </summary>
     public bool HasChoices => Choices.Count > 0;
 
-    /// <summary>Optional schema-owned guidance; it is not part of persisted workflow data.</summary>
+    /// <summary>Optional schema-owned guidance; it is not part of persisted workflow data.
+    /// <para>由 schema 提供的可选说明；不属于持久化的工作流数据。</para>
+    /// </summary>
     public string? HintResourceKey { get; init; }
 
-    /// <summary>Optional localized display mapping for stable string output values.</summary>
+    /// <summary>Optional localized display mapping for stable string output values.
+    /// <para>稳定字符串输出值的可选本地化显示映射。</para>
+    /// </summary>
     public string? ValueResourcePrefix { get; init; }
 
-    /// <summary>Whether this connector has format-specific editing guidance.</summary>
+    /// <summary>Whether this connector has format-specific editing guidance.
+    /// <para>该连接器是否有特定于格式的编辑说明。</para>
+    /// </summary>
     public bool HasHint => HintResourceKey is not null;
 
-    /// <summary>Localized guidance describing the accepted value or format dialect.</summary>
+    /// <summary>Localized guidance describing the accepted value or format dialect.
+    /// <para>描述可接受取值或格式方言的本地化说明。</para>
+    /// </summary>
     public string LocalizedHint => HintResourceKey is null ? string.Empty : LanguageService.Instance.GetString(HintResourceKey);
 
-    /// <summary>Selected option mapped to the ordinary persisted initial value.</summary>
+    /// <summary>Selected option mapped to the ordinary persisted initial value.
+    /// <para>选中项到普通持久化初始值的映射。</para>
+    /// </summary>
     public NodePortChoice? SelectedChoice
     {
         get => Choices.FirstOrDefault(choice => string.Equals(choice.Value, Convert.ToString(InitialValue), StringComparison.Ordinal));
@@ -190,22 +208,34 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
         }
     }
 
-    /// <summary>Whether text accepts line breaks in the properties editor.</summary>
+    /// <summary>Whether text accepts line breaks in the properties editor.
+    /// <para>属性编辑器中文本是否接受换行。</para>
+    /// </summary>
     public bool IsMultiline { get; init; }
 
-    /// <summary>Minimum height for single-line or multiline input.</summary>
+    /// <summary>Minimum height for single-line or multiline input.
+    /// <para>单行或多行输入的最小高度。</para>
+    /// </summary>
     public double EditorMinHeight => IsMultiline ? 76 : 24;
 
-    /// <summary>Whether the browse action must select a folder.</summary>
+    /// <summary>Whether the browse action must select a folder.
+    /// <para>浏览操作是否必须选择目录。</para>
+    /// </summary>
     public bool IsDirectoryPath { get; init; }
 
-    /// <summary>Suggested suffix used by output file pickers.</summary>
+    /// <summary>Suggested suffix used by output file pickers.
+    /// <para>输出文件选择器使用的建议后缀。</para>
+    /// </summary>
     public string OutputExtension { get; init; } = "img";
 
-    /// <summary>Default output name when no path has been entered.</summary>
+    /// <summary>Default output name when no path has been entered.
+    /// <para>未输入路径时使用的默认输出名。</para>
+    /// </summary>
     public string SuggestedOutputName { get; init; } = "super.img";
 
-    /// <summary>Whether a free-text editor is used rather than a choice editor.</summary>
+    /// <summary>Whether a free-text editor is used rather than a choice editor.
+    /// <para>是否使用自由文本编辑器而非选项编辑器。</para>
+    /// </summary>
     public bool UsesTextEditor => IsTextOrPathPort && !HasChoices && !HasConnectedSource;
 
     /// <summary>
@@ -218,7 +248,9 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
            && IsInput
            && PortType is NodePortType.Path or NodePortType.Text or NodePortType.Number or NodePortType.Boolean;
 
-    /// <summary>Sensitive values are excluded from saved initial values and result previews.</summary>
+    /// <summary>Sensitive values are excluded from saved initial values and result previews.
+    /// <para>敏感值不写入保存的初始值，也不出现在结果预览中。</para>
+    /// </summary>
     public bool IsSensitive
     {
         get;
@@ -233,7 +265,9 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
         }
     }
 
-    /// <summary>Masks sensitive literal editing without affecting the underlying value.</summary>
+    /// <summary>Masks sensitive literal editing without affecting the underlying value.
+    /// <para>对敏感字面量的编辑做遮蔽，不改变底层取值。</para>
+    /// </summary>
     public char EditorPasswordChar => IsSensitive ? '●' : '\0';
 
     /// <summary>
@@ -301,13 +335,19 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     /// </summary>
     public NodePortType PortType { get; set; } = NodePortType.Any;
 
-    /// <summary>Schema-provided display label, independent of runtime endpoint identity.</summary>
+    /// <summary>Schema-provided display label, independent of runtime endpoint identity.
+    /// <para>schema 提供的显示标签，独立于运行时端点标识。</para>
+    /// </summary>
     public string? DisplayName { get; set; }
 
-    /// <summary>Localized label override without changing a persisted port title or identity.</summary>
+    /// <summary>Localized label override without changing a persisted port title or identity.
+    /// <para>本地化标签覆盖，不改变已持久化的端口标题或标识。</para>
+    /// </summary>
     public string? DisplayResourceKey { get; init; }
 
-    /// <summary>Gets the localized connector name used by the node editor.</summary>
+    /// <summary>Gets the localized connector name used by the node editor.
+    /// <para>获取节点编辑器使用的本地化连接器名称。</para>
+    /// </summary>
     public string LocalizedTitle
     {
         get
@@ -322,7 +362,9 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
         }
     }
 
-    /// <summary>Gets the localized port data type used by the node editor.</summary>
+    /// <summary>Gets the localized port data type used by the node editor.
+    /// <para>获取节点编辑器使用的本地化端口数据类型。</para>
+    /// </summary>
     public string LocalizedPortTypeDisplay => LanguageService.Instance.GetString("Node_PortType_" + PortType);
 
     internal void RefreshLocalization()
@@ -337,17 +379,25 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
         }
     }
 
-    /// <summary>Stable non-localized identifier used by portable workflows and visual plugins.</summary>
+    /// <summary>Stable non-localized identifier used by portable workflows and visual plugins.
+    /// <para>可移植工作流与可视化插件使用的稳定非本地化标识。</para>
+    /// </summary>
     public string PortId
     {
         get;
         set => SetProperty(ref field, value);
     } = string.Empty;
 
-    /// <summary>Configured stable id, or a deterministic compatibility id derived from the legacy title.</summary>
+    /// <summary>
+    /// Configured stable id, or a deterministic compatibility id derived from the title.
+    /// <para>已配置的稳定 id；未配置时为由标题推导的确定性兼容 id。</para>
+    /// </summary>
     public string StableId => string.IsNullOrWhiteSpace(PortId) ? CreateStableId(Title) : PortId;
 
-    /// <summary>Creates a deterministic ASCII id for legacy connectors that only have a title.</summary>
+    /// <summary>
+    /// Creates a deterministic ASCII id for connectors that only have a title.
+    /// <para>为只有标题的连接器生成确定性 ASCII id。</para>
+    /// </summary>
     public static string CreateStableId(string? title)
     {
         if (string.IsNullOrWhiteSpace(title)) return "port";

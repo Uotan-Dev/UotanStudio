@@ -17,14 +17,20 @@ namespace UotanStudio.ViewModels.Devices;
 /// </remarks>
 public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceViewModel? owner = null) : ViewModelBase
 {
-    /// <summary>Creates a single-endpoint device entry.</summary>
+    /// <summary>Creates a single-endpoint device entry.
+    /// <para>创建单端点设备条目。</para>
+    /// </summary>
     public DeviceInfo(DetectedDevice device, DeviceViewModel? owner = null) : this([device], owner) { }
 
-    /// <summary>Verified protocol endpoints for this physical device.</summary>
+    /// <summary>Verified protocol endpoints for this physical device.
+    /// <para>本物理设备已验证的协议端点。</para>
+    /// </summary>
     public IReadOnlyList<DetectedDevice> Connections { get; } = endpoints.Count > 0
         ? endpoints.ToArray() : throw new ArgumentException("A device requires an endpoint.", nameof(endpoints));
 
-    /// <summary>The selected endpoint used for device operations.</summary>
+    /// <summary>The selected endpoint used for device operations.
+    /// <para>用于设备操作的已选端点。</para>
+    /// </summary>
     public DetectedDevice Device { get; private set; } = endpoints[0];
 
     /// <summary>
@@ -45,10 +51,14 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         return device.Target;
     }
 
-    /// <summary>Whether the device has more than one communication endpoint.</summary>
+    /// <summary>Whether the device has more than one communication endpoint.
+    /// <para>设备是否拥有多于一个通信端点。</para>
+    /// </summary>
     public bool HasMultipleConnections => Connections.Count > 1;
 
-    /// <summary>Chooses the protocol endpoint without changing the selected physical device.</summary>
+    /// <summary>Chooses the protocol endpoint without changing the selected physical device.
+    /// <para>选择协议端点，不改变已选物理设备。</para>
+    /// </summary>
     public DetectedDevice SelectedConnection
     {
         get => Device;
@@ -153,13 +163,22 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         }
     }
 
-    /// <summary>稳定键。 Stable key.</summary>
+    /// <summary>
+    /// Stable key.
+    /// <para>稳定键。</para>
+    /// </summary>
     public string Key => Connections[0].GroupId;
 
-    /// <summary>设备序列号。 Device serial.</summary>
+    /// <summary>
+    /// Device serial.
+    /// <para>设备序列号。</para>
+    /// </summary>
     public string Serial => Device.Serial;
 
-    /// <summary>设备状态（device/offline/fastboot/edl/maskrom/loader 等）。 Device state.</summary>
+    /// <summary>
+    /// Device state.
+    /// <para>设备状态（device/offline/fastboot/edl/maskrom/loader 等）。</para>
+    /// </summary>
     public string State
     {
         get => Device.State;
@@ -174,7 +193,10 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         }
     }
 
-    /// <summary>连接模式（ADB/Fastboot/EDL/RKDL）。 Connection mode.</summary>
+    /// <summary>
+    /// Connection mode.
+    /// <para>连接模式（ADB/Fastboot/EDL/RKDL）。</para>
+    /// </summary>
     public string Mode => Device.ProtocolLabel;
 
     /// <summary>
@@ -184,10 +206,16 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// </summary>
     public string EdlSerialPort { get; private set => SetProperty(ref field, value); } = string.Empty;
 
-    /// <summary>协议类型枚举值。 Protocol kind value.</summary>
+    /// <summary>
+    /// Protocol kind value.
+    /// <para>协议类型枚举值。</para>
+    /// </summary>
     public DeviceProtocolKind Protocol => Device.Protocol;
 
-    /// <summary>传输类型（USB/Network/Serial）。 Transport kind (USB/Network/Serial).</summary>
+    /// <summary>
+    /// Transport kind (USB/Network/Serial).
+    /// <para>传输类型（USB/Network/Serial）。</para>
+    /// </summary>
     public string Transport => Device.Transport switch
     {
         DeviceTransportKind.Tcp or DeviceTransportKind.Udp => "Network",
@@ -198,7 +226,10 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         _ => "Unknown",
     };
 
-    /// <summary>设备型号（ro.product.model 或 fastboot product）。 Device model.</summary>
+    /// <summary>
+    /// Device model.
+    /// <para>设备型号（ro.product.model 或 fastboot product）。</para>
+    /// </summary>
     public string Model
     {
         get;
@@ -211,14 +242,20 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         }
     } = string.Empty;
 
-    /// <summary>Android 版本（ro.build.version.release）。 Android version.</summary>
+    /// <summary>
+    /// Android version.
+    /// <para>Android 版本（ro.build.version.release）。</para>
+    /// </summary>
     public string AndroidVersion
     {
         get;
         set => SetProperty(ref field, value);
     } = string.Empty;
 
-    /// <summary>显示名称。 Display name.</summary>
+    /// <summary>
+    /// Display name.
+    /// <para>显示名称。</para>
+    /// </summary>
     public string DisplayName => string.IsNullOrEmpty(Model)
         ? $"{Serial} ({State})"
         : $"{Serial} - {Model} ({State})";
@@ -235,7 +272,10 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// </summary>
     public string ListSubtitle => string.IsNullOrEmpty(State) ? Serial : $"{Serial} · {State}";
 
-    /// <summary>链接端口/地址信息（USB 标识、TCP host:port、串口路径）。 Link/port info.</summary>
+    /// <summary>
+    /// Link/port info.
+    /// <para>链接端口/地址信息（USB 标识、TCP host:port、串口路径）。</para>
+    /// </summary>
     public string LinkPort => Device.Transport switch
     {
         DeviceTransportKind.Tcp or DeviceTransportKind.Udp => Device.Serial,
@@ -245,31 +285,49 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         _ => "Unknown",
     };
 
-    /// <summary>厂商/产品 USB ID（十六进制 VID:PID）。 Vendor/product USB ID.</summary>
+    /// <summary>
+    /// Vendor/product USB ID.
+    /// <para>厂商/产品 USB ID（十六进制 VID:PID）。</para>
+    /// </summary>
     public string UsbIds => Device.VendorId == 0
         ? string.Empty
         : $"{Device.VendorId:X04}:{Device.ProductId:X04}";
 
-    /// <summary>USB 厂商名（按 VendorId 查内置表，未知返回空）。 USB vendor name from the built-in VID table.</summary>
+    /// <summary>
+    /// USB vendor name from the built-in VID table.
+    /// <para>USB 厂商名（按 VendorId 查内置表，未知返回空）。</para>
+    /// </summary>
     public string VendorName => UsbVendorTable.TryGetVendor(Device.VendorId);
 
-    /// <summary>是否为 ADB 设备。 Whether the device is in ADB mode.</summary>
+    /// <summary>
+    /// Whether the device is in ADB mode.
+    /// <para>是否为 ADB 设备。</para>
+    /// </summary>
     public bool IsAdb => Device.Protocol == DeviceProtocolKind.Adb;
 
-    /// <summary>Whether a noninteractive root shell was confirmed during the latest ADB scan.</summary>
+    /// <summary>Whether a noninteractive root shell was confirmed during the latest ADB scan.
+    /// <para>最近一次 ADB 扫描是否已确认非交互 root shell。</para>
+    /// </summary>
     public bool HasSu
     {
         get;
         set => SetProperty(ref field, value);
     }
 
-    /// <summary>Whether this is an HDC device.</summary>
+    /// <summary>Whether this is an HDC device.
+    /// <para>本设备是否为 HDC 设备。</para>
+    /// </summary>
     public bool IsHdc => Device.Protocol == DeviceProtocolKind.Hdc;
 
-    /// <summary>Whether system details are available.</summary>
+    /// <summary>Whether system details are available.
+    /// <para>系统详情是否可用。</para>
+    /// </summary>
     public bool HasSystemInfo => IsAdb || IsHdc;
 
-    /// <summary>是否为 Fastboot 设备。 Whether the device is in Fastboot mode.</summary>
+    /// <summary>
+    /// Whether the device is in Fastboot mode.
+    /// <para>是否为 Fastboot 设备。</para>
+    /// </summary>
     public bool IsFastboot => Device.Protocol == DeviceProtocolKind.Fastboot;
 
     /// <summary>
@@ -291,10 +349,15 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// </summary>
     public bool SupportsFastbootd => IsAdb || IsFastboot;
 
-    /// <summary>是否为 EDL 设备。 Whether the device is in EDL mode.</summary>
+    /// <summary>
+    /// Whether the device is in EDL mode.
+    /// <para>是否为 EDL 设备。</para>
+    /// </summary>
     public bool IsEdl => Device.Protocol == DeviceProtocolKind.Edl;
 
-    /// <summary>The latest verified EDL wire protocol.</summary>
+    /// <summary>The latest verified EDL wire protocol.
+    /// <para>最近一次验证通过的 EDL 线协议。</para>
+    /// </summary>
     public EdlProtocolState EdlProtocol
     {
         get => Device.EdlProtocol;
@@ -310,7 +373,9 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         }
     }
 
-    /// <summary>Whether Sahara or Firehose has been verified for this endpoint.</summary>
+    /// <summary>Whether Sahara or Firehose has been verified for this endpoint.
+    /// <para>该端点是否已验证 Sahara 或 Firehose。</para>
+    /// </summary>
     public bool HasEdlProtocol => IsEdl && EdlProtocol != EdlProtocolState.Unknown;
 
     /// <summary>
@@ -448,13 +513,22 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         }
     }
 
-    /// <summary>是否为 RKDL 设备。 Whether the device is in RKDL mode.</summary>
+    /// <summary>
+    /// Whether the device is in RKDL mode.
+    /// <para>是否为 RKDL 设备。</para>
+    /// </summary>
     public bool IsRkdl => Device.Protocol == DeviceProtocolKind.Rkdl;
 
-    /// <summary>是否为 MTK 设备。 Whether the device is a MediaTek target.</summary>
+    /// <summary>
+    /// Whether the device is a MediaTek target.
+    /// <para>是否为 MTK 设备。</para>
+    /// </summary>
     public bool IsMtk => Device.Protocol == DeviceProtocolKind.Mtk;
 
-    /// <summary>是否为 iOS 设备。 Whether the device is an Apple (usbmuxd) target.</summary>
+    /// <summary>
+    /// Whether the device is an Apple (usbmuxd) target.
+    /// <para>是否为 iOS 设备。</para>
+    /// </summary>
     public bool IsIos => Device.Protocol == DeviceProtocolKind.Ios;
 
     /// <summary>
@@ -501,7 +575,10 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// </summary>
     public string MtkSocidHex { get; set => SetProperty(ref field, value); } = string.Empty;
 
-    /// <summary>是否已查询到 MTK 身份信息。 Whether MediaTek identity info has been queried.</summary>
+    /// <summary>
+    /// Whether MediaTek identity info has been queried.
+    /// <para>是否已查询到 MTK 身份信息。</para>
+    /// </summary>
     public bool HasMtkInfo => MtkHardware.Length > 0;
 
     /// <summary>
@@ -534,7 +611,10 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// </summary>
     public string IosTrust { get; set => SetProperty(ref field, value); } = string.Empty;
 
-    /// <summary>是否已查询到 iOS 设备信息。 Whether iOS device info has been queried.</summary>
+    /// <summary>
+    /// Whether iOS device info has been queried.
+    /// <para>是否已查询到 iOS 设备信息。</para>
+    /// </summary>
     public bool HasIosInfo => IosName.Length > 0;
 
     /// <summary>
@@ -587,20 +667,31 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         OnPropertyChanged(nameof(HasMtkInfo));
     }
 
-    /// <summary>是否为 USB 直连设备。 Whether the device is connected over USB.</summary>
+    /// <summary>
+    /// Whether the device is connected over USB.
+    /// <para>是否为 USB 直连设备。</para>
+    /// </summary>
     public bool IsUsb => Device.Transport == DeviceTransportKind.Usb;
 
-    /// <summary>是否为网络（TCP/UDP/adb server）设备。 Whether the device is connected over network.</summary>
+    /// <summary>
+    /// Whether the device is connected over network.
+    /// <para>是否为网络（TCP/UDP/adb server）设备。</para>
+    /// </summary>
     public bool IsNetwork => Device.Transport is DeviceTransportKind.Tcp or DeviceTransportKind.Udp;
 
-    /// <summary>Whether this endpoint supports explicit network connection management.</summary>
+    /// <summary>Whether this endpoint supports explicit network connection management.
+    /// <para>该端点是否支持显式网络连接管理。</para>
+    /// </summary>
     public bool CanManageConnection => IsNetwork &&
         Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc or DeviceProtocolKind.Fastboot &&
         owner?.IsConnectionBusy != true;
 
     internal void NotifyConnectionAvailabilityChanged() => OnPropertyChanged(nameof(CanManageConnection));
 
-    /// <summary>是否为串口设备。 Whether the device is connected over a serial port.</summary>
+    /// <summary>
+    /// Whether the device is connected over a serial port.
+    /// <para>是否为串口设备。</para>
+    /// </summary>
     public bool IsSerial => Device.Transport == DeviceTransportKind.Serial;
 
     /// <summary>
@@ -715,7 +806,10 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         }
     } = -1;
 
-    /// <summary>电池信息是否可用。 Whether battery info is available.</summary>
+    /// <summary>
+    /// Whether battery info is available.
+    /// <para>电池信息是否可用。</para>
+    /// </summary>
     public bool HasBattery => BatteryLevel >= 0;
 
     /// <summary>
@@ -740,7 +834,10 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         }
     } = -1;
 
-    /// <summary>内存信息是否可用。 Whether memory info is available.</summary>
+    /// <summary>
+    /// Whether memory info is available.
+    /// <para>内存信息是否可用。</para>
+    /// </summary>
     public bool HasMem => MemLevel >= 0;
 
     /// <summary>
@@ -765,7 +862,10 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         }
     } = -1;
 
-    /// <summary>磁盘信息是否可用。 Whether disk info is available.</summary>
+    /// <summary>
+    /// Whether disk info is available.
+    /// <para>磁盘信息是否可用。</para>
+    /// </summary>
     public bool HasDisk => DiskLevel >= 0;
 
     /// <summary>

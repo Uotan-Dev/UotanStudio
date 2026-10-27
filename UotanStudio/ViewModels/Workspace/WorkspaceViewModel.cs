@@ -128,14 +128,14 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Opens or focuses the screen-mirror document for one device. Each device keeps its own document,
     /// so several mirrors can stay open side by side; reopening the same device focuses its existing
-    /// document instead of creating a duplicate. Slots whose document is no longer shown in its dock
+    /// document instead of creating a duplicate. Slots whose document is not shown in its dock
     /// are dropped first, so reopening a closed device builds a fresh document.
     /// <para>为单个设备打开或聚焦投屏文档。每个设备各自保留一个文档，因此可以同时打开多个投屏；
-    /// 重新打开同一设备时聚焦已有文档而不是创建重复文档。已关闭、不再显示在停靠区的槽位会被先行
+    /// 重新打开同一设备时聚焦已有文档而不是创建重复文档。已关闭、未显示在停靠区的槽位会被先行
     /// 丢弃，因此重新打开已关闭设备时会新建文档。</para>
     /// </summary>
-    /// <param name="deviceKey">Stable device serial or connect key; null or blank selects the legacy
-    /// untargeted document slot. <para>稳定的设备序列号或连接键；null 或空白选择旧的无目标文档槽位。</para></param>
+    /// <param name="deviceKey">Stable device serial or connect key; null or blank selects the
+    /// untargeted document slot. <para>稳定的设备序列号或连接键；null 或空白选择无目标的文档槽位。</para></param>
     /// <returns>The screen-mirror document, or null if the layout is unavailable. <para>投屏文档；布局未就绪时为 null。</para></returns>
     public ScreenMirrorViewModel? OpenScreenMirrorDocument(string? deviceKey = null)
     {
@@ -384,7 +384,9 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         static fullPath => new DexEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
         static (document, fullPath) => document.LoadAsync(fullPath));
 
-    /// <summary>Opens or activates an ELF information document for the supplied file.</summary>
+    /// <summary>Opens or activates an ELF information document for the supplied file.
+    /// <para>为给定文件打开或激活 ELF 信息文档。</para>
+    /// </summary>
     public Task OpenElfAsync(string path) => OpenOrActivateDocumentAsync(
         path, static document => document.FilePath,
         static fullPath => new ElfInfoViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },

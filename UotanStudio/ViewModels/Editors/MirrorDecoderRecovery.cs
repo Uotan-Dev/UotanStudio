@@ -12,17 +12,13 @@ namespace UotanStudio.ViewModels.Editors;
 /// <para>决定流内解码失败能否在下一个关键帧边界重建解码器来恢复，以及重建后的会话应当改用哪个后端。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// A rebuilt decoder cannot join a running GOP: feeding it a delta frame produces artifacts or an immediate
 /// second failure, so recovery waits for a codec configuration packet plus a key frame and asks the server
 /// for one with <c>TYPE_RESET_VIDEO</c>. Only one rebuild is attempted per session; a decoder that fails again
-/// after losing hardware decoding ends the session as before rather than oscillating between backends.
-/// </para>
-/// <para>
-/// 重建后的解码器无法加入正在进行的 GOP：喂入差分帧会产生伪影或立刻二次失败，因此恢复过程等待一个编码器配置包
+/// after losing hardware decoding ends the session rather than oscillating between backends.
+/// <para>重建后的解码器无法加入正在进行的 GOP：喂入差分帧会产生伪影或立刻二次失败，因此恢复过程等待一个编码器配置包
 /// 加上一个关键帧，并用 <c>TYPE_RESET_VIDEO</c> 向服务端请求。每次会话只尝试重建一次；在失去硬件解码后仍失败的
-/// 解码器照旧终止会话，而不是在后端之间来回振荡。
-/// </para>
+/// 解码器照旧终止会话，而不是在后端之间来回振荡。</para>
 /// </remarks>
 internal static class MirrorDecoderRecovery
 {

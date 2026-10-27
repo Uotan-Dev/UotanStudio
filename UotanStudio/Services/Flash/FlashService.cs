@@ -884,11 +884,11 @@ public sealed class FlashService : IFlashService
     /// <summary>RKDL path that programs a partition with an explicitly given loader path, discovered in the image directory when null.
     /// <para>RKDL 路径：按显式给出的 loader 路径刷写分区，为 null 时在镜像目录中自动发现。</para></summary>
     /// <remarks>
-    /// <para>In maskrom mode the loader download and the flash write run in two phases: the loader is
+    /// In maskrom mode the loader download and the flash write run in two phases: the loader is
     /// downloaded on the maskrom lease, that lease is released, the device must re-enumerate as a
     /// Rockchip loader, and only then is a new RKDL session opened for the parameter lookup and
     /// <see cref="RkdlSession.WriteLBA"/>. No bulk command is ever sent over the old maskrom handle; if
-    /// the device does not re-enumerate, the flash fails instead of continuing.</para>
+    /// the device does not re-enumerate, the flash fails instead of continuing.
     /// <para>设备处于 maskrom 模式时，loader 下载与刷写分两阶段执行：先在 maskrom 租约上下载 loader，
     /// 释放该租约，等待设备以 Rockchip loader 模式重枚举，之后才打开新的 RKDL 会话做 parameter 查找与
     /// <see cref="RkdlSession.WriteLBA"/>。绝不会在旧的 maskrom 句柄上发送批量命令；若设备未重枚举，

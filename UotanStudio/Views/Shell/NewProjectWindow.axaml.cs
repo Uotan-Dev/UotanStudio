@@ -45,7 +45,9 @@ public partial class NewProjectWindow : Window, INewProjectDialog
     /// <summary>Queries available bytes; replaceable by window validation without filling a real disk.</summary>
     internal Func<string, long> AvailableSpace { get; set; } = DiskSpaceEstimator.GetFreeBytes;
 
-    /// <summary>Runs creation while the modal form displays progress.</summary>
+    /// <summary>Runs creation while the modal form displays progress.
+    /// <para>在模态表单显示进度的同时执行创建。</para>
+    /// </summary>
     public Func<NewProjectFormResult, Task>? CreateAsync { get; set; }
     public Func<NewProjectFormResult, CancellationToken, Task>? CreateWithCancellationAsync { get; set; }
 
@@ -61,7 +63,9 @@ public partial class NewProjectWindow : Window, INewProjectDialog
     private readonly ProgressMeter _meter = new();
     private int _progressGeneration;
 
-    /// <summary>Updates operation status on the UI thread.</summary>
+    /// <summary>Updates operation status on the UI thread.
+    /// <para>在 UI 线程更新操作状态。</para>
+    /// </summary>
     public void ReportProgress(string status, double? percent = null, (long Processed, long Total)? bytes = null, string? statistics = null)
     {
         ProgressPanel.IsVisible = true;
@@ -90,7 +94,9 @@ public partial class NewProjectWindow : Window, INewProjectDialog
         OperationStats.Text = string.Empty;
     }
 
-    /// <summary>Begins one byte-counted stage; late callbacks from earlier stages are discarded.</summary>
+    /// <summary>Begins one byte-counted stage; late callbacks from earlier stages are discarded.
+    /// <para>开始一个按字节计数的阶段；前一阶段的迟到回调会被丢弃。</para>
+    /// </summary>
     public IProgress<(long Processed, long Total)> BeginByteProgress(string status)
     {
         ResetProgressStats();
@@ -729,7 +735,9 @@ internal sealed partial class NewProjectImageEntry : ObservableObject
     /// <summary>Whether the entry is a payload partition (distinguishes ZIP members in zip mode). <para>是否来自 payload 的分区（ZIP 模式下区分 ZIP 成员与 payload 分区）。</para></summary>
     public bool FromPayload { get; }
 
-    /// <summary>Whether this row represents the complete remote source package.</summary>
+    /// <summary>Whether this row represents the complete remote source package.
+    /// <para>该行是否表示完整的远程源包。</para>
+    /// </summary>
     public bool IsRemoteSource { get; }
 
     /// <summary>Whether this is a group-header row. <para>是否分组头行。</para></summary>
@@ -741,7 +749,9 @@ internal sealed partial class NewProjectImageEntry : ObservableObject
     /// <summary>Tooltip: full path for plain files, container path for inner entries. <para>悬停提示：普通文件显示完整路径，内部条目显示容器路径。</para></summary>
     public string Tip => FilePath ?? ContainerPath + "!/" + (PayloadMemberPath is null ? "" : PayloadMemberPath + "!/") + Name;
 
-    /// <summary>Containing Payload member path for the full nested location tooltip.</summary>
+    /// <summary>Containing Payload member path for the full nested location tooltip.
+    /// <para>用于完整嵌套位置提示的所属 Payload 成员路径。</para>
+    /// </summary>
     public string? PayloadMemberPath { get; }
 
     [ObservableProperty]

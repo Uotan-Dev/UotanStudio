@@ -392,21 +392,21 @@ public sealed partial class DeviceMonitorService
     /// 端点，并在重新打开的 RKDL 会话上执行刷写阶段。</para>
     /// </summary>
     /// <remarks>
-    /// <para>The loader-download lease is always released before the reconnection wait, so no bulk
+    /// The loader-download lease is always released before the reconnection wait, so no bulk
     /// command is ever sent over the old maskrom handle. A loader-download phase that returns
     /// <see langword="null"/> means the device was already in loader mode, and the flash phase runs on
     /// the same lease without a reconnection. The reconnection uses
     /// <see cref="RkdlLoaderTransitionOffer"/> evidence captured from the released lease; a timeout or
     /// missing USB container evidence stops the operation with an error instead of falling back to the
-    /// old session.</para>
+    /// old session.
+    /// The RKDL session cannot observe its own mode transition: its device-info snapshot is taken
+    /// when the session opens. Re-observation therefore happens only through the device layer, and the
+    /// PID-switching transition still needs real-device confirmation.
     /// <para>loader 下载租约总是在等待重连前释放，因此绝不会在旧的 maskrom 句柄上发送批量命令。loader
     /// 下载阶段返回 <see langword="null"/> 表示设备已处于 loader 模式，刷写阶段在同一租约上执行而无需
     /// 重连。重连使用从已释放租约捕获的 <see cref="RkdlLoaderTransitionOffer"/> 证据；超时或缺少 USB
-    /// 容器证据时以错误停止，而不会回退到旧会话。</para>
-    /// <para>The RKDL session cannot observe its own mode transition: its device-info snapshot is taken
-    /// when the session opens. Re-observation therefore happens only through the device layer, and the
-    /// PID-switching transition still needs real-device confirmation.</para>
-    /// <para>RKDL 会话无法观测自身的模式迁移：其设备信息快照在会话打开时拍摄。因此重新观测只通过设备层
+    /// 容器证据时以错误停止，而不会回退到旧会话。
+    /// RKDL 会话无法观测自身的模式迁移：其设备信息快照在会话打开时拍摄。因此重新观测只通过设备层
     /// 进行，切换 PID 的迁移仍需真机确认。</para>
     /// </remarks>
     /// <param name="device">The RKDL device to operate on. <para>要操作的 RKDL 设备。</para></param>

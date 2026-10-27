@@ -14,7 +14,9 @@ namespace UotanStudio.ViewModels.Nodes;
 /// </summary>
 public sealed class VisualPluginWorkspaceViewModel : ViewModelBase, IDisposable
 {
-    /// <summary>Whether the property pane exposes the plugin workspace.</summary>
+    /// <summary>Whether the property pane exposes the plugin workspace.
+    /// <para>属性面板是否显示插件工作区。</para>
+    /// </summary>
     public bool ShowWorkspace { get; }
 
     /// <summary>
@@ -34,10 +36,14 @@ public sealed class VisualPluginWorkspaceViewModel : ViewModelBase, IDisposable
         ? LanguageService.Instance.GetString("Plugin_CodeRuntimeDisabled")
         : string.Empty;
 
-    /// <summary>Installed composite nodes available for isolated graph editing.</summary>
+    /// <summary>Installed composite nodes available for isolated graph editing.
+    /// <para>可用于独立图编辑的已安装组合节点。</para>
+    /// </summary>
     public ObservableCollection<VisualPluginRegistration> EditableVisualPlugins { get; } = [];
 
-    /// <summary>The composite node selected in the property-pane plugin workspace.</summary>
+    /// <summary>The composite node selected in the property-pane plugin workspace.
+    /// <para>属性面板插件工作区中选中的组合节点。</para>
+    /// </summary>
     public VisualPluginRegistration? SelectedVisualPlugin
     {
         get => field;

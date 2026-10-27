@@ -303,11 +303,11 @@ public sealed partial class DeviceMonitorService
 
     /// <summary>
     /// Opens a direct network fastboot lease for a manually registered target, choosing the transport from
-    /// the key prefix (<c>fastboot-tcp:</c> or <c>fastboot-udp:</c>). The AOSP handshake runs while the
+    /// the key prefix (<c>fastboot-tcp:</c> or <c>fastboot-udp:</c>). The fastboot handshake runs while the
     /// session opens, so an unreachable target detaches itself instead of staying in the list as an
     /// offline row.
     /// <para>为手动登记的网络目标打开直连 fastboot 租约，按键前缀（<c>fastboot-tcp:</c> 或
-    /// <c>fastboot-udp:</c>）选择传输。AOSP 握手在打开会话时执行，不可达的目标会自行注销，
+    /// <c>fastboot-udp:</c>）选择传输。fastboot 握手在打开会话时执行，不可达的目标会自行注销，
     /// 而不是以离线行的形式留在列表中。</para>
     /// </summary>
     /// <param name="device">The manually registered fastboot network target.<para>手动登记的 fastboot 网络目标。</para></param>

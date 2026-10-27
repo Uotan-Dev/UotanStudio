@@ -13,49 +13,94 @@ namespace UotanStudio.ViewModels.Workspace;
 /// </summary>
 public static class ExplorerIconPalette
 {
-    /// <summary>目录，包括普通目录与项目文件夹。 Folders, both plain and project folders.</summary>
+    /// <summary>
+    /// Folders, both plain and project folders.
+    /// <para>目录，包括普通目录与项目文件夹。</para>
+    /// </summary>
     public static IBrush Folder { get; } = Create("#D9A03C");
 
-    /// <summary>分区镜像与裸块数据（.img/.bin/.dat 等）。 Partition images and raw block data (.img/.bin/.dat).</summary>
+    /// <summary>
+    /// Partition images and raw block data (.img/.bin/.dat).
+    /// <para>分区镜像与裸块数据（.img/.bin/.dat 等）。</para>
+    /// </summary>
     public static IBrush Image { get; } = Create("#4C8DF6");
 
-    /// <summary>固件载荷：原生二进制与厂商整包。 Firmware payloads: native binaries and vendor bundles.</summary>
+    /// <summary>
+    /// Firmware payloads: native binaries and vendor bundles.
+    /// <para>固件载荷：原生二进制与厂商整包。</para>
+    /// </summary>
     public static IBrush Firmware { get; } = Create("#F0813C");
 
-    /// <summary>设备树源文件与编译产物。 Device-tree sources and their compiled artifacts.</summary>
+    /// <summary>
+    /// Device-tree sources and their compiled artifacts.
+    /// <para>设备树源文件与编译产物。</para>
+    /// </summary>
     public static IBrush DeviceTree { get; } = Create("#2FB89A");
 
-    /// <summary>Android 安装包。 Android packages.</summary>
+    /// <summary>
+    /// Android packages.
+    /// <para>Android 安装包。</para>
+    /// </summary>
     public static IBrush Android { get; } = Create("#3DDC84");
 
-    /// <summary>源码与字节码（.dex/.jar/.java 等）。 Source and bytecode (.dex/.jar/.java).</summary>
+    /// <summary>
+    /// Source and bytecode (.dex/.jar/.java).
+    /// <para>源码与字节码（.dex/.jar/.java 等）。</para>
+    /// </summary>
     public static IBrush Code { get; } = Create("#A98BF5");
 
-    /// <summary>资源表（.arsc）。 Resource tables (.arsc).</summary>
+    /// <summary>
+    /// Resource tables (.arsc).
+    /// <para>资源表（.arsc）。</para>
+    /// </summary>
     public static IBrush Resource { get; } = Create("#2BB6C9");
 
-    /// <summary>XML 与 Manifest 清单。 XML and Manifest documents.</summary>
+    /// <summary>
+    /// XML and Manifest documents.
+    /// <para>XML 与 Manifest 清单。</para>
+    /// </summary>
     public static IBrush Markup { get; } = Create("#8CBF3F");
 
-    /// <summary>JSON 数据文件。 JSON data files.</summary>
+    /// <summary>
+    /// JSON data files.
+    /// <para>JSON 数据文件。</para>
+    /// </summary>
     public static IBrush Json { get; } = Create("#CBCB41");
 
-    /// <summary>脚本文件。 Script files.</summary>
+    /// <summary>
+    /// Script files.
+    /// <para>脚本文件。</para>
+    /// </summary>
     public static IBrush Script { get; } = Create("#6FBF73");
 
-    /// <summary>归档容器与压缩流。 Archive containers and compressed streams.</summary>
+    /// <summary>
+    /// Archive containers and compressed streams.
+    /// <para>归档容器与压缩流。</para>
+    /// </summary>
     public static IBrush Archive { get; } = Create("#BFA07A");
 
-    /// <summary>签名证书与密钥库。 Signing certificates and keystores.</summary>
+    /// <summary>
+    /// Signing certificates and keystores.
+    /// <para>签名证书与密钥库。</para>
+    /// </summary>
     public static IBrush Security { get; } = Create("#E06C9F");
 
-    /// <summary>图片、音频与视频资源。 Image, audio and video assets.</summary>
+    /// <summary>
+    /// Image, audio and video assets.
+    /// <para>图片、音频与视频资源。</para>
+    /// </summary>
     public static IBrush Media { get; } = Create("#A074C4");
 
-    /// <summary>文本、配置与文档（.txt/.log/.prop/.md/.csv/.docx 等）。 Text, configuration and documents.</summary>
+    /// <summary>
+    /// Text, configuration and documents.
+    /// <para>文本、配置与文档（.txt/.log/.prop/.md/.csv/.docx 等）。</para>
+    /// </summary>
     public static IBrush Document { get; } = Create("#8A93A5");
 
-    /// <summary>PDF 文档。 PDF documents.</summary>
+    /// <summary>
+    /// PDF documents.
+    /// <para>PDF 文档。</para>
+    /// </summary>
     public static IBrush Pdf { get; } = Create("#E05252");
 
     private static IBrush Create(string hexColor) => new SolidColorBrush(Color.Parse(hexColor));

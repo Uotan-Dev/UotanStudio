@@ -24,7 +24,9 @@ public static class NodeTypeRegistry
         _factories[typeKey] = factory;
     }
 
-    /// <summary>Removes a dynamically registered node type.</summary>
+    /// <summary>Removes a dynamically registered node type.
+    /// <para>移除动态注册的节点类型。</para>
+    /// </summary>
     public static bool Unregister(string typeKey)
         => !string.IsNullOrWhiteSpace(typeKey) && _factories.TryRemove(typeKey, out _);
 

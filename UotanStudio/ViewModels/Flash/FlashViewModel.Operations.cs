@@ -1091,9 +1091,9 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Writes the background-enumerated ports back to the combo box, keeping the previously selected port when it
+    /// Writes the background-enumerated ports back to the combo box, keeping the current selection when it
     /// is still present. The continuation resumes on the UI thread, so touching the control is safe.
-    /// <para>把后台枚举到的串口写回下拉框，尽量保留此前选中的端口。续接点在 UI 线程，因此写控件安全。</para>
+    /// <para>把后台枚举到的串口写回下拉框，尽量保留当前选中的端口。续接点在 UI 线程，因此写控件安全。</para>
     /// </summary>
     /// <param name="box">The serial port combo box to fill. <para>要填充的串口下拉框。</para></param>
     /// <param name="ports">The running enumeration task. <para>进行中的枚举任务。</para></param>
@@ -2280,9 +2280,9 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Picks the boot resource directory; the explicit authentication file wins per the upstream
-    /// --auth convention, and this directory is only consulted when nothing was chosen there.
-    /// <para>选择启动资源目录；显式认证文件按上游 --auth 约定优先，未选择时才回退到此目录。</para>
+    /// Picks the boot resource directory; the explicit authentication file wins over this directory, which is only consulted when no
+    /// authentication file was chosen.
+    /// <para>选择启动资源目录；显式认证文件优先，未选择认证文件时才回退到此目录。</para>
     /// </summary>
     internal async void OnChooseMtkKeyDirClick(object? sender, RoutedEventArgs e)
     {
@@ -3527,10 +3527,10 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// Picks a programmer folder and positively matches it against the Sahara identity the target already reported:
-    /// the scan builds rows under the upstream loader naming convention and only a unique match yields an
+    /// the scan builds rows under the loader naming convention of that folder and only a unique match yields an
     /// upload-eligible verdict. Ambiguous, contradictory and insufficient-evidence outcomes only produce a verdict
     /// line; they never replace the in-package candidate picker and never open a file on their own.
-    /// <para>选定 programmer 目录并按目标已上报的 Sahara 身份做正匹配：扫描按上游 loader 命名约定建立条目，
+    /// <para>选定 programmer 目录并按目标已上报的 Sahara 身份做正匹配：扫描按该目录的 loader 命名约定建立条目，
     /// 唯一匹配才给出可上传结论；歧义、矛盾或证据不足都只给结论行，不替代包内候选选择，也不自动打开任何文件。</para>
     /// </summary>
     internal async void OnEdlChooseProgrammerDirClick(object? sender, RoutedEventArgs e)
@@ -4496,9 +4496,8 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Builds the DAA boot resource provider: the explicit auth file wins per the upstream --auth
-    /// convention, otherwise the key directory is used.
-    /// <para>构造 DAA 启动资源提供方：显式认证文件按上游 --auth 约定优先，否则回退到密钥目录。</para>
+    /// Builds the DAA boot resource provider: the explicit auth file wins, otherwise the key directory is used.
+    /// <para>构造 DAA 启动资源提供方：显式认证文件优先，否则回退到密钥目录。</para>
     /// </summary>
     /// <returns>The provider, or null when nothing was selected.
     /// <para>资源提供方；未选择任何内容时为 null。</para></returns>

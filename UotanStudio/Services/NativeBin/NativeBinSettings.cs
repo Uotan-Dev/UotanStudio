@@ -18,8 +18,8 @@ public interface INativeBinSettings
 
     /// <summary>
     /// Whether the provisioner may fall back to non-official mirrors when the
-    /// upstream release URL is unreachable. <see langword="true"/> by default.
-    /// <para>当上游 Release 地址不可达时是否回落到非官方镜像，默认为 <c>true</c>。</para>
+    /// official release URL is unreachable. <see langword="true"/> by default.
+    /// <para>当官方 Release 地址不可达时是否回落到非官方镜像，默认为 <c>true</c>。</para>
     /// </summary>
     /// <value>True when mirror URLs may be tried.<para>允许尝试镜像 URL 时为 true。</para></value>
     bool UseMirrorList { get; }

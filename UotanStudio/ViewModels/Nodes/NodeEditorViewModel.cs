@@ -24,13 +24,19 @@ namespace UotanStudio.ViewModels.Nodes;
 public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 {
     public Guid EditorId { get; } = Guid.NewGuid();
-    /// <summary>Interaction service supplied by the visible desktop host.</summary>
+    /// <summary>Interaction service supplied by the visible desktop host.
+    /// <para>由可见桌面宿主提供的交互服务。</para>
+    /// </summary>
     public Services.Interactions.IWorkflowInteractionService Interactions { get; set; }
         = Services.Interactions.UnsupportedWorkflowInteractionService.Instance;
-    /// <summary>Resource scope supplied by the composite editor; ordinary project canvases have no package scope.</summary>
+    /// <summary>Resource scope supplied by the composite editor; ordinary project canvases have no package scope.
+    /// <para>由组合节点编辑器提供的资源作用域；普通项目画布没有包作用域。</para>
+    /// </summary>
     public VisualPluginPackage? ResourcePackage { get; set; }
 
-    /// <summary>Host-provided dependency check for the package currently being edited.</summary>
+    /// <summary>Host-provided dependency check for the package currently being edited.
+    /// <para>宿主提供的、针对当前编辑包的依赖检查。</para>
+    /// </summary>
     public Func<IReadOnlyList<string>>? ValidatePackage { get; set; }
     private Point _nextNodeLocation = new(100, 100);
     private static readonly Point DefaultNodeLocation = new(100, 100);
@@ -38,25 +44,39 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     private readonly ObservableCollection<FlowNodeViewModel> _selectedNodes = [];
     private readonly ObservableCollection<BatchNodeInputViewModel> _batchInputs = [];
 
-    /// <summary>Review state for the last patch execution or preview, extracted from the editor shell.</summary>
+    /// <summary>Review state for the last patch execution or preview, extracted from the editor shell.
+    /// <para>最近一次补丁执行或预览的复核状态，由编辑器外壳提取。</para>
+    /// </summary>
     public PatchReviewViewModel PatchReview { get; } = new();
 
-    /// <summary>Individual invocation results; publication remains a root-run decision.</summary>
+    /// <summary>Individual invocation results; publication remains a root-run decision.
+    /// <para>单次调用结果；是否发布仍由根运行决定。</para>
+    /// </summary>
     public IReadOnlyList<PatchCompositeExecutionViewModel> CompositeExecutions => PatchReview.CompositeExecutions;
 
-    /// <summary>Bounded review rows from the last execution or preview.</summary>
+    /// <summary>Bounded review rows from the last execution or preview.
+    /// <para>最近一次执行或预览产生的有界复核行。</para>
+    /// </summary>
     public IReadOnlyList<PatchChangeViewModel> PatchChanges => PatchReview.PatchChanges;
 
-    /// <summary>Whether a patch review panel should be visible.</summary>
+    /// <summary>Whether a patch review panel should be visible.
+    /// <para>是否应显示补丁复核面板。</para>
+    /// </summary>
     public bool HasPatchChanges => PatchReview.HasPatchChanges;
 
-    /// <summary>Includes a meaningful preflight result even when no file changes were staged.</summary>
+    /// <summary>Includes a meaningful preflight result even when no file changes were staged.
+    /// <para>即使没有暂存任何文件变更，也包含有意义的预检结果。</para>
+    /// </summary>
     public bool HasPatchReview => PatchReview.HasPatchReview;
 
-    /// <summary>Localized publication outcome, distinct from node execution success.</summary>
+    /// <summary>Localized publication outcome, distinct from node execution success.
+    /// <para>本地化的发布结果，与节点执行是否成功无关。</para>
+    /// </summary>
     public string PatchOutcomeText => PatchReview.PatchOutcomeText;
 
-    /// <summary>Whether the bounded report omitted additional skipped composites.</summary>
+    /// <summary>Whether the bounded report omitted additional skipped composites.
+    /// <para>有界报告是否省略了其它被跳过的组合节点。</para>
+    /// </summary>
     public bool CompositeReportTruncated => PatchReview.CompositeReportTruncated;
 
     private Stack<IEditorCommand> _undoStack = [];
@@ -140,13 +160,19 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
     private NodeConnectionViewModel? _selectedConnection;
 
-    /// <summary>The exclusively selected canvas connection.</summary>
+    /// <summary>The exclusively selected canvas connection.
+    /// <para>画布上被唯一选中的连接。</para>
+    /// </summary>
     public NodeConnectionViewModel? SelectedConnection => _selectedConnection;
 
-    /// <summary>Whether the shared delete action has a node or connection target.</summary>
+    /// <summary>Whether the shared delete action has a node or connection target.
+    /// <para>共享删除操作是否有节点或连接目标。</para>
+    /// </summary>
     public bool HasSelection => HasSelectedNodes || SelectedConnection is not null;
 
-    /// <summary>Selects a connection and clears node selection, or clears the connection selection.</summary>
+    /// <summary>Selects a connection and clears node selection, or clears the connection selection.
+    /// <para>选中一条连接并清除节点选择，或清除连接选择。</para>
+    /// </summary>
     public void SelectConnection(NodeConnectionViewModel? connection)
     {
         if (connection is not null && !Connections.Contains(connection)) return;
@@ -330,29 +356,43 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public bool CanEditGraph => !IsExecuting;
     public bool CanRun => !IsExecuting && Nodes.Count > 0;
     public bool CanDeleteSelection => !IsExecuting && HasSelection;
-    /// <summary>Short workflow summaries shown in the bottom panel; detailed diagnostics remain in the global log.</summary>
+    /// <summary>Short workflow summaries shown in the bottom panel; detailed diagnostics remain in the global log.
+    /// <para>底部面板显示的工作流简要摘要；详细诊断仍在全局日志中。</para>
+    /// </summary>
     public ObservableCollection<string> ExecutionLog { get; } = [];
 
-    /// <summary>Installed composite nodes available for isolated graph editing.</summary>
+    /// <summary>Installed composite nodes available for isolated graph editing.
+    /// <para>可用于独立图编辑的已安装组合节点。</para>
+    /// </summary>
     public VisualPluginWorkspaceViewModel PluginWorkspace { get; }
 
-    /// <summary>Whether the property pane exposes the plugin workspace.</summary>
+    /// <summary>Whether the property pane exposes the plugin workspace.
+    /// <para>属性面板是否显示插件工作区。</para>
+    /// </summary>
     public bool ShowVisualPluginWorkspace => PluginWorkspace.ShowWorkspace;
 
-    /// <summary>Installed composite nodes available for isolated graph editing.</summary>
+    /// <summary>Installed composite nodes available for isolated graph editing.
+    /// <para>可用于独立图编辑的已安装组合节点。</para>
+    /// </summary>
     public ObservableCollection<VisualPluginRegistration> EditableVisualPlugins => PluginWorkspace.EditableVisualPlugins;
 
-    /// <summary>The composite node selected in the property-pane plugin workspace.</summary>
+    /// <summary>The composite node selected in the property-pane plugin workspace.
+    /// <para>属性面板插件工作区中选中的组合节点。</para>
+    /// </summary>
     public VisualPluginRegistration? SelectedVisualPlugin
     {
         get => PluginWorkspace.SelectedVisualPlugin;
         set => PluginWorkspace.SelectedVisualPlugin = value;
     }
 
-    /// <summary>Whether the current publish form blocks any plugin kind in the property-pane workspace.</summary>
+    /// <summary>Whether the current publish form blocks any plugin kind in the property-pane workspace.
+    /// <para>当前发布形态是否在属性面板工作区中屏蔽了某些插件类型。</para>
+    /// </summary>
     public bool CodeRuntimeDisabled => PluginWorkspace.CodeRuntimeDisabled;
 
-    /// <summary>Localized explanation shown while plugin kinds are blocked; empty otherwise.</summary>
+    /// <summary>Localized explanation shown while plugin kinds are blocked; empty otherwise.
+    /// <para>屏蔽插件类型时显示的本地化说明；其余情况为空。</para>
+    /// </summary>
     public string CodeRuntimeDisabledText => PluginWorkspace.CodeRuntimeDisabledText;
 
     /// <summary>
@@ -679,43 +719,65 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         node.RefreshCanvasInputs(CompactNodes);
     }
 
-    /// <summary>Gets the nodes currently selected on the canvas.</summary>
+    /// <summary>Gets the nodes currently selected on the canvas.
+    /// <para>获取画布上当前选中的节点。</para>
+    /// </summary>
     public ReadOnlyObservableCollection<FlowNodeViewModel> SelectedNodes { get; }
 
-    /// <summary>Gets the shared input properties for a multi-node selection.</summary>
+    /// <summary>Gets the shared input properties for a multi-node selection.
+    /// <para>获取多节点选择下共有的输入属性。</para>
+    /// </summary>
     public ReadOnlyObservableCollection<BatchNodeInputViewModel> BatchInputs { get; }
 
-    /// <summary>Gets the number of selected nodes.</summary>
+    /// <summary>Gets the number of selected nodes.
+    /// <para>获取已选节点数量。</para>
+    /// </summary>
     public int SelectedNodeCount => _selectedNodes.Count;
 
-    /// <summary>Gets whether at least one node is selected.</summary>
+    /// <summary>Gets whether at least one node is selected.
+    /// <para>获取是否至少选中一个节点。</para>
+    /// </summary>
     public bool HasSelectedNodes => _selectedNodes.Count > 0;
 
-    /// <summary>Gets whether exactly one node is selected.</summary>
+    /// <summary>Gets whether exactly one node is selected.
+    /// <para>获取是否恰好选中一个节点。</para>
+    /// </summary>
     public bool IsSingleSelection => _selectedNodes.Count == 1;
 
-    /// <summary>Gets whether more than one node is selected.</summary>
+    /// <summary>Gets whether more than one node is selected.
+    /// <para>获取是否选中多于一个节点。</para>
+    /// </summary>
     public bool IsMultipleSelection => _selectedNodes.Count > 1;
 
-    /// <summary>Gets the localized label for deleting the current selection.</summary>
+    /// <summary>Gets the localized label for deleting the current selection.
+    /// <para>获取删除当前选择的本地化标签。</para>
+    /// </summary>
     public string DeleteSelectionText => SelectedConnection is not null
         ? LanguageService.Instance.GetString("Node_DeleteConnection")
         : HasSelectedNodes
         ? LanguageService.Instance.GetString("Node_DeleteSelectionCount", SelectedNodeCount)
         : LanguageService.Instance.GetString("Node_DeleteSelected");
 
-    /// <summary>Gets the common category, or a localized mixed-value label when selected nodes differ.</summary>
+    /// <summary>Gets the common category, or a localized mixed-value label when selected nodes differ.
+    /// <para>获取共有分类；所选节点不同时返回本地化的混合值标签。</para>
+    /// </summary>
     public string SelectedCategoryDisplay => CommonSelectionDisplay(nodes => nodes.Select(node =>
         LanguageService.Instance.GetString("Node_Category_" + (NodeFactoryRegistrar.Descriptors.FirstOrDefault(
             descriptor => descriptor.TypeKey == node.TypeKey)?.CategoryPath ?? "Composite"))));
 
-    /// <summary>Gets the common type key, or a localized mixed-value label when selected nodes differ.</summary>
+    /// <summary>Gets the common type key, or a localized mixed-value label when selected nodes differ.
+    /// <para>获取共有类型键；所选节点不同时返回本地化的混合值标签。</para>
+    /// </summary>
     public string SelectedTypeDisplay => CommonSelectionDisplay(nodes => nodes.Select(node => node.TypeKey));
 
-    /// <summary>Gets whether every selected node supports project-image editing.</summary>
+    /// <summary>Gets whether every selected node supports project-image editing.
+    /// <para>获取是否每个所选节点都支持工程镜像编辑。</para>
+    /// </summary>
     public bool CanEditBatchProjectImage => IsMultipleSelection && _selectedNodes.All(node => node.IsProjectImageNode);
 
-    /// <summary>Gets or sets the common selected image for the current selection.</summary>
+    /// <summary>Gets or sets the common selected image for the current selection.
+    /// <para>获取或设置当前选择共有的镜像。</para>
+    /// </summary>
     public string BatchSelectedImage
     {
         get => CommonSelectionValue(nodes => nodes.Select(node => node.SelectedImage));
@@ -772,6 +834,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Synchronizes the canvas selection with the ViewModel. The first item is kept as the primary
     /// selection for status text, while all selected nodes remain available to the batch panel.
+    /// <para>把画布选择同步到视图模型：首项作为状态文本的主选择，其余所选节点仍可供批量面板使用。</para>
     /// </summary>
     public void SetSelection(IEnumerable<FlowNodeViewModel> nodes,
         FlowNodeViewModel? primary = null)
@@ -1082,7 +1145,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>Deletes every selected node as one undoable operation.</summary>
+    /// <summary>Deletes every selected node as one undoable operation.
+    /// <para>把全部所选节点作为一次可撤销操作删除。</para>
+    /// </summary>
     public void DeleteSelectedNodes()
     {
 
@@ -1518,7 +1583,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         return Task.CompletedTask;
     }
 
-    /// <summary>Appends a portable workflow template as one undoable canvas edit.</summary>
+    /// <summary>Appends a portable workflow template as one undoable canvas edit.
+    /// <para>以一次可撤销的画布编辑追加可移植工作流模板。</para>
+    /// </summary>
     public void ImportTemplate(VisualPluginPackage package)
     {
         EnsureEditable();
@@ -1579,7 +1646,9 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>Captures the current canvas as a portable visual-plugin package.</summary>
+    /// <summary>Captures the current canvas as a portable visual-plugin package.
+    /// <para>把当前画布捕获为可移植的可视化插件包。</para>
+    /// </summary>
     public VisualPluginPackage CreateVisualPluginPackage(
         string name, string id, VisualPluginKind kind, string author = "")
         => VisualPluginPackageBuilder.Create(name, id, kind, Nodes, Connections, author);

@@ -88,8 +88,8 @@ public static class MtkScatterPackage
     /// <para>解析已读入的 scatter 文档中，哪些镜像存在于 scatter 文件旁。</para></summary>
     /// <param name="scatterPath">The path the document was read from; its directory anchors file names.
     /// <para>文档的读取路径；其目录用于锚定文件名。</para></param>
-    /// <param name="document">A previously parsed scatter document.
-    /// <para>此前已解析的 scatter 文档。</para></param>
+    /// <param name="document">An already parsed scatter document.
+    /// <para>已解析的 scatter 文档。</para></param>
     /// <returns>The selected layout with its resolvable rows in manifest order.
     /// <para>按清单顺序连同可解析条目的所选布局。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="scatterPath"/> is empty or whitespace.
@@ -148,8 +148,8 @@ public static class MtkScatterPackage
 
     /// <summary>Builds the explicit scatter flash step for one resolved row.
     /// <para>为一条已解析条目构造显式 scatter 刷写步骤。</para></summary>
-    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
-    /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
+    /// <param name="resolution">A resolution already returned by <see cref="Resolve"/>.
+    /// <para>由 <see cref="Resolve"/> 返回的解析结果。</para></param>
     /// <param name="rowIndex">Zero-based index into <see cref="MtkScatterPackageResolution.Rows"/>.
     /// <para>指向 <see cref="MtkScatterPackageResolution.Rows"/> 的从零开始索引。</para></param>
     /// <param name="verify">Whether written extents require readback; passed through unchanged.
@@ -404,8 +404,8 @@ public static class MtkScatterPackage
 
     /// <summary>Builds the raw write operation for one resolved row addressed by GPT partition name, for the Legacy download agent.
     /// <para>为一个按 GPT 分区名寻址的已解析条目构造 Legacy 下载代理使用的原始写入操作。</para></summary>
-    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
-    /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
+    /// <param name="resolution">A resolution already returned by <see cref="Resolve"/>.
+    /// <para>由 <see cref="Resolve"/> 返回的解析结果。</para></param>
     /// <param name="rowIndex">Zero-based index into <see cref="MtkScatterPackageResolution.Rows"/>.
     /// <para>指向 <see cref="MtkScatterPackageResolution.Rows"/> 的从零开始索引。</para></param>
     /// <param name="verify">Whether written extents require readback; passed through unchanged.
@@ -506,8 +506,8 @@ public static class MtkScatterPackage
     /// container, because streaming a sparse header as raw bytes would corrupt the partition.
     /// <para>取出只支持原始字节的家族可写入的条目：它要求 GPT 分区名并拒绝稀疏容器，因为把稀疏头当原始字节写入会损坏分区。</para>
     /// </summary>
-    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
-    /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
+    /// <param name="resolution">A resolution already returned by <see cref="Resolve"/>.
+    /// <para>由 <see cref="Resolve"/> 返回的解析结果。</para></param>
     /// <param name="rowIndex">Zero-based row index.<para>行序号。</para></param>
     /// <param name="agent">The family name used in the messages.<para>用于文案的家族名。</para></param>
     /// <returns>The resolvable row to write and its GPT partition name.
@@ -540,8 +540,8 @@ public static class MtkScatterPackage
 
     /// <summary>Builds the raw write operation for one resolved row addressed by GPT partition name, for the XML download agent, rounding the extent up to the block granularity the scatter layout declares.
     /// <para>为一个按 GPT 分区名寻址的已解析条目构造 XML 下载代理使用的原始写入操作，范围向上取整到 scatter 布局声明的块粒度。</para></summary>
-    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
-    /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
+    /// <param name="resolution">A resolution already returned by <see cref="Resolve"/>.
+    /// <para>由 <see cref="Resolve"/> 返回的解析结果。</para></param>
     /// <param name="rowIndex">Zero-based index into <see cref="MtkScatterPackageResolution.Rows"/>.
     /// <para>指向 <see cref="MtkScatterPackageResolution.Rows"/> 的从零开始索引。</para></param>
     /// <param name="verify">Whether written extents require readback; passed through unchanged.
@@ -567,8 +567,8 @@ public static class MtkScatterPackage
 
     /// <summary>Builds the XML erase operation for one scatter entry; the range is the entry's declared capacity rounded up to the block granularity the scatter layout declares.
     /// <para>为一个 scatter 条目构造 XML 擦除操作；范围取该条目声明容量并向上取整到 scatter 布局声明的块粒度。</para></summary>
-    /// <param name="resolution">A resolution previously returned by <see cref="Resolve"/>.
-    /// <para>此前由 <see cref="Resolve"/> 返回的解析结果。</para></param>
+    /// <param name="resolution">A resolution already returned by <see cref="Resolve"/>.
+    /// <para>由 <see cref="Resolve"/> 返回的解析结果。</para></param>
     /// <param name="partition">The erase-eligible scatter entry, usually from <see cref="ListEraseTargets"/>.
     /// <para>可擦除的 scatter 条目，通常来自 <see cref="ListEraseTargets"/>。</para></param>
     /// <returns>A GPT-named erase step.<para>GPT 命名的擦除步骤。</para></returns>

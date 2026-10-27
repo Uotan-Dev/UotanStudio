@@ -755,7 +755,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// format version so the user can tell whether an older build is needed for migration. Hosts without a
     /// window (tests) only log.
     /// <para>把打开失败的会话原因转成显式错误弹窗：文件缺失、解决方案版本不可读、节点项目损坏各有独立文案，
-    /// 版本不匹配时附上磁盘上的格式版本以便判断是否需要用旧版工具迁移。无窗口宿主（测试）只写日志。</para>
+    /// 版本不匹配时附上磁盘上的格式版本以便判断是否需要迁移。无窗口宿主（测试）只写日志。</para>
     /// </summary>
     private async Task ReportOpenFailureAsync()
     {

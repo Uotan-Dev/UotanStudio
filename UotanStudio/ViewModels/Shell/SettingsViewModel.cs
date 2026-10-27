@@ -54,7 +54,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// <value>The localized options in backend order. <para>按后端顺序排列的本地化选项。</para></value>
     public IReadOnlyList<LocalizedOption> UsbBackendOptions => _usbBackendOptions.Options;
 
-    /// <summary>Persisted USB mode; existing sessions retain their backend until restart.</summary>
+    /// <summary>Persisted USB mode; existing sessions retain their backend until restart.
+    /// <para>已持久化的 USB 模式；已建立的会话在重启前保持原后端。</para>
+    /// </summary>
     public int DeviceUsbBackendIndex
     {
         get => (int)_appSettings.DeviceCommunication.UsbBackend;
@@ -348,7 +350,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private string _serverActionKey = "Settings_ServerActionNone";
     private string? _serverActionError;
 
-    /// <summary>Localized result of the explicit server stop action.</summary>
+    /// <summary>Localized result of the explicit server stop action.
+    /// <para>显式停止服务器操作的本地化结果。</para>
+    /// </summary>
     public string ServerActionStatus => _serverActionKey == "Settings_ServerActionNone" ? string.Empty : _serverActionError is null
         ? LanguageService.Instance.GetString(_serverActionKey)
         : string.Format(LanguageService.Instance.GetString(_serverActionKey), _serverActionError);
@@ -394,10 +398,14 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private string _adbServerStatusKey = "Settings_ServerUnchecked";
     private string _hdcServerStatusKey = "Settings_ServerUnchecked";
 
-    /// <summary>Localized result of the latest ADB endpoint probe.</summary>
+    /// <summary>Localized result of the latest ADB endpoint probe.
+    /// <para>最近一次 ADB 端点探测的本地化结果。</para>
+    /// </summary>
     public string AdbServerStatus => LanguageService.Instance.GetString(_adbServerStatusKey);
 
-    /// <summary>Localized result of the latest HDC endpoint probe.</summary>
+    /// <summary>Localized result of the latest HDC endpoint probe.
+    /// <para>最近一次 HDC 端点探测的本地化结果。</para>
+    /// </summary>
     public string HdcServerStatus => LanguageService.Instance.GetString(_hdcServerStatusKey);
 
     [RelayCommand]
@@ -424,7 +432,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>Maximum concurrent firmware workers, applied to newly started operations.</summary>
+    /// <summary>Maximum concurrent firmware workers, applied to newly started operations.
+    /// <para>固件并发工作线程上限，仅作用于新启动的操作。</para>
+    /// </summary>
     public int FirmwareParallelism
     {
         get => _appSettings.FirmwareParallelism;

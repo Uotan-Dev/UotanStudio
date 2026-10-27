@@ -415,10 +415,10 @@ public sealed class LanguageService : ILocalizer
     /// application. A headless test session replaces <see cref="Application.Current"/> while the
     /// abandoned instance still owns the previous dictionary, and Avalonia enforces one parent per
     /// <see cref="ResourceDictionary"/>, so the bridge is replaced with a fresh instance whenever
-    /// its owner is no longer the current application. Within one application the dictionary is
+    /// its owner is not the current application. Within one application the dictionary is
     /// detached only for the bulk value update and re-attached at its recorded index, so one
     /// culture switch fires exactly one resource-changed notification instead of one per key.
-    /// <para>把所有当前语言的值镜像进语言字典，并保持其挂在当前应用上。无头测试会话会替换 <see cref="Application.Current"/>，而被弃用的实例仍持有旧字典的所有权，且 Avalonia 强制每个 <see cref="ResourceDictionary"/> 只有一个父级，因此当字典的宿主不再是当前应用时就更换一个新的桥实例。同一应用内批量赋值时先摘除、按原下标挂回，使每次语言切换只触发一次资源变更通知，而不是每键一次。</para>
+    /// <para>把所有当前语言的值镜像进语言字典，并保持其挂在当前应用上。无头测试会话会替换 <see cref="Application.Current"/>，而被弃用的实例仍持有旧字典的所有权，且 Avalonia 强制每个 <see cref="ResourceDictionary"/> 只有一个父级，因此当字典的宿主不是当前应用时就更换一个新的桥实例。同一应用内批量赋值时先摘除、按原下标挂回，使每次语言切换只触发一次资源变更通知，而不是每键一次。</para>
     /// </summary>
     private void RefreshBridge()
     {

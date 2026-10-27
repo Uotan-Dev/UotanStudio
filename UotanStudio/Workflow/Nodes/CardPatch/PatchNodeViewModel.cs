@@ -6,7 +6,9 @@ using UotanStudio.Workflow.Registry;
 
 namespace UotanStudio.Workflow.Nodes;
 
-/// <summary>Offline configuration patch nodes. Mutations produce text until explicitly published.</summary>
+/// <summary>Offline configuration patch nodes. Mutations produce text until explicitly published.
+/// <para>离线配置补丁节点；变更先生成文本，直到显式发布。</para>
+/// </summary>
 public sealed partial class PatchNodeViewModel : FlowNodeViewModel
 {
     private PatchNodeViewModel(string typeKey, bool completesFlow = true) : base(typeKey, NodeCategory.Data)
@@ -19,7 +21,9 @@ public sealed partial class PatchNodeViewModel : FlowNodeViewModel
         }
     }
 
-    /// <summary>Creates a node with stable ports shared by the canvas, persistence and composites.</summary>
+    /// <summary>Creates a node with stable ports shared by the canvas, persistence and composites.
+    /// <para>创建带稳定端口的节点，画布、持久化与组合节点共用这些端口。</para>
+    /// </summary>
     public static PatchNodeViewModel Create(string typeKey)
     {
         if (!PatchNodePorts.TryGetSet(typeKey, out var ports))

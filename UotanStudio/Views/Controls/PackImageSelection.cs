@@ -9,7 +9,9 @@ public sealed record PackImageSelection(string GroupName, string FilePath)
 {
     /// <summary>Actual file size, or null when unavailable. <para>实际文件大小；无法读取时为空。</para></summary>
     public long? SizeBytes { get; init; }
-    /// <summary>Logical partition names from this source project; null when no source metadata exists.</summary>
+    /// <summary>Logical partition names from this source project; null when no source metadata exists.
+    /// <para>该来源工程的逻辑分区名；没有来源元数据时为 null。</para>
+    /// </summary>
     public IReadOnlySet<string>? DynamicPartitions { get; init; }
 }
 

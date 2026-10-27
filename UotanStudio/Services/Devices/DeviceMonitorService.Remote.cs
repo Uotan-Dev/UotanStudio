@@ -10,8 +10,8 @@ namespace UotanStudio.Services.Devices;
 public sealed partial class DeviceMonitorService
 {
     /// <summary>
-    /// Conventional AOSP fastboot-over-TCP port, used when a fastboot address omits the port.
-    /// <para>AOSP fastboot-over-TCP 的约定端口；fastboot 地址省略端口时补用。</para>
+    /// Conventional fastboot-over-TCP port, used when a fastboot address omits the port.
+    /// <para>fastboot-over-TCP 的约定端口；fastboot 地址省略端口时补用。</para>
     /// </summary>
     private const int FastbootTcpDefaultPort = 5554;
 

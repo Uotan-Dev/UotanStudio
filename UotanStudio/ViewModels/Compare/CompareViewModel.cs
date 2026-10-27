@@ -35,7 +35,9 @@ public sealed partial class CompareViewModel : Document, ITool
 
     private readonly IComparisonService _comparison;
 
-    /// <summary>Creates a compare document with the default file-comparison services.</summary>
+    /// <summary>Creates a compare document with the default file-comparison services.
+    /// <para>用默认文件对比服务创建对比文档。</para>
+    /// </summary>
     public CompareViewModel() : this(ComparisonService.CreateDefault()) { }
 
     /// <summary>Creates a document with an explicitly supplied comparison backend.</summary>

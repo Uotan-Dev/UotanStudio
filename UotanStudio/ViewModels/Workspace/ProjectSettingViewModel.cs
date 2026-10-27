@@ -70,7 +70,9 @@ internal partial class ProjectSettingViewModel : Tool
     /// </summary>
     public IReadOnlyList<string> ErofsAlgorithmOptions => ErofsAlgorithmSelectors.Ordered;
 
-    /// <summary>Compression algorithms supported by the managed F2FS builder.</summary>
+    /// <summary>Compression algorithms supported by the managed F2FS builder.
+    /// <para>托管 F2FS 构建器支持的压缩算法。</para>
+    /// </summary>
     public IReadOnlyList<string> F2fsCompressionAlgorithmOptions { get; } = Enum.GetNames<CompressionAlgorithm>();
 
     /// <summary>Whether the F2FS compression values are an explicit user override.</summary>

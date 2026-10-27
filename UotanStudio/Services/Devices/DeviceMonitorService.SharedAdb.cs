@@ -95,12 +95,12 @@ public sealed partial class DeviceMonitorService
 
     /// <summary>
     /// Borrows the shared direct ADB session for the device, opening and connecting it once when no borrower
-    /// holds it. A second borrower never opens a competing transport, so a long log capture no longer makes
+    /// holds it. A second borrower never opens a competing transport, so a long log capture does not make
     /// every other host operation fail with a busy endpoint. A pooled session that lost its link is torn down
     /// before anything else is opened, because its exclusive endpoint reservation would otherwise refuse the
     /// replacement and leave every later command failing as busy.
     /// <para>借用该设备的共享直连 ADB 会话；无人持有时只打开并连接一次。第二个借用方绝不会再开一份竞争的
-    /// 传输，因此长时间的日志抓取不再让其它宿主操作以端点占用失败。丢失链路的池内会话会先被拆除，否则它的独占端点
+    /// 传输，因此长时间的日志抓取不会让其它宿主操作以端点占用失败。丢失链路的池内会话会先被拆除，否则它的独占端点
     /// 占用会拒绝替代会话，使之后每条命令都以占用失败告终。</para>
     /// </summary>
     /// <param name="device">The direct ADB device, USB or network, whose session is borrowed.

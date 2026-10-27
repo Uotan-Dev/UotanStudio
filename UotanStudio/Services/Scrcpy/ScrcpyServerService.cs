@@ -79,24 +79,16 @@ public sealed record ScrcpyServerInstall(
 /// <para>解析并更新投屏客户端所对接的 scrcpy 服务端 jar。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// The client protocol is pinned to the 5.x stream layout, and the server aborts when the version it
 /// is launched with differs from its own build, so the version must always be taken from the artifact
 /// that is actually about to be pushed rather than from a constant.
-/// </para>
-/// <para>
-/// 客户端协议锁定 5.x 码流布局，而服务端在启动版本与自身构建版本不一致时会直接中止，因此版本串必须来自
-/// 即将推送的那个产物本身，而不能来自常量。
-/// </para>
-/// <para>
 /// Release metadata (version, byte length, SHA-256) is read from the origin only. The payload may come
 /// from a mirror, and is then accepted only if it matches both the length and the digest the origin
 /// published, which is what makes a mirror-served file trustworthy.
-/// </para>
-/// <para>
+/// <para>客户端协议锁定 5.x 码流布局，而服务端在启动版本与自身构建版本不一致时会直接中止，因此版本串必须来自
+/// 即将推送的那个产物本身，而不能来自常量。
 /// 版本元数据（版本、字节长度、SHA-256）只从源站读取。载荷可以来自镜像，但只有在长度与摘要都与源站公布的
-/// 一致时才接受，这正是镜像文件可信的依据。
-/// </para>
+/// 一致时才接受，这正是镜像文件可信的依据。</para>
 /// </remarks>
 public sealed class ScrcpyServerService
 {
@@ -189,8 +181,9 @@ public sealed class ScrcpyServerService
     /// <summary>Returns the provisioned artifact, or the bundled jar when nothing valid is cached.
     /// <para>返回已供给的产物；缓存中没有有效文件时返回随包 jar。</para></summary>
     /// <remarks>
-    /// <para> A provisioned jar is accepted only when its bytes still hash to the digest recorded at install time, so a half-written or hand-edited cache file falls back to the bundled jar instead of breaking every launch. The bundled jar is used without a digest match: a locally replaced jar still starts, and the server itself reports the version mismatch on the device. </para>
-    /// <para> 已供给的 jar 只有在其字节仍能哈希到安装时记录的摘要时才被接受，因此写坏一半或被手工改过的缓存文件 会回落到随包 jar，而不是让每次启动都失败。随包 jar 不做摘要匹配即使用：本地替换的 jar 仍然能启动， 版本不一致由服务端在设备上自行上报。 </para></remarks>
+    /// A provisioned jar is accepted only when its bytes still hash to the digest recorded at install time, so a half-written or hand-edited cache file falls back to the bundled jar instead of breaking every launch. The bundled jar is used without a digest match: a locally replaced jar still starts, and the server itself reports the version mismatch on the device.
+    /// <para>已供给的 jar 只有在其字节仍能哈希到安装时记录的摘要时才被接受，因此写坏一半或被手工改过的缓存文件 会回落到随包 jar，而不是让每次启动都失败。随包 jar 不做摘要匹配即使用：本地替换的 jar 仍然能启动， 版本不一致由服务端在设备上自行上报。</para>
+    /// </remarks>
     /// <param name="cancellationToken">Cancels the digest read.<para>取消摘要读取。</para></param>
     /// <returns>The jar to push and the version to launch it with.
     /// <para>要推送的 jar 及其启动版本。</para></returns>
@@ -436,9 +429,11 @@ public sealed class ScrcpyServerService
 
     /// <summary>Refreshes the cache in the background when the setting allows it.
     /// <para>在设置允许时于后台更新缓存。</para></summary>
-    /// <remarks> <para> Failures are reported through <see cref="LogService"/> only: a launch must
+    /// <remarks>
+    /// Failures are reported through <see cref="LogService"/> only: a launch must
     /// never depend on a reachable release feed, and the bundled jar keeps mirroring working meanwhile.
-    /// </para><para> 失败只经由 <see cref="LogService"/> 上报：启动绝不能依赖可达的 Release 源，期间随包 jar 仍可投屏。 </para> </remarks>
+    /// <para>失败只经由 <see cref="LogService"/> 上报：启动绝不能依赖可达的 Release 源，期间随包 jar 仍可投屏。</para>
+    /// </remarks>
     /// <param name="startupDelay">Delay before the first request.<para>首次请求前的延迟。</para></param>
     /// <param name="cancellationToken">Cancels the wait and the update.<para>取消等待与更新。</para></param>
     /// <returns>A task that completes once the check round has finished or been skipped.

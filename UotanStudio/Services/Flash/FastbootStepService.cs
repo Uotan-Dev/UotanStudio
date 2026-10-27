@@ -57,9 +57,9 @@ public static class FastbootStepService
     /// <param name="step">The validated non-image step to run.<para>要执行的已校验非镜像步骤。</para></param>
     /// <param name="ct">Token cancelling the step.<para>用于取消步骤的令牌。</para></param>
     /// <remarks>
-    /// <para>A <c>create</c> step uses <see cref="FlashStep.ImageLength"/> as the logical partition
+    /// A <c>create</c> step uses <see cref="FlashStep.ImageLength"/> as the logical partition
     /// size, creates the partition with it and then resizes it to the same size. A create step that
-    /// carries no size fails explicitly: <c>create-logical-partition</c> is never sent with size 0.</para>
+    /// carries no size fails explicitly: <c>create-logical-partition</c> is never sent with size 0.
     /// <para><c>create</c> 步骤把 <see cref="FlashStep.ImageLength"/> 作为逻辑分区尺寸，以该尺寸创建
     /// 分区后再调整到同一尺寸。未携带尺寸的 create 步骤会明确失败：绝不会以 size 0 发送
     /// <c>create-logical-partition</c>。</para>

@@ -7,7 +7,9 @@ using UotanStudio.Services.Keys;
 
 namespace UotanStudio.ViewModels.Shell;
 
-/// <summary>Key library selection, background operations and user-visible operation results.</summary>
+/// <summary>Key library selection, background operations and user-visible operation results.
+/// <para>密钥库选择、后台操作与用户可见的操作结果。</para>
+/// </summary>
 public partial class KeyManagerViewModel : ViewModelBase
 {
     private readonly KeyLibraryService _library;

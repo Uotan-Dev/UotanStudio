@@ -210,7 +210,6 @@ partial class NodeEditorView
 
         if (isZoom)
         {
-            // Leave event unhandled so NodifyEditor executes its built-in pointer-centered zoom.
             return;
         }
 
