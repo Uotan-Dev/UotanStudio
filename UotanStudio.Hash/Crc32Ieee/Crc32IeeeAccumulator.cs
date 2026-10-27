@@ -31,7 +31,7 @@ public sealed class Crc32IeeeAccumulator
     /// <para>返回定稿校验和且不消费已累加字节，因此可以继续并入。</para>
     /// </summary>
     /// <returns>
-    /// The standard CRC-32 of everything appended so far. <para>此前全部已并入字节的标准 CRC-32。</para>
+    /// The standard CRC-32 of everything appended so far. <para>已并入的全部字节的标准 CRC-32。</para>
     /// </returns>
     public uint GetCurrentHash() => _hash.GetCurrentHashAsUInt32();
 

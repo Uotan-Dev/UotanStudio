@@ -94,7 +94,7 @@ public static class Adler32
     /// <para>参与计算的字节；空区间原样返回 <paramref name="previousResult"/>。</para></param>
     /// <param name="previousResult">Packed Adler-32 value of every earlier byte, holding <c>a</c> in the low half and <c>b</c>
     /// in the high half; the value <c>1</c> starts a new checksum.
-    /// <para>此前所有字节的打包 Adler-32 值，低半部为 <c>a</c>，高半部为 <c>b</c>；取值 <c>1</c> 表示重新开始计算。</para></param>
+    /// <para>已并入的全部字节的打包 Adler-32 值，低半部为 <c>a</c>，高半部为 <c>b</c>；取值 <c>1</c> 表示重新开始计算。</para></param>
     /// <returns>The Adler-32 value of the bytes already covered by <paramref name="previousResult"/> followed by
     /// <paramref name="data"/>, identical to <see cref="Compute(ReadOnlySpan{byte})"/> over the concatenated bytes.
     /// <para>返回 <paramref name="previousResult"/> 已覆盖字节后接 <paramref name="data"/> 的 Adler-32 值，与对拼接后的

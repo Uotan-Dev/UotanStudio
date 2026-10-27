@@ -27,7 +27,7 @@ public sealed class XzCrc64
 
     /// <summary>
     /// Folds more bytes into the running checksum, continuing from whatever has been appended so far.
-    /// <para>把更多字节并入进行中的校验和，从此前已累加的位置继续。</para>
+    /// <para>把更多字节并入进行中的校验和，从已累加的位置继续。</para>
     /// </summary>
     /// <param name="data">
     /// Bytes to fold; an empty span leaves the state unchanged.

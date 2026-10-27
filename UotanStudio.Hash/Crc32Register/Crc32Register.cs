@@ -14,7 +14,7 @@ namespace UotanStudio.Hash.Crc32Register;
 /// <c>Crc32Ieee.Compute(data) == ~Compute(data, 0xFFFF_FFFF)</c>。</para>
 /// </summary>
 /// <remarks>
-/// <para>On ARM64 the whole span, including every non-standard seed, runs through the hardware <c>crc32</c> extension,
+/// On ARM64 the whole span, including every non-standard seed, runs through the hardware <c>crc32</c> extension,
 /// whose reflected-IEEE instruction follows exactly this register convention. On other processors a fresh
 /// <c>0xFFFF_FFFF</c> seed of at least 512 bytes is complemented and forwarded to the hardware-accelerated
 /// <c>System.IO.Hashing.Crc32</c>, and a continued register (any other seed) of at least 128 KiB reaches the same
@@ -22,7 +22,7 @@ namespace UotanStudio.Hash.Crc32Register;
 /// where the zero-run term advances the complemented seed through a 32×32 GF(2) matrix power cached by length.
 /// Everything else keeps the eight-table loop that consumes eight bytes per iteration (slice-by-8) and falls back to
 /// the byte-at-a-time table for the trailing remainder, so the register semantics stay identical for every length
-/// and seed.</para>
+/// and seed.
 /// <para>ARM64 上整段数据（含任意非标准 seed）都走硬件 <c>crc32</c> 扩展，该反射 IEEE 指令恰好遵循本寄存器约定。
 /// 其他处理器上，初值 <c>0xFFFF_FFFF</c> 且长度不少于 512 字节的区间先取反再转发给硬件加速的
 /// <c>System.IO.Hashing.Crc32</c>；其余 seed 的续算只要达到 128 KiB 也经 CRC 更新的线性性到达同一硬件路径：

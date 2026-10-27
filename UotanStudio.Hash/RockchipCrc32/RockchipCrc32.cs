@@ -3,19 +3,17 @@ using System.Buffers.Binary;
 namespace UotanStudio.Hash.RockchipCrc32;
 
 /// <summary>
-/// Non-reflected CRC-32 (polynomial <c>0x04C10DB7</c>, MSB-first, init 0, no final XOR) matching the
-/// <c>gTable_Crc32</c> semantics of Rockchip's rkaf/rkdeveloptool <c>crc.cpp</c>, used by RKAF/RKFW
-/// container and loader image checksums.
-/// <para>非反射式 CRC-32（多项式 <c>0x04C10DB7</c>，高位优先，初值 0，无最终异或），对应 Rockchip
-/// rkaf/rkdeveloptool 的 <c>crc.cpp</c> 中 <c>gTable_Crc32</c> 的语义，用于 RKAF/RKFW 容器与 loader
-/// 镜像校验。</para>
+/// Non-reflected CRC-32 (polynomial <c>0x04C10DB7</c>, MSB-first, init 0, no final XOR) that RKAF/RKFW
+/// container and loader image checksums require.
+/// <para>非反射式 CRC-32（多项式 <c>0x04C10DB7</c>，高位优先，初值 0，无最终异或），RKAF/RKFW 容器与 loader
+/// 镜像校验要求该形式。</para>
 /// </summary>
 /// <remarks>
 /// The hot loop consumes eight bytes per iteration through eight 256-entry tables (slice-by-8) and falls back to the
 /// byte-at-a-time table for the trailing remainder, so a caller-supplied seed and any trailing length keep the exact
-/// register semantics of the upstream byte loop.
+/// register semantics of a byte-at-a-time table walk.
 /// <para>热循环借助 8 张 256 项表每轮消费 8 字节（slice-by-8），尾部余数字节回退到逐字节查表，
-/// 因此调用方给定的 seed 与任意尾部长度都保持上游逐字节循环的寄存器语义。</para>
+/// 因此调用方给定的 seed 与任意尾部长度都保持逐字节查表的寄存器语义。</para>
 /// </remarks>
 public static class RockchipCrc32
 {

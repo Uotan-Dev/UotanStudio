@@ -11,10 +11,10 @@ namespace UotanStudio.Hash.Crc16CcittFalse;
 /// <c>0xFFFF</c>。</para>
 /// </summary>
 /// <remarks>
-/// <para>The main loop consumes eight bytes per iteration through eight 256-entry tables (slice-by-8): the register is
+/// The main loop consumes eight bytes per iteration through eight 256-entry tables (slice-by-8): the register is
 /// XOR-ed with the first two big-endian bytes and the mixed bytes index the two highest tables while the remaining
 /// six bytes index the lower ones directly. The trailing remainder falls back to the byte-at-a-time table, and both
-/// forms produce the same register value for every length, so the protocol semantics stay bit-identical.</para>
+/// forms produce the same register value for every length, so the protocol semantics stay bit-identical.
 /// <para>主循环借助 8 张 256 项表每轮消费 8 字节（slice-by-8）：寄存器先与前两个大端字节异或，混合出的两个字节索引
 /// 最高的两张表，其余 6 个字节直接索引较低的表。尾部余数回退到逐字节查表，两种形态对任意长度都产出相同的寄存器值，
 /// 协议语义逐位不变。</para>

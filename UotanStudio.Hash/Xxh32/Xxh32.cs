@@ -3,9 +3,9 @@ using System.Buffers.Binary;
 namespace UotanStudio.Hash.Xxh32;
 
 /// <summary>
-/// XXH32 exactly as erofs-utils and the Linux kernel compute it (<c>lib/xxhash.c</c>), the variant the on-disk
-/// format pins for the EROFS xattr name filter.
-/// <para>erofs-utils 与 Linux 内核共同使用的 XXH32（<c>lib/xxhash.c</c>），即 EROFS xattr 名称过滤器所固定的磁盘格式变体。</para>
+/// XXH32 as the on-disk EROFS xattr name filter requires, in the variant the Linux kernel and the fsck
+/// implementations compute.
+/// <para>EROFS xattr 名称过滤器所固定的磁盘格式变体，即 Linux 内核与 fsck 实现所计算的 XXH32。</para>
 /// </summary>
 public static class Xxh32
 {

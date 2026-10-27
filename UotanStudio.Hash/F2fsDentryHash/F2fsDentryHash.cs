@@ -9,9 +9,9 @@ namespace UotanStudio.Hash.F2fsDentryHash;
 /// <para>计算 F2FS 目录项哈希：从 MD4 风格初始向量出发对 16 字节分块做 TEA 变换，并为 <c>.</c> 与 <c>..</c> 返回 0，与内核行为一致。</para>
 /// </summary>
 /// <remarks>
-/// <para>The UTF-8 encoding of the name and the transform buffers live on the stack for names up to 256 bytes — above
+/// The UTF-8 encoding of the name and the transform buffers live on the stack for names up to 256 bytes — above
 /// the F2FS name-length bound — and in the shared array pool above it, so hashing every entry of a large directory
-/// tree allocates nothing per call.</para>
+/// tree allocates nothing per call.
 /// <para>名称的 UTF-8 编码与变换缓冲对 256 字节以内的名称（高于 F2FS 名称长度上限）驻留栈上，超出部分落共享数组池，
 /// 因此遍历大型目录树时每次调用零分配。</para>
 /// </remarks>

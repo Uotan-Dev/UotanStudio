@@ -13,14 +13,12 @@ namespace UotanStudio.Hash.Sums;
 /// </summary>
 /// <remarks>
 /// The tail rule is part of the protocol: a final odd byte contributes as the low half of a word whose high half is
-/// zero, which is the same value as appending one <c>0x00</c> byte before folding. The reference downloader pads the
-/// buffer this way before its word loop (Library/mtk_preloader.py:988-996 of the mtkclient tree), and both MTK upload
-/// exchanges reuse that helper, so the word order, the zero seed and the padding rule are a single contract rather
-/// than two call-site conventions.
+/// zero, which is the same value as appending one <c>0x00</c> byte before folding. Both MTK upload
+/// exchanges frame their chunks this way before the word loop, so the word order, the zero seed and the padding
+/// rule are a single contract rather than two call-site conventions.
 /// <para>尾部规则属于协议本身：末尾的奇数字节作为「高字节为 0 的字」的低半部参与异或，等价于在折叠前先追加一个
-/// <c>0x00</c> 字节。参考下载器在逐词循环之前就是这样补齐缓冲区的（mtkclient 源码树的
-/// Library/mtk_preloader.py:988-996），且两处 MTK 上传交换都走同一个 helper，因此字序、零种子与补齐规则是一条
-/// 统一契约，而不是两个调用点各自的约定。</para>
+/// <c>0x00</c> 字节。两处 MTK 上传交换都在逐词循环之前这样补齐缓冲区，因此字序、零种子与补齐规则是一条统一契约，
+/// 而不是两个调用点各自的约定。</para>
 /// Continuing an earlier call requires the next chunk to be word-aligned: <c>Compute(first)</c> then
 /// <c>Compute(second, firstResult)</c> equals <c>Compute(concatenation)</c> only when <c>first.Length</c> is even,
 /// because an odd-length prefix would have padded its own tail. Upload framing keeps chunks even, so a running

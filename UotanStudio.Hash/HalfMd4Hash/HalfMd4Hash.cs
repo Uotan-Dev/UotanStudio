@@ -10,9 +10,9 @@ namespace UotanStudio.Hash.HalfMd4Hash;
 /// 分支一致：全零种子改用默认 MD4 初始向量。</para>
 /// </summary>
 /// <remarks>
-/// <para>The UTF-8 encoding of the name and the transform buffers live on the stack for names up to 256 bytes — the
+/// The UTF-8 encoding of the name and the transform buffers live on the stack for names up to 256 bytes — the
 /// ext4 directory-entry bound — and in the shared array pool above it, so hashing every entry of a large directory
-/// tree allocates nothing per call.</para>
+/// tree allocates nothing per call.
 /// <para>名称的 UTF-8 编码与变换缓冲对 256 字节以内的名称（ext4 目录项上限）驻留栈上，超出部分落共享数组池，
 /// 因此遍历大型目录树时每次调用零分配。</para>
 /// </remarks>

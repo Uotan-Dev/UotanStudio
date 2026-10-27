@@ -5,9 +5,9 @@ namespace UotanStudio.Hash.Fnv1a;
 /// <para>Fowler-Noll-Vo 1a 64 位混合，用于只在内存中比较、从不作为格式摘要落盘的身份键。</para>
 /// </summary>
 /// <remarks>
-/// <para>The library forwards standard CRCs and digests to the BCL; FNV is not one of those, so it is implemented here
+/// The library forwards standard CRCs and digests to the BCL; FNV is not one of those, so it is implemented here
 /// rather than left in a caller. The character overload consumes UTF-16 code units, which is the form the device
-/// projection keys already have, while the byte overload serves callers that hold UTF-8 bytes.</para>
+/// projection keys already have, while the byte overload serves callers that hold UTF-8 bytes.
 /// <para>本库把标准 CRC 与摘要转发给 BCL；FNV 不属于其中之一，因此在本库实现而不是留在调用方。字符重载消费
 /// UTF-16 码元，正是设备投影键已有的形态；字节重载服务于持有 UTF-8 字节的调用方。</para>
 /// </remarks>

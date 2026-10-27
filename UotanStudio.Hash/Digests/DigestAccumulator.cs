@@ -56,7 +56,7 @@ public sealed class DigestAccumulator : IDisposable
     /// Returns the digest of everything appended so far **without** resetting, so the same running state can keep
     /// accepting bytes. Payload signing uses this to sign a header+manifest digest and then continue folding the
     /// data region into the same accumulator.
-    /// <para>返回此前已输入字节的摘要且**不**重置，因此同一累进状态可以继续接收字节。Payload 签名用它在对
+    /// <para>返回已输入的全部字节的摘要且**不**重置，因此同一累进状态可以继续接收字节。Payload 签名用它在对
     /// header+manifest 摘要签名后，继续把数据区并入同一累加器。</para>
     /// </summary>
     /// <returns>
