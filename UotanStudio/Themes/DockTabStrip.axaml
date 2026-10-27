@@ -34,25 +34,35 @@
                     <ContentPresenter Grid.Row="1" Grid.Column="2"
                                       Content="{TemplateBinding RightContent}"
                                       ContentTemplate="{TemplateBinding RightContentTemplate}" />
-                    <DockPanel Grid.Row="1" Grid.Column="1">
-                        <Panel Name="PART_Panel" VerticalAlignment="Stretch">
-                            <ScrollViewer Name="PART_ScrollViewer"
-                                          HorizontalScrollBarVisibility="Disabled"
-                                          VerticalScrollBarVisibility="Hidden"
-                                          Padding="0"
-                                          Margin="0"
-                                          VerticalAlignment="Bottom"
-                                          VerticalContentAlignment="Bottom">
-                                <ItemsPresenter Name="PART_ItemsPresenter"
-                                                VerticalAlignment="Bottom"
-                                                HorizontalAlignment="Left"
-                                                ItemsPanel="{TemplateBinding ItemsPanel}" />
-                            </ScrollViewer>
-                            <Border Name="PART_BorderFill" IsHitTestVisible="False" />
-                            <ContentControl Name="PART_CreateButtonHost" IsHitTestVisible="False" />
-                            <Panel Name="PART_TrailingFill" IsHitTestVisible="False" />
-                        </Panel>
-                    </DockPanel>
+                    <!-- PART_Panel 直接作为 Grid.Column="1" 的子元素，避免包裹 DockPanel。
+                         Dock.Avalonia 内部若检测到 PART_Panel.Parent 为 DockPanel，会在 Detach 期间注销
+                         Bounds 监听器且 Attach 时不再重新注册，导致面板最大化时 PART_Panel 仍残留小窗宽度的
+                         陈旧 MaxWidth，进而在全屏下产生首标签异常向右居中偏移的现象。 -->
+                    <!-- PART_Panel placed directly in Grid.Column="1" without an intermediate DockPanel wrapper.
+                         When PART_Panel.Parent is a DockPanel, Dock.Avalonia subscribes to Bounds on DockPanel,
+                         clears the observables on DetachedFromVisualTree and never reattaches them, leaving a
+                         stale MaxWidth from the small-window state that centers the tab host horizontally. -->
+                    <Panel Name="PART_Panel"
+                           Grid.Row="1"
+                           Grid.Column="1"
+                           HorizontalAlignment="Stretch"
+                           VerticalAlignment="Stretch">
+                        <ScrollViewer Name="PART_ScrollViewer"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Hidden"
+                                      Padding="0"
+                                      Margin="0"
+                                      VerticalAlignment="Bottom"
+                                      VerticalContentAlignment="Bottom">
+                            <ItemsPresenter Name="PART_ItemsPresenter"
+                                            VerticalAlignment="Bottom"
+                                            HorizontalAlignment="Left"
+                                            ItemsPanel="{TemplateBinding ItemsPanel}" />
+                        </ScrollViewer>
+                        <Border Name="PART_BorderFill" IsHitTestVisible="False" />
+                        <ContentControl Name="PART_CreateButtonHost" IsHitTestVisible="False" />
+                        <Panel Name="PART_TrailingFill" IsHitTestVisible="False" />
+                    </Panel>
                 </Grid>
             </ControlTemplate>
         </Setter>

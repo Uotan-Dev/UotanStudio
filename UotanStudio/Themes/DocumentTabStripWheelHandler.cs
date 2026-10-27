@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Dock.Avalonia.Controls;
@@ -84,10 +85,36 @@ public static class DocumentTabStripWheelHandler
         if (args.NewValue is true)
         {
             strip.AddHandler(InputElement.PointerWheelChangedEvent, OnPointerWheelChanged, RoutingStrategies.Tunnel);
+            strip.AttachedToVisualTree += OnStripAttachedToVisualTree;
+            ResetPanelMaxWidth(strip);
         }
         else
         {
             strip.RemoveHandler(InputElement.PointerWheelChangedEvent, OnPointerWheelChanged);
+            strip.AttachedToVisualTree -= OnStripAttachedToVisualTree;
+        }
+    }
+
+    private static void OnStripAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        if (sender is DocumentTabStrip strip)
+        {
+            ResetPanelMaxWidth(strip);
+        }
+    }
+
+    private static void ResetPanelMaxWidth(DocumentTabStrip strip)
+    {
+        foreach (var visual in strip.GetVisualDescendants())
+        {
+            if (visual is Panel { Name: "PART_Panel" } panel)
+            {
+                if (!double.IsPositiveInfinity(panel.MaxWidth))
+                {
+                    panel.ClearValue(Layoutable.MaxWidthProperty);
+                }
+                break;
+            }
         }
     }
 
