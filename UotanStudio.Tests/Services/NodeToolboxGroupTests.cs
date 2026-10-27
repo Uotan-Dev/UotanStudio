@@ -26,7 +26,6 @@ public sealed class NodeToolboxGroupTests
         Assert.Contains(editor.ToolboxGroups, group => group.Key == "FlowInteraction");
         Assert.Contains(editor.ToolboxGroups, group => group.Key == "Extensions");
 
-        // Verify default expansion: only FirmwareConfig is expanded by default
         var firmwareGroup = Assert.Single(editor.ToolboxGroups, group => group.Key == "FirmwareConfig");
         Assert.True(firmwareGroup.IsExpanded);
 
@@ -65,7 +64,6 @@ public sealed class NodeToolboxGroupTests
         Assert.True(deviceGroup.IsExpanded);
         Assert.Contains(deviceGroup.Items, item => item.TypeKey == "Device.Partition.Flash");
 
-        // Groups with no matching item should become invisible
         var flowGroup = Assert.Single(editor.ToolboxGroups, g => g.Key == "FlowInteraction");
         Assert.False(flowGroup.IsVisible);
         Assert.Empty(flowGroup.Items);

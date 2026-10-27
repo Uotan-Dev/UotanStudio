@@ -6,7 +6,7 @@ namespace UotanStudio.Tests.Delivery;
 
 /// <summary>
 /// Guards the embedded native updater: the zstd frame must materialize into a verified arm64 ELF that passes the same
-/// Edify validation the loose asset used to go through.
+/// Edify validation the asset must pass before packing.
 /// <para>守护内嵌原生更新器：zstd 帧必须解压成已校验的 arm64 ELF，并通过原先松散资产所走的同一套 Edify 校验。</para>
 /// </summary>
 public class EmbeddedUpdaterAssetTests

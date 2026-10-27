@@ -14,13 +14,13 @@ namespace UotanStudio.Tests.Firmware;
 /// pcluster's physical length, so a head row on the file's last logical cluster makes
 /// <c>compacted_load_cluster_from_disk</c> answer <c>-EINVAL</c> (or read past the index) and the tail
 /// page fails in <c>z_erofs_read_folio</c>. The builder therefore keeps the terminal single-cluster
-/// pcluster uncompressed, which is what upstream <c>mkfs.erofs</c> does for a final chunk of at most one
-/// block, and the stored bytes plus the one-block physical length stay self-evident from the head row.
+/// pcluster uncompressed, which keeps a final chunk of at most one block uncompressed, and the stored
+/// bytes plus the one-block physical length stay self-evident from the head row.
 /// <para>守护没有经过 <c>z_erofs_get_extent_compressedlen</c> 精修的内核能够解析的 EROFS 索引布局：只要 inode
 /// 声明 big pcluster，<c>z_erofs_get_extent_compressedlen</c> 就会读取压缩 head 行之后的那一行来取得 pcluster
 /// 的物理长度，于是落在文件最后一个逻辑簇上的 head 行会让 <c>compacted_load_cluster_from_disk</c> 返回
 /// <c>-EINVAL</c>（或读到索引之外的字节），尾页在 <c>z_erofs_read_folio</c> 中失败。构建器因此把末尾那个
-/// 单簇 pcluster 保持为不压缩，这与上游 <c>mkfs.erofs</c> 对至多一个块的尾部片段的做法一致，
+/// 单簇 pcluster 保持为不压缩，使至多一个块的尾部片段不压缩，
 /// 存放的字节与一个块的物理长度都能由 head 行自身说明。</para>
 /// </summary>
 public sealed class ErofsTerminalPclusterTests

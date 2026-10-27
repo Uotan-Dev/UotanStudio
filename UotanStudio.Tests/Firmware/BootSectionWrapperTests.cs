@@ -8,19 +8,11 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Guard tests for the batch-1.4 section-wrapper investigation (BGPT / PLMZ / TICLE). Upstream Magisk was fetched
-/// and inspected (native/src/boot/bootimg.cpp, compress.rs, format.rs, patch.rs, lib.rs at master and tags v26.0,
-/// v27.0, v28.0, v29.0; the only FileFormat wrappers there are gzip/xz/lzma/bzip2/lz4/lz4_legacy/lz4_lg plus
-/// ACCLAIM, SEANDROID and LG_BUMP tails), and osm0sis mboot and the Android Image Kitchen contain none of the
-/// BGPT, PLMZ, TICLE or LQEC strings, so no byte layout could be proven and no unwrapping is implemented. These
-/// tests pin the shipped contract instead: boot component bytes with such leading magics stay verbatim through
-/// detection, decompression and unpack → repack, which is exactly what a future wrapper decoder must preserve.
-/// <para>批次 1.4 区段封装调查（BGPT / PLMZ / TICLE）的守门测试。已抓取并检查上游 Magisk
-/// （native/src/boot 的 bootimg.cpp、compress.rs、format.rs、patch.rs、lib.rs，master 及 v26.0、v27.0、v28.0、v29.0 标签；
-/// 其中仅有的封装格式为 gzip/xz/lzma/bzip2/lz4/lz4_legacy/lz4_lg，外加 ACCLAIM、SEANDROID、LG_BUMP 尾部），
-/// osm0sis mboot 与 Android Image Kitchen 亦无 BGPT、PLMZ、TICLE、LQEC 字符串，因此无法证实任何字节布局，未实现解封装。
-/// 本文件锁定实际交付的契约：以这些魔数开头的 boot 组件字节在检测、解压与解包 → 重打包全程逐字节保持不变，
-/// 这正是未来封装解码器必须维持的性质。</para>
+/// Guard tests for the section-wrapper magics BGPT / PLMZ / TICLE: no byte layout is defined for them, so no
+/// unwrapping exists. These tests pin the shipped contract: boot component bytes with such leading magics stay
+/// verbatim through detection, decompression and unpack → repack.
+/// <para>区段封装魔数 BGPT / PLMZ / TICLE 的守门测试：这些魔数没有已定义的字节布局，因此不做解封装。
+/// 本文件锁定实际交付的契约：以这些魔数开头的 boot 组件字节在检测、解压与解包 → 重打包全程逐字节保持不变。</para>
 /// </summary>
 public class BootSectionWrapperTests
 {

@@ -9,16 +9,16 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// Guards the fixed 36-byte LP name fields (partition, group and block-device) against values the field
-/// cannot hold. The writers clipped longer names with <c>Math.Min</c> and handed the whole entry record to
-/// the copy, so a wide value also overwrote the adjacent attribute, flag or index bytes; a clipped name
-/// silently renames a partition on the device, where <c>dump-super</c>, <c>fastboot</c> and the kernel read
-/// back exactly these bytes. The builder contract is ASCII, so a non-ASCII name is rejected before it is
-/// encoded, and the Delivery super builder can no longer publish an unvalidated device name.
+/// cannot hold. Because the whole entry record is copied, a clipped name overwrites the adjacent attribute, flag or index
+/// bytes and silently renames a partition on the device, where <c>dump-super</c>, <c>fastboot</c> and the kernel
+/// read back exactly these bytes; an over-long name must therefore be rejected instead of clipped. The builder
+/// contract is ASCII, so a non-ASCII name is rejected before it is encoded, and the Delivery super builder cannot
+/// publish an unvalidated device name.
 /// <para>守护三个定宽 36 字节的 LP 名称字段（分区名、组名、块设备分区名），拒绝字段无法承载的值。
-/// 写入器过去会用 <c>Math.Min</c> 裁剪超长名称，而且把整条记录交给复制，因此过宽的值还会覆盖相邻的属性、
-/// 标志或索引字节；裁剪后的名称会在设备上静默改名，因为 <c>dump-super</c>、<c>fastboot</c> 与内核读回的
-/// 就是这些字节。构建器约定名称为 ASCII，所以非 ASCII 名称在编码之前就被拒绝，Delivery 的 super
-/// 构建也不再能以未经校验的设备名发布镜像。</para>
+/// 由于复制的是整条记录，裁剪后的名称会覆盖相邻的属性、标志或索引字节，并会在设备上静默改名，因为
+/// <c>dump-super</c>、<c>fastboot</c> 与内核读回的就是这些字节；因此超长名称必须被拒绝而不是裁剪。构建器
+/// 约定名称为 ASCII，所以非 ASCII 名称在编码之前就被拒绝，Delivery 的 super 构建也不能以未经校验的设备名
+/// 发布镜像。</para>
 /// </summary>
 public sealed class LpNameFieldTests
 {

@@ -11,14 +11,14 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Guards the build-side replay of captured EROFS dimensions that used to be recomputed from the new layout:
+/// Guards the build-side replay of captured EROFS dimensions instead of recomputing them from the target layout:
 /// the raw device-slot tag bytes, the recorded unified device address while it stays addressable, the
 /// <c>chunkformat</c> high bits, the superblock's <c>s_sb_extslots</c> and <c>s_dirblkbits</c>, and the
-/// per-inode advise bit. Every dimension keeps the repository's pre-existing behavior when the profile carries
-/// no recorded value, so an older document rebuilds exactly as before.
-/// <para>守护此前会按新布局重算的已捕获 EROFS 维度的构建侧重放：设备槽 tag 原始字节、仍可寻址时记录的设备统一
+/// per-inode advise bit. Every dimension keeps the repository's inherited behavior when the profile carries no recorded value, so a
+/// profile without these dimensions rebuilds the same image.
+/// <para>守护已捕获 EROFS 维度的构建侧重放（而不是按目标布局重算）：设备槽 tag 原始字节、仍可寻址时记录的设备统一
 /// 地址、<c>chunkformat</c> 高位、超级块的 <c>s_sb_extslots</c> 与 <c>s_dirblkbits</c>，以及逐 inode advise
-/// 位。任一方位在档案未记录取值时都保持仓库既有行为，因此更早的文档仍与修复前逐字节一致地重建。</para>
+/// 位。任一方位在档案未记录取值时都保持仓库既有行为，因此缺少这些维度的档案仍逐字节重建出相同镜像。</para>
 /// </summary>
 public sealed class ErofsBuilderReplayTests
 {

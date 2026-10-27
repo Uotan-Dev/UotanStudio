@@ -11,12 +11,12 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Guards the forced inode shapes behind <c>mkfs.erofs -E force-inode-compact|force-inode-extended</c> and
-/// <c>force-inode-blockmap|force-chunk-indexes</c>: the requested record width or chunk index form is emitted
+/// Guards the forced inode shapes behind the <c>force-inode-compact|force-inode-extended</c> and
+/// <c>force-inode-blockmap|force-chunk-indexes</c> options: the requested record width or chunk index form is emitted
 /// as asked, and a request the metadata or the assigned addresses cannot express fails loudly instead of
 /// silently producing the other form, because the option names a layout the image then reports.
-/// <para>守护 <c>mkfs.erofs -E force-inode-compact|force-inode-extended</c> 与
-/// <c>force-inode-blockmap|force-chunk-indexes</c> 背后的强制 inode 形态：请求的记录宽度或 chunk 索引形态按
+/// <para>守护 <c>force-inode-compact|force-inode-extended</c> 与
+/// <c>force-inode-blockmap|force-chunk-indexes</c> 选项背后的强制 inode 形态：请求的记录宽度或 chunk 索引形态按
 /// 要求写出，而元数据或已分配地址无法表达的请求会显式失败而非静默产出另一种形态，因为该选项命名的是镜像随后
 /// 报告的布局。</para>
 /// </summary>

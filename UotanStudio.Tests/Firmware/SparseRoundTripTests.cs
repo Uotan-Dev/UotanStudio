@@ -454,9 +454,9 @@ public class SparseRoundTripTests
     /// Simulates the bootloader consuming resparse pieces: for each piece in order, RAW/FILL
     /// chunks are written into a partition buffer at their absolute block addresses, and
     /// DONT_CARE chunks (and the write cursor) are skipped — the ABOOT/fastbootd semantics the
-    /// upstream resparse invariants target.
+    /// resparse invariants target.
     /// <para>模拟 bootloader 消费重稀疏化分片：按序把每个分片的 RAW/FILL chunk 按绝对块地址
-    /// 写入分区缓冲，DONT_CARE（及写入游标）被跳过——即上游重稀疏化不变量针对的
+    /// 写入分区缓冲，DONT_CARE（及写入游标）被跳过——即重稀疏化不变量针对的
     /// ABOOT/fastbootd 语义。</para>
     /// </summary>
     /// <param name="pieces">The piece files in flash order. <para>按刷写顺序排列的分片文件。</para></param>

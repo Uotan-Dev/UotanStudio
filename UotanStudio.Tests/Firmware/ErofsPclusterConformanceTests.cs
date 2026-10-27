@@ -10,15 +10,15 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// Guards the EROFS pcluster plan against the rules a conformant reader applies to the emitted index instead of
-/// the rules the writer assumed. Each extent is re-derived from the on-disk logical-cluster rows the way
-/// erofs-utils 1.9.4 does in <c>lib/zmap.c</c>: the head's <c>di_clusterofs</c> gives the logical start, the
+/// the rules the writer assumed. Each extent is re-derived from the on-disk logical-cluster rows: the head's
+/// <c>di_clusterofs</c> gives the logical start, the
 /// non-head <c>li_delta[1]</c> chain gives the logical length the index credits to the frame, and the physical
 /// length is the block count a reader can name. The named region is then stripped of its leading zero padding and
 /// decoded with the credited length as the destination size, which is the exact check that produced
 /// <c>failed to full decompress</c> in <c>fsck.erofs --extract</c> for rebuilt images that our own parser had no
 /// complaint about.
 /// <para>按合规读取方对已发出索引所使用的规则守护 EROFS pcluster 规划，而不是按写入方自认为的规则。
-/// 每个 extent 都按 erofs-utils 1.9.4 在 <c>lib/zmap.c</c> 里的方式从盘上逻辑簇索引行重新推导：头簇的
+/// 每个 extent 都从盘上逻辑簇索引行重新推导：头簇的
 /// <c>di_clusterofs</c> 给出逻辑起点，非头簇的 <c>li_delta[1]</c> 链给出索引记给该帧的逻辑长度，物理长度则为
 /// 读取方能够表明的块数。随后剥掉该块区的前导零填充，并以该逻辑长度作为目标缓冲大小做解压——这一步正是让
 /// 托管解析器毫无意见、却被 <c>fsck.erofs --extract</c> 报为 <c>failed to full decompress</c> 的检查。</para>
@@ -129,17 +129,15 @@ public sealed class ErofsPclusterConformanceTests
     }
 
     /// <summary>Guards the row a conformant reader needs when a file's data ends inside its final logical
-    /// cluster. 5.10's <c>z_erofs_map_blocks_iter</c> keeps <c>end = (lcn + 1) &lt;&lt; lclusterbits</c> for the
+    /// cluster. <c>z_erofs_map_blocks_iter</c> keeps <c>end = (lcn + 1) &lt;&lt; lclusterbits</c> for the
     /// cluster a lookup starts in and <c>z_erofs_extent_lookback</c> only rewinds the start, so a non-head row
     /// left at that cluster would demand the whole cluster from the frame and
-    /// <c>z_erofs_lz4_decompress</c> answers <c>-EIO</c> whenever the stream produces less. erofs-utils closes
-    /// the index with the trailing plain row of <c>z_erofs_fini_full_indexes</c>, whose cluster offset is the
-    /// residual end offset, so the extent is credited exactly the bytes it encodes.
+    /// <c>z_erofs_lz4_decompress</c> answers <c>-EIO</c> whenever the stream produces less. A conformant writer closes
+    /// the index with a trailing plain row whose cluster offset is the residual end offset, so the extent is
+    /// credited exactly the bytes it encodes.
     /// <para>守护文件数据结束于末尾逻辑簇内时合规读取方所需的那一行。5.10 的 <c>z_erofs_map_blocks_iter</c> 对查找起点的
     /// 簇保持 <c>end = (lcn + 1) &lt;&lt; lclusterbits</c>，而 <c>z_erofs_extent_lookback</c> 只回退起点，因此若该簇上留着
-    /// 非头行，它就会要求帧产出整个簇，而 <c>z_erofs_lz4_decompress</c> 在流产出不足时返回 <c>-EIO</c>。erofs-utils 用
-    /// <c>z_erofs_fini_full_indexes</c> 的尾部 plain 行收尾索引，其簇偏移等于剩余结束偏移，使该 extent 被记为正
-    /// 它编码的字节数。</para>
+    /// 非头行，它就会要求帧产出整个簇，而 <c>z_erofs_lz4_decompress</c> 在流产出不足时返回 <c>-EIO</c>。合规写入方用尾部 plain 行收尾索引，其簇偏移等于剩余结束偏移，使该 extent 被记为正它编码的字节数。</para>
     /// </summary>
     [Theory]
     [InlineData(false)]

@@ -6,13 +6,13 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// DTBO (Android DT table image) round-trip tests. The layout is asserted against the
-/// upstream AOSP <c>dt_table.h</c> / <c>mkdtboimg.py</c> definition (big-endian, 32-byte
-/// header, 32-byte entry descriptors, blobs at dt_offset) — including a case hand-encoded
-/// to that definition so the reader is not merely validated against our own writer.
-/// <para>DTBO（Android DT 表镜像）回环测试。布局断言对齐上游 AOSP <c>dt_table.h</c> /
-/// <c>mkdtboimg.py</c> 定义（大端、32 字节表头、32 字节条目描述符、数据块位于 dt_offset），
-/// 并包含按上游定义手工编码的用例，避免读取端只被自家写入端验证。</para>
+/// DTBO (Android DT table image) round-trip tests. The layout is asserted against the DT table
+/// definition (big-endian, 32-byte header, 32-byte entry descriptors, blobs at dt_offset) —
+/// including a case hand-encoded to that definition so the reader is not merely validated
+/// against our own writer.
+/// <para>DTBO（Android DT 表镜像）回环测试。布局断言对齐 DT 表定义（大端、32 字节表头、
+/// 32 字节条目描述符、数据块位于 dt_offset），并包含按该定义手工编码的用例，避免读取端
+/// 只被自家写入端验证。</para>
 /// </summary>
 public class DtboRoundTripTests
 {
@@ -73,9 +73,9 @@ public class DtboRoundTripTests
         (uint)(FdtConstants.DtboHeaderSize + entryCount * FdtConstants.DtboEntrySize);
 
     /// <summary>
-    /// Hand-encodes a DTBO image exactly as AOSP mkdtboimg.py would: '>8I' big-endian
+    /// Hand-encodes a DTBO image in the on-disk layout the round-trip assertions target: '>8I' big-endian
     /// header, per-entry descriptors with non-zero id/rev/custom, contiguous blobs.
-    /// <para>完全按 AOSP mkdtboimg.py 的方式手工编码 DTBO：'>8I' 大端表头、带非零
+    /// <para>按往返断言所针对的磁盘布局手工编码 DTBO：'>8I' 大端表头、带非零
     /// id/rev/custom 的条目描述符、连续数据块。</para>
     /// </summary>
     private static byte[] BuildUpstreamEncodedImage(out byte[] blob0, out byte[] blob1)

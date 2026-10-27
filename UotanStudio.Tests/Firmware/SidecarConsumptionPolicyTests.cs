@@ -14,9 +14,9 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// Locks the consumption policy for preserved extractions: <c>metadata.json</c> is the only attribute table a
-/// pack reads, the AOSP-style flat sidecars stay extraction-time exports for external tools, and a native tool
+/// pack reads, the flat sidecars stay extraction-time exports for external tools, and a native tool
 /// receives a temporary sidecar materialised from the payload rather than a file left over from an earlier run.
-/// <para>固定受保留解包的消费策略：<c>metadata.json</c> 是打包唯一读取的属性表，AOSP 风格扁平附属文件只是供外部
+/// <para>固定受保留解包的消费策略：<c>metadata.json</c> 是打包唯一读取的属性表，扁平附属文件只是供外部
 /// 工具使用的解包期导出物，本机工具收到的是由负载具象化出的临时附属文件，而不是上一次运行遗留的文件。</para>
 /// </summary>
 [Collection("Workspace state")]

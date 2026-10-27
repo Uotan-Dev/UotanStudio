@@ -17,12 +17,12 @@ namespace UotanStudio.Tests.Firmware;
 /// <summary>
 /// Pins the i_format acceptance word, the nlink-one advice dimension, the source-xattr inheritance and the
 /// chunk-format mask as kernel-facing contracts read straight from the image bytes. <c>EROFS_I_ALL</c> is
-/// derived upstream from <c>EROFS_I_NLINK_1_BIT = 4</c>, so the widest word both the writer and the kernel
-/// accept is <c>0x1F</c>; a regression that narrowed the mask (to the three-bit data-layout width) would make
+/// derived from <c>EROFS_I_NLINK_1_BIT = 4</c>, so the widest word both the writer and the kernel accept is
+/// <c>0x1F</c>; a regression that narrowed the mask (to the three-bit data-layout width) would make
 /// the managed parser reject or mis-decode an inode the kernel itself accepts, and a regression that widened
 /// it would emit a word the kernel refuses with <c>unsupported i_format</c>.
 /// <para>把 i_format 接受字、nlink-one advice 维度、源 xattr 继承与 chunk 格式掩码作为面向内核、直接从镜像
-/// 字节读取的契约钉住。上游由 <c>EROFS_I_NLINK_1_BIT = 4</c> 推导 <c>EROFS_I_ALL</c>，因此写入方与内核都
+/// 字节读取的契约钉住。由 <c>EROFS_I_NLINK_1_BIT = 4</c> 推导 <c>EROFS_I_ALL</c>，因此写入方与内核都
 /// 接受的最宽字是 <c>0x1F</c>；把掩码收窄（收窄到三位数据布局宽度）的回归会让托管解析器拒绝或错误解码内核
 /// 自己接受的 inode，而放宽掩码的回归会写出内核以 <c>unsupported i_format</c> 拒绝的字。</para>
 /// </summary>

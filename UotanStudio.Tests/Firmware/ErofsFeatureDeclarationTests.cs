@@ -11,9 +11,9 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// Pins the EROFS feature declaration channel: an explicit declaration is the authority for both superblock
-/// feature words, a layout option may not demand a bit the declaration omits, and the upstream feature table
+/// feature words, a layout option may not demand a bit the declaration omits, and the feature table
 /// resolves alias names, read-only bits and the oldest mounting kernel.
-/// <para>钉住 EROFS 特性声明通道：显式声明是两个超级块特性字的权威，布局选项不得要求声明缺失的位，上游特性表
+/// <para>钉住 EROFS 特性声明通道：显式声明是两个超级块特性字的权威，布局选项不得要求声明缺失的位，特性表
 /// 解析别名、只读位与最老可挂载内核。</para>
 /// </summary>
 public sealed class ErofsFeatureDeclarationTests

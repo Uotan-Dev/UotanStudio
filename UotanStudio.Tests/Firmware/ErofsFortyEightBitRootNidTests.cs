@@ -9,13 +9,11 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Guards how a <c>48bit</c> superblock resolves its root inode number. erofs-utils leaves the wide
-/// <c>rootnid_8b</c> field zero whenever the root number already fits the 16-bit legacy field, and its
-/// reader therefore prefers the wide field only when that field is non-zero
-/// (<c>lib/super.c</c>). Reading the wide field unconditionally turns such an image into an empty tree.
-/// <para>守护 <c>48bit</c> 超级块解析根 inode 编号的方式。erofs-utils 在根编号本就能装进 16 位旧字段时会把
-/// 64 位的 <c>rootnid_8b</c> 留为零，因此其读取方仅在该字段非零时才优先使用它（<c>lib/super.c</c>）。
-/// 无条件读取宽字段会把这类镜像解析成空树。</para>
+/// Guards how a <c>48bit</c> superblock resolves its root inode number. The wide <c>rootnid_8b</c> field stays
+/// zero whenever the root number already fits the 16-bit legacy field, so a reader honours the wide field only
+/// when it is non-zero. Reading it unconditionally turns such an image into an empty tree.
+/// <para>守护 <c>48bit</c> 超级块解析根 inode 编号的方式。根编号本就能装进 16 位旧字段时，64 位的 <c>rootnid_8b</c>
+/// 保持为零，因此读取方只在该字段非零时才采用它。无条件读取宽字段会把这类镜像解析成空树。</para>
 /// </summary>
 public sealed class ErofsFortyEightBitRootNidTests
 {

@@ -10,14 +10,14 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Guards the metadata zone that <c>mkfs.erofs --MZ</c> produces, where a nonzero <c>s_meta_blkaddr</c> moves
+/// Guards the metadata zone a metabox image carries, where a nonzero <c>s_meta_blkaddr</c> moves
 /// every inode record, its inline body and its index tables into a separate area after the data blocks while
 /// the data blocks stay at the head of the image. A preserved rebuild has to place that zone again and publish
 /// its block back, otherwise the recorded inode numbers resolve to different byte offsets and the layout is
 /// silently changed. The same file also pins the metabox container rule: a source whose container payload was
 /// compressed cannot be reproduced by a writer that stores the container verbatim, so it fails loudly instead
 /// of publishing an uncompressed container under the same recorded feature.
-/// <para>守护 <c>mkfs.erofs --MZ</c> 产出的元数据区：非零的 <c>s_meta_blkaddr</c> 把每条 inode 记录、其内联体与
+/// <para>守护 metabox 镜像携带的元数据区：非零的 <c>s_meta_blkaddr</c> 把每条 inode 记录、其内联体与
 /// 索引表移到数据块之后的独立区域，而数据块留在镜像头部。保留式重建必须重新放置该区并发布其块号，否则记录的
 /// inode 编号会解析到不同的字节偏移，布局被静默改变。本文件同时钉住 metabox 容器规则：容器负载被压缩过的源无法
 /// 由逐字存放容器的写入方复现，因此必须显式失败，而不是在同一个已记录特性下发布未压缩容器。</para>

@@ -8,9 +8,9 @@ namespace UotanStudio.Tests.Firmware;
 /// <summary>
 /// Validates that unknown sparse chunk types are consistently rejected at the
 /// header-validation stage, matching the reader's default-branch rejection.
-/// AOSP defines only four standard types (RAW/FILL/DONT_CARE/CRC32).
+/// The sparse image format defines only four standard types (RAW/FILL/DONT_CARE/CRC32).
 /// <para>验证未知 sparse chunk 类型在头验证阶段即被一致拒绝，与读取端 default 分支一致。
-/// AOSP 仅定义四种标准类型（RAW/FILL/DONT_CARE/CRC32）行使校验与读取端保持一致。</para>
+/// 稀疏镜像格式仅定义四种标准类型（RAW/FILL/DONT_CARE/CRC32），校验与读取端因此保持一致。</para>
 /// </summary>
 public class SparseChunkValidationTests
 {

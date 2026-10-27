@@ -5,11 +5,11 @@ using System.Text;
 namespace UotanStudio.Tests.TestInfrastructure;
 
 /// <summary>
-/// Locates the upstream <c>magiskboot</c> reference binary through <c>UOTAN_MAGISKBOOT_ORACLE</c> and runs its
+/// Locates the reference <c>magiskboot</c> binary named by <c>UOTAN_MAGISKBOOT_ORACLE</c> and runs its
 /// <c>unpack</c>/<c>repack</c> commands inside a throwaway working directory, so oracle-comparison tests can
 /// contrast the managed boot-image implementation with the reference behaviour without sharing files between
 /// runs and without ever assembling a shell command line.
-/// <para>通过 <c>UOTAN_MAGISKBOOT_ORACLE</c> 定位上游 <c>magiskboot</c> 参考可执行文件，并在一次性工作目录中运行其
+/// <para>通过 <c>UOTAN_MAGISKBOOT_ORACLE</c> 定位 <c>magiskboot</c> 参考可执行文件，并在一次性工作目录中运行其
 /// <c>unpack</c>/<c>repack</c> 命令，使 oracle 对比测试能够在不共享文件、不拼接 shell 命令行的前提下，
 /// 把自有 boot image 实现与参考行为进行对照。</para>
 /// </summary>

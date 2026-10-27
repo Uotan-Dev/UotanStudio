@@ -9,14 +9,12 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Pins the reachability of the interlaced plain-pcluster advise in this writer. The advise mirrors
-/// <c>lib/compress.c</c> in erofs-utils, which raises it for a build that enables fragments, does not force
-/// whole-file dedupe and keeps compressed data block-aligned; the writer honours that condition here, but
+/// Pins the reachability of the interlaced plain-pcluster advise in this writer. The advise is raised for a build that enables fragments, does not force whole-file dedupe and keeps
+/// compressed data block-aligned; the writer honours that condition here, but
 /// every payload that satisfies it is packed as a whole-file or tail fragment first, so no plain pcluster
 /// survives to be rotated. These cases fail loudly if that ever changes, because the rotation then has to be
 /// verified against the reader instead of assumed unreachable.
-/// <para>钉住本写入方交错原样 pcluster advise 的可达性。该 advise 镜像 erofs-utils 的 <c>lib/compress.c</c>：
-/// 启用 fragments、未强制整文件去重且压缩数据保持块对齐时置起；本写入方遵循该条件，但所有满足条件的负载
+/// <para>钉住本写入方交错原样 pcluster advise 的可达性。该 advise 在启用 fragments、未强制整文件去重且压缩数据保持块对齐时置起；本写入方遵循该条件，但所有满足条件的负载
 /// 都会先被打包为整文件或尾部 fragment，因此没有任何原样 pcluster 留存下来可供旋转。一旦该前提改变，这些
 /// 用例会立刻失败，因为那时必须对照读取方验证旋转，而不能继续假定其不可达。</para>
 /// </summary>

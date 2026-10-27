@@ -8,12 +8,12 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// Guards the separation of the two dedupe comparisons: the repository's whole-file content-hash pass stays
-/// gated on <c>Dedup</c> while <c>DedupeMode</c> is <c>WholeFile</c>, and the encoded-pcluster reuse upstream
-/// implements is selected by <c>DedupeMode=Pcluster</c> alone so switching it on can never change a build
+/// gated on <c>Dedup</c> while <c>DedupeMode</c> is <c>WholeFile</c>, and the encoded-pcluster reuse this writer implements
+/// is selected by <c>DedupeMode=Pcluster</c> alone so switching it on can never change a build
 /// that leaves the mode at its default. The reuse is observable through the saved-byte statistic and the
 /// image size, and the profile path carries the mode across a capture/restore round trip.
 /// <para>守护两种去重比较的分离：仓库的整文件内容哈希处理仍由 <c>Dedup</c> 门控且仅在 <c>DedupeMode</c> 为
-/// <c>WholeFile</c> 时生效，而上游实现的编码后 pcluster 复用仅由 <c>DedupeMode=Pcluster</c> 选择，因此启用它
+/// <c>WholeFile</c> 时生效，而本写入方实现的编码后 pcluster 复用仅由 <c>DedupeMode=Pcluster</c> 选择，因此启用它
 /// 绝不会改变把模式留在默认值的构建。复用可通过省下字节的统计量与镜像大小观察，档案路径则让该模式跨采集/还原
 /// 往返保留。</para>
 /// </summary>

@@ -9,12 +9,12 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// Vendor boot version 3/4 validation closure: byte-identical repacks of synthetic images with multi-ramdisk
-/// tables (including DLKM-type entries), the AOSP boot_image.h ramdisk type semantics, and rejection of every
+/// tables (including DLKM-type entries), the ramdisk type semantics the vendor boot header defines, and rejection of every
 /// invalid variant: entry stride other than 108 bytes, empty DTB on version 3, version 4 page sizes outside
 /// {4096, 16384}, new bootconfig payloads above the 4096-byte mkbootimg convention, out-of-bounds table entries
 /// and malformed board ids.
-/// <para>Vendor Boot 版本 3/4 校验收口：含多 RAMDisk 表（含 DLKM 类型条目）合成镜像的逐字节一致重打包、AOSP
-/// boot_image.h 的 RAMDisk 类型语义，以及对每种非法变体的拒绝：条目步长非 108 字节、版本 3 空 DTB、版本 4 页大小不在
+/// <para>Vendor Boot 版本 3/4 校验收口：含多 RAMDisk 表（含 DLKM 类型条目）合成镜像的逐字节一致重打包、vendor boot 头部定义的
+/// RAMDisk 类型语义，以及对每种非法变体的拒绝：条目步长非 108 字节、版本 3 空 DTB、版本 4 页大小不在
 /// {4096, 16384} 内、新 bootconfig 载荷超过 4096 字节的 mkbootimg 约定、越界表条目与畸形 board id。</para>
 /// </summary>
 public class VendorBootValidationTests

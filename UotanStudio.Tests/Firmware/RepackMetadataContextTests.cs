@@ -6,11 +6,11 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Verification for the explicit repack-metadata context (T7): explicit project roots never
+/// Verification for the explicit repack-metadata context: explicit project roots never
 /// cross-fallback, explicit local mode ignores the ambient root, contexts are fixed at call
-/// time, and legacy static entry points keep their historical behavior.
-/// <para>显式重打包元数据上下文（T7）验证：显式工程根不交叉回退、显式本地模式忽略环境根、
-/// 上下文在调用时固定，旧静态入口保持历史行为。</para>
+/// time, and the static entry points keep their documented behavior.
+/// <para>显式重打包元数据上下文验证：显式工程根不交叉回退、显式本地模式忽略环境根、
+/// 上下文在调用时固定，静态入口保持既有契约。</para>
 /// </summary>
 [Collection("Workspace state")]
 public class RepackMetadataContextTests : IDisposable

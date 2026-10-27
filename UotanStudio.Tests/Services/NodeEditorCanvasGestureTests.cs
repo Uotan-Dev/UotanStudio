@@ -14,7 +14,6 @@ public sealed class NodeEditorCanvasGestureTests
     [Fact]
     public void CalculateWheelAction_VerticalWheel_ScrollsVerticallyWithoutZoom()
     {
-        // Wheel up: viewport scrolls up (canvas shifts down, deltaOffsetY > 0)
         var resultUp = NodeEditorView.CalculateWheelAction(
             new Vector(0, 1),
             KeyModifiers.None,
@@ -28,7 +27,6 @@ public sealed class NodeEditorCanvasGestureTests
         Assert.Equal(0, deltaXUp);
         Assert.Equal(60, deltaYUp);
 
-        // Wheel down: viewport scrolls down (canvas shifts up, deltaOffsetY < 0)
         var resultDown = NodeEditorView.CalculateWheelAction(
             new Vector(0, -1),
             KeyModifiers.None,
@@ -46,7 +44,6 @@ public sealed class NodeEditorCanvasGestureTests
     [Fact]
     public void CalculateWheelAction_ShiftVerticalWheel_ScrollsHorizontallyWithoutZoom()
     {
-        // Shift + wheel up: viewport scrolls left (canvas shifts right, deltaOffsetX > 0)
         var resultUp = NodeEditorView.CalculateWheelAction(
             new Vector(0, 1),
             KeyModifiers.Shift,
@@ -60,7 +57,6 @@ public sealed class NodeEditorCanvasGestureTests
         Assert.Equal(60, deltaXUp);
         Assert.Equal(0, deltaYUp);
 
-        // Shift + wheel down: viewport scrolls right (canvas shifts left, deltaOffsetX < 0)
         var resultDown = NodeEditorView.CalculateWheelAction(
             new Vector(0, -1),
             KeyModifiers.Shift,
@@ -78,7 +74,6 @@ public sealed class NodeEditorCanvasGestureTests
     [Fact]
     public void CalculateWheelAction_HorizontalWheel_ScrollsHorizontallyWithoutZoom()
     {
-        // Horizontal tilt right / scroll right: Delta.X is negative, viewport scrolls right
         var resultRight = NodeEditorView.CalculateWheelAction(
             new Vector(-1, 0),
             KeyModifiers.None,
@@ -92,7 +87,6 @@ public sealed class NodeEditorCanvasGestureTests
         Assert.Equal(-60, deltaXRight);
         Assert.Equal(0, deltaYRight);
 
-        // Horizontal tilt left / scroll left: Delta.X is positive, viewport scrolls left
         var resultLeft = NodeEditorView.CalculateWheelAction(
             new Vector(1, 0),
             KeyModifiers.None,
@@ -110,7 +104,6 @@ public sealed class NodeEditorCanvasGestureTests
     [Fact]
     public void CalculateWheelAction_ControlVerticalWheel_TreatsAsZoom()
     {
-        // Ctrl + wheel up: zoom in
         var resultUp = NodeEditorView.CalculateWheelAction(
             new Vector(0, 1),
             KeyModifiers.Control,
@@ -124,7 +117,6 @@ public sealed class NodeEditorCanvasGestureTests
         Assert.Equal(0, deltaXUp);
         Assert.Equal(0, deltaYUp);
 
-        // Ctrl + wheel down: zoom out
         var resultDown = NodeEditorView.CalculateWheelAction(
             new Vector(0, -1),
             KeyModifiers.Control,
@@ -159,7 +151,6 @@ public sealed class NodeEditorCanvasGestureTests
     [Fact]
     public void CalculateWheelAction_ZoomScaling_AdjustsCanvasDeltaInverselyToZoom()
     {
-        // At zoom = 2.0 (zoomed in): 60 screen pixels = 30 canvas units
         NodeEditorView.CalculateWheelAction(
             new Vector(0, 1),
             KeyModifiers.None,
@@ -169,7 +160,6 @@ public sealed class NodeEditorCanvasGestureTests
             out var deltaZoomedIn);
         Assert.Equal(30.0, deltaZoomedIn);
 
-        // At zoom = 0.5 (zoomed out): 60 screen pixels = 120 canvas units
         NodeEditorView.CalculateWheelAction(
             new Vector(0, 1),
             KeyModifiers.None,

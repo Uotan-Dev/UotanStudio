@@ -5,13 +5,15 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Identification tests for the compiled magic engine (upstream file(1) magic(5) corpus emitted
-/// into C# rule tables by UotanStudio.Firmware.MagicGen). Every expected description below was
-/// captured from the engine and cross-checked against the installed <c>file(1)</c> 5.48 oracle.
-/// The vendored corpus tracks upstream master, so a few trailing description clauses that require a
-/// full-file read (ELF "no section header", gzip ISIZE) or that classify plain text are intentionally
-/// out of scope for a header-probe identifier and are asserted only on their stable prefix.
-/// <para>编译型魔数引擎 FileMagic 的识别测试。</para>
+/// Identification tests for the compiled magic engine; the rule tables are generated from a magic(5)
+/// corpus by UotanStudio.Firmware.MagicGen. Every expected description below was captured from the
+/// engine and cross-checked against the installed <c>file(1)</c> 5.48. A few trailing description
+/// clauses require a full-file read (ELF "no section header", gzip ISIZE) or classify plain text, so
+/// they are out of scope for a header-probe identifier and are asserted only on their stable prefix.
+/// <para>编译型魔数引擎 FileMagic 的识别测试；规则表由 UotanStudio.Firmware.MagicGen 从 magic(5) 语料生成。
+/// 以下每条期望描述都取自该引擎，并与已安装的 <c>file(1)</c> 5.48 对照。少数尾部描述子句需要整文件读取
+/// （ELF 的 “no section header”、gzip 的 ISIZE）或对纯文本分类，因此不在头部探测识别器的范围内，
+/// 只断言其稳定前缀。</para>
 /// </summary>
 public class FileMagicTests
 {
@@ -317,12 +319,10 @@ public class FileMagicTests
 
 /// <summary>
 /// Differential parity checks against the system <c>file(1)</c>. These exercise the same fixtures
-/// through both the compiled engine and the upstream oracle and assert both classify the file into
-/// the same family (matched on a shared keyword rather than the full description, because the vendored
-/// corpus tracks upstream master and some trailing clauses drift). Tests skip when no <c>file</c>
-/// executable is available on <c>PATH</c>; the oracle comparison for these fixtures was performed
-/// manually with file(1) 5.48 while the assertions above were authored.
-/// <para>与系统 <c>file(1)</c> 的差分一致性测试。</para>
+/// through both the compiled engine and the reference oracle and assert both classify the file into the same
+/// family (matched on a shared keyword rather than the full description, because the vendored corpus can drift
+/// in trailing clauses). Tests skip when no <c>file</c> executable is available on <c>PATH</c>.
+/// <para>与系统 <c>file(1)</c> 的差分一致性对照测试：同一批夹具分别交给编译引擎与参考 oracle，断言两者把文件归入同一族（按共享关键字匹配而非完整描述，因为随附语料的尾部子句可能漂移）；<c>PATH</c> 上没有 <c>file</c> 可执行文件时跳过。</para>
 /// </summary>
 public class FileMagicDifferentialTests
 {

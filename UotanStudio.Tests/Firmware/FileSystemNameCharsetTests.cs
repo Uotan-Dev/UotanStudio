@@ -12,7 +12,7 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Directory-entry name charset guard shared by the EXT4 and EROFS dirent writers: upstream Linux never
+/// Directory-entry name charset guard shared by the EXT4 and EROFS dirent writers: the Linux directory format never
 /// lets a path component reach a dirent when it is empty, when it carries <c>'/'</c> or a NUL byte, or when
 /// it is the <c>.</c> or <c>..</c> name the writer synthesises itself, and e2fsck or fsck.erofs reports such
 /// a record as corrupt, so the builders must fail before publishing rather than emit an untraversable tree.
@@ -20,7 +20,7 @@ namespace UotanStudio.Tests.Firmware;
 /// where those characters are ordinary, so only the byte limit governs it. Every name the formats can
 /// encode — CJK, accents, spaces, apostrophes, a leading hyphen, a dot in the middle — still builds and
 /// round-trips through the matching parser, and the synthesised dot records survive in the written block.
-/// <para>EXT4 与 EROFS 目录项写入器共用的名称字符集守卫：上游 Linux 从不允许空组件、含 <c>'/'</c> 或 NUL
+/// <para>EXT4 与 EROFS 目录项写入器共用的名称字符集守卫：Linux 目录格式从不允许空组件、含 <c>'/'</c> 或 NUL
 /// 字节的组件，以及写入器自己合成的 <c>.</c> 与 <c>..</c> 名称进入目录项，e2fsck 与 fsck.erofs 会把这类记录
 /// 判为损坏，因此构建器必须在发布镜像之前失败，而不是写出无法遍历的目录树。长度规则保持独立，因为扩展属性的
 /// 短名称属于另一个命名空间，那些字符在那里只是普通字符，只受字节上限约束。格式能编码的名称——中文、重音

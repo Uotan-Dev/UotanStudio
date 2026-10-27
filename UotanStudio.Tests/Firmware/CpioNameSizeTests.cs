@@ -10,7 +10,7 @@ namespace UotanStudio.Tests.Firmware;
 /// <summary>
 /// The CPIO <c>namesc</c> field is dialect-specific in width: two big-endian bytes in the binary dialects,
 /// six octal digits in the old ASCII dialects and eight hexadecimal digits in newc and crc. It counts the
-/// NUL terminator, so a name that no longer fits must fail before a single record byte is emitted instead of
+/// NUL terminator, so a name that does not fit must fail before a single record byte is emitted instead of
 /// aliasing the field, because a header whose declared record size differs from the written bytes
 /// desynchronises every following record. The measurement is in UTF-8 bytes, not in UTF-16 characters, so a
 /// CJK name costs three bytes per character and still passes unchanged while it fits, and the widest field

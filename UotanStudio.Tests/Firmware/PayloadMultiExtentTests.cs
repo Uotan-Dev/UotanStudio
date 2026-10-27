@@ -9,11 +9,10 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// 多区间（multi-extent）操作语义测试，对齐上游 delta_performer：源区间拼接为一条数据流
-/// 整体校验哈希后按顺序写入全部目标区间。
-/// <para>Multi-extent operation semantics tests, mirroring upstream delta_performer: source
-/// extents concatenate into one data stream, verified as a whole, then written sequentially
-/// across ALL destination extents.</para>
+/// Multi-extent operation semantics tests: source extents concatenate into one data stream, verified
+/// as a whole, then written sequentially across all destination extents.
+/// <para>多区间（multi-extent）操作语义测试：源区间拼接为一条数据流，整体校验哈希后按顺序写入
+/// 全部目标区间。</para>
 /// </summary>
 public class PayloadMultiExtentTests
 {
