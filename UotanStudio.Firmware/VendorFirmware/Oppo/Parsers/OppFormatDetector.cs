@@ -4,7 +4,7 @@ using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
 
 namespace UotanStudio.Firmware.VendorFirmware.Oppo.Parsers;
 
-internal static class FormatDetector
+internal static class OppFormatDetector
 {
     private static readonly List<Func<Stream, OppFormat?>> CustomDetectors = [];
 

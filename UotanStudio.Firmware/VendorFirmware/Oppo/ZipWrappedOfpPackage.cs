@@ -5,7 +5,7 @@ using UotanStudio.Firmware.VendorFirmware.Oppo.Exceptions;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Models;
 using UotanStudio.Firmware.VendorFirmware.Oppo.Parsers;
 using FileExtraction = UotanStudio.Firmware.Core.FileExtraction;
-using OppFormatDetector = UotanStudio.Firmware.VendorFirmware.Oppo.Parsers.FormatDetector;
+using OppFormatDetector = UotanStudio.Firmware.VendorFirmware.Oppo.Parsers.OppFormatDetector;
 
 namespace UotanStudio.Firmware.VendorFirmware.Oppo;
 

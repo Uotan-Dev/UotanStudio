@@ -48,7 +48,7 @@ internal static class OppoInitializer
             ParserRegistry.Register(new OzipFormatParser());
 
 
-            FormatDetector.RegisterDetector(TryDetectMtkFormat);
+            OppFormatDetector.RegisterDetector(TryDetectMtkFormat);
 
             _initialized = true;
         }
@@ -101,7 +101,7 @@ internal static class OppoInitializer
                 OppMtkKeyDerivation.MtkShuffle(MtkKeyDatabase.MtkHeaderShuffleKey, headerBuffer);
 
 
-                if (FormatDetector.IsPrintableAscii(headerBuffer.AsSpan(0, 46)))
+                if (OppFormatDetector.IsPrintableAscii(headerBuffer.AsSpan(0, 46)))
                 {
                     return OppFormat.OfpMtk;
                 }

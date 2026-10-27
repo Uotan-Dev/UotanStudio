@@ -72,7 +72,7 @@ public sealed class OppoFormatHandler : IReadonlyFormatHandler
         try
         {
             using var fs = File.OpenRead(filePath);
-            var format = Parsers.FormatDetector.DetectFormatFromStream(fs);
+            var format = Parsers.OppFormatDetector.DetectFormatFromStream(fs);
             if (format != OppFormat.Unknown)
             {
                 return true;
