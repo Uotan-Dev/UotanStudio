@@ -331,6 +331,9 @@
 				 <MenuItem Header="{DynamicResource Menu_BootPatch}" Command="{Binding MenuVM.OpenBootPatchCommand}">
 					<MenuItem.Icon><avalonia:Tools Width="16" Height="16" /></MenuItem.Icon>
 				 </MenuItem>
+				 <MenuItem Header="{DynamicResource Menu_AvbTool}" Command="{Binding MenuVM.OpenAvbToolCommand}">
+					<MenuItem.Icon><avalonia:FileSafety Width="16" Height="16" /></MenuItem.Icon>
+				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_LogWindow}" Command="{Binding MenuVM.OpenLogWindowCommand}">
 					<MenuItem.Icon>
 						<avalonia:File Width="16" Height="16" />

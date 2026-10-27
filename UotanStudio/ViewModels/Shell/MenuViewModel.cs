@@ -1444,6 +1444,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void OpenBootPatch() => _windows.ShowHostWindow(HostWindowKind.BootPatch);
 
+    /// <summary>Opens or activates the AVB footer and A/B OTA tool.
+    /// <para>打开或聚焦 AVB 尾部与 A/B OTA 工具。</para></summary>
+    [RelayCommand]
+    private void OpenAvbTool() => _windows.ShowHostWindow(HostWindowKind.AvbTool);
+
     /// <summary>打开文件校验器窗口；窗口已打开时前置聚焦。</summary>
     [RelayCommand]
     private void OpenFileChecksum() => _windows.ShowChecksumWindow();

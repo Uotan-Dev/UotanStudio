@@ -27,6 +27,7 @@ public sealed class UiWindowService : IWindowService
     private Window? _visualPluginManagerWindow;
     private Window? _apkSigningWindow;
     private Window? _bootPatchWindow;
+    private Window? _avbToolWindow;
     private ChecksumWindow? _checksumWindow;
     private SchemeEditorWindow? _schemeEditorWindow;
     private SchemeOperatorWindow? _schemeOperatorWindow;
@@ -142,6 +143,9 @@ public sealed class UiWindowService : IWindowService
                 break;
             case HostWindowKind.BootPatch:
                 ShowToolWindow(ref _bootPatchWindow, static () => new BootPatchWindow());
+                break;
+            case HostWindowKind.AvbTool:
+                ShowToolWindow(ref _avbToolWindow, static () => new AvbToolWindow());
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown host window kind.");

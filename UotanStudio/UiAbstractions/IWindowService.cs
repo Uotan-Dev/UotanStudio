@@ -25,7 +25,10 @@ public enum HostWindowKind
     ApkSigning,
 
     /// <summary>The boot image patch window. <para>Boot 镜像修补窗口。</para></summary>
-    BootPatch
+    BootPatch,
+
+    /// <summary>The AVB footer and A/B OTA tool window. <para>AVB 尾部与 A/B OTA 工具窗口。</para></summary>
+    AvbTool
 }
 
 /// <summary>
