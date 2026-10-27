@@ -11,19 +11,19 @@ namespace UotanStudio.Compress.Codecs.Zstd;
 /// 而不是把它折叠成更粗略的结果。</para>
 /// </summary>
 /// <remarks>
-/// <para>How long one instance lives and which frames it is applied to belongs to the caller; this type keeps no cache.
+/// How long one instance lives and which frames it is applied to belongs to the caller; this type keeps no cache.
 /// Reuse is only sound when every frame re-establishes its session boundary, so the caller calls <see cref="Reset"/>
 /// first and writes <see cref="MaximumWindowLog"/> afterwards: a frame abandoned part way through by cancellation,
 /// truncation or invalid data leaves the session mid-flight, the reset is what returns it to a clean boundary, and the
 /// window bound is a property of the session that is about to decode the next frame rather than of the one just
-/// abandoned.</para>
+/// abandoned.
+/// Formats that decode a whole frame in one step without owning a context stay on
+/// <see cref="ZstdBlockCodec"/>, which builds or rents an engine context per block and returns the decoded length.
 /// <para>实例存活多久、用于哪些帧，都由调用方决定；本类型不持有缓存。复用只有在每帧都重新建立会话边界时才是可靠的：
 /// 调用方先调用 <see cref="Reset"/>，之后再写入 <see cref="MaximumWindowLog"/>。被取消、截断或非法数据中途放弃的帧会把
 /// 会话留在半途，重置正是把它恢复到干净的状态边界；而窗口上限属于即将解码下一帧的那个会话，不属于刚刚放弃的那个，
-/// 所以要写在重置之后。</para>
-/// <para>Formats that decode a whole frame in one step without owning a context stay on
-/// <see cref="ZstdBlockCodec"/>, which builds or rents an engine context per block and returns the decoded length.</para>
-/// <para>一次性整帧解码又不愿持有上下文的格式，继续使用 <see cref="ZstdBlockCodec"/>：它按块新建或借用引擎上下文，
+/// 所以要写在重置之后。
+/// 一次性整帧解码又不愿持有上下文的格式，继续使用 <see cref="ZstdBlockCodec"/>：它按块新建或借用引擎上下文，
 /// 并返回解码后的长度。</para>
 /// </remarks>
 public sealed class ZstdFrameDecompressor : IDisposable

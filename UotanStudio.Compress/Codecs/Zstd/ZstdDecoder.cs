@@ -11,9 +11,9 @@ namespace UotanStudio.Compress.Codecs.Zstd;
 /// 而不必直接租借 ZstdSharp 类型。</para>
 /// </summary>
 /// <remarks>
-/// <para>The window ceiling comes from construction because ZstdSharp's one-shot frame decode never consults
+/// The window ceiling comes from construction because ZstdSharp's one-shot frame decode never consults
 /// <c>ZSTD_d_windowLogMax</c>; the bound is set on the context here so every later frame inherits it, and
-/// <see cref="Reset"/> re-establishes a clean frame boundary without losing it. One instance is not thread-safe.</para>
+/// <see cref="Reset"/> re-establishes a clean frame boundary without losing it. One instance is not thread-safe.
 /// <para>窗口上限在构造时确定，因为 ZstdSharp 的一次性帧解码从不查看 <c>ZSTD_d_windowLogMax</c>；此处把它设在上下文上，
 /// 使后续每帧都继承它，<see cref="Reset"/> 只重建干净的帧边界而不丢失该上限。单个实例并非线程安全。</para>
 /// </remarks>

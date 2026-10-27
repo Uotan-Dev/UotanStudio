@@ -49,9 +49,9 @@ public static partial class Lz4DestinationCodec
     /// <remarks>
     /// The context is re-initialised before every use, so a caller may keep one for the whole run and reuse it
     /// across blocks: the emitted bytes depend only on the block, its level and its algorithm, never on what the
-    /// context previously encoded. Reuse is single-threaded per context; two concurrent callers must rent their own.
+    /// context encoded for an earlier block. Reuse is single-threaded per context; two concurrent callers must rent their own.
     /// <para>每次使用前都会重新初始化上下文，因此调用方可以在整个运行期间持有同一个上下文并在各块之间复用：
-    /// 输出字节只取决于该块、其级别与算法，与上下文此前编码过什么无关。复用按上下文单线程；并发的两个调用方必须
+    /// 输出字节只取决于该块、其级别与算法，与上下文为更早的块编码过什么无关。复用按上下文单线程；并发的两个调用方必须
     /// 各自借用自己的上下文。</para>
     /// </remarks>
     public static unsafe int Encode(ReadOnlySpan<byte> source, Span<byte> target, int algorithm, int level,
@@ -155,9 +155,9 @@ public static partial class Lz4DestinationCodec
     /// <remarks>
     /// Renting removes the slot under the lock, so a context is exclusively owned until it is returned and an idle
     /// slot never contains a context another caller is still using. The context is cleared before every use, so the
-    /// bytes do not depend on which block previously occupied it. A displaced idle context is freed outside the lock.
+    /// bytes do not depend on which block last occupied it. A displaced idle context is freed outside the lock.
     /// <para>借用会在锁内移除槽位，因此上下文在归还前被独占，空闲槽位中也绝不会出现其他调用方仍在使用的上下文。
-    /// 每次使用前都会清零，因此输出字节不取决于此前占用它的块。被挤出的空闲上下文在锁外释放。</para>
+    /// 每次使用前都会清零，因此输出字节不取决于上一个占用它的块。被挤出的空闲上下文在锁外释放。</para>
     /// </remarks>
     private static class ContextCache
     {

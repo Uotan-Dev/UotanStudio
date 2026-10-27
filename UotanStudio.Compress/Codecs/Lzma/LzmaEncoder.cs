@@ -11,18 +11,18 @@ namespace UotanStudio.Compress.Codecs.Lzma;
 /// 默认值，因为由本库写入默认值会改变格式已经写入磁盘的字节。</para>
 /// </summary>
 /// <remarks>
-/// <para>Container framing deliberately stays with the caller. The single property byte, the LZMA-alone eight-byte
+/// Container framing deliberately stays with the caller. The single property byte, the LZMA-alone eight-byte
 /// size field, the negated property byte MicroLZMA stores and the properties-then-size order a container writes are
 /// format contracts; this type produces only the payload those frames wrap, and it never rewrites a property the
-/// caller did not name.</para>
+/// caller did not name.
+/// The SDK applies the axes independently, so the order in which they are listed here does not affect the
+/// encoded result; only which axes are present does.
+/// The SDK rejects an out-of-range axis with an exception type it does not expose, so a format that has to
+/// bound a value validates it before constructing the encoder.
 /// <para>容器封装刻意留给调用方。单个属性字节、LZMA-alone 的 8 字节大小字段、MicroLZMA 存储的属性取反字节，
-/// 以及容器先写属性再写大小的顺序都是格式契约；本类型只产出这些封装所包裹的载荷，也不会改写调用方未点名的属性。</para>
-/// <para>The SDK applies the axes independently, so the order in which they are listed here does not affect the
-/// encoded result; only which axes are present does.</para>
-/// <para>SDK 会彼此独立地应用各属性轴，因此此处列出它们的顺序不影响编码结果，影响的只是哪些属性轴被提供。</para>
-/// <para>The SDK rejects an out-of-range axis with an exception type it does not expose, so a format that has to
-/// bound a value validates it before constructing the encoder.</para>
-/// <para>SDK 会用一个不对外暴露的异常类型拒绝越界的属性轴，因此需要限定取值范围的格式层应在构造编码器之前自行校验。</para>
+/// 以及容器先写属性再写大小的顺序都是格式契约；本类型只产出这些封装所包裹的载荷，也不会改写调用方未点名的属性。
+/// SDK 会彼此独立地应用各属性轴，因此此处列出它们的顺序不影响编码结果，影响的只是哪些属性轴被提供。
+/// SDK 会用一个不对外暴露的异常类型拒绝越界的属性轴，因此需要限定取值范围的格式层应在构造编码器之前自行校验。</para>
 /// </remarks>
 public sealed class LzmaEncoder
 {

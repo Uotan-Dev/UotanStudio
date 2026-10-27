@@ -10,9 +10,9 @@ namespace UotanStudio.Compress.Codecs.Lzma;
 /// 封装：读取大小字段、补回 MicroLZMA 丢掉的字节、限制输出目标容量都是格式层自己的职责。</para>
 /// </summary>
 /// <remarks>
-/// <para>The properties are forwarded to the SDK verbatim, so the SDK's own range checks and failure reporting stay
+/// The properties are forwarded to the SDK verbatim, so the SDK's own range checks and failure reporting stay
 /// exactly as a format observed them before this type existed; its rejection uses an exception type the SDK does not
-/// expose.</para>
+/// expose.
 /// <para>属性字节原样转发给 SDK，因此 SDK 自身的范围检查与失败上报与引入本类型之前格式所观察到的完全一致；
 /// 其拒绝路径使用 SDK 不对外暴露的异常类型。</para>
 /// </remarks>

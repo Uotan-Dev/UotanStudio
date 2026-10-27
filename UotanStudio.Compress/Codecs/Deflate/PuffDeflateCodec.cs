@@ -5,23 +5,22 @@ using UotanStudio.Compress.Internal;
 namespace UotanStudio.Compress.Codecs.Deflate;
 
 /// <summary>
-/// Converts between a DEFLATE bitstream and the puff instruction stream that AOSP's puffin tool uses so a delta patch
-/// can address bytes inside a compressed payload without recompressing it.
-/// <para>在 DEFLATE 位流与 AOSP puffin 工具的 puff 指令流之间双向转换，使增量补丁能够定位压缩载荷内部的字节而无需重新压缩。</para>
+/// Converts between a DEFLATE bitstream and the puff instruction stream a delta patch carries so it can address bytes
+/// inside a compressed payload without recompressing it.
+/// <para>在 DEFLATE 位流与增量补丁所携带的 puff 指令流之间双向转换，使补丁能够定位压缩载荷内部的字节而无需重新压缩。</para>
 /// </summary>
 /// <remarks>
-/// <para><see cref="PuffDeflateCodec.Puff"/> reads a bit extent of a DEFLATE stream and emits literal runs plus
+/// <see cref="PuffDeflateCodec.Puff"/> reads a bit extent of a DEFLATE stream and emits literal runs plus
 /// back-reference tokens; <see cref="PuffDeflateCodec.Huff"/> replays those tokens to reproduce the original bytes.
-/// Both directions keep the AOSP literal, length and distance bases, the stored-block handling and every boundary
-/// check exactly as the puffin reference implementation spells them, because a stream puffed by one variant has to
-/// huff back with the same variant.</para>
+/// Both directions keep the literal, length and distance bases, the stored-block handling and every boundary check
+/// the puff format defines, because a stream puffed by one variant has to huff back with the same variant.
+/// Output is bounded by the declared extent length through <see cref="BoundedWriteStream"/> before any byte
+/// lands, so a stream that decodes past its declared size fails instead of growing without limit.
 /// <para><see cref="PuffDeflateCodec.Puff"/> 读取 DEFLATE 位流的某个比特区间并输出字面量段与回指标记；
 /// <see cref="PuffDeflateCodec.Huff"/> 按这些标记还原原始字节。
-/// 两个方向都必须与 puffin 参考实现逐字节一致：字面量、长度与距离基表、stored 块处理以及所有边界检查均不允许改写，
-/// 因为按某一变体 puff 出来的流必须用同一变体 huff 回去。</para>
-/// <para>Output is bounded by the declared extent length through <see cref="BoundedWriteStream"/> before any byte
-/// lands, so a stream that decodes past its declared size fails instead of growing without limit.</para>
-/// <para>输出在落地前就由 <see cref="BoundedWriteStream"/> 按声明长度设界，因此解码超出既定大小的流会失败，而不是无限增长。</para>
+/// 两个方向都必须遵循 puff 格式定义的字面量、长度与距离基表、stored 块处理以及所有边界检查，
+/// 因为按某一变体 puff 出来的流必须用同一变体 huff 回去。
+/// 输出在落地前就由 <see cref="BoundedWriteStream"/> 按声明长度设界，因此解码超出既定大小的流会失败，而不是无限增长。</para>
 /// </remarks>
 public static class PuffDeflateCodec
 {

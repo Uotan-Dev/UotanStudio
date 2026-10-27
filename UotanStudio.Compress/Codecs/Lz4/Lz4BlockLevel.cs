@@ -5,10 +5,10 @@ namespace UotanStudio.Compress.Codecs.Lz4;
 /// <para>无帧 LZ4 块编码器具名的搜索强度锚点，按从最快到最详尽排列。</para>
 /// </summary>
 /// <remarks>
-/// <para>The numeric values are the encoder's own anchors, not a caller's level scale. A format that publishes its
+/// The numeric values are the encoder's own anchors, not a caller's level scale. A format that publishes its
 /// levels as <c>0</c>, <c>1</c>, <c>3</c>, <c>5</c> and <c>9</c> has to translate them onto this scale before calling
 /// <see cref="Lz4BlockCodec.Encode"/>, and a wrong translation silently rewrites the emitted block instead of
-/// failing, so the translation belongs to the format that owns the on-disk bytes.</para>
+/// failing, so the translation belongs to the format that owns the on-disk bytes.
 /// <para>数值是编码器自身的锚点，而不是调用方的级别尺度。以 <c>0</c>、<c>1</c>、<c>3</c>、<c>5</c>、<c>9</c>
 /// 对外暴露级别的格式，在调用 <see cref="Lz4BlockCodec.Encode"/> 之前必须先把级别翻译到本尺度；翻译错误不会报错，
 /// 只会静默改写产出的块字节，因此该翻译留在持有磁盘字节的格式层。</para>

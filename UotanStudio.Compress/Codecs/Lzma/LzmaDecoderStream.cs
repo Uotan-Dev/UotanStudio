@@ -10,15 +10,15 @@ namespace UotanStudio.Compress.Codecs.Lzma;
 /// 解压大小共同确定；LZMA2 只由其分块框架携带的单个字典字节确定。</para>
 /// </summary>
 /// <remarks>
-/// <para>The properties and sizes are forwarded to the engine untouched, so the framing rules a format was written
+/// The properties and sizes are forwarded to the engine untouched, so the framing rules a format was written
 /// against stay in the format: reading a header, bounding the input to the declared payload and rejecting an output
-/// length that disagrees with the header all remain the caller's checks.</para>
-/// <para>属性与大小都原样转发给引擎，因此写入时依据的封装规则仍留在格式层：读取头部、把输入限制到声明的
-/// 负载长度，以及拒绝与头部不一致的输出长度，这些都由调用方自行校验。</para>
-/// <para>Reading produces plaintext and ends when the engine reaches the declared size, the LZMA2 end marker, or the
+/// length that disagrees with the header all remain the caller's checks.
+/// Reading produces plaintext and ends when the engine reaches the declared size, the LZMA2 end marker, or the
 /// end of the bounded input; a stream that consumed fewer bytes than declared is observable on the caller's own
-/// bounded input stream, never here.</para>
-/// <para>读取产出明文，并在引擎到达声明大小、LZMA2 结束标记或有界输入末尾时结束；消耗字节数少于声明值的情况
+/// bounded input stream, never here.
+/// <para>属性与大小都原样转发给引擎，因此写入时依据的封装规则仍留在格式层：读取头部、把输入限制到声明的
+/// 负载长度，以及拒绝与头部不一致的输出长度，这些都由调用方自行校验。
+/// 读取产出明文，并在引擎到达声明大小、LZMA2 结束标记或有界输入末尾时结束；消耗字节数少于声明值的情况
 /// 只能在调用方自己的有界输入流上观察到，本类型不做该检查。</para>
 /// </remarks>
 public sealed class LzmaDecoderStream : Stream

@@ -11,13 +11,13 @@ namespace UotanStudio.Compress.Codecs.Lzma;
 /// 仍可通过 <see cref="Properties"/> 读取，因此容器可以把它们与载荷一起记录，而不必事后反推。</para>
 /// </summary>
 /// <remarks>
-/// <para>The engine's default coder properties are used unchanged, because a container whose bytes are already on
-/// disk was written with them; this type adds no level, dictionary or thread knob of its own.</para>
+/// The engine's default coder properties are used unchanged, because a container whose bytes are already on
+/// disk was written with them; this type adds no level, dictionary or thread knob of its own.
+/// Nothing is framed here: the five property bytes are exposed for the caller to write where its container
+/// wants them, and disposal is what flushes the encoder into the output stream.
 /// <para>引擎自身的默认编码器属性不做改动，因为磁盘上已有的容器字节就是用它们写入的；本类型不额外提供级别、
-/// 字典或线程参数。</para>
-/// <para>Nothing is framed here: the five property bytes are exposed for the caller to write where its container
-/// wants them, and disposal is what flushes the encoder into the output stream.</para>
-/// <para>本类型不做封装：5 个属性字节暴露给调用方，由其写到容器需要的位置；只有释放编码器才会把数据刷入输出流。</para>
+/// 字典或线程参数。
+/// 本类型不做封装：5 个属性字节暴露给调用方，由其写到容器需要的位置；只有释放编码器才会把数据刷入输出流。</para>
 /// </remarks>
 public sealed class LzmaEncoderStream : Stream
 {

@@ -10,9 +10,9 @@ namespace UotanStudio.Compress.Codecs.Zstd;
 /// ZstdSharp 上下文。</para>
 /// </summary>
 /// <remarks>
-/// <para>Context parameters are fixed at construction, which is why the checksum flag lives here rather than on the
+/// Context parameters are fixed at construction, which is why the checksum flag lives here rather than on the
 /// method: the payload writer records a checksum in every frame it emits, and a per-call parameter would let a later
-/// call silently drop it. One instance is not thread-safe; create one per worker.</para>
+/// call silently drop it. One instance is not thread-safe; create one per worker.
 /// <para>上下文参数在构造时固定，因此校验标志放在这里而不是方法上：载荷写入器在每帧中记录校验和，若改为逐调用参数，
 /// 后续调用就可能静默丢掉它。单个实例并非线程安全，请按工作者各建一个。</para>
 /// </remarks>

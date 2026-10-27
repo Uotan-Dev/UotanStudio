@@ -9,22 +9,22 @@ namespace UotanStudio.Compress.Codecs.Zstd;
 /// <para>调用方持有的 Zstandard 上下文：每次调用编码一个完整的帧，并在跨调用之间保持级别、内容校验和设置与原始字典。</para>
 /// </summary>
 /// <remarks>
-/// <para>Reuse policy deliberately belongs to the caller and this type keeps no static cache, because Zstandard
+/// Reuse policy deliberately belongs to the caller and this type keeps no static cache, because Zstandard
 /// advances an internal hash salt on every session reset whenever the selected level's strategy is <c>greedy</c>,
 /// <c>lazy</c> or <c>lazy2</c>, and a salted reused context may then emit bytes that a freshly created context does
 /// not. Levels whose strategy keeps the row match finder disabled — <c>dfast</c>, the strategy behind the default
 /// level <c>3</c> — return to the same state on every session reset, so a reused context and a freshly created one
 /// agree byte for byte there and one instance may serve a whole encoding loop. A caller that selects a level outside
-/// that equivalence buys reuse at the price of frames that no longer depend on the block payload alone, and it still
-/// owns disposal of this instance.</para>
+/// that equivalence buys reuse at the price of frames that depend on more than the block payload alone, and it still
+/// owns disposal of this instance.
+/// A format that compresses block by block without wanting to hold a context of its own stays on
+/// <see cref="ZstdBlockCodec"/>, which builds and releases one engine context per block.
 /// <para>复用策略刻意留给调用方，本类型不做任何静态缓存：只要所选级别的策略是 <c>greedy</c>、<c>lazy</c> 或 <c>lazy2</c>，
 /// Zstandard 就会在每次会话重置时推进内部哈希盐值，被加盐的复用上下文因此可能产出新建上下文不会产出的字节。策略不启用行匹配器
 /// 的级别（<c>dfast</c>，即默认级别 <c>3</c> 背后的策略）每次会话重置都回到同一状态，因此复用与新建上下文在该级别上逐字节
-/// 一致，一个实例足以跑完整个编码循环。选择该等价性之外级别的调用方，等于以“帧不再只取决于该块自身载荷”为代价换取复用，
-/// 并且本实例的释放责任仍归它自己。</para>
-/// <para>A format that compresses block by block without wanting to hold a context of its own stays on
-/// <see cref="ZstdBlockCodec"/>, which builds and releases one engine context per block.</para>
-/// <para>逐块压缩又不愿自己持有上下文的格式，继续使用 <see cref="ZstdBlockCodec"/>：它每块新建并释放一个引擎上下文。</para>
+/// 一致，一个实例足以跑完整个编码循环。选择该等价性之外级别的调用方，等于以“帧取决于该块自身载荷之外的状态”为代价换取复用，
+/// 并且本实例的释放责任仍归它自己。
+/// 逐块压缩又不愿自己持有上下文的格式，继续使用 <see cref="ZstdBlockCodec"/>：它每块新建并释放一个引擎上下文。</para>
 /// </remarks>
 public sealed class ZstdFrameCompressor : IDisposable
 {
@@ -86,7 +86,7 @@ public sealed class ZstdFrameCompressor : IDisposable
 
     /// <summary>
     /// Releases the engine context. Frames produced earlier stay valid and a second call does nothing.
-    /// <para>释放引擎上下文。此前产出的帧依然有效，重复调用不产生任何效果。</para>
+    /// <para>释放引擎上下文。已经产出的帧依然有效，重复调用不产生任何效果。</para>
     /// </summary>
     public void Dispose()
     {

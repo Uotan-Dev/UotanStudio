@@ -6,20 +6,20 @@ namespace UotanStudio.Compress.Codecs.Lz4;
 /// <para>以流的方式解码无帧 LZ4 原始块并写入目标流，解码过程中保留最近 64 KiB 输出作为匹配窗口。</para>
 /// </summary>
 /// <remarks>
-/// <para>The block carries no frame header, no content size and no checksum: every token is <c>literalLengthHigh |
+/// The block carries no frame header, no content size and no checksum: every token is <c>literalLengthHigh |
 /// matchLengthLow</c>, a literal run, a two-byte little-endian match offset and an extended match length of at least
 /// four bytes. The caller supplies the packed byte count and the exact expected output length, and both are verified
 /// when the block ends, so a block that leaves input behind or underfills the declared size is rejected rather than
-/// silently accepted.</para>
-/// <para>该块不含帧头、内容长度与校验和：每个标记为 <c>字面量长度高位 | 匹配长度低位</c>，其后是字面量段、2 字节小端序匹配偏移，
-/// 以及最少 4 字节的扩展匹配长度。调用方给出压缩字节数与期望输出长度，块结束时两者都会被核对，因此遗留输入字节或输出不足的块会被拒绝而非静默接受。</para>
-/// <para>The window is maintained byte by byte while output is still being produced, so an overlapping match that reads
-/// the bytes it just wrote is reproduced exactly; the decoder never buffers the whole block.</para>
-/// <para>窗口在输出产生的同时逐字节维护，因此读取刚刚写出字节的自重叠匹配能被精确还原；解码器不会把整块缓存进内存。</para>
-/// <para>Failures are reported through <see cref="Lz4RawBlockException"/> with a machine-readable reason instead of a
+/// silently accepted.
+/// The window is maintained byte by byte while output is still being produced, so an overlapping match that reads
+/// the bytes it just wrote is reproduced exactly; the decoder never buffers the whole block.
+/// Failures are reported through <see cref="Lz4RawBlockException"/> with a machine-readable reason instead of a
 /// vendor-specific sentence, because the wording a caller shows its user belongs to that caller; the reason carries the
-/// decoded and expected lengths so the caller can rebuild its own message.</para>
-/// <para>失败通过 <see cref="Lz4RawBlockException"/> 以可机读的原因上报，而不是带厂商色彩的文案，因为面向用户的措辞属于调用方；
+/// decoded and expected lengths so the caller can rebuild its own message.
+/// <para>该块不含帧头、内容长度与校验和：每个标记为 <c>字面量长度高位 | 匹配长度低位</c>，其后是字面量段、2 字节小端序匹配偏移，
+/// 以及最少 4 字节的扩展匹配长度。调用方给出压缩字节数与期望输出长度，块结束时两者都会被核对，因此遗留输入字节或输出不足的块会被拒绝而非静默接受。
+/// 窗口在输出产生的同时逐字节维护，因此读取刚刚写出字节的自重叠匹配能被精确还原；解码器不会把整块缓存进内存。
+/// 失败通过 <see cref="Lz4RawBlockException"/> 以可机读的原因上报，而不是带厂商色彩的文案，因为面向用户的措辞属于调用方；
 /// 原因会附带已解码与期望长度，便于调用方重建自己的文案。</para>
 /// </remarks>
 internal static class Lz4RawStreamDecoder

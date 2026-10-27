@@ -108,11 +108,11 @@ internal abstract class XzBlockFilter
 /// <para>逆差分过滤器：每个字节加上距离一个步长之前的字节。</para>
 /// </summary>
 /// <remarks>
-/// <para>The first <c>distance</c> bytes of every chunk run scalarly against the history ring. Beyond that, in-place
+/// The first <c>distance</c> bytes of every chunk run scalarly against the history ring. Beyond that, in-place
 /// decoding satisfies <c>v[i] = buffer[i] + v[i - distance]</c>, so when hardware vectors exist and the distance
 /// covers a full vector, whole vectors are added at once — the load of the earlier <c>v</c> never overlaps the store
 /// being produced. The ring is then refreshed from the last <c>distance</c> outputs, which reproduces the per-byte
-/// history state across chunks exactly. Distances below the vector width keep the byte-at-a-time path.</para>
+/// history state across chunks exactly. Distances below the vector width keep the byte-at-a-time path.
 /// <para>每个块的前 <c>distance</c> 字节按标量对齐 history 环处理。此后就地解码满足
 /// <c>v[i] = buffer[i] + v[i - distance]</c>，因此在存在硬件向量且步长覆盖整条向量时按整向量相加——对较早
 /// <c>v</c> 的加载与正在产出的存储永不错位重叠。随后用最后 <c>distance</c> 个输出回填环形缓冲，跨块的逐字节

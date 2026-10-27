@@ -9,18 +9,18 @@ namespace UotanStudio.Compress.Codecs.Deflate;
 /// 且自行选择编码策略的格式使用。</para>
 /// </summary>
 /// <remarks>
-/// <para>The strategy axis exists for semi-compressed clusters: <see cref="RawDeflateStrategy.HuffmanOnly"/> emits
+/// The strategy axis exists for semi-compressed clusters: <see cref="RawDeflateStrategy.HuffmanOnly"/> emits
 /// literals only, which is what a format asks for when it declares a window too small to hold matches. Choosing the
 /// strategy from a window size is the caller's format rule and stays with the caller; this codec only carries the
-/// choice down to the encoder.</para>
-/// <para>策略维度是为半压缩簇存在的：<see cref="RawDeflateStrategy.HuffmanOnly"/> 只输出字面量，这正是格式声明的
-/// 窗口小得装不下匹配时所要求的编码形态。按窗口大小决定策略属于调用方的格式规则，留在调用方；本编解码器只把该选择
-/// 传给编码器。</para>
-/// <para>Decompression hands back the in-box inflate reader instead of a byte-count API, so a format keeps its own
+/// choice down to the encoder.
+/// Decompression hands back the in-box inflate reader instead of a byte-count API, so a format keeps its own
 /// read loop, its own capacity ceiling and its own trailing-data judgement. Corruption surfaces as
 /// <see cref="InvalidDataException"/> from the in-box decoder and is deliberately not re-wrapped: a format that
-/// treats a corrupt stream as "not this codec" relies on that exact type.</para>
-/// <para>解压返回内置 inflate 读取流而非字节数 API，使格式得以保留自己的读取循环、自己的容量上限与自己的尾随数据判定。
+/// treats a corrupt stream as "not this codec" relies on that exact type.
+/// <para>策略维度是为半压缩簇存在的：<see cref="RawDeflateStrategy.HuffmanOnly"/> 只输出字面量，这正是格式声明的
+/// 窗口小得装不下匹配时所要求的编码形态。按窗口大小决定策略属于调用方的格式规则，留在调用方；本编解码器只把该选择
+/// 传给编码器。
+/// 解压返回内置 inflate 读取流而非字节数 API，使格式得以保留自己的读取循环、自己的容量上限与自己的尾随数据判定。
 /// 损坏数据仍以内置解码器的 <see cref="InvalidDataException"/> 呈现，刻意不再包装：把损坏流当作「不是本编解码器」的格式
 /// 依赖的正是这个类型本身。</para>
 /// </remarks>

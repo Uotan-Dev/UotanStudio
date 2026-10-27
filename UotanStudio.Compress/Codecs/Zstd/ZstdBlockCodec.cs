@@ -9,20 +9,20 @@ namespace UotanStudio.Compress.Codecs.Zstd;
 /// <para>基于 ZstdSharp、以 span 交换数据的帧级 Zstd 块原语，供按块存储完整 zstd 帧而非带头部与校验和容器的文件系统格式使用。</para>
 /// </summary>
 /// <remarks>
-/// <para>Both directions are span-based. The span decode overload that takes no window bound reuses a cached zstd
+/// Both directions are span-based. The span decode overload that takes no window bound reuses a cached zstd
 /// decompression context so a per-cluster loop does not rebuild a native context for every block, and it returns the
 /// number of bytes it actually wrote because a span destination has no implicit size hint like the array-level
 /// <c>Unwrap(compressed, expectedSize)</c> overload; readers that rely on that hint's array length stay on their
-/// own path.</para>
-/// <para>The bytes the span encode overload that takes no window bound writes match the single-frame path of the
+/// own path.
+/// The bytes the span encode overload that takes no window bound writes match the single-frame path of the
 /// array-level compressor for the same level and payload: a zstd frame is destination-independent, so no content-size
-/// flag, content checksum or window override is applied there and no frame is emitted for an empty payload.</para>
-/// <para>A window is the only context setting either direction can be asked for. The encode side writes it into the
+/// flag, content checksum or window override is applied there and no frame is emitted for an empty payload.
+/// A window is the only context setting either direction can be asked for. The encode side writes it into the
 /// frame header and clears it again before the context returns to the cache, because a zstd compression context keeps
 /// a parameter across <c>Wrap</c> calls and an uncleared window would silently re-appear in the next caller's frame.
 /// The decode side never touches its cached context: <c>ZSTD_d_windowLogMax</c> is not consulted by the one-shot
 /// frame decode ZstdSharp performs, so the ceiling is enforced by reading the declared window out of the frame header
-/// before any decoding happens.</para>
+/// before any decoding happens.
 /// <para>每个方向唯一的上下文设置就是窗口。编码侧把它写入帧头，并在上下文回到缓存前再次清零，因为 zstd 压缩上下文会在
 /// <c>Wrap</c> 调用之间保留该参数，未清零的窗口会静默出现在下一个调用方写出的帧里。解码侧完全不碰它缓存的上下文：
 /// ZstdSharp 所执行的一次性帧解码并不查看 <c>ZSTD_d_windowLogMax</c>，因此上限改为在任何解码之前从帧头读取所声明的窗口来执行。</para>
@@ -192,10 +192,10 @@ public static class ZstdBlockCodec
     /// <param name="source">Frame bytes to inspect. <para>待检查的帧字节。</para></param>
     /// <param name="maximumWindowLog">Window log the declared window must stay within. <para>所声明窗口必须落入的窗口对数上限。</para></param>
     /// <remarks>
-    /// <para>Any non-zero return from the header read means the buffer does not hold a parseable frame header, whether
+    /// Any non-zero return from the header read means the buffer does not hold a parseable frame header, whether
     /// because it is shorter than the header or because the magic is wrong, and is left to the decode call, which
     /// reports it as the malformed frame it is. Only a zero return fills the header fields, so no window is ever read
-    /// from an unfilled struct.</para>
+    /// from an unfilled struct.
     /// <para>读取帧头返回非零即表示缓冲区并不含有可解析的帧头——无论是因为短于帧头还是因为魔数错误——都交由解码调用
     /// 按其真实情况报为无效帧。只有返回零才会填好帧头字段，因此绝不会从未填充的结构里读出窗口。</para>
     /// </remarks>
@@ -342,8 +342,8 @@ public static class ZstdBlockCodec
         }
 
         /// <summary>
-        /// Parks one decompression context for later reuse; a previously parked context is disposed.
-        /// <para>停放一个解压上下文供后续复用；此前停放的上下文会被释放。</para>
+        /// Parks one decompression context for later reuse; a context already parked is disposed.
+        /// <para>停放一个解压上下文供后续复用；已停放的那个上下文会被释放。</para>
         /// </summary>
         /// <param name="decompressor">Context being returned; null is ignored. <para>归还的上下文；null 会被忽略。</para></param>
         public static void Return(Decompressor decompressor)
