@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace UotanStudio.Firmware.Core;
 
-/// <summary>Invariant, lossless formatting for firmware inspection fields.</summary>
+/// <summary>Invariant, lossless formatting for firmware inspection fields. <para>固件检视字段的固定区域、无损格式化。</para></summary>
 internal static class MetadataDisplay
 {
     internal static string Number<T>(T value) where T : IFormattable

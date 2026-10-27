@@ -3,12 +3,12 @@ using System.Text.RegularExpressions;
 namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
 
 /// <summary>
-/// Compiled <c>--compress-hints</c> rules for the EROFS writer, matching upstream <c>lib/compress_hints.c</c>.
+/// Compiled <c>--compress-hints</c> rules for the EROFS writer.
 /// Each accepted line names a physical cluster size in bytes, an optional compression configuration index, and
 /// a match pattern; the first rule whose pattern matches a node's image-relative path decides that node's codec
 /// and pcluster size, and a zero pcluster size means the node is not compressed. Paths are matched through the
 /// same normalization the exclusion matcher uses.
-/// <para>EROFS 写入方的 <c>--compress-hints</c> 规则，与上游 <c>lib/compress_hints.c</c> 一致。每条被接受的
+/// <para>EROFS 写入方的 <c>--compress-hints</c> 规则。每条被接受的
 /// 行给出物理簇字节数、可选的压缩配置下标与匹配模式；首个模式命中节点镜像内相对路径的规则决定该节点的编解码器
 /// 与 pcluster 大小，pcluster 大小为 0 表示该节点不压缩。路径经与排除匹配器相同的规整后比较。</para>
 /// </summary>
@@ -28,12 +28,12 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Builder;
 /// 要求排除的文件，而被跳过的提示只让一个文件落在全局编解码器上，因此两者需要不同的失败模式。</para>
 /// A hint whose pcluster size exceeds the current maximum raises <see cref="ErofsOptions.MaxPclusterSize"/>
 /// and every codec record below that size to the requested value and records a build warning instead of
-/// failing, mirroring upstream <c>lib/compress_hints.c</c>; the planner and the compression configuration
+/// failing; the planner and the compression configuration
 /// read the raised limit from those options, so a caller must compile the hints before it materializes the
 /// configuration records that carry each codec's maximum. A raise past the 1 MiB format maximum fails the
 /// build because the declared layout cannot express it.
 /// <para>pcluster 大小超过当前上限的提示会把它以及所有低于该值的编解码器记录提升到请求值并记录一条构建期警告，
-/// 而不是失败，与上游 <c>lib/compress_hints.c</c> 一致；规划器与压缩配置都从这些选项读取提升后的上限，因此调用方
+/// 而不是失败；规划器与压缩配置都从这些选项读取提升后的上限，因此调用方
 /// 必须在生成携带各编解码器上限的配置记录之前编译提示。提升到 1 MiB 格式上限之上会让构建失败，因为声明的布局
 /// 无法表达它。</para>
 /// </remarks>

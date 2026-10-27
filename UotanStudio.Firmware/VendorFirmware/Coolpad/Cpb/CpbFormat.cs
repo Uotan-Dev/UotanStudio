@@ -124,9 +124,9 @@ internal static class CpbFormat
     /// <para>按顺序并入校验和的字节。</para></param>
     /// <param name="crc">Running checksum; pass <c>0</c> to start a new accumulation.
     /// <para>累加中的校验和；从零开始累加时传 <c>0</c>。</para></param>
-    /// <returns>The updated 32-bit accumulation. Only the low 16 bits match a masked CRC-16 register; the reference
-    /// implementation never truncates, so the full value participates in the container checksum.
-    /// <para>更新后的 32 位累加值。只有低 16 位与掩码 CRC-16 寄存器一致；参考实现从不截断，因此完整值参与容器校验和。</para></returns>
+    /// <returns>The updated 32-bit accumulation. Only the low 16 bits match a masked CRC-16 register; the
+    /// accumulation is never truncated, so the full 32-bit value participates in the container checksum.
+    /// <para>更新后的 32 位累加值。只有低 16 位与掩码 CRC-16 寄存器一致；该累加值从不截断，因此完整的 32 位值参与容器校验和。</para></returns>
     internal static uint Crc16(ReadOnlySpan<byte> data, uint crc)
     {
         unchecked

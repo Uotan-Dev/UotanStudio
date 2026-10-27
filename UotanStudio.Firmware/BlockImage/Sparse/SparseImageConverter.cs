@@ -132,8 +132,8 @@ public static class SparseImageConverter
     /// <para>目标稀疏路径；会被就地截断，转换失败时留下部分写入的内容。</para></param>
     /// <param name="blockSize">Logical block size used to classify zero, fill and raw runs; defaults to <c>4096</c> and must be a positive multiple of <c>4</c>. When <paramref name="options"/> is supplied, its validated <see cref="SparseWriteOptions"/> geometry additionally caps RAW chunks, appends the CRC32 chunk and pads the total block count; the classification block size stays <paramref name="blockSize"/>.
     /// <para>用于判定零块、Fill 块与 Raw 块的逻辑块大小；默认为 <c>4096</c>，必须是 <c>4</c> 的正整数倍。 提供 <paramref name="options"/> 时，其已校验的几何会额外限制 RAW 块、追加 CRC32 块并填充总块数；分类块大小仍为 <paramref name="blockSize"/>。</para></param>
-    /// <param name="options">Optional write geometry; <see langword="null"/> reproduces the historical byte output.
-    /// <para>可选写出几何；<see langword="null"/> 复现历史字节输出。</para></param>
+    /// <param name="options">Optional write geometry; <see langword="null"/> selects the defaults of <see cref="SparseWriteOptions"/>.
+    /// <para>可选写出几何；<see langword="null"/> 采用 <see cref="SparseWriteOptions"/> 的默认几何。</para></param>
     /// <example>
     /// <code>SparseImageConverter.ConvertRawToSparse("system.img", "system.sparse.img", blockSize: 4096);</code>
     /// </example>

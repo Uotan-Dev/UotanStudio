@@ -84,8 +84,8 @@ internal sealed class HeaderProbeSession : IDisposable
     /// <param name="filePath">Path the header belongs to. <para>头部所属的路径。</para></param>
     /// <param name="header">Header prefix read by the caller. <para>调用方读取的头部前缀。</para></param>
     /// <param name="totalLength">Full file length observed by the caller. <para>调用方观察到的文件总长度。</para></param>
-    /// <returns>The active scope; disposing it restores the previously active snapshot.
-    /// <para>活动作用域；释放后恢复此前活动的快照。</para></returns>
+    /// <returns>The active scope; disposing it restores the snapshot that was active before this scope was entered.
+    /// <para>活动作用域；释放后恢复到进入该作用域之前的活动快照。</para></returns>
     public static HeaderProbeSession Enter(string filePath, byte[] header, long totalLength)
     {
         var session = new HeaderProbeSession(filePath, header, totalLength, _current);

@@ -544,7 +544,7 @@ public sealed partial class Ext4Builder
     /// <param name="uuid">Filesystem UUID used as the planning hash seed. <para>作为规划哈希种子使用的文件系统 UUID。</para></param>
     /// <param name="enableMetadataCsum">Whether directory block metadata checksums are enabled. <para>是否启用目录块元数据校验和。</para></param>
     /// <param name="excludedFiles">Full paths excluded from the scanned tree. <para>扫描树时排除的完整路径。</para></param>
-    /// <param name="plannedRoot">Previously built tree reused instead of rescanning sourceDirectory. <para>复用的既有树；提供时不再重新扫描 sourceDirectory。</para></param>
+    /// <param name="plannedRoot">Tree already built by the caller, reused instead of rescanning sourceDirectory. <para>复用的既有树；提供时不再重新扫描 sourceDirectory。</para></param>
     /// <returns>The planned tree with its node list, highest inode number, and shared-block plan. <para>包含节点列表、最大 inode 号与相同块共享计划的规划结果。</para></returns>
     private static TreePlan PlanTree(string sourceDirectory, Ext4Options options, int blockSize, int inodeSize, byte[] uuid, bool enableMetadataCsum, IReadOnlyCollection<string> excludedFiles, Node? plannedRoot)
     {

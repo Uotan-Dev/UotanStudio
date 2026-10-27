@@ -47,7 +47,7 @@ public sealed class AvbHashtreeResult : IDisposable
     public long ImageSize { get; }
 
     /// <summary>
-    /// <para>Full tree bytes. Small trees are held inline; large trees are read back from the temp backing store, intended for tests or small inputs — image writers should use <see cref="WriteTreeToAsync"/> instead.</para>
+    /// Full tree bytes. Small trees are held inline; large trees are read back from the temp backing store, intended for tests or small inputs — image writers should use <see cref="WriteTreeToAsync"/> instead.
     /// <para>完整树字节。小树内联保存；大树从临时后备存储读回，仅供测试或小规模使用，生产写镜像应改用 <see cref="WriteTreeToAsync"/>。</para>
     /// </summary>
     /// <value>
@@ -60,8 +60,9 @@ public sealed class AvbHashtreeResult : IDisposable
     public byte[] TreeBytes => _store?.ToArray() ?? [];
 
     /// <summary>
-    /// <para>Streams the tree bytes to the target without materializing a large tree in memory.</para>
-    /// <para>把树字节流式写入目标流；大树不整体进入内存。</para></summary>
+    /// Streams the tree bytes to the target without materializing a large tree in memory.
+    /// <para>把树字节流式写入目标流；大树不整体进入内存。</para>
+    /// </summary>
     /// <param name="output">Destination the tree bytes are appended to; the stream is neither flushed nor closed here.
     /// <para>接收树字节并追加写入的目标流；此处不会刷新或关闭该流。</para></param>
     /// <param name="cancellationToken">Cancels the copy, which can leave <paramref name="output"/> partially written.

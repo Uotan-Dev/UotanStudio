@@ -23,7 +23,7 @@ internal static class SparsePreservationAccess
     /// Returns the registered preserved-filesystem provider.
     /// <para>返回已注册的保留文件系统提供方。</para>
     /// </summary>
-    /// <returns>The provider published by the filesystem context.</returns>
+    /// <returns>The provider published by the filesystem context. <para>由文件系统上下文发布的提供程序。</para></returns>
     /// <exception cref="InvalidOperationException">No provider was registered, so preserved rebuilds are
     /// unavailable. <para>没有已注册的提供方，保留式重建不可用。</para></exception>
     internal static ISparsePreservationBridge Resolve()

@@ -241,7 +241,7 @@ public sealed class ErofsOptions
 
     /// <summary>
     /// Long-prefix name under which each file inode records a SHA-256 fingerprint of its content. Setting it registers the name as a long prefix, publishes ishare_xattrs with the prefix id naming that record, and gives every regular file an attribute whose value is "sha256:" followed by the 32-byte digest.
-    /// <para>各文件 inode 记录其内容 SHA-256 指纹所用的长前缀名。设置它会把该名称注册为长前缀、发布 ishare_xattrs 并以前缀 id 指向该记录，同时为每个常规文件写入名为该文本、值为 "sha256:" 加 32 字节摘要的属性。</para>
+    /// <para>各文件 inode 记录其内容 SHA-256 指纹所用的长前缀名。设置它会把该名称注册为长前缀、发布 ishare_xattrs 并以该前缀的 id 指向该记录，同时为每个常规文件写入名为该文本、值为 "sha256:" 加 32 字节摘要的属性。</para>
     /// </summary>
     /// <value>The attribute name, or <see langword="null"/> to record no fingerprints.
     /// <para>属性名；为 <see langword="null"/> 时不记录指纹。</para></value>
@@ -376,7 +376,7 @@ public sealed class ErofsOptions
     /// that <c>Z_EROFS_ADVISE_EXTENTS</c> licenses.
     /// <para>压缩 inode 是否把索引存成 <c>Z_EROFS_ADVISE_EXTENTS</c> 许可的可变长度 <c>z_erofs_extent</c> 数组。</para></summary>
     /// <value><see cref="ErofsTriStateFeature.Auto"/> follows a preserved source inode's recorded
-    /// shape, <c>Enabled</c> forces the extent form, and <c>Disabled</c> forbids it. Upstream only writes it
+    /// shape, <c>Enabled</c> forces the extent form, and <c>Disabled</c> forbids it. The extent form is written only
     /// when the image declares <c>48bit</c> and the inode has no inline data, so an enabled request without
     /// that declaration fails instead of degrading silently.
     /// <para><see cref="ErofsTriStateFeature.Auto"/> 跟随保留源 inode 记录的形态，<c>Enabled</c> 强制
@@ -752,7 +752,8 @@ public sealed class ErofsOptions
     /// <para>为 <see langword="null"/> 时不从磁盘读取；预加载的覆盖表仍会生效并优先于本路径。</para></value>
     public string? FileContextsPath { get; set; }
 
-    /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above.</summary>
+    /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above.
+    /// <para>预加载的覆盖表；设置后优先于上面按路径读取的来源。</para></summary>
     internal IReadOnlyDictionary<string, Metadata.FsConfigEntry>? FsConfig { get; set; }
     internal IReadOnlyDictionary<string, string>? FileContexts { get; set; }
 
@@ -1044,13 +1045,12 @@ public sealed class ErofsOptions
 
     /// <summary>
     /// Reports whether this build may lay an uncompressed pcluster out with the interlaced byte rotation
-    /// named by <c>Z_EROFS_ADVISE_INTERLACED_PCLUSTER</c>. The condition mirrors
-    /// <c>lib/compress.c</c> in erofs-utils, which raises the advise when fragments are enabled, the dedupe
-    /// dimension is not forced to whole-file comparison, and the build does not lay compressed data out
+    /// named by <c>Z_EROFS_ADVISE_INTERLACED_PCLUSTER</c>. The advise is raised when fragments are enabled, the
+    /// dedupe dimension is not forced to whole-file comparison, and the build does not lay compressed data out
     /// unaligned.
     /// <para>判断本次构建是否可以按 <c>Z_EROFS_ADVISE_INTERLACED_PCLUSTER</c> 所指的字节旋转来存放未压缩
-    /// pcluster。该条件与 erofs-utils 的 <c>lib/compress.c</c> 一致：启用 fragments、去重维度未强制为整文件
-    /// 比较、且本次构建不以非对齐方式存放压缩数据时置起该 advise。</para>
+    /// pcluster。启用 fragments、去重维度未强制为整文件比较、且本次构建不以非对齐方式存放压缩数据时，
+    /// 该 advise 置起。</para>
     /// </summary>
     /// <value>
     /// <see langword="true"/> when every clause holds. A build without compression never rotates: the advise
@@ -1059,13 +1059,13 @@ public sealed class ErofsOptions
     /// <para>每个子句都成立时为 <see langword="true"/>。未启用压缩的构建绝不旋转：该 advise 描述的是压缩 inode 的
     /// 原样 pcluster 布局，因此只在压缩布局生效时才有意义。</para></value>
     /// <remarks>
-    /// The dedupe clause cannot distinguish the upstream <c>EROFS_DEDUPE_FORCE_ON</c> value from the two
+    /// The dedupe clause cannot distinguish the <c>EROFS_DEDUPE_FORCE_ON</c> value from the two
     /// dimensions this repository models, because <see cref="ErofsDedupeMode"/> carries only whole-file and
     /// encoded-pcluster comparison and an explicitly requested whole-file dedupe is what
     /// <c>EROFS_DEDUPE_FORCE_ON</c> names. The unaligned clause is the one that matters in practice: a build
     /// that declares 48-bit block counts, or that pins the compressed extent size away from the block size,
     /// rotates nothing, exactly as <c>lib/compress.c</c> declines to set the advise for that layout.
-    /// <para>去重子句无法把上游的 <c>EROFS_DEDUPE_FORCE_ON</c> 与本仓库建模的两个维度区分开，因为
+    /// <para>去重子句无法把 <c>EROFS_DEDUPE_FORCE_ON</c> 与本仓库建模的两个维度区分开，因为
     /// <see cref="ErofsDedupeMode"/> 只携带整文件比较与编码后 pcluster 比较，而显式请求的整文件去重正是
     /// <c>EROFS_DEDUPE_FORCE_ON</c> 所指之物。真正起作用的是非对齐子句：声明 48 位块数、或把压缩 extent 大小
     /// 钉到块大小之外的构建不会旋转任何内容，正如 <c>lib/compress.c</c> 拒绝为该布局置起该 advise。</para>
@@ -1152,10 +1152,10 @@ public sealed record ErofsDeviceSpec(string Tag, long SizeBytes)
 {
     /// <summary>
     /// Raw tag bytes the device slot holds; authoritative over <see cref="Tag"/> when present. The on-disk tag
-    /// field is a fixed 64-byte array that upstream fills with a digest for blob-backed devices, so those bytes
+    /// field is a fixed 64-byte array that holds a digest for blob-backed devices, so those bytes
     /// cannot always be represented as text and are carried verbatim instead.
-    /// <para>设备槽携带的原始 tag 字节；存在时优先于 <see cref="Tag"/>。磁盘 tag 字段是固定 64 字节数组，上游
-    /// 会为 blob 支撑的设备填入摘要，因此这些字节并不总能表示为文本，改为按原样携带。</para>
+    /// <para>设备槽携带的原始 tag 字节；存在时优先于 <see cref="Tag"/>。磁盘 tag 字段是固定 64 字节数组，
+    /// blob 支撑的设备会在其中填入摘要，因此这些字节并不总能表示为文本，改为按原样携带。</para>
     /// </summary>
     /// <value>The authoritative raw bytes, or <see langword="null"/> when the descriptor was authored from text
     /// only and the writer has to fall back to <see cref="Tag"/>.

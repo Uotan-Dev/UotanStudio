@@ -155,7 +155,7 @@ public static partial class DtboFormat
         return UnpackCoreAsync(inputPath, destination, names, staging, options, cancellationToken);
     }
 
-    /// <summary>Metadata publication and staged publication for <see cref="UnpackAsync"/>.</summary>
+    /// <summary>Metadata publication and staged publication for <see cref="UnpackAsync"/>. <para><see cref="UnpackAsync"/> 的元数据发布与分阶段发布流程。</para></summary>
     private static async Task<IReadOnlyList<string>> UnpackCoreAsync(string inputPath, string destination,
         string[] names, string staging, UnpackOptions options, CancellationToken cancellationToken)
     {
@@ -220,7 +220,7 @@ public static partial class DtboFormat
         return (names, staging);
     }
 
-    /// <summary>Moves staged files to their destination names and reports completion.</summary>
+    /// <summary>Moves staged files to their destination names and reports completion. <para>把分阶段文件移动到目标名称并上报完成。</para></summary>
     private static IReadOnlyList<string> PublishStaged(string[] names, string staging, string destination,
         UnpackOptions options, CancellationToken cancellationToken)
     {

@@ -190,7 +190,7 @@ internal static class ErofsRebuildMetadata
     /// source extent and, only while <see cref="ErofsBuildDefaults.RebuildOptimization"/> is enabled, the
     /// bounded candidate estimates sampled from the parser that is still live at extraction. Sampling decodes
     /// and re-encodes a capped number of clusters, so it is skipped entirely when the search is off and the
-    /// snapshot stays as it was before this feature. A candidate deviation that is not finite is persisted as
+    /// snapshot carries no candidate estimates. A candidate deviation that is not finite is persisted as
     /// the largest representable deviation, because a zero-length source cluster would otherwise make the
     /// whole preservation document unserializable.
     /// <para>采集持久化档案以及重建搜索所需的内容：权威 64 位源范围，以及仅在
@@ -479,11 +479,11 @@ internal static class ErofsRebuildMetadata
     /// it has a configuration record behind it. The superblock bitmap is built from the encodable algorithms,
     /// so an inode naming one without a record would leave the bitmap holding a bit the configuration area
     /// never answers, and both a kernel and <c>fsck.erofs</c> consume the records strictly in ascending bit
-    /// order (erofs-utils emits them the same way, in <c>lib/compress.c</c>). A profile carrying no records
+    /// order. A profile carrying no records
     /// encodes every payload with the single selected algorithm, so that name is the only acceptable one.
     /// <para>判断已记录的 inode 算法能否被本次重建重新编码，判据就是它背后是否有配置记录。超级块位图由可编码
     /// 的算法集合构成，因此缺少记录的 inode 会让位图携带配置区永远不会应答的位，而内核与
-    /// <c>fsck.erofs</c> 都严格按位升序消费这些记录（erofs-utils 在 <c>lib/compress.c</c> 中也按同一顺序写出）。
+    /// <c>fsck.erofs</c> 都严格按位升序消费这些记录。
     /// 不携带任何记录的档案会用唯一选定的算法编码全部负载，所以只有该名称可以接受。</para>
     /// </summary>
     /// <param name="options">Options already carrying the restored codec records.
@@ -712,11 +712,11 @@ internal static class ErofsRebuildMetadata
 
     /// <summary>
     /// Labels one device slot for the builder descriptor. The on-disk tag field is a fixed 64-byte array that
-    /// upstream fills with a digest for blob-backed devices, so text is taken only while the bytes before the
+    /// carries a digest for blob-backed devices, so text is taken only while the bytes before the
     /// first NUL decode back to themselves and fit the field; otherwise a positional placeholder is used. The
     /// slot bytes always travel verbatim in <see cref="ErofsDeviceSpec.TagBytes"/>, so a binary tag is neither
     /// rejected nor re-encoded.
-    /// <para>为构建器描述符标注一个设备槽。磁盘 tag 字段是固定 64 字节数组，上游会为 blob 支撑的设备填入摘要，
+    /// <para>为构建器描述符标注一个设备槽。磁盘 tag 字段是固定 64 字节数组，blob 支撑的设备会在其中填入摘要，
     /// 因此仅当首个 NUL 之前的字节能原样解码回自身且落在字段宽度内时才取其文本，否则使用位置占位名。槽位字节始终
     /// 按原样经 <see cref="ErofsDeviceSpec.TagBytes"/> 传递，因此二进制 tag 既不会被拒绝也不会被重新编码。</para>
     /// </summary>

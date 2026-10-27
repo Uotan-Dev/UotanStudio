@@ -57,12 +57,15 @@ public readonly record struct FileSystemByteProgress(FileSystemWorkStage Stage, 
         => new FileSystemStageProgress(progress, stage);
 }
 
-/// <summary>Aggregates parallel writes and bounds notification frequency without estimating byte counts.</summary>
+/// <summary>Aggregates parallel writes and bounds notification frequency without estimating byte counts. <para>聚合并行写入，限制通知频率，且不估算字节总数。</para></summary>
 /// <remarks>
 /// The counter is updated with one interlocked add and the throttle window is claimed with one compare-exchange,
 /// so a write never waits for another worker's write. A monitor around this path would serialize every extracted
 /// block of every worker: the extraction writes one block at a time, so a lock here costs one contended
 /// acquisition per block and is the difference between near-linear and flat parallel scaling.
+/// <para>计数器以一次互锁加法更新，节流窗口以一次比较交换抢占，因此一次写入从不等候另一个工作者的写入。
+/// 若在该路径上加监视器，会把每个工作者的每个解出块串行化：解包每次只写一个块，因此这里的锁会让每块多出一次
+/// 争用获取，直接决定并行扩展是接近线性还是持平。</para>
 /// </remarks>
 internal sealed class ExtractionByteCounter
 {
@@ -116,7 +119,7 @@ internal sealed class ExtractionByteCounter
         => progress?.Report((Math.Min(Volatile.Read(ref processed), total), total));
 }
 
-/// <summary>Tags synchronous backend measurements before the UI schedules their delivery.</summary>
+/// <summary>Tags synchronous backend measurements before the UI schedules their delivery. <para>在 UI 安排交付之前标记同步后端测量值。</para></summary>
 internal sealed class FileSystemStageProgress(IProgress<FileSystemByteProgress>? progress, FileSystemWorkStage stage)
     : IProgress<(long Processed, long Total)>
 {

@@ -79,10 +79,10 @@ public sealed partial class PayloadBuilder
 
     /// <summary>
     /// Two-stage software pipeline over the chunks of one partition: a dedicated reader fills the next batch while
-    /// the consumer compresses and emits the current one, so the serial read/hash stage no longer idles the
+    /// the consumer compresses and emits the current one, so the serial read/hash stage does not idle the
     /// compression workers and vice versa.
     /// <para>作用于单个分区各块的两级软件流水线：专用读取方在消费方压缩并写出当前批时填充下一批，
-    /// 使串行的读取/哈希阶段不再让压缩工作者空转，反之亦然。</para>
+    /// 使串行的读取/哈希阶段不会让压缩工作者空转，反之亦然。</para>
     /// </summary>
     /// <remarks>
     /// Two batches of slots are allocated and swapped, so the pipeline costs one extra batch of buffers on top of
@@ -94,7 +94,7 @@ public sealed partial class PayloadBuilder
     /// the previous barrier-based loop produced.
     /// <para>分配并轮换两批槽位，因此流水线在构建本就需要压缩缓冲之上多付出一批缓冲。读取发生在流水线自有的任务上，
     /// 每个填充的块都在该任务内并入输入摘要，使串行的摘要代价与压缩重叠；读取任务完成所建立的内存序保证这些追加
-    /// 在消费方观察该批之前已经生效。只有消费方执行 65536 条操作上限检查，因为只有它知道此前分区已输出多少条操作。
+    /// 在消费方观察该批之前已经生效。只有消费方执行 65536 条操作上限检查，因为只有它知道前面各分区已输出多少条操作。
     /// 压缩运行在消费线程的并行循环中，从而让每个写出的块与原先基于屏障的循环顺序完全一致。</para>
     /// </remarks>
     private sealed class PartitionPipeline : IDisposable
@@ -132,7 +132,7 @@ public sealed partial class PayloadBuilder
         /// <summary>
         /// Retires the in-flight read and takes ownership of the batch it filled, enforcing the operation limit on
         /// the consumer because only the consumer knows how many operations earlier partitions emitted.
-        /// <para>结束在途读取并接管它填充的批次，同时在消费方执行操作上限检查，因为只有消费方知道此前分区已输出多少条操作。</para>
+        /// <para>结束在途读取并接管它填充的批次，同时在消费方执行操作上限检查，因为只有消费方知道前面各分区已输出多少条操作。</para>
         /// </summary>
         internal ulong Read(ref int operationCount, CancellationToken cancellationToken)
         {

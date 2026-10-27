@@ -44,14 +44,14 @@ public sealed record SparseChunkSet(SparseChunkVariant Variant, IReadOnlyList<st
 /// 通过 <c>\.sparsechunk\.(\d+)$</c> 后缀发现同级文件、编号必须从零开始连续无缺口，并对每个生成文件执行原子发布。</para>
 /// </summary>
 /// <remarks>
-/// <para>Merge supports both shapes: the raw-slice shape is a bounded stream concatenation, and the
+/// Merge supports both shapes: the raw-slice shape is a bounded stream concatenation, and the
 /// self-contained-sparse shape (every part carries the sparse magic and the same logical geometry) is
 /// merged by preserving each part's absolute chunk addresses and letting <see cref="SparseWriter"/>
 /// re-emit the gap don't-care chunks. Split supports the raw shape only; sparse inputs must first be
 /// converted with <c>SparseImageConverter.ResparseImage</c>, because byte-slicing a sparse container
 /// would destroy the self-contained geometry this merger validates. Per-part trailing CRC32 chunks and
 /// header image checksums are dropped on merge: the merged body is rebuilt from chunk data, and no
-/// cross-part checksum semantics exist in the format.</para>
+/// cross-part checksum semantics exist in the format.
 /// <para>合并支持两种形态：原始切片形态做有界的流拼接；自包含稀疏形态（每片带稀疏魔数与相同逻辑几何）通过保留各片的
 /// 绝对块地址合并，由 <see cref="SparseWriter"/> 重新发出空隙 don't-care 块。拆分仅支持原始形态；稀疏输入必须先用
 /// <c>SparseImageConverter.ResparseImage</c> 生成，因为对稀疏容器做字节切片会破坏本合并器所校验的自包含几何。

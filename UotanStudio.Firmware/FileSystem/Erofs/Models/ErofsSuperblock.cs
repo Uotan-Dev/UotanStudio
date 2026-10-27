@@ -177,8 +177,8 @@ internal sealed class ErofsSuperblock
         : Blocks;
 
     /// <summary>
-    /// Resolved root inode number: a 48bit image prefers the wide field but falls back to the legacy 16-bit field when the wide field is zero; an image without 48bit always reads the 16-bit field.
-    /// <para>解析后的根 inode 编号：48bit 镜像优先取宽字段，该字段为零时回退到旧的 16 位字段；非 48bit 镜像始终读取 16 位字段。</para>
+    /// Resolved root inode number: a 48bit image prefers the wide field but falls back to the 16-bit field when the wide field is zero; an image without 48bit always reads the 16-bit field.
+    /// <para>解析后的根 inode 编号：48bit 镜像优先取宽字段，该字段为零时回退到 16 位字段；非 48bit 镜像始终读取 16 位字段。</para>
     /// </summary>
     /// <value>The wide field when a <c>48bit</c> image populates it, otherwise the 16-bit field.
     /// <para><c>48bit</c> 镜像填充了宽字段时为其值，否则为 16 位字段。</para></value>
@@ -198,10 +198,10 @@ internal sealed class ErofsSuperblock
     public bool HasCompressionConfigs => (FeatureIncompat & IncompatCompressCfgs) != 0;
 
     /// <summary>
-    /// Major component of the oldest Linux release that can mount this image, estimated the way erofs-utils does:
-    /// the highest kernel among the incompat bits, raised per algorithm named in <see cref="AvailableComprAlgs"/>
+    /// Major component of the oldest Linux release that can mount this image, estimated from the feature words:
+    /// the highest kernel floor among the incompat bits, raised per algorithm named in <see cref="AvailableComprAlgs"/>
     /// once configuration records are present. Compat bits carry no kernel floor.
-    /// <para>可挂载该镜像的最老 Linux 主版本号，估算方式与 erofs-utils 一致：取 incompat 位中的最高内核下限，并在存在
+    /// <para>可挂载该镜像的最老 Linux 主版本号，估算方式取自特性字：取 incompat 位中的最高内核下限，并在存在
     /// 配置记录时按 <see cref="AvailableComprAlgs"/> 指名的算法逐项抬高。compat 位不含内核下限。</para>
     /// </summary>
     /// <value>The major version, or zero when no floor applies.
@@ -313,31 +313,31 @@ internal sealed class ErofsSuperblock
     }
 
     /// <summary>
-    /// Names the upstream features carried by an incompat word. The list delegates to
+    /// Names the features carried by an incompat word. The list delegates to
     /// <see cref="ErofsFeatureTable"/> so a decoded superblock, a declared feature set and a rejected layout
     /// can never drift apart in wording.
-    /// <para>命名 incompat 字所携带的上游特性。名单委托给 <see cref="ErofsFeatureTable"/>，使解码出的超级块、
+    /// <para>命名 incompat 字所携带的特性。名单委托给 <see cref="ErofsFeatureTable"/>，使解码出的超级块、
     /// 声明的特性集与被拒绝的布局在措辞上不会彼此偏离。</para>
     /// </summary>
     /// <param name="bits">The raw <c>s_feature_incompat</c> mask.
     /// <para>原始 <c>s_feature_incompat</c> 掩码。</para></param>
-    /// <returns>Comma-joined upstream names, or <c>"none"</c> when the word is empty.
-    /// <para>以逗号连接的上游名；该字为空时返回 <c>"none"</c>。</para></returns>
+    /// <returns>Comma-joined feature names, or <c>"none"</c> when the word is empty.
+    /// <para>以逗号连接的特性名；该字为空时返回 <c>"none"</c>。</para></returns>
     internal static string DescribeIncompat(uint bits)
         => ErofsFeatureTable.Describe(0, bits);
 
     /// <summary>
-    /// Names the upstream features carried by an incompat word, resolving the bit shared by <c>device_table</c>
+    /// Names the features carried by an incompat word, resolving the bit shared by <c>device_table</c>
     /// and <c>compr_head2</c> through the extra-device slot count instead of printing both names.
-    /// <para>命名 incompat 字所携带的上游特性，并用额外设备槽位数解析 <c>device_table</c> 与 <c>compr_head2</c>
+    /// <para>命名 incompat 字所携带的特性，并用额外设备槽位数解析 <c>device_table</c> 与 <c>compr_head2</c>
     /// 共用的位，而不是同时输出两名。</para>
     /// </summary>
     /// <param name="bits">The raw <c>s_feature_incompat</c> mask.
     /// <para>原始 <c>s_feature_incompat</c> 掩码。</para></param>
     /// <param name="extraDeviceCount">Extra-device slots carried by the layout, read from
     /// <c>s_extra_devices</c>.<para>布局携带的额外设备槽位数，取自 <c>s_extra_devices</c>。</para></param>
-    /// <returns>Comma-joined upstream names, or <c>"none"</c> when the word is empty.
-    /// <para>以逗号连接的上游名；该字为空时返回 <c>"none"</c>。</para></returns>
+    /// <returns>Comma-joined feature names, or <c>"none"</c> when the word is empty.
+    /// <para>以逗号连接的特性名；该字为空时返回 <c>"none"</c>。</para></returns>
     internal static string DescribeIncompat(uint bits, int extraDeviceCount)
         => ErofsFeatureTable.Describe(0, bits, extraDeviceCount);
 
@@ -347,20 +347,20 @@ internal sealed class ErofsSuperblock
     /// <para>在该超级块自身的额外设备上下文中命名其 incompat 特性，措辞与对原始两字调用
     /// <see cref="DescribeIncompat(uint, int)"/> 的结果一致。</para>
     /// </summary>
-    /// <returns>Comma-joined upstream names, or <c>"none"</c> when no incompat bit is set.
-    /// <para>以逗号连接的上游名；未置任何 incompat 位时返回 <c>"none"</c>。</para></returns>
+    /// <returns>Comma-joined feature names, or <c>"none"</c> when no incompat bit is set.
+    /// <para>以逗号连接的特性名；未置任何 incompat 位时返回 <c>"none"</c>。</para></returns>
     internal string DescribeIncompatFeatures()
         => ErofsFeatureTable.Describe(0, FeatureIncompat, ExtraDevices);
 
     /// <summary>
-    /// Names the upstream features carried by a compat word, with the same single source of truth as
+    /// Names the features carried by a compat word, with the same single source of truth as
     /// <see cref="DescribeIncompat(uint)"/>.
-    /// <para>命名 compat 字所携带的上游特性，与 <see cref="DescribeIncompat(uint)"/> 共用同一唯一真值来源。</para>
+    /// <para>命名 compat 字所携带的特性，与 <see cref="DescribeIncompat(uint)"/> 共用同一唯一真值来源。</para>
     /// </summary>
     /// <param name="bits">The raw <c>s_feature_compat</c> mask.
     /// <para>原始 <c>s_feature_compat</c> 掩码。</para></param>
-    /// <returns>Comma-joined upstream names, or <c>"none"</c> when the word is empty.
-    /// <para>以逗号连接的上游名；该字为空时返回 <c>"none"</c>。</para></returns>
+    /// <returns>Comma-joined feature names, or <c>"none"</c> when the word is empty.
+    /// <para>以逗号连接的特性名；该字为空时返回 <c>"none"</c>。</para></returns>
     internal static string DescribeCompat(uint bits)
         => ErofsFeatureTable.Describe(bits, 0);
 

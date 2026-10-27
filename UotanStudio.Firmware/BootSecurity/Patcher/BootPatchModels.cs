@@ -153,7 +153,8 @@ public sealed record BootPatchOptions
     public bool RecoveryMode { get; init; }
     /// <summary>Requests Magisk's legacy SAR rootfs kernel patch.
     /// <para>请求 Magisk 的传统 SAR rootfs 内核补丁。</para></summary>
-    /// <remarks>Magisk defaults this option to false; it is only needed for legacy SAR images.</remarks>
+    /// <remarks>Only legacy SAR images need this option; it stays disabled otherwise.
+    /// <para>仅遗留 SAR 镜像需要该选项；其余情形保持禁用。</para></remarks>
     /// <value>Defaults to <see langword="false"/>. <para>默认为 <see langword="false"/>。</para></value>
     public bool ForceRootfs { get; init; }
     /// <summary>

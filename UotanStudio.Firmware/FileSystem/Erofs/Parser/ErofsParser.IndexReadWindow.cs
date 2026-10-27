@@ -6,7 +6,8 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;
 /// </summary>
 public sealed partial class ErofsParser
 {
-    /// <summary>A bounded, per-file index window; only source reads share the parser lock.</summary>
+    /// <summary>A bounded, per-file index window; only source reads share the parser lock.
+    /// <para>按文件划分的有界索引窗口；只有源读取会共享解析器锁。</para></summary>
     private sealed class IndexReadWindow
     {
         private readonly ErofsParser _parser;

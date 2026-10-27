@@ -5,9 +5,9 @@ using UotanStudio.Firmware.Core.Magic;
 namespace UotanStudio.Firmware.MagicGen;
 
 /// <summary>
-/// Parses an upstream magic(5) fragment into a <see cref="RuleAst"/> tree. Line-oriented; a failing line
+/// Parses a magic(5) fragment into a <see cref="RuleAst"/> tree. Line-oriented; a failing line
 /// is counted under a category in <see cref="Stats"/> and skipped, never aborting the corpus.
-/// <para>把上游 magic(5) 文本片段解析为 <see cref="RuleAst"/> 树。逐行解析，异常行按类别计入
+/// <para>把 magic(5) 文本片段解析为 <see cref="RuleAst"/> 树。逐行解析，异常行按类别计入
 /// <see cref="Stats"/> 并跳过，绝不因单行失败中断整个语料。</para>
 /// </summary>
 internal sealed class Magic5Parser

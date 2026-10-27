@@ -82,7 +82,8 @@ public static class BootPatchAnalyzer
     /// <exception cref="OperationCanceledException">The token was canceled before or during the scheduled work.
     /// <para>令牌在调度任务期间或之前被取消。</para></exception>
     /// <remarks>Boot image parse failures surface through the returned task from
-    /// <c>BootImageParser.ParseFile</c>.</remarks>
+    /// <c>BootImageParser.ParseFile</c>.
+    /// <para>boot 镜像解析失败通过 <c>BootImageParser.ParseFile</c> 返回的任务上报。</para></remarks>
     public static Task<string?> DetectBootKmiAsync(string bootPath, CancellationToken cancellationToken = default)
         => Task.Run(() =>
         {

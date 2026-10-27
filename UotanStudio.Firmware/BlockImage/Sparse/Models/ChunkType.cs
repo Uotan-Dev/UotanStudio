@@ -15,6 +15,6 @@ public enum ChunkType : ushort
     /// <summary>Chunk whose blocks expand to zeros without storing payload. <para>其块在不存储载荷的情况下展开为零的块。</para></summary>
     DontCare = 0xCAC3,
 
-    /// <summary>Trailing chunk storing the CRC32 checksum of all preceding expanded data. <para>存储此前全部展开数据 CRC32 校验和的尾部块。</para></summary>
+    /// <summary>Trailing chunk storing the CRC32 checksum of all preceding expanded data. <para>存储其前面全部已展开数据 CRC32 校验和的尾部块。</para></summary>
     Crc32 = 0xCAC4
 }

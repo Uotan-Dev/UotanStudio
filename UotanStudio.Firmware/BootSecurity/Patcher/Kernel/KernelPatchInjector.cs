@@ -35,8 +35,9 @@ internal static class KernelPatchInjector
     /// <exception cref="InvalidDataException">内核过小、缺少 kallsyms、已被补丁或 kpimg 无效时抛出。</exception>
     /// <exception cref="NotSupportedException">kpimg 目标架构或内核格式不受支持时抛出。</exception>
     /// <remarks>
-    /// <para>The in-memory image_size can exceed the bytes actually present, so it is used only as an in-file prefix; kernel_size mirrors the arm64 Image header field rather than the trimmed prefix, and start_offset is an address-space value where the tail alignment wins once extra items push the file past it.</para>
-    /// <para>image_size 描述内存中的镜像大小，可能超过引导镜像实际存在的字节数，故只用于文件内前缀；kernel_size 与 arm64 Image 头部同字段一致，而不采用裁剪后的文件前缀；start_offset 是地址空间值，指向取整后 kernel_size 之后的内核区结尾，当末尾附加项把文件推过该点时以末尾对齐为准。</para></remarks>
+    /// The in-memory image_size can exceed the bytes actually present, so it is used only as an in-file prefix; kernel_size mirrors the arm64 Image header field rather than the trimmed prefix, and start_offset is an address-space value where the tail alignment wins once extra items push the file past it.
+    /// <para>image_size 描述内存中的镜像大小，可能超过引导镜像实际存在的字节数，故只用于文件内前缀；kernel_size 与 arm64 Image 头部同字段一致，而不采用裁剪后的文件前缀；start_offset 是地址空间值，指向取整后 kernel_size 之后的内核区结尾，当末尾附加项把文件推过该点时以末尾对齐为准。</para>
+    /// </remarks>
     public static byte[] Patch(ReadOnlySpan<byte> kernel, ReadOnlySpan<byte> kpimg, string superKey)
     {
         if (kernel.Length < 0x40) throw new InvalidDataException("Kernel image is too small for APatch.");
@@ -119,7 +120,7 @@ internal static class KernelPatchInjector
     /// <param name="kernel">待检测的内核镜像字节。</param>
     /// <returns>内核明文或解压后的 IKCFG 配置块中存在 CONFIG_KALLSYMS=y 时为 true。</returns>
     /// <remarks>
-    /// <para>The payload is decoded through CompressionService.CreateDecompressionStream, the repository's authoritative compression entry. A malformed gzip stream surfaces either as an InvalidDataException from the reader or as a CompressionException when the codec fails, and both simply mean the kernel carries no usable IKCFG config, so they are reported as false instead of propagating.</para>
+    /// The payload is decoded through CompressionService.CreateDecompressionStream, the repository's authoritative compression entry. A malformed gzip stream surfaces either as an InvalidDataException from the reader or as a CompressionException when the codec fails, and both simply mean the kernel carries no usable IKCFG config, so they are reported as false instead of propagating.
     /// <para>该数据块经由仓库权威压缩入口 CompressionService.CreateDecompressionStream 解码。损坏的 gzip 流会以读取器抛出的 InvalidDataException 或编解码失败时抛出的 CompressionException 呈现，两者都说明内核没有可用的 IKCFG 配置，因此返回 false 而不是继续向上抛出。</para>
     /// </remarks>
     internal static bool HasKallsyms(ReadOnlySpan<byte> kernel)

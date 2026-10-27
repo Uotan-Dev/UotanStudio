@@ -152,7 +152,7 @@ public sealed class Ext4Options
     /// <para><see langword="null"/>（默认）表示不应用 SELinux 标签覆盖。</para></value>
     public string? FileContextsPath { get; init; }
 
-    /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above.</summary>
+    /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above. <para>预加载的覆盖表；设置后优先于上面的按路径来源。</para></summary>
     internal IReadOnlyDictionary<string, Metadata.FsConfigEntry>? FsConfig { get; set; }
     internal IReadOnlyDictionary<string, string>? FileContexts { get; set; }
 }

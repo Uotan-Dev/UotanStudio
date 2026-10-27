@@ -1,36 +1,35 @@
 namespace UotanStudio.Firmware.FileSystem.Erofs.Models;
 
 /// <summary>
-/// Single source of truth mapping each <see cref="ErofsFeature"/> to its on-disk word, bit, upstream
-/// name, oldest mounting kernel and writer capability, mirroring the erofs-utils feature list. Names that
+/// Single source of truth mapping each <see cref="ErofsFeature"/> to its on-disk word, bit, feature
+/// name, oldest mounting kernel and writer capability. The name is the one the superblock summary prints,
+/// and the table is the single bit-to-name mapping shared by the parser and the writer. Names that
 /// alias one bit share that bit's kernel floor, while capability belongs to the name: a bit the writer can
 /// lay out through one name marks the other name <see cref="ErofsFeatureCapability.Contextual"/>, because
 /// whether that face is writable depends on fields the feature word does not carry.
-/// <para>把每个 <see cref="ErofsFeature"/> 映射到磁盘字、位、上游名称、最老可挂载内核与写入方能力的唯一真值表，
-/// 与 erofs-utils 的特性名单一致。共用一位的名称共享该位的内核下限，而能力归属于名称：写入方能经某个名称落盘的位，
+/// <para>把每个 <see cref="ErofsFeature"/> 映射到磁盘字、位、特性名、最老可挂载内核与写入方能力的唯一真值表。
+/// 特性名即超级块摘要打印的名称，该表是解析器与写入方共用的单一位到名称映射。共用一位的名称共享该位的内核下限，
+/// 而能力归属于名称：写入方能经某个名称落盘的位，
 /// 会把另一个名称标为 <see cref="ErofsFeatureCapability.Contextual"/>，因为该面能否写出取决于特性字未携带的字段。</para>
 /// </summary>
 internal static class ErofsFeatureTable
 {
-    /// <summary>Oldest kernel erofs-utils requires of a bitmap carrying MicroLZMA, read from
-    /// <c>dump/main.c</c> when it raises the floor from <c>s_available_compr_algs</c>.
-    /// <para>erofs-utils 依据 <c>s_available_compr_algs</c> 抬高下限时为携带 MicroLZMA 的位图要求的最老内核，取自
-    /// <c>dump/main.c</c>。</para></summary>
+    /// <summary>Oldest kernel that mounts a bitmap carrying MicroLZMA once <c>s_available_compr_algs</c>
+    /// raises the incompat floor.
+    /// <para>依据 <c>s_available_compr_algs</c> 抬高下限后，携带 MicroLZMA 的位图所能挂载的最老内核。</para></summary>
     private const int LzmaKernelFloor = 516;
 
-    /// <summary>Oldest kernel erofs-utils requires of a bitmap carrying DEFLATE.<para>erofs-utils 为携带 DEFLATE
-    /// 的位图要求的最老内核。</para></summary>
+    /// <summary>Oldest kernel that mounts a bitmap carrying DEFLATE.<para>携带 DEFLATE 的位图所能挂载的最老内核。</para></summary>
     private const int DeflateKernelFloor = 606;
 
-    /// <summary>Oldest kernel erofs-utils requires of a bitmap carrying Zstandard.<para>erofs-utils 为携带
-    /// Zstandard 的位图要求的最老内核。</para></summary>
+    /// <summary>Oldest kernel that mounts a bitmap carrying Zstandard.<para>携带 Zstandard 的位图所能挂载的最老内核。</para></summary>
     private const int ZstdKernelFloor = 610;
 
-    /// <summary>One row of the upstream feature list.<para>上游特性表中的一行。</para></summary>
+    /// <summary>One row of the feature table.<para>特性表中的一行。</para></summary>
     /// <param name="Feature">Logical identifier.<para>逻辑标识。</para></param>
     /// <param name="IsCompat">Whether the word is <c>s_feature_compat</c>.<para>该位属于 <c>s_feature_compat</c> 时为真。</para></param>
     /// <param name="Bit">Physical bit value.<para>物理位值。</para></param>
-    /// <param name="Name">Upstream feature name as erofs-utils prints it.<para>erofs-utils 输出的上游特性名。</para></param>
+    /// <param name="Name">Feature name as printed in the superblock summary.<para>超级块摘要中输出的特性名。</para></param>
     /// <param name="Kernel">Oldest mounting kernel, encoded as major * 100 + minor.<para>最老可挂载内核，编码为 major * 100 + minor。</para></param>
     /// <param name="Capability">Whether the managed writer can emit the structures this name stands for, given
     /// the bit it shares.<para>结合该名称所共用的位，受管写入方能否输出该名称所指的结构。</para></param>
@@ -77,7 +76,7 @@ internal static class ErofsFeatureTable
             ErofsFeatureCapability.Emittable),
     ];
 
-    /// <summary>Every row, in upstream bit order.<para>按上游位顺序排列的全部行。</para></summary>
+    /// <summary>Every row, in the bit order of its feature word.<para>按其所属特性字的位顺序排列的全部行。</para></summary>
     internal static IReadOnlyList<Descriptor> Entries => Descriptors;
 
     /// <summary>Physical bit of a logical identifier.<para>逻辑标识的物理位。</para></summary>
@@ -92,7 +91,7 @@ internal static class ErofsFeatureTable
     internal static bool IsCompat(ErofsFeature feature)
         => Row(feature).IsCompat;
 
-    /// <summary>Every upstream name sharing one physical bit in one feature word.<para>列出某个特性字内共用同一物理位的全部上游名称。</para></summary>
+    /// <summary>Every name in the table sharing one physical bit in one feature word.<para>列出某个特性字内共用同一物理位的全部名称。</para></summary>
     /// <param name="bit">Physical bit value as it appears in its word.<para>磁盘上该字中的物理位值。</para></param>
     /// <param name="isCompat">Word to search: <see langword="true"/> selects <c>s_feature_compat</c> and
     /// <see langword="false"/> selects <c>s_feature_incompat</c>, since one value appears in both
@@ -116,10 +115,10 @@ internal static class ErofsFeatureTable
     /// 第二种压缩 inode 头部：二者同指 0x00000008 位，而只有设备表拥有写入方能够落盘的磁盘结构。</para></param>
     /// <returns><c>device_table</c> for bit 0x00000008 with a positive <paramref name="extraDeviceCount"/> and
     /// <c>compr_head2</c> for that bit without any extra device; the joined alias names for the pairs sharing
-    /// 0x00000002 and 0x00000020; the single upstream name of every other known bit; and the hexadecimal value
+    /// 0x00000002 and 0x00000020; the single name of every other known bit; and the hexadecimal value
     /// for a bit the table does not carry.<para>0x00000008 位在 <paramref name="extraDeviceCount"/> 为正时返回
     /// <c>device_table</c>，无额外设备时返回 <c>compr_head2</c>；0x00000002 与 0x00000020 的别名对返回连接后的名称；
-    /// 其余已知位返回其唯一上游名；表中未收录的位返回十六进制值。</para></returns>
+    /// 其余已知位返回其唯一名称；表中未收录的位返回十六进制值。</para></returns>
     internal static string NameForIncompatBit(uint bit, int extraDeviceCount)
     {
         if (bit == ErofsSuperblock.IncompatDeviceTable)
@@ -135,9 +134,9 @@ internal static class ErofsFeatureTable
             : string.Join("/", aliases);
     }
 
-    /// <summary>Upstream name of a logical identifier.<para>逻辑标识的上游名称。</para></summary>
+    /// <summary>Name of a logical identifier as the superblock summary prints it.<para>逻辑标识在超级块摘要中打印的名称。</para></summary>
     /// <param name="feature">Identifier to name.<para>待命名的标识。</para></param>
-    /// <returns>The name as erofs-utils prints it. <para>erofs-utils 输出的名称。</para></returns>
+    /// <returns>The name the superblock summary prints. <para>超级块摘要打印的名称。</para></returns>
     internal static string NameOf(ErofsFeature feature)
         => Row(feature).Name;
 
@@ -168,13 +167,12 @@ internal static class ErofsFeatureTable
         => MinimumKernel(incompatBits, 0, false) % 100;
 
     /// <summary>Oldest mounting kernel of a decoded superblock, as a major component.<para>解码超级块的最老可挂载内核主版本。</para></summary>
-    /// <param name="compatBits">Decoded compat word. Compat rows carry no kernel floor, mirroring the
-    /// <c>lkver</c> of zero upstream, so the word cannot raise the estimate.<para>解码得到的 compat 字。compat 行没有
-    /// 内核下限，与上游置零的 <c>lkver</c> 一致，因此该字不会抬高估计值。</para></param>
+    /// <param name="compatBits">Decoded compat word. Compat rows carry no kernel floor, so the word cannot
+    /// raise the estimate.<para>解码得到的 compat 字。compat 行没有内核下限，因此该字不会抬高估计值。</para></param>
     /// <param name="incompatBits">Decoded incompat word.<para>解码得到的 incompat 字。</para></param>
-    /// <param name="availableComprAlgs">The <c>s_available_compr_algs</c> bitmap. erofs-utils raises the floor
-    /// from it once per algorithm: MicroLZMA to 5.16, DEFLATE to 6.6 and Zstandard to 6.10.<para>
-    /// <c>s_available_compr_algs</c> 位图。erofs-utils 会按算法抬高下限：MicroLZMA 至 5.16、DEFLATE 至 6.6、Zstandard
+    /// <param name="availableComprAlgs">The <c>s_available_compr_algs</c> bitmap. Each named algorithm raises
+    /// the floor: MicroLZMA to 5.16, DEFLATE to 6.6 and Zstandard to 6.10.<para>
+    /// <c>s_available_compr_algs</c> 位图。每个指名的算法各自抬高下限：MicroLZMA 至 5.16、DEFLATE 至 6.6、Zstandard
     /// 至 6.10。</para></param>
     /// <param name="hasCompressionConfigs">Whether compression configuration records follow the superblock. The
     /// same two bytes hold the legacy LZ4 maximum distance while no records exist, so the bitmap raises no floor
@@ -201,35 +199,35 @@ internal static class ErofsFeatureTable
         bool hasCompressionConfigs)
         => MinimumKernel(incompatBits, availableComprAlgs, hasCompressionConfigs) % 100;
 
-    /// <summary>Formats declared words as upstream names, aliasing names for shared bits printed together.
-    /// <para>把声明字格式化为上游名称，共用位的别名名一并输出。</para></summary>
+    /// <summary>Formats declared words as table names, printing the names that alias one shared bit together.
+    /// <para>把声明字格式化为特性名，共用位的别名一并输出。</para></summary>
     /// <param name="compatBits">Declared compat word.<para>已声明的 compat 字。</para></param>
     /// <param name="incompatBits">Declared incompat word.<para>已声明的 incompat 字。</para></param>
     /// <returns>Comma-joined names, or <c>"none"</c> when both words are empty.
-    /// <para>以逗号连接的上游名；两字皆空时返回 <c>"none"</c>。</para></returns>
+    /// <para>以逗号连接的特性名；两字皆空时返回 <c>"none"</c>。</para></returns>
     internal static string Describe(uint compatBits, uint incompatBits)
         => JoinWords(DescribeWord(incompatBits, false, null), DescribeWord(compatBits, true, null));
 
-    /// <summary>Formats declared words as upstream names, resolving the bit shared by the device table and the
+    /// <summary>Formats declared words as table names, resolving the bit shared by the device table and the
     /// second compressed-inode head format through the layout context instead of printing both names.
-    /// <para>把声明字格式化为上游名称，并用布局上下文解析设备表与第二种压缩 inode 头部共用的位，而不是同时输出两名。</para></summary>
+    /// <para>把声明字格式化为特性名，并用布局上下文解析设备表与第二种压缩 inode 头部共用的位，而不是同时输出两名。</para></summary>
     /// <param name="compatBits">Declared compat word.<para>已声明的 compat 字。</para></param>
     /// <param name="incompatBits">Declared incompat word.<para>已声明的 incompat 字。</para></param>
     /// <param name="extraDeviceCount">Extra-device slot count read from <c>s_extra_devices</c>, which names the
     /// shared 0x00000008 bit.<para>取自 <c>s_extra_devices</c> 的额外设备槽位数，用于命名共用的 0x00000008 位。</para></param>
     /// <returns>Comma-joined names, or <c>"none"</c> when both words are empty.
-    /// <para>以逗号连接的上游名；两字皆空时返回 <c>"none"</c>。</para></returns>
+    /// <para>以逗号连接的特性名；两字皆空时返回 <c>"none"</c>。</para></returns>
     internal static string Describe(uint compatBits, uint incompatBits, int extraDeviceCount)
         => JoinWords(DescribeWord(incompatBits, false, extraDeviceCount),
             DescribeWord(compatBits, true, null));
 
-    /// <summary>Applies an upstream-style feature edit script to a baseline declaration, dropping the notes about
-    /// bits that carry more than one upstream name.
-    /// <para>把上游风格的特性编辑序列应用到基线声明，并省略关于携带多个上游名的位的提示。</para></summary>
+    /// <summary>Applies a feature edit script to a baseline declaration, dropping the notes about bits that
+    /// carry more than one name.
+    /// <para>把特性编辑序列应用到基线声明，并省略关于携带多个名称的位的提示。</para></summary>
     /// <param name="text">Comma-separated tokens; a bare name sets a bit, a leading <c>!</c> clears one,
-    /// and <c>auto</c> returns the derived declaration. Matching is case-insensitive against the upstream
+    /// and <c>auto</c> returns the derived declaration. Matching is case-insensitive against the table
     /// names.
-    /// <para>以逗号分隔的记号：裸名置位，前导 <c>!</c> 清位，<c>auto</c> 回到推导式声明；匹配对上游名忽略大小写。</para></param>
+    /// <para>以逗号分隔的记号：裸名置位，前导 <c>!</c> 清位，<c>auto</c> 回到推导式声明；匹配对特性名忽略大小写。</para></param>
     /// <param name="baseCompat">Compat word to start from.<para>起始的 compat 字。</para></param>
     /// <param name="baseIncompat">Incompat word to start from.<para>起始的 incompat 字。</para></param>
     /// <param name="compat">Resulting compat word.<para>结果的 compat 字。</para></param>
@@ -242,27 +240,27 @@ internal static class ErofsFeatureTable
         out uint incompat, out string? error)
         => TryApplyEdits(text, baseCompat, baseIncompat, out compat, out incompat, out error, out _);
 
-    /// <summary>Applies an upstream-style feature edit script to a baseline declaration and reports the aliases each
-    /// edited bit carries. Edits address physical bits, so a token naming one alias edits every name sharing that
+    /// <summary>Applies a feature edit script to a baseline declaration and reports the aliases each edited bit
+    /// carries. Edits address physical bits, so a token naming one alias edits every name sharing that
     /// bit, and <paramref name="aliasNotice"/> lists all of them.
-    /// <para>把上游风格的特性编辑序列应用到基线声明，并报告每个被编辑位携带的别名。编辑针对物理位进行，因此指名某个别名的
+    /// <para>把特性编辑序列应用到基线声明，并报告每个被编辑位携带的别名。编辑针对物理位进行，因此指名某个别名的
     /// 记号会同时改动共用该位的全部名称，<paramref name="aliasNotice"/> 会列出全部名称。</para></summary>
     /// <param name="text">Comma-separated tokens; a bare name sets a bit, a leading <c>!</c> clears one,
-    /// and <c>auto</c> returns the derived declaration. Matching is case-insensitive against the upstream
+    /// and <c>auto</c> returns the derived declaration. Matching is case-insensitive against the table
     /// names.
-    /// <para>以逗号分隔的记号：裸名置位，前导 <c>!</c> 清位，<c>auto</c> 回到推导式声明；匹配对上游名忽略大小写。</para></param>
+    /// <para>以逗号分隔的记号：裸名置位，前导 <c>!</c> 清位，<c>auto</c> 回到推导式声明；匹配对特性名忽略大小写。</para></param>
     /// <param name="baseCompat">Compat word to start from.<para>起始的 compat 字。</para></param>
     /// <param name="baseIncompat">Incompat word to start from.<para>起始的 incompat 字。</para></param>
     /// <param name="compat">Resulting compat word.<para>结果的 compat 字。</para></param>
     /// <param name="incompat">Resulting incompat word.<para>结果的 incompat 字。</para></param>
     /// <param name="error">Rejected token text, or <see langword="null"/> on success.
     /// <para>被拒绝的记号文本；成功时为 <see langword="null"/>。</para></param>
-    /// <param name="aliasNotice">Semicolon-joined notes naming every bit an edited token shares with other upstream
-    /// names, one note per edited bit, or <see langword="null"/> when no edited bit is aliased. An incompat word
+    /// <param name="aliasNotice">Semicolon-joined notes naming every bit an edited token shares with other
+    /// names in the table, one note per edited bit, or <see langword="null"/> when no edited bit is aliased. An incompat word
     /// alone cannot tell which face of a shared bit the declaration means, so the full alias list is what tells the
     /// operator that clearing <c>dedupe</c> also clears <c>fragments</c> and that clearing <c>compr_head2</c> also
     /// clears <c>device_table</c>.
-    /// <para>以分号连接的提示，为被编辑记号共用的每个位列出其全部上游名称，每个被编辑位一条；当没有编辑到共用位时为
+    /// <para>以分号连接的提示，为被编辑记号共用的每个位列出其全部名称，每个被编辑位一条；当没有编辑到共用位时为
     /// <see langword="null"/>。仅凭 incompat 字无法判断声明指的是共用位的哪一面，因此完整别名列表才能告知操作者：清除
     /// <c>dedupe</c> 会一并清除 <c>fragments</c>，清除 <c>compr_head2</c> 也会一并清除 <c>device_table</c>。</para></param>
     /// <returns><see langword="true"/> when every token resolved and the script applied.

@@ -127,8 +127,8 @@ public static class VectorDrawableParser
     }
 
     /// <summary>
-    /// Reads a dp dimension attribute (AOSP complex encoding).
-    /// <para>读取 dp 尺寸属性（AOSP complex 编码）。</para>
+    /// Reads a dp dimension attribute stored in the complex dimension encoding.
+    /// <para>读取以 complex 尺寸编码存储的 dp 尺寸属性。</para>
     /// </summary>
     private static float ReadDp(AXmlElement el, string name, float fallback)
     {

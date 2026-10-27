@@ -106,7 +106,7 @@ internal static class FileSystemPackingOptions
     /// options. The feature edit script starts from
     /// <paramref name="inheritedWords"/> when the caller carries an inherited declaration and
     /// from the writer's own implied words otherwise; a key that is absent leaves the declaration untouched, so a
-    /// build without these keys stays byte-identical to one that never had them. A token outside the upstream
+    /// build without these keys stays byte-identical to one that never had them. A token outside the
     /// feature table or outside the layout-mode vocabulary fails the build rather than dropping the edit silently.
     /// The exclusion, hint and device-index keys hold one entry per line rather than a comma-separated list,
     /// because a regular expression or a path may contain a comma.
@@ -115,7 +115,7 @@ internal static class FileSystemPackingOptions
     /// <c>ErofsBlobDeviceIds</c>、<c>ErofsInodeFormat</c>、<c>ErofsChunkIndexKind</c>、<c>ErofsCompressHints</c>
     /// 与 <c>ErofsDedupeMode</c> 打包键应用到构建选项。调用方携带继承声明时以
     /// <paramref name="inheritedWords"/> 作为编辑基线，否则以写入方自行推导的隐含字作为基线；缺失的键不会改动
-    /// 声明，因此未带这些键的构建与从未有过这些键时逐字节一致。超出上游特性表或布局模式词表的记号会使构建
+    /// 声明，因此未带这些键的构建与从未有过这些键时逐字节一致。超出特性表或布局模式词表的记号会使构建
     /// 失败，而不是静默丢弃该次编辑。排除键、提示键与设备下标键每行一个条目而非逗号分隔，因为正则表达式或
     /// 路径可能包含逗号。</para>
     /// </summary>
@@ -124,9 +124,9 @@ internal static class FileSystemPackingOptions
     /// <para>接收该声明的构建选项。</para></param>
     /// <param name="inheritedWords">Inherited superblock feature words, or <see langword="null"/> to edit from the
     /// minimal derived baseline. <para>继承的超级块特性字；为 <see langword="null"/> 时以最小推导基线为编辑起点。</para></param>
-    /// <exception cref="FileSystemUnsupportedFeatureException">The edit script names a token the upstream feature
+    /// <exception cref="FileSystemUnsupportedFeatureException">The edit script names a token the feature
     /// table does not carry, or the dot-omitted value is neither a tri-state name nor a boolean.
-    /// <para>编辑脚本包含上游特性表未收录的记号，或 dot-omitted 值既不是三态名也不是布尔值。</para></exception>
+    /// <para>编辑脚本包含特性表未收录的记号，或 dot-omitted 值既不是三态名也不是布尔值。</para></exception>
     internal static void ApplyErofsFeatureKeys(IReadOnlyDictionary<string, string> options, ErofsOptions erofsOptions,
         (uint Compat, uint Incompat)? inheritedWords)
     {
@@ -250,9 +250,8 @@ internal static class FileSystemPackingOptions
     }
 
     /// <summary>
-    /// Trims and lower-cases a layout-mode packing token so these keys accept the spelling an
-    /// <c>erofs-utils</c> command line would carry.
-    /// <para>裁剪并小写化布局模式打包记号，使这些键接受与 <c>erofs-utils</c> 命令行一致的写法。</para>
+    /// Trims and lower-cases a layout-mode packing token so these keys accept a case-insensitive spelling.
+    /// <para>裁剪并小写化布局模式打包记号，使这些键接受不区分大小写的写法。</para>
     /// </summary>
     /// <param name="value">Raw token text. <para>原始记号文本。</para></param>
     /// <returns>The normalized token. <para>规范化后的记号。</para></returns>

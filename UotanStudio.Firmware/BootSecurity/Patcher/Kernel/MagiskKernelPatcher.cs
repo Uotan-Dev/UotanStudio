@@ -2,10 +2,14 @@ using System.Buffers;
 
 namespace UotanStudio.Firmware.BootSecurity.Patcher.Kernel;
 
-/// <summary>Applies the source-faithful, pattern based kernel fixes for Magisk-style patching.</summary>
+/// <summary>Applies the pattern based kernel fixes required by Magisk-style patching.
+/// <para>应用 Magisk 风格修补所需、基于模式定位的内核修正。</para>
+/// </summary>
 /// <remarks>
-/// Every pattern is located by the same single pass over the kernel; the sequential search that used one full
-/// image scan per pattern produced the same first occurrences because no replacement can create a later pattern.
+/// Every pattern is located in one pass over the kernel; one pass finds the same first occurrence per pattern
+/// because no replacement can create a later occurrence.
+/// <para>所有模式都在对内核的一次遍历中定位；一次遍历即可为每个模式找到相同的最先出现位置，因为任何替换都不会
+/// 产生更靠后的匹配。</para>
 /// </remarks>
 internal static class MagiskKernelPatcher
 {
@@ -37,6 +41,8 @@ internal static class MagiskKernelPatcher
     /// <summary>
     /// Applies the same fixes and enables the legacy rootfs rewrite whenever the kernel already carries
     /// <c>skip_initramfs</c>, matching <see cref="NeedsLegacyRootfs"/> without a second full image scan.
+    /// <para>应用同一组修正，并在内核已带 <c>skip_initramfs</c> 时启用 legacy rootfs 改写，与
+    /// <see cref="NeedsLegacyRootfs"/> 一致且无需第二次全镜像扫描。</para>
     /// </summary>
     public static byte[] ApplyDetectingRootfs(ReadOnlySpan<byte> kernel, bool forceRootfs, List<string> changes)
         => Apply(kernel, forceRootfs, detectRootfs: true, changes);

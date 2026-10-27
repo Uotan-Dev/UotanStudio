@@ -195,10 +195,10 @@ internal static class PuffDiffApplier
 
     /// <summary>Creates a standard PUF1 patch from bounded seekable streams without buffering either image as a whole.
     /// <para>从有界可定位流创建标准 PUF1 补丁，不将任一完整镜像整体载入内存。</para></summary>
-    /// <param name="oldData">Seekable source image stream positioned at zero.</param>
-    /// <param name="newData">Seekable target image stream positioned at zero.</param>
-    /// <param name="output">Writable destination receiving the complete PUF1 patch.</param>
-    /// <param name="cancellationToken">Cancellation token checked during patch generation and copying.</param>
+    /// <param name="oldData">Seekable source image stream positioned at zero. <para>定位在零处的可定位源镜像流。</para></param>
+    /// <param name="newData">Seekable target image stream positioned at zero. <para>定位在零处的可定位目标镜像流。</para></param>
+    /// <param name="output">Writable destination receiving the complete PUF1 patch. <para>接收完整 PUF1 补丁的可写目标。</para></param>
+    /// <param name="cancellationToken">Cancellation token checked during patch generation and copying. <para>在补丁生成与复制期间检查的取消令牌。</para></param>
     /// <exception cref="ArgumentException">A stream is not seekable/readable or exceeds the 256 MiB limit.</exception>
     public static void CreatePatch(Stream oldData, Stream newData, Stream output,
         CancellationToken cancellationToken = default)

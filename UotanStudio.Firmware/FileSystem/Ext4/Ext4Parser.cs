@@ -174,7 +174,7 @@ public sealed class Ext4Parser : IDisposable
     internal byte[] SourceUuid => _superblock.Uuid;
     internal string SourceVolumeName => _superblock.VolumeName;
 
-    /// <summary>The parsed superblock used for metadata inspection.</summary>
+    /// <summary>The parsed superblock used for metadata inspection. <para>用于元数据检视的已解析超级块。</para></summary>
     internal Ext4Superblock Superblock => _superblock;
 
     /// <summary>Filesystem block size in bytes.

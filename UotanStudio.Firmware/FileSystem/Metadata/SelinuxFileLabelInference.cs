@@ -5,7 +5,8 @@ using UotanStudio.Firmware.FileSystem.Rebuilding;
 
 namespace UotanStudio.Firmware.FileSystem.Metadata;
 
-/// <summary>Infers file object contexts without inventing process domains or executable entrypoint types.</summary>
+/// <summary>Infers file object contexts without inventing process domains or executable entrypoint types.
+/// <para>推断文件对象上下文，且不虚构进程域或可执行入口类型。</para></summary>
 internal sealed class SelinuxFileLabelInference
 {
     private readonly Dictionary<string, PreservedInodeEntry> originals;

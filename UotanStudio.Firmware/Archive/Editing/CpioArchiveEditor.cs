@@ -67,7 +67,7 @@ internal sealed class CpioArchiveEditor
     /// Removes every entry whose normalized path equals the given path.
     /// <para>移除所有规范化路径与给定路径一致的条目。</para>
     /// </summary>
-    /// <param name="path">Entry path to remove; the same normalization as in <see cref="Find"/> applies.</param>
+    /// <param name="path">Entry path to remove; the same normalization as in <see cref="Find"/> applies. <para>要移除的条目路径；采用与 <see cref="Find"/> 相同的规范化。</para></param>
     /// <returns><see langword="true"/> when this call removes at least one entry.
     /// <para>本次调用至少移除一个条目时返回 <see langword="true"/>。</para></returns>
     /// <exception cref="ArgumentException"><paramref name="path"/> is <see langword="null"/> or white space.

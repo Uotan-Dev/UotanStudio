@@ -3,8 +3,7 @@ using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk;
 
-/// <summary>One decoded JKS entry: a private-key entry (tag 1) or a trusted-certificate entry (tag 2).</summary>
-/// <para>单个解析出的 JKS 条目：私钥条目（tag 1）或受信证书条目（tag 2）。</para>
+/// <summary>One decoded JKS entry: a private-key entry (tag 1) or a trusted-certificate entry (tag 2). <para>单个解析出的 JKS 条目：私钥条目（tag 1）或受信证书条目（tag 2）。</para></summary>
 /// <param name="Tag">Raw entry type: 1 for a protected private-key entry, 2 for a trusted-certificate entry; <see cref="JksKeyStoreReader.Read"/> rejects any other value. <para>原始条目类型：1 为受保护私钥条目，2 为受信证书条目；<see cref="JksKeyStoreReader.Read"/> 拒绝其他值。</para></param>
 /// <param name="Alias">Entry alias decoded from Java modified UTF-8. <para>由 Java 修改版 UTF-8 解码出的条目别名。</para></param>
 /// <param name="Creation">Entry timestamp stored as big-endian milliseconds since the Unix epoch. <para>以大端 Unix 毫秒时间戳存储的条目时间。</para></param>
@@ -127,8 +126,7 @@ internal static class JksKeyStoreReader
         finally { CryptographicOperations.ZeroMemory(passwordBytes); }
     }
 
-    /// <summary>The keystore integrity digest: SHA1(passwordBytes || "Mighty Aphrodite").</summary>
-    /// <para>密钥库完整性摘要：SHA1(passwordBytes || "Mighty Aphrodite")。</para>
+    /// <summary>The keystore integrity digest: SHA1(passwordBytes || "Mighty Aphrodite"). <para>密钥库完整性摘要：SHA1(passwordBytes || "Mighty Aphrodite")。</para></summary>
     internal static DigestAccumulator IntegrityDigest(string password)
     {
         var hash = Sha1.CreateAccumulator();
@@ -139,8 +137,7 @@ internal static class JksKeyStoreReader
         return hash;
     }
 
-    /// <summary>Encodes every password char as a big-endian 16-bit pair (high byte first).</summary>
-    /// <para>将密码的每个字符按大端 16 位写出（高字节在前）。</para>
+    /// <summary>Encodes every password char as a big-endian 16-bit pair (high byte first). <para>将密码的每个字符按大端 16 位写出（高字节在前）。</para></summary>
     internal static byte[] EncodePassword(string password)
     {
         var bytes = new byte[checked(password.Length * 2)];
@@ -190,8 +187,7 @@ internal static class JksKeyStoreReader
         return bytes;
     }
 
-    /// <summary>Decodes Java modified UTF-8 with a 2-byte length prefix.</summary>
-    /// <para>解码带 2 字节长度前缀的 Java 修改版 UTF-8。</para>
+    /// <summary>Decodes Java modified UTF-8 with a 2-byte length prefix. <para>解码带 2 字节长度前缀的 Java 修改版 UTF-8。</para></summary>
     private static string ReadModifiedUtf(byte[] data, ref int offset)
     {
         var length = ReadInt16(data, ref offset);
@@ -233,8 +229,7 @@ internal static class JksKeyStoreReader
 /// </summary>
 public static class JksKeyStoreWriter
 {
-    /// <summary>JKS v1 magic shared by the writer and the reader's magic check.</summary>
-    /// <para>JKS v1 魔数，供写出方与读取方的魔数校验共用。</para>
+    /// <summary>JKS v1 magic shared by the writer and the reader's magic check. <para>JKS v1 魔数，供写出方与读取方的魔数校验共用。</para></summary>
     internal const int Magic = unchecked((int)0xFEEDFEED);
     private const int Version = 1;
     private const int PrivateKeyTag = 1;
@@ -328,8 +323,7 @@ public static class JksKeyStoreWriter
         finally { CryptographicOperations.ZeroMemory(protectedKey); }
     }
 
-    /// <summary>KeyProtector.protect: SHA1 XOR keystream with random salt, trailing digest(password || plainKey).</summary>
-    /// <para>KeyProtector.protect：SHA1 XOR 密钥流加随机盐，尾部附加 digest(password || plainKey)。</para>
+    /// <summary>KeyProtector.protect: SHA1 XOR keystream with random salt, trailing digest(password || plainKey). <para>KeyProtector.protect：SHA1 XOR 密钥流加随机盐，尾部附加 digest(password || plainKey)。</para></summary>
     private static byte[] Protect(byte[] plainKey, string password)
     {
         var passwordBytes = JksKeyStoreReader.EncodePassword(password);
@@ -370,8 +364,7 @@ public static class JksKeyStoreWriter
         return target;
     }
 
-    /// <summary>Encodes Java modified UTF-8 (U+0000 as C0 80; supplementary chars as surrogate pairs).</summary>
-    /// <para>编码 Java 修改版 UTF-8（U+0000 写作 C0 80；增补字符按代理对处理）。</para>
+    /// <summary>Encodes Java modified UTF-8 (U+0000 as C0 80; supplementary chars as surrogate pairs). <para>编码 Java 修改版 UTF-8（U+0000 写作 C0 80；增补字符按代理对处理）。</para></summary>
     private static byte[] EncodeModifiedUtf(string value)
     {
         var length = 0;

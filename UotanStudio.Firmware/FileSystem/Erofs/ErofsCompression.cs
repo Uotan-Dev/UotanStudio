@@ -99,8 +99,8 @@ internal static class ErofsCompression
         => CompressLz4(source, sourceIndex, sourceLength, target, targetIndex, targetLength, compressionLevel,
             highCompression: false);
 
-    /// <summary>Decompresses a single pcluster with LZ4 (unchanged legacy behavior), returning the decompressed byte count.
-    /// <para>解压单个 pcluster（LZ4，与既有实现一致），返回解压字节数。</para></summary>
+    /// <summary>Decompresses a single pcluster with LZ4, the pre-5.13 codec, returning the decompressed byte count.
+    /// <para>以 pre-5.13 编解码器 LZ4 解压单个 pcluster，返回解压字节数。</para></summary>
     /// <param name="source">Buffer holding the encoded LZ4 block.<para>存放 LZ4 编码块的缓冲区。</para></param>
     /// <param name="sourceIndex">Start index of the compressed range inside <paramref name="source"/>.
     /// <para><paramref name="source"/> 内压缩区间的起始索引。</para></param>

@@ -2,11 +2,11 @@ namespace UotanStudio.Firmware.Core.Repacking;
 
 /// <summary>
 /// Explicit metadata context distinguishing "explicit project root", "explicit no-project local
-/// mode" and "unspecified (legacy ambient default)". Unspecified keeps the historical behavior of
-/// reading <see cref="RepackMetadata.DefaultMetadataRoot"/> at use time; the two explicit kinds
+/// mode" and "unspecified (ambient default resolved at use time)". Unspecified reads
+/// <see cref="RepackMetadata.DefaultMetadataRoot"/> at use time; the two explicit kinds
 /// never read the ambient root and never cross-fallback (single-location rule unchanged).
-/// <para>显式元数据上下文，区分「显式工程根」「显式无工程本地模式」与「未指定（沿用旧环境默认值）」。
-/// Unspecified 保持历史行为：使用时读取 <see cref="RepackMetadata.DefaultMetadataRoot"/>；
+/// <para>显式元数据上下文，区分「显式工程根」「显式无工程本地模式」与「未指定（使用时解析环境默认值）」。
+/// 未指定状态在使用时读取 <see cref="RepackMetadata.DefaultMetadataRoot"/>；
 /// 两个显式状态绝不读取环境根、也绝不交叉回退（单一位置规则不变）。</para>
 /// </summary>
 public readonly struct RepackMetadataContext

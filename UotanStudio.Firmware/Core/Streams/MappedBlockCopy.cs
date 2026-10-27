@@ -2,7 +2,7 @@ using System.Buffers;
 
 namespace UotanStudio.Firmware.Core.Streams;
 
-/// <summary>Copies physically contiguous block runs with a bounded buffer; holes remain zero filled.</summary>
+/// <summary>Copies physically contiguous block runs with a bounded buffer; holes remain zero filled. <para>用有界缓冲复制物理连续的块区间；空洞保持零填充。</para></summary>
 internal static class MappedBlockCopy
 {
     internal static void Copy(Stream source, Stream destination, long size, int blockSize, Func<uint, long?> mapBlock,

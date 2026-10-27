@@ -19,7 +19,7 @@ internal static class SparseContainerAccess
     /// Returns the registered sparse container bridge.
     /// <para>返回已注册的稀疏容器桥接实现。</para>
     /// </summary>
-    /// <returns>The bridge instance published by the owning format handler.</returns>
+    /// <returns>The bridge instance published by the owning format handler. <para>由所属格式处理器发布的桥接实例。</para></returns>
     /// <exception cref="InvalidOperationException">No registered format handler implements
     /// <see cref="ISparseContainerBridge"/>, so the sparse container utilities are unavailable.
     /// <para>没有已注册的格式处理器实现 <see cref="ISparseContainerBridge"/>，稀疏容器工具不可用。</para></exception>

@@ -5,7 +5,8 @@ using UotanStudio.Firmware.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 
-/// <summary>Owns source filesystem configuration, sidecar generation and preservation capture.</summary>
+/// <summary>Owns source filesystem configuration, sidecar generation and preservation capture.
+/// <para>负责源文件系统配置、附属文件生成与保留式捕获。</para></summary>
 internal static class FileSystemRepackMetadata
 {
     internal static void Configure(RepackMetadata metadata, string sourcePath, string outputDirectory, bool sparse = false)

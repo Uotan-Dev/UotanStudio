@@ -4,11 +4,11 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes;
 
 /// <summary>
 /// Unified EROFS inode that holds the tree position, the on-disk fields and the build-time source
-/// information that erofs-utils keeps in one <c>struct erofs_inode</c>. A decoded inode fills the
+/// information one inode record carries. A decoded inode fills the
 /// on-disk fields from the inode record and carries its addressing state in <see cref="Idata"/>; a
 /// planner fills the same fields while it assigns layouts, so a preserved rebuild compares source and
 /// target strategies on one model instead of three parallel ones.
-/// <para>统一的 EROFS inode，把 erofs-utils 保存在单个 <c>struct erofs_inode</c> 中的树位置、
+/// <para>统一的 EROFS inode，把树位置、
 /// 磁盘字段与构建期源信息放在一起。解码得到的 inode 从 inode 记录填充磁盘字段，并在
 /// <see cref="Idata"/> 中携带寻址状态；规划器在分配布局时填充同一批字段，使保留式重建可以在一个模型上
 /// 比较源与目标的存储策略，而不是在三处并行模型之间手工同步。</para>
@@ -76,15 +76,15 @@ internal sealed class ErofsInode
     /// 声明针对定义了该位的内核时才写出。</para></summary>
     internal const ushort AdviseBitNlinkOneOrDotOmitted = 1 << 4;
 
-    /// <summary>Every <c>i_format</c> bit the kernel accepts (<c>EROFS_I_ALL</c>). Upstream computes it from the
+    /// <summary>Every <c>i_format</c> bit the kernel accepts (<c>EROFS_I_ALL</c>). It is computed from the
     /// nlink-one bit rather than from the data-layout width, as
     /// <c>((1 &lt;&lt; (EROFS_I_NLINK_1_BIT + 1)) - 1)</c>, which is <c>0x1F</c>; the kernel rejects any inode with
-    /// a bit outside it through <c>ifmt &amp; ~EROFS_I_ALL</c>, and erofs-utils applies the same test while
+    /// a bit outside it through <c>ifmt &amp; ~EROFS_I_ALL</c>, and the reader applies the same test while
     /// reading. Deriving it from <see cref="AdviseBitNlinkOneOrDotOmitted"/> keeps the acceptance mask and the
     /// bit the writer raises from ever disagreeing.
-    /// <para>内核接受的全部 <c>i_format</c> 位（<c>EROFS_I_ALL</c>）。上游由 nlink-one 位而非数据布局宽度推导它，即
+    /// <para>内核接受的全部 <c>i_format</c> 位（<c>EROFS_I_ALL</c>）。该掩码由 nlink-one 位而非数据布局宽度推导，即
     /// <c>((1 &lt;&lt; (EROFS_I_NLINK_1_BIT + 1)) - 1)</c>，结果为 <c>0x1F</c>；内核以 <c>ifmt &amp; ~EROFS_I_ALL</c>
-    /// 拒绝任何越界的 inode，erofs-utils 在读取时施加同一判定。由 <see cref="AdviseBitNlinkOneOrDotOmitted"/> 推导它，
+    /// 拒绝任何越界的 inode，读取方在读取时施加同一判定。由 <see cref="AdviseBitNlinkOneOrDotOmitted"/> 推导它，
     /// 使接受掩码与写入方置起的位不可能出现分歧。</para></summary>
     internal const ushort AdviseAll = (AdviseBitNlinkOneOrDotOmitted << 1) - 1;
 
@@ -105,11 +105,11 @@ internal sealed class ErofsInode
     /// <para>把索引表项首块加宽到 48 位的 chunk 格式位（<c>EROFS_CHUNK_FORMAT_48BIT</c>）。</para></summary>
     internal const ushort ChunkFormat48Bit = 0x0040;
 
-    /// <summary>Every defined chunk-format bit (<c>EROFS_CHUNK_FORMAT_ALL</c>). erofs-utils derives it as
-    /// <c>((EROFS_CHUNK_FORMAT_48BIT &lt;&lt; 1) - 1)</c> and rejects a chunk-based inode carrying any bit
-    /// outside it, so the test is stated once over the whole word instead of per sub-field.
-    /// <para>全部已定义的 chunk 格式位（<c>EROFS_CHUNK_FORMAT_ALL</c>）。erofs-utils 按
-    /// <c>((EROFS_CHUNK_FORMAT_48BIT &lt;&lt; 1) - 1)</c> 推导它，并拒绝任何携带其外位的 chunk-based inode，
+    /// <summary>Every defined chunk-format bit (<c>EROFS_CHUNK_FORMAT_ALL</c>). The mask is derived as
+    /// <c>((EROFS_CHUNK_FORMAT_48BIT &lt;&lt; 1) - 1)</c>, and the reader rejects a chunk-based inode carrying any
+    /// bit outside it, so the test is stated once over the whole word instead of per sub-field.
+    /// <para>全部已定义的 chunk 格式位（<c>EROFS_CHUNK_FORMAT_ALL</c>）。该掩码按
+    /// <c>((EROFS_CHUNK_FORMAT_48BIT &lt;&lt; 1) - 1)</c> 推导，读取方拒绝任何携带其外位的 chunk-based inode，
     /// 因此该判定针对整个字声明一次，而不是逐子域声明。</para></summary>
     internal const ushort ChunkFormatAll = (ChunkFormat48Bit << 1) - 1;
 
@@ -263,9 +263,8 @@ internal sealed class ErofsInode
 
     /// <summary>Link count (<c>i_nlink</c>). <para>链接数（<c>i_nlink</c>）。</para></summary>
     /// <value>For a compact inode with the shared bit set and a non-directory mode this is one. A freshly
-    /// created inode starts at one link, matching upstream's new-inode default; a decoded inode overwrites
-    /// it from the record. <para>紧凑 inode 置有共用位且模式为文件时为 1。新建 inode 起始为一个链接，与上游的
-    /// 新 inode 默认值一致；解码得到的 inode 会用记录覆盖它。</para></value>
+    /// created inode starts at one link; a decoded inode overwrites it from the record.
+    /// <para>紧凑 inode 置有共用位且模式为文件时为 1。新建 inode 起始为一个链接；解码得到的 inode 会用记录覆盖它。</para></value>
     internal ulong Nlink { get; set; } = 1;
 
     /// <summary>Mode word (<c>i_mode</c>) including the file-type nibble.
@@ -347,9 +346,9 @@ internal sealed class ErofsInode
 
     /// <summary>Physical blocks one pcluster spans (<c>z_physical_clusterblks</c>).
     /// <para>单个 pcluster 跨越的物理块数（<c>z_physical_clusterblks</c>）。</para></summary>
-    /// <value>A build-time planning field that erofs-utils does not store in the map header, so a
-    /// decoded inode leaves it zero and the planner fills it.
-    /// <para>构建期规划字段，erofs-utils 并不把它写入映射头，因此解码得到的 inode 保持为零，由规划器填充。</para></value>
+    /// <value>A build-time planning field the map header does not store, so a decoded inode leaves it zero
+    /// and the planner fills it.
+    /// <para>构建期规划字段，映射头不存放它，因此解码得到的 inode 保持为零，由规划器填充。</para></value>
     internal byte ZPhysicalClusterBlks { get; set; }
 
     /// <summary>Extent row count of a compressed-full inode (<c>z_extents</c>).
@@ -585,10 +584,10 @@ internal sealed class ErofsInode
 
     /// <summary>Placement shape of the source payload across the file's own blocks and the packed inode,
     /// recorded while a preserved source is decoded. The value cannot be derived from the decoded node:
-    /// upstream decides between the whole-file and tail shapes by whether the packed inode is compressed,
-    /// which is not part of this inode's record.
+    /// the whole-file and tail shapes differ by whether the packed inode is compressed, which is not part of
+    /// this inode's record.
     /// <para>源负载在文件自身块与 packed inode 之间的存放形态，在解码保留式源时记录。该值无法由解码得到的
-    /// 节点推导：上游依据 packed inode 是否压缩来区分整文件与尾部两种形态，而这不是本 inode 记录的一部分。</para></summary>
+    /// 节点推导：整文件与尾部两种形态按 packed inode 是否压缩区分，而这不是本 inode 记录的一部分。</para></summary>
     /// <value>Only meaningful on a node whose <see cref="Layer"/> is
     /// <see cref="ErofsInodeLayer.Source"/>; <see cref="ErofsFragmentShape.None"/> means the payload sits
     /// entirely in the file's own blocks or pclusters.
@@ -621,9 +620,8 @@ internal sealed class ErofsInode
     /// <para>源记录的元数据创建形态，在解码保留式源时记录：记录位于普通元数据区、METABOX 容器还是独立元数据区，
     /// 以及采用紧凑还是扩展宽度。该形态无法仅由记录字段重新推导，因为 nid 第 63 位承载的 METABOX 位置与超级块
     /// 元数据块地址承载的 metazone 迁移都不在记录之内。</para></summary>
-    /// <value><see langword="null"/> on a node whose creation form was not recorded, which keeps the rebuild's
-    /// previous derivation for that node. <para>未记录创建形态的节点为 <see langword="null"/>，重建对该节点保持
-    /// 此前的推导方式。</para></value>
+    /// <value><see langword="null"/> on a node whose creation form was not recorded, in which case the rebuild
+    /// derives the form instead. <para>未记录创建形态的节点为 <see langword="null"/>，重建对该节点改为推导该形态。</para></value>
     internal ErofsInodeMetadataCreationType? MetadataCreationType { get; set; }
 
     /// <summary>Secondary algorithm the node's HEAD2 index rows name, or <see langword="null"/>.
@@ -683,11 +681,11 @@ internal sealed class ErofsInode
     internal bool IsFragment { get; set; }
 
     /// <summary>Whether only the node's final pcluster is placed in the shared fragment area while its
-    /// remaining clusters stay in its own data blocks. This is the shape <c>mkfs.erofs -E fragments</c>
-    /// produces for a file whose last compressed window fits one pcluster; the whole-file shape above is
+    /// remaining clusters stay in its own data blocks. This is the shape a fragment build produces for a file
+    /// whose last compressed window fits one pcluster; the whole-file shape above is
     /// the separate case its map header marks with bit 63.
     /// <para>是否只把节点的末尾 pcluster 放入共享 fragment 区，其余簇仍留在自身的数据库块中。这是
-    /// <c>mkfs.erofs -E fragments</c> 对「末尾压缩窗口能装进一个 pcluster」的文件所产生的形态；上面的整文件
+    /// fragment 构建对「末尾压缩窗口能装进一个 pcluster」的文件所产生的形态；上面的整文件
     /// 形态是其映射头以第 63 位标记的另一种情况。</para></summary>
     /// <value><see langword="true"/> only for a node that keeps <see cref="Pclusters"/> non-empty and ends
     /// them with a fragment entry. <para>仅当节点保留非空 <see cref="Pclusters"/> 并以 fragment 条目结尾时为

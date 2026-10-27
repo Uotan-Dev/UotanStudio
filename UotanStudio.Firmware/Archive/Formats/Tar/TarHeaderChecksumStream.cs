@@ -18,9 +18,9 @@ namespace UotanStudio.Firmware.Archive.Formats.Tar;
 /// 计算校验和时，偏移 148 的校验和字段按空格处理，与写入器一致。全零块表示归档结束，其后的字节不再校验。</para>
 /// <para>A seek is reinterpreted against the record range already parsed: landing on the next header or
 /// inside the current payload keeps validation aligned, while an offset outside both ranges stops it
-/// because the record boundaries can no longer be derived.
+/// because the record boundaries cannot be derived from it.
 /// 定位请求会按已解析的记录范围重新解释：落在下一个头块或当前负载范围内时校验保持对齐，
-/// 超出两者范围的偏移会因无法再推断记录边界而停止校验。</para>
+/// 超出两者范围的偏移无法据此推断记录边界，校验随之中断。</para>
 /// </remarks>
 internal sealed class TarHeaderChecksumStream(Stream inner) : Stream
 {

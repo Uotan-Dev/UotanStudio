@@ -155,7 +155,7 @@ public sealed class ArchiveBrowser : IDisposable
         || CompressionForPath(path) != CompressionFormat.None
         || HasContainerMagic(path);
 
-    /// <summary>Reads a bounded header and checks the ZIP/RAR/7z container magics; unreadable files return false.</summary>
+    /// <summary>Reads a bounded header and checks the ZIP/RAR/7z container magics; unreadable files return false. <para>读取有界头部并检查 ZIP/RAR/7z 容器魔数；文件不可读时返回 false。</para></summary>
     private static bool HasContainerMagic(string path)
     {
         try

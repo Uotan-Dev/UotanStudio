@@ -4,10 +4,10 @@ namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;
 
 /// <summary>
 /// Decoder-state plumbing shared by the compressed read paths: every pcluster decode borrows the parser's
-/// retained ZSTD decompressor or MicroLZMA decoder, so a decode no longer pays for the decoder workspace a
+/// retained ZSTD decompressor or MicroLZMA decoder, so a decode avoids the decoder workspace a
 /// fresh instance would allocate per pcluster.
 /// <para>压缩读取路径共享的解码器状态接线：每次 pcluster 解码都借用解析器保留的 ZSTD 解压器或 MicroLZMA
-/// 解码器，使解码不必再付出新建实例为每个 pcluster 分配的解码器工作区。</para>
+/// 解码器，因此解码无需为每个 pcluster 新建实例并分配其解码器工作区。</para>
 /// </summary>
 public sealed partial class ErofsParser
 {

@@ -67,53 +67,13 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Plans pclusters for one payload with the cluster-restarting planner. A candidate is accepted only when the
-    /// emitted index can name its physical length: without a declared big-pcluster feature every pcluster is
-    /// pinned to exactly one filesystem block, so a frame larger than one block would be read back truncated;
-    /// with the feature the block count travels in the first non-head row, so a frame larger than one block has
-    /// to be given a second logical cluster to carry that row. Non-big candidates are additionally trimmed to
-    /// whole logical clusters, which is the granularity that layout has always used.
-    /// The search reuses one scratch buffer for every probe, so the accepted frame is copied to a second buffer as
-    /// soon as a probe is accepted: the probe that ends the search is usually a longer span whose encoding starts
-    /// with the accepted frame's bytes but does not stop where they stop, and staging that prefix would credit the
-    /// index with <c>acceptedLen</c> bytes while the stored frame decodes to a different span, which a conformant
-    /// reader reports as <c>failed to full decompress</c>.
-    /// <para>以逐簇重启的规划器为单个负载规划 pcluster。只有在已发出的索引能够表明其物理长度时才接受候选：
-    /// 未声明 big pcluster 时每个 pcluster 被钉死为一个文件系统块，超过一块的帧读回时必被截断；声明该特性时
-    /// 块数写在首个非头簇行里，因此超过一块的帧必须有第二个逻辑簇来承载该行。非 big 候选还会被裁剪为整数个
-    /// 逻辑簇，这也是该布局一直使用的粒度。
-    /// 搜索过程复用同一块暂存缓冲，因此候选一旦被接受就立刻把该帧复制到第二块缓冲：结束搜索的那次探测通常是
-    /// 更长的跨度，其编码以被接受帧的字节开头却不会在同样的位置收尾，若把这段前缀写入暂存文件，索引会记给
-    /// 该帧 <c>acceptedLen</c> 字节，而盘上帧却解码成另一个跨度，合规读取方会报
-    /// <c>failed to full decompress</c>。</para>
-    /// <para>Reads also credit each accepted frame with the cluster that carries its end: 5.10's
-    /// <c>z_erofs_map_blocks_iter</c> keeps <c>end = (lcn + 1) &lt;&lt; lclusterbits</c> for the cluster a lookup
-    /// starts in and <c>z_erofs_extent_lookback</c> only rewinds the start, so <c>zdata.c</c> folds that rounded
-    /// length into <c>pcl-&gt;length</c> and <c>z_erofs_lz4_decompress</c> returns <c>-EIO</c> whenever
-    /// <c>ret != rq-&gt;outputsize</c>. A frame for a file whose data ends inside its final logical cluster
-    /// therefore has to encode that whole cluster, so the candidate that reaches the end of file with a partial
-    /// tail is compressed from a zero-filled input up to the cluster boundary. erofs-utils meets the same
-    /// contract differently — it leaves the residual end offset in <c>ctx-&gt;clusterofs</c> and
-    /// <c>z_erofs_fini_full_indexes</c> closes the index with a trailing row — which is only available while the
-    /// row after the head stays free for a block count; padding the input keeps the emitted rows unchanged and
-    /// keeps a sub-block tail inside its own frame instead of spending a whole block on it.</para>
-    /// <para>读取方还会把每个被接受的帧记到承载其末端的那个簇上：5.10 的 <c>z_erofs_map_blocks_iter</c> 对查找起点的簇
-    /// 保持 <c>end = (lcn + 1) &lt;&lt; lclusterbits</c>，而 <c>z_erofs_extent_lookback</c> 只回退起点，因此
-    /// <c>zdata.c</c> 把取整后的长度折进 <c>pcl-&gt;length</c>，而 <c>z_erofs_lz4_decompress</c> 只要
-    /// <c>ret != rq-&gt;outputsize</c> 就返回 <c>-EIO</c>。因此数据在末尾逻辑簇内结束的文件，其帧必须编码整个簇，
-    /// 所以触及文件末尾且带不满簇尾巴的候选会从补零到簇边界的输入压缩。erofs-utils 以另一种方式满足同一契约——把
-    /// 剩余结束偏移留在 <c>ctx-&gt;clusterofs</c> 而由 <c>z_erofs_fini_full_indexes</c> 以尾行收尾——但那只在头行之后
-    /// 的那一行仍可用于块数时可行；补零输入保持已发出的行不变，并让不足一块的尾巴留在自己的帧里，而不必为它花掉
-    /// 整整一个块。</para>
-    /// </summary>
-    /// <summary>
     /// Reports whether a frame accepted for <paramref name="candidateLength"/> bytes at
     /// <paramref name="position"/> can be closed by the index row a reader expects when a file's data ends
     /// inside its final logical cluster. A reader credits such a frame with the cluster that carries its end
     /// (5.10's <c>z_erofs_map_blocks_iter</c> keeps <c>end = (lcn + 1) &lt;&lt; lclusterbits</c> and
     /// <c>z_erofs_extent_lookback</c> only rewinds the start, so <c>zdata.c</c> demands that rounded size and
     /// <c>z_erofs_lz4_decompress</c> returns <c>-EIO</c> when the stream produces less). The row that closes the
-    /// extent — the trailing row erofs-utils emits from <c>z_erofs_fini_full_indexes</c>, a plain row whose
+    /// extent — the trailing row <c>z_erofs_fini_full_indexes</c> emits, a plain row whose
     /// cluster offset is the residual end offset — keeps the demand equal to the bytes the frame encodes, and it
     /// is written for the last cluster of the last pcluster. It can only stand in for a non-head row of a
     /// multi-cluster pcluster, and it takes the place of the block count row a multi-block frame needs, so a
@@ -124,7 +84,7 @@ public sealed partial class ErofsBuilder
     /// 文件数据结束于末尾逻辑簇内时所期待的索引行收尾。读取方会把这样的帧记到承载其末端的簇上（5.10 的
     /// <c>z_erofs_map_blocks_iter</c> 保持 <c>end = (lcn + 1) &lt;&lt; lclusterbits</c>，而
     /// <c>z_erofs_extent_lookback</c> 只回退起点，因此 <c>zdata.c</c> 要求的正是取整后的长度，而
-    /// <c>z_erofs_lz4_decompress</c> 在流产出不足时返回 <c>-EIO</c>）。收尾该 extent 的行——erofs-utils 由
+    /// <c>z_erofs_lz4_decompress</c> 在流产出不足时返回 <c>-EIO</c>）。收尾该 extent 的行——由
     /// <c>z_erofs_fini_full_indexes</c> 发出的尾行，即簇偏移等于剩余结束偏移的 plain 行——会让要求量等于帧实际编码的
     /// 字节数，且它为最后一个 pcluster 的最后一个簇而写。它只能替代多簇 pcluster 的非头行，并且会占掉多块帧所需的块数行，
     /// 因此跨两簇且超过一块的帧不能使用它：此类候选在此被拒绝，规划器退化为更短的跨度加一个承载剩余字节的原样
@@ -197,11 +157,11 @@ public sealed partial class ErofsBuilder
 
     /// <summary>
     /// Reports whether the row at <paramref name="clusterIndex"/> is the closing row of the file's last
-    /// compressed pcluster, i.e. the trailing plain row erofs-utils writes from
+    /// compressed pcluster, i.e. the trailing plain row written from
     /// <c>z_erofs_fini_full_indexes</c> whose cluster offset is the residual end offset. A reader only reaches
     /// that offset at end of file, so the row never resolves to a physical address; it exists so the extent
     /// before it is credited with the bytes it really encodes instead of a whole final cluster.
-    /// <para>判断 <paramref name="clusterIndex"/> 处的行是否为文件最后一个压缩 pcluster 的收尾行，即 erofs-utils 由
+    /// <para>判断 <paramref name="clusterIndex"/> 处的行是否为文件最后一个压缩 pcluster 的收尾行，即由
     /// <c>z_erofs_fini_full_indexes</c> 写出、簇偏移等于剩余结束偏移的尾部 plain 行。读取方只会在文件末尾到达该偏移，
     /// 因此该行永远不会解析出物理地址；它的存在只是让之前的 extent 被记为它真正编码的字节数，而不是整个末尾簇。</para>
     /// </summary>
@@ -351,6 +311,45 @@ public sealed partial class ErofsBuilder
         return TryPlanCompressed(node, blockSize, options, staging, codecStates);
     }
 
+    /// <summary>
+    /// Plans pclusters for one payload with the cluster-restarting planner. A candidate is accepted only when the
+    /// emitted index can name its physical length: without a declared big-pcluster feature every pcluster is
+    /// pinned to exactly one filesystem block, so a frame larger than one block would be read back truncated;
+    /// with the feature the block count travels in the first non-head row, so a frame larger than one block has
+    /// to be given a second logical cluster to carry that row. Non-big candidates are additionally trimmed to
+    /// whole logical clusters, which is the granularity that layout has always used.
+    /// The search reuses one scratch buffer for every probe, so the accepted frame is copied to a second buffer as
+    /// soon as a probe is accepted: the probe that ends the search is usually a longer span whose encoding starts
+    /// with the accepted frame's bytes but does not stop where they stop, and staging that prefix would credit the
+    /// index with <c>acceptedLen</c> bytes while the stored frame decodes to a different span, which a conformant
+    /// reader reports as <c>failed to full decompress</c>.
+    /// <para>Reads also credit each accepted frame with the cluster that carries its end: 5.10's
+    /// <c>z_erofs_map_blocks_iter</c> keeps <c>end = (lcn + 1) &lt;&lt; lclusterbits</c> for the cluster a lookup
+    /// starts in and <c>z_erofs_extent_lookback</c> only rewinds the start, so <c>zdata.c</c> folds that rounded
+    /// length into <c>pcl-&gt;length</c> and <c>z_erofs_lz4_decompress</c> returns <c>-EIO</c> whenever
+    /// <c>ret != rq-&gt;outputsize</c>. A frame for a file whose data ends inside its final logical cluster
+    /// therefore has to encode that whole cluster, so the candidate that reaches the end of file with a partial
+    /// tail is compressed from a zero-filled input up to the cluster boundary. Leaving the residual end offset in
+    /// <c>ctx-&gt;clusterofs</c> and closing the index with a trailing row is only available while the row after
+    /// the head stays free for a block count; padding the input keeps the emitted rows unchanged and
+    /// keeps a sub-block tail inside its own frame instead of spending a whole block on it.</para>
+    /// <para>以逐簇重启的规划器为单个负载规划 pcluster。只有在已发出的索引能够表明其物理长度时才接受候选：
+    /// 未声明 big pcluster 时每个 pcluster 被钉死为一个文件系统块，超过一块的帧读回时必被截断；声明该特性时
+    /// 块数写在首个非头簇行里，因此超过一块的帧必须有第二个逻辑簇来承载该行。非 big 候选还会被裁剪为整数个
+    /// 逻辑簇，这也是该布局一直使用的粒度。
+    /// 搜索过程复用同一块暂存缓冲，因此候选一旦被接受就立刻把该帧复制到第二块缓冲：结束搜索的那次探测通常是
+    /// 更长的跨度，其编码以被接受帧的字节开头却不会在同样的位置收尾，若把这段前缀写入暂存文件，索引会记给
+    /// 该帧 <c>acceptedLen</c> 字节，而盘上帧却解码成另一个跨度，合规读取方会报
+    /// <c>failed to full decompress</c>。</para>
+    /// <para>读取方还会把每个被接受的帧记到承载其末端的那个簇上：5.10 的 <c>z_erofs_map_blocks_iter</c> 对查找起点的簇
+    /// 保持 <c>end = (lcn + 1) &lt;&lt; lclusterbits</c>，而 <c>z_erofs_extent_lookback</c> 只回退起点，因此
+    /// <c>zdata.c</c> 把取整后的长度折进 <c>pcl-&gt;length</c>，而 <c>z_erofs_lz4_decompress</c> 只要
+    /// <c>ret != rq-&gt;outputsize</c> 就返回 <c>-EIO</c>。因此数据在末尾逻辑簇内结束的文件，其帧必须编码整个簇，
+    /// 所以触及文件末尾且带不满簇尾巴的候选会从补零到簇边界的输入压缩。把剩余结束偏移留在 <c>ctx-&gt;clusterofs</c> 而由
+    /// <c>z_erofs_fini_full_indexes</c> 以尾行收尾，只在头行之后
+    /// 的那一行仍可用于块数时可行；补零输入保持已发出的行不变，并让不足一块的尾巴留在自己的帧里，而不必为它花掉
+    /// 整整一个块。</para>
+    /// </summary>
     private static ErofsPclusterPlan[]? PlanClusterRestartCompressed(ErofsInode node, int blockSize,
         ErofsOptions options, ErofsStagingBatch batch, ErofsEncoderContext codec)
     {
@@ -643,7 +642,7 @@ public sealed partial class ErofsBuilder
     /// <param name="bufferLength">Usable length of <paramref name="buffer"/>; the rented array may be longer.
     /// <para><paramref name="buffer"/> 的可用长度；借用的数组可能更长。</para></param>
     /// <param name="position">File offset the candidate starts at, which becomes the window base when the
-    /// candidate no longer fits. <para>候选的起始文件偏移；候选放不下时它成为窗口基址。</para></param>
+    /// candidate does not fit. <para>候选的起始文件偏移；候选放不下时它成为窗口基址。</para></param>
     /// <param name="length">Candidate length in bytes. <para>候选的字节长度。</para></param>
     /// <param name="windowBase">File offset of the first window byte, updated in place.
     /// <para>窗口首字节的文件偏移，就地更新。</para></param>
@@ -1273,18 +1272,17 @@ public sealed partial class ErofsBuilder
     /// raised: when that row is the CBLKCNT row of the pcluster the previous pack ended inside, the reader
     /// recovers that pcluster's block count from it instead, and the same row clears <c>dummy_head</c>, so
     /// the head following it never sees the flag and is never raised either. The raise is consumed by the
-    /// first non-NONHEAD row whether or not it observed the flag, which is what upstream's
-    /// <c>update_blkaddr</c> latch does. The zero filler slots that pad the final pack's tail are not
+    /// first non-NONHEAD row whether or not it observed the flag, which is the
+    /// <c>update_blkaddr</c> latch semantics. The zero filler slots that pad the final pack's tail are not
     /// non-NONHEAD rows here: they can only follow every real row of that pack, so a pack that carries a head
     /// consumes the latch on a real row first and the base it records is unaffected.
     /// <para>写出紧凑 EROFS 索引：每条 4 字节、按 8 字节打包；当 inode 声明
     /// <c>Z_EROFS_ADVISE_COMPACTED_2B</c> 时，在 4 字节头部与 4 字节尾部之间插入按 32 字节打包的 2 字节中段。
-    /// 每个包末尾四字节存放读取方在包内反向遍历时叠加块数的基准，其取值逐条对应 <c>lib/compress.c</c> 的
-    /// <c>write_compacted_indexes</c>：基准等于包起点处的运行块地址，且每包最多抬高一次——当且仅当本包首个非
+    /// 每个包末尾四字节存放读取方在包内反向遍历时叠加块数的基准：基准等于包起点处的运行块地址，且每包最多抬高一次——当且仅当本包首个非
     /// 非头行（head、plain 行或尾部洞行）观察到 <c>dummy_head</c> 置起时抬高，因为读取方的 big-pcluster 遍历在
     /// 该处从零起算。首行为非头行的包刻意不抬高：若该行是上一包结束处所在 pcluster 的 CBLKCNT 行，读取方改为
     /// 从该行取回该 pcluster 的块数，而同一行会把 <c>dummy_head</c> 置为假，因此紧随其后的 head 观察不到该标志，
-    /// 同样不会被抬高。抬高只被本包首个非头行消费一次，无论该行是否观察到标志，这正是上游
+    /// 同样不会被抬高。抬高只被本包首个非头行消费一次，无论该行是否观察到标志，这正是
     /// <c>update_blkaddr</c> 闩锁的语义。补齐末包尾部的全零槽位在此不算非头行：它们只能位于该包所有真实行
     /// 之后，因此承载 head 的包必先在某真实行上消费掉该闩锁，其记录的基准不受这些槽位影响。</para>
     /// </summary>
@@ -1515,10 +1513,10 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Writes one plain frame with the interlaced byte rotation the pcluster plan selected, mirroring
-    /// <c>lib/compress.c</c> in erofs-utils: the stored block starts at the in-block offset the frame's
-    /// logical window lands on and wraps at the block end, and the remaining bytes of the block stay zero.
-    /// <para>按 pcluster 规划选定的字节旋转写出单个原样帧，与 erofs-utils 的 <c>lib/compress.c</c> 一致：
+    /// Writes one plain frame with the interlaced byte rotation the pcluster plan selected: the stored block
+    /// starts at the in-block offset the frame's logical window lands on and wraps at the block end, and the
+    /// remaining bytes of the block stay zero.
+    /// <para>按 pcluster 规划选定的字节旋转写出单个原样帧：
     /// 存储块从该帧逻辑窗口落入的块内偏移开始，在块尾回绕，块内其余字节保持为零。</para>
     /// </summary>
     /// <param name="output">Destination stream in image coordinates.
@@ -1824,6 +1822,7 @@ public sealed partial class ErofsBuilder
 
     /// <summary>
     /// Whole-file fragment offsets occupy the low 63 bits of the map header and need no alignment.
+    /// <para>整文件 fragment 偏移占据映射头的低 63 位，无需对齐。</para>
     /// </summary>
     private static long AlignFragmentStart(long cursor)
         => cursor;

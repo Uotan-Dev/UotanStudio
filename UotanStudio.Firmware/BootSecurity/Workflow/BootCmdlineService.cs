@@ -79,7 +79,7 @@ public sealed class BootCmdlineService
     /// <para>取消写出；临时文件会被删除，取消异常会重新抛出。</para></param>
     /// <returns>A task completed once the repacked image is published.
     /// <para>重新打包的镜像发布完成后结束的任务。</para></returns>
-    /// <exception cref="ArgumentException">The command line no longer fits the boot header capacity.
+    /// <exception cref="ArgumentException">The command line does not fit the boot header capacity.
     /// <para>命令行已超出 boot 头部的容量。</para></exception>
     /// <exception cref="ImageParseException">The source image of <paramref name="plan"/> cannot be parsed.
     /// <para><paramref name="plan"/> 的源镜像无法解析。</para></exception>

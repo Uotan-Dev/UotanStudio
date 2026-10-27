@@ -16,8 +16,8 @@ public sealed class SparseFormatHandler : IFormatHandler, IRepackMetadataProvide
     /// expanded model to the returned view.
     /// <para>为另一个限界上下文打开稀疏容器文件的逻辑视图，展开后模型的所有权转移给返回的视图。</para>
     /// </summary>
-    /// <param name="imagePath">Path to the container file.</param>
-    /// <returns>A disposable logical view.</returns>
+    /// <param name="imagePath">Path to the container file. <para>容器文件路径。</para></param>
+    /// <returns>A disposable logical view. <para>可释放的逻辑视图。</para></returns>
     /// <exception cref="InvalidDataException">The file is not a readable sparse container.</exception>
     Core.Bridges.ISparseLogicalView Core.Bridges.ISparseContainerBridge.OpenLogicalView(string imagePath)
     {
@@ -31,8 +31,8 @@ public sealed class SparseFormatHandler : IFormatHandler, IRepackMetadataProvide
     /// <para>打开可寻址流内稀疏容器的逻辑视图。调用方保留对 <paramref name="container"/> 的所有权，
     /// 随视图释放的仅为展开后的模型。</para>
     /// </summary>
-    /// <param name="container">Seekable container stream.</param>
-    /// <returns>A disposable logical view.</returns>
+    /// <param name="container">Seekable container stream. <para>可定位的容器流。</para></param>
+    /// <returns>A disposable logical view. <para>可释放的逻辑视图。</para></returns>
     /// <exception cref="InvalidDataException">The stream is not a readable sparse container.</exception>
     Core.Bridges.ISparseLogicalView Core.Bridges.ISparseContainerBridge.OpenLogicalView(Stream container)
     {
@@ -44,9 +44,9 @@ public sealed class SparseFormatHandler : IFormatHandler, IRepackMetadataProvide
     /// Flattens sparse containers into one raw image file.
     /// <para>把稀疏容器展平为单个原始镜像文件。</para>
     /// </summary>
-    /// <param name="inputFiles">Container files in concatenation order.</param>
-    /// <param name="outputFile">Raw image destination.</param>
-    /// <param name="cancellationToken">Cancels the conversion.</param>
+    /// <param name="inputFiles">Container files in concatenation order. <para>按拼接顺序排列的容器文件。</para></param>
+    /// <param name="outputFile">Raw image destination. <para>原始镜像目标。</para></param>
+    /// <param name="cancellationToken">Cancels the conversion. <para>取消转换。</para></param>
     void Core.Bridges.ISparseContainerBridge.ConvertSparseToRaw(IEnumerable<string> inputFiles, string outputFile, CancellationToken cancellationToken)
         => SparseImageConverter.ConvertSparseToRawCancellable(inputFiles, outputFile, cancellationToken);
 
@@ -54,9 +54,9 @@ public sealed class SparseFormatHandler : IFormatHandler, IRepackMetadataProvide
     /// Converts a raw image into a sparse container published atomically after structural validation.
     /// <para>把原始镜像转换为稀疏容器，结构校验通过后原子发布。</para>
     /// </summary>
-    /// <param name="inputFile">Raw image source.</param>
-    /// <param name="outputFile">Container destination replaced only on success.</param>
-    /// <param name="cancellationToken">Cancels the conversion.</param>
+    /// <param name="inputFile">Raw image source. <para>原始镜像来源。</para></param>
+    /// <param name="outputFile">Container destination replaced only on success. <para>仅在成功后替换的容器目标。</para></param>
+    /// <param name="cancellationToken">Cancels the conversion. <para>取消转换。</para></param>
     void Core.Bridges.ISparseContainerBridge.ConvertRawToSparseAtomic(string inputFile, string outputFile, CancellationToken cancellationToken)
         => SparseImageConverter.ConvertRawToSparseAtomic(inputFile, outputFile, 4096, cancellationToken);
 
@@ -65,12 +65,12 @@ public sealed class SparseFormatHandler : IFormatHandler, IRepackMetadataProvide
     /// caller publishes it.
     /// <para>在调用方持有两个流的前提下完成 raw 到容器的转换，并在调用方发布前校验结果。</para>
     /// </summary>
-    /// <param name="input">Raw image source.</param>
-    /// <param name="output">Container destination written by this call.</param>
-    /// <param name="blockSize">Block size for the produced container.</param>
-    /// <param name="length">Expected raw length.</param>
-    /// <param name="cancellationToken">Cancels the conversion.</param>
-    /// <param name="validationOutput">Optional readable stream carrying the produced bytes for validation.</param>
+    /// <param name="input">Raw image source. <para>原始镜像来源。</para></param>
+    /// <param name="output">Container destination written by this call. <para>由本次调用写出的容器目标。</para></param>
+    /// <param name="blockSize">Block size for the produced container. <para>产出的容器的块大小。</para></param>
+    /// <param name="length">Expected raw length. <para>期望的原始长度。</para></param>
+    /// <param name="cancellationToken">Cancels the conversion. <para>取消转换。</para></param>
+    /// <param name="validationOutput">Optional readable stream carrying the produced bytes for validation. <para>可选的可读流，承载产出字节以供校验。</para></param>
     void Core.Bridges.ISparseContainerBridge.ConvertRawToSparseValidated(Stream input, Stream output, uint blockSize, long length, CancellationToken cancellationToken, Stream? validationOutput)
         => SparseImageConverter.ConvertRawToSparseValidated(input, output, blockSize, length, cancellationToken, validationOutput);
     void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)

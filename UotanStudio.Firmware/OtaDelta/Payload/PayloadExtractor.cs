@@ -19,8 +19,7 @@ internal class PayloadExtractor
 
     internal const long DefaultMaximumZstdDictBytes = 64L * 1024 * 1024;
 
-    /// <summary>Buffer size in bytes for the file streams created during partition extraction.</summary>
-    /// <para>分区提取期间创建的文件流所用的缓冲区大小（字节）。</para>
+    /// <summary>Buffer size in bytes for the file streams created during partition extraction. <para>分区提取期间创建的文件流所用的缓冲区大小（字节）。</para></summary>
     private const int CopyBufferSize = 81920;
 
     /// <summary>

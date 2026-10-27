@@ -12,8 +12,7 @@ internal sealed class ErofsDeviceSlot
 {
     public const int Size = 128;
 
-    /// <summary>Byte width of the on-disk device tag field (NUL-padded).</summary>
-    /// <para>磁盘设备 tag 字段的字节宽度（以 NUL 填充）。</para>
+    /// <summary>Byte width of the on-disk device tag field (NUL-padded).<para>磁盘设备 tag 字段的字节宽度（以 NUL 填充）。</para></summary>
     public const int TagSize = 64;
 
     private const int TagLength = TagSize;
@@ -30,19 +29,17 @@ internal sealed class ErofsDeviceSlot
 
     public byte[] Tag { get; init; } = new byte[TagLength];
 
-    /// <summary>Total block count of this device (48-bit across blocks_lo/blocks_hi).</summary>
-    /// <para>该设备的总块数（blocks_lo/blocks_hi 组成的 48 位）。</para>
+    /// <summary>Total block count of this device (48-bit across blocks_lo/blocks_hi).<para>该设备的总块数（blocks_lo/blocks_hi 组成的 48 位）。</para></summary>
     public ulong Blocks { get; init; }
 
-    /// <summary>Unified starting block of this device (48-bit across uniaddr_lo/uniaddr_hi).</summary>
-    /// <para>该设备的统一起始块号（uniaddr_lo/uniaddr_hi 组成的 48 位）。</para>
+    /// <summary>Unified starting block of this device (48-bit across uniaddr_lo/uniaddr_hi).<para>该设备的统一起始块号（uniaddr_lo/uniaddr_hi 组成的 48 位）。</para></summary>
     public ulong UniAddr { get; init; }
 
-    /// <summary>Reads one device slot, honouring the image's 48-bit feature state. erofs-utils only folds
-    /// <c>blocks_hi</c>/<c>uniaddr_hi</c> in while <c>INCOMPAT_48BIT</c> is declared, and those two words
+    /// <summary>Reads one device slot, honouring the image's 48-bit feature state. The reader folds
+    /// <c>blocks_hi</c>/<c>uniaddr_hi</c> in only while <c>INCOMPAT_48BIT</c> is declared, and those two words
     /// otherwise sit in space the format reserves, so an image without the feature may carry arbitrary bytes
     /// there that must be ignored rather than treated as an address extension.
-    /// <para>按镜像的 48 位特性状态读取一个设备槽位。erofs-utils 仅在声明 <c>INCOMPAT_48BIT</c> 时才并入
+    /// <para>按镜像的 48 位特性状态读取一个设备槽位。仅在声明 <c>INCOMPAT_48BIT</c> 时才并入
     /// <c>blocks_hi</c>/<c>uniaddr_hi</c>；未声明时这两个字位于格式保留的空间内，因此未携带该特性的镜像可以在
     /// 其中存放任意字节，必须忽略它们而不是当作地址扩展。</para>
     /// </summary>

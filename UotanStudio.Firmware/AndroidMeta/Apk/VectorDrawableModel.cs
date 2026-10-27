@@ -7,16 +7,16 @@ namespace UotanStudio.Firmware.AndroidMeta.Apk;
 public sealed class VectorDrawable
 {
     /// <summary>
-    /// Intrinsic width in dp, decoded from a float or AOSP complex dimension attribute.
-    /// <para>固有宽度（dp），由 float 或 AOSP complex 尺寸属性解码得到。</para>
+    /// Intrinsic width in dp, decoded from a float or a complex dimension attribute.
+    /// <para>固有宽度（dp），由 float 或 complex 尺寸属性解码得到。</para>
     /// </summary>
     /// <value>The dp width; the parser substitutes 24f when the attribute is absent or has an unsupported value type.
     /// <para>以 dp 计的值；属性缺失或值类型不受支持时解析器回退为 24f。</para></value>
     public float Width { get; init; } = 24f;
 
     /// <summary>
-    /// Intrinsic height in dp, decoded from a float or AOSP complex dimension attribute.
-    /// <para>固有高度（dp），由 float 或 AOSP complex 尺寸属性解码得到。</para>
+    /// Intrinsic height in dp, decoded from a float or a complex dimension attribute.
+    /// <para>固有高度（dp），由 float 或 complex 尺寸属性解码得到。</para>
     /// </summary>
     /// <value>The dp height; the parser substitutes 24f when the attribute is absent or has an unsupported value type.
     /// <para>以 dp 计的值；属性缺失或值类型不受支持时解析器回退为 24f。</para></value>
@@ -94,8 +94,8 @@ public sealed class VectorPath
     public uint? StrokeColor { get; init; }
 
     /// <summary>
-    /// Stroke width in dp, decoded from a float or AOSP complex dimension attribute.
-    /// <para>描边宽度（dp），由 float 或 AOSP complex 尺寸属性解码得到。</para>
+    /// Stroke width in dp, decoded from a float or a complex dimension attribute.
+    /// <para>描边宽度（dp），由 float 或 complex 尺寸属性解码得到。</para>
     /// </summary>
     /// <value>The dp width; the parser substitutes 0f when the attribute is absent or has an unsupported value type.
     /// <para>以 dp 计的值；属性缺失或值类型不受支持时解析器回退为 0f。</para></value>

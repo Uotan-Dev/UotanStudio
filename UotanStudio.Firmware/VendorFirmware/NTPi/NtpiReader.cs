@@ -118,7 +118,7 @@ public sealed class NtpiReader : IDisposable
     /// <param name="cancellationToken">Token observed between files and extraction blocks; the default (none) token cannot cancel.
     /// <para>在文件之间与解压块之间检查的取消令牌；默认（无）令牌不可取消。</para></param>
     /// <remarks>Each file is written to a temporary path and moved into place with overwrite enabled, so a failed file leaves no partial output for that file; files completed by earlier iterations stay on disk.
-    /// <para>每个文件先写入临时路径，再以允许覆盖的方式移动到目标位置，因此失败的文件本身不会残留半成品；此前已完成的文件仍保留在磁盘上。</para></remarks>
+    /// <para>每个文件先写入临时路径，再以允许覆盖的方式移动到目标位置，因此失败的文件本身不会残留半成品；已完成处理的文件仍保留在磁盘上。</para></remarks>
     /// <exception cref="ObjectDisposedException">The reader has been disposed.
     /// <para>读取器已被释放。</para></exception>
     /// <exception cref="ArgumentNullException"><paramref name="filePath"/>, <paramref name="outputDir"/> or <paramref name="options"/> is <see langword="null"/>.

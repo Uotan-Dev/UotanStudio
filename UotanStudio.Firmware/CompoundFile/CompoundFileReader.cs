@@ -63,7 +63,7 @@ public sealed class CompoundFileReader : IDisposable
     /// <param name="path">The compound file path.<para>复合文档文件路径。</para></param>
     /// <param name="cancellationToken">Cancellation token carried through the header and structure reads.
     /// <para>取消令牌，贯穿头部与结构读取。</para></param>
-    /// <returns>A parsed reader instance; must be disposed when no longer needed.
+    /// <returns>A parsed reader instance; the caller owns it and must dispose it.
     /// <para>已解析的读取器实例；使用完毕后须释放。</para></returns>
     /// <exception cref="InvalidCompoundFileMagicException">The file does not start with the OLE2/CFB magic or is shorter than 512 bytes.
     /// <para>文件不以 OLE2/CFB 魔数开头或短于 512 字节。</para></exception>

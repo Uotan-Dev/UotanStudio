@@ -141,7 +141,7 @@ public sealed class F2fsOptions
     /// <para>按路径索引的属性表，编码进各 inode 的 xattr 区域；为 <see langword="null"/>（默认）时不提供二进制覆盖。</para></value>
     public IReadOnlyDictionary<string, Dictionary<string, byte[]>>? FileXattrs { get; init; }
 
-    /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above.</summary>
+    /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above. <para>预加载的覆盖表；设置后优先于上面的按路径来源。</para></summary>
     internal IReadOnlyDictionary<string, Metadata.FsConfigEntry>? FsConfig { get; set; }
     internal IReadOnlyDictionary<string, string>? FileContexts { get; set; }
 

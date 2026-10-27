@@ -174,7 +174,7 @@ internal class FileDataProvider(string filePath, long offset, long length) : ISp
     /// <remarks>
     /// Only the cached read handle is closed; the destination streams this provider ever wrote to are
     /// left untouched, and a subsequent read simply opens a new handle.
-    /// <para>仅关闭缓存的读取句柄；此前写入过的目标流不受影响，后续读取会直接打开新的句柄。</para>
+    /// <para>仅关闭缓存的读取句柄；已写入过的目标流不受影响，后续读取会直接打开新的句柄。</para>
     /// </remarks>
     public virtual void Dispose()
     {

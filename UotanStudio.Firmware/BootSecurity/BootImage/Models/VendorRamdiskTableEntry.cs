@@ -44,9 +44,9 @@ public class VendorRamdiskTableEntry
     public uint RamdiskType { get; set; }
 
     /// <summary>
-    /// The AOSP-defined meaning of <see cref="RamdiskType"/>, or <see langword="null"/> when the raw code is a vendor
+    /// The defined meaning of <see cref="RamdiskType"/>, or <see langword="null"/> when the raw code is a vendor
     /// extension outside the <see cref="VendorRamdiskType"/> constants.
-    /// <para><see cref="RamdiskType"/> 的 AOSP 定义语义；当原始代码是 <see cref="VendorRamdiskType"/> 常量之外的厂商扩展时为 <see langword="null"/>。</para>
+    /// <para><see cref="RamdiskType"/> 的约定语义；当原始代码是 <see cref="VendorRamdiskType"/> 常量之外的厂商扩展时为 <see langword="null"/>。</para>
     /// </summary>
     /// <value>
     /// Derived on every read from the raw field; <see cref="VendorRamdiskType.None"/> for raw <c>0</c> and

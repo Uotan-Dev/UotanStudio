@@ -205,7 +205,7 @@ public sealed partial class F2fsBuilder
         BuildManaged(sourceDirectory, outputPath, options);
     }
 
-    /// <summary>Managed (non-native) F2FS build path shared by <see cref="Build(string, string, F2fsOptions?)"/> and <see cref="BuildAsync"/>.</summary>
+    /// <summary>Managed (non-native) F2FS build path shared by <see cref="Build(string, string, F2fsOptions?)"/> and <see cref="BuildAsync"/>. <para><see cref="Build(string, string, F2fsOptions?)"/> 与 <see cref="BuildAsync"/> 共用的托管（非本机工具）F2FS 构建路径。</para></summary>
     private static void BuildManaged(string sourceDirectory, string outputPath, F2fsOptions? options,
         IProgress<(long Processed, long Total)>? progress = null)
     {
@@ -299,7 +299,7 @@ public sealed partial class F2fsBuilder
         }
     }
 
-    /// <summary>Applies owner, mode and binary xattr overrides, including SELinux labels, before data/node allocation.</summary>
+    /// <summary>Applies owner, mode and binary xattr overrides, including SELinux labels, before data/node allocation. <para>在数据块与节点分配之前应用所有者、模式与二进制扩展属性覆盖，其中含 SELinux 标签。</para></summary>
     private static void ApplyFsConfigOverrides(List<BuildNode> ordered, F2fsOptions options)
     {
         if (options.FsConfig is null && options.FileContexts is null

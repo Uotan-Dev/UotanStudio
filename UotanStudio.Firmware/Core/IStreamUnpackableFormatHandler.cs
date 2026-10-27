@@ -16,7 +16,7 @@ public interface IStreamUnpackableFormatHandler
     /// </summary>
     /// <param name="logical">Seekable logical stream positioned by the caller; the implementation restores
     /// the position before returning. <para>调用方定位好的可寻址逻辑流；实现须在返回前恢复其位置。</para></param>
-    /// <returns><see langword="true"/> when this handler owns the stream content.</returns>
+    /// <returns><see langword="true"/> when this handler owns the stream content. <para>当该处理器拥有流内容时为 <see langword="true"/>。</para></returns>
     bool CanHandleLogicalStream(Stream logical);
 
     /// <summary>
@@ -26,12 +26,12 @@ public interface IStreamUnpackableFormatHandler
     /// <para>把逻辑流解包到输出目录。返回的结果必须携带与文件路径解包路径相同的条目列表与元数据键，
     /// 以便容器调用方原样转发。</para>
     /// </summary>
-    /// <param name="logical">Seekable logical stream of the format's own content.</param>
-    /// <param name="outputDirectory">Destination directory receiving the extracted content.</param>
-    /// <param name="byteProgress">Optional byte-level progress source supplied by the container caller.</param>
-    /// <param name="overwrite">Whether existing output files may be replaced.</param>
-    /// <param name="cancellationToken">Cancels the extraction.</param>
-    /// <returns>An outcome describing what was extracted.</returns>
+    /// <param name="logical">Seekable logical stream of the format's own content. <para>该格式自身内容对应的可定位逻辑流。</para></param>
+    /// <param name="outputDirectory">Destination directory receiving the extracted content. <para>接收解出内容的目标目录。</para></param>
+    /// <param name="byteProgress">Optional byte-level progress source supplied by the container caller. <para>容器调用方提供的可选字节级进度源。</para></param>
+    /// <param name="overwrite">Whether existing output files may be replaced. <para>是否允许替换已存在的输出文件。</para></param>
+    /// <param name="cancellationToken">Cancels the extraction. <para>取消解包。</para></param>
+    /// <returns>An outcome describing what was extracted. <para>描述本次解包产出的结果。</para></returns>
     Task<FirmwareOpResult> UnpackLogicalStreamAsync(Stream logical, string outputDirectory,
         IProgress<FileSystemByteProgress>? byteProgress, bool overwrite, CancellationToken cancellationToken);
 }

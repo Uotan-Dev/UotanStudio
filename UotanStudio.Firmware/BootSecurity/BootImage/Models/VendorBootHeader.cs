@@ -146,11 +146,10 @@ public class VendorBootHeader
     /// </summary>
     /// <value>
     /// The parser requires exactly <c>108</c> bytes whenever the table declares entries: that is the fixed size of
-    /// the AOSP <c>boot_image.h</c> <c>vendor_ramdisk_table_entry_v4</c> record (size, offset, type, 32-byte name,
+    /// the version 4 vendor ramdisk table entry record (size, offset, type, 32-byte name,
     /// sixteen board-id words); a zero-entry table may carry <c>0</c>. Version 3 leaves the field <c>0</c>.
-    /// <para>只要表声明了条目，解析器就要求步长恰为 <c>108</c> 字节：这是 AOSP <c>boot_image.h</c> 中
-    /// <c>vendor_ramdisk_table_entry_v4</c> 记录的固定大小（大小、偏移、类型、32 字节名称、16 个板级标识字）；
-    /// 零条目表的步长可以为 <c>0</c>。版本 3 时该字段为 <c>0</c>。</para>
+    /// <para>只要表声明了条目，解析器就要求步长恰为 <c>108</c> 字节：这是版本 4 vendor ramdisk 表条目记录的固定大小
+    /// （大小、偏移、类型、32 字节名称、16 个板级标识字）；零条目表的步长可以为 <c>0</c>。版本 3 时该字段为 <c>0</c>。</para>
     /// </value>
     public uint VendorRamdiskTableEntrySize { get; set; }
 

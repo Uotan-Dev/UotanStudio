@@ -14,10 +14,11 @@ namespace UotanStudio.Firmware.FileSystem.Metadata;
 /// Generates Android-style filesystem metadata files (<c>fs_config</c>, <c>file_contexts</c>, <c>partition_info</c>)
 /// from parser inode data after extraction. The flat files are an export for external tools and an optional
 /// hand-written input for a fresh directory build; the lossless channel stays <c>metadata.json</c>, so each
-/// writer emits only the strict AOSP grammar and reports, without throwing, every entry the grammar cannot hold.
+/// writer emits only the platform fs_config, file_contexts and partition_info grammars and reports, without throwing, every entry the grammar cannot hold.
 /// <para>从解析器 inode 数据生成 Android 风格的文件系统元数据文件（<c>fs_config</c>、<c>file_contexts</c>、
 /// <c>partition_info</c>）。这些扁平文件是供外部工具消费的导出物，也是全新目录构建时的可选人工输入；
-/// 无损通道始终是 <c>metadata.json</c>，因此各写入器只输出严格的 AOSP 语法，并对语法无法承载的条目
+/// 无损通道始终是 <c>metadata.json</c>，因此各写入器只输出严格的 fs_config、file_contexts 与 partition_info
+/// 语法，并对语法无法承载的条目
 /// 以警告（而非异常）方式上报。</para>
 /// </summary>
 internal static class FileSystemMetadataGenerator
@@ -51,9 +52,9 @@ internal static class FileSystemMetadataGenerator
 
     /// <summary>
     /// BOM-free UTF-8 for every flat export, matching <c>PortableExtractionPaths.NameEncoding</c>: the
-    /// <see cref="Encoding.UTF8"/> singleton would prepend <c>EF BB BF</c> and break AOSP tools on line 1.
+    /// <see cref="Encoding.UTF8"/> singleton would prepend <c>EF BB BF</c> and break a reader on line 1.
     /// <para>所有扁平导出使用的无 BOM UTF-8，与 <c>PortableExtractionPaths.NameEncoding</c> 一致：
-    /// <see cref="Encoding.UTF8"/> 单例会在文件开头写入 <c>EF BB BF</c>，使 AOSP 工具在第一行即失败。</para>
+    /// <see cref="Encoding.UTF8"/> 单例会在文件开头写入 <c>EF BB BF</c>，使读取方在第一行即失败。</para>
     /// </summary>
     private static readonly UTF8Encoding MetadataEncoding = new(false, true);
 
@@ -231,14 +232,14 @@ internal static class FileSystemMetadataGenerator
     }
 
     /// <summary>
-    /// Writes the <c>path uid gid mode capabilities</c> rows. uid and gid stay decimal because AOSP defines
-    /// them that way; the mode always goes through <see cref="FsConfigModes"/> so the token is four octal
+    /// Writes the <c>path uid gid mode capabilities</c> rows. uid and gid stay decimal because the grammar
+    /// defines them that way; the mode always goes through <see cref="FsConfigModes"/> so the token is four octal
     /// digits, including the literal <c>0000</c> for an unknown mode, while the capabilities column stays
-    /// <c>0</c> and any decoded capability is only reported. Rows use LF because AOSP readers treat a
+    /// <c>0</c> and any decoded capability is only reported. Rows use LF because a reader treats a
     /// trailing CR as part of the last field.
-    /// <para>写入 <c>path uid gid mode capabilities</c> 行。uid 与 gid 保持十进制，因为 AOSP 如此定义；
+    /// <para>写入 <c>path uid gid mode capabilities</c> 行。uid 与 gid 保持十进制，因为该语法如此定义；
     /// 模式一律经 <see cref="FsConfigModes"/> 输出为四位八进制记号，未知模式也照原样写作 <c>0000</c>；
-    /// capabilities 列保持 <c>0</c>，解码到的能力只以上报方式给出。行尾使用 LF，因为 AOSP 读取器会把结尾的
+    /// capabilities 列保持 <c>0</c>，解码到的能力只以上报方式给出。行尾使用 LF，因为读取方会把结尾的
     /// CR 当作最后一个字段的一部分。</para>
     /// </summary>
     /// <param name="metadataDirectory">Directory the file is written to. <para>写入目标的目录。</para></param>
@@ -326,10 +327,10 @@ internal static class FileSystemMetadataGenerator
         };
 
     /// <summary>
-    /// Renders the capabilities column as <c>0</c> for every entry, because the numeric dialect AOSP readers
-    /// expect in that column is not asserted here: the decoded permitted set is reported as a warning instead of
+    /// Renders the capabilities column as <c>0</c> for every entry, because the numeric base a reader
+    /// expects in that column is not asserted here: the decoded permitted set is reported as a warning instead of
     /// being written with an unverified base. An entry carrying no capability data needs no warning.
-    /// <para>生成 capabilities 列：一律写作 <c>0</c>，因为本实现不断言 AOSP 读取器在该列期望的数值进制；
+    /// <para>生成 capabilities 列：一律写作 <c>0</c>，因为本实现不断言读取方在该列期望的数值进制；
     /// 解码出的 permitted 集合改为以告警上报，而不是用未经验证的进制写出。条目本身无能力数据时不产生告警。</para>
     /// </summary>
     /// <param name="capability">Raw xattr value, or <see langword="null"/>.
@@ -496,10 +497,10 @@ internal static class FileSystemMetadataGenerator
     }
 
     /// <summary>
-    /// Writes one <c>path label</c> row separated by a single space, the spelling AOSP's file_contexts loader
+    /// Writes one <c>path label</c> row separated by a single space, the spelling the file_contexts format
     /// splits on; the reader takes the last whitespace-delimited token, so a path or a label containing
     /// whitespace is skipped rather than exported as two rows' worth of text.
-    /// <para>写入一行 <c>path label</c>，以单个空格分隔，即 AOSP file_contexts 加载器切分所用的拼写；
+    /// <para>写入一行 <c>path label</c>，以单个空格分隔，即 file_contexts 格式切分所用的拼写；
     /// 读取器取最后一个空白分隔记号，因此路径或标签含空白时跳过，而不是导出会被拆成两行的文本。</para>
     /// </summary>
     /// <param name="target">Buffer collecting the rows. <para>收集各行的缓冲区。</para></param>

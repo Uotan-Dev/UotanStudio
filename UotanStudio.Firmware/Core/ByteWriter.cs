@@ -4,10 +4,10 @@ namespace UotanStudio.Firmware.Core;
 
 /// <summary>
 /// Explicit-endianness fixed-width byte writers over <see cref="BinaryPrimitives"/>. The read-side
-/// counterpart is <see cref="BinaryReaderHelpers"/>; these centralize the little/big-endian write
-/// idioms that were previously hand-rolled per format so callers never depend on CPU endianness.
+/// counterpart is <see cref="BinaryReaderHelpers"/>; both centralize the little/big-endian byte
+/// order of every format so callers never depend on CPU endianness.
 /// <para>基于 <see cref="BinaryPrimitives"/> 的显式端序定宽字节写入器。读取侧对应 <see cref="BinaryReaderHelpers"/>；
-/// 此处集中此前各格式手写的读写惯例，使调用方不依赖 CPU 端序。</para>
+/// 两者集中各格式的读写端序，使调用方不依赖 CPU 端序。</para>
 /// </summary>
 internal static class ByteWriter
 {

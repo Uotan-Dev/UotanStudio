@@ -75,10 +75,10 @@ internal static class ErofsXattr
     public const byte NameIndexPosixAclDefault = 3;
     public const byte NameIndexTrusted = 4;
 
-    /// <summary>Name index 5 is declared by <c>EROFS_XATTR_INDEX_LUSTRE</c> but upstream
-    /// <c>xattr_types[]</c> leaves its slot empty, so it names no namespace and must neither be written
-    /// nor resolved. <para>名称索引 5 虽由 <c>EROFS_XATTR_INDEX_LUSTRE</c> 声明，但上游
-    /// <c>xattr_types[]</c> 让其槽位为空，因此它不指名任何命名空间，既不可写出也不可解析。</para></summary>
+    /// <summary>Name index 5 is declared by <c>EROFS_XATTR_INDEX_LUSTRE</c> but its slot in the name table is
+    /// empty, so it names no namespace and must neither be written nor resolved.
+    /// <para>名称索引 5 虽由 <c>EROFS_XATTR_INDEX_LUSTRE</c> 声明，但它在名称表中的槽位为空，因此它不指名任何命名空间，
+    /// 既不可写出也不可解析。</para></summary>
     public const byte ReservedNameIndex = 5;
 
     public const byte NameIndexSecurity = 6;
@@ -194,10 +194,10 @@ internal static class ErofsXattr
 
     /// <summary>
     /// Default short-prefix lookup: maps a name index to its default prefix string (e.g. 1 → "user.").
-    /// Index 0 maps to the empty prefix, which upstream <c>xattr_types[0] = {""}</c> defines as a namespace
-    /// of its own, so a name carrying it is stored and resolved verbatim.
+    /// Index 0 maps to the empty prefix, which <c>xattr_types[0] = {""}</c> defines as a namespace of its own,
+    /// so a name carrying it is stored and resolved verbatim.
     /// <para>默认短前缀查找：将名称索引映射到默认前缀字符串（如 1 → "user."）。索引 0 映射到空前缀，
-    /// 上游 <c>xattr_types[0] = {""}</c> 把它定义为一个自有命名空间，因此携带它的名称按原样存储与解析。</para>
+    /// <c>xattr_types[0] = {""}</c> 把它定义为一个自有命名空间，因此携带它的名称按原样存储与解析。</para>
     /// </summary>
     /// <param name="nameIndex">On-disk name index with no long-prefix flag applied; values below seven address the built-in table.
     /// <para>未置长前缀标志的磁盘名称索引；小于 7 时指向内置表。</para></param>
@@ -664,13 +664,13 @@ internal static class ErofsXattr
     }
 
     /// <summary>
-    /// Rejects an <c>e_name_index</c> that names no default namespace: the format defines 0 through 6
-    /// (<c>include/erofs_fs.h</c>), where 0 is the empty namespace upstream <c>xattr_types[]</c> declares for
-    /// names stored without a prefix, and 5 is the empty slot neither side may use. A long-prefix index is a
-    /// table position, so only its table bounds are checked, by the resolver that owns the table.
-    /// <para>拒绝不指名任何默认命名空间的 <c>e_name_index</c>：格式定义 0 到 6
-    /// （<c>include/erofs_fs.h</c>），其中 0 是上游 <c>xattr_types[]</c> 为无前缀名称声明的空命名空间，5 是
-    /// 双方都不得使用的空槽。长前缀索引是表内位置，只由持有该表的解析方检查其表边界。</para>
+    /// Rejects an <c>e_name_index</c> that names no default namespace: the format defines 0 through 6,
+    /// where 0 is the empty namespace used for names stored without a prefix, and 5 is the empty slot
+    /// neither side may use. A long-prefix index is a table position, so only its table bounds are
+    /// checked, by the resolver that owns the table.
+    /// <para>拒绝不指名任何默认命名空间的 <c>e_name_index</c>：格式定义 0 到 6，其中 0 是
+    /// 无前缀名称使用的空命名空间，5 是双方都不得使用的空槽。长前缀索引是表内位置，
+    /// 只由持有该表的解析方检查其表边界。</para>
     /// </summary>
     /// <param name="nameIndex">On-disk <c>e_name_index</c>.<para>磁盘上的 <c>e_name_index</c>。</para></param>
     /// <exception cref="FileSystemCorruptedException">A plain index is 5 or above 7.

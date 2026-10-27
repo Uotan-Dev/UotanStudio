@@ -496,6 +496,7 @@ public sealed class BootPatchService
     /// <summary>
     /// Installs the KernelSU init: the stock init moves to
     /// init.real (when present) and ksuinit becomes the root init with 0755.
+    /// <para>安装 KernelSU 的 init：原有 init 移动到 init.real（存在时），ksuinit 以 0755 成为根 init。</para>
     /// </summary>
     private static void InstallKernelSuInit(CpioArchiveEditor editor, string initTarget, List<string> changes)
     {

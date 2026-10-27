@@ -6,7 +6,7 @@ using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.FileSystem.Extraction;
 
-/// <summary>Maps image paths to portable host names without merging case aliases or treating Linux backslashes as separators.</summary>
+/// <summary>Maps image paths to portable host names without merging case aliases or treating Linux backslashes as separators. <para>把镜像路径映射为可移植的主机名，不合并大小写别名，也不把 Linux 中的反斜杠当作分隔符。</para></summary>
 internal sealed class PortableExtractionPaths
 {
     internal static readonly Encoding NameEncoding = new UTF8Encoding(false, true);

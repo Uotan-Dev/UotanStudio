@@ -2,7 +2,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace UotanStudio.Firmware.Core.Streams;
 
-/// <summary>A bounded non-owning write cursor over a preallocated file range.</summary>
+/// <summary>A bounded non-owning write cursor over a preallocated file range. <para>预分配文件区间上的有界非拥有型写入游标。</para></summary>
 internal sealed class PositionedWriteStream(SafeFileHandle handle, long start, long length) : Stream
 {
     private long _position;

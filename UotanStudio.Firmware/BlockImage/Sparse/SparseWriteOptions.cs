@@ -1,11 +1,11 @@
 namespace UotanStudio.Firmware.BlockImage.Sparse;
 
 /// <summary>
-/// Optional geometry knobs for the sparse write path. Defaults reproduce the historical byte output
-/// exactly: a <c>4096</c>-byte block, no RAW block cap beyond the implicit 32-bit payload limit, no
-/// trailing CRC32 chunk and no total-size alignment padding. Every consumer treats <see langword="null"/>
+/// Optional geometry knobs for the sparse write path. The defaults are a <c>4096</c>-byte block,
+/// no RAW block cap beyond the implicit 32-bit payload limit, no trailing CRC32 chunk and no
+/// total-size alignment padding. Every consumer treats <see langword="null"/>
 /// options as identical to a freshly created instance.
-/// <para>稀疏写出路径的可选几何参数。默认值完整复现历史字节输出：<c>4096</c> 字节块、除隐式 32 位载荷上限外不限制
+/// <para>稀疏写出路径的可选几何参数。默认值为 <c>4096</c> 字节块、除隐式 32 位载荷上限外不限制
 /// RAW 块、不追加 CRC32 尾块、不做总大小对齐填充。所有消费者都把 <see langword="null"/> 视为与新建实例等价。</para>
 /// </summary>
 public sealed record SparseWriteOptions

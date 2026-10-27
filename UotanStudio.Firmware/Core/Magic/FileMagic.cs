@@ -2,8 +2,8 @@ namespace UotanStudio.Firmware.Core.Magic;
 
 /// <summary>
 /// Public entry point for managed magic identification: the generator compiles the magic(5)
-/// corpus into C# rule tables; at runtime nothing parses text or a .mgc file.
-/// <para>托管魔数识别的公共入口：基于生成器把 magic(5) 语料编译成 C# 规则表，运行时不再解析文本或 .mgc。</para>
+/// rules into C# rule tables; at runtime nothing parses text or a .mgc file.
+/// <para>托管魔数识别的公共入口：生成器把 magic(5) 规则编译成 C# 规则表，运行时不解析文本或 .mgc。</para>
 /// </summary>
 public static class FileMagic
 {

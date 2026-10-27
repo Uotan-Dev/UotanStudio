@@ -28,9 +28,9 @@ internal sealed class ErofsCompressionEstimate
     internal Candidate Inferred => Candidates.OrderByDescending(c => c.ExactMatches).ThenBy(c => c.Error).ThenBy(c => c.Level).First();
     internal Candidate Smallest => Candidates.OrderBy(c => c.Bytes).ThenBy(c => c.Level).First();
 
-    /// <summary>Replays the candidate counters persisted at extraction so a rebuild that no longer holds the
-    /// source image selects exactly what the bounded source sampling inferred.
-    /// <para>重放解包时持久化的候选计数，使不再持有源镜像的重建得到有界源采样当初推断出的同一选择。</para></summary>
+    /// <summary>Replays the candidate counters persisted at extraction so a rebuild without the source image
+    /// selects exactly what the bounded source sampling inferred.
+    /// <para>重放解包时持久化的候选计数，使没有源镜像的重建得到有界源采样当初推断出的同一选择。</para></summary>
     /// <param name="options">Codec options the rebuild feeds the selected level into; ownership transfers to
     /// the returned estimate. <para>重建将所选级别写入的编解码选项；所有权转移给返回的估算。</para></param>
     /// <param name="record">Persisted estimate for exactly this codec. <para>与该编解码精确对应的持久化估算。</para></param>
@@ -85,7 +85,8 @@ internal sealed class ErofsCompressionEstimate
 /// </summary>
 public sealed partial class ErofsParser
 {
-    /// <summary>Compares bounded source-cluster samples with local encoder candidates; estimates are not stored encoder settings.</summary>
+    /// <summary>Compares bounded source-cluster samples with local encoder candidates; estimates are not stored encoder settings.
+    /// <para>把有界的源簇采样与本地编码候选比较；得到的估算不是文件中保存的编码器设置。</para></summary>
     internal List<ErofsCompressionEstimate> AnalyzeCompression(ErofsOptions options, CancellationToken token)
     {
         var estimates = options.SourceCompressionOptions!.Values

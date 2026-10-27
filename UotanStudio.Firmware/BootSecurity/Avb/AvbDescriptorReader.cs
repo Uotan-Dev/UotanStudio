@@ -10,10 +10,10 @@ namespace UotanStudio.Firmware.BootSecurity.Avb;
 /// <para>从 vbmeta 镜像提取 AVB 哈希描述符，兼容完整的 256 字节头部与部分截断厂商镜像携带的 80 字节短头部。</para>
 /// </summary>
 /// <remarks>
-/// <para>Input is treated as untrusted: every offset, length, alignment and descriptor count is checked
+/// Input is treated as untrusted: every offset, length, alignment and descriptor count is checked
 /// against its containing region before a slice is taken. Invalid containers and malformed entries yield an
 /// empty or partial list instead of an exception, so callers can report "no descriptors" without unwrapping
-/// parse failures.</para>
+/// parse failures.
 /// <para>输入按不可信处理：截取任何区间之前都会针对所在区域校验偏移、长度、对齐与描述符数量。非法容器与畸形条目
 /// 返回空列表或部分列表而不抛出异常，调用方无需解包解析失败即可报告“没有描述符”。</para>
 /// </remarks>

@@ -3,7 +3,8 @@ using UotanStudio.Firmware.FileSystem.Metadata;
 
 namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 
-/// <summary>Resolves image paths and inherited Linux attributes independently of host filesystem metadata.</summary>
+/// <summary>Resolves image paths and inherited Linux attributes independently of host filesystem metadata.
+/// <para>独立于宿主文件系统元数据解析镜像路径与继承的 Linux 属性。</para></summary>
 internal sealed class FileSystemEditPlan
 {
     internal const uint Ext4SemanticFlagMask = 0x600304F8u;

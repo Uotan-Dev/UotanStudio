@@ -121,11 +121,11 @@ public sealed record ErofsFileEntry(
 }
 
 /// <summary>
-/// How the source image stored its metabox container inode. Upstream builds the container through the
+/// How the source image stored its metabox container inode. The container is built through the
 /// ordinary compressed-file path, so the container is an ordinary inode and carries its own layout and codec
 /// instead of a metabox-specific encoding; a rebuild replays those two dimensions so re-encoded resident
 /// inodes reproduce the source bytes.
-/// <para>源镜像存储其 metabox 容器 inode 的方式。上游通过普通压缩文件路径构建容器，因此容器就是普通 inode，
+/// <para>源镜像存储其 metabox 容器 inode 的方式。容器通过普通压缩文件路径构建，因此容器就是普通 inode，
 /// 自带布局与编解码器而不是 metabox 专属编码；重建会重放这两个维度，使重新编码的常驻 inode 复现源字节。</para>
 /// </summary>
 /// <param name="Compressed">Whether the container inode is stored compressed.
@@ -1175,11 +1175,11 @@ public sealed partial class ErofsParser : IDisposable
 
     /// <summary>
     /// Records how the metabox container inode itself is stored: whether it is compressed, the storage layout
-    /// it declares, and, for a compressed form, the codec its own map header names. Upstream builds the
+    /// it declares, and, for a compressed form, the codec its own map header names. The
     /// container through the ordinary compressed-file path, so the low nibble of <c>h_algorithmtype</c> is the
     /// container's algorithm and nothing about the codec has to be assumed from the primary declaration.
     /// <para>记录 metabox 容器 inode 自身的存储方式：是否压缩、声明的存储布局，以及压缩形态下其自身映射头指名的
-    /// 编解码器。上游通过普通压缩文件路径构建容器，因此 <c>h_algorithmtype</c> 低四位就是容器的算法，无需从主
+    /// 编解码器。容器通过普通压缩文件路径构建，因此 <c>h_algorithmtype</c> 低四位就是容器的算法，无需从主
     /// 声明推断编解码器。</para>
     /// </summary>
     /// <param name="inode">Container inode decoded from the source metabox slot.

@@ -273,7 +273,7 @@ public static class ContainerEntryExtractor
         return candidate;
     }
 
-    /// <summary>Copies an exact byte range with throttled progress and bounded memory.</summary>
+    /// <summary>Copies an exact byte range with throttled progress and bounded memory. <para>按精确字节范围复制，进度上报带节流，内存占用有界。</para></summary>
     private static async Task CopyWithProgressAsync(Stream source, Stream output, long length,
         long completed, long total, IProgress<double>? progress, CancellationToken cancellationToken, IProgress<(long Processed, long Total)>? byteProgress)
     {
@@ -295,7 +295,7 @@ public static class ContainerEntryExtractor
         }
     }
 
-    /// <summary>Replaces invalid filename characters in an internal entry name.</summary>
+    /// <summary>Replaces invalid filename characters in an internal entry name. <para>替换内部条目名中的非法文件名字符。</para></summary>
     private static string SanitizeFileName(string name)
     {
         var invalid = Path.GetInvalidFileNameChars();

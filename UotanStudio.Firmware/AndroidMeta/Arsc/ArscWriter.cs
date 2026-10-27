@@ -375,8 +375,8 @@ public static class ArscWriter
     }
 
     /// <summary>
-    /// Encodes one UTF-8 pool string (AOSP length header: UTF-16 length then UTF-8 length, 4-byte aligned).
-    /// <para>编码一个 UTF-8 池字符串（AOSP 长度头：先 UTF-16 长度后 UTF-8 长度，4 字节对齐）。</para>
+    /// Encodes one UTF-8 pool string (length header: UTF-16 length then UTF-8 length, 4-byte aligned).
+    /// <para>编码一个 UTF-8 池字符串（长度头：先 UTF-16 长度后 UTF-8 长度，4 字节对齐）。</para>
     /// </summary>
     private static byte[] EncodeUtf8String(string value)
     {

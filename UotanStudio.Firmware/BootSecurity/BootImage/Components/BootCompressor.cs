@@ -94,8 +94,8 @@ public static class BootCompressor
     /// <para>无论实际内容为何、要尝试的容器格式；<c>CompressionType.None</c> 会解码为空数组，不受支持的值返回 <see langword="null"/>。</para></param>
     /// <returns>The decompressed bytes, or <see langword="null"/> when the format is unsupported or any decoding error occurs; all exceptions raised by the underlying codecs are swallowed.
     /// <para>解压后的字节；当格式不受支持或出现任何解码错误时返回 <see langword="null"/>，底层编解码器抛出的异常全部被吞没。</para></returns>
-    /// <remarks>Every container is decoded through the compression library, and its bzip2 reader is built with decompressConcatenated enabled, so a payload that concatenates several back-to-back bzip2 streams now decodes into the members joined in order instead of being rejected after the first stream the way the previous single-stream reader left it.
-    /// <para>所有容器统一经由压缩库解码，其中 bzip2 读取器以启用串接解压的方式构造，因此把多个首尾相连的 bzip2 流拼接在一起的载荷现在会按成员顺序解码并合并输出，而不再像此前只支持单流的读取器那样在第一段之后被拒绝。</para></remarks>
+    /// <remarks>Every container is decoded through the compression library, and its bzip2 reader is built with decompressConcatenated enabled, so a payload that concatenates several back-to-back bzip2 streams decodes into the members joined in order instead of stopping after the first stream.
+    /// <para>所有容器统一经由压缩库解码，其中 bzip2 读取器以启用串接解压的方式构造，因此把多个首尾相连的 bzip2 流拼接在一起的载荷会按成员顺序解码并合并输出，而不会在第一段之后停止。</para></remarks>
     public static byte[]? TryDecompress(byte[] data, CompressionType type)
     {
         if (data is null || data.Length == 0)

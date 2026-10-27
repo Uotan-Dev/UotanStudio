@@ -4,19 +4,19 @@ using System.Text.RegularExpressions;
 namespace UotanStudio.Firmware.FileSystem.Erofs;
 
 /// <summary>
-/// Compiled image-relative exclusion rules for the EROFS writer, aligned with the upstream
-/// <c>lib/exclude.c</c> contract. A literal entry excludes exactly that image path, compared with the
+/// Compiled image-relative exclusion rules for the EROFS writer.
+/// A literal entry excludes exactly that image path, compared with the
 /// ordinal equivalent of <c>strcmp</c>; a regular expression excludes any entry whose image path it matches
 /// at any position. Both kinds are evaluated against the <c>/</c>-separated image-relative path with no
 /// leading slash, so a host separator never reaches the comparison and an exclusion is decided before any
 /// ownership, fs_config or extended-attribute table is consulted.
-/// <para>EROFS 写入方的镜像内相对路径排除规则，与上游 <c>lib/exclude.c</c> 的契约对齐。字面条目只排除该确切
+/// <para>EROFS 写入方的镜像内相对路径排除规则。字面条目只排除该确切
 /// 镜像路径，比较等价于 <c>strcmp</c> 的序数比较；正则表达式在任意位置命中镜像路径即排除该条目。两类规则都
 /// 针对不带前导斜杠、以 <c>/</c> 分隔的镜像内相对路径求值，因此宿主分隔符不会进入比较，且排除在查阅任何属主、
 /// fs_config 或扩展属性表之前就已判定。</para>
 /// </summary>
 /// <remarks>
-/// A literal rule does not expand to descendants: upstream compares the exact path, so a descendant path
+/// A literal rule does not expand to descendants: the comparison is exact, so a descendant path
 /// tested directly is not excluded by an ancestor's literal entry. The writer still prunes an excluded
 /// directory during collection because it never descends into a node it dropped, which is why a literal
 /// directory entry omits the whole subtree in a build; a caller that needs recursive exclusion of
@@ -24,7 +24,7 @@ namespace UotanStudio.Firmware.FileSystem.Erofs;
 /// entry. Regular expressions follow POSIX extended syntax after the translation described on
 /// <see cref="TranslatePosixPattern"/>, and match with the case-sensitive, unanchored search a POSIX
 /// <c>regexec</c> performs.
-/// <para>字面规则不会扩展到后代：上游比较的是确切路径，因此直接测试某个后代路径时不会因其祖先的字面条目而被
+/// <para>字面规则不会扩展到后代：比较的是确切路径，因此直接测试某个后代路径时不会因其祖先的字面条目而被
 /// 排除。写入方在收集阶段仍会剪掉被排除的目录，因为它不会下钻已丢弃的节点，所以在一次构建中字面目录条目会
 /// 省略整棵子树；若调用方需要对分别测试的路径做递归排除，必须提供形如 <c>^system/etc(/|$)</c> 的正则或穷举
 /// 每个条目。正则经 <see cref="TranslatePosixPattern"/> 所述翻译后遵循 POSIX 扩展语法，并以 POSIX
@@ -140,9 +140,9 @@ internal sealed class ErofsExclusions
     internal bool IsEmpty => literalPaths.Length == 0 && regexes.Length == 0;
 
     /// <summary>
-    /// Reports whether one image-relative path is excluded, matching a literal entry exactly, the way upstream
+    /// Reports whether one image-relative path is excluded, matching a literal entry exactly, the way
     /// <c>strcmp</c> compares it, or matching any regular expression at any position.
-    /// <para>判断某个镜像内相对路径是否被排除：与字面条目完全一致（即上游 <c>strcmp</c> 的比较方式），或在任意
+    /// <para>判断某个镜像内相对路径是否被排除：与字面条目完全一致（即 <c>strcmp</c> 的比较方式），或在任意
     /// 位置命中任一正则表达式。</para>
     /// </summary>
     /// <param name="imagePath">Image-relative path, which may use either separator; <see langword="null"/>, an
@@ -358,7 +358,7 @@ internal sealed class ErofsExclusions
     /// Reduces a path to the canonical comparison form: host separators become <c>/</c>, empty segments
     /// disappear, and <c>.</c> segments are dropped, so a leading slash, a doubled slash and a
     /// <c>./</c> prefix all compare equal to the plain image-relative path.
-    /// <para>把路径规约为标准比较形式：宿主分隔符变为 <c>/</c>，空段消失，<c>.</c> 段被丢弃，因此前导斜杠、
+    /// <para>把路径规约为标准比较形式：宿主分隔符变为 <c>/</c>，空段消失，<c>.</c> 段被丢弃，因此开头的斜杠、
     /// 连续斜杠与 <c>./</c> 前缀都与普通镜像内相对路径比较相等。</para>
     /// </summary>
     /// <param name="path">Path text to normalize. <para>待规范化的路径文本。</para></param>

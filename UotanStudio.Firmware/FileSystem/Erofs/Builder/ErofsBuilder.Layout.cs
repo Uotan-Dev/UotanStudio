@@ -43,10 +43,10 @@ public sealed partial class ErofsBuilder
         public int ExtraDevices { get; init; }
 
         /// <summary>Block count the extra devices contribute, so <c>s_blocks</c> spans the whole logical
-        /// filesystem rather than the primary image alone. erofs-utils seeds its running total with the primary
+        /// filesystem rather than the primary image alone. The running total starts from the primary
         /// block count and adds each device's blocks, and the kernel and the size-basis report read the result.
-        /// <para>额外设备贡献的块数，使 <c>s_blocks</c> 覆盖整个逻辑文件系统而不只是主镜像。erofs-utils 以主镜像
-        /// 块数作为累计初值并逐设备相加，内核与容量基线报告都会读取该结果。</para>
+        /// <para>额外设备贡献的块数，使 <c>s_blocks</c> 覆盖整个逻辑文件系统而不只是主镜像。累计值以主镜像
+        /// 块数作为初值并逐设备相加，内核与容量基线报告都会读取该结果。</para>
         /// </summary>
         public long ExtraDeviceBlocks => ExtraDevices == 0 || Options.ExtraDeviceImages is not { } images
             ? 0
@@ -1336,16 +1336,11 @@ public sealed partial class ErofsBuilder
 
         /// <summary>
         /// Materializes the metabox container body into a scratch file and plans its pclusters, so the
-        /// container travels the same compression pipeline as a regular file. Upstream arrives at the same
-        /// shape from the other direction: <c>lib/metabox.c</c> assembles the container into a temporary file
-        /// and hands that descriptor to <c>erofs_mkfs_build_special_from_fd</c>, which runs the ordinary
-        /// <c>erofs_write_compressed_file</c> path over it. Nothing about a metabox container therefore needs
-        /// slot addressing once its bytes exist as a stream — the slots are only the verbatim layout of the
-        /// same payload.
-        /// <para>把 metabox 容器本体落到暂存文件并规划其 pcluster，使容器与常规文件走同一条压缩管线。上游从
-        /// 另一方向得到同一形态：<c>lib/metabox.c</c> 把容器装配进临时文件并把这个描述符交给
-        /// <c>erofs_mkfs_build_special_from_fd</c>，由它套用普通的 <c>erofs_write_compressed_file</c>
-        /// 路径。因此容器字节一旦以流的形式存在，就完全不需要槽位寻址——槽位只是同一负载在明文形态下的摆放
+        /// container travels the same compression pipeline as a regular file. Nothing about a metabox container
+        /// therefore needs slot addressing once its bytes exist as a stream — the slots are only the verbatim
+        /// layout of the same payload.
+        /// <para>把 metabox 容器本体落到暂存文件并规划其 pcluster，使容器与常规文件走同一条压缩管线。
+        /// 因此容器字节一旦以流的形式存在，就完全不需要槽位寻址——槽位只是同一负载在明文形态下的摆放
         /// 方式。</para>
         /// <para>The body is assembled here rather than during the payload pass because a resident's serialized
         /// record embeds the data block assigned to it, so the container's payload is only defined once the
@@ -1519,18 +1514,18 @@ public sealed partial class ErofsBuilder
         /// 退回明文布局。</para>
         /// </summary>
         /// <remarks>
-        /// <para>The compressed form is only reachable for a payload that shrinks: a packed area smaller than one
+        /// The compressed form is only reachable for a payload that shrinks: a packed area smaller than one
         /// logical cluster rounds to the same single physical block either way, so the planner returns no plan and
         /// the verbatim layout is kept. A preserved source that recorded the packed inode as compressed treats
         /// that outcome as a failure instead, because falling back would silently publish a different packed-inode
-        /// strategy than the source described.</para>
+        /// strategy than the source described.
         /// <para>压缩形态只对确实变小的负载可达：小于一个逻辑簇的 packed 区两种形态都会取整到同一个物理块，
         /// 因此规划器不返回规划，保持明文布局。记录了 packed inode 为压缩的保留式源则把该结果视为失败，因为退回
         /// 明文会静默发布与源描述不同的 packed inode 策略。</para>
         /// </remarks>
         /// <exception cref="FileSystemUnsupportedFeatureException">A source recorded the packed inode as
-        /// compressed, but this build cannot reproduce that codec or its payload no longer compresses.
-        /// <para>源镜像记录 packed inode 为压缩，而本次构建无法复现该编解码器或其负载不再可压缩。</para></exception>
+        /// compressed, but this build cannot reproduce that codec or its payload does not compress.
+        /// <para>源镜像记录 packed inode 为压缩，而本次构建无法复现该编解码器或其负载不可压缩。</para></exception>
         internal void PlanPackedNodeCompression()
         {
             if (PackedNode is not { } node || PackedEnd <= 0)
@@ -2073,7 +2068,7 @@ public sealed partial class ErofsBuilder
         /// <summary>
         /// Refuses to publish a preserved rebuild whose planned storage strategy differs from the strategy
         /// the source image recorded. A rebuilt image that silently re-lays-out a compressed inode as plain
-        /// blocks, or that drops a compacted-index or tail-packing decision, is still readable but no longer
+        /// blocks, or that drops a compacted-index or tail-packing decision, is still readable but not
         /// the image the source described, so the divergence is an error rather than a quiet downgrade. The
         /// check runs only when the options carry source-inode records, which is exactly the preserved-rebuild
         /// path; a fresh directory build has no source strategy to compare against and is unaffected.
@@ -2538,21 +2533,12 @@ public sealed partial class ErofsBuilder
         }
 
         /// <summary>
-        /// Hashes one planned pcluster's accepted encoding so a later frame with the same bytes can share its
-        /// physical extent. Only the encoded frames take part: a plain pcluster is stored verbatim from its
-        /// source file and has no staged encoding to compare, and a fragment entry's bytes live in the packed
-        /// inode, where whole-file fragment reuse already applies.
-        /// <para>对单个已规划 pcluster 的已接受编码求哈希，使后续字节相同的帧可以共享其物理区间。只有编码帧
-        /// 参与：原样 pcluster 自其源文件逐字存放、没有可比对的暂存编码，而 fragment 条目的字节位于 packed
-        /// inode，那里已经由整文件 fragment 复用覆盖。</para>
-        /// </summary>
-        /// <summary>
         /// Reports the byte rotation one planned plain frame is stored with, or zero when it is stored
         /// verbatim. A rotation is only available for a plain frame whose physical address and physical
-        /// length are both whole blocks, which is the layout erofs-utils interlaces; a rotated frame also has
+        /// length are both whole blocks, which is the layout that allows interlacing; a rotated frame also has
         /// to fit inside the single block that holds it, so a frame longer than one block is never rotated.
         /// <para>给出单个已规划原样帧所按的字节旋转量，帧原样存放时为 0。只有物理地址与物理长度都是整数个块的
-        /// 原样帧才可旋转，这正是 erofs-utils 为之交错的布局；旋转后的帧还必须能容纳进承载它的单个块内，
+        /// 原样帧才可交错，旋转后的帧还必须能容纳进承载它的单个块内，
         /// 因此超过一块的帧绝不旋转。</para>
         /// </summary>
         /// <param name="pcluster">Planned pcluster whose address has just been assigned.
@@ -2576,6 +2562,15 @@ public sealed partial class ErofsBuilder
             return checked((int)(pcluster.SourceOffset % BlockSize));
         }
 
+        /// <summary>
+        /// Hashes one planned pcluster's accepted encoding so a later frame with the same bytes can share its
+        /// physical extent. Only the encoded frames take part: a plain pcluster is stored verbatim from its
+        /// source file and has no staged encoding to compare, and a fragment entry's bytes live in the packed
+        /// inode, where whole-file fragment reuse already applies.
+        /// <para>对单个已规划 pcluster 的已接受编码求哈希，使后续字节相同的帧可以共享其物理区间。只有编码帧
+        /// 参与：原样 pcluster 自其源文件逐字存放、没有可比对的暂存编码，而 fragment 条目的字节位于 packed
+        /// inode，那里已经由整文件 fragment 复用覆盖。</para>
+        /// </summary>
         /// <param name="pcluster">Planned pcluster of one compressed node.
         /// <para>某个压缩节点的已规划 pcluster。</para></param>
         /// <returns>A hexadecimal digest of the staged frame, or <see langword="null"/> when the entry has no

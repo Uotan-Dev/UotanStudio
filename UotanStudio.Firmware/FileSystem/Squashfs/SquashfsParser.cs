@@ -662,7 +662,7 @@ internal sealed class SquashfsParser
     /// <paramref name="count"/> negative; the rejected length is then allocated on purpose so the overflow fault
     /// that bounded this write before stays the same.
     /// <para>被构造的 inode 可以携带超过文件长度所需的块条目数，此时 <paramref name="count"/> 为负；这里刻意仍按该
-    /// 被拒绝的长度做一次分配，以保持此前已由该写入边界给出的溢出故障不变。</para>
+    /// 被拒绝的长度做一次分配，以保持该写入边界原本给出的溢出故障不变。</para>
     /// </remarks>
     private static void ZeroFill(Stream destination, long count, CancellationToken cancellationToken)
     {

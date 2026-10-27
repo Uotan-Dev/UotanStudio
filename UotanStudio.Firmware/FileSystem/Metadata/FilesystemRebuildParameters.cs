@@ -161,11 +161,11 @@ internal sealed class ErofsRebuildParameters
     /// <summary>
     /// Gets the recorded all-fragments advise: whether a file shorter than one filesystem block is stored whole
     /// in the packed fragment inode on top of the tail fragments that <see cref="Fragments"/> licenses. It is
-    /// the shape <c>mkfs.erofs -E all-fragments</c> selects, and it only has an effect while
+    /// the all-fragments shape, and it only has an effect while
     /// <see cref="Fragments"/> is enabled.
     /// <para>获取记录的 all-fragments advise：在 <see cref="Fragments"/> 许可的尾部碎片之外，是否把不足一个
-    /// 文件系统块的文件整份存放在 packed fragment inode 里。这正是 <c>mkfs.erofs -E all-fragments</c> 选用的
-    /// 形态，且只在 <see cref="Fragments"/> 开启时生效。</para>
+    /// 文件系统块的文件整份存放在 packed fragment inode 里。这正是 all-fragments 形态，
+    /// 且只在 <see cref="Fragments"/> 开启时生效。</para>
     /// </summary>
     /// <value>The recorded flag, or <see langword="null"/> when the snapshot carries no entry for it; a null
     /// value is read together with <see cref="Fragments"/>, because a profile without this dimension stores

@@ -597,7 +597,7 @@ public readonly record struct NativeToolResult(int ExitCode, string Output);
 /// <summary>
 /// Materialises the structured preservation payload of an extraction directory into the temporary flat
 /// <c>fs_config</c> and <c>file_contexts</c> files native tools require, because their command-line contract is
-/// "a file already exists at this path". Rows follow the strict AOSP dialect shared with the extraction-time
+/// "a file already exists at this path". Rows follow the strict flat-text layout shared with the extraction-time
 /// export: space-delimited fields, four-digit octal mode, a literal <c>0</c> capabilities column, LF endings and
 /// no UTF BOM, and the grammar cannot carry a path or label holding whitespace or an inode type with no type
 /// column, so those rows are skipped. The published files are written through atomic publication and removed when
@@ -605,7 +605,7 @@ public readonly record struct NativeToolResult(int ExitCode, string Output);
 /// extraction. A directory whose metadata carries no payload yields no instance, so an externally supplied
 /// hand-authored sidecar keeps working for a directory build.
 /// <para>把解包目录的结构化保留负载具象化为本机工具所需的临时扁平 <c>fs_config</c> 与 <c>file_contexts</c> 文件，
-/// 因为它们的命令行约定是“该路径上已存在文件”。行与解包期导出共用严格的 AOSP 方言：以空格分隔字段、四位八进制
+/// 因为它们的命令行约定是“该路径上已存在文件”。行与解包期导出共用严格的扁平文本约定：以空格分隔字段、四位八进制
 /// 模式、字面 <c>0</c> 的 capabilities 列、LF 行尾且不带 UTF BOM；该语法无法承载含空白的路径或标签，也没有文件
 /// 类型列可供特殊节点使用，因此这些行会被跳过。发布出的文件经原子发布写出，实例释放时移除，使工具运行绝不会读到
 /// 上一次解包遗留的附属文件。元数据不携带负载的目录不会产生实例，因此目录构建仍可继续使用外部提供的、人工编写的

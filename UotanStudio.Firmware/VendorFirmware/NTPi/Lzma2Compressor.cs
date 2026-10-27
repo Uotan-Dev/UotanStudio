@@ -207,8 +207,8 @@ internal sealed class Lzma2Compressor : ILzma2Compressor
     /// <para>解压后的字节，长度严格等于头部声明的原始大小。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.
     /// <para><paramref name="data"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="ArgumentException"><paramref name="data"/> is no longer than the 112-byte header, or the header magic is not <c>NTDECOMP</c>.
-    /// <para><paramref name="data"/> 不长于 112 字节头部，或头部魔数不是 <c>NTDECOMP</c>。</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="data"/> is shorter than or equal to the 112-byte header, or the header magic is not <c>NTDECOMP</c>.
+    /// <para><paramref name="data"/> 的长度不超过 112 字节头部，或头部魔数不是 <c>NTDECOMP</c>。</para></exception>
     /// <exception cref="Lzma2CompressionException">A declared size is out of bounds, trailing padding is invalid, decoding fails, or the produced length disagrees with the header.
     /// <para>声明大小越界、末尾填充无效、解码失败，或产出长度与头部声明不一致。</para></exception>
     public byte[] Decompress(byte[] data)

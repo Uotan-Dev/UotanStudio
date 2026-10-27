@@ -2,7 +2,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace UotanStudio.Firmware.Core.Streams;
 
-/// <summary>A non-owning cursor; raw files use positional I/O, other streams serialize only each read.</summary>
+/// <summary>A non-owning cursor; raw files use positional I/O, other streams serialize only each read. <para>非拥有型游标；原始文件使用定位 I/O，其他流只对每次读取串行化。</para></summary>
 internal sealed class IndependentReadStream : Stream
 {
     private readonly Stream _source;

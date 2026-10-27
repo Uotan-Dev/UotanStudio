@@ -286,8 +286,8 @@ public static partial class DatWriter
     /// </param>
     /// <param name="level">
     /// Unified compression level mapped to the Brotli quality by the shared mapper; <see langword="null"/> keeps the
-    /// historical quality 4 and is the only setting that reproduces the pre-existing bytes.
-    /// <para>由共享映射器换算为 Brotli 质量的统一压缩等级；<see langword="null"/> 保持历史质量 4，是唯一能复现既有字节的取值。</para>
+    /// default quality 4 and is the only setting that reproduces the default bytes.
+    /// <para>由共享映射器换算为 Brotli 质量的统一压缩等级；<see langword="null"/> 保持默认质量 4，是唯一能复现默认字节的取值。</para>
     /// </param>
     /// <remarks>
     /// The produced file is a single Brotli stream, which is what every reader of this artifact requires:

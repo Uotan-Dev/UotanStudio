@@ -5,27 +5,20 @@ using UotanStudio.Firmware.Core.IO;
 
 namespace UotanStudio.Firmware.AndroidMeta.Apk;
 
-/// <summary>Signing key algorithm choices for generated APK signing material.</summary>
-/// <para>生成 APK 签名材料时的密钥算法选项。</para>
+/// <summary>Signing key algorithm choices for generated APK signing material. <para>生成 APK 签名材料时的密钥算法选项。</para></summary>
 public enum ApkSigningKeyType
 {
-    /// <summary>RSA 2048 bits.</summary>
-    /// <para>RSA 2048 位。</para>
+    /// <summary>RSA 2048 bits. <para>RSA 2048 位。</para></summary>
     Rsa2048,
-    /// <summary>RSA 3072 bits.</summary>
-    /// <para>RSA 3072 位。</para>
+    /// <summary>RSA 3072 bits. <para>RSA 3072 位。</para></summary>
     Rsa3072,
-    /// <summary>RSA 4096 bits.</summary>
-    /// <para>RSA 4096 位。</para>
+    /// <summary>RSA 4096 bits. <para>RSA 4096 位。</para></summary>
     Rsa4096,
-    /// <summary>ECDSA NIST P-256.</summary>
-    /// <para>ECDSA NIST P-256 曲线。</para>
+    /// <summary>ECDSA NIST P-256. <para>ECDSA NIST P-256 曲线。</para></summary>
     EcP256,
-    /// <summary>ECDSA NIST P-384.</summary>
-    /// <para>ECDSA NIST P-384 曲线。</para>
+    /// <summary>ECDSA NIST P-384. <para>ECDSA NIST P-384 曲线。</para></summary>
     EcP384,
-    /// <summary>ECDSA NIST P-521.</summary>
-    /// <para>ECDSA NIST P-521 曲线。</para>
+    /// <summary>ECDSA NIST P-521. <para>ECDSA NIST P-521 曲线。</para></summary>
     EcP521,
 }
 
@@ -35,56 +28,47 @@ public enum ApkSigningKeyType
 /// </summary>
 public sealed record ApkSigningKeyOptions
 {
-    /// <summary>Key algorithm; RSA 2048 by default.</summary>
-    /// <para>密钥算法；默认 RSA 2048。</para>
+    /// <summary>Key algorithm; RSA 2048 by default. <para>密钥算法；默认 RSA 2048。</para></summary>
     /// <value>Algorithm of the generated key pair: RSA at 2048, 3072 or 4096 bits, or ECDSA on a NIST P-256, P-384 or P-521 curve.
     /// <para>生成密钥对的算法：RSA 2048、3072 或 4096 位，或 ECDSA NIST P-256、P-384、P-521 曲线。</para></value>
     public ApkSigningKeyType KeyType { get; init; } = ApkSigningKeyType.Rsa2048;
 
-    /// <summary>Certificate common name (CN), required, 1–200 characters.</summary>
-    /// <para>证书通用名称（CN），必填，1–200 个字符。</para>
+    /// <summary>Certificate common name (CN), required, 1–200 characters. <para>证书通用名称（CN），必填，1–200 个字符。</para></summary>
     /// <value>Written trimmed into the certificate subject; <see cref="ApkSigningKeyGenerator.Generate"/> rejects values outside 1–200 characters, with control characters, or containing '/'.
     /// <para>去除首尾空白后写入证书主题；<see cref="ApkSigningKeyGenerator.Generate"/> 会拒绝超出 1–200 个字符、含控制字符或包含 '/' 的值。</para></value>
     public string CommonName { get; init; } = string.Empty;
 
-    /// <summary>Optional organization (O) subject field.</summary>
-    /// <para>可选的主题组织字段（O）。</para>
+    /// <summary>Optional organization (O) subject field. <para>可选的主题组织字段（O）。</para></summary>
     /// <value>Added as the trimmed O RDN only when non-blank; omitted otherwise.
     /// <para>仅在非空白时以去除首尾空白的 O RDN 加入主题；否则省略。</para></value>
     public string? Organization { get; init; }
 
-    /// <summary>Optional organizational unit (OU) subject field.</summary>
-    /// <para>可选的主题组织单位字段（OU）。</para>
+    /// <summary>Optional organizational unit (OU) subject field. <para>可选的主题组织单位字段（OU）。</para></summary>
     /// <value>Added as the trimmed OU RDN only when non-blank; omitted otherwise.
     /// <para>仅在非空白时以去除首尾空白的 OU RDN 加入主题；否则省略。</para></value>
     public string? OrganizationalUnit { get; init; }
 
-    /// <summary>Optional locality / city (L) subject field.</summary>
-    /// <para>可选的城市或地区字段（L）。</para>
+    /// <summary>Optional locality / city (L) subject field. <para>可选的城市或地区字段（L）。</para></summary>
     /// <value>Added as the trimmed L RDN only when non-blank; omitted otherwise.
     /// <para>仅在非空白时以去除首尾空白的 L RDN 加入主题；否则省略。</para></value>
     public string? Locality { get; init; }
 
-    /// <summary>Optional state or province (ST) subject field.</summary>
-    /// <para>可选的州或省份字段（ST）。</para>
+    /// <summary>Optional state or province (ST) subject field. <para>可选的州或省份字段（ST）。</para></summary>
     /// <value>Added as the trimmed ST RDN only when non-blank; omitted otherwise.
     /// <para>仅在非空白时以去除首尾空白的 ST RDN 加入主题；否则省略。</para></value>
     public string? State { get; init; }
 
-    /// <summary>Optional two-letter country code (C) subject field.</summary>
-    /// <para>可选的两位国家代码字段（C）。</para>
+    /// <summary>Optional two-letter country code (C) subject field. <para>可选的两位国家代码字段（C）。</para></summary>
     /// <value>Added as the trimmed C RDN only when non-blank; <see cref="ApkSigningKeyGenerator.Generate"/> rejects a non-blank value whose trimmed length is not two characters.
     /// <para>仅在非空白时以去除首尾空白的 C RDN 加入主题；<see cref="ApkSigningKeyGenerator.Generate"/> 会拒绝去空白后长度不是 2 的非空白值。</para></value>
     public string? Country { get; init; }
 
-    /// <summary>Certificate validity in years (1–100); defaults to 30 years like typical debug certificates.</summary>
-    /// <para>证书有效年数（1–100）；默认 30 年，与常见调试证书一致。</para>
+    /// <summary>Certificate validity in years (1–100); defaults to 30 years like typical debug certificates. <para>证书有效年数（1–100）；默认 30 年，与常见调试证书一致。</para></summary>
     /// <value>Added to the validity start (one day before the current UTC time) to obtain the certificate's notAfter; values outside 1–100 are rejected.
     /// <para>加在有效期起点（当前 UTC 时间前一天）上得到证书的 notAfter；超出 1–100 的值会被拒绝。</para></value>
     public int ValidityYears { get; init; } = 30;
 
-    /// <summary>Optional private key password; when set the key is exported as encrypted PKCS#8, otherwise plaintext PKCS#8.</summary>
-    /// <para>可选私钥密码；设置后私钥导出为加密 PKCS#8，否则为明文 PKCS#8。</para>
+    /// <summary>Optional private key password; when set the key is exported as encrypted PKCS#8, otherwise plaintext PKCS#8. <para>可选私钥密码；设置后私钥导出为加密 PKCS#8，否则为明文 PKCS#8。</para></summary>
     /// <value>A non-empty value encrypts the PEM with AES-256-CBC, SHA-256 and 100,000 PBKDF iterations, and is also used as the PFX password when <c>exportPfx</c> is set; null or empty yields plaintext PKCS#8 and an unauthenticated PFX.
     /// <para>非空值使用 AES-256-CBC、SHA-256 与 100000 次 PBKDF 迭代加密 PEM，并在 <c>exportPfx</c> 时同时作为 PFX 密码；null 或空值输出明文 PKCS#8 与无口令 PFX。</para></value>
     public string? KeyPassword { get; init; }

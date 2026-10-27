@@ -6,20 +6,17 @@ namespace UotanStudio.Firmware.AndroidMeta.Apk.Signing;
 /// </summary>
 public sealed class ApkSigningOptions
 {
-    /// <summary>Enables JAR (v1) signature artifacts (META-INF MANIFEST.MF/.SF/CMS).</summary>
-    /// <para>启用 JAR（v1）签名工件（META-INF 的 MANIFEST.MF/.SF/CMS）。</para>
+    /// <summary>Enables JAR (v1) signature artifacts (META-INF MANIFEST.MF/.SF/CMS). <para>启用 JAR（v1）签名工件（META-INF 的 MANIFEST.MF/.SF/CMS）。</para></summary>
     /// <value><see langword="true"/> (default) appends META-INF signature artifacts.
     /// <para>默认 <see langword="true"/>，追加 META-INF 签名工件。</para></value>
     public bool EnableV1 { get; set; } = true;
 
-    /// <summary>Enables APK Signature Scheme v2 (API 24+).</summary>
-    /// <para>启用 APK 签名方案 v2（API 24+）。</para>
+    /// <summary>Enables APK Signature Scheme v2 (API 24+). <para>启用 APK 签名方案 v2（API 24+）。</para></summary>
     /// <value><see langword="true"/> (default) emits the v2 signer under block ID 0x7109871a.
     /// <para>默认 <see langword="true"/>，在分块 ID 0x7109871a 下写入 v2 签名者。</para></value>
     public bool EnableV2 { get; set; } = true;
 
-    /// <summary>Enables APK Signature Scheme v3 (API 28+).</summary>
-    /// <para>启用 APK 签名方案 v3（API 28+）。</para>
+    /// <summary>Enables APK Signature Scheme v3 (API 28+). <para>启用 APK 签名方案 v3（API 28+）。</para></summary>
     /// <value><see langword="true"/> (default) emits the v3 signer under block ID 0xf05368c0.
     /// <para>默认 <see langword="true"/>，在分块 ID 0xf05368c0 下写入 v3 签名者。</para></value>
     public bool EnableV3 { get; set; } = true;
@@ -32,13 +29,11 @@ public sealed class ApkSigningOptions
     /// <para>默认 24；传给算法选择器，但选择器实际按密钥位数决策。</para></value>
     public int MinSdkVersion { get; set; } = 24;
 
-    /// <summary>Minimum SDK protected by the v3 signer.</summary>
-    /// <para>v3 签名者保护的最低 SDK。</para>
+    /// <summary>Minimum SDK protected by the v3 signer. <para>v3 签名者保护的最低 SDK。</para></summary>
     /// <value>Defaults to 28; signing rejects values below 28. <para>默认 28；低于 28 时签名入口直接拒绝。</para></value>
     public int V3MinSdk { get; set; } = ApkV2V3SchemeSigner.V3DefaultMinSdk;
 
-    /// <summary>Maximum SDK protected by the v3 signer.</summary>
-    /// <para>v3 签名者保护的最高 SDK。</para>
+    /// <summary>Maximum SDK protected by the v3 signer. <para>v3 签名者保护的最高 SDK。</para></summary>
     /// <value>Defaults to <see cref="int.MaxValue"/>; must not be below <see cref="V3MinSdk"/>.
     /// <para>默认 <see cref="int.MaxValue"/>；不得小于 <see cref="V3MinSdk"/>。</para></value>
     public int V3MaxSdk { get; set; } = ApkV2V3SchemeSigner.V3DefaultMaxSdk;

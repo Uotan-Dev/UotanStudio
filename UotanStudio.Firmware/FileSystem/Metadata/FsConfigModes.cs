@@ -1,9 +1,9 @@
 namespace UotanStudio.Firmware.FileSystem.Metadata;
 
 /// <summary>
-/// Reads and writes the <c>fs_config</c> permission token in the one dialect AOSP tools accept: octal
+/// Reads and writes the <c>fs_config</c> permission token in the one dialect the format accepts: octal
 /// digits, optionally prefixed with <c>0</c>, always written back as four zero-padded digits.
-/// <para>以 AOSP 工具唯一接受的方言读写 <c>fs_config</c> 权限记号：八进制数字，可带前导 <c>0</c>，
+/// <para>以该格式唯一接受的写法读写 <c>fs_config</c> 权限记号：八进制数字，可带前导 <c>0</c>，
 /// 输出时一律为零填充的四位。</para>
 /// </summary>
 internal static class FsConfigModes
@@ -49,9 +49,10 @@ internal static class FsConfigModes
     }
 
     /// <summary>
-    /// Renders a mode as the four zero-padded octal digits AOSP expects, discarding the file-type bits above
-    /// the twelve permission bits; <c>0</c> therefore renders as <c>0000</c> rather than a substituted default.
-    /// <para>将模式渲染为 AOSP 期望的四位零填充八进制数字，丢弃低十二位权限位之上的文件类型位；
+    /// Renders a mode as the four zero-padded octal digits the format expects, discarding the file-type bits
+    /// above the twelve permission bits; <c>0</c> therefore renders as <c>0000</c> rather than a substituted
+    /// default.
+    /// <para>将模式渲染为该格式期望的四位零填充八进制数字，丢弃低十二位权限位之上的文件类型位；
     /// 因此 <c>0</c> 输出为 <c>0000</c>，而不是被替换成默认权限。</para>
     /// </summary>
     /// <param name="mode">Raw inode mode, whose type bits are ignored.

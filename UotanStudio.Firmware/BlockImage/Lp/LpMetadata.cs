@@ -80,8 +80,8 @@ public sealed class LpMetadata
     public IReadOnlyList<string> PartitionNames => [.. Partitions.Select(p => p.NameString)];
 
     /// <summary>
-    /// Validates the metadata-wide invariants that were previously enforced inside the builder's export step: geometry dimensions, partition and group name shape and uniqueness, and each group's combined-size quota.
-    /// <para>校验此前由构建器导出步骤强制执行的元数据整体不变量：几何尺寸、分区与组名称的形态与唯一性，以及每个组的合计大小配额。</para>
+    /// Validates the metadata-wide invariants required before the metadata is serialized: geometry dimensions, partition and group name shape and uniqueness, and each group's combined-size quota.
+    /// <para>校验序列化元数据之前必须满足的整体不变量：几何尺寸、分区与组名称的形态与唯一性，以及每个组的合计大小配额。</para>
     /// </summary>
     /// <exception cref="ArgumentException">
     /// A partition or group name is outside the 1-to-36 UTF-8-byte-without-NUL range, a partition name uses a character other than an ASCII letter, digit or underscore, or a partition or group name is duplicated.

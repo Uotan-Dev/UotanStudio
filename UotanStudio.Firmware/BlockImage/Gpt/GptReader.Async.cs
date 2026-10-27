@@ -9,7 +9,8 @@ namespace UotanStudio.Firmware.BlockImage.Gpt;
 /// <param name="cancellationToken">Cancellation token the implementation must honor.
 /// <para>实现必须遵守的取消令牌。</para></param>
 /// <remarks>The buffer must not be retained after completion. Reads are sequential, never
-/// concurrent.</remarks>
+/// concurrent.
+/// <para>完成后不得继续持有该缓冲区。读取按顺序进行，从不并发。</para></remarks>
 public delegate ValueTask GptBlockReader(long offset, Memory<byte> destination, CancellationToken cancellationToken);
 
 /// <summary>
@@ -62,34 +63,31 @@ public static partial class GptReader
     /// from the overridden location is still required to match the declared entry-array CRC byte-for-byte
     /// against the backup copy, so an override that points inside the reported capacity but at the wrong place
     /// ends in <see cref="InvalidDataException"/>, while an override that cannot describe the array at all ends in
-    /// <see cref="ArgumentOutOfRangeException"/>. Neither path yields a partially trusted table. The reference
-    /// downloader exposes the same knob as
-    /// <c>--gpt-part-entry-start-lba</c> (bkerler/edl <c>edlclient/Library/firehose_client.py:483-485</c>,
-    /// consumed at <c>edlclient/Library/gpt.py:360-362</c>).
+    /// <see cref="ArgumentOutOfRangeException"/>. Neither path yields a partially trusted table. The option
+    /// <c>--gpt-part-entry-start-lba</c> exposes the same override.
     /// <para>主分区条目数组 LBA 的覆盖值，用于自身取值已损坏的头部；为 <see langword="null"/> 时采用头部自身的
     /// 取值，备份数组仍使用其头部所报位置。覆盖仅替换位置：主头部的其余字段仍须全部通过校验，且从覆盖位置读出的
     /// 条目数组仍必须与备份副本逐字节一致并匹配头部声明的条目数组 CRC。因此落在上报容量之内却指错位置的覆盖值以
     /// <see cref="InvalidDataException"/> 结束，而根本无法描述该数组的覆盖值以
-    /// <see cref="ArgumentOutOfRangeException"/> 被拒绝，两条路径都不会产出部分可信的分区表。参考下载器以
-    /// <c>--gpt-part-entry-start-lba</c> 暴露同一开关（bkerler/edl
-    /// <c>edlclient/Library/firehose_client.py:483-485</c>，消费点 <c>edlclient/Library/gpt.py:360-362</c>）。</para>
+    /// <see cref="ArgumentOutOfRangeException"/> 被拒绝，两条路径都不会产出部分可信的分区表。选项
+    /// <c>--gpt-part-entry-start-lba</c> 暴露同一覆盖值。</para>
     /// </param>
     /// <param name="partitionEntryCount">
     /// Override of the partition-entry count for a header that reports zero or a damaged count, or
     /// <see langword="null"/> to use the header's value. Unlike the LBA, the dimensions are array-wide and
-    /// therefore apply to both copies, so the declared entry-array CRC still gates the result. The reference
-    /// downloader exposes the same knob as <c>--gpt-num-part-entries</c>.
+    /// therefore apply to both copies, so the declared entry-array CRC still gates the result. The option
+    /// <c>--gpt-num-part-entries</c> exposes the same override.
     /// <para>分区条目数量的覆盖值，用于上报零或条目数量已损坏的头部；为 <see langword="null"/> 时采用头部自身的取值。
-    /// 与 LBA 不同，数组维度作用于整条数组，因此同时应用于主备两份，所声明的条目数组 CRC 仍是放行条件。参考下载器以
-    /// <c>--gpt-num-part-entries</c> 暴露同一开关。</para>
+    /// 与 LBA 不同，数组维度作用于整条数组，因此同时应用于主备两份，所声明的条目数组 CRC 仍是放行条件。选项
+    /// <c>--gpt-num-part-entries</c> 暴露同一覆盖值。</para>
     /// </param>
     /// <param name="partitionEntrySize">
     /// Override of the partition-entry size, a power of two from 128 through 4096, or <see langword="null"/> to
-    /// use the header's value; the same array-wide rule as <paramref name="partitionEntryCount"/> applies. The
-    /// reference downloader exposes the same knob as <c>--gpt-part-entry-size</c>.
+    /// use the header's value; the same array-wide rule as <paramref name="partitionEntryCount"/> applies. The option
+    /// <c>--gpt-part-entry-size</c> exposes the same override.
     /// <para>分区条目大小的覆盖值，须为 128 至 4096 之间 2 的幂；为 <see langword="null"/> 时采用头部自身的取值，
-    /// 且与 <paramref name="partitionEntryCount"/> 一样作用于整条数组。参考下载器以 <c>--gpt-part-entry-size</c>
-    /// 暴露同一开关。</para>
+    /// 且与 <paramref name="partitionEntryCount"/> 一样作用于整条数组。选项 <c>--gpt-part-entry-size</c>
+    /// 暴露同一覆盖值。</para>
     /// </param>
     /// <param name="cancellationToken">
     /// Cancellation propagated through every read.

@@ -64,21 +64,21 @@ internal class VendorBootPacker
     /// <summary>Device tree blob written page-aligned after the vendor ramdisk.
     /// <para>紧随 vendor ramdisk 按页对齐写出的设备树 blob。</para></summary>
     /// <value>Raw bytes as provided; an empty array omits the segment. Version 3 packing rejects an empty DTB
-    /// because the AOSP boot_image.h v3 layout marks the DTB as required. Component-file precedence applies as for
+    /// because the version 3 vendor boot layout marks the DTB as required. Component-file precedence applies as for
     /// <see cref="VendorRamdisk"/>.
-    /// <para>按提供的原始字节写出；空数组时省略该区段。版本 3 打包会拒绝空 DTB，因为 AOSP boot_image.h 的 v3 布局将 DTB 标记为必需。
+    /// <para>按提供的原始字节写出；空数组时省略该区段。版本 3 打包会拒绝空 DTB，因为版本 3 的 vendor boot 布局将 DTB 标记为必需。
     /// 组件文件优先规则与 <see cref="VendorRamdisk"/> 相同。</para></value>
     public byte[] Dtb { get; set; } = [];
 
     /// <summary>Bootconfig content written last, only for version 4.
     /// <para>最后写出的 bootconfig 内容，仅在版本 4 时写入。</para></summary>
     /// <value>Raw bytes as provided; ignored (size <c>0</c> in the header) for version 3. New payloads are capped
-    /// at 4096 bytes per the mkbootimg convention (the AOSP boot_image.h defines no size constant); a byte-identical
+    /// at 4096 bytes, the conventional Android bootconfig ceiling (the vendor boot v4 layout defines no size constant); a byte-identical
     /// repack of a parsed source is allowed to exceed the cap when the payload length equals the declared
     /// <see cref="VendorBootHeader.VendorBootconfigSize"/>. Component-file precedence applies as for
     /// <see cref="VendorRamdisk"/>.
-    /// <para>按提供的原始字节写出；版本 3 时被忽略（头部中大小为 <c>0</c>）。新载荷按 mkbootimg 约定上限 4096 字节
-    /// （AOSP boot_image.h 未定义大小常量）；当载荷长度等于声明的 <see cref="VendorBootHeader.VendorBootconfigSize"/> 时，
+    /// <para>按提供的原始字节写出；版本 3 时被忽略（头部中大小为 <c>0</c>）。新载荷上限为 4096 字节，即 Android bootconfig 的惯例上限
+    /// （vendor boot v4 布局未定义大小常量）；当载荷长度等于声明的 <see cref="VendorBootHeader.VendorBootconfigSize"/> 时，
     /// 已解析源的逐字节一致重打包可以超过该上限。组件文件优先规则与 <see cref="VendorRamdisk"/> 相同。</para></value>
     public byte[] Bootconfig { get; set; } = [];
 

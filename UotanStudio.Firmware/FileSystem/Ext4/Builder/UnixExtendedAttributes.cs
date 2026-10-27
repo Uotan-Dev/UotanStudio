@@ -3,8 +3,8 @@ using System.Runtime.InteropServices;
 namespace UotanStudio.Firmware.FileSystem.Ext4.Builder;
 
 /// <summary>
-/// Reads one extended attribute through the platform <c>getxattr</c> entry point. The builder previously forked a <c>getfattr</c> process per tree entry, which dominated the per-file build cost; the native call returns the same bytes with the same "absent, empty or unreadable means no attribute" fallback.
-/// <para>通过平台 <c>getxattr</c> 入口读取单个扩展属性。构建器原先为每个目录项 fork 一个 <c>getfattr</c> 进程，这构成了每文件构建开销的主要部分；原生调用返回相同字节，并保持“不存在、为空或不可读即视为无属性”的同一回退语义。</para>
+/// Reads one extended attribute through the platform <c>getxattr</c> entry point, which returns the attribute value directly; "absent, empty or unreadable" all mean no attribute.
+/// <para>通过平台 <c>getxattr</c> 入口直接读取单个扩展属性值；“不存在、为空或不可读”一律视为无属性。</para>
 /// </summary>
 internal static unsafe partial class UnixExtendedAttributes
 {

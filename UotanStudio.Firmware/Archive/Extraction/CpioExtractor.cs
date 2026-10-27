@@ -536,6 +536,7 @@ public sealed class CpioExtractor
 
     /// <summary>
     /// Returns the deepest directory that exists and is not itself a symbolic link, starting at <paramref name="path"/>.
+    /// <para>返回从 <paramref name="path"/> 开始、已存在且本身不是符号链接的最深目录。</para>
     /// </summary>
     private static string DeepestExistingNonLinkDirectory(string path)
     {

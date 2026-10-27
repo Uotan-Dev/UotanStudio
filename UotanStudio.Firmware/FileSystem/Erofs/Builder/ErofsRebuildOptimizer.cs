@@ -129,10 +129,10 @@ internal static class ErofsRebuildOptimizer
         => candidate.Level.ToString(CultureInfo.InvariantCulture) + (candidate.HighCompression ? "hc" : "");
 
     /// <summary>Binds each persisted estimate to the restored codec options of the same algorithm name.
-    /// Records naming an absent codec or carrying no candidate are dropped, which is how a snapshot written
-    /// by an older build degrades to a single build instead of failing.
+    /// Records naming an absent codec or carrying no candidate are dropped, so an incomplete snapshot
+    /// degrades to a single build instead of failing.
     /// <para>把每条持久化估算绑定到同名算法的已还原编解码选项。指向缺失编解码或不含候选的记录会被丢弃，
-    /// 旧版本写出的快照因此退化为单次构建而非失败。</para></summary>
+    /// 信息不完整的快照因此退化为单次构建而非失败。</para></summary>
     private static List<ErofsCompressionEstimate> Rebuild(ErofsOptions options, ErofsRebuildParameters captured)
     {
         if (options.SourceCompressionOptions is not { Count: > 0 } codecs) return [];

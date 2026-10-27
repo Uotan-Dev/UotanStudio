@@ -9,9 +9,9 @@ using UnifiedInode = UotanStudio.Firmware.FileSystem.Erofs.Models.Inodes.ErofsIn
 namespace UotanStudio.Firmware.FileSystem.Erofs.Parser;
 
 /// <summary>
-/// EROFS parser part that copies inode data out of the image: it checks every offset and length against the image size, dispatches on the inline, flat, chunk-based and compressed layouts, and reports pcluster coverage deficits against the legacy decoding rules.
+/// EROFS parser part that copies inode data out of the image: it checks every offset and length against the image size, dispatches on the inline, flat, chunk-based and compressed layouts, and reports pcluster coverage deficits against the pre-5.13 decoding rules.
 /// <para>EROFS 解析器的组成部分，负责把 inode 数据从镜像中取出：先用镜像大小校验每个偏移与长度，
-/// 再按 inline、flat、chunk-based 与压缩布局分派，并按旧版解码规则报告 pcluster 的覆盖缺口。</para>
+/// 再按 inline、flat、chunk-based 与压缩布局分派，并按 pre-5.13 解码规则报告 pcluster 的覆盖缺口。</para>
 /// </summary>
 public sealed partial class ErofsParser
 {
@@ -1276,7 +1276,7 @@ public sealed partial class ErofsParser
 
     /// <summary>Diagnostic companion to <see cref="MaxPclusterKernelCoverageDeficit"/> listing every
     /// compressed extent whose legacy-expected output exceeds its decoded bytes.
-    /// <para><see cref="MaxPclusterKernelCoverageDeficit"/> 的诊断伴侣，列出所有旧版期望输出大于实际
+    /// <para><see cref="MaxPclusterKernelCoverageDeficit"/> 的诊断伴侣，列出所有 pre-5.13 期望输出大于实际
     /// 解压字节数的压缩 extent。</para></summary>
     internal List<(string Path, int Expected, int Decoded)> PclusterKernelCoverageDeficits()
     {

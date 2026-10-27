@@ -125,7 +125,7 @@ internal static class AvbFecCodec
     /// <summary>
     /// The byte-at-a-time reference form of <see cref="XorMultiplyConstant(Span{byte}, ReadOnlySpan{byte}, byte)"/>,
     /// which is also its fallback when the processor cannot permute a lane in one instruction.
-    /// <para><see cref="XorMultiplyConstant(Span{byte}, ReadOnlySpan{byte}, byte)"/> 的逐字节参考实现，同时是处理器无法
+    /// <para><see cref="XorMultiplyConstant(Span{byte}, ReadOnlySpan{byte}, byte)"/> 的逐字节标量实现，同时是处理器无法
     /// 用单条指令置换通道时的回退路径。</para>
     /// </summary>
     /// <remarks>

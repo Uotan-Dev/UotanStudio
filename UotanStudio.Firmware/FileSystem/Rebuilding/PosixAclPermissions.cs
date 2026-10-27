@@ -2,7 +2,8 @@ using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 
-/// <summary>Applies Linux chmod masking to serialized access ACLs without changing named identities.</summary>
+/// <summary>Applies Linux chmod masking to serialized access ACLs without changing named identities.
+/// <para>对序列化的访问 ACL 施加 Linux chmod 掩码，且不改变具名身份。</para></summary>
 internal static class PosixAclPermissions
 {
     internal static byte[] Apply(byte[] source, ushort mode)

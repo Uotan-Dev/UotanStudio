@@ -46,13 +46,13 @@ public sealed partial class ErofsParser
     /// dot-omitted advise dimension, device table and extended-superblock geometry for an edited rebuild. The
     /// declared feature words are replayed exactly: the rebuild neither adds a bit the source did not declare
     /// nor infers a legacy baseline from the absence of modern signals. Device slot tags are captured as raw
-    /// bytes, without UTF-8 decoding or NUL truncation, because upstream stores digests in that field, and the
+    /// bytes, without UTF-8 decoding or NUL truncation, because that field holds digests, and the
     /// extended-superblock geometry <c>s_sb_extslots</c> together with <c>dirblkbits</c> is captured as well, so
     /// the compression configuration offset and the directory blocking unit the source used survive a rebuild.
     /// <para>读取编辑重建所需的源压缩契约、inode 时间戳、已声明的超级块特性字、目录省略 advise 维度、设备表
     /// 与扩展超级块几何。已声明的特性字按原样重放：重建既不添加源未声明的位，也不因缺少现代迹象而推断 legacy
     /// 基线。</para>
-    /// <para>设备槽的 tag 按原始字节采集，不做 UTF-8 解码或 NUL 截断，因为上游会把摘要写进该字段；几何则采集
+    /// <para>设备槽的 tag 按原始字节采集，不做 UTF-8 解码或 NUL 截断，因为该字段存放摘要；几何则采集
     /// <c>s_sb_extslots</c> 与 <c>dirblkbits</c>，使源所用的压缩配置区偏移与目录分块单位在重建后仍保持一致。</para>
     /// </summary>
     internal ErofsOptions ReadRebuildOptions()
@@ -238,11 +238,11 @@ public sealed partial class ErofsParser
 
     /// <summary>
     /// Labels one source device slot for the builder descriptor. The on-disk tag field is a fixed 64-byte array
-    /// that upstream fills with a digest for blob-backed devices, so a label is derived from the bytes before
+    /// that holds a digest for blob-backed devices, so a label is derived from the bytes before
     /// the first NUL only while they decode as valid UTF-8 and fit the field; otherwise a positional placeholder
     /// is used. The slot bytes always travel verbatim in <see cref="ErofsDeviceSpec.TagBytes"/>, so a binary tag
     /// is neither rejected nor re-encoded.
-    /// <para>为构建器描述符标注一个源设备槽。磁盘 tag 字段是固定 64 字节数组，上游会为 blob 支撑的设备填入
+    /// <para>为构建器描述符标注一个源设备槽。磁盘 tag 字段是固定 64 字节数组，blob 支撑的设备会在其中填入
     /// 摘要，因此仅当首个 NUL 之前的字节能解码为合法 UTF-8 且落在字段宽度内时才取其文本作为标签，否则使用位置
     /// 占位名。槽位字节始终按原样经 <see cref="ErofsDeviceSpec.TagBytes"/> 传递，因此二进制 tag 既不会被拒绝
     /// 也不会被重新编码。</para>

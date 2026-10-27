@@ -9,9 +9,9 @@ namespace UotanStudio.Firmware.BlockImage.Sparse;
 public enum SparseRawZeroMode
 {
     /// <summary>
-    /// Writes every zero byte through the stream. This is the historical behaviour and works on any writable stream,
+    /// Writes every zero byte through the stream. Works on any writable stream,
     /// including non-seekable progress wrappers.
-    /// <para>把每个零字节都经流写出。这是历史行为，适用于任何可写流，包括不可寻址的进度包装流。</para>
+    /// <para>把每个零字节都经流写出。适用于任何可写流，包括不可寻址的进度包装流。</para>
     /// </summary>
     Write = 0,
 

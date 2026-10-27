@@ -6,7 +6,7 @@ using UotanStudio.Hash.Digests;
 
 namespace UotanStudio.Firmware.BootSecurity.Avb;
 
-/// <summary>Reads AVB configuration without treating the embedded key as a trust anchor.</summary>
+/// <summary>Reads AVB configuration without treating the embedded key as a trust anchor. <para>读取 AVB 配置，但不把内嵌密钥当作信任锚。</para></summary>
 internal static class AvbMetadataReader
 {
     private const ulong MaximumMetadataSize = 16 * 1024 * 1024;

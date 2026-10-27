@@ -209,10 +209,10 @@ public sealed class F2fsParser : IDisposable
         return output.ToArray();
     }
 
-    /// <summary>The parsed superblock used for metadata inspection.</summary>
+    /// <summary>The parsed superblock used for metadata inspection. <para>用于元数据检视的已解析超级块。</para></summary>
     internal F2fsSuperblock Superblock => _superblock;
 
-    /// <summary>The active checkpoint selected by the parser.</summary>
+    /// <summary>The active checkpoint selected by the parser. <para>解析器选定的当前活动检查点。</para></summary>
     internal F2fsCheckpoint Checkpoint => _checkpoint;
 
     /// <summary>
@@ -386,7 +386,7 @@ public sealed class F2fsParser : IDisposable
         return [new F2fsFileEntry(".", (long)root.Size, _superblock.RootIno, F2fsEntryKind.Directory, Uid: root.Uid, Gid: root.Gid, Mode: root.Mode, Xattrs: ReadXattrs(_superblock.RootIno, root), Flags: root.Flags) { Metadata = root.Metadata }, .. entries];
     }
 
-    /// <summary>Reads the compression algorithms actually referenced by compressed file inodes.</summary>
+    /// <summary>Reads the compression algorithms actually referenced by compressed file inodes. <para>读取压缩文件 inode 实际引用的压缩算法。</para></summary>
     internal IReadOnlySet<CompressionAlgorithm> ReadCompressionAlgorithms()
     {
         var algorithms = new HashSet<CompressionAlgorithm>();

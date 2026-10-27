@@ -44,8 +44,8 @@ public static class BootImageDetector
 
         /// <summary>
         /// Samsung boot image carrying the ANDROID! magic whose offset-40 little-endian word is
-        /// greater than 4; probed before the plain AOSP check.
-        /// <para>带 ANDROID! 魔数且偏移 40 处小端字大于 4 的三星镜像；探测先于普通 AOSP 判定。</para>
+        /// greater than 4; probed before the plain Android boot header check.
+        /// <para>带 ANDROID! 魔数且偏移 40 处小端字大于 4 的三星镜像；探测先于普通 Android boot 头判定。</para>
         /// </summary>
         SamsungPxa = 4,
 
@@ -117,10 +117,10 @@ public static class BootImageDetector
 
         /// <summary>
         /// Annotations recorded during detection: a <c>type</c> key for every outcome, plus a
-        /// <c>version</c> key for vendor boot images of more than 8 bytes and for AOSP images of at
+        /// <c>version</c> key for vendor boot images of more than 8 bytes and for Android boot images of at
         /// least 44 bytes.
         /// <para>检测期间记录的注释：所有结果均含 <c>type</c> 键；超过 8 字节的 vendor boot 以及
-        /// 不少于 44 字节的 AOSP 镜像还含 <c>version</c> 键。</para>
+        /// 不少于 44 字节的 Android boot 镜像还含 <c>version</c> 键。</para>
         /// </summary>
         /// <value>The detection annotations; empty before any probe runs. <para>检测注释；未探测时为空。</para></value>
         public Dictionary<string, string> Metadata { get; set; } = [];
@@ -165,39 +165,39 @@ public static class BootImageDetector
         public byte[] Ramdisk { get; set; } = [];
 
         /// <summary>
-        /// AOSP secondary section carried by AOSP, MTK, Samsung and DHTB images; empty otherwise.
-        /// <para>AOSP、MTK、三星与 DHTB 镜像携带的 secondary 段；其余格式为空数组。</para>
+        /// Secondary section carried by Android boot, MTK, Samsung and DHTB images; empty otherwise.
+        /// <para>Android boot、MTK、三星与 DHTB 镜像携带的 secondary 段；其余格式为空数组。</para>
         /// </summary>
         /// <value>The secondary bytes, possibly empty. <para>secondary 段字节，可能为空。</para></value>
         public byte[] Second { get; set; } = [];
 
         /// <summary>
-        /// Device tree blob extracted from AOSP, vendor boot, MTK and Samsung images; empty
+        /// Device tree blob extracted from Android boot, vendor boot, MTK and Samsung images; empty
         /// otherwise.
-        /// <para>从 AOSP、vendor boot、MTK、三星镜像提取的设备树 blob；其余格式为空数组。</para>
+        /// <para>从 Android boot、vendor boot、MTK、三星镜像提取的设备树 blob；其余格式为空数组。</para>
         /// </summary>
         /// <value>The DTB bytes, possibly empty. <para>DTB 字节，可能为空。</para></value>
         public byte[] Dtb { get; set; } = [];
 
         /// <summary>
-        /// Parsed boot image header; only AOSP parsing populates it, so it stays null for every
+        /// Parsed boot image header; only Android boot header parsing populates it, so it stays null for every
         /// other format.
-        /// <para>已解析的 boot 镜像头部；仅 AOSP 解析会填充，其余格式保持 null。</para>
+        /// <para>已解析的 boot 镜像头部；仅 Android boot 头解析会填充，其余格式保持 null。</para>
         /// </summary>
         /// <value>The header, or null. <para>头部，或 null。</para></value>
         public BootImageHeader? Header { get; set; }
 
         /// <summary>
-        /// Kernel command line copied from the AOSP header; empty string for other formats.
-        /// <para>复制自 AOSP 头部的内核命令行；其余格式为空字符串。</para>
+        /// Kernel command line copied from the Android boot header; empty string for other formats.
+        /// <para>复制自 Android boot 头部的内核命令行；其余格式为空字符串。</para>
         /// </summary>
         /// <value>The command line text. <para>命令行文本。</para></value>
         public string CommandLine { get; set; } = string.Empty;
 
         /// <summary>
-        /// Kernel compression reported by AOSP, Tegra and zImage parsing; other formats keep the
+        /// Kernel compression reported by Android boot, Tegra and zImage parsing; other formats keep the
         /// default value.
-        /// <para>AOSP、Tegra、zImage 解析上报的内核压缩方式；其余格式保持默认值。</para>
+        /// <para>Android boot、Tegra、zImage 解析上报的内核压缩方式；其余格式保持默认值。</para>
         /// </summary>
         /// <value>The inferred kernel compression. <para>推断出的内核压缩方式。</para></value>
         public CompressionType KernelCompression { get; set; }
@@ -361,8 +361,8 @@ public static class BootImageDetector
     /// <summary>Unified parsing of boot image.<para>统一解析 boot 镜像。</para></summary>
     /// <param name="data">Candidate image bytes; the format dispatch follows <see cref="Detect"/>.
     /// <para>待解析的镜像字节；格式分发依据 <see cref="Detect"/>。</para></param>
-    /// <returns>Result carrying the detected format. AOSP, vendor boot, MTK, Samsung, DHTB, Tegra and zImage sections are filled when parsing succeeds; Unknown, ChromeOS and Payload report success with empty sections, and a parse failure leaves <see cref="UnifiedResult.Success"/> false with the exception message in <see cref="UnifiedResult.ErrorMessage"/>.
-    /// <para>返回携带检测格式的结果。解析成功时填充 AOSP、vendor boot、MTK、三星、DHTB、Tegra 与 zImage 各段；Unknown、ChromeOS、Payload 视为成功但各段为空；解析失败时 <see cref="UnifiedResult.Success"/> 为 false，异常消息写入 <see cref="UnifiedResult.ErrorMessage"/>。</para></returns>
+    /// <returns>Result carrying the detected format. Android boot, vendor boot, MTK, Samsung, DHTB, Tegra and zImage sections are filled when parsing succeeds; Unknown, ChromeOS and Payload report success with empty sections, and a parse failure leaves <see cref="UnifiedResult.Success"/> false with the exception message in <see cref="UnifiedResult.ErrorMessage"/>.
+    /// <para>返回携带检测格式的结果。解析成功时填充 Android boot、vendor boot、MTK、三星、DHTB、Tegra 与 zImage 各段；Unknown、ChromeOS、Payload 视为成功但各段为空；解析失败时 <see cref="UnifiedResult.Success"/> 为 false，异常消息写入 <see cref="UnifiedResult.ErrorMessage"/>。</para></returns>
     /// <example>
     /// <code>
     /// var result = BootImageDetector.Parse(File.ReadAllBytes("boot.img"));

@@ -1,6 +1,7 @@
 namespace UotanStudio.Firmware.FileSystem.Rebuilding;
 
-/// <summary>Bounds the image address space while allowing builders to rewrite earlier blocks.</summary>
+/// <summary>Bounds the image address space while allowing builders to rewrite earlier blocks.
+/// <para>在允许构建器改写更早块的同时限定镜像地址空间。</para></summary>
 internal sealed class CapacityWriteStream : Stream
 {
     private readonly Stream _output;

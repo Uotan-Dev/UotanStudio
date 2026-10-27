@@ -30,11 +30,10 @@ public enum ErofsFeature : uint
     DeviceTable = 1 << 4,
     /// <summary>Incompat 0x00000008; the second compressed-inode head format shares this bit with the device
     /// table. The writer emits HEAD2 index rows for it when the source inode named a secondary algorithm through
-    /// <c>h_algorithmtype</c>; erofs-utils keeps no setter for this face and pins the HEAD2 algorithm nibble to
-    /// zero, so a build that declares the bit without extra-device slots and without any HEAD2 row cannot honour
-    /// it.<para>incompat 0x00000008：第二种压缩 inode 头部格式与设备表共用该位。当源 inode 经
-    /// <c>h_algorithmtype</c> 指名了第二算法时，写入方为该面发出 HEAD2 索引行；erofs-utils 未为该面提供置位
-    /// 接口，并把 HEAD2 算法半字节固定为零，因此既无额外设备槽又没有任何 HEAD2 行的构建无法兑现该位。</para></summary>
+    /// <c>h_algorithmtype</c>; it pins the HEAD2 algorithm nibble to zero, so a build that declares the bit
+    /// without extra-device slots and without any HEAD2 row cannot honour it.<para>incompat 0x00000008：第二种压缩 inode 头部格式与设备表共用该位。当源 inode 经
+    /// <c>h_algorithmtype</c> 指名了第二算法时，写入方为该面发出 HEAD2 索引行；写入方把 HEAD2 算法半字节固定为零，
+    /// 因此既无额外设备槽又没有任何 HEAD2 行的构建无法兑现该位。</para></summary>
     CompressionHead2 = 1 << 5,
     /// <summary>Incompat 0x00000010; the final compressed cluster is stored inline with its indexes. Linux 5.17
     /// and later.<para>incompat 0x00000010：最后一个压缩簇与索引同块内联存放。Linux 5.17 及以后。</para></summary>
@@ -76,8 +75,8 @@ public enum ErofsFeature : uint
 }
 
 /// <summary>
-/// Reports whether the managed writer can produce the on-disk structures a feature stands for. Every name in the upstream table is emittable; a contextual name is one whose bit is honoured only when the layout carries the structures behind it.
-/// <para>报告托管写入器能否产出某特性所代表的磁盘结构。上游表中每个名称都可写出；上下文名称指仅在布局具备相应结构时才生效的位。</para>
+/// Reports whether the managed writer can produce the on-disk structures a feature stands for. Every name in the feature table is emittable; a contextual name is one whose bit is honoured only when the layout carries the structures behind it.
+/// <para>报告托管写入器能否产出某特性所代表的磁盘结构。特性表中每个名称都可写出；上下文名称指仅在布局具备相应结构时才生效的位。</para>
 /// </summary>
 public enum ErofsFeatureCapability
 {
@@ -175,11 +174,11 @@ public readonly record struct ErofsFeatureSet(bool IsAuto, uint CompatBits, uint
     /// <summary>Major component of the oldest Linux release that can mount every declared incompat
     /// feature.<para>可挂载全部已声明 incompat 特性的最老 Linux 主版本号。</para></summary>
     /// <value>Zero when no incompat feature is declared or the declaration is derived; otherwise the
-    /// highest upstream kernel version among the declared incompat bits. A declaration carries no
-    /// <c>s_available_compr_algs</c> word, so the per-algorithm floors erofs-utils adds from it are outside
+    /// highest kernel floor among the declared incompat bits. A declaration carries no
+    /// <c>s_available_compr_algs</c> word, so the per-algorithm floors that word adds are outside
     /// this value; a decoded superblock reports those floors together with its feature words.
-    /// <para>未声明 incompat 特性或声明为推导时为零；否则为已声明 incompat 位中最高的上游内核版本。声明不携带
-    /// <c>s_available_compr_algs</c> 字，因此 erofs-utils 依据该字追加的逐算法下限不在本值之内；解码出的超级块会
+    /// <para>未声明 incompat 特性或声明为推导时为零；否则为已声明 incompat 位中最高的内核下限。声明不携带
+    /// <c>s_available_compr_algs</c> 字，因此依据该字追加的逐算法下限不在本值之内；解码出的超级块会
     /// 把这些下限与特性字一并报告。</para></value>
     public int MinimumKernelMajor => ErofsFeatureTable.MinimumKernelMajor(CompatBits, IncompatBits);
 
@@ -190,10 +189,10 @@ public readonly record struct ErofsFeatureSet(bool IsAuto, uint CompatBits, uint
     /// <para>未声明 incompat 特性或声明为推导时为零；否则为与 <see cref="MinimumKernelMajor"/> 配对的次版本。</para></value>
     public int MinimumKernelMinor => ErofsFeatureTable.MinimumKernelMinor(CompatBits, IncompatBits);
 
-    /// <summary>Formats the declared words as the upstream feature names the parser reports.
-    /// <para>把声明字格式化成解析器使用的上游特性名。</para></summary>
-    /// <returns>Comma-joined upstream names, or <c>"auto"</c> while the declaration is
-    /// derived.<para>以上游名以逗号连接；推导式声明时返回 <c>"auto"</c>。</para></returns>
+    /// <summary>Formats the declared words as the feature names the parser reports.
+    /// <para>把声明字格式化成解析器使用的特性名。</para></summary>
+    /// <returns>Comma-joined feature names, or <c>"auto"</c> while the declaration is
+    /// derived.<para>以特性名用逗号连接；推导式声明时返回 <c>"auto"</c>。</para></returns>
     public override string ToString()
         => IsAuto ? "auto" : ErofsFeatureTable.Describe(CompatBits, IncompatBits);
 }

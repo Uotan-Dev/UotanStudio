@@ -118,6 +118,9 @@ internal static class FileExtraction
     /// is itself a symbolic link, is skipped so the search continues upwards for a real directory; <see cref="RejectLinks"/>
     /// still inspects every skipped link while walking down to the target, so a link planted inside an extraction root
     /// is rejected while an operating-system link above that root is not.
+    /// <para>返回已存在且确为真实目录的最深祖先目录。不存在或本身是符号链接的路径分量会被跳过，以便继续向上寻找真实目录；
+    /// <see cref="RejectLinks"/> 仍会在向下走向目标的途中检查每个被跳过的链接，因此植入解包根内部的链接会被拒绝，
+    /// 而该根之上的操作系统链接不会被拒绝。</para>
     /// </summary>
     private static string DeepestExistingAncestor(string target)
     {

@@ -448,9 +448,9 @@ public class BootImageParser : IDisposable
     /// <para>镜像总长度（字节）。</para></param>
     /// <returns>The largest candidate in {16384, 8192, 4096, 2048} whose fully page-aligned layout equals the image
     /// length; failing that, the largest candidate whose layout fits within and divides the image length exactly;
-    /// otherwise the historical default <c>4096</c>.
+    /// otherwise the default <c>4096</c>.
     /// <para>返回页对齐总长恰好等于镜像长度的最大候选（集合 {16384, 8192, 4096, 2048}）；否则返回布局可容纳且能整除
-    /// 镜像长度的最大候选；再否则返回历史默认值 <c>4096</c>。</para></returns>
+    /// 镜像长度的最大候选；再否则返回默认值 <c>4096</c>。</para></returns>
     internal static uint DetectV3V4PageSize(uint headerSize, uint kernelSize, uint ramdiskSize, uint signatureSize, long imageLength)
     {
         foreach (var candidate in V3V4PageSizeCandidates)
