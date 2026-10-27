@@ -33,10 +33,11 @@
 - `UotanStudio.Firmware/VendorFirmware/HarmonyOS/` 新增只读格式处理器 `HarmonyOS update.bin`，按 L1/L2 组件表（71/87 字节记录、16/32 字节名称字段）、16 字节保留区与 `0x06`/`0x08` 元数据 TLV 解析；`FirmwareFormatRegistry` 在 `UpdateApp` 之前注册，`.bin` 必须先通过布局字（`0x01`/`0x11`）与组件表边界探测。
 - 定向测试：`UotanStudio.Tests.Firmware.HarmonyUpdateBinTests` 23/23（L2/L1、`board_list→BOARD.list`、type 0/1 输出名、SHA-256 校验与失败回滚、筛选、预算、覆盖、取消、截断、非法名称、重复名、未知 TLV、metadata-only）。
 - 镜像文件管理：`ImageInputService` 新增 `ImageFormatKind.UpdateBin`，标签为 `update.bin`（`ParseFormatLabel` 可回读）；`ProbeFormat` 经已注册的 `HarmonyOS update.bin` 处理器识别，`ImageViewModel` 的解包模式扫描也登记该类型，导入/刷新/工程恢复后不再显示 `unknown`。`ImageInputServiceTests` 75/75（含 `DetectFormat_HarmonyUpdateBin_ReturnsUpdateBin` 与标签往返）；DataGrid 直接绑定该字符串，本轮未启动 GUI 目视渲染。
+- 创建解决方案/子项目：`ContainerKind.UpdateBin` 接入 `ContainerStructureAnalyzer`（列出组件名、扩展名与大小），`ContainerEntryExtractor` 经处理器的 `UnpackComponentsAsync` 定向解出组件且不写 `metadata.json`；`NewProjectWindow` 的勾选分流把 update.bin 组件送入分区列表（ZIP 成员仍只属于 ZIP），`MenuViewModel` 的容器导入、选择性提取与完全解包复用既有路径。真实样例经临时工装：完整选择解出 4 个组件，SHA-256 与组件表一致；只选 `package_info`/`version` 时仅解出 `package_info.img`/`version.img`。`ContainerStructureTests` 23/23、`NewProjectSelectionTests` 3/3；新建对话框的渲染与文件选择器未启动 GUI 目视。
 - 全 Firmware 命名空间：4357 总数 / 4355 通过 / 2 跳过（未设 `UOTAN_EROFS_CORPUS`）/ 0 失败，单轮 32s。
 - 真实样例：`D:\Download\update_full_cust_HAD-W24_all_cn.zip`（SHA-256 `e1f28c16e77cfb05d73ab9c91dc0395f3f532b2e6daa2e071dcbc791ee197aed`）中的 `update.bin`（35,778 B，SHA-256 `264d8bf27b82f8f6bfabf7d3341a2c050644d1e8e30f4e741d554a23264ba14a`）经临时控制台工装解析：布局 L2、4 个组件、数据偏移 2,851、载荷 32,927 B、元数据 TLV `0x08`；`VerifyChecksums=true` 解出 `package_info.img`（121 B）、`BOARD.list`（20 B）、`ptable.img`（18 B）、`version.img`（32,768 B），四个输出 SHA-256 与组件表记录逐一相同；同时发布 `metadata.json`，`canPackDirectory=false`。样例未加入测试集、`TestData/` 或仓库。
-- NativeAOT：同轮 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained -p:PublishAot=true` 成功，产物 `UotanStudio.Desktop.exe` 155,762,176 B；只报告第三方既有的 IL2026/IL2104/IL3053 警告，没有指向新增固件代码的裁剪/AOT 警告。
-- 全量（2026-10-27）：7599 总数 / 7593 通过 / 6 跳过 / 0 失败，单轮 2m41s（`dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug --minimum-expected-tests 6000`，共享工作树）。
+- NativeAOT：同轮 `dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功，产物 `UotanStudio.Desktop.exe` 156,822,528 B；只报告第三方既有的 IL2026/IL2104/IL3053 警告，没有指向新增固件或宿主代码的裁剪/AOT 警告。
+- 全量（2026-10-27）：7692 总数 / 7684 通过 / 8 跳过 / 0 失败，单轮 1m42s（`dotnet test --project UotanStudio.Tests/UotanStudio.Tests.csproj --no-build -c Debug --minimum-expected-tests 6000`，共享工作树）。
 
 ## 酷派 CPB 解包实测（2026-10-27，Windows x64，Debug）
 
