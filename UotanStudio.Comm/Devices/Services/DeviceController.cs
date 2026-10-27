@@ -5,6 +5,7 @@ using UotanStudio.Comm.Devices.Services.Sessions;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Routing;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Hash.Fnv1a;
 
 namespace UotanStudio.Comm.Devices.Services;
 
@@ -593,19 +594,9 @@ public sealed partial class DeviceController : IDisposable, IAsyncDisposable
     /// </summary>
     private static ulong MixModeItem(string key, string protocol)
     {
-        var hash = 14695981039346656037UL;
-        foreach (var ch in key)
-        {
-            hash = unchecked((hash ^ ch) * 1099511628211UL);
-        }
-
-        hash = unchecked((hash ^ 0x1FUL) * 1099511628211UL);
-        foreach (var ch in protocol)
-        {
-            hash = unchecked((hash ^ ch) * 1099511628211UL);
-        }
-
-        return hash;
+        var hash = Fnv1a64.Compute(key.AsSpan());
+        hash = Fnv1a64.Mix(hash, 0x1F);
+        return Fnv1a64.Compute(protocol.AsSpan(), hash);
     }
 
     /// <summary>
