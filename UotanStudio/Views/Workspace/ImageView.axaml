@@ -133,6 +133,11 @@
                                             <avalonia:ImageAdd Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
+                                    <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeFat}" Click="OnSynthesizeFatMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:HardDiskStorage Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
                                     <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeBr}" Click="OnSynthesizeBrMenuClick">
                                         <MenuItem.Icon>
                                             <avalonia:FileZip Width="16" Height="16" />
@@ -270,6 +275,17 @@
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
                                     <avalonia:ImageAdd Grid.Column="0" Width="14" Height="14" />
                                     <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeImg}"
+                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Grid>
+                            </Button>
+                            <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                    Command="{Binding SynthesizeFatCommand}"
+                                    ToolTip.Tip="{DynamicResource ImageView_SynthesizeFatHint}">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                    <avalonia:HardDiskStorage Grid.Column="0" Width="14" Height="14" />
+                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeFat}"
                                                FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Grid>

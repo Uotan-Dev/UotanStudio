@@ -1,4 +1,6 @@
 using UotanStudio.Firmware.Core;
+using UotanStudio.Firmware.Core.Repacking;
+using UotanStudio.Firmware.FileSystem.Rebuilding;
 
 namespace UotanStudio.Firmware.FileSystem.Fat;
 
@@ -11,7 +13,7 @@ namespace UotanStudio.Firmware.FileSystem.Fat;
 /// 目录树。解包容忍厂商卷的声明容量大于实际文件长度：仍发布覆盖到的条目并报告不可读的尾部，而不是让整张镜像
 /// 失败。</para>
 /// </summary>
-internal sealed class FatFormatHandler : IReadonlyFormatHandler
+internal sealed class FatFormatHandler : IWritableFormatHandler, IRepackMetadataProvider
 {
     /// <summary>Name of the format this handler serves.
     /// <para>本处理器所服务格式的名称。</para></summary>
@@ -118,6 +120,164 @@ internal sealed class FatFormatHandler : IReadonlyFormatHandler
                 return FirmwareOpResult.Fail($"Failed to unpack {FormatName} image '{filePath}': {ex.Message}");
             }
         }, cancellationToken);
+
+    /// <summary>Packs a directory into a FAT12/FAT16/FAT32 volume image.
+    /// <para>把目录打包为 FAT12/FAT16/FAT32 卷镜像。</para></summary>
+    /// <param name="inputPath">Directory whose contents become the volume. Packing options recorded beside the
+    /// directory (from an earlier extraction of the same volume) reproduce its variant, sector geometry, reserved
+    /// sectors, root-directory slots and declared capacity; without them a fresh volume is planned from the content.
+    /// <para>内容将构成该卷的目录。目录旁记录的打包选项（来自同一卷早前的解包）会复现其变体、扇区几何、保留扇区、
+    /// 根目录槽位与声明容量；没有这些选项时按内容全新规划卷。</para></param>
+    /// <param name="outputPath">Destination image path; the parent directory is created and an existing file is
+    /// replaced only after the image has been written successfully.
+    /// <para>目标镜像路径；自动创建父目录，仅在镜像成功写出后才替换已存在的文件。</para></param>
+    /// <param name="cancellationToken">Cancels planning and writing.
+    /// <para>取消规划与写入。</para></param>
+    /// <returns>An <c>Ok</c> result with the written geometry, or a <c>Fail</c> result when the input is not a
+    /// directory or the options cannot be represented by the variant.
+    /// <para>成功时返回携带已写出几何的 <c>Ok</c> 结果；输入不是目录或选项无法被该变体表示时返回 <c>Fail</c> 结果。</para></returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was signaled.
+    /// <para><paramref name="cancellationToken"/> 已被触发。</para></exception>
+    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+        => PackCore(inputPath, outputPath, null, cancellationToken);
+
+    Task<FirmwareOpResult> IWritableFormatHandler.PackAsync(string inputPath, string outputPath,
+        IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken)
+        => PackCore(inputPath, outputPath, progress, cancellationToken);
+
+    private Task<FirmwareOpResult> PackCore(string inputPath, string outputPath,
+        IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken)
+        => Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                if (!Directory.Exists(inputPath))
+                {
+                    return FirmwareOpResult.Fail($"Input path is not a directory: '{inputPath}'.");
+                }
+
+                var options = FileSystemPackingOptions.OptionsFor(inputPath, FormatName);
+                var report = FatBuilder.Build(inputPath, outputPath, BuildOptions(options), progress, cancellationToken);
+                var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["Format"] = report.Variant,
+                    ["VolumeSize"] = report.VolumeBytes.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["BytesPerSector"] = report.BytesPerSector.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["SectorsPerCluster"] = report.SectorsPerCluster.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["TotalClusters"] = report.TotalClusters.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["EntryCount"] = report.EntryCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["FileCount"] = report.FileCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["TotalDataBytes"] = report.DataBytes.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                };
+                return FirmwareOpResult.Ok(
+                    $"Packed '{inputPath}' into '{outputPath}' ({report.Variant}, {metadata["VolumeSize"]} bytes).",
+                    metadata: metadata);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return FirmwareOpResult.Fail($"Failed to pack '{inputPath}' into a FAT volume: {ex.Message}");
+            }
+        }, cancellationToken);
+
+    /// <summary>
+    /// Records the geometry of the source volume so a later directory pack reproduces it instead of planning a new
+    /// layout. FAT carries no POSIX ownership, permissions or extended attributes, so no preservation payload is
+    /// captured; the packing notes state that the attributes come from the extracted host tree.
+    /// <para>记录源卷的几何，使后续按目录打包时复现它而不是重新规划布局。FAT 不承载 POSIX 属主、权限或扩展属性，
+    /// 因此不采集保留负载；打包说明指出属性来自解包后的宿主目录树。</para>
+    /// </summary>
+    /// <param name="metadata">Metadata instance being assembled. <para>正在组装的元数据实例。</para></param>
+    /// <param name="sourcePath">Source volume image whose geometry is read.
+    /// <para>其几何被读取的源卷镜像。</para></param>
+    /// <param name="outputDirectory">Extraction directory; only recorded for diagnostics.
+    /// <para>解包目录；仅用于诊断记录。</para></param>
+    void IRepackMetadataProvider.ConfigureRepackMetadata(RepackMetadata metadata, string sourcePath, string outputDirectory)
+    {
+        metadata.CanPackDirectory = true;
+        metadata.PackingNotes = " FAT rebuilds inherit the recorded variant, sector geometry, reserved sectors, root-directory slots and declared capacity; both allocation tables are regenerated and file timestamps come from the extracted host tree. FAT has no POSIX ownership, permission or extended-attribute channel.";
+        try
+        {
+            using var parser = new FatParser(sourcePath);
+            var culture = System.Globalization.CultureInfo.InvariantCulture;
+            metadata.PackingOptions["FatVariant"] = parser.Variant.ToLowerInvariant();
+            metadata.PackingOptions["BytesPerSector"] = parser.BytesPerSector.ToString(culture);
+            metadata.PackingOptions["SectorsPerCluster"] = parser.SectorsPerCluster.ToString(culture);
+            metadata.PackingOptions["ReservedSectors"] = parser.ReservedSectorCount.ToString(culture);
+            metadata.PackingOptions["RootDirectoryEntries"] = parser.MaxRootDirectoryEntries.ToString(culture);
+            metadata.PackingOptions["VolumeName"] = parser.VolumeLabel;
+            metadata.PackingOptions["TotalBytes"] = parser.DeclaredVolumeBytes.ToString(culture);
+            if (parser.FatCount != 2)
+            {
+                metadata.PackingNotes += $" The source stores {parser.FatCount} allocation table(s); the rebuild always writes two mirror copies.";
+            }
+
+            if (parser.DeclaredVolumeBytes != parser.ImageBytes)
+            {
+                metadata.PackingNotes += " The source declares a capacity that differs from its image length: " + FatVolumeTree.CapacityText(parser.DeclaredVolumeBytes, parser.ImageBytes) + ".";
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or FileSystemException or UnauthorizedAccessException)
+        {
+            metadata.PackingNotes += $" The source volume geometry could not be recorded ({ex.Message}); the rebuild plans a fresh layout from the extracted content.";
+        }
+    }
+
+    private static FatBuildOptions BuildOptions(IReadOnlyDictionary<string, string> options)
+    {
+        var mediaDescriptor = FileSystemPackingOptions.IntegerOption(options, "MediaDescriptor", 0xF8);
+        if (mediaDescriptor is < 0 or > 255)
+        {
+            throw new InvalidDataException($"Unsupported FAT media descriptor value {mediaDescriptor}; expected 0 through 255.");
+        }
+
+        long? totalBytes = null;
+        if (options.TryGetValue("TotalBytes", out var total))
+        {
+            if (!long.TryParse(total, System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+            {
+                throw new InvalidDataException($"Unsupported FAT TotalBytes value '{total}'; expected an integer byte count.");
+            }
+
+            totalBytes = parsed;
+        }
+
+        return new FatBuildOptions
+        {
+            Variant = ParseVariant(options),
+            BytesPerSector = FileSystemPackingOptions.IntegerOption(options, "BytesPerSector", 512),
+            SectorsPerCluster = FileSystemPackingOptions.IntegerOption(options, "SectorsPerCluster", 0),
+            ReservedSectors = FileSystemPackingOptions.IntegerOption(options, "ReservedSectors", 0),
+            RootDirectoryEntries = FileSystemPackingOptions.IntegerOption(options, "RootDirectoryEntries", 0),
+            VolumeLabel = options.TryGetValue("VolumeName", out var label) ? label : string.Empty,
+            HiddenSectors = FileSystemPackingOptions.IntegerOption(options, "HiddenSectors", 0),
+            MediaDescriptor = (byte)mediaDescriptor,
+            TotalBytes = totalBytes,
+        };
+    }
+
+    private static FatVariant ParseVariant(IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("FatVariant", out var value) || string.IsNullOrWhiteSpace(value)
+            || value.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            return FatVariant.Auto;
+        }
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "fat12" or "12" => FatVariant.Fat12,
+            "fat16" or "16" => FatVariant.Fat16,
+            "fat32" or "32" => FatVariant.Fat32,
+            _ => throw new InvalidDataException(
+                $"Unsupported FAT variant '{value}'; expected auto, fat12, fat16 or fat32."),
+        };
+    }
 
     private static Dictionary<string, string> Metadata(FatParser parser, IReadOnlyList<FatVolumeEntry> entries)
     {

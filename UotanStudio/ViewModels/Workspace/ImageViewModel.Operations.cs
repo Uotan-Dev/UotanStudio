@@ -40,6 +40,17 @@ internal partial class ImageViewModel
     private Task SynthesizeImgAsync(ImageEntryViewModel? image = null) => RunImagesAsync("img", image);
 
     /// <summary>
+    /// Builds a FAT12/FAT16/FAT32 image from the selected directory, reproducing recorded geometry when the
+    /// directory was extracted from a FAT volume.
+    /// <para>从所选目录构建 FAT12/FAT16/FAT32 镜像；目录由 FAT 卷解包而来时复现其记录的几何。</para>
+    /// </summary>
+    /// <param name="image">Directory entry to pack; <see langword="null"/> packs the checked entries.
+    /// <para>待打包的目录条目；为 <see langword="null"/> 时打包已勾选条目。</para></param>
+    /// <returns>A task completed when the pack finishes. <para>打包完成后结束的任务。</para></returns>
+    [RelayCommand]
+    private Task SynthesizeFatAsync(ImageEntryViewModel? image = null) => RunImagesAsync("fat", image);
+
+    /// <summary>
     /// Builds Brotli-compressed DAT output.
     /// <para>构建 Brotli 压缩的 DAT 输出。</para>
     /// </summary>
@@ -153,7 +164,7 @@ internal partial class ImageViewModel
                         {
                             var kind = operation switch
                             {
-                                "img" => HistoryOperationKind.SynthesizeImg,
+                                "img" or "fat" => HistoryOperationKind.SynthesizeImg,
                                 "br" => HistoryOperationKind.SynthesizeBr,
                                 _ => HistoryOperationKind.SynthesizeDat
                             };

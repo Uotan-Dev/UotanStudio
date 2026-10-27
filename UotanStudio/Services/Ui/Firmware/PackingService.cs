@@ -29,12 +29,21 @@ internal static class PackingService
     /// <param name="outputPath">Path of the image to write. <para>待写出镜像的路径。</para></param>
     /// <param name="settings">Packing settings, null to fall back to the shared instance. <para>打包设置，为 null 时回退到共享实例。</para></param>
     /// <param name="progress">Optional byte-progress reporter, null when progress is not tracked. <para>可选的字节进度回调，不跟踪进度时为 null。</para></param>
+    /// <param name="forcedFormat">Registered writable format to pack regardless of recorded metadata, such as
+    /// <c>FAT</c>; <see langword="null"/> keeps the metadata/settings dispatch.
+    /// <para>无论记录的元数据如何都强制使用的已注册可写格式（例如 <c>FAT</c>）；为 <see langword="null"/> 时沿用
+    /// 元数据/设置分派。</para></param>
+    /// <param name="packingOverrides">Option overrides merged over the recorded packing options for an explicit
+    /// format; <see langword="null"/> applies none. <para>显式格式下合并到记录打包选项之上的选项覆盖；为
+    /// <see langword="null"/> 时不追加。</para></param>
     /// <returns>The build result, carrying a failure summary when packing is refused. <para>构建结果，打包被拒绝时携带失败摘要。</para></returns>
     public static FirmwareOperationResult BuildImage(
         string sourceDirectory,
         string outputPath,
         ProjectSettingViewModel? settings = null,
-        IProgress<FileSystemByteProgress>? progress = null)
+        IProgress<FileSystemByteProgress>? progress = null,
+        string? forcedFormat = null,
+        IReadOnlyDictionary<string, string>? packingOverrides = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -45,6 +54,24 @@ internal static class PackingService
                 ProjectContextService.Instance.CaptureMetadataContext(sourceDirectory));
             var metadata = RepackMetadata.Read(sourceDirectory);
             var imageProgress = FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
+            if (forcedFormat is not null)
+            {
+                var estimated = EstimateSourceBytes(sourceDirectory);
+                imageProgress.Report((0, estimated));
+                using var explicitOverrides = packingOverrides is null
+                    ? null
+                    : RepackMetadata.UsePackingOverrides(packingOverrides);
+                var explicitResult = RegisteredFirmwareFormats
+                    .PackDirectoryAsync(forcedFormat, sourceDirectory, outputPath, progress: progress)
+                    .GetAwaiter().GetResult();
+                if (forcedFormat is not ("EXT4" or "EROFS" or "F2FS"))
+                {
+                    imageProgress.Report((estimated, estimated));
+                }
+
+                return explicitResult;
+            }
+
             if (metadata is not null)
             {
                 if (!metadata.CanPackDirectory) return FirmwareOperationResult.Fail(metadata.PackingNotes);

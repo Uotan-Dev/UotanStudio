@@ -15,11 +15,11 @@ internal static class ImageOutputService
     /// <para>列出打包操作在开始写入前会在其输出目录下写出的目标文件。</para>
     /// </summary>
     /// <param name="paths">Operation paths naming the output root and entry name. <para>指明输出根目录与条目名的操作路径。</para></param>
-    /// <param name="operation">Pack mode: img, dat or br. <para>打包方式：img、dat 或 br。</para></param>
+    /// <param name="operation">Pack mode: img, fat, dat or br. <para>打包方式：img、fat、dat 或 br。</para></param>
     /// <returns>The absolute paths that would be published, empty for other modes. <para>将被写出的绝对路径，其他方式为空。</para></returns>
     internal static IReadOnlyList<string> GetPlannedOutputs(ImageOperationPaths paths, string operation) => operation switch
     {
-        "img" => [Path.Combine(paths.OutputRoot, paths.Name + ".img")],
+        "img" or "fat" => [Path.Combine(paths.OutputRoot, paths.Name + ".img")],
         "br" => [Path.Combine(paths.OutputRoot, paths.Name + ".new.dat.br"), Path.Combine(paths.OutputRoot, paths.Name + ".transfer.list")],
         "dat" => [Path.Combine(paths.OutputRoot, paths.Name + ".new.dat"), Path.Combine(paths.OutputRoot, paths.Name + ".transfer.list")],
         _ => []
@@ -30,18 +30,21 @@ internal static class ImageOutputService
     /// <para>为单个条目在其预定路径下构建 img、dat 或 br 产物。</para>
     /// </summary>
     /// <param name="paths">Operation paths for the entry. <para>该条目的操作路径。</para></param>
-    /// <param name="operation">Output kind: img, dat or br. <para>产物种类：img、dat 或 br。</para></param>
+    /// <param name="operation">Output kind: img, fat, dat or br. <para>产物种类：img、fat、dat 或 br。</para></param>
     /// <param name="brotliLevel">Brotli compression level applied to the br output. <para>施加于 br 产物的 Brotli 压缩级别。</para></param>
     /// <param name="progress">Optional byte-progress reporter, null when progress is not tracked. <para>可选的字节进度回调，不跟踪进度时为 null。</para></param>
     /// <returns>The build outcome; the img path carries the packing result. <para>构建结果；img 路径附带打包服务的结果。</para></returns>
     internal static FirmwareOperationResult Build(ImageOperationPaths paths, string operation, int brotliLevel, IProgress<FileSystemByteProgress>? progress = null)
     {
-        if (operation is not ("img" or "dat" or "br")) throw new ArgumentOutOfRangeException(nameof(operation));
+        if (operation is not ("img" or "fat" or "dat" or "br")) throw new ArgumentOutOfRangeException(nameof(operation));
         Directory.CreateDirectory(paths.OutputRoot);
-        if (operation == "img")
+        if (operation is "img" or "fat")
         {
             if (!Directory.Exists(paths.UnpackedDirectory)) throw new DirectoryNotFoundException(paths.UnpackedDirectory);
-            return PackingService.BuildImage(paths.UnpackedDirectory, Path.Combine(paths.OutputRoot, paths.Name + ".img"), progress: progress);
+            var imagePath = Path.Combine(paths.OutputRoot, paths.Name + ".img");
+            return operation == "fat"
+                ? PackingService.BuildImage(paths.UnpackedDirectory, imagePath, progress: progress, forcedFormat: "FAT")
+                : PackingService.BuildImage(paths.UnpackedDirectory, imagePath, progress: progress);
         }
 
         var staging = Path.Combine(paths.OutputRoot, ".build-" + Guid.NewGuid().ToString("N"));

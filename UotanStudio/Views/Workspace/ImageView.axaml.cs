@@ -259,6 +259,11 @@ public partial class ImageView : UserControl
     private void OnSynthesizeImgMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuImage(sender, static vm => vm.SynthesizeImgCommand);
 
+    /// <summary>Synthesize a FAT12/FAT16/FAT32 image from the context-menu directory.
+    /// <para>从右键菜单选中的目录合成 FAT12/FAT16/FAT32 镜像。</para></summary>
+    private void OnSynthesizeFatMenuClick(object? sender, RoutedEventArgs e)
+        => ExecuteForMenuImage(sender, static vm => vm.SynthesizeFatCommand);
+
     /// <summary>Synthesize the context-menu image into a br. <para>合成右键菜单选中的镜像为 br。</para></summary>
     private void OnSynthesizeBrMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuImage(sender, static vm => vm.SynthesizeBrCommand);
