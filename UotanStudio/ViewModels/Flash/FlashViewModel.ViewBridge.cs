@@ -7,6 +7,8 @@ namespace UotanStudio.ViewModels.Flash;
 
 public sealed partial class FlashViewModel
 {
+    private readonly LocalizedOptionSet _rootFileSourceOptions = new("BootPatch_CustomFile", "BootPatch_NoFile");
+
     private Control? _surface;
 
     /// <summary>
@@ -29,17 +31,22 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Resolves one named control from the attached page.
-    /// <para>从已附加页面解析一个具名控件。</para>
+    /// Resolves one named control from the attached page, or returns a detached dummy control if not found.
+    /// <para>从已附加页面解析一个具名控件，未找到时返回分离的虚拟控件。</para>
     /// </summary>
     /// <typeparam name="T">The expected control type.<para>期望的控件类型。</para></typeparam>
     /// <param name="name">The XAML name.<para>XAML 名称。</para></param>
-    /// <returns>The resolved control.<para>解析到的控件。</para></returns>
-    private T Field<T>(string name) where T : Control => Surface.GetControl<T>(name);
+    /// <returns>The resolved control or a detached dummy.<para>解析到的控件或分离的虚拟控件。</para></returns>
+    private T Field<T>(string name) where T : Control, new() =>
+        Surface?.FindControl<T>(name) ?? new T();
 
     private void InitializeSurface()
     {
-        Field<CheckBox>("FlashExpertModeBox").IsChecked = SettingsPersistenceService.Instance.LoadSettings().FlashExpertMode;
+        Field<ComboBox>("RootFileSourceBox").ItemsSource = _rootFileSourceOptions.Options;
+        Field<ComboBox>("RootFileSourceBox").SelectedIndex = 0;
+        Field<CheckBox>("AddRootBox").IsCheckedChanged += (_, _) => UpdateRootControlsState();
+        UpdateRootControlsState();
+
         Field<ComboBox>("EdlSectorSizeBox").ItemsSource = _edlSectorSizeOptions.Options;
         Field<ComboBox>("EdlSectorSizeBox").SelectedIndex = 0;
         Field<ComboBox>("EdlSlotBox").ItemsSource = _edlSlotOptions.Options;
@@ -56,8 +63,6 @@ public sealed partial class FlashViewModel
         Field<ComboBox>("MtkLegacyCompletionBox").SelectedIndex = 0;
         Field<ComboBox>("MtkBaudBox").ItemsSource = new[] { 115200, 921600, 460800, 230400 };
         Field<ComboBox>("MtkBaudBox").SelectedIndex = 0;
-        Field<ComboBox>("EdlSerialBaudBox").ItemsSource = new[] { 115200, 921600, 460800, 230400 };
-        Field<ComboBox>("EdlSerialBaudBox").SelectedIndex = 0;
         Field<ComboBox>("EdlLunBox").ItemsSource = Enumerable.Range(0, 8).ToArray();
         Field<ComboBox>("EdlLunBox").SelectedIndex = 0;
         Field<ComboBox>("MtkRpmbModeBox").ItemsSource = _mtkRpmbModeOptions.Options;
@@ -83,6 +88,7 @@ public sealed partial class FlashViewModel
             _deviceViewModel.PropertyChanged += OnGlobalDeviceChanged;
         }
 
+        UpdateObservedDeviceInfo();
         UpdateEdlButton();
     }
 
@@ -98,6 +104,7 @@ public sealed partial class FlashViewModel
         }
 
         _deviceViewModel = null;
+        UpdateObservedDeviceInfo();
         FlushPendingLog();
     }
 }

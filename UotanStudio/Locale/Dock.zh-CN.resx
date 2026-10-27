@@ -1042,10 +1042,10 @@
     <value>确定要将设备重启到 {0} 吗？</value>
   </data>
   <data name="Device_FlashConfirmTitle" xml:space="preserve">
-    <value>确认刷写</value>
+    <value>确认刷入</value>
   </data>
   <data name="Device_FlashConfirmMessage" xml:space="preserve">
-    <value>刷写操作存在风险，可能导致设备变砖。是否继续？</value>
+    <value>刷入操作存在风险，可能导致设备变砖。是否继续？</value>
   </data>
   <data name="Device_ModeSystem" xml:space="preserve">
     <value>系统</value>

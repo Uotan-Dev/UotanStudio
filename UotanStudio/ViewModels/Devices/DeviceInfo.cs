@@ -189,6 +189,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 Device.State = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ListSubtitle));
+                OnPropertyChanged(nameof(IsFastbootd));
             }
         }
     }
@@ -342,6 +343,16 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// <para>Fastboot 徽章文本：K1/K3 gadget 显示 SoC 厂商 "SpacemiT"，其余显示通用模式名。</para>
     /// </summary>
     public string FastbootBadge => IsSpacemiTFastboot ? "SpacemiT" : "Fastboot";
+
+    /// <summary>
+    /// Whether the fastboot device is currently running in user-space fastboot (fastbootd).
+    /// <para>该 Fastboot 设备当前是否处于用户空间 fastboot（fastbootd）。</para>
+    /// </summary>
+    public bool IsFastbootd =>
+        IsFastboot &&
+        (string.Equals(IsUserspace, "fastbootd", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(IsUserspace, "yes", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(State, "fastbootd", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Whether rebooting into fastbootd is supported (ADB or Fastboot protocol).
@@ -788,7 +799,17 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     /// Whether fastboot is user-space (fastbootd).
     /// <para>fastboot 是否为 user-space（fastbootd）。</para>
     /// </summary>
-    public string IsUserspace { get; set => SetProperty(ref field, value); } = string.Empty;
+    public string IsUserspace
+    {
+        get => field;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(IsFastbootd));
+            }
+        }
+    } = string.Empty;
 
     /// <summary>
     /// Battery level percent (-1 = unavailable).

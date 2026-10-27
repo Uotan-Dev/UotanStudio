@@ -211,7 +211,7 @@
     <value>读取 Fastboot 设备信息</value>
   </data>
   <data name="Device_QuickFlash" xml:space="preserve">
-    <value>快速刷写 boot 分区</value>
+    <value>快速刷入 boot 分区</value>
   </data>
   <data name="Device_DetailPlaceholder" xml:space="preserve">
     <value>选择设备以查看详情</value>
@@ -412,10 +412,10 @@
     <value>资源使用</value>
   </data>
   <data name="Flash_Flash" xml:space="preserve">
-    <value>刷写</value>
+    <value>刷入</value>
   </data>
   <data name="Flash_FlashCard" xml:space="preserve">
-    <value>刷写分区</value>
+    <value>刷入分区</value>
   </data>
   <data name="Flash_PartitionHint" xml:space="preserve">
     <value>如 boot</value>
@@ -427,16 +427,16 @@
     <value>镜像文件路径</value>
   </data>
   <data name="Flash_Flashing" xml:space="preserve">
-    <value>正在刷写</value>
+    <value>正在刷入</value>
   </data>
   <data name="Flash_Done" xml:space="preserve">
-    <value>刷写完成</value>
+    <value>刷入完成</value>
   </data>
   <data name="Flash_Failed" xml:space="preserve">
-    <value>刷写失败</value>
+    <value>刷入失败</value>
   </data>
   <data name="Flash_Canceled" xml:space="preserve">
-    <value>刷写已取消</value>
+    <value>刷入已取消</value>
   </data>
   <data name="Device_IosInfo" xml:space="preserve">
     <value>iOS 设备信息</value>

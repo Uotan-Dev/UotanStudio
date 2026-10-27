@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
@@ -30,7 +31,7 @@ public partial class FlashView : UserControl
     /// <para>操作栏固定宽度：按「最宽的两个复选框同行」取值（复选框网格因此保持两列对齐），
     /// 窗口变窄时不再压缩它，只压缩日志和列表。</para>
     /// </summary>
-    private const double ActionPaneWidth = 292;
+    private const double ActionPaneWidth = 320;
     private const double MinimumLogWidth = 340;
     private const double MinimumListWidth = 360;
     /// <summary>
@@ -63,7 +64,7 @@ public partial class FlashView : UserControl
     /// a usable width.
     /// <para>刷机包一行放不下时的换行阈值：低于该宽度时按钮移到路径框下方，避免路径框被压成窄条。</para>
     /// </summary>
-    private const double MinimumPackageRowWidth = 430;
+    private const double MinimumPackageRowWidth = 630;
 
     private readonly FlashViewModel _model = new();
     private bool? _wide;
@@ -119,6 +120,9 @@ public partial class FlashView : UserControl
             Place(LogPane, row: 0, column: 0, rowSpan: 3);
             Place(PartitionPane, row: 2, column: 2);
             Place(ActionPane, row: 0, column: 4, rowSpan: 3);
+            LogOverallProgress.IsVisible = true;
+            PartitionOverallProgress.IsVisible = false;
+            LogBox.Margin = new Thickness(12, 0, 12, 8);
         }
         else
         {
@@ -150,6 +154,9 @@ public partial class FlashView : UserControl
             Place(PartitionPane, row: 2, column: 0);
             Place(ActionPane, row: 0, column: 2, rowSpan: 3);
             Place(LogPane, row: 4, column: 0, columnSpan: 3);
+            LogOverallProgress.IsVisible = false;
+            PartitionOverallProgress.IsVisible = true;
+            LogBox.Margin = new Thickness(12, 0, 12, 12);
         }
     }
 
@@ -241,6 +248,7 @@ public partial class FlashView : UserControl
     private void OnPackagePathLostFocus(object? sender, RoutedEventArgs e) => _model.OnPackagePathLostFocus(sender, e);
     private void OnChooseFileClick(object? sender, RoutedEventArgs e) => _model.OnChooseFileClick(sender, e);
     private void OnChooseFolderClick(object? sender, RoutedEventArgs e) => _model.OnChooseFolderClick(sender, e);
+    private void OnGetPackageClick(object? sender, RoutedEventArgs e) => _model.OnGetPackageClick(sender, e);
     private void OnClearLogClick(object? sender, RoutedEventArgs e) => _model.OnClearLogClick(sender, e);
     private void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e) => _model.OnChoosePartitionImageClick(sender, e);
     private void OnExpertModeClick(object? sender, RoutedEventArgs e) => _model.OnExpertModeClick(sender, e);
@@ -250,7 +258,20 @@ public partial class FlashView : UserControl
     private void OnEdlSerialFlashClick(object? sender, RoutedEventArgs e) => _model.OnEdlSerialFlashClick(sender, e);
     private void OnEraseSelectedClick(object? sender, RoutedEventArgs e) => _model.OnEraseSelectedClick(sender, e);
     private void OnSwitchSlotClick(object? sender, RoutedEventArgs e) => _model.OnSwitchSlotClick(sender, e);
+    private void OnSlotResetCurrentClick(object? sender, RoutedEventArgs e) => _model.OnSlotResetCurrentClick(sender, e);
+    private void OnSlotSetAClick(object? sender, RoutedEventArgs e) => _model.OnSlotSetAClick(sender, e);
+    private void OnSlotSetBClick(object? sender, RoutedEventArgs e) => _model.OnSlotSetBClick(sender, e);
     private void OnCancelFlashClick(object? sender, RoutedEventArgs e) => _model.OnCancelFlashClick(sender, e);
+    private void OnRootFileSourceChanged(object? sender, SelectionChangedEventArgs e) => _model.OnRootFileSourceChanged(sender, e);
+    private void OnReadbackSelectedClick(object? sender, RoutedEventArgs e) => _model.OnReadbackSelectedClick(sender, e);
+    private void OnRebootSystemClick(object? sender, RoutedEventArgs e) => _model.OnRebootSystemClick(sender, e);
+    private void OnRebootBootloaderClick(object? sender, RoutedEventArgs e) => _model.OnRebootBootloaderClick(sender, e);
+    private void OnRebootRecoveryClick(object? sender, RoutedEventArgs e) => _model.OnRebootRecoveryClick(sender, e);
+    private void OnRebootFastbootdClick(object? sender, RoutedEventArgs e) => _model.OnRebootFastbootdClick(sender, e);
+    private void OnRebootEdlClick(object? sender, RoutedEventArgs e) => _model.OnRebootEdlClick(sender, e);
+    private void OnPowerOffClick(object? sender, RoutedEventArgs e) => _model.OnPowerOffClick(sender, e);
+    private void OnRebootMetaClick(object? sender, RoutedEventArgs e) => _model.OnMtkRebootMetaClick(sender, e);
+    private void OnRebootAndroidTestClick(object? sender, RoutedEventArgs e) => _model.OnMtkRebootAndroidTestClick(sender, e);
     private void OnChooseRootPackageClick(object? sender, RoutedEventArgs e) => _model.OnChooseRootPackageClick(sender, e);
     private void OnRefreshMtkPortsClick(object? sender, RoutedEventArgs e) => _model.OnRefreshMtkPortsClick(sender, e);
     private void OnChooseMtkDaClick(object? sender, RoutedEventArgs e) => _model.OnChooseMtkDaClick(sender, e);
@@ -287,15 +308,10 @@ public partial class FlashView : UserControl
     private void OnEdlProgrammerPickChanged(object? sender, SelectionChangedEventArgs e) => _model.OnEdlProgrammerPickChanged(sender, e);
     private void OnEdlReadbackClick(object? sender, RoutedEventArgs e) => _model.OnEdlReadbackClick(sender, e);
     private void OnEdlEraseClick(object? sender, RoutedEventArgs e) => _model.OnEdlEraseClick(sender, e);
-    private void OnEdlFactoryResetClick(object? sender, RoutedEventArgs e) => _model.OnEdlFactoryResetClick(sender, e);
-    private void OnEdlRepairGptClick(object? sender, RoutedEventArgs e) => _model.OnEdlRepairGptClick(sender, e);
     private void OnEdlResetClick(object? sender, RoutedEventArgs e) => _model.OnEdlResetClick(sender, e);
     private void OnEdlPowerOffClick(object? sender, RoutedEventArgs e) => _model.OnEdlPowerOffClick(sender, e);
     private void OnEdlResetToEdlClick(object? sender, RoutedEventArgs e) => _model.OnEdlResetToEdlClick(sender, e);
-    private void OnEdlSetActiveSlotClick(object? sender, RoutedEventArgs e) => _model.OnEdlSetActiveSlotClick(sender, e);
-    private void OnChooseEdlRegionDirClick(object? sender, RoutedEventArgs e) => _model.OnChooseEdlRegionDirClick(sender, e);
     private void OnEdlReadLunClick(object? sender, RoutedEventArgs e) => _model.OnEdlReadLunClick(sender, e);
-    private void OnEdlReadWholeFlashClick(object? sender, RoutedEventArgs e) => _model.OnEdlReadWholeFlashClick(sender, e);
     private void OnEdlReadManifestClick(object? sender, RoutedEventArgs e) => _model.OnEdlReadManifestClick(sender, e);
     private void OnEdlErasePartitionSectorsClick(object? sender, RoutedEventArgs e) => _model.OnEdlErasePartitionSectorsClick(sender, e);
     private void OnEdlPreviewEraseAllClick(object? sender, RoutedEventArgs e) => _model.OnEdlPreviewEraseAllClick(sender, e);

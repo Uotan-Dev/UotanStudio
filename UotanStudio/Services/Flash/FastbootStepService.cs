@@ -136,4 +136,26 @@ public static class FastbootStepService
             }, ct);
         }, ct);
     }
+    /// <summary>Reboots the Fastboot device to the specified target.
+    /// <para>把 Fastboot 设备重启到指定目标。</para></summary>
+    /// <param name="device">Fastboot device to reboot.<para>要重启的 Fastboot 设备。</para></param>
+    /// <param name="target">Reboot target suffix (e.g. "bootloader", "recovery", "fastboot", "edl") or null for system.<para>重启目标后缀（如 "bootloader"、"recovery"、"fastboot"、"edl"），为 null 则重启至系统。</para></param>
+    /// <param name="ct">Token cancelling the reboot.<para>用于取消重启的令牌。</para></param>
+    public static Task RebootAsync(DetectedDevice device, string? target, CancellationToken ct)
+    {
+        if (device.Protocol != DeviceProtocolKind.Fastboot)
+        {
+            throw new ArgumentException("A Fastboot device is required.", nameof(device));
+        }
+
+        return Task.Run(() =>
+        {
+            ct.ThrowIfCancellationRequested();
+            App.DeviceMonitor.RunFastboot(device, session =>
+            {
+                ct.ThrowIfCancellationRequested();
+                session.Reboot(target).ThrowIfFailed();
+            }, ct);
+        }, ct);
+    }
 }

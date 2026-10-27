@@ -53,4 +53,52 @@ public static class FastbootSlotService
             }, ct);
         }, ct);
     }
+
+    /// <summary>Sets the active slot to the specified slot.<para>将活动槽位设置为指定槽位。</para></summary>
+    /// <param name="device">The Fastboot device whose slot changes.<para>要改换槽位的 Fastboot 设备。</para></param>
+    /// <param name="slot">Target slot identifier (e.g., "a" or "b").<para>目标槽位标识（例如 "a" 或 "b"）。</para></param>
+    /// <param name="ct">Token cancelling the change.<para>用于取消改换的令牌。</para></param>
+    /// <returns>The slot activated by the change.<para>本次改换激活的槽位。</para></returns>
+    public static Task<string> SetActiveSlotAsync(DetectedDevice device, string slot, CancellationToken ct)
+    {
+        if (device.Protocol != DeviceProtocolKind.Fastboot)
+        {
+            throw new ArgumentException("A Fastboot device is required.", nameof(device));
+        }
+
+        return Task.Run(() =>
+        {
+            ct.ThrowIfCancellationRequested();
+            return App.DeviceMonitor.RunFastboot(device, session =>
+            {
+                ct.ThrowIfCancellationRequested();
+                session.SetActiveSlot(slot).ThrowIfFailed();
+                return slot;
+            }, ct);
+        }, ct);
+    }
+
+    /// <summary>Re-applies the currently active slot.<para>重新将当前活动槽位设为活动态。</para></summary>
+    /// <param name="device">The Fastboot device whose slot is re-applied.<para>要重设当前槽位的 Fastboot 设备。</para></param>
+    /// <param name="ct">Token cancelling the change.<para>用于取消改换的令牌。</para></param>
+    /// <returns>The active slot re-applied.<para>重新应用的活动槽位。</para></returns>
+    public static Task<string> ResetCurrentAsync(DetectedDevice device, CancellationToken ct)
+    {
+        if (device.Protocol != DeviceProtocolKind.Fastboot)
+        {
+            throw new ArgumentException("A Fastboot device is required.", nameof(device));
+        }
+
+        return Task.Run(() =>
+        {
+            ct.ThrowIfCancellationRequested();
+            return App.DeviceMonitor.RunFastboot(device, session =>
+            {
+                var slot = session.GetVariable("current-slot", useCache: false).Trim();
+                ct.ThrowIfCancellationRequested();
+                session.SetActiveSlot(slot).ThrowIfFailed();
+                return slot;
+            }, ct);
+        }, ct);
+    }
 }

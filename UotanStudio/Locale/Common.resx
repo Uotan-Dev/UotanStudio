@@ -490,7 +490,10 @@ Author: 暮间雾
     <value>Select file</value>
   </data>
   <data name="Flash_ChooseFolder" xml:space="preserve">
-    <value>Select folder</value>
+    <value>Select directory</value>
+  </data>
+  <data name="Flash_GetPackage" xml:space="preserve">
+    <value>Get package</value>
   </data>
   <data name="Flash_SelectAll" xml:space="preserve">
     <value>Select all</value>
@@ -529,7 +532,7 @@ Author: 暮间雾
     <value>Read device info</value>
   </data>
   <data name="Flash_ShowAllPartitions" xml:space="preserve">
-    <value>Show all partitions in Fastbootd</value>
+    <value>Show physical partitions</value>
   </data>
   <data name="Flash_FlashSelected" xml:space="preserve">
     <value>Flash selected</value>
@@ -538,7 +541,7 @@ Author: 暮间雾
     <value>Erase selected</value>
   </data>
   <data name="Flash_DisableVbmeta" xml:space="preserve">
-    <value>Disable vbmeta verification</value>
+    <value>Disable AVB</value>
   </data>
   <data name="Flash_DeleteCow" xml:space="preserve">
     <value>Delete COW partition</value>
@@ -553,7 +556,7 @@ Author: 暮间雾
     <value>Add Root</value>
   </data>
   <data name="Flash_EraseData" xml:space="preserve">
-    <value>Erase all data</value>
+    <value>Wipe user data</value>
   </data>
   <data name="Flash_RebootAfter" xml:space="preserve">
     <value>Reboot after flashing</value>
@@ -601,7 +604,16 @@ Author: 暮间雾
     <value>device partitions loaded</value>
   </data>
   <data name="Flash_SwitchSlot" xml:space="preserve">
-    <value>Switch active slot</value>
+    <value>Switch Slot</value>
+  </data>
+  <data name="Flash_SlotResetCurrent" xml:space="preserve">
+    <value>Reset Current Slot</value>
+  </data>
+  <data name="Flash_SlotSetA" xml:space="preserve">
+    <value>Set to Slot A</value>
+  </data>
+  <data name="Flash_SlotSetB" xml:space="preserve">
+    <value>Set to Slot B</value>
   </data>
   <data name="Flash_ActiveSlot" xml:space="preserve">
     <value>Active slot</value>
@@ -654,6 +666,9 @@ Author: 暮间雾
   <data name="Flash_OverallProgress" xml:space="preserve">
     <value>{0} of {1}</value>
   </data>
+  <data name="Flash_Fastboot" xml:space="preserve">
+    <value>Fastboot</value>
+  </data>
   <data name="Flash_VerifyAfterFlash" xml:space="preserve">
     <value>Verify after flash</value>
   </data>
@@ -673,7 +688,7 @@ Author: 暮间雾
     <value>No device selected</value>
   </data>
   <data name="Flash_Mtk" xml:space="preserve">
-    <value>MediaTek download</value>
+    <value>Mediatek</value>
   </data>
   <data name="Flash_MtkPorts" xml:space="preserve">
     <value>Serial port</value>
@@ -763,7 +778,7 @@ Author: 暮间雾
     <value>The user-area dump was published with the length clamped to the family transfer alignment.</value>
   </data>
   <data name="Flash_ExpertMode" xml:space="preserve">
-    <value>Expert controls (raw memory and security configuration)</value>
+    <value>Expert mode</value>
   </data>
   <data name="Flash_MtkStage" xml:space="preserve">
     <value>Boot stage</value>
@@ -979,7 +994,7 @@ Author: 暮间雾
     <value>, {0:F1} MiB verified</value>
   </data>
   <data name="Flash_Edl" xml:space="preserve">
-    <value>EDL (Firehose)</value>
+    <value>Qualcomm</value>
   </data>
   <data name="Flash_EdlStorageInfoUnknown" xml:space="preserve">
     <value>Storage info unknown. Read the storage report first.</value>
@@ -1090,7 +1105,8 @@ Author: 暮间雾
     <value>Override programmer (loader)</value>
   </data>
   <data name="Flash_EdlAllowStreamDload" xml:space="preserve">
-    <value>Allow Streaming DLOAD for command-mode targets (no Firehose programmer)</value>
+    <value>Allow Streaming DLOAD for command-mode targets
+(no Firehose programmer)</value>
   </data>
   <data name="Flash_EdlSkipResponse" xml:space="preserve">
     <value>Skip the read/write acknowledgement header (loaders that never acknowledge)</value>
@@ -1117,10 +1133,12 @@ Author: 暮间雾
     <value>Unique match: {0}</value>
   </data>
   <data name="Flash_EdlQudRecovery" xml:space="preserve">
-    <value>Enable QUD HELLO recovery (only for drivers that repeat the hello handshake)</value>
+    <value>Enable QUD HELLO recovery
+(only for drivers that repeat the hello handshake)</value>
   </data>
   <data name="Flash_EdlPendingCompletion" xml:space="preserve">
-    <value>Accept one pending response as completion (single-image transfers only)</value>
+    <value>Accept one pending response as completion
+(single-image transfers only)</value>
   </data>
   <data name="Flash_EdlSerial" xml:space="preserve">
     <value>Device serial</value>
@@ -3653,5 +3671,63 @@ Continue?</value>
   </data>
   <data name="Avb_OtaPartitionRequired" xml:space="preserve">
     <value>Select at least one partition.</value>
+  </data>
+
+  <data name="Flash_RebootMenu" xml:space="preserve">
+    <value>Reboot Device</value>
+  </data>
+  <data name="Flash_RebootSystem" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="Flash_RebootBootloader" xml:space="preserve">
+    <value>Bootloader</value>
+  </data>
+  <data name="Flash_RebootRecovery" xml:space="preserve">
+    <value>Recovery</value>
+  </data>
+  <data name="Flash_RebootFastbootd" xml:space="preserve">
+    <value>Fastbootd</value>
+  </data>
+  <data name="Flash_RebootEdl" xml:space="preserve">
+    <value>Qualcomm EDL</value>
+  </data>
+  <data name="Flash_PowerOff" xml:space="preserve">
+    <value>Power Off</value>
+  </data>
+  <data name="Flash_ReadbackSelected" xml:space="preserve">
+    <value>Read back selected</value>
+  </data>
+  <data name="Flash_RootPackageHint" xml:space="preserve">
+    <value>Path to Magisk, KernelSU, or APatch package</value>
+  </data>
+  <data name="Flash_EdlProgrammerPathHint" xml:space="preserve">
+    <value>Programmer file path</value>
+  </data>
+  <data name="Flash_EdlProgrammerDirHint" xml:space="preserve">
+    <value>Programmer directory path</value>
+  </data>
+  <data name="Flash_EdlRegionDirHint" xml:space="preserve">
+    <value>Dump directory path</value>
+  </data>
+  <data name="Flash_EdlUfsProfileHint" xml:space="preserve">
+    <value>UFS profile path</value>
+  </data>
+  <data name="Flash_EdlNandTableHint" xml:space="preserve">
+    <value>NAND partition table path</value>
+  </data>
+  <data name="Flash_MtkDaHint" xml:space="preserve">
+    <value>DA file path</value>
+  </data>
+  <data name="Flash_MtkEmiHint" xml:space="preserve">
+    <value>EMI file path</value>
+  </data>
+  <data name="Flash_MtkKeyDirHint" xml:space="preserve">
+    <value>Key directory path</value>
+  </data>
+  <data name="Flash_MtkAuthFileHint" xml:space="preserve">
+    <value>Auth file path</value>
+  </data>
+  <data name="Flash_GeneralOperations" xml:space="preserve">
+    <value>General Operations</value>
   </data>
 </root>

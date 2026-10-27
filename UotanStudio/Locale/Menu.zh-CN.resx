@@ -829,7 +829,7 @@
     <value>无</value>
   </data>
   <data name="Plugin_Permission_DeviceFlash" xml:space="preserve">
-    <value>刷写设备分区</value>
+    <value>刷入设备分区</value>
   </data>
   <data name="Plugin_Permission_DeviceErase" xml:space="preserve">
     <value>擦除设备分区</value>

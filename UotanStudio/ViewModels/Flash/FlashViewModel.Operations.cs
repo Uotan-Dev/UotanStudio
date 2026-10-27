@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.IO.Ports;
 using System.Text;
+using System.Text.RegularExpressions;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -103,7 +104,6 @@ public sealed partial class FlashViewModel
     /// <summary><para>区域转储的输出目录；未选择时读写动作在本地被拒绝，绝不回落到工作目录。</para>
     /// Output directory for region dumps; while it is unset the read actions refuse locally instead of
     /// falling back to a working directory.</summary>
-    private string? _edlRegionDirectory;
 
     private DetectedDevice? SelectedDevice => _deviceViewModel?.SelectedDevice?.Device;
 
@@ -154,6 +154,24 @@ public sealed partial class FlashViewModel
         }
     }
 
+    internal async void OnGetPackageClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming)
+        {
+            return;
+        }
+
+        var text = PackagePath?.Trim();
+        if (Uri.TryCreate(text, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+        {
+            await LoadPackageAsync(text);
+        }
+        else
+        {
+            ExternalLinkService.TryOpen("https://xiaomirom.com/series/");
+        }
+    }
+
     private async Task LoadPackageAsync(string path)
     {
         if (_busy || _confirming || string.Equals(path, _loadedPath, StringComparison.Ordinal))
@@ -173,7 +191,7 @@ public sealed partial class FlashViewModel
         _mtkResolution = null;
         _mtkRows.Clear();
         _mtkPartitions.Clear();
-        Field<StackPanel>("MtkPane").IsVisible = false;
+        UpdateModeVisibility();
         _payloadPath = null;
         _remotePayloadUrl = null;
         _superPath = null;
@@ -372,7 +390,7 @@ public sealed partial class FlashViewModel
                 }
 
                 Partitions.Apply(0, scatterRows);
-                Field<StackPanel>("MtkPane").IsVisible = true;
+                UpdateEdlButton();
                 AppendLog($"{resolution.Rows.Count + eraseOnlyRows} {LanguageService.Instance.GetString("Flash_ImagesLoaded")} · {resolution.StorageLabel}");
                 return;
             }
@@ -399,86 +417,83 @@ public sealed partial class FlashViewModel
                 return;
             }
 
-            if (Directory.Exists(path) &&
-                Directory.EnumerateFiles(Directory.Exists(Path.Combine(path, "images"))
-                    ? Path.Combine(path, "images") : path, "*.bin", SearchOption.TopDirectoryOnly).Any())
+            if (File.Exists(path) && extension is ".bat" or ".sh")
             {
-                var bin = FlashBinPackage.Read(path);
-                if (bin.Images.Count > 0)
-                {
-                    _flatBinPackage = true;
-                    _edlProgrammerCandidates = bin.Programmers;
-                    Field<ComboBox>("EdlProgrammerPickBox").ItemsSource = bin.Programmers
-                        .Select(Path.GetFileName)
-                        .ToArray();
-                    Field<ComboBox>("EdlProgrammerPickBox").SelectedIndex = -1;
-                    Field<ComboBox>("EdlProgrammerPickBox").IsVisible = Field<TextBlock>("EdlProgrammerChoiceLabel").IsVisible = bin.Programmers.Count > 1;
-                    _edlProgrammer = bin.Programmer;
-                    var edlPrograms = bin.Programs.Where(entry =>
-                        !string.IsNullOrEmpty(entry.Filename) && File.Exists(entry.SourceFile) &&
-                        !entry.Filename.StartsWith("gpt_", StringComparison.OrdinalIgnoreCase))
-                        .ToArray();
-                    var edlRows = new List<FlashPartitionEntry>();
-                    foreach (var (name, image, length) in bin.Images)
-                    {
-                        var matches = edlPrograms.Where(entry =>
-                            Path.GetFullPath(entry.SourceFile).Equals(Path.GetFullPath(image),
-                                StringComparison.OrdinalIgnoreCase)).ToArray();
-                        foreach (var entry in matches.Length == 0 ? [null] : matches.Cast<RawProgramEntry?>())
-                        {
-                            var row = new FlashPartitionEntry
-                            {
-                                Name = entry?.Label is { Length: > 0 } label ? label : name,
-                                Command = "flash",
-                                FilePath = image,
-                                FileName = Path.GetFileName(image),
-                                Size = $"{length / 1024d / 1024d:F1} MiB"
-                            };
-                            edlRows.Add(row);
-                            if (entry is not null) _edlEntries.Add(row, entry);
-                        }
-                    }
-                    Partitions.Apply(0, edlRows);
-                    _edlBundleReady = bin.Programs.Count > 0 && bin.Programmers.Count > 0;
-                    if (bin.Programmers.Count > 1)
-                    {
-                        AppendLog($"{LanguageService.Instance.GetString("Flash_EdlProgrammerChoice")}: {bin.Programmers.Count}");
-                    }
-                    UpdateEdlButton();
-                    AppendLog($"{Partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
-                    return;
-                }
-            }
-            var manifest = File.Exists(path)
-                ? extension switch
-                {
-                    ".txt" => FlashManifestReader.Read(path),
-                    ".bat" or ".sh" => FlashScriptReader.Read(path),
-                    _ => null
-                }
-                : null;
-            _requiredCodeName = manifest?.CodeName;
-            _requiresFastbootd = manifest?.RequiresFastbootd ?? false;
-            var steps = manifest?.Steps ?? [.. FlashPackageReader.Read(path)
-                .Select(image => new FlashStep(image.Partition.Equals("super_empty", StringComparison.OrdinalIgnoreCase)
-                    ? "wipe_super" : "flash",
-                    image.Partition, image.Path, image.Length))];
-            var manifestRows = new List<FlashPartitionEntry>(steps.Count);
-            foreach (var step in steps)
-            {
-                manifestRows.Add(new FlashPartitionEntry
-                {
-                    Step = step,
-                    Name = step.Partition.Length > 0 ? step.Partition : step.Command,
-                    Command = step.Command,
-                    Size = step.ImageLength > 0 ? $"{step.ImageLength / 1024d / 1024d:F1} MiB" : string.Empty,
-                    FileName = Path.GetFileName(step.ImagePath),
-                    FilePath = step.ImagePath
-                });
+                var lines = await File.ReadAllLinesAsync(path);
+                var scriptRows = ParseScript(path, lines);
+                Partitions.Apply(0, scriptRows);
+                AppendLog($"{Partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                return;
             }
 
-            Partitions.Apply(0, manifestRows);
-            AppendLog($"{Partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+            if (File.Exists(path) && extension is ".txt")
+            {
+                var lines = await File.ReadAllLinesAsync(path);
+                var txtRows = ParseManifestText(path, lines, out _requiredCodeName, out _requiresFastbootd);
+                Partitions.Apply(0, txtRows);
+                AppendLog($"{Partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                return;
+            }
+
+            if (Directory.Exists(path))
+            {
+                var directoryImages = Directory.Exists(Path.Combine(path, "images")) ? Path.Combine(path, "images") : path;
+                if (Directory.EnumerateFiles(directoryImages, "rawprogram*.xml", SearchOption.TopDirectoryOnly).Any())
+                {
+                    var bin = FlashBinPackage.Read(path);
+                    if (bin.Images.Count > 0)
+                    {
+                        _flatBinPackage = true;
+                        _edlProgrammerCandidates = bin.Programmers;
+                        Field<ComboBox>("EdlProgrammerPickBox").ItemsSource = bin.Programmers
+                            .Select(Path.GetFileName)
+                            .ToArray();
+                        Field<ComboBox>("EdlProgrammerPickBox").SelectedIndex = -1;
+                        Field<ComboBox>("EdlProgrammerPickBox").IsVisible = Field<TextBlock>("EdlProgrammerChoiceLabel").IsVisible = bin.Programmers.Count > 1;
+                        _edlProgrammer = bin.Programmer;
+                        var edlPrograms = bin.Programs.Where(entry =>
+                            !string.IsNullOrEmpty(entry.Filename) && File.Exists(entry.SourceFile) &&
+                            !entry.Filename.StartsWith("gpt_", StringComparison.OrdinalIgnoreCase))
+                            .ToArray();
+                        var edlRows = new List<FlashPartitionEntry>();
+                        foreach (var (name, image, length) in bin.Images)
+                        {
+                            var matches = edlPrograms.Where(entry =>
+                                Path.GetFullPath(entry.SourceFile).Equals(Path.GetFullPath(image),
+                                    StringComparison.OrdinalIgnoreCase)).ToArray();
+                            foreach (var entry in matches.Length == 0 ? [null] : matches.Cast<RawProgramEntry?>())
+                            {
+                                var row = new FlashPartitionEntry
+                                {
+                                    Name = entry?.Label is { Length: > 0 } label ? label : name,
+                                    Command = "flash",
+                                    FilePath = image,
+                                    FileName = Path.GetFileName(image),
+                                    Size = FormatByteSize(length),
+                                    CanSelect = true,
+                                    IsSelected = false
+                                };
+                                edlRows.Add(row);
+                                if (entry is not null) _edlEntries.Add(row, entry);
+                            }
+                        }
+                        Partitions.Apply(0, edlRows);
+                        _edlBundleReady = bin.Programs.Count > 0 && bin.Programmers.Count > 0;
+                        if (bin.Programmers.Count > 1)
+                        {
+                            AppendLog($"{LanguageService.Instance.GetString("Flash_EdlProgrammerChoice")}: {bin.Programmers.Count}");
+                        }
+                        UpdateEdlButton();
+                        AppendLog($"{Partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                        return;
+                    }
+                }
+
+                var dirRows = ParseDirectory(path);
+                Partitions.Apply(0, dirRows);
+                AppendLog($"{Partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                return;
+            }
         }
         catch (Exception ex)
         {
@@ -492,7 +507,6 @@ public sealed partial class FlashViewModel
             _mtkResolution = null;
             _mtkRows.Clear();
             _mtkPartitions.Clear();
-            Field<StackPanel>("MtkPane").IsVisible = false;
             Partitions.Clear();
             UpdateEdlButton();
         }
@@ -584,6 +598,180 @@ public sealed partial class FlashViewModel
         }
     }
 
+
+    internal void UpdateRootControlsState()
+    {
+        var addRoot = Field<CheckBox>("AddRootBox").IsChecked == true;
+        var sourceBox = Field<ComboBox>("RootFileSourceBox");
+        var pathBox = Field<TextBox>("RootPackagePathBox");
+        var chooseBtn = Field<Button>("ChooseRootPackageButton");
+
+        sourceBox.IsEnabled = !_busy && addRoot;
+        var customFile = sourceBox.SelectedIndex == 0;
+        pathBox.IsEnabled = !_busy && addRoot && customFile;
+        chooseBtn.IsEnabled = !_busy && addRoot && customFile;
+    }
+
+    internal void OnRootFileSourceChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        var custom = Field<ComboBox>("RootFileSourceBox").SelectedIndex == 0;
+        if (!custom)
+        {
+            Field<TextBox>("RootPackagePathBox").Text = string.Empty;
+            _rootPackagePath = null;
+        }
+        UpdateRootControlsState();
+    }
+
+    internal void OnReadbackSelectedClick(object? sender, RoutedEventArgs e)
+    {
+        if (SelectedDevice?.Protocol == DeviceProtocolKind.Mtk || _mtkResolution is not null)
+        {
+            OnMtkReadbackClick(sender, e);
+        }
+        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Edl || _edlEntries.Count > 0)
+        {
+            OnEdlReadbackClick(sender, e);
+        }
+        else
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+        }
+    }
+
+    internal async void OnRebootSystemClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming) return;
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fastbootDevice)
+        {
+            SetBusy(true);
+            try
+            {
+                await FastbootStepService.RebootAsync(fastbootDevice, null, CancellationToken.None);
+                AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"), "reboot"));
+            }
+            catch (Exception ex) { AppendLog(ex.Message); }
+            finally { SetBusy(false); }
+        }
+        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } || _edlEntries.Count > 0)
+        {
+            OnEdlResetClick(sender, e);
+        }
+        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Mtk } || _mtkResolution is not null)
+        {
+            OnMtkRebootClick(sender, e);
+        }
+        else
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_DeviceNotSelected"));
+        }
+    }
+
+    internal async void OnRebootBootloaderClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming) return;
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fastbootDevice)
+        {
+            SetBusy(true);
+            try
+            {
+                await FastbootStepService.RebootAsync(fastbootDevice, "bootloader", CancellationToken.None);
+                AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"), "reboot-bootloader"));
+            }
+            catch (Exception ex) { AppendLog(ex.Message); }
+            finally { SetBusy(false); }
+        }
+        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Mtk } || _mtkResolution is not null)
+        {
+            OnMtkRebootFastbootClick(sender, e);
+        }
+        else
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+        }
+    }
+
+    internal async void OnRebootRecoveryClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming) return;
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fastbootDevice)
+        {
+            SetBusy(true);
+            try
+            {
+                await FastbootStepService.RebootAsync(fastbootDevice, "recovery", CancellationToken.None);
+                AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"), "reboot-recovery"));
+            }
+            catch (Exception ex) { AppendLog(ex.Message); }
+            finally { SetBusy(false); }
+        }
+        else
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+        }
+    }
+
+    internal async void OnRebootFastbootdClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming) return;
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fastbootDevice)
+        {
+            SetBusy(true);
+            try
+            {
+                await FastbootStepService.RebootAsync(fastbootDevice, "fastboot", CancellationToken.None);
+                AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"), "reboot-fastboot"));
+            }
+            catch (Exception ex) { AppendLog(ex.Message); }
+            finally { SetBusy(false); }
+        }
+        else
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+        }
+    }
+
+    internal async void OnRebootEdlClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming) return;
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fastbootDevice)
+        {
+            SetBusy(true);
+            try
+            {
+                await FastbootStepService.RebootAsync(fastbootDevice, "edl", CancellationToken.None);
+                AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"), "reboot-edl"));
+            }
+            catch (Exception ex) { AppendLog(ex.Message); }
+            finally { SetBusy(false); }
+        }
+        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } || _edlEntries.Count > 0)
+        {
+            OnEdlResetToEdlClick(sender, e);
+        }
+        else
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+        }
+    }
+
+    internal void OnPowerOffClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming) return;
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } || _edlEntries.Count > 0)
+        {
+            OnEdlPowerOffClick(sender, e);
+        }
+        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Mtk } || _mtkResolution is not null)
+        {
+            OnMtkPowerOffClick(sender, e);
+        }
+        else
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+        }
+    }
+
     internal async void OnChooseRootPackageClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
@@ -595,8 +783,6 @@ public sealed partial class FlashViewModel
         });
         if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
         SetBusy(true);
-        Field<CheckBox>("AddRootBox").IsChecked = false;
-        Field<CheckBox>("AddRootBox").IsEnabled = false;
         _rootPackagePath = null;
         try
         {
@@ -608,12 +794,15 @@ public sealed partial class FlashViewModel
                     LanguageService.Instance.GetString("Flash_RootPackageUnsupported"));
             }
             _rootPackagePath = path;
+            Field<TextBox>("RootPackagePathBox").Text = path;
+            Field<ComboBox>("RootFileSourceBox").SelectedIndex = 0;
             Field<CheckBox>("AddRootBox").IsEnabled = true;
+            Field<CheckBox>("AddRootBox").IsChecked = true;
             ToolTip.SetTip(Field<Button>("ChooseRootPackageButton"), path);
             AppendLog(Path.GetFileName(path));
         }
         catch (Exception ex) { AppendLog(ex.Message); }
-        finally { SetBusy(false); }
+        finally { SetBusy(false); UpdateRootControlsState(); }
     }
 
     internal async void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e)
@@ -643,10 +832,43 @@ public sealed partial class FlashViewModel
         entry.CanSelect = true;
     }
 
+    private DeviceInfo? _observedDeviceInfo;
+
+    private void UpdateObservedDeviceInfo()
+    {
+        var current = _deviceViewModel?.SelectedDevice;
+        if (ReferenceEquals(_observedDeviceInfo, current))
+        {
+            return;
+        }
+
+        if (_observedDeviceInfo is not null)
+        {
+            _observedDeviceInfo.PropertyChanged -= OnDeviceInfoPropertyChanged;
+        }
+
+        _observedDeviceInfo = current;
+        if (_observedDeviceInfo is not null)
+        {
+            _observedDeviceInfo.PropertyChanged += OnDeviceInfoPropertyChanged;
+        }
+    }
+
+    private void OnDeviceInfoPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(DeviceInfo.IsUserspace) or nameof(DeviceInfo.State) or nameof(DeviceInfo.IsFastbootd))
+        {
+            UpdateEdlButton();
+        }
+    }
+
     private void OnGlobalDeviceChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(DeviceViewModel.SelectedDevice))
+        {
+            UpdateObservedDeviceInfo();
             UpdateEdlButton();
+        }
     }
 
     private void UpdateEdlButton()
@@ -654,13 +876,7 @@ public sealed partial class FlashViewModel
         var busy = _busy;
         var protocol = SelectedDevice?.Protocol;
         UpdateModeVisibility();
-        Field<Button>("FlashEdlBundleButton").IsEnabled =
-            !busy && Field<Button>("FlashEdlBundleButton").IsVisible && protocol is DeviceProtocolKind.Edl &&
-            (_edlProgrammer is not null || _edlProgrammerOverride is not null);
-        Field<Button>("EdlSerialFlashButton").IsEnabled = !busy && _edlBundleReady;
-        Field<Button>("MtkFlashButton").IsEnabled = !busy && _mtkResolution is not null && MtkStage != MtkStageLogging;
-        Field<CheckBox>("VerifyAfterFlashBox").IsEnabled = !busy &&
-            (protocol is DeviceProtocolKind.Edl or DeviceProtocolKind.Rkdl || _mtkResolution is not null);
+
         SelectedDeviceText = SelectedDevice is { } device
             ? device.Protocol is DeviceProtocolKind.Mtk && device.State == "logging"
                 ? $"{device.ProtocolLabel} · {device.DisplayName} — {LanguageService.Instance.GetString("Flash_MtkLoggingOnlyHint")}"
@@ -826,23 +1042,15 @@ public sealed partial class FlashViewModel
     /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
     internal void OnExpertModeClick(object? sender, RoutedEventArgs e)
     {
-        var settings = SettingsPersistenceService.Instance.LoadSettings();
-        settings.FlashExpertMode = Field<CheckBox>("FlashExpertModeBox").IsChecked == true;
-        SettingsPersistenceService.Instance.SaveSettings(settings);
         UpdateEdlButton();
     }
 
     /// <summary>
-    /// Switches the action-pane visibility by the selected device's protocol: pane ownership follows
-    /// only the selected device's protocol — an EDL device shows just the EDL pane, an MTK device just
-    /// the MTK pane, and Fastboot-only items (read info, show-all, switch slot, erase and the package
-    /// options) appear only for Fastboot; with no device selected the preparation state (the EDL bundle
-    /// row and an MTK pane backed by a loaded scatter) is kept, and stale preparation state never
-    /// exposes the MTK pane to devices of other protocols.
-    /// <para>按所选设备的协议切换操作面板可见性：面板归属只跟随选中设备的协议——EDL 设备只显示 EDL
-    /// 面板，MTK 设备只显示 MTK 面板，Fastboot 专属项（读取信息、全选显示、切换槽位、擦除与整包选项）
-    /// 只在 Fastboot 下显示；未选中设备时保留准备态（EDL 完整包行与已加载 scatter 的 MTK 面板），
-    /// 旧会话的散件准备状态不会让其他协议的设备看到 MTK 面板。</para>
+    /// Switches the action-pane expansion by the selected device's protocol: expands the protocol-matching
+    /// expander and collapses the others; with no device selected the preparation state (the EDL bundle
+    /// row and an MTK pane backed by a loaded scatter) determines the expansion.
+    /// <para>按所选设备的协议切换操作面板展开状态：展开与选中设备协议匹配的分类并收起其他分类；
+    /// 未选中设备时根据准备态（EDL 完整包或已加载的 MTK scatter）决定默认展开项。</para>
     /// </summary>
     private void UpdateModeVisibility()
     {
@@ -851,26 +1059,12 @@ public sealed partial class FlashViewModel
         var isFastboot = protocol is DeviceProtocolKind.Fastboot;
         var isMtk = protocol is DeviceProtocolKind.Mtk;
         var isMtkUsb = isMtk && SelectedDevice is { Transport: DeviceTransportKind.Usb };
-        Field<TextBlock>("EdlHeader").IsVisible = Field<StackPanel>("EdlPane").IsVisible = isEdl;
-        var expert = Field<CheckBox>("FlashExpertModeBox").IsChecked == true;
-        Field<CheckBox>("FlashExpertModeBox").IsVisible = isEdl || isMtk || SelectedDevice is null;
-        Field<TextBlock>("EdlStageText").Text = LanguageService.Instance.GetString(EdlStage switch
-        {
-            EdlProtocolState.Sahara => "Flash_EdlStageSahara",
-            EdlProtocolState.Firehose => "Flash_EdlStageFirehose",
-            EdlProtocolState.Streaming => "Flash_EdlStageStreaming",
-            _ => "Flash_EdlStageUnknown",
-        });
+
         var edlFirehose = isEdl && EdlStage == EdlProtocolState.Firehose;
         var edlSaharaCommandMode = isEdl && EdlStage is not (EdlProtocolState.Firehose or EdlProtocolState.Streaming);
-        Field<StackPanel>("EdlRegionGroup").IsVisible = expert && isEdl;
 
-        Field<Button>("ChooseEdlRegionDirButton").IsEnabled = !_busy && edlFirehose;
-        Field<Button>("EdlReadLunButton").IsEnabled = !_busy && edlFirehose && _edlRegionDirectory is not null;
-        Field<Button>("EdlReadWholeFlashButton").IsEnabled = !_busy && edlFirehose && _edlRegionDirectory is not null;
-        Field<Button>("EdlReadManifestButton").IsEnabled = !_busy && edlFirehose && _edlRegionDirectory is not null;
-        var edlStreaming = expert && isEdl && EdlStage == EdlProtocolState.Streaming;
-        Field<StackPanel>("EdlStreamingNandGroup").IsVisible = edlStreaming;
+        Field<Button>("EdlReadLunButton").IsEnabled = !_busy && edlFirehose;
+        var edlStreaming = isEdl && EdlStage == EdlProtocolState.Streaming;
         var edlStreamingReady = !_busy && edlStreaming;
         Field<TextBox>("EdlNandPartitionBox").IsEnabled = edlStreamingReady;
         Field<TextBox>("EdlNandBlockBox").IsEnabled = edlStreamingReady;
@@ -893,31 +1087,15 @@ public sealed partial class FlashViewModel
         Field<Button>("EdlNandFlashModeButton").IsEnabled = edlStreamingReady;
         Field<Button>("EdlNandSecureModeButton").IsEnabled = edlStreamingReady;
         Field<Button>("EdlNandSendTableButton").IsEnabled = edlStreamingReady && _edlNandTablePath is not null;
-        Field<Button>("EdlErasePartitionSectorsButton").IsEnabled = !_busy && edlFirehose;
-        Field<Button>("EdlPreviewEraseAllButton").IsEnabled = !_busy && edlFirehose;
-        Field<Button>("EdlEraseAllButton").IsEnabled = !_busy && edlFirehose;
+
         Field<Button>("EdlSetBootableButton").IsEnabled = !_busy && edlFirehose;
         Field<Button>("EdlPartitionDigestButton").IsEnabled = !_busy && edlFirehose;
-        Field<CheckBox>("EdlAllowStreamDloadBox").IsVisible = EdlStage is not (EdlProtocolState.Firehose or EdlProtocolState.Streaming);
-        Field<CheckBox>("EdlSkipResponseBox").IsVisible = edlSaharaCommandMode;
         var bundleRowVisible = _edlBundleReady && (isEdl || SelectedDevice is null);
-        if (bundleRowVisible && !Field<StackPanel>("BundleActionRow").IsVisible)
+        if (bundleRowVisible)
         {
             RefreshEdlSerialPorts();
         }
 
-        Field<StackPanel>("BundleActionRow").IsVisible = bundleRowVisible;
-        Field<StackPanel>("EdlTuningRow").IsVisible = expert && bundleRowVisible;
-        Field<TextBlock>("EdlGptEntryLbaLabel").IsVisible = expert;
-        Field<TextBox>("EdlGptEntryLbaBox").IsVisible = expert;
-        Field<TextBlock>("EdlGptEntryCountLabel").IsVisible = expert;
-        Field<TextBox>("EdlGptEntryCountBox").IsVisible = expert;
-        Field<TextBlock>("EdlGptEntrySizeLabel").IsVisible = expert;
-        Field<TextBox>("EdlGptEntrySizeBox").IsVisible = expert;
-        Field<Button>("FlashEdlBundleButton").IsVisible = isEdl;
-        Field<Button>("EdlSerialFlashButton").IsVisible = SelectedDevice is null;
-        Field<StackPanel>("MtkPane").IsVisible = isMtk || (SelectedDevice is null && _mtkResolution is not null);
-        Field<TextBlock>("MtkHeader").IsVisible = Field<StackPanel>("MtkPane").IsVisible;
         var mtkStage = MtkStage;
         Field<TextBlock>("MtkStageText").Text = LanguageService.Instance.GetString(mtkStage switch
         {
@@ -927,39 +1105,28 @@ public sealed partial class FlashViewModel
             MtkStageLogging => "Flash_MtkStageNowLogging",
             _ => "Flash_MtkStageUndetermined",
         });
-        var mtkDaStage = isMtk && MtkStage == MtkStageDa;
-        Field<StackPanel>("MtkLegacyParamsGroup").IsVisible = expert && isMtk && SelectedMtkProtocol == MtkDaProtocol.Legacy;
-        Field<TextBlock>("MtkScatterHintText").IsVisible = _mtkResolution is null;
-        Field<TextBlock>("MtkPortLabel").IsVisible = !isMtkUsb;
-        Field<ComboBox>("MtkPortBox").IsVisible = !isMtkUsb;
-        Field<Button>("RefreshMtkPortsButton").IsVisible = !isMtkUsb;
-        Field<TextBlock>("MtkBaudLabel").IsVisible = !isMtkUsb;
-        Field<ComboBox>("MtkBaudBox").IsVisible = !isMtkUsb;
-        Field<CheckBox>("MtkAttachAgentBox").IsVisible = !isMtkUsb;
-        Field<Button>("SwitchSlotButton").IsVisible = isFastboot;
-        Field<Button>("ReadInfoButton").IsVisible = isFastboot || isMtkUsb;
-        Field<CheckBox>("ShowAllPartitionsBox").IsVisible = isFastboot;
-        Field<Button>("EraseSelectedButton").IsVisible = isFastboot;
-        Field<Button>("FlashSelectedButton").IsVisible = protocol is not DeviceProtocolKind.Mtk;
-        Field<CheckBox>("AddRootBox").IsVisible = isFastboot;
-        Field<Button>("ChooseRootPackageButton").IsVisible = isFastboot;
-        Field<CheckBox>("DeleteCowBox").IsVisible = isFastboot;
-        Field<CheckBox>("DisableVbmetaBox").IsVisible = isFastboot;
-        Field<CheckBox>("EraseDataBox").IsVisible = isFastboot;
-        Field<CheckBox>("RebootAfterBox").IsVisible = isFastboot;
-        Field<Button>("EdlReadbackButton").IsVisible = edlFirehose;
-        Field<Button>("EdlEraseButton").IsVisible = edlFirehose;
-        Field<Button>("EdlFactoryResetButton").IsVisible = edlFirehose;
-        Field<Button>("EdlRepairGptButton").IsVisible = edlFirehose;
-        Field<CheckBox>("EdlGenerateXmlBox").IsVisible = edlFirehose;
-        Field<CheckBox>("EdlGeneralizedXmlBox").IsVisible = edlFirehose;
+
+        var isFastbootd =
+            SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fbDevice &&
+            ((_deviceViewModel?.SelectedDevice is { } devInfo && devInfo.IsFastbootd) ||
+             string.Equals(fbDevice.State, "fastbootd", StringComparison.OrdinalIgnoreCase));
+
+        Field<CheckBox>("ShowAllPartitionsBox").IsEnabled = !_busy && isFastbootd;
+        Field<CheckBox>("DeleteCowBox").IsEnabled = !_busy && isFastbootd;
+        if (!isFastbootd)
+        {
+            Field<CheckBox>("ShowAllPartitionsBox").IsChecked = false;
+            Field<CheckBox>("DeleteCowBox").IsChecked = false;
+        }
+
+        Field<CheckBox>("AddRootBox").IsEnabled = !_busy;
+        UpdateRootControlsState();
+        Field<Button>("ReadbackSelectedButton").IsEnabled = !_busy && (
+            (protocol == DeviceProtocolKind.Edl && edlFirehose && HasSelectedEdlEntries()) ||
+            (protocol == DeviceProtocolKind.Mtk && _mtkResolution is not null && Partitions.Any(p => p.IsSelected)));
+        Field<DropDownButton>("RebootMenuButton").IsEnabled = !_busy;
         Field<Button>("EdlReadbackButton").IsEnabled = edlFirehose && !_busy && HasSelectedEdlEntries();
-        Field<Button>("EdlEraseButton").IsEnabled = edlFirehose && !_busy && HasSelectedEdlEntries();
-        Field<Button>("EdlReadStorageInfoButton").IsEnabled = !_busy && isEdl;
-        Field<Button>("EdlRepairGptButton").IsEnabled = !_busy && edlFirehose;
-        Field<Button>("EdlFactoryResetButton").IsEnabled = !_busy && edlFirehose;
         var mtkBootStage = isMtkUsb && mtkStage is MtkStageBootRom or MtkStagePreloader;
-        Field<StackPanel>("MtkUsbOnlyRow").IsVisible = mtkBootStage;
         var mtkRpmbReady = !_busy && mtkBootStage;
         Field<ComboBox>("MtkRpmbModeBox").IsEnabled = mtkRpmbReady;
         Field<TextBox>("MtkRpmbOffsetBox").IsEnabled = mtkRpmbReady;
@@ -967,7 +1134,6 @@ public sealed partial class FlashViewModel
         Field<Button>("MtkRpmbReadButton").IsEnabled = mtkRpmbReady;
         Field<Button>("MtkRpmbCapacityButton").IsEnabled = mtkRpmbReady;
         var isMtkPreloader = isMtkUsb && mtkStage == MtkStagePreloader;
-        Field<StackPanel>("MtkPreloaderPane").IsVisible = isMtkPreloader;
         var preloaderEnabled = !_busy && isMtkPreloader;
         Field<TextBox>("MtkPreloaderOffsetBox").IsEnabled = preloaderEnabled;
         Field<TextBox>("MtkPreloaderLengthBox").IsEnabled = preloaderEnabled;
@@ -982,11 +1148,7 @@ public sealed partial class FlashViewModel
         Field<Button>("MtkSetSpeedButton").IsEnabled = mtkProtocolReady;
         Field<Button>("MtkRebootMetaButton").IsEnabled = mtkProtocolReady;
         Field<Button>("MtkRebootAndroidTestButton").IsEnabled = mtkProtocolReady;
-        Field<Button>("MtkRepairGptButton").IsEnabled = mtkProtocolReady;
         Field<Button>("MtkFullDumpButton").IsEnabled = mtkProtocolReady;
-        Field<StackPanel>("MtkRawReadGroup").IsVisible = expert && mtkDaStage;
-        Field<TextBox>("MtkDumpSkipBox").IsEnabled = mtkProtocolReady;
-        Field<Button>("MtkDumpPartitionListButton").IsEnabled = mtkProtocolReady;
         Field<Button>("MtkDumpWholeFlashButton").IsEnabled = mtkProtocolReady;
         Field<TextBox>("MtkSectorRegionBox").IsEnabled = mtkProtocolReady;
         Field<TextBox>("MtkSectorStartBox").IsEnabled = mtkProtocolReady;
@@ -997,48 +1159,14 @@ public sealed partial class FlashViewModel
         Field<Button>("MtkReadAreaButton").IsEnabled = mtkProtocolReady;
         Field<TextBox>("MtkXmlPropertyBox").IsEnabled = mtkProtocolReady;
         Field<Button>("MtkXmlPropertyQueryButton").IsEnabled = mtkProtocolReady;
-        Field<Button>("MtkRebootButton").IsEnabled = mtkProtocolReady;
-        Field<Button>("MtkRebootFastbootButton").IsEnabled = mtkProtocolReady;
-        Field<Button>("MtkPowerOffButton").IsEnabled = mtkProtocolReady;
-        var edlLoaderRowVisible = SelectedDevice is null || edlSaharaCommandMode;
-        foreach (var loaderControl in new Control[]
-        {
-            Field<Button>("EdlChooseProgrammerButton"), Field<TextBlock>("EdlProgrammerPathText"),
-            Field<CheckBox>("EdlQudRecoveryBox"), Field<CheckBox>("EdlPendingCompletionBox"),
-            Field<Button>("EdlChooseProgrammerDirButton")
-        })
-        {
-            loaderControl.IsVisible = edlLoaderRowVisible;
-        }
-
-        Field<TextBlock>("EdlProgrammerDirText").IsVisible = edlLoaderRowVisible && _edlProgrammerDirectoryResult is not null;
-
-        Field<TextBlock>("EdlProgrammerChoiceLabel").IsVisible = Field<ComboBox>("EdlProgrammerPickBox").IsVisible =
-            SelectedDevice is not null && !edlSaharaCommandMode
-                ? false
-                : _edlProgrammerCandidates.Count > 1;
 
         Field<Button>("EdlChooseProgrammerButton").IsEnabled = !_busy && edlSaharaCommandMode;
         Field<Button>("EdlChooseProgrammerDirButton").IsEnabled = !_busy && edlSaharaCommandMode;
-        Field<Button>("EdlResetButton").IsEnabled = !_busy && isEdl;
-        Field<Button>("EdlPowerOffButton").IsEnabled = !_busy && isEdl;
-        Field<Button>("EdlResetToEdlButton").IsEnabled = !_busy && isEdl;
-        Field<TextBox>("EdlActiveSlotBox").IsVisible = edlFirehose;
-        Field<Button>("EdlSetActiveSlotButton").IsVisible = edlFirehose;
-        Field<TextBox>("EdlActiveSlotBox").IsEnabled = !_busy && edlFirehose;
-        Field<Button>("EdlSetActiveSlotButton").IsEnabled = !_busy && edlFirehose;
-        Field<Button>("EdlChooseUfsProfileButton").IsVisible = edlFirehose;
-        Field<Button>("EdlUfsPreviewButton").IsVisible = edlFirehose;
-        Field<Button>("EdlUfsProvisionButton").IsVisible = edlFirehose;
-        Field<Button>("EdlUfsResetButton").IsVisible = edlFirehose;
+
         Field<Button>("EdlChooseUfsProfileButton").IsEnabled = !_busy && edlFirehose;
         Field<Button>("EdlUfsPreviewButton").IsEnabled = !_busy && edlFirehose && _edlUfsProfile is not null;
         Field<Button>("EdlUfsProvisionButton").IsEnabled = !_busy && edlFirehose && _edlUfsProfile is not null;
         Field<Button>("EdlUfsResetButton").IsEnabled = !_busy && edlFirehose;
-        if (!isEdl || !string.Equals(_edlCapabilityDevice, SelectedDevice?.Key, StringComparison.Ordinal))
-        {
-            Field<TextBlock>("EdlCapabilityText").IsVisible = false;
-        }
     }
 
     /// <summary>
@@ -1289,7 +1417,7 @@ public sealed partial class FlashViewModel
             _mtkResolution = null;
             _mtkRows.Clear();
             _mtkPartitions.Clear();
-            Field<StackPanel>("MtkPane").IsVisible = false;
+            UpdateModeVisibility();
             Field<Button>("ExtractSelectedButton").IsEnabled = false;
             Field<Button>("BuildWiredPackageButton").IsEnabled = false;
             PackagePath = string.Empty;
@@ -1395,7 +1523,20 @@ public sealed partial class FlashViewModel
     }
 
     internal async void OnFlashSelectedClick(object? sender, RoutedEventArgs e)
-        => await RunSelectedAsync(erase: false);
+    {
+        if (SelectedDevice?.Protocol == DeviceProtocolKind.Mtk || _mtkResolution is not null)
+        {
+            OnMtkFlashClick(sender, e);
+        }
+        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Edl || _flatBinPackage || _edlEntries.Count > 0)
+        {
+            OnFlashEdlBundleClick(sender, e);
+        }
+        else
+        {
+            await RunSelectedAsync(erase: false);
+        }
+    }
 
     internal async void OnFlashEdlBundleClick(object? sender, RoutedEventArgs e)
     {
@@ -1611,31 +1752,28 @@ public sealed partial class FlashViewModel
 
         long? maxPayload = null;
         long? pagesPerBlock = null;
-        if (Field<CheckBox>("FlashExpertModeBox").IsChecked == true)
+        if (!string.IsNullOrWhiteSpace(Field<TextBox>("EdlMaxPayloadBox").Text))
         {
-            if (!string.IsNullOrWhiteSpace(Field<TextBox>("EdlMaxPayloadBox").Text))
+            if (!long.TryParse(Field<TextBox>("EdlMaxPayloadBox").Text, out var parsedMaxPayload) ||
+                parsedMaxPayload is < 512 or > 16777216 || parsedMaxPayload % 512 != 0)
             {
-                if (!long.TryParse(Field<TextBox>("EdlMaxPayloadBox").Text, out var parsedMaxPayload) ||
-                    parsedMaxPayload is < 512 or > 16777216 || parsedMaxPayload % 512 != 0)
-                {
-                    AppendLog(LanguageService.Instance.GetString("Flash_EdlMaxPayloadInvalid"));
-                    return false;
-                }
-
-                maxPayload = parsedMaxPayload;
+                AppendLog(LanguageService.Instance.GetString("Flash_EdlMaxPayloadInvalid"));
+                return false;
             }
 
-            if (!string.IsNullOrWhiteSpace(Field<TextBox>("EdlPagesPerBlockBox").Text))
-            {
-                if (!long.TryParse(Field<TextBox>("EdlPagesPerBlockBox").Text, out var parsedPagesPerBlock) ||
-                    parsedPagesPerBlock is < 0 or > 65535)
-                {
-                    AppendLog(LanguageService.Instance.GetString("Flash_EdlPagesPerBlockInvalid"));
-                    return false;
-                }
+            maxPayload = parsedMaxPayload;
+        }
 
-                pagesPerBlock = parsedPagesPerBlock == 0 ? null : parsedPagesPerBlock;
+        if (!string.IsNullOrWhiteSpace(Field<TextBox>("EdlPagesPerBlockBox").Text))
+        {
+            if (!long.TryParse(Field<TextBox>("EdlPagesPerBlockBox").Text, out var parsedPagesPerBlock) ||
+                parsedPagesPerBlock is < 0 or > 65535)
+            {
+                AppendLog(LanguageService.Instance.GetString("Flash_EdlPagesPerBlockInvalid"));
+                return false;
             }
+
+            pagesPerBlock = parsedPagesPerBlock == 0 ? null : parsedPagesPerBlock;
         }
 
         tuning = new EdlBundleTuning
@@ -1680,10 +1818,6 @@ public sealed partial class FlashViewModel
         partitionEntryLba = null;
         partitionEntryCount = null;
         partitionEntrySize = null;
-        if (Field<CheckBox>("FlashExpertModeBox").IsChecked != true)
-        {
-            return true;
-        }
 
         if (!TryReadEdlExpertNumber(Field<TextBox>("EdlGptEntryLbaBox").Text, out var requestedLba) || requestedLba is < 0 or 1)
         {
@@ -1752,11 +1886,38 @@ public sealed partial class FlashViewModel
     }
 
     internal async void OnEraseSelectedClick(object? sender, RoutedEventArgs e)
-        => await RunSelectedAsync(erase: true);
-
-    internal async void OnSwitchSlotClick(object? sender, RoutedEventArgs e)
     {
-        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Fastboot } device ||
+        if (SelectedDevice?.Protocol == DeviceProtocolKind.Mtk || _mtkResolution is not null)
+        {
+            OnMtkEraseClick(sender, e);
+        }
+        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Edl || _edlEntries.Count > 0)
+        {
+            OnEdlEraseClick(sender, e);
+        }
+        else
+        {
+            await RunSelectedAsync(erase: true);
+        }
+    }
+
+    internal void OnSlotResetCurrentClick(object? sender, RoutedEventArgs e)
+        => RunSwitchSlotActionAsync(SlotAction.ResetCurrent);
+
+    internal void OnSlotSetAClick(object? sender, RoutedEventArgs e)
+        => RunSwitchSlotActionAsync(SlotAction.SetA);
+
+    internal void OnSlotSetBClick(object? sender, RoutedEventArgs e)
+        => RunSwitchSlotActionAsync(SlotAction.SetB);
+
+    internal void OnSwitchSlotClick(object? sender, RoutedEventArgs e)
+        => RunSwitchSlotActionAsync(SlotAction.SwitchOther);
+
+    private enum SlotAction { ResetCurrent, SetA, SetB, SwitchOther }
+
+    private async void RunSwitchSlotActionAsync(SlotAction action)
+    {
+        if (_busy || _confirming || SelectedDevice is not { } device ||
             TopLevel.GetTopLevel(Surface) is not Window owner) return;
         var language = LanguageService.Instance;
         _confirming = true;
@@ -1764,25 +1925,51 @@ public sealed partial class FlashViewModel
         try { confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_SwitchSlot"), device.DisplayName); }
         finally { _confirming = false; }
         if (!confirmed) return;
-        if (SelectedDevice is not DetectedDevice current || current.Key != device.Key ||
-            (await Task.Run(App.DeviceMonitor.Scan)).All(found => found.Key != device.Key ||
-                found.Protocol != DeviceProtocolKind.Fastboot))
+
+        if (device.Protocol == DeviceProtocolKind.Fastboot)
         {
-            AppendLog(language.GetString("Flash_DeviceChanged"));
-            return;
+            if (SelectedDevice is not DetectedDevice current || current.Key != device.Key ||
+                (await Task.Run(App.DeviceMonitor.Scan)).All(found => found.Key != device.Key ||
+                    found.Protocol != DeviceProtocolKind.Fastboot))
+            {
+                AppendLog(language.GetString("Flash_DeviceChanged"));
+                return;
+            }
+            SetBusy(true);
+            Field<Button>("SwitchSlotButton").IsEnabled = false;
+            try
+            {
+                var slot = action switch
+                {
+                    SlotAction.ResetCurrent => await FastbootSlotService.ResetCurrentAsync(device, CancellationToken.None),
+                    SlotAction.SetA => await FastbootSlotService.SetActiveSlotAsync(device, "a", CancellationToken.None),
+                    SlotAction.SetB => await FastbootSlotService.SetActiveSlotAsync(device, "b", CancellationToken.None),
+                    _ => await FastbootSlotService.SetOtherAsync(device, CancellationToken.None)
+                };
+                AppendLog($"{language.GetString("Flash_ActiveSlot")}: {slot}");
+            }
+            catch (Exception ex) { AppendLog(ex.Message); }
+            finally
+            {
+                SetBusy(false);
+                Field<Button>("SwitchSlotButton").IsEnabled = true;
+            }
         }
-        SetBusy(true);
-        Field<Button>("SwitchSlotButton").IsEnabled = false;
-        try
+        else if (device.Protocol == DeviceProtocolKind.Edl)
         {
-            var slot = await FastbootSlotService.SetOtherAsync(device, CancellationToken.None);
-            AppendLog($"{language.GetString("Flash_ActiveSlot")}: {slot}");
+            var targetSlot = action switch
+            {
+                SlotAction.SetA => "a",
+                SlotAction.SetB => "b",
+                _ => "a"
+            };
+            await RunEdlPowerRequestAsync("Flash_SwitchSlot", "Flash_EdlSetActiveSlotConfirm",
+                "Flash_EdlSetActiveSlotDone",
+                (firehose, cancellationToken) => firehose.SetActivePartitionAsync(targetSlot, cancellationToken));
         }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
+        else
         {
-            SetBusy(false);
-            Field<Button>("SwitchSlotButton").IsEnabled = true;
+            AppendLog(language.GetString("Flash_ModeMismatch"));
         }
     }
 
@@ -2531,50 +2718,6 @@ public sealed partial class FlashViewModel
         }
     }
 
-    /// <summary>
-    /// Repairs the partition table by writing back the extents built from the table currently read off the
-    /// device, then revalidates the metadata fingerprint; the user must confirm before any write is issued.
-    /// <para>用设备当前读回的分区表重写主、备 GPT 范围，并在写回后按元数据指纹复核；任何写入前都需要用户确认。</para>
-    /// </summary>
-    internal async void OnEdlRepairGptClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
-            TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        if (!TryBuildEdlInitialization(out var initialization)) return;
-        var language = LanguageService.Instance;
-        _confirming = true;
-        bool confirmed;
-        try
-        {
-            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_EdlRepairGpt"),
-                $"{language.GetString("Flash_EdlRepairGptConfirm")}{Environment.NewLine}{device.DisplayName}");
-        }
-        finally { _confirming = false; }
-        if (!confirmed) return;
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("EdlRepairGptButton").IsEnabled = false;
-        try
-        {
-            var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
-            var result = await EdlGptPartitionService.RepairGptAsync(new DeviceInfo(device), confirmed: true,
-                progress, cancellation.Token, _edlProgrammerOverride ?? _edlProgrammer, initialization,
-                SelectedEdlLun).ConfigureAwait(true);
-            AppendLog(result.Summary);
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            _flashCancellation = null;
-            Field<Button>("CancelFlashButton").IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
 
     /// <summary>
     /// Resets the selected EDL device over firehose after a best-effort bootable-storage setup; the
@@ -2619,25 +2762,6 @@ public sealed partial class FlashViewModel
             ? slot
             : null;
 
-    /// <summary>
-    /// Switches the active A/B slot from the box value; the reference implementations accept the letter and
-    /// numeric spellings, so a, b, 0 and 1 are forwarded verbatim and any other text is refused before the
-    /// device is touched.
-    /// <para>按输入框里的槽位标识切换活动 A/B 分区；参考实现分别接受字母与数字两种写法，因此这里接受 a、b、0、1
-    /// 并原样下发，其他文本在接触设备之前被拒绝。</para>
-    /// </summary>
-    internal async void OnEdlSetActiveSlotClick(object? sender, RoutedEventArgs e)
-    {
-        if (NormalizeEdlSlot(Field<TextBox>("EdlActiveSlotBox").Text) is not { } slot)
-        {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlSetActiveSlotInvalid"));
-            return;
-        }
-
-        await RunEdlPowerRequestAsync("Flash_EdlSetActiveSlot", "Flash_EdlSetActiveSlotConfirm",
-            "Flash_EdlSetActiveSlotDone",
-            (firehose, cancellationToken) => firehose.SetActivePartitionAsync(slot, cancellationToken));
-    }
 
     /// <summary>
     /// Routes every region-level read or erase through one session template: build the initialization,
@@ -2744,26 +2868,6 @@ public sealed partial class FlashViewModel
         }
     }
 
-    /// <summary>
-    /// Picks the output directory for region dumps; choosing it moves no bytes, so it needs no confirmation.
-    /// <para>选择区域转储的输出目录；读回是只传输不动作的准备步骤，因此不弹确认。</para>
-    /// </summary>
-    /// <param name="sender">The choosing button. <para>选择按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnChooseEdlRegionDirClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
-        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = LanguageService.Instance.GetString("Flash_EdlRegionDirChoose"),
-            AllowMultiple = false
-        });
-        if (_busy || _confirming || folders.Count != 1 || folders[0].TryGetLocalPath() is not { } path) return;
-        _edlRegionDirectory = path;
-        Field<TextBlock>("EdlRegionDirText").Text = new DirectoryInfo(path).Name;
-        ToolTip.SetTip(Field<TextBlock>("EdlRegionDirText"), path);
-        UpdateEdlButton();
-    }
 
     /// <summary>
     /// Dumps the pane-selected LUN into <c>lun-N.bin</c> inside the chosen directory; the summary names the
@@ -2774,7 +2878,21 @@ public sealed partial class FlashViewModel
     /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
     internal async void OnEdlReadLunClick(object? sender, RoutedEventArgs e)
     {
-        if (_edlRegionDirectory is not { } directory || !await ConfirmEdlRegionWriteAsync("Flash_EdlReadLun")) return;
+        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
+        var language = LanguageService.Instance;
+        _confirming = true;
+        IReadOnlyList<IStorageFolder> folders;
+        try
+        {
+            folders = await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = language.GetString("Flash_EdlRegionDirChoose"),
+                AllowMultiple = false
+            });
+        }
+        finally { _confirming = false; }
+        if (folders.Count == 0 || folders[0].TryGetLocalPath() is not { Length: > 0 } directory) return;
+        if (!await ConfirmEdlRegionWriteAsync("Flash_EdlReadLun")) return;
         var lun = SelectedEdlLun;
         var destination = Path.Combine(directory, $"lun-{lun}.bin");
         await RunEdlRegionOperationAsync(async (firehose, _, token) =>
@@ -2782,7 +2900,7 @@ public sealed partial class FlashViewModel
             var result = await EdlGptRegionService.ReadLunRegionToFileAsync(firehose, lun, destination, token)
                 .ConfigureAwait(true);
             return string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                LanguageService.Instance.GetString("Flash_EdlReadLunResult"),
+                language.GetString("Flash_EdlReadLunResult"),
                 Path.GetFileName(destination),
                 result.BytesTransferred.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 result.Sha256Hex);
@@ -2818,11 +2936,11 @@ public sealed partial class FlashViewModel
             _confirming = false;
         }
 
-        if (_edlRegionDirectory is not { } directory || files.Count != 1 ||
-            files[0].TryGetLocalPath() is not { Length: > 0 } manifest)
+        if (files.Count != 1 || files[0].TryGetLocalPath() is not { Length: > 0 } manifest)
         {
             return;
         }
+        var directory = Path.GetDirectoryName(manifest) ?? string.Empty;
 
         await RunEdlRegionOperationAsync(async (firehose, progress, token) =>
         {
@@ -2835,25 +2953,6 @@ public sealed partial class FlashViewModel
         });
     }
 
-    /// <summary>
-    /// Dumps every LUN of the physical storage into the chosen directory; capacity ceilings and cancellation
-    /// belong to the service layer, and the page only reports each region's outcome.
-    /// <para>逐个 LUN 转储整块物理存储到已选目录；容量上限与取消由服务层负责，界面只报告每区结果。</para>
-    /// </summary>
-    /// <param name="sender">the read button. <para>读取按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlReadWholeFlashClick(object? sender, RoutedEventArgs e)
-    {
-        if (_edlRegionDirectory is not { } directory || !await ConfirmEdlRegionWriteAsync("Flash_EdlReadWholeFlash")) return;
-        await RunEdlRegionOperationAsync(async (firehose, _, token) =>
-        {
-            var results = await EdlGptRegionService.ReadWholeFlashAsync(firehose, directory, token)
-                .ConfigureAwait(true);
-            return string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                LanguageService.Instance.GetString("Flash_EdlReadWholeFlashResult"),
-                results.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), directory);
-        });
-    }
 
     /// <summary>
     /// Erases the stated sector count from a partition start: the name and count come from the page, and a
@@ -2984,53 +3083,6 @@ public sealed partial class FlashViewModel
         });
     }
 
-    /// <summary>
-    /// Runs the EDL factory reset after confirmation: <c>userdata</c> and <c>metadata</c> are resolved
-    /// across LUNs on the device's own GPT and erased whole; the erasure is irreversible, absent partitions
-    /// are skipped and reported by the service, and a device reporting neither yields a summary saying
-    /// nothing was erased.
-    /// <para>确认后执行 EDL 出厂重置：按设备自身 GPT 跨 LUN 解析 <c>userdata</c> 与 <c>metadata</c> 并整区
-    /// 擦除；擦除不可恢复，缺失的分区由服务层跳过并报告，全部缺失时结果摘要写明未擦除任何内容。</para>
-    /// </summary>
-    internal async void OnEdlFactoryResetClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
-            TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        if (!TryBuildEdlInitialization(out var initialization)) return;
-        var language = LanguageService.Instance;
-        _confirming = true;
-        bool confirmed;
-        try
-        {
-            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_EdlFactoryReset"),
-                $"{language.GetString("Flash_EdlFactoryResetConfirm")}{Environment.NewLine}{device.DisplayName}");
-        }
-        finally { _confirming = false; }
-        if (!confirmed) return;
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("EdlFactoryResetButton").IsEnabled = false;
-        try
-        {
-            var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
-            var result = await EdlGptPartitionService.FactoryResetAsync(new DeviceInfo(device), progress,
-                cancellation.Token, _edlProgrammerOverride ?? _edlProgrammer, initialization)
-                .ConfigureAwait(true);
-            AppendLog(result.Summary);
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            _flashCancellation = null;
-            Field<Button>("CancelFlashButton").IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
 
     /// <summary>
     /// Runs one power or slot request on the configured firehose session after confirmation; a response the
@@ -5721,4 +5773,299 @@ public sealed partial class FlashViewModel
             mode == DeviceProtocolKind.Rkdl && hasRockchipParameter ||
             flatBin && (mode == DeviceProtocolKind.Adb ||
                         mode == DeviceProtocolKind.Edl && hasProgrammer);
+
+    internal static string FormatByteSize(long size)
+    {
+        if (size <= 0) return string.Empty;
+        if (size >= 1024L * 1024 * 1024)
+            return $"{size / 1024d / 1024d / 1024d:F2} GiB";
+        if (size >= 1024L * 1024)
+            return $"{size / 1024d / 1024d:F1} MiB";
+        if (size >= 1024)
+            return $"{size / 1024d:F1} KiB";
+        return $"{size} B";
+    }
+
+    internal static List<FlashPartitionEntry> ParseScript(string path, string[] lines)
+    {
+        var scriptDir = Path.GetDirectoryName(path) ?? string.Empty;
+        var regex = new Regex(
+            @"(?:@\s*)?fastboot\s+(?:(?:%\*|\$\*)\s+)?(flash|erase|set_active|reboot|wipe-super|create-logical-partition|delete-logical-partition|create|delete)(?:\s+([^\s]+))?(?:\s+(.*?))?(?=\s*(?:\||&|;|>|$))",
+            RegexOptions.IgnoreCase);
+
+        var scriptRows = new List<FlashPartitionEntry>();
+        foreach (var line in lines)
+        {
+            var match = regex.Match(line);
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            var command = match.Groups[1].Value.ToLowerInvariant();
+            var partitionOrArg = match.Groups[2].Value.Trim();
+            var relativeFilePath = match.Groups[3].Value.Trim();
+
+            var fullPath = string.Empty;
+            var fileName = string.Empty;
+            var sizeStr = string.Empty;
+            var partName = partitionOrArg;
+
+            if (command == "set_active")
+            {
+                partName = partitionOrArg;
+            }
+            else if (command == "reboot")
+            {
+                partName = string.Empty;
+            }
+            else if (command == "wipe-super")
+            {
+                command = "wipe_super";
+                partName = "super_empty";
+                if (string.IsNullOrEmpty(relativeFilePath))
+                {
+                    relativeFilePath = partitionOrArg;
+                }
+            }
+            else if (command == "create-logical-partition")
+            {
+                command = "create";
+            }
+            else if (command == "delete-logical-partition")
+            {
+                command = "delete";
+            }
+
+            if (!string.IsNullOrEmpty(relativeFilePath) && command != "set_active" && command != "reboot")
+            {
+                var normalizedPath = relativeFilePath
+                    .Replace("%~dp0", "")
+                    .Replace("`dirname $0`", "")
+                    .Replace("$(dirname $0)", "")
+                    .Replace("\"", "")
+                    .Replace("'", "")
+                    .Trim();
+
+                if (normalizedPath.StartsWith("./", StringComparison.Ordinal) ||
+                    normalizedPath.StartsWith(".\\", StringComparison.Ordinal))
+                {
+                    normalizedPath = normalizedPath[2..];
+                }
+
+                if (normalizedPath.Length >= 2 && normalizedPath[1] == ':')
+                {
+                    fullPath = normalizedPath;
+                }
+                else
+                {
+                    normalizedPath = normalizedPath.TrimStart('/', '\\');
+                    fullPath = Path.Combine(scriptDir, normalizedPath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
+                }
+                fileName = Path.GetFileName(fullPath);
+
+                if (partName.Replace(" ", "").Equals("super", StringComparison.OrdinalIgnoreCase) && !File.Exists(fullPath))
+                {
+                    var zstPath = Path.ChangeExtension(fullPath, ".zst");
+                    if (File.Exists(zstPath))
+                    {
+                        fullPath = zstPath;
+                        fileName = Path.GetFileName(zstPath);
+                    }
+                }
+
+                if (File.Exists(fullPath))
+                {
+                    sizeStr = FormatByteSize(new FileInfo(fullPath).Length);
+                }
+            }
+
+            var cleanName = partName.Replace(" ", "");
+            var fileLength = File.Exists(fullPath) ? new FileInfo(fullPath).Length : 0;
+            var isSuperEmpty = cleanName.Equals("super_empty", StringComparison.OrdinalIgnoreCase);
+            var stepCommand = isSuperEmpty ? "wipe_super" : command;
+            var step = new FlashStep(stepCommand, cleanName, fullPath, fileLength);
+
+            scriptRows.Add(new FlashPartitionEntry
+            {
+                Step = step,
+                Name = cleanName.Length > 0 ? cleanName : command,
+                Command = command,
+                Size = sizeStr,
+                FileName = fileName,
+                FilePath = fullPath,
+                CanSelect = true,
+                IsSelected = false
+            });
+        }
+
+        return scriptRows;
+    }
+
+    internal static List<FlashPartitionEntry> ParseManifestText(string path, string[] lines, out string? codeName, out bool requiresFastbootd)
+    {
+        var scriptDir = Path.GetDirectoryName(path) ?? string.Empty;
+        var txtRows = new List<FlashPartitionEntry>();
+        codeName = null;
+        requiresFastbootd = false;
+
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+            if (string.IsNullOrWhiteSpace(trimmedLine)) continue;
+            if (trimmedLine.StartsWith('#')) continue;
+
+            if (trimmedLine.StartsWith("codename:", StringComparison.OrdinalIgnoreCase))
+            {
+                codeName = trimmedLine["codename:".Length..].Trim();
+                continue;
+            }
+            if (trimmedLine.Equals("mode:fastbootd", StringComparison.OrdinalIgnoreCase))
+            {
+                requiresFastbootd = true;
+                continue;
+            }
+
+            var parts = trimmedLine.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) continue;
+
+            var partName = parts[0];
+            var command = "flash";
+            var relativeFilePath = string.Empty;
+            var fullPath = string.Empty;
+            var fileName = string.Empty;
+            var sizeStr = string.Empty;
+
+            if (parts.Length == 1)
+            {
+                relativeFilePath = Path.Combine("images", $"{partName}.img");
+                fileName = $"{partName}.img";
+            }
+            else if (parts.Length >= 2)
+            {
+                var arg = parts[1];
+                if (arg.Equals("delete", StringComparison.OrdinalIgnoreCase))
+                {
+                    command = "delete";
+                }
+                else if (arg.Equals("create", StringComparison.OrdinalIgnoreCase))
+                {
+                    command = "create";
+                }
+                else
+                {
+                    relativeFilePath = arg;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(relativeFilePath))
+            {
+                var normalizedPath = relativeFilePath
+                    .Replace("\"", "")
+                    .Replace("'", "")
+                    .Trim();
+
+                if (normalizedPath.StartsWith("./", StringComparison.Ordinal) ||
+                    normalizedPath.StartsWith(".\\", StringComparison.Ordinal))
+                {
+                    normalizedPath = normalizedPath[2..];
+                }
+
+                if (normalizedPath.Length >= 2 && normalizedPath[1] == ':')
+                {
+                    fullPath = normalizedPath;
+                }
+                else
+                {
+                    normalizedPath = normalizedPath.TrimStart('/', '\\');
+                    fullPath = Path.Combine(scriptDir, normalizedPath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
+                }
+                fileName = Path.GetFileName(fullPath);
+
+                if (!File.Exists(fullPath))
+                {
+                    var zstPath = Path.ChangeExtension(fullPath, ".zst");
+                    if (File.Exists(zstPath))
+                    {
+                        fullPath = zstPath;
+                        fileName = Path.GetFileName(zstPath);
+                    }
+                }
+
+                if (File.Exists(fullPath))
+                {
+                    sizeStr = FormatByteSize(new FileInfo(fullPath).Length);
+                }
+            }
+
+            var cleanName = partName.Replace(" ", "");
+            var fileLength = File.Exists(fullPath) ? new FileInfo(fullPath).Length : 0;
+            var isSuperEmpty = cleanName.Equals("super_empty", StringComparison.OrdinalIgnoreCase);
+            var stepCommand = isSuperEmpty ? "wipe_super" : command.Replace(" ", "");
+            var step = new FlashStep(stepCommand, cleanName, fullPath, fileLength);
+
+            txtRows.Add(new FlashPartitionEntry
+            {
+                Step = step,
+                Name = cleanName,
+                Size = sizeStr,
+                Command = command.Replace(" ", ""),
+                FileName = fileName,
+                FilePath = fullPath,
+                CanSelect = true,
+                IsSelected = false
+            });
+        }
+
+        return txtRows;
+    }
+
+    internal static List<FlashPartitionEntry> ParseDirectory(string path)
+    {
+        var targetDir = path;
+        var imagesSubdir = Path.Combine(path, "images");
+        if (Directory.Exists(imagesSubdir) &&
+            Directory.EnumerateFiles(imagesSubdir, "*", SearchOption.TopDirectoryOnly).Any() &&
+            !Directory.EnumerateFiles(path, "*.img", SearchOption.TopDirectoryOnly).Any())
+        {
+            targetDir = imagesSubdir;
+        }
+
+        var imgFiles = Directory.GetFiles(targetDir, "*", SearchOption.TopDirectoryOnly);
+        var dirRows = new List<FlashPartitionEntry>(imgFiles.Length);
+        foreach (var file in imgFiles)
+        {
+            var fileInfo = new FileInfo(file);
+            var fileName = fileInfo.Name;
+            var ext = Path.GetExtension(fileName).ToLowerInvariant();
+            if (ext is ".bat" or ".sh" or ".exe" or ".cmd" or ".ps1" or ".txt")
+            {
+                continue;
+            }
+
+            var partName = Path.GetFileNameWithoutExtension(fileName).Replace(" ", "");
+            if (fileName.EndsWith(".img.zst", StringComparison.OrdinalIgnoreCase))
+            {
+                partName = Path.GetFileNameWithoutExtension(partName);
+            }
+            var sizeStr = FormatByteSize(fileInfo.Length);
+            var isSuperEmpty = partName.Equals("super_empty", StringComparison.OrdinalIgnoreCase);
+            var command = isSuperEmpty ? "wipe_super" : "flash";
+            var step = new FlashStep(command, partName, file, fileInfo.Length);
+
+            dirRows.Add(new FlashPartitionEntry
+            {
+                Step = step,
+                Name = partName,
+                Size = sizeStr,
+                Command = command,
+                FileName = fileName,
+                FilePath = file,
+                CanSelect = true,
+                IsSelected = false
+            });
+        }
+
+        return dirRows;
+    }
 }

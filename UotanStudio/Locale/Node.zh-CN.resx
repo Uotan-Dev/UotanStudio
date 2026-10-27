@@ -265,7 +265,7 @@
     <value>切换活动槽位</value>
   </data>
   <data name="Node_Device_Edl_Flash" xml:space="preserve">
-    <value>EDL 刷写分区</value>
+    <value>EDL 刷入分区</value>
   </data>
   <data name="Node_Device_Edl_Erase" xml:space="preserve">
     <value>EDL 擦除分区</value>
@@ -286,7 +286,7 @@
     <value>EDL 回读分区</value>
   </data>
   <data name="Node_Device_Rkdl_Flash" xml:space="preserve">
-    <value>RKDL 刷写分区</value>
+    <value>RKDL 刷入分区</value>
   </data>
   <data name="Node_Device_Rkdl_ReadPartition" xml:space="preserve">
     <value>RKDL 回读分区</value>
@@ -2122,13 +2122,13 @@
     <value>从预设创建</value>
   </data>
   <data name="Node_Preset_Flash_boot" xml:space="preserve">
-    <value>刷写 boot 分区</value>
+    <value>刷入 boot 分区</value>
   </data>
   <data name="Node_Preset_Flash_bootloader" xml:space="preserve">
-    <value>刷写 bootloader 分区</value>
+    <value>刷入 bootloader 分区</value>
   </data>
   <data name="Node_Preset_Flash_super" xml:space="preserve">
-    <value>刷写 super 分区</value>
+    <value>刷入 super 分区</value>
   </data>
   <data name="Node_File_Artifact_Open" xml:space="preserve">
     <value>打开文件产物</value>

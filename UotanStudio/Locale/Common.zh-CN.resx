@@ -490,7 +490,10 @@
     <value>选择文件</value>
   </data>
   <data name="Flash_ChooseFolder" xml:space="preserve">
-    <value>选择文件夹</value>
+    <value>选择目录</value>
+  </data>
+  <data name="Flash_GetPackage" xml:space="preserve">
+    <value>获取刷机包</value>
   </data>
   <data name="Flash_SelectAll" xml:space="preserve">
     <value>全选</value>
@@ -520,7 +523,7 @@
     <value>尚未加载分区列表</value>
   </data>
   <data name="Flash_NoPartitionsHint" xml:space="preserve">
-    <value>选择刷机包后，可刷写分区会显示在这里。</value>
+    <value>选择刷机包后，可刷入分区会显示在这里。</value>
   </data>
   <data name="Flash_Basic" xml:space="preserve">
     <value>基本操作</value>
@@ -529,16 +532,16 @@
     <value>读取设备信息</value>
   </data>
   <data name="Flash_ShowAllPartitions" xml:space="preserve">
-    <value>Fastbootd 显示全部分区</value>
+    <value>显示物理分区</value>
   </data>
   <data name="Flash_FlashSelected" xml:space="preserve">
-    <value>刷写选中分区</value>
+    <value>刷入选中分区</value>
   </data>
   <data name="Flash_EraseSelected" xml:space="preserve">
     <value>擦除选中分区</value>
   </data>
   <data name="Flash_DisableVbmeta" xml:space="preserve">
-    <value>禁用 vbmeta 校验</value>
+    <value>禁用AVB</value>
   </data>
   <data name="Flash_DeleteCow" xml:space="preserve">
     <value>删除COW分区</value>
@@ -547,16 +550,16 @@
     <value>所选设备模式或权限不支持此刷机包及操作。</value>
   </data>
   <data name="Flash_FlashEdlBundle" xml:space="preserve">
-    <value>刷写完整 EDL 包</value>
+    <value>刷入完整 EDL 包</value>
   </data>
   <data name="Flash_AddRoot" xml:space="preserve">
     <value>添加 Root</value>
   </data>
   <data name="Flash_EraseData" xml:space="preserve">
-    <value>清除所有数据</value>
+    <value>清除用户数据</value>
   </data>
   <data name="Flash_RebootAfter" xml:space="preserve">
-    <value>刷写后重启设备</value>
+    <value>刷入后重启设备</value>
   </data>
   <data name="Flash_Image" xml:space="preserve">
     <value>镜像操作</value>
@@ -574,7 +577,7 @@
     <value>清空</value>
   </data>
   <data name="Flash_LogPlaceholder" xml:space="preserve">
-    <value>刷写日志输出</value>
+    <value>刷入日志输出</value>
   </data>
   <data name="Flash_FolderOnly" xml:space="preserve">
     <value>请选择刷机包、镜像目录或 HTTP(S) Payload 链接。</value>
@@ -592,7 +595,7 @@
     <value>镜像文件不存在。</value>
   </data>
   <data name="Flash_PackageChanged" xml:space="preserve">
-    <value>刷机包路径已更改，请先加载后再刷写。</value>
+    <value>刷机包路径已更改，请先加载后再刷入。</value>
   </data>
   <data name="Flash_ProductMismatch" xml:space="preserve">
     <value>设备机型与刷机清单不匹配，未写入任何数据。</value>
@@ -601,7 +604,16 @@
     <value>个设备分区已加载</value>
   </data>
   <data name="Flash_SwitchSlot" xml:space="preserve">
-    <value>切换活动槽位</value>
+    <value>切换槽位</value>
+  </data>
+  <data name="Flash_SlotResetCurrent" xml:space="preserve">
+    <value>重设当前槽位</value>
+  </data>
+  <data name="Flash_SlotSetA" xml:space="preserve">
+    <value>设为A槽位</value>
+  </data>
+  <data name="Flash_SlotSetB" xml:space="preserve">
+    <value>设为B槽位</value>
   </data>
   <data name="Flash_ActiveSlot" xml:space="preserve">
     <value>活动槽位</value>
@@ -616,7 +628,7 @@
     <value>此刷机包要求设备处于 Fastbootd 模式。</value>
   </data>
   <data name="Flash_RebootConflict" xml:space="preserve">
-    <value>所选脚本步骤已包含重启，请关闭刷写后操作或取消选择该步骤。</value>
+    <value>所选脚本步骤已包含重启，请关闭刷入后操作或取消选择该步骤。</value>
   </data>
   <data name="Flash_VbmetaMissing" xml:space="preserve">
     <value>请选中 vbmeta 分区及镜像以禁用校验。</value>
@@ -634,7 +646,7 @@
     <value>排队中</value>
   </data>
   <data name="Flash_Status_Flashing" xml:space="preserve">
-    <value>刷写中</value>
+    <value>刷入中</value>
   </data>
   <data name="Flash_Status_Verifying" xml:space="preserve">
     <value>校验中</value>
@@ -654,8 +666,11 @@
   <data name="Flash_OverallProgress" xml:space="preserve">
     <value>{1} 项中第 {0} 项</value>
   </data>
+  <data name="Flash_Fastboot" xml:space="preserve">
+    <value>Fastboot</value>
+  </data>
   <data name="Flash_VerifyAfterFlash" xml:space="preserve">
-    <value>刷写后校验</value>
+    <value>刷入后校验</value>
   </data>
   <data name="Flash_VerifyUnsupported" xml:space="preserve">
     <value>该协议不支持回读校验。</value>
@@ -673,7 +688,7 @@
     <value>未选择设备</value>
   </data>
   <data name="Flash_Mtk" xml:space="preserve">
-    <value>联发科下载</value>
+    <value>联发科 Mediatek</value>
   </data>
   <data name="Flash_MtkPorts" xml:space="preserve">
     <value>串口号</value>
@@ -763,7 +778,7 @@
     <value>整用户区转储已发布，读取长度被下调到该家族的传输对齐界限。</value>
   </data>
   <data name="Flash_ExpertMode" xml:space="preserve">
-    <value>专家级控件（原始内存与安全配置）</value>
+    <value>专家模式</value>
   </data>
   <data name="Flash_MtkStage" xml:space="preserve">
     <value>启动阶段</value>
@@ -865,7 +880,7 @@
     <value>关闭设备</value>
   </data>
   <data name="Flash_MtkReadback" xml:space="preserve">
-    <value>回读所选分区</value>
+    <value>回读选中分区</value>
   </data>
   <data name="Flash_MtkShowGpt" xml:space="preserve">
     <value>查看分区表</value>
@@ -979,7 +994,7 @@
     <value>，校验 {0:F1} MiB</value>
   </data>
   <data name="Flash_Edl" xml:space="preserve">
-    <value>EDL（Firehose）</value>
+    <value>高通 Qualcomm</value>
   </data>
   <data name="Flash_EdlStorageInfoUnknown" xml:space="preserve">
     <value>存储信息未知，请先读取存储报告。</value>
@@ -1090,7 +1105,8 @@
     <value>覆盖 Programmer（引导）</value>
   </data>
   <data name="Flash_EdlAllowStreamDload" xml:space="preserve">
-    <value>为命令模式目标启用流式 DLOAD（不使用 Firehose Programmer）</value>
+    <value>为命令模式目标启用流式 DLOAD
+（不使用 Firehose Programmer）</value>
   </data>
   <data name="Flash_EdlSkipResponse" xml:space="preserve">
     <value>跳过读写确认头（仅用于不回确认的下载器）</value>
@@ -1117,16 +1133,18 @@
     <value>唯一匹配：{0}</value>
   </data>
   <data name="Flash_EdlQudRecovery" xml:space="preserve">
-    <value>启用 QUD HELLO 恢复（仅用于会重发握手的驱动）</value>
+    <value>启用 QUD HELLO 恢复
+（仅用于会重发握手的驱动）</value>
   </data>
   <data name="Flash_EdlPendingCompletion" xml:space="preserve">
-    <value>允许把一次 pending 视为完成（仅单镜像传输）</value>
+    <value>允许把一次 pending 视为完成
+（仅单镜像传输）</value>
   </data>
   <data name="Flash_EdlSerial" xml:space="preserve">
     <value>设备序列号</value>
   </data>
   <data name="Flash_EdlReadbackSelected" xml:space="preserve">
-    <value>回读所选分区</value>
+    <value>回读选中分区</value>
   </data>
   <data name="Flash_EdlGenerateXml" xml:space="preserve">
     <value>生成 rawprogram XML</value>
@@ -1138,7 +1156,7 @@
     <value>跳过 UFS 配置（provisioning）</value>
   </data>
   <data name="Flash_EdlSerialFlash" xml:space="preserve">
-    <value>串口刷写完整包</value>
+    <value>串口刷入完整包</value>
   </data>
   <data name="Flash_EdlSerialPort" xml:space="preserve">
     <value>EDL 串口</value>
@@ -1225,7 +1243,7 @@
     <value>坏块标记位于备用区</value>
   </data>
   <data name="Flash_EdlNandConfirm" xml:space="preserve">
-    <value>确认 NAND 写入操作</value>
+    <value>确认NAND写入操作</value>
   </data>
   <data name="Flash_EdlNandTableChoose" xml:space="preserve">
     <value>选择分区表文件</value>
@@ -1408,7 +1426,7 @@
     <value>串口波特率</value>
   </data>
   <data name="Flash_MtkLoggingOnlyHint" xml:space="preserve">
-    <value>所选 MTK 端口仅支持日志输出，无法执行刷写命令。</value>
+    <value>所选 MTK 端口仅支持日志输出，无法执行刷入命令。</value>
   </data>
   <data name="Flash_MtkLoaderNoEntries" xml:space="preserve">
     <value>该 loader 配置没有可用的 DA1/DA2 区域对。</value>
@@ -1663,7 +1681,7 @@
     <value>刷入选中文件</value>
   </data>
   <data name="ImageView_FlashSelectedHint" xml:space="preserve">
-    <value>将选中的可刷写镜像按顺序刷入当前设备</value>
+    <value>将选中的可刷入镜像按顺序刷入当前设备</value>
   </data>
   <data name="ImageView_PackRom" xml:space="preserve">
     <value>打包ZIP</value>
@@ -3653,5 +3671,63 @@
   </data>
   <data name="Avb_OtaPartitionRequired" xml:space="preserve">
     <value>请至少选择一个分区。</value>
+  </data>
+
+  <data name="Flash_RebootMenu" xml:space="preserve">
+    <value>重启设备</value>
+  </data>
+  <data name="Flash_RebootSystem" xml:space="preserve">
+    <value>系统</value>
+  </data>
+  <data name="Flash_RebootBootloader" xml:space="preserve">
+    <value>引导模式 (Bootloader)</value>
+  </data>
+  <data name="Flash_RebootRecovery" xml:space="preserve">
+    <value>恢复模式 (Recovery)</value>
+  </data>
+  <data name="Flash_RebootFastbootd" xml:space="preserve">
+    <value>用户空间 Fastboot (Fastbootd)</value>
+  </data>
+  <data name="Flash_RebootEdl" xml:space="preserve">
+    <value>高通深度刷机 (EDL)</value>
+  </data>
+  <data name="Flash_PowerOff" xml:space="preserve">
+    <value>关机</value>
+  </data>
+  <data name="Flash_ReadbackSelected" xml:space="preserve">
+    <value>回读选中分区</value>
+  </data>
+  <data name="Flash_RootPackageHint" xml:space="preserve">
+    <value>Magisk、KernelSU 或 APatch 安装包路径</value>
+  </data>
+  <data name="Flash_EdlProgrammerPathHint" xml:space="preserve">
+    <value>Programmer 文件路径</value>
+  </data>
+  <data name="Flash_EdlProgrammerDirHint" xml:space="preserve">
+    <value>Programmer 目录路径</value>
+  </data>
+  <data name="Flash_EdlRegionDirHint" xml:space="preserve">
+    <value>转储目录路径</value>
+  </data>
+  <data name="Flash_EdlUfsProfileHint" xml:space="preserve">
+    <value>UFS 描述符路径</value>
+  </data>
+  <data name="Flash_EdlNandTableHint" xml:space="preserve">
+    <value>NAND 分区表路径</value>
+  </data>
+  <data name="Flash_MtkDaHint" xml:space="preserve">
+    <value>DA 文件路径</value>
+  </data>
+  <data name="Flash_MtkEmiHint" xml:space="preserve">
+    <value>EMI 文件路径</value>
+  </data>
+  <data name="Flash_MtkKeyDirHint" xml:space="preserve">
+    <value>密钥目录路径</value>
+  </data>
+  <data name="Flash_MtkAuthFileHint" xml:space="preserve">
+    <value>认证文件路径</value>
+  </data>
+  <data name="Flash_GeneralOperations" xml:space="preserve">
+    <value>通用操作</value>
   </data>
 </root>
