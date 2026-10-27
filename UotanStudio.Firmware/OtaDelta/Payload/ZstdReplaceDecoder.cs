@@ -1,6 +1,6 @@
 using System.Buffers;
-using ZstdSharp;
-using ZstdSharp.Unsafe;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Codecs.Zstd;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload;
 
@@ -86,27 +86,27 @@ internal static class ZstdReplaceDecoder
 
     /// <summary>
     /// Per-worker REPLACE_ZSTD decode state: the external dictionary bytes, the two pooled transfer buffers and the
-    /// reusable <see cref="Decompressor"/> stay allocated for as many frames as the owning worker decodes instead of
+    /// reusable <see cref="ZstdDecoder"/> stay allocated for as many frames as the owning worker decodes instead of
     /// being built and released once per operation. A caller that decodes concurrently creates one instance per
     /// worker and disposes each of them; one instance is not thread-safe, and the decoder's window bound
     /// (26 bits, i.e. 64 MiB) is what a worker count should be budgeted against.
     /// <para>每个解码工作者的 REPLACE_ZSTD 解码状态：外部字典字节、两个池化传输缓冲以及可复用的
-    /// <see cref="Decompressor"/> 会持续保留，供该工作者解码尽可能多的帧，而不再每条操作重建与释放。
+    /// <see cref="ZstdDecoder"/> 会持续保留，供该工作者解码尽可能多的帧，而不再每条操作重建与释放。
     /// 并发解码的调用方应为每个工作者各创建一个实例并逐个释放；单个实例并非线程安全，而解码器窗口上限
     /// （26 位，即 64 MiB）正是收口工作者数量时应参照的每工作者字节预算。</para>
     /// </summary>
     /// <remarks>
-    /// The <see cref="Decompressor"/> is created on the first frame rather than in the constructor, so a worker that
+    /// The <see cref="ZstdDecoder"/> is created on the first frame rather than in the constructor, so a worker that
     /// never meets a REPLACE_ZSTD operation never pays for a decoder window. Every frame begins with
-    /// <see cref="Decompressor.ResetStream"/> followed by the window bound, which is what makes reuse safe: a frame
+    /// <see cref="ZstdDecoder.Reset"/> followed by the window bound, which is what makes reuse safe: a frame
     /// that was abandoned part way through by cancellation, truncation or invalid data leaves the session mid-flight,
-    /// and the reset at the start of the next frame is what restores a clean boundary. <see cref="Decompressor"/>
+    /// and the reset at the start of the next frame is what restores a clean boundary. <see cref="ZstdDecoder"/>
     /// holds no state shared with other instances, so correctness depends entirely on the caller keeping one
     /// instance to one thread at a time.
-    /// <para><see cref="Decompressor"/> 在首帧才创建而不是在构造函数中创建，因此从未遇到 REPLACE_ZSTD 操作的工作者
-    /// 不会为解码器窗口付出代价。每一帧都以 <see cref="Decompressor.ResetStream"/> 加窗口上限设置开始，这正是复用
+    /// <para><see cref="ZstdDecoder"/> 在首帧才创建而不是在构造函数中创建，因此从未遇到 REPLACE_ZSTD 操作的工作者
+    /// 不会为解码器窗口付出代价。每一帧都以 <see cref="ZstdDecoder.Reset"/> 加窗口上限设置开始，这正是复用
     /// 之所以安全的原因：被取消、截断或非法数据中途放弃的帧会把会话留在半途，而下一帧开头的重置正是恢复干净
-    /// 状态边界的操作。<see cref="Decompressor"/> 不持有与其他实例共享的状态，因此正确性完全取决于调用方保证
+    /// 状态边界的操作。<see cref="ZstdDecoder"/> 不持有与其他实例共享的状态，因此正确性完全取决于调用方保证
     /// 任一时刻一个实例只属于一个线程。</para>
     /// </remarks>
     internal sealed class ZstdDecodeContext : IDisposable
@@ -114,7 +114,7 @@ internal static class ZstdReplaceDecoder
         private readonly ReadOnlyMemory<byte>? _dictionary;
         private readonly byte[] _inputBuffer;
         private readonly byte[] _outputBuffer;
-        private Decompressor? _decompressor;
+        private ZstdDecoder? _decompressor;
         private bool _disposed;
 
         /// <summary>
@@ -156,8 +156,6 @@ internal static class ZstdReplaceDecoder
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             var decompressor = _decompressor ??= CreateDecompressor();
-            decompressor.ResetStream();
-            decompressor.SetParameter(ZSTD_dParameter.ZSTD_d_windowLogMax, MaximumWindowLog);
 
             var inputOffset = 0;
             var inputLength = 0;
@@ -177,7 +175,7 @@ internal static class ZstdReplaceDecoder
                         }
                     }
 
-                    var status = decompressor.UnwrapStream(
+                    var status = decompressor.Decompress(
                         _inputBuffer.AsSpan(inputOffset, inputLength - inputOffset),
                         _outputBuffer,
                         out var consumed,
@@ -214,7 +212,7 @@ internal static class ZstdReplaceDecoder
                     }
                 }
             }
-            catch (ZstdException ex)
+            catch (CompressionException ex)
             {
                 ReleaseDecompressor();
                 throw new PartitionExtractionException(
@@ -229,23 +227,14 @@ internal static class ZstdReplaceDecoder
         /// <returns>
         /// A live decoder the context disposes. <para>由本上下文释放的活跃解码器。</para>
         /// </returns>
-        private Decompressor CreateDecompressor()
+        private ZstdDecoder CreateDecompressor()
         {
-            var decompressor = new Decompressor();
-            try
+            if (_dictionary is { } externalDictionary)
             {
-                if (_dictionary is { } externalDictionary)
-                {
-                    decompressor.LoadDictionary(externalDictionary.Span);
-                }
-            }
-            catch
-            {
-                decompressor.Dispose();
-                throw;
+                return new ZstdDecoder(externalDictionary, MaximumWindowLog);
             }
 
-            return decompressor;
+            return new ZstdDecoder(ReadOnlyMemory<byte>.Empty, MaximumWindowLog);
         }
 
         /// <summary>

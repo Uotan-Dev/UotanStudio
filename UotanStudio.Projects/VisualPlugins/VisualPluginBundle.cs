@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text.Json;
 using UotanStudio.Compress.Zip;
@@ -363,65 +362,6 @@ public static class VisualPluginBundle
         {
             throw new InvalidDataException("Patch bundle size is outside supported bounds.");
         }
-        var tail = new byte[(int)Math.Min(file.Length, 65557)];
-        file.Position = file.Length - tail.Length;
-        file.ReadExactly(tail);
-        var end = -1;
-        for (var i = tail.Length - 22; i >= 0; i--)
-        {
-            if (BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(i)) == 0x06054B50
-                && i + 22 + BinaryPrimitives.ReadUInt16LittleEndian(tail.AsSpan(i + 20)) == tail.Length)
-            {
-                end = i;
-                break;
-            }
-        }
-        if (end < 0)
-        {
-            throw new InvalidDataException("Patch bundle end record is missing.");
-        }
-        var record = tail.AsSpan(end);
-        var count = BinaryPrimitives.ReadUInt16LittleEndian(record[10..]);
-        var size = BinaryPrimitives.ReadUInt32LittleEndian(record[12..]);
-        var offset = BinaryPrimitives.ReadUInt32LittleEndian(record[16..]);
-        if (BinaryPrimitives.ReadUInt32LittleEndian(record[4..]) != 0
-            || BinaryPrimitives.ReadUInt16LittleEndian(record[8..]) != count
-            || count is 0 or > MaximumAssetCount + 1 || size > MaximumDirectorySize
-            || (long)offset + size != file.Length - tail.Length + end)
-        {
-            throw new InvalidDataException("Patch bundle directory is oversized, ZIP64, multidisk or malformed.");
-        }
-        file.Position = offset;
-        var directory = new byte[(int)size];
-        file.ReadExactly(directory);
-        var cursor = 0;
-        for (var i = 0; i < count; i++)
-        {
-            if (directory.Length - cursor < 46)
-            {
-                throw new InvalidDataException("Truncated patch bundle directory.");
-            }
-            var header = directory.AsSpan(cursor);
-            if (BinaryPrimitives.ReadUInt32LittleEndian(header) != 0x02014B50
-                || (BinaryPrimitives.ReadUInt16LittleEndian(header[8..]) & 1) != 0
-                || BinaryPrimitives.ReadUInt16LittleEndian(header[34..]) != 0
-                || BinaryPrimitives.ReadUInt32LittleEndian(header[20..]) == uint.MaxValue
-                || BinaryPrimitives.ReadUInt32LittleEndian(header[24..]) == uint.MaxValue
-                || BinaryPrimitives.ReadUInt32LittleEndian(header[42..]) >= offset)
-            {
-                throw new InvalidDataException("Unsupported patch bundle directory entry.");
-            }
-            cursor += 46 + BinaryPrimitives.ReadUInt16LittleEndian(header[28..])
-                + BinaryPrimitives.ReadUInt16LittleEndian(header[30..])
-                + BinaryPrimitives.ReadUInt16LittleEndian(header[32..]);
-            if (cursor > directory.Length)
-            {
-                throw new InvalidDataException("Patch bundle directory entry exceeds its range.");
-            }
-        }
-        if (cursor != directory.Length)
-        {
-            throw new InvalidDataException("Patch bundle directory count is inconsistent.");
-        }
+        ZipContainer.ValidateSingleDiskLayout(file, MaximumDirectorySize, MaximumAssetCount + 1);
     }
 }

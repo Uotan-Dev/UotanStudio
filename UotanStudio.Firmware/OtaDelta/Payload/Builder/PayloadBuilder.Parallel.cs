@@ -1,10 +1,10 @@
 using System.Runtime.ExceptionServices;
 using Google.Protobuf;
+using UotanStudio.Compress.Codecs.Zstd;
 using UotanStudio.Compress.Compressors;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Hash.Digests;
-using ZstdSharp;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
@@ -334,7 +334,7 @@ public sealed partial class PayloadBuilder
         /// </summary>
         internal bool StoresInput;
         private readonly DigestAccumulator _frameHash = Sha256.CreateAccumulator();
-        private Compressor? _zstd;
+        private ZstdEncoder? _zstd;
         private byte[]? _zstdDictionary;
 
         /// <summary>
@@ -429,7 +429,7 @@ public sealed partial class PayloadBuilder
             Hash = _frameHash.GetHashAndReset();
         }
 
-        private Compressor EnsureZstdCompressor(byte[]? dictionary)
+        private ZstdEncoder EnsureZstdCompressor(byte[]? dictionary)
         {
             if (_zstd is { } compressor && ReferenceEquals(_zstdDictionary, dictionary))
             {

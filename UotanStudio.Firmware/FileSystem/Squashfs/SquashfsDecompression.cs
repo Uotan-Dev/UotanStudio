@@ -2,8 +2,8 @@ using System.Buffers;
 using UotanStudio.Compress;
 using UotanStudio.Compress.Codecs.Lz4;
 using UotanStudio.Compress.Codecs.Lzo;
+using UotanStudio.Compress.Codecs.Zstd;
 using UotanStudio.Compress.Compressors;
-using ZstdSharp;
 
 namespace UotanStudio.Firmware.FileSystem.Squashfs;
 
@@ -43,7 +43,7 @@ internal static class SquashfsDecompression
 internal sealed class SquashfsBlockDecoder : IDisposable
 {
     private readonly int _compression;
-    private Decompressor? _zstd;
+    private ZstdDecoder? _zstd;
     private byte[]? _lzoScratch;
     private BufferReadStream? _input;
     private BoundedBufferStream? _output;
@@ -225,10 +225,10 @@ internal sealed class SquashfsBlockDecoder : IDisposable
             throw new FileSystemCorruptedException("The SquashFS zstd block does not start with a zstd frame magic.");
         }
 
-        _zstd ??= new Decompressor();
+        _zstd ??= new ZstdDecoder();
         try
         {
-            return _zstd.Unwrap(payload.AsSpan(0, payloadLength), destination.AsSpan(0, capacity));
+            return _zstd.Decompress(payload.AsSpan(0, payloadLength), destination.AsSpan(0, capacity));
         }
         catch (Exception ex) when (ex is not FileSystemCorruptedException)
         {

@@ -1,5 +1,4 @@
 using System.Buffers;
-using K4os.Compression.LZ4;
 using UotanStudio.Compress.Codecs.Lz4;
 using UotanStudio.Compress.Codecs.Lzo;
 using UotanStudio.Compress.Codecs.Zstd;
@@ -151,19 +150,19 @@ internal static class F2fsCompression
     {
         var lz4Level = level switch
         {
-            0 => LZ4Level.L00_FAST,
-            1 => LZ4Level.L03_HC,
-            3 => LZ4Level.L06_HC,
-            5 => LZ4Level.L09_HC,
-            9 => LZ4Level.L12_MAX,
-            _ => LZ4Level.L00_FAST,
+            0 => 0,
+            1 => 3,
+            3 => 6,
+            5 => 9,
+            9 => 12,
+            _ => 0,
         };
 
         var maxOutput = Lz4BlockCodec.MaximumOutputSize(data.Length);
         var target = ArrayPool<byte>.Shared.Rent(maxOutput);
         try
         {
-            var written = Lz4BlockCodec.Encode(data, target.AsSpan(0, maxOutput), (int)lz4Level);
+            var written = Lz4BlockCodec.Encode(data, target.AsSpan(0, maxOutput), lz4Level);
             if (written <= 0)
                 throw new InvalidOperationException("LZ4 compression produced no output.");
             return target.AsSpan(0, written).ToArray();
@@ -211,10 +210,10 @@ internal static class F2fsCompression
     private static byte[] DecompressZstd(ReadOnlySpan<byte> compressed, int expectedSize)
     {
         var result = GC.AllocateUninitializedArray<byte>(expectedSize);
-        var decompressor = ZstdBlockCodec.DecompressorCache.Rent();
+        var decompressor = new ZstdDecoder();
         try
         {
-            var written = decompressor.Unwrap(compressed, result);
+            var written = decompressor.Decompress(compressed, result);
             if (written < expectedSize)
             {
                 result.AsSpan(written).Clear();
@@ -224,7 +223,7 @@ internal static class F2fsCompression
         }
         finally
         {
-            ZstdBlockCodec.DecompressorCache.Return(decompressor);
+            decompressor.Dispose();
         }
     }
 }

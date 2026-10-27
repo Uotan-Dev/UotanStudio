@@ -1,5 +1,5 @@
 ﻿using System.Text;
-using SharpCompress.Compressors.LZMA;
+using UotanStudio.Compress.Codecs.Lzma;
 using UotanStudio.Firmware.Core.Streams;
 using UotanStudio.Firmware.VendorFirmware.NTPi.Models;
 
@@ -368,7 +368,7 @@ internal sealed class Lzma2Compressor : ILzma2Compressor
 
                 var compressedDataSize = payloadSize - 5;
                 using var boundedInput = new LengthLimitedReadStream(input, compressedDataSize, leaveOpen: true);
-                using var lzma = LzmaStream.Create(properties, boundedInput, compressedDataSize, originalSize);
+                using var lzma = new LzmaDecoderStream(properties, boundedInput, compressedDataSize, originalSize);
                 lzma.CopyTo(limitedOutput);
                 if (boundedInput.Position != compressedDataSize)
                 {
@@ -379,7 +379,7 @@ internal sealed class Lzma2Compressor : ILzma2Compressor
             else
             {
                 using var boundedInput = new LengthLimitedReadStream(input, payloadSize, leaveOpen: true);
-                using var lzma = LzmaStream.Create(new byte[1], boundedInput);
+                using var lzma = new LzmaDecoderStream(new byte[1], boundedInput);
                 lzma.CopyTo(limitedOutput);
                 if (boundedInput.Position != payloadSize)
                 {
@@ -431,7 +431,7 @@ internal sealed class Lzma2Compressor : ILzma2Compressor
     private static void DecompressLzma2(byte[] data, int payloadSize, MemoryStream outputStream)
     {
         using var inputStream = new MemoryStream(data, HeaderSize, payloadSize);
-        using var lzma = LzmaStream.Create(new byte[1], inputStream);
+        using var lzma = new LzmaDecoderStream(new byte[1], inputStream);
         lzma.CopyTo(outputStream);
     }
 
@@ -447,7 +447,7 @@ internal sealed class Lzma2Compressor : ILzma2Compressor
 
         var compressedDataSize = payloadSize - 5;
         using var inputStream = new MemoryStream(data, HeaderSize + 5, compressedDataSize);
-        using var lzma = LzmaStream.Create(properties, inputStream, compressedDataSize, (long)originalSize);
+        using var lzma = new LzmaDecoderStream(properties, inputStream, compressedDataSize, (long)originalSize);
         lzma.CopyTo(outputStream);
     }
 
@@ -486,7 +486,7 @@ internal sealed class Lzma2Compressor : ILzma2Compressor
         {
             var estimatedCapacity = Math.Max(256, (int)(originalSize / 2));
             using var compressedStream = new MemoryStream(estimatedCapacity);
-            using (var lzma = LzmaStream.Create(LzmaEncoderProperties.Default, false, compressedStream))
+            using (var lzma = new LzmaEncoderStream(compressedStream))
             {
                 lzma.Write(data, 0, data.Length);
                 properties = lzma.Properties;
@@ -561,7 +561,7 @@ internal sealed class Lzma2Compressor : ILzma2Compressor
             {
                 try
                 {
-                    using (var lzma = LzmaStream.Create(LzmaEncoderProperties.Default, false, compressedStream))
+                    using (var lzma = new LzmaEncoderStream(compressedStream))
                     {
                         var remaining = (long)originalSize;
                         var buffer = new byte[81920];

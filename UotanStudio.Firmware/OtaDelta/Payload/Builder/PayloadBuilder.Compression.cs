@@ -1,5 +1,5 @@
-using ZstdSharp;
-using ZstdSharp.Unsafe;
+using UotanStudio.Compress;
+using UotanStudio.Compress.Codecs.Zstd;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload.Builder;
 
@@ -53,22 +53,14 @@ public sealed partial class PayloadBuilder
     /// <exception cref="PayloadGenerationException">
     /// The compressor rejected the dictionary or the context parameters. <para>压缩器拒绝字典或上下文参数。</para>
     /// </exception>
-    internal static Compressor CreateZstdFrameContext(ReadOnlyMemory<byte> dictionary, int level = 3)
+    internal static ZstdEncoder CreateZstdFrameContext(ReadOnlyMemory<byte> dictionary, int level = 3)
     {
-        var compressor = new Compressor(level);
         try
         {
-            compressor.SetParameter(ZSTD_cParameter.ZSTD_c_checksumFlag, 1);
-            if (!dictionary.IsEmpty)
-            {
-                compressor.LoadDictionary(dictionary.Span);
-            }
-
-            return compressor;
+            return new ZstdEncoder(level, dictionary, checksum: true);
         }
-        catch (ZstdException ex)
+        catch (CompressionException ex)
         {
-            compressor.Dispose();
             throw new PayloadGenerationException($"Zstd REPLACE compression failed: {ex.Message}", ex);
         }
     }
@@ -85,8 +77,8 @@ public sealed partial class PayloadBuilder
     /// </param>
     /// <param name="source">Chunk plaintext. <para>块明文。</para></param>
     /// <param name="destination">
-    /// Destination wide enough for <see cref="Compressor.GetCompressBound(int)"/> bytes of <paramref name="source"/>.
-    /// <para>容量足以容纳 <paramref name="source"/> 的 <see cref="Compressor.GetCompressBound(int)"/> 字节的目标区间。</para>
+    /// Destination wide enough for <see cref="ZstdEncoder.MaximumCompressedSize(int)"/> bytes of <paramref name="source"/>.
+    /// <para>容量足以容纳 <paramref name="source"/> 的 <see cref="ZstdEncoder.MaximumCompressedSize(int)"/> 字节的目标区间。</para>
     /// </param>
     /// <returns>
     /// The number of frame bytes written at the start of <paramref name="destination"/>.
@@ -96,13 +88,13 @@ public sealed partial class PayloadBuilder
     /// The frame did not fit <paramref name="destination"/> or the compressor failed.
     /// <para>帧无法放入 <paramref name="destination"/>，或压缩器出错。</para>
     /// </exception>
-    internal static int CompressZstdFrame(Compressor compressor, ReadOnlySpan<byte> source, Span<byte> destination)
+    internal static int CompressZstdFrame(ZstdEncoder compressor, ReadOnlySpan<byte> source, Span<byte> destination)
     {
         try
         {
-            return compressor.Wrap(source, destination);
+            return compressor.Compress(source, destination);
         }
-        catch (ZstdException ex)
+        catch (CompressionException ex)
         {
             throw new PayloadGenerationException($"Zstd REPLACE compression failed: {ex.Message}", ex);
         }
@@ -138,7 +130,7 @@ public sealed partial class PayloadBuilder
         inputStream.CopyTo(buffer);
         var plain = buffer.ToArray();
         using var compressor = CreateZstdFrameContext(dictionary, level);
-        var frame = new byte[Compressor.GetCompressBound(plain.Length)];
+        var frame = new byte[ZstdEncoder.MaximumCompressedSize(plain.Length)];
         var written = CompressZstdFrame(compressor, plain, frame);
         outputStream.Write(frame, 0, written);
     }

@@ -3,8 +3,6 @@ using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading.Channels;
-using K4os.Compression.LZ4;
-using K4os.Compression.LZ4.Streams;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Compress;
 
@@ -553,8 +551,10 @@ internal sealed partial class AdbSyncClient
     {
         AdbSyncCompression.Brotli => CompressionService.CreateCompressionStream(
             collector, CompressionFormat.Brotli, new CompressionOptions { Level = 1 }),
-        AdbSyncCompression.Lz4 => LZ4Stream.Encode(collector, LZ4Level.L00_FAST, 0, leaveOpen: true),
-        AdbSyncCompression.Zstd => new ZstdSharp.CompressionStream(collector, leaveOpen: true),
+        AdbSyncCompression.Lz4 => CompressionService.CreateCompressionStream(
+            collector, CompressionFormat.Lz4, new CompressionOptions { Level = 0 }),
+        AdbSyncCompression.Zstd => CompressionService.CreateCompressionStream(
+            collector, CompressionFormat.Zstd, new CompressionOptions { Level = 3 }),
         _ => throw new ArgumentOutOfRangeException(nameof(codec), codec, "Unsupported sync v2 codec."),
     };
 
@@ -566,8 +566,8 @@ internal sealed partial class AdbSyncClient
     private static Stream CreateSyncDecodeStream(Stream feed, AdbSyncCompression codec) => codec switch
     {
         AdbSyncCompression.Brotli => CompressionService.CreateDecompressionStream(feed, CompressionFormat.Brotli),
-        AdbSyncCompression.Lz4 => LZ4Stream.Decode(feed, 0, leaveOpen: true, interactive: true),
-        AdbSyncCompression.Zstd => new ZstdSharp.DecompressionStream(feed, leaveOpen: true),
+        AdbSyncCompression.Lz4 => CompressionService.CreateDecompressionStream(feed, CompressionFormat.Lz4),
+        AdbSyncCompression.Zstd => CompressionService.CreateDecompressionStream(feed, CompressionFormat.Zstd),
         _ => throw new ArgumentOutOfRangeException(nameof(codec), codec, "Unsupported sync v2 codec."),
     };
 

@@ -730,10 +730,6 @@ public static partial class DeliveryPackageBuilder
             throw new InvalidDataException("外层签名私钥与证书不匹配。");
         await using var file = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None, 1024 * 1024, true);
         if (file.Length < 22) throw new InvalidDataException("Invalid ZIP.");
-        file.Position = file.Length - 22;
-        var tail = new byte[22]; await file.ReadExactlyAsync(tail, token);
-        if (BinaryPrimitives.ReadUInt32LittleEndian(tail) != 0x06054b50 || tail[20] != 0 || tail[21] != 0)
-            throw new InvalidDataException("ZIP already has a comment.");
         file.Position = 0;
         using var digest = Sha256.CreateAccumulator();
         var buffer = new byte[1024 * 1024]; var remaining = file.Length - 2;
@@ -752,10 +748,7 @@ public static partial class DeliveryPackageBuilder
         BinaryPrimitives.WriteUInt16LittleEndian(comment.AsSpan(total - 6), checked((ushort)(cms.Length + 6)));
         comment[total - 4] = 255; comment[total - 3] = 255;
         BinaryPrimitives.WriteUInt16LittleEndian(comment.AsSpan(total - 2), (ushort)total);
-        if (comment.AsSpan().IndexOf(new byte[] { 0x50, 0x4b, 0x05, 0x06 }) >= 0) throw new CryptographicException("Spurious ZIP end marker in signature.");
-        file.Position = file.Length - 2;
-        var length = new byte[2]; BinaryPrimitives.WriteUInt16LittleEndian(length, (ushort)total);
-        await file.WriteAsync(length, token); await file.WriteAsync(comment, token);
+        ZipContainer.AppendArchiveComment(file, comment);
     }
 
     private static byte[] EncodeCms(X509Certificate2 cert, byte[] signature)

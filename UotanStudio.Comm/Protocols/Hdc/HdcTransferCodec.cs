@@ -1,6 +1,6 @@
 using System.Buffers;
 using System.Text;
-using K4os.Compression.LZ4;
+using UotanStudio.Compress.Codecs.Lz4;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -65,9 +65,9 @@ internal static class HdcTransferCodec
             var compressed = false;
             if (compress && !data.IsEmpty)
             {
-                var maximum = LZ4Codec.MaximumOutputSize(data.Length);
+                var maximum = Lz4BlockCodec.MaximumOutputSize(data.Length);
                 rented = ArrayPool<byte>.Shared.Rent(maximum);
-                var count = LZ4Codec.Encode(data, rented.AsSpan(0, maximum));
+                var count = Lz4BlockCodec.Encode(data, rented.AsSpan(0, maximum), 0);
                 if (count > 0 && count < data.Length)
                 {
                     data = rented.AsSpan(0, count);
@@ -112,7 +112,7 @@ internal static class HdcTransferCodec
         if (compression == 1)
         {
             var decoded = new byte[(int)expanded];
-            if (LZ4Codec.Decode(payload[64..], decoded) != decoded.Length)
+            if (Lz4BlockCodec.Decode(payload[64..], decoded) != decoded.Length)
                 throw new InvalidDataException("Invalid HDC LZ4 chunk.");
             return ((long)offset, decoded);
         }

@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Buffers.Binary;
 using System.IO.Compression;
 
 namespace UotanStudio.Compress.Zip;
@@ -431,6 +432,161 @@ public static class ZipContainer
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+        }
+    }
+
+    /// <summary>
+    /// Appends a comment to an archive that has none, growing the end-of-central-directory record by the comment length.
+    /// <para>向尚无注释的归档追加注释，使中央目录结束记录按注释长度增长。</para>
+    /// </summary>
+    /// <param name="archive">Seekable, writable archive positioned anywhere; it is left at the end of the comment.
+    /// <para>可定位、可写的归档，起始位置不限；调用后停在注释末尾。</para></param>
+    /// <param name="comment">Comment bytes; they must not contain the end-record signature, because readers scan
+    /// backwards for that signature and would find the comment instead of the record.
+    /// <para>注释字节；不得包含结束记录签名，因为读取器会向后扫描该签名并找到注释而不是记录。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="archive"/> is <see langword="null"/>.
+    /// <para><paramref name="archive"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="NotSupportedException">The archive is not seekable and writable.
+    /// <para>归档不可定位或不可写。</para></exception>
+    /// <exception cref="InvalidDataException">The archive is too short, its end record is missing, it already has a
+    /// comment, or the comment carries the end-record signature. <para>归档过短、缺少结束记录、已有注释，或注释含结束记录签名。</para></exception>
+    public static void AppendArchiveComment(Stream archive, ReadOnlySpan<byte> comment)
+    {
+        ArgumentNullException.ThrowIfNull(archive);
+        if (!archive.CanSeek || !archive.CanWrite)
+        {
+            throw new NotSupportedException("Appending a ZIP comment requires a seekable writable archive.");
+        }
+
+        if (comment.Length > ushort.MaxValue)
+        {
+            throw new InvalidDataException("The ZIP comment exceeds the 16-bit length field.");
+        }
+
+        if (comment.IndexOf("PK\u0005\u0006"u8) >= 0)
+        {
+            throw new InvalidDataException("Spurious ZIP end marker in the comment.");
+        }
+
+        const int endRecordLength = 22;
+        const uint endRecordSignature = 0x06054b50;
+        if (archive.Length < endRecordLength)
+        {
+            throw new InvalidDataException("The archive is too short for a ZIP end-of-central-directory record.");
+        }
+
+        Span<byte> record = stackalloc byte[endRecordLength];
+        archive.Position = archive.Length - endRecordLength;
+        archive.ReadExactly(record);
+        if (BinaryPrimitives.ReadUInt32LittleEndian(record) != endRecordSignature)
+        {
+            throw new InvalidDataException("The ZIP end-of-central-directory record is missing.");
+        }
+
+        if (BinaryPrimitives.ReadUInt16LittleEndian(record[20..]) != 0)
+        {
+            throw new InvalidDataException("The archive already has a comment.");
+        }
+
+        Span<byte> length = stackalloc byte[2];
+        BinaryPrimitives.WriteUInt16LittleEndian(length, (ushort)comment.Length);
+        archive.Position = archive.Length - 2;
+        archive.Write(length);
+        archive.Write(comment);
+    }
+
+    /// <summary>
+    /// Validates the single-disk layout a hardened OTA or patch bundle requires: one end record, a contiguous central
+    /// directory that ends where the record starts, no ZIP64 placeholders, no encryption flag, stored entries only,
+    /// and every local header before the directory.
+    /// <para>校验加固的 OTA 或补丁包所要求的单盘布局：单一结束记录、紧接记录起点结束的连续中央目录、无 ZIP64 占位值、
+    /// 无加密标志、仅 stored 条目，且每个本地头都位于目录之前。</para>
+    /// </summary>
+    /// <param name="archive">Seekable readable archive. <para>可定位可读的归档。</para></param>
+    /// <param name="maximumDirectoryBytes">Upper bound on the central directory size. <para>中央目录大小上限。</para></param>
+    /// <param name="maximumEntries">Upper bound on the entry count. <para>条目数量上限。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="archive"/> is <see langword="null"/>.
+    /// <para><paramref name="archive"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidDataException">The layout is ZIP64, multidisk, encrypted, compressed or malformed.
+    /// <para>布局为 ZIP64、多盘、加密、已压缩或结构无效。</para></exception>
+    public static void ValidateSingleDiskLayout(Stream archive, long maximumDirectoryBytes, int maximumEntries)
+    {
+        ArgumentNullException.ThrowIfNull(archive);
+        if (!archive.CanSeek || !archive.CanRead)
+        {
+            throw new NotSupportedException("Validating a ZIP layout requires a seekable readable archive.");
+        }
+
+        if (archive.Length < 22)
+        {
+            throw new InvalidDataException("Patch bundle end record is missing.");
+        }
+
+        var tail = new byte[(int)Math.Min(archive.Length, 65557)];
+        archive.Position = archive.Length - tail.Length;
+        archive.ReadExactly(tail);
+        var end = -1;
+        for (var index = tail.Length - 22; index >= 0; index--)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(index)) == 0x06054B50
+                && index + 22 + BinaryPrimitives.ReadUInt16LittleEndian(tail.AsSpan(index + 20)) == tail.Length)
+            {
+                end = index;
+                break;
+            }
+        }
+
+        if (end < 0)
+        {
+            throw new InvalidDataException("Patch bundle end record is missing.");
+        }
+
+        var record = tail.AsSpan(end);
+        var count = BinaryPrimitives.ReadUInt16LittleEndian(record[10..]);
+        var size = BinaryPrimitives.ReadUInt32LittleEndian(record[12..]);
+        var offset = BinaryPrimitives.ReadUInt32LittleEndian(record[16..]);
+        if (BinaryPrimitives.ReadUInt32LittleEndian(record[4..]) != 0
+            || BinaryPrimitives.ReadUInt16LittleEndian(record[8..]) != count
+            || count is 0 || count > maximumEntries || size > maximumDirectoryBytes
+            || (long)offset + size != archive.Length - tail.Length + end)
+        {
+            throw new InvalidDataException("Patch bundle directory is oversized, ZIP64, multidisk or malformed.");
+        }
+
+        archive.Position = offset;
+        var directory = new byte[(int)size];
+        archive.ReadExactly(directory);
+        var cursor = 0;
+        for (var index = 0; index < count; index++)
+        {
+            if (directory.Length - cursor < 46)
+            {
+                throw new InvalidDataException("Truncated patch bundle directory.");
+            }
+
+            var header = directory.AsSpan(cursor);
+            if (BinaryPrimitives.ReadUInt32LittleEndian(header) != 0x02014B50
+                || (BinaryPrimitives.ReadUInt16LittleEndian(header[8..]) & 1) != 0
+                || BinaryPrimitives.ReadUInt16LittleEndian(header[34..]) != 0
+                || BinaryPrimitives.ReadUInt32LittleEndian(header[20..]) == uint.MaxValue
+                || BinaryPrimitives.ReadUInt32LittleEndian(header[24..]) == uint.MaxValue
+                || BinaryPrimitives.ReadUInt32LittleEndian(header[42..]) >= offset)
+            {
+                throw new InvalidDataException("Unsupported patch bundle directory entry.");
+            }
+
+            cursor += 46 + BinaryPrimitives.ReadUInt16LittleEndian(header[28..])
+                + BinaryPrimitives.ReadUInt16LittleEndian(header[30..])
+                + BinaryPrimitives.ReadUInt16LittleEndian(header[32..]);
+            if (cursor > directory.Length)
+            {
+                throw new InvalidDataException("Patch bundle directory entry exceeds its range.");
+            }
+        }
+
+        if (cursor != directory.Length)
+        {
+            throw new InvalidDataException("Patch bundle directory count is inconsistent.");
         }
     }
 }

@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
-using SevenZip.Compression.LZMA;
-using ZstdSharp;
-using ZstdSharp.Unsafe;
+using UotanStudio.Compress.Codecs.Lzma;
+using UotanStudio.Compress.Codecs.Zstd;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs;
 
@@ -37,11 +36,11 @@ internal sealed class ErofsEncoderContext : IDisposable
     private const int LargeLzmaDictionarySize = 256 * 1024;
 
     private readonly ErofsLz4StatePool _lz4States = new();
-    private readonly Dictionary<(int Level, int WindowLog), Compressor> _zstd = [];
+    private readonly Dictionary<(int Level, int WindowLog), ZstdEncoder> _zstd = [];
     private readonly Queue<(int Level, int WindowLog)> _zstdOrder = new();
     private ErofsLz4Context? _lz4Fast;
     private ErofsLz4Context? _lz4HighCompression;
-    private Encoder? _lzma;
+    private LzmaEncoder? _lzma;
     private int _lzmaLevel = int.MinValue;
     private int _lzmaDictionarySize = int.MinValue;
     private MemoryStream? _lzmaOutput;
@@ -74,7 +73,7 @@ internal sealed class ErofsEncoderContext : IDisposable
     /// <param name="windowLog">Frame window log to apply, or <c>0</c> for the level's own default.
     /// <para>要写入的帧窗口对数；为 <c>0</c> 时使用该级别自身的默认值。</para></param>
     /// <returns>A compressor owned by this context. <para>由本上下文持有的压缩器。</para></returns>
-    internal Compressor RentZstd(int level, int windowLog)
+    internal ZstdEncoder RentZstd(int level, int windowLog)
     {
         var key = (level, windowLog);
         if (_zstd.TryGetValue(key, out var retained))
@@ -82,19 +81,7 @@ internal sealed class ErofsEncoderContext : IDisposable
             return retained;
         }
 
-        var compressor = new Compressor(level);
-        try
-        {
-            if (windowLog > 0)
-            {
-                compressor.SetParameter(ZSTD_cParameter.ZSTD_c_windowLog, windowLog);
-            }
-        }
-        catch
-        {
-            compressor.Dispose();
-            throw;
-        }
+        var compressor = new ZstdEncoder(level, windowLog: windowLog);
 
         _zstd[key] = compressor;
         _zstdOrder.Enqueue(key);
@@ -126,12 +113,12 @@ internal sealed class ErofsEncoderContext : IDisposable
     /// <para>已按帧长封顶的字典字节数。</para></param>
     /// <returns>The encoder this context owns until it is disposed.
     /// <para>由本上下文持有至其被释放的编码器。</para></returns>
-    internal Encoder RentLzma(int compressionLevel, int dictionarySize)
+    internal LzmaEncoder RentLzma(int compressionLevel, int dictionarySize)
     {
         var encoder = _lzma;
         if (encoder is null)
         {
-            encoder = new Encoder();
+            encoder = new LzmaEncoder();
             ErofsCompression.ConfigureLzmaEncoder(encoder, compressionLevel, dictionarySize);
             _lzma = encoder;
             _lzmaLevel = compressionLevel;
@@ -289,9 +276,9 @@ internal sealed class ErofsCodecStatePool : IDisposable
 /// </summary>
 internal sealed class ErofsDecoderContext
 {
-    private Decompressor? _zstd;
+    private ZstdDecoder? _zstd;
     private int _zstdWindowLog = int.MinValue;
-    private Decoder? _lzma;
+    private LzmaDecoder? _lzma;
 
     /// <summary>
     /// Returns the ZSTD decompressor constrained to the requested window log, replacing the retained one when
@@ -303,16 +290,12 @@ internal sealed class ErofsDecoderContext
     /// <param name="windowLog">Maximum window log to apply, or <c>0</c> for the decoder default.
     /// <para>要施加的最大窗口对数；为 <c>0</c> 时使用解码器默认值。</para></param>
     /// <returns>A decompressor owned by this context. <para>由本上下文持有的解压器。</para></returns>
-    internal Decompressor RentZstd(int windowLog)
+    internal ZstdDecoder RentZstd(int windowLog)
     {
         if (_zstd is null || _zstdWindowLog != windowLog)
         {
             _zstd?.Dispose();
-            _zstd = new Decompressor();
-            if (windowLog > 0)
-            {
-                _zstd.SetParameter(ZSTD_dParameter.ZSTD_d_windowLogMax, windowLog);
-            }
+            _zstd = new ZstdDecoder(maximumWindowLog: windowLog);
 
             _zstdWindowLog = windowLog;
         }
@@ -325,13 +308,13 @@ internal sealed class ErofsDecoderContext
     /// resolve a different dictionary size for each pcluster.
     /// <para>返回保留的 MicroLZMA 解码器。调用方可能为每个 pcluster 解析不同的字典大小，因此解码属性逐次应用。</para>
     /// </summary>
-    internal Decoder LzmaDecoder => _lzma ??= new Decoder();
+    internal LzmaDecoder LzmaDecoder => _lzma ??= new LzmaDecoder();
 
     /// <summary>
-    /// The five-byte property block handed to <see cref="Decoder.SetDecoderProperties(byte[])"/>. It is
+    /// The five-byte property block handed to <see cref="LzmaDecoder.SetProperties(byte[])"/>. It is
     /// rewritten from the frame's own header before every decode, so the retained array never carries the
     /// previous pcluster's dictionary size.
-    /// <para>交给 <see cref="Decoder.SetDecoderProperties(byte[])"/> 的五字节属性块。每次解码前都由当前帧自身
+    /// <para>交给 <see cref="LzmaDecoder.SetProperties(byte[])"/> 的五字节属性块。每次解码前都由当前帧自身
     /// 的头部重写，因此保留的数组不会沿用上一个 pcluster 的字典大小。</para>
     /// </summary>
     internal byte[] LzmaProperties { get; } = new byte[5];

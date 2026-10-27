@@ -2,13 +2,11 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Numerics;
-using K4os.Compression.LZ4;
-using SevenZip;
-using SevenZip.Compression.LZMA;
+using UotanStudio.Compress;
 using UotanStudio.Compress.Codecs.Lz4;
+using UotanStudio.Compress.Codecs.Lzma;
+using UotanStudio.Compress.Codecs.Zstd;
 using UotanStudio.Firmware.FileSystem.Erofs.Models;
-using ZstdSharp;
-using ZstdSharp.Unsafe;
 
 namespace UotanStudio.Firmware.FileSystem.Erofs;
 
@@ -126,7 +124,7 @@ internal static class ErofsCompression
     /// <param name="length">Number of uncompressed input bytes. <para>未压缩输入的字节数。</para></param>
     /// <returns>The LZ4 output bound in bytes for <paramref name="length"/>.
     /// <para>LZ4 针对 <paramref name="length"/> 可能输出的字节数上界。</para></returns>
-    public static int MaximumOutputSize(int length) => LZ4Codec.MaximumOutputSize(length);
+    public static int MaximumOutputSize(int length) => Lz4BlockCodec.MaximumOutputSize(length);
 
     /// <summary>
     /// Computes a conservative maximum output size bound for the given algorithm.
@@ -149,7 +147,7 @@ internal static class ErofsCompression
 
         return algorithm switch
         {
-            ErofsAlgorithm.Lz4 => LZ4Codec.MaximumOutputSize(length),
+            ErofsAlgorithm.Lz4 => Lz4BlockCodec.MaximumOutputSize(length),
             ErofsAlgorithm.Lzma => LzmaMaximumOutputSize(length),
             ErofsAlgorithm.Deflate => DeflateMaximumOutputSize(length),
             ErofsAlgorithm.Zstd => ZstdMaximumOutputSize(length),
@@ -641,7 +639,7 @@ internal static class ErofsCompression
     }
 
     private static int DecompressLz4(byte[] source, int sourceIndex, int sourceLength, byte[] target, int targetIndex, int targetLength)
-        => LZ4Codec.Decode(source, sourceIndex, sourceLength, target, targetIndex, targetLength);
+        => Lz4BlockCodec.Decode(source.AsSpan(sourceIndex, sourceLength), target.AsSpan(targetIndex, targetLength));
 
     private static readonly int[] LzmaNumFastBytesByLevel = [32, 64, 128, 128, 256, 384, 512, 768, 1024];
 
@@ -704,7 +702,7 @@ internal static class ErofsCompression
         }
 
         var dictionarySize = ResolveLzmaDictionarySize(sourceLength, dictSize);
-        var encoder = context is null ? new Encoder() : context.RentLzma(compressionLevel, dictionarySize);
+        var encoder = context is null ? new LzmaEncoder() : context.RentLzma(compressionLevel, dictionarySize);
         if (context is null)
         {
             ConfigureLzmaEncoder(encoder, compressionLevel, dictionarySize);
@@ -719,7 +717,7 @@ internal static class ErofsCompression
         try
         {
             raw.SetLength(0);
-            encoder.Code(input, raw, sourceLength, sourceLength, null);
+            encoder.Code(input, raw, sourceLength, sourceLength);
             var rawBytes = raw.GetBuffer();
             if (raw.Length <= 0 || rawBytes[0] != 0)
             {
@@ -761,12 +759,14 @@ internal static class ErofsCompression
     /// <para>选择 LZMA 算法与 fast-bytes 数量的等级。</para></param>
     /// <param name="dictionarySize">Dictionary size in bytes already capped to the frame length.
     /// <para>已按帧长封顶的字典字节数。</para></param>
-    internal static void ConfigureLzmaEncoder(Encoder encoder, int compressionLevel, int dictionarySize)
-        => encoder.SetCoderProperties(
-            [CoderPropID.DictionarySize, CoderPropID.PosStateBits, CoderPropID.LitContextBits,
-                CoderPropID.LitPosBits, CoderPropID.Algorithm, CoderPropID.NumFastBytes],
-            [dictionarySize, LzmaPosStateBits, LzmaLitContextBits, LzmaLitPosBits,
-                compressionLevel >= 5 ? 2 : 1, LzmaNumFastBytes(compressionLevel)]);
+    internal static void ConfigureLzmaEncoder(LzmaEncoder encoder, int compressionLevel, int dictionarySize)
+        => encoder.Configure(
+            dictionarySize: dictionarySize,
+            posStateBits: LzmaPosStateBits,
+            litContextBits: LzmaLitContextBits,
+            litPosBits: LzmaLitPosBits,
+            algorithm: compressionLevel >= 5 ? 2 : 1,
+            numFastBytes: LzmaNumFastBytes(compressionLevel));
 
     /// <summary>
     /// LZMA decompression accepting the EROFS MicroLZMA stream (a negated property byte followed by raw LZMA
@@ -811,13 +811,13 @@ internal static class ErofsCompression
         properties[0] = propertyByte;
         BinaryPrimitives.WriteUInt32LittleEndian(properties.AsSpan(1), (uint)dictionarySize);
 
-        var decoder = context?.LzmaDecoder ?? new Decoder();
-        decoder.SetDecoderProperties(properties);
+        var decoder = context?.LzmaDecoder ?? new LzmaDecoder();
+        decoder.SetProperties(properties);
 
         using var input = new MicroLzmaInputStream(source, sourceIndex, sourceLength);
         using var output = new BoundedWriteStream(target, targetIndex, targetLength);
 
-        decoder.Code(input, output, sourceLength, targetLength, null);
+        decoder.Code(input, output, sourceLength, targetLength);
         if (output.Position != targetLength)
         {
             throw new FileSystemCorruptedException(
@@ -1051,7 +1051,7 @@ internal static class ErofsCompression
         int targetLength,
         int compressionLevel,
         int windowLog,
-        Compressor? reusableCompressor)
+        ZstdEncoder? reusableCompressor)
     {
         if (sourceLength == 0)
         {
@@ -1060,26 +1060,21 @@ internal static class ErofsCompression
 
         if (reusableCompressor is null)
         {
-            using var compressor = new Compressor(Math.Clamp(compressionLevel, -5, 22));
-            if (windowLog > 0)
-            {
-                compressor.SetParameter(ZSTD_cParameter.ZSTD_c_windowLog, windowLog);
-            }
-
+            using var compressor = new ZstdEncoder(Math.Clamp(compressionLevel, -5, 22), windowLog: Math.Max(0, windowLog));
             return CompressZstdFrame(compressor, source, sourceIndex, sourceLength, target, targetIndex, targetLength);
         }
 
         return CompressZstdFrame(reusableCompressor, source, sourceIndex, sourceLength, target, targetIndex, targetLength);
     }
 
-    private static int CompressZstdFrame(Compressor compressor, byte[] source, int sourceIndex, int sourceLength,
+    private static int CompressZstdFrame(ZstdEncoder compressor, byte[] source, int sourceIndex, int sourceLength,
         byte[] target, int targetIndex, int targetLength)
     {
         try
         {
-            return compressor.Wrap(source.AsSpan(sourceIndex, sourceLength), target.AsSpan(targetIndex, targetLength));
+            return compressor.Compress(source.AsSpan(sourceIndex, sourceLength), target.AsSpan(targetIndex, targetLength));
         }
-        catch (ZstdException ex)
+        catch (CompressionException ex)
         {
             throw new InvalidOperationException(
                 "ZSTD compressed output exceeds the destination buffer, or the compression parameters are invalid.", ex);
@@ -1107,12 +1102,7 @@ internal static class ErofsCompression
 
         if (context is null)
         {
-            using var decompressor = new Decompressor();
-            if (windowLog > 0)
-            {
-                decompressor.SetParameter(ZSTD_dParameter.ZSTD_d_windowLogMax, windowLog);
-            }
-
+            using var decompressor = new ZstdDecoder(maximumWindowLog: windowLog);
             return DecompressZstdFrame(decompressor, source, sourceIndex, sourceLength, target, targetIndex, targetLength);
         }
 
@@ -1120,14 +1110,14 @@ internal static class ErofsCompression
             targetLength);
     }
 
-    private static int DecompressZstdFrame(Decompressor decompressor, byte[] source, int sourceIndex,
+    private static int DecompressZstdFrame(ZstdDecoder decompressor, byte[] source, int sourceIndex,
         int sourceLength, byte[] target, int targetIndex, int targetLength)
     {
         try
         {
-            return decompressor.Unwrap(source.AsSpan(sourceIndex, sourceLength), target.AsSpan(targetIndex, targetLength));
+            return decompressor.Decompress(source.AsSpan(sourceIndex, sourceLength), target.AsSpan(targetIndex, targetLength));
         }
-        catch (ZstdException ex)
+        catch (CompressionException ex)
         {
             throw new FileSystemCorruptedException(
                 "ZSTD decompression failed: the compressed data is corrupt or the destination buffer is too small.", ex);
@@ -1196,10 +1186,10 @@ internal static class ErofsCompression
     }
 
     /// <summary>
-    /// Read-only stream presenting one EROFS MicroLZMA frame to <see cref="Decoder"/> without copying it: the
+    /// Read-only stream presenting one EROFS MicroLZMA frame to <see cref="LzmaDecoder"/> without copying it: the
     /// stream yields the synthetic leading zero byte the LZMA range coder expects, then the frame bytes after
     /// the property byte, exactly the sequence a rented copy would expose.
-    /// <para>向 <see cref="Decoder"/> 呈现单个 EROFS MicroLZMA 帧而不复制它的只读流：先产出 LZMA 区间编码器
+    /// <para>向 <see cref="LzmaDecoder"/> 呈现单个 EROFS MicroLZMA 帧而不复制它的只读流：先产出 LZMA 区间编码器
     /// 期望的前导零字节，随后是属性字节之后的帧字节，与租借缓冲复制出的序列完全一致。</para>
     /// </summary>
     private sealed class MicroLzmaInputStream(byte[] source, int sourceIndex, int length) : Stream

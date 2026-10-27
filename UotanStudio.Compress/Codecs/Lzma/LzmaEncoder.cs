@@ -53,6 +53,27 @@ public sealed class LzmaEncoder
         int? numFastBytes = null,
         bool? endMarker = null)
     {
+        Configure(dictionarySize, posStateBits, litContextBits, litPosBits, algorithm, numFastBytes, endMarker);
+    }
+
+    /// <summary>Re-applies the coder properties on a retained encoder, so a pooled encoder can serve the next frame's level and dictionary.
+    /// <para>在保留的编码器上重新应用编码属性，使池化编码器可以服务下一帧的等级与字典。</para></summary>
+    /// <param name="dictionarySize">Match-finder dictionary window in bytes. <para>匹配查找器的字典窗口字节数。</para></param>
+    /// <param name="posStateBits">Position state bits (pb). <para>位置状态位数（pb）。</para></param>
+    /// <param name="litContextBits">Literal context bits (lc). <para>字面量上下文位数（lc）。</para></param>
+    /// <param name="litPosBits">Literal position bits (lp). <para>字面量位置位数（lp）。</para></param>
+    /// <param name="algorithm">SDK algorithm selector. <para>SDK 算法选择器。</para></param>
+    /// <param name="numFastBytes">Bytes the match finder tries to extend. <para>匹配查找器尝试延伸的字节数。</para></param>
+    /// <param name="endMarker">Whether the stream ends with an end marker. <para>流是否以结束标记收尾。</para></param>
+    public void Configure(
+        int? dictionarySize = null,
+        int? posStateBits = null,
+        int? litContextBits = null,
+        int? litPosBits = null,
+        int? algorithm = null,
+        int? numFastBytes = null,
+        bool? endMarker = null)
+    {
         var identifiers = new List<CoderPropID>(7);
         var values = new List<object>(7);
 

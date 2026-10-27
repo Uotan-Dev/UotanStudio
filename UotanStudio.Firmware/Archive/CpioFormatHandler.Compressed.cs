@@ -1,8 +1,7 @@
 using System.Buffers.Binary;
 using System.Text.Json.Nodes;
-using SevenZip;
-using SevenZip.Compression.LZMA;
 using UotanStudio.Compress;
+using UotanStudio.Compress.Codecs.Lzma;
 using UotanStudio.Compress.Compressors;
 using UotanStudio.Compress.Detection;
 using UotanStudio.Firmware.Archive.Formats.Cpio;
@@ -635,16 +634,17 @@ public sealed partial class CpioFormatHandler
                     {
                         throw new ArchiveCorruptedException("Invalid stored LZMA-alone properties.");
                     }
-                    var encoder = new Encoder();
-                    encoder.SetCoderProperties(
-                        [CoderPropID.DictionarySize, CoderPropID.PosStateBits, CoderPropID.LitPosBits,
-                            CoderPropID.LitContextBits, CoderPropID.EndMarker],
-                        [(int)dictionary, property / 45, property % 45 / 9, property % 9, unknownSize]);
+                    var encoder = new LzmaEncoder(
+                        dictionarySize: (int)dictionary,
+                        posStateBits: property / 45,
+                        litContextBits: property % 9,
+                        litPosBits: property % 45 / 9,
+                        endMarker: unknownSize);
                     encoder.WriteCoderProperties(bounded);
                     Span<byte> size = stackalloc byte[8];
                     BinaryPrimitives.WriteInt64LittleEndian(size, unknownSize ? -1 : raw.Length);
                     bounded.Write(size);
-                    encoder.Code(raw, bounded, -1, -1, null);
+                    encoder.Code(raw, bounded, -1, -1);
                 }
                 else
                 {
