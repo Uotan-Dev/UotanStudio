@@ -32,13 +32,14 @@ public enum NewProjectWindowMode
 /// Combined full directory (<c>base/name</c>); must be missing or empty.
 /// <para>组合后的完整目录（<c>基础目录/名称</c>），必须不存在或为空。</para>
 /// </param>
-/// <param name="ContainerKind">Single-file container kind (none / super / payload / zip). <para>单文件容器类型（无/ super / payload / zip）。</para></param>
+/// <param name="ContainerKind">Single-file container kind (none / super / payload / zip / update.bin). <para>单文件容器类型（无/ super / payload / zip / update.bin）。</para></param>
 /// <param name="ContainerPath">Container file path; null when not a container. <para>容器文件路径；非容器时为 null。</para></param>
 /// <param name="SelectedImagePaths">Full paths of plain multi-selected images. <para>普通多选镜像的完整路径。</para></param>
 /// <param name="SelectedZipMembers">Selected ZIP member full paths. <para>ZIP 容器中勾选的条目完整路径。</para></param>
 /// <param name="SelectedPartitions">
-/// Selected partition names (super logical partitions or payload partitions, per <see cref="ContainerKind"/>).
-/// <para>勾选的分区名（super 逻辑分区或 payload 分区，按 <see cref="ContainerKind"/> 区分）。</para>
+/// Selected partition or component names (super logical partitions, payload partitions or update.bin components,
+/// per <see cref="ContainerKind"/>).
+/// <para>勾选的分区或组件名（super 逻辑分区、payload 分区或 update.bin 组件，按 <see cref="ContainerKind"/> 区分）。</para>
 /// </param>
 /// <param name="UnpackImages">Whether to unpack images. <para>是否解压镜像。</para></param>
 /// <param name="UnpackFully">Whether to unpack extracted supported imgs into same-name folders. <para>是否把解出的受支持 img 继续解压为同名文件夹。</para></param>

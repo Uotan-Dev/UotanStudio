@@ -154,9 +154,24 @@ internal sealed class HarmonyUpdateBinFormatHandler : IReadonlyFormatHandler, IR
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory,
         UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options, cancellationToken,
-            () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
+            () => UnpackComponentsAsync(filePath, outputDirectory, options, cancellationToken));
 
-    private async Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory,
+    /// <summary>
+    /// Extracts components without publishing repack metadata, for container workflows that own the output
+    /// directory and must not leave an extra metadata file among the extracted images.
+    /// <para>不发布重打包元数据地解出组件，供自行管理输出目录、且不得在解出镜像中留下额外元数据文件的容器流程使用。</para>
+    /// </summary>
+    /// <param name="filePath">Package to unpack; the input is opened read-only.
+    /// <para>待解包的包；输入以只读方式打开。</para></param>
+    /// <param name="outputDirectory">Directory receiving the selected components.
+    /// <para>接收选中组件的目录。</para></param>
+    /// <param name="options">Extraction policy; <see langword="null"/> uses defaults.
+    /// <para>解包策略；为 <see langword="null"/> 时使用默认值。</para></param>
+    /// <param name="cancellationToken">Checked before and during each component copy.
+    /// <para>在每个组件复制前后与过程中检查。</para></param>
+    /// <returns>The extraction outcome without repack-metadata publication.
+    /// <para>不发布重打包元数据的解包结果。</para></returns>
+    internal async Task<FirmwareOpResult> UnpackComponentsAsync(string filePath, string outputDirectory,
         UnpackOptions? options, CancellationToken cancellationToken)
     {
         options ??= new UnpackOptions();

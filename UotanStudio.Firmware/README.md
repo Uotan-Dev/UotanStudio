@@ -20,7 +20,7 @@
 | `Core` | 流包装、校验和、格式探测契约、Magic 识别引擎、通用格式契约、基于处理器的识别、进度与范围校验等共享基础能力 |
 | `Core/Repacking` | 通用重打包元数据、显式上下文、原子 JSON 保存和格式扩展契约 |
 | `Application/Formats` | 内置格式处理器的注册与组装 |
-| `Application/Containers` | 组合 ZIP、Payload、LP/Super 能力，分析容器结构并提取选定成员 |
+| `Application/Containers` | 组合 ZIP、Payload、LP/Super 与 HarmonyOS update.bin 能力，分析容器结构并提取选定成员 |
 
 通用压缩是独立的支撑项目 `UotanStudio.Compress`，本项目通过项目引用调用其能力。本项目负责归档、文件系统、OTA、启动镜像与厂商容器中的领域封装，包括成员列表、块级压缩簇和专有容器头部；通用编码器不解释这些领域结构。
 

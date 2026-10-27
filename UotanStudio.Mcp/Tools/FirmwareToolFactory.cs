@@ -306,7 +306,7 @@ internal static class FirmwareToolHandlers
         var structure = ContainerStructureAnalyzer.Analyze(resolvedInput);
         if (structure.Kind == ContainerKind.None)
         {
-            return new ToolResult(false, $"Not a supported container (super/payload/zip): {resolvedInput}");
+            return new ToolResult(false, $"Not a supported container (super/payload/zip/update.bin): {resolvedInput}");
         }
 
         var result = await ContainerEntryExtractor.ExtractAsync(

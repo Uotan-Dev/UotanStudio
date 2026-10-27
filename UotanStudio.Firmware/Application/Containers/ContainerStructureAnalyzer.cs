@@ -5,10 +5,10 @@ using UotanStudio.Firmware.Core;
 namespace UotanStudio.Firmware.Application.Containers;
 
 /// <summary>
-/// Container structure analyzer: recognizes super / payload.bin / ZIP and enumerates selectable
-/// inner entries. All bounded read-only parsing (metadata/manifest level), no data extraction,
+/// Container structure analyzer: recognizes super / payload.bin / ZIP / HarmonyOS update.bin and enumerates
+/// selectable inner entries. All bounded read-only parsing (metadata/manifest level), no data extraction,
 /// AOT-safe (no reflection).
-/// <para>容器结构分析器：识别 super / payload.bin / ZIP 并枚举内部可勾选条目。
+/// <para>容器结构分析器：识别 super / payload.bin / ZIP / HarmonyOS update.bin 并枚举内部可勾选条目。
 /// 全部为有界只读解析（元数据/清单级别），不提取数据，AOT 安全（无反射）。</para>
 /// </summary>
 public static class ContainerStructureAnalyzer
@@ -43,6 +43,11 @@ public static class ContainerStructureAnalyzer
                 return AnalyzePayload(filePath);
             }
 
+            if (new VendorFirmware.HarmonyOS.HarmonyUpdateBinFormatHandler().CanHandle(filePath))
+            {
+                return AnalyzeUpdateBin(filePath);
+            }
+
             if (new LpFormatHandler().CanHandle(filePath))
             {
                 return AnalyzeSuper(filePath);
@@ -71,6 +76,26 @@ public static class ContainerStructureAnalyzer
         var entries = info.Select(p => new ContainerEntry(p.Name, "payload", (long)p.SizeBytes, FromPayload: true))
             .ToList();
         return new ContainerStructure(ContainerKind.Payload, entries);
+    }
+
+    /// <summary>
+    /// Analyzes a HarmonyOS <c>update.bin</c> package: lists its component names, sizes and output extensions.
+    /// <para>分析 HarmonyOS <c>update.bin</c> 包：列出组件名、大小与输出扩展名。</para>
+    /// </summary>
+    private static ContainerStructure AnalyzeUpdateBin(string filePath)
+    {
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            64 * 1024, FileOptions.SequentialScan);
+        var package = VendorFirmware.HarmonyOS.HarmonyUpdateBinReader.Read(stream, stream.Length);
+        var entries = new List<ContainerEntry>(package.Components.Count);
+        foreach (var component in package.Components)
+        {
+            var extension = Path.GetExtension(component.OutputName);
+            entries.Add(new ContainerEntry(component.Name,
+                extension.Length > 1 ? extension[1..] : "update.bin", component.Size, FromPayload: false));
+        }
+
+        return new ContainerStructure(ContainerKind.UpdateBin, entries);
     }
 
     /// <summary>

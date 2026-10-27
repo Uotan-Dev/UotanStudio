@@ -194,10 +194,10 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Opens the new-project form (new-solution semantics); on create, builds the solution from the
     /// combined path, imports selected images, extracts selected entries from a single super /
-    /// payload.bin / zip container in place inside images/, and, with full unpack checked, recursively
+    /// payload.bin / update.bin / zip container in place inside images/, and, with full unpack checked, recursively
     /// unpacks the extracted supported imgs into same-name folders.
     /// <para>打开新建项目配置窗口（新建解决方案语义）；点击创建后按组合路径创建解决方案、
-    /// 导入选中镜像；单文件容器（super / payload.bin / zip）按勾选条目在 images/ 内原地进行向提取，
+    /// 导入选中镜像；单文件容器（super / payload.bin / update.bin / zip）按勾选条目在 images/ 内原地进行向提取，
     /// 勾选完全解压时对提取出的受支持 img 继续递归解包为同名文件夹。</para>
     /// </summary>
     [RelayCommand]
@@ -368,6 +368,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 ContainerKind.Super => "super",
                 ContainerKind.Payload => "payload",
                 ContainerKind.Zip => "zip",
+                ContainerKind.UpdateBin => "update.bin",
                 _ => "raw"
             }, byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
             if (container is null) throw new IOException("Container import failed.");

@@ -18,8 +18,8 @@ public sealed record ContainerExtractionResult(IReadOnlyList<string> Entries, IR
 }
 
 /// <summary>
-/// Extracts selected entries from a container into an explicit output directory, preserving the legacy output-next-to-container behavior when none is given. Super partitions are stream-cropped by LP extents, payload partitions through PayloadParser.ExtractAsync, ZIP members by entry path.
-/// <para>把容器中选定的条目解包到显式输出目录，未指定时保留“输出到容器旁”的既有行为。Super 分区按 LP extent 流式裁剪，payload 分区经 PayloadParser.ExtractAsync，ZIP 成员按条目路径流式解出。</para>
+/// Extracts selected entries from a container into an explicit output directory, preserving the legacy output-next-to-container behavior when none is given. Super partitions are stream-cropped by LP extents, payload partitions through PayloadParser.ExtractAsync, ZIP members by entry path, and HarmonyOS update.bin components through the registered update.bin handler.
+/// <para>把容器中选定的条目解包到显式输出目录，未指定时保留“输出到容器旁”的既有行为。Super 分区按 LP extent 流式裁剪，payload 分区经 PayloadParser.ExtractAsync，ZIP 成员按条目路径流式解出，HarmonyOS update.bin 组件经已注册的 update.bin 处理器解出。</para>
 /// </summary>
 public static class ContainerEntryExtractor
 {
@@ -30,8 +30,8 @@ public static class ContainerEntryExtractor
     /// <summary>Extracts the selected entries from a container (sync wrapper for background threads).
     /// <para>从容器按勾选条目定向提取（同步包装，供后台线程调用）。</para></summary>
     /// <param name="containerPath">Container file path.<para>容器文件路径。</para></param>
-    /// <param name="selectedNames">Selected inner entries: super/payload partition names, or full ZIP entry paths.
-    /// <para>勾选的内部条目：super/payload 分区名，或 ZIP 条目完整路径。</para></param>
+    /// <param name="selectedNames">Selected inner entries: super/payload partition names, update.bin component names, or full ZIP entry paths.
+    /// <para>勾选的内部条目：super/payload 分区名、update.bin 组件名，或 ZIP 条目完整路径。</para></param>
     /// <param name="fromPayloadOnly">Extract payload partitions only (true when a ZIP's payload section alone is selected).
     /// <para>仅提取 payload 分区（ZIP 容器只勾选 payload 部分时为 true）。</para></param>
     /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
@@ -63,6 +63,7 @@ public static class ContainerEntryExtractor
             ContainerKind.Super => await ExtractSuperAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress, byteProgress, maximumOutputBytes).ConfigureAwait(false),
             ContainerKind.Payload => await ExtractPayloadAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress, byteProgress).ConfigureAwait(false),
             ContainerKind.Zip => await ExtractZipAsync(containerPath, selectedNames, fromPayloadOnly, cancellationToken, outputDirectory, progress, byteProgress, maximumOutputBytes).ConfigureAwait(false),
+            ContainerKind.UpdateBin => await ExtractUpdateBinAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress, byteProgress, maximumOutputBytes).ConfigureAwait(false),
             _ => ContainerExtractionResult.Empty
         };
     }
@@ -184,6 +185,93 @@ public static class ContainerEntryExtractor
 
         await Task.CompletedTask.ConfigureAwait(false);
         return new ContainerExtractionResult(outputNames, outputPaths);
+    }
+
+    /// <summary>
+    /// Extracts selected components from a HarmonyOS update.bin through its registered handler, writing the
+    /// package's own output names (for example <c>system.img</c> and <c>BOARD.list</c>) into the output directory.
+    /// <para>经已注册的 HarmonyOS update.bin 处理器解出选中组件，按包自身的输出名（如 <c>system.img</c> 与
+    /// <c>BOARD.list</c>）写入输出目录。</para>
+    /// </summary>
+    private static async Task<ContainerExtractionResult> ExtractUpdateBinAsync(
+        string containerPath, IReadOnlyList<string> selectedNames, CancellationToken cancellationToken,
+        string outputDirectory, IProgress<double>? progress,
+        IProgress<(long Processed, long Total)>? byteProgress, long maximumOutputBytes)
+    {
+        var names = new HashSet<string>(selectedNames, StringComparer.OrdinalIgnoreCase);
+        long totalBytes;
+        using (var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            64 * 1024, FileOptions.SequentialScan))
+        {
+            var package = VendorFirmware.HarmonyOS.HarmonyUpdateBinReader.Read(stream, stream.Length,
+                cancellationToken);
+            var selected = package.Components
+                .Where(component => names.Contains(component.Name) || names.Contains(component.OutputName))
+                .ToArray();
+            if (selected.Length != names.Count)
+            {
+                throw new InvalidDataException("A selected update.bin component is missing or duplicated.");
+            }
+
+            totalBytes = selected.Sum(component => component.Size);
+        }
+
+        if (totalBytes > maximumOutputBytes)
+        {
+            throw new InvalidDataException("Selected update.bin components exceed the extraction budget.");
+        }
+
+        var options = new UnpackOptions
+        {
+            SelectedEntries = [.. names],
+            Overwrite = true,
+            MaximumOutputBytes = maximumOutputBytes,
+            Progress = progress is null && byteProgress is null
+                ? null
+                : new UpdateBinProgress(progress, byteProgress, totalBytes)
+        };
+        var unpacked = await new VendorFirmware.HarmonyOS.HarmonyUpdateBinFormatHandler()
+            .UnpackComponentsAsync(containerPath, outputDirectory, options, cancellationToken).ConfigureAwait(false);
+        if (!unpacked.Success)
+        {
+            throw new InvalidDataException(unpacked.Summary);
+        }
+
+        progress?.Report(100);
+        byteProgress?.Report((totalBytes, totalBytes));
+        var outputPaths = new List<string>(unpacked.Entries.Count);
+        foreach (var name in unpacked.Entries)
+        {
+            var path = Path.Combine(outputDirectory, name);
+            if (!File.Exists(path))
+            {
+                throw new InvalidOperationException($"update.bin component '{name}' was not extracted.");
+            }
+
+            outputPaths.Add(path);
+        }
+
+        return new ContainerExtractionResult([.. unpacked.Entries], outputPaths);
+    }
+
+    /// <summary>
+    /// Maps the update.bin handler's percentage reports to the container extractor's percent and byte sinks.
+    /// <para>把 update.bin 处理器的百分比报告映射到容器提取器的百分比与字节输出槽。</para>
+    /// </summary>
+    private sealed class UpdateBinProgress(
+        IProgress<double>? percent,
+        IProgress<(long Processed, long Total)>? bytes,
+        long totalBytes) : IFirmwareProgress
+    {
+        public void Report(double percentValue, string message)
+        {
+            var clamped = Math.Clamp(percentValue, 0, 100);
+            percent?.Report(clamped);
+            if (bytes is not null && totalBytes > 0)
+            {
+                bytes.Report(((long)(totalBytes * clamped / 100), totalBytes));
+            }
+        }
     }
 
     /// <summary>
