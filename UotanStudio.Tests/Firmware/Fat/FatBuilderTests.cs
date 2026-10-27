@@ -21,7 +21,8 @@ public class FatBuilderTests
         var source = CreateSourceTree(temp);
         var image = Path.Combine(temp.Path, "auto.img");
 
-        var report = FatBuilder.Build(source, image, new FatBuildOptions { VolumeLabel = "ANDROID" });
+        var report = FatBuilder.Build(source, image, new FatBuildOptions { VolumeLabel = "ANDROID" },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("FAT12", report.Variant);
         Assert.Equal(new FileInfo(image).Length, report.VolumeBytes);
@@ -42,7 +43,8 @@ public class FatBuilderTests
         var source = CreateSourceTree(temp);
         var image = Path.Combine(temp.Path, "fat16.img");
 
-        var report = FatBuilder.Build(source, image, new FatBuildOptions { Variant = FatVariant.Fat16 });
+        var report = FatBuilder.Build(source, image, new FatBuildOptions { Variant = FatVariant.Fat16 },
+            cancellationToken: TestContext.Current.CancellationToken);
         var parser = new FatParser(image);
         using (parser)
         {
@@ -62,7 +64,8 @@ public class FatBuilderTests
         var source = CreateSourceTree(temp);
         var image = Path.Combine(temp.Path, "fat32.img");
 
-        var report = FatBuilder.Build(source, image, new FatBuildOptions { Variant = FatVariant.Fat32 });
+        var report = FatBuilder.Build(source, image, new FatBuildOptions { Variant = FatVariant.Fat32 },
+            cancellationToken: TestContext.Current.CancellationToken);
         using var parser = new FatParser(image);
         Assert.Equal("FAT32", report.Variant);
         Assert.Equal("FAT32", parser.Variant);
@@ -79,7 +82,7 @@ public class FatBuilderTests
         using var temp = new TempDirectory();
         var source = CreateSourceTree(temp);
         var image = Path.Combine(temp.Path, "guarded.img");
-        FatBuilder.Build(source, image, new FatBuildOptions());
+        FatBuilder.Build(source, image, new FatBuildOptions(), cancellationToken: TestContext.Current.CancellationToken);
         var before = File.ReadAllBytes(image);
 
         var oversized = Path.Combine(temp.Path, "oversized");
@@ -87,7 +90,8 @@ public class FatBuilderTests
         File.WriteAllBytes(Path.Combine(oversized, "big.bin"), new byte[3 * 1024 * 1024]);
 
         Assert.Throws<InvalidDataException>(() =>
-            FatBuilder.Build(oversized, image, new FatBuildOptions { Variant = FatVariant.Fat12 }));
+            FatBuilder.Build(oversized, image, new FatBuildOptions { Variant = FatVariant.Fat12 },
+                cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(before, File.ReadAllBytes(image));
     }
 
@@ -98,7 +102,8 @@ public class FatBuilderTests
         var source = CreateSourceTree(temp);
         var image = Path.Combine(temp.Path, "source.img");
         var original = FatBuilder.Build(source, image,
-            new FatBuildOptions { Variant = FatVariant.Fat16, VolumeLabel = "EFI", TotalBytes = 8L * 1024 * 1024 });
+            new FatBuildOptions { Variant = FatVariant.Fat16, VolumeLabel = "EFI", TotalBytes = 8L * 1024 * 1024 },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var handler = FormatDetector.RegisteredHandlers.OfType<IWritableFormatHandler>()
             .First(candidate => candidate.FormatName == "FAT");
