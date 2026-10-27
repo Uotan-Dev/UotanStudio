@@ -217,13 +217,34 @@ public static class OtaZipPatchService
         CancellationToken cancellationToken = default)
         => RebuildCoreAsync(inputPath, outputPath, options, null, cancellationToken);
 
-    internal static Task<OtaZipRebuildResult> RebuildAsync(
+    /// <summary>
+    /// Rebuilds an existing A/B OTA around a replacement Payload with signing keys supplied by the caller.
+    /// <para>使用调用方提供的签名密钥围绕替换 Payload 重建既有 A/B OTA。</para>
+    /// </summary>
+    /// <param name="inputPath">Existing OTA ZIP supplying copied members and metadata; read only.
+    /// <para>提供待复制成员与元数据的既有 OTA ZIP；只读。</para></param>
+    /// <param name="outputPath">Destination archive published only after verification succeeds.
+    /// <para>仅在校验成功后发布的目标归档。</para></param>
+    /// <param name="options">Replacement Payload, extra substitutions, optional signing pair and verification policy.
+    /// <para>替换 Payload、附加替换项、可选签名对与校验策略。</para></param>
+    /// <param name="signingKeys">Provider that materializes the RSA private key recorded in <see cref="OtaZipRebuildOptions.SigningKeyPath"/>; required when whole-file signing is requested.
+    /// <para>把 <see cref="OtaZipRebuildOptions.SigningKeyPath"/> 记录的 RSA 私钥取出为实例的供应器；请求整包签名时必需。</para></param>
+    /// <param name="cancellationToken">Cancels reads, hashing and publication.
+    /// <para>取消读取、哈希与发布。</para></param>
+    /// <returns>The published archive, written members, signature state and verification result.
+    /// <para>已发布归档、已写入成员、签名状态与校验结果。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> or <paramref name="signingKeys"/> is <see langword="null"/>.
+    /// <para><paramref name="options"/> 或 <paramref name="signingKeys"/> 为 <see langword="null"/>。</para></exception>
+    public static Task<OtaZipRebuildResult> RebuildAsync(
         string inputPath,
         string outputPath,
         OtaZipRebuildOptions options,
         IDeliverySigningKeyProvider signingKeys,
         CancellationToken cancellationToken = default)
-        => RebuildCoreAsync(inputPath, outputPath, options, signingKeys, cancellationToken);
+    {
+        ArgumentNullException.ThrowIfNull(signingKeys);
+        return RebuildCoreAsync(inputPath, outputPath, options, signingKeys, cancellationToken);
+    }
 
     private static async Task<OtaZipRebuildResult> RebuildCoreAsync(
         string inputPath,
