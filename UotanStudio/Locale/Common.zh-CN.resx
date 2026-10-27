@@ -3730,4 +3730,46 @@
   <data name="Flash_GeneralOperations" xml:space="preserve">
     <value>通用操作</value>
   </data>
+  <data name="Flash_Diagnostics" xml:space="preserve">
+    <value>诊断与崩溃转储</value>
+  </data>
+  <data name="Flash_DiagComPortWatermark" xml:space="preserve">
+    <value>输入 DIAG 串口名，例如 COM3</value>
+  </data>
+  <data name="Flash_DiagReadNv" xml:space="preserve">
+    <value>读取 NV 条目 10</value>
+  </data>
+  <data name="Flash_DiagBackupQcn" xml:space="preserve">
+    <value>备份 QCN 到文件夹…</value>
+  </data>
+  <data name="Flash_DiagRestoreQcn" xml:space="preserve">
+    <value>从文件恢复 QCN…</value>
+  </data>
+  <data name="Flash_DiagListEfs" xml:space="preserve">
+    <value>列出 EFS 根目录</value>
+  </data>
+  <data name="Flash_DiagSyncStatus" xml:space="preserve">
+    <value>读取 EFS 同步状态</value>
+  </data>
+  <data name="Flash_CrashDump" xml:space="preserve">
+    <value>从 EDL 设备收集崩溃转储</value>
+  </data>
+  <data name="Flash_FactoryBuildFlatten" xml:space="preserve">
+    <value>展平工厂构建（contents.xml）…</value>
+  </data>
+  <data name="Flash_DiagQcnBackupDone" xml:space="preserve">
+    <value>QCN 备份完成</value>
+  </data>
+  <data name="Flash_DiagQcnRestoreDone" xml:space="preserve">
+    <value>QCN 恢复完成</value>
+  </data>
+  <data name="Flash_DiagRestoreConfirm" xml:space="preserve">
+    <value>写入 NV 条目会改变射频配置。是否继续？</value>
+  </data>
+  <data name="Flash_CrashDumpHint" xml:space="preserve">
+    <value>崩溃转储收集在 EDL 存储就绪后运行；区域选择将在后续版本提供。</value>
+  </data>
+  <data name="Flash_FactoryBuildHint" xml:space="preserve">
+    <value>选择工厂元构建 contents.xml 以展平为 rawprogram+patch。</value>
+  </data>
 </root>

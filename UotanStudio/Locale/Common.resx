@@ -3730,4 +3730,46 @@ Continue?</value>
   <data name="Flash_GeneralOperations" xml:space="preserve">
     <value>General Operations</value>
   </data>
+  <data name="Flash_Diagnostics" xml:space="preserve">
+    <value>Diagnostics and crash dumps</value>
+  </data>
+  <data name="Flash_DiagComPortWatermark" xml:space="preserve">
+    <value>Enter a DIAG serial port name, for example COM3</value>
+  </data>
+  <data name="Flash_DiagReadNv" xml:space="preserve">
+    <value>Read NV item 10</value>
+  </data>
+  <data name="Flash_DiagBackupQcn" xml:space="preserve">
+    <value>Back up QCN to folder…</value>
+  </data>
+  <data name="Flash_DiagRestoreQcn" xml:space="preserve">
+    <value>Restore QCN from file…</value>
+  </data>
+  <data name="Flash_DiagListEfs" xml:space="preserve">
+    <value>List EFS root directory</value>
+  </data>
+  <data name="Flash_DiagSyncStatus" xml:space="preserve">
+    <value>Read EFS sync status</value>
+  </data>
+  <data name="Flash_CrashDump" xml:space="preserve">
+    <value>Collect crash dump from EDL device</value>
+  </data>
+  <data name="Flash_FactoryBuildFlatten" xml:space="preserve">
+    <value>Flatten factory build (contents.xml)…</value>
+  </data>
+  <data name="Flash_DiagQcnBackupDone" xml:space="preserve">
+    <value>QCN backup finished</value>
+  </data>
+  <data name="Flash_DiagQcnRestoreDone" xml:space="preserve">
+    <value>QCN restore finished</value>
+  </data>
+  <data name="Flash_DiagRestoreConfirm" xml:space="preserve">
+    <value>Writing NV items changes the radio configuration. Continue?</value>
+  </data>
+  <data name="Flash_CrashDumpHint" xml:space="preserve">
+    <value>Crash dump collection runs from the EDL session once storage is up; pick regions in a follow-up release.</value>
+  </data>
+  <data name="Flash_FactoryBuildHint" xml:space="preserve">
+    <value>Pick a factory metabuild contents.xml to flatten into rawprogram+patch.</value>
+  </data>
 </root>

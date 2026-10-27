@@ -260,6 +260,20 @@ public partial class FlashView : UserControl
     private void OnSwitchSlotClick(object? sender, RoutedEventArgs e) => _model.OnSwitchSlotClick(sender, e);
     private void OnSlotResetCurrentClick(object? sender, RoutedEventArgs e) => _model.OnSlotResetCurrentClick(sender, e);
     private void OnSlotSetAClick(object? sender, RoutedEventArgs e) => _model.OnSlotSetAClick(sender, e);
+
+    private void OnDiagReadNvClick(object? sender, RoutedEventArgs e) => _model.OnDiagReadNvClick(sender, e);
+
+    private void OnDiagBackupQcnClick(object? sender, RoutedEventArgs e) => _model.OnDiagBackupQcnClick(sender, e);
+
+    private void OnDiagRestoreQcnClick(object? sender, RoutedEventArgs e) => _model.OnDiagRestoreQcnClick(sender, e);
+
+    private void OnDiagListEfsClick(object? sender, RoutedEventArgs e) => _model.OnDiagListEfsClick(sender, e);
+
+    private void OnDiagSyncStatusClick(object? sender, RoutedEventArgs e) => _model.OnDiagSyncStatusClick(sender, e);
+
+    private void OnCrashDumpClick(object? sender, RoutedEventArgs e) => _model.OnCrashDumpClick(sender, e);
+
+    private void OnFactoryBuildFlattenClick(object? sender, RoutedEventArgs e) => _model.OnFactoryBuildFlattenClick(sender, e);
     private void OnSlotSetBClick(object? sender, RoutedEventArgs e) => _model.OnSlotSetBClick(sender, e);
     private void OnCancelFlashClick(object? sender, RoutedEventArgs e) => _model.OnCancelFlashClick(sender, e);
     private void OnRootFileSourceChanged(object? sender, SelectionChangedEventArgs e) => _model.OnRootFileSourceChanged(sender, e);
