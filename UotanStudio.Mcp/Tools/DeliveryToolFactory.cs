@@ -65,11 +65,11 @@ internal static class DeliveryToolFactory
             });
 
     /// <summary>
-    /// <para>Builds the delivery build tool for one host, binding the tool-preparation provider that
-    /// host was given; the provider is no longer a process-wide mutable static, so a headless server
-    /// can never inherit another session's injection and the honest-gap result depends only on this
-    /// host's config.</para>
-    /// <para>为单个宿主构建交付构建工具，并绑定该宿主获得的工具准备服务提供器；该提供器不再是进程级可变静态，
+    /// Builds the delivery build tool for one host, binding the tool-preparation provider that
+    /// host was given; the provider is bound per host instead of held in a process-wide mutable static, so a headless server
+    /// cannot inherit another session's injection and the honest-gap result depends only on this
+    /// host's config.
+    /// <para>为单个宿主构建交付构建工具，并绑定该宿主获得的工具准备服务提供器；该提供器按宿主绑定而不再放在进程级可变静态中，
     /// 因此无头服务器不会继承其他会话的注入，能力缺口的如实上报只取决于本宿主配置。</para>
     /// </summary>
     /// <param name="sandbox">The sandbox confining plan and output paths. <para>约束计划与输出路径的沙箱。</para></param>

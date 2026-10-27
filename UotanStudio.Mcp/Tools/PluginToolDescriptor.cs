@@ -3,10 +3,10 @@ using ModelContextProtocol.Server;
 namespace UotanStudio.Mcp.Tools;
 
 /// <summary>
-/// <para>Declarative description of one MCP tool: its protocol name, owning domain, the workflow-node
+/// Declarative description of one MCP tool: its protocol name, owning domain, the workflow-node
 /// type key it mirrors when one exists, the safety annotations the protocol advertises, and whether it
 /// is registered only under <c>--allow-flash</c>. The catalog projects these descriptors into the tool
-/// list, so a new tool is declared once instead of being hand-appended to a builder method.</para>
+/// list, so a new tool is declared once instead of being hand-appended to a builder method.
 /// <para>单个 MCP 工具的声明式描述：协议名称、所属领域、存在时对应的流程节点类型键、协议对外声明的安全标注，
 /// 以及是否仅在 <c>--allow-flash</c> 下注册。目录据此投影出工具列表，新增工具只需声明一次，而不必手工追加到
 /// 构建方法里。</para>
@@ -28,8 +28,8 @@ internal sealed record PluginToolDescriptor(
     Func<PluginToolContext, McpServerTool> Create);
 
 /// <summary>
-/// <para>Per-host inputs every catalogued tool needs: the shared path sandbox, the device gateway, the
-/// delivery tool-preparation and signing providers, and the flash gate.</para>
+/// Per-host inputs every catalogued tool needs: the shared path sandbox, the device gateway, the
+/// delivery tool-preparation and signing providers, and the flash gate.
 /// <para>每个目录工具都需要的宿主级输入：共享路径沙箱、设备网关、交付工具准备与签名提供器，以及刷写门控。</para>
 /// </summary>
 /// <param name="Sandbox">The sandbox confining every client path. <para>约束全部客户端路径的沙箱。</para></param>

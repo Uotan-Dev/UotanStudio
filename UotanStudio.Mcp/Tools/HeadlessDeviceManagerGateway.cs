@@ -244,9 +244,9 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway, IBoo
         => RunProtocolSessionAsync("mtk", DeviceSessionKind.Mtk, target, operation, cancellationToken);
 
     /// <summary>
-    /// <para>Leases the descriptor-identified EDL or MTK direct endpoint, hands one read transaction to
+    /// Leases the descriptor-identified EDL or MTK direct endpoint, hands one read transaction to
     /// the callback, and releases the lease before returning; a refused or already leased endpoint is
-    /// never reopened, retried, or routed to another transport.</para>
+    /// never reopened, retried, or routed to another transport.
     /// <para>租用按描述符识别出的 EDL 或 MTK 直连端点，把单次读取事务交给回调，并在返回前释放租约；
     /// 被拒绝或已被租用的端点绝不重开、绝不重试、绝不改走其他传输。</para>
     /// </summary>
@@ -270,9 +270,9 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway, IBoo
     }
 
     /// <summary>
-    /// <para>Locates the single endpoint classified as the requested protocol that this host may drive
+    /// Locates the single endpoint classified as the requested protocol that this host may drive
     /// directly; without a target it requires exactly one candidate and never guesses by enumeration
-    /// order.</para>
+    /// order.
     /// <para>在本宿主可直接驱动、且按请求协议分类的端点中定位唯一目标；未给出目标时要求恰好存在一个
     /// 候选端点，绝不按枚举顺序猜测。</para>
     /// </summary>
@@ -333,8 +333,8 @@ internal sealed class HeadlessDeviceManagerGateway : IDeviceManagerGateway, IBoo
     private const int MaxPairingWaitSeconds = 1800;
 
     /// <summary>
-    /// <para>Decides whether a directly routable USB endpoint is the target the caller selected, matching
-    /// either the reported serial or the stable USB device key, which is also the endpoint address.</para>
+    /// Decides whether a directly routable USB endpoint is the target the caller selected, matching
+    /// either the reported serial or the stable USB device key, which is also the endpoint address.
     /// <para>按 serial 或稳定 USB 设备键判断某个可直接路由的 USB 端点是否就是调用方选定的目标；
     /// 设备键同时也是端点地址。</para>
     /// </summary>

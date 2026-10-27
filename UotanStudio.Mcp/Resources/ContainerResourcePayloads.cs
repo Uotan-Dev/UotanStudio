@@ -142,10 +142,10 @@ internal sealed record FilesystemEntriesDocument(
 /// <remarks>
 /// The tools publish their payloads through <see cref="Tools.McpToolJsonContext"/>, which
 /// lives in the <c>Tools</c> folder and is owned by the tool factories. Resource documents are registered
-/// here instead so the two surfaces can evolve independently; both use the same camel-case, null-skipping
+/// here instead so the two surfaces stay independent; both use the same camel-case, null-skipping
 /// generation options.
 /// <para>工具经 <see cref="Tools.McpToolJsonContext"/> 发布负载，该上下文位于 <c>Tools</c>
-/// 目录并由工具工厂持有。资源文档因此注册在本文，使两面可以独立演进；两者采用相同的小驼峰、忽略 null 的生成选项。</para>
+/// 目录并由工具工厂持有。资源文档因此注册在本文，使两面保持独立；两者采用相同的小驼峰、忽略 null 的生成选项。</para>
 /// </remarks>
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

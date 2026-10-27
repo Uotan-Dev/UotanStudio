@@ -1,17 +1,17 @@
 namespace UotanStudio.Mcp.Tools;
 
 /// <summary>
-/// <para>The single declared order of every MCP tool this server can expose. <c>BuildTools</c> projects
+/// The single declared order of every MCP tool this server can expose. <c>BuildTools</c> projects
 /// this catalog onto the emitted list, keeping the flash gate as a property of one descriptor rather
-/// than a second hard-coded factory call.</para>
+/// than a second hard-coded factory call.
 /// <para>本服务器可能暴露的全部 MCP 工具的唯一声明顺序。<c>BuildTools</c> 把本目录投影为最终列表，刷写门控
 /// 是单个描述符的属性，而不是另一处硬编码的工厂调用。</para>
 /// </summary>
 internal static class PluginToolCatalog
 {
     /// <summary>
-    /// <para>Gets every catalogued tool, in firmware, compression, device, delivery, OTA, project, misc,
-    /// environment and finally flash-gated order.</para>
+    /// Gets every catalogued tool, in firmware, compression, device, delivery, OTA, project, misc,
+    /// environment and finally flash-gated order.
     /// <para>获取全部已编目工具，顺序为固件、压缩、设备、交付、OTA、工程、杂项、环境，最后是受门控的刷写工具。</para>
     /// </summary>
     internal static IReadOnlyList<PluginToolDescriptor> All { get; } =

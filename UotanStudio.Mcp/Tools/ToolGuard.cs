@@ -7,10 +7,10 @@ namespace UotanStudio.Mcp.Tools;
 /// failures are reported on the protocol error channel, and the specific cause survives.
 /// <para>所有 MCP 工具委托统一经过的执行包装，使取消被观察到、失败进入协议错误通道、具体原因不被吞掉。</para>
 /// The SDK replaces the message of any exception type other than <see cref="ModelContextProtocol.McpException"/>
-/// with a generic error text, which previously made every handler failure indistinguishable on the wire.
+/// with a generic error text, which would make every handler failure indistinguishable on the wire.
 /// Catching here and converting to <see cref="ToolResult"/> keeps the exception type and message
 /// visible while still setting <see cref="CallToolResult.IsError"/>.
-/// <para>SDK 会把非 <see cref="ModelContextProtocol.McpException"/> 异常的消息替换为通用错误文本，历史上导致所有处理器失败在线上无法区分。
+/// <para>SDK 会把非 <see cref="ModelContextProtocol.McpException"/> 异常的消息替换为通用错误文本，使所有处理器失败在线上无法区分。
 /// 在此捕获并转为 <see cref="ToolResult"/>，既保留异常类型与消息，又设置 <see cref="CallToolResult.IsError"/>。</para>
 /// </summary>
 internal static class ToolGuard

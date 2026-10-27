@@ -11,10 +11,10 @@ namespace UotanStudio.Mcp.Tools;
 /// <summary>
 /// Builds the OTA-package and delivery-preparation MCP tools backed by <see cref="OtaZipPatchService"/>,
 /// <see cref="SuperPayloadConversionService"/> and <see cref="DeliveryService"/>, exposing the Delivery
-/// capabilities that had no MCP entry point: OTA ZIP verification, bounded member patching, payload-centric
+/// capabilities that need an MCP entry point: OTA ZIP verification, bounded member patching, payload-centric
 /// rebuild, Super-to-Payload conversion and pinned platform-tool preparation.
 /// <para>基于 <see cref="OtaZipPatchService"/>、<see cref="SuperPayloadConversionService"/> 与
-/// <see cref="DeliveryService"/> 构建 OTA 包与交付准备类 MCP 工具，暴露此前没有 MCP 入口的交付能力：
+/// <see cref="DeliveryService"/> 构建 OTA 包与交付准备类 MCP 工具，暴露需要 MCP 入口的交付能力：
 /// OTA ZIP 校验、受限成员修补、以 Payload 为中心的重建、Super 转 Payload，以及钉定版本平台工具的准备。</para>
 /// Each delegate ends with the ambient parameters the MCP server binds itself
 /// (<see cref="IProgress{T}"/> only where the backing API reports progress, plus
