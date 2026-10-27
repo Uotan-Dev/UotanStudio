@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.SpacemiT;
@@ -93,7 +94,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
             EdlMaxPayload = string.Empty;
             foreach (var property in new[]
             {
-                nameof(Device), nameof(SelectedConnection), nameof(Serial), nameof(State),
+                nameof(Device), nameof(SelectedConnection), nameof(Serial), nameof(State), nameof(StateLabel),
                 nameof(Mode), nameof(Protocol), nameof(Transport), nameof(DisplayName),
                 nameof(ListTitle), nameof(ListSubtitle), nameof(LinkPort), nameof(UsbIds),
                 nameof(VendorName), nameof(IsAdb), nameof(IsHdc), nameof(HasSystemInfo),
@@ -189,6 +190,8 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 Device.State = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ListSubtitle));
+                OnPropertyChanged(nameof(StateLabel));
+                OnPropertyChanged(nameof(DisplayName));
             }
         }
     }
@@ -213,14 +216,15 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public DeviceProtocolKind Protocol => Device.Protocol;
 
     /// <summary>
-    /// Transport kind (USB/Network/Serial).
-    /// <para>传输类型（USB/Network/Serial）。</para>
+    /// Transport kind (USB/Network/Serial); a selected endpoint without a link class falls back to a
+    /// sibling endpoint of the same physical device instead of reading as unknown.
+    /// <para>传输类型（USB/Network/Serial）；所选端点没有链路类别时回退到同一物理设备的其他端点，而不是显示为未知。</para>
     /// </summary>
-    public string Transport => Device.Transport switch
+    public string Transport => LinkSource.Transport switch
     {
         DeviceTransportKind.Tcp or DeviceTransportKind.Udp => "Network",
         DeviceTransportKind.Serial => "Serial",
-        DeviceTransportKind.Usb when EdlSerialPort.Length > 0 =>
+        DeviceTransportKind.Usb when ReferenceEquals(LinkSource, Device) && EdlSerialPort.Length > 0 =>
             $"{Services.LanguageService.Instance.GetString("Device_TransportSerial")} ({EdlSerialPort})",
         DeviceTransportKind.Usb => "USB",
         _ => "Unknown",
@@ -238,6 +242,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(ListTitle));
+                OnPropertyChanged(nameof(DisplayName));
             }
         }
     } = string.Empty;
@@ -253,12 +258,64 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     } = string.Empty;
 
     /// <summary>
-    /// Display name.
-    /// <para>显示名称。</para>
+    /// Display name: a server DNS-SD instance serial is replaced by the model or dialable address, and a
+    /// ready ADB or HDC target reads its platform plus the detected slot in the parentheses.
+    /// <para>显示名称：server 的 DNS-SD 实例串号改用型号或可拨号地址，就绪的 ADB 或 HDC 目标在括号内显示平台与检测到的槽位。</para>
     /// </summary>
-    public string DisplayName => string.IsNullOrEmpty(Model)
-        ? $"{Serial} ({State})"
-        : $"{Serial} - {Model} ({State})";
+    public string DisplayName => $"{DisplayIdentity} ({StateLabel})";
+
+    /// <summary>
+    /// Identity in front of the state: hardware serial plus model for a regular endpoint, and the model,
+    /// dialable address or shortened instance name for a DNS-SD server target.
+    /// <para>状态前显示的标识：普通端点为硬件序列号加型号；DNS-SD server 目标为型号、可拨号地址或缩短后的实例名。</para>
+    /// </summary>
+    private string DisplayIdentity
+    {
+        get
+        {
+            if (!AdbTargetInfo.IsMdnsInstanceName(Serial))
+            {
+                return string.IsNullOrEmpty(Model) ? Serial : $"{Serial} - {Model}";
+            }
+
+            if (!string.IsNullOrEmpty(Model))
+            {
+                return Model;
+            }
+
+            return Device.NetworkAlias is { Length: > 0 } alias ? alias : ShortenedInstanceName(Serial);
+        }
+    }
+
+    private static string ShortenedInstanceName(string serial)
+    {
+        var separator = serial.IndexOf("._adb", StringComparison.OrdinalIgnoreCase);
+        return separator > 0 ? serial[..separator] : serial;
+    }
+
+    /// <summary>
+    /// State text shown to the user: a ready ADB target reads as Android and a ready HDC target as
+    /// HarmonyOS, a detected A/B slot is appended, and every other state stays exactly as enumerated.
+    /// <para>面向用户的状态文本：就绪的 ADB 目标显示为 Android，就绪的 HDC 目标显示为 HarmonyOS，
+    /// 检测到 A/B 槽位时追加槽位；其他状态保持枚举得到的原文。</para>
+    /// </summary>
+    public string StateLabel
+    {
+        get
+        {
+            var label = IsAdb && IsReadyState(State) ? "Android"
+                : IsHdc && IsReadyState(State) ? "HarmonyOS"
+                : State;
+            return HasDetectedSlot && IsReadyState(State) ? $"{label} {Slot}" : label;
+        }
+    }
+
+    private bool HasDetectedSlot => Slot.Length > 0 && !string.Equals(Slot, "--", StringComparison.Ordinal);
+
+    private static bool IsReadyState(string state)
+        => string.Equals(state, "device", StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(state, "devices", StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(state, "fastboot", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Device list entry title: the model when known, otherwise the serial.
@@ -273,17 +330,29 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public string ListSubtitle => string.IsNullOrEmpty(State) ? Serial : $"{Serial} · {State}";
 
     /// <summary>
-    /// Link/port info.
-    /// <para>链接端口/地址信息（USB 标识、TCP host:port、串口路径）。</para>
+    /// Link/port info; a TCP or UDP endpoint reports the dialable network alias when the server resolved
+    /// one, and a selected endpoint without a link class falls back to a sibling endpoint of the same
+    /// physical device.
+    /// <para>链接端口/地址信息；TCP 或 UDP 端点优先显示 server 解析出的可拨号网络别名，
+    /// 所选端点没有链路类别时回退到同一物理设备的其他端点。</para>
     /// </summary>
-    public string LinkPort => Device.Transport switch
+    public string LinkPort => LinkSource.Transport switch
     {
-        DeviceTransportKind.Tcp or DeviceTransportKind.Udp => Device.Serial,
-        DeviceTransportKind.Serial => Device.Key,
-        DeviceTransportKind.Usb when EdlSerialPort.Length > 0 => EdlSerialPort,
+        DeviceTransportKind.Tcp or DeviceTransportKind.Udp => LinkSource.NetworkAlias ?? LinkSource.Serial,
+        DeviceTransportKind.Serial => LinkSource.Key,
+        DeviceTransportKind.Usb when ReferenceEquals(LinkSource, Device) && EdlSerialPort.Length > 0 => EdlSerialPort,
         DeviceTransportKind.Usb => "USB",
         _ => "Unknown",
     };
+
+    /// <summary>
+    /// The endpoint that carries link evidence: the selected one when it reports a transport, otherwise the
+    /// first sibling endpoint of the same physical device that does.
+    /// <para>携带链路证据的端点：所选端点报告了传输类型时用所选端点，否则用同一物理设备中首个报告了传输类型的端点。</para>
+    /// </summary>
+    private DetectedDevice LinkSource => Device.Transport != DeviceTransportKind.Unknown
+        ? Device
+        : Connections.FirstOrDefault(connection => connection.Transport != DeviceTransportKind.Unknown) ?? Device;
 
     /// <summary>
     /// Vendor/product USB ID.
@@ -526,7 +595,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public bool IsMtk => Device.Protocol == DeviceProtocolKind.Mtk;
 
     /// <summary>
-    /// Whether the device is an Apple (usbmuxd) target.
+    /// Whether the device is an Apple (iOS) target.
     /// <para>是否为 iOS 设备。</para>
     /// </summary>
     public bool IsIos => Device.Protocol == DeviceProtocolKind.Ios;
@@ -755,10 +824,21 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
     public string BlStatus { get; set => SetProperty(ref field, value); } = string.Empty;
 
     /// <summary>
-    /// Current A/B slot (e.g. _a/_b).
-    /// <para>当前 A/B 槽位（如 _a/_b）。</para>
+    /// Current A/B slot label (for example <c>Slot A</c>), or <c>--</c> when the device reports no slot.
+    /// <para>当前 A/B 槽位标签（例如 <c>Slot A</c>）；设备未上报槽位时为 <c>--</c>。</para>
     /// </summary>
-    public string Slot { get; set => SetProperty(ref field, value); } = string.Empty;
+    public string Slot
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(StateLabel));
+                OnPropertyChanged(nameof(DisplayName));
+            }
+        }
+    } = string.Empty;
 
     /// <summary>
     /// Power-on time (uptime).
