@@ -170,6 +170,16 @@
 - HDC 冷启动：`--open-screen-mirror 5XM0225C18001159` 出画（视频区均值 39.29，max 255）；清理本产品遗留的采集扩展后复跑均值为 50.31；`hdc fport ls` 可见应用注册的 `tcp:…→localabstract:scrcpy_grpc_socket` 与 `localabstract:uitest_socket` 两条转发。
 - 未验证：密码页安全视图只验证了"不误判断联"，解锁后能否自动恢复出画未验证；设备待机断流的自动重开只在门禁与代码路径上验证，未在真机等待屏幕超时复现；双设备同时投屏时只有 ADB 一路有画面，两路同时出画未验证；HDC 冷启动稳定性未做 20 次以上重复统计。
 
+## AVB 全链密钥、页脚与 OTA 操作（2026-10-27，Windows x64，Debug）
+
+- 固件层新增 `AvbDescriptorTable`（原样保留描述符表的解析/替换）、`AvbSigner.SignVbmetaWithDescriptorTableAsync`（未知描述符类型不丢失）、`AvbSigner.RemoveFooterAsync`、`AvbImageVerifier`（尾部 + VBMeta 签名 + 内容/FEC 的端到端校验）、`PayloadPatcher.ReplaceAsync` 与 `PayloadSignatureVerifier`（两个 RSA 签名槽独立校验）。
+- 宿主层新增 `AvbOtaService`：原始 `payload.bin` 或 A/B OTA ZIP 输入，重签所选分区并更新顶层 `vbmeta` 描述符，重建 Payload，ZIP 输入经 `OtaZipPatchService` 重新发布；`VerifyAsync` 校验 ZIP 结构、载荷签名与以 `vbmeta` 为根的 AVB 链。`OtaZipPatchService` 增加带 `IDeliverySigningKeyProvider` 的公开重载，宿主经 `DeliveryKeyProvider` 注入整包签名密钥。
+- UI 新增 Tools → AVB 工具窗口（密钥/页脚/A-B OTA 三页）：AVB 密钥生成、导入、删除与 `avb_pkmd.bin` 导出；hash/hashtree 尾部添加、镜像校验、尾部移除与详情；OTA 分区选择、`disable-avb`、Payload/ZIP 密钥选择、`otapatch` 与 `otaverify`。窗口已接入 `HostWindowKind.AvbTool`、`MenuViewModel` 与 98 个 `Avb_*` 本地化键。
+- 定向测试：`AvbDescriptorTableTests` 6/6、`AvbImageVerifierTests` 6/6、`AvbFooterRemovalTests` 4/4、`PayloadPatcherPublicTests` 4/4、`AvbOtaServiceTests` 3/3（含原始载荷与带载荷签名/整包签名的 OTA ZIP 往返）。
+- `UotanStudio.Tests.Firmware` 全命名空间 4398 项 / 4396 通过 / 0 失败 / 2 跳过（缺 `UOTAN_EROFS_CORPUS`）；全解决方案 7662 项，两次完整运行均为 7655 通过 / 7 跳过 / 0 失败。之后在工作区并行负载下复跑时分别出现 1 个与本改动无关的时序/隔离失败（EROFS feature replay 与 USB serial cache 各一次），两类单独复跑分别为 20/20、6/6 通过。
+- 全解决方案 Debug 构建 0 错误；`dotnet format` whitespace 与 style 双门无差异。并发会话中的 `FatBuilderTests` 仍有 6 条 xUnit1051 警告，不属于本次改动。NativeAOT `win-x64` 自包含发布成功（0 错误），警告仍为既有第三方 Ursa/Dock/Avalonia/DataGrid/YamlDotNet/Common.Logging 的 IL2104/IL3053/IL2026 与 `Makaretu.Dns.LinuxHelper` 的 Linux 专属告警，没有出现指向 AVB 新增代码的裁剪警告。
+- 未验证边界：OTA 补丁/校验只用本地构建的完整 Payload 与最小 OTA ZIP 验证，未在真实厂商 OTA、差分/source 操作、`super` 动态分区或真机启动链上接受；顶层链式描述符保持原样且不能重定向，选择链保护分区会被拒绝；`otaverify` 校验载荷签名与 AVB 链，但不独立校验外层 ZIP 签名；AVB 工具窗口与原生文件选择器未做人工 GUI 验证；未与 Android `avbtool` 做逐字节外部对照。
+
 ## CI 门禁现状
 
 `.github/workflows/ci.yml` 跑 `setup-dotnet` 取 10.0.x、构建、whitespace 与 style 两道 `dotnet format`，然后 `dotnet test --solution UotanStudio.slnx --no-restore -c Release --minimum-expected-tests 6000`，Test 步骤 `timeout-minutes: 15`，不设置任何 `UOTAN_*`，因此门控用例自跳。`.github/workflows/release.yml` 只负责 NativeAOT 发布。套件规模再变化时，Test 步骤的下限要跟着实测调，而不是靠放宽来掩盖删除。
