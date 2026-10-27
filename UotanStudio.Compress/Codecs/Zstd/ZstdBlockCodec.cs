@@ -261,31 +261,41 @@ public static class ZstdBlockCodec
     }
 
     /// <summary>
-    /// Caches one zstd compression context per level so a per-cluster loop reuses the context instead of
-    /// rebuilding it for every block.
-    /// <para>按级别各缓存一个 zstd 压缩上下文，使逐 cluster 的循环复用上下文而不必每块重建。</para>
+    /// Caches idle zstd compression contexts per level so per-cluster loops and parallel chunk batches reuse
+    /// contexts instead of rebuilding one for every block.
+    /// <para>按级别缓存空闲的 zstd 压缩上下文，使逐 cluster 的循环与并行分块批次复用上下文而不必每块重建。</para>
     /// </summary>
     /// <remarks>
     /// A zstd context carries the level's window state, so constructing one per block repeats that setup for every
-    /// cluster of an image. The cache hands out an exclusive owner per call and stores it back on return; a second
-    /// caller arriving while one is checked out constructs its own, so no caller ever waits on another. A context is
-    /// never shared concurrently and is therefore never observed in a half-consumed state. A context displaced from
-    /// a slot is idle by construction, because renting removes the slot entry under the same lock.
-    /// <para>zstd 上下文承载该级别的窗口状态，每块新建就会让镜像的每个 cluster 重复一次搭建。该缓存每次借出
-    /// 独占所有者并在归还时存回；借用期间来的第二个调用方自行新建，因此不会有调用方等待他人。上下文从不并发共享，
-    /// 也就不会出现处于半消费状态被观测到的情况。被挤出槽位的上下文按构造必为空闲，因为借用会在同一把锁内移除槽位条目。</para>
+    /// cluster of an image. The cache keeps an unbounded idle list per level: renting removes the newest entry under
+    /// the lock and hands out an exclusive owner, while a caller arriving with no idle entry constructs its own, so
+    /// no caller ever waits on another. A returned context is only parked, never disposed, and parallel workers that
+    /// return in the same batch are all still available to the next batch. A context is never shared concurrently
+    /// and is therefore never observed in a half-consumed state.
+    /// <para>zstd 上下文承载该级别的窗口状态，每块新建就会让镜像的每个 cluster 重复一次搭建。缓存为每个级别保留
+    /// 不设上限的空闲列表：借用会在锁内移除最新条目并给出独占所有者，而没有空闲条目的调用方自行新建，因此不会有
+    /// 调用方等待他人。归还的上下文只是停放而不释放，同批并行工作者归还的上下文对下一批仍然可用。上下文从不并发
+    /// 共享，也就不会出现处于半消费状态被观测到的情况。</para>
     /// </remarks>
     internal static class CompressorCache
     {
         private static readonly Lock Gate = new();
-        private static readonly Dictionary<int, Holder> Idle = [];
+        private static readonly Dictionary<int, List<Holder>> Idle = [];
 
         internal static Compressor Rent(int level)
         {
             lock (Gate)
             {
-                if (Idle.Remove(level, out var holder))
+                if (Idle.TryGetValue(level, out var idleList))
                 {
+                    var last = idleList.Count - 1;
+                    var holder = idleList[last];
+                    idleList.RemoveAt(last);
+                    if (idleList.Count == 0)
+                    {
+                        Idle.Remove(level);
+                    }
+
                     return holder.Value;
                 }
             }
@@ -295,14 +305,16 @@ public static class ZstdBlockCodec
 
         internal static void Return(int level, Compressor compressor)
         {
-            Holder? displaced;
             lock (Gate)
             {
-                Idle.Remove(level, out displaced);
-                Idle[level] = new Holder(compressor);
-            }
+                if (!Idle.TryGetValue(level, out var idleList))
+                {
+                    idleList = [];
+                    Idle[level] = idleList;
+                }
 
-            displaced?.Value.Dispose();
+                idleList.Add(new Holder(compressor));
+            }
         }
 
         private sealed class Holder(Compressor value)
