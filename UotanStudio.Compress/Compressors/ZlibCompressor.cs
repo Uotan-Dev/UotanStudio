@@ -140,7 +140,7 @@ public static class ZlibCompressor
         try
         {
             using var zlib = new ZlibStream(new NonDisposingStream(output), CompressionMode.Compress, CompressionLevelMapper.ToSharpCompressDeflate(options?.Level));
-            input.CopyTo(zlib);
+            ExactCopy.ToEnd(input, zlib);
         }
         catch (Exception ex)
         {

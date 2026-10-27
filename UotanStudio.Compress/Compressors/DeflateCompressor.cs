@@ -138,7 +138,7 @@ public static class DeflateCompressor
         try
         {
             using var deflate = new DeflateStream(output, CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true);
-            input.CopyTo(deflate);
+            ExactCopy.ToEnd(input, deflate);
         }
         catch (Exception ex)
         {

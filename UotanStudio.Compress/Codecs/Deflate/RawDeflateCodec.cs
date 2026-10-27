@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using UotanStudio.Compress.Internal;
 
 namespace UotanStudio.Compress.Codecs.Deflate;
 
@@ -61,7 +62,7 @@ public static class RawDeflateCodec
         };
 
         using var deflate = new DeflateStream(destination, options, leaveOpen: true);
-        source.CopyTo(deflate);
+        ExactCopy.ToEnd(source, deflate);
     }
 
     /// <summary>

@@ -140,7 +140,7 @@ public static class ZstdCompressor
                 return;
             }
             using var compressor = new CompressionStream(new NonDisposingStream(output), options?.Level ?? 3);
-            input.CopyTo(compressor);
+            ExactCopy.ToEnd(input, compressor);
         }
         catch (Exception ex)
         {
@@ -407,7 +407,7 @@ public static class ZstdCompressor
         try
         {
             using var decompressor = new DecompressionStream(new NonDisposingStream(input));
-            decompressor.CopyTo(output);
+            ExactCopy.ToEnd(decompressor, output);
         }
         catch (Exception ex)
         {

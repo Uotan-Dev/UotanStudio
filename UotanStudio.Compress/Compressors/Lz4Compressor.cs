@@ -104,7 +104,7 @@ internal static class Lz4Compressor
         try
         {
             using var encoder = LZ4Stream.Encode(output, ToLz4Level(options?.Level), leaveOpen: true);
-            input.CopyTo(encoder);
+            ExactCopy.ToEnd(input, encoder);
         }
         catch (Exception ex)
         {

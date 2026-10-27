@@ -116,7 +116,7 @@ public static class GzipCompressor
         try
         {
             using var gzip = new GZipStream(output, CompressionLevelMapper.ToBclCompressionLevel(options?.Level), leaveOpen: true);
-            input.CopyTo(gzip);
+            ExactCopy.ToEnd(input, gzip);
         }
         catch (Exception ex)
         {

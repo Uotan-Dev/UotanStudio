@@ -97,7 +97,7 @@ public static class BrotliCompressor
         try
         {
             using var brotli = new BrotliStream(output, EncoderOptions(options), leaveOpen: true);
-            input.CopyTo(brotli);
+            ExactCopy.ToEnd(input, brotli);
         }
         catch (Exception ex)
         {

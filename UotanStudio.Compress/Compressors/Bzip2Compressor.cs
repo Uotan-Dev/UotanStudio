@@ -115,7 +115,7 @@ public static class Bzip2Compressor
         {
             using var buffered = new BufferedStream(new NonDisposingStream(output), 64 * 1024);
             using var bzip2 = BZip2Stream.Create(buffered, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true);
-            input.CopyTo(bzip2);
+            ExactCopy.ToEnd(input, bzip2);
         }
         catch (Exception ex)
         {
