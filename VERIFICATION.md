@@ -2,6 +2,18 @@
 
 本文件记录门禁实测结果与未验证边界；每跑完一道门禁就更新"当前实测"一节。只写当前状态：一条测量配一个日期，不写轮次叙述、不写"上一轮"或"之前失败现在通过"。常驻约束与命令在根 `AGENTS.md`，测试工程写法在 `UotanStudio.Tests/AGENTS.md`。
 
+## Hash/Compress 热点优化实测（2026-10-28，Windows x64，Debug，共享工作树）
+
+- `Crc32Register` 零矩阵缓存改为单个不可变快照字段原子发布，并发不同长度续算不再可能把一个长度配上另一个长度的矩阵；`Crc32RegisterConcurrentZeroMatrixTests`（并发 5 种长度 × 2 万次/线程）通过。
+- `RegisterContinuationBenchmarks` 增加 4 KiB/64 KiB/4 MiB 块长参数。x64 实测：4 KiB 硬件续算 1.944µs 对 slice-by-8 1.948µs（1.00×）、64 KiB 31.3µs 对 31.0µs（1.00×）、4 MiB 272.8µs 对 1 984.4µs（7.28×）。128 KiB 续算门槛在本机没有可回收的收益，维持不变。
+- XZ 块头固定为 28 字节（含 CRC32，尺寸字节恒为 6，体部补零纳入 CRC），`CompressInPlace` 不再对 LZMA2 载荷做整段左移；`ArchiveBrowserTests` 34/34（含 .xz/.txz 列表与解包往返）。
+- Sparse RAW 路径（`SparseReader.CopyRawExactly`/`AppendStream`、`SparseWriter` Raw 块）改为块内 `Crc32IeeeAccumulator` 累加、每块一次 `CombineIeee` 折叠；`SparseFillCrcBatchingTests` 4/4。
+- 流式编解码（Zstd/Gzip/Brotli/LZ4/Zlib/Deflate/Bzip2/RawDeflate）的 `Stream.CopyTo` 换为池化 `ExactCopy.ToEnd`；`PayloadStreamingTests` 5/5、`LzopCompressionTests` 13/13。
+- `ZstdBlockCodec.CompressorCache` 改为按级别多槽空闲列表，并行分块批间不再批量重建原生上下文。
+- `CompressionService.DecompressWithOptions` 在预算为 `long.MaxValue` 且令牌不可取消时跳过 `BoundedWriteStream` 包装；`XzDecoderStream.ReadAsync(byte[])` 复用已完成的读取任务。
+- Zstd 数组级 `Wrap/Unwrap` 返回精确尺寸的内部缓冲，外层 `ToArray` 是取得 `byte[]` 的必要拷贝，不构成可消除的冗余（行为探测确认每次调用返回新缓冲）。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`UotanStudio.Tests.Firmware` 命名空间 4406 总数 / 4404 通过 / 2 跳过（未设 `UOTAN_EROFS_CORPUS`）/ 0 失败，单轮 33s；架构门 `UotanStudio.Tests.Architecture` 55/55。本轮 `dotnet format` 全解校验中 `FlashPackageParsingTests`/`CompoundFileWriterTests`/`DiagProtocolTests` 的报告来自并行会话的未跟踪文件，本次改动文件逐一定向校验为零报告。
+
 ## 当前实测（2026-10-25，Windows x64，Debug）
 
 - `dotnet restore UotanStudio.slnx -p:Configuration=Debug` 与 `dotnet build UotanStudio.slnx --no-restore --nologo -c Debug`：0 错误、0 警告（2026-10-27，共享工作树）。
