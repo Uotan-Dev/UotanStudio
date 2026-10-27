@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.Core;
+
 namespace UotanStudio.Firmware.BlockImage.Sparse;
 
 /// <summary>
@@ -7,7 +9,7 @@ namespace UotanStudio.Firmware.BlockImage.Sparse;
 public static class SparseFormat
 {
     /// <summary>Little-endian magic value that identifies an Android sparse image file header. <para>标识 Android 稀疏镜像文件头部的小端魔数。</para></summary>
-    public const uint SparseHeaderMagic = 0xed26ff3a;
+    public const uint SparseHeaderMagic = BlockImageMagic.SparseHeaderMagic;
 
     /// <summary>Size in bytes of the base sparse file header before any extended header padding. <para>扩展头部填充之前，稀疏文件基础头部的字节大小。</para></summary>
     public const ushort SparseHeaderSize = 28;

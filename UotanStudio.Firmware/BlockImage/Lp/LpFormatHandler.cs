@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
@@ -62,7 +63,7 @@ public sealed class LpFormatHandler : IFormatHandler, IRepackMetadataProvider, I
     /// <para>Android sparse 魔数（小端 0xED26FF3A）。稀疏镜像的逻辑字节与原始文件布局不同，
     /// 因此下面的几何槽位魔数预检必须对稀疏 super 跳过。</para>
     /// </summary>
-    private const uint SparseMagic = 0xED26FF3A;
+    private const uint SparseMagic = SparseFormat.SparseHeaderMagic;
 
     /// <summary>
     /// Determines whether the file matches this format.

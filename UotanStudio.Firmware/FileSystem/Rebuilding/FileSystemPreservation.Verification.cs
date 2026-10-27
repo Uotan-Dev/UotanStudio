@@ -48,7 +48,7 @@ public static partial class FileSystemPreservation
         Span<byte> magic = stackalloc byte[4];
         container.ReadExactly(magic);
         container.Position = 0;
-        if (BinaryPrimitives.ReadUInt32LittleEndian(magic) == 0xED26FF3A)
+        if (BinaryPrimitives.ReadUInt32LittleEndian(magic) == BlockImageMagic.SparseHeaderMagic)
         {
             using var sparse = SparseContainerAccess.Resolve().OpenLogicalView(container);
             VerifyRebuiltFilesystem(sparse.Logical, plan, token, contentBytes);

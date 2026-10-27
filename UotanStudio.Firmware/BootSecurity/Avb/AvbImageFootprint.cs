@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.Core;
 
@@ -51,6 +52,6 @@ public static class AvbImageFootprint
         return sparseFooter is null ? null : checked((long)sparseFooter.Value.OriginalImageSize);
     }
 
-    private const uint SparseMagic = 0xED26FF3A;
+    private const uint SparseMagic = SparseFormat.SparseHeaderMagic;
     private const int MaximumChunks = 65_536;
 }

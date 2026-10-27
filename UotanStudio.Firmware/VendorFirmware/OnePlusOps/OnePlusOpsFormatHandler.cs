@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.Repacking;
 using UotanStudio.Firmware.Core.Streams;
@@ -737,7 +738,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
 
         var magic32 = BinaryPrimitives.ReadUInt32LittleEndian(data);
 
-        if (magic32 == 0xED26FF3A)
+        if (magic32 == SparseFormat.SparseHeaderMagic)
         {
             return true;
         }

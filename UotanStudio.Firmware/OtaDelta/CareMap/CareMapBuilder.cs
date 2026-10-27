@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.BlockImage.Sparse;
 using UotanStudio.Firmware.BlockImage.Sparse.IO;
 using UotanStudio.Firmware.BlockImage.Sparse.Models;
 using UotanStudio.Firmware.Core;
@@ -98,7 +99,7 @@ public static class CareMapBuilder
         return new CareMapPartitionInfo { Name = partitionName, Ranges = CareMapRanges.Format(clipped) };
     }
 
-    private const uint SparseMagic = 0xED26FF3A;
+    private const uint SparseMagic = SparseFormat.SparseHeaderMagic;
 
     private static (IReadOnlyList<CareMapRange> Present, long Length) ReadSparsePresentBlocks(string imagePath,
         CancellationToken cancellationToken)

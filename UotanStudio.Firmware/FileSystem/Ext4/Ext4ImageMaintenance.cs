@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.Core;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Firmware.FileSystem.Native;
 
@@ -41,7 +42,7 @@ public static class Ext4ImageMaintenance
             }
             var magic = new byte[4];
             await input.ReadExactlyAsync(magic, cancellationToken).ConfigureAwait(false);
-            sparseInput = BinaryPrimitives.ReadUInt32LittleEndian(magic) == 0xED26FF3A;
+            sparseInput = BinaryPrimitives.ReadUInt32LittleEndian(magic) == BlockImageMagic.SparseHeaderMagic;
         }
 
         var directory = Path.GetDirectoryName(destination)!;
