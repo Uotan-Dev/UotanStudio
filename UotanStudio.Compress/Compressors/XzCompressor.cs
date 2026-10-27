@@ -176,15 +176,9 @@ public static class XzCompressor
             var payloadEnd = output.Position;
             var compressedSize = payloadEnd - payloadStart;
             var blockHeader = XzContainer.BuildBlockHeader(compressedSize, (ulong)total, dictionarySize);
-            if (blockHeader.Length > XzContainer.MaximumBlockHeaderSize)
+            if (blockHeader.Length != XzContainer.MaximumBlockHeaderSize)
             {
-                throw new InvalidOperationException("The XZ block header exceeded its reserved size.");
-            }
-
-            if (blockHeader.Length < XzContainer.MaximumBlockHeaderSize)
-            {
-                payloadEnd = XzContainer.MoveLeft(output, payloadStart, payloadEnd,
-                    XzContainer.MaximumBlockHeaderSize - blockHeader.Length);
+                throw new InvalidOperationException("The XZ block header did not fill its reserved size.");
             }
 
             output.Position = payloadStart - XzContainer.MaximumBlockHeaderSize;

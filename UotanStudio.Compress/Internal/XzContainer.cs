@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Buffers.Binary;
 using UotanStudio.Hash.Crc32Ieee;
 using UotanStudio.Hash.XzCrc64;
@@ -159,23 +158,25 @@ internal static class XzContainer
 
         var bodyBytes = body.ToArray();
 
-
+        var headerBodySize = MaximumBlockHeaderSize - 4;
         var realSize = 1 + bodyBytes.Length + 4;
-        var padding = (4 - (realSize % 4)) % 4;
-        realSize += padding;
+        if (realSize > headerBodySize)
+        {
+            throw new InvalidOperationException("The XZ block header body exceeded its fixed size.");
+        }
 
-        var encodedHeaderSize = (byte)((realSize / 4) - 1);
+        var encodedHeaderSize = (byte)((MaximumBlockHeaderSize / 4) - 1);
 
         using var header = new MemoryStream();
         header.WriteByte(encodedHeaderSize);
         header.Write(bodyBytes, 0, bodyBytes.Length);
-        for (var i = 0; i < padding; i++)
+        while (header.Length < headerBodySize)
         {
             header.WriteByte(0);
         }
 
-        var headerBytes = header.ToArray();
-        WriteCrc32(header, headerBytes);
+        var paddedBytes = header.ToArray();
+        WriteCrc32(header, paddedBytes);
 
         return header.ToArray();
     }
@@ -194,70 +195,6 @@ internal static class XzContainer
     /// <para>含 CRC-32 的完整块头，长度不超过 <see cref="MaximumBlockHeaderSize"/> 字节。</para></returns>
     internal static byte[] BuildBlockHeader(long compressedSize, ulong uncompressedSize, uint dictionarySize)
         => BuildBlockHeader(compressedSize, uncompressedSize, DictionarySizeToIndex(dictionarySize));
-
-    /// <summary>
-    /// Moves a written byte range toward lower offsets inside a seekable stream that also supports reading.
-    /// <para>在同时支持读取的可定位流内，把已写出的字节区间整体向较低偏移移动。</para>
-    /// </summary>
-    /// <param name="stream">Seekable, readable and writable stream holding the range; it is flushed once before a chunked move and left positioned at the moved end.
-    /// <para>保存该区间的可定位、可读可写流；分块移动前刷新一次，结束后定位在移动后的末尾。</para></param>
-    /// <param name="start">Byte offset of the range start; it must not be lower than <paramref name="delta"/>.
-    /// <para>区间起始字节偏移；不得小于 <paramref name="delta"/>。</para></param>
-    /// <param name="end">Byte offset just past the range end.
-    /// <para>区间末尾之后的字节偏移。</para></param>
-    /// <param name="delta">Distance to move toward lower offsets; zero or a range below one byte leaves the stream unchanged.
-    /// <para>向较低偏移移动的距离；为零或区间不足一字节时不做改动。</para></param>
-    /// <returns>The byte offset just past the moved range, which is also the new stream position.
-    /// <para>移动后区间末尾之后的字节偏移，同时也是流的新位置。</para></returns>
-    /// <exception cref="EndOfStreamException">A seekable stream returned no bytes while the range still had bytes to move.
-    /// <para>可定位流在区间仍有字节待移动时返回零字节。</para></exception>
-    internal static long MoveLeft(Stream stream, long start, long end, int delta)
-    {
-        var length = end - start;
-        if (delta <= 0 || length <= 0)
-        {
-            return end;
-        }
-
-        var movedEnd = end - delta;
-        if (stream is MemoryStream memory && memory.TryGetBuffer(out var segment))
-        {
-            var buffer = segment.Array!;
-            var source = checked(segment.Offset + (int)start);
-            buffer.AsSpan(source, checked((int)length)).CopyTo(buffer.AsSpan(source - delta));
-            stream.Position = movedEnd;
-            return movedEnd;
-        }
-
-        stream.Flush();
-        var moveBuffer = ArrayPool<byte>.Shared.Rent(81920);
-        try
-        {
-            var readPosition = start;
-            var writePosition = start - delta;
-            while (readPosition < end)
-            {
-                stream.Position = readPosition;
-                var read = stream.Read(moveBuffer, 0, (int)Math.Min(moveBuffer.Length, end - readPosition));
-                if (read <= 0)
-                {
-                    throw new EndOfStreamException("The seekable output ended before the LZMA2 payload could be moved.");
-                }
-
-                stream.Position = writePosition;
-                stream.Write(moveBuffer, 0, read);
-                readPosition += read;
-                writePosition += read;
-            }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(moveBuffer);
-        }
-
-        stream.Position = movedEnd;
-        return movedEnd;
-    }
 
     /// <summary>
     /// Builds the index: indicator + record count + records + padding + CRC32.
