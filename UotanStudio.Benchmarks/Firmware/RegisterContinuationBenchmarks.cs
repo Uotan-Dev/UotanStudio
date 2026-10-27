@@ -19,6 +19,10 @@ public class RegisterContinuationBenchmarks
     private byte[] _block = [];
     private byte[] _frame = [];
     private byte[] _delta = [];
+    private byte[] _continuationBlock = [];
+
+    [Params(4 * 1024, 64 * 1024, 4 * 1024 * 1024)]
+    public int ContinuationBlockBytes { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -26,24 +30,28 @@ public class RegisterContinuationBenchmarks
         _block = new byte[4 * 1024 * 1024];
         _frame = new byte[1024 * 1024];
         _delta = new byte[4 * 1024 * 1024];
+        _continuationBlock = new byte[ContinuationBlockBytes];
         Random.Shared.NextBytes(_block);
         Random.Shared.NextBytes(_frame);
         Random.Shared.NextBytes(_delta);
+        Random.Shared.NextBytes(_continuationBlock);
     }
 
     /// <summary>
-    /// The optimized continuation path: any seed over 128 KiB reaches the hardware CRC through the zero-run matrix.
-    /// <para>优化后的续算路径：任意 seed 超过 128 KiB 即经零串矩阵到达硬件 CRC。</para>
+    /// The optimized continuation path: any seed over 128 KiB reaches the hardware CRC through the zero-run matrix,
+    /// and the block length sweeps 4 KiB, 64 KiB and 4 MiB to expose where that threshold stops paying off.
+    /// <para>优化后的续算路径：任意 seed 超过 128 KiB 即经零串矩阵到达硬件 CRC；块长扫描 4 KiB、64 KiB 与 4 MiB，
+    /// 暴露该阈值何时不再划算。</para>
     /// </summary>
     [Benchmark(Baseline = true)]
-    public uint Crc32Continued() => Crc32Register.Compute(_block, 0xDEAD_BEEFu);
+    public uint Crc32Continued() => Crc32Register.Compute(_continuationBlock, 0xDEAD_BEEFu);
 
     /// <summary>
     /// The software slice-by-8 walk that served every non-standard seed before the hardware path existed.
     /// <para>硬件路径出现之前服务所有非标准 seed 的 slice-by-8 软件查表。</para>
     /// </summary>
     [Benchmark]
-    public uint Crc32ContinuedSoftware() => Crc32Register.ComputeSoftware(_block, 0xDEAD_BEEFu);
+    public uint Crc32ContinuedSoftware() => Crc32Register.ComputeSoftware(_continuationBlock, 0xDEAD_BEEFu);
 
     /// <summary>
     /// The slice-by-8 CRC-16 that backs the RKDL download frames.

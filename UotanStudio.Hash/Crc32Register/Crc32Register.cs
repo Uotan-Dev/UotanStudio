@@ -44,8 +44,20 @@ public static class Crc32Register
     private static readonly uint[] Table = InitTable();
     private static readonly uint[] SliceTable = InitSliceTable();
 
-    private static uint[]? _cachedZeroMatrix;
-    private static long _cachedZeroMatrixLength;
+    private static ZeroMatrixCache? _cachedZeroMatrix;
+
+    private sealed class ZeroMatrixCache
+    {
+        internal ZeroMatrixCache(long length, uint[] matrix)
+        {
+            Length = length;
+            Matrix = matrix;
+        }
+
+        internal long Length { get; }
+
+        internal uint[] Matrix { get; }
+    }
 
     /// <summary>Computes the CRC-32 of the data starting from <paramref name="seed"/> (register semantics, no final XOR).
     /// <para>以 <paramref name="seed"/> 为寄存器初值计算数据的 CRC-32（寄存器语义，无最终异或）。</para></summary>
@@ -185,23 +197,24 @@ public static class Crc32Register
 
     /// <summary>
     /// Returns the zero-run advance matrix for the given length, memoizing the most recent power because callers
-    /// continue block-shaped data whose lengths repeat.
-    /// <para>返回给定长度的零串推进矩阵并记忆最近一次结果，因为调用方按固定块长续算，长度高度重复。</para>
+    /// continue block-shaped data whose lengths repeat. The cached entry is published as one immutable snapshot
+    /// through a single field, so concurrent callers never pair one length with another length's matrix.
+    /// <para>返回给定长度的零串推进矩阵并记忆最近一次结果，因为调用方按固定块长续算，长度高度重复。缓存条目以
+    /// 不可变快照形式经单个字段原子发布，并发调用方不会把一个长度配上另一个长度的矩阵。</para>
     /// </summary>
     /// <param name="length">Number of zero bytes; must be positive. <para>零字节的个数；必须为正。</para></param>
     /// <returns>The matrix whose row <c>i</c> is the register <c>1 &lt;&lt; i</c> after that many zero bytes.
     /// <para>行 <c>i</c> 为寄存器 <c>1 &lt;&lt; i</c> 推进相应零字节后的矩阵。</para></returns>
     private static uint[] ObtainZeroMatrix(long length)
     {
-        var cached = _cachedZeroMatrix;
-        if (cached is not null && Volatile.Read(ref _cachedZeroMatrixLength) == length)
+        var cached = Volatile.Read(ref _cachedZeroMatrix);
+        if (cached is not null && cached.Length == length)
         {
-            return cached;
+            return cached.Matrix;
         }
 
         var matrix = BuildZeroMatrix(length);
-        Volatile.Write(ref _cachedZeroMatrixLength, length);
-        Volatile.Write(ref _cachedZeroMatrix, matrix);
+        Volatile.Write(ref _cachedZeroMatrix, new ZeroMatrixCache(length, matrix));
         return matrix;
     }
 
