@@ -35,6 +35,36 @@ public sealed class QcnNvItem
     }
 
     /// <summary>
+    /// Creates a record from raw NV data, zero-padded or truncated to the 128-byte data region.
+    /// <para>从原始 NV 数据创建记录，数据补零或截断到 128 字节。</para>
+    /// </summary>
+    /// <param name="ordinal">Zero-based record ordinal. <para>从零的记录序号。</para></param>
+    /// <param name="id">The numbered NV item id. <para>编号 NV 条目 id。</para></param>
+    /// <param name="flags">The record flags field. <para>记录 flags 字段。</para></param>
+    /// <param name="data">The item data; at most 128 bytes are stored.
+    /// <para>条目数据；至多存储 128 字节。</para></param>
+    /// <param name="sourceStreamPath">The stream path the record belongs to.
+    /// <para>记录所属的流路径。</para></param>
+    /// <param name="recordIndex">Zero-based index inside the stream.
+    /// <para>流内从零索引。</para></param>
+    /// <returns>The created record. <para>创建的记录。</para></returns>
+    /// <exception cref="ArgumentException">The data exceeds 128 bytes.
+    /// <para>数据超过 128 字节。</para></exception>
+    public static QcnNvItem Create(int ordinal, ushort id, ushort flags, ReadOnlySpan<byte> data,
+        string sourceStreamPath, int recordIndex)
+    {
+        if (data.Length > DataLength)
+        {
+            throw new ArgumentException($"The item data is {data.Length} bytes; at most {DataLength} are stored.",
+                nameof(data));
+        }
+
+        var stored = new byte[DataLength];
+        data.CopyTo(stored);
+        return new QcnNvItem(ordinal, id, flags, stored, sourceStreamPath, recordIndex);
+    }
+
+    /// <summary>
     /// Zero-based position of this record across all <c>NV_ITEM_ARRAY</c> streams in file order.
     /// <para>该记录在文件内所有 <c>NV_ITEM_ARRAY</c> 流中按文件顺序的从零位置。</para>
     /// </summary>
