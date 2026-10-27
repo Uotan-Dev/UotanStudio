@@ -11,7 +11,7 @@
     <PackageVersion Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Iciclecreek.Avalonia.Terminal" Version="4.1.1" />
-    <PackageVersion Include="LuaCSharp" Version="0.5.7" />
+    <PackageVersion Include="LuaCSharp" Version="0.5.8" />
     <PackageVersion Include="Porta.Pty" Version="2.2.3" />
     <PackageVersion Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.4" />
@@ -39,7 +39,7 @@
     <!-- Device communication packages -->
     <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
     <PackageVersion Include="Makaretu.Dns.Multicast" Version="0.27.0" />
-    <PackageVersion Include="System.IO.Ports" Version="10.0.13" />
+    <PackageVersion Include="System.IO.Ports" Version="10.0.14" />
     <!-- QR code generation for the wireless-debugging pairing popup (pure managed PNG writer). -->
     <PackageVersion Include="QRCoder" Version="1.8.1" />
     <!-- UotanStudio.Firmware third-party dependencies -->
@@ -49,8 +49,8 @@
     <PackageVersion Include="K4os.Compression.LZ4.Streams" Version="1.3.8" />
     <PackageVersion Include="LZMA-SDK" Version="22.1.1" />
     <PackageVersion Include="SharpCompress" Version="0.50.7" />
-    <PackageVersion Include="System.IO.Hashing" Version="10.0.13" />
-    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageVersion Include="System.IO.Hashing" Version="10.0.14" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
     <PackageVersion Include="ZstdSharp.Port" Version="0.8.8" />
     <!-- AVB signature verification (RSASSA-PSS / PKCS#1 v1.5), pure managed & AOT-friendly -->
@@ -64,7 +64,7 @@
     <!-- Official Model Context Protocol C# SDK for the embedded MCP server -->
     <PackageVersion Include="ModelContextProtocol" Version="2.3.0" />
     <PackageVersion Include="ModelContextProtocol.Core" Version="2.3.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
     <!-- Source-compatible command parsing with trimming/AOT support. -->
   </ItemGroup>
 </Project>
