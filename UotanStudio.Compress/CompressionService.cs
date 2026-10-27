@@ -225,8 +225,10 @@ public static class CompressionService
         cancellationToken.ThrowIfCancellationRequested();
         ValidateForDecompression(format);
 
-        using var limitedOutput = new BoundedWriteStream(output, maximumOutputBytes, leaveOpen: true, cancellationToken: cancellationToken);
-        output = limitedOutput;
+        using var limitedOutput = maximumOutputBytes == long.MaxValue && !cancellationToken.CanBeCanceled
+            ? null
+            : new BoundedWriteStream(output, maximumOutputBytes, leaveOpen: true, cancellationToken: cancellationToken);
+        output = limitedOutput ?? output;
 
         if (format == CompressionFormat.None)
         {

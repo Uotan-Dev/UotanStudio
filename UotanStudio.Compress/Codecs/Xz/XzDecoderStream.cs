@@ -38,6 +38,8 @@ internal sealed class XzDecoderStream : Stream
     private byte _checkType;
     private DecoderState _state;
     private bool _disposed;
+    private Task<int> _completedReadTask = Task.FromResult(0);
+    private int _completedReadValue;
 
     internal XzDecoderStream(Stream input, bool leaveOpen)
     {
@@ -87,7 +89,14 @@ internal sealed class XzDecoderStream : Stream
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(Read(buffer, offset, count));
+        var read = Read(buffer, offset, count);
+        if (read != _completedReadValue || _completedReadTask.Status != TaskStatus.RanToCompletion)
+        {
+            _completedReadValue = read;
+            _completedReadTask = Task.FromResult(read);
+        }
+
+        return _completedReadTask;
     }
 
     public override int Read(Span<byte> buffer)
