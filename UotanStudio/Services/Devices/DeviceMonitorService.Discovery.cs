@@ -146,28 +146,6 @@ public sealed partial class DeviceMonitorService
             });
         }
 
-        foreach (var endpoint in endpoints)
-        {
-            if (endpoint.Source != "usbmuxd" || string.IsNullOrWhiteSpace(endpoint.Address))
-            {
-                continue;
-            }
-
-            devices.Add(new DetectedDevice
-            {
-                Key = "apple:" + endpoint.Address,
-                Serial = endpoint.Address,
-                PhysicalId = null,
-                Protocol = DeviceProtocolKind.Ios,
-                Transport = string.Equals(endpoint.State, "Network", StringComparison.OrdinalIgnoreCase)
-                    ? DeviceTransportKind.Tcp : DeviceTransportKind.Usb,
-                State = "device",
-                VendorId = 0x05AC,
-                ProductId = 0,
-                EdlProtocol = EdlProtocolState.Unknown,
-            });
-        }
-
         var resolvedEndpoints = adbDevices
             .Where(target => target.AliasAddress is not null)
             .Select(target => target.AliasAddress!)

@@ -27,6 +27,7 @@
 
 ## Apple 协议族
 
+- Apple 相关协议不要接到设备扫描上：`DeviceControllerFactory` 只注册 USB/adb/HDC 发现源，`Devices/Discovery` 不提供 usbmuxd 发现源，`CommDeviceTransportOpener` 不识别 usbmuxd 端点路由，宿主扫描也不把 usbmuxd 端点映射为设备。不要为扫描恢复 usbmuxd 探针、端点映射或新增 Apple 发现源；`Protocols/Apple/` 的实现只经显式直连 USB 会话消费。
 - `Protocols/Apple/` 是 Apple 设备（iPhone/iPad）的唯一实现处：usbmuxd 管道客户端（Windows TCP 27015 / Unix 套接字，可用 `USBMUXD_SOCKET_ADDRESS` 覆盖）、lockdownd 与配对、AFC、syslog 中继、iOS 17.4+ 受信隧道（`Protocols/Apple/Tunnel/`）与直连 USB 复用（`AppleUsbMuxDirect`，接口 class 0xFF/subclass 0xFE/protocol 2）。
 - 直连 USB 复用与 Apple Mobile Device Service 驱动互斥：本库不做任何驱动替换；直连仅在 WinUSB 可打开接口时可用，属于显式 opt-in 路径。
 - 配对记录保存在 `%LOCALAPPDATA%/UotanStudio/apple-lockdown`，可只读导入 `C:\ProgramData\Apple\Lockdown` 的 Apple 记录；配对私钥是该目录的敏感数据，不得写入日志或诊断输出。

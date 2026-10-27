@@ -36,8 +36,7 @@ public static class DeviceControllerFactory
             [
                 new UsbDiscoverySource(kit, UsbApiKind.Auto),
                 new AdbServerDiscoverySource(),
-                new HdcServerDiscoverySource(),
-                new UsbmuxdDiscoverySource()
+                new HdcServerDiscoverySource()
             ],
             new CommDeviceTransportOpener(kit),
             DefaultDeviceSessionFactories.All,
