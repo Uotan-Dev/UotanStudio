@@ -184,10 +184,9 @@ public class SparseImageBenchmarks
 /// 交付链路实际发布的 <c>.new.dat.br</c> Brotli 组合，以及读取器提供的两条解包路径。</para>
 /// <para><see cref="DatWriteOptions.SelfVerifyIncremental"/> defaults to <see langword="true"/> and both
 /// the host and the handler leave it on, so the pack benchmarks run with verification on and off as two
-/// separate measurements and the delta is exactly the cost the unpack/pack audit flagged as
-/// unquantified.</para>
+/// separate measurements and the delta is exactly the cost self-verification adds.</para>
 /// <para><see cref="DatWriteOptions.SelfVerifyIncremental"/> 默认为 <see langword="true"/>，且宿主与处理器都保持
-/// 开启，因此打包基准把校验开启与关闭作为两次独立测量运行，其差值正是解包/打包审计所指出、此前未被量化的成本。</para>
+/// 开启，因此打包基准把校验开启与关闭作为两次独立测量运行，其差值正是自校验本身的开销。</para>
 /// <para>Param matrix: 2 kinds x 2 sizes x 4 pack methods = 16, plus 4 unpack methods x 2 kinds x 2 sizes
 /// = 16, for 32 cases in this class.</para>
 /// <para>参数矩阵：2 种特征 × 2 种尺寸 × 4 个打包方法 = 16，加上 4 个解包方法 × 2 种特征 × 2 种尺寸 = 16，
@@ -296,8 +295,7 @@ public class DatDeliveryBenchmarks
     /// <para>在开启自校验的情况下写出 <c>.new.dat</c> / <c>.transfer.list</c> 组合：将刚写出的数据集经读取器回放，
     /// 并与输入镜像比较。</para>
     /// </summary>
-    /// <returns>The produced <c>.new.dat</c> length in bytes. <para>产出的 <c>.new.dat</c> 字节长度。</para>
-    /// <exception cref="InvalidDataException">Self-verification did not rebuild the input image.
+    /// <returns>The produced <c>.new.dat</c> length in bytes. <para>产出的 <c>.new.dat</c> 字节长度。</para></returns><exception cref="InvalidDataException">Self-verification did not rebuild the input image.
     /// <para>自校验未能重建输入镜像。</para></exception>
     [Benchmark(Description = "Dat_Pack_SelfVerifyOn")]
     public long PackDatSelfVerifyOn()
@@ -308,11 +306,11 @@ public class DatDeliveryBenchmarks
 
     /// <summary>
     /// Writes the same pair with self-verification off. The difference against
-    /// <see cref="PackDatSelfVerifyOn"/> is the unquantified replay-and-compare cost the audit flagged.
+    /// <see cref="PackDatSelfVerifyOn"/> is the replay-and-compare cost that self-verification adds.
     /// <para>在关闭自校验的情况下写出同样的组合。它与 <see cref="PackDatSelfVerifyOn"/> 的差值正是审计所指出的、
-    /// 此前未被量化的回放并比较成本。</para>
+    /// 自校验附带的回放并比较成本。</para>
     /// </summary>
-    /// <returns>The produced <c>.new.dat</c> length in bytes. <para>产出的 <c>.new.dat</c> 字节长度。</para>
+    /// <returns>The produced <c>.new.dat</c> length in bytes. <para>产出的 <c>.new.dat</c> 字节长度。</para></returns>
     [Benchmark(Description = "Dat_Pack_SelfVerifyOff", Baseline = true)]
     public long PackDatSelfVerifyOff()
     {
@@ -325,7 +323,7 @@ public class DatDeliveryBenchmarks
     /// delivery pipeline ships, with self-verification on.
     /// <para>写出卡刷 Brotli 组合：传输清单与交付链路发布的 <c>.new.dat.br</c>，并开启自校验。</para>
     /// </summary>
-    /// <returns>The produced <c>.new.dat.br</c> length in bytes. <para>产出的 <c>.new.dat.br</c> 字节长度。</para>
+    /// <returns>The produced <c>.new.dat.br</c> length in bytes. <para>产出的 <c>.new.dat.br</c> 字节长度。</para></returns>
     [Benchmark(Description = "DatBr_Pack_SelfVerifyOn")]
     public long PackDatBrSelfVerifyOn()
     {
@@ -339,7 +337,7 @@ public class DatDeliveryBenchmarks
     /// <para>在关闭自校验的情况下写出同样的 Brotli 组合，把校验趟与 <see cref="PackDatBrSelfVerifyOn"/> 所度量的
     /// Brotli 压缩成本分离。</para>
     /// </summary>
-    /// <returns>The produced <c>.new.dat.br</c> length in bytes. <para>产出的 <c>.new.dat.br</c> 字节长度。</returns>
+    /// <returns>The produced <c>.new.dat.br</c> length in bytes. <para>产出的 <c>.new.dat.br</c> 字节长度。</para></returns>
     [Benchmark(Description = "DatBr_Pack_SelfVerifyOff")]
     public long PackDatBrSelfVerifyOff()
     {
@@ -352,8 +350,7 @@ public class DatDeliveryBenchmarks
     /// import path.
     /// <para>经公开导入路径从带编号的未压缩新数据卷集合重建原始分区镜像。</para>
     /// </summary>
-    /// <returns>The reconstructed image length in bytes. <para>重建镜像的字节长度。</para>
-    /// <exception cref="InvalidDataException">The joined volume does not match the transfer list.
+    /// <returns>The reconstructed image length in bytes. <para>重建镜像的字节长度。</para></returns><exception cref="InvalidDataException">The joined volume does not match the transfer list.
     /// <para>拼接后的卷与传输清单不符。</para></exception>
     [Benchmark(Description = "Dat_Unpack_Plain")]
     public long UnpackDatPlain()
@@ -367,8 +364,7 @@ public class DatDeliveryBenchmarks
     /// through the strict Brotli reader before replaying the commands.
     /// <para>经严格 Brotli 读取器解压后再回放命令，从带编号的 Brotli 新数据卷集合重建原始分区镜像。</para>
     /// </summary>
-    /// <returns>The reconstructed image length in bytes. <para>重建镜像的字节长度。</para>
-    /// <exception cref="InvalidDataException">The joined Brotli volume does not match the transfer list.
+    /// <returns>The reconstructed image length in bytes. <para>重建镜像的字节长度。</para></returns><exception cref="InvalidDataException">The joined Brotli volume does not match the transfer list.
     /// <para>拼接后的 Brotli 卷与传输清单不符。</para></exception>
     [Benchmark(Description = "DatBr_Unpack")]
     public long UnpackDatBrotli()
@@ -383,7 +379,7 @@ public class DatDeliveryBenchmarks
     /// <para>以交付所用的 Brotli 级别把已写出的 <c>.new.dat</c> 压缩为 <c>.new.dat.br</c>，即
     /// <c>ImageOutputService</c> 产出 <c>br</c> 时的后半段。</para>
     /// </summary>
-    /// <returns>The produced Brotli file length in bytes. <para>产出的 Brotli 文件字节长度。</para>
+    /// <returns>The produced Brotli file length in bytes. <para>产出的 Brotli 文件字节长度。</para></returns>
     [Benchmark(Description = "DatBr_Compress")]
     public long CompressDatToBrotli()
     {
@@ -397,7 +393,7 @@ public class DatDeliveryBenchmarks
     /// standalone decompression half of the card-flash path.
     /// <para>使用格式探测把 <c>.new.dat.br</c> 解压回明文，即卡刷链路的独立解压半段。</para>
     /// </summary>
-    /// <returns>The decompressed plaintext length in bytes. <para>解压后明文的字节长度。</para>
+    /// <returns>The decompressed plaintext length in bytes. <para>解压后明文的字节长度。</para></returns>
     [Benchmark(Description = "DatBr_Decompress")]
     public long DecompressDatBrotli()
     {

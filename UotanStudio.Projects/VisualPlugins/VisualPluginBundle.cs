@@ -343,7 +343,8 @@ public static class VisualPluginBundle
 
     private static string GetEntryName(VisualPluginAsset asset) => "assets/" + asset.Sha256.ToLowerInvariant();
 
-    /// <summary>Enumerates a structurally validated embedded graph without using registry or global state.</summary>
+    /// <summary>Enumerates a structurally validated embedded graph without using registry or global state.
+    /// <para>枚举结构校验过的内嵌图，不使用注册表或全局状态。</para></summary>
     public static IEnumerable<VisualPluginPackage> EnumerateScopes(VisualPluginPackage package)
     {
         yield return package;

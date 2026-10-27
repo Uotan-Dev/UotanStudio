@@ -6,10 +6,10 @@ using UotanStudio.Hash.Crc32Register;
 namespace UotanStudio.Benchmarks.Firmware;
 
 /// <summary>
-/// Measures the register-continuation and small-checksum optimizations against the software paths that ran before
-/// them: a non-standard CRC-32 seed over a block-shaped buffer (the AMLogic/F2FS continuation shape), the RKDL
+/// Measures the register-continuation and small-checksum optimizations against the scalar software paths that do the same work byte by byte:
+/// a non-standard CRC-32 seed over a block-shaped buffer (the AMLogic/F2FS continuation shape), the RKDL
 /// CRC-16 over loader-sized frames, and the inverse XZ delta filter over a 4 MiB decode chunk.
-/// <para>度量寄存器续算与小型校验和优化相对此前软件路径的收益：非标准 CRC-32 seed 对块状缓冲（AMLogic/F2FS 续算
+/// <para>度量寄存器续算与小型校验和优化相对逐字节软件路径的收益：非标准 CRC-32 seed 对块状缓冲（AMLogic/F2FS 续算
 /// 形态）、RKDL CRC-16 对 loader 级帧、逆 XZ 差分过滤器对 4 MiB 解码块。</para>
 /// </summary>
 [MemoryDiagnoser]

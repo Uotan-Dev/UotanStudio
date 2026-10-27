@@ -10,16 +10,12 @@ namespace UotanStudio.RegexInfer;
 /// 再把轨迹合并成一棵片段字典树，字典树上泛化出的最优路径即推导出的正则。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Only patterns that were validated against the .NET regex engine before being returned are emitted, and
 /// only candidates that matched every positive example exactly are kept. A candidate that still matches a
 /// supplied negative example is reported with a non-zero <see cref="InferredRegex.NegativeLeaks"/> instead
 /// of being silently dropped, so callers can judge whether the residual ambiguity is acceptable.
-/// </para>
-/// <para>
-/// 本库只输出在返回前已通过 .NET 正则引擎验证、且精确命中全部正例的候选。仍然匹配所提供负例的候选会带上
-/// 非零的 <see cref="InferredRegex.NegativeLeaks"/> 报告出来，而不是被静默丢弃，由调用方判断残留歧义是否可接受。
-/// </para>
+/// <para>本库只输出在返回前已通过 .NET 正则引擎验证、且精确命中全部正例的候选。仍然匹配所提供负例的候选会带上
+/// 非零的 <see cref="InferredRegex.NegativeLeaks"/> 报告出来，而不是被静默丢弃，由调用方判断残留歧义是否可接受。</para>
 /// </remarks>
 public static class RegexInfer
 {

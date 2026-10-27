@@ -372,11 +372,12 @@ public sealed record DeliveryPlan
     public Dictionary<string, string> LocalZstd { get; init; } = [];
 }
 
-/// <summary><para>通过解决方案文件状态段进行有界、AOT 安全的交付计划持久化；路径相对解决方案根存储。</para>
-/// Bounded AOT-safe plan persistence through the solution file state section; paths are stored relative to the solution root.</summary>
+/// <summary>Bounded AOT-safe plan persistence through the solution file state section; paths are stored relative to the solution root.
+/// <para>通过解决方案文件状态段进行有界、AOT 安全的交付计划持久化；路径相对解决方案根存储。</para></summary>
 public static class DeliveryPlanStore
 {
-    /// <summary>Well-known key of the delivery plan inside the solution file's state section.</summary>
+    /// <summary>Well-known key of the delivery plan inside the solution file's state section.
+    /// <para>交付计划在解决方案文件状态段中的固定键。</para></summary>
     public const string StateKey = "delivery";
 
     /// <summary>

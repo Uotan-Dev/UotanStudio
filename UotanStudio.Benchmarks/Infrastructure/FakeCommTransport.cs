@@ -306,10 +306,10 @@ public sealed class FakeAdbDeviceTransport : FakeCommTransport
 
     /// <summary>
     /// Gets or sets how many AUTH token challenges the simulated adbd issues before it accepts the
-    /// client, reproducing the upstream flow where each token is answered with the next host identity
+    /// client, reproducing the AUTH challenge flow the wire protocol defines, where each token is answered with the next host identity
     /// and an exhausted chain ends with the public-key announcement that triggers the device prompt.
     /// Zero keeps the no-auth handshake the other tests rely on.
-    /// <para>获取或设置模拟 adbd 在接纳客户端前下发多少个 AUTH 令牌挑战，复现上游流程：每个令牌由下一个
+    /// <para>获取或设置模拟 adbd 在接纳客户端前下发多少个 AUTH 令牌挑战，复现线协议定义的 AUTH 挑战流程：每个令牌由下一个
     /// 主机身份应答，身份链耗尽后以公钥通告结束并触发设备提示。为 0 时保持其他测试依赖的免认证握手。</para>
     /// </summary>
     public int AuthTokenChallenges { get; init; }

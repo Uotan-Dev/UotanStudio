@@ -54,7 +54,7 @@ public static class SchemeFile
     /// <para>待序列化的软件包；其格式版本必须能被本实现读取，且内嵌签名必须与当前内容一致。</para></param>
     /// <param name="cancellationToken">Cancels staging or comparison I/O; the destination keeps its previous content.
     /// <para>取消暂存或比对阶段的 I/O；目标文件保持原有内容。</para></param>
-    /// <returns><see langword="true"/> when the destination holds text equivalent to the package; <see langword="false"/> when the path is empty, the version is unsupported, the signature no longer matches, the serialized state exceeds 32 MiB, or any I/O error occurred.
+    /// <returns><see langword="true"/> when the destination holds text equivalent to the package; <see langword="false"/> when the path is empty, the version is unsupported, the signature does not match, the serialized state exceeds 32 MiB, or any I/O error occurred.
     /// <para>目标文件内容与软件包等价时返回 <see langword="true"/>；路径为空、版本不受支持、签名已不匹配、序列化结果超过 32 MiB 或发生任何 I/O 错误时返回 <see langword="false"/>。</para></returns>
     /// <exception cref="OperationCanceledException">Cancellation was requested before the destination was replaced.
     /// <para>在替换目标文件之前请求了取消。</para></exception>

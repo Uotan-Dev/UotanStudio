@@ -2,7 +2,7 @@ namespace UotanStudio.Delivery;
 
 /// <summary>Public delivery progress contract: the internal <see cref="DeliveryProgress"/> flattened into a record that crosses the assembly boundary so facade callers can drive progress bars and statistics. Tuple fields become standalone scalars, so no ValueTuple is exposed on the public surface.
 /// <para>公共交付进度契约：把内部 <see cref="DeliveryProgress"/> 摊平为可跨程序集边界的记录，供门面调用方 驱动进度条与统计。元组字段被展开为独立标量，因此不向公共面暴露 ValueTuple。</para></summary>
-/// <param name="Percent">Percent progress; a negative value means the caller should keep the previously reported percentage.
+/// <param name="Percent">Percent progress; a negative value means the caller should keep the last reported percentage.
 /// <para>百分比进度；负值表示调用方应沿用既有百分比。</para></param>
 /// <param name="Message">Human-readable localized text that carries the final wording only when <paramref name="Stage"/> is null.
 /// <para>已本地化的可读文本，仅当 <paramref name="Stage"/> 为 null 时携带最终文案。</para></param>

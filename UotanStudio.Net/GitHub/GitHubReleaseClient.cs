@@ -8,15 +8,11 @@ namespace UotanStudio.Net.GitHub;
 /// <para>只从 <c>api.github.com</c> 源站读取 Release 元数据；镜像绝不提供版本、长度或摘要。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Every response body is capped at one MiB and parsed through a source-generated JSON context, so the
 /// metadata path stays bounded and NativeAOT-safe. The artifact itself is downloaded separately and
 /// verified against the <see cref="GitHubAsset.Size"/> and <see cref="GitHubAsset.Sha256"/> reported here.
-/// </para>
-/// <para>
-/// 每个响应体上限为一 MiB，并经源生成 JSON 上下文解析，因此元数据路径有界且在 NativeAOT 下可用。产物本体另行下载，
-/// 并用此处上报的 <see cref="GitHubAsset.Size"/> 与 <see cref="GitHubAsset.Sha256"/> 校验。
-/// </para>
+/// <para>每个响应体上限为一 MiB，并经源生成 JSON 上下文解析，因此元数据路径有界且在 NativeAOT 下可用。产物本体另行下载，
+/// 并用此处上报的 <see cref="GitHubAsset.Size"/> 与 <see cref="GitHubAsset.Sha256"/> 校验。</para>
 /// </remarks>
 public static class GitHubReleaseClient
 {

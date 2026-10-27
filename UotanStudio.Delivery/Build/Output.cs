@@ -393,9 +393,9 @@ public sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigning
     /// structure and content, and records capacity without requiring it because delivery never promises the rebuilt image
     /// still fits the original partition (Super fit is hard-checked separately by DeliverySuperCapacity); metadata that
     /// cannot be bound to the source because it records no source identity inherits nothing and still must not fail,
-    /// while metadata whose recorded identity no longer matches the source is stale evidence and aborts the delivery
+    /// while metadata whose recorded identity differs from the source is stale evidence and aborts the delivery
     /// rather than being silently downgraded; Super packing expands sparse sources into their logical image, whose bytes
-    /// legitimately differ and whose source-side evidence no longer describes the artifact, so every dimension stays
+    /// legitimately differ and whose source-side evidence does not describe the artifact, so every dimension stays
     /// unevaluated there; generated containers (super.img / super_empty.img / payload.bin / ota.zip / super.zip /
     /// recovery.zip) hold no source identity at all and are reported honestly as unevaluated instead of verified.
     /// Only a dimension that is both required and judged not equivalent aborts the delivery; an unevaluated dimension
@@ -516,7 +516,7 @@ public sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigning
     /// <param name="file">Delivered file entry whose equivalence is evaluated. <para>要评估等价性的交付条目。</para></param>
     /// <param name="stagedPath">Staged copy of the source image. <para>源镜像的暂存副本路径。</para></param>
     /// <param name="expandedToLogicalImage">True when staging expanded the source through the sparse layout, so the
-    /// container bytes no longer describe the source. <para>暂存已按稀疏布局展开源数据时为 true，此时容器字节不再等同源字节。</para></param>
+    /// container bytes do not describe the source. <para>暂存已按稀疏布局展开源数据时为 true，此时容器字节不再等同源字节。</para></param>
     /// <param name="token">Cancels hashing and verification. <para>取消哈希与校验。</para></param>
     /// <param name="fusedIdentity">
     /// The digest and length of the same source bytes folded out of the staging copy pass; when null the source image is

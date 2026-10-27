@@ -28,15 +28,11 @@ public sealed record ScrcpyServerRelease(
 /// <para>描述从 <c>api.github.com</c> 读取的已发布 scrcpy 服务端版本。</para>
 /// </summary>
 /// <remarks>
-/// <para>
 /// Metadata is read from the origin only and never from a mirror: the digest and byte length are what
 /// make a mirror-served payload trustworthy, so a mirror must not be able to supply them. The
 /// artifact itself is downloaded through the mirror-accelerating downloader and verified against them.
-/// </para>
-/// <para>
-/// 元数据只读源站、绝不读镜像：摘要与字节长度正是让镜像载荷可信的依据，因此镜像不能提供它们。
-/// 产物本体走带镜像加速的下载器获取，并用这两个值校验。
-/// </para>
+/// <para>元数据只读源站、绝不读镜像：摘要与字节长度正是让镜像载荷可信的依据，因此镜像不能提供它们。
+/// 产物本体走带镜像加速的下载器获取，并用这两个值校验。</para>
 /// </remarks>
 public static class ScrcpyServerReleaseClient
 {

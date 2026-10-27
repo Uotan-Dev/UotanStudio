@@ -89,7 +89,8 @@ public sealed class VisualPluginPackage
     [JsonIgnore]
     public string? BundlePath { get; set; }
 
-    /// <summary>Validated root manifest owning the shared archive of an embedded package.</summary>
+    /// <summary>Validated root manifest owning the shared archive of an embedded package.
+    /// <para>校验过的根清单，持有内嵌包共享归档的所有权。</para></summary>
     [JsonIgnore]
     public VisualPluginPackage? BundleRoot { get; set; }
 
