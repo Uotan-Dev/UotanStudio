@@ -287,17 +287,6 @@ public partial class NodeEditorView : UserControl
         vm.SetSelection(selected, primary);
     }
 
-    private void OnOpenVisualPluginEditorClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is NodeEditorViewModel
-            {
-                SelectedVisualPlugin: { Kind: VisualPluginKind.CompositeNode } registration
-            })
-        {
-            VisualPluginEditorWindow.ShowRegistration(registration);
-        }
-    }
-
     private IReadOnlyList<FlowNodeViewModel> NodesIntersectingSelection(Point first, Point second)
     {
         var selection = CreateSelectionRectangle(first, second);
