@@ -7,7 +7,13 @@ namespace UotanStudio.ViewModels.Flash;
 
 public sealed partial class FlashViewModel
 {
-    private readonly LocalizedOptionSet _rootFileSourceOptions = new("BootPatch_CustomFile", "BootPatch_NoFile");
+    private readonly LocalizedOptionSet _rootFileSourceOptions = LocalizedOptionSet.FromOptions(
+        LocalizedOption.FromText("Magisk"),
+        LocalizedOption.FromText("Alpha"),
+        LocalizedOption.FromText("KernelSU"),
+        LocalizedOption.FromText("SukiSU"),
+        LocalizedOption.FromText("APatch"),
+        LocalizedOption.FromResource("BootPatch_CustomFile"));
 
     private Control? _surface;
 

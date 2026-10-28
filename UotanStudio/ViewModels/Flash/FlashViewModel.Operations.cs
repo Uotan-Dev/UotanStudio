@@ -625,14 +625,19 @@ public sealed partial class FlashViewModel
         var chooseBtn = Field<Button>("ChooseRootPackageButton");
 
         sourceBox.IsEnabled = !_busy && addRoot;
-        var customFile = sourceBox.SelectedIndex == 0;
+        var customFile = sourceBox.SelectedIndex == 5;
+        pathBox.IsVisible = customFile;
+        chooseBtn.IsVisible = customFile;
         pathBox.IsEnabled = !_busy && addRoot && customFile;
         chooseBtn.IsEnabled = !_busy && addRoot && customFile;
+        var versionBox = Field<ComboBox>("RootVersionBox");
+        versionBox.IsVisible = !customFile;
+        versionBox.IsEnabled = !_busy && addRoot;
     }
 
     internal void OnRootFileSourceChanged(object? sender, SelectionChangedEventArgs e)
     {
-        var custom = Field<ComboBox>("RootFileSourceBox").SelectedIndex == 0;
+        var custom = Field<ComboBox>("RootFileSourceBox").SelectedIndex == 5;
         if (!custom)
         {
             Field<TextBox>("RootPackagePathBox").Text = string.Empty;
@@ -813,7 +818,7 @@ public sealed partial class FlashViewModel
             }
             _rootPackagePath = path;
             Field<TextBox>("RootPackagePathBox").Text = path;
-            Field<ComboBox>("RootFileSourceBox").SelectedIndex = 0;
+            Field<ComboBox>("RootFileSourceBox").SelectedIndex = 5;
             Field<CheckBox>("AddRootBox").IsEnabled = true;
             Field<CheckBox>("AddRootBox").IsChecked = true;
             ToolTip.SetTip(Field<Button>("ChooseRootPackageButton"), path);

@@ -12,8 +12,13 @@ namespace UotanStudio.Views.Shell;
 /// </summary>
 public partial class BootPatchWindow : Window
 {
-    private readonly LocalizedOptionSet _fileSourceOptions =
-        new("BootPatch_CustomFile", "BootPatch_NoFile");
+    private readonly LocalizedOptionSet _fileSourceOptions = LocalizedOptionSet.FromOptions(
+        LocalizedOption.FromText("Magisk"),
+        LocalizedOption.FromText("Alpha"),
+        LocalizedOption.FromText("KernelSU"),
+        LocalizedOption.FromText("SukiSU"),
+        LocalizedOption.FromText("APatch"),
+        LocalizedOption.FromResource("BootPatch_CustomFile"));
     private readonly BootPatchService _patchService = new();
     private BootPatchDetection? _detection;
     private string? _bootArchitecture;
@@ -44,8 +49,10 @@ public partial class BootPatchWindow : Window
     private void OnFileSourceChanged(object? sender, SelectionChangedEventArgs e) => UpdateFileSourceState();
     private void UpdateFileSourceState()
     {
-        var custom = FileSourceBox.SelectedIndex == 0;
-        FilePathBox.IsEnabled = custom; BrowseFileButton.IsEnabled = custom;
+        var custom = FileSourceBox.SelectedIndex == 5;
+        FilePathBox.IsVisible = custom;
+        BrowseFileButton.IsVisible = custom;
+        FileVersionBox.IsVisible = !custom;
         if (!custom)
         {
             FilePathBox.Text = string.Empty;

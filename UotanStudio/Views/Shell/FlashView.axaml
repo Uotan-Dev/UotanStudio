@@ -360,15 +360,17 @@
                                           AutomationProperties.Name="{DynamicResource Flash_DeleteCow}" />
                             </Grid>
                             <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
-                            <!-- 参考修补Boot页面：在“选择Magisk或KernelSU安装包”按钮上方增加下拉框和TextBox -->
                             <ComboBox Name="RootFileSourceBox" HorizontalAlignment="Stretch"
                                       ItemTemplate="{StaticResource LocalizedOptionTemplate}"
                                       SelectionChanged="OnRootFileSourceChanged"
                                       AutomationProperties.Name="{DynamicResource BootPatch_File}" />
+                            <ComboBox Name="RootVersionBox" HorizontalAlignment="Stretch" Height="32"
+                                      VerticalContentAlignment="Center" />
                             <TextBox Name="RootPackagePathBox" Height="32" VerticalContentAlignment="Center"
+                                     IsVisible="False"
                                      IsReadOnly="True" PlaceholderText="{DynamicResource Flash_RootPackageHint}"
                                      AutomationProperties.Name="{DynamicResource Flash_ChooseRootPackage}" />
-                            <Button Name="ChooseRootPackageButton" Classes="pane-action"
+                            <Button Name="ChooseRootPackageButton" Classes="pane-action" IsVisible="False"
                                     Click="OnChooseRootPackageClick"
                                     Content="{DynamicResource Flash_ChooseRootPackage}" />
                         </StackPanel>

@@ -69,8 +69,11 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
-                        <TextBox Grid.Column="2" Name="FilePathBox" Classes="path-field" IsReadOnly="True" />
-                        <Button Grid.Column="3" Name="BrowseFileButton" Classes="browse"
+                        <ComboBox Grid.Column="2" Grid.ColumnSpan="2" Name="FileVersionBox"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBox Grid.Column="2" Name="FilePathBox" Classes="path-field" IsReadOnly="True"
+                                 IsVisible="False" />
+                        <Button Grid.Column="3" Name="BrowseFileButton" Classes="browse" IsVisible="False"
                                 Content="{DynamicResource BootPatch_SelectFile}" Click="OnBrowseFileClick" />
                     </Grid>
                     <Grid ColumnSpacing="10">
