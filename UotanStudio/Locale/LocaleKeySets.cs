@@ -338,7 +338,6 @@ internal static class LocaleKeySets
         "Flash_EdlReadbackSelected",
         "Flash_EdlGenerateXml",
         "Flash_EdlGeneralizedXml",
-        "Flash_EdlSkipUfsProvision",
         "Flash_EdlSerialPort",
         "Flash_Auto",
         "Flash_EdlSectorSize",

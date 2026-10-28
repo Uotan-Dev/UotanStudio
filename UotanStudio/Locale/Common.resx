@@ -1050,9 +1050,6 @@ Author: 暮间雾
   <data name="Flash_EdlGeneralizedXml" xml:space="preserve">
     <value>Generalize XML (fit different storage sizes)</value>
   </data>
-  <data name="Flash_EdlSkipUfsProvision" xml:space="preserve">
-    <value>Skip UFS provisioning</value>
-  </data>
   <data name="Flash_EdlSerialPort" xml:space="preserve">
     <value>EDL serial port</value>
   </data>

@@ -377,53 +377,51 @@
                         <Expander Name="EdlExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Edl}" IsExpanded="False">
                             <StackPanel Name="EdlPane" Spacing="8">
-                                                                <Grid Name="EdlOptionGrid" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*,*"
+                                                                <Grid Name="EdlOptionGrid" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*,*"
                                       RowSpacing="6" ColumnSpacing="8" HorizontalAlignment="Stretch">
                                     <CheckBox Grid.Row="0" Grid.Column="0" Name="SkipAbsentSourcesBox"
                                               Content="{DynamicResource Flash_SkipAbsentSources}" HorizontalAlignment="Left" />
                                     <CheckBox Grid.Row="0" Grid.Column="1" Name="ContinueOnFailureBox"
                                               Content="{DynamicResource Flash_ContinueOnFailure}" HorizontalAlignment="Left" />
-                                    <CheckBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Name="EdlSkipUfsBox"
-                                              Content="{DynamicResource Flash_EdlSkipUfsProvision}" HorizontalAlignment="Left" />
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Flash_EdlSectorSize}"
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Flash_EdlSectorSize}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <ComboBox Grid.Row="2" Grid.Column="1" Name="EdlSectorSizeBox" Height="28"
+                                    <ComboBox Grid.Row="1" Grid.Column="1" Name="EdlSectorSizeBox" Height="28"
                                               HorizontalAlignment="Stretch"
                                               ItemTemplate="{StaticResource LocalizedOptionTemplate}"
                                               AutomationProperties.Name="{DynamicResource Flash_EdlSectorSize}" />
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="{DynamicResource Flash_EdlSlot}"
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Flash_EdlSlot}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <ComboBox Grid.Row="3" Grid.Column="1" Name="EdlSlotBox" Height="28"
+                                    <ComboBox Grid.Row="2" Grid.Column="1" Name="EdlSlotBox" Height="28"
                                               HorizontalAlignment="Stretch"
                                               ItemTemplate="{StaticResource LocalizedOptionTemplate}"
                                               AutomationProperties.Name="{DynamicResource Flash_EdlSlot}" />
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="{DynamicResource Flash_EdlWipeFirst}"
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="{DynamicResource Flash_EdlWipeFirst}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <TextBox Grid.Row="4" Grid.Column="1" Name="EdlWipeFirstBox" Height="28"
+                                    <TextBox Grid.Row="3" Grid.Column="1" Name="EdlWipeFirstBox" Height="28"
                                              HorizontalAlignment="Stretch" Text="0" PlaceholderText="0"
                                              AutomationProperties.Name="{DynamicResource Flash_EdlWipeFirst}" />
-                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="{DynamicResource Flash_EdlMaxPayload}"
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="{DynamicResource Flash_EdlMaxPayload}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <TextBox Grid.Row="5" Grid.Column="1" Name="EdlMaxPayloadBox" Height="28"
+                                    <TextBox Grid.Row="4" Grid.Column="1" Name="EdlMaxPayloadBox" Height="28"
                                              HorizontalAlignment="Stretch" Text="1048576" PlaceholderText="1048576"
                                              AutomationProperties.Name="{DynamicResource Flash_EdlMaxPayload}" />
-                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="{DynamicResource Flash_EdlPagesPerBlock}"
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="{DynamicResource Flash_EdlPagesPerBlock}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <TextBox Grid.Row="6" Grid.Column="1" Name="EdlPagesPerBlockBox" Height="28"
+                                    <TextBox Grid.Row="5" Grid.Column="1" Name="EdlPagesPerBlockBox" Height="28"
                                              HorizontalAlignment="Stretch" Text="0" PlaceholderText="0"
                                              AutomationProperties.Name="{DynamicResource Flash_EdlPagesPerBlock}" />
-                                    <CheckBox Grid.Row="7" Grid.Column="0" Name="EdlWipeConfirmBox"
+                                    <CheckBox Grid.Row="6" Grid.Column="0" Name="EdlWipeConfirmBox"
                                               Content="{DynamicResource Flash_EdlWipeConfirm}"
                                               VerticalAlignment="Center" FontSize="12"
                                               AutomationProperties.Name="{DynamicResource Flash_EdlWipeConfirm}" />
-                                    <CheckBox Grid.Row="7" Grid.Column="1" Name="EdlWipeEntireBox"
+                                    <CheckBox Grid.Row="6" Grid.Column="1" Name="EdlWipeEntireBox"
                                               Content="{DynamicResource Flash_EdlWipeEntire}"
                                               VerticalAlignment="Center" FontSize="12"
                                               AutomationProperties.Name="{DynamicResource Flash_EdlWipeEntire}" />
-                                    <TextBlock Grid.Row="8" Grid.Column="0" Name="EdlGptEntryLbaLabel"
+                                    <TextBlock Grid.Row="7" Grid.Column="0" Name="EdlGptEntryLbaLabel"
                                                Text="{DynamicResource Flash_EdlGptEntryLba}"
                                                VerticalAlignment="Center" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" />
-                                    <TextBox Grid.Row="8" Grid.Column="1" Name="EdlGptEntryLbaBox" Height="28"
+                                    <TextBox Grid.Row="7" Grid.Column="1" Name="EdlGptEntryLbaBox" Height="28"
                                              HorizontalAlignment="Stretch" Text="0" PlaceholderText="0"
                                              AutomationProperties.Name="{DynamicResource Flash_EdlGptEntryLba}" />
                                 </Grid>

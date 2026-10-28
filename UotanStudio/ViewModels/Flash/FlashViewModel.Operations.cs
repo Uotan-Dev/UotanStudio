@@ -1880,7 +1880,7 @@ public sealed partial class FlashViewModel
                         Handshake = Handshake.None
                     },
                     _loadedPath, programmerPath,
-                    configuration: null, includeUfsProvision: Field<CheckBox>("EdlSkipUfsBox").IsChecked != true,
+                    configuration: null, includeUfsProvision: true,
                     cancellationToken: cancellation.Token,
                     continueOnFailure: Field<CheckBox>("ContinueOnFailureBox").IsChecked == true,
                     skipAbsentSources: Field<CheckBox>("SkipAbsentSourcesBox").IsChecked == true,
@@ -1889,7 +1889,7 @@ public sealed partial class FlashViewModel
                 : await App.DeviceMonitor.FlashEdlBundleAsync(device!, _loadedPath, programmerPath,
                     cancellation.Token, Field<CheckBox>("ContinueOnFailureBox").IsChecked == true,
                     Field<CheckBox>("SkipAbsentSourcesBox").IsChecked == true, bundleLabels, progress,
-                    Field<CheckBox>("VerifyAfterFlashBox").IsChecked == true, Field<CheckBox>("EdlSkipUfsBox").IsChecked == true, bundleTuning,
+                    Field<CheckBox>("VerifyAfterFlashBox").IsChecked == true, skipUfsProvision: false, bundleTuning,
                     initialization);
             if (bundleActiveRow is { State: FlashRowState.Running })
             {
