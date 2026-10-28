@@ -76,9 +76,7 @@ internal static class FlashEdlBundleService
         folder = Path.GetFullPath(folder);
         var directory = Directory.Exists(Path.Combine(folder, "images"))
             ? Path.Combine(folder, "images") : folder;
-        var manifests = Directory.EnumerateFiles(directory, "rawprogram*.xml", SearchOption.TopDirectoryOnly)
-            .Take(257)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
+        var manifests = FlashManifestSelection.Enumerate(directory);
         if (manifests.Length is 0 or > 256)
         {
             throw new InvalidDataException("A bundle requires between one and 256 rawprogram manifests.");

@@ -31,8 +31,7 @@ public static class FlashBinPackage
             }
         }
 
-        var manifests = Directory.EnumerateFiles(directory, "rawprogram*.xml", SearchOption.TopDirectoryOnly)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
+        var manifests = FlashManifestSelection.Enumerate(directory);
         var programs = manifests.Length == 0 ? [] : RawProgramParser.ParseAll(manifests, directory);
         var programmers = Directory.EnumerateFiles(directory, "prog_*firehose*.elf", SearchOption.TopDirectoryOnly)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();

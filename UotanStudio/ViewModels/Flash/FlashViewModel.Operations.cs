@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.IO.Ports;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -66,11 +67,6 @@ public sealed partial class FlashViewModel
         "9. SATA",
         "10. PCIE"
     ];
-    private string? _rkConfig;
-    private IReadOnlyList<string> _rkConfigCandidates = [];
-    private string? _rkConfigOverride;
-    private bool _isCustomRkConfig;
-    private string? EffectiveRkConfig => _isCustomRkConfig ? _rkConfigOverride : _rkConfig;
     private string? _edlProgrammerDirectory;
     private EdlProgrammerDirectoryResult? _edlProgrammerDirectoryResult;
     private UfsProvisionProfile? _edlUfsProfile;
@@ -147,7 +143,14 @@ public sealed partial class FlashViewModel
         {
             Title = _localizer.GetString("Flash_ChooseFile"),
             AllowMultiple = false,
-            FileTypeFilter = [FilePickerFileTypes.All]
+            FileTypeFilter =
+            [
+                FilePickerFileTypes.All,
+                new FilePickerFileType(_localizer.GetString("Flash_RkConfigFileType"))
+                {
+                    Patterns = ["*.cfg"]
+                }
+            ]
         });
         if (!_busy && !_confirming && files.Count == 1 && files[0].TryGetLocalPath() is { } path)
         {
@@ -197,6 +200,12 @@ public sealed partial class FlashViewModel
     {
         if (_busy || _confirming || string.Equals(path, _loadedPath, StringComparison.Ordinal))
         {
+            return;
+        }
+
+        if (File.Exists(path) && RockchipConfigFile.LooksLike(path))
+        {
+            await ImportRkConfigAsync(path).ConfigureAwait(true);
             return;
         }
 
@@ -416,7 +425,25 @@ public sealed partial class FlashViewModel
                 return;
             }
 
-            if (File.Exists(path) && extension is not (".txt" or ".bat" or ".sh"))
+            if (File.Exists(path) && extension is ".bat" or ".sh")
+            {
+                var lines = await File.ReadAllLinesAsync(path);
+                var scriptRows = ParseScript(path, lines);
+                Partitions.Apply(0, scriptRows);
+                AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
+                return;
+            }
+
+            if (File.Exists(path) && extension is ".txt")
+            {
+                var lines = await File.ReadAllLinesAsync(path);
+                var txtRows = ParseManifestText(path, lines, out _requiredCodeName, out _requiresFastbootd);
+                Partitions.Apply(0, txtRows);
+                AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
+                return;
+            }
+
+            if (File.Exists(path) && FlashPayloadService.LooksLikePayload(path))
             {
                 var partitions = await FlashPayloadService.ListAsync(path, CancellationToken.None);
                 if (path != _loadedPath) return;
@@ -438,26 +465,14 @@ public sealed partial class FlashViewModel
                 return;
             }
 
-            if (File.Exists(path) && extension is ".bat" or ".sh")
-            {
-                var lines = await File.ReadAllLinesAsync(path);
-                var scriptRows = ParseScript(path, lines);
-                Partitions.Apply(0, scriptRows);
-                AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
-                return;
-            }
-
-            if (File.Exists(path) && extension is ".txt")
-            {
-                var lines = await File.ReadAllLinesAsync(path);
-                var txtRows = ParseManifestText(path, lines, out _requiredCodeName, out _requiresFastbootd);
-                Partitions.Apply(0, txtRows);
-                AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
-                return;
-            }
-
             if (Directory.Exists(path))
             {
+                if (FlashAfterSalesPackage.Read(path) is { } afterSales)
+                {
+                    ApplyAfterSalesPackage(afterSales);
+                    return;
+                }
+
                 var directoryImages = Directory.Exists(Path.Combine(path, "images")) ? Path.Combine(path, "images") : path;
                 if (Directory.EnumerateFiles(directoryImages, "rawprogram*.xml", SearchOption.TopDirectoryOnly).Any())
                 {
@@ -512,6 +527,13 @@ public sealed partial class FlashViewModel
                 AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
                 return;
             }
+
+            if (File.Exists(path))
+            {
+                AppendLog(string.Format(CultureInfo.InvariantCulture,
+                    _localizer.GetString("Flash_UnsupportedPackage"), Path.GetFileName(path)));
+                _loadedPath = string.Empty;
+            }
         }
         catch (Exception ex)
         {
@@ -533,6 +555,55 @@ public sealed partial class FlashViewModel
             SetBusy(false);
             UpdateEdlButton();
         }
+    }
+
+    /// <summary>
+    /// Applies an after-sales package folder: marks the page as an EDL bundle, fills the programmer picker and lists
+    /// every partition image of the IMAGES tree with the RADIO images merged in.
+    /// <para>应用售后包目录：把页面标为 EDL 完整包，填充 programmer 选择，并按 IMAGES 树列出全部分区镜像，
+    /// 同时合入 RADIO 镜像。</para>
+    /// </summary>
+    /// <param name="package">The package contents read from the folder.
+    /// <para>从目录读出的包内容。</para></param>
+    private void ApplyAfterSalesPackage(AfterSalesPackageContents package)
+    {
+        _flatBinPackage = true;
+        _edlProgrammerCandidates = package.Programmers;
+        _edlProgrammer = package.Programmer;
+        _isCustomProgrammer = false;
+        UpdateEdlProgrammerPickOptions();
+        _edlBundleReady = package.Programs.Count > 0 && package.Programmers.Count > 0;
+        var rows = new List<FlashPartitionEntry>(package.Images.Count);
+        foreach (var image in package.Images)
+        {
+            var row = new FlashPartitionEntry
+            {
+                Name = image.Partition,
+                Command = "flash",
+                FilePath = image.FilePath,
+                FileName = Path.GetFileName(image.FilePath),
+                Size = FormatByteSize(image.Length),
+                CanSelect = true
+            };
+            rows.Add(row);
+            if (image.Program is { } program)
+            {
+                _edlEntries.Add(row, program);
+            }
+        }
+
+        Partitions.Apply(0, rows);
+        if (package.Programmers.Count > 1)
+        {
+            AppendLog($"{_localizer.GetString("Flash_EdlProgrammerChoice")}: {package.Programmers.Count}");
+        }
+
+        var merged = package.MergedRadioImages > 0
+            ? $" · {_localizer.GetString("Flash_AfterSalesMerged")} {package.MergedRadioImages}"
+            : string.Empty;
+        AppendLog($"{package.Images.Count} {_localizer.GetString("Flash_ImagesLoaded")} · " +
+            $"{_localizer.GetString("Flash_AfterSalesPackage")}{merged}");
+        UpdateEdlButton();
     }
 
     internal async void OnPackagePathLostFocus(object? sender, RoutedEventArgs e)
@@ -1052,7 +1123,6 @@ public sealed partial class FlashViewModel
 
         var protocol = SelectedDevice?.Protocol;
         UpdateEdlProgrammerUiState();
-        UpdateRkConfigUiState();
         var isRk = protocol is DeviceProtocolKind.Rkdl;
         Field<Button>("RkEnterMaskromButton").IsEnabled = !_busy && isRk;
         Field<ComboBox>("RkStorageTypeBox").IsEnabled = !_busy;
@@ -1099,103 +1169,6 @@ public sealed partial class FlashViewModel
             _edlProgrammer = null;
         }
         UpdateEdlProgrammerUiState();
-        UpdateEdlButton();
-    }
-
-    internal void UpdateRkConfigPickOptions()
-    {
-        if (Surface is null) return;
-        var pickBox = Field<ComboBox>("RkConfigPickBox");
-        var customText = _localizer.GetString("Flash_EdlCustomFile");
-        var items = _rkConfigCandidates.Select(Path.GetFileName).Concat([customText]).ToArray();
-        var previousCustom = _isCustomRkConfig;
-        var previousConfig = _rkConfig;
-        pickBox.ItemsSource = items;
-
-        if (previousCustom)
-        {
-            pickBox.SelectedIndex = items.Length - 1;
-        }
-        else if (previousConfig is not null)
-        {
-            var idx = -1;
-            for (var i = 0; i < _rkConfigCandidates.Count; i++)
-            {
-                if (string.Equals(_rkConfigCandidates[i], previousConfig, StringComparison.OrdinalIgnoreCase))
-                {
-                    idx = i;
-                    break;
-                }
-            }
-            pickBox.SelectedIndex = idx;
-        }
-        else
-        {
-            pickBox.SelectedIndex = -1;
-        }
-
-        UpdateRkConfigUiState();
-    }
-
-    internal void UpdateRkConfigUiState()
-    {
-        if (Surface is null) return;
-        var pathBox = Field<TextBox>("RkConfigPathBox");
-        var chooseButton = Field<Button>("RkChooseConfigButton");
-        if (_isCustomRkConfig)
-        {
-            pathBox.Text = _rkConfigOverride ?? string.Empty;
-            ToolTip.SetTip(pathBox, _rkConfigOverride ?? string.Empty);
-            pathBox.IsEnabled = !_busy;
-            chooseButton.IsEnabled = !_busy;
-        }
-        else
-        {
-            pathBox.Text = _rkConfig ?? string.Empty;
-            ToolTip.SetTip(pathBox, _rkConfig ?? string.Empty);
-            pathBox.IsEnabled = false;
-            chooseButton.IsEnabled = false;
-        }
-    }
-
-    internal void OnRkConfigPickChanged(object? source, SelectionChangedEventArgs e)
-    {
-        var index = Field<ComboBox>("RkConfigPickBox").SelectedIndex;
-        if (index >= 0 && index < _rkConfigCandidates.Count)
-        {
-            _isCustomRkConfig = false;
-            _rkConfig = _rkConfigCandidates[index];
-        }
-        else if (index >= 0 && index == _rkConfigCandidates.Count)
-        {
-            _isCustomRkConfig = true;
-            _rkConfig = null;
-        }
-        else
-        {
-            _isCustomRkConfig = false;
-            _rkConfig = null;
-        }
-        UpdateRkConfigUiState();
-        UpdateEdlButton();
-    }
-
-    internal async void OnRkChooseConfigClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = _localizer.GetString("Flash_RkChooseCustomConfig"),
-            AllowMultiple = false,
-            FileTypeFilter = [FilePickerFileTypes.All]
-        });
-        if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
-        _rkConfigOverride = File.Exists(path) ? path : null;
-        UpdateRkConfigUiState();
-        if (_rkConfigOverride is { } selected)
-        {
-            AppendLog(Path.GetFileName(selected));
-        }
         UpdateEdlButton();
     }
 
@@ -1753,13 +1726,21 @@ public sealed partial class FlashViewModel
         });
     }
 
+    /// <summary>
+    /// Dispatches the flash request to the protocol that owns it: MediaTek runs its own plan, an EDL target (or a
+    /// package loaded while no device is picked) runs the EDL bundle, and every other transport flashes the selected
+    /// rows so a fastboot device can take an after-sales package partition by partition.
+    /// <para>把刷写请求分发给所属协议：联发科走自己的计划；EDL 目标（或未选设备时加载的包）走 EDL 完整包；
+    /// 其他传输按勾选逐行刷写，使 fastboot 设备可以逐个分区刷入售后包。</para>
+    /// </summary>
     internal async void OnFlashSelectedClick(object? sender, RoutedEventArgs e)
     {
         if (SelectedDevice?.Protocol == DeviceProtocolKind.Mtk || _mtkResolution is not null)
         {
             OnMtkFlashClick(sender, e);
         }
-        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Edl || _flatBinPackage || _edlEntries.Count > 0)
+        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Edl ||
+                 SelectedDevice is null && (_flatBinPackage || _edlEntries.Count > 0))
         {
             OnFlashEdlBundleClick(sender, e);
         }

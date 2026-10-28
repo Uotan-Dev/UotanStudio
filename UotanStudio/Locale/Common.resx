@@ -582,6 +582,18 @@ Author: 暮间雾
   <data name="Flash_ImagesLoaded" xml:space="preserve">
     <value>images loaded</value>
   </data>
+  <data name="Flash_AfterSalesPackage" xml:space="preserve">
+    <value>after-sales package</value>
+  </data>
+  <data name="Flash_AfterSalesMerged" xml:space="preserve">
+    <value>RADIO merged</value>
+  </data>
+  <data name="Flash_RkConfigFileType" xml:space="preserve">
+    <value>Rockchip config (*.cfg)</value>
+  </data>
+  <data name="Flash_UnsupportedPackage" xml:space="preserve">
+    <value>Unsupported package type: {0}</value>
+  </data>
   <data name="Flash_DeviceChanged" xml:space="preserve">
     <value>The selected device changed. Refresh and confirm again.</value>
   </data>

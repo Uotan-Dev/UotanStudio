@@ -5,6 +5,35 @@ namespace UotanStudio.Services.Flash;
 /// <summary>Lists and extracts images from a local Payload container.<para>从本地 Payload 容器中列举并解压镜像。</para></summary>
 public static class FlashPayloadService
 {
+    /// <summary>
+    /// Detects a payload package by content: a raw <c>CrAU</c> payload or a ZIP archive that wraps <c>payload.bin</c>.
+    /// <para>按内容识别载荷包：原始 <c>CrAU</c> 载荷，或包裹 <c>payload.bin</c> 的 ZIP 归档。</para>
+    /// </summary>
+    /// <param name="path">Candidate file; missing or unreadable files are reported as not a payload.
+    /// <para>候选文件；缺失或不可读时判定为非载荷。</para></param>
+    /// <returns><see langword="true"/> when the file carries the payload magic or a ZIP payload entry.
+    /// <para>文件带载荷魔数或含 ZIP 载荷条目时为 <see langword="true"/>。</para></returns>
+    public static bool LooksLikePayload(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            return PayloadTool.IsPayload(path) || PayloadTool.IsPayloadArchive(path);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Reads partition metadata without materializing their image data.<para>只读取分区元数据，不展开镜像数据。</para></summary>
     /// <param name="path">Payload file to read.<para>要读取的 Payload 文件。</para></param>
     /// <param name="ct">Token cancelling the read.<para>用于取消读取的令牌。</para></param>

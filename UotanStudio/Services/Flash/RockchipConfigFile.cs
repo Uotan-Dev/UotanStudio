@@ -217,6 +217,38 @@ public static class RockchipConfigFile
         && BinaryPrimitives.ReadUInt16LittleEndian(header[4..]) == HeaderLength;
 
     /// <summary>
+    /// Checks a file on disk for the configuration signature without reading the whole file.
+    /// <para>在不读取整个文件的前提下检查磁盘文件的配置签名。</para>
+    /// </summary>
+    /// <param name="path">Candidate file path; a missing file is not a configuration.
+    /// <para>候选文件路径；文件不存在时不算配置。</para></param>
+    /// <returns><see langword="true"/> when the leading bytes carry a complete configuration header.
+    /// <para>起始字节携带完整配置头部时为 <see langword="true"/>。</para></returns>
+    public static bool LooksLike(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            Span<byte> header = stackalloc byte[HeaderLength];
+            return stream.ReadAtLeast(header, HeaderLength, throwOnEndOfStream: false) == HeaderLength
+                && IsConfigHeader(header);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Creates a header for a configuration that has no source file. The date/time-like block stays zero
     /// because its exact meaning is not part of the observed samples.
     /// <para>为没有来源文件的配置创建头部。日期时间样式的数据块保持为零，因为其确切含义不在观测样本内。</para>

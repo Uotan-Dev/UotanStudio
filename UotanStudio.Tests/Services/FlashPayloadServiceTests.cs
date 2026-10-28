@@ -1,3 +1,4 @@
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.OtaDelta.Payload.Proto;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Firmware;
@@ -7,6 +8,41 @@ namespace UotanStudio.Tests.Services;
 
 public sealed class FlashPayloadServiceTests
 {
+    [Fact]
+    public void LooksLikePayload_ContentDetection_AcceptsRawAndArchivedPayloads()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "flash-payload-detect-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var raw = Path.Combine(root, "payload.bin");
+            File.WriteAllBytes(raw, [0x43, 0x72, 0x41, 0x55, 0, 0, 0, 0]);
+            Assert.True(FlashPayloadService.LooksLikePayload(raw));
+
+            var renamed = Path.Combine(root, "no-extension");
+            File.Copy(raw, renamed);
+            Assert.True(FlashPayloadService.LooksLikePayload(renamed));
+
+            var archive = Path.Combine(root, "update.zip");
+            using (var zip = ZipContainer.Create(archive))
+            {
+                using var entry = zip.CreateEntry("payload.bin").Open();
+                entry.Write([0x43, 0x72, 0x41, 0x55]);
+            }
+
+            Assert.True(FlashPayloadService.LooksLikePayload(archive));
+
+            var text = Path.Combine(root, "notes.bin");
+            File.WriteAllText(text, "not a payload");
+            Assert.False(FlashPayloadService.LooksLikePayload(text));
+            Assert.False(FlashPayloadService.LooksLikePayload(Path.Combine(root, "absent.bin")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task ExtractAsync_SelectedPartition_PublishesVerifiedDirectory()
     {

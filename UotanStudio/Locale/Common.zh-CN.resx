@@ -582,6 +582,18 @@
   <data name="Flash_ImagesLoaded" xml:space="preserve">
     <value>个镜像已加载</value>
   </data>
+  <data name="Flash_AfterSalesPackage" xml:space="preserve">
+    <value>售后包</value>
+  </data>
+  <data name="Flash_AfterSalesMerged" xml:space="preserve">
+    <value>合并 RADIO 镜像</value>
+  </data>
+  <data name="Flash_RkConfigFileType" xml:space="preserve">
+    <value>瑞芯微配置 (*.cfg)</value>
+  </data>
+  <data name="Flash_UnsupportedPackage" xml:space="preserve">
+    <value>不支持的刷机包类型：{0}</value>
+  </data>
   <data name="Flash_DeviceChanged" xml:space="preserve">
     <value>所选设备已变化，请刷新并重新确认。</value>
   </data>

@@ -107,4 +107,60 @@ public sealed class RockchipConfigFileTests
 
         Assert.Throws<InvalidDataException>(() => RockchipConfigFile.Parse(image));
     }
+
+    [Fact]
+    public void LooksLike_ConfigFileOnDisk_True()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.cfg");
+        try
+        {
+            File.WriteAllBytes(path, BuildSample());
+
+            Assert.True(RockchipConfigFile.LooksLike(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void LooksLike_PlainTextFile_False()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.cfg");
+        try
+        {
+            File.WriteAllText(path, "[System]\nMSC_TIMEOUT=30\n");
+
+            Assert.False(RockchipConfigFile.LooksLike(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void LooksLike_TruncatedHeader_False()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.cfg");
+        try
+        {
+            File.WriteAllBytes(path, BuildSample()[..12]);
+
+            Assert.False(RockchipConfigFile.LooksLike(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void LooksLike_MissingFile_False()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.cfg");
+
+        Assert.False(RockchipConfigFile.LooksLike(path));
+    }
 }

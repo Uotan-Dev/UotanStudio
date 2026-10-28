@@ -439,9 +439,8 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Imports a download-list configuration: the loader row supplies the RKDL loader image and the image row
-    /// becomes the loaded package so the rows can be flashed directly.
-    /// <para>导入下载列表配置：Loader 行提供 RKDL loader 镜像，镜像行作为已加载刷机包，使各行可直接刷写。</para>
+    /// Asks for a download-list configuration and imports it.
+    /// <para>选择下载列表配置并导入。</para>
     /// </summary>
     internal async void OnRkImportConfigClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -452,18 +451,28 @@ public sealed partial class FlashViewModel
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new FilePickerFileType("Rockchip Config (*.cfg)") { Patterns = ["*.cfg"] },
+                new FilePickerFileType(_localizer.GetString("Flash_RkConfigFileType")) { Patterns = ["*.cfg"] },
                 FilePickerFileTypes.All
             ]
         });
         if (files.Count != 1 || files[0].TryGetLocalPath() is not { } path || !File.Exists(path)) return;
+        await ImportRkConfigAsync(path);
+    }
 
+    /// <summary>
+    /// Imports a download-list configuration: the loader row supplies the RKDL loader image and the first
+    /// existing image row becomes the loaded package so its rows can be flashed directly.
+    /// <para>导入下载列表配置：Loader 行提供 RKDL loader 镜像，第一条存在的镜像行作为已加载刷机包，
+    /// 使其中的行可直接刷写。</para>
+    /// </summary>
+    /// <param name="path">Existing configuration file; parse failures are logged instead of thrown.
+    /// <para>既有的配置文件；解析失败只记录日志，不抛出异常。</para></param>
+    internal async Task ImportRkConfigAsync(string path)
+    {
         try
         {
             var (header, entries) = RockchipConfigFile.Load(path);
             _rkConfigHeader = header;
-            _rkConfigOverride = path;
-            _isCustomRkConfig = true;
             foreach (var entry in entries)
             {
                 AppendLog($"{entry.Name}: {entry.Path}");
@@ -476,14 +485,18 @@ public sealed partial class FlashViewModel
 
             AppendLog(string.Format(CultureInfo.InvariantCulture,
                 _localizer.GetString("Flash_RkConfigImported"), $"{entries.Count}"));
-            UpdateRkConfigPickOptions();
             var image = entries.FirstOrDefault(entry =>
                 !string.Equals(entry.Name, "Loader", StringComparison.OrdinalIgnoreCase) &&
-                File.Exists(entry.Path));
+                File.Exists(entry.Path) &&
+                !RockchipConfigFile.LooksLike(entry.Path));
             if (image is not null)
             {
                 PackagePath = image.Path;
                 await LoadPackageAsync(image.Path).ConfigureAwait(true);
+            }
+            else
+            {
+                PackagePath = path;
             }
         }
         catch (Exception ex) { AppendLog(ex.Message); }

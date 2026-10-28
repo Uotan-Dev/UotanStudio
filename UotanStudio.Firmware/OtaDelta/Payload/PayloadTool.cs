@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using UotanStudio.Compress.Zip;
+using UotanStudio.Firmware.OtaDelta.Payload.Models;
 
 namespace UotanStudio.Firmware.OtaDelta.Payload;
 
@@ -42,6 +44,43 @@ public static class PayloadTool
         var header = new byte[4];
         using var fs = File.OpenRead(path);
         return fs.Read(header, 0, 4) >= 4 && BinaryPrimitives.ReadUInt32BigEndian(header) == PayloadMagic;
+    }
+
+    /// <summary>
+    /// Checks whether the file is a ZIP archive that wraps a <c>payload.bin</c> entry.
+    /// <para>检查文件是否为包裹 <c>payload.bin</c> 条目的 ZIP 归档。</para>
+    /// </summary>
+    /// <param name="path">Candidate archive path; blank, missing or malformed archives are reported as carrying no payload.
+    /// <para>候选归档路径；空白、缺失或格式错误的归档判定为不含载荷。</para></param>
+    /// <returns><see langword="true"/> when an entry named <c>payload.bin</c> exists at any depth, matched
+    /// case-insensitively; otherwise <see langword="false"/>.
+    /// <para>任意深度存在名称按不区分大小写匹配 <c>payload.bin</c> 的条目时返回 <see langword="true"/>，
+    /// 否则返回 <see langword="false"/>。</para></returns>
+    public static bool IsPayloadArchive(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var archive = ZipContainer.OpenRead(path);
+            return archive.Entries.Any(entry =>
+                string.Equals(entry.Name, PayloadConstants.PayloadFilename, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Extracts the named image from a payload.<para>从 payload 中提取指定镜像。</para></summary>

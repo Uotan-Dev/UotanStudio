@@ -1,3 +1,4 @@
+using UotanStudio.Compress.Zip;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.OtaDelta.Payload.Builder;
 using UotanStudio.Tests.TestInfrastructure;
@@ -63,6 +64,31 @@ public class PayloadToolTests
         Assert.False(PayloadTool.IsPayload(Path.Combine(temp.Path, "absent.bin")));
         Assert.False(PayloadTool.IsPayload("   "));
         Assert.False(PayloadTool.IsPayload(string.Empty));
+    }
+
+    [Fact]
+    public void IsPayloadArchive_ZipWithPayloadEntry_AcceptsAndRejectsByEntryName()
+    {
+        using var temp = new TempDirectory();
+        var withPayload = Path.Combine(temp.Path, "update.zip");
+        using (var archive = ZipContainer.Create(withPayload))
+        {
+            using var entry = archive.CreateEntry("payload.bin").Open();
+            entry.Write([0x43, 0x72, 0x41, 0x55, 0, 0, 0, 0]);
+        }
+
+        Assert.True(PayloadTool.IsPayloadArchive(withPayload));
+
+        var withoutPayload = Path.Combine(temp.Path, "plain.zip");
+        using (var archive = ZipContainer.Create(withoutPayload))
+        {
+            using var entry = archive.CreateEntry("boot.img").Open();
+            entry.Write([1, 2, 3]);
+        }
+
+        Assert.False(PayloadTool.IsPayloadArchive(withoutPayload));
+        Assert.False(PayloadTool.IsPayloadArchive(temp.WriteBytes("raw.bin", CrAuMagic)));
+        Assert.False(PayloadTool.IsPayloadArchive(Path.Combine(temp.Path, "absent.zip")));
     }
 
     [Fact]
