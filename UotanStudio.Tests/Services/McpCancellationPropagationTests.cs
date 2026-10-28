@@ -80,8 +80,7 @@ public sealed class McpCancellationPropagationTests : IDisposable
     {
         var sandbox = new PathSandbox(_root);
         var container = CreateZipContainer("uncanceled.zip", entries: 4);
-        var reports = 0;
-        var progress = new CountingProgress(() => reports++);
+        var progress = new CountingProgress();
 
         var result = await ToolGuard.RunAsync(
             token => FirmwareToolHandlers.ExtractAsync(
@@ -97,7 +96,8 @@ public sealed class McpCancellationPropagationTests : IDisposable
 
         Assert.False(result.IsError);
         Assert.True(File.Exists(Path.Combine(_root, "out-live", "member-0.bin")));
-        Assert.True(reports >= 1, "a supplied progress sink must receive byte reports");
+        await progress.WaitForFirstReportAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.True(progress.Count >= 1, "a supplied progress sink must receive byte reports");
     }
 
     [Fact]
@@ -138,8 +138,20 @@ public sealed class McpCancellationPropagationTests : IDisposable
         return path;
     }
 
-    private sealed class CountingProgress(Action onReport) : IProgress<ProgressNotificationValue>
+    private sealed class CountingProgress : IProgress<ProgressNotificationValue>
     {
-        public void Report(ProgressNotificationValue value) => onReport();
+        private readonly TaskCompletionSource _firstReport = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _count;
+
+        public int Count => Volatile.Read(ref _count);
+
+        public Task WaitForFirstReportAsync(TimeSpan timeout, CancellationToken cancellationToken) =>
+            _firstReport.Task.WaitAsync(timeout, cancellationToken);
+
+        public void Report(ProgressNotificationValue value)
+        {
+            Interlocked.Increment(ref _count);
+            _firstReport.TrySetResult();
+        }
     }
 }

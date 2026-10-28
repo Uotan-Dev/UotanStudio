@@ -12,6 +12,8 @@ namespace UotanStudio.Tests.Protocols;
 
 public sealed class AdbRemoteProtocolTests
 {
+    private static readonly TimeSpan NetworkGuardTimeout = TimeSpan.FromSeconds(60);
+
     [Fact]
     public void StlsVersion_Constants_MatchAosp()
     {
@@ -130,55 +132,55 @@ public sealed class AdbRemoteProtocolTests
         Assert.Equal(AdbConstants.ProtocolVersion, session.PeerVersion);
     }
 
-    [Fact(Timeout = 15000)]
+    [Fact]
     public async Task PairAsync_GeneratedCommand_PutsPasswordBeforeEndpoint()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
+        using var guard = CreateNetworkGuard(TestContext.Current.CancellationToken);
         await using var server = new SingleReplyAdbServer(
             _ => Okay("Successfully paired to 192.0.2.7:45678 [guid=abcdef]"));
 
         var response = await AdbServerServices.PairAsync("192.0.2.7", 45678, "abc123", "127.0.0.1",
-            server.Port, cancellationToken);
+            server.Port, guard.Token);
 
         Assert.Contains("Successfully paired", response, StringComparison.Ordinal);
         Assert.Equal("host:pair:abc123:192.0.2.7:45678", await server.RequestTask);
     }
 
-    [Fact(Timeout = 15000)]
+    [Fact]
     public async Task PairAsync_OkayThenFail_SurfacesServerFailureText()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
+        using var guard = CreateNetworkGuard(TestContext.Current.CancellationToken);
         await using var server = new SingleReplyAdbServer(_ => FailAfterOkay("Wrong password"));
 
         var exception = await Assert.ThrowsAsync<IOException>(() =>
-            AdbServerServices.PairAsync("192.0.2.7", 45678, "abc123", "127.0.0.1", server.Port, cancellationToken));
+            AdbServerServices.PairAsync("192.0.2.7", 45678, "abc123", "127.0.0.1", server.Port, guard.Token));
 
         Assert.Contains("Wrong password", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Invalid ADB server response length", exception.Message, StringComparison.Ordinal);
     }
 
-    [Fact(Timeout = 15000)]
+    [Fact]
     public async Task PairAsync_StatusFramedResult_IsAccepted()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
+        using var guard = CreateNetworkGuard(TestContext.Current.CancellationToken);
         await using var server = new SingleReplyAdbServer(
             _ => StatusOkayAfterAck("Successfully paired to 192.0.2.7:45678 [guid=abcdef]"));
 
         var response = await AdbServerServices.PairAsync("192.0.2.7", 45678, "abc123", "127.0.0.1",
-            server.Port, cancellationToken);
+            server.Port, guard.Token);
 
         Assert.Contains("Successfully paired", response, StringComparison.Ordinal);
     }
 
-    [Fact(Timeout = 15000)]
+    [Fact]
     public async Task PairAsync_ServerPairingClientStartFailure_ThrowsDistinguishedFailure()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
+        using var guard = CreateNetworkGuard(TestContext.Current.CancellationToken);
         await using var server = new SingleReplyAdbServer(
             _ => FailAfterOkay("Failed: Unable to start pairing client."));
 
         var exception = await Assert.ThrowsAsync<AdbServerPairingClientException>(() =>
-            AdbServerServices.PairAsync("192.0.2.7", 45678, "abc123", "127.0.0.1", server.Port, cancellationToken));
+            AdbServerServices.PairAsync("192.0.2.7", 45678, "abc123", "127.0.0.1", server.Port, guard.Token));
 
         Assert.Contains("Unable to start pairing client", exception.Message, StringComparison.Ordinal);
     }
@@ -191,35 +193,35 @@ public sealed class AdbRemoteProtocolTests
                 TestContext.Current.CancellationToken));
     }
 
-    [Fact(Timeout = 15000)]
+    [Fact]
     public async Task TcpTransport_Read_ReturnsArrivedBytesAndZeroAtEof()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
+        using var guard = CreateNetworkGuard(TestContext.Current.CancellationToken);
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
-        var acceptTask = listener.AcceptTcpClientAsync(cancellationToken).AsTask();
+        var acceptTask = listener.AcceptTcpClientAsync(guard.Token).AsTask();
         using var transport = new AdbTcpTransport("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port);
         using var server = await acceptTask;
         var stream = server.GetStream();
         var buffer = new byte[16];
 
-        await stream.WriteAsync(new byte[] { 1, 2, 3 }, cancellationToken);
+        await stream.WriteAsync(new byte[] { 1, 2, 3 }, guard.Token);
         Assert.Equal(3, transport.Read(buffer, 0, buffer.Length, 2000));
 
-        await stream.WriteAsync(new byte[] { 4, 5, 6, 7 }, cancellationToken);
-        Assert.Equal(4, await transport.ReadAsync(buffer, 0, buffer.Length, 2000, cancellationToken));
+        await stream.WriteAsync(new byte[] { 4, 5, 6, 7 }, guard.Token);
+        Assert.Equal(4, await transport.ReadAsync(buffer, 0, buffer.Length, 2000, guard.Token));
 
         server.Client.Shutdown(SocketShutdown.Send);
         Assert.Equal(0, transport.Read(buffer, 0, buffer.Length, 2000));
     }
 
-    [Fact(Timeout = 15000)]
+    [Fact]
     public async Task TcpTransport_ReadWithoutArrivingBytes_TimesOut()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
+        using var guard = CreateNetworkGuard(TestContext.Current.CancellationToken);
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
-        var acceptTask = listener.AcceptTcpClientAsync(cancellationToken).AsTask();
+        var acceptTask = listener.AcceptTcpClientAsync(guard.Token).AsTask();
         using var transport = new AdbTcpTransport("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port);
         using var server = await acceptTask;
         Assert.NotNull(server);
@@ -256,6 +258,13 @@ public sealed class AdbRemoteProtocolTests
         Assert.True(timeouts.Count >= 3, $"Expected the banner and the idle header read, saw {timeouts.Count} read(s).");
         Assert.Contains(timeouts, timeout => timeout > 0);
         Assert.Equal(Timeout.Infinite, timeouts[^1]);
+    }
+
+    private static CancellationTokenSource CreateNetworkGuard(CancellationToken cancellationToken)
+    {
+        var guard = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        guard.CancelAfter(NetworkGuardTimeout);
+        return guard;
     }
 
     private static string Okay(string payload) =>

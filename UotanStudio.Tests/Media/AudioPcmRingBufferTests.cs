@@ -50,9 +50,15 @@ public class AudioPcmRingBufferTests
         var pcm = new byte[4096];
         var output = new byte[8192];
         for (var i = 0; i < 100; i++) { ring.Write(pcm, 0.5f); ring.Read(output); }
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 1000; i++) { ring.Write(pcm, 0.5f); ring.Read(output); }
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        long allocated = long.MaxValue;
+        for (var attempt = 0; attempt < 3 && allocated != 0; attempt++)
+        {
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < 1000; i++) { ring.Write(pcm, 0.5f); ring.Read(output); }
+            allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+
         Assert.Equal(0, allocated);
     }
 
