@@ -32,11 +32,20 @@
             <Setter Property="Padding" Value="12,0" />
         </Style>
         <!-- 纯图标按钮：与动作按钮同高，保证工具栏基线一致 -->
+        <!-- Icon-only buttons: keep the same height as action buttons for a consistent toolbar baseline. -->
         <Style Selector="Button.DeviceIconButton">
             <Setter Property="Width" Value="32" />
             <Setter Property="Height" Value="32" />
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="Padding" Value="0" />
+        </Style>
+        <!-- 彩色图标在禁用时退为次要文本色，避免红色仍显得像可操作状态。 -->
+        <!-- Colored icons fall back to the secondary text colour when disabled, so red does not imply actionability. -->
+        <Style Selector="Button.device-disconnect :is(avalonia|TDesignIconBase)">
+            <Setter Property="Stroke1" Value="Red" />
+        </Style>
+        <Style Selector="Button.device-disconnect:disabled :is(avalonia|TDesignIconBase)">
+            <Setter Property="Stroke1" Value="{DynamicResource TextFillColorSecondaryBrush}" />
         </Style>
         <Style Selector="Border.ToolbarDivider">
             <Setter Property="Width" Value="1" />
@@ -100,10 +109,10 @@
                 <Grid x:Name="DeviceToolbarGrid" ColumnDefinitions="*,Auto"
                       RowDefinitions="Auto,Auto" ColumnSpacing="16" RowSpacing="6">
                     <StackPanel x:Name="DeviceActionsPanel" Orientation="Horizontal" VerticalAlignment="Top" Spacing="6">
-                        <Button x:Name="DisconnectDeviceButton" Classes="DeviceIconButton"
+                        <Button x:Name="DisconnectDeviceButton" Classes="DeviceIconButton device-disconnect"
                                 Command="{Binding DisconnectCommand}"
                                 ToolTip.Tip="{DynamicResource Device_Disconnect}">
-                            <avalonia:LinkUnlink Width="16" Height="16" Stroke1="Red" />
+                            <avalonia:LinkUnlink Width="16" Height="16" />
                         </Button>
                         <Border Classes="ToolbarDivider" />
                         <Button Classes="DeviceIconButton"

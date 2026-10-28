@@ -54,6 +54,20 @@
         <Style Selector="Button.favorite">
             <Setter Property="Foreground" Value="{DynamicResource AccentColor}" />
         </Style>
+        <!-- 彩色运行图标在禁用时使用次要文本色，明确区分当前可执行状态。 -->
+        <!-- Coloured run icons use the secondary text colour when disabled to make executability clear. -->
+        <Style Selector="Button.node-run-action :is(avalonia|TDesignIconBase)">
+            <Setter Property="Stroke1" Value="Green" />
+        </Style>
+        <Style Selector="Button.node-run-action:disabled :is(avalonia|TDesignIconBase)">
+            <Setter Property="Stroke1" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style Selector="Button.node-stop-action :is(avalonia|TDesignIconBase)">
+            <Setter Property="Stroke1" Value="Red" />
+        </Style>
+        <Style Selector="Button.node-stop-action:disabled :is(avalonia|TDesignIconBase)">
+            <Setter Property="Stroke1" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
         <!-- 连线与待处理连线主题色 -->
         <Style Selector="nodify|Connection">
             <Setter Property="Stroke" Value="{DynamicResource SemiColorPrimary}" />
@@ -258,15 +272,15 @@
                     </StackPanel>
                     <Border Classes="toolbar-separator" />
                     <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                        <Button Width="28" Height="28" Padding="0"
+                        <Button Classes="node-run-action" Width="28" Height="28" Padding="0"
                                 Command="{Binding RunCommand}"
                                 ToolTip.Tip="{DynamicResource Node_Run}">
-                            <avalonia:PlayCircleStroke Width="16" Height="16" Stroke1="Green" />
+                            <avalonia:PlayCircleStroke Width="16" Height="16" />
                         </Button>
-                        <Button Width="28" Height="28" Padding="0"
+                        <Button Classes="node-stop-action" Width="28" Height="28" Padding="0"
                                 Command="{Binding StopCommand}"
                                 ToolTip.Tip="{DynamicResource Node_Stop}">
-                            <avalonia:StopCircleStroke Width="16" Height="16" Stroke1="Red" />
+                            <avalonia:StopCircleStroke Width="16" Height="16" />
                         </Button>
                     </StackPanel>
                 </WrapPanel>
