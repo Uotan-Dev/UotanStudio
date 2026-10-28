@@ -5,7 +5,6 @@ using System.Text.RegularExpressions;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using UotanStudio.Comm.Protocols.Common.Evidence;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Edl.Programmer;
@@ -17,6 +16,7 @@ using UotanStudio.Firmware.VendorFirmware.MediaTek;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
+using UotanStudio.Services.PatchPackages;
 using UotanStudio.Services.Ui;
 using UotanStudio.ViewModels.Devices;
 
@@ -145,7 +145,7 @@ public sealed partial class FlashViewModel
 
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_ChooseFile"),
+            Title = _localizer.GetString("Flash_ChooseFile"),
             AllowMultiple = false,
             FileTypeFilter = [FilePickerFileTypes.All]
         });
@@ -165,7 +165,7 @@ public sealed partial class FlashViewModel
 
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_ChooseFolder"),
+            Title = _localizer.GetString("Flash_ChooseFolder"),
             AllowMultiple = false
         });
         if (!_busy && !_confirming && folders.Count == 1 && folders[0].TryGetLocalPath() is { } path)
@@ -229,7 +229,7 @@ public sealed partial class FlashViewModel
         {
             if (!remotePayload && !Directory.Exists(path) && !File.Exists(path))
             {
-                AppendLog(LanguageService.Instance.GetString("Flash_FolderOnly"));
+                AppendLog(_localizer.GetString("Flash_FolderOnly"));
                 _loadedPath = string.Empty;
                 return;
             }
@@ -251,7 +251,7 @@ public sealed partial class FlashViewModel
                 }
                 Partitions.Apply(0, remoteRows);
                 Field<Button>("ExtractSelectedButton").IsEnabled = partitions.Count > 0;
-                AppendLog($"{partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                AppendLog($"{partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
                 return;
             }
 
@@ -263,7 +263,7 @@ public sealed partial class FlashViewModel
                 {
                     if (!path.EndsWith(".img", StringComparison.OrdinalIgnoreCase))
                         throw new InvalidDataException(
-                            LanguageService.Instance.GetString("Flash_CompressedSuperEmptyUnsupported"));
+                            _localizer.GetString("Flash_CompressedSuperEmptyUnsupported"));
                     _ = FlashSuperEmptyService.Prepare(path);
                     Partitions.Add(new FlashPartitionEntry
                     {
@@ -296,7 +296,7 @@ public sealed partial class FlashViewModel
                     }
                     Partitions.Apply(0, superRows);
                     Field<Button>("ExtractSelectedButton").IsEnabled = partitions.Count > 0;
-                    AppendLog($"{partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                    AppendLog($"{partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
                     return;
                 }
 
@@ -310,7 +310,7 @@ public sealed partial class FlashViewModel
                     !name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
                 {
                     throw new InvalidDataException(
-                        LanguageService.Instance.GetString("Flash_ImageNameInvalid"));
+                        _localizer.GetString("Flash_ImageNameInvalid"));
                 }
 
                 Partitions.Add(new FlashPartitionEntry
@@ -342,7 +342,7 @@ public sealed partial class FlashViewModel
                 }
                 Partitions.Apply(0, oppoRows);
                 Field<Button>("ExtractSelectedButton").IsEnabled = entries.Count > 0;
-                AppendLog($"{entries.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                AppendLog($"{entries.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
                 return;
             }
 
@@ -363,7 +363,7 @@ public sealed partial class FlashViewModel
                 }
                 Partitions.Apply(0, vendorRows);
                 Field<Button>("ExtractSelectedButton").IsEnabled = entries.Count > 0;
-                AppendLog($"{entries.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                AppendLog($"{entries.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
                 return;
             }
 
@@ -412,7 +412,7 @@ public sealed partial class FlashViewModel
 
                 Partitions.Apply(0, scatterRows);
                 UpdateEdlButton();
-                AppendLog($"{resolution.Rows.Count + eraseOnlyRows} {LanguageService.Instance.GetString("Flash_ImagesLoaded")} · {resolution.StorageLabel}");
+                AppendLog($"{resolution.Rows.Count + eraseOnlyRows} {_localizer.GetString("Flash_ImagesLoaded")} · {resolution.StorageLabel}");
                 return;
             }
 
@@ -434,7 +434,7 @@ public sealed partial class FlashViewModel
                 Partitions.Apply(0, payloadRows);
                 Field<Button>("ExtractSelectedButton").IsEnabled = partitions.Count > 0;
                 Field<Button>("BuildWiredPackageButton").IsEnabled = partitions.Count > 0;
-                AppendLog($"{partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                AppendLog($"{partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
                 return;
             }
 
@@ -443,7 +443,7 @@ public sealed partial class FlashViewModel
                 var lines = await File.ReadAllLinesAsync(path);
                 var scriptRows = ParseScript(path, lines);
                 Partitions.Apply(0, scriptRows);
-                AppendLog($"{Partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
                 return;
             }
 
@@ -452,7 +452,7 @@ public sealed partial class FlashViewModel
                 var lines = await File.ReadAllLinesAsync(path);
                 var txtRows = ParseManifestText(path, lines, out _requiredCodeName, out _requiresFastbootd);
                 Partitions.Apply(0, txtRows);
-                AppendLog($"{Partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
                 return;
             }
 
@@ -499,17 +499,17 @@ public sealed partial class FlashViewModel
                         _edlBundleReady = bin.Programs.Count > 0 && bin.Programmers.Count > 0;
                         if (bin.Programmers.Count > 1)
                         {
-                            AppendLog($"{LanguageService.Instance.GetString("Flash_EdlProgrammerChoice")}: {bin.Programmers.Count}");
+                            AppendLog($"{_localizer.GetString("Flash_EdlProgrammerChoice")}: {bin.Programmers.Count}");
                         }
                         UpdateEdlButton();
-                        AppendLog($"{Partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                        AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
                         return;
                     }
                 }
 
                 var dirRows = ParseDirectory(path);
                 Partitions.Apply(0, dirRows);
-                AppendLog($"{Partitions.Count} {LanguageService.Instance.GetString("Flash_ImagesLoaded")}");
+                AppendLog($"{Partitions.Count} {_localizer.GetString("Flash_ImagesLoaded")}");
                 return;
             }
         }
@@ -547,7 +547,7 @@ public sealed partial class FlashViewModel
         if (selected.Length == 0) return;
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_ExtractSelected"),
+            Title = _localizer.GetString("Flash_ExtractSelected"),
             AllowMultiple = false
         });
         if (_busy || _confirming || !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal) ||
@@ -595,7 +595,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || _payloadPath is not { } payload || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_BuildWiredPackage"),
+            Title = _localizer.GetString("Flash_BuildWiredPackage"),
             AllowMultiple = false
         });
         if (_busy || _confirming || !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal) ||
@@ -632,6 +632,14 @@ public sealed partial class FlashViewModel
         chooseBtn.IsVisible = customFile;
         var versionBox = Field<ComboBox>("RootVersionBox");
         versionBox.IsVisible = !customFile;
+        if (!addRoot)
+        {
+            CancelRootOperations();
+            _rootLoadedSource = null;
+            return;
+        }
+
+        if (!customFile) EnsureRootReleasesLoaded();
     }
 
     internal void OnRootFileSourceChanged(object? sender, SelectionChangedEventArgs e)
@@ -640,8 +648,9 @@ public sealed partial class FlashViewModel
         if (!custom)
         {
             Field<TextBox>("RootPackagePathBox").Text = string.Empty;
-            _rootPackagePath = null;
         }
+
+        ResetRootReleases();
         UpdateRootControlsState();
     }
 
@@ -657,7 +666,7 @@ public sealed partial class FlashViewModel
         }
         else
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
         }
     }
 
@@ -670,7 +679,7 @@ public sealed partial class FlashViewModel
             try
             {
                 await FastbootStepService.RebootAsync(fastbootDevice, null, CancellationToken.None);
-                AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"), "reboot"));
+                AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot"));
             }
             catch (Exception ex) { AppendLog(ex.Message); }
             finally { SetBusy(false); }
@@ -685,7 +694,7 @@ public sealed partial class FlashViewModel
         }
         else
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_DeviceNotSelected"));
+            AppendLog(_localizer.GetString("Flash_DeviceNotSelected"));
         }
     }
 
@@ -698,7 +707,7 @@ public sealed partial class FlashViewModel
             try
             {
                 await FastbootStepService.RebootAsync(fastbootDevice, "bootloader", CancellationToken.None);
-                AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"), "reboot-bootloader"));
+                AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-bootloader"));
             }
             catch (Exception ex) { AppendLog(ex.Message); }
             finally { SetBusy(false); }
@@ -709,7 +718,7 @@ public sealed partial class FlashViewModel
         }
         else
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
         }
     }
 
@@ -722,14 +731,14 @@ public sealed partial class FlashViewModel
             try
             {
                 await FastbootStepService.RebootAsync(fastbootDevice, "recovery", CancellationToken.None);
-                AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"), "reboot-recovery"));
+                AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-recovery"));
             }
             catch (Exception ex) { AppendLog(ex.Message); }
             finally { SetBusy(false); }
         }
         else
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
         }
     }
 
@@ -742,14 +751,14 @@ public sealed partial class FlashViewModel
             try
             {
                 await FastbootStepService.RebootAsync(fastbootDevice, "fastboot", CancellationToken.None);
-                AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"), "reboot-fastboot"));
+                AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-fastboot"));
             }
             catch (Exception ex) { AppendLog(ex.Message); }
             finally { SetBusy(false); }
         }
         else
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
         }
     }
 
@@ -762,7 +771,7 @@ public sealed partial class FlashViewModel
             try
             {
                 await FastbootStepService.RebootAsync(fastbootDevice, "edl", CancellationToken.None);
-                AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"), "reboot-edl"));
+                AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-edl"));
             }
             catch (Exception ex) { AppendLog(ex.Message); }
             finally { SetBusy(false); }
@@ -773,7 +782,7 @@ public sealed partial class FlashViewModel
         }
         else
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
         }
     }
 
@@ -790,7 +799,7 @@ public sealed partial class FlashViewModel
         }
         else
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_ProtocolMismatch"));
+            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
         }
     }
 
@@ -799,7 +808,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_ChooseRootPackage"),
+            Title = _localizer.GetString("Flash_ChooseRootPackage"),
             AllowMultiple = false,
             FileTypeFilter = [FilePickerFileTypes.All]
         });
@@ -808,14 +817,14 @@ public sealed partial class FlashViewModel
         _rootPackagePath = null;
         try
         {
-            var detection = await new Firmware.BootSecurity.Patcher.BootPatchService()
-                .DetectAsync(path);
-            if (!FlashRootImage.IsSupportedPackage(detection))
+            var validation = await RootPatchPackageService.Shared.ValidateAsync(path);
+            if (!validation.IsSupported || validation.Detection is null ||
+                !FlashRootImage.IsSupportedPackage(validation.Detection))
             {
                 throw new InvalidDataException(
-                    LanguageService.Instance.GetString("Flash_RootPackageUnsupported"));
+                    _localizer.GetString("Flash_RootPackageUnsupported"));
             }
-            _rootPackagePath = path;
+            _rootPackagePath = validation.Path;
             Field<TextBox>("RootPackagePathBox").Text = path;
             Field<ComboBox>("RootFileSourceBox").SelectedIndex = 5;
             Field<CheckBox>("AddRootBox").IsEnabled = true;
@@ -838,7 +847,7 @@ public sealed partial class FlashViewModel
 
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_ChooseFile"),
+            Title = _localizer.GetString("Flash_ChooseFile"),
             AllowMultiple = false,
             FileTypeFilter = [FilePickerFileTypes.All]
         });
@@ -937,12 +946,13 @@ public sealed partial class FlashViewModel
         var busy = _busy;
         var protocol = SelectedDevice?.Protocol;
         UpdateModeVisibility();
+        UpdateRockchipActionState(protocol is DeviceProtocolKind.Rkdl);
 
         SelectedDeviceText = SelectedDevice is { } device
             ? device.Protocol is DeviceProtocolKind.Mtk && device.State == "logging"
-                ? $"{device.ProtocolLabel} · {device.DisplayName} — {LanguageService.Instance.GetString("Flash_MtkLoggingOnlyHint")}"
+                ? $"{device.ProtocolLabel} · {device.DisplayName} — {_localizer.GetString("Flash_MtkLoggingOnlyHint")}"
                 : $"{device.ProtocolLabel} · {device.DisplayName}"
-            : LanguageService.Instance.GetString("Flash_NoDevice");
+            : _localizer.GetString("Flash_NoDevice");
     }
 
     /// <summary>
@@ -1012,7 +1022,7 @@ public sealed partial class FlashViewModel
     {
         if (Surface is null) return;
         var pickBox = Field<ComboBox>("EdlProgrammerPickBox");
-        var customText = LanguageService.Instance.GetString("Flash_EdlCustomFile");
+        var customText = _localizer.GetString("Flash_EdlCustomFile");
         var items = _edlProgrammerCandidates.Select(Path.GetFileName).Concat([customText]).ToArray();
         var previousCustom = _isCustomProgrammer;
         var previousEdl = _edlProgrammer;
@@ -1096,7 +1106,7 @@ public sealed partial class FlashViewModel
     {
         if (Surface is null) return;
         var pickBox = Field<ComboBox>("RkConfigPickBox");
-        var customText = LanguageService.Instance.GetString("Flash_EdlCustomFile");
+        var customText = _localizer.GetString("Flash_EdlCustomFile");
         var items = _rkConfigCandidates.Select(Path.GetFileName).Concat([customText]).ToArray();
         var previousCustom = _isCustomRkConfig;
         var previousConfig = _rkConfig;
@@ -1175,7 +1185,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_RkChooseCustomConfig"),
+            Title = _localizer.GetString("Flash_RkChooseCustomConfig"),
             AllowMultiple = false,
             FileTypeFilter = [FilePickerFileTypes.All]
         });
@@ -1194,20 +1204,20 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming) return;
         if (SelectedDevice is not { Protocol: DeviceProtocolKind.Rkdl } device)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_DeviceNotConnected"));
+            AppendLog(_localizer.GetString("Flash_DeviceNotConnected"));
             return;
         }
 
         SetBusy(true);
         try
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_RkEnterMaskrom"));
+            AppendLog(_localizer.GetString("Flash_RkEnterMaskrom"));
             await App.DeviceMonitor.RunRkdlAsync(device, session =>
             {
                 session.RebootMaskRom();
                 return Task.FromResult(true);
             }, CancellationToken.None).ConfigureAwait(true);
-            AppendLog(LanguageService.Instance.GetString("Flash_OperationSucceeded"));
+            AppendLog(_localizer.GetString("Flash_OperationSucceeded"));
         }
         catch (Exception ex)
         {
@@ -1225,7 +1235,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_RkExportConfig"),
+            Title = _localizer.GetString("Flash_RkExportConfig"),
             DefaultExtension = "cfg",
             SuggestedFileName = "config.cfg",
             FileTypeChoices = [
@@ -1237,22 +1247,8 @@ public sealed partial class FlashViewModel
 
         try
         {
-            if (EffectiveRkConfig is { } existingPath && File.Exists(existingPath))
-            {
-                File.Copy(existingPath, savePath, overwrite: true);
-            }
-            else
-            {
-                var sb = new StringBuilder();
-                sb.AppendLine("# Rockchip Flash Configuration");
-                sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "# Generated at {0:yyyy-MM-dd HH:mm:ss}", DateTime.Now));
-                foreach (var part in Partitions)
-                {
-                    sb.AppendLine($"{part.Name}={part.Offset}\t{part.FilePath}");
-                }
-                await File.WriteAllTextAsync(savePath, sb.ToString(), Encoding.UTF8).ConfigureAwait(true);
-            }
-            AppendLog($"{LanguageService.Instance.GetString("Flash_RkExportConfig")} -> {Path.GetFileName(savePath)}");
+            SaveRkConfig(savePath);
+            AppendLog($"{_localizer.GetString("Flash_RkExportConfig")} -> {Path.GetFileName(savePath)}");
         }
         catch (Exception ex)
         {
@@ -1481,7 +1477,7 @@ public sealed partial class FlashViewModel
     private void SetRowsQueued(IReadOnlyList<FlashPartitionEntry> rows)
     {
         _overallRows = [.. rows];
-        var language = LanguageService.Instance;
+        var language = _localizer;
         foreach (var row in rows)
         {
             row.State = FlashRowState.Queued;
@@ -1496,12 +1492,12 @@ public sealed partial class FlashViewModel
     {
         row.State = FlashRowState.Running;
         row.Percent = 0;
-        row.StatusText = LanguageService.Instance.GetString(textKey);
+        row.StatusText = _localizer.GetString(textKey);
     }
 
     private void SetRowFinished(FlashPartitionEntry row, bool success)
     {
-        var language = LanguageService.Instance;
+        var language = _localizer;
         row.State = success ? FlashRowState.Succeeded : FlashRowState.Failed;
         row.StatusText = language.GetString(success ? "Flash_Status_Succeeded" : "Flash_Status_Failed");
         if (success)
@@ -1514,7 +1510,7 @@ public sealed partial class FlashViewModel
 
     private void MarkUnfinishedSkipped()
     {
-        var language = LanguageService.Instance;
+        var language = _localizer;
         foreach (var row in _overallRows.Where(row => row.State is FlashRowState.Queued or FlashRowState.Running))
         {
             row.State = FlashRowState.Skipped;
@@ -1551,7 +1547,7 @@ public sealed partial class FlashViewModel
         }
 
         OverallPercent = share / rows.Count * 100d;
-        OverallText = string.Format(LanguageService.Instance.GetString("Flash_OverallProgress"), finished, rows.Count);
+        OverallText = string.Format(_localizer.GetString("Flash_OverallProgress"), finished, rows.Count);
     }
 
 
@@ -1598,7 +1594,7 @@ public sealed partial class FlashViewModel
 
     private void AppendPartitionTable(IReadOnlyList<GptPartition> partitions)
     {
-        var language = LanguageService.Instance;
+        var language = _localizer;
         foreach (var line in FormatPartitionTable(partitions, MaxPartitionTableLines,
                      language.GetString("Flash_PartitionTableRow"),
                      language.GetString("Flash_PartitionTableMore")))
@@ -1612,6 +1608,23 @@ public sealed partial class FlashViewModel
         if (SelectedDevice is { Protocol: DeviceProtocolKind.Mtk, Transport: DeviceTransportKind.Usb })
         {
             await RunMtkDeviceInfoAsync();
+            return;
+        }
+
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Rkdl } rkdl && !_busy && !_confirming)
+        {
+            SetBusy(true);
+            try
+            {
+                await RunRkReadInfoAsync(rkdl);
+            }
+            catch (Exception ex) { AppendLog(ex.Message); }
+            finally
+            {
+                SetBusy(false);
+                UpdateEdlButton();
+            }
+
             return;
         }
 
@@ -1650,7 +1663,7 @@ public sealed partial class FlashViewModel
                 });
             }
             Partitions.Apply(0, deviceRows);
-            AppendLog($"{partitions.Count} {LanguageService.Instance.GetString("Flash_PartitionsLoaded")}");
+            AppendLog($"{partitions.Count} {_localizer.GetString("Flash_PartitionsLoaded")}");
         }
         catch (Exception ex) { AppendLog(ex.Message); }
         finally { SetBusy(false); }
@@ -1658,7 +1671,7 @@ public sealed partial class FlashViewModel
 
     private async Task RunMtkDeviceInfoAsync()
     {
-        var language = LanguageService.Instance;
+        var language = _localizer;
         await RunWithReadyMtkOperationAsync(async (session, token) =>
         {
             if (SelectedMtkProtocol != MtkDaProtocol.XFlash)
@@ -1781,7 +1794,7 @@ public sealed partial class FlashViewModel
     /// <param name="owner">The window owning the confirmation dialogs. <para>持有确认对话框的窗口。</para></param>
     private async Task RunEdlBundleAsync(bool useSerialPort, DetectedDevice? device, string? serialPort, Window owner)
     {
-        var language = LanguageService.Instance;
+        var language = _localizer;
         var programmerPath = EffectiveEdlProgrammer;
         if (programmerPath is null || !_flatBinPackage) return;
         _confirming = true;
@@ -1906,11 +1919,11 @@ public sealed partial class FlashViewModel
                 SetRowFinished(row, success: true);
             }
 
-            AppendLog(string.Format(LanguageService.Instance.GetString("Flash_OkResult"),
-                LanguageService.Instance.GetString("Flash_FlashEdlBundle")));
+            AppendLog(string.Format(_localizer.GetString("Flash_OkResult"),
+                _localizer.GetString("Flash_FlashEdlBundle")));
             foreach (var warning in warnings)
             {
-                AppendLog($"{LanguageService.Instance.GetString("Flash_WarningPrefix")}: {warning}");
+                AppendLog($"{_localizer.GetString("Flash_WarningPrefix")}: {warning}");
             }
         }
         catch (Exception ex)
@@ -1948,7 +1961,7 @@ public sealed partial class FlashViewModel
         tuning = new EdlBundleTuning();
         if (!long.TryParse(Field<TextBox>("EdlWipeFirstBox").Text, out var wipeFirstSectors) || wipeFirstSectors < 0)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlWipeFirstInvalid"));
+            AppendLog(_localizer.GetString("Flash_EdlWipeFirstInvalid"));
             return false;
         }
 
@@ -1959,7 +1972,7 @@ public sealed partial class FlashViewModel
             if (!long.TryParse(Field<TextBox>("EdlMaxPayloadBox").Text, out var parsedMaxPayload) ||
                 parsedMaxPayload is < 512 or > 16777216 || parsedMaxPayload % 512 != 0)
             {
-                AppendLog(LanguageService.Instance.GetString("Flash_EdlMaxPayloadInvalid"));
+                AppendLog(_localizer.GetString("Flash_EdlMaxPayloadInvalid"));
                 return false;
             }
 
@@ -1971,7 +1984,7 @@ public sealed partial class FlashViewModel
             if (!long.TryParse(Field<TextBox>("EdlPagesPerBlockBox").Text, out var parsedPagesPerBlock) ||
                 parsedPagesPerBlock is < 0 or > 65535)
             {
-                AppendLog(LanguageService.Instance.GetString("Flash_EdlPagesPerBlockInvalid"));
+                AppendLog(_localizer.GetString("Flash_EdlPagesPerBlockInvalid"));
                 return false;
             }
 
@@ -2023,7 +2036,7 @@ public sealed partial class FlashViewModel
 
         if (!TryReadEdlExpertNumber(Field<TextBox>("EdlGptEntryLbaBox").Text, out var requestedLba) || requestedLba is < 0 or 1)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlGptEntryLbaInvalid"));
+            AppendLog(_localizer.GetString("Flash_EdlGptEntryLbaInvalid"));
             return false;
         }
 
@@ -2032,7 +2045,7 @@ public sealed partial class FlashViewModel
         if (!TryReadEdlExpertNumber(Field<TextBox>("EdlGptEntryCountBox").Text, out var requestedCount)
             || requestedCount is < 0 or > 65536)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlGptEntryCountInvalid"));
+            AppendLog(_localizer.GetString("Flash_EdlGptEntryCountInvalid"));
             return false;
         }
 
@@ -2042,7 +2055,7 @@ public sealed partial class FlashViewModel
             || (requestedSize != 0 && (requestedSize is < 128 or > 4096
                 || (requestedSize & (requestedSize - 1)) != 0)))
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlGptEntrySizeInvalid"));
+            AppendLog(_localizer.GetString("Flash_EdlGptEntrySizeInvalid"));
             return false;
         }
 
@@ -2118,7 +2131,7 @@ public sealed partial class FlashViewModel
     {
         if (_busy || _confirming || SelectedDevice is not { } device ||
             TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         _confirming = true;
         bool confirmed;
         try { confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_SwitchSlot"), device.DisplayName); }
@@ -2179,7 +2192,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || SelectedDevice is not DetectedDevice device) return;
         if (!string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal))
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_PackageChanged"));
+            AppendLog(_localizer.GetString("Flash_PackageChanged"));
             return;
         }
         var selected = Partitions.Where(entry => entry.IsSelected && entry.CanSelect &&
@@ -2193,14 +2206,14 @@ public sealed partial class FlashViewModel
                 rkImageDir.Length > 0 && FlashService.HasRockchipParameter(rkImageDir)) ||
             device.Protocol == DeviceProtocolKind.Adb && !await FlashSuService.HasSuAsync(device, CancellationToken.None))
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_ModeMismatch"));
+            AppendLog(_localizer.GetString("Flash_ModeMismatch"));
             return;
         }
         var plainOptions = erase || Field<CheckBox>("DeleteCowBox").IsChecked == true || Field<CheckBox>("EraseDataBox").IsChecked == true ||
             Field<CheckBox>("RebootAfterBox").IsChecked == true || Field<CheckBox>("DisableVbmetaBox").IsChecked == true || Field<CheckBox>("AddRootBox").IsChecked == true;
         if (device.Protocol != DeviceProtocolKind.Fastboot && plainOptions)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_ModeMismatch"));
+            AppendLog(_localizer.GetString("Flash_ModeMismatch"));
             return;
         }
         var canExtract = _payloadPath is not null || _remotePayloadUrl is not null ||
@@ -2208,11 +2221,11 @@ public sealed partial class FlashViewModel
         if (!erase && selected.Any(entry => (entry.Step?.Command ?? "flash") is "flash" or "wipe_super" &&
             !File.Exists(entry.FilePath) && (!canExtract || entry.FilePath.Length != 0)))
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_FileMissing"));
+            AppendLog(_localizer.GetString("Flash_FileMissing"));
             return;
         }
         if (TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         var deleteCow = !erase && Field<CheckBox>("DeleteCowBox").IsChecked == true;
         var eraseData = !erase && Field<CheckBox>("EraseDataBox").IsChecked == true;
         var rebootAfter = !erase && Field<CheckBox>("RebootAfterBox").IsChecked == true;
@@ -2226,14 +2239,15 @@ public sealed partial class FlashViewModel
             AppendLog(language.GetString("Flash_VbmetaMissing"));
             return;
         }
-        var bootEntries = selected.Where(entry => (entry.Step?.Command ?? "flash") == "flash" &&
-            entry.Name is "boot" or "boot_a" or "boot_b" or "init_boot" or "init_boot_a" or "init_boot_b").ToArray();
-        if (addRoot && (_rootPackagePath is not { } || bootEntries.Length != 1))
+        var rootEntry = addRoot
+            ? FindRootPartitionEntry(selected, Field<ComboBox>("RootPartitionBox").SelectedItem as string)
+            : null;
+        if (addRoot && rootEntry is null)
         {
-            AppendLog(language.GetString("Flash_RootBootMissing"));
+            AppendLog(language.GetString("Flash_RootPartitionNotSelected"));
             return;
         }
-        var rootPackage = _rootPackagePath;
+
         if (selected.Any(entry => entry.Step?.Command == "reboot") && (eraseData || rebootAfter))
         {
             AppendLog(language.GetString("Flash_RebootConflict"));
@@ -2254,8 +2268,14 @@ public sealed partial class FlashViewModel
         if (eraseData) description += Environment.NewLine + language.GetString("Flash_EraseData");
         if (rebootAfter) description += Environment.NewLine + language.GetString("Flash_RebootAfter");
         if (disableVbmeta) description += Environment.NewLine + language.GetString("Flash_DisableVbmeta");
-        if (addRoot) description += Environment.NewLine + language.GetString("Flash_AddRoot") +
-            ": " + Path.GetFileName(rootPackage);
+        if (addRoot && rootEntry is { } rootTarget)
+        {
+            description += Environment.NewLine + language.GetString("Flash_AddRoot") + ": " + rootTarget.Name;
+            if (_rootPackagePath is { } chosenPackage)
+            {
+                description += " <- " + Path.GetFileName(chosenPackage);
+            }
+        }
         _confirming = true;
         bool confirmed;
         try
@@ -2472,13 +2492,13 @@ public sealed partial class FlashViewModel
                         prepared[entry] = output;
                     }
                 }
-                if (addRoot)
+                if (addRoot && rootEntry is { } patchedEntry)
                 {
-                    var entry = bootEntries[0];
-                    var output = await FlashRootImage.PrepareAsync(rootPackage!,
-                        prepared.GetValueOrDefault(entry, entry.FilePath), cancellation.Token);
+                    var rootPackage = await ResolveRootPackageAsync(cancellation.Token);
+                    var output = await FlashRootImage.PrepareAsync(rootPackage,
+                        prepared.GetValueOrDefault(patchedEntry, patchedEntry.FilePath), cancellation.Token);
                     staged.Add(output);
-                    prepared[entry] = output;
+                    prepared[patchedEntry] = output;
                 }
             }
             if (deleteCow)
@@ -2520,7 +2540,8 @@ public sealed partial class FlashViewModel
                         ? await FlashService.Default.ErasePartitionAsync(target, entry.Name, progress, cancellation.Token)
                         : device.Protocol == DeviceProtocolKind.Rkdl
                             ? await FlashService.FlashRkdlAsync(target, entry.Name,
-                                prepared.GetValueOrDefault(entry, entry.FilePath), null, progress, cancellation.Token, verify)
+                                prepared.GetValueOrDefault(entry, entry.FilePath), EffectiveRkLoaderPath,
+                                progress, cancellation.Token, verify)
                             : await FlashService.Default.FlashImageAsync(target, entry.Name,
                                 prepared.GetValueOrDefault(entry, entry.FilePath), progress, cancellation.Token);
                     AppendLog(result.Summary);
@@ -2604,7 +2625,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_MtkDaFile"),
+            Title = _localizer.GetString("Flash_MtkDaFile"),
             AllowMultiple = false,
             FileTypeFilter = [FilePickerFileTypes.All]
         });
@@ -2620,13 +2641,13 @@ public sealed partial class FlashViewModel
             if (entries.Count == 0)
             {
                 throw new InvalidDataException(
-                    LanguageService.Instance.GetString("Flash_MtkLoaderNoEntries"));
+                    _localizer.GetString("Flash_MtkLoaderNoEntries"));
             }
 
             _mtkLoaderPath = path;
             _mtkLoaderEntries = entries;
             Field<ComboBox>("MtkEntryIndexBox").ItemsSource = entries.Select(entry =>
-                string.Format(LanguageService.Instance.GetString("Flash_MtkLoaderEntry"),
+                string.Format(_localizer.GetString("Flash_MtkLoaderEntry"),
                     entry.Index, entry.HardwareCode.ToString("X4"), entry.HardwareSubCode.ToString("X4"),
                     $"{entry.HardwareVersion}{(entry.SoftwareVersion is { } software ? $".{software}" : string.Empty)}")).ToArray();
             Field<ComboBox>("MtkEntryIndexBox").SelectedIndex = 0;
@@ -2647,7 +2668,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_MtkEmiFile"),
+            Title = _localizer.GetString("Flash_MtkEmiFile"),
             AllowMultiple = false,
             FileTypeFilter = [FilePickerFileTypes.All]
         });
@@ -2675,7 +2696,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_MtkKeyDir"),
+            Title = _localizer.GetString("Flash_MtkKeyDir"),
             AllowMultiple = false
         });
         if (_busy || _confirming || folders.Count != 1 || folders[0].TryGetLocalPath() is not { } path) return;
@@ -2685,8 +2706,8 @@ public sealed partial class FlashViewModel
             : string.Empty;
         ToolTip.SetTip(Field<TextBlock>("MtkKeyDirText"), _mtkKeyDirectory ?? string.Empty);
         AppendLog(_mtkKeyDirectory is null
-            ? LanguageService.Instance.GetString("Flash_MtkKeyDir")
-            : $"{LanguageService.Instance.GetString("Flash_MtkKeyDir")}: {_mtkKeyDirectory}");
+            ? _localizer.GetString("Flash_MtkKeyDir")
+            : $"{_localizer.GetString("Flash_MtkKeyDir")}: {_mtkKeyDirectory}");
     }
 
     internal async void OnChooseMtkAuthFileClick(object? sender, RoutedEventArgs e)
@@ -2694,7 +2715,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_MtkAuthFile"),
+            Title = _localizer.GetString("Flash_MtkAuthFile"),
             AllowMultiple = false,
             FileTypeFilter = [FilePickerFileTypes.All]
         });
@@ -2703,8 +2724,8 @@ public sealed partial class FlashViewModel
         Field<TextBlock>("MtkAuthFileText").Text = _mtkAuthFile is { } file ? Path.GetFileName(file) : string.Empty;
         ToolTip.SetTip(Field<TextBlock>("MtkAuthFileText"), _mtkAuthFile ?? string.Empty);
         AppendLog(_mtkAuthFile is null
-            ? LanguageService.Instance.GetString("Flash_MtkAuthFile")
-            : $"{LanguageService.Instance.GetString("Flash_MtkAuthFile")}: {_mtkAuthFile}");
+            ? _localizer.GetString("Flash_MtkAuthFile")
+            : $"{_localizer.GetString("Flash_MtkAuthFile")}: {_mtkAuthFile}");
     }
 
     private static MtkEmiParameters ReadEmi(string path)
@@ -2744,7 +2765,7 @@ public sealed partial class FlashViewModel
         if (selected.Length == 0) return;
         if (!TryBuildEdlInitialization(out var initialization)) return;
         if (!TryReadEdlGptEntryOverrides(out var gptEntryLba, out var gptEntryCount, out var gptEntrySize)) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         _confirming = true;
         bool confirmed;
         try
@@ -2885,7 +2906,7 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        var language = LanguageService.Instance;
+        var language = _localizer;
         SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
@@ -2927,7 +2948,7 @@ public sealed partial class FlashViewModel
             return false;
         }
 
-        var language = LanguageService.Instance;
+        var language = _localizer;
         _confirming = true;
         bool confirmed;
         try
@@ -2951,7 +2972,7 @@ public sealed partial class FlashViewModel
     private async Task RunEdlStorageServiceCallAsync(Func<CancellationToken, Task<string>> body)
     {
         if (_busy || _confirming) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
@@ -2982,7 +3003,7 @@ public sealed partial class FlashViewModel
     internal async void OnEdlReadLunClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         _confirming = true;
         IReadOnlyList<IStorageFolder> folders;
         try
@@ -3024,7 +3045,7 @@ public sealed partial class FlashViewModel
                 System.Globalization.CultureInfo.InvariantCulture, out var value) || value is < 0 or > 255 ||
             !TryBuildEdlInitialization(out var initialization))
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlBootableValueInvalid"));
+            AppendLog(_localizer.GetString("Flash_EdlBootableValueInvalid"));
             return;
         }
 
@@ -3051,7 +3072,7 @@ public sealed partial class FlashViewModel
         var partition = Field<TextBox>("EdlDigestPartitionBox").Text?.Trim() ?? string.Empty;
         if (partition.Length == 0 || !TryBuildEdlInitialization(out var initialization))
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlDigestPartitionMissing"));
+            AppendLog(_localizer.GetString("Flash_EdlDigestPartitionMissing"));
             return;
         }
 
@@ -3077,7 +3098,7 @@ public sealed partial class FlashViewModel
     {
         if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } ||
             TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         _confirming = true;
         bool confirmed;
         try
@@ -3131,7 +3152,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_EdlUfsProfileChoose"),
+            Title = _localizer.GetString("Flash_EdlUfsProfileChoose"),
             AllowMultiple = false,
             FileTypeFilter = [FilePickerFileTypes.All]
         });
@@ -3181,7 +3202,7 @@ public sealed partial class FlashViewModel
         }
         catch (OperationCanceledException)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_Canceled"));
+            AppendLog(_localizer.GetString("Flash_Canceled"));
         }
         catch (Exception ex)
         {
@@ -3211,7 +3232,7 @@ public sealed partial class FlashViewModel
             !TryReadEdlNandUInt(Field<TextBox>("EdlNandSectorsBox").Text, out var sectorsPerPage) ||
             !TryReadEdlNandUInt(Field<TextBox>("EdlNandBadLenBox").Text, out var badBlockByteNum))
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlNandInputInvalid"));
+            AppendLog(_localizer.GetString("Flash_EdlNandInputInvalid"));
             return false;
         }
 
@@ -3241,7 +3262,7 @@ public sealed partial class FlashViewModel
         {
             block = 0;
             blockCount = 0;
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlNandInputInvalid"));
+            AppendLog(_localizer.GetString("Flash_EdlNandInputInvalid"));
             return false;
         }
 
@@ -3262,7 +3283,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_EdlNandTableChoose"),
+            Title = _localizer.GetString("Flash_EdlNandTableChoose"),
             AllowMultiple = false,
             FileTypeFilter = [FilePickerFileTypes.All]
         });
@@ -3409,7 +3430,7 @@ public sealed partial class FlashViewModel
     {
         if (_edlNandTablePath is not { } tablePath)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlNandTableMissing"));
+            AppendLog(_localizer.GetString("Flash_EdlNandTableMissing"));
             return;
         }
 
@@ -3443,7 +3464,7 @@ public sealed partial class FlashViewModel
     {
         if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
             TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         if (confirmKey is not null)
         {
             _confirming = true;
@@ -3492,7 +3513,7 @@ public sealed partial class FlashViewModel
     {
         if (_edlUfsProfile is null || _edlUfsProfilePath is not { } profilePath)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlUfsProfileMissing"));
+            AppendLog(_localizer.GetString("Flash_EdlUfsProfileMissing"));
             return;
         }
 
@@ -3511,7 +3532,7 @@ public sealed partial class FlashViewModel
     {
         if (_edlUfsProfile is null || _edlUfsProfilePath is not { } profilePath)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlUfsProfileMissing"));
+            AppendLog(_localizer.GetString("Flash_EdlUfsProfileMissing"));
             return;
         }
 
@@ -3542,7 +3563,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_EdlChooseCustomProgrammer"),
+            Title = _localizer.GetString("Flash_EdlChooseCustomProgrammer"),
             AllowMultiple = false,
             FileTypeFilter = [FilePickerFileTypes.All]
         });
@@ -3567,7 +3588,7 @@ public sealed partial class FlashViewModel
     internal async void OnEdlChooseProgrammerDirClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
             Title = language.GetString("Flash_EdlChooseProgrammerDir"),
@@ -3648,7 +3669,7 @@ public sealed partial class FlashViewModel
         if (!TryReadEdlGptEntryOverrides(out var gptEntryLba, out var gptEntryCount, out var gptEntrySize)) return;
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_EdlReadbackSelected"),
+            Title = _localizer.GetString("Flash_EdlReadbackSelected"),
             AllowMultiple = false
         });
         if (_busy || _confirming || folders.Count != 1 || folders[0].TryGetLocalPath() is not { } destination) return;
@@ -3759,7 +3780,7 @@ public sealed partial class FlashViewModel
     private async Task ExecuteMtkPlanAsync(IMtkFlashPlanPreview preparation, IReadOnlyList<FlashPartitionEntry> rows,
         Window owner, CancellationToken token, string titleKey)
     {
-        var language = LanguageService.Instance;
+        var language = _localizer;
         _confirming = true;
         bool go;
         try
@@ -3833,7 +3854,7 @@ public sealed partial class FlashViewModel
         var selected = Partitions
             .Where(row => row.IsSelected && row.CanSelect && _mtkPartitions.ContainsKey(row)).ToArray();
         if (selected.Length == 0) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         if (!TryReadMtkSelection(out var useSerial, out var usbDevice, out var port, out var baudRate,
                 out var attach, out var autoMatch))
         {
@@ -3955,7 +3976,7 @@ public sealed partial class FlashViewModel
         var selected = Partitions
             .Where(row => row.IsSelected && row.CanSelect && _mtkRows.ContainsKey(row)).ToArray();
         if (selected.Length == 0) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         if (!TryReadMtkSelection(out var useSerial, out var usbDevice, out var port, out var baudRate,
                 out var attach, out var autoMatch))
         {
@@ -4096,7 +4117,7 @@ public sealed partial class FlashViewModel
     internal bool TryReadMtkSelection(out bool useSerial, out DetectedDevice? usbDevice, out string? port,
         out int baudRate, out bool attach, out bool autoMatch)
     {
-        var language = LanguageService.Instance;
+        var language = _localizer;
         usbDevice = SelectedDevice is { Protocol: DeviceProtocolKind.Mtk, Transport: DeviceTransportKind.Usb }
             ? SelectedDevice
             : null;
@@ -4250,7 +4271,7 @@ public sealed partial class FlashViewModel
         var kind = SelectedMtkStorageKind;
         if (_mtkResolution is not { } resolution)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_MtkLoadScatterHint"));
+            AppendLog(_localizer.GetString("Flash_MtkLoadScatterHint"));
             return null;
         }
 
@@ -4368,7 +4389,7 @@ public sealed partial class FlashViewModel
 
     private MtkLegacyOptions BuildLegacyOptions()
     {
-        var language = LanguageService.Instance;
+        var language = _localizer;
         if (!ushort.TryParse(Field<TextBox>("MtkLegacyNorSelectBox").Text?.Trim(), System.Globalization.NumberStyles.HexNumber,
                 System.Globalization.CultureInfo.InvariantCulture, out var norSelect)
             || !byte.TryParse(Field<TextBox>("MtkLegacyNandChipSelectBox").Text?.Trim(), System.Globalization.NumberStyles.HexNumber,
@@ -4558,7 +4579,7 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        var language = LanguageService.Instance;
+        var language = _localizer;
         var folders = await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
             Title = language.GetString("Flash_MtkReadback"),
@@ -4690,7 +4711,7 @@ public sealed partial class FlashViewModel
     {
         var directory = await PickMtkDumpDirectoryAsync("Flash_MtkDumpWholeFlash").ConfigureAwait(true);
         if (directory is null) return;
-        var prompt = LanguageService.Instance;
+        var prompt = _localizer;
         var family = SelectedMtkProtocol;
         await RunMtkSecurityOperationAsync("Flash_MtkDumpWholeFlash", "Flash_MtkDumpWholeFlashConfirm",
             async (session, token) =>
@@ -4716,7 +4737,7 @@ public sealed partial class FlashViewModel
     /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
     internal async void OnMtkReadSectorsClick(object? sender, RoutedEventArgs e)
     {
-        var prompt = LanguageService.Instance;
+        var prompt = _localizer;
         var region = Field<TextBox>("MtkSectorRegionBox").Text?.Trim() ?? string.Empty;
         if (region.Length == 0 ||
             !long.TryParse(Field<TextBox>("MtkSectorStartBox").Text?.Trim(), System.Globalization.NumberStyles.Integer,
@@ -4756,7 +4777,7 @@ public sealed partial class FlashViewModel
     /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
     internal async void OnMtkReadAreaClick(object? sender, RoutedEventArgs e)
     {
-        var prompt = LanguageService.Instance;
+        var prompt = _localizer;
         if (!long.TryParse(Field<TextBox>("MtkAreaOffsetBox").Text?.Trim(), System.Globalization.NumberStyles.Integer,
                 System.Globalization.CultureInfo.InvariantCulture, out var offset) || offset < 0 ||
             !long.TryParse(Field<TextBox>("MtkAreaLengthBox").Text?.Trim(), System.Globalization.NumberStyles.Integer,
@@ -4796,7 +4817,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return null;
         var folders = await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString(titleKey),
+            Title = _localizer.GetString(titleKey),
             AllowMultiple = false
         }).ConfigureAwait(true);
         return _busy || _confirming || folders.Count != 1 || folders[0].TryGetLocalPath() is not { Length: > 0 } path
@@ -4872,7 +4893,7 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        var language = LanguageService.Instance;
+        var language = _localizer;
         SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
@@ -4912,7 +4933,7 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        var language = LanguageService.Instance;
+        var language = _localizer;
         if (useSerial || usbDevice is null)
         {
             AppendLog(language.GetString("Flash_MtkUsbOnlyOperation"));
@@ -5024,7 +5045,7 @@ public sealed partial class FlashViewModel
         Func<MtkSession, CancellationToken, Task> operation)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         if (confirmKey is not null)
         {
             _confirming = true;
@@ -5068,7 +5089,7 @@ public sealed partial class FlashViewModel
     internal async void OnMtkFullDumpClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var prompt = LanguageService.Instance;
+        var prompt = _localizer;
         var family = SelectedMtkProtocol;
         var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
@@ -5182,7 +5203,7 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        var language = LanguageService.Instance;
+        var language = _localizer;
         if (confirmKey is not null && TopLevel.GetTopLevel(Surface) is Window owner)
         {
             _confirming = true;
@@ -5253,7 +5274,7 @@ public sealed partial class FlashViewModel
         if (!TryReadPreloaderAddress(Field<TextBox>("MtkPreloaderOffsetBox").Text, out var address) ||
             !TryReadPreloaderCount(Field<TextBox>("MtkPreloaderLengthBox").Text, out var length) || length <= 0)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_MtkPreloaderOffset"));
+            AppendLog(_localizer.GetString("Flash_MtkPreloaderOffset"));
             return;
         }
 
@@ -5278,7 +5299,7 @@ public sealed partial class FlashViewModel
     {
         if (Field<TextBox>("MtkPreloaderPartitionNameBox").Text?.Trim() is not { Length: > 0 } partitionName)
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_MtkPreloaderPartitionName"));
+            AppendLog(_localizer.GetString("Flash_MtkPreloaderPartitionName"));
             return;
         }
 
@@ -5323,7 +5344,7 @@ public sealed partial class FlashViewModel
 
     internal async void OnMtkSetSpeedClick(object? sender, RoutedEventArgs e)
     {
-        var language = LanguageService.Instance;
+        var language = _localizer;
         await RunWithReadyMtkOperationAsync(async (session, token) =>
         {
             var applied = SelectedMtkProtocol switch
@@ -5342,7 +5363,7 @@ public sealed partial class FlashViewModel
     private async Task RunWithReadyMtkOperationAsync(Func<MtkSession, CancellationToken, Task> operation)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         SetBusy(true);
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
@@ -5392,7 +5413,7 @@ public sealed partial class FlashViewModel
     private async void RunMtkXmlRebootAsync(MtkXmlBootMode mode, string titleKey, string confirmKey, string doneKey)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         if (SelectedMtkProtocol != MtkDaProtocol.Xml)
         {
             AppendLog(language.GetString("Flash_MtkXmlRebootFamilyRequired"));
@@ -5471,11 +5492,11 @@ public sealed partial class FlashViewModel
         var name = Field<TextBox>("MtkXmlPropertyBox").Text?.Trim();
         if (string.IsNullOrWhiteSpace(name))
         {
-            AppendLog(LanguageService.Instance.GetString("Flash_MtkXmlPropertyRequired"));
+            AppendLog(_localizer.GetString("Flash_MtkXmlPropertyRequired"));
             return;
         }
 
-        var language = LanguageService.Instance;
+        var language = _localizer;
         if (SelectedMtkProtocol != MtkDaProtocol.Xml)
         {
             AppendLog(language.GetString("Flash_MtkXmlPropertyFamilyRequired"));
@@ -5510,7 +5531,7 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        var language = LanguageService.Instance;
+        var language = _localizer;
         var kind = SelectedMtkStorageKind;
         if (MtkPowerRequestRefusalKey(SelectedMtkProtocol, mode) is { } refusal)
         {

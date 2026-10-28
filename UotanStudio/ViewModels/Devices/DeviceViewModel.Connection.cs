@@ -189,7 +189,7 @@ public partial class DeviceViewModel
         _connectionCancellation = cancellation;
         IsConnectionBusy = true;
         var operation = disconnect is null ? "Connect" : "Disconnect";
-        ConnectionStatusText = string.Format(LanguageService.Instance.GetString(
+        ConnectionStatusText = string.Format(_localizer.GetString(
             disconnect is null ? "Device_RemoteConnecting" : "Device_RemoteDisconnecting"), address);
         try
         {
@@ -216,18 +216,18 @@ public partial class DeviceViewModel
                     SelectedDevice = connected;
                 }
             }
-            ConnectionStatusText = string.Format(LanguageService.Instance.GetString(
+            ConnectionStatusText = string.Format(_localizer.GetString(
                 disconnect is null ? "Device_RemoteConnected" : "Device_RemoteDisconnected"), address);
-            LogService.Instance.Write(LogLevel.Info, "DeviceManager", $"{operation} {protocol} {address}: OK");
+            _log.Write(LogLevel.Info, "DeviceManager", $"{operation} {protocol} {address}: OK");
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
-            ConnectionStatusText = LanguageService.Instance.GetString("Device_RemoteCanceled");
+            ConnectionStatusText = _localizer.GetString("Device_RemoteCanceled");
         }
         catch (Exception ex)
         {
-            ConnectionStatusText = string.Format(LanguageService.Instance.GetString("Device_RemoteFailed"), address);
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"{operation} {protocol} {address}: {ex.Message}");
+            ConnectionStatusText = string.Format(_localizer.GetString("Device_RemoteFailed"), address);
+            _log.Write(LogLevel.Error, "DeviceManager", $"{operation} {protocol} {address}: {ex.Message}");
         }
         finally
         {
@@ -265,38 +265,38 @@ public partial class DeviceViewModel
 
         var modeDisplayName = mode switch
         {
-            "system" => LanguageService.Instance.GetString("Device_ModeSystem"),
-            "bootloader" => LanguageService.Instance.GetString("Device_ModeBootloader"),
-            "fastbootd" => LanguageService.Instance.GetString("Device_ModeFastbootd"),
-            "recovery" => LanguageService.Instance.GetString("Device_ModeRecovery"),
-            "edl" => LanguageService.Instance.GetString("Device_ModeEdl"),
+            "system" => _localizer.GetString("Device_ModeSystem"),
+            "bootloader" => _localizer.GetString("Device_ModeBootloader"),
+            "fastbootd" => _localizer.GetString("Device_ModeFastbootd"),
+            "recovery" => _localizer.GetString("Device_ModeRecovery"),
+            "edl" => _localizer.GetString("Device_ModeEdl"),
             _ => mode
         };
 
         var owner = DialogService.GetOwnerWindow();
         if (owner is null) return;
         var confirmed = await DialogService.ConfirmAsync(owner,
-            LanguageService.Instance.GetString("Device_RebootConfirmTitle"),
-            string.Format(LanguageService.Instance.GetString("Device_RebootConfirmMessage"), modeDisplayName) + $"\n{device.Serial}");
+            _localizer.GetString("Device_RebootConfirmTitle"),
+            string.Format(_localizer.GetString("Device_RebootConfirmMessage"), modeDisplayName) + $"\n{device.Serial}");
         if (!confirmed)
         {
             return;
         }
 
-        StatusText = $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode}...";
+        StatusText = $"{_localizer.GetString("Device_Reboot")} {device.Serial} -> {mode}...";
         try
         {
             var ok = await App.DeviceMonitor.RebootAsync(device.Device, mode).ConfigureAwait(true);
             StatusText = ok
-                ? $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode} OK"
-                : $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode} FAIL";
-            LogService.Instance.Write(ok ? LogLevel.Info : LogLevel.Error, "DeviceManager",
+                ? $"{_localizer.GetString("Device_Reboot")} {device.Serial} -> {mode} OK"
+                : $"{_localizer.GetString("Device_Reboot")} {device.Serial} -> {mode} FAIL";
+            _log.Write(ok ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"Reboot {device.Serial} -> {mode}: {(ok ? "OK" : "FAIL")}");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode} {LanguageService.Instance.GetString("UserError_Failed")}";
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager",
+            StatusText = $"{_localizer.GetString("Device_Reboot")} {device.Serial} -> {mode} {_localizer.GetString("UserError_Failed")}";
+            _log.Write(LogLevel.Error, "DeviceManager",
                 $"Reboot {device.Serial} -> {mode} failed: {ex.Message}");
         }
     }

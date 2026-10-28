@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using UotanStudio.Comm.Protocols.Mtk;
-using UotanStudio.Services;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.Flash;
@@ -48,11 +47,12 @@ public sealed partial class FlashViewModel
 
     private void InitializeSurface()
     {
-        Field<ComboBox>("RootPartitionBox").ItemsSource = new[] { "boot", "init_boot", "vendor_boot" };
-        Field<ComboBox>("RootPartitionBox").SelectedIndex = 0;
         Field<ComboBox>("RootFileSourceBox").ItemsSource = _rootFileSourceOptions.Options;
         Field<ComboBox>("RootFileSourceBox").SelectedIndex = 0;
+        Field<ComboBox>("RootVersionBox").ItemsSource = _rootVersionLabels;
+        Field<ComboBox>("RootVersionBox").SelectionChanged += OnRootVersionChanged;
         Field<CheckBox>("AddRootBox").IsCheckedChanged += (_, _) => UpdateRootControlsState();
+        RefreshRootPartitionOptions();
         UpdateRootControlsState();
 
         Field<ComboBox>("EdlSectorSizeBox").ItemsSource = _edlSectorSizeOptions.Options;
@@ -110,6 +110,7 @@ public sealed partial class FlashViewModel
         }
 
         _deviceViewModel = null;
+        CancelRootOperations();
         UpdateObservedDeviceInfo();
         FlushPendingLog();
     }

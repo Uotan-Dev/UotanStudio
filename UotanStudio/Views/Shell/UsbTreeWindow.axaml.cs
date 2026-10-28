@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using UotanStudio.Composition;
 using UotanStudio.Services;
 using UotanStudio.Services.Ui;
 using UotanStudio.ViewModels.Shell;
@@ -23,7 +24,7 @@ public partial class UsbTreeWindow : Window
     /// <para>初始化 USB 树窗口，使用宿主设备监视服务作为拓扑来源。</para>
     /// </summary>
     public UsbTreeWindow()
-        : this(new UsbTreeViewModel())
+        : this(ServiceHub.TryGet<UsbTreeViewModel>() ?? new UsbTreeViewModel())
     {
     }
 

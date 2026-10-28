@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using UotanStudio.Composition;
 using UotanStudio.Services.Keys;
 using UotanStudio.ViewModels.Editors;
 
@@ -18,7 +19,7 @@ public partial class ApkSigningWindow : Window
     public ApkSigningWindow(ApkEditorViewModel? model)
     {
         InitializeComponent();
-        DataContext = model ?? new ApkEditorViewModel();
+        DataContext = model ?? ServiceHub.TryGet<ApkEditorViewModel>() ?? new ApkEditorViewModel();
         ApkPathBox.Text = (DataContext as ApkEditorViewModel)?.FilePath;
         Opened += (_, _) => RefreshKeys();
     }

@@ -5,7 +5,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
-
+using UotanStudio.UiAbstractions;
 namespace UotanStudio.ViewModels.Devices;
 
 /// <summary>
@@ -209,6 +209,12 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// </summary>
     private readonly Dictionary<string, int> _backupProgressByPartition = [];
 
+    /// <summary>Localized string lookup supplied by the composition root. <para>由组合根提供的本地化字符串查询。</para></summary>
+    private readonly ILocalizer _localizer;
+
+    /// <summary>Unified log sink supplied by the composition root. <para>由组合根提供的统一日志接收端。</para></summary>
+    private readonly IUnifiedLog _log;
+
     /// <summary>
     /// Initializes the device view model: starts the device monitor service (which performs
     /// the startup full USB scan and begins hotplug monitoring), subscribes to device
@@ -221,10 +227,14 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     internal DeviceViewModel(bool monitorDevices,
-        Func<DeviceProtocolKind, string, DetectedDevice?, DeviceTransportKind, CancellationToken, Task>? changeNetworkConnection = null)
+        Func<DeviceProtocolKind, string, DetectedDevice?, DeviceTransportKind, CancellationToken, Task>? changeNetworkConnection = null,
+        ILocalizer? localizer = null,
+        IUnifiedLog? log = null)
     {
         _monitorDevices = monitorDevices;
         _changeNetworkConnection = changeNetworkConnection ?? ExecuteNetworkConnectionAsync;
+        _localizer = localizer ?? LanguageService.Instance;
+        _log = log ?? LogService.Instance;
         Devices.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasDevices));
@@ -260,7 +270,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         }
 
         _backupProgressByPartition[partition] = message.Percent;
-        LogService.Instance.Write(LogLevel.Info, "BackupService",
+        _log.Write(LogLevel.Info, "BackupService",
             $"[{message.Percent}%] {message.Status}{(string.IsNullOrEmpty(partition) ? string.Empty : $" ({partition})")}");
     }
 
@@ -325,7 +335,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         }
 
         IsRefreshing = true;
-        StatusText = LanguageService.Instance.GetString("Device_Scanning");
+        StatusText = _localizer.GetString("Device_Scanning");
         OnPropertyChanged(nameof(HasNoDevices));
         var selectedKey = SelectedDevice?.Key;
         try
@@ -384,9 +394,9 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             }
 
             StatusText = Devices.Count == 0
-                ? LanguageService.Instance.GetString("Device_NoDevices")
-                : $"{Devices.Count}{LanguageService.Instance.GetString("Device_DeviceCount")}";
-            LogService.Instance.Write(LogLevel.Info, "DeviceManager",
+                ? _localizer.GetString("Device_NoDevices")
+                : $"{Devices.Count}{_localizer.GetString("Device_DeviceCount")}";
+            _log.Write(LogLevel.Info, "DeviceManager",
                 $"Scan completed: {Devices.Count} device(s) found.");
 
             var enrichable = Devices
@@ -403,12 +413,12 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         }
         catch (OperationCanceledException)
         {
-            StatusText = LanguageService.Instance.GetString("Device_NoDevices");
+            StatusText = _localizer.GetString("Device_NoDevices");
         }
         catch (Exception ex)
         {
-            StatusText = LanguageService.Instance.GetString("Device_RefreshFailed");
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Device refresh failed: {ex.Message}");
+            StatusText = _localizer.GetString("Device_RefreshFailed");
+            _log.Write(LogLevel.Error, "DeviceManager", $"Device refresh failed: {ex.Message}");
         }
         finally
         {

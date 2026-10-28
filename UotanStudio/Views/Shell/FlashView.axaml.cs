@@ -328,4 +328,13 @@ public partial class FlashView : UserControl
     private void OnRkConfigPickChanged(object? sender, SelectionChangedEventArgs e) => _model.OnRkConfigPickChanged(sender, e);
     private void OnRkChooseConfigClick(object? sender, RoutedEventArgs e) => _model.OnRkChooseConfigClick(sender, e);
     private void OnRkExportConfigClick(object? sender, RoutedEventArgs e) => _model.OnRkExportConfigClick(sender, e);
+    private void OnRkImportConfigClick(object? sender, RoutedEventArgs e) => _model.OnRkImportConfigClick(sender, e);
+    private void OnRkReadInfoClick(object? sender, RoutedEventArgs e) => _model.OnRkReadInfoClick(sender, e);
+    private void OnRkTestDeviceClick(object? sender, RoutedEventArgs e) => _model.OnRkTestDeviceClick(sender, e);
+    private void OnRkGetStorageClick(object? sender, RoutedEventArgs e) => _model.OnRkGetStorageClick(sender, e);
+    private void OnRkSwitchStorageClick(object? sender, RoutedEventArgs e) => _model.OnRkSwitchStorageClick(sender, e);
+    private void OnRkEraseFlashClick(object? sender, RoutedEventArgs e) => _model.OnRkEraseFlashClick(sender, e);
+    private void OnRkLbaReadClick(object? sender, RoutedEventArgs e) => _model.OnRkLbaReadClick(sender, e);
+    private void OnRkLbaWriteClick(object? sender, RoutedEventArgs e) => _model.OnRkLbaWriteClick(sender, e);
+    private void OnRkEraseSectorsClick(object? sender, RoutedEventArgs e) => _model.OnRkEraseSectorsClick(sender, e);
 }

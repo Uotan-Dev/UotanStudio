@@ -1599,6 +1599,27 @@ Author: 暮间雾
   <data name="BootPatch_ApatchPassword" xml:space="preserve">
     <value>Enter SuperKey</value>
   </data>
+  <data name="BootPatch_VersionsLoading" xml:space="preserve">
+    <value>Loading releases…</value>
+  </data>
+  <data name="BootPatch_VersionsEmpty" xml:space="preserve">
+    <value>No downloadable release was found.</value>
+  </data>
+  <data name="BootPatch_PackageDownloading" xml:space="preserve">
+    <value>Downloading {0}…</value>
+  </data>
+  <data name="BootPatch_PackageReady" xml:space="preserve">
+    <value>Patch package {0} is ready.</value>
+  </data>
+  <data name="BootPatch_PackageInvalid" xml:space="preserve">
+    <value>Unsupported patch package: {0}</value>
+  </data>
+  <data name="BootPatch_VersionDownloaded" xml:space="preserve">
+    <value>{0} (downloaded)</value>
+  </data>
+  <data name="BootPatch_ProbingSources" xml:space="preserve">
+    <value>Testing mirror sources…</value>
+  </data>
   <data name="PackDialog_PackPayload" xml:space="preserve">
     <value>Pack Payload</value>
   </data>
@@ -3583,4 +3604,4 @@ Continue?</value>
   <data name="Flash_GeneralOperations" xml:space="preserve">
     <value>General Operations</value>
   </data>
-<data name="Flash_EdlSelectProgrammer" xml:space="preserve"><value>Select Programmer</value></data><data name="Flash_EdlCustomFile" xml:space="preserve"><value>Custom File</value></data><data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve"><value>Choose Custom Programmer File</value></data><data name="Flash_Rockchip" xml:space="preserve"><value>Rockchip</value></data><data name="Flash_RkSetStorageType" xml:space="preserve"><value>Set Storage Type</value></data><data name="Flash_RkEnterMaskrom" xml:space="preserve"><value>Enter Maskrom</value></data><data name="Flash_RkSelectConfig" xml:space="preserve"><value>Select Config</value></data><data name="Flash_RkConfigPathHint" xml:space="preserve"><value>Config file path</value></data><data name="Flash_RkChooseCustomConfig" xml:space="preserve"><value>Choose Custom Config File</value></data><data name="Flash_RkExportConfig" xml:space="preserve"><value>Export Config</value></data><data name="Flash_Offset" xml:space="preserve"><value>Offset</value></data></root>
+<data name="Flash_EdlSelectProgrammer" xml:space="preserve"><value>Select Programmer</value></data><data name="Flash_EdlCustomFile" xml:space="preserve"><value>Custom File</value></data><data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve"><value>Choose Custom Programmer File</value></data><data name="Flash_Rockchip" xml:space="preserve"><value>Rockchip</value></data><data name="Flash_RkSetStorageType" xml:space="preserve"><value>Set Storage Type</value></data><data name="Flash_RkEnterMaskrom" xml:space="preserve"><value>Enter Maskrom</value></data><data name="Flash_RkSelectConfig" xml:space="preserve"><value>Select Config</value></data><data name="Flash_RkConfigPathHint" xml:space="preserve"><value>Config file path</value></data><data name="Flash_RkChooseCustomConfig" xml:space="preserve"><value>Choose Custom Config File</value></data><data name="Flash_RkExportConfig" xml:space="preserve"><value>Export Config</value></data><data name="Flash_Offset" xml:space="preserve"><value>Offset</value></data><data name="Flash_RkReadInfo" xml:space="preserve"><value>Read Chip Info</value></data><data name="Flash_RkTestDevice" xml:space="preserve"><value>Test Device</value></data><data name="Flash_RkGetStorage" xml:space="preserve"><value>Get Current Storage</value></data><data name="Flash_RkSwitchStorage" xml:space="preserve"><value>Switch Storage</value></data><data name="Flash_RkEraseFlash" xml:space="preserve"><value>Erase Flash</value></data><data name="Flash_RkEraseFlashConfirm" xml:space="preserve"><value>Erase the whole flash? Every partition on the device is destroyed.</value></data><data name="Flash_RkEraseSectors" xml:space="preserve"><value>Erase Sectors</value></data><data name="Flash_RkLbaGroup" xml:space="preserve"><value>LBA Read / Write</value></data><data name="Flash_RkLbaAddress" xml:space="preserve"><value>Start sector</value></data><data name="Flash_RkLbaCount" xml:space="preserve"><value>Sector count</value></data><data name="Flash_RkLbaRead" xml:space="preserve"><value>Read LBA</value></data><data name="Flash_RkLbaWrite" xml:space="preserve"><value>Write LBA</value></data><data name="Flash_RkForceAddress" xml:space="preserve"><value>Force Address Write</value></data><data name="Flash_RkImportConfig" xml:space="preserve"><value>Import Config</value></data><data name="Flash_RkConfigImported" xml:space="preserve"><value>Config imported: {0} rows</value></data><data name="Flash_RkCapability" xml:space="preserve"><value>Capability</value></data><data name="Flash_RkStorage" xml:space="preserve"><value>Storage</value></data><data name="Explorer_OpenAsRockchipConfig" xml:space="preserve"><value>Rockchip Config</value></data><data name="Dock_RkConfig_Name" xml:space="preserve"><value>Name</value></data><data name="Dock_RkConfig_Address" xml:space="preserve"><value>Address</value></data><data name="Dock_RkConfig_Path" xml:space="preserve"><value>Path</value></data><data name="Dock_RkConfig_File" xml:space="preserve"><value>File</value></data><data name="Dock_RkConfig_Present" xml:space="preserve"><value>Present</value></data><data name="Dock_RkConfig_Missing" xml:space="preserve"><value>Missing</value></data><data name="Dock_RkConfig_Header" xml:space="preserve"><value>Header</value></data><data name="Dock_RkConfig_Tail" xml:space="preserve"><value>Trailing block</value></data><data name="Dock_RkConfig_Empty" xml:space="preserve"><value>This configuration has no rows.</value></data><data name="Dock_RkConfig_Summary" xml:space="preserve"><value>Header {0} B · {1} rows</value></data><data name="UserError_RkConfigLoadFailed" xml:space="preserve"><value>The configuration file could not be parsed.</value></data><data name="Flash_RootPartitionNotSelected" xml:space="preserve"><value>The boot partition selected for Root patching is not part of this flash run. Select it, or pick another partition.</value></data><data name="Flash_RootPackageMissing" xml:space="preserve"><value>No usable Root patch package is available for the selected version. Wait for the download, or pick another version.</value></data></root>

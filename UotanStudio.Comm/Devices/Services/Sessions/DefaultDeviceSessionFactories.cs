@@ -83,6 +83,8 @@ internal sealed class AdbDeviceSessionFactory : IDeviceSessionFactory
 
 internal sealed class HdcDeviceSessionFactory : IDeviceSessionFactory
 {
+    private readonly HdcFactory _factory = new();
+
     public DeviceSessionKind Kind => DeviceSessionKind.Hdc;
 
     public Task<object> CreateAsync(DeviceEndpoint endpoint, IAsyncDisposable transport, CancellationToken cancellationToken)
@@ -95,7 +97,7 @@ internal sealed class HdcDeviceSessionFactory : IDeviceSessionFactory
         }
 
         var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
-        if (!new HdcFactory().TryCreate(usb, out var session) || session is not HdcSession hdcSession)
+        if (!_factory.TryCreate(usb, out var session) || session is not HdcSession hdcSession)
         {
             throw new IOException("The device does not expose an HDC interface.");
         }
@@ -106,6 +108,8 @@ internal sealed class HdcDeviceSessionFactory : IDeviceSessionFactory
 
 internal sealed class FastbootDeviceSessionFactory : IDeviceSessionFactory
 {
+    private readonly FastbootFactory _factory = new();
+
     public DeviceSessionKind Kind => DeviceSessionKind.Fastboot;
 
     public Task<object> CreateAsync(DeviceEndpoint endpoint, IAsyncDisposable transport, CancellationToken cancellationToken)
@@ -113,7 +117,7 @@ internal sealed class FastbootDeviceSessionFactory : IDeviceSessionFactory
         cancellationToken.ThrowIfCancellationRequested();
         LeasedTransport.RequireProtocol(endpoint, "fastboot");
         var usb = LeasedTransport.Require<IUsbDeviceSession>(transport, Kind);
-        if (!new FastbootFactory().TryCreate(usb, out var session) || session is not FastbootSession fastbootSession)
+        if (!_factory.TryCreate(usb, out var session) || session is not FastbootSession fastbootSession)
         {
             throw new IOException("The device does not expose a fastboot interface.");
         }

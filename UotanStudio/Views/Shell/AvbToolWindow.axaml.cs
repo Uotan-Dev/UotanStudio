@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using UotanStudio.Composition;
 using UotanStudio.Services;
 using UotanStudio.Services.Ui;
 using UotanStudio.ViewModels.Shell;
@@ -23,7 +24,7 @@ public partial class AvbToolWindow : Window
     public AvbToolWindow()
     {
         InitializeComponent();
-        DataContext = new AvbToolViewModel();
+        DataContext = ServiceHub.TryGet<AvbToolViewModel>() ?? new AvbToolViewModel();
         Opened += async (_, _) => await Model.RefreshKeysAsync();
         Closing += (_, e) =>
         {

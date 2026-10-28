@@ -382,7 +382,7 @@
                         <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
                         <!-- 高通 EDL 9008 协议分类 -->
                         <Expander Name="EdlExpander" Classes="protocol-expander"
-                                  Header="{DynamicResource Flash_Edl}" IsExpanded="False">
+                                  Header="{DynamicResource Flash_Edl}" IsExpanded="{Binding IsEdlSectionExpanded, Mode=TwoWay}">
                             <StackPanel Name="EdlPane" Spacing="8">
                                                                 <Grid Name="EdlOptionGrid" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*,*"
                                       RowSpacing="6" ColumnSpacing="8" HorizontalAlignment="Stretch">
@@ -524,7 +524,7 @@
                         </Expander>
                         <!-- 联发科 MTK 协议分类 -->
                         <Expander Name="MtkExpander" Classes="protocol-expander"
-                                  Header="{DynamicResource Flash_Mtk}" IsExpanded="False">
+                                  Header="{DynamicResource Flash_Mtk}" IsExpanded="{Binding IsMtkSectionExpanded, Mode=TwoWay}">
                             <StackPanel Spacing="8">
                                 <StackPanel Name="MtkPane" Spacing="8">
                                 <TextBox Name="MtkDaPathBox" Height="32" VerticalContentAlignment="Center"
@@ -675,16 +675,72 @@
                         </Expander>
                         <!-- 瑞芯微 Rockchip 分类 -->
                         <Expander Name="RkExpander" Classes="protocol-expander"
-                                  Header="{DynamicResource Flash_Rockchip}" IsExpanded="False">
+                                  Header="{DynamicResource Flash_Rockchip}" IsExpanded="{Binding IsRockchipSectionExpanded, Mode=TwoWay}">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="{DynamicResource Flash_RkSetStorageType}" FontSize="12" Opacity="0.8" />
                                 <ComboBox Name="RkStorageTypeBox" Height="32" VerticalContentAlignment="Center"
                                           HorizontalAlignment="Stretch"
                                           AutomationProperties.Name="{DynamicResource Flash_RkSetStorageType}" />
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <Button Grid.Column="0" Name="RkGetStorageButton" Classes="pane-action"
+                                            Click="OnRkGetStorageClick"
+                                            Content="{DynamicResource Flash_RkGetStorage}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkGetStorage}" />
+                                    <Button Grid.Column="1" Name="RkSwitchStorageButton" Classes="pane-action"
+                                            Click="OnRkSwitchStorageClick"
+                                            Content="{DynamicResource Flash_RkSwitchStorage}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkSwitchStorage}" />
+                                </Grid>
                                 <Button Name="RkEnterMaskromButton" Classes="pane-action"
                                         Click="OnRkEnterMaskromClick"
                                         Content="{DynamicResource Flash_RkEnterMaskrom}"
                                         AutomationProperties.Name="{DynamicResource Flash_RkEnterMaskrom}" />
+                                <Button Name="RkReadInfoButton" Classes="pane-action"
+                                        Click="OnRkReadInfoClick"
+                                        Content="{DynamicResource Flash_RkReadInfo}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkReadInfo}" />
+                                <Button Name="RkTestDeviceButton" Classes="pane-action"
+                                        Click="OnRkTestDeviceClick"
+                                        Content="{DynamicResource Flash_RkTestDevice}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkTestDevice}" />
+                                <Button Name="RkEraseFlashButton" Classes="pane-action"
+                                        Click="OnRkEraseFlashClick"
+                                        Content="{DynamicResource Flash_RkEraseFlash}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkEraseFlash}" />
+                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+                                        Margin="0,2" />
+                                <TextBlock Text="{DynamicResource Flash_RkLbaGroup}" FontSize="12"
+                                           FontWeight="SemiBold" Opacity="0.8" />
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <TextBox Grid.Column="0" Name="RkLbaAddressBox" Height="32"
+                                             VerticalContentAlignment="Center" Text="0"
+                                             PlaceholderText="{DynamicResource Flash_RkLbaAddress}"
+                                             AutomationProperties.Name="{DynamicResource Flash_RkLbaAddress}" />
+                                    <TextBox Grid.Column="1" Name="RkLbaCountBox" Height="32"
+                                             VerticalContentAlignment="Center" Text="1"
+                                             PlaceholderText="{DynamicResource Flash_RkLbaCount}"
+                                             AutomationProperties.Name="{DynamicResource Flash_RkLbaCount}" />
+                                </Grid>
+                                <CheckBox Name="RkForceAddressBox"
+                                          Content="{DynamicResource Flash_RkForceAddress}"
+                                          HorizontalAlignment="Left"
+                                          AutomationProperties.Name="{DynamicResource Flash_RkForceAddress}" />
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <Button Grid.Column="0" Name="RkLbaReadButton" Classes="pane-action"
+                                            Click="OnRkLbaReadClick"
+                                            Content="{DynamicResource Flash_RkLbaRead}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkLbaRead}" />
+                                    <Button Grid.Column="1" Name="RkLbaWriteButton" Classes="pane-action"
+                                            Click="OnRkLbaWriteClick"
+                                            Content="{DynamicResource Flash_RkLbaWrite}"
+                                            AutomationProperties.Name="{DynamicResource Flash_RkLbaWrite}" />
+                                </Grid>
+                                <Button Name="RkEraseSectorsButton" Classes="pane-action"
+                                        Click="OnRkEraseSectorsClick"
+                                        Content="{DynamicResource Flash_RkEraseSectors}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkEraseSectors}" />
+                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+                                        Margin="0,2" />
                                 <TextBlock Name="RkConfigSelectLabel" FontSize="12" Opacity="0.8"
                                            Text="{DynamicResource Flash_RkSelectConfig}" />
                                 <ComboBox Name="RkConfigPickBox" Height="32" VerticalContentAlignment="Center"
@@ -700,6 +756,10 @@
                                         Click="OnRkChooseConfigClick"
                                         Content="{DynamicResource Flash_RkChooseCustomConfig}"
                                         AutomationProperties.Name="{DynamicResource Flash_RkChooseCustomConfig}" />
+                                <Button Name="RkImportConfigButton" Classes="pane-action"
+                                        Click="OnRkImportConfigClick"
+                                        Content="{DynamicResource Flash_RkImportConfig}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkImportConfig}" />
                                 <Button Name="RkExportConfigButton" Classes="pane-action"
                                         Click="OnRkExportConfigClick"
                                         Content="{DynamicResource Flash_RkExportConfig}"
@@ -708,7 +768,7 @@
                         </Expander>
                         <!-- 镜像操作分类 -->
                         <Expander Name="ImageExpander" Classes="protocol-expander"
-                                  Header="{DynamicResource Flash_Image}" IsExpanded="False">
+                                  Header="{DynamicResource Flash_Image}" IsExpanded="{Binding IsImageSectionExpanded, Mode=TwoWay}">
                             <StackPanel Spacing="8">
                                 <Button Name="ExtractSelectedButton" Classes="pane-action" IsEnabled="False"
                                         Click="OnExtractSelectedClick"

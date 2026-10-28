@@ -1,0 +1,97 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.Editors.RockchipConfigEditorView"
+             x:DataType="viewmodels:RockchipConfigEditorViewModel">
+  <Grid IsEnabled="{Binding !IsBusy}" RowDefinitions="Auto,Auto,*,Auto">
+    <!-- 顶部摘要栏：头部长度与行数。 -->
+    <Border Grid.Row="0" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <TextBlock Text="{Binding SourceDescription}"
+                 VerticalAlignment="Center"
+                 FontSize="11" Opacity="0.7" FontFamily="Consolas"
+                 TextTrimming="CharacterEllipsis" />
+    </Border>
+
+    <!-- 错误提示条：与其它编辑器同一套样式。 -->
+    <Border Grid.Row="1" Classes="error-banner"
+            IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
+    </Border>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,320">
+      <!-- 左：下载项列表，列为名称 / 地址 / 路径 / 文件是否存在。 -->
+      <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" Margin="8,6,8,4" ColumnDefinitions="160,170,*,70" ColumnSpacing="8">
+            <TextBlock Grid.Column="0" Text="{x:Static viewmodels:RockchipConfigEditorViewModel.NameLabel}"
+                       FontSize="11" Opacity="0.7" />
+            <TextBlock Grid.Column="1" Text="{x:Static viewmodels:RockchipConfigEditorViewModel.AddressLabel}"
+                       FontSize="11" Opacity="0.7" />
+            <TextBlock Grid.Column="2" Text="{x:Static viewmodels:RockchipConfigEditorViewModel.PathLabel}"
+                       FontSize="11" Opacity="0.7" />
+            <TextBlock Grid.Column="3" Text="{x:Static viewmodels:RockchipConfigEditorViewModel.FileLabel}"
+                       FontSize="11" Opacity="0.7" HorizontalAlignment="Center" />
+          </Grid>
+          <TextBlock DockPanel.Dock="Top" Margin="8,8,8,0" Opacity="0.6" TextWrapping="Wrap"
+                     Text="{x:Static viewmodels:RockchipConfigEditorViewModel.EmptyLabel}"
+                     IsVisible="{Binding HasNoRows}" />
+          <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem, Mode=TwoWay}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="viewmodels:RockchipConfigRowViewModel">
+                <Grid ColumnDefinitions="160,170,*,70" ColumnSpacing="8" Margin="0,2">
+                  <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="SemiBold"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="1" Text="{Binding AddressText}" FontFamily="Consolas"
+                             FontSize="11" Opacity="0.75" />
+                  <TextBlock Grid.Column="2" Text="{Binding Path}" FontFamily="Consolas" FontSize="11"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="3" HorizontalAlignment="Center" FontSize="11"
+                             Text="{x:Static viewmodels:RockchipConfigEditorViewModel.PresentLabel}"
+                             IsVisible="{Binding FileExists}" />
+                  <TextBlock Grid.Column="3" HorizontalAlignment="Center" FontSize="11" Foreground="Orange"
+                             Text="{x:Static viewmodels:RockchipConfigEditorViewModel.MissingLabel}"
+                             IsVisible="{Binding !FileExists}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+
+      <!-- 右：头部与选中行的原始尾块。 -->
+      <Border Grid.Column="1">
+        <ScrollViewer>
+          <StackPanel Margin="8" Spacing="8">
+            <TextBlock Text="{x:Static viewmodels:RockchipConfigEditorViewModel.HeaderLabel}"
+                       FontSize="11" Opacity="0.7" />
+            <TextBlock Text="{Binding HeaderHex}" FontFamily="Consolas" FontSize="11"
+                       TextWrapping="Wrap" Opacity="0.8" />
+            <TextBlock Text="{x:Static viewmodels:RockchipConfigEditorViewModel.TailLabel}"
+                       FontSize="11" Opacity="0.7" />
+            <TextBlock Opacity="0.6" TextWrapping="Wrap"
+                       IsVisible="{Binding HasSelection, Converter={x:Static BoolConverters.Not}}"
+                       Text="{x:Static viewmodels:RockchipConfigEditorViewModel.EmptyLabel}" />
+            <StackPanel Spacing="4"
+                        IsVisible="{Binding HasSelection, DataType=viewmodels:RockchipConfigEditorViewModel}"
+                        DataContext="{Binding SelectedItem}"
+                        x:DataType="viewmodels:RockchipConfigRowViewModel">
+              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding Path}" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding TailText}" FontFamily="Consolas" FontSize="11"
+                         TextWrapping="Wrap" Opacity="0.8" />
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <!-- 底部状态栏：解析中提示。 -->
+    <Border Grid.Row="3" Padding="6,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <TextBlock Text="{Binding SourceDescription}" FontSize="11" Opacity="0.6"
+                 TextTrimming="CharacterEllipsis" />
+    </Border>
+  </Grid>
+</UserControl>

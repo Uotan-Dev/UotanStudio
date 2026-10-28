@@ -291,21 +291,21 @@ internal partial class PropertiesViewModel : Tool
         {
             var typeName = ContentType switch
             {
-                PropertiesContentType.ElfDocument => LanguageService.Instance.GetString("Dock_Elf_Title"),
-                PropertiesContentType.PartitionDocument => LanguageService.Instance.GetString("Dock_Properties_Type_PartitionDocument"),
-                PropertiesContentType.LogDocument => LanguageService.Instance.GetString("Dock_Properties_Type_LogDocument"),
-                PropertiesContentType.ScreenMirror => LanguageService.Instance.GetString("Tab_ScreenMirror"),
-                PropertiesContentType.Image => LanguageService.Instance.GetString("Dock_Properties_Type_Image"),
-                PropertiesContentType.FileAnalysis => LanguageService.Instance.GetString("Dock_Properties_Type_FileAnalysis"),
-                PropertiesContentType.TextDocument => LanguageService.Instance.GetString("Dock_Properties_Type_TextDocument"),
-                PropertiesContentType.DtbDocument => LanguageService.Instance.GetString("Dock_Properties_Type_DtbDocument"),
-                PropertiesContentType.DexDocument => LanguageService.Instance.GetString("Dock_Properties_Type_DexDocument"),
-                PropertiesContentType.ManifestDocument => LanguageService.Instance.GetString("Dock_Properties_Type_ManifestDocument"),
-                PropertiesContentType.ArscDocument => LanguageService.Instance.GetString("Dock_Properties_Type_ArscDocument"),
-                PropertiesContentType.ApkDocument => LanguageService.Instance.GetString("Dock_Properties_Type_ApkDocument"),
-                PropertiesContentType.FirmwareDocument => LanguageService.Instance.GetString("Dock_Properties_Type_FirmwareDocument"),
-                PropertiesContentType.HexDocument => LanguageService.Instance.GetString("Dock_Properties_Type_HexDocument"),
-                PropertiesContentType.CompareEntry => LanguageService.Instance.GetString("Dock_Properties_Type_CompareEntry"),
+                PropertiesContentType.ElfDocument => _localizer.GetString("Dock_Elf_Title"),
+                PropertiesContentType.PartitionDocument => _localizer.GetString("Dock_Properties_Type_PartitionDocument"),
+                PropertiesContentType.LogDocument => _localizer.GetString("Dock_Properties_Type_LogDocument"),
+                PropertiesContentType.ScreenMirror => _localizer.GetString("Tab_ScreenMirror"),
+                PropertiesContentType.Image => _localizer.GetString("Dock_Properties_Type_Image"),
+                PropertiesContentType.FileAnalysis => _localizer.GetString("Dock_Properties_Type_FileAnalysis"),
+                PropertiesContentType.TextDocument => _localizer.GetString("Dock_Properties_Type_TextDocument"),
+                PropertiesContentType.DtbDocument => _localizer.GetString("Dock_Properties_Type_DtbDocument"),
+                PropertiesContentType.DexDocument => _localizer.GetString("Dock_Properties_Type_DexDocument"),
+                PropertiesContentType.ManifestDocument => _localizer.GetString("Dock_Properties_Type_ManifestDocument"),
+                PropertiesContentType.ArscDocument => _localizer.GetString("Dock_Properties_Type_ArscDocument"),
+                PropertiesContentType.ApkDocument => _localizer.GetString("Dock_Properties_Type_ApkDocument"),
+                PropertiesContentType.FirmwareDocument => _localizer.GetString("Dock_Properties_Type_FirmwareDocument"),
+                PropertiesContentType.HexDocument => _localizer.GetString("Dock_Properties_Type_HexDocument"),
+                PropertiesContentType.CompareEntry => _localizer.GetString("Dock_Properties_Type_CompareEntry"),
                 _ => string.Empty,
             };
 
@@ -313,13 +313,25 @@ internal partial class PropertiesViewModel : Tool
         }
     }
 
+    /// <summary>Localized string lookup supplied by the composition root. <para>由组合根提供的本地化字符串查询。</para></summary>
+    private readonly ILocalizer _localizer;
+
+    /// <summary>Unified log sink supplied by the composition root. <para>由组合根提供的统一日志接收端。</para></summary>
+    private readonly IUnifiedLog _log;
+
     /// <summary>
     /// Creates the properties view model, subscribing to node-selection-changed and image-selection-changed
     /// messages and showing the no-selection placeholder.
     /// <para>构造属性视图模型，订阅节点选中变更消息与镜像选中变更消息并显示无选择占位。</para>
     /// </summary>
-    public PropertiesViewModel()
+    /// <param name="localizer">Localized string lookup, or <see langword="null"/> for the shared language service.
+    /// <para>本地化字符串查询；为 <see langword="null"/> 时使用共享语言服务。</para></param>
+    /// <param name="log">Unified log sink, or <see langword="null"/> for the shared log service.
+    /// <para>统一日志接收端；为 <see langword="null"/> 时使用共享日志服务。</para></param>
+    public PropertiesViewModel(ILocalizer? localizer = null, IUnifiedLog? log = null)
     {
+        _localizer = localizer ?? LanguageService.Instance;
+        _log = log ?? LogService.Instance;
         WeakReferenceMessenger.Default.Register<ImageSelectionChangedMessage>(this, OnImageSelectionChanged);
         WeakReferenceMessenger.Default.Register<FileAnalysisCompletedMessage>(this, OnFileAnalysisCompleted);
         WeakReferenceMessenger.Default.Register<ActiveDocumentChangedMessage>(this, OnActiveDocumentChanged);
@@ -486,7 +498,7 @@ internal partial class PropertiesViewModel : Tool
         var imageDetailsGeneration = Volatile.Read(ref _imageDetailsGeneration);
         _ = RefreshImageDetailsAsync(image, imageDetailsGeneration);
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for image '{image.DisplayName}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for image '{image.DisplayName}'");
     }
 
     /// <summary>
@@ -522,7 +534,7 @@ internal partial class PropertiesViewModel : Tool
         PopulateLanguageSelector(doc.Language);
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_Language", string.Empty, isLanguageSelector: true));
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for text document '{doc.FilePath}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for text document '{doc.FilePath}'");
     }
 
     /// <summary>
@@ -561,7 +573,7 @@ internal partial class PropertiesViewModel : Tool
     private void PopulateLanguageSelector(string? currentLanguageId)
     {
         AvailableLanguages.Clear();
-        var svc = LanguageService.Instance;
+        var svc = _localizer;
         var autoLabel = svc.GetString("Dock_Properties_Text_LanguageAuto");
         AvailableLanguages.Add(string.IsNullOrEmpty(autoLabel) ? "Auto Detect" : autoLabel);
 
@@ -716,7 +728,7 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_RootSizeCells", doc.RootSizeCells));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_MemReservations", doc.MemoryReservationCount.ToString("N0")));
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DTB document '{doc.FilePath}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for DTB document '{doc.FilePath}'");
     }
 
     /// <summary>
@@ -745,7 +757,7 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_ElementCount", doc.ElementCount.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_AttributeCount", doc.AttributeCount.ToString("N0")));
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for Manifest document '{doc.FilePath}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for Manifest document '{doc.FilePath}'");
     }
 
     /// <summary>
@@ -778,7 +790,7 @@ internal partial class PropertiesViewModel : Tool
             Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_SelectedNodeText", element.Text));
         }
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for Manifest node '{node.Name}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for Manifest node '{node.Name}'");
     }
 
     /// <summary>
@@ -808,7 +820,7 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_VersionCode", doc.VersionCodeDisplay));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_Permissions", doc.Info?.Permissions.Count.ToString("N0") ?? "0"));
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for APK document '{doc.FilePath}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for APK document '{doc.FilePath}'");
     }
 
     /// <summary>
@@ -848,7 +860,7 @@ internal partial class PropertiesViewModel : Tool
             Properties.Add(CreateDynamicRow(row.Name, row.Value));
         }
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for firmware document '{doc.FilePath}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for firmware document '{doc.FilePath}'");
     }
 
     /// <summary>
@@ -879,7 +891,7 @@ internal partial class PropertiesViewModel : Tool
         PopulateHexEncodingSelector(doc.EncodingName);
         Properties.Add(CreateLocalizedRow("Dock_Properties_Text_Encoding", string.Empty, isEncodingSelector: true));
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for Hex document '{doc.FilePath}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for Hex document '{doc.FilePath}'");
     }
 
     /// <summary>
@@ -931,7 +943,7 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_TypeCount", doc.TypeCount.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_EntryCount", doc.EntryCount.ToString("N0")));
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for ARSC document '{doc.FilePath}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for ARSC document '{doc.FilePath}'");
     }
 
     /// <summary>
@@ -972,7 +984,7 @@ internal partial class PropertiesViewModel : Tool
                 break;
         }
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for ARSC node '{node.Name}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for ARSC node '{node.Name}'");
     }
 
     /// <summary>
@@ -1036,7 +1048,7 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_SelectedNodeProps", node.Node.Properties.Count.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_SelectedNodeChildren", node.Node.Children.Count.ToString("N0")));
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DTB node '{node.FullPath}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for DTB node '{node.FullPath}'");
     }
 
     /// <summary>
@@ -1078,7 +1090,7 @@ internal partial class PropertiesViewModel : Tool
             Properties.Add(CreateLocalizedRow("Dock_Properties_SelectedResource", resource.Name));
         }
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DEX document '{doc.FilePath}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for DEX document '{doc.FilePath}'");
     }
 
     /// <summary>
@@ -1101,7 +1113,7 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_FileCount", doc.FileCount.ToString("N0")));
         Properties.Add(CreateLocalizedRow("Dock_Properties_DirectoryCount", doc.DirectoryCount.ToString("N0")));
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for file-manager document '{doc.FilePath}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for file-manager document '{doc.FilePath}'");
     }
 
     /// <summary>
@@ -1129,7 +1141,7 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Size", entry.SizeText));
         Properties.Add(CreateLocalizedRow("Dock_Properties_ImageType", entry.KindText));
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for file-manager entry '{entry.Path}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for file-manager entry '{entry.Path}'");
     }
 
     /// <summary>
@@ -1154,14 +1166,14 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_FileName", SelectedNodeTitle));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Path", path));
         Properties.Add(CreateLocalizedRow("Dock_Properties_ImageType",
-            LanguageService.Instance.GetString(isDirectory ? "FileManager_KindDirectory" : "FileManager_KindFile")));
+            _localizer.GetString(isDirectory ? "FileManager_KindDirectory" : "FileManager_KindFile")));
         if (!isDirectory && File.Exists(path))
         {
             var size = new FileInfo(path).Length;
             Properties.Add(CreateLocalizedRow("Dock_Properties_Size", ProgressMeter.FormatSize(size)));
         }
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for compare entry '{path}'");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for compare entry '{path}'");
     }
 
     /// <summary>
@@ -1179,7 +1191,7 @@ internal partial class PropertiesViewModel : Tool
 
         ShowProperties(PropertiesContentType.FileAnalysis);
         SelectedNodeTitle = analysis.FilePath ?? analysis.DetectedFormat
-            ?? LanguageService.Instance.GetString("Dock_Properties_Type_FileAnalysis");
+            ?? _localizer.GetString("Dock_Properties_Type_FileAnalysis");
         AddMagicRow(analysis.FilePath);
 
         foreach (var row in analysis.Analysis)
@@ -1187,12 +1199,12 @@ internal partial class PropertiesViewModel : Tool
             Properties.Add(CreateDynamicRow(row.Name, row.Value));
         }
 
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for file analysis '{analysis.FilePath}' ({analysis.Analysis.Count} entries)");
+        _log.Write(LogLevel.Debug, "Properties", $"Refreshed for file analysis '{analysis.FilePath}' ({analysis.Analysis.Count} entries)");
     }
 
     private void AddMagicRow(string? path)
     {
-        var unknown = LanguageService.Instance.GetString("Dock_Properties_Unknown");
+        var unknown = _localizer.GetString("Dock_Properties_Unknown");
         var description = unknown;
         if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
         {
@@ -1202,11 +1214,11 @@ internal partial class PropertiesViewModel : Tool
             }
             catch (IOException)
             {
-                description = LanguageService.Instance.GetString("Dock_Properties_Unavailable");
+                description = _localizer.GetString("Dock_Properties_Unavailable");
             }
             catch (UnauthorizedAccessException)
             {
-                description = LanguageService.Instance.GetString("Dock_Properties_Unavailable");
+                description = _localizer.GetString("Dock_Properties_Unavailable");
             }
         }
 
@@ -1284,7 +1296,7 @@ internal partial class PropertiesViewModel : Tool
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Debug, "Properties", $"Failed to read image details: {ex.Message}");
+            _log.Write(LogLevel.Debug, "Properties", $"Failed to read image details: {ex.Message}");
         }
     }
 

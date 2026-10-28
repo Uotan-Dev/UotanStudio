@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using UotanStudio.Composition;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Shell;
 
@@ -30,7 +31,7 @@ public partial class ChecksumWindow : Window
     public ChecksumWindow(string? filePath)
     {
         InitializeComponent();
-        DataContext = new ChecksumViewModel();
+        DataContext = ServiceHub.TryGet<ChecksumViewModel>() ?? new ChecksumViewModel();
         SetFile(filePath);
 
         Closed += (_, _) => ViewModel.ClearResults();

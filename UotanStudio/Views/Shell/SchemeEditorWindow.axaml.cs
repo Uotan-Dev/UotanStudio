@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using UotanStudio.Composition;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Shell;
 
@@ -22,7 +23,7 @@ public partial class SchemeEditorWindow : Window
     public SchemeEditorWindow()
     {
         InitializeComponent();
-        var model = new SchemeEditorViewModel();
+        var model = ServiceHub.TryGet<SchemeEditorViewModel>() ?? new SchemeEditorViewModel();
         model.RefreshPublisherKeys();
         DataContext = model;
         Closed += (_, _) =>

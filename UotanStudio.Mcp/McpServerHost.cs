@@ -24,7 +24,12 @@ public sealed class McpServerHost
     /// <param name="deviceManager">Device gateway used by device tools; <see langword="null"/> selects the standalone gateway that owns device access without the desktop host.
     /// <para>设备工具使用的设备网关；为 <see langword="null"/> 时使用在无桌面宿主下自行持有设备访问的独立网关。</para></param>
     public McpServerHost(McpServerConfig config, IDeviceManagerGateway? deviceManager = null)
-        : this(new PathSandbox(config.RootDirectory), config.AllowFlash, deviceManager)
+        : this(new McpServerComposition
+        {
+            Sandbox = new PathSandbox((config ?? throw new ArgumentNullException(nameof(config))).RootDirectory),
+            AllowFlash = config.AllowFlash,
+            DeviceManager = deviceManager
+        })
     {
     }
 
@@ -42,10 +47,15 @@ public sealed class McpServerHost
     public McpServerHost(McpServerConfig config, IDeviceManagerGateway? deviceManager,
         Func<UotanStudio.Delivery.IDeliveryTools?>? deliveryTools,
         Func<UotanStudio.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null)
-        : this(new PathSandbox(config.RootDirectory), config.AllowFlash, deviceManager)
+        : this(new McpServerComposition
+        {
+            Sandbox = new PathSandbox((config ?? throw new ArgumentNullException(nameof(config))).RootDirectory),
+            AllowFlash = config.AllowFlash,
+            DeviceManager = deviceManager,
+            DeliveryTools = deliveryTools,
+            SigningKeys = signingKeys
+        })
     {
-        DeliveryTools = deliveryTools;
-        SigningKeys = signingKeys;
     }
 
     /// <summary>Assembles the host from an existing sandbox plus flash gate, so the HTTP exposure path registers exactly the same tool set.
@@ -59,11 +69,31 @@ public sealed class McpServerHost
     /// <exception cref="ArgumentNullException"><paramref name="sandbox"/> is <see langword="null"/>.
     /// <para><paramref name="sandbox"/> 为 <see langword="null"/>。</para></exception>
     public McpServerHost(PathSandbox sandbox, bool allowFlash, IDeviceManagerGateway? deviceManager = null)
+        : this(new McpServerComposition
+        {
+            Sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox)),
+            AllowFlash = allowFlash,
+            DeviceManager = deviceManager
+        })
     {
-        ArgumentNullException.ThrowIfNull(sandbox);
-        Sandbox = sandbox;
-        AllowFlash = allowFlash;
-        DeviceManager = deviceManager ?? new HeadlessDeviceManagerGateway();
+    }
+
+    /// <summary>
+    /// Assembles the host from one composition record; every other constructor forwards here.
+    /// <para>由单个组合记录组装宿主；其余构造函数都转发到本构造函数。</para>
+    /// </summary>
+    /// <param name="composition">The sandbox, gate and providers this host serves.
+    /// <para>本宿主使用的沙箱、门控与提供器。</para></param>
+    /// <exception cref="ArgumentNullException"><paramref name="composition"/> is <see langword="null"/>.
+    /// <para><paramref name="composition"/> 为 <see langword="null"/>。</para></exception>
+    public McpServerHost(McpServerComposition composition)
+    {
+        ArgumentNullException.ThrowIfNull(composition);
+        Sandbox = composition.Sandbox;
+        AllowFlash = composition.AllowFlash;
+        DeviceManager = composition.DeviceManager ?? new HeadlessDeviceManagerGateway();
+        DeliveryTools = composition.DeliveryTools;
+        SigningKeys = composition.SigningKeys;
     }
 
     private IDeviceManagerGateway DeviceManager { get; }
@@ -84,10 +114,15 @@ public sealed class McpServerHost
     public McpServerHost(PathSandbox sandbox, bool allowFlash, IDeviceManagerGateway? deviceManager,
         Func<UotanStudio.Delivery.IDeliveryTools?>? deliveryTools,
         Func<UotanStudio.Delivery.IDeliverySigningKeyProvider?>? signingKeys = null)
-        : this(sandbox, allowFlash, deviceManager)
+        : this(new McpServerComposition
+        {
+            Sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox)),
+            AllowFlash = allowFlash,
+            DeviceManager = deviceManager,
+            DeliveryTools = deliveryTools,
+            SigningKeys = signingKeys
+        })
     {
-        DeliveryTools = deliveryTools;
-        SigningKeys = signingKeys;
     }
 
     /// <summary>

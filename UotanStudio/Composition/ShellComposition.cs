@@ -29,6 +29,40 @@ internal static class ShellComposition
     internal static ShellComponents Create() => Create(ProjectOperationsService.Instance);
 
     /// <summary>
+    /// Builds the menu view model over the supplied services; the composition root and the independent shell
+    /// assembly share this definition so the menu never learns a second construction pattern.
+    /// <para>围绕给定服务构建菜单视图模型；组合根与独立装配共用这一处定义，菜单不会出现第二种构造方式。</para>
+    /// </summary>
+    /// <param name="projects">The project operations service the menu drives. <para>菜单驱动的工程操作服务。</para></param>
+    /// <param name="windows">Window service used by file pickers and dialogs. <para>文件选择与对话框使用的窗口服务。</para></param>
+    /// <param name="localizer">Localized string lookup. <para>本地化字符串查询。</para></param>
+    /// <param name="log">Unified log sink. <para>统一日志接收端。</para></param>
+    /// <returns>The menu view model. <para>菜单视图模型。</para></returns>
+    internal static MenuViewModel CreateMenu(ProjectOperationsService projects, IWindowService windows,
+        ILocalizer localizer, IUnifiedLog log) => new(projects, windows, localizer, log);
+
+    /// <summary>Builds the node editor view model; every shell assembly shares this definition.
+    /// <para>构建节点编辑器视图模型；每种 shell 装配共用这一处定义。</para></summary>
+    /// <returns>The node editor view model. <para>节点编辑器视图模型。</para></returns>
+    internal static NodeEditorViewModel CreateNodes() => new();
+
+    /// <summary>Builds the settings view model over the supplied settings snapshot.
+    /// <para>围绕给定的设置快照构建设置视图模型。</para></summary>
+    /// <param name="settings">The persisted settings to edit. <para>要编辑的持久化设置。</para></param>
+    /// <param name="applyLanguage">Whether the model applies the stored culture on construction.
+    /// <para>构造时是否应用已存储的区域性。</para></param>
+    /// <returns>The settings view model. <para>设置视图模型。</para></returns>
+    internal static SettingsViewModel CreateSettings(AppSettings settings, bool applyLanguage)
+        => new(settings, applyLanguage);
+
+    /// <summary>Builds the workspace view model whose dock factory follows the AI setting.
+    /// <para>构建工作区视图模型，其停靠工厂跟随 AI 设置。</para></summary>
+    /// <param name="settings">The settings view model carrying the AI preference. <para>携带 AI 偏好的设置视图模型。</para></param>
+    /// <returns>The workspace view model. <para>工作区视图模型。</para></returns>
+    internal static WorkspaceViewModel CreateWorkspace(SettingsViewModel settings)
+        => new(new WorkspaceDockFactory(settings.Ai));
+
+    /// <summary>
     /// Builds the shell components in stages, yielding through the supplied progress callback between
     /// them. View models come from the composition root when <see cref="App.Services"/> is initialized,
     /// otherwise they are constructed explicitly; every locally built component is disposed when
@@ -65,14 +99,14 @@ internal static class ShellComposition
             menu = services?.GetService<MenuViewModel>();
             if (menu is null)
             {
-                menu = new MenuViewModel(projects, windows);
+                menu = CreateMenu(projects, windows, LanguageService.Instance, LogService.Instance);
                 ownsMenu = true;
             }
             await report(SplashPhase.Nodes);
             nodes = services?.GetService<NodeEditorViewModel>();
             if (nodes is null)
             {
-                nodes = new NodeEditorViewModel();
+                nodes = CreateNodes();
                 ownsNodes = true;
             }
             await report(SplashPhase.Workspace);
@@ -80,7 +114,7 @@ internal static class ShellComposition
             if (settings is null)
             {
                 var appSettings = await Task.Run(SettingsPersistenceService.Instance.LoadSettings);
-                settings = new SettingsViewModel(appSettings,
+                settings = CreateSettings(appSettings,
                     applyLanguage: appliedCultureName is null
                         || !string.Equals(appSettings.CultureName, appliedCultureName, StringComparison.Ordinal));
                 ownsSettings = true;
@@ -88,7 +122,7 @@ internal static class ShellComposition
             workspace = services?.GetService<WorkspaceViewModel>();
             if (workspace is null)
             {
-                workspace = new WorkspaceViewModel(new WorkspaceDockFactory(settings.Ai));
+                workspace = CreateWorkspace(settings);
                 ownsWorkspace = true;
             }
             return new ShellComponents(projects, menu, nodes, settings, workspace);
@@ -129,10 +163,10 @@ internal static class ShellComposition
         if (projects.IsWorkspaceAttached) throw new InvalidOperationException("Only one desktop project shell may be active.");
         var windows = UiWindowService.Shared;
         DeviceViewModel.Windows = windows;
-        var menu = new MenuViewModel(projects, windows);
-        var nodes = new NodeEditorViewModel();
-        var settings = new SettingsViewModel();
-        var workspace = new WorkspaceViewModel(new WorkspaceDockFactory(settings.Ai));
+        var menu = CreateMenu(projects, windows, LanguageService.Instance, LogService.Instance);
+        var nodes = CreateNodes();
+        var settings = CreateSettings(new AppSettings(), applyLanguage: false);
+        var workspace = CreateWorkspace(settings);
         return new ShellComponents(projects, menu, nodes, settings, workspace);
     }
 }

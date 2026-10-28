@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
@@ -12,6 +13,7 @@ using UotanStudio.Messages;
 using UotanStudio.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
+using UotanStudio.Services.Network;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui;
 using UotanStudio.Services.Ui.Projects;
@@ -44,6 +46,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
     private readonly ProjectOperationsService _projectOps;
     private readonly IWindowService _windows;
+    private readonly ILocalizer _localizer;
+    private readonly IUnifiedLog _log;
 
     /// <summary>
     /// Cached collection-changed handler so it can be unsubscribed in <see cref="Dispose"/>.
@@ -58,10 +62,13 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// </summary>
     public MenuViewModel() : this(ProjectOperationsService.Instance) { }
 
-    internal MenuViewModel(ProjectOperationsService projectOperations, IWindowService? windows = null)
+    internal MenuViewModel(ProjectOperationsService projectOperations, IWindowService? windows = null,
+        ILocalizer? localizer = null, IUnifiedLog? log = null)
     {
         _projectOps = projectOperations;
         _windows = windows ?? NullWindowService.Instance;
+        _localizer = localizer ?? LanguageService.Instance;
+        _log = log ?? LogService.Instance;
         WeakReferenceMessenger.Default.Register<ActiveTabChangedMessage>(this, OnActiveTabChanged);
         _recentProjectsChangedHandler = (_, _) => OnPropertyChanged(nameof(HasRecentProjects));
         RecentProjects.CollectionChanged += _recentProjectsChangedHandler;
@@ -227,7 +234,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             else if (form.SelectedImagePaths.Length > 0)
             {
                 await images.ImportAsync(form.SelectedImagePaths,
-                    byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
+                    byteProgress: window.BeginByteProgress(_localizer.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
             }
 
             WorkspacePanelService.Instance.Show(WorkspacePanelService.ImagesView);
@@ -254,7 +261,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         INewProjectDialog window, CancellationToken cancellationToken)
     {
         var uri = new Uri(form.RemoteUrl!, UriKind.Absolute);
-        using var client = new HttpClient { Timeout = TimeSpan.FromHours(2) };
+        using var client = SharedHttpClient.Create(TimeSpan.FromHours(2));
         var service = new RemoteRomService(client);
         var outputDirectory = ProjectContextService.Instance.EnsureImagesDirectory();
         var fileName = Path.GetFileName(uri.LocalPath);
@@ -265,7 +272,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         try
         {
             window.ResetProgressStats();
-            var progress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Downloading"));
+            var progress = window.BeginByteProgress(_localizer.GetString("NewProject_Downloading"));
             if (form.ContainerKind == ContainerKind.Payload && form.SelectedPartitions.Length > 0 && !form.CopyOriginal)
             {
                 try
@@ -370,12 +377,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 ContainerKind.Zip => "zip",
                 ContainerKind.UpdateBin => "update.bin",
                 _ => "raw"
-            }, byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
+            }, byteProgress: window.BeginByteProgress(_localizer.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
             if (container is null) throw new IOException("Container import failed.");
             containerPath = ProjectContextService.Instance.ResolvePath(container.RelativePath) ?? source;
         }
         window.ResetProgressStats();
-        window.ReportProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
+        window.ReportProgress(_localizer.GetString("NewProject_Extracting"));
         if (!form.UnpackImages
             || (form.SelectedZipMembers.Length == 0 && form.SelectedPartitions.Length == 0))
         {
@@ -389,7 +396,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             {
                 foreach (var member in form.SelectedZipMembers)
                 {
-                    var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
+                    var byteProgress = window.BeginByteProgress(_localizer.GetString("NewProject_Extracting"));
                     var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
                         containerPath, [member], fromPayloadOnly: false, outputDirectory: outputDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken)).ConfigureAwait(true);
                     extractedPaths.AddRange(result.OutputPaths);
@@ -399,19 +406,19 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             if (form.SelectedPartitions.Length > 0)
             {
 
-                var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
+                var byteProgress = window.BeginByteProgress(_localizer.GetString("NewProject_Extracting"));
                 var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
                     containerPath, form.SelectedPartitions,
                     fromPayloadOnly: form.ContainerKind == ContainerKind.Zip, outputDirectory: outputDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken)).ConfigureAwait(true);
                 extractedPaths.AddRange(result.OutputPaths);
             }
 
-            LogService.Instance.Write(LogLevel.Info, "Images",
+            _log.Write(LogLevel.Info, "Images",
                 $"Extracted {extractedPaths.Count} image(s) from {Path.GetFileName(containerPath)}");
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "Images",
+            _log.Write(LogLevel.Error, "Images",
                 $"Container extraction failed: {ex.Message}");
             throw;
         }
@@ -453,7 +460,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var (systemTree, myTrees) = MyPartitionMergePlanner.DiscoverTrees(root);
         if (systemTree is null || myTrees.Count == 0)
         {
-            LogService.Instance.Write(LogLevel.Warn, "Images",
+            _log.Write(LogLevel.Warn, "Images",
                 "My-partition merge skipped: no unpacked system or my_* tree was found in the sub-project.");
             return;
         }
@@ -471,7 +478,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 var partition = Path.GetFileName(Path.TrimEndingDirectorySeparator(tree));
                 window.ResetProgressStats();
                 window.ReportProgress(
-                    string.Format(LanguageService.Instance.GetString("NewProject_MergingMyPartitions"), partition),
+                    string.Format(_localizer.GetString("NewProject_MergingMyPartitions"), partition),
                     done * 100.0 / myTrees.Count);
                 var result = await service.MergeAsync(tree, systemTree, configDirectory: null,
                     new MyPartitionMergeOptions
@@ -483,19 +490,19 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                     }, cancellationToken: cancellationToken);
                 merged.Add(partition);
                 done++;
-                LogService.Instance.Write(LogLevel.Info, "Images",
+                _log.Write(LogLevel.Info, "Images",
                     $"Merged {partition} into system: {result.MovedEntries} entries, file_contexts {(result.FileContextsRebased ? "rebased" : "skipped")}, fs_config {(result.FsConfigRebased ? "rebased" : "skipped")}, preservation {(result.PreservationFolded ? $"folded ({result.FoldedInodeEntries} inodes)" : "manifest not found")}.");
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            LogService.Instance.Write(LogLevel.Error, "Images",
+            _log.Write(LogLevel.Error, "Images",
                 $"My-partition merge failed after {merged.Count} partition(s): {ex.Message}");
             throw;
         }
 
         window.ResetProgressStats();
-        window.ReportProgress(LanguageService.Instance.GetString("NewProject_CleaningMergedPartitions"), 100);
+        window.ReportProgress(_localizer.GetString("NewProject_CleaningMergedPartitions"), 100);
         foreach (var tree in myTrees)
         {
             var partition = Path.GetFileName(Path.TrimEndingDirectorySeparator(tree));
@@ -506,7 +513,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             if (Directory.Exists(metadata))
                 Directory.Delete(metadata, recursive: true);
         }
-        LogService.Instance.Write(LogLevel.Info, "Images",
+        _log.Write(LogLevel.Info, "Images",
             $"Removed {myTrees.Count} merged my-partition tree(s) with their images and metadata.");
     }
 
@@ -538,7 +545,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString(
+            await DialogService.ShowAsync(owner, _localizer.GetString(
                 isDirectory ? "Dialog_NewFolderFailed" : "Dialog_NewFileFailed"), UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
@@ -559,7 +566,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
+            await DialogService.ShowAsync(owner, _localizer.GetString("Menu_OpenFailed"),
                 UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
@@ -574,7 +581,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         {
             var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = LanguageService.Instance.GetString("Menu_OpenFile"),
+                Title = _localizer.GetString("Menu_OpenFile"),
                 AllowMultiple = true,
                 FileTypeFilter = [FilePickerFileTypes.All]
             });
@@ -589,7 +596,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
+            await DialogService.ShowAsync(owner, _localizer.GetString("Menu_OpenFailed"),
                 UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
@@ -613,11 +620,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "Scheme", $"Open scheme failed: {ex.Message}");
+            _log.Write(LogLevel.Error, "Scheme", $"Open scheme failed: {ex.Message}");
             var owner = DialogService.GetOwnerWindow();
             if (owner is not null)
             {
-                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
+                await DialogService.ShowAsync(owner, _localizer.GetString("Menu_OpenFailed"),
                     UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
             }
         }
@@ -636,7 +643,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "Scheme", $"New scheme failed: {ex.Message}");
+            _log.Write(LogLevel.Error, "Scheme", $"New scheme failed: {ex.Message}");
         }
     }
 
@@ -659,11 +666,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "Scheme", $"Open scheme operator failed: {ex.Message}");
+            _log.Write(LogLevel.Error, "Scheme", $"Open scheme operator failed: {ex.Message}");
             var owner = DialogService.GetOwnerWindow();
             if (owner is not null)
             {
-                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
+                await DialogService.ShowAsync(owner, _localizer.GetString("Menu_OpenFailed"),
                     UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
             }
         }
@@ -721,12 +728,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "Project", $"Open project failed: {ex.Message}");
+            _log.Write(LogLevel.Error, "Project", $"Open project failed: {ex.Message}");
             var owner = DialogService.GetOwnerWindow();
             if (owner is not null)
             {
-                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
-                    LanguageService.Instance.GetString("Menu_OpenProjectFolderFailed"), Ursa.Controls.MessageBoxIcon.Error);
+                await DialogService.ShowAsync(owner, _localizer.GetString("Menu_OpenFailed"),
+                    _localizer.GetString("Menu_OpenProjectFolderFailed"), Ursa.Controls.MessageBoxIcon.Error);
             }
         }
     }
@@ -760,7 +767,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// </summary>
     private async Task ReportOpenFailureAsync()
     {
-        var language = LanguageService.Instance;
+        var language = _localizer;
         var failure = _projectOps.OpenFailure;
         var target = _projectOps.OpenFailurePath;
         var version = _projectOps.OpenFailureStoredVersion;
@@ -776,7 +783,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 language.GetString("Menu_OpenNodeProjectUnreadable"), target),
             _ => string.Format(language.GetString("Menu_OpenSolutionUnreadable"), target)
         };
-        LogService.Instance.Write(LogLevel.Error, "Project", $"Open failed: {target} ({message})");
+        _log.Write(LogLevel.Error, "Project", $"Open failed: {target} ({message})");
         var owner = DialogService.GetOwnerWindow();
         if (owner is not null)
             await DialogService.ShowAsync(owner, language.GetString("Menu_OpenFailed"), message,
@@ -823,8 +830,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         if (!context.IsProjectOpen)
         {
             if (owner is not null)
-                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Explorer_NodeProject"),
-                    LanguageService.Instance.GetString("Menu_CreateNodeProjectNoProject"),
+                await DialogService.ShowAsync(owner, _localizer.GetString("Explorer_NodeProject"),
+                    _localizer.GetString("Menu_CreateNodeProjectNoProject"),
                     Ursa.Controls.MessageBoxIcon.Information);
             return;
         }
@@ -837,7 +844,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             if (owner is not null)
-                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Explorer_NodeProject"),
+                await DialogService.ShowAsync(owner, _localizer.GetString("Explorer_NodeProject"),
                     UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
@@ -874,7 +881,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var context = ProjectContextService.Instance;
         if (!context.IsProjectOpen || context.RootDirectory is null)
         {
-            LogService.Instance.Write(LogLevel.Warn, "Menu", "Add sub-project aborted: no solution is open");
+            _log.Write(LogLevel.Warn, "Menu", "Add sub-project aborted: no solution is open");
             return;
         }
 
@@ -900,7 +907,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             else if (form.SelectedImagePaths.Length > 0)
             {
                 await images.ImportAsync(form.SelectedImagePaths,
-                    byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
+                    byteProgress: window.BeginByteProgress(_localizer.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
                 await UnpackSelectedPlainImagesAsync(form, images, window, cancellationToken);
             }
 
@@ -1104,14 +1111,14 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var root = ProjectContextService.Instance.RootDirectory;
         if (root is null)
         {
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Export"),
-                LanguageService.Instance.GetString("FindReplace_NoProject"), Ursa.Controls.MessageBoxIcon.Information);
+            await DialogService.ShowAsync(owner, _localizer.GetString("Menu_Export"),
+                _localizer.GetString("FindReplace_NoProject"), Ursa.Controls.MessageBoxIcon.Information);
             return;
         }
 
         var files = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = LanguageService.Instance.GetString("Menu_Export"),
+            Title = _localizer.GetString("Menu_Export"),
             DefaultExtension = "zip",
             FileTypeChoices =
             [
@@ -1142,12 +1149,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             if (root != ProjectContextService.Instance.RootDirectory) throw new IOException("The active project changed.");
             if (!await _projectOps.SaveAsync(saveActiveDocument: false)) return;
             await _projectOps.ExportAsync(output);
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Export"), output, Ursa.Controls.MessageBoxIcon.Information);
+            await DialogService.ShowAsync(owner, _localizer.GetString("Menu_Export"), output, Ursa.Controls.MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "Export", ex.Message);
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Export"), UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
+            _log.Write(LogLevel.Error, "Export", ex.Message);
+            await DialogService.ShowAsync(owner, _localizer.GetString("Menu_Export"), UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }
 
@@ -1167,7 +1174,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Menu_ImportImage"),
+            Title = _localizer.GetString("Menu_ImportImage"),
             AllowMultiple = true,
             FileTypeFilter =
             [
@@ -1194,7 +1201,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var selected = ImageViewModel.EnsureInstance().SelectedImage;
         if (selected is null)
         {
-            LogService.Instance.Write(LogLevel.Warn, "Menu", "Export image aborted: no image selected");
+            _log.Write(LogLevel.Warn, "Menu", "Export image aborted: no image selected");
             return;
         }
 
@@ -1206,7 +1213,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
         var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = LanguageService.Instance.GetString("Menu_ExportImage"),
+            Title = _localizer.GetString("Menu_ExportImage"),
             DefaultExtension = "img",
             FileTypeChoices =
             [

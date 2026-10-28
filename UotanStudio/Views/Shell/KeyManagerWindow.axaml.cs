@@ -1,9 +1,11 @@
 using System.Globalization;
+
 using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using UotanStudio.Composition;
 using UotanStudio.Services;
 using UotanStudio.Services.Keys;
 using UotanStudio.Services.Ui;
@@ -23,7 +25,7 @@ public partial class KeyManagerWindow : Window
     public KeyManagerWindow()
     {
         InitializeComponent();
-        DataContext = new KeyManagerViewModel();
+        DataContext = ServiceHub.TryGet<KeyManagerViewModel>() ?? new KeyManagerViewModel();
         KeyCreationActions.SizeChanged += (_, _) => UpdateCreationActionsLayout();
         ImportKeyControls.SizeChanged += (_, _) => UpdateCreationActionsLayout();
         ImportKeyButton.SizeChanged += (_, _) => UpdateCreationActionsLayout();

@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using UotanStudio.Composition;
 using UotanStudio.Projects;
 using UotanStudio.Services;
 using UotanStudio.Services.Keys;
@@ -26,7 +27,7 @@ public partial class VisualPluginManagerWindow : Window
     public VisualPluginManagerWindow()
     {
         InitializeComponent();
-        DataContext = new VisualPluginManagerViewModel();
+        DataContext = ServiceHub.TryGet<VisualPluginManagerViewModel>() ?? new VisualPluginManagerViewModel();
         Closed += (_, _) =>
         {
             _toastManager?.CloseAll();

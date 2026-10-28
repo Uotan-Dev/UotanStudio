@@ -3,9 +3,10 @@ using System.ComponentModel;
 using System.Text;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Services;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Logging;
-
+using UotanStudio.UiAbstractions;
 namespace UotanStudio.ViewModels.Flash;
 
 /// <summary>
@@ -173,6 +174,12 @@ public sealed partial class FlashViewModel : ObservableObject
     /// <summary>The flash backend used by every device-facing action on the page. <para>页面所有面向设备动作使用的刷写后端。</para></summary>
     private readonly IFlashService _flashService;
 
+    /// <summary>Localized string lookup supplied by the composition root. <para>由组合根提供的本地化字符串查询。</para></summary>
+    private readonly ILocalizer _localizer;
+
+    /// <summary>Unified log sink supplied by the composition root. <para>由组合根提供的统一日志接收端。</para></summary>
+    private readonly IUnifiedLog _log;
+
     /// <summary>Creates the view model and hooks list changes and the batched log publish. <para>构造视图模型并挂接列表变更与日志批量发布。</para></summary>
     public FlashViewModel() : this(FlashService.Default)
     {
@@ -183,11 +190,18 @@ public sealed partial class FlashViewModel : ObservableObject
     /// <para>以指定的刷写后端创建视图模型。</para>
     /// </summary>
     /// <param name="flashService">The flash backend to use.<para>要使用的刷写后端。</para></param>
-    internal FlashViewModel(IFlashService flashService)
+    /// <param name="localizer">Localized string lookup; null uses the shared language service.
+    /// <para>本地化字符串查询；为 null 时使用共享语言服务。</para></param>
+    /// <param name="log">Unified log sink; null uses the shared log service.
+    /// <para>统一日志接收端；为 null 时使用共享日志服务。</para></param>
+    internal FlashViewModel(IFlashService flashService, ILocalizer? localizer = null, IUnifiedLog? log = null)
     {
         ArgumentNullException.ThrowIfNull(flashService);
         _flashService = flashService;
+        _localizer = localizer ?? LanguageService.Instance;
+        _log = log ?? LogService.Instance;
         Partitions.CollectionChanged += OnPartitionsChanged;
+        LoadSectionExpansion();
     }
 
     private DispatcherTimer CreateLogFlushTimer()
@@ -407,6 +421,7 @@ public sealed partial class FlashViewModel : ObservableObject
         }
 
         RefreshVisiblePartitions();
+        RefreshRootPartitionOptions();
     }
 
     private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)

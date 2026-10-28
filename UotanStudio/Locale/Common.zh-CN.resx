@@ -1599,6 +1599,27 @@
   <data name="BootPatch_ApatchPassword" xml:space="preserve">
     <value>请输入超级密码</value>
   </data>
+  <data name="BootPatch_VersionsLoading" xml:space="preserve">
+    <value>正在获取版本列表…</value>
+  </data>
+  <data name="BootPatch_VersionsEmpty" xml:space="preserve">
+    <value>未找到可下载的发布版本。</value>
+  </data>
+  <data name="BootPatch_PackageDownloading" xml:space="preserve">
+    <value>正在下载 {0}…</value>
+  </data>
+  <data name="BootPatch_PackageReady" xml:space="preserve">
+    <value>补丁包 {0} 已就绪。</value>
+  </data>
+  <data name="BootPatch_PackageInvalid" xml:space="preserve">
+    <value>不支持的补丁包：{0}</value>
+  </data>
+  <data name="BootPatch_VersionDownloaded" xml:space="preserve">
+    <value>{0}（已下载）</value>
+  </data>
+  <data name="BootPatch_ProbingSources" xml:space="preserve">
+    <value>正在测速镜像源…</value>
+  </data>
   <data name="PackDialog_PackPayload" xml:space="preserve">
     <value>打包 Payload</value>
   </data>
@@ -3583,4 +3604,4 @@
   <data name="Flash_GeneralOperations" xml:space="preserve">
     <value>通用操作</value>
   </data>
-<data name="Flash_EdlSelectProgrammer" xml:space="preserve"><value>选择 Programmer</value></data><data name="Flash_EdlCustomFile" xml:space="preserve"><value>自选文件</value></data><data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve"><value>自选 Programmer 文件</value></data><data name="Flash_Rockchip" xml:space="preserve"><value>瑞芯微 Rockchip</value></data><data name="Flash_RkSetStorageType" xml:space="preserve"><value>设置存储类型</value></data><data name="Flash_RkEnterMaskrom" xml:space="preserve"><value>进入 Maskrom</value></data><data name="Flash_RkSelectConfig" xml:space="preserve"><value>选择 Config</value></data><data name="Flash_RkConfigPathHint" xml:space="preserve"><value>Config 文件路径</value></data><data name="Flash_RkChooseCustomConfig" xml:space="preserve"><value>自选 Config 文件</value></data><data name="Flash_RkExportConfig" xml:space="preserve"><value>导出 Config</value></data><data name="Flash_Offset" xml:space="preserve"><value>偏移量</value></data></root>
+<data name="Flash_EdlSelectProgrammer" xml:space="preserve"><value>选择 Programmer</value></data><data name="Flash_EdlCustomFile" xml:space="preserve"><value>自选文件</value></data><data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve"><value>自选 Programmer 文件</value></data><data name="Flash_Rockchip" xml:space="preserve"><value>瑞芯微 Rockchip</value></data><data name="Flash_RkSetStorageType" xml:space="preserve"><value>设置存储类型</value></data><data name="Flash_RkEnterMaskrom" xml:space="preserve"><value>进入 Maskrom</value></data><data name="Flash_RkSelectConfig" xml:space="preserve"><value>选择 Config</value></data><data name="Flash_RkConfigPathHint" xml:space="preserve"><value>Config 文件路径</value></data><data name="Flash_RkChooseCustomConfig" xml:space="preserve"><value>自选 Config 文件</value></data><data name="Flash_RkExportConfig" xml:space="preserve"><value>导出 Config</value></data><data name="Flash_Offset" xml:space="preserve"><value>偏移量</value></data><data name="Flash_RkReadInfo" xml:space="preserve"><value>读取芯片信息</value></data><data name="Flash_RkTestDevice" xml:space="preserve"><value>测试设备</value></data><data name="Flash_RkGetStorage" xml:space="preserve"><value>获取当前存储</value></data><data name="Flash_RkSwitchStorage" xml:space="preserve"><value>切换存储</value></data><data name="Flash_RkEraseFlash" xml:space="preserve"><value>擦除 Flash</value></data><data name="Flash_RkEraseFlashConfirm" xml:space="preserve"><value>擦除整块 Flash？设备上的所有分区都会被破坏。</value></data><data name="Flash_RkEraseSectors" xml:space="preserve"><value>擦除扇区</value></data><data name="Flash_RkLbaGroup" xml:space="preserve"><value>LBA 读写</value></data><data name="Flash_RkLbaAddress" xml:space="preserve"><value>起始扇区</value></data><data name="Flash_RkLbaCount" xml:space="preserve"><value>扇区数</value></data><data name="Flash_RkLbaRead" xml:space="preserve"><value>读取 LBA</value></data><data name="Flash_RkLbaWrite" xml:space="preserve"><value>写入 LBA</value></data><data name="Flash_RkForceAddress" xml:space="preserve"><value>强制按地址写</value></data><data name="Flash_RkImportConfig" xml:space="preserve"><value>导入 Config</value></data><data name="Flash_RkConfigImported" xml:space="preserve"><value>已导入配置：{0} 行</value></data><data name="Flash_RkCapability" xml:space="preserve"><value>读取能力</value></data><data name="Flash_RkStorage" xml:space="preserve"><value>存储</value></data><data name="Explorer_OpenAsRockchipConfig" xml:space="preserve"><value>瑞芯微配置</value></data><data name="Dock_RkConfig_Name" xml:space="preserve"><value>名称</value></data><data name="Dock_RkConfig_Address" xml:space="preserve"><value>地址</value></data><data name="Dock_RkConfig_Path" xml:space="preserve"><value>路径</value></data><data name="Dock_RkConfig_File" xml:space="preserve"><value>文件</value></data><data name="Dock_RkConfig_Present" xml:space="preserve"><value>存在</value></data><data name="Dock_RkConfig_Missing" xml:space="preserve"><value>缺失</value></data><data name="Dock_RkConfig_Header" xml:space="preserve"><value>头部</value></data><data name="Dock_RkConfig_Tail" xml:space="preserve"><value>尾块</value></data><data name="Dock_RkConfig_Empty" xml:space="preserve"><value>该配置没有行。</value></data><data name="Dock_RkConfig_Summary" xml:space="preserve"><value>头部 {0} 字节 · {1} 行</value></data><data name="UserError_RkConfigLoadFailed" xml:space="preserve"><value>无法解析该配置文件。</value></data><data name="Flash_RootPartitionNotSelected" xml:space="preserve"><value>为 Root 修补选择的分区不在本次烧录范围内，请勾选该分区或改选其他分区。</value></data><data name="Flash_RootPackageMissing" xml:space="preserve"><value>所选版本没有可用的 Root 补丁包，请等待下载完成或改选其他版本。</value></data></root>

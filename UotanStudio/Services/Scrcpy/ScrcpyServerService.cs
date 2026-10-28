@@ -5,6 +5,7 @@ using UotanStudio.Hash.Digests;
 using UotanStudio.Net.Components.Scrcpy;
 using UotanStudio.Net.Http;
 
+using UotanStudio.Services.Network;
 namespace UotanStudio.Services.Scrcpy;
 
 /// <summary>Where a resolved server jar came from. <para>已解析的服务端 jar 来源。</para></summary>
@@ -113,11 +114,7 @@ public sealed class ScrcpyServerService
     /// <summary>Process-wide instance used by the mirror editor, the session tools and the startup check.
     /// <para>投屏编辑器、会话工具与启动检查共用的进程级实例。</para></summary>
     /// <value>A service over a shared HTTP client. <para>基于共享 HTTP 客户端的服务实例。</para></value>
-    public static ScrcpyServerService Shared { get; } = new(new HttpClient
-    {
-        Timeout = TimeSpan.FromMinutes(5),
-        DefaultRequestHeaders = { { "User-Agent", HttpDownload.DefaultBrowserUserAgent } },
-    });
+    public static ScrcpyServerService Shared { get; } = new(SharedHttpClient.Shared);
 
     private readonly HttpClient _client;
     private readonly IProgress<ScrcpyServerProgress>? _progress;

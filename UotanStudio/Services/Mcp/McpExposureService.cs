@@ -1,6 +1,7 @@
 using UotanStudio.Mcp;
 using UotanStudio.Mcp.Http;
 
+using UotanStudio.Mcp.Tools;
 namespace UotanStudio.Services.Mcp;
 
 /// <summary>
@@ -12,6 +13,9 @@ namespace UotanStudio.Services.Mcp;
 internal sealed class McpExposureService
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly Func<IDeviceManagerGateway> _deviceManagerFactory;
+    private readonly Func<UotanStudio.Delivery.IDeliveryTools?> _deliveryToolsFactory;
+    private readonly Func<UotanStudio.Delivery.IDeliverySigningKeyProvider?> _signingKeyFactory;
     private McpHttpServerHost? _host;
 
     /// <summary>Sandbox root live in <see cref="_host"/>; empty marks the unrestricted sandbox. <para>当前生效实例的沙箱根目录；空字符串表示不受限。</para></summary>
@@ -21,7 +25,34 @@ internal sealed class McpExposureService
     private bool _activeAllowFlash;
 
     private McpExposureService()
+        : this(static () => new DesktopDeviceManagerGateway(), McpLauncher.CreateDesktopDeliveryTools(),
+            static () => new Delivery.DeliveryKeyProvider())
     {
+    }
+
+    /// <summary>
+    /// Creates the service over the supplied dependency factories, so the composition root can decide what the
+    /// embedded server runs on the same object every consumer reads through <see cref="Instance"/>.
+    /// <para>以给定的依赖工厂创建服务，使组合根能与 <see cref="Instance"/> 的全部消费者共享同一个对象、并决定嵌入式
+    /// 服务器使用哪些依赖。</para>
+    /// </summary>
+    /// <param name="deviceManagerFactory">Creates the gateway each started server exposes to device tools.
+    /// <para>创建每次启动的服务器提供给设备工具的网关。</para></param>
+    /// <param name="deliveryToolsFactory">Creates the delivery tool-preparation provider for <c>delivery_build</c>.
+    /// <para>为 <c>delivery_build</c> 创建交付工具准备提供器。</para></param>
+    /// <param name="signingKeyFactory">Creates the signing key provider used by signed delivery plans.
+    /// <para>创建签名交付计划使用的签名密钥供应器。</para></param>
+    /// <exception cref="ArgumentNullException">Any factory is null. <para>任一工厂为 null。</para></exception>
+    internal McpExposureService(Func<IDeviceManagerGateway> deviceManagerFactory,
+        Func<UotanStudio.Delivery.IDeliveryTools?> deliveryToolsFactory,
+        Func<UotanStudio.Delivery.IDeliverySigningKeyProvider?> signingKeyFactory)
+    {
+        ArgumentNullException.ThrowIfNull(deviceManagerFactory);
+        ArgumentNullException.ThrowIfNull(deliveryToolsFactory);
+        ArgumentNullException.ThrowIfNull(signingKeyFactory);
+        _deviceManagerFactory = deviceManagerFactory;
+        _deliveryToolsFactory = deliveryToolsFactory;
+        _signingKeyFactory = signingKeyFactory;
     }
 
     /// <summary>The global singleton. <para>全局单例。</para></summary>
@@ -112,9 +143,8 @@ internal sealed class McpExposureService
 
             await StopCoreAsync("MCP exposure restarting.").ConfigureAwait(false);
 
-            var serverHost = new McpServerHost(sandbox, allowFlash,
-                new DesktopDeviceManagerGateway(), McpLauncher.CreateDesktopDeliveryTools(),
-                () => new Delivery.DeliveryKeyProvider());
+            var serverHost = new McpServerHost(sandbox, allowFlash, _deviceManagerFactory(),
+                _deliveryToolsFactory, _signingKeyFactory);
             var host = new McpHttpServerHost(serverHost.BuildTools(), serverHost.BuildResources(), loggerFactory: null, McpToolCallLog.Instance);
             host.Start(effectivePort);
 

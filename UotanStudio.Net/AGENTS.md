@@ -20,6 +20,7 @@
 | `GitHub/GitHubReleaseClient.cs` | Release 元数据读取、版本归一化与纯 JSON 解析 |
 | `GitHub/GitHubRelease.cs` | 公共 Release/Asset 记录与源生成 JSON 上下文 |
 | `Components/Scrcpy/` | scrcpy 服务端的 Release 记录及其资产投影 |
+| `Components/Root/` | Magisk/Alpha/KernelSU/SukiSU/APatch 官方仓库清单、Release 列表读取与补丁包资产投影 |
 | `IO/AtomicPublish.cs` | 内部同目录原子发布 |
 
 ## 验证

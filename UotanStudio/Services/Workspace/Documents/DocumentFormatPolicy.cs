@@ -16,6 +16,7 @@ using UotanStudio.Firmware.FileSystem.Ext4;
 using UotanStudio.Firmware.FileSystem.F2fs;
 using UotanStudio.Firmware.OtaDelta.Payload;
 using UotanStudio.Firmware.VendorFirmware.Rockchip;
+using UotanStudio.Services.Flash;
 using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.UiAbstractions;
 
@@ -158,6 +159,50 @@ public static class DocumentFormatPolicy
     /// <returns><see langword="true"/> for <c>.qcn</c>.<para>为 <c>.qcn</c> 时返回 <see langword="true"/>。</para></returns>
     public static bool IsQcnExtension(string? ext) =>
         ext is not null && ext.Equals(".qcn", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether the extension is the one RKDevTool uses for its download-list configuration.
+    /// <para>是否为 RKDevTool 下载列表配置使用的扩展名。</para>
+    /// </summary>
+    /// <param name="ext">Extension with or without the leading dot.<para>带或不带前导点的扩展名。</para></param>
+    /// <returns><see langword="true"/> for <c>.cfg</c>.<para>为 <c>.cfg</c> 时返回 <see langword="true"/>。</para></returns>
+    public static bool IsRockchipConfigExtension(string? ext) =>
+        ext is not null && ext.Equals(".cfg", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a bounded header sample carries the RKDevTool configuration signature.
+    /// <para>有界头部样本是否携带 RKDevTool 配置签名。</para>
+    /// </summary>
+    /// <param name="header">Bounded leading bytes.<para>有界起始字节。</para></param>
+    /// <returns><see langword="true"/> when the magic and declared header length match.
+    /// <para>魔数与声明的头部长度都匹配时为 <see langword="true"/>。</para></returns>
+    public static bool IsRockchipConfigHeader(ReadOnlySpan<byte> header) => RockchipConfigFile.IsConfigHeader(header);
+
+    /// <summary>
+    /// Whether a file on disk is an RKDevTool download-list configuration, decided by content so a plain
+    /// <c>.cfg</c> text file is never captured.
+    /// <para>磁盘上的文件是否为 RKDevTool 下载列表配置；按内容判定，因此普通 <c>.cfg</c> 文本文件不会被接管。</para>
+    /// </summary>
+    /// <param name="path">Candidate file.<para>候选文件。</para></param>
+    /// <returns><see langword="true"/> when the file starts with a complete configuration header.
+    /// <para>文件以完整配置头部开始时为 <see langword="true"/>。</para></returns>
+    public static bool IsRockchipConfig(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, RockchipConfigFile.HeaderLength);
+            return IsRockchipConfigHeader(header);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// Whether the extension is a DTS device-tree source extension.

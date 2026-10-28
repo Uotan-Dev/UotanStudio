@@ -28,7 +28,7 @@ public partial class DeviceViewModel
             try { apply(await monitor.HdcShellAsync(device.Device, command, timeout.Token)); }
             catch (Exception ex) when (ex is IOException or TimeoutException)
             {
-                LogService.Instance.Write(LogLevel.Debug, "DeviceManager", $"Optional HDC detail unavailable: {ex.Message}");
+                _log.Write(LogLevel.Debug, "DeviceManager", $"Optional HDC detail unavailable: {ex.Message}");
             }
         }
         try
@@ -42,7 +42,7 @@ public partial class DeviceViewModel
             device.CompileVersion = await Parameter("const.product.software.version");
             await Optional("hidumper -c base", text =>
             {
-                var details = DevicePropertyReader.ParseHarmonyBootDetails(text, LanguageService.Instance.GetString);
+                var details = DevicePropertyReader.ParseHarmonyBootDetails(text, _localizer.GetString);
                 device.CpuCode = details.SocPlatform;
                 device.BoardId = details.BoardId;
                 device.BlStatus = details.LockState;
@@ -60,7 +60,7 @@ public partial class DeviceViewModel
                 device.BatteryText = description;
             });
             await Optional("uname -r", text => device.Kernel = text.Trim());
-            await Optional("uptime", text => device.PowerOnTime = DevicePropertyReader.FormatUptime(text, LanguageService.Instance.GetString));
+            await Optional("uptime", text => device.PowerOnTime = DevicePropertyReader.FormatUptime(text, _localizer.GetString));
             await Optional("cat /proc/meminfo", text =>
             {
                 var (level, description) = DevicePropertyReader.ParseMem(text);
@@ -76,7 +76,7 @@ public partial class DeviceViewModel
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Debug, "DeviceManager", $"HDC details unavailable: {ex.Message}");
+            _log.Write(LogLevel.Debug, "DeviceManager", $"HDC details unavailable: {ex.Message}");
         }
     }
 
@@ -88,7 +88,7 @@ public partial class DeviceViewModel
         var device = SelectedDevice;
         var owner = DialogService.GetOwnerWindow();
         if (device?.IsHdc != true || owner is null) return;
-        var language = LanguageService.Instance;
+        var language = _localizer;
         var title = language.GetString("Device_Hdc" + operation);
         var monitor = App.DeviceMonitor;
         try
@@ -133,13 +133,13 @@ public partial class DeviceViewModel
             }
             else throw new NotSupportedException(operation);
             StatusText = $"{title}: {result.Trim()}";
-            LogService.Instance.Write(LogLevel.Info, "DeviceManager", StatusText);
+            _log.Write(LogLevel.Info, "DeviceManager", StatusText);
         }
         catch (OperationCanceledException) { StatusText = language.GetString("Device_HdcCancelled"); }
         catch (Exception ex)
         {
             StatusText = $"{title}: {(UserError.Describe(ex))}";
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager", StatusText);
+            _log.Write(LogLevel.Error, "DeviceManager", StatusText);
             await DialogService.ShowAsync(owner, title, UserError.Describe(ex), Ursa.Controls.MessageBoxIcon.Error);
         }
     }

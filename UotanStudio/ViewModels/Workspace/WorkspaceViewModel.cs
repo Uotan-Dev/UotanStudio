@@ -417,6 +417,23 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
+    /// Opens the given RKDevTool download-list configuration in the read-only configuration browser:
+    /// focuses it if already open; otherwise creates and loads a <see cref="RockchipConfigEditorViewModel"/>.
+    /// <para>在只读配置浏览视图中打开指定的 RKDevTool 下载列表配置：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="RockchipConfigEditorViewModel"/>。</para>
+    /// </summary>
+    /// <param name="path">Path of the configuration file.<para>配置文件路径。</para></param>
+    /// <returns>Completes when the document has loaded.<para>文档载入完成后结束。</para></returns>
+    public Task OpenRockchipConfigAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new RockchipConfigEditorViewModel
+        {
+            Title = Path.GetFileName(fullPath),
+            FilePath = fullPath
+        },
+        static (document, fullPath) => document.LoadAsync(fullPath));
+
+    /// <summary>
     /// Opens the given AXML file in the Manifest editor in the document area: focuses it if already
     /// open; otherwise creates and loads a <see cref="ManifestEditorViewModel"/>.
     /// <para>在文档区以 Manifest 编辑器打开指定的 AXML 文件：若已打开则聚焦并返回；

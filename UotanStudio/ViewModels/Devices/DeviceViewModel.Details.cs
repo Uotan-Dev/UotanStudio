@@ -67,7 +67,7 @@ public partial class DeviceViewModel
         catch (Exception exception) when (exception is IOException or InvalidOperationException
             or TimeoutException or OperationCanceledException)
         {
-            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+            _log.Write(LogLevel.Debug, "DeviceManager",
                 $"iOS info query for {device.Serial} reported {exception.GetType().Name}: {exception.Message}");
         }
     }
@@ -102,7 +102,7 @@ public partial class DeviceViewModel
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+            _log.Write(LogLevel.Debug, "DeviceManager",
                 $"MTK identity query for {endpoint.Key} failed: {ex.Message}");
         }
     }
@@ -140,7 +140,7 @@ public partial class DeviceViewModel
             {
                 device.EdlProtocol = Comm.Protocols.Edl.EdlProtocolState.Unknown;
             }
-            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+            _log.Write(LogLevel.Debug, "DeviceManager",
                 $"EDL protocol detection for {endpoint.Key} failed: {ex.Message}");
         }
     }
@@ -182,7 +182,7 @@ public partial class DeviceViewModel
                 }
                 catch (Exception error) when (error is not OutOfMemoryException)
                 {
-                    LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                    _log.Write(LogLevel.Debug, "DeviceManager",
                         $"Root probe for {endpoint.Key} stopped: {error.GetType().Name}: {error.Message}");
                 }
 
@@ -191,7 +191,7 @@ public partial class DeviceViewModel
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+            _log.Write(LogLevel.Debug, "DeviceManager",
                 $"ADB detail query for {endpoint.Key} stopped: {ex.GetType().Name}: {ex.Message}");
         }
 
@@ -293,7 +293,7 @@ public partial class DeviceViewModel
                     }
                     catch (Exception ex) when (ex is not OutOfMemoryException)
                     {
-                        LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+                        _log.Write(LogLevel.Debug, "DeviceManager",
                             $"Fastboot getvar for {endpoint.Key} stopped: {ex.GetType().Name}: {ex.Message}");
                         return null;
                     }
@@ -301,7 +301,7 @@ public partial class DeviceViewModel
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            LogService.Instance.Write(LogLevel.Debug, "DeviceManager",
+            _log.Write(LogLevel.Debug, "DeviceManager",
                 $"Fastboot details for {endpoint.Key} are unavailable: {ex.GetType().Name}: {ex.Message}");
         }
 

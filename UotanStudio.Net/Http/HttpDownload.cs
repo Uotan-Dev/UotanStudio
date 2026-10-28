@@ -21,7 +21,6 @@ public static class HttpDownload
     [
         new() { Name = "GitHub 直连", BaseUrl = string.Empty, IsEnabled = true },
         new() { Name = "h233", BaseUrl = "https://gh.h233.eu.org/https://github.com", IsEnabled = true },
-        new() { Name = "rapidgit", BaseUrl = "https://rapidgit.jjda.de5.net/https://github.com", IsEnabled = true },
         new() { Name = "ddlc", BaseUrl = "https://gh.ddlc.top/https://github.com", IsEnabled = true },
         new() { Name = "gh-proxy.org", BaseUrl = "https://gh-proxy.org/https://github.com", IsEnabled = true },
         new() { Name = "cdn.gh-proxy.org", BaseUrl = "https://cdn.gh-proxy.org/https://github.com", IsEnabled = true },
@@ -31,7 +30,6 @@ public static class HttpDownload
         new() { Name = "boki.moe", BaseUrl = "https://github.boki.moe/https://github.com", IsEnabled = true },
         new() { Name = "jasonzeng", BaseUrl = "https://gh.jasonzeng.dev/https://github.com", IsEnabled = true },
         new() { Name = "monlor", BaseUrl = "https://gh.monlor.com/https://github.com", IsEnabled = true },
-        new() { Name = "tbedu", BaseUrl = "https://github.tbedu.top/https://github.com", IsEnabled = true },
         new() { Name = "geekery", BaseUrl = "https://github.geekery.cn/https://github.com", IsEnabled = true },
         new() { Name = "ednovas", BaseUrl = "https://github.ednovas.xyz/https://github.com", IsEnabled = true },
         new() { Name = "geekertao", BaseUrl = "https://ghfile.geekertao.top/https://github.com", IsEnabled = true },
@@ -52,6 +50,7 @@ public static class HttpDownload
         new() { Name = "ghproxy.net", BaseUrl = "https://ghproxy.net/https://github.com", IsEnabled = true },
         new() { Name = "ghfast", BaseUrl = "https://ghfast.top/https://github.com", IsEnabled = true },
         new() { Name = "wget.la", BaseUrl = "https://wget.la/https://github.com", IsEnabled = true },
+        new() { Name = "blfrp", BaseUrl = "https://g.blfrp.cn/https://github.com", IsEnabled = true },
     ];
 
     private const int SpeedProbeBytes = 256 * 1024;
@@ -213,6 +212,9 @@ public static class HttpDownload
     /// <para>取消选源与传输；取消会直接向上抛出，不再尝试后续源。</para></param>
     /// <param name="requestHeaders">Optional newline-separated headers applied to every request.
     /// <para>可选的按行分隔标头，应用于所有请求。</para></param>
+    /// <param name="sources">Pre-ranked candidate sources; when supplied the speed probe is skipped and these
+    /// sources are tried in order, so a caller that already ranked the mirrors pays for the probe once.
+    /// <para>已排好序的候选源；提供时会跳过测速并按该顺序尝试，使已经完成测速的调用方只付一次测速成本。</para></param>
     /// <returns>The source that produced the completed file.<para>最终完成下载所使用的源地址。</para></returns>
     /// <exception cref="IOException">Every candidate source failed; the message lists each source host with its error.
     /// <para>所有候选源均失败；消息中按主机列出各源的错误。</para></exception>
@@ -220,11 +222,13 @@ public static class HttpDownload
     /// <para><paramref name="cancellationToken"/> 被触发。</para></exception>
     public static async Task<Uri> DownloadAsync(HttpClient client, Uri url, string destination,
         IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default,
-        string? requestHeaders = null)
+        string? requestHeaders = null, IReadOnlyList<Uri>? sources = null)
     {
-        var sources = await SelectSourcesBySpeedAsync(url, client, cancellationToken, requestHeaders).ConfigureAwait(false);
+        IReadOnlyList<Uri> candidates = sources is { Count: > 0 }
+            ? sources
+            : await SelectSourcesBySpeedAsync(url, client, cancellationToken, requestHeaders).ConfigureAwait(false);
         List<string> errors = [];
-        foreach (var source in sources)
+        foreach (var source in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try

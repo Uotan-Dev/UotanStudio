@@ -222,6 +222,20 @@ internal static class DocumentOpenRegistry
         },
         new()
         {
+            Kind = "RockchipConfig",
+            Mode = EditorOpenMode.RockchipConfig,
+            ViewModelType = typeof(RockchipConfigEditorViewModel),
+            LocaleKey = "Explorer_OpenAsRockchipConfig",
+            MenuOrder = 15,
+            IconKind = AppIconKind.File,
+            Probe = static r => DocumentFormatPolicy.IsRockchipConfigExtension(Path.GetExtension(r.Path ?? string.Empty))
+                && DocumentFormatPolicy.IsRockchipConfigHeader(ProbeHeader(r)),
+            Open = static (w, r) => w.OpenRockchipConfigAsync(r.Path!),
+            GetPath = vm => ((RockchipConfigEditorViewModel)vm).FilePath,
+            Cleanup = vm => ((RockchipConfigEditorViewModel)vm).Cleanup(),
+        },
+        new()
+        {
             Kind = "Compare",
             ViewModelType = typeof(CompareViewModel),
             GetPath = _ => null,
@@ -399,6 +413,9 @@ internal static class DocumentOpenRegistry
         new(EditorOpenMode.Hex, static (_, header, _, _) =>
             header is not null && header.AsSpan().StartsWith("\u007fELF"u8) && !ElfReader.TryReadHeader(header, out _)),
 
+        new(EditorOpenMode.RockchipConfig, static (_, header, _, _) =>
+            header is not null && DocumentFormatPolicy.IsRockchipConfigHeader(header)),
+
         new(EditorOpenMode.Axml, static (_, header, _, _) =>
             header is not null && UotanStudio.Firmware.AndroidMeta.AXml.AXmlParser.IsAxml(header)),
 
@@ -455,6 +472,7 @@ internal static class DocumentOpenRegistry
         new(EditorOpenMode.Arsc, static (_, _, _, extension) => extension.Value == EditorOpenMode.Arsc),
         new(EditorOpenMode.Apk, static (_, _, _, extension) => extension.Value == EditorOpenMode.Apk),
         new(EditorOpenMode.Qcn, static (_, _, _, extension) => extension.Value == EditorOpenMode.Qcn),
+        new(EditorOpenMode.RockchipConfig, static (_, _, _, extension) => extension.Value == EditorOpenMode.RockchipConfig),
         new(EditorOpenMode.FileSystem, static (_, _, _, extension) => extension.Value == EditorOpenMode.FileSystem),
         new(EditorOpenMode.Partition, static (_, _, _, extension) => extension.Value == EditorOpenMode.Partition),
         new(EditorOpenMode.Firmware, static (_, _, _, extension) => extension.Value == EditorOpenMode.Firmware),
@@ -528,6 +546,11 @@ internal static class DocumentOpenRegistry
         if (DocumentFormatPolicy.IsQcnExtension(ext))
         {
             return EditorOpenMode.Qcn;
+        }
+
+        if (DocumentFormatPolicy.IsRockchipConfigExtension(ext) && DocumentFormatPolicy.IsRockchipConfig(path))
+        {
+            return EditorOpenMode.RockchipConfig;
         }
 
         if (DocumentFormatPolicy.IsDtsExtension(ext))

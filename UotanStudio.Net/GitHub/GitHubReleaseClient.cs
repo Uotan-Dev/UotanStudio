@@ -78,6 +78,68 @@ public static class GitHubReleaseClient
         return GetAsync(client, uri, owner, repo, cancellationToken);
     }
 
+    /// <summary>Default number of releases returned by <see cref="ListAsync"/>.
+    /// <para><see cref="ListAsync"/> 默认返回的 Release 数量。</para></summary>
+    public const int DefaultListCount = 20;
+
+    /// <summary>Upper bound accepted for the release count of one <see cref="ListAsync"/> request.
+    /// <para>单次 <see cref="ListAsync"/> 请求可接受的 Release 数量上限。</para></summary>
+    public const int MaximumListCount = 100;
+
+    /// <summary>Fetches published releases of a repository, newest first, without drafts.
+    /// <para>获取仓库的已发布 Release（由新到旧），不含草稿。</para></summary>
+    /// <param name="client">HTTP client used for the single origin request.
+    /// <para>用于这次源站请求的 HTTP 客户端。</para></param>
+    /// <param name="owner">Repository owner; must be a single path segment.
+    /// <para>仓库拥有者；必须是单个路径段。</para></param>
+    /// <param name="repo">Repository name; must be a single path segment.
+    /// <para>仓库名；必须是单个路径段。</para></param>
+    /// <param name="maximum">Requested release count, clamped to 1 through <see cref="MaximumListCount"/>.
+    /// <para>请求的 Release 数量，收敛到 1 至 <see cref="MaximumListCount"/>。</para></param>
+    /// <param name="cancellationToken">Cancels the request and the parse.
+    /// <para>取消请求与解析。</para></param>
+    /// <returns>Published releases in API order, drafts removed; pre-releases stay listed.
+    /// <para>按 API 顺序的已发布 Release，草稿已移除；预发布仍保留在列表中。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="owner"/> or <paramref name="repo"/> is empty or contains a path separator.
+    /// <para><paramref name="owner"/> 或 <paramref name="repo"/> 为空或包含路径分隔符。</para></exception>
+    /// <exception cref="HttpRequestException">The origin returned a non-success status; the exception carries the status code.
+    /// <para>源站返回非成功状态；异常携带状态码。</para></exception>
+    /// <exception cref="InvalidOperationException">The response exceeds the size cap, carries no document list, or describes a release without a tag or an asset without a name or download URL.
+    /// <para>响应超出大小上限、没有文档列表，或描述了缺少标签的 Release、缺少名称或下载地址的资产。</para></exception>
+    /// <exception cref="JsonException">The response body is not a valid release JSON array.
+    /// <para>响应体不是有效的 Release JSON 数组。</para></exception>
+    public static async Task<IReadOnlyList<GitHubRelease>> ListAsync(HttpClient client, string owner, string repo,
+        int maximum = DefaultListCount, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        var count = Math.Clamp(maximum, 1, MaximumListCount);
+        var uri = new Uri($"{ApiOrigin}/repos/{RequireSegment(owner, nameof(owner))}/{RequireSegment(repo, nameof(repo))}/releases?per_page={count}");
+        var payload = await ReadAsync(client, uri, cancellationToken).ConfigureAwait(false);
+        return ParseReleases(owner, repo, payload);
+    }
+
+    /// <summary>Parses a release list API document without performing any network request.
+    /// <para>不发起任何网络请求地解析 Release 列表 API 文档。</para></summary>
+    /// <param name="owner">Repository owner recorded on every result.
+    /// <para>记录到每个结果上的仓库拥有者。</para></param>
+    /// <param name="repository">Repository name recorded on every result.
+    /// <para>记录到每个结果上的仓库名。</para></param>
+    /// <param name="json">Release list API document text.
+    /// <para>Release 列表 API 文档文本。</para></param>
+    /// <returns>Published releases in document order with drafts removed, so pre-releases stay listed.
+    /// <para>按文档顺序的已发布 Release（草稿已移除），预发布仍保留在列表中。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="json"/> is <see langword="null"/>.
+    /// <para><paramref name="json"/> 为 <see langword="null"/>。</para></exception>
+    /// <exception cref="InvalidOperationException">A listed release carries no tag or describes an asset without a name or download URL.
+    /// <para>列表中的某个 Release 没有标签，或描述了缺少名称或下载地址的资产。</para></exception>
+    /// <exception cref="JsonException">The text is not a valid release JSON array.
+    /// <para>文本不是有效的 Release JSON 数组。</para></exception>
+    public static IReadOnlyList<GitHubRelease> ParseReleases(string owner, string repository, string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        return ParseReleases(owner, repository, System.Text.Encoding.UTF8.GetBytes(json));
+    }
+
     /// <summary>Normalizes a release tag into deterministic version text.
     /// <para>把 Release 标签归一化为确定性的版本文本。</para></summary>
     /// <param name="tag">Release tag, for example <c>v1.2.3</c> or <c>v1.2.3-beta.1</c>.
@@ -123,6 +185,12 @@ public static class GitHubReleaseClient
     internal static async Task<GitHubRelease> GetAsync(HttpClient client, Uri url, string owner, string repository,
         CancellationToken cancellationToken)
     {
+        var payload = await ReadAsync(client, url, cancellationToken).ConfigureAwait(false);
+        return ParseRelease(owner, repository, payload);
+    }
+
+    private static async Task<byte[]> ReadAsync(HttpClient client, Uri url, CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(url);
         using var request = HttpDownload.CreateRequest(url);
@@ -138,8 +206,7 @@ public static class GitHubReleaseClient
                 response.StatusCode);
         }
 
-        var payload = await ReadBoundedAsync(response.Content, cancellationToken).ConfigureAwait(false);
-        return ParseRelease(owner, repository, payload);
+        return await ReadBoundedAsync(response.Content, cancellationToken).ConfigureAwait(false);
     }
 
     internal static string? ParseDigest(string? digest)
@@ -159,6 +226,29 @@ public static class GitHubReleaseClient
     {
         var document = JsonSerializer.Deserialize(json, GitHubJsonContext.Default.GitHubReleaseDocument)
             ?? throw new InvalidOperationException("The release API returned no document.");
+        return Project(owner, repository, document);
+    }
+
+    private static IReadOnlyList<GitHubRelease> ParseReleases(string owner, string repository, ReadOnlySpan<byte> json)
+    {
+        var documents = JsonSerializer.Deserialize(json, GitHubJsonContext.Default.ListGitHubReleaseDocument)
+            ?? throw new InvalidOperationException("The release API returned no document list.");
+        List<GitHubRelease> releases = [];
+        foreach (var document in documents)
+        {
+            if (document is null || document.Draft)
+            {
+                continue;
+            }
+
+            releases.Add(Project(owner, repository, document));
+        }
+
+        return releases;
+    }
+
+    private static GitHubRelease Project(string owner, string repository, GitHubReleaseDocument document)
+    {
         var tag = document.TagName?.Trim();
         if (string.IsNullOrEmpty(tag))
         {

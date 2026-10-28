@@ -2,13 +2,17 @@ using Microsoft.Extensions.DependencyInjection;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
+using UotanStudio.Services.Mcp;
+using UotanStudio.Services.Network;
+using UotanStudio.Services.PatchPackages;
+using UotanStudio.Services.Scrcpy;
 using UotanStudio.Services.Ui.Projects;
 using UotanStudio.UiAbstractions;
+using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Flash;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Workspace;
 
 namespace UotanStudio.Composition;
 
@@ -40,6 +44,13 @@ internal static class ServiceRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(windowService);
 
+        services.AddTransient<AvbToolViewModel>(_ => new AvbToolViewModel());
+        services.AddTransient<ChecksumViewModel>(_ => new ChecksumViewModel());
+        services.AddTransient<ApkEditorViewModel>(_ => new ApkEditorViewModel());
+        services.AddTransient<KeyManagerViewModel>(_ => new KeyManagerViewModel());
+        services.AddTransient<SchemeEditorViewModel>(_ => new SchemeEditorViewModel());
+        services.AddTransient<UsbTreeViewModel>(_ => new UsbTreeViewModel());
+        services.AddTransient<VisualPluginManagerViewModel>(_ => new VisualPluginManagerViewModel());
         services.AddSingleton<ILocalizer>(_ => LanguageService.Instance);
         services.AddSingleton<LanguageService>(_ => LanguageService.Instance);
         services.AddSingleton<IUnifiedLog>(_ => LogService.Instance);
@@ -49,18 +60,28 @@ internal static class ServiceRegistration
             services.AddSingleton<DeviceMonitorService>(_ => monitor);
         }
         services.AddSingleton<IWindowService>(_ => windowService);
+        services.AddSingleton<HttpClient>(_ => SharedHttpClient.Shared);
+        services.AddSingleton<ScrcpyServerService>(_ => ScrcpyServerService.Shared);
+        services.AddSingleton<RootPatchPackageService>(_ => RootPatchPackageService.Shared);
+        services.AddSingleton<McpToolCallLog>(_ => McpToolCallLog.Instance);
+        services.AddSingleton<McpExposureService>(_ => McpExposureService.Instance);
+        services.AddSingleton<McpClientConnectionService>(_ => McpClientConnectionService.Instance);
         services.AddSingleton<IFlashService>(_ => FlashService.Default);
         services.AddSingleton<ProjectOperationsService>(_ => ProjectOperationsService.Instance);
         services.AddSingleton<SettingsPersistenceService>(_ => SettingsPersistenceService.Instance);
 
-        services.AddSingleton<FlashViewModel>(sp => new FlashViewModel(sp.GetRequiredService<IFlashService>()));
-        services.AddSingleton<MenuViewModel>(sp => new MenuViewModel(
-            sp.GetRequiredService<ProjectOperationsService>(), sp.GetRequiredService<IWindowService>()));
-        services.AddSingleton<NodeEditorViewModel>(_ => new NodeEditorViewModel());
-        services.AddSingleton<SettingsViewModel>(sp => new SettingsViewModel(
+        services.AddSingleton<FlashViewModel>(sp => new FlashViewModel(
+            sp.GetRequiredService<IFlashService>(),
+            sp.GetRequiredService<ILocalizer>(),
+            sp.GetRequiredService<IUnifiedLog>()));
+        services.AddSingleton<MenuViewModel>(sp => ShellComposition.CreateMenu(
+            sp.GetRequiredService<ProjectOperationsService>(), sp.GetRequiredService<IWindowService>(),
+            sp.GetRequiredService<ILocalizer>(), sp.GetRequiredService<IUnifiedLog>()));
+        services.AddSingleton<NodeEditorViewModel>(_ => ShellComposition.CreateNodes());
+        services.AddSingleton<SettingsViewModel>(sp => ShellComposition.CreateSettings(
             sp.GetRequiredService<SettingsPersistenceService>().LoadSettings(), applyLanguage: false));
-        services.AddSingleton<WorkspaceViewModel>(sp => new WorkspaceViewModel(
-            new WorkspaceDockFactory(sp.GetRequiredService<SettingsViewModel>().Ai)));
+        services.AddSingleton<WorkspaceViewModel>(sp => ShellComposition.CreateWorkspace(
+            sp.GetRequiredService<SettingsViewModel>()));
         return services;
     }
 

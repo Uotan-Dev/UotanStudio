@@ -43,7 +43,7 @@ public partial class DeviceViewModel
 
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Device_QuickFlash"),
+            Title = _localizer.GetString("Device_QuickFlash"),
             AllowMultiple = false,
             FileTypeFilter =
             [
@@ -59,13 +59,13 @@ public partial class DeviceViewModel
         var imagePath = files[0].Path.LocalPath;
         if (topLevel is not Avalonia.Controls.Window owner) return;
         if (!await DialogService.ConfirmAsync(owner,
-            LanguageService.Instance.GetString("Device_FlashConfirmTitle"),
-            LanguageService.Instance.GetString("Device_FlashConfirmMessage") + $"\n{device.Serial}\n{partitionName}\n{imagePath}"))
+            _localizer.GetString("Device_FlashConfirmTitle"),
+            _localizer.GetString("Device_FlashConfirmMessage") + $"\n{device.Serial}\n{partitionName}\n{imagePath}"))
         {
             return;
         }
 
-        StatusText = $"{LanguageService.Instance.GetString("Flash_Flashing")} {partitionName}...";
+        StatusText = $"{_localizer.GetString("Flash_Flashing")} {partitionName}...";
         try
         {
             var progress = new Progress<FlashProgress>(fp =>
@@ -75,15 +75,15 @@ public partial class DeviceViewModel
             });
             var result = await FlashService.Default.FlashImageAsync(device, partitionName, imagePath, progress, CancellationToken.None).ConfigureAwait(true);
             StatusText = result.Success
-                ? $"{LanguageService.Instance.GetString("Flash_Done")} {partitionName}"
-                : $"{LanguageService.Instance.GetString("Flash_Failed")} {partitionName}: {result.Summary}";
-            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
+                ? $"{_localizer.GetString("Flash_Done")} {partitionName}"
+                : $"{_localizer.GetString("Flash_Failed")} {partitionName}: {result.Summary}";
+            _log.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"Quick flash {partitionName} to {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Flash_Failed")} {partitionName}";
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Quick flash {partitionName} to {device.Serial} failed: {ex.Message}");
+            StatusText = $"{_localizer.GetString("Flash_Failed")} {partitionName}";
+            _log.Write(LogLevel.Error, "DeviceManager", $"Quick flash {partitionName} to {device.Serial} failed: {ex.Message}");
         }
     }
 
@@ -126,7 +126,7 @@ public partial class DeviceViewModel
 
         var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = LanguageService.Instance.GetString("Backup_SaveTitle"),
+            Title = _localizer.GetString("Backup_SaveTitle"),
             SuggestedFileName = $"{partitionName}.img",
             DefaultExtension = "img",
             FileTypeChoices =
@@ -141,7 +141,7 @@ public partial class DeviceViewModel
         }
 
         var outPath = file.Path.LocalPath;
-        StatusText = $"{LanguageService.Instance.GetString("Backup_BackingUp")} {partitionName}...";
+        StatusText = $"{_localizer.GetString("Backup_BackingUp")} {partitionName}...";
         try
         {
             var progress = new Progress<BackupProgress>(bp =>
@@ -152,15 +152,15 @@ public partial class DeviceViewModel
             var result = await BackupService.BackupPartitionAsync(
                 device, partitionName, outPath, progress, CancellationToken.None).ConfigureAwait(true);
             StatusText = result.Success
-                ? $"{LanguageService.Instance.GetString("Backup_Done")} {partitionName}"
-                : $"{LanguageService.Instance.GetString("Backup_Failed")} {partitionName}: {result.Summary}";
-            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
+                ? $"{_localizer.GetString("Backup_Done")} {partitionName}"
+                : $"{_localizer.GetString("Backup_Failed")} {partitionName}: {result.Summary}";
+            _log.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"Backup {partitionName} from {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Backup_Failed")} {partitionName}";
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Backup {partitionName} from {device.Serial} failed: {ex.Message}");
+            StatusText = $"{_localizer.GetString("Backup_Failed")} {partitionName}";
+            _log.Write(LogLevel.Error, "DeviceManager", $"Backup {partitionName} from {device.Serial} failed: {ex.Message}");
         }
     }
 
@@ -203,7 +203,7 @@ public partial class DeviceViewModel
 
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Backup_OpenTitle"),
+            Title = _localizer.GetString("Backup_OpenTitle"),
             AllowMultiple = false,
             FileTypeFilter =
             [
@@ -217,7 +217,7 @@ public partial class DeviceViewModel
         }
 
         var imagePath = files[0].Path.LocalPath;
-        StatusText = $"{LanguageService.Instance.GetString("Backup_Restoring")} {partitionName}...";
+        StatusText = $"{_localizer.GetString("Backup_Restoring")} {partitionName}...";
         try
         {
             var progress = new Progress<BackupProgress>(bp =>
@@ -228,15 +228,15 @@ public partial class DeviceViewModel
             var result = await BackupService.RestorePartitionAsync(
                 device, partitionName, imagePath, progress, CancellationToken.None).ConfigureAwait(true);
             StatusText = result.Success
-                ? $"{LanguageService.Instance.GetString("Backup_RestoreDone")} {partitionName}"
-                : $"{LanguageService.Instance.GetString("Backup_RestoreFailed")} {partitionName}: {result.Summary}";
-            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
+                ? $"{_localizer.GetString("Backup_RestoreDone")} {partitionName}"
+                : $"{_localizer.GetString("Backup_RestoreFailed")} {partitionName}: {result.Summary}";
+            _log.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"Restore {partitionName} to {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Backup_RestoreFailed")} {partitionName}";
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Restore {partitionName} to {device.Serial} failed: {ex.Message}");
+            StatusText = $"{_localizer.GetString("Backup_RestoreFailed")} {partitionName}";
+            _log.Write(LogLevel.Error, "DeviceManager", $"Restore {partitionName} to {device.Serial} failed: {ex.Message}");
         }
     }
 
@@ -262,7 +262,7 @@ public partial class DeviceViewModel
 
         var rawProgramFiles = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Backup_SelectRawProgram"),
+            Title = _localizer.GetString("Backup_SelectRawProgram"),
             AllowMultiple = false,
             FileTypeFilter =
             [
@@ -278,7 +278,7 @@ public partial class DeviceViewModel
         var rawProgramPath = rawProgramFiles[0].Path.LocalPath;
         var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = LanguageService.Instance.GetString("Backup_SaveTitle"),
+            Title = _localizer.GetString("Backup_SaveTitle"),
             SuggestedFileName = $"{partitionName}.img",
             DefaultExtension = "img",
             FileTypeChoices =
@@ -293,7 +293,7 @@ public partial class DeviceViewModel
         }
 
         var outPath = file.Path.LocalPath;
-        StatusText = $"{LanguageService.Instance.GetString("Backup_BackingUp")} {partitionName}...";
+        StatusText = $"{_localizer.GetString("Backup_BackingUp")} {partitionName}...";
         try
         {
             var progress = new Progress<BackupProgress>(bp =>
@@ -304,15 +304,15 @@ public partial class DeviceViewModel
             var result = await BackupService.BackupEdlPartitionAsync(
                 device, partitionName, outPath, rawProgramPath, progress, CancellationToken.None).ConfigureAwait(true);
             StatusText = result.Success
-                ? $"{LanguageService.Instance.GetString("Backup_Done")} {partitionName}"
-                : $"{LanguageService.Instance.GetString("Backup_Failed")} {partitionName}: {result.Summary}";
-            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
+                ? $"{_localizer.GetString("Backup_Done")} {partitionName}"
+                : $"{_localizer.GetString("Backup_Failed")} {partitionName}: {result.Summary}";
+            _log.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"EDL backup {partitionName} from {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Backup_Failed")} {partitionName}";
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"EDL backup {partitionName} from {device.Serial} failed: {ex.Message}");
+            StatusText = $"{_localizer.GetString("Backup_Failed")} {partitionName}";
+            _log.Write(LogLevel.Error, "DeviceManager", $"EDL backup {partitionName} from {device.Serial} failed: {ex.Message}");
         }
     }
 
@@ -337,7 +337,7 @@ public partial class DeviceViewModel
 
         var rawProgramFiles = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Backup_SelectRawProgram"),
+            Title = _localizer.GetString("Backup_SelectRawProgram"),
             AllowMultiple = false,
             FileTypeFilter =
             [
@@ -352,7 +352,7 @@ public partial class DeviceViewModel
 
         var rawProgramPath = rawProgramFiles[0].Path.LocalPath;
         var imageDir = Path.GetDirectoryName(Path.GetFullPath(rawProgramPath)) ?? string.Empty;
-        StatusText = $"{LanguageService.Instance.GetString("Backup_Restoring")} {partitionName}...";
+        StatusText = $"{_localizer.GetString("Backup_Restoring")} {partitionName}...";
         try
         {
             var progress = new Progress<BackupProgress>(bp =>
@@ -368,15 +368,15 @@ public partial class DeviceViewModel
                 session => BackupService.RestoreEdlPartitionAsync(
                     session, entry, imageDir, progress, CancellationToken.None)).ConfigureAwait(true);
             StatusText = result.Success
-                ? $"{LanguageService.Instance.GetString("Backup_RestoreDone")} {partitionName}"
-                : $"{LanguageService.Instance.GetString("Backup_RestoreFailed")} {partitionName}: {result.Summary}";
-            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
+                ? $"{_localizer.GetString("Backup_RestoreDone")} {partitionName}"
+                : $"{_localizer.GetString("Backup_RestoreFailed")} {partitionName}: {result.Summary}";
+            _log.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
                 $"EDL restore {partitionName} to {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Backup_RestoreFailed")} {partitionName}";
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"EDL restore {partitionName} to {device.Serial} failed: {ex.Message}");
+            StatusText = $"{_localizer.GetString("Backup_RestoreFailed")} {partitionName}";
+            _log.Write(LogLevel.Error, "DeviceManager", $"EDL restore {partitionName} to {device.Serial} failed: {ex.Message}");
         }
     }
 }

@@ -20,6 +20,12 @@ internal partial class ImageViewModel
     /// <summary>IMG-to-BR conversion direction key. <para>IMG→BR 转换方向标识。</para></summary>
     internal const string ConvertImgToBr = "br";
 
+    /// <summary>Whether the file can be converted between sparse, raw, dat and br forms, which decides whether the conversion menu is offered.
+    /// <para>判断该文件能否在 sparse、raw、dat 与 br 形式之间转换，用于决定是否显示转换菜单。</para></summary>
+    /// <param name="path">File path to test. <para>待判断的文件路径。</para></param>
+    /// <returns><see langword="true"/> when at least one conversion applies. <para>至少一种转换适用时为 <see langword="true"/>。</para></returns>
+    internal static bool SupportsFormatConversion(string path) => ImageInputService.SupportsFormatConversion(path);
+
     /// <summary>
     /// The expected result of a format conversion, used by the pre-action confirmation dialog.
     /// <para>格式转换的预期结果描述，用于执行前的确认对话框。</para>

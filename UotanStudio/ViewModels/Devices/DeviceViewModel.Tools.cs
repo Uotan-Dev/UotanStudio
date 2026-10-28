@@ -65,15 +65,15 @@ public partial class DeviceViewModel
         try
         {
             var port = App.DeviceMonitor.StartSshTunnel(device.Device);
-            StatusText = $"{LanguageService.Instance.GetString("Device_IosSshTunnelOpen")} 127.0.0.1:{port}";
-            LogService.Instance.Write(LogLevel.Info, "DeviceManager",
+            StatusText = $"{_localizer.GetString("Device_IosSshTunnelOpen")} 127.0.0.1:{port}";
+            _log.Write(LogLevel.Info, "DeviceManager",
                 $"SSH channel for {device.Serial} forwarding 127.0.0.1:{port} to device port 22.");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_IosSshTunnelOpen")} {device.Serial} " +
-                LanguageService.Instance.GetString("UserError_Failed");
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager",
+            StatusText = $"{_localizer.GetString("Device_IosSshTunnelOpen")} {device.Serial} " +
+                _localizer.GetString("UserError_Failed");
+            _log.Write(LogLevel.Error, "DeviceManager",
                 $"SSH channel for {device.Serial} failed: {ex.Message}");
         }
     }
@@ -92,8 +92,8 @@ public partial class DeviceViewModel
         }
 
         App.DeviceMonitor.StopSshTunnel(device.Device);
-        StatusText = LanguageService.Instance.GetString("Device_IosSshTunnelClose");
-        LogService.Instance.Write(LogLevel.Info, "DeviceManager", $"SSH channel for {device.Serial} closed.");
+        StatusText = _localizer.GetString("Device_IosSshTunnelClose");
+        _log.Write(LogLevel.Info, "DeviceManager", $"SSH channel for {device.Serial} closed.");
     }
 
     /// <summary>
@@ -107,14 +107,14 @@ public partial class DeviceViewModel
         try
         {
             var session = App.DeviceMonitor.StartAirPlayReceiver(text =>
-                LogService.Instance.Write(LogLevel.Info, "DeviceManager", text));
-            StatusText = $"{LanguageService.Instance.GetString("Device_IosAirPlayReceive")} 127.0.0.1:{session.RtspPort}";
+                _log.Write(LogLevel.Info, "DeviceManager", text));
+            StatusText = $"{_localizer.GetString("Device_IosAirPlayReceive")} 127.0.0.1:{session.RtspPort}";
         }
         catch (Exception ex)
         {
-            StatusText = LanguageService.Instance.GetString("Device_IosAirPlayReceive") + " " +
-                LanguageService.Instance.GetString("UserError_Failed");
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager",
+            StatusText = _localizer.GetString("Device_IosAirPlayReceive") + " " +
+                _localizer.GetString("UserError_Failed");
+            _log.Write(LogLevel.Error, "DeviceManager",
                 $"AirPlay receiver failed: {ex.Message}");
         }
     }
@@ -132,17 +132,17 @@ public partial class DeviceViewModel
             return;
         }
 
-        StatusText = $"{LanguageService.Instance.GetString("Device_IosExportCrashLogs")} {device.Serial}...";
+        StatusText = $"{_localizer.GetString("Device_IosExportCrashLogs")} {device.Serial}...";
         try
         {
             var directory = App.DeviceMonitor.ExportCrashLogs(device.Device);
-            StatusText = $"{LanguageService.Instance.GetString("Device_IosExportCrashLogs")} {directory}";
+            StatusText = $"{_localizer.GetString("Device_IosExportCrashLogs")} {directory}";
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_IosExportCrashLogs")} {device.Serial} " +
-                LanguageService.Instance.GetString("UserError_Failed");
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager",
+            StatusText = $"{_localizer.GetString("Device_IosExportCrashLogs")} {device.Serial} " +
+                _localizer.GetString("UserError_Failed");
+            _log.Write(LogLevel.Error, "DeviceManager",
                 $"Crash export for {device.Serial} failed: {ex.Message}");
         }
     }
@@ -179,13 +179,13 @@ public partial class DeviceViewModel
         try
         {
             App.DeviceMonitor.OpenInteractiveShell(device.Device);
-            StatusText = $"{LanguageService.Instance.GetString("Device_OpenAdbShell")} {device.Serial} OK";
-            LogService.Instance.Write(LogLevel.Info, "DeviceManager", $"Open {device.Mode} shell for {device.Serial}.");
+            StatusText = $"{_localizer.GetString("Device_OpenAdbShell")} {device.Serial} OK";
+            _log.Write(LogLevel.Info, "DeviceManager", $"Open {device.Mode} shell for {device.Serial}.");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_OpenAdbShell")} {device.Serial} {LanguageService.Instance.GetString("UserError_Failed")}";
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Open {device.Mode} shell for {device.Serial} failed: {ex.Message}");
+            StatusText = $"{_localizer.GetString("Device_OpenAdbShell")} {device.Serial} {_localizer.GetString("UserError_Failed")}";
+            _log.Write(LogLevel.Error, "DeviceManager", $"Open {device.Mode} shell for {device.Serial} failed: {ex.Message}");
         }
     }
 
@@ -204,7 +204,7 @@ public partial class DeviceViewModel
             return;
         }
 
-        StatusText = $"{LanguageService.Instance.GetString("Device_FastbootReadInfo")} {device.Serial}...";
+        StatusText = $"{_localizer.GetString("Device_FastbootReadInfo")} {device.Serial}...";
         try
         {
             var sb = new StringBuilder();
@@ -226,13 +226,13 @@ public partial class DeviceViewModel
                 });
             }).ConfigureAwait(true);
 
-            StatusText = $"{LanguageService.Instance.GetString("Device_FastbootReadInfo")} {device.Serial} OK";
-            LogService.Instance.Write(LogLevel.Info, "DeviceManager", $"Fastboot getvar {device.Serial}:\n{sb.ToString().TrimEnd()}");
+            StatusText = $"{_localizer.GetString("Device_FastbootReadInfo")} {device.Serial} OK";
+            _log.Write(LogLevel.Info, "DeviceManager", $"Fastboot getvar {device.Serial}:\n{sb.ToString().TrimEnd()}");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_FastbootReadInfo")} {device.Serial} {LanguageService.Instance.GetString("UserError_Failed")}";
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Fastboot read info {device.Serial} failed: {ex.Message}");
+            StatusText = $"{_localizer.GetString("Device_FastbootReadInfo")} {device.Serial} {_localizer.GetString("UserError_Failed")}";
+            _log.Write(LogLevel.Error, "DeviceManager", $"Fastboot read info {device.Serial} failed: {ex.Message}");
         }
     }
 }

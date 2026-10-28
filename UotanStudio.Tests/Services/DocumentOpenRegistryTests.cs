@@ -16,7 +16,7 @@ public class DocumentOpenRegistryTests
         var expected = new[]
         {
             "Text", "Firmware", "FileManager", "Dtb", "Dex", "Elf", "Qualcomm",
-            "Manifest", "Arsc", "Hex", "Apk", "Partition", "Compare"
+            "Manifest", "Arsc", "Hex", "Apk", "Partition", "Compare", "RockchipConfig"
         };
 
         var actual = DocumentOpenRegistry.All
@@ -46,7 +46,8 @@ public class DocumentOpenRegistryTests
             (EditorOpenMode.Arsc, "Arsc"),
             (EditorOpenMode.Apk, "Apk"),
             (EditorOpenMode.Firmware, "Firmware"),
-            (EditorOpenMode.FileSystem, "FileManager")
+            (EditorOpenMode.FileSystem, "FileManager"),
+            (EditorOpenMode.RockchipConfig, "RockchipConfig")
         };
 
         foreach (var (mode, kind) in expected)
@@ -66,7 +67,7 @@ public class DocumentOpenRegistryTests
             EditorOpenMode.Partition, EditorOpenMode.Text, EditorOpenMode.Log,
             EditorOpenMode.Hex, EditorOpenMode.Dtb, EditorOpenMode.Dex,
             EditorOpenMode.Axml, EditorOpenMode.Arsc, EditorOpenMode.Apk,
-            EditorOpenMode.Firmware, EditorOpenMode.FileSystem
+            EditorOpenMode.Firmware, EditorOpenMode.FileSystem, EditorOpenMode.RockchipConfig
         };
 
         var actual = DocumentOpenRegistry.MenuEntries.Select(d => d.Mode!.Value).ToList();
@@ -83,7 +84,7 @@ public class DocumentOpenRegistryTests
             "Explorer_OpenAsPartition", "Explorer_OpenAsText", "Explorer_OpenAsLog",
             "Explorer_OpenAsHex", "Explorer_OpenAsDtb", "Explorer_OpenAsDex",
             "Explorer_OpenAsAxml", "Explorer_OpenAsArsc", "Explorer_OpenAsApk",
-            "Explorer_OpenAsFirmware", "Explorer_OpenAsFileSystem"
+            "Explorer_OpenAsFirmware", "Explorer_OpenAsFileSystem", "Explorer_OpenAsRockchipConfig"
         };
 
         var actual = DocumentOpenRegistry.MenuEntries.Select(d => d.LocaleKey).ToList();
@@ -108,7 +109,8 @@ public class DocumentOpenRegistryTests
             (typeof(HexEditorViewModel), "Hex"),
             (typeof(ApkEditorViewModel), "Apk"),
             (typeof(PartitionEditorViewModel), "Partition"),
-            (typeof(CompareViewModel), "Compare")
+            (typeof(CompareViewModel), "Compare"),
+            (typeof(RockchipConfigEditorViewModel), "RockchipConfig")
         };
 
         foreach (var (viewModelType, kind) in expected)

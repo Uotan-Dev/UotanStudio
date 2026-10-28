@@ -172,8 +172,8 @@ public partial class App : Application
         await ReportAsync(SplashPhase.ApplyingSettings);
         ApplyTheme(settings.ThemeMode);
         ApplyLanguage(settings.CultureName);
-        McpExposureService.Instance.Apply(settings.McpExposeEnabled, settings.McpExposePort);
-        McpClientConnectionService.Instance.Apply();
+        ServiceHub.GetRequired<McpExposureService>().Apply(settings.McpExposeEnabled, settings.McpExposePort);
+        ServiceHub.GetRequired<McpClientConnectionService>().Apply();
 
         await ReportAsync(SplashPhase.Scanning);
         LogService.Instance.Write(LogLevel.Info, "App", "Startup sequence: initial USB scan starting.");
@@ -246,7 +246,7 @@ public partial class App : Application
     private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         if (sender is IClassicDesktopStyleApplicationLifetime desktop) desktop.Exit -= OnDesktopExit;
-        McpExposureService.Instance.Stop();
+        ServiceHub.GetRequired<McpExposureService>().Stop();
         try { GetDesktopMainViewModel()?.Dispose(); }
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Lifecycle", $"Closing views during shutdown failed: {ex.GetType().Name}: {ex.Message}"); }
         try { _desktopServices?.Dispose(); }

@@ -30,6 +30,7 @@ public class AppSettings : IJsonOnDeserialized
         ExpandedNodeCategories ??= [];
         PairedNetworkTargets ??= [];
         PairedHdcNetworkTargets ??= [];
+        ExpandedFlashSections ??= [];
     }
 
     /// <summary>
@@ -63,6 +64,7 @@ public class AppSettings : IJsonOnDeserialized
         copy.ExpandedNodeCategories = [.. ExpandedNodeCategories];
         copy.PairedNetworkTargets = [.. PairedNetworkTargets];
         copy.PairedHdcNetworkTargets = [.. PairedHdcNetworkTargets];
+        copy.ExpandedFlashSections = [.. ExpandedFlashSections];
         copy.McpServers = [.. McpServers];
         copy.AdditionalSettings = AdditionalSettings is null ? null : new(AdditionalSettings);
         return copy;
@@ -433,6 +435,17 @@ public class AppSettings : IJsonOnDeserialized
     public RenderingCompositionMode RenderingCompositionMode { get; set; }
 
     /// <summary>
+    /// Gets or sets the flash-page side sections that are expanded, identified by <c>edl</c>, <c>mtk</c>,
+    /// <c>rockchip</c> and <c>image</c>; unlisted sections stay collapsed and unknown identifiers are ignored.
+    /// <para>获取或设置烧录页面已展开的侧边分类标识（<c>edl</c>、<c>mtk</c>、<c>rockchip</c>、<c>image</c>）；
+    /// 未列出的分类保持折叠，未知标识会被忽略。</para>
+    /// </summary>
+    /// <value>The expanded section identifiers, or an empty list when every section is collapsed.
+    /// <para>已展开的分类标识；全部折叠时为空列表。</para></value>
+    [JsonPropertyName("expandedFlashSections")]
+    public List<string> ExpandedFlashSections { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the main-window size, position and state restored at the next application start.
     /// <para>获取或设置下次应用启动时恢复的主窗口尺寸、位置与状态。</para>
     /// </summary>
@@ -725,6 +738,35 @@ public class SettingsPersistenceService
             return true;
         }
         settings.MainWindowPlacement = placement;
+        return TrySaveSettings(settings, out _);
+    }
+
+    /// <summary>
+    /// Replaces the expanded flash-page side sections, merging on top of the latest settings on disk so other
+    /// settings are never overwritten.
+    /// <para>替换烧录页面已展开的侧边分类：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
+    /// </summary>
+    /// <param name="sections">The section identifiers that are expanded; empty collapses every section.
+    /// <para>已展开的分类标识；为空时折叠所有分类。</para></param>
+    /// <returns><see langword="true"/> when the stored list already matched or the save succeeded;
+    /// <see langword="false"/> when the write failed and the error was logged.
+    /// <para>已存列表与目标一致或保存成功时返回 <see langword="true"/>；写入失败并已记录错误时返回
+    /// <see langword="false"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="sections"/> is <see langword="null"/>.
+    /// <para><paramref name="sections"/> 为 <see langword="null"/>。</para></exception>
+    public bool SaveExpandedFlashSections(IReadOnlyList<string> sections)
+    {
+        ArgumentNullException.ThrowIfNull(sections);
+        var settings = LoadSettings();
+        List<string> normalized = [.. sections
+            .Where(section => !string.IsNullOrWhiteSpace(section))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.Ordinal)];
+        if (settings.ExpandedFlashSections is { } stored && stored.SequenceEqual(normalized, StringComparer.Ordinal))
+        {
+            return true;
+        }
+        settings.ExpandedFlashSections = normalized;
         return TrySaveSettings(settings, out _);
     }
 

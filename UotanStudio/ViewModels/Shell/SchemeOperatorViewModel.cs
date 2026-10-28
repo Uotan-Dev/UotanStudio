@@ -1,11 +1,13 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Projects;
 using UotanStudio.Projects.Schemes;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui.Projects;
+using UotanStudio.UiAbstractions;
 using UotanStudio.Workflow.Execution;
 
 namespace UotanStudio.ViewModels.Shell;
@@ -23,6 +25,8 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
     private readonly PublisherTrustStore _trustStore;
     private readonly Func<string, string, string, Task<bool>>? _confirm;
     private readonly Func<string?> _projectRootProvider;
+    private readonly ILocalizer _localizer;
+    private readonly IUnifiedLog _log;
     private readonly Func<string?> _temporaryDirectory;
     private SchemePackage? _package;
     private SchemeRunResult? _lastResult;
@@ -79,13 +83,19 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
     /// <para>用作资产回退的工程根提供者；为 <see langword="null"/> 时读取工程会话。</para></param>
     /// <param name="temporaryDirectory">Parent directory for the run asset directory, or <see langword="null"/> for the host temp directory.
     /// <para>运行资产目录的父目录；为 <see langword="null"/> 时使用主机临时目录。</para></param>
+    /// <param name="localizer">Localized string lookup, or <see langword="null"/> for the shared language service.
+    /// <para>本地化字符串查询；为 <see langword="null"/> 时使用共享语言服务。</para></param>
+    /// <param name="log">Unified log sink, or <see langword="null"/> for the shared log service.
+    /// <para>统一日志接收端；为 <see langword="null"/> 时使用共享日志服务。</para></param>
     internal SchemeOperatorViewModel(
         Func<SchemePackage, SchemeRunOptions, CancellationToken, Task<SchemeRunResult>>? runAsync,
         Func<string, CancellationToken, Task<WorkflowSnapshot?>>? workflowLoader,
         PublisherTrustStore? trustStore,
         Func<string, string, string, Task<bool>>? confirm,
         Func<string?>? projectRootProvider,
-        Func<string?>? temporaryDirectory)
+        Func<string?>? temporaryDirectory,
+        ILocalizer? localizer = null,
+        IUnifiedLog? log = null)
     {
         _runAsync = runAsync ?? RunWithSchemeRunnerAsync;
         _workflowLoader = workflowLoader ?? LoadProjectWorkflowAsync;
@@ -93,6 +103,8 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
         _confirm = confirm;
         _projectRootProvider = projectRootProvider ?? LoadProjectRoot;
         _temporaryDirectory = temporaryDirectory ?? (() => null);
+        _localizer = localizer ?? LanguageService.Instance;
+        _log = log ?? LogService.Instance;
     }
 
     /// <summary>
@@ -302,7 +314,7 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
     /// <para>指明停止运行阶段的本地化失败行；没有阶段失败时为空。</para>
     /// </summary>
     public string FailedStageText => HasFailedStage
-        ? string.Format(CultureInfo.CurrentCulture, LanguageService.Instance.GetString("Node_OperationFailed"), FailedStageId)
+        ? string.Format(CultureInfo.CurrentCulture, _localizer.GetString("Node_OperationFailed"), FailedStageId)
         : string.Empty;
 
     /// <summary>
@@ -359,7 +371,7 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
     /// Localized signature state caption.
     /// <para>本地化的签名状态标题。</para>
     /// </summary>
-    public string SignatureText => LanguageService.Instance.GetString(SignatureStatusKey);
+    public string SignatureText => _localizer.GetString(SignatureStatusKey);
 
     /// <summary>
     /// Loads a scheme package from disk and rebuilds the operator form.
@@ -376,7 +388,7 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
         if (package is null)
         {
             ClearPackageState();
-            ErrorMessage = LanguageService.Instance.GetString("Menu_OpenFailed");
+            ErrorMessage = _localizer.GetString("Menu_OpenFailed");
             ResultText = string.Empty;
             return false;
         }
@@ -387,8 +399,8 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
             ClearPackageState();
             SignatureStatus = null;
             ErrorMessage = string.Format(CultureInfo.CurrentCulture,
-                LanguageService.Instance.GetString("Node_OperationFailed"), verification.Error);
-            ResultText = LanguageService.Instance.GetString("Scheme_RunFailed");
+                _localizer.GetString("Node_OperationFailed"), verification.Error);
+            ResultText = _localizer.GetString("Scheme_RunFailed");
             return false;
         }
 
@@ -419,8 +431,8 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
         {
             ClearPackageState();
             ErrorMessage = string.Format(CultureInfo.CurrentCulture,
-                LanguageService.Instance.GetString("Node_OperationFailed"), verification.Error);
-            ResultText = LanguageService.Instance.GetString("Scheme_RunFailed");
+                _localizer.GetString("Node_OperationFailed"), verification.Error);
+            ResultText = _localizer.GetString("Scheme_RunFailed");
             return false;
         }
         _package = package;
@@ -452,7 +464,7 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
         RebuildResumeOptions();
         ResetRunState();
         RefreshSignatureState();
-        StatusText = LanguageService.Instance.GetString("Node_Status_Idle");
+        StatusText = _localizer.GetString("Node_Status_Idle");
         NotifyPackageChanged();
         return true;
     }
@@ -480,8 +492,8 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
         if (invalid is not null)
         {
             ErrorMessage = invalid.ValidationMessage;
-            ResultText = LanguageService.Instance.GetString("Scheme_RunFailed");
-            StatusText = LanguageService.Instance.GetString("Node_Status_Failed");
+            ResultText = _localizer.GetString("Scheme_RunFailed");
+            StatusText = _localizer.GetString("Node_Status_Failed");
             return false;
         }
 
@@ -494,8 +506,8 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
         if (assets.Error is not null)
         {
             ErrorMessage = assets.Error;
-            ResultText = LanguageService.Instance.GetString("Scheme_RunFailed");
-            StatusText = LanguageService.Instance.GetString("Node_Status_Failed");
+            ResultText = _localizer.GetString("Scheme_RunFailed");
+            StatusText = _localizer.GetString("Node_Status_Failed");
             return false;
         }
 
@@ -503,7 +515,7 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _runCts = cts;
         IsRunning = true;
-        StatusText = LanguageService.Instance.GetString("Node_Status_Running");
+        StatusText = _localizer.GetString("Node_Status_Running");
         try
         {
             var options = new SchemeRunOptions
@@ -521,17 +533,17 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             RunStatus = ExecutionStatus.Cancelled;
-            StatusText = LanguageService.Instance.GetString("Node_Status_Cancelled");
-            ResultText = LanguageService.Instance.GetString("Scheme_RunFailed");
+            StatusText = _localizer.GetString("Node_Status_Cancelled");
+            ResultText = _localizer.GetString("Scheme_RunFailed");
             return false;
         }
         catch (Exception ex)
         {
             RunStatus = ExecutionStatus.Failed;
-            StatusText = LanguageService.Instance.GetString("Node_Status_Failed");
-            ResultText = LanguageService.Instance.GetString("Scheme_RunFailed");
+            StatusText = _localizer.GetString("Node_Status_Failed");
+            ResultText = _localizer.GetString("Scheme_RunFailed");
             ErrorMessage = string.Format(CultureInfo.CurrentCulture,
-                LanguageService.Instance.GetString("Node_OperationFailed"), ex.Message);
+                _localizer.GetString("Node_OperationFailed"), ex.Message);
             return false;
         }
         finally
@@ -571,10 +583,10 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
             return TrustPublisher() is not null;
         }
         var confirmed = await _confirm(
-            LanguageService.Instance.GetString("Plugin_TrustConfirmTitle"),
-            string.Format(CultureInfo.CurrentCulture, LanguageService.Instance.GetString("Plugin_TrustConfirm"),
+            _localizer.GetString("Plugin_TrustConfirmTitle"),
+            string.Format(CultureInfo.CurrentCulture, _localizer.GetString("Plugin_TrustConfirm"),
                 publisher.Fingerprint, publisher.Id),
-            LanguageService.Instance.GetString("Plugin_TrustPublisher")).ConfigureAwait(true);
+            _localizer.GetString("Plugin_TrustPublisher")).ConfigureAwait(true);
         return confirmed && TrustPublisher() is not null;
     }
 
@@ -600,7 +612,7 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
                                        or UnauthorizedAccessException)
         {
             ErrorMessage = string.Format(CultureInfo.CurrentCulture,
-                LanguageService.Instance.GetString("Node_OperationFailed"), ex.Message);
+                _localizer.GetString("Node_OperationFailed"), ex.Message);
             return null;
         }
     }
@@ -640,7 +652,7 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
                 asset.Reset();
             }
             ErrorMessage = string.Format(CultureInfo.CurrentCulture,
-                LanguageService.Instance.GetString("Node_OperationFailed"), ex.Message);
+                _localizer.GetString("Node_OperationFailed"), ex.Message);
         }
     }
 
@@ -715,17 +727,17 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
         switch (SignatureStatus)
         {
             case PublisherTrustStatus.FingerprintMismatch:
-                ErrorMessage = LanguageService.Instance.GetString("Plugin_PublisherFingerprintChanged");
-                ResultText = LanguageService.Instance.GetString("Scheme_RunFailed");
-                StatusText = LanguageService.Instance.GetString("Node_Status_Failed");
+                ErrorMessage = _localizer.GetString("Plugin_PublisherFingerprintChanged");
+                ResultText = _localizer.GetString("Scheme_RunFailed");
+                StatusText = _localizer.GetString("Node_Status_Failed");
                 return false;
             case PublisherTrustStatus.UnknownPublisher:
                 {
                     if (!await ConfirmAndTrustPublisherAsync().ConfigureAwait(true))
                     {
-                        ErrorMessage = LanguageService.Instance.GetString("Plugin_PublisherUntrusted");
-                        ResultText = LanguageService.Instance.GetString("Scheme_RunFailed");
-                        StatusText = LanguageService.Instance.GetString("Node_Status_Failed");
+                        ErrorMessage = _localizer.GetString("Plugin_PublisherUntrusted");
+                        ResultText = _localizer.GetString("Scheme_RunFailed");
+                        StatusText = _localizer.GetString("Node_Status_Failed");
                         return false;
                     }
                     return true;
@@ -733,13 +745,13 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
             case PublisherTrustStatus.Unsigned when _confirm is not null:
                 {
                     var confirmed = await _confirm(
-                        LanguageService.Instance.GetString("Scheme_Run"),
-                        LanguageService.Instance.GetString("Plugin_Trust_Unsigned"),
-                        LanguageService.Instance.GetString("Scheme_Run")).ConfigureAwait(true);
+                        _localizer.GetString("Scheme_Run"),
+                        _localizer.GetString("Plugin_Trust_Unsigned"),
+                        _localizer.GetString("Scheme_Run")).ConfigureAwait(true);
                     if (!confirmed)
                     {
-                        ResultText = LanguageService.Instance.GetString("Scheme_RunFailed");
-                        StatusText = LanguageService.Instance.GetString("Node_Status_Idle");
+                        ResultText = _localizer.GetString("Scheme_RunFailed");
+                        StatusText = _localizer.GetString("Node_Status_Idle");
                     }
                     return confirmed;
                 }
@@ -841,9 +853,9 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
         _lastResult = result;
         FailedStageId = result.FailedStageId;
         ErrorMessage = result.ErrorMessage ?? string.Empty;
-        ResultText = LanguageService.Instance.GetString(
+        ResultText = _localizer.GetString(
             result.Status == ExecutionStatus.Succeeded ? "Scheme_RunSucceeded" : "Scheme_RunFailed");
-        StatusText = LanguageService.Instance.GetString(result.Status switch
+        StatusText = _localizer.GetString(result.Status switch
         {
             ExecutionStatus.Succeeded => "Node_Status_Succeeded",
             ExecutionStatus.Cancelled => "Node_Status_Cancelled",
@@ -900,7 +912,7 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
             }
             catch (Exception ex)
             {
-                LogService.Instance.Write(LogLevel.Warn, "Scheme", $"Could not resolve workflow '{name}': {ex.Message}");
+                _log.Write(LogLevel.Warn, "Scheme", $"Could not resolve workflow '{name}': {ex.Message}");
             }
         }
 
@@ -916,7 +928,7 @@ public sealed partial class SchemeOperatorViewModel : ObservableObject
     {
         var previousStageId = SelectedResumeOption?.StageId;
         ResumeOptions.Clear();
-        ResumeOptions.Add(new SchemeResumeOption(null, LanguageService.Instance.GetString("Menu_RunWorkflow")));
+        ResumeOptions.Add(new SchemeResumeOption(null, _localizer.GetString("Menu_RunWorkflow")));
         for (var index = 0; index < Stages.Count; index++)
         {
             var stage = Stages[index];

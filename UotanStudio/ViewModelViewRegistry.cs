@@ -44,6 +44,7 @@ internal static class ViewModelViewRegistry
         [typeof(DtbEditorViewModel)] = new(() => new DtbEditorView(), IsDocumentStyle: true),
         [typeof(DexEditorViewModel)] = new(() => new DexEditorView(), IsDocumentStyle: true),
         [typeof(ElfInfoViewModel)] = new(() => new ElfInfoView(), IsDocumentStyle: true),
+        [typeof(RockchipConfigEditorViewModel)] = new(() => new RockchipConfigEditorView(), IsDocumentStyle: true),
         [typeof(QualcommImageViewModel)] = new(() => new QualcommImageView(), IsDocumentStyle: true),
         [typeof(QcnEditorViewModel)] = new(() => new QcnEditorView()),
         [typeof(ManifestEditorViewModel)] = new(() => new ManifestEditorView(), IsDocumentStyle: true),

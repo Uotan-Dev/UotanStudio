@@ -32,7 +32,22 @@ public sealed record GitHubRelease(
 
 /// <summary>Subset of the GitHub release document that is read from the API.
 /// <para>从 API 读取的 GitHub Release 文档子集。</para></summary>
-internal sealed record GitHubReleaseDocument(string? TagName, List<GitHubAssetDocument>? Assets);
+/// <param name="TagName">Published release tag, or <see langword="null"/> when the document carries none.
+/// <para>已发布的 Release 标签；文档没有该字段时为 <see langword="null"/>。</para></param>
+/// <param name="Assets">Published assets in API order; <see langword="null"/> when the document lists none.
+/// <para>按 API 顺序排列的已发布资产；文档未列出资产时为 <see langword="null"/>。</para></param>
+internal sealed record GitHubReleaseDocument(string? TagName, List<GitHubAssetDocument>? Assets)
+{
+    /// <summary>Whether the release is an unpublished draft.
+    /// <para>该 Release 是否为未发布的草稿。</para></summary>
+    /// <value><see langword="false"/> when the API omits the field. <para>API 未提供该字段时为 <see langword="false"/>。</para></value>
+    public bool Draft { get; init; }
+
+    /// <summary>Whether the release is published as a pre-release.
+    /// <para>该 Release 是否以预发布形式公布。</para></summary>
+    /// <value><see langword="false"/> when the API omits the field. <para>API 未提供该字段时为 <see langword="false"/>。</para></value>
+    public bool Prerelease { get; init; }
+}
 
 /// <summary>Subset of a GitHub release asset that is read from the API.
 /// <para>从 API 读取的 GitHub Release 资产子集。</para></summary>
@@ -46,6 +61,7 @@ internal sealed record GitHubAssetDocument(string? Name, long Size, string? Brow
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(GitHubReleaseDocument))]
+[JsonSerializable(typeof(List<GitHubReleaseDocument>))]
 [JsonSerializable(typeof(GitHubAssetDocument))]
 [JsonSerializable(typeof(List<GitHubAssetDocument>))]
 internal sealed partial class GitHubJsonContext : JsonSerializerContext;

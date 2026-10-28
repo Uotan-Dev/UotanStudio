@@ -13,6 +13,7 @@ public sealed class HttpDownloadMirrorUrlTests
     [InlineData("https://ghfast.top/https://github.com/")]
     [InlineData("https://xget.xi-xu.me/gh")]
     [InlineData("https://cors.isteed.cc/github.com")]
+    [InlineData("https://g.blfrp.cn/https://github.com")]
     [InlineData("https://down.npee.cn/?https://github.com")]
     [InlineData("https://github.com")]
     public void MirrorUrl_ReleaseAssetAppendsTheGitHubPathOnceWithoutRepeatingTheOrigin(string baseUrl)

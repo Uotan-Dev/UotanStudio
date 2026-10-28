@@ -4,7 +4,6 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Dock.Model.Core;
 using UotanStudio.Services;
-using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Ui;
 using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.ViewModels;
@@ -68,7 +67,7 @@ public sealed class DocumentFileActionsMenuItem : MenuItem
         _path = !string.IsNullOrWhiteSpace(path) ? path : null;
         IsVisible = _path is not null;
         _openAsMenuItem.IsVisible = _path is not null;
-        _convertMenuItem.IsVisible = _path is not null && ImageInputService.SupportsFormatConversion(_path);
+        _convertMenuItem.IsVisible = _path is not null && ImageViewModel.SupportsFormatConversion(_path);
         if (_path is not null)
         {
             _openAsMenuItem.RefreshForPath(_path);

@@ -91,5 +91,9 @@ public enum EditorOpenMode
 
     /// <summary>Open the Qualcomm QCN NV backup in the structured QCN editor.
     /// <para>以结构化 QCN 编辑器打开 Qualcomm QCN NV 备份。</para></summary>
-    Qcn
+    Qcn,
+
+    /// <summary>Open an RKDevTool download-list configuration in the read-only configuration browser.
+    /// <para>以只读配置浏览视图打开 RKDevTool 下载列表配置。</para></summary>
+    RockchipConfig
 }

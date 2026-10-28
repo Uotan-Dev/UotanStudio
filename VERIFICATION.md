@@ -2,6 +2,17 @@
 
 本文件记录门禁实测结果与未验证边界；每跑完一道门禁就更新"当前实测"一节。只写当前状态：一条测量配一个日期，不写轮次叙述、不写"上一轮"或"之前失败现在通过"。常驻约束与命令在根 `AGENTS.md`，测试工程写法在 `UotanStudio.Tests/AGENTS.md`。
 
+## Boot 修补后端与烧录页接线实测（2026-10-29，Windows x64，Debug，共享工作树）
+
+- 版本清单：`UotanStudio.Net/Components/Root/RootPatchReleaseClient.cs` 只读各上游 GitHub 仓库的 `/releases?per_page=N`（默认 20，上限 100，1 MiB 上限），丢弃 draft、保留预发布，并按「正式标记的 APK > APK > 正式 ZIP > ZIP」选出安装包，debug/sources 资产被排除。清单来源为 magisk=topjohnwu/Magisk、magisk-alpha=vvb2060/Magisk、kernelsu=tiann/KernelSU、sukisu=SukiSU-Ultra/SukiSU-Ultra、apatch=bmax121/APatch；Alpha 按 Magisk、SukiSU 按 KernelSU 修补。
+- 下载与校验：`UotanStudio/Services/PatchPackages/RootPatchPackageService` 把清单、下载、校验、缓存串成一条链路。元数据只读 `api.github.com`（镜像不代理该 API），载荷可以走镜像，但必须通过长度与公布的 SHA-256 后才原子发布；未公布摘要的 Release 只走源站。产物落在共享下载资源目录的 `<magisk|magisk-alpha|kernelsu|sukisu|apatch>/<version>/<asset>`，与 scrcpy 服务端目录同级。
+- 测速：窗口打开先拉清单，再以最新资产的地址对源站与 27 个镜像各取 256 KiB（5 s 上限）排序，把最快的一个固定为后续下载的首选源；`DownloadAsync` 的 `sources` 参数复用该排序，避免每次下载重测。
+- 修补 Boot 窗口与烧录页共用同一服务。烧录页的 boot 分区下拉框改为从烧录条目自动检测（分区名含 `boot`），不再固定 `boot`/`init_boot`/`vendor_boot`；勾选「添加 Root」时才异步拉清单、测速并回填版本下拉框，版本条目带「已下载」括号后缀；开始烧录时只有该分区同时在勾选列表里才修补，修补结果只写进 `prepared` 映射，行内 `FilePath` 与列表展示不变。烧录流程仍只接受 Magisk/KernelSU 家族（APatch 需要 SuperKey），选中 APatch 或类型不符的包会报「不受支持的包」。
+- 定向测试：`UotanStudio.Tests.Flash.FlashRootPartitionTests` 6/6，`UotanStudio.Tests.Flash` 命名空间 22/22，`UotanStudio.Tests.Services.FlashRootImageTests` 6/6，`UotanStudio.Tests.Services.RootPatchPackageTests` 21/21，`UotanStudio.Tests.Services.LocaleDictionaryTests` 6/6，`UotanStudio.Tests.Architecture.HostLayeringGuardTests` 4/4。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 的 `whitespace` 与 `style` 对本轮改动文件零报告；全量 `dotnet test --solution UotanStudio.slnx --no-build -c Debug --minimum-expected-tests 6000` 7804 总数 / 7796 通过 / 8 跳过 / 0 失败，单轮 1m42s（共享工作树）。
+- NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功，产物 `UotanStudio.Desktop.exe` 156,161,024 B；警告只有 Avalonia/Dock/Ursa/Iciclecreek/LTRData/YamlDotNet/Common.Logging 既有的 IL2104/IL3053，没有指向本轮新增宿主代码的裁剪/AOT 警告。
+- 未验证边界：窗口与烧录页的渲染、勾选后的真实测速与下载耗时、镜像源实际命中率都必须在 GUI 里人工走一遍；本轮只有编译、单元测试与静态门禁覆盖，不能记为界面已验证。烧录页的修补行为依赖真实设备与 boot 镜像，未在真机上执行。
+
 ## Hash/Compress 热点优化实测（2026-10-28，Windows x64，Debug，共享工作树）
 
 - `Crc32Register` 零矩阵缓存改为单个不可变快照字段原子发布，并发不同长度续算不再可能把一个长度配上另一个长度的矩阵；`Crc32RegisterConcurrentZeroMatrixTests`（并发 5 种长度 × 2 万次/线程）通过。
