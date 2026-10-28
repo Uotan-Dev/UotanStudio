@@ -200,7 +200,9 @@
                                 <DataGridTextColumn Width="Auto" MinWidth="80" IsReadOnly="True"
                                                     Header="{DynamicResource Flash_Command}"
                                                     Binding="{Binding Command}" />
-
+                                <DataGridTextColumn Width="Auto" MinWidth="90"
+                                                    Header="{DynamicResource Flash_Offset}"
+                                                    Binding="{Binding Offset}" />
                                 <DataGridTextColumn Width="Auto" MinWidth="80" IsReadOnly="True"
                                                     Header="{DynamicResource Flash_Size}"
                                                     Binding="{Binding Size}" />
@@ -664,6 +666,39 @@
                                 </Grid>
 
                             </StackPanel>
+                            </StackPanel>
+                        </Expander>
+                        <!-- 瑞芯微 Rockchip 分类 -->
+                        <Expander Name="RkExpander" Classes="protocol-expander"
+                                  Header="{DynamicResource Flash_Rockchip}" IsExpanded="False">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="{DynamicResource Flash_RkSetStorageType}" FontSize="12" Opacity="0.8" />
+                                <ComboBox Name="RkStorageTypeBox" Height="32" VerticalContentAlignment="Center"
+                                          HorizontalAlignment="Stretch"
+                                          AutomationProperties.Name="{DynamicResource Flash_RkSetStorageType}" />
+                                <Button Name="RkEnterMaskromButton" Classes="pane-action"
+                                        Click="OnRkEnterMaskromClick"
+                                        Content="{DynamicResource Flash_RkEnterMaskrom}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkEnterMaskrom}" />
+                                <TextBlock Name="RkConfigSelectLabel" FontSize="12" Opacity="0.8"
+                                           Text="{DynamicResource Flash_RkSelectConfig}" />
+                                <ComboBox Name="RkConfigPickBox" Height="32" VerticalContentAlignment="Center"
+                                          HorizontalAlignment="Stretch"
+                                          SelectionChanged="OnRkConfigPickChanged"
+                                          AutomationProperties.Name="{DynamicResource Flash_RkSelectConfig}" />
+                                <TextBox Name="RkConfigPathBox" Height="32" VerticalContentAlignment="Center"
+                                         IsReadOnly="True" IsEnabled="False"
+                                         PlaceholderText="{DynamicResource Flash_RkConfigPathHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_RkSelectConfig}" />
+                                <Button Name="RkChooseConfigButton" Classes="pane-action"
+                                        IsEnabled="False"
+                                        Click="OnRkChooseConfigClick"
+                                        Content="{DynamicResource Flash_RkChooseCustomConfig}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkChooseCustomConfig}" />
+                                <Button Name="RkExportConfigButton" Classes="pane-action"
+                                        Click="OnRkExportConfigClick"
+                                        Content="{DynamicResource Flash_RkExportConfig}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkExportConfig}" />
                             </StackPanel>
                         </Expander>
                         <!-- 镜像操作分类 -->

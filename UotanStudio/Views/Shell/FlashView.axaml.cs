@@ -324,4 +324,8 @@ public partial class FlashView : UserControl
     private void OnBuildWiredPackageClick(object? sender, RoutedEventArgs e) => _model.OnBuildWiredPackageClick(sender, e);
     private void OnSlotResetCurrentClick(object? sender, RoutedEventArgs e) => _model.OnSlotResetCurrentClick(sender, e);
     private void OnSlotSetAClick(object? sender, RoutedEventArgs e) => _model.OnSlotSetAClick(sender, e);
+    private void OnRkEnterMaskromClick(object? sender, RoutedEventArgs e) => _model.OnRkEnterMaskromClick(sender, e);
+    private void OnRkConfigPickChanged(object? sender, SelectionChangedEventArgs e) => _model.OnRkConfigPickChanged(sender, e);
+    private void OnRkChooseConfigClick(object? sender, RoutedEventArgs e) => _model.OnRkChooseConfigClick(sender, e);
+    private void OnRkExportConfigClick(object? sender, RoutedEventArgs e) => _model.OnRkExportConfigClick(sender, e);
 }

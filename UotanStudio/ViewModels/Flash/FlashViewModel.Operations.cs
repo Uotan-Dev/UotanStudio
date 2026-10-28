@@ -53,6 +53,24 @@ public sealed partial class FlashViewModel
 
     private string? EffectiveEdlProgrammer => _isCustomProgrammer ? _edlProgrammerOverride : _edlProgrammer;
 
+    private static readonly string[] RkStorageTypes =
+    [
+        "1. FLASH",
+        "2. EMMC",
+        "3. SD",
+        "4. SD1",
+        "5. SPINOR",
+        "6. SPINAND",
+        "7. RAM",
+        "8. USB",
+        "9. SATA",
+        "10. PCIE"
+    ];
+    private string? _rkConfig;
+    private IReadOnlyList<string> _rkConfigCandidates = [];
+    private string? _rkConfigOverride;
+    private bool _isCustomRkConfig;
+    private string? EffectiveRkConfig => _isCustomRkConfig ? _rkConfigOverride : _rkConfig;
     private string? _edlProgrammerDirectory;
     private EdlProgrammerDirectoryResult? _edlProgrammerDirectoryResult;
     private UfsProvisionProfile? _edlUfsProfile;
@@ -871,17 +889,25 @@ public sealed partial class FlashViewModel
         {
             Field<Expander>("EdlExpander").IsExpanded = true;
             Field<Expander>("MtkExpander").IsExpanded = false;
+            Field<Expander>("RkExpander").IsExpanded = false;
         }
         else if (protocol is DeviceProtocolKind.Mtk)
         {
             Field<Expander>("MtkExpander").IsExpanded = true;
             Field<Expander>("EdlExpander").IsExpanded = false;
+            Field<Expander>("RkExpander").IsExpanded = false;
         }
-
+        else if (protocol is DeviceProtocolKind.Rkdl)
+        {
+            Field<Expander>("RkExpander").IsExpanded = true;
+            Field<Expander>("EdlExpander").IsExpanded = false;
+            Field<Expander>("MtkExpander").IsExpanded = false;
+        }
         else
         {
             Field<Expander>("EdlExpander").IsExpanded = false;
             Field<Expander>("MtkExpander").IsExpanded = false;
+            Field<Expander>("RkExpander").IsExpanded = false;
         }
     }
 
@@ -1012,7 +1038,11 @@ public sealed partial class FlashViewModel
 
         var protocol = SelectedDevice?.Protocol;
         UpdateEdlProgrammerUiState();
-
+        UpdateRkConfigUiState();
+        var isRk = protocol is DeviceProtocolKind.Rkdl;
+        Field<Button>("RkEnterMaskromButton").IsEnabled = !_busy && isRk;
+        Field<ComboBox>("RkStorageTypeBox").IsEnabled = !_busy;
+        Field<Button>("RkExportConfigButton").IsEnabled = !_busy;
     }
 
     internal void UpdateEdlProgrammerUiState()
@@ -1056,6 +1086,174 @@ public sealed partial class FlashViewModel
         }
         UpdateEdlProgrammerUiState();
         UpdateEdlButton();
+    }
+
+    internal void UpdateRkConfigPickOptions()
+    {
+        if (Surface is null) return;
+        var pickBox = Field<ComboBox>("RkConfigPickBox");
+        var customText = LanguageService.Instance.GetString("Flash_EdlCustomFile");
+        var items = _rkConfigCandidates.Select(Path.GetFileName).Concat([customText]).ToArray();
+        var previousCustom = _isCustomRkConfig;
+        var previousConfig = _rkConfig;
+        pickBox.ItemsSource = items;
+
+        if (previousCustom)
+        {
+            pickBox.SelectedIndex = items.Length - 1;
+        }
+        else if (previousConfig is not null)
+        {
+            var idx = -1;
+            for (var i = 0; i < _rkConfigCandidates.Count; i++)
+            {
+                if (string.Equals(_rkConfigCandidates[i], previousConfig, StringComparison.OrdinalIgnoreCase))
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            pickBox.SelectedIndex = idx;
+        }
+        else
+        {
+            pickBox.SelectedIndex = -1;
+        }
+
+        UpdateRkConfigUiState();
+    }
+
+    internal void UpdateRkConfigUiState()
+    {
+        if (Surface is null) return;
+        var pathBox = Field<TextBox>("RkConfigPathBox");
+        var chooseButton = Field<Button>("RkChooseConfigButton");
+        if (_isCustomRkConfig)
+        {
+            pathBox.Text = _rkConfigOverride ?? string.Empty;
+            ToolTip.SetTip(pathBox, _rkConfigOverride ?? string.Empty);
+            pathBox.IsEnabled = !_busy;
+            chooseButton.IsEnabled = !_busy;
+        }
+        else
+        {
+            pathBox.Text = _rkConfig ?? string.Empty;
+            ToolTip.SetTip(pathBox, _rkConfig ?? string.Empty);
+            pathBox.IsEnabled = false;
+            chooseButton.IsEnabled = false;
+        }
+    }
+
+    internal void OnRkConfigPickChanged(object? source, SelectionChangedEventArgs e)
+    {
+        var index = Field<ComboBox>("RkConfigPickBox").SelectedIndex;
+        if (index >= 0 && index < _rkConfigCandidates.Count)
+        {
+            _isCustomRkConfig = false;
+            _rkConfig = _rkConfigCandidates[index];
+        }
+        else if (index >= 0 && index == _rkConfigCandidates.Count)
+        {
+            _isCustomRkConfig = true;
+            _rkConfig = null;
+        }
+        else
+        {
+            _isCustomRkConfig = false;
+            _rkConfig = null;
+        }
+        UpdateRkConfigUiState();
+        UpdateEdlButton();
+    }
+
+    internal async void OnRkChooseConfigClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Flash_RkChooseCustomConfig"),
+            AllowMultiple = false,
+            FileTypeFilter = [FilePickerFileTypes.All]
+        });
+        if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
+        _rkConfigOverride = File.Exists(path) ? path : null;
+        UpdateRkConfigUiState();
+        if (_rkConfigOverride is { } selected)
+        {
+            AppendLog(Path.GetFileName(selected));
+        }
+        UpdateEdlButton();
+    }
+
+    internal async void OnRkEnterMaskromClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming) return;
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Rkdl } device)
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_DeviceNotConnected"));
+            return;
+        }
+
+        SetBusy(true);
+        try
+        {
+            AppendLog(LanguageService.Instance.GetString("Flash_RkEnterMaskrom"));
+            await App.DeviceMonitor.RunRkdlAsync(device, session =>
+            {
+                session.RebootMaskRom();
+                return Task.FromResult(true);
+            }, CancellationToken.None).ConfigureAwait(true);
+            AppendLog(LanguageService.Instance.GetString("Flash_OperationSucceeded"));
+        }
+        catch (Exception ex)
+        {
+            AppendLog(ex.Message);
+        }
+        finally
+        {
+            SetBusy(false);
+            UpdateEdlButton();
+        }
+    }
+
+    internal async void OnRkExportConfigClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = LanguageService.Instance.GetString("Flash_RkExportConfig"),
+            DefaultExtension = "cfg",
+            SuggestedFileName = "config.cfg",
+            FileTypeChoices = [
+                new FilePickerFileType("Rockchip Config (*.cfg)") { Patterns = ["*.cfg", "*.txt"] },
+                FilePickerFileTypes.All
+            ]
+        });
+        if (file is null || file.TryGetLocalPath() is not { } savePath) return;
+
+        try
+        {
+            if (EffectiveRkConfig is { } existingPath && File.Exists(existingPath))
+            {
+                File.Copy(existingPath, savePath, overwrite: true);
+            }
+            else
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine("# Rockchip Flash Configuration");
+                sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "# Generated at {0:yyyy-MM-dd HH:mm:ss}", DateTime.Now));
+                foreach (var part in Partitions)
+                {
+                    sb.AppendLine($"{part.Name}={part.Offset}\t{part.FilePath}");
+                }
+                await File.WriteAllTextAsync(savePath, sb.ToString(), Encoding.UTF8).ConfigureAwait(true);
+            }
+            AppendLog($"{LanguageService.Instance.GetString("Flash_RkExportConfig")} -> {Path.GetFileName(savePath)}");
+        }
+        catch (Exception ex)
+        {
+            AppendLog(ex.Message);
+        }
     }
 
     private const string MtkStageBootRom = "brom";
