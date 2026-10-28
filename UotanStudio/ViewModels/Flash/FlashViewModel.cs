@@ -66,6 +66,10 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     [ObservableProperty]
     private string _size = string.Empty;
 
+    /// <summary>The partition offset or sector offset. <para>分区偏移量或扇区偏移。</para></summary>
+    [ObservableProperty]
+    private string _offset = string.Empty;
+
     /// <summary>The image file name. <para>镜像文件名。</para></summary>
     [ObservableProperty]
     private string _fileName = string.Empty;

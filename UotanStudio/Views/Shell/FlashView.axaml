@@ -21,7 +21,7 @@
             <Setter Property="FontSize" Value="13" />
             <Setter Property="MinHeight" Value="24" />
         </Style>
-        <Style Selector="Button">
+        <Style Selector="Button, DropDownButton">
             <Setter Property="FontSize" Value="13" />
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="12,0" />
@@ -38,6 +38,18 @@
         </Style>
         <Style Selector="Button.pane-action, DropDownButton.pane-action">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="MenuFlyoutPresenter">
+            <Setter Property="MinWidth" Value="240" />
+        </Style>
+        <Style Selector="MenuFlyoutPresenter MenuItem">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="MinHeight" Value="30" />
+        </Style>
+        <Style Selector="DropDownButton#SwitchSlotButton MenuItem">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="TextBlock.TextAlignment" Value="Center" />
         </Style>
         <Style Selector="Expander.protocol-expander">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -188,6 +200,9 @@
                                 <DataGridTextColumn Width="Auto" MinWidth="80" IsReadOnly="True"
                                                     Header="{DynamicResource Flash_Command}"
                                                     Binding="{Binding Command}" />
+                                <DataGridTextColumn Width="Auto" MinWidth="90"
+                                                    Header="{DynamicResource Flash_Offset}"
+                                                    Binding="{Binding Offset}" />
                                 <DataGridTextColumn Width="Auto" MinWidth="80" IsReadOnly="True"
                                                     Header="{DynamicResource Flash_Size}"
                                                     Binding="{Binding Size}" />
@@ -248,10 +263,6 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               AllowAutoHide="True">
                     <StackPanel Margin="12" Spacing="10">
-                        <TextBlock Name="DeviceStatusBar" Text="{Binding SelectedDeviceText}"
-                                   TextWrapping="Wrap" FontWeight="SemiBold"
-                                   HorizontalAlignment="Center" TextAlignment="Center" />
-                        <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
                         <!-- 通用操作标题 -->
                         <TextBlock Text="{DynamicResource Flash_GeneralOperations}" FontWeight="SemiBold" />
                         <!-- 全协议通用功能 UI -->
@@ -271,6 +282,20 @@
                             <Button Name="CancelFlashButton" Classes="pane-action" IsEnabled="False"
                                     Click="OnCancelFlashClick"
                                     Content="{DynamicResource Flash_Cancel}" />
+                            <DropDownButton Name="SwitchSlotButton" Classes="pane-action"
+                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                            Content="{DynamicResource Flash_SwitchSlot}">
+                                <DropDownButton.Flyout>
+                                    <MenuFlyout Placement="Bottom">
+                                        <MenuItem Header="{DynamicResource Flash_SlotResetCurrent}" Click="OnSlotResetCurrentClick"
+                                                  HorizontalAlignment="Stretch" TextBlock.TextAlignment="Center" />
+                                        <MenuItem Header="{DynamicResource Flash_SlotSetA}" Click="OnSlotSetAClick"
+                                                  HorizontalAlignment="Stretch" TextBlock.TextAlignment="Center" />
+                                        <MenuItem Header="{DynamicResource Flash_SlotSetB}" Click="OnSlotSetBClick"
+                                                  HorizontalAlignment="Stretch" TextBlock.TextAlignment="Center" />
+                                    </MenuFlyout>
+                                </DropDownButton.Flyout>
+                            </DropDownButton>
                             <DropDownButton Name="RebootMenuButton" Classes="pane-action"
                                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                             Content="{DynamicResource Flash_RebootMenu}">
@@ -312,17 +337,6 @@
                                     </MenuFlyout>
                                 </DropDownButton.Flyout>
                             </DropDownButton>
-                            <DropDownButton Name="SwitchSlotButton" Classes="pane-action"
-                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                            Content="{DynamicResource Flash_SwitchSlot}">
-                                <DropDownButton.Flyout>
-                                    <MenuFlyout Placement="Bottom">
-                                        <MenuItem Header="{DynamicResource Flash_SlotResetCurrent}" Click="OnSlotResetCurrentClick" />
-                                        <MenuItem Header="{DynamicResource Flash_SlotSetA}" Click="OnSlotSetAClick" />
-                                        <MenuItem Header="{DynamicResource Flash_SlotSetB}" Click="OnSlotSetBClick" />
-                                    </MenuFlyout>
-                                </DropDownButton.Flyout>
-                            </DropDownButton>
                             <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
                             <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,*"
                                   RowSpacing="6" ColumnSpacing="8" HorizontalAlignment="Stretch">
@@ -361,13 +375,9 @@
                         <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
                         <!-- 高通 EDL 9008 协议分类 -->
                         <Expander Name="EdlExpander" Classes="protocol-expander"
-                                  Header="{DynamicResource Flash_Edl}" IsExpanded="True">
+                                  Header="{DynamicResource Flash_Edl}" IsExpanded="False">
                             <StackPanel Name="EdlPane" Spacing="8">
-                                                                <TextBlock Name="EdlSerialPortLabel" Text="{DynamicResource Flash_EdlSerialPort}"
-                                           FontSize="12" Opacity="0.8" />
-                                <ComboBox Name="EdlSerialPortBox" Height="32" HorizontalAlignment="Stretch"
-                                          AutomationProperties.Name="{DynamicResource Flash_EdlSerialPort}" />
-                                <Grid Name="EdlOptionGrid" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*,*"
+                                                                <Grid Name="EdlOptionGrid" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*,*"
                                       RowSpacing="6" ColumnSpacing="8" HorizontalAlignment="Stretch">
                                     <CheckBox Grid.Row="0" Grid.Column="0" Name="SkipAbsentSourcesBox"
                                               Content="{DynamicResource Flash_SkipAbsentSources}" HorizontalAlignment="Left" />
@@ -436,38 +446,21 @@
                                 <ComboBox Name="EdlLunBox" Height="32" VerticalContentAlignment="Center"
                                           HorizontalAlignment="Stretch"
                                           AutomationProperties.Name="{DynamicResource Flash_EdlLun}" />
-                                <TextBox Name="EdlProgrammerPathBox" Height="32" VerticalContentAlignment="Center"
-                                         IsReadOnly="True" PlaceholderText="{DynamicResource Flash_EdlProgrammerPathHint}"
-                                         Text="{Binding #EdlProgrammerPathText.Text}"
-                                         AutomationProperties.Name="{DynamicResource Flash_EdlChooseProgrammer}" />
-                                <Button Name="EdlChooseProgrammerButton" Classes="pane-action"
-                                        Click="OnEdlChooseProgrammerClick"
-                                        Content="{DynamicResource Flash_EdlChooseProgrammer}"
-                                        AutomationProperties.Name="{DynamicResource Flash_EdlChooseProgrammer}" />
-                                <TextBlock Name="EdlProgrammerPathText" IsVisible="False" />
-                                <!-- programmer 目录判定：按上游 loader 命名约定扫描目录并用目标已上报的 Sahara 身份正匹配，
-                                     只有唯一匹配才给出可用结论。它是包内 programmer 之外的正交入口，不覆盖上面的单文件选择。 -->
-                                <!-- The programmer folder verdict scans the folder under the upstream loader naming convention
-                                     and positively matches it against the Sahara identity the target already reported; only a
-                                     unique match yields a usable verdict. It is orthogonal to the package-supplied programmer
-                                     and never overrides the single-file selection above. -->
-                                <TextBox Name="EdlProgrammerDirBox" Height="32" VerticalContentAlignment="Center"
-                                         IsReadOnly="True" PlaceholderText="{DynamicResource Flash_EdlProgrammerDirHint}"
-                                         Text="{Binding #EdlProgrammerDirText.Text}"
-                                         AutomationProperties.Name="{DynamicResource Flash_EdlChooseProgrammerDir}" />
-                                <Button Name="EdlChooseProgrammerDirButton" Classes="pane-action"
-                                        Click="OnEdlChooseProgrammerDirClick"
-                                        Content="{DynamicResource Flash_EdlChooseProgrammerDir}"
-                                        AutomationProperties.Name="{DynamicResource Flash_EdlChooseProgrammerDir}" />
-                                <TextBlock Name="EdlProgrammerDirText" IsVisible="False" />
-                                <!-- 包内同时存在多个 firehose loader 时由用户显式选择，不自动取第一个。 -->
-                                <!-- When the package ships several firehose loaders the user picks one; the first is never assumed. -->
-                                <TextBlock Name="EdlProgrammerChoiceLabel" FontSize="12" Opacity="0.8"
-                                           Text="{DynamicResource Flash_EdlProgrammerChoice}" />
+                                <TextBlock Name="EdlProgrammerSelectLabel" FontSize="12" Opacity="0.8"
+                                           Text="{DynamicResource Flash_EdlSelectProgrammer}" />
                                 <ComboBox Name="EdlProgrammerPickBox" Height="32" VerticalContentAlignment="Center"
                                           HorizontalAlignment="Stretch"
                                           SelectionChanged="OnEdlProgrammerPickChanged"
-                                          AutomationProperties.Name="{DynamicResource Flash_EdlProgrammerChoice}" />
+                                          AutomationProperties.Name="{DynamicResource Flash_EdlSelectProgrammer}" />
+                                <TextBox Name="EdlProgrammerPathBox" Height="32" VerticalContentAlignment="Center"
+                                         IsReadOnly="True" IsEnabled="False"
+                                         PlaceholderText="{DynamicResource Flash_EdlProgrammerPathHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_EdlSelectProgrammer}" />
+                                <Button Name="EdlChooseProgrammerButton" Classes="pane-action"
+                                        IsEnabled="False"
+                                        Click="OnEdlChooseProgrammerClick"
+                                        Content="{DynamicResource Flash_EdlChooseCustomProgrammer}"
+                                        AutomationProperties.Name="{DynamicResource Flash_EdlChooseCustomProgrammer}" />
                                 <!-- 下面三项是链路兼容开关：只在驱动或 programmer 表现出对应异常时勾选，默认全部关闭。 -->
                                 <!-- The three entries below are link-compatibility switches; enable them only when the
                                      driver or programmer shows the matching failure, and all three stay off by default. -->
@@ -490,10 +483,6 @@
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_EdlSkipResponse}" />
                                 <StackPanel Name="EdlRegionGroup" Spacing="8">
-                                    <Button Name="EdlReadLunButton" Classes="pane-action"
-                                            Click="OnEdlReadLunClick"
-                                            Content="{DynamicResource Flash_EdlReadLun}"
-                                            AutomationProperties.Name="{DynamicResource Flash_EdlReadLun}" />
                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                         <TextBox Name="EdlBootableValueBox" Grid.Column="0" Height="32" Text="0"
                                                  VerticalContentAlignment="Center"
@@ -515,145 +504,6 @@
                                                 AutomationProperties.Name="{DynamicResource Flash_EdlPartitionDigest}" />
                                     </Grid>
                                 </StackPanel>
-                                <!-- UFS provisioning 只吃外部描述符文件：预览不写设备，提交前必须确认，非 UFS 存储由服务层拒绝。 -->
-                                <!-- UFS provisioning takes an external descriptor profile: the preview writes nothing, the
-                                     submission needs confirmation, and non-UFS storage is refused by the service layer. -->
-                                <TextBox Name="EdlUfsProfileBox" Height="32" VerticalContentAlignment="Center"
-                                         IsReadOnly="True" PlaceholderText="{DynamicResource Flash_EdlUfsProfileHint}"
-                                         Text="{Binding #EdlUfsProfileText.Text}"
-                                         AutomationProperties.Name="{DynamicResource Flash_EdlUfsProfileChoose}" />
-                                <Button Name="EdlChooseUfsProfileButton" Classes="pane-action"
-                                        Click="OnEdlChooseUfsProfileClick"
-                                        Content="{DynamicResource Flash_EdlUfsProfileChoose}"
-                                        AutomationProperties.Name="{DynamicResource Flash_EdlUfsProfileChoose}" />
-                                <TextBlock Name="EdlUfsProfileText" IsVisible="False" />
-                                <Button Name="EdlUfsPreviewButton" Classes="pane-action"
-                                        Click="OnEdlUfsPreviewClick"
-                                        Content="{DynamicResource Flash_EdlUfsPreview}"
-                                        AutomationProperties.Name="{DynamicResource Flash_EdlUfsPreview}" />
-                                <Button Name="EdlUfsProvisionButton" Classes="pane-action"
-                                        Click="OnEdlUfsProvisionClick"
-                                        Content="{DynamicResource Flash_EdlUfsProvision}"
-                                        AutomationProperties.Name="{DynamicResource Flash_EdlUfsProvision}" />
-                                <Button Name="EdlUfsResetButton" Classes="pane-action"
-                                        Click="OnEdlUfsResetClick"
-                                        Content="{DynamicResource Flash_EdlUfsReset}"
-                                        AutomationProperties.Name="{DynamicResource Flash_EdlUfsReset}" />
-                                <!-- 流式 NAND 的控制器布局与分区名都要照参考工具那样由操作者给出；整组只在会话确实
-                                     处于 Streaming DLOAD 且 expert 开关开启时出现，写操作另需下面的确认勾选。 -->
-                                <!-- The streaming NAND controller layout and the partition name are operator-supplied
-                                     exactly as in the reference tool; the whole group appears only while the session is
-                                     really on Streaming DLOAD with the expert switch on, and the writes need the
-                                     confirmation check below. -->
-                                <StackPanel Name="EdlStreamingNandGroup" Spacing="8">
-                                    <TextBlock Text="{DynamicResource Flash_EdlStreamingNandGroup}" FontSize="12"
-                                               Opacity="0.8" TextWrapping="Wrap" />
-                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <TextBox Name="EdlNandPartitionBox" Grid.Column="0" Height="32"
-                                                 VerticalContentAlignment="Center"
-                                                 PlaceholderText="{DynamicResource Flash_EdlNandPartitionHint}"
-                                                 AutomationProperties.Name="{DynamicResource Flash_EdlNandPartitionHint}" />
-                                        <TextBox Name="EdlNandBlockBox" Grid.Column="1" Height="32" Text="0"
-                                                 VerticalContentAlignment="Center"
-                                                 PlaceholderText="{DynamicResource Flash_EdlNandBlockHint}"
-                                                 AutomationProperties.Name="{DynamicResource Flash_EdlNandBlockHint}" />
-                                    </Grid>
-                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <TextBox Name="EdlNandBaseBox" Grid.Column="0" Height="32" Text="0"
-                                                 VerticalContentAlignment="Center"
-                                                 PlaceholderText="{DynamicResource Flash_EdlNandBaseHint}"
-                                                 AutomationProperties.Name="{DynamicResource Flash_EdlNandBaseHint}" />
-                                        <TextBox Name="EdlNandBlockCountBox" Grid.Column="1" Height="32" Text="64"
-                                                 VerticalContentAlignment="Center"
-                                                 PlaceholderText="{DynamicResource Flash_EdlNandBlockCountHint}"
-                                                 AutomationProperties.Name="{DynamicResource Flash_EdlNandBlockCountHint}" />
-                                    </Grid>
-                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <TextBox Name="EdlNandPagesBox" Grid.Column="0" Height="32" Text="0"
-                                                 VerticalContentAlignment="Center"
-                                                 PlaceholderText="{DynamicResource Flash_EdlNandPagesHint}"
-                                                 AutomationProperties.Name="{DynamicResource Flash_EdlNandPagesHint}" />
-                                        <TextBox Name="EdlNandSectorsBox" Grid.Column="1" Height="32" Text="0"
-                                                 VerticalContentAlignment="Center"
-                                                 PlaceholderText="{DynamicResource Flash_EdlNandSectorsHint}"
-                                                 AutomationProperties.Name="{DynamicResource Flash_EdlNandSectorsHint}" />
-                                    </Grid>
-                                    <TextBox Name="EdlNandBadLenBox" Height="32" Text="0"
-                                             VerticalContentAlignment="Center"
-                                             PlaceholderText="{DynamicResource Flash_EdlNandBadLenHint}"
-                                             AutomationProperties.Name="{DynamicResource Flash_EdlNandBadLenHint}" />
-                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <CheckBox Grid.Column="0" Name="EdlNandBadInSpareBox"
-                                                  Content="{DynamicResource Flash_EdlNandBadInSpare}" HorizontalAlignment="Left"
-                                                  AutomationProperties.Name="{DynamicResource Flash_EdlNandBadInSpare}" />
-                                        <CheckBox Grid.Column="1" Name="EdlNandConfirmBox"
-                                                  Content="{DynamicResource Flash_EdlNandConfirm}" HorizontalAlignment="Left"
-                                                  AutomationProperties.Name="{DynamicResource Flash_EdlNandConfirm}" />
-                                    </Grid>
-                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                        <TextBox Name="EdlNandTableBox" Grid.Column="0" Height="32" VerticalContentAlignment="Center"
-                                                 IsReadOnly="True" PlaceholderText="{DynamicResource Flash_EdlNandTableHint}"
-                                                 Text="{Binding #EdlNandTableText.Text}"
-                                                 AutomationProperties.Name="{DynamicResource Flash_EdlNandTableChoose}" />
-                                        <Button Name="ChooseEdlNandTableButton" Grid.Column="1" Classes="pane-action"
-                                                Click="OnChooseEdlNandTableClick"
-                                                Content="{DynamicResource Flash_EdlNandTableChoose}"
-                                                AutomationProperties.Name="{DynamicResource Flash_EdlNandTableChoose}" />
-                                    </Grid>
-                                    <TextBlock Name="EdlNandTableText" IsVisible="False" />
-                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <CheckBox Grid.Column="0" Name="EdlNandOverrideBox" Content="{DynamicResource Flash_EdlNandOverride}"
-                                                  HorizontalAlignment="Left"
-                                                  AutomationProperties.Name="{DynamicResource Flash_EdlNandOverride}" />
-                                        <CheckBox Grid.Column="1" Name="EdlNandTrustedBox" Content="{DynamicResource Flash_EdlNandTrusted}"
-                                                  HorizontalAlignment="Left"
-                                                  AutomationProperties.Name="{DynamicResource Flash_EdlNandTrusted}" />
-                                    </Grid>
-                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <Button Name="EdlNandReadMapButton" Grid.Column="0" Classes="pane-action"
-                                                Click="OnEdlNandReadMapClick"
-                                                Content="{DynamicResource Flash_EdlNandReadMap}"
-                                                AutomationProperties.Name="{DynamicResource Flash_EdlNandReadMap}" />
-                                        <Button Grid.Column="1" Name="EdlNandMarkBadButton" Classes="pane-action"
-                                                Click="OnEdlNandMarkBadClick"
-                                                Content="{DynamicResource Flash_EdlNandMarkBad}"
-                                                AutomationProperties.Name="{DynamicResource Flash_EdlNandMarkBad}" />
-                                    </Grid>
-                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <Button Grid.Column="0" Name="EdlNandUnmarkBadButton" Classes="pane-action"
-                                                Click="OnEdlNandUnmarkBadClick"
-                                                Content="{DynamicResource Flash_EdlNandUnmarkBad}"
-                                                AutomationProperties.Name="{DynamicResource Flash_EdlNandUnmarkBad}" />
-                                        <Button Name="EdlNandRegistersButton" Grid.Column="1" Classes="pane-action"
-                                                Click="OnEdlNandRegistersClick"
-                                                Content="{DynamicResource Flash_EdlNandRegisters}"
-                                                AutomationProperties.Name="{DynamicResource Flash_EdlNandRegisters}" />
-                                    </Grid>
-                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <Button Grid.Column="0" Name="EdlNandCodewordButton" Classes="pane-action"
-                                                Click="OnEdlNandCodewordClick"
-                                                Content="{DynamicResource Flash_EdlNandCodeword}"
-                                                AutomationProperties.Name="{DynamicResource Flash_EdlNandCodeword}" />
-                                        <Button Grid.Column="1" Name="EdlNandFlashModeButton" Classes="pane-action"
-                                                Click="OnEdlNandFlashModeClick"
-                                                Content="{DynamicResource Flash_EdlNandFlashMode}"
-                                                AutomationProperties.Name="{DynamicResource Flash_EdlNandFlashMode}" />
-                                    </Grid>
-                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <Button Name="EdlNandSecureModeButton" Grid.Column="0" Classes="pane-action"
-                                                Click="OnEdlNandSecureModeClick"
-                                                Content="{DynamicResource Flash_EdlNandSecureMode}"
-                                                AutomationProperties.Name="{DynamicResource Flash_EdlNandSecureMode}" />
-                                        <Button Grid.Column="1" Name="EdlNandSendTableButton" Classes="pane-action"
-                                                Click="OnEdlNandSendTableClick"
-                                                Content="{DynamicResource Flash_EdlNandSendTable}"
-                                                AutomationProperties.Name="{DynamicResource Flash_EdlNandSendTable}" />
-                                    </Grid>
-                                    <Button Name="EdlNandCloseButton" Classes="pane-action"
-                                            Click="OnEdlNandCloseClick"
-                                            Content="{DynamicResource Flash_EdlNandClose}"
-                                            AutomationProperties.Name="{DynamicResource Flash_EdlNandClose}" />
-                                </StackPanel>
                                 <!-- 回读清单的两项只在回读入口可用时出现：它们由 OnEdlReadbackClick 消费，
                                      阶段未到 Firehose 时整组隐藏，与回读按钮同判据。 -->
                                 <!-- The two read-back manifest boxes appear only while the read-back entry is usable:
@@ -663,24 +513,15 @@
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_EdlGenerateXml}" />
                                 <CheckBox Name="EdlGeneralizedXmlBox" Content="{DynamicResource Flash_EdlGeneralizedXml}"
-                                          HorizontalAlignment="Left" IsEnabled="False"
+                                          HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_EdlGeneralizedXml}" />
                             </StackPanel>
                         </Expander>
                         <!-- 联发科 MTK 协议分类 -->
                         <Expander Name="MtkExpander" Classes="protocol-expander"
-                                  Header="{DynamicResource Flash_Mtk}" IsExpanded="True">
+                                  Header="{DynamicResource Flash_Mtk}" IsExpanded="False">
                             <StackPanel Spacing="8">
                                 <StackPanel Name="MtkPane" Spacing="8">
-                                <TextBlock Name="MtkPortLabel" Text="{DynamicResource Flash_MtkPorts}"
-                                           FontSize="12" Opacity="0.8" />
-                                <ComboBox Name="MtkPortBox" Height="32" VerticalContentAlignment="Center"
-                                          HorizontalAlignment="Stretch"
-                                          AutomationProperties.Name="{DynamicResource Flash_MtkPorts}" />
-                                <Button Name="RefreshMtkPortsButton" Classes="pane-action"
-                                        Click="OnRefreshMtkPortsClick"
-                                        Content="{DynamicResource Flash_MtkRefreshPorts}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkRefreshPorts}" />
                                 <TextBox Name="MtkDaPathBox" Height="32" VerticalContentAlignment="Center"
                                          IsReadOnly="True" PlaceholderText="{DynamicResource Flash_MtkDaHint}"
                                          Text="{Binding #MtkDaPathText.Text}"
@@ -808,108 +649,6 @@
                                           HorizontalAlignment="Stretch"
                                           ItemTemplate="{StaticResource LocalizedOptionTemplate}"
                                           AutomationProperties.Name="{DynamicResource Flash_MtkStage}" />
-                                <TextBlock Name="MtkStageText" Text="{DynamicResource Flash_MtkStageUndetermined}"
-                                           FontSize="12" Opacity="0.8" TextWrapping="Wrap" />
-                                <CheckBox Name="MtkAttachAgentBox" Content="{DynamicResource Flash_MtkAttachAgent}"
-                                          HorizontalAlignment="Left"
-                                          AutomationProperties.Name="{DynamicResource Flash_MtkAttachAgent}" />
-                                <!-- 整用户区转储是只读操作，按所选代理家族上报的容量分块读取，目标文件由用户挑选；
-                                     字节先落暂存文件，长度与上报值一致时才替换目标。 -->
-                                <!-- A whole-user-area dump is read-only: it walks the capacity the selected agent family
-                                     reported in chunks, takes the destination file from the user, and replaces the target
-                                     only after the staged length equals the reported length. -->
-                                <Button Name="MtkFullDumpButton" Classes="pane-action"
-                                        Click="OnMtkFullDumpClick"
-                                        Content="{DynamicResource Flash_MtkFullDump}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkFullDump}" />
-                                <!-- 全部分区列表转储与整存储转储都是只读走查：跳过清单按分区名给出，输出目录在点击时
-                                     选择，任何失败都保留既有文件。 -->
-                                <!-- The all-partition dump and the whole-storage dump are read-only walks: the skip list is
-                                     named by partition, the output directory is chosen on click, and every failure path
-                                     preserves the files that already exist. -->
-                                <Button Name="MtkDumpWholeFlashButton" Classes="pane-action"
-                                        Click="OnMtkDumpWholeFlashClick"
-                                        Content="{DynamicResource Flash_MtkDumpWholeFlash}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkDumpWholeFlash}" />
-                                <!-- 裸扇区窗口与区域无关的绝对字节读取都属专家面：扇区窗口按区域令牌寻址，
-                                     绝对读取由上报几何拼接跨区偏移，两者给出的地址空间不同。 -->
-                                <!-- The raw sector window and the region-agnostic absolute read are both expert
-                                     surfaces: the sector window is addressed by a region token, while the absolute read
-                                     splices across the regions the agent reported, so the two name different address
-                                     spaces. -->
-                                <StackPanel Name="MtkRawReadGroup" Spacing="8" >
-                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
-                                    <TextBox Name="MtkSectorRegionBox" Grid.Column="0" Height="32"
-                                             VerticalContentAlignment="Center"
-                                             PlaceholderText="{DynamicResource Flash_MtkSectorRegionHint}"
-                                             AutomationProperties.Name="{DynamicResource Flash_MtkSectorRegionHint}" />
-                                    <TextBox Name="MtkSectorStartBox" Grid.Column="1" Height="32" Text="0"
-                                             VerticalContentAlignment="Center"
-                                             PlaceholderText="{DynamicResource Flash_MtkSectorStartHint}"
-                                             AutomationProperties.Name="{DynamicResource Flash_MtkSectorStartHint}" />
-                                    <TextBox Grid.Column="2" Name="MtkSectorCountBox" Height="32" Text="16"
-                                             VerticalContentAlignment="Center"
-                                             PlaceholderText="{DynamicResource Flash_MtkSectorCountHint}"
-                                             AutomationProperties.Name="{DynamicResource Flash_MtkSectorCountHint}" />
-                                </Grid>
-                                <Button Name="MtkReadSectorsButton" Classes="pane-action" Click="OnMtkReadSectorsClick"
-                                        Content="{DynamicResource Flash_MtkReadSectors}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkReadSectors}" />
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                    <TextBox Name="MtkAreaOffsetBox" Grid.Column="0" Height="32" Text="0"
-                                             VerticalContentAlignment="Center"
-                                             PlaceholderText="{DynamicResource Flash_MtkAreaOffsetHint}"
-                                             AutomationProperties.Name="{DynamicResource Flash_MtkAreaOffsetHint}" />
-                                    <TextBox Name="MtkAreaLengthBox" Grid.Column="1" Height="32" Text="4096"
-                                             VerticalContentAlignment="Center"
-                                             PlaceholderText="{DynamicResource Flash_MtkAreaLengthHint}"
-                                             AutomationProperties.Name="{DynamicResource Flash_MtkAreaLengthHint}" />
-                                </Grid>
-                                <Button Name="MtkReadAreaButton" Classes="pane-action" Click="OnMtkReadAreaClick"
-                                        Content="{DynamicResource Flash_MtkReadArea}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkReadArea}" />
-                                </StackPanel>
-                                <!-- 传输速度协商与代理崩溃都作用于已在存储就绪阶段的代理：崩溃会打崩 boot 通道，会话随即 fault，需重连。 -->
-                                <!-- Transfer-speed negotiation and a DA crash both act on an agent already at storage readiness: a
-                                     crash interrupts the boot channel and faults the session, so the channel must be reopened. -->
-                                <Button Name="MtkSetSpeedButton" Classes="pane-action" Click="OnMtkSetSpeedClick"
-                                        Content="{DynamicResource Flash_MtkSpeedButton}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkSpeedButton}" />
-                                <!-- 以下两组操作只在 USB 上的 MediaTek 租约成立时出现：串口路径没有 BootROM 阶段的控制面。 -->
-                                <!-- These two groups appear only for a MediaTek lease on USB: the serial path has no
-                                     BootROM-stage control surface. -->
-                                <StackPanel Name="MtkUsbOnlyRow" Spacing="8" >
-                                <!-- RPMB 只读捕获的寻址形态必须属于所选代理家族支持的组合；组合不支持时先在本地拒绝，不接触设备。 -->
-                                <!-- The read-only RPMB capture must use an addressing shape the chosen family supports; an
-                                     unsupported combination is refused locally before any device contact. -->
-                                <TextBlock Text="{DynamicResource Flash_MtkRpmbMode}" FontSize="12" Opacity="0.8" />
-                                <ComboBox Name="MtkRpmbModeBox" Height="32" VerticalContentAlignment="Center"
-                                          HorizontalAlignment="Stretch"
-                                          ItemTemplate="{StaticResource LocalizedOptionTemplate}"
-                                          AutomationProperties.Name="{DynamicResource Flash_MtkRpmbMode}" />
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                    <TextBox Name="MtkRpmbOffsetBox" Height="32" VerticalContentAlignment="Center"
-                                             PlaceholderText="{DynamicResource Flash_MtkRpmbOffset}"
-                                             AutomationProperties.Name="{DynamicResource Flash_MtkRpmbOffset}" />
-                                    <TextBox Grid.Column="1" Name="MtkRpmbLengthBox" Height="32"
-                                             VerticalContentAlignment="Center"
-                                             PlaceholderText="{DynamicResource Flash_MtkRpmbLength}"
-                                             AutomationProperties.Name="{DynamicResource Flash_MtkRpmbLength}" />
-                                </Grid>
-                                <Button Name="MtkRpmbReadButton" Classes="pane-action"
-                                        Click="OnMtkRpmbReadClick"
-                                        Content="{DynamicResource Flash_MtkRpmbRead}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkRpmbRead}" />
-                                <!-- 容量查询与捕获读取同级：两者都只读，且都需要会话先进入 XFlash 存储就绪状态，
-                                     所以共用上面那一行阶段的显隐，不新增分组。 -->
-                                <!-- The capacity query sits beside the capture: both are read-only and both need the session
-                                     to reach the XFlash storage-ready state, so they share that row's stage gating rather
-                                     than introducing a new group. -->
-                                <Button Name="MtkRpmbCapacityButton" Classes="pane-action"
-                                        Click="OnMtkRpmbCapacityClick"
-                                        Content="{DynamicResource Flash_MtkRpmbCapacity}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkRpmbCapacity}" />
-                                </StackPanel>
                                 <!-- 关机与两种启动模式切换都要先启动到存储就绪的代理，因此复用本面板的 DA/EMI/端口选择。 -->
                                 <!-- Every power and boot-mode request first boots a storage-ready agent, so it reuses this
                                      pane's DA/EMI/port selection. -->
@@ -925,47 +664,46 @@
                                             Content="{DynamicResource Flash_MtkXmlPropertyQuery}"
                                             AutomationProperties.Name="{DynamicResource Flash_MtkXmlPropertyQuery}" />
                                 </Grid>
-                                <TextBlock Name="MtkScatterHintText" Text="{DynamicResource Flash_MtkLoadScatterHint}"
-                                           FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+
                             </StackPanel>
-    <StackPanel Name="MtkPreloaderPane" Spacing="8">
-                                <TextBlock Text="{DynamicResource Flash_MtkPreloaderGroup}" FontWeight="SemiBold" />
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                    <TextBox Name="MtkPreloaderOffsetBox" Height="32" VerticalContentAlignment="Center"
-                                             Text="0x0" PlaceholderText="{DynamicResource Flash_MtkPreloaderOffset}"
-                                             AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderOffset}" />
-                                    <TextBox Grid.Column="1" Name="MtkPreloaderLengthBox" Height="32"
-                                             VerticalContentAlignment="Center" Text="0x1000"
-                                             PlaceholderText="{DynamicResource Flash_MtkPreloaderLength}"
-                                             AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderLength}" />
-                                </Grid>
-                                <Button Name="MtkPreloaderPeekButton" Classes="pane-action" Click="OnMtkPreloaderPeekClick"
-                                        Content="{DynamicResource Flash_MtkPreloaderPeek}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderPeek}" />
-                                <Button Name="MtkPreloaderReturnToBromButton" Classes="pane-action"
-                                        Click="OnMtkPreloaderReturnToBromClick"
-                                        Content="{DynamicResource Flash_MtkPreloaderReturnToBrom}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderReturnToBrom}" />
-                                <Button Name="MtkPreloaderDisableWatchdogButton" Classes="pane-action"
-                                        Click="OnMtkPreloaderDisableWatchdogClick"
-                                        Content="{DynamicResource Flash_MtkPreloaderDisableWatchdog}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderDisableWatchdog}" />
-                                <TextBox Name="MtkPreloaderPartitionNameBox" Height="32" VerticalContentAlignment="Center"
-                                         PlaceholderText="{DynamicResource Flash_MtkPreloaderPartitionName}"
-                                         AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderPartitionName}" />
-                                <Button Name="MtkPreloaderJumpButton" Classes="pane-action" Click="OnMtkPreloaderJumpClick"
-                                        Content="{DynamicResource Flash_MtkPreloaderJump}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderJump}" />
-                                <Button Name="MtkPreloaderBootloaderJumpButton" Classes="pane-action"
-                                        Click="OnMtkPreloaderBootloaderJumpClick"
-                                        Content="{DynamicResource Flash_MtkPreloaderBootloaderJump}"
-                                        AutomationProperties.Name="{DynamicResource Flash_MtkPreloaderBootloaderJump}" />
                             </StackPanel>
+                        </Expander>
+                        <!-- 瑞芯微 Rockchip 分类 -->
+                        <Expander Name="RkExpander" Classes="protocol-expander"
+                                  Header="{DynamicResource Flash_Rockchip}" IsExpanded="False">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="{DynamicResource Flash_RkSetStorageType}" FontSize="12" Opacity="0.8" />
+                                <ComboBox Name="RkStorageTypeBox" Height="32" VerticalContentAlignment="Center"
+                                          HorizontalAlignment="Stretch"
+                                          AutomationProperties.Name="{DynamicResource Flash_RkSetStorageType}" />
+                                <Button Name="RkEnterMaskromButton" Classes="pane-action"
+                                        Click="OnRkEnterMaskromClick"
+                                        Content="{DynamicResource Flash_RkEnterMaskrom}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkEnterMaskrom}" />
+                                <TextBlock Name="RkConfigSelectLabel" FontSize="12" Opacity="0.8"
+                                           Text="{DynamicResource Flash_RkSelectConfig}" />
+                                <ComboBox Name="RkConfigPickBox" Height="32" VerticalContentAlignment="Center"
+                                          HorizontalAlignment="Stretch"
+                                          SelectionChanged="OnRkConfigPickChanged"
+                                          AutomationProperties.Name="{DynamicResource Flash_RkSelectConfig}" />
+                                <TextBox Name="RkConfigPathBox" Height="32" VerticalContentAlignment="Center"
+                                         IsReadOnly="True" IsEnabled="False"
+                                         PlaceholderText="{DynamicResource Flash_RkConfigPathHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_RkSelectConfig}" />
+                                <Button Name="RkChooseConfigButton" Classes="pane-action"
+                                        IsEnabled="False"
+                                        Click="OnRkChooseConfigClick"
+                                        Content="{DynamicResource Flash_RkChooseCustomConfig}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkChooseCustomConfig}" />
+                                <Button Name="RkExportConfigButton" Classes="pane-action"
+                                        Click="OnRkExportConfigClick"
+                                        Content="{DynamicResource Flash_RkExportConfig}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkExportConfig}" />
                             </StackPanel>
                         </Expander>
                         <!-- 镜像操作分类 -->
                         <Expander Name="ImageExpander" Classes="protocol-expander"
-                                  Header="{DynamicResource Flash_Image}" IsExpanded="True">
+                                  Header="{DynamicResource Flash_Image}" IsExpanded="False">
                             <StackPanel Spacing="8">
                                 <Button Name="ExtractSelectedButton" Classes="pane-action" IsEnabled="False"
                                         Click="OnExtractSelectedClick"

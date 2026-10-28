@@ -65,15 +65,11 @@ public sealed partial class FlashViewModel
         Field<ComboBox>("MtkBaudBox").SelectedIndex = 0;
         Field<ComboBox>("EdlLunBox").ItemsSource = Enumerable.Range(0, 8).ToArray();
         Field<ComboBox>("EdlLunBox").SelectedIndex = 0;
-        Field<ComboBox>("MtkRpmbModeBox").ItemsSource = _mtkRpmbModeOptions.Options;
-        Field<ComboBox>("MtkRpmbModeBox").SelectedIndex = 0;
-        Field<TextBox>("MtkRpmbOffsetBox").Text = "0";
-        Field<TextBox>("MtkRpmbLengthBox").Text = "8";
-        Field<CheckBox>("EdlGeneralizedXmlBox").IsEnabled = false;
-        Field<CheckBox>("EdlGenerateXmlBox").IsCheckedChanged += (_, _) =>
-            Field<CheckBox>("EdlGeneralizedXmlBox").IsEnabled = Field<CheckBox>("EdlGenerateXmlBox").IsChecked == true;
+        Field<ComboBox>("RkStorageTypeBox").ItemsSource = RkStorageTypes;
+        Field<ComboBox>("RkStorageTypeBox").SelectedIndex = 1;
+        UpdateEdlProgrammerPickOptions();
+        UpdateRkConfigPickOptions();
         PropertyChanged += OnModelPropertyChanged;
-        RefreshMtkPorts();
     }
 
     /// <summary>
@@ -88,6 +84,8 @@ public sealed partial class FlashViewModel
             _deviceViewModel.PropertyChanged += OnGlobalDeviceChanged;
         }
 
+        _lastObservedDevice = SelectedDevice;
+        ApplyDeviceProtocolExpansion(SelectedDevice?.Protocol);
         UpdateObservedDeviceInfo();
         UpdateEdlButton();
     }
