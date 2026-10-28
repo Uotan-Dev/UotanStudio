@@ -867,6 +867,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.FavoriteNodeTypes = latest.FavoriteNodeTypes;
         _appSettings.ExpandedNodeCategories = latest.ExpandedNodeCategories;
         _appSettings.PairedNetworkTargets = latest.PairedNetworkTargets;
+        _appSettings.MainWindowPlacement = latest.MainWindowPlacement;
 
         _appSettings.McpServers = [.. McpServers];
         _appSettings.McpExposeEnabled = McpExposeEnabled;

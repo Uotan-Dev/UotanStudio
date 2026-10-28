@@ -3,15 +3,14 @@ using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
-using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Core;
-using UotanStudio.Messages;
 using UotanStudio.Projects;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Ui.Projects;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
+using Ursa.Controls;
 
 namespace UotanStudio.Services.Ui.Workspace;
 
@@ -27,6 +26,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
     private bool _disposed;
     private Task? _initialization;
     private Window? _mainWindow;
+    private MainWindowPlacement? _savedWindowPlacement;
 
     internal WorkspaceAutoSaveService(WorkspaceViewModel workspace, SettingsViewModel settings, ProjectOperationsService projects, string? sessionPath = null)
     {
@@ -38,7 +38,6 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         _settings.PropertyChanged += OnSettingsChanged;
         _timer.Tick += OnTick;
         _projects.BeforeProjectChangeAsync = FlushAsync;
-        WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
     }
 
     /// <summary>
@@ -97,8 +96,10 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
 
     private async Task RestoreAsync()
     {
+        var resetPlacement = false;
         try
         {
+            resetPlacement = RestoreWindowPlacement();
             if (_coordinator.Enabled && File.Exists(_sessionPath))
             {
                 await using var input = File.OpenRead(_sessionPath);
@@ -121,7 +122,6 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                     }
                     if (_projects.CurrentProjectPath is null && snapshot.ProjectPath is null && snapshot.DraftPackingSettings is { } packing)
                         ProjectSettingViewModel.EnsureInstance().ApplyFromDto(packing);
-                    ApplyWindowState(snapshot);
                     var docks = WorkspaceSessionCapture.Enumerate(_workspace.Layout).OfType<IDock>().ToList();
                     foreach (var state in snapshot.Docks)
                     {
@@ -141,6 +141,10 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
             _initialized = true;
             if (!_disposed) _timer.Start();
         }
+        if (resetPlacement && _mainWindow is { } window)
+        {
+            _ = ShowPlacementResetNoticeAsync(window);
+        }
     }
 
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
@@ -149,45 +153,88 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
             _coordinator.Enabled = _settings.AutoSave;
     }
 
-    private void ApplyWindowState(WorkspaceSessionSnapshot snapshot)
+    /// <summary>
+    /// Applies the persisted main-window size, position and state; the placement lives in the application
+    /// settings file and is therefore shared by every solution. A placement that leaves no usable visible part
+    /// on any screen is discarded so the default window size and position stay in effect.
+    /// <para>应用持久化的主窗口尺寸、位置与状态；该位置存放在应用设置文件中，因此对所有解决方案生效。若某处
+    /// 持久化位置在任何屏幕上都留不下可用的可视部分，则丢弃该位置并保持默认窗口大小与位置。</para>
+    /// </summary>
+    /// <returns><see langword="true"/> when the persisted placement was discarded as off-screen.
+    /// <para>持久化位置因超出屏幕被丢弃时为 <see langword="true"/>。</para></returns>
+    private bool RestoreWindowPlacement()
     {
-        var window = _mainWindow;
-        if (window is null) return;
-        if (snapshot.WindowWidth is > 100 and < 10000 && snapshot.WindowHeight is > 100 and < 10000)
+        if (_mainWindow is not { } window) return false;
+        if (SettingsPersistenceService.Instance.LoadSettings().MainWindowPlacement is not { } placement) return false;
+        var width = placement.Width ?? window.Width;
+        var height = placement.Height ?? window.Height;
+        var x = placement.X ?? window.Position.X;
+        var y = placement.Y ?? window.Position.Y;
+        var scaling = window.Screens.Primary?.Scaling ?? 1;
+        if (!WindowPlacementValidator.HasVisibleArea(x, y, width, height,
+                [.. window.Screens.All.Select(screen => screen.WorkingArea)], scaling))
+            return true;
+        if (placement.Width is > 100 and < 10000 && placement.Height is > 100 and < 10000)
         {
-            window.Width = snapshot.WindowWidth.Value;
-            window.Height = snapshot.WindowHeight.Value;
+            window.Width = placement.Width.Value;
+            window.Height = placement.Height.Value;
         }
-        if (snapshot.WindowX is { } x && snapshot.WindowY is { } y)
-            window.Position = new PixelPoint(x, y);
-        if (snapshot.WindowState is { } state && Enum.IsDefined(typeof(WindowState), state)
-            && (WindowState)state != WindowState.Minimized)
-            window.WindowState = (WindowState)state;
+        if (placement.X is { } positionX && placement.Y is { } positionY)
+            window.Position = new PixelPoint(positionX, positionY);
+        if (placement.State != WindowState.Minimized)
+            window.WindowState = placement.State;
+        _savedWindowPlacement = placement;
+        return false;
     }
 
-    private async Task RestoreWindowForCurrentProjectAsync()
+    /// <summary>
+    /// Tells the user that the stored window placement was outside every screen and that the default size and
+    /// position are used instead.
+    /// <para>告知用户已存窗口位置超出所有屏幕，因此改用默认的窗口大小与位置。</para>
+    /// </summary>
+    /// <param name="window">Owner window of the notice. <para>提示的所属窗口。</para></param>
+    /// <returns>A task that completes after the notice closes. <para>提示关闭后完成的任务。</para></returns>
+    private static async Task ShowPlacementResetNoticeAsync(Window window)
     {
         try
         {
-            if (!_coordinator.Enabled || _mainWindow is null || !File.Exists(_sessionPath)) return;
-            await using var input = File.OpenRead(_sessionPath);
-            if (input.Length > 32 * 1024 * 1024) return;
-            var snapshot = await JsonSerializer.DeserializeAsync(input, AppSettingsJsonContext.Default.WorkspaceSessionSnapshot);
-            if (snapshot is { Version: 1 } && string.Equals(snapshot.ProjectPath, _projects.CurrentProjectPath,
-                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-                ApplyWindowState(snapshot);
+            var language = LanguageService.Instance;
+            await DialogService.ShowAsync(window,
+                language.GetString("Window_RestoreOutOfScreenTitle"),
+                language.GetString("Window_RestoreOutOfScreenMessage"),
+                MessageBoxIcon.Warning);
         }
-        catch (Exception ex) { LogService.Instance.Write(LogLevel.Warn, "AutoSave", $"Restore window state failed: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "AutoSave", $"Window placement notice failed: {ex.Message}");
+        }
     }
 
-    private void OnProjectContextChanged(object recipient, ProjectContextChangedMessage message)
+    /// <summary>
+    /// Writes the current main-window size, position and state to the application settings file, skipping the
+    /// write when the persisted placement already matches.
+    /// <para>把当前主窗口尺寸、位置与状态写入应用设置文件；磁盘上的位置已相同时跳过写入。</para>
+    /// </summary>
+    private void SaveWindowPlacement()
     {
-        if (_initialized) _ = RestoreWindowForCurrentProjectAsync();
+        if (_mainWindow is not { } window) return;
+        var placement = new MainWindowPlacement
+        {
+            Width = window.Width is > 100 and < 10000 ? window.Width : null,
+            Height = window.Height is > 100 and < 10000 ? window.Height : null,
+            X = window.Position.X,
+            Y = window.Position.Y,
+            State = window.WindowState == WindowState.Minimized ? WindowState.Normal : window.WindowState
+        };
+        if (_savedWindowPlacement is { } saved && saved.Matches(placement)) return;
+        if (SettingsPersistenceService.Instance.SaveMainWindowPlacement(placement)) _savedWindowPlacement = placement;
     }
 
     private async void OnTick(object? sender, EventArgs e)
     {
-        if (_initialized && !_projects.IsBusy && !_projects.IsImageOperationRunning) await _coordinator.TickAsync();
+        if (!_initialized || _projects.IsBusy || _projects.IsImageOperationRunning) return;
+        if (_coordinator.Enabled) await _coordinator.TickAsync();
+        else SaveWindowPlacement();
     }
 
     private async Task SaveEditedDocumentsAsync()
@@ -206,6 +253,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         if (!_initialized || _projects.IsBusy) return;
         try
         {
+            SaveWindowPlacement();
             var signature = ComputeSessionSignature();
             if (string.Equals(signature, _lastSessionSignature, StringComparison.Ordinal)) return;
 
@@ -219,14 +267,6 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                 Documents = documents,
                 Docks = WorkspaceSessionCapture.Docks(_workspace.Layout)
             };
-            if (_mainWindow is { } window)
-            {
-                snapshot.WindowWidth = window.Width is > 0 and < 10000 ? window.Width : null;
-                snapshot.WindowHeight = window.Height is > 0 and < 10000 ? window.Height : null;
-                snapshot.WindowX = window.Position.X;
-                snapshot.WindowY = window.Position.Y;
-                snapshot.WindowState = (int)(window.WindowState == WindowState.Minimized ? WindowState.Normal : window.WindowState);
-            }
             if (_projects.NodeEditorVM is { } nodes)
             {
                 snapshot.NodeZoom = nodes.Zoom;
@@ -275,6 +315,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
             Resume();
             return false;
         }
+        SaveWindowPlacement();
         if (_initialized)
         {
             if (_projects.CurrentProjectPath is { Length: > 0 } path)
@@ -308,6 +349,5 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         _settings.PropertyChanged -= OnSettingsChanged;
         if (_projects.BeforeProjectChangeAsync == FlushAsync)
             _projects.BeforeProjectChangeAsync = null;
-        WeakReferenceMessenger.Default.Unregister<ProjectContextChangedMessage>(this);
     }
 }

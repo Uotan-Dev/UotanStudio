@@ -111,12 +111,7 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
             Panels = new() { [WorkspacePanelService.ProjectExplorer] = false, [WorkspacePanelService.ImagesView] = true },
             Documents = [new() { Kind = "Text", RelativePath = Path.Combine(_root, "outside.json"), OpenMode = (int)EditorOpenMode.Text, IsActive = true }],
             Docks = [new() { Id = "LeftPane", Proportion = 0.3, ActiveId = "ImagesView" }],
-            DraftWorkflow = new() { Nodes = [new() { InstanceId = "test", TypeKey = "File.Binary.Read", InputInitialValues = new() { ["Path"] = "boot.img" } }] },
-            WindowWidth = 1280,
-            WindowHeight = 720,
-            WindowX = 40,
-            WindowY = 60,
-            WindowState = 0
+            DraftWorkflow = new() { Nodes = [new() { InstanceId = "test", TypeKey = "File.Binary.Read", InputInitialValues = new() { ["Path"] = "boot.img" } }] }
         };
         Assert.True(await AtomicJsonFile.WriteIfChangedAsync(path, snapshot, AppSettingsJsonContext.Default.WorkspaceSessionSnapshot, Cancellation));
         var time = File.GetLastWriteTimeUtc(path);
@@ -131,10 +126,6 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
         Assert.Equal((int)EditorOpenMode.Text, loaded.Documents[0].OpenMode);
         Assert.Equal(0.3, Assert.Single(loaded.Docks).Proportion);
         Assert.Equal("boot.img", Assert.Single(loaded.DraftWorkflow!.Nodes).InputInitialValues!["Path"]);
-        Assert.Equal(1280d, loaded.WindowWidth);
-        Assert.Equal(720d, loaded.WindowHeight);
-        Assert.Equal(40, loaded.WindowX);
-        Assert.Equal(60, loaded.WindowY);
     }
 
     [Fact]

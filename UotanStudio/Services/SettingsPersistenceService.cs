@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Avalonia.Controls;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Composition;
 using UotanStudio.Firmware.Core.IO;
@@ -430,6 +431,15 @@ public class AppSettings : IJsonOnDeserialized
     [JsonPropertyName("renderingCompositionMode")]
     [JsonConverter(typeof(JsonStringEnumConverter<RenderingCompositionMode>))]
     public RenderingCompositionMode RenderingCompositionMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets the main-window size, position and state restored at the next application start.
+    /// <para>获取或设置下次应用启动时恢复的主窗口尺寸、位置与状态。</para>
+    /// </summary>
+    /// <value>The persisted placement, or <see langword="null"/> when the window was never captured.
+    /// <para>持久化的窗口位置；从未捕获时为 <see langword="null"/>。</para></value>
+    [JsonPropertyName("mainWindowPlacement")]
+    public MainWindowPlacement? MainWindowPlacement { get; set; }
 }
 
 /// <summary>
@@ -444,6 +454,62 @@ public enum GpuExportPreference
     On,
     /// <summary>Always decode to CPU-visible planes. <para>始终解码为 CPU 可读的像素平面。</para></summary>
     Off,
+}
+
+/// <summary>
+/// Persisted main-window size, position and state restored at the next application start.
+/// <para>持久化的主窗口尺寸、位置与状态，在下次应用启动时恢复。</para>
+/// </summary>
+public sealed class MainWindowPlacement
+{
+    /// <summary>Gets or sets the outer width in device-independent pixels; null leaves the width untouched.
+    /// <para>获取或设置设备无关像素的外层宽度；为 null 时保持原宽度。</para></summary>
+    /// <value>The captured width, or <see langword="null"/> when unavailable.
+    /// <para>捕获到的宽度；不可用时为 <see langword="null"/>。</para></value>
+    [JsonPropertyName("width")]
+    public double? Width { get; set; }
+
+    /// <summary>Gets or sets the outer height in device-independent pixels; null leaves the height untouched.
+    /// <para>获取或设置设备无关像素的外层高度；为 null 时保持原高度。</para></summary>
+    /// <value>The captured height, or <see langword="null"/> when unavailable.
+    /// <para>捕获到的高度；不可用时为 <see langword="null"/>。</para></value>
+    [JsonPropertyName("height")]
+    public double? Height { get; set; }
+
+    /// <summary>Gets or sets the screen X coordinate in pixels; null leaves the horizontal position untouched.
+    /// <para>获取或设置以像素计的屏幕 X 坐标；为 null 时保持原水平位置。</para></summary>
+    /// <value>The captured horizontal position, or <see langword="null"/> when unavailable.
+    /// <para>捕获到的水平位置；不可用时为 <see langword="null"/>。</para></value>
+    [JsonPropertyName("x")]
+    public int? X { get; set; }
+
+    /// <summary>Gets or sets the screen Y coordinate in pixels; null leaves the vertical position untouched.
+    /// <para>获取或设置以像素计的屏幕 Y 坐标；为 null 时保持原垂直位置。</para></summary>
+    /// <value>The captured vertical position, or <see langword="null"/> when unavailable.
+    /// <para>捕获到的垂直位置；不可用时为 <see langword="null"/>。</para></value>
+    [JsonPropertyName("y")]
+    public int? Y { get; set; }
+
+    /// <summary>Gets or sets the window state applied on restore; <see cref="WindowState.Minimized"/> is never restored.
+    /// <para>获取或设置恢复时应用的窗口状态；<see cref="WindowState.Minimized"/> 不会被恢复。</para></summary>
+    /// <value>The captured window state; defaults to <see cref="WindowState.Normal"/>.
+    /// <para>捕获到的窗口状态；默认为 <see cref="WindowState.Normal"/>。</para></value>
+    [JsonPropertyName("state")]
+    [JsonConverter(typeof(JsonStringEnumConverter<WindowState>))]
+    public WindowState State { get; set; }
+
+    /// <summary>Reports whether another placement carries the same width, height, position and state.
+    /// <para>判断另一个窗口位置是否具有相同的宽度、高度、坐标与状态。</para></summary>
+    /// <param name="other">The placement to compare with; <see langword="null"/> never matches.
+    /// <para>用于比较的位置；<see langword="null"/> 永不匹配。</para></param>
+    /// <returns><see langword="true"/> when every stored value is equal.
+    /// <para>所有已存值相等时返回 <see langword="true"/>。</para></returns>
+    internal bool Matches(MainWindowPlacement? other) => other is not null
+        && Width == other.Width
+        && Height == other.Height
+        && X == other.X
+        && Y == other.Y
+        && State == other.State;
 }
 
 /// <summary>
@@ -470,11 +536,12 @@ public sealed record PairedNetworkTarget(string Address, bool RequiresTls);
 [JsonSerializable(typeof(McpTransportKind))]
 [JsonSerializable(typeof(Logging.LogFileRecord))]
 [JsonSerializable(typeof(Dictionary<string, bool>))]
+[JsonSerializable(typeof(List<string>))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    Converters = [typeof(JsonStringEnumConverter<ThemeMode>), typeof(JsonStringEnumConverter<McpTransportKind>)])]
+    Converters = [typeof(JsonStringEnumConverter<ThemeMode>), typeof(JsonStringEnumConverter<McpTransportKind>), typeof(JsonStringEnumConverter<WindowState>)])]
 internal partial class AppSettingsJsonContext : JsonSerializerContext;
 
 /// <summary>
@@ -635,6 +702,30 @@ public class SettingsPersistenceService
         var settings = LoadSettings();
         settings.RecentProjects = recentProjects ?? [];
         SaveSettings(settings);
+    }
+
+    /// <summary>
+    /// Persists the main-window size, position and state, merging on top of the latest settings on disk so
+    /// other settings are never overwritten.
+    /// <para>持久化主窗口尺寸、位置与状态：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
+    /// </summary>
+    /// <param name="placement">The captured placement to store. <para>要保存的捕获窗口位置。</para></param>
+    /// <returns><see langword="true"/> when the placement was already stored or the save succeeded;
+    /// <see langword="false"/> when the write failed and the error was logged.
+    /// <para>位置已存在或保存成功时返回 <see langword="true"/>；写入失败并已记录错误时返回
+    /// <see langword="false"/>。</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="placement"/> is <see langword="null"/>.
+    /// <para><paramref name="placement"/> 为 <see langword="null"/>。</para></exception>
+    public bool SaveMainWindowPlacement(MainWindowPlacement placement)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+        var settings = LoadSettings();
+        if (settings.MainWindowPlacement is { } stored && stored.Matches(placement))
+        {
+            return true;
+        }
+        settings.MainWindowPlacement = placement;
+        return TrySaveSettings(settings, out _);
     }
 
     /// <summary>

@@ -18,16 +18,6 @@ internal sealed class WorkspaceSessionSnapshot
     public ProjectSettingsDto? DraftPackingSettings { get; set; }
     public double NodeZoom { get; set; } = 1;
     public bool NodeMinimap { get; set; } = true;
-    /// <summary>
-    /// Last main-window bounds and state, when available.
-    /// <para>最近一次主窗口的边界与状态（若已捕获）。</para>
-    /// </summary>
-    /// <value>The captured window width, or null when unavailable. <para>捕获到的窗口宽度，未获取时为 null。</para></value>
-    public double? WindowWidth { get; set; }
-    public double? WindowHeight { get; set; }
-    public int? WindowX { get; set; }
-    public int? WindowY { get; set; }
-    public int? WindowState { get; set; }
 }
 
 internal sealed class WorkspaceDockState

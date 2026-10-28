@@ -1788,6 +1788,12 @@ Author: 暮间雾
   <data name="MainWindow_Title" xml:space="preserve">
     <value>UotanStudio</value>
   </data>
+  <data name="Window_RestoreOutOfScreenTitle" xml:space="preserve">
+    <value>Window placement reset</value>
+  </data>
+  <data name="Window_RestoreOutOfScreenMessage" xml:space="preserve">
+    <value>The saved window position or size is outside every visible screen area. The default window size and position are used instead.</value>
+  </data>
   <data name="Document_BuildProp" xml:space="preserve">
     <value>build.prop</value>
   </data>

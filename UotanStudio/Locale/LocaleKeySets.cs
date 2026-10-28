@@ -584,6 +584,8 @@ internal static class LocaleKeySets
         "Splash_Nodes",
         "Splash_Workspace",
         "MainWindow_Title",
+        "Window_RestoreOutOfScreenTitle",
+        "Window_RestoreOutOfScreenMessage",
         "Document_BuildProp",
         "Document_InitRc",
         "ProjectExplorer_Outer",
