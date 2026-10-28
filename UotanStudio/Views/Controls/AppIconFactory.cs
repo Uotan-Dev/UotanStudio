@@ -67,6 +67,11 @@ internal static class AppIconFactory
         AppIconKind.DragHandle => new Td.DragMove(),
         AppIconKind.SplitHorizontal => new Td.ComponentDividerHorizontal(),
         AppIconKind.SplitVertical => new Td.ComponentDividerVertical(),
+        AppIconKind.OpenAs => new Td.ArrowRightUp(),
+        AppIconKind.Convert => new Td.Swap(),
+        AppIconKind.Checksum => new Td.FileSafety(),
+        AppIconKind.Extract => new Td.FileDownload(),
+        AppIconKind.OpenFolder => new Td.FolderOpen(),
         _ => new Td.File(),
     };
 }

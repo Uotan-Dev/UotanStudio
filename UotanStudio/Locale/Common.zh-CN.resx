@@ -1900,6 +1900,9 @@
   <data name="Explorer_OpenInFileExplorer" xml:space="preserve">
     <value>在文件资源管理器中打开</value>
   </data>
+  <data name="Explorer_FileOperations" xml:space="preserve">
+    <value>文件操作</value>
+  </data>
   <data name="Explorer_OpenInMultiColumnBrowser" xml:space="preserve">
     <value>在多列文件浏览器中打开</value>
   </data>

@@ -3,6 +3,7 @@
         xmlns:dock="using:Dock.Avalonia.Controls"
         xmlns:icons="https://irihi.tech/iconica/tdesign"
         xmlns:core="using:Dock.Model.Core"
+        xmlns:controls="using:UotanStudio.Views.Controls"
         xmlns:ui="using:UotanStudio.UiAbstractions">
     <!-- 文档/工具标签页右键菜单：覆盖 Semi Dock 主题的默认菜单——
          去掉方向性关闭（关闭左侧/右侧/上方/下方）、新建水平/垂直文档停靠区、布局模式，
@@ -14,6 +15,7 @@
     <Style Selector="dock|DocumentTabStripItem">
         <Setter Property="DocumentContextMenu">
             <Template><ContextMenu x:DataType="core:IDockable">
+                <controls:DocumentFileActionsMenuItem />
                 <MenuItem Header="{DynamicResource DockMenu_Float}" IsVisible="{Binding CanFloat}"
                           Command="{Binding Factory.FloatDockable}" CommandParameter="{Binding}">
                     <MenuItem.Icon>

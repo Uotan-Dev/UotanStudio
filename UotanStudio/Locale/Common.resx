@@ -1900,6 +1900,9 @@ Author: 暮间雾
   <data name="Explorer_OpenInFileExplorer" xml:space="preserve">
     <value>Open in File Explorer</value>
   </data>
+  <data name="Explorer_FileOperations" xml:space="preserve">
+    <value>File Operations</value>
+  </data>
   <data name="Explorer_OpenInMultiColumnBrowser" xml:space="preserve">
     <value>Open in Multi-Column File Browser</value>
   </data>

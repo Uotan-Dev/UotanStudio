@@ -58,4 +58,9 @@ public enum AppIconKind
     DragHandle,
     SplitHorizontal,
     SplitVertical,
+    OpenAs,
+    Convert,
+    Checksum,
+    Extract,
+    OpenFolder,
 }

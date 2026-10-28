@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using CommunityToolkit.Mvvm.Messaging;
+using Dock.Model.Core;
 using UotanStudio.Firmware.Core;
 using UotanStudio.Messages;
 using UotanStudio.Services.Ui.Workspace.Documents;
@@ -27,6 +28,7 @@ namespace UotanStudio.Views.Controls;
 public sealed class OpenAsMenuItem : MenuItem
 {
     private ExplorerNode? _node;
+    private string? _path;
 
     /// <summary>
     /// Keeps the entry styled as a plain <see cref="MenuItem"/>. Avalonia looks a control theme up by the
@@ -47,7 +49,7 @@ public sealed class OpenAsMenuItem : MenuItem
     /// </summary>
     public OpenAsMenuItem()
     {
-        Items.Add(BuildItem("Explorer_OpenAsAuto", EditorOpenMode.Auto, null));
+        Items.Add(BuildItem("Explorer_OpenAsAuto", EditorOpenMode.Auto, AppIconKind.OpenAs));
         foreach (var descriptor in DocumentOpenRegistry.MenuEntries)
         {
             Items.Add(BuildItem(descriptor.LocaleKey, descriptor.Mode, descriptor.IconKind));
@@ -70,22 +72,31 @@ public sealed class OpenAsMenuItem : MenuItem
     /// <param name="node">The right-clicked node. <para>被右键的节点。</para></param>
     internal void RefreshFor(ExplorerNode node)
     {
-        if (ReferenceEquals(_node, node))
+        RefreshForPath(node.Path, node);
+    }
+
+    internal void RefreshForPath(string path)
+        => RefreshForPath(path, null);
+
+    private void RefreshForPath(string path, ExplorerNode? node)
+    {
+        if (ReferenceEquals(_node, node) && string.Equals(_path, path, StringComparison.Ordinal))
         {
             return;
         }
 
         _node = node;
+        _path = path;
         var entries = DocumentOpenRegistry.MenuEntries;
         var applicable = 0;
-        if (!node.IsDirectory && !node.IsPlaceholder && File.Exists(node.Path))
+        if ((node is null || !node.IsDirectory && !node.IsPlaceholder) && File.Exists(path))
         {
             (entries, applicable) = DocumentOpenRegistry.OrderByApplicability(
-                entries, node.Path, ReadHeader(node.Path));
+                entries, path, ReadHeader(path));
         }
 
         Items.Clear();
-        Items.Add(BuildItem("Explorer_OpenAsAuto", EditorOpenMode.Auto, null));
+        Items.Add(BuildItem("Explorer_OpenAsAuto", EditorOpenMode.Auto, AppIconKind.OpenAs));
         for (var index = 0; index < entries.Count; index++)
         {
             if (applicable > 0 && applicable < entries.Count && index == applicable)
@@ -141,10 +152,11 @@ public sealed class OpenAsMenuItem : MenuItem
     {
         if (sender is MenuItem { Tag: EditorOpenMode mode } item)
         {
-            var target = FindOwner(item)?.Node ?? ResolveExplorerNode(item);
-            if (target is { IsDirectory: false, IsPlaceholder: false })
+            var menuOwner = FindOwner(item);
+            var targetPath = menuOwner?._path ?? ResolveExplorerNode(item)?.Path ?? ResolveDocumentPath(item);
+            if (targetPath is not null)
             {
-                WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(target.Path, mode));
+                WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(targetPath, mode));
             }
 
             e.Handled = true;
@@ -177,6 +189,20 @@ public sealed class OpenAsMenuItem : MenuItem
             if (current.DataContext is ExplorerNode node)
             {
                 return node;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ResolveDocumentPath(MenuItem item)
+    {
+        for (Control? current = item; current is not null; current = current.Parent as Control)
+        {
+            if (current.DataContext is IDockable dockable
+                && DocumentOpenRegistry.ByInstance(dockable)?.GetPath?.Invoke(dockable) is { Length: > 0 } path)
+            {
+                return path;
             }
         }
 

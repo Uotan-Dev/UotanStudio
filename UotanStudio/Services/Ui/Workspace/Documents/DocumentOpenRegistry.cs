@@ -27,7 +27,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(FileViewModel),
             LocaleKey = "Explorer_OpenAsText",
             MenuOrder = 5,
-            IconKind = AppIconKind.File,
+            IconKind = AppIconKind.FileCode,
             Open = static (w, r) => r.Mode == EditorOpenMode.Auto
                 ? w.OpenDocumentAsync(r.Path!, EditorOpenMode.Auto)
                 : w.OpenTextAsync(r.Path!, r.Mode),
@@ -79,6 +79,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(PartitionEditorViewModel),
             LocaleKey = "Explorer_OpenAsPartition",
             MenuOrder = 4,
+            IconKind = AppIconKind.HardDisk,
             Probe = static r => IsPartitionPath(r.Path),
             Open = static (w, r) => w.OpenPartitionAsync(r.Path!),
             GetPath = vm => ((PartitionEditorViewModel)vm).FilePath,
@@ -91,7 +92,7 @@ internal static class DocumentOpenRegistry
             ViewModelType = typeof(LogEditorViewModel),
             LocaleKey = "Explorer_OpenAsLog",
             MenuOrder = 6,
-            IconKind = AppIconKind.TextLines,
+            IconKind = AppIconKind.Script,
             Probe = static r => IsLogExtension(Path.GetExtension(r.Path ?? string.Empty)),
             Open = static (w, r) => w.OpenLogAsync(r.Path!),
             GetPath = vm => ((LogEditorViewModel)vm).FilePath,

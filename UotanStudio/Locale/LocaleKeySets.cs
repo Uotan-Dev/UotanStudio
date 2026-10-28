@@ -621,6 +621,7 @@ internal static class LocaleKeySets
         "Explorer_Rename",
         "Explorer_CopyFullPath",
         "Explorer_OpenInFileExplorer",
+        "Explorer_FileOperations",
         "Explorer_OpenInMultiColumnBrowser",
         "Explorer_OpenInTerminal",
         "Explorer_NodeProject",
