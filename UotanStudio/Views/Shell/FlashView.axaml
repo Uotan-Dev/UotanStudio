@@ -963,35 +963,6 @@
                             </StackPanel>
                             </StackPanel>
                         </Expander>
-                        <!-- 诊断与崩溃转储分类：DIAG 会话、QCN 备份恢复、EFS 操作、崩溃转储与工厂构建 -->
-                        <Expander Name="DiagnosticsExpander" Classes="protocol-expander"
-                                  Header="{DynamicResource Flash_Diagnostics}" IsExpanded="False">
-                            <StackPanel Spacing="8">
-                                <TextBox Name="DiagComPortBox"
-                                         Watermark="{DynamicResource Flash_DiagComPortWatermark}" />
-                                <Button Name="DiagReadNvButton" Classes="pane-action"
-                                        Click="OnDiagReadNvClick"
-                                        Content="{DynamicResource Flash_DiagReadNv}" />
-                                <Button Name="DiagBackupQcnButton" Classes="pane-action"
-                                        Click="OnDiagBackupQcnClick"
-                                        Content="{DynamicResource Flash_DiagBackupQcn}" />
-                                <Button Name="DiagRestoreQcnButton" Classes="pane-action"
-                                        Click="OnDiagRestoreQcnClick"
-                                        Content="{DynamicResource Flash_DiagRestoreQcn}" />
-                                <Button Name="DiagListEfsButton" Classes="pane-action"
-                                        Click="OnDiagListEfsClick"
-                                        Content="{DynamicResource Flash_DiagListEfs}" />
-                                <Button Name="DiagSyncStatusButton" Classes="pane-action"
-                                        Click="OnDiagSyncStatusClick"
-                                        Content="{DynamicResource Flash_DiagSyncStatus}" />
-                                <Button Name="CrashDumpButton" Classes="pane-action"
-                                        Click="OnCrashDumpClick"
-                                        Content="{DynamicResource Flash_CrashDump}" />
-                                <Button Name="FactoryBuildFlattenButton" Classes="pane-action"
-                                        Click="OnFactoryBuildFlattenClick"
-                                        Content="{DynamicResource Flash_FactoryBuildFlatten}" />
-                            </StackPanel>
-                        </Expander>
                         <!-- 镜像操作分类 -->
                         <Expander Name="ImageExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Image}" IsExpanded="True">

@@ -56,7 +56,6 @@ public sealed partial class FlashViewModel
     private string? _edlNandTablePath;
     private bool _flatBinPackage;
     private bool _edlBundleReady;
-    private string? _edlCapabilityDevice;
     private CancellationTokenSource? _flashCancellation;
     private IReadOnlyList<FlashPartitionEntry> _overallRows = [];
     private MtkScatterPackageResolution? _mtkResolution;
@@ -1034,18 +1033,6 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// The expert switch writes the setting and immediately recomputes both panes' group visibility; it governs
-    /// exposure only and changes no action's semantics.
-    /// <para>专家开关写入设置并立即重算两个面板的分组可见性；它只控制暴露，不改变任何动作的语义。</para>
-    /// </summary>
-    /// <param name="sender">The expert-mode checkbox. <para>专家开关复选框本身。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal void OnExpertModeClick(object? sender, RoutedEventArgs e)
-    {
-        UpdateEdlButton();
-    }
-
-    /// <summary>
     /// Switches the action-pane expansion by the selected device's protocol: expands the protocol-matching
     /// expander and collapses the others; with no device selected the preparation state (the EDL bundle
     /// row and an MTK pane backed by a loaded scatter) determines the expansion.
@@ -1547,20 +1534,6 @@ public sealed partial class FlashViewModel
         await RunEdlBundleAsync(useSerialPort: false, device, serialPort: null, owner);
     }
 
-    internal async void OnEdlSerialFlashClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || _edlProgrammer is null || !_flatBinPackage ||
-            TopLevel.GetTopLevel(Surface) is not Window owner ||
-            !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal)) return;
-        if (Field<ComboBox>("EdlSerialPortBox").SelectedItem is not string serialPort)
-        {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlSerialPortRequired"));
-            return;
-        }
-
-        await RunEdlBundleAsync(useSerialPort: true, device: null, serialPort, owner);
-    }
-
     /// <summary>
     /// <para>执行完整 EDL 包刷写：USB 路径复扫设备后再刷，串口路径复核端口仍在；两条路径共用
     /// 全部选项、调优参数、进度与取消。</para>
@@ -1910,10 +1883,7 @@ public sealed partial class FlashViewModel
     internal void OnSlotSetBClick(object? sender, RoutedEventArgs e)
         => RunSwitchSlotActionAsync(SlotAction.SetB);
 
-    internal void OnSwitchSlotClick(object? sender, RoutedEventArgs e)
-        => RunSwitchSlotActionAsync(SlotAction.SwitchOther);
-
-    private enum SlotAction { ResetCurrent, SetA, SetB, SwitchOther }
+    private enum SlotAction { ResetCurrent, SetA, SetB }
 
     private async void RunSwitchSlotActionAsync(SlotAction action)
     {
@@ -2525,103 +2495,7 @@ public sealed partial class FlashViewModel
         return MtkEmiReader.ReadPreloader(retry, 0, MtkEmiPayloadLayout.BinaryParameters);
     }
 
-    /// <summary>
-    /// Reads the selected EDL device's storage geometry and GPT summary for display only.
-    /// <para>读取所选 EDL 设备的存储几何与 GPT 摘要并展示；仅供显示，不改变刷写状态。</para>
-    /// </summary>
-    internal async void OnEdlReadStorageInfoClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
-            !TryBuildEdlInitialization(out var initialization))
-        {
-            return;
-        }
 
-        if (!TryReadEdlGptEntryOverrides(out var gptEntryLba, out var gptEntryCount, out var gptEntrySize))
-        {
-            return;
-        }
-
-        SetBusy(true);
-        var currentKey = device.Key;
-        try
-        {
-            var info = await App.DeviceMonitor.RunEdlAsync(device, async edl =>
-            {
-                var firehose = await ConfigureEdlAsync(edl, initialization, CancellationToken.None)
-                    .ConfigureAwait(true);
-                var geometry = await firehose.GetStorageGeometryAsync(SelectedEdlLun, CancellationToken.None).ConfigureAwait(true);
-                var snapshot = await firehose.ReadGptWithPartitionEntryOverridesAsync(
-                    SelectedEdlLun, gptEntryLba, gptEntryCount, gptEntrySize,
-                    CancellationToken.None).ConfigureAwait(true);
-                return (geometry, snapshot, edl.Capabilities);
-            }, CancellationToken.None);
-            Field<TextBlock>("EdlStorageInfoText").Text = string.Format(
-                LanguageService.Instance.GetString("Flash_EdlStorageInfoFormat"),
-                info.geometry.SectorSize, info.geometry.SectorCount,
-                info.geometry.CapacityBytes / 1024d / 1024d / 1024d,
-                info.snapshot.Table.Partitions.Count);
-            if (FirehoseProtocol.DetectActiveSlot(info.snapshot) is { } activeSlot)
-            {
-                Field<TextBlock>("EdlStorageInfoText").Text += Environment.NewLine + string.Format(
-                    LanguageService.Instance.GetString("Flash_EdlActiveSlotDetected"), activeSlot);
-            }
-            AppendLog(Field<TextBlock>("EdlStorageInfoText").Text ?? string.Empty);
-            if (info.Capabilities is { } capabilities)
-            {
-                Field<TextBlock>("EdlCapabilityText").Text = FormatEdlCapabilities(capabilities, info.geometry.SectorSize);
-                Field<TextBlock>("EdlCapabilityText").IsVisible = true;
-                _edlCapabilityDevice = currentKey;
-                AppendLog(Field<TextBlock>("EdlCapabilityText").Text ?? string.Empty);
-            }
-            else
-            {
-                Field<TextBlock>("EdlCapabilityText").IsVisible = false;
-            }
-
-            AppendPartitionTable(info.snapshot.Table.Partitions);
-        }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// <para>把 Firehose 能力快照格式化为两行本地化文本：第一行为扇区、载荷与版本，第二行为
-    /// 关键命令的三态支持情况。</para>
-    /// Formats a Firehose capability snapshot into two localized lines: sector, payload and version
-    /// first, then the tri-state support of the key commands.
-    /// </summary>
-    /// <param name="capabilities">The negotiated capability snapshot. <para>已协商的能力快照。</para></param>
-    /// <param name="fallbackSectorSize">Sector size to use when the snapshot carries none.
-    /// <para>快照未携带扇区大小时使用的回退值。</para></param>
-    /// <returns>The localized capability text. <para>本地化的能力文本。</para></returns>
-    private static string FormatEdlCapabilities(FirehoseCapabilitySnapshot capabilities, long fallbackSectorSize)
-    {
-        var language = LanguageService.Instance;
-        return string.Format(language.GetString("Flash_EdlCapabilities"),
-                capabilities.SectorSizeInBytes ?? fallbackSectorSize,
-                (capabilities.MaxPayloadSizeToTargetInBytes ?? 0) / 1024d / 1024d,
-                capabilities.FirehoseVersion ?? "?")
-            + Environment.NewLine
-            + string.Format(language.GetString("Flash_EdlCapabilityFeatures"),
-                SupportToken(language, capabilities.Read),
-                SupportToken(language, capabilities.Program),
-                SupportToken(language, capabilities.Erase),
-                SupportToken(language, capabilities.Patch),
-                SupportToken(language, capabilities.Sparse),
-                SupportToken(language, capabilities.UfsProvisioning));
-    }
-
-    private static string SupportToken(LanguageService language, FeatureSupport support) => support switch
-    {
-        FeatureSupport.Supported => language.GetString("Flash_SupportYes"),
-        FeatureSupport.Unsupported => language.GetString("Flash_SupportNo"),
-        _ => language.GetString("Flash_SupportUnknown")
-    };
 
     /// <summary>
     /// Erases the selected EDL partitions over the sector range declared by the manifest;
@@ -2904,128 +2778,6 @@ public sealed partial class FlashViewModel
                 Path.GetFileName(destination),
                 result.BytesTransferred.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 result.Sha256Hex);
-        });
-    }
-
-    /// <summary>
-    /// Picks one read manifest (qdl's read-xml) and reads every declared range into the chosen directory; entry
-    /// order, the abort-at-first-failure policy and atomic publication belong to the service layer, while the page
-    /// only selects the file and reports the outcome.
-    /// <para>选择一份 read 清单并把其中每个范围回读到已选目录；条目顺序、失败即中止与原子发布
-    /// 都由服务层决定，界面只挑选文件并报告结果。</para>
-    /// </summary>
-    /// <param name="sender">the read-manifest button. <para>读清单按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlReadManifestClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = LanguageService.Instance;
-        _confirming = true;
-        IReadOnlyList<IStorageItem> files;
-        try
-        {
-            files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = language.GetString("Flash_EdlReadManifestPick"),
-                AllowMultiple = false,
-                FileTypeFilter = [FilePickerFileTypes.All]
-            });
-        }
-        finally
-        {
-            _confirming = false;
-        }
-
-        if (files.Count != 1 || files[0].TryGetLocalPath() is not { Length: > 0 } manifest)
-        {
-            return;
-        }
-        var directory = Path.GetDirectoryName(manifest) ?? string.Empty;
-
-        await RunEdlRegionOperationAsync(async (firehose, progress, token) =>
-        {
-            var results = await EdlReadManifestService
-                .ReadManifestAsync(firehose, manifest, directory, progress, token).ConfigureAwait(true);
-            return string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                LanguageService.Instance.GetString("Flash_EdlReadManifestResult"),
-                results.Count,
-                directory);
-        });
-    }
-
-
-    /// <summary>
-    /// Erases the stated sector count from a partition start: the name and count come from the page, and a
-    /// count beyond the partition's own capacity is refused by the service.
-    /// <para>从分区起始处擦除给定扇区数：分区名与扇区数由界面给出，超出分区容量由服务层拒绝。</para>
-    /// </summary>
-    /// <param name="sender">The erase button. <para>擦除按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlErasePartitionSectorsClick(object? sender, RoutedEventArgs e)
-    {
-        var partition = Field<TextBox>("EdlErasePartitionNameBox").Text?.Trim() ?? string.Empty;
-        if (partition.Length == 0 ||
-            !long.TryParse(Field<TextBox>("EdlEraseSectorCountBox").Text?.Trim(), System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out var sectors) || sectors < 1)
-        {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlErasePartitionInputInvalid"));
-            return;
-        }
-
-        if (!await ConfirmEdlRegionWriteAsync("Flash_EdlErasePartitionSectors")) return;
-        await RunEdlRegionOperationAsync(async (firehose, _, token) =>
-        {
-            var result = await EdlGptRegionService.ErasePartitionSectorsCoreAsync(firehose, partition, sectors, token)
-                .ConfigureAwait(true);
-            return result.Summary;
-        });
-    }
-
-    /// <summary>
-    /// Lists every extent a full erase would close without sending a single erase command; this preview is the
-    /// required step before the all-partition erase.
-    /// <para>列出将被关闭的每个分区范围，不发出任何擦除命令；这是执行全部分区擦除前的必要预览。</para>
-    /// </summary>
-    /// <param name="sender">The preview button. <para>预览按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlPreviewEraseAllClick(object? sender, RoutedEventArgs e)
-    {
-        await RunEdlRegionOperationAsync(async (firehose, _, token) =>
-        {
-            var extents = await EdlGptRegionService.PlanEraseAllAsync(firehose, token).ConfigureAwait(true);
-            foreach (var extent in extents)
-            {
-                AppendLog($"LUN {extent.Lun} {extent.Partition} +{extent.StartSector} x{extent.Sectors}");
-            }
-
-            return string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                LanguageService.Instance.GetString("Flash_EdlPreviewEraseAllResult"),
-                extents.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        });
-    }
-
-    /// <summary>
-    /// Erases every partition the device's own GPT lists: the irreversible-write checkbox is required first,
-    /// then the dialog, and the service still re-reads the table and erases region by region.
-    /// <para>擦除设备自身 GPT 列出的全部分区：先要求不可逆确认复选框，再要求对话框，随后仍由服务层重读
-    /// 分区表并逐区擦除。</para>
-    /// </summary>
-    /// <param name="sender">The erase button. <para>擦除按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlEraseAllClick(object? sender, RoutedEventArgs e)
-    {
-        if (Field<CheckBox>("EdlEraseAllConfirmBox").IsChecked != true)
-        {
-            AppendLog(LanguageService.Instance.GetString("Flash_EdlEraseAllConfirmRequired"));
-            return;
-        }
-
-        if (!await ConfirmEdlRegionWriteAsync("Flash_EdlEraseAll")) return;
-        await RunEdlRegionOperationAsync(async (firehose, progress, token) =>
-        {
-            var result = await EdlGptRegionService.EraseAllCoreAsync(firehose, true, progress, token)
-                .ConfigureAwait(true);
-            return result.Summary;
         });
     }
 
@@ -4696,152 +4448,6 @@ public sealed partial class FlashViewModel
             Field<TextBox>("PackagePathBox").IsEnabled = true;
             UpdateEdlButton();
         }
-    }
-
-    /// <summary>
-    /// Boots an agent to storage readiness, reads the GPT and writes the partition table to the log;
-    /// both the serial and USB paths reuse this pane's connection selection and share the same
-    /// validation, confirmation and cancellation as flashing and read-back.
-    /// <para>启动到存储就绪的代理后读取 GPT 并把分区表写入日志；串口与 USB 两条路径复用本面板的
-    /// 连接选择，与刷写/回读共用同一套校验与取消。</para>
-    /// </summary>
-    internal async void OnMtkShowGptClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner ||
-            !TryReadMtkSelection(out var useSerial, out var usbDevice, out var port, out var baudRate,
-                out var attach, out var autoMatch))
-        {
-            return;
-        }
-
-        var language = LanguageService.Instance;
-        var kind = SelectedMtkStorageKind;
-        var family = SelectedMtkProtocol;
-        var physicalPartition = MtkScatterPackage.GetPhysicalPartition(kind);
-        _confirming = true;
-        bool confirmed;
-        try
-        {
-            confirmed = await DialogService.ConfirmAsync(owner,
-                language.GetString("Flash_MtkShowGpt"), language.GetString("Flash_MtkShowGptConfirm"));
-        }
-        finally { _confirming = false; }
-        if (!confirmed) return;
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("MtkFlashButton").IsEnabled = false;
-        try
-        {
-            async Task ShowGptAsync(MtkSession session, CancellationToken token)
-            {
-                AppendPartitionTable(family switch
-                {
-                    MtkDaProtocol.Legacy => (await session.ReadLegacyGptAsync(
-                        MtkScatterPackage.GetLegacyPhysicalPartition(kind), token)).Table.Partitions,
-                    MtkDaProtocol.Xml => (await session.ReadXmlGptAsync(
-                        MtkScatterPackage.GetXmlRegionName(kind), cancellationToken: token)).Table.Partitions,
-                    _ => (await session.ReadXFlashGptAsync(physicalPartition, token)).Table.Partitions
-                });
-            }
-
-            if (useSerial)
-            {
-                var connect = BuildMtkSerialConnector(port!, baudRate, kind, attach, autoMatch);
-                using var session = await connect(cancellation.Token);
-                await ShowGptAsync(session, cancellation.Token);
-            }
-            else
-            {
-                var matched = await BuildMtkAutoStartupAsync(kind, cancellation.Token);
-                await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
-                {
-                    var ready = await MtkBootstrap.MatchAsync(session, SelectedMtkProtocol, matched,
-                        cancellation.Token);
-                    await ShowGptAsync(ready, cancellation.Token);
-                    return true;
-                }, cancellation.Token);
-            }
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            SetBusy(false);
-            _flashCancellation = null;
-            Field<Button>("CancelFlashButton").IsEnabled = false;
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Writes back the device's own partition table: a read-only preview first reports how many copies and
-    /// bytes would be submitted, and only after confirmation does the write run; a readback byte mismatch
-    /// fails the operation in the service instead of falling back to another family.
-    /// <para>写回设备自身的分区表：先在只读预览里报出将要提交的副本数与字节数，确认后才执行；回读字节
-    /// 不一致时服务层让操作失败，绝不降级到其他家族。</para>
-    /// </summary>
-    /// <param name="sender">The repair button. <para>修复按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnMtkRepairGptClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = LanguageService.Instance;
-        var kind = SelectedMtkStorageKind;
-        var family = SelectedMtkProtocol;
-        await RunMtkSecurityOperationAsync("Flash_MtkRepairGpt", "Flash_MtkRepairGptConfirm",
-            async (session, token) =>
-            {
-                var preparation = await MtkGptRepairService.PrepareAsync(session, family, kind, token)
-                    .ConfigureAwait(true);
-                AppendLog(string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    language.GetString("Flash_MtkRepairGptPreview"),
-                    preparation.OperationCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    preparation.TotalBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-                var result = await preparation.ExecuteAsync(cancellationToken: token).ConfigureAwait(true);
-                AppendLog(string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    language.GetString("Flash_MtkRepairGptResult"),
-                    result.CompletedOperations.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    result.WrittenBytes.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    result.VerifiedBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            });
-    }
-
-    /// <summary>
-    /// Reads back every listed partition: the plan comes from the device's own partition table (the skip list is
-    /// matched by partition name), and after confirmation each partition lands in its own file.
-    /// <para>按分区名列表逐个回读：先解析设备自身的分区表得到计划（跳过清单按分区名生效），确认后逐分区落盘。</para>
-    /// </summary>
-    /// <param name="sender">The dump button. <para>转储按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnMtkDumpPartitionListClick(object? sender, RoutedEventArgs e)
-    {
-        var directory = await PickMtkDumpDirectoryAsync("Flash_MtkDumpPartitionList").ConfigureAwait(true);
-        if (directory is null) return;
-        var prompt = LanguageService.Instance;
-        var family = SelectedMtkProtocol;
-        var kind = SelectedMtkStorageKind;
-        var skip = (Field<TextBox>("MtkDumpSkipBox").Text ?? string.Empty)
-            .Split([','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        await RunMtkSecurityOperationAsync("Flash_MtkDumpPartitionList", "Flash_MtkDumpPartitionListConfirm",
-            async (session, token) =>
-            {
-                var plan = await MtkPartitionListDumpService.ResolveAsync(session, family, kind, skip, token)
-                    .ConfigureAwait(true);
-                AppendLog(string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    prompt.GetString("Flash_MtkDumpPlanPreview"),
-                    plan.Entries.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    plan.TotalBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-                var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
-                var result = await MtkPartitionListDumpService.CaptureAsync(
-                    session, plan, directory, progress, token).ConfigureAwait(true);
-                AppendLog(string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    prompt.GetString("Flash_MtkDumpDone"),
-                    result.Partitions.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    result.PublishedBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            });
     }
 
     /// <summary>

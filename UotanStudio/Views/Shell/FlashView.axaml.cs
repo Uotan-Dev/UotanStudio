@@ -251,29 +251,11 @@ public partial class FlashView : UserControl
     private void OnGetPackageClick(object? sender, RoutedEventArgs e) => _model.OnGetPackageClick(sender, e);
     private void OnClearLogClick(object? sender, RoutedEventArgs e) => _model.OnClearLogClick(sender, e);
     private void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e) => _model.OnChoosePartitionImageClick(sender, e);
-    private void OnExpertModeClick(object? sender, RoutedEventArgs e) => _model.OnExpertModeClick(sender, e);
     private void OnReadInfoClick(object? sender, RoutedEventArgs e) => _model.OnReadInfoClick(sender, e);
     private void OnFlashSelectedClick(object? sender, RoutedEventArgs e) => _model.OnFlashSelectedClick(sender, e);
     private void OnFlashEdlBundleClick(object? sender, RoutedEventArgs e) => _model.OnFlashEdlBundleClick(sender, e);
-    private void OnEdlSerialFlashClick(object? sender, RoutedEventArgs e) => _model.OnEdlSerialFlashClick(sender, e);
     private void OnEraseSelectedClick(object? sender, RoutedEventArgs e) => _model.OnEraseSelectedClick(sender, e);
-    private void OnSwitchSlotClick(object? sender, RoutedEventArgs e) => _model.OnSwitchSlotClick(sender, e);
-    private void OnSlotResetCurrentClick(object? sender, RoutedEventArgs e) => _model.OnSlotResetCurrentClick(sender, e);
-    private void OnSlotSetAClick(object? sender, RoutedEventArgs e) => _model.OnSlotSetAClick(sender, e);
 
-    private void OnDiagReadNvClick(object? sender, RoutedEventArgs e) => _model.OnDiagReadNvClick(sender, e);
-
-    private void OnDiagBackupQcnClick(object? sender, RoutedEventArgs e) => _model.OnDiagBackupQcnClick(sender, e);
-
-    private void OnDiagRestoreQcnClick(object? sender, RoutedEventArgs e) => _model.OnDiagRestoreQcnClick(sender, e);
-
-    private void OnDiagListEfsClick(object? sender, RoutedEventArgs e) => _model.OnDiagListEfsClick(sender, e);
-
-    private void OnDiagSyncStatusClick(object? sender, RoutedEventArgs e) => _model.OnDiagSyncStatusClick(sender, e);
-
-    private void OnCrashDumpClick(object? sender, RoutedEventArgs e) => _model.OnCrashDumpClick(sender, e);
-
-    private void OnFactoryBuildFlattenClick(object? sender, RoutedEventArgs e) => _model.OnFactoryBuildFlattenClick(sender, e);
     private void OnSlotSetBClick(object? sender, RoutedEventArgs e) => _model.OnSlotSetBClick(sender, e);
     private void OnCancelFlashClick(object? sender, RoutedEventArgs e) => _model.OnCancelFlashClick(sender, e);
     private void OnRootFileSourceChanged(object? sender, SelectionChangedEventArgs e) => _model.OnRootFileSourceChanged(sender, e);
@@ -294,10 +276,7 @@ public partial class FlashView : UserControl
     private void OnChooseMtkAuthFileClick(object? sender, RoutedEventArgs e) => _model.OnChooseMtkAuthFileClick(sender, e);
     private void OnMtkFlashClick(object? sender, RoutedEventArgs e) => _model.OnMtkFlashClick(sender, e);
     private void OnMtkReadbackClick(object? sender, RoutedEventArgs e) => _model.OnMtkReadbackClick(sender, e);
-    private void OnMtkShowGptClick(object? sender, RoutedEventArgs e) => _model.OnMtkShowGptClick(sender, e);
-    private void OnMtkRepairGptClick(object? sender, RoutedEventArgs e) => _model.OnMtkRepairGptClick(sender, e);
     private void OnMtkFullDumpClick(object? sender, RoutedEventArgs e) => _model.OnMtkFullDumpClick(sender, e);
-    private void OnMtkDumpPartitionListClick(object? sender, RoutedEventArgs e) => _model.OnMtkDumpPartitionListClick(sender, e);
     private void OnMtkDumpWholeFlashClick(object? sender, RoutedEventArgs e) => _model.OnMtkDumpWholeFlashClick(sender, e);
     private void OnMtkReadSectorsClick(object? sender, RoutedEventArgs e) => _model.OnMtkReadSectorsClick(sender, e);
     private void OnMtkReadAreaClick(object? sender, RoutedEventArgs e) => _model.OnMtkReadAreaClick(sender, e);
@@ -316,7 +295,6 @@ public partial class FlashView : UserControl
     private void OnMtkPreloaderDisableWatchdogClick(object? sender, RoutedEventArgs e) => _model.OnMtkPreloaderDisableWatchdogClick(sender, e);
     private void OnMtkPreloaderJumpClick(object? sender, RoutedEventArgs e) => _model.OnMtkPreloaderJumpClick(sender, e);
     private void OnMtkPreloaderBootloaderJumpClick(object? sender, RoutedEventArgs e) => _model.OnMtkPreloaderBootloaderJumpClick(sender, e);
-    private void OnEdlReadStorageInfoClick(object? sender, RoutedEventArgs e) => _model.OnEdlReadStorageInfoClick(sender, e);
     private void OnEdlChooseProgrammerClick(object? sender, RoutedEventArgs e) => _model.OnEdlChooseProgrammerClick(sender, e);
     private void OnEdlChooseProgrammerDirClick(object? sender, RoutedEventArgs e) => _model.OnEdlChooseProgrammerDirClick(sender, e);
     private void OnEdlProgrammerPickChanged(object? sender, SelectionChangedEventArgs e) => _model.OnEdlProgrammerPickChanged(sender, e);
@@ -326,10 +304,6 @@ public partial class FlashView : UserControl
     private void OnEdlPowerOffClick(object? sender, RoutedEventArgs e) => _model.OnEdlPowerOffClick(sender, e);
     private void OnEdlResetToEdlClick(object? sender, RoutedEventArgs e) => _model.OnEdlResetToEdlClick(sender, e);
     private void OnEdlReadLunClick(object? sender, RoutedEventArgs e) => _model.OnEdlReadLunClick(sender, e);
-    private void OnEdlReadManifestClick(object? sender, RoutedEventArgs e) => _model.OnEdlReadManifestClick(sender, e);
-    private void OnEdlErasePartitionSectorsClick(object? sender, RoutedEventArgs e) => _model.OnEdlErasePartitionSectorsClick(sender, e);
-    private void OnEdlPreviewEraseAllClick(object? sender, RoutedEventArgs e) => _model.OnEdlPreviewEraseAllClick(sender, e);
-    private void OnEdlEraseAllClick(object? sender, RoutedEventArgs e) => _model.OnEdlEraseAllClick(sender, e);
     private void OnEdlSetBootableClick(object? sender, RoutedEventArgs e) => _model.OnEdlSetBootableClick(sender, e);
     private void OnEdlPartitionDigestClick(object? sender, RoutedEventArgs e) => _model.OnEdlPartitionDigestClick(sender, e);
     private void OnEdlChooseUfsProfileClick(object? sender, RoutedEventArgs e) => _model.OnEdlChooseUfsProfileClick(sender, e);
@@ -348,4 +322,6 @@ public partial class FlashView : UserControl
     private void OnEdlNandCloseClick(object? sender, RoutedEventArgs e) => _model.OnEdlNandCloseClick(sender, e);
     private void OnExtractSelectedClick(object? sender, RoutedEventArgs e) => _model.OnExtractSelectedClick(sender, e);
     private void OnBuildWiredPackageClick(object? sender, RoutedEventArgs e) => _model.OnBuildWiredPackageClick(sender, e);
+    private void OnSlotResetCurrentClick(object? sender, RoutedEventArgs e) => _model.OnSlotResetCurrentClick(sender, e);
+    private void OnSlotSetAClick(object? sender, RoutedEventArgs e) => _model.OnSlotSetAClick(sender, e);
 }

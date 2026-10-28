@@ -525,9 +525,6 @@ Author: 暮间雾
   <data name="Flash_NoPartitionsHint" xml:space="preserve">
     <value>Select a flash package and the flashable partitions appear here.</value>
   </data>
-  <data name="Flash_Basic" xml:space="preserve">
-    <value>Basic actions</value>
-  </data>
   <data name="Flash_ReadInfo" xml:space="preserve">
     <value>Read device info</value>
   </data>
@@ -666,12 +663,6 @@ Author: 暮间雾
   <data name="Flash_OverallProgress" xml:space="preserve">
     <value>{0} of {1}</value>
   </data>
-  <data name="Flash_Fastboot" xml:space="preserve">
-    <value>Fastboot</value>
-  </data>
-  <data name="Flash_VerifyAfterFlash" xml:space="preserve">
-    <value>Verify after flash</value>
-  </data>
   <data name="Flash_VerifyUnsupported" xml:space="preserve">
     <value>Readback verification is not available for this protocol.</value>
   </data>
@@ -777,9 +768,6 @@ Author: 暮间雾
   <data name="Flash_MtkFullDumpClamped" xml:space="preserve">
     <value>The user-area dump was published with the length clamped to the family transfer alignment.</value>
   </data>
-  <data name="Flash_ExpertMode" xml:space="preserve">
-    <value>Expert mode</value>
-  </data>
   <data name="Flash_MtkStage" xml:space="preserve">
     <value>Boot stage</value>
   </data>
@@ -809,15 +797,6 @@ Author: 暮间雾
   </data>
   <data name="Flash_MtkStageUndetermined" xml:space="preserve">
     <value>The stage could not be determined from the USB descriptors. Declare it above when the device state is known.</value>
-  </data>
-  <data name="Flash_MtkDumpSkipHint" xml:space="preserve">
-    <value>Partitions to skip, comma-separated</value>
-  </data>
-  <data name="Flash_MtkDumpPartitionList" xml:space="preserve">
-    <value>Dump listed partitions</value>
-  </data>
-  <data name="Flash_MtkDumpPartitionListConfirm" xml:space="preserve">
-    <value>Reads every listed partition into its own file plus both table copies. Nothing is written to the device. Continue?</value>
   </data>
   <data name="Flash_MtkDumpWholeFlash" xml:space="preserve">
     <value>Dump whole storage area</value>
@@ -882,17 +861,11 @@ Author: 暮间雾
   <data name="Flash_MtkReadback" xml:space="preserve">
     <value>Read back selected partitions</value>
   </data>
-  <data name="Flash_MtkShowGpt" xml:space="preserve">
-    <value>Show partition table</value>
-  </data>
   <data name="Flash_MtkErase" xml:space="preserve">
     <value>Erase selected partitions</value>
   </data>
   <data name="Flash_MtkEraseConfirm" xml:space="preserve">
     <value>The selected partitions are erased over the capacity declared by the manifest; erased data cannot be recovered. Continue?</value>
-  </data>
-  <data name="Flash_MtkShowGptConfirm" xml:space="preserve">
-    <value>An agent is booted to storage readiness first (the loader is loaded into device memory), then the GPT table is read into the log. Continue?</value>
   </data>
   <data name="Flash_PartitionTableRow" xml:space="preserve">
     <value>{0}: start sector {1}, {2} sectors</value>
@@ -996,24 +969,6 @@ Author: 暮间雾
   <data name="Flash_Edl" xml:space="preserve">
     <value>Qualcomm</value>
   </data>
-  <data name="Flash_EdlStorageInfoUnknown" xml:space="preserve">
-    <value>Storage info unknown. Read the storage report first.</value>
-  </data>
-  <data name="Flash_EdlStageUnknown" xml:space="preserve">
-    <value>No EDL protocol stage has been observed yet, so only stage-independent actions are enabled.</value>
-  </data>
-  <data name="Flash_EdlStageSahara" xml:space="preserve">
-    <value>Observed stage: Sahara, with no loader transferred yet.</value>
-  </data>
-  <data name="Flash_EdlStageFirehose" xml:space="preserve">
-    <value>Observed stage: Firehose, with a programmer already active.</value>
-  </data>
-  <data name="Flash_EdlStageStreaming" xml:space="preserve">
-    <value>Observed stage: streaming DLOAD downloader.</value>
-  </data>
-  <data name="Flash_EdlRegionGroup" xml:space="preserve">
-    <value>Region reads and partition-targeted erasure</value>
-  </data>
   <data name="Flash_EdlRegionDirChoose" xml:space="preserve">
     <value>Choose dump directory</value>
   </data>
@@ -1023,62 +978,8 @@ Author: 暮间雾
   <data name="Flash_EdlReadLunResult" xml:space="preserve">
     <value>Dumped {0}: {1} bytes, sha256 {2}</value>
   </data>
-  <data name="Flash_EdlReadWholeFlashResult" xml:space="preserve">
-    <value>{0} LUN images written to {1}</value>
-  </data>
-  <data name="Flash_EdlReadManifest" xml:space="preserve">
-    <value>Read manifest ranges</value>
-  </data>
-  <data name="Flash_EdlReadManifestPick" xml:space="preserve">
-    <value>Choose a read manifest</value>
-  </data>
-  <data name="Flash_EdlReadManifestResult" xml:space="preserve">
-    <value>{0} manifest ranges written to {1}</value>
-  </data>
-  <data name="Flash_EdlPreviewEraseAllResult" xml:space="preserve">
-    <value>Partitions that would be erased: {0}</value>
-  </data>
-  <data name="Flash_MtkRepairGpt" xml:space="preserve">
-    <value>Repair partition table</value>
-  </data>
-  <data name="Flash_MtkRepairGptConfirm" xml:space="preserve">
-    <value>Writes the partition table the device itself reported back to its own primary and backup copies. Nothing is read from a foreign table. Continue?</value>
-  </data>
-  <data name="Flash_MtkRepairGptPreview" xml:space="preserve">
-    <value>Preview: {0} copies, {1} bytes</value>
-  </data>
-  <data name="Flash_MtkRepairGptResult" xml:space="preserve">
-    <value>Wrote {0} copies, {1} bytes, read back {2} bytes</value>
-  </data>
   <data name="Flash_EdlReadLun" xml:space="preserve">
     <value>Dump selected LUN to file</value>
-  </data>
-  <data name="Flash_EdlReadWholeFlash" xml:space="preserve">
-    <value>Dump every LUN</value>
-  </data>
-  <data name="Flash_EdlErasePartitionNameHint" xml:space="preserve">
-    <value>Partition name</value>
-  </data>
-  <data name="Flash_EdlEraseSectorCountHint" xml:space="preserve">
-    <value>Sector count</value>
-  </data>
-  <data name="Flash_EdlErasePartitionSectors" xml:space="preserve">
-    <value>Erase sectors from partition start</value>
-  </data>
-  <data name="Flash_EdlErasePartitionInputInvalid" xml:space="preserve">
-    <value>Enter a partition name and a sector count of at least one.</value>
-  </data>
-  <data name="Flash_EdlPreviewEraseAll" xml:space="preserve">
-    <value>Preview all-partition erase</value>
-  </data>
-  <data name="Flash_EdlEraseAllConfirm" xml:space="preserve">
-    <value>I accept that erasing every listed partition is irreversible</value>
-  </data>
-  <data name="Flash_EdlEraseAll" xml:space="preserve">
-    <value>Erase every GPT partition</value>
-  </data>
-  <data name="Flash_EdlEraseAllConfirmRequired" xml:space="preserve">
-    <value>Tick the irreversible-erase confirmation before erasing every partition.</value>
   </data>
   <data name="Flash_EdlBootableValueHint" xml:space="preserve">
     <value>Boot partition number (0-255)</value>
@@ -1097,9 +998,6 @@ Author: 暮间雾
   </data>
   <data name="Flash_EdlDigestPartitionMissing" xml:space="preserve">
     <value>Enter the partition whose digest should be read.</value>
-  </data>
-  <data name="Flash_EdlReadStorageInfo" xml:space="preserve">
-    <value>Read storage info</value>
   </data>
   <data name="Flash_EdlChooseProgrammer" xml:space="preserve">
     <value>Override programmer (loader)</value>
@@ -1155,14 +1053,8 @@ Author: 暮间雾
   <data name="Flash_EdlSkipUfsProvision" xml:space="preserve">
     <value>Skip UFS provisioning</value>
   </data>
-  <data name="Flash_EdlSerialFlash" xml:space="preserve">
-    <value>Flash bundle over serial</value>
-  </data>
   <data name="Flash_EdlSerialPort" xml:space="preserve">
     <value>EDL serial port</value>
-  </data>
-  <data name="Flash_EdlSerialPortRequired" xml:space="preserve">
-    <value>Select an EDL serial port first.</value>
   </data>
   <data name="Flash_Auto" xml:space="preserve">
     <value>Auto</value>
@@ -1284,35 +1176,8 @@ Author: 暮间雾
   <data name="Flash_EdlNandInputInvalid" xml:space="preserve">
     <value>Enter a block index of zero or more, a scan count of at least one, and non-negative layout values.</value>
   </data>
-  <data name="Flash_EdlNandPartitionMissing" xml:space="preserve">
-    <value>Enter the partition name the streaming table reports.</value>
-  </data>
   <data name="Flash_EdlNandTableMissing" xml:space="preserve">
     <value>Choose the partition table file first.</value>
-  </data>
-  <data name="Flash_EdlFactoryReset" xml:space="preserve">
-    <value>Factory reset (erase userdata and metadata)</value>
-  </data>
-  <data name="Flash_EdlFactoryResetConfirm" xml:space="preserve">
-    <value>The userdata and metadata partitions are located across LUNs on the device GPT and erased whole; erased data cannot be recovered and absent partitions are skipped and reported. Continue?</value>
-  </data>
-  <data name="Flash_EdlStorageInfoFormat" xml:space="preserve">
-    <value>LUN0 {0} B × {1} · {2:F2} GiB · GPT {3} partitions</value>
-  </data>
-  <data name="Flash_EdlCapabilities" xml:space="preserve">
-    <value>sector {0} B · payload {1:F1} MiB · Firehose {2}</value>
-  </data>
-  <data name="Flash_EdlCapabilityFeatures" xml:space="preserve">
-    <value>read {0} · write {1} · erase {2} · patch {3} · sparse {4} · ufs {5}</value>
-  </data>
-  <data name="Flash_SupportYes" xml:space="preserve">
-    <value>supported</value>
-  </data>
-  <data name="Flash_SupportNo" xml:space="preserve">
-    <value>unsupported</value>
-  </data>
-  <data name="Flash_SupportUnknown" xml:space="preserve">
-    <value>unknown</value>
   </data>
   <data name="Flash_EdlReset" xml:space="preserve">
     <value>Reboot device</value>
@@ -1322,12 +1187,6 @@ Author: 暮间雾
   </data>
   <data name="Flash_EdlEraseConfirm" xml:space="preserve">
     <value>The selected partitions are erased over the sector range declared by the manifest; erased data cannot be recovered. Continue?</value>
-  </data>
-  <data name="Flash_EdlRepairGpt" xml:space="preserve">
-    <value>Repair partition table</value>
-  </data>
-  <data name="Flash_EdlRepairGptConfirm" xml:space="preserve">
-    <value>The partition table currently read from the device is written back over both GPT extents; a mismatched table can render the device unbootable. Continue?</value>
   </data>
   <data name="Flash_EdlResetConfirm" xml:space="preserve">
     <value>The bootable storage is set on a best-effort basis, then the device is reset over firehose. Continue?</value>
@@ -1356,17 +1215,11 @@ Author: 暮间雾
   <data name="Flash_EdlSetActiveSlot" xml:space="preserve">
     <value>Active slot (a, b, 0 or 1)</value>
   </data>
-  <data name="Flash_EdlSetActiveSlotApply" xml:space="preserve">
-    <value>Switch active slot</value>
-  </data>
   <data name="Flash_EdlSetActiveSlotConfirm" xml:space="preserve">
     <value>The active A/B slot is changed on the device; booting then uses the selected slot. Continue?</value>
   </data>
   <data name="Flash_EdlSetActiveSlotDone" xml:space="preserve">
     <value>Active slot change requested.</value>
-  </data>
-  <data name="Flash_EdlSetActiveSlotInvalid" xml:space="preserve">
-    <value>Enter the active slot as &quot;a&quot;, &quot;b&quot;, &quot;0&quot; or &quot;1&quot;.</value>
   </data>
   <data name="Flash_EdlUfsProfileChoose" xml:space="preserve">
     <value>Choose UFS provisioning profile</value>
@@ -1416,14 +1269,8 @@ Author: 暮间雾
   <data name="Flash_EdlPowerNotAcknowledged" xml:space="preserve">
     <value>The target did not acknowledge the request. {0}</value>
   </data>
-  <data name="Flash_EdlActiveSlotDetected" xml:space="preserve">
-    <value>Active slot: {0}</value>
-  </data>
   <data name="Flash_EdlLun" xml:space="preserve">
     <value>Physical region (LUN)</value>
-  </data>
-  <data name="Flash_EdlSerialBaud" xml:space="preserve">
-    <value>Serial baud rate</value>
   </data>
   <data name="Flash_MtkLoggingOnlyHint" xml:space="preserve">
     <value>The selected MTK port is logging-only and cannot run flashing commands.</value>
@@ -3729,47 +3576,5 @@ Continue?</value>
   </data>
   <data name="Flash_GeneralOperations" xml:space="preserve">
     <value>General Operations</value>
-  </data>
-  <data name="Flash_Diagnostics" xml:space="preserve">
-    <value>Diagnostics and crash dumps</value>
-  </data>
-  <data name="Flash_DiagComPortWatermark" xml:space="preserve">
-    <value>Enter a DIAG serial port name, for example COM3</value>
-  </data>
-  <data name="Flash_DiagReadNv" xml:space="preserve">
-    <value>Read NV item 10</value>
-  </data>
-  <data name="Flash_DiagBackupQcn" xml:space="preserve">
-    <value>Back up QCN to folder…</value>
-  </data>
-  <data name="Flash_DiagRestoreQcn" xml:space="preserve">
-    <value>Restore QCN from file…</value>
-  </data>
-  <data name="Flash_DiagListEfs" xml:space="preserve">
-    <value>List EFS root directory</value>
-  </data>
-  <data name="Flash_DiagSyncStatus" xml:space="preserve">
-    <value>Read EFS sync status</value>
-  </data>
-  <data name="Flash_CrashDump" xml:space="preserve">
-    <value>Collect crash dump from EDL device</value>
-  </data>
-  <data name="Flash_FactoryBuildFlatten" xml:space="preserve">
-    <value>Flatten factory build (contents.xml)…</value>
-  </data>
-  <data name="Flash_DiagQcnBackupDone" xml:space="preserve">
-    <value>QCN backup finished</value>
-  </data>
-  <data name="Flash_DiagQcnRestoreDone" xml:space="preserve">
-    <value>QCN restore finished</value>
-  </data>
-  <data name="Flash_DiagRestoreConfirm" xml:space="preserve">
-    <value>Writing NV items changes the radio configuration. Continue?</value>
-  </data>
-  <data name="Flash_CrashDumpHint" xml:space="preserve">
-    <value>Crash dump collection runs from the EDL session once storage is up; pick regions in a follow-up release.</value>
-  </data>
-  <data name="Flash_FactoryBuildHint" xml:space="preserve">
-    <value>Pick a factory metabuild contents.xml to flatten into rawprogram+patch.</value>
   </data>
 </root>
