@@ -14,6 +14,7 @@ public partial class NodeEditorView
         base.OnAttachedToVisualTree(e);
         _interactionAttached = true;
         BindInteractionHost();
+        AttachExecutionLogPresentation();
         ScheduleCanvasViewportSync();
     }
 
@@ -21,6 +22,7 @@ public partial class NodeEditorView
     {
         _interactionAttached = false;
         BindInteractionHost();
+        DetachExecutionLogPresentation();
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -28,6 +30,10 @@ public partial class NodeEditorView
     {
         base.OnDataContextChanged(e);
         BindInteractionHost();
+        if (_interactionAttached)
+        {
+            BindExecutionLogModel();
+        }
     }
 
     private void BindInteractionHost()

@@ -69,6 +69,12 @@
   <data name="Node_ExecLog" xml:space="preserve">
     <value>Execution Log</value>
   </data>
+  <data name="Node_ExecLog_Collapse" xml:space="preserve">
+    <value>Collapse execution log</value>
+  </data>
+  <data name="Node_ExecLog_Expand" xml:space="preserve">
+    <value>Expand execution log</value>
+  </data>
   <data name="Node_Canvas" xml:space="preserve">
     <value>Node Canvas</value>
   </data>

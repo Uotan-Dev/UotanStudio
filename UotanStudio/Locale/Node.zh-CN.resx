@@ -69,6 +69,12 @@
   <data name="Node_ExecLog" xml:space="preserve">
     <value>执行日志</value>
   </data>
+  <data name="Node_ExecLog_Collapse" xml:space="preserve">
+    <value>收起执行日志</value>
+  </data>
+  <data name="Node_ExecLog_Expand" xml:space="preserve">
+    <value>展开执行日志</value>
+  </data>
   <data name="Node_Canvas" xml:space="preserve">
     <value>节点画布</value>
   </data>

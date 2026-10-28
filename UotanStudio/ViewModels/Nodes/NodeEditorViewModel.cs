@@ -356,10 +356,10 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
     public bool CanEditGraph => !IsExecuting;
     public bool CanRun => !IsExecuting && Nodes.Count > 0;
     public bool CanDeleteSelection => !IsExecuting && HasSelection;
-    /// <summary>Short workflow summaries shown in the bottom panel; detailed diagnostics remain in the global log.
-    /// <para>底部面板显示的工作流简要摘要；详细诊断仍在全局日志中。</para>
+    /// <summary>Workflow and node log entries shown in the execution panel.
+    /// <para>在执行面板中显示的工作流与节点日志条目。</para>
     /// </summary>
-    public ObservableCollection<string> ExecutionLog { get; } = [];
+    public ObservableCollection<LogEntry> ExecutionLog { get; } = [];
 
     /// <summary>Installed composite nodes available for isolated graph editing.
     /// <para>可用于独立图编辑的已安装组合节点。</para>
@@ -1200,6 +1200,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        IsExecutionLogExpanded = true;
         IsExecuting = true;
         FailedNodes = [];
         foreach (var node in Nodes)
@@ -1410,14 +1411,25 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
         _executionLogSources = sources;
     }
 
-    /// <summary>Appends one line to the execution log for the current run, dropping an immediately repeated line.</summary>
-    private void AppendExecutionLog(string line)
+    /// <summary>Appends one workflow summary, dropping an immediately repeated summary.</summary>
+    private void AppendExecutionLog(string line, LogLevel level = LogLevel.Info)
     {
-        if (ExecutionLog.Count > 0 && string.Equals(ExecutionLog[^1], line, StringComparison.Ordinal))
+        if (ExecutionLog.Count > 0
+            && ExecutionLog[^1].Source == "Workflow"
+            && string.Equals(ExecutionLog[^1].Message, line, StringComparison.Ordinal))
         {
             return;
         }
-        ExecutionLog.Add(line);
+        ExecutionLog.Add(new LogEntry(DateTime.Now, level, "Workflow", line));
+    }
+
+    private void AppendExecutionLog(LogEntry entry)
+    {
+        if (ExecutionLog.Count > 0 && ExecutionLog[^1] == entry)
+        {
+            return;
+        }
+        ExecutionLog.Add(entry);
     }
 
     private void OnNodeStatusChanged(object? sender, NodeStatusChangedEventArgs e)
@@ -1451,7 +1463,7 @@ public partial class NodeEditorViewModel : ViewModelBase, IDisposable
 
         void Append()
         {
-            AppendExecutionLog($"[{entry.Timestamp:HH:mm:ss}] {entry.Source}: {entry.Message}");
+            AppendExecutionLog(entry);
         }
 
         if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())

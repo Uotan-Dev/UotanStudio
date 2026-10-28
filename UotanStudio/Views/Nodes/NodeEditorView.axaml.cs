@@ -67,6 +67,7 @@ public partial class NodeEditorView : UserControl
     public NodeEditorView()
     {
         InitializeComponent();
+        _executionLogPresenter = CreateExecutionLogPresenter();
         AddHandler(KeyDownEvent, OnLocalEditorKeyDown, RoutingStrategies.Bubble);
 
         Editor.SelectionChanged += OnEditorSelectionChanged;
@@ -78,6 +79,8 @@ public partial class NodeEditorView : UserControl
             RoutingStrategies.Bubble, handledEventsToo: true);
 
         PaneLayout.SizeChanged += (_, _) => ApplyPaneMinimums();
+        CenterPane.SizeChanged += OnCenterPaneSizeChanged;
+        UpdateExecutionLogPane();
 
         AddHandler(PointerPressedEvent, OnToolboxItemPointerPressed,
             RoutingStrategies.Tunnel, handledEventsToo: true);

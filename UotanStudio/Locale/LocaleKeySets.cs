@@ -2156,6 +2156,8 @@ internal static class LocaleKeySets
         "Node_Toolbox_Destructive",
         "Node_Properties",
         "Node_ExecLog",
+        "Node_ExecLog_Collapse",
+        "Node_ExecLog_Expand",
         "Node_Canvas",
         "Node_SearchNodes",
         "Node_ZoomIn",

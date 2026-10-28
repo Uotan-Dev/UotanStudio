@@ -244,8 +244,8 @@ public partial class NodeEditorView
         RightPaneDivider.IsVisible = RightPaneHandle.IsVisible = !narrow;
         ToolboxPane.IsVisible = !narrow || ToolboxPaneToggle.IsChecked == true;
         PropertiesPane.IsVisible = !narrow || PropertiesPaneToggle.IsChecked == true;
-        Grid.SetColumn(EditorSurface, narrow ? 0 : 2);
-        Grid.SetColumnSpan(EditorSurface, narrow ? 5 : 1);
+        Grid.SetColumn(CenterPane, narrow ? 0 : 2);
+        Grid.SetColumnSpan(CenterPane, narrow ? 5 : 1);
         Grid.SetColumn(ToolboxPane, 0);
         Grid.SetColumn(PropertiesPane, narrow ? 0 : 4);
         Grid.SetColumnSpan(ToolboxPane, narrow ? 5 : 1);

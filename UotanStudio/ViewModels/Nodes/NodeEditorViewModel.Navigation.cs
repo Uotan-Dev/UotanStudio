@@ -17,7 +17,7 @@ public partial class NodeEditorViewModel
     {
         get;
         set => SetProperty(ref field, value);
-    }
+    } = false;
 
     public IReadOnlyList<FlowNodeViewModel> FailedNodes
     {

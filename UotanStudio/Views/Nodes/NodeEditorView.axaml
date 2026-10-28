@@ -6,6 +6,7 @@
              xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:views="using:UotanStudio.Views.Nodes"
              xmlns:vm="using:UotanStudio.ViewModels.Nodes"
+             xmlns:edit="using:AvaloniaEdit"
              xmlns:nodify="clr-namespace:NodifyM.Avalonia.Controls;assembly=NodifyM.Avalonia"
              xmlns:nodeVm="using:UotanStudio.Workflow.Nodes"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
@@ -119,6 +120,22 @@
             <Setter Property="Width" Value="0.5" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="IsVertical" Value="True" />
+        </Style>
+        <Style Selector="controls|RoundedPaneDivider.pane-edge.horizontal">
+            <Setter Property="Height" Value="0.5" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="IsVertical" Value="False" />
+        </Style>
+        <Style Selector="GridSplitter.pane-splitter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="ResizeBehavior" Value="PreviousAndNext" />
+        </Style>
+        <Style Selector="GridSplitter.pane-splitter.horizontal">
+            <Setter Property="Height" Value="9" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="ResizeDirection" Value="Rows" />
+            <Setter Property="Cursor" Value="SizeNorthSouth" />
         </Style>
         <!-- 拖动条：自绘拖动逻辑（见代码后置），保证相邻两栏只在自身之间搬运宽度、
              不牵动第三栏，也不会把任何一栏拖到最小宽度以下。 -->
@@ -369,14 +386,12 @@
         <!-- 底部状态栏 -->
         <Border DockPanel.Dock="Bottom" Padding="8,4"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                <TextBlock x:Name="WorkflowStatusText" Text="{Binding ExecutionStatus}" TextTrimming="CharacterEllipsis"
-                           ToolTip.Tip="{Binding ExecutionStatus}" FontSize="12" VerticalAlignment="Center" />
-                <TextBlock x:Name="CanvasHintText" Grid.Column="1" FontSize="11" VerticalAlignment="Center"
+            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBlock x:Name="CanvasHintText" FontSize="11" VerticalAlignment="Center"
                            Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis"
                            Text="{DynamicResource Node_CanvasHint}"
                            IsVisible="{Binding $parent[views:NodeEditorView].CanvasHintVisible}" />
-                <TextBlock Grid.Column="2" FontSize="11" VerticalAlignment="Center"
+                <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center"
                            Foreground="{DynamicResource SecondaryTextBrush}">
                     <Run Text="{Binding Zoom, StringFormat='{}{0:P0}'}" />
                     <Run Text=" | " />
@@ -390,7 +405,7 @@
                     <Run Text=" " />
                     <Run Text="{Binding SelectedExecutionStageLabel, Mode=OneWay}" />
                 </TextBlock>
-                <ProgressBar x:Name="WorkflowProgress" Grid.Row="1" Grid.ColumnSpan="3" Height="3" Margin="0,4,0,0"
+                <ProgressBar x:Name="WorkflowProgress" Grid.Row="1" Grid.ColumnSpan="2" Height="3" Margin="0,4,0,0"
                              Minimum="0" Maximum="1" Value="{Binding ExecutionProgress}" IsVisible="{Binding IsExecuting}" />
             </Grid>
         </Border>
@@ -445,39 +460,6 @@
                 </ListBox>
             </StackPanel>
         </Expander>
-
-        <!-- 底部执行日志面板（状态栏上方） -->
-        <Border DockPanel.Dock="Bottom" MaxHeight="180"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-            <Expander Header="{DynamicResource Node_ExecLog}" IsExpanded="{Binding IsExecutionLogExpanded, Mode=TwoWay}" Padding="6,2">
-                <DockPanel>
-                    <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding FailedNodes}" IsVisible="{Binding HasFailures}" MaxHeight="90">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type nodeVm:FlowNodeViewModel}">
-                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnFocusFailureClick"
-                                        ToolTip.Tip="{Binding ExecutionError}" Margin="0,1">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <avalonia:ErrorCircle Width="16" Height="16" />
-                                        <TextBlock Text="{Binding DisplayHeader}" TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                </Button>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                <ListBox ItemsSource="{Binding ExecutionLog}"
-                         MaxHeight="150"
-                         Background="Transparent" BorderThickness="0">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding}" FontFamily="Consolas,monospace" FontSize="13"
-                                       Foreground="{DynamicResource TextForeground}"
-                                       TextWrapping="Wrap" />
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-                </DockPanel>
-            </Expander>
-        </Border>
 
         <!-- 左中右三栏：始终按 1:4:1 比例分布，两侧保留最小宽度，
              窗口变窄时三栏一起收缩而不是让两侧内容消失；栏间可拖动调整。 -->
@@ -863,14 +845,18 @@
                 PointerPressed="OnRightSplitterPressed" PointerMoved="OnSplitterMoved"
                 PointerReleased="OnSplitterReleased" PointerCaptureLost="OnSplitterCaptureLost" />
 
+        <!-- 中央画布与执行日志纵向分隔，日志只占中央栏宽度。 -->
+        <!-- The center canvas and execution log are vertically split so the log stays within the center pane. -->
+        <Grid Grid.Column="2" x:Name="CenterPane" RowDefinitions="*,0,Auto" ClipToBounds="True">
         <!-- 中央节点画布区域 - 使用 Grid 叠加小地图 -->
-        <Grid Grid.Column="2" x:Name="EditorSurface"
+        <Grid Grid.Row="0" x:Name="EditorSurface"
               ClipToBounds="True"
               DragDrop.AllowDrop="True"
               DragDrop.DragOver="OnCanvasDragOver"
               DragDrop.DragLeave="OnCanvasDragLeave"
               DragDrop.Drop="OnCanvasDrop">
             <nodify:NodifyEditor ItemsSource="{Binding Nodes}"
+                                 ClipToBounds="True"
                                  IsEnabled="{Binding CanEditGraph}"
                                  Connections="{Binding Connections}"
                                  PendingConnection="{Binding PendingConnection}"
@@ -1067,6 +1053,89 @@
                                         ViewportBrush="{DynamicResource SemiColorPrimaryLight}"
                                         MapBorderBrush="{DynamicResource BorderBrush}"
                                         IsVisible="{Binding ShowMinimap}" />
+        </Grid>
+
+        <controls:RoundedPaneDivider x:Name="ExecutionLogDivider" Grid.Row="1"
+                                     Classes="pane-edge horizontal" ShadowUp="True" />
+        <GridSplitter x:Name="ExecutionLogSplitter" Grid.Row="1"
+                      Classes="pane-splitter horizontal" />
+
+        <Border x:Name="ExecutionLogPanel" Grid.Row="2"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <Grid RowDefinitions="Auto,*">
+                <Border Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{DynamicResource Node_ExecLog}" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Width="26" Height="26" Padding="0"
+                                Click="OnClearExecutionLogClick" ToolTip.Tip="{DynamicResource Log_Clear}"
+                                AutomationProperties.Name="{DynamicResource Log_Clear}">
+                            <avalonia:Delete Width="14" Height="14" />
+                        </Button>
+                        <Grid Grid.Column="2" Width="28" Height="28">
+                            <Button IsVisible="{Binding IsExecutionLogExpanded}"
+                                    Click="OnCollapseExecutionLogClick"
+                                    ToolTip.Tip="{DynamicResource Node_ExecLog_Collapse}"
+                                    AutomationProperties.Name="{DynamicResource Node_ExecLog_Collapse}">
+                                <avalonia:ChevronDown Width="14" Height="14" />
+                            </Button>
+                            <Button IsVisible="{Binding !IsExecutionLogExpanded}"
+                                    Click="OnExpandExecutionLogClick"
+                                    ToolTip.Tip="{DynamicResource Node_ExecLog_Expand}"
+                                    AutomationProperties.Name="{DynamicResource Node_ExecLog_Expand}">
+                                <avalonia:ChevronUp Width="14" Height="14" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Border>
+                <Grid Grid.Row="1" RowDefinitions="Auto,*"
+                      IsVisible="{Binding IsExecutionLogExpanded}">
+                    <ScrollViewer Grid.Row="0" MaxHeight="90" Margin="8,0,8,4"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto"
+                                  IsVisible="{Binding HasFailures}">
+                        <ItemsControl ItemsSource="{Binding FailedNodes}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type nodeVm:FlowNodeViewModel}">
+                                    <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                            Click="OnFocusFailureClick" ToolTip.Tip="{Binding ExecutionError}">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                            <avalonia:ErrorCircle Grid.Column="0" Width="16" Height="16" />
+                                            <TextBlock Grid.Column="1" Text="{Binding DisplayHeader}"
+                                                       TextWrapping="Wrap" TextAlignment="Center"
+                                                       VerticalAlignment="Center" MaxLines="2" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <edit:TextEditor Grid.Row="1" x:Name="ExecutionLogTextEditor"
+                                     IsReadOnly="True" ShowLineNumbers="False" WordWrap="False"
+                                     FontFamily="Consolas,monospace" FontSize="13"
+                                     Padding="8,4" Background="Transparent"
+                                     Foreground="{DynamicResource TextForeground}"
+                                     HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <edit:TextEditor.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem x:Name="CopyExecutionLogSelectionMenuItem"
+                                          Header="{DynamicResource Menu_Copy}"
+                                          InputGesture="Ctrl+C" IsEnabled="False"
+                                          Click="OnCopyExecutionLogSelectionClick" />
+                                <MenuItem Header="{DynamicResource Menu_SelectAll}"
+                                          InputGesture="Ctrl+A" Click="OnSelectAllExecutionLogClick" />
+                            </ContextMenu>
+                        </edit:TextEditor.ContextMenu>
+                    </edit:TextEditor>
+                </Grid>
+            </Grid>
+        </Border>
         </Grid>
         </Grid>
     </DockPanel>

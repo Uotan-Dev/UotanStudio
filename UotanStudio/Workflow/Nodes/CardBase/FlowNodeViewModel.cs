@@ -277,7 +277,7 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     private static readonly IBrush IdleBorderBrush = Brushes.Transparent;
 
     private static readonly IBrush SuccessBorderBrush = new ImmutableSolidColorBrush(Colors.Green);
-    private static readonly IBrush FailureBorderBrush = new ImmutableSolidColorBrush(Colors.Red);
+    private static readonly IBrush FailureBorderBrush = new ImmutableSolidColorBrush(Color.Parse("#6B0000"));
     private static readonly IBrush MutedBorderBrush = new ImmutableSolidColorBrush(Colors.Gray);
 
     /// <summary>
