@@ -1178,6 +1178,9 @@ internal static class LocaleKeySets
         "Flash_MtkKeyDirHint",
         "Flash_MtkAuthFileHint",
         "Flash_GeneralOperations",
+        "Flash_EdlSelectProgrammer",
+        "Flash_EdlCustomFile",
+        "Flash_EdlChooseCustomProgrammer",
     ];
 
     internal static readonly string[] Menu =

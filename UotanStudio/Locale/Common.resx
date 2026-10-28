@@ -1,51 +1,51 @@
-<?xml version="1.0" encoding="utf-8"?>
-<root>
-  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
-    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
-    <xsd:element name="root" msdata:IsDataSet="true">
-      <xsd:complexType>
-        <xsd:choice maxOccurs="unbounded">
-          <xsd:element name="metadata">
-            <xsd:complexType>
-              <xsd:sequence>
-                <xsd:element name="value" type="xsd:string" minOccurs="0" />
-              </xsd:sequence>
-              <xsd:attribute name="name" use="required" type="xsd:string" />
-              <xsd:attribute name="type" type="xsd:string" />
-              <xsd:attribute name="mimetype" type="xsd:string" />
-              <xsd:attribute ref="xml:space" />
-            </xsd:complexType>
-          </xsd:element>
-          <xsd:element name="assembly">
-            <xsd:complexType>
-              <xsd:attribute name="alias" type="xsd:string" />
-              <xsd:attribute name="name" type="xsd:string" />
-            </xsd:complexType>
-          </xsd:element>
-          <xsd:element name="data">
-            <xsd:complexType>
-              <xsd:sequence>
-                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
-                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
-              </xsd:sequence>
-              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
-              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
-              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
-              <xsd:attribute ref="xml:space" />
-            </xsd:complexType>
-          </xsd:element>
-          <xsd:element name="resheader">
-            <xsd:complexType>
-              <xsd:sequence>
-                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
-              </xsd:sequence>
-              <xsd:attribute name="name" type="xsd:string" use="required" />
-            </xsd:complexType>
-          </xsd:element>
-        </xsd:choice>
-      </xsd:complexType>
-    </xsd:element>
-  </xsd:schema>
+<?xml version='1.0' encoding='utf-8'?>
+<root xmlns:ns1="urn:schemas-microsoft-com:xml-msdata" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:schema id="root">
+    <xs:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xs:element name="root" ns1:IsDataSet="true">
+      <xs:complexType>
+        <xs:choice maxOccurs="unbounded">
+          <xs:element name="metadata">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="value" type="xsd:string" minOccurs="0" />
+              </xs:sequence>
+              <xs:attribute name="name" use="required" type="xsd:string" />
+              <xs:attribute name="type" type="xsd:string" />
+              <xs:attribute name="mimetype" type="xsd:string" />
+              <xs:attribute ref="xml:space" />
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="assembly">
+            <xs:complexType>
+              <xs:attribute name="alias" type="xsd:string" />
+              <xs:attribute name="name" type="xsd:string" />
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="data">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="value" type="xsd:string" minOccurs="0" ns1:Ordinal="1" />
+                <xs:element name="comment" type="xsd:string" minOccurs="0" ns1:Ordinal="2" />
+              </xs:sequence>
+              <xs:attribute name="name" type="xsd:string" use="required" ns1:Ordinal="1" />
+              <xs:attribute name="type" type="xsd:string" ns1:Ordinal="3" />
+              <xs:attribute name="mimetype" type="xsd:string" ns1:Ordinal="4" />
+              <xs:attribute ref="xml:space" />
+            </xs:complexType>
+          </xs:element>
+          <xs:element name="resheader">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="value" type="xsd:string" minOccurs="0" ns1:Ordinal="1" />
+              </xs:sequence>
+              <xs:attribute name="name" type="xsd:string" use="required" />
+            </xs:complexType>
+          </xs:element>
+        </xs:choice>
+      </xs:complexType>
+    </xs:element>
+  </xs:schema>
   <resheader name="resmimetype">
     <value>text/microsoft-resx</value>
   </resheader>
@@ -1022,7 +1022,7 @@ Author: 暮间雾
     <value>Several rows match; pick one explicitly in the list above.</value>
   </data>
   <data name="Flash_EdlProgrammerDirNoMatch" xml:space="preserve">
-    <value>No row&apos;s declared identity agrees with the device.</value>
+    <value>No row's declared identity agrees with the device.</value>
   </data>
   <data name="Flash_EdlProgrammerDirNeedsIdentity" xml:space="preserve">
     <value>The device has not reported a Sahara identity yet, so nothing can be matched.</value>
@@ -1258,13 +1258,13 @@ Author: 暮间雾
     <value>EDL image {0} no longer matches its rawprogram entry.</value>
   </data>
   <data name="Flash_EdlGptProgrammed" xml:space="preserve">
-    <value>EDL partition &apos;{0}&apos; programmed from the device GPT ({1} bytes written, {2} bytes verified).</value>
+    <value>EDL partition '{0}' programmed from the device GPT ({1} bytes written, {2} bytes verified).</value>
   </data>
   <data name="Flash_EdlEraseRangeUnknown" xml:space="preserve">
-    <value>rawprogram entry &apos;{0}&apos; declares no num_partition_sectors; the erase range cannot be determined.</value>
+    <value>rawprogram entry '{0}' declares no num_partition_sectors; the erase range cannot be determined.</value>
   </data>
   <data name="Flash_EdlEraseFailed" xml:space="preserve">
-    <value>Failed to erase &apos;{0}&apos;. Response: {1}</value>
+    <value>Failed to erase '{0}'. Response: {1}</value>
   </data>
   <data name="Flash_EdlPowerNotAcknowledged" xml:space="preserve">
     <value>The target did not acknowledge the request. {0}</value>
@@ -1435,7 +1435,7 @@ Author: 暮间雾
     <value>Unsaved Changes</value>
   </data>
   <data name="Dialog_UnsavedMessage" xml:space="preserve">
-    <value>Save changes to &apos;{0}&apos; before closing?</value>
+    <value>Save changes to '{0}' before closing?</value>
   </data>
   <data name="Dialog_DiscardChanges" xml:space="preserve">
     <value>Discard</value>
@@ -1663,7 +1663,7 @@ Author: 暮间雾
     <value>Unpack the selected image to its corresponding directory</value>
   </data>
   <data name="ImageView_SuperHint" xml:space="preserve">
-    <value>Build a super image from the project&apos;s raw/sparse images</value>
+    <value>Build a super image from the project's raw/sparse images</value>
   </data>
   <data name="ImageView_DatHint" xml:space="preserve">
     <value>Generate .new.dat + .transfer.list (Android v4)</value>
@@ -1699,7 +1699,7 @@ Author: 暮间雾
     <value>Directory Already Exists</value>
   </data>
   <data name="Image_ExtractOverwriteMessage" xml:space="preserve">
-    <value>Directory &apos;{0}&apos; already exists. Overwrite?</value>
+    <value>Directory '{0}' already exists. Overwrite?</value>
   </data>
   <data name="Image_ExtractOverwrite" xml:space="preserve">
     <value>Overwrite</value>
@@ -1717,7 +1717,7 @@ Author: 暮间雾
     <value>Unpacked Folder Not Found</value>
   </data>
   <data name="Image_UnpackedDirectoryMissingMessage" xml:space="preserve">
-    <value>The unpacked folder &apos;{0}&apos; does not exist.</value>
+    <value>The unpacked folder '{0}' does not exist.</value>
   </data>
   <data name="Log_Channel_All" xml:space="preserve">
     <value>All Channels</value>
@@ -2204,7 +2204,7 @@ Author: 暮间雾
     <value>Close this column</value>
   </data>
   <data name="Compare_SaveFile" xml:space="preserve">
-    <value>Save this column&apos;s edits to the file</value>
+    <value>Save this column's edits to the file</value>
   </data>
   <data name="Compare_CopyTextToOtherSide" xml:space="preserve">
     <value>Copy to Other Side</value>
@@ -3148,7 +3148,7 @@ Continue?</value>
     <value>Invalid partition size value: {0}</value>
   </data>
   <data name="UserError_PartitionOverlap" xml:space="preserve">
-    <value>Partition &quot;{0}&quot; overlaps partition &quot;{1}&quot;.</value>
+    <value>Partition "{0}" overlaps partition "{1}".</value>
   </data>
   <data name="UserError_PluginUnavailable" xml:space="preserve">
     <value>The plugin is unavailable. Check compatibility and required dependencies.</value>
@@ -3577,4 +3577,4 @@ Continue?</value>
   <data name="Flash_GeneralOperations" xml:space="preserve">
     <value>General Operations</value>
   </data>
-</root>
+<data name="Flash_EdlSelectProgrammer" xml:space="preserve"><value>Select Programmer</value></data><data name="Flash_EdlCustomFile" xml:space="preserve"><value>Custom File</value></data><data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve"><value>Choose Custom Programmer File</value></data></root>

@@ -49,6 +49,10 @@ public sealed partial class FlashViewModel
     private string? _edlProgrammer;
     private IReadOnlyList<string> _edlProgrammerCandidates = [];
     private string? _edlProgrammerOverride;
+    private bool _isCustomProgrammer;
+
+    private string? EffectiveEdlProgrammer => _isCustomProgrammer ? _edlProgrammerOverride : _edlProgrammer;
+
     private string? _edlProgrammerDirectory;
     private EdlProgrammerDirectoryResult? _edlProgrammerDirectoryResult;
     private UfsProvisionProfile? _edlUfsProfile;
@@ -444,12 +448,9 @@ public sealed partial class FlashViewModel
                     {
                         _flatBinPackage = true;
                         _edlProgrammerCandidates = bin.Programmers;
-                        Field<ComboBox>("EdlProgrammerPickBox").ItemsSource = bin.Programmers
-                            .Select(Path.GetFileName)
-                            .ToArray();
-                        Field<ComboBox>("EdlProgrammerPickBox").SelectedIndex = -1;
-                        Field<ComboBox>("EdlProgrammerPickBox").IsVisible = Field<TextBlock>("EdlProgrammerChoiceLabel").IsVisible = bin.Programmers.Count > 1;
                         _edlProgrammer = bin.Programmer;
+                        _isCustomProgrammer = false;
+                        UpdateEdlProgrammerPickOptions();
                         var edlPrograms = bin.Programs.Where(entry =>
                             !string.IsNullOrEmpty(entry.Filename) && File.Exists(entry.SourceFile) &&
                             !entry.Filename.StartsWith("gpt_", StringComparison.OrdinalIgnoreCase))
@@ -861,10 +862,41 @@ public sealed partial class FlashViewModel
         }
     }
 
+    private DetectedDevice? _lastObservedDevice;
+
+    internal void ApplyDeviceProtocolExpansion(DeviceProtocolKind? protocol)
+    {
+        if (Surface is null) return;
+        if (protocol is DeviceProtocolKind.Edl)
+        {
+            Field<Expander>("EdlExpander").IsExpanded = true;
+            Field<Expander>("MtkExpander").IsExpanded = false;
+        }
+        else if (protocol is DeviceProtocolKind.Mtk)
+        {
+            Field<Expander>("MtkExpander").IsExpanded = true;
+            Field<Expander>("EdlExpander").IsExpanded = false;
+        }
+
+        else
+        {
+            Field<Expander>("EdlExpander").IsExpanded = false;
+            Field<Expander>("MtkExpander").IsExpanded = false;
+        }
+    }
+
     private void OnGlobalDeviceChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(DeviceViewModel.SelectedDevice))
         {
+            var currentDevice = SelectedDevice;
+            if (!ReferenceEquals(_lastObservedDevice, currentDevice) ||
+                _lastObservedDevice?.Protocol != currentDevice?.Protocol)
+            {
+                _lastObservedDevice = currentDevice;
+                ApplyDeviceProtocolExpansion(currentDevice?.Protocol);
+            }
+
             UpdateObservedDeviceInfo();
             UpdateEdlButton();
         }
@@ -891,10 +923,9 @@ public sealed partial class FlashViewModel
     {
         _edlProgrammer = null;
         _edlProgrammerCandidates = [];
-        Field<ComboBox>("EdlProgrammerPickBox").ItemsSource = null;
-        Field<ComboBox>("EdlProgrammerPickBox").SelectedIndex = -1;
-        Field<ComboBox>("EdlProgrammerPickBox").IsVisible = false;
-        Field<TextBlock>("EdlProgrammerChoiceLabel").IsVisible = false;
+        _isCustomProgrammer = false;
+        _edlProgrammerOverride = null;
+        UpdateEdlProgrammerPickOptions();
     }
 
     /// <summary>
@@ -938,7 +969,7 @@ public sealed partial class FlashViewModel
             return existing;
         }
 
-        var programmerPath = _edlProgrammerOverride ?? _edlProgrammer;
+        var programmerPath = EffectiveEdlProgrammer;
         using var programmer = programmerPath is { } loader && File.Exists(loader)
             ? File.OpenRead(loader)
             : null;
@@ -947,12 +978,83 @@ public sealed partial class FlashViewModel
             "The EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
     }
 
+    internal void UpdateEdlProgrammerPickOptions()
+    {
+        if (Surface is null) return;
+        var pickBox = Field<ComboBox>("EdlProgrammerPickBox");
+        var customText = LanguageService.Instance.GetString("Flash_EdlCustomFile");
+        var items = _edlProgrammerCandidates.Select(Path.GetFileName).Concat([customText]).ToArray();
+        var previousCustom = _isCustomProgrammer;
+        var previousEdl = _edlProgrammer;
+        pickBox.ItemsSource = items;
+
+        if (previousCustom)
+        {
+            pickBox.SelectedIndex = items.Length - 1;
+        }
+        else if (previousEdl is not null)
+        {
+            var idx = -1;
+            for (var i = 0; i < _edlProgrammerCandidates.Count; i++)
+            {
+                if (string.Equals(_edlProgrammerCandidates[i], previousEdl, StringComparison.OrdinalIgnoreCase))
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            pickBox.SelectedIndex = idx;
+        }
+        else
+        {
+            pickBox.SelectedIndex = -1;
+        }
+
+        var protocol = SelectedDevice?.Protocol;
+        UpdateEdlProgrammerUiState();
+
+    }
+
+    internal void UpdateEdlProgrammerUiState()
+    {
+        if (Surface is null) return;
+        var pathBox = Field<TextBox>("EdlProgrammerPathBox");
+        var chooseButton = Field<Button>("EdlChooseProgrammerButton");
+        if (_isCustomProgrammer)
+        {
+            pathBox.Text = _edlProgrammerOverride ?? string.Empty;
+            ToolTip.SetTip(pathBox, _edlProgrammerOverride ?? string.Empty);
+            pathBox.IsEnabled = !_busy;
+            chooseButton.IsEnabled = !_busy;
+        }
+        else
+        {
+            pathBox.Text = _edlProgrammer ?? string.Empty;
+            ToolTip.SetTip(pathBox, _edlProgrammer ?? string.Empty);
+            pathBox.IsEnabled = false;
+            chooseButton.IsEnabled = false;
+        }
+    }
+
     internal void OnEdlProgrammerPickChanged(object? source, SelectionChangedEventArgs e)
     {
         var index = Field<ComboBox>("EdlProgrammerPickBox").SelectedIndex;
-        _edlProgrammer = index >= 0 && index < _edlProgrammerCandidates.Count
-            ? _edlProgrammerCandidates[index]
-            : null;
+        if (index >= 0 && index < _edlProgrammerCandidates.Count)
+        {
+            _isCustomProgrammer = false;
+            _edlProgrammer = _edlProgrammerCandidates[index];
+        }
+        else if (index >= 0 && index == _edlProgrammerCandidates.Count)
+        {
+            _isCustomProgrammer = true;
+            _edlProgrammer = null;
+        }
+        else
+        {
+            _isCustomProgrammer = false;
+            _edlProgrammer = null;
+        }
+        UpdateEdlProgrammerUiState();
         UpdateEdlButton();
     }
 
@@ -1050,48 +1152,10 @@ public sealed partial class FlashViewModel
         var edlFirehose = isEdl && EdlStage == EdlProtocolState.Firehose;
         var edlSaharaCommandMode = isEdl && EdlStage is not (EdlProtocolState.Firehose or EdlProtocolState.Streaming);
 
-        Field<Button>("EdlReadLunButton").IsEnabled = !_busy && edlFirehose;
-        var edlStreaming = isEdl && EdlStage == EdlProtocolState.Streaming;
-        var edlStreamingReady = !_busy && edlStreaming;
-        Field<TextBox>("EdlNandPartitionBox").IsEnabled = edlStreamingReady;
-        Field<TextBox>("EdlNandBlockBox").IsEnabled = edlStreamingReady;
-        Field<TextBox>("EdlNandBlockCountBox").IsEnabled = edlStreamingReady;
-        Field<TextBox>("EdlNandBaseBox").IsEnabled = edlStreamingReady;
-        Field<TextBox>("EdlNandPagesBox").IsEnabled = edlStreamingReady;
-        Field<TextBox>("EdlNandSectorsBox").IsEnabled = edlStreamingReady;
-        Field<TextBox>("EdlNandBadLenBox").IsEnabled = edlStreamingReady;
-        Field<CheckBox>("EdlNandBadInSpareBox").IsEnabled = edlStreamingReady;
-        Field<CheckBox>("EdlNandConfirmBox").IsEnabled = edlStreamingReady;
-        Field<CheckBox>("EdlNandOverrideBox").IsEnabled = edlStreamingReady;
-        Field<CheckBox>("EdlNandTrustedBox").IsEnabled = edlStreamingReady;
-        Field<Button>("ChooseEdlNandTableButton").IsEnabled = edlStreamingReady;
-        Field<Button>("EdlNandReadMapButton").IsEnabled = edlStreamingReady;
-        Field<Button>("EdlNandRegistersButton").IsEnabled = edlStreamingReady;
-        Field<Button>("EdlNandCloseButton").IsEnabled = edlStreamingReady;
-        Field<Button>("EdlNandMarkBadButton").IsEnabled = edlStreamingReady;
-        Field<Button>("EdlNandUnmarkBadButton").IsEnabled = edlStreamingReady;
-        Field<Button>("EdlNandCodewordButton").IsEnabled = edlStreamingReady;
-        Field<Button>("EdlNandFlashModeButton").IsEnabled = edlStreamingReady;
-        Field<Button>("EdlNandSecureModeButton").IsEnabled = edlStreamingReady;
-        Field<Button>("EdlNandSendTableButton").IsEnabled = edlStreamingReady && _edlNandTablePath is not null;
-
         Field<Button>("EdlSetBootableButton").IsEnabled = !_busy && edlFirehose;
         Field<Button>("EdlPartitionDigestButton").IsEnabled = !_busy && edlFirehose;
-        var bundleRowVisible = _edlBundleReady && (isEdl || SelectedDevice is null);
-        if (bundleRowVisible)
-        {
-            RefreshEdlSerialPorts();
-        }
 
         var mtkStage = MtkStage;
-        Field<TextBlock>("MtkStageText").Text = LanguageService.Instance.GetString(mtkStage switch
-        {
-            MtkStageBootRom => "Flash_MtkStageNowBootRom",
-            MtkStagePreloader => "Flash_MtkStageNowPreloader",
-            MtkStageDa => "Flash_MtkStageNowDa",
-            MtkStageLogging => "Flash_MtkStageNowLogging",
-            _ => "Flash_MtkStageUndetermined",
-        });
 
         var isFastbootd =
             SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fbDevice &&
@@ -1112,48 +1176,13 @@ public sealed partial class FlashViewModel
             (protocol == DeviceProtocolKind.Edl && edlFirehose && HasSelectedEdlEntries()) ||
             (protocol == DeviceProtocolKind.Mtk && _mtkResolution is not null && Partitions.Any(p => p.IsSelected)));
         Field<DropDownButton>("RebootMenuButton").IsEnabled = !_busy;
-        Field<Button>("EdlReadbackButton").IsEnabled = edlFirehose && !_busy && HasSelectedEdlEntries();
-        var mtkBootStage = isMtkUsb && mtkStage is MtkStageBootRom or MtkStagePreloader;
-        var mtkRpmbReady = !_busy && mtkBootStage;
-        Field<ComboBox>("MtkRpmbModeBox").IsEnabled = mtkRpmbReady;
-        Field<TextBox>("MtkRpmbOffsetBox").IsEnabled = mtkRpmbReady;
-        Field<TextBox>("MtkRpmbLengthBox").IsEnabled = mtkRpmbReady;
-        Field<Button>("MtkRpmbReadButton").IsEnabled = mtkRpmbReady;
-        Field<Button>("MtkRpmbCapacityButton").IsEnabled = mtkRpmbReady;
-        var isMtkPreloader = isMtkUsb && mtkStage == MtkStagePreloader;
-        var preloaderEnabled = !_busy && isMtkPreloader;
-        Field<TextBox>("MtkPreloaderOffsetBox").IsEnabled = preloaderEnabled;
-        Field<TextBox>("MtkPreloaderLengthBox").IsEnabled = preloaderEnabled;
-
-        Field<Button>("MtkPreloaderPeekButton").IsEnabled = preloaderEnabled;
-        Field<Button>("MtkPreloaderReturnToBromButton").IsEnabled = preloaderEnabled;
-        Field<Button>("MtkPreloaderDisableWatchdogButton").IsEnabled = preloaderEnabled;
-        Field<TextBox>("MtkPreloaderPartitionNameBox").IsEnabled = preloaderEnabled;
-        Field<Button>("MtkPreloaderJumpButton").IsEnabled = preloaderEnabled;
-        Field<Button>("MtkPreloaderBootloaderJumpButton").IsEnabled = preloaderEnabled;
         var mtkProtocolReady = !_busy && protocol is DeviceProtocolKind.Mtk && mtkStage != MtkStageLogging;
-        Field<Button>("MtkSetSpeedButton").IsEnabled = mtkProtocolReady;
         Field<Button>("MtkRebootMetaButton").IsEnabled = mtkProtocolReady;
         Field<Button>("MtkRebootAndroidTestButton").IsEnabled = mtkProtocolReady;
-        Field<Button>("MtkFullDumpButton").IsEnabled = mtkProtocolReady;
-        Field<Button>("MtkDumpWholeFlashButton").IsEnabled = mtkProtocolReady;
-        Field<TextBox>("MtkSectorRegionBox").IsEnabled = mtkProtocolReady;
-        Field<TextBox>("MtkSectorStartBox").IsEnabled = mtkProtocolReady;
-        Field<TextBox>("MtkSectorCountBox").IsEnabled = mtkProtocolReady;
-        Field<Button>("MtkReadSectorsButton").IsEnabled = mtkProtocolReady;
-        Field<TextBox>("MtkAreaOffsetBox").IsEnabled = mtkProtocolReady;
-        Field<TextBox>("MtkAreaLengthBox").IsEnabled = mtkProtocolReady;
-        Field<Button>("MtkReadAreaButton").IsEnabled = mtkProtocolReady;
         Field<TextBox>("MtkXmlPropertyBox").IsEnabled = mtkProtocolReady;
         Field<Button>("MtkXmlPropertyQueryButton").IsEnabled = mtkProtocolReady;
 
-        Field<Button>("EdlChooseProgrammerButton").IsEnabled = !_busy && edlSaharaCommandMode;
-        Field<Button>("EdlChooseProgrammerDirButton").IsEnabled = !_busy && edlSaharaCommandMode;
-
-        Field<Button>("EdlChooseUfsProfileButton").IsEnabled = !_busy && edlFirehose;
-        Field<Button>("EdlUfsPreviewButton").IsEnabled = !_busy && edlFirehose && _edlUfsProfile is not null;
-        Field<Button>("EdlUfsProvisionButton").IsEnabled = !_busy && edlFirehose && _edlUfsProfile is not null;
-        Field<Button>("EdlUfsResetButton").IsEnabled = !_busy && edlFirehose;
+        UpdateEdlProgrammerUiState();
     }
 
     /// <summary>
@@ -1527,7 +1556,7 @@ public sealed partial class FlashViewModel
 
     internal async void OnFlashEdlBundleClick(object? sender, RoutedEventArgs e)
     {
-        if (_busy || _confirming || _edlProgrammer is null || !_flatBinPackage ||
+        if (_busy || _confirming || EffectiveEdlProgrammer is null || !_flatBinPackage ||
             SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
             TopLevel.GetTopLevel(Surface) is not Window owner ||
             !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal)) return;
@@ -1551,7 +1580,7 @@ public sealed partial class FlashViewModel
     private async Task RunEdlBundleAsync(bool useSerialPort, DetectedDevice? device, string? serialPort, Window owner)
     {
         var language = LanguageService.Instance;
-        var programmerPath = _edlProgrammerOverride ?? _edlProgrammer;
+        var programmerPath = EffectiveEdlProgrammer;
         if (programmerPath is null || !_flatBinPackage) return;
         _confirming = true;
         bool confirmed;
@@ -1582,7 +1611,6 @@ public sealed partial class FlashViewModel
         Field<Button>("FlashSelectedButton").IsEnabled = false;
         Field<Button>("FlashEdlBundleButton").IsEnabled = false;
         Field<Button>("EdlSerialFlashButton").IsEnabled = false;
-        Field<ComboBox>("EdlSerialPortBox").IsEnabled = false;
         Field<TextBox>("PackagePathBox").IsEnabled = false;
         FlashPartitionEntry? bundleActiveRow = null;
         try
@@ -1702,7 +1730,6 @@ public sealed partial class FlashViewModel
             Field<Button>("FlashSelectedButton").IsEnabled = true;
             UpdateEdlButton();
             Field<TextBox>("PackagePathBox").IsEnabled = true;
-            Field<ComboBox>("EdlSerialPortBox").IsEnabled = true;
         }
     }
 
@@ -1960,7 +1987,7 @@ public sealed partial class FlashViewModel
             ? Path.GetDirectoryName(Path.GetFullPath(firstRow.FilePath)) ?? string.Empty
             : string.Empty;
         if (!FlashModeAllowed(device.Protocol, _flatBinPackage,
-                _edlProgrammer is not null || _edlProgrammerOverride is not null,
+                EffectiveEdlProgrammer is not null,
                 rkImageDir.Length > 0 && FlashService.HasRockchipParameter(rkImageDir)) ||
             device.Protocol == DeviceProtocolKind.Adb && !await FlashSuService.HasSuAsync(device, CancellationToken.None))
         {
@@ -2122,7 +2149,7 @@ public sealed partial class FlashViewModel
                             {
                                 result = await FlashService.Default.FlashEdlPartitionAsync(
                                     edl, entry, Path.GetDirectoryName(row.FilePath)!,
-                                    _edlProgrammerOverride ?? _edlProgrammer, progress, cancellation.Token, verify,
+                                    EffectiveEdlProgrammer, progress, cancellation.Token, verify,
                                     initialization);
                             }
                             else
@@ -2803,7 +2830,7 @@ public sealed partial class FlashViewModel
         await RunEdlStorageServiceCallAsync(async token =>
         {
             var result = await EdlStorageControlService.SetBootableStorageDriveAsync(
-                new DeviceInfo(device), value, token, _edlProgrammerOverride ?? _edlProgrammer, initialization)
+                new DeviceInfo(device), value, token, EffectiveEdlProgrammer, initialization)
                 .ConfigureAwait(true);
             return result.Summary;
         });
@@ -2829,7 +2856,7 @@ public sealed partial class FlashViewModel
         await RunEdlStorageServiceCallAsync(async token =>
         {
             var digest = await EdlStorageControlService.GetPartitionSha256Async(
-                new DeviceInfo(device), partition, SelectedEdlLun, token, _edlProgrammerOverride ?? _edlProgrammer,
+                new DeviceInfo(device), partition, SelectedEdlLun, token, EffectiveEdlProgrammer,
                 initialization).ConfigureAwait(true);
             return $"{digest.Partition} [{digest.StartSector} x{digest.SectorCount}] lun {digest.Lun}: {digest.Sha256Hex}";
         });
@@ -3240,7 +3267,7 @@ public sealed partial class FlashViewModel
         try
         {
             var result = await operation(new DeviceInfo(device), initialization,
-                _edlProgrammerOverride ?? _edlProgrammer, cancellation.Token).ConfigureAwait(true);
+                EffectiveEdlProgrammer, cancellation.Token).ConfigureAwait(true);
             AppendLog(result.Summary);
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
@@ -3313,20 +3340,18 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LanguageService.Instance.GetString("Flash_EdlChooseProgrammer"),
+            Title = LanguageService.Instance.GetString("Flash_EdlChooseCustomProgrammer"),
             AllowMultiple = false,
             FileTypeFilter = [FilePickerFileTypes.All]
         });
         if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
         _edlProgrammerOverride = File.Exists(path) ? path : null;
-        Field<TextBlock>("EdlProgrammerPathText").Text = _edlProgrammerOverride is { } programmer
-            ? Path.GetFileName(programmer)
-            : string.Empty;
-        ToolTip.SetTip(Field<TextBlock>("EdlProgrammerPathText"), _edlProgrammerOverride ?? string.Empty);
+        UpdateEdlProgrammerUiState();
         if (_edlProgrammerOverride is { } selected)
         {
             AppendLog(Path.GetFileName(selected));
         }
+        UpdateEdlButton();
     }
 
     /// <summary>
