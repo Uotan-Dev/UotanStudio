@@ -516,54 +516,6 @@
                 <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_Properties}"
                            FontWeight="SemiBold" FontSize="13"
                            Margin="8,8,8,4" />
-                <Border x:Name="VisualPluginWorkspace" DockPanel.Dock="Bottom"
-                        Margin="8,12,8,8" CornerRadius="6" ClipToBounds="True"
-                        BorderBrush="{DynamicResource EditorPaneSplitterBackgroundBrush}" BorderThickness="1"
-                        IsVisible="{Binding ShowVisualPluginWorkspace}">
-                    <DockPanel>
-                        <Border DockPanel.Dock="Top" Padding="10,8" CornerRadius="5,5,0,0"
-                                BorderBrush="{DynamicResource EditorPaneSplitterBackgroundBrush}"
-                                BorderThickness="0,0,0,1">
-                            <Border.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackground}" />
-                            </Border.Background>
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <avalonia:App Width="16" Height="16" />
-                                <TextBlock Text="{DynamicResource Node_PluginWorkspace}" FontWeight="SemiBold"
-                                           FontSize="12" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Border>
-                        <StackPanel Margin="10" Spacing="8">
-                            <TextBlock Text="{Binding CodeRuntimeDisabledText}" FontSize="11"
-                                       Foreground="{DynamicResource SecondaryTextBrush}"
-                                       TextWrapping="Wrap"
-                                       IsVisible="{Binding CodeRuntimeDisabled}" />
-                            <TextBlock Text="{DynamicResource Node_PluginWorkspaceEmpty}" FontSize="11"
-                                       Foreground="{DynamicResource SecondaryTextBrush}"
-                                       TextWrapping="Wrap" IsVisible="{Binding !EditableVisualPlugins.Count}" />
-                            <ComboBox x:Name="VisualPluginSelector" Height="28" FontSize="12"
-                                      ItemsSource="{Binding EditableVisualPlugins}"
-                                      SelectedItem="{Binding SelectedVisualPlugin, Mode=TwoWay}"
-                                      IsVisible="{Binding !!EditableVisualPlugins.Count}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                            <Button x:Name="OpenVisualPluginEditorButton" Height="28" Padding="8,0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    Click="OnOpenVisualPluginEditorClick"
-                                    IsEnabled="{Binding !!SelectedVisualPlugin}"
-                                    IsVisible="{Binding !!EditableVisualPlugins.Count}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <avalonia:ChartLine Width="15" Height="15" />
-                                    <TextBlock Text="{DynamicResource Node_OpenPluginEditor}" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
                 <ScrollViewer>
                     <Grid IsEnabled="{Binding CanEditGraph}">
                         <!-- 未选中节点时的占位提示 -->
