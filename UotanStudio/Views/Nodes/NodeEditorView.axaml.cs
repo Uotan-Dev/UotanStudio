@@ -11,7 +11,6 @@ using UotanStudio.Services.Ui;
 using UotanStudio.Services.Ui.Projects;
 using UotanStudio.Services.VisualPlugins;
 using UotanStudio.ViewModels.Nodes;
-using UotanStudio.Views.Shell;
 using UotanStudio.Workflow.Nodes;
 using UotanStudio.Workflow.Nodes.EditorCommands;
 
