@@ -32,7 +32,7 @@
 ## 项目、快照与交付
 
 - 新建、打开、关闭、另存为必须经过 `ProjectOperationsService`。保存失败保留源上下文与原目标内容；另存为成功后才切换项目根目录。自动保存失败要放行项目操作门，不能静默卡住。
-- 解决方案快照中的交付计划与面板可见性只写 `SolutionSnapshot.State`（键 `delivery`/`panels`）；解决方案根目录不存放 `delivery.json`。子项目自己的 `.uotan/` 语义保持不变。
+- 解决方案快照中的交付计划、面板可见性与项目资源管理器展开状态只写 `SolutionSnapshot.State`（键 `delivery`/`panels`/`explorer`）；解决方案根目录不存放 `delivery.json`。子项目自己的 `.uotan/` 语义保持不变。
 - 交付页面保持现有控件与布局语义；新行为优先复用 `DeliveryViewModel`、`DeliveryCompositionView`、`DeliveryView.Operations.cs`，不要在 View 层维护第二套镜像归属、确认状态或输出集合。`DeliveryPlan` 仍是交付后端唯一输入。
 - 设置写入 `%AppData%/UotanStudio/settings.json`，使用临时文件 + 原子替换；新设置项同时加 `AppSettings` 与 `AppSettingsJsonContext`。未知或归档键留在 `AdditionalSettings`，损坏文件回退默认值。主窗口尺寸、位置与状态存为 `mainWindowPlacement`（`MainWindowPlacement`），`SettingsViewModel.SaveSettings` 保存前必须从磁盘最新设置合并该键，`workspace-session.json` 不再记录窗口几何。
 - 渲染后端与合成模式是启动期设置：设置页只写 `renderingBackend`/`renderingCompositionMode` 并提示重启，桌面入口在下一次启动时转换平台选项；"自动"项展示当前进程实际使用的后端与合成宿主（`RenderingRuntimeProbe`，经保留的解析器反射读取），Wayland 下不提供可选项。

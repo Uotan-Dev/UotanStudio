@@ -280,10 +280,11 @@ public sealed class SolutionSnapshot
 
     /// <summary>
     /// Solution-level extension state keyed by well-known names (e.g. <c>delivery</c> delivery
-    /// plan, <c>panels</c> panel visibility), stored as raw JSON elements so the host application
-    /// owns their schema. Optional; solutions may omit it.
+    /// plan, <c>panels</c> panel visibility, <c>explorer</c> project-explorer expansion), stored as raw
+    /// JSON elements so the host application owns their schema. Optional; solutions may omit it.
     /// <para>解决方案级扩展状态，按约定键名存放（如 <c>delivery</c> 交付计划、<c>panels</c> 面板
-    /// 可见性），以原始 JSON 元素承载、模式由宿主应用定义。可选；解决方案可不包含该字段。</para>
+    /// 可见性、<c>explorer</c> 资源管理器展开状态），以原始 JSON 元素承载、模式由宿主应用定义。可选；
+    /// 解决方案可不包含该字段。</para>
     /// </summary>
     /// <value>Raw JSON payloads keyed by well-known names, or <see langword="null"/> when absent.
     /// <para>按约定键名存放的原始 JSON 内容；不存在时为 <see langword="null"/>。</para></value>

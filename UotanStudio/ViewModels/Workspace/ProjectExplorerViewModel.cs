@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
+using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 
@@ -32,6 +33,45 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
     internal string? CreationDirectory => SelectedNode is { IsPlaceholder: false } node
         ? node.IsDirectory ? node.Path : Path.GetDirectoryName(node.Path)
         : _openedFolder?.Path ?? ProjectContextService.Instance.RootDirectory;
+
+    /// <summary>
+    /// Captures the expanded directory paths relative to the solution root so they can be stored with the solution.
+    /// <para>捕获相对解决方案根的已展开目录路径，以便随解决方案保存。</para>
+    /// </summary>
+    /// <returns>The project-root-relative paths, or <see langword="null"/> when no solution root is open.
+    /// <para>相对工程根的路径；未打开解决方案根时为 <see langword="null"/>。</para></returns>
+    internal List<string>? CaptureExpandedPaths()
+    {
+        var root = ProjectContextService.Instance.RootDirectory;
+        return string.IsNullOrEmpty(root) ? null : ExplorerExpansionState.Capture(TreeViewContent, root);
+    }
+
+    /// <summary>
+    /// Expands the directories stored with the solution after the tree was rebuilt for that solution, loading the
+    /// lazily scanned children along each route.
+    /// <para>在为该解决方案重建树之后展开随解决方案保存的目录，并沿途加载惰性扫描的子节点。</para>
+    /// </summary>
+    /// <param name="relativePaths">Project-root-relative paths; empty leaves the tree untouched.
+    /// <para>工程根相对路径；为空时不改变树。</para></param>
+    /// <returns>A task that completes after the reachable paths are expanded and loaded.
+    /// <para>可达路径完成展开与加载后完成的任务。</para></returns>
+    internal async Task RestoreExpandedPathsAsync(IReadOnlyList<string> relativePaths)
+    {
+        var root = ProjectContextService.Instance.RootDirectory;
+        if (string.IsNullOrEmpty(root))
+        {
+            return;
+        }
+
+        try
+        {
+            await ExplorerExpansionState.RestoreAsync(TreeViewContent, root, relativePaths);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Explorer", $"Restore explorer expansion failed: {ex.Message}");
+        }
+    }
 
     internal void OpenFolder(string directory)
     {
@@ -377,6 +417,22 @@ public sealed partial class ExplorerNode : ObservableObject
         }
 
         RefreshChildren();
+    }
+
+    /// <summary>
+    /// Loads the directory's children when needed and returns a task that completes after the discovered children
+    /// are applied; an already loaded directory, a file or a placeholder completes immediately.
+    /// <para>按需加载目录子节点，并返回发现的子节点应用完成后完成的任务；已加载目录、文件或占位节点会立即完成。</para>
+    /// </summary>
+    /// <returns>The in-flight load, or a completed task. <para>进行中的加载任务，或已完成的任务。</para></returns>
+    internal Task EnsureChildrenLoadedAsync()
+    {
+        if (_childrenLoaded || !IsDirectory || IsPlaceholder)
+        {
+            return Task.CompletedTask;
+        }
+
+        return RefreshChildrenAsync(marshalToUi: Avalonia.Application.Current is not null);
     }
 
     internal void RefreshChildren()

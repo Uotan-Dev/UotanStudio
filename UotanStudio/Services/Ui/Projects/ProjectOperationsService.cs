@@ -102,6 +102,7 @@ public sealed class ProjectOperationsService
     }
 
     private const string PanelStateKey = "panels";
+    private const string ExplorerStateKey = "explorer";
     /// <summary>Delegate slot that captures the delivery plan element before solution saves.
     /// <para>在解决方案保存前捕获交付计划元素的委托槽位。</para></summary>
     /// <value>The capture delegate, or <see langword="null"/> when unset.<para>捕获委托；未设置时为 <see langword="null"/>。</para></value>
@@ -131,8 +132,15 @@ public sealed class ProjectOperationsService
             state[DeliveryPlanStore.StateKey] = kept;
         var panels = WorkspacePanelService.Instance.CaptureVisibility();
         state[PanelStateKey] = JsonSerializer.SerializeToElement(panels, AppSettingsJsonContext.Default.DictionaryStringBoolean);
+        if (ProjectExplorer is { } explorer && explorer.CaptureExpandedPaths() is { Count: > 0 } expanded)
+            state[ExplorerStateKey] = JsonSerializer.SerializeToElement(expanded, AppSettingsJsonContext.Default.ListString);
+        else if (_session.SolutionState is { } previousState && previousState.TryGetValue(ExplorerStateKey, out var keptExplorer))
+            state[ExplorerStateKey] = keptExplorer;
         return state;
     }
+
+    private ProjectExplorerViewModel? ProjectExplorer
+        => (_workspace as ProjectWorkspaceCoordinator)?.Workspace?.ProjectExplorer;
 
     private Dictionary<string, JsonElement>? _restoredState;
     private int _solutionReloadGeneration;
@@ -141,7 +149,8 @@ public sealed class ProjectOperationsService
 
     private void OnSessionChanged()
     {
-        if (!ReferenceEquals(_restoredState, _session.SolutionState))
+        var stateChanged = !ReferenceEquals(_restoredState, _session.SolutionState);
+        if (stateChanged)
         {
             _restoredState = _session.SolutionState;
             if (_session.SolutionState is { } state && state.TryGetValue(PanelStateKey, out var panels)
@@ -149,6 +158,11 @@ public sealed class ProjectOperationsService
                 WorkspacePanelService.Instance.RestoreVisibility(visibility);
         }
         WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
+        if (stateChanged && _session.SolutionState is { } restored
+            && restored.TryGetValue(ExplorerStateKey, out var explorer)
+            && explorer.Deserialize(AppSettingsJsonContext.Default.ListString) is { Count: > 0 } expanded
+            && ProjectExplorer is { } model)
+            _ = model.RestoreExpandedPathsAsync(expanded);
     }
 
     private ProjectWorkspaceCoordinator DesktopWorkspace => _workspace as ProjectWorkspaceCoordinator
