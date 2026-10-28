@@ -22,16 +22,6 @@
 			</ContentPage>
 			<ContentPage TabbedPage.IsTabEnabled="False">
 			</ContentPage>
-			<!-- 底部工作区第一个入口：烧录。 -->
-			<!-- First entry of the bottom workspace bar: flash. -->
-			<ContentPage Name="FlashTab">
-				<ContentPage.Icon>
-					<avalonia:Thunder Width="18" Height="18" Margin="0 -7 0 0" />
-				</ContentPage.Icon>
-				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -7" Text="{DynamicResource Tab_Flash}" FontSize="13" FontWeight="SemiBold" />
-				</ContentPage.Header>
-			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>
 					<avalonia:Dashboard1 Width="18" Height="18" Margin="0 -7 0 0" />
@@ -41,12 +31,12 @@
 				</ContentPage.Header>
 				<workspaceviews:WorkspaceView Name="WorkspaceDocuments" DataContext="{Binding WorkspaceVM}" />
 			</ContentPage>
-			<ContentPage Name="DeliveryTab">
+			<ContentPage Name="FlashTab">
 				<ContentPage.Icon>
-					<avalonia:Gift Width="18" Height="18" Margin="0 -7 0 0" />
+					<avalonia:Thunder Width="18" Height="18" Margin="0 -7 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -7" Text="{DynamicResource Tab_Delivery}" FontSize="13" FontWeight="SemiBold" />
+					<TextBlock Margin="0 0 0 -7" Text="{DynamicResource Tab_Flash}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 			</ContentPage>
 			<ContentPage Name="NodeEditorTab" DataContext="{Binding NodeEditorVM}">
@@ -55,6 +45,14 @@
 				</ContentPage.Icon>
 				<ContentPage.Header>
 					<TextBlock Margin="0 0 0 -7" Text="{DynamicResource Tab_Node}" FontSize="13" FontWeight="SemiBold" />
+				</ContentPage.Header>
+			</ContentPage>
+			<ContentPage Name="DeliveryTab">
+				<ContentPage.Icon>
+					<avalonia:Gift Width="18" Height="18" Margin="0 -7 0 0" />
+				</ContentPage.Icon>
+				<ContentPage.Header>
+					<TextBlock Margin="0 0 0 -7" Text="{DynamicResource Tab_Delivery}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 			</ContentPage>
 			<ContentPage Name="SettingsTab" DataContext="{Binding SettingsVM}">

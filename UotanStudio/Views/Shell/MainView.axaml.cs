@@ -10,10 +10,10 @@ namespace UotanStudio.Views.Shell;
 public partial class MainView : UserControl
 {
 
-    private const int FlashTabIndex = 3;
-    private const int WorkspaceTabIndex = 4;
-    private const int DeliveryTabIndex = 5;
-    private const int NodeEditorTabIndex = 6;
+    private const int WorkspaceTabIndex = 3;
+    private const int FlashTabIndex = 4;
+    private const int NodeEditorTabIndex = 5;
+    private const int DeliveryTabIndex = 6;
     private const int SettingsTabIndex = 7;
 
     private readonly Func<int, Control> _createPage;
