@@ -624,15 +624,14 @@ public sealed partial class FlashViewModel
         var pathBox = Field<TextBox>("RootPackagePathBox");
         var chooseBtn = Field<Button>("ChooseRootPackageButton");
 
-        sourceBox.IsEnabled = !_busy && addRoot;
+        var rootPanel = Field<StackPanel>("RootOptionsPanel");
+        rootPanel.IsVisible = addRoot;
+        rootPanel.IsEnabled = !_busy;
         var customFile = sourceBox.SelectedIndex == 5;
         pathBox.IsVisible = customFile;
         chooseBtn.IsVisible = customFile;
-        pathBox.IsEnabled = !_busy && addRoot && customFile;
-        chooseBtn.IsEnabled = !_busy && addRoot && customFile;
         var versionBox = Field<ComboBox>("RootVersionBox");
         versionBox.IsVisible = !customFile;
-        versionBox.IsEnabled = !_busy && addRoot;
     }
 
     internal void OnRootFileSourceChanged(object? sender, SelectionChangedEventArgs e)

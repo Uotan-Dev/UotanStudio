@@ -359,20 +359,25 @@
                                           IsEnabled="False"
                                           AutomationProperties.Name="{DynamicResource Flash_DeleteCow}" />
                             </Grid>
-                            <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
-                            <ComboBox Name="RootFileSourceBox" HorizontalAlignment="Stretch"
-                                      ItemTemplate="{StaticResource LocalizedOptionTemplate}"
-                                      SelectionChanged="OnRootFileSourceChanged"
-                                      AutomationProperties.Name="{DynamicResource BootPatch_File}" />
-                            <ComboBox Name="RootVersionBox" HorizontalAlignment="Stretch" Height="32"
-                                      VerticalContentAlignment="Center" />
-                            <TextBox Name="RootPackagePathBox" Height="32" VerticalContentAlignment="Center"
-                                     IsVisible="False"
-                                     IsReadOnly="True" PlaceholderText="{DynamicResource Flash_RootPackageHint}"
-                                     AutomationProperties.Name="{DynamicResource Flash_ChooseRootPackage}" />
-                            <Button Name="ChooseRootPackageButton" Classes="pane-action" IsVisible="False"
-                                    Click="OnChooseRootPackageClick"
-                                    Content="{DynamicResource Flash_ChooseRootPackage}" />
+                            <StackPanel Name="RootOptionsPanel" Spacing="8" IsVisible="False">
+                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
+                                <TextBlock Text="{DynamicResource Flash_AddRoot}" FontWeight="SemiBold" />
+                                <ComboBox Name="RootPartitionBox" HorizontalAlignment="Stretch" Height="32"
+                                          VerticalContentAlignment="Center" />
+                                <ComboBox Name="RootFileSourceBox" HorizontalAlignment="Stretch"
+                                          ItemTemplate="{StaticResource LocalizedOptionTemplate}"
+                                          SelectionChanged="OnRootFileSourceChanged"
+                                          AutomationProperties.Name="{DynamicResource BootPatch_File}" />
+                                <ComboBox Name="RootVersionBox" HorizontalAlignment="Stretch" Height="32"
+                                          VerticalContentAlignment="Center" />
+                                <TextBox Name="RootPackagePathBox" Height="32" VerticalContentAlignment="Center"
+                                         IsVisible="False"
+                                         IsReadOnly="True" PlaceholderText="{DynamicResource Flash_RootPackageHint}"
+                                         AutomationProperties.Name="{DynamicResource Flash_ChooseRootPackage}" />
+                                <Button Name="ChooseRootPackageButton" Classes="pane-action" IsVisible="False"
+                                        Click="OnChooseRootPackageClick"
+                                        Content="{DynamicResource Flash_ChooseRootPackage}" />
+                            </StackPanel>
                         </StackPanel>
                         <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
                         <!-- 高通 EDL 9008 协议分类 -->

@@ -48,6 +48,8 @@ public sealed partial class FlashViewModel
 
     private void InitializeSurface()
     {
+        Field<ComboBox>("RootPartitionBox").ItemsSource = new[] { "boot", "init_boot", "vendor_boot" };
+        Field<ComboBox>("RootPartitionBox").SelectedIndex = 0;
         Field<ComboBox>("RootFileSourceBox").ItemsSource = _rootFileSourceOptions.Options;
         Field<ComboBox>("RootFileSourceBox").SelectedIndex = 0;
         Field<CheckBox>("AddRootBox").IsCheckedChanged += (_, _) => UpdateRootControlsState();
