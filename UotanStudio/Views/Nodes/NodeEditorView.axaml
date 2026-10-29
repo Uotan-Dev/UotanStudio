@@ -69,6 +69,53 @@
         <Style Selector="Button.node-stop-action:disabled :is(avalonia|TDesignIconBase)">
             <Setter Property="Stroke1" Value="{DynamicResource TextFillColorSecondaryBrush}" />
         </Style>
+        <!-- 节点主体使用主题红的暖色系表面，标题和内容前景分别保持高对比度。 -->
+        <!-- Node surfaces use warm accent tones while header and content foregrounds remain high-contrast. -->
+        <Style Selector="nodify|Node">
+            <Setter Property="Background" Value="{DynamicResource NodeSurfaceBrush}" />
+            <Setter Property="ContentBrush" Value="{DynamicResource NodeSurfaceBrush}" />
+            <Setter Property="HeaderBrush" Value="{DynamicResource NodeHeaderBrush}" />
+            <Setter Property="FooterBrush" Value="{DynamicResource NodeSurfaceBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource NodeContentForegroundBrush}" />
+        </Style>
+        <Style Selector="nodify|Node /template/ ContentPresenter#HeaderContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource NodeHeaderForegroundBrush}" />
+        </Style>
+        <!-- 节点端口行、端口圆点和已连接状态统一使用主题色。 -->
+        <!-- Node port rows, connector dots and connected state share the accent palette. -->
+        <Style Selector="nodify|Connector">
+            <Setter Property="Background" Value="{DynamicResource NodePortBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource NodeContentForegroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource NodePortBorderBrush}" />
+        </Style>
+        <Style Selector="nodify|NodeInput">
+            <Setter Property="Background" Value="{DynamicResource NodePortBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource NodeContentForegroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource NodePortBorderBrush}" />
+        </Style>
+        <Style Selector="nodify|NodeOutput">
+            <Setter Property="Background" Value="{DynamicResource NodePortBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource NodeContentForegroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource NodePortBorderBrush}" />
+        </Style>
+        <Style Selector="nodify|Connector /template/ Ellipse#PART_Connector">
+            <Setter Property="Fill" Value="{DynamicResource NodePortBackgroundBrush}" />
+            <Setter Property="Stroke" Value="{DynamicResource NodePortBorderBrush}" />
+        </Style>
+        <Style Selector="nodify|Connector:connected /template/ Ellipse#PART_Connector">
+            <Setter Property="Fill" Value="{DynamicResource NodePortConnectedBrush}" />
+            <Setter Property="Stroke" Value="{DynamicResource NodePortConnectedBrush}" />
+        </Style>
+        <Style Selector="nodify|NodeInput /template/ Ellipse#PART_Connector,
+                        nodify|NodeOutput /template/ Ellipse#PART_Connector">
+            <Setter Property="Fill" Value="{DynamicResource NodePortBackgroundBrush}" />
+            <Setter Property="Stroke" Value="{DynamicResource NodePortBorderBrush}" />
+        </Style>
+        <Style Selector="nodify|NodeInput:connected /template/ Ellipse#PART_Connector,
+                        nodify|NodeOutput:connected /template/ Ellipse#PART_Connector">
+            <Setter Property="Fill" Value="{DynamicResource NodePortConnectedBrush}" />
+            <Setter Property="Stroke" Value="{DynamicResource NodePortConnectedBrush}" />
+        </Style>
         <!-- 连线与待处理连线主题色 -->
         <Style Selector="nodify|Connection">
             <Setter Property="Stroke" Value="{DynamicResource SemiColorPrimary}" />
@@ -78,29 +125,22 @@
             <Setter Property="StrokeThickness" Value="4" />
         </Style>
         <Style Selector="nodify|PendingConnection">
-            <Setter Property="Stroke" Value="{DynamicResource SemiColorPrimary}" />
-        </Style>
-        <!-- 节点端口连接小圆圈主题色（未连接时空心，连接后实心） -->
-        <Style Selector="nodify|Connector">
-            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+            <Setter Property="Background" Value="{DynamicResource NodePendingBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource NodePendingForegroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource NodePendingBorderBrush}" />
+            <Setter Property="Stroke" Value="{DynamicResource NodePendingStrokeBrush}" />
         </Style>
         <Style Selector="nodify|Connector:connected">
-            <Setter Property="Background" Value="{DynamicResource SemiColorPrimary}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
-        </Style>
-        <Style Selector="nodify|NodeInput">
-            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+            <Setter Property="Background" Value="{DynamicResource NodePortConnectedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource NodePortConnectedBrush}" />
         </Style>
         <Style Selector="nodify|NodeInput:connected">
-            <Setter Property="Background" Value="{DynamicResource SemiColorPrimary}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
-        </Style>
-        <Style Selector="nodify|NodeOutput">
-            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+            <Setter Property="Background" Value="{DynamicResource NodePortConnectedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource NodePortConnectedBrush}" />
         </Style>
         <Style Selector="nodify|NodeOutput:connected">
-            <Setter Property="Background" Value="{DynamicResource SemiColorPrimary}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+            <Setter Property="Background" Value="{DynamicResource NodePortConnectedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource NodePortConnectedBrush}" />
         </Style>
         <!-- 全局预览小地图主题色 -->
         <Style Selector="nodify|NodifyEditorMinimap">
@@ -836,11 +876,11 @@
                                     <TextBlock Text="{Binding DisplayHeader}" FontWeight="SemiBold"
                                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                     <Border CornerRadius="3" Padding="4,1" VerticalAlignment="Center"
-                                            Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                            Background="{DynamicResource NodeBadgeBackgroundBrush}"
+                                            BorderBrush="{DynamicResource NodeBadgeBorderBrush}"
                                             BorderThickness="1">
                                         <TextBlock Text="{Binding ExecutionStageBadge}" FontSize="10"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                   Foreground="{DynamicResource NodeBadgeForegroundBrush}" />
                                     </Border>
                                 </StackPanel>
                             </nodify:Node.Header>
@@ -853,12 +893,12 @@
                                             <StackPanel Orientation="Horizontal" Spacing="4">
                                                 <Border CornerRadius="3" Padding="4,1"
                                                         VerticalAlignment="Center"
-                                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                        Background="{DynamicResource NodeBadgeBackgroundBrush}"
+                                                        BorderBrush="{DynamicResource NodeBadgeBorderBrush}"
                                                         BorderThickness="1">
                                                     <TextBlock Text="{Binding LocalizedPortTypeDisplay}"
                                                                FontSize="10"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                               Foreground="{DynamicResource NodeBadgeForegroundBrush}" />
                                                 </Border>
                                                 <TextBlock Text="{Binding LocalizedTitle}"
                                                            FontSize="12" VerticalAlignment="Center" />
@@ -876,12 +916,12 @@
                                             <StackPanel Orientation="Horizontal" Spacing="4">
                                                 <Border CornerRadius="3" Padding="4,1"
                                                         VerticalAlignment="Center"
-                                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                        Background="{DynamicResource NodeBadgeBackgroundBrush}"
+                                                        BorderBrush="{DynamicResource NodeBadgeBorderBrush}"
                                                         BorderThickness="1">
                                                     <TextBlock Text="{Binding LocalizedPortTypeDisplay}"
                                                                FontSize="10"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                               Foreground="{DynamicResource NodeBadgeForegroundBrush}" />
                                                 </Border>
                                                 <TextBlock Text="{Binding LocalizedTitle}"
                                                            FontSize="12" VerticalAlignment="Center" />
@@ -931,11 +971,11 @@
                                 <TextBlock Text="{Binding DisplayHeader}" FontWeight="SemiBold"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                 <Border CornerRadius="3" Padding="4,1" VerticalAlignment="Center"
-                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                        Background="{DynamicResource NodeBadgeBackgroundBrush}"
+                                        BorderBrush="{DynamicResource NodeBadgeBorderBrush}"
                                         BorderThickness="1">
                                     <TextBlock Text="{Binding ExecutionStageBadge}" FontSize="10"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                               Foreground="{DynamicResource NodeBadgeForegroundBrush}" />
                                 </Border>
                             </StackPanel>
                         </nodify:Node.Header>
@@ -946,12 +986,12 @@
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <Border CornerRadius="3" Padding="4,1"
                                                     VerticalAlignment="Center"
-                                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                    Background="{DynamicResource NodeBadgeBackgroundBrush}"
+                                                    BorderBrush="{DynamicResource NodeBadgeBorderBrush}"
                                                     BorderThickness="1">
                                                 <TextBlock Text="{Binding LocalizedPortTypeDisplay}"
                                                            FontSize="10"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                           Foreground="{DynamicResource NodeBadgeForegroundBrush}" />
                                             </Border>
                                             <TextBlock Text="{Binding LocalizedTitle}"
                                                        FontSize="12" VerticalAlignment="Center" />
@@ -967,12 +1007,12 @@
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <Border CornerRadius="3" Padding="4,1"
                                                     VerticalAlignment="Center"
-                                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                    Background="{DynamicResource NodeBadgeBackgroundBrush}"
+                                                    BorderBrush="{DynamicResource NodeBadgeBorderBrush}"
                                                     BorderThickness="1">
                                                 <TextBlock Text="{Binding LocalizedPortTypeDisplay}"
                                                            FontSize="10"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                           Foreground="{DynamicResource NodeBadgeForegroundBrush}" />
                                             </Border>
                                             <TextBlock Text="{Binding LocalizedTitle}"
                                                        FontSize="12" VerticalAlignment="Center" />

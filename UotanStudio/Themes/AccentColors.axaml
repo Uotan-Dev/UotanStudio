@@ -40,6 +40,23 @@
             <!-- Hover text/icon colour (Semi has no hover-foreground key; Themes/AccentControls.axaml styles use it). -->
             <SolidColorBrush x:Key="AccentHoverForeground" Color="#FCE7E5" />
 
+            <!-- 节点画布：暖白内容区 + 深红标题区，保持节点文字与端口信息清晰可读。 -->
+            <!-- Node canvas: warm-white content with a deep-red header so node text and port details stay legible. -->
+            <SolidColorBrush x:Key="NodeSurfaceBrush" Color="#FFF8F7" />
+            <SolidColorBrush x:Key="NodeHeaderBrush" Color="#B73229" />
+            <SolidColorBrush x:Key="NodeHeaderForegroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="NodeContentForegroundBrush" Color="#2A1715" />
+            <SolidColorBrush x:Key="NodePortBackgroundBrush" Color="#FFF1EF" />
+            <SolidColorBrush x:Key="NodePortConnectedBrush" Color="#D03A2F" />
+            <SolidColorBrush x:Key="NodePortBorderBrush" Color="#D03A2F" />
+            <SolidColorBrush x:Key="NodePendingBackgroundBrush" Color="#FFF1EF" />
+            <SolidColorBrush x:Key="NodePendingForegroundBrush" Color="#2A1715" />
+            <SolidColorBrush x:Key="NodePendingBorderBrush" Color="#B73229" />
+            <SolidColorBrush x:Key="NodePendingStrokeBrush" Color="#D03A2F" />
+            <SolidColorBrush x:Key="NodeBadgeBackgroundBrush" Color="#FCE7E5" />
+            <SolidColorBrush x:Key="NodeBadgeBorderBrush" Color="#E8A09A" />
+            <SolidColorBrush x:Key="NodeBadgeForegroundBrush" Color="#7A241E" />
+
             <!-- 控件状态键：按钮文字改回普通文本色，悬浮/选中改为主色底。 -->
             <!-- Control-state keys: button text back to the normal text colour, hover/selected fills use the accent. -->
             <SolidColorBrush x:Key="ButtonDefaultPrimaryForeground" Color="#1A1A1A" />
@@ -88,6 +105,23 @@
             <StaticResource x:Key="HyperlinkButtonDisabledForeground" ResourceKey="SemiColorPrimaryDisabled" />
 
             <SolidColorBrush x:Key="AccentHoverForeground" Color="#FCE7E5" />
+
+            <!-- 深色节点画布：压低表面与标题亮度，并使用浅色前景避免红底上的文字发糊。 -->
+            <!-- Dark node canvas: darker surfaces and header, with light foregrounds for clear contrast. -->
+            <SolidColorBrush x:Key="NodeSurfaceBrush" Color="#2B2221" />
+            <SolidColorBrush x:Key="NodeHeaderBrush" Color="#6E2B26" />
+            <SolidColorBrush x:Key="NodeHeaderForegroundBrush" Color="#FFF4F2" />
+            <SolidColorBrush x:Key="NodeContentForegroundBrush" Color="#FFF1EF" />
+            <SolidColorBrush x:Key="NodePortBackgroundBrush" Color="#4A2522" />
+            <SolidColorBrush x:Key="NodePortConnectedBrush" Color="#E36A60" />
+            <SolidColorBrush x:Key="NodePortBorderBrush" Color="#DE6A5D" />
+            <SolidColorBrush x:Key="NodePendingBackgroundBrush" Color="#4A2522" />
+            <SolidColorBrush x:Key="NodePendingForegroundBrush" Color="#FFF1EF" />
+            <SolidColorBrush x:Key="NodePendingBorderBrush" Color="#DE6A5D" />
+            <SolidColorBrush x:Key="NodePendingStrokeBrush" Color="#E36A60" />
+            <SolidColorBrush x:Key="NodeBadgeBackgroundBrush" Color="#55241E" />
+            <SolidColorBrush x:Key="NodeBadgeBorderBrush" Color="#B85C52" />
+            <SolidColorBrush x:Key="NodeBadgeForegroundBrush" Color="#FFE4E0" />
 
             <SolidColorBrush x:Key="ButtonDefaultPrimaryForeground" Color="#FEFEFE" />
             <SolidColorBrush x:Key="ButtonDefaultBackground" Color="#2E3238" />
