@@ -54,6 +54,24 @@ public sealed partial class FlashViewModel
 
     private string? EffectiveEdlProgrammer => _isCustomProgrammer ? _edlProgrammerOverride : _edlProgrammer;
 
+    /// <summary>
+    /// The vendor tool's storage list, numbered as its selector shows it (<c>1. FLASH</c> through <c>10. PCIE</c>).
+    /// <para>厂商工具的存储列表，编号与选择框显示一致（<c>1. FLASH</c> 到 <c>10. PCIE</c>）。</para>
+    /// </summary>
+    /// <remarks>
+    /// <para>These are user-facing numbers, not protocol codes. The vendored <c>rkdeveloptool</c> documents
+    /// <c>1=EMMC, 2=SD, 9=SPINOR</c> for CHANGE_STORAGE, the vendored <c>rkdevtool</c> rewrite converts this same
+    /// list into a separate protocol enumeration instead of sending the number, and the vendor sample
+    /// configurations store the protocol identifiers as bits of their row storage mask (eMMC = bit 1, SPI NOR =
+    /// bit 9) — the same numbering, and notably not the list entry <c>5. SPINOR</c>. Sending an entry index and
+    /// reading a reported identifier back as if it were one of these numbers can therefore be off by one or wrong
+    /// by medium, which only real hardware can settle.</para>
+    /// <para>这些是面向用户的编号，不是协议编号：随仓库保留的 <c>rkdeveloptool</c> 对 CHANGE_STORAGE 记载
+    /// <c>1=EMMC、2=SD、9=SPINOR</c>，另一份 <c>rkdevtool</c> 复刻实现把同一份列表转换成独立的协议枚举而不是
+    /// 原样发送编号，而厂商样本配置把协议标识存在行存储掩码的位上（eMMC 为第 1 位、SPI NOR 为第 9 位）——同一
+    /// 套编号，且明显不是列表项 <c>5. SPINOR</c>。因此把列表下标当作协议码发送、又把设备回报的标识当作列表编号
+    /// 来解释，都可能差一位或对应错介质，只有真机才能定论。</para>
+    /// </remarks>
     private static readonly string[] RkStorageTypes =
     [
         "1. FLASH",
@@ -391,7 +409,8 @@ public sealed partial class FlashViewModel
                         Command = "flash",
                         FilePath = imagePath,
                         FileName = Path.GetFileName(imagePath),
-                        Size = $"{length / 1024d / 1024d:F1} MiB"
+                        Size = $"{length / 1024d / 1024d:F1} MiB",
+                        StorageMedium = resolution.StorageLabel
                     };
                     scatterRows.Add(row);
                     _mtkRows[row] = index;
@@ -412,7 +431,8 @@ public sealed partial class FlashViewModel
                         Name = partition.Name,
                         Command = "erase",
                         CanSelect = true,
-                        Size = $"{partition.Size / 1024d / 1024d:F1} MiB"
+                        Size = $"{partition.Size / 1024d / 1024d:F1} MiB",
+                        StorageMedium = resolution.StorageLabel
                     };
                     scatterRows.Add(row);
                     eraseOnlyRows++;
@@ -503,6 +523,9 @@ public sealed partial class FlashViewModel
                                     FilePath = image,
                                     FileName = Path.GetFileName(image),
                                     Size = FormatByteSize(length),
+                                    StorageMedium = entry is null
+                                        ? string.Empty
+                                        : $"LUN {entry.PhysicalPartitionNumber}",
                                     CanSelect = true,
                                     IsSelected = false
                                 };
@@ -583,6 +606,9 @@ public sealed partial class FlashViewModel
                 FilePath = image.FilePath,
                 FileName = Path.GetFileName(image.FilePath),
                 Size = FormatByteSize(image.Length),
+                StorageMedium = image.Program is { } edlProgram
+                    ? $"LUN {edlProgram.PhysicalPartitionNumber}"
+                    : string.Empty,
                 CanSelect = true
             };
             rows.Add(row);
@@ -735,6 +761,10 @@ public sealed partial class FlashViewModel
         {
             OnEdlReadbackClick(sender, e);
         }
+        else if (SelectedDevice?.Protocol == DeviceProtocolKind.Rkdl)
+        {
+            OnRkLbaReadClick(sender, e);
+        }
         else
         {
             AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
@@ -763,9 +793,15 @@ public sealed partial class FlashViewModel
         {
             OnMtkRebootClick(sender, e);
         }
+        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Rkdl } rkdlDevice)
+        {
+            await RunRkResetAsync(rkdlDevice, powerOff: false);
+        }
         else
         {
-            AppendLog(_localizer.GetString("Flash_DeviceNotSelected"));
+            AppendLog(_localizer.GetString(SelectedDevice is null
+                ? "Flash_DeviceNotSelected"
+                : "Flash_ProtocolMismatch"));
         }
     }
 
@@ -857,7 +893,7 @@ public sealed partial class FlashViewModel
         }
     }
 
-    internal void OnPowerOffClick(object? sender, RoutedEventArgs e)
+    internal async void OnPowerOffClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming) return;
         if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } || _edlEntries.Count > 0)
@@ -868,9 +904,67 @@ public sealed partial class FlashViewModel
         {
             OnMtkPowerOffClick(sender, e);
         }
+        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Rkdl } rkdlDevice)
+        {
+            await RunRkResetAsync(rkdlDevice, powerOff: true);
+        }
         else
         {
-            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
+            AppendLog(_localizer.GetString(SelectedDevice is null
+                ? "Flash_DeviceNotSelected"
+                : "Flash_ProtocolMismatch"));
+        }
+    }
+
+    /// <summary>
+    /// Reboots or powers off an RKDL device through one DEVICE_RESET transaction after an explicit confirmation;
+    /// the device re-enumerates, so the device list has to be refreshed before the next command.
+    /// <para>经显式确认后通过一次 DEVICE_RESET 事务重启或关闭 RKDL 设备；设备会重新枚举，下一条命令前需要刷新
+    /// 设备列表。</para>
+    /// </summary>
+    /// <param name="device">Target RKDL endpoint.<para>目标 RKDL 端点。</para></param>
+    /// <param name="powerOff">Whether to power off instead of rebooting.<para>是关机而不是重启。</para></param>
+    private async Task RunRkResetAsync(DetectedDevice device, bool powerOff)
+    {
+        if (TopLevel.GetTopLevel(Surface) is not Window owner) return;
+        var language = _localizer;
+        _confirming = true;
+        bool confirmed;
+        try
+        {
+            confirmed = await DialogService.ConfirmAsync(owner,
+                language.GetString(powerOff ? "Flash_PowerOff" : "Device_RebootSystem"),
+                device.DisplayName).ConfigureAwait(true);
+        }
+        finally
+        {
+            _confirming = false;
+        }
+
+        if (!confirmed) return;
+        SetBusy(true);
+        try
+        {
+            await App.DeviceMonitor.RunRkdlAsync(device, session =>
+            {
+                if (powerOff)
+                {
+                    session.Shutdown();
+                }
+                else
+                {
+                    session.ResetDevice();
+                }
+
+                return Task.FromResult(0);
+            }, CancellationToken.None).ConfigureAwait(true);
+            AppendLog(string.Format(language.GetString("Flash_OkResult"), powerOff ? "poweroff" : "reboot"));
+        }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            SetBusy(false);
+            UpdateEdlButton();
         }
     }
 
@@ -910,7 +1004,7 @@ public sealed partial class FlashViewModel
     internal async void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || sender is not Button { DataContext: FlashPartitionEntry entry } ||
-            entry.Step?.Command is not (null or "flash" or "wipe_super") ||
+            entry.Step?.Command is not (null or "flash" or "wipe_super") || entry.Command == LoaderCommand ||
             TopLevel.GetTopLevel(Surface) is not { } topLevel)
         {
             return;
@@ -2091,9 +2185,101 @@ public sealed partial class FlashViewModel
         {
             OnEdlEraseClick(sender, e);
         }
+        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Rkdl } rkdlDevice)
+        {
+            await RunRkEraseSelectedAsync(rkdlDevice);
+        }
         else
         {
             await RunSelectedAsync(erase: true);
+        }
+    }
+
+    /// <summary>
+    /// Erases the selected partitions on an RKDL device: addresses come from the loaded Rockchip parameter table, so
+    /// a maskrom device is first moved into loader mode with the loader the configuration names.
+    /// <para>在 RKDL 设备上擦除所选分区：地址取自已加载的 Rockchip parameter 分区表，因此 maskrom 设备会先用
+    /// 配置指定的 loader 进入 loader 模式。</para>
+    /// </summary>
+    /// <param name="device">Target RKDL endpoint.<para>目标 RKDL 端点。</para></param>
+    private async Task RunRkEraseSelectedAsync(DetectedDevice device)
+    {
+        if (_busy || _confirming) return;
+        if (!string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal))
+        {
+            AppendLog(_localizer.GetString("Flash_PackageChanged"));
+            return;
+        }
+
+        var selected = Partitions.Where(entry => entry.IsSelected && entry.CanSelect &&
+            entry.Command != LoaderCommand &&
+            entry.Step?.Command is not ("set_active" or "reboot" or "wipe_super")).ToArray();
+        if (selected.Length == 0) return;
+        var language = _localizer;
+        var parameterPath = RkParameterTablePath();
+        if (parameterPath is null)
+        {
+            AppendLog(language.GetString("Flash_RkParameterMissing"));
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(Surface) is not Window owner) return;
+        var description = $"{device.DisplayName}: {string.Join(", ", selected.Select(entry => entry.Name))}";
+        _confirming = true;
+        bool confirmed;
+        try
+        {
+            confirmed = await DialogService.ConfirmAsync(owner,
+                language.GetString("Flash_EraseSelected"), description).ConfigureAwait(true);
+        }
+        finally
+        {
+            _confirming = false;
+        }
+
+        if (!confirmed || selected.Any(entry => !entry.IsSelected || !Partitions.Contains(entry))) return;
+        if (SelectedDevice is not DetectedDevice current || current.Key != device.Key ||
+            (await Task.Run(App.DeviceMonitor.Scan)).All(found => found.Key != device.Key ||
+                found.Protocol != device.Protocol))
+        {
+            AppendLog(language.GetString("Flash_DeviceChanged"));
+            return;
+        }
+
+        SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        Field<Button>("EraseSelectedButton").IsEnabled = false;
+        var target = new DeviceInfo(device);
+        try
+        {
+            foreach (var entry in selected)
+            {
+                if (cancellation.IsCancellationRequested)
+                {
+                    AppendLog(language.GetString("Flash_Canceled"));
+                    break;
+                }
+
+                SetRowRunning(entry, "Flash_Status_Erasing");
+                var result = await FlashService.EraseRkdlAsync(target, entry.Name, parameterPath,
+                    EffectiveRkLoaderPath, cancellation.Token).ConfigureAwait(true);
+                AppendLog(result.Summary);
+                SetRowFinished(entry, result.Success);
+                if (!result.Success)
+                {
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            SetBusy(false);
+            _flashCancellation = null;
+            Field<Button>("EraseSelectedButton").IsEnabled = true;
+            UpdateEdlButton();
         }
     }
 
@@ -2177,6 +2363,7 @@ public sealed partial class FlashViewModel
             return;
         }
         var selected = Partitions.Where(entry => entry.IsSelected && entry.CanSelect &&
+            entry.Command != LoaderCommand &&
             (!erase || entry.Name != "reboot" && entry.Step?.Command is not ("set_active" or "reboot" or "wipe_super"))).ToArray();
         if (selected.Length == 0) return;
         var rkImageDir = selected.FirstOrDefault(row => row.FilePath.Length > 0) is { } firstRow

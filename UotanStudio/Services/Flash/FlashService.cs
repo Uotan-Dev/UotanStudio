@@ -1005,6 +1005,61 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
+    /// RKDL path that erases one partition's LBA range from the Rockchip parameter table, downloading the
+    /// loader first when the device is still in maskrom mode.
+    /// <para>RKDL 路径：按 Rockchip parameter 分区表擦除一个分区的 LBA 范围；设备仍在 maskrom 模式时先下载
+    /// loader。</para>
+    /// </summary>
+    /// <param name="device">The target device.<para>目标设备。</para></param>
+    /// <param name="partition">Partition name as written in the parameter table.<para>parameter 表中记录的分区名。</para></param>
+    /// <param name="parameterPath">Existing parameter file that holds the partition table.
+    /// <para>承载分区表的既有 parameter 文件。</para></param>
+    /// <param name="loaderPath">Optional loader used in maskrom mode; auto-discovered next to the parameter file
+    /// when null.<para>maskrom 模式下使用的可选 loader；为 null 时在 parameter 文件旁自动发现。</para></param>
+    /// <param name="ct">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The erase result; <see cref="FlashResult.Success"/> is false when the device refused the erase.
+    /// <para>擦除结果；设备拒绝擦除时 <see cref="FlashResult.Success"/> 为 false。</para></returns>
+    /// <exception cref="InvalidOperationException">The partition is absent from the parameter table, a maskrom
+    /// device has no loader, or the device did not re-enumerate as a loader.
+    /// <para>分区不在 parameter 表中、maskrom 设备缺少 loader，或设备未以 loader 模式重枚举。</para></exception>
+    public static async Task<FlashResult> EraseRkdlAsync(DeviceTarget device, string partition,
+        string parameterPath, string? loaderPath, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(parameterPath);
+        var parameterDirectory = Path.GetDirectoryName(Path.GetFullPath(parameterPath)) ?? string.Empty;
+        var partitions = RockchipParameterParser.Parse(parameterPath);
+        var target = partitions.FirstOrDefault(p =>
+            string.Equals(p.Name, partition, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException(
+            $"Partition '{partition}' not found in the Rockchip partition table. Available: {string.Join(", ", partitions.Select(p => p.Name))} 分区不在 Rockchip 分区表中。");
+        return await App.DeviceMonitor.RunRkdlLoaderTransitionAsync(
+            device.Endpoint,
+            async (rkdl, token) =>
+            {
+                if (!rkdl.IsMaskromMode)
+                {
+                    return null;
+                }
+
+                var loader = ResolveLoaderPath(loaderPath, parameterDirectory) ?? throw new InvalidOperationException(
+                    "The device is in maskrom mode; a Rockchip loader is required to enter loader mode. 设备处于 MaskROM 模式，需要 loader 才能进入 loader 模式。");
+                var loaderBytes = await File.ReadAllBytesAsync(loader, token).ConfigureAwait(false);
+                await rkdl.DownloadBootLoaderAsync(loaderBytes, token).ConfigureAwait(false);
+                return rkdl.CreateLoaderTransitionOffer();
+            },
+            (rkdl, token) =>
+            {
+                rkdl.EraseLbaRange(target.OffsetSectors, target.SizeSectors, null, token);
+                return Task.FromResult(new FlashResult
+                {
+                    Success = true,
+                    Summary = $"Erased '{target.Name}' at LBA 0x{target.OffsetSectors:X} ({target.SizeSectors} sectors). 已擦除分区。"
+                });
+            },
+            ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// RKDL single-partition write core: writes the image to the partition LBA with
     /// <see cref="RkdlSession.WriteLBA"/>.
     /// <para>RKDL 单分区写入核心：用 <see cref="RkdlSession.WriteLBA"/> 把镜像写入分区 LBA。</para>

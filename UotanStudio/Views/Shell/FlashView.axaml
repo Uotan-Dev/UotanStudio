@@ -197,6 +197,9 @@
                                 <DataGridTextColumn Width="Auto" MinWidth="96" IsReadOnly="True"
                                                     Header="{DynamicResource Flash_Partition}"
                                                     Binding="{Binding Name}" />
+                                <DataGridTextColumn Width="Auto" MinWidth="88" IsReadOnly="True"
+                                                    Header="{DynamicResource Flash_StorageMedium}"
+                                                    Binding="{Binding StorageMedium}" />
                                 <DataGridTextColumn Width="Auto" MinWidth="80" IsReadOnly="True"
                                                     Header="{DynamicResource Flash_Command}"
                                                     Binding="{Binding Command}" />
@@ -741,10 +744,6 @@
                                         AutomationProperties.Name="{DynamicResource Flash_RkEraseSectors}" />
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
-                                <Button Name="RkImportConfigButton" Classes="pane-action"
-                                        Click="OnRkImportConfigClick"
-                                        Content="{DynamicResource Flash_RkImportConfig}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkImportConfig}" />
                                 <Button Name="RkExportConfigButton" Classes="pane-action"
                                         Click="OnRkExportConfigClick"
                                         Content="{DynamicResource Flash_RkExportConfig}"

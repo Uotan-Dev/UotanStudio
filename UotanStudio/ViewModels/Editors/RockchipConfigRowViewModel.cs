@@ -20,7 +20,8 @@ public sealed partial class RockchipConfigRowViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(entry);
         Name = entry.Name;
         Address = entry.Address;
-        AddressText = $"0x{entry.Address:X16}";
+        StorageMask = entry.StorageMask;
+        AddressText = $"0x{entry.Address:X8}";
         Path = entry.Path;
         TailText = Convert.ToHexString(entry.Trailing);
         FileExists = entry.Path.Length > 0 && File.Exists(entry.Path);
@@ -30,9 +31,12 @@ public sealed partial class RockchipConfigRowViewModel : ObservableObject
     public string Name { get; }
 
     /// <summary>Gets the address from the trailing block.<para>获取尾块中的地址。</para></summary>
-    public ulong Address { get; }
+    public uint Address { get; }
 
-    /// <summary>Gets the address formatted as a 64-bit hexadecimal value.<para>获取格式化为 64 位十六进制的地址。</para></summary>
+    /// <summary>Gets the storage bitmask from the trailing block.<para>获取尾块中的存储位掩码。</para></summary>
+    public uint StorageMask { get; }
+
+    /// <summary>Gets the address formatted as a 32-bit hexadecimal value.<para>获取格式化为 32 位十六进制的地址。</para></summary>
     public string AddressText { get; }
 
     /// <summary>Gets the stored image path.<para>获取存储的镜像路径。</para></summary>

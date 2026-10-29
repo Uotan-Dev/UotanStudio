@@ -71,6 +71,14 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     [ObservableProperty]
     private string _offset = string.Empty;
 
+    /// <summary>
+    /// The storage medium this row writes to, for example <c>EMMC</c>, <c>UFS</c> or <c>LUN 3</c>; empty when the
+    /// package does not determine one.
+    /// <para>该行写入的存储介质，例如 <c>EMMC</c>、<c>UFS</c> 或 <c>LUN 3</c>；刷机包无法确定时为空。</para>
+    /// </summary>
+    [ObservableProperty]
+    private string _storageMedium = string.Empty;
+
     /// <summary>The image file name. <para>镜像文件名。</para></summary>
     [ObservableProperty]
     private string _fileName = string.Empty;
