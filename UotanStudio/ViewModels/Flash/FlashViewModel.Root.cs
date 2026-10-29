@@ -16,6 +16,7 @@ public sealed partial class FlashViewModel
     private readonly RootPatchPackageService _rootPackageService = RootPatchPackageService.Shared;
     private readonly ObservableCollection<string> _rootVersionLabels = [];
     private IReadOnlyList<string> _rootPartitionNames = [];
+    private RootPatchPackage? _rootPreparedRelease;
     private IReadOnlyList<RootPatchPackage> _rootReleases = [];
     private RootPatchPackageSource? _rootLoadedSource;
     private CancellationTokenSource? _rootListCts;
@@ -101,6 +102,7 @@ public sealed partial class FlashViewModel
         _rootReleases = [];
         _rootLoadedSource = null;
         _rootPackagePath = null;
+        _rootPreparedRelease = null;
         _rootVersionLabels.Clear();
         CancelRootOperations();
     }
@@ -138,6 +140,11 @@ public sealed partial class FlashViewModel
         if (changed && box.SelectedIndex != selected) box.SelectedIndex = selected;
     }
 
+    /// <summary>Starts the one-time catalog warm-up so version switching never re-queries the upstreams.
+    /// <para>启动一次性的清单预热，使切换版本不再重复查询上游。</para>
+    /// </summary>
+    internal void WarmRootCatalogs() => _ = WarmRootCatalogsAsync();
+
     /// <summary>
     /// Loads the release list of the selected source once, when the root patch panel needs it.
     /// <para>在 Root 修补面板需要时加载一次所选来源的版本列表。</para>
@@ -165,7 +172,11 @@ public sealed partial class FlashViewModel
         var cts = BeginRootList();
         var box = Field<ComboBox>("RootVersionBox");
         box.IsEnabled = false;
-        AppendLog(_localizer.GetString("BootPatch_VersionsLoading"));
+        if (!_rootPackageService.CatalogLoaded(source))
+        {
+            AppendLog(_localizer.GetString("BootPatch_VersionsLoading"));
+        }
+
         try
         {
             var releases = await _rootPackageService.ListPackagesAsync(source, cts.Token);
@@ -180,7 +191,11 @@ public sealed partial class FlashViewModel
                 return;
             }
 
-            AppendLog(_localizer.GetString("BootPatch_ProbingSources"));
+            if (_rootPackageService.PreferredSourceAuthority is null)
+            {
+                AppendLog(_localizer.GetString("BootPatch_ProbingSources"));
+            }
+
             await ProbeRootSourcesAsync(releases[0].DownloadUrl);
             if (epoch != _rootEpoch) return;
             box.SelectedIndex = 0;
@@ -245,7 +260,7 @@ public sealed partial class FlashViewModel
             }
 
             var chosen = RequirePatchable(await _rootPackageService.ValidateAsync(custom, null, cancellationToken),
-                null, cancellationToken);
+                cancellationToken);
             _rootPackagePath = chosen;
             return chosen;
         }
@@ -260,7 +275,7 @@ public sealed partial class FlashViewModel
         var artifact = await _rootPackageService.EnsurePackageAsync(release,
             cancellationToken: cancellationToken);
         var path = RequirePatchable(
-            await _rootPackageService.ValidateAsync(artifact.Path, source, cancellationToken), release, cancellationToken);
+            await _rootPackageService.ValidateAsync(artifact.Path, source, cancellationToken), cancellationToken);
         _rootPackagePath = path;
         RefreshRootVersionLabels();
         return path;
@@ -271,14 +286,11 @@ public sealed partial class FlashViewModel
     /// <para>确认校验结果可用于烧录修补流程，并返回其路径。</para>
     /// </summary>
     /// <param name="validation">Result of validating one package file. <para>单个包文件的校验结果。</para></param>
-    /// <param name="release">Release being prepared, or null for a user-chosen file.
-    /// <para>正在准备的发布版；自选文件时为 null。</para></param>
     /// <param name="cancellationToken">Token cancelling the wait. <para>用于取消等待的令牌。</para></param>
     /// <returns>The validated absolute path. <para>已校验的绝对路径。</para></returns>
     /// <exception cref="InvalidDataException">The package is unreadable or its family cannot be patched here.
     /// <para>包不可读，或其类型族无法在此处修补。</para></exception>
-    private string RequirePatchable(RootPatchPackageValidation validation, RootPatchPackage? release,
-        CancellationToken cancellationToken)
+    private string RequirePatchable(RootPatchPackageValidation validation, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!validation.IsSupported || validation.Detection is null ||
@@ -289,7 +301,6 @@ public sealed partial class FlashViewModel
                 : _localizer.GetString("BootPatch_PackageInvalid", validation.Problem));
         }
 
-        if (release is not null) AppendLog(_localizer.GetString("BootPatch_PackageReady", release.Version));
         return validation.Path;
     }
 
@@ -307,13 +318,19 @@ public sealed partial class FlashViewModel
 
         var index = Field<ComboBox>("RootVersionBox").SelectedIndex;
         if (index < 0 || index >= _rootReleases.Count || _rootReleases[index].Source != source) return;
+        var release = _rootReleases[index];
+        if (_rootPackagePath is not null && _rootPreparedRelease == release) return;
         var request = ++_rootPrepareRequest;
         var cts = BeginRootPrepare();
         _rootPackagePath = null;
-        AppendLog(_localizer.GetString("BootPatch_PackageDownloading", _rootReleases[index].Version));
+        _rootPreparedRelease = null;
+        var stored = _rootPackageService.HasStoredPackage(release);
+        if (!stored) AppendLog(_localizer.GetString("BootPatch_PackageDownloading", release.Version));
         try
         {
             await ResolveRootPackageAsync(cts.Token);
+            _rootPreparedRelease = release;
+            if (!stored) AppendLog(_localizer.GetString("BootPatch_PackageReady", release.Version));
         }
         catch (OperationCanceledException)
         {
@@ -334,6 +351,21 @@ public sealed partial class FlashViewModel
     /// <param name="e">Selection details. <para>选择详情。</para></param>
     internal async void OnRootVersionChanged(object? sender, SelectionChangedEventArgs e)
         => await PrepareRootSelectionAsync();
+
+    private async Task WarmRootCatalogsAsync()
+    {
+        try
+        {
+            await _rootPackageService.WarmUpAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "FlashRoot", $"Root patch warm-up failed: {ex.Message}");
+        }
+    }
 
     /// <summary>Starts one cancellable list read and cancels the previous one.
     /// <para>开始一次可取消的列表读取，并取消上一次读取。</para>

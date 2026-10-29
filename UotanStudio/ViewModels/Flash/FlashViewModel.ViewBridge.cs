@@ -76,6 +76,7 @@ public sealed partial class FlashViewModel
         Field<ComboBox>("RkStorageTypeBox").ItemsSource = RkStorageTypes;
         Field<ComboBox>("RkStorageTypeBox").SelectedIndex = -1;
         UpdateEdlProgrammerPickOptions();
+        WarmRootCatalogs();
         PropertyChanged += OnModelPropertyChanged;
     }
 

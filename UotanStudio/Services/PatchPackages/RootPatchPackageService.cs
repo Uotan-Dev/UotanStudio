@@ -67,7 +67,13 @@ public sealed class RootPatchPackageService
     private readonly HttpClient _client;
     private readonly BootPatchService _patchService = new();
     private readonly bool? _useMirrorListOverride;
+    private readonly Lock _catalogGate = new();
+    private readonly Dictionary<RootPatchPackageSource, IReadOnlyList<RootPatchPackage>> _catalogs = [];
+    private readonly Dictionary<RootPatchPackageSource, Task<IReadOnlyList<RootPatchPackage>>> _catalogLoads = [];
+    private readonly SemaphoreSlim _probeGate = new(1, 1);
     private string? _preferredSourceAuthority;
+    private Task? _warmUp;
+    private bool _probeAttempted;
 
     /// <summary>Process-wide instance used by the boot patch window.
     /// <para>修补 Boot 窗口使用的进程级实例。</para></summary>
@@ -134,18 +140,114 @@ public sealed class RootPatchPackageService
     public async Task<string?> ProbeSourcesAsync(Uri url, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(url);
-        var sources = await HttpDownload.SelectSourcesBySpeedAsync(url, _client, cancellationToken)
-            .ConfigureAwait(false);
-        var fastest = sources.Count > 0 ? sources[0] : null;
-        if (fastest is null)
+        if (_probeAttempted) return _preferredSourceAuthority;
+        await _probeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            return null;
-        }
+            if (_probeAttempted) return _preferredSourceAuthority;
+            var sources = await HttpDownload.SelectSourcesBySpeedAsync(url, _client, cancellationToken)
+                .ConfigureAwait(false);
+            _probeAttempted = true;
+            if (sources.Count == 0 || sources[0] is not { } fastest)
+            {
+                LogService.Instance.Write(LogLevel.Warn, "BootPatch",
+                    $"No source answered the speed probe for {url.Host}; downloads keep the origin order.");
+                return null;
+            }
 
-        _preferredSourceAuthority = fastest.GetLeftPart(UriPartial.Authority);
-        LogService.Instance.Write(LogLevel.Info, "BootPatch",
-            $"Fastest source for {url.Host}: {_preferredSourceAuthority}.");
-        return _preferredSourceAuthority;
+            _preferredSourceAuthority = fastest.GetLeftPart(UriPartial.Authority);
+            LogService.Instance.Write(LogLevel.Info, "BootPatch",
+                $"Fastest source for {url.Host}: {_preferredSourceAuthority}.");
+            return _preferredSourceAuthority;
+        }
+        finally
+        {
+            _probeGate.Release();
+        }
+    }
+
+    /// <summary>Reads every provisionable catalog and pins the fastest source once, so later reads and downloads are free.
+    /// <para>一次性读取全部可供给清单并只固定一次最快源，使后续读取与下载不再联网探测。</para></summary>
+    /// <param name="cancellationToken">Cancels the warm-up; a failed or cancelled warm-up can be retried.
+    /// <para>取消预热；失败或被取消的预热可以重试。</para></param>
+    /// <returns>A task that completes after every catalog is cached and the source probe has settled.
+    /// <para>全部清单已缓存且源测速已结束后完成的任务。</para></returns>
+    public Task WarmUpAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_catalogGate)
+        {
+            if (_warmUp is { IsCompletedSuccessfully: false }) _warmUp = null;
+            return _warmUp ??= WarmUpCoreAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>Reports whether one source's catalog is already cached.
+    /// <para>报告某个来源的清单是否已缓存。</para></summary>
+    /// <param name="source">Provisionable source. <para>可供给来源。</para></param>
+    /// <returns><see langword="true"/> after a successful read of that source.
+    /// <para>该来源成功读取后为 <see langword="true"/>。</para></returns>
+    public bool CatalogLoaded(RootPatchPackageSource source)
+    {
+        lock (_catalogGate)
+        {
+            return _catalogs.ContainsKey(source);
+        }
+    }
+
+    /// <summary>Returns a cached catalog without any network work.
+    /// <para>不联网地返回已缓存的清单。</para></summary>
+    /// <param name="source">Provisionable source. <para>可供给来源。</para></param>
+    /// <returns>The cached releases, or <see langword="null"/> when this source was not read yet.
+    /// <para>已缓存的发布版；该来源尚未读取时为 <see langword="null"/>。</para></returns>
+    public IReadOnlyList<RootPatchPackage>? TryGetCatalog(RootPatchPackageSource source)
+    {
+        lock (_catalogGate)
+        {
+            return _catalogs.GetValueOrDefault(source);
+        }
+    }
+
+    private async Task WarmUpCoreAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var catalogs = await Task.WhenAll(RootPatchSources.All.Select(async source =>
+            {
+                try
+                {
+                    return await ListPackagesAsync(source, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    LogService.Instance.Write(LogLevel.Warn, "BootPatch",
+                        $"Root patch catalog {source.CommandFolderName()} skipped: {ex.Message}");
+                    return (IReadOnlyList<RootPatchPackage>)Array.Empty<RootPatchPackage>();
+                }
+            }).ToArray()).ConfigureAwait(false);
+            if (catalogs.SelectMany(catalog => catalog).FirstOrDefault() is not { } newest) return;
+            await ProbeSourcesAsync(new Uri(newest.DownloadUrl), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            lock (_catalogGate)
+            {
+                _warmUp = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            lock (_catalogGate)
+            {
+                _warmUp = null;
+            }
+
+            LogService.Instance.Write(LogLevel.Warn, "BootPatch",
+                $"Root patch catalog warm-up skipped: {ex.Message}");
+        }
     }
 
     /// <summary>Absolute folder holding one source's downloaded packages.
@@ -190,8 +292,13 @@ public sealed class RootPatchPackageService
         }
     }
 
-    /// <summary>Reads the published packages of one source, newest release first.
-    /// <para>读取某个来源的已发布补丁包，最新的 Release 在前。</para></summary>
+    /// <summary>Reads the published packages of one source, newest release first, once per session.
+    /// <para>读取某个来源的已发布补丁包，最新的 Release 在前；每个会话只读取一次。</para></summary>
+    /// <remarks>
+    /// The first read of a source is cached; later reads and concurrent callers share that result, so switching
+    /// versions or sources never re-queries the release feed.
+    /// <para>一个来源的首次读取会被缓存，后续读取与并发调用共享同一结果，因此切换版本或来源都不会重复查询发布源。</para>
+    /// </remarks>
     /// <param name="source">Provisionable source. <para>可供给来源。</para></param>
     /// <param name="cancellationToken">Cancels the metadata read. <para>取消版本元数据读取。</para></param>
     /// <returns>Every release that publishes an installable package. <para>每个发布了可安装补丁包的 Release。</para></returns>
@@ -201,10 +308,55 @@ public sealed class RootPatchPackageService
     public async Task<IReadOnlyList<RootPatchPackage>> ListPackagesAsync(RootPatchPackageSource source,
         CancellationToken cancellationToken = default)
     {
+        Task<IReadOnlyList<RootPatchPackage>> load;
+        lock (_catalogGate)
+        {
+            if (_catalogs.TryGetValue(source, out var cached)) return cached;
+            if (!_catalogLoads.TryGetValue(source, out var pending))
+            {
+                pending = LoadCatalogAsync(source, cancellationToken);
+                _catalogLoads[source] = pending;
+            }
+
+            load = pending;
+        }
+
+        try
+        {
+            var catalog = await load.WaitAsync(cancellationToken).ConfigureAwait(false);
+            lock (_catalogGate)
+            {
+                return _catalogs.TryGetValue(source, out var ready) ? ready : catalog;
+            }
+        }
+        catch
+        {
+            lock (_catalogGate)
+            {
+                if (_catalogLoads.TryGetValue(source, out var pending) && ReferenceEquals(pending, load))
+                {
+                    _catalogLoads.Remove(source);
+                }
+            }
+
+            throw;
+        }
+    }
+
+    private async Task<IReadOnlyList<RootPatchPackage>> LoadCatalogAsync(RootPatchPackageSource source,
+        CancellationToken cancellationToken)
+    {
         var releases = await RootPatchReleaseClient.ListAsync(_client, source.Key(), cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        return [.. releases.Select(release => new RootPatchPackage(source, release.Version, release.Tag,
-            release.AssetName, release.DownloadUrl, release.Length, release.Sha256))];
+        IReadOnlyList<RootPatchPackage> catalog = [.. releases.Select(release =>
+            new RootPatchPackage(source, release.Version, release.Tag, release.AssetName, release.DownloadUrl,
+                release.Length, release.Sha256))];
+        lock (_catalogGate)
+        {
+            _catalogs[source] = catalog;
+        }
+
+        return catalog;
     }
 
     /// <summary>Resolves a verified local file for a package, downloading it when it is not cached yet.

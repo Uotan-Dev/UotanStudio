@@ -2,6 +2,17 @@
 
 本文件记录门禁实测结果与未验证边界；每跑完一道门禁就更新"当前实测"一节。只写当前状态：一条测量配一个日期，不写轮次叙述、不写"上一轮"或"之前失败现在通过"。常驻约束与命令在根 `AGENTS.md`，测试工程写法在 `UotanStudio.Tests/AGENTS.md`。
 
+## Root 清单预热与单次测速实测（2026-10-29，Windows x64，Debug，共享工作树）
+
+- 清单缓存：`RootPatchPackageService.ListPackagesAsync` 对每个来源只读一次 Release 源并缓存结果，并发调用共享同一个在途任务，失败或不完整的读取不会留在缓存里；`CatalogLoaded`/`TryGetCatalog` 让界面判断是否需要显示「正在获取版本列表…」。
+- 预热：`WarmUpAsync` 首次调用并行读取全部 5 个来源的清单，再用最新条目（Magisk 优先）测速一次；之后 `ProbeSourcesAsync` 直接返回已固定的站点部分，不再联网。烧录页在页面构造时调用一次预热，修补 Boot 窗口随后只读缓存。
+- 日志与重复下载：烧录页仅在清单尚未缓存时输出「正在获取版本列表…」、仅在还没有固定源时输出「正在测速镜像源…」；版本预下载只在本地尚未存放该版本时输出「正在下载 X…」与「补丁包 X 已就绪。」，同一版本已准备好时再次触发选择不会重复下载或重复输出。开始烧录时的包解析命中缓存，不再产生第二组下载/就绪日志。
+- 定向测试：`UotanStudio.Tests.Services.RootPatchPackageTests` 24/24（新增 `ListPackagesAsync_RepeatedCalls_ReadTheReleaseFeedOnce`、`WarmUpAsync_EverySource_CachesFiveCatalogsWithoutReadingTheFeedAgain`、`ProbeSourcesAsync_SecondCall_ReusesThePinnedSourceWithoutProbing`）。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 的 `whitespace` 与 `style` 对本轮改动文件零报告；全量 `dotnet test --solution UotanStudio.slnx --no-build -c Debug` 7830 总数 / 7822 通过 / 8 跳过 / 0 失败（1m38s）。
+- NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功，产物 `UotanStudio.Desktop.exe` 156,262,912 B，警告仅为 Avalonia/Dock/Ursa/Iciclecreek/LTRData/YamlDotNet/Common.Logging 既有的 IL2104/IL3053。
+- 预热按来源容错：单个上游读取失败只记一条警告并跳过该来源，其余四个来源照常缓存并完成一次测速。
+- 未验证边界：实际界面日志顺序、预热与窗口打开的相对时序、真实镜像的测速耗时仍需人工在 GUI 观察；本轮只有单元测试与编译门禁覆盖。
+
 ## Boot 修补后端与烧录页接线实测（2026-10-29，Windows x64，Debug，共享工作树）
 
 - 版本清单：`UotanStudio.Net/Components/Root/RootPatchReleaseClient.cs` 只读各上游 GitHub 仓库的 `/releases?per_page=N`（默认 20，上限 100，1 MiB 上限），丢弃 draft、保留预发布，并按「正式标记的 APK > APK > 正式 ZIP > ZIP」选出安装包，debug/sources 资产被排除。清单来源为 magisk=topjohnwu/Magisk、magisk-alpha=vvb2060/Magisk、kernelsu=tiann/KernelSU、sukisu=SukiSU-Ultra/SukiSU-Ultra、apatch=bmax121/APatch；Alpha 按 Magisk、SukiSU 按 KernelSU 修补。

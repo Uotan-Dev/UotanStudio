@@ -171,7 +171,11 @@ public partial class BootPatchWindow : Window
         var token = BeginOperation();
         _isFetchingReleases = true;
         FileVersionBox.IsEnabled = false;
-        SetStatus(LanguageService.Instance.GetString("BootPatch_VersionsLoading"));
+        if (!_packageService.CatalogLoaded(source))
+        {
+            SetStatus(LanguageService.Instance.GetString("BootPatch_VersionsLoading"));
+        }
+
         try
         {
             var releases = await _packageService.ListPackagesAsync(source, token);
@@ -185,7 +189,11 @@ public partial class BootPatchWindow : Window
 
             if (releases.Count > 0)
             {
-                SetStatus(LanguageService.Instance.GetString("BootPatch_ProbingSources"));
+                if (_packageService.PreferredSourceAuthority is null)
+                {
+                    SetStatus(LanguageService.Instance.GetString("BootPatch_ProbingSources"));
+                }
+
                 await ProbeSourcesAsync(releases[0].DownloadUrl);
             }
 

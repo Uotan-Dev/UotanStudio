@@ -274,6 +274,108 @@ public sealed class RootPatchPackageTests : IDisposable
         Assert.StartsWith(service.CommandFolderFor(RootPatchPackageSource.SukiSu), path, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task ListPackagesAsync_RepeatedCalls_ReadTheReleaseFeedOnce()
+    {
+        var root = NewRoot();
+        var calls = 0;
+        var service = NewService(new HttpClient(new StubHandler(request =>
+        {
+            if (request.RequestUri!.Host != "api.github.com")
+            {
+                throw new HttpRequestException("only the release feed may be read here");
+            }
+
+            Interlocked.Increment(ref calls);
+            return Json(ReleasesJson("topjohnwu", "Magisk", "28.1"));
+        })), root, useMirrorList: false);
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        var first = await service.ListPackagesAsync(RootPatchPackageSource.Magisk, cancellationToken);
+        var second = await service.ListPackagesAsync(RootPatchPackageSource.Magisk, cancellationToken);
+
+        Assert.Single(first);
+        Assert.Equal(first, second);
+        Assert.Equal(1, calls);
+        Assert.True(service.CatalogLoaded(RootPatchPackageSource.Magisk));
+        Assert.Null(service.TryGetCatalog(RootPatchPackageSource.KernelSu));
+        Assert.Equal(first, service.TryGetCatalog(RootPatchPackageSource.Magisk));
+    }
+
+    [Fact]
+    public async Task WarmUpAsync_EverySource_CachesFiveCatalogsWithoutReadingTheFeedAgain()
+    {
+        var feedReads = new ConcurrentBag<string>();
+        var service = NewService(new HttpClient(new StubHandler(request =>
+        {
+            if (request.RequestUri!.Host == "api.github.com")
+            {
+                var segments = request.RequestUri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                var owner = segments[^3];
+                var repo = segments[^2];
+                feedReads.Add($"{owner}/{repo}");
+                return Json(ReleasesJson(owner, repo, "28.1"));
+            }
+
+            if (string.Equals(request.RequestUri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[2048]) };
+            }
+
+            throw new HttpRequestException("mirror unavailable in this test");
+        })), NewRoot(), useMirrorList: true);
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        await service.WarmUpAsync(cancellationToken);
+
+        Assert.Equal(RootPatchSources.All.Count, feedReads.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(RootPatchSources.All, source => Assert.True(service.CatalogLoaded(source)));
+        Assert.Equal("https://github.com", service.PreferredSourceAuthority);
+
+        var before = feedReads.Count;
+        await service.ListPackagesAsync(RootPatchPackageSource.APatch, cancellationToken);
+        await service.WarmUpAsync(cancellationToken);
+
+        Assert.Equal(before, feedReads.Count);
+    }
+
+    [Fact]
+    public async Task ProbeSourcesAsync_SecondCall_ReusesThePinnedSourceWithoutProbing()
+    {
+        var requests = 0;
+        var service = NewService(new HttpClient(new StubHandler(request =>
+        {
+            Interlocked.Increment(ref requests);
+            if (!string.Equals(request.RequestUri!.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new HttpRequestException("mirror unavailable in this test");
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[2048]) };
+        })), NewRoot(), useMirrorList: true);
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        var first = await service.ProbeSourcesAsync(new Uri(AssetUrl), cancellationToken);
+        var afterFirst = requests;
+        var second = await service.ProbeSourcesAsync(new Uri(AssetUrl), cancellationToken);
+
+        Assert.Equal("https://github.com", first);
+        Assert.Equal(first, second);
+        Assert.True(afterFirst > 0);
+        Assert.Equal(afterFirst, requests);
+    }
+
+    private static HttpResponseMessage Json(string body)
+        => new(HttpStatusCode.OK) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+
+    private static string ReleasesJson(string owner, string repo, string version)
+    {
+        var asset = $"{repo}-v{version}.apk";
+        return $$"""
+            [{"tag_name":"v{{version}}","assets":[{"name":"{{asset}}","size":1024,"browser_download_url":"https://github.com/{{owner}}/{{repo}}/releases/download/v{{version}}/{{asset}}"}]}]
+            """;
+    }
+
     private RootPatchPackage Package(RootPatchPackageSource source, string version, long length, string? sha256)
         => new(source, version, "v" + version, AssetName, AssetUrl, length, sha256);
 
