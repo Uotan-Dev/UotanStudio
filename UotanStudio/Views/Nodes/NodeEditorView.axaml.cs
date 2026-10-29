@@ -302,8 +302,7 @@ public partial class NodeEditorView : UserControl
             Rect? nodeBounds = null;
             foreach (var control in controls)
             {
-                if (control.TranslatePoint(new Point(), EditorSurface) is not { } topLeft) continue;
-                var bounds = new Rect(topLeft, control.Bounds.Size);
+                if (GetControlBoundsInSurface(control) is not { } bounds) continue;
                 nodeBounds = nodeBounds is { } existing ? existing.Union(bounds) : bounds;
             }
 
@@ -311,6 +310,27 @@ public partial class NodeEditorView : UserControl
         }
 
         return result;
+    }
+
+    private Rect? GetControlBoundsInSurface(Control control)
+    {
+        var width = control.Bounds.Width;
+        var height = control.Bounds.Height;
+        Rect? bounds = null;
+        foreach (var point in new[]
+        {
+            new Point(),
+            new Point(width, 0),
+            new Point(0, height),
+            new Point(width, height)
+        })
+        {
+            if (control.TranslatePoint(point, EditorSurface) is not { } surfacePoint) continue;
+            var pointBounds = new Rect(surfacePoint, new Size());
+            bounds = bounds is { } existing ? existing.Union(pointBounds) : pointBounds;
+        }
+
+        return bounds;
     }
 
     internal int SelectNodesInRectangle(Point first, Point second)

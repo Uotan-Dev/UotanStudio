@@ -62,15 +62,18 @@ partial class NodeEditorView
     /// </summary>
     private void AttachCanvasGestureHandlers()
     {
-        Editor.AddHandler(PointerPressedEvent, OnCanvasGesturePressed,
+        // Attach to the surface rather than NodifyEditor itself. The editor visual bounds are scaled and translated,
+        // so a press in the rendered blank area can otherwise bypass the editor route and fall through to Nodify's
+        // left-pan logic.
+        EditorSurface.AddHandler(PointerPressedEvent, OnCanvasGesturePressed,
             RoutingStrategies.Tunnel, handledEventsToo: true);
-        Editor.AddHandler(PointerMovedEvent, OnCanvasGestureMoved,
+        EditorSurface.AddHandler(PointerMovedEvent, OnCanvasGestureMoved,
             RoutingStrategies.Tunnel, handledEventsToo: true);
-        Editor.AddHandler(PointerReleasedEvent, OnCanvasGestureReleased,
+        EditorSurface.AddHandler(PointerReleasedEvent, OnCanvasGestureReleased,
             RoutingStrategies.Tunnel, handledEventsToo: true);
-        Editor.AddHandler(PointerCaptureLostEvent, OnCanvasGestureCaptureLost,
+        EditorSurface.AddHandler(PointerCaptureLostEvent, OnCanvasGestureCaptureLost,
             RoutingStrategies.Tunnel, handledEventsToo: true);
-        Editor.AddHandler(PointerWheelChangedEvent, OnCanvasPointerWheelChanged,
+        EditorSurface.AddHandler(PointerWheelChangedEvent, OnCanvasPointerWheelChanged,
             RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
@@ -92,12 +95,12 @@ partial class NodeEditorView
 
         var editable = DataContext is NodeEditorViewModel { CanEditGraph: true } && Editor.IsEnabled;
         var onCanvas = IsPointerOnCanvas(e) && !IsAlignmentGuideGrip(e);
-        var captureTarget = e.Source as IInputElement ?? Editor;
+
         if (e.GetCurrentPoint(Editor).Properties.IsRightButtonPressed)
         {
             if (editable && onCanvas)
             {
-                BeginPan(e, captureTarget);
+                BeginPan(e);
             }
 
             e.Handled = true;
@@ -131,13 +134,17 @@ partial class NodeEditorView
         _canvasGesture = CanvasGesture.Pending;
         _canvasGesturePointer = e.Pointer;
         _canvasGestureTrigger = e;
-        _canvasGestureOrigin = e.GetPosition(Editor);
+        // Keep the gesture origin in the same surface space used by the selection overlay.
+        // GetPosition(Editor) is in Nodify zoomed canvas coordinates, so using it for a
+        // screen-space threshold and then mixing it with EditorSurface coordinates shifts
+        // the selection box whenever Zoom is not 1.
+        _canvasGestureOrigin = e.GetPosition(EditorSurface);
         _canvasGestureNode = FindNodeAt(e.Source);
-        e.Pointer.Capture(captureTarget);
+        e.Pointer.Capture(Editor);
         e.Handled = true;
     }
 
-    private void BeginPan(PointerPressedEventArgs e, IInputElement captureTarget)
+    private void BeginPan(PointerPressedEventArgs e)
     {
         _canvasGesture = CanvasGesture.Panning;
         _canvasGesturePointer = e.Pointer;
@@ -147,7 +154,7 @@ partial class NodeEditorView
         _panStartOffsetX = Editor.OffsetX;
         _panStartOffsetY = Editor.OffsetY;
         _panStartZoom = Editor.Zoom > 0 ? Editor.Zoom : 1;
-        e.Pointer.Capture(captureTarget);
+        e.Pointer.Capture(Editor);
         e.Handled = true;
     }
 
@@ -324,7 +331,7 @@ partial class NodeEditorView
 
     private void PromotePendingGesture(PointerEventArgs e)
     {
-        var delta = e.GetPosition(Editor) - _canvasGestureOrigin;
+        var delta = e.GetPosition(EditorSurface) - _canvasGestureOrigin;
         if (Math.Sqrt((delta.X * delta.X) + (delta.Y * delta.Y)) < CanvasGestureThreshold)
         {
             return;
@@ -474,12 +481,15 @@ partial class NodeEditorView
     /// <param name="e">The press arguments.</param>
     private bool IsPointerOnCanvas(PointerEventArgs e)
     {
-        if (!Editor.IsVisible || Editor.Bounds.Width <= 0 || Editor.Bounds.Height <= 0)
+        if (!Editor.IsVisible || !IsPointerOnSurface(e))
         {
             return false;
         }
 
-        return Editor.Bounds.Contains(e.GetPosition(Editor));
+        // The minimap is a separate interactive overlay on the same surface and must keep receiving its own gestures.
+        return e.Source is not Visual visual
+            || !visual.GetSelfAndVisualAncestors()
+                .Any(candidate => candidate is NodifyM.Avalonia.Controls.NodifyEditorMinimap);
     }
 
     /// <summary>
@@ -491,9 +501,9 @@ partial class NodeEditorView
     /// <param name="e">The press arguments.</param>
     private bool IsAlignmentGuideGrip(PointerPressedEventArgs e)
     {
-        var position = e.GetPosition(Editor);
-        return Editor.Bounds.Height > AlignmentGuideGripThickness * 2
-            && position.Y >= Editor.Bounds.Height - AlignmentGuideGripThickness;
+        var position = e.GetPosition(EditorSurface);
+        return EditorSurface.Bounds.Height > AlignmentGuideGripThickness * 2
+            && position.Y >= EditorSurface.Bounds.Height - AlignmentGuideGripThickness;
     }
 
     /// <summary>
