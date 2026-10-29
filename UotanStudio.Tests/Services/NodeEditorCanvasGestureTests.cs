@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Input;
+using UotanStudio.ViewModels.Nodes;
 using UotanStudio.Views.Nodes;
+using UotanStudio.Workflow.Nodes;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -11,6 +13,53 @@ namespace UotanStudio.Tests.Services;
 /// </summary>
 public sealed class NodeEditorCanvasGestureTests
 {
+    [Theory]
+    [InlineData(0, 40, 1, 1)]
+    [InlineData(99, 40, 1, 1)]
+    [InlineData(40, 0, 1, 1)]
+    [InlineData(40, 99, 1, 1)]
+    public void IntersectsSelection_AnyPartialNodeOverlap_IsSelected(
+        double selectionX, double selectionY, double selectionWidth, double selectionHeight)
+    {
+        var selection = new Rect(selectionX, selectionY, selectionWidth, selectionHeight);
+        var nodeBounds = new Rect(0, 0, 100, 100);
+
+        Assert.True(NodeEditorView.IntersectsSelection(selection, nodeBounds));
+    }
+
+    [Fact]
+    public void IntersectsSelection_OutsideNodeBounds_IsNotSelected()
+    {
+        var selection = new Rect(102, 40, 10, 10);
+        var nodeBounds = new Rect(0, 0, 100, 100);
+
+        Assert.False(NodeEditorView.IntersectsSelection(selection, nodeBounds));
+    }
+
+    [Fact]
+    public void ToggleNodeSelection_ShiftClickSelectedNode_RemovesIt()
+    {
+        var first = new FlowNodeViewModel("first", NodeCategory.Data);
+        var second = new FlowNodeViewModel("second", NodeCategory.Data);
+
+        var selected = NodeEditorView.ToggleNodeSelection([first, second], first);
+
+        Assert.DoesNotContain(first, selected);
+        Assert.Contains(second, selected);
+    }
+
+    [Fact]
+    public void ToggleNodeSelection_ShiftClickUnselectedNode_AddsIt()
+    {
+        var first = new FlowNodeViewModel("first", NodeCategory.Data);
+        var second = new FlowNodeViewModel("second", NodeCategory.Data);
+
+        var selected = NodeEditorView.ToggleNodeSelection([first], second);
+
+        Assert.Contains(first, selected);
+        Assert.Contains(second, selected);
+    }
+
     [Fact]
     public void CalculateWheelAction_VerticalWheel_ScrollsVerticallyWithoutZoom()
     {

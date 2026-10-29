@@ -288,57 +288,85 @@ public partial class NodeEditorView : UserControl
 
     private IReadOnlyList<FlowNodeViewModel> NodesIntersectingSelection(Point first, Point second)
     {
-        var selection = CreateSelectionRectangle(first, second);
+        if (DataContext is not NodeEditorViewModel vm
+            || EditorSurface.TranslatePoint(first, Editor) is not { } editorFirst
+            || EditorSurface.TranslatePoint(second, Editor) is not { } editorSecond)
+        {
+            return [];
+        }
+
+        var offset = new Vector(Editor.OffsetX, Editor.OffsetY);
+        var selection = CreateSelectionRectangle(editorFirst - offset, editorSecond - offset);
+        var tolerance = 1 / (Editor.Zoom > 0 ? Editor.Zoom : 1);
         List<FlowNodeViewModel> result = [];
-        if (DataContext is not NodeEditorViewModel vm) return result;
 
         foreach (var node in vm.Nodes)
         {
             if (Editor.ContainerFromItem(node) is not Control container) continue;
-            var controls = container.GetVisualDescendants()
-                .OfType<Control>()
-                .Where(control => ReferenceEquals(control.DataContext, node))
-                .Prepend(container);
-            Rect? nodeBounds = null;
-            foreach (var control in controls)
-            {
-                if (GetControlBoundsInSurface(control) is not { } bounds) continue;
-                nodeBounds = nodeBounds is { } existing ? existing.Union(bounds) : bounds;
-            }
+            var nodeControl = container as NodifyM.Avalonia.Controls.BaseNode
+                ?? container.GetVisualDescendants()
+                    .OfType<NodifyM.Avalonia.Controls.BaseNode>()
+                    .FirstOrDefault();
+            if (nodeControl is null || nodeControl.Bounds.Width <= 0 || nodeControl.Bounds.Height <= 0) continue;
 
-            if (nodeBounds is { } value && selection.Intersects(value)) result.Add(node);
+            var nodeBounds = new Rect(node.Location, nodeControl.Bounds.Size);
+            if (IntersectsSelection(selection, nodeBounds, tolerance)) result.Add(node);
         }
 
         return result;
     }
 
-    private Rect? GetControlBoundsInSurface(Control control)
+    internal static bool IntersectsSelection(Rect selection, Rect nodeBounds, double tolerance = 1)
     {
-        var width = control.Bounds.Width;
-        var height = control.Bounds.Height;
-        Rect? bounds = null;
-        foreach (var point in new[]
-        {
-            new Point(),
-            new Point(width, 0),
-            new Point(0, height),
-            new Point(width, height)
-        })
-        {
-            if (control.TranslatePoint(point, EditorSurface) is not { } surfacePoint) continue;
-            var pointBounds = new Rect(surfacePoint, new Size());
-            bounds = bounds is { } existing ? existing.Union(pointBounds) : pointBounds;
-        }
-
-        return bounds;
+        return selection.X <= nodeBounds.Right + tolerance
+            && selection.Right >= nodeBounds.X - tolerance
+            && selection.Y <= nodeBounds.Bottom + tolerance
+            && selection.Bottom >= nodeBounds.Y - tolerance;
     }
 
-    internal int SelectNodesInRectangle(Point first, Point second)
+    internal int SelectNodesInRectangle(Point first, Point second, bool additive = false)
     {
         var selected = NodesIntersectingSelection(first, second);
-        Editor.SelectedItems = selected.ToList();
-        if (DataContext is NodeEditorViewModel vm) vm.SetSelection(selected);
+        if (additive)
+        {
+            selected = Editor.SelectedItems
+                .OfType<FlowNodeViewModel>()
+                .Concat(selected)
+                .Distinct()
+                .ToArray();
+        }
+
+        SelectNodes(selected);
         return selected.Count;
+    }
+
+    internal static IReadOnlyList<FlowNodeViewModel> ToggleNodeSelection(
+        IEnumerable<FlowNodeViewModel> selectedNodes,
+        FlowNodeViewModel clicked)
+    {
+        var currentSelection = selectedNodes.ToList();
+        var selected = currentSelection
+            .Where(node => !ReferenceEquals(node, clicked))
+            .ToList();
+        if (!currentSelection.Contains(clicked))
+        {
+            selected.Add(clicked);
+        }
+
+        return selected;
+    }
+
+    private void SelectNodes(IEnumerable<FlowNodeViewModel> nodes)
+    {
+        var selected = nodes
+            .Where(node => DataContext is not NodeEditorViewModel vm || vm.Nodes.Contains(node))
+            .Distinct()
+            .ToList();
+        Editor.SelectedItems = selected;
+        if (DataContext is NodeEditorViewModel editor)
+        {
+            editor.SetSelection(selected);
+        }
     }
 
     /// <summary>

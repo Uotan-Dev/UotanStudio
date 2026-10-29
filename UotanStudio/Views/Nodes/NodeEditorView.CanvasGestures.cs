@@ -37,6 +37,7 @@ partial class NodeEditorView
     private Point _canvasGestureOrigin;
     private NodifyM.Avalonia.Controls.BaseNode? _canvasGestureNode;
     private PointerPressedEventArgs? _canvasGestureTrigger;
+    private bool _canvasGestureAdditiveSelection;
     private double _panStartPointerX;
     private double _panStartPointerY;
     private double _panStartOffsetX;
@@ -134,6 +135,7 @@ partial class NodeEditorView
         _canvasGesture = CanvasGesture.Pending;
         _canvasGesturePointer = e.Pointer;
         _canvasGestureTrigger = e;
+        _canvasGestureAdditiveSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         // Keep the gesture origin in the same surface space used by the selection overlay.
         // GetPosition(Editor) is in Nodify zoomed canvas coordinates, so using it for a
         // screen-space threshold and then mixing it with EditorSurface coordinates shifts
@@ -350,8 +352,14 @@ partial class NodeEditorView
             vm.SelectConnection(null);
             if (!clicked.IsSelected)
             {
-                Editor.SelectedItems = new List<FlowNodeViewModel> { clicked };
-                vm.SetSelection([clicked]);
+                if (_canvasGestureAdditiveSelection)
+                {
+                    SelectNodes([.. Editor.SelectedItems.OfType<FlowNodeViewModel>(), clicked]);
+                }
+                else
+                {
+                    SelectNodes([clicked]);
+                }
             }
 
             _nodeDragStartLocations = Editor.SelectedItems?
@@ -380,6 +388,7 @@ partial class NodeEditorView
         var gesture = _canvasGesture;
         var node = _canvasGestureNode;
         var moved = _selectionBoxMoved;
+        var additiveSelection = _canvasGestureAdditiveSelection;
         if (gesture == CanvasGesture.DraggingNode)
         {
             Editor.StopNodeDrag(e);
@@ -388,14 +397,20 @@ partial class NodeEditorView
         EndCanvasGesture(e.Pointer);
         if (gesture == CanvasGesture.Selecting && moved)
         {
-            SelectNodesInRectangle(_selectionBoxStart, e.GetPosition(EditorSurface));
+            SelectNodesInRectangle(_selectionBoxStart, e.GetPosition(EditorSurface), additiveSelection);
         }
         else if (gesture == CanvasGesture.Pending && node?.DataContext is FlowNodeViewModel clicked
                  && DataContext is NodeEditorViewModel vm)
         {
             vm.SelectConnection(null);
-            Editor.SelectedItems = new List<FlowNodeViewModel> { clicked };
-            vm.SetSelection([clicked]);
+            if (additiveSelection)
+            {
+                SelectNodes(ToggleNodeSelection(Editor.SelectedItems.OfType<FlowNodeViewModel>(), clicked));
+            }
+            else
+            {
+                SelectNodes([clicked]);
+            }
         }
 
         e.Handled = true;
@@ -438,6 +453,7 @@ partial class NodeEditorView
         _canvasGesturePointer = null;
         _canvasGestureNode = null;
         _canvasGestureTrigger = null;
+        _canvasGestureAdditiveSelection = false;
         _selectionBoxMoved = false;
         if (_selectionBoxDragging)
         {
