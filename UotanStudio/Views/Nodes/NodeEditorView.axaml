@@ -1050,7 +1050,9 @@
         <controls:RoundedPaneDivider x:Name="ExecutionLogDivider" Grid.Row="1"
                                      Classes="pane-edge horizontal" ShadowUp="True" />
         <GridSplitter x:Name="ExecutionLogSplitter" Grid.Row="1"
-                      Classes="pane-splitter horizontal" />
+                      Classes="pane-splitter horizontal"
+                      IsEnabled="{Binding IsExecutionLogExpanded}"
+                      IsHitTestVisible="{Binding IsExecutionLogExpanded}" />
 
         <Border x:Name="ExecutionLogPanel" Grid.Row="2"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
