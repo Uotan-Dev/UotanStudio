@@ -152,9 +152,22 @@ public partial class BootPatchWindow : Window
     }
 
     private string DescribeInvalidPackage(string? problem)
-        => string.IsNullOrWhiteSpace(problem)
-            ? LanguageService.Instance.GetString("BootPatch_PackageInvalid", string.Empty)
-            : LanguageService.Instance.GetString("BootPatch_PackageInvalid", problem);
+    {
+        if (!string.IsNullOrWhiteSpace(problem))
+        {
+            LogService.Instance.Write(LogLevel.Warn, "BootPatch", problem);
+        }
+
+        return LanguageService.Instance.GetString("BootPatch_PackageInvalidShort");
+    }
+
+    private static string DescribeStatusError(Exception exception)
+    {
+        LogService.Instance.Write(LogLevel.Warn, "BootPatch", exception.ToString());
+        var description = UserError.Describe(exception);
+        var detailsStart = description.IndexOf(Environment.NewLine, StringComparison.Ordinal);
+        return detailsStart < 0 ? description : description[..detailsStart];
+    }
 
     /// <summary>Loads the release list of the selected upstream project into the version list.
     /// <para>把所选上游项目的版本列表加载到版本下拉框。</para>
@@ -173,7 +186,7 @@ public partial class BootPatchWindow : Window
         FileVersionBox.IsEnabled = false;
         if (!_packageService.CatalogLoaded(source))
         {
-            SetStatus(LanguageService.Instance.GetString("BootPatch_VersionsLoading"));
+            SetStatus(LanguageService.Instance.GetString("BootPatch_VersionsLoadingShort"));
         }
 
         try
@@ -189,24 +202,19 @@ public partial class BootPatchWindow : Window
 
             if (releases.Count > 0)
             {
-                if (_packageService.PreferredSourceAuthority is null)
-                {
-                    SetStatus(LanguageService.Instance.GetString("BootPatch_ProbingSources"));
-                }
-
                 await ProbeSourcesAsync(releases[0].DownloadUrl);
             }
 
             if (epoch != _sourceEpoch) return;
             FileVersionBox.SelectedIndex = releases.Count > 0 ? 0 : -1;
-            SetStatus(releases.Count > 0 ? string.Empty : LanguageService.Instance.GetString("BootPatch_VersionsEmpty"));
+            SetStatus(releases.Count > 0 ? string.Empty : LanguageService.Instance.GetString("BootPatch_VersionsEmptyShort"));
         }
         catch (OperationCanceledException)
         {
         }
         catch (Exception ex)
         {
-            if (epoch == _sourceEpoch) SetStatus(UserError.Describe(ex));
+            if (epoch == _sourceEpoch) SetStatus(DescribeStatusError(ex));
         }
         finally
         {
@@ -316,9 +324,7 @@ public partial class BootPatchWindow : Window
             if (epoch != _sourceEpoch || request != _prepareRequest) return;
             _packagePath = validation.IsSupported ? artifact.Path : null;
             SetDetection(validation.Detection);
-            SetStatus(validation.IsSupported
-                ? LanguageService.Instance.GetString("BootPatch_PackageReady", release.Version)
-                : DescribeInvalidPackage(validation.Problem));
+            SetStatus(validation.IsSupported ? string.Empty : DescribeInvalidPackage(validation.Problem));
         }
         catch (OperationCanceledException)
         {
@@ -329,7 +335,7 @@ public partial class BootPatchWindow : Window
             {
                 _packagePath = null;
                 SetDetection(null);
-                SetStatus(UserError.Describe(ex));
+                SetStatus(DescribeStatusError(ex));
             }
         }
         finally
@@ -349,7 +355,7 @@ public partial class BootPatchWindow : Window
         {
             PatchProgressBar.Value = Math.Clamp(value * 100d, 0d, 100d);
             ProgressPanel.IsVisible = true;
-            ProgressText.Text = LanguageService.Instance.GetString("BootPatch_PackageDownloading", release.Version);
+            ProgressText.Text = LanguageService.Instance.GetString("BootPatch_PackageDownloadingShort");
         });
         return await _packageService.EnsurePackageAsync(release, progress, token);
     }
@@ -395,7 +401,7 @@ public partial class BootPatchWindow : Window
             if (validation.IsSupported)
             {
                 _packagePath = validation.Path;
-                SetStatus(DescribeDetection(validation.Detection));
+                SetStatus(string.Empty);
             }
             else
             {
@@ -405,38 +411,32 @@ public partial class BootPatchWindow : Window
         catch (Exception ex)
         {
             SetDetection(null);
-            SetStatus(UserError.Describe(ex));
+            SetStatus(DescribeStatusError(ex));
         }
 
         UpdateStartEnabled();
     }
 
-    private string DescribeDetection(BootPatchDetection? detection)
-    {
-        if (detection is null) return string.Empty;
-        var kmi = detection.Kmis is { Count: > 0 }
-            ? $"; KMI: {string.Join(", ", detection.Kmis)}"
-            : string.Empty;
-        var boot = string.IsNullOrWhiteSpace(_bootKmi) ? string.Empty : $"; boot KMI: {_bootKmi}";
-        return $"{detection.Kind}: {string.Join(", ", detection.Architectures)}{kmi}{boot}";
-    }
-
     private void SetDetection(BootPatchDetection? detection, bool preserveInputs = false)
     {
         _detection = detection;
+        var source = SelectedSource;
+        var isMagiskSource = source is RootPatchPackageSource.Magisk or RootPatchPackageSource.MagiskAlpha;
         var isMagisk = detection?.Kind == BootPatchKind.Magisk;
-        var isApatch = detection?.Kind == BootPatchKind.APatch;
+        var showMagiskOptions = isMagiskSource || isMagisk;
+        var isApatch = detection?.Kind == BootPatchKind.APatch ||
+            detection is null && source == RootPatchPackageSource.APatch;
         var isKernelSu = detection?.Kind == BootPatchKind.KernelSu;
-        var showPatchInputs = isMagisk || isApatch || isKernelSu;
 
-        PatchOptionsPanel.IsVisible = showPatchInputs;
-        PatchInputRow.IsVisible = showPatchInputs;
-        MagiskOptionsRow.IsVisible = isMagisk;
-        PrebootDeviceBox.IsVisible = isMagisk || isApatch;
-        ArchitectureBox.IsVisible = isMagisk || isApatch;
+        PatchOptionsPanel.IsVisible = true;
+        PatchInputRow.IsVisible = true;
+        MagiskOptionsRow.IsVisible = showMagiskOptions;
+        PrebootDeviceBox.IsVisible = true;
+        ArchitectureBox.IsVisible = true;
         KmiBox.IsVisible = isKernelSu;
         var supported = detection?.SupportedOptions;
-        var supports = (BootPatchOption option) => isMagisk && (supported is null || supported.Contains(option));
+        var supports = (BootPatchOption option) => showMagiskOptions &&
+            (supported is null || !isMagisk || supported.Contains(option));
         ForceRootfsBox.IsVisible = supports(BootPatchOption.LegacySar);
         KeepEncryptionBox.IsVisible = supports(BootPatchOption.KeepForceEncryption);
         InstallRecoveryBox.IsVisible = supports(BootPatchOption.RecoveryMode);
@@ -469,10 +469,6 @@ public partial class BootPatchWindow : Window
             }
             catch { _bootArchitecture = null; }
         }
-        if (_detection?.Kind == BootPatchKind.KernelSu)
-            SetStatus(string.IsNullOrWhiteSpace(_bootKmi)
-                ? LanguageService.Instance.GetString("BootPatch_KmiDetectionFailed")
-                : LanguageService.Instance.GetString("BootPatch_KmiDetected", _bootKmi));
         RefreshArchitectureOptions();
         RefreshKmiOptions();
     }
@@ -480,20 +476,17 @@ public partial class BootPatchWindow : Window
     private void RefreshArchitectureOptions()
     {
         var detection = _detection;
-        if (detection is null || (detection.Kind is not BootPatchKind.Magisk and not BootPatchKind.APatch))
-        {
-            ArchitectureBox.ItemsSource = Array.Empty<string>();
-            ArchitectureBox.SelectedIndex = -1;
-            return;
-        }
-
         var detectedLabel = string.IsNullOrWhiteSpace(_bootArchitecture)
             ? LanguageService.Instance.GetString("BootPatch_ArchitectureUnknown")
             : _bootArchitecture;
         var autoText = LanguageService.Instance.GetString("BootPatch_AutoDetectArchitecture", detectedLabel);
         List<string> items = [autoText];
 
-        items.AddRange(detection.Architectures);
+        if (detection?.Architectures is { Count: > 0 })
+        {
+            items.AddRange(detection.Architectures);
+        }
+
         ArchitectureBox.ItemsSource = items;
         ArchitectureBox.SelectedIndex = 0;
     }
@@ -542,6 +535,7 @@ public partial class BootPatchWindow : Window
             _isPatching = true;
             UpdateStartEnabled();
             MainBusyContainer.IsLoading = true; ProgressPanel.IsVisible = true; PatchProgressBar.Value = 0;
+            ProgressText.Text = string.Empty;
             var packagePath = await ResolvePackagePathAsync();
             if (string.IsNullOrWhiteSpace(packagePath)) return;
             var output = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(bootPath))!, $"patched_{DateTime.Now:yyyyMMdd_HHmmss}.img");
@@ -556,14 +550,14 @@ public partial class BootPatchWindow : Window
                 RecoveryMode = InstallRecoveryBox.IsChecked == true,
                 PatchVbmetaFlag = PatchVbmetaBox.IsChecked == true,
                 PreInitDevice = _detection?.Kind == BootPatchKind.APatch ? null : PrebootDeviceBox.Text,
-                Progress = new Progress<double>(p => { PatchProgressBar.Value = Math.Clamp(p * 100d, 0d, 100d); ProgressText.Text = $"{p:P0}"; })
+                Progress = new Progress<double>(p => PatchProgressBar.Value = Math.Clamp(p * 100d, 0d, 100d))
             });
-            ProgressText.Text = $"{result.OutputPath} ({result.Changes.Count} changes)";
+            ProgressText.Text = Path.GetFileName(result.OutputPath);
         }
         catch (OperationCanceledException)
         {
         }
-        catch (Exception ex) { SetStatus(UserError.Describe(ex)); }
+        catch (Exception ex) { SetStatus(DescribeStatusError(ex)); }
         finally { MainBusyContainer.IsLoading = false; _isPatching = false; UpdateStartEnabled(); }
     }
 

@@ -36,9 +36,10 @@
         </Style>
         <Style Selector="Button.browse"><Setter Property="MinWidth" Value="108" /><Setter Property="Height" Value="32" /></Style>
         <Style Selector="CheckBox.compact-check">
-            <Setter Property="Margin" Value="0" />
+            <Setter Property="Margin" Value="0,0,8,0" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="MinHeight" Value="28" />
         </Style>
     </Window.Styles>
     <Grid RowDefinitions="*,Auto" Margin="0,32,0,0">
@@ -87,15 +88,18 @@
                         <TextBox Grid.Column="1" Grid.ColumnSpan="2" Name="BootPathBox" Classes="path-field" IsReadOnly="True" />
                         <Button Grid.Column="3" Classes="browse" Content="{DynamicResource BootPatch_SelectFile}" Click="OnBrowseBootClick" />
                     </Grid>
-                    <Grid Name="PatchOptionsPanel" RowDefinitions="Auto,Auto" RowSpacing="8" IsVisible="False">
+                    <Grid Name="PatchOptionsPanel" RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
                         <Grid Name="PatchInputRow" ColumnDefinitions="*,*" ColumnSpacing="10">
                             <TextBox Name="PrebootDeviceBox" PlaceholderText="{DynamicResource BootPatch_DevicePlaceholder}" />
                             <ComboBox Grid.Column="1" Name="ArchitectureBox" HorizontalAlignment="Stretch" SelectedIndex="-1" />
-                            <ComboBox Grid.Column="1" Name="KmiBox" HorizontalAlignment="Stretch" SelectedIndex="-1" IsVisible="False" />
                         </Grid>
-                        <WrapPanel Grid.Row="1" Name="MagiskOptionsRow" Orientation="Horizontal"
-                                   ItemWidth="220" ItemHeight="40" MaxHeight="200"
-                                   HorizontalAlignment="Center" VerticalAlignment="Top">
+                        <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <ComboBox Grid.Column="1" Name="KmiBox" HorizontalAlignment="Stretch"
+                                      SelectedIndex="-1" IsVisible="False" />
+                        </Grid>
+                        <WrapPanel Grid.Row="2" Name="MagiskOptionsRow" Orientation="Horizontal"
+                                   ItemWidth="190" MaxHeight="84"
+                                   HorizontalAlignment="Left" VerticalAlignment="Top">
                             <CheckBox Classes="compact-check" Name="ForceRootfsBox" IsChecked="False">
                                 <TextBlock Text="{DynamicResource BootPatch_ForceRootfs}" TextWrapping="Wrap" />
                             </CheckBox>
@@ -120,11 +124,11 @@
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                 <StackPanel Name="ProgressPanel" IsVisible="False" Width="280" Spacing="4" HorizontalAlignment="Left" VerticalAlignment="Center">
                     <ProgressBar Name="PatchProgressBar" Minimum="0" Maximum="100" Value="0" ShowProgressText="True" Height="20" CornerRadius="4" />
-                    <TextBlock Name="ProgressText" Text="{DynamicResource BootPatch_Progress}" FontSize="11" Opacity="0.75" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Name="ProgressText" FontSize="11" Height="16" Opacity="0.75" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <Button Content="{DynamicResource Editor_Cancel}" MinWidth="88" Height="32" IsCancel="True" Click="OnCancelClick" />
-                    <Button Name="StartButton" Content="{DynamicResource BootPatch_Start}" Theme="{StaticResource SolidButton}" MinWidth="110" Height="32" IsDefault="True" Click="OnStartPatchClick" />
+                    <Button Content="{DynamicResource Editor_Cancel}" MinWidth="88" Height="40" IsCancel="True" Click="OnCancelClick" />
+                    <Button Name="StartButton" Content="{DynamicResource BootPatch_Start}" Theme="{StaticResource SolidButton}" MinWidth="110" Height="40" IsDefault="True" Click="OnStartPatchClick" />
                 </StackPanel>
             </Grid>
         </Border>

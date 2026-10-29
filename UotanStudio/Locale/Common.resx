@@ -1587,17 +1587,29 @@ Author: 暮间雾
   <data name="BootPatch_VersionsLoading" xml:space="preserve">
     <value>Loading releases…</value>
   </data>
+  <data name="BootPatch_VersionsLoadingShort" xml:space="preserve">
+    <value>Loading…</value>
+  </data>
   <data name="BootPatch_VersionsEmpty" xml:space="preserve">
     <value>No downloadable release was found.</value>
   </data>
+  <data name="BootPatch_VersionsEmptyShort" xml:space="preserve">
+    <value>No releases found.</value>
+  </data>
   <data name="BootPatch_PackageDownloading" xml:space="preserve">
     <value>Downloading {0}…</value>
+  </data>
+  <data name="BootPatch_PackageDownloadingShort" xml:space="preserve">
+    <value>Downloading…</value>
   </data>
   <data name="BootPatch_PackageReady" xml:space="preserve">
     <value>Patch package {0} is ready.</value>
   </data>
   <data name="BootPatch_PackageInvalid" xml:space="preserve">
     <value>Unsupported patch package: {0}</value>
+  </data>
+  <data name="BootPatch_PackageInvalidShort" xml:space="preserve">
+    <value>Unsupported patch package.</value>
   </data>
   <data name="BootPatch_VersionDownloaded" xml:space="preserve">
     <value>{0} (downloaded)</value>

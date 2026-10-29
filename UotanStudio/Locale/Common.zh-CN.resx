@@ -1587,17 +1587,29 @@
   <data name="BootPatch_VersionsLoading" xml:space="preserve">
     <value>正在获取版本列表…</value>
   </data>
+  <data name="BootPatch_VersionsLoadingShort" xml:space="preserve">
+    <value>加载中…</value>
+  </data>
   <data name="BootPatch_VersionsEmpty" xml:space="preserve">
     <value>未找到可下载的发布版本。</value>
   </data>
+  <data name="BootPatch_VersionsEmptyShort" xml:space="preserve">
+    <value>暂无版本。</value>
+  </data>
   <data name="BootPatch_PackageDownloading" xml:space="preserve">
     <value>正在下载 {0}…</value>
+  </data>
+  <data name="BootPatch_PackageDownloadingShort" xml:space="preserve">
+    <value>下载中…</value>
   </data>
   <data name="BootPatch_PackageReady" xml:space="preserve">
     <value>补丁包 {0} 已就绪。</value>
   </data>
   <data name="BootPatch_PackageInvalid" xml:space="preserve">
     <value>不支持的补丁包：{0}</value>
+  </data>
+  <data name="BootPatch_PackageInvalidShort" xml:space="preserve">
+    <value>补丁包不受支持。</value>
   </data>
   <data name="BootPatch_VersionDownloaded" xml:space="preserve">
     <value>{0}（已下载）</value>
