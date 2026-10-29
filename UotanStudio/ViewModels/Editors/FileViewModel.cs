@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Controls;
@@ -650,6 +651,24 @@ public sealed partial class PropertyRow : ObservableObject
     /// <para>属性值文本。</para>
     /// </summary>
     [ObservableProperty] private string _value = string.Empty;
+
+    /// <summary>
+    /// Optional command invoked by the row's inline action button; <see langword="null"/> hides the button.
+    /// <para>行内操作按钮调用的可选命令；为 <see langword="null"/> 时隐藏按钮。</para>
+    /// </summary>
+    public ICommand? ActionCommand { get; init; }
+
+    /// <summary>
+    /// Caption of the inline action button; empty when the row exposes no action.
+    /// <para>行内操作按钮的标题；该行没有操作时为空字符串。</para>
+    /// </summary>
+    public string ActionLabel { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Whether the row exposes an inline action button.
+    /// <para>该行是否显示行内操作按钮。</para>
+    /// </summary>
+    public bool HasAction => ActionCommand is not null;
 
     /// <summary>
     /// Creates a property row.

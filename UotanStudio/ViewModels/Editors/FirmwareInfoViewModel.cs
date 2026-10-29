@@ -96,6 +96,12 @@ public partial class FirmwareInfoViewModel : Document, ITool
     [ObservableProperty] private string _summary = string.Empty;
 
     /// <summary>
+    /// Whether the summary section has text (drives its visibility); AVB images never show one.
+    /// <para>摘要分区是否有文本（驱动分区显示）；AVB 镜像不显示摘要。</para>
+    /// </summary>
+    [ObservableProperty] private bool _hasSummary;
+
+    /// <summary>
     /// The error message text; empty when there is no error.
     /// <para>错误信息文本；无错误时为空字符串。</para>
     /// </summary>
@@ -190,6 +196,7 @@ public partial class FirmwareInfoViewModel : Document, ITool
         IsRecognized = false;
         FormatName = string.Empty;
         Summary = string.Empty;
+        HasSummary = false;
         Metadata.Clear();
         Entries.Clear();
         Components.Clear();
@@ -301,6 +308,7 @@ public partial class FirmwareInfoViewModel : Document, ITool
         HasComponents = false;
         FormatName = string.Empty;
         Summary = string.Empty;
+        HasSummary = false;
         ErrorMessage = string.Empty;
         HasError = false;
         IsRecognized = false;

@@ -40,9 +40,10 @@
           </StackPanel>
         </Border>
 
-        <!-- 摘要 -->
+        <!-- 摘要：AVB 镜像不显示摘要说明。 -->
+        <!-- Summary: AVB images never render one. -->
         <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
-                IsVisible="{Binding IsRecognized}">
+                IsVisible="{Binding HasSummary}">
           <StackPanel Spacing="8">
             <TextBlock Text="{DynamicResource FirmwareInfo_Summary}"
                        FontWeight="SemiBold" FontSize="13" />
@@ -68,8 +69,15 @@
                                                       MinEditorWidth="180" ColumnSpacing="16" RowSpacing="4" Margin="0,3">
                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
                                        FontSize="12" TextWrapping="Wrap" />
-                            <SelectableTextBlock Text="{Binding Value}" FontFamily="Consolas"
-                                                 FontSize="12" TextWrapping="Wrap" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                              <SelectableTextBlock Grid.Column="0" Text="{Binding Value}" FontFamily="Consolas"
+                                                   FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
+                              <Button Grid.Column="1" Classes="Small" VerticalAlignment="Center"
+                                      Content="{Binding ActionLabel}"
+                                      IsVisible="{Binding HasAction}"
+                                      IsEnabled="{Binding $parent[UserControl].DataContext.CanToggleVbmetaFlags}"
+                                      Command="{Binding ActionCommand}" />
+                            </Grid>
                           </controls:ResponsiveFormRow>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
