@@ -601,7 +601,7 @@
     <value>正在处理...</value>
   </data>
   <data name="Flash_FileMissing" xml:space="preserve">
-    <value>镜像文件不存在。</value>
+    <value>文件不存在。</value>
   </data>
   <data name="Flash_PackageChanged" xml:space="preserve">
     <value>刷机包路径已更改，请先加载后再刷入。</value>
@@ -693,12 +693,6 @@
   <data name="Flash_Mtk" xml:space="preserve">
     <value>联发科 Mediatek</value>
   </data>
-  <data name="Flash_MtkPorts" xml:space="preserve">
-    <value>串口号</value>
-  </data>
-  <data name="Flash_MtkRefreshPorts" xml:space="preserve">
-    <value>刷新端口</value>
-  </data>
   <data name="Flash_MtkDaFile" xml:space="preserve">
     <value>选择 DA/加载器</value>
   </data>
@@ -731,15 +725,6 @@
   </data>
   <data name="Flash_MtkAuthFile" xml:space="preserve">
     <value>DAA 认证文件（--auth）</value>
-  </data>
-  <data name="Flash_MtkBaud" xml:space="preserve">
-    <value>串口波特率</value>
-  </data>
-  <data name="Flash_MtkAttachAgent" xml:space="preserve">
-    <value>附加已运行代理</value>
-  </data>
-  <data name="Flash_MtkUsbOnlyOperation" xml:space="preserve">
-    <value>此操作需要通过 USB 持有的 MediaTek 设备；串口路径没有 BootROM 控制面。</value>
   </data>
   <data name="Flash_MtkRpmbMode" xml:space="preserve">
     <value>RPMB 寻址形态</value>
@@ -903,26 +888,17 @@
   <data name="Flash_MtkPowerOffDone" xml:space="preserve">
     <value>已请求设备关机。</value>
   </data>
-  <data name="Flash_MtkPortRequired" xml:space="preserve">
-    <value>请先选择串口。</value>
-  </data>
   <data name="Flash_MtkDaRequired" xml:space="preserve">
     <value>请先选择 DA/加载器文件。</value>
   </data>
   <data name="Flash_MtkEntryRequired" xml:space="preserve">
     <value>请先选择加载器条目。</value>
   </data>
-  <data name="Flash_MtkBaudRequired" xml:space="preserve">
-    <value>请先选择波特率。</value>
-  </data>
-  <data name="Flash_MtkUsbAttachUnsupported" xml:space="preserve">
-    <value>附加已运行代理仅支持串口连接。</value>
-  </data>
-  <data name="Flash_MtkAttachFamilyUnsupported" xml:space="preserve">
-    <value>附加已运行代理仅支持 XFlash 与 XML 下载代理。</value>
-  </data>
   <data name="Flash_MtkUsbAutoMatchRequired" xml:space="preserve">
     <value>USB 连接需勾选“按芯片身份自动匹配加载器条目”。</value>
+  </data>
+  <data name="Flash_MtkUsbDeviceRequired" xml:space="preserve">
+    <value>请通过 USB 连接并选中联发科设备。</value>
   </data>
   <data name="Flash_MtkLegacyStorageUnsupported" xml:space="preserve">
     <value>Legacy 下载代理只服务 eMMC，UFS 请选择 XFlash 或 XML 代理。</value>
@@ -1253,9 +1229,6 @@
   </data>
   <data name="Flash_CompressedSuperEmptyUnsupported" xml:space="preserve">
     <value>不支持压缩的 super_empty 镜像。</value>
-  </data>
-  <data name="Flash_ImageNameInvalid" xml:space="preserve">
-    <value>镜像文件名不是合法的分区名。</value>
   </data>
   <data name="Flash_RootPackageUnsupported" xml:space="preserve">
     <value>所选文件不是受支持的 Magisk 或 KernelSU 包。</value>
@@ -2925,8 +2898,8 @@
   <data name="FirmwareField_PublicKeyMetadataSize" xml:space="preserve">
     <value>公钥元数据大小（字节）</value>
   </data>
-  <data name="FirmwareInfo_AvbSummary" xml:space="preserve">
-    <value>显示文件声明的签名、哈希、回滚保护和描述符配置。读取配置不代表签名可信或分区内容已通过验证；AVB 签名也不代表镜像内容已加密。</value>
+  <data name="FirmwareField_ToggleFlag" xml:space="preserve">
+    <value>切换标志位</value>
   </data>
   <data name="FirmwareInfo_FilesystemSummary" xml:space="preserve">
     <value>{0} 超级块特性和文件系统布局参数。特性标志表示格式能力，不代表每个文件都启用了该特性；未知位保留在原始十六进制值中。</value>
@@ -3616,4 +3589,4 @@
   <data name="Flash_GeneralOperations" xml:space="preserve">
     <value>通用操作</value>
   </data>
-<data name="Flash_EdlSelectProgrammer" xml:space="preserve"><value>选择 Programmer</value></data><data name="Flash_EdlCustomFile" xml:space="preserve"><value>自选文件</value></data><data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve"><value>自选 Programmer 文件</value></data><data name="Flash_Rockchip" xml:space="preserve"><value>瑞芯微 Rockchip</value></data><data name="Flash_RkSetStorageType" xml:space="preserve"><value>设置存储类型</value></data><data name="Flash_RkEnterMaskrom" xml:space="preserve"><value>进入 Maskrom</value></data><data name="Flash_RkSelectConfig" xml:space="preserve"><value>选择 Config</value></data><data name="Flash_RkConfigPathHint" xml:space="preserve"><value>Config 文件路径</value></data><data name="Flash_RkChooseCustomConfig" xml:space="preserve"><value>自选 Config 文件</value></data><data name="Flash_RkExportConfig" xml:space="preserve"><value>导出 Config</value></data><data name="Flash_Offset" xml:space="preserve"><value>偏移量</value></data><data name="Flash_RkReadInfo" xml:space="preserve"><value>读取芯片信息</value></data><data name="Flash_RkTestDevice" xml:space="preserve"><value>测试设备</value></data><data name="Flash_RkGetStorage" xml:space="preserve"><value>获取当前存储</value></data><data name="Flash_RkSwitchStorage" xml:space="preserve"><value>切换存储</value></data><data name="Flash_RkEraseFlash" xml:space="preserve"><value>擦除 Flash</value></data><data name="Flash_RkEraseFlashConfirm" xml:space="preserve"><value>擦除整块 Flash？设备上的所有分区都会被破坏。</value></data><data name="Flash_RkEraseSectors" xml:space="preserve"><value>擦除扇区</value></data><data name="Flash_RkLbaGroup" xml:space="preserve"><value>LBA 读写</value></data><data name="Flash_RkLbaAddress" xml:space="preserve"><value>起始扇区</value></data><data name="Flash_RkLbaCount" xml:space="preserve"><value>扇区数</value></data><data name="Flash_RkLbaRead" xml:space="preserve"><value>读取 LBA</value></data><data name="Flash_RkLbaWrite" xml:space="preserve"><value>写入 LBA</value></data><data name="Flash_RkForceAddress" xml:space="preserve"><value>强制按地址写</value></data><data name="Flash_RkImportConfig" xml:space="preserve"><value>导入 Config</value></data><data name="Flash_RkConfigImported" xml:space="preserve"><value>已导入配置：{0} 行</value></data><data name="Flash_RkCapability" xml:space="preserve"><value>读取能力</value></data><data name="Flash_RkStorage" xml:space="preserve"><value>存储</value></data><data name="Explorer_OpenAsRockchipConfig" xml:space="preserve"><value>瑞芯微配置</value></data><data name="Dock_RkConfig_Name" xml:space="preserve"><value>名称</value></data><data name="Dock_RkConfig_Address" xml:space="preserve"><value>地址</value></data><data name="Dock_RkConfig_Path" xml:space="preserve"><value>路径</value></data><data name="Dock_RkConfig_File" xml:space="preserve"><value>文件</value></data><data name="Dock_RkConfig_Present" xml:space="preserve"><value>存在</value></data><data name="Dock_RkConfig_Missing" xml:space="preserve"><value>缺失</value></data><data name="Dock_RkConfig_Header" xml:space="preserve"><value>头部</value></data><data name="Dock_RkConfig_Tail" xml:space="preserve"><value>尾块</value></data><data name="Dock_RkConfig_Empty" xml:space="preserve"><value>该配置没有行。</value></data><data name="Dock_RkConfig_Summary" xml:space="preserve"><value>头部 {0} 字节 · {1} 行</value></data><data name="UserError_RkConfigLoadFailed" xml:space="preserve"><value>无法解析该配置文件。</value></data><data name="Flash_RootPartitionNotSelected" xml:space="preserve"><value>为 Root 修补选择的分区不在本次烧录范围内，请勾选该分区或改选其他分区。</value></data><data name="Flash_RootPackageMissing" xml:space="preserve"><value>所选版本没有可用的 Root 补丁包，请等待下载完成或改选其他版本。</value></data></root>
+<data name="Flash_EdlSelectProgrammer" xml:space="preserve"><value>选择 Programmer</value></data><data name="Flash_EdlCustomFile" xml:space="preserve"><value>自选文件</value></data><data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve"><value>自选 Programmer 文件</value></data><data name="Flash_Rockchip" xml:space="preserve"><value>瑞芯微 Rockchip</value></data><data name="Flash_RkSetStorageType" xml:space="preserve"><value>设置存储类型</value></data><data name="Flash_RkEnterMaskrom" xml:space="preserve"><value>进入 Maskrom</value></data><data name="Flash_RkSelectConfig" xml:space="preserve"><value>选择 Config</value></data><data name="Flash_RkConfigPathHint" xml:space="preserve"><value>Config 文件路径</value></data><data name="Flash_RkChooseCustomConfig" xml:space="preserve"><value>自选 Config 文件</value></data><data name="Flash_RkExportConfig" xml:space="preserve"><value>导出 Config</value></data><data name="Flash_Offset" xml:space="preserve"><value>偏移量</value></data><data name="Flash_RkReadInfo" xml:space="preserve"><value>读取芯片信息</value></data><data name="Flash_RkTestDevice" xml:space="preserve"><value>测试设备</value></data><data name="Flash_RkGetStorage" xml:space="preserve"><value>获取当前存储</value></data><data name="Flash_RkSwitchStorage" xml:space="preserve"><value>切换存储</value></data><data name="Flash_RkEraseFlash" xml:space="preserve"><value>擦除 Flash</value></data><data name="Flash_RkEraseFlashConfirm" xml:space="preserve"><value>擦除整块 Flash？设备上的所有分区都会被破坏。</value></data><data name="Flash_RkEraseSectors" xml:space="preserve"><value>擦除扇区</value></data><data name="Flash_RkLbaGroup" xml:space="preserve"><value>LBA 读写</value></data><data name="Flash_RkLbaAddress" xml:space="preserve"><value>起始扇区</value></data><data name="Flash_RkLbaCount" xml:space="preserve"><value>扇区数</value></data><data name="Flash_RkLbaRead" xml:space="preserve"><value>读取 LBA</value></data><data name="Flash_RkLbaWrite" xml:space="preserve"><value>写入 LBA</value></data><data name="Flash_RkForceAddress" xml:space="preserve"><value>强制按地址写</value></data><data name="Flash_RkLbaNotDeclared" xml:space="preserve"><value>该扇区范围不在已加载 Rockchip parameter 分区表的任何分区内；确需写入时请勾选“强制按地址写”。</value></data><data name="Flash_RkLbaCountTooSmall" xml:space="preserve"><value>扇区数小于要写入的文件；请增大扇区数或勾选“强制按地址写”。</value></data><data name="Flash_RkParameterMissing" xml:space="preserve"><value>已加载镜像旁没有 Rockchip parameter 分区表，无法解析分区地址。</value></data><data name="Flash_RkStorageSwitched" xml:space="preserve"><value>存储已切换；设备会重新枚举，请在设备列表中重新选择后再执行下一条命令。</value></data><data name="Flash_RkConfigImported" xml:space="preserve"><value>已导入配置：{0} 行</value></data><data name="Flash_RkCapability" xml:space="preserve"><value>读取能力</value></data><data name="Flash_RkStorage" xml:space="preserve"><value>存储</value></data><data name="Explorer_OpenAsRockchipConfig" xml:space="preserve"><value>瑞芯微配置</value></data><data name="Dock_RkConfig_Name" xml:space="preserve"><value>名称</value></data><data name="Dock_RkConfig_Address" xml:space="preserve"><value>地址</value></data><data name="Dock_RkConfig_Path" xml:space="preserve"><value>路径</value></data><data name="Dock_RkConfig_File" xml:space="preserve"><value>文件</value></data><data name="Dock_RkConfig_Present" xml:space="preserve"><value>存在</value></data><data name="Dock_RkConfig_Missing" xml:space="preserve"><value>缺失</value></data><data name="Dock_RkConfig_Header" xml:space="preserve"><value>头部</value></data><data name="Dock_RkConfig_Tail" xml:space="preserve"><value>尾块</value></data><data name="Dock_RkConfig_Empty" xml:space="preserve"><value>该配置没有行。</value></data><data name="Dock_RkConfig_Summary" xml:space="preserve"><value>头部 {0} 字节 · {1} 行</value></data><data name="UserError_RkConfigLoadFailed" xml:space="preserve"><value>无法解析该配置文件。</value></data><data name="Flash_RootPartitionNotSelected" xml:space="preserve"><value>为 Root 修补选择的分区不在本次烧录范围内，请勾选该分区或改选其他分区。</value></data><data name="Flash_RootPackageMissing" xml:space="preserve"><value>所选版本没有可用的 Root 补丁包，请等待下载完成或改选其他版本。</value></data><data name="Flash_StorageMedium" xml:space="preserve"><value>存储介质</value></data><data name="Flash_RkConfigNoImages" xml:space="preserve"><value>该配置没有镜像行。</value></data><data name="Flash_RkStorageNotSelected" xml:space="preserve"><value>请先在存储类型中选择目标存储；配置本身可以留空。</value></data><data name="Flash_RkLoaderDeclared" xml:space="preserve"><value>加载 Loader：{0}</value></data><data name="Flash_RkLoaderMissing" xml:space="preserve"><value>该配置引用的 Loader 不存在：{0}</value></data></root>
