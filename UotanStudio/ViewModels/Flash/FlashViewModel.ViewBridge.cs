@@ -69,8 +69,6 @@ public sealed partial class FlashViewModel
         Field<ComboBox>("MtkStorageKindBox").SelectedIndex = 0;
         Field<ComboBox>("MtkLegacyCompletionBox").ItemsSource = Enum.GetNames<MtkLegacyCompletionProfile>();
         Field<ComboBox>("MtkLegacyCompletionBox").SelectedIndex = 0;
-        Field<ComboBox>("MtkBaudBox").ItemsSource = new[] { 115200, 921600, 460800, 230400 };
-        Field<ComboBox>("MtkBaudBox").SelectedIndex = 0;
         Field<ComboBox>("EdlLunBox").ItemsSource = Enumerable.Range(0, 8).ToArray();
         Field<ComboBox>("EdlLunBox").SelectedIndex = 0;
         Field<ComboBox>("RkStorageTypeBox").ItemsSource = RkStorageTypes;

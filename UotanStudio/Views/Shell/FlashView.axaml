@@ -631,11 +631,6 @@
                                         Content="{DynamicResource Flash_MtkAuthFile}"
                                         AutomationProperties.Name="{DynamicResource Flash_MtkAuthFile}" />
                                 <TextBlock Name="MtkAuthFileText" IsVisible="False" />
-                                <TextBlock Name="MtkBaudLabel" Text="{DynamicResource Flash_MtkBaud}"
-                                           FontSize="12" Opacity="0.8" />
-                                <ComboBox Name="MtkBaudBox" Height="32" VerticalContentAlignment="Center"
-                                          HorizontalAlignment="Stretch"
-                                          AutomationProperties.Name="{DynamicResource Flash_MtkBaud}" />
                                 <!-- 下载代理家族由本选择框决定，不做探测：XFlash 用于新芯片，Legacy 用于旧芯片，XML 用于按区域名寻址的 v6 代理。 -->
                                 <!-- The download-agent family is chosen here, never probed: XFlash for current chips, Legacy for legacy chips and XML for the region-named v6 agent. -->
                                 <TextBlock Text="{DynamicResource Flash_MtkProtocol}" FontSize="12" Opacity="0.8" />
@@ -657,9 +652,9 @@
                                           HorizontalAlignment="Stretch"
                                           ItemTemplate="{StaticResource LocalizedOptionTemplate}"
                                           AutomationProperties.Name="{DynamicResource Flash_MtkStage}" />
-                                <!-- 关机与两种启动模式切换都要先启动到存储就绪的代理，因此复用本面板的 DA/EMI/端口选择。 -->
+                                <!-- 关机与两种启动模式切换都要先启动到存储就绪的代理，因此复用本面板的 DA/EMI 选择。 -->
                                 <!-- Every power and boot-mode request first boots a storage-ready agent, so it reuses this
-                                     pane's DA/EMI/port selection. -->
+                                     pane's DA/EMI selection. -->
                                 <!-- XML 系统属性按精确键名查询且结果不做授权解释；查询是只读的，只有 XML 家族提供该通路。 -->
                                 <!-- An XML system property is queried by exact key and its result is never interpreted
                                      as authorization; the query is read-only and only the XML family offers the path. -->

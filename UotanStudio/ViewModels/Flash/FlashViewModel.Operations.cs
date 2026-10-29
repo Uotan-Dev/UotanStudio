@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Globalization;
-using System.IO.Ports;
 using System.Text;
 using System.Text.RegularExpressions;
 using Avalonia.Controls;
@@ -8,10 +7,8 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
-using UotanStudio.Comm.Protocols.Edl.Programmer;
 using UotanStudio.Comm.Protocols.Mtk;
 using UotanStudio.Comm.Protocols.Mtk.Profile;
-using UotanStudio.Comm.Transports.Serial;
 using UotanStudio.Firmware.BlockImage.Gpt;
 using UotanStudio.Firmware.VendorFirmware.MediaTek;
 using UotanStudio.Services;
@@ -85,11 +82,6 @@ public sealed partial class FlashViewModel
         "9. SATA",
         "10. PCIE"
     ];
-    private string? _edlProgrammerDirectory;
-    private EdlProgrammerDirectoryResult? _edlProgrammerDirectoryResult;
-    private UfsProvisionProfile? _edlUfsProfile;
-    private string? _edlUfsProfilePath;
-    private string? _edlNandTablePath;
     private bool _flatBinPackage;
     private bool _edlBundleReady;
     private CancellationTokenSource? _flashCancellation;
@@ -108,16 +100,6 @@ public sealed partial class FlashViewModel
     private string? _mtkKeyDirectory;
     private string? _mtkAuthFile;
 
-    /// <summary>
-    /// MTK port refresh sequence; only the latest request's result is written back to the combo box.
-    /// <para>MTK 串口刷新请求序号；只有最新一次请求的结果才写回下拉框。</para>
-    /// </summary>
-    private int _mtkPortRequest;
-    /// <summary>
-    /// EDL port refresh sequence; only the latest request's result is written back to the combo box.
-    /// <para>EDL 串口刷新请求序号；只有最新一次请求的结果才写回下拉框。</para>
-    /// </summary>
-    private int _edlSerialPortRequest;
     private DeviceViewModel? _deviceViewModel;
 
     private readonly LocalizedOptionSet _edlSectorSizeOptions = LocalizedOptionSet.FromOptions(
@@ -333,12 +315,6 @@ public sealed partial class FlashViewModel
                     name = Path.GetFileNameWithoutExtension(name);
                 }
                 var length = new FileInfo(path).Length;
-                if (length == 0 || name.Length is < 1 or > 128 ||
-                    !name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
-                {
-                    throw new InvalidDataException(
-                        _localizer.GetString("Flash_ImageNameInvalid"));
-                }
 
                 Partitions.Add(new FlashPartitionEntry
                 {
@@ -724,7 +700,7 @@ public sealed partial class FlashViewModel
         var rootPanel = Field<StackPanel>("RootOptionsPanel");
         rootPanel.IsVisible = addRoot;
         rootPanel.IsEnabled = !_busy;
-        var customFile = sourceBox.SelectedIndex == 5;
+        var customFile = sourceBox.SelectedIndex == RootCustomFileIndex;
         pathBox.IsVisible = customFile;
         chooseBtn.IsVisible = customFile;
         var versionBox = Field<ComboBox>("RootVersionBox");
@@ -741,7 +717,7 @@ public sealed partial class FlashViewModel
 
     internal void OnRootFileSourceChanged(object? sender, SelectionChangedEventArgs e)
     {
-        var custom = Field<ComboBox>("RootFileSourceBox").SelectedIndex == 5;
+        var custom = Field<ComboBox>("RootFileSourceBox").SelectedIndex == RootCustomFileIndex;
         if (!custom)
         {
             Field<TextBox>("RootPackagePathBox").Text = string.Empty;
@@ -1244,6 +1220,30 @@ public sealed partial class FlashViewModel
         }
     }
 
+    /// <summary>
+    /// Picks a programmer file overriding the package-supplied one for later EDL work.
+    /// <para>选择用于覆盖包内 programmer 的引导文件；覆盖只影响后续 EDL 刷写与回读。</para>
+    /// </summary>
+    internal async void OnEdlChooseProgrammerClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = _localizer.GetString("Flash_EdlChooseCustomProgrammer"),
+            AllowMultiple = false,
+            FileTypeFilter = [FilePickerFileTypes.All]
+        });
+        if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
+        _edlProgrammerOverride = File.Exists(path) ? path : null;
+        UpdateEdlProgrammerUiState();
+        if (_edlProgrammerOverride is { } selected)
+        {
+            AppendLog(Path.GetFileName(selected));
+        }
+        UpdateEdlButton();
+    }
+
+
     internal void OnEdlProgrammerPickChanged(object? source, SelectionChangedEventArgs e)
     {
         var index = Field<ComboBox>("EdlProgrammerPickBox").SelectedIndex;
@@ -1442,8 +1442,6 @@ public sealed partial class FlashViewModel
             (protocol == DeviceProtocolKind.Mtk && _mtkResolution is not null && Partitions.Any(p => p.IsSelected)));
         Field<DropDownButton>("RebootMenuButton").IsEnabled = !_busy;
         var mtkProtocolReady = !_busy && protocol is DeviceProtocolKind.Mtk && mtkStage != MtkStageLogging;
-        Field<Button>("MtkRebootMetaButton").IsEnabled = mtkProtocolReady;
-        Field<Button>("MtkRebootAndroidTestButton").IsEnabled = mtkProtocolReady;
         Field<TextBox>("MtkXmlPropertyBox").IsEnabled = mtkProtocolReady;
         Field<Button>("MtkXmlPropertyQueryButton").IsEnabled = mtkProtocolReady;
 
@@ -1474,70 +1472,6 @@ public sealed partial class FlashViewModel
         if (e.PropertyName == nameof(FlashViewModel.SelectedCount))
         {
             UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Enumerates the MTK serial ports on a background thread and fills the combo box back on the UI thread;
-    /// the sequence number drops stale enumeration results.
-    /// <para>后台线程枚举 MTK 串口，回到 UI 线程填充下拉框；序号用于丢弃过期的枚举结果。</para>
-    /// </summary>
-    private void RefreshMtkPorts()
-    {
-        var request = ++_mtkPortRequest;
-        _ = ApplySerialPortsAsync(Field<ComboBox>("MtkPortBox"), ReadSerialPortsAsync(), () => _mtkPortRequest == request);
-    }
-
-    /// <summary>
-    /// Enumerates the EDL serial ports on a background thread and fills the combo box back on the UI thread;
-    /// the sequence number drops stale enumeration results.
-    /// <para>后台线程枚举 EDL 串口，回到 UI 线程填充下拉框；序号用于丢弃过期的枚举结果。</para>
-    /// </summary>
-    private void RefreshEdlSerialPorts()
-    {
-        var request = ++_edlSerialPortRequest;
-        _ = ApplySerialPortsAsync(Field<ComboBox>("EdlSerialPortBox"), ReadSerialPortsAsync(), () => _edlSerialPortRequest == request);
-    }
-
-    /// <summary>
-    /// Writes the background-enumerated ports back to the combo box, keeping the current selection when it
-    /// is still present. The continuation resumes on the UI thread, so touching the control is safe.
-    /// <para>把后台枚举到的串口写回下拉框，尽量保留当前选中的端口。续接点在 UI 线程，因此写控件安全。</para>
-    /// </summary>
-    /// <param name="box">The serial port combo box to fill. <para>要填充的串口下拉框。</para></param>
-    /// <param name="ports">The running enumeration task. <para>进行中的枚举任务。</para></param>
-    /// <param name="isCurrent">Whether the result still belongs to the latest request. <para>结果是否仍属于最新一次请求。</para></param>
-    private static async Task ApplySerialPortsAsync(ComboBox box, Task<IReadOnlyList<string>> ports,
-        Func<bool> isCurrent)
-    {
-        var previous = box.SelectedItem as string;
-        var available = await ports;
-        if (!isCurrent())
-        {
-            return;
-        }
-
-        box.ItemsSource = available;
-        box.SelectedItem = previous is { } name && available.Contains(name)
-            ? previous
-            : available.Count > 0 ? available[0] : null;
-    }
-
-    /// <summary>
-    /// Reads the system port names on a background thread. The registry enumeration costs tens of milliseconds,
-    /// and a failure is reported as "no ports" so the async pipeline never raises an unobserved exception.
-    /// <para>在后台线程读取系统串口名。注册表枚举可达数十毫秒，失败时按无串口处理，不让异步管道抛出未观察异常。</para>
-    /// </summary>
-    /// <returns>The available port names. <para>可用串口名列表。</para></returns>
-    private static async Task<IReadOnlyList<string>> ReadSerialPortsAsync()
-    {
-        try
-        {
-            return await Task.Run(SerialTransport.GetAvailablePorts);
-        }
-        catch (Exception)
-        {
-            return [];
         }
     }
 
@@ -1695,7 +1629,19 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Fastboot } device || _busy || _confirming) return;
+        if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } && !_busy && !_confirming)
+        {
+            OnEdlPartitionDigestClick(sender, e);
+            return;
+        }
+
+        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Fastboot } device || _busy || _confirming)
+        {
+            AppendLog(_localizer.GetString(SelectedDevice is null
+                ? "Flash_DeviceNotSelected"
+                : "Flash_ProtocolMismatch"));
+            return;
+        }
         SetBusy(true);
         try
         {
@@ -1850,24 +1796,18 @@ public sealed partial class FlashViewModel
             SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
             TopLevel.GetTopLevel(Surface) is not Window owner ||
             !string.Equals(PackagePath, _loadedPath, StringComparison.Ordinal)) return;
-        await RunEdlBundleAsync(useSerialPort: false, device, serialPort: null, owner);
+        await RunEdlBundleAsync(device, owner);
     }
 
     /// <summary>
-    /// <para>执行完整 EDL 包刷写：USB 路径复扫设备后再刷，串口路径复核端口仍在；两条路径共用
-    /// 全部选项、调优参数、进度与取消。</para>
-    /// Runs a full EDL bundle flash: the USB path re-scans the device first and the serial path
-    /// re-checks that the port is still present; both paths share every option, tuning value,
-    /// progress report and cancellation.
+    /// Runs a full EDL bundle flash over the confirmed USB EDL device, re-scanning that device first and
+    /// sharing every option, tuning value, progress report and cancellation with the rest of the page.
+    /// <para>在已确认的 USB EDL 设备上执行完整 EDL 包刷写：先复扫该设备，并与页面其余部分共用全部选项、
+    /// 调优参数、进度与取消。</para>
     /// </summary>
-    /// <param name="useSerialPort">Whether the run targets an explicit serial port.
-    /// <para>本次运行是否针对显式串口。</para></param>
-    /// <param name="device">The confirmed USB EDL device, or null for a serial run.
-    /// <para>已确认的 USB EDL 设备；串口运行为 null。</para></param>
-    /// <param name="serialPort">The confirmed serial port, or null for a USB run.
-    /// <para>已确认的串口；USB 运行为 null。</para></param>
+    /// <param name="device">The confirmed USB EDL device.<para>已确认的 USB EDL 设备。</para></param>
     /// <param name="owner">The window owning the confirmation dialogs. <para>持有确认对话框的窗口。</para></param>
-    private async Task RunEdlBundleAsync(bool useSerialPort, DetectedDevice? device, string? serialPort, Window owner)
+    private async Task RunEdlBundleAsync(DetectedDevice? device, Window owner)
     {
         var language = _localizer;
         var programmerPath = EffectiveEdlProgrammer;
@@ -1877,15 +1817,11 @@ public sealed partial class FlashViewModel
         try
         {
             confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_FlashEdlBundle"),
-                useSerialPort ? serialPort! : device!.DisplayName);
+                device!.DisplayName);
         }
         finally { _confirming = false; }
         if (!confirmed || PackagePath != _loadedPath) return;
-        if (useSerialPort)
-        {
-            if (Field<ComboBox>("EdlSerialPortBox").SelectedItem is not string currentPort || currentPort != serialPort) return;
-        }
-        else if (SelectedDevice is not DetectedDevice current || current.Key != device!.Key ||
+        if (SelectedDevice is not DetectedDevice current || current.Key != device!.Key ||
                  (await Task.Run(App.DeviceMonitor.Scan)).All(found =>
                      found.Key != device.Key || found.Protocol != DeviceProtocolKind.Edl))
         {
@@ -1899,8 +1835,6 @@ public sealed partial class FlashViewModel
         _flashCancellation = cancellation;
         Field<Button>("CancelFlashButton").IsEnabled = true;
         Field<Button>("FlashSelectedButton").IsEnabled = false;
-        Field<Button>("FlashEdlBundleButton").IsEnabled = false;
-        Field<Button>("EdlSerialFlashButton").IsEnabled = false;
         Field<TextBox>("PackagePathBox").IsEnabled = false;
         FlashPartitionEntry? bundleActiveRow = null;
         try
@@ -1963,26 +1897,11 @@ public sealed partial class FlashViewModel
                     AppendLog(update.Message);
                 }
             });
-            var warnings = useSerialPort
-                ? await App.DeviceMonitor.FlashEdlSerialAsync(
-                    new SerialConnectionOptions
-                    {
-                        PortName = serialPort!,
-                        BaudRate = Field<ComboBox>("EdlSerialBaudBox").SelectedItem is int baud ? baud : 115200,
-                        Handshake = Handshake.None
-                    },
-                    _loadedPath, programmerPath,
-                    configuration: null, includeUfsProvision: true,
-                    cancellationToken: cancellation.Token,
-                    continueOnFailure: Field<CheckBox>("ContinueOnFailureBox").IsChecked == true,
-                    skipAbsentSources: Field<CheckBox>("SkipAbsentSourcesBox").IsChecked == true,
-                    labels: bundleLabels, progress: progress,
-                    verify: Field<CheckBox>("VerifyAfterFlashBox").IsChecked == true, tuning: bundleTuning)
-                : await App.DeviceMonitor.FlashEdlBundleAsync(device!, _loadedPath, programmerPath,
-                    cancellation.Token, Field<CheckBox>("ContinueOnFailureBox").IsChecked == true,
-                    Field<CheckBox>("SkipAbsentSourcesBox").IsChecked == true, bundleLabels, progress,
-                    Field<CheckBox>("VerifyAfterFlashBox").IsChecked == true, skipUfsProvision: false, bundleTuning,
-                    initialization);
+            var warnings = await App.DeviceMonitor.FlashEdlBundleAsync(device!, _loadedPath, programmerPath,
+                cancellation.Token, Field<CheckBox>("ContinueOnFailureBox").IsChecked == true,
+                Field<CheckBox>("SkipAbsentSourcesBox").IsChecked == true, bundleLabels, progress,
+                verify: false, skipUfsProvision: false, bundleTuning,
+                initialization);
             if (bundleActiveRow is { State: FlashRowState.Running })
             {
                 SetRowFinished(bundleActiveRow, success: true);
@@ -2399,8 +2318,6 @@ public sealed partial class FlashViewModel
         var rebootAfter = !erase && Field<CheckBox>("RebootAfterBox").IsChecked == true;
         var disableVbmeta = !erase && Field<CheckBox>("DisableVbmetaBox").IsChecked == true;
         var addRoot = !erase && Field<CheckBox>("AddRootBox").IsChecked == true;
-        var verifyRequested = !erase && Field<CheckBox>("VerifyAfterFlashBox").IsChecked == true;
-        var verify = verifyRequested && device.Protocol is DeviceProtocolKind.Edl or DeviceProtocolKind.Rkdl;
         if (disableVbmeta && !selected.Any(entry => (entry.Step?.Command ?? "flash") == "flash" &&
             entry.Name.StartsWith("vbmeta", StringComparison.OrdinalIgnoreCase)))
         {
@@ -2480,11 +2397,6 @@ public sealed partial class FlashViewModel
         string? extractionRoot = null;
         try
         {
-            if (verifyRequested && !verify)
-            {
-                AppendLog(language.GetString("Flash_VerifyUnsupported"));
-            }
-
             var rowsByName = new Dictionary<string, FlashPartitionEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var row in selected)
             {
@@ -2539,7 +2451,7 @@ public sealed partial class FlashViewModel
                             {
                                 result = await FlashService.Default.FlashEdlPartitionAsync(
                                     edl, entry, Path.GetDirectoryName(row.FilePath)!,
-                                    EffectiveEdlProgrammer, progress, cancellation.Token, verify,
+                                    EffectiveEdlProgrammer, progress, cancellation.Token, verify: false,
                                     initialization);
                             }
                             else
@@ -2550,7 +2462,7 @@ public sealed partial class FlashViewModel
                                     SelectedEdlLun, gptEntryLba, gptEntryCount, gptEntrySize,
                                     cancellation.Token).ConfigureAwait(true);
                                 var written = await firehose.ProgramRawPartitionFromFileAsync(snapshot, row.Name,
-                                    row.FilePath, verify: verify, cancellationToken: cancellation.Token).ConfigureAwait(true);
+                                    row.FilePath, verify: false, cancellationToken: cancellation.Token).ConfigureAwait(true);
                                 result = new FlashResult
                                 {
                                     Success = true,
@@ -2709,7 +2621,7 @@ public sealed partial class FlashViewModel
                         : device.Protocol == DeviceProtocolKind.Rkdl
                             ? await FlashService.FlashRkdlAsync(target, entry.Name,
                                 prepared.GetValueOrDefault(entry, entry.FilePath), EffectiveRkLoaderPath,
-                                progress, cancellation.Token, verify)
+                                progress, cancellation.Token)
                             : await FlashService.Default.FlashImageAsync(target, entry.Name,
                                 prepared.GetValueOrDefault(entry, entry.FilePath), progress, cancellation.Token);
                     AppendLog(result.Summary);
@@ -2786,8 +2698,6 @@ public sealed partial class FlashViewModel
         return Encoding.ASCII.GetString(buffer, 0, read).Contains("MTK_PLATFORM", StringComparison.OrdinalIgnoreCase);
     }
 
-    internal void OnRefreshMtkPortsClick(object? sender, RoutedEventArgs e) => RefreshMtkPorts();
-
     internal async void OnChooseMtkDaClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
@@ -2830,6 +2740,7 @@ public sealed partial class FlashViewModel
             UpdateEdlButton();
         }
     }
+
 
     internal async void OnChooseMtkEmiClick(object? sender, RoutedEventArgs e)
     {
@@ -2948,7 +2859,6 @@ public sealed partial class FlashViewModel
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
         Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("EdlEraseButton").IsEnabled = false;
         SetRowsQueued(selected);
         try
         {
@@ -3311,513 +3221,6 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Picks and parses a UFS provisioning descriptor file; a parse failure clears the selection and
-    /// reports the reason in the log.
-    /// <para>选择并解析 UFS provisioning 描述符文件；解析失败会清空已选配置并把原因写进日志。</para>
-    /// </summary>
-    internal async void OnEdlChooseUfsProfileClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = _localizer.GetString("Flash_EdlUfsProfileChoose"),
-            AllowMultiple = false,
-            FileTypeFilter = [FilePickerFileTypes.All]
-        });
-        if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
-        try
-        {
-            _edlUfsProfile = await UfsProvisionProfileLoader.LoadAsync(path, CancellationToken.None);
-            _edlUfsProfilePath = path;
-            Field<TextBlock>("EdlUfsProfileText").Text = Path.GetFileName(path);
-            ToolTip.SetTip(Field<TextBlock>("EdlUfsProfileText"), path);
-        }
-        catch (Exception ex)
-        {
-            _edlUfsProfile = null;
-            _edlUfsProfilePath = null;
-            Field<TextBlock>("EdlUfsProfileText").Text = string.Empty;
-            AppendLog(ex.Message);
-        }
-
-        UpdateEdlButton();
-    }
-
-    /// <summary>
-    /// Runs one streaming NAND operation: the group is only visible while the session really is on Streaming
-    /// DLOAD, so this adds just the busy state, cancellation and logging, while the device lease, the partition
-    /// resolution and every wire-format check live in the service layer.
-    /// <para>执行一次流式 NAND 操作：分组本身只在会话确实处于 Streaming DLOAD 时可见，因此这里只补忙碌态、
-    /// 取消与日志；设备租约、分区解析与线格式校验都在服务层完成。</para>
-    /// </summary>
-    /// <param name="operation"><para>要执行的设备级操作，返回可直接显示的摘要。</para>
-    /// The device-level operation, returning renderable summary text.</param>
-    private async Task RunEdlStreamingNandAsync(Func<DeviceInfo, CancellationToken, Task<string>> operation)
-    {
-        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
-            EdlStage != EdlProtocolState.Streaming)
-        {
-            return;
-        }
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        Field<Button>("CancelFlashButton").IsEnabled = true;
-        try
-        {
-            AppendLog(await operation(new DeviceInfo(device), cancellation.Token).ConfigureAwait(true));
-        }
-        catch (OperationCanceledException)
-        {
-            AppendLog(_localizer.GetString("Flash_Canceled"));
-        }
-        catch (Exception ex)
-        {
-            AppendLog(ex.Message);
-        }
-        finally
-        {
-            _flashCancellation = null;
-            Field<Button>("CancelFlashButton").IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Parses the four layout boxes and the spare-area check into a controller layout; a non-integer or negative
-    /// value is refused, so neither a device report nor a typed value addresses the arrays unchecked.
-    /// <para>把四个布局框与备用区勾选解析成控制器布局；任一非整数或负值都拒绝，绝不用设备或输入值直接寻址。</para>
-    /// </summary>
-    /// <param name="layout">The parsed layout, or null. <para>解析得到的布局；失败时为 null。</para></param>
-    /// <returns>True when every field is a non-negative uint. <para>三者都合法时为 true。</para></returns>
-    private bool TryReadEdlNandLayout(out EdlStreamingNandLayout? layout)
-    {
-        layout = null;
-        if (!TryReadEdlNandUInt(Field<TextBox>("EdlNandBaseBox").Text, out var nandBase) ||
-            !TryReadEdlNandUInt(Field<TextBox>("EdlNandPagesBox").Text, out var pagesPerBlock) ||
-            !TryReadEdlNandUInt(Field<TextBox>("EdlNandSectorsBox").Text, out var sectorsPerPage) ||
-            !TryReadEdlNandUInt(Field<TextBox>("EdlNandBadLenBox").Text, out var badBlockByteNum))
-        {
-            AppendLog(_localizer.GetString("Flash_EdlNandInputInvalid"));
-            return false;
-        }
-
-        layout = new EdlStreamingNandLayout(nandBase, pagesPerBlock, sectorsPerPage, badBlockByteNum,
-            Field<CheckBox>("EdlNandBadInSpareBox").IsChecked == true ? 1u : 0u);
-        return true;
-    }
-
-    private static bool TryReadEdlNandUInt(string? text, out uint value) =>
-        uint.TryParse(text?.Trim(), System.Globalization.NumberStyles.Integer,
-            System.Globalization.CultureInfo.InvariantCulture, out value);
-
-    /// <summary>
-    /// Reads the block index and the scan count: the index must be zero or more and the count at least one.
-    /// <para>读取块序号与扫描块数：序号不小于 0，扫描数至少为 1。</para>
-    /// </summary>
-    /// <param name="block">The parsed block index. <para>解析出的块序号。</para></param>
-    /// <param name="blockCount">The parsed scan count. <para>解析出的扫描块数。</para></param>
-    /// <returns>True when both fields are usable. <para>两者都合法时为 true。</para></returns>
-    private bool TryReadEdlNandBlocks(out uint block, out int blockCount)
-    {
-        block = 0;
-        blockCount = 0;
-        if (!TryReadEdlNandUInt(Field<TextBox>("EdlNandBlockBox").Text, out block) ||
-            !int.TryParse(Field<TextBox>("EdlNandBlockCountBox").Text?.Trim(), System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out blockCount) || blockCount < 1)
-        {
-            block = 0;
-            blockCount = 0;
-            AppendLog(_localizer.GetString("Flash_EdlNandInputInvalid"));
-            return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// Returns the partition name, or null with a localized hint when the box is blank, so the service never
-    /// receives a request it would have to guess at.
-    /// <para>取分区名；空白时给出本地化提示并返回 null，服务层因此收不到任何模糊匹配请求。</para>
-    /// </summary>
-    private string? EdlNandPartition() => Field<TextBox>("EdlNandPartitionBox").Text?.Trim() is { Length: > 0 } name
-        ? name
-        : null;
-
-    internal async void OnChooseEdlNandTableClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = _localizer.GetString("Flash_EdlNandTableChoose"),
-            AllowMultiple = false,
-            FileTypeFilter = [FilePickerFileTypes.All]
-        });
-        if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
-        _edlNandTablePath = File.Exists(path) ? path : null;
-        Field<TextBlock>("EdlNandTableText").Text = _edlNandTablePath is null ? string.Empty : Path.GetFileName(path);
-        UpdateEdlButton();
-    }
-
-    /// <summary>
-    /// Reads the target's own bad-marker state only, programming and erasing no array location.
-    /// <para>只读取设备自身坏块标记状态，不编程也不擦除任何阵列位置。</para>
-    /// </summary>
-    /// <param name="sender">The read button. <para>读取按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlNandReadMapClick(object? sender, RoutedEventArgs e)
-    {
-        if (!TryReadEdlNandBlocks(out _, out var blockCount) || !TryReadEdlNandLayout(out var layout) ||
-            EdlNandPartition() is not { } partition)
-        {
-            return;
-        }
-
-        await RunEdlStreamingNandAsync(async (device, token) =>
-            (await EdlStreamingNandService.ReadBadBlockMapAsync(device, partition, layout!, blockCount, token)
-                .ConfigureAwait(false)).Summary);
-    }
-
-    /// <summary>
-    /// Programs a bad marker on the given block; the operation really programs, and without the confirmation
-    /// check the service layer refuses before any byte goes out.
-    /// <para>给指定块写入坏块标记；该操作会真的编程，未勾选确认时由服务层在发出任何字节前拒绝。</para>
-    /// </summary>
-    /// <param name="sender">The mark button. <para>标记按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlNandMarkBadClick(object? sender, RoutedEventArgs e)
-    {
-        if (!TryReadEdlNandBlocks(out var block, out _) || !TryReadEdlNandLayout(out var layout) ||
-            EdlNandPartition() is not { } partition)
-        {
-            return;
-        }
-
-        await RunEdlStreamingNandAsync(async (device, token) =>
-            (await EdlStreamingNandService.MarkBlockBadAsync(device, partition, layout!, block,
-                Field<CheckBox>("EdlNandConfirmBox").IsChecked == true, token).ConfigureAwait(false)).Summary);
-    }
-
-    /// <summary>
-    /// Clears the bad marker on the given block; also an irreversible program step, so it shares the write
-    /// confirmation check.
-    /// <para>清除指定块的坏块标记；同样是不可逆编程，因此共用写入确认勾选。</para>
-    /// </summary>
-    /// <param name="sender">The clear button. <para>清除按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlNandUnmarkBadClick(object? sender, RoutedEventArgs e)
-    {
-        if (!TryReadEdlNandBlocks(out var block, out _) || !TryReadEdlNandLayout(out var layout) ||
-            EdlNandPartition() is not { } partition)
-        {
-            return;
-        }
-
-        await RunEdlStreamingNandAsync(async (device, token) =>
-            (await EdlStreamingNandService.UnmarkBlockBadAsync(device, partition, layout!, block,
-                Field<CheckBox>("EdlNandConfirmBox").IsChecked == true, token).ConfigureAwait(false)).Summary);
-    }
-
-    /// <summary>
-    /// Reads back only the controller configuration words and their derived values so the operator can check the
-    /// layout; nothing is written back to any register.
-    /// <para>只回读控制器配置字与派生值，供操作者核对布局；绝不写回任何寄存器。</para>
-    /// </summary>
-    /// <param name="sender">The register button. <para>寄存器按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlNandRegistersClick(object? sender, RoutedEventArgs e)
-    {
-        if (!TryReadEdlNandLayout(out var layout))
-        {
-            return;
-        }
-
-        await RunEdlStreamingNandAsync(async (device, token) =>
-            (await EdlStreamingNandService.ReadRegisterReportAsync(device, layout!, token)
-                .ConfigureAwait(false)).Summary);
-    }
-
-    /// <summary>
-    /// Reads the codeword and ECC status of one block to judge whether it is bad; in the reference this is a
-    /// page-read sequence that asks for confirmation.
-    /// <para>读取一个块的码字与 ECC 状态以判断它是否已坏；按参考实现这属于要确认的页读序列。</para>
-    /// </summary>
-    /// <param name="sender">The codeword button. <para>码字按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlNandCodewordClick(object? sender, RoutedEventArgs e)
-    {
-        if (!TryReadEdlNandBlocks(out var block, out _) || !TryReadEdlNandLayout(out var layout) ||
-            EdlNandPartition() is not { } partition)
-        {
-            return;
-        }
-
-        await RunEdlStreamingNandAsync(async (device, token) =>
-            (await EdlStreamingNandService.EvaluateCodewordStatusAsync(device, partition, layout!, block,
-                Field<CheckBox>("EdlNandConfirmBox").IsChecked == true, token).ConfigureAwait(false)).Summary);
-    }
-
-    /// <summary>
-    /// Puts the target into flash mode, a precondition of the write sequence, so it needs the write confirmation
-    /// too.
-    /// <para>让目标进入 flash 模式；这是写序列的前置状态，因此也要求写入确认。</para>
-    /// </summary>
-    /// <param name="sender">The flash-mode button. <para>flash 模式按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlNandFlashModeClick(object? sender, RoutedEventArgs e)
-    {
-        await RunEdlStreamingNandAsync(async (device, token) =>
-            (await EdlStreamingNandService.EnterFlashModeAsync(device, Field<CheckBox>("EdlNandConfirmBox").IsChecked == true, token)
-                .ConfigureAwait(false)).Summary);
-    }
-
-    /// <summary>
-    /// Requests secure mode from the target, trusted or not by the check box; either way it changes session state
-    /// and writes no content.
-    /// <para>请求目标进入安全模式；受信与否由勾选决定，两者都只改变会话状态而不写内容。</para>
-    /// </summary>
-    /// <param name="sender">The secure-mode button. <para>安全模式按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlNandSecureModeClick(object? sender, RoutedEventArgs e)
-    {
-        await RunEdlStreamingNandAsync(async (device, token) =>
-            (await EdlStreamingNandService.EnterSecureModeAsync(device,
-                Field<CheckBox>("EdlNandTrustedBox").IsChecked == true, token).ConfigureAwait(false)).Summary);
-    }
-
-    /// <summary>
-    /// Sends the chosen partition-table file to the target; replacing an existing table needs its own allowance
-    /// check, and an unconfirmed request is refused by the service layer first.
-    /// <para>把选定的分区表文件送给目标；替换既有表还要单独的允许勾选，未确认时服务层先拒绝。</para>
-    /// </summary>
-    /// <param name="sender">The send button. <para>发送按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlNandSendTableClick(object? sender, RoutedEventArgs e)
-    {
-        if (_edlNandTablePath is not { } tablePath)
-        {
-            AppendLog(_localizer.GetString("Flash_EdlNandTableMissing"));
-            return;
-        }
-
-        await RunEdlStreamingNandAsync(async (device, token) =>
-            (await EdlStreamingNandService.SendPartitionTableAsync(device, tablePath,
-                Field<CheckBox>("EdlNandOverrideBox").IsChecked == true, Field<CheckBox>("EdlNandConfirmBox").IsChecked == true, token)
-                .ConfigureAwait(false)).Summary);
-    }
-
-    /// <summary>
-    /// Closes the streaming session properly; leaving it open after a write keeps the target in flash mode.
-    /// <para>正常收尾流式会话；写操作之后不关闭就会把目标留在 flash 模式里。</para>
-    /// </summary>
-    /// <param name="sender">The close button. <para>关闭按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnEdlNandCloseClick(object? sender, RoutedEventArgs e)
-    {
-        await RunEdlStreamingNandAsync(async (device, token) =>
-            (await EdlStreamingNandService.CloseStreamAsync(device, token).ConfigureAwait(false)).Summary);
-    }
-
-    /// <summary>
-    /// Runs one UFS provisioning step: a write is confirmed by the user first, non-UFS storage is refused by the
-    /// service layer, and session initialization with the pane's programmer selection is delegated to the
-    /// device-level entry point while this method owns only the confirmation, busy state and log.
-    /// <para>执行一次 UFS provisioning 步骤：写入前先经用户确认，非 UFS 存储由服务层拒绝，会话初始化与
-    /// programmer 选择交给设备级入口自己完成，本方法只负责确认、忙碌态与日志。</para>
-    /// </summary>
-    private async Task RunEdlUfsOperationAsync(string titleKey, string? confirmKey,
-        Func<DeviceInfo, EdlInitializationOptions?, string?, CancellationToken, Task<FlashResult>> operation)
-    {
-        if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
-            TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = _localizer;
-        if (confirmKey is not null)
-        {
-            _confirming = true;
-            bool confirmed;
-            try
-            {
-                confirmed = await DialogService.ConfirmAsync(owner, language.GetString(titleKey),
-                    $"{language.GetString(confirmKey)}{Environment.NewLine}{device.DisplayName}");
-            }
-            finally { _confirming = false; }
-            if (!confirmed) return;
-        }
-
-        if (!TryBuildEdlInitialization(out var initialization)) return;
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("EdlUfsPreviewButton").IsEnabled = false;
-        Field<Button>("EdlUfsProvisionButton").IsEnabled = false;
-        Field<Button>("EdlUfsResetButton").IsEnabled = false;
-        try
-        {
-            var result = await operation(new DeviceInfo(device), initialization,
-                EffectiveEdlProgrammer, cancellation.Token).ConfigureAwait(true);
-            AppendLog(result.Summary);
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            _flashCancellation = null;
-            Field<Button>("CancelFlashButton").IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Previews the provisioning plan the descriptor file would produce for this device; no byte is
-    /// written.
-    /// <para>预览描述符文件对该设备会产生的 provisioning 计划；不写出任何字节。</para>
-    /// </summary>
-    internal async void OnEdlUfsPreviewClick(object? sender, RoutedEventArgs e)
-    {
-        if (_edlUfsProfile is null || _edlUfsProfilePath is not { } profilePath)
-        {
-            AppendLog(_localizer.GetString("Flash_EdlUfsProfileMissing"));
-            return;
-        }
-
-        await RunEdlUfsOperationAsync("Flash_EdlUfsPreview", null, (device, initialization, programmerPath, token) =>
-            EdlUfsProvisionService.PreviewAsync(device, profilePath,
-                new Progress<FlashProgress>(update => AppendLog(update.Status)), token, programmerPath,
-                initialization));
-    }
-
-    /// <summary>
-    /// Submits the provisioning plan: the logical units the descriptor declares are really created, so the
-    /// user must confirm first.
-    /// <para>提交 provisioning 计划：描述符里声明的逻辑单元会真实建立，因此必须先经用户确认。</para>
-    /// </summary>
-    internal async void OnEdlUfsProvisionClick(object? sender, RoutedEventArgs e)
-    {
-        if (_edlUfsProfile is null || _edlUfsProfilePath is not { } profilePath)
-        {
-            AppendLog(_localizer.GetString("Flash_EdlUfsProfileMissing"));
-            return;
-        }
-
-        await RunEdlUfsOperationAsync("Flash_EdlUfsProvision", "Flash_EdlUfsProvisionConfirm",
-            (device, initialization, programmerPath, token) => EdlUfsProvisionService.ProvisionAsync(
-                device, profilePath, confirmed: true,
-                new Progress<FlashProgress>(update => AppendLog(update.Status)), token, programmerPath,
-                initialization));
-    }
-
-    /// <summary>
-    /// Requests a device UFS reset; the command is independent of the descriptor file, so no profile
-    /// selection is required first.
-    /// <para>请求设备执行 UFS reset；该命令独立于描述符文件，因此不需要先选配置。</para>
-    /// </summary>
-    internal async void OnEdlUfsResetClick(object? sender, RoutedEventArgs e)
-        => await RunEdlUfsOperationAsync("Flash_EdlUfsReset", "Flash_EdlUfsResetConfirm",
-            (device, initialization, programmerPath, token) => EdlUfsProvisionService.ResetAsync(
-                device, confirmed: true, new Progress<FlashProgress>(update => AppendLog(update.Status)), token,
-                programmerPath, initialization));
-
-    /// <summary>
-    /// Picks a programmer file overriding the package-supplied one for later EDL work.
-    /// <para>选择用于覆盖包内 programmer 的引导文件；覆盖只影响后续 EDL 刷写与回读。</para>
-    /// </summary>
-    internal async void OnEdlChooseProgrammerClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = _localizer.GetString("Flash_EdlChooseCustomProgrammer"),
-            AllowMultiple = false,
-            FileTypeFilter = [FilePickerFileTypes.All]
-        });
-        if (_busy || _confirming || files.Count != 1 || files[0].TryGetLocalPath() is not { } path) return;
-        _edlProgrammerOverride = File.Exists(path) ? path : null;
-        UpdateEdlProgrammerUiState();
-        if (_edlProgrammerOverride is { } selected)
-        {
-            AppendLog(Path.GetFileName(selected));
-        }
-        UpdateEdlButton();
-    }
-
-    /// <summary>
-    /// Picks a programmer folder and positively matches it against the Sahara identity the target already reported:
-    /// the scan builds rows under the loader naming convention of that folder and only a unique match yields an
-    /// upload-eligible verdict. Ambiguous, contradictory and insufficient-evidence outcomes only produce a verdict
-    /// line; they never replace the in-package candidate picker and never open a file on their own.
-    /// <para>选定 programmer 目录并按目标已上报的 Sahara 身份做正匹配：扫描按该目录的 loader 命名约定建立条目，
-    /// 唯一匹配才给出可上传结论；歧义、矛盾或证据不足都只给结论行，不替代包内候选选择，也不自动打开任何文件。</para>
-    /// </summary>
-    internal async void OnEdlChooseProgrammerDirClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
-        var language = _localizer;
-        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = language.GetString("Flash_EdlChooseProgrammerDir"),
-            AllowMultiple = false
-        });
-        if (_busy || _confirming || folders.Count != 1 || folders[0].TryGetLocalPath() is not { } directory) return;
-        _edlProgrammerDirectory = directory;
-        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device)
-        {
-            EdlProgrammerDirectoryResult scan;
-            try
-            {
-                scan = EdlProgrammerDirectoryService.ScanAsync(directory, CancellationToken.None);
-            }
-            catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException)
-            {
-                _edlProgrammerDirectoryResult = null;
-                Field<TextBlock>("EdlProgrammerDirText").Text = string.Empty;
-                AppendLog(ex.Message);
-                return;
-            }
-
-            _edlProgrammerDirectoryResult = scan;
-            Field<TextBlock>("EdlProgrammerDirText").Text = string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                "{0} ({1})", directory, scan.CandidateCount);
-            ToolTip.SetTip(Field<TextBlock>("EdlProgrammerDirText"), directory);
-            AppendLog(scan.CandidateCount == 0
-                ? language.GetString("Flash_EdlProgrammerDirEmpty")
-                : $"{scan.CandidateCount} / {scan.SkippedCount}");
-            return;
-        }
-
-        EdlProgrammerDirectoryResult result;
-        try
-        {
-            result = EdlProgrammerDirectoryService.MatchAsync(device, directory, CancellationToken.None);
-        }
-        catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException)
-        {
-            _edlProgrammerDirectoryResult = null;
-            Field<TextBlock>("EdlProgrammerDirText").Text = string.Empty;
-            AppendLog(ex.Message);
-            return;
-        }
-
-        _edlProgrammerDirectoryResult = result;
-        var summary = result.Decision switch
-        {
-            EdlProgrammerMatchDecision.Matched => language.GetString("Flash_EdlProgrammerDirMatched",
-                result.Descriptor?.FileName ?? string.Empty),
-            EdlProgrammerMatchDecision.Ambiguous => language.GetString("Flash_EdlProgrammerDirAmbiguous"),
-            EdlProgrammerMatchDecision.NoMatch => language.GetString("Flash_EdlProgrammerDirNoMatch"),
-            _ when result.CandidateCount == 0 => language.GetString("Flash_EdlProgrammerDirEmpty"),
-            _ => language.GetString("Flash_EdlProgrammerDirNeedsIdentity")
-        };
-        Field<TextBlock>("EdlProgrammerDirText").Text = $"{Path.GetFileName(directory)} · {summary}";
-        ToolTip.SetTip(Field<TextBlock>("EdlProgrammerDirText"), directory);
-        AppendLog(summary);
-    }
-
-    /// <summary>
     /// Reads the selected EDL partitions back into a user directory; with XML generation enabled,
     /// a rawprogram manifest is written from the results and the generalized option rewrites
     /// entries abutting the disk end as relative <c>NUM_DISK_SECTORS-</c> start sectors.
@@ -3846,7 +3249,6 @@ public sealed partial class FlashViewModel
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
         SetBusy(true);
-        Field<Button>("EdlReadbackButton").IsEnabled = false;
         Field<Button>("CancelFlashButton").IsEnabled = true;
         try
         {
@@ -4009,10 +3411,9 @@ public sealed partial class FlashViewModel
     /// <summary>
     /// Erases the selected scatter partitions: it covers both flashable rows that carry an image and
     /// policy-eligible rows without one; the range is the manifest-declared capacity and the live GPT
-    /// re-checks it. Erasure is irreversible, so the user must confirm first, and both transports share
-    /// the same connection selection.
+    /// re-checks it. Erasure is irreversible, so the user must confirm first.
     /// <para>擦除所选 scatter 分区：既覆盖有镜像的可刷写行，也覆盖无镜像但策略允许的行；范围取清单声明
-    /// 的容量并由实机 GPT 复核。擦除不可恢复，执行前需用户确认，串口与 USB 共用同一套连接选择。</para>
+    /// 的容量并由实机 GPT 复核。擦除不可恢复，执行前需用户确认。</para>
     /// </summary>
     internal async void OnMtkEraseClick(object? sender, RoutedEventArgs e)
     {
@@ -4023,8 +3424,7 @@ public sealed partial class FlashViewModel
             .Where(row => row.IsSelected && row.CanSelect && _mtkPartitions.ContainsKey(row)).ToArray();
         if (selected.Length == 0) return;
         var language = _localizer;
-        if (!TryReadMtkSelection(out var useSerial, out var usbDevice, out var port, out var baudRate,
-                out var attach, out var autoMatch))
+        if (!TryReadMtkSelection(out var usbDevice, out var autoMatch))
         {
             return;
         }
@@ -4058,7 +3458,6 @@ public sealed partial class FlashViewModel
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
         Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("MtkFlashButton").IsEnabled = false;
         Field<Button>("FlashSelectedButton").IsEnabled = false;
         Field<DataGrid>("PartitionGrid").IsEnabled = false;
         Field<TextBox>("PackagePathBox").IsEnabled = false;
@@ -4069,38 +3468,21 @@ public sealed partial class FlashViewModel
         try
         {
             var physicalPartition = plan.PhysicalPartition;
-            if (useSerial)
+            var matched = await BuildMtkAutoStartupAsync(kind, cancellation.Token);
+            await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
             {
-                var connect = BuildMtkSerialConnector(port!, baudRate, kind, attach, autoMatch);
                 preparation = plan.Family switch
                 {
-                    MtkDaProtocol.Legacy => await MtkFlashService.PrepareLegacyAsync(connect, plan.LegacyRegion,
-                        plan.LegacySteps, cancellation.Token),
-                    MtkDaProtocol.Xml => await MtkFlashService.PrepareXmlAsync(connect, plan.XmlRegion!,
-                        plan.XmlSteps, cancellation.Token),
-                    _ => await MtkFlashService.PrepareAsync(connect, physicalPartition, plan.XFlashEraseSteps,
-                        cancellation.Token)
+                    MtkDaProtocol.Legacy => await MtkFlashService.PrepareLegacyOnSessionAsync(session,
+                        matched, plan.LegacyRegion, plan.LegacySteps, cancellation.Token),
+                    MtkDaProtocol.Xml => await MtkFlashService.PrepareXmlOnSessionAsync(session,
+                        matched, plan.XmlRegion!, plan.XmlSteps, cancellation.Token),
+                    _ => await MtkFlashService.PrepareOnSessionAsync(session, plan.Family,
+                        matched, physicalPartition, plan.XFlashEraseSteps, cancellation.Token)
                 };
                 await ExecuteMtkPlanAsync(preparation, selected, owner, cancellation.Token, "Flash_MtkErase");
-            }
-            else
-            {
-                var matched = await BuildMtkAutoStartupAsync(kind, cancellation.Token);
-                await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
-                {
-                    preparation = plan.Family switch
-                    {
-                        MtkDaProtocol.Legacy => await MtkFlashService.PrepareLegacyOnSessionAsync(session,
-                            matched, plan.LegacyRegion, plan.LegacySteps, cancellation.Token),
-                        MtkDaProtocol.Xml => await MtkFlashService.PrepareXmlOnSessionAsync(session,
-                            matched, plan.XmlRegion!, plan.XmlSteps, cancellation.Token),
-                        _ => await MtkFlashService.PrepareOnSessionAsync(session, plan.Family,
-                            matched, physicalPartition, plan.XFlashEraseSteps, cancellation.Token)
-                    };
-                    await ExecuteMtkPlanAsync(preparation, selected, owner, cancellation.Token, "Flash_MtkErase");
-                    return true;
-                }, cancellation.Token);
-            }
+                return true;
+            }, cancellation.Token);
         }
         catch (OperationCanceledException)
         {
@@ -4145,8 +3527,7 @@ public sealed partial class FlashViewModel
             .Where(row => row.IsSelected && row.CanSelect && _mtkRows.ContainsKey(row)).ToArray();
         if (selected.Length == 0) return;
         var language = _localizer;
-        if (!TryReadMtkSelection(out var useSerial, out var usbDevice, out var port, out var baudRate,
-                out var attach, out var autoMatch))
+        if (!TryReadMtkSelection(out var usbDevice, out var autoMatch))
         {
             return;
         }
@@ -4158,13 +3539,12 @@ public sealed partial class FlashViewModel
         }
 
         var kind = SelectedMtkStorageKind;
-        var verify = Field<CheckBox>("VerifyAfterFlashBox").IsChecked == true;
-        if (BuildMtkFamilyPlan(erase: false, selected, verify) is not { } plan)
+        if (BuildMtkFamilyPlan(erase: false, selected, verify: false) is not { } plan)
         {
             return;
         }
 
-        var target = useSerial ? port! : usbDevice!.DisplayName;
+        var target = usbDevice!.DisplayName;
         _confirming = true;
         bool confirmed;
         try
@@ -4181,7 +3561,6 @@ public sealed partial class FlashViewModel
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
         Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("MtkFlashButton").IsEnabled = false;
         Field<Button>("FlashSelectedButton").IsEnabled = false;
         Field<DataGrid>("PartitionGrid").IsEnabled = false;
         Field<TextBox>("PackagePathBox").IsEnabled = false;
@@ -4192,39 +3571,22 @@ public sealed partial class FlashViewModel
         try
         {
             var physicalPartition = plan.PhysicalPartition;
-            if (useSerial)
+            var matched = await BuildMtkAutoStartupAsync(kind, cancellation.Token);
+            await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
             {
-                var connect = BuildMtkSerialConnector(port!, baudRate, kind, attach, autoMatch);
                 preparation = plan.Family switch
                 {
-                    MtkDaProtocol.Legacy => await MtkFlashService.PrepareLegacyAsync(connect, plan.LegacyRegion,
-                        plan.LegacySteps, cancellation.Token),
-                    MtkDaProtocol.Xml => await MtkFlashService.PrepareXmlAsync(connect, plan.XmlRegion!,
-                        plan.XmlSteps, cancellation.Token),
-                    _ => await MtkFlashService.PrepareScatterAsync(connect,
-                        physicalPartition, resolution.Storage, plan.ScatterSteps, cancellation.Token)
+                    MtkDaProtocol.Legacy => await MtkFlashService.PrepareLegacyOnSessionAsync(session,
+                        matched, plan.LegacyRegion, plan.LegacySteps, cancellation.Token),
+                    MtkDaProtocol.Xml => await MtkFlashService.PrepareXmlOnSessionAsync(session,
+                        matched, plan.XmlRegion!, plan.XmlSteps, cancellation.Token),
+                    _ => await MtkFlashService.PrepareScatterOnSessionAsync(session,
+                        plan.Family, matched, physicalPartition, resolution.Storage, plan.ScatterSteps,
+                        cancellation.Token)
                 };
                 await ExecuteMtkPlanAsync(preparation, selected, owner, cancellation.Token, "Flash_MtkFlash");
-            }
-            else
-            {
-                var matched = await BuildMtkAutoStartupAsync(kind, cancellation.Token);
-                await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
-                {
-                    preparation = plan.Family switch
-                    {
-                        MtkDaProtocol.Legacy => await MtkFlashService.PrepareLegacyOnSessionAsync(session,
-                            matched, plan.LegacyRegion, plan.LegacySteps, cancellation.Token),
-                        MtkDaProtocol.Xml => await MtkFlashService.PrepareXmlOnSessionAsync(session,
-                            matched, plan.XmlRegion!, plan.XmlSteps, cancellation.Token),
-                        _ => await MtkFlashService.PrepareScatterOnSessionAsync(session,
-                            plan.Family, matched, physicalPartition, resolution.Storage, plan.ScatterSteps,
-                            cancellation.Token)
-                    };
-                    await ExecuteMtkPlanAsync(preparation, selected, owner, cancellation.Token, "Flash_MtkFlash");
-                    return true;
-                }, cancellation.Token);
-            }
+                return true;
+            }, cancellation.Token);
         }
         catch (OperationCanceledException)
         {
@@ -4262,37 +3624,24 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// <para>读取 MTK 面板当前选择并按顺序校验；失败时把本地化原因写入日志并返回 false。
-    /// 家族与存储类型的不可能组合排在最前，因为用户不必为一个所选代理永远无法服务的请求去找加载器、
-    /// 串口和波特率；XML 家族不使用 EMI 参数，通过校验时只写一条本地化提示，不做静默丢弃。
-    /// 附加模式只有 Legacy 家族被拒绝，XFlash 与 XML 代理都能按各自通路附加。</para>
+    /// 家族与存储类型的不可能组合排在最前，因为用户不必为一个所选代理永远无法服务的请求去找加载器；
+    /// XML 家族不使用 EMI 参数，通过校验时只写一条本地化提示，不做静默丢弃。</para>
     /// Reads the current MTK pane selection and validates it in order; on failure the localized
     /// reason is written to the log and <see langword="false"/> is returned. An impossible family and
-    /// storage combination is reported first, because the user should not have to hunt for a loader, a
-    /// port and a baud rate for a request the chosen agent can never serve. The XML family uses no EMI
-    /// parameters, so a passing selection only writes one localized note instead of dropping them quietly.
-    /// Attach mode refuses only the Legacy family; XFlash and XML agents are attached over their own paths.
+    /// storage combination is reported first, because the user should not have to hunt for a loader for a
+    /// request the chosen agent can never serve. The XML family uses no EMI parameters, so a
+    /// passing selection only writes one localized note instead of dropping them quietly.
     /// </summary>
-    /// <param name="useSerial">Whether the operation targets a serial port instead of a USB device.
-    /// <para>操作目标是串口而非 USB 设备。</para></param>
     /// <param name="usbDevice">The selected USB MTK device, or null. <para>所选 USB MTK 设备，或为 null。</para></param>
-    /// <param name="port">The selected serial port, or null. <para>所选串口，或为 null。</para></param>
-    /// <param name="baudRate">The selected baud rate; 0 without a serial target. <para>所选波特率；非串口目标时为 0。</para></param>
-    /// <param name="attach">Whether a running agent should be attached instead of booting one.
-    /// <para>是否改为附加已运行的代理而非启动新代理。</para></param>
     /// <param name="autoMatch">Whether the loader entry is matched from the reported identity.
     /// <para>是否按上报身份匹配加载器条目。</para></param>
     /// <returns><see langword="true"/> when the selection is usable. <para>选择可用时为 true。</para></returns>
-    internal bool TryReadMtkSelection(out bool useSerial, out DetectedDevice? usbDevice, out string? port,
-        out int baudRate, out bool attach, out bool autoMatch)
+    internal bool TryReadMtkSelection(out DetectedDevice? usbDevice, out bool autoMatch)
     {
         var language = _localizer;
         usbDevice = SelectedDevice is { Protocol: DeviceProtocolKind.Mtk, Transport: DeviceTransportKind.Usb }
             ? SelectedDevice
             : null;
-        useSerial = usbDevice is null;
-        port = null;
-        baudRate = 0;
-        attach = Field<CheckBox>("MtkAttachAgentBox").IsChecked == true;
         autoMatch = Field<CheckBox>("MtkAutoMatchBox").IsChecked == true;
 
         string? failure = null;
@@ -4301,52 +3650,25 @@ public sealed partial class FlashViewModel
             failure = "Flash_MtkLegacyStorageUnsupported";
         }
 
-        if (failure is null && useSerial)
+        if (failure is null && usbDevice is null)
         {
-            if (Field<ComboBox>("MtkPortBox").SelectedItem is not string selectedPort)
-            {
-                failure = "Flash_MtkPortRequired";
-            }
-            else
-            {
-                port = selectedPort;
-            }
+            failure = "Flash_MtkUsbDeviceRequired";
         }
 
-        if (failure is null && !attach && _mtkLoaderPath is not { })
+        if (failure is null && _mtkLoaderPath is not { })
         {
             failure = "Flash_MtkDaRequired";
         }
 
-        if (failure is null && !attach && !autoMatch &&
+        if (failure is null && !autoMatch &&
             (_mtkLoaderEntries.Count == 0 || Field<ComboBox>("MtkEntryIndexBox").SelectedIndex < 0))
         {
             failure = "Flash_MtkEntryRequired";
         }
 
-        if (failure is null && useSerial)
-        {
-            if (Field<ComboBox>("MtkBaudBox").SelectedItem is not int selectedBaud)
-            {
-                failure = "Flash_MtkBaudRequired";
-            }
-            else
-            {
-                baudRate = selectedBaud;
-            }
-        }
-        else if (failure is null && attach)
-        {
-            failure = "Flash_MtkUsbAttachUnsupported";
-        }
-        else if (failure is null && !autoMatch)
+        if (failure is null && !autoMatch)
         {
             failure = "Flash_MtkUsbAutoMatchRequired";
-        }
-
-        if (failure is null && attach && SelectedMtkProtocol == MtkDaProtocol.Legacy)
-        {
-            failure = "Flash_MtkAttachFamilyUnsupported";
         }
 
         if (failure is null)
@@ -4613,89 +3935,6 @@ public sealed partial class FlashViewModel
         : MtkXmlHostOs.Linux;
 
     /// <summary>
-    /// <para>按面板选择构造串口 MTK 连接器：手动条目走显式启动配置，自动匹配按身份选条目，
-    /// 附加模式直接挂到已运行的代理。</para>
-    /// Builds the serial MTK connector from the pane selection: counted entries use an explicit
-    /// startup configuration, auto-match picks the entry by identity, and attach mode connects to an
-    /// agent that is already running.
-    /// </summary>
-    /// <param name="port">The selected serial port. <para>所选串口。</para></param>
-    /// <param name="baudRate">The selected baud rate. <para>所选波特率。</para></param>
-    /// <param name="kind">The storage family the agent must serve. <para>代理需服务的存储族。</para></param>
-    /// <param name="attach">Whether to attach instead of booting an agent. <para>是否改为附加而非启动代理。</para></param>
-    /// <param name="autoMatch">Whether the entry is matched from the reported identity.
-    /// <para>是否按上报身份匹配条目。</para></param>
-    /// <returns>A connector returning a storage-ready session. <para>返回存储就绪会话的连接器。</para></returns>
-    private Func<CancellationToken, Task<MtkSession>> BuildMtkSerialConnector(string port, int baudRate,
-        MtkXFlashStorageKind kind, bool attach, bool autoMatch)
-    {
-        async Task<MtkSession> StartAgentAsync(CancellationToken token)
-        {
-            var serial = new SerialConnectionOptions
-            {
-                PortName = port,
-                BaudRate = baudRate,
-                Handshake = Handshake.None
-            };
-            if (!autoMatch)
-            {
-                var entry = _mtkLoaderEntries[Field<ComboBox>("MtkEntryIndexBox").SelectedIndex];
-                var protocol = SelectedMtkProtocol;
-                var startup = new MtkBootstrapOptions
-                {
-                    LoaderPath = _mtkLoaderPath!,
-                    EntryIndex = entry.Index,
-                    StageOneRegionIndex = entry.StageOneRegion,
-                    StageTwoRegionIndex = entry.StageTwoRegion,
-                    StageTwoContent = protocol == MtkDaProtocol.Legacy
-                        ? MtkDaRegionContent.Complete
-                        : MtkDaRegionContent.WithoutSignatureSuffix,
-                    StorageKind = kind,
-                    EmiParameters = FamilyUsesEmiParameters(protocol) ? _mtkEmi : null,
-                    BootResourceProvider = BuildMtkBootResourceProvider()
-                };
-                if (protocol == MtkDaProtocol.Legacy)
-                {
-                    startup = startup with { Legacy = BuildLegacyOptions() };
-                }
-                else if (protocol == MtkDaProtocol.Xml)
-                {
-                    startup = startup with { Xml = BuildXmlStartupOptions() };
-                }
-                return await MtkBootstrap.ConnectSerialAsync(serial, protocol, startup, token);
-            }
-
-            var matched = ApplyMtkFamily(await BuildMtkAutoStartupAsync(kind, token));
-            return await MtkBootstrap.MatchSerialAsync(serial, SelectedMtkProtocol, matched, token);
-        }
-
-        async Task<MtkSession> AttachAgentAsync(CancellationToken token)
-        {
-            var session = await MtkSession.OpenSerialAsync(port, baudRate, token);
-            try
-            {
-                if (SelectedMtkProtocol == MtkDaProtocol.Xml)
-                {
-                    await session.AttachRunningXmlAgentAsync(120000, token);
-                }
-                else
-                {
-                    await session.AttachRunningXFlashAgentAsync(kind, 120000, token);
-                }
-
-                return session;
-            }
-            catch
-            {
-                session.Dispose();
-                throw;
-            }
-        }
-
-        return attach ? AttachAgentAsync : StartAgentAsync;
-    }
-
-    /// <summary>
     /// <para>按面板的 DA 文件与密钥目录构造身份匹配启动配置；密钥目录提供 DAA 资源。</para>
     /// Builds the identity-matched startup configuration from the pane's DA file and key directory;
     /// the key directory supplies the DAA resources.
@@ -4741,8 +3980,7 @@ public sealed partial class FlashViewModel
             .Where(row => row.IsSelected && row.CanSelect && _mtkRows.ContainsKey(row))
             .ToArray();
         if (selected.Length == 0) return;
-        if (!TryReadMtkSelection(out var useSerial, out var usbDevice, out var port, out var baudRate,
-                out var attach, out var autoMatch))
+        if (!TryReadMtkSelection(out var usbDevice, out var autoMatch))
         {
             return;
         }
@@ -4772,7 +4010,6 @@ public sealed partial class FlashViewModel
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
         Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("MtkFlashButton").IsEnabled = false;
         Field<DataGrid>("PartitionGrid").IsEnabled = false;
         Field<TextBox>("PackagePathBox").IsEnabled = false;
         SetRowsQueued(selected);
@@ -4825,23 +4062,14 @@ public sealed partial class FlashViewModel
                 }
             }
 
-            if (useSerial)
+            var matched = await BuildMtkAutoStartupAsync(kind, cancellation.Token);
+            await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
             {
-                var connect = BuildMtkSerialConnector(port!, baudRate, kind, attach, autoMatch);
-                using var session = await connect(cancellation.Token);
-                await ReadBackAsync(session, cancellation.Token);
-            }
-            else
-            {
-                var matched = await BuildMtkAutoStartupAsync(kind, cancellation.Token);
-                await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
-                {
-                    var ready = await MtkBootstrap.MatchAsync(session, SelectedMtkProtocol, matched,
-                        cancellation.Token);
-                    await ReadBackAsync(ready, cancellation.Token);
-                    return true;
-                }, cancellation.Token);
-            }
+                var ready = await MtkBootstrap.MatchAsync(session, SelectedMtkProtocol, matched,
+                    cancellation.Token);
+                await ReadBackAsync(ready, cancellation.Token);
+                return true;
+            }, cancellation.Token);
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex)
@@ -4867,112 +4095,6 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Dumps the whole storage area region by region as the chosen family reports them; NAND and any region needing
-    /// authenticated access are refused by name in the service, and the page never substitutes an addressing
-    /// scheme of its own.
-    /// <para>整块存储转储：按所选家族上报的区域逐块读取，NAND 与需要认证的区域由服务层指名拒绝，
-    /// 界面不做任何替代寻址。</para>
-    /// </summary>
-    /// <param name="sender">The dump button. <para>转储按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnMtkDumpWholeFlashClick(object? sender, RoutedEventArgs e)
-    {
-        var directory = await PickMtkDumpDirectoryAsync("Flash_MtkDumpWholeFlash").ConfigureAwait(true);
-        if (directory is null) return;
-        var prompt = _localizer;
-        var family = SelectedMtkProtocol;
-        await RunMtkSecurityOperationAsync("Flash_MtkDumpWholeFlash", "Flash_MtkDumpWholeFlashConfirm",
-            async (session, token) =>
-            {
-                var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
-                var result = await MtkBulkReadService.ReadWholeFlashAsync(session, family, directory, progress, token)
-                    .ConfigureAwait(true);
-                AppendLog(string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    prompt.GetString("Flash_MtkDumpDone"),
-                    result.Regions.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    result.TotalBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            });
-    }
-
-    /// <summary>
-    /// Reads a raw sector window whose region token, start sector and count the user supplies; the service then
-    /// validates them against the reported capacity, and an out-of-range window or digest mismatch fails before
-    /// anything is published.
-    /// <para>读取裸扇区窗口：区域令牌、起始扇区与扇区数都由用户给出，服务层再按上报容量校验，
-    /// 越界或摘要不符都在落盘前失败。</para>
-    /// </summary>
-    /// <param name="sender">The read button. <para>读取按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnMtkReadSectorsClick(object? sender, RoutedEventArgs e)
-    {
-        var prompt = _localizer;
-        var region = Field<TextBox>("MtkSectorRegionBox").Text?.Trim() ?? string.Empty;
-        if (region.Length == 0 ||
-            !long.TryParse(Field<TextBox>("MtkSectorStartBox").Text?.Trim(), System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out var start) || start < 0 ||
-            !long.TryParse(Field<TextBox>("MtkSectorCountBox").Text?.Trim(), System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out var count) || count < 1)
-        {
-            AppendLog(prompt.GetString("Flash_MtkSectorInputInvalid"));
-            return;
-        }
-
-        var directory = await PickMtkDumpDirectoryAsync("Flash_MtkReadSectors").ConfigureAwait(true);
-        if (directory is null) return;
-        var family = SelectedMtkProtocol;
-        var destination = Path.Combine(directory, $"sectors_{region}_{start}_{count}.bin");
-        await RunMtkSecurityOperationAsync("Flash_MtkReadSectors", "Flash_MtkDumpWholeFlashConfirm",
-            async (session, token) =>
-            {
-                var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
-                var record = await MtkBulkReadService.ReadSectorsAsync(
-                    session, family, region, start, count, destination, progress: progress, ct: token)
-                    .ConfigureAwait(true);
-                AppendLog(string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    prompt.GetString("Flash_MtkDumpDone"), "1",
-                    record.ByteLength.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            });
-    }
-
-    /// <summary>
-    /// Reads an absolute byte range that is independent of any region token: the user supplies the offset and
-    /// length, the service splices the read across the regions the chosen family reported, and an out-of-range,
-    /// mis-aligned or short staged capture fails before publishing so existing files stay untouched.
-    /// <para>按区域无关的绝对字节范围读取：偏移与长度由用户给出，服务层用所选家族上报的区域拼接跨区读取，
-    /// 越界、未对齐或暂存长度不足都在落盘前失败，既有文件保持原样。</para>
-    /// </summary>
-    /// <param name="sender">The read button. <para>读取按钮。</para></param>
-    /// <param name="e">The routed click event. <para>点击路由事件。</para></param>
-    internal async void OnMtkReadAreaClick(object? sender, RoutedEventArgs e)
-    {
-        var prompt = _localizer;
-        if (!long.TryParse(Field<TextBox>("MtkAreaOffsetBox").Text?.Trim(), System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out var offset) || offset < 0 ||
-            !long.TryParse(Field<TextBox>("MtkAreaLengthBox").Text?.Trim(), System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out var length) || length < 1)
-        {
-            AppendLog(prompt.GetString("Flash_MtkAreaInputInvalid"));
-            return;
-        }
-
-        var directory = await PickMtkDumpDirectoryAsync("Flash_MtkReadArea").ConfigureAwait(true);
-        if (directory is null) return;
-        var family = SelectedMtkProtocol;
-        var destination = Path.Combine(directory, $"area_{offset}_{length}.bin");
-        await RunMtkSecurityOperationAsync("Flash_MtkReadArea", "Flash_MtkDumpWholeFlashConfirm",
-            async (session, token) =>
-            {
-                var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
-                var record = await MtkFlashAreaService.CaptureBytesAsync(session, family, offset, length,
-                    destination, progress, token).ConfigureAwait(true);
-                AppendLog(string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    prompt.GetString("Flash_MtkDumpDone"),
-                    record.Regions.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    record.ByteLength.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            });
-    }
-
-    /// <summary>
     /// Picks the output directory for a read-only walk; returns null when nothing was chosen or the page became busy,
     /// so the caller can exit quietly.
     /// <para>为只读走查选择输出目录；未选或忙碌时返回 null，调用方据此安静退出。</para>
@@ -4994,293 +4116,27 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Parses the RPMB offset and length texts: the frame shape maps onto a frame range, the byte shape
-    /// onto a byte span, and the whole-area shape ignores both; malformed or out-of-bounds text returns
-    /// false.
-    /// <para>解析 RPMB 的偏移与长度文本：帧形态映射到帧范围，字节形态映射到字节区间，整区形态忽略两者；
-    /// 文本非法或数值越界时返回 false。</para>
-    /// </summary>
-    /// <param name="mode">The addressing shape. <para>寻址形态。</para></param>
-    /// <param name="offsetText">The offset text. <para>偏移文本。</para></param>
-    /// <param name="lengthText">The length text. <para>长度文本。</para></param>
-    /// <param name="frames">The parsed frame range. <para>解析出的帧范围。</para></param>
-    /// <param name="byteOffset">The parsed byte offset. <para>解析出的字节偏移。</para></param>
-    /// <param name="byteLength">The parsed byte length. <para>解析出的字节长度。</para></param>
-    /// <returns><see langword="true"/> when the shape is usable. <para>形态可用时为
-    /// <see langword="true"/>。</para></returns>
-    internal static bool TryReadRpmbShape(MtkRpmbCaptureMode mode, string? offsetText, string? lengthText,
-        out MtkRpmbFrameRange frames, out long byteOffset, out long byteLength)
-    {
-        frames = new MtkRpmbFrameRange(0, 1);
-        byteOffset = 0;
-        byteLength = 0;
-        if (mode == MtkRpmbCaptureMode.FullArea)
-        {
-            return true;
-        }
-
-        if (!long.TryParse(offsetText?.Trim(), System.Globalization.NumberStyles.None,
-                System.Globalization.CultureInfo.InvariantCulture, out var offset) ||
-            !long.TryParse(lengthText?.Trim(), System.Globalization.NumberStyles.None,
-                System.Globalization.CultureInfo.InvariantCulture, out var length) ||
-            offset < 0 || length <= 0)
-        {
-            return false;
-        }
-
-        if (mode == MtkRpmbCaptureMode.Frames)
-        {
-            if (length > int.MaxValue)
-            {
-                return false;
-            }
-
-            frames = new MtkRpmbFrameRange(offset, (int)length);
-        }
-        else
-        {
-            byteOffset = offset;
-            byteLength = length;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// Queries the RPMB capacity read-only: it is the companion read half of the capture, so the user can confirm
-    /// the region size before producing a file. The reply stays undecoded exactly as the reference client leaves
-    /// it, so the log interprets only the geometry capacity field and never guesses at the raw bytes.
-    /// <para>只读查询 RPMB 容量：这是捕获读取的配套读端，让用户在没有落盘文件时也能先确认区域大小。应答按参考
-    /// 客户端的做法不解码，因此日志只解释几何信息里的容量字段，不猜测未解码字节的含义。</para>
-    /// </summary>
-    internal async void OnMtkRpmbCapacityClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || !TryReadMtkSelection(out var useSerial, out var usbDevice, out _, out _, out _, out _)
-            || useSerial || usbDevice is null)
-        {
-            return;
-        }
-
-        var language = _localizer;
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("MtkRpmbCapacityButton").IsEnabled = false;
-        try
-        {
-            var status = await MtkRpmbService.QueryCapacityOnEndpointAsync(usbDevice, cancellation.Token)
-                .ConfigureAwait(true);
-            AppendLog(status.ReportedRpmbCapacityBytes is { } capacity
-                ? language.GetString("Flash_MtkRpmbCapacityResult", capacity)
-                : language.GetString("Flash_MtkRpmbCapacityUnknown"));
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            _flashCancellation = null;
-            Field<Button>("CancelFlashButton").IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Captures RPMB read-only for the download-agent family chosen in the pane: the family's supported
-    /// addressing shape is consulted first, then a destination file is picked, and every publish is staged
-    /// and verified; the captured area can contain keys, so the user must confirm before it runs.
-    /// <para>按面板选定的代理家族只读捕获 RPMB：先查该家族支持的寻址形态，再选择落盘文件，任何写入都经
-    /// 暂存与校验后替换；捕获内容可能包含密钥，执行前需用户确认。</para>
-    /// </summary>
-    internal async void OnMtkRpmbReadClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner ||
-            !TryReadMtkSelection(out var useSerial, out var usbDevice, out _, out _, out _, out _))
-        {
-            return;
-        }
-
-        var language = _localizer;
-        if (useSerial || usbDevice is null)
-        {
-            AppendLog(language.GetString("Flash_MtkUsbOnlyOperation"));
-            return;
-        }
-
-        var mode = Enum.GetValues<MtkRpmbCaptureMode>()[Math.Max(Field<ComboBox>("MtkRpmbModeBox").SelectedIndex, 0)];
-        if (MtkRpmbService.DescribeShapeRefusal(SelectedMtkProtocol, mode) is { } refusal)
-        {
-            AppendLog(refusal);
-            return;
-        }
-
-        if (!TryReadRpmbShape(mode, Field<TextBox>("MtkRpmbOffsetBox").Text, Field<TextBox>("MtkRpmbLengthBox").Text, out var frames,
-                out var byteOffset, out var byteLength))
-        {
-            AppendLog(language.GetString("Flash_MtkRpmbRangeInvalid"));
-            return;
-        }
-
-        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = language.GetString("Flash_MtkRpmbRead"),
-            SuggestedFileName = "rpmb.bin",
-            DefaultExtension = "bin"
-        });
-        if (_busy || _confirming || file?.TryGetLocalPath() is not { } destination) return;
-        _confirming = true;
-        bool confirmed;
-        try
-        {
-            confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_MtkRpmbRead"),
-                $"{language.GetString("Flash_MtkRpmbReadConfirm")}{Environment.NewLine}{usbDevice.DisplayName}");
-        }
-        finally { _confirming = false; }
-        if (!confirmed) return;
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("MtkRpmbReadButton").IsEnabled = false;
-        try
-        {
-            var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
-            var result = await MtkRpmbService.CaptureOnEndpointAsync(usbDevice, new MtkRpmbCaptureRequest
-            {
-                Family = SelectedMtkProtocol,
-                DestinationPath = destination,
-                Mode = mode,
-                FrameRange = frames,
-                ByteOffset = byteOffset,
-                ByteLength = byteLength
-            }, progress, cancellation.Token).ConfigureAwait(true);
-            AppendLog(result.Summary);
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            _flashCancellation = null;
-            Field<Button>("CancelFlashButton").IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
     /// Boots the agent to the state the secure-boot operations need from the pane selection and runs the
-    /// given operation on that session; the serial and auto-match paths share this single entry.
-    /// <para>按面板选择把代理带到能执行安全配置操作的状态，再在该会话上运行给定操作；串口与自动匹配两条路径
-    /// 共用这一入口。</para>
+    /// given operation on that session after matching the pane's download agent.
+    /// <para>按面板选择把代理带到能执行安全配置操作的状态，再在该会话上运行给定操作。</para>
     /// </summary>
     private async Task RunWithReadyMtkSessionAsync(Func<MtkSession, CancellationToken, Task> operation,
         CancellationToken token)
     {
-        if (!TryReadMtkSelection(out var useSerial, out var usbDevice, out var port, out var baudRate,
-                out var attach, out var autoMatch))
+        if (!TryReadMtkSelection(out var usbDevice, out var autoMatch))
         {
             return;
         }
 
         var kind = SelectedMtkStorageKind;
-        if (useSerial)
+        var matched = await BuildMtkAutoStartupAsync(kind, token).ConfigureAwait(true);
+        await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
         {
-            var connect = BuildMtkSerialConnector(port!, baudRate, kind, attach, autoMatch);
-            using var session = await connect(token).ConfigureAwait(true);
-            await operation(session, token).ConfigureAwait(true);
-        }
-        else
-        {
-            var matched = await BuildMtkAutoStartupAsync(kind, token).ConfigureAwait(true);
-            await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
-            {
-                var ready = await MtkBootstrap.MatchAsync(session, SelectedMtkProtocol, matched, token)
-                    .ConfigureAwait(true);
-                await operation(ready, token).ConfigureAwait(true);
-                return true;
-            }, token).ConfigureAwait(true);
-        }
-    }
-
-    /// <summary>
-    /// The shared shell for secure-boot operations: an optional user confirmation, the busy and
-    /// cancellation state, and a recomputed control state once the operation ends.
-    /// <para>安全配置操作的统一外壳：可选的用户确认、忙碌与取消状态、以及结束后按面板状态重算可用性。</para>
-    /// </summary>
-    private async Task RunMtkSecurityOperationAsync(string titleKey, string? confirmKey,
-        Func<MtkSession, CancellationToken, Task> operation)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = _localizer;
-        if (confirmKey is not null)
-        {
-            _confirming = true;
-            bool confirmed;
-            try
-            {
-                confirmed = await DialogService.ConfirmAsync(owner, language.GetString(titleKey),
-                    language.GetString(confirmKey));
-            }
-            finally { _confirming = false; }
-            if (!confirmed) return;
-        }
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("MtkFullDumpButton").IsEnabled = false;
-        try
-        {
-            await RunWithReadyMtkSessionAsync(operation, cancellation.Token).ConfigureAwait(true);
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
-        finally
-        {
-            _flashCancellation = null;
-            Field<Button>("CancelFlashButton").IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Reads the whole user data area the selected agent family reported into one contiguous image: the user
-    /// picks the destination file and confirms, then the read-only collection runs on a ready session, staging
-    /// the bytes and replacing the destination only when the staged length equals the reported length.
-    /// <para>把所选代理家族上报的整个用户数据区读取为一份连续镜像：先让用户挑选目标文件并确认，再在已就绪的会话
-    /// 上执行只读采集；字节先写暂存文件，只有暂存长度与上报长度一致才替换目标文件。</para>
-    /// </summary>
-    internal async void OnMtkFullDumpClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var prompt = _localizer;
-        var family = SelectedMtkProtocol;
-        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = prompt.GetString("Flash_MtkFullDump"),
-            SuggestedFileName = $"mtk-{family.ToString().ToLowerInvariant()}-user-area.img",
-            DefaultExtension = "img",
-            FileTypeChoices =
-            [
-                new FilePickerFileType("Images") { Patterns = ["*.img"] },
-                new FilePickerFileType("All files") { Patterns = ["*.*"] }
-            ]
-        }).ConfigureAwait(true);
-        if (file?.TryGetLocalPath() is not { Length: > 0 } destination) return;
-
-        await RunMtkSecurityOperationAsync("Flash_MtkFullDump", "Flash_MtkFullDumpConfirm",
-            async (session, token) =>
-            {
-                var progress = new Progress<FlashProgress>(update => AppendLog(update.Status));
-                var record = await MtkFullDumpService.CaptureAsync(session, family, destination, progress, token)
-                    .ConfigureAwait(true);
-                AppendLog(prompt.GetString(record.CapacityUsedAsReported ? "Flash_MtkFullDumpReported" :
-                    "Flash_MtkFullDumpClamped"));
-            });
+            var ready = await MtkBootstrap.MatchAsync(session, SelectedMtkProtocol, matched, token)
+                .ConfigureAwait(true);
+            await operation(ready, token).ConfigureAwait(true);
+            return true;
+        }, token).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -5355,64 +4211,6 @@ public sealed partial class FlashViewModel
         return builder.ToString().TrimEnd();
     }
 
-    /// <summary>
-    /// Runs the given operation on a fresh preloader command-stage session: every click takes a newly initialized
-    /// lease with no download-agent uploaded, so a protocol fault is rebuilt by the next click rather than retried
-    /// on the faulted session.
-    /// <para>在 preloader 命令阶段的新会话上运行给定操作：每次点击都经租约取一份全新、已初始化但未上传下载代理的
-    /// 会话，因此协议 fault 后下一次点击自动重建，不在故障会话上重试。</para>
-    /// </summary>
-    private async Task RunMtkPreloaderAsync(string? confirmKey, Func<MtkSession, CancellationToken, Task> operation)
-    {
-        if (_busy || _confirming ||
-            SelectedDevice is not { Protocol: DeviceProtocolKind.Mtk, Transport: DeviceTransportKind.Usb } usbDevice ||
-            usbDevice.State != "preloader")
-        {
-            return;
-        }
-
-        var language = _localizer;
-        if (confirmKey is not null && TopLevel.GetTopLevel(Surface) is Window owner)
-        {
-            _confirming = true;
-            bool confirmed;
-            try
-            {
-                confirmed = await DialogService.ConfirmAsync(owner, language.GetString("Flash_MtkPreloaderGroup"),
-                    language.GetString(confirmKey));
-            }
-            finally { _confirming = false; }
-            if (!confirmed) return;
-        }
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        Field<Button>("CancelFlashButton").IsEnabled = true;
-        try
-        {
-            await App.DeviceMonitor.RunMtkAsync(usbDevice, async session =>
-            {
-                await session.InitializeAsync(cancellation.Token).ConfigureAwait(true);
-                await operation(session, cancellation.Token).ConfigureAwait(true);
-                return true;
-            }, cancellation.Token).ConfigureAwait(true);
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex)
-        {
-            AppendLog(ex.Message);
-            AppendLog(language.GetString("Flash_MtkPreloaderSessionFaulted"));
-        }
-        finally
-        {
-            _flashCancellation = null;
-            Field<Button>("CancelFlashButton").IsEnabled = false;
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
     internal static bool TryReadPreloaderAddress(string? text, out uint value)
     {
         var trimmed = text?.Trim();
@@ -5437,79 +4235,6 @@ public sealed partial class FlashViewModel
             System.Globalization.CultureInfo.InvariantCulture, out value);
     }
 
-    internal async void OnMtkPreloaderPeekClick(object? sender, RoutedEventArgs e)
-    {
-        if (!TryReadPreloaderAddress(Field<TextBox>("MtkPreloaderOffsetBox").Text, out var address) ||
-            !TryReadPreloaderCount(Field<TextBox>("MtkPreloaderLengthBox").Text, out var length) || length <= 0)
-        {
-            AppendLog(_localizer.GetString("Flash_MtkPreloaderOffset"));
-            return;
-        }
-
-        await RunMtkPreloaderAsync(null, async (session, token) =>
-        {
-            var data = await MtkPreloaderService.PeekWindowAsync(session, address, length, token)
-                .ConfigureAwait(true);
-            AppendLog($"0x{address:X8}: {Convert.ToHexString(data)}");
-        });
-    }
-
-    internal async void OnMtkPreloaderReturnToBromClick(object? sender, RoutedEventArgs e)
-        => await RunMtkPreloaderAsync("Flash_MtkPreloaderReturnToBromConfirm", async (session, token) =>
-            await MtkPreloaderService.ReturnToBootRomAsync(session, timeoutSeconds: 0, confirmed: true, token)
-                .ConfigureAwait(true));
-
-    internal async void OnMtkPreloaderDisableWatchdogClick(object? sender, RoutedEventArgs e)
-        => await RunMtkPreloaderAsync("Flash_MtkPreloaderDisableWatchdogConfirm", async (session, token) =>
-            await MtkPreloaderService.DisableWatchdogAsync(session, confirmed: true, token).ConfigureAwait(true));
-
-    internal async void OnMtkPreloaderJumpClick(object? sender, RoutedEventArgs e)
-    {
-        if (Field<TextBox>("MtkPreloaderPartitionNameBox").Text?.Trim() is not { Length: > 0 } partitionName)
-        {
-            AppendLog(_localizer.GetString("Flash_MtkPreloaderPartitionName"));
-            return;
-        }
-
-        await RunMtkPreloaderAsync("Flash_MtkPreloaderJumpConfirm", async (session, token) =>
-            await MtkPreloaderService.JumpToPartitionAsync(session, partitionName, confirmed: true, token)
-                .ConfigureAwait(true));
-    }
-
-    /// <summary>
-    /// Jumps the preloader to its boot loader after confirmation: execution is transferred and the link is
-    /// expected to drop, so the session is retired together with the protocol fault and must be reopened
-    /// afterwards.
-    /// <para>在确认后让 preloader 跳转到 Boot Loader：执行权被转移且链路预计会断开，会话随协议 fault 一起作废，
-    /// 因此之后必须重新打开会话。</para>
-    /// </summary>
-    internal async void OnMtkPreloaderBootloaderJumpClick(object? sender, RoutedEventArgs e)
-        => await RunMtkPreloaderAsync("Flash_MtkPreloaderBootloaderJumpConfirm", async (session, token) =>
-            await MtkPreloaderService.JumpToBootLoaderAsync(session, confirmed: true, token)
-                .ConfigureAwait(true));
-
-    internal static bool TryParseHexBytes(string text, out byte[] bytes)
-    {
-        Span<char> digits = text.Length <= 256 ? stackalloc char[text.Length] : new char[text.Length];
-        var count = 0;
-        foreach (var ch in text)
-        {
-            if (Uri.IsHexDigit(ch))
-            {
-                digits[count++] = ch;
-            }
-        }
-
-        if (count == 0 || count % 2 != 0)
-        {
-            bytes = [];
-            return false;
-        }
-
-        bytes = Convert.FromHexString(digits[..count]);
-        return true;
-    }
-
     internal async void OnMtkSetSpeedClick(object? sender, RoutedEventArgs e)
     {
         var language = _localizer;
@@ -5518,7 +4243,7 @@ public sealed partial class FlashViewModel
             var applied = SelectedMtkProtocol switch
             {
                 MtkDaProtocol.Legacy => (await session.SetLegacyTransferSpeedAsync(
-                    SelectedMtkBaudrate, token).ConfigureAwait(true)).ToString(),
+                    MtkLegacyTransferSpeed, token).ConfigureAwait(true)).ToString(),
                 MtkDaProtocol.XFlash => (await session.SetXFlashUsbSpeedAsync(token).ConfigureAwait(true)).ToString(),
                 _ => null
             };
@@ -5551,7 +4276,11 @@ public sealed partial class FlashViewModel
         }
     }
 
-    private int SelectedMtkBaudrate => Field<ComboBox>("MtkBaudBox").SelectedItem is int baud ? baud : 921600;
+    /// <summary>
+    /// Transfer speed the Legacy family applies when the speed action runs, in baud.
+    /// <para>测速动作在 Legacy 家族上应用的传输速率（波特）。</para>
+    /// </summary>
+    private const int MtkLegacyTransferSpeed = 921600;
 
     internal void OnMtkRebootClick(object? sender, RoutedEventArgs e)
         => RunMtkShutdownAsync(MtkXFlashShutdownMode.NormalBoot,
@@ -5588,8 +4317,7 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        if (!TryReadMtkSelection(out var useSerial, out var usbDevice, out var port, out var baudRate,
-                out var attach, out var autoMatch))
+        if (!TryReadMtkSelection(out var usbDevice, out var autoMatch))
         {
             return;
         }
@@ -5616,23 +4344,14 @@ public sealed partial class FlashViewModel
                     .ConfigureAwait(true);
             }
 
-            if (useSerial)
+            var matched = await BuildMtkAutoStartupAsync(SelectedMtkStorageKind, cancellation.Token);
+            await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
             {
-                var connect = BuildMtkSerialConnector(port!, baudRate, SelectedMtkStorageKind, attach, autoMatch);
-                using var session = await connect(cancellation.Token);
-                await FinishAsync(session, cancellation.Token);
-            }
-            else
-            {
-                var matched = await BuildMtkAutoStartupAsync(SelectedMtkStorageKind, cancellation.Token);
-                await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
-                {
-                    var ready = await MtkBootstrap.MatchAsync(session, SelectedMtkProtocol, matched,
-                        cancellation.Token);
-                    await FinishAsync(ready, cancellation.Token);
-                    return true;
-                }, cancellation.Token);
-            }
+                var ready = await MtkBootstrap.MatchAsync(session, SelectedMtkProtocol, matched,
+                    cancellation.Token);
+                await FinishAsync(ready, cancellation.Token);
+                return true;
+            }, cancellation.Token);
 
             AppendLog(language.GetString(doneKey));
         }
@@ -5643,6 +4362,48 @@ public sealed partial class FlashViewModel
             SetBusy(false);
             _flashCancellation = null;
             Field<Button>("CancelFlashButton").IsEnabled = false;
+            UpdateEdlButton();
+        }
+    }
+
+    /// <summary>
+    /// The shared shell for secure-boot operations: an optional user confirmation, the busy and
+    /// cancellation state, and a recomputed control state once the operation ends.
+    /// <para>安全配置操作的统一外壳：可选的用户确认、忙碌与取消状态、以及结束后按面板状态重算可用性。</para>
+    /// </summary>
+    private async Task RunMtkSecurityOperationAsync(string titleKey, string? confirmKey,
+        Func<MtkSession, CancellationToken, Task> operation)
+    {
+        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
+        var language = _localizer;
+        if (confirmKey is not null)
+        {
+            _confirming = true;
+            bool confirmed;
+            try
+            {
+                confirmed = await DialogService.ConfirmAsync(owner, language.GetString(titleKey),
+                    language.GetString(confirmKey));
+            }
+            finally { _confirming = false; }
+            if (!confirmed) return;
+        }
+
+        SetBusy(true);
+        using var cancellation = new CancellationTokenSource();
+        _flashCancellation = cancellation;
+        Field<Button>("CancelFlashButton").IsEnabled = true;
+        try
+        {
+            await RunWithReadyMtkSessionAsync(operation, cancellation.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
+        catch (Exception ex) { AppendLog(ex.Message); }
+        finally
+        {
+            _flashCancellation = null;
+            Field<Button>("CancelFlashButton").IsEnabled = false;
+            SetBusy(false);
             UpdateEdlButton();
         }
     }
@@ -5693,8 +4454,7 @@ public sealed partial class FlashViewModel
         string doneKey)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner ||
-            !TryReadMtkSelection(out var useSerial, out var usbDevice, out var port, out var baudRate,
-                out var attach, out var autoMatch))
+            !TryReadMtkSelection(out var usbDevice, out var autoMatch))
         {
             return;
         }
@@ -5721,7 +4481,6 @@ public sealed partial class FlashViewModel
         using var cancellation = new CancellationTokenSource();
         _flashCancellation = cancellation;
         Field<Button>("CancelFlashButton").IsEnabled = true;
-        Field<Button>("MtkFlashButton").IsEnabled = false;
         try
         {
             async Task FinishAsync(MtkSession session, CancellationToken token)
@@ -5754,23 +4513,14 @@ public sealed partial class FlashViewModel
                 }
             }
 
-            if (useSerial)
+            var matched = await BuildMtkAutoStartupAsync(kind, cancellation.Token);
+            await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
             {
-                var connect = BuildMtkSerialConnector(port!, baudRate, kind, attach, autoMatch);
-                using var session = await connect(cancellation.Token);
-                await FinishAsync(session, cancellation.Token);
-            }
-            else
-            {
-                var matched = await BuildMtkAutoStartupAsync(kind, cancellation.Token);
-                await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
-                {
-                    var ready = await MtkBootstrap.MatchAsync(session, SelectedMtkProtocol, matched,
-                        cancellation.Token);
-                    await FinishAsync(ready, cancellation.Token);
-                    return true;
-                }, cancellation.Token);
-            }
+                var ready = await MtkBootstrap.MatchAsync(session, SelectedMtkProtocol, matched,
+                    cancellation.Token);
+                await FinishAsync(ready, cancellation.Token);
+                return true;
+            }, cancellation.Token);
 
             AppendLog(language.GetString(doneKey));
         }
