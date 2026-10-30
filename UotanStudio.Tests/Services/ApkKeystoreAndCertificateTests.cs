@@ -147,6 +147,41 @@ public class ApkKeystoreAndCertificateTests : IDisposable
     }
 
     [Fact]
+    public void GenerateApkCertificate_RecordsLinkedFilesAndDeleteRemovesThem()
+    {
+        using var library = new KeyLibraryFixture(_root);
+        var output = Path.Combine(_root, "out-linked");
+        var bundle = library.Library.GenerateApkCertificate("linked-key", null, "store-pass", 5,
+            new ApkSigningKeyOptions { CommonName = "Linked" }, ApkSigningKeyType.Rsa2048,
+            ApkCertificateExportFormat.All, output, TestContext.Current.CancellationToken);
+
+        var listed = library.Library.Rename(bundle.Key, "linked-key-renamed");
+        Assert.Equal(bundle.ExportedFiles, listed.LinkedFiles);
+        Assert.Equal(bundle.ExportedFiles, Assert.Single(library.Library.List()).LinkedFiles);
+        Assert.All(bundle.ExportedFiles, f => Assert.True(File.Exists(f), f));
+
+        Assert.Empty(library.Library.Delete(listed));
+        Assert.Empty(library.Library.List());
+        Assert.All(bundle.ExportedFiles, f => Assert.False(File.Exists(f), f));
+    }
+
+    [Fact]
+    public void Delete_MissingLinkedFile_SucceedsWithoutFailures()
+    {
+        using var library = new KeyLibraryFixture(_root);
+        var output = Path.Combine(_root, "out-missing");
+        var bundle = library.Library.GenerateApkCertificate("missing-key", null, "store-pass", 5,
+            new ApkSigningKeyOptions { CommonName = "Missing" }, ApkSigningKeyType.Rsa2048,
+            ApkCertificateExportFormat.Jks, output, TestContext.Current.CancellationToken);
+
+        File.Delete(bundle.ExportedFiles[0]);
+        var listed = Assert.Single(library.Library.List());
+        Assert.Empty(library.Library.Delete(listed));
+        Assert.Empty(library.Library.List());
+        Assert.Empty(Directory.GetFiles(output));
+    }
+
+    [Fact]
     public void Import_EcPrivateKey_CreatesApkEntry()
     {
         using var library = new KeyLibraryFixture(_root);

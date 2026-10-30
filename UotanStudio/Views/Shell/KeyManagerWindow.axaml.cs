@@ -10,6 +10,7 @@ using UotanStudio.Services;
 using UotanStudio.Services.Keys;
 using UotanStudio.Services.Ui;
 using UotanStudio.ViewModels.Shell;
+using Ursa.Controls;
 
 namespace UotanStudio.Views.Shell;
 
@@ -71,6 +72,31 @@ public partial class KeyManagerWindow : Window
         if (Model.Status == "") ApplicationRestartService.RestartWithSolution();
     }
 
+    private async void GenerateClick(object? sender, RoutedEventArgs e)
+    {
+        var model = Model;
+        if (!model.IsApkCertificate || !string.IsNullOrWhiteSpace(model.KeystorePassword)) return;
+        var language = LanguageService.Instance;
+        // FormatIndex: 0 = All, 1 = JKS, 2 = PKCS12, 3 = PEM.
+        if (model.FormatIndex is 0 or 1)
+        {
+            e.Handled = true;
+            await DialogService.ShowAsync(this,
+                language.GetString("Keys_PasswordRequiredTitle"),
+                language.GetString("Keys_PasswordRequiredMessage"), MessageBoxIcon.Warning);
+            ApkKeystorePasswordBox.Focus();
+        }
+        else if (model.FormatIndex == 2)
+        {
+            e.Handled = true;
+            var proceed = await DialogService.ConfirmYesNoAsync(this,
+                language.GetString("Keys_UnprotectedStoreTitle"),
+                language.GetString("Keys_UnprotectedStoreMessage"),
+                language.GetString("Keys_ContinueWithoutPassword"));
+            if (proceed) await model.GenerateCommand.ExecuteAsync(null);
+        }
+    }
+
     private void UpdateCreationActionsLayout()
     {
         if (KeyCreationActions.Bounds.Width <= 0) return;
@@ -99,8 +125,12 @@ public partial class KeyManagerWindow : Window
         try
         {
             var language = LanguageService.Instance;
+            var message = key.LinkedFiles.Count > 0
+                ? string.Format(language.GetString("Keys_DeleteConfirmWithFiles"), key.Name,
+                    string.Join(Environment.NewLine, key.LinkedFiles.Select(Path.GetFileName)))
+                : string.Format(language.GetString("Keys_DeleteConfirm"), key.Name);
             if (await DialogService.ConfirmAsync(this, language.GetString("Keys_Delete"),
-                string.Format(language.GetString("Keys_DeleteConfirm"), key.Name), language.GetString("Menu_Delete")))
+                    message, language.GetString("Menu_Delete")))
                 await model.DeleteKeyAsync(key);
         }
         catch (Exception ex) { model.Status = UserError.Describe(ex); }

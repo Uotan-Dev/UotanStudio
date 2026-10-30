@@ -43,11 +43,17 @@ public partial class KeyManagerViewModel : ViewModelBase
     [ObservableProperty] private string _renameText = "";
     [ObservableProperty] private ManagedKey? _selectedKey;
     [ObservableProperty] private string _publicKey = "";
-    [ObservableProperty] private string _status = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatus))]
+    private string _status = "";
     [ObservableProperty][NotifyPropertyChangedFor(nameof(IsIdle))] private bool _isBusy;
     [ObservableProperty] private bool _confirmDeletion;
     [ObservableProperty][NotifyPropertyChangedFor(nameof(IsSelectedDefault), nameof(CanSetCurrentDefault))] private string _defaultSignatureIds = "";
     public bool IsIdle => !IsBusy;
+    /// <summary>Whether a status message is available for display.
+    /// <para>是否存在可显示的状态消息。</para>
+    /// </summary>
+    public bool HasStatus => Status.Length > 0;
     public bool IsPayload => KindIndex == (int)ManagedKeyKind.Payload;
     /// <summary>Whether the UI is showing the APK certificate purpose.
     /// <para>当前是否选择了 APK 密钥用途。</para>
@@ -288,10 +294,14 @@ public partial class KeyManagerViewModel : ViewModelBase
                 key.Kind == ManagedKeyKind.Adb ? "Adb" : "Hdc", null));
             if (!cleared) Status = GetStringOrFallback("Keys_DefaultSaveFailed", "Failed to save the default key setting.");
         }
-        await Task.Run(() => _library.Delete(key));
+        var failures = await Task.Run(() => _library.Delete(key));
         _all = await Task.Run(_library.List);
         Filter();
         RebuildDefaultIds();
+        if (failures.Count > 0)
+            Status = string.Format(
+                GetStringOrFallback("Keys_LinkedDeleteFailed", "The key was deleted, but these recorded files could not be removed:{0}"),
+                Environment.NewLine + string.Join(Environment.NewLine, failures));
     });
 
     [RelayCommand]

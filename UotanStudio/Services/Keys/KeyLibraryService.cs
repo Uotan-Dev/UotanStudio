@@ -44,6 +44,21 @@ public sealed record ManagedKey(string Id, string Name, ManagedKeyKind Kind, int
     public string Summary => Bits is 256 or 384 or 521
         ? $"{Kind.ToString().ToUpperInvariant()} · EC P-{Bits}"
         : $"{Kind.ToString().ToUpperInvariant()} · RSA {Bits}";
+
+    /// <summary>Disk paths of the key files exported when this entry was created (APK certificate bundles); they are deleted together with the entry.
+    /// <para>该条目创建时（APK 证书导出包）写出的密钥文件磁盘路径；删除条目时一并删除。</para></summary>
+    public IReadOnlyList<string> LinkedFiles { get; init; } = [];
+
+    /// <summary>Determines whether the other entry describes the same key; the recorded linked files are not part of identity.
+    /// <para>判断另一条目是否为同一密钥；记录的导出文件路径不参与同一性比较。</para></summary>
+    /// <param name="other">The entry to compare with.<para>参与比较的条目。</para></param>
+    /// <returns><c>true</c> when all identity fields match.<para>所有同一性字段一致时为 <c>true</c>。</para></returns>
+    public bool Equals(ManagedKey? other) => other is not null && Id == other.Id && Name == other.Name &&
+        Kind == other.Kind && Bits == other.Bits && Fingerprint == other.Fingerprint && Created == other.Created;
+
+    /// <summary>Returns a hash code from the identity fields, excluding the recorded linked files.
+    /// <para>按同一性字段计算散列，不含记录的导出文件路径。</para></summary>
+    public override int GetHashCode() => HashCode.Combine(Id, Name, Kind, Bits, Fingerprint, Created);
 }
 
 [JsonSerializable(typeof(ManagedKey))]
@@ -190,6 +205,7 @@ public sealed class KeyLibraryService
                         exported.Add(certPath);
                     }
                 }
+                key = RecordLinkedFiles(key, exported);
                 return new ApkCertificateBundle(key, exported);
             }
             finally { CryptographicOperations.ZeroMemory(pkcs8); }
@@ -451,15 +467,27 @@ public sealed class KeyLibraryService
     {
         Validate(name, key.Kind, key.Bits);
         var updated = key with { Name = name.Trim() };
+        WriteMetadata(updated);
+        return updated;
+    }
+
+    private ManagedKey RecordLinkedFiles(ManagedKey key, IReadOnlyList<string> files)
+    {
+        var updated = key with { LinkedFiles = [.. files] };
+        WriteMetadata(updated);
+        return updated;
+    }
+
+    private void WriteMetadata(ManagedKey key)
+    {
         var directory = KeyDirectory(key.Id);
         var temporary = Path.Combine(directory, Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
-            Write(temporary, JsonSerializer.Serialize(updated, KeyLibraryJsonContext.Default.ManagedKey));
+            Write(temporary, JsonSerializer.Serialize(key, KeyLibraryJsonContext.Default.ManagedKey));
             File.Move(temporary, Path.Combine(directory, "key.json"), true);
         }
         finally { File.Delete(temporary); }
-        return updated;
     }
 
     /// <summary>Moves a key into a recoverable local trash directory; exported copies are unaffected.
@@ -472,10 +500,11 @@ public sealed class KeyLibraryService
         Directory.Move(KeyDirectory(key.Id), Path.Combine(trash, key.Id + "-" + Guid.NewGuid().ToString("N")));
     }
 
-    /// <summary>Permanently deletes one key directory; never follows directory links or affects exports.
-    /// <para>永久删除单个密钥目录；绝不跟随目录链接，也不影响已导出的副本。</para></summary>
+    /// <summary>Permanently deletes one key directory together with the key files recorded in <see cref="ManagedKey.LinkedFiles"/>; never follows directory links or affects other exports.
+    /// <para>永久删除单个密钥目录以及 <see cref="ManagedKey.LinkedFiles"/> 中记录的密钥文件；绝不跟随目录链接，也不影响其他导出副本。</para></summary>
     /// <param name="key">The library entry to delete.<para>要删除的库条目。</para></param>
-    public void Delete(ManagedKey key)
+    /// <returns>The recorded linked-file paths that could not be deleted; empty when every recorded file was removed.<para>未能删除的记录路径；全部删除成功时为空。</para></returns>
+    public IReadOnlyList<string> Delete(ManagedKey key)
     {
         var directory = KeyDirectory(key.Id);
         if (!Directory.Exists(directory)) throw new DirectoryNotFoundException(directory);
@@ -484,6 +513,15 @@ public sealed class KeyLibraryService
         if (Directory.EnumerateDirectories(directory).Any()) throw new IOException("密钥目录包含未知子目录 / Unexpected key subdirectory.");
         foreach (var file in Directory.EnumerateFiles(directory)) File.Delete(file);
         Directory.Delete(directory);
+
+        List<string> failures = [];
+        foreach (var path in key.LinkedFiles)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) continue;
+            try { File.Delete(path); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failures.Add(path); }
+        }
+        return failures;
     }
 
     /// <summary>Exports to a new directory, never replacing existing files.

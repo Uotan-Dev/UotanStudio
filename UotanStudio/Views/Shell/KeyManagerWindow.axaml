@@ -166,7 +166,7 @@
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_KeystorePassword}" />
-                                    <TextBox Classes="key-field" PasswordChar="●" Text="{Binding KeystorePassword}" AutomationProperties.Name="{DynamicResource Keys_KeystorePassword}" />
+                                    <TextBox Name="ApkKeystorePasswordBox" Classes="key-field" PasswordChar="●" Text="{Binding KeystorePassword}" AutomationProperties.Name="{DynamicResource Keys_KeystorePassword}" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_ValidityYears}" />
@@ -254,7 +254,7 @@
                                 <TextBox Name="ImportPasswordBox" Classes="key-field" Width="210" HorizontalAlignment="Left"
                                          Text="{Binding Password}" PasswordChar="●" PlaceholderText="{DynamicResource Keys_Password}" AutomationProperties.Name="{DynamicResource Keys_Password}" />
                             </StackPanel>
-                            <Button Name="GenerateKeyButton" Grid.Column="2" Classes="key-action" Command="{Binding GenerateCommand}" HorizontalAlignment="Right">
+                            <Button Name="GenerateKeyButton" Grid.Column="2" Classes="key-action" Command="{Binding GenerateCommand}" Click="GenerateClick" HorizontalAlignment="Right">
                                 <Grid>
                                     <TextBlock Text="{DynamicResource Keys_Generate}" IsVisible="{Binding !IsApkCertificate}" />
                                     <TextBlock Text="{DynamicResource Keys_GenerateCertificate}" IsVisible="{Binding IsApkCertificate}" />
@@ -298,6 +298,8 @@
         </Grid>
         <StackPanel Grid.Row="1" Spacing="8">
             <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="3" />
+            <SelectableTextBlock Name="StatusText" Text="{Binding Status}" IsVisible="{Binding HasStatus}"
+                                 TextWrapping="Wrap" FontSize="12" Margin="20,0,20,12" />
         </StackPanel>
     </Grid>
 </Window>
