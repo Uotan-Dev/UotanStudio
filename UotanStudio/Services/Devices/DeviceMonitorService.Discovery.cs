@@ -442,8 +442,20 @@ public sealed partial class DeviceMonitorService
             _ => null
         };
 
+    /// <summary>
+    /// Labels the Rockchip boot ROM stage from the device descriptor's <c>bcdUSB</c> bit, falling back to <c>bootrom</c>
+    /// when the backend could not read that bit.
+    /// <para>依据设备描述符的 <c>bcdUSB</c> 位标注瑞芯微 boot ROM 阶段；后端读不到该位时退回 <c>bootrom</c>。</para>
+    /// </summary>
+    /// <param name="info">The enumerated USB device. <para>已枚举的 USB 设备。</para></param>
+    /// <returns>The stage label shown in the device list. <para>设备列表中显示阶段标签。</para></returns>
     private static string RkdlState(UsbDeviceInfo info)
-        => RkdlConstants.KnownLoaderProductIds.Contains(info.ProductId) ? "loader" : "maskrom";
+        => RkdlConstants.ClassifyMode(info.ProductId, info.BcdUsb) switch
+        {
+            RkdlDeviceMode.Maskrom => "maskrom",
+            RkdlDeviceMode.Loader => "loader",
+            _ => "bootrom",
+        };
 
     private static string MtkState(UsbDeviceInfo info)
         => MtkModeClassifier.Classify(info).Mode switch

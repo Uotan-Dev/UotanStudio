@@ -18,11 +18,10 @@ public sealed partial class RkdlSession
     /// The <c>ucRc4Flag</c> is informational: a non-zero value means "RC4 disabled", so the flag is
     /// not a rejection condition and entry payloads are sent verbatim either way.
     /// Completion of that settle window is not evidence that the device reached loader mode:
-    /// <see cref="IsRockusbMode"/> derives from a device-info snapshot taken when this session was
-    /// constructed and can never observe the transition, and the loader download switches the USB
-    /// product ID (a maskrom PID versus
-    /// <see cref="RkdlConstants.KnownLoaderProductIds"/>). Callers must re-observe the device through
-    /// the device layer, using <see cref="CreateLoaderTransitionOffer"/>; whether a PID-switching
+    /// <see cref="Mode"/> derives from a device-info snapshot taken when this session was
+    /// constructed and can never observe the transition, and taking the loader over clears bit 0 of the device
+    /// descriptor's <c>bcdUSB</c> value (see <see cref="RkdlConstants.BcdUsbLoaderBit"/>). Callers must re-observe the
+    /// device through the device layer, using <see cref="CreateLoaderTransitionOffer"/>; whether a re-enumerating
     /// bootrom transition passes the controller's USB reconnection validation needs real-device
     /// confirmation and has not been verified in this repository. A positive byte-count return
     /// therefore only means every entry was transmitted, not that the loader took over.
@@ -34,10 +33,10 @@ public sealed partial class RkdlSession
     /// <see cref="RkdlConstants.LoaderReenumerationSettleMs"/> 毫秒让设备重新枚举。
     /// <c>ucRc4Flag</c> 仅作信息：非 0 值表示“禁用 RC4”，因此该标志不是拒绝条件，
     /// 条目负载始终原样发送。
-    /// 该稳定窗口的结束并不能证明设备已进入 loader 模式：<see cref="IsRockusbMode"/> 派生自本会话
-    /// 构造时拍摄的设备信息快照，在会话内永远观测不到该模式变化，而且 loader 下载会切换 USB 产品 ID
-    /// （maskrom PID 与 <see cref="RkdlConstants.KnownLoaderProductIds"/> 之列的 loader ID）。
-    /// 调用方必须借助 <see cref="CreateLoaderTransitionOffer"/> 通过设备层重新观测设备；切换 PID 的
+    /// 该稳定窗口的结束并不能证明设备已进入 loader 模式：<see cref="Mode"/> 派生自本会话
+    /// 构造时拍摄的设备信息快照，在会话内永远观测不到该模式变化，而且 loader 接管后会清除设备描述符
+    /// <c>bcdUSB</c> 取值的 bit 0（见 <see cref="RkdlConstants.BcdUsbLoaderBit"/>）。
+    /// 调用方必须借助 <see cref="CreateLoaderTransitionOffer"/> 通过设备层重新观测设备；重新枚举的
     /// bootrom 迁移能否通过控制器的 USB 重连校验需真机确认，本仓库未在硬件上验证。因此正的字节数
     /// 返回值只代表每个条目已发出，不代表 loader 已经接管。</para>
     /// </remarks>
@@ -185,7 +184,14 @@ public sealed partial class RkdlSession
         ArgumentNullException.ThrowIfNull(loaderImage);
         if (!IsMaskromMode)
         {
-            throw new RkdlException(RkdlError.NotSupported, "Loader download requires a maskrom-mode device (0x0471/0x0472 vendor requests).");
+            throw new RkdlException(RkdlError.NotSupported, Mode switch
+            {
+                RkdlDeviceMode.Loader =>
+                    "Loader download requires a maskrom-mode device, but this device already reports loader mode " +
+                    "(bcdUSB bit 0 is set).",
+                _ => "Loader download requires a maskrom-mode device, but the device descriptor carried no bcdUSB " +
+                    "value, so the boot ROM stage cannot be confirmed."
+            });
         }
 
         var image = RkBootImage.Parse(loaderImage);

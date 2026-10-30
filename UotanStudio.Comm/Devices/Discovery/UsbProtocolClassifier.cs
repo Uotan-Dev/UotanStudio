@@ -121,8 +121,7 @@ public static class UsbProtocolClassifier
             return "mtk";
         }
 
-        if (vendorId == RkdlConstants.RockchipVid &&
-            ((product >> 8) != 0 || RkdlConstants.KnownLoaderProductIds.Contains(product)))
+        if (vendorId == RkdlConstants.RockchipVid && RkdlConstants.IsBootromProduct(product))
         {
             return "rkdl";
         }

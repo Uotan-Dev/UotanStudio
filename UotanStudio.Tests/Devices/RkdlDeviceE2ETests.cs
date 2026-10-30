@@ -33,13 +33,15 @@ public sealed class RkdlDeviceE2ETests
             (
                 VendorId: session.VendorId,
                 ProductId: session.ProductId,
+                Mode: session.Mode,
                 IsMaskrom: session.IsMaskromMode,
                 FlashId: session.ReadFlashId(),
                 CapabilityRaw: session.ReadCapability().Raw
             )), TestContext.Current.CancellationToken);
 
         Assert.Equal(0x2207, info.VendorId);
-        Assert.True(info.IsMaskrom, $"The target reported PID 0x{info.ProductId:X4}, which is not maskrom.");
+        Assert.True(info.IsMaskrom,
+            $"The target reported PID 0x{info.ProductId:X4} in {info.Mode} stage, which is not maskrom.");
         Assert.True(info.FlashId.Length >= 5, $"READ_FLASH_ID returned {info.FlashId.Length} bytes.");
         Assert.True(info.CapabilityRaw.Length >= 8, $"READ_CAPABILITY returned {info.CapabilityRaw.Length} bytes.");
     }
