@@ -2098,9 +2098,6 @@
   <data name="FirmwareInfo_FormatName" xml:space="preserve">
     <value>格式名</value>
   </data>
-  <data name="FirmwareInfo_Summary" xml:space="preserve">
-    <value>摘要</value>
-  </data>
   <data name="FirmwareInfo_Metadata" xml:space="preserve">
     <value>元数据</value>
   </data>
@@ -2961,12 +2958,6 @@
   <data name="FirmwareField_ToggleFlag" xml:space="preserve">
     <value>切换标志位</value>
   </data>
-  <data name="FirmwareInfo_FilesystemSummary" xml:space="preserve">
-    <value>{0} 超级块特性和文件系统布局参数。特性标志表示格式能力，不代表每个文件都启用了该特性；未知位保留在原始十六进制值中。</value>
-  </data>
-  <data name="FirmwareInfo_FatSummary" xml:space="preserve">
-    <value>{0} 卷引导记录几何信息与目录布局参数。簇数描述声明容量，不代表镜像实际携带的数据量。</value>
-  </data>
   <data name="FirmwareField_TotalBlocks" xml:space="preserve">
     <value>总块数量</value>
   </data>
@@ -3069,20 +3060,8 @@
   <data name="FirmwareField_DtbAddress" xml:space="preserve">
     <value>DTB 加载地址</value>
   </data>
-  <data name="FirmwareInfo_PayloadSummary" xml:space="preserve">
-    <value>OTA 载荷清单与签名布局信息。存在签名不代表已验证其可信性。</value>
-  </data>
-  <data name="FirmwareInfo_SparseSummary" xml:space="preserve">
-    <value>Android Sparse 容器头部信息。逻辑镜像大小与实际文件大小不同。</value>
-  </data>
-  <data name="FirmwareInfo_BootSummary" xml:space="preserve">
-    <value>启动镜像头部、组件大小、压缩格式与加载地址信息。具体字段取决于启动镜像类型。</value>
-  </data>
   <data name="FirmwareField_PartitionHash" xml:space="preserve">
     <value>分区哈希</value>
-  </data>
-  <data name="FirmwareInfo_CpbSummary" xml:space="preserve">
-    <value>酷派 CPB 容器头与镜像目录信息。每个镜像的偏移、长度与 CRC16 由容器声明，其中偏移以由头部推导出的密钥混淆存储。校验和一致说明容器完整，不代表其来源可信。</value>
   </data>
   <data name="FirmwareField_CpbVersion" xml:space="preserve">
     <value>CPB 版本</value>
@@ -3098,6 +3077,33 @@
   </data>
   <data name="FirmwareField_Mismatch" xml:space="preserve">
     <value>不一致</value>
+  </data>
+  <data name="FirmwareField_LoaderTag" xml:space="preserve">
+    <value>Loader 头标识</value>
+  </data>
+  <data name="FirmwareField_LoaderVersion" xml:space="preserve">
+    <value>Loader 版本</value>
+  </data>
+  <data name="FirmwareField_SupportChip" xml:space="preserve">
+    <value>芯片代码</value>
+  </data>
+  <data name="FirmwareField_Signed" xml:space="preserve">
+    <value>已签名的 loader</value>
+  </data>
+  <data name="FirmwareField_Rc4Disabled" xml:space="preserve">
+    <value>已禁用 RC4</value>
+  </data>
+  <data name="FirmwareField_LoaderChecksum" xml:space="preserve">
+    <value>Loader 校验和（存储值）</value>
+  </data>
+  <data name="FirmwareField_EntryCount471" xml:space="preserve">
+    <value>0x471 条目数量</value>
+  </data>
+  <data name="FirmwareField_EntryCount472" xml:space="preserve">
+    <value>0x472 条目数量</value>
+  </data>
+  <data name="FirmwareField_EntryCountLoader" xml:space="preserve">
+    <value>Loader 条目数量</value>
   </data>
   <data name="Explorer_OpenAsAuto" xml:space="preserve">
     <value>自动识别</value>

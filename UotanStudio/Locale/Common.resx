@@ -2098,9 +2098,6 @@ Author: 暮间雾
   <data name="FirmwareInfo_FormatName" xml:space="preserve">
     <value>Format Name</value>
   </data>
-  <data name="FirmwareInfo_Summary" xml:space="preserve">
-    <value>Summary</value>
-  </data>
   <data name="FirmwareInfo_Metadata" xml:space="preserve">
     <value>Metadata</value>
   </data>
@@ -2961,12 +2958,6 @@ Continue?</value>
   <data name="FirmwareField_ToggleFlag" xml:space="preserve">
     <value>Toggle flag</value>
   </data>
-  <data name="FirmwareInfo_FilesystemSummary" xml:space="preserve">
-    <value>{0} superblock features and filesystem layout. Feature flags describe format capabilities, not necessarily the settings of every file. Unknown bits are retained in the hexadecimal mask.</value>
-  </data>
-  <data name="FirmwareInfo_FatSummary" xml:space="preserve">
-    <value>{0} volume boot record geometry and directory layout. Cluster counts describe the declared volume, not the amount of data the shipped image carries.</value>
-  </data>
   <data name="FirmwareField_TotalBlocks" xml:space="preserve">
     <value>Total blocks</value>
   </data>
@@ -3069,20 +3060,8 @@ Continue?</value>
   <data name="FirmwareField_DtbAddress" xml:space="preserve">
     <value>DTB load address</value>
   </data>
-  <data name="FirmwareInfo_PayloadSummary" xml:space="preserve">
-    <value>OTA payload manifest and signature layout. Signature presence does not establish authenticity.</value>
-  </data>
-  <data name="FirmwareInfo_SparseSummary" xml:space="preserve">
-    <value>Android sparse container header. The logical image size differs from the size of this file.</value>
-  </data>
-  <data name="FirmwareInfo_BootSummary" xml:space="preserve">
-    <value>Boot container header, component sizes, compression and load addresses. Fields depend on the boot image variant.</value>
-  </data>
   <data name="FirmwareField_PartitionHash" xml:space="preserve">
     <value>Partition hash</value>
-  </data>
-  <data name="FirmwareInfo_CpbSummary" xml:space="preserve">
-    <value>Coolpad CPB container header and image directory. Each image offset, size and CRC16 is declared by the container, and offsets are stored obfuscated with a key derived from the header. A matching checksum shows the container is intact; it does not establish authenticity.</value>
   </data>
   <data name="FirmwareField_CpbVersion" xml:space="preserve">
     <value>CPB version</value>
@@ -3098,6 +3077,33 @@ Continue?</value>
   </data>
   <data name="FirmwareField_Mismatch" xml:space="preserve">
     <value>Mismatch</value>
+  </data>
+  <data name="FirmwareField_LoaderTag" xml:space="preserve">
+    <value>Loader header tag</value>
+  </data>
+  <data name="FirmwareField_LoaderVersion" xml:space="preserve">
+    <value>Loader version</value>
+  </data>
+  <data name="FirmwareField_SupportChip" xml:space="preserve">
+    <value>Chip code</value>
+  </data>
+  <data name="FirmwareField_Signed" xml:space="preserve">
+    <value>Signed loader</value>
+  </data>
+  <data name="FirmwareField_Rc4Disabled" xml:space="preserve">
+    <value>RC4 disabled</value>
+  </data>
+  <data name="FirmwareField_LoaderChecksum" xml:space="preserve">
+    <value>Loader checksum (stored value)</value>
+  </data>
+  <data name="FirmwareField_EntryCount471" xml:space="preserve">
+    <value>0x471 entry count</value>
+  </data>
+  <data name="FirmwareField_EntryCount472" xml:space="preserve">
+    <value>0x472 entry count</value>
+  </data>
+  <data name="FirmwareField_EntryCountLoader" xml:space="preserve">
+    <value>Loader entry count</value>
   </data>
   <data name="Explorer_OpenAsAuto" xml:space="preserve">
     <value>Automatic detection</value>
