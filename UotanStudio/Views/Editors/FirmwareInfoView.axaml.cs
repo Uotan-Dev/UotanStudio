@@ -3,9 +3,9 @@ using Avalonia.Controls;
 namespace UotanStudio.Views.Editors;
 
 /// <summary>
-/// Firmware metadata panel view: read-only display of a firmware file's format name, summary,
+/// Firmware metadata panel view: read-only display of a firmware file's format name,
 /// metadata key-value pairs and entry list.
-/// <para>固件元数据面板视图：只读展示固件文件的格式名、摘要、元数据键值对与条目列表。</para>
+/// <para>固件元数据面板视图：只读展示固件文件的格式名、元数据键值对与条目列表。</para>
 /// </summary>
 public partial class FirmwareInfoView : UserControl
 {

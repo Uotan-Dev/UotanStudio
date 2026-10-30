@@ -40,17 +40,6 @@
           </StackPanel>
         </Border>
 
-        <!-- 摘要：AVB 镜像不显示摘要说明。 -->
-        <!-- Summary: AVB images never render one. -->
-        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
-                IsVisible="{Binding HasSummary}">
-          <StackPanel Spacing="8">
-            <TextBlock Text="{DynamicResource FirmwareInfo_Summary}"
-                       FontWeight="SemiBold" FontSize="13" />
-            <SelectableTextBlock Text="{Binding Summary}" FontSize="12" TextWrapping="Wrap" />
-          </StackPanel>
-        </Border>
-
         <!-- 元数据键值对 -->
         <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
                 IsVisible="{Binding HasMetadata}">
