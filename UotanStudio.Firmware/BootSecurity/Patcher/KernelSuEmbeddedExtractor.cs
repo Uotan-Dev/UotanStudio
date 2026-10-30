@@ -1,35 +1,13 @@
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace UotanStudio.Firmware.BootSecurity.Patcher;
 
 /// <summary>
-/// Extracts ELF relocatable kernel modules embedded in libksud.so.
-/// <para>从 libksud.so 中提取内嵌的 ELF 可重定位内核模块。</para>
+/// Extracts ELF relocatable kernel modules and named payloads embedded in libksud.so.
+/// <para>从 libksud.so 中提取内嵌的 ELF 可重定位内核模块与命名负载。</para>
 /// </summary>
 internal static class KernelSuEmbeddedExtractor
 {
-    /// <summary>
-    /// Scans raw bytes for <c>*_kernelsu.ko</c> name patterns and collects the distinct KMI strings.
-    /// <para>扫描原始字节中的 <c>*_kernelsu.ko</c> 名称模式，收集去重后的 KMI 字符串。</para>
-    /// </summary>
-    /// <param name="data">
-    /// Binary content, typically a whole shared-library image.
-    /// <para>二进制内容，通常为完整的共享库映像。</para>
-    /// </param>
-    /// <returns>
-    /// KMI strings ordered case-insensitively with underscores normalized to hyphens; empty when nothing matches.
-    /// <para>按不区分大小写排序、下划线已规范为连字符的 KMI 字符串；无匹配时为空。</para>
-    /// </returns>
-    public static IReadOnlyList<string> FindKmisInBinary(ReadOnlySpan<byte> data)
-    {
-        var text = Encoding.Latin1.GetString(data);
-        var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (Match match in Regex.Matches(text, @"(?i)(android\d+(?:\.\d+)?[-_]\d+\.\d+)_kernelsu\.ko"))
-            found.Add(match.Groups[1].Value.Replace('_', '-'));
-        return [.. found.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase)];
-    }
-
     /// <summary>Extracts the verified kernel module matching one KMI from the embedded asset store of a libksud-style library.
     /// <para>从 libksud 类库的内置资源存储中提取与指定 KMI 匹配的已校验内核模块。</para></summary>
     /// <param name="so">Bytes of the shared library to parse.<para>待解析的共享库字节。</para></param>
@@ -46,6 +24,37 @@ internal static class KernelSuEmbeddedExtractor
             foreach (var asset in report.Assets)
             {
                 if (!TryGetKmi(asset.Name, out var assetKmi) || !string.Equals(assetKmi, kmi, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!asset.Verified) continue;
+                var data = Extractor.GetOutBytes(elf.Data, asset);
+                if (data.Length > 0 && data.AsSpan().StartsWith("\u007fELF"u8)) return data;
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>
+    /// Extracts one verified named asset from the embedded asset store of a libksud-style library.
+    /// <para>从 libksud 类库的内置资源存储中提取一个指定名称的已校验资源。</para>
+    /// </summary>
+    /// <param name="so">Bytes of the shared library to parse. <para>待解析的共享库字节。</para></param>
+    /// <param name="assetName">Asset name compared case-insensitively, for example <c>ksuinit</c>.
+    /// <para>不区分大小写比较的资源名称，例如 <c>ksuinit</c>。</para></param>
+    /// <returns>The verified ELF payload, or <c>null</c> when the name is absent, the payload cannot be located or
+    /// fails its hash check, or the container does not parse.
+    /// <para>已校验的 ELF 负载；名称不存在、负载无法定位或未通过哈希校验、容器无法解析时为 <c>null</c>。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="assetName"/> is null or whitespace.
+    /// <para><paramref name="assetName"/> 为 null 或空白。</para></exception>
+    public static byte[]? ExtractNamed(ReadOnlySpan<byte> so, string assetName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(assetName);
+        try
+        {
+            var elf = new ElfFile(so.ToArray());
+            var report = Extractor.ExtractAssets(elf, verbose: false,
+                nameFilter: name => string.Equals(name, assetName, StringComparison.OrdinalIgnoreCase));
+            foreach (var asset in report.Assets)
+            {
                 if (!asset.Verified) continue;
                 var data = Extractor.GetOutBytes(elf.Data, asset);
                 if (data.Length > 0 && data.AsSpan().StartsWith("\u007fELF"u8)) return data;

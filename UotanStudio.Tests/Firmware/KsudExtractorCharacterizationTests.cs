@@ -10,16 +10,16 @@ using KsudExtractor = UotanStudio.Firmware.BootSecurity.Patcher.Extractor;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Characterization tests for the KernelSU asset extractor. The extractor restores <c>*_kernelsu.ko</c> payloads from
-/// a KernelSU-patched kernel module and has no production consumer, so these tests pin the observable contract of each
+/// Characterization tests for the KernelSU asset extractor. The extractor restores <c>*_kernelsu.ko</c> payloads and
+/// named assets such as <c>ksuinit</c> from a KernelSU module, so these tests pin the observable contract of each
 /// shipped entry point over synthetic ELF64 images: name sanitization against traversal and illegal characters,
 /// deflate probing including its cap and malformed-input rejection, the address-mapping based reference scans for both
-/// supported machines, table-entry discovery and de-duplication, static-thunk discovery, and the asset shape reported
-/// by <c>ExtractAssets</c> when no payload can be located.
-/// <para>KernelSU 资源提取器的表征测试。该提取器从 KernelSU 打过补丁的内核模块中恢复 <c>*_kernelsu.ko</c> 数据，
-/// 且在生产代码中没有消费者，因此本测试在合成 ELF64 镜像上钉住每个已发布入口的可观察契约：
+/// supported machines, table-entry discovery and de-duplication, static-thunk discovery, explicit name filters, and
+/// the asset shape reported by <c>ExtractAssets</c> when no payload can be located.
+/// <para>KernelSU 资源提取器的表征测试。该提取器从 KernelSU 模块中恢复 <c>*_kernelsu.ko</c> 负载与
+/// <c>ksuinit</c> 等命名资源，因此本测试在合成 ELF64 镜像上钉住每个已发布入口的可观察契约：
 /// 针对路径穿越与非法字符的名称净化、deflate 探测（含其上限与畸形输入拒绝）、基于地址映射的两种受支持机器
-/// 引用扫描、表条目发现与去重、静态跳板发现，以及无法定位数据时 <c>ExtractAssets</c> 报告的资源形态。</para>
+/// 引用扫描、表条目发现与去重、静态跳板发现、显式名称过滤，以及无法定位数据时 <c>ExtractAssets</c> 报告的资源形态。</para>
 /// </summary>
 public class KsudExtractorCharacterizationTests
 {
@@ -269,6 +269,41 @@ public class KsudExtractorCharacterizationTests
         var elf = new ElfFile(ModuleImage(MachineX86_64));
 
         Assert.Empty(KsudExtractor.FindStaticFns(elf.Data, elf, 0x9000));
+    }
+
+    [Fact]
+    public void FindEntries_ExplicitNameFilter_ReturnsTheNamedEntryFromARealTable()
+    {
+        var elf = new ElfFile(ModuleImage(MachineX86_64));
+        var view = WithAssetTable(elf.Data, "bootctl", RodataVa + 0x20, ExecVa + 0x40);
+        WriteTableEntry(view, WritableFileOffset + 24, RodataVa + 0x60, 7, ExecVa + 0x80);
+        Encoding.ASCII.GetBytes("ksuinit").CopyTo(view, RodataFileOffset + 0x60);
+        WriteTableEntry(view, WritableFileOffset + 48, RodataVa + 0x80, 7, ExecVa + 0xC0);
+        Encoding.ASCII.GetBytes("waitsys").CopyTo(view, RodataFileOffset + 0x80);
+
+        var entries = KsudExtractor.FindEntries(view, elf, nameFilter: name => name == "ksuinit");
+
+        var entry = Assert.Single(entries);
+        Assert.Equal("ksuinit", entry.Name);
+        Assert.Equal(ExecVa + 0x80, entry.FnVa);
+        Assert.Empty(KsudExtractor.FindEntries(view, elf));
+    }
+
+    [Fact]
+    public void FindEntries_ExplicitNameFilter_IgnoresAStrayEntryOutsideTheTable()
+    {
+        var elf = new ElfFile(ModuleImage(MachineX86_64));
+        var view = WithAssetTable(elf.Data, "bootctl", RodataVa + 0x20, ExecVa + 0x40);
+        WriteTableEntry(view, WritableFileOffset + 24, RodataVa + 0x60, 7, ExecVa + 0x80);
+        Encoding.ASCII.GetBytes("ksuinit").CopyTo(view, RodataFileOffset + 0x60);
+        WriteTableEntry(view, WritableFileOffset + 48, RodataVa + 0x80, 7, ExecVa + 0xC0);
+        Encoding.ASCII.GetBytes("waitsys").CopyTo(view, RodataFileOffset + 0x80);
+        WriteTableEntry(view, WritableFileOffset - 0x40, RodataVa + 0xA0, 7, ExecVa + 0x100);
+        Encoding.ASCII.GetBytes("ksuinit").CopyTo(view, RodataFileOffset + 0xA0);
+
+        var entry = Assert.Single(KsudExtractor.FindEntries(view, elf, nameFilter: name => name == "ksuinit"));
+
+        Assert.Equal(ExecVa + 0x80, entry.FnVa);
     }
 
     [Fact]

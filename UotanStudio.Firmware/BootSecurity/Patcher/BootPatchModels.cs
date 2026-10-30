@@ -24,7 +24,54 @@ public enum BootPatchKind
     /// </summary>
     APatch,
     /// <summary>A standalone KernelSU loadable kernel module file. <para>独立的 KernelSU 可加载内核模块文件。</para></summary>
-    KernelSuLkm
+    KernelSuLkm,
+    /// <summary>
+    /// Package that patches the kernel with a bundled KernelPatch image and has no APatch install scripts.
+    /// <para>仅携带 KernelPatch 镜像、不含 APatch 安装脚本的内核修补包。</para>
+    /// </summary>
+    /// <remarks>
+    /// The image may sit at <c>assets/kpimg</c> or <c>assets/kpm/kpimg</c>; the superkey is a patch option,
+    /// because the package does not publish one.
+    /// <para>镜像可能位于 <c>assets/kpimg</c> 或 <c>assets/kpm/kpimg</c>；由于包内不公布超级密钥，
+    /// 该密钥通过修补选项传入。</para>
+    /// </remarks>
+    KernelPatch,
+    /// <summary>
+    /// A standalone boot kernel image or AnyKernel3-style package used to replace the boot kernel in GKI mode.
+    /// <para>用于 GKI 模式整体替换 boot 内核的独立内核镜像或 AnyKernel3 风格压缩包。</para>
+    /// </summary>
+    /// <remarks>
+    /// The payload is a raw ARM64 <c>Image</c>, a gzip-compressed kernel, or a ZIP carrying one of those entries.
+    /// <para>载荷为原始 ARM64 <c>Image</c>、gzip 压缩内核，或携带此类条目的 ZIP 压缩包。</para>
+    /// </remarks>
+    GkiKernel
+}
+
+/// <summary>Patch strategies a KernelSU-family boot patch can follow.
+/// <para>KernelSU 系 boot 修补可采用的修补策略。</para></summary>
+public enum BootPatchMode
+{
+    /// <summary>
+    /// Let the patcher pick the strategy from the detected package family: KPM for KernelPatch
+    /// packages and LKM otherwise.
+    /// <para>由修补器按检测到的包类型族决定策略：KernelPatch 包为 KPM，其余为 LKM。</para>
+    /// </summary>
+    Auto,
+    /// <summary>
+    /// Install the package's KernelSU module into the ramdisk and leave the boot kernel untouched.
+    /// <para>把包内的 KernelSU 模块装入 ramdisk，boot 内核保持不动。</para>
+    /// </summary>
+    Lkm,
+    /// <summary>
+    /// Replace the boot image kernel with a prebuilt GKI kernel supplied by the caller.
+    /// <para>用调用方提供的预编译 GKI 内核替换 boot 镜像内核。</para>
+    /// </summary>
+    Gki,
+    /// <summary>
+    /// Patch the boot kernel with the package's KernelPatch image so KPM modules can load.
+    /// <para>用包内 KernelPatch 镜像修补 boot 内核，使 KPM 模块可加载。</para>
+    /// </summary>
+    Kpm,
 }
 
 /// <summary>Optional controls exposed by a Magisk boot patch script. <para>Magisk 引导补丁脚本暴露的可选控制项。</para></summary>
@@ -104,6 +151,18 @@ public sealed record KernelSuPackageInfo(IReadOnlyList<string> Architectures, IR
 public sealed record BootKernelInfo(string? Architecture, string? Kmi);
 
 /// <summary>
+/// Components and identity read from one Android boot image in a single parse.
+/// <para>在单次解析中从 Android boot 镜像读到的组件与标识。</para>
+/// </summary>
+/// <param name="Architecture">Kernel ABI name such as <c>arm64</c>, or <c>null</c> when the kernel is absent or
+/// unrecognized. <para>内核 ABI 名称，例如 <c>arm64</c>；内核缺失或无法识别时为 <c>null</c>。</para></param>
+/// <param name="Kmi">KernelSU KMI string, or <c>null</c> when the kernel carries no extractable release.
+/// <para>KernelSU KMI 字符串；内核不含可提取版本时为 <c>null</c>。</para></param>
+/// <param name="HasKernel">Whether the image carries a non-empty kernel. <para>镜像是否携带非空内核。</para></param>
+/// <param name="HasRamdisk">Whether the image carries a non-empty ramdisk. <para>镜像是否携带非空 ramdisk。</para></param>
+public sealed record BootImageInspection(string? Architecture, string? Kmi, bool HasKernel, bool HasRamdisk);
+
+/// <summary>
 /// Detection outcome describing a package's family, ABIs, options and KMIs.
 /// <para>描述包类型族、ABI、可选项与 KMI 的检测结果。</para>
 /// </summary>
@@ -118,25 +177,46 @@ public sealed record BootKernelInfo(string? Architecture, string? Kmi);
 /// <para>包内 boot_patch.sh 引用的选项标记；非 Magisk 类型族为 <c>null</c>。</para>
 /// </param>
 /// <param name="Kmis">
-/// KMI strings detected for KernelSU packages; empty for other families.
-/// <para>KernelSU 包检测到的 KMI 字符串；其他类型族为空。</para>
+/// KMI strings whose module payload was extracted and hash-verified in the package; empty for other families.
+/// <para>包内已提取并通过哈希校验的模块负载所对应的 KMI 字符串；其他类型族为空。</para>
+/// </param>
+/// <param name="HasKernelPatchImage">
+/// Whether the package carries a KernelPatch image usable for KPM patching.
+/// <para>包内是否携带可用于 KPM 修补的 KernelPatch 镜像。</para>
+/// </param>
+/// <param name="UnsupportedReason">
+/// Why a recognized family or layout cannot patch a boot image, or <see langword="null"/> when it can.
+/// <para>已识别的类型族或布局为何无法修补 boot 镜像；可以修补时为 <see langword="null"/>。</para>
 /// </param>
 public sealed record BootPatchDetection(BootPatchKind Kind, IReadOnlyList<string> Architectures, string? Version = null,
-    IReadOnlySet<BootPatchOption>? SupportedOptions = null, IReadOnlyList<string>? Kmis = null)
+    IReadOnlySet<BootPatchOption>? SupportedOptions = null, IReadOnlyList<string>? Kmis = null,
+    bool HasKernelPatchImage = false, string? UnsupportedReason = null)
 {
     /// <summary>Whether a known family was detected together with at least one architecture.
     /// <para>是否同时检测到已知类型族与至少一个架构。</para></summary>
     /// <value>
-    /// <see langword="true"/> when <c>Kind</c> is not <see cref="BootPatchKind.Unknown"/>
-    /// and the ABI list is non-empty.
-    /// <para>当 <c>Kind</c> 不是 <see cref="BootPatchKind.Unknown"/> 且 ABI 列表非空时为 <see langword="true"/>。</para>
+    /// <see langword="true"/> when <c>Kind</c> is not <see cref="BootPatchKind.Unknown"/>, the ABI list is
+    /// non-empty and <see cref="UnsupportedReason"/> is <see langword="null"/>.
+    /// <para>当 <c>Kind</c> 不是 <see cref="BootPatchKind.Unknown"/>、ABI 列表非空且
+    /// <see cref="UnsupportedReason"/> 为 <see langword="null"/> 时为 <see langword="true"/>。</para>
     /// </value>
-    public bool IsSupported => Kind != BootPatchKind.Unknown && Architectures.Count > 0;
+    public bool IsSupported => Kind != BootPatchKind.Unknown && Architectures.Count > 0 && UnsupportedReason is null;
 }
 
 /// <summary>Options used by the native boot patcher. <para>原生引导修补器使用的选项。</para></summary>
 public sealed record BootPatchOptions
 {
+    /// <summary>
+    /// Patch strategy override; <see cref="BootPatchMode.Auto"/> picks the strategy from the package content:
+    /// KernelSU packages with verified module payloads take the LKM path, KernelSU packages that only carry a
+    /// KernelPatch image take the KPM path, and kernel images or AnyKernel3 packages take the GKI path.
+    /// <para>修补策略覆盖；<see cref="BootPatchMode.Auto"/> 按包内容选择策略：带已验证模块负载的
+    /// KernelSU 包走 LKM，仅携带 KernelPatch 镜像的 KernelSU 包走 KPM，内核镜像或 AnyKernel3 压缩包走 GKI。</para>
+    /// </summary>
+    /// <value>Defaults to <see cref="BootPatchMode.Auto"/>. <para>默认为 <see cref="BootPatchMode.Auto"/>。</para></value>
+    /// <remarks>Explicit modes are rejected when the package family cannot perform them.
+    /// <para>包类型族无法执行显式指定的模式时会被拒绝。</para></remarks>
+    public BootPatchMode Mode { get; init; } = BootPatchMode.Auto;
     /// <summary>Keeps dm-verity active in the patched image. <para>在修补后的镜像中保留 dm-verity。</para></summary>
     /// <value>Defaults to <see langword="true"/>. <para>默认为 <see langword="true"/>。</para></value>
     public bool KeepVerity { get; init; } = true;
@@ -175,10 +255,11 @@ public sealed record BootPatchOptions
     /// </value>
     public string? KernelSuKmi { get; init; }
     /// <summary>
-    /// Password forwarded to the patcher for super partition access.
-    /// <para>转发给修补器用于 super 分区访问的密码。</para>
+    /// KernelPatch superkey used by APatch and KernelPatch packages.
+    /// <para>APatch 与 KernelPatch 包使用的 KernelPatch 超级密钥。</para>
     /// </summary>
-    /// <value><c>null</c> when no super password is supplied. <para>未提供 super 密码时为 <c>null</c>。</para></value>
+    /// <value><c>null</c> when no superkey is supplied; APatch requires a valid key and KernelPatch packages
+    /// require a non-empty one. <para>未提供超级密钥时为 <c>null</c>；APatch 要求有效密钥，KernelPatch 包要求非空密钥。</para></value>
     public string? SuperPassword { get; init; }
     /// <summary>
     /// Optional sink that receives progress values from the patch pipeline.

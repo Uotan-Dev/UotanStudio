@@ -120,8 +120,45 @@ public static class BootPatchAnalyzer
                 : new BootKernelInfo(DetectKernelArchitecture(kernel), KernelVersionExtractor.ExtractKmi(kernel));
         }, cancellationToken);
 
+    /// <summary>Reads the architecture, KMI and component presence of a boot image in one parse and one decompression.
+    /// <para>在一次解析与一次解压中读取 boot 镜像的架构、KMI 与组件存在性。</para></summary>
+    /// <param name="bootPath">Boot image file path parsed from disk.
+    /// <para>从磁盘解析的 boot 镜像文件路径。</para></param>
+    /// <param name="cancellationToken">Honored by the thread-pool scheduling and checked after parsing.
+    /// <para>由线程池调度遵守，并在解析完成后检查。</para></param>
+    /// <returns>Kernel identity and component presence; architecture and KMI are <c>null</c> when the image has no
+    /// usable kernel. <para>内核标识与组件存在性；镜像没有可用内核时架构与 KMI 为 <c>null</c>。</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="bootPath"/> is null or whitespace.
+    /// <para><paramref name="bootPath"/> 为 null 或空白。</para></exception>
+    /// <exception cref="OperationCanceledException">The token was canceled before or during the scheduled work.
+    /// <para>令牌在调度任务期间或之前被取消。</para></exception>
+    /// <remarks>Boot image parse failures surface through the returned task from <c>BootImageParser.ParseFile</c>.
+    /// <para>boot 镜像解析失败通过 <c>BootImageParser.ParseFile</c> 返回的任务上报。</para></remarks>
+    public static Task<BootImageInspection> InspectBootAsync(string bootPath, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(bootPath);
+        return Task.Run(() =>
+        {
+            using var parser = new BootImageParser();
+            parser.ParseFile(bootPath);
+            cancellationToken.ThrowIfCancellationRequested();
+            var hasKernel = parser.Kernel.Length > 0;
+            var hasRamdisk = parser.Ramdisk.Length > 0;
+            if (!hasKernel)
+                return new BootImageInspection(null, null, hasKernel, hasRamdisk);
+            var kernel = parser.Header.KernelCompression == CompressionType.None
+                ? parser.Kernel
+                : BootCompressor.TryDecompress(parser.Kernel, parser.Header.KernelCompression);
+            return kernel is null
+                ? new BootImageInspection(null, null, hasKernel, hasRamdisk)
+                : new BootImageInspection(DetectKernelArchitecture(kernel), KernelVersionExtractor.ExtractKmi(kernel),
+                    hasKernel, hasRamdisk);
+        }, cancellationToken);
+    }
+
     internal static string? DetectKernelArchitecture(ReadOnlySpan<byte> kernel)
     {
+        if (LooksLikeArm64Image(kernel)) return "arm64";
         var headerLength = Math.Min(kernel.Length, 1024 * 1024);
         if (FileMagic.Identify(kernel[..headerLength])?.Description is { } rootDescription && TryMapArchitecture(rootDescription) is { } detected) return detected;
 
@@ -197,6 +234,15 @@ public static class BootPatchAnalyzer
             return new(BootPatchKind.KernelSuLkm, [DetectElfArchitecture(await ReadBoundedAsync(stream, cancellationToken))]);
 
         if (!stream.CanSeek) throw new NotSupportedException("Patch package inspection requires a seekable stream.");
+        var head = new byte[64];
+        var headLength = await ReadHeadAsync(stream, head, cancellationToken).ConfigureAwait(false);
+        stream.Position = 0;
+        if (!IsZipMagic(head.AsSpan(0, headLength))
+            && (LooksLikeArm64Image(head.AsSpan(0, headLength)) || IsGzipMagic(head.AsSpan(0, headLength))))
+        {
+            return await AnalyzeRawKernelAsync(stream, cancellationToken).ConfigureAwait(false);
+        }
+
         using var zip = ZipContainer.OpenRead(stream, leaveOpen: true);
         var names = zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).Select(e => e.FullName.Replace('\\', '/')).ToArray();
         var abis = names.Select(TryGetAbi).Where(static a => a is not null).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -215,7 +261,10 @@ public static class BootPatchAnalyzer
         var hasApatch = names.Any(n => n.EndsWith("libkptools.so", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("libkpatch.so", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("kpatch", StringComparison.OrdinalIgnoreCase));
-        if (!hasApatch && names.Any(n => n.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase)))
+        var hasKpatchLibrary = names.Any(n => n.EndsWith("libkpatch.so", StringComparison.OrdinalIgnoreCase))
+            || names.Any(n => n.EndsWith("kpatch", StringComparison.OrdinalIgnoreCase));
+        var hasBootPatchScript = names.Any(n => n.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
+        if (!hasApatch && hasBootPatchScript)
         {
             var script = zip.Entries.FirstOrDefault(e => e.FullName.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase));
             if (script is not null)
@@ -227,9 +276,35 @@ public static class BootPatchAnalyzer
                     || body.Contains("kpatch", StringComparison.OrdinalIgnoreCase);
             }
         }
-        hasApatch = hasApatch || names.Any(n => n.EndsWith("kpatch", StringComparison.OrdinalIgnoreCase));
-        var kind = hasApatch ? BootPatchKind.APatch : hasKsu ? BootPatchKind.KernelSu : hasMagisk ? BootPatchKind.Magisk : BootPatchKind.Unknown;
+        var hasApatchScript = hasKpatchLibrary || (hasBootPatchScript && hasApatch);
+        var hasKernelPatchImage = names.Any(n => n.Equals("assets/kpimg", StringComparison.OrdinalIgnoreCase))
+            || names.Any(n => n.EndsWith("/kpm/kpimg", StringComparison.OrdinalIgnoreCase));
+        var kind = !hasKsu && !hasMagisk && hasKernelPatchImage && !hasApatchScript
+            ? BootPatchKind.KernelPatch
+            : hasApatch ? BootPatchKind.APatch : hasKsu ? BootPatchKind.KernelSu : hasMagisk ? BootPatchKind.Magisk : BootPatchKind.Unknown;
+        if (!hasApatch && !hasKsu && !hasMagisk && names.Any(IsLegacyMagiskEntry))
+        {
+            kind = BootPatchKind.Magisk;
+        }
         var kmiNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (kind == BootPatchKind.Unknown)
+        {
+            var kernelEntry = zip.Entries.FirstOrDefault(e => GkiKernelEntryNames.Contains(e.Name, StringComparer.OrdinalIgnoreCase));
+            if (kernelEntry is not null)
+            {
+                var bytes = await ReadBoundedAsync(kernelEntry.Open(), cancellationToken).ConfigureAwait(false);
+                var payloadType = BootCompressor.Detect(bytes);
+                var raw = payloadType == CompressionType.None ? bytes : BootCompressor.TryDecompress(bytes, payloadType);
+                if (raw is not null && LooksLikeArm64Image(raw))
+                {
+                    kind = BootPatchKind.GkiKernel;
+                    var abi = DetectKernelArchitecture(raw);
+                    if (abi is not null) abis.Add(abi);
+                    if (KernelVersionExtractor.ExtractKmi(raw) is { } kmi) kmiNames.Add(kmi);
+                }
+            }
+        }
+        var unsupportedReason = ResolveUnsupportedReason(kind, names);
         if (kind == BootPatchKind.KernelSu)
         {
             foreach (var entry in zip.Entries.Where(e => e.Name.EndsWith("libksud.so", StringComparison.OrdinalIgnoreCase)
@@ -241,8 +316,6 @@ public static class BootPatchAnalyzer
                     var bytes = await ReadBoundedAsync(entry.Open(), cancellationToken);
                     foreach (var asset in KernelSuEmbeddedExtractor.ExtractDetailed(bytes))
                         if (!string.IsNullOrWhiteSpace(asset.Kmi)) kmiNames.Add(asset.Kmi!);
-                    foreach (var kmi in KernelSuEmbeddedExtractor.FindKmisInBinary(bytes))
-                        kmiNames.Add(kmi);
                 }
                 catch { }
             }
@@ -274,15 +347,15 @@ public static class BootPatchAnalyzer
                 AddSupportedOption(executableScript, supportedOptions, BootPatchOption.LegacySar, "LEGACYSAR");
                 AddSupportedOption(executableScript, supportedOptions, BootPatchOption.PreInitDevice, "PREINITDEVICE");
             }
-            supportedOptions.Add(BootPatchOption.KeepVerity);
-            supportedOptions.Add(BootPatchOption.KeepForceEncryption);
         }
         if (abis.Count == 0)
         {
             foreach (var entry in zip.Entries.Where(e => e.Name.EndsWith(".so", StringComparison.OrdinalIgnoreCase) || e.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase)))
             {
                 await using var es = entry.Open();
-                var header = await ReadBoundedAsync(es, cancellationToken, 128);
+                var headerBuffer = new byte[128];
+                var headerLength = await ReadHeadAsync(es, headerBuffer, cancellationToken).ConfigureAwait(false);
+                var header = headerBuffer.AsSpan(0, headerLength).ToArray();
                 if (header.Length >= 20 && header[0] == 0x7f && header[1] == (byte)'E')
                 {
                     var abi = DetectElfArchitecture(header);
@@ -292,7 +365,40 @@ public static class BootPatchAnalyzer
             }
         }
         return new(kind, abis, version, kind == BootPatchKind.Magisk ? supportedOptions : null,
-            [.. kmiNames.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase)]);
+            [.. kmiNames.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase)],
+            kind == BootPatchKind.KernelPatch || hasKernelPatchImage, unsupportedReason);
+    }
+
+    private static string? ResolveUnsupportedReason(BootPatchKind kind, string[] names)
+    {
+        if (kind == BootPatchKind.Magisk)
+        {
+            if (MagiskPackageLayout.HasRuntimePayload(names)) return null;
+            return names.Any(IsLegacyMagiskEntry)
+                ? "The Magisk package uses the v21.4 and earlier ZIP layout; select a v22.0 or newer APK to patch a boot image."
+                : "The Magisk package carries no installable runtime payload (libmagiskinit, libmagisk32/libmagisk64 or libmagisk), so the boot image cannot be patched from it.";
+        }
+
+        if (kind == BootPatchKind.Unknown && names.Any(IsSukiSuManagerOnlyEntry))
+        {
+            return "The SukiSU build is a manager-only bundle without a boot-image payload; select a build that ships libksud, ksuinit, .ko modules or kpimg.";
+        }
+
+        return null;
+    }
+
+    private static bool IsLegacyMagiskEntry(string name)
+    {
+        var file = Path.GetFileName(name);
+        return file.Equals("magiskinit", StringComparison.OrdinalIgnoreCase)
+            || file.Equals("magiskinit64", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsSukiSuManagerOnlyEntry(string name)
+    {
+        var file = Path.GetFileName(name);
+        return file.Equals("libzako.so", StringComparison.OrdinalIgnoreCase)
+            || file.Equals("libzakoboot.so", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void AddSupportedOption(string script, HashSet<BootPatchOption> options, BootPatchOption option, string token)
@@ -336,5 +442,44 @@ public static class BootPatchAnalyzer
         }
         if (output.Length >= max && stream.ReadByte() >= 0) throw new InvalidDataException("Patch payload exceeds the bounded limit.");
         return output.ToArray();
+    }
+
+    internal static readonly string[] GkiKernelEntryNames =
+        ["Image", "Image.gz-dtb", "Image.gz", "Image-dtb", "zImage", "zImage-dtb", "bzImage"];
+
+    private static async Task<int> ReadHeadAsync(Stream stream, byte[] head, CancellationToken ct)
+    {
+        var filled = 0;
+        while (filled < head.Length)
+        {
+            var read = await stream.ReadAsync(head.AsMemory(filled), ct).ConfigureAwait(false);
+            if (read == 0) break;
+            filled += read;
+        }
+
+        return filled;
+    }
+
+    private static bool IsZipMagic(ReadOnlySpan<byte> head) => head.Length >= 4 && head[0] == (byte)'P'
+        && head[1] == (byte)'K' && head[2] is 0x03 or 0x05 or 0x07 && head[3] is 0x04 or 0x06 or 0x08;
+
+    private static bool IsGzipMagic(ReadOnlySpan<byte> head) => head.Length >= 2 && head[0] == 0x1F && head[1] == 0x8B;
+
+    /// <summary>
+    /// Recognizes an ARM64 kernel image by the <c>ARMd</c> magic at header offset 0x38.
+    /// <para>通过头部 0x38 偏移处的 <c>ARMd</c> 魔数识别 ARM64 内核镜像。</para>
+    /// </summary>
+    private static bool LooksLikeArm64Image(ReadOnlySpan<byte> image) => image.Length >= 0x3C
+        && image[0x38] == (byte)'A' && image[0x39] == (byte)'R' && image[0x3A] == (byte)'M' && image[0x3B] == 0x64;
+
+    private static async Task<BootPatchDetection> AnalyzeRawKernelAsync(Stream stream, CancellationToken ct)
+    {
+        var payload = await ReadBoundedAsync(stream, ct).ConfigureAwait(false);
+        var payloadType = BootCompressor.Detect(payload);
+        var raw = payloadType == CompressionType.None ? payload : BootCompressor.TryDecompress(payload, payloadType);
+        if (raw is null || !LooksLikeArm64Image(raw)) return new(BootPatchKind.Unknown, []);
+        var abi = DetectKernelArchitecture(raw);
+        var kmi = KernelVersionExtractor.ExtractKmi(raw);
+        return new(BootPatchKind.GkiKernel, abi is null ? [] : [abi], Kmis: kmi is null ? [] : [kmi]);
     }
 }

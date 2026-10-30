@@ -27,6 +27,15 @@ public enum RootPatchPackageSource
 /// </summary>
 public static class RootPatchSources
 {
+    /// <summary>KernelPatch superkey the flash panel's root patch uses when the caller supplies none.
+    /// <para>闪刷面板的 Root 修补在调用方未提供密钥时使用的 KernelPatch 超级密钥。</para>
+    /// </summary>
+    /// <remarks>The patch core accepts any non-empty key. The boot patch window leaves its superkey field
+    /// empty for the user to fill; this value only backs the flash panel, which has no key input.
+    /// <para>修补核心接受任意非空密钥。修补 Boot 窗口的超级密钥框默认留空由用户填写；该值只供没有密钥输入的
+    /// 闪刷面板内部使用。</para></remarks>
+    public const string KernelPatchDefaultSuperKey = "123";
+
     /// <summary>Every provisionable source in presentation order.
     /// <para>按呈现顺序排列的全部可供给来源。</para></summary>
     /// <value>Five stable entries; the collection is never mutated after initialization.
@@ -72,14 +81,17 @@ public static class RootPatchSources
     public static RootPatchPackageSource? FromIndex(int index)
         => index >= 0 && index < All.Count ? All[index] : null;
 
-    /// <summary>Returns the package family a source's downloads must be detected as.
-    /// <para>返回该来源的下载文件必须被检测出的包类型族。</para></summary>
+    /// <summary>Returns the package family a source's downloads are expected to contain.
+    /// <para>返回该来源的下载文件预期包含的包类型族。</para></summary>
     /// <param name="source">Provisionable source. <para>可供给来源。</para></param>
     /// <returns>
-    /// <see cref="BootPatchKind.Magisk"/> for both Magisk sources, <see cref="BootPatchKind.KernelSu"/> for both
-    /// KernelSU-path sources, and <see cref="BootPatchKind.APatch"/> for APatch.
-    /// <para>两个 Magisk 来源为 <see cref="BootPatchKind.Magisk"/>，两个 KernelSU 路径来源为
-    /// <see cref="BootPatchKind.KernelSu"/>，APatch 为 <see cref="BootPatchKind.APatch"/>。</para>
+    /// <see cref="BootPatchKind.Magisk"/> for both Magisk sources and <see cref="BootPatchKind.APatch"/> for
+    /// APatch; the KernelSU-path sources list <see cref="BootPatchKind.KernelSu"/> but also publish standalone
+    /// kernel packages. Use <see cref="Accepts"/> for the full verdict, because SukiSU also accepts KernelPatch
+    /// packages and both KernelSU-path sources accept GKI kernel packages.
+    /// <para>两个 Magisk 来源为 <see cref="BootPatchKind.Magisk"/>，APatch 为 <see cref="BootPatchKind.APatch"/>；
+    /// KernelSU 路径来源声明 <see cref="BootPatchKind.KernelSu"/>，但也发布独立内核包。完整判定请用
+    /// <see cref="Accepts"/>，因为 SukiSU 也接受 KernelPatch 包，两个 KernelSU 路径来源也接受 GKI 内核包。</para>
     /// </returns>
     public static BootPatchKind ExpectedKind(this RootPatchPackageSource source) => source switch
     {
@@ -88,4 +100,26 @@ public static class RootPatchSources
         RootPatchPackageSource.APatch => BootPatchKind.APatch,
         _ => BootPatchKind.Unknown,
     };
+
+    /// <summary>Reports whether a detected package family can be patched from this source.
+    /// <para>判断检测到的包类型族能否由该来源修补。</para></summary>
+    /// <param name="source">Provisionable source. <para>可供给来源。</para></param>
+    /// <param name="kind">Detected package family. <para>检测到的包类型族。</para></param>
+    /// <returns><see langword="true"/> for the expected family; SukiSU also accepts KernelPatch/KPM builds, and
+    /// both KernelSU-path sources accept <see cref="BootPatchKind.GkiKernel"/> kernel packages that patch in
+    /// GKI mode. <para>类型族符合预期时为 <see langword="true"/>；SukiSU 另接受 KernelPatch/KPM 构建，两个
+    /// KernelSU 路径来源也接受按 GKI 模式修补的 <see cref="BootPatchKind.GkiKernel"/> 内核包。</para></returns>
+    public static bool Accepts(this RootPatchPackageSource source, BootPatchKind kind)
+        => kind == source.ExpectedKind()
+            || (source == RootPatchPackageSource.SukiSu && kind == BootPatchKind.KernelPatch)
+            || (source is RootPatchPackageSource.KernelSu or RootPatchPackageSource.SukiSu
+                && kind == BootPatchKind.GkiKernel);
+
+    /// <summary>Returns the KernelPatch superkey the flash panel uses for this source when the caller supplies none.
+    /// <para>返回闪刷面板在该来源未提供密钥时使用的 KernelPatch 超级密钥。</para></summary>
+    /// <param name="source">Provisionable source. <para>可供给来源。</para></param>
+    /// <returns><see cref="KernelPatchDefaultSuperKey"/> for SukiSU; <see langword="null"/> otherwise.
+    /// <para>SukiSU 为 <see cref="KernelPatchDefaultSuperKey"/>；其他来源为 <see langword="null"/>。</para></returns>
+    public static string? DefaultSuperKey(this RootPatchPackageSource source)
+        => source == RootPatchPackageSource.SukiSu ? KernelPatchDefaultSuperKey : null;
 }

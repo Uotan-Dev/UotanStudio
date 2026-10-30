@@ -2575,8 +2575,9 @@ public sealed partial class FlashViewModel
                 if (addRoot && rootEntry is { } patchedEntry)
                 {
                     var rootPackage = await ResolveRootPackageAsync(cancellation.Token);
+                    var superKey = _rootLoadedSource?.DefaultSuperKey() ?? RootPatchSources.KernelPatchDefaultSuperKey;
                     var output = await FlashRootImage.PrepareAsync(rootPackage,
-                        prepared.GetValueOrDefault(patchedEntry, patchedEntry.FilePath), cancellation.Token);
+                        prepared.GetValueOrDefault(patchedEntry, patchedEntry.FilePath), superKey, cancellation.Token);
                     staged.Add(output);
                     prepared[patchedEntry] = output;
                 }

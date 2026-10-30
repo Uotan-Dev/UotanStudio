@@ -10,7 +10,7 @@ public static class FlashRootImage
     /// <returns>True when this flow can patch the package.<para>当前流程可以修补该包时为真。</para></returns>
     public static bool IsSupportedPackage(BootPatchDetection detection)
         => detection.IsSupported &&
-            (detection.Kind is BootPatchKind.Magisk or BootPatchKind.KernelSu ||
+            (detection.Kind is BootPatchKind.Magisk or BootPatchKind.KernelSu or BootPatchKind.KernelPatch ||
                 detection.Kind == BootPatchKind.KernelSuLkm &&
                 detection.Architectures.Any(arch => arch is "arm64" or "arm32" or "x64" or "x86"));
 
@@ -19,7 +19,17 @@ public static class FlashRootImage
     /// <param name="bootPath">Boot image file to patch.<para>要修补的 boot 镜像文件。</para></param>
     /// <param name="ct">Token cancelling the patch.<para>用于取消修补的令牌。</para></param>
     /// <returns>Path of the patched temporary image.<para>修补后的临时镜像路径。</para></returns>
-    public static async Task<string> PrepareAsync(string packagePath, string bootPath, CancellationToken ct)
+    public static Task<string> PrepareAsync(string packagePath, string bootPath, CancellationToken ct)
+        => PrepareAsync(packagePath, bootPath, superKey: null, ct);
+
+    /// <summary>Returns a temporary image, supplying the KernelPatch superkey for generic KernelPatch packages.<para>返回临时镜像，并为通用 KernelPatch 包提供超级密钥。</para></summary>
+    /// <param name="packagePath">Root package file supplying the patch.<para>提供修补内容的 Root 包文件。</para></param>
+    /// <param name="bootPath">Boot image file to patch.<para>要修补的 boot 镜像文件。</para></param>
+    /// <param name="superKey">KernelPatch superkey; ignored by Magisk and KernelSU packages.<para>KernelPatch 超级密钥；Magisk 与 KernelSU 包会忽略该值。</para></param>
+    /// <param name="ct">Token cancelling the patch.<para>用于取消修补的令牌。</para></param>
+    /// <returns>Path of the patched temporary image.<para>修补后的临时镜像路径。</para></returns>
+    public static async Task<string> PrepareAsync(string packagePath, string bootPath, string? superKey,
+        CancellationToken ct)
     {
         var output = Path.Combine(Path.GetTempPath(), "uotan-root-" + Guid.NewGuid().ToString("N") + ".img");
         try
@@ -28,10 +38,11 @@ public static class FlashRootImage
             var detection = await patcher.DetectAsync(packagePath, ct).ConfigureAwait(false);
             if (!IsSupportedPackage(detection))
             {
-                throw new InvalidDataException("The selected package is not a supported Magisk or KernelSU package.");
+                throw new InvalidDataException("The selected package is not a supported Magisk, KernelSU or KernelPatch package.");
             }
 
-            await patcher.PatchAsync(packagePath, bootPath, output, cancellationToken: ct).ConfigureAwait(false);
+            await patcher.PatchAsync(packagePath, bootPath, output,
+                new BootPatchOptions { SuperPassword = superKey }, ct).ConfigureAwait(false);
             if (!File.Exists(output) || new FileInfo(output).Length == 0)
             {
                 throw new InvalidDataException("The Root patch did not produce a boot image.");

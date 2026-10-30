@@ -24,7 +24,7 @@ public sealed class BootPatchService
     /// <para>分析 root 包文件，报告其补丁类型、架构与可用模块。</para>
     /// </summary>
     /// <param name="packagePath">
-    /// Path to the Magisk, KernelSU or APatch package to inspect.
+    /// Path to the Magisk, KernelSU, APatch or KernelPatch package to inspect.
     /// <para>待检查的 Magisk、KernelSU 或 APatch 包路径。</para>
     /// </param>
     /// <param name="cancellationToken">Cancels the package analysis. <para>取消包的解析过程。</para></param>
@@ -35,22 +35,22 @@ public sealed class BootPatchService
 
     /// <summary>Applies a root package to an Android boot image and atomically publishes a new image.
     /// <para>将 root 包应用到 Android boot 镜像，并以原子方式发布新镜像。</para></summary>
-    /// <param name="packagePath">Path to the Magisk, KernelSU or APatch package selected by <see cref="DetectAsync"/>.
+    /// <param name="packagePath">Path to the Magisk, KernelSU, APatch or KernelPatch package selected by <see cref="DetectAsync"/>.
     /// <para>由 <see cref="DetectAsync"/> 选定的 Magisk、KernelSU 或 APatch 包路径。</para></param>
     /// <param name="bootPath">Source boot image; it is read only and never overwritten.
     /// <para>源 boot 镜像；只读取，不会被覆盖。</para></param>
     /// <param name="outputPath">Destination image path. The result is written to a temporary file first and moved into place only after the full image is packed; the temporary file is removed on failure.
     /// <para>目标镜像路径。结果先写入临时文件，完整镜像打包完成后才移动到位；失败时删除临时文件。</para></param>
-    /// <param name="options">Patch options such as architecture, KMI override and verity flags; <see langword="null"/> uses the defaults of <c>BootPatchOptions</c>.
-    /// <para>补丁选项（架构、KMI 覆盖、verity 开关等）；为 <see langword="null"/> 时使用 <c>BootPatchOptions</c> 的默认值。</para></param>
+    /// <param name="options">Patch options such as patch mode, architecture, KMI override and verity flags; <see langword="null"/> uses the defaults of <c>BootPatchOptions</c>.
+    /// <para>补丁选项（修补模式、架构、KMI 覆盖、verity 开关等）；为 <see langword="null"/> 时使用 <c>BootPatchOptions</c> 的默认值。</para></param>
     /// <param name="cancellationToken">Cancels package reads and the output write; cancellation leaves the existing output file untouched.
     /// <para>取消包的读取与输出写入；取消时既有输出文件保持不变。</para></param>
     /// <returns>The published output path, the detection narrowed to the architecture actually applied, and the ordered list of changes made to the ramdisk and kernel.
     /// <para>已发布的输出路径、收敛到实际应用架构的检测结果，以及对 ramdisk 与内核所做变更的有序列表。</para></returns>
     /// <exception cref="InvalidOperationException"><paramref name="bootPath"/> and <paramref name="outputPath"/> resolve to the same file.
     /// <para><paramref name="bootPath"/> 与 <paramref name="outputPath"/> 解析为同一文件。</para></exception>
-    /// <exception cref="InvalidDataException">The package is unsupported, the APatch SuperKey is invalid, the boot image lacks a kernel or a required ramdisk, kernel or ramdisk decompression fails, the KernelSU package has no module for the selected KMI, or the image is already Magisk-patched.
-    /// <para>包不受支持、APatch SuperKey 无效、boot 镜像缺少内核或必需的 ramdisk、内核或 ramdisk 解压失败、 KernelSU 包不含所选 KMI 的模块，或镜像已被 Magisk 打过补丁。</para></exception>
+    /// <exception cref="InvalidDataException">The package is unsupported, the requested patch mode does not fit the package, the APatch SuperKey is invalid, a KernelPatch run has no SuperKey, the boot image lacks a kernel or a required ramdisk, kernel or ramdisk decompression fails, the KernelSU package has no verified module for the selected KMI or no ksuinit payload, the GKI kernel package carries no kernel image, or the image is already Magisk-patched.
+    /// <para>包不受支持、请求的修补模式与包不匹配、APatch SuperKey 无效、KernelPatch 修补缺少 SuperKey、boot 镜像缺少内核或必需的 ramdisk、内核或 ramdisk 解压失败、 KernelSU 包不含所选 KMI 的已验证模块或不含 ksuinit 负载、GKI 内核包不含内核镜像，或镜像已被 Magisk 打过补丁。</para></exception>
     /// <exception cref="OperationCanceledException">The token is cancelled during a read or write.
     /// <para>读取或写入期间令牌被取消。</para></exception>
     /// <example>
@@ -72,8 +72,8 @@ public sealed class BootPatchService
     /// <para>源 boot 镜像；只读取，不会被覆盖。</para></param>
     /// <param name="outputPath">Destination image path published atomically after the full image is packed.
     /// <para>目标镜像路径；完整镜像打包完成后原子发布。</para></param>
-    /// <param name="options">Patch options such as architecture, KMI override and verity flags.
-    /// <para>补丁选项（架构、KMI 覆盖、verity 开关等）。</para></param>
+    /// <param name="options">Patch options such as patch mode, architecture, KMI override and verity flags.
+    /// <para>补丁选项（修补模式、架构、KMI 覆盖、verity 开关等）。</para></param>
     /// <param name="detection">Detection produced by <see cref="DetectAsync"/> for <paramref name="packagePath"/>.
     /// <para>由 <see cref="DetectAsync"/> 针对 <paramref name="packagePath"/> 生成的检测结果。</para></param>
     /// <param name="cancellationToken">Cancels package reads and the output write.
@@ -84,8 +84,8 @@ public sealed class BootPatchService
     /// <para><paramref name="detection"/> 为 <see langword="null"/>。</para></exception>
     /// <exception cref="InvalidOperationException"><paramref name="bootPath"/> and <paramref name="outputPath"/> resolve to the same file.
     /// <para><paramref name="bootPath"/> 与 <paramref name="outputPath"/> 解析为同一文件。</para></exception>
-    /// <exception cref="InvalidDataException">The detection is unsupported, the APatch SuperKey is invalid, the boot image lacks a kernel or a required ramdisk, kernel or ramdisk decompression fails, the KernelSU package has no module for the selected KMI, or the image is already Magisk-patched.
-    /// <para>检测结果不受支持、APatch SuperKey 无效、boot 镜像缺少内核或必需的 ramdisk、内核或 ramdisk 解压失败、 KernelSU 包不含所选 KMI 的模块，或镜像已被 Magisk 打过补丁。</para></exception>
+    /// <exception cref="InvalidDataException">The detection is unsupported, the requested patch mode does not fit the package, the APatch SuperKey is invalid, a KernelPatch run has no SuperKey, the boot image lacks a kernel or a required ramdisk, kernel or ramdisk decompression fails, the KernelSU package has no verified module for the selected KMI or no ksuinit payload, the GKI kernel package carries no kernel image, or the image is already Magisk-patched.
+    /// <para>检测结果不受支持、请求的修补模式与包不匹配、APatch SuperKey 无效、KernelPatch 修补缺少 SuperKey、boot 镜像缺少内核或必需的 ramdisk、内核或 ramdisk 解压失败、 KernelSU 包不含所选 KMI 的已验证模块或不含 ksuinit 负载、GKI 内核包不含内核镜像，或镜像已被 Magisk 打过补丁。</para></exception>
     /// <exception cref="OperationCanceledException">The token is cancelled during a read or write.
     /// <para>读取或写入期间令牌被取消。</para></exception>
     public async Task<BootPatchResult> PatchWithDetectionAsync(string packagePath, string bootPath, string outputPath,
@@ -106,15 +106,22 @@ public sealed class BootPatchService
         if (string.Equals(sourceFullPath, destinationFullPath, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The patched image must be written to a different file.");
         detection ??= await DetectAsync(packagePath, cancellationToken).ConfigureAwait(false);
-        if (!detection.IsSupported) throw new InvalidDataException("The selected file is not a supported Magisk, KernelSU or APatch package.");
+        if (!detection.IsSupported)
+            throw new InvalidDataException(detection.UnsupportedReason
+                ?? "The selected file is not a supported Magisk, KernelSU, APatch, KernelPatch or kernel image package.");
+        var mode = ResolvePatchMode(detection, options.Mode);
         if (detection.Kind == BootPatchKind.APatch && !APatchSuperKey.IsValid(options.SuperPassword))
             throw new InvalidDataException("APatch SuperKey must be 8-63 characters and contain both a letter and a digit.");
+        if ((detection.Kind == BootPatchKind.KernelPatch || mode == BootPatchMode.Kpm)
+            && string.IsNullOrWhiteSpace(options.SuperPassword))
+            throw new InvalidDataException("The KernelPatch package requires a non-empty SuperKey.");
         var arch = options.Architecture is { Length: > 0 } selected && detection.Architectures.Contains(selected, StringComparer.OrdinalIgnoreCase)
             ? selected : detection.Architectures[0];
         using var parser = new BootImageParser();
         parser.ParseFile(bootPath);
         var role = parser.DetectRole(Core.Repacking.RepackMetadata.DetectPartitionName(Path.GetFileName(bootPath)));
-        if (role == BootImageRole.InitBoot && detection.Kind is BootPatchKind.KernelSu or BootPatchKind.APatch)
+        if (role == BootImageRole.InitBoot &&
+            detection.Kind is BootPatchKind.KernelSu or BootPatchKind.APatch or BootPatchKind.KernelPatch)
             throw new InvalidDataException(
                 $"{detection.Kind} patches the kernel, but init_boot images carry an empty kernel segment; select the boot image instead of init_boot.");
         string? stockBootSha1 = null;
@@ -127,7 +134,7 @@ public sealed class BootPatchService
         options.Progress?.Report(.2d);
         string? bootKmi = null;
         string? kernelSuKmi = null;
-        if (detection.Kind == BootPatchKind.KernelSu)
+        if (mode == BootPatchMode.Lkm && detection.Kind == BootPatchKind.KernelSu)
         {
             if (parser.Kernel.Length == 0)
                 throw new InvalidDataException("The boot image does not contain a kernel.");
@@ -144,20 +151,57 @@ public sealed class BootPatchService
             if (!detection.Kmis.Contains(kernelSuKmi, StringComparer.OrdinalIgnoreCase))
                 throw new InvalidDataException($"KernelSU package does not contain a module for KMI '{kernelSuKmi}'.");
         }
-        if (parser.Ramdisk.Length == 0 && detection.Kind != BootPatchKind.APatch)
+        if (parser.Ramdisk.Length == 0 && detection.Kind is not (BootPatchKind.APatch or BootPatchKind.KernelPatch)
+            && mode is not (BootPatchMode.Gki or BootPatchMode.Kpm))
             throw new InvalidDataException("The boot image has no ramdisk to patch.");
         var changes = new List<string>();
 
         var patchedKernel = parser.Kernel;
         byte[]? kernelDtb = null;
-        if (detection.Kind == BootPatchKind.APatch)
+        if (mode == BootPatchMode.Gki)
+        {
+            if (parser.Kernel.Length == 0)
+                throw new InvalidDataException("The boot image does not contain a kernel to replace.");
+            if (parser.Header.HeaderVersion == BootImageVersion.V1)
+            {
+                var rawStock = parser.Header.KernelCompression == CompressionType.None
+                    ? parser.Kernel
+                    : BootCompressor.TryDecompress(parser.Kernel, parser.Header.KernelCompression)
+                        ?? throw new InvalidDataException("The boot kernel compression is unsupported or corrupt.");
+                SplitEmbeddedKernelDtb(parser, rawStock, out _, out kernelDtb);
+            }
+
+            var replacement = await LoadGkiKernelAsync(packagePath, cancellationToken).ConfigureAwait(false);
+            SplitEmbeddedKernelDtb(parser, replacement, out _, out var replacementDtb);
+            byte[] kernelBody;
+            if (replacementDtb is { Length: > 0 } || kernelDtb is not { Length: > 0 })
+            {
+                kernelBody = replacement;
+            }
+            else
+            {
+                kernelBody = [.. replacement, .. kernelDtb];
+                changes.Add("re-attach the original kernel DTB");
+            }
+
+            patchedKernel = parser.Header.KernelCompression == CompressionType.None
+                ? kernelBody
+                : CompressRamdisk(kernelBody, parser.Header.KernelCompression);
+            changes.Add("replace boot kernel with the supplied GKI image");
+        }
+        else if (detection.Kind is BootPatchKind.APatch or BootPatchKind.KernelPatch
+            || mode == BootPatchMode.Kpm)
         {
             var kpimg = await ReadPackageEntryAsync(packagePath, detection, arch, "kpimg", cancellationToken).ConfigureAwait(false)
-                ?? throw new InvalidDataException("The selected APatch package has no kpimg for the selected architecture.");
+                ?? throw new InvalidDataException("The selected KernelPatch package has no kpimg for the selected architecture.");
             var rawKernel = parser.Header.KernelCompression == CompressionType.None
                 ? parser.Kernel
                 : BootCompressor.TryDecompress(parser.Kernel, parser.Header.KernelCompression)
                     ?? throw new InvalidDataException("The boot kernel compression is unsupported or corrupt.");
+            var targetKernelArchitecture = BootPatchAnalyzer.DetectKernelArchitecture(rawKernel);
+            if (!string.Equals(targetKernelArchitecture, "arm64", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    $"KernelPatch and APatch injection support arm64 boot kernels only; the boot kernel is {targetKernelArchitecture ?? "unrecognized"}.");
             SplitEmbeddedKernelDtb(parser, rawKernel, out var kernelBody, out kernelDtb);
             var injected = KernelPatchInjector.Patch(kernelBody.Span, kpimg, options.SuperPassword!);
             if (kernelDtb is { Length: > 0 }) injected = [.. injected, .. kernelDtb];
@@ -191,7 +235,12 @@ public sealed class BootPatchService
         }
 
         byte[] compressed;
-        if (parser.Ramdisk.Length == 0)
+        if (detection.Kind is BootPatchKind.KernelPatch or BootPatchKind.APatch || mode is BootPatchMode.Gki
+            || (mode == BootPatchMode.Kpm && detection.Kind == BootPatchKind.KernelSu))
+        {
+            compressed = parser.Ramdisk;
+        }
+        else if (parser.Ramdisk.Length == 0)
         {
             compressed = [];
         }
@@ -238,6 +287,8 @@ public sealed class BootPatchService
         string? stockBootSha1 = null)
     {
         var initTarget = editor.Exists("init.real") ? "init.real" : "init";
+        var initStaged = false;
+        var moduleInstalled = false;
         if (detection.Kind == BootPatchKind.KernelSuLkm)
         {
             var ko = await File.ReadAllBytesAsync(packagePath, ct).ConfigureAwait(false);
@@ -249,6 +300,8 @@ public sealed class BootPatchService
         using var fs = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var zip = ZipContainer.OpenRead(fs);
         var abiNames = AbiDirectories(architecture);
+        var entryNames = zip.Entries.Select(static e => e.FullName.Replace('\\', '/')).ToArray();
+        var magiskSplit = MagiskPackageLayout.UsesSplitLayout(entryNames);
         foreach (var entry in zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)))
         {
             var path = entry.FullName.Replace('\\', '/');
@@ -258,8 +311,8 @@ public sealed class BootPatchService
             if (!inAbi && !isMagiskAsset) continue;
             if (detection.Kind == BootPatchKind.Magisk)
             {
-                if (!IsMagiskRuntimeEntry(entry.Name, detection.Version)) continue;
-                var magiskTarget = MagiskTarget(entry.Name, initTarget, detection.Version);
+                if (!MagiskPackageLayout.IsRuntimeEntry(entry.Name, magiskSplit)) continue;
+                var magiskTarget = MagiskPackageLayout.Target(entry.Name, initTarget, magiskSplit);
                 if (magiskTarget is null) continue;
                 var bytes = await ReadEntryBoundedAsync(entry, ct).ConfigureAwait(false);
                 if (!entry.Name.EndsWith(".xz", StringComparison.OrdinalIgnoreCase) && magiskTarget.EndsWith(".xz", StringComparison.OrdinalIgnoreCase))
@@ -284,15 +337,16 @@ public sealed class BootPatchService
                 editor.AddOrReplace("ksuinit", initData.ToArray(), Regular(0x81ED));
                 changes.Add("stage ksuinit");
                 InstallKernelSuInit(editor, initTarget, changes);
+                initStaged = true;
                 continue;
             }
             await using var input = entry.Open();
             using var data = new MemoryStream();
             await input.CopyToAsync(data, ct).ConfigureAwait(false);
-            var target = isKsuInit ? initTarget : "kernelsu.ko";
-            EnsureParentDirectories(editor, target, changes);
-            editor.AddOrReplace(target, data.ToArray(), Regular((uint)(isKsuInit ? 0x81ED : 0x81A4)));
-            changes.Add($"install {target}");
+            EnsureParentDirectories(editor, "kernelsu.ko", changes);
+            editor.AddOrReplace("kernelsu.ko", data.ToArray(), Regular(0x81A4));
+            changes.Add("install kernelsu.ko");
+            moduleInstalled = true;
         }
         if (detection.Kind == BootPatchKind.Magisk)
         {
@@ -321,48 +375,54 @@ public sealed class BootPatchService
             if (options.PatchVbmetaFlag)
                 changes.Add("enable Magisk PATCHVBMETAFLAG");
         }
-        if (detection.Kind == BootPatchKind.KernelSu || detection.Kind == BootPatchKind.APatch)
+        if (detection.Kind == BootPatchKind.KernelSu)
         {
             foreach (var entry in zip.Entries.Where(e => IsKernelSuLibrary(e.Name)))
             {
                 var bytes = await ReadEntryBoundedAsync(entry, ct).ConfigureAwait(false);
-                if (detection.Kind == BootPatchKind.KernelSu && entry.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase))
+                if (entry.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase))
                 {
                     EnsureParentDirectories(editor, "kernelsu.ko", changes);
                     editor.AddOrReplace("kernelsu.ko", bytes, Regular(0x81A4));
                     changes.Add("install kernelsu.ko");
+                    moduleInstalled = true;
                     continue;
                 }
-                if (detection.Kind == BootPatchKind.KernelSu && entry.Name.Equals("ksuinit", StringComparison.OrdinalIgnoreCase))
+                if (entry.Name.Equals("ksuinit", StringComparison.OrdinalIgnoreCase))
                 {
                     editor.AddOrReplace("ksuinit", bytes, Regular(0x81ED));
                     changes.Add("stage ksuinit");
                     InstallKernelSuInit(editor, initTarget, changes);
+                    initStaged = true;
                     continue;
                 }
-                if (detection.Kind == BootPatchKind.APatch && entry.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase))
+                if (!initStaged
+                    && KernelSuEmbeddedExtractor.ExtractNamed(bytes, "ksuinit") is { } ksuinit)
                 {
-                    var target = entry.Name.Equals("ksu.ko", StringComparison.OrdinalIgnoreCase) ? "kernelsu.ko" : entry.Name;
-                    EnsureParentDirectories(editor, $"overlay.d/sbin/{target}", changes);
-                    editor.AddOrReplace($"overlay.d/sbin/{target}", bytes, Regular(0x81A4));
-                    changes.Add($"install {target}");
-                    continue;
+                    editor.AddOrReplace("ksuinit", ksuinit, Regular(0x81ED));
+                    changes.Add("stage ksuinit from embedded assets");
+                    InstallKernelSuInit(editor, initTarget, changes);
+                    initStaged = true;
                 }
-                if (detection.Kind == BootPatchKind.APatch && (entry.Name.Equals("ksud", StringComparison.OrdinalIgnoreCase) || entry.Name.Equals("ksuinit", StringComparison.OrdinalIgnoreCase)))
-                {
-                    EnsureParentDirectories(editor, $"overlay.d/sbin/{entry.Name}", changes);
-                    editor.AddOrReplace($"overlay.d/sbin/{entry.Name}", bytes, Regular(0x81EDu));
-                    changes.Add($"install {entry.Name}");
-                    continue;
-                }
-                if (detection.Kind != BootPatchKind.KernelSu) continue;
+                if (moduleInstalled) continue;
                 var extracted = bootKmi is null ? null : KernelSuEmbeddedExtractor.ExtractForKmi(bytes, bootKmi);
                 if (extracted is null) continue;
+                var moduleArchitecture = BootPatchAnalyzer.DetectElfArchitecture(extracted);
+                if (moduleArchitecture is "arm64" or "arm32" or "x64" or "x86"
+                    && !string.Equals(moduleArchitecture, architecture, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException(
+                        $"The KernelSU module for KMI {bootKmi} targets {moduleArchitecture}, while the boot image ABI is {architecture}.");
                 EnsureParentDirectories(editor, "kernelsu.ko", changes);
                 editor.AddOrReplace("kernelsu.ko", extracted, Regular(0x81A4));
                 changes.Add($"extract and install KernelSU module for KMI {bootKmi}");
-                break;
+                moduleInstalled = true;
             }
+
+            if (!moduleInstalled)
+                throw new InvalidDataException(
+                    $"The KernelSU package has no verified module for KMI '{bootKmi}'.");
+            if (!initStaged)
+                throw new InvalidDataException("The KernelSU package has no ksuinit payload to install.");
         }
         var script = zip.Entries.FirstOrDefault(e => e.Name.Equals("util_functions.sh", StringComparison.OrdinalIgnoreCase) || e.Name.Equals("boot-patch.sh", StringComparison.OrdinalIgnoreCase));
         if (script is not null)
@@ -383,28 +443,6 @@ public sealed class BootPatchService
         "riscv64" => ["riscv64"],
         _ => [architecture]
     };
-
-    private static string? MagiskTarget(string name, string initTarget, string? version)
-    {
-        if (name.Equals("init", StringComparison.OrdinalIgnoreCase) || name.Equals("magiskinit", StringComparison.OrdinalIgnoreCase) || name.Equals("libmagiskinit.so", StringComparison.OrdinalIgnoreCase)) return initTarget;
-        if (name.Equals("magisk.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("magisk", StringComparison.OrdinalIgnoreCase) || name.Equals("libmagisk.so", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/magisk.xz";
-        if (name.Equals("magisk32.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("magisk32", StringComparison.OrdinalIgnoreCase) || name.Equals("libmagisk32.so", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/magisk32.xz";
-        if (name.Equals("magisk64.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("magisk64", StringComparison.OrdinalIgnoreCase) || name.Equals("libmagisk64.so", StringComparison.OrdinalIgnoreCase)) return version?.StartsWith("27.", StringComparison.Ordinal) == true ? "overlay.d/sbin/magisk64.xz" : "overlay.d/sbin/magisk.xz";
-        if (name.Equals("stub.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("stub.apk", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/stub.xz";
-        if (name.Equals("init-ld.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("init-ld", StringComparison.OrdinalIgnoreCase) || name.Equals("libinit-ld.so", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/init-ld.xz";
-        if (name.Equals("busybox.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("busybox", StringComparison.OrdinalIgnoreCase) || name.Equals("libbusybox.so", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/busybox.xz";
-        if (name.Equals("util_functions.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("util_functions.sh", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/util_functions.xz";
-        return name.EndsWith(".xz", StringComparison.OrdinalIgnoreCase) ? $"overlay.d/sbin/{name}" : null;
-    }
-
-    private static bool IsMagiskRuntimeEntry(string name, string? version)
-        => name.Equals("stub.apk", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("libmagisk.so", StringComparison.OrdinalIgnoreCase)
-            || (version?.StartsWith("27.", StringComparison.Ordinal) == true
-                && (name.Equals("libmagisk32.so", StringComparison.OrdinalIgnoreCase)
-                    || name.Equals("libmagisk64.so", StringComparison.OrdinalIgnoreCase)))
-            || name.Equals("libmagiskinit.so", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("libinit-ld.so", StringComparison.OrdinalIgnoreCase);
 
     internal static void SplitEmbeddedKernelDtb(BootImageParser parser, ReadOnlyMemory<byte> rawKernel,
         out ReadOnlyMemory<byte> kernelBody, out byte[]? kernelDtb)
@@ -555,5 +593,99 @@ public sealed class BootPatchService
             _ => throw new NotSupportedException($"Cannot recompress ramdisk as {type}.")
         };
         return CompressionService.Compress(data, format);
+    }
+
+    /// <summary>
+    /// Resolves the effective patch mode: Auto picks the strategy from the package content — KernelSU
+    /// packages with verified module payloads take the LKM path, KernelSU packages that only carry a
+    /// KernelPatch image take the KPM path, and kernel images or AnyKernel3 packages take the GKI path;
+    /// explicit modes are rejected when the package cannot perform them.
+    /// <para>解析实际修补模式：Auto 按包内容选择策略——带已验证模块负载的 KernelSU 包走 LKM，仅携带
+    /// KernelPatch 镜像的 KernelSU 包走 KPM，内核镜像或 AnyKernel3 压缩包走 GKI；包无法执行的显式模式会被拒绝。</para>
+    /// </summary>
+    internal static BootPatchMode ResolvePatchMode(BootPatchDetection detection, BootPatchMode requested)
+    {
+        if (requested != BootPatchMode.Auto)
+        {
+            var supported = requested switch
+            {
+                BootPatchMode.Lkm => detection.Kind is BootPatchKind.KernelSu or BootPatchKind.KernelSuLkm,
+                BootPatchMode.Gki => detection.Kind == BootPatchKind.GkiKernel,
+                BootPatchMode.Kpm => detection.Kind is BootPatchKind.KernelSu or BootPatchKind.KernelPatch,
+                _ => false,
+            };
+            if (!supported) throw new InvalidDataException($"The {detection.Kind} package does not support {requested} patch mode.");
+            return requested;
+        }
+
+        return detection.Kind switch
+        {
+            BootPatchKind.KernelPatch => BootPatchMode.Kpm,
+            BootPatchKind.KernelSu => detection.Kmis is { Count: > 0 } || !detection.HasKernelPatchImage
+                ? BootPatchMode.Lkm
+                : BootPatchMode.Kpm,
+            BootPatchKind.KernelSuLkm => BootPatchMode.Lkm,
+            BootPatchKind.GkiKernel => BootPatchMode.Gki,
+            _ => BootPatchMode.Auto,
+        };
+    }
+
+    /// <summary>
+    /// Loads the replacement kernel for GKI mode from the package itself: a raw kernel image or the kernel
+    /// entry of an AnyKernel3-style package, decompressed to its raw body.
+    /// <para>从包本身加载 GKI 模式的替换内核：原始内核镜像或 AnyKernel3 风格压缩包中的内核条目，并解压为原始内核体。</para>
+    /// </summary>
+    private static async Task<byte[]> LoadGkiKernelAsync(string path, CancellationToken ct)
+    {
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            65536, FileOptions.SequentialScan);
+        var head = new byte[4];
+        var filled = 0;
+        while (filled < head.Length)
+        {
+            var read = await stream.ReadAsync(head.AsMemory(filled), ct).ConfigureAwait(false);
+            if (read == 0) break;
+            filled += read;
+        }
+
+        stream.Position = 0;
+        var payload = filled == 4 && head[0] == (byte)'P' && head[1] == (byte)'K'
+            ? await ReadZipKernelEntryAsync(stream, ct).ConfigureAwait(false)
+            : await ReadBoundedStreamAsync(stream, ct).ConfigureAwait(false);
+        var type = BootCompressor.Detect(payload);
+        return type == CompressionType.None
+            ? payload
+            : BootCompressor.TryDecompress(payload, type)
+                ?? throw new InvalidDataException("The replacement GKI kernel compression is unsupported or corrupt.");
+    }
+
+    private static async Task<byte[]> ReadZipKernelEntryAsync(Stream stream, CancellationToken ct)
+    {
+        using var zip = ZipContainer.OpenRead(stream, leaveOpen: true);
+        foreach (var candidate in BootPatchAnalyzer.GkiKernelEntryNames)
+        {
+            var entry = zip.Entries.FirstOrDefault(e => e.Name.Equals(candidate, StringComparison.OrdinalIgnoreCase));
+            if (entry is null) continue;
+            return await ReadEntryBoundedAsync(entry, ct).ConfigureAwait(false);
+        }
+
+        throw new InvalidDataException("The kernel package contains no kernel image entry (Image/Image.gz/zImage).");
+    }
+
+    private static async Task<byte[]> ReadBoundedStreamAsync(Stream stream, CancellationToken ct)
+    {
+        const long max = 256L * 1024 * 1024;
+        using var output = new MemoryStream();
+        var buffer = new byte[65536];
+        while (output.Length < max)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, max - output.Length)), ct).ConfigureAwait(false);
+            if (read == 0) break;
+            output.Write(buffer, 0, read);
+        }
+
+        if (output.Length >= max && stream.ReadByte() >= 0)
+            throw new InvalidDataException("The replacement GKI kernel exceeds the bounded limit.");
+        return output.ToArray();
     }
 }

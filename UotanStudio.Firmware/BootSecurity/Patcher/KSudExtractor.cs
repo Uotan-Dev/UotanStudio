@@ -293,10 +293,13 @@ public static partial class Extractor
     /// <para>条目中可接受的名称长度字段上限。</para></param>
     /// <param name="minCluster">Minimum number of consecutive entries a cluster needs to keep; clusters are only filtered when doing so leaves at least one cluster.
     /// <para>簇需要保留的最小连续条目数；仅当过滤后仍有簇时才应用该过滤。</para></param>
+    /// <param name="nameFilter">Predicate deciding which entry names are reported; <see langword="null"/> keeps the
+    /// KernelSU kernel-module shape. <para>决定报告哪些条目名称的谓词；为 <see langword="null"/> 时保留 KernelSU 内核模块形态。</para></param>
     /// <returns>Unique entries sorted by table offset; empty when no entry passes the shape and name checks.
     /// <para>按表偏移排序的去重条目；没有条目通过形态与名称检查时为空。</para></returns>
     public static List<(string Name, ulong FnVa, long TableOff)> FindEntries(
-        byte[] view, ElfFile elf, int maxNameLen = 256, int minCluster = 3)
+        byte[] view, ElfFile elf, int maxNameLen = 256, int minCluster = 3,
+        Func<string, bool>? nameFilter = null)
     {
         var hits = new List<(long P, string Name, ulong Fn)>();
         for (long p = 0; p <= view.Length - 24; p += 8)
@@ -325,13 +328,49 @@ public static partial class Extractor
             if (!printable)
                 continue;
             var name = ElfFile.EncodingLatin1.GetString(view, (int)noff.Value, (int)v2);
-            if (!name.EndsWith("_kernelsu.ko", StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (!Regex.IsMatch(name, @"(?i)(?:^|/)(?:android\d+(?:\.\d+)?[-_]\d+\.\d+|\d+\.\d+(?:\.\d+)?[-_]android\d+)_kernelsu\.ko$"))
-                continue;
             hits.Add((p, name, v3));
         }
 
+        var clusters = Cluster(hits)
+            .Select(cluster => (Cluster: cluster, Matches: cluster.Where(hit => Matches(hit.Name)).ToList()))
+            .ToList();
+        var fullClusters = clusters.Where(pair => pair.Matches.Count >= minCluster).ToList();
+        if (fullClusters.Count > 0)
+        {
+            clusters = fullClusters;
+        }
+        else
+        {
+            var tableClusters = clusters.Where(pair => pair.Cluster.Count >= minCluster).ToList();
+            if (tableClusters.Count > 0)
+                clusters = tableClusters;
+        }
+
+        var entries = new List<(string, ulong, long)>();
+        var seen = new HashSet<string>();
+        foreach (var match in clusters.SelectMany(pair => pair.Matches))
+        {
+            if (seen.Add(match.Name))
+                entries.Add((match.Name, match.Fn, match.P));
+        }
+
+        entries.Sort((a, b) => a.Item3.CompareTo(b.Item3));
+        return entries;
+
+        bool Matches(string name)
+        {
+            if (nameFilter is null)
+            {
+                return name.EndsWith("_kernelsu.ko", StringComparison.OrdinalIgnoreCase)
+                    && Regex.IsMatch(name, @"(?i)(?:^|/)(?:android\d+(?:\.\d+)?[-_]\d+\.\d+|\d+\.\d+(?:\.\d+)?[-_]android\d+)_kernelsu\.ko$");
+            }
+
+            return nameFilter(name);
+        }
+    }
+
+    private static List<List<(long P, string Name, ulong Fn)>> Cluster(List<(long P, string Name, ulong Fn)> hits)
+    {
         var clusters = new List<List<(long P, string Name, ulong Fn)>>();
         var cur = new List<(long P, string Name, ulong Fn)>();
         foreach (var h in hits)
@@ -345,20 +384,10 @@ public static partial class Extractor
                 cur = [h];
             }
         }
+
         if (cur.Count > 0)
             clusters.Add(cur);
-        var big = clusters.Where(c => c.Count >= minCluster).ToList();
-        if (big.Count > 0)
-            clusters = big;
-
-        var entries = new List<(string, ulong, long)>();
-        var seen = new HashSet<string>();
-        foreach (var c in clusters)
-            foreach (var (p, name, fn) in c)
-                if (seen.Add(name))
-                    entries.Add((name, fn, p));
-        entries.Sort((a, b) => a.Item3.CompareTo(b.Item3));
-        return entries;
+        return clusters;
     }
 
     /// <summary>Scans for 64-bit words pointing into executable code near a given static address and returns candidate internal function addresses.
@@ -605,6 +634,8 @@ public static partial class Extractor
     /// <para>待分析的 KernelSU 模块 ELF；其数据保持只读。</para></param>
     /// <param name="verbose">When <see langword="true"/>, adds one log line listing every discovered table entry.
     /// <para>为 <see langword="true"/> 时在日志中追加一行，列出全部发现到的表条目。</para></param>
+    /// <param name="nameFilter">Predicate selecting the entries to restore; <see langword="null"/> keeps the KernelSU
+    /// kernel-module shape. <para>选择要还原的条目的谓词；为 <see langword="null"/> 时保留 KernelSU 内核模块形态。</para></param>
     /// <returns>One <see cref="Asset"/> per table entry — entries whose payload (at least 4096 decompressed bytes) cannot be located keep <c>DataOff</c> <see langword="null"/> — plus the log lines in emission order.
     /// <para>每个表条目对应一个 <see cref="Asset"/>——无法定位数据（解压后不少于 4096 字节） 的条目其 <c>DataOff</c> 保持 <see langword="null"/>——外加按产生顺序排列的日志行。</para></returns>
     /// <example>
@@ -614,12 +645,12 @@ public static partial class Extractor
     /// </code>
     /// </example>
     public static (List<Asset> Assets, List<string> Log) ExtractAssets(
-        ElfFile elf, bool verbose = false)
+        ElfFile elf, bool verbose = false, Func<string, bool>? nameFilter = null)
     {
         var view = elf.PatchView() ?? elf.Data;
         var data = view;
         var log = new List<string>();
-        var entries = FindEntries(view, elf);
+        var entries = FindEntries(view, elf, nameFilter: nameFilter);
         if (verbose)
             log.Add($"ENTRIES: {entries.Count} [{string.Join(", ", entries.Select(e => e.Name))}]");
 
@@ -659,9 +690,9 @@ public static partial class Extractor
             var result = new Asset { Name = name, FnVa = fnVa, TableOff = tableOff };
             byte[]? located = null;
 
-            foreach (var r in dataRefs)
+            bool TryFactory(ulong root)
             {
-                foreach (var thunk in FindStaticFns(view, elf, r))
+                foreach (var thunk in FindStaticFns(view, elf, root))
                 {
                     foreach (var r2 in ScanRefs(elf, thunk, 0x40))
                     {
@@ -677,14 +708,27 @@ public static partial class Extractor
                             result.Sha256 = Sha256Hex(got.Value.Output);
                             result.Method = "entry-factory";
                             located = got.Value.Output;
-                            break;
+                            return true;
                         }
                     }
-                    if (result.DataOff is not null)
+                }
+
+                return false;
+            }
+
+            foreach (var r in dataRefs)
+            {
+                if (TryFactory(r))
+                    break;
+            }
+
+            if (result.DataOff is null)
+            {
+                foreach (var r in hashRefs)
+                {
+                    if (TryFactory(r))
                         break;
                 }
-                if (result.DataOff is not null)
-                    break;
             }
 
             if (result.DataOff is null)

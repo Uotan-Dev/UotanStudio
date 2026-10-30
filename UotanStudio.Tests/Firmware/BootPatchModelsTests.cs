@@ -23,6 +23,7 @@ public sealed class BootPatchModelsTests
         {
             zip.CreateEntry("assets/boot_patch.sh");
             zip.CreateEntry("assets/util_functions.sh");
+            zip.CreateEntry("assets/kpimg");
             zip.CreateEntry("lib/arm64-v8a/libkptools.so");
             zip.CreateEntry("lib/x86_64/libkptools.so");
         }
@@ -30,6 +31,78 @@ public sealed class BootPatchModelsTests
         var result = await BootPatchAnalyzer.AnalyzeAsync("apatch.apk", stream, TestContext.Current.CancellationToken);
         Assert.Equal(BootPatchKind.APatch, result.Kind);
         Assert.Equal(["arm64", "x64"], result.Architectures);
+    }
+
+    [Theory]
+    [InlineData("assets/kpm/kpimg")]
+    [InlineData("assets/kpimg")]
+    public async Task Analyzer_RecognizesKernelPatchImageWithoutApatchScripts(string kpimgEntry)
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            zip.CreateEntry(kpimgEntry);
+            zip.CreateEntry("lib/arm64-v8a/libkptools.so");
+        }
+        stream.Position = 0;
+        var result = await BootPatchAnalyzer.AnalyzeAsync("sukisu.apk", stream, TestContext.Current.CancellationToken);
+        Assert.Equal(BootPatchKind.KernelPatch, result.Kind);
+        Assert.Equal(["arm64"], result.Architectures);
+    }
+
+    [Fact]
+    public async Task Analyzer_MagiskMarkersWithKpimg_StayMagisk()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            zip.CreateEntry("assets/kpimg");
+            zip.CreateEntry("lib/arm64-v8a/libmagiskinit.so");
+            zip.CreateEntry("lib/arm64-v8a/libmagisk.so");
+        }
+        stream.Position = 0;
+        var result = await BootPatchAnalyzer.AnalyzeAsync("Magisk-v31.apk", stream, TestContext.Current.CancellationToken);
+        Assert.Equal(BootPatchKind.Magisk, result.Kind);
+    }
+
+    [Fact]
+    public async Task PatchAsync_KernelPatchPackage_InjectsKpimgWithTheSuppliedKey()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "uotan-kernelpatch-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var kernel = new byte[0x2400];
+            BitConverter.GetBytes(0x2000u).CopyTo(kernel, 0x10);
+            "ARM\x64"u8.CopyTo(kernel.AsSpan(0x38));
+            "CONFIG_KALLSYMS=y\0"u8.CopyTo(kernel.AsSpan(0x200));
+            BitConverter.GetBytes(0x14000000u).CopyTo(kernel, 0);
+            var kpimg = new byte[0x1100];
+            "KP1158"u8.CopyTo(kpimg);
+            var bootPath = Path.Combine(work, "boot.img");
+            var packagePath = Path.Combine(work, "sukisu.apk");
+            var outputPath = Path.Combine(work, "patched.img");
+            File.WriteAllBytes(bootPath, PackBootImage(kernel, UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageVersion.V3));
+            using (var zip = ZipFile.Open(packagePath, ZipArchiveMode.Create))
+            {
+                using (var entry = zip.CreateEntry("assets/kpm/kpimg").Open())
+                    entry.Write(kpimg);
+                zip.CreateEntry("lib/arm64-v8a/libkptools.so");
+            }
+
+            var result = await new BootPatchService().PatchAsync(packagePath, bootPath, outputPath,
+                new BootPatchOptions { SuperPassword = "123" }, TestContext.Current.CancellationToken);
+
+            using var parser = new UotanStudio.Firmware.BootSecurity.BootImage.Parser.BootImageParser();
+            parser.ParseFile(outputPath);
+            Assert.Equal(KernelPatchInjector.Patch(kernel, kpimg, "123"), parser.Kernel);
+            Assert.Contains("inject KernelPatch kpimg into kernel", result.Changes);
+            Assert.Equal(BootPatchKind.KernelPatch, result.Detection.Kind);
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
     }
 
     [Fact]
@@ -399,6 +472,213 @@ public sealed class BootPatchModelsTests
     }
 
     [Fact]
+    public async Task PatchAsync_MagiskV24SplitLayout_InstallsTheSplitNativeLibraries()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "uotan-bootpatch-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var kernel = "\0Linux version 5.15.123-android13-5.15 (builder)\0"u8.ToArray();
+            var stockInit = "stock-init"u8.ToArray();
+            var magiskInit = "magisk-init"u8.ToArray();
+            var magisk32 = "fake-magisk32"u8.ToArray();
+            var magisk64 = "fake-magisk64"u8.ToArray();
+            var ramdisk = BuildCpio([("init", stockInit)]);
+            var bootPath = Path.Combine(work, "boot.img");
+            var packagePath = Path.Combine(work, "Magisk-v24.0.apk");
+            var outputPath = Path.Combine(work, "patched.img");
+            File.WriteAllBytes(bootPath, PackBootImage(kernel, ramdisk));
+            File.WriteAllBytes(Path.Combine(work, "magiskinit.bin"), magiskInit);
+            File.WriteAllBytes(Path.Combine(work, "magisk32.bin"), magisk32);
+            File.WriteAllBytes(Path.Combine(work, "magisk64.bin"), magisk64);
+            using (var zip = ZipFile.Open(packagePath, ZipArchiveMode.Create))
+            {
+                zip.CreateEntry("assets/boot_patch.sh");
+                using (var util = new StreamWriter(zip.CreateEntry("assets/util_functions.sh").Open()))
+                    util.WriteLine("MAGISK_VER='24.0:24000'");
+                zip.CreateEntryFromFile(Path.Combine(work, "magiskinit.bin"), "lib/arm64-v8a/libmagiskinit.so");
+                zip.CreateEntryFromFile(Path.Combine(work, "magisk32.bin"), "lib/arm64-v8a/libmagisk32.so");
+                zip.CreateEntryFromFile(Path.Combine(work, "magisk64.bin"), "lib/arm64-v8a/libmagisk64.so");
+            }
+
+            var result = await new BootPatchService().PatchAsync(packagePath, bootPath, outputPath,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            using var parser = new UotanStudio.Firmware.BootSecurity.BootImage.Parser.BootImageParser();
+            parser.Parse(File.ReadAllBytes(outputPath));
+            var editor = new UotanStudio.Firmware.Archive.Editing.CpioArchiveEditor();
+            using var ramdiskStream = new MemoryStream(parser.Ramdisk);
+            editor.Load(ramdiskStream);
+            Assert.Equal(magisk32,
+                UotanStudio.Firmware.BootSecurity.BootImage.Components.BootCompressor.TryDecompress(
+                    editor.Find("overlay.d/sbin/magisk32.xz")!.Data,
+                    UotanStudio.Firmware.BootSecurity.BootImage.Models.CompressionType.Xz));
+            Assert.Equal(magisk64,
+                UotanStudio.Firmware.BootSecurity.BootImage.Components.BootCompressor.TryDecompress(
+                    editor.Find("overlay.d/sbin/magisk64.xz")!.Data,
+                    UotanStudio.Firmware.BootSecurity.BootImage.Models.CompressionType.Xz));
+            Assert.Equal(magiskInit, editor.Find("init")!.Data);
+            Assert.NotNull(editor.Find(".backup/.magisk"));
+            Assert.Contains("install overlay.d/sbin/magisk32.xz", result.Changes);
+            Assert.Contains("install overlay.d/sbin/magisk64.xz", result.Changes);
+            Assert.Equal("24.0:24000", result.Detection.Version);
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PatchAsync_MagiskV23SplitLayout_InstallsTheSplitNativeLibraries()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "uotan-bootpatch-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var kernel = "\0Linux version 5.15.123-android13-5.15 (builder)\0"u8.ToArray();
+            var stockInit = "stock-init"u8.ToArray();
+            var magiskInit = "magisk-init"u8.ToArray();
+            var magisk32 = "fake-magisk32"u8.ToArray();
+            var magisk64 = "fake-magisk64"u8.ToArray();
+            var ramdisk = BuildCpio([("init", stockInit)]);
+            var bootPath = Path.Combine(work, "boot.img");
+            var packagePath = Path.Combine(work, "Magisk-v23.0.apk");
+            var outputPath = Path.Combine(work, "patched.img");
+            File.WriteAllBytes(bootPath, PackBootImage(kernel, ramdisk));
+            File.WriteAllBytes(Path.Combine(work, "magiskinit.bin"), magiskInit);
+            File.WriteAllBytes(Path.Combine(work, "magisk32.bin"), magisk32);
+            File.WriteAllBytes(Path.Combine(work, "magisk64.bin"), magisk64);
+            using (var zip = ZipFile.Open(packagePath, ZipArchiveMode.Create))
+            {
+                zip.CreateEntry("assets/boot_patch.sh");
+                using (var util = new StreamWriter(zip.CreateEntry("assets/util_functions.sh").Open()))
+                    util.WriteLine("MAGISK_VER='23.0:23000'");
+                zip.CreateEntryFromFile(Path.Combine(work, "magiskinit.bin"), "lib/arm64-v8a/libmagiskinit.so");
+                zip.CreateEntryFromFile(Path.Combine(work, "magisk32.bin"), "lib/arm64-v8a/libmagisk32.so");
+                zip.CreateEntryFromFile(Path.Combine(work, "magisk64.bin"), "lib/arm64-v8a/libmagisk64.so");
+            }
+
+            var result = await new BootPatchService().PatchAsync(packagePath, bootPath, outputPath,
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            using var parser = new UotanStudio.Firmware.BootSecurity.BootImage.Parser.BootImageParser();
+            parser.Parse(File.ReadAllBytes(outputPath));
+            var editor = new UotanStudio.Firmware.Archive.Editing.CpioArchiveEditor();
+            using var ramdiskStream = new MemoryStream(parser.Ramdisk);
+            editor.Load(ramdiskStream);
+            Assert.Equal(magisk32,
+                UotanStudio.Firmware.BootSecurity.BootImage.Components.BootCompressor.TryDecompress(
+                    editor.Find("overlay.d/sbin/magisk32.xz")!.Data,
+                    UotanStudio.Firmware.BootSecurity.BootImage.Models.CompressionType.Xz));
+            Assert.Equal(magisk64,
+                UotanStudio.Firmware.BootSecurity.BootImage.Components.BootCompressor.TryDecompress(
+                    editor.Find("overlay.d/sbin/magisk64.xz")!.Data,
+                    UotanStudio.Firmware.BootSecurity.BootImage.Models.CompressionType.Xz));
+            Assert.Contains("install overlay.d/sbin/magisk64.xz", result.Changes);
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Analyzer_LegacyMagiskZipLayout_IsRecognizedButReportsWhyItCannotPatch()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            zip.CreateEntry("META-INF/com/google/android/update-binary");
+            zip.CreateEntry("arm/magiskinit");
+            zip.CreateEntry("arm/magiskinit64");
+            zip.CreateEntry("common/boot_patch.sh");
+            using var util = new StreamWriter(zip.CreateEntry("common/util_functions.sh").Open());
+            util.WriteLine("MAGISK_VER='21.4'");
+        }
+        stream.Position = 0;
+        var result = await BootPatchAnalyzer.AnalyzeAsync("Magisk-v21.4.zip", stream, TestContext.Current.CancellationToken);
+
+        Assert.Equal(BootPatchKind.Magisk, result.Kind);
+        Assert.Equal("21.4", result.Version);
+        Assert.False(result.IsSupported);
+        Assert.NotNull(result.UnsupportedReason);
+        Assert.Contains("v22.0", result.UnsupportedReason!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Analyzer_MagiskWithoutInstallablePayload_ReportsWhyItCannotPatch()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            using (var util = new StreamWriter(zip.CreateEntry("assets/util_functions.sh").Open()))
+                util.WriteLine("MAGISK_VER='30.0:30000'");
+            zip.CreateEntry("lib/arm64-v8a/libmagiskpolicy.so");
+            zip.CreateEntry("lib/arm64-v8a/libmagiskboot.so");
+        }
+        stream.Position = 0;
+        var result = await BootPatchAnalyzer.AnalyzeAsync("Magisk-v30.0.apk", stream, TestContext.Current.CancellationToken);
+
+        Assert.Equal(BootPatchKind.Magisk, result.Kind);
+        Assert.False(result.IsSupported);
+        Assert.NotNull(result.UnsupportedReason);
+        Assert.Contains("no installable runtime payload", result.UnsupportedReason!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Analyzer_SukiSuManagerOnlyBundle_ReportsWhyItCannotPatch()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            zip.CreateEntry("lib/arm64-v8a/libzako.so");
+            zip.CreateEntry("lib/arm64-v8a/libzakoboot.so");
+            zip.CreateEntry("assets/ksu_susfs_1.5.9");
+        }
+        stream.Position = 0;
+        var result = await BootPatchAnalyzer.AnalyzeAsync("SukiSU.apk", stream, TestContext.Current.CancellationToken);
+
+        Assert.Equal(BootPatchKind.Unknown, result.Kind);
+        Assert.False(result.IsSupported);
+        Assert.NotNull(result.UnsupportedReason);
+        Assert.Contains("manager-only", result.UnsupportedReason!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PatchAsync_KernelPatchPackageOnNonArm64Kernel_IsRejected()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "uotan-bootpatch-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var kernel = new byte[0x1000];
+            kernel.AsSpan().Fill(0x11);
+            var bootPath = Path.Combine(work, "boot.img");
+            var packagePath = Path.Combine(work, "APatch.apk");
+            var outputPath = Path.Combine(work, "patched.img");
+            File.WriteAllBytes(bootPath, PackBootImage(kernel, BuildCpio(("init", "stock-init"u8.ToArray()))));
+            using (var zip = ZipFile.Open(packagePath, ZipArchiveMode.Create))
+            {
+                using (var kpimg = zip.CreateEntry("assets/kpimg").Open())
+                    kpimg.Write(new byte[0x1100]);
+                zip.CreateEntry("lib/arm64-v8a/libkptools.so");
+            }
+
+            var failure = await Assert.ThrowsAsync<InvalidDataException>(() => new BootPatchService().PatchAsync(
+                packagePath, bootPath, outputPath,
+                new BootPatchOptions { SuperPassword = "abc12345" },
+                TestContext.Current.CancellationToken));
+
+            Assert.Contains("arm64 boot kernels only", failure.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task PatchAsync_KernelSuOnMagiskPatchedImage_IsRejected()
     {
         var work = Path.Combine(Path.GetTempPath(), "uotan-bootpatch-" + Guid.NewGuid().ToString("N"));
@@ -425,6 +705,282 @@ public sealed class BootPatchModelsTests
             Directory.Delete(work, recursive: true);
         }
     }
+
+    [Theory]
+    [InlineData(BootPatchKind.Magisk, BootPatchMode.Auto, false, true)]
+    [InlineData(BootPatchKind.KernelSu, BootPatchMode.Lkm, true, true)]
+    [InlineData(BootPatchKind.KernelSu, BootPatchMode.Kpm, true, false)]
+    [InlineData(BootPatchKind.KernelPatch, BootPatchMode.Kpm, true, false)]
+    [InlineData(BootPatchKind.APatch, BootPatchMode.Auto, true, false)]
+    [InlineData(BootPatchKind.GkiKernel, BootPatchMode.Gki, true, false)]
+    public void Compatibility_Requirements_FollowKindAndMode(BootPatchKind kind, BootPatchMode mode,
+        bool needsKernel, bool needsRamdisk)
+    {
+        Assert.Equal(needsKernel, BootPatchCompatibility.RequiresKernel(kind, mode));
+        Assert.Equal(needsRamdisk, BootPatchCompatibility.RequiresRamdisk(kind, mode));
+    }
+
+    [Fact]
+    public void Compatibility_MissingRamdisk_BlocksMagiskAndKernelSuLkm()
+    {
+        var boot = new BootImageInspection("arm64", "android13-5.15", HasKernel: true, HasRamdisk: false);
+
+        Assert.Equal(BootPatchCompatibilityProblem.RamdiskRequired, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.Magisk, ["arm64"]), BootPatchMode.Auto, boot));
+        Assert.Equal(BootPatchCompatibilityProblem.RamdiskRequired, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.KernelSu, ["arm64"], ["android13-5.15"]), BootPatchMode.Lkm, boot));
+        Assert.Equal(BootPatchCompatibilityProblem.None, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.KernelSu, ["arm64"], ["android13-5.15"], kpimg: true),
+            BootPatchMode.Kpm, boot));
+    }
+
+    [Theory]
+    [InlineData(BootPatchKind.KernelSu, BootPatchMode.Lkm)]
+    [InlineData(BootPatchKind.KernelPatch, BootPatchMode.Kpm)]
+    [InlineData(BootPatchKind.APatch, BootPatchMode.Auto)]
+    [InlineData(BootPatchKind.GkiKernel, BootPatchMode.Gki)]
+    public void Compatibility_MissingKernel_BlocksKernelBasedModes(BootPatchKind kind, BootPatchMode mode)
+    {
+        var boot = new BootImageInspection(null, null, HasKernel: false, HasRamdisk: true);
+
+        Assert.Equal(BootPatchCompatibilityProblem.KernelRequired, BootPatchCompatibility.Check(
+            Detection(kind, ["arm64"]), mode, boot));
+    }
+
+    [Fact]
+    public void Compatibility_ArchitectureUnsupportedByPackage_IsReported()
+    {
+        var boot = new BootImageInspection("x64", "android13-5.15", HasKernel: true, HasRamdisk: true);
+
+        Assert.Equal(BootPatchCompatibilityProblem.ArchitectureMismatch, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.Magisk, ["arm64", "arm32"]), BootPatchMode.Auto, boot));
+    }
+
+    [Fact]
+    public void Compatibility_ExplicitArchitectureDifferentFromBoot_IsReported()
+    {
+        var boot = new BootImageInspection("arm64", "android13-5.15", HasKernel: true, HasRamdisk: true);
+
+        Assert.Equal(BootPatchCompatibilityProblem.SelectedArchitectureMismatch, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.Magisk, ["arm64", "x64"]), BootPatchMode.Auto, boot, selectedArchitecture: "x64"));
+    }
+
+    [Fact]
+    public void Compatibility_KernelSuLkmWithoutBootKmiOrSelection_IsReported()
+    {
+        var boot = new BootImageInspection("arm64", null, HasKernel: true, HasRamdisk: true);
+
+        Assert.Equal(BootPatchCompatibilityProblem.KmiUnknown, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.KernelSu, ["arm64"], ["android13-5.15"]), BootPatchMode.Lkm, boot));
+        Assert.Equal(BootPatchCompatibilityProblem.None, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.KernelSu, ["arm64"], ["android13-5.15"]), BootPatchMode.Lkm, boot,
+            selectedKmi: "android13-5.15"));
+    }
+
+    [Fact]
+    public void Compatibility_KernelSuLkmWithoutMatchingModule_IsReported()
+    {
+        var boot = new BootImageInspection("arm64", "android14-6.1", HasKernel: true, HasRamdisk: true);
+
+        Assert.Equal(BootPatchCompatibilityProblem.KernelSuKmiMismatch, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.KernelSu, ["arm64"], ["android13-5.15"]), BootPatchMode.Lkm, boot));
+    }
+
+    [Fact]
+    public void Compatibility_GkiKernelKmiMismatch_IsReported()
+    {
+        var boot = new BootImageInspection("arm64", "android13-5.15", HasKernel: true, HasRamdisk: true);
+
+        Assert.Equal(BootPatchCompatibilityProblem.GkiKmiMismatch, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.GkiKernel, ["arm64"], ["android14-6.1"]), BootPatchMode.Gki, boot));
+        Assert.Equal(BootPatchCompatibilityProblem.None, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.GkiKernel, ["arm64"], ["android13-5.15"]), BootPatchMode.Gki, boot));
+    }
+
+    [Fact]
+    public void Compatibility_GkiSelectionDifferentFromBootKmi_IsReported()
+    {
+        var boot = new BootImageInspection("arm64", "android13-5.15", HasKernel: true, HasRamdisk: true);
+
+        Assert.Equal(BootPatchCompatibilityProblem.GkiKmiMismatch, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.GkiKernel, ["arm64"], ["android13-5.15", "android14-6.1"]), BootPatchMode.Gki,
+            boot, selectedKmi: "android14-6.1"));
+        Assert.Equal(BootPatchCompatibilityProblem.None, BootPatchCompatibility.Check(
+            Detection(BootPatchKind.GkiKernel, ["arm64"], ["android13-5.15", "android14-6.1"]), BootPatchMode.Gki,
+            boot, selectedKmi: "android13-5.15"));
+    }
+
+    [Theory]
+    [InlineData(BootPatchKind.APatch, BootPatchMode.Auto, "abc", false)]
+    [InlineData(BootPatchKind.APatch, BootPatchMode.Auto, "patch123", true)]
+    [InlineData(BootPatchKind.KernelPatch, BootPatchMode.Kpm, "", false)]
+    [InlineData(BootPatchKind.KernelPatch, BootPatchMode.Kpm, "abc", true)]
+    [InlineData(BootPatchKind.KernelSu, BootPatchMode.Lkm, null, true)]
+    [InlineData(BootPatchKind.Magisk, BootPatchMode.Auto, null, true)]
+    public void Compatibility_SuperKeyRequirement_FollowsFamilyAndMode(BootPatchKind kind, BootPatchMode mode,
+        string? superKey, bool acceptable)
+    {
+        Assert.Equal(acceptable, BootPatchCompatibility.IsSuperKeyAcceptable(kind, mode, superKey));
+    }
+
+    [Theory]
+    [InlineData(1, true, BootPatchMode.Lkm)]
+    [InlineData(0, true, BootPatchMode.Kpm)]
+    [InlineData(0, false, BootPatchMode.Lkm)]
+    public void ResolvePatchMode_KernelSuPrefersTheVerifiedLkmPayload(int kmiCount, bool kpimg, BootPatchMode expected)
+    {
+        var kmis = Enumerable.Range(0, kmiCount).Select(index => $"android1{index}-5.10").ToArray();
+        var detection = Detection(BootPatchKind.KernelSu, ["arm64"], kmis, kpimg);
+
+        Assert.Equal(expected, BootPatchService.ResolvePatchMode(detection, BootPatchMode.Auto));
+    }
+
+    [Fact]
+    public void ResolvePatchMode_KernelPatchImageOnlyPackage_TakesKpm()
+    {
+        var detection = Detection(BootPatchKind.KernelPatch, ["arm64"], kpimg: true);
+
+        Assert.Equal(BootPatchMode.Kpm, BootPatchService.ResolvePatchMode(detection, BootPatchMode.Auto));
+    }
+
+    [Fact]
+    public async Task Analyzer_KernelSuRawModuleNamesWithoutVerifiedAssets_ReportNoKmi()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            using var entry = zip.CreateEntry("lib/arm64-v8a/libksud.so").Open();
+            entry.Write("android13-5.15_kernelsu.ko"u8);
+        }
+
+        stream.Position = 0;
+        var result = await BootPatchAnalyzer.AnalyzeAsync("kernelsu.apk", stream, TestContext.Current.CancellationToken);
+
+        Assert.Equal(BootPatchKind.KernelSu, result.Kind);
+        Assert.Empty(result.Kmis!);
+    }
+
+    [Fact]
+    public async Task Analyzer_GkiKernelImage_ReportsItsKmiAndArchitecture()
+    {
+        var kernel = new byte[0x2000];
+        "ARM\x64"u8.CopyTo(kernel.AsSpan(0x38));
+        "\0Linux version 5.15.123-android13-5.15 (builder)\0"u8.CopyTo(kernel.AsSpan(0x200));
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            using var entry = zip.CreateEntry("Image").Open();
+            entry.Write(kernel);
+        }
+
+        stream.Position = 0;
+        var result = await BootPatchAnalyzer.AnalyzeAsync("gki.zip", stream, TestContext.Current.CancellationToken);
+
+        Assert.Equal(BootPatchKind.GkiKernel, result.Kind);
+        Assert.Equal(["arm64"], result.Architectures);
+        Assert.Equal(["android13-5.15"], result.Kmis!);
+    }
+
+    [Fact]
+    public async Task InspectBootAsync_KernelAndRamdisk_ReportsIdentityAndComponents()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "uotan-bootinspect-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var kernel = new byte[0x2000];
+            "ARM\x64"u8.CopyTo(kernel.AsSpan(0x38));
+            "\0Linux version 5.15.123-android13-5.15 (builder)\0"u8.CopyTo(kernel.AsSpan(0x200));
+            var bootPath = Path.Combine(work, "boot.img");
+            File.WriteAllBytes(bootPath, PackBootImage(kernel,
+                UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageVersion.V3,
+                BuildCpio(("init", "stock-init"u8.ToArray()))));
+
+            var inspection = await BootPatchAnalyzer.InspectBootAsync(bootPath, TestContext.Current.CancellationToken);
+
+            Assert.Equal("arm64", inspection.Architecture);
+            Assert.Equal("android13-5.15", inspection.Kmi);
+            Assert.True(inspection.HasKernel);
+            Assert.True(inspection.HasRamdisk);
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InspectBootAsync_EmptyKernel_ReportsMissingKernel()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "uotan-bootinspect-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var bootPath = Path.Combine(work, "init_boot.img");
+            File.WriteAllBytes(bootPath, PackBootImage([],
+                UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageVersion.V3,
+                BuildCpio(("init", "stock-init"u8.ToArray()))));
+
+            var inspection = await BootPatchAnalyzer.InspectBootAsync(bootPath, TestContext.Current.CancellationToken);
+
+            Assert.Null(inspection.Architecture);
+            Assert.Null(inspection.Kmi);
+            Assert.False(inspection.HasKernel);
+            Assert.True(inspection.HasRamdisk);
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PatchAsync_ApatchPackage_LeavesTheRamdiskBytesUntouched()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "uotan-apatch-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var kernel = new byte[0x2400];
+            BitConverter.GetBytes(0x2000u).CopyTo(kernel, 0x10);
+            "ARM\x64"u8.CopyTo(kernel.AsSpan(0x38));
+            "CONFIG_KALLSYMS=y\0"u8.CopyTo(kernel.AsSpan(0x200));
+            BitConverter.GetBytes(0x14000000u).CopyTo(kernel, 0);
+            var kpimg = new byte[0x1100];
+            "KP1158"u8.CopyTo(kpimg);
+            var ramdisk = BuildCpio(("init", "stock-init"u8.ToArray()));
+            var bootPath = Path.Combine(work, "boot.img");
+            var packagePath = Path.Combine(work, "APatch.apk");
+            var outputPath = Path.Combine(work, "patched.img");
+            File.WriteAllBytes(bootPath, PackBootImage(kernel,
+                UotanStudio.Firmware.BootSecurity.BootImage.Models.BootImageVersion.V3, ramdisk));
+            using (var zip = ZipFile.Open(packagePath, ZipArchiveMode.Create))
+            {
+                using (var script = new StreamWriter(zip.CreateEntry("assets/boot_patch.sh").Open()))
+                    script.WriteLine("kpimg");
+                using (var entry = zip.CreateEntry("assets/kpimg").Open())
+                    entry.Write(kpimg);
+                zip.CreateEntry("lib/arm64-v8a/libkptools.so");
+            }
+
+            var result = await new BootPatchService().PatchAsync(packagePath, bootPath, outputPath,
+                new BootPatchOptions { SuperPassword = "abc12345" }, TestContext.Current.CancellationToken);
+
+            using var parser = new UotanStudio.Firmware.BootSecurity.BootImage.Parser.BootImageParser();
+            parser.ParseFile(outputPath);
+            Assert.Equal(BootPatchKind.APatch, result.Detection.Kind);
+            Assert.Equal(KernelPatchInjector.Patch(kernel, kpimg, "abc12345"), parser.Kernel);
+            Assert.Equal(ramdisk, parser.Ramdisk);
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    private static BootPatchDetection Detection(BootPatchKind kind, string[] architectures,
+        string[]? kmis = null, bool kpimg = false)
+        => new(kind, architectures, Kmis: kmis, HasKernelPatchImage: kpimg);
 
     private static byte[] BuildCpio(params (string Name, byte[] Data)[] entries)
     {
