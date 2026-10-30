@@ -74,7 +74,7 @@ public partial class FirmwareInfoViewModel
 
             var value = fieldKey switch
             {
-                "HashtreeDisabled" or "VerificationDisabled" or "PartialUpdate" => FieldLabel(rawValue),
+                "HashtreeDisabled" or "VerificationDisabled" or "PartialUpdate" or "Signed" or "Rc4Disabled" => FieldLabel(rawValue),
                 "Type" when rawValue == "Hash" => FieldLabel("PartitionHash"),
                 "VerificationStatus" or "Type" or "ChecksumStatus" => FieldLabel(rawValue),
                 _ => rawValue.Length == 0 ? FieldLabel("Empty") : rawValue
