@@ -329,8 +329,8 @@ public partial class NodeEditorView : UserControl
         var selected = NodesIntersectingSelection(first, second);
         if (additive)
         {
-            selected = Editor.SelectedItems
-                .OfType<FlowNodeViewModel>()
+            selected = (Editor.SelectedItems?.OfType<FlowNodeViewModel>()
+                    ?? Enumerable.Empty<FlowNodeViewModel>())
                 .Concat(selected)
                 .Distinct()
                 .ToArray();

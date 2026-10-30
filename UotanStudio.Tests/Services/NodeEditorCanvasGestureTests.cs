@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Input;
-using UotanStudio.ViewModels.Nodes;
 using UotanStudio.Views.Nodes;
 using UotanStudio.Workflow.Nodes;
 using Xunit;

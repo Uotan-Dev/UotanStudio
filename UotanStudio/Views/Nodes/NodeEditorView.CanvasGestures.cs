@@ -354,7 +354,8 @@ partial class NodeEditorView
             {
                 if (_canvasGestureAdditiveSelection)
                 {
-                    SelectNodes([.. Editor.SelectedItems.OfType<FlowNodeViewModel>(), clicked]);
+                    SelectNodes(
+                        [.. Editor.SelectedItems?.OfType<FlowNodeViewModel>() ?? [], clicked]);
                 }
                 else
                 {
@@ -405,7 +406,8 @@ partial class NodeEditorView
             vm.SelectConnection(null);
             if (additiveSelection)
             {
-                SelectNodes(ToggleNodeSelection(Editor.SelectedItems.OfType<FlowNodeViewModel>(), clicked));
+                SelectNodes(ToggleNodeSelection(
+                    Editor.SelectedItems?.OfType<FlowNodeViewModel>() ?? [], clicked));
             }
             else
             {
