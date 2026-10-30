@@ -17,6 +17,7 @@ internal static class UsbInfoCopy
         DeviceInstanceId = info.DeviceInstanceId,
         VendorId = info.VendorId,
         ProductId = info.ProductId,
+        BcdUsb = info.BcdUsb,
         InterfaceClass = info.InterfaceClass,
         InterfaceSubClass = info.InterfaceSubClass,
         InterfaceProtocol = info.InterfaceProtocol,

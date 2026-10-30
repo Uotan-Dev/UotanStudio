@@ -143,6 +143,7 @@ internal static class LinuxUsbFinder
                         PhysicalPortPath = LinuxUsbPortIdentity.Observe(fd, dev_path),
                         VendorId = info.VendorId,
                         ProductId = info.ProductId,
+                        BcdUsb = info.BcdUsb,
                         InterfaceClass = info.InterfaceClass,
                         InterfaceSubClass = info.InterfaceSubClass,
                         InterfaceProtocol = info.InterfaceProtocol,

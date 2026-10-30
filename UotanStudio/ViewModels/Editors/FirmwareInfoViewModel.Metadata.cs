@@ -16,7 +16,6 @@ public partial class FirmwareInfoViewModel
     private const string AvbFormatName = "Android Verified Boot (AVB)";
 
     private IReadOnlyDictionary<string, string>? _rawMetadata;
-    private string _rawSummary = string.Empty;
     private CancellationTokenSource? _loadCancellation;
     private bool _closed;
 
@@ -74,7 +73,7 @@ public partial class FirmwareInfoViewModel
 
             var value = fieldKey switch
             {
-                "HashtreeDisabled" or "VerificationDisabled" or "PartialUpdate" => FieldLabel(rawValue),
+                "HashtreeDisabled" or "VerificationDisabled" or "PartialUpdate" or "Signed" or "Rc4Disabled" => FieldLabel(rawValue),
                 "Type" when rawValue == "Hash" => FieldLabel("PartitionHash"),
                 "VerificationStatus" or "Type" or "ChecksumStatus" => FieldLabel(rawValue),
                 _ => rawValue.Length == 0 ? FieldLabel("Empty") : rawValue
@@ -108,18 +107,6 @@ public partial class FirmwareInfoViewModel
             MetadataGroups.Add(new FirmwareMetadataGroup(name, rows));
         }
 
-        Summary = FormatName switch
-        {
-            AvbFormatName => string.Empty,
-            "EROFS" or "EXT4" or "F2FS" => LanguageService.Instance.GetString("FirmwareInfo_FilesystemSummary", FormatName),
-            "FAT" or "EXFAT" => LanguageService.Instance.GetString("FirmwareInfo_FatSummary", FormatName),
-            "Android Boot / Vendor Boot Image" => LanguageService.Instance.GetString("FirmwareInfo_BootSummary"),
-            "Android OTA Payload (payload.bin)" => LanguageService.Instance.GetString("FirmwareInfo_PayloadSummary"),
-            "Android Sparse Image (simg)" => LanguageService.Instance.GetString("FirmwareInfo_SparseSummary"),
-            "Coolpad CPB Package" => LanguageService.Instance.GetString("FirmwareInfo_CpbSummary"),
-            _ => _rawSummary
-        };
-        HasSummary = Summary.Length > 0;
         HasMetadata = Metadata.Count > 0;
     }
 

@@ -41,31 +41,6 @@ public sealed partial class FlashViewModel
         => _rkLoaderPath is { Length: > 0 } loader && File.Exists(loader) ? loader : null;
 
     /// <summary>
-    /// Enables the Rockchip-only actions when the selected device speaks RKDL and no operation is running.
-    /// <para>仅当所选设备使用 RKDL 且没有操作在运行时启用瑞芯微专属动作。</para>
-    /// </summary>
-    /// <param name="isRockchip">Whether the selected device uses RKDL.<para>所选设备是否使用 RKDL。</para></param>
-    private void UpdateRockchipActionState(bool isRockchip)
-    {
-        if (Surface is null) return;
-        var enabled = !_busy && isRockchip;
-        foreach (var name in new[]
-                 {
-                     "RkReadInfoButton", "RkTestDeviceButton", "RkGetStorageButton", "RkSwitchStorageButton",
-                     "RkEnterMaskromButton", "RkEraseFlashButton", "RkLbaReadButton", "RkLbaWriteButton",
-                     "RkEraseSectorsButton"
-                 })
-        {
-            Field<Button>(name).IsEnabled = enabled;
-        }
-
-        Field<ComboBox>("RkStorageTypeBox").IsEnabled = enabled;
-        Field<TextBox>("RkLbaAddressBox").IsEnabled = enabled;
-        Field<TextBox>("RkLbaCountBox").IsEnabled = enabled;
-        Field<CheckBox>("RkForceAddressBox").IsEnabled = enabled;
-    }
-
-    /// <summary>
     /// Reads the chip capability word, the flash id and the current storage, then reports them in the log.
     /// <para>读取芯片能力字、Flash ID 与当前存储并写入日志。</para>
     /// </summary>

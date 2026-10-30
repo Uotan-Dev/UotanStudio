@@ -487,7 +487,10 @@ public sealed partial class DeviceMonitorService
             if (!session.IsRockusbMode)
             {
                 throw new InvalidOperationException(
-                    $"The re-enumerated Rockchip device reports product ID 0x{session.ProductId:X4}, which the PID-only loader table classifies as maskrom/bootrom, so bulk flash commands are not sent over that handle. 重新枚举出的 Rockchip 设备报告的产品 ID 被仅按 PID 的 loader 表归类为 maskrom/bootrom，因此不会在该句柄上发送批量刷写命令。");
+                    $"The re-enumerated Rockchip device reports product ID 0x{session.ProductId:X4} in " +
+                    $"{session.Mode} stage, so bulk flash commands are not sent over that handle. " +
+                    $"重新枚举出的 Rockchip 设备的产品 ID 0x{session.ProductId:X4} 处于 {session.Mode} 阶段，" +
+                    "因此不会在该句柄上发送批量刷写命令。");
             }
 
             return await flashPhase(session, cancellationToken).ConfigureAwait(false);

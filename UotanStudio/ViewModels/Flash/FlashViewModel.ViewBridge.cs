@@ -32,7 +32,9 @@ public sealed partial class FlashViewModel
     {
         ArgumentNullException.ThrowIfNull(surface);
         _surface = surface;
+        CaptureControlIntent();
         InitializeSurface();
+        RefreshDeviceUiGate();
     }
 
     /// <summary>

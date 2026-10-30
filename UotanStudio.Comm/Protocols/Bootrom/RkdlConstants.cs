@@ -159,27 +159,26 @@ public static class RkdlConstants
     public const int LoaderRelinkTimeoutMs = 30000;
 
     /// <summary>
-    /// Product IDs of devices already in rockusb (loader) mode, paired with the RKDL chip-ID
-    /// mapping. Other PIDs under the Rockchip VID that satisfy the generic bootrom rule are treated
-    /// as maskrom or bootrom devices.
-    /// <para>已处于 rockusb（loader）模式的设备产品 ID，并与 RKDL 芯片 ID 映射成对使用。Rockchip VID 下
-    /// 满足通用 bootrom 规则的其他 PID 按 maskrom 或 bootrom 设备处理。</para>
+    /// Bit 0 of the USB <c>bcdUSB</c> field that survives on Rockchip boot ROM devices: set means the device already
+    /// runs a loader, clear means it is still in mask ROM. Both stages report the same vendor and product IDs, so this
+    /// bit is the only descriptor evidence that separates them.
+    /// <para>瑞芯微 boot ROM 设备上报的 USB <c>bcdUSB</c> 字段中保留的 bit 0：为 1 表示设备已运行 loader，为 0 表示
+    /// 仍处于 mask ROM。两个阶段报告相同的厂商与产品 ID，因此该位是区分它们的唯一描述符证据。</para>
+    /// </summary>
+    public const ushort BcdUsbLoaderBit = 0x0001;
+
+    /// <summary>
+    /// Product IDs known to belong to the Rockchip boot ROM product range, used only where the generic
+    /// <c>pid &gt;&gt; 8 != 0</c> rule cannot decide.
+    /// <para>已知属于瑞芯微 boot ROM 产品区间的产品 ID，只在通用规则 <c>pid &gt;&gt; 8 != 0</c> 无法判定时使用。</para>
     /// </summary>
     /// <remarks>
-    /// Boundary: maskrom and loader differ in bit 0 of the USB <c>bcdUSB</c> field, but
-    /// <c>UsbDeviceInfo</c> carries no <c>bcdUSB</c> field and this repository does not widen the USB
-    /// abstraction for it. Classification is therefore PID-only: a loader PID listed here is opened in
-    /// loader mode, an unlisted loader PID is treated as maskrom (so its loader download is refused),
-    /// and a maskrom device sharing a listed PID is treated as loader (so its first CBW transaction
-    /// fails instead of receiving a loader). Real-hardware confirmation is required for any PID not
-    /// listed here.
-    /// <para>边界：maskrom 与 loader 可由 <c>bcdUSB</c> 的 bit 0 区分，但 <c>UsbDeviceInfo</c>
-    /// 没有 <c>bcdUSB</c> 字段，本仓库也不为此扩展 USB 抽象层，因此这里只按 PID 判定：列入本表的
-    /// loader PID 按 loader 模式打开；未列出的 loader PID 会被当作 maskrom，其 loader 下载请求会被
-    /// 拒绝；与表内 PID 相同的 maskrom 设备会被当作 loader，其首个 CBW 事务会失败而不会收到 loader。
-    /// 本表之外的 PID 需要真机确认。</para>
+    /// This table lists both mask ROM and loader product IDs and therefore says nothing about the stage; the stage is
+    /// decided by <see cref="ClassifyMode"/> from <c>bcdUSB</c>.
+    /// <para>本表同时包含 mask ROM 与 loader 的产品 ID，因此不表达阶段信息；阶段由
+    /// <see cref="ClassifyMode"/> 依据 <c>bcdUSB</c> 判定。</para>
     /// </remarks>
-    public static readonly ushort[] KnownLoaderProductIds =
+    public static readonly ushort[] KnownBootromProductIds =
     [
         0x281A,
         0x290A,
@@ -199,6 +198,45 @@ public static class RkdlConstants
         0x350A,
         0x350B,
     ];
+
+    /// <summary>
+    /// Reports whether a product ID belongs to the Rockchip boot ROM product range: a non-zero high byte, or an entry in
+    /// <see cref="KnownBootromProductIds"/>.
+    /// <para>报告产品 ID 是否属于瑞芯微 boot ROM 产品区间：高字节非零，或收录于
+    /// <see cref="KnownBootromProductIds"/>。</para>
+    /// </summary>
+    /// <param name="productId">The USB product ID to test. <para>待判定的 USB 产品 ID。</para></param>
+    /// <returns><see langword="true"/> when the product ID can be a boot ROM port.
+    /// <para>该产品 ID 可能是 boot ROM 端口时为 <see langword="true"/>。</para></returns>
+    public static bool IsBootromProduct(ushort productId)
+        => (productId >> 8) != 0 || KnownBootromProductIds.Contains(productId);
+
+    /// <summary>
+    /// Classifies the stage a Rockchip boot ROM is in from its product ID and its device descriptor's <c>bcdUSB</c>
+    /// value.
+    /// <para>依据产品 ID 与设备描述符的 <c>bcdUSB</c> 取值判定瑞芯微 boot ROM 所处阶段。</para>
+    /// </summary>
+    /// <param name="productId">The USB product ID reported by the device. <para>设备报告的 USB 产品 ID。</para></param>
+    /// <param name="bcdUsb">The device descriptor's <c>bcdUSB</c> field, or <see langword="null"/> when the backend could
+    /// not read it. <para>设备描述符的 <c>bcdUSB</c> 字段；后端无法读取时为 <see langword="null"/>。</para></param>
+    /// <returns>
+    /// <see cref="RkdlDeviceMode.Maskrom"/> when bit 0 of <paramref name="bcdUsb"/> is clear,
+    /// <see cref="RkdlDeviceMode.Loader"/> when it is set, and <see cref="RkdlDeviceMode.Unknown"/> when the product ID is
+    /// not a boot ROM product or <paramref name="bcdUsb"/> is absent — the two stages share one product ID, so no guess
+    /// is made without the descriptor bit.
+    /// <para><paramref name="bcdUsb"/> 的 bit 0 为 0 时返回 <see cref="RkdlDeviceMode.Maskrom"/>，为 1 时返回
+    /// <see cref="RkdlDeviceMode.Loader"/>；产品 ID 不属于 boot ROM 产品或 <paramref name="bcdUsb"/> 缺失时返回
+    /// <see cref="RkdlDeviceMode.Unknown"/>——两个阶段共用同一产品 ID，缺少描述符位时不做猜测。</para>
+    /// </returns>
+    public static RkdlDeviceMode ClassifyMode(ushort productId, ushort? bcdUsb)
+    {
+        if (!IsBootromProduct(productId) || bcdUsb is not ushort value)
+        {
+            return RkdlDeviceMode.Unknown;
+        }
+
+        return (value & BcdUsbLoaderBit) != 0 ? RkdlDeviceMode.Loader : RkdlDeviceMode.Maskrom;
+    }
 }
 
 /// <summary>
@@ -420,32 +458,65 @@ internal class RkChipInfo
     public string Tag { get; set; } = string.Empty;
 
     /// <summary>
-    /// Returns the chip name for a given chip ID (a USB-Style numeric ID or an ASCII tag
-    /// value read directly from the chip-info response).
-    /// <para>返回给定芯片 ID 的芯片名称（USB 风格数字 ID，或直接从芯片信息响应读取的 ASCII 标签值）。</para>
+    /// Returns the chip name for a given chip ID: either the USB-style numeric ID or the ASCII tag carried by the
+    /// chip-info response, in either byte order.
+    /// <para>返回给定芯片 ID 的芯片名称：或为 USB 风格数字 ID，或为芯片信息响应携带的 ASCII 标签，两种字节序均可。</para>
     /// </summary>
     /// <param name="chipId">The chip ID. <para>芯片 ID。</para></param>
-    /// <returns>The chip name. <para>芯片名称。</para></returns>
+    /// <returns>
+    /// The mapped chip name; the tag itself when the ID spells a printable four-character tag this table does not map;
+    /// otherwise <c>Unknown(0x...)</c> with the raw ID.
+    /// <para>映射到的芯片名称；当该 ID 拼出本表未映射的可打印四字符标签时返回标签本身；其余情况返回带原始 ID 的
+    /// <c>Unknown(0x...)</c>。</para>
+    /// </returns>
     public static string GetChipName(uint chipId)
     {
         return chipId switch
         {
-            0x33323041 or 0x41303233 => "RK32",
+            0x33323041 or 0x41303233 or 0x320A => "RK3288",
             0x33303041 or 0x41303033 => "RK30",
             0x33313041 or 0x41303133 => "RK31",
             0x33313042 or 0x42303133 => "RK31B",
             0x32393058 or 0x58303932 => "RK29",
             0x6E616E6F or 0x6F6E616E => "Nano",
-            0x301A => "RK3036",
-            0x310C => "RK3128",
-            0x320A => "RK3288",
-            0x320B => "RK3229",
-            0x320C => "RK3328",
-            0x330A => "RK3368",
-            0x330C => "RK3399",
-            0x350A => "RK3566",
-            _ => $"Unknown(0x{chipId:X4})"
+            0x33303141 or 0x41313033 or 0x301A => "RK3036",
+            0x33313043 or 0x43303133 or 0x310C => "RK3128",
+            0x33323042 or 0x42303233 or 0x320B => "RK3229",
+            0x33323043 or 0x43303233 or 0x320C => "RK3328",
+            0x33333041 or 0x41303333 or 0x330A => "RK3368",
+            0x33333043 or 0x43303333 or 0x330C => "RK3399",
+            0x33353041 or 0x41303533 or 0x350A => "RK3566",
+            _ => TryReadPrintableTag(chipId, out var tag) ? tag : $"Unknown(0x{chipId:X4})"
         };
+    }
+
+    /// <summary>
+    /// Decodes a chip ID that spells a printable four-character tag, taking the bytes in wire order, so an unmapped chip
+    /// reports the tag it sent instead of a hexadecimal number that hides it.
+    /// <para>把拼出可打印四字符标签的芯片 ID 按线上字节序解码，使未映射的芯片显示它上报的标签，而不是掩盖它的十六进制数。</para>
+    /// </summary>
+    /// <param name="chipId">The chip ID. <para>芯片 ID。</para></param>
+    /// <param name="tag">The decoded tag when this returns <see langword="true"/>.
+    /// <para>返回 <see langword="true"/> 时解码出的标签。</para></param>
+    /// <returns><see langword="true"/> when all four bytes are printable ASCII.
+    /// <para>四个字节都是可打印 ASCII 时为 <see langword="true"/>。</para></returns>
+    private static bool TryReadPrintableTag(uint chipId, out string tag)
+    {
+        Span<char> text = stackalloc char[4];
+        for (var index = 0; index < text.Length; index++)
+        {
+            var value = (byte)(chipId >> (index * 8));
+            if (value is < 0x20 or > 0x7E)
+            {
+                tag = string.Empty;
+                return false;
+            }
+
+            text[index] = (char)value;
+        }
+
+        tag = new string(text);
+        return true;
     }
 }
 

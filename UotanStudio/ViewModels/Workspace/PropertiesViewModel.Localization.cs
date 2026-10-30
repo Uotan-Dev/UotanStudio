@@ -95,7 +95,6 @@ internal partial class PropertiesViewModel
             ["CanDecompress"] = "Dock_Properties_Metadata_CanDecompress",
             ["Entries"] = "Dock_Properties_Metadata_Entries",
             ["Entry"] = "Dock_Properties_Metadata_Entry",
-            ["Summary"] = "Dock_Properties_Metadata_Summary",
             ["Error"] = "Dock_Properties_Metadata_Error",
             ["Size"] = "Dock_Properties_Metadata_Size",
             ["SourceFilesystemSize"] = "Dock_Properties_Metadata_SourceFilesystemSize",

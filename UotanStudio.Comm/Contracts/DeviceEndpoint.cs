@@ -249,6 +249,7 @@ public sealed record DeviceEndpoint
             && left.DeviceInstanceId == right.DeviceInstanceId
             && left.VendorId == right.VendorId
             && left.ProductId == right.ProductId
+            && left.BcdUsb == right.BcdUsb
             && left.InterfaceClass == right.InterfaceClass
             && left.InterfaceSubClass == right.InterfaceSubClass
             && left.InterfaceProtocol == right.InterfaceProtocol
@@ -369,6 +370,7 @@ public sealed record DeviceEndpoint
         hash.Add(info.DeviceInstanceId);
         hash.Add(info.VendorId);
         hash.Add(info.ProductId);
+        hash.Add(info.BcdUsb);
         hash.Add(info.InterfaceClass);
         hash.Add(info.InterfaceSubClass);
         hash.Add(info.InterfaceProtocol);

@@ -28,11 +28,31 @@ internal static partial class WinUsbDriverNativeMethods
     /// <para><c>SetupUninstallOEMInf</c> 的 <c>SUOI_FORCEDELETE</c> 标志：删除已暂存包的文件。</para></summary>
     internal const uint SuoiForceDelete = 0x00000001;
 
+    /// <summary>The <c>INSTALLFLAG_FORCE</c> flag for <c>UpdateDriverForPlugAndPlayDevices</c>: install the
+    /// package even when another driver also matches the device.
+    /// <para><c>UpdateDriverForPlugAndPlayDevices</c> 的 <c>INSTALLFLAG_FORCE</c> 标志：即使还有别的驱动匹配该
+    /// 设备也安装该包。</para></summary>
+    internal const uint InstallFlagForce = 0x00000001;
+
+    /// <summary>The <c>INSTALLFLAG_NONINTERACTIVE</c> flag for <c>UpdateDriverForPlugAndPlayDevices</c>: never
+    /// show installation UI.
+    /// <para><c>UpdateDriverForPlugAndPlayDevices</c> 的 <c>INSTALLFLAG_NONINTERACTIVE</c> 标志：不显示任何
+    /// 安装界面。</para></summary>
+    internal const uint InstallFlagNonInteractive = 0x00000004;
+
     /// <summary>The <c>CM_REENUMERATE_RETRY_INSTALLATION</c> flag for <c>CM_Reenumerate_DevNode</c>: retry driver
-    /// installation for devnodes whose install previously failed, without waiting for it to finish.
+    /// installation for devnodes whose install previously failed. Combine it with
+    /// <see cref="CmReenumerateAsynchronous"/>, otherwise the call waits for the install to finish.
     /// <para><c>CM_Reenumerate_DevNode</c> 的 <c>CM_REENUMERATE_RETRY_INSTALLATION</c> 标志：对此前安装失败的
-    /// 设备节点重试驱动安装，且不等待其完成。</para></summary>
+    /// 设备节点重试驱动安装。必须与 <see cref="CmReenumerateAsynchronous"/> 组合，否则调用会等待安装完成。</para></summary>
     internal const uint CmReenumerateRetryInstallation = 0x00000002;
+
+    /// <summary>The <c>CM_REENUMERATE_ASYNCHRONOUS</c> flag for <c>CM_Reenumerate_DevNode</c>: return as soon as the
+    /// re-enumeration is queued instead of waiting for the PnP install, which a stalled device node can hold
+    /// open indefinitely.
+    /// <para><c>CM_Reenumerate_DevNode</c> 的 <c>CM_REENUMERATE_ASYNCHRONOUS</c> 标志：重枚举排队后立即返回，
+    /// 不等待 PnP 安装，因为卡住的设备节点可能让其无限期挂起。</para></summary>
+    internal const uint CmReenumerateAsynchronous = 0x00000004;
 
     /// <summary>The <c>CM_GETIDLIST_FILTER_PRESENT</c> flag for <c>CM_Get_Device_ID_List_Size</c> and
     /// <c>CM_Get_Device_ID_List</c>: list only devnodes whose device is currently present.
@@ -44,6 +64,21 @@ internal static partial class WinUsbDriverNativeMethods
     /// code.
     /// <para><c>CM_Get_DevNode_Status</c> 的 <c>DN_HAS_PROBLEM</c> 状态位：设备节点报告了问题码。</para></summary>
     internal const uint DnHasProblem = 0x00000400;
+
+    /// <summary>The <c>DN_QUERY_REMOVE_PENDING</c> status bit of <c>CM_Get_DevNode_Status</c>: a remove
+    /// request is pending for the devnode, so no driver operation can start on it.
+    /// <para><c>CM_Get_DevNode_Status</c> 的 <c>DN_QUERY_REMOVE_PENDING</c> 状态位：设备节点上有挂起的
+    /// 移除请求，其上无法开始驱动操作。</para></summary>
+    internal const uint DnQueryRemovePending = 0x00010000;
+
+    /// <summary>The <c>DN_QUERY_REMOVE_ACTIVE</c> status bit: the devnode is inside a remove query.
+    /// <para><c>DN_QUERY_REMOVE_ACTIVE</c> 状态位：设备节点正处于移除查询中。</para></summary>
+    internal const uint DnQueryRemoveActive = 0x00020000;
+
+    /// <summary>The <c>DN_WILL_BE_REMOVED</c> status bit: the devnode is queued for removal, so PnP cannot
+    /// install a driver on it.
+    /// <para><c>DN_WILL_BE_REMOVED</c> 状态位：设备节点已排队等待移除，PnP 无法在其上安装驱动。</para></summary>
+    internal const uint DnWillBeRemoved = 0x00040000;
 
     /// <summary>The <c>CM_PROB_FAILED_INSTALL</c> problem code that marks a devnode without an installed driver.
     /// <para>标记设备节点未安装驱动的 <c>CM_PROB_FAILED_INSTALL</c> 问题码。</para></summary>
@@ -70,9 +105,6 @@ internal static partial class WinUsbDriverNativeMethods
     [LibraryImport("cfgmgr32.dll", EntryPoint = "CM_Reenumerate_DevNode")]
     internal static partial uint CmReenumerateDevNode(uint devInst, uint flags);
 
-    [LibraryImport("cfgmgr32.dll", EntryPoint = "CM_Get_Parent")]
-    internal static partial uint CmGetParent(out uint parentDevInst, uint devInst, uint flags);
-
     [LibraryImport("cfgmgr32.dll", EntryPoint = "CM_Get_DevNode_Status")]
     internal static partial uint CmGetDevNodeStatus(out uint status, out uint problemNumber, uint devInst, uint flags);
 
@@ -84,9 +116,27 @@ internal static partial class WinUsbDriverNativeMethods
         StringMarshalling = StringMarshalling.Utf16)]
     internal static partial uint CmGetDeviceIdListW([Out] byte[] buffer, uint bufferLength, string filter, uint flags);
 
-    [LibraryImport("cfgmgr32.dll", EntryPoint = "CM_Query_And_Remove_SubTreeW")]
-    internal static partial uint CmQueryAndRemoveSubTree(uint devInst, IntPtr vetoType, IntPtr vetoName,
-        uint vetoNameLength, uint flags);
+    /// <summary>
+    /// Installs a staged package on every present device matching one hardware id and lets PnP start those
+    /// devices in place, without removing and re-enumerating their devnodes.
+    /// <para>把已暂存的包装到所有匹配该硬件 ID 的在位设备上，并让 PnP 就地启动这些设备，不会移除并重枚举其
+    /// 设备节点。</para>
+    /// </summary>
+    /// <param name="hwndParent">The parent window handle, or <see cref="IntPtr.Zero"/> for none.
+    /// <para>父窗口句柄；无父窗口时为 <see cref="IntPtr.Zero"/>。</para></param>
+    /// <param name="hardwareId">The hardware id to match.<para>要匹配的硬件 ID。</para></param>
+    /// <param name="fullInfPath">The absolute INF path.<para>INF 的绝对路径。</para></param>
+    /// <param name="installFlags"><see cref="InstallFlagForce"/> and <see cref="InstallFlagNonInteractive"/>.
+    /// <para><see cref="InstallFlagForce"/> 与 <see cref="InstallFlagNonInteractive"/>。</para></param>
+    /// <param name="rebootRequired">Non-zero when the caller must reboot for the install to take effect.
+    /// <para>非零表示需要重启系统才能生效。</para></param>
+    /// <returns><see langword="true"/> when the package was installed on the matching devices.
+    /// <para>包已安装到匹配设备上时为 <see langword="true"/>。</para></returns>
+    [LibraryImport("newdev.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool UpdateDriverForPlugAndPlayDevicesW(IntPtr hwndParent,
+        [MarshalAs(UnmanagedType.LPWStr)] string hardwareId,
+        [MarshalAs(UnmanagedType.LPWStr)] string fullInfPath, uint installFlags, out int rebootRequired);
 
     [LibraryImport("setupapi.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

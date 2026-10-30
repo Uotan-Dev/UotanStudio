@@ -37,11 +37,15 @@ internal static unsafe class WinUsbSelfSignedDriverPackage
     internal const string CertificateSubject =
         "CN=UotanStudio WinUSB Takeover, O=UotanStudio, OU=Device Takeover";
 
+    /// <summary>The subject the retired driver-signing implementation used, purged from the trust stores
+    /// when a takeover runs.
+    /// <para>已退役的驱动签名实现使用的主体名，接管运行时从信任存储中清除。</para></summary>
+    internal const string LegacyCertificateSubject = "CN=UotanStudio Driver Signing";
+
     /// <summary>The friendly name shown for the certificate in the Windows certificate stores.
     /// <para>证书在 Windows 证书存储中显示的友好名。</para></summary>
     internal const string CertificateFriendlyName = "UotanStudio WinUSB Takeover";
 
-    private const string WinUsbServiceName = "WinUSB";
     private const string UsbDeviceClassGuid = "{88bae032-5a81-49f0-bc3d-a4ff138216d6}";
     private const int KeySizeBits = 2048;
 
@@ -62,17 +66,20 @@ internal static unsafe class WinUsbSelfSignedDriverPackage
     /// <param name="hardwareId">The device hardware id the INF matches.<para>INF 匹配的设备硬件 ID。</para></param>
     /// <param name="instanceId">The device instance id, used to derive the interface GUID.
     /// <para>设备实例 ID，用于推导接口 GUID。</para></param>
+    /// <param name="deviceName">The device description the INF publishes, or <see langword="null"/> for the
+    /// hardware id.<para>INF 发布的设备描述；为 <see langword="null"/> 时使用硬件 ID。</para></param>
     /// <returns>The materialized package.<para>物化后的驱动包。</para></returns>
     /// <exception cref="InvalidOperationException">A native step failed; the message carries the Win32 error.
     /// <para>某个原生步骤失败；消息携带 Win32 错误。</para></exception>
-    internal static WinUsbSelfSignedPackage Create(string directory, string hardwareId, string instanceId)
+    internal static WinUsbSelfSignedPackage Create(string directory, string hardwareId, string instanceId,
+        string? deviceName = null)
     {
         var suffix = BuildSuffix(hardwareId);
         var infPath = Path.Combine(directory, $"uotanstudio-{suffix}.inf");
         var catalogPath = Path.Combine(directory, $"uotanstudio-{suffix}.cat");
         var infFileName = Path.GetFileName(infPath);
         var catalogFileName = Path.GetFileName(catalogPath);
-        File.WriteAllText(infPath, BuildInf(hardwareId, infFileName, catalogFileName,
+        File.WriteAllText(infPath, BuildInf(hardwareId, deviceName, infFileName, catalogFileName,
             DeriveInterfaceGuid(instanceId)), new UTF8Encoding(false));
 
         var containerName = $"UotanStudioWinUsb{suffix}";
@@ -110,12 +117,45 @@ internal static unsafe class WinUsbSelfSignedDriverPackage
     /// <returns><see langword="true"/> when at least one store was cleaned or held no such certificate.
     /// <para>至少清理了一个存储，或该存储中没有此类证书时为 <see langword="true"/>。</para></returns>
     internal static bool RemoveCertificateFromStores()
+        => RemoveCertificates(WinUsbTakeoverNativeMethods.CertSystemStoreLocalMachine, CertificateSubject);
+
+    /// <summary>
+    /// Removes certificates the retired driver-signing implementation left in the machine and current-user
+    /// trust stores, so no orphaned request root stays trusted. Failures are ignored: the cleanup must never
+    /// keep a takeover from running.
+    /// <para>移除已退役的驱动签名实现在本机与当前用户信任存储中留下的证书，避免孤立的请求根继续受信。</para>
+    /// </summary>
+    internal static void PurgeLegacyCertificates()
     {
-        var subject = EncodeName(CertificateSubject);
+        try
+        {
+            _ = RemoveCertificates(WinUsbTakeoverNativeMethods.CertSystemStoreLocalMachine,
+                LegacyCertificateSubject);
+            _ = RemoveCertificates(WinUsbTakeoverNativeMethods.CertSystemStoreCurrentUser,
+                LegacyCertificateSubject);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Deletes every certificate carrying <paramref name="subjectName"/> from the <c>Root</c> and
+    /// <c>TrustedPublisher</c> stores of one store location.
+    /// <para>从指定位置的 <c>Root</c> 与 <c>TrustedPublisher</c> 存储删除所有带 <paramref name="subjectName"/>
+    /// 的证书。</para>
+    /// </summary>
+    /// <param name="location">The store location.<para>存储位置。</para></param>
+    /// <param name="subjectName">The certificate subject to match.<para>要匹配的证书主体名。</para></param>
+    /// <returns><see langword="true"/> when every matching certificate was removed and every store was opened.
+    /// <para>所有匹配证书都被删除且每个存储都成功打开时为 <see langword="true"/>。</para></returns>
+    private static bool RemoveCertificates(uint location, string subjectName)
+    {
+        var subject = EncodeName(subjectName);
         var cleaned = true;
         foreach (var storeName in CertificateStoresToWrite)
         {
-            var store = WinUsbTakeoverNativeMethods.OpenLocalMachineStore(storeName);
+            var store = WinUsbTakeoverNativeMethods.OpenStore(location, storeName);
             if (store == IntPtr.Zero)
             {
                 cleaned = false;
@@ -157,16 +197,22 @@ internal static unsafe class WinUsbSelfSignedDriverPackage
     }
 
     /// <summary>
-    /// Builds the device-specific INF that binds the in-box WinUSB service to one hardware id.
-    /// <para>构建把系统内置 WinUSB 服务绑定到单个硬件 ID 的设备专用 INF。</para>
+    /// Builds the device-specific INF that binds the in-box WinUSB service to one hardware id. It imports
+    /// the in-box <c>WINUSB.NT</c>, <c>WINUSB.NT.Services</c> and <c>WINUSB.NT.HW</c> sections instead of
+    /// restating the WinUSB service, which keeps the in-box service definition and lets the device start.
+    /// <para>构建把系统内置 WinUSB 服务绑定到单个硬件 ID 的设备专用 INF。它导入系统内置的 <c>WINUSB.NT</c>、
+    /// <c>WINUSB.NT.Services</c> 与 <c>WINUSB.NT.HW</c> 段而不是重述 WinUSB 服务，从而保留系统既有的服务
+    /// 定义并让设备正常启动。</para>
     /// </summary>
     /// <param name="hardwareId">The hardware id to match.<para>要匹配的硬件 ID。</para></param>
+    /// <param name="deviceName">The device description to publish, or <see langword="null"/> for the hardware id.
+    /// <para>要发布的设备描述；为 <see langword="null"/> 时使用硬件 ID。</para></param>
     /// <param name="infFileName">The INF file name the catalog is declared in it.<para>其中声明的 INF 文件名。</para></param>
     /// <param name="catalogFileName">The catalog file name.<para>编录文件名。</para></param>
     /// <param name="interfaceGuid">The device interface GUID to register.<para>要注册的设备接口 GUID。</para></param>
     /// <returns>The INF text.<para>INF 文本。</para></returns>
-    private static string BuildInf(string hardwareId, string infFileName, string catalogFileName,
-        Guid interfaceGuid)
+    private static string BuildInf(string hardwareId, string? deviceName, string infFileName,
+        string catalogFileName, Guid interfaceGuid)
     {
         var version = DateTime.UtcNow.ToString("MM/dd/yyyy", CultureInfo.InvariantCulture);
         var builder = new StringBuilder();
@@ -179,13 +225,6 @@ internal static unsafe class WinUsbSelfSignedDriverPackage
         builder.AppendLine($"CatalogFile = {catalogFileName}");
         builder.AppendLine($"DriverVer   = {version},1.0.0.0");
         builder.AppendLine("PnpLockdown = 1");
-        builder.AppendLine();
-        builder.AppendLine("[ClassInstall32]");
-        builder.AppendLine("AddReg = UotanStudioUsbDeviceClassReg");
-        builder.AppendLine();
-        builder.AppendLine("[UotanStudioUsbDeviceClassReg]");
-        builder.AppendLine("HKR,,,0,\"Universal Serial Bus devices\"");
-        builder.AppendLine("HKR,,Icon,,-20");
         builder.AppendLine();
         builder.AppendLine("[Manufacturer]");
         builder.AppendLine("%UotanStudioManufacturer% = UotanStudioWinUsb,NTx86,NTamd64,NTarm64");
@@ -202,38 +241,29 @@ internal static unsafe class WinUsbSelfSignedDriverPackage
         builder.AppendLine("Needs   = WINUSB.NT");
         builder.AppendLine();
         builder.AppendLine("[UotanStudioWinUsb_Install.Services]");
-        builder.AppendLine("Include    = winusb.inf");
-        builder.AppendLine($"AddService = {WinUsbServiceName},0x00000002,UotanStudioWinUsb_Service");
-        builder.AppendLine();
-        builder.AppendLine("[UotanStudioWinUsb_Service]");
-        builder.AppendLine($"DisplayName   = \"{WinUsbServiceName} - Kernel Driver\"");
-        builder.AppendLine("ServiceType   = 1");
-        builder.AppendLine("StartType     = 3");
-        builder.AppendLine("ErrorControl  = 1");
-        builder.AppendLine("ServiceBinary = %12%\\WinUSB.sys");
-        builder.AppendLine();
-        builder.AppendLine("[UotanStudioWinUsb_Install.Wdf]");
-        builder.AppendLine($"KmdfService = {WinUsbServiceName}, UotanStudioWinUsb_WdfInstall");
-        builder.AppendLine();
-        builder.AppendLine("[UotanStudioWinUsb_WdfInstall]");
-        builder.AppendLine("KmdfLibraryVersion = 1.15");
+        builder.AppendLine("Include = winusb.inf");
+        builder.AppendLine("Needs   = WINUSB.NT.Services");
         builder.AppendLine();
         builder.AppendLine("[UotanStudioWinUsb_Install.HW]");
-        builder.AppendLine("AddReg = UotanStudioWinUsb_DeviceInterface");
+        builder.AppendLine("Include = winusb.inf");
+        builder.AppendLine("Needs   = WINUSB.NT.HW");
+        builder.AppendLine("AddReg  = UotanStudioWinUsb_DeviceInterface");
         builder.AppendLine();
         builder.AppendLine("[UotanStudioWinUsb_DeviceInterface]");
         builder.AppendLine("HKR,,DeviceInterfaceGUIDs,0x10000,%UotanStudioDeviceInterfaceGuid%");
         builder.AppendLine();
         builder.AppendLine("[Strings]");
         builder.AppendLine($"UotanStudioManufacturer = \"{ProviderName}\"");
-        builder.AppendLine($"UotanStudioDeviceName = \"{BuildDeviceName(hardwareId)}\"");
+        builder.AppendLine($"UotanStudioDeviceName = \"{BuildDeviceName(deviceName, hardwareId)}\"");
         builder.AppendLine($"UotanStudioDeviceInterfaceGuid = \"{{{interfaceGuid:D}}}\"");
         builder.AppendLine($"; {infFileName}");
         return builder.ToString();
     }
 
-    private static string BuildDeviceName(string hardwareId)
-        => $"UotanStudio WinUSB device ({Sanitize(hardwareId)})";
+    private static string BuildDeviceName(string? deviceName, string hardwareId)
+        => string.IsNullOrWhiteSpace(deviceName)
+            ? $"UotanStudio WinUSB ({Sanitize(hardwareId)})"
+            : Sanitize(deviceName.Trim());
 
     private static string Sanitize(string value)
     {
@@ -294,10 +324,7 @@ internal static unsafe class WinUsbSelfSignedDriverPackage
         IntPtr key = IntPtr.Zero;
         try
         {
-            if (!WinUsbTakeoverNativeMethods.CryptAcquireContext(out provider, container, IntPtr.Zero,
-                    WinUsbTakeoverNativeMethods.ProvRsaFull,
-                    WinUsbTakeoverNativeMethods.CryptMachineKeyset | WinUsbTakeoverNativeMethods.CryptNewKeyset |
-                    WinUsbTakeoverNativeMethods.CryptSilent))
+            if (!AcquireMachineKeyset(container, out provider))
             {
                 throw new InvalidOperationException(
                     WinUsbTakeoverNativeMethods.DescribeLastError("Key container creation failed"));
@@ -646,22 +673,64 @@ internal static unsafe class WinUsbSelfSignedDriverPackage
         }
     }
 
+    /// <summary>
+    /// Acquires the machine key container for one takeover package, creating it. A container left behind by
+    /// an interrupted takeover is deleted first, so a repeated takeover of the same hardware id never fails
+    /// on an existing container.
+    /// <para>获取一个接管包所用的机器密钥容器，并在需要时创建它。被中断的接管残留的容器会先被删除，因此同一
+    /// 硬件 ID 的重复接管不会因容器已存在而失败。</para>
+    /// </summary>
+    /// <param name="container">The unmanaged container name.<para>非托管容器名。</para></param>
+    /// <param name="provider">The acquired provider handle.<para>获取到的提供者句柄。</para></param>
+    /// <returns><see langword="true"/> when the container is available.
+    /// <para>容器可用时为 <see langword="true"/>。</para></returns>
+    private static bool AcquireMachineKeyset(IntPtr container, out IntPtr provider)
+    {
+        var createFlags = WinUsbTakeoverNativeMethods.CryptMachineKeyset |
+            WinUsbTakeoverNativeMethods.CryptNewKeyset |
+            WinUsbTakeoverNativeMethods.CryptSilent;
+        if (WinUsbTakeoverNativeMethods.CryptAcquireContext(out provider, container, IntPtr.Zero,
+                WinUsbTakeoverNativeMethods.ProvRsaFull, createFlags))
+        {
+            return true;
+        }
+
+        DeleteKeyContainer(container);
+        return WinUsbTakeoverNativeMethods.CryptAcquireContext(out provider, container, IntPtr.Zero,
+            WinUsbTakeoverNativeMethods.ProvRsaFull, createFlags);
+    }
+
+    /// <summary>
+    /// Deletes the machine key container behind a takeover package, leaving every other container alone.
+    /// <para>删除一个接管包所用的机器密钥容器，不影响其他容器。</para>
+    /// </summary>
+    /// <param name="containerName">The container name.<para>容器名。</para></param>
     private static void DeleteKeyContainer(string containerName)
     {
         var container = Marshal.StringToHGlobalUni(containerName);
         try
         {
-            if (WinUsbTakeoverNativeMethods.CryptAcquireContext(out var provider, container, IntPtr.Zero,
-                    WinUsbTakeoverNativeMethods.ProvRsaFull,
-                    WinUsbTakeoverNativeMethods.CryptMachineKeyset | WinUsbTakeoverNativeMethods.CryptSilent |
-                    WinUsbTakeoverNativeMethods.CryptDeleteKeyset))
-            {
-                WinUsbTakeoverNativeMethods.CryptReleaseContext(provider, 0);
-            }
+            DeleteKeyContainer(container);
         }
         finally
         {
             Marshal.FreeHGlobal(container);
+        }
+    }
+
+    /// <summary>
+    /// Deletes one machine key container addressed by its unmanaged name.
+    /// <para>按非托管容器名删除一个机器密钥容器。</para>
+    /// </summary>
+    /// <param name="container">The unmanaged container name.<para>非托管容器名。</para></param>
+    private static void DeleteKeyContainer(IntPtr container)
+    {
+        if (WinUsbTakeoverNativeMethods.CryptAcquireContext(out var provider, container, IntPtr.Zero,
+                WinUsbTakeoverNativeMethods.ProvRsaFull,
+                WinUsbTakeoverNativeMethods.CryptMachineKeyset | WinUsbTakeoverNativeMethods.CryptSilent |
+                WinUsbTakeoverNativeMethods.CryptDeleteKeyset) && provider != IntPtr.Zero)
+        {
+            WinUsbTakeoverNativeMethods.CryptReleaseContext(provider, 0);
         }
     }
 
@@ -690,7 +759,8 @@ internal static unsafe class WinUsbSelfSignedDriverPackage
 
             foreach (var storeName in CertificateStoresToWrite)
             {
-                var store = WinUsbTakeoverNativeMethods.OpenLocalMachineStore(storeName);
+                var store = WinUsbTakeoverNativeMethods.OpenStore(
+                    WinUsbTakeoverNativeMethods.CertSystemStoreLocalMachine, storeName);
                 if (store == IntPtr.Zero)
                 {
                     throw new InvalidOperationException(

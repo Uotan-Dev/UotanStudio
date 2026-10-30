@@ -376,12 +376,15 @@ public sealed partial class RkdlSession
     }
 
     /// <summary>
-    /// Writes a CBW to the bulk OUT endpoint.
-    /// <para>将 CBW 写入 bulk OUT 端点。</para>
+    /// Writes a CBW to the bulk OUT endpoint, refusing first when the device is not in loader mode.
+    /// <para>将 CBW 写入 bulk OUT 端点，并在设备不处于 loader 模式时先行拒绝。</para>
     /// </summary>
     /// <param name="cbw">The CBW to write. <para>要写入的 CBW。</para></param>
+    /// <exception cref="RkdlException">The device reports mask ROM mode, or reports no stage at all, so no bulk command can
+    /// be answered. <para>设备报告 Mask ROM 模式，或完全未报告阶段，因而无法应答任何批量命令。</para></exception>
     private void WriteCbw(RkdlCbw cbw)
     {
+        EnsureBulkCommandAllowed(cbw);
         var bytes = cbw.ToBytes();
         var written = Transport.Write(bytes, 0, bytes.Length, _timeoutMs);
         if (written != bytes.Length)
@@ -389,6 +392,50 @@ public sealed partial class RkdlSession
             throw new RkdlException(RkdlError.TransferFailed, $"CBW short write: {written}/{bytes.Length}.");
         }
     }
+
+    /// <summary>
+    /// Rejects a bulk command that mask ROM cannot answer. Mask ROM implements the device-information and SDRAM
+    /// commands only, so a storage command sent there waits for a CSW until the transfer timeout expires and then
+    /// reports a signature failure instead of the real cause.
+    /// <para>拒绝 Mask ROM 无法应答的批量命令。Mask ROM 只实现设备信息与 SDRAM 命令，因此向它发送存储命令会一直等待
+    /// CSW 直到传输超时，最终报告签名校验失败而不是真实原因。</para>
+    /// </summary>
+    /// <param name="cbw">The CBW about to be written. <para>即将写入的 CBW。</para></param>
+    /// <exception cref="RkdlException">The device reports mask ROM mode and the command needs a loader.
+    /// <para>设备报告 Mask ROM 模式，且该命令需要 loader。</para></exception>
+    private void EnsureBulkCommandAllowed(RkdlCbw cbw)
+    {
+        if (Mode != RkdlDeviceMode.Maskrom || IsMaskromCommand(cbw.OperationCode))
+        {
+            return;
+        }
+
+        throw new RkdlException(RkdlError.NotSupported,
+            $"The device is in mask ROM mode, which answers no 0x{cbw.OperationCode:X2} storage command; download a loader first.");
+    }
+
+    /// <summary>
+    /// Reports whether mask ROM answers the operation code: device information, chip capability and the SDRAM commands a
+    /// loader download needs. Every storage command needs a loader.
+    /// <para>报告 Mask ROM 是否应答该操作码：设备信息、芯片能力，以及 loader 下载所需的 SDRAM 命令。所有存储命令都需要
+    /// loader。</para>
+    /// </summary>
+    /// <param name="operationCode">The rockusb operation code. <para>rockusb 操作码。</para></param>
+    /// <returns><see langword="true"/> when mask ROM implements the command.
+    /// <para>Mask ROM 实现该命令时为 <see langword="true"/>。</para></returns>
+    private static bool IsMaskromCommand(byte operationCode) => operationCode switch
+    {
+        (byte)RkdlCommand.TestUnitReady => true,
+        (byte)RkdlCommand.ReadFlashId => true,
+        (byte)RkdlCommand.ReadFlashInfo => true,
+        (byte)RkdlCommand.ReadChipInfo => true,
+        (byte)RkdlCommand.ReadCapability => true,
+        (byte)RkdlCommand.ReadSdram => true,
+        (byte)RkdlCommand.WriteSdram => true,
+        (byte)RkdlCommand.ExecuteSdram => true,
+        (byte)RkdlCommand.DeviceReset => true,
+        _ => false
+    };
 
     /// <summary>
     /// Reads a CSW from the bulk IN endpoint and validates signature + tag (UFI_CHECK_SIGN).

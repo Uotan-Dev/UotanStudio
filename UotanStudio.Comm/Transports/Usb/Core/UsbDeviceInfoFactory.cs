@@ -31,6 +31,7 @@ internal static class UsbDeviceInfoFactory
             DeviceInstanceId = device.DeviceInstanceId,
             VendorId = device.VendorId,
             ProductId = device.ProductId,
+            BcdUsb = device.BcdUsb,
             InterfaceClass = device.InterfaceClass,
             InterfaceSubClass = device.InterfaceSubClass,
             InterfaceProtocol = device.InterfaceProtocol,

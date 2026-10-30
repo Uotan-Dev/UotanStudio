@@ -462,9 +462,6 @@
   <data name="Dock_Properties_Fw_Format" xml:space="preserve">
     <value>格式</value>
   </data>
-  <data name="Dock_Properties_Fw_Summary" xml:space="preserve">
-    <value>摘要</value>
-  </data>
   <data name="Dock_Properties_Fw_MetadataCount" xml:space="preserve">
     <value>元数据条目数</value>
   </data>
@@ -734,9 +731,6 @@
   </data>
   <data name="Dock_Properties_Metadata_Entry" xml:space="preserve">
     <value>条目</value>
-  </data>
-  <data name="Dock_Properties_Metadata_Summary" xml:space="preserve">
-    <value>摘要</value>
   </data>
   <data name="Dock_Properties_Metadata_Error" xml:space="preserve">
     <value>错误</value>

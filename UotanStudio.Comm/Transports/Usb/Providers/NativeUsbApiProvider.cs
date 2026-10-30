@@ -53,6 +53,7 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
             Backends =
             [
                 new UsbBackendCapability { BackendName = "winusb", SupportsNativeAsyncIo = true, ResetReenumeratesDevice = false },
+                new UsbBackendCapability { BackendName = "rockusb", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "winusb-legacy", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "linux-usbfs", SupportsNativeAsyncIo = true, ResetReenumeratesDevice = true },
                 new UsbBackendCapability { BackendName = "macos-usbhost", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = true },

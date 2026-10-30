@@ -268,6 +268,8 @@
                     <StackPanel Margin="12" Spacing="10">
                         <!-- 通用操作标题 -->
                         <TextBlock Text="{DynamicResource Flash_GeneralOperations}" FontWeight="SemiBold" />
+                        <TextBlock Name="SelectedDeviceLabel" Text="{Binding SelectedDeviceText}"
+                                   FontSize="12" Opacity="0.8" TextWrapping="Wrap" />
                         <!-- 全协议通用功能 UI -->
                         <StackPanel Spacing="8">
                             <Button Name="ReadInfoButton" Classes="pane-action"
@@ -674,7 +676,7 @@
                         <!-- 瑞芯微 Rockchip 分类 -->
                         <Expander Name="RkExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Rockchip}" IsExpanded="{Binding IsRockchipSectionExpanded, Mode=TwoWay}">
-                            <StackPanel Spacing="8">
+                            <StackPanel Name="RkPane" Spacing="8">
                                 <TextBlock Text="{DynamicResource Flash_RkSetStorageType}" FontSize="12" Opacity="0.8" />
                                 <ComboBox Name="RkStorageTypeBox" Height="32" VerticalContentAlignment="Center"
                                           HorizontalAlignment="Stretch"
@@ -748,7 +750,7 @@
                         <!-- 镜像操作分类 -->
                         <Expander Name="ImageExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Image}" IsExpanded="{Binding IsImageSectionExpanded, Mode=TwoWay}">
-                            <StackPanel Spacing="8">
+                            <StackPanel Name="ImagePane" Spacing="8">
                                 <Button Name="ExtractSelectedButton" Classes="pane-action" IsEnabled="False"
                                         Click="OnExtractSelectedClick"
                                         Content="{DynamicResource Flash_ExtractSelected}" />

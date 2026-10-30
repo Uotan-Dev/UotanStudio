@@ -442,9 +442,63 @@ internal static partial class WinUSBFinder
         return $"path:{device.DevicePath}|vid:{device.VendorId:X4}|pid:{device.ProductId:X4}|type:{device.GetType().Name}";
     }
 
+    /// <summary>
+    /// Returns the short backend name a device is opened through, for scan diagnostics.
+    /// <para>返回设备实际使用的后端简称，用于扫描诊断日志。</para>
+    /// </summary>
+    /// <param name="device">The opened device. <para>已打开的设备。</para></param>
+    /// <returns><c>Rockusb</c>, <c>WinUSB</c> or <c>Legacy</c>. <para><c>Rockusb</c>、<c>WinUSB</c> 或 <c>Legacy</c>。</para></returns>
+    private static string AttachedBackendName(UsbDevice device)
+        => device switch
+        {
+            RockusbDevice => "Rockusb",
+            WinUSBDevice => "WinUSB",
+            _ => "Legacy"
+        };
+
     /// <summary>Serializes descriptor probes so one scan never opens the same interface twice at once.
     /// <para>串行化描述符探测，使一次扫描不会同时打开同一个接口两次。</para></summary>
     private static readonly FifoGate SerialProbeGate = new();
+
+    /// <summary>Interface class of the vendor-specific debug interfaces whose iSerial exists only in the descriptor.
+    /// <para>厂商自定义调试接口的接口类，其 iSerial 只存在于描述符中。</para>
+    /// </summary>
+    private const byte VendorSpecificInterfaceClass = 0xFF;
+
+    /// <summary>Interface class a Rockchip mask ROM or loader port exposes: mass storage with the bulk-only protocol, which
+    /// carries no serial-only evidence but does carry the <c>bcdUSB</c> bit that separates the two stages.
+    /// <para>瑞芯微 mask ROM 或 loader 端口暴露的接口类：大容量存储 + bulk-only 协议，它没有“仅凭序列号”可用的证据，
+    /// 但携带区分两个阶段的 <c>bcdUSB</c> 位。</para>
+    /// </summary>
+    private const byte MaskRomStorageInterfaceClass = 0x08;
+
+    /// <summary>Rockchip vendor id: a boot ROM node reports no interface class worth trusting before its driver is bound.
+    /// <para>瑞芯微厂商 ID：boot ROM 节点在驱动绑定前不报告可用的接口类。</para>
+    /// </summary>
+    private const ushort RockchipVendorId = 0x2207;
+
+    /// <summary>What one bounded descriptor probe read from an interface.
+    /// <para>一次有界描述符探测从接口读到的内容。</para>
+    /// </summary>
+    /// <param name="Serial">The iSerial string descriptor value, or <see langword="null"/> when unread.
+    /// <para>iSerial 字符串描述符取值；未读到时为 <see langword="null"/>。</para></param>
+    /// <param name="BcdUsb">The device descriptor's <c>bcdUSB</c> field, or <see langword="null"/> when unread.
+    /// <para>设备描述符的 <c>bcdUSB</c> 字段；未读到时为 <see langword="null"/>。</para></param>
+    private readonly record struct DescriptorProbe(string? Serial, ushort? BcdUsb);
+
+    /// <summary>Whether this interface is worth one non-claiming descriptor probe: vendor-specific debug interfaces carry
+    /// their serial only there, and Rockchip boot ROM ports carry the <c>bcdUSB</c> stage bit only there. Every other
+    /// device is left alone so a scan never opens handles it has no question to answer with.
+    /// <para>该接口是否值得做一次不认领接口的描述符探测：厂商自定义调试接口只有在那里才有序列号，瑞芯微 boot ROM 端口
+    /// 只有在那里才有 <c>bcdUSB</c> 阶段位。其余设备不探测，使一次扫描不会打开它无需问询的句柄。</para>
+    /// </summary>
+    /// <param name="device">The enumerated device. <para>已枚举的设备。</para></param>
+    /// <returns><see langword="true"/> when a probe may answer one of those questions.
+    /// <para>探测能回答其中任一问题时为 <see langword="true"/>。</para></returns>
+    private static bool ShouldProbeDeviceDescriptor(UsbDevice device)
+        => device.InterfaceMetadataObserved
+            ? device.InterfaceClass is VendorSpecificInterfaceClass or MaskRomStorageInterfaceClass
+            : device.VendorId == RockchipVendorId;
 
     /// <summary>
     /// Resolves the serial of one enumerated interface in the order Windows itself prefers: an instance-id suffix
@@ -490,28 +544,82 @@ internal static partial class WinUSBFinder
         => !string.IsNullOrWhiteSpace(candidate) && !candidate.Contains('&');
 
     private static string? PeekSerialNumberFor(UsbDevice probe, string path, string? instanceId)
-    {
-        if (!probe.InterfaceMetadataObserved || probe.InterfaceClass != 0xff)
-        {
-            return null;
-        }
+        => ShouldProbeDeviceDescriptor(probe) ? ProbeDescriptors(path, instanceId).Serial : null;
 
-        if (UsbSerialCache.IsRecentlyUnavailable(path, instanceId, Environment.TickCount64))
+    /// <summary>
+    /// Runs one gated descriptor probe and remembers what it read, marking the interface unavailable for a short window
+    /// when the probe read nothing at all.
+    /// <para>在闸门下执行一次描述符探测并记住读到的内容；探测什么都没读到时，把该接口标记为短时不可用。</para>
+    /// </summary>
+    /// <param name="path">Device interface path. <para>设备接口路径。</para></param>
+    /// <param name="instanceId">Device instance id observed now. <para>本次观测到的设备实例 ID。</para></param>
+    /// <returns>The values the probe read; both members are <see langword="null"/> when it read nothing.
+    /// <para>探测读到的取值；什么都没读到时两个成员均为 <see langword="null"/>。</para></returns>
+    private static DescriptorProbe ProbeDescriptors(string path, string? instanceId)
+    {
+        var nowTicks = Environment.TickCount64;
+        if (UsbSerialCache.IsRecentlyUnavailable(path, instanceId, nowTicks))
         {
-            return null;
+            return default;
         }
 
         using (SerialProbeGate.Enter())
         {
-            var peeked = PeekSerialNumber(path);
-            if (string.IsNullOrWhiteSpace(peeked))
+            var peeked = PeekDeviceDescriptors(path);
+            if (peeked.Serial is null && peeked.BcdUsb is null)
             {
                 UsbSerialCache.RememberUnavailable(path, instanceId, Environment.TickCount64);
-                return null;
+                return default;
             }
 
-            UsbSerialCache.Remember(path, instanceId, peeked, Environment.TickCount64);
+            UsbSerialCache.RememberDescriptors(path, instanceId, peeked.Serial, peeked.BcdUsb,
+                Environment.TickCount64);
             return peeked;
+        }
+    }
+
+    /// <summary>
+    /// Fills the device descriptor's <c>bcdUSB</c> value for an enumerated device when the device was already opened
+    /// (the handle carries it), when one bounded WinUSB probe may read it, or, for a device serviced by
+    /// <c>rockusb.sys</c> that no WinUSB handle can reach, from the hub port data that the hub reports for it. This is
+    /// the only evidence that separates a Rockchip mask ROM device from its loader stage: both report the same vendor
+    /// and product ids, so a product-id table alone cannot tell them apart.
+    /// <para>为已枚举设备补齐设备描述符的 <c>bcdUSB</c> 取值：设备已打开时直接取句柄里的值，有界 WinUSB 探测能读到时
+    /// 取探测值；由 <c>rockusb.sys</c> 服务、WinUSB 句柄无法打开的瑞芯微设备则取集线器为该端口报告的取值。这是区分
+    /// 瑞芯微 mask ROM 设备与其 loader 阶段的唯一证据：两者报告相同的厂商与产品 ID，仅凭产品 ID 表无法区分。</para>
+    /// </summary>
+    /// <param name="device">The enumerated device to complete. <para>待补齐的已枚举设备。</para></param>
+    private static void AttachObservedDescriptor(UsbDevice device)
+    {
+        if (device.BcdUsb is not null)
+        {
+            return;
+        }
+
+        var path = device.DevicePath;
+        var instanceId = device.DeviceInstanceId;
+        var nowTicks = Environment.TickCount64;
+        if (UsbSerialCache.TryGetBcdUsb(path, instanceId, nowTicks, out var remembered))
+        {
+            device.BcdUsb = remembered;
+            return;
+        }
+
+        if (device is not RockusbDevice && ShouldProbeDeviceDescriptor(device))
+        {
+            var peeked = ProbeDescriptors(path, instanceId);
+            device.BcdUsb = peeked.BcdUsb;
+            if (string.IsNullOrWhiteSpace(device.SerialNumber) && peeked.Serial is { Length: > 0 } serial)
+            {
+                device.SerialNumber = serial;
+            }
+        }
+
+        if (device.BcdUsb is null && device.VendorId == RockchipVendorId &&
+            UsbHubDescriptorReader.TryReadBcdUsb(instanceId, device.VendorId, device.ProductId, out var hubBcdUsb))
+        {
+            device.BcdUsb = hubBcdUsb;
+            UsbSerialCache.RememberDescriptors(path, instanceId, serial: null, hubBcdUsb, nowTicks);
         }
     }
 
@@ -547,29 +655,33 @@ internal static partial class WinUSBFinder
             device.SerialNumber = PeekSerialNumberFor(device, device.DevicePath, device.DeviceInstanceId);
         }
 
+        AttachObservedDescriptor(device);
         return device;
     }
 
     /// <summary>
-    /// Briefly opens a WinUSB handle to read the device descriptor and the iSerial string
-    /// descriptor; no pipe queries, no policies, no interface claim, and the handle is closed
-    /// immediately. Every read failure yields <c>null</c>.
-    /// <para>短暂打开 WinUSB 句柄读取设备描述符与 iSerial 字符串描述符；不查询管道、
-    /// 不设置策略、不认领接口，句柄随即关闭。读取失败一律返回 <c>null</c>。</para>
+    /// Briefly opens a WinUSB handle to read the device descriptor (<c>bcdUSB</c> and the iSerial index) and the iSerial
+    /// string descriptor; no pipe queries, no policies, no interface claim, and the handle is closed immediately. A
+    /// device whose driver is not WinUSB cannot be opened this way, so every value is absent rather than guessed.
+    /// <para>短暂打开 WinUSB 句柄读取设备描述符（<c>bcdUSB</c> 与 iSerial 索引）及 iSerial 字符串描述符；不查询管道、
+    /// 不设置策略、不认领接口，句柄随即关闭。驱动不是 WinUSB 的设备无法这样打开，因此取值为缺省而非猜测。</para>
     /// </summary>
-    private static unsafe string? PeekSerialNumber(string path)
+    /// <param name="path">Device interface path. <para>设备接口路径。</para></param>
+    /// <returns>Whatever the probe could read; both members are <see langword="null"/> when the handle could not be
+    /// opened. <para>探测能读到的一切；句柄无法打开时两个成员均为 <see langword="null"/>。</para></returns>
+    private static unsafe DescriptorProbe PeekDeviceDescriptors(string path)
     {
         var hUsb = Win32API.SimpleCreateHandle(path, true);
         if (hUsb == Win32API.INVALID_HANDLE_VALUE)
         {
-            return null;
+            return default;
         }
 
         try
         {
             if (!WinUSBAPI.WinUsb_Initialize(hUsb, out var winUsbHandle))
             {
-                return null;
+                return default;
             }
 
             using var safeHandle = new SafeWinUsbHandle(winUsbHandle);
@@ -577,22 +689,25 @@ internal static partial class WinUSBFinder
             if (!WinUSBAPI.WinUsb_GetDescriptor(safeHandle.DangerousGetHandle(), WinUSBAPI.USB_DEVICE_DESCRIPTOR_TYPE,
                 0, 0, (IntPtr)buffer, UsbDeviceDescriptorBytes, out _))
             {
-                return null;
+                return default;
             }
 
-            var iSerial = Marshal.PtrToStructure<Win32API.USBDeviceDescriptor>((IntPtr)buffer).ISerialNumber;
+            var descriptor = Marshal.PtrToStructure<Win32API.USBDeviceDescriptor>((IntPtr)buffer);
+            ushort? bcdUsb = descriptor.BcdUSB;
+            var iSerial = descriptor.ISerialNumber;
             if (iSerial == 0)
             {
-                return null;
+                return new DescriptorProbe(null, bcdUsb);
             }
 
             if (!WinUSBAPI.WinUsb_GetDescriptor(safeHandle.DangerousGetHandle(), WinUSBAPI.USB_STRING_DESCRIPTOR_TYPE,
                 iSerial, 0x0409, (IntPtr)buffer, UsbStringDescriptorBufferBytes - 1, out var transferred) || transferred <= 2)
             {
-                return null;
+                return new DescriptorProbe(null, bcdUsb);
             }
 
-            return Marshal.PtrToStringUni((IntPtr)(buffer + 2), (int)(transferred - 2) / 2)?.TrimEnd('\0');
+            var serial = Marshal.PtrToStringUni((IntPtr)(buffer + 2), (int)(transferred - 2) / 2)?.TrimEnd('\0');
+            return new DescriptorProbe(string.IsNullOrWhiteSpace(serial) ? null : serial, bcdUsb);
         }
         finally
         {

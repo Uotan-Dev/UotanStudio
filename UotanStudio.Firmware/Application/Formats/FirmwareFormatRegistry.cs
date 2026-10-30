@@ -64,6 +64,7 @@ public static class FirmwareFormatRegistry
             Register(new VendorFirmware.HarmonyOS.HarmonyUpdateBinFormatHandler());
             Register(new VendorFirmware.UpdateApp.UpdateAppFormatHandler());
             Register(new VendorFirmware.Rockchip.RockchipFormatHandler());
+            Register(new VendorFirmware.Rockchip.RockchipLoaderFormatHandler());
             Register(new VendorFirmware.Amlogic.AmlogicFormatHandler());
             Register(new VendorFirmware.SonySin.SonySinFormatHandler());
             Register(new VendorFirmware.Meizu.Mpk.MpkFormatHandler());

@@ -50,6 +50,15 @@ internal abstract partial class UsbDevice : IDisposable
     public ushort ProductId { get; set; }
 
     /// <summary>
+    /// Gets or sets the device descriptor's <c>bcdUSB</c> release number, when the backend read it.
+    /// <para>获取或设置设备描述符的 <c>bcdUSB</c> 版本号（后端读到时为有效值）。</para>
+    /// </summary>
+    /// <value>The <c>bcdUSB</c> field, or <see langword="null"/> when it was not observed; a device with
+    /// no opened handle reports nothing.
+    /// <para><c>bcdUSB</c> 字段；未观测到时为 <see langword="null"/>，未打开句柄的设备不报告任何值。</para></value>
+    public ushort? BcdUsb { get; set; }
+
+    /// <summary>
     /// Gets or sets the interface class code.
     /// <para>获取或设置接口类代码。</para>
     /// </summary>

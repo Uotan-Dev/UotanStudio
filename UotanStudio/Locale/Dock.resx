@@ -504,9 +504,6 @@
   <data name="Dock_Properties_Fw_Format" xml:space="preserve">
     <value>Format</value>
   </data>
-  <data name="Dock_Properties_Fw_Summary" xml:space="preserve">
-    <value>Summary</value>
-  </data>
   <data name="Dock_Properties_Fw_MetadataCount" xml:space="preserve">
     <value>Metadata Entries</value>
   </data>
@@ -776,9 +773,6 @@
   </data>
   <data name="Dock_Properties_Metadata_Entry" xml:space="preserve">
     <value>Entry</value>
-  </data>
-  <data name="Dock_Properties_Metadata_Summary" xml:space="preserve">
-    <value>Summary</value>
   </data>
   <data name="Dock_Properties_Metadata_Error" xml:space="preserve">
     <value>Error</value>

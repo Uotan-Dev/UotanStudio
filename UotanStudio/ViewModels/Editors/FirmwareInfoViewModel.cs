@@ -10,9 +10,9 @@ namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
 /// Firmware metadata panel view model: a read-only Dock document showing a firmware file's format name,
-/// summary, metadata key-value pairs and entry list, populated from <see cref="FormatDetector"/> plus
+/// metadata key-value pairs and entry list, populated from <see cref="FormatDetector"/> plus
 /// <see cref="IFormatHandler.ReadMetadataAsync"/>.
-/// <para>固件元数据面板视图模型：以只读 Dock 文档展示固件文件的格式名、摘要、
+/// <para>固件元数据面板视图模型：以只读 Dock 文档展示固件文件的格式名、
 /// 元数据键值对与条目列表，数据来自 <see cref="FormatDetector"/> + <see cref="IFormatHandler.ReadMetadataAsync"/>。</para>
 /// </summary>
 public partial class FirmwareInfoViewModel : Document, ITool
@@ -28,12 +28,6 @@ public partial class FirmwareInfoViewModel : Document, ITool
     /// <para>「格式名」字段标签的本地化文本。</para>
     /// </summary>
     public static string FormatNameLabel => LanguageService.Instance.GetString("FirmwareInfo_FormatName");
-
-    /// <summary>
-    /// The localized "summary" field label.
-    /// <para>「摘要」字段标签的本地化文本。</para>
-    /// </summary>
-    public static string SummaryLabel => LanguageService.Instance.GetString("FirmwareInfo_Summary");
 
     /// <summary>
     /// The localized "metadata" section title.
@@ -88,18 +82,6 @@ public partial class FirmwareInfoViewModel : Document, ITool
     /// <para>检测到的固件格式名称；未识别时为空字符串。</para>
     /// </summary>
     [ObservableProperty] private string _formatName = string.Empty;
-
-    /// <summary>
-    /// The read summary text.
-    /// <para>读取摘要文本。</para>
-    /// </summary>
-    [ObservableProperty] private string _summary = string.Empty;
-
-    /// <summary>
-    /// Whether the summary section has text (drives its visibility); AVB images never show one.
-    /// <para>摘要分区是否有文本（驱动分区显示）；AVB 镜像不显示摘要。</para>
-    /// </summary>
-    [ObservableProperty] private bool _hasSummary;
 
     /// <summary>
     /// The error message text; empty when there is no error.
@@ -195,8 +177,6 @@ public partial class FirmwareInfoViewModel : Document, ITool
         ErrorMessage = string.Empty;
         IsRecognized = false;
         FormatName = string.Empty;
-        Summary = string.Empty;
-        HasSummary = false;
         Metadata.Clear();
         Entries.Clear();
         Components.Clear();
@@ -230,7 +210,6 @@ public partial class FirmwareInfoViewModel : Document, ITool
                 return;
             }
 
-            _rawSummary = result.Summary;
             var fields = new Dictionary<string, string>
             {
                 ["FileName"] = Path.GetFileName(path),
@@ -298,7 +277,6 @@ public partial class FirmwareInfoViewModel : Document, ITool
         _loadCancellation?.Cancel();
         LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
         _rawMetadata = null;
-        _rawSummary = string.Empty;
         MetadataGroups.Clear();
         Metadata.Clear();
         Entries.Clear();
@@ -307,8 +285,6 @@ public partial class FirmwareInfoViewModel : Document, ITool
         HasEntries = false;
         HasComponents = false;
         FormatName = string.Empty;
-        Summary = string.Empty;
-        HasSummary = false;
         ErrorMessage = string.Empty;
         HasError = false;
         IsRecognized = false;

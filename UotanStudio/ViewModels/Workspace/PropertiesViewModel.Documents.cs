@@ -61,7 +61,7 @@ internal partial class PropertiesViewModel
             LogEditorViewModel => e.PropertyName is nameof(LogEditorViewModel.IsLoading) or nameof(LogEditorViewModel.ErrorMessage),
             DexEditorViewModel => e.PropertyName is nameof(DexEditorViewModel.SelectedEntry) or nameof(DexEditorViewModel.SelectedResource)
                 or nameof(DexEditorViewModel.IsBusy),
-            FirmwareInfoViewModel => e.PropertyName is nameof(FirmwareInfoViewModel.IsBusy) or nameof(FirmwareInfoViewModel.Summary),
+            FirmwareInfoViewModel => e.PropertyName is nameof(FirmwareInfoViewModel.IsBusy),
             _ => false
         };
         if (refresh)

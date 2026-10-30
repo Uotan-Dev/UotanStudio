@@ -274,6 +274,7 @@ internal static partial class LibUsbFinder
         {
             Vid = libUsbDevice.VendorId,
             Pid = libUsbDevice.ProductId,
+            BcdUsb = (ushort)libUsbDevice.Descriptor.Usb,
             BusNumber = busNumber,
             DeviceAddress = address,
             PhysicalPortPath = LibUsbPortIdentity.Observe(libUsbDevice),

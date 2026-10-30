@@ -14,8 +14,9 @@ namespace UotanStudio.Services.Devices;
 public static class UsbDriverElevatedCommand
 {
     /// <summary>
-    /// The switch selecting the device takeover; followed by the instance id and hardware id.
-    /// <para>选择设备接管的开关；后接实例 ID 与硬件 ID。</para>
+    /// The switch selecting the device takeover; followed by the instance id, the hardware id and the
+    /// optional device description the generated INF publishes.
+    /// <para>选择设备接管的开关；后接实例 ID、硬件 ID，以及生成的 INF 发布的可选设备描述。</para>
     /// </summary>
     public const string TakeoverSwitch = "--usb-driver-takeover";
 
@@ -68,9 +69,31 @@ public static class UsbDriverElevatedCommand
     [SupportedOSPlatform("windows")]
     private static int RunWindows(string[] args)
     {
-        var result = Execute(args);
+        var result = ExecuteSafely(args);
         WriteResult(FindValue(args, ResultSwitch), result);
         return result.Status == WinUsbDriverOperationStatus.Succeeded ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Runs the requested operation and converts any escaping exception into a failure result, so the
+    /// helper always writes the outcome file the parent waits for instead of terminating without one.
+    /// <para>执行请求的操作，并把逃逸的异常转换为失败结果，使助手始终写出父进程等待的结果文件，而不会在
+    /// 没有结果的情况下终止。</para>
+    /// </summary>
+    /// <param name="args">The process arguments.<para>进程参数。</para></param>
+    /// <returns>The operation result.<para>操作结果。</para></returns>
+    [SupportedOSPlatform("windows")]
+    private static WinUsbDriverOperationResult ExecuteSafely(string[] args)
+    {
+        try
+        {
+            return Execute(args);
+        }
+        catch (Exception ex)
+        {
+            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
+                $"The elevated driver operation failed: {ex.GetType().FullName}: {ex.Message}");
+        }
     }
 
     private static int ReportUnsupported(string? resultPath)
@@ -96,7 +119,8 @@ public static class UsbDriverElevatedCommand
             return installer.InstallTakeover(new WinUsbTakeoverRequest
             {
                 InstanceId = values[0],
-                HardwareId = values[1]
+                HardwareId = values[1],
+                DeviceName = values.Count > 2 ? values[2] : null
             });
         }
 

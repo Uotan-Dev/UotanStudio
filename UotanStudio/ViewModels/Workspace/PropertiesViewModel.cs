@@ -824,9 +824,9 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// Refreshes property rows for a firmware-info document (file name, path, format name, summary,
+    /// Refreshes property rows for a firmware-info document (file name, path, format name,
     /// metadata key-values and component/entry counts).
-    /// <para>刷新固件信息文档的属性行（文件名、路径、格式名、摘要、元数据键值与组件/条目计数）。</para>
+    /// <para>刷新固件信息文档的属性行（文件名、路径、格式名、元数据键值与组件/条目计数）。</para>
     /// </summary>
     public void RefreshForFirmwareDocument(FirmwareInfoViewModel doc)
     {
@@ -845,10 +845,6 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_FileName", fileName));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_FilePath", doc.FilePath ?? string.Empty));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_Format", doc.FormatName));
-        if (!string.IsNullOrEmpty(doc.Summary))
-        {
-            Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_Summary", doc.Summary));
-        }
         Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_MetadataCount", doc.Metadata.Count.ToString("N0")));
         if (doc.HasComponents)
         {

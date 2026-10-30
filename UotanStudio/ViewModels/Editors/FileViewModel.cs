@@ -498,11 +498,6 @@ public partial class FileViewModel : Document, ITool, IEditable, ISaveableDocume
                         AddAnalysis("Entry", entry);
                     }
                 }
-
-                if (!string.IsNullOrEmpty(result.Summary))
-                {
-                    AddAnalysis("Summary", result.Summary);
-                }
             }
             else
             {

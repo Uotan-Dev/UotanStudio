@@ -300,10 +300,15 @@ internal static partial class WinUSBFinder
                     UsbSerialCache.Remember(path, instanceId, device.SerialNumber, Environment.TickCount64);
                 }
 
+                if (device is RockusbDevice)
+                {
+                    AttachObservedDescriptor(device);
+                }
+
                 var key = BuildDeviceKey(device);
                 if (uniqueKeys.Add(key))
                 {
-                    UsbTrace.LogFormatted($"Confirmed device added: key={key} using {(device is WinUSBDevice ? "WinUSB" : "Legacy")}");
+                    UsbTrace.LogFormatted($"Confirmed device added: key={key} using {AttachedBackendName(device)}");
                     devices.Add(device);
                 }
                 else

@@ -20,6 +20,7 @@ internal static partial class UsbPnpNative
     private const uint CrSuccess = 0x00000000;
     private const uint CrBufferSmall = 0x0000001A;
     private const uint CmGetIdListFilterPresent = 0x00000100;
+    private const uint CmGetDeviceInterfaceListPresent = 0x00000001;
 
     private const uint DevPropTypeUint32 = 0x00000007;
     private const uint DevPropTypeGuid = 0x0000000D;
@@ -43,6 +44,7 @@ internal static partial class UsbPnpNative
     private static readonly DEVPROPKEY ClassGuidKey = new(DeviceFmtid, 10);
     private static readonly DEVPROPKEY FriendlyNameKey = new(DeviceFmtid, 14);
     private static readonly DEVPROPKEY LocationPathsKey = new(DeviceFmtid, 37);
+    private static readonly DEVPROPKEY AddressKey = new(DeviceFmtid, 30);
     private static readonly DEVPROPKEY ProblemCodeKey = new(DeviceStatusFmtid, 3);
     private static readonly DEVPROPKEY ContainerIdKey = new(DeviceContainerFmtid, 2);
     private static readonly DEVPROPKEY BusReportedDeviceDescKey = new(DeviceBusReportedFmtid, 4);
@@ -75,6 +77,14 @@ internal static partial class UsbPnpNative
     [LibraryImport("cfgmgr32.dll")]
     private static partial uint CM_Get_DevNode_PropertyW(uint devInst, ref DEVPROPKEY propertyKey,
         out uint propertyType, byte[]? propertyBuffer, ref uint propertyBufferSize, uint flags);
+
+    [LibraryImport("cfgmgr32.dll")]
+    private static partial uint CM_Get_Device_Interface_List_SizeW(out uint length, in Guid interfaceClassGuid,
+        [MarshalAs(UnmanagedType.LPWStr)] string deviceId, uint flags);
+
+    [LibraryImport("cfgmgr32.dll")]
+    private static partial uint CM_Get_Device_Interface_ListW(in Guid interfaceClassGuid,
+        [MarshalAs(UnmanagedType.LPWStr)] string deviceId, IntPtr buffer, uint bufferLen, uint flags);
 
     /// <summary>
     /// Reports whether this machine can read the USB device-instance list, as a lightweight
@@ -258,6 +268,63 @@ internal static partial class UsbPnpNative
     /// </returns>
     internal static bool TryGetSibling(uint devInst, out uint siblingDevInst)
         => CM_Get_Sibling(out siblingDevInst, devInst, 0) == CrSuccess;
+
+    /// <summary>
+    /// Reads the parent-hub port number a USB devnode is connected to (<c>DEVPKEY_Device_Address</c>), which is the
+    /// connection index the hub driver expects.
+    /// <para>读取 USB 设备节点所连接的父集线器端口号（<c>DEVPKEY_Device_Address</c>），即集线器驱动所需的连接索引。</para>
+    /// </summary>
+    /// <param name="devInst">The USB devnode handle. <para>USB 设备节点句柄。</para></param>
+    /// <param name="port">The one-based port number when this returns <see langword="true"/>.
+    /// <para>返回 <see langword="true"/> 时的一基端口号。</para></param>
+    /// <returns><see langword="true"/> when the property holds a usable port number.
+    /// <para>该属性包含可用端口号时为 <see langword="true"/>。</para></returns>
+    internal static bool TryReadAddressPort(uint devInst, out uint port)
+    {
+        var value = ReadUInt32(devInst, AddressKey);
+        port = value ?? 0;
+        return port != 0;
+    }
+
+    /// <summary>
+    /// Finds the present device-interface path one devnode publishes for an interface class, taking the first match.
+    /// <para>在某个设备节点为指定接口类发布的在位设备接口路径中取第一条匹配项。</para>
+    /// </summary>
+    /// <param name="interfaceClassGuid">The device-interface class GUID. <para>设备接口类 GUID。</para></param>
+    /// <param name="deviceId">The publishing devnode's instance id. <para>发布方设备节点的实例标识。</para></param>
+    /// <returns>The interface path, or <see langword="null"/> when the node publishes none.
+    /// <para>接口路径；该节点未发布时为 <see langword="null"/>。</para></returns>
+    internal static string? FindDeviceInterfacePath(Guid interfaceClassGuid, string deviceId)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId) ||
+            CM_Get_Device_Interface_List_SizeW(out var length, interfaceClassGuid, deviceId,
+                CmGetDeviceInterfaceListPresent) != CrSuccess ||
+            length <= 1)
+        {
+            return null;
+        }
+
+        var buffer = Marshal.AllocHGlobal((int)length * sizeof(char));
+        try
+        {
+            unsafe
+            {
+                new Span<char>(buffer.ToPointer(), (int)length).Clear();
+            }
+
+            if (CM_Get_Device_Interface_ListW(interfaceClassGuid, deviceId, buffer, length,
+                CmGetDeviceInterfaceListPresent) != CrSuccess)
+            {
+                return null;
+            }
+
+            return Marshal.PtrToStringUni(buffer) is { Length: > 0 } first ? first : null;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
 
     /// <summary>
     /// Reads every defined property of a devnode, degrading unreadable fields to <see langword="null"/>

@@ -45,10 +45,9 @@ internal sealed class RkdlFactory : IProtocolFactory
     }
 
     /// <summary>
-    /// Checks whether the USB device is a Rockchip bootrom or loader device by its vendor
-    /// ID, product ID and the known loader product IDs.
-    /// <para>按厂商 ID、产品 ID 与已知 loader 产品 ID 检查 USB 设备是否为 Rockchip
-    /// bootrom 或 loader 设备。</para>
+    /// Checks whether the USB device is a Rockchip boot ROM port (mask ROM or loader stage) by its vendor and product
+    /// ID.
+    /// <para>按厂商与产品 ID 检查 USB 设备是否为瑞芯微 boot ROM 端口（mask ROM 或 loader 阶段）。</para>
     /// </summary>
     /// <param name="transport">The USB device session to inspect. <para>待检查的 USB 设备会话。</para></param>
     /// <returns><c>true</c> when the device is a Rockchip bootrom or loader device.
@@ -60,7 +59,6 @@ internal sealed class RkdlFactory : IProtocolFactory
             return false;
         }
 
-        var pid = transport.DeviceInfo.ProductId;
-        return (pid >> 8) != 0 || RkdlConstants.KnownLoaderProductIds.Contains(pid);
+        return RkdlConstants.IsBootromProduct(transport.DeviceInfo.ProductId);
     }
 }

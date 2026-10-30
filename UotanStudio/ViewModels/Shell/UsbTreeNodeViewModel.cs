@@ -30,8 +30,10 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
 
     /// <summary>
     /// Whether the row offers the WinUSB takeover action; only set for Windows PnP device or function
-    /// nodes carrying their own hardware ids.
-    /// <para>该行是否提供 WinUSB 接管操作；仅为携带自身硬件 ID 的 Windows PnP 设备/接口节点置位。</para>
+    /// nodes carrying their own hardware ids and a protocol, so the button appears on exactly the rows
+    /// the "filter mode" switch keeps.
+    /// <para>该行是否提供 WinUSB 接管操作；仅为携带自身硬件 ID 与已识别协议的 Windows PnP 设备/接口
+    /// 节点置位，使按钮只出现在「过滤显示」开关保留的行上。</para>
     /// </summary>
     [ObservableProperty] private bool _showDriverAction;
 
