@@ -414,7 +414,7 @@ internal partial class WinUSBDevice : UsbDevice
         return builder.ToString();
     }
 
-        /// <summary>
+    /// <summary>
     /// Parses a raw USB configuration descriptor buffer into interface/endpoint metadata, so a multi-interface
     /// device reports every interface instead of only the WinUSB-bound one.
     /// <para>将原始 USB 配置描述符缓冲区解析为接口/端点元数据，使多接口设备报告全部接口，而非仅 WinUSB 绑定的接口。</para>
