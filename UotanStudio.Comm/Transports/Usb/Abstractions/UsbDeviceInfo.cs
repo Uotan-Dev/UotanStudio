@@ -91,6 +91,15 @@ public sealed class UsbDeviceInfo
     public ushort ProductId { get; set; }
 
     /// <summary>
+    /// Gets or sets the device descriptor's <c>bcdUSB</c> release number when it was observed.
+    /// <para>获取或设置观测到的设备描述符 <c>bcdUSB</c> 版本号。</para>
+    /// </summary>
+    /// <value>The <c>bcdUSB</c> field (for example <c>0x0200</c>), or <see langword="null"/> when the
+    /// backend could not read the device descriptor.
+    /// <para><c>bcdUSB</c> 字段（例如 <c>0x0200</c>）；后端无法读取设备描述符时为 <see langword="null"/>。</para></value>
+    public ushort? BcdUsb { get; set; }
+
+    /// <summary>
     /// Gets or sets the USB interface class code when available.
     /// <para>获取或设置 USB 接口类代码（若可用）。</para>
     /// </summary>

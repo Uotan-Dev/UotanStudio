@@ -55,6 +55,30 @@ internal static partial class WinUSBFinder
             return dev;
         }
 
+        if (vid == RockchipVendorId)
+        {
+            var rockDev = new RockusbDevice
+            {
+                DevicePath = path,
+                VendorId = vid ?? 0,
+                ProductId = pid ?? 0,
+                SessionOptions = options
+            };
+            if (rockDev.CreateHandle() == 0)
+            {
+                if (!string.IsNullOrWhiteSpace(serial))
+                {
+                    rockDev.SerialNumber = serial;
+                }
+
+                UsbTrace.LogFormatted($"WinUSBFinder: ProbeDevice opened [{path}] through rockusb.sys.");
+                return rockDev;
+            }
+
+            rockDev.Dispose();
+            UsbTrace.LogFormatted($"WinUSBFinder: ProbeDevice rockusb open failed for [{path}] - trying WinUSB.");
+        }
+
         var winDev = new WinUSBDevice
         {
             DevicePath = path,

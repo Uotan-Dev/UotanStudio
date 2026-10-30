@@ -65,4 +65,49 @@ public sealed class UsbSerialCacheTests : IDisposable
         Assert.True(UsbSerialCache.TryGet(Path, "any-instance", Now + 1_000, out var serial));
         Assert.Equal("SERIAL0001", serial);
     }
+
+    [Fact]
+    public void TryGetBcdUsb_AfterRememberDescriptors_ReturnsRememberedValue()
+    {
+        UsbSerialCache.RememberDescriptors(Path, "instance", serial: null, bcdUsb: 0x0200, nowTicks: Now);
+
+        Assert.True(UsbSerialCache.TryGetBcdUsb(Path, "instance", Now + 1_000, out var bcdUsb));
+        Assert.Equal(0x0200, bcdUsb!.Value);
+    }
+
+    [Fact]
+    public void RememberDescriptors_WithoutValueAfterSerialRead_KeepsTheSerial()
+    {
+        UsbSerialCache.Remember(Path, "instance", "SERIAL0001", Now);
+        UsbSerialCache.RememberDescriptors(Path, "instance", serial: null, bcdUsb: 0x0200, nowTicks: Now + 10);
+
+        Assert.True(UsbSerialCache.TryGet(Path, "instance", Now + 20, out var serial));
+        Assert.Equal("SERIAL0001", serial);
+        Assert.True(UsbSerialCache.TryGetBcdUsb(Path, "instance", Now + 20, out var bcdUsb));
+        Assert.Equal(0x0200, bcdUsb!.Value);
+    }
+
+    [Fact]
+    public void RememberUnavailable_KeepsRememberedBcdUsbAndStopsSuppressingAfterSuccess()
+    {
+        UsbSerialCache.RememberDescriptors(Path, "instance", "SERIAL0001", 0x0200, Now);
+        UsbSerialCache.RememberUnavailable(Path, "instance", Now + 10);
+
+        Assert.True(UsbSerialCache.IsRecentlyUnavailable(Path, "instance", Now + 20));
+        Assert.True(UsbSerialCache.TryGetBcdUsb(Path, "instance", Now + 20, out var bcdUsb));
+        Assert.Equal(0x0200, bcdUsb!.Value);
+
+        UsbSerialCache.RememberDescriptors(Path, "instance", "SERIAL0001", 0x0200, Now + 30);
+
+        Assert.False(UsbSerialCache.IsRecentlyUnavailable(Path, "instance", Now + 40));
+    }
+
+    [Fact]
+    public void RememberDescriptors_NothingRead_LeavesNoEntry()
+    {
+        UsbSerialCache.RememberDescriptors(Path, "instance", serial: null, bcdUsb: null, nowTicks: Now);
+
+        Assert.False(UsbSerialCache.TryGet(Path, "instance", Now, out _));
+        Assert.False(UsbSerialCache.TryGetBcdUsb(Path, "instance", Now, out _));
+    }
 }

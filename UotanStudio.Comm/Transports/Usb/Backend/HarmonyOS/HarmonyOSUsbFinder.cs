@@ -183,6 +183,7 @@ internal static class HarmonyOSUsbFinder
                         null
                     );
                     dev.Interfaces = interfaces;
+                    dev.BcdUsb = devDesc.BcdUSB;
                     dev.Speed = UsbSpeedInference.FromBcdUsb(devDesc.BcdUSB);
 
                     devices.Add(dev);

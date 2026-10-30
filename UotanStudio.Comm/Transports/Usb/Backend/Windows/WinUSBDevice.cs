@@ -1,5 +1,3 @@
-using System.Buffers;
-using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using UotanStudio.Comm.Diagnostics;
@@ -115,6 +113,7 @@ internal partial class WinUSBDevice : UsbDevice
         _usbDeviceDescriptor = Marshal.PtrToStructure<USBDeviceDescriptor>(ptr);
         VendorId = _usbDeviceDescriptor.IdVendor;
         ProductId = _usbDeviceDescriptor.IdProduct;
+        BcdUsb = _usbDeviceDescriptor.BcdUSB;
         Marshal.FreeHGlobal(ptr);
 
         ptr = Marshal.AllocHGlobal(Marshal.SizeOf<USBDeviceConfigDescriptor>());
@@ -415,87 +414,14 @@ internal partial class WinUSBDevice : UsbDevice
         return builder.ToString();
     }
 
-    /// <summary>
-    /// Parses a raw USB configuration descriptor buffer into interface/endpoint metadata.
-    /// <para>将原始 USB 配置描述符缓冲区解析为接口/端点元数据。</para>
-    /// Walks the descriptor chain (configuration → interface → endpoint) so multi-interface
-    /// devices report every interface instead of only the WinUSB-bound one.
-    /// <para>遍历描述符链（配置 → 接口 → 端点），使多接口设备报告全部接口，
-    /// 而非仅 WinUSB 绑定的接口。</para>
+        /// <summary>
+    /// Parses a raw USB configuration descriptor buffer into interface/endpoint metadata, so a multi-interface
+    /// device reports every interface instead of only the WinUSB-bound one.
+    /// <para>将原始 USB 配置描述符缓冲区解析为接口/端点元数据，使多接口设备报告全部接口，而非仅 WinUSB 绑定的接口。</para>
     /// </summary>
     /// <param name="buffer">Pointer to the raw configuration descriptor. <para>原始配置描述符指针。</para></param>
     /// <param name="length">Total bytes available. <para>可用总字节数。</para></param>
     /// <returns>The parsed interfaces with their endpoints. <para>解析出的接口及其端点。</para></returns>
     private static List<UsbInterfaceInfo> ParseConfigurationDescriptor(IntPtr buffer, int length)
-    {
-        var result = new List<UsbInterfaceInfo>();
-        if (buffer == IntPtr.Zero || length < 9)
-        {
-            return result;
-        }
-
-        var rented = ArrayPool<byte>.Shared.Rent(length);
-        try
-        {
-            Marshal.Copy(buffer, rented, 0, length);
-            var descriptor = rented.AsSpan(0, length);
-            var pos = 0;
-            UsbInterfaceInfo? currentInterface = null;
-            List<UsbEndpointInfo>? currentEndpoints = null;
-            while (pos + 2 <= length)
-            {
-                int bLength = descriptor[pos];
-                int bDescriptorType = descriptor[pos + 1];
-                if (bLength < 2 || pos + bLength > length)
-                {
-                    break;
-                }
-
-                switch (bDescriptorType)
-                {
-                    case 4 when bLength >= 8:
-                        if (currentInterface != null)
-                        {
-                            result.Add(currentInterface);
-                        }
-
-                        currentEndpoints = [];
-                        currentInterface = new UsbInterfaceInfo
-                        {
-                            InterfaceNumber = descriptor[pos + 2],
-                            Class = descriptor[pos + 5],
-                            SubClass = descriptor[pos + 6],
-                            Protocol = descriptor[pos + 7],
-                            Endpoints = currentEndpoints
-                        };
-                        break;
-
-                    case 5 when bLength >= 7:
-                        currentEndpoints?.Add(new UsbEndpointInfo
-                        {
-                            EndpointAddress = descriptor[pos + 2],
-                            Attributes = descriptor[pos + 3],
-                            MaxPacketSize = BinaryPrimitives.ReadUInt16LittleEndian(descriptor[(pos + 4)..]),
-                            Interval = descriptor[pos + 6]
-                        });
-                        break;
-                    default:
-                        break;
-                }
-
-                pos += bLength;
-            }
-
-            if (currentInterface != null)
-            {
-                result.Add(currentInterface);
-            }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented);
-        }
-
-        return result;
-    }
+        => UsbConfigurationDescriptorParser.Parse(buffer, length);
 }

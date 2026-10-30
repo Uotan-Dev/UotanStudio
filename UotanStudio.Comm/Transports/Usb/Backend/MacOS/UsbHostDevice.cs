@@ -563,7 +563,8 @@ internal class UsbHostDevice : UsbDevice
                 return -1;
             }
 
-            Speed = UsbSpeedInference.FromBcdUsb((ushort)(dd[2] | (dd[3] << 8)));
+            BcdUsb = (ushort)(dd[2] | (dd[3] << 8));
+            Speed = UsbSpeedInference.FromBcdUsb(BcdUsb.Value);
 
             var serialIndex = dd[16];
             if (serialIndex == 0)

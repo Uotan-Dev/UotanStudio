@@ -69,7 +69,7 @@ internal sealed class CommDeviceTransportOpener(
                     }
                     return new OwnedDeviceTransport<SerialTransport>(serial);
                 }
-                throw new IOException("Exact USB endpoint is unavailable.");
+                throw new IOException(DescribeUnopenableEndpoint(endpoint, usb));
             }
             if (session.DeviceInfo.SourceApiKind != usb.Backend ||
                 !UsbDeviceIdentity.MatchesOpenedKey(endpoint.Address, session.DeviceInfo.DeviceKey))
@@ -127,5 +127,46 @@ internal sealed class CommDeviceTransportOpener(
         }
 
         throw new NotSupportedException("Endpoint route is not configured for this opener.");
+    }
+
+    /// <summary>
+    /// Explains why an enumerated USB endpoint could not be opened: the device disappeared between discovery and the
+    /// open, or it is still present while no backend could open it — the usual cause being another process that holds
+    /// an exclusive handle to the port, which a flasher-mode device rejects a second open on.
+    /// <para>说明一个已枚举 USB 端点为何无法打开：设备在发现与打开之间消失，或设备仍在位但没有任何后端能打开它——
+    /// 最常见的原因是另一个进程以独占方式持有该端口的句柄，处于刷机模式的设备会拒绝第二次打开。</para>
+    /// </summary>
+    /// <param name="endpoint">The endpoint that failed to open. <para>打开失败的端点。</para></param>
+    /// <param name="usb">The USB details recorded at discovery. <para>发现时记录的 USB 详细信息。</para></param>
+    /// <returns>The message carried by the thrown <see cref="IOException"/>. <para>抛出的 <see cref="IOException"/> 携带的消息。</para></returns>
+    private string DescribeUnopenableEndpoint(DeviceEndpoint endpoint, UsbEndpointDetails usb)
+    {
+        var identity = $"USB device {usb.VendorId:X4}:{usb.ProductId:X4} at '{usb.Path}'";
+        IReadOnlyList<UsbDeviceInfo> present;
+        try
+        {
+            present = kit.EnumerateUsbDevices(usb.Backend);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or NotSupportedException)
+        {
+            return $"{identity} could not be opened through the {usb.Backend} backend and the device list could not be " +
+                $"re-read to tell whether it is still connected ({ex.Message}).";
+        }
+
+        var stillPresent = present.Any(candidate =>
+            string.Equals(candidate.DevicePath, usb.Path, StringComparison.OrdinalIgnoreCase));
+        if (!stillPresent)
+        {
+            return $"{identity} is no longer connected; reconnect it and retry " +
+                $"({endpoint.Protocol} endpoint).";
+        }
+
+        var instanceId = present
+            .First(candidate => string.Equals(candidate.DevicePath, usb.Path, StringComparison.OrdinalIgnoreCase))
+            .DeviceInstanceId;
+        var instance = string.IsNullOrWhiteSpace(instanceId) ? string.Empty : $" (instance '{instanceId}')";
+        return $"{identity}{instance} is still connected but no {usb.Backend} backend could open it: another process " +
+            $"most likely holds an exclusive handle to this port. Close the other flasher or debug tool and retry " +
+            $"({endpoint.Protocol} endpoint).";
     }
 }
