@@ -105,6 +105,10 @@ public sealed class UsbDriverConfigService : IUsbDriverConfigService
 {
     private const int ErrorCancelled = 1223;
 
+    /// <summary>The longest the host waits for the elevated helper before it terminates it.
+    /// <para>宿主等待提权助手的最长时间，超时后终止该子进程。</para></summary>
+    private static readonly TimeSpan ElevatedTimeout = TimeSpan.FromSeconds(180);
+
     private static WinUsbDriverInstaller? _installer;
 
     /// <summary>
@@ -154,6 +158,10 @@ public sealed class UsbDriverConfigService : IUsbDriverConfigService
         [
             UsbDriverElevatedCommand.TakeoverSwitch, request.InstanceId, request.HardwareId
         ];
+        if (request.DeviceName is { Length: > 0 } deviceName)
+        {
+            arguments.Add(deviceName);
+        }
 
         return RunElevated(arguments);
     }
@@ -211,12 +219,12 @@ public sealed class UsbDriverConfigService : IUsbDriverConfigService
 
     /// <summary>
     /// Relaunches the application with <c>runas</c>, waits for the elevated child to finish the driver
-    /// operation, and returns the outcome the child reported through the result file. The helper only
-    /// invokes driver-store operations (<c>SetupCopyOEMInf</c>, <c>CM_Reenumerate_DevNode</c>,
-    /// <c>SetupUninstallOEMInf</c>) that terminate on their own, so the wait has no timeout.
-    /// <para>以 <c>runas</c> 重启应用，等待提权子进程完成驱动操作，并返回子进程经结果文件上报的结果。
-    /// 助手只调用会自行结束的驱动仓库操作（<c>SetupCopyOEMInf</c>、
-    /// <c>CM_Reenumerate_DevNode</c>、<c>SetupUninstallOEMInf</c>），因此等待不设超时。</para>
+    /// operation, and returns the outcome the child reported through the result file. The wait is bounded by
+    /// <see cref="ElevatedTimeout"/>, which covers a forced PnP install of a USB devnode: a helper that PnP
+    /// leaves blocked past that bound is terminated, so a stuck device can never freeze the caller.
+    /// <para>以 <c>runas</c> 重启应用，等待提权子进程完成驱动操作，并返回子进程经结果文件上报的结果。等待受
+    /// <see cref="ElevatedTimeout"/> 限制，该上限覆盖 USB 设备节点的一次强制 PnP 安装：超过上限仍被 PnP
+    /// 阻塞的助手会被终止，卡住的设备因此不会冻结调用方。</para>
     /// </summary>
     /// <param name="arguments">The helper arguments describing the operation.
     /// <para>描述该操作的助手参数。</para></param>
@@ -264,7 +272,15 @@ public sealed class UsbDriverConfigService : IUsbDriverConfigService
                     "The elevated driver operation could not be started.");
             }
 
-            process.WaitForExit();
+            if (!process.WaitForExit((int)ElevatedTimeout.TotalMilliseconds))
+            {
+                var killed = TryKillElevated(process);
+                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
+                    $"The elevated driver operation did not finish within {ElevatedTimeout.TotalSeconds:0} seconds " +
+                    $"and was {(killed ? "terminated" : "left running because it could not be terminated")}; " +
+                    "the device state may be incomplete.");
+            }
+
             return ReadElevatedResult(resultPath, process.ExitCode);
         }
         catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
@@ -281,6 +297,20 @@ public sealed class UsbDriverConfigService : IUsbDriverConfigService
         finally
         {
             TryDeleteResultFile(resultPath);
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static bool TryKillElevated(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException)
+        {
+            return false;
         }
     }
 

@@ -318,7 +318,9 @@ public sealed class DriverPackageInstaller
             }
 
             if (WinUsbDriverNativeMethods.CmReenumerateDevNode(devInst,
-                    WinUsbDriverNativeMethods.CmReenumerateRetryInstallation) == WinUsbDriverNativeMethods.CrSuccess)
+                    WinUsbDriverNativeMethods.CmReenumerateRetryInstallation |
+                    WinUsbDriverNativeMethods.CmReenumerateAsynchronous) ==
+                WinUsbDriverNativeMethods.CrSuccess)
             {
                 retried++;
             }

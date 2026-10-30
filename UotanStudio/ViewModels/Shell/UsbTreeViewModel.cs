@@ -106,6 +106,12 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>
+    /// Whether a driver takeover or its release is in flight; the tree toolbar stays disabled meanwhile.
+    /// <para>是否正在执行驱动接管或解除接管；期间树工具栏保持禁用。</para>
+    /// </summary>
+    [ObservableProperty] private bool _isDriverOperationRunning;
+
+    /// <summary>
     /// Constructs the view model with the host device-monitor service as the topology source.
     /// <para>使用宿主设备监视服务作为拓扑来源构造视图模型。</para>
     /// </summary>
@@ -206,7 +212,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// </returns>
     public Task RefreshAsync()
     {
-        if (_disposed)
+        if (_disposed || IsDriverOperationRunning)
         {
             return Task.CompletedTask;
         }
@@ -249,33 +255,35 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// the takeover runs in the background, the status bar reports the outcome and the tree refreshes on
     /// success.
     /// <para>用新生成的自签名 WinUSB 包接管该节点的设备，这是通过 WinUSB 路径打开联发科预加载器、下载模式
-    /// 及其他厂商模式设备的前提。节点必须提供接管操作且当前无进行中的操作；接管在后台执行，状态栏报告
-    /// 结果，成功后刷新树。</para>
+    /// 及其他厂商模式设备的前提。节点必须提供接管操作且当前无进行中的操作；接管在后台执行，期间树不读取、
+    /// 工具栏控件禁用，状态栏报告结果，成功后刷新树。</para>
     /// </summary>
     /// <param name="node">The tree node whose device is taken over.<para>要被接管设备的树节点。</para></param>
     public async Task EnableTakeoverAsync(UsbTreeNodeViewModel node)
     {
-        if (node is null || !node.ShowDriverAction || node.IsDriverBusy || _disposed ||
-            !OperatingSystem.IsWindows() || node.Node.HardwareIds.Count == 0)
+        if (node is null || !node.ShowDriverAction || node.IsDriverBusy || IsDriverOperationRunning ||
+            _disposed || !OperatingSystem.IsWindows() || node.Node.HardwareIds.Count == 0)
         {
             return;
         }
 
-        node.IsDriverBusy = true;
+        SetDriverOperationRunning(node, true);
         StatusText = Localized("UsbTree_TakeoverEnabling", node.DisplayText);
+        var refreshRequired = false;
         try
         {
             var request = new WinUsbTakeoverRequest
             {
                 InstanceId = node.Node.InstanceId,
-                HardwareId = node.Node.HardwareIds[0]
+                HardwareId = node.Node.HardwareIds[0],
+                DeviceName = DescribeTakeoverDevice(node.Node)
             };
             var result = await Task.Run(() => _driverConfig.InstallTakeover(request)).ConfigureAwait(true);
             switch (result.Status)
             {
                 case WinUsbDriverOperationStatus.Succeeded:
                     StatusText = Localized("UsbTree_TakeoverEnabled", node.DisplayText);
-                    _ = RefreshAsync();
+                    refreshRequired = true;
                     break;
                 case WinUsbDriverOperationStatus.ElevationRequired:
                     StatusText = Localized("UsbTree_TakeoverElevationRequired");
@@ -296,7 +304,12 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         }
         finally
         {
-            node.IsDriverBusy = false;
+            SetDriverOperationRunning(node, false);
+        }
+
+        if (refreshRequired)
+        {
+            await RefreshAsync().ConfigureAwait(true);
         }
     }
 
@@ -306,19 +319,20 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     /// may be running on it; the removal runs in the background, the status bar reports the outcome and
     /// the tree refreshes on success.
     /// <para>结束该节点设备的接管：删除自签名包与其证书，设备回退系统驱动。节点必须提供接管操作且当前无
-    /// 进行中的操作；移除在后台执行，状态栏报告结果，成功后刷新树。</para>
+    /// 进行中的操作；移除在后台执行，期间树不读取、工具栏控件禁用，状态栏报告结果，成功后刷新树。</para>
     /// </summary>
     /// <param name="node">The tree node whose takeover ends.<para>要结束接管的树节点。</para></param>
     public async Task CancelTakeoverAsync(UsbTreeNodeViewModel node)
     {
-        if (node is null || !node.ShowDriverAction || node.IsDriverBusy || _disposed ||
-            !OperatingSystem.IsWindows())
+        if (node is null || !node.ShowDriverAction || node.IsDriverBusy || IsDriverOperationRunning ||
+            _disposed || !OperatingSystem.IsWindows())
         {
             return;
         }
 
-        node.IsDriverBusy = true;
+        SetDriverOperationRunning(node, true);
         StatusText = Localized("UsbTree_TakeoverDisabling", node.DisplayText);
+        var refreshRequired = false;
         try
         {
             var result = await Task.Run(() => _driverConfig.UninstallTakeover(node.Node.InstanceId))
@@ -327,7 +341,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             {
                 case WinUsbDriverOperationStatus.Succeeded:
                     StatusText = Localized("UsbTree_TakeoverDisabled", node.DisplayText);
-                    _ = RefreshAsync();
+                    refreshRequired = true;
                     break;
                 case WinUsbDriverOperationStatus.ElevationRequired:
                     StatusText = Localized("UsbTree_TakeoverElevationRequired");
@@ -348,7 +362,12 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         }
         finally
         {
-            node.IsDriverBusy = false;
+            SetDriverOperationRunning(node, false);
+        }
+
+        if (refreshRequired)
+        {
+            await RefreshAsync().ConfigureAwait(true);
         }
     }
 
@@ -559,7 +578,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         if (_lastResult is { } result)
         {
             var branches = OnlyAndroid
-                ? UsbTopologyTree.Retain(result.Roots, static node => node.Protocol is { Length: > 0 })
+                ? UsbTopologyTree.Retain(result.Roots, IsFilteredIn)
                 : result.Roots;
             foreach (var branch in branches)
             {
@@ -591,7 +610,8 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         node.ShowDriverAction = _driverConfig.IsSupported &&
             capabilities.Backend == UsbTopologyBackendKind.WindowsPnp &&
             branch.Node.Kind is UsbTopologyNodeKind.Device or UsbTopologyNodeKind.Function &&
-            branch.Node.HardwareIds.Count > 0;
+            branch.Node.HardwareIds.Count > 0 &&
+            IsFilteredIn(branch.Node);
         if (_expandedById.TryGetValue(branch.Node.InstanceId, out var expanded))
         {
             node.IsExpanded = expanded;
@@ -672,6 +692,61 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
             CollectDriverActionNodes(candidate.Children, collected);
         }
     }
+
+    /// <summary>
+    /// Toggles the "a driver operation is in flight" state and mirrors it onto every node that offers the
+    /// takeover action, so all of their row buttons disable at once. Reads are skipped while the state is
+    /// on, because a rebuild recreates the node view models and would drop the operation's own state.
+    /// <para>切换「有驱动操作进行中」状态，并同步到每个提供接管操作的节点，使其行按钮同时禁用。该状态开启时
+    /// 跳过读取，因为重建会重创节点视图模型并丢失操作自身的状态。</para>
+    /// </summary>
+    /// <param name="node">The node the operation runs on.<para>操作所在的节点。</para></param>
+    /// <param name="running">Whether the operation is in flight.<para>操作是否在进行中。</para></param>
+    private void SetDriverOperationRunning(UsbTreeNodeViewModel node, bool running)
+    {
+        IsDriverOperationRunning = running;
+        var driverNodes = new List<UsbTreeNodeViewModel>();
+        CollectDriverActionNodes(Roots, driverNodes);
+        foreach (var candidate in driverNodes)
+        {
+            candidate.IsDriverBusy = running;
+        }
+
+        node.IsDriverBusy = running;
+    }
+
+    /// <summary>
+    /// The criterion the "filter mode" switch applies: the backend recognized a protocol on the node.
+    /// The takeover row action is offered for exactly the nodes this criterion accepts, so a row the
+    /// filter would hide never carries the button.
+    /// <para>「过滤显示」开关所用的判定：后端在该节点上识别出了协议。接管行操作只对这些节点提供，
+    /// 因此会被过滤隐藏的行不会带该按钮。</para>
+    /// </summary>
+    /// <param name="node">The node to test.<para>要判定的节点。</para></param>
+    /// <returns><see langword="true"/> when the node carries a recognized protocol.
+    /// <para>节点带有已识别协议时为 <see langword="true"/>。</para></returns>
+    private static bool IsFilteredIn(UsbTopologyNode node) => node.Protocol is { Length: > 0 };
+
+    /// <summary>
+    /// Builds the device description the takeover INF publishes, naming the device mode the backend
+    /// recognized so Device Manager shows the mode instead of a generic WinUSB entry. Unrecognized modes
+    /// get no description and fall back to the hardware id.
+    /// <para>构建接管 INF 发布的设备描述，写明后端识别到的设备模式，使设备管理器显示该模式而不是笼统的
+    /// WinUSB 条目。未识别出模式时不提供描述，回退为硬件 ID。</para>
+    /// </summary>
+    /// <param name="node">The node being taken over.<para>要被接管的节点。</para></param>
+    /// <returns>The description, or <see langword="null"/> when the mode is unknown.
+    /// <para>设备描述；模式未知时为 <see langword="null"/>。</para></returns>
+    private static string? DescribeTakeoverDevice(UsbTopologyNode node) => node.Protocol switch
+    {
+        "rkdl" => "UotanStudio WinUSB (Rockchip RKDL)",
+        "mtk" => "UotanStudio WinUSB (MediaTek BROM)",
+        "edl" => "UotanStudio WinUSB (Qualcomm EDL)",
+        "fastboot" => "UotanStudio WinUSB (Fastboot)",
+        "adb" => "UotanStudio WinUSB (ADB)",
+        "hdc" => "UotanStudio WinUSB (HDC)",
+        _ => null
+    };
 
     private void RememberExpansion(IReadOnlyList<UsbTreeNodeViewModel> nodes)
     {

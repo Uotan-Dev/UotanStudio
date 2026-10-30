@@ -17,17 +17,18 @@ internal static unsafe partial class WinUsbTakeoverNativeMethods
 {
     internal const uint CertStoreProvSystem = 10;
     internal const uint CertSystemStoreLocalMachine = 0x00020000;
+    internal const uint CertSystemStoreCurrentUser = 0x00010000;
     internal const uint X509AsnEncoding = 0x00010001;
     internal const uint CertX500NameStr = 0x00040000;
     internal const uint CertStoreAddReplaceExisting = 3;
     internal const uint CertFindSubjectName = 0x000b0000;
     internal const uint CertFriendlyNamePropId = 9;
 
-    internal const uint CryptMachineKeyset = 0x00000008;
+    internal const uint CryptMachineKeyset = 0x00000020;
     internal const uint CryptSilent = 0x00000040;
-    internal const uint CryptNewKeyset = 0x00000002;
+    internal const uint CryptNewKeyset = 0x00000008;
     internal const uint CryptDeleteKeyset = 0x00000010;
-    internal const uint CryptVerifyContext = 0x80000000;
+    internal const uint CryptVerifyContext = 0xF0000000;
     internal const uint ProvRsaFull = 1;
     internal const uint AtSignature = 2;
     internal const uint CryptExportable = 0x00000001;
@@ -36,9 +37,9 @@ internal static unsafe partial class WinUsbTakeoverNativeMethods
     internal const uint CalgSha256 = 0x0000800c;
 
     internal const uint CryptCatOpenCreateNew = 0x00000001;
-    internal const uint CryptCatAttrAuthenticated = 0x00000100;
+    internal const uint CryptCatAttrAuthenticated = 0x10000000;
     internal const uint CryptCatAttrNameAscii = 0x00000001;
-    internal const uint CryptCatAttrDataAscii = 0x00000002;
+    internal const uint CryptCatAttrDataAscii = 0x00010000;
     internal const uint CryptCatMemberVersion = 0x200;
     internal const uint SpcFileLinkChoice = 1;
     internal const int Sha1HashLength = 20;
@@ -199,7 +200,13 @@ internal static unsafe partial class WinUsbTakeoverNativeMethods
         internal IntPtr Unauthenticated;
     }
 
-    [LibraryImport("crypt32.dll", SetLastError = true, EntryPoint = "CryptAcquireContextW")]
+    /// <summary>
+    /// Acquires one CSP context. The provider calls of this class are exported by <c>advapi32</c>, not by
+    /// <c>crypt32</c>, which only carries the certificate and catalog APIs here.
+    /// <para>获取一个 CSP 上下文。本类的加密提供者调用由 <c>advapi32</c> 导出，<c>crypt32</c> 只提供这里的
+    /// 证书与编录 API。</para>
+    /// </summary>
+    [LibraryImport("advapi32.dll", SetLastError = true, EntryPoint = "CryptAcquireContextW")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool CryptAcquireContext(out IntPtr provider, IntPtr container, IntPtr providerName,
         uint providerType, uint flags);
@@ -305,16 +312,6 @@ internal static unsafe partial class WinUsbTakeoverNativeMethods
     internal static partial int SignerFreeSignerContext(IntPtr signerContext);
 
     /// <summary>
-    /// Encodes one ANSI string as a null-terminated unmanaged block the caller must free.
-    /// <para>把一个 ANSI 字符串编码为调用方必须释放的、以 null 结尾的非托管块。</para>
-    /// </summary>
-    /// <param name="value">The string to encode.<para>要编码的字符串。</para></param>
-    /// <returns>The unmanaged pointer, or <see cref="IntPtr.Zero"/> for a null input.
-    /// <para>非托管指针；输入为 null 时为 <see cref="IntPtr.Zero"/>。</para></returns>
-    internal static IntPtr AllocateAnsi(string? value)
-        => value is null ? IntPtr.Zero : Marshal.StringToHGlobalAnsi(value);
-
-    /// <summary>
     /// Encodes one UTF-16 string as a null-terminated unmanaged block the caller must free.
     /// <para>把一个 UTF-16 字符串编码为调用方必须释放的、以 null 结尾的非托管块。</para>
     /// </summary>
@@ -325,19 +322,23 @@ internal static unsafe partial class WinUsbTakeoverNativeMethods
         => value is null ? IntPtr.Zero : Marshal.StringToHGlobalUni(value);
 
     /// <summary>
-    /// Opens a local-machine system certificate store by name.
-    /// <para>按名称打开本机系统证书存储。</para>
+    /// Opens a system certificate store by location and name. The system-store provider is the <c>_W</c>
+    /// variant, so the name must be a Unicode buffer; an ANSI buffer opens an empty store instead of the
+    /// named one.
+    /// <para>按位置与名称打开系统证书存储。系统存储提供者是 <c>_W</c> 变体，名称必须是 Unicode 缓冲区；
+    /// 传 ANSI 缓冲区会打开一个空存储而不是指定的存储。</para>
     /// </summary>
+    /// <param name="location">The store location, for example <see cref="CertSystemStoreLocalMachine"/>.
+    /// <para>存储位置，例如 <see cref="CertSystemStoreLocalMachine"/>。</para></param>
     /// <param name="storeName">The store name, for example <c>Root</c>.<para>存储名，例如 <c>Root</c>。</para></param>
     /// <returns>The store handle, or <see cref="IntPtr.Zero"/> on failure.
     /// <para>存储句柄；失败时为 <see cref="IntPtr.Zero"/>。</para></returns>
-    internal static IntPtr OpenLocalMachineStore(string storeName)
+    internal static IntPtr OpenStore(uint location, string storeName)
     {
-        var name = AllocateAnsi(storeName);
+        var name = AllocateUnicode(storeName);
         try
         {
-            return CertOpenStore((nint)CertStoreProvSystem, X509AsnEncoding, IntPtr.Zero, CertSystemStoreLocalMachine,
-                name);
+            return CertOpenStore((nint)CertStoreProvSystem, X509AsnEncoding, IntPtr.Zero, location, name);
         }
         finally
         {

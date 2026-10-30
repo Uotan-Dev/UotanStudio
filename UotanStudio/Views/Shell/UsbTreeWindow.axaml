@@ -93,12 +93,14 @@
       <StackPanel Orientation="Horizontal" Spacing="8">
         <Button Classes="toolbar-action" Name="RefreshUsbTreeButton"
                 Command="{Binding RefreshCommand}"
+                IsEnabled="{Binding !IsDriverOperationRunning}"
                 Content="{DynamicResource UsbTree_Refresh}" />
         <TextBlock Classes="toolbar-label" Text="{DynamicResource UsbTree_Backend}" Margin="6,0,0,0" />
         <ComboBox Name="UsbTreeBackendSelector" MinWidth="150" Height="26" MinHeight="26" Padding="8,0"
                   VerticalAlignment="Center" FontSize="12"
                   ItemsSource="{Binding Backends}"
                   SelectedItem="{Binding SelectedBackend, Mode=TwoWay}"
+                  IsEnabled="{Binding !IsDriverOperationRunning}"
                   ToolTip.Tip="{Binding SelectedBackend.Description}">
           <ComboBox.ItemTemplate>
             <DataTemplate DataType="vm:UsbTreeViewModel+UsbTreeBackendOption">
@@ -107,10 +109,13 @@
           </ComboBox.ItemTemplate>
         </ComboBox>
         <CheckBox Classes="toolbar-action" Name="OnlyAndroidCheckBox" Content="{DynamicResource UsbTree_OnlyAndroid}"
-                  IsChecked="{Binding OnlyAndroid, Mode=TwoWay}" />
+                  IsChecked="{Binding OnlyAndroid, Mode=TwoWay}"
+                  IsEnabled="{Binding !IsDriverOperationRunning}" />
         <Button Classes="toolbar-action" Name="ExpandAllButton" Command="{Binding ExpandAllCommand}"
+                IsEnabled="{Binding !IsDriverOperationRunning}"
                 Content="{DynamicResource UsbTree_ExpandAll}" />
         <Button Classes="toolbar-action" Name="CollapseAllButton" Command="{Binding CollapseAllCommand}"
+                IsEnabled="{Binding !IsDriverOperationRunning}"
                 Content="{DynamicResource UsbTree_CollapseAll}" />
         <Button Classes="toolbar-action" Name="CopyTreeButton" Click="OnCopyTextClick"
                 Content="{DynamicResource UsbTree_CopyText}" />
