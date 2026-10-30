@@ -54,11 +54,11 @@
   <ItemGroup>
     <!-- Shared AVB signature verification lives in UotanStudio.Firmware (no circular dependency:
          Firmware does not reference Comm). -->
+    <!-- Vendor driver packages ship as drivers/<packageId> bundles in UotanStudio.Assets and are staged
+         through AssetStore; this project embeds no assembly resources of its own. -->
+    <ProjectReference Include="..\UotanStudio.Assets\UotanStudio.Assets.csproj" />
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
     <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
   </ItemGroup>
 
 </Project>

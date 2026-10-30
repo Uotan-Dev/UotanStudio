@@ -1,8 +1,10 @@
 # DevEco 投屏运行时提取
 
 `extract.ps1` 从本机 DevEco Studio 的 `screen-mirroring` 插件 JAR 中提取 HDC 投屏所需的设备端二进制，
-写入 `UotanStudio.Mirroring/Assets/ohos/device/`。这些文件随应用输出与发布到 `ohos/device/`，由
-`OhscrcpyServerManager` 在会话建立时按 UI Test 版本与架构选择并推送到设备的 `/data/local/tmp`。
+写入 `UotanStudio.Assets/Assets/ohos/device/`，作为压缩步骤的生成输入。压缩帧与
+`UotanStudio.Assets/Assets/manifest.tsv` 条目由 `dotnet run tools/compress-embedded-assets.cs` 生成并随包，运行时由
+`AssetStore.Materialize` 物化，`OhscrcpyServerManager` 在会话建立时按 UI Test 版本与架构选择并推送到设备的
+`/data/local/tmp`。
 
 ## 使用
 
@@ -14,7 +16,7 @@ pwsh -File tools/deveco-mirroring/extract.ps1
 
 - DevEco：`C:\Program Files\Huawei\DevEco Studio`
 - 插件：`plugins\screen-mirroring\lib\hosScrcpy-1.0.20-beta.jar`
-- 输出：`UotanStudio.Mirroring\Assets\ohos\device`
+- 输出：`UotanStudio.Assets\Assets\ohos\device`
 
 DevEco 安装在其他位置时：
 
@@ -23,7 +25,8 @@ pwsh -File tools/deveco-mirroring/extract.ps1 -DevEcoRoot 'D:\Huawei\DevEco Stud
 ```
 
 脚本只会覆盖 `libscrcpy/*.so` 与 `uitest_agent*.so` 这 15 个条目，并打印每个文件的大小与 SHA-256；
-来源、版本和摘要记录在 `UotanStudio.Mirroring/Assets/ohos/README.md`。
+来源、版本和摘要记录在 `UotanStudio.Assets/Assets/ohos/README.md`。重新提取后运行
+`dotnet run tools/compress-embedded-assets.cs` 更新压缩帧与清单条目。
 
 ## 边界
 

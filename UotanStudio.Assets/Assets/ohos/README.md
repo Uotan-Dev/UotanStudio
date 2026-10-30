@@ -17,15 +17,16 @@ CPU 架构选择，并通过托管 HDC 会话推送到 `/data/local/tmp`。
 
 ## 打包与运行时布局
 
-原始 `.so` 文件保留在本目录作为生成输入，不再直接复制到输出目录。构建时由资源压缩步骤生成
-`device/<文件名>.zst` 与 `device/manifest.txt`，两者作为内嵌资源进入 `UotanStudio.Mirroring`；清单的
-逻辑名是 `ohos/device/manifest.txt`。
+原始 `.so` 文件保留在本目录作为生成输入，不内嵌。构建时由 `tools/compress-embedded-assets.cs` 生成
+`device/<文件名>.zst`，并把对应行写进 `UotanStudio.Assets/Assets/manifest.tsv`；压缩帧内嵌进
+`UotanStudio.Assets` 程序集，逻辑资源名是 `assets/ohos/device/<文件名>.zst`。
 
-首次使用时 `OhscrcpyDeviceAssets` 读取清单，把每个 zstd 帧解压到内存并校验长度与 SHA-256，再原子写入
-`%TEMP%/UotanStudio/ohos-device/<清单 SHA-256 前 16 位>/`；同一清单后续启动直接复用该目录。采集库与
-UI Test 代理的选择、推送仍按真实文件路径进行。
+运行时由 `AssetStore.Materialize(AssetCatalog.OhosDevice, cancellationToken)` 把 `ohos/device` 资源包物化到
+`%TEMP%/UotanStudio/assets/ohos/device/<bundle 摘要前 16 位>/`；每个帧的长度与 SHA-256 由 `AssetStore` 按清单
+校验，写入经同目录临时文件加原子替换，同一 bundle 摘要的目录后续直接复用。采集库与 UI Test 代理的选择、推送
+仍按真实文件路径进行。
 
-清单是 UTF-8 文本，每行一个条目：`<文件名>\t<解压长度>\t<小写 SHA-256>`；空行与 `#` 开头的行忽略。
+`ohos/device` 在共享清单里的行是六列 `bundle`/`path`/长度/SHA-256/编码/来源，`path` 列就是本目录的纯文件名。
 
 ## 文件与摘要
 

@@ -1,3 +1,4 @@
+using UotanStudio.Assets;
 using UotanStudio.Firmware.Core.Magic;
 using UotanStudio.Firmware.Core.Magic.Generated;
 using UotanStudio.Hash.Digests;
@@ -6,26 +7,28 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Guards the compiled magic rule table resource: the embedded zstd frame must match the generator's recorded sizes,
-/// decode to the declared length, and hash to the recorded digest before the engine ever reads it.
-/// <para>守护编译型魔数规则表资源：内嵌 zstd 帧必须与生成器记录的尺寸一致，解码后长度与摘要必须匹配，引擎才会读取它。</para>
+/// Guards the compiled magic rule table asset: the shipped <c>firmware/magic</c> bundle must expose the rule table,
+/// decode it to the length and digest the generator recorded, and load the declared top-level rule count.
+/// <para>守护编译型魔数规则表资源：随包的 <c>firmware/magic</c> 资源包必须提供规则表，解出的长度与摘要必须与生成器记录一致，并装载声明数量的顶层规则。</para>
 /// </summary>
 public class CompiledMagicResourceTests
 {
-    private const string ResourceName = "UotanStudio.Firmware.Core.Magic.rules.zst";
-
     [Fact]
-    public void EmbeddedResource_CompiledMagicDataFrame_IsEmbeddedWithTheDeclaredLength()
+    public void MagicRulesBundle_CompiledMagicDataEntry_ReadsToTheDeclaredLengthAndDigest()
     {
-        var assembly = typeof(CompiledMagicEngine).Assembly;
-        using var stream = assembly.GetManifestResourceStream(ResourceName);
+        var bundle = AssetCatalog.MagicRules;
 
-        Assert.NotNull(stream);
-        Assert.Equal(CompiledMagicData.CompressedByteLength, checked((int)stream!.Length));
+        Assert.True(bundle.IsPresent, "The firmware/magic asset bundle is not shipped in this build.");
+        Assert.Contains(bundle.Entries, entry => string.Equals(entry.Path, AssetNames.Magic.Rules, StringComparison.Ordinal));
+
+        var payload = AssetStore.Read(bundle, AssetNames.Magic.Rules);
+
+        Assert.Equal(CompiledMagicData.RulesByteLength, payload.Length);
+        Assert.Equal(CompiledMagicData.RulesSha256, Sha256.ComputeHexLower(payload));
     }
 
     [Fact]
-    public void Rules_EmbeddedFrame_DecodesToTheDeclaredLengthAndDigest()
+    public void Rules_LoadedTable_MatchesTheGeneratorRecordedLengthAndDigest()
     {
         var rules = CompiledMagicRules.Rules;
 

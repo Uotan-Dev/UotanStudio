@@ -41,9 +41,12 @@
     <Content Include="Assets\*.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <!-- scrcpy 服务端 jar 由 UotanStudio/Services/Scrcpy/ScrcpyServerService.cs 在使用前按源站公布的长度与
-         摘要校验后取入本地存储，仓库不随包分发该二进制。
-         The scrcpy server jar is fetched into the local store by ScrcpyServerService, which checks the length
-         and digest the origin publishes before use; this repository does not ship the binary. -->
+    <!-- scrcpy 服务端 jar 不随仓库分发；UotanStudio/Services/Scrcpy/ScrcpyServerService.cs 在使用前按源站公布的
+         长度与摘要校验后取入本地存储。若将来随包，放在 UotanStudio.Assets/Assets/scrcpy/scrcpy-server.jar，
+         并运行 dotnet run tools/compress-embedded-assets.cs 生成帧与清单条目。
+         The scrcpy server jar is not distributed with this repository; ScrcpyServerService checks the length
+         and digest the origin publishes before taking it into the local store. A jar that ships later belongs
+         at UotanStudio.Assets/Assets/scrcpy/scrcpy-server.jar and needs
+         dotnet run tools/compress-embedded-assets.cs to generate its zstd frame and manifest row. -->
   </ItemGroup>
 </Project>

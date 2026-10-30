@@ -7,28 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Assets\UotanStudio.Assets.csproj" />
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
   </ItemGroup>
-
-  <ItemGroup>
-    <!-- 设备端采集库与 UI Test 代理以 zstd 帧加文本清单内嵌随包分发，首次使用时由
-         OhscrcpyDeviceAssets 解压到 %TEMP%/UotanStudio/ohos-device/<清单哈希>/；
-         帧与清单由仓库中的原始 .so 文件经资源压缩步骤生成。 -->
-    <EmbeddedResource Include="Assets\ohos\device\*.so.zst">
-      <LogicalName>ohos/device/%(Filename)</LogicalName>
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets\ohos\device\manifest.txt">
-      <LogicalName>ohos/device/manifest.txt</LogicalName>
-    </EmbeddedResource>
-  </ItemGroup>
-
-  <Target Name="ValidateBundledDeviceAssets" BeforeTargets="PrepareForBuild">
-    <ItemGroup>
-      <_BundledDeviceFrame Include="Assets\ohos\device\*.so.zst" />
-    </ItemGroup>
-    <Error Condition="!Exists('$(MSBuildProjectDirectory)/Assets/ohos/device/manifest.txt') or '@(_BundledDeviceFrame)' == ''"
-           Text="Missing the ohos/device zstd frames or manifest.txt. Run 'dotnet run tools/compress-embedded-assets.cs' to regenerate them." />
-  </Target>
 
 </Project>

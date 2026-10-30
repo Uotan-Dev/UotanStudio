@@ -17,18 +17,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Assets\UotanStudio.Assets.csproj" />
     <ProjectReference Include="..\UotanStudio.Compress\UotanStudio.Compress.csproj" />
     <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- The compiled magic rule table ships as one zstd frame and is decoded into memory on first use. The logical
-         name is fixed because the loader looks it up by name and publishes preserve manifest resource names;
-         WithCulture=false keeps MSBuild from reading the file name as a culture and emitting a satellite assembly. -->
-    <EmbeddedResource Include="Core\Magic\Generated\CompiledMagicData.zst">
-      <LogicalName>UotanStudio.Firmware.Core.Magic.rules.zst</LogicalName>
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

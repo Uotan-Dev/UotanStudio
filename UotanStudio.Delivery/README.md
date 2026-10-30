@@ -12,7 +12,7 @@ The source tree is grouped by responsibility:
 - `Build/` contains output, package, Payload, Super, Recovery, validation, and size calculation code.
 - `Scripts/` contains the script generator and its small preflight/text partials.
 - `Tools/` contains delivery tool preparation and pruning.
-- `Assets/` contains the pinned native `update-binary-arm64` fallback for Recovery DAT packages.
+- The pinned native `update-binary-arm64` fallback for Recovery DAT packages ships as the `delivery` bundle of `UotanStudio.Assets` (`UotanStudio.Assets/Assets/delivery/`).
   An A/B `ota.zip` contains `payload.bin`, `payload_properties.txt`, and Android OTA metadata,
   but no device-specific `update-binary`: TWRP detects it as an A/B OTA and invokes its own
   update-engine path. Installation requires a TWRP build with A/B OTA support and a payload that

@@ -20,6 +20,8 @@
     <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
     <!-- Compression library under test (internal codecs exposed through InternalsVisibleTo). -->
     <ProjectReference Include="..\UotanStudio.Compress\UotanStudio.Compress.csproj" />
+    <!-- Unified embedded asset store under test (internal store seams exposed through InternalsVisibleTo). -->
+    <ProjectReference Include="..\UotanStudio.Assets\UotanStudio.Assets.csproj" />
     <!-- Download, mirror and release metadata leaf library under test. -->
     <ProjectReference Include="..\UotanStudio.Net\UotanStudio.Net.csproj" />
     <ProjectReference Include="..\UotanStudio.Delivery\UotanStudio.Delivery.csproj" />

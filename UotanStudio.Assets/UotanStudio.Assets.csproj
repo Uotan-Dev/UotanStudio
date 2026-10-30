@@ -1,0 +1,88 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>UotanStudio.Assets</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Compress\UotanStudio.Compress.csproj" />
+    <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 每个 bundle 一组内嵌项。压缩帧路径恒为 Assets/<bundle>/<path>.zst，逻辑资源名恒为
+         assets/<bundle>/<path>.zst，所以名字必须写成 %(Filename)%(Extension)：%(Filename) 只保留到最后一个点之前，
+         单用它会把 .zst 后缀丢掉。WithCulture=false 防止文件名被 AssignCulture 当成区域资源而生成
+         satellite assembly。 -->
+    <EmbeddedResource Include="Assets\fonts\*.zst">
+      <LogicalName>assets/fonts/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\ohos\device\*.zst">
+      <LogicalName>assets/ohos/device/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\drivers\rockusb\*.zst">
+      <LogicalName>assets/drivers/rockusb/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\drivers\mediatek-vcom\*.zst">
+      <LogicalName>assets/drivers/mediatek-vcom/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\drivers\mediatek-full\*.zst">
+      <LogicalName>assets/drivers/mediatek-full/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\drivers\google-usb\*.zst">
+      <LogicalName>assets/drivers/google-usb/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\drivers\rockchip-adb\*.zst">
+      <LogicalName>assets/drivers/rockchip-adb/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\drivers\qualcomm-qud\*.zst">
+      <LogicalName>assets/drivers/qualcomm-qud/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\drivers\silabs-cp210x\*.zst">
+      <LogicalName>assets/drivers/silabs-cp210x/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\drivers\ftdi-cdm\*.zst">
+      <LogicalName>assets/drivers/ftdi-cdm/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\delivery\*.zst">
+      <LogicalName>assets/delivery/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\firmware\magic\*.zst">
+      <LogicalName>assets/firmware/magic/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\scrcpy\*.zst">
+      <LogicalName>assets/scrcpy/%(Filename)%(Extension)</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\manifest.tsv">
+      <LogicalName>assets/manifest.tsv</LogicalName>
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- 粗粒度门禁：清单或全部压缩帧缺失时构建失败。清单与帧的逐行双射由 tools/compress-embedded-assets.cs
+       的 check 模式与新项目的清单测试守护，因为 UotanStudio.Firmware.MagicGen 依赖本工程可构建才能重新生成
+       firmware/magic 的帧。 -->
+  <Target Name="ValidateBundledAssets" BeforeTargets="PrepareForBuild">
+    <ItemGroup>
+      <_AssetFrame Include="Assets\**\*.zst" />
+    </ItemGroup>
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)/Assets/manifest.tsv') or '@(_AssetFrame)' == ''"
+           Text="Missing Assets/manifest.tsv or every zstd frame under UotanStudio.Assets/Assets. Run 'dotnet run tools/compress-embedded-assets.cs' to regenerate them." />
+  </Target>
+
+</Project>

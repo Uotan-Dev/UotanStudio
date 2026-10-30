@@ -156,7 +156,10 @@ public partial class App : Application
         await ReportAsync(SplashPhase.Resources);
         try
         {
-            FontManager.Current.AddFontCollection(new ZstdEmbeddedFontCollection());
+            // The zstd decode is the heaviest startup step; run it off the UI thread so the splash keeps
+            // animating, then register the decoded faces on the UI thread.
+            var faces = await Task.Run(ZstdEmbeddedFontCollection.DecompressFaces).ConfigureAwait(true);
+            FontManager.Current.AddFontCollection(new ZstdEmbeddedFontCollection(faces));
         }
         catch (Exception ex)
         {

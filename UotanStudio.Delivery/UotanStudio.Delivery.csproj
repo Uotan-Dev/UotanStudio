@@ -7,20 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Assets\UotanStudio.Assets.csproj" />
     <ProjectReference Include="..\UotanStudio.Compress\UotanStudio.Compress.csproj" />
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
     <ProjectReference Include="..\UotanStudio.Hash\UotanStudio.Hash.csproj" />
     <ProjectReference Include="..\UotanStudio.Net\UotanStudio.Net.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Assets\update-binary-arm64.zst">
-      <LogicalName>UotanStudio.Delivery.Assets.update-binary-arm64</LogicalName>
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
-  </ItemGroup>
-
-  <Target Name="ValidateBundledUpdater" BeforeTargets="PrepareForBuild">
-    <Error Condition="!Exists('$(MSBuildProjectDirectory)/Assets/update-binary-arm64.zst')"
-           Text="Missing Assets/update-binary-arm64.zst. Run 'dotnet run tools/compress-embedded-assets.cs' to regenerate it." />
-  </Target>
 </Project>

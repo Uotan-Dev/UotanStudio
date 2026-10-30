@@ -19,9 +19,6 @@ internal static partial class CompiledMagicData
     /// <summary>Decoded byte length of the serialized rule table. <para>序列化规则表解码后的字节长度。</para></summary>
     internal const int RulesByteLength = 3045111;
 
-    /// <summary>Byte length of the embedded zstd frame. <para>内嵌 zstd 帧的字节长度。</para></summary>
-    internal const int CompressedByteLength = 317709;
-
     /// <summary>Lower-case SHA-256 of the decoded rule table. <para>解码后规则表的小写 SHA-256。</para></summary>
     internal const string RulesSha256 = "9bc9461d536c0709696e76d570432ee32ebd661e5a76e3e734b448edd10c8755";
 }

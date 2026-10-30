@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if ([string]::IsNullOrWhiteSpace($Destination)) {
-    $Destination = Join-Path $PSScriptRoot '..\..\UotanStudio.Mirroring\Assets\ohos\device'
+    $Destination = Join-Path $PSScriptRoot '..\..\UotanStudio.Assets\Assets\ohos\device'
 }
 
 $jar = Join-Path $DevEcoRoot 'plugins\screen-mirroring\lib\hosScrcpy-1.0.20-beta.jar'

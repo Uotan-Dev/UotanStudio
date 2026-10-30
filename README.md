@@ -35,6 +35,7 @@
 flowchart TD
  Hash["UotanStudio.Hash<br/>校验和 · 哈希算法"]
  Compress["UotanStudio.Compress<br/>通用压缩 · 容器编解码"]
+ Assets["UotanStudio.Assets<br/>内嵌二进制资源 · 清单 · 准备与抽取"]
  Firmware["UotanStudio.Firmware<br/>固件格式 · 文件系统 · 签名"]
  MagicGen["UotanStudio.Firmware.MagicGen<br/>魔术号表生成"]
  Projects["UotanStudio.Projects<br/>项目文件 · 解决方案快照"]
@@ -49,16 +50,23 @@ flowchart TD
 
  MagicGen --> Firmware
  Compress --> Hash
+ Assets --> Compress
+ Assets --> Hash
  Firmware --> Compress
+ Firmware --> Assets
  Comm --> Firmware
+ Comm --> Assets
  Delivery --> Firmware
+ Delivery --> Assets
  Mirroring --> Comm
+ Mirroring --> Assets
  Mcp --> Firmware
  Mcp --> Comm
  Mcp --> Delivery
  Mcp --> Projects
  Host --> Firmware
  Host --> Comm
+ Host --> Assets
  Host --> Delivery
  Host --> Mirroring
  Host --> Media
@@ -70,6 +78,8 @@ flowchart TD
 ```
 
 - `UotanStudio.Hash` 与 `UotanStudio.Net` 是最底层叶子；`UotanStudio.Compress` 只依赖 `Hash` 并提供通用压缩与 ZIP/容器编解码，`UotanStudio.Firmware` 再依赖 `UotanStudio.Compress`；`UotanStudio.Projects` 依赖 `Hash` 与 `Compress`，`UotanStudio.Media` 不依赖其他业务项目。
+- `UotanStudio.Assets` 只依赖 `Hash` 与 `Compress`，是全部随包二进制资源的唯一存放点（字体、OpenHarmony 采集库、厂商驱动包、交付更新器、magic 规则表）；`Firmware`、`Comm`、`Mirroring`、`Delivery` 与宿主经 `AssetCatalog`/`AssetStore` 读取，任何项目都不再自己内嵌资源。
+- 厂商 Windows 驱动以 `drivers/<packageId>` 资源包随包，设置页的驱动安装器经 `AssetStore` 物化到临时目录后暂存到驱动仓库。
 - 测试宿主实际引用除 `UotanStudio.Desktop` 之外的全部项目，图中只画出一条代表性依赖。
 - 全部设备读写（USB 句柄、套接字、串口、adb/HDC server 协议）由 `UotanStudio.Comm` 持有，宿主只消费 `DeviceController`/`DeviceLease` 与协议客户端。
 - `UotanStudio.Delivery` 可引用固件层，但不得反向引用宿主 UI、项目服务或密钥库；签名能力通过 `IDeliverySigningKeyProvider` 注入。

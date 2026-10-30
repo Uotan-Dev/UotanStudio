@@ -26,7 +26,7 @@
 - `.resx` 只作为 `AdditionalFiles` 并从 SDK 默认 `EmbeddedResource` glob 移除，否则会生成 satellite assembly。UI 可见文本只走资源字典，不能在界面中拼接中英文。
 - 已生成脚本文本只在生成时确定语言；切换界面语言不得改写已生成内容。
 - 编辑器明确选择“按文本打开”时必须保持文本模式（`EditorOpenMode.Text`），即使文件含 NUL 或使用二进制扩展名；只有 `Auto` 才允许按扩展名或内容探测。
-- `Fonts/` 下的 MiSans 字体以 zstd 帧存放，在启动序列的 `SplashPhase.Resources` 阶段由 `ZstdEmbeddedFontCollection` 解码到内存并注册到 `FontManager`；启动窗在此之前使用平台默认字体（`SplashViewModel.SplashFontFamily`），所以不要把字体注册移回 `App.Initialize`，否则启动窗会先于资源解压解析空的 `fonts:` 集合。注册失败只记录错误日志并回退平台字体，不能把用户困在启动窗上。这些 `.zst` 产物由上游 TTF 经资源压缩步骤生成。
+- MiSans 字形由 `UotanStudio.Assets` 的 `fonts` 资源包随包（`MiSans-Regular.ttf` 与 `MiSans-Bold.ttf`，压缩帧与清单在 `UotanStudio.Assets/Assets/fonts`），宿主不再自带字体帧；启动序列的 `SplashPhase.Resources` 阶段由 `ZstdEmbeddedFontCollection.DecompressFaces` 经 `AssetStore.Read` 取已校验字节并注册到 `FontManager`。启动窗在此之前使用平台默认字体（`SplashViewModel.SplashFontFamily`），所以不要把字体注册移回 `App.Initialize`，否则启动窗会先于资源解码解析空的 `fonts:` 集合。注册失败只记录错误日志并回退平台字体，不能把用户困在启动窗上。
 - `.dat`、`.new.dat`、`.patch.dat`、`.br`、`.transfer.list` 的识别复用现有格式注册与判定（`ImageInputService`、`ImageOutputService`、`ProjectExplorerView`）；不要在 View 复制后缀判断。
 
 ## 项目、快照与交付

@@ -35,6 +35,7 @@ The edges below match the `ProjectReference` entries in each project file.
 flowchart TD
  Hash["UotanStudio.Hash<br/>Checksums · hash algorithms"]
  Compress["UotanStudio.Compress<br/>General-purpose compression · container codecs"]
+ Assets["UotanStudio.Assets<br/>Bundled binaries · manifest · prepare and extract"]
  Firmware["UotanStudio.Firmware<br/>Firmware formats · file systems · signing"]
  MagicGen["UotanStudio.Firmware.MagicGen<br/>Magic number table generation"]
  Projects["UotanStudio.Projects<br/>Project files · solution snapshots"]
@@ -49,16 +50,23 @@ flowchart TD
 
  MagicGen --> Firmware
  Compress --> Hash
+ Assets --> Compress
+ Assets --> Hash
  Firmware --> Compress
+ Firmware --> Assets
  Comm --> Firmware
+ Comm --> Assets
  Delivery --> Firmware
+ Delivery --> Assets
  Mirroring --> Comm
+ Mirroring --> Assets
  Mcp --> Firmware
  Mcp --> Comm
  Mcp --> Delivery
  Mcp --> Projects
  Host --> Firmware
  Host --> Comm
+ Host --> Assets
  Host --> Delivery
  Host --> Mirroring
  Host --> Media
@@ -70,6 +78,8 @@ flowchart TD
 ```
 
 - `UotanStudio.Hash` and `UotanStudio.Net` are the lowest leaves; `UotanStudio.Compress` depends only on `Hash` and provides general-purpose compression plus ZIP/container codecs, and `UotanStudio.Firmware` depends on `UotanStudio.Compress` in turn. `UotanStudio.Projects` depends on `Hash` and `Compress`; `UotanStudio.Media` depends on no other business project.
+- `UotanStudio.Assets` depends only on `Hash` and `Compress` and is the single home of every shipped binary asset (fonts, OpenHarmony capture libraries, vendor driver packages, the delivery updater and the magic rule table); `Firmware`, `Comm`, `Mirroring`, `Delivery` and the host read them through `AssetCatalog`/`AssetStore`, and no project embeds resources of its own.
+- Vendor Windows drivers ship as `drivers/<packageId>` bundles; the settings page driver installer materializes them through `AssetStore` and stages them into the driver store.
 - The test host really references every project except `UotanStudio.Desktop`; the diagram draws one representative dashed edge for it.
 - `UotanStudio.Comm` owns every device access path (USB handles, sockets, serial ports, adb/HDC server protocols); the host only consumes `DeviceController`/`DeviceLease` and the protocol clients.
 - `UotanStudio.Delivery` may use the firmware layer but never references host UI, project services or the key library; signing reaches it through `IDeliverySigningKeyProvider`.

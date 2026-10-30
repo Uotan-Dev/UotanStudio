@@ -1,10 +1,10 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
+using UotanStudio.Assets;
 using UotanStudio.Net.Components.Scrcpy;
 using UotanStudio.Net.GitHub;
 using UotanStudio.Services.Scrcpy;
-using UotanStudio.Tests.Firmware.Architecture;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;
@@ -136,18 +136,12 @@ public sealed class ScrcpyServerReleaseTests : IDisposable
     [Fact]
     public void BundledCatalog_DigestMatchesTheJarShippedWithTheApplication()
     {
-        var bundled = ScrcpyServerService.BundledCandidates.FirstOrDefault(File.Exists)
-            ?? (FirmwareContextDependencyScanner.TryFindRepositoryRoot(AppContext.BaseDirectory, out var repositoryRoot)
-                ? Path.Combine(repositoryRoot!, "UotanStudio.Desktop", "Assets", "scrcpy-server.jar")
-                : null);
-        Assert.SkipWhen(bundled is null || !File.Exists(bundled),
-            "Neither the test host output nor a checked-out repository above it exposes "
-            + "UotanStudio.Desktop/Assets/scrcpy-server.jar, so the shipped-artifact gate has nothing to hash.");
+        Assert.SkipWhen(!AssetCatalog.ScrcpyServer.IsPresent,
+            "UotanStudio.Assets/Assets/scrcpy/scrcpy-server.jar 未随包，随包产物门禁无从校验");
 
-        using var stream = File.OpenRead(bundled!);
+        var entry = AssetCatalog.ScrcpyServer[AssetNames.Scrcpy.ServerJar];
 
-        Assert.Equal(ScrcpyServerService.BundledSha256,
-            Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant());
+        Assert.Equal(ScrcpyServerService.BundledSha256, entry.Sha256);
     }
 
     [Fact]

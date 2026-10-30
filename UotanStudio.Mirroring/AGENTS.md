@@ -4,12 +4,12 @@
 
 ## 边界
 
-- 命名空间是 `UotanStudio.Mirroring`；本项目只引用 `UotanStudio.Comm`，不得引用 `UotanStudio.Media`、`UotanStudio.Firmware`、`UotanStudio.Projects` 或宿主 `UotanStudio`。scrcpy 不属于 Comm 协议层，也不得反向并入 Comm。
+- 命名空间是 `UotanStudio.Mirroring`；本项目只引用 `UotanStudio.Comm` 与 `UotanStudio.Assets`，不得引用 `UotanStudio.Media`、`UotanStudio.Firmware`、`UotanStudio.Projects` 或宿主 `UotanStudio`。scrcpy 不属于 Comm 协议层，也不得反向并入 Comm。
 - 设备 I/O 全部经 Comm 契约：`IAdbDeviceSession`（`OpenStream`/`OpenServiceStream`/`CreateSyncClient`）、`AdbServerServices`、`IHdcDeviceSession`、`DeviceLease`。本层不得自建 socket、USB 句柄或启动 adb/hdc 进程。
 - ADB server 复用由宿主决定：`DeviceMonitorService.StartMirror` 在目标由 server 管理时复用已运行的 server，不新起 server；否则使用原生 USB 会话。两种来源分别对应 `MirrorSessionFacade.StartScrcpyOverAdbServer` 与 `StartScrcpyOverUsbSession`，`ScrcpyClient` 只是内部实现。
 - server jar 的获取、长度与 SHA-256 校验、暂存后原子发布、缓存摘要复验与随包回退都在宿主 `ScrcpyServerService`；本层只接收本地路径并把 jar 推到 `/data/local/tmp/scrcpy-server.jar`。
-- HDC 目标的设备端产物不是安装包：采集库与 UI Test 代理以 `Assets/ohos/device/*.so.zst` 的 zstd 帧加同目录 `manifest.txt` 文本清单内嵌随包分发，首次使用时由 `OhscrcpyDeviceAssets` 物化到 `%TEMP%/UotanStudio/ohos-device/<清单哈希前 16 位>/` 并校验长度与 SHA-256；`OhscrcpyServerManager.RuntimeDirectory` 返回该目录，选择与推送仍操作真实文件。改原始 `.so` 后运行 `dotnet run tools/compress-embedded-assets.cs` 重新生成帧与清单；不要在运行时下载或查询 Release 来补设备库。
-- `Assets/ohos/device/` 的 15 个文件提取自本机 DevEco Studio 26.0.0.821 的 `plugins/screen-mirroring/lib/hosScrcpy-1.0.20-beta.jar`（JAR SHA-256 `62cba3701b635a9d9c906a70f18cbc43efd60b7bfd61e2bb18fb88b2c7dfb187`）。来源、逐文件摘要与再分发边界见 `Assets/ohos/README.md`；升级 DevEco 后用 `tools/deveco-mirroring/extract.ps1` 重新提取，不要手工改二进制。`libscrcpy_server0.z.so` 是旧版回退候选。
+- HDC 目标的设备端产物不是安装包：采集库与 UI Test 代理的原始 `.so` 与压缩帧位于 `UotanStudio.Assets/Assets/ohos/device`，唯一清单是 `UotanStudio.Assets/Assets/manifest.tsv`，运行时由 `UotanStudio.Assets` 的 `AssetStore.Materialize` 物化到 `%TEMP%/UotanStudio/assets/ohos/device/<bundle 摘要前 16 位>/`，长度与 SHA-256 由 `AssetStore` 校验；`OhscrcpyDeviceAssets` 只是取该目录的薄适配器，`OhscrcpyServerManager.RuntimeDirectory` 返回它，选择与推送仍操作真实文件。改原始 `.so` 后仍运行 `dotnet run tools/compress-embedded-assets.cs` 重新生成帧与清单；不要在运行时下载或查询 Release 来补设备库。
+- `UotanStudio.Assets/Assets/ohos/device/` 的 15 个文件提取自本机 DevEco Studio 26.0.0.821 的 `plugins/screen-mirroring/lib/hosScrcpy-1.0.20-beta.jar`（JAR SHA-256 `62cba3701b635a9d9c906a70f18cbc43efd60b7bfd61e2bb18fb88b2c7dfb187`）。来源、逐文件摘要与再分发边界见 `UotanStudio.Assets/Assets/ohos/README.md`；升级 DevEco 后用 `tools/deveco-mirroring/extract.ps1` 重新提取，不要手工改二进制。`libscrcpy_server0.z.so` 是旧版回退候选。
 - 呈现不在本层：本层只交付压缩视频/音频包与控制消息；GPU 呈现与 CPU 位图回退在宿主 `ScreenMirrorGpuPresenter` / `ScreenMirrorViewModel`。
 - AirPlay 接收端（`AirPlay/`）是设备**入站**的呈现连接：设备浏览 mDNS 并连到本机监听端口，因此“本层不得自建 socket”针对设备方向的 I/O，不适用于该监听器；它仍不得接触 USB 句柄、adb/HDC server 或设备端口。接收端只读，没有反向控制通道；帧形状与 scrcpy 一致（`ScrcpyVideoFrame` 的 config/key 标志），音频按 AAC-ELD 44100/2ch/480 交付。
 - AirPlay 的 mDNS 广播不依赖 Bonjour，也不解析对端地址；`AirPlayOptions.FairPlayKeyPath` 是外部密钥材料入口，仓库不携带 FairPlay 密钥表，未配置时加密流必须被明确拒绝而不是解成乱码。

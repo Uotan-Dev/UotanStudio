@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using UotanStudio.Assets;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Hash.Digests;
 using UotanStudio.Net.Components.Scrcpy;
@@ -13,7 +14,8 @@ public enum ScrcpyServerSource
 {
     /// <summary>Fetched from a GitHub release and digest-verified. <para>从 GitHub Release 获取并通过摘要校验。</para></summary>
     Provisioned,
-    /// <summary>The jar shipped next to the executable. <para>随可执行文件一同发布的 jar。</para></summary>
+    /// <summary>The jar shipped with the application, taken from the asset bundle or from a copy next to the
+    /// executable. <para>随应用发布的 jar，取自资源包或放在可执行文件旁的副本。</para></summary>
     Bundled,
 }
 
@@ -93,12 +95,12 @@ public sealed record ScrcpyServerInstall(
 /// </remarks>
 public sealed class ScrcpyServerService
 {
-    /// <summary>Version of the jar shipped inside the application payload.
-    /// <para>随应用一起打包的 jar 版本。</para></summary>
+    /// <summary>Version of the bundled jar that ships as a zstd frame in the asset bundle.
+    /// <para>以资源包中 zstd 帧随包的 jar 版本。</para></summary>
     public const string BundledVersion = "5.0.1";
 
-    /// <summary>SHA-256 of the jar shipped inside the application payload.
-    /// <para>随应用一起打包的 jar 的 SHA-256。</para></summary>
+    /// <summary>SHA-256 of the bundled jar, as recorded in the asset manifest.
+    /// <para>随包 jar 的 SHA-256，与资源清单记录一致。</para></summary>
     public const string BundledSha256 = "764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536";
 
     /// <summary>File name the provisioned jar is stored under, inside a per-version directory.
@@ -166,8 +168,15 @@ public sealed class ScrcpyServerService
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UotanStudio", "ScrcpyServer");
     }
 
-    /// <summary>Candidate paths of the jar shipped with the application, in lookup order.
-    /// <para>随应用发布的 jar 的候选路径，按查找顺序。</para></summary>
+    /// <summary>Candidate paths of a jar placed next to the executable by a portable install, in lookup order.
+    /// <para>便携安装放在可执行文件旁的 jar 的候选路径，按查找顺序。</para></summary>
+    /// <remarks>
+    /// The bundled jar ships as a zstd frame in the asset bundle and is resolved through
+    /// <see cref="AssetCatalog.ScrcpyServer"/>; these paths keep a portable install working when the jar is put
+    /// next to the executable instead of being packed.
+    /// <para>随包 jar 以资源包的 zstd 帧分发，并经 <see cref="AssetCatalog.ScrcpyServer"/> 解析；这些路径服务把
+    /// jar 直接放在可执行文件旁的便携安装。</para>
+    /// </remarks>
     /// <value>Two absolute paths; the first existing one is used. <para>两个绝对路径，使用首个存在的那个。</para></value>
     public static IReadOnlyList<string> BundledCandidates { get; } =
     [
@@ -175,17 +184,28 @@ public sealed class ScrcpyServerService
         Path.Combine(AppContext.BaseDirectory, JarFileName),
     ];
 
-    /// <summary>Returns the provisioned artifact, or the bundled jar when nothing valid is cached.
-    /// <para>返回已供给的产物；缓存中没有有效文件时返回随包 jar。</para></summary>
+    /// <summary>Returns the provisioned artifact, otherwise the bundled jar from the asset bundle, otherwise a jar
+    /// put next to the executable.
+    /// <para>返回已供给的产物；否则返回资源包中的随包 jar；否则返回放在可执行文件旁的 jar。</para></summary>
     /// <remarks>
-    /// A provisioned jar is accepted only when its bytes still hash to the digest recorded at install time, so a half-written or hand-edited cache file falls back to the bundled jar instead of breaking every launch. The bundled jar is used without a digest match: a locally replaced jar still starts, and the server itself reports the version mismatch on the device.
-    /// <para>已供给的 jar 只有在其字节仍能哈希到安装时记录的摘要时才被接受，因此写坏一半或被手工改过的缓存文件 会回落到随包 jar，而不是让每次启动都失败。随包 jar 不做摘要匹配即使用：本地替换的 jar 仍然能启动， 版本不一致由服务端在设备上自行上报。</para>
+    /// A provisioned jar is accepted only when its bytes still hash to the digest recorded at install time, so a
+    /// half-written or hand-edited cache file falls back to the next source instead of breaking every launch. The
+    /// bundled jar comes from <see cref="AssetCatalog.ScrcpyServer"/> and is materialized by <see cref="AssetStore"/>,
+    /// which already checked its length and SHA-256 against the asset manifest. A jar found through
+    /// <see cref="BundledCandidates"/> is used without a digest match: a locally replaced jar still starts, and the
+    /// server itself reports the version mismatch on the device.
+    /// <para>已供给的 jar 只有在其字节仍能哈希到安装时记录的摘要时才被接受，因此写坏一半或被手工改过的缓存文件会回落到
+    /// 下一个来源，而不是让每次启动都失败。随包 jar 来自 <see cref="AssetCatalog.ScrcpyServer"/>，由
+    /// <see cref="AssetStore"/> 物化，长度与 SHA-256 已在资源清单校验通过。经 <see cref="BundledCandidates"/>
+    /// 找到的 jar 不做摘要匹配即使用：本地替换的 jar 仍然能启动，版本不一致由服务端在设备上自行上报。</para>
     /// </remarks>
-    /// <param name="cancellationToken">Cancels the digest read.<para>取消摘要读取。</para></param>
     /// <returns>The jar to push and the version to launch it with.
     /// <para>要推送的 jar 及其启动版本。</para></returns>
     /// <exception cref="FileNotFoundException">Neither a valid provisioned jar nor a bundled jar exists.
     /// <para>既没有有效的已供给 jar，也没有随包 jar。</para></exception>
+    /// <exception cref="InvalidDataException">The bundled asset frame is missing, truncated, corrupt, or does not
+    /// match the length and SHA-256 the asset manifest declares.
+    /// <para>随包资源帧缺失、被截断、损坏，或与资源清单声明的长度、SHA-256 不符。</para></exception>
     public ScrcpyServerArtifact Resolve()
     {
         var installed = ReadInstall();
@@ -198,6 +218,13 @@ public sealed class ScrcpyServerService
             }
         }
 
+        if (AssetCatalog.ScrcpyServer.IsPresent)
+        {
+            var directory = AssetStore.Materialize(AssetCatalog.ScrcpyServer);
+            return new ScrcpyServerArtifact(Path.Combine(directory, AssetNames.Scrcpy.ServerJar), BundledVersion,
+                BundledSha256, ScrcpyServerSource.Bundled);
+        }
+
         foreach (var candidate in BundledCandidates)
         {
             if (File.Exists(candidate))
@@ -208,7 +235,10 @@ public sealed class ScrcpyServerService
 
         throw new FileNotFoundException(
             "No scrcpy server jar is available: the provisioned cache is empty and no bundled jar was found at "
-            + string.Join(", ", BundledCandidates) + ".");
+            + string.Join(", ", BundledCandidates) + ". The bundled asset is located at "
+            + "UotanStudio.Assets/Assets/scrcpy/scrcpy-server.jar. "
+            + "没有可用的 scrcpy 服务端 jar：已供给缓存为空，且以上路径都没有随包 jar；"
+            + "随包资源位置为 UotanStudio.Assets/Assets/scrcpy/scrcpy-server.jar。");
     }
 
     /// <summary>Reads the installation manifest. <para>读取安装清单。</para></summary>
