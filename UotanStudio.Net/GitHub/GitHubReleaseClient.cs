@@ -3,9 +3,16 @@ using UotanStudio.Net.Http;
 
 namespace UotanStudio.Net.GitHub;
 
+/// <summary>Thrown when a release API response exceeds <see cref="GitHubReleaseClient.MaximumResponseBytes"/>.
+/// <para>Release API 响应超过 <see cref="GitHubReleaseClient.MaximumResponseBytes"/> 时抛出。</para></summary>
+/// <remarks>Derived from <see cref="InvalidOperationException"/> so existing callers stay source-compatible.
+/// <para>派生自 <see cref="InvalidOperationException"/>，既有调用方保持兼容。</para></remarks>
+public sealed class GitHubResponseTooLargeException(string message) : InvalidOperationException(message);
+
 /// <summary>
-/// Reads release metadata from the <c>api.github.com</c> origin only; mirrors never supply versions, lengths or digests.
-/// <para>只从 <c>api.github.com</c> 源站读取 Release 元数据；镜像绝不提供版本、长度或摘要。</para>
+/// Reads release metadata from the <c>api.github.com</c> origin, optionally through a caller-ranked source
+/// list that may deliver documents from mirrors.
+/// <para>从 <c>api.github.com</c> 源站读取 Release 元数据；也可按调用方排序的源列表从镜像交付文档。</para>
 /// </summary>
 /// <remarks>
 /// Every response body is capped at one MiB and parsed through a source-generated JSON context, so the
@@ -40,8 +47,10 @@ public static class GitHubReleaseClient
     /// <para><paramref name="owner"/> 或 <paramref name="repo"/> 为空或包含路径分隔符。</para></exception>
     /// <exception cref="HttpRequestException">The origin returned a non-success status; the exception carries the status code.
     /// <para>源站返回非成功状态；异常携带状态码。</para></exception>
-    /// <exception cref="InvalidOperationException">The response exceeds the size cap, carries no document or tag, or describes an asset without a name or download URL.
-    /// <para>响应超出大小上限、没有文档或标签，或资产缺少名称或下载地址。</para></exception>
+    /// <exception cref="GitHubResponseTooLargeException">The response exceeds the size cap.
+    /// <para>响应超出大小上限。</para></exception>
+    /// <exception cref="InvalidOperationException">The response carries no document or tag, or describes an asset without a name or download URL.
+    /// <para>响应没有文档或标签，或资产缺少名称或下载地址。</para></exception>
     /// <exception cref="JsonException">The response body is not valid release JSON.
     /// <para>响应体不是有效的 Release JSON。</para></exception>
     public static Task<GitHubRelease> GetLatestAsync(HttpClient client, string owner, string repo,
@@ -66,8 +75,10 @@ public static class GitHubReleaseClient
     /// <para><paramref name="owner"/> 或 <paramref name="repo"/> 为空或包含路径分隔符，或 <paramref name="tag"/> 为空。</para></exception>
     /// <exception cref="HttpRequestException">The origin returned a non-success status, including 404 for an unknown tag; the exception carries the status code.
     /// <para>源站返回非成功状态（未知标签为 404）；异常携带状态码。</para></exception>
-    /// <exception cref="InvalidOperationException">The response exceeds the size cap, carries no document or tag, or describes an asset without a name or download URL.
-    /// <para>响应超出大小上限、没有文档或标签，或资产缺少名称或下载地址。</para></exception>
+    /// <exception cref="GitHubResponseTooLargeException">The response exceeds the size cap.
+    /// <para>响应超出大小上限。</para></exception>
+    /// <exception cref="InvalidOperationException">The response carries no document or tag, or describes an asset without a name or download URL.
+    /// <para>响应没有文档或标签，或资产缺少名称或下载地址。</para></exception>
     /// <exception cref="JsonException">The response body is not valid release JSON.
     /// <para>响应体不是有效的 Release JSON。</para></exception>
     public static Task<GitHubRelease> GetByTagAsync(HttpClient client, string owner, string repo, string tag,
@@ -88,14 +99,18 @@ public static class GitHubReleaseClient
 
     /// <summary>Fetches published releases of a repository, newest first, without drafts.
     /// <para>获取仓库的已发布 Release（由新到旧），不含草稿。</para></summary>
+    /// <remarks>When the document exceeds the response cap, the count is halved and the request is retried, so a
+    /// repository with long release notes still yields its newest releases. <para>响应文档超过上限时会把数量减半后重试，
+    /// 使发布说明很长的仓库仍能取到最新 Release。</para></remarks>
     /// <param name="client">HTTP client used for the single origin request.
     /// <para>用于这次源站请求的 HTTP 客户端。</para></param>
     /// <param name="owner">Repository owner; must be a single path segment.
     /// <para>仓库拥有者；必须是单个路径段。</para></param>
     /// <param name="repo">Repository name; must be a single path segment.
     /// <para>仓库名；必须是单个路径段。</para></param>
-    /// <param name="maximum">Requested release count, clamped to 1 through <see cref="MaximumListCount"/>.
-    /// <para>请求的 Release 数量，收敛到 1 至 <see cref="MaximumListCount"/>。</para></param>
+    /// <param name="maximum">Requested release count, clamped to 1 through <see cref="MaximumListCount"/>; reduced on
+    /// retry when the document exceeds the cap. <para>请求的 Release 数量，收敛到 1 至 <see cref="MaximumListCount"/>；
+    /// 文档超过上限重试时会减少。</para></param>
     /// <param name="cancellationToken">Cancels the request and the parse.
     /// <para>取消请求与解析。</para></param>
     /// <returns>Published releases in API order, drafts removed; pre-releases stay listed.
@@ -104,18 +119,106 @@ public static class GitHubReleaseClient
     /// <para><paramref name="owner"/> 或 <paramref name="repo"/> 为空或包含路径分隔符。</para></exception>
     /// <exception cref="HttpRequestException">The origin returned a non-success status; the exception carries the status code.
     /// <para>源站返回非成功状态；异常携带状态码。</para></exception>
-    /// <exception cref="InvalidOperationException">The response exceeds the size cap, carries no document list, or describes a release without a tag or an asset without a name or download URL.
-    /// <para>响应超出大小上限、没有文档列表，或描述了缺少标签的 Release、缺少名称或下载地址的资产。</para></exception>
+    /// <exception cref="GitHubResponseTooLargeException">Even a single release exceeds the size cap.
+    /// <para>即使只请求一个 Release 也超出大小上限。</para></exception>
+    /// <exception cref="InvalidOperationException">The response carries no document list, or describes a release without a tag or an asset without a name or download URL.
+    /// <para>响应没有文档列表，或描述了缺少标签的 Release、缺少名称或下载地址的资产。</para></exception>
     /// <exception cref="JsonException">The response body is not a valid release JSON array.
     /// <para>响应体不是有效的 Release JSON 数组。</para></exception>
-    public static async Task<IReadOnlyList<GitHubRelease>> ListAsync(HttpClient client, string owner, string repo,
+    public static Task<IReadOnlyList<GitHubRelease>> ListAsync(HttpClient client, string owner, string repo,
         int maximum = DefaultListCount, CancellationToken cancellationToken = default)
+        => ListPageAsync(client, owner, repo, maximum, page: 1, cancellationToken);
+
+    /// <summary>Fetches one page of published releases of a repository, newest first, without drafts.
+    /// <para>获取仓库一页已发布的 Release（由新到旧），不含草稿。</para></summary>
+    /// <remarks>When the document exceeds the response cap, the count is halved and the request is retried for the
+    /// same page. <para>响应文档超过上限时会把数量减半并对同一页重试。</para></remarks>
+    /// <param name="client">HTTP client used for the single origin request.
+    /// <para>用于这次源站请求的 HTTP 客户端。</para></param>
+    /// <param name="owner">Repository owner; must be a single path segment.
+    /// <para>仓库拥有者；必须是单个路径段。</para></param>
+    /// <param name="repo">Repository name; must be a single path segment.
+    /// <para>仓库名；必须是单个路径段。</para></param>
+    /// <param name="maximum">Requested release count per page, clamped to 1 through <see cref="MaximumListCount"/>.
+    /// <para>每页请求的 Release 数量，收敛到 1 至 <see cref="MaximumListCount"/>。</para></param>
+    /// <param name="page">One-based page number. <para>从 1 开始的页码。</para></param>
+    /// <param name="cancellationToken">Cancels the request and the parse.
+    /// <para>取消请求与解析。</para></param>
+    /// <param name="sources">Optional ranked candidate URLs of the same release-list request, fastest source
+    /// first; each is tried in order until one returns a usable document, and <see langword="null"/> keeps the
+    /// origin-only request. <para>可选的同一清单请求的候选地址列表（已按测速排序）；按顺序逐个尝试直到某个源返回可用
+    /// 文档，为 <see langword="null"/> 时保持仅源站请求。</para></param>
+    /// <returns>Published releases on that page in API order, drafts removed; pre-releases stay listed.
+    /// <para>该页按 API 顺序的已发布 Release，草稿已移除；预发布仍保留在列表中。</para></returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="page"/> is less than 1.
+    /// <para><paramref name="page"/> 小于 1。</para></exception>
+    /// <exception cref="GitHubResponseTooLargeException">Even a single release exceeds the size cap.
+    /// <para>即使只请求一个 Release 也超出大小上限。</para></exception>
+    /// <exception cref="HttpRequestException">Every candidate source failed, or a source returned a non-success status.
+    /// <para>全部候选源失败，或某个源返回非成功状态。</para></exception>
+    /// <exception cref="InvalidOperationException">The response carries no document list, or describes a release
+    /// without a tag or an asset without a name or download URL.
+    /// <para>响应没有文档列表，或描述了缺少标签的 Release、缺少名称或下载地址的资产。</para></exception>
+    public static async Task<IReadOnlyList<GitHubRelease>> ListPageAsync(HttpClient client, string owner, string repo,
+        int maximum = DefaultListCount, int page = 1, CancellationToken cancellationToken = default,
+        IReadOnlyList<Uri>? sources = null)
     {
         ArgumentNullException.ThrowIfNull(client);
+        ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
         var count = Math.Clamp(maximum, 1, MaximumListCount);
-        var uri = new Uri($"{ApiOrigin}/repos/{RequireSegment(owner, nameof(owner))}/{RequireSegment(repo, nameof(repo))}/releases?per_page={count}");
-        var payload = await ReadAsync(client, uri, cancellationToken).ConfigureAwait(false);
-        return ParseReleases(owner, repo, payload);
+        while (true)
+        {
+            try
+            {
+                var payload = await ReadReleasesAsync(client, owner, repo, count, page, sources, cancellationToken)
+                    .ConfigureAwait(false);
+                return ParseReleases(owner, repo, payload);
+            }
+            catch (GitHubResponseTooLargeException) when (count > 1)
+            {
+                count = Math.Max(1, count / 2);
+            }
+        }
+    }
+
+    private static async Task<byte[]> ReadReleasesAsync(HttpClient client, string owner, string repo, int count,
+        int page, IReadOnlyList<Uri>? sources, CancellationToken cancellationToken)
+    {
+        if (sources is not { Count: > 0 })
+        {
+            return await ReadAsync(client, BuildListUri(owner, repo, count, page), cancellationToken).ConfigureAwait(false);
+        }
+
+        List<string> errors = [];
+        GitHubResponseTooLargeException? tooLarge = null;
+        var tooLargeCount = 0;
+        foreach (var source in sources)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                return await ReadAsync(client, source, cancellationToken).ConfigureAwait(false);
+            }
+            catch (GitHubResponseTooLargeException ex)
+            {
+                tooLarge = ex;
+                tooLargeCount++;
+                errors.Add(source.Host + ": " + ex.Message);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException)
+            {
+                errors.Add(source.Host + ": " + ex.Message);
+            }
+        }
+
+        if (tooLarge is not null && tooLargeCount == errors.Count) throw tooLarge;
+        throw new HttpRequestException(
+            $"The GitHub release feed of {owner}/{repo} failed for every candidate source:\n"
+            + string.Join("\n", errors));
     }
 
     /// <summary>Parses a release list API document without performing any network request.
@@ -274,7 +377,7 @@ public static class GitHubReleaseClient
     {
         if (content.Headers.ContentLength is { } declared && declared > MaximumResponseBytes)
         {
-            throw new InvalidOperationException(
+            throw new GitHubResponseTooLargeException(
                 $"The release API response exceeds the {MaximumResponseBytes}-byte cap.");
         }
 
@@ -286,7 +389,7 @@ public static class GitHubReleaseClient
         {
             if (buffer.Length + read > MaximumResponseBytes)
             {
-                throw new InvalidOperationException(
+                throw new GitHubResponseTooLargeException(
                     $"The release API response exceeds the {MaximumResponseBytes}-byte cap.");
             }
 
@@ -298,6 +401,9 @@ public static class GitHubReleaseClient
 
     private static Uri BuildLatestUri(string owner, string repository)
         => new($"{ApiOrigin}/repos/{RequireSegment(owner, nameof(owner))}/{RequireSegment(repository, nameof(repository))}/releases/latest");
+
+    private static Uri BuildListUri(string owner, string repository, int count, int page)
+        => new($"{ApiOrigin}/repos/{RequireSegment(owner, nameof(owner))}/{RequireSegment(repository, nameof(repository))}/releases?per_page={count}&page={page}");
 
     private static string RequireSegment(string value, string parameterName)
     {

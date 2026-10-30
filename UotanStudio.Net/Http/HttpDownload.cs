@@ -61,14 +61,18 @@ public static class HttpDownload
     private const int ParallelChunkBytes = 16 * 1024 * 1024;
     private const int ParallelWorkers = 8;
 
-    /// <summary>Whether the URL points at a GitHub file (release, blob or raw path).
-    /// <para>判断地址是否为 GitHub 文件（release/blob/raw 下载路径）。</para></summary>
+    /// <summary>Whether the URL points at a GitHub host whose paths mirrors may proxy (release, blob or raw
+    /// file paths, and the releases API).
+    /// <para>判断地址是否为镜像可代理的 GitHub 主机（release/blob/raw 文件路径，以及 releases API）。</para></summary>
     /// <param name="uri">Absolute URL whose host is compared. <para>用于比对主机名的绝对地址。</para></param>
     /// <returns>
-    /// <see langword="true"/> for <c>github.com</c>, <c>raw.githubusercontent.com</c> or <c>objects.githubusercontent.com</c>, compared without case sensitivity.
-    /// <para>主机名为 <c>github.com</c>、<c>raw.githubusercontent.com</c> 或 <c>objects.githubusercontent.com</c> 时返回 <see langword="true"/>，比对不区分大小写。</para>
+    /// <see langword="true"/> for <c>github.com</c>, <c>api.github.com</c>, <c>raw.githubusercontent.com</c> or
+    /// <c>objects.githubusercontent.com</c>, compared without case sensitivity.
+    /// <para>主机名为 <c>github.com</c>、<c>api.github.com</c>、<c>raw.githubusercontent.com</c> 或
+    /// <c>objects.githubusercontent.com</c> 时返回 <see langword="true"/>，比对不区分大小写。</para>
     /// </returns>
     public static bool IsGitHubUrl(Uri uri) => string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(uri.Host, "api.github.com", StringComparison.OrdinalIgnoreCase)
         || string.Equals(uri.Host, "raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase)
         || string.Equals(uri.Host, "objects.githubusercontent.com", StringComparison.OrdinalIgnoreCase);
 
@@ -162,8 +166,13 @@ public static class HttpDownload
                     var buffer = new byte[64 * 1024];
                     long readTotal = 0;
                     await using var input = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
-                    while (readTotal < SpeedProbeBytes
-                        && (readTotal += await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, SpeedProbeBytes - readTotal)), timeout.Token).ConfigureAwait(false)) > 0) { }
+                    while (readTotal < SpeedProbeBytes)
+                    {
+                        var read = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, SpeedProbeBytes - readTotal)), timeout.Token).ConfigureAwait(false);
+                        if (read == 0) break;
+                        readTotal += read;
+                    }
+
                     stopwatch.Stop();
                     return (Source: source, Score: stopwatch.Elapsed.Ticks + (readTotal > 0 ? 0 : TimeSpan.TicksPerDay));
                 }

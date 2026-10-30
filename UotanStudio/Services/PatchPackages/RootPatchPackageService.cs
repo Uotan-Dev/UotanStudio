@@ -3,6 +3,7 @@ using UotanStudio.Firmware.BootSecurity.Patcher;
 using UotanStudio.Firmware.Core.IO;
 using UotanStudio.Hash.Digests;
 using UotanStudio.Net.Components.Root;
+using UotanStudio.Net.GitHub;
 using UotanStudio.Net.Http;
 
 using UotanStudio.Services.Network;
@@ -54,13 +55,14 @@ public sealed record RootPatchPackageValidation(string Path, BootPatchDetection?
 /// <para>列出、下载并校验根补丁包，把它们与 scrcpy 服务端存储并排存放。</para>
 /// </summary>
 /// <remarks>
-/// Release metadata is read from the origin only. The payload may arrive through a mirror, and is accepted
-/// only after its length and published digest match; a release that publishes no digest is fetched from the
-/// origin alone. Downloads land in the shared download resource directory, one folder per upstream command,
-/// one subfolder per version, and are published atomically after verification.
-/// <para>版本元数据只从源站读取。载荷可以由镜像交付，但只有在长度与公布的摘要都一致后才被接受；未公布摘要的
-/// Release 只从源站获取。下载产物落在共享下载资源目录下，每个上游命令一个文件夹、每个版本一个子目录，
-/// 并在校验通过后原子发布。</para>
+/// Release metadata, including the published length and digest, is read from the origin only, so those values stay
+/// the trust anchor of the payload. The source probe ranks mirrors for the payload transfer, and every candidate
+/// source is verified against the length and digest before the next one is tried; a release that publishes no
+/// digest is fetched from the origin alone. Downloads land in the shared download resource directory, one folder
+/// per upstream command, one subfolder per version, and are published atomically after verification.
+/// <para>Release 元数据（含公布的长度与摘要）只从源站读取，使这些值保持为载荷的信任锚点。源测速只对载荷传输的镜像排序，
+/// 每个候选源都要先通过长度与摘要校验，才会尝试下一个；未公布摘要的 Release 只从源站获取。
+/// 下载产物落在共享下载资源目录下，每个上游命令一个文件夹、每个版本一个子目录，并在校验通过后原子发布。</para>
 /// </remarks>
 public sealed class RootPatchPackageService
 {
@@ -70,6 +72,9 @@ public sealed class RootPatchPackageService
     private readonly Lock _catalogGate = new();
     private readonly Dictionary<RootPatchPackageSource, IReadOnlyList<RootPatchPackage>> _catalogs = [];
     private readonly Dictionary<RootPatchPackageSource, Task<IReadOnlyList<RootPatchPackage>>> _catalogLoads = [];
+    private readonly Dictionary<RootPatchPackageSource, int> _catalogPages = [];
+    private readonly Dictionary<RootPatchPackageSource, bool> _catalogHasMore = [];
+    private readonly Dictionary<RootPatchPackageSource, Task> _catalogMoreLoads = [];
     private readonly SemaphoreSlim _probeGate = new(1, 1);
     private string? _preferredSourceAuthority;
     private Task? _warmUp;
@@ -117,18 +122,18 @@ public sealed class RootPatchPackageService
     /// <para>源站或镜像的 <c>scheme://host[:port]</c>；尚未排序时为 <see langword="null"/>。</para></value>
     public string? PreferredSourceAuthority => _preferredSourceAuthority;
 
-    /// <summary>Speed-probes every candidate source of a GitHub file and remembers the fastest one.
-    /// <para>对某个 GitHub 文件的全部候选源测速，并记住最快的一个。</para></summary>
+    /// <summary>Speed-probes every candidate source of a GitHub URL and remembers the fastest one.
+    /// <para>对某个 GitHub 地址的全部候选源测速，并记住最快的一个。</para></summary>
     /// <remarks>
     /// The probe measures the origin plus every enabled mirror with a bounded range request, and the winner
-    /// is reused by later downloads, so the probe cost is paid once per window instead of once per transfer.
-    /// Release metadata stays on <c>api.github.com</c>: mirrors do not proxy that API, and the byte length and
-    /// digest that make a mirror-delivered payload trustworthy must not come from the mirror itself.
-    /// <para>测速以有界范围请求测量源站与全部启用镜像，胜出的源被后续下载复用，使每次窗口只付一次测速成本。
-    /// Release 元数据仍取自 <c>api.github.com</c>：镜像不代理该 API，而让镜像载荷可信的字节长度与摘要不能来自镜像本身。</para>
+    /// is reused by later payload downloads, so the probe cost is paid once per panel instead of once per
+    /// transfer. Catalog reads stay on the origin. Mirrors that cannot serve the probed URL fail the probe and
+    /// keep the origin-first fallback order.
+    /// <para>测速以有界范围请求测量源站与全部启用镜像，胜出的源被后续载荷下载复用，使每个面板只付一次测速成本。
+    /// 清单读取保持在源站。无法代理被测地址的镜像会在测速中失败并保持源站兜底的顺序。</para>
     /// </remarks>
-    /// <param name="url">GitHub file URL whose sources are ranked, typically the newest release asset.
-    /// <para>参与排序的 GitHub 文件地址，通常是最新发布资产。</para></param>
+    /// <param name="url">GitHub URL whose sources are ranked, the release API at panel warm-up or a release asset.
+    /// <para>参与排序的 GitHub 地址；面板预热时为 Release API，其他场景为发布资产。</para></param>
     /// <param name="cancellationToken">Cancels probing; the remembered source is left unchanged.
     /// <para>取消测速；已记住的源保持不变。</para></param>
     /// <returns>The winning authority, or <see langword="null"/> when no source answered.
@@ -168,8 +173,13 @@ public sealed class RootPatchPackageService
 
     /// <summary>Reads every provisionable catalog and pins the fastest source once, so later reads and downloads are free.
     /// <para>一次性读取全部可供给清单并只固定一次最快源，使后续读取与下载不再联网探测。</para></summary>
-    /// <param name="cancellationToken">Cancels the warm-up; a failed or cancelled warm-up can be retried.
-    /// <para>取消预热；失败或被取消的预热可以重试。</para></param>
+    /// <remarks>The source probe runs first against the release API and ranks the payload mirrors; all five
+    /// catalogs are then fetched simultaneously from the origin, so switching to any package source afterwards
+    /// reads from the cache instead of waiting on the network.
+    /// <para>先对 Release API 做源测速并为载荷镜像排序；随后五个清单同时从源站并行拉取，使之后切换任何补丁包来源
+    /// 都直接读缓存而不再等待网络。</para></remarks>
+    /// <param name="cancellationToken">Stops waiting for the catalogs and the probe; completed reads stay cached.
+    /// <para>停止等待清单与测速；已完成的读取仍会缓存。</para></param>
     /// <returns>A task that completes after every catalog is cached and the source probe has settled.
     /// <para>全部清单已缓存且源测速已结束后完成的任务。</para></returns>
     public Task WarmUpAsync(CancellationToken cancellationToken = default)
@@ -211,7 +221,24 @@ public sealed class RootPatchPackageService
     {
         try
         {
-            var catalogs = await Task.WhenAll(RootPatchSources.All.Select(async source =>
+            if (UseMirrorSources())
+            {
+                try
+                {
+                    await ProbeSourcesAsync(CatalogProbeUrl(), cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    LogService.Instance.Write(LogLevel.Warn, "BootPatch",
+                        $"Root patch source probe skipped: {DescribeLogDetail(ex.Message)}");
+                }
+            }
+
+            await Task.WhenAll(RootPatchSources.All.Select(async source =>
             {
                 try
                 {
@@ -224,12 +251,10 @@ public sealed class RootPatchPackageService
                 catch (Exception ex)
                 {
                     LogService.Instance.Write(LogLevel.Warn, "BootPatch",
-                        $"Root patch catalog {source.CommandFolderName()} skipped: {ex.Message}");
+                        $"Root patch catalog {source.CommandFolderName()} skipped: {DescribeLogDetail(ex.Message)}");
                     return (IReadOnlyList<RootPatchPackage>)Array.Empty<RootPatchPackage>();
                 }
             }).ToArray()).ConfigureAwait(false);
-            if (catalogs.SelectMany(catalog => catalog).FirstOrDefault() is not { } newest) return;
-            await ProbeSourcesAsync(new Uri(newest.DownloadUrl), cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -246,7 +271,7 @@ public sealed class RootPatchPackageService
             }
 
             LogService.Instance.Write(LogLevel.Warn, "BootPatch",
-                $"Root patch catalog warm-up skipped: {ex.Message}");
+                $"Root patch catalog warm-up skipped: {DescribeLogDetail(ex.Message)}");
         }
     }
 
@@ -300,7 +325,8 @@ public sealed class RootPatchPackageService
     /// <para>一个来源的首次读取会被缓存，后续读取与并发调用共享同一结果，因此切换版本或来源都不会重复查询发布源。</para>
     /// </remarks>
     /// <param name="source">Provisionable source. <para>可供给来源。</para></param>
-    /// <param name="cancellationToken">Cancels the metadata read. <para>取消版本元数据读取。</para></param>
+    /// <param name="cancellationToken">Stops waiting for the shared read; the read itself completes and is cached for
+    /// later callers. <para>停止等待共享读取；读取本身会完成并供后续调用复用。</para></param>
     /// <returns>Every release that publishes an installable package. <para>每个发布了可安装补丁包的 Release。</para></returns>
     /// <exception cref="HttpRequestException">The release feed could not be read. <para>无法读取 Release 源。</para></exception>
     /// <exception cref="InvalidOperationException">The release feed returned no usable document.
@@ -314,50 +340,150 @@ public sealed class RootPatchPackageService
             if (_catalogs.TryGetValue(source, out var cached)) return cached;
             if (!_catalogLoads.TryGetValue(source, out var pending))
             {
-                pending = LoadCatalogAsync(source, cancellationToken);
+                pending = LoadCatalogAsync(source);
                 _catalogLoads[source] = pending;
             }
 
             load = pending;
         }
 
-        try
-        {
-            var catalog = await load.WaitAsync(cancellationToken).ConfigureAwait(false);
-            lock (_catalogGate)
-            {
-                return _catalogs.TryGetValue(source, out var ready) ? ready : catalog;
-            }
-        }
-        catch
-        {
-            lock (_catalogGate)
-            {
-                if (_catalogLoads.TryGetValue(source, out var pending) && ReferenceEquals(pending, load))
-                {
-                    _catalogLoads.Remove(source);
-                }
-            }
-
-            throw;
-        }
-    }
-
-    private async Task<IReadOnlyList<RootPatchPackage>> LoadCatalogAsync(RootPatchPackageSource source,
-        CancellationToken cancellationToken)
-    {
-        var releases = await RootPatchReleaseClient.ListAsync(_client, source.Key(), cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        IReadOnlyList<RootPatchPackage> catalog = [.. releases.Select(release =>
-            new RootPatchPackage(source, release.Version, release.Tag, release.AssetName, release.DownloadUrl,
-                release.Length, release.Sha256))];
+        var catalog = await load.WaitAsync(cancellationToken).ConfigureAwait(false);
         lock (_catalogGate)
         {
-            _catalogs[source] = catalog;
+            return _catalogs.TryGetValue(source, out var ready) ? ready : catalog;
+        }
+    }
+
+    /// <summary>Reports whether the upstream feed may hold releases older than the cached page.
+    /// <para>报告上游是否可能还有比已缓存页更早的 Release。</para></summary>
+    /// <param name="source">Provisionable source. <para>可供给来源。</para></param>
+    /// <returns><see langword="true"/> when the last loaded page was full; <see langword="false"/> before any read.
+    /// <para>最后加载的一页已满时为 <see langword="true"/>；尚未读取时为 <see langword="false"/>。</para></returns>
+    public bool HasMore(RootPatchPackageSource source)
+    {
+        lock (_catalogGate)
+        {
+            return _catalogHasMore.GetValueOrDefault(source);
+        }
+    }
+
+    /// <summary>Appends the next release page to the cached catalog and returns the cumulative list.
+    /// <para>把下一页 Release 追加到已缓存清单，并返回累积列表。</para></summary>
+    /// <param name="source">Provisionable source. <para>可供给来源。</para></param>
+    /// <param name="cancellationToken">Stops waiting for the shared page read; the read itself completes and is cached.
+    /// <para>停止等待共享分页读取；读取本身会完成并缓存。</para></param>
+    /// <returns>The cumulative releases after the page is merged; the cached list is returned unchanged when no older
+    /// page exists. <para>合并后的累积 Release；没有更早页时原样返回已缓存列表。</para></returns>
+    /// <exception cref="HttpRequestException">The release feed could not be read.
+    /// <para>无法读取 Release 源。</para></exception>
+    /// <exception cref="InvalidOperationException">The release feed returned no usable document.
+    /// <para>Release 源没有返回可用文档。</para></exception>
+    public async Task<IReadOnlyList<RootPatchPackage>> LoadMoreAsync(RootPatchPackageSource source,
+        CancellationToken cancellationToken = default)
+    {
+        Task load;
+        lock (_catalogGate)
+        {
+            if (!_catalogs.TryGetValue(source, out var catalog) || !_catalogHasMore.GetValueOrDefault(source))
+            {
+                return catalog ?? Array.Empty<RootPatchPackage>();
+            }
+
+            if (!_catalogMoreLoads.TryGetValue(source, out var pending))
+            {
+                pending = LoadMoreCoreAsync(source, _catalogPages.GetValueOrDefault(source) + 1);
+                _catalogMoreLoads[source] = pending;
+            }
+
+            load = pending;
         }
 
-        return catalog;
+        await load.WaitAsync(cancellationToken).ConfigureAwait(false);
+        lock (_catalogGate)
+        {
+            return _catalogs.GetValueOrDefault(source) ?? Array.Empty<RootPatchPackage>();
+        }
     }
+
+    private async Task LoadMoreCoreAsync(RootPatchPackageSource source, int page)
+    {
+        try
+        {
+            var result = await ListCatalogPageAsync(source, page).ConfigureAwait(false);
+            lock (_catalogGate)
+            {
+                if (!_catalogs.TryGetValue(source, out var existing)) return;
+                var known = existing.Select(package => package.Tag)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                List<RootPatchPackage> appended = [];
+                foreach (var release in result.Releases)
+                {
+                    if (known.Add(release.Tag))
+                    {
+                        appended.Add(ToPackage(source, release));
+                    }
+                }
+
+                if (appended.Count > 0)
+                {
+                    _catalogs[source] = [.. existing, .. appended];
+                }
+
+                _catalogPages[source] = page;
+                _catalogHasMore[source] = result.HasMore;
+            }
+        }
+        finally
+        {
+            lock (_catalogGate)
+            {
+                _catalogMoreLoads.Remove(source);
+            }
+        }
+    }
+
+    private static RootPatchPackage ToPackage(RootPatchPackageSource source, RootPatchRelease release)
+        => new(source, release.Version, release.Tag, release.AssetName, release.DownloadUrl,
+            release.Length, release.Sha256);
+
+    private async Task<IReadOnlyList<RootPatchPackage>> LoadCatalogAsync(RootPatchPackageSource source)
+    {
+        try
+        {
+            var page = await ListCatalogPageAsync(source, page: 1).ConfigureAwait(false);
+            IReadOnlyList<RootPatchPackage> catalog = [.. page.Releases.Select(release => ToPackage(source, release))];
+            lock (_catalogGate)
+            {
+                _catalogs[source] = catalog;
+                _catalogPages[source] = 1;
+                _catalogHasMore[source] = page.HasMore;
+            }
+
+            return catalog;
+        }
+        finally
+        {
+            lock (_catalogGate)
+            {
+                _catalogLoads.Remove(source);
+            }
+        }
+    }
+
+    /// <summary>Builds the lightweight API URL the warm-up probe ranks payload mirrors against.
+    /// <para>构造预热测速用于为载荷镜像排序的轻量 API 地址。</para></summary>
+    private static Uri CatalogProbeUrl()
+    {
+        var vendor = RootPatchCatalog.Vendors[0];
+        return new Uri($"{GitHubReleaseClient.ApiOrigin}/repos/{vendor.Owner}/{vendor.Repository}/releases?per_page=1&page=1");
+    }
+
+    /// <summary>Reads one catalog page from the origin only, because the published length and digest are the trust
+    /// anchor of the payload download.
+    /// <para>只从源站读取一页清单，因为公布的长度与摘要是载荷下载的信任锚点。</para></summary>
+    private Task<RootPatchReleasePage> ListCatalogPageAsync(RootPatchPackageSource source, int page)
+        => RootPatchReleaseClient.ListPageAsync(_client, source.Key(),
+            RootPatchReleaseClient.DefaultCatalogCount, page, cancellationToken: default);
 
     /// <summary>Resolves a verified local file for a package, downloading it when it is not cached yet.
     /// <para>解析补丁包对应的已校验本地文件；尚未缓存时先下载。</para></summary>
@@ -370,10 +496,11 @@ public sealed class RootPatchPackageService
     /// <para>本地文件以及交付它的地址。</para></returns>
     /// <exception cref="ArgumentNullException"><paramref name="package"/> is <see langword="null"/>.
     /// <para><paramref name="package"/> 为 <see langword="null"/>。</para></exception>
-    /// <exception cref="InvalidDataException">The delivered file does not match the published length or digest.
-    /// <para>交付的文件与公布的长度或摘要不符。</para></exception>
-    /// <exception cref="IOException">Every candidate source failed, or the file could not be staged or committed.
-    /// <para>所有候选源均失败，或无法暂存/提交该文件。</para></exception>
+    /// <exception cref="InvalidDataException">The only candidate source delivered a file that does not match the
+    /// published length or digest. <para>唯一候选源交付的文件与公布的长度或摘要不符。</para></exception>
+    /// <exception cref="IOException">Every candidate source failed, including length or digest mismatches, or the
+    /// file could not be staged or committed.
+    /// <para>所有候选源均失败（含长度或摘要不符），或无法暂存/提交该文件。</para></exception>
     public async Task<RootPatchPackageArtifact> EnsurePackageAsync(RootPatchPackage package,
         IProgress<double>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -395,31 +522,52 @@ public sealed class RootPatchPackageService
                 : new Progress<(long Processed, long Total)>(sample => progress.Report(sample.Total > 0
                     ? Math.Clamp((double)sample.Processed / sample.Total, 0d, 1d)
                     : 0d));
-            Uri used;
-            if ((_useMirrorListOverride ?? RootPatchPackageSettingsStore.UseMirrorList) && package.Sha256 is not null)
+            IReadOnlyList<Uri> candidates = UseMirrorSources() && package.Sha256 is not null
+                ? OrderSources(origin)
+                : [origin];
+            Uri used = origin;
+            List<string> failures = [];
+            var downloaded = false;
+            foreach (var candidate in candidates)
             {
-                used = await HttpDownload.DownloadAsync(_client, origin, staged, transfer, cancellationToken,
-                    sources: OrderSources(origin)).ConfigureAwait(false);
-            }
-            else
-            {
-                used = origin;
-                await HttpDownload.DownloadSingleAsync(_client, origin, staged, transfer, cancellationToken)
-                    .ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    await HttpDownload.DownloadSingleAsync(_client, candidate, staged, transfer, cancellationToken)
+                        .ConfigureAwait(false);
+                    var length = new FileInfo(staged).Length;
+                    if (package.Length > 0 && length != package.Length)
+                    {
+                        throw new InvalidDataException(
+                            $"Root patch package {package.Source.CommandFolderName()} {package.Version} is {package.Length} bytes but {candidate.Host} delivered {length}.");
+                    }
+
+                    var digest = await Sha256HexAsync(staged, cancellationToken).ConfigureAwait(false);
+                    if (package.Sha256 is { } expected && !string.Equals(digest, expected, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidDataException(
+                            $"Root patch package {package.Source.CommandFolderName()} {package.Version} digest mismatch from {candidate.Host}: expected {expected}, got {digest}.");
+                    }
+
+                    used = candidate;
+                    downloaded = true;
+                    break;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException)
+                {
+                    if (candidates.Count == 1) throw;
+                    failures.Add(candidate.Host + ": " + ex.Message);
+                    TryDelete(staged);
+                }
             }
 
-            var length = new FileInfo(staged).Length;
-            if (package.Length > 0 && length != package.Length)
+            if (!downloaded)
             {
-                throw new InvalidDataException(
-                    $"Root patch package {package.Source.CommandFolderName()} {package.Version} is {package.Length} bytes but {used.Host} delivered {length}.");
-            }
-
-            var digest = await Sha256HexAsync(staged, cancellationToken).ConfigureAwait(false);
-            if (package.Sha256 is { } expected && !string.Equals(digest, expected, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidDataException(
-                    $"Root patch package {package.Source.CommandFolderName()} {package.Version} digest mismatch from {used.Host}: expected {expected}, got {digest}.");
+                throw new IOException("Download failed: " + origin + "\n" + string.Join("\n", failures));
             }
 
             AtomicPublish.Publish(staged, target);
@@ -460,10 +608,11 @@ public sealed class RootPatchPackageService
             if (!detection.IsSupported)
             {
                 return new RootPatchPackageValidation(full, detection, false,
-                    "The selected file is not a supported Magisk, KernelSU or APatch package.");
+                    detection.UnsupportedReason
+                    ?? "The selected file is not a supported Magisk, KernelSU, APatch or KernelPatch package.");
             }
 
-            if (expected is { } source && detection.Kind != source.ExpectedKind())
+            if (expected is { } source && !source.Accepts(detection.Kind))
             {
                 return new RootPatchPackageValidation(full, detection, false,
                     $"The selected file is a {detection.Kind} package, but {source.CommandFolderName()} requires {source.ExpectedKind()}.");
@@ -495,6 +644,19 @@ public sealed class RootPatchPackageService
         ordered.AddRange(sources.Where(source => !HasAuthority(source, authority)));
         return ordered;
     }
+
+    /// <summary>Whether non-official mirrors may deliver payloads and catalog documents.
+    /// <para>非官方镜像是否可以交付载荷与清单文档。</para></summary>
+    private bool UseMirrorSources() => _useMirrorListOverride ?? RootPatchPackageSettingsStore.UseMirrorList;
+
+    /// <summary>
+    /// Removes the ASCII period the transport layer appends after a message that already ends with a CJK
+    /// sentence stop, so log lines do not carry a doubled "。." ending.
+    /// <para>去除传输层在以中文句末标点结尾的消息后追加的英文句点，避免日志出现 "。." 的重复收尾。</para></summary>
+    internal static string DescribeLogDetail(string message)
+        => message.Length >= 2 && message[^1] == '.' && message[^2] is '。' or '！' or '？'
+            ? message[..^1]
+            : message;
 
     private static bool HasAuthority(Uri source, string authority)
         => string.Equals(source.GetLeftPart(UriPartial.Authority), authority, StringComparison.OrdinalIgnoreCase);

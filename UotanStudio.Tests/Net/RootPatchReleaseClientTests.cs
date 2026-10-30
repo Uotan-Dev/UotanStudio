@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Net;
+using System.Text;
 using UotanStudio.Net.Components.Root;
 using UotanStudio.Net.GitHub;
 using Xunit;
@@ -49,11 +52,50 @@ public sealed class RootPatchReleaseClientTests
     }
 
     [Fact]
+    public void SelectPackageAsset_StubAppShell_LosesToTheManagerApk()
+    {
+        GitHubAsset[] assets =
+        [
+            new("stub-release.apk", "https://github.com/x/stub.apk", 28_400, null),
+            new("Magisk-v24.0.apk", "https://github.com/x/magisk.apk", 1, null),
+        ];
+
+        var selected = RootPatchReleaseClient.SelectPackageAsset(assets);
+
+        Assert.NotNull(selected);
+        Assert.Equal("Magisk-v24.0.apk", selected.Name);
+    }
+
+    [Fact]
     public void SelectPackageAsset_AssetWithoutApkOrZip_ReturnsNull()
     {
         GitHubAsset[] assets = [new("APatch_v1.5.0.apk.sha256", "https://github.com/x/digest", 1, null)];
 
         Assert.Null(RootPatchReleaseClient.SelectPackageAsset(assets));
+    }
+
+    [Fact]
+    public void SelectPackageAsset_LegacyBuildFirstInApiOrder_LosesToTheStandardApk()
+    {
+        GitHubAsset[] assets =
+        [
+            new("apk-legacy-release.apk", "https://github.com/x/legacy.apk", 2, null),
+            new("app-release.apk", "https://github.com/x/app.apk", 1, null),
+        ];
+
+        Assert.Equal("app-release.apk", RootPatchReleaseClient.SelectPackageAsset(assets)!.Name);
+    }
+
+    [Fact]
+    public void SelectPackageAsset_SpoofedBuildFirstInApiOrder_LosesToTheStandardApk()
+    {
+        GitHubAsset[] assets =
+        [
+            new("SukiSU_v4.3.0_41100-release-spoofed.apk", "https://github.com/x/spoofed.apk", 2, null),
+            new("SukiSU_v4.3.0_41100-release.apk", "https://github.com/x/release.apk", 1, null),
+        ];
+
+        Assert.Equal("SukiSU_v4.3.0_41100-release.apk", RootPatchReleaseClient.SelectPackageAsset(assets)!.Name);
     }
 
     [Fact]
@@ -113,4 +155,126 @@ public sealed class RootPatchReleaseClientTests
     public async Task ListAsync_UnknownKey_Rejects()
         => await Assert.ThrowsAsync<ArgumentException>(() => RootPatchReleaseClient.ListAsync(
             new HttpClient(), "unknown-key", cancellationToken: TestContext.Current.CancellationToken));
+
+    [Fact]
+    public async Task ListAsync_DefaultCatalog_RequestsTheRootCatalogCount()
+    {
+        int? requested = null;
+        using var client = new HttpClient(new StubHandler(request =>
+        {
+            requested = QueryInt(request.RequestUri!, "per_page");
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[]", Encoding.UTF8, "application/json")
+            };
+        }));
+
+        var packages = await RootPatchReleaseClient.ListAsync(client, RootPatchCatalog.KernelSuKey,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Empty(packages);
+        Assert.Equal(RootPatchReleaseClient.DefaultCatalogCount, requested);
+    }
+
+    [Fact]
+    public async Task ListPageAsync_FirstSourceFailing_ServesTheDocumentFromTheNextSource()
+    {
+        var hosts = new List<string>();
+        using var client = new HttpClient(new StubHandler(request =>
+        {
+            hosts.Add(request.RequestUri!.Host);
+            if (string.Equals(request.RequestUri.Host, "mirror.test", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new HttpRequestException("mirror down in this test");
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(ReleaseJson("28.1"), Encoding.UTF8, "application/json")
+            };
+        }));
+        var sources = new[]
+        {
+            new Uri("https://mirror.test/https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
+            new Uri("https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
+        };
+
+        var page = await RootPatchReleaseClient.ListPageAsync(client, RootPatchCatalog.MagiskKey,
+            cancellationToken: TestContext.Current.CancellationToken, sources: sources);
+
+        Assert.Single(page.Releases);
+        Assert.Equal("28.1", page.Releases[0].Version);
+        Assert.Equal(["mirror.test", "api.github.com"], hosts);
+    }
+
+    [Fact]
+    public async Task ListPageAsync_FirstSourceServing_SkipsTheRemainingSources()
+    {
+        var hosts = new List<string>();
+        using var client = new HttpClient(new StubHandler(request =>
+        {
+            hosts.Add(request.RequestUri!.Host);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(ReleaseJson("28.1"), Encoding.UTF8, "application/json")
+            };
+        }));
+        var sources = new[]
+        {
+            new Uri("https://mirror.test/https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
+            new Uri("https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
+        };
+
+        var page = await RootPatchReleaseClient.ListPageAsync(client, RootPatchCatalog.MagiskKey,
+            cancellationToken: TestContext.Current.CancellationToken, sources: sources);
+
+        Assert.Single(page.Releases);
+        Assert.Equal(["mirror.test"], hosts);
+    }
+
+    [Fact]
+    public async Task ListPageAsync_EverySourceFailing_ReportsTheAggregate()
+    {
+        using var client = new HttpClient(new StubHandler(_ =>
+            throw new HttpRequestException("every source is down in this test")));
+        var sources = new[]
+        {
+            new Uri("https://mirror.test/https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
+            new Uri("https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=5&page=1"),
+        };
+
+        var error = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            RootPatchReleaseClient.ListPageAsync(client, RootPatchCatalog.MagiskKey,
+                cancellationToken: TestContext.Current.CancellationToken, sources: sources));
+
+        Assert.Contains("mirror.test", error.Message, StringComparison.Ordinal);
+        Assert.Contains("api.github.com", error.Message, StringComparison.Ordinal);
+    }
+
+    private static string ReleaseJson(string version)
+        => $$"""
+            [{"tag_name":"v{{version}}","assets":[
+              {"name":"Magisk-v{{version}}.apk","size":1024,"browser_download_url":"https://github.com/topjohnwu/Magisk/releases/download/v{{version}}/Magisk-v{{version}}.apk"}
+            ]}]
+            """;
+
+    private static int QueryInt(Uri uri, string name)
+    {
+        foreach (var segment in uri.Query.TrimStart('?').Split('&'))
+        {
+            if (segment.StartsWith(name + "=", StringComparison.Ordinal))
+            {
+                return int.Parse(segment[(name.Length + 1)..], CultureInfo.InvariantCulture);
+            }
+        }
+
+        throw new InvalidOperationException($"Missing query value '{name}'.");
+    }
+
+    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
+            => Task.FromResult(respond(request));
+    }
 }

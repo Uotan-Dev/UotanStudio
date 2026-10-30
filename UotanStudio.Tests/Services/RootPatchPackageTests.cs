@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
@@ -60,6 +61,70 @@ public sealed class RootPatchPackageTests : IDisposable
     [InlineData(RootPatchPackageSource.APatch, BootPatchKind.APatch)]
     public void ExpectedKind_ForkFamilies_MapOntoThePatchPathTheyUse(RootPatchPackageSource source, BootPatchKind expected)
         => Assert.Equal(expected, source.ExpectedKind());
+
+    [Theory]
+    [InlineData(RootPatchPackageSource.SukiSu, BootPatchKind.KernelSu, true)]
+    [InlineData(RootPatchPackageSource.SukiSu, BootPatchKind.KernelPatch, true)]
+    [InlineData(RootPatchPackageSource.SukiSu, BootPatchKind.Magisk, false)]
+    [InlineData(RootPatchPackageSource.SukiSu, BootPatchKind.APatch, false)]
+    [InlineData(RootPatchPackageSource.KernelSu, BootPatchKind.KernelPatch, false)]
+    [InlineData(RootPatchPackageSource.APatch, BootPatchKind.KernelPatch, false)]
+    public void Accepts_SourceAndDetectedFamily_MatchesThePatchPath(
+        RootPatchPackageSource source, BootPatchKind kind, bool accepted)
+        => Assert.Equal(accepted, source.Accepts(kind));
+
+    [Fact]
+    public void DefaultSuperKey_OnlyTheSukiSuSource_PrefillsTheKernelPatchConvention()
+    {
+        Assert.Equal(RootPatchSources.KernelPatchDefaultSuperKey,
+            RootPatchPackageSource.SukiSu.DefaultSuperKey());
+        Assert.Null(RootPatchPackageSource.KernelSu.DefaultSuperKey());
+        Assert.Null(RootPatchPackageSource.APatch.DefaultSuperKey());
+    }
+
+    [Fact]
+    public async Task ValidateAsync_SukiSuKernelPatchBuild_IsAcceptedOnlyByTheSukiSuSource()
+    {
+        var root = NewRoot();
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "SukiSU.apk");
+        using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("assets/kpm/kpimg");
+            archive.CreateEntry("lib/arm64-v8a/libkptools.so");
+        }
+        var service = NewService(new HttpClient(), root, useMirrorList: false);
+
+        var accepted = await service.ValidateAsync(path, RootPatchPackageSource.SukiSu,
+            TestContext.Current.CancellationToken);
+        var rejected = await service.ValidateAsync(path, RootPatchPackageSource.KernelSu,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(accepted.IsSupported);
+        Assert.Equal(BootPatchKind.KernelPatch, accepted.Detection!.Kind);
+        Assert.False(rejected.IsSupported);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_LegacyMagiskZip_ReportsTheLayoutReason()
+    {
+        var root = NewRoot();
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "Magisk-v21.4.zip");
+        using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("arm/magiskinit");
+            archive.CreateEntry("common/boot_patch.sh");
+        }
+
+        var service = NewService(new HttpClient(), root, useMirrorList: false);
+        var validation = await service.ValidateAsync(path, RootPatchPackageSource.Magisk,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(validation.IsSupported);
+        Assert.NotNull(validation.Problem);
+        Assert.Contains("v22.0", validation.Problem!, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void FromIndex_PresentationOrder_MatchesTheWindowList()
@@ -275,6 +340,53 @@ public sealed class RootPatchPackageTests : IDisposable
     }
 
     [Fact]
+    public async Task ListPackagesAsync_CancelledWaiter_LeavesTheSharedReadRunningForTheNextCaller()
+    {
+        var gate = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new GateHandler(gate.Task);
+        var service = NewService(new HttpClient(handler), NewRoot(), useMirrorList: false);
+        using var cancelled = new CancellationTokenSource();
+
+        var first = service.ListPackagesAsync(RootPatchPackageSource.Magisk, cancelled.Token);
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        Assert.False(service.CatalogLoaded(RootPatchPackageSource.Magisk));
+
+        gate.SetResult(Json(ReleasesJson("topjohnwu", "Magisk", "28.1")));
+        var catalog = await service.ListPackagesAsync(RootPatchPackageSource.Magisk,
+            TestContext.Current.CancellationToken);
+
+        Assert.Single(catalog);
+        Assert.Equal(1, handler.Calls);
+        Assert.True(service.CatalogLoaded(RootPatchPackageSource.Magisk));
+    }
+
+    [Fact]
+    public async Task LoadMoreAsync_NextPage_AppendsOlderReleasesAndClearsHasMore()
+    {
+        var pages = new ConcurrentBag<int>();
+        var service = NewService(new HttpClient(new StubHandler(request =>
+        {
+            var page = QueryInt(request.RequestUri!, "page");
+            pages.Add(page);
+            return Json(ReleasesJson("topjohnwu", "Magisk", page == 1 ? 5 : 2, page));
+        })), NewRoot(), useMirrorList: false);
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        var first = await service.ListPackagesAsync(RootPatchPackageSource.Magisk, cancellationToken);
+
+        Assert.Equal(5, first.Count);
+        Assert.True(service.HasMore(RootPatchPackageSource.Magisk));
+
+        var all = await service.LoadMoreAsync(RootPatchPackageSource.Magisk, cancellationToken);
+
+        Assert.Equal(7, all.Count);
+        Assert.Equal(7, service.TryGetCatalog(RootPatchPackageSource.Magisk)!.Count);
+        Assert.False(service.HasMore(RootPatchPackageSource.Magisk));
+        Assert.Contains(2, pages);
+    }
+
+    [Fact]
     public async Task ListPackagesAsync_RepeatedCalls_ReadTheReleaseFeedOnce()
     {
         var root = NewRoot();
@@ -330,13 +442,117 @@ public sealed class RootPatchPackageTests : IDisposable
 
         Assert.Equal(RootPatchSources.All.Count, feedReads.Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.All(RootPatchSources.All, source => Assert.True(service.CatalogLoaded(source)));
-        Assert.Equal("https://github.com", service.PreferredSourceAuthority);
+        Assert.Equal("https://api.github.com", service.PreferredSourceAuthority);
 
         var before = feedReads.Count;
         await service.ListPackagesAsync(RootPatchPackageSource.APatch, cancellationToken);
         await service.WarmUpAsync(cancellationToken);
 
         Assert.Equal(before, feedReads.Count);
+    }
+
+    [Fact]
+    public async Task WarmUpAsync_MirrorServingOnlyTheProbe_KeepsCatalogsOnTheOrigin()
+    {
+        var catalogReads = new ConcurrentBag<string>();
+        var service = NewService(new HttpClient(new StubHandler(request =>
+        {
+            var host = request.RequestUri!.Host;
+            if (string.Equals(host, "api.github.com", StringComparison.OrdinalIgnoreCase))
+            {
+                if (QueryInt(request.RequestUri, "per_page") == 1)
+                {
+                    throw new HttpRequestException("the origin does not answer the speed probe here");
+                }
+
+                catalogReads.Add(host);
+                var segments = request.RequestUri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                return Json(ReleasesJson(segments[^3], segments[^2], "28.1"));
+            }
+
+            if (string.Equals(host, "ghfast.top", StringComparison.OrdinalIgnoreCase))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[1024]) };
+            }
+
+            throw new HttpRequestException($"source unavailable in this test: {host}");
+        })), NewRoot(), useMirrorList: true);
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        await service.WarmUpAsync(cancellationToken);
+
+        Assert.Equal("https://ghfast.top", service.PreferredSourceAuthority);
+        Assert.Equal(RootPatchSources.All.Count, catalogReads.Count);
+        Assert.All(RootPatchSources.All, source =>
+        {
+            var catalog = service.TryGetCatalog(source)!;
+            Assert.Single(catalog);
+            Assert.Equal("28.1", catalog[0].Version);
+        });
+    }
+
+    [Fact]
+    public async Task EnsurePackageAsync_OriginDigestMismatch_FallsBackToTheMirror()
+    {
+        var root = NewRoot();
+        var expected = new byte[2048];
+        Random.Shared.NextBytes(expected);
+        var corrupted = (byte[])expected.Clone();
+        corrupted[0] ^= 0xFF;
+        var hosts = new ConcurrentBag<string>();
+        var service = NewService(new HttpClient(new StubHandler(request =>
+        {
+            var host = request.RequestUri!.Host;
+            hosts.Add(host);
+            var payload = string.Equals(host, "github.com", StringComparison.OrdinalIgnoreCase)
+                ? corrupted
+                : expected;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(payload) };
+        })), root, useMirrorList: true);
+        var package = Package(RootPatchPackageSource.Magisk, "28.1", expected.Length, Sha256Hex(expected));
+
+        var artifact = await service.EnsurePackageAsync(package, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(artifact.FromCache);
+        Assert.NotEqual("github.com", artifact.Source.Host);
+        Assert.Contains(hosts, host => !string.Equals(host, "github.com", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(expected, await File.ReadAllBytesAsync(artifact.Path, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task WarmUpAsync_MirrorListDisabled_KeepsCatalogReadsOnTheOrigin()
+    {
+        var catalogReads = new ConcurrentBag<string>();
+        var service = NewService(new HttpClient(new StubHandler(request =>
+        {
+            if (request.RequestUri!.Host != "api.github.com")
+            {
+                throw new HttpRequestException("mirror unavailable in this test");
+            }
+
+            var segments = request.RequestUri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var owner = segments[^3];
+            var repo = segments[^2];
+            catalogReads.Add($"{owner}/{repo}");
+            return Json(ReleasesJson(owner, repo, "28.1"));
+        })), NewRoot(), useMirrorList: false);
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        await service.WarmUpAsync(cancellationToken);
+
+        Assert.All(RootPatchSources.All, source => Assert.True(service.CatalogLoaded(source)));
+        Assert.Equal(RootPatchSources.All.Count, catalogReads.Count);
+    }
+
+    [Fact]
+    public void DescribeLogDetail_CjkStopWithAppendedAsciiPeriod_TrimsTheDuplicate()
+    {
+        Assert.Equal("Unable to read data from the transport connection: 远程主机强迫关闭了一个现有的连接。",
+            RootPatchPackageService.DescribeLogDetail(
+                "Unable to read data from the transport connection: 远程主机强迫关闭了一个现有的连接。."));
+        Assert.Equal("mirror unavailable.", RootPatchPackageService.DescribeLogDetail("mirror unavailable."));
+        Assert.Equal("远程主机强迫关闭了一个现有的连接。",
+            RootPatchPackageService.DescribeLogDetail("远程主机强迫关闭了一个现有的连接。"));
     }
 
     [Fact]
@@ -374,6 +590,30 @@ public sealed class RootPatchPackageTests : IDisposable
         return $$"""
             [{"tag_name":"v{{version}}","assets":[{"name":"{{asset}}","size":1024,"browser_download_url":"https://github.com/{{owner}}/{{repo}}/releases/download/v{{version}}/{{asset}}"}]}]
             """;
+    }
+
+    private static string ReleasesJson(string owner, string repo, int count, int page)
+    {
+        var releases = Enumerable.Range(0, count).Select(index =>
+        {
+            var version = $"{page}.{index}";
+            var asset = $"{repo}-v{version}.apk";
+            return $$"""{"tag_name":"v{{version}}","assets":[{"name":"{{asset}}","size":1024,"browser_download_url":"https://github.com/{{owner}}/{{repo}}/releases/download/v{{version}}/{{asset}}"}]}""";
+        });
+        return "[" + string.Join(",", releases) + "]";
+    }
+
+    private static int QueryInt(Uri uri, string name)
+    {
+        foreach (var segment in uri.Query.TrimStart('?').Split('&'))
+        {
+            if (segment.StartsWith(name + "=", StringComparison.Ordinal))
+            {
+                return int.Parse(segment[(name.Length + 1)..], CultureInfo.InvariantCulture);
+            }
+        }
+
+        throw new InvalidOperationException($"Missing query value '{name}'.");
     }
 
     private RootPatchPackage Package(RootPatchPackageSource source, string version, long length, string? sha256)
@@ -415,6 +655,20 @@ public sealed class RootPatchPackageTests : IDisposable
     }
 
     private static string Sha256Hex(byte[] payload) => Convert.ToHexStringLower(SHA256.HashData(payload));
+
+    private sealed class GateHandler(Task<HttpResponseMessage> response) : HttpMessageHandler
+    {
+        private int _calls;
+
+        public int Calls => Volatile.Read(ref _calls);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _calls);
+            return await response.WaitAsync(cancellationToken);
+        }
+    }
 
     private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {

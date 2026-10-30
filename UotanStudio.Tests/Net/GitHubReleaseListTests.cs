@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Net;
+using System.Text;
 using System.Text.Json;
 using UotanStudio.Net.GitHub;
 using Xunit;
@@ -61,4 +64,65 @@ public sealed class GitHubReleaseListTests
     [Fact]
     public void ParseReleases_ObjectInsteadOfArray_ThrowsJsonException()
         => Assert.Throws<JsonException>(() => GitHubReleaseClient.ParseReleases("owner", "repo", "{}"));
+
+    [Fact]
+    public async Task ListAsync_ResponseAboveTheCap_RetriesWithFewerReleases()
+    {
+        List<int> counts = [];
+        using var client = new HttpClient(new StubHandler(request =>
+        {
+            var count = QueryInt(request.RequestUri!, "per_page");
+            counts.Add(count);
+            if (count > 10)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(new string('x', GitHubReleaseClient.MaximumResponseBytes + 1))
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""[{"tag_name":"v1.0.0","assets":[]}]""", Encoding.UTF8, "application/json")
+            };
+        }));
+
+        var releases = await GitHubReleaseClient.ListAsync(client, "tiann", "KernelSU", maximum: 20,
+            TestContext.Current.CancellationToken);
+
+        Assert.Single(releases);
+        Assert.Equal([20, 10], counts);
+    }
+
+    [Fact]
+    public async Task ListAsync_SingleReleaseAboveTheCap_ThrowsTheDedicatedError()
+    {
+        using var client = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(new string('x', GitHubReleaseClient.MaximumResponseBytes + 1))
+        }));
+
+        await Assert.ThrowsAsync<GitHubResponseTooLargeException>(() => GitHubReleaseClient.ListAsync(
+            client, "owner", "repo", maximum: 4, TestContext.Current.CancellationToken));
+    }
+
+    private static int QueryInt(Uri uri, string name)
+    {
+        foreach (var segment in uri.Query.TrimStart('?').Split('&'))
+        {
+            if (segment.StartsWith(name + "=", StringComparison.Ordinal))
+            {
+                return int.Parse(segment[(name.Length + 1)..], CultureInfo.InvariantCulture);
+            }
+        }
+
+        throw new InvalidOperationException($"Missing query value '{name}'.");
+    }
+
+    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
+            => Task.FromResult(respond(request));
+    }
 }

@@ -77,6 +77,37 @@ public sealed class HttpDownloadMirrorUrlTests
         Assert.Equal(other, HttpDownload.MirrorUrl(site, other));
     }
 
+    [Fact]
+    public void MirrorUrl_ApiOriginUnderAMarkerPrefix_KeepsTheFullUrlInThePath()
+    {
+        var site = new GitHubMirrorSite { Name = "ghfast", BaseUrl = "https://ghfast.top/https://github.com" };
+
+        var mirror = HttpDownload.MirrorUrl(site, new Uri("https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=1&page=1"));
+
+        Assert.Equal("https://ghfast.top/https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=1&page=1",
+            mirror.ToString());
+    }
+
+    [Fact]
+    public void EnumerateSources_ApiOrigin_ExpandsOntoTheEnabledMirrors()
+    {
+        var origin = new Uri("https://api.github.com/repos/topjohnwu/Magisk/releases?per_page=1&page=1");
+
+        var sources = HttpDownload.EnumerateSources(origin).ToArray();
+
+        Assert.True(sources.Length > 1);
+        Assert.Equal(origin, sources[0]);
+        Assert.Contains(sources, source => string.Equals(source.Host, "ghfast.top", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void EnumerateSources_NonGitHubHost_YieldsOnlyTheOrigin()
+    {
+        var origin = new Uri("https://example.org/tool.tar.gz");
+
+        Assert.Equal([origin], HttpDownload.EnumerateSources(origin).ToArray());
+    }
+
     private static int CountOccurrences(string text, string value)
     {
         var count = 0;
