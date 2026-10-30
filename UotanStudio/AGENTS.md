@@ -45,7 +45,7 @@
 ## 启动与呈现
 
 - 启动顺序保持：`FirmwareFormatRegistry.RegisterAll()` → 语言初始化 → 启动窗 → 内嵌资源解压（`SplashPhase.Resources`，MiSans 字体）→ 设置/主题/语言 → `McpExposureService.Apply` → 首次 USB 扫描（结果行 `DevicesFound`）→ `ShellComposition.CreateAsync` → 启动文件/投屏 → `Ready`。启动文件失败只记录日志，不阻断主窗口。
-- 启动窗文本只由 `SplashViewModel.AdvanceAsync` 的 `SplashPhase` 驱动，阶段只能前进；状态文案写在 `Common.resx`/`Common.zh-CN.resx`，新增阶段要同时改 `LocaleKeySets` 与两份 resx。进度条恒为 `IsIndeterminate="True"`，不要绑定具体进度或恢复“完成到 100%”的第二条进度条。
+- 启动窗文本只由 `SplashViewModel.AdvanceAsync` 的 `SplashPhase` 驱动，阶段只能前进；状态文案写在 `Common.resx`/`Common.zh-CN.resx`，新增阶段要同时改 `LocaleKeySets` 与两份 resx。进度条为确定态：`AdvanceAsync` 依 `SplashPhase` 单调写入 `TargetProgress`（0..1），`MainSplashWindow` 用合成层 `Scale` 补间动画平滑填充，阶段跳变不表现为长度突变；动画跑在合成线程，UI 线程解压资源或预构建主窗口时仍持续推进。不要把它退回 `IsIndeterminate`，也不要恢复第二条“完成到 100%”的百分比进度条。
 - `App.Initialize` 先建立容器并调用 `ServiceHub.Initialize`，`OnFrameworkInitializationCompleted` 的既有启动顺序不变；`App.DeviceMonitor` 在容器已注册实例时取容器实例，否则回退组合根持有的默认监视器。
 - 投屏的 GPU 呈现只在 `ScreenMirrorGpuPresenter` 真实取得合成 GPU 上下文并准备好呈现路径后启用；失败时关闭 GPU 导出并保留 CPU 位图回退。不要把“取得 surface”写成“已启用 GPU 解码”。
 - GUI 路径没有控制台；诊断写 `LogService`，不要写 `Console.WriteLine`。文件关联注册失败只记日志。

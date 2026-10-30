@@ -1,5 +1,9 @@
+using System.ComponentModel;
+using Avalonia;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Rendering.Composition;
+using UotanStudio.ViewModels.Shell;
 using Ursa.Controls;
 
 namespace UotanStudio.Views.Shell;
@@ -33,9 +37,14 @@ public partial class MainSplashWindow : SplashWindow
     public MainSplashWindow()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+        ProgressFill.AttachedToVisualTree += OnFillAttached;
     }
 
-    /// <summary>Waits for the completed progress state to reach the render thread before closing.</summary>
+    /// <summary>
+    /// Waits for the completed progress state to reach the render thread before closing.
+    /// <para>等待完成态进度到达渲染线程后再关闭。</para>
+    /// </summary>
     internal async Task PresentCompletionAsync()
     {
         UpdateLayout();
@@ -51,6 +60,86 @@ public partial class MainSplashWindow : SplashWindow
 
             }
         }
+    }
+
+    private SplashViewModel? _viewModel;
+    private bool _fillComposed;
+    private bool _fillRevealed;
+    private double _currentRatio;
+    private double _pendingRatio;
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        if (_viewModel is not null)
+        {
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        }
+
+        _viewModel = DataContext as SplashViewModel;
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        _currentRatio = _viewModel.TargetProgress;
+        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        ApplyProgress(_currentRatio);
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SplashViewModel.TargetProgress) && _viewModel is not null)
+        {
+            ApplyProgress(_viewModel.TargetProgress);
+        }
+    }
+
+    private void OnFillAttached(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        _fillComposed = true;
+        ApplyProgress(_pendingRatio);
+    }
+
+    /// <summary>
+    /// Tweens the indicator fill toward <paramref name="ratio"/> with a compositor <c>Scale</c> animation, so phase
+    /// steps glide instead of snapping. The animation runs on the compositor thread and therefore keeps advancing
+    /// while the UI thread is busy decompressing resources or pre-building the main window.
+    /// <para>用合成层 <c>Scale</c> 动画把填充平滑推向 <paramref name="ratio"/>，使阶段跳变表现为滑动而非突变。动画在合成线程
+    /// 上运行，故 UI 线程解压资源或预构建主窗口时仍能持续推进。</para>
+    /// </summary>
+    /// <param name="ratio">Target fill ratio, clamped to <c>0..1</c>.<para>目标填充比例，被限制在 <c>0..1</c>。</para></param>
+    private void ApplyProgress(double ratio)
+    {
+        ratio = Math.Clamp(ratio, 0d, 1d);
+        if (!_fillComposed)
+        {
+            _pendingRatio = ratio;
+            return;
+        }
+
+        if (ElementComposition.GetElementVisual(ProgressFill) is not { } visual)
+        {
+            _pendingRatio = ratio;
+            return;
+        }
+
+        if (!_fillRevealed)
+        {
+            ProgressFill.Opacity = 1d;
+            _fillRevealed = true;
+        }
+
+        var from = (float)_currentRatio;
+        var to = (float)ratio;
+        _currentRatio = ratio;
+
+        var animation = visual.Compositor.CreateVector3DKeyFrameAnimation();
+        animation.Duration = TimeSpan.FromMilliseconds(450);
+        animation.InsertKeyFrame(0f, new Vector3D(from, 1f, 1f));
+        animation.InsertKeyFrame(1f, new Vector3D(to, 1f, 1f), new CubicEaseOut());
+        visual.StartAnimation("Scale", animation);
+        // Commit the end value as the base so the fill settles there when the transient animation completes.
+        visual.Scale = new Vector3D(to, 1f, 1f);
     }
 
     /// <summary>

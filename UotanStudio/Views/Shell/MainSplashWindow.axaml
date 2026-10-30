@@ -10,7 +10,7 @@
                ShowInTaskbar="False"
                WindowStartupLocation="CenterScreen"
                WindowDecorations="BorderOnly">
-    <!-- Ursa 主题启动窗：Logo + 应用名 + 启动状态文本；进度条始终处于加载中状态，不表达具体百分比。
+    <!-- Ursa 主题启动窗：Logo + 应用名 + 启动状态文本；进度条为确定态，由合成层补间动画平滑填充，不随阶段跳变。
          字体使用 SplashFontFamily（平台默认字体），因为此时内嵌 MiSans 资源尚未解压。 -->
     <DockPanel LastChildFill="True">
         <StackPanel DockPanel.Dock="Bottom" Margin="24,0,24,20" Spacing="8">
@@ -18,8 +18,15 @@
                        FontFamily="{Binding SplashFontFamily}"
                        FontSize="12" Opacity="0.7"
                        HorizontalAlignment="Center" />
-            <ProgressBar x:Name="BusyProgress" IsIndeterminate="True"
-                         MinWidth="320" Height="4" />
+            <Panel Height="4" MinWidth="320">
+                <!-- 轨道：淡化的强调色描出完整轮廓；填充为整块条，靠合成层 Scale 从左侧揭示（缩放轴心默认在左上角，
+                     故 X 缩放即向右生长），轨道圆角裁剪填充边缘。 -->
+                <Border Background="{DynamicResource SemiColorPrimary}" Opacity="0.18" CornerRadius="2" />
+                <Border CornerRadius="2" ClipToBounds="True">
+                    <Rectangle x:Name="ProgressFill" Fill="{DynamicResource SemiColorPrimary}"
+                               Opacity="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                </Border>
+            </Panel>
         </StackPanel>
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
             <Image Source="/Assets/UotanToolbox.png" Width="72" Height="72" />

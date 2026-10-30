@@ -25,6 +25,16 @@ public partial class SplashViewModel(string initialStatus) : ViewModelBase
     [ObservableProperty]
     private string _statusText = initialStatus;
 
+    /// <summary>
+    /// Target fill ratio for the splash progress bar, in <c>0..1</c>. It advances monotonically with
+    /// <see cref="SplashPhase"/>; the view interpolates toward it with a compositor animation so discrete
+    /// phase steps never appear as length jumps.
+    /// <para>启动进度条的目标填充比例，取值 <c>0..1</c>。随 <see cref="SplashPhase"/> 单调前进；视图用合成动画
+    /// 向其插值，使离散阶段不会表现为长度突变。</para>
+    /// </summary>
+    [ObservableProperty]
+    private double _targetProgress;
+
     private SplashPhase _phase;
 
     /// <summary>
@@ -65,6 +75,7 @@ public partial class SplashViewModel(string initialStatus) : ViewModelBase
             SplashPhase.Ready => Text("Splash_Ready"),
             _ => Text("Splash_Initializing")
         };
+        TargetProgress = (int)phase / (double)SplashPhase.Ready;
 
         await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Background);
     }
