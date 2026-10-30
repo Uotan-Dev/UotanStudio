@@ -52,6 +52,43 @@
         </DataTemplate>
     </UserControl.Resources>
     <UserControl.Styles>
+        <Style Selector="Border#PropertiesPane TextBox">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border#PropertiesPane ComboBox">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border#PropertiesPane NumericUpDown">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.path-browse">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="100" />
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
+        <Style Selector="Border#PropertiesPane TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="Border#PropertiesPane TextBox.multiline">
+            <Setter Property="Height" Value="NaN" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+        </Style>
+        <Style Selector="Button.path-browse">
+            <Setter Property="Content" Value="{DynamicResource Delivery_SelectFile}" />
+        </Style>
+        <Style Selector="Button.path-browse.directory">
+            <Setter Property="Content" Value="{DynamicResource PackDialog_SelectFolder}" />
+        </Style>
         <Style Selector="Button.favorite">
             <Setter Property="Foreground" Value="{DynamicResource AccentColor}" />
         </Style>
@@ -554,49 +591,49 @@
         <Border x:Name="PropertiesPane" Grid.Column="4" BorderThickness="0">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_Properties}"
-                           FontWeight="SemiBold" FontSize="13"
-                           Margin="8,8,8,4" />
-                <ScrollViewer>
+                           FontWeight="SemiBold" FontSize="15"
+                           Margin="12,12,12,4" />
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" AllowAutoHide="True">
                     <Grid IsEnabled="{Binding CanEditGraph}">
                         <!-- 未选中节点时的占位提示 -->
                         <TextBlock Text="{DynamicResource Node_NoSelection}"
-                                   FontSize="12"
+                                   FontSize="13"
                                    Foreground="{DynamicResource SecondaryTextBrush}"
                                    HorizontalAlignment="Center"
                                    Margin="0,20"
                                    IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNull}}" />
 
                         <!-- 选中节点后的属性面板 -->
-                        <StackPanel Margin="8" Spacing="6"
+                        <StackPanel Margin="12" Spacing="12"
                                     IsVisible="{Binding IsMultipleSelection}">
                             <TextBlock Text="{DynamicResource Node_BatchSelection}"
-                                       FontWeight="SemiBold" FontSize="13" />
-                            <TextBlock FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}">
+                                       FontWeight="SemiBold" FontSize="15" />
+                            <TextBlock FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}">
                                 <Run Text="{Binding SelectedNodeCount}" />
                                 <Run Text=" " />
                                 <Run Text="{DynamicResource Node_BatchSelectedSuffix}" />
                             </TextBlock>
                             <Separator Margin="0,4" />
-                            <Grid ColumnDefinitions="Auto,*">
+                            <Grid SizeChanged="OnPropertyFieldSizeChanged" ColumnDefinitions="Auto,*">
                                 <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Category}"
                                            FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
                                 <TextBlock Grid.Column="1" Text="{Binding SelectedCategoryDisplay}"
-                                           FontSize="12" />
+                                           FontSize="13" />
                             </Grid>
-                            <Grid ColumnDefinitions="Auto,*">
+                            <Grid SizeChanged="OnPropertyFieldSizeChanged" ColumnDefinitions="Auto,*">
                                 <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Type}"
                                            FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
                                 <TextBlock Grid.Column="1" Text="{Binding SelectedTypeDisplay}"
-                                           FontSize="12" TextTrimming="CharacterEllipsis" />
+                                           FontSize="13" TextTrimming="CharacterEllipsis" />
                             </Grid>
-                            <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,0">
+                            <Grid SizeChanged="OnPropertyFieldSizeChanged" ColumnDefinitions="Auto,*" Margin="0,2,0,0">
                                 <TextBlock Grid.Column="0" Text="{DynamicResource Node_Choice_Stage}"
                                            FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" VerticalAlignment="Center" />
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                                    <ComboBox FontSize="12" Height="28" MinWidth="64"
+                                <StackPanel Grid.Column="1" Spacing="6">
+                                    <ComboBox FontSize="13" Height="32" MinWidth="64"
                                               ItemsSource="{Binding ExecutionStageLabels}"
                                               SelectedItem="{Binding SelectedExecutionStageLabel, Mode=TwoWay}"
                                               ToolTip.Tip="{DynamicResource Node_Choice_Stage}" />
@@ -608,11 +645,11 @@
                             </Grid>
                             <StackPanel Spacing="4" IsVisible="{Binding CanEditBatchProjectImage}">
                                 <Separator Margin="0,4" />
-                                <Grid ColumnDefinitions="Auto,*">
+                                <Grid SizeChanged="OnPropertyFieldSizeChanged" ColumnDefinitions="Auto,*">
                                     <TextBlock Grid.Column="0" Text="{DynamicResource Node_ProjImg_Select}"
                                                FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                                Margin="0,4,8,0" />
-                                    <TextBox Grid.Column="1" FontSize="12" Height="24"
+                                    <TextBox Grid.Column="1" FontSize="13" Height="32"
                                              Text="{Binding BatchSelectedImage, Mode=TwoWay}"
                                              PlaceholderText="{DynamicResource Node_BatchMixed}" />
                                 </Grid>
@@ -624,13 +661,13 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type nodeVm:BatchNodeInputViewModel}">
                                         <Grid RowDefinitions="Auto,Auto" Margin="0,2">
-                                            <TextBlock FontSize="12" Margin="0,2,0,4" TextWrapping="Wrap"
+                                            <TextBlock FontSize="13" Margin="0,2,0,4" TextWrapping="Wrap"
                                                        VerticalAlignment="Center" Text="{Binding LocalizedTitle}" />
-                                            <TextBox Grid.Row="1" FontSize="12" MinHeight="28"
+                                            <TextBox Grid.Row="1" FontSize="13" MinHeight="32"
                                                      Text="{Binding TextValue, Mode=TwoWay}"
                                                      IsVisible="{Binding IsTextOrPathPort}"
                                                      PlaceholderText="{DynamicResource Node_BatchMixed}" />
-                                            <NumericUpDown Grid.Row="1" FontSize="12" MinHeight="28"
+                                            <NumericUpDown Grid.Row="1" FontSize="13" MinHeight="32"
                                                            Value="{Binding NumberValue, Mode=TwoWay}"
                                                            IsVisible="{Binding IsNumberPort}" />
                                             <CheckBox Grid.Row="1" IsChecked="{Binding BooleanValue, Mode=TwoWay}"
@@ -641,74 +678,74 @@
                             </ItemsControl>
                         </StackPanel>
 
-                        <StackPanel Margin="8" Spacing="6"
+                        <StackPanel Margin="12" Spacing="12"
                                     IsVisible="{Binding IsSingleSelection}">
-                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,4">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" Margin="0,0,0,4">
                                 <TextBlock Text="{Binding SelectedNode.DisplayHeader}"
-                                           FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" />
-                                <Border CornerRadius="3" Padding="4,1" VerticalAlignment="Center"
+                                           FontWeight="SemiBold" FontSize="15" TextWrapping="Wrap" />
+                                <Border Grid.Column="1" CornerRadius="3" Padding="4,1" VerticalAlignment="Center"
                                         Background="{DynamicResource ControlFillColorDefaultBrush}"
                                         BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                                         BorderThickness="1">
                                     <TextBlock Text="{Binding SelectedNode.ExecutionStageBadge}" FontSize="10"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                 </Border>
-                            </StackPanel>
+                            </Grid>
                             <Separator Margin="0,4" />
 
                             <!-- 节点类别 -->
-                            <Grid ColumnDefinitions="Auto,*">
+                            <Grid SizeChanged="OnPropertyFieldSizeChanged" ColumnDefinitions="Auto,*">
                                 <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Category}"
                                            FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding SelectedCategoryDisplay}"
-                                           FontSize="12" />
+                                           FontSize="13" />
                             </Grid>
 
                             <!-- 执行状态 -->
-                            <Grid ColumnDefinitions="Auto,*">
+                            <Grid SizeChanged="OnPropertyFieldSizeChanged" ColumnDefinitions="Auto,*">
                                 <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Status}"
                                            FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding SelectedNode.StatusDisplay}"
-                                           FontSize="12" />
+                                           FontSize="13" />
                             </Grid>
 
                             <!-- 执行阶段 -->
-                            <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,0">
+                            <Grid SizeChanged="OnPropertyFieldSizeChanged" ColumnDefinitions="Auto,*" Margin="0,2,0,0">
                                 <TextBlock Grid.Column="0" Text="{DynamicResource Node_Choice_Stage}"
                                            FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" VerticalAlignment="Center" />
-                                <ComboBox Grid.Column="1" FontSize="12" Height="28"
+                                <ComboBox Grid.Column="1" FontSize="13" Height="32"
                                           ItemsSource="{Binding ExecutionStageLabels}"
                                           SelectedItem="{Binding SelectedExecutionStageLabel, Mode=TwoWay}"
                                           ToolTip.Tip="{DynamicResource Node_Choice_Stage}" />
                             </Grid>
 
                             <!-- 节点类型键 -->
-                            <Grid ColumnDefinitions="Auto,*">
+                            <Grid SizeChanged="OnPropertyFieldSizeChanged" ColumnDefinitions="Auto,*">
                                 <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Type}"
                                            FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
                                 <TextBlock Grid.Column="1"
                                              Text="{Binding SelectedNode.TypeKey}"
-                                            FontSize="12" TextWrapping="Wrap" />
+                                            FontSize="13" TextWrapping="Wrap" />
                             </Grid>
 
                             <!-- 位置 -->
-                            <Grid ColumnDefinitions="Auto,*">
+                            <Grid SizeChanged="OnPropertyFieldSizeChanged" ColumnDefinitions="Auto,*">
                                 <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Location}"
                                            FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
                                 <TextBlock x:Name="NodeLocationText" Grid.Column="1"
-                                           FontSize="12" TextTrimming="CharacterEllipsis"
+                                           FontSize="13" TextTrimming="CharacterEllipsis"
                                            ToolTip.Tip="{Binding SelectedNode.Location}">
                                     <Run Text="{Binding SelectedNode.Location.X, StringFormat='{}{0:0.#}'}" />
                                     <Run Text=", " />
@@ -717,13 +754,13 @@
                             </Grid>
 
                             <!-- 备注名 -->
-                            <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,0">
+                            <Grid SizeChanged="OnPropertyFieldSizeChanged" ColumnDefinitions="Auto,*" Margin="0,2,0,0">
                                 <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_CustomName}"
                                            FontSize="11"
                                            VerticalAlignment="Center"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
-                                <TextBox Grid.Column="1" Height="24" FontSize="12"
+                                <TextBox Grid.Column="1" Height="32" FontSize="13"
                                          Text="{Binding SelectedNode.CustomName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             </Grid>
 
@@ -732,11 +769,11 @@
                             <!-- 工程镜像引用节点的镜像选择编辑区 -->
                             <StackPanel Spacing="4"
                                         IsVisible="{Binding SelectedNode.IsProjectImageNode}">
-                                <Grid ColumnDefinitions="Auto,*">
+                                <Grid SizeChanged="OnPropertyFieldSizeChanged" ColumnDefinitions="Auto,*">
                                     <TextBlock Grid.Column="0" Text="{DynamicResource Node_ProjImg_Select}"
                                                FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
                                                Margin="0,4,8,0" VerticalAlignment="Center" />
-                                    <ComboBox Grid.Column="1" FontSize="12"
+                                    <ComboBox Grid.Column="1" FontSize="13"
                                               ItemsSource="{Binding SelectedNode.AvailableImages}"
                                               SelectedItem="{Binding SelectedNode.SelectedImage, Mode=TwoWay}" />
                                 </Grid>
@@ -755,50 +792,50 @@
                             <ItemsControl ItemsSource="{Binding SelectedParameterInputs}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" Margin="0,2">
-                                            <TextBlock Grid.ColumnSpan="2" FontSize="12" Margin="0,2,0,4" TextWrapping="Wrap"
+                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,2">
+                                            <TextBlock Grid.ColumnSpan="2" FontSize="13" Margin="0,2,0,4" TextWrapping="Wrap"
                                                        VerticalAlignment="Center">
                                                 <Run Text="• " />
                                                 <Run Text="{Binding LocalizedTitle}" />
                                             </TextBlock>
                                             <!-- 文本 / 路径：文本框 + 路径浏览 -->
-                                            <TextBox Grid.Row="1" Grid.Column="0" FontSize="12" MinHeight="{Binding EditorMinHeight}"
-                                                     AcceptsReturn="{Binding IsMultiline}"
-                                                     TextWrapping="Wrap"
-                                                     Text="{Binding InitialValue, Mode=TwoWay}"
-                                                     PasswordChar="{Binding EditorPasswordChar}"
-                                                     IsVisible="{Binding UsesTextEditor}">
-                                            </TextBox>
-                                            <ComboBox Grid.Row="1" Grid.Column="0" HorizontalAlignment="Stretch" FontSize="12"
-                                                      ItemsSource="{Binding Choices}"
-                                                      SelectedItem="{Binding SelectedChoice, Mode=TwoWay}"
-                                                      IsVisible="{Binding CanEditChoice}">
-                                                <ComboBox.ItemTemplate>
-                                                    <DataTemplate DataType="{x:Type nodeVm:NodePortChoice}">
-                                                        <TextBlock Text="{Binding DisplayName}" />
-                                                    </DataTemplate>
-                                                </ComboBox.ItemTemplate>
-                                            </ComboBox>
-                                            <!-- 数值：数值框 -->
-                                            <NumericUpDown Grid.Row="1" Grid.Column="0" FontSize="12" MinHeight="28"
-                                                           Value="{Binding InitialNumberValue, Mode=TwoWay}"
-                                                           IsVisible="{Binding CanEditNumber}" />
-                                            <!-- 布尔：开关 -->
-                                            <CheckBox Grid.Row="1" Grid.Column="0" FontSize="12"
-                                                      IsChecked="{Binding InitialBooleanValue, Mode=TwoWay}"
-                                                      IsVisible="{Binding CanEditBoolean}"
-                                                      VerticalContentAlignment="Center" />
-                                            <Button Grid.Row="1" Grid.Column="1" Width="28" Height="28" Padding="0"
-                                                    Margin="4,0,0,0" FontSize="12"
-                                                    IsVisible="{Binding CanBrowsePath}"
-                                                    Click="OnBrowsePathClick"
-                                                    Tag="{Binding}" ToolTip.Tip="{DynamicResource Node_BrowsePath}">
-                                                <avalonia:FolderOpen Width="16" Height="16" />
-                                            </Button>
-                                            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SourceDescription}"
-                                                       IsVisible="{Binding HasConnectedSource}" TextWrapping="Wrap" FontSize="12" />
-                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="0,4,0,6"
-                                                       FontSize="12" LineHeight="18" TextWrapping="Wrap"
+                                            <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto"
+                                                  RowDefinitions="Auto" SizeChanged="OnPathEditorRowSizeChanged">
+                                                <TextBox Grid.Column="0" Classes="property-editor" Classes.multiline="{Binding IsMultiline}" MinHeight="{Binding EditorMinHeight}"
+                                                         AcceptsReturn="{Binding IsMultiline}"
+                                                         Text="{Binding InitialValue, Mode=TwoWay}"
+                                                         PasswordChar="{Binding EditorPasswordChar}"
+                                                         IsVisible="{Binding UsesTextEditor}" />
+                                                <ComboBox Grid.Column="0" Classes="property-editor" HorizontalAlignment="Stretch"
+                                                          ItemsSource="{Binding Choices}"
+                                                          SelectedItem="{Binding SelectedChoice, Mode=TwoWay}"
+                                                          IsVisible="{Binding CanEditChoice}">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type nodeVm:NodePortChoice}">
+                                                            <TextBlock Text="{Binding DisplayName}" />
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                                <!-- 数值：数值框 -->
+                                                <NumericUpDown Grid.Column="0" Classes="property-editor"
+                                                               Value="{Binding InitialNumberValue, Mode=TwoWay}"
+                                                               IsVisible="{Binding CanEditNumber}" />
+                                                <!-- 布尔：开关 -->
+                                                <CheckBox Grid.Column="0" FontSize="13"
+                                                          IsChecked="{Binding InitialBooleanValue, Mode=TwoWay}"
+                                                          IsVisible="{Binding CanEditBoolean}"
+                                                          VerticalContentAlignment="Center" />
+                                                <Button Grid.Column="1" Classes="path-browse" HorizontalAlignment="Right"
+                                                        Margin="8,0,0,0"
+                                                        IsVisible="{Binding CanBrowsePath}"
+                                                        Click="OnBrowsePathClick"
+                                                        Tag="{Binding}" Classes.directory="{Binding IsDirectoryPath}"
+                                                        ToolTip.Tip="{DynamicResource Node_BrowsePath}" />
+                                            </Grid>
+                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding SourceDescription}"
+                                                       IsVisible="{Binding HasConnectedSource}" TextWrapping="Wrap" FontSize="13" />
+                                            <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Margin="0,4,0,6"
+                                                       FontSize="13" LineHeight="18" TextWrapping="Wrap"
                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                        Text="{Binding LocalizedHint}" IsVisible="{Binding HasHint}" />
                                         </Grid>
@@ -815,7 +852,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
                                         <StackPanel Spacing="2" Margin="0,1">
-                                            <TextBlock FontSize="12">
+                                            <TextBlock FontSize="13">
                                                 <Run Text="• " />
                                                 <Run Text="{Binding LocalizedTitle}" />
                                             </TextBlock>

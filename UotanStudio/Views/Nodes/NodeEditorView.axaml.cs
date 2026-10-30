@@ -237,6 +237,46 @@ public partial class NodeEditorView : UserControl
         return (LeftPaneMinimum * scale, CenterPaneMinimum * scale, RightPaneMinimum * scale);
     }
 
+    private void OnPropertyFieldSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (sender is not Grid row || row.Bounds.Width <= 0 || row.Children.Count != 2)
+        {
+            return;
+        }
+
+        var stacked = row.Bounds.Width < 300;
+        if (stacked == (row.ColumnDefinitions.Count == 1))
+        {
+            return;
+        }
+
+        row.ColumnDefinitions = new ColumnDefinitions(stacked ? "*" : "Auto,*");
+        row.RowDefinitions = new RowDefinitions(stacked ? "Auto,Auto" : "Auto");
+        row.RowSpacing = stacked ? 6 : 0;
+        Grid.SetColumn(row.Children[1], stacked ? 0 : 1);
+        Grid.SetRow(row.Children[1], stacked ? 1 : 0);
+    }
+
+    private void OnPathEditorRowSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (sender is not Grid row || row.Bounds.Width <= 0 || row.Children.LastOrDefault() is not Button button)
+        {
+            return;
+        }
+
+        var stacked = row.Bounds.Width < 300;
+        if (stacked == (row.ColumnDefinitions.Count == 1))
+        {
+            return;
+        }
+
+        row.ColumnDefinitions = new ColumnDefinitions(stacked ? "*" : "*,Auto");
+        row.RowDefinitions = new RowDefinitions(stacked ? "Auto,Auto" : "Auto");
+        Grid.SetColumn(button, stacked ? 0 : 1);
+        Grid.SetRow(button, stacked ? 1 : 0);
+        button.Margin = stacked ? new Thickness(0, 8, 0, 0) : new Thickness(8, 0, 0, 0);
+    }
+
     /// <summary>Applies the effective minimums to the column definitions (called when the pane size changes). <para>把当前生效的最小宽度应用到列定义（面板尺寸变化时调用）。</para></summary>
     private void ApplyPaneMinimums()
     {
