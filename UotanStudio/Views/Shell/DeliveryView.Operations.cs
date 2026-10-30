@@ -50,10 +50,6 @@ public partial class DeliveryView
         Composition.OutputRequested += async (_, _) => await RunDeliveryAsync();
         Composition.OperationFailed += async (_, error) => await ShowDeliveryMessageAsync(UserError.Describe(error), true);
         Composition.Model.NoticeRequested += async (_, message) => await ShowDeliveryMessageAsync(message, false);
-        Composition.Model.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(Composition.Model.Status)) ToolTip.SetTip(Composition, Composition.Model.Status);
-        };
         foreach (var box in new[] { OutputDirectoryBox, SuperSizeBox, SuperGroupNameBox, SuperDeviceNameBox,
                      SuperMetadataSizeBox, SuperBlockSizeBox, SuperMetadataSlotsBox, PayloadVersionBox, PayloadMinorVersionBox,
                      PayloadBuildFingerprintBox, PayloadIncrementalBox, PayloadSdkLevelBox,
@@ -457,7 +453,7 @@ public partial class DeliveryView
                 .BuildAsync(planJson, overwrite, progress, cancellation.Token)).ToArray();
             acceptingProgress = false;
             Composition.Model.ResetProgressStatistics();
-            Composition.SetRunning(true, 100);
+            Composition.SetRunning(true, 0);
             var completionMessage = LanguageService.Instance.GetString("Delivery_OutputComplete", outputs.Length, plan.OutputDirectory);
             Composition.Model.Status = string.Empty;
             LogService.Instance.Write(LogLevel.Info, "Delivery", completionMessage);
@@ -480,9 +476,10 @@ public partial class DeliveryView
         }
         finally
         {
+            acceptingProgress = false;
             _deliveryCancellation = null;
             Composition.Model.ResetProgressStatistics();
-            Composition.SetRunning(false, Composition.Model.Progress);
+            Composition.SetRunning(false, 0);
             UpdateSidebarLock();
             _deliveryCompletion!.TrySetResult(); _deliveryCompletion = null;
         }

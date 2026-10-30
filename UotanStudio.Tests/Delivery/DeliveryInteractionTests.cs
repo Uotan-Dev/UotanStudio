@@ -14,6 +14,10 @@ public sealed class DeliveryInteractionTests : IDisposable
     [InlineData("first\nsecond")]
     [InlineData("first\rsecond")]
     [InlineData("first\u2028second")]
+    [InlineData("first\vsecond")]
+    [InlineData("first\fsecond")]
+    [InlineData("first\u0085second")]
+    [InlineData("first\u2029second")]
     public void Status_Multiline_RoutesToNoticeWithoutInlineText(string message)
     {
         var model = new DeliveryViewModel();
@@ -54,6 +58,56 @@ public sealed class DeliveryInteractionTests : IDisposable
         Assert.Contains("first\nsecond", Assert.Single(notices));
         Assert.Empty(model.ProgressText);
         Assert.Equal(25, model.Progress);
+    }
+    [Fact]
+    public void ProgressText_RunningWithStatistics_UsesOneLineWithoutPercentage()
+    {
+        var model = new DeliveryViewModel
+        {
+            IsRunning = true,
+            Progress = 42,
+            Status = "正在校验输出",
+            ProgressStats = "12 MB/s · 剩余 00:30"
+        };
+
+        Assert.Equal("正在校验输出 · 12 MB/s · 剩余 00:30", model.ProgressText);
+        Assert.DoesNotContain("%", model.ProgressText);
+        Assert.Equal(42, model.Progress);
+    }
+
+    [Fact]
+    public void ProgressStats_Changed_NotifiesCombinedProgressText()
+    {
+        var model = new DeliveryViewModel { Status = "Verifying output" };
+        var changed = new List<string?>();
+        model.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        model.ProgressStats = "12 MB/s";
+
+        Assert.Contains(nameof(model.ProgressText), changed);
+        Assert.Equal("Verifying output · 12 MB/s", model.ProgressText);
+        model.ResetProgressStatistics();
+        Assert.Equal("Verifying output", model.ProgressText);
+    }
+
+    [Theory]
+    [InlineData("first\nsecond")]
+    [InlineData("first\rsecond")]
+    [InlineData("first\vsecond")]
+    [InlineData("first\fsecond")]
+    [InlineData("first\u0085second")]
+    [InlineData("first\u2028second")]
+    [InlineData("first\u2029second")]
+    public void ProgressStats_Multiline_RoutesToNoticeWithoutInlineDetails(string message)
+    {
+        var model = new DeliveryViewModel { Status = "Verifying output" };
+        var notices = new List<string>();
+        model.NoticeRequested += (_, value) => notices.Add(value);
+
+        model.ProgressStats = message;
+
+        Assert.Equal(message, Assert.Single(notices));
+        Assert.Equal("Verifying output", model.ProgressText);
     }
     private DeliveryFile Input(string name, int size = 8192)
     {

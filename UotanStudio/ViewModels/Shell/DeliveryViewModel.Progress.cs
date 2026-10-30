@@ -8,12 +8,20 @@ internal sealed partial class DeliveryViewModel
 {
     private readonly ProgressMeter _progressMeter = new();
     private string? _progressStage;
-    [ObservableProperty] private string _progressStats = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ProgressText))] private string _progressStats = "";
     internal event EventHandler<string>? NoticeRequested;
-    public string ProgressText => HasLineBreak(Status) ? string.Empty : IsRunning && double.IsFinite(Progress) && Progress >= 0 && Status.Length > 0
-        ? string.Format(LanguageService.Instance.GetString("Progress_StatusPercent"), Status, Math.Clamp(Progress, 0, 100)) : Status;
+    public string ProgressText
+    {
+        get
+        {
+            var status = HasLineBreak(Status) ? string.Empty : Status;
+            var stats = HasLineBreak(ProgressStats) ? string.Empty : ProgressStats;
+            return string.IsNullOrWhiteSpace(stats) ? status
+                : string.IsNullOrWhiteSpace(status) ? stats : $"{status} · {stats}";
+        }
+    }
 
-    private static bool HasLineBreak(string value) => value.IndexOfAny(['\r', '\n', '\u0085', '\u2028', '\u2029']) >= 0;
+    private static bool HasLineBreak(string value) => value.IndexOfAny(['\r', '\n', '\v', '\f', '\u0085', '\u2028', '\u2029']) >= 0;
 
     partial void OnStatusChanged(string value)
     {
@@ -23,8 +31,13 @@ internal sealed partial class DeliveryViewModel
             NoticeRequested?.Invoke(this, value);
         }
     }
-    partial void OnProgressChanged(double value) => OnPropertyChanged(nameof(ProgressText));
-    partial void OnIsRunningChanged(bool value) => OnPropertyChanged(nameof(ProgressText));
+    partial void OnProgressStatsChanged(string value)
+    {
+        if (HasLineBreak(value))
+        {
+            NoticeRequested?.Invoke(this, value);
+        }
+    }
 
     internal void ResetProgressStatistics()
     {

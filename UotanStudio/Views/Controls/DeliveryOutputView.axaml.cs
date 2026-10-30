@@ -114,9 +114,6 @@ public partial class DeliveryOutputView : UserControl
         if (e.PropertyName == nameof(DeliveryViewModel.PackPayload)) ResetScriptOptions();
         UpdateRecoveryAvailability();
         OutputStatusText.Text = _model?.ProgressText;
-        OutputStatusText.IsVisible = !string.IsNullOrEmpty(OutputStatusText.Text);
-        OutputStatsText.Text = _model?.ProgressStats;
-        OutputStatsText.IsVisible = !string.IsNullOrEmpty(OutputStatsText.Text);
     }
 
     private void OnModelChanged(object? sender, EventArgs e) => UpdateRecoveryAvailability();

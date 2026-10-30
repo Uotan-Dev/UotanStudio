@@ -111,13 +111,10 @@
                 </Expander>
             </local:DeliveryOutputSectionsPanel>
             </Grid>
-            <Grid Name="OutputFooter" Grid.Row="1" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="4">
-                <StackPanel Spacing="2">
-                    <TextBlock Name="OutputStatusText" FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" IsVisible="False" />
-                    <TextBlock Name="OutputStatsText" FontSize="11" Opacity="0.75" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" IsVisible="False" />
-                </StackPanel>
+            <Grid Name="OutputFooter" Grid.Row="1" Height="40" ColumnDefinitions="*,Auto" RowDefinitions="16,20" ColumnSpacing="12" RowSpacing="4">
+                <TextBlock Name="OutputStatusText" FontSize="11" Height="16" MaxLines="1" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                 <ProgressBar Name="OutputProgress" Grid.Row="1" Minimum="0" Maximum="100" Value="0" Height="20" MinWidth="0"
-                             ShowProgressText="False" VerticalAlignment="Center"
+                             ShowProgressText="True" VerticalAlignment="Center"
                              AutomationProperties.Name="{DynamicResource Delivery_OutputProgress}" />
                 <Button Name="StartOutputButton" Grid.Column="1" Grid.RowSpan="2"
                         MinHeight="20" MinWidth="96" Padding="12,0" VerticalAlignment="Stretch" />

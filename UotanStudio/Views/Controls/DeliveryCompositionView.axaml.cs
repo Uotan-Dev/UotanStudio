@@ -72,9 +72,6 @@ public partial class DeliveryCompositionView : UserControl
         Model.PropertyChanged += (_, _) =>
         {
             CompositionStatusText.Text = Model.ProgressText;
-            CompositionStatusText.IsVisible = Model.ProgressText.Length > 0;
-            CompositionStatsText.Text = Model.ProgressStats;
-            CompositionStatsText.IsVisible = Model.ProgressStats.Length > 0;
         };
         Model.Changed += (_, _) => { UpdateInteractionState(); UpdateEmptyState(); Changed?.Invoke(this, EventArgs.Empty); };
         StartCompositionOutputButton.Click += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
