@@ -1537,7 +1537,7 @@ Author: 暮间雾
     <value>Specify pre-boot device</value>
   </data>
   <data name="BootPatch_ForceRootfs" xml:space="preserve">
-    <value>legacy sar</value>
+    <value>Legacy SAR</value>
   </data>
   <data name="BootPatch_KeepEncryption" xml:space="preserve">
     <value>Keep force encryption</value>
@@ -1572,6 +1572,45 @@ Author: 暮间雾
   <data name="BootPatch_KmiDetected" xml:space="preserve">
     <value>Boot kernel KMI: {0}</value>
   </data>
+  <data name="BootPatch_WarningTitle" xml:space="preserve">
+    <value>Boot patch check</value>
+  </data>
+  <data name="BootPatch_PackageReadFailed" xml:space="preserve">
+    <value>The patch package could not be read: {0}</value>
+  </data>
+  <data name="BootPatch_BootReadFailed" xml:space="preserve">
+    <value>The boot image could not be read: {0}</value>
+  </data>
+  <data name="BootPatch_BootNeedsKernel" xml:space="preserve">
+    <value>This patch mode modifies the boot kernel, but the selected image has no kernel.</value>
+  </data>
+  <data name="BootPatch_BootNeedsRamdisk" xml:space="preserve">
+    <value>This patch mode installs into the ramdisk, but the selected image has no ramdisk.</value>
+  </data>
+  <data name="BootPatch_ArchitectureMismatch" xml:space="preserve">
+    <value>The package supports {0}, but the boot image is {1}.</value>
+  </data>
+  <data name="BootPatch_SelectedArchitectureMismatch" xml:space="preserve">
+    <value>The selected architecture {0} does not match the boot architecture {1}.</value>
+  </data>
+  <data name="BootPatch_KmiMismatch" xml:space="preserve">
+    <value>The package has no kernel module for {0}.</value>
+  </data>
+  <data name="BootPatch_GkiKmiMismatch" xml:space="preserve">
+    <value>The package kernel KMI {0} does not match the boot KMI {1}.</value>
+  </data>
+  <data name="BootPatch_GkiVersion" xml:space="preserve">
+    <value>Select GKI version</value>
+  </data>
+  <data name="BootPatch_GkiVersionRequired" xml:space="preserve">
+    <value>Select the GKI version of the package before patching.</value>
+  </data>
+  <data name="BootPatch_GkiVersionUnreadable" xml:space="preserve">
+    <value>The GKI version could not be read from the package: {0}</value>
+  </data>
+  <data name="BootPatch_BootArchitectureUnreadable" xml:space="preserve">
+    <value>The boot kernel architecture could not be read: {0}</value>
+  </data>
   <data name="BootPatch_Progress" xml:space="preserve">
     <value>Patch progress</value>
   </data>
@@ -1583,6 +1622,9 @@ Author: 暮间雾
   </data>
   <data name="BootPatch_ApatchPassword" xml:space="preserve">
     <value>Enter SuperKey</value>
+  </data>
+  <data name="BootPatch_SuperKey" xml:space="preserve">
+    <value>Enter superkey</value>
   </data>
   <data name="BootPatch_VersionsLoading" xml:space="preserve">
     <value>Loading releases…</value>
@@ -1602,6 +1644,9 @@ Author: 暮间雾
   <data name="BootPatch_PackageDownloadingShort" xml:space="preserve">
     <value>Downloading…</value>
   </data>
+  <data name="BootPatch_TimeRemaining" xml:space="preserve">
+    <value>{0} left</value>
+  </data>
   <data name="BootPatch_PackageReady" xml:space="preserve">
     <value>Patch package {0} is ready.</value>
   </data>
@@ -1616,6 +1661,9 @@ Author: 暮间雾
   </data>
   <data name="BootPatch_ProbingSources" xml:space="preserve">
     <value>Testing mirror sources…</value>
+  </data>
+  <data name="BootPatch_LoadMore" xml:space="preserve">
+    <value>Load more…</value>
   </data>
   <data name="PackDialog_PackPayload" xml:space="preserve">
     <value>Pack Payload</value>

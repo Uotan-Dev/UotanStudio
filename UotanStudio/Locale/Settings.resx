@@ -450,4 +450,100 @@
   <data name="Settings_RenderingBackendAngleEglD3D9" xml:space="preserve">
     <value>ANGLE / EGL (D3D9)</value>
   </data>
+  <data name="Settings_DriverPackages" xml:space="preserve">
+    <value>Driver installation</value>
+  </data>
+  <data name="Settings_DriverPackagesHint" xml:space="preserve">
+    <value>Stages a signed vendor driver package into the Windows driver store and lets Windows bind it to the matching devices. Administrator rights are required.</value>
+  </data>
+  <data name="Settings_DriverPackageInstall" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="Settings_DriverPackageRemove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Settings_DriverPackageInstalling" xml:space="preserve">
+    <value>Installing {0}...</value>
+  </data>
+  <data name="Settings_DriverPackageInstalled" xml:space="preserve">
+    <value>{0} installed</value>
+  </data>
+  <data name="Settings_DriverPackageRemoving" xml:space="preserve">
+    <value>Removing {0}...</value>
+  </data>
+  <data name="Settings_DriverPackageRemoved" xml:space="preserve">
+    <value>{0} removed</value>
+  </data>
+  <data name="Settings_DriverPackageElevationRequired" xml:space="preserve">
+    <value>Administrator rights are required to install driver packages</value>
+  </data>
+  <data name="Settings_DriverPackageFailed" xml:space="preserve">
+    <value>Driver package operation failed: {0}</value>
+  </data>
+  <data name="Settings_DriverPackageDetail" xml:space="preserve">
+    <value>{0} INF files, {1} MB</value>
+  </data>
+  <data name="Settings_DriverPackageUnavailable" xml:space="preserve">
+    <value>Not bundled in this build</value>
+  </data>
+  <data name="DriverPackage_Rockusb_Name" xml:space="preserve">
+    <value>Rockchip Rockusb (DriverAssistant v5.14)</value>
+  </data>
+  <data name="DriverPackage_MediaTekVcom_Name" xml:space="preserve">
+    <value>MediaTek USB VCOM (WHQL cdc-acm)</value>
+  </data>
+  <data name="DriverPackage_MediaTekFull_Name" xml:space="preserve">
+    <value>MediaTek USB full package (WHQL)</value>
+  </data>
+  <data name="DriverPackage_GoogleUsb_Name" xml:space="preserve">
+    <value>Google USB Driver r13</value>
+  </data>
+  <data name="DriverPackage_RockchipAdb_Name" xml:space="preserve">
+    <value>Rockchip ADB driver (v5.14)</value>
+  </data>
+  <data name="DriverPackage_QualcommQud_Name" xml:space="preserve">
+    <value>Qualcomm USB Driver (QUD 1.00.95.6)</value>
+  </data>
+  <data name="DriverPackage_SilabsCp210x_Name" xml:space="preserve">
+    <value>Silicon Labs CP210x virtual COM port</value>
+  </data>
+  <data name="DriverPackage_FtdiCdm_Name" xml:space="preserve">
+    <value>FTDI CDM (2.12.36.20)</value>
+  </data>
+  <data name="DriverPackage_WchSerial_Name" xml:space="preserve">
+    <value>WCH CH341SER and CH343SER</value>
+  </data>
+  <data name="DriverPackage_HuaweiHiSuite_Name" xml:space="preserve">
+    <value>Huawei HiSuite driver</value>
+  </data>
+  <data name="DriverPackage_Rockchip_Coverage" xml:space="preserve">
+    <value>Rockchip and SpacemiT maskrom and loader mode devices</value>
+  </data>
+  <data name="DriverPackage_MediaTek_Coverage" xml:space="preserve">
+    <value>MediaTek preloader, DA, COM, MBIM and MTP interfaces</value>
+  </data>
+  <data name="DriverPackage_Google_Coverage" xml:space="preserve">
+    <value>Android ADB and fastboot interfaces</value>
+  </data>
+  <data name="DriverPackage_Qualcomm_Coverage" xml:space="preserve">
+    <value>Qualcomm 9008 serial, DIAG, ADB and WWAN</value>
+  </data>
+  <data name="DriverPackage_SiliconLabs_Coverage" xml:space="preserve">
+    <value>CP210x USB-to-UART bridges</value>
+  </data>
+  <data name="DriverPackage_Ftdi_Coverage" xml:space="preserve">
+    <value>FTDI FT232 and FT245 USB-to-UART bridges</value>
+  </data>
+  <data name="DriverPackage_Wch_Coverage" xml:space="preserve">
+    <value>WCH CH340, CH341 and CH343 USB-to-UART bridges</value>
+  </data>
+  <data name="DriverPackage_Huawei_Coverage" xml:space="preserve">
+    <value>Huawei HDB, ADB and COM interfaces</value>
+  </data>
+  <data name="Settings_DriverPackageReason_SelfExtractorOnly" xml:space="preserve">
+    <value>This vendor only ships a self-extracting installer, so the package is not bundled; install it from the vendor and the driver stays available to Windows.</value>
+  </data>
+  <data name="Settings_DriverPackageReason_LicenseAndSize" xml:space="preserve">
+    <value>The vendor license and the package size keep this driver out of the build; install it from the vendor when needed.</value>
+  </data>
 </root>

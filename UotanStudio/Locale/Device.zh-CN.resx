@@ -538,7 +538,7 @@
     <value>优先平台原生后端，必要时回退 libusb。</value>
   </data>
   <data name="UsbTree_OnlyAndroid" xml:space="preserve">
-    <value>只看 Android 相关</value>
+    <value>过滤显示</value>
   </data>
   <data name="UsbTree_ExpandAll" xml:space="preserve">
     <value>展开全部</value>
@@ -699,41 +699,41 @@
   <data name="UsbTree_Detail_InterfaceGuids" xml:space="preserve">
     <value>设备接口 GUID</value>
   </data>
-  <data name="UsbTree_ConfigureDriver" xml:space="preserve">
-    <value>安装驱动</value>
+  <data name="UsbTree_EnableTakeover" xml:space="preserve">
+    <value>启用接管</value>
   </data>
-  <data name="UsbTree_UninstallDriver" xml:space="preserve">
-    <value>卸载驱动</value>
+  <data name="UsbTree_CancelTakeover" xml:space="preserve">
+    <value>取消接管</value>
   </data>
-  <data name="UsbTree_DriverInstallTitle" xml:space="preserve">
-    <value>安装 WinUSB 驱动</value>
+  <data name="UsbTree_TakeoverConfirmTitle" xml:space="preserve">
+    <value>启用设备接管</value>
   </data>
-  <data name="UsbTree_DriverInstallDetail" xml:space="preserve">
-    <value>将把 {0} 当前的驱动替换为本应用自签名的 WinUSB 驱动包，并向本机受信任存储添加应用证书。需要管理员权限。</value>
+  <data name="UsbTree_TakeoverConfirmDetail" xml:space="preserve">
+    <value>将把 {0} 当前的驱动替换为本应用自签名的 WinUSB 驱动包，使设备可通过 WinUSB 打开，并把接管证书加入本机受信任存储。需要管理员权限。</value>
   </data>
-  <data name="UsbTree_DriverUninstallTitle" xml:space="preserve">
-    <value>卸载 WinUSB 驱动</value>
+  <data name="UsbTree_TakeoverCancelTitle" xml:space="preserve">
+    <value>取消设备接管</value>
   </data>
-  <data name="UsbTree_DriverUninstallDetail" xml:space="preserve">
-    <value>将把本应用为 {0} 安装的 WinUSB 驱动卸载，并恢复系统默认驱动。需要管理员权限。</value>
+  <data name="UsbTree_TakeoverCancelDetail" xml:space="preserve">
+    <value>将移除本应用为 {0} 安装的自签名 WinUSB 驱动包与证书，并恢复系统驱动。需要管理员权限。</value>
   </data>
-  <data name="UsbTree_DriverInstalling" xml:space="preserve">
-    <value>正在为 {0} 安装 WinUSB 驱动...</value>
+  <data name="UsbTree_TakeoverEnabling" xml:space="preserve">
+    <value>正在用 WinUSB 接管 {0}...</value>
   </data>
-  <data name="UsbTree_DriverUninstalling" xml:space="preserve">
-    <value>正在卸载 {0} 的 WinUSB 驱动...</value>
+  <data name="UsbTree_TakeoverEnabled" xml:space="preserve">
+    <value>已启用 {0} 的 WinUSB 接管</value>
   </data>
-  <data name="UsbTree_DriverInstallSucceeded" xml:space="preserve">
-    <value>已为 {0} 安装 WinUSB 驱动</value>
+  <data name="UsbTree_TakeoverDisabling" xml:space="preserve">
+    <value>正在取消 {0} 的 WinUSB 接管...</value>
   </data>
-  <data name="UsbTree_DriverUninstallSucceeded" xml:space="preserve">
-    <value>已卸载 {0} 的 WinUSB 驱动，系统默认驱动已恢复</value>
+  <data name="UsbTree_TakeoverDisabled" xml:space="preserve">
+    <value>已取消 {0} 的 WinUSB 接管，系统驱动已恢复</value>
   </data>
-  <data name="UsbTree_DriverElevationRequired" xml:space="preserve">
-    <value>配置驱动需要管理员权限</value>
+  <data name="UsbTree_TakeoverElevationRequired" xml:space="preserve">
+    <value>接管设备需要管理员权限</value>
   </data>
-  <data name="UsbTree_DriverOperationFailed" xml:space="preserve">
-    <value>驱动操作失败：{0}</value>
+  <data name="UsbTree_TakeoverFailed" xml:space="preserve">
+    <value>设备接管失败：{0}</value>
   </data>
   <data name="UsbTree_DriverStateRefreshFailed" xml:space="preserve">
     <value>驱动状态查询失败：{0}</value>

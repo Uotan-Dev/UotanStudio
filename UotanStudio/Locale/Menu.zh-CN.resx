@@ -711,6 +711,27 @@
   <data name="Keys_DeleteConfirm" xml:space="preserve">
     <value>确定永久删除密钥“{0}”吗？此操作不可恢复，已导出的副本不受影响。</value>
   </data>
+  <data name="Keys_PasswordRequiredTitle" xml:space="preserve">
+    <value>需要密钥库密码</value>
+  </data>
+  <data name="Keys_PasswordRequiredMessage" xml:space="preserve">
+    <value>尚未设置密钥库密码。导出 JKS 或全部格式时必须提供密钥库密码以保护密钥库；请在密码框中输入后重试。</value>
+  </data>
+  <data name="Keys_UnprotectedStoreTitle" xml:space="preserve">
+    <value>不设密码导出？</value>
+  </data>
+  <data name="Keys_UnprotectedStoreMessage" xml:space="preserve">
+    <value>尚未设置密码，导出的 PKCS#12 文件将不做加密，任何取得该文件的人都可以读取其中的私钥。仍要在不设密码的情况下继续吗？</value>
+  </data>
+  <data name="Keys_ContinueWithoutPassword" xml:space="preserve">
+    <value>不设密码继续</value>
+  </data>
+  <data name="Keys_DeleteConfirmWithFiles" xml:space="preserve">
+    <value>确定永久删除密钥“{0}”吗？此操作不可恢复。生成时导出到磁盘的密钥文件将被一并删除：{1}</value>
+  </data>
+  <data name="Keys_LinkedDeleteFailed" xml:space="preserve">
+    <value>密钥已删除，但以下记录的文件未能删除：{0}</value>
+  </data>
   <data name="Keys_PayloadSigning" xml:space="preserve">
     <value>Payload 发布签名密钥</value>
   </data>

@@ -538,7 +538,7 @@
     <value>Prefers the platform-native backend and falls back to libusb when needed.</value>
   </data>
   <data name="UsbTree_OnlyAndroid" xml:space="preserve">
-    <value>Android related only</value>
+    <value>Filter mode</value>
   </data>
   <data name="UsbTree_ExpandAll" xml:space="preserve">
     <value>Expand all</value>
@@ -699,41 +699,41 @@
   <data name="UsbTree_Detail_InterfaceGuids" xml:space="preserve">
     <value>Device-interface GUIDs</value>
   </data>
-  <data name="UsbTree_ConfigureDriver" xml:space="preserve">
-    <value>Install WinUSB Driver</value>
+  <data name="UsbTree_EnableTakeover" xml:space="preserve">
+    <value>Enable takeover</value>
   </data>
-  <data name="UsbTree_UninstallDriver" xml:space="preserve">
-    <value>Uninstall Driver</value>
+  <data name="UsbTree_CancelTakeover" xml:space="preserve">
+    <value>Cancel takeover</value>
   </data>
-  <data name="UsbTree_DriverInstallTitle" xml:space="preserve">
-    <value>Install WinUSB driver</value>
+  <data name="UsbTree_TakeoverConfirmTitle" xml:space="preserve">
+    <value>Enable device takeover</value>
   </data>
-  <data name="UsbTree_DriverInstallDetail" xml:space="preserve">
-    <value>This replaces the current driver of {0} with a self-signed WinUSB driver package. The app's certificate will be added to the local machine trusted stores. Administrator rights are required.</value>
+  <data name="UsbTree_TakeoverConfirmDetail" xml:space="preserve">
+    <value>This replaces the current driver of {0} with a self-signed WinUSB package so the device can be opened through WinUSB, and adds the takeover certificate to the local machine trusted stores. Administrator rights are required.</value>
   </data>
-  <data name="UsbTree_DriverUninstallTitle" xml:space="preserve">
-    <value>Uninstall WinUSB driver</value>
+  <data name="UsbTree_TakeoverCancelTitle" xml:space="preserve">
+    <value>Cancel device takeover</value>
   </data>
-  <data name="UsbTree_DriverUninstallDetail" xml:space="preserve">
-    <value>This removes the WinUSB driver installed by this app from {0} and restores the system default driver. Administrator rights are required.</value>
+  <data name="UsbTree_TakeoverCancelDetail" xml:space="preserve">
+    <value>This removes the self-signed WinUSB package and certificate this app installed for {0} and restores the system driver. Administrator rights are required.</value>
   </data>
-  <data name="UsbTree_DriverInstalling" xml:space="preserve">
-    <value>Installing WinUSB driver for {0}...</value>
+  <data name="UsbTree_TakeoverEnabling" xml:space="preserve">
+    <value>Taking over {0} with WinUSB...</value>
   </data>
-  <data name="UsbTree_DriverUninstalling" xml:space="preserve">
-    <value>Uninstalling WinUSB driver from {0}...</value>
+  <data name="UsbTree_TakeoverEnabled" xml:space="preserve">
+    <value>WinUSB takeover enabled for {0}</value>
   </data>
-  <data name="UsbTree_DriverInstallSucceeded" xml:space="preserve">
-    <value>WinUSB driver installed for {0}</value>
+  <data name="UsbTree_TakeoverDisabling" xml:space="preserve">
+    <value>Ending the WinUSB takeover of {0}...</value>
   </data>
-  <data name="UsbTree_DriverUninstallSucceeded" xml:space="preserve">
-    <value>WinUSB driver uninstalled from {0}; the system default driver is restored</value>
+  <data name="UsbTree_TakeoverDisabled" xml:space="preserve">
+    <value>WinUSB takeover ended for {0}; the system driver is restored</value>
   </data>
-  <data name="UsbTree_DriverElevationRequired" xml:space="preserve">
-    <value>Administrator rights are required to configure drivers</value>
+  <data name="UsbTree_TakeoverElevationRequired" xml:space="preserve">
+    <value>Administrator rights are required to take a device over</value>
   </data>
-  <data name="UsbTree_DriverOperationFailed" xml:space="preserve">
-    <value>Driver operation failed: {0}</value>
+  <data name="UsbTree_TakeoverFailed" xml:space="preserve">
+    <value>Device takeover failed: {0}</value>
   </data>
   <data name="UsbTree_DriverStateRefreshFailed" xml:space="preserve">
     <value>Driver state query failed: {0}</value>

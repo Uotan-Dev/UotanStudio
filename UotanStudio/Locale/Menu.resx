@@ -711,6 +711,27 @@ Continue creating the project?</value>
   <data name="Keys_DeleteConfirm" xml:space="preserve">
     <value>Permanently delete the key “{0}”? This cannot be undone. Exported copies are unaffected.</value>
   </data>
+  <data name="Keys_PasswordRequiredTitle" xml:space="preserve">
+    <value>Keystore password required</value>
+  </data>
+  <data name="Keys_PasswordRequiredMessage" xml:space="preserve">
+    <value>The keystore password is empty. Exporting JKS or all formats requires a keystore password to protect the keystore; enter one in the password field and try again.</value>
+  </data>
+  <data name="Keys_UnprotectedStoreTitle" xml:space="preserve">
+    <value>Export without a password?</value>
+  </data>
+  <data name="Keys_UnprotectedStoreMessage" xml:space="preserve">
+    <value>No keystore password is set. The exported PKCS#12 file will not be encrypted, so anyone who obtains the file can read the private key. Continue without a password?</value>
+  </data>
+  <data name="Keys_ContinueWithoutPassword" xml:space="preserve">
+    <value>Continue without password</value>
+  </data>
+  <data name="Keys_DeleteConfirmWithFiles" xml:space="preserve">
+    <value>Permanently delete the key “{0}”? This cannot be undone. The key files exported at generation time will also be deleted: {1}</value>
+  </data>
+  <data name="Keys_LinkedDeleteFailed" xml:space="preserve">
+    <value>The key was deleted, but these recorded files could not be removed:{0}</value>
+  </data>
   <data name="Keys_PayloadSigning" xml:space="preserve">
     <value>Payload signing key</value>
   </data>
