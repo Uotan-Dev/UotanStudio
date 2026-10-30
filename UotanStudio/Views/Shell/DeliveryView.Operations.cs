@@ -49,6 +49,7 @@ public partial class DeliveryView
         };
         Composition.OutputRequested += async (_, _) => await RunDeliveryAsync();
         Composition.OperationFailed += async (_, error) => await ShowDeliveryMessageAsync(UserError.Describe(error), true);
+        Composition.Model.NoticeRequested += async (_, message) => await ShowDeliveryMessageAsync(message, false);
         Composition.Model.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(Composition.Model.Status)) ToolTip.SetTip(Composition, Composition.Model.Status);
@@ -234,7 +235,7 @@ public partial class DeliveryView
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Warn, "Delivery", $"Delivery state capture skipped: {ex.Message}");
-            Composition.Model.Status = UserError.Describe(ex);
+            _ = ShowDeliveryMessageAsync(UserError.Describe(ex), true);
             return null;
         }
     }
@@ -270,7 +271,7 @@ public partial class DeliveryView
                             Composition.Model.Status = LanguageService.Instance.GetString("Delivery_EditedScriptsNeedReview");
                 }
             }
-            catch (Exception ex) { Composition.Model.Status = UserError.Describe(ex); }
+            catch (Exception ex) { _ = ShowDeliveryMessageAsync(UserError.Describe(ex), true); }
             finally
             {
                 _deliverySaveTimer.Stop();
@@ -400,6 +401,7 @@ public partial class DeliveryView
         using var cancellation = new CancellationTokenSource();
         _deliveryCancellation = cancellation; _deliveryCompletion = new();
         Composition.Model.ResetProgressStatistics();
+        Composition.Model.Status = string.Empty;
         var acceptingProgress = true;
         var root = _deliveryRoot;
         try
@@ -456,18 +458,20 @@ public partial class DeliveryView
             acceptingProgress = false;
             Composition.Model.ResetProgressStatistics();
             Composition.SetRunning(true, 100);
-            Composition.Model.Status = LanguageService.Instance.GetString("Delivery_OutputComplete", outputs.Length, plan.OutputDirectory);
-            LogService.Instance.Write(LogLevel.Info, "Delivery", Composition.Model.Status);
+            var completionMessage = LanguageService.Instance.GetString("Delivery_OutputComplete", outputs.Length, plan.OutputDirectory);
+            Composition.Model.Status = string.Empty;
+            LogService.Instance.Write(LogLevel.Info, "Delivery", completionMessage);
 
             ImageSelection.AddDeliveryOutputs(outputs);
             if (showCompletion && _attached && root == ProjectContextService.Instance.RootDirectory)
-                await ShowDeliveryMessageAsync(Composition.Model.Status, false);
+                await ShowDeliveryMessageAsync(completionMessage, false);
         }
         catch (OperationCanceledException)
         {
             acceptingProgress = false;
-            Composition.Model.Status = LanguageService.Instance.GetString("Delivery_OutputCancelled");
-            LogService.Instance.Write(LogLevel.Info, "Delivery", Composition.Model.Status);
+            var cancellationMessage = LanguageService.Instance.GetString("Delivery_OutputCancelled");
+            Composition.Model.Status = cancellationMessage;
+            LogService.Instance.Write(LogLevel.Info, "Delivery", cancellationMessage);
         }
         catch (Exception ex)
         {
@@ -521,7 +525,7 @@ public partial class DeliveryView
 
     private async Task ShowDeliveryMessageAsync(string message, bool error)
     {
-        Composition.Model.Status = message;
+        Composition.Model.Status = string.Empty;
         LogService.Instance.Write(error ? LogLevel.Error : LogLevel.Info, "Delivery", message);
         if (_attached && TopLevel.GetTopLevel(this) is Window owner)
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Tab_Delivery"), message, error ? Ursa.Controls.MessageBoxIcon.Error : Ursa.Controls.MessageBoxIcon.Information);

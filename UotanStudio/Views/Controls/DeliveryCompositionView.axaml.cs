@@ -143,7 +143,7 @@ public partial class DeliveryCompositionView : UserControl
     {
         if (!_packImages || !_outputToDirectory || Model.Confirmed) return;
         try { Model.Confirm(ReadPlan()); }
-        catch (Exception ex) { Model.Status = Services.UserError.Describe(ex); OperationFailed?.Invoke(this, ex); }
+        catch (Exception ex) { OperationFailed?.Invoke(this, ex); }
         UpdateInteractionState();
     }
 

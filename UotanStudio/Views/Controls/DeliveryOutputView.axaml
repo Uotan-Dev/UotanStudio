@@ -111,14 +111,16 @@
                 </Expander>
             </local:DeliveryOutputSectionsPanel>
             </Grid>
-            <Grid Name="OutputFooter" Grid.Row="1" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="4">
-                <ProgressBar Name="OutputProgress" Minimum="0" Maximum="100" Value="0" Height="20" MinWidth="0"
+            <Grid Name="OutputFooter" Grid.Row="1" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="4">
+                <StackPanel Spacing="2">
+                    <TextBlock Name="OutputStatusText" FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" IsVisible="False" />
+                    <TextBlock Name="OutputStatsText" FontSize="11" Opacity="0.75" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" IsVisible="False" />
+                </StackPanel>
+                <ProgressBar Name="OutputProgress" Grid.Row="1" Minimum="0" Maximum="100" Value="0" Height="20" MinWidth="0"
                              ShowProgressText="False" VerticalAlignment="Center"
                              AutomationProperties.Name="{DynamicResource Delivery_OutputProgress}" />
-                <Button Name="StartOutputButton" Grid.Column="1"
-                        Height="32" MinWidth="96" Padding="12,0" />
-                <TextBlock Name="OutputStatusText" Grid.Row="1" Grid.ColumnSpan="2" FontSize="11" TextWrapping="Wrap" />
-                <TextBlock Name="OutputStatsText" Grid.Row="2" Grid.ColumnSpan="2" FontSize="11" Opacity="0.75" TextWrapping="Wrap" />
+                <Button Name="StartOutputButton" Grid.Column="1" Grid.RowSpan="2"
+                        MinHeight="20" MinWidth="96" Padding="12,0" VerticalAlignment="Stretch" />
             </Grid>
         </Grid>
         <Grid Name="DocumentPane" Grid.Column="2" RowDefinitions="Auto,*" RowSpacing="6">

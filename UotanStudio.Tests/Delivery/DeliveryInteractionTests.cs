@@ -10,6 +10,51 @@ public sealed class DeliveryInteractionTests : IDisposable
     public DeliveryInteractionTests() => Directory.CreateDirectory(_root);
     public void Dispose() => Directory.Delete(_root, true);
 
+    [Theory]
+    [InlineData("first\nsecond")]
+    [InlineData("first\rsecond")]
+    [InlineData("first\u2028second")]
+    public void Status_Multiline_RoutesToNoticeWithoutInlineText(string message)
+    {
+        var model = new DeliveryViewModel();
+        var notices = new List<string>();
+        model.NoticeRequested += (_, value) => notices.Add(value);
+
+        model.Status = message;
+
+        Assert.Equal(message, Assert.Single(notices));
+        Assert.Empty(model.ProgressText);
+    }
+
+    [Fact]
+    public void ReportProgress_SparseDiagnostic_UsesLocalizedStageWithoutEnglishDetail()
+    {
+        var model = new DeliveryViewModel();
+
+        model.ReportProgress(new DeliveryProgress(99, "Converting Sparse", Stage: "Delivery_ProgressSparse",
+            Detail: "RAW 100 MiB → Sparse 10 MiB (saved 90%)"));
+
+        Assert.Equal(UotanStudio.Services.LanguageService.Instance.GetString("Delivery_ProgressSparse"), model.Status);
+        Assert.Equal(99, model.Progress);
+    }
+
+    [Fact]
+    public void ReportProgress_MultilineDetail_CanBeClearedByNoticeHandler()
+    {
+        var model = new DeliveryViewModel();
+        var notices = new List<string>();
+        model.NoticeRequested += (_, message) =>
+        {
+            notices.Add(message);
+            model.Status = string.Empty;
+        };
+
+        model.ReportProgress(new DeliveryProgress(25, "Copying images", Stage: "Delivery_ProgressCopy", Detail: "first\nsecond"));
+
+        Assert.Contains("first\nsecond", Assert.Single(notices));
+        Assert.Empty(model.ProgressText);
+        Assert.Equal(25, model.Progress);
+    }
     private DeliveryFile Input(string name, int size = 8192)
     {
         var path = Path.Combine(_root, name + ".img");
