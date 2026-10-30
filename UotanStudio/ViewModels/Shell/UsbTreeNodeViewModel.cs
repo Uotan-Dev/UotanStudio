@@ -21,27 +21,26 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
 
     private readonly UsbTopologyCapabilities _capabilities;
     private readonly IReadOnlyList<string> _protocols;
-    private readonly Func<UsbTreeNodeViewModel, Task>? _configureDriver;
-    private readonly Func<UsbTreeNodeViewModel, Task>? _uninstallDriver;
+    private readonly Func<UsbTreeNodeViewModel, Task>? _enableTakeover;
+    private readonly Func<UsbTreeNodeViewModel, Task>? _cancelTakeover;
 
     /// <summary><para>节点是否展开，与 <c>TreeViewItem.IsExpanded</c> 双向绑定。</para>
     /// Whether the node is expanded, bound two-way to <c>TreeViewItem.IsExpanded</c>.</summary>
     [ObservableProperty] private bool _isExpanded;
 
     /// <summary>
-    /// Whether the row offers the WinUSB driver actions; only set for Windows PnP device or function
-    /// nodes carrying their own recognized protocol and hardware ids.
-    /// <para>该行是否提供 WinUSB 驱动操作；仅为携带自身识别协议与硬件 ID 的 Windows PnP 设备/接口
-    /// 节点置位。</para>
+    /// Whether the row offers the WinUSB takeover action; only set for Windows PnP device or function
+    /// nodes carrying their own hardware ids.
+    /// <para>该行是否提供 WinUSB 接管操作；仅为携带自身硬件 ID 的 Windows PnP 设备/接口节点置位。</para>
     /// </summary>
     [ObservableProperty] private bool _showDriverAction;
 
     /// <summary>
-    /// Whether the current driver binding was installed by this application, deciding which driver
-    /// action button the row shows.
-    /// <para>当前驱动绑定是否由本应用安装，决定该行显示哪个驱动操作按钮。</para>
+    /// Whether the device is currently bound to the self-signed WinUSB package this application
+    /// installed, deciding whether the row offers takeover or its cancellation.
+    /// <para>设备当前是否绑定到本应用安装的自签名 WinUSB 包，决定该行提供接管还是取消接管。</para>
     /// </summary>
-    [ObservableProperty] private bool _isDriverManaged;
+    [ObservableProperty] private bool _isTakenOver;
 
     /// <summary>
     /// Whether a driver operation is running on this node; the row buttons stay disabled until it
@@ -57,70 +56,70 @@ public sealed partial class UsbTreeNodeViewModel : ObservableObject
     /// <param name="children">The already-built child view models.<para>已构建的子节点视图模型。</para></param>
     /// <param name="depth">The node depth with the root at 0, used by the default expansion policy.
     /// <para>节点深度，根为 0；用于默认展开策略。</para></param>
-    /// <param name="configureDriver">
-    /// The optional callback invoked by <c>ConfigureDriverCommand</c> to install the WinUSB driver
-    /// for this node.
-    /// <para><c>ConfigureDriverCommand</c> 调用的可选回调，为该节点安装 WinUSB 驱动。</para>
+    /// <param name="enableTakeover">
+    /// The optional callback invoked by <c>EnableTakeoverCommand</c> to take the node's device over with
+    /// a self-signed WinUSB package.
+    /// <para><c>EnableTakeoverCommand</c> 调用的可选回调，用自签名 WinUSB 包接管该节点的设备。</para>
     /// </param>
-    /// <param name="uninstallDriver">
-    /// The optional callback invoked by <c>UninstallDriverCommand</c> to remove the WinUSB driver
-    /// installed by this app.
-    /// <para><c>UninstallDriverCommand</c> 调用的可选回调，卸载本应用安装的 WinUSB 驱动。</para>
+    /// <param name="cancelTakeover">
+    /// The optional callback invoked by <c>CancelTakeoverCommand</c> to remove the self-signed WinUSB
+    /// package this app installed.
+    /// <para><c>CancelTakeoverCommand</c> 调用的可选回调，移除本应用安装的自签名 WinUSB 包。</para>
     /// </param>
     public UsbTreeNodeViewModel(UsbTopologyNode node, UsbTopologyCapabilities capabilities,
         IReadOnlyList<UsbTreeNodeViewModel> children, int depth,
-        Func<UsbTreeNodeViewModel, Task>? configureDriver = null,
-        Func<UsbTreeNodeViewModel, Task>? uninstallDriver = null)
+        Func<UsbTreeNodeViewModel, Task>? enableTakeover = null,
+        Func<UsbTreeNodeViewModel, Task>? cancelTakeover = null)
     {
         Node = node;
         _capabilities = capabilities;
         Children = children;
         _protocols = CollectProtocols(node, children);
-        _configureDriver = configureDriver;
-        _uninstallDriver = uninstallDriver;
+        _enableTakeover = enableTakeover;
+        _cancelTakeover = cancelTakeover;
         IsExpanded = depth <= 1 || _protocols.Count > 0;
     }
 
     /// <summary>
-    /// Whether the row may offer the install action: driver actions are shown and no host-managed
-    /// driver is currently bound.
-    /// <para>该行是否可提供安装操作：显示驱动操作且当前未绑定本应用管理的驱动。</para>
+    /// Whether the row may offer the takeover action: the takeover action is shown and the device is not
+    /// bound to this application's package yet.
+    /// <para>该行是否可提供接管操作：显示接管操作且设备尚未绑定本应用的驱动包。</para>
     /// </summary>
-    public bool CanInstallDriver => ShowDriverAction && !IsDriverManaged;
+    public bool CanEnableTakeover => ShowDriverAction && !IsTakenOver;
 
     /// <summary>
-    /// Whether the row may offer the uninstall action: driver actions are shown and a host-managed
-    /// driver is currently bound.
-    /// <para>该行是否可提供卸载操作：显示驱动操作且当前已绑定本应用管理的驱动。</para>
+    /// Whether the row may offer the cancellation action: the takeover action is shown and the device is
+    /// bound to this application's package.
+    /// <para>该行是否可提供取消接管操作：显示接管操作且设备已绑定本应用的驱动包。</para>
     /// </summary>
-    public bool CanUninstallDriver => ShowDriverAction && IsDriverManaged;
+    public bool CanCancelTakeover => ShowDriverAction && IsTakenOver;
 
     /// <summary>
-    /// Forwards to the injected install callback; without one the command completes without doing
+    /// Forwards to the injected takeover callback; without one the command completes without doing
     /// anything.
-    /// <para>转发到注入的安装回调；未注入时命令直接完成，不做任何事。</para>
+    /// <para>转发到注入的接管回调；未注入时命令直接完成，不做任何事。</para>
     /// </summary>
     [RelayCommand]
-    private Task ConfigureDriverAsync() => _configureDriver?.Invoke(this) ?? Task.CompletedTask;
+    private Task EnableTakeoverAsync() => _enableTakeover?.Invoke(this) ?? Task.CompletedTask;
 
     /// <summary>
-    /// Forwards to the injected uninstall callback; without one the command completes without doing
-    /// anything.
-    /// <para>转发到注入的卸载回调；未注入时命令直接完成，不做任何事。</para>
+    /// Forwards to the injected takeover-cancellation callback; without one the command completes
+    /// without doing anything.
+    /// <para>转发到注入的取消接管回调；未注入时命令直接完成，不做任何事。</para>
     /// </summary>
     [RelayCommand]
-    private Task UninstallDriverAsync() => _uninstallDriver?.Invoke(this) ?? Task.CompletedTask;
+    private Task CancelTakeoverAsync() => _cancelTakeover?.Invoke(this) ?? Task.CompletedTask;
 
     partial void OnShowDriverActionChanged(bool value)
     {
-        OnPropertyChanged(nameof(CanInstallDriver));
-        OnPropertyChanged(nameof(CanUninstallDriver));
+        OnPropertyChanged(nameof(CanEnableTakeover));
+        OnPropertyChanged(nameof(CanCancelTakeover));
     }
 
-    partial void OnIsDriverManagedChanged(bool value)
+    partial void OnIsTakenOverChanged(bool value)
     {
-        OnPropertyChanged(nameof(CanInstallDriver));
-        OnPropertyChanged(nameof(CanUninstallDriver));
+        OnPropertyChanged(nameof(CanEnableTakeover));
+        OnPropertyChanged(nameof(CanCancelTakeover));
     }
 
     /// <summary><para>底层扁平节点，供详情面板与文本导出读取原始字段。</para>

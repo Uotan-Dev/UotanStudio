@@ -266,6 +266,43 @@
                             HorizontalAlignment="Right" />
                 </StackPanel>
 
+                <!-- Section: Driver packages -->
+                <StackPanel Spacing="8" IsVisible="{Binding IsDriverPackageInstallSupported}">
+                    <TextBlock Text="{DynamicResource Settings_DriverPackages}" FontWeight="SemiBold"
+                               FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                    <TextBlock Text="{DynamicResource Settings_DriverPackagesHint}" FontSize="12" Opacity="0.7"
+                               TextWrapping="Wrap" Margin="0,0,0,4" />
+
+                    <ItemsControl ItemsSource="{Binding DriverPackages}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DriverPackageItemViewModel">
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,3">
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="{Binding NameText}" FontWeight="SemiBold" FontSize="13" />
+                                        <TextBlock Text="{Binding CoverageText}" FontSize="11" Opacity="0.75"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding DetailText}" FontSize="11" Opacity="0.6" />
+                                        <TextBlock Text="{Binding UnavailableText}" FontSize="11" Opacity="0.6"
+                                                   TextWrapping="Wrap" IsVisible="{Binding IsUnavailable}" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1"
+                                            Content="{DynamicResource Settings_DriverPackageInstall}"
+                                            Command="{Binding $parent[UserControl].DataContext.InstallDriverPackageCommand}"
+                                            CommandParameter="{Binding}" IsEnabled="{Binding CanOperate}" />
+                                    <Button Grid.Column="2"
+                                            Content="{DynamicResource Settings_DriverPackageRemove}"
+                                            Command="{Binding $parent[UserControl].DataContext.RemoveDriverPackageCommand}"
+                                            CommandParameter="{Binding}" IsEnabled="{Binding CanOperate}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="{Binding DriverPackageStatus}" FontSize="11" Opacity="0.7"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+
                 <!-- Section: Developers -->
                 <StackPanel Spacing="8">
                     <TextBlock Text="{DynamicResource Settings_Developers}" FontWeight="SemiBold" FontSize="16" />

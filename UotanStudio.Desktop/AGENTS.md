@@ -13,7 +13,8 @@
 
 ## 启动行为
 
-- `Main` 的分发顺序固定：`--managed-device-shell` → `--mcp-headless` → `--mcp` 伴随 → GUI。managed shell 失败写 stderr 并返回 1，其余模式返回 0。
+- `Main` 的分发顺序固定：USB 驱动提权助手（`--usb-driver-takeover`/`--usb-driver-release`/`--usb-driver-package-install`/`--usb-driver-package-uninstall`）→ `--managed-device-shell` → `--mcp-headless` → `--mcp` 伴随 → GUI。managed shell 失败写 stderr 并返回 1，其余模式返回 0。
+- 提权助手由宿主 `UsbDriverConfigService`/`DriverPackageService` 以 `runas` 重启同一个可执行文件时进入，参数由 `UotanStudio.Services.Devices.UsbDriverElevatedCommand` 解析：在 GUI 初始化之前执行设备接管、解除接管或厂商驱动包安装/移除，把结果写入 `--usb-driver-result` 指定的临时文件，成功返回 0、其余返回 1；不要在 GUI 侧复制这套参数解析或安装逻辑。
 - `--managed-device-shell` 只匹配恰好三个参数 `["--managed-device-shell", "Adb|Hdc", serial]`，不要插入额外开关；该入口只服务命令行用户，`WorkspacePanelService.CreateDeviceShellProfile` 不再启动本程序，而是返回不带可执行文件的标签配置，设备 shell 终端由宿主进程内的 `DeviceShellConnection` 复用自己的 ADB/HDC 会话。各启动阶段经标准输出报告，失败仍写标准错误并返回 1。
 - `--mcp` 伴随在 GUI 启动前 `Task.Run`，设备经 `DesktopDeviceManagerGateway`、签名经 `DeliveryKeyProvider`、审计经 `McpToolCallLog`；不要在 Desktop 复制工具实现。`--mcp-root`/`--allow-flash` 由 `UotanStudio.Mcp` 的 `McpServerConfig.Parse` 读取。
 - `--open-screen-mirror <serial>` 写入 `App.StartupScreenMirrorSerial`（`Array.IndexOf`，区分大小写且必须有后继参数）；文件参数只取 `File.Exists` 的路径，由宿主决定打开解决方案还是导入。不要从 `args` 删除参数，也不要在 `Program` 里做项目打开。

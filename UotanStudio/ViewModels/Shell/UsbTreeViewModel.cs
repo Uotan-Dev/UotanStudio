@@ -243,52 +243,56 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Installs the self-signed WinUSB driver package on the node's device. The node must offer driver
-    /// actions and no operation may be running on it; the install itself runs in the background and the
-    /// status bar reports the outcome, refreshing the tree on success.
-    /// <para>为该节点的设备安装自签名 WinUSB 驱动包。节点必须提供驱动操作且当前无进行中的操作；安装
-    /// 在后台执行，状态栏报告结果，成功后刷新树。</para>
+    /// Takes the node's device over with a freshly generated self-signed WinUSB package, which is the
+    /// prerequisite for opening MediaTek preloader, download-mode and other vendor-mode devices through
+    /// the WinUSB path. The node must offer the takeover action and no operation may be running on it;
+    /// the takeover runs in the background, the status bar reports the outcome and the tree refreshes on
+    /// success.
+    /// <para>用新生成的自签名 WinUSB 包接管该节点的设备，这是通过 WinUSB 路径打开联发科预加载器、下载模式
+    /// 及其他厂商模式设备的前提。节点必须提供接管操作且当前无进行中的操作；接管在后台执行，状态栏报告
+    /// 结果，成功后刷新树。</para>
     /// </summary>
-    /// <param name="node">The tree node to install the driver for.<para>要安装驱动的树节点。</para></param>
-    public async Task ConfigureDriverAsync(UsbTreeNodeViewModel node)
+    /// <param name="node">The tree node whose device is taken over.<para>要被接管设备的树节点。</para></param>
+    public async Task EnableTakeoverAsync(UsbTreeNodeViewModel node)
     {
         if (node is null || !node.ShowDriverAction || node.IsDriverBusy || _disposed ||
-            !OperatingSystem.IsWindows())
+            !OperatingSystem.IsWindows() || node.Node.HardwareIds.Count == 0)
         {
             return;
         }
 
         node.IsDriverBusy = true;
-        StatusText = Localized("UsbTree_DriverInstalling", node.DisplayText);
+        StatusText = Localized("UsbTree_TakeoverEnabling", node.DisplayText);
         try
         {
-            var request = new WinUsbDriverInstallRequest
+            var request = new WinUsbTakeoverRequest
             {
                 InstanceId = node.Node.InstanceId,
-                HardwareId = node.Node.HardwareIds[0],
-                DeviceName = node.DisplayText
+                HardwareId = node.Node.HardwareIds[0]
             };
-            var result = await Task.Run(() => _driverConfig.Install(request)).ConfigureAwait(true);
+            var result = await Task.Run(() => _driverConfig.InstallTakeover(request)).ConfigureAwait(true);
             switch (result.Status)
             {
                 case WinUsbDriverOperationStatus.Succeeded:
-                    StatusText = Localized("UsbTree_DriverInstallSucceeded", node.DisplayText);
+                    StatusText = Localized("UsbTree_TakeoverEnabled", node.DisplayText);
                     _ = RefreshAsync();
                     break;
                 case WinUsbDriverOperationStatus.ElevationRequired:
-                    StatusText = Localized("UsbTree_DriverElevationRequired");
+                    StatusText = Localized("UsbTree_TakeoverElevationRequired");
                     break;
                 default:
-                    StatusText = Localized("UsbTree_DriverOperationFailed",
-                        result.Message is { Length: > 0 } message ? message : result.Status.ToString());
+                    var detail = result.Message is { Length: > 0 } message ? message : result.Status.ToString();
+                    StatusText = Localized("UsbTree_TakeoverFailed", detail);
+                    LogService.Instance.Write(LogLevel.Error, "UsbTree",
+                        $"WinUSB takeover failed: {detail}");
                     break;
             }
         }
         catch (Exception ex)
         {
-            StatusText = Localized("UsbTree_DriverOperationFailed", ex.Message);
+            StatusText = Localized("UsbTree_TakeoverFailed", ex.Message);
             LogService.Instance.Write(LogLevel.Error, "UsbTree",
-                $"WinUSB driver install failed: {ex.Message}");
+                $"WinUSB takeover failed: {ex.Message}");
         }
         finally
         {
@@ -297,15 +301,15 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Removes the WinUSB driver package this app installed from the node's device, letting the device
-    /// fall back to the system default driver. The node must offer driver actions and no operation may
-    /// be running on it; the uninstall runs in the background and the status bar reports the outcome,
-    /// refreshing the tree on success.
-    /// <para>卸载本应用为该节点设备安装的 WinUSB 驱动包，让设备回退系统默认驱动。节点必须提供驱动
-    /// 操作且当前无进行中的操作；卸载在后台执行，状态栏报告结果，成功后刷新树。</para>
+    /// Ends the takeover of the node's device: the self-signed package and its certificate are deleted and
+    /// the device falls back to a system driver. The node must offer the takeover action and no operation
+    /// may be running on it; the removal runs in the background, the status bar reports the outcome and
+    /// the tree refreshes on success.
+    /// <para>结束该节点设备的接管：删除自签名包与其证书，设备回退系统驱动。节点必须提供接管操作且当前无
+    /// 进行中的操作；移除在后台执行，状态栏报告结果，成功后刷新树。</para>
     /// </summary>
-    /// <param name="node">The tree node to uninstall the driver from.<para>要卸载驱动的树节点。</para></param>
-    public async Task UninstallDriverAsync(UsbTreeNodeViewModel node)
+    /// <param name="node">The tree node whose takeover ends.<para>要结束接管的树节点。</para></param>
+    public async Task CancelTakeoverAsync(UsbTreeNodeViewModel node)
     {
         if (node is null || !node.ShowDriverAction || node.IsDriverBusy || _disposed ||
             !OperatingSystem.IsWindows())
@@ -314,31 +318,33 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         }
 
         node.IsDriverBusy = true;
-        StatusText = Localized("UsbTree_DriverUninstalling", node.DisplayText);
+        StatusText = Localized("UsbTree_TakeoverDisabling", node.DisplayText);
         try
         {
-            var result = await Task.Run(() => _driverConfig.Uninstall(node.Node.InstanceId))
+            var result = await Task.Run(() => _driverConfig.UninstallTakeover(node.Node.InstanceId))
                 .ConfigureAwait(true);
             switch (result.Status)
             {
                 case WinUsbDriverOperationStatus.Succeeded:
-                    StatusText = Localized("UsbTree_DriverUninstallSucceeded", node.DisplayText);
+                    StatusText = Localized("UsbTree_TakeoverDisabled", node.DisplayText);
                     _ = RefreshAsync();
                     break;
                 case WinUsbDriverOperationStatus.ElevationRequired:
-                    StatusText = Localized("UsbTree_DriverElevationRequired");
+                    StatusText = Localized("UsbTree_TakeoverElevationRequired");
                     break;
                 default:
-                    StatusText = Localized("UsbTree_DriverOperationFailed",
-                        result.Message is { Length: > 0 } message ? message : result.Status.ToString());
+                    var detail = result.Message is { Length: > 0 } message ? message : result.Status.ToString();
+                    StatusText = Localized("UsbTree_TakeoverFailed", detail);
+                    LogService.Instance.Write(LogLevel.Error, "UsbTree",
+                        $"Ending the WinUSB takeover failed: {detail}");
                     break;
             }
         }
         catch (Exception ex)
         {
-            StatusText = Localized("UsbTree_DriverOperationFailed", ex.Message);
+            StatusText = Localized("UsbTree_TakeoverFailed", ex.Message);
             LogService.Instance.Write(LogLevel.Error, "UsbTree",
-                $"WinUSB driver uninstall failed: {ex.Message}");
+                $"Ending the WinUSB takeover failed: {ex.Message}");
         }
         finally
         {
@@ -581,12 +587,11 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
         }
 
         var node = new UsbTreeNodeViewModel(branch.Node, capabilities, children, depth,
-            ConfigureDriverAsync, UninstallDriverAsync);
+            EnableTakeoverAsync, CancelTakeoverAsync);
         node.ShowDriverAction = _driverConfig.IsSupported &&
             capabilities.Backend == UsbTopologyBackendKind.WindowsPnp &&
             branch.Node.Kind is UsbTopologyNodeKind.Device or UsbTopologyNodeKind.Function &&
-            branch.Node.HardwareIds.Count > 0 &&
-            branch.Node.Protocol is { Length: > 0 };
+            branch.Node.HardwareIds.Count > 0;
         if (_expandedById.TryGetValue(branch.Node.InstanceId, out var expanded))
         {
             node.IsExpanded = expanded;
@@ -623,10 +628,10 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
                     return;
                 }
 
-                var managedByHost = false;
+                var takenOver = false;
                 try
                 {
-                    managedByHost = _driverConfig.QueryState(driverNode.Node.InstanceId).IsManagedByHost;
+                    takenOver = _driverConfig.QueryState(driverNode.Node.InstanceId).IsTakeoverBinding;
                 }
                 catch (Exception ex)
                 {
@@ -647,7 +652,7 @@ public sealed partial class UsbTreeViewModel : ViewModelBase, IDisposable
                 {
                     if (!_disposed && !driverNode.IsDriverBusy)
                     {
-                        driverNode.IsDriverManaged = managedByHost;
+                        driverNode.IsTakenOver = takenOver;
                     }
                 });
             }

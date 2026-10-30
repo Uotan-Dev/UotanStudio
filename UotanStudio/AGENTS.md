@@ -11,6 +11,8 @@
 - 跨 VM/View 通知走 `WeakReferenceMessenger` + `Messages/` 记录；App 注册，退出时 `UnregisterAll`。`async void` 只用于消息处理，并经 `RunMainRequestAsync` 记录异常。`AppFeatures.AiAssistantEnabled` 恒为 `false`，不要启用或删除占位。
 - 容器入口：`App.Initialize` 用 `ServiceRegistration.Register` + `ServiceRegistration.BuildProvider` 建立 `Microsoft.Extensions.DependencyInjection` 容器，并交给 `ServiceHub` 保存；`App.Services` 暴露该容器，容器未建立时为 null。所有注册必须使用显式工厂，禁止反射式 DI、程序集扫描、`ActivatorUtilities` 与无工厂的 `AddSingleton<T>()`；这是裁剪与 NativeAOT 的注册契约，发布验证仍按根 `AGENTS.md` 的命令执行。
 - 静态门面统一“容器优先、测试回退”：`LanguageService.Instance`、`LogService.Instance`、`ProjectOperationsService.Instance`、`SettingsPersistenceService.Instance` 先查 `ServiceHub`，容器未初始化或正在构建该注册时返回惰性默认实例；不启动容器的测试可直接运行，注册工厂不会递归。
+- USB 树的「启用接管」与设置页的厂商驱动安装都以管理员令牌执行：`Services/Devices/UsbDriverConfigService` 与 `Services/Devices/DriverPackageService` 在未提权时用 `runas` 重启自身进入 `--usb-driver-takeover`/`--usb-driver-release`/`--usb-driver-package-install`/`--usb-driver-package-uninstall` 助手模式（参数与结果文件格式见 `UsbDriverElevatedCommand`），等待子进程并读回状态；UAC 被取消或宿主无法重启自身时返回 `ElevationRequired`，界面沿用原有提示。
+- USB 树只做接管，厂商驱动包只在设置页安装：接管走 Comm 的自签 WinUSB 包（设备级 INF、目录签名、证书写入 `LocalMachine` 的 Root 与 TrustedPublisher），宿主不生成证书也不持有私钥；取消接管按绑定的 provider 校验后卸载包并删除证书。任何一侧都不要复用另一侧的提权入口。
 - `ShellComposition.CreateAsync` 在 `App.Services` 可用时从容器解析 `MenuViewModel`/`NodeEditorViewModel`/`SettingsViewModel`/`WorkspaceViewModel`，容器不可用时按手工构造装配；`ShellComposition.Create(ProjectOperationsService)` 仍按传入服务显式装配，供测试与基准使用。
 
 ## 分层与依赖

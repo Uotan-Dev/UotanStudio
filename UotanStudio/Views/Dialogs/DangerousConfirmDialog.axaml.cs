@@ -7,11 +7,21 @@ namespace UotanStudio.Views.Dialogs;
 /// <summary>
 /// Dangerous operation confirmation dialog: the "Proceed" button only enables when the
 /// irreversibility acknowledgement is ticked and the typed token matches the confirm word.
-/// <para>危险操作二次确认对话框：勾选不可逆确认且输入匹配口令时「继续」按钮才可点。</para>
+/// The token input box stays disabled until the acknowledgement is ticked.
+/// <para>危险操作二次确认对话框：勾选不可逆确认且输入匹配口令时「继续」按钮才可点；口令输入框在勾选前处于禁用状态。</para>
 /// </summary>
 internal sealed partial class DangerousConfirmDialog : Window
 {
     private string _confirmWord = string.Empty;
+
+    /// <summary>
+    /// <para>加载对话框的 XAML 内容。</para>
+    /// <para>Loads the dialog XAML content.</para>
+    /// </summary>
+    internal DangerousConfirmDialog()
+    {
+        InitializeComponent();
+    }
 
     /// <summary>
     /// <para>用户是否点击了「继续」按钮（Enter 键走 IsDefault 路径，同样计入）。</para>
@@ -67,6 +77,7 @@ internal sealed partial class DangerousConfirmDialog : Window
 
     private void UpdateConfirmEnabled()
     {
+        ConfirmWordBox.IsEnabled = AckCheckBox.IsChecked == true;
         var typed = ConfirmWordBox.Text ?? string.Empty;
         ConfirmButton.IsEnabled = DialogService.ShouldEnableConfirm(AckCheckBox.IsChecked == true, typed, _confirmWord);
     }

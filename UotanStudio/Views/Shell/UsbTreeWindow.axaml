@@ -136,12 +136,12 @@
                   <Border Grid.Column="2" Classes="protocol-badge" IsVisible="{Binding HasProtocol}">
                     <TextBlock Classes="protocol-badge" Text="{Binding ProtocolText}" />
                   </Border>
-                  <Button Grid.Column="3" Classes="node-action" Click="OnConfigureDriverClick"
-                          Content="{DynamicResource UsbTree_ConfigureDriver}"
-                          IsVisible="{Binding CanInstallDriver}" IsEnabled="{Binding !IsDriverBusy}" />
-                  <Button Grid.Column="3" Classes="node-action" Click="OnUninstallDriverClick"
-                          Content="{DynamicResource UsbTree_UninstallDriver}"
-                          IsVisible="{Binding CanUninstallDriver}" IsEnabled="{Binding !IsDriverBusy}" />
+                  <Button Grid.Column="3" Classes="node-action" Click="OnEnableTakeoverClick"
+                          Content="{DynamicResource UsbTree_EnableTakeover}"
+                          IsVisible="{Binding CanEnableTakeover}" IsEnabled="{Binding !IsDriverBusy}" />
+                  <Button Grid.Column="3" Classes="node-action" Click="OnCancelTakeoverClick"
+                          Content="{DynamicResource UsbTree_CancelTakeover}"
+                          IsVisible="{Binding CanCancelTakeover}" IsEnabled="{Binding !IsDriverBusy}" />
                 </Grid>
                 <TextBlock Classes="node-meta" Text="{Binding DiagnosticsText}"
                            IsVisible="{Binding HasDiagnostics}" />

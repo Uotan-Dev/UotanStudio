@@ -15,16 +15,24 @@ sealed class Program
     /// <para>进程入口，分发启动模式。</para>
     /// </summary>
     /// <param name="args">
-    /// Launch arguments; an empty array starts the desktop application, other switches select headless modes.
-    /// <para>启动参数；空数组启动桌面应用，其他开关选择无头模式。</para>
+    /// Launch arguments; an empty array starts the desktop application, other switches select headless
+    /// modes or the elevated USB driver helper.
+    /// <para>启动参数；空数组启动桌面应用，其他开关选择无头模式或提权 USB 驱动助手。</para>
     /// </param>
     /// <returns>
-    /// 0 when the selected mode finishes or is cancelled, and 1 when a managed device-shell request fails.
-    /// <para>所选模式正常结束或被取消时返回 0；托管设备 shell 请求失败时返回 1。</para>
+    /// 0 when the selected mode finishes or is cancelled, the driver helper status when it runs, and 1
+    /// when a managed device-shell request fails.
+    /// <para>所选模式正常结束或被取消时返回 0；驱动助手运行时返回其状态码；托管设备 shell 请求失败时
+    /// 返回 1。</para>
     /// </returns>
     [STAThread]
     public static int Main(string[] args)
     {
+        if (Services.Devices.UsbDriverElevatedCommand.IsRequested(args))
+        {
+            return Services.Devices.UsbDriverElevatedCommand.Run(args);
+        }
+
         var settings = Services.SettingsPersistenceService.Instance.LoadSettings();
         Comm.DeviceCommunicationConfiguration.Current = settings.DeviceCommunication;
 

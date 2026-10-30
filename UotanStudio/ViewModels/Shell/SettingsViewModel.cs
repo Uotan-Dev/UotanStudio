@@ -1,11 +1,14 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Comm.Transports.Usb.Drivers;
 using UotanStudio.Mcp;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
+using UotanStudio.Services.Devices;
 using UotanStudio.Services.Mcp;
 using UotanStudio.Services.Ui;
 
@@ -24,6 +27,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     public AiSettingsViewModel Ai { get; } = new();
 
     private AppSettings _appSettings;
+
+    private readonly IDriverPackageService _driverPackages;
 
     private readonly LocalizedOptionSet _usbBackendOptions =
         new("Settings_UsbAuto", "Settings_UsbNative", "Settings_UsbLibusb");
@@ -697,9 +702,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     {
     }
 
-    internal SettingsViewModel(AppSettings settings, bool applyLanguage)
+    internal SettingsViewModel(AppSettings settings, bool applyLanguage,
+        IDriverPackageService? driverPackages = null)
     {
         _appSettings = settings;
+        _driverPackages = driverPackages ?? DriverPackageService.Default;
 
         _renderingPlatform = RenderingRuntimeProbe.DetectWindowingPlatform();
         _renderingBackends = [.. RenderingPreferenceCatalog.SupportedBackends(_renderingPlatform)];
@@ -710,6 +717,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         Languages = new ObservableCollection<LanguageInfo>(LanguageService.Instance.AvailableLanguages);
 
         InitializeFromAppSettings(_appSettings, applyLanguage);
+        LoadDriverPackages();
 
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
     }
@@ -839,6 +847,145 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         }
 
         SaveSettings();
+    }
+
+    /// <summary>
+    /// Gets the vendor driver packages the settings page stages into the Windows driver store.
+    /// <para>获取设置页暂存到 Windows 驱动仓库的厂商驱动包。</para>
+    /// </summary>
+    /// <value>The package rows in catalog order; empty outside Windows.
+    /// <para>按目录顺序排列的驱动包行；非 Windows 下为空。</para></value>
+    public ObservableCollection<DriverPackageItemViewModel> DriverPackages { get; } = [];
+
+    /// <summary>
+    /// Gets or sets the status line of the driver installation section.
+    /// <para>获取或设置驱动安装分区的状态行。</para>
+    /// </summary>
+    public string DriverPackageStatus
+    {
+        get;
+        set => SetProperty(ref field, value);
+    } = string.Empty;
+
+    /// <summary>
+    /// Gets whether this environment can install vendor driver packages, which requires Windows.
+    /// <para>获取当前环境是否可安装厂商驱动包；仅 Windows 支持。</para>
+    /// </summary>
+    /// <value><see langword="true"/> only on Windows.<para>仅在 Windows 上为 <see langword="true"/>。</para></value>
+    public bool IsDriverPackageInstallSupported => OperatingSystem.IsWindows() && _driverPackages.IsSupported;
+
+    [RelayCommand]
+    private Task InstallDriverPackageAsync(DriverPackageItemViewModel? item)
+        => RunDriverPackageOperationAsync(item, install: true);
+
+    [RelayCommand]
+    private Task RemoveDriverPackageAsync(DriverPackageItemViewModel? item)
+        => RunDriverPackageOperationAsync(item, install: false);
+
+    /// <summary>
+    /// Stages or removes one vendor driver package on a background thread and reports the outcome in the
+    /// section status line; the row stays busy and disabled until the elevated operation returns.
+    /// <para>在后台线程暂存或移除一个厂商驱动包，并把结果写入该分区状态行；提权操作返回前该行保持忙碌与禁用。</para>
+    /// </summary>
+    /// <param name="item">The package row.<para>驱动包行。</para></param>
+    /// <param name="install">Whether to stage the package instead of removing it.
+    /// <para>是暂存驱动包还是移除它。</para></param>
+    /// <returns>A task that completes after the operation settles.<para>操作结束后完成的任务。</para></returns>
+    private async Task RunDriverPackageOperationAsync(DriverPackageItemViewModel? item, bool install)
+    {
+        if (item is null || item.IsBusy || !item.IsAvailable || !IsDriverPackageInstallSupported
+            || !OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        item.IsBusy = true;
+        DriverPackageStatus = LanguageService.Instance.GetString(
+            install ? "Settings_DriverPackageInstalling" : "Settings_DriverPackageRemoving", item.NameText);
+        try
+        {
+            var result = await Task.Run(() => install
+                ? _driverPackages.Install(item.Id)
+                : _driverPackages.Uninstall(item.Id)).ConfigureAwait(true);
+            switch (result.Status)
+            {
+                case WinUsbDriverOperationStatus.Succeeded:
+                    DriverPackageStatus = LanguageService.Instance.GetString(
+                        install ? "Settings_DriverPackageInstalled" : "Settings_DriverPackageRemoved",
+                        item.NameText);
+                    LoadDriverPackages();
+                    break;
+                case WinUsbDriverOperationStatus.ElevationRequired:
+                    DriverPackageStatus = LanguageService.Instance.GetString(
+                        "Settings_DriverPackageElevationRequired");
+                    break;
+                default:
+                    var detail = result.Message is { Length: > 0 } message ? message : result.Status.ToString();
+                    DriverPackageStatus = LanguageService.Instance.GetString("Settings_DriverPackageFailed", detail);
+                    LogService.Instance.Write(LogLevel.Error, "Settings",
+                        "Vendor driver package operation failed: " + item.Id + ": " + detail);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            DriverPackageStatus = LanguageService.Instance.GetString("Settings_DriverPackageFailed", ex.Message);
+            LogService.Instance.Write(LogLevel.Error, "Settings",
+                "Vendor driver package operation failed: " + item.Id + ": " + ex.Message);
+        }
+        finally
+        {
+            item.IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the driver package rows from the catalog so availability and sizes follow the current
+    /// build and platform.
+    /// <para>从目录重建驱动包行，使可用性与体积跟随当前构建与平台。</para>
+    /// </summary>
+    private void LoadDriverPackages()
+    {
+        DriverPackages.Clear();
+        if (!IsDriverPackageInstallSupported)
+        {
+            return;
+        }
+
+        foreach (var package in _driverPackages.Packages)
+        {
+            var detail = LanguageService.Instance.GetString("Settings_DriverPackageDetail",
+                package.InfFileNames.Count.ToString(CultureInfo.CurrentCulture),
+                (package.TotalBytes / 1024d / 1024d).ToString("0.0", CultureInfo.CurrentCulture));
+            DriverPackages.Add(new DriverPackageItemViewModel(package.Id,
+                LanguageService.Instance.GetString(package.NameKey),
+                LanguageService.Instance.GetString(package.VendorNameKey), detail, package.IsAvailable,
+                ResolveUnavailableText(package)));
+        }
+    }
+
+    /// <summary>
+    /// Maps the Comm reason suffix of a package this build does not carry to the localized reason the row
+    /// states, falling back to the generic missing-payload text for unknown suffixes.
+    /// <para>把本构建未携带的包的 Comm 原因后缀映射为该行显示的本地化原因，未知后缀回退到通用的缺包文本。</para>
+    /// </summary>
+    /// <param name="package">The package entry.<para>驱动包条目。</para></param>
+    /// <returns>The reason text, or an empty string for an available package.
+    /// <para>原因文本；包可用时为空字符串。</para></returns>
+    private static string ResolveUnavailableText(DriverPackageEntry package)
+    {
+        if (package.IsAvailable)
+        {
+            return string.Empty;
+        }
+
+        var key = package.UnavailableReasonKey switch
+        {
+            "SelfExtractorOnly" => "Settings_DriverPackageReason_SelfExtractorOnly",
+            "LicenseAndSize" => "Settings_DriverPackageReason_LicenseAndSize",
+            _ => "Settings_DriverPackageUnavailable",
+        };
+        return LanguageService.Instance.GetString(key);
     }
 
     /// <summary>

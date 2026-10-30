@@ -93,11 +93,11 @@ public partial class UsbTreeWindow : Window
     }
 
     /// <summary>
-    /// Asks for the dangerous-operation confirmation and, when confirmed, installs the self-signed
-    /// WinUSB driver package on the clicked row's device.
-    /// <para>弹出危险操作确认,确认后为点击行对应的设备安装自签名 WinUSB 驱动包。</para>
+    /// Asks for the dangerous-operation confirmation and, when confirmed, takes the clicked row's device
+    /// over with a self-signed WinUSB package.
+    /// <para>弹出危险操作确认,确认后用自签名 WinUSB 包接管点击行对应的设备。</para>
     /// </summary>
-    private async void OnConfigureDriverClick(object? sender, RoutedEventArgs e)
+    private async void OnEnableTakeoverClick(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is not UsbTreeNodeViewModel node)
         {
@@ -108,8 +108,8 @@ public partial class UsbTreeWindow : Window
         var confirmed = await DialogService.ConfirmDangerousAsync(this, new DangerousConfirmRequest
         {
             TabTitle = language.GetString("Menu_UsbTreeWindow"),
-            Title = language.GetString("UsbTree_DriverInstallTitle"),
-            Detail = language.GetString("UsbTree_DriverInstallDetail", node.DisplayText),
+            Title = language.GetString("UsbTree_TakeoverConfirmTitle"),
+            Detail = language.GetString("UsbTree_TakeoverConfirmDetail", node.DisplayText),
             DeviceIdentifier = node.Node.InstanceId
         });
         if (!confirmed)
@@ -117,15 +117,15 @@ public partial class UsbTreeWindow : Window
             return;
         }
 
-        _ = _model.ConfigureDriverAsync(node);
+        _ = _model.EnableTakeoverAsync(node);
     }
 
     /// <summary>
-    /// Asks for the dangerous-operation confirmation and, when confirmed, removes the WinUSB driver
-    /// package installed by this app from the clicked row's device.
-    /// <para>弹出危险操作确认,确认后卸载本应用为点击行对应设备安装的 WinUSB 驱动包。</para>
+    /// Asks for the dangerous-operation confirmation and, when confirmed, ends the takeover of the clicked
+    /// row's device by removing the self-signed package and its certificate.
+    /// <para>弹出危险操作确认,确认后移除自签名包与证书,结束点击行对应设备的接管。</para>
     /// </summary>
-    private async void OnUninstallDriverClick(object? sender, RoutedEventArgs e)
+    private async void OnCancelTakeoverClick(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is not UsbTreeNodeViewModel node)
         {
@@ -136,8 +136,8 @@ public partial class UsbTreeWindow : Window
         var confirmed = await DialogService.ConfirmDangerousAsync(this, new DangerousConfirmRequest
         {
             TabTitle = language.GetString("Menu_UsbTreeWindow"),
-            Title = language.GetString("UsbTree_DriverUninstallTitle"),
-            Detail = language.GetString("UsbTree_DriverUninstallDetail", node.DisplayText),
+            Title = language.GetString("UsbTree_TakeoverCancelTitle"),
+            Detail = language.GetString("UsbTree_TakeoverCancelDetail", node.DisplayText),
             DeviceIdentifier = node.Node.InstanceId
         });
         if (!confirmed)
@@ -145,6 +145,6 @@ public partial class UsbTreeWindow : Window
             return;
         }
 
-        _ = _model.UninstallDriverAsync(node);
+        _ = _model.CancelTakeoverAsync(node);
     }
 }

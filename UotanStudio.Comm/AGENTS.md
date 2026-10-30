@@ -19,6 +19,14 @@
 - `Native/LibUsb` 按 RID 随包提供，`SHA256SUMS` 记录来源；`COPYING` 以 `libusb-LICENSE.txt` 复制。缺少当前 RID 的二进制只警告并禁用 libusb，除非通过 `CommKit.SetLibusbLibraryPath` / `LibUsbRuntime.SetLibraryPath` 显式注册绝对路径。插入 Comm 与宿主之间的引用项目必须保留 RID 传递。
 - Comm 不启动或调用 adb/hdc 可执行文件；server 存活只做 TCP 探测。HDC 关闭优先走 `HdcServerClient.KillAsync` 的 host-channel `kill`；仅当 greeting 未宣告 `CMD_SERVER_KILL` 时，允许读取 pid 文件并在校验进程名与可执行路径后终止该单个进程。
 
+## Windows 驱动与 WinUSB 接管
+
+- `Transports/Usb/Drivers/` 是全部 Windows 驱动逻辑的唯一位置：`WinUsbDriverInstaller` 只做设备接管（`QueryState`/`InstallTakeover`/`UninstallTakeover`），`WinUsbSelfSignedDriverPackage` 生成设备级 INF、自签代码签名证书、目录（catalog）签名并把证书写入本机 `Root` 与 `TrustedPublisher`，`WinUsbTakeoverNativeMethods` 保存 crypt32/advapi32/wintrust/mssign32 的 P/Invoke。厂商驱动包由 `DriverPackageCatalog`（只带本地化 key 后缀）、`DriverPackageAssets`（唯一接触内嵌资源的地方）、`DriverPackageInfReader` 与 `DriverPackageInstaller` 组成。
+- 接管失败必须如实报错：取消接管先读回设备绑定，绑定的 provider 不是 `UotanStudio` 时拒绝删除并报失败；厂商包卸载只遍历 `%SystemRoot%\inf\oem*.inf` 并按 provider 与服务商 catalog 双匹配，同一 catalog 但 provider 不同时同样拒绝。删除成功后固定移除暂存包与接管证书，不做“留着下次用”的优化。
+- 暂存走 `SetupCopyOEMInfW(SPOST_PATH)`，绑定只对 `CM_Get_Device_ID_ListW`（filter `USB`、`CM_GETIDLIST_FILTER_PRESENT`）返回且 `CM_Get_DevNode_Status` 报 `CM_PROB_FAILED_INSTALL` 的在位节点调 `CM_Reenumerate_DevNode(RETRY_INSTALLATION)`，节点数有上限。禁止在 UI 触达的路径上调用 `UpdateDriverForPlugAndPlayDevices`/`DiInstallDriverW`，它们会长时间阻塞枚举。
+- 驱动包负载是 `UotanStudio.Assets` 的 `drivers/<packageId>` 资源包，本库经 `AssetStore` 读取，自己不内嵌任何程序集资源。资源路径只能是纯文件名，所以包内目录用 `__` 编码（`x64__usb2ser.sys` 代表 `x64/usb2ser.sys`），`DriverPackageAssets` 物化时还原目录，因为暂存要求原始布局。换包或换源后跑 `dotnet run tools/compress-embedded-assets.cs` 重生成帧与清单，来源与排除规则见 `reference/driver-pkg/README.md`。
+- 只内置可独立暂存的 INF/CAT/SYS/DLL：`wch-serial`（只有 EXE 自解压安装器）与 `huawei-hisuite`（许可与体积）不内置，只以 `UnavailableReasonKey`（`SelfExtractorOnly`/`LicenseAndSize`）在目录中列出，安装入口对它们直接失败。
+
 ## 危险操作
 
 - EDL `FlashBundleOptions.WipeConfirmation` 必须携带精确短语 `WIPE`，整存储擦除还需要 `AllowEntireStorageWipe`；两道门都在生成命令文档之前拒绝，设备零写入。

@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security;
 using System.Security.Principal;
-using System.Text;
 
 namespace UotanStudio.Comm.Transports.Usb.Drivers;
 
@@ -20,14 +19,14 @@ public sealed record WinUsbDriverState
     public required bool DevicePresent { get; init; }
 
     /// <summary>
-    /// The kernel service name of the bound driver, for example <c>winusb</c>.
-    /// <para>已绑定驱动的内核服务名,例如 <c>winusb</c>。</para>
+    /// The kernel service name of the bound driver, for example <c>Rockusb</c>.
+    /// <para>已绑定驱动的内核服务名，例如 <c>Rockusb</c>。</para>
     /// </summary>
     public string? DriverService { get; init; }
 
     /// <summary>
     /// The driver INF name backing the device, for example <c>oem42.inf</c>.
-    /// <para>设备使用的驱动 INF 名,例如 <c>oem42.inf</c>。</para>
+    /// <para>设备使用的驱动 INF 名，例如 <c>oem42.inf</c>。</para>
     /// </summary>
     public string? DriverInfPath { get; init; }
 
@@ -38,51 +37,39 @@ public sealed record WinUsbDriverState
     public string? DriverProvider { get; init; }
 
     /// <summary>
-    /// Whether the bound driver package was installed by this application, which is the case when
-    /// the service is <c>winusb</c> and the provider is <c>UotanStudio</c>.
-    /// <para>当前驱动包是否由本应用安装:服务为 <c>winusb</c> 且提供者为 <c>UotanStudio</c> 时成立。</para>
+    /// Whether the bound driver is the self-signed WinUSB package this application installed for device
+    /// takeover, which is the case when the kernel service is <c>WinUSB</c> and the provider matches
+    /// <see cref="WinUsbSelfSignedDriverPackage.ProviderName"/>.
+    /// <para>当前绑定是否为本应用为设备接管安装的自签名 WinUSB 包：内核服务为 <c>WinUSB</c> 且提供者与
+    /// <see cref="WinUsbSelfSignedDriverPackage.ProviderName"/> 相符时成立。</para>
     /// </summary>
-    public required bool IsManagedByHost { get; init; }
+    public bool IsTakeoverBinding { get; init; }
 }
 
 /// <summary>
-/// The parameters of one WinUSB driver install.
-/// <para>一次 WinUSB 驱动安装的参数。</para>
+/// The parameters of one device takeover: the device to bind and the hardware id the generated INF
+/// matches.
+/// <para>一次设备接管的参数：要绑定的设备，以及生成 INF 所匹配的硬件 ID。</para>
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed record WinUsbDriverInstallRequest
+public sealed record WinUsbTakeoverRequest
 {
     /// <summary>
-    /// The device instance id, for example <c>USB\VID_18D1&amp;PID_4EE7&amp;MI_01\6&amp;2d3f...</c>.
-    /// <para>设备实例 ID,例如 <c>USB\VID_18D1&amp;PID_4EE7&amp;MI_01\6&amp;2d3f...</c>。</para>
+    /// The device instance id, for example <c>USB\VID_0E8D&amp;PID_2000\5&amp;1A2B3C4D&amp;0&amp;1</c>.
+    /// <para>设备实例 ID，例如 <c>USB\VID_0E8D&amp;PID_2000\5&amp;1A2B3C4D&amp;0&amp;1</c>。</para>
     /// </summary>
     public required string InstanceId { get; init; }
 
     /// <summary>
-    /// The hardware id the INF matches, for example <c>USB\VID_18D1&amp;PID_4EE7&amp;MI_01</c>.
-    /// <para>INF 匹配用硬件 ID,例如 <c>USB\VID_18D1&amp;PID_4EE7&amp;MI_01</c>。</para>
+    /// The hardware id the generated INF matches, for example <c>USB\VID_0E8D&amp;PID_2000</c>.
+    /// <para>生成 INF 匹配的硬件 ID，例如 <c>USB\VID_0E8D&amp;PID_2000</c>。</para>
     /// </summary>
     public required string HardwareId { get; init; }
-
-    /// <summary>
-    /// The device display name written into the INF strings; line breaks are removed and the text
-    /// is truncated.
-    /// <para>写入 INF 字符串段的设备显示名;换行会被移除并做截断。</para>
-    /// </summary>
-    public required string DeviceName { get; init; }
-
-    /// <summary>
-    /// Optional device interface class GUID override; when omitted
-    /// <see cref="WinUsbDriverInstaller.DefaultInterfaceGuid"/> is used.
-    /// <para>可选的设备接口类 GUID 覆盖;省略时使用
-    /// <see cref="WinUsbDriverInstaller.DefaultInterfaceGuid"/>。</para>
-    /// </summary>
-    public Guid? DeviceInterfaceGuid { get; init; }
 }
 
 /// <summary>
-/// The outcome of a WinUSB driver operation.
-/// <para>WinUSB 驱动操作的结果状态。</para>
+/// The outcome of a driver operation.
+/// <para>驱动操作的结果状态。</para>
 /// </summary>
 public enum WinUsbDriverOperationStatus
 {
@@ -95,13 +82,13 @@ public enum WinUsbDriverOperationStatus
     /// <summary>The target device instance was not found. <para>目标设备实例未找到。</para></summary>
     DeviceNotFound,
 
-    /// <summary>The operation failed; see the message. <para>操作失败;详见消息。</para></summary>
+    /// <summary>The operation failed; see the message. <para>操作失败；详见消息。</para></summary>
     Failed
 }
 
 /// <summary>
-/// The result of one WinUSB driver operation: a status plus an optional human-readable message.
-/// <para>一次 WinUSB 驱动操作的结果:状态加可选的可读消息。</para>
+/// The result of one driver operation: a status plus an optional human-readable message.
+/// <para>一次驱动操作的结果：状态加可选的可读消息。</para>
 /// </summary>
 /// <param name="Status">The operation outcome. <para>操作结果。</para></param>
 /// <param name="Message">Optional detail or failure reason. <para>可选的细节或失败原因。</para></param>
@@ -109,34 +96,29 @@ public enum WinUsbDriverOperationStatus
 public sealed record WinUsbDriverOperationResult(WinUsbDriverOperationStatus Status, string? Message = null);
 
 /// <summary>
-/// Installs and removes a self-signed WinUSB driver package for matching USB devices. The install
-/// path creates a self-signed code-signing certificate, publishes it to the LocalMachine Root and
-/// TrustedPublisher stores, builds and signs a WinUSB catalog, and binds the package to the device
-/// with <c>DiInstallDriver</c>; the uninstall path removes only packages this application
-/// installed and lets the device fall back to the system default driver. Both mutating operations
+/// Takes over a device by staging a generated self-signed WinUSB package and asking PnP to bind it, and
+/// releases that binding again. Every other vendor driver package, including the Rockchip DriverAssistant
+/// package, is installed and removed through <see cref="DriverPackageInstaller"/>. Both mutating operations
 /// require an administrator token, never throw, and report failures through
 /// <see cref="WinUsbDriverOperationResult"/>.
-/// <para>为匹配的 USB 设备安装与卸载自签名 WinUSB 驱动包。安装路径创建自签代码签名证书、发布到
-/// LocalMachine 的 Root 与 TrustedPublisher 存储、构建并签名 WinUSB 目录,再用
-/// <c>DiInstallDriver</c> 把驱动包绑定到设备;卸载路径只移除本应用安装的驱动包,让设备回退系统
-/// 默认驱动。两个变更操作都需要管理员令牌,绝不抛出,失败经
-/// <see cref="WinUsbDriverOperationResult"/> 返回。</para>
+/// <para>通过暂存生成的自签名 WinUSB 包并请求 PnP 绑定来接管设备，并在之后释放该绑定。其余厂商驱动包（含
+/// 瑞芯微 DriverAssistant 包）的安装与卸载由 <see cref="DriverPackageInstaller"/> 负责。两个变更操作都需要
+/// 管理员令牌，绝不抛出，失败经 <see cref="WinUsbDriverOperationResult"/> 返回。</para>
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class WinUsbDriverInstaller
 {
-    private const string InfFileName = "uotanstudio_winusb.inf";
-    private const string HostProvider = "UotanStudio";
-    private const string WinUsbService = "winusb";
+    /// <summary>The kernel service name of the in-box WinUSB driver the takeover package binds.
+    /// <para>接管包所绑定的系统内置 WinUSB 驱动内核服务名。</para></summary>
+    private const string WinUsbService = "WinUSB";
 
-    /// <summary>
-    /// The default WinUSB device interface class GUID registered by generated INF files when the
-    /// request does not override one. It is a fixed WinUSB device interface class GUID: interface
-    /// enumeration and WinUSB session openers filter device interfaces by this class.
-    /// <para>请求未提供覆盖时,生成的 INF 注册的默认 WinUSB 设备接口类 GUID。它是一个固定的
-    /// WinUSB 设备接口类 GUID:接口枚举与 WinUSB 会话开启方按此类过滤设备接口。</para>
-    /// </summary>
-    public static readonly Guid DefaultInterfaceGuid = new("03adffdb-d865-4370-b81a-4bf800371253");
+    /// <summary>The upper bound the takeover install waits for the observed binding to switch.
+    /// <para>接管安装等待观测绑定切换的上界。</para></summary>
+    private static readonly TimeSpan BindingWaitTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>The interval between two binding observations during takeover.
+    /// <para>接管期间两次绑定观测之间的间隔。</para></summary>
+    private static readonly TimeSpan BindingPollInterval = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
     /// Gets whether this platform supports the installer; always <see langword="true"/> on Windows.
@@ -171,13 +153,13 @@ public sealed class WinUsbDriverInstaller
 
     /// <summary>
     /// Reads the current driver binding of a device instance without changing anything.
-    /// <para>读取一个设备实例当前的驱动绑定,不做任何变更。</para>
+    /// <para>读取一个设备实例当前的驱动绑定，不做任何变更。</para>
     /// </summary>
     /// <param name="instanceId">The device instance id. <para>设备实例 ID。</para></param>
     /// <returns>
     /// The observed state; a device that cannot be located reports
     /// <see cref="WinUsbDriverState.DevicePresent"/> as <see langword="false"/> with null fields.
-    /// <para>观测到的状态;定位不到的设备返回 <see cref="WinUsbDriverState.DevicePresent"/> 为
+    /// <para>观测到的状态；定位不到的设备返回 <see cref="WinUsbDriverState.DevicePresent"/> 为
     /// <see langword="false"/> 且其余字段为 null。</para>
     /// </returns>
     public WinUsbDriverState QueryState(string instanceId)
@@ -186,7 +168,7 @@ public sealed class WinUsbDriverInstaller
             (WinUsbDriverNativeMethods.CM_Locate_DevNodeW(out var devInst, instanceId,
                 WinUsbDriverNativeMethods.CmLocateDevnodeNormal) != WinUsbDriverNativeMethods.CrSuccess))
         {
-            return new WinUsbDriverState { DevicePresent = false, IsManagedByHost = false };
+            return new WinUsbDriverState { DevicePresent = false };
         }
 
         var service = WinUsbDriverNativeMethods.ReadDevNodeString(devInst, WinUsbDriverNativeMethods.DriverServiceKey);
@@ -198,99 +180,73 @@ public sealed class WinUsbDriverInstaller
             DriverService = service,
             DriverInfPath = infPath,
             DriverProvider = provider,
-            IsManagedByHost = IsHostManagedBinding(service, provider)
+            IsTakeoverBinding = IsTakeoverBindingState(service, provider)
         };
     }
 
     /// <summary>
-    /// Installs a self-signed WinUSB driver package and binds it to the device matching the
-    /// request hardware id. Requires an administrator token. On success the self-signed
-    /// certificate has been added to the LocalMachine Root and TrustedPublisher stores and the
-    /// WinUSB package is bound to the device; a reboot may be required, which the message reports.
-    /// <para>安装自签名 WinUSB 驱动包并绑定到匹配请求硬件 ID 的设备。需要管理员令牌。成功时自签
-    /// 证书已加入 LocalMachine 的 Root 与 TrustedPublisher 存储,WinUSB 驱动包已绑定到设备;可能
-    /// 需要重启,消息中会说明。</para>
+    /// Takes over the device by staging a freshly generated self-signed WinUSB driver package and asking
+    /// PnP to bind it. Requires an administrator token; the package binds the in-box <c>WinUSB</c> service
+    /// to the one hardware id in <paramref name="request"/>, so the device becomes openable through the
+    /// WinUSB path used for MediaTek preloader and download-mode access. The certificate is added to the
+    /// local-machine <c>Root</c> and <c>TrustedPublisher</c> stores and its private key is destroyed before
+    /// it is published. Binding proceeds asynchronously: the call waits at most
+    /// <see cref="BindingWaitTimeout"/> for the observed binding to become the takeover package and reports
+    /// success once the package is staged even when the device has not come back yet.
+    /// <para>通过暂存新生成的自签名 WinUSB 驱动包并请求 PnP 绑定来接管设备。需要管理员令牌；该包把系统内置
+    /// <c>WinUSB</c> 服务绑定到 <paramref name="request"/> 中的单个硬件 ID，使设备可由 MediaTek 预加载器
+    /// 与下载模式访问所用的 WinUSB 路径打开。证书会被加入本机 <c>Root</c> 与 <c>TrustedPublisher</c>
+    /// 存储，并在发布前销毁私钥。绑定异步完成：调用最多等待 <see cref="BindingWaitTimeout"/> 观测绑定是否
+    /// 变为接管包，只要包已暂存即报告成功，即使设备尚未重新枚举。</para>
     /// </summary>
-    /// <param name="request">The install parameters. <para>安装参数。</para></param>
-    /// <returns>The operation result; never throws. <para>操作结果;绝不抛出。</para></returns>
-    public WinUsbDriverOperationResult Install(WinUsbDriverInstallRequest request)
+    /// <param name="request">The takeover parameters.<para>接管参数。</para></param>
+    /// <returns>The operation result; never throws.<para>操作结果；绝不抛出。</para></returns>
+    public WinUsbDriverOperationResult InstallTakeover(WinUsbTakeoverRequest request)
     {
         if (!OperatingSystem.IsWindows())
         {
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                "WinUSB driver installation is only supported on Windows.");
+                "Device takeover is only supported on Windows.");
         }
 
         if (!IsElevated)
         {
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.ElevationRequired,
-                "Installing a WinUSB driver requires an administrator token; relaunch the application as administrator.");
+                "Taking over a device requires an administrator token.");
         }
 
         if (string.IsNullOrWhiteSpace(request.InstanceId) || string.IsNullOrWhiteSpace(request.HardwareId))
         {
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                "The install request must carry a device instance id and a hardware id.");
+                "The takeover request must carry a device instance id and a hardware id.");
         }
 
-        var workDirectory = Path.Combine(Path.GetTempPath(), "UotanStudio.DriverInstall", Path.GetRandomFileName());
-        string? verificationNoteOut = null;
+        var workDirectory = Path.Combine(Path.GetTempPath(), "UotanStudio.WinUsbTakeover",
+            Path.GetRandomFileName());
         try
         {
             Directory.CreateDirectory(workDirectory);
-            var infPath = Path.Combine(workDirectory, InfFileName);
-            var interfaceGuid = request.DeviceInterfaceGuid ?? DefaultInterfaceGuid;
-            var infText = WinUsbDriverInf.Build(request.HardwareId.Trim(),
-                string.IsNullOrWhiteSpace(request.DeviceName) ? request.HardwareId : request.DeviceName,
-                interfaceGuid, InfFileName, DateTime.UtcNow);
-            File.WriteAllText(infPath, infText, Encoding.Unicode);
-
-            using var certificate = WinUsbDriverCertStore.TryLoadOrCreate(out var certError);
-            if (certificate is null)
-            {
-                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed, certError);
-            }
-
-            if (!WinUsbDriverCertStore.TryInstallToMachineStores(certificate, out var storeError))
-            {
-                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed, storeError);
-            }
-
-            if (!WinUsbDriverCatalog.TryCreateAndSign(infPath, certificate, out var catalogPath, out var catalogError,
-                    out var verificationNote))
-            {
-                return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed, catalogError);
-            }
-
-            File.Copy(catalogPath, Path.ChangeExtension(infPath, ".cat"), overwrite: true);
-            verificationNoteOut = verificationNote;
-
-            if (!WinUsbDriverNativeMethods.DiInstallDriverW(IntPtr.Zero, infPath,
-                    WinUsbDriverNativeMethods.DiirflagForceInf, out var needReboot))
+            var package = WinUsbSelfSignedDriverPackage.Create(workDirectory, request.HardwareId,
+                request.InstanceId);
+            if (!WinUsbDriverNativeMethods.SetupCopyOEMInfW(package.InfPath, IntPtr.Zero,
+                    WinUsbDriverNativeMethods.SpOemSourcePath, 0, IntPtr.Zero, 0, out _, IntPtr.Zero))
             {
                 return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                    WinUsbDriverNativeMethods.DescribeLastWin32Error("DiInstallDriver failed"));
+                    WinUsbDriverNativeMethods.DescribeLastWin32Error("SetupCopyOEMInf failed"));
             }
 
-            var message =
-                $"Installed the self-signed WinUSB driver package for '{request.HardwareId}'; the device interface class is {interfaceGuid:D}.";
-            if (needReboot)
-            {
-                message += " A reboot is required before the binding takes effect.";
-            }
-
-            if (verificationNoteOut is not null)
-            {
-                message += $" {verificationNoteOut}";
-            }
-
-            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Succeeded, message);
+            RequestRebind(request.InstanceId);
+            var bound = WaitForTakeoverBinding(request.InstanceId);
+            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Succeeded,
+                bound
+                    ? $"Staged and bound the self-signed WinUSB package for '{request.HardwareId}'."
+                    : $"Staged the self-signed WinUSB package for '{request.HardwareId}'; the device binds on its next enumeration.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
-            or ArgumentException or NotSupportedException)
+            or ArgumentException or NotSupportedException or InvalidDataException)
         {
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                $"The driver package workspace could not be prepared: {ex.Message}");
+                $"The WinUSB takeover package could not be prepared: {ex.Message}");
         }
         finally
         {
@@ -299,90 +255,144 @@ public sealed class WinUsbDriverInstaller
     }
 
     /// <summary>
-    /// Uninstalls the device and the driver package this application installed, letting the device
-    /// fall back to the system default driver after re-enumeration. Requires an administrator
-    /// token, and only removes packages whose driver provider is <c>UotanStudio</c> and whose
-    /// service is <c>winusb</c>; vendor drivers are never removed.
-    /// <para>卸载设备与本应用安装的驱动包,设备重新枚举后回退系统默认驱动。需要管理员令牌,且只
-    /// 移除驱动提供者为 <c>UotanStudio</c>、服务为 <c>winusb</c> 的驱动包;绝不移除厂商驱动。</para>
+    /// Ends the takeover of a device: removes the staged package with <c>SetupUninstallOEMInf</c>, asks PnP
+    /// to re-enumerate the devnode so the device falls back to a system driver, and deletes the takeover
+    /// certificate from the local-machine <c>Root</c> and <c>TrustedPublisher</c> stores. Requires an
+    /// administrator token and only acts on a binding this application installed.
+    /// <para>结束设备接管：经 <c>SetupUninstallOEMInf</c> 移除暂存的包，请求 PnP 重枚举设备节点使设备回退
+    /// 系统驱动，并从本机 <c>Root</c> 与 <c>TrustedPublisher</c> 存储删除接管证书。需要管理员令牌，
+    /// 且只作用于本应用安装的绑定。</para>
     /// </summary>
-    /// <param name="instanceId">The device instance id. <para>设备实例 ID。</para></param>
-    /// <returns>The operation result; never throws. <para>操作结果;绝不抛出。</para></returns>
-    public WinUsbDriverOperationResult Uninstall(string instanceId)
+    /// <param name="instanceId">The device instance id.<para>设备实例 ID。</para></param>
+    /// <returns>The operation result; never throws.<para>操作结果；绝不抛出。</para></returns>
+    public WinUsbDriverOperationResult UninstallTakeover(string instanceId)
     {
         if (!OperatingSystem.IsWindows())
         {
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                "WinUSB driver removal is only supported on Windows.");
+                "Ending a device takeover is only supported on Windows.");
         }
 
         if (!IsElevated)
         {
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.ElevationRequired,
-                "Removing a WinUSB driver requires an administrator token; relaunch the application as administrator.");
+                "Ending a device takeover requires an administrator token.");
         }
 
-        if (string.IsNullOrWhiteSpace(instanceId) ||
-            (WinUsbDriverNativeMethods.CM_Locate_DevNodeW(out var devInst, instanceId,
-                WinUsbDriverNativeMethods.CmLocateDevnodeNormal) != WinUsbDriverNativeMethods.CrSuccess))
+        if (string.IsNullOrWhiteSpace(instanceId))
+        {
+            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
+                "The takeover removal requires a device instance id.");
+        }
+
+        var located = WinUsbDriverNativeMethods.CM_Locate_DevNodeW(out var devInst, instanceId,
+            WinUsbDriverNativeMethods.CmLocateDevnodeNormal) == WinUsbDriverNativeMethods.CrSuccess;
+        var service = located
+            ? WinUsbDriverNativeMethods.ReadDevNodeString(devInst, WinUsbDriverNativeMethods.DriverServiceKey)
+            : null;
+        var provider = located
+            ? WinUsbDriverNativeMethods.ReadDevNodeString(devInst, WinUsbDriverNativeMethods.DriverProviderKey)
+            : null;
+        var infName = located
+            ? WinUsbDriverNativeMethods.ReadDevNodeString(devInst, WinUsbDriverNativeMethods.DriverInfPathKey)
+            : null;
+
+        if (!located && !WinUsbSelfSignedDriverPackage.RemoveCertificateFromStores())
         {
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.DeviceNotFound,
-                $"No device instance matches '{instanceId}'.");
+                $"No device instance matches '{instanceId}' and the takeover certificate could not be removed.");
         }
 
-        var provider = WinUsbDriverNativeMethods.ReadDevNodeString(devInst, WinUsbDriverNativeMethods.DriverProviderKey);
-        var service = WinUsbDriverNativeMethods.ReadDevNodeString(devInst, WinUsbDriverNativeMethods.DriverServiceKey);
-        if (!IsHostManagedBinding(service, provider))
+        if (located && !IsTakeoverBindingState(service, provider))
         {
             return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                "The current driver was not installed by this application; uninstall is refused to protect vendor drivers.");
+                "The current driver was not installed by this application's takeover; removal is refused to protect other drivers.");
         }
 
-        var deviceInfoSet = WinUsbDriverNativeMethods.SetupDiCreateDeviceInfoList(IntPtr.Zero, IntPtr.Zero);
-        if (deviceInfoSet == WinUsbDriverNativeMethods.InvalidHandleValue)
+        if (located)
         {
-            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                WinUsbDriverNativeMethods.DescribeLastWin32Error("SetupDiCreateDeviceInfoList failed"));
-        }
-
-        try
-        {
-            var deviceInfoData = new WinUsbDriverNativeMethods.SpDevInfoData
-            {
-                CbSize = (uint)Marshal.SizeOf<WinUsbDriverNativeMethods.SpDevInfoData>()
-            };
-            if (!WinUsbDriverNativeMethods.SetupDiOpenDeviceInfoW(deviceInfoSet, instanceId, IntPtr.Zero, 0,
-                    ref deviceInfoData))
+            if (string.IsNullOrWhiteSpace(infName))
             {
                 return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                    WinUsbDriverNativeMethods.DescribeLastWin32Error("SetupDiOpenDeviceInfo failed"));
+                    "The takeover binding does not expose the staged package name; removal is refused.");
             }
 
-            if (!WinUsbDriverNativeMethods.DiUninstallDevice(IntPtr.Zero, deviceInfoSet, ref deviceInfoData, 0,
-                    out var needReboot))
+            if (!WinUsbDriverNativeMethods.SetupUninstallOEMInfW(infName,
+                    WinUsbDriverNativeMethods.SuoiForceDelete, IntPtr.Zero) &&
+                Marshal.GetLastWin32Error() != WinUsbDriverNativeMethods.ErrorFileNotFound)
             {
                 return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Failed,
-                    WinUsbDriverNativeMethods.DescribeLastWin32Error("DiUninstallDevice failed"));
+                    WinUsbDriverNativeMethods.DescribeLastWin32Error("SetupUninstallOEMInf failed"));
             }
 
-            var message =
-                "Removed the device and the WinUSB driver package installed by this application; the device returns to the system default driver when it is re-enumerated.";
-            if (needReboot)
-            {
-                message += " A reboot is required to complete the removal.";
-            }
-
-            return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Succeeded, message);
+            _ = WinUsbDriverNativeMethods.CmReenumerateDevNode(devInst,
+                WinUsbDriverNativeMethods.CmReenumerateRetryInstallation);
         }
-        finally
+
+        var certificateRemoved = WinUsbSelfSignedDriverPackage.RemoveCertificateFromStores();
+        return new WinUsbDriverOperationResult(WinUsbDriverOperationStatus.Succeeded,
+            certificateRemoved
+                ? $"Removed the takeover package '{infName}' and its certificate; the device returns to a system driver."
+                : $"Removed the takeover package '{infName}' but the certificate stores could not be cleaned.");
+    }
+
+    private static bool IsTakeoverBindingState(string? service, string? provider)
+        => string.Equals(service, WinUsbService, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(provider, WinUsbSelfSignedDriverPackage.ProviderName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Asks PnP to install the freshly staged package without waiting for a device start: removing a devnode
+    /// whose package is staged has nothing to veto, and re-enumerating the parent brings the device back so
+    /// the PnP service performs the install. Devices that stall their start therefore never block this call.
+    /// </summary>
+    /// <param name="instanceId">The device instance id.<para>设备实例 ID。</para></param>
+    private static void RequestRebind(string instanceId)
+    {
+        if (WinUsbDriverNativeMethods.CM_Locate_DevNodeW(out var devInst, instanceId,
+                WinUsbDriverNativeMethods.CmLocateDevnodeNormal) != WinUsbDriverNativeMethods.CrSuccess)
         {
-            _ = WinUsbDriverNativeMethods.SetupDiDestroyDeviceInfoList(deviceInfoSet);
+            return;
+        }
+
+        var removed = WinUsbDriverNativeMethods.CmQueryAndRemoveSubTree(devInst, IntPtr.Zero, IntPtr.Zero, 0, 0)
+            == WinUsbDriverNativeMethods.CrSuccess;
+        if (removed && WinUsbDriverNativeMethods.CmGetParent(out var parentDevInst, devInst, 0)
+            == WinUsbDriverNativeMethods.CrSuccess)
+        {
+            _ = WinUsbDriverNativeMethods.CmReenumerateDevNode(parentDevInst,
+                WinUsbDriverNativeMethods.CmReenumerateRetryInstallation);
+        }
+        else if (!removed)
+        {
+            _ = WinUsbDriverNativeMethods.CmReenumerateDevNode(devInst,
+                WinUsbDriverNativeMethods.CmReenumerateRetryInstallation);
         }
     }
 
-    private static bool IsHostManagedBinding(string? service, string? provider)
-        => string.Equals(service, WinUsbService, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(provider, HostProvider, StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Polls the observed binding for at most <see cref="BindingWaitTimeout"/> until it is the takeover
+    /// package, so a slow enumeration still reports an accurate outcome.
+    /// </summary>
+    /// <param name="instanceId">The device instance ID.<para>设备实例 ID。</para></param>
+    /// <returns><see langword="true"/> when the takeover binding was observed.
+    /// <para>观测到接管绑定时为 <see langword="true"/>。</para></returns>
+    private static bool WaitForTakeoverBinding(string instanceId)
+    {
+        var deadline = DateTime.UtcNow + BindingWaitTimeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var state = new WinUsbDriverInstaller().QueryState(instanceId);
+            if (state is { DevicePresent: true, IsTakeoverBinding: true })
+            {
+                return true;
+            }
+
+            Thread.Sleep(BindingPollInterval);
+        }
+
+        return false;
+    }
+
 
     private static void TryDeleteDirectory(string path)
     {
