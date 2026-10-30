@@ -1555,10 +1555,10 @@
     <value>自动检测</value>
   </data>
   <data name="BootPatch_AutoDetectArchitecture" xml:space="preserve">
-    <value>自动检测（{0}）</value>
+    <value>自动识别架构（{0}）</value>
   </data>
   <data name="BootPatch_AutoDetectKmi" xml:space="preserve">
-    <value>自动检测（{0}）</value>
+    <value>自动识别KMI（{0}）</value>
   </data>
   <data name="BootPatch_ArchitectureUnknown" xml:space="preserve">
     <value>未识别</value>

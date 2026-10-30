@@ -48,6 +48,8 @@ public partial class BootPatchWindow : Window
     private int _prepareRequest;
     private bool _probeStarted;
     private bool _isPatching;
+    private string _statusText = string.Empty;
+    private string _downloadStats = string.Empty;
 
     public BootPatchWindow() : this(null) { }
     public BootPatchWindow(string? imagePath)
@@ -139,11 +141,16 @@ public partial class BootPatchWindow : Window
     }
 
     /// <summary>Reports whether the option row must show the KMI list: KernelSU LKM chooses the module KMI, and a
-    /// GKI package asks the user to confirm the GKI version it carries.
-    /// <para>报告选项行是否必须显示 KMI 列表：KernelSU LKM 选择模块 KMI，GKI 包要求用户确认它携带的 GKI 版本。</para>
+    /// GKI package asks the user to confirm the GKI version it carries. Pending KernelSU sources show automatic KMI selection.
+    /// <para>报告选项行是否显示 KMI 列表：KernelSU 来源加载期间显示自动识别，LKM 选择模块 KMI，GKI 包要求确认它携带的版本。</para>
     /// </summary>
     private bool RequiresKmiChoice()
     {
+        if (_detection is null)
+        {
+            return SelectedSource is RootPatchPackageSource.KernelSu or RootPatchPackageSource.SukiSu;
+        }
+
         var mode = ResolvedPatchMode();
         return mode == BootPatchMode.Gki
             ? HasGkiVersionChoices()
@@ -315,7 +322,7 @@ public partial class BootPatchWindow : Window
     {
         if (string.Equals(_validationMessage, message, StringComparison.Ordinal))
         {
-            if (message is not null && !string.Equals(ProgressText.Text, message, StringComparison.Ordinal))
+            if (message is not null && !string.Equals(_statusText, message, StringComparison.Ordinal))
                 SetStatus(message);
             return;
         }
@@ -326,7 +333,7 @@ public partial class BootPatchWindow : Window
         {
             SetStatus(message);
         }
-        else if (previous is not null && string.Equals(ProgressText.Text, previous, StringComparison.Ordinal))
+        else if (previous is not null && string.Equals(_statusText, previous, StringComparison.Ordinal))
         {
             SetStatus(string.Empty);
         }
@@ -334,8 +341,15 @@ public partial class BootPatchWindow : Window
 
     private void SetStatus(string text)
     {
-        ProgressText.Text = text;
+        _statusText = text;
+        UpdateProgressText();
         if (!_isPatching) ProgressPanel.IsVisible = !string.IsNullOrWhiteSpace(text);
+    }
+
+    private void UpdateProgressText()
+    {
+        ProgressText.Text = string.IsNullOrEmpty(_downloadStats) ? _statusText
+            : string.IsNullOrEmpty(_statusText) ? _downloadStats : $"{_statusText} · {_downloadStats}";
     }
 
     private string DescribeInvalidPackage(string? problem)
@@ -668,8 +682,8 @@ public partial class BootPatchWindow : Window
         }
     }
 
-    /// <summary>Downloads one release, reporting transfer speed and the estimated remaining time beside the bar.
-    /// <para>下载某个发布版，并在进度条旁显示传输速度与预计剩余时间。</para></summary>
+    /// <summary>Downloads one release, reporting status, transfer speed and remaining time above the bar.
+    /// <para>下载某个发布版，并在进度条上方合并显示状态、传输速度与预计剩余时间。</para></summary>
     private async Task<RootPatchPackageArtifact> EnsureReleasePackageAsync(RootPatchPackage release,
         CancellationToken token)
     {
@@ -677,11 +691,16 @@ public partial class BootPatchWindow : Window
         var lastSample = stopwatch.Elapsed;
         var lastBytes = 0d;
         var smoothedRate = 0d;
+        var acceptingProgress = true;
         var progress = new Progress<double>(value =>
         {
+            if (!acceptingProgress)
+            {
+                return;
+            }
             PatchProgressBar.Value = Math.Clamp(value * 100d, 0d, 100d);
             ProgressPanel.IsVisible = true;
-            ProgressText.Text = LanguageService.Instance.GetString("BootPatch_PackageDownloadingShort");
+            _statusText = LanguageService.Instance.GetString("BootPatch_PackageDownloadingShort");
             var processed = Math.Clamp(value, 0d, 1d) * release.Length;
             var elapsed = stopwatch.Elapsed - lastSample;
             if (elapsed.TotalSeconds >= 0.25 && processed >= lastBytes)
@@ -694,9 +713,9 @@ public partial class BootPatchWindow : Window
 
             if (smoothedRate > 0)
             {
-                DownloadStatsText.IsVisible = true;
-                DownloadStatsText.Text = FormatDownloadStats(release.Length - processed, smoothedRate);
+                _downloadStats = FormatDownloadStats(release.Length - processed, smoothedRate);
             }
+            UpdateProgressText();
         });
         try
         {
@@ -704,8 +723,9 @@ public partial class BootPatchWindow : Window
         }
         finally
         {
-            DownloadStatsText.IsVisible = false;
-            DownloadStatsText.Text = string.Empty;
+            acceptingProgress = false;
+            _downloadStats = string.Empty;
+            UpdateProgressText();
         }
     }
 
@@ -932,7 +952,8 @@ public partial class BootPatchWindow : Window
 
     private void RefreshKmiOptions()
     {
-        if (_detection is not { } detection || !RequiresKmiChoice())
+        var detection = _detection;
+        if (!RequiresKmiChoice())
         {
             KmiBox.ItemsSource = Array.Empty<string>();
             KmiBox.SelectedIndex = -1;
@@ -941,7 +962,7 @@ public partial class BootPatchWindow : Window
 
         if (HasGkiVersionChoices())
         {
-            KmiBox.ItemsSource = detection.Kmis!.ToList();
+            KmiBox.ItemsSource = detection!.Kmis!.ToList();
             KmiBox.SelectedIndex = -1;
             return;
         }
@@ -953,8 +974,10 @@ public partial class BootPatchWindow : Window
         {
             LanguageService.Instance.GetString("BootPatch_AutoDetectKmi", detectedLabel)
         };
-        if (detection.Kmis is { Count: > 0 })
+        if (detection?.Kmis is { Count: > 0 })
+        {
             items.AddRange(detection.Kmis);
+        }
         KmiBox.ItemsSource = items;
         KmiBox.SelectedIndex = 0;
     }
@@ -985,7 +1008,7 @@ public partial class BootPatchWindow : Window
             _isPatching = true;
             UpdateStartEnabled();
             MainBusyContainer.IsLoading = true; ProgressPanel.IsVisible = true; PatchProgressBar.Value = 0;
-            ProgressText.Text = string.Empty;
+            SetStatus(string.Empty);
             var packagePath = await ResolvePackagePathAsync();
             if (string.IsNullOrWhiteSpace(packagePath)) return;
             var patchMode = ResolvedPatchMode();
@@ -1007,7 +1030,7 @@ public partial class BootPatchWindow : Window
                     : PrebootDeviceBox.Text,
                 Progress = new Progress<double>(p => PatchProgressBar.Value = Math.Clamp(p * 100d, 0d, 100d))
             });
-            ProgressText.Text = Path.GetFileName(result.OutputPath);
+            SetStatus(Path.GetFileName(result.OutputPath));
         }
         catch (OperationCanceledException)
         {

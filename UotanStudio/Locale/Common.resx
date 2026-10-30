@@ -1555,10 +1555,10 @@ Author: 暮间雾
     <value>Auto detect</value>
   </data>
   <data name="BootPatch_AutoDetectArchitecture" xml:space="preserve">
-    <value>Auto detect ({0})</value>
+    <value>Auto detect architecture ({0})</value>
   </data>
   <data name="BootPatch_AutoDetectKmi" xml:space="preserve">
-    <value>Auto detect ({0})</value>
+    <value>Auto detect KMI ({0})</value>
   </data>
   <data name="BootPatch_ArchitectureUnknown" xml:space="preserve">
     <value>unknown</value>

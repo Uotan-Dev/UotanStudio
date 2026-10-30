@@ -88,16 +88,14 @@
                         <TextBox Grid.Column="1" Grid.ColumnSpan="2" Name="BootPathBox" Classes="path-field" IsReadOnly="True" />
                         <Button Grid.Column="3" Classes="browse" Content="{DynamicResource BootPatch_SelectFile}" Click="OnBrowseBootClick" />
                     </Grid>
-                    <Grid Name="PatchOptionsPanel" RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
-                        <Grid Name="PatchInputRow" ColumnDefinitions="*,*" ColumnSpacing="10">
+                    <Grid Name="PatchOptionsPanel" RowDefinitions="Auto,Auto" RowSpacing="6">
+                        <UniformGrid Name="PatchInputRow" Rows="1" ColumnSpacing="10">
                             <TextBox Name="PrebootDeviceBox" PlaceholderText="{DynamicResource BootPatch_DevicePlaceholder}" />
-                            <ComboBox Grid.Column="1" Name="ArchitectureBox" HorizontalAlignment="Stretch" SelectedIndex="-1" />
-                        </Grid>
-                        <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="10">
-                            <ComboBox Grid.Column="1" Name="KmiBox" HorizontalAlignment="Stretch"
+                            <ComboBox Name="ArchitectureBox" HorizontalAlignment="Stretch" SelectedIndex="-1" />
+                            <ComboBox Name="KmiBox" HorizontalAlignment="Stretch"
                                       SelectedIndex="-1" IsVisible="False" />
-                        </Grid>
-                        <WrapPanel Grid.Row="2" Name="MagiskOptionsRow" Orientation="Horizontal"
+                        </UniformGrid>
+                        <WrapPanel Grid.Row="1" Name="MagiskOptionsRow" Orientation="Horizontal"
                                    ItemWidth="190" MaxHeight="84"
                                    HorizontalAlignment="Left" VerticalAlignment="Top">
                             <CheckBox Classes="compact-check" Name="ForceRootfsBox" IsChecked="False">
@@ -121,17 +119,18 @@
             </ScrollViewer>
         </ursa:LoadingContainer>
         <Border Grid.Row="1" Padding="20,14" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource PageBackground}">
-            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
-                <StackPanel Name="ProgressPanel" IsVisible="False" Width="280" Spacing="4" HorizontalAlignment="Left" VerticalAlignment="Center">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Height="40">
+                <StackPanel Name="ProgressPanel" IsVisible="False" Spacing="4" VerticalAlignment="Center">
+                    <TextBlock Name="ProgressText" FontSize="11" Height="16" TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding #ProgressText.Text}" />
                     <ProgressBar Name="PatchProgressBar" Minimum="0" Maximum="100" Value="0" ShowProgressText="True" Height="20" CornerRadius="4" />
-                    <TextBlock Name="ProgressText" FontSize="11" Height="16" Opacity="0.75" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-                <TextBlock Grid.Column="1" Name="DownloadStatsText" FontSize="11" Opacity="0.75"
-                           VerticalAlignment="Center" IsVisible="False" TextTrimming="CharacterEllipsis" />
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <Button Content="{DynamicResource Editor_Cancel}" MinWidth="88" Height="40" IsCancel="True" Click="OnCancelClick" />
-                    <Button Name="StartButton" Content="{DynamicResource BootPatch_Start}" Theme="{StaticResource SolidButton}" MinWidth="110" Height="40" IsDefault="True" Click="OnStartPatchClick" />
-                </StackPanel>
+                <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="10">
+                    <Button Content="{DynamicResource Editor_Cancel}" MinWidth="96" MinHeight="20" Padding="12,0"
+                            VerticalAlignment="Stretch" IsCancel="True" Click="OnCancelClick" />
+                    <Button Grid.Column="1" Name="StartButton" Content="{DynamicResource BootPatch_Start}" Theme="{StaticResource SolidButton}"
+                            MinWidth="96" MinHeight="20" Padding="12,0" VerticalAlignment="Stretch" IsDefault="True" Click="OnStartPatchClick" />
+                </Grid>
             </Grid>
         </Border>
     </Grid>
