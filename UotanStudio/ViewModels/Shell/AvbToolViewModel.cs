@@ -22,6 +22,7 @@ public partial class AvbToolViewModel : ViewModelBase
     private readonly KeyLibraryService _library;
     private readonly AvbOtaService _ota;
     private CancellationTokenSource? _operation;
+    private string _defaultFooterOutputPath = "";
 
     /// <summary>
     /// Creates the tool over the shared key library and a default OTA service.
@@ -61,23 +62,8 @@ public partial class AvbToolViewModel : ViewModelBase
     /// <summary>ZIP entries offered as the OTA certificate source. <para>作为 OTA 证书来源的 ZIP 条目。</para></summary>
     public ObservableCollection<ManagedKey> ZipKeys { get; } = [];
 
-    /// <summary>Selectable AVB key sizes. <para>可选的 AVB 密钥位数。</para></summary>
-    public int[] KeyBitOptions { get; } = [2048, 4096];
-
     /// <summary>Currently selected AVB key. <para>当前选中的 AVB 密钥。</para></summary>
     [ObservableProperty] private ManagedKey? _selectedKey;
-
-    /// <summary>Name submitted when generating or importing an AVB key. <para>生成或导入 AVB 密钥时提交的名称。</para></summary>
-    [ObservableProperty] private string _keyName = "";
-
-    /// <summary>Modulus size submitted when generating an AVB key. <para>生成 AVB 密钥时提交的模数位数。</para></summary>
-    [ObservableProperty] private int _keyBits = 2048;
-
-    /// <summary>Optional password applied when importing an encrypted private key. <para>导入加密私钥时使用的可选密码。</para></summary>
-    [ObservableProperty] private string _keyPassword = "";
-
-    /// <summary>Key-section operation result. <para>密钥区的操作结果。</para></summary>
-    [ObservableProperty] private string _keyStatus = "";
 
     /// <summary>Images offered to the footer section. <para>供尾部区选择的镜像。</para></summary>
     public ObservableCollection<string> Images { get; } = [];
@@ -90,6 +76,14 @@ public partial class AvbToolViewModel : ViewModelBase
 
     /// <summary>Footer mode index: 0 selects hash, 1 selects hashtree. <para>尾部模式索引：0 为哈希，1 为哈希树。</para></summary>
     [ObservableProperty] private int _footerModeIndex;
+
+    /// <summary>Whether newly signed VBMeta skips dm-verity hashtree checks.
+    /// <para>新签名的 VBMeta 是否跳过 dm-verity 哈希树检查。</para></summary>
+    [ObservableProperty] private bool _disableVerity;
+
+    /// <summary>Whether newly signed VBMeta skips AVB signature verification.
+    /// <para>新签名的 VBMeta 是否跳过 AVB 签名校验。</para></summary>
+    [ObservableProperty] private bool _disableAvbVerification;
 
     /// <summary>Rollback index text; blank or non-numeric values are rejected before signing.
     /// <para>回滚索引文本；空白或非数字值在签名前被拒绝。</para></summary>
@@ -165,6 +159,14 @@ public partial class AvbToolViewModel : ViewModelBase
 
     partial void OnSelectedImageChanged(string? value)
     {
+        var nextDefaultPath = value is { Length: > 0 } image ? image + ".avb.img" : "";
+        if (string.IsNullOrWhiteSpace(FooterOutputPath)
+            || string.Equals(FooterOutputPath, _defaultFooterOutputPath, StringComparison.OrdinalIgnoreCase))
+        {
+            FooterOutputPath = nextDefaultPath;
+        }
+
+        _defaultFooterOutputPath = nextDefaultPath;
         OnPropertyChanged(nameof(SignedOutputPath));
         OnPropertyChanged(nameof(UnsignedOutputPath));
     }
@@ -231,74 +233,14 @@ public partial class AvbToolViewModel : ViewModelBase
     public Task RefreshKeysAsync() => RunAsync(ReloadKeysAsync);
 
     /// <summary>
-    /// Generates an AVB key pair in the shared library from the current name and size.
-    /// <para>按当前名称与位数在共享密钥库中生成 AVB 密钥对。</para>
-    /// </summary>
-    /// <returns>A task completed once the operation finishes. <para>操作结束后完成的任务。</para></returns>
-    public Task GenerateKeyAsync() => RunAsync(async () =>
-    {
-        KeyStatus = "";
-        if (string.IsNullOrWhiteSpace(KeyName))
-        {
-            KeyStatus = T("Avb_KeyNameRequired");
-            return;
-        }
-
-        var name = KeyName.Trim();
-        var bits = KeyBits;
-        var created = await Task.Run(() => _library.Generate(name, ManagedKeyKind.Avb, bits));
-        await ReloadKeysAsync();
-        SelectedKey = AvbKeys.FirstOrDefault(key => key.Id == created.Id);
-        KeyStatus = created.Summary;
-    });
-
-    /// <summary>
-    /// Imports an existing private key as an AVB library entry.
-    /// <para>把已有私钥导入为 AVB 库条目。</para>
-    /// </summary>
-    /// <param name="path">PEM or DER private key selected by the caller. <para>调用方选择的 PEM 或 DER 私钥。</para></param>
-    /// <returns>A task completed once the operation finishes. <para>操作结束后完成的任务。</para></returns>
-    public Task ImportKeyAsync(string path) => RunAsync(async () =>
-    {
-        KeyStatus = "";
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return;
-        }
-
-        var name = string.IsNullOrWhiteSpace(KeyName) ? Path.GetFileNameWithoutExtension(path) : KeyName.Trim();
-        var password = KeyPassword;
-        KeyPassword = "";
-        var imported = await Task.Run(() => _library.Import(name, ManagedKeyKind.Avb, path, password));
-        await ReloadKeysAsync();
-        SelectedKey = AvbKeys.FirstOrDefault(key => key.Id == imported.Id);
-        KeyStatus = imported.Summary;
-    });
-
-    /// <summary>
-    /// Permanently deletes one AVB library entry.
-    /// <para>永久删除一个 AVB 库条目。</para>
-    /// </summary>
-    /// <param name="key">The entry to delete. <para>要删除的条目。</para></param>
-    /// <returns>A task completed once the operation finishes. <para>操作结束后完成的任务。</para></returns>
-    public Task DeleteKeyAsync(ManagedKey key) => RunAsync(async () =>
-    {
-        ArgumentNullException.ThrowIfNull(key);
-        KeyStatus = "";
-        await Task.Run(() => _library.Delete(key));
-        await ReloadKeysAsync();
-    });
-
-    /// <summary>
-    /// Copies the selected key's libavb public-key blob to a destination file or directory.
-    /// <para>把所选密钥的 libavb 公钥数据块复制到目标文件或目录。</para>
+    /// Exports the selected AVB key's public-key metadata blob without replacing an existing file.
+    /// <para>导出所选 AVB 密钥的公钥元数据块，不替换已有文件。</para>
     /// </summary>
     /// <param name="destination">Target file path, or a directory receiving <c>avb_pkmd.bin</c>.
     /// <para>目标文件路径，或接收 <c>avb_pkmd.bin</c> 的目录。</para></param>
-    /// <returns>A task completed once the operation finishes. <para>操作结束后完成的任务。</para></returns>
+    /// <returns>A task completed once the export finishes. <para>导出完成后结束的任务。</para></returns>
     public Task ExportAvbPublicKeyAsync(string destination) => RunAsync(async () =>
     {
-        KeyStatus = "";
         if (string.IsNullOrWhiteSpace(destination))
         {
             return;
@@ -306,7 +248,7 @@ public partial class AvbToolViewModel : ViewModelBase
 
         if (SelectedKey is not { Kind: ManagedKeyKind.Avb } key)
         {
-            KeyStatus = T("Avb_KeyEmpty");
+            Status = T("Avb_KeyEmpty");
             return;
         }
 
@@ -319,7 +261,7 @@ public partial class AvbToolViewModel : ViewModelBase
             File.Copy(blob, path, false);
             return path;
         });
-        KeyStatus = T("Avb_KeyExported", target);
+        Status = T("Avb_KeyExported", target);
     });
 
     /// <summary>
@@ -406,6 +348,8 @@ public partial class AvbToolViewModel : ViewModelBase
             Mode = FooterModeIndex == 1 ? AvbResignMode.Hashtree : AvbResignMode.Hash,
             RollbackIndex = rollbackIndex,
             RollbackIndexLocation = rollbackLocation,
+            Flags = (DisableVerity ? (uint)AvbVbmetaFlag.HashtreeDisabled : 0)
+                | (DisableAvbVerification ? (uint)AvbVbmetaFlag.VerificationDisabled : 0),
             PartitionSize = partitionSize,
         };
         var output = SignedOutputPath;

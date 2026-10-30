@@ -3318,6 +3318,9 @@ Continue?</value>
   <data name="Avb_KeyRefresh" xml:space="preserve">
     <value>Refresh</value>
   </data>
+  <data name="Avb_KeyManage" xml:space="preserve">
+    <value>Manage keys</value>
+  </data>
   <data name="Avb_KeyForm" xml:space="preserve">
     <value>Create or import</value>
   </data>
@@ -3367,10 +3370,28 @@ Continue?</value>
     <value>AVB public key written to {0}.</value>
   </data>
   <data name="Avb_Browse" xml:space="preserve">
-    <value>Browse</value>
+    <value>Select file</value>
   </data>
   <data name="Avb_FooterImage" xml:space="preserve">
     <value>Partition image</value>
+  </data>
+  <data name="Avb_FooterSigningKey" xml:space="preserve">
+    <value>AVB signing key</value>
+  </data>
+  <data name="Avb_FooterFlags" xml:space="preserve">
+    <value>VBMeta options</value>
+  </data>
+  <data name="Avb_FooterDisableVerity" xml:space="preserve">
+    <value>Disable dm-verity</value>
+  </data>
+  <data name="Avb_FooterDisableVerification" xml:space="preserve">
+    <value>Disable AVB verification</value>
+  </data>
+  <data name="Avb_FooterFlagsHint" xml:space="preserve">
+    <value>These options weaken boot integrity. Use only when needed and keep the original image.</value>
+  </data>
+  <data name="Avb_FooterAdvanced" xml:space="preserve">
+    <value>Advanced settings</value>
   </data>
   <data name="Avb_FooterAddImage" xml:space="preserve">
     <value>Add image…</value>
@@ -3410,9 +3431,6 @@ Continue?</value>
   </data>
   <data name="Avb_FooterOutput" xml:space="preserve">
     <value>Output image</value>
-  </data>
-  <data name="Avb_FooterOutputPlaceholder" xml:space="preserve">
-    <value>Leave blank for &lt;image&gt;.avb.img</value>
   </data>
   <data name="Avb_FooterSelectOutputTitle" xml:space="preserve">
     <value>Select output image</value>

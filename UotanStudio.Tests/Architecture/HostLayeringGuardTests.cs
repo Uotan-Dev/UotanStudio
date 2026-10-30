@@ -39,6 +39,7 @@ public partial class HostLayeringGuardTests
             ["UotanStudio/Views/Nodes/NodeEditorView.Interactions.cs"] = Set("UotanStudio.Services.Interactions"),
             ["UotanStudio/Views/Nodes/NodeEditorView.axaml.cs"] = Set("UotanStudio.Services.VisualPlugins"),
             ["UotanStudio/Views/Shell/ApkSigningWindow.axaml.cs"] = Set("UotanStudio.Services.Keys"),
+            ["UotanStudio/Views/Shell/AvbToolWindow.axaml.cs"] = Set("UotanStudio.Services.Keys"),
             ["UotanStudio/Views/Shell/BootPatchWindow.axaml.cs"] = Set("UotanStudio.Services.PatchPackages"),
             ["UotanStudio/Views/Shell/DeliveryView.Operations.cs"] = Set("UotanStudio.Services.Delivery", "UotanStudio.Services.Projects"),
             ["UotanStudio/Views/Shell/DeliveryView.SigningKeys.cs"] = Set("UotanStudio.Services.Keys"),

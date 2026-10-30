@@ -661,7 +661,7 @@
     <value>输出目录</value>
   </data>
   <data name="Keys_Browse" xml:space="preserve">
-    <value>浏览</value>
+    <value>选择目录</value>
   </data>
   <data name="Keys_FormatPkcs12" xml:space="preserve">
     <value>仅 PKCS12（.p12）</value>

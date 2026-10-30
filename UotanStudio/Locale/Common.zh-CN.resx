@@ -3318,6 +3318,9 @@
   <data name="Avb_KeyRefresh" xml:space="preserve">
     <value>刷新</value>
   </data>
+  <data name="Avb_KeyManage" xml:space="preserve">
+    <value>管理密钥</value>
+  </data>
   <data name="Avb_KeyForm" xml:space="preserve">
     <value>创建或导入</value>
   </data>
@@ -3367,10 +3370,28 @@
     <value>AVB 公钥已写入 {0}。</value>
   </data>
   <data name="Avb_Browse" xml:space="preserve">
-    <value>浏览</value>
+    <value>选择文件</value>
   </data>
   <data name="Avb_FooterImage" xml:space="preserve">
     <value>分区镜像</value>
+  </data>
+  <data name="Avb_FooterSigningKey" xml:space="preserve">
+    <value>AVB 签名密钥</value>
+  </data>
+  <data name="Avb_FooterFlags" xml:space="preserve">
+    <value>VBMeta 选项</value>
+  </data>
+  <data name="Avb_FooterDisableVerity" xml:space="preserve">
+    <value>禁用 dm-verity</value>
+  </data>
+  <data name="Avb_FooterDisableVerification" xml:space="preserve">
+    <value>禁用 AVB 校验</value>
+  </data>
+  <data name="Avb_FooterFlagsHint" xml:space="preserve">
+    <value>这些选项会降低启动完整性保护。仅在确有需要时使用，并保留原始镜像。</value>
+  </data>
+  <data name="Avb_FooterAdvanced" xml:space="preserve">
+    <value>高级设置</value>
   </data>
   <data name="Avb_FooterAddImage" xml:space="preserve">
     <value>添加镜像…</value>
@@ -3410,9 +3431,6 @@
   </data>
   <data name="Avb_FooterOutput" xml:space="preserve">
     <value>输出镜像</value>
-  </data>
-  <data name="Avb_FooterOutputPlaceholder" xml:space="preserve">
-    <value>留空则输出 &lt;image&gt;.avb.img</value>
   </data>
   <data name="Avb_FooterSelectOutputTitle" xml:space="preserve">
     <value>选择输出镜像</value>

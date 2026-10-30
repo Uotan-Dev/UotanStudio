@@ -36,6 +36,12 @@ public sealed class KeyManagerPurposeTests : IDisposable
         Assert.True(model.IsLibraryPurpose);
         Assert.True(model.IsBitsEditable);
         Assert.Equal([2048, 4096], model.PayloadSizes);
+
+        model.KindIndex = (int)ManagedKeyKind.Avb;
+        Assert.True(model.IsAvb);
+        Assert.True(model.IsLibraryPurpose);
+        Assert.True(model.IsBitsEditable);
+        Assert.Equal([2048, 4096], model.PayloadSizes);
     }
 
     [Fact]
@@ -73,6 +79,24 @@ public sealed class KeyManagerPurposeTests : IDisposable
         var key = Assert.Single(library.List());
         Assert.Equal(ManagedKeyKind.Jar, key.Kind);
         Assert.Equal("jar-signing", key.Name);
+    }
+
+    [Fact]
+    public async Task AvbPurpose_GeneratesManagedAvbKey()
+    {
+        var library = new KeyLibraryService(Path.Combine(_root, "library"));
+        var model = new KeyManagerViewModel(library)
+        {
+            KindIndex = (int)ManagedKeyKind.Avb,
+            Name = "avb-signing",
+            PayloadBits = 2048,
+        };
+
+        await model.GenerateCommand.ExecuteAsync(null);
+
+        var key = Assert.Single(library.List());
+        Assert.Equal(ManagedKeyKind.Avb, key.Kind);
+        Assert.Equal("avb-signing", key.Name);
     }
 
     [Fact]

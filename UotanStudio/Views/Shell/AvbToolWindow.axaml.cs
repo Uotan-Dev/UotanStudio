@@ -4,7 +4,9 @@ using Avalonia.Platform.Storage;
 using UotanStudio.Composition;
 using UotanStudio.Services;
 using UotanStudio.Services.Ui;
+using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Shell;
+using Ursa.Controls;
 
 namespace UotanStudio.Views.Shell;
 
@@ -15,8 +17,6 @@ namespace UotanStudio.Views.Shell;
 /// </summary>
 public partial class AvbToolWindow : Window
 {
-    private bool _confirmingDeletion;
-
     /// <summary>
     /// Creates the AVB tool window, loads the key library and cancels the close request while an operation runs.
     /// <para>创建 AVB 工具窗口，载入密钥库，并在操作运行期间取消关闭请求。</para>
@@ -25,7 +25,7 @@ public partial class AvbToolWindow : Window
     {
         InitializeComponent();
         DataContext = ServiceHub.TryGet<AvbToolViewModel>() ?? new AvbToolViewModel();
-        Opened += async (_, _) => await Model.RefreshKeysAsync();
+        Opened += async (_, _) => await RunOperationAsync(Model.RefreshKeysAsync);
         Closing += (_, e) =>
         {
             if (!Model.IsBusy)
@@ -40,57 +40,21 @@ public partial class AvbToolWindow : Window
 
     private AvbToolViewModel Model => (AvbToolViewModel)DataContext!;
 
-    private async void OnRefreshKeysClick(object? sender, RoutedEventArgs e) => await Model.RefreshKeysAsync();
+    private async void OnRefreshKeysClick(object? sender, RoutedEventArgs e) => await RunOperationAsync(Model.RefreshKeysAsync);
 
-    private async void OnGenerateKeyClick(object? sender, RoutedEventArgs e) => await Model.GenerateKeyAsync();
-
-    private async void OnImportKeyClick(object? sender, RoutedEventArgs e)
-    {
-        var path = await PickOpenFileAsync("Avb_KeyImport", "*.pem", "*.der", "*.key");
-        if (path is not null)
-        {
-            await Model.ImportKeyAsync(path);
-        }
-    }
+    private async void OnAvbKeyDropDownOpened(object? sender, EventArgs e) => await RunOperationAsync(Model.RefreshKeysAsync);
 
     private async void OnExportPublicKeyClick(object? sender, RoutedEventArgs e)
     {
         var path = await PickSaveFileAsync("Avb_KeyExportPublic", "avb_pkmd.bin", "bin");
         if (path is not null)
         {
-            await Model.ExportAvbPublicKeyAsync(path);
+            await RunOperationAsync(() => Model.ExportAvbPublicKeyAsync(path));
         }
     }
 
-    private async void OnDeleteKeyClick(object? sender, RoutedEventArgs e)
-    {
-        if (_confirmingDeletion || Model.IsBusy || Model.SelectedKey is not { } key)
-        {
-            return;
-        }
-
-        _confirmingDeletion = true;
-        try
-        {
-            var language = LanguageService.Instance;
-            var confirmed = await DialogService.ConfirmAsync(this,
-                language.GetString("Avb_KeyDeleteTitle"),
-                string.Format(language.GetString("Avb_KeyDeleteConfirm"), key.Name),
-                language.GetString("Avb_KeyDelete"));
-            if (confirmed)
-            {
-                await Model.DeleteKeyAsync(key);
-            }
-        }
-        catch (Exception ex)
-        {
-            Model.Status = UserError.Describe(ex);
-        }
-        finally
-        {
-            _confirmingDeletion = false;
-        }
-    }
+    private void OnManageKeysClick(object? sender, RoutedEventArgs e) =>
+        UiWindowService.Shared.ShowHostWindow(HostWindowKind.KeyManager);
 
     private async void OnAddImagesClick(object? sender, RoutedEventArgs e)
     {
@@ -124,13 +88,13 @@ public partial class AvbToolWindow : Window
         }
     }
 
-    private async void OnAddFooterClick(object? sender, RoutedEventArgs e) => await Model.AddFooterAsync();
+    private async void OnAddFooterClick(object? sender, RoutedEventArgs e) => await RunOperationAsync(Model.AddFooterAsync);
 
-    private async void OnVerifyImageClick(object? sender, RoutedEventArgs e) => await Model.VerifyImageAsync();
+    private async void OnVerifyImageClick(object? sender, RoutedEventArgs e) => await RunOperationAsync(Model.VerifyImageAsync);
 
-    private async void OnInspectImageClick(object? sender, RoutedEventArgs e) => await Model.InspectImageAsync();
+    private async void OnInspectImageClick(object? sender, RoutedEventArgs e) => await RunOperationAsync(Model.InspectImageAsync);
 
-    private async void OnRemoveFooterClick(object? sender, RoutedEventArgs e) => await Model.RemoveFooterAsync();
+    private async void OnRemoveFooterClick(object? sender, RoutedEventArgs e) => await RunOperationAsync(Model.RemoveFooterAsync);
 
     private async void OnOtaInputBrowseClick(object? sender, RoutedEventArgs e)
     {
@@ -141,7 +105,7 @@ public partial class AvbToolWindow : Window
         }
 
         Model.OtaInputPath = path;
-        await Model.LoadOtaPartitionsAsync();
+        await RunOperationAsync(Model.LoadOtaPartitionsAsync);
     }
 
     private async void OnOtaOutputBrowseClick(object? sender, RoutedEventArgs e)
@@ -164,15 +128,15 @@ public partial class AvbToolWindow : Window
     }
 
     private async void OnLoadOtaPartitionsClick(object? sender, RoutedEventArgs e) =>
-        await Model.LoadOtaPartitionsAsync();
+        await RunOperationAsync(Model.LoadOtaPartitionsAsync);
 
-    private async void OnPatchOtaClick(object? sender, RoutedEventArgs e) => await Model.PatchOtaAsync();
+    private async void OnPatchOtaClick(object? sender, RoutedEventArgs e) => await RunOperationAsync(Model.PatchOtaAsync);
 
-    private async void OnVerifyOtaClick(object? sender, RoutedEventArgs e) => await Model.VerifyOtaAsync();
+    private async void OnVerifyOtaClick(object? sender, RoutedEventArgs e) => await RunOperationAsync(Model.VerifyOtaAsync);
 
     /// <summary>
-    /// Picks one file with an optional extension filter; picker failures are reported through the view model status.
-    /// <para>选择单个文件，可选按扩展名过滤；选择器失败经视图模型状态上报。</para>
+    /// Picks one file with an optional extension filter; picker failures are shown in a dialog.
+    /// <para>选择单个文件，可选按扩展名过滤；选择器失败以弹窗提示。</para>
     /// </summary>
     private async Task<string?> PickOpenFileAsync(string titleKey, params string[] patterns)
     {
@@ -193,7 +157,7 @@ public partial class AvbToolWindow : Window
         }
         catch (Exception ex)
         {
-            Model.Status = UserError.Describe(ex);
+            await ShowErrorAsync(ex);
             return null;
         }
     }
@@ -215,14 +179,14 @@ public partial class AvbToolWindow : Window
         }
         catch (Exception ex)
         {
-            Model.Status = UserError.Describe(ex);
+            await ShowErrorAsync(ex);
             return [];
         }
     }
 
     /// <summary>
-    /// Picks one destination file; picker failures are reported through the view model status.
-    /// <para>选择单个目标文件；选择器失败经视图模型状态上报。</para>
+    /// Picks one destination file; picker failures are shown in a dialog.
+    /// <para>选择单个目标文件；选择器失败以弹窗提示。</para>
     /// </summary>
     private async Task<string?> PickSaveFileAsync(string titleKey, string? suggestedFileName, string? extension)
     {
@@ -239,9 +203,60 @@ public partial class AvbToolWindow : Window
         }
         catch (Exception ex)
         {
-            Model.Status = UserError.Describe(ex);
+            await ShowErrorAsync(ex);
             return null;
         }
+    }
+
+    private async Task RunOperationAsync(Func<Task> operation)
+    {
+        var model = Model;
+        if (model.IsBusy)
+        {
+            return;
+        }
+
+        model.Status = "";
+        model.OtaSummary = "";
+        try
+        {
+            await operation();
+            var messages = new[] { model.Status, model.OtaSummary }
+                .Where(message => !string.IsNullOrWhiteSpace(message))
+                .Distinct(StringComparer.Ordinal);
+            var message = string.Join(Environment.NewLine + Environment.NewLine, messages);
+            model.Status = "";
+            model.OtaSummary = "";
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                await DialogService.ShowAsync(this, LanguageService.Instance.GetString("Avb_Title"),
+                    message, MessageBoxIcon.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorAsync(ex);
+        }
+    }
+
+    private async void OnZipKeySelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        var model = Model;
+        if (model.IsBusy || string.IsNullOrWhiteSpace(model.Status))
+        {
+            return;
+        }
+
+        var message = model.Status;
+        model.Status = "";
+        await DialogService.ShowAsync(this, LanguageService.Instance.GetString("Avb_Title"),
+            message, MessageBoxIcon.Error);
+    }
+
+    private async Task ShowErrorAsync(Exception exception)
+    {
+        await DialogService.ShowAsync(this, LanguageService.Instance.GetString("Avb_Title"),
+            UserError.Describe(exception), MessageBoxIcon.Error);
     }
 
     private static FilePickerFileType BuildFileType(string[] patterns) =>

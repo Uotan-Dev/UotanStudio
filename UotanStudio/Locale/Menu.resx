@@ -661,7 +661,7 @@ Continue creating the project?</value>
     <value>Output directory</value>
   </data>
   <data name="Keys_Browse" xml:space="preserve">
-    <value>Browse</value>
+    <value>Select directory</value>
   </data>
   <data name="Keys_FormatPkcs12" xml:space="preserve">
     <value>PKCS12 only (.p12)</value>

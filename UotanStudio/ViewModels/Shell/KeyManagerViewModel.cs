@@ -75,11 +75,12 @@ public partial class KeyManagerViewModel : ViewModelBase
     /// <summary>Whether the selected purpose is backed by the managed key library.
     /// <para>当前用途是否由密钥库后端支持。</para>
     /// </summary>
-    public bool IsLibraryPurpose => KindIndex is (int)ManagedKeyKind.Zip or < (int)ManagedKeyKind.Apk;
+    public bool IsLibraryPurpose => KindIndex is (int)ManagedKeyKind.Zip or (int)ManagedKeyKind.Avb or < (int)ManagedKeyKind.Apk;
     /// <summary>Whether the key-size selector can be changed for the selected purpose.
     /// <para>当前用途是否允许调整密钥位数。</para>
     /// </summary>
-    public bool IsBitsEditable => IsPayload || IsJar || IsZip || IsPublisher;
+    public bool IsBitsEditable => IsPayload || IsJar || IsZip || IsAvb || IsPublisher;
+    public bool IsAvb => KindIndex == (int)ManagedKeyKind.Avb;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
@@ -210,6 +211,7 @@ public partial class KeyManagerViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsJar));
         OnPropertyChanged(nameof(IsZip));
         OnPropertyChanged(nameof(IsPublisher));
+        OnPropertyChanged(nameof(IsAvb));
         OnPropertyChanged(nameof(IsLibraryPurpose));
         OnPropertyChanged(nameof(IsBitsEditable));
         OnPropertyChanged(nameof(IsOutputDirectoryRequired));

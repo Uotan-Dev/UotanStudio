@@ -147,6 +147,7 @@
                                 <ComboBoxItem Content="{DynamicResource Keys_ApkKey}" />
                                 <ComboBoxItem Content="{DynamicResource Keys_ApkCertificate}" />
                                 <ComboBoxItem Content="{DynamicResource Keys_Zip}" />
+                                <ComboBoxItem Content="AVB" />
                             </ComboBox>
                         </Grid>
                         <Grid ColumnSpacing="8" IsVisible="{Binding !IsApkCertificate}">

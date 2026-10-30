@@ -2,6 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:UotanStudio.ViewModels.Shell"
         xmlns:keys="using:UotanStudio.Services.Keys"
+        xmlns:icons="https://irihi.tech/iconica/tdesign"
+        xmlns:primitives="using:Avalonia.Controls.Primitives"
         x:Class="UotanStudio.Views.Shell.AvbToolWindow"
         x:DataType="vm:AvbToolViewModel"
         Title="{DynamicResource Avb_Title}"
@@ -9,6 +11,10 @@
         WindowStartupLocation="CenterOwner" ShowInTaskbar="True"
         ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
         WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+    <Window.Resources>
+        <CornerRadius x:Key="KeyFieldCornerRadius">6</CornerRadius>
+        <SolidColorBrush x:Key="KeyEntryBorderBrush" Color="{DynamicResource BorderForegroundColor}" />
+    </Window.Resources>
     <Window.Styles>
         <Style Selector="TextBlock">
             <Setter Property="FontSize" Value="13" />
@@ -16,11 +22,16 @@
         <Style Selector="Button">
             <Setter Property="FontSize" Value="13" />
         </Style>
+        <Style Selector="SelectableTextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
         <Style Selector="TextBox">
             <Setter Property="FontSize" Value="13" />
         </Style>
         <Style Selector="ComboBox">
             <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
             <Setter Property="Background">
@@ -45,6 +56,12 @@
             <Setter Property="Opacity" Value="0.6" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
+        <Style Selector="ListBox.key-list > ListBoxItem">
+            <Setter Property="CornerRadius" Value="{StaticResource KeyFieldCornerRadius}" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
         <Style Selector="TextBox.key-field">
             <Setter Property="Height" Value="32" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -67,73 +84,27 @@
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
+        <Style Selector="TabItem.avb-tab">
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
     </Window.Styles>
     <Grid RowDefinitions="*,Auto" Margin="0,32,0,0">
-        <TabControl Grid.Row="0" Padding="14,6,14,0" IsEnabled="{Binding IsIdle}">
-            <!-- 密钥 / Keys -->
-            <TabItem Header="{DynamicResource Avb_TabKeys}">
-                <Grid ColumnDefinitions="300,*" ColumnSpacing="18" Margin="0,14,14,14">
-                    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
-                        <TextBlock Text="{DynamicResource Avb_KeysSubtitle}" TextWrapping="Wrap" FontSize="12" Opacity="0.7" />
-                        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                            <TextBlock Text="{DynamicResource Avb_KeyList}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <Button Grid.Column="1" Classes="key-action" Content="{DynamicResource Avb_KeyRefresh}"
-                                    Click="OnRefreshKeysClick" />
-                        </Grid>
-                        <ListBox Grid.Row="2" Name="AvbKeyList" ItemsSource="{Binding AvbKeys}"
-                                 SelectedItem="{Binding SelectedKey}" Background="Transparent" BorderThickness="0"
-                                 Padding="0,0,10,0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate x:DataType="keys:ManagedKey">
-                                    <StackPanel Spacing="3" Margin="2,5">
-                                        <TextBlock Text="{Binding Name}" FontWeight="Medium"
-                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
-                                        <TextBlock Text="{Binding Summary}" FontSize="12" Opacity="0.65" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </Grid>
-                    <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled"
-                                  VerticalScrollBarVisibility="Auto">
-                        <StackPanel Spacing="12">
-                            <TextBlock Text="{DynamicResource Avb_KeyForm}" FontWeight="SemiBold" />
-                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto"
-                                  ColumnSpacing="10" RowSpacing="10">
-                                <TextBlock Classes="field-label" Text="{DynamicResource Avb_KeyName}" />
-                                <TextBox Grid.Column="1" Classes="key-field" Text="{Binding KeyName}" MaxLength="80"
-                                         PlaceholderText="{DynamicResource Avb_KeyName}"
-                                         AutomationProperties.Name="{DynamicResource Avb_KeyName}" />
-                                <TextBlock Grid.Row="1" Classes="field-label" Text="{DynamicResource Avb_KeyBits}" />
-                                <ComboBox Grid.Row="1" Grid.Column="1" Classes="key-field" HorizontalAlignment="Stretch"
-                                          ItemsSource="{Binding KeyBitOptions}" SelectedItem="{Binding KeyBits}"
-                                          AutomationProperties.Name="{DynamicResource Avb_KeyBits}" />
-                                <TextBlock Grid.Row="2" Classes="field-label" Text="{DynamicResource Avb_KeyPassword}" />
-                                <TextBox Grid.Row="2" Grid.Column="1" Classes="key-field" Text="{Binding KeyPassword}"
-                                         PasswordChar="●" PlaceholderText="{DynamicResource Avb_KeyPassword}"
-                                         AutomationProperties.Name="{DynamicResource Avb_KeyPassword}" />
-                            </Grid>
-                            <WrapPanel ItemSpacing="8" LineSpacing="8">
-                                <Button Classes="key-action" Content="{DynamicResource Avb_KeyGenerate}"
-                                        Click="OnGenerateKeyClick" />
-                                <Button Classes="key-action" Content="{DynamicResource Avb_KeyImport}"
-                                        Click="OnImportKeyClick" />
-                                <Button Classes="key-action" Content="{DynamicResource Avb_KeyExportPublic}"
-                                        Click="OnExportPublicKeyClick" />
-                                <Button Classes="key-action" Content="{DynamicResource Avb_KeyDelete}"
-                                        Click="OnDeleteKeyClick" />
-                            </WrapPanel>
-                            <TextBlock Text="{DynamicResource Avb_KeyPublicBlob}" FontWeight="SemiBold" />
-                            <TextBlock Classes="field-hint" Text="{DynamicResource Avb_KeyPublicBlobHint}" />
-                            <Border Classes="result-card" BorderBrush="{DynamicResource BorderBrush}" MinHeight="96">
-                                <SelectableTextBlock Text="{Binding KeyStatus}" FontSize="12" TextWrapping="Wrap" />
-                            </Border>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Grid>
-            </TabItem>
-            <!-- 尾部 / Footer -->
-            <TabItem Header="{DynamicResource Avb_TabFooter}">
+        <TabControl Grid.Row="0" Classes="avb-tabs" Padding="14,6,14,0" IsEnabled="{Binding IsIdle}">
+            <TabControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <primitives:UniformGrid Rows="1" />
+                </ItemsPanelTemplate>
+            </TabControl.ItemsPanel>
+            <TabItem Classes="avb-tab">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+                        <icons:FileSafety Width="16" Height="16" />
+                        <TextBlock Text="{DynamicResource Avb_TabFooter}" FontSize="12" TextAlignment="Center" VerticalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
                 <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12" Margin="0,14,14,8">
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                         <TextBlock Classes="field-label" Text="{DynamicResource Avb_FooterImage}" />
@@ -150,7 +121,37 @@
                     <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
                                   VerticalScrollBarVisibility="Auto">
                         <StackPanel Spacing="14" Margin="0,0,4,0">
-                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto"
+                            <StackPanel Spacing="4">
+                                <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterSigningKey}" />
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                                    <ComboBox Classes="key-field" HorizontalAlignment="Stretch"
+                                              ItemsSource="{Binding AvbKeys}" SelectedItem="{Binding SelectedKey}"
+                                              DropDownOpened="OnAvbKeyDropDownOpened"
+                                              AutomationProperties.Name="{DynamicResource Avb_FooterSigningKey}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="keys:ManagedKey">
+                                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <Button Grid.Column="1" Classes="key-action" Width="32" Padding="0"
+                                            Click="OnExportPublicKeyClick" ToolTip.Tip="{DynamicResource Avb_KeyExportPublic}"
+                                            AutomationProperties.Name="{DynamicResource Avb_KeyExportPublic}">
+                                        <icons:FileExport Width="16" Height="16" />
+                                    </Button>
+                                    <Button Grid.Column="2" Classes="key-action" Width="32" Padding="0"
+                                            Click="OnRefreshKeysClick" ToolTip.Tip="{DynamicResource Avb_KeyRefresh}"
+                                            AutomationProperties.Name="{DynamicResource Avb_KeyRefresh}">
+                                        <icons:Refresh Width="16" Height="16" />
+                                    </Button>
+                                    <Button Grid.Column="3" Classes="key-action" Width="32" Padding="0"
+                                            Click="OnManageKeysClick" ToolTip.Tip="{DynamicResource Avb_KeyManage}"
+                                            AutomationProperties.Name="{DynamicResource Avb_KeyManage}">
+                                        <icons:Key Width="16" Height="16" />
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto"
                                   ColumnSpacing="14" RowSpacing="12">
                                 <StackPanel Spacing="4">
                                     <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterPartition}" />
@@ -167,47 +168,61 @@
                                         <ComboBoxItem Content="{DynamicResource Avb_FooterModeHashtree}" />
                                     </ComboBox>
                                 </StackPanel>
-                                <StackPanel Grid.Row="1" Spacing="4">
-                                    <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterRollbackIndex}" />
-                                    <TextBox Classes="key-field" Text="{Binding RollbackIndex}"
-                                             AutomationProperties.Name="{DynamicResource Avb_FooterRollbackIndex}" />
-                                </StackPanel>
-                                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
-                                    <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterRollbackLocation}" />
-                                    <TextBox Classes="key-field" Text="{Binding RollbackIndexLocation}"
-                                             AutomationProperties.Name="{DynamicResource Avb_FooterRollbackLocation}" />
-                                </StackPanel>
-                                <StackPanel Grid.Row="2" Spacing="4">
-                                    <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterPartitionSize}" />
-                                    <TextBox Classes="key-field" Text="{Binding PartitionSize}"
-                                             AutomationProperties.Name="{DynamicResource Avb_FooterPartitionSize}" />
-                                    <TextBlock Classes="field-hint" Text="{DynamicResource Avb_FooterPartitionSizeHint}" />
-                                </StackPanel>
-                                <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4">
-                                    <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterTrustedKey}" />
-                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                        <TextBox Classes="key-field" Text="{Binding TrustedPublicKeyPath}"
-                                                 PlaceholderText="{DynamicResource Avb_FooterTrustedKeyPlaceholder}"
-                                                 AutomationProperties.Name="{DynamicResource Avb_FooterTrustedKey}" />
-                                        <Button Grid.Column="1" Classes="key-action"
-                                                Content="{DynamicResource Avb_Browse}"
-                                                Click="OnTrustedKeyBrowseClick" />
+                                <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Spacing="4"
+                                            ToolTip.Tip="{DynamicResource Avb_FooterFlagsHint}">
+                                    <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterFlags}" />
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                                        <CheckBox Classes="compact-check" IsChecked="{Binding DisableVerity}"
+                                                  Content="{DynamicResource Avb_FooterDisableVerity}" FontSize="12" />
+                                        <CheckBox Grid.Column="1" Classes="compact-check"
+                                                  IsChecked="{Binding DisableAvbVerification}"
+                                                  Content="{DynamicResource Avb_FooterDisableVerification}" FontSize="12" />
                                     </Grid>
                                 </StackPanel>
                             </Grid>
+                            <Expander Header="{DynamicResource Avb_FooterAdvanced}">
+                                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto"
+                                      ColumnSpacing="14" RowSpacing="12" Margin="0,10,0,0">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterRollbackIndex}" />
+                                        <TextBox Classes="key-field" Text="{Binding RollbackIndex}"
+                                                 AutomationProperties.Name="{DynamicResource Avb_FooterRollbackIndex}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterRollbackLocation}" />
+                                        <TextBox Classes="key-field" Text="{Binding RollbackIndexLocation}"
+                                                 AutomationProperties.Name="{DynamicResource Avb_FooterRollbackLocation}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Spacing="4">
+                                        <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterPartitionSize}" />
+                                        <TextBox Classes="key-field" Text="{Binding PartitionSize}"
+                                                 AutomationProperties.Name="{DynamicResource Avb_FooterPartitionSize}" />
+                                        <TextBlock Classes="field-hint" Text="{DynamicResource Avb_FooterPartitionSizeHint}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+                                        <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterTrustedKey}" />
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <TextBox Classes="key-field" Text="{Binding TrustedPublicKeyPath}"
+                                                     PlaceholderText="{DynamicResource Avb_FooterTrustedKeyPlaceholder}"
+                                                     AutomationProperties.Name="{DynamicResource Avb_FooterTrustedKey}" />
+                                            <Button Grid.Column="1" Classes="key-action"
+                                                    Content="{DynamicResource Avb_Browse}"
+                                                    Click="OnTrustedKeyBrowseClick" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+                            </Expander>
                             <StackPanel Spacing="4">
                                 <TextBlock Classes="field-caption" Text="{DynamicResource Avb_FooterOutput}" />
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBox Classes="key-field" Text="{Binding FooterOutputPath}"
-                                             PlaceholderText="{DynamicResource Avb_FooterOutputPlaceholder}"
                                              AutomationProperties.Name="{DynamicResource Avb_FooterOutput}" />
                                     <Button Grid.Column="1" Classes="key-action"
                                             Content="{DynamicResource Avb_Browse}"
                                             Click="OnFooterOutputBrowseClick" />
                                 </Grid>
-                                <TextBlock Classes="field-hint" Text="{Binding SignedOutputPath}" />
                             </StackPanel>
-                            <WrapPanel ItemSpacing="8" LineSpacing="8">
+                            <WrapPanel HorizontalAlignment="Right" ItemSpacing="8" LineSpacing="8">
                                 <Button Classes="key-action" Content="{DynamicResource Avb_FooterSign}"
                                         Click="OnAddFooterClick" />
                                 <Button Classes="key-action" Content="{DynamicResource Avb_FooterVerify}"
@@ -217,14 +232,17 @@
                                 <Button Classes="key-action" Content="{DynamicResource Avb_FooterUnsign}"
                                         Click="OnRemoveFooterClick" />
                             </WrapPanel>
-                            <TextBlock Classes="field-hint" Text="{DynamicResource Avb_FooterUnsignedHint}" />
                         </StackPanel>
                     </ScrollViewer>
-                    <TextBlock Grid.Row="2" Classes="field-hint" Text="{DynamicResource Avb_FooterKeyHint}" />
                 </Grid>
             </TabItem>
-            <!-- A/B OTA -->
-            <TabItem Header="{DynamicResource Avb_TabOta}">
+            <TabItem Classes="avb-tab">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+                        <icons:File Width="16" Height="16" />
+                        <TextBlock Text="{DynamicResource Avb_TabOta}" FontSize="12" TextAlignment="Center" VerticalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
                 <Grid RowDefinitions="Auto,*" RowSpacing="12" Margin="0,14,14,8">
                     <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto"
                           ColumnSpacing="10" RowSpacing="8">
@@ -285,8 +303,11 @@
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Spacing="4">
                                         <TextBlock Classes="field-caption" Text="{DynamicResource Avb_OtaOptions}" />
-                                        <CheckBox Classes="compact-check" IsChecked="{Binding DisableAvb}"
-                                                  Content="{DynamicResource Avb_OtaDisableAvb}" FontSize="12" />
+                                        <Grid Height="32">
+                                            <CheckBox Classes="compact-check" Height="32" VerticalAlignment="Center"
+                                                      IsChecked="{Binding DisableAvb}"
+                                                      Content="{DynamicResource Avb_OtaDisableAvb}" FontSize="12" />
+                                        </Grid>
                                     </StackPanel>
                                     <StackPanel Grid.Row="1" Spacing="4">
                                         <TextBlock Classes="field-caption" Text="{DynamicResource Avb_OtaPayloadKey}" />
@@ -306,6 +327,7 @@
                                         <ComboBox Classes="key-field" HorizontalAlignment="Stretch"
                                                   ItemsSource="{Binding ZipKeys}"
                                                   SelectedItem="{Binding SelectedZipKey}"
+                                                  SelectionChanged="OnZipKeySelectionChanged"
                                                   AutomationProperties.Name="{DynamicResource Avb_OtaZipKey}">
                                             <ComboBox.ItemTemplate>
                                                 <DataTemplate x:DataType="keys:ManagedKey">
@@ -330,40 +352,18 @@
                                     <TextBox Classes="key-field" Text="{Binding OtaPrivateKeyPath}" IsReadOnly="True"
                                              AutomationProperties.Name="{DynamicResource Avb_OtaPrivateKey}" />
                                 </StackPanel>
-                                <WrapPanel ItemSpacing="8" LineSpacing="8">
+                                <WrapPanel HorizontalAlignment="Right" ItemSpacing="8" LineSpacing="8">
                                     <Button Classes="key-action" Content="{DynamicResource Avb_OtaPatch}"
                                             Click="OnPatchOtaClick" />
                                     <Button Classes="key-action" Content="{DynamicResource Avb_OtaVerify}"
                                             Click="OnVerifyOtaClick" />
                                 </WrapPanel>
-                                <StackPanel Spacing="4">
-                                    <TextBlock Classes="field-caption" Text="{DynamicResource Avb_Result}" />
-                                    <Border Classes="result-card" BorderBrush="{DynamicResource BorderBrush}"
-                                            MinHeight="110">
-                                        <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                                                      VerticalScrollBarVisibility="Auto">
-                                            <SelectableTextBlock Text="{Binding OtaSummary}" FontSize="12"
-                                                                 TextWrapping="Wrap" />
-                                        </ScrollViewer>
-                                    </Border>
-                                </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>
                 </Grid>
             </TabItem>
         </TabControl>
-        <Border Grid.Row="1" Padding="16,10" BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="0,1,0,0" Background="{DynamicResource PageBackground}">
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" Width="120" Height="4"
-                             VerticalAlignment="Center" />
-                <ScrollViewer Grid.Column="1" MaxHeight="86" HorizontalScrollBarVisibility="Disabled"
-                              VerticalScrollBarVisibility="Auto">
-                    <SelectableTextBlock Text="{Binding Status}" FontSize="12" TextWrapping="Wrap"
-                                         VerticalAlignment="Center" />
-                </ScrollViewer>
-            </Grid>
-        </Border>
+        <ProgressBar Grid.Row="1" IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="3" />
     </Grid>
 </Window>
