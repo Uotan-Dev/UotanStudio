@@ -2,6 +2,47 @@
 
 本文件记录门禁实测结果与未验证边界；每跑完一道门禁就更新"当前实测"一节。只写当前状态：一条测量配一个日期，不写轮次叙述、不写"上一轮"或"之前失败现在通过"。常驻约束与命令在根 `AGENTS.md`，测试工程写法在 `UotanStudio.Tests/AGENTS.md`。
 
+## Magisk v20.0–v31.1 全 Release 语料实测与两处修补修复（2026-10-30，Windows x64，Debug，共享工作树）
+
+- 语料实测：用临时工程（%TEMP%，跑完即删）经 `RootPatchCatalog` 之外的公共 API 分页拉取 topjohnwu/Magisk 全部 Release（共 39 个 tag，v20.0→v31.1），以测速排序的候选源（探针胜出为 github.com 直连，github.boki.moe 镜像承担部分交付）下载全部 apk/zip 资产共约 52 个并逐一 `BootPatchAnalyzer.AnalyzeAsync`，同时列出 ZIP 内 lib 布局与修补目标标记。所有 v29+ 资产的 GitHub digest 校验全部通过（更早版本无 digest）。
+- 布局实测结论：v22.0–v31.1 的正式 APK 全部识别为 Magisk、MAGISK_VER 正确、四 ABI 齐全；真实布局分界在 v27/v28——v24–v27 为 magisk32/magisk64 分体库（无 libmagisk.so、无 init-ld），v28+ 为 libmagisk.so 合并布局（含 init-ld）。v20.0–v21.4 仅发布 flashable/uninstaller ZIP（无 lib/ 布局，二进制在 arm/、x86/ 目录），两类 ZIP 均识别为 Unknown，修补流程不支持属预期边界。
+- 缺陷修复一（资产挑选器）：v24.0–v26.1 的 Release 同时发布 28 KB 的 `stub-release.apk` 壳，与正式 APK 同为「发行版标记 APK」评分且 API 顺序靠前，挑选器选中空壳导致这些版本在修补窗口被判「不受支持」；`Rank` 现将名称含 `stub` 的资产排除（与 debug/sources 同级）。
+- 缺陷修复二（分体库版本门槛）：`IsMagiskRuntimeEntry`/`MagiskTarget` 原以 `version.StartsWith("27.")` 决定是否安装 magisk32/magisk64 分体库，实测 v24–v27 均为分体布局，v24.0–v26.4 的修补产物会缺失 magisk 主体；门槛改为 `UsesSplitNativeLibraries`（解析 MAGISK_VER 主版本号落在 24–27），`magisk64` 目标映射同步修正，MAGISK_VER 带 `:代码` 后缀的取值正确解析主版本。
+- 定向测试：`RootPatchReleaseClientTests` 22/22（新增 `SelectPackageAsset_StubAppShell_LosesToTheManagerApk`），`BootPatchModelsTests` 31/31（新增 `PatchAsync_MagiskV24SplitLayout_InstallsTheSplitNativeLibraries`，断言 magisk32.xz/magisk64.xz 以 XZ 载荷写入 overlay.d/sbin 且 init 为 magiskinit 接管），Firmware 命名空间 4425 通过/2 环境跳过，Net 命名空间 57/57。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 的 `whitespace` 与 `style` 全解零报告；全量 `dotnet test --solution UotanStudio.slnx --no-build -c Debug --minimum-expected-tests 6000` 7922 总数 / 7914 通过 / 8 跳过 / 0 失败（2m34s）。
+- 未验证边界：v24.0–v26.4 修复后只经合成包集成测试验证，未用真实历史 APK 逐一跑完整 PatchAsync（语料在检测后已按临时产物纪律删除）；v20.0–v21.4 flashable ZIP 的支持缺口未列入实现计划；Magisk Alpha（vvb2060）与 Canary 渠道未做同样语料实测；修补产物的真机启动验证仍缺失。
+
+## 修补包镜像测速先行与清单镜像化实测（2026-10-30，Windows x64，Debug，共享工作树）
+
+- 预热流程重排：修补 Boot 窗口与烧录面板 Root 区共用的 `RootPatchPackageService.WarmUpAsync` 先对 Release API 探针（Magisk 仓库 `per_page=1` 的 API 地址）做全镜像测速并固定最快源，随后五个补丁包清单同时并行拉取；每份清单按「固定源优先、源站兜底、其余镜像在后」的候选序逐源尝试，切换来源或加载更多版本都复用该顺序读缓存或请求。镜像列表被设置禁用（`patchPackage.useMirrorList=false`）时跳过测速，清单仅走源站。
+- Net 层支持：`HttpDownload.IsGitHubUrl` 纳入 `api.github.com`，API 地址经 marker 前缀改写枚举镜像候选（不支持 API 代理的镜像在探针中失败、排到末位，天然回落源站）；`GitHubReleaseClient.ListPageAsync`/`RootPatchReleaseClient.ListPageAsync` 新增可选排序源列表参数，逐源尝试（传输/状态/JSON 错误换下一源，全部超限时聚合上报；全部「响应过大」时仍走数量减半重试）。
+- 测速缺陷修复：`SelectSourcesBySpeedAsync` 的有界读取循环在响应流短于 256 KiB 时不终止、空转至 5 秒探针超时——测速目标换成小体积 API 响应后每轮必现；已改为读到流尾即退出，探针在小响应上即时完成。
+- 窗口交互：下载进行中锁定补丁包类别与版本选择（版本准备与开始修补的按需下载都覆盖）；点击「获取更多」时同步锁定类别；下载中在进度条右侧显示传输速度与预计剩余时间（0.25s 采样、0.6/0.4 平滑、按包字节数估算，总大小未知时只显速度，完成或失败后隐藏）。
+- 其他：修补窗口的 SukiSU 超级密钥默认改为留空（KPM 模式需非空才能开始；闪刷面板无密钥输入，内部仍以 `KernelPatchDefaultSuperKey` 作为自动修补键）；日志中「Root patch catalog … skipped」等条目对以中文句末标点结尾的异常消息去除传输层追加的英文句点，不再出现 "。." 收尾（`DescribeLogDetail`）。
+- 定向测试：`UotanStudio.Tests.Services.RootPatchPackageTests` 37/37（新增镜像供单并固定、镜像禁用仅源站、日志句点去重；预热测试固定源断言更新为 `https://api.github.com`），`UotanStudio.Tests.Net` 命名空间 56/56（新增 API 地址镜像枚举与改写形状、多源回退/首选源跳过/全失败聚合），`LocaleDictionaryTests` 6/6（新增 `BootPatch_TimeRemaining`）。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 的 `whitespace` 与 `style` 全解零报告；全量 `dotnet test --solution UotanStudio.slnx --no-build -c Debug --minimum-expected-tests 6000` 7919 总数 / 7911 通过 / 8 跳过 / 0 失败（1m33s）。
+- 未验证边界：速度与剩余时间的实际显示、下载锁定的观感需人工在 GUI 走一遍；真实镜像站对 `api.github.com` 的代理支持参差，不支持者依赖探针失败回落，未对全部 33 个镜像逐一实测；清单改由镜像交付后，版本号/长度/摘要本身出自镜像（载荷仍按摘要校验，但镜像被篡改清单时校验基线随之变化）——信任模型变化未做对抗性验证；`net_io_readfailure` 双句点的修复仅由 `DescribeLogDetail` 单测覆盖，未复现真实断连日志。
+
+## 修补 Boot 窗口 KernelSU 修补模式实测（2026-10-30，Windows x64，Debug，共享工作树）
+
+- 修补模式自动选择：`BootPatchMode`（Auto/Lkm/Gki/Kpm）进入 `BootPatchOptions`，Auto 按包内容路由——KernelSU 系包含 libksud 或内置 .ko 走 LKM（kernelsu.ko 入 ramdisk，KMI 校验仅在 LKM 生效时运行）；携带 kpimg（`assets/kpimg` 或 `assets/kpm/kpimg`）的包走 KPM（KernelPatch 注入内核、ramdisk 原样、superkey 必填，KernelSu 类型包内也携带 kpimg 时 KPM 优先）；`BootPatchKind.GkiKernel`（新增类型）走 GKI——用包本身替换 boot 内核段。修补模式下拉框按要求移除，模式由检测结果自动决定。
+- GkiKernel 识别：独立内核文件（0x38 处 ARM64 `ARMd` 魔数的原始 Image，或 gzip 压缩内核）与 AnyKernel3 风格压缩包（含 Image/Image.gz-dtb/Image.gz/Image-dtb/zImage/zImage-dtb/bzImage 条目且无 libksud/ko/kpimg/Magisk 标记）识别为 `GkiKernel`；`DetectKernelArchitecture` 新增 ARM64 头魔数直判，boot 内核架构检测同样受益。自选文件过滤器扩展 `*.img`/`*.gz`/`*` 以接纳扩展名内核镜像。
+- GKI 替换细节：256MB 有界读取，gzip 载荷解压后按原内核压缩方式重压；v1 头镜像在替换内核不带 DTB 时回接原内核 DTB（变更列表报告 `re-attach the original kernel DTB`）；ramdisk 与 fstab/overlay 不做任何改动；显式 GKI 只接受 GkiKernel 包，显式 LKM 拒绝 KernelPatch 包。`RootPatchSources.Accepts` 让 KernelSU/SukiSU 来源额外接受 GkiKernel 资产（SukiSU 仍接受 KernelPatch）。
+- 窗口 UI 随自动模式联动：GKI 模式隐藏预启动设备输入；KPM 模式把设备框变为超级密钥框（密码符 `*`，默认留空、非空才能开始）；LKM 模式显示 KMI 列表。Magisk 复选框文案 `BootPatch_ForceRootfs` 改为大小写规范的 "Legacy SAR"（中英一致）。
+- 定向测试：`UotanStudio.Tests.Firmware.BootPatchModeTests` 10/10（KernelSu 包内 kpimg 检测、原始 Image 与 AnyKernel3 压缩包识别、原始内核与 AnyKernel3 替换 boot 内核并保留 ramdisk、v1 DTB 回接、KernelSu+kpimg 自动 KPM 注入且 ramdisk 不动、显式 LKM 拒绝 KernelPatch 包、显式 GKI 拒绝 KernelSu 包、无内核条目压缩包拒绝），`LocaleDictionaryTests` 6/6，`RootPatchPackageTests` 34/34，`FirmwareArchitectureGuardTests` 12/12，`FirmwareNamespaceFolderTests` 2/2。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告（宿主增量编译另有 3 条既有 CS8604，来自 NodeEditorView 手势代码）；`dotnet format` 的 `whitespace` 与 `style` 全解零报告；全量 `dotnet test --solution UotanStudio.slnx --no-build -c Debug --minimum-expected-tests 6000` 7906 总数 / 7898 通过 / 8 跳过 / 0 失败（1m53s）。
+- 未验证边界：修补模式自动选择在实际下载的 KernelSU/SukiSU Release 资产上的表现需联网走一遍 GUI（GKI 内核包与 KPM 补丁包的发布形态以社区现状为准）；GKI 替换内核与设备 KMI 的匹配性未校验（由使用者保证）；真机启动未验证；修补模式无人工下拉覆盖入口，异常包形态只能通过自选文件显式模式 API 覆盖。
+
+## 密钥管理密码提示与删除联动实测（2026-10-30，Windows x64，Debug，共享工作树）
+
+- APK 证书生成组：生成按钮在密钥库密码为空时由窗口层拦截——导出格式为 JKS/全部时弹出「需要密钥库密码」警示框并回焦密码框，不再静默失败到不可见的状态文本；导出 PKCS12 时弹出「不设密码导出？」确认框，确认后按无密码继续，取消则不生成；PEM 不使用密码，不拦截。拦截依赖 Avalonia `Button.OnClick` 的 `!e.Handled` 门（对 12.1.4 源码逐字核实），标记 Handled 后 Command 不会执行。
+- 导出文件登记与删除联动：`ManagedKey` 新增可选 `LinkedFiles`（旧 key.json 反序列化为空列表），`GenerateApkCertificate` 导出成功后原子改写 key.json 登记本次导出的 jks/p12/pem/pk8 路径；`Delete` 同步删除登记文件（逐个 best-effort，仅捕获 IO/未授权异常）并返回未能删除的路径，`Remove` 进回收站路径的行为不变；`Equals`/`GetHashCode` 重写为六个同一性字段，`LinkedFiles` 不参与，保持与 JSON 往返的相等语义。
+- 删除确认与状态栏：条目带登记文件时删除确认框改列将被一并删除的文件名，无登记文件时维持原文案；窗口底部新增状态栏（`Status`/`HasStatus`），生成时的导出路径与删除失败的登记路径均可见。
+- 定向测试：`UotanStudio.Tests.Services.ApkKeystoreAndCertificateTests` 15/15（新增 `GenerateApkCertificate_RecordsLinkedFilesAndDeleteRemovesThem`、`Delete_MissingLinkedFile_SucceedsWithoutFailures`），`KeyLibraryTests` 10/10，`KeyManagerPurposeTests` 4/4，`LocaleDictionaryTests` 6/6，`DefaultSignatureTests` 8/8，`ProjectOperationsBoundaryTests` 23/23，`NodeCatalogReductionTests` 23/23。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告（宿主增量编译另有 3 条既有 CS8604，来自 NodeEditorView 手势代码）；`dotnet format` 的 `whitespace` 与 `style` 全解零报告；全量 `dotnet test --solution UotanStudio.slnx --no-build -c Debug --minimum-expected-tests 6000` 7877 总数 / 7869 通过 / 8 跳过 / 0 失败（1m34s）。
+- NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功；警告仅 LTRData.Extensions/YamlDotNet/Common.Logging 既有 IL2104/IL3053 与 Makaretu.Dns 的 Tmds.LibC ILC 说明，无指向本轮新增宿主代码的裁剪/AOT 警告。
+- 未验证边界：弹窗文案与按钮、密码框回焦、状态栏排版、删除确认文件列表的实际渲染需人工在 GUI 走一遍；登记文件被其他进程占用时删除失败提示的展示路径未在真实占用场景演练；「手动导出副本不受删除影响」仅由 `KeyLibraryTests` 覆盖，未做 GUI 演练。
+
 ## Root 清单预热与单次测速实测（2026-10-29，Windows x64，Debug，共享工作树）
 
 - 清单缓存：`RootPatchPackageService.ListPackagesAsync` 对每个来源只读一次 Release 源并缓存结果，并发调用共享同一个在途任务，失败或不完整的读取不会留在缓存里；`CatalogLoaded`/`TryGetCatalog` 让界面判断是否需要显示「正在获取版本列表…」。
@@ -169,28 +210,28 @@
 
 ### 规则表（Firmware）
 
-- 生成物：`UotanStudio.Firmware/Core/Magic/Generated/CompiledMagicData.zst` 317,678 B（原 3,044,942 B blob 的 10.4%），同目录 `CompiledMagicData.g.cs` 1.5 KB（只含 `RuleCount`、`RulesByteLength`、`CompressedByteLength`、`RulesSha256`、`GeneratedAt`）。解码后 SHA-256 `fe2e629bfea17370ef2f85625e00d3d198cfa3d9ae95d2bb9bb01d8ef2bbf6b1`、`topLevel=4205`、`rules=24763` 与跳过统计保持不变。
-- 程序集：`UotanStudio.Firmware.dll` Release 12,213,248 B → 4,443,648 B（−7.41 MiB），Debug 4,770,304 B。资源以 `LogicalName=UotanStudio.Firmware.Core.Magic.rules.zst` 内嵌；`WithCulture=false` 必需，否则 MSBuild 会把文件名里的 `.bin` 段当文化并产出 satellite assembly。
+- 生成物：帧 `UotanStudio.Assets/Assets/firmware/magic/CompiledMagicData.zst` 317,709 B（由 `UotanStudio.Firmware.MagicGen` 生成，压缩脚本只索引），常量 `UotanStudio.Firmware/Core/Magic/Generated/CompiledMagicData.g.cs` 1.4 KB（只含 `RuleCount`、`RulesByteLength`、`RulesSha256`、`GeneratedAt`）。解码后 SHA-256 `fe2e629bfea17370ef2f85625e00d3d198cfa3d9ae95d2bb9bb01d8ef2bbf6b1`、`topLevel=4205`、`rules=24763` 与跳过统计保持不变。
+- 程序集：`UotanStudio.Firmware.dll` Release 12,213,248 B → 4,443,648 B（−7.41 MiB），Debug 4,770,304 B。帧改由 `UotanStudio.Assets` 以 `LogicalName=assets/firmware/magic/%(Filename)%(Extension)` 内嵌并声明 `WithCulture=false`；固件侧只经 `AssetStore.Read(AssetCatalog.MagicRules, AssetNames.Magic.Rules)` 取已校验字节。
 - 运行时：`FileMagic.Identify` 首次调用 331 ms（资源读取 + zstd 解码 + SHA-256 校验 + 4205 条顶层规则建索引 + 首个匹配），热调用 113 µs/次（1000 次平均）；zstd 解码本体 2.0–2.8 ms。
 - 识别正确性：`dotnet run --project UotanStudio.Firmware.MagicGen -- --smoke` 20/23 命中，未命中的 `plain-text`、`empty` 与 `ZIP` 样本属于既有边界。
 
 ### 字体（Host）
 
-- 生成物：`UotanStudio/Fonts/MiSans-Regular.ttf.zst` 4,900,305 B、`MiSans-Bold.ttf.zst` 4,979,674 B（原 8,122,324 / 8,009,316，60.3% / 62.2%）；原始 TTF 只在本地 `reference/fonts-source/`（仓库忽略）作重新生成的输入。
+- 生成物：`UotanStudio.Assets/Assets/fonts/MiSans-Regular.ttf.zst` 4,900,305 B、`MiSans-Bold.ttf.zst` 4,979,674 B（原 8,122,324 / 8,009,316，60.3% / 62.2%）；原始 TTF 只在本地 `reference/fonts-source/`（仓库忽略）作重新生成的输入。
 - 程序集：`UotanStudio.dll` Debug 23,382,016 B → 17,742,848 B（−5.38 MiB）。
 - 运行时冒烟（真实 `UotanStudio.dll` + Win32/Skia 控制台宿主）：集合键 `fonts:UotanStudio/MiSans`，Regular 与 Bold 均解析为 `MiSans`、29,758 个字形；离屏渲染 `Uotan 中文字体` 得到 2,599 个非透明像素。冷构造 186.7 ms，首次 typeface 解析 6.0 ms。
 - 未验证：真实 GUI 首帧与整体启动耗时、主题/回退链在窗口中的表现；AOT 运行时的字体加载只由发布产物中包含对应逻辑资源名间接证明。
 
 ### 鸿蒙采集库（Mirroring）
 
-- 生成物：15 个 `Assets/ohos/device/*.so` 共 11,204,026 B → 15 个 zstd 帧共 3,478,225 B（31.0%），加同目录 `manifest.txt`（文件名、解码长度、SHA-256）；`UotanStudio.Mirroring.dll` Debug 3,627,520 B。
-- 运行时：首次使用时物化到 `%TEMP%/UotanStudio/ohos-device/<清单 SHA-256 前 16 位>/`，逐文件校验长度与摘要后原子替换；`OhscrcpyDeviceAssetsTests` 3/3，`OhscrcpyServerManagerTests` 12/12。
+- 生成物：15 个 `UotanStudio.Assets/Assets/ohos/device/*.so` 共 11,204,026 B → 15 个 zstd 帧共 3,477,417 B（31.0%），逐文件长度与 SHA-256 记在唯一清单 `UotanStudio.Assets/Assets/manifest.tsv`；`UotanStudio.Mirroring.dll` Debug 3,627,520 B。
+- 运行时：首次使用时由 `AssetStore.Materialize(AssetCatalog.OhosDevice)` 物化到 `%TEMP%/UotanStudio/assets/ohos/device/<bundle 摘要前 16 位>/`，逐文件校验长度与摘要后原子替换；`OhscrcpyDeviceAssetsTests` 通过条件同上，`OhscrcpyServerManagerTests` 12/12。
 - 发布输出不含 `ohos/device` 松散文件（`publish/ohos/device` 只剩空目录）。
 - 未验证：真机/HDC 推送与 `dlopen`；多进程并发首次物化共用同名 `<name>.tmp` 的竞态未特殊处理。
 
 ### 卡刷更新器（Delivery）
 
-- 生成物：`Assets/update-binary-arm64.zst` 838,349 B（原 2,002,464 B，41.9%），逻辑名 `UotanStudio.Delivery.Assets.update-binary-arm64`。
+- 生成物：`UotanStudio.Assets/Assets/delivery/update-binary-arm64.zst` 838,349 B（原 2,002,464 B，41.9%），逻辑名 `assets/delivery/update-binary-arm64.zst`。
 - 运行时：内存解压 → 长度 + SHA-256 校验 → `%TEMP%/UotanStudio/delivery-updater/` 原子落盘并设置可执行位；`EmbeddedUpdaterAssetTests` 2/2。
 - 发布输出 `Assets/` 只有三个图标，不携带 2 MB 更新器。
 - 未验证：设备侧实际执行该更新器。
@@ -214,6 +255,17 @@
 - `UotanStudio.Tests.Firmware` 全命名空间 4398 项 / 4396 通过 / 0 失败 / 2 跳过（缺 `UOTAN_EROFS_CORPUS`）；全解决方案 7662 项，两次完整运行均为 7655 通过 / 7 跳过 / 0 失败。之后在工作区并行负载下复跑时分别出现 1 个与本改动无关的时序/隔离失败（EROFS feature replay 与 USB serial cache 各一次），两类单独复跑分别为 20/20、6/6 通过。
 - 全解决方案 Debug 构建 0 错误；`dotnet format` whitespace 与 style 双门无差异。并发会话中的 `FatBuilderTests` 仍有 6 条 xUnit1051 警告，不属于本次改动。NativeAOT `win-x64` 自包含发布成功（0 错误），警告仍为既有第三方 Ursa/Dock/Avalonia/DataGrid/YamlDotNet/Common.Logging 的 IL2104/IL3053/IL2026 与 `Makaretu.Dns.LinuxHelper` 的 Linux 专属告警，没有出现指向 AVB 新增代码的裁剪警告。
 - 未验证边界：OTA 补丁/校验只用本地构建的完整 Payload 与最小 OTA ZIP 验证，未在真实厂商 OTA、差分/source 操作、`super` 动态分区或真机启动链上接受；顶层链式描述符保持原样且不能重定向，选择链保护分区会被拒绝；`otaverify` 校验载荷签名与 AVB 链，但不独立校验外层 ZIP 签名；AVB 工具窗口与原生文件选择器未做人工 GUI 验证；未与 Android `avbtool` 做逐字节外部对照。
+
+## WinUSB 接管与厂商驱动包（2026-10-30，Windows x64，Debug）
+
+- 接管路径：`WinUsbSelfSignedDriverPackage` 生成设备级 INF、自签代码签名证书与目录签名；暂存走 `SetupCopyOEMInfW(SPOST_PATH)`，绑定只对 `CM_Get_Device_ID_ListW` 返回且 `CM_Get_DevNode_Status` 报 `CM_PROB_FAILED_INSTALL` 的在位节点调 `CM_Reenumerate_DevNode(RETRY_INSTALLATION)`，随后 30 s 内轮询观测绑定切换；UI 触达的路径不调用 `UpdateDriverForPlugAndPlayDevices`/`DiInstallDriverW`。提权助手等待不设超时、不杀进程。
+- 实测规避项（Win11）：mssign32 对带认证属性（SPC opus/statement）的 .cat 主体签名会在目录 SIP 内 `0xC0000005` 崩溃——与目录内容无关（系统自带 .cat 同样复现）、与提权无关；目录签名因此不带认证属性，产物 PKCS#7 内容类型 `1.3.6.1.4.1.311.10.1` 与系统自带目录一致。
+- 确认框口令输入框在勾选不可逆确认前禁用；USB 树驱动操作失败（`Failed`/`DeviceNotFound`）结果与异常一样写入全局日志（`ElevationRequired` 不记）。
+- 驱动包负载经 `UotanStudio.Assets` 的 `drivers/<packageId>` 资源包分发，`UotanStudio.Comm` 侧只有 `DriverPackageAssets` 经 `AssetStore` 读取，不再有程序集级内嵌项：八套包共 74 个负载、19.94 MiB 原始字节、15.18 MiB 帧（rockusb 3、mediatek-vcom 4、mediatek-full 22、google-usb 6、rockchip-adb 7、qualcomm-qud 19、silabs-cp210x 7、ftdi-cdm 6）。`dotnet run tools/compress-embedded-assets.cs -- --check` 报 `asset manifest check: OK`，整份清单 93 行全部逐字节校验通过。
+- 定向测试：`UotanStudio.Tests.Assets` 命名空间 42 项 / 41 通过 / 1 跳过（未随包的 scrcpy 服务器）；`UotanStudio.Tests.Devices` 命名空间 353 项 / 350 通过 / 2 跳过（缺 `UOTAN_*` 环境）；`UotanStudio.Tests.Firmware.Architecture` 55 项全通过，含把接管包的摘要计算约束到 `UotanStudio.Hash` 的 `HashBoundaryGuardTests` 与 `ProjectReferenceDirectionGuardTests`。
+- 门禁：全量 Debug 构建 `dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 的 whitespace 与 style 双门零报告；全量 `dotnet test --solution UotanStudio.slnx --no-build -c Debug --minimum-expected-tests 6000` 8018 总数 / 7998 通过 / 20 跳过 / 0 失败（1m43s）。
+- 夹具与并发边界：`UotanStudio.Tests.Devices` 单独满载运行时出现过 1 次 `AdbTlsTransportTests` 失败，同一命令复跑与全解决方案运行均为 0 失败，属于并行负载下的握手超时，与本改动无关。
+- 未验证边界：接管、解除接管与厂商驱动包安装/卸载均未在带管理员令牌的真机会话复跑（没有真机、没有 UAC 提示、没有一次真实的自签目录暂存）；重插后的绑定、WinUSB 会话与设备管理器中的 RKDL 目标未验证；`win-arm64` 与其余 RID 下的驱动包物化未执行。
 
 ## CI 门禁现状
 
