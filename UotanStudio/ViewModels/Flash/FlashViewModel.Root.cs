@@ -64,7 +64,7 @@ public sealed partial class FlashViewModel
         if (string.IsNullOrWhiteSpace(partitionName)) return null;
         foreach (var entry in selected)
         {
-            if ((entry.Step?.Command ?? "flash") == "flash" &&
+            if (entry.EffectiveCommand == "flash" &&
                 string.Equals(entry.Name, partitionName, StringComparison.OrdinalIgnoreCase))
             {
                 return entry;

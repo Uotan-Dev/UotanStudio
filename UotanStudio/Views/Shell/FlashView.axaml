@@ -154,17 +154,34 @@
                     CornerRadius="8" BorderThickness="1"
                     Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}">
                 <Grid RowDefinitions="Auto,Auto,*">
-                    <Grid Margin="12,8,12,8" ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="10">
-                        <CheckBox Name="SelectAllBox" VerticalAlignment="Center"
-                                  Content="{DynamicResource Flash_SelectAll}"
-                                  IsChecked="{Binding IsSelectAllChecked, Mode=TwoWay}" />
-                        <TextBlock Grid.Column="1" Text="{DynamicResource Flash_Selected}" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="2" MinWidth="20" Text="{Binding SelectedCount}" VerticalAlignment="Center" />
-                        <TextBox Grid.Column="4" Name="PartitionSearchBox" Width="220" MinWidth="120"
+                    <Grid Margin="12,8,12,8" ColumnDefinitions="Auto,*,Auto,*,Auto" ColumnSpacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <CheckBox Name="SelectAllBox"
+                                      Content="{DynamicResource Flash_SelectAll}"
+                                      IsChecked="{Binding IsSelectAllChecked, Mode=TwoWay}" />
+                            <TextBlock Text="{DynamicResource Flash_Selected}" VerticalAlignment="Center" />
+                            <TextBlock MinWidth="20" Text="{Binding SelectedCount}" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBox Grid.Column="2" Name="PartitionSearchBox" Width="220" MinWidth="120"
                                  Height="32" VerticalContentAlignment="Center"
+                                 HorizontalAlignment="Center"
                                  PlaceholderText="{DynamicResource Flash_SearchPlaceholder}"
                                  Text="{Binding SearchText, Mode=TwoWay}"
                                  AutomationProperties.Name="{DynamicResource Flash_SearchPlaceholder}" />
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8">
+                            <Button Name="AddPartitionButton" Width="32" MinWidth="32" Padding="0"
+                                    Click="OnAddPartitionClick"
+                                    ToolTip.Tip="{DynamicResource Flash_AddPartition}"
+                                    AutomationProperties.Name="{DynamicResource Flash_AddPartition}">
+                                <icons:Add Width="16" Height="16" />
+                            </Button>
+                            <Button Name="DeletePartitionsButton" Width="32" MinWidth="32" Padding="0"
+                                    Click="OnDeletePartitionsClick" IsEnabled="{Binding HasSelectedPartitions}"
+                                    ToolTip.Tip="{DynamicResource Flash_DeletePartitions}"
+                                    AutomationProperties.Name="{DynamicResource Flash_DeletePartitions}">
+                                <icons:Delete Width="16" Height="16" />
+                            </Button>
+                        </StackPanel>
                     </Grid>
                     <!-- 窄屏时总进度行在分区列表上方显示，宽屏时隐藏由日志区域下方展示。 -->
                     <!-- In stacked layout the overall row is placed above the partitions; in wide layout it is shown under the log. -->
@@ -177,7 +194,7 @@
                         <DataGrid Name="PartitionGrid" ItemsSource="{Binding VisiblePartitions}"
                                   AutoGenerateColumns="False" CanUserResizeColumns="True" CanUserSortColumns="False"
                                   CanUserReorderColumns="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                                  IsReadOnly="False" SelectionMode="Single" RowHeight="30"
+                                  IsReadOnly="False" SelectionMode="Single" RowHeight="35"
                                   Background="Transparent" BorderThickness="0">
                             <DataGrid.Columns>
                                 <DataGridTemplateColumn Width="Auto" MinWidth="56" IsReadOnly="True">
@@ -194,18 +211,18 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Width="Auto" MinWidth="96" IsReadOnly="True"
+                                <DataGridTextColumn Width="Auto" MinWidth="96"
                                                     Header="{DynamicResource Flash_Partition}"
-                                                    Binding="{Binding Name}" />
-                                <DataGridTextColumn Width="Auto" MinWidth="88" IsReadOnly="True"
+                                                    Binding="{Binding Name, Mode=TwoWay}" />
+                                <DataGridTextColumn Width="Auto" MinWidth="88"
                                                     Header="{DynamicResource Flash_StorageMedium}"
-                                                    Binding="{Binding StorageMedium}" />
-                                <DataGridTextColumn Width="Auto" MinWidth="80" IsReadOnly="True"
+                                                    Binding="{Binding StorageMedium, Mode=TwoWay}" />
+                                <DataGridTextColumn Width="Auto" MinWidth="80"
                                                     Header="{DynamicResource Flash_Command}"
-                                                    Binding="{Binding Command}" />
+                                                    Binding="{Binding Command, Mode=TwoWay}" />
                                 <DataGridTextColumn Width="Auto" MinWidth="90"
                                                     Header="{DynamicResource Flash_Offset}"
-                                                    Binding="{Binding Offset}" />
+                                                    Binding="{Binding Offset, Mode=TwoWay}" />
                                 <DataGridTextColumn Width="Auto" MinWidth="80" IsReadOnly="True"
                                                     Header="{DynamicResource Flash_Size}"
                                                     Binding="{Binding Size}" />
@@ -216,14 +233,20 @@
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate x:DataType="vm:FlashPartitionEntry">
                                             <Grid ColumnDefinitions="*,Auto">
-                                                <TextBlock Text="{Binding FileName}" ToolTip.Tip="{Binding FilePath}"
-                                                           Margin="6,0" VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <Button Grid.Column="1" Padding="4,0" MinWidth="30"
-                                                        Click="OnChoosePartitionImageClick"
-                                                        ToolTip.Tip="{DynamicResource Flash_ChooseFile}">
-                                                    <icons:FolderOpen Width="16" Height="16" />
-                                                </Button>
+                                                <HyperlinkButton Content="{Binding FileName}"
+                                                                 Foreground="{DynamicResource HyperlinkButtonForeground}"
+                                                                 Padding="6,0" VerticalAlignment="Center"
+                                                                 HorizontalAlignment="Left"
+                                                                 Click="OnChoosePartitionImageClick"
+                                                                 IsVisible="{Binding HasFileName}"
+                                                                 ToolTip.Tip="{Binding FilePath}" />
+                                                <HyperlinkButton Content="{DynamicResource Flash_ClickChooseFile}"
+                                                                 Foreground="{DynamicResource HyperlinkButtonForeground}"
+                                                                 Padding="6,0" VerticalAlignment="Center"
+                                                                 HorizontalAlignment="Left"
+                                                                 Click="OnChoosePartitionImageClick"
+                                                                 IsVisible="{Binding !HasFileName}"
+                                                                 ToolTip.Tip="{Binding FilePath}" />
                                             </Grid>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
@@ -256,6 +279,14 @@
                             <TextBlock Text="{DynamicResource Flash_NoPartitionsHint}" HorizontalAlignment="Center"
                                        FontSize="12" Opacity="0.7" TextAlignment="Center" TextWrapping="Wrap" />
                         </StackPanel>
+                        <Border IsVisible="{Binding IsBusy}" IsHitTestVisible="False" ZIndex="10"
+                                Background="{DynamicResource CardBackground}" Opacity="0.82">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                                <ursa:LoadingIcon IsLoading="{Binding IsBusy}" Width="32" Height="32"
+                                                  HorizontalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource Flash_Busy}" />
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Grid>
             </Border>
@@ -764,16 +795,5 @@
             </Border>
         </Grid>
     </ScrollViewer>
-    <!-- 覆盖层忙碌徽标：仅绑定 IsBusy 显隐，IsHitTestVisible=False 保证不拦截取消/操作输入。 -->
-    <!-- Busy badge overlay: visibility driven by IsBusy only; IsHitTestVisible=False keeps cancel/action input intact. -->
-    <Border IsVisible="{Binding IsBusy}" IsHitTestVisible="False" ZIndex="100"
-            HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,16,0,0"
-            Padding="16,8" CornerRadius="10" BorderThickness="1"
-            Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}">
-        <StackPanel Orientation="Horizontal" Spacing="10">
-            <ursa:LoadingIcon IsLoading="{Binding IsBusy}" Width="20" Height="20" />
-            <TextBlock Text="{DynamicResource Flash_Busy}" VerticalAlignment="Center" />
-        </StackPanel>
-    </Border>
     </Grid>
 </UserControl>

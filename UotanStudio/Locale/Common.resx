@@ -504,6 +504,15 @@ Author: 暮间雾
   <data name="Flash_SearchPlaceholder" xml:space="preserve">
     <value>Search partitions</value>
   </data>
+  <data name="Flash_AddPartition" xml:space="preserve">
+    <value>Add image</value>
+  </data>
+  <data name="Flash_DeletePartitions" xml:space="preserve">
+    <value>Remove selected rows</value>
+  </data>
+  <data name="Flash_DeletePartitionsConfirm" xml:space="preserve">
+    <value>Remove {0} selected row(s) from the list? Source files will not be deleted.</value>
+  </data>
   <data name="Flash_Select" xml:space="preserve">
     <value>Select</value>
   </data>
@@ -518,6 +527,9 @@ Author: 暮间雾
   </data>
   <data name="Flash_File" xml:space="preserve">
     <value>File</value>
+  </data>
+  <data name="Flash_ClickChooseFile" xml:space="preserve">
+    <value>Click to choose a file</value>
   </data>
   <data name="Flash_NoPartitions" xml:space="preserve">
     <value>No partition list loaded</value>

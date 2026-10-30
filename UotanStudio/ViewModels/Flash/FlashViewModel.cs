@@ -43,7 +43,7 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     /// <summary>The explicit operation represented by an imported script row, if any.
     /// <para>导入脚本行所表示的显式操作；没有则为空。</para>
     /// </summary>
-    public FlashStep? Step { get; init; }
+    public FlashStep? Step { get; set; }
     /// <summary>Whether the row is selected. <para>是否勾选该分区。</para></summary>
     [ObservableProperty]
     private bool _isSelected;
@@ -59,9 +59,28 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     [ObservableProperty]
     private string _command = string.Empty;
 
+    /// <summary>The operation command, falling back to flash for rows without an explicit command. <para>操作命令；未显式指定时回退为 flash。</para></summary>
+    public string EffectiveCommand => Step?.Command ?? (string.IsNullOrWhiteSpace(Command) ? "flash" : Command);
+
     /// <summary>The partition name. <para>分区名。</para></summary>
     [ObservableProperty]
     private string _name = string.Empty;
+
+    partial void OnNameChanged(string value)
+    {
+        if (Step is { } step)
+        {
+            Step = step with { Partition = value };
+        }
+    }
+
+    partial void OnCommandChanged(string value)
+    {
+        if (Step is { } step)
+        {
+            Step = step with { Command = value };
+        }
+    }
 
     /// <summary>The formatted image size. <para>已格式化的镜像大小。</para></summary>
     [ObservableProperty]
@@ -82,6 +101,14 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     /// <summary>The image file name. <para>镜像文件名。</para></summary>
     [ObservableProperty]
     private string _fileName = string.Empty;
+
+    /// <summary>Whether this row has an image file name. <para>该行是否已有镜像文件名。</para></summary>
+    public bool HasFileName => !string.IsNullOrEmpty(FileName);
+
+    partial void OnFileNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasFileName));
+    }
 
     /// <summary>The full image path, used by the row tooltip. <para>镜像完整路径，用于条目提示。</para></summary>
     [ObservableProperty]
@@ -249,6 +276,10 @@ public sealed partial class FlashViewModel : ObservableObject
     /// <summary>The number of selected partitions. <para>已勾选的分区数量。</para></summary>
     [ObservableProperty]
     private int _selectedCount;
+
+    /// <summary>Whether any partition rows are selected. <para>是否选中了分区行。</para></summary>
+    [ObservableProperty]
+    private bool _hasSelectedPartitions;
 
     /// <summary>Whether the filtered list contains rows. <para>过滤后是否存在可显示的分区。</para></summary>
     [ObservableProperty]
@@ -454,6 +485,7 @@ public sealed partial class FlashViewModel : ObservableObject
     private void UpdateSelectionState()
     {
         SelectedCount = Partitions.Count(entry => entry.IsSelected);
+        HasSelectedPartitions = SelectedCount > 0;
         var selectable = VisiblePartitions.Where(entry => entry.CanSelect).ToList();
         var allVisibleSelected = selectable.Count > 0 && selectable.All(entry => entry.IsSelected);
         _updatingSelectAll = true;

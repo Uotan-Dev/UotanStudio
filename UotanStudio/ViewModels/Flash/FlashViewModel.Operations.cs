@@ -132,6 +132,55 @@ public sealed partial class FlashViewModel
 
     internal void OnClearLogClick(object? sender, RoutedEventArgs e) => ClearLog();
 
+    internal void OnAddPartitionClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming)
+        {
+            return;
+        }
+
+        Partitions.Add(new FlashPartitionEntry
+        {
+            Step = new FlashStep("flash", string.Empty),
+            Name = string.Empty,
+            Command = "flash",
+            CanSelect = true
+        });
+    }
+
+    internal async void OnDeletePartitionsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || _confirming || SelectedCount == 0 ||
+            TopLevel.GetTopLevel(Surface) is not Window owner)
+        {
+            return;
+        }
+
+        var selected = Partitions.Where(entry => entry.IsSelected).ToArray();
+        _confirming = true;
+        bool confirmed;
+        try
+        {
+            confirmed = await DialogService.ConfirmAsync(owner,
+                _localizer.GetString("Flash_DeletePartitions"),
+                string.Format(_localizer.GetString("Flash_DeletePartitionsConfirm"), selected.Length));
+        }
+        finally
+        {
+            _confirming = false;
+        }
+
+        if (!confirmed || _busy || selected.Any(entry => !entry.IsSelected || !Partitions.Contains(entry)))
+        {
+            return;
+        }
+
+        foreach (var entry in selected)
+        {
+            Partitions.Remove(entry);
+        }
+    }
+
     internal async void OnChooseFileClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not { } topLevel)
@@ -979,8 +1028,8 @@ public sealed partial class FlashViewModel
 
     internal async void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e)
     {
-        if (_busy || _confirming || sender is not Button { DataContext: FlashPartitionEntry entry } ||
-            entry.Step?.Command is not (null or "flash" or "wipe_super") || entry.Command == LoaderCommand ||
+        if (_busy || _confirming || sender is not Control { DataContext: FlashPartitionEntry entry } ||
+            entry.Command == LoaderCommand ||
             TopLevel.GetTopLevel(Surface) is not { } topLevel)
         {
             return;
@@ -1000,7 +1049,12 @@ public sealed partial class FlashViewModel
 
         entry.FilePath = path;
         entry.FileName = Path.GetFileName(path);
-        entry.Size = $"{new FileInfo(path).Length / 1024d / 1024d:F1} MiB";
+        var length = new FileInfo(path).Length;
+        entry.Size = $"{length / 1024d / 1024d:F1} MiB";
+        if (entry.Step is { } step)
+        {
+            entry.Step = step with { ImagePath = path, ImageLength = length };
+        }
         entry.CanSelect = true;
     }
 
@@ -2124,7 +2178,7 @@ public sealed partial class FlashViewModel
 
         var selected = Partitions.Where(entry => entry.IsSelected && entry.CanSelect &&
             entry.Command != LoaderCommand &&
-            entry.Step?.Command is not ("set_active" or "reboot" or "wipe_super")).ToArray();
+            entry.EffectiveCommand is not ("set_active" or "reboot" or "wipe_super")).ToArray();
         if (selected.Length == 0) return;
         var language = _localizer;
         var parameterPath = RkParameterTablePath();
@@ -2275,7 +2329,7 @@ public sealed partial class FlashViewModel
         }
         var selected = Partitions.Where(entry => entry.IsSelected && entry.CanSelect &&
             entry.Command != LoaderCommand &&
-            (!erase || entry.Name != "reboot" && entry.Step?.Command is not ("set_active" or "reboot" or "wipe_super"))).ToArray();
+            (!erase || entry.Name != "reboot" && entry.EffectiveCommand is not ("set_active" or "reboot" or "wipe_super"))).ToArray();
         if (selected.Length == 0) return;
         var rkImageDir = selected.FirstOrDefault(row => row.FilePath.Length > 0) is { } firstRow
             ? Path.GetDirectoryName(Path.GetFullPath(firstRow.FilePath)) ?? string.Empty
@@ -2297,7 +2351,7 @@ public sealed partial class FlashViewModel
         }
         var canExtract = _payloadPath is not null || _remotePayloadUrl is not null ||
             _superPath is not null || _vendorPath is not null || _oppoPath is not null;
-        if (!erase && selected.Any(entry => (entry.Step?.Command ?? "flash") is "flash" or "wipe_super" &&
+        if (!erase && selected.Any(entry => entry.EffectiveCommand is "flash" or "wipe_super" &&
             !File.Exists(entry.FilePath) && (!canExtract || entry.FilePath.Length != 0)))
         {
             AppendLog(_localizer.GetString("Flash_FileMissing"));
@@ -2310,7 +2364,7 @@ public sealed partial class FlashViewModel
         var rebootAfter = !erase && Field<CheckBox>("RebootAfterBox").IsChecked == true;
         var disableVbmeta = !erase && Field<CheckBox>("DisableVbmetaBox").IsChecked == true;
         var addRoot = !erase && Field<CheckBox>("AddRootBox").IsChecked == true;
-        if (disableVbmeta && !selected.Any(entry => (entry.Step?.Command ?? "flash") == "flash" &&
+        if (disableVbmeta && !selected.Any(entry => entry.EffectiveCommand == "flash" &&
             entry.Name.StartsWith("vbmeta", StringComparison.OrdinalIgnoreCase)))
         {
             AppendLog(language.GetString("Flash_VbmetaMissing"));
@@ -2325,7 +2379,7 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        if (selected.Any(entry => entry.Step?.Command == "reboot") && (eraseData || rebootAfter))
+        if (selected.Any(entry => entry.EffectiveCommand == "reboot") && (eraseData || rebootAfter))
         {
             AppendLog(language.GetString("Flash_RebootConflict"));
             return;
@@ -2508,9 +2562,9 @@ public sealed partial class FlashViewModel
             Dictionary<FlashPartitionEntry, PreparedSuperEmpty> preparedSuper = [];
             if (!erase)
             {
-                foreach (var entry in selected.Where(entry => entry.Step?.Command == "wipe_super"))
+                foreach (var entry in selected.Where(entry => entry.EffectiveCommand == "wipe_super"))
                     preparedSuper[entry] = FlashSuperEmptyService.Prepare(entry.FilePath);
-                var missingImages = selected.Where(entry => (entry.Step?.Command ?? "flash") == "flash" &&
+                var missingImages = selected.Where(entry => entry.EffectiveCommand == "flash" &&
                     entry.FilePath.Length == 0).ToArray();
                 if (missingImages.Length > 0)
                 {
@@ -2543,7 +2597,7 @@ public sealed partial class FlashViewModel
                         prepared[entry] = image;
                     }
                 }
-                foreach (var entry in selected.Where(entry => (entry.Step?.Command ?? "flash") == "flash" &&
+                foreach (var entry in selected.Where(entry => entry.EffectiveCommand == "flash" &&
                     prepared.GetValueOrDefault(entry, entry.FilePath).EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
                 {
                     cancellation.Token.ThrowIfCancellationRequested();
@@ -2555,7 +2609,7 @@ public sealed partial class FlashViewModel
                 }
                 if (disableVbmeta)
                 {
-                    foreach (var entry in selected.Where(entry => (entry.Step?.Command ?? "flash") == "flash" &&
+                    foreach (var entry in selected.Where(entry => entry.EffectiveCommand == "flash" &&
                         entry.Name.StartsWith("vbmeta", StringComparison.OrdinalIgnoreCase)))
                     {
                         var source = prepared.GetValueOrDefault(entry, entry.FilePath);
@@ -2588,7 +2642,7 @@ public sealed partial class FlashViewModel
                     succeeded = false;
                     break;
                 }
-                var command = erase ? "erase" : entry.Step?.Command ?? "flash";
+                var command = erase ? "erase" : entry.EffectiveCommand;
                 if (command is "flash" or "wipe_super" &&
                     !File.Exists(prepared.GetValueOrDefault(entry, entry.FilePath)))
                 {

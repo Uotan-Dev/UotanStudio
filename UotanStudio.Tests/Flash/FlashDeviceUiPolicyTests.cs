@@ -23,7 +23,7 @@ public sealed class FlashDeviceUiPolicyTests
     }
 
     [Fact]
-    public void IsAvailable_NoDeviceSelected_DisablesEveryGatedControl()
+    public void IsAvailable_NoDeviceSelected_DisablesOnlyDeviceOperations()
     {
         Assert.NotEmpty(FlashDeviceUiPolicy.GatedControls);
 
@@ -46,16 +46,19 @@ public sealed class FlashDeviceUiPolicyTests
     [Fact]
     public void IsAvailable_SharedControls_StayAvailableInEverySelectedMode()
     {
-        string[] shared = ["PackagePathBox", "PartitionGrid", "FlashSelectedButton", "RebootMenuButton"];
+        string[] ungated = ["PackagePathBox", "PartitionGrid", "ClearLogButton", "PartitionSearchBox"];
 
-        foreach (var name in shared)
+        foreach (var name in ungated)
         {
-            Assert.False(FlashDeviceUiPolicy.IsAvailable(name, FlashDeviceMode.None));
+            Assert.True(FlashDeviceUiPolicy.IsAvailable(name, FlashDeviceMode.None));
             foreach (var mode in SelectedModes)
             {
                 Assert.True(FlashDeviceUiPolicy.IsAvailable(name, mode), $"{name} in {mode}");
             }
         }
+
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("FlashSelectedButton", FlashDeviceMode.None));
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("RebootMenuButton", FlashDeviceMode.None));
     }
 
     [Fact]
@@ -96,5 +99,41 @@ public sealed class FlashDeviceUiPolicyTests
     {
         Assert.True(FlashDeviceUiPolicy.IsAvailable("RootVersionBox", FlashDeviceMode.None));
         Assert.True(FlashDeviceUiPolicy.IsAvailable("EdlProgrammerPickBox", FlashDeviceMode.Shared));
+    }
+
+    [Fact]
+    public void FlashPartitionEntry_EditableCommandAndName_StayInSyncWithStep()
+    {
+        var entry = new FlashPartitionEntry
+        {
+            Step = new("flash", "boot", "boot.img", 1024),
+            Name = "boot",
+            Command = "flash"
+        };
+
+        entry.Name = "vendor_boot";
+        entry.Command = "wipe_super";
+
+        Assert.Equal("vendor_boot", entry.Step?.Partition);
+        Assert.Equal("wipe_super", entry.Step?.Command);
+        Assert.Equal("wipe_super", entry.EffectiveCommand);
+    }
+
+    [Fact]
+    public void FlashPartitionEntry_HasFileName_TracksFileNameChanges()
+    {
+        var entry = new FlashPartitionEntry();
+        var changedProperties = new List<string?>();
+        entry.PropertyChanged += (_, args) => changedProperties.Add(args.PropertyName);
+
+        entry.FileName = "boot.img";
+        Assert.True(entry.HasFileName);
+        Assert.Contains(nameof(FlashPartitionEntry.HasFileName), changedProperties);
+
+        changedProperties.Clear();
+        entry.FileName = string.Empty;
+
+        Assert.False(entry.HasFileName);
+        Assert.Contains(nameof(FlashPartitionEntry.HasFileName), changedProperties);
     }
 }

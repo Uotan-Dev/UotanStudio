@@ -34,16 +34,9 @@ internal enum FlashDeviceMode
 /// <para>烧录页面哪些控件可用、以及每个控件需要哪种设备模式的唯一来源。</para>
 /// </summary>
 /// <remarks>
-/// The page applies this table as a restriction: a control is usable only when the page state enables it and
-/// <see cref="IsAvailable"/> allows the current <see cref="FlashDeviceMode"/>. A control listed without a mode is
-/// shared by every selected device and stays unusable while no device is selected; a control listed with modes is
-/// additionally limited to those modes. Every control that starts an action is listed, so the page is inert until a
-/// device is selected; the protocol section headers stay expandable so the options each mode offers remain
-/// inspectable, and the log stays readable.
-/// <para>页面把这张表作为限制条件应用：只有页面状态启用该控件、且 <see cref="IsAvailable"/> 允许当前
-/// <see cref="FlashDeviceMode"/> 时控件才可用。未标注模式的控件由所有已选设备共用，未选中设备时不可用；标注了
-/// 模式的控件进一步限定在这些模式内。所有能发起动作的控件都列在表中，因此未选中设备时整页不可用；协议分类标题
-/// 仍可展开，以便查看各模式提供的选项，日志保持可读。</para>
+/// The page applies this table only to device operations in the right action pane. Shared operations require a
+/// selected device; protocol-specific sections are additionally limited to their matching device mode.
+/// <para>页面只对右侧操作区中的设备操作应用这张表。通用操作需要选中设备；协议专属分类还会进一步限制为匹配的设备模式。</para>
 /// </remarks>
 internal static class FlashDeviceUiPolicy
 {
@@ -64,17 +57,6 @@ internal static class FlashDeviceUiPolicy
     /// </summary>
     private static readonly (string Name, FlashDeviceMode[]? Modes)[] Entries =
     [
-        // 刷机包栏 / package bar
-        ("PackagePathBox", null),
-        ("ChooseFileButton", null),
-        ("ChooseFolderButton", null),
-        ("GetPackageButton", null),
-        // 日志 / log
-        ("ClearLogButton", null),
-        // 分区列表 / partition list
-        ("SelectAllBox", null),
-        ("PartitionSearchBox", null),
-        ("PartitionGrid", null),
         // 通用操作与刷写选项 / shared actions and flash options
         ("ReadInfoButton", null),
         ("ReadbackSelectedButton", null),

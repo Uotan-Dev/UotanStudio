@@ -504,6 +504,15 @@
   <data name="Flash_SearchPlaceholder" xml:space="preserve">
     <value>搜索分区</value>
   </data>
+  <data name="Flash_AddPartition" xml:space="preserve">
+    <value>添加镜像</value>
+  </data>
+  <data name="Flash_DeletePartitions" xml:space="preserve">
+    <value>移除选中行</value>
+  </data>
+  <data name="Flash_DeletePartitionsConfirm" xml:space="preserve">
+    <value>从列表中移除选中的 {0} 行？不会删除源文件。</value>
+  </data>
   <data name="Flash_Select" xml:space="preserve">
     <value>选择</value>
   </data>
@@ -518,6 +527,9 @@
   </data>
   <data name="Flash_File" xml:space="preserve">
     <value>文件</value>
+  </data>
+  <data name="Flash_ClickChooseFile" xml:space="preserve">
+    <value>点击选择文件</value>
   </data>
   <data name="Flash_NoPartitions" xml:space="preserve">
     <value>尚未加载分区列表</value>
