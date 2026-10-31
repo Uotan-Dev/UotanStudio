@@ -81,6 +81,7 @@ public partial class CompareView : UserControl
 
         AddHandler(PointerPressedEvent, OnPreviewPointerPressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, OnPreviewPointerMoved, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, OnPreviewPointerReleased, RoutingStrategies.Tunnel);
     }
 
     /// <summary>
@@ -664,26 +665,17 @@ public partial class CompareView : UserControl
             return;
         }
 
-        var sourceIndexes = list.Selection?.SelectedIndexes ?? [];
-        var targetIndexes = otherList.Selection?.SelectedIndexes ?? [];
-        if (sourceIndexes.Count == targetIndexes.Count
-            && !sourceIndexes.Except(targetIndexes).Any())
+        if (otherList.SelectedIndex != list.SelectedIndex)
         {
-            return;
-        }
-
-        _syncingSelection = true;
-        try
-        {
-            otherList.Selection?.Clear();
-            foreach (var index in list.Selection?.SelectedIndexes ?? [])
+            _syncingSelection = true;
+            try
             {
-                otherList.Selection?.Select(index);
+                otherList.SelectedIndex = list.SelectedIndex;
             }
-        }
-        finally
-        {
-            _syncingSelection = false;
+            finally
+            {
+                _syncingSelection = false;
+            }
         }
     }
 
@@ -785,6 +777,24 @@ public partial class CompareView : UserControl
         var index = vm.ScrollToIndex;
         if (index < 0 || index >= vm.Rows.Count)
         {
+            return;
+        }
+
+        if (vm.IsTextEditorMode)
+        {
+            foreach (var (editor, _) in EnumerateCompareEditors())
+            {
+                var doc = editor.Document;
+                if (doc is null || doc.LineCount == 0)
+                {
+                    continue;
+                }
+
+                var lineNumber = Math.Clamp(index + 1, 1, doc.LineCount);
+                var docLine = doc.GetLineByNumber(lineNumber);
+                editor.CaretOffset = docLine.Offset;
+                editor.ScrollToLine(lineNumber);
+            }
             return;
         }
 
@@ -903,13 +913,11 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>
-    /// Activates a row on double-click: a folder row expands/collapses (both while browsing and comparing; a folder
-    /// comparison shares one node so one side expands both), a file row opens its comparison in a new tab during a folder
-    /// comparison, and a file row while browsing does nothing. Entering a folder is a context-menu item so it does not
-    /// compete with the expand gesture.
-    /// <para>双击激活一行：目录行展开/折叠（浏览与对比都一样；对比中两侧共享同一节点，一侧展开即两侧同步展开），
-    /// 文件行在文件夹对比中于新标签打开该文件的对比，浏览状态下的文件行不做处理。
-    /// 「进入某个目录」是右键菜单项，避免与双击展开手势冲突。</para>
+    /// Activates a row on double-click: directory rows expand or collapse; when comparison is active, file rows open
+    /// their file comparison in a new tab (using text or hex view only); when comparison is inactive, file rows open
+    /// in a new document tab with the matching editor (via <see cref="OpenDocumentRequestMessage"/>), matching Project Explorer behavior.
+    /// <para>双击激活一行：目录行展开/折叠；开启对比时在新的对比标签页中以对比视图打开该文件（仅使用文本或十六进制视图）；
+    /// 未开启对比时按照与项目资源管理器完全统一的逻辑在独立标签页打开（发送 <see cref="OpenDocumentRequestMessage"/>）。</para>
     /// </summary>
     private void ActivateRow(CompareRowViewModel row, ListBox list)
     {
@@ -925,10 +933,31 @@ public partial class CompareView : UserControl
         }
 
         if (DataContext is CompareViewModel vm
-            && ResolveTextRowOwner(list) is { IsCompareSide: true }
-            && vm.IsFolderMode)
+            && vm.IsComparing
+            && FindColumnFor(list) is { IsCompareSide: true })
         {
-            vm.OpenFileComparisonInNewTab(node);
+            if (vm.IsFolderMode)
+            {
+                vm.OpenFileComparisonInNewTab(node);
+            }
+
+            return;
+        }
+
+        var filePath = ResolveRowPath(row, list);
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+        {
+            return;
+        }
+
+        if (string.Equals(Path.GetExtension(filePath), ".uotannode", StringComparison.OrdinalIgnoreCase))
+        {
+            WeakReferenceMessenger.Default.Send(new OpenNodeProjectRequestMessage(
+                Path.GetFileNameWithoutExtension(filePath)));
+        }
+        else
+        {
+            WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(filePath));
         }
     }
 

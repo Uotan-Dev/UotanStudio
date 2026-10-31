@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -21,9 +21,7 @@ public partial class CompareView
     private ListBox? _dragList;
     private Point _dragOrigin;
 
-    /// <summary>跨行框选的起点（在某一行上按下）。</summary>
-    private ListBox? _rangeList;
-    private int _rangeAnchor = -1;
+
 
     /// <summary>正文拖拽的负载路径（拖到文件夹行时用它复制，避免依赖平台拖拽数据的格式差异）。</summary>
     private string? _draggingPath;
@@ -39,8 +37,6 @@ public partial class CompareView
     private void OnPreviewPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         ClearDragCandidate();
-        _rangeList = null;
-        _rangeAnchor = -1;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
             || e.Source is not Control { DataContext: CompareRowViewModel row } source
             || FindListFor(source) is not { } list)
@@ -54,13 +50,7 @@ public partial class CompareView
             return;
         }
 
-        _rangeList = list;
-        _rangeAnchor = index;
-
-        if (list.Selection is { } selection
-            && (list.SelectionMode & SelectionMode.Multiple) != 0
-            && !e.KeyModifiers.HasFlag(KeyModifiers.Control)
-            && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        if (list.Selection is { } selection)
         {
             selection.Clear();
             selection.Select(index);
@@ -97,7 +87,6 @@ public partial class CompareView
     /// </summary>
     private async void OnPreviewPointerMoved(object? sender, PointerEventArgs e)
     {
-        ExtendRangeSelection(e);
 
         var trigger = _dragTrigger;
         var row = _dragRow;
@@ -132,41 +121,7 @@ public partial class CompareView
         await DragDrop.DoDragDropAsync(trigger, transfer, DragDropEffects.Copy);
     }
 
-    /// <summary>
-    /// Dragging over other rows while the left button is held selects the whole range (cross-row selection); releasing or
-    /// leaving the rows ends it.
-    /// <para>按住左键在某一行按下后拖过其它行 → 选中整段（跨行框选）；松开或移到行外即结束。</para>
-    /// </summary>
-    private void ExtendRangeSelection(PointerEventArgs e)
-    {
-        if (_rangeList is not { } list || _rangeAnchor < 0
-            || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-        {
-            return;
-        }
 
-        if (e.Source is not Control { DataContext: CompareRowViewModel row })
-        {
-            return;
-        }
-
-        var index = IndexOfRow(list, row);
-        if (index < 0 || index == _rangeAnchor)
-        {
-            return;
-        }
-
-        var start = Math.Min(_rangeAnchor, index);
-        var end = Math.Max(_rangeAnchor, index);
-        var selection = list.Selection;
-        if (selection is null)
-        {
-            return;
-        }
-
-        selection.Clear();
-        selection.SelectRange(start, end);
-    }
 
     /// <summary>取行在列表中的索引（列表的 ItemsSource 就是文档的行列表）。</summary>
     private static int IndexOfRow(ListBox list, CompareRowViewModel row)
@@ -193,6 +148,12 @@ public partial class CompareView
         _dragTrigger = null;
         _dragRow = null;
         _dragList = null;
+    }
+
+    /// <summary>松开鼠标时清空拖拽候选。</summary>
+    private void OnPreviewPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        ClearDragCandidate();
     }
 
     /// <summary>解析树行对应的绝对路径（浏览行自带路径，对比行用所在侧的根目录加相对路径）。</summary>

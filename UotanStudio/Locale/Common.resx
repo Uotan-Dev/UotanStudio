@@ -1984,6 +1984,9 @@ Author: 暮间雾
   <data name="Explorer_OpenInMultiColumnBrowser" xml:space="preserve">
     <value>Open in Multi-Column File Browser</value>
   </data>
+  <data name="Explorer_OpenInNewMultiColumnBrowser" xml:space="preserve">
+    <value>Open in New Multi-Column File Browser</value>
+  </data>
   <data name="Explorer_OpenInTerminal" xml:space="preserve">
     <value>Open in Terminal</value>
   </data>
@@ -2362,6 +2365,9 @@ You can also use “Add Folder” in the toolbar or type a path in a column.</va
   </data>
   <data name="Compare_Unrecognized" xml:space="preserve">
     <value>Unrecognized firmware format</value>
+  </data>
+  <data name="Compare_EmptyFolder" xml:space="preserve">
+    <value>(empty)</value>
   </data>
   <data name="Progress_ItemsStats" xml:space="preserve">
     <value>{0} / {1} items · {2} · {3} left</value>

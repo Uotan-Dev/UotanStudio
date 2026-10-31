@@ -155,8 +155,22 @@ public sealed class CompareRowViewModel : ObservableObject
     public bool IsLeftDiff
     {
         get => field;
-        private set => SetProperty(ref field, value);
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ShowLeftDiffBackground));
+            }
+        }
     }
+
+    /// <summary>
+    /// Whether the left diff background should be shown: active for non-tree diff rows (text and hex comparisons).
+    /// Tree rows indicate diffs via the status bar on the left to avoid visually conflicting with selection highlight.
+    /// <para>是否显示左侧差异背景：非树节点差异行（文本与十六进制对比）显示。树行通过左侧状态条指示差异，避免与选中高亮视觉冲突。</para>
+    /// </summary>
+    /// <value><c>true</c> for non-tree differing rows on the left side.<para>左侧非树节点的差异行为 <c>true</c>。</para></value>
+    public bool ShowLeftDiffBackground => IsLeftDiff && !IsTreeRow;
 
     /// <summary>
     /// Right line-number or offset label.
@@ -191,8 +205,22 @@ public sealed class CompareRowViewModel : ObservableObject
     public bool IsRightDiff
     {
         get => field;
-        private set => SetProperty(ref field, value);
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ShowRightDiffBackground));
+            }
+        }
     }
+
+    /// <summary>
+    /// Whether the right diff background should be shown: active for non-tree diff rows (text and hex comparisons).
+    /// Tree rows indicate diffs via the status bar on the left to avoid visually conflicting with selection highlight.
+    /// <para>是否显示右侧差异背景：非树节点差异行（文本与十六进制对比）显示。树行通过左侧状态条指示差异，避免与选中高亮视觉冲突。</para>
+    /// </summary>
+    /// <value><c>true</c> for non-tree differing rows on the right side.<para>右侧非树节点的差异行为 <c>true</c>。</para></value>
+    public bool ShowRightDiffBackground => IsRightDiff && !IsTreeRow;
 
     /// <summary>
     /// Whether single-side entries tint their own side.

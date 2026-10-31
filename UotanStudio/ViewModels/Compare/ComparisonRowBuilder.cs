@@ -1,3 +1,4 @@
+using UotanStudio.Services;
 using UotanStudio.Services.Compare;
 using UotanStudio.ViewModels.Workspace;
 
@@ -43,6 +44,36 @@ internal static class ComparisonRowBuilder
         rows.Add(ForTreeNode(node, depth, compared));
         if (!node.IsExpanded)
         {
+            return;
+        }
+
+        if (node.Children.Count == 0)
+        {
+            var emptyText = LanguageService.Instance.GetString("Compare_EmptyFolder");
+            if (string.IsNullOrEmpty(emptyText) || emptyText == "Compare_EmptyFolder")
+            {
+                emptyText = "(空)";
+            }
+
+            rows.Add(new CompareRowViewModel(
+                FolderItemStatus.Equal,
+                depth + 1,
+                leftLine: string.Empty,
+                leftText: node.LeftName.Length > 0 ? emptyText : string.Empty,
+                leftSub: string.Empty,
+                isLeftDiff: false,
+                rightLine: string.Empty,
+                rightText: node.RightName.Length > 0 ? emptyText : string.Empty,
+                rightSub: string.Empty,
+                isRightDiff: false,
+                tintSingleSide: false,
+                treeNode: null,
+                leftIcon: null,
+                rightIcon: null,
+                menu: CompareRowMenuKind.None,
+                compared: compared,
+                hasLeftLine: node.LeftName.Length > 0,
+                hasRightLine: node.RightName.Length > 0));
             return;
         }
 

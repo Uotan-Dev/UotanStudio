@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -61,6 +61,11 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
             if (ReferenceEquals(_rows, value))
             {
                 return;
+            }
+
+            if (_rows is IDisposable disposable)
+            {
+                disposable.Dispose();
             }
 
             _rows = value;
@@ -196,12 +201,11 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     public bool ShowDiffNavigation => IsCompareSide && (_owner.IsTextMode || _owner.IsBinaryMode);
 
     /// <summary>
-    /// The row list's selection mode: a text comparison with editable rows allows dragging a multi-row
-    /// selection, everything else is single selection.
-    /// <para>行列表的选择模式：可编辑行的文本对比允许拖拽选中多行，其余情况单选。</para>
+    /// The row list's selection mode: always single selection.
+    /// <para>行列表的选择模式：始终为单选。</para>
     /// </summary>
     /// <value>The selection mode applied to this column's row list. <para>本列行列表采用的选择模式。</para></value>
-    public SelectionMode RowSelectionMode => _hasEditableRows ? SelectionMode.Multiple : SelectionMode.Single;
+    public SelectionMode RowSelectionMode => SelectionMode.Single;
 
     /// <summary>
     /// The raw-hex toggle command (forwarded to the document; both columns share one comparison).
@@ -676,13 +680,11 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
                 }
 
                 IsTextEditorVisible = false;
-                var rows = await _owner.BuildFileRowsAsync(path, ct, (_, _) => MarkDirty());
-                ct.ThrowIfCancellationRequested();
                 TreeRoot = null;
-                _ownRows = rows;
+                _ownRows = null;
                 _isDirty = false;
-                _hasEditableRows = rows.Any(row => row.IsEditable);
-                Rows = rows;
+                _hasEditableRows = false;
+                Rows = new CompareHexRowCollection(path, string.Empty, []);
             }
 
             NotifyContentChanged();
@@ -751,6 +753,7 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     {
         _loadCts.Cancel();
         _loadCts.Dispose();
+        (_rows as IDisposable)?.Dispose();
     }
 
     /// <summary>

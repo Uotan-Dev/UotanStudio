@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -555,6 +555,10 @@ public partial class CompareView
             }
 
             vm.UpdateRowSelection(indices);
+            if (start >= 0)
+            {
+                vm.SelectedIndex = start;
+            }
         }
         catch (Exception ex)
         {

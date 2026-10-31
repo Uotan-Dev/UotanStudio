@@ -1984,6 +1984,9 @@
   <data name="Explorer_OpenInMultiColumnBrowser" xml:space="preserve">
     <value>在多列文件浏览器中打开</value>
   </data>
+  <data name="Explorer_OpenInNewMultiColumnBrowser" xml:space="preserve">
+    <value>在新多列文件浏览器中打开</value>
+  </data>
   <data name="Explorer_OpenInTerminal" xml:space="preserve">
     <value>在终端打开</value>
   </data>
@@ -2362,6 +2365,9 @@
   </data>
   <data name="Compare_Unrecognized" xml:space="preserve">
     <value>无法识别的固件格式</value>
+  </data>
+  <data name="Compare_EmptyFolder" xml:space="preserve">
+    <value>(空)</value>
   </data>
   <data name="Progress_ItemsStats" xml:space="preserve">
     <value>{0} / {1} 项 · {2} · 剩余 {3}</value>

@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Globalization;
 using System.Text;
 using UotanStudio.Services.Compare;
@@ -26,8 +26,8 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     /// </summary>
     private const int CacheCapacity = 256;
 
-    private readonly FileStream _leftStream;
-    private readonly FileStream _rightStream;
+    private readonly FileStream? _leftStream;
+    private readonly FileStream? _rightStream;
     private readonly long _leftLength;
     private readonly long _rightLength;
     private readonly int _count;
@@ -53,8 +53,17 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
         _rowDiffBitmap = rowDiffBitmap;
         try
         {
-            _leftStream = new FileStream(leftPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
-            _rightStream = new FileStream(rightPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
+            if (leftPath.Length > 0 && File.Exists(leftPath))
+            {
+                _leftStream = new FileStream(leftPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
+                _leftLength = _leftStream.Length;
+            }
+
+            if (rightPath.Length > 0 && File.Exists(rightPath))
+            {
+                _rightStream = new FileStream(rightPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
+                _rightLength = _rightStream.Length;
+            }
         }
         catch
         {
@@ -63,12 +72,11 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
             throw;
         }
 
-        _leftLength = _leftStream.Length;
-        _rightLength = _rightStream.Length;
-        _count = (int)((Math.Max(_leftLength, _rightLength) + BytesPerLine - 1) / BytesPerLine);
+        var maxLength = Math.Max(_leftLength, _rightLength);
+        _count = (int)((maxLength + BytesPerLine - 1) / BytesPerLine);
 
-        var required = BinaryDiffService.RowBitmapLength(Math.Max(_leftLength, _rightLength));
-        if (_rowDiffBitmap.Length < required)
+        var required = BinaryDiffService.RowBitmapLength(maxLength);
+        if (_rowDiffBitmap.Length > 0 && _rowDiffBitmap.Length < required)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(rowDiffBitmap), _rowDiffBitmap.Length,
@@ -204,8 +212,8 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     /// </summary>
     public void Dispose()
     {
-        _leftStream.Dispose();
-        _rightStream.Dispose();
+        _leftStream?.Dispose();
+        _rightStream?.Dispose();
     }
 
     /// <summary>
@@ -277,6 +285,10 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     /// <returns>Whether the row intersects a reported difference. <para>该行是否与已记录的差异相交。</para></returns>
     private bool IntersectsDiff(long rowStart)
     {
+        if (_rowDiffBitmap.Length == 0)
+        {
+            return false;
+        }
         var row = (int)(rowStart / BytesPerLine);
         if (row / 8 >= _rowDiffBitmap.Length)
         {
@@ -297,9 +309,9 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     /// <param name="length">The file length bounding the read. <para>限定本次读取的文件长度。</para></param>
     /// <param name="buffer">The buffer receiving the row's bytes. <para>接收该行字节的缓冲。</para></param>
     /// <returns>The number of bytes actually read. <para>实际读取到的字节数。</para></returns>
-    private static int ReadLine(FileStream stream, long offset, long length, byte[] buffer)
+    private static int ReadLine(FileStream? stream, long offset, long length, byte[] buffer)
     {
-        if (offset >= length)
+        if (stream is null || offset >= length)
         {
             return 0;
         }

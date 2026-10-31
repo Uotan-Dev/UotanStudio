@@ -67,7 +67,7 @@
         <Border Grid.ColumnSpan="2" Background="{Binding LeftTintBrush}"
                 IsVisible="{Binding LeftTintBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <Border Grid.ColumnSpan="2" Background="{DynamicResource DiffBackgroundBrush}"
-                IsVisible="{Binding IsLeftDiff}" />
+                IsVisible="{Binding ShowLeftDiffBackground}" />
         <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
                 Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsLeftEmpty}" />
         <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*,Auto"
@@ -127,7 +127,7 @@
         <Border Grid.ColumnSpan="2" Background="{Binding RightTintBrush}"
                 IsVisible="{Binding RightTintBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <Border Grid.ColumnSpan="2" Background="{DynamicResource DiffBackgroundBrush}"
-                IsVisible="{Binding IsRightDiff}" />
+                IsVisible="{Binding ShowRightDiffBackground}" />
         <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
                 Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsRightEmpty}" />
         <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*,Auto"
@@ -273,7 +273,7 @@
                shows the comparison's left side. -->
           <ListBox x:Name="LeftCellsList" ItemsSource="{Binding Rows}" IsVisible="{Binding ShowLeftCells}"
                    Classes="compare-rows" SelectionChanged="OnRowSelectionChanged"
-                   SelectionMode="{Binding RowSelectionMode}"
+                   SelectionMode="Single"
                    AutoScrollToSelectedItem="False" Background="Transparent"
                    KeyDown="OnRowListKeyDown"
                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
@@ -284,7 +284,7 @@
           <!-- Right-cell row list: used by the compare right column only. -->
           <ListBox x:Name="RightCellsList" ItemsSource="{Binding Rows}" IsVisible="{Binding ShowRightCells}"
                    Classes="compare-rows" SelectionChanged="OnRowSelectionChanged"
-                   SelectionMode="{Binding RowSelectionMode}"
+                   SelectionMode="Single"
                    AutoScrollToSelectedItem="False" Background="Transparent"
                    KeyDown="OnRowListKeyDown"
                    ScrollViewer.HorizontalScrollBarVisibility="Auto"

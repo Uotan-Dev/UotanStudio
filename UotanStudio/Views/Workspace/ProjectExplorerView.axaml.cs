@@ -309,8 +309,26 @@ public partial class ProjectExplorerView : UserControl
     /// </summary>
     private void OnOpenInCompareView(object? sender, RoutedEventArgs e)
     {
-        if (ProjectTree.SelectedItem is not ExplorerNode node || node.IsPlaceholder) return;
+        if (ProjectTree.SelectedItem is not ExplorerNode node || node.IsPlaceholder)
+        {
+            return;
+        }
+
         WeakReferenceMessenger.Default.Send(new OpenCompareRequestMessage { Path = node.Path });
+    }
+
+    /// <summary>
+    /// Opens the selected file or folder in a new multi-column file browser tab.
+    /// <para>在新的多列文件浏览器标签页中打开选中的文件或目录。</para>
+    /// </summary>
+    private void OnOpenInNewCompareView(object? sender, RoutedEventArgs e)
+    {
+        if (ProjectTree.SelectedItem is not ExplorerNode node || node.IsPlaceholder)
+        {
+            return;
+        }
+
+        WeakReferenceMessenger.Default.Send(new OpenCompareRequestMessage { Path = node.Path, OpenInNewTab = true });
     }
 
     private void OnOpenInTerminal(object? sender, RoutedEventArgs e)

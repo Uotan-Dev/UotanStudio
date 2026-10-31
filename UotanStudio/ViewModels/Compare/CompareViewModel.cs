@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -743,9 +743,10 @@ public sealed partial class CompareViewModel : Document, ITool
             return;
         }
 
+        var current = SelectedIndex >= 0 ? SelectedIndex : -1;
         for (var i = 1; i <= Rows.Count; i++)
         {
-            var idx = (SelectedIndex + i) % Rows.Count;
+            var idx = (current + i + Rows.Count) % Rows.Count;
             if (Rows[idx].IsLeftDiff || Rows[idx].IsRightDiff)
             {
                 SelectedIndex = idx;
@@ -769,9 +770,10 @@ public sealed partial class CompareViewModel : Document, ITool
             return;
         }
 
+        var current = SelectedIndex >= 0 ? SelectedIndex : Rows.Count;
         for (var i = 1; i <= Rows.Count; i++)
         {
-            var idx = ((SelectedIndex - i) % Rows.Count + Rows.Count) % Rows.Count;
+            var idx = ((current - i) % Rows.Count + Rows.Count) % Rows.Count;
             if (Rows[idx].IsLeftDiff || Rows[idx].IsRightDiff)
             {
                 SelectedIndex = idx;
@@ -1614,16 +1616,14 @@ public sealed partial class CompareViewModel : Document, ITool
         }
         else
         {
-            var metadata = await _comparison.ReadMetadataAsync(path, ct);
-            ct.ThrowIfCancellationRequested();
-
             Mode = CompareMode.Binary;
-            _leftMetadata = useLeftSide ? metadata : null;
-            _rightMetadata = useLeftSide ? null : metadata;
-            BinaryViewKind = BinaryViewKind.Metadata;
-            Rows = useLeftSide
-                ? ComparisonRowBuilder.ForMetadata(metadata, null, unrecognized)
-                : ComparisonRowBuilder.ForMetadata(null, metadata, unrecognized);
+            _currentHexRows?.Dispose();
+            var hex = useLeftSide
+                ? new CompareHexRowCollection(path, string.Empty, [])
+                : new CompareHexRowCollection(string.Empty, path, []);
+            _currentHexRows = hex;
+            Rows = hex;
+            BinaryViewKind = BinaryViewKind.Hex;
             StatsText = LanguageService.Instance.GetString("Compare_SingleSideFile");
         }
 
@@ -1664,18 +1664,23 @@ public sealed partial class CompareViewModel : Document, ITool
     {
         try
         {
-            var leftMeta = await _comparison.ReadMetadataAsync(_fileLeftPath, ct);
-            ct.ThrowIfCancellationRequested();
-            var rightMeta = await _comparison.ReadMetadataAsync(_fileRightPath, ct);
+            var leftLen = new FileInfo(_fileLeftPath).Length;
+            var rightLen = new FileInfo(_fileRightPath).Length;
+            var maxLength = Math.Max(leftLen, rightLen);
+            var rowDiffBitmap = new byte[BinaryDiffService.RowBitmapLength(maxLength)];
+            var stats = await _comparison.CompareBinaryAsync(_fileLeftPath, _fileRightPath, rowDiffBitmap, ct);
             ct.ThrowIfCancellationRequested();
 
-            _leftMetadata = leftMeta;
-            _rightMetadata = rightMeta;
-            BinaryViewKind = BinaryViewKind.Metadata;
-            Rows = ComparisonRowBuilder.ForMetadata(leftMeta, rightMeta, LanguageService.Instance.GetString("Compare_Unrecognized"));
+            _currentHexRows?.Dispose();
+            var hex = new CompareHexRowCollection(_fileLeftPath, _fileRightPath, rowDiffBitmap);
+            _currentHexRows = hex;
+            Rows = hex;
+            BinaryViewKind = BinaryViewKind.Hex;
             SelectedIndex = -1;
-            StatsText = string.Empty;
-
+            StatsText = string.Format(
+                LanguageService.Instance.GetString("Compare_HexSummary"),
+                stats.TotalDifferentBytes,
+                stats.RangeCount);
             HasError = false;
             ErrorMessage = string.Empty;
         }
