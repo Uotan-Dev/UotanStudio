@@ -31,11 +31,16 @@
     </Style>
   </Window.Styles>
 
-  <!-- 文字与输入框统一上下布局：每个字段先标签、再（输入框 + 右侧按钮）。 -->
-  <!-- Every field is stacked label-above-input, with the action buttons to the right of the inputs. -->
-  <!-- 底部留出空白空间：窗口高度由 MinHeight 抬高，内容顶部对齐。 -->
-  <!-- Blank space is kept at the bottom: MinHeight raises the window, the content stays top-aligned. -->
-  <StackPanel Margin="16,40,16,40" Spacing="14">
+  <DockPanel>
+    <!-- 底部进度条：计算各项校验值期间显示不确定进度（与设备管理器一致）。 -->
+    <!-- Bottom progress bar: indeterminate while computing checksums, as in the device manager. -->
+    <ProgressBar DockPanel.Dock="Bottom" IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="3" />
+
+    <!-- 文字与输入框统一上下布局：每个字段先标签、再（输入框 + 右侧按钮）。 -->
+    <!-- Every field is stacked label-above-input, with the action buttons to the right of the inputs. -->
+    <!-- 底部留出空白空间：窗口高度由 MinHeight 抬高，内容顶部对齐。 -->
+    <!-- Blank space is kept at the bottom: MinHeight raises the window, the content stays top-aligned. -->
+    <StackPanel Margin="16,40,16,40" Spacing="14" IsEnabled="{Binding IsIdle}">
 
     <!-- 文件名 -->
     <StackPanel Spacing="4">
@@ -126,5 +131,6 @@
                 IsEnabled="{Binding CanPaste}" />
       </Grid>
     </StackPanel>
-  </StackPanel>
+    </StackPanel>
+  </DockPanel>
 </Window>

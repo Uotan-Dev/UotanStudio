@@ -68,12 +68,19 @@ public sealed partial class ChecksumViewModel : ObservableObject
     [ObservableProperty] private string _pastedText = string.Empty;
 
     /// <summary>
-    /// Whether a verification is running (the verify button stays disabled meanwhile).
-    /// <para>是否有校验正在进行（期间禁用校验按钮）。</para>
+    /// Whether a verification is running (the window UI stays disabled meanwhile).
+    /// <para>是否有校验正在进行（期间禁用窗口界面）。</para>
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanVerify))]
+    [NotifyPropertyChangedFor(nameof(IsIdle))]
     private bool _isBusy;
+
+    /// <summary>
+    /// Whether no verification is running.
+    /// <para>当前没有校验在运行。</para>
+    /// </summary>
+    public bool IsIdle => !IsBusy;
 
     /// <summary>比对结果（驱动勾/叉指示）。 The comparison result (drives the tick/cross indicator).</summary>
     [ObservableProperty]
@@ -156,8 +163,8 @@ public sealed partial class ChecksumViewModel : ObservableObject
 
     /// <summary>
     /// Runs "verify": one streaming pass computes every checked algorithm; unchecked rows are cleared.
-    /// The verify button stays disabled while a verification runs.
-    /// <para>执行「校验」：单次流式读取同时计算勾选的算法，未勾选的行清空；校验期间按钮禁用。</para>
+    /// The window UI stays disabled while a verification runs.
+    /// <para>执行「校验」：单次流式读取同时计算勾选的算法，未勾选的行清空；校验期间窗口界面禁用。</para>
     /// </summary>
     public async Task VerifyAsync()
     {
@@ -279,6 +286,7 @@ public sealed partial class ChecksumViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HasFile));
         OnPropertyChanged(nameof(CanVerify));
+        OnPropertyChanged(nameof(IsIdle));
         OnPropertyChanged(nameof(HasAnyValue));
         OnPropertyChanged(nameof(CanPaste));
         OnPropertyChanged(nameof(CanCopyMd5));

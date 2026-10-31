@@ -115,4 +115,20 @@ public sealed class ChecksumViewModelTests
         Assert.Equal(ChecksumMatchResult.None, viewModel.MatchResult);
         Assert.False(viewModel.HasAnyValue);
     }
+
+    [Fact]
+    public void IsIdle_WhenIsBusyToggled_TracksInverseState()
+    {
+        var viewModel = new ChecksumViewModel();
+
+        Assert.True(viewModel.IsIdle);
+
+        viewModel.IsBusy = true;
+
+        Assert.False(viewModel.IsIdle);
+
+        viewModel.IsBusy = false;
+
+        Assert.True(viewModel.IsIdle);
+    }
 }
