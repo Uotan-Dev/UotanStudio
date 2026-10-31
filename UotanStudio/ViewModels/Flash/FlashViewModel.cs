@@ -330,13 +330,46 @@ public sealed partial class FlashViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Appends one log line to the buffer, publishing the full string only at the line or character threshold
-    /// and leaving everything else to the flush timer.
-    /// <para>追加一行日志：写入缓冲区，达到行数或字符阈值才发布整串，否则交给定时器补发。</para>
+    /// Appends one log line to the buffer at trace level, publishing the full string only at the line or character
+    /// threshold and leaving everything else to the flush timer.
+    /// <para>以 trace 级别追加一行日志到缓冲区，达到行数或字符阈值才发布整串，否则交给定时器补发。</para>
     /// </summary>
     /// <param name="message">The log line text. <para>日志行内容。</para></param>
-    internal void AppendLog(string message)
+    internal void AppendLog(string message) => AppendLog(message, LogLevel.Trace);
+
+    /// <summary>
+    /// Appends one log line at error level; used when an exception ends an action.
+    /// <para>以 error 级别追加一行日志；异常结束某个动作时使用。</para>
+    /// </summary>
+    /// <param name="message">The log line text. <para>日志行内容。</para></param>
+    internal void AppendError(string message) => AppendLog(message, LogLevel.Error);
+
+    /// <summary>
+    /// Appends one log line to the failure report: the same text goes to the page log at error level and to the
+    /// unified log, so a failed flash action is visible in the global log window instead of only on this page.
+    /// <para>追加一行失败记录：文本同时以 error 级别写入页面日志与统一日志，使失败的刷写动作在全局日志窗口中可见，
+    /// 而不只出现在本页面。</para>
+    /// </summary>
+    /// <param name="exception">The exception that ended the action. <para>结束该动作的异常。</para></param>
+    private void AppendError(Exception exception)
     {
+        ArgumentNullException.ThrowIfNull(exception);
+        var detail = exception.InnerException is { } inner
+            ? $"{exception.Message} ({inner.Message})"
+            : exception.Message;
+        AppendLog($"{exception.GetType().Name}: {detail}", LogLevel.Error);
+    }
+
+    /// <summary>
+    /// Appends one log line at the given level and forwards it to the unified log, so every line the page shows is
+    /// also collected by the global log window at the same severity.
+    /// <para>按给定级别追加一行日志并转发到统一日志，使页面显示的每一行都以相同严重级别进入全局日志窗口。</para>
+    /// </summary>
+    /// <param name="message">The log line text. <para>日志行内容。</para></param>
+    /// <param name="level">The severity the line is reported with. <para>该行上报的严重级别。</para></param>
+    private void AppendLog(string message, LogLevel level)
+    {
+        _log.Write(level, "Flash", message);
         _logBuffer.Append(message).Append(Environment.NewLine);
         _pendingLogLines++;
         _pendingLogCharacters += message.Length + Environment.NewLine.Length;
