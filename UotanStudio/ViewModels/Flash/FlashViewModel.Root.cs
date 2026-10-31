@@ -205,7 +205,7 @@ public sealed partial class FlashViewModel
         }
         catch (Exception ex)
         {
-            if (epoch == _rootEpoch) AppendLog(ex.Message);
+            if (epoch == _rootEpoch) AppendError(ex);
         }
         finally
         {
@@ -337,7 +337,7 @@ public sealed partial class FlashViewModel
         }
         catch (Exception ex)
         {
-            if (request == _rootPrepareRequest) AppendLog(ex.Message);
+            if (request == _rootPrepareRequest) AppendError(ex);
         }
         finally
         {

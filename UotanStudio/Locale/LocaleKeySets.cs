@@ -1279,6 +1279,19 @@ internal static class LocaleKeySets
         "Flash_RkLoaderDeclared",
         "Flash_RkLoaderMissing",
         "Flash_RkStorageNotSelected",
+        "Flash_RkStorageNeedsLoader",
+        "Flash_RkLoaderChecking",
+        "Flash_RkLoaderValid",
+        "Flash_RkLoaderInvalidStatus",
+        "Flash_RkLoaderNotLoader",
+        "Flash_RkLoaderInvalid",
+        "Flash_RkLoaderChecksumMismatch",
+        "Flash_RkLoaderChecked",
+        "Flash_RkParameterValid",
+        "Flash_RkParameterInvalidStatus",
+        "Flash_RkParameterChecked",
+        "Flash_RkParameterInvalid",
+        "Flash_CommandNotRunnable",
     ];
 
     internal static readonly string[] Menu =

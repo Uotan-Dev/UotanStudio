@@ -43,9 +43,12 @@ public sealed partial class FlashViewModel
     /// </summary>
     /// <typeparam name="T">The expected control type.<para>期望的控件类型。</para></typeparam>
     /// <param name="name">The XAML name.<para>XAML 名称。</para></param>
-    /// <returns>The resolved control or a detached dummy.<para>解析到的控件或分离的虚拟控件。</para></returns>
+    /// <returns>The resolved control or a detached dummy; a view model that is not attached to a page reads and
+    /// writes that dummy instead of failing, so page state stays usable without a view.
+    /// <para>解析到的控件或分离的虚拟控件；未附加到页面的视图模型读写该虚拟控件而不是失败，因此页面状态在没有视图时
+    /// 仍然可用。</para></returns>
     private T Field<T>(string name) where T : Control, new() =>
-        Surface?.FindControl<T>(name) ?? new T();
+        _surface?.FindControl<T>(name) ?? new T();
 
     private void InitializeSurface()
     {

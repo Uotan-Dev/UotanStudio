@@ -585,7 +585,7 @@ public sealed partial class FlashViewModel
         }
         catch (Exception ex)
         {
-            AppendLog(ex.Message);
+            AppendError(ex);
             _loadedPath = string.Empty;
             _flatBinPackage = false;
             _edlBundleReady = false;
@@ -704,7 +704,7 @@ public sealed partial class FlashViewModel
             }
             AppendLog(output);
         }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
@@ -730,7 +730,7 @@ public sealed partial class FlashViewModel
                 [.. Partitions.Select(entry => entry.Name)], parent, CancellationToken.None);
             AppendLog(output);
         }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
@@ -807,7 +807,7 @@ public sealed partial class FlashViewModel
                 await FastbootStepService.RebootAsync(fastbootDevice, null, CancellationToken.None);
                 AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot"));
             }
-            catch (Exception ex) { AppendLog(ex.Message); }
+            catch (Exception ex) { AppendError(ex); }
             finally { SetBusy(false); }
         }
         else if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } || _edlEntries.Count > 0)
@@ -841,7 +841,7 @@ public sealed partial class FlashViewModel
                 await FastbootStepService.RebootAsync(fastbootDevice, "bootloader", CancellationToken.None);
                 AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-bootloader"));
             }
-            catch (Exception ex) { AppendLog(ex.Message); }
+            catch (Exception ex) { AppendError(ex); }
             finally { SetBusy(false); }
         }
         else if (SelectedDevice is { Protocol: DeviceProtocolKind.Mtk } || _mtkResolution is not null)
@@ -865,7 +865,7 @@ public sealed partial class FlashViewModel
                 await FastbootStepService.RebootAsync(fastbootDevice, "recovery", CancellationToken.None);
                 AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-recovery"));
             }
-            catch (Exception ex) { AppendLog(ex.Message); }
+            catch (Exception ex) { AppendError(ex); }
             finally { SetBusy(false); }
         }
         else
@@ -885,7 +885,7 @@ public sealed partial class FlashViewModel
                 await FastbootStepService.RebootAsync(fastbootDevice, "fastboot", CancellationToken.None);
                 AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-fastboot"));
             }
-            catch (Exception ex) { AppendLog(ex.Message); }
+            catch (Exception ex) { AppendError(ex); }
             finally { SetBusy(false); }
         }
         else
@@ -905,7 +905,7 @@ public sealed partial class FlashViewModel
                 await FastbootStepService.RebootAsync(fastbootDevice, "edl", CancellationToken.None);
                 AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-edl"));
             }
-            catch (Exception ex) { AppendLog(ex.Message); }
+            catch (Exception ex) { AppendError(ex); }
             finally { SetBusy(false); }
         }
         else if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } || _edlEntries.Count > 0)
@@ -985,7 +985,7 @@ public sealed partial class FlashViewModel
             }, CancellationToken.None).ConfigureAwait(true);
             AppendLog(string.Format(language.GetString("Flash_OkResult"), powerOff ? "poweroff" : "reboot"));
         }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
@@ -1022,14 +1022,13 @@ public sealed partial class FlashViewModel
             ToolTip.SetTip(Field<Button>("ChooseRootPackageButton"), path);
             AppendLog(Path.GetFileName(path));
         }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally { SetBusy(false); UpdateRootControlsState(); }
     }
 
     internal async void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e)
     {
         if (_busy || _confirming || sender is not Control { DataContext: FlashPartitionEntry entry } ||
-            entry.Command == LoaderCommand ||
             TopLevel.GetTopLevel(Surface) is not { } topLevel)
         {
             return;
@@ -1055,7 +1054,14 @@ public sealed partial class FlashViewModel
         {
             entry.Step = step with { ImagePath = path, ImageLength = length };
         }
+
         entry.CanSelect = true;
+        if (entry.Command == LoaderCommand)
+        {
+            ApplyRkLoaderPath(path);
+        }
+
+        UpdateSpecialFileRowStatus(entry);
     }
 
     private DeviceInfo? _observedDeviceInfo;
@@ -1092,7 +1098,7 @@ public sealed partial class FlashViewModel
 
     internal void ApplyDeviceProtocolExpansion(DeviceProtocolKind? protocol)
     {
-        if (Surface is null) return;
+        if (_surface is null) return;
         if (protocol is DeviceProtocolKind.Edl)
         {
             Field<Expander>("EdlExpander").IsExpanded = true;
@@ -1213,7 +1219,7 @@ public sealed partial class FlashViewModel
 
     internal void UpdateEdlProgrammerPickOptions()
     {
-        if (Surface is null) return;
+        if (_surface is null) return;
         var pickBox = Field<ComboBox>("EdlProgrammerPickBox");
         var customText = _localizer.GetString("Flash_EdlCustomFile");
         var items = _edlProgrammerCandidates.Select(Path.GetFileName).Concat([customText]).ToArray();
@@ -1248,7 +1254,7 @@ public sealed partial class FlashViewModel
 
     internal void UpdateEdlProgrammerUiState()
     {
-        if (Surface is null) return;
+        if (_surface is null) return;
         var pathBox = Field<TextBox>("EdlProgrammerPathBox");
         var chooseButton = Field<Button>("EdlChooseProgrammerButton");
         if (_isCustomProgrammer)
@@ -1335,7 +1341,7 @@ public sealed partial class FlashViewModel
         }
         catch (Exception ex)
         {
-            AppendLog(ex.Message);
+            AppendError(ex);
         }
         finally
         {
@@ -1366,7 +1372,7 @@ public sealed partial class FlashViewModel
         }
         catch (Exception ex)
         {
-            AppendLog(ex.Message);
+            AppendError(ex);
         }
     }
 
@@ -1498,7 +1504,7 @@ public sealed partial class FlashViewModel
     /// <para>判断是否选中了可回读的 EDL 条目。</para>
     /// </summary>
     private bool HasSelectedEdlEntries()
-        => Partitions.Any(row => row.IsSelected && row.CanSelect);
+        => Partitions.Any(row => row.IsSelected && row.CanSelect && IsWritableEntry(row));
 
     private void SetBusy(bool value)
     {
@@ -1665,7 +1671,7 @@ public sealed partial class FlashViewModel
             {
                 await RunRkReadInfoAsync(rkdl);
             }
-            catch (Exception ex) { AppendLog(ex.Message); }
+            catch (Exception ex) { AppendError(ex); }
             finally
             {
                 SetBusy(false);
@@ -1724,7 +1730,7 @@ public sealed partial class FlashViewModel
             Partitions.Apply(0, deviceRows);
             AppendLog($"{partitions.Count} {_localizer.GetString("Flash_PartitionsLoaded")}");
         }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally { SetBusy(false); }
     }
 
@@ -1975,7 +1981,7 @@ public sealed partial class FlashViewModel
 
             MarkUnfinishedSkipped();
             UpdateOverall();
-            AppendLog(ex.Message);
+            AppendError(ex);
         }
         finally
         {
@@ -2177,7 +2183,7 @@ public sealed partial class FlashViewModel
         }
 
         var selected = Partitions.Where(entry => entry.IsSelected && entry.CanSelect &&
-            entry.Command != LoaderCommand &&
+            IsWritableEntry(entry) &&
             entry.EffectiveCommand is not ("set_active" or "reboot" or "wipe_super")).ToArray();
         if (selected.Length == 0) return;
         var language = _localizer;
@@ -2238,7 +2244,7 @@ public sealed partial class FlashViewModel
             }
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
@@ -2292,7 +2298,7 @@ public sealed partial class FlashViewModel
                 };
                 AppendLog($"{language.GetString("Flash_ActiveSlot")}: {slot}");
             }
-            catch (Exception ex) { AppendLog(ex.Message); }
+            catch (Exception ex) { AppendError(ex); }
             finally
             {
                 SetBusy(false);
@@ -2328,7 +2334,7 @@ public sealed partial class FlashViewModel
             return;
         }
         var selected = Partitions.Where(entry => entry.IsSelected && entry.CanSelect &&
-            entry.Command != LoaderCommand &&
+            IsWritableEntry(entry) &&
             (!erase || entry.Name != "reboot" && entry.EffectiveCommand is not ("set_active" or "reboot" or "wipe_super"))).ToArray();
         if (selected.Length == 0) return;
         var rkImageDir = selected.FirstOrDefault(row => row.FilePath.Length > 0) is { } firstRow
@@ -2679,11 +2685,18 @@ public sealed partial class FlashViewModel
                         break;
                     }
                 }
-                else
+                else if (entry.Step is { } step)
                 {
-                    await FastbootStepService.ExecuteAsync(device, entry.Step!, cancellation.Token);
+                    await FastbootStepService.ExecuteAsync(device, step, cancellation.Token);
                     AppendLog(string.Format(language.GetString("Flash_OkResult"), command));
                     SetRowFinished(entry, success: true);
+                }
+                else
+                {
+                    AppendLog($"{entry.Name}: {string.Format(language.GetString("Flash_CommandNotRunnable"), command)}");
+                    SetRowFinished(entry, success: false);
+                    succeeded = false;
+                    break;
                 }
             }
             if (succeeded && !cancellation.IsCancellationRequested && eraseData)
@@ -2706,7 +2719,7 @@ public sealed partial class FlashViewModel
                     language.GetString("Flash_RebootAfter")));
             }
         }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             foreach (var path in staged)
@@ -2780,7 +2793,7 @@ public sealed partial class FlashViewModel
             ToolTip.SetTip(Field<TextBlock>("MtkDaPathText"), path);
             AppendLog(Path.GetFileName(path));
         }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
@@ -2808,7 +2821,7 @@ public sealed partial class FlashViewModel
             ToolTip.SetTip(Field<TextBlock>("MtkEmiPathText"), path);
             AppendLog(Path.GetFileName(path));
         }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally { SetBusy(false); }
     }
 
@@ -2886,7 +2899,7 @@ public sealed partial class FlashViewModel
         if (_busy || _confirming || SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
             TopLevel.GetTopLevel(Surface) is not Window owner) return;
         var selected = Partitions
-            .Where(row => row.IsSelected && row.CanSelect)
+            .Where(row => row.IsSelected && row.CanSelect && IsWritableEntry(row))
             .ToArray();
         if (selected.Length == 0) return;
         if (!TryBuildEdlInitialization(out var initialization)) return;
@@ -2950,7 +2963,7 @@ public sealed partial class FlashViewModel
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex)
         {
-            AppendLog(ex.Message);
+            AppendError(ex);
             foreach (var row in selected.Where(row => row.State == FlashRowState.Running))
             {
                 SetRowFinished(row, success: false);
@@ -3047,7 +3060,7 @@ public sealed partial class FlashViewModel
             AppendLog(summary);
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             _flashCancellation = null;
@@ -3107,7 +3120,7 @@ public sealed partial class FlashViewModel
             AppendLog(await body(cancellation.Token).ConfigureAwait(true));
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             _flashCancellation = null;
@@ -3257,7 +3270,7 @@ public sealed partial class FlashViewModel
             AppendLog(language.GetString(doneKey));
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             _flashCancellation = null;
@@ -3280,7 +3293,7 @@ public sealed partial class FlashViewModel
             SelectedDevice is not { Protocol: DeviceProtocolKind.Edl } device ||
             TopLevel.GetTopLevel(Surface) is not { } topLevel) return;
         var selected = Partitions
-            .Where(row => row.IsSelected && row.CanSelect)
+            .Where(row => row.IsSelected && row.CanSelect && IsWritableEntry(row))
             .ToArray();
         if (selected.Length == 0) return;
         if (!TryBuildEdlInitialization(out var initialization)) return;
@@ -3370,7 +3383,7 @@ public sealed partial class FlashViewModel
             }
         }
         catch (OperationCanceledException) { MarkUnfinishedSkipped(); }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             _flashCancellation = null;
@@ -3537,7 +3550,7 @@ public sealed partial class FlashViewModel
         }
         catch (Exception ex)
         {
-            AppendLog(ex.Message);
+            AppendError(ex);
             foreach (var row in selected.Where(row => row.State == FlashRowState.Running))
             {
                 SetRowFinished(row, success: false);
@@ -3548,7 +3561,7 @@ public sealed partial class FlashViewModel
             if (preparation is not null)
             {
                 try { preparation.Dispose(); }
-                catch (Exception ex) { AppendLog(ex.Message); }
+                catch (Exception ex) { AppendError(ex); }
             }
 
             MarkUnfinishedSkipped();
@@ -3641,7 +3654,7 @@ public sealed partial class FlashViewModel
         }
         catch (Exception ex)
         {
-            AppendLog(ex.Message);
+            AppendError(ex);
             foreach (var row in selected.Where(row => row.State == FlashRowState.Running))
             {
                 SetRowFinished(row, success: false);
@@ -3652,7 +3665,7 @@ public sealed partial class FlashViewModel
             if (preparation is not null)
             {
                 try { preparation.Dispose(); }
-                catch (Exception ex) { AppendLog(ex.Message); }
+                catch (Exception ex) { AppendError(ex); }
             }
 
             MarkUnfinishedSkipped();
@@ -3861,7 +3874,7 @@ public sealed partial class FlashViewModel
         }
         catch (Exception ex)
         {
-            AppendLog(ex.Message);
+            AppendError(ex);
             return null;
         }
     }
@@ -4121,7 +4134,7 @@ public sealed partial class FlashViewModel
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
         catch (Exception ex)
         {
-            AppendLog(ex.Message);
+            AppendError(ex);
             foreach (var row in selected.Where(row => row.State == FlashRowState.Running))
             {
                 SetRowFinished(row, success: false);
@@ -4313,7 +4326,7 @@ public sealed partial class FlashViewModel
             await RunWithReadyMtkSessionAsync(operation, cancellation.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             _flashCancellation = null;
@@ -4403,7 +4416,7 @@ public sealed partial class FlashViewModel
             AppendLog(language.GetString(doneKey));
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);
@@ -4445,7 +4458,7 @@ public sealed partial class FlashViewModel
             await RunWithReadyMtkSessionAsync(operation, cancellation.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             _flashCancellation = null;
@@ -4572,7 +4585,7 @@ public sealed partial class FlashViewModel
             AppendLog(language.GetString(doneKey));
         }
         catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendLog(ex.Message); }
+        catch (Exception ex) { AppendError(ex); }
         finally
         {
             SetBusy(false);

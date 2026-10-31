@@ -501,7 +501,64 @@ public sealed partial class FlashViewModel : ObservableObject
         if (e.PropertyName == nameof(FlashPartitionEntry.IsSelected))
         {
             UpdateSelectionState();
+            if (sender is FlashPartitionEntry { IsSelected: true, CanSelect: true } selected)
+            {
+                OnEntrySelected(selected);
+            }
         }
+        else if (e.PropertyName is nameof(FlashPartitionEntry.Command) or nameof(FlashPartitionEntry.FilePath) &&
+            sender is FlashPartitionEntry { CanSelect: true } edited)
+        {
+            UpdateRowValidityText(edited);
+        }
+    }
+
+    /// <summary>
+    /// Runs the check a row owns when the user selects it; only the rows that carry a file instead of an image have one.
+    /// <para>用户勾选某行时运行该行自带的检查；只有承载文件而非镜像的行才有这项检查。</para>
+    /// </summary>
+    /// <param name="entry">The row that just became selected.
+    /// <para>刚刚被勾选的行。</para></param>
+    /// <remarks>
+    /// A loader row is checked here rather than when its file was picked, because the same row can be selected after a
+    /// re-import, after the file changed on disk, or after the user edited another column; the verdict is published on
+    /// the row so the grid states it instead of leaving the user to infer validity from the flash outcome.
+    /// <para>loader 行在这里检查而不是在选文件时检查，因为同一行可能在重新导入后、磁盘文件变化后或用户编辑了其它列之后被
+    /// 勾选；结论发布在行上，使列表直接说明有效性，而不是让用户从刷写结果反推。</para>
+    /// </remarks>
+    private void OnEntrySelected(FlashPartitionEntry entry)
+    {
+        if (entry.Command is not (LoaderCommand or ParameterCommand) || entry.FilePath.Length == 0)
+        {
+            return;
+        }
+
+        UpdateSpecialFileRowStatus(entry);
+    }
+
+    /// <summary>
+    /// Publishes whether a row has the file the flash path needs, so an edited row states its own validity.
+    /// <para>发布某行是否持有刷写路径所需的文件，使被编辑的行直接说明自身是否有效。</para>
+    /// </summary>
+    /// <param name="entry">Row whose command or file path just changed.
+    /// <para>命令或文件路径刚刚变化的行。</para></param>
+    private void UpdateRowValidityText(FlashPartitionEntry entry)
+    {
+        if (entry.Command is LoaderCommand or ParameterCommand)
+        {
+            if (entry.FilePath.Length == 0)
+            {
+                entry.StatusText = string.Empty;
+                return;
+            }
+
+            UpdateSpecialFileRowStatus(entry);
+            return;
+        }
+
+        entry.StatusText = entry.FilePath.Length == 0 || File.Exists(entry.FilePath)
+            ? string.Empty
+            : _localizer.GetString("Flash_FileMissing");
     }
 
     private void RefreshVisiblePartitions()
