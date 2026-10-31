@@ -2,7 +2,6 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Nodes;
-using UotanStudio.Views.Shell;
 using UotanStudio.Workflow.Nodes;
 
 namespace UotanStudio.Views.Nodes;
@@ -53,12 +52,4 @@ public partial class NodeEditorView
         }
     }
 
-    private void OnEditCompositeClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is NodeEditorViewModel { SelectedNode: CompositeNodeViewModel composite, IsExecuting: false } vm)
-        {
-            VisualPluginEditorWindow.ShowLocal(composite.Package,
-                package => vm.ReplaceComposite(composite, package));
-        }
-    }
 }

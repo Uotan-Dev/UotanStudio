@@ -188,19 +188,6 @@ public partial class VisualPluginManagerWindow : Window
         }
     }
 
-    private void EditGraphClick(object? sender, RoutedEventArgs e)
-    {
-        switch (Model.SelectedPlugin)
-        {
-            case { Kind: VisualPluginKind.CompositeNode } composite:
-                VisualPluginEditorWindow.ShowRegistration(composite);
-                break;
-            case { Kind: VisualPluginKind.ScriptNode } script:
-                new ScriptPluginEditorWindow(script).Show();
-                break;
-        }
-    }
-
     private async void EnableClick(object? sender, RoutedEventArgs e) => await SetEnabledAsync(true);
 
     private async void DisableClick(object? sender, RoutedEventArgs e) => await SetEnabledAsync(false);

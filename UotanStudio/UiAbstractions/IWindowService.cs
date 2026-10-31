@@ -102,22 +102,6 @@ public interface IWindowService
         IEnumerable<string>? reservedNames);
 
     /// <summary>
-    /// Opens or focuses the scheme editor window, optionally loading a scheme file.
-    /// <para>打开或聚焦方案编辑器窗口，可选载入方案文件。</para>
-    /// </summary>
-    /// <param name="path">The scheme file to load, or null to keep the current document. <para>要载入的方案文件；为 null 时保留当前文档。</para></param>
-    /// <returns>A task that completes after the window is shown and the file is loaded. <para>窗口显示并完成文件载入后完成的任务。</para></returns>
-    Task ShowSchemeEditorAsync(string? path);
-
-    /// <summary>
-    /// Opens or focuses the scheme operator window, optionally loading a scheme file.
-    /// <para>打开或聚焦方案执行器窗口，可选载入方案文件。</para>
-    /// </summary>
-    /// <param name="path">The scheme file to load, or null to keep the current document. <para>要载入的方案文件；为 null 时保留当前文档。</para></param>
-    /// <returns>A task that completes after the window is shown and the file is loaded. <para>窗口显示并完成文件载入后完成的任务。</para></returns>
-    Task ShowSchemeOperatorAsync(string? path);
-
-    /// <summary>
     /// Shows the wireless-debugging QR pairing window modally against the current owner.
     /// <para>相对当前所有者以模态方式显示无线调试扫码配对窗口。</para>
     /// </summary>
@@ -161,10 +145,6 @@ internal sealed class NullWindowService : IWindowService
 
     public INewProjectDialog CreateNewProjectDialog(NewProjectWindowMode mode, string? baseDirectory,
         IEnumerable<string>? reservedNames) => throw new NotSupportedException("No host window service is attached.");
-
-    public Task ShowSchemeEditorAsync(string? path) => Task.CompletedTask;
-
-    public Task ShowSchemeOperatorAsync(string? path) => Task.CompletedTask;
 
     public Task ShowQrPairingAsync() => Task.CompletedTask;
 

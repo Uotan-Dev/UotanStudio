@@ -29,8 +29,6 @@ public sealed class UiWindowService : IWindowService
     private Window? _bootPatchWindow;
     private Window? _avbToolWindow;
     private ChecksumWindow? _checksumWindow;
-    private SchemeEditorWindow? _schemeEditorWindow;
-    private SchemeOperatorWindow? _schemeOperatorWindow;
 
     private UiWindowService()
     {
@@ -42,70 +40,6 @@ public sealed class UiWindowService : IWindowService
     /// <inheritdoc />
     public INewProjectDialog CreateNewProjectDialog(NewProjectWindowMode mode, string? baseDirectory,
         IEnumerable<string>? reservedNames) => new NewProjectWindow(mode, baseDirectory, reservedNames);
-
-    /// <inheritdoc />
-    public async Task ShowSchemeEditorAsync(string? path)
-    {
-        SchemeEditorWindow window;
-        if (_schemeEditorWindow is { IsVisible: true } existing)
-        {
-            window = existing;
-            window.WindowState = WindowState.Normal;
-            window.Activate();
-            if (path is null)
-            {
-                window.ViewModel.NewScheme();
-            }
-        }
-        else
-        {
-            window = new SchemeEditorWindow();
-            _schemeEditorWindow = window;
-            window.Closed += (_, _) =>
-            {
-                if (ReferenceEquals(_schemeEditorWindow, window))
-                {
-                    _schemeEditorWindow = null;
-                }
-            };
-            window.Show();
-        }
-
-        if (path is not null)
-        {
-            await window.LoadAsync(path);
-        }
-    }
-
-    /// <inheritdoc />
-    public async Task ShowSchemeOperatorAsync(string? path)
-    {
-        SchemeOperatorWindow window;
-        if (_schemeOperatorWindow is { IsVisible: true } existing)
-        {
-            window = existing;
-            window.WindowState = WindowState.Normal;
-            window.Activate();
-        }
-        else
-        {
-            window = new SchemeOperatorWindow();
-            _schemeOperatorWindow = window;
-            window.Closed += (_, _) =>
-            {
-                if (ReferenceEquals(_schemeOperatorWindow, window))
-                {
-                    _schemeOperatorWindow = null;
-                }
-            };
-            window.Show();
-        }
-
-        if (path is not null)
-        {
-            await window.LoadAsync(path);
-        }
-    }
 
     /// <inheritdoc />
     public async Task ShowQrPairingAsync()

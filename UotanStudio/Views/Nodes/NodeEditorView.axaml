@@ -326,10 +326,6 @@
                                 ToolTip.Tip="{DynamicResource Node_CollapseComposite}">
                             <avalonia:Rollback Width="16" Height="16" />
                         </Button>
-                        <Button Width="28" Height="28" Padding="0" Click="OnEditCompositeClick"
-                                ToolTip.Tip="{DynamicResource Plugin_EditGraph}">
-                            <avalonia:Edit Width="16" Height="16" />
-                        </Button>
                         <Button Width="28" Height="28" Padding="0" Click="OnExportCompositeClick"
                                 ToolTip.Tip="{DynamicResource Node_ExportComposite}">
                             <avalonia:App Width="16" Height="16" />

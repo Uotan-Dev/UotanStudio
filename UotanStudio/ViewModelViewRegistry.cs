@@ -67,8 +67,6 @@ internal static class ViewModelViewRegistry
         [typeof(WorkspaceLogViewModel)] = new(() => new WorkspaceLogView()),
         [typeof(AdbLogViewModel)] = new(() => new AdbLogView()),
         [typeof(TerminalViewModel)] = new(() => new TerminalView()),
-        [typeof(SchemeOperatorViewModel)] = new(() => new SchemeOperatorWindow()),
-        [typeof(SchemeEditorViewModel)] = new(() => new SchemeEditorWindow()),
     }.ToFrozenDictionary();
 
     /// <summary>

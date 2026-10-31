@@ -250,14 +250,6 @@ internal static class DocumentOpenRegistry
             IsDocument = false,
             Singleton = false,
         },
-        new()
-        {
-            Kind = "Scheme",
-            ViewModelType = typeof(SchemeEditorViewModel),
-            GetPath = vm => ((SchemeEditorViewModel)vm).FilePath,
-            IsDocument = false,
-            Singleton = false,
-        },
     ];
 
     /// <summary>All descriptors in registration order. <para>全部描述符，按登记顺序。</para></summary>

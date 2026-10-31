@@ -1193,16 +1193,6 @@ public sealed class VisualPluginRegistration
     /// </value>
     public bool ShowDisableAction => Kind is VisualPluginKind.CompositeNode or VisualPluginKind.ScriptNode && IsEnabled;
     /// <summary>
-    /// Localized label for the edit action, matching the package kind.
-    /// <para>编辑操作的本地化标签，与包类型相匹配。</para>
-    /// </summary>
-    /// <value>
-    /// The localized edit label.
-    /// <para>本地化的编辑标签。</para>
-    /// </value>
-    public string EditActionText => LanguageService.Instance.GetString(
-        Kind == VisualPluginKind.ScriptNode ? "Plugin_EditScript" : "Plugin_EditGraph");
-    /// <summary>
     /// Localized label describing the package kind.
     /// <para>描述包类型的本地化标签。</para>
     /// </summary>

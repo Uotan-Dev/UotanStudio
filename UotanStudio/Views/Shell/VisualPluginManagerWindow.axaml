@@ -212,9 +212,6 @@
                         <Button Classes="plugin-action" Content="{DynamicResource Plugin_UseTemplate}"
                                 Click="UseTemplateClick" IsEnabled="{Binding SelectedPlugin.IsAvailable}"
                                 IsVisible="{Binding SelectedPlugin.IsTemplate}" />
-                        <Button Classes="plugin-action" Content="{Binding SelectedPlugin.EditActionText}"
-                                Click="EditGraphClick" IsEnabled="{Binding SelectedPlugin.IsAvailable}"
-                                IsVisible="{Binding !SelectedPlugin.IsTemplate}" />
                         <Button Classes="plugin-action" Content="{DynamicResource Plugin_Disable}"
                                 Click="DisableClick" IsVisible="{Binding SelectedPlugin.ShowDisableAction}" />
                         <Button Classes="plugin-action" Content="{DynamicResource Plugin_Enable}"
