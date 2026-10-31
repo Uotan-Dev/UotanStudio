@@ -8,6 +8,28 @@ public sealed partial class RkdlSession
     private RkFlashInfo? _flashInfo;
 
     /// <summary>
+    /// Runs the bulk warm-up sequence the official download tool performs before its loader download:
+    /// TEST_UNIT_READY, READ_CHIP_INFO and READ_FLASH_INFO. A maskrom port that answers these bulk
+    /// transactions accepts the 0x0471/0x0472 vendor requests right afterwards; a port whose control
+    /// endpoint has wedged fails here with a bulk error instead of hanging the vendor IOCTL.
+    /// <para>执行官方下载工具在 loader 下载前运行的批量预热序列：TEST_UNIT_READY、READ_CHIP_INFO 与
+    /// READ_FLASH_INFO。能应答这些批量事务的 maskrom 端口随后就会接受 0x0471/0x0472 vendor 请求；
+    /// 控制端点已卡死的端口会在此以批量错误失败，而不是让 vendor IOCTL 挂死。</para>
+    /// </summary>
+    /// <exception cref="RkdlException">Any bulk transaction of the sequence failed.
+    /// <para>序列中任一批量事务失败。</para></exception>
+    public void WarmUpForLoaderDownload()
+    {
+        if (!TestDeviceReady())
+        {
+            throw new RkdlException(RkdlError.TransferFailed, "The device did not answer TEST_UNIT_READY before the loader download.");
+        }
+
+        ReadChipInfo();
+        ReadFlashInfo();
+    }
+
+    /// <summary>
     /// Reads chip info from the device via a READ_CHIP_INFO CBW/CSW transaction (16 bytes).
     /// The first four bytes of the response are an ASCII chip tag (e.g. "320A"); it is
     /// exposed both raw and decoded.

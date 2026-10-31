@@ -1,7 +1,9 @@
+using System.Buffers.Binary;
+using System.Text;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Transports.Abstractions;
-using UotanStudio.Comm.Transports.Usb;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Hash.RockchipCrc32;
 using Xunit;
 
 namespace UotanStudio.Tests.Protocols;
@@ -118,14 +120,41 @@ public sealed class RkdlModeClassificationTests
     }
 
     [Fact]
-    public void ReadStorage_WithoutDescriptorValue_SendsTheCommand()
+    public void ReadStorage_WithoutDescriptorValue_RefusesBeforeWritingTheCommand()
     {
         var fake = new RecordingUsbSession(0x350B, null);
         using var session = new RkdlSession(new UsbDeviceTransport(fake));
 
-        Assert.ThrowsAny<RkdlException>(() => session.ReadStorage());
+        var error = Assert.Throws<RkdlException>(() => session.ReadStorage());
 
-        Assert.Equal(1, fake.WriteCalls);
+        Assert.Contains("bcdUSB", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, fake.WriteCalls);
+    }
+
+    [Fact]
+    public async Task DownloadBootLoaderAsync_WithoutDescriptorValue_AttemptsTheVendorRequest()
+    {
+        var fake = new RecordingUsbSession(0x350B, null);
+        using var session = new RkdlSession(new UsbDeviceTransport(fake));
+
+        var error = await Assert.ThrowsAsync<RkdlException>(() =>
+            session.DownloadBootLoaderAsync(CreateLoaderImage(), TestContext.Current.CancellationToken));
+
+        Assert.DoesNotContain("loader mode", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(fake.ControlTransferCalls > 0);
+    }
+
+    [Fact]
+    public async Task DownloadBootLoaderAsync_OnLoaderDevice_RefusesBeforeAnyControlTransfer()
+    {
+        var fake = new RecordingUsbSession(0x350B, 0x0201);
+        using var session = new RkdlSession(new UsbDeviceTransport(fake));
+
+        var error = await Assert.ThrowsAsync<RkdlException>(() =>
+            session.DownloadBootLoaderAsync(CreateLoaderImage(), TestContext.Current.CancellationToken));
+
+        Assert.Contains("already reports loader mode", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, fake.ControlTransferCalls);
     }
 
     [Theory]
@@ -146,9 +175,61 @@ public sealed class RkdlModeClassificationTests
     private static RkdlSession CreateSession(ushort? bcdUsb)
         => new(new UsbDeviceTransport(new RecordingUsbSession(0x350B, bcdUsb)));
 
+    /// <summary>
+    /// Builds a minimal synthetic RKBOOT image: one first-stage entry, one second-stage entry, padded to the
+    /// 1024-byte parse minimum, with the trailing Rockchip CRC-32.
+    /// <para>构建最小的合成 RKBOOT 镜像：一个一级条目与一个二级条目，填充到 1024 字节解析下限，
+    /// 并附带末尾的瑞芯微 CRC-32。</para>
+    /// </summary>
+    internal static byte[] CreateLoaderImage()
+    {
+        const int headerSize = 102;
+        const int entrySize = 57;
+        const int count471 = 1;
+        const int count472 = 1;
+        byte[] payload471 = [1, 2, 3, 4];
+        byte[] payload472 = [5, 6, 7];
+        var tableBytes = (count471 + count472) * entrySize;
+        var payloadBytes = payload471.Length + payload472.Length;
+        var image = new byte[Math.Max(headerSize + tableBytes + payloadBytes + 4, 1024)];
+
+        Encoding.ASCII.GetBytes("BOOT").CopyTo(image, 0);
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(4), headerSize);
+        image[25] = count471;
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(26), headerSize);
+        image[30] = entrySize;
+        image[31] = count472;
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(32), headerSize + (count471 * entrySize));
+        image[36] = entrySize;
+
+        var dataOffset = headerSize + tableBytes;
+        Span<byte> entry471 = image.AsSpan(headerSize, entrySize);
+        entry471[0] = entrySize;
+        BinaryPrimitives.WriteUInt32LittleEndian(entry471[1..], 1u);
+        Encoding.ASCII.GetBytes("ddr").CopyTo(entry471[5..]);
+        BinaryPrimitives.WriteUInt32LittleEndian(entry471[45..], (uint)dataOffset);
+        BinaryPrimitives.WriteUInt32LittleEndian(entry471[49..], (uint)payload471.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(entry471[53..], 1u);
+        payload471.CopyTo(image, dataOffset);
+
+        Span<byte> entry472 = image.AsSpan(headerSize + (count471 * entrySize), entrySize);
+        entry472[0] = entrySize;
+        BinaryPrimitives.WriteUInt32LittleEndian(entry472[1..], 2u);
+        Encoding.ASCII.GetBytes("usbplug").CopyTo(entry472[5..]);
+        BinaryPrimitives.WriteUInt32LittleEndian(entry472[45..], (uint)(dataOffset + payload471.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(entry472[49..], (uint)payload472.Length);
+        payload472.CopyTo(image, dataOffset + payload471.Length);
+
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(image.Length - 4),
+            RockchipCrc32.Compute(image.AsSpan(0, image.Length - 4)));
+        return image;
+    }
+
     private sealed class RecordingUsbSession(ushort productId, ushort? bcdUsb) : IUsbDeviceSession
     {
         public int WriteCalls { get; private set; }
+
+        public int ControlTransferCalls { get; private set; }
 
         public int DefaultTimeoutMs => 1000;
 
@@ -197,7 +278,10 @@ public sealed class RkdlModeClassificationTests
         }
 
         public int ControlTransfer(UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs)
-            => 0;
+        {
+            ControlTransferCalls++;
+            return 0;
+        }
 
         public void SetInterfaceAltSetting(byte interfaceNumber, byte altSetting)
         {

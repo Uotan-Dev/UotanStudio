@@ -297,13 +297,14 @@ public sealed partial class FlashViewModel
             await App.DeviceMonitor.RunRkdlLoaderTransitionAsync(device,
                 async (session, token) =>
                 {
-                    if (!session.IsMaskromMode)
+                    if (session.IsRockusbMode)
                     {
                         return null;
                     }
 
                     AppendLog(string.Format(CultureInfo.InvariantCulture,
                         language.GetString("Flash_RkLoaderDeclared"), loader));
+                    session.WarmUpForLoaderDownload();
                     await session.DownloadBootLoaderAsync(loaderBytes, token).ConfigureAwait(false);
                     return session.CreateLoaderTransitionOffer();
                 },

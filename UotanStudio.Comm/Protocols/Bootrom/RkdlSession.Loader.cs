@@ -175,29 +175,29 @@ public sealed partial class RkdlSession
     };
 
     /// <summary>
-    /// Runs every guard that must reject a loader image before the first vendor request: maskrom
-    /// mode, parse success, and the <c>dwDataDelay</c> bound of both entry tables. The
+    /// Runs every guard that must reject a loader image before the first vendor request: a stage that
+    /// can still accept the download, parse success, and the <c>dwDataDelay</c> bound of both entry
+    /// tables. A device whose stage is unknown is accepted because the 0x0471 vendor request is the only
+    /// probe <c>rockusb.sys</c> forwards and a loader-stage device just refuses it. The
     /// <c>ucRc4Flag</c> is not a guard: a non-zero value means RC4 is disabled, and
     /// zero-length entries are skipped because they are never sent or delayed.
-    /// <para>执行所有必须在首个 vendor 请求之前拒绝 loader 镜像的守卫：maskrom 模式、解析成功、
-    /// 以及两张条目表的 <c>dwDataDelay</c> 上界。<c>ucRc4Flag</c> 不是守卫：非 0 值表示已禁用 RC4；
-    /// 零长度条目会被跳过，因为它们既不会被发送也不会延时。</para>
+    /// <para>执行所有必须在首个 vendor 请求之前拒绝 loader 镜像的守卫：仍可接受下载的阶段、解析成功，
+    /// 以及两张条目表的 <c>dwDataDelay</c> 上界。阶段未知的设备会被接受，因为 0x0471 vendor 请求是
+    /// <c>rockusb.sys</c> 唯一转发的探测手段，处于 loader 阶段的设备只会拒绝它。<c>ucRc4Flag</c> 不是守卫：
+    /// 非 0 值表示已禁用 RC4；零长度条目会被跳过，因为它们既不会被发送也不会延时。</para>
     /// </summary>
     /// <param name="loaderImage">The loader image bytes (RKBOOT .bin). <para>loader 镜像字节（RKBOOT .bin）。</para></param>
     /// <returns>The validated parsed image. <para>已通过校验的解析结果。</para></returns>
+    /// <exception cref="RkdlException">The device reports loader mode, so the download cannot run there.
+    /// <para>设备报告 loader 模式，下载无法在该阶段执行。</para></exception>
     private RkBootImage PrepareLoaderImage(byte[] loaderImage)
     {
         ArgumentNullException.ThrowIfNull(loaderImage);
-        if (!IsMaskromMode)
+        if (IsRockusbMode)
         {
-            throw new RkdlException(RkdlError.NotSupported, Mode switch
-            {
-                RkdlDeviceMode.Loader =>
-                    "Loader download requires a maskrom-mode device, but this device already reports loader mode " +
-                    "(bcdUSB bit 0 is set).",
-                _ => "Loader download requires a maskrom-mode device, but the device descriptor carried no bcdUSB " +
-                    "value, so the boot ROM stage cannot be confirmed."
-            });
+            throw new RkdlException(RkdlError.NotSupported,
+                "Loader download requires a maskrom-mode device, but this device already reports loader mode " +
+                "(bcdUSB bit 0 is set).");
         }
 
         var image = RkBootImage.Parse(loaderImage);

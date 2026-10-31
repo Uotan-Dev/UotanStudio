@@ -300,7 +300,7 @@ internal static partial class WinUSBFinder
                     UsbSerialCache.Remember(path, instanceId, device.SerialNumber, Environment.TickCount64);
                 }
 
-                if (device is RockusbDevice)
+                if (device.VendorId == RockchipVendorId || device is RockusbDevice)
                 {
                     AttachObservedDescriptor(device);
                 }

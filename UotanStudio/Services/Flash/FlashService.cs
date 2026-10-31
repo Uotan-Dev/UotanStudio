@@ -914,7 +914,7 @@ public sealed class FlashService : IFlashService
             device.Endpoint,
             async (rkdl, token) =>
             {
-                if (!rkdl.IsMaskromMode)
+                if (rkdl.IsRockusbMode)
                 {
                     return null;
                 }
@@ -923,9 +923,11 @@ public sealed class FlashService : IFlashService
                 if (loader is null)
                 {
                     throw new InvalidOperationException(
-                        "The device is in maskrom mode; a Rockchip loader (MiniLoaderAll*.bin / *loader*.bin) is required to enter loader mode. 设备处于 MaskROM 模式，需要 loader 才能进入 loader 模式。");
+                        "The device needs a Rockchip loader (MiniLoaderAll*.bin / *loader*.bin) to enter loader mode. 设备需要 loader 才能进入 loader 模式。");
                 }
 
+                Report(progress, partition, 3, "Warming the device up (test/chip/flash info)... 正在预热设备（测试/芯片/闪存信息）...");
+                rkdl.WarmUpForLoaderDownload();
                 Report(progress, partition, 5, $"Downloading loader {Path.GetFileName(loader)}... 正在下载 loader...");
                 var loaderBytes = await File.ReadAllBytesAsync(loader, token).ConfigureAwait(false);
                 await rkdl.DownloadBootLoaderAsync(loaderBytes, token).ConfigureAwait(false);
@@ -1036,13 +1038,14 @@ public sealed class FlashService : IFlashService
             device.Endpoint,
             async (rkdl, token) =>
             {
-                if (!rkdl.IsMaskromMode)
+                if (rkdl.IsRockusbMode)
                 {
                     return null;
                 }
 
                 var loader = ResolveLoaderPath(loaderPath, parameterDirectory) ?? throw new InvalidOperationException(
-                    "The device is in maskrom mode; a Rockchip loader is required to enter loader mode. 设备处于 MaskROM 模式，需要 loader 才能进入 loader 模式。");
+                    "The device needs a Rockchip loader to enter loader mode. 设备需要 loader 才能进入 loader 模式。");
+                rkdl.WarmUpForLoaderDownload();
                 var loaderBytes = await File.ReadAllBytesAsync(loader, token).ConfigureAwait(false);
                 await rkdl.DownloadBootLoaderAsync(loaderBytes, token).ConfigureAwait(false);
                 return rkdl.CreateLoaderTransitionOffer();
@@ -1389,16 +1392,26 @@ public sealed class FlashService : IFlashService
     }
 
     /// <summary>
-    /// Locates a Rockchip loader file in the image directory.
-    /// <para>在镜像目录中查找 Rockchip loader 文件。</para>
+    /// Locates a Rockchip loader file in the image directory. A declared path that no longer exists fails
+    /// instead of silently substituting another loader file.
+    /// <para>在镜像目录中查找 Rockchip loader 文件。已声明但缺失的路径直接失败，不会静默替换为其它 loader 文件。</para>
     /// </summary>
     /// <param name="loaderPath">The explicitly given loader path, which may be null. <para>显式给出的 loader 路径，可为 null。</para></param>
     /// <param name="imageDir">The directory to search for loader files. <para>搜索 loader 文件的目录。</para></param>
     /// <returns>The loader path, or null when none is found. <para>loader 路径，未找到时为 null。</para></returns>
+    /// <exception cref="FileNotFoundException">The caller declared a loader path and the file is missing.
+    /// <para>调用方已声明 loader 路径而该文件缺失。</para></exception>
     internal static string? ResolveLoaderPath(string? loaderPath, string imageDir)
     {
-        if (!string.IsNullOrWhiteSpace(loaderPath) && File.Exists(loaderPath))
+        if (!string.IsNullOrWhiteSpace(loaderPath))
         {
+            if (!File.Exists(loaderPath))
+            {
+                throw new FileNotFoundException(
+                    $"The selected Rockchip loader is missing: {loaderPath}. 所选的瑞芯微 loader 已缺失：{loaderPath}。",
+                    loaderPath);
+            }
+
             return Path.GetFullPath(loaderPath);
         }
 

@@ -493,6 +493,19 @@ public sealed partial class DeviceMonitorService
                     "因此不会在该句柄上发送批量刷写命令。");
             }
 
+            // 上传完成的字节数不是 loader 已接管的证明：在 flash 阶段前以 TEST_UNIT_READY 等待 loader 就绪，
+            // 超时按失败上报而不是把存储命令送进尚未就绪的设备。
+            // The transferred byte count is not proof the loader took over: wait for readiness through
+            // TEST_UNIT_READY before the flash phase, and report a timeout as failure instead of sending
+            // storage commands to a device that is not ready yet.
+            if (!await session.WaitForLoaderReadyAsync(5_000,
+                    cancellationToken: cancellationToken).ConfigureAwait(false))
+            {
+                throw new TimeoutException(
+                    "The re-enumerated Rockchip loader did not report ready in time; the flash was stopped. " +
+                    "重枚举出的瑞芯微 loader 未在时限内报告就绪；已停止刷写。");
+            }
+
             return await flashPhase(session, cancellationToken).ConfigureAwait(false);
         }
         finally

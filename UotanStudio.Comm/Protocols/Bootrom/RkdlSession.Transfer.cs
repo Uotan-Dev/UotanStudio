@@ -407,26 +407,41 @@ public sealed partial class RkdlSession
     }
 
     /// <summary>
-    /// Rejects a bulk command that mask ROM cannot answer. Mask ROM implements the device-information and SDRAM
-    /// commands only, so a storage command sent there waits for a CSW until the transfer timeout expires and then
-    /// reports a signature failure instead of the real cause.
-    /// <para>拒绝 Mask ROM 无法应答的批量命令。Mask ROM 只实现设备信息与 SDRAM 命令，因此向它发送存储命令会一直等待
-    /// CSW 直到传输超时，最终报告签名校验失败而不是真实原因。</para>
+    /// Rejects a bulk command that mask ROM cannot answer, and every bulk command whose stage cannot be
+    /// confirmed. Mask ROM implements the device-information and SDRAM commands only, so a storage command
+    /// sent there waits for a CSW until the transfer times out or the device stalls the pipe; a device whose
+    /// descriptor carried no <c>bcdUSB</c> value may still be in mask ROM, so it gets the same refusal instead
+    /// of a raw USB error.
+    /// <para>拒绝 Mask ROM 无法应答的批量命令，以及无法确认阶段的设备的所有批量命令。Mask ROM 只实现设备信息与
+    /// SDRAM 命令，因此向它发送存储命令会一直等待 CSW 直到传输超时或设备停顿管道；描述符未携带 <c>bcdUSB</c>
+    /// 取值的设备可能仍处于 Mask ROM，因此同样先行拒绝，而不是抛出原始 USB 错误。</para>
     /// </summary>
     /// <param name="cbw">The CBW about to be written. <para>即将写入的 CBW。</para></param>
-    /// <exception cref="RkdlException">The device reports mask ROM mode and the command needs a loader.
-    /// <para>设备报告 Mask ROM 模式，且该命令需要 loader。</para></exception>
+    /// <exception cref="RkdlException">The device reports mask ROM mode or an unconfirmed stage and the command
+    /// needs a loader. <para>设备报告 Mask ROM 模式或阶段未确认，且该命令需要 loader。</para></exception>
     private void EnsureBulkCommandAllowed(RkdlCbw cbw)
     {
-        if (Mode != RkdlDeviceMode.Maskrom || IsMaskromCommand(cbw.OperationCode))
+        if (IsMaskromCommand(cbw.OperationCode))
         {
             return;
         }
 
-        CommTrace.Error("rkdl",
-            $"Refused CBW 0x{cbw.OperationCode:X2}: the device is in mask ROM mode, which answers information commands only, and no loader is running.");
-        throw new RkdlException(RkdlError.NotSupported,
-            $"The device is in mask ROM mode, which answers no 0x{cbw.OperationCode:X2} storage command; download a loader first.");
+        if (Mode == RkdlDeviceMode.Maskrom)
+        {
+            CommTrace.Error("rkdl",
+                $"Refused CBW 0x{cbw.OperationCode:X2}: the device is in mask ROM mode, which answers information commands only, and no loader is running.");
+            throw new RkdlException(RkdlError.NotSupported,
+                $"The device is in mask ROM mode, which answers no 0x{cbw.OperationCode:X2} storage command; download a loader first.");
+        }
+
+        if (Mode == RkdlDeviceMode.Unknown)
+        {
+            CommTrace.Error("rkdl",
+                $"Refused CBW 0x{cbw.OperationCode:X2}: the device descriptor carried no bcdUSB value, so the boot ROM stage cannot be confirmed.");
+            throw new RkdlException(RkdlError.NotSupported,
+                "The device descriptor carried no bcdUSB value, so the boot ROM stage cannot be confirmed; " +
+                $"re-scan the device before sending 0x{cbw.OperationCode:X2} storage commands.");
+        }
     }
 
     /// <summary>
