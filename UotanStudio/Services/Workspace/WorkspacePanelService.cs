@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Controls;
 using Dock.Model.Core;
+using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Terminal;
@@ -77,6 +78,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
     {
         public required string Key { get; init; }
         public required IDockable Dockable { get; init; }
+        public required IDock RegisteredHost { get; init; }
         public IDock? Host { get; set; }
         public string? TitleKey { get; set; }
     }
@@ -226,6 +228,10 @@ public sealed partial class WorkspacePanelService : ObservableObject
     [ObservableProperty]
     private bool _terminalVisible = true;
 
+    private IProportionalDock? _mainLayout;
+    private IProportionalDock? _centerColumn;
+    private IProportionalDock? _rightColumn;
+
     /// <summary>
     /// Registers a workspace panel with its host dock and syncs the initial visibility.
     /// Re-registering the same key overwrites the previous entry (idempotent, safe when the
@@ -238,6 +244,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <param name="visible">Whether initially visible. <para>初始是否可见。</para></param>
     public void Register(string key, IDockable dockable, IDock host, bool visible)
     {
+        _mainLayout = null;
+        _centerColumn = null;
+        _rightColumn = null;
         if (key == AdbLog && GetEntry(key)?.Dockable is IDisposable previous &&
             !ReferenceEquals(previous, dockable))
             previous.Dispose();
@@ -245,6 +254,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
         {
             Key = key,
             Dockable = dockable,
+            RegisteredHost = host,
             Host = host,
             TitleKey = PanelTitleKeys.GetValueOrDefault(key)
         };
@@ -272,16 +282,45 @@ public sealed partial class WorkspacePanelService : ObservableObject
     {
         if (key == Terminal)
         {
-            if (activate) _terminals?.Show();
-            else _terminals?.ShowWithoutActivate();
+            if (activate)
+            {
+                _terminals?.Show();
+            }
+            else
+            {
+                _terminals?.ShowWithoutActivate();
+            }
             RefreshTerminalVisibility();
+            SyncDockHierarchy(isShowing: true);
             return;
         }
         var entry = GetEntry(key);
         UpdateHost(entry);
-        if (entry is null || entry.Host is not { } host)
+        if (entry is null)
         {
             return;
+        }
+
+        if (entry.Dockable.Owner is IDock currentOwner && currentOwner.VisibleDockables?.Contains(entry.Dockable) == true)
+        {
+            if (activate && !ReferenceEquals(currentOwner.ActiveDockable, entry.Dockable))
+            {
+                currentOwner.ActiveDockable = entry.Dockable;
+            }
+            SetVisibleState(key, true);
+            SyncDockHierarchy(isShowing: true);
+            return;
+        }
+
+        var host = (entry.Host is IToolDock ? entry.Host : null) ?? entry.RegisteredHost;
+
+        if (entry.Dockable.Owner is IDock previousOwner && !ReferenceEquals(previousOwner, host))
+        {
+            previousOwner.VisibleDockables?.Remove(entry.Dockable);
+            if (ReferenceEquals(previousOwner.ActiveDockable, entry.Dockable))
+            {
+                previousOwner.ActiveDockable = previousOwner.VisibleDockables?.FirstOrDefault();
+            }
         }
 
         if (host.VisibleDockables is { } list && !list.Contains(entry.Dockable))
@@ -289,12 +328,20 @@ public sealed partial class WorkspacePanelService : ObservableObject
             list.Add(entry.Dockable);
         }
 
-        if (activate && !ReferenceEquals(host.ActiveDockable, entry.Dockable))
+        entry.Dockable.Owner = host;
+        if (activate || host.ActiveDockable is null)
         {
             host.ActiveDockable = entry.Dockable;
         }
 
         SetVisibleState(key, true);
+        SyncDockHierarchy(isShowing: true);
+
+        if (activate && host.Factory is { } factory && factory.FindRoot(entry.Dockable, static _ => true) is { } root)
+        {
+            factory.SetActiveDockable(entry.Dockable);
+            factory.SetFocusedDockable(root, entry.Dockable);
+        }
     }
 
     /// <summary>
@@ -309,25 +356,39 @@ public sealed partial class WorkspacePanelService : ObservableObject
         {
             _terminals?.Hide();
             RefreshTerminalVisibility();
+            SyncDockHierarchy(isShowing: false);
             return;
         }
         var entry = GetEntry(key);
-        UpdateHost(entry);
-        if (entry is null || entry.Host is not { } host)
+        if (entry is null)
         {
             return;
         }
 
-        if (host.VisibleDockables is { } list && list.Contains(entry.Dockable))
+        UpdateHost(entry);
+        var currentOwner = entry.Dockable.Owner as IDock;
+        if (currentOwner?.VisibleDockables is { } currentList && currentList.Contains(entry.Dockable))
         {
-            list.Remove(entry.Dockable);
-            if (ReferenceEquals(host.ActiveDockable, entry.Dockable))
+            currentList.Remove(entry.Dockable);
+            if (ReferenceEquals(currentOwner.ActiveDockable, entry.Dockable))
             {
-                host.ActiveDockable = list.FirstOrDefault();
+                currentOwner.ActiveDockable = currentList.FirstOrDefault();
             }
         }
 
+        var host = entry.Host;
+        if (host is not null && !ReferenceEquals(host, currentOwner) && host.VisibleDockables is { } hostList && hostList.Contains(entry.Dockable))
+        {
+            hostList.Remove(entry.Dockable);
+            if (ReferenceEquals(host.ActiveDockable, entry.Dockable))
+            {
+                host.ActiveDockable = hostList.FirstOrDefault();
+            }
+        }
+
+        entry.Dockable.Owner = null;
         SetVisibleState(key, false);
+        SyncDockHierarchy(isShowing: false);
     }
 
     /// <summary>
@@ -357,13 +418,8 @@ public sealed partial class WorkspacePanelService : ObservableObject
     {
         if (key == Terminal) return _terminals?.IsVisible == true;
         var entry = GetEntry(key);
-        UpdateHost(entry);
-        if (entry?.Host is { } host)
-        {
-            return host.VisibleDockables?.Contains(entry.Dockable) == true;
-        }
-
-        return false;
+        if (entry is null) return false;
+        return entry.Dockable.Owner is IDock owner && owner.VisibleDockables?.Contains(entry.Dockable) == true;
     }
 
     /// <summary>
@@ -372,16 +428,15 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <para>所属停靠区的可见内容变化时（例如停靠项经关闭按钮被移除），重新同步该区内各停靠项的可见性可观察属性。</para>
     /// </summary>
     /// <param name="dock">The dock whose contents changed. <para>内容变化的停靠区。</para></param>
-    public void OnDockContentsChanged(IDock dock)
+    public void OnDockContentsChanged(IDock? dock = null)
     {
         foreach (var (key, entry) in _panels)
         {
-            if (ReferenceEquals(entry.Host, dock))
-            {
-                SetVisibleState(key, dock.VisibleDockables?.Contains(entry.Dockable) == true);
-            }
+            var isVisible = entry.Dockable.Owner is IDock owner && owner.VisibleDockables?.Contains(entry.Dockable) == true;
+            SetVisibleState(key, isVisible);
         }
         RefreshTerminalVisibility();
+        SyncDockHierarchy(isShowing: false);
     }
 
     private PanelEntry? GetEntry(string key) => _panels.TryGetValue(key, out var entry) ? entry : null;
@@ -390,7 +445,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
     {
         foreach (var entry in _panels.Values)
         {
-            if (ReferenceEquals(entry.Dockable, dockable) && entry.Host is IToolDock toolDock)
+            if (ReferenceEquals(entry.Dockable, dockable) && entry.RegisteredHost is IToolDock toolDock)
             {
                 return toolDock;
             }
@@ -401,8 +456,14 @@ public sealed partial class WorkspacePanelService : ObservableObject
 
     private static void UpdateHost(PanelEntry? entry)
     {
-        if (entry?.Dockable.Owner is IDock actual && actual.VisibleDockables?.Contains(entry.Dockable) == true)
-            entry.Host = actual;
+        if (entry is null) return;
+        if (entry.Dockable.Owner is IDock actual && actual.VisibleDockables?.Contains(entry.Dockable) == true)
+        {
+            if (actual is IToolDock)
+            {
+                entry.Host = actual;
+            }
+        }
     }
 
     private void SetVisibleState(string key, bool value)
@@ -436,6 +497,169 @@ public sealed partial class WorkspacePanelService : ObservableObject
             case Terminal:
                 TerminalVisible = value;
                 break;
+        }
+    }
+
+    private void SyncDockHierarchy(bool isShowing)
+    {
+        var leftPane = _panels.GetValueOrDefault(ProjectExplorer)?.RegisteredHost;
+        var bottomPane = _panels.GetValueOrDefault(WorkspaceLog)?.RegisteredHost;
+        var rightPaneTop = _panels.GetValueOrDefault(ImagesView)?.RegisteredHost;
+        var rightPane = _panels.GetValueOrDefault(Properties)?.RegisteredHost;
+
+        var sampleHost = rightPaneTop ?? rightPane ?? leftPane ?? bottomPane;
+        if (sampleHost?.Factory is not { } factory)
+        {
+            return;
+        }
+
+        var root = factory.FindRoot(sampleHost, static _ => true);
+        if (root is null)
+        {
+            return;
+        }
+
+        _mainLayout ??= factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceMainLayout", StringComparison.Ordinal)) as IProportionalDock;
+        _centerColumn ??= factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceCenterColumn", StringComparison.Ordinal)) as IProportionalDock;
+        _rightColumn ??= (factory.FindDockable(root, static d => string.Equals(d.Id, "WorkspaceRightColumn", StringComparison.Ordinal))
+            ?? rightPaneTop?.Owner
+            ?? rightPane?.Owner) as IProportionalDock;
+
+        var mainLayout = _mainLayout;
+        var centerCol = _centerColumn;
+        var rightCol = _rightColumn;
+
+        if (mainLayout is null || centerCol is null)
+        {
+            return;
+        }
+
+        // 1. Sync LeftPane
+        if (leftPane is not null)
+        {
+            var leftCount = leftPane.VisibleDockables?.Count ?? 0;
+            var mainList = mainLayout.VisibleDockables?.ToList() ?? [];
+            if (leftCount == 0)
+            {
+                if (mainList.Contains(leftPane))
+                {
+                    var idx = mainList.IndexOf(leftPane);
+                    mainList.Remove(leftPane);
+                    if (idx < mainList.Count && mainList[idx] is IProportionalDockSplitter)
+                    {
+                        mainList.RemoveAt(idx);
+                    }
+                    mainLayout.VisibleDockables = factory.CreateList(mainList.ToArray());
+                }
+            }
+            else if (isShowing && !mainList.Contains(leftPane))
+            {
+                mainList.Insert(0, leftPane);
+                mainList.Insert(1, new ProportionalDockSplitter());
+                leftPane.Proportion = 0.15;
+                leftPane.Owner = mainLayout;
+                mainLayout.VisibleDockables = factory.CreateList(mainList.ToArray());
+            }
+        }
+
+        // 2. Sync Right Column
+        if (rightCol is not null && rightPaneTop is not null && rightPane is not null)
+        {
+            var topVisible = rightPaneTop.VisibleDockables is { Count: > 0 };
+            var bottomVisible = rightPane.VisibleDockables is { Count: > 0 };
+            var mainList = mainLayout.VisibleDockables?.ToList() ?? [];
+
+            if (!topVisible && !bottomVisible)
+            {
+                if (mainList.Contains(rightCol))
+                {
+                    var idx = mainList.IndexOf(rightCol);
+                    if (idx > 0 && mainList[idx - 1] is IProportionalDockSplitter)
+                    {
+                        mainList.RemoveAt(idx - 1);
+                    }
+                    mainList.Remove(rightCol);
+                    mainLayout.VisibleDockables = factory.CreateList(mainList.ToArray());
+                }
+                rightCol.VisibleDockables = factory.CreateList<IDockable>();
+            }
+            else
+            {
+                if (!mainList.Contains(rightCol))
+                {
+                    if (isShowing)
+                    {
+                        if (mainList.Count > 0 && mainList[^1] is not IProportionalDockSplitter)
+                        {
+                            mainList.Add(new ProportionalDockSplitter());
+                        }
+                        mainList.Add(rightCol);
+                        rightCol.Proportion = 0.15;
+                        mainLayout.VisibleDockables = factory.CreateList(mainList.ToArray());
+                    }
+                }
+
+                if (mainList.Contains(rightCol))
+                {
+                    rightCol.Owner = mainLayout;
+
+                    if (topVisible && bottomVisible)
+                    {
+                        rightPaneTop.Owner = rightCol;
+                        rightPane.Owner = rightCol;
+                        rightPaneTop.Proportion = double.NaN;
+                        rightPane.Proportion = 0.35;
+                        rightCol.VisibleDockables = factory.CreateList<IDockable>(
+                            rightPaneTop,
+                            new ProportionalDockSplitter(),
+                            rightPane
+                        );
+                    }
+                    else if (topVisible)
+                    {
+                        rightPaneTop.Owner = rightCol;
+                        rightPaneTop.Proportion = double.NaN;
+                        rightCol.VisibleDockables = factory.CreateList<IDockable>(rightPaneTop);
+                    }
+                    else // bottomVisible
+                    {
+                        rightPane.Owner = rightCol;
+                        rightPane.Proportion = double.NaN;
+                        rightCol.VisibleDockables = factory.CreateList<IDockable>(rightPane);
+                    }
+                }
+            }
+        }
+
+        // 3. Sync BottomPane in Center Column
+        if (bottomPane is not null)
+        {
+            var bottomToolsCount = bottomPane.VisibleDockables?.Count ?? 0;
+            var centerList = centerCol.VisibleDockables?.ToList() ?? [];
+            if (bottomToolsCount == 0)
+            {
+                if (centerList.Contains(bottomPane))
+                {
+                    var idx = centerList.IndexOf(bottomPane);
+                    if (idx > 0 && centerList[idx - 1] is IProportionalDockSplitter)
+                    {
+                        centerList.RemoveAt(idx - 1);
+                    }
+                    centerList.Remove(bottomPane);
+                    centerCol.VisibleDockables = factory.CreateList(centerList.ToArray());
+                }
+            }
+            else if (isShowing && !centerList.Contains(bottomPane))
+            {
+                if (centerList.Count > 0 && centerList[^1] is not IProportionalDockSplitter)
+                {
+                    centerList.Add(new ProportionalDockSplitter());
+                }
+                centerList.Add(bottomPane);
+                bottomPane.Proportion = 0.25;
+                bottomPane.Owner = centerCol;
+                centerCol.VisibleDockables = factory.CreateList(centerList.ToArray());
+            }
         }
     }
 }

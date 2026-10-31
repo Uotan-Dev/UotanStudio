@@ -212,6 +212,56 @@ public sealed class WorkspaceDockTitleTests
     }
 
     [Fact]
+    public async Task ToolDockedAsDocument_WhenClosed_UpdatesMenuVisibility_AndCanReopenToRegisteredToolDock()
+    {
+        var factory = new WorkspaceDockFactory();
+        var root = factory.CreateLayout();
+        factory.InitLayout(root);
+        root.Window = new DockWindow();
+        try
+        {
+            var panels = WorkspacePanelService.Instance;
+            var projectExplorer = Assert.IsAssignableFrom<ITool>(
+                factory.FindDockable(root, static d => d.Id == WorkspacePanelService.ProjectExplorer));
+            var leftPane = Assert.IsAssignableFrom<IToolDock>(
+                factory.FindDockable(root, static d => d.Id == "LeftPane"));
+            var documentDock = Assert.IsAssignableFrom<IDocumentDock>(
+                factory.FindDockable(root, static d => d.Id == "DocumentsPane"));
+
+            Assert.True(panels.ProjectExplorerVisible);
+            Assert.Contains(projectExplorer, leftPane.VisibleDockables!);
+
+            var dockManager = new DockManager(new DockService());
+            Assert.True(dockManager.ValidateDockable(
+                projectExplorer, documentDock, DragAction.Move, DockOperation.Fill, bExecute: true));
+
+            Assert.Same(documentDock, projectExplorer.Owner);
+            Assert.Contains(projectExplorer, documentDock.VisibleDockables!);
+            Assert.DoesNotContain(projectExplorer, leftPane.VisibleDockables!);
+            Assert.True(panels.ProjectExplorerVisible);
+
+            factory.CloseDockable(projectExplorer);
+            await WaitForAsync(
+                () => !panels.ProjectExplorerVisible,
+                TestContext.Current.CancellationToken);
+
+            Assert.False(panels.ProjectExplorerVisible);
+            Assert.DoesNotContain(projectExplorer, documentDock.VisibleDockables!);
+
+            panels.Show(WorkspacePanelService.ProjectExplorer);
+
+            Assert.True(panels.ProjectExplorerVisible);
+            Assert.Same(leftPane, projectExplorer.Owner);
+            Assert.Contains(projectExplorer, leftPane.VisibleDockables!);
+            Assert.DoesNotContain(projectExplorer, documentDock.VisibleDockables!);
+        }
+        finally
+        {
+            factory.DisposeTerminal();
+        }
+    }
+
+    [Fact]
     public void DockManager_AllowsDraggingWorkspaceDocument_IntoToolPanesAndDocumentPane()
     {
         var factory = new WorkspaceDockFactory();
@@ -590,5 +640,119 @@ public sealed class WorkspaceDockTitleTests
         }
 
         Assert.True(predicate());
+    }
+    [Fact]
+    public async Task ToolDockedAsDocument_WhenClosedAndHostCollapsed_ReopensAndRestoresHostToLayout()
+    {
+        var factory = new WorkspaceDockFactory();
+        var root = factory.CreateLayout();
+        factory.InitLayout(root);
+        root.Window = new DockWindow();
+        try
+        {
+            var panels = WorkspacePanelService.Instance;
+            var projectExplorer = Assert.IsAssignableFrom<ITool>(
+                factory.FindDockable(root, static d => d.Id == WorkspacePanelService.ProjectExplorer));
+            var leftPane = Assert.IsAssignableFrom<IToolDock>(
+                factory.FindDockable(root, static d => d.Id == "LeftPane"));
+            var mainLayout = Assert.IsAssignableFrom<IDock>(
+                factory.FindDockable(root, static d => d.Id == "WorkspaceMainLayout"));
+            var documentDock = Assert.IsAssignableFrom<IDocumentDock>(
+                factory.FindDockable(root, static d => d.Id == "DocumentsPane"));
+
+            var dockManager = new DockManager(new DockService());
+            Assert.True(dockManager.ValidateDockable(
+                projectExplorer, documentDock, DragAction.Move, DockOperation.Fill, bExecute: true));
+
+            // Simulate host dock being detached/collapsed from layout
+            mainLayout.VisibleDockables!.Remove(leftPane);
+
+            factory.CloseDockable(projectExplorer);
+            await WaitForAsync(() => !panels.ProjectExplorerVisible, TestContext.Current.CancellationToken);
+
+            Assert.False(panels.ProjectExplorerVisible);
+            Assert.False(mainLayout.VisibleDockables!.Contains(leftPane));
+
+            // User clicks Window menu item to reopen
+            panels.Show(WorkspacePanelService.ProjectExplorer);
+
+            Assert.True(panels.ProjectExplorerVisible);
+            Assert.True(mainLayout.VisibleDockables!.Contains(leftPane));
+            Assert.Contains(projectExplorer, leftPane.VisibleDockables!);
+            Assert.Same(projectExplorer, leftPane.ActiveDockable);
+            Assert.Same(leftPane, projectExplorer.Owner);
+        }
+        finally
+        {
+            factory.DisposeTerminal();
+        }
+    }
+    [Fact]
+    public void RightColumn_PanelsToggle_FillsSpace_RestoresAlone_AndLeavesNoPhantoms()
+    {
+        var factory = new WorkspaceDockFactory();
+        var root = factory.CreateLayout();
+        factory.InitLayout(root);
+        root.Window = new DockWindow();
+        try
+        {
+            var panels = WorkspacePanelService.Instance;
+            var mainLayout = Assert.IsAssignableFrom<IDock>(
+                factory.FindDockable(root, static d => d.Id == "WorkspaceMainLayout"));
+            var rightCol = Assert.IsAssignableFrom<IDock>(
+                factory.FindDockable(root, static d => d.Id == "WorkspaceRightColumn"));
+            var rightPaneTop = Assert.IsAssignableFrom<IDock>(
+                factory.FindDockable(root, static d => d.Id == "RightPaneTop"));
+            var rightPane = Assert.IsAssignableFrom<IDock>(
+                factory.FindDockable(root, static d => d.Id == "RightPane"));
+
+            // Initially both are visible and split
+            Assert.True(mainLayout.VisibleDockables!.Contains(rightCol));
+            Assert.Equal(3, rightCol.VisibleDockables!.Count);
+            Assert.True(panels.ImagesViewVisible);
+            Assert.True(panels.PropertiesVisible);
+
+            for (var cycle = 0; cycle < 5; cycle++)
+            {
+                // 1. Close Properties from Window menu -> ImagesView must fill 100% of the column
+                panels.Hide(WorkspacePanelService.Properties);
+                Assert.False(panels.PropertiesVisible);
+                Assert.True(panels.ImagesViewVisible);
+                Assert.True(mainLayout.VisibleDockables!.Contains(rightCol));
+                Assert.Single(rightCol.VisibleDockables!);
+                Assert.Same(rightPaneTop, rightCol.VisibleDockables[0]);
+                Assert.Equal(double.NaN, rightPaneTop.Proportion);
+
+                // 2. Close ImagesView -> Right column must completely collapse from WorkspaceMainLayout
+                panels.Hide(WorkspacePanelService.ImagesView);
+                Assert.False(panels.ImagesViewVisible);
+                Assert.False(mainLayout.VisibleDockables!.Contains(rightCol));
+                Assert.Empty(rightCol.VisibleDockables!);
+
+                // 3. Open Properties alone from Window menu -> Restores alone and fills column
+                panels.Show(WorkspacePanelService.Properties);
+                Assert.True(panels.PropertiesVisible);
+                Assert.False(panels.ImagesViewVisible);
+                Assert.True(mainLayout.VisibleDockables!.Contains(rightCol));
+                Assert.Single(rightCol.VisibleDockables!);
+                Assert.Same(rightPane, rightCol.VisibleDockables[0]);
+                Assert.Equal(double.NaN, rightPane.Proportion);
+
+                // 4. Open ImagesView -> Both restored and split nicely
+                panels.Show(WorkspacePanelService.ImagesView);
+                Assert.True(panels.PropertiesVisible);
+                Assert.True(panels.ImagesViewVisible);
+                Assert.True(mainLayout.VisibleDockables!.Contains(rightCol));
+                Assert.Equal(3, rightCol.VisibleDockables!.Count);
+                Assert.Same(rightPaneTop, rightCol.VisibleDockables[0]);
+                Assert.Same(rightPane, rightCol.VisibleDockables[2]);
+                Assert.Equal(double.NaN, rightPaneTop.Proportion);
+                Assert.Equal(0.35, rightPane.Proportion);
+            }
+        }
+        finally
+        {
+            factory.DisposeTerminal();
+        }
     }
 }

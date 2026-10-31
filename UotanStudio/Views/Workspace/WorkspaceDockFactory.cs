@@ -119,6 +119,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         {
             Id = "RightPaneTop",
             Title = "RightPaneTop",
+            IsCollapsable = false,
             Proportion = double.NaN,
             ActiveDockable = imagesView,
             VisibleDockables = CreateList<IDockable>(imagesView)
@@ -132,6 +133,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         {
             Id = "RightPane",
             Title = "RightPane",
+            IsCollapsable = false,
             Proportion = 0.35,
             ActiveDockable = properties,
             VisibleDockables = CreateList<IDockable>(properties)
@@ -141,6 +143,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         {
             Id = "LeftPane",
             Title = "LeftPane",
+            IsCollapsable = false,
             Proportion = 0.15,
             ActiveDockable = projectExplorer,
 
@@ -151,9 +154,36 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         {
             Id = "BottomPane",
             Title = "BottomPane",
+            IsCollapsable = false,
             Proportion = 0.25,
             ActiveDockable = output,
             VisibleDockables = CreateList<IDockable>(output, adbLog)
+        };
+
+        var centerColumn = new ProportionalDock
+        {
+            Id = "WorkspaceCenterColumn",
+            IsCollapsable = false,
+            Orientation = Orientation.Vertical,
+            Proportion = 0.7,
+            VisibleDockables = CreateList<IDockable>(
+                documentDock,
+                new ProportionalDockSplitter(),
+                bottomTools
+            )
+        };
+
+        var rightColumn = new ProportionalDock
+        {
+            Id = "WorkspaceRightColumn",
+            IsCollapsable = false,
+            Orientation = Orientation.Vertical,
+            Proportion = 0.15,
+            VisibleDockables = CreateList<IDockable>(
+                rightToolsTop,
+                new ProportionalDockSplitter(),
+                rightTools
+            )
         };
 
         var mainLayout = new ProportionalDock
@@ -164,29 +194,9 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
             VisibleDockables = CreateList<IDockable>(
                 leftTools,
                 new ProportionalDockSplitter(),
-                new ProportionalDock
-                {
-                    Id = "WorkspaceCenterColumn",
-                    Orientation = Orientation.Vertical,
-                    Proportion = 0.7,
-                    VisibleDockables = CreateList<IDockable>(
-                        documentDock,
-                        new ProportionalDockSplitter(),
-                        bottomTools
-                    )
-                },
+                centerColumn,
                 new ProportionalDockSplitter(),
-                new ProportionalDock
-                {
-                    Id = "WorkspaceRightColumn",
-                    Orientation = Orientation.Vertical,
-                    Proportion = 0.15,
-                    VisibleDockables = CreateList<IDockable>(
-                        rightToolsTop,
-                        new ProportionalDockSplitter(),
-                        rightTools
-                    )
-                }
+                rightColumn
             )
         };
 
@@ -476,6 +486,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
 
         base.MoveDockable(sourceDock, targetDock, sourceDockable, targetDockable);
         SyncDocumentDocks(root);
+        WorkspacePanelService.Instance.OnDockContentsChanged();
     }
 
     /// <inheritdoc/>
@@ -485,6 +496,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         ReleaseDockablePresentations(dockable);
         base.SplitToDock(dock, dockable, operation);
         SyncDocumentDocks(root);
+        WorkspacePanelService.Instance.OnDockContentsChanged();
     }
 
     /// <inheritdoc/>
@@ -499,6 +511,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         ReleaseDockablePresentations(dockable);
         base.SplitToWindow(dock, dockable, x, y, width, height, options);
         SyncDocumentDocks(root);
+        WorkspacePanelService.Instance.OnDockContentsChanged();
     }
 
     /// <inheritdoc/>
@@ -520,6 +533,7 @@ public class WorkspaceDockFactory : Factory, IWorkspaceDockFactory, IDockSplitPo
         {
             SyncDocumentDocks(root);
         }
+        WorkspacePanelService.Instance.OnDockContentsChanged();
     }
 
     private IToolDock? ResolveTargetToolDock(IDockable dockable, IRootDock root)
