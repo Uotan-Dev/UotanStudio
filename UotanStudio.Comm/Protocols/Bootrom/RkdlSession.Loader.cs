@@ -1,3 +1,5 @@
+using UotanStudio.Comm.Diagnostics;
+
 namespace UotanStudio.Comm.Protocols.Bootrom;
 
 public sealed partial class RkdlSession
@@ -104,6 +106,8 @@ public sealed partial class RkdlSession
     {
         cancellationToken.ThrowIfCancellationRequested();
         var image = PrepareLoaderImage(loaderImage);
+        CommTrace.State("rkdl",
+            $"Downloading loader: {image.Entries471.Count} first-stage and {image.Entries472.Count} second-stage entries in {Mode} stage.");
 
         var total = 0;
 
@@ -135,6 +139,8 @@ public sealed partial class RkdlSession
             }
         }
 
+        CommTrace.State("rkdl",
+            $"Loader download sent {total} B; waiting {RkdlConstants.LoaderReenumerationSettleMs} ms for re-enumeration.");
         await Task.Delay(RkdlConstants.LoaderReenumerationSettleMs, cancellationToken).ConfigureAwait(false);
         return total;
     }

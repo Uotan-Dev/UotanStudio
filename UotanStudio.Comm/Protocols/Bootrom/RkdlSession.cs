@@ -1,4 +1,5 @@
 using UotanStudio.Comm.Devices.Discovery;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
@@ -43,6 +44,8 @@ public sealed partial class RkdlSession : IProtocolSession
         _physicalIdentity = UsbSession?.DeviceInfo is { } deviceInfo
             ? PhysicalDeviceIdentity.From(deviceInfo)
             : null;
+        CommTrace.State("rkdl", $"Opened RKDL session: VID 0x{VendorId:X4} PID 0x{ProductId:X4}, stage {Mode}, " +
+            $"bcdUSB 0x{UsbSession?.DeviceInfo.BcdUsb ?? 0:X4}, timeout {_timeoutMs} ms.");
     }
 
     /// <summary>
@@ -160,6 +163,7 @@ public sealed partial class RkdlSession : IProtocolSession
         }
 
         _disposed = true;
+        CommTrace.State("rkdl", $"Disposing RKDL session: VID 0x{VendorId:X4} PID 0x{ProductId:X4}, stage {Mode}.");
         Transport.Dispose();
     }
 }

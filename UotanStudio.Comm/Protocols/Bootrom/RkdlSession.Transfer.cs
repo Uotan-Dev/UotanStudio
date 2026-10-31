@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Bootrom;
@@ -256,6 +257,7 @@ public sealed partial class RkdlSession
         }
 
         var usb = GetUsbSession();
+        CommTrace.Debug("rkdl", $"Vendor request 0x0C wIndex 0x{wIndex:X4}: {loaderData.Length} B in {Mode} stage.");
 
         var dataLength = loaderData.Length;
         var sendPadPacket = false;
@@ -292,8 +294,10 @@ public sealed partial class RkdlSession
                 Length = (ushort)chunk
             };
             var sent = usb.ControlTransfer(setupPacket, buffer, offset, chunk, _timeoutMs);
+            CommTrace.Payload("rkdl", $"vendor 0x0C wIndex 0x{wIndex:X4} chunk at {offset}", buffer.AsSpan(offset, chunk));
             if (sent != chunk)
             {
+                CommTrace.Error("rkdl", $"Loader vendor request 0x{wIndex:X4} wrote {sent} of {chunk} bytes at offset {offset}.");
                 throw new RkdlException(RkdlError.TransferFailed, $"Loader vendor request 0x{wIndex:X4} failed: {sent}/{chunk} bytes.");
             }
 
@@ -339,6 +343,8 @@ public sealed partial class RkdlSession
         WriteCbw(cbw);
 
         var buffer = new byte[readBufferSize];
+        CommTrace.Debug("rkdl", $"CBW 0x{(byte)opcode:X2} in, tag 0x{cbw.Tag:X8}, data {transferLength} B, stage {Mode}.");
+        CommTrace.Payload("rkdl", "CBW out", cbw.ToBytes());
         var n = 0;
         while (n < readBufferSize)
         {
@@ -356,16 +362,21 @@ public sealed partial class RkdlSession
             }
         }
 
+        CommTrace.Payload("rkdl", $"data in ({n} B)", buffer.AsSpan(0, n));
         if (n < requiredMinimum)
         {
+            CommTrace.Error("rkdl", $"CBW 0x{(byte)opcode:X2} read {n} B, less than the {requiredMinimum} B the command requires.");
             throw new RkdlException(RkdlError.ReadFailed, $"Short data read: {n} < {requiredMinimum}.");
         }
 
         var csw = ReadCsw(cbw.Tag);
         if (!csw.IsSuccess)
         {
+            CommTrace.Error("rkdl", $"CBW 0x{(byte)opcode:X2} reported CSW status {csw.Status}.");
             throw new RkdlException(RkdlError.ReadFailed, $"Command 0x{(byte)opcode:X2} failed, CSW status = {csw.Status}.");
         }
+
+        CommTrace.Debug("rkdl", $"CBW 0x{(byte)opcode:X2} done, tag 0x{cbw.Tag:X8}, {n} B in.");
 
         if (n < readBufferSize)
         {
@@ -386,9 +397,11 @@ public sealed partial class RkdlSession
     {
         EnsureBulkCommandAllowed(cbw);
         var bytes = cbw.ToBytes();
+        CommTrace.Payload("rkdl", "CBW out", bytes);
         var written = Transport.Write(bytes, 0, bytes.Length, _timeoutMs);
         if (written != bytes.Length)
         {
+            CommTrace.Error("rkdl", $"CBW 0x{cbw.OperationCode:X2} wrote {written} of {bytes.Length} bytes.");
             throw new RkdlException(RkdlError.TransferFailed, $"CBW short write: {written}/{bytes.Length}.");
         }
     }
@@ -410,6 +423,8 @@ public sealed partial class RkdlSession
             return;
         }
 
+        CommTrace.Error("rkdl",
+            $"Refused CBW 0x{cbw.OperationCode:X2}: the device is in mask ROM mode, which answers information commands only, and no loader is running.");
         throw new RkdlException(RkdlError.NotSupported,
             $"The device is in mask ROM mode, which answers no 0x{cbw.OperationCode:X2} storage command; download a loader first.");
     }
@@ -458,11 +473,14 @@ public sealed partial class RkdlSession
             totalRead += n;
             if (n == buffer.Length && RkdlCsw.TryParse(buffer, tag, out var csw))
             {
+                CommTrace.Payload("rkdl", $"CSW in, tag 0x{tag:X8}", buffer);
                 return csw!;
             }
 
+            CommTrace.Payload("rkdl", $"CSW in, {n} B without a matching tag 0x{tag:X8}", buffer.AsSpan(0, n));
             tryCount--;
         }
+        CommTrace.Error("rkdl", $"CSW validation failed for tag 0x{tag:X8}: signature or tag mismatch after {totalRead} B.");
         throw new RkdlException(RkdlError.TransferFailed, "CSW validation failed (signature or tag mismatch).");
     }
 
