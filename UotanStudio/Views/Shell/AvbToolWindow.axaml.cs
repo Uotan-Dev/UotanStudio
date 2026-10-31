@@ -135,6 +135,45 @@ public partial class AvbToolWindow : Window
     private async void OnVerifyOtaClick(object? sender, RoutedEventArgs e) => await RunOperationAsync(Model.VerifyOtaAsync);
 
     /// <summary>
+    /// Opens the disable-AVB tab and sets the target image file.
+    /// <para>打开禁用 AVB 标签页并设置目标镜像文件。</para>
+    /// </summary>
+    /// <param name="filePath">The image file path. <para>镜像文件路径。</para></param>
+    public void OpenDisableAvbTab(string filePath) => Model.LoadDisableAvbTarget(filePath);
+
+    private async void OnDisableAvbFileBrowseClick(object? sender, RoutedEventArgs e)
+    {
+        var path = await PickOpenFileAsync("Avb_DisableSelectFile", "*.img", "*.bin", "*.raw");
+        if (path is not null)
+        {
+            Model.LoadDisableAvbTarget(path);
+        }
+    }
+
+    private async void OnDisableAvbOutputBrowseClick(object? sender, RoutedEventArgs e)
+    {
+        var suggested = Model.DisableAvbOutputPath is { Length: > 0 } output
+            ? Path.GetFileName(output)
+            : (Model.DisableAvbFilePath is { Length: > 0 } input
+                ? $"{Path.GetFileNameWithoutExtension(input)}_{AvbToolViewModel.GetDisableCommandSuffix(Model.SelectedDisableCommand)}{Path.GetExtension(input)}"
+                : null);
+        var ext = Model.DisableAvbFilePath is { Length: > 0 } img ? Path.GetExtension(img).TrimStart('.') : "img";
+        if (string.IsNullOrEmpty(ext))
+        {
+            ext = "img";
+        }
+
+        var path = await PickSaveFileAsync("Avb_FooterSelectOutputTitle", suggested, ext);
+        if (path is not null)
+        {
+            Model.DisableAvbOutputPath = path;
+        }
+    }
+
+    private async void OnExecuteDisableClick(object? sender, RoutedEventArgs e) =>
+        await RunOperationAsync(Model.DisableVerificationAsync);
+
+    /// <summary>
     /// Picks one file with an optional extension filter; picker failures are shown in a dialog.
     /// <para>选择单个文件，可选按扩展名过滤；选择器失败以弹窗提示。</para>
     /// </summary>

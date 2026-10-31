@@ -131,6 +131,76 @@ public partial class AvbToolViewModel : ViewModelBase
     /// <summary>AVB private key path; auto-filled from the selected AVB key. <para>AVB 私钥路径；由所选 AVB 密钥自动填入。</para></summary>
     [ObservableProperty] private string _otaPrivateKeyPath = "";
 
+    /// <summary>Active tab index in the AVB tool window. <para>AVB 工具窗口中的当前标签页索引。</para></summary>
+    [ObservableProperty] private int _selectedTabIndex;
+
+    /// <summary>Path of the AVB file to disable verification on. <para>待禁用校验的 AVB 文件路径。</para></summary>
+    [ObservableProperty] private string _disableAvbFilePath = "";
+
+    /// <summary>The available commands for disabling AVB verification. <para>可用的禁用 AVB 校验命令。</para></summary>
+    public static readonly string[] AvailableDisableCommands =
+    [
+        "--disable-verity --disable-verification",
+        "--disable-verity",
+        "--disable-verification",
+        "取消禁用"
+    ];
+
+    /// <summary>Disable commands offered to the disable verification section. <para>供禁用校验区选择的命令列表。</para></summary>
+    public IReadOnlyList<string> DisableCommands => AvailableDisableCommands;
+
+    /// <summary>
+    /// Derives the concise suffix string for the given disable-verification command.
+    /// <para>推导给定禁用校验命令的精简后缀字符串。</para>
+    /// </summary>
+    /// <param name="command">The raw command string. <para>原始命令字符串。</para></param>
+    /// <returns>A concise suffix without spaces or leading dashes. <para>无空格与前导横线的精简后缀。</para></returns>
+    public static string GetDisableCommandSuffix(string? command)
+    {
+        if (command is not null && (command.Contains("取消", StringComparison.Ordinal) || command.Contains("enable", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "enable-verity-verification";
+        }
+
+        var hasVerity = command?.Contains("--disable-verity", StringComparison.Ordinal) == true;
+        var hasVerification = command?.Contains("--disable-verification", StringComparison.Ordinal) == true;
+
+        return (hasVerity, hasVerification) switch
+        {
+            (true, true) => "disable-verity-verification",
+            (true, false) => "disable-verity",
+            (false, true) => "disable-verification",
+            _ => "disabled"
+        };
+    }
+
+    /// <summary>Selected command for disabling verification. <para>当前选中的禁用校验命令。</para></summary>
+    [ObservableProperty] private string _selectedDisableCommand = AvailableDisableCommands[0];
+
+    private string _defaultDisableAvbOutputPath = "";
+
+    /// <summary>Output image path with verification disabled; blank derives &lt;image&gt;_&lt;command&gt;.&lt;ext&gt;.
+    /// <para>已禁用校验的输出镜像路径；留空时自动推导为 &lt;镜像&gt;_&lt;命令&gt;.&lt;扩展名&gt;。</para></summary>
+    [ObservableProperty] private string _disableAvbOutputPath = "";
+
+    /// <summary>Target directory for disabled AVB output. <para>禁用 AVB 镜像的输出目录。</para></summary>
+    public string DisableAvbOutputDir
+    {
+        get => !string.IsNullOrWhiteSpace(DisableAvbOutputPath) ? (Path.GetDirectoryName(DisableAvbOutputPath) ?? "") : "";
+        set
+        {
+            if (!string.IsNullOrWhiteSpace(value) && !string.IsNullOrWhiteSpace(DisableAvbFilePath))
+            {
+                var name = Path.GetFileNameWithoutExtension(DisableAvbFilePath);
+                var ext = Path.GetExtension(DisableAvbFilePath);
+                var command = SelectedDisableCommand ?? AvailableDisableCommands[0];
+                var nextPath = Path.Combine(value, $"{name}_{GetDisableCommandSuffix(command)}{ext}");
+                DisableAvbOutputPath = nextPath;
+                _defaultDisableAvbOutputPath = nextPath;
+            }
+        }
+    }
+
     /// <summary>Multi-line OTA result report. <para>多行 OTA 结果报告。</para></summary>
     [ObservableProperty] private string _otaSummary = "";
 
@@ -172,6 +242,46 @@ public partial class AvbToolViewModel : ViewModelBase
     }
 
     partial void OnFooterOutputPathChanged(string value) => OnPropertyChanged(nameof(SignedOutputPath));
+
+    private void UpdateDefaultDisableOutputPath()
+    {
+        var input = DisableAvbFilePath;
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return;
+        }
+
+        try
+        {
+            var dir = !string.IsNullOrWhiteSpace(DisableAvbOutputPath)
+                ? (Path.GetDirectoryName(DisableAvbOutputPath) ?? "")
+                : "";
+            if (string.IsNullOrWhiteSpace(dir))
+            {
+                dir = Path.GetDirectoryName(input) ?? "";
+            }
+
+            var name = Path.GetFileNameWithoutExtension(input);
+            var ext = Path.GetExtension(input);
+            var command = SelectedDisableCommand ?? AvailableDisableCommands[0];
+            var nextDefault = Path.Combine(dir, $"{name}_{GetDisableCommandSuffix(command)}{ext}");
+
+            if (string.IsNullOrWhiteSpace(DisableAvbOutputPath)
+                || string.Equals(DisableAvbOutputPath, _defaultDisableAvbOutputPath, StringComparison.OrdinalIgnoreCase))
+            {
+                DisableAvbOutputPath = nextDefault;
+            }
+
+            _defaultDisableAvbOutputPath = nextDefault;
+        }
+        catch
+        {
+        }
+    }
+
+    partial void OnDisableAvbFilePathChanged(string value) => UpdateDefaultDisableOutputPath();
+
+    partial void OnSelectedDisableCommandChanged(string value) => UpdateDefaultDisableOutputPath();
 
     partial void OnSelectedKeyChanged(ManagedKey? value)
     {
@@ -543,6 +653,139 @@ public partial class AvbToolViewModel : ViewModelBase
         var result = await _ota.VerifyAsync(request, cancellationToken);
         OtaSummary = DescribeVerify(result);
         Status = result.Success ? T("Avb_OtaVerified") : T("Avb_OtaVerificationFailed");
+    });
+
+    /// <summary>
+    /// Loads a target image file path into the disable-AVB tab and switches the view to that tab.
+    /// <para>将目标镜像文件路径载入禁用 AVB 标签页，并切换到该标签页。</para>
+    /// </summary>
+    /// <param name="filePath">The image file path. <para>镜像文件路径。</para></param>
+    public void LoadDisableAvbTarget(string filePath)
+    {
+        DisableAvbFilePath = filePath;
+        UpdateDefaultDisableOutputPath();
+        SelectedTabIndex = 0;
+    }
+
+    /// <summary>
+    /// Disables AVB verification flags on a copy of the selected image and outputs it to the target directory.
+    /// <para>在所选镜像的副本上禁用 AVB 校验标志位并输出到目标目录。</para>
+    /// </summary>
+    /// <returns>A task completed once the operation finishes. <para>操作结束后完成的任务。</para></returns>
+    public Task DisableVerificationAsync() => RunAsync(async cancellationToken =>
+    {
+        var input = DisableAvbFilePath?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            Status = T("Avb_DisableFileEmpty");
+            return;
+        }
+
+        if (!File.Exists(input))
+        {
+            Status = T("Avb_DisableFileNotExist", input);
+            return;
+        }
+
+        var outputPath = DisableAvbOutputPath?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            UpdateDefaultDisableOutputPath();
+            outputPath = DisableAvbOutputPath?.Trim() ?? "";
+        }
+
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            Status = T("Avb_DisableOutputDirInvalid");
+            return;
+        }
+
+        var outputDir = Path.GetDirectoryName(outputPath);
+        if (string.IsNullOrWhiteSpace(outputDir))
+        {
+            Status = T("Avb_DisableOutputDirInvalid");
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(outputDir);
+        }
+        catch (Exception ex)
+        {
+            Status = UserError.WithDetails(ex.Message, "Avb_DisableOutputDirInvalid");
+            return;
+        }
+
+        try
+        {
+            if (!string.Equals(Path.GetFullPath(input), Path.GetFullPath(outputPath), StringComparison.OrdinalIgnoreCase))
+            {
+                File.Copy(input, outputPath, overwrite: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Status = UserError.WithDetails(ex.Message, "Avb_DisableCopyFailed");
+            return;
+        }
+
+        var command = SelectedDisableCommand?.Trim() ?? AvailableDisableCommands[0];
+        var isCancelDisable = command is "取消禁用" or "Cancel disable"
+            || command.Contains("取消", StringComparison.OrdinalIgnoreCase)
+            || command.Contains("enable", StringComparison.OrdinalIgnoreCase);
+
+        bool targetVerityDisabled;
+        bool targetVerificationDisabled;
+
+        if (isCancelDisable)
+        {
+            targetVerityDisabled = false;
+            targetVerificationDisabled = false;
+        }
+        else
+        {
+            var hasBoth = command.Contains("--disable-verity", StringComparison.Ordinal)
+                && command.Contains("--disable-verification", StringComparison.Ordinal);
+            if (hasBoth)
+            {
+                targetVerityDisabled = true;
+                targetVerificationDisabled = true;
+            }
+            else if (command.Contains("--disable-verity", StringComparison.Ordinal))
+            {
+                targetVerityDisabled = true;
+                targetVerificationDisabled = false;
+            }
+            else if (command.Contains("--disable-verification", StringComparison.Ordinal))
+            {
+                targetVerityDisabled = false;
+                targetVerificationDisabled = true;
+            }
+            else
+            {
+                targetVerityDisabled = false;
+                targetVerificationDisabled = false;
+            }
+        }
+
+        var res1 = await AvbSigner.SetVbmetaFlagAsync(outputPath, AvbVbmetaFlag.HashtreeDisabled, targetVerityDisabled, cancellationToken);
+        if (!res1.Success)
+        {
+            Status = UserError.WithDetails(res1.ErrorMessage, "Avb_DisableFailed");
+            return;
+        }
+
+        var res2 = await AvbSigner.SetVbmetaFlagAsync(outputPath, AvbVbmetaFlag.VerificationDisabled, targetVerificationDisabled, cancellationToken);
+        if (!res2.Success)
+        {
+            Status = UserError.WithDetails(res2.ErrorMessage, "Avb_DisableFailed");
+            return;
+        }
+
+        Status = isCancelDisable
+            ? T("Avb_CancelDisableSuccess", outputPath)
+            : T("Avb_DisableSuccess", outputPath);
     });
 
     /// <summary>

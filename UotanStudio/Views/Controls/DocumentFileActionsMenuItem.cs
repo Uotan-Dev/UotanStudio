@@ -20,6 +20,7 @@ public sealed class DocumentFileActionsMenuItem : MenuItem
 {
     private readonly OpenAsMenuItem _openAsMenuItem = new();
     private readonly MenuItem _convertMenuItem;
+    private readonly MenuItem _disableAvbMenuItem;
     private string? _path;
 
     /// <summary>Uses the standard menu-item theme. <para>使用标准菜单项主题。</para></summary>
@@ -41,6 +42,11 @@ public sealed class DocumentFileActionsMenuItem : MenuItem
         _convertMenuItem.Items.Add(CreateConversionItem("Explorer_ConvertImgToDat", ImageViewModel.ConvertImgToDat));
         _convertMenuItem.Items.Add(CreateConversionItem("Explorer_ConvertImgToBr", ImageViewModel.ConvertImgToBr));
         Items.Add(_convertMenuItem);
+
+        _disableAvbMenuItem = CreateItem("Explorer_DisableAvb");
+        _disableAvbMenuItem.Icon = CreateIcon(AppIconKind.Checksum);
+        _disableAvbMenuItem.Click += OnDisableAvb;
+        Items.Add(_disableAvbMenuItem);
 
         var checksum = CreateItem("Explorer_Checksum");
         checksum.Icon = CreateIcon(AppIconKind.Checksum);
@@ -68,6 +74,7 @@ public sealed class DocumentFileActionsMenuItem : MenuItem
         IsVisible = _path is not null;
         _openAsMenuItem.IsVisible = _path is not null;
         _convertMenuItem.IsVisible = _path is not null && ImageViewModel.SupportsFormatConversion(_path);
+        _disableAvbMenuItem.IsVisible = _path is not null && ImageViewModel.SupportsFormatConversion(_path);
         if (_path is not null)
         {
             _openAsMenuItem.RefreshForPath(_path);
@@ -119,6 +126,14 @@ public sealed class DocumentFileActionsMenuItem : MenuItem
             LogService.Instance.Write(LogLevel.Error, "DocumentTab", ex.Message);
             await DialogService.ShowAsync(owner, language.GetString("Image_ConvertTitle"), UserError.Describe(ex),
                 MessageBoxIcon.Error);
+        }
+    }
+
+    private void OnDisableAvb(object? sender, RoutedEventArgs e)
+    {
+        if (_path is not null)
+        {
+            UiWindowService.Shared.ShowAvbToolWindow(_path);
         }
     }
 

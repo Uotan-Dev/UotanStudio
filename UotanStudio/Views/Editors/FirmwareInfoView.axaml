@@ -58,15 +58,8 @@
                                                       MinEditorWidth="180" ColumnSpacing="16" RowSpacing="4" Margin="0,3">
                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
                                        FontSize="12" TextWrapping="Wrap" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                              <SelectableTextBlock Grid.Column="0" Text="{Binding Value}" FontFamily="Consolas"
-                                                   FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
-                              <Button Grid.Column="1" Classes="Small" VerticalAlignment="Center"
-                                      Content="{Binding ActionLabel}"
-                                      IsVisible="{Binding HasAction}"
-                                      IsEnabled="{Binding $parent[UserControl].DataContext.CanToggleVbmetaFlags}"
-                                      Command="{Binding ActionCommand}" />
-                            </Grid>
+                            <SelectableTextBlock Text="{Binding Value}" FontFamily="Consolas"
+                                                 FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
                           </controls:ResponsiveFormRow>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>

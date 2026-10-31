@@ -229,6 +229,20 @@ public partial class ProjectExplorerView : UserControl
         UiWindowService.Shared.ShowChecksumWindow(node.Path);
     }
 
+    /// <summary>
+    /// Opens the AVB tool window switched to the disable-AVB tab with the selected image file.
+    /// <para>打开 AVB 工具窗口，切换到禁用 AVB 标签页并载入所选镜像文件。</para>
+    /// </summary>
+    private void OnDisableAvb(object? sender, RoutedEventArgs e)
+    {
+        if (ProjectTree.SelectedItem is not ExplorerNode { IsDirectory: false, IsPlaceholder: false } node)
+        {
+            return;
+        }
+
+        UiWindowService.Shared.ShowAvbToolWindow(node.Path);
+    }
+
     private void OnNewEmptySubProject(object? sender, RoutedEventArgs e)
     {
 

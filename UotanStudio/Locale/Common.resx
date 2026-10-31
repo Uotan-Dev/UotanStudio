@@ -2008,6 +2008,9 @@ Author: 暮间雾
   <data name="Explorer_ConvertImgToBr" xml:space="preserve">
     <value>IMG to BR</value>
   </data>
+  <data name="Explorer_DisableAvb" xml:space="preserve">
+    <value>Disable AVB</value>
+  </data>
   <data name="Explorer_Checksum" xml:space="preserve">
     <value>Checksum</value>
   </data>
@@ -3326,6 +3329,48 @@ Continue?</value>
   </data>
   <data name="Avb_TabOta" xml:space="preserve">
     <value>A/B OTA</value>
+  </data>
+  <data name="Avb_TabDisableAvb" xml:space="preserve">
+    <value>Disable AVB</value>
+  </data>
+  <data name="Avb_SelectDirectory" xml:space="preserve">
+    <value>Select directory</value>
+  </data>
+  <data name="Avb_DisableAvbHint" xml:space="preserve">
+    <value>--disable-verity --disable-verification (03): Most devices&#10;--disable-verity (01): Newer Xiaomi devices (8E and later)&#10;--disable-verification (02)</value>
+  </data>
+  <data name="Avb_DisableSelectFile" xml:space="preserve">
+    <value>Select AVB file</value>
+  </data>
+  <data name="Avb_DisableCommandTitle" xml:space="preserve">
+    <value>Disable command</value>
+  </data>
+  <data name="Avb_DisableOutputDirTitle" xml:space="preserve">
+    <value>Output directory</value>
+  </data>
+  <data name="Avb_ExecuteDisable" xml:space="preserve">
+    <value>Disable verification</value>
+  </data>
+  <data name="Avb_DisableFileEmpty" xml:space="preserve">
+    <value>Please select an AVB file first.</value>
+  </data>
+  <data name="Avb_DisableFileNotExist" xml:space="preserve">
+    <value>Image file '{0}' does not exist.</value>
+  </data>
+  <data name="Avb_DisableOutputDirInvalid" xml:space="preserve">
+    <value>Invalid output directory.</value>
+  </data>
+  <data name="Avb_DisableCopyFailed" xml:space="preserve">
+    <value>Failed to copy image to output path.</value>
+  </data>
+  <data name="Avb_DisableFailed" xml:space="preserve">
+    <value>Failed to disable AVB verification.</value>
+  </data>
+  <data name="Avb_DisableSuccess" xml:space="preserve">
+    <value>AVB verification flags have been disabled successfully: {0}</value>
+  </data>
+  <data name="Avb_CancelDisableSuccess" xml:space="preserve">
+    <value>AVB disable flags have been cleared successfully: {0}</value>
   </data>
   <data name="Avb_KeysSubtitle" xml:space="preserve">
     <value>AVB signing keys come from the shared key library; private keys stay on this machine.</value>

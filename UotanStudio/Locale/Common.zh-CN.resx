@@ -2008,6 +2008,9 @@
   <data name="Explorer_ConvertImgToBr" xml:space="preserve">
     <value>IMG 转 BR</value>
   </data>
+  <data name="Explorer_DisableAvb" xml:space="preserve">
+    <value>禁用 AVB</value>
+  </data>
   <data name="Explorer_Checksum" xml:space="preserve">
     <value>校验</value>
   </data>
@@ -3326,6 +3329,48 @@
   </data>
   <data name="Avb_TabOta" xml:space="preserve">
     <value>A/B OTA</value>
+  </data>
+  <data name="Avb_TabDisableAvb" xml:space="preserve">
+    <value>禁用 AVB</value>
+  </data>
+  <data name="Avb_SelectDirectory" xml:space="preserve">
+    <value>选择目录</value>
+  </data>
+  <data name="Avb_DisableAvbHint" xml:space="preserve">
+    <value>--disable-verity --disable-verification (03): 绝大多数设备&#10;--disable-verity (01): 小米新设备(8E及以后)&#10;--disable-verification (02)</value>
+  </data>
+  <data name="Avb_DisableSelectFile" xml:space="preserve">
+    <value>选择AVB文件</value>
+  </data>
+  <data name="Avb_DisableCommandTitle" xml:space="preserve">
+    <value>禁用命令</value>
+  </data>
+  <data name="Avb_DisableOutputDirTitle" xml:space="preserve">
+    <value>输出目录</value>
+  </data>
+  <data name="Avb_ExecuteDisable" xml:space="preserve">
+    <value>执行禁用</value>
+  </data>
+  <data name="Avb_DisableFileEmpty" xml:space="preserve">
+    <value>请先选择 AVB 文件。</value>
+  </data>
+  <data name="Avb_DisableFileNotExist" xml:space="preserve">
+    <value>镜像文件“{0}”不存在。</value>
+  </data>
+  <data name="Avb_DisableOutputDirInvalid" xml:space="preserve">
+    <value>输出目录无效。</value>
+  </data>
+  <data name="Avb_DisableCopyFailed" xml:space="preserve">
+    <value>复制镜像到输出路径失败。</value>
+  </data>
+  <data name="Avb_DisableFailed" xml:space="preserve">
+    <value>禁用 AVB 校验失败。</value>
+  </data>
+  <data name="Avb_DisableSuccess" xml:space="preserve">
+    <value>已成功禁用 AVB 校验标志位：{0}</value>
+  </data>
+  <data name="Avb_CancelDisableSuccess" xml:space="preserve">
+    <value>已成功取消 AVB 禁用（恢复校验标志位）：{0}</value>
   </data>
   <data name="Avb_KeysSubtitle" xml:space="preserve">
     <value>AVB 签名密钥来自共享密钥库，私钥只保存在本机。</value>
