@@ -49,6 +49,14 @@ internal static partial class Win32API
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool ReadFile(IntPtr hFile, IntPtr buffer, uint sizeToRead, out uint bytesRead, IntPtr overlapped);
 
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool WriteFile(IntPtr hFile, IntPtr buffer, uint sizeToWrite, out uint bytesWritten, ref OVERLAPPED overlapped);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ReadFile(IntPtr hFile, IntPtr buffer, uint sizeToRead, out uint bytesRead, ref OVERLAPPED overlapped);
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct SpDeviceInterfaceData
     {
@@ -182,11 +190,30 @@ internal static partial class Win32API
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetupDiDestroyDeviceInfoList(IntPtr deviceInfoSet);
 
+    /// <summary>
+    /// Opens one device or interface path for reading and writing with both share modes.
+    /// <para>以读写与两种共享模式打开一个设备或接口路径。</para>
+    /// </summary>
+    /// <param name="filePath">The device interface path. <para>设备接口路径。</para></param>
+    /// <param name="overlapped">Whether to request overlapped I/O. <para>是否请求重叠 I/O。</para></param>
+    /// <returns>The handle, or <see cref="INVALID_HANDLE_VALUE"/>. <para>句柄，或 <see cref="INVALID_HANDLE_VALUE"/>。</para></returns>
     public static IntPtr SimpleCreateHandle(string filePath, bool overlapped = false)
+        => SimpleCreateHandle(filePath, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, overlapped);
+
+    /// <summary>
+    /// Opens one device or interface path with the given access right and share mode.
+    /// <para>按给定访问权限与共享模式打开一个设备或接口路径。</para>
+    /// </summary>
+    /// <param name="filePath">The device interface path. <para>设备接口路径。</para></param>
+    /// <param name="access">The requested <c>dwDesiredAccess</c> flags. <para>请求的 <c>dwDesiredAccess</c> 标志。</para></param>
+    /// <param name="shareMode">The requested <c>dwShareMode</c> flags. <para>请求的 <c>dwShareMode</c> 标志。</para></param>
+    /// <param name="overlapped">Whether to request overlapped I/O. <para>是否请求重叠 I/O。</para></param>
+    /// <returns>The handle, or <see cref="INVALID_HANDLE_VALUE"/>. <para>句柄，或 <see cref="INVALID_HANDLE_VALUE"/>。</para></returns>
+    public static IntPtr SimpleCreateHandle(string filePath, uint access, uint shareMode, bool overlapped = false)
     {
         return CreateFileW(filePath,
-            GENERIC_READ | GENERIC_WRITE,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            access,
+            shareMode,
             IntPtr.Zero, OPEN_EXISTING,
             overlapped ? FILE_FLAG_OVERLAPPED : 0, IntPtr.Zero);
     }
@@ -212,6 +239,20 @@ internal static partial class Win32API
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool CancelIoEx(IntPtr handle, IntPtr overlapped);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetOverlappedResult(IntPtr hFile, ref OVERLAPPED overlapped, out uint bytesTransferred,
+        [MarshalAs(UnmanagedType.Bool)] bool wait);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    public static partial IntPtr CreateEventW(IntPtr securityAttributes,
+        [MarshalAs(UnmanagedType.Bool)] bool manualReset,
+        [MarshalAs(UnmanagedType.Bool)] bool initialState,
+        IntPtr name);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    public static partial uint WaitForSingleObject(IntPtr handle, uint milliseconds);
 
     [LibraryImport("kernel32.dll")]
     public static partial IntPtr GetModuleHandleW([MarshalAs(UnmanagedType.LPWStr)] string? lpModuleName);
