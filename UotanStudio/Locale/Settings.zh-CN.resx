@@ -450,6 +450,30 @@
   <data name="Settings_RenderingBackendAngleEglD3D9" xml:space="preserve">
     <value>ANGLE / EGL（D3D9）</value>
   </data>
+  <data name="Settings_Gc" xml:space="preserve">
+    <value>垃圾回收</value>
+  </data>
+  <data name="Settings_GcName" xml:space="preserve">
+    <value>GC 实现</value>
+  </data>
+  <data name="Settings_GcDefaultName" xml:space="preserve">
+    <value>默认 GC</value>
+  </data>
+  <data name="Settings_GcServer" xml:space="preserve">
+    <value>服务器 GC</value>
+  </data>
+  <data name="Settings_GcConcurrent" xml:space="preserve">
+    <value>并发 GC</value>
+  </data>
+  <data name="Settings_GcEnabled" xml:space="preserve">
+    <value>已启用</value>
+  </data>
+  <data name="Settings_GcDisabled" xml:space="preserve">
+    <value>已禁用</value>
+  </data>
+  <data name="Settings_GcLatencyMode" xml:space="preserve">
+    <value>延迟模式</value>
+  </data>
   <data name="Settings_DriverPackages" xml:space="preserve">
     <value>驱动安装</value>
   </data>

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Runtime;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -350,6 +351,52 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// <para>合成模式标签资源键；无法观测时为 null。</para></returns>
     private string? ActiveCompositionLabelKey()
         => _activeCompositionLabelKey ??= RenderingRuntimeProbe.DetectActiveCompositionLabelKey();
+
+    /// <summary>
+    /// Gets the text naming the garbage collector the running process uses: Satori GC when the Satori collector
+    /// is loaded, otherwise the localized default-GC label.
+    /// <para>获取运行进程所用垃圾回收器的显示文本：加载了 Satori 回收器时为 Satori GC，否则为本地化的默认回收器标签。</para>
+    /// </summary>
+    public string GcImplementationText => IsSatoriGc
+        ? "Satori GC"
+        : LanguageService.Instance.GetString("Settings_GcDefaultName");
+
+    /// <summary>
+    /// Gets the localized state of server garbage collection in the running process.
+    /// <para>获取运行进程服务器垃圾回收的本地化状态。</para>
+    /// </summary>
+    public string GcServerText => IsServerGc
+        ? LanguageService.Instance.GetString("Settings_GcEnabled")
+        : LanguageService.Instance.GetString("Settings_GcDisabled");
+
+    /// <summary>
+    /// Gets the localized state of concurrent garbage collection in the running process.
+    /// <para>获取运行进程并发垃圾回收的本地化状态。</para>
+    /// </summary>
+    public string GcConcurrentText => IsConcurrentGc
+        ? LanguageService.Instance.GetString("Settings_GcEnabled")
+        : LanguageService.Instance.GetString("Settings_GcDisabled");
+
+    /// <summary>
+    /// Gets the latency mode the running process reports through <see cref="GCSettings.LatencyMode"/>; the name
+    /// is a runtime value and is shown as-is.
+    /// <para>获取运行进程经 <see cref="GCSettings.LatencyMode"/> 报告的延迟模式；该名称是运行时取值，按原样展示。</para>
+    /// </summary>
+    public string GcLatencyModeText => GCSettings.LatencyMode.ToString();
+
+    private static readonly bool IsSatoriGc = ProbeGcVariable("SatoriGC", null) is not null;
+    private static readonly bool IsServerGc = GCSettings.IsServerGC;
+    private static readonly bool IsConcurrentGc = ProbeGcVariable("System.GC.Concurrent", "1") != "0";
+
+    /// <summary>
+    /// Reads one garbage-collector configuration variable, returning the fallback when the variable is absent.
+    /// <para>读取一个垃圾回收器配置变量；变量缺失时返回回退值。</para>
+    /// </summary>
+    /// <param name="name">Configuration variable name.<para>配置变量名。</para></param>
+    /// <param name="fallback">Value returned when the variable is absent.<para>变量缺失时返回的值。</para></param>
+    /// <returns>The current variable value, or <paramref name="fallback"/>.<para>当前变量值；缺失时为 <paramref name="fallback"/>。</para></returns>
+    private static string? ProbeGcVariable(string name, string? fallback)
+        => GC.GetConfigurationVariables().TryGetValue(name, out var value) && value is string text ? text : fallback;
 
     private bool _stoppingServer;
     private string _serverActionKey = "Settings_ServerActionNone";
@@ -1046,6 +1093,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
+        OnPropertyChanged(nameof(GcServerText));
+        OnPropertyChanged(nameof(GcConcurrentText));
         OnPropertyChanged(nameof(LanguagePreviewText));
         OnPropertyChanged(nameof(ServerActionStatus));
         OnPropertyChanged(nameof(AdbServerStatus));

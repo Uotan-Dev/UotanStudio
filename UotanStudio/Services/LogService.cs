@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Composition;
 
 namespace UotanStudio.Services;
@@ -191,6 +192,22 @@ public sealed class LogService : IUnifiedLog
     public void ApplyDebugMode(bool debug)
     {
         SetMinimumLevel(debug ? LogLevel.Trace : LogLevel.Info);
+        ApplyCommDebugMode(debug);
+    }
+
+    /// <summary>
+    /// Points the Comm diagnostics at the debug setting: debug mode collects protocol state, per-step debug output and
+    /// bounded raw payload previews in the global log, and the off state keeps the console-only defaults.
+    /// <para>把 Comm 诊断接到调试设置上：调试模式在全局日志中收集协议状态、逐步调试输出与有界原始负载预览，关闭时
+    /// 保留默认的仅控制台输出。</para>
+    /// </summary>
+    /// <param name="debug">Whether debug mode is enabled. <para>是否启用调试模式。</para></param>
+    private static void ApplyCommDebugMode(bool debug)
+    {
+        CommTrace.Level = debug ? CommLogLevel.Trace : CommLogLevel.Off;
+        CommTrace.CaptureRawPayloads = debug;
+        UsbTrace.IsEnabled = debug;
+        UsbTrace.CaptureFrames = debug;
     }
 
     /// <summary>

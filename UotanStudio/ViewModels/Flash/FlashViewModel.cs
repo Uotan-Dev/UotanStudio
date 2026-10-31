@@ -330,13 +330,46 @@ public sealed partial class FlashViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Appends one log line to the buffer, publishing the full string only at the line or character threshold
-    /// and leaving everything else to the flush timer.
-    /// <para>追加一行日志：写入缓冲区，达到行数或字符阈值才发布整串，否则交给定时器补发。</para>
+    /// Appends one log line to the buffer at trace level, publishing the full string only at the line or character
+    /// threshold and leaving everything else to the flush timer.
+    /// <para>以 trace 级别追加一行日志到缓冲区，达到行数或字符阈值才发布整串，否则交给定时器补发。</para>
     /// </summary>
     /// <param name="message">The log line text. <para>日志行内容。</para></param>
-    internal void AppendLog(string message)
+    internal void AppendLog(string message) => AppendLog(message, LogLevel.Trace);
+
+    /// <summary>
+    /// Appends one log line at error level; used when an exception ends an action.
+    /// <para>以 error 级别追加一行日志；异常结束某个动作时使用。</para>
+    /// </summary>
+    /// <param name="message">The log line text. <para>日志行内容。</para></param>
+    internal void AppendError(string message) => AppendLog(message, LogLevel.Error);
+
+    /// <summary>
+    /// Appends one log line to the failure report: the same text goes to the page log at error level and to the
+    /// unified log, so a failed flash action is visible in the global log window instead of only on this page.
+    /// <para>追加一行失败记录：文本同时以 error 级别写入页面日志与统一日志，使失败的刷写动作在全局日志窗口中可见，
+    /// 而不只出现在本页面。</para>
+    /// </summary>
+    /// <param name="exception">The exception that ended the action. <para>结束该动作的异常。</para></param>
+    private void AppendError(Exception exception)
     {
+        ArgumentNullException.ThrowIfNull(exception);
+        var detail = exception.InnerException is { } inner
+            ? $"{exception.Message} ({inner.Message})"
+            : exception.Message;
+        AppendLog($"{exception.GetType().Name}: {detail}", LogLevel.Error);
+    }
+
+    /// <summary>
+    /// Appends one log line at the given level and forwards it to the unified log, so every line the page shows is
+    /// also collected by the global log window at the same severity.
+    /// <para>按给定级别追加一行日志并转发到统一日志，使页面显示的每一行都以相同严重级别进入全局日志窗口。</para>
+    /// </summary>
+    /// <param name="message">The log line text. <para>日志行内容。</para></param>
+    /// <param name="level">The severity the line is reported with. <para>该行上报的严重级别。</para></param>
+    private void AppendLog(string message, LogLevel level)
+    {
+        _log.Write(level, "Flash", message);
         _logBuffer.Append(message).Append(Environment.NewLine);
         _pendingLogLines++;
         _pendingLogCharacters += message.Length + Environment.NewLine.Length;
@@ -468,7 +501,64 @@ public sealed partial class FlashViewModel : ObservableObject
         if (e.PropertyName == nameof(FlashPartitionEntry.IsSelected))
         {
             UpdateSelectionState();
+            if (sender is FlashPartitionEntry { IsSelected: true, CanSelect: true } selected)
+            {
+                OnEntrySelected(selected);
+            }
         }
+        else if (e.PropertyName is nameof(FlashPartitionEntry.Command) or nameof(FlashPartitionEntry.FilePath) &&
+            sender is FlashPartitionEntry { CanSelect: true } edited)
+        {
+            UpdateRowValidityText(edited);
+        }
+    }
+
+    /// <summary>
+    /// Runs the check a row owns when the user selects it; only the rows that carry a file instead of an image have one.
+    /// <para>用户勾选某行时运行该行自带的检查；只有承载文件而非镜像的行才有这项检查。</para>
+    /// </summary>
+    /// <param name="entry">The row that just became selected.
+    /// <para>刚刚被勾选的行。</para></param>
+    /// <remarks>
+    /// A loader row is checked here rather than when its file was picked, because the same row can be selected after a
+    /// re-import, after the file changed on disk, or after the user edited another column; the verdict is published on
+    /// the row so the grid states it instead of leaving the user to infer validity from the flash outcome.
+    /// <para>loader 行在这里检查而不是在选文件时检查，因为同一行可能在重新导入后、磁盘文件变化后或用户编辑了其它列之后被
+    /// 勾选；结论发布在行上，使列表直接说明有效性，而不是让用户从刷写结果反推。</para>
+    /// </remarks>
+    private void OnEntrySelected(FlashPartitionEntry entry)
+    {
+        if (entry.Command is not (LoaderCommand or ParameterCommand) || entry.FilePath.Length == 0)
+        {
+            return;
+        }
+
+        UpdateSpecialFileRowStatus(entry);
+    }
+
+    /// <summary>
+    /// Publishes whether a row has the file the flash path needs, so an edited row states its own validity.
+    /// <para>发布某行是否持有刷写路径所需的文件，使被编辑的行直接说明自身是否有效。</para>
+    /// </summary>
+    /// <param name="entry">Row whose command or file path just changed.
+    /// <para>命令或文件路径刚刚变化的行。</para></param>
+    private void UpdateRowValidityText(FlashPartitionEntry entry)
+    {
+        if (entry.Command is LoaderCommand or ParameterCommand)
+        {
+            if (entry.FilePath.Length == 0)
+            {
+                entry.StatusText = string.Empty;
+                return;
+            }
+
+            UpdateSpecialFileRowStatus(entry);
+            return;
+        }
+
+        entry.StatusText = entry.FilePath.Length == 0 || File.Exists(entry.FilePath)
+            ? string.Empty
+            : _localizer.GetString("Flash_FileMissing");
     }
 
     private void RefreshVisiblePartitions()

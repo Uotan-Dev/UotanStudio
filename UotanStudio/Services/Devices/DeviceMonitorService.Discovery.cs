@@ -104,6 +104,8 @@ public sealed partial class DeviceMonitorService
             var serial = info.SerialNumber;
             if (protocol == DeviceProtocolKind.Fastboot && string.IsNullOrWhiteSpace(serial))
                 serial = ReadFastbootSerial(info);
+            if (protocol == DeviceProtocolKind.Rkdl && string.IsNullOrWhiteSpace(serial))
+                serial = ReadRkdlSerial(info);
             devices.Add(new DetectedDevice
             {
                 Key = info.DeviceKey,
@@ -395,6 +397,24 @@ public sealed partial class DeviceMonitorService
         {
             LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
                 $"Fastboot serial unavailable for {info.DeviceKey}.");
+        }
+        return serial;
+    }
+
+    /// <summary>
+    /// Probes the RKDevTool-aligned display identity for one Rockchip bootrom/loader node.
+    /// <para>探测单个瑞芯微 bootrom/loader 节点的、与 RKDevTool 对齐的显示身份。</para>
+    /// </summary>
+    /// <param name="info">The discovered USB device. <para>已发现的 USB 设备。</para></param>
+    /// <returns>The display identity, or <c>null</c> when the probe failed.
+    /// <para>显示身份；探测失败时返回 <c>null</c>。</para></returns>
+    private string? ReadRkdlSerial(UsbDeviceInfo info)
+    {
+        var serial = _controller.ReadRkdlSerial(info);
+        if (serial is null)
+        {
+            LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor",
+                $"RKDL display serial unavailable for {info.DeviceKey}.");
         }
         return serial;
     }

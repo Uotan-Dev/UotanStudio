@@ -87,6 +87,29 @@ internal static class FlashDeviceUiPolicy
     internal static IReadOnlyList<string> GatedControls { get; } = [.. Entries.Select(entry => entry.Name)];
 
     /// <summary>
+    /// Controls a Rockchip device can only offer while the page holds a usable loader: the shared flash actions and the
+    /// Rockchip section, whose commands all read the storage that mask ROM cannot answer.
+    /// <para>瑞芯微设备只有在页面持有可用 loader 时才提供的控件：通用刷写动作与瑞芯微分类，它们的命令都会读取
+    /// Mask ROM 无法应答的存储。</para>
+    /// </summary>
+    /// <remarks>
+    /// A Rockchip loader is a row of the download-list configuration, so this is a second availability dimension on top
+    /// of <see cref="IsAvailable(string, FlashDeviceMode)"/> rather than a mode of its own: it only restricts the
+    /// <see cref="FlashDeviceMode.Rkdl"/> mode, and a page state that already made a control unusable stays unusable.
+    /// <para>瑞芯微 loader 是下载列表配置中的一行，因此这是叠加在 <see cref="IsAvailable(string, FlashDeviceMode)"/>
+    /// 之上的第二个可用性维度，而不是独立模式：只约束 <see cref="FlashDeviceMode.Rkdl"/> 模式，页面状态本已禁用
+    /// 的控件仍然不可用。</para>
+    /// </remarks>
+    internal static IReadOnlyList<string> RockchipLoaderControls { get; } =
+    [
+        "ReadInfoButton",
+        "ReadbackSelectedButton",
+        "FlashSelectedButton",
+        "EraseSelectedButton",
+        "RkPane"
+    ];
+
+    /// <summary>
     /// Maps the selected device's protocol to the mode whose controls the page offers.
     /// <para>把所选设备的协议映射为页面据此提供控件的模式。</para>
     /// </summary>
@@ -120,6 +143,30 @@ internal static class FlashDeviceUiPolicy
         }
 
         return modes is null ? mode != FlashDeviceMode.None : Array.IndexOf(modes, mode) >= 0;
+    }
+
+    /// <summary>
+    /// Reports whether a control may be used in the given mode and loader state; a Rockchip device without a loader
+    /// gets no control that would send a storage command to mask ROM.
+    /// <para>判断控件在给定模式与 loader 状态下是否可用；没有 loader 的瑞芯微设备不会得到任何会向 Mask ROM 发送
+    /// 存储命令的控件。</para>
+    /// </summary>
+    /// <param name="controlName">Name of the XAML control. <para>XAML 控件名称。</para></param>
+    /// <param name="mode">The mode currently offered by the page. <para>页面当前所处的模式。</para></param>
+    /// <param name="hasRockchipLoader">Whether the page holds a usable Rockchip loader.
+    /// <para>页面是否持有可用的 Rockchip loader。</para></param>
+    /// <returns><see langword="true"/> when the mode offers the control and, for a Rockchip device, the loader the
+    /// control needs is available. <para>模式提供该控件，且对瑞芯微设备而言该控件所需的 loader 可用时为
+    /// <see langword="true"/>。</para></returns>
+    internal static bool IsAvailable(string controlName, FlashDeviceMode mode, bool hasRockchipLoader)
+    {
+        if (!IsAvailable(controlName, mode))
+        {
+            return false;
+        }
+
+        return hasRockchipLoader || mode != FlashDeviceMode.Rkdl ||
+            !RockchipLoaderControls.Contains(controlName, StringComparer.Ordinal);
     }
 
     private static Dictionary<string, FlashDeviceMode[]?> BuildModeIndex()

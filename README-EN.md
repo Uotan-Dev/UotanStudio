@@ -25,7 +25,7 @@
 - 🖥 Screen mirroring: scrcpy protocol with GPU presentation and a CPU bitmap fallback
 - 🌍 Multilingual UI: Simplified Chinese and English
 - 🚫 No ads, no telemetry: parsing, packaging and flashing all run locally; the network is used only to download external tools on demand
-- ⚡ NativeAOT publishing: self-contained output that needs no .NET runtime on the target machine
+- ⚡ NativeAOT publishing: self-contained output that needs no .NET runtime on the target machine, with Satori GC replacing the default GC at publish time
 
 ## 🧩 Architecture
 
