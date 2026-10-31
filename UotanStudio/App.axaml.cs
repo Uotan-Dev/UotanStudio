@@ -368,7 +368,10 @@ public partial class App : Application
         {
             if (GetDesktopMainViewModel()?.WorkspaceVM.OpenScreenMirrorDocument(message.Serial) is { } mirror)
             {
-                mirror.StartForDevice(message.Serial);
+                if (!string.IsNullOrWhiteSpace(message.Serial))
+                {
+                    mirror.StartForDevice(message.Serial);
+                }
             }
         }
         catch (Exception ex)

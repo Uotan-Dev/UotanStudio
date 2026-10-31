@@ -300,8 +300,14 @@ Continue creating the project?</value>
   <data name="Menu_Workspace" xml:space="preserve">
     <value>Workspace</value>
   </data>
+  <data name="Menu_Flash" xml:space="preserve">
+    <value>Flash</value>
+  </data>
   <data name="Menu_NodeEditor" xml:space="preserve">
     <value>Node Editor</value>
+  </data>
+  <data name="Menu_Delivery" xml:space="preserve">
+    <value>Delivery</value>
   </data>
   <data name="Menu_Settings" xml:space="preserve">
     <value>Settings</value>
@@ -359,6 +365,9 @@ Continue creating the project?</value>
   </data>
   <data name="Menu_DeviceManager" xml:space="preserve">
     <value>Device Manager</value>
+  </data>
+  <data name="Menu_ScreenMirror" xml:space="preserve">
+    <value>Screen Mirror</value>
   </data>
   <data name="Menu_LogWindow" xml:space="preserve">
     <value>Log Window</value>

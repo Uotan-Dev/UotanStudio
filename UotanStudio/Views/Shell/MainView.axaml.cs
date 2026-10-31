@@ -85,6 +85,7 @@ public partial class MainView : UserControl
             var index = message.Target switch
             {
                 NavigationTarget.Workspace => WorkspaceTabIndex,
+                NavigationTarget.Flash => FlashTabIndex,
                 NavigationTarget.Delivery => DeliveryTabIndex,
                 NavigationTarget.NodeEditor => NodeEditorTabIndex,
                 NavigationTarget.Settings => SettingsTabIndex,

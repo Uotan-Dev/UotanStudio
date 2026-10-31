@@ -300,8 +300,14 @@
   <data name="Menu_Workspace" xml:space="preserve">
     <value>工作区</value>
   </data>
+  <data name="Menu_Flash" xml:space="preserve">
+    <value>烧录</value>
+  </data>
   <data name="Menu_NodeEditor" xml:space="preserve">
     <value>节点编辑器</value>
+  </data>
+  <data name="Menu_Delivery" xml:space="preserve">
+    <value>交付</value>
   </data>
   <data name="Menu_Settings" xml:space="preserve">
     <value>设置</value>
@@ -359,6 +365,9 @@
   </data>
   <data name="Menu_DeviceManager" xml:space="preserve">
     <value>设备管理器</value>
+  </data>
+  <data name="Menu_ScreenMirror" xml:space="preserve">
+    <value>投屏</value>
   </data>
   <data name="Menu_LogWindow" xml:space="preserve">
     <value>日志窗口</value>

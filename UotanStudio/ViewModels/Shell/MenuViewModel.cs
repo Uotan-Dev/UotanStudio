@@ -20,6 +20,7 @@ using UotanStudio.Services.Ui.Projects;
 using UotanStudio.Services.Ui.Workspace;
 using UotanStudio.Services.Workspace;
 using UotanStudio.UiAbstractions;
+using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
@@ -1246,11 +1247,25 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
     }
 
+    /// <summary>Switch to the Flash tab. <para>切换到烧录选项卡。</para></summary>
+    [RelayCommand]
+    private void GoToFlash()
+    {
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Flash));
+    }
+
     /// <summary>Switch to the Node Editor tab. <para>切换到节点编辑器选项卡。</para></summary>
     [RelayCommand]
     private void GoToNodeEditor()
     {
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.NodeEditor));
+    }
+
+    /// <summary>Switch to the Delivery tab. <para>切换到交付选项卡。</para></summary>
+    [RelayCommand]
+    private void GoToDelivery()
+    {
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Delivery));
     }
 
     /// <summary>Switch to the Settings tab. <para>切换到设置选项卡。</para></summary>
@@ -1319,6 +1334,17 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void OpenDevice()
     {
         _windows.ShowHostWindow(HostWindowKind.Device);
+    }
+
+    /// <summary>
+    /// Opens the screen-mirror page, defaulting to the currently selected device if available.
+    /// <para>打开投屏页面，默认为当前选中设备。</para>
+    /// </summary>
+    [RelayCommand]
+    private void OpenScreenMirror()
+    {
+        var serial = (DeviceViewModel.Instance ?? DeviceViewModel.EnsureInstance()).SelectedDevice?.Serial;
+        WeakReferenceMessenger.Default.Send(new OpenScreenMirrorRequestMessage { Serial = serial });
     }
 
     /// <summary>
@@ -1507,7 +1533,9 @@ public enum NavigationTarget
     /// <summary>Settings. <para>设置。</para></summary>
     Settings,
     /// <summary>ROM delivery configuration. <para>ROM 交付配置。</para></summary>
-    Delivery
+    Delivery,
+    /// <summary>Flash panel. <para>烧录面板。</para></summary>
+    Flash
 }
 
 /// <summary>
