@@ -271,6 +271,22 @@ public sealed partial class DeviceController
     public string? ReadFastbootSerial(UsbDeviceInfo info)
         => Discovery.FastbootSerialReader.Read(RequiredKit, info);
 
+    /// <summary>
+    /// Best-effort display identity read for a Rockchip bootrom/loader device, aligned with RKDevTool:
+    /// the chip name via one short READ_CHIP_INFO probe plus the USB location suffix. The
+    /// claim/probe mechanism lives in the discovery layer and the host only consumes the result.
+    /// <para>Best-effort 读取瑞芯微 bootrom/loader 设备的显示身份，与 RKDevTool 对齐：经一次短暂的
+    /// READ_CHIP_INFO 探测读取芯片名并附上 USB 位置后缀。认领/探测机制在 Comm 发现层，
+    /// 宿主只消费结果。</para>
+    /// </summary>
+    /// <param name="info">
+    /// Rockchip bootrom/loader USB node to query. <para>待查询的瑞芯微 bootrom/loader USB 节点。</para>
+    /// </param>
+    /// <returns>The display identity, or <see langword="null"/> when claim, probe or location evidence fails.
+    /// <para>显示身份；认领、探测或位置证据失败时返回 <see langword="null"/>。</para></returns>
+    public string? ReadRkdlSerial(UsbDeviceInfo info)
+        => Discovery.RkdlSerialReader.Read(RequiredKit, info);
+
     private ICommKit RequiredKit => _kit
         ?? throw new NotSupportedException("This controller was composed without a communication kit and cannot expose the raw USB surface.");
 
