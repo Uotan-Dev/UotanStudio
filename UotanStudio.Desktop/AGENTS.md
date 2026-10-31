@@ -26,6 +26,7 @@
 ## 发布与验证
 
 - 发布以 `.github/workflows/release.yml` 为准：六个 RID（`win-x64`、`win-arm64`、`linux-x64`、`linux-arm64`、`osx-x64`、`osx-arm64`），`dotnet publish ... -c Release -r <rid> --self-contained`。`PublishAot` 由 csproj 声明，不要再用命令行 `-p:PublishAot=true` 传入：那会把属性变成全局属性传给所有被引用项目。Release 默认 `DebugType=none`（不产 PDB），与 CI 一致。`Properties/PublishProfiles/FolderProfile.pubxml` 是本机 win-x64/单文件配置，不代表 CI。
+- 发布经 csproj 顶部的 `PublishWithSatoriGC` SDK 用 Satori GC 替换默认 GC：仅自包含发布生效（CI 六个 RID 均自包含，NativeAOT 支持）；SDK 版本跟随上游开发更新，升级时直接改 csproj 中的版本号。运行时可经 `GC.GetConfigurationVariables()` 的 `SatoriGC` 键检测；设置页的「垃圾回收」区块展示当前进程的 GC 实现与配置。
 - `WindowsCompositionRoots.xml` 只在 win RID 发布时作为 `TrimmerRootDescriptor` 注入，保留 `Avalonia.Win32.WindowImpl.CompositionEffectsSurface` 供设置页报告实际合成宿主；不要改成无条件引用，否则 Linux/macOS 发布会保留 Win32 平台实现。
 - `UotanStudio.Tests` 不引用 Desktop，`Program.cs` 与命令行没有自动化测试。改动后必须 Release 构建 + 对应 RID 发布，并手工冒烟 GUI、`--managed-device-shell`、`--mcp-headless`、`--mcp` 四种模式；不能写成“已测试”。
 - 文件关联只能人工验证：Windows 首次启动后检查 `HKCU\Software\Classes\.uotan` 指向 `UotanStudio.uotan`，图标来自输出目录 `Assets/`。

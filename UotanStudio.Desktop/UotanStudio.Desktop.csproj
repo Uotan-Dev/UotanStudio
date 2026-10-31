@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- 发布时用 Satori GC 替换默认 GC：仅自包含发布（含 NativeAOT）生效；版本跟随上游开发更新，需定期核对 NuGet。
+       Swaps the default GC for Satori GC at publish time: takes effect only on self-contained publishes
+       (NativeAOT included); the version tracks upstream development and needs periodic NuGet checks. -->
+  <Sdk Name="PublishWithSatoriGC" Version="10.0.15-satori.40994390316.1" />
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
