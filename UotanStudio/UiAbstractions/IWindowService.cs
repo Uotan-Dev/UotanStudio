@@ -123,13 +123,6 @@ public interface IWindowService
     void ShowChecksumWindow(string? filePath = null);
 
     /// <summary>
-    /// Shows or focuses the AVB tool window, optionally switching to the disable-AVB tab with a target file.
-    /// <para>显示或聚焦 AVB 工具窗口，可选切换到禁用 AVB 标签页并载入目标文件。</para>
-    /// </summary>
-    /// <param name="filePath">The image file to load, or null to open with default state. <para>要载入的镜像文件；为 null 时以默认状态打开。</para></param>
-    void ShowAvbToolWindow(string? filePath = null);
-
-    /// <summary>
     /// Shows the About dialog against the main window.
     /// <para>相对主窗口显示关于对话框。</para>
     /// </summary>
@@ -160,10 +153,6 @@ internal sealed class NullWindowService : IWindowService
     }
 
     public void ShowChecksumWindow(string? filePath = null)
-    {
-    }
-
-    public void ShowAvbToolWindow(string? filePath = null)
     {
     }
 

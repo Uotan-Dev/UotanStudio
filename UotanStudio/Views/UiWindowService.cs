@@ -87,30 +87,6 @@ public sealed class UiWindowService : IWindowService
     }
 
     /// <inheritdoc />
-    public void ShowAvbToolWindow(string? filePath = null)
-    {
-        if (_avbToolWindow is AvbToolWindow { IsVisible: true } existing)
-        {
-            if (!string.IsNullOrEmpty(filePath))
-            {
-                existing.OpenDisableAvbTab(filePath);
-            }
-
-            existing.WindowState = WindowState.Normal;
-            existing.Activate();
-            return;
-        }
-
-        var window = new AvbToolWindow();
-        _avbToolWindow = window;
-        if (!string.IsNullOrEmpty(filePath))
-        {
-            window.OpenDisableAvbTab(filePath);
-        }
-        window.Show();
-    }
-
-    /// <inheritdoc />
     public void ShowChecksumWindow(string? filePath = null)
     {
         if (_checksumWindow is { IsVisible: true } existing)

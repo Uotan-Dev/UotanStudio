@@ -16,6 +16,7 @@ using UotanStudio.Services.Ui.Projects;
 using UotanStudio.UiAbstractions;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
+using UotanStudio.Views.Shell;
 using Ursa.Controls;
 
 namespace UotanStudio.Views.Workspace;
@@ -230,17 +231,35 @@ public partial class ProjectExplorerView : UserControl
     }
 
     /// <summary>
-    /// Opens the AVB tool window switched to the disable-AVB tab with the selected image file.
-    /// <para>打开 AVB 工具窗口，切换到禁用 AVB 标签页并载入所选镜像文件。</para>
+    /// Opens the boot patch window with the selected image file loaded as the boot image.
+    /// <para>打开修补 Boot 窗口，并将所选镜像文件载入为 Boot 镜像。</para>
     /// </summary>
-    private void OnDisableAvb(object? sender, RoutedEventArgs e)
+    private async void OnBootPatch(object? sender, RoutedEventArgs e)
     {
-        if (ProjectTree.SelectedItem is not ExplorerNode { IsDirectory: false, IsPlaceholder: false } node)
+        if (ProjectTree.SelectedItem is not ExplorerNode { IsDirectory: false, IsPlaceholder: false } node
+            || GetOwnerWindow() is not { } owner)
         {
             return;
         }
 
-        UiWindowService.Shared.ShowAvbToolWindow(node.Path);
+        var window = new BootPatchWindow(node.Path);
+        await window.ShowDialog(owner);
+    }
+
+    /// <summary>
+    /// Opens the AVB tool window switched to the disable-AVB tab with the selected image file.
+    /// <para>打开 AVB 工具窗口，切换到禁用 AVB 标签页并载入所选镜像文件。</para>
+    /// </summary>
+    private async void OnDisableAvb(object? sender, RoutedEventArgs e)
+    {
+        if (ProjectTree.SelectedItem is not ExplorerNode { IsDirectory: false, IsPlaceholder: false } node
+            || GetOwnerWindow() is not { } owner)
+        {
+            return;
+        }
+
+        var window = new AvbToolWindow(node.Path);
+        await window.ShowDialog(owner);
     }
 
     private void OnNewEmptySubProject(object? sender, RoutedEventArgs e)

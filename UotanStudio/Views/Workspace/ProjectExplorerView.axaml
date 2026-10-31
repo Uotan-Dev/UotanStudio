@@ -44,6 +44,13 @@
                                 <icons:CloseCircle Width="16" Height="16" />
                             </MenuItem.Icon>
                         </MenuItem>
+                        <!-- 镜像文件右键菜单：修补 Boot -->
+                        <MenuItem Header="{DynamicResource ImageView_BootPatch}"
+                                  IsVisible="{Binding SupportsFormatConversion}" Click="OnBootPatch">
+                            <MenuItem.Icon>
+                                <icons:Tools Width="16" Height="16" />
+                            </MenuItem.Icon>
+                        </MenuItem>
                         <!-- 文件节点右键菜单：打开校验窗口 -->
                         <MenuItem Header="{DynamicResource Explorer_Checksum}"
                                   IsVisible="{Binding !IsDirectory}" Click="OnChecksum">

@@ -38,6 +38,19 @@ public partial class AvbToolWindow : Window
         };
     }
 
+    /// <summary>
+    /// Creates the AVB tool window and optionally selects the disable-AVB tab with a target image file.
+    /// <para>创建 AVB 工具窗口，并可选切换到禁用 AVB 标签页并载入目标镜像文件。</para>
+    /// </summary>
+    /// <param name="disableAvbImagePath">The image file path to load into the disable-AVB tab.<para>载入禁用 AVB 标签页的镜像文件路径。</para></param>
+    public AvbToolWindow(string? disableAvbImagePath) : this()
+    {
+        if (!string.IsNullOrEmpty(disableAvbImagePath))
+        {
+            OpenDisableAvbTab(disableAvbImagePath);
+        }
+    }
+
     private AvbToolViewModel Model => (AvbToolViewModel)DataContext!;
 
     private async void OnRefreshKeysClick(object? sender, RoutedEventArgs e) => await RunOperationAsync(Model.RefreshKeysAsync);

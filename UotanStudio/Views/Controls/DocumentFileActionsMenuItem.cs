@@ -8,6 +8,7 @@ using UotanStudio.Services.Ui;
 using UotanStudio.Services.Ui.Workspace.Documents;
 using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Workspace;
+using UotanStudio.Views.Shell;
 using Ursa.Controls;
 
 namespace UotanStudio.Views.Controls;
@@ -129,11 +130,15 @@ public sealed class DocumentFileActionsMenuItem : MenuItem
         }
     }
 
-    private void OnDisableAvb(object? sender, RoutedEventArgs e)
+    private async void OnDisableAvb(object? sender, RoutedEventArgs e)
     {
         if (_path is not null)
         {
-            UiWindowService.Shared.ShowAvbToolWindow(_path);
+            if (TopLevel.GetTopLevel(this) is Window owner)
+            {
+                var window = new AvbToolWindow(_path);
+                await window.ShowDialog(owner);
+            }
         }
     }
 
