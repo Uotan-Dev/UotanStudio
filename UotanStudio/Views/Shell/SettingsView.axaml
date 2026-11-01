@@ -90,15 +90,11 @@
                 <StackPanel Spacing="8">
                     <TextBlock Text="{DynamicResource Settings_Gc}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4">
-                        <TextBlock Text="{DynamicResource Settings_GcName}" VerticalAlignment="Center" FontSize="13" />
-                        <TextBlock Grid.Column="1" Text="{Binding GcImplementationText}" FontSize="13" />
-                        <TextBlock Grid.Row="1" Text="{DynamicResource Settings_GcServer}" VerticalAlignment="Center" FontSize="13" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding GcServerText}" FontSize="13" />
-                        <TextBlock Grid.Row="2" Text="{DynamicResource Settings_GcConcurrent}" VerticalAlignment="Center" FontSize="13" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding GcConcurrentText}" FontSize="13" />
-                        <TextBlock Grid.Row="3" Text="{DynamicResource Settings_GcLatencyMode}" VerticalAlignment="Center" FontSize="13" />
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding GcLatencyModeText}" FontSize="13" />
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto" Margin="0,4">
+                        <TextBlock Text="{DynamicResource Settings_GcCurrent}" VerticalAlignment="Center" FontSize="13" />
+                        <TextBlock Grid.Column="1" Text="{Binding CurrentGcText}" FontSize="13" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="1" Text="{DynamicResource Settings_DotNetSdkVersion}" VerticalAlignment="Center" FontSize="13" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DotNetSdkVersionText}" FontSize="13" TextWrapping="Wrap" />
                     </Grid>
                 </StackPanel>
 

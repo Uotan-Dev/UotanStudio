@@ -3,6 +3,11 @@
        Swaps the default GC for Satori GC at publish time: takes effect only on self-contained publishes
        (NativeAOT included); the version tracks upstream development and needs periodic NuGet checks. -->
   <Sdk Name="PublishWithSatoriGC" Version="10.0.15-satori.40994390316.1" />
+  <!-- riscv64 与 loongarch64 没有 Satori 运行时包：这些 RID 回落到默认 GC。
+       riscv64 and loongarch64 have no Satori runtime packs: these RIDs fall back to the default GC. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != '' and ($(RuntimeIdentifier.Contains('riscv64')) or $(RuntimeIdentifier.Contains('loongarch64')))">
+    <UseSatoriGC>false</UseSatoriGC>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
@@ -19,6 +24,16 @@
   <PropertyGroup>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 把构建所用 .NET SDK 版本写入程序集元数据，供设置页展示；SDK 解析器未提供该属性时不写入。
+         Bakes the .NET SDK version used to build into assembly metadata for the settings page; omitted
+         when the SDK resolver does not provide the property. -->
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute" Condition="'$(NETCoreSdkVersion)' != ''">
+      <_Parameter1>DotNetSdkVersion</_Parameter1>
+      <_Parameter2>$(NETCoreSdkVersion)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" />

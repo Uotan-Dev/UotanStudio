@@ -453,26 +453,29 @@
   <data name="Settings_Gc" xml:space="preserve">
     <value>垃圾回收</value>
   </data>
-  <data name="Settings_GcName" xml:space="preserve">
-    <value>GC 实现</value>
+  <data name="Settings_GcCurrent" xml:space="preserve">
+    <value>当前垃圾回收</value>
+  </data>
+  <data name="Settings_GcSummaryFormat" xml:space="preserve">
+    <value>{0}，{1}，{2}；延迟模式 {3}</value>
   </data>
   <data name="Settings_GcDefaultName" xml:space="preserve">
     <value>默认 GC</value>
   </data>
-  <data name="Settings_GcServer" xml:space="preserve">
-    <value>服务器 GC</value>
+  <data name="Settings_GcServerShape" xml:space="preserve">
+    <value>服务器</value>
   </data>
-  <data name="Settings_GcConcurrent" xml:space="preserve">
-    <value>并发 GC</value>
+  <data name="Settings_GcWorkstationShape" xml:space="preserve">
+    <value>工作站</value>
   </data>
-  <data name="Settings_GcEnabled" xml:space="preserve">
-    <value>已启用</value>
+  <data name="Settings_GcConcurrentOn" xml:space="preserve">
+    <value>并发</value>
   </data>
-  <data name="Settings_GcDisabled" xml:space="preserve">
-    <value>已禁用</value>
+  <data name="Settings_GcConcurrentOff" xml:space="preserve">
+    <value>非并发</value>
   </data>
-  <data name="Settings_GcLatencyMode" xml:space="preserve">
-    <value>延迟模式</value>
+  <data name="Settings_DotNetSdkVersion" xml:space="preserve">
+    <value>.NET SDK 版本</value>
   </data>
   <data name="Settings_DriverPackages" xml:space="preserve">
     <value>驱动安装</value>
