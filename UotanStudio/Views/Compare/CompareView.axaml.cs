@@ -858,6 +858,34 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>
+    /// Opens the add-file dropdown flyout when the pointer hovers over the button.
+    /// <para>指针悬浮在添加文件按钮上方时展开下拉菜单。</para>
+    /// </summary>
+    private void OnAddButtonPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Button { Flyout: { } flyout } button && !flyout.IsOpen)
+        {
+            flyout.ShowAt(button);
+        }
+    }
+
+    /// <summary>
+    /// Placeholder for opening device files (UI-only for now).
+    /// <para>打开设备文件占位（当前仅完成 UI）。</para>
+    /// </summary>
+    private void OnDeviceFilesClick(object? sender, RoutedEventArgs e)
+    {
+    }
+
+    /// <summary>
+    /// Placeholder for opening remote files (UI-only for now).
+    /// <para>打开远程文件占位（当前仅完成 UI）。</para>
+    /// </summary>
+    private void OnRemoteFilesClick(object? sender, RoutedEventArgs e)
+    {
+    }
+
+    /// <summary>
     /// "Add Folder" button: shows a multi-select folder dialog where each chosen folder takes one file
     /// column (filling empty columns first and appending when needed). No column is added while
     /// comparing.

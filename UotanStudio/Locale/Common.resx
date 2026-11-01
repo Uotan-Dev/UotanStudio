@@ -2284,6 +2284,12 @@ Author: 暮间雾
   <data name="Compare_AddFolder" xml:space="preserve">
     <value>Add Folder</value>
   </data>
+  <data name="Compare_DeviceFiles" xml:space="preserve">
+    <value>Device Files</value>
+  </data>
+  <data name="Compare_RemoteFiles" xml:space="preserve">
+    <value>Remote Files</value>
+  </data>
   <data name="Compare_PathPlaceholder" xml:space="preserve">
     <value>Enter a folder or file path</value>
   </data>

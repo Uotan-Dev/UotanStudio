@@ -426,9 +426,24 @@
                 <avalonia:CloseCircle IsVisible="{Binding IsComparing}" />
               </Panel>
             </Button>
-            <Button Classes="Small" Click="OnAddFoldersClick"
+            <Button Classes="Small"
+                    PointerEntered="OnAddButtonPointerEntered"
                     ToolTip.Tip="{DynamicResource Compare_AddFolder}"
                     AutomationProperties.Name="{DynamicResource Compare_AddFolder}">
+              <Button.Flyout>
+                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                  <MenuItem Header="{DynamicResource Compare_DeviceFiles}" Click="OnDeviceFilesClick">
+                    <MenuItem.Icon>
+                      <avalonia:Mobile Width="16" Height="16" />
+                    </MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="{DynamicResource Compare_RemoteFiles}" Click="OnRemoteFilesClick">
+                    <MenuItem.Icon>
+                      <avalonia:Internet Width="16" Height="16" />
+                    </MenuItem.Icon>
+                  </MenuItem>
+                </MenuFlyout>
+              </Button.Flyout>
               <avalonia:FolderAdd />
             </Button>
           </StackPanel>

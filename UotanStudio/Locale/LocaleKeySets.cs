@@ -747,6 +747,8 @@ internal static class LocaleKeySets
         "Compare_GoUp",
         "Compare_NoParentFolder",
         "Compare_AddFolder",
+        "Compare_DeviceFiles",
+        "Compare_RemoteFiles",
         "Compare_PathPlaceholder",
         "Compare_LoadPath",
         "Compare_CloseColumn",
