@@ -2064,6 +2064,51 @@
   <data name="Node_Family_Result" xml:space="preserve">
     <value>结果</value>
   </data>
+  <data name="Node_Family_CommandLine" xml:space="preserve">
+    <value>启动命令行</value>
+  </data>
+  <data name="Node_Family_Config" xml:space="preserve">
+    <value>配置文件</value>
+  </data>
+  <data name="Node_Family_List" xml:space="preserve">
+    <value>列表</value>
+  </data>
+  <data name="Node_Family_Search" xml:space="preserve">
+    <value>二进制搜索</value>
+  </data>
+  <data name="Node_Family_Shell" xml:space="preserve">
+    <value>Shell 命令</value>
+  </data>
+  <data name="Node_Family_Slot" xml:space="preserve">
+    <value>设备槽位</value>
+  </data>
+  <data name="Node_Family_Table" xml:space="preserve">
+    <value>分区表</value>
+  </data>
+  <data name="Node_Family_Vbmeta" xml:space="preserve">
+    <value>VBMeta</value>
+  </data>
+  <data name="Node_Family_Adb" xml:space="preserve">
+    <value>ADB</value>
+  </data>
+  <data name="Node_Family_Edl" xml:space="preserve">
+    <value>高通 EDL</value>
+  </data>
+  <data name="Node_Family_Fastboot" xml:space="preserve">
+    <value>Fastboot</value>
+  </data>
+  <data name="Node_Family_Hdc" xml:space="preserve">
+    <value>HDC</value>
+  </data>
+  <data name="Node_Family_Mtk" xml:space="preserve">
+    <value>联发科</value>
+  </data>
+  <data name="Node_Family_Rkdl" xml:space="preserve">
+    <value>瑞芯微烧录</value>
+  </data>
+  <data name="Node_Family_Wait" xml:space="preserve">
+    <value>设备等待</value>
+  </data>
   <data name="Node_AdvancedParameters" xml:space="preserve">
     <value>显示高级参数</value>
   </data>

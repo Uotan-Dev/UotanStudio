@@ -2064,6 +2064,51 @@
   <data name="Node_Family_Result" xml:space="preserve">
     <value>Results</value>
   </data>
+  <data name="Node_Family_CommandLine" xml:space="preserve">
+    <value>Boot command line</value>
+  </data>
+  <data name="Node_Family_Config" xml:space="preserve">
+    <value>Configuration files</value>
+  </data>
+  <data name="Node_Family_List" xml:space="preserve">
+    <value>Lists</value>
+  </data>
+  <data name="Node_Family_Search" xml:space="preserve">
+    <value>Binary search</value>
+  </data>
+  <data name="Node_Family_Shell" xml:space="preserve">
+    <value>Shell commands</value>
+  </data>
+  <data name="Node_Family_Slot" xml:space="preserve">
+    <value>Device slots</value>
+  </data>
+  <data name="Node_Family_Table" xml:space="preserve">
+    <value>Partition tables</value>
+  </data>
+  <data name="Node_Family_Vbmeta" xml:space="preserve">
+    <value>VBMeta</value>
+  </data>
+  <data name="Node_Family_Adb" xml:space="preserve">
+    <value>ADB</value>
+  </data>
+  <data name="Node_Family_Edl" xml:space="preserve">
+    <value>Qualcomm EDL</value>
+  </data>
+  <data name="Node_Family_Fastboot" xml:space="preserve">
+    <value>Fastboot</value>
+  </data>
+  <data name="Node_Family_Hdc" xml:space="preserve">
+    <value>HDC</value>
+  </data>
+  <data name="Node_Family_Mtk" xml:space="preserve">
+    <value>MediaTek</value>
+  </data>
+  <data name="Node_Family_Rkdl" xml:space="preserve">
+    <value>Rockchip loader</value>
+  </data>
+  <data name="Node_Family_Wait" xml:space="preserve">
+    <value>Device wait</value>
+  </data>
   <data name="Node_AdvancedParameters" xml:space="preserve">
     <value>Show advanced parameters</value>
   </data>

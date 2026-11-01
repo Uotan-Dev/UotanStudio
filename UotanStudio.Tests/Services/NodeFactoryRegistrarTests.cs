@@ -159,6 +159,23 @@ public sealed class NodeFactoryRegistrarTests
     }
 
     [Fact]
+    public void Toolbox_ObjectFamilies_ResolveLocalizedNames()
+    {
+        using var editor = new NodeEditorViewModel();
+        var language = LanguageService.Instance;
+        var unresolved = NodeFactoryRegistrar.Descriptors
+            .Where(descriptor => NodeFactoryRegistrar.BuiltInTypeKeys.Contains(descriptor.TypeKey))
+            .Select(descriptor => "Node_Family_" + descriptor.Family)
+            .Distinct(StringComparer.Ordinal)
+            .Where(key => language.GetString(key) == key)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(editor.ToolboxItems);
+        Assert.Empty(unresolved);
+    }
+
+    [Fact]
     public void ParameterSchema_ConditionalInputs_PreservesValuesAndProtectionDefaults()
     {
         var descriptor = Assert.Single(NodeFactoryRegistrar.Descriptors, descriptor => descriptor.TypeKey == "Image.File.Attributes");
