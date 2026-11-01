@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using System.Numerics;
+using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Comm.Protocols.Bootrom;
 
@@ -8,35 +8,13 @@ public sealed partial class RkdlSession
     private RkFlashInfo? _flashInfo;
 
     /// <summary>
-    /// Runs the bulk warm-up sequence the official download tool performs before its loader download:
-    /// TEST_UNIT_READY, READ_CHIP_INFO and READ_FLASH_INFO. A maskrom port that answers these bulk
-    /// transactions accepts the 0x0471/0x0472 vendor requests right afterwards; a port whose control
-    /// endpoint has wedged fails here with a bulk error instead of hanging the vendor IOCTL.
-    /// <para>执行官方下载工具在 loader 下载前运行的批量预热序列：TEST_UNIT_READY、READ_CHIP_INFO 与
-    /// READ_FLASH_INFO。能应答这些批量事务的 maskrom 端口随后就会接受 0x0471/0x0472 vendor 请求；
-    /// 控制端点已卡死的端口会在此以批量错误失败，而不是让 vendor IOCTL 挂死。</para>
-    /// </summary>
-    /// <exception cref="RkdlException">Any bulk transaction of the sequence failed.
-    /// <para>序列中任一批量事务失败。</para></exception>
-    public void WarmUpForLoaderDownload()
-    {
-        if (!TestDeviceReady())
-        {
-            throw new RkdlException(RkdlError.TransferFailed, "The device did not answer TEST_UNIT_READY before the loader download.");
-        }
-
-        ReadChipInfo();
-        ReadFlashInfo();
-    }
-
-    /// <summary>
     /// Reads chip info from the device via a READ_CHIP_INFO CBW/CSW transaction (16 bytes).
     /// The first four bytes of the response are an ASCII chip tag (e.g. "320A"); it is
     /// exposed both raw and decoded.
     /// <para>通过 READ_CHIP_INFO CBW/CSW 事务从设备读取芯片信息（16 字节）。响应的前 4 字节是
     /// ASCII 芯片标签（如 "320A"）；同时以原始值与解码字符串暴露。</para>
     /// </summary>
-    internal RkChipInfo ReadChipInfo()
+    public RkChipInfo ReadChipInfo()
     {
         var data = ReadDataCommand(RkdlCommand.ReadChipInfo, 16, RkdlFrame.CbwcbLengthShort, 16, 16);
         return new RkChipInfo
@@ -71,10 +49,11 @@ public sealed partial class RkdlSession
     /// <exception cref="RkdlException">The data phase was shorter than the 11 bytes requested, or
     /// the CSW reported failure.
     /// <para>数据阶段短于请求的 11 字节，或 CSW 报告失败。</para></exception>
-    internal RkFlashInfo ReadFlashInfo()
+    public RkFlashInfo ReadFlashInfo()
     {
         var data = ReadDataCommand(RkdlCommand.ReadFlashInfo, RkdlConstants.FlashInfoStructureLength,
-            RkdlFrame.CbwcbLengthShort, RkdlConstants.MaxFlashInfoLength, RkdlConstants.FlashInfoStructureLength);
+            RkdlFrame.CbwcbLengthShort, RkdlConstants.MaxFlashInfoLength, RkdlConstants.FlashInfoStructureLength,
+            RkdlConstants.ReadFlashInfoTimeoutMs);
         return RkFlashInfo.Decode(data);
     }
 
@@ -218,16 +197,37 @@ public sealed partial class RkdlSession
     /// 因为复位会让设备重新枚举，之后报告的几何是一次全新观测。</para>
     /// </summary>
     /// <param name="subCode">A <see cref="RkdlResetSubCode"/> value (default none). <para><see cref="RkdlResetSubCode"/> 子码（默认无）。</para></param>
-    /// <returns>0 when the reset command completed. <para>复位命令完成时返回 0。</para></returns>
-    /// <exception cref="RkdlException">The session is disposed, the CSW could not be validated, or
-    /// the CSW reported failure. <para>会话已释放、CSW 无法校验，或 CSW 报告失败。</para></exception>
+    /// <returns>0 when the reset command completed, or when the transport dropped before the CSW arrived for the
+    /// default sub code. <para>复位命令完成时返回 0；默认子码下传输在 CSW 到达前断开时同样返回 0。</para></returns>
+    /// <exception cref="RkdlException">The session is disposed, the CSW could not be validated for a reset with an
+    /// explicit sub code, or the CSW reported failure. <para>会话已释放、带显式子码的复位无法校验 CSW，或 CSW 报告失败。</para></exception>
+    /// <remarks>
+    /// A plain DEVICE_RESET re-enumerates the device, so the CSW often never reaches the host; the vendor tool treats
+    /// the corresponding read and CSW-open failures as success for this sub code alone (its <c>CRKDevice::ResetDevice</c>
+    /// accepts <c>-2</c> and <c>-4</c>). Resets that carry a sub code keep failing closed because power-off and mask-ROM
+    /// resets are only observable through their CSW.
+    /// <para>普通 DEVICE_RESET 会让设备重新枚举，CSW 往往根本到不了主机；厂商工具仅对该子码把相应的读取与 CSW 打开失败
+    /// 视为成功（其 <c>CRKDevice::ResetDevice</c> 接受 <c>-2</c> 与 <c>-4</c>）。带子码的复位仍保持失败即报错，因为关机与
+    /// 回到 Mask ROM 只能通过 CSW 观测。</para>
+    /// </remarks>
     public int ResetDevice(byte subCode = RkdlResetSubCode.None)
     {
         ThrowIfDisposed();
         var cbw = new RkdlCbw(RkdlCommand.DeviceReset, RkdlFrame.DirectionOut, 0,
             RkdlFrame.CbwcbLengthShort, subCode: subCode);
         WriteCbw(cbw);
-        var csw = ReadCsw(cbw.Tag, recovery: true);
+        RkdlCsw csw;
+        try
+        {
+            csw = ReadCsw(cbw.Tag, recovery: true);
+        }
+        catch (RkdlException) when (subCode == RkdlResetSubCode.None)
+        {
+            CommTrace.State("rkdl", "DEVICE_RESET left no readable CSW; treating the default reset as accepted.");
+            InvalidateFlashGeometry();
+            return 0;
+        }
+
         InvalidateFlashGeometry();
         return !csw.IsSuccess ? throw new RkdlException(RkdlError.DeviceReset, $"DEVICE_RESET failed, CSW status = {csw.Status}.") : 0;
     }
@@ -280,17 +280,19 @@ public sealed partial class RkdlSession
     }
 
     /// <summary>
-    /// Reads the supported storage mediums through a READ_STORAGE (0x2B) CBW/CSW transaction. The
-    /// device returns a 4-byte little-endian bitmask, and the index of the first set bit is the
-    /// storage identifier the device currently reports.
-    /// <para>通过 READ_STORAGE（0x2B）CBW/CSW 事务读取支持的存储介质。设备返回 4 字节小端位掩码，
-    /// 首个置位的下标即设备当前报告的存储标识。</para>
+    /// Reads the storage medium bitmask through a READ_STORAGE (0x2B) CBW/CSW transaction. The device
+    /// returns a 4-byte little-endian mask whose single set bit names the active medium through
+    /// <see cref="RkdlStorage.WireBits"/>; the official tool matches the whole mask against one
+    /// <c>1 &lt;&lt; wireBit</c> instead of reading the first set bit.
+    /// <para>通过 READ_STORAGE（0x2B）CBW/CSW 事务读取存储介质位掩码。设备返回 4 字节小端掩码，
+    /// 唯一置位经 <see cref="RkdlStorage.WireBits"/> 命名当前介质；官方工具用整个掩码与单个
+    /// <c>1 &lt;&lt; 线上位</c> 精确匹配，而不是取首个置位。</para>
     /// </summary>
-    /// <returns>The zero-based index of the first set bit in the storage bitmask.
-    /// <para>存储位掩码中首个置位从零开始的下标。</para></returns>
+    /// <returns>The raw storage bitmask exactly as the device reported it.
+    /// <para>设备原样回报的存储位掩码。</para></returns>
     /// <exception cref="RkdlException">The data phase was shorter than 4 bytes, the CSW reported
     /// failure, or the bitmask is zero. <para>数据阶段短于 4 字节、CSW 报告失败，或位掩码为零。</para></exception>
-    public int ReadStorage()
+    public uint ReadStorageMask()
     {
         ThrowIfDisposed();
         var data = ReadDataCommand(RkdlCommand.ReadStorage, 4, RkdlFrame.CbwcbLengthShort, 4, 4);
@@ -300,7 +302,7 @@ public sealed partial class RkdlSession
             throw new RkdlException(RkdlError.ReadFailed, "READ_STORAGE returned an empty storage bitmask.");
         }
 
-        return BitOperations.TrailingZeroCount(mask);
+        return mask;
     }
 
     /// <summary>
@@ -549,6 +551,14 @@ public sealed partial class RkdlSession
     /// boot progress (current/total) along the way.
     /// <para>轮询 TEST_UNIT_READY 直到 loader 报告就绪或超时，期间上报启动进度（当前/总进度）。</para>
     /// </summary>
+    /// <remarks>
+    /// Mirrors <c>CRKDevice::TestDevice</c>: a poll that fails at the transport level is retried three times one
+    /// second apart before the wait gives up, a report whose current progress exceeds the total is treated as a
+    /// failed boot, and a loader-stage device that reports a zero total is treated the same way. Polls are one second
+    /// apart, and the final report carries the total as both fields once the device is ready.
+    /// <para>与 <c>CRKDevice::TestDevice</c> 一致：传输层失败的轮询会以 1 秒间隔重试三次后才放弃；当前进度超过总进度的报告
+    /// 视为启动失败；loader 阶段报告总进度为零时同样如此。轮询间隔为 1 秒，设备就绪后最后一次上报会把总进度同时写入两个字段。</para>
+    /// </remarks>
     /// <param name="timeoutMs">Total wait budget in milliseconds. <para>总等待预算（毫秒）。</para></param>
     /// <param name="progress">Optional progress receiver. <para>可选进度接收器。</para></param>
     /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
@@ -560,10 +570,38 @@ public sealed partial class RkdlSession
         {
             cancellationToken.ThrowIfCancellationRequested();
             ushort current = 0, total = 0;
-            var ready = await Task.Run(() => TestDeviceReady(out current, out total), cancellationToken).ConfigureAwait(false);
+            var ready = false;
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    ready = await Task.Run(() => TestDeviceReady(out current, out total), cancellationToken).ConfigureAwait(false);
+                    break;
+                }
+                catch (RkdlException)
+                {
+                    if (attempt == 2 || Environment.TickCount64 >= deadline)
+                    {
+                        return false;
+                    }
+
+                    await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
             if (ready)
             {
+                if (total > 0)
+                {
+                    progress?.Report((total, total));
+                }
+
                 return true;
+            }
+
+            if (current > total || (Mode == RkdlDeviceMode.Loader && total == 0))
+            {
+                return false;
             }
 
             if (total > 0)
@@ -571,7 +609,7 @@ public sealed partial class RkdlSession
                 progress?.Report((current, total));
             }
 
-            await Task.Delay(200, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
         }
         return false;
     }

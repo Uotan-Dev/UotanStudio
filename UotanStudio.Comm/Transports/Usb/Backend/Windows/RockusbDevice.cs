@@ -137,10 +137,12 @@ internal sealed unsafe class RockusbDevice : UsbDevice
 
     /// <summary>
     /// Opens the control handle, reads the configuration descriptor the driver caches, then opens one handle for each
-    /// bulk direction because the driver binds a single pipe per handle. Both pipes are reset once afterwards so a
-    /// transfer the previous owner of the port left halted cannot fail the first command of this session.
+    /// bulk direction because the driver binds a single pipe per handle. No pipe reset runs here: the official tool
+    /// issues the reset-all IOCTL before it retries a failed command, not when it opens the port, and on a live
+    /// maskrom port an unconditional open-time reset can stall the interface and poison the first command.
     /// <para>打开控制句柄、读取驱动缓存的配置描述符，然后为每个批量方向各打开一个句柄，因为驱动为每个句柄只绑定一条管道。
-    /// 随后复位一次两条管道，使端口上一任占用者留下的已停住传输不会让本次会话的第一条命令失败。</para>
+    /// 打开时不做管道复位：官方工具只在重试失败的命令前发出复位全部管道 IOCTL，而不是在打开端口时；对在位的
+    /// maskrom 端口，无条件的打开期复位可能停住接口并破坏第一条命令。</para>
     /// </summary>
     /// <returns><c>0</c> on success, otherwise the <see cref="Marshal.GetLastWin32Error"/> value of the failing step.
     /// <para>成功时为 <c>0</c>，否则为失败步骤的 <see cref="Marshal.GetLastWin32Error"/> 取值。</para></returns>
@@ -159,15 +161,7 @@ internal sealed unsafe class RockusbDevice : UsbDevice
             return failure;
         }
 
-        failure = OpenBulkPipes();
-        if (failure != 0)
-        {
-            DisposeHandles();
-            return failure;
-        }
-
-        ResetAllPipes();
-        return 0;
+        return OpenBulkPipes();
     }
 
     /// <summary>

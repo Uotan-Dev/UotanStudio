@@ -91,7 +91,7 @@ public sealed class RkdlModeClassificationTests
         var fake = new RecordingUsbSession(0x350B, 0x0200);
         using var session = new RkdlSession(new UsbDeviceTransport(fake));
 
-        var error = Assert.Throws<RkdlException>(() => session.ReadStorage());
+        var error = Assert.Throws<RkdlException>(() => session.ReadStorageMask());
 
         Assert.Contains("mask ROM", error.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, fake.WriteCalls);
@@ -120,15 +120,13 @@ public sealed class RkdlModeClassificationTests
     }
 
     [Fact]
-    public void ReadStorage_WithoutDescriptorValue_RefusesBeforeWritingTheCommand()
+    public void ReadStorage_WithoutDescriptorValue_SendsTheCommandLikeTheOfficialTool()
     {
         var fake = new RecordingUsbSession(0x350B, null);
         using var session = new RkdlSession(new UsbDeviceTransport(fake));
 
-        var error = Assert.Throws<RkdlException>(() => session.ReadStorage());
-
-        Assert.Contains("bcdUSB", error.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(0, fake.WriteCalls);
+        Assert.Throws<RkdlException>(() => session.ReadStorageMask());
+        Assert.Equal(1, fake.WriteCalls);
     }
 
     [Fact]
@@ -154,6 +152,61 @@ public sealed class RkdlModeClassificationTests
             session.DownloadBootLoaderAsync(CreateLoaderImage(), TestContext.Current.CancellationToken));
 
         Assert.Contains("already reports loader mode", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, fake.ControlTransferCalls);
+    }
+
+    [Fact]
+    public void UpgradeLoader_OnLoaderDevice_RefusesBeforeAnyBulkWrite()
+    {
+        var fake = new RecordingUsbSession(0x350B, 0x0201);
+        using var session = new RkdlSession(new UsbDeviceTransport(fake));
+
+        var error = Assert.Throws<RkdlException>(() => session.UpgradeLoader(CreateLoaderImage()));
+
+        Assert.Contains("loader mode", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, fake.WriteCalls);
+    }
+
+    [Fact]
+    public void UpgradeLoader_OnLoaderDevice_ChecksTheStageBeforeParsingTheImage()
+    {
+        var fake = new RecordingUsbSession(0x350B, 0x0201);
+        using var session = new RkdlSession(new UsbDeviceTransport(fake));
+
+        var error = Assert.Throws<RkdlException>(() => session.UpgradeLoader([1, 2, 3]));
+
+        Assert.DoesNotContain("too small", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, fake.WriteCalls);
+    }
+
+    [Fact]
+    public void ResetDevice_DefaultSubCodeWithoutReadableCsw_ReportsSuccess()
+    {
+        var fake = new RecordingUsbSession(0x350B, 0x0201);
+        using var session = new RkdlSession(new UsbDeviceTransport(fake));
+
+        Assert.Equal(0, session.ResetDevice());
+        Assert.Equal(1, fake.WriteCalls);
+    }
+
+    [Fact]
+    public void ResetDevice_ExplicitSubCodeWithoutReadableCsw_StillFailsClosed()
+    {
+        var fake = new RecordingUsbSession(0x350B, 0x0201);
+        using var session = new RkdlSession(new UsbDeviceTransport(fake));
+
+        Assert.Throws<RkdlException>(() => session.ResetDevice(RkdlResetSubCode.ResetMaskRom));
+    }
+
+    [Fact]
+    public async Task DeviceRequest_OnLoaderDevice_RejectsBeforeAnyControlTransfer()
+    {
+        var fake = new RecordingUsbSession(0x350B, 0x0201);
+        using var session = new RkdlSession(new UsbDeviceTransport(fake));
+
+        var error = await Assert.ThrowsAsync<RkdlException>(() => session.DownloadBootLoader471([1, 2, 3], TestContext.Current.CancellationToken));
+
+        Assert.Contains("mask ROM only", error.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, fake.ControlTransferCalls);
     }
 

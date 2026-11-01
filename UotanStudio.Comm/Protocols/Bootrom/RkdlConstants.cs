@@ -83,6 +83,13 @@ public static class RkdlConstants
     public const int LoaderChunkSize = 4096;
 
     /// <summary>
+    /// Pause before every 0x0471/0x0472 control-transfer chunk, matching the official download
+    /// tool's 50 ms inter-chunk sleep.
+    /// <para>每条 0x0471/0x0472 控制传输分块前的停顿，与官方下载工具 50 毫秒的分块间隔一致。</para>
+    /// </summary>
+    public const int LoaderChunkGapMs = 50;
+
+    /// <summary>
     /// Maximum block count per ERASE_NORMAL/ERASE_FORCE command (MAX_ERASE_BLOCKS).
     /// <para>每条 ERASE_NORMAL/ERASE_FORCE 命令的最大块数（MAX_ERASE_BLOCKS）。</para>
     /// </summary>
@@ -111,6 +118,29 @@ public static class RkdlConstants
     public const int EraseSectorChunk = 1024 * 32;
 
     /// <summary>
+    /// Upper bound on the chunk records a sparse image may declare when it is replayed to flash, matching the
+    /// reader's default cap so a crafted image cannot pin the pass in chunk bookkeeping.
+    /// <para>稀疏镜像回放到 flash 时允许声明的数据块记录上限，与读取器的默认上限一致，使伪造镜像无法靠数据块记账
+    /// 拖住回放。</para>
+    /// </summary>
+    public const int MaxSparseChunks = 1048576;
+
+    /// <summary>
+    /// LBA the loader-upgrade ID block is written to, matching the <c>RKU_WriteLBA(64, ...)</c> call of
+    /// <c>upgrade_loader</c>.
+    /// <para>loader 升级 ID block 写入的 LBA，与 <c>upgrade_loader</c> 的 <c>RKU_WriteLBA(64, ...)</c> 一致。</para>
+    /// </summary>
+    public const uint LoaderIdBlockLba = 64;
+
+    /// <summary>
+    /// Granularity, in bytes, that the loader-upgrade path rounds each ID-block component to before converting it to
+    /// sectors, matching the <c>ALIGN(size, 2048)</c> calls of <c>upgrade_loader</c>.
+    /// <para>loader 升级路径在换算扇区之前对每个 ID block 分量取整的字节粒度，与 <c>upgrade_loader</c> 的
+    /// <c>ALIGN(size, 2048)</c> 一致。</para>
+    /// </summary>
+    public const int LoaderIdBlockAlignment = 2048;
+
+    /// <summary>
     /// Length of the leading <c>STRUCT_FLASHINFO_CMD</c> bytes READ_FLASH_INFO transfers: flash size,
     /// block size, page size, ECC bits, access time, manufacturer code and flash chip select.
     /// <para>READ_FLASH_INFO 传输的 <c>STRUCT_FLASHINFO_CMD</c> 首部长度：flash 容量、块大小、
@@ -124,6 +154,13 @@ public static class RkdlConstants
     /// <para>READ_FLASH_INFO 数据阶段的上界；设备可能返回更长的结构，最多读取该长度。</para>
     /// </summary>
     public const int MaxFlashInfoLength = 512;
+
+    /// <summary>
+    /// Timeout, in milliseconds, the READ_FLASH_INFO transaction waits for the device's data phase, matching the
+    /// 5000 ms budget of <c>RKU_ReadFlashInfo</c>.
+    /// <para>READ_FLASH_INFO 事务等待设备数据阶段的超时（毫秒），与 <c>RKU_ReadFlashInfo</c> 的 5000 毫秒预算一致。</para>
+    /// </summary>
+    public const int ReadFlashInfoTimeoutMs = 5000;
 
     /// <summary>
     /// READ_FLASH_ID value that marks an eMMC medium. Read as little-endian bytes the constant
@@ -210,6 +247,32 @@ public static class RkdlConstants
     /// <para>该产品 ID 可能是 boot ROM 端口时为 <see langword="true"/>。</para></returns>
     public static bool IsBootromProduct(ushort productId)
         => (productId >> 8) != 0 || KnownBootromProductIds.Contains(productId);
+
+    /// <summary>
+    /// VID/PID pairs that the vendor tool excludes before it checks for a Rockchip port: USB mass-storage
+    /// implementations whose product IDs fall inside the boot ROM numeric range but that answer no RKDL command.
+    /// <para>厂商工具在判定瑞芯微端口之前先排除的 VID/PID 组合：这些 USB 大容量存储实现的产品 ID 虽落在 boot ROM 数字区间内，
+    /// 却不应答任何 RKDL 命令。</para>
+    /// </summary>
+    public static readonly (ushort VendorId, ushort ProductId)[] MscExcludedDevices =
+    [
+        (0x071B, 0x3203),
+        (0x071B, 0x3205),
+        (0x0BB4, 0x2910),
+        (0x2207, 0x0000),
+        (0x2207, 0x0010),
+    ];
+
+    /// <summary>
+    /// Reports whether a VID/PID pair is one of the mass-storage ports excluded from Rockchip port detection.
+    /// <para>报告某个 VID/PID 组合是否属于被排除在瑞芯微端口识别之外的大容量存储端口。</para>
+    /// </summary>
+    /// <param name="vendorId">The USB vendor ID. <para>USB 厂商 ID。</para></param>
+    /// <param name="productId">The USB product ID. <para>USB 产品 ID。</para></param>
+    /// <returns><see langword="true"/> when the pair must not be treated as a Rockchip port.
+    /// <para>该组合不得被视为瑞芯微端口时为 <see langword="true"/>。</para></returns>
+    public static bool IsMscExcluded(ushort vendorId, ushort productId)
+        => MscExcludedDevices.Contains((vendorId, productId));
 
     /// <summary>
     /// Classifies the stage a Rockchip boot ROM is in from its product ID and its device descriptor's <c>bcdUSB</c>
@@ -426,7 +489,7 @@ internal enum RkdlCommand : byte
 /// RKDL chip info structure.
 /// <para>RKDL 芯片信息结构。</para>
 /// </summary>
-internal class RkChipInfo
+public sealed class RkChipInfo
 {
     /// <summary>
     /// Gets or sets the chip ID.
@@ -525,7 +588,7 @@ internal class RkChipInfo
 /// <c>STRUCT_FLASHINFO_CMD</c> the device returns.
 /// <para>READ_FLASH_INFO 报告的 RKDL 闪存信息，由设备返回的紧凑 <c>STRUCT_FLASHINFO_CMD</c> 解码而来。</para>
 /// </summary>
-internal sealed class RkFlashInfo
+public sealed class RkFlashInfo
 {
     /// <summary>
     /// Gets the total sector count reported by the device, widened from the leading little-endian
@@ -703,15 +766,24 @@ internal sealed class RkFlashInfo
 /// <para>READ_CAPABILITY 返回的设备能力字。</para>
 /// </summary>
 /// <remarks>
-/// Only the two bits <c>CRKDevice::ReadCapability</c> consumes are decoded: bit 0 selects
-/// direct-LBA addressing and bit 2 marks first-4M access. The remaining bits stay verbatim in
-/// <see cref="Raw"/> and are not interpreted.
-/// <para>只解码 <c>CRKDevice::ReadCapability</c> 使用的两个位：位 0 表示直接 LBA 寻址，位 2 表示
-/// 前 4M 访问。其余位原样保留在 <see cref="Raw"/> 中且不作解释。</para>
+/// The two bits <c>CRKDevice::ReadCapability</c> consumes are decoded into properties: bit 0 selects
+/// direct-LBA addressing and bit 2 marks first-4M access. <see cref="Describe"/> reports every bit the
+/// official tool names; unnamed bits stay verbatim in <see cref="Raw"/>.
+/// <para><c>CRKDevice::ReadCapability</c> 使用的两个位解码为属性：位 0 表示直接 LBA 寻址，位 2 表示
+/// 前 4M 访问。<see cref="Describe"/> 报告官方工具命名的全部位；未命名位原样保留在 <see cref="Raw"/> 中。</para>
 /// </remarks>
 public sealed class RkCapability
 {
     private RkCapability(byte[] raw) => Raw = raw;
+
+    /// <summary>
+    /// Gets the all-zero capability that stands in for a failed READ_CAPABILITY query: no direct-LBA and no
+    /// first-4M access.
+    /// <para>获取在 READ_CAPABILITY 查询失败时代入的全零能力：不支持直接 LBA，也不支持前 4M 访问。</para>
+    /// </summary>
+    /// <value>A capability whose <see cref="Raw"/> is eight zero bytes.
+    /// <para><see cref="Raw"/> 为 8 个零字节的能力字。</para></value>
+    internal static RkCapability None { get; } = new(new byte[8]);
 
     /// <summary>
     /// Gets the capability bytes exactly as the device returned them.
@@ -736,6 +808,61 @@ public sealed class RkCapability
     public bool First4MAccess => (Raw[0] & 0x04) != 0;
 
     /// <summary>
+    /// Describes every capability bit the official tool reports, as <c>name=Enable/Disable</c> lines in the
+    /// official order: DirectLBA, VendorStorage, First4M, ReadLBA, ReadComLog, ReadIDBConfig,
+    /// ReadSecureMode on the first byte; NewIDB, SwitchStorage, LBAparity, ReadOTPchip, SwitchUsb3 on the
+    /// second. Bits the official tool does not name stay in <see cref="Raw"/> and are reported as
+    /// <c>BitN</c>.
+    /// <para>按官方顺序以 <c>名称=Enable/Disable</c> 行描述官方工具报告的每个能力位：首字节为
+    /// DirectLBA、VendorStorage、First4M、ReadLBA、ReadComLog、ReadIDBConfig、ReadSecureMode；
+    /// 次字节为 NewIDB、SwitchStorage、LBAparity、ReadOTPchip、SwitchUsb3。官方未命名的位保留在
+    /// <see cref="Raw"/> 中并报告为 <c>BitN</c>。</para>
+    /// </summary>
+    /// <returns>One line per named bit. <para>每个已命名位一行。</para></returns>
+    public IReadOnlyList<string> Describe()
+    {
+        (string Name, int ByteIndex, int Bit)[] bits =
+        [
+            ("DirectLBA", 0, 0), ("VendorStorage", 0, 1), ("First4M", 0, 2), ("ReadLBA", 0, 3),
+            ("ReadComLog", 0, 5), ("ReadIDBConfig", 0, 6), ("ReadSecureMode", 0, 7),
+            ("NewIDB", 1, 0), ("SwitchStorage", 1, 1), ("LBAparity", 1, 2), ("ReadOTPchip", 1, 3),
+            ("SwitchUsb3", 1, 4)
+        ];
+        var lines = new List<string>(bits.Length);
+        foreach (var (name, byteIndex, bit) in bits)
+        {
+            if (byteIndex >= Raw.Length)
+            {
+                continue;
+            }
+
+            var enabled = (Raw[byteIndex] & (1 << bit)) != 0;
+            lines.Add($"{name}={(enabled ? "Enable" : "Disable")}");
+        }
+
+        for (var byteIndex = 0; byteIndex < Raw.Length; byteIndex++)
+        {
+            for (var bit = 0; bit < 8; bit++)
+            {
+                var flag = 1 << bit;
+                if ((Raw[byteIndex] & flag) == 0)
+                {
+                    continue;
+                }
+
+                var named = bits.Any(candidate =>
+                    candidate.ByteIndex == byteIndex && candidate.Bit == bit);
+                if (!named)
+                {
+                    lines.Add($"Bit{byteIndex * 8 + bit}=Enable");
+                }
+            }
+        }
+
+        return lines;
+    }
+
+    /// <summary>
     /// Decodes the eight-byte READ_CAPABILITY data phase.
     /// <para>解码 8 字节 READ_CAPABILITY 数据阶段。</para>
     /// </summary>
@@ -753,6 +880,73 @@ public sealed class RkCapability
         }
 
         return new RkCapability(response.ToArray());
+    }
+}
+
+/// <summary>
+/// The storage mediums the official tool offers, with the wire identifier CHANGE_STORAGE sends for each
+/// entry and the READ_STORAGE mask bit that names it. The selector order matches the official tool:
+/// FLASH, EMMC, SD, SD1, SPINOR, SPINAND, RAM, USB, SATA, PCIE, UFS, RVD. The wire number is the medium's
+/// bit position, not the selector ordinal: SPI NOR answers on bit 9 while SPINAND sits on bit 8, so
+/// sending the list index selects the wrong medium or nothing at all.
+/// <para>官方工具提供的存储介质列表，含 CHANGE_STORAGE 为每个条目发送的线上标识与 READ_STORAGE 掩码中
+/// 命名该介质的位。选择框顺序与官方工具一致：FLASH、EMMC、SD、SD1、SPINOR、SPINAND、RAM、USB、SATA、
+/// PCIE、UFS、RVD。线上编号是介质的位位置而不是选择框序号：SPI NOR 应答在第 9 位而 SPINAND 在第 8 位，
+/// 因此发送列表下标会选错介质或什么也选不到。</para>
+/// </summary>
+public static class RkdlStorage
+{
+    /// <summary>The medium names in the official selector order.
+    /// <para>按官方选择框顺序排列的介质名。</para></summary>
+    public static readonly string[] Names =
+    [
+        "FLASH", "EMMC", "SD", "SD1", "SPINOR", "SPINAND",
+        "RAM", "USB", "SATA", "PCIE", "UFS", "RVD"
+    ];
+
+    /// <summary>The wire identifiers the official tool sends per selector entry; the array index is the
+    /// selector ordinal. Recovered from the official CHANGE_STORAGE table.
+    /// <para>官方工具按选择框条目发送的线上标识；数组下标即选择框序号。取自官方 CHANGE_STORAGE 表。</para></summary>
+    public static readonly byte[] WireBits =
+    [
+        0, 1, 2, 3, 9, 8,
+        6, 7, 10, 11, 12, 13
+    ];
+
+    /// <summary>
+    /// Returns the selector ordinal whose wire bit is the only bit set in <paramref name="mask"/>, or
+    /// <c>-1</c> when the mask does not exactly match one medium, mirroring the official equality check
+    /// against <c>1 &lt;&lt; wireBit</c>.
+    /// <para>返回线上位为 <paramref name="mask"/> 中唯一置位的条目序号；掩码不与单个介质精确匹配时为
+    /// <c>-1</c>，与官方对 <c>1 &lt;&lt; 线上位</c> 的相等判断一致。</para>
+    /// </summary>
+    /// <param name="mask">The READ_STORAGE bitmask.<para>READ_STORAGE 位掩码。</para></param>
+    /// <returns>The selector ordinal, or <c>-1</c> when unmatched.
+    /// <para>选择框序号；未匹配时为 <c>-1</c>。</para></returns>
+    public static int IndexOfMask(uint mask)
+    {
+        for (var index = 0; index < WireBits.Length; index++)
+        {
+            if (mask == 1u << WireBits[index])
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Names the medium whose wire bit is the only bit set in <paramref name="mask"/>, or formats the raw
+    /// mask when it names no single medium.
+    /// <para>命名掩码唯一置位对应的介质；掩码不对应单一介质时格式化原始值。</para>
+    /// </summary>
+    /// <param name="mask">The READ_STORAGE bitmask.<para>READ_STORAGE 位掩码。</para></param>
+    /// <returns>The medium name or the raw mask text.<para>介质名或原始掩码文本。</para></returns>
+    public static string DescribeMask(uint mask)
+    {
+        var index = IndexOfMask(mask);
+        return index >= 0 ? Names[index] : $"0x{mask:X8}";
     }
 }
 

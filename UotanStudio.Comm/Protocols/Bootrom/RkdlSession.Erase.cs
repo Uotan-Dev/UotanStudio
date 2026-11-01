@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Comm.Protocols.Bootrom;
 
@@ -70,15 +71,19 @@ public sealed partial class RkdlSession
     /// <param name="cancellationToken">Checked before each chunk. <para>每个分块前检查。</para></param>
     /// <returns>The number of blocks inside chunks the device answered with CSW status 1; always zero
     /// on the LBA path. <para>设备以 CSW 状态 1 应答的分块所含块数；LBA 路径恒为零。</para></returns>
-    /// <exception cref="RkdlException">The flash geometry or capability query failed, the reported
-    /// block geometry is unusable, or an erase transaction failed.
-    /// <para>flash 几何或能力查询失败、上报的块几何不可用，或某条擦除事务失败。</para></exception>
+    /// <exception cref="RkdlException">The flash geometry query failed, the reported block geometry is
+    /// unusable, or an erase transaction failed. A failed READ_CAPABILITY does not throw: the query degrades to
+    /// <see cref="RkCapability.None"/> and the erase falls back to per-block commands, like
+    /// <c>CRKDevice::EraseAllBlocks</c> ignoring the query's return value.
+    /// <para>flash 几何查询失败、上报的块几何不可用，或某条擦除事务失败。READ_CAPABILITY 失败不会抛出：
+    /// 查询降级为 <see cref="RkCapability.None"/>，擦除改走逐块命令，与 <c>CRKDevice::EraseAllBlocks</c>
+    /// 忽略该查询返回值一致。</para></exception>
     public int EraseAllFlash(bool forceBlockErase = false, IProgress<long>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         var geometry = RequireFlashGeometry();
-        var capability = ReadCapability();
+        var capability = QueryCapabilityOrNone();
 
         if (!forceBlockErase && (IsEmmcFlash() || capability.DirectLba))
         {
@@ -111,5 +116,28 @@ public sealed partial class RkdlSession
         }
 
         return badBlocks;
+    }
+
+    /// <summary>
+    /// Reads the capability word and degrades to <see cref="RkCapability.None"/> when the query fails, matching
+    /// <c>CRKDevice::EraseAllBlocks</c>, which ignores the return value of <c>ReadCapability</c> and carries on with
+    /// the block-erase strategy.
+    /// <para>读取能力字，并在查询失败时降级为 <see cref="RkCapability.None"/>；这与 <c>CRKDevice::EraseAllBlocks</c>
+    /// 忽略 <c>ReadCapability</c> 返回值并继续执行逐块擦除策略一致。</para>
+    /// </summary>
+    /// <returns>The decoded capability, or <see cref="RkCapability.None"/> when the device did not answer.
+    /// <para>解码后的能力字；设备未应答时为 <see cref="RkCapability.None"/>。</para></returns>
+    private RkCapability QueryCapabilityOrNone()
+    {
+        try
+        {
+            return ReadCapability();
+        }
+        catch (RkdlException ex)
+        {
+            CommTrace.State("rkdl",
+                $"READ_CAPABILITY failed ({ex.Message}); degrading to per-block erase, as the vendor tool does.");
+            return RkCapability.None;
+        }
     }
 }

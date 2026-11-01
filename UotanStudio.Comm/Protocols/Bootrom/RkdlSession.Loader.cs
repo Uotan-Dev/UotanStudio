@@ -52,43 +52,8 @@ public sealed partial class RkdlSession
     /// <para>设备不处于 maskrom 模式、镜像解析失败、任一条目声明的
     /// <c>dwDataDelay</c> 超过 <see cref="RkdlConstants.MaxLoaderDataDelayMs"/>（消息中会引用来自不受信
     /// loader 文件的原始数值，且不会发出任何 vendor 请求），或 vendor 请求写入过短。</para></exception>
-    public int DownloadBootLoader(byte[] loaderImage)
-    {
-        var image = PrepareLoaderImage(loaderImage);
-
-        var total = 0;
-
-        foreach (var entry in image.Entries471)
-        {
-            if (entry.DataSize == 0)
-            {
-                continue;
-            }
-
-            total += DeviceRequest(RkdlConstants.RkdlWIndex471, SliceEntry(loaderImage, entry));
-            if (entry.DataDelay > 0)
-            {
-                Thread.Sleep(checked((int)entry.DataDelay));
-            }
-        }
-
-        foreach (var entry in image.Entries472)
-        {
-            if (entry.DataSize == 0)
-            {
-                continue;
-            }
-
-            total += DeviceRequest(RkdlConstants.RkdlWIndex472, SliceEntry(loaderImage, entry));
-            if (entry.DataDelay > 0)
-            {
-                Thread.Sleep(checked((int)entry.DataDelay));
-            }
-        }
-
-        Thread.Sleep(RkdlConstants.LoaderReenumerationSettleMs);
-        return total;
-    }
+    public Task<int> DownloadBootLoader(byte[] loaderImage)
+        => DownloadBootLoaderAsync(loaderImage, CancellationToken.None);
 
     /// <summary>Asynchronously downloads a complete RKBOOT loader image; see <see cref="DownloadBootLoader(byte[])"/> for the protocol flow, the delay bound, and the settle-window caveats. Every entry delay and the final re-enumeration settle window are cooperative waits on <paramref name="cancellationToken"/>.
     /// <para>异步下载完整的 RKBOOT loader 镜像；协议流程、延时上界与稳定窗口的注意事项见 <see cref="DownloadBootLoader(byte[])"/>。每个条目延时与最终的重枚举稳定窗口都会协作式地 等待 <paramref name="cancellationToken"/>。</para></summary>
@@ -118,7 +83,7 @@ public sealed partial class RkdlSession
                 continue;
             }
 
-            total += DeviceRequest(RkdlConstants.RkdlWIndex471, SliceEntry(loaderImage, entry));
+            total += await DeviceRequestAsync(RkdlConstants.RkdlWIndex471, SliceEntry(loaderImage, entry), cancellationToken).ConfigureAwait(false);
             if (entry.DataDelay > 0)
             {
                 await Task.Delay(checked((int)entry.DataDelay), cancellationToken).ConfigureAwait(false);
@@ -132,7 +97,7 @@ public sealed partial class RkdlSession
                 continue;
             }
 
-            total += DeviceRequest(RkdlConstants.RkdlWIndex472, SliceEntry(loaderImage, entry));
+            total += await DeviceRequestAsync(RkdlConstants.RkdlWIndex472, SliceEntry(loaderImage, entry), cancellationToken).ConfigureAwait(false);
             if (entry.DataDelay > 0)
             {
                 await Task.Delay(checked((int)entry.DataDelay), cancellationToken).ConfigureAwait(false);
@@ -273,9 +238,14 @@ public sealed partial class RkdlSession
     /// <para>调用方给定的字节原样发送，与 <see cref="DownloadBootLoader(byte[])"/> 的条目一致；
     /// 此处不检查 <c>ucRc4Flag</c>。</para></remarks>
     /// <param name="loaderData">The loader image data. <para>loader 镜像数据。</para></param>
+    /// <param name="cancellationToken">Cancellation for the inter-chunk pacing delays.
+    /// <para>分块间隔等待的取消令牌。</para></param>
     /// <returns>The total number of bytes transferred. <para>实际传输的字节总数。</para></returns>
-    public int DownloadBootLoader471(byte[] loaderData)
-        => DeviceRequest(RkdlConstants.RkdlWIndex471, loaderData);
+    /// <exception cref="RkdlException">The device already reports loader mode, the payload is empty or above
+    /// <see cref="RkdlConstants.MaxLoaderSize"/>, or a control transfer was short.
+    /// <para>设备已报告 loader 模式、负载为空或超过 <see cref="RkdlConstants.MaxLoaderSize"/>，或控制传输写入过短。</para></exception>
+    public Task<int> DownloadBootLoader471(byte[] loaderData, CancellationToken cancellationToken = default)
+        => DeviceRequestAsync(RkdlConstants.RkdlWIndex471, loaderData, cancellationToken);
 
     /// <summary>
     /// Downloads the second-stage loader via the 0x0472 vendor request
@@ -286,8 +256,13 @@ public sealed partial class RkdlSession
     /// 帧规则见 <see cref="DownloadBootLoader471"/>。</para>
     /// </summary>
     /// <param name="loaderData">The loader image data. <para>loader 镜像数据。</para></param>
+    /// <param name="cancellationToken">Cancellation for the inter-chunk pacing delays.
+    /// <para>分块间隔等待的取消令牌。</para></param>
     /// <returns>The total number of bytes transferred. <para>实际传输的字节总数。</para></returns>
-    public int DownloadBootLoader472(byte[] loaderData)
-        => DeviceRequest(RkdlConstants.RkdlWIndex472, loaderData);
+    /// <exception cref="RkdlException">The device already reports loader mode, the payload is empty or above
+    /// <see cref="RkdlConstants.MaxLoaderSize"/>, or a control transfer was short.
+    /// <para>设备已报告 loader 模式、负载为空或超过 <see cref="RkdlConstants.MaxLoaderSize"/>，或控制传输写入过短。</para></exception>
+    public Task<int> DownloadBootLoader472(byte[] loaderData, CancellationToken cancellationToken = default)
+        => DeviceRequestAsync(RkdlConstants.RkdlWIndex472, loaderData, cancellationToken);
 
 }

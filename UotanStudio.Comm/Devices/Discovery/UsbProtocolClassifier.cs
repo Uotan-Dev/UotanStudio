@@ -82,8 +82,10 @@ public static class UsbProtocolClassifier
 
     /// <summary>
     /// Maps a bootrom VID/PID pair to <c>edl</c>, <c>mtk</c> or <c>rkdl</c>, covering Qualcomm and
-    /// MediaTek bootrom and download ports plus Rockchip loader ports.
-    /// <para>把 bootrom 的 VID/PID 对映射到 <c>edl</c>、<c>mtk</c> 或 <c>rkdl</c>，覆盖高通与联发科的 bootrom/下载端口以及瑞芯微 loader 端口。</para>
+    /// MediaTek bootrom and download ports plus Rockchip loader ports. Pairs in
+    /// <see cref="RkdlConstants.MscExcludedDevices"/> are rejected first, exactly like the vendor tool's scan.
+    /// <para>把 bootrom 的 VID/PID 对映射到 <c>edl</c>、<c>mtk</c> 或 <c>rkdl</c>，覆盖高通与联发科的 bootrom/下载端口以及瑞芯微 loader 端口。
+    /// 属于 <see cref="RkdlConstants.MscExcludedDevices"/> 的组合会先被拒绝，与厂商工具的扫描一致。</para>
     /// </summary>
     /// <param name="vendorId">
     /// USB vendor id. <para>USB 厂商 ID。</para>
@@ -97,6 +99,11 @@ public static class UsbProtocolClassifier
     /// </returns>
     private static string? ClassifyBootrom(ushort vendorId, ushort? productId)
     {
+        if (productId is ushort presentProduct && RkdlConstants.IsMscExcluded(vendorId, presentProduct))
+        {
+            return null;
+        }
+
         var product = productId ?? 0;
         if (vendorId == QualcommVid &&
             product is 0x9006 or 0x9008 or 0x900E or 0x901D or 0x9025 or 0x9307)

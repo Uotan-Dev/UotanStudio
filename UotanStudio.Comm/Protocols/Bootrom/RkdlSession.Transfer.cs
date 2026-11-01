@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
@@ -69,6 +70,10 @@ public sealed partial class RkdlSession
     /// <para>可选的累计已写出源字节接收器。</para></param>
     /// <param name="cancellationToken">Checked before each chunk; the token does not interrupt an in-flight synchronous bulk transfer.
     /// <para>每个分块前检查；令牌不会打断进行中的同步批量传输。</para></param>
+    /// <param name="subCode">The RWMETHOD byte placed in the command block's reserved byte: <see cref="RkdlRwMethod.Image"/>
+    /// addresses by partition image offset and <see cref="RkdlRwMethod.Lba"/> by logical block address.
+    /// <para>写入命令块保留字节的 RWMETHOD 值：<see cref="RkdlRwMethod.Image"/> 按分区镜像偏移寻址，
+    /// <see cref="RkdlRwMethod.Lba"/> 按逻辑块地址寻址。</para></param>
     /// <returns>The number of source bytes transferred, equal to <paramref name="length"/> on success.
     /// <para>成功时转出的源字节数，等于 <paramref name="length"/>。</para></returns>
     /// <exception cref="RkdlException">The address is out of range, the byte length rounded up to 512-byte sectors leaves the addressed range beyond the device geometry, the device geometry is unusable because READ_FLASH_INFO reported an invalid sector count (<see cref="RkdlError.FlashInfoFailed"/>), a bulk write was short, or a CSW reported failure.
@@ -79,7 +84,29 @@ public sealed partial class RkdlSession
     /// <para>流在读满 <paramref name="length"/> 字节前结束。</para></exception>
     /// <exception cref="ObjectDisposedException">The session was disposed.
     /// <para>会话已被释放。</para></exception>
-    public long WriteLBA(long address, Stream dataStream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+    public long WriteLBA(long address, Stream dataStream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default, byte subCode = RkdlRwMethod.Image)
+        => WriteLbaCore(address, dataStream, length, progress, cancellationToken, subCode, maskromLoaderUpgrade: false);
+
+    /// <summary>
+    /// Writes data to flash through WRITE_LBA transactions, optionally as the mask ROM ID-block write the loader
+    /// upgrade performs.
+    /// <para>通过 WRITE_LBA 事务把数据写入 flash；可选择作为 loader 升级在 Mask ROM 中执行的 ID block 写入。</para>
+    /// </summary>
+    /// <param name="address">The start LBA. <para>起始 LBA。</para></param>
+    /// <param name="dataStream">The source stream read sequentially. <para>被顺序读取的源流。</para></param>
+    /// <param name="length">Total bytes to transfer. <para>需转出的总字节数。</para></param>
+    /// <param name="progress">Optional receiver of cumulative source bytes written. <para>可选的累计已写出源字节接收器。</para></param>
+    /// <param name="cancellationToken">Checked before each chunk. <para>每个分块前检查。</para></param>
+    /// <param name="subCode">The RWMETHOD byte. <para>RWMETHOD 值。</para></param>
+    /// <param name="maskromLoaderUpgrade"><see langword="true"/> only for the loader-upgrade ID-block write: it bypasses
+    /// the mask ROM command gate and the flash-geometry range check, because mask ROM answers this one WRITE_LBA for the
+    /// fixed ID-block area before any loader reports a geometry. <para>仅用于 loader 升级的 ID block 写入：它绕过 Mask ROM
+    /// 命令门与 flash 几何范围校验，因为 Mask ROM 在没有任何 loader 报告几何之前只为固定 ID block 区域应答这一条 WRITE_LBA。</para></param>
+    /// <returns>The number of source bytes transferred. <para>转出的源字节数。</para></returns>
+    /// <exception cref="RkdlException">The address is out of range, the range leaves the device geometry, a bulk write
+    /// was short, or a CSW reported failure. <para>地址越界、范围超出设备几何、批量写入过短，或 CSW 报告失败。</para></exception>
+    private long WriteLbaCore(long address, Stream dataStream, long length, IProgress<long>? progress,
+        CancellationToken cancellationToken, byte subCode, bool maskromLoaderUpgrade)
     {
         ThrowIfDisposed();
         if (address is < 0 or > uint.MaxValue)
@@ -93,7 +120,10 @@ public sealed partial class RkdlSession
         }
 
         var requiredSectors = length <= 0 ? 0L : checked((length - 1) / RkdlConstants.SectorSize + 1);
-        ValidateLbaRange(address, requiredSectors);
+        if (!maskromLoaderUpgrade)
+        {
+            ValidateLbaRange(address, requiredSectors);
+        }
 
         var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(RkdlConstants.TransferChunkSize);
         try
@@ -129,8 +159,8 @@ public sealed partial class RkdlSession
                 var sectorCount = sectorBytes / RkdlConstants.SectorSize;
 
                 var cbw = new RkdlCbw(RkdlCommand.WriteLba, RkdlFrame.DirectionOut, (uint)sectorBytes,
-                    RkdlFrame.CbwcbLengthLong, address: (uint)currentSector, sectorLength: (ushort)sectorCount);
-                WriteCbw(cbw);
+                    RkdlFrame.CbwcbLengthLong, subCode: subCode, address: (uint)currentSector, sectorLength: (ushort)sectorCount);
+                WriteCbw(cbw, maskromLoaderUpgrade);
 
                 var written = Transport.Write(buffer, 0, sectorBytes, _timeoutMs);
                 if (written != sectorBytes)
@@ -165,6 +195,10 @@ public sealed partial class RkdlSession
     /// <para>可选的累计写入输出流字节数接收器。</para></param>
     /// <param name="cancellationToken">Checked before each chunk; the token does not interrupt an in-flight synchronous bulk transfer.
     /// <para>每个分块前检查；令牌不会打断进行中的同步批量传输。</para></param>
+    /// <param name="subCode">The RWMETHOD byte placed in the command block's reserved byte: <see cref="RkdlRwMethod.Image"/>
+    /// addresses by partition image offset and <see cref="RkdlRwMethod.Lba"/> by logical block address.
+    /// <para>写入命令块保留字节的 RWMETHOD 值：<see cref="RkdlRwMethod.Image"/> 按分区镜像偏移寻址，
+    /// <see cref="RkdlRwMethod.Lba"/> 按逻辑块地址寻址。</para></param>
     /// <returns>The number of bytes written to <paramref name="outputStream"/>, equal to <paramref name="length"/> on success.
     /// <para>写入 <paramref name="outputStream"/> 的字节数， 成功时等于 <paramref name="length"/>。</para></returns>
     /// <exception cref="RkdlException">The address is out of range, the byte length rounded up to 512-byte sectors leaves the addressed range beyond the device geometry, the device geometry is unusable because READ_FLASH_INFO reported an invalid sector count (<see cref="RkdlError.FlashInfoFailed"/>), the device signaled EOF early, or a CSW reported failure.
@@ -173,7 +207,7 @@ public sealed partial class RkdlSession
     /// <para><paramref name="outputStream"/> 为 <c>null</c>。</para></exception>
     /// <exception cref="ObjectDisposedException">The session was disposed.
     /// <para>会话已被释放。</para></exception>
-    public long ReadLBA(long address, Stream outputStream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+    public long ReadLBA(long address, Stream outputStream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default, byte subCode = RkdlRwMethod.Image)
     {
         ThrowIfDisposed();
         if (address is < 0 or > uint.MaxValue)
@@ -202,7 +236,7 @@ public sealed partial class RkdlSession
                 var sectorCount = sectorBytes / RkdlConstants.SectorSize;
 
                 var cbw = new RkdlCbw(RkdlCommand.ReadLba, RkdlFrame.DirectionIn, (uint)sectorBytes,
-                    RkdlFrame.CbwcbLengthLong, address: (uint)currentSector, sectorLength: (ushort)sectorCount);
+                    RkdlFrame.CbwcbLengthLong, subCode: subCode, address: (uint)currentSector, sectorLength: (ushort)sectorCount);
                 WriteCbw(cbw);
 
                 var n = 0;
@@ -242,10 +276,23 @@ public sealed partial class RkdlSession
     /// </summary>
     /// <param name="wIndex">The vendor request wIndex (0x0471 or 0x0472). <para>vendor 请求 wIndex（0x0471 或 0x0472）。</para></param>
     /// <param name="loaderData">The loader image data. <para>loader 镜像数据。</para></param>
+    /// <param name="cancellationToken">Cancellation for the inter-chunk pacing delays.
+    /// <para>分块间隔等待的取消令牌。</para></param>
     /// <returns>The total number of bytes transferred. <para>实际传输的字节总数。</para></returns>
-    private int DeviceRequest(ushort wIndex, byte[] loaderData)
+    private async Task<int> DeviceRequestAsync(ushort wIndex, byte[] loaderData, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
+        if (Mode == RkdlDeviceMode.Loader)
+        {
+            throw new RkdlException(RkdlError.NotSupported,
+                "The device already reports loader mode; the 0x0471/0x0472 download requests are mask ROM only.");
+        }
+
+        if (wIndex is not RkdlConstants.RkdlWIndex471 and not RkdlConstants.RkdlWIndex472)
+        {
+            throw new RkdlException(RkdlError.InvalidParameter, $"Unsupported loader download request 0x{wIndex:X4}.");
+        }
+
         if (loaderData == null || loaderData.Length == 0)
         {
             throw new RkdlException(RkdlError.InvalidParameter, "Loader data cannot be null or empty.");
@@ -285,6 +332,7 @@ public sealed partial class RkdlSession
         while (offset < totalLength)
         {
             var chunk = Math.Min(RkdlConstants.LoaderChunkSize, totalLength - offset);
+            await Task.Delay(RkdlConstants.LoaderChunkGapMs, cancellationToken).ConfigureAwait(false);
             var setupPacket = new UsbSetupPacket
             {
                 RequestType = 0x40,
@@ -293,12 +341,22 @@ public sealed partial class RkdlSession
                 Index = wIndex,
                 Length = (ushort)chunk
             };
-            var sent = usb.ControlTransfer(setupPacket, buffer, offset, chunk, _timeoutMs);
+            int sent;
+            try
+            {
+                sent = usb.ControlTransfer(setupPacket, buffer, offset, chunk, _timeoutMs);
+            }
+            catch (Exception error) when (error is Win32Exception or NotSupportedException or ObjectDisposedException)
+            {
+                CommTrace.Error("rkdl", $"Loader vendor request 0x{wIndex:X4} chunk at {offset} failed: {error.Message}");
+                throw new RkdlException(RkdlError.TransferFailed, BuildVendorRequestFailureMessage(wIndex, offset), error);
+            }
+
             CommTrace.Payload("rkdl", $"vendor 0x0C wIndex 0x{wIndex:X4} chunk at {offset}", buffer.AsSpan(offset, chunk));
             if (sent != chunk)
             {
                 CommTrace.Error("rkdl", $"Loader vendor request 0x{wIndex:X4} wrote {sent} of {chunk} bytes at offset {offset}.");
-                throw new RkdlException(RkdlError.TransferFailed, $"Loader vendor request 0x{wIndex:X4} failed: {sent}/{chunk} bytes.");
+                throw new RkdlException(RkdlError.TransferFailed, BuildVendorRequestFailureMessage(wIndex, offset));
             }
 
             offset += sent;
@@ -306,6 +364,7 @@ public sealed partial class RkdlSession
 
         if (sendPadPacket)
         {
+            await Task.Delay(RkdlConstants.LoaderChunkGapMs, cancellationToken).ConfigureAwait(false);
             var zero = new byte[1];
             var setupPacket = new UsbSetupPacket
             {
@@ -315,15 +374,37 @@ public sealed partial class RkdlSession
                 Index = wIndex,
                 Length = 1
             };
-            var sent = usb.ControlTransfer(setupPacket, zero, 0, 1, _timeoutMs);
-            if (sent != 1)
+            int sent;
+            try
             {
-                throw new RkdlException(RkdlError.TransferFailed, $"Loader padding packet failed: {sent} bytes.");
+                sent = usb.ControlTransfer(setupPacket, zero, 0, 1, _timeoutMs);
+            }
+            catch (Exception error) when (error is Win32Exception or NotSupportedException or ObjectDisposedException)
+            {
+                CommTrace.Error("rkdl", $"Loader padding packet for 0x{wIndex:X4} failed: {error.Message}");
+                throw new RkdlException(RkdlError.TransferFailed, BuildVendorRequestFailureMessage(wIndex, offset), error);
+            }
+
+            if (sent is not 0 and not 1)
+            {
+                throw new RkdlException(RkdlError.TransferFailed, BuildVendorRequestFailureMessage(wIndex, offset));
             }
         }
 
         return totalLength;
     }
+
+    /// <summary>
+    /// Builds the failure message for a 0x0471/0x0472 vendor-request chunk, stating that a maskrom port
+    /// whose boot-download control transfer fails or times out must re-enter maskrom before any retry
+    /// can succeed.
+    /// <para>构建 0x0471/0x0472 vendor 请求分块的失败消息，说明 boot 下载控制传输失败或超时的 maskrom
+    /// 端口必须先重新进入 maskrom，任何重试才可能成功。</para>
+    /// </summary>
+    private static string BuildVendorRequestFailureMessage(ushort wIndex, int offset) =>
+        $"Loader vendor request 0x{wIndex:X4} failed at offset {offset}; the maskrom port did not accept the boot download. " +
+        "Re-enter maskrom mode on the board (power-cycle or re-trigger maskrom) before retrying. " +
+        $"Maskrom 端口未接受 boot 下载（0x{wIndex:X4}，偏移 {offset}），请先让板子重新进入 Maskrom（重新上电或重新触发 Maskrom）再重试。";
 
     /// <summary>
     /// Runs a data-in CBW/CSW transaction: writes the CBW, reads the data phase, reads and
@@ -335,8 +416,12 @@ public sealed partial class RkdlSession
     /// <param name="cbwcbLength">The CBWCB length (0x06 or 0x0A). <para>CBWCB 长度（0x06 或 0x0A）。</para></param>
     /// <param name="readBufferSize">The size of the read buffer. <para>读取缓冲区大小。</para></param>
     /// <param name="requiredMinimum">The minimum number of data bytes required. <para>所需的最小数据字节数。</para></param>
+    /// <param name="timeoutMs">Optional I/O timeout for both the data phase and the CSW, overriding the session
+    /// timeout; READ_FLASH_INFO uses its own 5000 ms budget this way. <para>数据阶段与 CSW 的可选 I/O 超时，覆盖会话超时；
+    /// READ_FLASH_INFO 正是用这种方式取得自己的 5000 毫秒预算。</para></param>
     /// <returns>The data bytes read from the device. <para>从设备读取的数据字节。</para></returns>
-    private byte[] ReadDataCommand(RkdlCommand opcode, uint transferLength, byte cbwcbLength, int readBufferSize, int requiredMinimum)
+    private byte[] ReadDataCommand(RkdlCommand opcode, uint transferLength, byte cbwcbLength, int readBufferSize, int requiredMinimum,
+        int? timeoutMs = null)
     {
         ThrowIfDisposed();
         var cbw = new RkdlCbw(opcode, RkdlFrame.DirectionIn, transferLength, cbwcbLength);
@@ -349,7 +434,7 @@ public sealed partial class RkdlSession
         while (n < readBufferSize)
         {
             var requested = readBufferSize - n;
-            var chunk = Transport.Read(buffer, n, requested, _timeoutMs);
+            var chunk = Transport.Read(buffer, n, requested, timeoutMs ?? _timeoutMs);
             if (chunk <= 0)
             {
                 break;
@@ -369,7 +454,7 @@ public sealed partial class RkdlSession
             throw new RkdlException(RkdlError.ReadFailed, $"Short data read: {n} < {requiredMinimum}.");
         }
 
-        var csw = ReadCsw(cbw.Tag);
+        var csw = ReadCsw(cbw.Tag, timeoutMs: timeoutMs);
         if (!csw.IsSuccess)
         {
             CommTrace.Error("rkdl", $"CBW 0x{(byte)opcode:X2} reported CSW status {csw.Status}.");
@@ -391,11 +476,14 @@ public sealed partial class RkdlSession
     /// <para>将 CBW 写入 bulk OUT 端点，并在设备不处于 loader 模式时先行拒绝。</para>
     /// </summary>
     /// <param name="cbw">The CBW to write. <para>要写入的 CBW。</para></param>
-    /// <exception cref="RkdlException">The device reports mask ROM mode, or reports no stage at all, so no bulk command can
-    /// be answered. <para>设备报告 Mask ROM 模式，或完全未报告阶段，因而无法应答任何批量命令。</para></exception>
-    private void WriteCbw(RkdlCbw cbw)
+    /// <param name="maskromLoaderUpgrade">Allows this one WRITE_LBA while the device reports mask ROM, which is how
+    /// the loader-upgrade path stores the ID block. <para>在设备报告 Mask ROM 时放行这一条 WRITE_LBA，loader 升级路径
+    /// 正是借此写入 ID block。</para></param>
+    /// <exception cref="RkdlException">The device reports mask ROM mode, which answers no storage command.
+    /// <para>设备报告 Mask ROM 模式，无法应答任何存储命令。</para></exception>
+    private void WriteCbw(RkdlCbw cbw, bool maskromLoaderUpgrade = false)
     {
-        EnsureBulkCommandAllowed(cbw);
+        EnsureBulkCommandAllowed(cbw, maskromLoaderUpgrade);
         var bytes = cbw.ToBytes();
         CommTrace.Payload("rkdl", "CBW out", bytes);
         var written = Transport.Write(bytes, 0, bytes.Length, _timeoutMs);
@@ -407,21 +495,29 @@ public sealed partial class RkdlSession
     }
 
     /// <summary>
-    /// Rejects a bulk command that mask ROM cannot answer, and every bulk command whose stage cannot be
-    /// confirmed. Mask ROM implements the device-information and SDRAM commands only, so a storage command
-    /// sent there waits for a CSW until the transfer times out or the device stalls the pipe; a device whose
-    /// descriptor carried no <c>bcdUSB</c> value may still be in mask ROM, so it gets the same refusal instead
-    /// of a raw USB error.
-    /// <para>拒绝 Mask ROM 无法应答的批量命令，以及无法确认阶段的设备的所有批量命令。Mask ROM 只实现设备信息与
-    /// SDRAM 命令，因此向它发送存储命令会一直等待 CSW 直到传输超时或设备停顿管道；描述符未携带 <c>bcdUSB</c>
-    /// 取值的设备可能仍处于 Mask ROM，因此同样先行拒绝，而不是抛出原始 USB 错误。</para>
+    /// Rejects a bulk command that mask ROM cannot answer. Mask ROM implements the device-information and
+    /// SDRAM commands only, so a storage command sent there waits for a CSW until the transfer times out or
+    /// the device stalls the pipe. A device whose descriptor carried no <c>bcdUSB</c> value is not refused:
+    /// the official download tool sends the same commands in both stages, so the device's answers stay the
+    /// only gate.
+    /// <para>拒绝 Mask ROM 无法应答的批量命令。Mask ROM 只实现设备信息与 SDRAM 命令，因此向它发送存储命令会一直
+    /// 等待 CSW 直到传输超时或设备停顿管道。描述符未携带 <c>bcdUSB</c> 取值的设备不会被拒绝：官方下载工具在两个
+    /// 阶段发送同样的命令，设备的应答本身就是唯一的门。</para>
     /// </summary>
     /// <param name="cbw">The CBW about to be written. <para>即将写入的 CBW。</para></param>
-    /// <exception cref="RkdlException">The device reports mask ROM mode or an unconfirmed stage and the command
-    /// needs a loader. <para>设备报告 Mask ROM 模式或阶段未确认，且该命令需要 loader。</para></exception>
-    private void EnsureBulkCommandAllowed(RkdlCbw cbw)
+    /// <param name="maskromLoaderUpgrade">Allows <see cref="RkdlCommand.WriteLba"/> in mask ROM for the loader-upgrade
+    /// ID-block write. Every other storage command still needs a loader. <para>为 loader 升级的 ID block 写入在 Mask ROM
+    /// 中放行 <see cref="RkdlCommand.WriteLba"/>；其余存储命令仍需要 loader。</para></param>
+    /// <exception cref="RkdlException">The device reports mask ROM mode and the command needs a loader.
+    /// <para>设备报告 Mask ROM 模式且该命令需要 loader。</para></exception>
+    private void EnsureBulkCommandAllowed(RkdlCbw cbw, bool maskromLoaderUpgrade = false)
     {
         if (IsMaskromCommand(cbw.OperationCode))
+        {
+            return;
+        }
+
+        if (maskromLoaderUpgrade && cbw.OperationCode == (byte)RkdlCommand.WriteLba)
         {
             return;
         }
@@ -432,15 +528,6 @@ public sealed partial class RkdlSession
                 $"Refused CBW 0x{cbw.OperationCode:X2}: the device is in mask ROM mode, which answers information commands only, and no loader is running.");
             throw new RkdlException(RkdlError.NotSupported,
                 $"The device is in mask ROM mode, which answers no 0x{cbw.OperationCode:X2} storage command; download a loader first.");
-        }
-
-        if (Mode == RkdlDeviceMode.Unknown)
-        {
-            CommTrace.Error("rkdl",
-                $"Refused CBW 0x{cbw.OperationCode:X2}: the device descriptor carried no bcdUSB value, so the boot ROM stage cannot be confirmed.");
-            throw new RkdlException(RkdlError.NotSupported,
-                "The device descriptor carried no bcdUSB value, so the boot ROM stage cannot be confirmed; " +
-                $"re-scan the device before sending 0x{cbw.OperationCode:X2} storage commands.");
         }
     }
 
@@ -476,15 +563,16 @@ public sealed partial class RkdlSession
     /// </summary>
     /// <param name="tag">The CBW tag the CSW must echo. <para>CSW 必须回显的 CBW 标签。</para></param>
     /// <param name="recovery">Whether to drain and retry on a mismatch. <para>不匹配时是否清空并重试。</para></param>
+    /// <param name="timeoutMs">Optional I/O timeout overriding the session timeout. <para>可选 I/O 超时，覆盖会话超时。</para></param>
     /// <returns>The validated CSW. <para>校验通过的 CSW。</para></returns>
-    private RkdlCsw ReadCsw(uint tag, bool recovery = false)
+    private RkdlCsw ReadCsw(uint tag, bool recovery = false, int? timeoutMs = null)
     {
         var buffer = new byte[RkdlFrame.CswLength];
         var tryCount = recovery ? 3 : 1;
         var totalRead = 0;
         while (tryCount > 0 && totalRead < 16 * 1024)
         {
-            var n = Transport.Read(buffer, 0, buffer.Length, _timeoutMs);
+            var n = Transport.Read(buffer, 0, buffer.Length, timeoutMs ?? _timeoutMs);
             totalRead += n;
             if (n == buffer.Length && RkdlCsw.TryParse(buffer, tag, out var csw))
             {
