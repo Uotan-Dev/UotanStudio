@@ -44,6 +44,13 @@ public partial class DeviceViewModel
     public bool CanScreenMirror => SelectedDevice?.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc;
 
     /// <summary>
+    /// Whether device file browsing can be opened (ADB or HDC).
+    /// <para>是否可打开设备文件浏览（ADB 或 HDC）。</para>
+    /// </summary>
+    public bool CanOpenDeviceFiles => SelectedDevice?.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc;
+
+
+    /// <summary>
     /// Whether the iOS tools (SSH channel, crash-log export) apply to the selected device.
     /// <para>选中设备是否适用 iOS 工具（SSH 通道、崩溃日志导出）。</para>
     /// </summary>
@@ -163,6 +170,26 @@ public partial class DeviceViewModel
 
         WeakReferenceMessenger.Default.Send(new OpenScreenMirrorRequestMessage { Serial = device.Serial });
     }
+
+    /// <summary>
+    /// Opens the selected device's file system in the multi-column browser.
+    /// <para>在多列文件浏览器中打开选中的设备文件系统。</para>
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanOpenDeviceFiles))]
+    private void OpenDeviceFiles()
+    {
+        var device = SelectedDevice;
+        if (device is null)
+        {
+            return;
+        }
+
+        WeakReferenceMessenger.Default.Send(new OpenCompareRequestMessage
+        {
+            Device = device.Device
+        });
+    }
+
 
     /// <summary>
     /// Opens the selected device's interactive shell in the managed terminal dock.

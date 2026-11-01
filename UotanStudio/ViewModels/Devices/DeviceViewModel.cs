@@ -126,6 +126,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanQuickFlash));
         OnPropertyChanged(nameof(CanBackupRestore));
         OnPropertyChanged(nameof(CanScreenMirror));
+        OnPropertyChanged(nameof(CanOpenDeviceFiles));
         OnPropertyChanged(nameof(CanManageSelectedConnection));
         ConnectCommand.NotifyCanExecuteChanged();
         DisconnectCommand.NotifyCanExecuteChanged();
@@ -136,6 +137,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         BackupPartitionCommand.NotifyCanExecuteChanged();
         RestorePartitionCommand.NotifyCanExecuteChanged();
         ScreenMirrorCommand.NotifyCanExecuteChanged();
+        OpenDeviceFilesCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>

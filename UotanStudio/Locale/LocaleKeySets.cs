@@ -3258,6 +3258,7 @@ internal static class LocaleKeySets
         "Device_EmptyHint",
         "Device_OpenAdbShell",
         "Device_ScreenMirror",
+        "Device_OpenDeviceFiles",
         "Device_FastbootReadInfo",
         "Device_QuickFlash",
         "Device_DetailPlaceholder",

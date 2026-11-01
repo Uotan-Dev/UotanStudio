@@ -207,6 +207,9 @@
   <data name="Device_ScreenMirror" xml:space="preserve">
     <value>屏幕投屏 (scrcpy)</value>
   </data>
+  <data name="Device_OpenDeviceFiles" xml:space="preserve">
+    <value>在多列文件浏览器中打开设备文件</value>
+  </data>
   <data name="Device_FastbootReadInfo" xml:space="preserve">
     <value>读取 Fastboot 设备信息</value>
   </data>

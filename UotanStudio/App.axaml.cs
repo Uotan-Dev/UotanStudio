@@ -353,7 +353,15 @@ public partial class App : Application
     private async void OnOpenCompare(object recipient, OpenCompareRequestMessage message)
         => await RunCompareRequestAsync(
             "Open compare failed",
-            compare => message.Path is { } path ? compare.AddComparisonPathAsync(path) : Task.CompletedTask,
+            compare =>
+            {
+                if (message.Device is { } device)
+                {
+                    return compare.AddDevicePathAsync(device, message.Path);
+                }
+
+                return message.Path is { } path ? compare.AddComparisonPathAsync(path) : Task.CompletedTask;
+            },
             openInNewTab: message.OpenInNewTab);
 
     /// <summary>

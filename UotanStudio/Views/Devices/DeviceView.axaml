@@ -165,6 +165,11 @@
                                 ToolTip.Tip="{DynamicResource Device_ScreenMirror}">
                             <avalonia:Cast Width="16" Height="16" />
                         </Button>
+                        <Button Classes="DeviceIconButton"
+                                Command="{Binding OpenDeviceFilesCommand}"
+                                ToolTip.Tip="{DynamicResource Device_OpenDeviceFiles}">
+                            <avalonia:FolderOpen Width="16" Height="16" />
+                        </Button>
                     </StackPanel>
                     <TextBlock x:Name="DeviceStatusText" Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding StatusText}"
                                HorizontalAlignment="Right"

@@ -207,6 +207,9 @@
   <data name="Device_ScreenMirror" xml:space="preserve">
     <value>Screen Mirror (scrcpy)</value>
   </data>
+  <data name="Device_OpenDeviceFiles" xml:space="preserve">
+    <value>Open Device Files (Multi-Column Browser)</value>
+  </data>
   <data name="Device_FastbootReadInfo" xml:space="preserve">
     <value>Read Fastboot Device Info</value>
   </data>

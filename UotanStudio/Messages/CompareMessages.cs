@@ -1,3 +1,5 @@
+using UotanStudio.Services.Devices;
+
 namespace UotanStudio.Messages;
 
 /// <summary>
@@ -6,6 +8,12 @@ namespace UotanStudio.Messages;
 /// </summary>
 public sealed class OpenCompareRequestMessage
 {
+    /// <summary>
+    /// The target device to browse in the compare document.
+    /// <para>在对比文档中浏览的目标设备。</para>
+    /// </summary>
+    public DetectedDevice? Device { get; init; }
+
     /// <summary>
     /// The path the request selects for the compare document.
     /// <para>请求为对比文档选中的路径。</para>
