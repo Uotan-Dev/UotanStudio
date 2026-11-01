@@ -3,7 +3,6 @@ using System.Text;
 using UotanStudio.Hash.RockchipCrc32;
 using UotanStudio.Services;
 using UotanStudio.Services.Flash;
-using UotanStudio.Services.Logging;
 using UotanStudio.ViewModels.Flash;
 using Xunit;
 
@@ -38,7 +37,6 @@ public sealed class FlashRockchipFileRowTests : IDisposable
         await model.SpecialFileRowCheck;
 
         var loaderRow = Assert.Single(model.Partitions, row => row.Command == "loader");
-        Assert.True(loaderRow.CanSelect);
         Assert.Equal(loader, model.EffectiveRkLoaderPath);
         Assert.Equal(LanguageService.Instance.GetString("Flash_RkLoaderValid"), loaderRow.StatusText);
         Assert.False(FlashViewModel.IsWritableEntry(loaderRow));
@@ -58,7 +56,6 @@ public sealed class FlashRockchipFileRowTests : IDisposable
         await model.SpecialFileRowCheck;
 
         var loaderRow = Assert.Single(model.Partitions, row => row.Command == "loader");
-        Assert.True(loaderRow.CanSelect);
         Assert.Equal(LanguageService.Instance.GetString("Flash_RkLoaderInvalidStatus"), loaderRow.StatusText);
     }
 
@@ -96,7 +93,6 @@ public sealed class FlashRockchipFileRowTests : IDisposable
         await model.ImportRkConfigAsync(config);
 
         var parameterRow = Assert.Single(model.Partitions, row => row.Command == "parameter");
-        Assert.True(parameterRow.CanSelect);
         Assert.Equal(string.Format(System.Globalization.CultureInfo.InvariantCulture,
             LanguageService.Instance.GetString("Flash_RkParameterValid"), 2), parameterRow.StatusText);
         Assert.False(FlashViewModel.IsWritableEntry(parameterRow));
@@ -141,6 +137,39 @@ public sealed class FlashRockchipFileRowTests : IDisposable
     }
 
     [Fact]
+    public async Task ImportRkConfigAsync_MissingLoaderFile_ReportsTheMissingFileOnce()
+    {
+        var missing = Path.Combine(_root, "MiniLoaderAll.bin");
+        var config = await WriteConfigAsync("missing-loader.cfg",
+            new RockchipConfigEntry { Name = RockchipConfigFile.LoaderRowName, Path = missing, Selected = true },
+            new RockchipConfigEntry { Name = "boot", Path = string.Empty, Selected = true });
+        var model = new FlashViewModel(FlashService.Default, LanguageService.Instance, new RecordingUnifiedLog());
+
+        await model.ImportRkConfigAsync(config);
+        await model.SpecialFileRowCheck;
+        model.FlushPendingLog();
+
+        Assert.Equal(1, CountReportedLines(model.LogText, LanguageService.Instance.GetString("Flash_RkLoaderMissing")));
+    }
+
+    [Fact]
+    public async Task ImportRkConfigAsync_ValidLoaderFile_ReportsTheAcceptedLoaderOnce()
+    {
+        var loader = Path.Combine(_root, "MiniLoaderAll.bin");
+        await File.WriteAllBytesAsync(loader, BuildLoader(), TestContext.Current.CancellationToken);
+        var config = await WriteConfigAsync("single-verdict.cfg",
+            new RockchipConfigEntry { Name = RockchipConfigFile.LoaderRowName, Path = loader, Selected = true },
+            new RockchipConfigEntry { Name = "boot", Path = string.Empty, Selected = true });
+        var model = new FlashViewModel(FlashService.Default, LanguageService.Instance, new RecordingUnifiedLog());
+
+        await model.ImportRkConfigAsync(config);
+        await model.SpecialFileRowCheck;
+        model.FlushPendingLog();
+
+        Assert.Equal(1, CountReportedLines(model.LogText, LanguageService.Instance.GetString("Flash_RkLoaderChecked")));
+    }
+
+    [Fact]
     public void IsWritableEntry_ImageAndContainerRows_StayWritable()
     {
         Assert.True(FlashViewModel.IsWritableEntry(new FlashPartitionEntry { Command = "flash" }));
@@ -157,6 +186,12 @@ public sealed class FlashRockchipFileRowTests : IDisposable
         await File.WriteAllTextAsync(path, await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken),
             TestContext.Current.CancellationToken);
         return path;
+    }
+
+    private static int CountReportedLines(string log, string template)
+    {
+        var marker = template.Split("{0}")[0];
+        return log.Split('\n').Count(line => line.Contains(marker, StringComparison.Ordinal));
     }
 
     private static byte[] BuildLoader()

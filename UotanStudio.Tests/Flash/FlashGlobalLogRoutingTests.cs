@@ -1,7 +1,6 @@
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Services;
 using UotanStudio.Services.Flash;
-using UotanStudio.Services.Logging;
 using UotanStudio.ViewModels.Flash;
 using Xunit;
 
@@ -103,11 +102,9 @@ public sealed class FlashGlobalLogRoutingTests
             Assert.Equal(model.Partitions, model.VisiblePartitions);
             var bootRow = Assert.Single(model.Partitions, row => row.Name == "boot");
             Assert.Equal("flash", bootRow.Command);
-            Assert.True(bootRow.CanSelect);
             Assert.Null(bootRow.Step);
             Assert.Equal("loader", model.Partitions[0].Command);
             Assert.Equal(loader, model.Partitions[0].FilePath);
-            Assert.True(model.Partitions[0].CanSelect);
         }
         finally
         {

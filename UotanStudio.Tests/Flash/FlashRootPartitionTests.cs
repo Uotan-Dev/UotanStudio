@@ -72,8 +72,7 @@ public sealed class FlashRootPartitionTests
         {
             Name = "boot",
             Step = new FlashStep("reboot", "boot"),
-            IsSelected = true,
-            CanSelect = true
+            IsSelected = true
         };
 
         Assert.Null(FlashViewModel.FindRootPartitionEntry([reboot], "boot"));
@@ -82,7 +81,6 @@ public sealed class FlashRootPartitionTests
     private static FlashPartitionEntry Row(string name) => new()
     {
         Name = name,
-        IsSelected = true,
-        CanSelect = true
+        IsSelected = true
     };
 }

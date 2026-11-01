@@ -48,13 +48,6 @@ public sealed partial class FlashPartitionEntry : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
-    /// <summary>
-    /// Whether the row can be selected; rows without an image stay disabled so the flash flow never gets a no-op.
-    /// <para>是否允许勾选；没有对应镜像的条目保持不可选，避免把空操作交给刷写流程。</para>
-    /// </summary>
-    [ObservableProperty]
-    private bool _canSelect = true;
-
     /// <summary>The fastboot command used for this partition. <para>该分区使用的 fastboot 命令。</para></summary>
     [ObservableProperty]
     private string _command = string.Empty;
@@ -293,10 +286,6 @@ public sealed partial class FlashViewModel : ObservableObject
     [ObservableProperty]
     private string _overallText = string.Empty;
 
-    /// <summary>The selected device's description; a placeholder when nothing is selected. <para>当前选中设备的描述文本，未选中时显示占位提示。</para></summary>
-    [ObservableProperty]
-    private string _selectedDeviceText = string.Empty;
-
     /// <summary>Whether the page is running an operation that changes the device or the list state. <para>页面是否正在执行会改变设备或列表状态的操作。</para></summary>
     [ObservableProperty]
     private bool _isBusy;
@@ -315,10 +304,7 @@ public sealed partial class FlashViewModel : ObservableObject
         {
             foreach (var entry in VisiblePartitions)
             {
-                if (entry.CanSelect)
-                {
-                    entry.IsSelected = value;
-                }
+                entry.IsSelected = value;
             }
         }
         finally
@@ -501,13 +487,13 @@ public sealed partial class FlashViewModel : ObservableObject
         if (e.PropertyName == nameof(FlashPartitionEntry.IsSelected))
         {
             UpdateSelectionState();
-            if (sender is FlashPartitionEntry { IsSelected: true, CanSelect: true } selected)
+            if (sender is FlashPartitionEntry { IsSelected: true } selected)
             {
                 OnEntrySelected(selected);
             }
         }
         else if (e.PropertyName is nameof(FlashPartitionEntry.Command) or nameof(FlashPartitionEntry.FilePath) &&
-            sender is FlashPartitionEntry { CanSelect: true } edited)
+            sender is FlashPartitionEntry edited)
         {
             UpdateRowValidityText(edited);
         }
@@ -552,6 +538,14 @@ public sealed partial class FlashViewModel : ObservableObject
                 return;
             }
 
+            // 行内选文件由选择器自己检查一次；抑制这次属性变化触发的重查，同一次动作才不会写出两行相同结论。
+            // The in-row picker checks the file itself, so the re-check this property change would start is
+            // suppressed; one action never reports the same verdict twice.
+            if (_suppressSpecialFileRowCheck)
+            {
+                return;
+            }
+
             UpdateSpecialFileRowStatus(entry);
             return;
         }
@@ -576,8 +570,7 @@ public sealed partial class FlashViewModel : ObservableObject
     {
         SelectedCount = Partitions.Count(entry => entry.IsSelected);
         HasSelectedPartitions = SelectedCount > 0;
-        var selectable = VisiblePartitions.Where(entry => entry.CanSelect).ToList();
-        var allVisibleSelected = selectable.Count > 0 && selectable.All(entry => entry.IsSelected);
+        var allVisibleSelected = VisiblePartitions.Count > 0 && VisiblePartitions.All(entry => entry.IsSelected);
         _updatingSelectAll = true;
         try
         {
