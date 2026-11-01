@@ -44,4 +44,13 @@ public sealed record RkdlLoaderTransitionOffer
     /// bound of 1 millisecond through 24 hours.
     /// <para>默认取 <see cref="RkdlConstants.LoaderRelinkTimeoutMs"/>，与控制器 1 毫秒至 24 小时的约束一致。</para></value>
     public TimeSpan Timeout { get; init; } = TimeSpan.FromMilliseconds(RkdlConstants.LoaderRelinkTimeoutMs);
+
+    /// <summary>
+    /// Gets the previous device node's stable hub chain captured while that node was still alive, when the
+    /// host captured one before the loader download switched the stage.
+    /// <para>获取旧设备节点仍存活时捕获的稳定集线器链（若宿主在 loader 下载切换阶段前捕获过）。</para>
+    /// </summary>
+    /// <value>The hub chain, or <see langword="null"/> when it was not captured.
+    /// <para>集线器链；未捕获时为 <see langword="null"/>。</para></value>
+    public string? StickyLocationChain { get; init; }
 }
