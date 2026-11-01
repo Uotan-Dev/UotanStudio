@@ -129,6 +129,7 @@ internal static class LocaleKeySets
         "Tab_Log",
         "Tab_Settings",
         "Tab_Compare",
+        "Tab_MultiColumnBrowser",
         "Menu_MultiColumnFileBrowser",
         "Tab_ScreenMirror",
         "Tab_ScreenMirrorDevice",

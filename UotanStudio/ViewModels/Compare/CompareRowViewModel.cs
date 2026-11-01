@@ -223,6 +223,17 @@ public sealed class CompareRowViewModel : ObservableObject
     public bool ShowRightDiffBackground => IsRightDiff && !IsTreeRow;
 
     /// <summary>
+    /// Whether this row is currently selected in the document.
+    /// <para>本行当前是否在文档中处于选中状态。</para>
+    /// </summary>
+    /// <value><c>true</c> when selected; <c>false</c> otherwise.<para>选中时为 <c>true</c>，否则为 <c>false</c>。</para></value>
+    public bool IsSelected
+    {
+        get => field;
+        internal set => SetProperty(ref field, value);
+    }
+
+    /// <summary>
     /// Whether single-side entries tint their own side.
     /// <para>单侧条目是否按侧着色。</para>
     /// </summary>

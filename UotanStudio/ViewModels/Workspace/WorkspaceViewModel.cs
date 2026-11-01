@@ -79,7 +79,6 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             _compareDocument = new CompareViewModel
             {
                 Id = "CompareDocument",
-                Title = LanguageService.Instance.GetString("Tab_Compare"),
                 CanClose = true
             };
             _factory.AddDockable(documentDock, _compareDocument);
@@ -111,7 +110,6 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         var document = new CompareViewModel
         {
             Id = $"CompareDocument{Guid.NewGuid():N}",
-            Title = LanguageService.Instance.GetString("Tab_Compare"),
             CanClose = true
         };
         _factory.AddDockable(documentDock, document);

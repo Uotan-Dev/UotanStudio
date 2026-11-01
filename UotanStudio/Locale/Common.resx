@@ -420,6 +420,9 @@ Author: 暮间雾
   <data name="Tab_Compare" xml:space="preserve">
     <value>Compare</value>
   </data>
+  <data name="Tab_MultiColumnBrowser" xml:space="preserve">
+    <value>Multi-Column Browser</value>
+  </data>
   <data name="Menu_MultiColumnFileBrowser" xml:space="preserve">
     <value>Multi-Column File Browser</value>
   </data>
