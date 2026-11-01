@@ -423,6 +423,63 @@
                                         Click="OnChooseRootPackageClick"
                                         Content="{DynamicResource Flash_ChooseRootPackage}" />
                             </StackPanel>
+                            <StackPanel Name="DeviceStatusPanel" Spacing="8">
+                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
+                                <TextBlock Text="{DynamicResource Flash_DeviceStatus}" FontWeight="SemiBold" />
+                                <TextBlock Text="{DynamicResource Flash_DeviceStatusEmpty}" FontSize="12" Opacity="0.6"
+                                           Margin="6,3" IsVisible="{Binding !DeviceStatus.Count}" />
+                                <DataGrid Name="DeviceStatusGrid" ItemsSource="{Binding DeviceStatus}"
+                                          IsVisible="{Binding !!DeviceStatus.Count}" MaxHeight="168"
+                                          AutoGenerateColumns="False" IsReadOnly="True"
+                                          HeadersVisibility="None" GridLinesVisibility="Horizontal"
+                                          CanUserResizeColumns="False" CanUserReorderColumns="False" CanUserSortColumns="False"
+                                          MinColumnWidth="0" RowHeight="28"
+                                          HorizontalAlignment="Stretch" HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto"
+                                          Background="Transparent" BorderThickness="0" Margin="0" Padding="0"
+                                          SizeChanged="OnDeviceStatusGridSizeChanged"
+                                          AutomationProperties.Name="{DynamicResource Flash_DeviceStatus}">
+                                    <DataGrid.Styles>
+                                        <Style Selector="DataGridCell">
+                                            <Setter Property="Padding" Value="0" />
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                                        </Style>
+                                    </DataGrid.Styles>
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Width="Auto" MaxWidth="10000">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="vm:FlashDeviceStatusEntry">
+                                                    <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
+                                                               Margin="6,3" Opacity="0.75" VerticalAlignment="Center"
+                                                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1">
+                                                        <ToolTip.Tip>
+                                                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" MaxWidth="480" />
+                                                        </ToolTip.Tip>
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="vm:FlashDeviceStatusEntry">
+                                                    <TextBlock Text="{Binding Value}" FontSize="13" Margin="6,3"
+                                                               VerticalAlignment="Center" TextWrapping="NoWrap"
+                                                               TextTrimming="CharacterEllipsis" MaxLines="1">
+                                                        <ToolTip.Tip>
+                                                            <ScrollViewer MaxWidth="480" MaxHeight="320"
+                                                                          HorizontalScrollBarVisibility="Disabled"
+                                                                          VerticalScrollBarVisibility="Auto">
+                                                                <TextBlock Text="{Binding Value}" TextWrapping="Wrap" />
+                                                            </ScrollViewer>
+                                                        </ToolTip.Tip>
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
                         </StackPanel>
                         <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
                         <!-- 高通 EDL 9008 协议分类 -->

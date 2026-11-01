@@ -576,6 +576,12 @@ Author: 暮间雾
   <data name="Flash_DeleteCow" xml:space="preserve">
     <value>Delete COW partition</value>
   </data>
+  <data name="Flash_DeviceStatus" xml:space="preserve">
+    <value>Device status</value>
+  </data>
+  <data name="Flash_DeviceStatusEmpty" xml:space="preserve">
+    <value>No device status available</value>
+  </data>
   <data name="Flash_ModeMismatch" xml:space="preserve">
     <value>The selected device mode or its permissions do not support this package and operation.</value>
   </data>

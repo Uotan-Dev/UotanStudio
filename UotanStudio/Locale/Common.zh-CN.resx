@@ -576,6 +576,12 @@
   <data name="Flash_DeleteCow" xml:space="preserve">
     <value>删除 COW 分区</value>
   </data>
+  <data name="Flash_DeviceStatus" xml:space="preserve">
+    <value>设备状态</value>
+  </data>
+  <data name="Flash_DeviceStatusEmpty" xml:space="preserve">
+    <value>暂无设备状态</value>
+  </data>
   <data name="Flash_ModeMismatch" xml:space="preserve">
     <value>所选设备模式或权限不支持此刷机包及操作。</value>
   </data>

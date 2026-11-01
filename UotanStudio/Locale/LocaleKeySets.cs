@@ -181,6 +181,8 @@ internal static class LocaleKeySets
         "Flash_EraseSelected",
         "Flash_DisableVbmeta",
         "Flash_DeleteCow",
+        "Flash_DeviceStatus",
+        "Flash_DeviceStatusEmpty",
         "Flash_ModeMismatch",
         "Flash_DeviceNotConnected",
         "Flash_ProtocolMismatch",
