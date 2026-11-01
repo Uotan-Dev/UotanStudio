@@ -12,6 +12,7 @@ namespace UotanStudio.ViewModels.Compare;
 public sealed partial class CompareTreeNodeViewModel : ObservableObject
 {
     private readonly CancellationToken _cancellationToken;
+    private readonly Func<CompareTreeNodeViewModel, CancellationToken, Task<IReadOnlyList<CompareTreeNodeViewModel>>>? _childrenLoader;
     private bool _childrenLoaded;
 
     private CompareTreeNodeViewModel(
@@ -25,7 +26,8 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
         long leftSize,
         long rightSize,
         bool childrenLoaded,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<CompareTreeNodeViewModel, CancellationToken, Task<IReadOnlyList<CompareTreeNodeViewModel>>>? childrenLoader = null)
     {
         Name = name;
         FullPath = fullPath;
@@ -38,6 +40,32 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
         RightSize = rightSize;
         _childrenLoaded = childrenLoaded;
         _cancellationToken = cancellationToken;
+        _childrenLoader = childrenLoader;
+    }
+
+    /// <summary>
+    /// Creates a device file-browser node: children are loaded asynchronously through the provided loader delegate.
+    /// <para>创建设备文件浏览节点：子节点通过提供的加载委托异步加载。</para>
+    /// </summary>
+    /// <param name="name">Node name.<para>节点名称。</para></param>
+    /// <param name="fullPath">Node absolute path on device.<para>设备上的绝对路径。</para></param>
+    /// <param name="isDirectory">Whether the node is a directory.<para>是否为目录。</para></param>
+    /// <param name="size">File size in bytes; -1 for directories.<para>文件大小（字节）；目录为 -1。</para></param>
+    /// <param name="childrenLoader">Asynchronous children loader delegate.<para>异步子项加载委托。</para></param>
+    /// <param name="cancellationToken">Cancellation token.<para>取消令牌。</para></param>
+    /// <returns>The created device node.<para>创建的设备节点。</para></returns>
+    public static CompareTreeNodeViewModel ForDevice(
+        string name,
+        string fullPath,
+        bool isDirectory,
+        long size,
+        Func<CompareTreeNodeViewModel, CancellationToken, Task<IReadOnlyList<CompareTreeNodeViewModel>>>? childrenLoader,
+        CancellationToken cancellationToken = default)
+    {
+        return new CompareTreeNodeViewModel(
+            name, fullPath, string.Empty, isDirectory, status: null,
+            leftName: name, rightName: string.Empty, leftSize: size, rightSize: -1,
+            childrenLoaded: false, cancellationToken, childrenLoader);
     }
 
     /// <summary>Creates a browsing node: children are scanned from disk on the first expansion and the node carries no comparison status (no status colouring).
@@ -193,20 +221,32 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
         var token = _cancellationToken;
         try
         {
-            var children = await Task.Run(() => EnumerateChildren(path, token), token);
-            token.ThrowIfCancellationRequested();
-            Children.Clear();
-            foreach (var child in children)
+            IReadOnlyList<CompareTreeNodeViewModel> children;
+            if (_childrenLoader is not null)
             {
-                Children.Add(child);
+                children = await _childrenLoader(this, token).ConfigureAwait(false);
             }
+            else
+            {
+                children = await Task.Run(() => EnumerateChildren(path, token), token).ConfigureAwait(false);
+            }
+
+            token.ThrowIfCancellationRequested();
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                Children.Clear();
+                foreach (var child in children)
+                {
+                    Children.Add(child);
+                }
+            });
         }
         catch (OperationCanceledException)
         {
         }
         catch (Exception)
         {
-            Children.Clear();
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(Children.Clear);
         }
     }
 
@@ -238,47 +278,49 @@ public sealed partial class CompareTreeNodeViewModel : ObservableObject
     /// name (case-insensitively on Windows).
     /// <para>枚举一个目录的直接子项：目录在前、文件在后，各自按名称排序（Windows 忽略大小写）。</para>
     /// </summary>
-    /// <param name="path">The directory to enumerate.<para>要枚举的目录路径。</para></param>
-    /// <param name="token">The cancellation token.<para>取消令牌。</para></param>
-    /// <returns>The child nodes, directories first then files.<para>子节点列表，目录在前、文件在后。</para></returns>
-    private static List<CompareTreeNodeViewModel> EnumerateChildren(string path, CancellationToken token)
+    private static List<CompareTreeNodeViewModel> EnumerateChildren(string directory, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
+        if (!Directory.Exists(directory))
+        {
+            return [];
+        }
+
+        var results = new List<CompareTreeNodeViewModel>();
+        try
+        {
+            var options = new EnumerationOptions
+            {
+                IgnoreInaccessible = true,
+                RecurseSubdirectories = false,
+                ReturnSpecialDirectories = false
+            };
+
+            foreach (var dir in Directory.EnumerateDirectories(directory, "*", options))
+            {
+                token.ThrowIfCancellationRequested();
+                results.Add(ForBrowsing(dir, isDirectory: true, token));
+            }
+
+            foreach (var file in Directory.EnumerateFiles(directory, "*", options))
+            {
+                token.ThrowIfCancellationRequested();
+                results.Add(ForBrowsing(file, isDirectory: false, token));
+            }
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        List<CompareTreeNodeViewModel> directories = [];
-        List<CompareTreeNodeViewModel> files = [];
-
-        foreach (var directory in Directory.EnumerateDirectories(path))
-        {
-            token.ThrowIfCancellationRequested();
-            directories.Add(ForBrowsing(directory, isDirectory: true, token));
-        }
-
-        foreach (var file in Directory.EnumerateFiles(path))
-        {
-            token.ThrowIfCancellationRequested();
-            files.Add(ForBrowsing(file, isDirectory: false, token));
-        }
-
-        directories.Sort((left, right) => comparer.Compare(left.Name, right.Name));
-        files.Sort((left, right) => comparer.Compare(left.Name, right.Name));
-        directories.AddRange(files);
-        return directories;
+        return [.. results.OrderByDescending(child => child.IsDirectory).ThenBy(child => child.Name, comparer)];
     }
 
-    /// <summary>
-    /// Extracts a path's display name, returning the path itself for a root and an empty string for an empty path.
-    /// <para>取路径的显示名称；路径为空时返回空串，根目录返回路径本身。</para>
-    /// </summary>
-    /// <param name="path">The path to name.<para>要取名称的路径。</para></param>
-    /// <returns>The display name for the path.<para>该路径的显示名称。</para></returns>
     private static string GetDisplayName(string path)
     {
-        if (string.IsNullOrEmpty(path))
-        {
-            return string.Empty;
-        }
-
-        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
-        return string.IsNullOrEmpty(name) ? path : name;
+        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var name = Path.GetFileName(trimmed);
+        return string.IsNullOrEmpty(name) ? trimmed : name;
     }
 }

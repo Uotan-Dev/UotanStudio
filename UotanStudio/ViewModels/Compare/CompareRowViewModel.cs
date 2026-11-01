@@ -245,14 +245,14 @@ public sealed class CompareRowViewModel : ObservableObject
     /// <para>仅左侧内容的左侧背景色。</para>
     /// </summary>
     /// <value>The left tint brush when the row is left-only, or <c>null</c> otherwise.<para>本行为仅左时返回左侧淡色画刷，其他情况为 <c>null</c>。</para></value>
-    public IBrush? LeftTintBrush => TintSingleSide && Status == FolderItemStatus.LeftOnly ? LeftOnlyTintBrush : null;
+    public IBrush? LeftTintBrush => TintSingleSide && !IsTreeRow && Status == FolderItemStatus.LeftOnly ? LeftOnlyTintBrush : null;
 
     /// <summary>
     /// Right background tint for right-only content.
     /// <para>仅右侧内容的右侧背景色。</para>
     /// </summary>
     /// <value>The right tint brush when the row is right-only, or <c>null</c> otherwise.<para>本行为仅右时返回右侧淡色画刷，其他情况为 <c>null</c>。</para></value>
-    public IBrush? RightTintBrush => TintSingleSide && Status == FolderItemStatus.RightOnly ? RightOnlyTintBrush : null;
+    public IBrush? RightTintBrush => TintSingleSide && !IsTreeRow && Status == FolderItemStatus.RightOnly ? RightOnlyTintBrush : null;
 
     /// <summary>
     /// Colour block reflecting the row's status.
