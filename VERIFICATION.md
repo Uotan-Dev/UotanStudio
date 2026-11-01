@@ -2,9 +2,89 @@
 
 本文件记录门禁实测结果与未验证边界；每跑完一道门禁就更新"当前实测"一节。只写当前状态：一条测量配一个日期，不写轮次叙述、不写"上一轮"或"之前失败现在通过"。常驻约束与命令在根 `AGENTS.md`，测试工程写法在 `UotanStudio.Tests/AGENTS.md`。
 
-# 验证状态与边界
+## 重捕获位置链随旧设备节点消失的修复实测（2026-11-01，Windows x64，Debug，共享工作树，Orangepi 5b）
 
-本文件记录门禁实测结果与未验证边界；每跑完一道门禁就更新"当前实测"一节。只写当前状态：一条测量配一个日期，不写轮次叙述、不写"上一轮"或"之前失败现在通过"。常驻约束与命令在根 `AGENTS.md`，测试工程写法在 `UotanStudio.Tests/AGENTS.md`。
+- 现象：超时诊断（同协议端点清单）显示 ROCKCHIP loader 候选已在快照中（serial=ROCKCHIP，instance=USB\VID_2207&PID_350B\ROCKCHIP）但匹配仍失败。
+- 根因：位置比较在等待期间从 `previousInfo` 重读 PnP 集线器链，而旧 maskrom 设备节点在阶段切换后已消失，`UsbLocationChain.TryRead(旧实例 ID)` 解析失败 → 旧链为 null；替代端点有真实链（如 1-x-x），两侧链不同时为 null 与非 null → 位置匹配失败；序列号尾部回退因 maskrom 数字串 ≠ ROCKCHIP 同样失败。
+- 修复：`RunRkdlOnLeaseAsync` 租约存活期间经 `DeviceController.CaptureUsbLocationChain` 捕获旧节点集线器链，经 `RkdlLoaderTransitionOffer.StickyLocationChain` 传入 `WaitForUsbReconnectAsync(capturedLocationChain)`；位置比较优先使用捕获链。等待入口处旧节点已消失时的就地捕获仅作兜底。超时消息现在附带已捕获链与超时时同协议端点证据。
+- 门禁：`dotnet build UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Debug` 0 错误；`UotanStudio.Tests.Devices` 命名空间 387 通过/0 失败/3 跳过（bin2 输出路径，测后删除）；`dotnet format whitespace` 仅余 2 个既有 FINALNEWLINE（`RkdlDeviceE2ETests.cs(48)`、`UiWindowService.cs(138)`）。
+- 未验证：真机 loader 下载 → 重枚举 → 重捕获端到端（需板子重进 maskrom 后重试一次下载确认）。
+
+## 引导发送后重枚举重捕获失败根因分析与修复实测（2026-11-01，Windows x64，Debug，共享工作树，Orangepi 5b）
+
+- 现象：loader 传输与设备模式切换成功（设备管理器出现 ROCKCHIP bootrom rkdl 设备），但重捕获等待 30 秒超时，页面保持 busy 并报「设备未以 Rockchip loader 模式重枚举」。路径：`DownloadRkLoaderAsync` → `RunRkdlLoaderTransitionAsync` → `WaitForUsbReconnectAsync(RockchipLoader)` → 快照轮询（100ms）按位置链 + loader 阶段证据匹配替代端点。
+- 根因：loader 阶段设备由 `rockusb.sys` 服务，发现快照无法用 WinUSB 探测读其 iSerial；序列号只能来自实例 ID 尾部或缓存/窥视回退。当实例尾部是位置串（`6&…&2`）或序列号解析失败时，快照的 `SerialNumber` 与 `BcdUsb`（hub 读取在 ASMedia 等集线器上可能失败）同时为空，`IsRockchipLoaderStage` 两条证据全失 → 候选被拒 → 超时。设备管理器显示的 ROCKCHIP 恰恰证明实例 ID 尾部已携带该名。
+- 修复（`DeviceController.Reconnection.cs`）：`IsRockchipLoaderStage` 增加第三条证据——设备实例 ID 尾部为 `ROCKCHIP`（无 `&`、不区分大小写），Windows 把上报的 iSerial 编入实例路径，rockusb 设备即使序列号解析失败也仍在该处携带它；`bcdUSB` bit 0 与 `SerialNumber` 两条证据保持不变。
+- 诊断（下一轮真机若再失败可定位）：等待循环对消失后出现的同协议同后端候选，逐个以 `CommTrace.Debug("reconnect", …)` 记录两侧的位置链、序列号、bcdUSB 与实例 ID，直接点名被拒绝的证据。
+- 顺带完成上一轮遗留：`LoadBootButton` 文本按协议切换——RKDL 设备显示 `Flash_RkSendBoot`（发送引导），其他协议保持 `Flash_LoadBoot`（加载引导），AutomationProperties.SetName 同步（Avalonia 12 的 `AutomationProperties` 静态 API）。功能上 RKDL 的「加载引导/发送引导」均已实现完整发送 + 重枚举等待。
+- 门禁：Comm/宿主/Desktop 构建 0 错误；`DeviceControllerRockchipReconnectionTests` 14/14（新增实例尾部证据 3 例 + 完整证据匹配 1 例）；Devices.Rkdl + Protocols + Flash + Locale 304 总数 / 302 通过 / 2 硬件跳过（中途一次失败为 %TEMP% 清理瞬时文件锁，复跑通过）；`dotnet format` 仅剩既有 2 条 FINALNEWLINE。
+- 未验证边界：实例尾部证据路径对真实 rockusb 设备的覆盖待真机复测确认；若真机仍超时，全局日志的 `reconnect` 诊断行会给出被拒原因。
+
+## 加载引导恢复完整发送流程实测（2026-11-01，Windows x64，Debug，共享工作树）
+
+- 修复：通用「加载引导」的 RKDL 路径恢复为完整流程——校验 loader 行、应用、经 `DownloadRkLoaderAsync` 传输到设备并等待 ROCKCHIP loader 阶段重枚举（与官方「下载引导」一致）；上一轮的“只应用不发送”拆分被用户实测否决后撤销。专用的「发送引导」按钮保留，仍按 loader 阶段门控（ROCKCHIP 序列号设备禁用）。
+- 上一轮引入的 `Flash_LoadBootRkApplied` 键随流程合并失去调用点，已从 EN/CN resx 与 LocaleKeySets 同步移除（并保持 key 集合一致）。
+- 门禁：`UotanStudio.csproj`、Tests、`UotanStudio.Desktop.csproj` 全部构建 0 错误（Desktop 输出目录锁已随用户停止调试会话解除）；Flash + LocaleDictionaryTests 64/64 通过；`dotnet format` 仅剩既有 `UiWindowService.cs` FINALNEWLINE。
+- 未验证边界：真机上「加载引导 → ROCKCHIP 重枚举 → 存储命令」的完整链路仍待用户复测。
+
+## 加载引导应用流程去重与完成提示实测（2026-11-01，Windows x64，Debug，共享工作树）
+
+- 修复：通用「加载引导」（RKDL 路径）与「发送引导」在校验通过后都把已算出的结论直接发布到 loader 行（`UpdateSpecialFileRowStatus`/`UpdateRkLoaderRowStatusAsync` 新增 `knownValid` 通道），消除同一文件被 `ValidateRkLoaderFileAsync` 读两遍并写两条相同「瑞芯微 loader 有效」日志的问题；勾选行与导入配置时的重查路径保持原样（那里的重复是真实的重新检查）。
+- 「加载引导」应用完成后输出新键 `Flash_LoadBootRkApplied`（EN/CN 同步，LocaleKeySets 登记；顺带修复了 `Flash_RkSendBoot` 在键集中缺失缩进的行），使流程可见地结束并指向「发送引导」；校验失败时不应用、行状态显示失败结论。
+- 门禁：`UotanStudio.csproj` 与 Tests 构建 0 错误；`FlashGlobalLogRoutingTests` 全类通过（此前一次 `ImportRkConfigAsync…` 因 `%TEMP%` 清理时 `MiniLoaderAll.bin` 仍被占用的瞬时文件锁失败，单独复跑通过）；`dotnet format` 仅剩既有 `UiWindowService.cs` FINALNEWLINE。
+- 未验证边界：Desktop 输出目录本轮被正在运行的调试实例（`UotanStudio.Desktop` + VS 调试适配器）锁定，`UotanStudio.Desktop.csproj` 的最终复制与真机复测需在用户停止调试会话后进行。
+
+## 存储切换与能力位按官方实现修正实测（2026-11-01，Windows x64，Debug，共享工作树，Orangepi 5b）
+
+- 官方实现还原（IDA，RKDevTool）：CHANGE_STORAGE 发送的是介质位位置而不是选择框序号——位表 FLASH=0、EMMC=1、SD=2、SD1=3、SPINOR=9、SPINAND=8、RAM=6、USB=7、SATA=10、PCIE=11、UFS=12、RVD=13（12 项与官方下拉一致）；READ_STORAGE 返回 4 字节小端掩码，官方以 `mask == 1 << wireBit` 整体相等判定当前介质。此前发送序号 5（SPINOR 实际位 9）表现为 CSW 成功但介质不变，且 `TrailingZeroCount`+序号解码把 EMMC 掩码 0x0002 误报为 FLASH，与本轮真机日志一致。
+- `RkdlStorage`（Comm，公开）：官方顺序的 12 个介质名与线上位表、`IndexOfMask`/`DescribeMask` 精确匹配辅助；`ReadStorageMask()` 取代 `ReadStorage()` 返回原始掩码；`RkCapability.Describe()` 按官方 `GetCapabilityProc` 字符串表输出每一位 `名称=Enable/Disable`（首字节 DirectLBA、VendorStorage、First4M、ReadLBA、ReadComLog、ReadIDBConfig、ReadSecureMode，次字节 NewIDB、SwitchStorage、LBAparity、ReadOTPchip、SwitchUsb3，未命名位报告 `BitN`）；`RkChipInfo`/`RkFlashInfo` 与 `ReadChipInfo`/`ReadFlashInfo` 转公开。
+- 宿主：选择框改为官方 12 项 `1..12`（条目序号仅作显示，发送走 `RkdlStorage.WireBits`）；「读取芯片信息」输出能力字逐位描述与 `Flash_RkChipName` 芯片型号（`RkChipInfo.ChipName` 映射，如 0x350A → RK3588S 表项或 ASCII 标签）；「获取当前存储」在掩码之外追加 `READ_FLASH_INFO` 几何（容量、擦除块、页大小、闪存厂商）；「切换存储」发送后回读掩码校验，不符时如实报告实际介质（与官方 CheckDeviceStorage 二次 GetDeviceStorage 一致）。
+- 门控修复：`UpdateModeVisibility` 对 `RkSendBootButton` 的覆盖改为 `!_busy && Rkdl && !IsRockchipLoaderStageDevice`，ROCKCHIP 序列号的 loader 阶段设备不再保留可用的「发送引导」。
+- 定向测试：`RkdlStorageTableTests` 19/19（官方位表、12 个单掩码映射、非法掩码、能力位描述）；Protocols + Devices.Rkdl + Locale 合计 246/244 通过/2 跳过；Flash 58/58。`dotnet format` 仅剩既有 2 条 FINALNEWLINE（`RkdlDeviceE2ETests.cs`、`UiWindowService.cs`）。Desktop Debug 构建 0 警告 0 错误。
+- 未验证边界：SPINOR/SPINAND/SATA/PCIE/UFS/RVD 六个介质的真实切换只能由对应硬件确认（本机只有 eMMC/SD 可对照官方工具）；READ_STORAGE 掩码多位置位（如 0x0003）的设备语义未在官方工具中观测到，按不匹配原样报告。
+
+## RKDL 发送引导独立入口与 ROCKCHIP 阶段门控实测（2026-11-01，Windows x64，Debug，共享工作树）
+
+- 重枚举匹配：`UsbReconnectIdentityPolicy` 新增 `RockchipLoader` 策略——替代端点按不变物理位置（设备实例 ID 背后的 Windows 集线器链，回退后端端口路径或 PnP 位置尾部）加 loader 阶段证据（`bcdUSB` bit 0 置位或厂商 `ROCKCHIP` 序列号）匹配，容器 ID 有意不比较（阶段切换本就会改写序列号与容器身份）。`RunRkdlLoaderTransitionAsync` 主路径改用该策略，证据缺失时回退 Container 策略。真机日志确认：maskrom 序列号为数字、loader 阶段序列号为 `ROCKCHIP`。
+- 通用「加载引导」按钮的 RKDL 路径不再发送任何内容：`ChooseRkLoaderAsync` 只校验并应用 loader 行；新增瑞芯微分类下专用的「发送引导」按钮（`RkSendBootButton`，`Flash_RkSendBoot` 中英资源 + LocaleKeySets），`OnRkSendBootClick` 是唯一会传输 loader 的 RKDL 路径（校验、应用、下载并等待 loader 阶段重枚举）。
+- 阶段门控取代 loader 行门控：`FlashDeviceUiPolicy.IsAvailable` 的第二维度改为 `isRockchipLoaderStage`（设备序列号为 `ROCKCHIP`）。maskrom 阶段只启用「发送引导」；loader 阶段禁用「发送引导」，启用烧录分区、回读分区、添加 root、RootOptionsPanel 与瑞芯微二级分类（RkPane）。
+- 其余 RKDL 引导发送逻辑全部剔除：`FlashService.FlashRkdlAsync`/`EraseRkdlAsync` 改为单阶段——要求 loader 阶段设备，遇到 maskrom 端点直接失败并提示先用发送引导；`RunRkReadInfoAsync` 不再经 loader 迁移下载 loader，maskrom 设备只读信息并提示需要 loader。
+- 定向测试：`Flash` + `Protocols` + `Devices.Rkdl` + `LocaleDictionaryTests` 合计 285 总数 / 283 通过 / 2 跳过（真机门控）；新增 `DeviceControllerRockchipReconnectionTests` 10/10（位置链回退、跨容器匹配、其他集线器拒绝、`bcdUSB`/序列号阶段证据）与 `FlashDeviceUiPolicyTests` 的阶段分拆用例。
+- 门禁：`dotnet build UotanStudio.Desktop/UotanStudio.Desktop.csproj --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 只剩既有的 `UotanStudio.Tests/Devices/RkdlDeviceE2ETests.cs` 与 `UotanStudio/Views/UiWindowService.cs` 两条 FINALNEWLINE。定向测试经 `-p:OutputPath` 临时输出目录执行后已删除（本机 Tests bin 仍被既有的 `--server dotnettest` 宿主镜像锁占用）。
+- 未验证边界：真机上「发送引导 → ROCKCHIP 重枚举 → 烧录分区/回读/root 解锁」的完整链路待用户在烧录机复测；`bcdUSB` bit 0 证据路径未在真机观测到（rockusb.sys 端点通常无描述符，实际生效的是 `ROCKCHIP` 序列号证据）。
+
+## Loader 下载真机 121 诊断与可操作报错实测（2026-11-01，Windows x64，Debug，共享工作树）
+
+- 官方逐字节对齐复核：`Boot_VendorRequest`（`sub_5E5380`，下载 Boot 路径）对负载无条件计算 CRC-16/CCITT-FALSE（步进函数 `sub_5C6D00`，检查值 `0x29B1`），按 4096 字节分块、每块前 `Sleep(50)`、要求 `BytesReturned == chunk`；条目数据经 `sub_5C68E0` 原样 `memmove`，无 RC4 变换。本仓库 `RkdlSession.DeviceRequestAsync` 的封帧、CRC 与分块与官方完全一致；官方日志同机同样出现过 `Total(2050),Sended(0),crc(1898),err(121)`。
+- 已删除无调用方的 `WarmUpForLoaderDownload`（官方下载 Boot 前不执行批量预热）。
+- vendor 请求失败可操作化：`DeviceRequestAsync` 把控制传输的 `Win32Exception`/`NotSupportedException`/`ObjectDisposedException` 与短写包装为带「板子需重新进入 Maskrom 再重试」指引的 `RkdlException`（保留内层异常）；`RunRkdlLoaderTransitionAsync` 的重枚举超时错误追加同一指引。
+- 定向测试：`UotanStudio.Tests.Protocols` 209/209；`FullyQualifiedName~UotanStudio.Tests.Devices.Rkdl` 10 通过 / 2 跳过（真机门控）。
+- 门禁：`dotnet build UotanStudio.Desktop/UotanStudio.Desktop.csproj --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format` 只剩既有的 `UotanStudio.Tests/Devices/RkdlDeviceE2ETests.cs` 与 `UotanStudio/Views/UiWindowService.cs` 两条 FINALNEWLINE（本轮新出现的 `RkdlLoaderProbeE2ETests.cs` 尾部换行已修复，并把 `RkdlModeClassificationTests` 的 xUnit1051 改为 `TestContext.Current.CancellationToken`）。
+- NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功；警告只有既有的第三方 IL2026/IL2104/IL3053 集合（Ursa、Dock.Avalonia、DataGrid、Semi.Avalonia.Dock、Iciclecreek、Satori GC 实验提示与 Avalonia XAML 反射绑定），本轮改动文件无新增警告。
+- 环境边界：本机 `UotanStudio.Tests\bin` 被两个 `--server dotnettest` 的既有 `UotanStudio.Tests.exe` 宿主（PID 24864/15304，Stop-Process/taskkill/WMI 均无法终止）以镜像锁占用，`dotnet test` 复制报 MSB3027；定向测试经 `-p:OutputPath` 临时输出目录执行后已删除。真机复测仍待用户在烧录机上执行：先让板子重新进入 Maskrom（重新上电），再跑加载引导。
+
+## RKDL 与 rkdeveloptool 逐方法对齐实测（2026-11-01，Windows x64，Debug，共享工作树）
+
+- ID block 与 CRC：新增 `UotanStudio.Hash.Crc16Xmodem`（高位优先 0x1021、初值 0x0000、无末异或，检查值 `0x31C3`），与 loader 下载帧用的 `Crc16CcittFalse`（初值 0xFFFF）保持两个类型；新增 `Rk28IdBlock`，按 `RK28_IDB_SEC0..3` 与 `MakeIDBlockData` 构建旧式四头部扇区布局与 head/data/code 布局，`uiBootCodeCrc` 仍走非反射的 `RockchipCrc32`；`RkdlRc4` 转写厂商 `P_RC4`（16 字节密钥按 `0x0f` 掩码循环），旧式布局无条件加密扇区 0/2/3，`uiRc4Flag` 非零时加密 loader 数据与代码，按 512 字节扇区重置状态。
+- loader 升级：新增 `RkdlSession.LoaderUpgrade`，要求 `FlashBoot` 与 `FlashData` 条目、`FlashHead` 可选（有 head 时要求 `capability[1] & 1`），把 ID block 写到 LBA 64，写入后不复位设备；`RkdlSession.Transfer` 增加 `maskromLoaderUpgrade` 通道，使 `EnsureBulkCommandAllowed` 只放行这一条 `WriteLba`。
+- 稀疏回放：新增 `RkdlSession.Sparse`，解析并校验后先 `ERASE_LBA` 擦除目标范围，再按数据块流式 `WRITE_LBA`；don't-care 数据块只推进 LBA 而不写零，原始载荷经 `SparseWriteSource` 单向有界读取，数据块记录上限 `MaxSparseChunks`。
+- 命令与超时：`READ_FLASH_INFO` 使用独立的 5000 毫秒预算；`ResetDevice` 只在 `RkdlResetSubCode.None` 下容忍缺失或不匹配的 CSW；`WaitForLoaderReadyAsync` 按 `CRKDevice::TestDevice` 判定就绪；`ReadLBA`/`ReadDataCommand`/`ReadCsw` 支持覆盖超时；Loader 模式拒绝 0x0471/0x0472 之外的 wIndex；填充包接受 0 或 1 字节短写。
+- 分类与能力：`UsbProtocolClassifier.ClassifyBootrom` 先应用 MSC 排除表；`EraseAllFlash` 读不到能力时退化为 `RkCapability.None` 而不是抛错。
+- 定向测试：`UotanStudio.Tests.Protocols` 209/209；`UotanStudio.Tests.Firmware` 4497 总数 / 4484 通过 / 13 跳过 / 0 失败。新增用例覆盖 ID block 逐字段与校验和位置、RC4 与类内转写交叉校验、稀疏字节源、模式分类与 CBW 线格式。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；`dotnet format UotanStudio.slnx style --no-restore --verify-no-changes` 零报告，`whitespace` 只剩既有的 `UotanStudio.Tests/Devices/RkdlDeviceE2ETests.cs` 与 `UotanStudio/Views/UiWindowService.cs` 两条 FINALNEWLINE。
+- NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功，产物在 `UotanStudio.Desktop\bin\Release\net10.0\win-x64\publish\`；输出只有既有的 Ursa.Themes.Semi、Dock.Avalonia、Avalonia.Controls.DataGrid、Semi.Avalonia.Dock、LTRData.Extensions、YamlDotNet、Common.Logging、Iciclecreek 的 IL2026/IL2104/IL3053 与 Avalonia XAML 反射绑定警告，本轮改动文件无新增警告。
+- `UotanStudio.Tests.Devices` 命名空间 372 总数 / 369 通过 / 2 跳过 / 1 失败：`AdbTlsTransportTests.UpgradeToTls_DeviceRebuildsItsCertificateEachHandshake_CompletesBothHandshakes` 在机器负载下以 15 秒握手超时报 `Received an unexpected EOF or 0 bytes from the transport stream`，单跑该类 6/6 通过；同一失败在 HEAD 的独立工作树（只带本轮 18 个改动文件）上同样复现，属负载敏感的既有用例，与本轮改动无关。
+- 未验证边界：无瑞芯微真机，loader 升级、稀疏回放与 Mask ROM `WRITE_LBA` 放行只有单元测试证据；ID block 与 MCU 侧的真实握手、`ucRc4Flag` 非零的实机镜像、以及 LBA 64 写入后的设备行为均未在硬件上执行。
+
+## 瑞芯微烧录页动作日志去重实测（2026-11-01，Windows x64，Debug，共享工作树）
+
+- 重复来源一（同一结论被两处写）：`ApplyRkLoaderPath` 在指向 loader 时写 `Flash_RkLoaderDeclared`、为空时写 `Flash_RkLoaderMissing`，而导入配置与行内选文件两条路径随后又各自调用一次 loader 检查，检查本身对同一文件写出 `Flash_RkLoaderMissing` 或 `Flash_RkLoaderChecked`，于是"加载 Loader：… / 该配置引用的 Loader 不存在：… / 瑞芯微 loader 有效，…"各出现两遍。现在 `ApplyRkLoaderPath` 只写 `_rkLoaderPath` 并重发门控，结论统一由 `ValidateRkLoaderFileAsync` 写一次。
+- 重复来源二（同一次点击检查两次）：`OnChoosePartitionImageClick` 先写 `entry.FilePath`，属性变化经 `OnEntryPropertyChanged` → `UpdateRowValidityText` 触发一次完整的 loader 检查，方法末尾再直接调用 `ValidateRkLoaderFileAsync` 一次，一次选择写两行相同结论。现在写行字段期间置 `_suppressSpecialFileRowCheck`，选择器自己对 loader 行检查一次并按结论决定是否 `ApplyRkLoaderPath`；parameter 行沿用 `UpdateSpecialFileRowStatus` 的同步检查。
+- 行状态与日志一致：新增 `PublishRkLoaderStatus(row, valid)`，`UpdateRkLoaderRowStatusAsync`、行内选择器与异常分支都经它写 `Flash_RkLoaderValid`/`Flash_RkLoaderInvalidStatus`，行内文案与日志不再各写一份判断。
+- 定向测试：`UotanStudio.Tests.Flash.FlashRockchipFileRowTests` 9/9（新增"缺失 loader 文件只报一行 `Flash_RkLoaderMissing`"与"有效 loader 只报一行 `Flash_RkLoaderChecked`"两条按 `LogText` 行计数断言的用例）；`UotanStudio.Tests.Flash` 命名空间 57/57。
+- 门禁：`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告（`UotanStudio.Desktop` 的 `bin\Debug\net10.0` 先后被正在运行的同名宿主进程锁定过一次 `MSB3026` 复制重试，该进程退出后重建通过）；触碰的四个文件 `dotnet format` 的 `whitespace` 与 `style` `--verify-no-changes` 零报告。
+- 全量测试：8140 总数 / 8120 通过 / 20 跳过 / 0 失败（2m 41s）。
+- 未验证边界：界面日志框的实际显示没有目视，去重结论只经视图模型层 `LogText` 行计数断言；NativeAOT 发布本轮未执行。全解 `--verify-no-changes` 仍被本轮未触碰的 `UotanStudio.Tests/Devices/RkdlDeviceE2ETests.cs` 与 `UotanStudio/Views/UiWindowService.cs` 的 FINALNEWLINE 报告挡住。
 
 ## 真机 RKDL loader 下载阻塞的定位实测（2026-10-31，Windows x64，Debug，共享工作树）
 
@@ -19,7 +99,10 @@
 - 文档与脚本同步：`README.md`/`README-EN.md` 特性列表、`UotanStudio.Desktop/AGENTS.md` 发布节、`.github/workflows/release.yml` 发布步骤注释。
 - 门禁：`dotnet restore UotanStudio.slnx -p:Configuration=Debug` 成功；`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误 0 警告；触碰文件的 `dotnet format whitespace` 校验干净（全解 whitespace 校验被共享工作树既有的 `RkdlSerialReader.cs` FINALNEWLINE 挡住，与本任务无关）；`LocaleDictionaryTests` 6/6。
 - NativeAOT：`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功，产物 172,613,632 B，二进制内可检索到 `SatoriGC` 配置变量键，证实 Satori GC 已进入发布镜像；输出仅含既有的 Ursa/Dock/LTRData/YamlDotNet/Common.Logging IL2104/IL3053 与 Avalonia XAML 反射绑定警告，加一条 SDK 预期的 `Satori GC is experimental`。
-- 未验证边界：Satori GC 在发布产物内的运行时行为（GC.GetConfigurationVariables 实测值、延迟与吞吐）未在真实 GUI 会话里核验；设置页新区块的界面布局只经编译绑定与 LocaleDictionaryTests 验证，没有人工目视；其余 RID 发布未执行。
+- RID 回落与 SDK 版本行（同日追加）：csproj 对 `riscv64`/`loongarch64` RID 显式 `UseSatoriGC=false`（Satori 无对应运行时包，发布回落默认 GC），其余 RID 保持默认开启；`NETCoreSdkVersion` 经 `AssemblyMetadata`（键 `DotNetSdkVersion`）写入桌面入口程序集，设置页「垃圾回收」区块新增「.NET SDK 版本」行，运行时读入口程序集元数据，缺失时回退 `RuntimeInformation.FrameworkDescription`。
+- 设置页当前 GC 单行摘要（2026-10-31）：「垃圾回收」区块改为两行——「当前垃圾回收」单行摘要（回收器名 + 服务器/工作站形态 + 并发/非并发 + 延迟模式，经 `Settings_GcSummaryFormat` 本地化拼接）与「.NET SDK 版本」；原来的实现/服务器/并发/延迟模式四个平铺条目移除，语言切换只刷新 `CurrentGcText`。
+- GC 生效形态探针（2026-10-31，独立最小工程验证检测逻辑）：framework-dependent 运行（IDE/`dotnet run`/`bin` 输出）加载本机 .NET 10.0.14 运行时，`GC.GetConfigurationVariables()` 不含 `SatoriGC`（32 变量，`IsServerGC=False`）；同一工程自包含发布后运行含 `SatoriGC`（33 变量，运行时报告 .NET 10.0.15-ci，`IsServerGC=True`）。Satori GC 仅存在于自包含发布产物，非自包含运行显示默认 GC 是如实报告，不视为缺陷。
+- 未验证边界：设置页区块的界面布局只经编译绑定与 LocaleDictionaryTests 验证，没有人工目视；其余 RID 发布未执行；riscv64/loongarch64 的真实发布未执行（本机无对应交叉工具链），烘焙的 SDK 版本未在发布产物中实测；Satori GC 的延迟与吞吐特性未测量（基准工作负载已就绪）。
 
 ## 瑞芯微 loader 行与 parameter 行的勾选检查实测（2026-11-01，Windows x64，Debug，共享工作树）
 
