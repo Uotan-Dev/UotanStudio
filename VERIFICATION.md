@@ -2,6 +2,34 @@
 
 本文件记录门禁实测结果与未验证边界；每跑完一道门禁就更新"当前实测"一节。只写当前状态：一条测量配一个日期，不写轮次叙述、不写"上一轮"或"之前失败现在通过"。常驻约束与命令在根 `AGENTS.md`，测试工程写法在 `UotanStudio.Tests/AGENTS.md`。
 
+## 设备列表 RK3588 芯片名显示修正实测（2026-11-07，Windows x64，Debug，共享工作树）
+
+- 现象对齐（IDA，RKDevTool v3.37，函数 `sub_4197E0`「读取芯片信息」）：官方工具对 `RKU_ReadChipInfo` 返回的前 4 字节只做 `Chip Tag:\t%02X %02X %02X %02X` 的逐字节十六进制打印，命中旧表才追加 `-RK27/-RK32/…` 一类家族标签，否则按线上字节序拼出四字符（`-RK`/`K` + 各字节）仅用于 `Image Chip Flag` 映像芯片比对；该路径没有把标签当型号显示的逻辑，因此 RK3588 的 `8853` 不会被 RKDevTool 当作型号。
+- 代码改动：`RkChipInfo.GetChipName` 增加 `0x38383533`（标签 "8853"）→ `RK3588` 的映射，与已有的 `0x33353838` 同列；`ChipName` 与 `Tag` 的 XML 注释写清 `Tag` 是线上字节序，显示型号一律走 `ChipName`。
+- 定向测试：`RkdlModeClassificationTests` 41 通过/0 失败（新增 `0x33353838`→RK3588、`0x38383533`→RK3588 两条 `GetChipName` 用例）。
+- 门禁：`dotnet build UotanStudio.Desktop/UotanStudio.Desktop.csproj --no-restore --nologo -c Debug` 0 警告/0 错误；`UotanStudio.Comm` 与 `UotanStudio.Tests` 的 `dotnet format whitespace`/`style` `--verify-no-changes`（`--include` 两个触碰文件）零报告。
+- 未验证：真实 RK3588 设备上的列表行与「读取芯片信息」输出未复测（需接板）；`UotanStudio.Tests` 构建另有两条既有 `CS8604`（`DeviceControllerRockchipReconnectionTests.cs:150/159`），本轮未改动该文件。
+
+## 瑞芯微阶段命名按 Rockusb wiki 更正实测（2026-11-01，Windows x64，Debug，共享工作树）
+
+- 依据 [Rockusb wiki](https://opensource.rock-chips.com/wiki_Rockusb)：Boot ROM 阶段叫 maskrom（Bootrom mode 别名），`db` 下载 usbplug 固件后 rockusb 驱动运行、DRAM 已初始化的阶段叫 usbplug mode；miniLoader/U-Boot rockusb 模式是 loader 的两种来源，但 USB 描述符层面同为一个已运行 rockusb 驱动的阶段。
+- 设备扫描状态：`DeviceMonitorService.Discovery.RkdlState` 的 loader 档改名为 `usbplug`，端点排序档同步；maskrom 与 bootrom 回退档不变。
+- 设备列表徽标：`DeviceInfo.RkdlBadge` 新增，按状态显示 `RKDL · MaskROM` / `RKDL · USBPlug` / `RKDL · BootROM`（徽章区分大小写），其他状态保持 `RKDL`；上报序列号为厂商阶段标记 `ROCKCHIP` 时即使描述符阶段回退也强制显示 `RKDL · USBPlug`；DeviceView 列表与详情的两处 RKDL 徽标改绑该属性。
+- 烧录页文本：`Flash_LoadBootRkDone`（EN/CN）改为「设备已进入 usbplug 模式」，`DeviceMonitorService.Transactions` 的重枚举超时消息与设置页驱动覆盖说明（`DriverPackage_Rockchip_Coverage`）同步改用 usbplug 表述。
+- 门禁：`dotnet build UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Debug` 0 警告/0 错误；`DeviceLinkDisplayTests` 33 通过/0 失败（新增 `RkdlBadge` 10 例，含大小写不敏感匹配与 ROCKCHIP 序列号标记）；`RkdlModeClassificationTests` 39 通过/0 失败；`LocaleDictionaryTests` 6 通过/0 失败。
+- 未验证：真机上 maskrom → usbplug 徽标切换的实际观感（需 Orangepi 5b 重新进入 maskrom 后发送引导程序确认）。
+## 完整 CI 发布门禁实测（2026-11-01，Windows x64，共享工作树）
+
+- 门禁顺序与结果：`dotnet restore UotanStudio.slnx -p:Configuration=Debug` 成功；`dotnet build UotanStudio.slnx --no-restore --nologo -c Debug` 0 错误（2 个既有 CS8604 位于 `UotanStudio.Tests/Devices/DeviceControllerRockchipReconnectionTests.cs`，非本次改动文件）；`dotnet format UotanStudio.slnx whitespace --verify-no-changes` 通过；`dotnet format UotanStudio.slnx style --verify-no-changes` 通过；`dotnet test --solution UotanStudio.slnx --no-build -c Debug` 8224 总计/8202 通过/0 失败/22 跳过（全部为环境门控：`UOTAN_HDC_MIRROR_DIRECT`、`UOTAN_EROFS_CORPUS` 等未设置），耗时 1m38s；`dotnet publish UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Release -r win-x64 --self-contained` 成功输出到 `UotanStudio.Desktop/bin/Release/net10.0/win-x64/publish/`。
+- 顺带修复 whitespace 门禁的两处既有 FINALNEWLINE：`UotanStudio.Tests/Devices/RkdlDeviceE2ETests.cs` 与 `UotanStudio/Views/UiWindowService.cs` 删除文件末尾多余换行（`.editorconfig` 规定 `insert_final_newline = false`）。
+- AOT 发布警告全部来自第三方依赖与 Avalonia 生成的 XAML trampoline：IL2104（LTRData.Extensions、Common.Logging）、IL3053（YamlDotNet 18.1.0）、IL2026（`CompiledAvaloniaXaml` Dock.Model trampoline 调用 `TypeUtilities.TryConvert`）与 Makaretu.Dns 的 Tmds.LibC 仅 Linux 提示；无本次改动文件（FlashViewModel、FlashDeviceUiPolicy、FlashView、Locale）新增的裁剪警告。
+## 瑞芯微发送引导入口合并与槽位切换门控实测（2026-11-01，Windows x64，Debug，共享工作树）
+
+- 链接 bootrom 模式 RKDL 设备（名为 ROCKCHIP）时「切换槽位」下拉按钮禁用：原 maskrom 专属清单 `RockchipMaskromControls` 改为 `RockchipUnsupportedControls`（`SwitchSlotButton`），三参 `IsAvailable` 对 RKDL 模式先拒绝该清单，再叠加 maskrom/loader 阶段拆分。
+- 瑞芯微二级菜单删除「发送引导」按钮：`RkSendBootButton` 的 XAML 定义、点击接线、`FlashDeviceUiPolicy.Entries` 条目、`UpdateModeVisibility` 门控行与 `OnRkSendBootClick` 处理器一并移除，`OnLoadBootClick` 的 RKDL 路径成为唯一传输 loader 的入口。
+- 通用「加载引导」按钮文本改为「发送引导程序」（EN "Send loader programmer"），不再按协议切换标签，`Flash_RkSendBoot` 资源与键集登记删除；`Flash_LoadBootNoDevice`、`Flash_LoadBootRkApplying`、`Flash_LoadBootUnsupported` 与 `FlashService` 的 maskrom 拒绝消息同步改用「发送引导程序」表述。
+- 门禁：`dotnet build UotanStudio.Desktop/UotanStudio.Desktop.csproj -c Debug` 0 警告/0 错误；`UotanStudio.Tests.Flash.FlashDeviceUiPolicyTests` 12 通过/0 失败；`UotanStudio.Tests.Services.LocaleDictionaryTests` 6 通过/0 失败；`dotnet format style` 干净，`whitespace` 仅余 2 个既有 FINALNEWLINE（`RkdlDeviceE2ETests.cs(48)`、`UiWindowService.cs(138)`，非本次改动）。
+- 未验证：真机上 RKDL 设备选中态的「切换槽位」禁用与「发送引导程序」按钮观感（需连接 ROCKCHIP bootrom 设备人工确认）。
 ## 重捕获位置链随旧设备节点消失的修复实测（2026-11-01，Windows x64，Debug，共享工作树，Orangepi 5b）
 
 - 现象：超时诊断（同协议端点清单）显示 ROCKCHIP loader 候选已在快照中（serial=ROCKCHIP，instance=USB\VID_2207&PID_350B\ROCKCHIP）但匹配仍失败。
