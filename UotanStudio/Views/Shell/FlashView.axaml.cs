@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using UotanStudio.ViewModels.Flash;
+using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Shell;
 
@@ -76,6 +77,8 @@ public partial class FlashView : UserControl
     public FlashView()
     {
         InitializeComponent();
+        AvbDisableCommandBox.ItemsSource = AvbToolViewModel.AvailableDisableCommands[..3];
+        AvbDisableCommandBox.SelectedIndex = 0;
         DataContext = _model;
         _model.Attach(this);
         AttachedToVisualTree += (_, _) => _model.OnAttached();

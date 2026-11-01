@@ -395,6 +395,15 @@
                                           HorizontalAlignment="Left"
                                           AutomationProperties.Name="{DynamicResource Flash_DeleteCow}" />
                             </Grid>
+                            <StackPanel Name="AvbOptionsPanel" Spacing="8"
+                                        IsVisible="{Binding #DisableVbmetaBox.IsChecked}">
+                                <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
+                                <TextBlock Text="{DynamicResource Flash_DisableVbmeta}" FontWeight="SemiBold" />
+                                <ComboBox Name="AvbDisableCommandBox" HorizontalAlignment="Stretch" Height="32"
+                                          VerticalContentAlignment="Center"
+                                          SelectedIndex="0"
+                                          AutomationProperties.Name="{DynamicResource Avb_DisableCommandTitle}" />
+                            </StackPanel>
                             <StackPanel Name="RootOptionsPanel" Spacing="8" IsVisible="False">
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
                                 <TextBlock Text="{DynamicResource Flash_AddRoot}" FontWeight="SemiBold" />

@@ -571,10 +571,10 @@
     <value>擦除选中分区</value>
   </data>
   <data name="Flash_DisableVbmeta" xml:space="preserve">
-    <value>禁用AVB</value>
+    <value>禁用 AVB</value>
   </data>
   <data name="Flash_DeleteCow" xml:space="preserve">
-    <value>删除COW分区</value>
+    <value>删除 COW 分区</value>
   </data>
   <data name="Flash_ModeMismatch" xml:space="preserve">
     <value>所选设备模式或权限不支持此刷机包及操作。</value>
