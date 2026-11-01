@@ -59,7 +59,7 @@ public sealed class FlashDeviceUiPolicyTests
         }
 
         Assert.False(FlashDeviceUiPolicy.IsAvailable("FlashSelectedButton", FlashDeviceMode.None));
-        Assert.False(FlashDeviceUiPolicy.IsAvailable("RebootMenuButton", FlashDeviceMode.None));
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("SwitchSlotButton", FlashDeviceMode.None));
     }
 
     [Fact]
@@ -105,8 +105,6 @@ public sealed class FlashDeviceUiPolicyTests
         Assert.True(FlashDeviceUiPolicy.IsAvailable("FlashSelectedButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true));
         Assert.False(FlashDeviceUiPolicy.IsAvailable("ReadbackSelectedButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false));
         Assert.True(FlashDeviceUiPolicy.IsAvailable("ReadbackSelectedButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true));
-        Assert.False(FlashDeviceUiPolicy.IsAvailable("AddRootBox", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false));
-        Assert.True(FlashDeviceUiPolicy.IsAvailable("AddRootBox", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true));
         Assert.False(FlashDeviceUiPolicy.IsAvailable("RkPane", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false));
         Assert.True(FlashDeviceUiPolicy.IsAvailable("RkPane", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true));
     }

@@ -6,6 +6,7 @@
              xmlns:vm="using:UotanStudio.ViewModels.Flash"
              xmlns:vms="using:UotanStudio.ViewModels"
              xmlns:ursa="using:Ursa.Controls"
+             xmlns:controls="using:UotanStudio.Views.Controls"
              mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="820"
              x:Class="UotanStudio.Views.Shell.FlashView"
              x:DataType="vm:FlashViewModel"
@@ -39,6 +40,10 @@
         <Style Selector="Button.pane-action, DropDownButton.pane-action">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Height" Value="NaN" />
+            <Setter Property="Padding" Value="6,4" />
         </Style>
         <Style Selector="MenuFlyoutPresenter">
             <Setter Property="MinWidth" Value="240" />
@@ -103,6 +108,7 @@
                  AllowAutoHide="True">
         <Grid Name="FlashLayout" Margin="12">
             <Border Name="PackageBar" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="5"
+                    VerticalAlignment="Top"
                     Padding="12,10" CornerRadius="8" BorderThickness="1"
                     Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource BorderBrush}">
                 <Grid Name="PackageBarGrid" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10"
@@ -300,52 +306,75 @@
                         <TextBlock Text="{DynamicResource Flash_GeneralOperations}" FontWeight="SemiBold" />
                         <!-- 全协议通用功能 UI -->
                         <StackPanel Spacing="8">
-                            <Button Name="LoadBootButton" Classes="pane-action"
-                                    Click="OnLoadBootClick"
-                                    Content="{DynamicResource Flash_LoadBoot}"
-                                    AutomationProperties.Name="{DynamicResource Flash_LoadBoot}" />
-                            <Button Name="ReadInfoButton" Classes="pane-action"
-                                    Click="OnReadInfoClick"
-                                    Content="{DynamicResource Flash_ReadInfo}" />
-                            <Button Name="ReadbackSelectedButton" Classes="pane-action"
-                                    Click="OnReadbackSelectedClick"
-                                    Content="{DynamicResource Flash_ReadbackSelected}" />
-                            <Button Name="FlashSelectedButton" Classes="pane-action"
-                                    Click="OnFlashSelectedClick"
-                                    Content="{DynamicResource Flash_FlashSelected}" />
-                            <Button Name="EraseSelectedButton" Classes="pane-action"
-                                    Click="OnEraseSelectedClick"
-                                    Content="{DynamicResource Flash_EraseSelected}" />
-                            <Button Name="CancelFlashButton" Classes="pane-action" IsEnabled="False"
-                                    Click="OnCancelFlashClick"
-                                    Content="{DynamicResource Flash_Cancel}" />
-                            <DropDownButton Name="SwitchSlotButton" Classes="pane-action"
-                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                            Content="{DynamicResource Flash_SwitchSlot}">
-                                <DropDownButton.Flyout>
-                                    <MenuFlyout Placement="Bottom">
-                                        <MenuItem Header="{DynamicResource Flash_SlotResetCurrent}" Click="OnSlotResetCurrentClick"
-                                                  HorizontalAlignment="Stretch" TextBlock.TextAlignment="Center" />
-                                        <MenuItem Header="{DynamicResource Flash_SlotSetA}" Click="OnSlotSetAClick"
-                                                  HorizontalAlignment="Stretch" TextBlock.TextAlignment="Center" />
-                                        <MenuItem Header="{DynamicResource Flash_SlotSetB}" Click="OnSlotSetBClick"
-                                                  HorizontalAlignment="Stretch" TextBlock.TextAlignment="Center" />
-                                    </MenuFlyout>
-                                </DropDownButton.Flyout>
-                            </DropDownButton>
-                            <DropDownButton Name="RebootMenuButton" Classes="pane-action"
-                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                            Content="{DynamicResource Flash_RebootMenu}">
-                                <DropDownButton.Flyout>
-                                    <MenuFlyout Placement="Bottom">
-                                        <MenuItem Header="{DynamicResource Device_RebootSystem}" Click="OnRebootSystemClick">
-                                            <MenuItem.Icon>
-                                                <icons:Rotate Width="16" Height="16" />
-                                            </MenuItem.Icon>
-                                        </MenuItem>
-                                    </MenuFlyout>
-                                </DropDownButton.Flyout>
-                            </DropDownButton>
+                            <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                <Button Name="LoadBootButton" Classes="pane-action"
+                                        MinWidth="110"
+                                        Click="OnLoadBootClick"
+                                        ToolTip.Tip="{DynamicResource Flash_LoadBoot}"
+                                        AutomationProperties.Name="{DynamicResource Flash_LoadBoot}">
+                                    <TextBlock Text="{DynamicResource Flash_LoadBoot}"
+                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Button>
+                                <Button Name="ReadInfoButton" Classes="pane-action"
+                                        MinWidth="110"
+                                        Click="OnReadInfoClick"
+                                        ToolTip.Tip="{DynamicResource Flash_ReadInfo}">
+                                    <TextBlock Text="{DynamicResource Flash_ReadInfo}"
+                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Button>
+                                <Button Name="ReadbackSelectedButton" Classes="pane-action"
+                                        MinWidth="110"
+                                        Click="OnReadbackSelectedClick"
+                                        ToolTip.Tip="{DynamicResource Flash_ReadbackSelected}">
+                                    <TextBlock Text="{DynamicResource Flash_ReadbackSelected}"
+                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Button>
+                                <Button Name="FlashSelectedButton" Classes="pane-action"
+                                        MinWidth="110"
+                                        Click="OnFlashSelectedClick"
+                                        ToolTip.Tip="{DynamicResource Flash_FlashSelected}">
+                                    <TextBlock Text="{DynamicResource Flash_FlashSelected}"
+                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Button>
+                                <Button Name="EraseSelectedButton" Classes="pane-action"
+                                        MinWidth="110"
+                                        Click="OnEraseSelectedClick"
+                                        ToolTip.Tip="{DynamicResource Flash_EraseSelected}">
+                                    <TextBlock Text="{DynamicResource Flash_EraseSelected}"
+                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Button>
+                                <Button Name="CancelFlashButton" Classes="pane-action" IsEnabled="False"
+                                        MinWidth="110"
+                                        Click="OnCancelFlashClick"
+                                        ToolTip.Tip="{DynamicResource Flash_Cancel}">
+                                    <TextBlock Text="{DynamicResource Flash_Cancel}"
+                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Button>
+                                <DropDownButton Name="SwitchSlotButton" Classes="pane-action"
+                                                MinWidth="110"
+                                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                                ToolTip.Tip="{DynamicResource Flash_SwitchSlot}">
+                                    <TextBlock Text="{DynamicResource Flash_SwitchSlot}"
+                                               FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                    <DropDownButton.Flyout>
+                                        <MenuFlyout Placement="Bottom">
+                                            <MenuItem Header="{DynamicResource Flash_SlotResetCurrent}" Click="OnSlotResetCurrentClick"
+                                                      HorizontalAlignment="Stretch" TextBlock.TextAlignment="Center" />
+                                            <MenuItem Header="{DynamicResource Flash_SlotSetA}" Click="OnSlotSetAClick"
+                                                      HorizontalAlignment="Stretch" TextBlock.TextAlignment="Center" />
+                                            <MenuItem Header="{DynamicResource Flash_SlotSetB}" Click="OnSlotSetBClick"
+                                                      HorizontalAlignment="Stretch" TextBlock.TextAlignment="Center" />
+                                        </MenuFlyout>
+                                    </DropDownButton.Flyout>
+                                </DropDownButton>
+                            </controls:JustifiedWrapPanel>
                             <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" Margin="0,2" />
                             <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,*"
                                   RowSpacing="6" ColumnSpacing="8" HorizontalAlignment="Stretch">
@@ -360,12 +389,10 @@
                                 <CheckBox Grid.Row="2" Grid.Column="0" Name="ShowAllPartitionsBox"
                                           Content="{DynamicResource Flash_ShowAllPartitions}"
                                           HorizontalAlignment="Left"
-                                          IsEnabled="False"
                                           AutomationProperties.Name="{DynamicResource Flash_ShowAllPartitions}" />
                                 <CheckBox Grid.Row="2" Grid.Column="1" Name="DeleteCowBox"
                                           Content="{DynamicResource Flash_DeleteCow}"
                                           HorizontalAlignment="Left"
-                                          IsEnabled="False"
                                           AutomationProperties.Name="{DynamicResource Flash_DeleteCow}" />
                             </Grid>
                             <StackPanel Name="RootOptionsPanel" Spacing="8" IsVisible="False">
@@ -709,8 +736,15 @@
                                         AutomationProperties.Name="{DynamicResource Flash_RkEraseFlash}" />
                                 <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
                                         Margin="0,2" />
-                                <TextBlock Text="{DynamicResource Flash_RkLbaGroup}" FontSize="12"
-                                           FontWeight="SemiBold" Opacity="0.8" />
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,2">
+                                    <TextBlock Grid.Column="0" Text="{DynamicResource Flash_RkLbaGroup}" FontSize="12"
+                                               FontWeight="SemiBold" Opacity="0.8" VerticalAlignment="Center" />
+                                    <CheckBox Grid.Column="1" Name="RkForceAddressBox"
+                                              Content="{DynamicResource Flash_RkForceAddress}"
+                                              HorizontalAlignment="Right" VerticalAlignment="Center"
+                                              FontSize="12" MinHeight="0" Padding="4,0,0,0"
+                                              AutomationProperties.Name="{DynamicResource Flash_RkForceAddress}" />
+                                </Grid>
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                     <TextBox Grid.Column="0" Name="RkLbaAddressBox" Height="32"
                                              VerticalContentAlignment="Center" Text="0"
@@ -721,10 +755,6 @@
                                              PlaceholderText="{DynamicResource Flash_RkLbaCount}"
                                              AutomationProperties.Name="{DynamicResource Flash_RkLbaCount}" />
                                 </Grid>
-                                <CheckBox Name="RkForceAddressBox"
-                                          Content="{DynamicResource Flash_RkForceAddress}"
-                                          HorizontalAlignment="Left"
-                                          AutomationProperties.Name="{DynamicResource Flash_RkForceAddress}" />
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                     <Button Grid.Column="0" Name="RkLbaReadButton" Classes="pane-action"
                                             Click="OnRkLbaReadClick"

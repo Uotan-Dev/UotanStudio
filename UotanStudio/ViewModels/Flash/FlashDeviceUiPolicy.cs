@@ -74,14 +74,6 @@ internal static class FlashDeviceUiPolicy
         ("EraseSelectedButton", null),
         ("CancelFlashButton", null),
         ("SwitchSlotButton", null),
-        ("RebootMenuButton", null),
-        ("DisableVbmetaBox", null),
-        ("AddRootBox", null),
-        ("EraseDataBox", null),
-        ("RebootAfterBox", null),
-        ("ShowAllPartitionsBox", null),
-        ("DeleteCowBox", null),
-        ("RootOptionsPanel", null),
         // 协议分类 / protocol sections
         ("EdlPane", EdlOnly),
         ("MtkPane", MtkOnly),
@@ -116,8 +108,6 @@ internal static class FlashDeviceUiPolicy
         "ReadbackSelectedButton",
         "FlashSelectedButton",
         "EraseSelectedButton",
-        "AddRootBox",
-        "RootOptionsPanel",
         "RkPane"
     ];
 

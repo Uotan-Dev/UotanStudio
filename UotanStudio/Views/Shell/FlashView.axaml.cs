@@ -55,9 +55,11 @@ public partial class FlashView : UserControl
     /// Height ratio between the list area and the log area in the stacked layout: the list's row capacity comes first.
     /// <para>窄屏时列表区域与日志区域的高度比例：优先保证列表能显示的行数，日志只占下方较小一段。</para>
     /// </summary>
-    private const double StackedListRatio = 2.5;
-    private const double StackedLogRatio = 1;
-    private const double StackedListMinimumHeight = 600;
+    /// <summary>
+    /// Fixed height of the partition table area in the stacked layout (increased by 100px from 600px).
+    /// <para>堆叠布局中分区表格区域的固定高度（在原先 600px 基础上增加 100px）。</para>
+    /// </summary>
+    private const double StackedListHeight = 700;
     private const double StackedLogMinimumHeight = 400;
     /// <summary>
     /// Wrap threshold for the package bar: below this width the buttons move under the path box so the box keeps
@@ -80,6 +82,10 @@ public partial class FlashView : UserControl
         DetachedFromVisualTree += (_, _) => _model.OnDetached();
         SizeChanged += (_, _) => UpdateResponsiveLayout();
         UpdateResponsiveLayout();
+
+        PartitionGrid.AddHandler(RequestBringIntoViewEvent, static (_, e) => e.Handled = true);
+        PartitionPane.AddHandler(RequestBringIntoViewEvent, static (_, e) => e.Handled = true);
+        PageScroll.AddHandler(RequestBringIntoViewEvent, static (_, e) => e.Handled = true, RoutingStrategies.Tunnel);
     }
 
     private void UpdateResponsiveLayout()
@@ -98,6 +104,10 @@ public partial class FlashView : UserControl
         _wide = wide;
         if (wide)
         {
+            PartitionPane.ClearValue(HeightProperty);
+            PartitionPane.ClearValue(MaxHeightProperty);
+            ActionPane.ClearValue(HeightProperty);
+            ActionPane.ClearValue(MaxHeightProperty);
 
             PageScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
             FlashLayout.ColumnDefinitions =
@@ -126,6 +136,8 @@ public partial class FlashView : UserControl
         }
         else
         {
+            var barHeight = _packageButtonsStacked == true ? 94d : 54d;
+            var actionHeight = barHeight + PaneGap + StackedListHeight;
 
             PageScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
             FlashLayout.ColumnDefinitions =
@@ -138,14 +150,15 @@ public partial class FlashView : UserControl
             ];
             FlashLayout.RowDefinitions =
             [
-                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto) { MaxHeight = barHeight + 2 },
                 GapRow(),
-                new RowDefinition(new GridLength(StackedListRatio, GridUnitType.Star))
+                new RowDefinition(new GridLength(StackedListHeight, GridUnitType.Pixel))
                 {
-                    MinHeight = StackedListMinimumHeight
+                    MinHeight = StackedListHeight,
+                    MaxHeight = StackedListHeight
                 },
                 GapRow(),
-                new RowDefinition(new GridLength(StackedLogRatio, GridUnitType.Star))
+                new RowDefinition(new GridLength(StackedLogMinimumHeight, GridUnitType.Pixel))
                 {
                     MinHeight = StackedLogMinimumHeight
                 }
@@ -157,6 +170,11 @@ public partial class FlashView : UserControl
             LogOverallProgress.IsVisible = false;
             PartitionOverallProgress.IsVisible = true;
             LogBox.Margin = new Thickness(12, 0, 12, 12);
+
+            PartitionPane.Height = StackedListHeight;
+            PartitionPane.MaxHeight = StackedListHeight;
+            ActionPane.Height = actionHeight;
+            ActionPane.MaxHeight = actionHeight;
         }
     }
 
@@ -243,6 +261,19 @@ public partial class FlashView : UserControl
             Place(PackageButtonRow, row: 0, column: 2);
             PackageButtonRow.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
         }
+
+        if (_wide == false)
+        {
+            var barHeight = stacked ? 94d : 54d;
+            if (FlashLayout.RowDefinitions.Count > 0)
+            {
+                FlashLayout.RowDefinitions[0].MaxHeight = barHeight + 2;
+            }
+
+            var actionHeight = barHeight + PaneGap + StackedListHeight;
+            ActionPane.Height = actionHeight;
+            ActionPane.MaxHeight = actionHeight;
+        }
     }
 
     private void OnPackagePathLostFocus(object? sender, RoutedEventArgs e) => _model.OnPackagePathLostFocus(sender, e);
@@ -263,7 +294,6 @@ public partial class FlashView : UserControl
     private void OnCancelFlashClick(object? sender, RoutedEventArgs e) => _model.OnCancelFlashClick(sender, e);
     private void OnRootFileSourceChanged(object? sender, SelectionChangedEventArgs e) => _model.OnRootFileSourceChanged(sender, e);
     private void OnReadbackSelectedClick(object? sender, RoutedEventArgs e) => _model.OnReadbackSelectedClick(sender, e);
-    private void OnRebootSystemClick(object? sender, RoutedEventArgs e) => _model.OnRebootSystemClick(sender, e);
     private void OnChooseRootPackageClick(object? sender, RoutedEventArgs e) => _model.OnChooseRootPackageClick(sender, e);
     private void OnChooseMtkDaClick(object? sender, RoutedEventArgs e) => _model.OnChooseMtkDaClick(sender, e);
     private void OnChooseMtkEmiClick(object? sender, RoutedEventArgs e) => _model.OnChooseMtkEmiClick(sender, e);

@@ -779,39 +779,6 @@ public sealed partial class FlashViewModel
         }
     }
 
-    internal async void OnRebootSystemClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming) return;
-        if (SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fastbootDevice)
-        {
-            SetBusy(true);
-            try
-            {
-                await FastbootStepService.RebootAsync(fastbootDevice, null, CancellationToken.None);
-                AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot"));
-            }
-            catch (Exception ex) { AppendError(ex); }
-            finally { SetBusy(false); }
-        }
-        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } || _edlEntries.Count > 0)
-        {
-            OnEdlResetClick(sender, e);
-        }
-        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Mtk } || _mtkResolution is not null)
-        {
-            OnMtkRebootClick(sender, e);
-        }
-        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Rkdl } rkdlDevice)
-        {
-            await RunRkResetAsync(rkdlDevice);
-        }
-        else
-        {
-            AppendLog(_localizer.GetString(SelectedDevice is null
-                ? "Flash_DeviceNotSelected"
-                : "Flash_ProtocolMismatch"));
-        }
-    }
 
     /// <summary>
     /// Reboots an RKDL device through one DEVICE_RESET transaction after an explicit confirmation;
@@ -1472,26 +1439,17 @@ public sealed partial class FlashViewModel
         SetControlEnabled("EdlPartitionDigestButton", !_busy && edlFirehose);
         var mtkStage = MtkStage;
 
-        var isFastbootd =
-            SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fbDevice &&
-            ((_deviceViewModel?.SelectedDevice is { } devInfo && devInfo.IsFastbootd) ||
-             string.Equals(fbDevice.State, "fastbootd", StringComparison.OrdinalIgnoreCase));
-
-        SetControlEnabled("ShowAllPartitionsBox", !_busy && isFastbootd);
-        SetControlEnabled("DeleteCowBox", !_busy && isFastbootd);
-        if (!isFastbootd)
-        {
-            Field<CheckBox>("ShowAllPartitionsBox").IsChecked = false;
-            Field<CheckBox>("DeleteCowBox").IsChecked = false;
-        }
-
+        SetControlEnabled("DisableVbmetaBox", !_busy);
         SetControlEnabled("AddRootBox", !_busy);
+        SetControlEnabled("EraseDataBox", !_busy);
+        SetControlEnabled("RebootAfterBox", !_busy);
+        SetControlEnabled("ShowAllPartitionsBox", !_busy);
+        SetControlEnabled("DeleteCowBox", !_busy);
         UpdateRootControlsState();
         SetControlEnabled("LoadBootButton", !_busy && CanLoadBoot);
         SetControlEnabled("ReadbackSelectedButton", !_busy && (
             (protocol == DeviceProtocolKind.Edl && edlFirehose && HasSelectedEdlEntries()) ||
             (protocol == DeviceProtocolKind.Mtk && _mtkResolution is not null && Partitions.Any(p => p.IsSelected))));
-        SetControlEnabled("RebootMenuButton", !_busy);
         var mtkProtocolReady = !_busy && protocol is DeviceProtocolKind.Mtk && mtkStage != MtkStageLogging;
         SetControlEnabled("MtkXmlPropertyBox", mtkProtocolReady);
         SetControlEnabled("MtkXmlPropertyQueryButton", mtkProtocolReady);
@@ -1509,6 +1467,13 @@ public sealed partial class FlashViewModel
     {
         _busy = value;
         IsBusy = value;
+        SetControlEnabled("DisableVbmetaBox", !value);
+        SetControlEnabled("AddRootBox", !value);
+        SetControlEnabled("EraseDataBox", !value);
+        SetControlEnabled("RebootAfterBox", !value);
+        SetControlEnabled("ShowAllPartitionsBox", !value);
+        SetControlEnabled("DeleteCowBox", !value);
+        SetControlEnabled("RootOptionsPanel", !value);
         SetControlEnabled("EdlPane", !value);
         SetControlEnabled("MtkPane", !value);
         SetControlEnabled("RkPane", !value);
