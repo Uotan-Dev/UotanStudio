@@ -330,6 +330,9 @@
   <data name="Device_Brand" xml:space="preserve">
     <value>Brand</value>
   </data>
+  <data name="Device_RkdlSoc" xml:space="preserve">
+    <value>SoC</value>
+  </data>
   <data name="Device_Codename" xml:space="preserve">
     <value>Codename</value>
   </data>

@@ -505,6 +505,22 @@ public sealed partial class DeviceMonitorService
             return true;
         }
 
+        if (device.Protocol == DeviceProtocolKind.Rkdl)
+        {
+            if (mode != "system")
+            {
+                return false;
+            }
+
+            await RunRkdlAsync(device, session =>
+            {
+                session.ResetDevice();
+                return Task.FromResult(0);
+            }, cancellationToken).ConfigureAwait(false);
+            await ForceRefreshAsync().ConfigureAwait(false);
+            return true;
+        }
+
         if (device.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc)
         {
             await StopLogcatStreamingAsync(device).ConfigureAwait(false);

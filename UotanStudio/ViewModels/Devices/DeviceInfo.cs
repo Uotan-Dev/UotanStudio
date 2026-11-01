@@ -98,7 +98,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 nameof(Mode), nameof(Protocol), nameof(Transport), nameof(DisplayName),
                 nameof(ListTitle), nameof(ListSubtitle), nameof(LinkPort), nameof(UsbIds),
                 nameof(VendorName), nameof(IsAdb), nameof(IsHdc), nameof(HasSystemInfo),
-                nameof(IsFastboot), nameof(SupportsFastbootd), nameof(IsEdl), nameof(IsRkdl),
+                nameof(IsFastboot), nameof(SupportsFastbootd), nameof(IsEdl), nameof(IsRkdl), nameof(RkdlBadge),
                 nameof(IsUsb), nameof(IsNetwork), nameof(IsSerial), nameof(CanManageConnection),
                 nameof(EdlProtocol), nameof(HasEdlProtocol), nameof(EdlBadge),
                 nameof(EdlSaharaVersion), nameof(EdlMaxCommandLength), nameof(EdlFirehoseVersion),
@@ -193,6 +193,7 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
                 OnPropertyChanged(nameof(IsFastbootd));
                 OnPropertyChanged(nameof(StateLabel));
                 OnPropertyChanged(nameof(DisplayName));
+                OnPropertyChanged(nameof(RkdlBadge));
             }
         }
     }
@@ -296,9 +297,10 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
 
     /// <summary>
     /// State text shown to the user: a ready ADB target reads as Android and a ready HDC target as
-    /// HarmonyOS, a detected A/B slot is appended, and every other state stays exactly as enumerated.
+    /// HarmonyOS, a Rockchip target reads its stage as MaskROM/USBPlug/BootROM, a detected A/B slot is
+    /// appended, and every other state stays exactly as enumerated.
     /// <para>面向用户的状态文本：就绪的 ADB 目标显示为 Android，就绪的 HDC 目标显示为 HarmonyOS，
-    /// 检测到 A/B 槽位时追加槽位；其他状态保持枚举得到的原文。</para>
+    /// 瑞芯微目标显示 MaskROM/USBPlug/BootROM 阶段，检测到 A/B 槽位时追加槽位；其他状态保持枚举得到的原文。</para>
     /// </summary>
     public string StateLabel
     {
@@ -306,10 +308,28 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         {
             var label = IsAdb && IsReadyState(State) ? "Android"
                 : IsHdc && IsReadyState(State) ? "HarmonyOS"
+                : IsRkdl ? RkdlStageLabel(State)
                 : State;
             return HasDetectedSlot && IsReadyState(State) ? $"{label} {Slot}" : label;
         }
     }
+
+    /// <summary>
+    /// Maps a discovered Rockchip state to its display stage: the discovered <c>maskrom</c>,
+    /// <c>usbplug</c> and <c>bootrom</c> values read as MaskROM, USBPlug and BootROM, and any other
+    /// value keeps the enumerated text.
+    /// <para>把发现的瑞芯微状态映射为显示阶段：枚举出的 <c>maskrom</c>、<c>usbplug</c> 与 <c>bootrom</c>
+    /// 显示为 MaskROM、USBPlug 与 BootROM；其他值保持枚举原文。</para>
+    /// </summary>
+    /// <param name="state">The discovered Rockchip state. <para>发现层给出的瑞芯微状态。</para></param>
+    /// <returns>The display stage text. <para>用于显示的阶段文本。</para></returns>
+    private static string RkdlStageLabel(string state) => state switch
+    {
+        "maskrom" => "MaskROM",
+        "usbplug" => "USBPlug",
+        "bootrom" => "BootROM",
+        _ => state,
+    };
 
     private bool HasDetectedSlot => Slot.Length > 0 && !string.Equals(Slot, "--", StringComparison.Ordinal);
 
@@ -408,10 +428,60 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
         IsFastboot && Device.VendorId == SpacemiTConstants.UsbVendorId && Device.ProductId == SpacemiTConstants.UsbProductId;
 
     /// <summary>
+    /// Serial the Rockchip loader stage switch writes into the USB descriptor, marking the device as past mask ROM.
+    /// <para>瑞芯微 loader 阶段切换写入 USB 描述符的序列号，标记设备已脱离 Mask ROM。</para>
+    /// </summary>
+    private const string RockchipLoaderSerialMarker = "ROCKCHIP";
+
+    /// <summary>
     /// Fastboot badge text: shows the SoC vendor "SpacemiT" for the K1/K3 gadget instead of the generic mode.
     /// <para>Fastboot 徽章文本：K1/K3 gadget 显示 SoC 厂商 "SpacemiT"，其余显示通用模式名。</para>
     /// </summary>
     public string FastbootBadge => IsSpacemiTFastboot ? "SpacemiT" : "Fastboot";
+
+    /// <summary>
+    /// Rockchip badge text: appends the USB stage from the device state, so a freshly scanned boot ROM reads as
+    /// "RKDL · MaskROM" and the boot-download replacement as "RKDL · USBPlug"; an unreadable stage keeps "RKDL".
+    /// The vendor rewrites the reported serial to <c>ROCKCHIP</c> on the stage switch, so that marker also proves
+    /// the USBPlug stage when the descriptor evidence is missing.
+    /// <para>瑞芯微徽章文本：在 RKDL 后追加设备状态给出的 USB 阶段，新扫描的 Boot ROM 显示
+    /// "RKDL · MaskROM"，引导下载后的设备显示 "RKDL · USBPlug"；阶段不可读时保持 "RKDL"。阶段切换会把
+    /// 上报序列号改写为 <c>ROCKCHIP</c>，因此描述符证据缺失时该标记同样证明 USBPlug 阶段。</para>
+    /// </summary>
+    public string RkdlBadge
+    {
+        get
+        {
+            if (!IsRkdl)
+            {
+                return "RKDL";
+            }
+
+            if (string.Equals(State, "maskrom", StringComparison.OrdinalIgnoreCase))
+            {
+                return "RKDL · MaskROM";
+            }
+
+            if (string.Equals(State, "usbplug", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Device.Serial?.Trim(), RockchipLoaderSerialMarker, StringComparison.OrdinalIgnoreCase))
+            {
+                return "RKDL · USBPlug";
+            }
+
+            return string.Equals(State, "bootrom", StringComparison.OrdinalIgnoreCase) ? "RKDL · BootROM" : "RKDL";
+        }
+    }
+
+    /// <summary>
+    /// Whether the Rockchip stage label and the badge can change after enrichment, so the device entry
+    /// republishes them when the stage text is refreshed.
+    /// <para>瑞芯微阶段标签与徽章是否会在信息丰富后变化；阶段文本刷新时设备条目据此重新发布它们。</para>
+    /// </summary>
+    private void NotifyRkdlStageChanged()
+    {
+        OnPropertyChanged(nameof(StateLabel));
+        OnPropertyChanged(nameof(RkdlBadge));
+    }
 
     /// <summary>
     /// Whether the fastboot device is currently running in user-space fastboot (fastbootd).
@@ -718,6 +788,43 @@ public partial class DeviceInfo(IReadOnlyList<DetectedDevice> endpoints, DeviceV
             _ => "unpaired",
         };
         OnPropertyChanged(nameof(HasIosInfo));
+    }
+
+    /// <summary>
+    /// The Rockchip SoC name read via READ_CHIP_INFO (for example <c>RK3566</c>); empty until queried.
+    /// <para>经 READ_CHIP_INFO 读到的瑞芯微 SoC 名称（如 <c>RK3566</c>），未查询时为空。</para>
+    /// </summary>
+    public string RkdlChipName
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                Model = value;
+                OnPropertyChanged(nameof(HasRkdlInfo));
+                NotifyRkdlStageChanged();
+            }
+        }
+    } = string.Empty;
+
+    /// <summary>
+    /// Whether Rockchip identity info has been queried.
+    /// <para>是否已查询到瑞芯微身份信息。</para>
+    /// </summary>
+    public bool HasRkdlInfo => RkdlChipName.Length > 0;
+
+    /// <summary>
+    /// <para>记录一次只读 READ_CHIP_INFO 查询得到的瑞芯微 SoC 名称，并把品牌固定为瑞芯微/RockChip。</para>
+    /// Records the Rockchip SoC name obtained from one read-only READ_CHIP_INFO query and fixes the
+    /// brand to 瑞芯微/RockChip.
+    /// </summary>
+    /// <param name="chipName">The SoC name reported by the target. <para>目标上报的 SoC 名称。</para></param>
+    internal void SetRkdlInfo(string chipName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(chipName);
+        RkdlChipName = chipName;
+        Brand = "瑞芯微/RockChip";
     }
 
     /// <summary>

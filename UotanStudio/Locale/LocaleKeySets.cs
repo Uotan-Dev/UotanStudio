@@ -3283,6 +3283,7 @@ internal static class LocaleKeySets
         "Device_UsbIds",
         "Device_Vendor",
         "Device_Brand",
+        "Device_RkdlSoc",
         "Device_Codename",
         "Device_SuAccess",
         "Device_SdkVersion",

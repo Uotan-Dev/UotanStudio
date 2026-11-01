@@ -249,6 +249,26 @@ public partial class DeviceViewModel
         is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot;
 
     /// <summary>
+    /// Whether the selected device can reboot into the given quick-reboot mode. RKDL devices only
+    /// support the plain DEVICE_RESET reboot to system; the other modes require ADB/Fastboot/HDC.
+    /// <para>选中设备能否重启到指定快捷重启模式。RKDL 设备仅支持经 DEVICE_RESET 重启到系统；
+    /// 其余模式需要 ADB/Fastboot/HDC。</para>
+    /// </summary>
+    /// <param name="mode">The quick-reboot mode (system/bootloader/fastbootd/recovery/edl).<para>快捷重启模式（system/bootloader/fastbootd/recovery/edl）。</para></param>
+    public bool CanRebootTo(string? mode) => mode switch
+    {
+        "system" => SelectedDevice is not null,
+        "bootloader" or "recovery" or "edl" => SelectedDevice?.Protocol
+            is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot or DeviceProtocolKind.Hdc,
+        _ => false,
+    };
+
+    public bool CanRebootToSystem => CanRebootTo("system");
+    public bool CanRebootToBootloader => CanRebootTo("bootloader");
+    public bool CanRebootToRecovery => CanRebootTo("recovery");
+    public bool CanRebootToEdl => CanRebootTo("edl");
+
+    /// <summary>
     /// Asynchronously reboots the selected device to the specified mode
     /// (system/bootloader/fastbootd/recovery/edl).
     /// <para>异步重启选中设备到指定模式（system/bootloader/fastbootd/recovery/edl）。</para>

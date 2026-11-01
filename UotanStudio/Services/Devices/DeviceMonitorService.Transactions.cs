@@ -487,7 +487,7 @@ public sealed partial class DeviceMonitorService
         catch (Exception error) when (error is TimeoutException or NotSupportedException)
         {
             throw new InvalidOperationException(
-                "The device did not re-enumerate as a Rockchip loader after the loader download; the maskrom lease was released and the flash was stopped instead of reusing that handle. Let the board re-enter maskrom mode (power-cycle or re-trigger maskrom) before retrying the loader download. 下载 loader 后设备未以 Rockchip loader 模式重枚举；已释放 maskrom 租约并停止刷写，不会复用旧句柄。请先让板子重新进入 Maskrom（重新上电或重新触发 Maskrom）再重试 loader 下载。",
+                "The device did not re-enumerate as a Rockchip usbplug device after the loader download; the maskrom lease was released and the flash was stopped instead of reusing that handle. Let the board re-enter maskrom mode (power-cycle or re-trigger maskrom) before retrying the loader download. 下载 loader 后设备未以瑞芯微 usbplug 模式重枚举；已释放 maskrom 租约并停止刷写，不会复用旧句柄。请先让板子重新进入 Maskrom（重新上电或重新触发 Maskrom）再重试 loader 下载。",
                 error);
         }
 

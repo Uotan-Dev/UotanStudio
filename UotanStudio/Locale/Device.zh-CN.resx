@@ -330,6 +330,9 @@
   <data name="Device_Brand" xml:space="preserve">
     <value>品牌</value>
   </data>
+  <data name="Device_RkdlSoc" xml:space="preserve">
+    <value>SoC 型号</value>
+  </data>
   <data name="Device_Codename" xml:space="preserve">
     <value>型号代号</value>
   </data>
