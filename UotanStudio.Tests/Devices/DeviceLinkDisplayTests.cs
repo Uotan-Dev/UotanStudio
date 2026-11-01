@@ -100,6 +100,46 @@ public class DeviceLinkDisplayTests
         Assert.EndsWith($"({state})", device.DisplayName, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("maskrom", "RKDL · MaskROM")]
+    [InlineData("usbplug", "RKDL · USBPlug")]
+    [InlineData("bootrom", "RKDL · BootROM")]
+    [InlineData("MASKROM", "RKDL · MaskROM")]
+    [InlineData("USBPLUG", "RKDL · USBPlug")]
+    [InlineData("device", "RKDL")]
+    public void RkdlBadge_RockchipStage_AppendsWikiModeName(string state, string expected)
+    {
+        var device = Create(DeviceProtocolKind.Rkdl, DeviceTransportKind.Usb, state);
+
+        Assert.Equal(expected, device.RkdlBadge);
+    }
+
+    [Fact]
+    public void RkdlBadge_NonRockchipProtocol_KeepsPlainLabel()
+    {
+        var device = Create(DeviceProtocolKind.Edl, DeviceTransportKind.Usb, "edl");
+
+        Assert.Equal("RKDL", device.RkdlBadge);
+    }
+
+    [Theory]
+    [InlineData("bootrom")]
+    [InlineData("device")]
+    public void RkdlBadge_RockchipSerialMarker_ProvesUsbplugStage(string state)
+    {
+        var device = Create(DeviceProtocolKind.Rkdl, DeviceTransportKind.Usb, state, "ROCKCHIP");
+
+        Assert.Equal("RKDL · USBPlug", device.RkdlBadge);
+    }
+
+    [Fact]
+    public void RkdlBadge_MaskromState_WinsOverSerialMarker()
+    {
+        var device = Create(DeviceProtocolKind.Rkdl, DeviceTransportKind.Usb, "maskrom", "ROCKCHIP");
+
+        Assert.Equal("RKDL · MaskROM", device.RkdlBadge);
+    }
+
     [Fact]
     public void Transport_SelectedServerEndpointWithoutLinkClass_UsesSiblingLinkEvidence()
     {
@@ -225,11 +265,12 @@ public class DeviceLinkDisplayTests
         string? label, DeviceTransportKind expected)
         => Assert.Equal(expected, DeviceMonitorService.MapServerTransport(label));
 
-    private static DeviceInfo Create(DeviceProtocolKind protocol, DeviceTransportKind transport, string state)
+    private static DeviceInfo Create(DeviceProtocolKind protocol, DeviceTransportKind transport, string state,
+        string? serial = null)
         => new(new DetectedDevice
         {
             Key = protocol == DeviceProtocolKind.Hdc ? "hdc:test" : "adb:test",
-            Serial = "test",
+            Serial = serial ?? "test",
             Protocol = protocol,
             Transport = transport,
             State = state

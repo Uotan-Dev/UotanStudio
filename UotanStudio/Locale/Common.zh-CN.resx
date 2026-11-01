@@ -487,7 +487,7 @@
     <value>刷机包</value>
   </data>
   <data name="Flash_PackagePlaceholder" xml:space="preserve">
-    <value>选择刷机包、镜像目录，或粘贴 Payload 链接</value>
+    <value>选择刷机包、镜像目录，或粘贴链接</value>
   </data>
   <data name="Flash_ChooseFile" xml:space="preserve">
     <value>选择文件</value>
@@ -544,25 +544,22 @@
     <value>读取设备信息</value>
   </data>
   <data name="Flash_LoadBoot" xml:space="preserve">
-    <value>加载引导</value>
+    <value>发送引导程序</value>
   </data>
   <data name="Flash_LoadBootNoDevice" xml:space="preserve">
-    <value>请先选择设备，再加载引导。</value>
+    <value>请先选择设备，再发送引导程序。</value>
   </data>
   <data name="Flash_LoadBootNoLoaderRow" xml:space="preserve">
     <value>条目列表中没有命令为 loader 的行；请先导入包含 loader 条目的配置。</value>
   </data>
   <data name="Flash_LoadBootRkApplying" xml:space="preserve">
-    <value>加载引导：正在应用 loader 行 {0}。</value>
+    <value>发送引导程序：正在应用 loader 行 {0}。</value>
   </data>
   <data name="Flash_LoadBootRkDone" xml:space="preserve">
-    <value>loader 已就绪，设备已进入 loader 模式。</value>
-  </data>
-  <data name="Flash_RkSendBoot" xml:space="preserve">
-    <value>发送引导</value>
+    <value>loader 已就绪，设备已进入 usbplug 模式。</value>
   </data>
   <data name="Flash_LoadBootUnsupported" xml:space="preserve">
-    <value>当前设备的协议不支持加载引导。</value>
+    <value>当前设备的协议不支持发送引导程序。</value>
   </data>
   <data name="Flash_ShowAllPartitions" xml:space="preserve">
     <value>显示物理分区</value>
@@ -891,12 +888,8 @@
   <data name="Flash_MtkReboot" xml:space="preserve">
     <value>重启设备</value>
   </data>
-  <data name="Flash_MtkRebootFastboot" xml:space="preserve">
-    <value>重启到 bootloader</value>
-  </data>
-  <data name="Flash_MtkPowerOff" xml:space="preserve">
-    <value>关闭设备</value>
-  </data>
+
+
   <data name="Flash_MtkReadback" xml:space="preserve">
     <value>回读选中分区</value>
   </data>
@@ -915,21 +908,13 @@
   <data name="Flash_MtkRebootConfirm" xml:space="preserve">
     <value>将先启动到存储就绪的代理（会向设备内存装载加载器），再请求正常启动。确定继续？</value>
   </data>
-  <data name="Flash_MtkRebootFastbootConfirm" xml:space="preserve">
-    <value>将先启动到存储就绪的代理（会向设备内存装载加载器），再请求切换到 bootloader；设备是否以 bootloader 重新枚举取决于机型。确定继续？</value>
-  </data>
-  <data name="Flash_MtkPowerOffConfirm" xml:space="preserve">
-    <value>将先启动到存储就绪的代理（会向设备内存装载加载器），再请求关机。确定继续？</value>
-  </data>
+
+
   <data name="Flash_MtkRebootDone" xml:space="preserve">
     <value>已请求设备重启。</value>
   </data>
-  <data name="Flash_MtkRebootFastbootDone" xml:space="preserve">
-    <value>已请求切换到 bootloader。</value>
-  </data>
-  <data name="Flash_MtkPowerOffDone" xml:space="preserve">
-    <value>已请求设备关机。</value>
-  </data>
+
+
   <data name="Flash_MtkDaRequired" xml:space="preserve">
     <value>请先选择 DA/加载器文件。</value>
   </data>
@@ -1221,24 +1206,12 @@
   <data name="Flash_EdlResetDone" xml:space="preserve">
     <value>已请求设备复位。</value>
   </data>
-  <data name="Flash_EdlPowerOff" xml:space="preserve">
-    <value>设备关机</value>
-  </data>
-  <data name="Flash_EdlPowerOffConfirm" xml:space="preserve">
-    <value>将通过 firehose 关闭设备电源，需重新插拔才能继续。确定继续？</value>
-  </data>
-  <data name="Flash_EdlPowerOffDone" xml:space="preserve">
-    <value>已请求设备关机。</value>
-  </data>
-  <data name="Flash_EdlResetToEdl" xml:space="preserve">
-    <value>返回 EDL 下载模式</value>
-  </data>
-  <data name="Flash_EdlResetToEdlConfirm" xml:space="preserve">
-    <value>设备将直接复位回紧急下载模式，当前 firehose 会话随之结束。确定继续？</value>
-  </data>
-  <data name="Flash_EdlResetToEdlDone" xml:space="preserve">
-    <value>已请求设备返回 EDL。</value>
-  </data>
+
+
+
+
+
+
   <data name="Flash_EdlSetActiveSlot" xml:space="preserve">
     <value>活动槽位（a、b、0 或 1）</value>
   </data>
@@ -1380,24 +1353,12 @@
   <data name="Flash_MtkXmlPropertyResult" xml:space="preserve">
     <value>XML 属性 {0} = {1}（信封 {2}，版本 {3}）</value>
   </data>
-  <data name="Flash_MtkRebootMeta" xml:space="preserve">
-    <value>重启进入 META 模式</value>
-  </data>
-  <data name="Flash_MtkRebootAndroidTest" xml:space="preserve">
-    <value>重启进入 Android 测试模式</value>
-  </data>
-  <data name="Flash_MtkRebootMetaConfirm" xml:space="preserve">
-    <value>先启动到存储就绪的代理，再请求 META 模式重启；只有 XML 下载代理定义该启动目标。确定继续？</value>
-  </data>
-  <data name="Flash_MtkRebootAndroidTestConfirm" xml:space="preserve">
-    <value>先启动到存储就绪的代理，再请求 Android 测试模式重启；只有 XML 下载代理定义该启动目标。确定继续？</value>
-  </data>
-  <data name="Flash_MtkRebootMetaDone" xml:space="preserve">
-    <value>已请求 META 模式重启。</value>
-  </data>
-  <data name="Flash_MtkRebootAndroidTestDone" xml:space="preserve">
-    <value>已请求 Android 测试模式重启。</value>
-  </data>
+
+
+
+
+
+
   <data name="Flash_MtkXmlRebootFamilyRequired" xml:space="preserve">
     <value>META 与 Android 测试模式重启只由 XML 下载代理家族定义；请把协议选择框切换到 XML。</value>
   </data>
@@ -3829,9 +3790,7 @@
   <data name="Flash_RebootEdl" xml:space="preserve">
     <value>高通深度刷机 (EDL)</value>
   </data>
-  <data name="Flash_PowerOff" xml:space="preserve">
-    <value>关机</value>
-  </data>
+
   <data name="Flash_ReadbackSelected" xml:space="preserve">
     <value>回读选中分区</value>
   </data>
@@ -3871,4 +3830,4 @@
   <data name="Flash_GeneralOperations" xml:space="preserve">
     <value>通用操作</value>
   </data>
-<data name="Flash_EdlSelectProgrammer" xml:space="preserve"><value>选择 Programmer</value></data><data name="Flash_EdlCustomFile" xml:space="preserve"><value>自选文件</value></data><data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve"><value>自选 Programmer 文件</value></data><data name="Flash_Rockchip" xml:space="preserve"><value>瑞芯微 Rockchip</value></data><data name="Flash_RkSetStorageType" xml:space="preserve"><value>设置存储类型</value></data><data name="Flash_RkEnterMaskrom" xml:space="preserve"><value>进入 Maskrom</value></data><data name="Flash_RkSelectConfig" xml:space="preserve"><value>选择 Config</value></data><data name="Flash_RkConfigPathHint" xml:space="preserve"><value>Config 文件路径</value></data><data name="Flash_RkChooseCustomConfig" xml:space="preserve"><value>自选 Config 文件</value></data><data name="Flash_RkExportConfig" xml:space="preserve"><value>导出 Config</value></data><data name="Flash_Offset" xml:space="preserve"><value>偏移量</value></data><data name="Flash_RkReadInfo" xml:space="preserve"><value>读取芯片信息</value></data><data name="Flash_RkTestDevice" xml:space="preserve"><value>测试设备</value></data><data name="Flash_RkGetStorage" xml:space="preserve"><value>获取当前存储</value></data><data name="Flash_RkChipName" xml:space="preserve"><value>芯片名称</value></data><data name="Flash_RkStorageSize" xml:space="preserve"><value>存储容量</value></data><data name="Flash_RkEraseBlock" xml:space="preserve"><value>擦除块</value></data><data name="Flash_RkPageSize" xml:space="preserve"><value>页大小</value></data><data name="Flash_RkFlashManufacturer" xml:space="preserve"><value>闪存厂商</value></data><data name="Flash_RkSwitchStorage" xml:space="preserve"><value>切换存储</value></data><data name="Flash_RkEraseFlash" xml:space="preserve"><value>擦除 Flash</value></data><data name="Flash_RkEraseFlashConfirm" xml:space="preserve"><value>擦除整块 Flash？设备上的所有分区都会被破坏。</value></data><data name="Flash_RkEraseSectors" xml:space="preserve"><value>擦除扇区</value></data><data name="Flash_RkLbaGroup" xml:space="preserve"><value>LBA 读写</value></data><data name="Flash_RkLbaAddress" xml:space="preserve"><value>起始扇区</value></data><data name="Flash_RkLbaCount" xml:space="preserve"><value>扇区数</value></data><data name="Flash_RkLbaRead" xml:space="preserve"><value>读取 LBA</value></data><data name="Flash_RkLbaWrite" xml:space="preserve"><value>写入 LBA</value></data><data name="Flash_RkForceAddress" xml:space="preserve"><value>强制按地址写</value></data><data name="Flash_RkLbaNotDeclared" xml:space="preserve"><value>该扇区范围不在已加载 Rockchip parameter 分区表的任何分区内；确需写入时请勾选“强制按地址写”。</value></data><data name="Flash_RkLbaCountTooSmall" xml:space="preserve"><value>扇区数小于要写入的文件；请增大扇区数或勾选“强制按地址写”。</value></data><data name="Flash_RkParameterMissing" xml:space="preserve"><value>已加载镜像旁没有 Rockchip parameter 分区表，无法解析分区地址。</value></data><data name="Flash_RkStorageSwitched" xml:space="preserve"><value>存储已切换；设备会重新枚举，请在设备列表中重新选择后再执行下一条命令。</value></data><data name="Flash_RkConfigImported" xml:space="preserve"><value>已导入配置：{0} 行</value></data><data name="Flash_RkCapability" xml:space="preserve"><value>读取能力</value></data><data name="Flash_RkStorage" xml:space="preserve"><value>存储</value></data><data name="Explorer_OpenAsRockchipConfig" xml:space="preserve"><value>瑞芯微配置</value></data><data name="Dock_RkConfig_Name" xml:space="preserve"><value>名称</value></data><data name="Dock_RkConfig_Address" xml:space="preserve"><value>地址</value></data><data name="Dock_RkConfig_Path" xml:space="preserve"><value>路径</value></data><data name="Dock_RkConfig_File" xml:space="preserve"><value>文件</value></data><data name="Dock_RkConfig_Present" xml:space="preserve"><value>存在</value></data><data name="Dock_RkConfig_Missing" xml:space="preserve"><value>缺失</value></data><data name="Dock_RkConfig_Header" xml:space="preserve"><value>头部</value></data><data name="Dock_RkConfig_Tail" xml:space="preserve"><value>尾块</value></data><data name="Dock_RkConfig_Empty" xml:space="preserve"><value>该配置没有行。</value></data><data name="Dock_RkConfig_Summary" xml:space="preserve"><value>头部 {0} 字节 · {1} 行</value></data><data name="UserError_RkConfigLoadFailed" xml:space="preserve"><value>无法解析该配置文件。</value></data><data name="Flash_RootPartitionNotSelected" xml:space="preserve"><value>为 Root 修补选择的分区不在本次烧录范围内，请勾选该分区或改选其他分区。</value></data><data name="Flash_RootPackageMissing" xml:space="preserve"><value>所选版本没有可用的 Root 补丁包，请等待下载完成或改选其他版本。</value></data><data name="Flash_StorageMedium" xml:space="preserve"><value>存储介质</value></data><data name="Flash_RkConfigNoImages" xml:space="preserve"><value>该配置没有镜像行。</value></data><data name="Flash_RkStorageNotSelected" xml:space="preserve"><value>请先在存储类型中选择目标存储；配置本身可以留空。</value></data><data name="Flash_RkLoaderDeclared" xml:space="preserve"><value>加载 Loader：{0}</value></data><data name="Flash_RkLoaderMissing" xml:space="preserve"><value>该配置引用的 Loader 不存在：{0}</value></data><data name="Flash_RkStorageNeedsLoader" xml:space="preserve"><value>设备处于 Mask ROM，无法应答存储查询；读取当前存储前请先加载 Rockchip Loader。</value></data><data name="Flash_RkLoaderChecking" xml:space="preserve"><value>正在检查 loader 文件…</value></data><data name="Flash_RkLoaderValid" xml:space="preserve"><value>loader 有效</value></data><data name="Flash_RkLoaderInvalidStatus" xml:space="preserve"><value>loader 无效</value></data><data name="Flash_RkLoaderNotLoader" xml:space="preserve"><value>不是瑞芯微 loader 镜像：{0}</value></data><data name="Flash_RkLoaderInvalid" xml:space="preserve"><value>瑞芯微 loader 结构非法，{0}：{1}</value></data><data name="Flash_RkLoaderChecksumMismatch" xml:space="preserve"><value>瑞芯微 loader 的校验和与内容不符：{0}</value></data><data name="Flash_RkLoaderChecked" xml:space="preserve"><value>瑞芯微 loader 有效，{0}：{1}</value></data><data name="Flash_RkParameterValid" xml:space="preserve"><value>分区表有效，共 {0} 个分区</value></data><data name="Flash_RkParameterInvalidStatus" xml:space="preserve"><value>分区表无效</value></data><data name="Flash_RkParameterChecked" xml:space="preserve"><value>分区表有效，{0}：{1} 个分区</value></data><data name="Flash_RkParameterInvalid" xml:space="preserve"><value>分区表无效，{0}：{1}</value></data><data name="Flash_CommandNotRunnable" xml:space="preserve"><value>该行没有可用于命令 {0} 的步骤；请重新导入刷机包以重建该行。</value></data></root>
+</root>

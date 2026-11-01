@@ -544,7 +544,7 @@
     <value>Huawei HiSuite driver</value>
   </data>
   <data name="DriverPackage_Rockchip_Coverage" xml:space="preserve">
-    <value>Rockchip and SpacemiT maskrom and loader mode devices</value>
+    <value>Rockchip and SpacemiT maskrom and usbplug mode devices</value>
   </data>
   <data name="DriverPackage_MediaTek_Coverage" xml:space="preserve">
     <value>MediaTek preloader, DA, COM, MBIM and MTP interfaces</value>

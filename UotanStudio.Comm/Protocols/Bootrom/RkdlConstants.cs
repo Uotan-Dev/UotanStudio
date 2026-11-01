@@ -506,24 +506,33 @@ public sealed class RkChipInfo
     public uint Revision { get; set; }
 
     /// <summary>
-    /// Gets the human-readable chip name.
-    /// <para>获取人类可读的芯片名称。</para>
+    /// Gets the display chip name for the tag the device reported.
+    /// <para>获取由设备上报标签得出的显示芯片名。</para>
     /// </summary>
-    /// <value>The name derived from <see cref="ChipId"/>. <para>由 <see cref="ChipId"/> 得出的名称。</para></value>
+    /// <value>
+    /// The name <see cref="GetChipName"/> derives from <see cref="ChipId"/>; a four-digit tag such as the reversed
+    /// <c>8853</c> reads as <c>RK3588</c> so callers never show the wire order.
+    /// <para>由 <see cref="ChipId"/> 经 <see cref="GetChipName"/> 得出的名称；四位数字标签（如倒序的 <c>8853</c>）
+    /// 读作 <c>RK3588</c>，调用方不会看到线上字节序。</para>
+    /// </value>
     public string ChipName => GetChipName(ChipId);
 
     /// <summary>
-    /// Gets the ASCII chip tag returned by READ_CHIP_INFO: the first four bytes of the
-    /// 16-byte response, such as "320A".
-    /// <para>获取 READ_CHIP_INFO 返回的 ASCII 芯片标签：16 字节响应的前 4 字节，如 "320A"。</para>
+    /// Gets the ASCII chip tag returned by READ_CHIP_INFO exactly as the device sent it: the first four bytes of the
+    /// 16-byte response, such as "320A" or the byte-reversed "8853" that stands for RK3588.
+    /// <para>获取 READ_CHIP_INFO 按设备原样返回的 ASCII 芯片标签：16 字节响应的前 4 字节，如 "320A"，或代表
+    /// RK3588 的字节倒序 "8853"。</para>
     /// </summary>
-    /// <value>The four-character ASCII tag. <para>四字符 ASCII 标签。</para></value>
+    /// <value>The four-character ASCII tag in wire order; display the model through <see cref="ChipName"/> instead.
+    /// <para>线上字节序的四字符 ASCII 标签；显示型号请改用 <see cref="ChipName"/>。</para></value>
     public string Tag { get; set; } = string.Empty;
 
     /// <summary>
     /// Returns the chip name for a given chip ID: either the USB-style numeric ID or the ASCII tag carried by the
-    /// chip-info response, in either byte order.
-    /// <para>返回给定芯片 ID 的芯片名称：或为 USB 风格数字 ID，或为芯片信息响应携带的 ASCII 标签，两种字节序均可。</para>
+    /// chip-info response, in either byte order. The tag may also be the chip number packed byte-reversed, the same
+    /// order the RKBOOT and RKFW headers use, so RK3588 arrives as <c>8853</c>.
+    /// <para>返回给定芯片 ID 的芯片名称：或为 USB 风格数字 ID，或为芯片信息响应携带的 ASCII 标签，两种字节序均可。标签也
+    /// 可能是按字节倒序打包的芯片型号，与 RKBOOT、RKFW 头部相同的顺序，因此 RK3588 以 <c>8853</c> 上报。</para>
     /// </summary>
     /// <param name="chipId">The chip ID. <para>芯片 ID。</para></param>
     /// <returns>
@@ -549,6 +558,11 @@ public sealed class RkChipInfo
             0x33333041 or 0x41303333 or 0x330A => "RK3368",
             0x33333043 or 0x43303333 or 0x330C => "RK3399",
             0x33353041 or 0x41303533 or 0x350A => "RK3566",
+            // RK3588 reports the chip number byte-reversed, the order RKBOOT/RKFW headers carry it, so the tag
+            // reads "8853" (the little-endian DWORD is therefore 0x33353838); both wire orders resolve to the name.
+            // <para>RK3588 按 RKBOOT/RKFW 头部使用的字节倒序上报芯片型号，标签读作 "8853"（小端 DWORD 因而是
+            // 0x33353838）；两种线上字节序都解析为同一名称。</para>
+            0x33353838 or 0x38383533 => "RK3588",
             _ => TryReadPrintableTag(chipId, out var tag) ? tag : $"Unknown(0x{chipId:X4})"
         };
     }
@@ -954,7 +968,7 @@ public static class RkdlStorage
 /// RKDL error codes.
 /// <para>RKDL 错误码。</para>
 /// </summary>
-internal enum RkdlError
+public enum RkdlError
 {
     /// <summary>
     /// Operation completed successfully.
@@ -1033,7 +1047,7 @@ internal enum RkdlError
 /// Exception thrown when an RKDL operation fails.
 /// <para>RKDL 操作失败时抛出的异常。</para>
 /// </summary>
-internal class RkdlException : Exception
+public class RkdlException : Exception
 {
     /// <summary>
     /// Gets the RKDL error code.

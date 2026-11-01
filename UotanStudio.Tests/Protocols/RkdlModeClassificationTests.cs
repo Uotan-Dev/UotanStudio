@@ -221,6 +221,8 @@ public sealed class RkdlModeClassificationTests
     [InlineData(0x350A, "RK3566")]
     [InlineData(0x41303233, "RK3288")]
     [InlineData(0x33353041, "RK3566")]
+    [InlineData(0x33353838, "RK3588")]
+    [InlineData(0x38383533, "RK3588")]
     [InlineData(0x42303533, "350B")]
     public void GetChipName_KnownOrTagChipId_ReturnsName(uint chipId, string expected)
         => Assert.Equal(expected, RkChipInfo.GetChipName(chipId));

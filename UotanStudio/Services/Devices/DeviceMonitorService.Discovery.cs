@@ -385,7 +385,7 @@ public sealed partial class DeviceMonitorService
 
     private static int EndpointStateRank(string state) => state switch
     {
-        "device" or "online" or "fastboot" or "loader" => 2,
+        "device" or "online" or "fastboot" or "usbplug" => 2,
         "unauthorized" => 1,
         _ => 0
     };
@@ -463,9 +463,11 @@ public sealed partial class DeviceMonitorService
         };
 
     /// <summary>
-    /// Labels the Rockchip boot ROM stage from the device descriptor's <c>bcdUSB</c> bit, falling back to <c>bootrom</c>
-    /// when the backend could not read that bit.
-    /// <para>依据设备描述符的 <c>bcdUSB</c> 位标注瑞芯微 boot ROM 阶段；后端读不到该位时退回 <c>bootrom</c>。</para>
+    /// Labels the Rockchip stage from the device descriptor's <c>bcdUSB</c> bit using the vendor wiki's terms:
+    /// a clear bit is the maskrom (boot ROM) mode, a set bit is the usbplug mode the boot download step produces,
+    /// and an unreadable descriptor falls back to <c>bootrom</c>.
+    /// <para>依据设备描述符的 <c>bcdUSB</c> 位按厂商 wiki 的术语标注瑞芯微阶段：位为 0 是 maskrom（Boot ROM）模式，
+    /// 位为 1 是引导下载产生的 usbplug 模式；后端读不到该位时退回 <c>bootrom</c>。</para>
     /// </summary>
     /// <param name="info">The enumerated USB device. <para>已枚举的 USB 设备。</para></param>
     /// <returns>The stage label shown in the device list. <para>设备列表中显示阶段标签。</para></returns>
@@ -473,7 +475,7 @@ public sealed partial class DeviceMonitorService
         => RkdlConstants.ClassifyMode(info.ProductId, info.BcdUsb) switch
         {
             RkdlDeviceMode.Maskrom => "maskrom",
-            RkdlDeviceMode.Loader => "loader",
+            RkdlDeviceMode.Loader => "usbplug",
             _ => "bootrom",
         };
 

@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -804,118 +803,7 @@ public sealed partial class FlashViewModel
         }
         else if (SelectedDevice is { Protocol: DeviceProtocolKind.Rkdl } rkdlDevice)
         {
-            await RunRkResetAsync(rkdlDevice, powerOff: false);
-        }
-        else
-        {
-            AppendLog(_localizer.GetString(SelectedDevice is null
-                ? "Flash_DeviceNotSelected"
-                : "Flash_ProtocolMismatch"));
-        }
-    }
-
-    internal async void OnRebootBootloaderClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming) return;
-        if (SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fastbootDevice)
-        {
-            SetBusy(true);
-            try
-            {
-                await FastbootStepService.RebootAsync(fastbootDevice, "bootloader", CancellationToken.None);
-                AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-bootloader"));
-            }
-            catch (Exception ex) { AppendError(ex); }
-            finally { SetBusy(false); }
-        }
-        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Mtk } || _mtkResolution is not null)
-        {
-            OnMtkRebootFastbootClick(sender, e);
-        }
-        else
-        {
-            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
-        }
-    }
-
-    internal async void OnRebootRecoveryClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming) return;
-        if (SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fastbootDevice)
-        {
-            SetBusy(true);
-            try
-            {
-                await FastbootStepService.RebootAsync(fastbootDevice, "recovery", CancellationToken.None);
-                AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-recovery"));
-            }
-            catch (Exception ex) { AppendError(ex); }
-            finally { SetBusy(false); }
-        }
-        else
-        {
-            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
-        }
-    }
-
-    internal async void OnRebootFastbootdClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming) return;
-        if (SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fastbootDevice)
-        {
-            SetBusy(true);
-            try
-            {
-                await FastbootStepService.RebootAsync(fastbootDevice, "fastboot", CancellationToken.None);
-                AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-fastboot"));
-            }
-            catch (Exception ex) { AppendError(ex); }
-            finally { SetBusy(false); }
-        }
-        else
-        {
-            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
-        }
-    }
-
-    internal async void OnRebootEdlClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming) return;
-        if (SelectedDevice is { Protocol: DeviceProtocolKind.Fastboot } fastbootDevice)
-        {
-            SetBusy(true);
-            try
-            {
-                await FastbootStepService.RebootAsync(fastbootDevice, "edl", CancellationToken.None);
-                AppendLog(string.Format(_localizer.GetString("Flash_OkResult"), "reboot-edl"));
-            }
-            catch (Exception ex) { AppendError(ex); }
-            finally { SetBusy(false); }
-        }
-        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } || _edlEntries.Count > 0)
-        {
-            OnEdlResetToEdlClick(sender, e);
-        }
-        else
-        {
-            AppendLog(_localizer.GetString("Flash_ProtocolMismatch"));
-        }
-    }
-
-    internal async void OnPowerOffClick(object? sender, RoutedEventArgs e)
-    {
-        if (_busy || _confirming) return;
-        if (SelectedDevice is { Protocol: DeviceProtocolKind.Edl } || _edlEntries.Count > 0)
-        {
-            OnEdlPowerOffClick(sender, e);
-        }
-        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Mtk } || _mtkResolution is not null)
-        {
-            OnMtkPowerOffClick(sender, e);
-        }
-        else if (SelectedDevice is { Protocol: DeviceProtocolKind.Rkdl } rkdlDevice)
-        {
-            await RunRkResetAsync(rkdlDevice, powerOff: true);
+            await RunRkResetAsync(rkdlDevice);
         }
         else
         {
@@ -926,14 +814,13 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Reboots or powers off an RKDL device through one DEVICE_RESET transaction after an explicit confirmation;
+    /// Reboots an RKDL device through one DEVICE_RESET transaction after an explicit confirmation;
     /// the device re-enumerates, so the device list has to be refreshed before the next command.
-    /// <para>经显式确认后通过一次 DEVICE_RESET 事务重启或关闭 RKDL 设备；设备会重新枚举，下一条命令前需要刷新
+    /// <para>经显式确认后通过一次 DEVICE_RESET 事务重启 RKDL 设备；设备会重新枚举，下一条命令前需要刷新
     /// 设备列表。</para>
     /// </summary>
     /// <param name="device">Target RKDL endpoint.<para>目标 RKDL 端点。</para></param>
-    /// <param name="powerOff">Whether to power off instead of rebooting.<para>是关机而不是重启。</para></param>
-    private async Task RunRkResetAsync(DetectedDevice device, bool powerOff)
+    private async Task RunRkResetAsync(DetectedDevice device)
     {
         if (TopLevel.GetTopLevel(Surface) is not Window owner) return;
         var language = _localizer;
@@ -942,7 +829,7 @@ public sealed partial class FlashViewModel
         try
         {
             confirmed = await DialogService.ConfirmAsync(owner,
-                language.GetString(powerOff ? "Flash_PowerOff" : "Device_RebootSystem"),
+                language.GetString("Device_RebootSystem"),
                 device.DisplayName).ConfigureAwait(true);
         }
         finally
@@ -956,18 +843,10 @@ public sealed partial class FlashViewModel
         {
             await App.DeviceMonitor.RunRkdlAsync(device, session =>
             {
-                if (powerOff)
-                {
-                    session.Shutdown();
-                }
-                else
-                {
-                    session.ResetDevice();
-                }
-
+                session.ResetDevice();
                 return Task.FromResult(0);
             }, CancellationToken.None).ConfigureAwait(true);
-            AppendLog(string.Format(language.GetString("Flash_OkResult"), powerOff ? "poweroff" : "reboot"));
+            AppendLog(string.Format(language.GetString("Flash_OkResult"), "reboot"));
         }
         catch (Exception ex) { AppendError(ex); }
         finally
@@ -1019,51 +898,6 @@ public sealed partial class FlashViewModel
     private async Task ChooseRkLoaderAsync()
     {
         if (_busy || _confirming) return;
-        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Rkdl } device)
-        {
-            AppendLog(_localizer.GetString("Flash_DeviceNotConnected"));
-            return;
-        }
-
-        var row = Partitions.FirstOrDefault(entry =>
-            entry.Command == LoaderCommand && entry.FilePath.Length > 0);
-        if (row is not { } loaderRow)
-        {
-            AppendLog(_localizer.GetString("Flash_LoadBootNoLoaderRow"));
-            return;
-        }
-
-        AppendLog(string.Format(CultureInfo.InvariantCulture,
-            _localizer.GetString("Flash_LoadBootRkApplying"), loaderRow.FilePath));
-        SetBusy(true);
-        try
-        {
-            var valid = await ValidateRkLoaderFileAsync(loaderRow.FilePath).ConfigureAwait(true);
-            UpdateSpecialFileRowStatus(loaderRow, valid);
-            if (!valid)
-            {
-                return;
-            }
-
-            ApplyRkLoaderPath(loaderRow.FilePath);
-            await DownloadRkLoaderAsync(device).ConfigureAwait(true);
-        }
-        catch (Exception ex) { AppendError(ex); }
-        finally
-        {
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
-    /// <summary>
-    /// Sends the applied Rockchip loader to the maskrom device through the 0x0471/0x0472 vendor requests and
-    /// waits for the loader-stage re-enumeration; this is the only RKDL path that transfers a loader.
-    /// <para>把已应用的瑞芯微 loader 经 0x0471/0x0472 vendor 请求发送给 maskrom 设备，并等待 loader 阶段的
-    /// 重枚举；这是唯一会传输 loader 的 RKDL 路径。</para>
-    /// </summary>
-    internal async void OnRkSendBootClick(object? sender, RoutedEventArgs e)
-    {
         if (SelectedDevice is not { Protocol: DeviceProtocolKind.Rkdl } device)
         {
             AppendLog(_localizer.GetString("Flash_DeviceNotConnected"));
@@ -1607,11 +1441,14 @@ public sealed partial class FlashViewModel
 
     /// <summary>
     /// Whether the selected device's observed protocol stage can still accept a boot loader; the load-boot
-    /// entry stays usable only while the device is in such a stage.
-    /// <para>所选设备所处的协议阶段是否仍可接受引导；只有处于该阶段时加载引导入口才保持可用。</para>
+    /// entry stays usable only while the device is in such a stage, so a Rockchip device already running the
+    /// loader (usbplug) leaves it disabled because the boot download cannot run a second time.
+    /// <para>所选设备所处的协议阶段是否仍可接受引导；只有处于该阶段时加载引导入口才保持可用，因此已运行
+    /// loader（usbplug）的瑞芯微设备将其禁用，因为引导下载无法再次执行。</para>
     /// </summary>
     internal bool CanLoadBoot => SelectedDevice is not { } device ||
-        FlashDeviceUiPolicy.IsLoaderStageLoadable(device.Protocol, EdlStage, MtkStage);
+        FlashDeviceUiPolicy.IsLoaderStageLoadable(device.Protocol, EdlStage, MtkStage,
+            IsRockchipLoaderStageDevice);
 
     /// <summary>
     /// Switches the action-pane expansion by the selected device's protocol: expands the protocol-matching
@@ -1651,12 +1488,6 @@ public sealed partial class FlashViewModel
         SetControlEnabled("AddRootBox", !_busy);
         UpdateRootControlsState();
         SetControlEnabled("LoadBootButton", !_busy && CanLoadBoot);
-        var loadBootButton = Field<Button>("LoadBootButton");
-        var loadBootLabel = _localizer.GetString(
-            protocol is DeviceProtocolKind.Rkdl ? "Flash_RkSendBoot" : "Flash_LoadBoot");
-        loadBootButton.Content = loadBootLabel;
-        AutomationProperties.SetName(loadBootButton, loadBootLabel);
-        SetControlEnabled("RkSendBootButton", !_busy && protocol is DeviceProtocolKind.Rkdl && !IsRockchipLoaderStageDevice);
         SetControlEnabled("ReadbackSelectedButton", !_busy && (
             (protocol == DeviceProtocolKind.Edl && edlFirehose && HasSelectedEdlEntries()) ||
             (protocol == DeviceProtocolKind.Mtk && _mtkResolution is not null && Partitions.Any(p => p.IsSelected))));
@@ -3158,25 +2989,6 @@ public sealed partial class FlashViewModel
             (firehose, cancellationToken) => firehose.ResetAsync(cancellationToken));
 
     /// <summary>
-    /// Power-off, the return to EDL and the active-slot switch share the reset path: the same single
-    /// confirmation, the same programmer and authentication configuration, and a response the target did
-    /// not acknowledge reported as a failure rather than as success.
-    /// <para>断电重启之外的三种电源类请求（关机、回到 EDL、切换活动分区）与复位共用同一条路径：同一次确认、
-    /// 同一套 programmer 与鉴权配置，并把未被确认的响应作为失败上报。</para>
-    /// </summary>
-    internal void OnEdlPowerOffClick(object? sender, RoutedEventArgs e)
-        => _ = RunEdlPowerRequestAsync("Flash_EdlPowerOff", "Flash_EdlPowerOffConfirm", "Flash_EdlPowerOffDone",
-            (firehose, cancellationToken) => firehose.PowerOffAsync(cancellationToken));
-
-    /// <summary>
-    /// Returns the device from a firehose session to EDL download mode.
-    /// <para>让设备从 firehose 会话回到 EDL 下载模式。</para>
-    /// </summary>
-    internal void OnEdlResetToEdlClick(object? sender, RoutedEventArgs e)
-        => _ = RunEdlPowerRequestAsync("Flash_EdlResetToEdl", "Flash_EdlResetToEdlConfirm",
-            "Flash_EdlResetToEdlDone", (firehose, cancellationToken) => firehose.ResetToEdlAsync(cancellationToken));
-
-    /// <summary>
     /// Normalises the slot text to a lowercase identifier that may be sent: the reference lineages emit
     /// either <c>slot="a"</c> or <c>slot="1"</c>, so both a/b and 0/1 are accepted here and the value the
     /// user wrote is forwarded unchanged, with no conversion.
@@ -4503,95 +4315,15 @@ public sealed partial class FlashViewModel
         }
     }
 
+    internal void OnMtkRebootClick(object? sender, RoutedEventArgs e)
+        => RunMtkShutdownAsync(MtkXFlashShutdownMode.NormalBoot,
+            "Flash_MtkReboot", "Flash_MtkRebootConfirm", "Flash_MtkRebootDone");
+
     /// <summary>
     /// Transfer speed the Legacy family applies when the speed action runs, in baud.
     /// <para>测速动作在 Legacy 家族上应用的传输速率（波特）。</para>
     /// </summary>
     private const int MtkLegacyTransferSpeed = 921600;
-
-    internal void OnMtkRebootClick(object? sender, RoutedEventArgs e)
-        => RunMtkShutdownAsync(MtkXFlashShutdownMode.NormalBoot,
-            "Flash_MtkReboot", "Flash_MtkRebootConfirm", "Flash_MtkRebootDone");
-    internal void OnMtkRebootFastbootClick(object? sender, RoutedEventArgs e)
-        => RunMtkShutdownAsync(MtkXFlashShutdownMode.Fastboot,
-            "Flash_MtkRebootFastboot", "Flash_MtkRebootFastbootConfirm", "Flash_MtkRebootFastbootDone");
-    internal void OnMtkPowerOffClick(object? sender, RoutedEventArgs e)
-        => RunMtkShutdownAsync(MtkXFlashShutdownMode.PowerOff,
-            "Flash_MtkPowerOff", "Flash_MtkPowerOffConfirm", "Flash_MtkPowerOffDone");
-
-    internal void OnMtkRebootMetaClick(object? sender, RoutedEventArgs e)
-        => RunMtkXmlRebootAsync(MtkXmlBootMode.Meta,
-            "Flash_MtkRebootMeta", "Flash_MtkRebootMetaConfirm", "Flash_MtkRebootMetaDone");
-
-    internal void OnMtkRebootAndroidTestClick(object? sender, RoutedEventArgs e)
-        => RunMtkXmlRebootAsync(MtkXmlBootMode.AndroidTest,
-            "Flash_MtkRebootAndroidTest", "Flash_MtkRebootAndroidTestConfirm", "Flash_MtkRebootAndroidTestDone");
-
-    /// <summary>
-    /// META and Android-test reboots are defined only by the XML download-agent family: a non-XML family is refused
-    /// locally before any device contact; when the family matches, a storage-ready XML agent is booted first and the
-    /// boot destination is requested afterwards under confirmation.
-    /// <para>META 与 Android 测试模式重启只由 XML 下载代理家族定义：非 XML 家族在接触设备前本地拒绝；家族匹配时先
-    /// 启动到存储就绪的 XML 代理，再请求该启动目标，执行前需用户确认。</para>
-    /// </summary>
-    private async void RunMtkXmlRebootAsync(MtkXmlBootMode mode, string titleKey, string confirmKey, string doneKey)
-    {
-        if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
-        var language = _localizer;
-        if (SelectedMtkProtocol != MtkDaProtocol.Xml)
-        {
-            AppendLog(language.GetString("Flash_MtkXmlRebootFamilyRequired"));
-            return;
-        }
-
-        if (!TryReadMtkSelection(out var usbDevice, out var autoMatch))
-        {
-            return;
-        }
-
-        _confirming = true;
-        bool confirmed;
-        try
-        {
-            confirmed = await DialogService.ConfirmAsync(owner, language.GetString(titleKey),
-                language.GetString(confirmKey));
-        }
-        finally { _confirming = false; }
-        if (!confirmed) return;
-
-        SetBusy(true);
-        using var cancellation = new CancellationTokenSource();
-        _flashCancellation = cancellation;
-        SetControlEnabled("CancelFlashButton", true);
-        try
-        {
-            async Task FinishAsync(MtkSession session, CancellationToken token)
-            {
-                await session.RebootXmlAsync(new MtkXmlRebootOptions { Mode = mode }, cancellationToken: token)
-                    .ConfigureAwait(true);
-            }
-
-            var matched = await BuildMtkAutoStartupAsync(SelectedMtkStorageKind, cancellation.Token);
-            await App.DeviceMonitor.RunMtkAsync(usbDevice!, async session =>
-            {
-                var ready = await MtkBootstrap.MatchAsync(session, SelectedMtkProtocol, matched,
-                    cancellation.Token);
-                await FinishAsync(ready, cancellation.Token);
-                return true;
-            }, cancellation.Token);
-
-            AppendLog(language.GetString(doneKey));
-        }
-        catch (OperationCanceledException) { AppendLog(language.GetString("Flash_Canceled")); }
-        catch (Exception ex) { AppendError(ex); }
-        finally
-        {
-            SetBusy(false);
-            _flashCancellation = null;
-            SetControlEnabled("CancelFlashButton", false);
-            UpdateEdlButton();
-        }
-    }
 
     /// <summary>
     /// The shared shell for secure-boot operations: an optional user confirmation, the busy and
@@ -4599,7 +4331,7 @@ public sealed partial class FlashViewModel
     /// <para>安全配置操作的统一外壳：可选的用户确认、忙碌与取消状态、以及结束后按面板状态重算可用性。</para>
     /// </summary>
     private async Task RunMtkSecurityOperationAsync(string titleKey, string? confirmKey,
-        Func<MtkSession, CancellationToken, Task> operation)
+            Func<MtkSession, CancellationToken, Task> operation)
     {
         if (_busy || _confirming || TopLevel.GetTopLevel(Surface) is not Window owner) return;
         var language = _localizer;

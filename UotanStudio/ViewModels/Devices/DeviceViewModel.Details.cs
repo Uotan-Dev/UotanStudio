@@ -13,6 +13,12 @@ public partial class DeviceViewModel
     private const int MtkIdentityTimeoutMs = 5000;
 
     /// <summary>
+    /// Cooperative bound for the Rockchip read-only identity query, so one scan is never held up by a device.
+    /// <para>瑞芯微只读身份查询的协作式时限；到点即放弃，不让一次扫描被设备拖住。</para>
+    /// </summary>
+    private const int RkdlIdentityTimeoutMs = 5000;
+
+    /// <summary>
     /// Cooperative bound for the whole ADB detail query, so a slow device cannot hold the exclusive direct-USB
     /// endpoint long enough to block a mirror start.
     /// <para>整段 ADB 详情查询的协作式时限，使响应慢的设备无法长时间占住独占直连 USB 端点而阻塞投屏启动。</para>
@@ -40,7 +46,7 @@ public partial class DeviceViewModel
         DeviceProtocolKind.Edl => EnrichEdlInfoAsync(device),
         DeviceProtocolKind.Mtk => EnrichMtkInfoAsync(device),
         DeviceProtocolKind.Ios => EnrichIosInfoAsync(device),
-        DeviceProtocolKind.Rkdl => Task.CompletedTask,
+        DeviceProtocolKind.Rkdl => EnrichRkdlInfoAsync(device),
         _ => Task.CompletedTask,
     };
 
@@ -314,6 +320,43 @@ public partial class DeviceViewModel
         if (SelectedDevice == device)
         {
             OnPropertyChanged(nameof(DeviceDetail));
+        }
+    }
+
+    /// <summary>
+    /// <para>对瑞芯微目标做一次只读 READ_CHIP_INFO 查询，把读到的芯片名写入型号并把品牌固定为
+    /// 瑞芯微/RockChip。查询不写任何扇区、不加载 loader 也不复位设备；已查询过或打开会话失败时直接跳过。</para>
+    /// Performs one read-only READ_CHIP_INFO query against a Rockchip target, recording the reported
+    /// chip name as the model and fixing the brand to 瑞芯微/RockChip. The query writes no sector, loads
+    /// no loader and resets nothing; targets already queried or whose session fails to open are skipped.
+    /// </summary>
+    /// <param name="device">The device entry to enrich. <para>待丰富的设备条目。</para></param>
+    /// <returns>A task completing after the query or its bounded failure. <para>查询或其受限失败后完成的任务。</para></returns>
+    private async Task EnrichRkdlInfoAsync(DeviceInfo device)
+    {
+        if (device.HasRkdlInfo)
+        {
+            return;
+        }
+
+        var endpoint = device.Device;
+        try
+        {
+            using var timeout = new CancellationTokenSource(RkdlIdentityTimeoutMs);
+            var chipName = await Task.Run(() => App.DeviceMonitor.RunRkdlAsync(endpoint,
+                session => Task.FromResult(session.ReadChipInfo().ChipName), timeout.Token)
+                .GetAwaiter().GetResult(), timeout.Token).ConfigureAwait(true);
+            if (!ReferenceEquals(device.Device, endpoint) || chipName.Length == 0)
+            {
+                return;
+            }
+
+            device.SetRkdlInfo(chipName);
+        }
+        catch (Exception ex)
+        {
+            _log.Write(LogLevel.Debug, "DeviceManager",
+                $"RKDL identity query for {endpoint.Key} failed: {ex.Message}");
         }
     }
 

@@ -86,7 +86,6 @@ internal static class FlashDeviceUiPolicy
         ("EdlPane", EdlOnly),
         ("MtkPane", MtkOnly),
         ("RkPane", RkdlOnly),
-        ("RkSendBootButton", RkdlOnly),
         // 镜像操作分类 / image operations section
         ("ImagePane", null)
     ];
@@ -123,11 +122,11 @@ internal static class FlashDeviceUiPolicy
     ];
 
     /// <summary>
-    /// Controls a Rockchip device offers only while it is still in mask ROM: the send-boot action, whose vendor
-    /// request a loader-stage device would refuse.
-    /// <para>瑞芯微设备仅在仍处于 Mask ROM 时才提供的控件：发送引导动作；loader 阶段设备会拒绝其 vendor 请求。</para>
+    /// Controls no Rockchip stage can serve: A/B slot switching is a fastboot operation, so neither a bootrom nor a
+    /// loader endpoint can answer it.
+    /// <para>任何瑞芯微阶段都无法服务的控件：A/B 槽位切换是 fastboot 操作，bootrom 与 loader 端点都无法应答。</para>
     /// </summary>
-    internal static IReadOnlyList<string> RockchipMaskromControls { get; } = ["RkSendBootButton"];
+    internal static IReadOnlyList<string> RockchipUnsupportedControls { get; } = ["SwitchSlotButton"];
 
     /// <summary>
     /// Maps the selected device's protocol to the mode whose controls the page offers.
@@ -167,9 +166,10 @@ internal static class FlashDeviceUiPolicy
 
     /// <summary>
     /// Reports whether a control may be used in the given mode and Rockchip stage: a maskrom-stage device gets only
-    /// the send-boot action, and a loader-stage device gets the storage actions and the Rockchip section.
-    /// <para>判断控件在给定模式与瑞芯微阶段下是否可用：maskrom 阶段设备只有发送引导动作，loader 阶段设备才有
-    /// 存储动作与瑞芯微分类。</para>
+    /// the shared info actions, a loader-stage device additionally gets the storage actions and the Rockchip
+    /// section, and fastboot slot switching stays unusable on every Rockchip stage.
+    /// <para>判断控件在给定模式与瑞芯微阶段下是否可用：maskrom 阶段设备只有通用信息动作，loader 阶段设备才有
+    /// 存储动作与瑞芯微分类，而 fastboot 槽位切换在任何瑞芯微阶段都不可用。</para>
     /// </summary>
     /// <param name="controlName">Name of the XAML control. <para>XAML 控件名称。</para></param>
     /// <param name="mode">The mode currently offered by the page. <para>页面当前所处的模式。</para></param>
@@ -190,33 +190,41 @@ internal static class FlashDeviceUiPolicy
             return true;
         }
 
-        return isRockchipLoaderStage
-            ? !RockchipMaskromControls.Contains(controlName, StringComparer.Ordinal)
-            : !RockchipLoaderControls.Contains(controlName, StringComparer.Ordinal);
+        if (RockchipUnsupportedControls.Contains(controlName, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        return isRockchipLoaderStage ||
+            !RockchipLoaderControls.Contains(controlName, StringComparer.Ordinal);
     }
 
     /// <summary>
     /// Reports whether a device in the observed protocol stage can still accept a boot loader: an EDL endpoint
     /// accepts a programmer only before the loader transition completed (unknown or Sahara), an MTK link that
-    /// only logs accepts nothing, and a Rockchip endpoint always can because loading a loader is the way out
-    /// of mask ROM.
+    /// only logs accepts nothing, and a Rockchip endpoint accepts a loader only while it stays in mask ROM,
+    /// because the boot download rewrites the reported serial to the vendor's <c>ROCKCHIP</c> value and the
+    /// loader stage answers the storage commands the page would then use instead.
     /// <para>判断设备所处的协议阶段是否仍可接受引导：EDL 端点只在加载器切换完成前（未知或 Sahara）接受
-    /// programmer，仅日志的 MTK 链路不接受任何加载，瑞芯微端点始终可以，因为加载 loader 正是脱离
-    /// Mask ROM 的途径。</para>
+    /// programmer，仅日志的 MTK 链路不接受任何加载，瑞芯微端点仅在仍处于 Mask ROM 时接受 loader，因为
+    /// 引导下载会把上报序列号改写为厂商 <c>ROCKCHIP</c> 值，而 loader 阶段此后应答的是页面改用的存储命令。</para>
     /// </summary>
     /// <param name="protocol">Protocol of the selected device. <para>所选设备的协议。</para></param>
     /// <param name="edlStage">The EDL wire protocol discovery observed. <para>发现层观测到的 EDL 线协议。</para></param>
     /// <param name="mtkStage">The MTK boot stage token; "logging" marks a link that cannot be upgraded.
     /// <para>联发科启动阶段标记；"logging" 表示无法升级的链路。</para></param>
+    /// <param name="isRockchipLoaderStage">Whether the Rockchip device reports the loader (usbplug) stage, i.e.
+    /// its serial was rewritten to <c>ROCKCHIP</c>. <para>瑞芯微设备是否处于 loader（usbplug）阶段，即序列号已
+    /// 改写为 <c>ROCKCHIP</c>。</para></param>
     /// <returns><see langword="true"/> when the stage can accept a loader.
     /// <para>该阶段可以接受 loader 时为 <see langword="true"/>。</para></returns>
     internal static bool IsLoaderStageLoadable(DeviceProtocolKind protocol, EdlProtocolState edlStage,
-        string mtkStage)
+        string mtkStage, bool isRockchipLoaderStage = false)
         => protocol switch
         {
             DeviceProtocolKind.Edl => edlStage is EdlProtocolState.Unknown or EdlProtocolState.Sahara,
             DeviceProtocolKind.Mtk => !string.Equals(mtkStage, MtkLoggingStage, StringComparison.Ordinal),
-            DeviceProtocolKind.Rkdl => true,
+            DeviceProtocolKind.Rkdl => !isRockchipLoaderStage,
             _ => false,
         };
 

@@ -119,6 +119,10 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanOpenAdbShell));
         OnPropertyChanged(nameof(CanFastbootReadInfo));
         OnPropertyChanged(nameof(CanRebootToFastbootd));
+        OnPropertyChanged(nameof(CanRebootToSystem));
+        OnPropertyChanged(nameof(CanRebootToBootloader));
+        OnPropertyChanged(nameof(CanRebootToRecovery));
+        OnPropertyChanged(nameof(CanRebootToEdl));
         OnPropertyChanged(nameof(CanQuickFlash));
         OnPropertyChanged(nameof(CanBackupRestore));
         OnPropertyChanged(nameof(CanScreenMirror));
@@ -402,6 +406,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             var enrichable = Devices
                 .Where(x => x.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot
                         or DeviceProtocolKind.Hdc or DeviceProtocolKind.Edl or DeviceProtocolKind.Ios
+                        or DeviceProtocolKind.Rkdl
                     || (x.Protocol is DeviceProtocolKind.Mtk && x.State is "brom" or "preloader"))
                 .Where(ShouldEnrich)
                 .ToList();

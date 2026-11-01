@@ -118,14 +118,14 @@
                         <Button Classes="DeviceIconButton"
                                 Command="{Binding RebootCommand}"
                                 CommandParameter="system"
-                                IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                IsEnabled="{Binding CanRebootToSystem}"
                                 ToolTip.Tip="{DynamicResource Device_RebootSystem}">
                             <avalonia:Rotate Width="16" Height="16" />
                         </Button>
                         <Button Classes="DeviceIconButton"
                                 Command="{Binding RebootCommand}"
                                 CommandParameter="bootloader"
-                                IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                IsEnabled="{Binding CanRebootToBootloader}"
                                 ToolTip.Tip="{DynamicResource Device_RebootBootloader}">
                             <avalonia:Cpu Width="16" Height="16" />
                         </Button>
@@ -141,14 +141,14 @@
                         <Button Classes="DeviceIconButton"
                                 Command="{Binding RebootCommand}"
                                 CommandParameter="recovery"
-                                IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                IsEnabled="{Binding CanRebootToRecovery}"
                                 ToolTip.Tip="{DynamicResource Device_RebootRecovery}">
                             <avalonia:Internet Width="16" Height="16" />
                         </Button>
                         <Button Classes="DeviceIconButton"
                                 Command="{Binding RebootCommand}"
                                 CommandParameter="edl"
-                                IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                IsEnabled="{Binding CanRebootToEdl}"
                                 ToolTip.Tip="{DynamicResource Device_RebootEdl}">
                             <avalonia:Download Width="16" Height="16" />
                         </Button>
@@ -316,7 +316,7 @@
                                                 </Border>
                                                 <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
                                                         IsVisible="{Binding IsRkdl}">
-                                                    <TextBlock Text="RKDL" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
+                                                    <TextBlock Text="{Binding RkdlBadge}" FontSize="10" Foreground="{DynamicResource AccentHoverForeground}" />
                                                 </Border>
                                                 <Border Classes="ModeChip" Background="#37474F"
                                                         IsVisible="{Binding IsIos}">
@@ -397,7 +397,7 @@
                                         </Border>
                                         <Border Classes="ModeChip" Background="{DynamicResource SemiColorPrimary}"
                                                 IsVisible="{Binding IsRkdl}">
-                                            <TextBlock Text="RKDL" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
+                                            <TextBlock Text="{Binding RkdlBadge}" FontSize="11" Foreground="{DynamicResource AccentHoverForeground}" />
                                         </Border>
                                         <Border Classes="ModeChip"
                                                 Background="{DynamicResource SemiColorPrimaryLight}"
@@ -748,7 +748,7 @@
                         <Border Classes="InfoCard" IsVisible="{Binding IsRkdl}">
                             <StackPanel>
                                 <TextBlock Classes="CardCaption" Text="{DynamicResource Device_RkdlInfo}" />
-                                <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                                <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
                                     <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
                                                Text="{DynamicResource Device_UsbIds}"
                                                IsVisible="{Binding UsbIds, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
@@ -762,9 +762,23 @@
                                                Text="{Binding State}" />
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Classes="CardLabel"
-                                               Text="{DynamicResource Device_Model}" />
+                                               Text="{DynamicResource Device_Brand}" />
                                     <TextBlock Grid.Row="2" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding Brand}" />
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_Model}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Classes="CardValue"
                                                Text="{Binding Model}" />
+
+                                    <!-- READ_CHIP_INFO 读到的 SoC 名称；未读到时整行隐藏。 -->
+                                    <!-- The SoC name read by READ_CHIP_INFO; the row hides when nothing was read. -->
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_RkdlSoc}"
+                                               IsVisible="{Binding HasRkdlInfo}" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding RkdlChipName}"
+                                               IsVisible="{Binding HasRkdlInfo}" />
                                 </Grid>
                             </StackPanel>
                         </Border>
