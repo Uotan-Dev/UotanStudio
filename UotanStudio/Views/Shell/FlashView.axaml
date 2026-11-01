@@ -204,7 +204,6 @@
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate x:DataType="vm:FlashPartitionEntry">
                                             <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                                      IsEnabled="{Binding CanSelect}"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       MinWidth="0" Padding="0"
                                                       AutomationProperties.Name="{Binding Name}" />
@@ -299,10 +298,12 @@
                     <StackPanel Margin="12" Spacing="10">
                         <!-- 通用操作标题 -->
                         <TextBlock Text="{DynamicResource Flash_GeneralOperations}" FontWeight="SemiBold" />
-                        <TextBlock Name="SelectedDeviceLabel" Text="{Binding SelectedDeviceText}"
-                                   FontSize="12" Opacity="0.8" TextWrapping="Wrap" />
                         <!-- 全协议通用功能 UI -->
                         <StackPanel Spacing="8">
+                            <Button Name="LoadBootButton" Classes="pane-action"
+                                    Click="OnLoadBootClick"
+                                    Content="{DynamicResource Flash_LoadBoot}"
+                                    AutomationProperties.Name="{DynamicResource Flash_LoadBoot}" />
                             <Button Name="ReadInfoButton" Classes="pane-action"
                                     Click="OnReadInfoClick"
                                     Content="{DynamicResource Flash_ReadInfo}" />
@@ -708,6 +709,10 @@
                         <Expander Name="RkExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Rockchip}" IsExpanded="{Binding IsRockchipSectionExpanded, Mode=TwoWay}">
                             <StackPanel Name="RkPane" Spacing="8">
+                                <Button Name="RkSendBootButton" Classes="pane-action"
+                                        Click="OnRkSendBootClick"
+                                        Content="{DynamicResource Flash_RkSendBoot}"
+                                        AutomationProperties.Name="{DynamicResource Flash_RkSendBoot}" />
                                 <TextBlock Text="{DynamicResource Flash_RkSetStorageType}" FontSize="12" Opacity="0.8" />
                                 <ComboBox Name="RkStorageTypeBox" Height="32" VerticalContentAlignment="Center"
                                           HorizontalAlignment="Stretch"

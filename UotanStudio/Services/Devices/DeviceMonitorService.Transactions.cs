@@ -420,9 +420,9 @@ public sealed partial class DeviceMonitorService
     /// <returns>The value produced by the flash phase. <para>刷写阶段产生的值。</para></returns>
     /// <exception cref="InvalidOperationException">The device did not re-enumerate into loader mode
     /// within the offer timeout, the previous endpoint lacks the USB evidence the controller requires
-    /// to identify its replacement, or the replacement still reports a maskrom/bootrom product ID.
+    /// to identify its replacement, or the replacement still reports the maskrom stage.
     /// <para>设备未在提议超时内重枚举为 loader 模式、旧端点缺少控制器识别替代端点所需的 USB 证据，
-    /// 或替代端点仍报告 maskrom/bootrom 产品 ID。</para></exception>
+    /// 或替代端点仍报告 maskrom 阶段。</para></exception>
     /// <exception cref="IOException">The re-enumerated endpoint does not expose an RKDL session.
     /// <para>重枚举出的端点未提供 RKDL 会话。</para></exception>
     internal async Task<TResult> RunRkdlLoaderTransitionAsync<TResult>(DetectedDevice device,
@@ -435,6 +435,13 @@ public sealed partial class DeviceMonitorService
         RkdlLoaderTransitionOffer? observedOffer = null;
         var transitionExpected = await RunRkdlOnLeaseAsync(device, async (session, lease, token) =>
         {
+            // The stage switch replaces the old device node, so its stable hub chain must be captured while
+            // the lease keeps the node alive; the later wait re-reads nothing after the node is gone.
+            // <para>阶段切换会替换旧设备节点，因此必须在租约保持节点存活时捕获其稳定集线器链；节点消失后
+            // 后续等待读不到任何链。</para>
+            var stickyChain = lease.Endpoint.UsbInfo is { } previousInfo
+                ? DeviceController.CaptureUsbLocationChain(previousInfo)
+                : null;
             var observed = await loaderPhase(session, token).ConfigureAwait(false);
             observedOffer = observed is null
                 ? null
@@ -442,6 +449,7 @@ public sealed partial class DeviceMonitorService
                 {
                     PreviousEndpoint = lease.Endpoint,
                     ObservedGeneration = lease.Generation,
+                    StickyLocationChain = stickyChain,
                 };
             return observed is not null;
         }, cancellationToken).ConfigureAwait(false);
@@ -461,19 +469,25 @@ public sealed partial class DeviceMonitorService
             var timeoutMs = (int)Math.Clamp(offer.Timeout.TotalMilliseconds, 1, 86_400_000);
             try
             {
+                // The loader switch rewrites the reported serial (maskrom digits → ROCKCHIP) and may change the
+                // OS container id, so the loader-stage replacement is matched by physical location plus
+                // loader-stage evidence instead of the container identity.
+                // <para>loader 切换会改写上报的序列号（maskrom 数字 → ROCKCHIP），操作系统容器 ID 也可能变化，
+                // 因此 loader 阶段替代端点按物理位置加 loader 阶段证据匹配，而不按容器身份匹配。</para>
+                replacement = await _controller.WaitForUsbReconnectAsync(previous, DeviceSessionKind.Bootrom,
+                    UsbReconnectIdentityPolicy.RockchipLoader, timeoutMs, cancellationToken,
+                    offer.StickyLocationChain).ConfigureAwait(false);
+            }
+            catch (NotSupportedException)
+            {
                 replacement = await _controller.WaitForUsbReconnectAsync(previous,
                     DeviceSessionKind.Bootrom, timeoutMs, cancellationToken).ConfigureAwait(false);
-            }
-            catch (NotSupportedException) when (previous.UsbInfo?.ContainerId is null)
-            {
-                replacement = await _controller.WaitForUsbReconnectAsync(previous, DeviceSessionKind.Bootrom,
-                    UsbReconnectIdentityPolicy.PhysicalPort, timeoutMs, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception error) when (error is TimeoutException or NotSupportedException)
         {
             throw new InvalidOperationException(
-                "The device did not re-enumerate as a Rockchip loader after the loader download; the maskrom lease was released and the flash was stopped instead of reusing that handle. 下载 loader 后设备未以 Rockchip loader 模式重枚举；已释放 maskrom 租约并停止刷写，不会复用旧句柄。",
+                "The device did not re-enumerate as a Rockchip loader after the loader download; the maskrom lease was released and the flash was stopped instead of reusing that handle. Let the board re-enter maskrom mode (power-cycle or re-trigger maskrom) before retrying the loader download. 下载 loader 后设备未以 Rockchip loader 模式重枚举；已释放 maskrom 租约并停止刷写，不会复用旧句柄。请先让板子重新进入 Maskrom（重新上电或重新触发 Maskrom）再重试 loader 下载。",
                 error);
         }
 
@@ -484,7 +498,7 @@ public sealed partial class DeviceMonitorService
                 throw new IOException("The re-enumerated device does not expose an RKDL session.");
             }
 
-            if (!session.IsRockusbMode)
+            if (session.IsMaskromMode)
             {
                 throw new InvalidOperationException(
                     $"The re-enumerated Rockchip device reports product ID 0x{session.ProductId:X4} in " +

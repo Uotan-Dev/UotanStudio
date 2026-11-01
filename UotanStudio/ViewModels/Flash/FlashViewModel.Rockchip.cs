@@ -57,35 +57,40 @@ public sealed partial class FlashViewModel
         => _rkLoaderPath is { Length: > 0 } loader && File.Exists(loader) ? loader : null;
 
     /// <summary>
-    /// Whether the page holds a legal loader row, which is what makes the Rockchip flash actions and the Rockchip
-    /// section usable at all.
-    /// <para>页面是否持有合法的 loader 行，这决定了瑞芯微刷写动作与瑞芯微分类是否可用。</para>
+    /// Whether the selected Rockchip device already reports the loader stage: the stage switch rewrote the
+    /// maskrom serial to the vendor's <c>ROCKCHIP</c> value. This is what makes the Rockchip flash actions and
+    /// the Rockchip section usable.
+    /// <para>所选瑞芯微设备是否已处于 loader 阶段：阶段切换把 maskrom 序列号改写为厂商的 <c>ROCKCHIP</c> 值。
+    /// 这决定了瑞芯微刷写动作与瑞芯微分类是否可用。</para>
     /// </summary>
     /// <remarks>
     /// A Rockchip device in mask ROM answers only the information commands, so every storage command needs a running
-    /// loader. The loader is therefore a precondition of the page, not an option of one action: this flag gates the
-    /// actions through <see cref="FlashDeviceUiPolicy.IsAvailable(string, FlashDeviceMode, bool)"/> and is republished
-    /// whenever the imported configuration or the loader row's file changes.
-    /// <para>处于 Mask ROM 的瑞芯微设备只应答信息类命令，因此所有存储命令都需要已运行的 loader。loader 因此是页面的
-    /// 前置条件而不是某个动作的选项：该标志经
-    /// <see cref="FlashDeviceUiPolicy.IsAvailable(string, FlashDeviceMode, bool)"/> 门控这些动作，并在导入配置或
-    /// loader 行的文件变化时重新发布。</para>
+    /// loader; the booted loader is therefore the precondition of the page, not an option of one action. This flag
+    /// gates the actions through <see cref="FlashDeviceUiPolicy.IsAvailable(string, FlashDeviceMode, bool)"/> and is
+    /// republished whenever the selected device changes.
+    /// <para>处于 Mask ROM 的瑞芯微设备只应答信息类命令，因此所有存储命令都需要已运行的 loader；已启动的 loader
+    /// 是页面的前置条件而不是某个动作的选项。该标志经
+    /// <see cref="FlashDeviceUiPolicy.IsAvailable(string, FlashDeviceMode, bool)"/> 门控这些动作，并在所选设备
+    /// 变化时重新发布。</para>
     /// </remarks>
-    private bool HasRockchipLoader => EffectiveRkLoaderPath is not null;
+    private bool IsRockchipLoaderStageDevice => string.Equals(
+        SelectedDevice?.Serial?.Trim(), "ROCKCHIP", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Republished whenever <see cref="HasRockchipLoader"/> can have changed, so the gate is re-applied to the page.
-    /// <para><see cref="HasRockchipLoader"/> 可能变化时调用，使门控重新施加到页面。</para>
+    /// Republished whenever the selected device changes, so the stage gate is re-applied to the page.
+    /// <para>所选设备变化时调用，使阶段门控重新施加到页面。</para>
     /// </summary>
     private void RefreshRockchipLoaderGate()
     {
-        OnPropertyChanged(nameof(HasRockchipLoader));
+        OnPropertyChanged(nameof(IsRockchipLoaderStageDevice));
         RefreshDeviceUiGate();
     }
 
     /// <summary>
-    /// Points the loader at one file, re-applies the gate and reports the loader the configured flash actions will use.
-    /// <para>把 loader 指向某个文件，重新施加门控并报告配置后的刷写动作将使用的 loader。</para>
+    /// Points the loader at one file and re-applies the gate, so the configured flash actions use it; whether the file
+    /// is a legal loader is reported once by the check that owns it, so no verdict is logged here.
+    /// <para>把 loader 指向某个文件并重新施加门控，使配置后的刷写动作使用它；文件是否为合法 loader 由负责该检查的
+    /// 一处报告，因此这里不写结论日志。</para>
     /// </summary>
     /// <param name="path">Loader image the user picked, or an empty value to drop it.
     /// <para>用户选择的 loader 镜像；空值表示清除。</para></param>
@@ -93,19 +98,24 @@ public sealed partial class FlashViewModel
     {
         _rkLoaderPath = path is { Length: > 0 } ? path : null;
         RefreshRockchipLoaderGate();
-        if (EffectiveRkLoaderPath is { } loader)
-        {
-            AppendLog(string.Format(CultureInfo.InvariantCulture,
-                _localizer.GetString("Flash_RkLoaderDeclared"), loader));
-            return;
-        }
-
-        if (_rkLoaderPath is { } missing)
-        {
-            AppendLog(string.Format(CultureInfo.InvariantCulture,
-                _localizer.GetString("Flash_RkLoaderMissing"), missing));
-        }
     }
+
+    /// <summary>
+    /// Suppresses the re-check a row property change would start while the in-row file picker writes the picked file
+    /// into the row, so that one pick runs one check and reports one verdict line.
+    /// <para>行内文件选择器把选中文件写入行期间抑制属性变化触发的重查，使一次选择只运行一次检查、只写一行结论。</para>
+    /// </summary>
+    private bool _suppressSpecialFileRowCheck;
+
+    /// <summary>
+    /// Publishes the verdict of a loader-row check on the row, so the row and the log always state the same outcome.
+    /// <para>把 loader 行检查的结论发布到该行，使行状态与日志始终表述同一结果。</para>
+    /// </summary>
+    /// <param name="row">Loader row that owns the verdict. <para>承载该结论的 loader 行。</para></param>
+    /// <param name="valid">Whether the loader handler accepted the file.
+    /// <para>loader 处理器是否接受了该文件。</para></param>
+    private void PublishRkLoaderStatus(FlashPartitionEntry row, bool valid)
+        => row.StatusText = _localizer.GetString(valid ? "Flash_RkLoaderValid" : "Flash_RkLoaderInvalidStatus");
 
     /// <summary>
     /// Checks whether one file is a Rockchip loader this page can hand to the RKDL flash path, and reports the outcome.
@@ -187,11 +197,14 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Re-checks the file an imported <c>Loader</c> row points at and publishes the verdict on that row.
-    /// <para>重新检查导入的 <c>Loader</c> 行所指向的文件，并把结论发布到该行。</para>
+    /// Publishes the loader verdict on its row: with a verdict already computed for the same file it is published
+    /// without re-reading, otherwise the file is re-checked here.
+    /// <para>把 loader 结论发布到其行：调用方已对同一文件算出结论时直接发布而不重读文件，否则在此重查。</para>
     /// </summary>
     /// <param name="row">Loader row whose file is checked; the row keeps its text while the check runs.
     /// <para>待检查文件的 loader 行；检查期间该行保持原有文本。</para></param>
+    /// <param name="knownValid">The verdict a caller already computed for the same file, or <see langword="null"/> to
+    /// re-check. <para>调用方对同一文件已算出的结论；<see langword="null"/> 表示在此重查。</para></param>
     /// <returns>A task that completes when the row status carries the verdict.
     /// <para>行状态已携带结论时完成的任务。</para></returns>
     /// <remarks>
@@ -200,7 +213,7 @@ public sealed partial class FlashViewModel
     /// <para>选择器只证明文件存在，因此用户在行内刚点选文件的 loader 行同样在这里检查：loader 按声明的结构与末尾校验和
     /// 判定，而不是按文件名。</para>
     /// </remarks>
-    private async Task UpdateRkLoaderRowStatusAsync(FlashPartitionEntry row)
+    private async Task UpdateRkLoaderRowStatusAsync(FlashPartitionEntry row, bool? knownValid = null)
     {
         var language = _localizer;
         if (row.FilePath.Length == 0)
@@ -209,16 +222,22 @@ public sealed partial class FlashViewModel
             return;
         }
 
+        if (knownValid is { } valid)
+        {
+            PublishRkLoaderStatus(row, valid);
+            RefreshRockchipLoaderGate();
+            return;
+        }
+
         row.StatusText = language.GetString("Flash_RkLoaderChecking");
         try
         {
-            var valid = await ValidateRkLoaderFileAsync(row.FilePath).ConfigureAwait(true);
-            row.StatusText = language.GetString(valid ? "Flash_RkLoaderValid" : "Flash_RkLoaderInvalidStatus");
+            PublishRkLoaderStatus(row, await ValidateRkLoaderFileAsync(row.FilePath).ConfigureAwait(true));
         }
         catch (Exception ex)
         {
             AppendError(ex);
-            row.StatusText = language.GetString("Flash_RkLoaderInvalidStatus");
+            PublishRkLoaderStatus(row, valid: false);
         }
 
         RefreshRockchipLoaderGate();
@@ -273,50 +292,21 @@ public sealed partial class FlashViewModel
         var lines = new List<string>();
         var loader = EffectiveRkLoaderPath;
 
-        if (loader is null)
+        await App.DeviceMonitor.RunRkdlAsync(device, session =>
         {
-            await App.DeviceMonitor.RunRkdlAsync(device, session =>
+            lines.AddRange(ReadRkDeviceInformation(session, language));
+            if (session.IsMaskromMode)
             {
-                lines.AddRange(ReadRkDeviceInformation(session, language));
-                if (session.IsMaskromMode)
-                {
-                    lines.Add(language.GetString("Flash_RkStorageNeedsLoader"));
-                }
-                else
-                {
-                    storageLabel = DescribeRkStorage(session.ReadStorage());
-                    lines.Add($"{language.GetString("Flash_RkStorage")}: {storageLabel}");
-                }
+                lines.Add(language.GetString("Flash_RkStorageNeedsLoader"));
+            }
+            else
+            {
+                storageLabel = DescribeRkStorage(session.ReadStorageMask());
+                lines.Add($"{language.GetString("Flash_RkStorage")}: {storageLabel}");
+            }
 
-                return Task.FromResult(true);
-            }, CancellationToken.None).ConfigureAwait(true);
-        }
-        else
-        {
-            var loaderBytes = await File.ReadAllBytesAsync(loader).ConfigureAwait(true);
-            await App.DeviceMonitor.RunRkdlLoaderTransitionAsync(device,
-                async (session, token) =>
-                {
-                    if (session.IsRockusbMode)
-                    {
-                        return null;
-                    }
-
-                    AppendLog(string.Format(CultureInfo.InvariantCulture,
-                        language.GetString("Flash_RkLoaderDeclared"), loader));
-                    session.WarmUpForLoaderDownload();
-                    await session.DownloadBootLoaderAsync(loaderBytes, token).ConfigureAwait(false);
-                    return session.CreateLoaderTransitionOffer();
-                },
-                (session, _) =>
-                {
-                    lines.AddRange(ReadRkDeviceInformation(session, language));
-                    storageLabel = DescribeRkStorage(session.ReadStorage());
-                    lines.Add($"{language.GetString("Flash_RkStorage")}: {storageLabel}");
-                    return Task.FromResult(true);
-                },
-                CancellationToken.None).ConfigureAwait(true);
-        }
+            return Task.FromResult(true);
+        }, CancellationToken.None).ConfigureAwait(true);
 
         foreach (var line in lines)
         {
@@ -324,6 +314,44 @@ public sealed partial class FlashViewModel
         }
 
         ApplyReportedRkStorage(storageLabel);
+    }
+
+    /// <summary>
+    /// Downloads the applied Rockchip loader on the maskrom lease and waits for the device to re-enumerate
+    /// as a loader, so loading a boot transfers the image the way the official tool's download-boot step does.
+    /// <para>在 maskrom 租约上下载已应用的瑞芯微 loader，并等待设备以 loader 模式重新枚举，使加载引导像
+    /// 官方工具的下载 Boot 步骤一样真正传输镜像。</para>
+    /// </summary>
+    /// <param name="device">Target RKDL endpoint. <para>目标 RKDL 端点。</para></param>
+    private async Task DownloadRkLoaderAsync(DetectedDevice device)
+    {
+        var language = _localizer;
+        var loader = EffectiveRkLoaderPath;
+        if (loader is null)
+        {
+            return;
+        }
+
+        var loaderBytes = await File.ReadAllBytesAsync(loader).ConfigureAwait(true);
+        await App.DeviceMonitor.RunRkdlLoaderTransitionAsync(device,
+            async (session, token) =>
+            {
+                if (session.IsRockusbMode)
+                {
+                    return null;
+                }
+
+                AppendLog(string.Format(CultureInfo.InvariantCulture,
+                    language.GetString("Flash_RkLoaderDeclared"), loader));
+                await session.DownloadBootLoaderAsync(loaderBytes, token).ConfigureAwait(false);
+                return session.CreateLoaderTransitionOffer();
+            },
+            (_, _) =>
+            {
+                AppendLog(language.GetString("Flash_LoadBootRkDone"));
+                return Task.FromResult(true);
+            },
+            CancellationToken.None).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -339,34 +367,31 @@ public sealed partial class FlashViewModel
     private static List<string> ReadRkDeviceInformation(RkdlSession session, ILocalizer language)
     {
         var capability = session.ReadCapability();
+        var chipInfo = session.ReadChipInfo();
         var flashId = session.ReadFlashId();
-        return
-        [
-            $"{language.GetString("Flash_RkCapability")}: 0x{Convert.ToHexString(capability.Raw)}",
-            $"DirectLBA={capability.DirectLba} First4M={capability.First4MAccess}",
-            $"FlashID: 0x{Convert.ToHexString(flashId)}"
-        ];
+        var lines = new List<string>
+        {
+            $"{language.GetString("Flash_RkCapability")}: 0x{Convert.ToHexString(capability.Raw)}"
+        };
+        lines.AddRange(capability.Describe());
+        lines.Add($"{language.GetString("Flash_RkChipName")}: {chipInfo.ChipName}");
+        lines.Add($"FlashID: 0x{Convert.ToHexString(flashId)}");
+        return lines;
     }
 
     /// <summary>
-    /// Maps a protocol storage number to the selector label, or reports the raw number when it is unknown.
-    /// <para>把协议存储编号映射为选择框文本；未知编号直接报告原值。</para>
+    /// Maps a READ_STORAGE mask to the selector label through the official wire-bit table, or reports the
+    /// raw mask when it names no single medium.
+    /// <para>经官方线上位表把 READ_STORAGE 掩码映射为选择框文本；掩码不对应单一介质时报告原始值。</para>
     /// </summary>
-    /// <remarks>
-    /// <para><paramref name="storage"/> is the first set bit index reported by READ_STORAGE, which is a protocol
-    /// identifier (eMMC is 1, SD is 2 and SPI NOR is 9), while the labels are the vendor selector's user-facing
-    /// numbers; see the note on <c>RkStorageTypes</c>. Indexing the selector list with that identifier can
-    /// therefore be off by one, and only real hardware can confirm the correct label.</para>
-    /// <para><paramref name="storage"/> 是 READ_STORAGE 回报的首个置位下标，即协议标识（eMMC 为 1、SD 为 2、
-    /// SPI NOR 为 9），而标签是厂商选择框的用户编号；见 <c>RkStorageTypes</c> 上的说明。用该标识去索引选择框
-    /// 列表可能差一位，正确标签只能由真机确认。</para>
-    /// </remarks>
-    /// <param name="storage">Protocol storage number.<para>协议存储编号。</para></param>
-    /// <returns>The label shown in the selector.<para>选择框中显示的文本。</para></returns>
-    private static string DescribeRkStorage(int storage)
-        => storage > 0 && storage <= RkStorageTypes.Length
-            ? RkStorageTypes[storage - 1]
-            : storage.ToString(CultureInfo.InvariantCulture);
+    /// <param name="mask">The READ_STORAGE bitmask.<para>READ_STORAGE 位掩码。</para></param>
+    /// <returns>The selector label such as <c>2. EMMC</c>, or the raw mask text.
+    /// <para>选择框文本（如 <c>2. EMMC</c>），或原始掩码文本。</para></returns>
+    private static string DescribeRkStorage(uint mask)
+    {
+        var index = RkdlStorage.IndexOfMask(mask);
+        return index >= 0 ? RkStorageTypes[index] : $"0x{mask:X8}";
+    }
 
     /// <summary>
     /// Shows a storage on the selector, or clears it when no medium is known; the vendor table allows a row to
@@ -470,7 +495,11 @@ public sealed partial class FlashViewModel
         }
     }
 
-    /// <summary>Reads the current storage number and reflects it in the selector. <para>读取当前存储编号并反映到选择框。</para></summary>
+    /// <summary>
+    /// Reads the current storage mask, reflects it in the selector and reports the active medium's flash
+    /// geometry, so the get-storage action also answers what the medium looks like.
+    /// <para>读取当前存储掩码并反映到选择框，同时报告当前介质的闪存几何，使获取当前存储也回答介质的具体形态。</para>
+    /// </summary>
     internal async void OnRkGetStorageClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (_busy || _confirming) return;
@@ -480,13 +509,48 @@ public sealed partial class FlashViewModel
             return;
         }
 
+        var language = _localizer;
         SetBusy(true);
         try
         {
-            var storage = await App.DeviceMonitor.RunRkdlAsync(device,
-                session => Task.FromResult(session.ReadStorage()), CancellationToken.None).ConfigureAwait(true);
-            var label = DescribeRkStorage(storage);
-            AppendLog($"{_localizer.GetString("Flash_RkStorage")}: {label}");
+            var lines = await App.DeviceMonitor.RunRkdlAsync(device, session =>
+            {
+                var report = new List<string>();
+                var mask = session.ReadStorageMask();
+                var index = RkdlStorage.IndexOfMask(mask);
+                var label = index >= 0 ? RkStorageTypes[index] : $"0x{mask:X8}";
+                report.Add($"{language.GetString("Flash_RkStorage")}: {label}");
+                var info = session.ReadFlashInfo();
+                if (info.SectorCount > 0)
+                {
+                    report.Add(string.Format(CultureInfo.InvariantCulture,
+                        "{0}: {1} MiB ({2} sectors × {3} B)",
+                        language.GetString("Flash_RkStorageSize"),
+                        info.Size / (1024 * 1024), info.SectorCount, info.SectorSize));
+                }
+
+                if (info.BlockSizeSectors > 0)
+                {
+                    report.Add(string.Format(CultureInfo.InvariantCulture,
+                        "{0}: {1} KiB, {2}: {3} B, {4}: {5}",
+                        language.GetString("Flash_RkEraseBlock"),
+                        info.BlockSizeBytes / 1024,
+                        language.GetString("Flash_RkPageSize"),
+                        info.PageSizeSectors * info.SectorSize,
+                        language.GetString("Flash_RkFlashManufacturer"),
+                        info.ManufacturerName));
+                }
+
+                return Task.FromResult(report);
+            }, CancellationToken.None).ConfigureAwait(true);
+            var label = lines.Count > 0
+                ? lines[0].Substring($"{language.GetString("Flash_RkStorage")}: ".Length)
+                : string.Empty;
+            foreach (var line in lines)
+            {
+                AppendLog(line);
+            }
+
             ApplyReportedRkStorage(label);
         }
         catch (Exception ex) { AppendError(ex); }
@@ -515,18 +579,29 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        var target = (byte)(index + 1);
+        var target = RkdlStorage.WireBits[index];
         var language = _localizer;
         SetBusy(true);
         try
         {
-            await App.DeviceMonitor.RunRkdlAsync(device, session =>
+            var reported = await App.DeviceMonitor.RunRkdlAsync(device, session =>
             {
                 session.ChangeStorage(target);
-                return Task.FromResult(true);
+                return Task.FromResult(session.ReadStorageMask());
             }, CancellationToken.None).ConfigureAwait(true);
             AppendLog($"{language.GetString("Flash_RkSwitchStorage")}: {RkStorageTypes[index]}");
-            AppendLog(language.GetString("Flash_RkStorageSwitched"));
+            var actualIndex = RkdlStorage.IndexOfMask(reported);
+            if (actualIndex == index)
+            {
+                AppendLog(language.GetString("Flash_RkStorageSwitched"));
+            }
+            else
+            {
+                AppendLog(string.Format(CultureInfo.InvariantCulture,
+                    "{0}: {1}",
+                    language.GetString("Flash_RkStorage"),
+                    actualIndex >= 0 ? RkStorageTypes[actualIndex] : $"0x{reported:X8}"));
+            }
         }
         catch (Exception ex) { AppendError(ex); }
         finally
@@ -974,7 +1049,6 @@ public sealed partial class FlashViewModel
                 Size = exists ? FormatByteSize(new FileInfo(entry.Path).Length) : string.Empty,
                 Offset = entry.Address == 0 ? string.Empty : $"0x{entry.Address:X8}",
                 StorageMedium = RockchipConfigFile.DescribeStorage(entry.StorageMask),
-                CanSelect = exists || entry.Path.Length == 0,
                 StatusText = exists || entry.Path.Length == 0
                     ? string.Empty
                     : _localizer.GetString("Flash_FileMissing")
@@ -1006,7 +1080,7 @@ public sealed partial class FlashViewModel
     /// <para>分区表是小文本文件，其检查同步完成；loader 要读取条目表与末尾校验和，因此异步完成。导入的行在发布后立即
     /// 检查，因此列表不会在读取内容之前就声称某个 loader 可用。</para>
     /// </remarks>
-    private void UpdateSpecialFileRowStatus(FlashPartitionEntry row)
+    private void UpdateSpecialFileRowStatus(FlashPartitionEntry row, bool? knownLoaderValid = null)
     {
         if (row.Command == ParameterCommand)
         {
@@ -1016,7 +1090,7 @@ public sealed partial class FlashViewModel
 
         if (row.Command == LoaderCommand)
         {
-            SpecialFileRowCheck = UpdateRkLoaderRowStatusAsync(row);
+            SpecialFileRowCheck = UpdateRkLoaderRowStatusAsync(row, knownLoaderValid);
         }
     }
 

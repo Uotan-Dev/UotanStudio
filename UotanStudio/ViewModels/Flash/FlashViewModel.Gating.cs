@@ -45,7 +45,7 @@ public sealed partial class FlashViewModel
             return;
         }
 
-        control.IsEnabled = enabled && FlashDeviceUiPolicy.IsAvailable(name, DeviceMode, HasRockchipLoader);
+        control.IsEnabled = enabled && FlashDeviceUiPolicy.IsAvailable(name, DeviceMode, IsRockchipLoaderStageDevice);
     }
 
     /// <summary>
@@ -92,7 +92,7 @@ public sealed partial class FlashViewModel
 
             var intent = _controlIntent.TryGetValue(name, out var stored) ? stored : control.IsEnabled;
             _controlIntent[name] = intent;
-            control.IsEnabled = intent && FlashDeviceUiPolicy.IsAvailable(name, mode, HasRockchipLoader);
+            control.IsEnabled = intent && FlashDeviceUiPolicy.IsAvailable(name, mode, IsRockchipLoaderStageDevice);
         }
     }
 }

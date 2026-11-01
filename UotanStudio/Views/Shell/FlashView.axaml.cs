@@ -253,6 +253,8 @@ public partial class FlashView : UserControl
     private void OnChoosePartitionImageClick(object? sender, RoutedEventArgs e) => _model.OnChoosePartitionImageClick(sender, e);
     private void OnAddPartitionClick(object? sender, RoutedEventArgs e) => _model.OnAddPartitionClick(sender, e);
     private void OnDeletePartitionsClick(object? sender, RoutedEventArgs e) => _model.OnDeletePartitionsClick(sender, e);
+    private void OnLoadBootClick(object? sender, RoutedEventArgs e) => _model.OnLoadBootClick(sender, e);
+    private void OnRkSendBootClick(object? sender, RoutedEventArgs e) => _model.OnRkSendBootClick(sender, e);
     private void OnReadInfoClick(object? sender, RoutedEventArgs e) => _model.OnReadInfoClick(sender, e);
     private void OnFlashSelectedClick(object? sender, RoutedEventArgs e) => _model.OnFlashSelectedClick(sender, e);
     private void OnFlashEdlBundleClick(object? sender, RoutedEventArgs e) => _model.OnFlashEdlBundleClick(sender, e);

@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Services.Devices;
 using UotanStudio.ViewModels.Flash;
 using Xunit;
@@ -59,6 +60,64 @@ public sealed class FlashDeviceUiPolicyTests
 
         Assert.False(FlashDeviceUiPolicy.IsAvailable("FlashSelectedButton", FlashDeviceMode.None));
         Assert.False(FlashDeviceUiPolicy.IsAvailable("RebootMenuButton", FlashDeviceMode.None));
+    }
+
+    [Fact]
+    public void IsAvailable_LoadBootButton_IsOfferedOnlyToLoaderCapableModes()
+    {
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("LoadBootButton", FlashDeviceMode.None));
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("LoadBootButton", FlashDeviceMode.Shared));
+
+        Assert.True(FlashDeviceUiPolicy.IsAvailable("LoadBootButton", FlashDeviceMode.Edl));
+        Assert.True(FlashDeviceUiPolicy.IsAvailable("LoadBootButton", FlashDeviceMode.Mtk));
+        Assert.True(FlashDeviceUiPolicy.IsAvailable("LoadBootButton", FlashDeviceMode.Rkdl));
+
+        Assert.True(FlashDeviceUiPolicy.IsAvailable("LoadBootButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false),
+            "the load-boot entry must stay reachable on Rockchip without a loader because loading one is its purpose");
+        Assert.True(FlashDeviceUiPolicy.IsAvailable("LoadBootButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true));
+    }
+
+    [Fact]
+    public void IsAvailable_RockchipStage_SplitsSendBootFromStorageActions()
+    {
+        Assert.True(FlashDeviceUiPolicy.IsAvailable("RkSendBootButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false),
+            "the send-boot action belongs to the maskrom stage");
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("RkSendBootButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true),
+            "a loader-stage device refuses the boot download request");
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("RkSendBootButton", FlashDeviceMode.None));
+
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("FlashSelectedButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false),
+            "maskrom storage must not receive a write");
+        Assert.True(FlashDeviceUiPolicy.IsAvailable("FlashSelectedButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true));
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("ReadbackSelectedButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false));
+        Assert.True(FlashDeviceUiPolicy.IsAvailable("ReadbackSelectedButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true));
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("AddRootBox", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false));
+        Assert.True(FlashDeviceUiPolicy.IsAvailable("AddRootBox", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true));
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("RkPane", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false));
+        Assert.True(FlashDeviceUiPolicy.IsAvailable("RkPane", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true));
+    }
+
+    [Fact]
+    public void IsLoaderStageLoadable_ObservedStages_MatchWhatEachProtocolCanStillAccept()
+    {
+        Assert.False(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Edl, EdlProtocolState.Firehose, string.Empty));
+        Assert.False(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Edl, EdlProtocolState.Streaming, string.Empty));
+        Assert.True(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Edl, EdlProtocolState.Sahara, string.Empty));
+        Assert.True(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Edl, EdlProtocolState.Unknown, string.Empty));
+
+        Assert.False(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Mtk, EdlProtocolState.Unknown, "logging"));
+        Assert.True(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Mtk, EdlProtocolState.Unknown, "brom"));
+
+        Assert.True(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Rkdl, EdlProtocolState.Unknown, string.Empty));
+        Assert.False(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Fastboot, EdlProtocolState.Unknown, string.Empty));
     }
 
     [Fact]
