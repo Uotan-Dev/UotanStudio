@@ -544,25 +544,22 @@ Author: 暮间雾
     <value>Read device info</value>
   </data>
   <data name="Flash_LoadBoot" xml:space="preserve">
-    <value>Load boot loader</value>
+    <value>Send loader programmer</value>
   </data>
   <data name="Flash_LoadBootNoDevice" xml:space="preserve">
-    <value>Select a device before loading a boot loader.</value>
+    <value>Select a device before sending a loader programmer.</value>
   </data>
   <data name="Flash_LoadBootNoLoaderRow" xml:space="preserve">
     <value>No entry with the loader command exists in the list; import a configuration that carries one first.</value>
   </data>
   <data name="Flash_LoadBootRkApplying" xml:space="preserve">
-    <value>Loading boot: applying loader row {0}.</value>
+    <value>Sending loader programmer: applying loader row {0}.</value>
   </data>
   <data name="Flash_LoadBootRkDone" xml:space="preserve">
-    <value>Loader is ready; the device is in loader mode.</value>
-  </data>
-  <data name="Flash_RkSendBoot" xml:space="preserve">
-    <value>Send Boot</value>
+    <value>Loader is ready; the device is in usbplug mode.</value>
   </data>
   <data name="Flash_LoadBootUnsupported" xml:space="preserve">
-    <value>Loading a boot loader is not supported by this device's protocol.</value>
+    <value>Sending a loader programmer is not supported by this device's protocol.</value>
   </data>
   <data name="Flash_ShowAllPartitions" xml:space="preserve">
     <value>Show physical partitions</value>
@@ -622,7 +619,7 @@ Author: 暮间雾
     <value>Flash log output</value>
   </data>
   <data name="Flash_FolderOnly" xml:space="preserve">
-    <value>Select a package, image folder, or HTTP(S) Payload URL.</value>
+    <value>Select a package, image folder, or HTTP(S) URL.</value>
   </data>
   <data name="Flash_ImagesLoaded" xml:space="preserve">
     <value>images loaded</value>
@@ -891,12 +888,8 @@ Author: 暮间雾
   <data name="Flash_MtkReboot" xml:space="preserve">
     <value>Reboot device</value>
   </data>
-  <data name="Flash_MtkRebootFastboot" xml:space="preserve">
-    <value>Reboot to bootloader</value>
-  </data>
-  <data name="Flash_MtkPowerOff" xml:space="preserve">
-    <value>Power off device</value>
-  </data>
+
+
   <data name="Flash_MtkReadback" xml:space="preserve">
     <value>Read back selected partitions</value>
   </data>
@@ -915,21 +908,13 @@ Author: 暮间雾
   <data name="Flash_MtkRebootConfirm" xml:space="preserve">
     <value>An agent is booted to storage readiness first (the loader is loaded into device memory), then a normal boot is requested. Continue?</value>
   </data>
-  <data name="Flash_MtkRebootFastbootConfirm" xml:space="preserve">
-    <value>An agent is booted to storage readiness first (the loader is loaded into device memory), then a bootloader reboot is requested; whether the target re-enumerates in bootloader mode depends on the device. Continue?</value>
-  </data>
-  <data name="Flash_MtkPowerOffConfirm" xml:space="preserve">
-    <value>An agent is booted to storage readiness first (the loader is loaded into device memory), then a power-off is requested. Continue?</value>
-  </data>
+
+
   <data name="Flash_MtkRebootDone" xml:space="preserve">
     <value>Device reboot requested.</value>
   </data>
-  <data name="Flash_MtkRebootFastbootDone" xml:space="preserve">
-    <value>Bootloader reboot requested.</value>
-  </data>
-  <data name="Flash_MtkPowerOffDone" xml:space="preserve">
-    <value>Device power-off requested.</value>
-  </data>
+
+
   <data name="Flash_MtkDaRequired" xml:space="preserve">
     <value>Select a DA/loader file first.</value>
   </data>
@@ -1221,24 +1206,12 @@ Author: 暮间雾
   <data name="Flash_EdlResetDone" xml:space="preserve">
     <value>Device reset requested.</value>
   </data>
-  <data name="Flash_EdlPowerOff" xml:space="preserve">
-    <value>Power off the device</value>
-  </data>
-  <data name="Flash_EdlPowerOffConfirm" xml:space="preserve">
-    <value>The device is powered off over firehose and must be replugged to continue. Continue?</value>
-  </data>
-  <data name="Flash_EdlPowerOffDone" xml:space="preserve">
-    <value>Device power-off requested.</value>
-  </data>
-  <data name="Flash_EdlResetToEdl" xml:space="preserve">
-    <value>Return to EDL download mode</value>
-  </data>
-  <data name="Flash_EdlResetToEdlConfirm" xml:space="preserve">
-    <value>The device resets straight back into emergency download mode, ending the current firehose session. Continue?</value>
-  </data>
-  <data name="Flash_EdlResetToEdlDone" xml:space="preserve">
-    <value>Device return to EDL requested.</value>
-  </data>
+
+
+
+
+
+
   <data name="Flash_EdlSetActiveSlot" xml:space="preserve">
     <value>Active slot (a, b, 0 or 1)</value>
   </data>
@@ -1380,24 +1353,12 @@ Author: 暮间雾
   <data name="Flash_MtkXmlPropertyResult" xml:space="preserve">
     <value>XML property {0} = {1} (envelope {2}, version {3})</value>
   </data>
-  <data name="Flash_MtkRebootMeta" xml:space="preserve">
-    <value>Reboot to META mode</value>
-  </data>
-  <data name="Flash_MtkRebootAndroidTest" xml:space="preserve">
-    <value>Reboot to Android test mode</value>
-  </data>
-  <data name="Flash_MtkRebootMetaConfirm" xml:space="preserve">
-    <value>An agent is booted to storage readiness first, then a META-mode reboot is requested; only the XML download agent defines this boot destination. Continue?</value>
-  </data>
-  <data name="Flash_MtkRebootAndroidTestConfirm" xml:space="preserve">
-    <value>An agent is booted to storage readiness first, then an Android-test-mode reboot is requested; only the XML download agent defines this boot destination. Continue?</value>
-  </data>
-  <data name="Flash_MtkRebootMetaDone" xml:space="preserve">
-    <value>META-mode reboot requested.</value>
-  </data>
-  <data name="Flash_MtkRebootAndroidTestDone" xml:space="preserve">
-    <value>Android-test-mode reboot requested.</value>
-  </data>
+
+
+
+
+
+
   <data name="Flash_MtkXmlRebootFamilyRequired" xml:space="preserve">
     <value>META and Android-test reboots are defined only for the XML download-agent family; switch the protocol selector to XML.</value>
   </data>
@@ -3730,9 +3691,7 @@ Continue?</value>
   <data name="Flash_RebootEdl" xml:space="preserve">
     <value>Qualcomm EDL</value>
   </data>
-  <data name="Flash_PowerOff" xml:space="preserve">
-    <value>Power Off</value>
-  </data>
+
   <data name="Flash_ReadbackSelected" xml:space="preserve">
     <value>Read back selected</value>
   </data>
@@ -3772,4 +3731,5 @@ Continue?</value>
   <data name="Flash_GeneralOperations" xml:space="preserve">
     <value>General Operations</value>
   </data>
-<data name="Flash_EdlSelectProgrammer" xml:space="preserve"><value>Select Programmer</value></data><data name="Flash_EdlCustomFile" xml:space="preserve"><value>Custom File</value></data><data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve"><value>Choose Custom Programmer File</value></data><data name="Flash_Rockchip" xml:space="preserve"><value>Rockchip</value></data><data name="Flash_RkSetStorageType" xml:space="preserve"><value>Set Storage Type</value></data><data name="Flash_RkEnterMaskrom" xml:space="preserve"><value>Enter Maskrom</value></data><data name="Flash_RkSelectConfig" xml:space="preserve"><value>Select Config</value></data><data name="Flash_RkConfigPathHint" xml:space="preserve"><value>Config file path</value></data><data name="Flash_RkChooseCustomConfig" xml:space="preserve"><value>Choose Custom Config File</value></data><data name="Flash_RkExportConfig" xml:space="preserve"><value>Export Config</value></data><data name="Flash_Offset" xml:space="preserve"><value>Offset</value></data><data name="Flash_RkReadInfo" xml:space="preserve"><value>Read Chip Info</value></data><data name="Flash_RkTestDevice" xml:space="preserve"><value>Test Device</value></data><data name="Flash_RkGetStorage" xml:space="preserve"><value>Get Current Storage</value></data><data name="Flash_RkChipName" xml:space="preserve"><value>Chip Name</value></data><data name="Flash_RkStorageSize" xml:space="preserve"><value>Storage Size</value></data><data name="Flash_RkEraseBlock" xml:space="preserve"><value>Erase Block</value></data><data name="Flash_RkPageSize" xml:space="preserve"><value>Page Size</value></data><data name="Flash_RkFlashManufacturer" xml:space="preserve"><value>Flash Manufacturer</value></data><data name="Flash_RkSwitchStorage" xml:space="preserve"><value>Switch Storage</value></data><data name="Flash_RkEraseFlash" xml:space="preserve"><value>Erase Flash</value></data><data name="Flash_RkEraseFlashConfirm" xml:space="preserve"><value>Erase the whole flash? Every partition on the device is destroyed.</value></data><data name="Flash_RkEraseSectors" xml:space="preserve"><value>Erase Sectors</value></data><data name="Flash_RkLbaGroup" xml:space="preserve"><value>LBA Read / Write</value></data><data name="Flash_RkLbaAddress" xml:space="preserve"><value>Start sector</value></data><data name="Flash_RkLbaCount" xml:space="preserve"><value>Sector count</value></data><data name="Flash_RkLbaRead" xml:space="preserve"><value>Read LBA</value></data><data name="Flash_RkLbaWrite" xml:space="preserve"><value>Write LBA</value></data><data name="Flash_RkForceAddress" xml:space="preserve"><value>Force Address Write</value></data><data name="Flash_RkLbaNotDeclared" xml:space="preserve"><value>The sector range is not inside any partition of the loaded Rockchip parameter table; enable Force Address Write to use it anyway.</value></data><data name="Flash_RkLbaCountTooSmall" xml:space="preserve"><value>The sector count is smaller than the file being written; increase it or enable Force Address Write.</value></data><data name="Flash_RkParameterMissing" xml:space="preserve"><value>No Rockchip parameter table was found next to the loaded images, so partition addresses cannot be resolved.</value></data><data name="Flash_RkStorageSwitched" xml:space="preserve"><value>Storage switched; the device re-enumerates, so select it again in the device list before the next command.</value></data><data name="Flash_RkConfigImported" xml:space="preserve"><value>Config imported: {0} rows</value></data><data name="Flash_RkCapability" xml:space="preserve"><value>Capability</value></data><data name="Flash_RkStorage" xml:space="preserve"><value>Storage</value></data><data name="Explorer_OpenAsRockchipConfig" xml:space="preserve"><value>Rockchip Config</value></data><data name="Dock_RkConfig_Name" xml:space="preserve"><value>Name</value></data><data name="Dock_RkConfig_Address" xml:space="preserve"><value>Address</value></data><data name="Dock_RkConfig_Path" xml:space="preserve"><value>Path</value></data><data name="Dock_RkConfig_File" xml:space="preserve"><value>File</value></data><data name="Dock_RkConfig_Present" xml:space="preserve"><value>Present</value></data><data name="Dock_RkConfig_Missing" xml:space="preserve"><value>Missing</value></data><data name="Dock_RkConfig_Header" xml:space="preserve"><value>Header</value></data><data name="Dock_RkConfig_Tail" xml:space="preserve"><value>Trailing block</value></data><data name="Dock_RkConfig_Empty" xml:space="preserve"><value>This configuration has no rows.</value></data><data name="Dock_RkConfig_Summary" xml:space="preserve"><value>Header {0} B · {1} rows</value></data><data name="UserError_RkConfigLoadFailed" xml:space="preserve"><value>The configuration file could not be parsed.</value></data><data name="Flash_RootPartitionNotSelected" xml:space="preserve"><value>The boot partition selected for Root patching is not part of this flash run. Select it, or pick another partition.</value></data><data name="Flash_RootPackageMissing" xml:space="preserve"><value>No usable Root patch package is available for the selected version. Wait for the download, or pick another version.</value></data><data name="Flash_StorageMedium" xml:space="preserve"><value>Storage medium</value></data><data name="Flash_RkConfigNoImages" xml:space="preserve"><value>The configuration has no image row.</value></data><data name="Flash_RkStorageNotSelected" xml:space="preserve"><value>Pick a target storage first; the configuration may leave this blank.</value></data><data name="Flash_RkLoaderDeclared" xml:space="preserve"><value>Load loader: {0}</value></data><data name="Flash_RkLoaderMissing" xml:space="preserve"><value>The loader this configuration references is missing: {0}</value></data><data name="Flash_RkStorageNeedsLoader" xml:space="preserve"><value>The device is in mask ROM, which answers no storage query; load a Rockchip loader to read the current storage.</value></data><data name="Flash_RkLoaderChecking" xml:space="preserve"><value>Checking the loader file…</value></data><data name="Flash_RkLoaderValid" xml:space="preserve"><value>Loader accepted</value></data><data name="Flash_RkLoaderInvalidStatus" xml:space="preserve"><value>Loader rejected</value></data><data name="Flash_RkLoaderNotLoader" xml:space="preserve"><value>Not a Rockchip loader image: {0}</value></data><data name="Flash_RkLoaderInvalid" xml:space="preserve"><value>Rockchip loader structure is invalid, {0}: {1}</value></data><data name="Flash_RkLoaderChecksumMismatch" xml:space="preserve"><value>Rockchip loader checksum does not match its content: {0}</value></data><data name="Flash_RkLoaderChecked" xml:space="preserve"><value>Rockchip loader accepted, {0}: {1}</value></data><data name="Flash_RkParameterValid" xml:space="preserve"><value>Partition table accepted, {0} partitions</value></data><data name="Flash_RkParameterInvalidStatus" xml:space="preserve"><value>Partition table rejected</value></data><data name="Flash_RkParameterChecked" xml:space="preserve"><value>Partition table accepted, {0}: {1} partitions</value></data><data name="Flash_RkParameterInvalid" xml:space="preserve"><value>Partition table is invalid, {0}: {1}</value></data><data name="Flash_CommandNotRunnable" xml:space="preserve"><value>The row carries no runnable step for command {0}; re-import the package to rebuild the row.</value></data></root>
+<data name="Flash_EdlSelectProgrammer" xml:space="preserve"><value>Select Programmer</value></data><data name="Flash_EdlCustomFile" xml:space="preserve"><value>Custom File</value></data><data name="Flash_EdlChooseCustomProgrammer" xml:space="preserve"><value>Choose Custom Programmer File</value></data><data name="Flash_Rockchip" xml:space="preserve"><value>Rockchip</value></data><data name="Flash_RkSetStorageType" xml:space="preserve"><value>Set Storage Type</value></data><data name="Flash_RkEnterMaskrom" xml:space="preserve"><value>Enter Maskrom</value></data><data name="Flash_RkSelectConfig" xml:space="preserve"><value>Select Config</value></data><data name="Flash_RkConfigPathHint" xml:space="preserve"><value>Config file path</value></data><data name="Flash_RkChooseCustomConfig" xml:space="preserve"><value>Choose Custom Config File</value></data><data name="Flash_RkExportConfig" xml:space="preserve"><value>Export Config</value></data><data name="Flash_Offset" xml:space="preserve"><value>Offset</value></data><data name="Flash_RkTestDevice" xml:space="preserve"><value>Test Device</value></data><data name="Flash_RkGetStorage" xml:space="preserve"><value>Get Current Storage</value></data><data name="Flash_RkChipName" xml:space="preserve"><value>Chip Name</value></data><data name="Flash_RkStorageSize" xml:space="preserve"><value>Storage Size</value></data><data name="Flash_RkEraseBlock" xml:space="preserve"><value>Erase Block</value></data><data name="Flash_RkPageSize" xml:space="preserve"><value>Page Size</value></data><data name="Flash_RkFlashManufacturer" xml:space="preserve"><value>Flash Manufacturer</value></data><data name="Flash_RkSwitchStorage" xml:space="preserve"><value>Switch Storage</value></data><data name="Flash_RkEraseFlash" xml:space="preserve"><value>Erase Flash</value></data><data name="Flash_RkEraseFlashConfirm" xml:space="preserve"><value>Erase the whole flash? Every partition on the device is destroyed.</value></data><data name="Flash_RkEraseSectors" xml:space="preserve"><value>Erase Sectors</value></data><data name="Flash_RkLbaGroup" xml:space="preserve"><value>LBA Read / Write</value></data><data name="Flash_RkLbaAddress" xml:space="preserve"><value>Start sector</value></data><data name="Flash_RkLbaCount" xml:space="preserve"><value>Sector count</value></data><data name="Flash_RkLbaRead" xml:space="preserve"><value>Read LBA</value></data><data name="Flash_RkLbaWrite" xml:space="preserve"><value>Write LBA</value></data><data name="Flash_RkForceAddress" xml:space="preserve"><value>Force Address Write</value></data><data name="Flash_RkLbaNotDeclared" xml:space="preserve"><value>The sector range is not inside any partition of the loaded Rockchip parameter table; enable Force Address Write to use it anyway.</value></data><data name="Flash_RkLbaCountTooSmall" xml:space="preserve"><value>The sector count is smaller than the file being written; increase it or enable Force Address Write.</value></data><data name="Flash_RkParameterMissing" xml:space="preserve"><value>No Rockchip parameter table was found next to the loaded images, so partition addresses cannot be resolved.</value></data><data name="Flash_RkStorageSwitched" xml:space="preserve"><value>Storage switched; the device re-enumerates, so select it again in the device list before the next command.</value></data><data name="Flash_RkConfigImported" xml:space="preserve"><value>Config imported: {0} rows</value></data><data name="Flash_RkCapability" xml:space="preserve"><value>Capability</value></data><data name="Flash_RkStorage" xml:space="preserve"><value>Storage</value></data><data name="Explorer_OpenAsRockchipConfig" xml:space="preserve"><value>Rockchip Config</value></data><data name="Dock_RkConfig_Name" xml:space="preserve"><value>Name</value></data><data name="Dock_RkConfig_Address" xml:space="preserve"><value>Address</value></data><data name="Dock_RkConfig_Path" xml:space="preserve"><value>Path</value></data><data name="Dock_RkConfig_File" xml:space="preserve"><value>File</value></data><data name="Dock_RkConfig_Present" xml:space="preserve"><value>Present</value></data><data name="Dock_RkConfig_Missing" xml:space="preserve"><value>Missing</value></data><data name="Dock_RkConfig_Header" xml:space="preserve"><value>Header</value></data><data name="Dock_RkConfig_Tail" xml:space="preserve"><value>Trailing block</value></data><data name="Dock_RkConfig_Empty" xml:space="preserve"><value>This configuration has no rows.</value></data><data name="Dock_RkConfig_Summary" xml:space="preserve"><value>Header {0} B · {1} rows</value></data><data name="UserError_RkConfigLoadFailed" xml:space="preserve"><value>The configuration file could not be parsed.</value></data><data name="Flash_RootPartitionNotSelected" xml:space="preserve"><value>The boot partition selected for Root patching is not part of this flash run. Select it, or pick another partition.</value></data><data name="Flash_RootPackageMissing" xml:space="preserve"><value>No usable Root patch package is available for the selected version. Wait for the download, or pick another version.</value></data><data name="Flash_StorageMedium" xml:space="preserve"><value>Storage medium</value></data><data name="Flash_RkConfigNoImages" xml:space="preserve"><value>The configuration has no image row.</value></data><data name="Flash_RkStorageNotSelected" xml:space="preserve"><value>Pick a target storage first; the configuration may leave this blank.</value></data><data name="Flash_RkLoaderDeclared" xml:space="preserve"><value>Load loader: {0}</value></data><data name="Flash_RkLoaderMissing" xml:space="preserve"><value>The loader this configuration references is missing: {0}</value></data><data name="Flash_RkStorageNeedsLoader" xml:space="preserve"><value>The device is in mask ROM, which answers no storage query; load a Rockchip loader to read the current storage.</value></data><data name="Flash_RkLoaderChecking" xml:space="preserve"><value>Checking the loader file…</value></data><data name="Flash_RkLoaderValid" xml:space="preserve"><value>Loader accepted</value></data><data name="Flash_RkLoaderInvalidStatus" xml:space="preserve"><value>Loader rejected</value></data><data name="Flash_RkLoaderNotLoader" xml:space="preserve"><value>Not a Rockchip loader image: {0}</value></data><data name="Flash_RkLoaderInvalid" xml:space="preserve"><value>Rockchip loader structure is invalid, {0}: {1}</value></data><data name="Flash_RkLoaderChecksumMismatch" xml:space="preserve"><value>Rockchip loader checksum does not match its content: {0}</value></data><data name="Flash_RkLoaderChecked" xml:space="preserve"><value>Rockchip loader accepted, {0}: {1}</value></data><data name="Flash_RkParameterValid" xml:space="preserve"><value>Partition table accepted, {0} partitions</value></data><data name="Flash_RkParameterInvalidStatus" xml:space="preserve"><value>Partition table rejected</value></data><data name="Flash_RkParameterChecked" xml:space="preserve"><value>Partition table accepted, {0}: {1} partitions</value></data><data name="Flash_RkParameterInvalid" xml:space="preserve"><value>Partition table is invalid, {0}: {1}</value></data><data name="Flash_CommandNotRunnable" xml:space="preserve"><value>The row carries no runnable step for command {0}; re-import the package to rebuild the row.</value></data><data name="Flash_RkStorageProbeHeader" xml:space="preserve"><value>Storage Probe</value></data><data name="Flash_RkStorageProbeMedium" xml:space="preserve"><value>{0}: no flash geometry reported</value></data><data name="Flash_RkStorageProbeFailed" xml:space="preserve"><value>{0}: the device did not answer ({1})</value></data><data name="Flash_RkStorageProbeAbsent" xml:space="preserve"><value>{0}: not present; the device still answers as {1}</value></data>
+</root>

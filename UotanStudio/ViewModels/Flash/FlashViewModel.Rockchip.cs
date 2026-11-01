@@ -280,17 +280,22 @@ public sealed partial class FlashViewModel
     }
 
     /// <summary>
-    /// Reads the chip capability word, the flash id and the current storage, then reports them in the log.
-    /// <para>读取芯片能力字、Flash ID 与当前存储并写入日志。</para>
+    /// Reads the information commands mask ROM answers as well as a loader does, then probes every storage
+    /// medium the loader can reach: when the loader is running, the current medium is read and reported first,
+    /// each storage is switched to in turn and its flash geometry is reported, and the device is switched back
+    /// to the medium it started on, which the selector then shows, so the shared read-device-info action fills
+    /// in the storage the device actually keeps answering from.
+    /// <para>读取 Mask ROM 与 loader 都能应答的信息类命令，然后探测 loader 能到达的每个存储介质：loader
+    /// 运行时先读取并报告当前介质，再逐个切换到各存储并报告其闪存几何，最后把设备切回探测前的介质，选择框
+    /// 显示的正是该介质，使通用的读取设备信息动作填好的是设备实际继续应答的存储。</para>
     /// </summary>
     /// <param name="device">Target RKDL endpoint.<para>目标 RKDL 端点。</para></param>
     private async Task RunRkReadInfoAsync(DetectedDevice device)
     {
         var language = _localizer;
-        AppendLog($"{language.GetString("Flash_RkReadInfo")}: {device.DisplayName}");
-        var storageLabel = string.Empty;
+        AppendLog($"{language.GetString("Flash_ReadInfo")}: {device.DisplayName}");
         var lines = new List<string>();
-        var loader = EffectiveRkLoaderPath;
+        var storageLabel = string.Empty;
 
         await App.DeviceMonitor.RunRkdlAsync(device, session =>
         {
@@ -301,8 +306,10 @@ public sealed partial class FlashViewModel
             }
             else
             {
-                storageLabel = DescribeRkStorage(session.ReadStorageMask());
-                lines.Add($"{language.GetString("Flash_RkStorage")}: {storageLabel}");
+                var initialMask = session.ReadStorageMask();
+                lines.Add($"{language.GetString("Flash_RkStorage")}: {DescribeRkStorage(initialMask)}");
+                lines.AddRange(ProbeRkStorages(session, language, initialMask));
+                storageLabel = DescribeRkStorage(initialMask);
             }
 
             return Task.FromResult(true);
@@ -314,6 +321,77 @@ public sealed partial class FlashViewModel
         }
 
         ApplyReportedRkStorage(storageLabel);
+    }
+
+    /// <summary>
+    /// Switches the running loader through every storage medium in the vendor table, reports each present
+    /// medium's flash geometry and ends by switching the device back to the medium
+    /// <paramref name="initialMask"/> names; a medium whose read-back mask does not name it, whose switch or
+    /// geometry read fails, is reported and skipped instead of ending the probe. The device acknowledges
+    /// CHANGE_STORAGE even when it cannot serve the medium, so only the read-back mask proves the switch,
+    /// matching the switch action's verification.
+    /// <para>让运行中的 loader 依次切换厂商表的每个存储介质，报告每个存在的介质的闪存几何，最后把设备切回
+    /// <paramref name="initialMask"/> 命名的介质；读回掩码不指向该介质、切换或几何读取失败的介质只记录并
+    /// 跳过，不终止探测。设备对无法服务的介质也会应答 CHANGE_STORAGE 成功，因此只有读回掩码能证明切换，
+    /// 与切换存储动作的校验一致。</para>
+    /// </summary>
+    /// <param name="session">Open RKDL session on the target device. <para>目标设备上已打开的 RKDL 会话。</para></param>
+    /// <param name="language">Localized string lookup for the report labels.
+    /// <para>报告标签使用的本地化字符串查询。</para></param>
+    /// <param name="initialMask">The storage mask the device answered with before the probe started, which
+    /// the probe restores when it ends.<para>探测开始前设备应答的存储掩码；探测结束时恢复到该介质。</para></param>
+    /// <returns>The report lines in probe order.<para>按探测顺序排列的报告行。</para></returns>
+    private static List<string> ProbeRkStorages(RkdlSession session, ILocalizer language, uint initialMask)
+    {
+        var header = language.GetString("Flash_RkStorageProbeHeader");
+        var lines = new List<string>(RkStorageTypes.Length + 2) { header };
+        for (var index = 0; index < RkStorageTypes.Length; index++)
+        {
+            var label = RkStorageTypes[index];
+            try
+            {
+                session.ChangeStorage(RkdlStorage.WireBits[index]);
+                var mask = session.ReadStorageMask();
+                if (mask != 1u << RkdlStorage.WireBits[index])
+                {
+                    lines.Add(string.Format(CultureInfo.InvariantCulture,
+                        language.GetString("Flash_RkStorageProbeAbsent"), label,
+                        DescribeRkStorage(mask)));
+                    continue;
+                }
+
+                var geometry = DescribeRkFlashGeometry(session.ReadFlashInfo(), language);
+                lines.Add(geometry.Count > 0
+                    ? $"{language.GetString("Flash_RkStorage")}: {label}, {string.Join(", ", geometry)}"
+                    : string.Format(CultureInfo.InvariantCulture, language.GetString("Flash_RkStorageProbeMedium"),
+                        label));
+            }
+            catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
+                or InvalidOperationException or ObjectDisposedException)
+            {
+                lines.Add(string.Format(CultureInfo.InvariantCulture,
+                    language.GetString("Flash_RkStorageProbeFailed"), label, exception.Message));
+            }
+        }
+
+        var initialIndex = RkdlStorage.IndexOfMask(initialMask);
+        if (initialIndex >= 0)
+        {
+            try
+            {
+                session.ChangeStorage(RkdlStorage.WireBits[initialIndex]);
+                lines.Add($"{language.GetString("Flash_RkStorage")}: {RkStorageTypes[initialIndex]}");
+            }
+            catch (Exception exception) when (exception is RkdlException or IOException or TimeoutException
+                or InvalidOperationException or ObjectDisposedException)
+            {
+                lines.Add(string.Format(CultureInfo.InvariantCulture,
+                    language.GetString("Flash_RkStorageProbeFailed"), RkStorageTypes[initialIndex],
+                    exception.Message));
+            }
+        }
+
+        return lines;
     }
 
     /// <summary>
@@ -445,29 +523,6 @@ public sealed partial class FlashViewModel
         ApplyReportedRkStorage(masks.Length == 1 ? RockchipConfigFile.DescribeStorage(masks[0]) : string.Empty);
     }
 
-    /// <summary>Reads the chip capability word for the selected device. <para>读取所选设备的芯片能力字。</para></summary>
-    internal async void OnRkReadInfoClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        if (_busy || _confirming) return;
-        if (SelectedDevice is not { Protocol: DeviceProtocolKind.Rkdl } device)
-        {
-            AppendLog(_localizer.GetString("Flash_DeviceNotConnected"));
-            return;
-        }
-
-        SetBusy(true);
-        try
-        {
-            await RunRkReadInfoAsync(device);
-        }
-        catch (Exception ex) { AppendError(ex); }
-        finally
-        {
-            SetBusy(false);
-            UpdateEdlButton();
-        }
-    }
-
     /// <summary>Runs the device ready test. <para>执行设备就绪测试。</para></summary>
     internal async void OnRkTestDeviceClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -520,27 +575,7 @@ public sealed partial class FlashViewModel
                 var index = RkdlStorage.IndexOfMask(mask);
                 var label = index >= 0 ? RkStorageTypes[index] : $"0x{mask:X8}";
                 report.Add($"{language.GetString("Flash_RkStorage")}: {label}");
-                var info = session.ReadFlashInfo();
-                if (info.SectorCount > 0)
-                {
-                    report.Add(string.Format(CultureInfo.InvariantCulture,
-                        "{0}: {1} MiB ({2} sectors × {3} B)",
-                        language.GetString("Flash_RkStorageSize"),
-                        info.Size / (1024 * 1024), info.SectorCount, info.SectorSize));
-                }
-
-                if (info.BlockSizeSectors > 0)
-                {
-                    report.Add(string.Format(CultureInfo.InvariantCulture,
-                        "{0}: {1} KiB, {2}: {3} B, {4}: {5}",
-                        language.GetString("Flash_RkEraseBlock"),
-                        info.BlockSizeBytes / 1024,
-                        language.GetString("Flash_RkPageSize"),
-                        info.PageSizeSectors * info.SectorSize,
-                        language.GetString("Flash_RkFlashManufacturer"),
-                        info.ManufacturerName));
-                }
-
+                report.AddRange(DescribeRkFlashGeometry(session.ReadFlashInfo(), language));
                 return Task.FromResult(report);
             }, CancellationToken.None).ConfigureAwait(true);
             var label = lines.Count > 0
@@ -559,6 +594,41 @@ public sealed partial class FlashViewModel
             SetBusy(false);
             UpdateEdlButton();
         }
+    }
+
+    /// <summary>
+    /// Formats one medium's flash geometry: the capacity line when the device declared sectors and the
+    /// erase-block line when it declared blocks, so every storage report shows the same shape.
+    /// <para>把某个介质的闪存几何格式化：设备声明了扇区时给出容量行，声明了块时给出擦除块行，使每份存储报告
+    /// 形状一致。</para>
+    /// </summary>
+    /// <param name="info">Flash geometry the device reported.<para>设备上报的闪存几何。</para></param>
+    /// <param name="language">Localized string lookup for the labels.<para>标签使用的本地化字符串查询。</para></param>
+    /// <returns>The geometry lines, possibly empty.<para>几何报告行；可能为空。</para></returns>
+    private static List<string> DescribeRkFlashGeometry(RkFlashInfo info, ILocalizer language)
+    {
+        var lines = new List<string>(2);
+        if (info.SectorCount > 0)
+        {
+            lines.Add(string.Format(CultureInfo.InvariantCulture,
+                "{0}: {1} MiB ({2} sectors × {3} B)",
+                language.GetString("Flash_RkStorageSize"),
+                info.Size / (1024 * 1024), info.SectorCount, info.SectorSize));
+        }
+
+        if (info.BlockSizeSectors > 0)
+        {
+            lines.Add(string.Format(CultureInfo.InvariantCulture,
+                "{0}: {1} KiB, {2}: {3} B, {4}: {5}",
+                language.GetString("Flash_RkEraseBlock"),
+                info.BlockSizeBytes / 1024,
+                language.GetString("Flash_RkPageSize"),
+                info.PageSizeSectors * info.SectorSize,
+                language.GetString("Flash_RkFlashManufacturer"),
+                info.ManufacturerName));
+        }
+
+        return lines;
     }
 
     /// <summary>Switches the device to the storage selected in the combo box. <para>把设备切换到选择框中选中的存储。</para></summary>

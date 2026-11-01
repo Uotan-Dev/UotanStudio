@@ -78,13 +78,27 @@ public sealed class FlashDeviceUiPolicyTests
     }
 
     [Fact]
-    public void IsAvailable_RockchipStage_SplitsSendBootFromStorageActions()
+    public void CanLoadBoot_RockchipUsbplugStage_LeavesLoadBootDisabled()
     {
-        Assert.True(FlashDeviceUiPolicy.IsAvailable("RkSendBootButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false),
-            "the send-boot action belongs to the maskrom stage");
-        Assert.False(FlashDeviceUiPolicy.IsAvailable("RkSendBootButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true),
-            "a loader-stage device refuses the boot download request");
-        Assert.False(FlashDeviceUiPolicy.IsAvailable("RkSendBootButton", FlashDeviceMode.None));
+        Assert.False(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Rkdl, EdlProtocolState.Unknown, string.Empty, isRockchipLoaderStage: true));
+        Assert.True(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Rkdl, EdlProtocolState.Unknown, string.Empty, isRockchipLoaderStage: false));
+
+        Assert.False(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Edl, EdlProtocolState.Firehose, string.Empty, isRockchipLoaderStage: true));
+        Assert.True(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Mtk, EdlProtocolState.Unknown, string.Empty, isRockchipLoaderStage: true));
+    }
+
+    [Fact]
+    public void IsAvailable_RockchipStage_SplitsStorageActionsFromInfoActions()
+    {
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("SwitchSlotButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false),
+            "A/B slot switching is a fastboot operation no bootrom endpoint can answer");
+        Assert.False(FlashDeviceUiPolicy.IsAvailable("SwitchSlotButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: true),
+            "A/B slot switching is a fastboot operation no loader endpoint can answer");
+        Assert.True(FlashDeviceUiPolicy.IsAvailable("SwitchSlotButton", FlashDeviceMode.Shared));
 
         Assert.False(FlashDeviceUiPolicy.IsAvailable("FlashSelectedButton", FlashDeviceMode.Rkdl, isRockchipLoaderStage: false),
             "maskrom storage must not receive a write");
@@ -118,6 +132,13 @@ public sealed class FlashDeviceUiPolicyTests
             DeviceProtocolKind.Rkdl, EdlProtocolState.Unknown, string.Empty));
         Assert.False(FlashDeviceUiPolicy.IsLoaderStageLoadable(
             DeviceProtocolKind.Fastboot, EdlProtocolState.Unknown, string.Empty));
+
+        Assert.True(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Rkdl, EdlProtocolState.Unknown, string.Empty, isRockchipLoaderStage: false),
+            "the maskrom endpoint must keep accepting the loader download");
+        Assert.False(FlashDeviceUiPolicy.IsLoaderStageLoadable(
+            DeviceProtocolKind.Rkdl, EdlProtocolState.Unknown, string.Empty, isRockchipLoaderStage: true),
+            "the usbplug endpoint already runs the loader the boot download produced");
     }
 
     [Fact]

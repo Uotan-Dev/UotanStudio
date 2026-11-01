@@ -885,10 +885,10 @@ public sealed class FlashService : IFlashService
     /// so this path never downloads one.
     /// <para>RKDL 路径：在已处于 loader 阶段的设备上烧写分区；loader 必须已在运行，此路径绝不下载 loader。</para></summary>
     /// <remarks>
-    /// Only the dedicated send-boot action transfers a loader; this path requires a loader-stage device and
+    /// Only the shared load-boot action transfers a loader; this path requires a loader-stage device and
     /// refuses a maskrom endpoint instead of booting one. The parameter lookup and
     /// <see cref="RkdlSession.WriteLBA"/> run on the selected device's own lease.
-    /// <para>只有专用的发送引导动作会传输 loader；此路径要求设备已处于 loader 阶段，遇到 maskrom 端点会拒绝
+    /// <para>只有通用的发送引导程序动作会传输 loader；此路径要求设备已处于 loader 阶段，遇到 maskrom 端点会拒绝
     /// 而不是为它启动 loader。parameter 查找与 <see cref="RkdlSession.WriteLBA"/> 在所选设备自身的租约上执行。</para>
     /// </remarks>
     /// <param name="device">The target device.<para>目标设备。</para></param>
@@ -912,7 +912,7 @@ public sealed class FlashService : IFlashService
             if (!rkdl.IsRockusbMode)
             {
                 throw new InvalidOperationException(
-                    "The Rockchip device is still in maskrom mode; use the dedicated send-boot action to run a loader first. 瑞芯微设备仍处于 Maskrom 模式，请先用专用的发送引导动作启动 loader。");
+                    "The Rockchip device is still in maskrom mode; use the shared load-boot action to run a loader first. 瑞芯微设备仍处于 Maskrom 模式，请先用通用的发送引导程序动作启动 loader。");
             }
 
             var parameterPath = FindParameterFile(imageDir);
@@ -1016,7 +1016,7 @@ public sealed class FlashService : IFlashService
             if (!rkdl.IsRockusbMode)
             {
                 throw new InvalidOperationException(
-                    "The Rockchip device is still in maskrom mode; use the dedicated send-boot action to run a loader first. 瑞芯微设备仍处于 Maskrom 模式，请先用专用的发送引导动作启动 loader。");
+                    "The Rockchip device is still in maskrom mode; use the shared load-boot action to run a loader first. 瑞芯微设备仍处于 Maskrom 模式，请先用通用的发送引导程序动作启动 loader。");
             }
 
             rkdl.EraseLbaRange(target.OffsetSectors, target.SizeSectors, null, ct);

@@ -343,34 +343,6 @@
                                                 <icons:Rotate Width="16" Height="16" />
                                             </MenuItem.Icon>
                                         </MenuItem>
-                                        <MenuItem Header="{DynamicResource Device_RebootBootloader}" Click="OnRebootBootloaderClick">
-                                            <MenuItem.Icon>
-                                                <icons:Cpu Width="16" Height="16" />
-                                            </MenuItem.Icon>
-                                        </MenuItem>
-                                        <MenuItem Header="{DynamicResource Device_RebootFastbootd}" Click="OnRebootFastbootdClick">
-                                            <MenuItem.Icon>
-                                                <icons:CloudDownload Width="16" Height="16" />
-                                            </MenuItem.Icon>
-                                        </MenuItem>
-                                        <MenuItem Header="{DynamicResource Device_RebootRecovery}" Click="OnRebootRecoveryClick">
-                                            <MenuItem.Icon>
-                                                <icons:Internet Width="16" Height="16" />
-                                            </MenuItem.Icon>
-                                        </MenuItem>
-                                        <MenuItem Header="{DynamicResource Device_RebootEdl}" Click="OnRebootEdlClick">
-                                            <MenuItem.Icon>
-                                                <icons:Download Width="16" Height="16" />
-                                            </MenuItem.Icon>
-                                        </MenuItem>
-                                        <Separator />
-                                        <MenuItem Header="{DynamicResource Flash_PowerOff}" Click="OnPowerOffClick">
-                                            <MenuItem.Icon>
-                                                <icons:Poweroff Width="16" Height="16" />
-                                            </MenuItem.Icon>
-                                        </MenuItem>
-                                        <MenuItem Header="{DynamicResource Flash_MtkRebootMeta}" Click="OnRebootMetaClick" />
-                                        <MenuItem Header="{DynamicResource Flash_MtkRebootAndroidTest}" Click="OnRebootAndroidTestClick" />
                                     </MenuFlyout>
                                 </DropDownButton.Flyout>
                             </DropDownButton>
@@ -709,10 +681,6 @@
                         <Expander Name="RkExpander" Classes="protocol-expander"
                                   Header="{DynamicResource Flash_Rockchip}" IsExpanded="{Binding IsRockchipSectionExpanded, Mode=TwoWay}">
                             <StackPanel Name="RkPane" Spacing="8">
-                                <Button Name="RkSendBootButton" Classes="pane-action"
-                                        Click="OnRkSendBootClick"
-                                        Content="{DynamicResource Flash_RkSendBoot}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkSendBoot}" />
                                 <TextBlock Text="{DynamicResource Flash_RkSetStorageType}" FontSize="12" Opacity="0.8" />
                                 <ComboBox Name="RkStorageTypeBox" Height="32" VerticalContentAlignment="Center"
                                           HorizontalAlignment="Stretch"
@@ -731,10 +699,6 @@
                                         Click="OnRkEnterMaskromClick"
                                         Content="{DynamicResource Flash_RkEnterMaskrom}"
                                         AutomationProperties.Name="{DynamicResource Flash_RkEnterMaskrom}" />
-                                <Button Name="RkReadInfoButton" Classes="pane-action"
-                                        Click="OnRkReadInfoClick"
-                                        Content="{DynamicResource Flash_RkReadInfo}"
-                                        AutomationProperties.Name="{DynamicResource Flash_RkReadInfo}" />
                                 <Button Name="RkTestDeviceButton" Classes="pane-action"
                                         Click="OnRkTestDeviceClick"
                                         Content="{DynamicResource Flash_RkTestDevice}"
