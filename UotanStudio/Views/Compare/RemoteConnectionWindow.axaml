@@ -1,0 +1,162 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:vm="using:UotanStudio.ViewModels.Compare"
+        x:Class="UotanStudio.Views.Compare.RemoteConnectionWindow"
+        x:DataType="vm:RemoteConnectionViewModel"
+        Title="{DynamicResource Remote_ConnectionTitle}"
+        Width="720" Height="600" MinWidth="600" MinHeight="500"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="True"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+  <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="Button">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="NumericUpDown">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="CheckBox">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MinimizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MaximizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=FullScreenButton]">
+      <Setter Property="IsVisible" Value="False" />
+      <Setter Property="IsEnabled" Value="False" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+      <Setter Property="Background">
+        <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
+      </Setter>
+    </Style>
+    <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+      <Setter Property="Margin" Value="40,0,48,0" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+  </Window.Styles>
+
+  <Grid Margin="20,40,20,16" RowDefinitions="Auto,Auto,*">
+    <!-- 顶部配置表单：参考传统文件传输对话框布局 -->
+    <!-- Top connection form: matches the classic remote session dialog layout -->
+    <StackPanel Grid.Row="0" Spacing="10">
+      <!-- 第 1 行：文件协议(F) 与 加密(E) -->
+      <Grid ColumnDefinitions="3*,14,2*">
+        <StackPanel Grid.Column="0" Spacing="4">
+          <TextBlock Text="{DynamicResource Remote_FileProtocol}" />
+          <ComboBox ItemsSource="{Binding Protocols}" SelectedItem="{Binding SelectedProtocolOption, Mode=TwoWay}"
+                    DisplayMemberBinding="{Binding DisplayName}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="4">
+          <TextBlock Text="{DynamicResource Remote_Encryption}" />
+          <ComboBox ItemsSource="{Binding AvailableEncryptions}" SelectedItem="{Binding SelectedEncryptionOption, Mode=TwoWay}"
+                    DisplayMemberBinding="{Binding DisplayName}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+      </Grid>
+
+      <!-- 第 2 行：主机名(H) 与 端口号(R) -->
+      <Grid ColumnDefinitions="3*,14,2*">
+        <StackPanel Grid.Column="0" Spacing="4">
+          <TextBlock Text="{DynamicResource Remote_Host}" />
+          <TextBox Text="{Binding Host, Mode=TwoWay}"
+                   PlaceholderText="{DynamicResource Remote_HostPlaceholder}" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="4">
+          <TextBlock Text="{DynamicResource Remote_Port}" />
+          <NumericUpDown Value="{Binding Port, Mode=TwoWay}" Minimum="1" Maximum="65535"
+                         FormatString="0" HorizontalAlignment="Stretch" />
+        </StackPanel>
+      </Grid>
+
+      <!-- 第 3 行：用户名(U) 与 密码(P) -->
+      <Grid ColumnDefinitions="3*,14,2*">
+        <StackPanel Grid.Column="0" Spacing="4">
+          <TextBlock Text="{DynamicResource Remote_Username}" />
+          <TextBox Text="{Binding Username, Mode=TwoWay}"
+                   IsEnabled="{Binding !IsAnonymous}"
+                   PlaceholderText="{DynamicResource Remote_UsernamePlaceholder}" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="4">
+          <TextBlock Text="{DynamicResource Remote_Password}" />
+          <TextBox Text="{Binding Password, Mode=TwoWay}"
+                   PasswordChar="•" IsEnabled="{Binding !IsAnonymous}"
+                   PlaceholderText="{DynamicResource Remote_PasswordPlaceholder}" />
+        </StackPanel>
+      </Grid>
+
+      <!-- 第 4 行：匿名登录复选框 与 提交/保存按钮 -->
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+        <CheckBox Grid.Column="0" IsChecked="{Binding IsAnonymous, Mode=TwoWay}"
+                  Content="{DynamicResource Remote_Anonymous}" VerticalAlignment="Center" />
+
+        <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" Foreground="Red" FontSize="12"
+                   VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis"
+                   IsVisible="{Binding HasError}" />
+
+        <Button Grid.Column="2" Classes="Primary" MinWidth="80" Height="32"
+                Command="{Binding ConnectCommand}" Content="{DynamicResource Remote_Connect}" />
+        <Button Grid.Column="3" MinWidth="80" Height="32"
+                Command="{Binding SaveCommand}" Content="{DynamicResource Remote_Save}" />
+        <Button Grid.Column="4" MinWidth="80" Height="32"
+                Click="OnCloseClick" Content="{DynamicResource Remote_Close}" />
+      </Grid>
+    </StackPanel>
+
+    <!-- 分隔栏与历史记录标题 -->
+    <Border Grid.Row="1" Margin="0,16,0,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+      <Grid ColumnDefinitions="Auto,*">
+        <TextBlock Grid.Column="0" Text="{DynamicResource Remote_History}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1" Text="{DynamicResource Remote_HistoryHint}" FontSize="11" Opacity="0.5"
+                   VerticalAlignment="Center" Margin="10,0,0,0" />
+      </Grid>
+    </Border>
+
+    <!-- 下方历史连接记录表格：可一键重连、删除 -->
+    <DataGrid Grid.Row="2" ItemsSource="{Binding History}" SelectedItem="{Binding SelectedHistoryItem, Mode=TwoWay}"
+              AutoGenerateColumns="False" IsReadOnly="True" GridLinesVisibility="Horizontal"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4"
+              DoubleTapped="OnHistoryDoubleTapped">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="{DynamicResource Remote_ColumnProtocol}" Binding="{Binding ProtocolDisplayName}" Width="75" />
+        <DataGridTextColumn Header="{DynamicResource Remote_ColumnHost}" Binding="{Binding Host}" Width="*" MinWidth="120" />
+        <DataGridTextColumn Header="{DynamicResource Remote_ColumnPort}" Binding="{Binding Port}" Width="65" />
+        <DataGridTextColumn Header="{DynamicResource Remote_ColumnUsername}" Binding="{Binding DisplayUser}" Width="95" />
+        <DataGridTextColumn Header="{DynamicResource Remote_ColumnEncryption}" Binding="{Binding EncryptionDisplayName}" Width="120" />
+        <DataGridTextColumn Header="{DynamicResource Remote_ColumnLastConnected}" Binding="{Binding LastConnectedDisplay}" Width="145" />
+        <DataGridTemplateColumn Header="{DynamicResource Remote_ColumnActions}" Width="135">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:RemoteConnectionProfileItemViewModel">
+              <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Button Classes="Small Primary" Padding="6,2" Height="24"
+                        Command="{Binding $parent[DataGrid].((vm:RemoteConnectionViewModel)DataContext).ReconnectCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="{DynamicResource Remote_Reconnect}" Content="{DynamicResource Remote_Reconnect}" />
+                <Button Classes="Small" Padding="6,2" Height="24"
+                        Command="{Binding $parent[DataGrid].((vm:RemoteConnectionViewModel)DataContext).DeleteCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="{DynamicResource Remote_Delete}" Content="{DynamicResource Remote_Delete}" />
+              </StackPanel>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
+  </Grid>
+</Window>

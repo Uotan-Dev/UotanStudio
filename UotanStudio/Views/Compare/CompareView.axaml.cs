@@ -14,6 +14,7 @@ using AvaloniaEdit;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Ui;
 using UotanStudio.ViewModels.Compare;
 
 namespace UotanStudio.Views.Compare;
@@ -878,11 +879,21 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>
-    /// Placeholder for opening remote files (UI-only for now).
-    /// <para>打开远程文件占位（当前仅完成 UI）。</para>
+    /// Opens the remote file connection window.
+    /// <para>打开远程文件连接窗口。</para>
     /// </summary>
-    private void OnRemoteFilesClick(object? sender, RoutedEventArgs e)
+    private async void OnRemoteFilesClick(object? sender, RoutedEventArgs e)
     {
+        var owner = TopLevel.GetTopLevel(this) as Window ?? DialogService.GetOwnerWindow();
+        var window = new RemoteConnectionWindow();
+        if (owner is not null)
+        {
+            await window.ShowDialog(owner);
+        }
+        else
+        {
+            window.Show();
+        }
     }
 
     /// <summary>

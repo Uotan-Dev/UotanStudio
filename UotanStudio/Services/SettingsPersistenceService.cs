@@ -31,6 +31,7 @@ public class AppSettings : IJsonOnDeserialized
         PairedNetworkTargets ??= [];
         PairedHdcNetworkTargets ??= [];
         ExpandedFlashSections ??= [];
+        RemoteConnectionHistory ??= [];
     }
 
     /// <summary>
@@ -65,6 +66,7 @@ public class AppSettings : IJsonOnDeserialized
         copy.PairedNetworkTargets = [.. PairedNetworkTargets];
         copy.PairedHdcNetworkTargets = [.. PairedHdcNetworkTargets];
         copy.ExpandedFlashSections = [.. ExpandedFlashSections];
+        copy.RemoteConnectionHistory = [.. RemoteConnectionHistory.Select(x => x.Clone())];
         copy.McpServers = [.. McpServers];
         copy.AdditionalSettings = AdditionalSettings is null ? null : new(AdditionalSettings);
         return copy;
@@ -245,6 +247,14 @@ public class AppSettings : IJsonOnDeserialized
     /// <value>The remembered fastboot UDP endpoints. <para>记住的 fastboot UDP 端点。</para></value>
     [JsonPropertyName("pairedFastbootUdpNetworkTargets")]
     public List<string> PairedFastbootUdpNetworkTargets { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the remembered remote file connection profiles (SFTP, SCP, FTP, WebDAV).
+    /// <para>获取或设置记住的远程文件连接配置（SFTP、SCP、FTP、WebDAV）。</para>
+    /// </summary>
+    /// <value>The remembered remote connection profiles. <para>记住的远程连接配置列表。</para></value>
+    [JsonPropertyName("remoteConnectionHistory")]
+    public List<RemoteConnectionProfile> RemoteConnectionHistory { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the Id of the ADB key library entry set as the "current signature"; empty string means the runtime identity auto-generated at startup.
@@ -537,6 +547,104 @@ public sealed class MainWindowPlacement
 public sealed record PairedNetworkTarget(string Address, bool RequiresTls);
 
 /// <summary>
+/// Supported remote file transfer protocols.
+/// <para>支持的远程文件传输协议。</para>
+/// </summary>
+public enum RemoteProtocol
+{
+    /// <summary>SSH File Transfer Protocol (Default Port 22).<para>SSH 文件传输协议（默认端口 22）。</para></summary>
+    Sftp,
+
+    /// <summary>Secure Copy Protocol (Default Port 22).<para>安全拷贝协议（默认端口 22）。</para></summary>
+    Scp,
+
+    /// <summary>File Transfer Protocol (Default Port 21).<para>文件传输协议（默认端口 21）。</para></summary>
+    Ftp,
+
+    /// <summary>Web Distributed Authoring and Versioning (Default Port 80/443).<para>基于 Web 的分布式创作与版本控制协议（默认端口 80/443）。</para></summary>
+    WebDav
+}
+
+/// <summary>
+/// Remote connection encryption mode.
+/// <para>远程连接加密模式。</para>
+/// </summary>
+public enum RemoteEncryptionMode
+{
+    /// <summary>Plaintext without encryption.<para>不加密（明文）。</para></summary>
+    None,
+
+    /// <summary>Implicit TLS/SSL.<para>TLS/SSL 隐式加密。</para></summary>
+    TlsImplicit,
+
+    /// <summary>Explicit TLS/SSL.<para>TLS/SSL 显式加密。</para></summary>
+    TlsExplicit,
+
+    /// <summary>Built-in SSH encryption (for SFTP and SCP).<para>SSH 协议加密（SFTP 与 SCP 内置）。</para></summary>
+    Ssh,
+
+    /// <summary>HTTPS (TLS/SSL encryption for WebDAV).<para>HTTPS（WebDAV 的 SSL/TLS 加密）。</para></summary>
+    Https
+}
+
+/// <summary>
+/// Remote connection profile, describing connection parameters for SFTP, SCP, FTP, or WebDAV.
+/// <para>远程连接配置档案，描述 SFTP、SCP、FTP 或 WebDAV 的连接参数。</para>
+/// </summary>
+public sealed class RemoteConnectionProfile
+{
+    /// <summary>Unique identifier of the connection profile.<para>连接配置的唯一标识。</para></summary>
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+    /// <summary>Remote file protocol.<para>远程文件协议。</para></summary>
+    [JsonPropertyName("protocol")]
+    public RemoteProtocol Protocol { get; set; } = RemoteProtocol.Sftp;
+
+    /// <summary>Encryption mode.<para>加密模式。</para></summary>
+    [JsonPropertyName("encryption")]
+    public RemoteEncryptionMode Encryption { get; set; } = RemoteEncryptionMode.Ssh;
+
+    /// <summary>Host name or IP address.<para>主机名或 IP 地址。</para></summary>
+    [JsonPropertyName("host")]
+    public string Host { get; set; } = string.Empty;
+
+    /// <summary>Port number.<para>端口号。</para></summary>
+    [JsonPropertyName("port")]
+    public int Port { get; set; } = 22;
+
+    /// <summary>Username for authentication.<para>认证用户名。</para></summary>
+    [JsonPropertyName("username")]
+    public string Username { get; set; } = string.Empty;
+
+    /// <summary>Password for authentication.<para>认证密码。</para></summary>
+    [JsonPropertyName("password")]
+    public string Password { get; set; } = string.Empty;
+
+    /// <summary>Whether anonymous login is used.<para>是否使用匿名登录。</para></summary>
+    [JsonPropertyName("isAnonymous")]
+    public bool IsAnonymous { get; set; }
+
+    /// <summary>Last connected time in ISO 8601 string format.<para>上次连接时间。</para></summary>
+    [JsonPropertyName("lastConnected")]
+    public DateTimeOffset? LastConnected { get; set; }
+
+    /// <summary>Clones this profile instance.<para>克隆此配置实例。</para></summary>
+    public RemoteConnectionProfile Clone() => new()
+    {
+        Id = Id,
+        Protocol = Protocol,
+        Encryption = Encryption,
+        Host = Host,
+        Port = Port,
+        Username = Username,
+        Password = Password,
+        IsAnonymous = IsAnonymous,
+        LastConnected = LastConnected
+    };
+}
+
+/// <summary>
 /// JSON serialization context for <see cref="AppSettings"/>, providing source generation support for AOT compatibility.
 /// <para><see cref="AppSettings"/> 的 JSON 序列化上下文，为 AOT 兼容提供源生成支持。</para>
 /// </summary>
@@ -550,11 +658,15 @@ public sealed record PairedNetworkTarget(string Address, bool RequiresTls);
 [JsonSerializable(typeof(Logging.LogFileRecord))]
 [JsonSerializable(typeof(Dictionary<string, bool>))]
 [JsonSerializable(typeof(List<string>))]
+[JsonSerializable(typeof(List<RemoteConnectionProfile>))]
+[JsonSerializable(typeof(RemoteConnectionProfile))]
+[JsonSerializable(typeof(RemoteProtocol))]
+[JsonSerializable(typeof(RemoteEncryptionMode))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    Converters = [typeof(JsonStringEnumConverter<ThemeMode>), typeof(JsonStringEnumConverter<McpTransportKind>), typeof(JsonStringEnumConverter<WindowState>)])]
+    Converters = [typeof(JsonStringEnumConverter<ThemeMode>), typeof(JsonStringEnumConverter<McpTransportKind>), typeof(JsonStringEnumConverter<WindowState>), typeof(JsonStringEnumConverter<RemoteProtocol>), typeof(JsonStringEnumConverter<RemoteEncryptionMode>)])]
 internal partial class AppSettingsJsonContext : JsonSerializerContext;
 
 /// <summary>
@@ -795,6 +907,19 @@ public class SettingsPersistenceService
     {
         var settings = LoadSettings();
         settings.PairedHdcNetworkTargets = targets ?? [];
+        SaveSettings(settings);
+    }
+
+    /// <summary>
+    /// Replaces the remembered remote file connection profiles, merging on top of the latest settings on disk.
+    /// <para>替换记住的远程文件连接配置记录，以磁盘上最新设置合并保存。</para>
+    /// </summary>
+    /// <param name="history">The current remembered remote connection profiles; <c>null</c> clears them.
+    /// <para>当前应记住的远程连接记录；为 <c>null</c> 时清空。</para></param>
+    public void UpdateRemoteConnectionHistory(List<RemoteConnectionProfile> history)
+    {
+        var settings = LoadSettings();
+        settings.RemoteConnectionHistory = history ?? [];
         SaveSettings(settings);
     }
 

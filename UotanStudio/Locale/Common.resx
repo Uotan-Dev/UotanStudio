@@ -2314,6 +2314,105 @@ Author: 暮间雾
   <data name="Compare_RemoteFiles" xml:space="preserve">
     <value>Remote Files</value>
   </data>
+  <data name="Remote_ConnectionTitle" xml:space="preserve">
+    <value>Remote Connection</value>
+  </data>
+  <data name="Remote_FileProtocol" xml:space="preserve">
+    <value>File Protocol (F):</value>
+  </data>
+  <data name="Remote_Encryption" xml:space="preserve">
+    <value>Encryption (E):</value>
+  </data>
+  <data name="Remote_Host" xml:space="preserve">
+    <value>Host Name (H):</value>
+  </data>
+  <data name="Remote_HostPlaceholder" xml:space="preserve">
+    <value>IP address or domain</value>
+  </data>
+  <data name="Remote_Port" xml:space="preserve">
+    <value>Port (R):</value>
+  </data>
+  <data name="Remote_Username" xml:space="preserve">
+    <value>User Name (U):</value>
+  </data>
+  <data name="Remote_UsernamePlaceholder" xml:space="preserve">
+    <value>Username</value>
+  </data>
+  <data name="Remote_Password" xml:space="preserve">
+    <value>Password (P):</value>
+  </data>
+  <data name="Remote_PasswordPlaceholder" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="Remote_Anonymous" xml:space="preserve">
+    <value>Anonymous login (N)</value>
+  </data>
+  <data name="Remote_Connect" xml:space="preserve">
+    <value>Connect</value>
+  </data>
+  <data name="Remote_Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Remote_Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Remote_History" xml:space="preserve">
+    <value>Connection History</value>
+  </data>
+  <data name="Remote_HistoryHint" xml:space="preserve">
+    <value>Click "Reconnect" or double-click a row to connect</value>
+  </data>
+  <data name="Remote_Reconnect" xml:space="preserve">
+    <value>Reconnect</value>
+  </data>
+  <data name="Remote_Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Remote_ColumnProtocol" xml:space="preserve">
+    <value>Protocol</value>
+  </data>
+  <data name="Remote_ColumnHost" xml:space="preserve">
+    <value>Host</value>
+  </data>
+  <data name="Remote_ColumnPort" xml:space="preserve">
+    <value>Port</value>
+  </data>
+  <data name="Remote_ColumnUsername" xml:space="preserve">
+    <value>User Name</value>
+  </data>
+  <data name="Remote_ColumnEncryption" xml:space="preserve">
+    <value>Encryption</value>
+  </data>
+  <data name="Remote_ColumnLastConnected" xml:space="preserve">
+    <value>Last Connected</value>
+  </data>
+  <data name="Remote_ColumnActions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Remote_EncryptNone" xml:space="preserve">
+    <value>None (Plain text)</value>
+  </data>
+  <data name="Remote_EncryptTlsImplicit" xml:space="preserve">
+    <value>TLS/SSL Implicit</value>
+  </data>
+  <data name="Remote_EncryptTlsExplicit" xml:space="preserve">
+    <value>TLS/SSL Explicit</value>
+  </data>
+  <data name="Remote_EncryptSsh" xml:space="preserve">
+    <value>SSH Protocol Encryption</value>
+  </data>
+  <data name="Remote_EncryptHttp" xml:space="preserve">
+    <value>HTTP (Plain text)</value>
+  </data>
+  <data name="Remote_EncryptHttps" xml:space="preserve">
+    <value>HTTPS (SSL/TLS)</value>
+  </data>
+  <data name="Remote_AnonymousDisplay" xml:space="preserve">
+    <value>Anonymous</value>
+  </data>
+  <data name="Remote_HostRequired" xml:space="preserve">
+    <value>Please enter a host name or IP address.</value>
+  </data>
   <data name="Compare_PathPlaceholder" xml:space="preserve">
     <value>Enter a folder or file path</value>
   </data>

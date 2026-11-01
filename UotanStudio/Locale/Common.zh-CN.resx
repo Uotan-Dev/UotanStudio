@@ -2314,6 +2314,105 @@
   <data name="Compare_RemoteFiles" xml:space="preserve">
     <value>远程文件</value>
   </data>
+  <data name="Remote_ConnectionTitle" xml:space="preserve">
+    <value>远程连接</value>
+  </data>
+  <data name="Remote_FileProtocol" xml:space="preserve">
+    <value>文件协议(F):</value>
+  </data>
+  <data name="Remote_Encryption" xml:space="preserve">
+    <value>加密(E):</value>
+  </data>
+  <data name="Remote_Host" xml:space="preserve">
+    <value>主机名(H):</value>
+  </data>
+  <data name="Remote_HostPlaceholder" xml:space="preserve">
+    <value>IP 地址或域名</value>
+  </data>
+  <data name="Remote_Port" xml:space="preserve">
+    <value>端口号(R):</value>
+  </data>
+  <data name="Remote_Username" xml:space="preserve">
+    <value>用户名(U):</value>
+  </data>
+  <data name="Remote_UsernamePlaceholder" xml:space="preserve">
+    <value>用户名</value>
+  </data>
+  <data name="Remote_Password" xml:space="preserve">
+    <value>密码(P):</value>
+  </data>
+  <data name="Remote_PasswordPlaceholder" xml:space="preserve">
+    <value>密码</value>
+  </data>
+  <data name="Remote_Anonymous" xml:space="preserve">
+    <value>匿名登录(N)</value>
+  </data>
+  <data name="Remote_Connect" xml:space="preserve">
+    <value>连接</value>
+  </data>
+  <data name="Remote_Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Remote_Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Remote_History" xml:space="preserve">
+    <value>历史连接</value>
+  </data>
+  <data name="Remote_HistoryHint" xml:space="preserve">
+    <value>点击「重连」或双击行可直接连接</value>
+  </data>
+  <data name="Remote_Reconnect" xml:space="preserve">
+    <value>重连</value>
+  </data>
+  <data name="Remote_Delete" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="Remote_ColumnProtocol" xml:space="preserve">
+    <value>协议</value>
+  </data>
+  <data name="Remote_ColumnHost" xml:space="preserve">
+    <value>主机</value>
+  </data>
+  <data name="Remote_ColumnPort" xml:space="preserve">
+    <value>端口</value>
+  </data>
+  <data name="Remote_ColumnUsername" xml:space="preserve">
+    <value>用户名</value>
+  </data>
+  <data name="Remote_ColumnEncryption" xml:space="preserve">
+    <value>加密方式</value>
+  </data>
+  <data name="Remote_ColumnLastConnected" xml:space="preserve">
+    <value>上次连接时间</value>
+  </data>
+  <data name="Remote_ColumnActions" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="Remote_EncryptNone" xml:space="preserve">
+    <value>不加密</value>
+  </data>
+  <data name="Remote_EncryptTlsImplicit" xml:space="preserve">
+    <value>TLS/SSL 隐式加密</value>
+  </data>
+  <data name="Remote_EncryptTlsExplicit" xml:space="preserve">
+    <value>TLS/SSL 显式加密</value>
+  </data>
+  <data name="Remote_EncryptSsh" xml:space="preserve">
+    <value>SSH 协议加密</value>
+  </data>
+  <data name="Remote_EncryptHttp" xml:space="preserve">
+    <value>HTTP (不加密)</value>
+  </data>
+  <data name="Remote_EncryptHttps" xml:space="preserve">
+    <value>HTTPS (SSL/TLS)</value>
+  </data>
+  <data name="Remote_AnonymousDisplay" xml:space="preserve">
+    <value>匿名 (anonymous)</value>
+  </data>
+  <data name="Remote_HostRequired" xml:space="preserve">
+    <value>请输入主机名或 IP 地址。</value>
+  </data>
   <data name="Compare_PathPlaceholder" xml:space="preserve">
     <value>输入目录或文件路径</value>
   </data>
